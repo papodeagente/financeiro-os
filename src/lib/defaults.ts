@@ -3,6 +3,7 @@ import {
   CarTransporte, GuiaDestino, SegSeguradora, NavioFornecedor, IngAtrativo,
   BrindeFornecedor, TKT_FONTES, HTL_FONTES,
 } from './types';
+import { createFinanceiroGrupo } from './financial-defaults';
 import { generateId } from './utils';
 
 export function createPeriodo(): Periodo {
@@ -116,5 +117,6 @@ export function createGrupoViagem(): GrupoViagem {
     navio: { fornecedores: Array.from({ length: 11 }, (_, i) => createNavioFornecedor(i)), deadline: null, info_adicional: '' },
     ing: { atrativos: [createIngAtrativo()] },
     brinde: { fornecedores: Array.from({ length: 13 }, (_, i) => createBrindeFornecedor(i)) },
+    financeiro: createFinanceiroGrupo(),
   };
 }

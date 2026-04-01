@@ -162,6 +162,8 @@ export interface BrindeFornecedor {
   prazo_entrega: string;
 }
 
+import { FinanceiroGrupo } from './financial-types';
+
 export interface GrupoViagem {
   id: string;
   grp_id: string;
@@ -186,9 +188,11 @@ export interface GrupoViagem {
   navio: { fornecedores: NavioFornecedor[]; deadline: string | null; info_adicional: string };
   ing: { atrativos: IngAtrativo[] };
   brinde: { fornecedores: BrindeFornecedor[] };
+
+  financeiro?: FinanceiroGrupo;
 }
 
-export type AbaType = 'inf' | 'tkt' | 'htl' | 'rec' | 'car' | 'guia' | 'seg' | 'navio' | 'ing' | 'brinde' | 'proposta' | 'htl_seg';
+export type AbaType = 'inf' | 'tkt' | 'htl' | 'rec' | 'car' | 'guia' | 'seg' | 'navio' | 'ing' | 'brinde' | 'proposta' | 'htl_seg' | 'painel' | 'vendas' | 'recebimentos' | 'fornecedores' | 'fluxo_caixa' | 'dre' | 'indicadores';
 
 export const ABA_LABELS: Record<AbaType, string> = {
   inf: 'INF',
@@ -203,6 +207,13 @@ export const ABA_LABELS: Record<AbaType, string> = {
   brinde: 'BRINDE',
   proposta: 'PROPOSTA',
   htl_seg: 'HTL + SEG',
+  painel: 'PAINEL',
+  vendas: 'VENDAS',
+  recebimentos: 'RECEBIM.',
+  fornecedores: 'FORNEC.',
+  fluxo_caixa: 'FLUXO CX',
+  dre: 'DRE',
+  indicadores: 'INDICAD.',
 };
 
 export const TKT_FONTES = [

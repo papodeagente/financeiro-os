@@ -19,14 +19,25 @@ import { IngTab } from '@/components/tabs/IngTab';
 import { BrindeTab } from '@/components/tabs/BrindeTab';
 import { PropostaTab } from '@/components/tabs/PropostaTab';
 import { HtlSegTab } from '@/components/tabs/HtlSegTab';
+import { VendasTab } from '@/components/tabs/financial/VendasTab';
+import RecebimentosTab from '@/components/tabs/financial/RecebimentosTab';
+import FornecedoresTab from '@/components/tabs/financial/FornecedoresTab';
+import FluxoCaixaTab from '@/components/tabs/financial/FluxoCaixaTab';
+import DRETab from '@/components/tabs/financial/DRETab';
+import IndicadoresTab from '@/components/tabs/financial/IndicadoresTab';
+import PainelTab from '@/components/tabs/financial/PainelTab';
+import { createFinanceiroGrupo } from '@/lib/financial-defaults';
 import { ArrowLeft, Save } from 'lucide-react';
 import Link from 'next/link';
 
-const ABAS: AbaType[] = ['inf', 'tkt', 'htl', 'rec', 'car', 'guia', 'seg', 'navio', 'ing', 'brinde', 'proposta', 'htl_seg'];
+const ABAS_PLANEJAMENTO: AbaType[] = ['inf', 'tkt', 'htl', 'rec', 'car', 'guia', 'seg', 'navio', 'ing', 'brinde', 'proposta', 'htl_seg'];
+const ABAS_FINANCEIRO: AbaType[] = ['painel', 'vendas', 'recebimentos', 'fornecedores', 'fluxo_caixa', 'dre', 'indicadores'];
 
 const ABA_ICONS: Record<AbaType, string> = {
   inf: 'i', tkt: '✈', htl: '🏨', rec: '🎯', car: '🚌', guia: '👤',
   seg: '🛡', navio: '🚢', ing: '🎫', brinde: '🎁', proposta: '💰', htl_seg: '📊',
+  painel: '📊', vendas: '🛒', recebimentos: '💵', fornecedores: '🏭',
+  fluxo_caixa: '📈', dre: '📋', indicadores: '🎯',
 };
 
 function hasData(grupo: GrupoViagem, aba: AbaType): boolean {
@@ -55,8 +66,13 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
   useEffect(() => {
     const grupos = loadGrupos();
     const found = grupos.find(g => g.id === id);
-    if (found) setGrupo(found);
-    else router.push('/');
+    if (found) {
+      // Ensure financeiro field exists for groups created before financial module
+      if (!found.financeiro) found.financeiro = createFinanceiroGrupo();
+      setGrupo(found);
+    } else {
+      router.push('/');
+    }
   }, [id, router]);
 
   const handleChange = useCallback((updated: GrupoViagem) => {
@@ -98,6 +114,13 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
       case 'brinde': return <BrindeTab grupo={grupo} onChange={handleChange} />;
       case 'proposta': return <PropostaTab grupo={grupo} />;
       case 'htl_seg': return <HtlSegTab grupo={grupo} />;
+      case 'painel': return <PainelTab grupo={grupo} />;
+      case 'vendas': return <VendasTab grupo={grupo} onChange={handleChange} />;
+      case 'recebimentos': return <RecebimentosTab grupo={grupo} onChange={handleChange} />;
+      case 'fornecedores': return <FornecedoresTab grupo={grupo} onChange={handleChange} />;
+      case 'fluxo_caixa': return <FluxoCaixaTab grupo={grupo} />;
+      case 'dre': return <DRETab grupo={grupo} onChange={handleChange} />;
+      case 'indicadores': return <IndicadoresTab grupo={grupo} onChange={handleChange} />;
     }
   };
 
@@ -105,20 +128,35 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
     <div className="flex h-screen">
       {/* Sidebar */}
       <aside className="w-20 bg-[#1a1a2e] text-white flex flex-col items-center py-4 gap-1 overflow-y-auto shrink-0">
-        <Link href="/" className="mb-4 text-[#d4a853] hover:text-white transition-colors">
+        <Link href="/" className="mb-3 text-[#d4a853] hover:text-white transition-colors">
           <ArrowLeft className="w-6 h-6" />
         </Link>
-        {ABAS.map(aba => (
+        <div className="text-[8px] uppercase tracking-wider text-gray-400 mb-1">Produto</div>
+        {ABAS_PLANEJAMENTO.map(aba => (
           <button
             key={aba}
             onClick={() => setActiveTab(aba)}
-            className={`w-16 py-2 rounded-lg text-center transition-all ${
+            className={`w-16 py-1.5 rounded-lg text-center transition-all ${
               activeTab === aba ? 'bg-[#d4a853] text-[#1a1a2e]' : 'hover:bg-white/10'
             }`}
           >
-            <div className="text-lg">{ABA_ICONS[aba]}</div>
-            <div className="text-[10px] font-semibold">{ABA_LABELS[aba]}</div>
+            <div className="text-sm">{ABA_ICONS[aba]}</div>
+            <div className="text-[9px] font-semibold">{ABA_LABELS[aba]}</div>
             {hasData(grupo, aba) && <div className="w-1.5 h-1.5 rounded-full bg-green-400 mx-auto mt-0.5" />}
+          </button>
+        ))}
+        <div className="w-12 border-t border-gray-600 my-2" />
+        <div className="text-[8px] uppercase tracking-wider text-gray-400 mb-1">Financeiro</div>
+        {ABAS_FINANCEIRO.map(aba => (
+          <button
+            key={aba}
+            onClick={() => setActiveTab(aba)}
+            className={`w-16 py-1.5 rounded-lg text-center transition-all ${
+              activeTab === aba ? 'bg-[#d4a853] text-[#1a1a2e]' : 'hover:bg-white/10'
+            }`}
+          >
+            <div className="text-sm">{ABA_ICONS[aba]}</div>
+            <div className="text-[9px] font-semibold">{ABA_LABELS[aba]}</div>
           </button>
         ))}
       </aside>
