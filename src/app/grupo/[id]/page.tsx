@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { GrupoViagem, AbaType, ABA_LABELS } from '@/lib/types';
 import { loadGrupos, saveGrupo } from '@/lib/storage';
+import { useApp } from '@/contexts/AppContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { FloatingResume } from '@/components/FloatingResume';
@@ -19,25 +20,15 @@ import { IngTab } from '@/components/tabs/IngTab';
 import { BrindeTab } from '@/components/tabs/BrindeTab';
 import { PropostaTab } from '@/components/tabs/PropostaTab';
 import { HtlSegTab } from '@/components/tabs/HtlSegTab';
-import { VendasTab } from '@/components/tabs/financial/VendasTab';
-import RecebimentosTab from '@/components/tabs/financial/RecebimentosTab';
-import FornecedoresTab from '@/components/tabs/financial/FornecedoresTab';
-import FluxoCaixaTab from '@/components/tabs/financial/FluxoCaixaTab';
-import DRETab from '@/components/tabs/financial/DRETab';
-import IndicadoresTab from '@/components/tabs/financial/IndicadoresTab';
-import PainelTab from '@/components/tabs/financial/PainelTab';
 import { createFinanceiroGrupo } from '@/lib/financial-defaults';
-import { ArrowLeft, Save } from 'lucide-react';
+import { Save } from 'lucide-react';
 import Link from 'next/link';
 
 const ABAS_PLANEJAMENTO: AbaType[] = ['inf', 'tkt', 'htl', 'rec', 'car', 'guia', 'seg', 'navio', 'ing', 'brinde', 'proposta', 'htl_seg'];
-const ABAS_FINANCEIRO: AbaType[] = ['painel', 'vendas', 'recebimentos', 'fornecedores', 'fluxo_caixa', 'dre', 'indicadores'];
 
-const ABA_ICONS: Record<AbaType, string> = {
-  inf: 'i', tkt: '✈', htl: '🏨', rec: '🎯', car: '🚌', guia: '👤',
+const ABA_ICONS: Record<string, string> = {
+  inf: 'ℹ', tkt: '✈', htl: '🏨', rec: '🎯', car: '🚌', guia: '👤',
   seg: '🛡', navio: '🚢', ing: '🎫', brinde: '🎁', proposta: '💰', htl_seg: '📊',
-  painel: '📊', vendas: '🛒', recebimentos: '💵', fornecedores: '🏭',
-  fluxo_caixa: '📈', dre: '📋', indicadores: '🎯',
 };
 
 function hasData(grupo: GrupoViagem, aba: AbaType): boolean {
@@ -59,6 +50,7 @@ function hasData(grupo: GrupoViagem, aba: AbaType): boolean {
 export default function GrupoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const { setActiveGrupo } = useApp();
   const [grupo, setGrupo] = useState<GrupoViagem | null>(null);
   const [activeTab, setActiveTab] = useState<AbaType>('inf');
   const [saved, setSaved] = useState(true);
@@ -69,11 +61,12 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
       if (found) {
         if (!found.financeiro) found.financeiro = createFinanceiroGrupo();
         setGrupo(found);
+        setActiveGrupo(found.id, found.grp_id || 'Sem ID');
       } else {
         router.push('/');
       }
     });
-  }, [id, router]);
+  }, [id, router, setActiveGrupo]);
 
   const handleChange = useCallback((updated: GrupoViagem) => {
     setGrupo(updated);
@@ -98,7 +91,7 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
     }
   }, [saved, grupo]);
 
-  if (!grupo) return <div className="flex items-center justify-center h-screen">Carregando...</div>;
+  if (!grupo) return <div className="flex items-center justify-center h-full">Carregando...</div>;
 
   const renderTab = () => {
     switch (activeTab) {
@@ -114,23 +107,13 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
       case 'brinde': return <BrindeTab grupo={grupo} onChange={handleChange} />;
       case 'proposta': return <PropostaTab grupo={grupo} />;
       case 'htl_seg': return <HtlSegTab grupo={grupo} />;
-      case 'painel': return <PainelTab grupo={grupo} />;
-      case 'vendas': return <VendasTab grupo={grupo} onChange={handleChange} />;
-      case 'recebimentos': return <RecebimentosTab grupo={grupo} onChange={handleChange} />;
-      case 'fornecedores': return <FornecedoresTab grupo={grupo} onChange={handleChange} />;
-      case 'fluxo_caixa': return <FluxoCaixaTab grupo={grupo} />;
-      case 'dre': return <DRETab grupo={grupo} onChange={handleChange} />;
-      case 'indicadores': return <IndicadoresTab grupo={grupo} onChange={handleChange} />;
     }
   };
 
   return (
-    <div className="flex h-screen">
-      {/* Sidebar */}
-      <aside className="w-20 bg-[#1a1a2e] text-white flex flex-col items-center py-4 gap-1 overflow-y-auto shrink-0">
-        <Link href="/" className="mb-3 text-[#d4a853] hover:text-white transition-colors">
-          <ArrowLeft className="w-6 h-6" />
-        </Link>
+    <div className="flex h-full">
+      {/* Inner sidebar - Planning tabs only */}
+      <aside className="w-20 bg-[#0f0f1e] text-white flex flex-col items-center py-3 gap-1 overflow-y-auto shrink-0 border-r border-gray-800">
         <div className="text-[8px] uppercase tracking-wider text-gray-400 mb-1">Produto</div>
         {ABAS_PLANEJAMENTO.map(aba => (
           <button
@@ -145,23 +128,9 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
             {hasData(grupo, aba) && <div className="w-1.5 h-1.5 rounded-full bg-green-400 mx-auto mt-0.5" />}
           </button>
         ))}
-        <div className="w-12 border-t border-gray-600 my-2" />
-        <div className="text-[8px] uppercase tracking-wider text-gray-400 mb-1">Financeiro</div>
-        {ABAS_FINANCEIRO.map(aba => (
-          <button
-            key={aba}
-            onClick={() => setActiveTab(aba)}
-            className={`w-16 py-1.5 rounded-lg text-center transition-all ${
-              activeTab === aba ? 'bg-[#d4a853] text-[#1a1a2e]' : 'hover:bg-white/10'
-            }`}
-          >
-            <div className="text-sm">{ABA_ICONS[aba]}</div>
-            <div className="text-[9px] font-semibold">{ABA_LABELS[aba]}</div>
-          </button>
-        ))}
       </aside>
 
-      {/* Main */}
+      {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar */}
         <header className="bg-white border-b px-6 py-3 flex items-center justify-between shrink-0">

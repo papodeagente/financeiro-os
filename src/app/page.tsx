@@ -5,6 +5,7 @@ import { GrupoViagem } from '@/lib/types';
 import { createGrupoViagem } from '@/lib/defaults';
 import { loadGrupos, saveGrupos, deleteGrupo, exportGrupoJSON, importGrupoJSON } from '@/lib/storage';
 import { formatDate } from '@/lib/utils';
+import { useApp } from '@/contexts/AppContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Plus, Copy, Download, Upload, Trash2, FolderOpen } from 'lucide-react';
@@ -13,6 +14,7 @@ import Link from 'next/link';
 export default function Home() {
   const [grupos, setGrupos] = useState<GrupoViagem[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { setActiveGrupo } = useApp();
 
   useEffect(() => { loadGrupos().then(setGrupos); }, []);
 
@@ -67,11 +69,12 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen">
-      <header className="bg-[#1a1a2e] text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-6 py-6 flex items-center justify-between">
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Header */}
+      <header className="bg-[#1a1a2e] text-white shadow-lg shrink-0">
+        <div className="px-6 py-5 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Grupos <span className="text-[#d4a853]">OS</span></h1>
+            <h1 className="text-2xl font-bold">Grupos <span className="text-[#d4a853]">OS</span></h1>
             <p className="text-sm text-gray-300 mt-1">Planejamento e precificacao de viagens em grupo</p>
           </div>
           <div className="flex gap-3">
@@ -86,7 +89,8 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      {/* Content */}
+      <main className="flex-1 overflow-y-auto p-6">
         {grupos.length === 0 ? (
           <div className="text-center py-20">
             <FolderOpen className="w-16 h-16 mx-auto text-gray-300 mb-4" />
@@ -110,7 +114,11 @@ export default function Home() {
                     <div>{g.periodos.length} periodo(s) | {g.trechos.length} trecho(s)</div>
                   </div>
                   <div className="flex gap-2">
-                    <Link href={`/grupo/${g.id}`} className="flex-1">
+                    <Link
+                      href={`/grupo/${g.id}`}
+                      className="flex-1"
+                      onClick={() => setActiveGrupo(g.id, g.grp_id || 'Sem ID')}
+                    >
                       <Button className="w-full bg-[#1a1a2e] hover:bg-[#2a2a4e] text-white" size="sm">
                         <FolderOpen className="w-4 h-4 mr-1" /> Abrir
                       </Button>
