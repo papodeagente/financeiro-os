@@ -7,8 +7,8 @@ import { AppSidebar } from "@/components/AppSidebar";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Grupos OS - Planejamento de Viagens em Grupo",
-  description: "Sistema de planejamento e precificação de grupos de viagens",
+  title: "Grupos OS - Sistema de Gestão de Agência de Viagens",
+  description: "Planejamento de grupos, vendas, financeiro e CRM para agências de viagens",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
