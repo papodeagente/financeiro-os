@@ -10,7 +10,10 @@ import {
   createVendaCRM,
   createProdutoVenda,
 } from '@/lib/crm-types';
+import { GrupoViagem } from '@/lib/types';
 import { loadEntities, saveEntity } from '@/lib/crm-storage';
+import { loadGrupos } from '@/lib/storage';
+import { getProdutoGrupo } from '@/lib/financial-calculations';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,7 +23,7 @@ const fmt = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
 const TIPOS_PRODUTO = [
-  'AEREO', 'HOTEL', 'PACOTE', 'SEGURO', 'RECEPTIVO', 'CRUZEIRO', 'CARRO', 'INGRESSO', 'OUTROS',
+  'AEREO', 'HOTEL', 'PACOTE', 'SEGURO', 'RECEPTIVO', 'CRUZEIRO', 'CARRO', 'INGRESSO', 'GRUPO', 'OUTROS',
 ] as const;
 
 const FORMAS_PAGAMENTO = [
@@ -70,6 +73,7 @@ function SectionHeader({
 export default function NovaVendaPage() {
   const router = useRouter();
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [grupos, setGrupos] = useState<GrupoViagem[]>([]);
   const [clienteSearch, setClienteSearch] = useState('');
   const [showClienteList, setShowClienteList] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -91,7 +95,47 @@ export default function NovaVendaPage() {
 
   useEffect(() => {
     loadEntities<Cliente>('clientes').then(setClientes);
+    loadGrupos().then(setGrupos);
   }, []);
+
+  // When a produto is set to GRUPO, allow selecting a grupo and auto-fill values
+  const selectGrupoForProduto = (idx: number, grupoId: string) => {
+    const grupo = grupos.find(g => g.id === grupoId);
+    if (!grupo) return;
+    try {
+      const produto = getProdutoGrupo(grupo);
+      const custoEntries = Object.values(produto.custos_por_apto) as Array<Record<string, number>>;
+      const custoSgl = custoEntries.reduce((sum, entry) => sum + (entry.sgl || 0), 0);
+      const vendaSgl = produto.precos.avista.sgl || 0;
+      setVenda(prev => {
+        const produtos = [...prev.produtos];
+        produtos[idx] = {
+          ...produtos[idx],
+          tipo: 'GRUPO' as ProdutoVenda['tipo'],
+          descricao: `Grupo: ${grupo.grp_id || 'Sem ID'} — ${grupo.origem_destino || ''}`,
+          fornecedor_nome: 'Operação Própria',
+          valor_custo: custoSgl,
+          valor_venda: vendaSgl,
+          moeda: 'BRL',
+          cambio: 1,
+          projeto: grupo.id,
+        };
+        return recalcTotais({ ...prev, produtos, tipo: 'GRUPO', grupo_id: grupo.id });
+      });
+    } catch {
+      // If getProdutoGrupo fails, just set basic info
+      setVenda(prev => {
+        const produtos = [...prev.produtos];
+        produtos[idx] = {
+          ...produtos[idx],
+          tipo: 'GRUPO' as ProdutoVenda['tipo'],
+          descricao: `Grupo: ${grupo.grp_id || 'Sem ID'}`,
+          projeto: grupo.id,
+        };
+        return { ...prev, produtos, tipo: 'GRUPO', grupo_id: grupo.id };
+      });
+    }
+  };
 
   // ---- Cliente helpers ----
   const selectedCliente = clientes.find(c => c.id === venda.cliente_id);
@@ -511,6 +555,30 @@ export default function NovaVendaPage() {
                     />
                   </div>
                 </div>
+
+                {/* GRUPO specific */}
+                {prod.tipo === 'GRUPO' && (
+                  <div className="mb-3 pt-3 border-t border-[#2a2a4e]">
+                    <label className={labelClass}>Selecionar Grupo (Produto)</label>
+                    <select
+                      className={`w-full rounded-md px-3 py-2 text-sm ${inputClass}`}
+                      value={prod.projeto || ''}
+                      onChange={e => selectGrupoForProduto(idx, e.target.value)}
+                    >
+                      <option value="">-- Selecione um grupo --</option>
+                      {grupos.map(g => (
+                        <option key={g.id} value={g.id}>
+                          {g.grp_id || 'Sem ID'} — {g.origem_destino || 'Sem destino'}
+                        </option>
+                      ))}
+                    </select>
+                    {prod.projeto && (
+                      <p className="text-xs text-green-400 mt-1">
+                        Valores preenchidos automaticamente a partir do produto do grupo
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* AEREO specific */}
                 {prod.tipo === 'AEREO' && (

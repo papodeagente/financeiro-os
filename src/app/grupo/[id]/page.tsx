@@ -135,7 +135,7 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
         {/* Top bar */}
         <header className="bg-white border-b px-6 py-3 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 text-sm text-gray-500">
-            <Link href="/" className="hover:text-[#1a1a2e]">Grupos OS</Link>
+            <Link href="/grupos" className="hover:text-[#1a1a2e]">Produtos</Link>
             <span>/</span>
             <span className="font-semibold text-[#1a1a2e]">{grupo.grp_id || 'Sem ID'}</span>
             <span>/</span>

@@ -144,7 +144,7 @@ export interface Membro {
 // VENDAS
 // ============================================================
 
-export type TipoProdutoVenda = 'AEREO' | 'HOTEL' | 'PACOTE' | 'SEGURO' | 'RECEPTIVO' | 'CRUZEIRO' | 'CARRO' | 'INGRESSO' | 'OUTROS';
+export type TipoProdutoVenda = 'AEREO' | 'HOTEL' | 'PACOTE' | 'SEGURO' | 'RECEPTIVO' | 'CRUZEIRO' | 'CARRO' | 'INGRESSO' | 'GRUPO' | 'OUTROS';
 export type StatusProdutoVenda = 'RESERVADO' | 'CONFIRMADO' | 'EMITIDO' | 'CANCELADO' | 'ALTERADO';
 export type StatusVendaCRM = 'ORCAMENTO' | 'RESERVADO' | 'CONFIRMADO' | 'CANCELADO' | 'CONCLUIDO';
 export type FormaPagamentoCRM = 'AVISTA_PIX' | 'CARTAO' | 'BOLETO' | 'FATURADO' | 'MISTO';

@@ -85,7 +85,7 @@ export default function FinanceiroPage({ params }: { params: Promise<{ id: strin
       {/* Top bar */}
       <header className="bg-white border-b px-6 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2 text-sm text-gray-500">
-          <Link href="/" className="hover:text-[#1a1a2e]">Grupos OS</Link>
+          <Link href="/financeiro-grupos" className="hover:text-[#1a1a2e]">Fin. Grupos</Link>
           <span>/</span>
           <Link href={`/grupo/${grupo.id}`} className="hover:text-[#1a1a2e] font-semibold text-[#1a1a2e]">
             {grupo.grp_id || 'Sem ID'}
