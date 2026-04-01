@@ -64,15 +64,15 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
   const [saved, setSaved] = useState(true);
 
   useEffect(() => {
-    const grupos = loadGrupos();
-    const found = grupos.find(g => g.id === id);
-    if (found) {
-      // Ensure financeiro field exists for groups created before financial module
-      if (!found.financeiro) found.financeiro = createFinanceiroGrupo();
-      setGrupo(found);
-    } else {
-      router.push('/');
-    }
+    loadGrupos().then(grupos => {
+      const found = grupos.find(g => g.id === id);
+      if (found) {
+        if (!found.financeiro) found.financeiro = createFinanceiroGrupo();
+        setGrupo(found);
+      } else {
+        router.push('/');
+      }
+    });
   }, [id, router]);
 
   const handleChange = useCallback((updated: GrupoViagem) => {
@@ -80,9 +80,9 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
     setSaved(false);
   }, []);
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     if (grupo) {
-      saveGrupo(grupo);
+      await saveGrupo(grupo);
       setSaved(true);
     }
   }, [grupo]);
@@ -90,8 +90,8 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
   // Auto-save every 5 seconds
   useEffect(() => {
     if (!saved && grupo) {
-      const timer = setTimeout(() => {
-        saveGrupo(grupo);
+      const timer = setTimeout(async () => {
+        await saveGrupo(grupo);
         setSaved(true);
       }, 5000);
       return () => clearTimeout(timer);

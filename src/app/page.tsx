@@ -14,25 +14,25 @@ export default function Home() {
   const [grupos, setGrupos] = useState<GrupoViagem[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { setGrupos(loadGrupos()); }, []);
+  useEffect(() => { loadGrupos().then(setGrupos); }, []);
 
-  const criarGrupo = () => {
+  const criarGrupo = async () => {
     const novo = createGrupoViagem();
     const updated = [...grupos, novo];
     setGrupos(updated);
-    saveGrupos(updated);
+    await saveGrupos(updated);
   };
 
-  const duplicarGrupo = (g: GrupoViagem) => {
+  const duplicarGrupo = async (g: GrupoViagem) => {
     const copia = { ...JSON.parse(JSON.stringify(g)), id: Date.now().toString(36) + Math.random().toString(36).substring(2, 9), created_at: new Date().toISOString(), updated_at: new Date().toISOString(), grp_id: g.grp_id + ' (copia)' };
     const updated = [...grupos, copia];
     setGrupos(updated);
-    saveGrupos(updated);
+    await saveGrupos(updated);
   };
 
-  const removerGrupo = (id: string) => {
+  const removerGrupo = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este grupo?')) return;
-    deleteGrupo(id);
+    await deleteGrupo(id);
     setGrupos(grupos.filter(g => g.id !== id));
   };
 
@@ -51,13 +51,13 @@ export default function Home() {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       const grupo = importGrupoJSON(ev.target?.result as string);
       if (grupo) {
         grupo.id = Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
         const updated = [...grupos, grupo];
         setGrupos(updated);
-        saveGrupos(updated);
+        await saveGrupos(updated);
       } else {
         alert('Arquivo JSON invalido');
       }
