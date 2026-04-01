@@ -1,0 +1,145 @@
+'use client';
+
+import { GrupoViagem } from '@/lib/types';
+import { createTktTrecho } from '@/lib/defaults';
+import { minPositivo, formatBRL } from '@/lib/utils';
+import { calcTktTotals } from '@/lib/calculations';
+import { MoneyInput } from '@/components/MoneyInput';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Plus, Trash2 } from 'lucide-react';
+
+interface Props {
+  grupo: GrupoViagem;
+  onChange: (grupo: GrupoViagem) => void;
+}
+
+export function TktTab({ grupo, onChange }: Props) {
+  const totals = calcTktTotals(grupo);
+
+  const updateFonte = (trechoIdx: number, fonteIdx: number, field: string, value: number | null | string) => {
+    const tkt = { ...grupo.tkt, trechos: [...grupo.tkt.trechos] };
+    tkt.trechos[trechoIdx] = {
+      ...tkt.trechos[trechoIdx],
+      fontes: [...tkt.trechos[trechoIdx].fontes],
+    };
+    tkt.trechos[trechoIdx].fontes[fonteIdx] = {
+      ...tkt.trechos[trechoIdx].fontes[fonteIdx],
+      [field]: value,
+    };
+    onChange({ ...grupo, tkt });
+  };
+
+  const updateDeadline = (trechoIdx: number, value: string | null) => {
+    const tkt = { ...grupo.tkt, trechos: [...grupo.tkt.trechos] };
+    tkt.trechos[trechoIdx] = { ...tkt.trechos[trechoIdx], deadline: value };
+    onChange({ ...grupo, tkt });
+  };
+
+  const addTrecho = () => {
+    if (grupo.tkt.trechos.length < 4) {
+      onChange({ ...grupo, tkt: { trechos: [...grupo.tkt.trechos, createTktTrecho()] } });
+    }
+  };
+
+  const removeTrecho = (idx: number) => {
+    onChange({ ...grupo, tkt: { trechos: grupo.tkt.trechos.filter((_, i) => i !== idx) } });
+  };
+
+  return (
+    <div className="space-y-8">
+      {/* Totals bar */}
+      <div className="bg-[#1a1a2e] text-white p-4 rounded-lg flex flex-wrap gap-6">
+        <div><span className="text-xs text-[#d4a853]">Total TKT ADT</span><div className="text-lg font-bold">{formatBRL(totals.totalAdt)}</div></div>
+        <div><span className="text-xs text-[#d4a853]">Total TKT CHD</span><div className="text-lg font-bold">{formatBRL(totals.totalChd)}</div></div>
+      </div>
+
+      <div className="flex justify-end">
+        <Button variant="outline" size="sm" onClick={addTrecho} disabled={grupo.tkt.trechos.length >= 4}>
+          <Plus className="w-4 h-4 mr-1" /> Trecho
+        </Button>
+      </div>
+
+      {grupo.tkt.trechos.map((trecho, tIdx) => {
+        const infTrecho = grupo.trechos[tIdx];
+        const melhorAdt = minPositivo(trecho.fontes.map(f => f.valor_adt));
+        const melhorChd = minPositivo(trecho.fontes.map(f => f.valor_chd));
+
+        return (
+          <div key={tIdx} className="border rounded-lg overflow-hidden">
+            <div className="bg-[#1a1a2e] text-white p-3 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <span className="font-semibold">Trecho {tIdx + 1}</span>
+                {infTrecho && (
+                  <span className="text-sm text-gray-300">
+                    ADT: {infTrecho.qtd_adt} | CHD: {infTrecho.qtd_chd}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Input type="date" value={trecho.deadline || ''} onChange={e => updateDeadline(tIdx, e.target.value || null)} className="h-8 w-40 bg-white/10 text-white border-white/20" />
+                {grupo.tkt.trechos.length > 1 && (
+                  <Button variant="ghost" size="sm" onClick={() => removeTrecho(tIdx)} className="text-red-300 hover:text-red-100">
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="p-2 text-left border">Fonte</th>
+                    <th className="p-2 border w-40">Valor ADT</th>
+                    <th className="p-2 border w-40">Valor CHD</th>
+                    <th className="p-2 border">Partida/Chegada</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trecho.fontes.map((fonte, fIdx) => {
+                    const isMinAdt = fonte.valor_adt !== null && fonte.valor_adt > 0 && fonte.valor_adt === melhorAdt;
+                    const isMinChd = fonte.valor_chd !== null && fonte.valor_chd > 0 && fonte.valor_chd === melhorChd;
+                    return (
+                      <tr key={fIdx} className={fIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        <td className="p-2 border font-medium">{fonte.nome}</td>
+                        <td className="p-1 border">
+                          <MoneyInput
+                            value={fonte.valor_adt}
+                            onChange={v => updateFonte(tIdx, fIdx, 'valor_adt', v)}
+                            highlight={isMinAdt}
+                          />
+                        </td>
+                        <td className="p-1 border">
+                          <MoneyInput
+                            value={fonte.valor_chd}
+                            onChange={v => updateFonte(tIdx, fIdx, 'valor_chd', v)}
+                            highlight={isMinChd}
+                          />
+                        </td>
+                        <td className="p-1 border">
+                          <Input
+                            value={fonte.partida_chegada}
+                            onChange={e => updateFonte(tIdx, fIdx, 'partida_chegada', e.target.value)}
+                            className="h-8"
+                            placeholder="GRU 10:00 → LIS 22:00"
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {/* Best price row */}
+                  <tr className="bg-green-100 font-bold">
+                    <td className="p-2 border text-green-800">MELHOR R$</td>
+                    <td className="p-2 border text-right text-green-800">{formatBRL(melhorAdt)}</td>
+                    <td className="p-2 border text-right text-green-800">{formatBRL(melhorChd)}</td>
+                    <td className="p-2 border"></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
