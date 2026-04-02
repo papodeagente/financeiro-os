@@ -1,7 +1,15 @@
 'use client';
 
 import { Input } from '@/components/ui/input';
+import { RichTextEditor } from '@/components/propostas/RichTextEditor';
 import type { BlockProps } from './types';
+
+// Convert plain text to basic HTML paragraphs (backward compat)
+function ensureHTML(text: string): string {
+  if (!text) return '';
+  if (text.includes('<')) return text; // already HTML
+  return text.split('\n').filter(Boolean).map(p => `<p>${p}</p>`).join('');
+}
 
 export function TextoBlock({ conteudo, onChange }: BlockProps) {
   const c = conteudo as { titulo?: string; corpo?: string };
@@ -13,12 +21,10 @@ export function TextoBlock({ conteudo, onChange }: BlockProps) {
         placeholder="Titulo do bloco"
         className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
       />
-      <textarea
-        value={c.corpo || ''}
-        onChange={e => onChange({ ...conteudo, corpo: e.target.value })}
-        rows={3}
-        placeholder="Texto..."
-        className="w-full bg-[var(--t-bg)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-sm resize-none"
+      <RichTextEditor
+        content={ensureHTML(c.corpo || '')}
+        onChange={html => onChange({ ...conteudo, corpo: html })}
+        placeholder="Escreva o conteudo aqui..."
       />
     </div>
   );

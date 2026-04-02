@@ -8,10 +8,15 @@ const BRL = (v: number) =>
 
 function TextoPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
   const c = conteudo as { titulo?: string; corpo?: string };
+  const isHTML = c.corpo?.includes('<');
   return (
     <div className="space-y-2">
       {c.titulo && <h3 className="text-xl font-semibold">{c.titulo}</h3>}
-      {c.corpo && <p className="whitespace-pre-wrap leading-relaxed opacity-80">{c.corpo}</p>}
+      {c.corpo && (
+        isHTML
+          ? <div className="prose prose-sm max-w-none leading-relaxed opacity-80 [&_a]:text-emerald-500 [&_a]:underline [&_mark]:bg-yellow-200/50 [&_blockquote]:border-l-2 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:opacity-70" dangerouslySetInnerHTML={{ __html: c.corpo }} />
+          : <p className="whitespace-pre-wrap leading-relaxed opacity-80">{c.corpo}</p>
+      )}
     </div>
   );
 }
