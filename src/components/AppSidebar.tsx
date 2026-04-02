@@ -3,13 +3,14 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
+import { useTheme } from '@/contexts/ThemeContext';
 import {
   LayoutDashboard, Users, UserPlus, Building2, Briefcase,
   ShoppingCart, ListOrdered, FileText as FileTextIcon,
   FolderOpen, Receipt, Factory, TrendingUp, FileText, Gauge,
   DollarSign, CreditCard, BookOpen, Landmark, Package,
   Settings, Building, UserCog,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, Sun, Moon,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -80,6 +81,7 @@ const MENU: MenuItem[] = [
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const { theme, toggleTheme } = useTheme();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const toggle = (key: string) => {
@@ -109,8 +111,8 @@ export function AppSidebar() {
             onClick={() => toggle(item.key)}
             className={`w-full flex items-center gap-3 px-3 py-2 text-[13px] rounded-lg transition-all ${
               isGroupActive(item)
-                ? 'bg-[#4ade80]/10 text-[#4ade80]'
-                : 'text-[#8888a0] hover:bg-white/[0.04] hover:text-white'
+                ? 'bg-[var(--t-sidebar-group)] text-[var(--t-sidebar-group-text)]'
+                : 'text-[var(--t-sidebar-item)] hover:bg-[var(--t-sidebar-item-hover)] hover:text-[var(--t-text)]'
             }`}
           >
             <Icon className="w-[18px] h-[18px] shrink-0" />
@@ -118,7 +120,7 @@ export function AppSidebar() {
             {isOpen ? <ChevronDown className="w-3.5 h-3.5 opacity-50" /> : <ChevronRight className="w-3.5 h-3.5 opacity-50" />}
           </button>
           {isOpen && (
-            <div className="ml-[18px] mt-0.5 space-y-0.5 border-l border-white/[0.06] pl-3 mb-1">
+            <div className="ml-[18px] mt-0.5 space-y-0.5 border-l border-[var(--t-border)] pl-3 mb-1">
               {item.children!.map(child => renderItem(child))}
             </div>
           )}
@@ -135,9 +137,10 @@ export function AppSidebar() {
         href={href}
         className={`flex items-center gap-3 px-3 py-2 text-[13px] rounded-lg transition-all ${
           active
-            ? 'bg-[#4ade80] text-[#0a0a14] font-medium shadow-lg shadow-[#4ade80]/20'
-            : 'text-[#8888a0] hover:bg-white/[0.04] hover:text-white'
+            ? 'bg-[var(--t-sidebar-active-bg)] text-[var(--t-sidebar-active-text)] font-medium shadow-lg'
+            : 'text-[var(--t-sidebar-item)] hover:bg-[var(--t-sidebar-item-hover)] hover:text-[var(--t-text)]'
         }`}
+        style={active ? { boxShadow: `0 4px 15px var(--t-green-shadow)` } : {}}
       >
         <Icon className="w-[18px] h-[18px] shrink-0" />
         <span>{item.label}</span>
@@ -146,22 +149,29 @@ export function AppSidebar() {
   };
 
   return (
-    <aside className="w-60 bg-[#0e0e1a] flex flex-col shrink-0 overflow-hidden border-r border-white/[0.06]">
+    <aside className="w-60 bg-[var(--t-sidebar-bg)] flex flex-col shrink-0 overflow-hidden border-r border-[var(--t-border)] transition-colors duration-200">
       {/* Logo */}
-      <div className="px-5 py-5">
+      <div className="px-5 py-5 flex items-center justify-between">
         <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-[#4ade80] flex items-center justify-center">
-            <span className="text-[#0a0a14] font-bold text-sm">E</span>
+          <div className="w-8 h-8 rounded-lg bg-[var(--t-green)] flex items-center justify-center">
+            <span className="text-white font-bold text-sm dark:text-[#0a0a14]">E</span>
           </div>
           <div>
-            <div className="text-[15px] font-semibold text-white tracking-tight">Entur <span className="text-[#4ade80]">OS</span></div>
-            <div className="text-[10px] text-[#8888a0] -mt-0.5">Financeiro</div>
+            <div className="text-[15px] font-semibold text-[var(--t-text)] tracking-tight">Entur <span className="text-[var(--t-green)]">OS</span></div>
+            <div className="text-[10px] text-[var(--t-text-secondary)] -mt-0.5">Financeiro</div>
           </div>
         </Link>
+        <button
+          onClick={toggleTheme}
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--t-text-secondary)] hover:text-[var(--t-text)] hover:bg-[var(--t-sidebar-item-hover)] transition-colors"
+          title={theme === 'dark' ? 'Tema claro' : 'Tema escuro'}
+        >
+          {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+        </button>
       </div>
 
       {/* Divider */}
-      <div className="mx-4 border-t border-white/[0.06]" />
+      <div className="mx-4 border-t border-[var(--t-border)]" />
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">
@@ -169,8 +179,8 @@ export function AppSidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="px-5 py-4 border-t border-white/[0.06]">
-        <div className="text-[10px] text-[#555] tracking-wider uppercase">Fase 1 — MVP</div>
+      <div className="px-5 py-4 border-t border-[var(--t-border)]">
+        <div className="text-[10px] text-[var(--t-text-muted)] tracking-wider uppercase">Fase 1 — MVP</div>
       </div>
     </aside>
   );
