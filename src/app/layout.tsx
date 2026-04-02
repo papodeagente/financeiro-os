@@ -7,8 +7,8 @@ import { AppSidebar } from "@/components/AppSidebar";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Grupos OS - Sistema de Gestão de Agência de Viagens",
-  description: "Planejamento de grupos, vendas, financeiro e CRM para agências de viagens",
+  title: "Entur OS - Financeiro",
+  description: "Sistema financeiro e gestão de agência de viagens",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

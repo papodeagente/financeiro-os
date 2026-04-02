@@ -151,8 +151,8 @@ export function AppSidebar() {
       {/* Logo */}
       <div className="px-4 py-4 border-b border-gray-700">
         <Link href="/dashboard" className="block">
-          <div className="text-lg font-bold">Grupos <span className="text-[#d4a853]">OS</span></div>
-          <div className="text-[10px] text-gray-400">Sistema de Gestão de Viagens</div>
+          <div className="text-lg font-bold">Entur <span className="text-[#d4a853]">OS</span></div>
+          <div className="text-[10px] text-gray-400">Financeiro</div>
         </Link>
       </div>
 
