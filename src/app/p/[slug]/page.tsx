@@ -8,6 +8,7 @@ import { PreviewRenderer } from '@/components/propostas/preview/PreviewRenderer'
 import { RodapeSection } from '@/components/propostas/preview/RodapeSection';
 import { AceitarProposta } from '@/components/propostas/preview/AceitarProposta';
 import { LeadCapture } from '@/components/propostas/preview/LeadCapture';
+import { ChatWidget } from '@/components/propostas/preview/ChatWidget';
 import { t, type IdiomaProposal } from '@/lib/i18n-proposta';
 
 export default function PublicPropostaPage() {
@@ -154,6 +155,13 @@ export default function PublicPropostaPage() {
           {i18n.validaAte} {new Date(proposta.cabecalho.validade + 'T12:00:00').toLocaleDateString(idioma === 'en' ? 'en-US' : idioma === 'es' ? 'es-ES' : 'pt-BR')}
         </div>
       )}
+
+      {/* AI Chat Widget */}
+      <ChatWidget
+        slug={slug}
+        corPrimaria={proposta.visual.cor_primaria || '#10b981'}
+        idioma={idioma}
+      />
     </div>
   );
 }
