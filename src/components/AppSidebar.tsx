@@ -93,6 +93,16 @@ const MENU: MenuItem[] = [
     ],
   },
   {
+    key: 'relatorios',
+    label: 'Relatórios',
+    icon: FileText,
+    children: [
+      { key: 'rel-financeiro', label: 'Financeiro', icon: DollarSign, href: '/relatorios/financeiro' },
+      { key: 'rel-rentabilidade', label: 'Rentabilidade', icon: TrendingUp, href: '/relatorios/rentabilidade' },
+      { key: 'rel-comparativo', label: 'Comparativo Mensal', icon: BarChart3, href: '/relatorios/comparativo' },
+    ],
+  },
+  {
     key: 'config',
     label: 'Configurações',
     icon: Settings,
