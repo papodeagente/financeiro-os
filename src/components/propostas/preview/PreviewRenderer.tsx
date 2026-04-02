@@ -230,6 +230,108 @@ function CtaPreview({ conteudo, corPrimaria }: { conteudo: Record<string, unknow
   );
 }
 
+function VideoPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
+  const c = conteudo as { url?: string; titulo?: string };
+  if (!c.url) return null;
+
+  // Convert YouTube/Vimeo URLs to embed
+  let embedUrl = '';
+  const url = c.url;
+  const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/);
+  const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
+  if (ytMatch) embedUrl = `https://www.youtube-nocookie.com/embed/${ytMatch[1]}`;
+  else if (vimeoMatch) embedUrl = `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+  else embedUrl = url;
+
+  return (
+    <div className="space-y-2">
+      {c.titulo && <h3 className="text-xl font-semibold">{c.titulo}</h3>}
+      <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+        <iframe
+          src={embedUrl}
+          className="absolute inset-0 w-full h-full rounded-xl"
+          allowFullScreen
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        />
+      </div>
+    </div>
+  );
+}
+
+function MapaPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
+  const c = conteudo as { titulo?: string; pontos?: Array<{ lat: number; lng: number; label: string }> };
+  const pontos = (c.pontos || []).filter(p => p.lat && p.lng);
+  if (pontos.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      {c.titulo && <h3 className="text-xl font-semibold">{c.titulo}</h3>}
+      <MapaRoteiro pontos={pontos.map((p, i) => ({ ...p, dia: i + 1 }))} height="400px" />
+    </div>
+  );
+}
+
+function FAQPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
+  const c = conteudo as { titulo?: string; perguntas?: Array<{ pergunta: string; resposta: string }> };
+  const perguntas = (c.perguntas || []).filter(p => p.pergunta);
+  if (perguntas.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      {c.titulo && <h3 className="text-xl font-semibold">{c.titulo}</h3>}
+      <div className="space-y-2">
+        {perguntas.map((faq, i) => (
+          <details key={i} className="group border border-gray-200 rounded-lg">
+            <summary className="flex items-center justify-between px-4 py-3 cursor-pointer font-medium text-sm hover:bg-gray-50 rounded-lg">
+              {faq.pergunta}
+              <span className="text-gray-400 group-open:rotate-180 transition-transform">&#9662;</span>
+            </summary>
+            <div className="px-4 pb-3 text-sm opacity-80 whitespace-pre-wrap">{faq.resposta}</div>
+          </details>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CountdownPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
+  const c = conteudo as { titulo?: string; data_evento?: string; mensagem?: string };
+  if (!c.data_evento) return null;
+
+  const target = new Date(c.data_evento + 'T00:00:00').getTime();
+  const now = Date.now();
+  const diff = target - now;
+
+  if (diff <= 0) {
+    return (
+      <div className="text-center py-6">
+        {c.titulo && <h3 className="text-xl font-semibold mb-2">{c.titulo}</h3>}
+        <p className="text-lg text-emerald-600 font-semibold">{c.mensagem || 'O grande dia chegou!'}</p>
+      </div>
+    );
+  }
+
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+  return (
+    <div className="text-center py-6">
+      {c.titulo && <h3 className="text-xl font-semibold mb-4">{c.titulo}</h3>}
+      <div className="flex justify-center gap-4">
+        {[{ v: days, l: 'dias' }, { v: hours, l: 'horas' }, { v: minutes, l: 'min' }].map((item, i) => (
+          <div key={i} className="flex flex-col items-center">
+            <div className="w-16 h-16 rounded-xl bg-emerald-50 border-2 border-emerald-200 flex items-center justify-center text-2xl font-bold text-emerald-700">
+              {item.v}
+            </div>
+            <span className="text-xs mt-1 opacity-60">{item.l}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 interface Props {
   secoes: SecaoProposta[];
   corPrimaria: string;
@@ -248,6 +350,10 @@ export function PreviewRenderer({ secoes, corPrimaria }: Props) {
           {secao.tipo === 'VALORES' && <ValoresPreview conteudo={secao.conteudo} />}
           {secao.tipo === 'DEPOIMENTO' && <DepoimentoPreview conteudo={secao.conteudo} />}
           {secao.tipo === 'CTA' && <CtaPreview conteudo={secao.conteudo} corPrimaria={corPrimaria} />}
+          {secao.tipo === 'VIDEO' && <VideoPreview conteudo={secao.conteudo} />}
+          {secao.tipo === 'MAPA' && <MapaPreview conteudo={secao.conteudo} />}
+          {secao.tipo === 'FAQ' && <FAQPreview conteudo={secao.conteudo} />}
+          {secao.tipo === 'COUNTDOWN' && <CountdownPreview conteudo={secao.conteudo} />}
         </div>
       ))}
     </div>

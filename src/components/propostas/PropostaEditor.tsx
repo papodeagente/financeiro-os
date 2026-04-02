@@ -10,6 +10,7 @@ import {
   ChevronUp, ChevronDown, Trash2, Plane, Hotel,
   Type, Calendar, Image, CheckSquare, DollarSign, Quote, MousePointer,
   Check, Loader2, Sparkles, FileDown, GitBranch,
+  Video, Map, HelpCircle, Timer,
 } from 'lucide-react';
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor,
@@ -34,10 +35,12 @@ import type { GooglePlace } from '@/lib/hotel-data-mapper';
 const TIPO_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   TEXTO: Type, SERVICO: Plane, ROTEIRO_DIA: Calendar, GALERIA: Image,
   INCLUSOS: CheckSquare, VALORES: DollarSign, DEPOIMENTO: Quote, CTA: MousePointer,
+  VIDEO: Video, MAPA: Map, FAQ: HelpCircle, COUNTDOWN: Timer,
 };
 const TIPO_LABELS: Record<string, string> = {
   TEXTO: 'Texto', SERVICO: 'Servico', ROTEIRO_DIA: 'Roteiro', GALERIA: 'Galeria',
   INCLUSOS: 'Inclusos', VALORES: 'Valores', DEPOIMENTO: 'Depoimento', CTA: 'CTA',
+  VIDEO: 'Video', MAPA: 'Mapa', FAQ: 'FAQ', COUNTDOWN: 'Countdown',
 };
 
 function defaultConteudo(tipo: string): Record<string, unknown> {
@@ -50,6 +53,10 @@ function defaultConteudo(tipo: string): Record<string, unknown> {
     case 'VALORES': return { opcoes: [{ titulo: 'Opcao 1', valor_total: 0, destaque: false, parcelas: [{ forma: 'A vista PIX', valor_parcela: 0, valor_total: 0, destaque: true }] }], observacoes_valores: '', validade: '' };
     case 'DEPOIMENTO': return { depoimentos: [{ texto: '', autor: '', foto: '', destino: '' }] };
     case 'CTA': return { texto_botao: 'Quero reservar minha viagem!', tipo_acao: 'WHATSAPP', numero_whatsapp: '', mensagem_predefinida: '', cor_botao: '#10b981' };
+    case 'VIDEO': return { url: '', titulo: '' };
+    case 'MAPA': return { titulo: '', pontos: [], zoom: 10 };
+    case 'FAQ': return { titulo: 'Perguntas Frequentes', perguntas: [] };
+    case 'COUNTDOWN': return { titulo: '', data_evento: '', mensagem: '' };
     default: return {};
   }
 }

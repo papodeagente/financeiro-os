@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import {
   Plus, Type, Plane, Calendar, Image, CheckSquare,
   DollarSign, Quote, MousePointer, Hotel, Sparkles, Loader2,
+  Video, Map, HelpCircle, Timer,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -17,6 +18,10 @@ const SECAO_TIPOS = [
   { tipo: 'VALORES', label: 'Valores', icon: DollarSign, desc: 'Tabela de precos' },
   { tipo: 'DEPOIMENTO', label: 'Depoimento', icon: Quote, desc: 'Prova social' },
   { tipo: 'CTA', label: 'CTA', icon: MousePointer, desc: 'Botao de acao' },
+  { tipo: 'VIDEO', label: 'Video', icon: Video, desc: 'YouTube ou Vimeo' },
+  { tipo: 'MAPA', label: 'Mapa', icon: Map, desc: 'Pontos no mapa' },
+  { tipo: 'FAQ', label: 'FAQ', icon: HelpCircle, desc: 'Perguntas frequentes' },
+  { tipo: 'COUNTDOWN', label: 'Countdown', icon: Timer, desc: 'Contagem regressiva' },
 ] as const;
 
 interface Props {

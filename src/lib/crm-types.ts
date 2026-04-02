@@ -540,7 +540,7 @@ export interface MetaVendedor {
 // ============================================================
 
 export type StatusProposta = 'RASCUNHO' | 'ENVIADO' | 'VISUALIZADO' | 'ACEITO' | 'RECUSADO' | 'EXPIRADO' | 'CONVERTIDO';
-export type TipoSecaoProposta = 'TEXTO' | 'SERVICO' | 'ROTEIRO_DIA' | 'GALERIA' | 'INCLUSOS' | 'VALORES' | 'DEPOIMENTO' | 'CTA';
+export type TipoSecaoProposta = 'TEXTO' | 'SERVICO' | 'ROTEIRO_DIA' | 'GALERIA' | 'INCLUSOS' | 'VALORES' | 'DEPOIMENTO' | 'CTA' | 'VIDEO' | 'MAPA' | 'FAQ' | 'COUNTDOWN';
 export type EstiloCapa = 'FULLSCREEN' | 'SPLIT' | 'MINIMAL';
 
 export interface SecaoProposta {
