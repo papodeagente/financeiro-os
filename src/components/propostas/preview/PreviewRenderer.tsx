@@ -210,7 +210,7 @@ function DepoimentoPreview({ conteudo, idioma }: { conteudo: Record<string, unkn
 
 function CtaPreview({ conteudo, corPrimaria, idioma }: { conteudo: Record<string, unknown>; corPrimaria: string; idioma?: IdiomaProposal }) {
   const c = conteudo as { texto_botao?: string; tipo_acao?: string; numero_whatsapp?: string; mensagem_predefinida?: string; cor_botao?: string };
-  const cor = c.cor_botao || corPrimaria || '#00F0FF';
+  const cor = c.cor_botao || corPrimaria || '#004aad';
 
   const handleClick = () => {
     if (c.tipo_acao === 'WHATSAPP' && c.numero_whatsapp) {

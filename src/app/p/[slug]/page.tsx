@@ -119,7 +119,7 @@ export default function PublicPropostaPage() {
       <div className="max-w-3xl mx-auto px-6 py-8">
         <PreviewRenderer
           secoes={proposta.secoes}
-          corPrimaria={proposta.visual.cor_primaria || '#00F0FF'}
+          corPrimaria={proposta.visual.cor_primaria || '#004aad'}
           idioma={idioma}
         />
       </div>
@@ -134,7 +134,7 @@ export default function PublicPropostaPage() {
         <AceitarProposta
           slug={slug}
           status={proposta.status}
-          corPrimaria={proposta.visual.cor_primaria || '#00F0FF'}
+          corPrimaria={proposta.visual.cor_primaria || '#004aad'}
           vendedorNome={proposta.rodape.nome_vendedor}
           aceite={proposta.aceite}
           idioma={idioma}
@@ -144,7 +144,7 @@ export default function PublicPropostaPage() {
       {/* Lead Capture — shown for proposals without specific client */}
       <LeadCapture
         slug={slug}
-        corPrimaria={proposta.visual.cor_primaria || '#00F0FF'}
+        corPrimaria={proposta.visual.cor_primaria || '#004aad'}
         vendedorNome={proposta.rodape.nome_vendedor}
         idioma={idioma}
       />
@@ -159,7 +159,7 @@ export default function PublicPropostaPage() {
       {/* AI Chat Widget */}
       <ChatWidget
         slug={slug}
-        corPrimaria={proposta.visual.cor_primaria || '#00F0FF'}
+        corPrimaria={proposta.visual.cor_primaria || '#004aad'}
         idioma={idioma}
       />
     </div>

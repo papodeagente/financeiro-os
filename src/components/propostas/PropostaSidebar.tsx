@@ -340,7 +340,7 @@ export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAI
                     <div className="flex gap-2 mt-1">
                       <input
                         type="color"
-                        value={proposta.visual.cor_primaria || '#00F0FF'}
+                        value={proposta.visual.cor_primaria || '#004aad'}
                         onChange={e => onUpdate(p => { p.visual.cor_primaria = e.target.value; return p; })}
                         className="w-8 h-8 rounded cursor-pointer border border-[var(--t-border)]"
                       />

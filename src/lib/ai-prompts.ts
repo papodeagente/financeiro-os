@@ -67,7 +67,7 @@ Responda APENAS com JSON valido (sem markdown):
       return base + `Gere o texto de um botao CTA (call-to-action) convincente para fechar a venda desta viagem.
 
 Responda APENAS com JSON valido (sem markdown):
-{"texto_botao": "...", "tipo_acao": "WHATSAPP", "numero_whatsapp": "", "mensagem_predefinida": "Ola! Gostaria de saber mais sobre a proposta de viagem para ${context.destino || 'o destino'}.", "cor_botao": "#00F0FF"}`;
+{"texto_botao": "...", "tipo_acao": "WHATSAPP", "numero_whatsapp": "", "mensagem_predefinida": "Ola! Gostaria de saber mais sobre a proposta de viagem para ${context.destino || 'o destino'}.", "cor_botao": "#004aad"}`;
 
     default:
       return base + `Gere conteudo relevante para um bloco do tipo "${tipo}" numa proposta de viagem.
@@ -99,7 +99,7 @@ Responda APENAS com JSON valido (sem markdown), no formato:
     {"tipo": "TEXTO", "conteudo": {"titulo": "...", "corpo": "...", "alinhamento": "left"}},
     {"tipo": "ROTEIRO_DIA", "conteudo": {"dias": [{"numero": 1, "titulo": "...", "descricao": "...", "atividades": [], "refeicoes_inclusas": ""}]}},
     {"tipo": "INCLUSOS", "conteudo": {"inclusos": ["..."], "nao_inclusos": ["..."]}},
-    {"tipo": "CTA", "conteudo": {"texto_botao": "...", "tipo_acao": "WHATSAPP", "numero_whatsapp": "", "mensagem_predefinida": "...", "cor_botao": "#00F0FF"}}
+    {"tipo": "CTA", "conteudo": {"texto_botao": "...", "tipo_acao": "WHATSAPP", "numero_whatsapp": "", "mensagem_predefinida": "...", "cor_botao": "#004aad"}}
   ]
 }`;
 }

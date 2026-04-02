@@ -133,7 +133,7 @@ export async function POST(req: Request) {
       cliente_id: '', cliente_nome: '', vendedor_id: '', vendedor_nome: '',
       template_id: '', grupo_id,
       visual: {
-        tema: 'padrao', cor_primaria: '#00F0FF', cor_secundaria: '#0a0a14', cor_texto: '#ffffff',
+        tema: 'padrao', cor_primaria: '#004aad', cor_secundaria: '#0a0a14', cor_texto: '#ffffff',
         cor_fundo: '#ffffff', fonte: 'Inter', imagem_capa: '', estilo_capa: 'FULLSCREEN',
       },
       cabecalho: {
