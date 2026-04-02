@@ -3,12 +3,14 @@
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Plus, Trash2 } from 'lucide-react';
+import { ImageUpload } from '@/components/propostas/ImageUpload';
 import type { BlockProps } from './types';
 
 interface Dia {
   numero: number;
   titulo: string;
   descricao: string;
+  imagem?: string;
   atividades: string[];
 }
 
@@ -43,6 +45,12 @@ export function RoteiroDiaBlock({ conteudo, onChange }: BlockProps) {
             rows={2}
             placeholder="Descricao do dia..."
             className="w-full bg-[var(--t-bg-secondary)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-sm resize-none"
+          />
+          <ImageUpload
+            compact
+            currentUrl={dia.imagem}
+            onUpload={urls => updateDia(i, { imagem: urls[0] })}
+            onRemove={() => updateDia(i, { imagem: '' })}
           />
         </div>
       ))}

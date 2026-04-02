@@ -1,6 +1,7 @@
 'use client';
 
 import { Input } from '@/components/ui/input';
+import { ImageUpload } from '@/components/propostas/ImageUpload';
 import type { BlockProps } from './types';
 
 export function ServicoBlock({ conteudo, onChange }: BlockProps) {
@@ -28,19 +29,19 @@ export function ServicoBlock({ conteudo, onChange }: BlockProps) {
         placeholder="Descricao do servico..."
         className="w-full bg-[var(--t-bg)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-sm resize-none"
       />
-      <div className="grid grid-cols-2 gap-2">
+      <div className="flex items-center gap-2">
         <Input
           type="number"
           value={c.valor || ''}
           onChange={e => onChange({ ...conteudo, valor: Number(e.target.value) })}
           placeholder="Valor (R$)"
-          className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
+          className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)] w-40"
         />
-        <Input
-          value={c.imagem || ''}
-          onChange={e => onChange({ ...conteudo, imagem: e.target.value })}
-          placeholder="URL da imagem (opcional)"
-          className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
+        <ImageUpload
+          compact
+          currentUrl={c.imagem}
+          onUpload={urls => onChange({ ...conteudo, imagem: urls[0] })}
+          onRemove={() => onChange({ ...conteudo, imagem: '' })}
         />
       </div>
     </div>

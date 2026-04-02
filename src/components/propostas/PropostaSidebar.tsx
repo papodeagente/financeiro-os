@@ -6,6 +6,7 @@ import { generateId } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { DestinoAutocomplete } from './DestinoAutocomplete';
 import { DestinoQuickFill } from './DestinoQuickFill';
+import { ImageUpload } from './ImageUpload';
 
 type Tab = 'config' | 'destinos';
 
@@ -239,13 +240,21 @@ export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAI
               <h4 className="text-xs font-semibold text-[var(--t-text-muted)] uppercase tracking-wider mb-3">Visual</h4>
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs text-[var(--t-text-secondary)]">URL imagem de capa</label>
-                  <Input
-                    value={proposta.visual.imagem_capa}
-                    onChange={e => onUpdate(p => { p.visual.imagem_capa = e.target.value; return p; })}
-                    placeholder="https://..."
-                    className="mt-1 bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)]"
-                  />
+                  <label className="text-xs text-[var(--t-text-secondary)]">Imagem de capa</label>
+                  <div className="mt-1 space-y-2">
+                    <ImageUpload
+                      compact
+                      currentUrl={proposta.visual.imagem_capa}
+                      onUpload={urls => onUpdate(p => { p.visual.imagem_capa = urls[0]; return p; })}
+                      onRemove={() => onUpdate(p => { p.visual.imagem_capa = ''; return p; })}
+                    />
+                    <Input
+                      value={proposta.visual.imagem_capa}
+                      onChange={e => onUpdate(p => { p.visual.imagem_capa = e.target.value; return p; })}
+                      placeholder="Ou cole uma URL..."
+                      className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)] text-xs"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="text-xs text-[var(--t-text-secondary)]">Estilo da capa</label>
