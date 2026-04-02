@@ -617,6 +617,50 @@ export interface TemplateProposta {
   is_padrao: boolean;
 }
 
+// ============================================================
+// DESTINOS (Banco de conteudo rico — estilo Wetu)
+// ============================================================
+
+export interface Destino {
+  id: string;
+  nome: string;
+  pais: string;
+  descricao: string;
+  idioma: string;
+  clima: string;
+  moeda: string;
+  fuso: string;
+  melhor_epoca: string;
+  gastronomia: string;
+  dicas: string;
+  coordenadas: { lat: number; lng: number } | null;
+  imagens: string[];
+  fast_facts: Array<{ label: string; valor: string }>;
+  enriquecido: boolean;
+  enriquecido_em: string | null;
+}
+
+export function createDestino(): Destino {
+  return {
+    id: generateId(),
+    nome: '',
+    pais: '',
+    descricao: '',
+    idioma: '',
+    clima: '',
+    moeda: '',
+    fuso: '',
+    melhor_epoca: '',
+    gastronomia: '',
+    dicas: '',
+    coordenadas: null,
+    imagens: [],
+    fast_facts: [],
+    enriquecido: false,
+    enriquecido_em: null,
+  };
+}
+
 export function createProposta(numero: string): Proposta {
   return {
     id: generateId(), numero, versao: 1,
@@ -676,6 +720,11 @@ export interface ConfiguracaoAPIs {
   };
   google_places: {
     api_key: string;
+    ativo: boolean;
+  };
+  anthropic: {
+    api_key: string;
+    modelo: string;
     ativo: boolean;
   };
   cache: {

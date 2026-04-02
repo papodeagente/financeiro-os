@@ -210,7 +210,7 @@ export default function PropostasPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <Link href={`/propostas/nova?id=${p.id}`}>
+                      <Link href={`/propostas/${p.id}`}>
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-[var(--t-text-secondary)] hover:text-[var(--t-text)]">
                           <FileText className="w-4 h-4" />
                         </Button>

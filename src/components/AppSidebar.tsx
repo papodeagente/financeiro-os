@@ -111,6 +111,7 @@ const MENU: MenuItem[] = [
     children: [
       { key: 'nova-proposta', label: 'Nova Proposta', icon: Plus, href: '/propostas/nova' },
       { key: 'lista-propostas', label: 'Minhas Propostas', icon: FileText, href: '/propostas' },
+      { key: 'destinos', label: 'Banco de Destinos', icon: Globe, href: '/destinos' },
     ],
   },
   {

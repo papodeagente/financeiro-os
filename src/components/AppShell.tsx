@@ -8,8 +8,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, loading } = useAuth();
 
-  // Login page — no sidebar, no auth check
-  if (pathname === '/login') {
+  // Login page and public proposal preview — no sidebar, no auth check
+  if (pathname === '/login' || pathname.startsWith('/p/')) {
     return <>{children}</>;
   }
 

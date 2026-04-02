@@ -8,7 +8,7 @@ const JWT_SECRET = new TextEncoder().encode(
 const COOKIE_NAME = 'entur-session';
 
 // Public routes that don't require authentication
-const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/seed', '/api/auth/session'];
+const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/seed', '/api/auth/session', '/p/', '/api/propostas/public/'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

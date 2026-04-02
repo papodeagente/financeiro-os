@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Settings, Plane, Hotel, Eye, EyeOff, CheckCircle2, XCircle,
-  Loader2, Save, BarChart3, Database, RefreshCw,
+  Loader2, Save, BarChart3, Database, RefreshCw, Sparkles,
 } from 'lucide-react';
 import type { ConfiguracaoAPIs } from '@/lib/crm-types';
 
@@ -11,6 +11,7 @@ const DEFAULT_CONFIG: ConfiguracaoAPIs = {
   amadeus: { api_key: '', api_secret: '', ambiente: 'test', ativo: false },
   aviationstack: { api_key: '', ativo: false },
   google_places: { api_key: '', ativo: false },
+  anthropic: { api_key: '', modelo: 'claude-sonnet-4-20250514', ativo: false },
   cache: {
     busca_voos_ttl: 86400,
     aeroportos_ttl: 2592000,
@@ -305,6 +306,57 @@ export default function IntegracoesPage() {
               {testing['google_places'] ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
               Testar conexão
             </button>
+          </div>
+        </div>
+
+        {/* Anthropic (Claude AI) */}
+        <div className="bg-[var(--t-surface)] rounded-xl border border-[var(--t-border)] p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
+              <Sparkles className="w-5 h-5 text-purple-400" />
+            </div>
+            <div className="flex-1">
+              <h2 className="text-lg font-semibold text-[var(--t-text)]">Anthropic (Claude AI)</h2>
+              <p className="text-xs text-[var(--t-text-secondary)]">IA para geração de conteúdo em propostas e destinos</p>
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={config.anthropic?.ativo ?? false}
+                onChange={e => setConfig(c => ({ ...c, anthropic: { ...c.anthropic, api_key: c.anthropic?.api_key ?? '', modelo: c.anthropic?.modelo ?? 'claude-sonnet-4-20250514', ativo: e.target.checked } }))}
+                className="w-4 h-4 rounded accent-[var(--t-green)]"
+              />
+              <span className="text-sm text-[var(--t-text)]">Ativo</span>
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">API Key</label>
+              <div className="flex gap-2">
+                <input
+                  type={showSecrets['anthropic_key'] ? 'text' : 'password'}
+                  value={config.anthropic?.api_key ?? ''}
+                  onChange={e => setConfig(c => ({ ...c, anthropic: { ...c.anthropic, api_key: e.target.value, modelo: c.anthropic?.modelo ?? 'claude-sonnet-4-20250514', ativo: c.anthropic?.ativo ?? false } }))}
+                  className="flex-1 px-3 py-2 bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded-lg text-sm text-[var(--t-text)]"
+                  placeholder="sk-ant-..."
+                />
+                <button onClick={() => toggleSecret('anthropic_key')} className="px-2 text-[var(--t-text-secondary)] hover:text-[var(--t-text)]">
+                  {showSecrets['anthropic_key'] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Modelo</label>
+              <select
+                value={config.anthropic?.modelo ?? 'claude-sonnet-4-20250514'}
+                onChange={e => setConfig(c => ({ ...c, anthropic: { ...c.anthropic, api_key: c.anthropic?.api_key ?? '', modelo: e.target.value, ativo: c.anthropic?.ativo ?? false } }))}
+                className="w-full px-3 py-2 bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded-lg text-sm text-[var(--t-text)]"
+              >
+                <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
+                <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+              </select>
+            </div>
           </div>
         </div>
 
