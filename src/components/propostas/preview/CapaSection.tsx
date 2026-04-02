@@ -1,4 +1,5 @@
 import { Proposta } from '@/lib/crm-types';
+import { t, type IdiomaProposal } from '@/lib/i18n-proposta';
 
 interface Props {
   proposta: Proposta;
@@ -7,6 +8,7 @@ interface Props {
 export function CapaSection({ proposta }: Props) {
   const { visual, cabecalho } = proposta;
   const corPrimaria = visual.cor_primaria || '#10b981';
+  const i18n = t((proposta.idioma || 'pt-BR') as IdiomaProposal);
 
   if (visual.estilo_capa === 'FULLSCREEN' && visual.imagem_capa) {
     return (
@@ -19,7 +21,7 @@ export function CapaSection({ proposta }: Props) {
         <div className="absolute inset-0 bg-black/40" />
         <div className="relative text-center text-white px-6 max-w-3xl">
           <h1 className="text-4xl md:text-5xl font-bold leading-tight drop-shadow-lg">
-            {cabecalho.titulo || 'Sua Proposta de Viagem'}
+            {cabecalho.titulo || i18n.suaProposta}
           </h1>
           {cabecalho.subtitulo && (
             <p className="text-xl md:text-2xl mt-4 opacity-90 drop-shadow">{cabecalho.subtitulo}</p>
@@ -35,7 +37,7 @@ export function CapaSection({ proposta }: Props) {
         <div className="flex-1 flex items-center justify-center p-8 md:p-12" style={{ backgroundColor: corPrimaria }}>
           <div className="text-white max-w-lg">
             <h1 className="text-3xl md:text-4xl font-bold leading-tight">
-              {cabecalho.titulo || 'Sua Proposta de Viagem'}
+              {cabecalho.titulo || i18n.suaProposta}
             </h1>
             {cabecalho.subtitulo && (
               <p className="text-lg mt-4 opacity-90">{cabecalho.subtitulo}</p>
@@ -58,7 +60,7 @@ export function CapaSection({ proposta }: Props) {
     <div className="py-16 md:py-24 px-6 text-center" style={{ backgroundColor: corPrimaria }}>
       <div className="max-w-3xl mx-auto text-white">
         <h1 className="text-3xl md:text-5xl font-bold leading-tight">
-          {cabecalho.titulo || 'Sua Proposta de Viagem'}
+          {cabecalho.titulo || i18n.suaProposta}
         </h1>
         {cabecalho.subtitulo && (
           <p className="text-lg md:text-xl mt-4 opacity-90">{cabecalho.subtitulo}</p>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { CheckCircle, MessageSquare, Loader2, ThumbsUp, Send, X } from 'lucide-react';
+import { t, type IdiomaProposal } from '@/lib/i18n-proposta';
 
 interface Props {
   slug: string;
@@ -9,11 +10,13 @@ interface Props {
   corPrimaria: string;
   vendedorNome: string;
   aceite?: { nome_aceite: string; data_aceite: string } | null;
+  idioma?: IdiomaProposal;
 }
 
 type Mode = 'idle' | 'aceitar' | 'feedback' | 'aceito' | 'feedback_sent';
 
-export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceite }: Props) {
+export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceite, idioma }: Props) {
+  const i18n = t(idioma);
   const [mode, setMode] = useState<Mode>(status === 'ACEITO' ? 'aceito' : 'idle');
   const [nome, setNome] = useState('');
   const [termos, setTermos] = useState(false);
@@ -21,6 +24,8 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
   const [nomeFeedback, setNomeFeedback] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const locale = idioma === 'en' ? 'en-US' : idioma === 'es' ? 'es-ES' : 'pt-BR';
 
   // Already accepted
   if (status === 'ACEITO' || mode === 'aceito') {
@@ -30,16 +35,16 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
           <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
             <ThumbsUp className="w-8 h-8 text-emerald-600" />
           </div>
-          <h3 className="text-xl font-bold text-emerald-800">Proposta Aceita!</h3>
+          <h3 className="text-xl font-bold text-emerald-800">{i18n.propostaAceita}</h3>
           <p className="text-emerald-600 mt-2 text-sm">
             {aceite?.nome_aceite
-              ? `Aceita por ${aceite.nome_aceite} em ${new Date(aceite.data_aceite).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`
-              : 'Esta proposta foi aceita com sucesso.'
+              ? `${aceite.nome_aceite} — ${new Date(aceite.data_aceite).toLocaleDateString(locale, { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+              : i18n.obrigadoAceite
             }
           </p>
           {vendedorNome && (
             <p className="text-emerald-500 text-sm mt-3">
-              {vendedorNome} entrara em contato em breve para os proximos passos.
+              {vendedorNome} {i18n.voltarContato}
             </p>
           )}
         </div>
@@ -53,9 +58,6 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
       <div className="max-w-3xl mx-auto px-6 py-12">
         <div className="text-center p-8 rounded-2xl border-2 border-red-200 bg-red-50">
           <h3 className="text-lg font-bold text-red-800">Proposta Recusada</h3>
-          <p className="text-red-600 mt-2 text-sm">
-            Esta proposta foi recusada. Entre em contato com seu agente para mais informacoes.
-          </p>
         </div>
       </div>
     );
@@ -69,24 +71,16 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
           <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
             <Send className="w-8 h-8 text-blue-600" />
           </div>
-          <h3 className="text-xl font-bold text-blue-800">Mensagem Enviada!</h3>
-          <p className="text-blue-600 mt-2 text-sm">
-            Suas solicitacoes de alteracao foram enviadas para {vendedorNome || 'o vendedor'}.
-          </p>
-          <button
-            onClick={() => setMode('idle')}
-            className="mt-4 text-sm text-blue-500 hover:text-blue-700 underline"
-          >
-            Voltar
-          </button>
+          <h3 className="text-xl font-bold text-blue-800">{i18n.feedbackEnviado}</h3>
+          <p className="text-blue-600 mt-2 text-sm">{i18n.obrigadoFeedback}</p>
         </div>
       </div>
     );
   }
 
   const handleAceitar = async () => {
-    if (!nome.trim()) { setError('Preencha seu nome completo'); return; }
-    if (!termos) { setError('Aceite os termos para continuar'); return; }
+    if (!nome.trim()) { setError(i18n.nomeCompleto); return; }
+    if (!termos) { setError(i18n.termosCondicoes); return; }
 
     setLoading(true);
     setError('');
@@ -97,16 +91,16 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
         body: JSON.stringify({ nome_aceite: nome.trim() }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao aceitar');
+      if (!res.ok) throw new Error(data.error || 'Error');
       setMode('aceito');
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Erro ao aceitar proposta');
+      setError(e instanceof Error ? e.message : 'Error');
     }
     setLoading(false);
   };
 
   const handleFeedback = async () => {
-    if (!mensagem.trim()) { setError('Escreva sua mensagem'); return; }
+    if (!mensagem.trim()) { setError('...'); return; }
 
     setLoading(true);
     setError('');
@@ -117,11 +111,11 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
         body: JSON.stringify({ mensagem: mensagem.trim(), nome: nomeFeedback.trim() }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao enviar');
+      if (!res.ok) throw new Error(data.error || 'Error');
       setMode('feedback_sent');
       setMensagem('');
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Erro ao enviar mensagem');
+      setError(e instanceof Error ? e.message : 'Error');
     }
     setLoading(false);
   };
@@ -132,11 +126,8 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
         {/* Header */}
         <div className="p-6 text-center" style={{ backgroundColor: `${corPrimaria}08` }}>
           <h3 className="text-xl font-bold" style={{ color: corPrimaria }}>
-            O que achou da proposta?
+            {idioma === 'en' ? 'What do you think?' : idioma === 'es' ? 'Que te parece?' : 'O que achou da proposta?'}
           </h3>
-          <p className="text-gray-500 text-sm mt-1">
-            Escolha uma opcao abaixo para dar seu retorno
-          </p>
         </div>
 
         {/* Idle: show buttons */}
@@ -148,7 +139,7 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
               style={{ backgroundColor: corPrimaria }}
             >
               <CheckCircle className="w-5 h-5" />
-              Aceitar Proposta
+              {i18n.aceitarProposta}
             </button>
             <button
               onClick={() => { setMode('feedback'); setError(''); }}
@@ -156,7 +147,7 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
               style={{ borderColor: corPrimaria, color: corPrimaria }}
             >
               <MessageSquare className="w-5 h-5" />
-              Solicitar Alteracoes
+              {i18n.solicitarAlteracoes}
             </button>
           </div>
         )}
@@ -165,19 +156,19 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
         {mode === 'aceitar' && (
           <div className="p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h4 className="font-semibold text-gray-800">Aceitar Proposta</h4>
+              <h4 className="font-semibold text-gray-800">{i18n.aceitarProposta}</h4>
               <button onClick={() => setMode('idle')} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div>
-              <label className="text-sm text-gray-600 block mb-1">Seu nome completo *</label>
+              <label className="text-sm text-gray-600 block mb-1">{i18n.nomeCompleto} *</label>
               <input
                 type="text"
                 value={nome}
                 onChange={e => setNome(e.target.value)}
-                placeholder="Digite seu nome completo"
+                placeholder={i18n.nomeCompleto}
                 className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:border-transparent"
                 style={{ '--tw-ring-color': corPrimaria } as React.CSSProperties}
               />
@@ -191,7 +182,7 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
                 className="w-4 h-4 mt-0.5 rounded border-gray-300"
               />
               <span className="text-sm text-gray-600 leading-relaxed">
-                Declaro que li e concordo com os termos desta proposta, incluindo valores, condicoes de pagamento e servicos descritos.
+                {i18n.liEConcordo} {i18n.termosCondicoes}.
               </span>
             </label>
 
@@ -204,7 +195,7 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
               style={{ backgroundColor: corPrimaria }}
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-              {loading ? 'Processando...' : 'Confirmar Aceite'}
+              {i18n.confirmarAceite}
             </button>
           </div>
         )}
@@ -213,30 +204,29 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
         {mode === 'feedback' && (
           <div className="p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h4 className="font-semibold text-gray-800">Solicitar Alteracoes</h4>
+              <h4 className="font-semibold text-gray-800">{i18n.solicitarAlteracoes}</h4>
               <button onClick={() => setMode('idle')} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div>
-              <label className="text-sm text-gray-600 block mb-1">Seu nome</label>
+              <label className="text-sm text-gray-600 block mb-1">{i18n.nomeCompleto}</label>
               <input
                 type="text"
                 value={nomeFeedback}
                 onChange={e => setNomeFeedback(e.target.value)}
-                placeholder="Seu nome (opcional)"
+                placeholder={i18n.nomeCompleto}
                 className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:border-transparent"
               />
             </div>
 
             <div>
-              <label className="text-sm text-gray-600 block mb-1">O que gostaria de alterar? *</label>
               <textarea
                 value={mensagem}
                 onChange={e => setMensagem(e.target.value)}
                 rows={4}
-                placeholder="Descreva as alteracoes desejadas: datas, destinos, servicos, valores..."
+                placeholder={i18n.suaSolicitacao}
                 className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:border-transparent"
               />
             </div>
@@ -250,7 +240,7 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
               style={{ borderColor: corPrimaria, color: corPrimaria }}
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              {loading ? 'Enviando...' : 'Enviar Solicitacao'}
+              {i18n.enviarSolicitacao}
             </button>
           </div>
         )}

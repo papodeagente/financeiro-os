@@ -3,6 +3,7 @@
 import { SecaoProposta } from '@/lib/crm-types';
 import { CheckCircle2, XCircle, MessageCircle, Star } from 'lucide-react';
 import { MapaRoteiro } from '@/components/propostas/MapaRoteiro';
+import { t, type IdiomaProposal } from '@/lib/i18n-proposta';
 
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -116,16 +117,17 @@ function GaleriaPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
   );
 }
 
-function InclusosPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
+function InclusosPreview({ conteudo, idioma }: { conteudo: Record<string, unknown>; idioma?: IdiomaProposal }) {
   const c = conteudo as { inclusos?: string[]; nao_inclusos?: string[] };
   const inclusos = (c.inclusos || []).filter(Boolean);
   const naoInclusos = (c.nao_inclusos || []).filter(Boolean);
+  const i18n = t(idioma);
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       {inclusos.length > 0 && (
         <div>
           <h4 className="font-semibold text-emerald-700 mb-2 flex items-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4" /> O que esta incluso
+            <CheckCircle2 className="w-4 h-4" /> {i18n.oQueEstaIncluso}
           </h4>
           <ul className="space-y-1.5">
             {inclusos.map((item, i) => (
@@ -140,7 +142,7 @@ function InclusosPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
       {naoInclusos.length > 0 && (
         <div>
           <h4 className="font-semibold text-red-600 mb-2 flex items-center gap-1.5">
-            <XCircle className="w-4 h-4" /> Nao incluso
+            <XCircle className="w-4 h-4" /> {i18n.naoIncluso}
           </h4>
           <ul className="space-y-1.5">
             {naoInclusos.map((item, i) => (
@@ -185,8 +187,9 @@ function ValoresPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
   );
 }
 
-function DepoimentoPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
+function DepoimentoPreview({ conteudo, idioma }: { conteudo: Record<string, unknown>; idioma?: IdiomaProposal }) {
   const deps = (conteudo as { depoimentos?: Array<{ texto: string; autor: string; foto?: string; destino?: string }> }).depoimentos || [];
+  const i18n = t(idioma);
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {deps.map((d, i) => (
@@ -196,7 +199,7 @@ function DepoimentoPreview({ conteudo }: { conteudo: Record<string, unknown> }) 
             {d.foto && <img src={d.foto} alt={d.autor} className="w-8 h-8 rounded-full object-cover" />}
             <div>
               <div className="text-sm font-semibold">{d.autor}</div>
-              {d.destino && <div className="text-xs opacity-60">Viajou para {d.destino}</div>}
+              {d.destino && <div className="text-xs opacity-60">{i18n.viajouPara} {d.destino}</div>}
             </div>
           </div>
         </div>
@@ -205,7 +208,7 @@ function DepoimentoPreview({ conteudo }: { conteudo: Record<string, unknown> }) 
   );
 }
 
-function CtaPreview({ conteudo, corPrimaria }: { conteudo: Record<string, unknown>; corPrimaria: string }) {
+function CtaPreview({ conteudo, corPrimaria, idioma }: { conteudo: Record<string, unknown>; corPrimaria: string; idioma?: IdiomaProposal }) {
   const c = conteudo as { texto_botao?: string; tipo_acao?: string; numero_whatsapp?: string; mensagem_predefinida?: string; cor_botao?: string };
   const cor = c.cor_botao || corPrimaria || '#10b981';
 
@@ -224,7 +227,7 @@ function CtaPreview({ conteudo, corPrimaria }: { conteudo: Record<string, unknow
         className="inline-flex items-center gap-2 px-8 py-3 text-white font-semibold rounded-full text-lg shadow-lg hover:opacity-90 transition-opacity"
       >
         {c.tipo_acao === 'WHATSAPP' && <MessageCircle className="w-5 h-5" />}
-        {c.texto_botao || 'Entrar em contato'}
+        {c.texto_botao || t(idioma).entrarEmContato}
       </button>
     </div>
   );
@@ -294,8 +297,9 @@ function FAQPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
   );
 }
 
-function CountdownPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
+function CountdownPreview({ conteudo, idioma }: { conteudo: Record<string, unknown>; idioma?: IdiomaProposal }) {
   const c = conteudo as { titulo?: string; data_evento?: string; mensagem?: string };
+  const i18n = t(idioma);
   if (!c.data_evento) return null;
 
   const target = new Date(c.data_evento + 'T00:00:00').getTime();
@@ -306,7 +310,7 @@ function CountdownPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
     return (
       <div className="text-center py-6">
         {c.titulo && <h3 className="text-xl font-semibold mb-2">{c.titulo}</h3>}
-        <p className="text-lg text-emerald-600 font-semibold">{c.mensagem || 'O grande dia chegou!'}</p>
+        <p className="text-lg text-emerald-600 font-semibold">{c.mensagem || i18n.grandiaDiaChegou}</p>
       </div>
     );
   }
@@ -319,7 +323,7 @@ function CountdownPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
     <div className="text-center py-6">
       {c.titulo && <h3 className="text-xl font-semibold mb-4">{c.titulo}</h3>}
       <div className="flex justify-center gap-4">
-        {[{ v: days, l: 'dias' }, { v: hours, l: 'horas' }, { v: minutes, l: 'min' }].map((item, i) => (
+        {[{ v: days, l: i18n.dias }, { v: hours, l: i18n.horas }, { v: minutes, l: i18n.minutos }].map((item, i) => (
           <div key={i} className="flex flex-col items-center">
             <div className="w-16 h-16 rounded-xl bg-emerald-50 border-2 border-emerald-200 flex items-center justify-center text-2xl font-bold text-emerald-700">
               {item.v}
@@ -335,9 +339,10 @@ function CountdownPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
 interface Props {
   secoes: SecaoProposta[];
   corPrimaria: string;
+  idioma?: IdiomaProposal;
 }
 
-export function PreviewRenderer({ secoes, corPrimaria }: Props) {
+export function PreviewRenderer({ secoes, corPrimaria, idioma }: Props) {
   return (
     <div className="space-y-8">
       {secoes.filter(s => s.visivel).map(secao => (
@@ -346,14 +351,14 @@ export function PreviewRenderer({ secoes, corPrimaria }: Props) {
           {secao.tipo === 'SERVICO' && <ServicoPreview conteudo={secao.conteudo} />}
           {secao.tipo === 'ROTEIRO_DIA' && <RoteiroDiaPreview conteudo={secao.conteudo} />}
           {secao.tipo === 'GALERIA' && <GaleriaPreview conteudo={secao.conteudo} />}
-          {secao.tipo === 'INCLUSOS' && <InclusosPreview conteudo={secao.conteudo} />}
+          {secao.tipo === 'INCLUSOS' && <InclusosPreview conteudo={secao.conteudo} idioma={idioma} />}
           {secao.tipo === 'VALORES' && <ValoresPreview conteudo={secao.conteudo} />}
-          {secao.tipo === 'DEPOIMENTO' && <DepoimentoPreview conteudo={secao.conteudo} />}
-          {secao.tipo === 'CTA' && <CtaPreview conteudo={secao.conteudo} corPrimaria={corPrimaria} />}
+          {secao.tipo === 'DEPOIMENTO' && <DepoimentoPreview conteudo={secao.conteudo} idioma={idioma} />}
+          {secao.tipo === 'CTA' && <CtaPreview conteudo={secao.conteudo} corPrimaria={corPrimaria} idioma={idioma} />}
           {secao.tipo === 'VIDEO' && <VideoPreview conteudo={secao.conteudo} />}
           {secao.tipo === 'MAPA' && <MapaPreview conteudo={secao.conteudo} />}
           {secao.tipo === 'FAQ' && <FAQPreview conteudo={secao.conteudo} />}
-          {secao.tipo === 'COUNTDOWN' && <CountdownPreview conteudo={secao.conteudo} />}
+          {secao.tipo === 'COUNTDOWN' && <CountdownPreview conteudo={secao.conteudo} idioma={idioma} />}
         </div>
       ))}
     </div>

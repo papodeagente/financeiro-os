@@ -8,6 +8,7 @@ import { PreviewRenderer } from '@/components/propostas/preview/PreviewRenderer'
 import { RodapeSection } from '@/components/propostas/preview/RodapeSection';
 import { AceitarProposta } from '@/components/propostas/preview/AceitarProposta';
 import { LeadCapture } from '@/components/propostas/preview/LeadCapture';
+import { t, type IdiomaProposal } from '@/lib/i18n-proposta';
 
 export default function PublicPropostaPage() {
   const params = useParams();
@@ -59,12 +60,15 @@ export default function PublicPropostaPage() {
     }
   }, [proposta]);
 
+  const idioma = (proposta?.idioma || 'pt-BR') as IdiomaProposal;
+  const i18n = t(idioma);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="text-center">
           <div className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-gray-400 text-sm mt-4">Carregando proposta...</p>
+          <p className="text-gray-400 text-sm mt-4">{i18n.carregando}</p>
         </div>
       </div>
     );
@@ -75,13 +79,9 @@ export default function PublicPropostaPage() {
       <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="text-center px-6">
           <div className="text-6xl mb-4">🗺️</div>
-          <h1 className="text-2xl font-bold text-gray-800">Proposta nao encontrada</h1>
-          <p className="text-gray-500 mt-2">
-            Este link pode ter expirado ou a proposta foi removida.
-          </p>
-          <p className="text-gray-400 text-sm mt-4">
-            Entre em contato com seu agente de viagens para obter um novo link.
-          </p>
+          <h1 className="text-2xl font-bold text-gray-800">{i18n.propostaNaoEncontrada}</h1>
+          <p className="text-gray-500 mt-2">{i18n.linkExpirado}</p>
+          <p className="text-gray-400 text-sm mt-4">{i18n.contateAgente}</p>
         </div>
       </div>
     );
@@ -119,6 +119,7 @@ export default function PublicPropostaPage() {
         <PreviewRenderer
           secoes={proposta.secoes}
           corPrimaria={proposta.visual.cor_primaria || '#10b981'}
+          idioma={idioma}
         />
       </div>
 
@@ -135,6 +136,7 @@ export default function PublicPropostaPage() {
           corPrimaria={proposta.visual.cor_primaria || '#10b981'}
           vendedorNome={proposta.rodape.nome_vendedor}
           aceite={proposta.aceite}
+          idioma={idioma}
         />
       )}
 
@@ -143,12 +145,13 @@ export default function PublicPropostaPage() {
         slug={slug}
         corPrimaria={proposta.visual.cor_primaria || '#10b981'}
         vendedorNome={proposta.rodape.nome_vendedor}
+        idioma={idioma}
       />
 
       {/* Validade */}
       {proposta.cabecalho.validade && (
         <div className="text-center pb-8 text-sm opacity-40">
-          Proposta valida ate {new Date(proposta.cabecalho.validade + 'T12:00:00').toLocaleDateString('pt-BR')}
+          {i18n.validaAte} {new Date(proposta.cabecalho.validade + 'T12:00:00').toLocaleDateString(idioma === 'en' ? 'en-US' : idioma === 'es' ? 'es-ES' : 'pt-BR')}
         </div>
       )}
     </div>

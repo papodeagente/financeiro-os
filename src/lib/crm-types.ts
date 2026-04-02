@@ -562,6 +562,8 @@ export interface Proposta {
   vendedor_nome: string;
   template_id: string;
 
+  idioma: 'pt-BR' | 'en' | 'es';
+
   visual: {
     tema: string;
     cor_primaria: string;
@@ -701,6 +703,7 @@ export function createProposta(numero: string): Proposta {
     id: generateId(), numero, versao: 1, versao_anterior_id: null,
     cliente_id: '', cliente_nome: '', vendedor_id: '', vendedor_nome: '',
     template_id: '',
+    idioma: 'pt-BR',
     visual: {
       tema: 'padrao', cor_primaria: '#10b981', cor_secundaria: '#0a0a14', cor_texto: '#ffffff',
       cor_fundo: '#ffffff', fonte: 'Inter', imagem_capa: '', estilo_capa: 'FULLSCREEN',

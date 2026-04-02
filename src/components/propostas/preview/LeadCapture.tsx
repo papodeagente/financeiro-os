@@ -2,14 +2,17 @@
 
 import { useState } from 'react';
 import { Send, Loader2, CheckCircle, User, Mail, Phone, MessageSquare } from 'lucide-react';
+import { t, type IdiomaProposal } from '@/lib/i18n-proposta';
 
 interface Props {
   slug: string;
   corPrimaria: string;
   vendedorNome: string;
+  idioma?: IdiomaProposal;
 }
 
-export function LeadCapture({ slug, corPrimaria, vendedorNome }: Props) {
+export function LeadCapture({ slug, corPrimaria, vendedorNome, idioma }: Props) {
+  const i18n = t(idioma);
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [telefone, setTelefone] = useState('');
@@ -25,18 +28,16 @@ export function LeadCapture({ slug, corPrimaria, vendedorNome }: Props) {
           <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-7 h-7 text-emerald-600" />
           </div>
-          <h3 className="text-lg font-bold text-emerald-800">Interesse registrado!</h3>
-          <p className="text-emerald-600 mt-2 text-sm">
-            {vendedorNome || 'Nosso consultor'} entrara em contato em breve.
-          </p>
+          <h3 className="text-lg font-bold text-emerald-800">{i18n.obrigadoLead}</h3>
+          <p className="text-emerald-600 mt-2 text-sm">{i18n.retornoBreve}</p>
         </div>
       </div>
     );
   }
 
   const handleSubmit = async () => {
-    if (!nome.trim()) { setError('Preencha seu nome'); return; }
-    if (!email.trim() && !telefone.trim()) { setError('Preencha email ou telefone'); return; }
+    if (!nome.trim()) { setError(i18n.nomeLeadPlaceholder); return; }
+    if (!email.trim() && !telefone.trim()) { setError('Email / telefone'); return; }
 
     setLoading(true);
     setError('');
@@ -47,10 +48,10 @@ export function LeadCapture({ slug, corPrimaria, vendedorNome }: Props) {
         body: JSON.stringify({ nome, email, telefone, mensagem }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro');
+      if (!res.ok) throw new Error(data.error || 'Error');
       setSent(true);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Erro ao enviar');
+      setError(e instanceof Error ? e.message : 'Error');
     }
     setLoading(false);
   };
@@ -59,10 +60,7 @@ export function LeadCapture({ slug, corPrimaria, vendedorNome }: Props) {
     <div className="max-w-3xl mx-auto px-6 py-10">
       <div className="rounded-2xl border overflow-hidden" style={{ borderColor: `${corPrimaria}25` }}>
         <div className="p-5 text-center" style={{ backgroundColor: `${corPrimaria}08` }}>
-          <h3 className="text-lg font-bold text-gray-800">Gostou desta proposta?</h3>
-          <p className="text-gray-500 text-sm mt-1">
-            Deixe seus dados e {vendedorNome || 'nosso consultor'} entra em contato
-          </p>
+          <h3 className="text-lg font-bold text-gray-800">{i18n.interesseViagem}</h3>
         </div>
 
         <div className="p-5 space-y-3">
@@ -72,7 +70,7 @@ export function LeadCapture({ slug, corPrimaria, vendedorNome }: Props) {
               type="text"
               value={nome}
               onChange={e => setNome(e.target.value)}
-              placeholder="Seu nome *"
+              placeholder={`${i18n.nomeLeadPlaceholder} *`}
               className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:border-transparent"
               style={{ '--tw-ring-color': corPrimaria } as React.CSSProperties}
             />
@@ -84,7 +82,7 @@ export function LeadCapture({ slug, corPrimaria, vendedorNome }: Props) {
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="Email"
+                placeholder={i18n.emailLeadPlaceholder}
                 className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:border-transparent"
               />
             </div>
@@ -94,7 +92,7 @@ export function LeadCapture({ slug, corPrimaria, vendedorNome }: Props) {
                 type="tel"
                 value={telefone}
                 onChange={e => setTelefone(e.target.value)}
-                placeholder="WhatsApp"
+                placeholder={i18n.telefonePlaceholder}
                 className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:border-transparent"
               />
             </div>
@@ -104,7 +102,7 @@ export function LeadCapture({ slug, corPrimaria, vendedorNome }: Props) {
             <textarea
               value={mensagem}
               onChange={e => setMensagem(e.target.value)}
-              placeholder="Alguma duvida ou preferencia? (opcional)"
+              placeholder={i18n.mensagemPlaceholder}
               rows={2}
               className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:border-transparent"
             />
@@ -119,12 +117,8 @@ export function LeadCapture({ slug, corPrimaria, vendedorNome }: Props) {
             style={{ backgroundColor: corPrimaria }}
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            {loading ? 'Enviando...' : 'Tenho interesse!'}
+            {i18n.enviarLead}
           </button>
-
-          <p className="text-[10px] text-gray-400 text-center">
-            Seus dados serao usados apenas para contato sobre esta proposta.
-          </p>
         </div>
       </div>
     </div>

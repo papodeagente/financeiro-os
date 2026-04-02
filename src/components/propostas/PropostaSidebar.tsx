@@ -8,6 +8,7 @@ import { DestinoAutocomplete } from './DestinoAutocomplete';
 import { DestinoQuickFill } from './DestinoQuickFill';
 import { ImageUpload } from './ImageUpload';
 import { TEMAS } from '@/lib/temas-proposta';
+import { IDIOMAS, type IdiomaProposal } from '@/lib/i18n-proposta';
 
 type Tab = 'config' | 'destinos';
 
@@ -183,6 +184,25 @@ export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAI
                       onChange={e => onUpdate(p => { p.cabecalho.validade = e.target.value; return p; })}
                       className="mt-1 bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                     />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-[var(--t-text-secondary)]">Idioma da proposta</label>
+                  <div className="flex gap-1.5 mt-1.5">
+                    {IDIOMAS.map(idioma => (
+                      <button
+                        key={idioma.id}
+                        onClick={() => onUpdate(p => { p.idioma = idioma.id as IdiomaProposal; return p; })}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all ${
+                          (proposta.idioma || 'pt-BR') === idioma.id
+                            ? 'border-[var(--t-green)] bg-[var(--t-green)]/10 text-[var(--t-green)]'
+                            : 'border-[var(--t-border)] text-[var(--t-text-muted)] hover:border-[var(--t-text-muted)]'
+                        }`}
+                      >
+                        <span>{idioma.flag}</span>
+                        <span>{idioma.label}</span>
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
