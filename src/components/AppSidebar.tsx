@@ -12,8 +12,9 @@ import {
   Settings, Building, UserCog, Target, ArrowRightLeft,
   FileSpreadsheet, BarChart3, Trophy, Percent, Medal,
   ChevronDown, ChevronRight, Sun, Moon,
-  FileEdit, Plus, Search,
+  FileEdit, Plus, Search, LogOut,
 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface MenuItem {
   key: string;
@@ -127,6 +128,7 @@ const MENU: MenuItem[] = [
 export function AppSidebar() {
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
+  const { user, logout } = useAuth();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const toggle = (key: string) => {
@@ -223,9 +225,28 @@ export function AppSidebar() {
         {MENU.map(item => renderItem(item))}
       </nav>
 
-      {/* Footer */}
-      <div className="px-5 py-4 border-t border-[var(--t-border)]">
-        <div className="text-[10px] text-[var(--t-text-muted)] tracking-wider uppercase">Fase 6 — Dashboard + Propostas</div>
+      {/* Footer — User + Logout */}
+      <div className="px-4 py-3 border-t border-[var(--t-border)]">
+        {user && (
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-full bg-[var(--t-green)]/20 flex items-center justify-center shrink-0">
+              <span className="text-[10px] font-bold text-[var(--t-green)]">
+                {user.nome?.charAt(0)?.toUpperCase() || 'U'}
+              </span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] text-[var(--t-text)] font-medium truncate">{user.nome}</div>
+              <div className="text-[9px] text-[var(--t-text-muted)] truncate">{user.perfil}</div>
+            </div>
+            <button
+              onClick={logout}
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:text-red-400 hover:bg-red-400/10 transition-colors"
+              title="Sair"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   );

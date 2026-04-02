@@ -3,7 +3,8 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { AppProvider } from "@/contexts/AppContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
-import { AppSidebar } from "@/components/AppSidebar";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { AppShell } from "@/components/AppShell";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -26,12 +27,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="h-full bg-[var(--t-bg)] transition-colors duration-200">
         <ThemeProvider>
-          <AppProvider>
-            <div className="flex h-full">
-              <AppSidebar />
-              <div className="flex-1 overflow-hidden">{children}</div>
-            </div>
-          </AppProvider>
+          <AuthProvider>
+            <AppProvider>
+              <AppShell>{children}</AppShell>
+            </AppProvider>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

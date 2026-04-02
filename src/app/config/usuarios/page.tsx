@@ -106,11 +106,39 @@ export default function UsuariosPage() {
     if (!editing) return;
     setSaving(true);
     try {
+      const toSave = { ...editing };
+
+      // Hash password if it was changed (not empty and not already a hash)
+      if (toSave.senha_hash && !toSave.senha_hash.includes(':')) {
+        if (toSave.senha_hash.length < 6) {
+          alert('A senha deve ter no minimo 6 caracteres');
+          setSaving(false);
+          return;
+        }
+        const hashRes = await fetch('/api/auth/hash-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: toSave.senha_hash }),
+        });
+        if (hashRes.ok) {
+          const { hash } = await hashRes.json();
+          toSave.senha_hash = hash;
+        } else {
+          alert('Erro ao processar senha');
+          setSaving(false);
+          return;
+        }
+      } else if (!toSave.senha_hash && !isNew) {
+        // Editing user without changing password — keep existing hash
+        const existing = usuarios.find(u => u.id === toSave.id);
+        if (existing) toSave.senha_hash = existing.senha_hash;
+      }
+
       if (isNew) {
-        const saved = await saveEntity<Usuario>(ENDPOINT, editing);
+        const saved = await saveEntity<Usuario>(ENDPOINT, toSave);
         setUsuarios((prev) => [...prev, saved]);
       } else {
-        const updated = await updateEntity<Usuario>(ENDPOINT, editing);
+        const updated = await updateEntity<Usuario>(ENDPOINT, toSave);
         setUsuarios((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
       }
       setEditing(null);
@@ -132,7 +160,7 @@ export default function UsuariosPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0f0f1a] text-white p-6">
+    <div className="min-h-screen bg-[var(--t-bg)] text-[var(--t-text)] p-6">
       <div className="max-w-4xl mx-auto space-y-6">
 
         {/* Header */}
