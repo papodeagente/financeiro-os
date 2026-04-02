@@ -89,9 +89,19 @@ export default function PublicPropostaPage() {
 
   const corFundo = proposta.visual.cor_fundo || '#ffffff';
   const corTexto = proposta.visual.cor_texto || '#1a1a2e';
+  const fonte = proposta.visual.fonte || 'Inter';
+  const needsPlayfair = fonte === 'Playfair Display';
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: corFundo, color: corTexto }}>
+    <div className="min-h-screen" style={{ backgroundColor: corFundo, color: corTexto, fontFamily: `'${fonte}', sans-serif` }}>
+      {/* Google Fonts */}
+      {needsPlayfair && (
+        // eslint-disable-next-line @next/next/no-page-custom-font
+        <link
+          href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&display=swap"
+          rel="stylesheet"
+        />
+      )}
       {/* Capa */}
       <CapaSection proposta={proposta} />
 

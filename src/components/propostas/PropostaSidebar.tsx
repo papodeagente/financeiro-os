@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { DestinoAutocomplete } from './DestinoAutocomplete';
 import { DestinoQuickFill } from './DestinoQuickFill';
 import { ImageUpload } from './ImageUpload';
+import { TEMAS } from '@/lib/temas-proposta';
 
 type Tab = 'config' | 'destinos';
 
@@ -239,6 +240,38 @@ export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAI
             <section>
               <h4 className="text-xs font-semibold text-[var(--t-text-muted)] uppercase tracking-wider mb-3">Visual</h4>
               <div className="space-y-3">
+                {/* Theme Picker */}
+                <div>
+                  <label className="text-xs text-[var(--t-text-secondary)]">Tema</label>
+                  <div className="grid grid-cols-4 gap-1.5 mt-1.5">
+                    {TEMAS.map(tema => (
+                      <button
+                        key={tema.id}
+                        onClick={() => onUpdate(p => {
+                          p.visual.tema = tema.id;
+                          p.visual.cor_primaria = tema.cor_primaria;
+                          p.visual.cor_secundaria = tema.cor_secundaria;
+                          p.visual.cor_texto = tema.cor_texto;
+                          p.visual.cor_fundo = tema.cor_fundo;
+                          p.visual.fonte = tema.fonte;
+                          return p;
+                        })}
+                        className={`flex flex-col items-center gap-1 p-1.5 rounded-lg border transition-all ${
+                          proposta.visual.tema === tema.id
+                            ? 'border-[var(--t-green)] ring-1 ring-[var(--t-green)]'
+                            : 'border-[var(--t-border)] hover:border-[var(--t-text-muted)]'
+                        }`}
+                        title={tema.descricao}
+                      >
+                        <div
+                          className="w-full h-5 rounded"
+                          style={{ background: tema.preview_gradient }}
+                        />
+                        <span className="text-[9px] text-[var(--t-text-muted)] leading-tight">{tema.nome}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div>
                   <label className="text-xs text-[var(--t-text-secondary)]">Imagem de capa</label>
                   <div className="mt-1 space-y-2">
@@ -266,6 +299,19 @@ export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAI
                     <option value="FULLSCREEN">Fullscreen</option>
                     <option value="SPLIT">Split</option>
                     <option value="MINIMAL">Minimal</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-[var(--t-text-secondary)]">Fonte</label>
+                  <select
+                    value={proposta.visual.fonte || 'Inter'}
+                    onChange={e => onUpdate(p => { p.visual.fonte = e.target.value; return p; })}
+                    className="w-full mt-1 bg-[var(--t-input-bg)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value="Inter">Inter (Moderna)</option>
+                    <option value="Playfair Display">Playfair Display (Elegante)</option>
+                    <option value="Georgia">Georgia (Classica)</option>
+                    <option value="system-ui">System UI (Nativa)</option>
                   </select>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
