@@ -211,6 +211,32 @@ export async function initDB() {
       data JSONB NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS api_cache (
+      key TEXT PRIMARY KEY,
+      source TEXT NOT NULL DEFAULT '',
+      data JSONB NOT NULL,
+      calls_saved INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS voos_monitorados (
+      id TEXT PRIMARY KEY,
+      grupo_id TEXT NOT NULL DEFAULT '',
+      cia TEXT NOT NULL DEFAULT '',
+      numero_voo TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'SCHEDULED',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS config_apis (
+      id TEXT PRIMARY KEY,
+      data JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
   initialized = true;
 }

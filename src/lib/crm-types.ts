@@ -660,6 +660,172 @@ export interface LogAuditoria {
 }
 
 // ============================================================
+// FASE 7 — APIs DE VOOS E HOTÉIS
+// ============================================================
+
+export interface ConfiguracaoAPIs {
+  amadeus: {
+    api_key: string;
+    api_secret: string;
+    ambiente: 'test' | 'production';
+    ativo: boolean;
+  };
+  aviationstack: {
+    api_key: string;
+    ativo: boolean;
+  };
+  google_places: {
+    api_key: string;
+    ativo: boolean;
+  };
+  cache: {
+    busca_voos_ttl: number;
+    aeroportos_ttl: number;
+    busca_hoteis_ttl: number;
+    precos_hoteis_ttl: number;
+    fotos_hoteis_ttl: number;
+    reviews_ttl: number;
+    status_voo_ttl: number;
+  };
+}
+
+export interface ResultadoVoo {
+  id: string;
+  cia: string;
+  numero_voo_ida: string;
+  numero_voo_volta: string | null;
+  ida: {
+    partida: string;
+    chegada: string;
+    duracao: string;
+    escalas: number;
+    aeroporto_escala: string | null;
+    bagagem: string;
+  };
+  volta: {
+    partida: string;
+    chegada: string;
+    duracao: string;
+    escalas: number;
+    aeroporto_escala: string | null;
+    bagagem: string;
+  } | null;
+  preco_adt: number;
+  preco_chd: number;
+  moeda: string;
+  usado_em_grupo: string | null;
+  usado_em_proposta: string | null;
+}
+
+export interface BuscaVoo {
+  id: string;
+  data_busca: string;
+  origem: string;
+  destino: string;
+  data_ida: string;
+  data_volta: string | null;
+  adultos: number;
+  criancas: number;
+  classe: string;
+  resultados: ResultadoVoo[];
+  source: 'AMADEUS';
+  cached: boolean;
+}
+
+export interface FotoHotel {
+  url: string;
+  largura: number;
+  altura: number;
+  atribuicao: string;
+}
+
+export interface ReviewHotel {
+  autor: string;
+  rating: number;
+  texto: string;
+  data: string;
+  idioma: string;
+  link_perfil_autor: string;
+}
+
+export interface FichaHotel {
+  place_id: string;
+  nome: string;
+  endereco: string;
+  coordenadas: { lat: number; lng: number };
+  rating: number;
+  total_avaliacoes: number;
+  nivel_preco: 1 | 2 | 3 | 4;
+  website: string;
+  telefone: string;
+  google_maps_url: string;
+  editorial_summary: string;
+  fotos: FotoHotel[];
+  amenities: string[];
+  reviews: ReviewHotel[];
+  horario_funcionamento: string;
+  acessibilidade: string[];
+  estacionamento: string;
+  precos: {
+    sgl: number | null;
+    dbl: number | null;
+    tpl: number | null;
+    qdp: number | null;
+  } | null;
+  disponibilidade: boolean | null;
+  cancelamento_gratis: boolean | null;
+  cafe_incluso: boolean | null;
+  sentimentos: {
+    overall: number;
+    localizacao: number;
+    servico: number;
+    quarto: number;
+    limpeza: number;
+    custo_beneficio: number;
+  } | null;
+}
+
+export interface BuscaHotel {
+  id: string;
+  data_busca: string;
+  destino: string;
+  check_in: string;
+  check_out: string;
+  resultados: FichaHotel[];
+  sources: ('GOOGLE_PLACES' | 'AMADEUS')[];
+  cached: boolean;
+}
+
+export interface VooMonitorado {
+  id: string;
+  grupo_id: string;
+  cia: string;
+  numero_voo: string;
+  data: string;
+  aeroporto_origem: string;
+  aeroporto_destino: string;
+  partida_programada: string;
+  chegada_programada: string;
+  status: 'SCHEDULED' | 'ACTIVE' | 'LANDED' | 'CANCELLED' | 'DIVERTED' | 'DELAYED';
+  partida_real: string | null;
+  chegada_real: string | null;
+  atraso_minutos: number | null;
+  gate: string | null;
+  terminal: string | null;
+  ultimo_check: string;
+  notificacao_enviada: boolean;
+}
+
+export interface CacheEntry {
+  key: string;
+  data: unknown;
+  created_at: string;
+  expires_at: string;
+  source: 'AMADEUS' | 'AVIATIONSTACK' | 'GOOGLE_PLACES';
+  calls_saved: number;
+}
+
+// ============================================================
 // CONFIGURACOES
 // ============================================================
 

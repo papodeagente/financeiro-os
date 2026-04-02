@@ -13,6 +13,7 @@ import {
   FileSpreadsheet, BarChart3, Trophy, Percent, Medal,
   ChevronDown, ChevronRight, Sun, Moon,
   FileEdit, Plus, Search, LogOut,
+  Plane, Hotel, Globe,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -95,6 +96,15 @@ const MENU: MenuItem[] = [
     ],
   },
   {
+    key: 'apis-externas',
+    label: 'APIs Externas',
+    icon: Globe,
+    children: [
+      { key: 'buscar-voos', label: 'Buscar Voos', icon: Plane, href: '/voos' },
+      { key: 'buscar-hoteis', label: 'Buscar Hotéis', icon: Hotel, href: '/hoteis' },
+    ],
+  },
+  {
     key: 'propostas-menu',
     label: 'Propostas',
     icon: FileEdit,
@@ -120,6 +130,7 @@ const MENU: MenuItem[] = [
     children: [
       { key: 'agencia', label: 'Dados da Agência', icon: Building, href: '/config/agencia' },
       { key: 'usuarios', label: 'Usuários', icon: UserCog, href: '/config/usuarios' },
+      { key: 'integracoes', label: 'Integrações APIs', icon: Settings, href: '/config/integracoes' },
       { key: 'auditoria', label: 'Log de Auditoria', icon: Search, href: '/config/auditoria' },
     ],
   },
