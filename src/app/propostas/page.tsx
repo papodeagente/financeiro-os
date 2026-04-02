@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import {
   FileText, Plus, Search, Send, Eye, CheckCircle, XCircle,
   Clock, Trash2, Copy, ExternalLink, MessageCircle, Mail,
-  ArrowRightLeft, Filter,
+  ArrowRightLeft, Filter, Bell,
 } from 'lucide-react';
 
 const BRL = (v: number) =>
@@ -127,6 +127,52 @@ export default function PropostasPage() {
         ))}
       </div>
 
+      {/* Notifications */}
+      {(() => {
+        const recentes = propostas.filter(p =>
+          (p.status === 'ACEITO' && p.aceite?.data_aceite &&
+            Date.now() - new Date(p.aceite.data_aceite).getTime() < 7 * 86400000)
+          || (p.feedbacks?.length > 0 &&
+            Date.now() - new Date(p.feedbacks[p.feedbacks.length - 1].data).getTime() < 7 * 86400000)
+        );
+        if (recentes.length === 0) return null;
+        return (
+          <div className="space-y-2">
+            {recentes.map(p => {
+              if (p.status === 'ACEITO' && p.aceite?.data_aceite) {
+                return (
+                  <div key={`aceite-${p.id}`} className="flex items-center gap-3 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                    <Bell className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span className="text-sm text-emerald-300 flex-1">
+                      <strong>{p.cliente_nome || p.numero}</strong> aceitou a proposta &quot;{p.cabecalho?.titulo || p.numero}&quot;
+                      {p.aceite.nome_aceite && <> (por {p.aceite.nome_aceite})</>}
+                    </span>
+                    <span className="text-xs text-emerald-400/60">
+                      {new Date(p.aceite.data_aceite).toLocaleDateString('pt-BR')}
+                    </span>
+                  </div>
+                );
+              }
+              const lastFeedback = p.feedbacks?.[p.feedbacks.length - 1];
+              if (lastFeedback) {
+                return (
+                  <div key={`fb-${p.id}`} className="flex items-center gap-3 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                    <MessageCircle className="w-4 h-4 text-blue-400 shrink-0" />
+                    <span className="text-sm text-blue-300 flex-1">
+                      <strong>{lastFeedback.nome || 'Cliente'}</strong> solicitou alteracoes em &quot;{p.cabecalho?.titulo || p.numero}&quot;
+                    </span>
+                    <span className="text-xs text-blue-400/60">
+                      {new Date(lastFeedback.data).toLocaleDateString('pt-BR')}
+                    </span>
+                  </div>
+                );
+              }
+              return null;
+            })}
+          </div>
+        );
+      })()}
+
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
@@ -205,6 +251,22 @@ export default function PropostasPage() {
                           <>
                             <span>&middot;</span>
                             <span className="font-medium text-[var(--t-text)]">{BRL(valorTotal)}</span>
+                          </>
+                        )}
+                        {p.feedbacks?.length > 0 && (
+                          <>
+                            <span>&middot;</span>
+                            <span className="flex items-center gap-1 text-blue-400">
+                              <MessageCircle className="w-3 h-3" /> {p.feedbacks.length}
+                            </span>
+                          </>
+                        )}
+                        {p.aceite && (
+                          <>
+                            <span>&middot;</span>
+                            <span className="text-emerald-400 text-[10px]">
+                              Aceito por {p.aceite.nome_aceite}
+                            </span>
                           </>
                         )}
                       </div>

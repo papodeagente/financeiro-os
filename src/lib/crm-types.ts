@@ -601,6 +601,18 @@ export interface Proposta {
   venda_id: string | null;
   data_conversao: string | null;
 
+  // Aceitacao digital
+  aceite: {
+    nome_aceite: string;
+    data_aceite: string;
+    ip_aceite: string;
+  } | null;
+  feedbacks: Array<{
+    data: string;
+    mensagem: string;
+    nome: string;
+  }>;
+
   criado_em: string;
   atualizado_em: string;
 }
@@ -680,6 +692,7 @@ export function createProposta(numero: string): Proposta {
     rodape: { mensagem: '', nome_vendedor: '', telefone_vendedor: '', whatsapp_vendedor: '', email_vendedor: '' },
     status: 'RASCUNHO', link_publico: '',
     envios: [], venda_id: null, data_conversao: null,
+    aceite: null, feedbacks: [],
     criado_em: new Date().toISOString(), atualizado_em: new Date().toISOString(),
   };
 }

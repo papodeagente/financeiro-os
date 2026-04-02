@@ -6,6 +6,7 @@ import { Proposta } from '@/lib/crm-types';
 import { CapaSection } from '@/components/propostas/preview/CapaSection';
 import { PreviewRenderer } from '@/components/propostas/preview/PreviewRenderer';
 import { RodapeSection } from '@/components/propostas/preview/RodapeSection';
+import { AceitarProposta } from '@/components/propostas/preview/AceitarProposta';
 
 export default function PublicPropostaPage() {
   const params = useParams();
@@ -94,6 +95,17 @@ export default function PublicPropostaPage() {
       <div className="max-w-3xl mx-auto px-6">
         <RodapeSection proposta={proposta} />
       </div>
+
+      {/* Aceitacao Digital */}
+      {proposta.status !== 'EXPIRADO' && proposta.status !== 'CONVERTIDO' && (
+        <AceitarProposta
+          slug={slug}
+          status={proposta.status}
+          corPrimaria={proposta.visual.cor_primaria || '#10b981'}
+          vendedorNome={proposta.rodape.nome_vendedor}
+          aceite={proposta.aceite}
+        />
+      )}
 
       {/* Validade */}
       {proposta.cabecalho.validade && (
