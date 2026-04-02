@@ -600,6 +600,7 @@ export interface Proposta {
   }>;
 
   venda_id: string | null;
+  grupo_id: string | null;
   data_conversao: string | null;
 
   // Aceitacao digital
@@ -692,7 +693,7 @@ export function createProposta(numero: string): Proposta {
     secoes: [],
     rodape: { mensagem: '', nome_vendedor: '', telefone_vendedor: '', whatsapp_vendedor: '', email_vendedor: '' },
     status: 'RASCUNHO', link_publico: '',
-    envios: [], venda_id: null, data_conversao: null,
+    envios: [], venda_id: null, grupo_id: null, data_conversao: null,
     aceite: null, feedbacks: [],
     criado_em: new Date().toISOString(), atualizado_em: new Date().toISOString(),
   };

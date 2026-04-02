@@ -21,7 +21,7 @@ import { BrindeTab } from '@/components/tabs/BrindeTab';
 import { PropostaTab } from '@/components/tabs/PropostaTab';
 import { HtlSegTab } from '@/components/tabs/HtlSegTab';
 import { createFinanceiroGrupo } from '@/lib/financial-defaults';
-import { Save } from 'lucide-react';
+import { Save, FileText, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
 const ABAS_PLANEJAMENTO: AbaType[] = ['inf', 'tkt', 'htl', 'rec', 'car', 'guia', 'seg', 'navio', 'ing', 'brinde', 'proposta', 'htl_seg'];
@@ -54,6 +54,7 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
   const [grupo, setGrupo] = useState<GrupoViagem | null>(null);
   const [activeTab, setActiveTab] = useState<AbaType>('inf');
   const [saved, setSaved] = useState(true);
+  const [gerandoProposta, setGerandoProposta] = useState(false);
 
   useEffect(() => {
     loadGrupos().then(grupos => {
@@ -79,6 +80,27 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
       setSaved(true);
     }
   }, [grupo]);
+
+  const handleGerarProposta = async () => {
+    if (!grupo) return;
+    setGerandoProposta(true);
+    try {
+      const res = await fetch('/api/propostas/from-grupo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ grupo_id: grupo.id }),
+      });
+      const data = await res.json();
+      if (data.id) {
+        router.push(`/propostas/${data.id}`);
+      } else {
+        alert(data.error || 'Erro ao gerar proposta');
+      }
+    } catch {
+      alert('Erro ao gerar proposta');
+    }
+    setGerandoProposta(false);
+  };
 
   // Auto-save every 5 seconds
   useEffect(() => {
@@ -145,6 +167,11 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
             <span className={`text-xs ${saved ? 'text-green-600' : 'text-orange-500'}`}>
               {saved ? '● Salvo' : '○ Não salvo'}
             </span>
+            <Button onClick={handleGerarProposta} size="sm" disabled={gerandoProposta}
+              className="bg-[var(--t-green)] hover:bg-[var(--t-green)]/90 text-white dark:text-[#0a0a14] gap-1">
+              {gerandoProposta ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+              {gerandoProposta ? 'Gerando...' : 'Gerar Proposta'}
+            </Button>
             <Button onClick={handleSave} size="sm" className="bg-[var(--t-header-bg)] hover:bg-[var(--t-surface-hover)]">
               <Save className="w-4 h-4 mr-1" /> Salvar
             </Button>
