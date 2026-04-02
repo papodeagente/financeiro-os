@@ -9,7 +9,7 @@ import {
   Save, ArrowLeft, Copy, MessageCircle, GripVertical,
   ChevronUp, ChevronDown, Trash2, Plane, Hotel,
   Type, Calendar, Image, CheckSquare, DollarSign, Quote, MousePointer,
-  Check, Loader2, Sparkles, FileDown,
+  Check, Loader2, Sparkles, FileDown, GitBranch,
 } from 'lucide-react';
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor,
@@ -282,6 +282,41 @@ export function PropostaEditor({ proposta: initialProposta, clientes, membros, i
     }
   };
 
+  const handleNovaVersao = async () => {
+    if (!confirm(`Criar versao ${proposta.versao + 1} desta proposta?`)) return;
+    // Save current first
+    const current = { ...proposta, atualizado_em: new Date().toISOString() };
+    await fetch(`/api/propostas/${current.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(current),
+    });
+    // Create new version
+    const nova: Proposta = {
+      ...current,
+      id: generateId(),
+      versao: current.versao + 1,
+      versao_anterior_id: current.id,
+      status: 'RASCUNHO',
+      link_publico: '',
+      aceite: null,
+      feedbacks: [],
+      envios: [],
+      criado_em: new Date().toISOString(),
+      atualizado_em: new Date().toISOString(),
+      secoes: current.secoes.map(s => ({ ...s, id: generateId() })),
+    };
+    nova.link_publico = `${window.location.origin}/p/${nova.id.slice(0, 8)}`;
+    const res = await fetch('/api/propostas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(nova),
+    });
+    if (res.ok) {
+      router.push(`/propostas/${nova.id}`);
+    }
+  };
+
   const handleFlightSelect = (offer: FlightOffer) => {
     const conteudo = formatFlightForProposta(offer);
     update(p => ({
@@ -386,6 +421,11 @@ export function PropostaEditor({ proposta: initialProposta, clientes, membros, i
           </Button>
           <span className="text-sm font-medium text-[var(--t-text)]">
             {isEdit ? `Editar ${proposta.numero}` : 'Nova Proposta'}
+            {proposta.versao > 1 && (
+              <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-400">
+                v{proposta.versao}
+              </span>
+            )}
           </span>
           {/* Auto-save indicator */}
           {autoSaveStatus === 'saving' && (
@@ -404,6 +444,12 @@ export function PropostaEditor({ proposta: initialProposta, clientes, membros, i
             <Button variant="outline" size="sm" className="gap-1 text-xs border-[var(--t-border)] text-[var(--t-text-secondary)]"
               onClick={() => navigator.clipboard.writeText(proposta.link_publico)}>
               <Copy className="w-3 h-3" /> Copiar link
+            </Button>
+          )}
+          {isEdit && (
+            <Button variant="outline" size="sm" className="gap-1 text-xs border-[var(--t-border)] text-purple-400"
+              onClick={handleNovaVersao}>
+              <GitBranch className="w-3 h-3" /> v{proposta.versao + 1}
             </Button>
           )}
           <Button variant="outline" size="sm" className="gap-1 text-xs border-[var(--t-border)] text-[var(--t-text-secondary)]"

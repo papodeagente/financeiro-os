@@ -240,6 +240,11 @@ export default function PropostasPage() {
                         <Badge className={`${sc.color} text-[10px] px-2 py-0 gap-1`}>
                           <Icon className="w-3 h-3" /> {sc.label}
                         </Badge>
+                        {p.versao > 1 && (
+                          <span className="text-[10px] px-1.5 py-0 rounded-full bg-purple-500/10 text-purple-400">
+                            v{p.versao}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-3 text-xs text-[var(--t-text-secondary)] mt-1">
                         <span>#{p.numero}</span>

@@ -555,6 +555,7 @@ export interface Proposta {
   id: string;
   numero: string;
   versao: number;
+  versao_anterior_id: string | null;
   cliente_id: string;
   cliente_nome: string;
   vendedor_id: string;
@@ -680,7 +681,7 @@ export function createDestino(): Destino {
 
 export function createProposta(numero: string): Proposta {
   return {
-    id: generateId(), numero, versao: 1,
+    id: generateId(), numero, versao: 1, versao_anterior_id: null,
     cliente_id: '', cliente_nome: '', vendedor_id: '', vendedor_nome: '',
     template_id: '',
     visual: {
