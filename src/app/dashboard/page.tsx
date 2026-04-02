@@ -3,426 +3,285 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
-  Users,
-  ShoppingCart,
-  DollarSign,
-  AlertTriangle,
-  TrendingUp,
-  UserPlus,
-  PlusCircle,
-  ArrowDownCircle,
-  ArrowUpCircle,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  FileText,
+  Users, ShoppingCart, ArrowUpRight, ArrowDownRight,
+  TrendingUp, Clock, AlertTriangle, ChevronRight,
+  DollarSign, CreditCard, Receipt, Package,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import type { Cliente, VendaCRM, ContaReceber, ContaPagar } from '@/lib/crm-types';
 
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+const fmt = (v: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
-const formatDate = (dateStr: string) => {
-  if (!dateStr) return '-';
-  const d = new Date(dateStr + 'T00:00:00');
+const fmtDate = (s: string) => {
+  if (!s) return '-';
+  const d = new Date(s + 'T00:00:00');
   return d.toLocaleDateString('pt-BR');
 };
 
-const statusVendaLabel: Record<string, { label: string; color: string }> = {
-  ORCAMENTO: { label: 'Orçamento', color: 'text-yellow-400 bg-yellow-400/10' },
-  RESERVADO: { label: 'Reservado', color: 'text-blue-400 bg-blue-400/10' },
-  CONFIRMADO: { label: 'Confirmado', color: 'text-green-400 bg-green-400/10' },
-  CANCELADO: { label: 'Cancelado', color: 'text-red-400 bg-red-400/10' },
-  CONCLUIDO: { label: 'Concluído', color: 'text-purple-400 bg-purple-400/10' },
-};
+const today = new Date().toISOString().split('T')[0];
+const thisMonth = today.slice(0, 7);
 
-const statusContaLabel: Record<string, { label: string; color: string }> = {
-  PENDENTE: { label: 'Pendente', color: 'text-yellow-400 bg-yellow-400/10' },
-  ATRASADO: { label: 'Atrasado', color: 'text-red-400 bg-red-400/10' },
-  VENCIDO: { label: 'Vencido', color: 'text-red-400 bg-red-400/10' },
-  RECEBIDO: { label: 'Recebido', color: 'text-green-400 bg-green-400/10' },
-  PAGO: { label: 'Pago', color: 'text-green-400 bg-green-400/10' },
-  PARCIAL: { label: 'Parcial', color: 'text-orange-400 bg-orange-400/10' },
-  CANCELADO: { label: 'Cancelado', color: 'text-gray-400 bg-gray-400/10' },
-};
+function daysUntil(dateStr: string): number {
+  const d = new Date(dateStr + 'T00:00:00');
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return Math.ceil((d.getTime() - now.getTime()) / 86400000);
+}
 
 export default function DashboardPage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [vendas, setVendas] = useState<VendaCRM[]>([]);
-  const [contasReceber, setContasReceber] = useState<ContaReceber[]>([]);
-  const [contasPagar, setContasPagar] = useState<ContaPagar[]>([]);
+  const [receber, setReceber] = useState<ContaReceber[]>([]);
+  const [pagar, setPagar] = useState<ContaPagar[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const [clientesRes, vendasRes, receberRes, pagarRes] = await Promise.all([
-          fetch('/api/clientes'),
-          fetch('/api/vendas-crm'),
-          fetch('/api/contas-receber'),
-          fetch('/api/contas-pagar'),
-        ]);
-
-        const [clientesData, vendasData, receberData, pagarData] = await Promise.all([
-          clientesRes.ok ? clientesRes.json() : [],
-          vendasRes.ok ? vendasRes.json() : [],
-          receberRes.ok ? receberRes.json() : [],
-          pagarRes.ok ? pagarRes.json() : [],
-        ]);
-
-        setClientes(clientesData);
-        setVendas(vendasData);
-        setContasReceber(receberData);
-        setContasPagar(pagarData);
-      } catch (err) {
-        console.error('Erro ao carregar dados do dashboard:', err);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchData();
+    Promise.all([
+      fetch('/api/clientes').then(r => r.json()).catch(() => []),
+      fetch('/api/vendas-crm').then(r => r.json()).catch(() => []),
+      fetch('/api/contas-receber').then(r => r.json()).catch(() => []),
+      fetch('/api/contas-pagar').then(r => r.json()).catch(() => []),
+    ]).then(([c, v, cr, cp]) => {
+      setClientes(c); setVendas(v); setReceber(cr); setPagar(cp);
+      setLoading(false);
+    });
   }, []);
-
-  // Computed metrics
-  const now = new Date();
-  const mesAtual = now.getMonth();
-  const anoAtual = now.getFullYear();
-
-  const vendasDoMes = vendas.filter((v) => {
-    const d = new Date(v.data_venda);
-    return d.getMonth() === mesAtual && d.getFullYear() === anoAtual;
-  });
-
-  const receitaDoMes = vendasDoMes
-    .filter((v) => v.status !== 'CANCELADO')
-    .reduce((acc, v) => acc + (v.valor_final || 0), 0);
-
-  const contasVencidas = [
-    ...contasReceber.filter((c) => c.status === 'ATRASADO'),
-    ...contasPagar.filter((c) => c.status === 'VENCIDO'),
-  ];
-
-  // Próximos 7 dias: contas a vencer
-  const em7dias = new Date(now);
-  em7dias.setDate(em7dias.getDate() + 7);
-
-  const contasAVencer = [
-    ...contasReceber
-      .filter((c) => {
-        if (c.status !== 'PENDENTE') return false;
-        const venc = new Date(c.data_vencimento + 'T00:00:00');
-        return venc >= now && venc <= em7dias;
-      })
-      .map((c) => ({
-        id: c.id,
-        tipo: 'receber' as const,
-        nome: c.cliente_nome,
-        valor: c.valor_final,
-        vencimento: c.data_vencimento,
-        status: c.status,
-      })),
-    ...contasPagar
-      .filter((c) => {
-        if (c.status !== 'PENDENTE') return false;
-        const venc = new Date(c.data_vencimento + 'T00:00:00');
-        return venc >= now && venc <= em7dias;
-      })
-      .map((c) => ({
-        id: c.id,
-        tipo: 'pagar' as const,
-        nome: c.fornecedor_nome,
-        valor: c.valor_final,
-        vencimento: c.data_vencimento,
-        status: c.status,
-      })),
-  ].sort((a, b) => a.vencimento.localeCompare(b.vencimento));
-
-  // Últimas 10 vendas
-  const ultimasVendas = [...vendas]
-    .sort((a, b) => b.data_venda.localeCompare(a.data_venda))
-    .slice(0, 10);
-
-  // Map clienteId -> nome
-  const clienteMap = Object.fromEntries(
-    clientes.map((c) => [c.id, c.nome_completo || c.razao_social || '-'])
-  );
-
-  const summaryCards = [
-    {
-      title: 'Total de Clientes',
-      value: clientes.filter((c) => c.status === 'ATIVO').length.toString(),
-      subtitle: `${clientes.length} cadastrados`,
-      icon: Users,
-      color: 'text-blue-400',
-      bg: 'bg-blue-400/10',
-    },
-    {
-      title: 'Vendas do Mês',
-      value: vendasDoMes.filter((v) => v.status !== 'CANCELADO').length.toString(),
-      subtitle: `${vendasDoMes.length} no total`,
-      icon: ShoppingCart,
-      color: 'text-[#d4a853]',
-      bg: 'bg-[#d4a853]/10',
-    },
-    {
-      title: 'Receita do Mês',
-      value: formatCurrency(receitaDoMes),
-      subtitle: 'vendas confirmadas',
-      icon: TrendingUp,
-      color: 'text-green-400',
-      bg: 'bg-green-400/10',
-    },
-    {
-      title: 'Contas Vencidas',
-      value: contasVencidas.length.toString(),
-      subtitle: 'requerem atenção',
-      icon: AlertTriangle,
-      color: 'text-red-400',
-      bg: 'bg-red-400/10',
-    },
-  ];
-
-  const quickActions = [
-    {
-      label: 'Novo Cliente',
-      icon: UserPlus,
-      href: '/pessoas/clientes',
-      variant: 'default' as const,
-    },
-    {
-      label: 'Nova Venda',
-      icon: PlusCircle,
-      href: '/vendas/nova',
-      variant: 'default' as const,
-    },
-    {
-      label: 'Contas a Receber',
-      icon: ArrowDownCircle,
-      href: '/financeiro-ag/receber',
-      variant: 'outline' as const,
-    },
-    {
-      label: 'Contas a Pagar',
-      icon: ArrowUpCircle,
-      href: '/financeiro-ag/pagar',
-      variant: 'outline' as const,
-    },
-  ];
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center space-y-3">
-          <div className="w-10 h-10 border-2 border-[#d4a853] border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-gray-400 text-sm">Carregando dashboard...</p>
-        </div>
+      <div className="flex items-center justify-center h-full">
+        <div className="w-8 h-8 border-2 border-[#4ade80] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
+  // Calculations
+  const vendasMes = vendas.filter(v => v.data_venda?.startsWith(thisMonth) && v.status !== 'CANCELADO');
+  const receitaMes = vendasMes.reduce((s, v) => s + (v.valor_final || 0), 0);
+  const ticketMedio = vendasMes.length > 0 ? receitaMes / vendasMes.length : 0;
+
+  const totalReceber = receber.filter(r => r.status === 'PENDENTE' || r.status === 'ATRASADO')
+    .reduce((s, r) => s + (r.valor_final || 0), 0);
+  const totalPagar = pagar.filter(p => p.status === 'PENDENTE' || p.status === 'VENCIDO')
+    .reduce((s, p) => s + (p.valor_final || 0), 0);
+  const atrasados = receber.filter(r => r.status === 'ATRASADO');
+  const vencidos = pagar.filter(p => p.status === 'VENCIDO');
+
+  const contasVencer7d = [
+    ...receber.filter(r => r.status === 'PENDENTE' && daysUntil(r.data_vencimento) >= 0 && daysUntil(r.data_vencimento) <= 7)
+      .map(r => ({ tipo: 'receber' as const, nome: r.cliente_nome, valor: r.valor_final, vencimento: r.data_vencimento, dias: daysUntil(r.data_vencimento) })),
+    ...pagar.filter(p => p.status === 'PENDENTE' && daysUntil(p.data_vencimento) >= 0 && daysUntil(p.data_vencimento) <= 7)
+      .map(p => ({ tipo: 'pagar' as const, nome: p.fornecedor_nome, valor: p.valor_final, vencimento: p.data_vencimento, dias: daysUntil(p.data_vencimento) })),
+  ].sort((a, b) => a.dias - b.dias);
+
+  const ultimasVendas = [...vendas].sort((a, b) => (b.data_venda || '').localeCompare(a.data_venda || '')).slice(0, 8);
+  const clienteMap = Object.fromEntries(clientes.map(c => [c.id, c.tipo === 'PF' ? c.nome_completo : c.nome_fantasia || c.razao_social]));
+
+  const statusColor: Record<string, string> = {
+    ORCAMENTO: 'bg-amber-500/20 text-amber-400',
+    RESERVADO: 'bg-blue-500/20 text-blue-400',
+    CONFIRMADO: 'bg-[#4ade80]/20 text-[#4ade80]',
+    CANCELADO: 'bg-red-500/20 text-red-400',
+    CONCLUIDO: 'bg-[#8888a0]/20 text-[#8888a0]',
+  };
+
   return (
-    <div className="space-y-8 p-6">
+    <div className="flex flex-col h-full overflow-y-auto">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-        <p className="text-gray-400 text-sm mt-1">
-          Visão geral do sistema —{' '}
-          {now.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-        </p>
+      <div className="px-8 pt-8 pb-2">
+        <h1 className="text-2xl font-semibold text-white">Dashboard</h1>
+        <p className="text-sm text-[#8888a0] mt-1">Visao geral financeira</p>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {summaryCards.map((card) => {
-          const Icon = card.icon;
-          return (
-            <Card key={card.title} className="bg-[#1a1a2e] border-white/10">
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <p className="text-gray-400 text-xs font-medium uppercase tracking-wide">
-                      {card.title}
-                    </p>
-                    <p className="text-white text-2xl font-bold">{card.value}</p>
-                    <p className="text-gray-500 text-xs">{card.subtitle}</p>
-                  </div>
-                  <div className={`p-2.5 rounded-lg ${card.bg}`}>
-                    <Icon className={`w-5 h-5 ${card.color}`} />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+      <div className="px-8 pb-8 space-y-6">
+        {/* Top KPI Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Receita do Mes */}
+          <div className="bg-[#12121e] rounded-2xl p-5 border border-white/[0.06] hover:border-white/[0.12] transition-colors">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-[13px] text-[#8888a0]">Receita do Mes</span>
+              <div className="w-9 h-9 rounded-xl bg-[#4ade80]/10 flex items-center justify-center">
+                <TrendingUp className="w-[18px] h-[18px] text-[#4ade80]" />
+              </div>
+            </div>
+            <div className="text-[28px] font-semibold text-white leading-none tracking-tight">{fmt(receitaMes)}</div>
+            <div className="flex items-center gap-2 mt-3">
+              <span className="text-xs text-[#8888a0]">{vendasMes.length} vendas</span>
+              <span className="text-[10px] text-[#555]">|</span>
+              <span className="text-xs text-[#8888a0]">Ticket medio: {fmt(ticketMedio)}</span>
+            </div>
+          </div>
 
-      {/* Quick Actions */}
-      <Card className="bg-[#1a1a2e] border-white/10">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-white text-base font-semibold">Ações Rápidas</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-3">
-          {quickActions.map((action) => {
-            const Icon = action.icon;
-            return (
-              <Link key={action.href} href={action.href}>
-                <Button
-                  variant={action.variant}
-                  className={
-                    action.variant === 'default'
-                      ? 'bg-[#d4a853] hover:bg-[#c4983f] text-[#1a1a2e] font-semibold gap-2'
-                      : 'border-white/20 text-gray-300 hover:bg-white/5 hover:text-white gap-2'
-                  }
-                >
-                  <Icon className="w-4 h-4" />
-                  {action.label}
-                </Button>
+          {/* A Receber */}
+          <div className="bg-[#12121e] rounded-2xl p-5 border border-white/[0.06] hover:border-white/[0.12] transition-colors">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-[13px] text-[#8888a0]">A Receber</span>
+              <div className="w-9 h-9 rounded-xl bg-[#4ade80]/10 flex items-center justify-center">
+                <ArrowDownRight className="w-[18px] h-[18px] text-[#4ade80]" />
+              </div>
+            </div>
+            <div className="text-[28px] font-semibold text-white leading-none tracking-tight">{fmt(totalReceber)}</div>
+            <div className="flex items-center gap-2 mt-3">
+              {atrasados.length > 0 && (
+                <span className="text-xs text-red-400 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" /> {atrasados.length} atrasado(s)
+                </span>
+              )}
+              {atrasados.length === 0 && <span className="text-xs text-[#4ade80]">Tudo em dia</span>}
+            </div>
+          </div>
+
+          {/* A Pagar */}
+          <div className="bg-[#12121e] rounded-2xl p-5 border border-white/[0.06] hover:border-white/[0.12] transition-colors">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-[13px] text-[#8888a0]">A Pagar</span>
+              <div className="w-9 h-9 rounded-xl bg-red-500/10 flex items-center justify-center">
+                <ArrowUpRight className="w-[18px] h-[18px] text-red-400" />
+              </div>
+            </div>
+            <div className="text-[28px] font-semibold text-white leading-none tracking-tight">{fmt(totalPagar)}</div>
+            <div className="flex items-center gap-2 mt-3">
+              {vencidos.length > 0 && (
+                <span className="text-xs text-red-400 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" /> {vencidos.length} vencido(s)
+                </span>
+              )}
+              {vencidos.length === 0 && <span className="text-xs text-[#4ade80]">Nenhum vencido</span>}
+            </div>
+          </div>
+
+          {/* Clientes */}
+          <div className="bg-[#12121e] rounded-2xl p-5 border border-white/[0.06] hover:border-white/[0.12] transition-colors">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-[13px] text-[#8888a0]">Clientes</span>
+              <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                <Users className="w-[18px] h-[18px] text-blue-400" />
+              </div>
+            </div>
+            <div className="text-[28px] font-semibold text-white leading-none tracking-tight">{clientes.filter(c => c.status === 'ATIVO').length}</div>
+            <div className="flex items-center gap-2 mt-3">
+              <span className="text-xs text-[#8888a0]">{clientes.length} cadastrados</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="flex gap-3">
+          <Link href="/vendas/nova">
+            <button className="flex items-center gap-2 px-4 py-2.5 bg-[#4ade80] text-[#0a0a14] rounded-xl text-sm font-medium hover:bg-[#22c55e] transition-colors shadow-lg shadow-[#4ade80]/20">
+              <ShoppingCart className="w-4 h-4" /> Nova Venda
+            </button>
+          </Link>
+          <Link href="/pessoas/clientes">
+            <button className="flex items-center gap-2 px-4 py-2.5 bg-[#1a1a2a] text-white rounded-xl text-sm font-medium hover:bg-[#252538] transition-colors border border-white/[0.06]">
+              <Users className="w-4 h-4" /> Clientes
+            </button>
+          </Link>
+          <Link href="/financeiro-ag/receber">
+            <button className="flex items-center gap-2 px-4 py-2.5 bg-[#1a1a2a] text-white rounded-xl text-sm font-medium hover:bg-[#252538] transition-colors border border-white/[0.06]">
+              <Receipt className="w-4 h-4" /> Contas a Receber
+            </button>
+          </Link>
+          <Link href="/financeiro-ag/pagar">
+            <button className="flex items-center gap-2 px-4 py-2.5 bg-[#1a1a2a] text-white rounded-xl text-sm font-medium hover:bg-[#252538] transition-colors border border-white/[0.06]">
+              <CreditCard className="w-4 h-4" /> Contas a Pagar
+            </button>
+          </Link>
+          <Link href="/financeiro-grupos">
+            <button className="flex items-center gap-2 px-4 py-2.5 bg-[#1a1a2a] text-white rounded-xl text-sm font-medium hover:bg-[#252538] transition-colors border border-white/[0.06]">
+              <Package className="w-4 h-4" /> Fin. Grupos
+            </button>
+          </Link>
+        </div>
+
+        {/* Bottom Grid: Recent Sales + Upcoming */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          {/* Recent Sales — 3 cols */}
+          <div className="lg:col-span-3 bg-[#12121e] rounded-2xl border border-white/[0.06] overflow-hidden">
+            <div className="px-5 py-4 flex items-center justify-between border-b border-white/[0.06]">
+              <h2 className="text-sm font-medium text-white">Ultimas Vendas</h2>
+              <Link href="/vendas" className="text-xs text-[#4ade80] flex items-center gap-1 hover:underline">
+                Ver todas <ChevronRight className="w-3 h-3" />
               </Link>
-            );
-          })}
-        </CardContent>
-      </Card>
-
-      {/* Bottom Grid: Recent Vendas + Alerts */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* Recent Vendas */}
-        <Card className="bg-[#1a1a2e] border-white/10">
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
-            <CardTitle className="text-white text-base font-semibold flex items-center gap-2">
-              <FileText className="w-4 h-4 text-[#d4a853]" />
-              Últimas Vendas
-            </CardTitle>
-            <Link href="/vendas">
-              <span className="text-[#d4a853] text-xs hover:underline cursor-pointer">
-                Ver todas
-              </span>
-            </Link>
-          </CardHeader>
-          <CardContent className="p-0">
+            </div>
             {ultimasVendas.length === 0 ? (
-              <div className="px-5 pb-5 text-gray-500 text-sm text-center py-8">
-                Nenhuma venda registrada ainda.
-              </div>
+              <div className="px-5 py-10 text-center text-[#8888a0] text-sm">Nenhuma venda registrada</div>
             ) : (
-              <div className="divide-y divide-white/5">
-                {ultimasVendas.map((venda) => {
-                  const status = statusVendaLabel[venda.status] ?? {
-                    label: venda.status,
-                    color: 'text-gray-400 bg-gray-400/10',
-                  };
-                  return (
-                    <div
-                      key={venda.id}
-                      className="flex items-center justify-between px-5 py-3 hover:bg-white/5 transition-colors"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="text-white text-sm font-medium truncate">
-                          {clienteMap[venda.cliente_id] ?? '—'}
-                        </p>
-                        <p className="text-gray-500 text-xs mt-0.5">
-                          #{venda.numero} · {formatDate(venda.data_venda)}
-                        </p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1 ml-3 shrink-0">
-                        <span className="text-white text-sm font-semibold">
-                          {formatCurrency(venda.valor_final)}
-                        </span>
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded-full font-medium ${status.color}`}
-                        >
-                          {status.label}
-                        </span>
-                      </div>
+              <div className="divide-y divide-white/[0.04]">
+                {ultimasVendas.map(v => (
+                  <div key={v.id} className="px-5 py-3 flex items-center gap-4 hover:bg-white/[0.02] transition-colors">
+                    <div className="w-9 h-9 rounded-full bg-[#1a1a2a] flex items-center justify-center shrink-0">
+                      <DollarSign className="w-4 h-4 text-[#4ade80]" />
                     </div>
-                  );
-                })}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-white truncate">{clienteMap[v.cliente_id] || 'Cliente'}</div>
+                      <div className="text-[11px] text-[#8888a0]">#{v.numero} · {fmtDate(v.data_venda)}</div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-sm font-medium text-white">{fmt(v.valor_final || 0)}</div>
+                      <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full ${statusColor[v.status] || ''}`}>
+                        {v.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Alerts: contas a vencer */}
-        <Card className="bg-[#1a1a2e] border-white/10">
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
-            <CardTitle className="text-white text-base font-semibold flex items-center gap-2">
-              <Clock className="w-4 h-4 text-[#d4a853]" />
-              Contas a Vencer (7 dias)
-            </CardTitle>
-            <span className="text-xs text-gray-500">{contasAVencer.length} conta(s)</span>
-          </CardHeader>
-          <CardContent className="p-0">
-            {contasAVencer.length === 0 ? (
-              <div className="px-5 pb-5 text-center py-8 space-y-2">
-                <CheckCircle2 className="w-8 h-8 text-green-400 mx-auto" />
-                <p className="text-gray-400 text-sm">Nenhuma conta a vencer nos próximos 7 dias.</p>
+          {/* Upcoming — 2 cols */}
+          <div className="lg:col-span-2 bg-[#12121e] rounded-2xl border border-white/[0.06] overflow-hidden">
+            <div className="px-5 py-4 flex items-center justify-between border-b border-white/[0.06]">
+              <h2 className="text-sm font-medium text-white">Vencimentos (7 dias)</h2>
+              <div className="flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-[#8888a0]" />
+                <span className="text-xs text-[#8888a0]">{contasVencer7d.length}</span>
+              </div>
+            </div>
+            {contasVencer7d.length === 0 ? (
+              <div className="px-5 py-10 text-center text-sm">
+                <div className="text-[#4ade80] mb-1">Tudo limpo</div>
+                <div className="text-[#8888a0]">Nenhuma conta nos proximos 7 dias</div>
               </div>
             ) : (
-              <div className="divide-y divide-white/5">
-                {contasAVencer.map((conta) => {
-                  const status = statusContaLabel[conta.status] ?? {
-                    label: conta.status,
-                    color: 'text-gray-400 bg-gray-400/10',
-                  };
-                  const isReceber = conta.tipo === 'receber';
-                  return (
-                    <div
-                      key={`${conta.tipo}-${conta.id}`}
-                      className="flex items-center justify-between px-5 py-3 hover:bg-white/5 transition-colors"
-                    >
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <div
-                          className={`p-1.5 rounded-md shrink-0 ${
-                            isReceber ? 'bg-green-400/10' : 'bg-red-400/10'
-                          }`}
-                        >
-                          {isReceber ? (
-                            <ArrowDownCircle className="w-3.5 h-3.5 text-green-400" />
-                          ) : (
-                            <ArrowUpCircle className="w-3.5 h-3.5 text-red-400" />
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-white text-sm font-medium truncate">{conta.nome}</p>
-                          <p className="text-gray-500 text-xs mt-0.5">
-                            {isReceber ? 'Receber' : 'Pagar'} · vence {formatDate(conta.vencimento)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end gap-1 ml-3 shrink-0">
-                        <span
-                          className={`text-sm font-semibold ${
-                            isReceber ? 'text-green-400' : 'text-red-400'
-                          }`}
-                        >
-                          {formatCurrency(conta.valor)}
-                        </span>
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded-full font-medium ${status.color}`}
-                        >
-                          {status.label}
-                        </span>
+              <div className="divide-y divide-white/[0.04]">
+                {contasVencer7d.slice(0, 8).map((c, i) => (
+                  <div key={i} className="px-5 py-3 flex items-center gap-3 hover:bg-white/[0.02] transition-colors">
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${c.tipo === 'receber' ? 'bg-[#4ade80]' : 'bg-red-400'}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-white truncate">{c.nome || 'Sem nome'}</div>
+                      <div className="text-[11px] text-[#8888a0]">
+                        {c.tipo === 'receber' ? 'Receber' : 'Pagar'} · {fmtDate(c.vencimento)}
                       </div>
                     </div>
-                  );
-                })}
+                    <div className="text-right shrink-0">
+                      <div className={`text-sm font-medium ${c.tipo === 'receber' ? 'text-[#4ade80]' : 'text-red-400'}`}>
+                        {fmt(c.valor)}
+                      </div>
+                      <div className="text-[10px] text-[#8888a0]">
+                        {c.dias === 0 ? 'Hoje' : c.dias === 1 ? 'Amanha' : `${c.dias}d`}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 
-            {/* Vencidas warning */}
-            {contasVencidas.length > 0 && (
-              <div className="mx-5 mb-5 mt-3 flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-                <XCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
-                <p className="text-red-300 text-xs">
-                  <span className="font-semibold">{contasVencidas.length} conta(s) vencida(s)</span>{' '}
-                  aguardando regularização.
-                </p>
+            {/* Alert banner if overdue */}
+            {(atrasados.length > 0 || vencidos.length > 0) && (
+              <div className="mx-5 mb-4 mt-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+                <div className="flex items-center gap-2 text-sm text-red-400">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>
+                    {atrasados.length > 0 && `${atrasados.length} conta(s) a receber atrasada(s)`}
+                    {atrasados.length > 0 && vencidos.length > 0 && ' · '}
+                    {vencidos.length > 0 && `${vencidos.length} conta(s) a pagar vencida(s)`}
+                  </span>
+                </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </div>
   );

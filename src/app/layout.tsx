@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR" className={`${inter.className} h-full antialiased`}>
-      <body className="h-full bg-gray-50">
+      <body className="h-full bg-[#0a0a14]">
         <AppProvider>
           <div className="flex h-full">
             <AppSidebar />

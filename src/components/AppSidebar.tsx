@@ -107,18 +107,18 @@ export function AppSidebar() {
         <div key={item.key}>
           <button
             onClick={() => toggle(item.key)}
-            className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-all ${
+            className={`w-full flex items-center gap-3 px-3 py-2 text-[13px] rounded-lg transition-all ${
               isGroupActive(item)
-                ? 'bg-[#d4a853]/20 text-[#d4a853]'
-                : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                ? 'bg-[#4ade80]/10 text-[#4ade80]'
+                : 'text-[#8888a0] hover:bg-white/[0.04] hover:text-white'
             }`}
           >
-            <Icon className="w-4 h-4 shrink-0" />
-            <span className="flex-1 text-left truncate">{item.label}</span>
-            {isOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+            <Icon className="w-[18px] h-[18px] shrink-0" />
+            <span className="flex-1 text-left">{item.label}</span>
+            {isOpen ? <ChevronDown className="w-3.5 h-3.5 opacity-50" /> : <ChevronRight className="w-3.5 h-3.5 opacity-50" />}
           </button>
           {isOpen && (
-            <div className="ml-3 mt-0.5 space-y-0.5 border-l border-gray-700 pl-2">
+            <div className="ml-[18px] mt-0.5 space-y-0.5 border-l border-white/[0.06] pl-3 mb-1">
               {item.children!.map(child => renderItem(child))}
             </div>
           )}
@@ -126,7 +126,6 @@ export function AppSidebar() {
       );
     }
 
-    // Leaf item
     const href = item.href || '#';
     const active = isActive(item.href);
 
@@ -134,36 +133,44 @@ export function AppSidebar() {
       <Link
         key={item.key}
         href={href}
-        className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg transition-all ${
+        className={`flex items-center gap-3 px-3 py-2 text-[13px] rounded-lg transition-all ${
           active
-            ? 'bg-[#d4a853] text-[#1a1a2e] font-semibold'
-            : 'text-gray-300 hover:bg-white/10 hover:text-white'
+            ? 'bg-[#4ade80] text-[#0a0a14] font-medium shadow-lg shadow-[#4ade80]/20'
+            : 'text-[#8888a0] hover:bg-white/[0.04] hover:text-white'
         }`}
       >
-        <Icon className="w-4 h-4 shrink-0" />
-        <span className="truncate">{item.label}</span>
+        <Icon className="w-[18px] h-[18px] shrink-0" />
+        <span>{item.label}</span>
       </Link>
     );
   };
 
   return (
-    <aside className="w-56 bg-[#1a1a2e] text-white flex flex-col shrink-0 overflow-hidden">
+    <aside className="w-60 bg-[#0e0e1a] flex flex-col shrink-0 overflow-hidden border-r border-white/[0.06]">
       {/* Logo */}
-      <div className="px-4 py-4 border-b border-gray-700">
-        <Link href="/dashboard" className="block">
-          <div className="text-lg font-bold">Entur <span className="text-[#d4a853]">OS</span></div>
-          <div className="text-[10px] text-gray-400">Financeiro</div>
+      <div className="px-5 py-5">
+        <Link href="/dashboard" className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-[#4ade80] flex items-center justify-center">
+            <span className="text-[#0a0a14] font-bold text-sm">E</span>
+          </div>
+          <div>
+            <div className="text-[15px] font-semibold text-white tracking-tight">Entur <span className="text-[#4ade80]">OS</span></div>
+            <div className="text-[10px] text-[#8888a0] -mt-0.5">Financeiro</div>
+          </div>
         </Link>
       </div>
 
+      {/* Divider */}
+      <div className="mx-4 border-t border-white/[0.06]" />
+
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
+      <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">
         {MENU.map(item => renderItem(item))}
       </nav>
 
       {/* Footer */}
-      <div className="px-4 py-3 border-t border-gray-700 text-[9px] text-gray-500">
-        Fase 1 — MVP v0.3
+      <div className="px-5 py-4 border-t border-white/[0.06]">
+        <div className="text-[10px] text-[#555] tracking-wider uppercase">Fase 1 — MVP</div>
       </div>
     </aside>
   );
