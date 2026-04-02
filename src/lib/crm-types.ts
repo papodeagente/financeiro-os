@@ -615,6 +615,12 @@ export interface Proposta {
     nome: string;
   }>;
 
+  // Analytics
+  visualizacoes: Array<{
+    data: string;
+    tempo_segundos: number;
+  }>;
+
   // Lead capture
   leads: Array<{
     nome: string;
@@ -703,7 +709,7 @@ export function createProposta(numero: string): Proposta {
     rodape: { mensagem: '', nome_vendedor: '', telefone_vendedor: '', whatsapp_vendedor: '', email_vendedor: '' },
     status: 'RASCUNHO', link_publico: '',
     envios: [], venda_id: null, grupo_id: null, data_conversao: null,
-    aceite: null, feedbacks: [], leads: [],
+    aceite: null, feedbacks: [], visualizacoes: [], leads: [],
     criado_em: new Date().toISOString(), atualizado_em: new Date().toISOString(),
   };
 }

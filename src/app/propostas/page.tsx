@@ -103,11 +103,18 @@ export default function PropostasPage() {
             Gerencie orcamentos e propostas de viagem
           </p>
         </div>
-        <Link href="/propostas/nova">
-          <Button className="bg-[var(--t-green)] hover:bg-[var(--t-green)]/90 text-white dark:text-[#0a0a14] gap-2">
-            <Plus className="w-4 h-4" /> Nova Proposta
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/propostas/analytics">
+            <Button variant="outline" className="gap-2 border-[var(--t-border)] text-purple-400">
+              <Eye className="w-4 h-4" /> Analytics
+            </Button>
+          </Link>
+          <Link href="/propostas/nova">
+            <Button className="bg-[var(--t-green)] hover:bg-[var(--t-green)]/90 text-white dark:text-[#0a0a14] gap-2">
+              <Plus className="w-4 h-4" /> Nova Proposta
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Stats */}

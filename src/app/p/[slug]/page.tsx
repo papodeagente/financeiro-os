@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { Proposta } from '@/lib/crm-types';
 import { CapaSection } from '@/components/propostas/preview/CapaSection';
@@ -25,11 +25,31 @@ export default function PublicPropostaPage() {
       .then(data => {
         if (!data?.id) throw new Error('Not found');
         setProposta(data);
-        // Track view
-        fetch(`/api/propostas/public/${slug}/view`, { method: 'POST' }).catch(() => {});
+        // Initial view track (without time)
+        fetch(`/api/propostas/public/${slug}/view`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tempo_segundos: 0 }),
+        }).catch(() => {});
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
+  }, [slug]);
+
+  // Track time on page
+  const startTime = useRef(Date.now());
+  useEffect(() => {
+    const sendTime = () => {
+      const segundos = Math.round((Date.now() - startTime.current) / 1000);
+      if (segundos > 5) {
+        navigator.sendBeacon(
+          `/api/propostas/public/${slug}/view`,
+          JSON.stringify({ tempo_segundos: segundos })
+        );
+      }
+    };
+    window.addEventListener('beforeunload', sendTime);
+    return () => window.removeEventListener('beforeunload', sendTime);
   }, [slug]);
 
   // Update page title
