@@ -605,10 +605,15 @@ export interface Proposta {
   atualizado_em: string;
 }
 
+export type TipoViagem = 'ROMANCE' | 'AVENTURA' | 'FAMILIA' | 'CORPORATIVO' | 'CRUZEIRO' | 'CULTURAL' | 'PRAIA' | 'OUTRO';
+
 export interface TemplateProposta {
   id: string;
   nome: string;
   descricao: string;
+  tipo_viagem: TipoViagem;
+  icone: string;
+  imagem_preview: string;
   visual: Proposta['visual'];
   secoes_padrao: SecaoProposta[];
   mensagem_abertura_padrao: string;
