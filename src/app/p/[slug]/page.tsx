@@ -7,6 +7,7 @@ import { CapaSection } from '@/components/propostas/preview/CapaSection';
 import { PreviewRenderer } from '@/components/propostas/preview/PreviewRenderer';
 import { RodapeSection } from '@/components/propostas/preview/RodapeSection';
 import { AceitarProposta } from '@/components/propostas/preview/AceitarProposta';
+import { LeadCapture } from '@/components/propostas/preview/LeadCapture';
 
 export default function PublicPropostaPage() {
   const params = useParams();
@@ -106,6 +107,13 @@ export default function PublicPropostaPage() {
           aceite={proposta.aceite}
         />
       )}
+
+      {/* Lead Capture — shown for proposals without specific client */}
+      <LeadCapture
+        slug={slug}
+        corPrimaria={proposta.visual.cor_primaria || '#10b981'}
+        vendedorNome={proposta.rodape.nome_vendedor}
+      />
 
       {/* Validade */}
       {proposta.cabecalho.validade && (

@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import {
   FileText, Plus, Search, Send, Eye, CheckCircle, XCircle,
   Clock, Trash2, Copy, ExternalLink, MessageCircle, Mail,
-  ArrowRightLeft, Filter, Bell,
+  ArrowRightLeft, Filter, Bell, UserPlus,
 } from 'lucide-react';
 
 const BRL = (v: number) =>
@@ -263,6 +263,14 @@ export default function PropostasPage() {
                             <span>&middot;</span>
                             <span className="flex items-center gap-1 text-blue-400">
                               <MessageCircle className="w-3 h-3" /> {p.feedbacks.length}
+                            </span>
+                          </>
+                        )}
+                        {p.leads?.length > 0 && (
+                          <>
+                            <span>&middot;</span>
+                            <span className="flex items-center gap-1 text-amber-400">
+                              <UserPlus className="w-3 h-3" /> {p.leads.length} lead{p.leads.length > 1 ? 's' : ''}
                             </span>
                           </>
                         )}
