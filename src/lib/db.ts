@@ -182,6 +182,35 @@ export async function initDB() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    CREATE TABLE IF NOT EXISTS propostas (
+      id TEXT PRIMARY KEY,
+      numero TEXT NOT NULL DEFAULT '',
+      cliente_id TEXT NOT NULL DEFAULT '',
+      vendedor_id TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'RASCUNHO',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS templates_proposta (
+      id TEXT PRIMARY KEY,
+      nome TEXT NOT NULL DEFAULT '',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id TEXT PRIMARY KEY,
+      usuario_id TEXT NOT NULL DEFAULT '',
+      acao TEXT NOT NULL DEFAULT '',
+      modulo TEXT NOT NULL DEFAULT '',
+      entidade TEXT NOT NULL DEFAULT '',
+      entidade_id TEXT NOT NULL DEFAULT '',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
   initialized = true;
 }

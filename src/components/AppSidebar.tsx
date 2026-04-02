@@ -12,6 +12,7 @@ import {
   Settings, Building, UserCog, Target, ArrowRightLeft,
   FileSpreadsheet, BarChart3, Trophy, Percent, Medal,
   ChevronDown, ChevronRight, Sun, Moon,
+  FileEdit, Plus, Search,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -93,6 +94,15 @@ const MENU: MenuItem[] = [
     ],
   },
   {
+    key: 'propostas-menu',
+    label: 'Propostas',
+    icon: FileEdit,
+    children: [
+      { key: 'nova-proposta', label: 'Nova Proposta', icon: Plus, href: '/propostas/nova' },
+      { key: 'lista-propostas', label: 'Minhas Propostas', icon: FileText, href: '/propostas' },
+    ],
+  },
+  {
     key: 'relatorios',
     label: 'Relatórios',
     icon: FileText,
@@ -109,6 +119,7 @@ const MENU: MenuItem[] = [
     children: [
       { key: 'agencia', label: 'Dados da Agência', icon: Building, href: '/config/agencia' },
       { key: 'usuarios', label: 'Usuários', icon: UserCog, href: '/config/usuarios' },
+      { key: 'auditoria', label: 'Log de Auditoria', icon: Search, href: '/config/auditoria' },
     ],
   },
 ];
@@ -214,7 +225,7 @@ export function AppSidebar() {
 
       {/* Footer */}
       <div className="px-5 py-4 border-t border-[var(--t-border)]">
-        <div className="text-[10px] text-[var(--t-text-muted)] tracking-wider uppercase">Fase 1 — MVP</div>
+        <div className="text-[10px] text-[var(--t-text-muted)] tracking-wider uppercase">Fase 6 — Dashboard + Propostas</div>
       </div>
     </aside>
   );

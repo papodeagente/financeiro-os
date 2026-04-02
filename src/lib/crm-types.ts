@@ -536,6 +536,130 @@ export interface MetaVendedor {
 }
 
 // ============================================================
+// FASE 6 — PROPOSTAS
+// ============================================================
+
+export type StatusProposta = 'RASCUNHO' | 'ENVIADO' | 'VISUALIZADO' | 'ACEITO' | 'RECUSADO' | 'EXPIRADO' | 'CONVERTIDO';
+export type TipoSecaoProposta = 'TEXTO' | 'SERVICO' | 'ROTEIRO_DIA' | 'GALERIA' | 'INCLUSOS' | 'VALORES' | 'DEPOIMENTO' | 'CTA';
+export type EstiloCapa = 'FULLSCREEN' | 'SPLIT' | 'MINIMAL';
+
+export interface SecaoProposta {
+  id: string;
+  tipo: TipoSecaoProposta;
+  ordem: number;
+  visivel: boolean;
+  conteudo: Record<string, unknown>;
+}
+
+export interface Proposta {
+  id: string;
+  numero: string;
+  versao: number;
+  cliente_id: string;
+  cliente_nome: string;
+  vendedor_id: string;
+  vendedor_nome: string;
+  template_id: string;
+
+  visual: {
+    cor_primaria: string;
+    cor_secundaria: string;
+    cor_texto: string;
+    cor_fundo: string;
+    fonte: string;
+    imagem_capa: string;
+    estilo_capa: EstiloCapa;
+  };
+
+  cabecalho: {
+    titulo: string;
+    subtitulo: string;
+    mensagem_abertura: string;
+    data_proposta: string;
+    validade: string;
+  };
+
+  secoes: SecaoProposta[];
+
+  rodape: {
+    mensagem: string;
+    nome_vendedor: string;
+    telefone_vendedor: string;
+    whatsapp_vendedor: string;
+    email_vendedor: string;
+  };
+
+  status: StatusProposta;
+  link_publico: string;
+
+  envios: Array<{
+    data: string;
+    canal: 'EMAIL' | 'WHATSAPP' | 'LINK';
+    destinatario: string;
+  }>;
+
+  venda_id: string | null;
+  data_conversao: string | null;
+
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export interface TemplateProposta {
+  id: string;
+  nome: string;
+  descricao: string;
+  visual: Proposta['visual'];
+  secoes_padrao: SecaoProposta[];
+  mensagem_abertura_padrao: string;
+  inclusos_padrao: string[];
+  nao_inclusos_padrao: string[];
+  is_padrao: boolean;
+}
+
+export function createProposta(numero: string): Proposta {
+  return {
+    id: generateId(), numero, versao: 1,
+    cliente_id: '', cliente_nome: '', vendedor_id: '', vendedor_nome: '',
+    template_id: '',
+    visual: {
+      cor_primaria: '#10b981', cor_secundaria: '#0a0a14', cor_texto: '#ffffff',
+      cor_fundo: '#ffffff', fonte: 'Inter', imagem_capa: '', estilo_capa: 'FULLSCREEN',
+    },
+    cabecalho: { titulo: '', subtitulo: '', mensagem_abertura: '', data_proposta: new Date().toISOString().split('T')[0], validade: '' },
+    secoes: [],
+    rodape: { mensagem: '', nome_vendedor: '', telefone_vendedor: '', whatsapp_vendedor: '', email_vendedor: '' },
+    status: 'RASCUNHO', link_publico: '',
+    envios: [], venda_id: null, data_conversao: null,
+    criado_em: new Date().toISOString(), atualizado_em: new Date().toISOString(),
+  };
+}
+
+// ============================================================
+// FASE 6 — LOG DE AUDITORIA
+// ============================================================
+
+export type AcaoAuditoria = 'CRIAR' | 'EDITAR' | 'EXCLUIR' | 'VISUALIZAR' | 'EXPORTAR' | 'ENVIAR' | 'CONVERTER' | 'CANCELAR' | 'CONFIRMAR';
+
+export interface LogAuditoria {
+  id: string;
+  timestamp: string;
+  usuario_id: string;
+  usuario_nome: string;
+  perfil: string;
+  acao: AcaoAuditoria;
+  modulo: string;
+  entidade: string;
+  entidade_id: string;
+  descricao: string;
+  alteracoes: Array<{
+    campo: string;
+    valor_anterior: string;
+    valor_novo: string;
+  }>;
+}
+
+// ============================================================
 // CONFIGURACOES
 // ============================================================
 
