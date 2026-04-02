@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Proposta, SecaoProposta, Cliente, Membro } from '@/lib/crm-types';
+import { Proposta, SecaoProposta, Cliente, Membro, Destino } from '@/lib/crm-types';
 import { generateId } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -126,6 +126,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes, membros, i
   const [hotelModalOpen, setHotelModalOpen] = useState(false);
   const [generatingAI, setGeneratingAI] = useState<Record<string, boolean>>({});
   const [generatingFull, setGeneratingFull] = useState(false);
+  const [aiDestino, setAIDestino] = useState<Destino | null>(null);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasUnsaved = useRef(false);
 
@@ -268,13 +269,13 @@ export function PropostaEditor({ proposta: initialProposta, clientes, membros, i
   };
 
   const getAIContext = useCallback(() => ({
-    destino: proposta.cabecalho.titulo?.replace(/.*—\s*/, '').replace(/Proposta.*/, '').trim() || '',
+    destino: aiDestino?.nome || proposta.cabecalho.titulo?.replace(/.*—\s*/, '').replace(/Proposta.*/, '').trim() || '',
     cliente_nome: proposta.cliente_nome || '',
     tipo_viagem: '',
     num_dias: proposta.secoes.find(s => s.tipo === 'ROTEIRO_DIA')
       ? ((s => (s?.conteudo as { dias?: unknown[] })?.dias?.length || 5)(proposta.secoes.find(s => s.tipo === 'ROTEIRO_DIA')))
       : 5,
-  }), [proposta]);
+  }), [proposta, aiDestino]);
 
   const handleGenerateAI = async (secaoId: string, tipo: string) => {
     setGeneratingAI(prev => ({ ...prev, [secaoId]: true }));
@@ -421,6 +422,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes, membros, i
           clientes={clientes}
           membros={membros}
           onUpdate={update}
+          onSetAIDestino={setAIDestino}
         />
       </div>
 
