@@ -11,6 +11,8 @@ interface Dia {
   titulo: string;
   descricao: string;
   imagem?: string;
+  lat?: number;
+  lng?: number;
   atividades: string[];
 }
 
@@ -46,12 +48,30 @@ export function RoteiroDiaBlock({ conteudo, onChange }: BlockProps) {
             placeholder="Descricao do dia..."
             className="w-full bg-[var(--t-bg-secondary)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-sm resize-none"
           />
-          <ImageUpload
-            compact
-            currentUrl={dia.imagem}
-            onUpload={urls => updateDia(i, { imagem: urls[0] })}
-            onRemove={() => updateDia(i, { imagem: '' })}
-          />
+          <div className="flex items-center gap-2">
+            <ImageUpload
+              compact
+              currentUrl={dia.imagem}
+              onUpload={urls => updateDia(i, { imagem: urls[0] })}
+              onRemove={() => updateDia(i, { imagem: '' })}
+            />
+            <Input
+              type="number"
+              step="any"
+              value={dia.lat || ''}
+              onChange={e => updateDia(i, { lat: Number(e.target.value) || undefined })}
+              placeholder="Lat"
+              className="w-20 bg-[var(--t-bg-secondary)] border-[var(--t-border)] text-[var(--t-text)] text-xs"
+            />
+            <Input
+              type="number"
+              step="any"
+              value={dia.lng || ''}
+              onChange={e => updateDia(i, { lng: Number(e.target.value) || undefined })}
+              placeholder="Lng"
+              className="w-20 bg-[var(--t-bg-secondary)] border-[var(--t-border)] text-[var(--t-text)] text-xs"
+            />
+          </div>
         </div>
       ))}
       <Button variant="ghost" size="sm" className="text-xs text-[var(--t-green)]"

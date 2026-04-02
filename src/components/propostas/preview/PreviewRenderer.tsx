@@ -2,6 +2,7 @@
 
 import { SecaoProposta } from '@/lib/crm-types';
 import { CheckCircle2, XCircle, MessageCircle, Star } from 'lucide-react';
+import { MapaRoteiro } from '@/components/propostas/MapaRoteiro';
 
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -53,9 +54,20 @@ function ServicoPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
 }
 
 function RoteiroDiaPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
-  const dias = (conteudo as { dias?: Array<{ numero: number; titulo: string; descricao: string; imagem?: string; atividades?: string[] }> }).dias || [];
+  const dias = (conteudo as { dias?: Array<{ numero: number; titulo: string; descricao: string; imagem?: string; lat?: number; lng?: number; atividades?: string[] }> }).dias || [];
+  const pontosComCoord = dias.filter(d => d.lat && d.lng).map(d => ({
+    lat: d.lat!, lng: d.lng!, label: d.titulo, dia: d.numero,
+  }));
+
   return (
     <div className="space-y-4">
+      {/* Mapa do roteiro */}
+      {pontosComCoord.length > 0 && (
+        <div className="mb-6">
+          <MapaRoteiro pontos={pontosComCoord} height="320px" />
+        </div>
+      )}
+
       {dias.map((dia, i) => (
         <div key={i} className="flex gap-4">
           <div className="flex flex-col items-center">
