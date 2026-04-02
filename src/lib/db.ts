@@ -137,6 +137,25 @@ export async function initDB() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS transferencias (
+      id TEXT PRIMARY KEY,
+      conta_origem_id TEXT NOT NULL DEFAULT '',
+      conta_destino_id TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'PENDENTE',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS extrato_bancario (
+      id TEXT PRIMARY KEY,
+      conta_bancaria_id TEXT NOT NULL DEFAULT '',
+      status_conciliacao TEXT NOT NULL DEFAULT 'PENDENTE',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
   initialized = true;
 }

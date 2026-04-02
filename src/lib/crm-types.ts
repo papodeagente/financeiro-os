@@ -432,6 +432,45 @@ export interface CentroCusto {
 }
 
 // ============================================================
+// FASE 3 — CONCILIACAO, FLUXO DE CAIXA, TRANSFERENCIAS, DRE
+// ============================================================
+
+export type StatusTransferencia = 'PENDENTE' | 'EFETIVADA' | 'CANCELADA';
+
+export interface TransferenciaBancaria {
+  id: string;
+  conta_origem_id: string;
+  conta_origem_nome: string;
+  conta_destino_id: string;
+  conta_destino_nome: string;
+  valor: number;
+  data: string;
+  data_efetivacao: string | null;
+  descricao: string;
+  status: StatusTransferencia;
+  criado_em: string;
+}
+
+export type StatusConciliacao = 'PENDENTE' | 'CONCILIADO' | 'DIVERGENTE' | 'IGNORADO';
+
+export interface ExtratoLinha {
+  id: string;
+  conta_bancaria_id: string;
+  data: string;
+  descricao: string;
+  valor: number; // positivo = crédito, negativo = débito
+  tipo: 'CREDITO' | 'DEBITO';
+  saldo: number;
+  // Conciliação
+  status_conciliacao: StatusConciliacao;
+  lancamento_vinculado_id: string | null;
+  lancamento_vinculado_tipo: 'CONTA_RECEBER' | 'CONTA_PAGAR' | 'TRANSFERENCIA' | null;
+  observacao_conciliacao: string;
+  importado_em: string;
+  arquivo_origem: string;
+}
+
+// ============================================================
 // CONFIGURACOES
 // ============================================================
 
@@ -578,6 +617,22 @@ export function createContaPagar(): ContaPagar {
     parcela_numero: 1, total_parcelas: 1,
     natureza_custo: null, is_custo_comercial: false,
     status: 'PENDENTE', rateio: [], anexos: [], observacoes: '',
+  };
+}
+
+export function createTransferencia(): TransferenciaBancaria {
+  return {
+    id: generateId(),
+    conta_origem_id: '',
+    conta_origem_nome: '',
+    conta_destino_id: '',
+    conta_destino_nome: '',
+    valor: 0,
+    data: new Date().toISOString().split('T')[0],
+    data_efetivacao: null,
+    descricao: '',
+    status: 'PENDENTE',
+    criado_em: new Date().toISOString(),
   };
 }
 

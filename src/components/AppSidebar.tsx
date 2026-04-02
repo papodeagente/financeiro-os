@@ -9,7 +9,8 @@ import {
   ShoppingCart, ListOrdered, FileText as FileTextIcon,
   FolderOpen, Receipt, Factory, TrendingUp, FileText, Gauge,
   DollarSign, CreditCard, BookOpen, Landmark, Package,
-  Settings, Building, UserCog, Target,
+  Settings, Building, UserCog, Target, ArrowRightLeft,
+  FileSpreadsheet, BarChart3,
   ChevronDown, ChevronRight, Sun, Moon,
 } from 'lucide-react';
 
@@ -66,6 +67,10 @@ const MENU: MenuItem[] = [
       { key: 'contas-pagar', label: 'Contas a Pagar', icon: CreditCard, href: '/financeiro-ag/pagar' },
       { key: 'plano-contas', label: 'Plano de Contas', icon: BookOpen, href: '/financeiro-ag/plano-contas' },
       { key: 'contas-bancarias', label: 'Contas Bancárias', icon: Landmark, href: '/financeiro-ag/contas-bancarias' },
+      { key: 'transferencias', label: 'Transferências', icon: ArrowRightLeft, href: '/financeiro-ag/transferencias' },
+      { key: 'conciliacao', label: 'Conciliação Bancária', icon: FileSpreadsheet, href: '/financeiro-ag/conciliacao' },
+      { key: 'fluxo-caixa', label: 'Fluxo de Caixa', icon: BarChart3, href: '/financeiro-ag/fluxo-caixa' },
+      { key: 'dre', label: 'DRE', icon: FileTextIcon, href: '/financeiro-ag/dre' },
     ],
   },
   {
