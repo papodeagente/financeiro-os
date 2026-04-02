@@ -19,26 +19,26 @@ export function BrindeTab({ grupo, onChange }: Props) {
 
   return (
     <div className="space-y-8">
-      <div className="bg-[#1a1a2e] text-white p-4 rounded-lg">
-        <span className="text-xs text-[#d4a853]">Melhor Preço Unitário</span>
+      <div className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-4 rounded-lg">
+        <span className="text-xs text-[var(--t-accent)]">Melhor Preço Unitário</span>
         <div className="text-lg font-bold">{formatBRL(totals.melhorPreco)}</div>
       </div>
 
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
-          <thead><tr className="bg-[#1a1a2e] text-white">
-            <th className="p-2 text-left border border-gray-600">Fornecedor</th>
-            <th className="p-2 border border-gray-600 w-32">Valor Unid.</th>
-            <th className="p-2 border border-gray-600">Descrição</th>
-            <th className="p-2 border border-gray-600">Contato</th>
-            <th className="p-2 border border-gray-600 w-36">Deadline</th>
-            <th className="p-2 border border-gray-600">Prazo Entrega</th>
+          <thead><tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
+            <th className="p-2 text-left border border-[var(--t-border)]">Fornecedor</th>
+            <th className="p-2 border border-[var(--t-border)] w-32">Valor Unid.</th>
+            <th className="p-2 border border-[var(--t-border)]">Descrição</th>
+            <th className="p-2 border border-[var(--t-border)]">Contato</th>
+            <th className="p-2 border border-[var(--t-border)] w-36">Deadline</th>
+            <th className="p-2 border border-[var(--t-border)]">Prazo Entrega</th>
           </tr></thead>
           <tbody>
             {grupo.brinde.fornecedores.map((f, fIdx) => {
               const isMin = f.valor_unidade !== null && f.valor_unidade > 0 && f.valor_unidade === totals.melhorPreco;
               return (
-                <tr key={fIdx} className={fIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                <tr key={fIdx} className={fIdx % 2 === 0 ? 'bg-[var(--t-surface)]' : 'bg-[var(--t-surface-hover)]'}>
                   <td className="p-1 border"><Input value={f.nome} onChange={e => update(fIdx, 'nome', e.target.value)} className="h-8" /></td>
                   <td className="p-1 border"><MoneyInput value={f.valor_unidade} onChange={v => update(fIdx, 'valor_unidade', v)} highlight={isMin} /></td>
                   <td className="p-1 border"><Input value={f.descricao} onChange={e => update(fIdx, 'descricao', e.target.value)} className="h-8" /></td>

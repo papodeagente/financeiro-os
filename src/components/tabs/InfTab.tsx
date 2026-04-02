@@ -84,7 +84,7 @@ export function InfTab({ grupo, onChange }: Props) {
       {/* Períodos */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold text-[#1a1a2e]">Períodos</h3>
+          <h3 className="text-lg font-semibold text-[var(--t-text)]">Períodos</h3>
           <Button variant="outline" size="sm" onClick={addPeriodo} disabled={grupo.periodos.length >= 10}>
             <Plus className="w-4 h-4 mr-1" /> Período
           </Button>
@@ -92,7 +92,7 @@ export function InfTab({ grupo, onChange }: Props) {
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="bg-[#1a1a2e] text-white">
+              <tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
                 <th className="p-2 text-left">#</th>
                 <th className="p-2">Check-in</th>
                 <th className="p-2">Check-out</th>
@@ -104,7 +104,7 @@ export function InfTab({ grupo, onChange }: Props) {
             </thead>
             <tbody>
               {grupo.periodos.map((p, i) => (
-                <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                <tr key={i} className={i % 2 === 0 ? 'bg-[var(--t-surface)]' : 'bg-[var(--t-surface-hover)]'}>
                   <td className="p-2 font-medium">{i + 1}</td>
                   <td className="p-2"><Input type="date" value={p.check_in || ''} onChange={e => updatePeriodo(i, 'check_in', e.target.value || null)} className="h-8" /></td>
                   <td className="p-2"><Input type="date" value={p.check_out || ''} onChange={e => updatePeriodo(i, 'check_out', e.target.value || null)} className="h-8" /></td>
@@ -128,7 +128,7 @@ export function InfTab({ grupo, onChange }: Props) {
       {/* Trechos Aéreos */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold text-[#1a1a2e]">Trechos Aéreos</h3>
+          <h3 className="text-lg font-semibold text-[var(--t-text)]">Trechos Aéreos</h3>
           <Button variant="outline" size="sm" onClick={addTrecho} disabled={grupo.trechos.length >= 4}>
             <Plus className="w-4 h-4 mr-1" /> Trecho
           </Button>
@@ -136,7 +136,7 @@ export function InfTab({ grupo, onChange }: Props) {
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="bg-[#1a1a2e] text-white">
+              <tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
                 <th className="p-2 text-left">Trecho</th>
                 <th className="p-2">Data</th>
                 <th className="p-2">QTD ADT</th>
@@ -146,7 +146,7 @@ export function InfTab({ grupo, onChange }: Props) {
             </thead>
             <tbody>
               {grupo.trechos.map((t, i) => (
-                <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                <tr key={i} className={i % 2 === 0 ? 'bg-[var(--t-surface)]' : 'bg-[var(--t-surface-hover)]'}>
                   <td className="p-2 font-medium">Trecho {i + 1}</td>
                   <td className="p-2"><Input type="date" value={t.data || ''} onChange={e => updateTrecho(i, 'data', e.target.value || null)} className="h-8" /></td>
                   <td className="p-2"><Input type="number" min={0} value={t.qtd_adt || ''} onChange={e => updateTrecho(i, 'qtd_adt', parseInt(e.target.value) || 0)} className="h-8 w-20 text-center" /></td>
@@ -167,7 +167,7 @@ export function InfTab({ grupo, onChange }: Props) {
 
       {/* Navio */}
       <div>
-        <h3 className="text-lg font-semibold text-[#1a1a2e] mb-3">Cruzeiro (Navio)</h3>
+        <h3 className="text-lg font-semibold text-[var(--t-text)] mb-3">Cruzeiro (Navio)</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div><Label>Embarque</Label><Input type="date" value={grupo.navio_info.embarque || ''} onChange={e => updateNavio('embarque', e.target.value || null)} /></div>
           <div><Label>Desembarque</Label><Input type="date" value={grupo.navio_info.desembarque || ''} onChange={e => updateNavio('desembarque', e.target.value || null)} /></div>
@@ -179,14 +179,14 @@ export function InfTab({ grupo, onChange }: Props) {
       </div>
 
       {/* Total Diárias */}
-      <div className="bg-[#1a1a2e] text-white p-4 rounded-lg flex items-center justify-between">
+      <div className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-4 rounded-lg flex items-center justify-between">
         <span className="font-semibold">Total de Diárias</span>
-        <span className="text-2xl font-bold text-[#d4a853]">{totalDiarias}</span>
+        <span className="text-2xl font-bold text-[var(--t-accent)]">{totalDiarias}</span>
       </div>
 
       {/* Parâmetros Financeiros */}
       <div>
-        <h3 className="text-lg font-semibold text-[#1a1a2e] mb-3">Parâmetros Financeiros</h3>
+        <h3 className="text-lg font-semibold text-[var(--t-text)] mb-3">Parâmetros Financeiros</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {([
             ['markup', 'Markup', 0.01],
@@ -213,11 +213,11 @@ export function InfTab({ grupo, onChange }: Props) {
 
       {/* Câmbio por Serviço */}
       <div>
-        <h3 className="text-lg font-semibold text-[#1a1a2e] mb-3">Câmbio por Serviço</h3>
+        <h3 className="text-lg font-semibold text-[var(--t-text)] mb-3">Câmbio por Serviço</h3>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="bg-[#1a1a2e] text-white">
+              <tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
                 <th className="p-2 text-left">Serviço</th>
                 <th className="p-2">Câmbio</th>
                 <th className="p-2">Moeda</th>
@@ -226,7 +226,7 @@ export function InfTab({ grupo, onChange }: Props) {
             </thead>
             <tbody>
               {SERVICOS.map((s, i) => (
-                <tr key={s} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                <tr key={s} className={i % 2 === 0 ? 'bg-[var(--t-surface)]' : 'bg-[var(--t-surface-hover)]'}>
                   <td className="p-2 font-medium uppercase">{s}</td>
                   <td className="p-2">
                     <Input type="number" step={0.01} value={grupo.cambio[s]?.valor ?? 1} onChange={e => updateCambio(s, 'valor', parseFloat(e.target.value) || 1)} className="h-8 w-24" />
@@ -251,7 +251,7 @@ export function InfTab({ grupo, onChange }: Props) {
 
       {/* Links Úteis */}
       <div>
-        <h3 className="text-lg font-semibold text-[#1a1a2e] mb-3">Links Úteis</h3>
+        <h3 className="text-lg font-semibold text-[var(--t-text)] mb-3">Links Úteis</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {['OP CRM', 'Pasta Drive', 'Check-list', 'PDF Roteiro', 'Form RSV', 'LP Conv.', 'LP Roteiro'].map(key => (
             <div key={key}>

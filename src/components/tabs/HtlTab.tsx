@@ -72,9 +72,9 @@ export function HtlTab({ grupo, onChange }: Props) {
   return (
     <div className="space-y-8">
       {/* Totals */}
-      <div className="bg-[#1a1a2e] text-white p-4 rounded-lg flex flex-wrap gap-4">
+      <div className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-4 rounded-lg flex flex-wrap gap-4">
         {TIPOS.map(t => (
-          <div key={t}><span className="text-xs text-[#d4a853]">Total {TIPO_LABELS[t]}</span><div className="text-lg font-bold">{formatBRL(totals.totals[t])}</div></div>
+          <div key={t}><span className="text-xs text-[var(--t-accent)]">Total {TIPO_LABELS[t]}</span><div className="text-lg font-bold">{formatBRL(totals.totals[t])}</div></div>
         ))}
       </div>
 
@@ -90,11 +90,11 @@ export function HtlTab({ grupo, onChange }: Props) {
 
         return (
           <div key={hIdx} className="border rounded-lg overflow-hidden">
-            <div className="bg-[#1a1a2e] text-white p-3 flex items-center justify-between">
+            <div className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-3 flex items-center justify-between">
               <div>
                 <span className="font-semibold">{periodo?.hotel || `Hotel ${hIdx + 1}`}</span>
                 {periodo && (
-                  <span className="text-sm text-gray-300 ml-3">
+                  <span className="text-sm text-[var(--t-text-secondary)] ml-3">
                     {periodo.destino} | {calcDiarias(periodo.check_in, periodo.check_out)} diárias
                   </span>
                 )}
@@ -113,14 +113,14 @@ export function HtlTab({ grupo, onChange }: Props) {
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
                 <thead>
-                  <tr className="bg-gray-100">
+                  <tr className="bg-[var(--t-surface-hover)]">
                     <th className="p-2 text-left border">Fonte</th>
                     {TIPOS.map(t => <th key={t} className="p-2 border w-28">{TIPO_LABELS[t]}</th>)}
                   </tr>
                 </thead>
                 <tbody>
                   {hotel.fontes.map((fonte, fIdx) => (
-                    <tr key={fIdx} className={fIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <tr key={fIdx} className={fIdx % 2 === 0 ? 'bg-[var(--t-surface)]' : 'bg-[var(--t-surface-hover)]'}>
                       <td className="p-2 border font-medium text-xs">{fonte.nome}</td>
                       {TIPOS.map(t => {
                         const key = `valor_${t}` as keyof typeof fonte;
@@ -142,7 +142,7 @@ export function HtlTab({ grupo, onChange }: Props) {
               </table>
             </div>
             {/* Info panel */}
-            <div className="p-4 bg-gray-50 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <div className="p-4 bg-[var(--t-surface-hover)] grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
               <div><Label className="text-xs">Deadline</Label><Input type="date" value={hotel.info.deadline || ''} onChange={e => updateInfo(hIdx, 'deadline', e.target.value || null)} className="h-8" /></div>
               <div><Label className="text-xs">Check-in Hora</Label><Input value={hotel.info.check_in_hora} onChange={e => updateInfo(hIdx, 'check_in_hora', e.target.value)} className="h-8" placeholder="14:00" /></div>
               <div><Label className="text-xs">Check-out Hora</Label><Input value={hotel.info.check_out_hora} onChange={e => updateInfo(hIdx, 'check_out_hora', e.target.value)} className="h-8" placeholder="12:00" /></div>

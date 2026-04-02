@@ -149,69 +149,69 @@ export default function ContasBancariasPage() {
   const totalSaldo = items.reduce((s, i) => s + i.saldo_atual, 0);
 
   return (
-    <div className="min-h-screen bg-[#1a1a2e] text-white p-6">
+    <div className="min-h-screen bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-6">
       <div className="max-w-6xl mx-auto space-y-6">
 
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[#d4a853]">Contas Bancárias</h1>
-            <p className="text-gray-400 text-sm mt-1">Gestão de contas e saldos da agência</p>
+            <h1 className="text-2xl font-bold text-[var(--t-accent)]">Contas Bancárias</h1>
+            <p className="text-[var(--t-text-secondary)] text-sm mt-1">Gestão de contas e saldos da agência</p>
           </div>
           <Button
             onClick={openNew}
-            className="bg-[#d4a853] hover:bg-[#c49843] text-[#1a1a2e] font-semibold"
+            className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold"
           >
             <Plus className="w-4 h-4 mr-2" /> Nova Conta
           </Button>
         </div>
 
         {/* Total Saldo Card */}
-        <Card className="bg-[#16213e] border-[#d4a853]/30">
+        <Card className="bg-[var(--t-surface)] border-[var(--t-accent)]/30">
           <CardContent className="p-5 flex items-center gap-4">
-            <div className="p-3 bg-[#d4a853]/10 rounded-xl">
-              <Wallet className="w-7 h-7 text-[#d4a853]" />
+            <div className="p-3 bg-[var(--t-accent)]/10 rounded-xl">
+              <Wallet className="w-7 h-7 text-[var(--t-accent)]" />
             </div>
             <div>
-              <p className="text-gray-400 text-xs uppercase tracking-wide">Saldo Total Consolidado</p>
-              <p className={`text-3xl font-bold mt-0.5 ${totalSaldo >= 0 ? 'text-[#d4a853]' : 'text-red-400'}`}>
+              <p className="text-[var(--t-text-secondary)] text-xs uppercase tracking-wide">Saldo Total Consolidado</p>
+              <p className={`text-3xl font-bold mt-0.5 ${totalSaldo >= 0 ? 'text-[var(--t-accent)]' : 'text-red-400'}`}>
                 {BRL(totalSaldo)}
               </p>
             </div>
             <div className="ml-auto text-right">
-              <p className="text-gray-500 text-xs">{items.length} conta{items.length !== 1 ? 's' : ''} cadastrada{items.length !== 1 ? 's' : ''}</p>
+              <p className="text-[var(--t-text-secondary)] text-xs">{items.length} conta{items.length !== 1 ? 's' : ''} cadastrada{items.length !== 1 ? 's' : ''}</p>
             </div>
           </CardContent>
         </Card>
 
         {/* Inline Form */}
         {showForm && (
-          <Card className="bg-[#16213e] border-[#d4a853]/40">
+          <Card className="bg-[var(--t-surface)] border-[var(--t-accent)]/40">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-[#d4a853] text-base">
+              <CardTitle className="text-[var(--t-accent)] text-base">
                 {editId ? 'Editar Conta Bancária' : 'Nova Conta Bancária'}
               </CardTitle>
-              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-white">
+              <button onClick={() => setShowForm(false)} className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)]">
                 <X className="w-4 h-4" />
               </button>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Nome da Conta *</label>
+                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Nome da Conta *</label>
                   <Input
                     value={form.nome}
                     onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
                     placeholder="Ex: Bradesco PJ Principal"
-                    className="bg-[#1a1a2e] border-gray-600 text-white"
+                    className="bg-[var(--t-header-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Tipo</label>
+                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Tipo</label>
                   <select
                     value={form.tipo}
                     onChange={e => setForm(f => ({ ...f, tipo: e.target.value as ContaBancaria['tipo'] }))}
-                    className="w-full bg-[#1a1a2e] border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                    className="w-full bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text)]"
                   >
                     <option value="CORRENTE">Conta Corrente</option>
                     <option value="POUPANCA">Poupança</option>
@@ -221,54 +221,54 @@ export default function ContasBancariasPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Banco</label>
+                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Banco</label>
                   <Input
                     value={form.banco}
                     onChange={e => setForm(f => ({ ...f, banco: e.target.value }))}
                     placeholder="Ex: Bradesco, Itaú, Nubank"
-                    className="bg-[#1a1a2e] border-gray-600 text-white"
+                    className="bg-[var(--t-header-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Agência</label>
+                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Agência</label>
                   <Input
                     value={form.agencia}
                     onChange={e => setForm(f => ({ ...f, agencia: e.target.value }))}
                     placeholder="0000-0"
-                    className="bg-[#1a1a2e] border-gray-600 text-white font-mono"
+                    className="bg-[var(--t-header-bg)] border-[var(--t-border)] text-[var(--t-text)] font-mono"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Conta</label>
+                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Conta</label>
                   <Input
                     value={form.conta}
                     onChange={e => setForm(f => ({ ...f, conta: e.target.value }))}
                     placeholder="00000000-0"
-                    className="bg-[#1a1a2e] border-gray-600 text-white font-mono"
+                    className="bg-[var(--t-header-bg)] border-[var(--t-border)] text-[var(--t-text)] font-mono"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Saldo Inicial (R$)</label>
+                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Saldo Inicial (R$)</label>
                   <Input
                     type="number"
                     step="0.01"
                     value={form.saldo_inicial}
                     onChange={e => setForm(f => ({ ...f, saldo_inicial: parseFloat(e.target.value) || 0 }))}
-                    className="bg-[#1a1a2e] border-gray-600 text-white"
+                    className="bg-[var(--t-header-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                   />
                 </div>
               </div>
               <div className="flex gap-2 mt-4">
                 <Button
                   onClick={handleSave}
-                  className="bg-[#d4a853] hover:bg-[#c49843] text-[#1a1a2e] font-semibold"
+                  className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold"
                 >
                   <Check className="w-4 h-4 mr-1" /> {editId ? 'Salvar' : 'Criar'}
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => setShowForm(false)}
-                  className="border-gray-600 text-gray-300 hover:bg-gray-700"
+                  className="border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface)]"
                 >
                   Cancelar
                 </Button>
@@ -279,13 +279,13 @@ export default function ContasBancariasPage() {
 
         {/* Cards Grid */}
         {loading ? (
-          <p className="text-gray-400 text-sm">Carregando...</p>
+          <p className="text-[var(--t-text-secondary)] text-sm">Carregando...</p>
         ) : items.length === 0 ? (
-          <Card className="bg-[#16213e] border-gray-700">
+          <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
             <CardContent className="p-12 text-center">
-              <Wallet className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-500 text-sm">Nenhuma conta bancária cadastrada.</p>
-              <p className="text-gray-600 text-xs mt-1">Clique em "Nova Conta" para adicionar.</p>
+              <Wallet className="w-12 h-12 text-[var(--t-text-muted)] mx-auto mb-3" />
+              <p className="text-[var(--t-text-secondary)] text-sm">Nenhuma conta bancária cadastrada.</p>
+              <p className="text-[var(--t-text-muted)] text-xs mt-1">Clique em "Nova Conta" para adicionar.</p>
             </CardContent>
           </Card>
         ) : (
@@ -293,7 +293,7 @@ export default function ContasBancariasPage() {
             {items.map(item => (
               <Card
                 key={item.id}
-                className="bg-[#16213e] border-gray-700 hover:border-[#d4a853]/40 transition-colors group"
+                className="bg-[var(--t-surface)] border-[var(--t-border)] hover:border-[var(--t-accent)]/40 transition-colors group"
               >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
@@ -302,14 +302,14 @@ export default function ContasBancariasPage() {
                         {TIPO_ICON[item.tipo]}
                       </div>
                       <div>
-                        <CardTitle className="text-white text-base leading-tight">{item.nome}</CardTitle>
-                        <p className="text-gray-500 text-xs mt-0.5">{item.banco || 'Banco não informado'}</p>
+                        <CardTitle className="text-[var(--t-text)] text-base leading-tight">{item.nome}</CardTitle>
+                        <p className="text-[var(--t-text-secondary)] text-xs mt-0.5">{item.banco || 'Banco não informado'}</p>
                       </div>
                     </div>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={() => openEdit(item)}
-                        className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
+                        className="p-1.5 rounded text-[var(--t-text-secondary)] hover:text-[var(--t-text)] hover:bg-[var(--t-surface)] transition-colors"
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
@@ -325,13 +325,13 @@ export default function ContasBancariasPage() {
                 <CardContent className="pt-0">
                   <div className="space-y-3">
                     {/* Saldo */}
-                    <div className="bg-[#1a1a2e] rounded-lg p-3">
-                      <p className="text-gray-500 text-xs uppercase tracking-wide">Saldo Atual</p>
-                      <p className={`text-xl font-bold mt-0.5 ${item.saldo_atual >= 0 ? 'text-white' : 'text-red-400'}`}>
+                    <div className="bg-[var(--t-header-bg)] rounded-lg p-3">
+                      <p className="text-[var(--t-text-secondary)] text-xs uppercase tracking-wide">Saldo Atual</p>
+                      <p className={`text-xl font-bold mt-0.5 ${item.saldo_atual >= 0 ? 'text-[var(--t-text)]' : 'text-red-400'}`}>
                         {BRL(item.saldo_atual)}
                       </p>
                       {item.saldo_inicial !== item.saldo_atual && (
-                        <p className="text-gray-600 text-xs mt-1">
+                        <p className="text-[var(--t-text-muted)] text-xs mt-1">
                           Inicial: {BRL(item.saldo_inicial)}
                         </p>
                       )}
@@ -339,11 +339,11 @@ export default function ContasBancariasPage() {
 
                     {/* Info row */}
                     <div className="flex items-center justify-between">
-                      <Badge className="bg-gray-700 text-gray-300 border-0 text-xs">
+                      <Badge className="bg-[var(--t-surface)] text-[var(--t-text-secondary)] border-0 text-xs">
                         {TIPO_LABEL[item.tipo]}
                       </Badge>
                       {(item.agencia || item.conta) && (
-                        <span className="text-gray-600 text-xs font-mono">
+                        <span className="text-[var(--t-text-muted)] text-xs font-mono">
                           {item.agencia && `Ag ${item.agencia}`}
                           {item.agencia && item.conta && ' · '}
                           {item.conta && `Cc ${item.conta}`}
@@ -353,9 +353,9 @@ export default function ContasBancariasPage() {
 
                     {/* Credit card specific */}
                     {item.tipo === 'CARTAO_CREDITO' && item.limite > 0 && (
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-[var(--t-text-secondary)]">
                         <span>Limite: </span>
-                        <span className="text-gray-300">{BRL(item.limite)}</span>
+                        <span className="text-[var(--t-text-secondary)]">{BRL(item.limite)}</span>
                         {item.dia_vencimento > 0 && (
                           <span className="ml-2">· Vence dia {item.dia_vencimento}</span>
                         )}

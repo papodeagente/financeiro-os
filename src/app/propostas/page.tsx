@@ -23,8 +23,8 @@ const fmtDate = (s: string) => {
 };
 
 const statusConfig: Record<string, { label: string; color: string; icon: React.ComponentType<{ className?: string }> }> = {
-  RASCUNHO: { label: 'Rascunho', color: 'bg-gray-500/10 text-gray-400', icon: Clock },
-  ENVIADO: { label: 'Enviado', color: 'bg-blue-500/10 text-blue-400', icon: Send },
+  RASCUNHO: { label: 'Rascunho', color: 'bg-[var(--t-surface-hover)]0/10 text-[var(--t-text-secondary)]', icon: Clock },
+  ENVIADO: { label: 'Enviado', color: 'bg-[var(--t-blue-bg)]0/10 text-blue-400', icon: Send },
   VISUALIZADO: { label: 'Visualizado', color: 'bg-purple-500/10 text-purple-400', icon: Eye },
   ACEITO: { label: 'Aceito', color: 'bg-emerald-500/10 text-emerald-400', icon: CheckCircle },
   RECUSADO: { label: 'Recusado', color: 'bg-red-500/10 text-red-400', icon: XCircle },
@@ -114,7 +114,7 @@ export default function PropostasPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: 'Total', value: stats.total, color: 'text-[var(--t-text)]' },
-          { label: 'Rascunhos', value: stats.rascunho, color: 'text-gray-400' },
+          { label: 'Rascunhos', value: stats.rascunho, color: 'text-[var(--t-text-secondary)]' },
           { label: 'Enviados', value: stats.enviados, color: 'text-blue-400' },
           { label: 'Aceitos', value: stats.aceitos, color: 'text-emerald-400' },
         ].map(s => (

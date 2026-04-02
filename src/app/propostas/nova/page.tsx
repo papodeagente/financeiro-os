@@ -674,7 +674,7 @@ function EditorInner() {
                   <div className="flex gap-2 mt-3 pt-3 border-t border-[var(--t-border)]">
                     <button
                       onClick={() => { setFlightModalOpen(true); setShowAddBloco(false); }}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/20 hover:border-blue-400 text-blue-400 text-xs font-medium transition-all"
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--t-blue-bg)]0/10 border border-blue-500/20 hover:border-blue-400 text-blue-400 text-xs font-medium transition-all"
                     >
                       <Plane className="w-4 h-4" /> Buscar Voo (API)
                     </button>

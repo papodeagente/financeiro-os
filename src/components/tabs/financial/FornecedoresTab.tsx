@@ -58,10 +58,10 @@ const TIPOS_CUSTO: { value: TipoCusto; label: string }[] = [
 
 const STATUS_BADGE: Record<StatusFornecedor, { bg: string; text: string; label: string }> = {
   PENDENTE: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'Pendente' },
-  PARCIAL: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'Parcial' },
+  PARCIAL: { bg: 'bg-[var(--t-blue-bg)]0/20', text: 'text-blue-400', label: 'Parcial' },
   PAGO: { bg: 'bg-green-500/20', text: 'text-green-400', label: 'Pago' },
   VENCIDO: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Vencido' },
-  CANCELADO: { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'Cancelado' },
+  CANCELADO: { bg: 'bg-[var(--t-surface-hover)]0/20', text: 'text-[var(--t-text-secondary)]', label: 'Cancelado' },
 };
 
 const CATEGORIA_ORDER: CategoriaFornecedor[] = [
@@ -279,14 +279,14 @@ export default function FornecedoresTab({ grupo, onChange }: Props) {
   // ---------- render ----------
 
   const summaryItems = [
-    { label: 'Custo Cotado', value: formatBRL(metrics.custoCotado), color: 'text-gray-300' },
-    { label: 'Custo Negociado', value: formatBRL(metrics.custoNegociado), color: 'text-white' },
+    { label: 'Custo Cotado', value: formatBRL(metrics.custoCotado), color: 'text-[var(--t-text-secondary)]' },
+    { label: 'Custo Negociado', value: formatBRL(metrics.custoNegociado), color: 'text-[var(--t-text)]' },
     {
       label: 'Economia',
       value: formatBRL(metrics.economiaNegociacao),
       color: metrics.economiaNegociacao >= 0 ? 'text-green-400' : 'text-red-400',
     },
-    { label: 'Total Pago', value: formatBRL(metrics.totalPago), color: 'text-[#d4a853]' },
+    { label: 'Total Pago', value: formatBRL(metrics.totalPago), color: 'text-[var(--t-accent)]' },
     { label: 'A Pagar', value: formatBRL(metrics.totalAPagar), color: 'text-orange-400' },
     { label: 'Vencido', value: formatBRL(metrics.totalVencido), color: 'text-red-400' },
   ];
@@ -298,9 +298,9 @@ export default function FornecedoresTab({ grupo, onChange }: Props) {
         {summaryItems.map(item => (
           <div
             key={item.label}
-            className="bg-[#1a1a2e] border border-[#d4a853]/20 rounded-lg p-3 text-center"
+            className="bg-[var(--t-header-bg)] border border-[var(--t-accent)]/20 rounded-lg p-3 text-center"
           >
-            <div className="text-[11px] text-gray-400 uppercase tracking-wide">{item.label}</div>
+            <div className="text-[11px] text-[var(--t-text-secondary)] uppercase tracking-wide">{item.label}</div>
             <div className={`text-lg font-bold ${item.color}`}>{item.value}</div>
           </div>
         ))}
@@ -311,14 +311,14 @@ export default function FornecedoresTab({ grupo, onChange }: Props) {
         <Button
           size="sm"
           variant="outline"
-          className="border-[#d4a853]/40 text-[#d4a853] hover:bg-[#d4a853]/10"
+          className="border-[var(--t-accent)]/40 text-[var(--t-accent)] hover:bg-[var(--t-accent)]/10"
           onClick={handleGerarContas}
         >
           Gerar Contas a Pagar
         </Button>
         <Button
           size="sm"
-          className="bg-[#d4a853] text-[#1a1a2e] hover:bg-[#d4a853]/80 font-semibold"
+          className="bg-[var(--t-accent)] text-[var(--t-text)] hover:bg-[var(--t-accent)]/80 font-semibold"
           onClick={() => {
             setForm(emptyPagamento());
             setShowNew(true);
@@ -330,19 +330,19 @@ export default function FornecedoresTab({ grupo, onChange }: Props) {
 
       {/* Table grouped by category */}
       {pagamentos.length === 0 ? (
-        <div className="text-center text-gray-500 py-12 bg-[#1a1a2e] rounded-lg border border-[#d4a853]/10">
+        <div className="text-center text-[var(--t-text-secondary)] py-12 bg-[var(--t-header-bg)] rounded-lg border border-[var(--t-accent)]/10">
           Nenhum fornecedor cadastrado. Clique em &quot;Novo Fornecedor&quot; para adicionar.
         </div>
       ) : (
         Array.from(grouped.entries()).map(([cat, items]) => (
           <div key={cat} className="space-y-1">
-            <div className="text-xs font-bold text-[#d4a853] uppercase tracking-wider mt-4 mb-1">
+            <div className="text-xs font-bold text-[var(--t-accent)] uppercase tracking-wider mt-4 mb-1">
               {categoriaLabel(cat)}
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-[11px] text-gray-400 uppercase border-b border-gray-700">
+                  <tr className="text-[11px] text-[var(--t-text-secondary)] uppercase border-b border-[var(--t-border)]">
                     <th className="text-left py-2 px-2">Fornecedor</th>
                     <th className="text-left py-2 px-2">Descrição</th>
                     <th className="text-right py-2 px-2">Cotado</th>
@@ -365,28 +365,28 @@ export default function FornecedoresTab({ grupo, onChange }: Props) {
                     return (
                       <tr
                         key={p.id}
-                        className="border-b border-gray-800 hover:bg-white/5 transition-colors"
+                        className="border-b border-[var(--t-border)] hover:bg-white/5 transition-colors"
                       >
-                        <td className="py-2 px-2 text-white font-medium max-w-[160px] truncate">
+                        <td className="py-2 px-2 text-[var(--t-text)] font-medium max-w-[160px] truncate">
                           {p.fornecedor_nome || '\u2014'}
                         </td>
-                        <td className="py-2 px-2 text-gray-400 max-w-[180px] truncate">
+                        <td className="py-2 px-2 text-[var(--t-text-secondary)] max-w-[180px] truncate">
                           {p.descricao || '\u2014'}
                         </td>
-                        <td className="py-2 px-2 text-right text-gray-300">
+                        <td className="py-2 px-2 text-right text-[var(--t-text-secondary)]">
                           {formatBRL(p.valor_brl_cotado)}
                         </td>
-                        <td className="py-2 px-2 text-right text-white">
+                        <td className="py-2 px-2 text-right text-[var(--t-text)]">
                           {formatBRL(negBrl)}
                         </td>
                         <td
                           className={`py-2 px-2 text-right font-medium ${
-                            delta > 0 ? 'text-green-400' : delta < 0 ? 'text-red-400' : 'text-gray-400'
+                            delta > 0 ? 'text-green-400' : delta < 0 ? 'text-red-400' : 'text-[var(--t-text-secondary)]'
                           }`}
                         >
                           {formatBRL(delta)}
                         </td>
-                        <td className="py-2 px-2 text-center text-gray-300">
+                        <td className="py-2 px-2 text-center text-[var(--t-text-secondary)]">
                           {formatDate(p.data_vencimento)}
                         </td>
                         <td className="py-2 px-2 text-center">
@@ -394,7 +394,7 @@ export default function FornecedoresTab({ grupo, onChange }: Props) {
                             {st.label}
                           </Badge>
                         </td>
-                        <td className="py-2 px-2 text-right text-[#d4a853]">
+                        <td className="py-2 px-2 text-right text-[var(--t-accent)]">
                           {formatBRL(p.valor_brl_pago)}
                         </td>
                         <td className="py-2 px-2 text-right text-orange-400">
@@ -405,7 +405,7 @@ export default function FornecedoresTab({ grupo, onChange }: Props) {
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-7 px-2 text-[11px] text-[#d4a853] hover:bg-[#d4a853]/10"
+                              className="h-7 px-2 text-[11px] text-[var(--t-accent)] hover:bg-[var(--t-accent)]/10"
                               onClick={() => openRegistrarPagamento(p.id)}
                               disabled={p.status === 'PAGO' || p.status === 'CANCELADO'}
                             >
@@ -415,7 +415,7 @@ export default function FornecedoresTab({ grupo, onChange }: Props) {
                               value={p.status}
                               onValueChange={(v) => handleChangeStatus(p.id, v as StatusFornecedor)}
                             >
-                              <SelectTrigger className="h-7 w-[90px] text-[10px] bg-transparent border-gray-700">
+                              <SelectTrigger className="h-7 w-[90px] text-[10px] bg-transparent border-[var(--t-border)]">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -448,20 +448,20 @@ export default function FornecedoresTab({ grupo, onChange }: Props) {
 
       {/* ========== Dialog: Novo Fornecedor ========== */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-[#1a1a2e] border-[#d4a853]/30 text-white">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-[var(--t-surface)] border-[var(--t-border)] text-[var(--t-text)]">
           <DialogHeader>
-            <DialogTitle className="text-[#d4a853]">Novo Fornecedor</DialogTitle>
+            <DialogTitle className="text-[var(--t-accent)]">Novo Fornecedor</DialogTitle>
           </DialogHeader>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Categoria */}
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Categoria</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">Categoria</Label>
               <Select
                 value={form.categoria}
                 onValueChange={(v) => setF('categoria', v as CategoriaFornecedor)}
               >
-                <SelectTrigger className="bg-[#1a1a2e] border-gray-700">
+                <SelectTrigger className="bg-[var(--t-header-bg)] border-[var(--t-border)]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -474,52 +474,52 @@ export default function FornecedoresTab({ grupo, onChange }: Props) {
 
             {/* Nome fornecedor */}
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Nome do Fornecedor</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">Nome do Fornecedor</Label>
               <Input
                 value={form.fornecedor_nome}
                 onChange={e => setF('fornecedor_nome', e.target.value)}
-                className="bg-[#1a1a2e] border-gray-700"
+                className="bg-[var(--t-header-bg)] border-[var(--t-border)]"
               />
             </div>
 
             {/* Descricao */}
             <div className="space-y-1 md:col-span-2">
-              <Label className="text-gray-400 text-xs">Descrição</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">Descrição</Label>
               <Input
                 value={form.descricao}
                 onChange={e => setF('descricao', e.target.value)}
-                className="bg-[#1a1a2e] border-gray-700"
+                className="bg-[var(--t-header-bg)] border-[var(--t-border)]"
               />
             </div>
 
             {/* Valor Cotado */}
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Valor Cotado</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">Valor Cotado</Label>
               <MoneyInput
                 value={form.valor_cotado || null}
                 onChange={v => setF('valor_cotado', v ?? 0)}
-                className="bg-[#1a1a2e] border-gray-700"
+                className="bg-[var(--t-header-bg)] border-[var(--t-border)]"
               />
             </div>
 
             {/* Valor Negociado */}
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Valor Negociado</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">Valor Negociado</Label>
               <MoneyInput
                 value={form.valor_negociado || null}
                 onChange={v => setF('valor_negociado', v ?? 0)}
-                className="bg-[#1a1a2e] border-gray-700"
+                className="bg-[var(--t-header-bg)] border-[var(--t-border)]"
               />
             </div>
 
             {/* Moeda */}
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Moeda</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">Moeda</Label>
               <Select
                 value={form.moeda}
                 onValueChange={(v) => setF('moeda', v as 'BRL' | 'USD' | 'EUR')}
               >
-                <SelectTrigger className="bg-[#1a1a2e] border-gray-700">
+                <SelectTrigger className="bg-[var(--t-header-bg)] border-[var(--t-border)]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -532,19 +532,19 @@ export default function FornecedoresTab({ grupo, onChange }: Props) {
 
             {/* Cambio Cotacao */}
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Câmbio Cotação</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">Câmbio Cotação</Label>
               <Input
                 type="number"
                 step="0.01"
                 value={form.cambio_cotacao}
                 onChange={e => setF('cambio_cotacao', parseFloat(e.target.value) || 1)}
-                className="bg-[#1a1a2e] border-gray-700"
+                className="bg-[var(--t-header-bg)] border-[var(--t-border)]"
               />
             </div>
 
             {/* Cambio Pagamento */}
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Câmbio Pagamento</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">Câmbio Pagamento</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -554,40 +554,40 @@ export default function FornecedoresTab({ grupo, onChange }: Props) {
                   setF('cambio_pagamento', isNaN(v) ? null : v);
                 }}
                 placeholder="Mesmo da cotação"
-                className="bg-[#1a1a2e] border-gray-700"
+                className="bg-[var(--t-header-bg)] border-[var(--t-border)]"
               />
             </div>
 
             {/* Deadline */}
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Deadline</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">Deadline</Label>
               <Input
                 type="date"
                 value={form.deadline ?? ''}
                 onChange={e => setF('deadline', e.target.value || null)}
-                className="bg-[#1a1a2e] border-gray-700"
+                className="bg-[var(--t-header-bg)] border-[var(--t-border)]"
               />
             </div>
 
             {/* Data Vencimento */}
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Data Vencimento</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">Data Vencimento</Label>
               <Input
                 type="date"
                 value={form.data_vencimento ?? ''}
                 onChange={e => setF('data_vencimento', e.target.value || null)}
-                className="bg-[#1a1a2e] border-gray-700"
+                className="bg-[var(--t-header-bg)] border-[var(--t-border)]"
               />
             </div>
 
             {/* Tipo Custo */}
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Tipo de Custo</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">Tipo de Custo</Label>
               <Select
                 value={form.tipo_custo}
                 onValueChange={(v) => setF('tipo_custo', v as TipoCusto)}
               >
-                <SelectTrigger className="bg-[#1a1a2e] border-gray-700">
+                <SelectTrigger className="bg-[var(--t-header-bg)] border-[var(--t-border)]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -600,135 +600,135 @@ export default function FornecedoresTab({ grupo, onChange }: Props) {
 
             {/* Quantidade */}
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Quantidade</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">Quantidade</Label>
               <Input
                 type="number"
                 value={form.quantidade}
                 onChange={e => setF('quantidade', parseInt(e.target.value) || 1)}
-                className="bg-[#1a1a2e] border-gray-700"
+                className="bg-[var(--t-header-bg)] border-[var(--t-border)]"
               />
             </div>
 
             {/* Valor Unitario */}
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Valor Unitário</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">Valor Unitário</Label>
               <MoneyInput
                 value={form.valor_unitario || null}
                 onChange={v => setF('valor_unitario', v ?? 0)}
-                className="bg-[#1a1a2e] border-gray-700"
+                className="bg-[var(--t-header-bg)] border-[var(--t-border)]"
               />
             </div>
 
             {/* Separator: Contato */}
-            <div className="md:col-span-2 border-t border-gray-700 pt-3 mt-1">
-              <span className="text-xs text-[#d4a853] font-bold uppercase">Contato</span>
+            <div className="md:col-span-2 border-t border-[var(--t-border)] pt-3 mt-1">
+              <span className="text-xs text-[var(--t-accent)] font-bold uppercase">Contato</span>
             </div>
 
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Nome Contato</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">Nome Contato</Label>
               <Input
                 value={form.contato_nome}
                 onChange={e => setF('contato_nome', e.target.value)}
-                className="bg-[#1a1a2e] border-gray-700"
+                className="bg-[var(--t-header-bg)] border-[var(--t-border)]"
               />
             </div>
 
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Telefone</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">Telefone</Label>
               <Input
                 value={form.contato_telefone}
                 onChange={e => setF('contato_telefone', e.target.value)}
-                className="bg-[#1a1a2e] border-gray-700"
+                className="bg-[var(--t-header-bg)] border-[var(--t-border)]"
               />
             </div>
 
             <div className="space-y-1 md:col-span-2">
-              <Label className="text-gray-400 text-xs">E-mail</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">E-mail</Label>
               <Input
                 value={form.contato_email}
                 onChange={e => setF('contato_email', e.target.value)}
-                className="bg-[#1a1a2e] border-gray-700"
+                className="bg-[var(--t-header-bg)] border-[var(--t-border)]"
               />
             </div>
 
             {/* Separator: Dados Bancarios */}
-            <div className="md:col-span-2 border-t border-gray-700 pt-3 mt-1">
-              <span className="text-xs text-[#d4a853] font-bold uppercase">Dados Bancários</span>
+            <div className="md:col-span-2 border-t border-[var(--t-border)] pt-3 mt-1">
+              <span className="text-xs text-[var(--t-accent)] font-bold uppercase">Dados Bancários</span>
             </div>
 
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Banco</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">Banco</Label>
               <Input
                 value={form.dados_bancarios.banco}
                 onChange={e => setBanco('banco', e.target.value)}
-                className="bg-[#1a1a2e] border-gray-700"
+                className="bg-[var(--t-header-bg)] border-[var(--t-border)]"
               />
             </div>
 
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Agência</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">Agência</Label>
               <Input
                 value={form.dados_bancarios.agencia}
                 onChange={e => setBanco('agencia', e.target.value)}
-                className="bg-[#1a1a2e] border-gray-700"
+                className="bg-[var(--t-header-bg)] border-[var(--t-border)]"
               />
             </div>
 
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Conta</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">Conta</Label>
               <Input
                 value={form.dados_bancarios.conta}
                 onChange={e => setBanco('conta', e.target.value)}
-                className="bg-[#1a1a2e] border-gray-700"
+                className="bg-[var(--t-header-bg)] border-[var(--t-border)]"
               />
             </div>
 
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">PIX</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">PIX</Label>
               <Input
                 value={form.dados_bancarios.pix}
                 onChange={e => setBanco('pix', e.target.value)}
-                className="bg-[#1a1a2e] border-gray-700"
+                className="bg-[var(--t-header-bg)] border-[var(--t-border)]"
               />
             </div>
 
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Titular</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">Titular</Label>
               <Input
                 value={form.dados_bancarios.titular}
                 onChange={e => setBanco('titular', e.target.value)}
-                className="bg-[#1a1a2e] border-gray-700"
+                className="bg-[var(--t-header-bg)] border-[var(--t-border)]"
               />
             </div>
 
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">CNPJ</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">CNPJ</Label>
               <Input
                 value={form.dados_bancarios.cnpj}
                 onChange={e => setBanco('cnpj', e.target.value)}
-                className="bg-[#1a1a2e] border-gray-700"
+                className="bg-[var(--t-header-bg)] border-[var(--t-border)]"
               />
             </div>
 
             {/* Observacoes */}
             <div className="md:col-span-2 space-y-1">
-              <Label className="text-gray-400 text-xs">Observações</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">Observações</Label>
               <Textarea
                 value={form.observacoes}
                 onChange={e => setF('observacoes', e.target.value)}
-                className="bg-[#1a1a2e] border-gray-700 min-h-[60px]"
+                className="bg-[var(--t-header-bg)] border-[var(--t-border)] min-h-[60px]"
               />
             </div>
           </div>
 
           <DialogFooter className="mt-4">
-            <Button variant="ghost" onClick={() => setShowNew(false)} className="text-gray-400">
+            <Button variant="ghost" onClick={() => setShowNew(false)} className="text-[var(--t-text-secondary)]">
               Cancelar
             </Button>
             <Button
               onClick={handleNovoSave}
               disabled={!form.fornecedor_nome}
-              className="bg-[#d4a853] text-[#1a1a2e] hover:bg-[#d4a853]/80 font-semibold"
+              className="bg-[var(--t-accent)] text-[var(--t-text)] hover:bg-[var(--t-accent)]/80 font-semibold"
             >
               Salvar Fornecedor
             </Button>
@@ -738,38 +738,38 @@ export default function FornecedoresTab({ grupo, onChange }: Props) {
 
       {/* ========== Dialog: Registrar Pagamento ========== */}
       <Dialog open={showPagamento} onOpenChange={setShowPagamento}>
-        <DialogContent className="max-w-md bg-[#1a1a2e] border-[#d4a853]/30 text-white">
+        <DialogContent className="max-w-md bg-[var(--t-surface)] border-[var(--t-border)] text-[var(--t-text)]">
           <DialogHeader>
-            <DialogTitle className="text-[#d4a853]">Registrar Pagamento</DialogTitle>
+            <DialogTitle className="text-[var(--t-accent)]">Registrar Pagamento</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Valor do Pagamento</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">Valor do Pagamento</Label>
               <MoneyInput
                 value={pgForm.valor || null}
                 onChange={v => setPgForm(prev => ({ ...prev, valor: v ?? 0 }))}
-                className="bg-[#1a1a2e] border-gray-700"
+                className="bg-[var(--t-header-bg)] border-[var(--t-border)]"
               />
             </div>
 
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Data do Pagamento</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">Data do Pagamento</Label>
               <Input
                 type="date"
                 value={pgForm.data}
                 onChange={e => setPgForm(prev => ({ ...prev, data: e.target.value }))}
-                className="bg-[#1a1a2e] border-gray-700"
+                className="bg-[var(--t-header-bg)] border-[var(--t-border)]"
               />
             </div>
 
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Forma de Pagamento</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">Forma de Pagamento</Label>
               <Select
                 value={pgForm.forma}
                 onValueChange={(v) => setPgForm(prev => ({ ...prev, forma: v ?? '' }))}
               >
-                <SelectTrigger className="bg-[#1a1a2e] border-gray-700">
+                <SelectTrigger className="bg-[var(--t-header-bg)] border-[var(--t-border)]">
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
@@ -783,24 +783,24 @@ export default function FornecedoresTab({ grupo, onChange }: Props) {
             </div>
 
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Comprovante (ref.)</Label>
+              <Label className="text-[var(--t-text-secondary)] text-xs">Comprovante (ref.)</Label>
               <Input
                 value={pgForm.comprovante}
                 onChange={e => setPgForm(prev => ({ ...prev, comprovante: e.target.value }))}
                 placeholder="Nº do comprovante ou referência"
-                className="bg-[#1a1a2e] border-gray-700"
+                className="bg-[var(--t-header-bg)] border-[var(--t-border)]"
               />
             </div>
           </div>
 
           <DialogFooter className="mt-4">
-            <Button variant="ghost" onClick={() => setShowPagamento(false)} className="text-gray-400">
+            <Button variant="ghost" onClick={() => setShowPagamento(false)} className="text-[var(--t-text-secondary)]">
               Cancelar
             </Button>
             <Button
               onClick={handleRegistrarPagamento}
               disabled={pgForm.valor <= 0}
-              className="bg-[#d4a853] text-[#1a1a2e] hover:bg-[#d4a853]/80 font-semibold"
+              className="bg-[var(--t-accent)] text-[var(--t-text)] hover:bg-[var(--t-accent)]/80 font-semibold"
             >
               Confirmar Pagamento
             </Button>

@@ -113,14 +113,14 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
   return (
     <div className="flex h-full">
       {/* Inner sidebar - Planning tabs only */}
-      <aside className="w-20 bg-[#0f0f1e] text-white flex flex-col items-center py-3 gap-1 overflow-y-auto shrink-0 border-r border-gray-800">
-        <div className="text-[8px] uppercase tracking-wider text-gray-400 mb-1">Produto</div>
+      <aside className="w-20 bg-[var(--t-bg)] text-[var(--t-text)] flex flex-col items-center py-3 gap-1 overflow-y-auto shrink-0 border-r border-[var(--t-border)]">
+        <div className="text-[8px] uppercase tracking-wider text-[var(--t-text-secondary)] mb-1">Produto</div>
         {ABAS_PLANEJAMENTO.map(aba => (
           <button
             key={aba}
             onClick={() => setActiveTab(aba)}
             className={`w-16 py-1.5 rounded-lg text-center transition-all ${
-              activeTab === aba ? 'bg-[#d4a853] text-[#1a1a2e]' : 'hover:bg-white/10'
+              activeTab === aba ? 'bg-[var(--t-accent)] text-[var(--t-text)]' : 'hover:bg-[var(--t-surface-hover)]'
             }`}
           >
             <div className="text-sm">{ABA_ICONS[aba]}</div>
@@ -133,19 +133,19 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="bg-white border-b px-6 py-3 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <Link href="/grupos" className="hover:text-[#1a1a2e]">Produtos</Link>
+        <header className="bg-[var(--t-surface)] border-b border-[var(--t-border)] px-6 py-3 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2 text-sm text-[var(--t-text-secondary)]">
+            <Link href="/grupos" className="hover:text-[var(--t-text)]">Produtos</Link>
             <span>/</span>
-            <span className="font-semibold text-[#1a1a2e]">{grupo.grp_id || 'Sem ID'}</span>
+            <span className="font-semibold text-[var(--t-text)]">{grupo.grp_id || 'Sem ID'}</span>
             <span>/</span>
-            <Badge variant="outline" className="text-[#d4a853] border-[#d4a853]">{ABA_LABELS[activeTab]}</Badge>
+            <Badge variant="outline" className="text-[var(--t-accent)] border-[var(--t-accent)]">{ABA_LABELS[activeTab]}</Badge>
           </div>
           <div className="flex items-center gap-3">
             <span className={`text-xs ${saved ? 'text-green-600' : 'text-orange-500'}`}>
               {saved ? '● Salvo' : '○ Não salvo'}
             </span>
-            <Button onClick={handleSave} size="sm" className="bg-[#1a1a2e] hover:bg-[#2a2a4e]">
+            <Button onClick={handleSave} size="sm" className="bg-[var(--t-header-bg)] hover:bg-[var(--t-surface-hover)]">
               <Save className="w-4 h-4 mr-1" /> Salvar
             </Button>
           </div>

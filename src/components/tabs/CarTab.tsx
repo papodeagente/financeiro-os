@@ -38,8 +38,8 @@ export function CarTab({ grupo, onChange }: Props) {
 
   return (
     <div className="space-y-8">
-      <div className="bg-[#1a1a2e] text-white p-4 rounded-lg">
-        <span className="text-xs text-[#d4a853]">Total CAR por PAX</span>
+      <div className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-4 rounded-lg">
+        <span className="text-xs text-[var(--t-accent)]">Total CAR por PAX</span>
         <div className="text-lg font-bold">{formatBRL(totals.totalPorPax)}</div>
       </div>
 
@@ -51,17 +51,17 @@ export function CarTab({ grupo, onChange }: Props) {
         const melhor = minPositivo(transp.empresas.map(e => e.valor_veiculo));
         return (
           <div key={tIdx} className="border rounded-lg overflow-hidden">
-            <div className="bg-[#1a1a2e] text-white p-3 flex items-center justify-between">
+            <div className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Input value={transp.origem} onChange={e => updateTransporte(tIdx, 'origem', e.target.value)} placeholder="Origem" className="h-8 w-40 bg-white/10 text-white border-white/20" />
+                <Input value={transp.origem} onChange={e => updateTransporte(tIdx, 'origem', e.target.value)} placeholder="Origem" className="h-8 w-40 bg-[var(--t-input-bg)] text-[var(--t-text)] border-[var(--t-border)]" />
                 <span>→</span>
-                <Input value={transp.destino} onChange={e => updateTransporte(tIdx, 'destino', e.target.value)} placeholder="Destino" className="h-8 w-40 bg-white/10 text-white border-white/20" />
+                <Input value={transp.destino} onChange={e => updateTransporte(tIdx, 'destino', e.target.value)} placeholder="Destino" className="h-8 w-40 bg-[var(--t-input-bg)] text-[var(--t-text)] border-[var(--t-border)]" />
               </div>
               {grupo.car.transportes.length > 1 && <Button variant="ghost" size="sm" onClick={() => removeTransporte(tIdx)} className="text-red-300"><Trash2 className="w-4 h-4" /></Button>}
             </div>
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
-                <thead><tr className="bg-gray-100">
+                <thead><tr className="bg-[var(--t-surface-hover)]">
                   <th className="p-2 text-left border">Empresa</th>
                   <th className="p-2 border w-36">Valor Veículo</th>
                   <th className="p-2 border w-28">Valor/PAX</th>
@@ -75,7 +75,7 @@ export function CarTab({ grupo, onChange }: Props) {
                     const valPax = emp.valor_veiculo ? emp.valor_veiculo / minPax : 0;
                     const isMin = emp.valor_veiculo !== null && emp.valor_veiculo > 0 && emp.valor_veiculo === melhor;
                     return (
-                      <tr key={eIdx} className={eIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      <tr key={eIdx} className={eIdx % 2 === 0 ? 'bg-[var(--t-surface)]' : 'bg-[var(--t-surface-hover)]'}>
                         <td className="p-1 border"><Input value={emp.nome} onChange={e => updateEmpresa(tIdx, eIdx, 'nome', e.target.value)} className="h-8" /></td>
                         <td className="p-1 border"><MoneyInput value={emp.valor_veiculo} onChange={v => updateEmpresa(tIdx, eIdx, 'valor_veiculo', v)} highlight={isMin} /></td>
                         <td className="p-2 border text-right text-sm">{formatBRL(valPax)}</td>

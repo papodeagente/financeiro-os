@@ -150,28 +150,28 @@ export default function ClientesPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#0f0f1a] text-gray-100 p-6">
+    <div className="min-h-screen bg-[var(--t-bg)] text-[var(--t-text)] p-6">
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#d4a853]">Clientes</h1>
-          <p className="text-sm text-gray-400 mt-1">{clientes.length} cliente{clientes.length !== 1 ? 's' : ''} cadastrado{clientes.length !== 1 ? 's' : ''}</p>
+          <h1 className="text-2xl font-bold text-[var(--t-accent)]">Clientes</h1>
+          <p className="text-sm text-[var(--t-text-secondary)] mt-1">{clientes.length} cliente{clientes.length !== 1 ? 's' : ''} cadastrado{clientes.length !== 1 ? 's' : ''}</p>
         </div>
         <Button
           onClick={openNew}
-          className="bg-[#d4a853] hover:bg-[#c49743] text-[#1a1a2e] font-semibold gap-2"
+          className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold gap-2"
         >
           <Plus size={16} /> Novo Cliente
         </Button>
       </div>
 
       {/* Filters */}
-      <Card className="bg-[#1a1a2e] border-[#2a2a4e] mb-4">
+      <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)] mb-4">
         <CardContent className="p-4 flex flex-wrap gap-3">
           <div className="relative flex-1 min-w-[200px]">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--t-text-secondary)]" />
             <Input
-              className="pl-9 bg-[#0f0f1a] border-[#2a2a4e] text-gray-100 placeholder:text-gray-500"
+              className="pl-9 bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)] placeholder:text-[var(--t-text-secondary)]"
               placeholder="Buscar por nome ou CPF/CNPJ..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -179,7 +179,7 @@ export default function ClientesPage() {
           </div>
           <div className="relative">
             <select
-              className="appearance-none bg-[#0f0f1a] border border-[#2a2a4e] text-gray-300 rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+              className="appearance-none bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
               value={filterTipo}
               onChange={(e) => setFilterTipo(e.target.value as '' | 'PF' | 'PJ')}
             >
@@ -187,11 +187,11 @@ export default function ClientesPage() {
               <option value="PF">Pessoa Física</option>
               <option value="PJ">Pessoa Jurídica</option>
             </select>
-            <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--t-text-secondary)] pointer-events-none" />
           </div>
           <div className="relative">
             <select
-              className="appearance-none bg-[#0f0f1a] border border-[#2a2a4e] text-gray-300 rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+              className="appearance-none bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as '' | 'ATIVO' | 'INATIVO')}
             >
@@ -199,20 +199,20 @@ export default function ClientesPage() {
               <option value="ATIVO">Ativo</option>
               <option value="INATIVO">Inativo</option>
             </select>
-            <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--t-text-secondary)] pointer-events-none" />
           </div>
         </CardContent>
       </Card>
 
       {/* Inline Form */}
       {showForm && (
-        <Card className="bg-[#1a1a2e] border-[#d4a853]/40 mb-4">
+        <Card className="bg-[var(--t-header-bg)] border-[var(--t-accent)]/40 mb-4">
           <CardContent className="p-5">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-[#d4a853]">
+              <h2 className="text-lg font-semibold text-[var(--t-accent)]">
                 {editingId ? 'Editar Cliente' : 'Novo Cliente'}
               </h2>
-              <button onClick={closeForm} className="text-gray-400 hover:text-gray-200">
+              <button onClick={closeForm} className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)]">
                 <X size={20} />
               </button>
             </div>
@@ -225,8 +225,8 @@ export default function ClientesPage() {
                   onClick={() => setField('tipo', t)}
                   className={`px-4 py-1.5 rounded text-sm font-medium transition-colors ${
                     form.tipo === t
-                      ? 'bg-[#d4a853] text-[#1a1a2e]'
-                      : 'bg-[#0f0f1a] border border-[#2a2a4e] text-gray-400 hover:text-gray-200'
+                      ? 'bg-[var(--t-accent)] text-[var(--t-text)]'
+                      : 'bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] hover:text-[var(--t-text)]'
                   }`}
                 >
                   {t === 'PF' ? 'Pessoa Física' : 'Pessoa Jurídica'}
@@ -235,15 +235,15 @@ export default function ClientesPage() {
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-1 mb-5 border-b border-[#2a2a4e]">
+            <div className="flex gap-1 mb-5 border-b border-[var(--t-border)]">
               {tabs.map((t) => (
                 <button
                   key={t.id}
                   onClick={() => setActiveTab(t.id)}
                   className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
                     activeTab === t.id
-                      ? 'border-[#d4a853] text-[#d4a853]'
-                      : 'border-transparent text-gray-400 hover:text-gray-200'
+                      ? 'border-[var(--t-accent)] text-[var(--t-accent)]'
+                      : 'border-transparent text-[var(--t-text-secondary)] hover:text-[var(--t-text)]'
                   }`}
                 >
                   {t.icon} {t.label}
@@ -255,11 +255,11 @@ export default function ClientesPage() {
             {activeTab === 'pessoais' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div className="sm:col-span-2 lg:col-span-2">
-                  <label className="block text-xs text-gray-400 mb-1">
+                  <label className="block text-xs text-[var(--t-text-secondary)] mb-1">
                     {form.tipo === 'PF' ? 'Nome Completo *' : 'Razão Social *'}
                   </label>
                   <Input
-                    className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                    className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                     value={form.tipo === 'PF' ? form.nome_completo : form.razao_social}
                     onChange={(e) =>
                       setField(form.tipo === 'PF' ? 'nome_completo' : 'razao_social', e.target.value)
@@ -268,20 +268,20 @@ export default function ClientesPage() {
                 </div>
                 {form.tipo === 'PJ' && (
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">Nome Fantasia</label>
+                    <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Nome Fantasia</label>
                     <Input
-                      className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                      className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                       value={form.nome_fantasia}
                       onChange={(e) => setField('nome_fantasia', e.target.value)}
                     />
                   </div>
                 )}
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">
+                  <label className="block text-xs text-[var(--t-text-secondary)] mb-1">
                     {form.tipo === 'PF' ? 'CPF' : 'CNPJ'}
                   </label>
                   <Input
-                    className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                    className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                     value={form.tipo === 'PF' ? form.cpf : form.cnpj}
                     onChange={(e) =>
                       setField(form.tipo === 'PF' ? 'cpf' : 'cnpj', e.target.value)
@@ -291,26 +291,26 @@ export default function ClientesPage() {
                 {form.tipo === 'PF' && (
                   <>
                     <div>
-                      <label className="block text-xs text-gray-400 mb-1">RG</label>
+                      <label className="block text-xs text-[var(--t-text-secondary)] mb-1">RG</label>
                       <Input
-                        className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                        className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                         value={form.rg}
                         onChange={(e) => setField('rg', e.target.value)}
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-400 mb-1">Data de Nascimento</label>
+                      <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Data de Nascimento</label>
                       <Input
                         type="date"
-                        className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                        className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                         value={form.data_nascimento}
                         onChange={(e) => setField('data_nascimento', e.target.value)}
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-400 mb-1">Gênero</label>
+                      <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Gênero</label>
                       <select
-                        className="w-full bg-[#0f0f1a] border border-[#2a2a4e] text-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+                        className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
                         value={form.genero}
                         onChange={(e) => setField('genero', e.target.value as Cliente['genero'])}
                       >
@@ -320,9 +320,9 @@ export default function ClientesPage() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-400 mb-1">Estado Civil</label>
+                      <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Estado Civil</label>
                       <select
-                        className="w-full bg-[#0f0f1a] border border-[#2a2a4e] text-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+                        className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
                         value={form.estado_civil}
                         onChange={(e) => setField('estado_civil', e.target.value)}
                       >
@@ -332,18 +332,18 @@ export default function ClientesPage() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-400 mb-1">Passaporte</label>
+                      <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Passaporte</label>
                       <Input
-                        className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                        className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                         value={form.passaporte}
                         onChange={(e) => setField('passaporte', e.target.value)}
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-400 mb-1">Validade Passaporte</label>
+                      <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Validade Passaporte</label>
                       <Input
                         type="date"
-                        className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                        className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                         value={form.validade_passaporte}
                         onChange={(e) => setField('validade_passaporte', e.target.value)}
                       />
@@ -351,9 +351,9 @@ export default function ClientesPage() {
                   </>
                 )}
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Status</label>
+                  <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Status</label>
                   <select
-                    className="w-full bg-[#0f0f1a] border border-[#2a2a4e] text-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+                    className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
                     value={form.status}
                     onChange={(e) => setField('status', e.target.value as 'ATIVO' | 'INATIVO')}
                   >
@@ -362,9 +362,9 @@ export default function ClientesPage() {
                   </select>
                 </div>
                 <div className="sm:col-span-2 lg:col-span-3">
-                  <label className="block text-xs text-gray-400 mb-1">Observações</label>
+                  <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Observações</label>
                   <textarea
-                    className="w-full bg-[#0f0f1a] border border-[#2a2a4e] text-gray-100 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853] resize-none"
+                    className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853] resize-none"
                     rows={3}
                     value={form.observacoes}
                     onChange={(e) => setField('observacoes', e.target.value)}
@@ -384,9 +384,9 @@ export default function ClientesPage() {
                   { label: 'E-mail Secundário', key: 'email_secundario' },
                 ].map(({ label, key }) => (
                   <div key={key}>
-                    <label className="block text-xs text-gray-400 mb-1">{label}</label>
+                    <label className="block text-xs text-[var(--t-text-secondary)] mb-1">{label}</label>
                     <Input
-                      className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                      className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                       value={(form as unknown as Record<string, unknown>)[key] as string}
                       onChange={(e) => setField(key as keyof Cliente, e.target.value)}
                     />
@@ -399,11 +399,11 @@ export default function ClientesPage() {
             {activeTab === 'endereco' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">
-                    CEP {cepLoading && <span className="text-[#d4a853] text-xs">(buscando...)</span>}
+                  <label className="block text-xs text-[var(--t-text-secondary)] mb-1">
+                    CEP {cepLoading && <span className="text-[var(--t-accent)] text-xs">(buscando...)</span>}
                   </label>
                   <Input
-                    className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                    className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                     value={form.cep}
                     onChange={(e) => setField('cep', e.target.value)}
                     onBlur={handleCepBlur}
@@ -411,58 +411,58 @@ export default function ClientesPage() {
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="block text-xs text-gray-400 mb-1">Logradouro</label>
+                  <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Logradouro</label>
                   <Input
-                    className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                    className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                     value={form.logradouro}
                     onChange={(e) => setField('logradouro', e.target.value)}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Número</label>
+                  <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Número</label>
                   <Input
-                    className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                    className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                     value={form.numero}
                     onChange={(e) => setField('numero', e.target.value)}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Complemento</label>
+                  <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Complemento</label>
                   <Input
-                    className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                    className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                     value={form.complemento}
                     onChange={(e) => setField('complemento', e.target.value)}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Bairro</label>
+                  <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Bairro</label>
                   <Input
-                    className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                    className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                     value={form.bairro}
                     onChange={(e) => setField('bairro', e.target.value)}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Cidade</label>
+                  <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Cidade</label>
                   <Input
-                    className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                    className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                     value={form.cidade}
                     onChange={(e) => setField('cidade', e.target.value)}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Estado</label>
+                  <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Estado</label>
                   <Input
-                    className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                    className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                     value={form.estado}
                     onChange={(e) => setField('estado', e.target.value)}
                     maxLength={2}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">País</label>
+                  <label className="block text-xs text-[var(--t-text-secondary)] mb-1">País</label>
                   <Input
-                    className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                    className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                     value={form.pais}
                     onChange={(e) => setField('pais', e.target.value)}
                   />
@@ -474,9 +474,9 @@ export default function ClientesPage() {
             {activeTab === 'preferencias' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Classe de Voo Preferida</label>
+                  <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Classe de Voo Preferida</label>
                   <select
-                    className="w-full bg-[#0f0f1a] border border-[#2a2a4e] text-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+                    className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
                     value={form.preferencias.classe_voo}
                     onChange={(e) =>
                       setField('preferencias', { ...form.preferencias, classe_voo: e.target.value })
@@ -488,9 +488,9 @@ export default function ClientesPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Tipo de Hotel</label>
+                  <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Tipo de Hotel</label>
                   <select
-                    className="w-full bg-[#0f0f1a] border border-[#2a2a4e] text-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+                    className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
                     value={form.preferencias.tipo_hotel}
                     onChange={(e) =>
                       setField('preferencias', { ...form.preferencias, tipo_hotel: e.target.value })
@@ -502,9 +502,9 @@ export default function ClientesPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Assento Preferido</label>
+                  <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Assento Preferido</label>
                   <Input
-                    className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                    className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                     placeholder="Ex: janela, corredor"
                     value={form.preferencias.assento_preferido}
                     onChange={(e) =>
@@ -513,9 +513,9 @@ export default function ClientesPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Restrições Alimentares</label>
+                  <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Restrições Alimentares</label>
                   <Input
-                    className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                    className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                     value={form.preferencias.restricoes_alimentares}
                     onChange={(e) =>
                       setField('preferencias', {
@@ -526,9 +526,9 @@ export default function ClientesPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Necessidades Especiais</label>
+                  <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Necessidades Especiais</label>
                   <Input
-                    className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                    className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                     value={form.preferencias.necessidades_especiais}
                     onChange={(e) =>
                       setField('preferencias', {
@@ -539,7 +539,7 @@ export default function ClientesPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-2">Tipos de Viagem</label>
+                  <label className="block text-xs text-[var(--t-text-secondary)] mb-2">Tipos de Viagem</label>
                   <div className="flex flex-wrap gap-2">
                     {TIPO_VIAGEM_OPTIONS.map((opt) => {
                       const selected = form.preferencias.tipo_viagem.includes(opt);
@@ -555,8 +555,8 @@ export default function ClientesPage() {
                           }}
                           className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                             selected
-                              ? 'bg-[#d4a853] text-[#1a1a2e]'
-                              : 'bg-[#0f0f1a] border border-[#2a2a4e] text-gray-400 hover:border-[#d4a853]'
+                              ? 'bg-[var(--t-accent)] text-[var(--t-text)]'
+                              : 'bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] hover:border-[var(--t-accent)]'
                           }`}
                         >
                           {opt}
@@ -566,10 +566,10 @@ export default function ClientesPage() {
                   </div>
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="block text-xs text-gray-400 mb-1">Marcadores / Tags</label>
+                  <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Marcadores / Tags</label>
                   <div className="flex gap-2 mb-2">
                     <Input
-                      className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100 flex-1"
+                      className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)] flex-1"
                       placeholder="Adicionar marcador..."
                       value={marcadorInput}
                       onChange={(e) => setMarcadorInput(e.target.value)}
@@ -578,7 +578,7 @@ export default function ClientesPage() {
                     <Button
                       type="button"
                       variant="outline"
-                      className="border-[#2a2a4e] text-gray-300 hover:bg-[#2a2a4e]"
+                      className="border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]"
                       onClick={addMarcador}
                     >
                       <Plus size={14} />
@@ -588,7 +588,7 @@ export default function ClientesPage() {
                     {form.marcadores.map((tag) => (
                       <span
                         key={tag}
-                        className="inline-flex items-center gap-1 px-2 py-1 bg-[#2a2a4e] text-gray-300 rounded text-xs"
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] rounded text-xs"
                       >
                         {tag}
                         <button onClick={() => removeMarcador(tag)} className="hover:text-red-400">
@@ -602,16 +602,16 @@ export default function ClientesPage() {
             )}
 
             {/* Form Actions */}
-            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-[#2a2a4e]">
+            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-[var(--t-border)]">
               <Button
                 variant="outline"
-                className="border-[#2a2a4e] text-gray-300 hover:bg-[#2a2a4e]"
+                className="border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]"
                 onClick={closeForm}
               >
                 Cancelar
               </Button>
               <Button
-                className="bg-[#d4a853] hover:bg-[#c49743] text-[#1a1a2e] font-semibold min-w-[100px]"
+                className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold min-w-[100px]"
                 onClick={handleSave}
                 disabled={saving || !form.nome_completo.trim()}
               >
@@ -623,12 +623,12 @@ export default function ClientesPage() {
       )}
 
       {/* Table */}
-      <Card className="bg-[#1a1a2e] border-[#2a2a4e]">
+      <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)]">
         <CardContent className="p-0">
           {loading ? (
-            <div className="flex items-center justify-center py-16 text-gray-400">Carregando...</div>
+            <div className="flex items-center justify-center py-16 text-[var(--t-text-secondary)]">Carregando...</div>
           ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-gray-500">
+            <div className="flex flex-col items-center justify-center py-16 text-[var(--t-text-secondary)]">
               <User size={40} className="mb-3 opacity-30" />
               <p>Nenhum cliente encontrado</p>
             </div>
@@ -636,7 +636,7 @@ export default function ClientesPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-[#2a2a4e] text-gray-400 text-xs uppercase tracking-wider">
+                  <tr className="border-b border-[var(--t-border)] text-[var(--t-text-secondary)] text-xs uppercase tracking-wider">
                     <th className="text-left px-4 py-3">Nome</th>
                     <th className="text-left px-4 py-3 hidden sm:table-cell">CPF/CNPJ</th>
                     <th className="text-left px-4 py-3 hidden md:table-cell">Telefone</th>
@@ -651,18 +651,18 @@ export default function ClientesPage() {
                   {filtered.map((c) => (
                     <tr
                       key={c.id}
-                      className="border-b border-[#2a2a4e]/50 hover:bg-[#0f0f1a]/50 transition-colors"
+                      className="border-b border-[var(--t-border)]/50 hover:bg-[var(--t-bg)]/50 transition-colors"
                     >
                       <td className="px-4 py-3">
-                        <div className="font-medium text-gray-100">{c.nome_completo || c.razao_social}</div>
-                        <div className="text-xs text-gray-500">{c.tipo === 'PF' ? 'Pessoa Física' : 'Pessoa Jurídica'}</div>
+                        <div className="font-medium text-[var(--t-text)]">{c.nome_completo || c.razao_social}</div>
+                        <div className="text-xs text-[var(--t-text-secondary)]">{c.tipo === 'PF' ? 'Pessoa Física' : 'Pessoa Jurídica'}</div>
                       </td>
-                      <td className="px-4 py-3 text-gray-300 hidden sm:table-cell">
+                      <td className="px-4 py-3 text-[var(--t-text-secondary)] hidden sm:table-cell">
                         {c.tipo === 'PF' ? c.cpf : c.cnpj}
                       </td>
-                      <td className="px-4 py-3 text-gray-300 hidden md:table-cell">{c.telefone_principal}</td>
-                      <td className="px-4 py-3 text-gray-300 hidden lg:table-cell">{c.email}</td>
-                      <td className="px-4 py-3 text-gray-300 hidden xl:table-cell">
+                      <td className="px-4 py-3 text-[var(--t-text-secondary)] hidden md:table-cell">{c.telefone_principal}</td>
+                      <td className="px-4 py-3 text-[var(--t-text-secondary)] hidden lg:table-cell">{c.email}</td>
+                      <td className="px-4 py-3 text-[var(--t-text-secondary)] hidden xl:table-cell">
                         {[c.cidade, c.estado].filter(Boolean).join(' / ')}
                       </td>
                       <td className="px-4 py-3">
@@ -676,14 +676,14 @@ export default function ClientesPage() {
                           {c.status}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 text-right text-[#d4a853] font-medium hidden lg:table-cell">
+                      <td className="px-4 py-3 text-right text-[var(--t-accent)] font-medium hidden lg:table-cell">
                         {BRL(c.valor_total_historico)}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => openEdit(c)}
-                            className="p-1.5 rounded hover:bg-[#2a2a4e] text-gray-400 hover:text-[#d4a853] transition-colors"
+                            className="p-1.5 rounded hover:bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] hover:text-[var(--t-accent)] transition-colors"
                           >
                             <Pencil size={14} />
                           </button>
@@ -697,7 +697,7 @@ export default function ClientesPage() {
                               </button>
                               <button
                                 onClick={() => setConfirmDelete(null)}
-                                className="px-2 py-1 rounded bg-[#2a2a4e] text-gray-400 text-xs"
+                                className="px-2 py-1 rounded bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] text-xs"
                               >
                                 Cancelar
                               </button>
@@ -705,7 +705,7 @@ export default function ClientesPage() {
                           ) : (
                             <button
                               onClick={() => setConfirmDelete(c.id)}
-                              className="p-1.5 rounded hover:bg-[#2a2a4e] text-gray-400 hover:text-red-400 transition-colors"
+                              className="p-1.5 rounded hover:bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] hover:text-red-400 transition-colors"
                             >
                               <Trash2 size={14} />
                             </button>
@@ -723,7 +723,7 @@ export default function ClientesPage() {
 
       {/* Summary */}
       {!loading && filtered.length > 0 && (
-        <p className="text-xs text-gray-500 mt-3 text-right">
+        <p className="text-xs text-[var(--t-text-secondary)] mt-3 text-right">
           Exibindo {filtered.length} de {clientes.length} cliente{clientes.length !== 1 ? 's' : ''}
         </p>
       )}

@@ -65,15 +65,15 @@ export default function OrcamentosPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f0f1a] text-white p-6">
+    <div className="min-h-screen bg-[var(--t-bg)] text-[var(--t-text)] p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white">Orçamentos</h1>
-          <p className="text-gray-400 text-sm mt-1">Vendas com status de orçamento pendente</p>
+          <h1 className="text-2xl font-bold text-[var(--t-text)]">Orçamentos</h1>
+          <p className="text-[var(--t-text-secondary)] text-sm mt-1">Vendas com status de orçamento pendente</p>
         </div>
         <Link href="/vendas/nova">
-          <Button className="bg-[#d4a853] hover:bg-[#c4953f] text-[#1a1a2e] font-semibold">
+          <Button className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold">
             <FileText className="w-4 h-4 mr-2" />
             Novo Orçamento
           </Button>
@@ -82,62 +82,62 @@ export default function OrcamentosPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <Card className="bg-[#1a1a2e] border-[#2a2a4e]">
+        <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)]">
           <CardContent className="p-4 flex items-center gap-4">
             <div className="p-3 bg-yellow-500/10 rounded-lg">
               <FileText className="w-5 h-5 text-yellow-400" />
             </div>
             <div>
-              <p className="text-gray-400 text-sm">Orçamentos Abertos</p>
-              <p className="text-xl font-bold text-white">{totalOrcamentos}</p>
+              <p className="text-[var(--t-text-secondary)] text-sm">Orçamentos Abertos</p>
+              <p className="text-xl font-bold text-[var(--t-text)]">{totalOrcamentos}</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-[#1a1a2e] border-[#2a2a4e]">
+        <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)]">
           <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-3 bg-[#d4a853]/10 rounded-lg">
-              <ArrowRight className="w-5 h-5 text-[#d4a853]" />
+            <div className="p-3 bg-[var(--t-accent)]/10 rounded-lg">
+              <ArrowRight className="w-5 h-5 text-[var(--t-accent)]" />
             </div>
             <div>
-              <p className="text-gray-400 text-sm">Valor em Aberto</p>
-              <p className="text-xl font-bold text-white">{fmt(valorTotal)}</p>
+              <p className="text-[var(--t-text-secondary)] text-sm">Valor em Aberto</p>
+              <p className="text-xl font-bold text-[var(--t-text)]">{fmt(valorTotal)}</p>
             </div>
           </CardContent>
         </Card>
       </div>
 
       {/* Search */}
-      <Card className="bg-[#1a1a2e] border-[#2a2a4e] mb-6">
+      <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)] mb-6">
         <CardContent className="p-4">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--t-text-secondary)]" />
             <Input
               placeholder="Buscar por número ou cliente..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="pl-9 bg-[#0f0f1a] border-[#2a2a4e] text-white placeholder:text-gray-500"
+              className="pl-9 bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)] placeholder:text-[var(--t-text-secondary)]"
             />
           </div>
         </CardContent>
       </Card>
 
       {/* Table */}
-      <Card className="bg-[#1a1a2e] border-[#2a2a4e]">
-        <CardHeader className="px-4 py-3 border-b border-[#2a2a4e]">
-          <CardTitle className="text-sm font-medium text-gray-400">
+      <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)]">
+        <CardHeader className="px-4 py-3 border-b border-[var(--t-border)]">
+          <CardTitle className="text-sm font-medium text-[var(--t-text-secondary)]">
             {filtered.length} orçamento{filtered.length !== 1 ? 's' : ''} encontrado{filtered.length !== 1 ? 's' : ''}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
-            <div className="flex items-center justify-center py-16 text-gray-400">
+            <div className="flex items-center justify-center py-16 text-[var(--t-text-secondary)]">
               Carregando...
             </div>
           ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+            <div className="flex flex-col items-center justify-center py-16 text-[var(--t-text-secondary)]">
               <FileText className="w-10 h-10 mb-3 opacity-30" />
               <p className="font-medium">Nenhum orçamento encontrado</p>
-              <p className="text-sm mt-1 text-gray-500">
+              <p className="text-sm mt-1 text-[var(--t-text-secondary)]">
                 {search ? 'Tente um termo diferente.' : 'Crie um novo orçamento para começar.'}
               </p>
             </div>
@@ -145,36 +145,36 @@ export default function OrcamentosPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-[#2a2a4e]">
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">Número</th>
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">Data</th>
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">Cliente</th>
-                    <th className="text-center px-4 py-3 text-gray-400 font-medium">Produtos</th>
-                    <th className="text-right px-4 py-3 text-gray-400 font-medium">Valor Final</th>
-                    <th className="text-center px-4 py-3 text-gray-400 font-medium">Status</th>
-                    <th className="text-center px-4 py-3 text-gray-400 font-medium">Ações</th>
+                  <tr className="border-b border-[var(--t-border)]">
+                    <th className="text-left px-4 py-3 text-[var(--t-text-secondary)] font-medium">Número</th>
+                    <th className="text-left px-4 py-3 text-[var(--t-text-secondary)] font-medium">Data</th>
+                    <th className="text-left px-4 py-3 text-[var(--t-text-secondary)] font-medium">Cliente</th>
+                    <th className="text-center px-4 py-3 text-[var(--t-text-secondary)] font-medium">Produtos</th>
+                    <th className="text-right px-4 py-3 text-[var(--t-text-secondary)] font-medium">Valor Final</th>
+                    <th className="text-center px-4 py-3 text-[var(--t-text-secondary)] font-medium">Status</th>
+                    <th className="text-center px-4 py-3 text-[var(--t-text-secondary)] font-medium">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((venda, idx) => (
                     <tr
                       key={venda.id}
-                      className={`border-b border-[#2a2a4e]/50 hover:bg-[#2a2a4e]/30 transition-colors ${
-                        idx % 2 === 0 ? '' : 'bg-[#0f0f1a]/30'
+                      className={`border-b border-[var(--t-border)]/50 hover:bg-[var(--t-surface-hover)]/30 transition-colors ${
+                        idx % 2 === 0 ? '' : 'bg-[var(--t-bg)]/30'
                       }`}
                     >
-                      <td className="px-4 py-3 font-mono text-[#d4a853] font-medium">
+                      <td className="px-4 py-3 font-mono text-[var(--t-accent)] font-medium">
                         {venda.numero}
                       </td>
-                      <td className="px-4 py-3 text-gray-300">
+                      <td className="px-4 py-3 text-[var(--t-text-secondary)]">
                         {venda.data_venda
                           ? new Date(venda.data_venda + 'T00:00:00').toLocaleDateString('pt-BR')
                           : '—'}
                       </td>
-                      <td className="px-4 py-3 text-gray-200">
+                      <td className="px-4 py-3 text-[var(--t-text)]">
                         {getClienteNome(venda.cliente_id)}
                       </td>
-                      <td className="px-4 py-3 text-center text-gray-300">
+                      <td className="px-4 py-3 text-center text-[var(--t-text-secondary)]">
                         {venda.produtos.length}
                       </td>
                       <td className="px-4 py-3 text-right text-green-400 font-medium">
@@ -206,7 +206,7 @@ export default function OrcamentosPage() {
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-7 text-xs text-gray-400 hover:text-[#d4a853] hover:bg-[#d4a853]/10"
+                              className="h-7 text-xs text-[var(--t-text-secondary)] hover:text-[var(--t-accent)] hover:bg-[var(--t-accent)]/10"
                             >
                               Editar
                             </Button>
@@ -225,7 +225,7 @@ export default function OrcamentosPage() {
       {/* Footer nav */}
       <div className="mt-4 flex justify-center">
         <Link href="/vendas">
-          <Button variant="ghost" className="text-gray-400 hover:text-white text-sm">
+          <Button variant="ghost" className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)] text-sm">
             Ver todas as vendas
           </Button>
         </Link>

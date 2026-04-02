@@ -109,6 +109,12 @@
   --t-sidebar-group: rgba(22, 163, 74, 0.08);
   --t-sidebar-group-text: #16a34a;
   --t-input-bg: #ffffff;
+  --t-header-bg: #ecfdf5;
+  --t-header-text: #065f46;
+  --t-accent: #059669;
+  --t-accent-muted: rgba(5, 150, 105, 0.12);
+  --t-table-header-bg: #f0fdf4;
+  --t-table-header-text: #065f46;
 }
 
 /* Dark theme */
@@ -170,6 +176,12 @@
   --t-sidebar-group: rgba(74, 222, 128, 0.1);
   --t-sidebar-group-text: #4ade80;
   --t-input-bg: #0f0f1a;
+  --t-header-bg: #022c22;
+  --t-header-text: #d1fae5;
+  --t-accent: #34d399;
+  --t-accent-muted: rgba(52, 211, 153, 0.12);
+  --t-table-header-bg: #0a1f1a;
+  --t-table-header-text: #a7f3d0;
 }
 
 @layer base {

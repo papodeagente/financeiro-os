@@ -27,30 +27,30 @@ export function PropostaTab({ grupo }: Props) {
       </div>
 
       {/* Header */}
-      <div className="bg-[#1a1a2e] text-white p-4 rounded-lg flex flex-wrap gap-6">
-        <div><span className="text-xs text-[#d4a853]">GRP#</span><div className="font-bold">{grupo.grp_id || '—'}</div></div>
-        <div><span className="text-xs text-[#d4a853]">Origem x Destino</span><div className="font-bold">{grupo.origem_destino || '—'}</div></div>
-        <div><span className="text-xs text-[#d4a853]">Parcelas</span><div className="font-bold">{grupo.params.parcelas}x</div></div>
+      <div className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-4 rounded-lg flex flex-wrap gap-6">
+        <div><span className="text-xs text-[var(--t-accent)]">GRP#</span><div className="font-bold">{grupo.grp_id || '—'}</div></div>
+        <div><span className="text-xs text-[var(--t-accent)]">Origem x Destino</span><div className="font-bold">{grupo.origem_destino || '—'}</div></div>
+        <div><span className="text-xs text-[var(--t-accent)]">Parcelas</span><div className="font-bold">{grupo.params.parcelas}x</div></div>
       </div>
 
       {/* PAX por apto */}
-      <div className="text-sm text-gray-500 flex gap-4">
+      <div className="text-sm text-[var(--t-text-secondary)] flex gap-4">
         {TIPOS.map(t => <span key={t}><b>{LABELS[t]}</b> = {PAX_MAP[t]} PAX</span>)}
       </div>
 
       {/* Linhas de custo */}
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
-          <thead><tr className="bg-[#1a1a2e] text-white">
-            <th className="p-2 text-left border border-gray-600 w-40">Serviço</th>
-            {TIPOS.map(t => <th key={t} className="p-2 border border-gray-600 w-32">{LABELS[t]}</th>)}
+          <thead><tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
+            <th className="p-2 text-left border border-[var(--t-border)] w-40">Serviço</th>
+            {TIPOS.map(t => <th key={t} className="p-2 border border-[var(--t-border)] w-32">{LABELS[t]}</th>)}
           </tr></thead>
           <tbody>
             {p.lines.map((line, i) => {
-              let cls = i % 2 === 0 ? 'bg-white' : 'bg-gray-50';
-              if (line.label === 'MARKUP') cls = 'bg-blue-50';
+              let cls = i % 2 === 0 ? 'bg-[var(--t-surface)]' : 'bg-[var(--t-surface-hover)]';
+              if (line.label === 'MARKUP') cls = 'bg-[var(--t-blue-bg)]';
               if (line.label === 'CORTESIA') cls = 'bg-yellow-50';
-              if (line.label === 'CONTRATO') cls = 'bg-gray-100';
+              if (line.label === 'CONTRATO') cls = 'bg-[var(--t-surface-hover)]';
               const vals: Record<string, number> = { sgl: line.sgl, dbl: line.dbl, tpl: line.tpl, qdp: line.qdp, chd: line.chd };
               return <Row key={line.label} label={line.label} values={vals} className={cls} />;
             })}
@@ -59,62 +59,62 @@ export function PropostaTab({ grupo }: Props) {
       </div>
 
       {/* Total por Apartamento */}
-      <h3 className="text-lg font-semibold text-[#1a1a2e]">Total por Apartamento</h3>
+      <h3 className="text-lg font-semibold text-[var(--t-text)]">Total por Apartamento</h3>
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
-          <thead><tr className="bg-[#1a1a2e] text-white">
-            <th className="p-2 text-left border border-gray-600 w-40">Modalidade</th>
-            {TIPOS.map(t => <th key={t} className="p-2 border border-gray-600 w-32">{LABELS[t]}</th>)}
+          <thead><tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
+            <th className="p-2 text-left border border-[var(--t-border)] w-40">Modalidade</th>
+            {TIPOS.map(t => <th key={t} className="p-2 border border-[var(--t-border)] w-32">{LABELS[t]}</th>)}
           </tr></thead>
           <tbody>
             <Row label="À Vista / PIX" values={p.totalAvista} className="bg-green-50 font-bold" />
-            <Row label="Cartão de Crédito" values={p.totalCartao} className="bg-blue-50" />
+            <Row label="Cartão de Crédito" values={p.totalCartao} className="bg-[var(--t-blue-bg)]" />
             <Row label="Boleto" values={p.totalBoleto} className="bg-orange-50" />
           </tbody>
         </table>
       </div>
 
       {/* Parcela por Apartamento */}
-      <h3 className="text-lg font-semibold text-[#1a1a2e]">Parcela por Apartamento ({grupo.params.parcelas}x)</h3>
+      <h3 className="text-lg font-semibold text-[var(--t-text)]">Parcela por Apartamento ({grupo.params.parcelas}x)</h3>
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
-          <thead><tr className="bg-[#1a1a2e] text-white">
-            <th className="p-2 text-left border border-gray-600 w-40">Modalidade</th>
-            {TIPOS.map(t => <th key={t} className="p-2 border border-gray-600 w-32">{LABELS[t]}</th>)}
+          <thead><tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
+            <th className="p-2 text-left border border-[var(--t-border)] w-40">Modalidade</th>
+            {TIPOS.map(t => <th key={t} className="p-2 border border-[var(--t-border)] w-32">{LABELS[t]}</th>)}
           </tr></thead>
           <tbody>
-            <Row label="Parcela CC" values={p.parcelaAptoCC} className="bg-blue-50" />
+            <Row label="Parcela CC" values={p.parcelaAptoCC} className="bg-[var(--t-blue-bg)]" />
             <Row label="Parcela Boleto" values={p.parcelaAptoBoleto} className="bg-orange-50" />
           </tbody>
         </table>
       </div>
 
       {/* Total por PAX */}
-      <h3 className="text-lg font-semibold text-[#1a1a2e]">Total por PAX</h3>
+      <h3 className="text-lg font-semibold text-[var(--t-text)]">Total por PAX</h3>
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
-          <thead><tr className="bg-[#1a1a2e] text-white">
-            <th className="p-2 text-left border border-gray-600 w-40">Modalidade</th>
-            {TIPOS.map(t => <th key={t} className="p-2 border border-gray-600 w-32">{LABELS[t]}</th>)}
+          <thead><tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
+            <th className="p-2 text-left border border-[var(--t-border)] w-40">Modalidade</th>
+            {TIPOS.map(t => <th key={t} className="p-2 border border-[var(--t-border)] w-32">{LABELS[t]}</th>)}
           </tr></thead>
           <tbody>
             <Row label="À Vista / PIX" values={p.totalPaxAvista} className="bg-green-50 font-bold" />
-            <Row label="Cartão de Crédito" values={p.totalPaxCartao} className="bg-blue-50" />
+            <Row label="Cartão de Crédito" values={p.totalPaxCartao} className="bg-[var(--t-blue-bg)]" />
             <Row label="Boleto" values={p.totalPaxBoleto} className="bg-orange-50" />
           </tbody>
         </table>
       </div>
 
       {/* Parcela por PAX */}
-      <h3 className="text-lg font-semibold text-[#1a1a2e]">Parcela por PAX ({grupo.params.parcelas}x)</h3>
+      <h3 className="text-lg font-semibold text-[var(--t-text)]">Parcela por PAX ({grupo.params.parcelas}x)</h3>
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
-          <thead><tr className="bg-[#1a1a2e] text-white">
-            <th className="p-2 text-left border border-gray-600 w-40">Modalidade</th>
-            {TIPOS.map(t => <th key={t} className="p-2 border border-gray-600 w-32">{LABELS[t]}</th>)}
+          <thead><tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
+            <th className="p-2 text-left border border-[var(--t-border)] w-40">Modalidade</th>
+            {TIPOS.map(t => <th key={t} className="p-2 border border-[var(--t-border)] w-32">{LABELS[t]}</th>)}
           </tr></thead>
           <tbody>
-            <Row label="Parcela CC" values={p.parcelaPaxCC} className="bg-blue-50" />
+            <Row label="Parcela CC" values={p.parcelaPaxCC} className="bg-[var(--t-blue-bg)]" />
             <Row label="Parcela Boleto" values={p.parcelaPaxBoleto} className="bg-orange-50" />
           </tbody>
         </table>

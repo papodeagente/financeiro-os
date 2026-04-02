@@ -13,10 +13,10 @@ export function FloatingResume({ grupo }: { grupo: GrupoViagem }) {
   if (dblAvista === 0) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 bg-[#1a1a2e] text-white rounded-xl shadow-2xl p-4 min-w-[220px] border border-[#d4a853]/30">
-      <div className="text-xs text-[#d4a853] font-semibold mb-1">Preço por PAX (DBL)</div>
+    <div className="fixed bottom-4 right-4 z-50 bg-[var(--t-header-bg)] text-[var(--t-header-text)] rounded-xl shadow-2xl p-4 min-w-[220px] border border-[var(--t-accent)]/30">
+      <div className="text-xs text-[var(--t-accent)] font-semibold mb-1">Preço por PAX (DBL)</div>
       <div className="text-xl font-bold">{formatBRL(dblAvista)}</div>
-      <div className="text-xs text-gray-300 mt-1">
+      <div className="text-xs text-[var(--t-text-secondary)] mt-1">
         ou {parcelas}x de {formatBRL(dblCartao)}
       </div>
     </div>

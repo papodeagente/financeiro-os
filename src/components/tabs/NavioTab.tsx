@@ -30,16 +30,16 @@ export function NavioTab({ grupo, onChange }: Props) {
   return (
     <div className="space-y-8">
       {/* Header info from INF */}
-      <div className="bg-[#1a1a2e] text-white p-4 rounded-lg space-y-2">
+      <div className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-4 rounded-lg space-y-2">
         <div className="flex flex-wrap gap-6 text-sm">
-          <div><span className="text-[#d4a853]">Cruzeiro:</span> {ni.nome_cruzeiro || '—'}</div>
-          <div><span className="text-[#d4a853]">Embarque:</span> {ni.cidade_embarque || '—'}</div>
-          <div><span className="text-[#d4a853]">Desembarque:</span> {ni.cidade_desembarque || '—'}</div>
-          <div><span className="text-[#d4a853]">Diárias:</span> {calcDiarias(ni.embarque, ni.desembarque) || '—'}</div>
+          <div><span className="text-[var(--t-accent)]">Cruzeiro:</span> {ni.nome_cruzeiro || '—'}</div>
+          <div><span className="text-[var(--t-accent)]">Embarque:</span> {ni.cidade_embarque || '—'}</div>
+          <div><span className="text-[var(--t-accent)]">Desembarque:</span> {ni.cidade_desembarque || '—'}</div>
+          <div><span className="text-[var(--t-accent)]">Diárias:</span> {calcDiarias(ni.embarque, ni.desembarque) || '—'}</div>
         </div>
         <div className="flex flex-wrap gap-4 mt-2">
           {TIPOS.map(t => (
-            <div key={t}><span className="text-xs text-[#d4a853]">Melhor {LABELS[t]}</span><div className="text-lg font-bold">{formatBRL(totals[t])}</div></div>
+            <div key={t}><span className="text-xs text-[var(--t-accent)]">Melhor {LABELS[t]}</span><div className="text-lg font-bold">{formatBRL(totals[t])}</div></div>
           ))}
         </div>
       </div>
@@ -50,13 +50,13 @@ export function NavioTab({ grupo, onChange }: Props) {
 
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
-          <thead><tr className="bg-[#1a1a2e] text-white">
-            <th className="p-2 text-left border border-gray-600">Fornecedor</th>
-            {TIPOS.map(t => <th key={t} className="p-2 border border-gray-600 w-28">{LABELS[t]}</th>)}
+          <thead><tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
+            <th className="p-2 text-left border border-[var(--t-border)]">Fornecedor</th>
+            {TIPOS.map(t => <th key={t} className="p-2 border border-[var(--t-border)] w-28">{LABELS[t]}</th>)}
           </tr></thead>
           <tbody>
             {grupo.navio.fornecedores.map((f, fIdx) => (
-              <tr key={fIdx} className={fIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+              <tr key={fIdx} className={fIdx % 2 === 0 ? 'bg-[var(--t-surface)]' : 'bg-[var(--t-surface-hover)]'}>
                 <td className="p-1 border"><Input value={f.nome} onChange={e => updateFornecedor(fIdx, 'nome', e.target.value)} className="h-8" /></td>
                 {TIPOS.map(t => {
                   const key = `valor_${t}` as keyof typeof f;

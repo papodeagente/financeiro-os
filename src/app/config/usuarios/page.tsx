@@ -26,7 +26,7 @@ const PERFIL_COLORS: Record<Usuario['perfil'], string> = {
   GERENTE: 'bg-purple-900/40 text-purple-300 border-purple-800',
   VENDEDOR: 'bg-blue-900/40 text-blue-300 border-blue-800',
   FINANCEIRO: 'bg-green-900/40 text-green-300 border-green-800',
-  VISUALIZADOR: 'bg-gray-800/40 text-gray-400 border-gray-700',
+  VISUALIZADOR: 'bg-[var(--t-surface)]/40 text-[var(--t-text-secondary)] border-[var(--t-border)]',
 };
 
 const PERMISSOES_LABELS: { key: keyof Omit<Usuario['permissoes'], 'ver_extrato_contas'>; label: string }[] = [
@@ -166,13 +166,13 @@ export default function UsuariosPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-white">Usuários</h1>
-            <p className="text-gray-400 text-sm mt-1">Gerenciamento de acesso e permissões</p>
+            <h1 className="text-2xl font-bold text-[var(--t-text)]">Usuários</h1>
+            <p className="text-[var(--t-text-secondary)] text-sm mt-1">Gerenciamento de acesso e permissões</p>
           </div>
           {!editing && (
             <Button
               onClick={handleNew}
-              className="bg-[#d4a853] hover:bg-[#c49843] text-[#1a1a2e] font-semibold gap-2"
+              className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold gap-2"
             >
               <Plus className="w-4 h-4" />
               Novo Usuário
@@ -182,9 +182,9 @@ export default function UsuariosPage() {
 
         {/* Edit / New Form */}
         {editing && (
-          <Card className="bg-[#1a1a2e] border-[#d4a853]/40">
+          <Card className="bg-[var(--t-header-bg)] border-[var(--t-accent)]/40">
             <CardHeader className="pb-3">
-              <CardTitle className="text-[#d4a853] flex items-center gap-2 text-base">
+              <CardTitle className="text-[var(--t-accent)] flex items-center gap-2 text-base">
                 <ShieldCheck className="w-4 h-4" />
                 {isNew ? 'Novo Usuário' : `Editando: ${editing.nome || 'sem nome'}`}
               </CardTitle>
@@ -194,30 +194,30 @@ export default function UsuariosPage() {
               {/* Basic fields */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs text-gray-400 uppercase tracking-wide">Nome</label>
+                  <label className="text-xs text-[var(--t-text-secondary)] uppercase tracking-wide">Nome</label>
                   <Input
                     value={editing.nome}
                     onChange={(e) => setEditField('nome', e.target.value)}
                     placeholder="Nome completo"
-                    className="bg-[#0f0f1a] border-[#2a2a4e] text-white placeholder:text-gray-600 focus:border-[#d4a853]"
+                    className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)] placeholder:text-[var(--t-text-muted)] focus:border-[var(--t-accent)]"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-gray-400 uppercase tracking-wide">E-mail</label>
+                  <label className="text-xs text-[var(--t-text-secondary)] uppercase tracking-wide">E-mail</label>
                   <Input
                     type="email"
                     value={editing.email}
                     onChange={(e) => setEditField('email', e.target.value)}
                     placeholder="email@agencia.com.br"
-                    className="bg-[#0f0f1a] border-[#2a2a4e] text-white placeholder:text-gray-600 focus:border-[#d4a853]"
+                    className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)] placeholder:text-[var(--t-text-muted)] focus:border-[var(--t-accent)]"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-gray-400 uppercase tracking-wide">Perfil</label>
+                  <label className="text-xs text-[var(--t-text-secondary)] uppercase tracking-wide">Perfil</label>
                   <select
                     value={editing.perfil}
                     onChange={(e) => setEditField('perfil', e.target.value as Usuario['perfil'])}
-                    className="w-full h-10 rounded-md border border-[#2a2a4e] bg-[#0f0f1a] text-white px-3 text-sm focus:outline-none focus:border-[#d4a853]"
+                    className="w-full h-10 rounded-md border border-[var(--t-border)] bg-[var(--t-bg)] text-[var(--t-text)] px-3 text-sm focus:outline-none focus:border-[var(--t-accent)]"
                   >
                     {(Object.keys(PERFIL_LABELS) as Usuario['perfil'][]).map((p) => (
                       <option key={p} value={p}>{PERFIL_LABELS[p]}</option>
@@ -225,19 +225,19 @@ export default function UsuariosPage() {
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-gray-400 uppercase tracking-wide">Senha</label>
+                  <label className="text-xs text-[var(--t-text-secondary)] uppercase tracking-wide">Senha</label>
                   <div className="relative">
                     <Input
                       type={showPassword ? 'text' : 'password'}
                       value={editing.senha_hash}
                       onChange={(e) => setEditField('senha_hash', e.target.value)}
                       placeholder={isNew ? 'Senha de acesso' : 'Deixe em branco para manter'}
-                      className="bg-[#0f0f1a] border-[#2a2a4e] text-white placeholder:text-gray-600 focus:border-[#d4a853] pr-10"
+                      className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)] placeholder:text-[var(--t-text-muted)] focus:border-[var(--t-accent)] pr-10"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword((v) => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--t-text-secondary)] hover:text-[var(--t-text-secondary)]"
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
@@ -253,7 +253,7 @@ export default function UsuariosPage() {
                   aria-checked={editing.ativo}
                   onClick={() => setEditField('ativo', !editing.ativo)}
                   className={`relative w-11 h-6 rounded-full transition-colors focus:outline-none ${
-                    editing.ativo ? 'bg-[#d4a853]' : 'bg-[#2a2a4e]'
+                    editing.ativo ? 'bg-[var(--t-accent)]' : 'bg-[var(--t-surface-hover)]'
                   }`}
                 >
                   <span
@@ -262,14 +262,14 @@ export default function UsuariosPage() {
                     }`}
                   />
                 </button>
-                <span className="text-sm text-gray-300">
+                <span className="text-sm text-[var(--t-text-secondary)]">
                   Usuário {editing.ativo ? 'ativo' : 'inativo'}
                 </span>
               </div>
 
               {/* Permissions */}
               <div className="space-y-2">
-                <p className="text-xs text-gray-400 uppercase tracking-wide">Permissões</p>
+                <p className="text-xs text-[var(--t-text-secondary)] uppercase tracking-wide">Permissões</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {PERMISSOES_LABELS.map(({ key, label }) => (
                     <label
@@ -280,9 +280,9 @@ export default function UsuariosPage() {
                         type="checkbox"
                         checked={editing.permissoes[key]}
                         onChange={(e) => setPermissao(key, e.target.checked)}
-                        className="w-4 h-4 rounded border-[#2a2a4e] bg-[#0f0f1a] accent-[#d4a853] cursor-pointer"
+                        className="w-4 h-4 rounded border-[var(--t-border)] bg-[var(--t-bg)] accent-[#d4a853] cursor-pointer"
                       />
-                      <span className="text-sm text-gray-300 group-hover:text-white transition-colors">
+                      <span className="text-sm text-[var(--t-text-secondary)] group-hover:text-[var(--t-text)] transition-colors">
                         {label}
                       </span>
                     </label>
@@ -295,7 +295,7 @@ export default function UsuariosPage() {
                 <Button
                   onClick={handleSave}
                   disabled={saving}
-                  className="bg-[#d4a853] hover:bg-[#c49843] text-[#1a1a2e] font-semibold gap-2"
+                  className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold gap-2"
                 >
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   {saving ? 'Salvando...' : 'Salvar'}
@@ -303,7 +303,7 @@ export default function UsuariosPage() {
                 <Button
                   variant="ghost"
                   onClick={handleCancel}
-                  className="text-gray-400 hover:text-white gap-2"
+                  className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)] gap-2"
                 >
                   <X className="w-4 h-4" />
                   Cancelar
@@ -314,12 +314,12 @@ export default function UsuariosPage() {
         )}
 
         {/* User List */}
-        <Card className="bg-[#1a1a2e] border-[#2a2a4e]">
+        <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)]">
           <CardHeader className="pb-3">
-            <CardTitle className="text-[#d4a853] flex items-center gap-2 text-base">
+            <CardTitle className="text-[var(--t-accent)] flex items-center gap-2 text-base">
               <Users className="w-4 h-4" />
               Usuários Cadastrados
-              <span className="ml-auto text-xs font-normal text-gray-500">
+              <span className="ml-auto text-xs font-normal text-[var(--t-text-secondary)]">
                 {usuarios.length} {usuarios.length === 1 ? 'usuário' : 'usuários'}
               </span>
             </CardTitle>
@@ -327,10 +327,10 @@ export default function UsuariosPage() {
           <CardContent>
             {loading ? (
               <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-6 h-6 text-[#d4a853] animate-spin" />
+                <Loader2 className="w-6 h-6 text-[var(--t-accent)] animate-spin" />
               </div>
             ) : usuarios.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
+              <div className="text-center py-12 text-[var(--t-text-secondary)]">
                 <Users className="w-10 h-10 mx-auto mb-3 opacity-30" />
                 <p className="text-sm">Nenhum usuário cadastrado.</p>
                 <p className="text-xs mt-1">Clique em &quot;Novo Usuário&quot; para começar.</p>
@@ -339,19 +339,19 @@ export default function UsuariosPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-[#2a2a4e]">
-                      <th className="text-left text-xs text-gray-500 uppercase tracking-wide py-2 pr-4">Nome</th>
-                      <th className="text-left text-xs text-gray-500 uppercase tracking-wide py-2 pr-4">E-mail</th>
-                      <th className="text-left text-xs text-gray-500 uppercase tracking-wide py-2 pr-4">Perfil</th>
-                      <th className="text-left text-xs text-gray-500 uppercase tracking-wide py-2 pr-4">Status</th>
-                      <th className="text-right text-xs text-gray-500 uppercase tracking-wide py-2">Ações</th>
+                    <tr className="border-b border-[var(--t-border)]">
+                      <th className="text-left text-xs text-[var(--t-text-secondary)] uppercase tracking-wide py-2 pr-4">Nome</th>
+                      <th className="text-left text-xs text-[var(--t-text-secondary)] uppercase tracking-wide py-2 pr-4">E-mail</th>
+                      <th className="text-left text-xs text-[var(--t-text-secondary)] uppercase tracking-wide py-2 pr-4">Perfil</th>
+                      <th className="text-left text-xs text-[var(--t-text-secondary)] uppercase tracking-wide py-2 pr-4">Status</th>
+                      <th className="text-right text-xs text-[var(--t-text-secondary)] uppercase tracking-wide py-2">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#2a2a4e]/50">
                     {usuarios.map((u) => (
-                      <tr key={u.id} className="hover:bg-[#0f0f1a]/50 transition-colors group">
-                        <td className="py-3 pr-4 font-medium text-white">{u.nome || '—'}</td>
-                        <td className="py-3 pr-4 text-gray-400">{u.email || '—'}</td>
+                      <tr key={u.id} className="hover:bg-[var(--t-bg)]/50 transition-colors group">
+                        <td className="py-3 pr-4 font-medium text-[var(--t-text)]">{u.nome || '—'}</td>
+                        <td className="py-3 pr-4 text-[var(--t-text-secondary)]">{u.email || '—'}</td>
                         <td className="py-3 pr-4">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${PERFIL_COLORS[u.perfil]}`}>
                             {PERFIL_LABELS[u.perfil]}
@@ -362,7 +362,7 @@ export default function UsuariosPage() {
                             className={
                               u.ativo
                                 ? 'bg-green-900/40 text-green-300 border border-green-800 hover:bg-green-900/40'
-                                : 'bg-gray-800/40 text-gray-500 border border-gray-700 hover:bg-gray-800/40'
+                                : 'bg-[var(--t-surface)]/40 text-[var(--t-text-secondary)] border border-[var(--t-border)] hover:bg-[var(--t-surface)]/40'
                             }
                           >
                             {u.ativo ? 'Ativo' : 'Inativo'}
@@ -374,7 +374,7 @@ export default function UsuariosPage() {
                               size="sm"
                               variant="ghost"
                               onClick={() => handleEdit(u)}
-                              className="h-7 w-7 p-0 text-gray-400 hover:text-[#d4a853] hover:bg-[#d4a853]/10"
+                              className="h-7 w-7 p-0 text-[var(--t-text-secondary)] hover:text-[var(--t-accent)] hover:bg-[var(--t-accent)]/10"
                             >
                               <Pencil className="w-3.5 h-3.5" />
                             </Button>
@@ -383,7 +383,7 @@ export default function UsuariosPage() {
                               variant="ghost"
                               onClick={() => handleDelete(u.id)}
                               disabled={deletingId === u.id}
-                              className="h-7 w-7 p-0 text-gray-400 hover:text-red-400 hover:bg-red-400/10"
+                              className="h-7 w-7 p-0 text-[var(--t-text-secondary)] hover:text-red-400 hover:bg-red-400/10"
                             >
                               {deletingId === u.id
                                 ? <Loader2 className="w-3.5 h-3.5 animate-spin" />

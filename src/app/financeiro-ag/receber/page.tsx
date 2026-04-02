@@ -18,7 +18,7 @@ const STATUS_BADGE: Record<StatusContaReceber, string> = {
   PENDENTE: 'bg-yellow-100 text-yellow-800',
   RECEBIDO: 'bg-green-100 text-green-800',
   ATRASADO: 'bg-red-100 text-red-800',
-  CANCELADO: 'bg-gray-200 text-gray-600',
+  CANCELADO: 'bg-[var(--t-border)] text-[var(--t-text-muted)]',
   PARCIAL: 'bg-blue-100 text-blue-800',
 };
 
@@ -138,18 +138,18 @@ export default function ContasReceberPage() {
   const STATUSES: Array<StatusContaReceber | 'TODOS'> = ['TODOS', 'PENDENTE', 'RECEBIDO', 'ATRASADO', 'CANCELADO', 'PARCIAL'];
 
   return (
-    <div className="min-h-screen bg-[#1a1a2e] text-white p-6">
+    <div className="min-h-screen bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-6">
       <div className="max-w-7xl mx-auto space-y-6">
 
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[#d4a853]">Contas a Receber</h1>
-            <p className="text-gray-400 text-sm mt-1">Gestão de recebíveis da agência</p>
+            <h1 className="text-2xl font-bold text-[var(--t-accent)]">Contas a Receber</h1>
+            <p className="text-[var(--t-text-secondary)] text-sm mt-1">Gestão de recebíveis da agência</p>
           </div>
           <Button
             onClick={openNew}
-            className="bg-[#d4a853] hover:bg-[#c49843] text-[#1a1a2e] font-semibold"
+            className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold"
           >
             <Plus className="w-4 h-4 mr-2" /> Nova Conta
           </Button>
@@ -157,29 +157,29 @@ export default function ContasReceberPage() {
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card className="bg-[#16213e] border-yellow-500/30">
+          <Card className="bg-[var(--t-surface)] border-yellow-500/30">
             <CardContent className="p-4 flex items-center gap-4">
               <Clock className="w-8 h-8 text-yellow-400 shrink-0" />
               <div>
-                <p className="text-gray-400 text-xs uppercase">Pendente</p>
+                <p className="text-[var(--t-text-secondary)] text-xs uppercase">Pendente</p>
                 <p className="text-xl font-bold text-yellow-400">{BRL(totalPendente)}</p>
               </div>
             </CardContent>
           </Card>
-          <Card className="bg-[#16213e] border-green-500/30">
+          <Card className="bg-[var(--t-surface)] border-green-500/30">
             <CardContent className="p-4 flex items-center gap-4">
               <TrendingUp className="w-8 h-8 text-green-400 shrink-0" />
               <div>
-                <p className="text-gray-400 text-xs uppercase">Recebido</p>
+                <p className="text-[var(--t-text-secondary)] text-xs uppercase">Recebido</p>
                 <p className="text-xl font-bold text-green-400">{BRL(totalRecebido)}</p>
               </div>
             </CardContent>
           </Card>
-          <Card className="bg-[#16213e] border-red-500/30">
+          <Card className="bg-[var(--t-surface)] border-red-500/30">
             <CardContent className="p-4 flex items-center gap-4">
               <AlertCircle className="w-8 h-8 text-red-400 shrink-0" />
               <div>
-                <p className="text-gray-400 text-xs uppercase">Atrasado</p>
+                <p className="text-[var(--t-text-secondary)] text-xs uppercase">Atrasado</p>
                 <p className="text-xl font-bold text-red-400">{BRL(totalAtrasado)}</p>
               </div>
             </CardContent>
@@ -188,23 +188,23 @@ export default function ContasReceberPage() {
 
         {/* Inline Form */}
         {showForm && (
-          <Card className="bg-[#16213e] border-[#d4a853]/40">
+          <Card className="bg-[var(--t-surface)] border-[var(--t-accent)]/40">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-[#d4a853] text-base">
+              <CardTitle className="text-[var(--t-accent)] text-base">
                 {editId ? 'Editar Conta' : 'Nova Conta a Receber'}
               </CardTitle>
-              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-white">
+              <button onClick={() => setShowForm(false)} className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)]">
                 <X className="w-4 h-4" />
               </button>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Origem</label>
+                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Origem</label>
                   <select
                     value={form.origem}
                     onChange={e => setForm(f => ({ ...f, origem: e.target.value as ContaReceber['origem'] }))}
-                    className="w-full bg-[#1a1a2e] border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                    className="w-full bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text)]"
                   >
                     <option value="VENDA">Venda</option>
                     <option value="COMISSAO_FORNECEDOR">Comissão Fornecedor</option>
@@ -213,58 +213,58 @@ export default function ContasReceberPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Cliente *</label>
+                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Cliente *</label>
                   <Input
                     value={form.cliente_nome}
                     onChange={e => setForm(f => ({ ...f, cliente_nome: e.target.value }))}
                     placeholder="Nome do cliente"
-                    className="bg-[#1a1a2e] border-gray-600 text-white"
+                    className="bg-[var(--t-header-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Descrição *</label>
+                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Descrição *</label>
                   <Input
                     value={form.descricao}
                     onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
                     placeholder="Descrição"
-                    className="bg-[#1a1a2e] border-gray-600 text-white"
+                    className="bg-[var(--t-header-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Categoria ID</label>
+                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Categoria ID</label>
                   <Input
                     value={form.categoria_id}
                     onChange={e => setForm(f => ({ ...f, categoria_id: e.target.value }))}
                     placeholder="ID da categoria"
-                    className="bg-[#1a1a2e] border-gray-600 text-white"
+                    className="bg-[var(--t-header-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Valor (R$) *</label>
+                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Valor (R$) *</label>
                   <Input
                     type="number"
                     min={0}
                     step="0.01"
                     value={form.valor_original}
                     onChange={e => setForm(f => ({ ...f, valor_original: parseFloat(e.target.value) || 0 }))}
-                    className="bg-[#1a1a2e] border-gray-600 text-white"
+                    className="bg-[var(--t-header-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Vencimento *</label>
+                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Vencimento *</label>
                   <Input
                     type="date"
                     value={form.data_vencimento}
                     onChange={e => setForm(f => ({ ...f, data_vencimento: e.target.value }))}
-                    className="bg-[#1a1a2e] border-gray-600 text-white"
+                    className="bg-[var(--t-header-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Forma de Recebimento</label>
+                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Forma de Recebimento</label>
                   <select
                     value={form.forma_recebimento}
                     onChange={e => setForm(f => ({ ...f, forma_recebimento: e.target.value as ContaReceber['forma_recebimento'] }))}
-                    className="w-full bg-[#1a1a2e] border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                    className="w-full bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text)]"
                   >
                     <option value="">Selecione</option>
                     <option value="PIX">PIX</option>
@@ -276,46 +276,46 @@ export default function ContasReceberPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Parcela nº</label>
+                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Parcela nº</label>
                   <Input
                     type="number"
                     min={1}
                     value={form.parcela_numero}
                     onChange={e => setForm(f => ({ ...f, parcela_numero: parseInt(e.target.value) || 1 }))}
-                    className="bg-[#1a1a2e] border-gray-600 text-white"
+                    className="bg-[var(--t-header-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Total Parcelas</label>
+                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Total Parcelas</label>
                   <Input
                     type="number"
                     min={1}
                     value={form.total_parcelas}
                     onChange={e => setForm(f => ({ ...f, total_parcelas: parseInt(e.target.value) || 1 }))}
-                    className="bg-[#1a1a2e] border-gray-600 text-white"
+                    className="bg-[var(--t-header-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                   />
                 </div>
                 <div className="sm:col-span-2 lg:col-span-3">
-                  <label className="text-xs text-gray-400 mb-1 block">Observações</label>
+                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Observações</label>
                   <Input
                     value={form.observacoes}
                     onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
                     placeholder="Observações"
-                    className="bg-[#1a1a2e] border-gray-600 text-white"
+                    className="bg-[var(--t-header-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                   />
                 </div>
               </div>
               <div className="flex gap-2 mt-4">
                 <Button
                   onClick={handleSave}
-                  className="bg-[#d4a853] hover:bg-[#c49843] text-[#1a1a2e] font-semibold"
+                  className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold"
                 >
                   <Check className="w-4 h-4 mr-1" /> {editId ? 'Salvar' : 'Criar'}
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => setShowForm(false)}
-                  className="border-gray-600 text-gray-300 hover:bg-gray-700"
+                  className="border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface)]"
                 >
                   Cancelar
                 </Button>
@@ -325,14 +325,14 @@ export default function ContasReceberPage() {
         )}
 
         {/* Filters */}
-        <Card className="bg-[#16213e] border-gray-700">
+        <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
           <CardContent className="p-4 flex flex-wrap gap-3 items-end">
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Status</label>
+              <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Status</label>
               <select
                 value={filterStatus}
                 onChange={e => setFilterStatus(e.target.value as StatusContaReceber | 'TODOS')}
-                className="bg-[#1a1a2e] border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                className="bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text)]"
               >
                 {STATUSES.map(s => (
                   <option key={s} value={s}>{s}</option>
@@ -340,21 +340,21 @@ export default function ContasReceberPage() {
               </select>
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Vencimento De</label>
+              <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Vencimento De</label>
               <Input
                 type="date"
                 value={filterDateFrom}
                 onChange={e => setFilterDateFrom(e.target.value)}
-                className="bg-[#1a1a2e] border-gray-600 text-white w-40"
+                className="bg-[var(--t-header-bg)] border-[var(--t-border)] text-[var(--t-text)] w-40"
               />
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Vencimento Até</label>
+              <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Vencimento Até</label>
               <Input
                 type="date"
                 value={filterDateTo}
                 onChange={e => setFilterDateTo(e.target.value)}
-                className="bg-[#1a1a2e] border-gray-600 text-white w-40"
+                className="bg-[var(--t-header-bg)] border-[var(--t-border)] text-[var(--t-text)] w-40"
               />
             </div>
             {(filterStatus !== 'TODOS' || filterDateFrom || filterDateTo) && (
@@ -362,7 +362,7 @@ export default function ContasReceberPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => { setFilterStatus('TODOS'); setFilterDateFrom(''); setFilterDateTo(''); }}
-                className="border-gray-600 text-gray-300 hover:bg-gray-700"
+                className="border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface)]"
               >
                 <X className="w-3 h-3 mr-1" /> Limpar
               </Button>
@@ -371,23 +371,23 @@ export default function ContasReceberPage() {
         </Card>
 
         {/* Table */}
-        <Card className="bg-[#16213e] border-gray-700">
+        <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
           <CardHeader className="pb-2">
-            <CardTitle className="text-white text-base flex items-center gap-2">
-              <DollarSign className="w-4 h-4 text-[#d4a853]" />
+            <CardTitle className="text-[var(--t-text)] text-base flex items-center gap-2">
+              <DollarSign className="w-4 h-4 text-[var(--t-accent)]" />
               Lançamentos ({filtered.length})
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             {loading ? (
-              <p className="text-gray-400 text-sm p-6">Carregando...</p>
+              <p className="text-[var(--t-text-secondary)] text-sm p-6">Carregando...</p>
             ) : filtered.length === 0 ? (
-              <p className="text-gray-500 text-sm p-6 text-center">Nenhum lançamento encontrado.</p>
+              <p className="text-[var(--t-text-secondary)] text-sm p-6 text-center">Nenhum lançamento encontrado.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-700 text-gray-400 text-xs uppercase">
+                    <tr className="border-b border-[var(--t-border)] text-[var(--t-text-secondary)] text-xs uppercase">
                       <th className="text-left px-4 py-3">Cliente</th>
                       <th className="text-left px-4 py-3">Descrição</th>
                       <th className="text-right px-4 py-3">Valor</th>
@@ -398,11 +398,11 @@ export default function ContasReceberPage() {
                   </thead>
                   <tbody>
                     {filtered.map(item => (
-                      <tr key={item.id} className="border-b border-gray-700/50 hover:bg-[#1a1a2e]/40 transition-colors">
-                        <td className="px-4 py-3 font-medium text-white">{item.cliente_nome || '—'}</td>
-                        <td className="px-4 py-3 text-gray-300 max-w-xs truncate">{item.descricao}</td>
-                        <td className="px-4 py-3 text-right font-mono text-white">{BRL(item.valor_final)}</td>
-                        <td className="px-4 py-3 text-gray-300">
+                      <tr key={item.id} className="border-b border-[var(--t-border)]/50 hover:bg-[var(--t-header-bg)]/40 transition-colors">
+                        <td className="px-4 py-3 font-medium text-[var(--t-text)]">{item.cliente_nome || '—'}</td>
+                        <td className="px-4 py-3 text-[var(--t-text-secondary)] max-w-xs truncate">{item.descricao}</td>
+                        <td className="px-4 py-3 text-right font-mono text-[var(--t-text)]">{BRL(item.valor_final)}</td>
+                        <td className="px-4 py-3 text-[var(--t-text-secondary)]">
                           {item.data_vencimento
                             ? new Date(item.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')
                             : '—'}
@@ -427,7 +427,7 @@ export default function ContasReceberPage() {
                               size="sm"
                               variant="outline"
                               onClick={() => openEdit(item)}
-                              className="border-gray-600 text-gray-300 hover:bg-gray-700 h-7 px-3 text-xs"
+                              className="border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface)] h-7 px-3 text-xs"
                             >
                               Editar
                             </Button>

@@ -25,7 +25,7 @@ function getMonthLabel(ym: string): string {
   return `${months[parseInt(m) - 1]}/${y}`;
 }
 
-const MEDAL_COLORS = ['text-yellow-400', 'text-gray-400', 'text-amber-600'];
+const MEDAL_COLORS = ['text-yellow-400', 'text-[var(--t-text-secondary)]', 'text-amber-600'];
 
 export default function MetasPage() {
   const [metas, setMetas] = useState<MetaVendedor[]>([]);

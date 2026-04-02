@@ -81,9 +81,9 @@ export function TktTab({ grupo, onChange }: Props) {
   return (
     <div className="space-y-8">
       {/* Totals bar */}
-      <div className="bg-[#1a1a2e] text-white p-4 rounded-lg flex flex-wrap gap-6">
-        <div><span className="text-xs text-[#d4a853]">Total TKT ADT</span><div className="text-lg font-bold">{formatBRL(totals.totalAdt)}</div></div>
-        <div><span className="text-xs text-[#d4a853]">Total TKT CHD</span><div className="text-lg font-bold">{formatBRL(totals.totalChd)}</div></div>
+      <div className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-4 rounded-lg flex flex-wrap gap-6">
+        <div><span className="text-xs text-[var(--t-accent)]">Total TKT ADT</span><div className="text-lg font-bold">{formatBRL(totals.totalAdt)}</div></div>
+        <div><span className="text-xs text-[var(--t-accent)]">Total TKT CHD</span><div className="text-lg font-bold">{formatBRL(totals.totalChd)}</div></div>
       </div>
 
       <div className="flex justify-end">
@@ -99,20 +99,20 @@ export function TktTab({ grupo, onChange }: Props) {
 
         return (
           <div key={tIdx} className="border rounded-lg overflow-hidden">
-            <div className="bg-[#1a1a2e] text-white p-3 flex items-center justify-between">
+            <div className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-3 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <span className="font-semibold">Trecho {tIdx + 1}</span>
                 {infTrecho && (
-                  <span className="text-sm text-gray-300">
+                  <span className="text-sm text-[var(--t-text-secondary)]">
                     ADT: {infTrecho.qtd_adt} | CHD: {infTrecho.qtd_chd}
                   </span>
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => setFlightModalOpen(tIdx)} className="text-blue-300 border-blue-300/30 hover:bg-blue-500/10 hover:text-blue-200">
+                <Button variant="outline" size="sm" onClick={() => setFlightModalOpen(tIdx)} className="text-blue-300 border-blue-300/30 hover:bg-[var(--t-blue-bg)]0/10 hover:text-blue-200">
                   <Plane className="w-4 h-4 mr-1" /> Buscar voo via API
                 </Button>
-                <Input type="date" value={trecho.deadline || ''} onChange={e => updateDeadline(tIdx, e.target.value || null)} className="h-8 w-40 bg-white/10 text-white border-white/20" />
+                <Input type="date" value={trecho.deadline || ''} onChange={e => updateDeadline(tIdx, e.target.value || null)} className="h-8 w-40 bg-[var(--t-input-bg)] text-[var(--t-text)] border-[var(--t-border)]" />
                 {grupo.tkt.trechos.length > 1 && (
                   <Button variant="ghost" size="sm" onClick={() => removeTrecho(tIdx)} className="text-red-300 hover:text-red-100">
                     <Trash2 className="w-4 h-4" />
@@ -123,7 +123,7 @@ export function TktTab({ grupo, onChange }: Props) {
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
                 <thead>
-                  <tr className="bg-gray-100">
+                  <tr className="bg-[var(--t-surface-hover)]">
                     <th className="p-2 text-left border">Fonte</th>
                     <th className="p-2 border w-40">Valor ADT</th>
                     <th className="p-2 border w-40">Valor CHD</th>
@@ -135,7 +135,7 @@ export function TktTab({ grupo, onChange }: Props) {
                     const isMinAdt = fonte.valor_adt !== null && fonte.valor_adt > 0 && fonte.valor_adt === melhorAdt;
                     const isMinChd = fonte.valor_chd !== null && fonte.valor_chd > 0 && fonte.valor_chd === melhorChd;
                     return (
-                      <tr key={fIdx} className={fonte.nome === 'API Amadeus' ? 'bg-blue-50' : fIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      <tr key={fIdx} className={fonte.nome === 'API Amadeus' ? 'bg-[var(--t-blue-bg)]' : fIdx % 2 === 0 ? 'bg-[var(--t-surface)]' : 'bg-[var(--t-surface-hover)]'}>
                         <td className={`p-2 border font-medium ${fonte.nome === 'API Amadeus' ? 'text-blue-700' : ''}`}>{fonte.nome}</td>
                         <td className="p-1 border">
                           <MoneyInput

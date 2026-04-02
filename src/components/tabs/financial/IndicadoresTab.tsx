@@ -28,7 +28,7 @@ interface IndicadoresTabProps {
 function ProgressBar({ value, max, color }: { value: number; max: number; color: string }) {
   const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
   return (
-    <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+    <div className="w-full bg-[var(--t-border)] rounded-full h-3 overflow-hidden">
       <div
         className="h-full rounded-full transition-all duration-500"
         style={{ width: `${pct}%`, backgroundColor: color }}
@@ -61,11 +61,11 @@ function StatCard({
         </div>
       )}
       <div>
-        <p className="text-xs text-gray-500">{label}</p>
+        <p className="text-xs text-[var(--t-text-secondary)]">{label}</p>
         <p className="text-lg font-bold" style={{ color: color ?? '#1a1a2e' }}>
           {value}
         </p>
-        {subtitle && <p className="text-xs text-gray-400">{subtitle}</p>}
+        {subtitle && <p className="text-xs text-[var(--t-text-secondary)]">{subtitle}</p>}
       </div>
     </div>
   );
@@ -133,14 +133,14 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
       {/* Config */}
       <Card className="border-0 shadow-md" style={{ backgroundColor: '#1a1a2e' }}>
         <CardHeader className="pb-3">
-          <CardTitle className="text-white flex items-center gap-2 text-base">
+          <CardTitle className="text-[var(--t-text)] flex items-center gap-2 text-base">
             <Settings2 className="h-4 w-4" style={{ color: '#d4a853' }} />
             Parametros
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="max-w-xs">
-            <Label className="text-gray-300 text-sm">
+            <Label className="text-[var(--t-text-secondary)] text-sm">
               Taxa de Conversao Estimada (%)
             </Label>
             <Input
@@ -150,7 +150,7 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
               max="100"
               value={taxaConversao}
               onChange={(e) => handleTaxaChange(parseFloat(e.target.value) || 0)}
-              className="mt-1 bg-white/10 border-white/20 text-white"
+              className="mt-1 bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)]"
             />
           </div>
         </CardContent>
@@ -196,7 +196,7 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
             max={(ocp.paxVendidos ?? 0) + (ocp.vagasDisponiveis ?? 0)}
             color="#d4a853"
           />
-          <div className="flex justify-between text-xs text-gray-500 mt-1">
+          <div className="flex justify-between text-xs text-[var(--t-text-secondary)] mt-1">
             <span>0 PAX</span>
             <span>{(ocp.paxVendidos ?? 0) + (ocp.vagasDisponiveis ?? 0)} PAX</span>
           </div>
@@ -221,7 +221,7 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
               color="#f59e0b"
             />
             <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-600">Break-even Atingido:</span>
+              <span className="text-sm text-[var(--t-text-muted)]">Break-even Atingido:</span>
               {be.breakEvenAtingido ? (
                 <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
                   <CheckCircle2 className="h-3 w-3 mr-1" />
@@ -272,7 +272,7 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
                 />
               )}
             </div>
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
+            <div className="flex justify-between text-xs text-[var(--t-text-secondary)] mt-1">
               <span>{ocp.paxVendidos ?? 0} vendidos</span>
               <span className="text-yellow-600 font-medium">
                 BE: {be.breakEvenPax ?? 0}
@@ -299,7 +299,7 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
               { label: 'Markup Efetivo', value: mg.markupEfetivo ?? 0 },
             ].map((m) => (
               <div key={m.label} className="text-center">
-                <p className="text-xs text-gray-500 mb-1">{m.label}</p>
+                <p className="text-xs text-[var(--t-text-secondary)] mb-1">{m.label}</p>
                 <p
                   className={`text-2xl font-bold ${
                     m.value >= 0 ? 'text-green-600' : 'text-red-600'
@@ -353,7 +353,7 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
               color="#f59e0b"
             />
             <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-600">Vai lotar a tempo:</span>
+              <span className="text-sm text-[var(--t-text-muted)]">Vai lotar a tempo:</span>
               {vel.vaiLotarATempo ? (
                 <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
                   <CheckCircle2 className="h-3 w-3 mr-1" />
@@ -387,23 +387,23 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">PAX</span>
+                <span className="text-[var(--t-text-muted)]">PAX</span>
                 <span className="font-semibold">{cenarios.pessimista?.pax ?? 0}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Receita</span>
+                <span className="text-[var(--t-text-muted)]">Receita</span>
                 <span className="font-semibold">
                   {formatBRL(cenarios.pessimista?.receita ?? 0)}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Custo</span>
+                <span className="text-[var(--t-text-muted)]">Custo</span>
                 <span className="font-semibold">
                   {formatBRL(cenarios.pessimista?.custo ?? 0)}
                 </span>
               </div>
               <div className="flex justify-between text-sm pt-1 border-t">
-                <span className="text-gray-700 font-medium">Lucro</span>
+                <span className="text-[var(--t-text)] font-medium">Lucro</span>
                 <span
                   className={`font-bold ${
                     (cenarios.pessimista?.lucro ?? 0) >= 0
@@ -415,7 +415,7 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
                 </span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Margem</span>
+                <span className="text-[var(--t-text-muted)]">Margem</span>
                 <span
                   className={`font-semibold ${
                     (cenarios.pessimista?.margem ?? 0) >= 0
@@ -436,23 +436,23 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">PAX</span>
+                <span className="text-[var(--t-text-muted)]">PAX</span>
                 <span className="font-semibold">{cenarios.realista?.pax ?? 0}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Receita</span>
+                <span className="text-[var(--t-text-muted)]">Receita</span>
                 <span className="font-semibold">
                   {formatBRL(cenarios.realista?.receita ?? 0)}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Custo</span>
+                <span className="text-[var(--t-text-muted)]">Custo</span>
                 <span className="font-semibold">
                   {formatBRL(cenarios.realista?.custo ?? 0)}
                 </span>
               </div>
               <div className="flex justify-between text-sm pt-1 border-t">
-                <span className="text-gray-700 font-medium">Lucro</span>
+                <span className="text-[var(--t-text)] font-medium">Lucro</span>
                 <span
                   className={`font-bold ${
                     (cenarios.realista?.lucro ?? 0) >= 0
@@ -464,7 +464,7 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
                 </span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Margem</span>
+                <span className="text-[var(--t-text-muted)]">Margem</span>
                 <span
                   className={`font-semibold ${
                     (cenarios.realista?.margem ?? 0) >= 0
@@ -485,23 +485,23 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">PAX</span>
+                <span className="text-[var(--t-text-muted)]">PAX</span>
                 <span className="font-semibold">{cenarios.otimista?.pax ?? 0}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Receita</span>
+                <span className="text-[var(--t-text-muted)]">Receita</span>
                 <span className="font-semibold">
                   {formatBRL(cenarios.otimista?.receita ?? 0)}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Custo</span>
+                <span className="text-[var(--t-text-muted)]">Custo</span>
                 <span className="font-semibold">
                   {formatBRL(cenarios.otimista?.custo ?? 0)}
                 </span>
               </div>
               <div className="flex justify-between text-sm pt-1 border-t">
-                <span className="text-gray-700 font-medium">Lucro</span>
+                <span className="text-[var(--t-text)] font-medium">Lucro</span>
                 <span
                   className={`font-bold ${
                     (cenarios.otimista?.lucro ?? 0) >= 0
@@ -513,7 +513,7 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
                 </span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Margem</span>
+                <span className="text-[var(--t-text-muted)]">Margem</span>
                 <span
                   className={`font-semibold ${
                     (cenarios.otimista?.margem ?? 0) >= 0

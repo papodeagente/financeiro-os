@@ -23,25 +23,25 @@ export function SegTab({ grupo, onChange }: Props) {
 
   return (
     <div className="space-y-8">
-      <div className="bg-[#1a1a2e] text-white p-4 rounded-lg flex flex-wrap gap-4">
+      <div className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-4 rounded-lg flex flex-wrap gap-4">
         {TIPOS.map(t => (
-          <div key={t}><span className="text-xs text-[#d4a853]">Melhor {LABELS[t]}</span><div className="text-lg font-bold">{formatBRL(totals[t])}</div></div>
+          <div key={t}><span className="text-xs text-[var(--t-accent)]">Melhor {LABELS[t]}</span><div className="text-lg font-bold">{formatBRL(totals[t])}</div></div>
         ))}
       </div>
 
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
-          <thead><tr className="bg-[#1a1a2e] text-white">
-            <th className="p-2 text-left border border-gray-600">Seguradora</th>
-            {TIPOS.map(t => <th key={t} className="p-2 border border-gray-600 w-28">{LABELS[t]}</th>)}
-            <th className="p-2 border border-gray-600 w-36">Deadline</th>
-            <th className="p-2 border border-gray-600">Descrição</th>
+          <thead><tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
+            <th className="p-2 text-left border border-[var(--t-border)]">Seguradora</th>
+            {TIPOS.map(t => <th key={t} className="p-2 border border-[var(--t-border)] w-28">{LABELS[t]}</th>)}
+            <th className="p-2 border border-[var(--t-border)] w-36">Deadline</th>
+            <th className="p-2 border border-[var(--t-border)]">Descrição</th>
           </tr></thead>
           <tbody>
             {grupo.seg.seguradoras.map((seg, sIdx) => {
               const bests = Object.fromEntries(TIPOS.map(t => [t, minPositivo(grupo.seg.seguradoras.map(s => s[`valor_${t}` as keyof typeof s] as number | null))]));
               return (
-                <tr key={sIdx} className={sIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                <tr key={sIdx} className={sIdx % 2 === 0 ? 'bg-[var(--t-surface)]' : 'bg-[var(--t-surface-hover)]'}>
                   <td className="p-1 border"><Input value={seg.nome} onChange={e => update(sIdx, 'nome', e.target.value)} className="h-8" /></td>
                   {TIPOS.map(t => {
                     const key = `valor_${t}` as keyof typeof seg;

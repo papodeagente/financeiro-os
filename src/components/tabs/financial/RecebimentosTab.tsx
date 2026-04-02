@@ -35,7 +35,7 @@ const STATUS_BADGE: Record<StatusParcela, { label: string; className: string }> 
   PENDENTE: { label: 'Pendente', className: 'bg-yellow-600 text-yellow-100 hover:bg-yellow-600' },
   RECEBIDO: { label: 'Recebido', className: 'bg-green-700 text-green-100 hover:bg-green-700' },
   ATRASADO: { label: 'Atrasado', className: 'bg-red-700 text-red-100 hover:bg-red-700' },
-  CANCELADO: { label: 'Cancelado', className: 'bg-gray-600 text-gray-200 hover:bg-gray-600' },
+  CANCELADO: { label: 'Cancelado', className: 'bg-[var(--t-surface)] text-[var(--t-text)] hover:bg-[var(--t-surface)]' },
 };
 
 const FORMAS_RECEBIMENTO = ['PIX', 'TED', 'Cartao', 'Boleto', 'Dinheiro'] as const;
@@ -167,31 +167,31 @@ export default function RecebimentosTab({ grupo, onChange }: RecebimentosTabProp
         </h3>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div>
-            <p className="text-xs text-gray-400">Total a Receber</p>
-            <p className="text-lg font-bold text-white">
+            <p className="text-xs text-[var(--t-text-secondary)]">Total a Receber</p>
+            <p className="text-lg font-bold text-[var(--t-text)]">
               {formatBRL(metrics.totalAReceber)}
             </p>
           </div>
           <div>
-            <p className="text-xs text-gray-400">Total Recebido</p>
+            <p className="text-xs text-[var(--t-text-secondary)]">Total Recebido</p>
             <p className="text-lg font-bold text-green-400">
               {formatBRL(metrics.totalRecebido)}
             </p>
           </div>
           <div>
-            <p className="text-xs text-gray-400">Total Atrasado</p>
+            <p className="text-xs text-[var(--t-text-secondary)]">Total Atrasado</p>
             <p className="text-lg font-bold text-red-400">
               {formatBRL(metrics.totalAtrasado)}
             </p>
           </div>
           <div>
-            <p className="text-xs text-gray-400">Taxa Inadimplencia</p>
+            <p className="text-xs text-[var(--t-text-secondary)]">Taxa Inadimplencia</p>
             <p className="text-lg font-bold text-yellow-400">
               {metrics.taxaInadimplencia.toFixed(1)}%
             </p>
           </div>
           <div>
-            <p className="text-xs text-gray-400">Previsao 30d</p>
+            <p className="text-xs text-[var(--t-text-secondary)]">Previsao 30d</p>
             <p className="text-lg font-bold text-blue-400">
               {formatBRL(metrics.previsao30d)}
             </p>
@@ -200,9 +200,9 @@ export default function RecebimentosTab({ grupo, onChange }: RecebimentosTabProp
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-end gap-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border">
+      <div className="flex flex-wrap items-end gap-3 p-3 bg-[var(--t-surface-hover)] dark:bg-[var(--t-bg)] rounded-lg border">
         <div className="space-y-1">
-          <label className="text-xs font-medium text-gray-500">Status</label>
+          <label className="text-xs font-medium text-[var(--t-text-secondary)]">Status</label>
           <Select
             value={filtroStatus}
             onValueChange={(v) => setFiltroStatus(v as FiltroStatus)}
@@ -221,7 +221,7 @@ export default function RecebimentosTab({ grupo, onChange }: RecebimentosTabProp
         </div>
 
         <div className="space-y-1">
-          <label className="text-xs font-medium text-gray-500">Cliente</label>
+          <label className="text-xs font-medium text-[var(--t-text-secondary)]">Cliente</label>
           <Input
             placeholder="Buscar por nome..."
             value={busca}
@@ -231,7 +231,7 @@ export default function RecebimentosTab({ grupo, onChange }: RecebimentosTabProp
         </div>
 
         <div className="space-y-1">
-          <label className="text-xs font-medium text-gray-500">Vencimento De</label>
+          <label className="text-xs font-medium text-[var(--t-text-secondary)]">Vencimento De</label>
           <Input
             type="date"
             value={dataInicio}
@@ -241,7 +241,7 @@ export default function RecebimentosTab({ grupo, onChange }: RecebimentosTabProp
         </div>
 
         <div className="space-y-1">
-          <label className="text-xs font-medium text-gray-500">Vencimento Ate</label>
+          <label className="text-xs font-medium text-[var(--t-text-secondary)]">Vencimento Ate</label>
           <Input
             type="date"
             value={dataFim}
@@ -281,7 +281,7 @@ export default function RecebimentosTab({ grupo, onChange }: RecebimentosTabProp
               ].map((col) => (
                 <th
                   key={col}
-                  className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider border-b border-gray-700"
+                  className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider border-b border-[var(--t-border)]"
                   style={{ color: '#d4a853' }}
                 >
                   {col}
@@ -294,7 +294,7 @@ export default function RecebimentosTab({ grupo, onChange }: RecebimentosTabProp
               <tr>
                 <td
                   colSpan={8}
-                  className="px-3 py-6 text-center text-gray-400"
+                  className="px-3 py-6 text-center text-[var(--t-text-secondary)]"
                 >
                   Nenhuma parcela encontrada.
                 </td>
@@ -303,29 +303,29 @@ export default function RecebimentosTab({ grupo, onChange }: RecebimentosTabProp
               parcelasFiltradas.map((p) => (
                 <tr
                   key={p.id}
-                  className="hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                  className="hover:bg-[var(--t-surface-hover)] dark:hover:bg-[var(--t-surface)]/50"
                 >
-                  <td className="px-3 py-2 border-r border-gray-100 dark:border-gray-800 whitespace-nowrap">
+                  <td className="px-3 py-2 border-r border-gray-100 dark:border-[var(--t-border)] whitespace-nowrap">
                     {formatDate(p.data_vencimento)}
                   </td>
-                  <td className="px-3 py-2 border-r border-gray-100 dark:border-gray-800">
+                  <td className="px-3 py-2 border-r border-gray-100 dark:border-[var(--t-border)]">
                     {p.cliente_nome}
                   </td>
-                  <td className="px-3 py-2 border-r border-gray-100 dark:border-gray-800 text-center whitespace-nowrap">
+                  <td className="px-3 py-2 border-r border-gray-100 dark:border-[var(--t-border)] text-center whitespace-nowrap">
                     {p.numero_parcela}/{p.total_parcelas}
                   </td>
-                  <td className="px-3 py-2 border-r border-gray-100 dark:border-gray-800 text-right whitespace-nowrap font-mono">
+                  <td className="px-3 py-2 border-r border-gray-100 dark:border-[var(--t-border)] text-right whitespace-nowrap font-mono">
                     {formatBRL(p.valor)}
                   </td>
-                  <td className="px-3 py-2 border-r border-gray-100 dark:border-gray-800">
+                  <td className="px-3 py-2 border-r border-gray-100 dark:border-[var(--t-border)]">
                     <Badge className={STATUS_BADGE[p.status].className}>
                       {STATUS_BADGE[p.status].label}
                     </Badge>
                   </td>
-                  <td className="px-3 py-2 border-r border-gray-100 dark:border-gray-800 whitespace-nowrap">
+                  <td className="px-3 py-2 border-r border-gray-100 dark:border-[var(--t-border)] whitespace-nowrap">
                     {formatDate(p.data_recebimento)}
                   </td>
-                  <td className="px-3 py-2 border-r border-gray-100 dark:border-gray-800 text-right whitespace-nowrap font-mono">
+                  <td className="px-3 py-2 border-r border-gray-100 dark:border-[var(--t-border)] text-right whitespace-nowrap font-mono">
                     {formatBRL(p.valor_recebido)}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
@@ -334,7 +334,7 @@ export default function RecebimentosTab({ grupo, onChange }: RecebimentosTabProp
                         <Button
                           size="sm"
                           variant="outline"
-                          className="text-xs h-7 border-green-600 text-green-600 hover:bg-green-600 hover:text-white"
+                          className="text-xs h-7 border-green-600 text-green-600 hover:bg-green-600 hover:text-[var(--t-text)]"
                           onClick={() => abrirConfirmacao(p)}
                         >
                           Confirmar
@@ -342,7 +342,7 @@ export default function RecebimentosTab({ grupo, onChange }: RecebimentosTabProp
                         <Button
                           size="sm"
                           variant="outline"
-                          className="text-xs h-7 border-gray-400 text-gray-400 hover:bg-gray-500 hover:text-white"
+                          className="text-xs h-7 border-gray-400 text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]0 hover:text-[var(--t-text)]"
                           onClick={() => cancelarParcela(p.id)}
                         >
                           Cancelar
@@ -358,7 +358,7 @@ export default function RecebimentosTab({ grupo, onChange }: RecebimentosTabProp
       </div>
 
       {/* Count */}
-      <p className="text-xs text-gray-500 text-right">
+      <p className="text-xs text-[var(--t-text-secondary)] text-right">
         Exibindo {parcelasFiltradas.length} de {financeiro.parcelas.length} parcelas
       </p>
 
@@ -371,7 +371,7 @@ export default function RecebimentosTab({ grupo, onChange }: RecebimentosTabProp
 
           {parcelaSelecionada && (
             <div className="space-y-4">
-              <div className="rounded-lg p-3 bg-gray-50 dark:bg-gray-800 text-sm space-y-1">
+              <div className="rounded-lg p-3 bg-[var(--t-surface-hover)] dark:bg-[var(--t-surface)] text-sm space-y-1">
                 <p>
                   <span className="font-medium">Cliente:</span>{' '}
                   {parcelaSelecionada.cliente_nome}
@@ -445,7 +445,7 @@ export default function RecebimentosTab({ grupo, onChange }: RecebimentosTabProp
             </Button>
             <Button
               onClick={confirmarRecebimento}
-              className="text-white"
+              className="text-[var(--t-text)]"
               style={{ backgroundColor: '#d4a853' }}
             >
               Confirmar Recebimento

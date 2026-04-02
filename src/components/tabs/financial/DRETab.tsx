@@ -115,7 +115,7 @@ export default function DRETab({ grupo, onChange }: DRETabProps) {
       {/* Configuracoes editaveis */}
       <Card className="border-0 shadow-md" style={{ backgroundColor: '#1a1a2e' }}>
         <CardHeader className="pb-3">
-          <CardTitle className="text-white flex items-center gap-2 text-base">
+          <CardTitle className="text-[var(--t-text)] flex items-center gap-2 text-base">
             <Settings2 className="h-4 w-4" style={{ color: '#d4a853' }} />
             Parametros da DRE
           </CardTitle>
@@ -123,7 +123,7 @@ export default function DRETab({ grupo, onChange }: DRETabProps) {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label className="text-gray-300 text-sm">Aliquota de Imposto (%)</Label>
+              <Label className="text-[var(--t-text-secondary)] text-sm">Aliquota de Imposto (%)</Label>
               <Input
                 type="number"
                 step="0.1"
@@ -135,11 +135,11 @@ export default function DRETab({ grupo, onChange }: DRETabProps) {
                   setAliquotaImposto(v);
                   handleConfigChange('aliquota_imposto', v);
                 }}
-                className="mt-1 bg-white/10 border-white/20 text-white"
+                className="mt-1 bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)]"
               />
             </div>
             <div>
-              <Label className="text-gray-300 text-sm">
+              <Label className="text-[var(--t-text-secondary)] text-sm">
                 Custos Administrativos (R$)
               </Label>
               <Input
@@ -152,7 +152,7 @@ export default function DRETab({ grupo, onChange }: DRETabProps) {
                   setCustosAdmin(v);
                   handleConfigChange('custos_administrativos', v);
                 }}
-                className="mt-1 bg-white/10 border-white/20 text-white"
+                className="mt-1 bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)]"
               />
             </div>
           </div>
@@ -162,15 +162,15 @@ export default function DRETab({ grupo, onChange }: DRETabProps) {
       {/* DRE */}
       <Card className="border-0 shadow-md overflow-hidden">
         <CardHeader style={{ backgroundColor: '#1a1a2e' }}>
-          <CardTitle className="text-white">
+          <CardTitle className="text-[var(--t-text)]">
             <span style={{ color: '#d4a853' }}>DRE</span> - Demonstrativo de
             Resultado do Exercicio
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {/* 1. RECEITA BRUTA */}
-          <div className="bg-gray-100 px-4 py-2">
-            <span className="font-bold text-sm uppercase tracking-wide text-gray-600">
+          <div className="bg-[var(--t-surface-hover)] px-4 py-2">
+            <span className="font-bold text-sm uppercase tracking-wide text-[var(--t-text-muted)]">
               1. Receita Bruta
             </span>
           </div>
@@ -183,8 +183,8 @@ export default function DRETab({ grupo, onChange }: DRETabProps) {
           <Separator />
 
           {/* 2. DEDUCOES */}
-          <div className="bg-gray-100 px-4 py-2">
-            <span className="font-bold text-sm uppercase tracking-wide text-gray-600">
+          <div className="bg-[var(--t-surface-hover)] px-4 py-2">
+            <span className="font-bold text-sm uppercase tracking-wide text-[var(--t-text-muted)]">
               2. (-) Deducoes
             </span>
           </div>
@@ -204,8 +204,8 @@ export default function DRETab({ grupo, onChange }: DRETabProps) {
           <Separator />
 
           {/* 4. CUSTOS DIRETOS */}
-          <div className="bg-gray-100 px-4 py-2">
-            <span className="font-bold text-sm uppercase tracking-wide text-gray-600">
+          <div className="bg-[var(--t-surface-hover)] px-4 py-2">
+            <span className="font-bold text-sm uppercase tracking-wide text-[var(--t-text-muted)]">
               4. (-) Custos Diretos
             </span>
           </div>
@@ -232,8 +232,8 @@ export default function DRETab({ grupo, onChange }: DRETabProps) {
           <Separator />
 
           {/* 6. CUSTOS OPERACIONAIS */}
-          <div className="bg-gray-100 px-4 py-2">
-            <span className="font-bold text-sm uppercase tracking-wide text-gray-600">
+          <div className="bg-[var(--t-surface-hover)] px-4 py-2">
+            <span className="font-bold text-sm uppercase tracking-wide text-[var(--t-text-muted)]">
               6. (-) Custos Operacionais
             </span>
           </div>
@@ -262,8 +262,8 @@ export default function DRETab({ grupo, onChange }: DRETabProps) {
           <Separator />
 
           {/* 8. IMPOSTOS */}
-          <div className="bg-gray-100 px-4 py-2">
-            <span className="font-bold text-sm uppercase tracking-wide text-gray-600">
+          <div className="bg-[var(--t-surface-hover)] px-4 py-2">
+            <span className="font-bold text-sm uppercase tracking-wide text-[var(--t-text-muted)]">
               8. (-) Impostos
             </span>
           </div>

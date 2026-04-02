@@ -809,7 +809,7 @@ export default function DashboardPage() {
                       )}
                       {a.email && (
                         <a href={`mailto:${a.email}?subject=Feliz Aniversario!&body=Ola ${a.nome?.split(' ')[0]}! A ENTUR Viagens deseja um feliz aniversario!`}
-                          className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center hover:bg-blue-500/20 transition-colors"
+                          className="w-7 h-7 rounded-lg bg-[var(--t-blue-bg)]0/10 flex items-center justify-center hover:bg-[var(--t-blue-bg)]0/20 transition-colors"
                           title="E-mail">
                           <Mail className="w-3.5 h-3.5 text-blue-400" />
                         </a>
@@ -916,7 +916,7 @@ export default function DashboardPage() {
                 const nome = cliente ? (cliente.tipo === 'PF' ? cliente.nome_completo : cliente.nome_fantasia || cliente.razao_social) : 'Cliente';
                 const statusColor: Record<string, string> = {
                   ORCAMENTO: 'bg-amber-500/10 text-amber-400',
-                  RESERVADO: 'bg-blue-500/10 text-blue-400',
+                  RESERVADO: 'bg-[var(--t-blue-bg)]0/10 text-blue-400',
                   CONFIRMADO: 'bg-emerald-500/10 text-emerald-400',
                   CANCELADO: 'bg-red-500/10 text-red-400',
                   CONCLUIDO: 'bg-[var(--t-bg)] text-[var(--t-text-secondary)]',

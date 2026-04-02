@@ -71,17 +71,17 @@ export default function GruposPage() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <header className="bg-[#1a1a2e] text-white shadow-lg shrink-0">
+      <header className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] shadow-lg shrink-0">
         <div className="px-6 py-5 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Produtos <span className="text-[#d4a853]">— Grupos</span></h1>
-            <p className="text-sm text-gray-300 mt-1">Crie e configure produtos de viagem em grupo para vender</p>
+            <h1 className="text-2xl font-bold">Produtos <span className="text-[var(--t-accent)]">— Grupos</span></h1>
+            <p className="text-sm text-[var(--t-text-secondary)] mt-1">Crie e configure produtos de viagem em grupo para vender</p>
           </div>
           <div className="flex gap-3">
-            <Button onClick={criarGrupo} className="bg-[#d4a853] hover:bg-[#c49943] text-[#1a1a2e] font-semibold">
+            <Button onClick={criarGrupo} className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold">
               <Plus className="w-4 h-4 mr-2" /> Novo Grupo
             </Button>
-            <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="border-white/30 text-white hover:bg-white/10">
+            <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="border-[var(--t-border)] text-[var(--t-text)] hover:bg-[var(--t-surface-hover)]">
               <Upload className="w-4 h-4 mr-2" /> Importar JSON
             </Button>
             <input ref={fileInputRef} type="file" accept=".json" onChange={importar} className="hidden" />
@@ -93,9 +93,9 @@ export default function GruposPage() {
       <main className="flex-1 overflow-y-auto p-6">
         {grupos.length === 0 ? (
           <div className="text-center py-20">
-            <FolderOpen className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-            <h2 className="text-xl font-semibold text-gray-600">Nenhum produto criado</h2>
-            <p className="text-gray-400 mt-2">Clique em &quot;Novo Grupo&quot; para criar um produto de viagem</p>
+            <FolderOpen className="w-16 h-16 mx-auto text-[var(--t-text-secondary)] mb-4" />
+            <h2 className="text-xl font-semibold text-[var(--t-text-muted)]">Nenhum produto criado</h2>
+            <p className="text-[var(--t-text-secondary)] mt-2">Clique em &quot;Novo Grupo&quot; para criar um produto de viagem</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -104,11 +104,11 @@ export default function GruposPage() {
                 <CardContent className="p-5">
                   <div className="flex items-start justify-between mb-3">
                     <div>
-                      <h3 className="font-bold text-lg text-[#1a1a2e]">{g.grp_id || 'Sem ID'}</h3>
-                      <p className="text-sm text-gray-500">{g.origem_destino || 'Sem destino'}</p>
+                      <h3 className="font-bold text-lg text-[var(--t-text)]">{g.grp_id || 'Sem ID'}</h3>
+                      <p className="text-sm text-[var(--t-text-secondary)]">{g.origem_destino || 'Sem destino'}</p>
                     </div>
                   </div>
-                  <div className="text-xs text-gray-400 mb-4">
+                  <div className="text-xs text-[var(--t-text-secondary)] mb-4">
                     <div>Criado: {formatDate(g.created_at?.split('T')[0])}</div>
                     <div>Atualizado: {formatDate(g.updated_at?.split('T')[0])}</div>
                     <div>{g.periodos.length} periodo(s) | {g.trechos.length} trecho(s)</div>
@@ -119,7 +119,7 @@ export default function GruposPage() {
                       className="flex-1"
                       onClick={() => setActiveGrupo(g.id, g.grp_id || 'Sem ID')}
                     >
-                      <Button className="w-full bg-[#1a1a2e] hover:bg-[#2a2a4e] text-white" size="sm">
+                      <Button className="w-full bg-[var(--t-header-bg)] hover:bg-[var(--t-surface-hover)] text-white" size="sm">
                         <FolderOpen className="w-4 h-4 mr-1" /> Abrir
                       </Button>
                     </Link>

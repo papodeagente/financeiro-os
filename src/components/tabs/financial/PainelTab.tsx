@@ -50,7 +50,7 @@ function BigNumberCard({
       <CardContent className="p-4">
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-xs text-gray-500 mb-1">{label}</p>
+            <p className="text-xs text-[var(--t-text-secondary)] mb-1">{label}</p>
             <p className="text-lg font-bold" style={{ color }}>
               {value}
             </p>
@@ -81,10 +81,10 @@ function HorizontalBar({
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-sm">
-        <span className="text-gray-600">{label}</span>
-        <span className="font-medium text-gray-800">{displayValue}</span>
+        <span className="text-[var(--t-text-muted)]">{label}</span>
+        <span className="font-medium text-[var(--t-text)]">{displayValue}</span>
       </div>
-      <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+      <div className="w-full bg-[var(--t-surface-hover)] rounded-full h-3 overflow-hidden">
         <div
           className="h-full rounded-full transition-all duration-500"
           style={{ width: `${pct}%`, backgroundColor: color }}
@@ -250,7 +250,7 @@ export default function PainelTab({ grupo, onChange }: PainelTabProps) {
         {/* Mix */}
         <Card className="border-0 shadow-md">
           <CardHeader style={{ backgroundColor: '#1a1a2e' }}>
-            <CardTitle className="text-white text-sm flex items-center gap-2">
+            <CardTitle className="text-[var(--t-text)] text-sm flex items-center gap-2">
               <Users className="h-4 w-4" style={{ color: '#d4a853' }} />
               Mix de Apartamentos
             </CardTitle>
@@ -267,7 +267,7 @@ export default function PainelTab({ grupo, onChange }: PainelTabProps) {
               />
             ))}
             {Object.values(mixAptos).every((v) => v === 0) && (
-              <p className="text-sm text-gray-400 text-center py-4">
+              <p className="text-sm text-[var(--t-text-secondary)] text-center py-4">
                 Nenhuma venda registrada
               </p>
             )}
@@ -277,7 +277,7 @@ export default function PainelTab({ grupo, onChange }: PainelTabProps) {
         {/* Custo por categoria */}
         <Card className="border-0 shadow-md">
           <CardHeader style={{ backgroundColor: '#1a1a2e' }}>
-            <CardTitle className="text-white text-sm flex items-center gap-2">
+            <CardTitle className="text-[var(--t-text)] text-sm flex items-center gap-2">
               <Receipt className="h-4 w-4" style={{ color: '#d4a853' }} />
               Custo por Categoria
             </CardTitle>
@@ -296,7 +296,7 @@ export default function PainelTab({ grupo, onChange }: PainelTabProps) {
               )
             )}
             {custosPorCategoriaEntries.length === 0 && (
-              <p className="text-sm text-gray-400 text-center py-4">
+              <p className="text-sm text-[var(--t-text-secondary)] text-center py-4">
                 Nenhum custo cadastrado
               </p>
             )}
@@ -308,7 +308,7 @@ export default function PainelTab({ grupo, onChange }: PainelTabProps) {
       {alertas.length > 0 && (
         <Card className="border-0 shadow-md">
           <CardHeader style={{ backgroundColor: '#1a1a2e' }}>
-            <CardTitle className="text-white text-sm flex items-center gap-2">
+            <CardTitle className="text-[var(--t-text)] text-sm flex items-center gap-2">
               <AlertTriangle className="h-4 w-4" style={{ color: '#d4a853' }} />
               Alertas
             </CardTitle>
@@ -347,7 +347,7 @@ export default function PainelTab({ grupo, onChange }: PainelTabProps) {
           className="rounded-lg p-4 text-center"
           style={{ backgroundColor: '#1a1a2e' }}
         >
-          <p className="text-gray-400 text-sm">
+          <p className="text-[var(--t-text-secondary)] text-sm">
             Nenhum alerta no momento. Tudo em dia!
           </p>
         </div>

@@ -227,25 +227,25 @@ export function VendasTab({ grupo, onChange }: Props) {
   return (
     <div className="space-y-6">
       {/* Summary Bar */}
-      <div className="bg-[#1a1a2e] text-white p-4 rounded-lg grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-4 rounded-lg grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="text-center">
-          <div className="text-xs text-[#d4a853] uppercase tracking-wide">Total Aptos</div>
+          <div className="text-xs text-[var(--t-accent)] uppercase tracking-wide">Total Aptos</div>
           <div className="text-2xl font-bold">{metrics.totalAptos}</div>
         </div>
         <div className="text-center">
-          <div className="text-xs text-[#d4a853] uppercase tracking-wide">Total PAX</div>
+          <div className="text-xs text-[var(--t-accent)] uppercase tracking-wide">Total PAX</div>
           <div className="text-2xl font-bold">{metrics.totalPax}</div>
         </div>
         <div className="text-center">
-          <div className="text-xs text-[#d4a853] uppercase tracking-wide">Receita Total</div>
+          <div className="text-xs text-[var(--t-accent)] uppercase tracking-wide">Receita Total</div>
           <div className="text-2xl font-bold">{formatBRL(metrics.receitaLiquida)}</div>
         </div>
         <div className="text-center">
-          <div className="text-xs text-[#d4a853] uppercase tracking-wide">Descontos</div>
+          <div className="text-xs text-[var(--t-accent)] uppercase tracking-wide">Descontos</div>
           <div className="text-2xl font-bold text-red-400">{formatBRL(metrics.descontos)}</div>
         </div>
         <div className="text-center">
-          <div className="text-xs text-[#d4a853] uppercase tracking-wide">Ticket Medio</div>
+          <div className="text-xs text-[var(--t-accent)] uppercase tracking-wide">Ticket Medio</div>
           <div className="text-2xl font-bold">{formatBRL(metrics.ticketMedioApto)}</div>
         </div>
       </div>
@@ -254,7 +254,7 @@ export function VendasTab({ grupo, onChange }: Props) {
       <div className="flex justify-end">
         <Button
           onClick={handleOpenDialog}
-          className="bg-[#d4a853] hover:bg-[#c49a48] text-[#1a1a2e] font-bold"
+          className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-bold"
         >
           + Nova Venda
         </Button>
@@ -264,29 +264,29 @@ export function VendasTab({ grupo, onChange }: Props) {
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="bg-[#1a1a2e] text-white">
-              <th className="p-2 border border-gray-600 text-left">Data</th>
-              <th className="p-2 border border-gray-600 text-left">Cliente</th>
-              <th className="p-2 border border-gray-600 text-center">Tipo</th>
-              <th className="p-2 border border-gray-600 text-center">PAX</th>
-              <th className="p-2 border border-gray-600 text-center">Forma</th>
-              <th className="p-2 border border-gray-600 text-right">Valor</th>
-              <th className="p-2 border border-gray-600 text-right">Desconto</th>
-              <th className="p-2 border border-gray-600 text-right">Final</th>
-              <th className="p-2 border border-gray-600 text-center">Status</th>
-              <th className="p-2 border border-gray-600 text-center">Acoes</th>
+            <tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
+              <th className="p-2 border border-[var(--t-border)] text-left">Data</th>
+              <th className="p-2 border border-[var(--t-border)] text-left">Cliente</th>
+              <th className="p-2 border border-[var(--t-border)] text-center">Tipo</th>
+              <th className="p-2 border border-[var(--t-border)] text-center">PAX</th>
+              <th className="p-2 border border-[var(--t-border)] text-center">Forma</th>
+              <th className="p-2 border border-[var(--t-border)] text-right">Valor</th>
+              <th className="p-2 border border-[var(--t-border)] text-right">Desconto</th>
+              <th className="p-2 border border-[var(--t-border)] text-right">Final</th>
+              <th className="p-2 border border-[var(--t-border)] text-center">Status</th>
+              <th className="p-2 border border-[var(--t-border)] text-center">Acoes</th>
             </tr>
           </thead>
           <tbody>
             {fin.vendas.length === 0 && (
               <tr>
-                <td colSpan={10} className="p-8 text-center text-gray-400 border">
+                <td colSpan={10} className="p-8 text-center text-[var(--t-text-secondary)] border">
                   Nenhuma venda registrada. Clique em &quot;Nova Venda&quot; para adicionar.
                 </td>
               </tr>
             )}
             {fin.vendas.map((v, i) => (
-              <tr key={v.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+              <tr key={v.id} className={i % 2 === 0 ? 'bg-[var(--t-surface)]' : 'bg-[var(--t-surface-hover)]'}>
                 <td className="p-2 border">{formatDate(v.data_venda)}</td>
                 <td className="p-2 border">
                   <div className="font-medium">{v.cliente_nome}</div>
@@ -342,7 +342,7 @@ export function VendasTab({ grupo, onChange }: Props) {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="text-xs h-7 border-gray-400 text-gray-600 hover:bg-gray-100"
+                      className="text-xs h-7 border-gray-400 text-[var(--t-text-muted)] hover:bg-[var(--t-surface-hover)]"
                       onClick={() => handleDelete(v.id)}
                     >
                       Excluir
@@ -359,13 +359,13 @@ export function VendasTab({ grupo, onChange }: Props) {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-[#1a1a2e] text-lg font-bold">Nova Venda</DialogTitle>
+            <DialogTitle className="text-[var(--t-text)] text-lg font-bold">Nova Venda</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-6">
             {/* Client Info */}
             <div className="space-y-3">
-              <h4 className="text-sm font-bold text-[#1a1a2e] border-b border-[#d4a853] pb-1">
+              <h4 className="text-sm font-bold text-[var(--t-text)] border-b border-[var(--t-accent)] pb-1">
                 Dados do Cliente
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -420,7 +420,7 @@ export function VendasTab({ grupo, onChange }: Props) {
 
             {/* Sale Details */}
             <div className="space-y-3">
-              <h4 className="text-sm font-bold text-[#1a1a2e] border-b border-[#d4a853] pb-1">
+              <h4 className="text-sm font-bold text-[var(--t-text)] border-b border-[var(--t-accent)] pb-1">
                 Detalhes da Venda
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -496,14 +496,14 @@ export function VendasTab({ grupo, onChange }: Props) {
                 </div>
                 <div>
                   <Label className="text-xs">Valor Final</Label>
-                  <div className="h-8 flex items-center px-3 bg-gray-100 border rounded text-sm font-bold text-green-700">
+                  <div className="h-8 flex items-center px-3 bg-[var(--t-surface-hover)] border rounded text-sm font-bold text-green-700">
                     {formatBRL(form.valor_final)}
                   </div>
                 </div>
               </div>
 
               {form.tipo_apto && form.forma_pagamento && form.qtd_parcelas > 1 && (
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-[var(--t-text-secondary)]">
                   Parcela: {form.qtd_parcelas}x de{' '}
                   <span className="font-bold">
                     {formatBRL(form.valor_final / form.qtd_parcelas)}
@@ -548,22 +548,22 @@ export function VendasTab({ grupo, onChange }: Props) {
 
             {/* Passengers */}
             <div className="space-y-3">
-              <div className="flex items-center justify-between border-b border-[#d4a853] pb-1">
-                <h4 className="text-sm font-bold text-[#1a1a2e]">
+              <div className="flex items-center justify-between border-b border-[var(--t-accent)] pb-1">
+                <h4 className="text-sm font-bold text-[var(--t-text)]">
                   Passageiros ({form.passageiros.length})
                 </h4>
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={addPassageiro}
-                  className="text-xs h-7 border-[#d4a853] text-[#d4a853]"
+                  className="text-xs h-7 border-[var(--t-accent)] text-[var(--t-accent)]"
                 >
                   + Adicionar
                 </Button>
               </div>
 
               {form.passageiros.map((pax, idx) => (
-                <div key={idx} className="grid grid-cols-12 gap-2 items-end bg-gray-50 p-2 rounded">
+                <div key={idx} className="grid grid-cols-12 gap-2 items-end bg-[var(--t-surface-hover)] p-2 rounded">
                   <div className="col-span-4">
                     <Label className="text-xs">Nome</Label>
                     <Input
@@ -630,7 +630,7 @@ export function VendasTab({ grupo, onChange }: Props) {
             <Button
               onClick={handleSave}
               disabled={!form.cliente_nome || !form.tipo_apto || !form.forma_pagamento}
-              className="bg-[#d4a853] hover:bg-[#c49a48] text-[#1a1a2e] font-bold"
+              className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-bold"
             >
               Salvar Venda
             </Button>

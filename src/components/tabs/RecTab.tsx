@@ -38,9 +38,9 @@ export function RecTab({ grupo, onChange }: Props) {
 
   return (
     <div className="space-y-8">
-      <div className="bg-[#1a1a2e] text-white p-4 rounded-lg flex flex-wrap gap-6">
-        <div><span className="text-xs text-[#d4a853]">Total REC ADT</span><div className="text-lg font-bold">{formatBRL(totals.totalAdt)}</div></div>
-        <div><span className="text-xs text-[#d4a853]">Total REC CHD</span><div className="text-lg font-bold">{formatBRL(totals.totalChd)}</div></div>
+      <div className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-4 rounded-lg flex flex-wrap gap-6">
+        <div><span className="text-xs text-[var(--t-accent)]">Total REC ADT</span><div className="text-lg font-bold">{formatBRL(totals.totalAdt)}</div></div>
+        <div><span className="text-xs text-[var(--t-accent)]">Total REC CHD</span><div className="text-lg font-bold">{formatBRL(totals.totalChd)}</div></div>
       </div>
 
       <div className="flex justify-end">
@@ -52,16 +52,16 @@ export function RecTab({ grupo, onChange }: Props) {
         const melhorChd = minPositivo(passeio.fornecedores.map(f => f.valor_chd));
         return (
           <div key={pIdx} className="border rounded-lg overflow-hidden">
-            <div className="bg-[#1a1a2e] text-white p-3 flex items-center justify-between">
+            <div className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Input value={passeio.nome} onChange={e => updatePasseio(pIdx, 'nome', e.target.value)} placeholder={`Passeio ${pIdx + 1}`} className="h-8 w-48 bg-white/10 text-white border-white/20" />
-                <Input type="date" value={passeio.data || ''} onChange={e => updatePasseio(pIdx, 'data', e.target.value || null)} className="h-8 w-40 bg-white/10 text-white border-white/20" />
+                <Input value={passeio.nome} onChange={e => updatePasseio(pIdx, 'nome', e.target.value)} placeholder={`Passeio ${pIdx + 1}`} className="h-8 w-48 bg-[var(--t-input-bg)] text-[var(--t-text)] border-[var(--t-border)]" />
+                <Input type="date" value={passeio.data || ''} onChange={e => updatePasseio(pIdx, 'data', e.target.value || null)} className="h-8 w-40 bg-[var(--t-input-bg)] text-[var(--t-text)] border-[var(--t-border)]" />
               </div>
               {grupo.rec.passeios.length > 1 && <Button variant="ghost" size="sm" onClick={() => removePasseio(pIdx)} className="text-red-300"><Trash2 className="w-4 h-4" /></Button>}
             </div>
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
-                <thead><tr className="bg-gray-100">
+                <thead><tr className="bg-[var(--t-surface-hover)]">
                   <th className="p-2 text-left border">Fornecedor</th>
                   <th className="p-2 border w-36">Valor ADT</th>
                   <th className="p-2 border w-36">Valor CHD</th>
@@ -70,7 +70,7 @@ export function RecTab({ grupo, onChange }: Props) {
                 </tr></thead>
                 <tbody>
                   {passeio.fornecedores.map((f, fIdx) => (
-                    <tr key={fIdx} className={fIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <tr key={fIdx} className={fIdx % 2 === 0 ? 'bg-[var(--t-surface)]' : 'bg-[var(--t-surface-hover)]'}>
                       <td className="p-2 border"><Input value={f.nome} onChange={e => updateFornecedor(pIdx, fIdx, 'nome', e.target.value)} className="h-8" /></td>
                       <td className="p-1 border"><MoneyInput value={f.valor_adt} onChange={v => updateFornecedor(pIdx, fIdx, 'valor_adt', v)} highlight={f.valor_adt !== null && f.valor_adt > 0 && f.valor_adt === melhorAdt} /></td>
                       <td className="p-1 border"><MoneyInput value={f.valor_chd} onChange={v => updateFornecedor(pIdx, fIdx, 'valor_chd', v)} highlight={f.valor_chd !== null && f.valor_chd > 0 && f.valor_chd === melhorChd} /></td>

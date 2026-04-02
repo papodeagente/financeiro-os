@@ -41,9 +41,9 @@ const FORMAS_PAGAMENTO = [
 ];
 
 const inputClass =
-  'bg-[#0f0f1a] border-[#2a2a4e] text-white placeholder:text-gray-500 focus:border-[#d4a853]';
-const labelClass = 'block text-sm text-gray-400 mb-1';
-const sectionClass = 'bg-[#1a1a2e] border border-[#2a2a4e] rounded-lg p-5 mb-4';
+  'bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)] placeholder:text-[var(--t-text-secondary)] focus:border-[var(--t-accent)]';
+const labelClass = 'block text-sm text-[var(--t-text-secondary)] mb-1';
+const sectionClass = 'bg-[var(--t-header-bg)] border border-[var(--t-border)] rounded-lg p-5 mb-4';
 
 function SectionHeader({
   title,
@@ -61,13 +61,13 @@ function SectionHeader({
       className="flex items-center justify-between cursor-pointer select-none mb-4"
       onClick={onToggle}
     >
-      <h2 className="text-base font-semibold text-[#d4a853]">{title}</h2>
+      <h2 className="text-base font-semibold text-[var(--t-accent)]">{title}</h2>
       <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
         {extra}
         <button
           type="button"
           onClick={onToggle}
-          className="text-gray-400 hover:text-white"
+          className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)]"
         >
           {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </button>
@@ -255,25 +255,25 @@ export default function NovaVendaPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f0f1a] text-white p-6 max-w-4xl mx-auto">
+    <div className="min-h-screen bg-[var(--t-bg)] text-[var(--t-text)] p-6 max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push('/vendas')}
-            className="text-gray-400 hover:text-white transition-colors"
+            className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)] transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-white">Nova Venda</h1>
-            <p className="text-gray-400 text-sm font-mono">{venda.numero}</p>
+            <h1 className="text-2xl font-bold text-[var(--t-text)]">Nova Venda</h1>
+            <p className="text-[var(--t-text-secondary)] text-sm font-mono">{venda.numero}</p>
           </div>
         </div>
         <Button
           onClick={handleSave}
           disabled={saving}
-          className="bg-[#d4a853] hover:bg-[#c4953f] text-[#1a1a2e] font-semibold"
+          className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold"
         >
           <Save className="w-4 h-4 mr-2" />
           {saving ? 'Salvando...' : 'Salvar Venda'}
@@ -303,9 +303,9 @@ export default function NovaVendaPage() {
                 className={inputClass}
               />
               {showClienteList && clienteSearch && (
-                <div className="absolute z-10 left-0 right-0 top-full mt-1 bg-[#1a1a2e] border border-[#2a2a4e] rounded-md shadow-xl max-h-48 overflow-y-auto">
+                <div className="absolute z-10 left-0 right-0 top-full mt-1 bg-[var(--t-header-bg)] border border-[var(--t-border)] rounded-md shadow-xl max-h-48 overflow-y-auto">
                   {filteredClientes.length === 0 ? (
-                    <p className="px-3 py-2 text-sm text-gray-400">Nenhum cliente encontrado</p>
+                    <p className="px-3 py-2 text-sm text-[var(--t-text-secondary)]">Nenhum cliente encontrado</p>
                   ) : (
                     filteredClientes.map(c => {
                       const nome =
@@ -314,12 +314,12 @@ export default function NovaVendaPage() {
                         <button
                           key={c.id}
                           type="button"
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-[#2a2a4e] text-gray-200"
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--t-surface-hover)] text-[var(--t-text)]"
                           onMouseDown={() => selectCliente(c)}
                         >
                           <span className="font-medium">{nome}</span>
                           {c.email && (
-                            <span className="text-gray-400 ml-2 text-xs">{c.email}</span>
+                            <span className="text-[var(--t-text-secondary)] ml-2 text-xs">{c.email}</span>
                           )}
                         </button>
                       );
@@ -344,7 +344,7 @@ export default function NovaVendaPage() {
                 onChange={e =>
                   setVenda(prev => ({ ...prev, status: e.target.value as VendaCRM['status'] }))
                 }
-                className="w-full bg-[#0f0f1a] border border-[#2a2a4e] text-white rounded-md px-3 py-2 text-sm"
+                className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm"
               >
                 <option value="ORCAMENTO">Orçamento</option>
                 <option value="RESERVADO">Reservado</option>
@@ -377,7 +377,7 @@ export default function NovaVendaPage() {
               type="button"
               size="sm"
               variant="ghost"
-              className="text-[#d4a853] hover:bg-[#d4a853]/10 h-7 text-xs"
+              className="text-[var(--t-accent)] hover:bg-[var(--t-accent)]/10 h-7 text-xs"
               onClick={addPassageiro}
             >
               <Plus className="w-3 h-3 mr-1" /> Adicionar
@@ -387,17 +387,17 @@ export default function NovaVendaPage() {
         {openSections.passageiros && (
           <div className="space-y-3">
             {venda.passageiros.length === 0 && (
-              <p className="text-gray-500 text-sm text-center py-4">
+              <p className="text-[var(--t-text-secondary)] text-sm text-center py-4">
                 Nenhum passageiro adicionado
               </p>
             )}
             {venda.passageiros.map((p, idx) => (
               <div
                 key={idx}
-                className="bg-[#0f0f1a] border border-[#2a2a4e] rounded-lg p-4"
+                className="bg-[var(--t-bg)] border border-[var(--t-border)] rounded-lg p-4"
               >
                 <div className="flex items-center justify-between mb-3">
-                  <Badge className="bg-[#d4a853]/10 text-[#d4a853] border-[#d4a853]/30 text-xs">
+                  <Badge className="bg-[var(--t-accent)]/10 text-[var(--t-accent)] border-[var(--t-accent)]/30 text-xs">
                     Passageiro {idx + 1}
                   </Badge>
                   <button
@@ -423,7 +423,7 @@ export default function NovaVendaPage() {
                     <select
                       value={p.tipo}
                       onChange={e => updatePassageiro(idx, 'tipo', e.target.value)}
-                      className="w-full bg-[#0f0f1a] border border-[#2a2a4e] text-white rounded-md px-3 py-2 text-sm"
+                      className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm"
                     >
                       <option value="ADT">ADT (Adulto)</option>
                       <option value="CHD">CHD (Criança)</option>
@@ -466,7 +466,7 @@ export default function NovaVendaPage() {
               type="button"
               size="sm"
               variant="ghost"
-              className="text-[#d4a853] hover:bg-[#d4a853]/10 h-7 text-xs"
+              className="text-[var(--t-accent)] hover:bg-[var(--t-accent)]/10 h-7 text-xs"
               onClick={addProduto}
             >
               <Plus className="w-3 h-3 mr-1" /> Adicionar
@@ -476,21 +476,21 @@ export default function NovaVendaPage() {
         {openSections.produtos && (
           <div className="space-y-4">
             {venda.produtos.length === 0 && (
-              <p className="text-gray-500 text-sm text-center py-4">
+              <p className="text-[var(--t-text-secondary)] text-sm text-center py-4">
                 Nenhum produto adicionado
               </p>
             )}
             {venda.produtos.map((prod, idx) => (
               <div
                 key={prod.id}
-                className="bg-[#0f0f1a] border border-[#2a2a4e] rounded-lg p-4"
+                className="bg-[var(--t-bg)] border border-[var(--t-border)] rounded-lg p-4"
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/30 text-xs">
+                    <Badge className="bg-[var(--t-blue-bg)]0/10 text-blue-400 border-blue-500/30 text-xs">
                       Produto {idx + 1}
                     </Badge>
-                    <Badge className="bg-[#2a2a4e] text-gray-300 border-[#3a3a5e] text-xs">
+                    <Badge className="bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] border-[#3a3a5e] text-xs">
                       {prod.tipo}
                     </Badge>
                   </div>
@@ -510,7 +510,7 @@ export default function NovaVendaPage() {
                     <select
                       value={prod.tipo}
                       onChange={e => updateProduto(idx, 'tipo', e.target.value)}
-                      className="w-full bg-[#1a1a2e] border border-[#2a2a4e] text-white rounded-md px-3 py-2 text-sm"
+                      className="w-full bg-[var(--t-header-bg)] border border-[var(--t-border)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm"
                     >
                       {TIPOS_PRODUTO.map(t => (
                         <option key={t} value={t}>{t}</option>
@@ -566,7 +566,7 @@ export default function NovaVendaPage() {
 
                 {/* GRUPO specific */}
                 {prod.tipo === 'GRUPO' && (
-                  <div className="mb-3 pt-3 border-t border-[#2a2a4e]">
+                  <div className="mb-3 pt-3 border-t border-[var(--t-border)]">
                     <label className={labelClass}>Selecionar Grupo (Produto)</label>
                     <select
                       className={`w-full rounded-md px-3 py-2 text-sm ${inputClass}`}
@@ -590,12 +590,12 @@ export default function NovaVendaPage() {
 
                 {/* AEREO specific */}
                 {prod.tipo === 'AEREO' && (
-                  <div className="mb-3 pt-3 border-t border-[#2a2a4e]">
+                  <div className="mb-3 pt-3 border-t border-[var(--t-border)]">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs text-gray-400">Dados do voo</span>
+                      <span className="text-xs text-[var(--t-text-secondary)]">Dados do voo</span>
                       <button
                         onClick={() => setFlightModalIdx(idx)}
-                        className="flex items-center gap-1 px-2 py-1 bg-blue-500/10 text-blue-400 text-xs rounded hover:bg-blue-500/20"
+                        className="flex items-center gap-1 px-2 py-1 bg-[var(--t-blue-bg)]0/10 text-blue-400 text-xs rounded hover:bg-[var(--t-blue-bg)]0/20"
                       >
                         <Search className="w-3 h-3" /> Buscar voo via API
                       </button>
@@ -625,9 +625,9 @@ export default function NovaVendaPage() {
 
                 {/* HOTEL specific */}
                 {prod.tipo === 'HOTEL' && (
-                  <div className="mb-3 pt-3 border-t border-[#2a2a4e]">
+                  <div className="mb-3 pt-3 border-t border-[var(--t-border)]">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs text-gray-400">Dados do hotel</span>
+                      <span className="text-xs text-[var(--t-text-secondary)]">Dados do hotel</span>
                       <button
                         onClick={() => setHotelModalIdx(idx)}
                         className="flex items-center gap-1 px-2 py-1 bg-emerald-500/10 text-emerald-400 text-xs rounded hover:bg-emerald-500/20"
@@ -668,7 +668,7 @@ export default function NovaVendaPage() {
                 )}
 
                 {/* Valores */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-3 border-t border-[#2a2a4e]">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-3 border-t border-[var(--t-border)]">
                   <div>
                     <label className={labelClass}>Valor Custo</label>
                     <Input
@@ -696,7 +696,7 @@ export default function NovaVendaPage() {
                     <select
                       value={prod.moeda}
                       onChange={e => updateProduto(idx, 'moeda', e.target.value)}
-                      className="w-full bg-[#0f0f1a] border border-[#2a2a4e] text-white rounded-md px-3 py-2 text-sm"
+                      className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm"
                     >
                       <option value="BRL">BRL</option>
                       <option value="USD">USD</option>
@@ -717,7 +717,7 @@ export default function NovaVendaPage() {
                 </div>
 
                 {prod.moeda !== 'BRL' && (
-                  <div className="mt-2 text-xs text-gray-400">
+                  <div className="mt-2 text-xs text-[var(--t-text-secondary)]">
                     Custo em BRL:{' '}
                     <span className="text-orange-400">
                       {fmt((prod.valor_custo || 0) * (prod.cambio || 1))}
@@ -743,26 +743,26 @@ export default function NovaVendaPage() {
         />
         {openSections.totais && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-[#0f0f1a] rounded-lg p-3 text-center">
-              <p className="text-xs text-gray-400 mb-1">Custo Total</p>
+            <div className="bg-[var(--t-bg)] rounded-lg p-3 text-center">
+              <p className="text-xs text-[var(--t-text-secondary)] mb-1">Custo Total</p>
               <p className="text-lg font-bold text-orange-400">
                 {fmt(venda.valor_total_custo)}
               </p>
             </div>
-            <div className="bg-[#0f0f1a] rounded-lg p-3 text-center">
-              <p className="text-xs text-gray-400 mb-1">Venda Total</p>
+            <div className="bg-[var(--t-bg)] rounded-lg p-3 text-center">
+              <p className="text-xs text-[var(--t-text-secondary)] mb-1">Venda Total</p>
               <p className="text-lg font-bold text-blue-400">
                 {fmt(venda.valor_total_venda)}
               </p>
             </div>
-            <div className="bg-[#0f0f1a] rounded-lg p-3 text-center">
-              <p className="text-xs text-gray-400 mb-1">Markup</p>
-              <p className="text-lg font-bold text-[#d4a853]">
+            <div className="bg-[var(--t-bg)] rounded-lg p-3 text-center">
+              <p className="text-xs text-[var(--t-text-secondary)] mb-1">Markup</p>
+              <p className="text-lg font-bold text-[var(--t-accent)]">
                 {venda.markup_realizado.toFixed(1)}%
               </p>
             </div>
-            <div className="bg-[#0f0f1a] rounded-lg p-3 text-center">
-              <p className="text-xs text-gray-400 mb-1">Valor Final</p>
+            <div className="bg-[var(--t-bg)] rounded-lg p-3 text-center">
+              <p className="text-xs text-[var(--t-text-secondary)] mb-1">Valor Final</p>
               <p className="text-lg font-bold text-green-400">
                 {fmt(venda.valor_final)}
               </p>
@@ -790,7 +790,7 @@ export default function NovaVendaPage() {
                     forma_pagamento: e.target.value as VendaCRM['forma_pagamento'],
                   }))
                 }
-                className="w-full bg-[#0f0f1a] border border-[#2a2a4e] text-white rounded-md px-3 py-2 text-sm"
+                className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm"
               >
                 {FORMAS_PAGAMENTO.map(f => (
                   <option key={f.value} value={f.value}>{f.label}</option>
@@ -821,8 +821,8 @@ export default function NovaVendaPage() {
                 className={inputClass}
               />
             </div>
-            <div className="col-span-2 md:col-span-3 bg-[#0f0f1a] rounded-lg p-3 flex items-center justify-between">
-              <span className="text-gray-400 text-sm">Valor Final a Pagar</span>
+            <div className="col-span-2 md:col-span-3 bg-[var(--t-bg)] rounded-lg p-3 flex items-center justify-between">
+              <span className="text-[var(--t-text-secondary)] text-sm">Valor Final a Pagar</span>
               <span className="text-xl font-bold text-green-400">{fmt(venda.valor_final)}</span>
             </div>
           </div>
@@ -842,7 +842,7 @@ export default function NovaVendaPage() {
             onChange={e => setVenda(prev => ({ ...prev, observacoes: e.target.value }))}
             placeholder="Observações internas sobre esta venda..."
             rows={4}
-            className="w-full bg-[#0f0f1a] border border-[#2a2a4e] text-white rounded-md px-3 py-2 text-sm placeholder:text-gray-500 resize-none focus:outline-none focus:border-[#d4a853]"
+            className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm placeholder:text-[var(--t-text-secondary)] resize-none focus:outline-none focus:border-[var(--t-accent)]"
           />
         )}
       </div>
@@ -852,14 +852,14 @@ export default function NovaVendaPage() {
         <Button
           variant="ghost"
           onClick={() => router.push('/vendas')}
-          className="text-gray-400 hover:text-white"
+          className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)]"
         >
           Cancelar
         </Button>
         <Button
           onClick={handleSave}
           disabled={saving}
-          className="bg-[#d4a853] hover:bg-[#c4953f] text-[#1a1a2e] font-semibold"
+          className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold"
         >
           <Save className="w-4 h-4 mr-2" />
           {saving ? 'Salvando...' : 'Salvar Venda'}

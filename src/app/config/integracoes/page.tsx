@@ -129,7 +129,7 @@ export default function IntegracoesPage() {
         {/* Amadeus */}
         <div className="bg-[var(--t-surface)] rounded-xl border border-[var(--t-border)] p-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-[var(--t-blue-bg)]0/10 flex items-center justify-center">
               <Plane className="w-5 h-5 text-blue-400" />
             </div>
             <div className="flex-1">
@@ -207,7 +207,7 @@ export default function IntegracoesPage() {
               <button
                 onClick={() => testApi('amadeus')}
                 disabled={testing['amadeus'] || !config.amadeus.api_key}
-                className="px-3 py-1.5 bg-blue-500/10 text-blue-400 text-sm rounded-lg hover:bg-blue-500/20 disabled:opacity-40 flex items-center gap-1.5"
+                className="px-3 py-1.5 bg-[var(--t-blue-bg)]0/10 text-blue-400 text-sm rounded-lg hover:bg-[var(--t-blue-bg)]0/20 disabled:opacity-40 flex items-center gap-1.5"
               >
                 {testing['amadeus'] ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                 Testar conexão

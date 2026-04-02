@@ -23,7 +23,7 @@ const acaoConfig: Record<string, { label: string; icon: React.ComponentType<{ cl
   CRIAR: { label: 'Criou', icon: Plus, color: 'text-emerald-400' },
   EDITAR: { label: 'Editou', icon: Edit3, color: 'text-blue-400' },
   EXCLUIR: { label: 'Excluiu', icon: Trash2, color: 'text-red-400' },
-  VISUALIZAR: { label: 'Visualizou', icon: Eye, color: 'text-gray-400' },
+  VISUALIZAR: { label: 'Visualizou', icon: Eye, color: 'text-[var(--t-text-secondary)]' },
   EXPORTAR: { label: 'Exportou', icon: Download, color: 'text-purple-400' },
   ENVIAR: { label: 'Enviou', icon: Send, color: 'text-cyan-400' },
   CONVERTER: { label: 'Converteu', icon: ArrowRightLeft, color: 'text-amber-400' },
@@ -154,7 +154,7 @@ export default function AuditoriaPage() {
           ) : (
             <div className="divide-y divide-[var(--t-border)]">
               {paginated.map(l => {
-                const cfg = acaoConfig[l.acao] || { label: l.acao, icon: FileText, color: 'text-gray-400' };
+                const cfg = acaoConfig[l.acao] || { label: l.acao, icon: FileText, color: 'text-[var(--t-text-secondary)]' };
                 const Icon = cfg.icon;
                 return (
                   <div key={l.id} className="px-5 py-3 flex items-start gap-3 hover:bg-[var(--t-bg)]/30 transition-colors">

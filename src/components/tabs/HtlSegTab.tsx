@@ -44,21 +44,21 @@ export function HtlSegTab({ grupo }: Props) {
 
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
-          <thead><tr className="bg-[#1a1a2e] text-white">
-            <th className="p-2 border border-gray-600">Tipo</th>
-            <th className="p-2 border border-gray-600">Ocup.</th>
-            <th className="p-2 border border-gray-600">Total Apto (HTL)</th>
-            <th className="p-2 border border-gray-600">Seguro</th>
-            <th className="p-2 border border-gray-600">Total (HTL+SEG)</th>
-            <th className="p-2 border border-gray-600">Total p/ ADT</th>
-            <th className="p-2 border border-gray-600">Entrada (10%)</th>
-            <th className="p-2 border border-gray-600">{parcelas}x Parcela</th>
-            <th className="p-2 border border-gray-600">Parcela p/ ADT</th>
-            <th className="p-2 border border-gray-600">Prova do 9</th>
+          <thead><tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
+            <th className="p-2 border border-[var(--t-border)]">Tipo</th>
+            <th className="p-2 border border-[var(--t-border)]">Ocup.</th>
+            <th className="p-2 border border-[var(--t-border)]">Total Apto (HTL)</th>
+            <th className="p-2 border border-[var(--t-border)]">Seguro</th>
+            <th className="p-2 border border-[var(--t-border)]">Total (HTL+SEG)</th>
+            <th className="p-2 border border-[var(--t-border)]">Total p/ ADT</th>
+            <th className="p-2 border border-[var(--t-border)]">Entrada (10%)</th>
+            <th className="p-2 border border-[var(--t-border)]">{parcelas}x Parcela</th>
+            <th className="p-2 border border-[var(--t-border)]">Parcela p/ ADT</th>
+            <th className="p-2 border border-[var(--t-border)]">Prova do 9</th>
           </tr></thead>
           <tbody>
             {rows.map((r, i) => (
-              <tr key={r.tipo} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+              <tr key={r.tipo} className={i % 2 === 0 ? 'bg-[var(--t-surface)]' : 'bg-[var(--t-surface-hover)]'}>
                 <td className="p-2 border font-bold">{r.label}</td>
                 <td className="p-2 border text-center">{r.ocup}</td>
                 <td className="p-2 border text-right">{formatBRL(r.totalHtl)}</td>

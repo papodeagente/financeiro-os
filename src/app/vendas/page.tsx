@@ -15,10 +15,10 @@ const fmt = (v: number) =>
 
 const STATUS_COLORS: Record<string, string> = {
   ORCAMENTO: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-  RESERVADO: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  RESERVADO: 'bg-[var(--t-blue-bg)]0/20 text-blue-400 border-blue-500/30',
   CONFIRMADO: 'bg-green-500/20 text-green-400 border-green-500/30',
   CANCELADO: 'bg-red-500/20 text-red-400 border-red-500/30',
-  CONCLUIDO: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+  CONCLUIDO: 'bg-[var(--t-surface-hover)]0/20 text-[var(--t-text-secondary)] border-[var(--t-border)]/30',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -80,15 +80,15 @@ export default function VendasPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f0f1a] text-white p-6">
+    <div className="min-h-screen bg-[var(--t-bg)] text-[var(--t-text)] p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white">Vendas</h1>
-          <p className="text-gray-400 text-sm mt-1">Gestão de vendas e reservas</p>
+          <h1 className="text-2xl font-bold text-[var(--t-text)]">Vendas</h1>
+          <p className="text-[var(--t-text-secondary)] text-sm mt-1">Gestão de vendas e reservas</p>
         </div>
         <Link href="/vendas/nova">
-          <Button className="bg-[#d4a853] hover:bg-[#c4953f] text-[#1a1a2e] font-semibold">
+          <Button className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold">
             <Plus className="w-4 h-4 mr-2" />
             Nova Venda
           </Button>
@@ -97,58 +97,58 @@ export default function VendasPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <Card className="bg-[#1a1a2e] border-[#2a2a4e]">
+        <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)]">
           <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-3 bg-[#d4a853]/10 rounded-lg">
-              <ShoppingCart className="w-5 h-5 text-[#d4a853]" />
+            <div className="p-3 bg-[var(--t-accent)]/10 rounded-lg">
+              <ShoppingCart className="w-5 h-5 text-[var(--t-accent)]" />
             </div>
             <div>
-              <p className="text-gray-400 text-sm">Total de Vendas</p>
-              <p className="text-xl font-bold text-white">{totalVendas}</p>
+              <p className="text-[var(--t-text-secondary)] text-sm">Total de Vendas</p>
+              <p className="text-xl font-bold text-[var(--t-text)]">{totalVendas}</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-[#1a1a2e] border-[#2a2a4e]">
+        <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)]">
           <CardContent className="p-4 flex items-center gap-4">
             <div className="p-3 bg-green-500/10 rounded-lg">
               <DollarSign className="w-5 h-5 text-green-400" />
             </div>
             <div>
-              <p className="text-gray-400 text-sm">Valor Total</p>
-              <p className="text-xl font-bold text-white">{fmt(valorTotal)}</p>
+              <p className="text-[var(--t-text-secondary)] text-sm">Valor Total</p>
+              <p className="text-xl font-bold text-[var(--t-text)]">{fmt(valorTotal)}</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-[#1a1a2e] border-[#2a2a4e]">
+        <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)]">
           <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-3 bg-blue-500/10 rounded-lg">
+            <div className="p-3 bg-[var(--t-blue-bg)]0/10 rounded-lg">
               <TrendingUp className="w-5 h-5 text-blue-400" />
             </div>
             <div>
-              <p className="text-gray-400 text-sm">Ticket Médio</p>
-              <p className="text-xl font-bold text-white">{fmt(ticketMedio)}</p>
+              <p className="text-[var(--t-text-secondary)] text-sm">Ticket Médio</p>
+              <p className="text-xl font-bold text-[var(--t-text)]">{fmt(ticketMedio)}</p>
             </div>
           </CardContent>
         </Card>
       </div>
 
       {/* Filters */}
-      <Card className="bg-[#1a1a2e] border-[#2a2a4e] mb-6">
+      <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)] mb-6">
         <CardContent className="p-4">
           <div className="flex flex-wrap gap-3">
             <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--t-text-secondary)]" />
               <Input
                 placeholder="Buscar por número ou cliente..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="pl-9 bg-[#0f0f1a] border-[#2a2a4e] text-white placeholder:text-gray-500"
+                className="pl-9 bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)] placeholder:text-[var(--t-text-secondary)]"
               />
             </div>
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
-              className="bg-[#0f0f1a] border border-[#2a2a4e] text-white rounded-md px-3 py-2 text-sm min-w-[160px]"
+              className="bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm min-w-[160px]"
             >
               <option value="">Todos os status</option>
               {ALL_STATUSES.map(s => (
@@ -159,20 +159,20 @@ export default function VendasPage() {
               type="date"
               value={dataInicio}
               onChange={e => setDataInicio(e.target.value)}
-              className="bg-[#0f0f1a] border-[#2a2a4e] text-white w-[160px]"
+              className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)] w-[160px]"
               title="Data inicial"
             />
             <Input
               type="date"
               value={dataFim}
               onChange={e => setDataFim(e.target.value)}
-              className="bg-[#0f0f1a] border-[#2a2a4e] text-white w-[160px]"
+              className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)] w-[160px]"
               title="Data final"
             />
             {(search || statusFilter || dataInicio || dataFim) && (
               <Button
                 variant="ghost"
-                className="text-gray-400 hover:text-white"
+                className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)]"
                 onClick={() => { setSearch(''); setStatusFilter(''); setDataInicio(''); setDataFim(''); }}
               >
                 Limpar
@@ -183,14 +183,14 @@ export default function VendasPage() {
       </Card>
 
       {/* Table */}
-      <Card className="bg-[#1a1a2e] border-[#2a2a4e]">
+      <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)]">
         <CardContent className="p-0">
           {loading ? (
-            <div className="flex items-center justify-center py-16 text-gray-400">
+            <div className="flex items-center justify-center py-16 text-[var(--t-text-secondary)]">
               Carregando...
             </div>
           ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+            <div className="flex flex-col items-center justify-center py-16 text-[var(--t-text-secondary)]">
               <ShoppingCart className="w-10 h-10 mb-3 opacity-30" />
               <p>Nenhuma venda encontrada</p>
             </div>
@@ -198,30 +198,30 @@ export default function VendasPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-[#2a2a4e]">
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">Número</th>
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">Data</th>
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">Cliente</th>
-                    <th className="text-right px-4 py-3 text-gray-400 font-medium">Valor Final</th>
-                    <th className="text-center px-4 py-3 text-gray-400 font-medium">Status</th>
-                    <th className="text-center px-4 py-3 text-gray-400 font-medium">Ações</th>
+                  <tr className="border-b border-[var(--t-border)]">
+                    <th className="text-left px-4 py-3 text-[var(--t-text-secondary)] font-medium">Número</th>
+                    <th className="text-left px-4 py-3 text-[var(--t-text-secondary)] font-medium">Data</th>
+                    <th className="text-left px-4 py-3 text-[var(--t-text-secondary)] font-medium">Cliente</th>
+                    <th className="text-right px-4 py-3 text-[var(--t-text-secondary)] font-medium">Valor Final</th>
+                    <th className="text-center px-4 py-3 text-[var(--t-text-secondary)] font-medium">Status</th>
+                    <th className="text-center px-4 py-3 text-[var(--t-text-secondary)] font-medium">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((venda, idx) => (
                     <tr
                       key={venda.id}
-                      className={`border-b border-[#2a2a4e]/50 hover:bg-[#2a2a4e]/30 transition-colors ${
-                        idx % 2 === 0 ? '' : 'bg-[#0f0f1a]/30'
+                      className={`border-b border-[var(--t-border)]/50 hover:bg-[var(--t-surface-hover)]/30 transition-colors ${
+                        idx % 2 === 0 ? '' : 'bg-[var(--t-bg)]/30'
                       }`}
                     >
-                      <td className="px-4 py-3 font-mono text-[#d4a853] font-medium">{venda.numero}</td>
-                      <td className="px-4 py-3 text-gray-300">
+                      <td className="px-4 py-3 font-mono text-[var(--t-accent)] font-medium">{venda.numero}</td>
+                      <td className="px-4 py-3 text-[var(--t-text-secondary)]">
                         {venda.data_venda
                           ? new Date(venda.data_venda + 'T00:00:00').toLocaleDateString('pt-BR')
                           : '—'}
                       </td>
-                      <td className="px-4 py-3 text-gray-200">{getClienteNome(venda.cliente_id)}</td>
+                      <td className="px-4 py-3 text-[var(--t-text)]">{getClienteNome(venda.cliente_id)}</td>
                       <td className="px-4 py-3 text-right text-green-400 font-medium">
                         {fmt(venda.valor_final || 0)}
                       </td>
@@ -236,7 +236,7 @@ export default function VendasPage() {
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-8 w-8 p-0 text-gray-400 hover:text-[#d4a853] hover:bg-[#d4a853]/10"
+                              className="h-8 w-8 p-0 text-[var(--t-text-secondary)] hover:text-[var(--t-accent)] hover:bg-[var(--t-accent)]/10"
                             >
                               <Edit className="w-4 h-4" />
                             </Button>
@@ -244,7 +244,7 @@ export default function VendasPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-8 w-8 p-0 text-gray-400 hover:text-red-400 hover:bg-red-500/10"
+                            className="h-8 w-8 p-0 text-[var(--t-text-secondary)] hover:text-red-400 hover:bg-red-500/10"
                             onClick={() => handleDelete(venda.id)}
                           >
                             <Trash2 className="w-4 h-4" />

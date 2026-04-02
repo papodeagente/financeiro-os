@@ -38,7 +38,7 @@ export default function FluxoCaixaTab({ grupo, onChange }: FluxoCaixaTabProps) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="border-0 shadow-md" style={{ backgroundColor: '#1a1a2e' }}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-300">
+            <CardTitle className="text-sm font-medium text-[var(--t-text-secondary)]">
               Total Entradas
             </CardTitle>
           </CardHeader>
@@ -51,7 +51,7 @@ export default function FluxoCaixaTab({ grupo, onChange }: FluxoCaixaTabProps) {
 
         <Card className="border-0 shadow-md" style={{ backgroundColor: '#1a1a2e' }}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-300">
+            <CardTitle className="text-sm font-medium text-[var(--t-text-secondary)]">
               Total Saidas
             </CardTitle>
           </CardHeader>
@@ -64,7 +64,7 @@ export default function FluxoCaixaTab({ grupo, onChange }: FluxoCaixaTabProps) {
 
         <Card className="border-0 shadow-md" style={{ backgroundColor: '#1a1a2e' }}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-300">
+            <CardTitle className="text-sm font-medium text-[var(--t-text-secondary)]">
               Saldo Final
             </CardTitle>
           </CardHeader>
@@ -94,7 +94,7 @@ export default function FluxoCaixaTab({ grupo, onChange }: FluxoCaixaTabProps) {
       {/* Tabela de fluxo de caixa */}
       <Card className="border-0 shadow-md">
         <CardHeader style={{ backgroundColor: '#1a1a2e' }}>
-          <CardTitle className="text-white flex items-center gap-2">
+          <CardTitle className="text-[var(--t-text)] flex items-center gap-2">
             <span style={{ color: '#d4a853' }}>$</span>
             Fluxo de Caixa Mensal
           </CardTitle>
@@ -104,23 +104,23 @@ export default function FluxoCaixaTab({ grupo, onChange }: FluxoCaixaTabProps) {
             <Table>
               <TableHeader>
                 <TableRow style={{ backgroundColor: '#1a1a2e' }}>
-                  <TableHead className="text-gray-300 font-semibold">Mês</TableHead>
-                  <TableHead className="text-gray-300 font-semibold text-right">
+                  <TableHead className="text-[var(--t-text-secondary)] font-semibold">Mês</TableHead>
+                  <TableHead className="text-[var(--t-text-secondary)] font-semibold text-right">
                     Entradas Prev.
                   </TableHead>
-                  <TableHead className="text-gray-300 font-semibold text-right">
+                  <TableHead className="text-[var(--t-text-secondary)] font-semibold text-right">
                     Entradas Real.
                   </TableHead>
-                  <TableHead className="text-gray-300 font-semibold text-right">
+                  <TableHead className="text-[var(--t-text-secondary)] font-semibold text-right">
                     Saidas Prev.
                   </TableHead>
-                  <TableHead className="text-gray-300 font-semibold text-right">
+                  <TableHead className="text-[var(--t-text-secondary)] font-semibold text-right">
                     Saidas Real.
                   </TableHead>
-                  <TableHead className="text-gray-300 font-semibold text-right">
+                  <TableHead className="text-[var(--t-text-secondary)] font-semibold text-right">
                     Saldo Mês
                   </TableHead>
-                  <TableHead className="text-gray-300 font-semibold text-right">
+                  <TableHead className="text-[var(--t-text-secondary)] font-semibold text-right">
                     Saldo Acum.
                   </TableHead>
                 </TableRow>
@@ -131,7 +131,7 @@ export default function FluxoCaixaTab({ grupo, onChange }: FluxoCaixaTabProps) {
                   return (
                     <TableRow
                       key={idx}
-                      className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
+                      className={idx % 2 === 0 ? 'bg-[var(--t-surface-hover)]' : 'bg-[var(--t-surface)]'}
                     >
                       <TableCell className="font-medium">{mes.mes}</TableCell>
                       <TableCell className="text-right">
@@ -168,7 +168,7 @@ export default function FluxoCaixaTab({ grupo, onChange }: FluxoCaixaTabProps) {
 
                 {fluxo.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-gray-500 py-8">
+                    <TableCell colSpan={7} className="text-center text-[var(--t-text-secondary)] py-8">
                       Nenhum dado de fluxo de caixa disponivel. Cadastre vendas e
                       fornecedores para gerar o fluxo.
                     </TableCell>
@@ -187,27 +187,27 @@ export default function FluxoCaixaTab({ grupo, onChange }: FluxoCaixaTabProps) {
           style={{ backgroundColor: '#1a1a2e' }}
         >
           <div>
-            <span className="text-gray-400 text-sm">Entradas Previstas</span>
-            <p className="text-white font-semibold">
+            <span className="text-[var(--t-text-secondary)] text-sm">Entradas Previstas</span>
+            <p className="text-[var(--t-text)] font-semibold">
               {formatBRL(fluxo.reduce((s, m) => s + m.entradasPrevistas, 0))}
             </p>
           </div>
           <div>
-            <span className="text-gray-400 text-sm">Entradas Realizadas</span>
+            <span className="text-[var(--t-text-secondary)] text-sm">Entradas Realizadas</span>
             <p className="text-green-400 font-semibold">{formatBRL(totalEntradas)}</p>
           </div>
           <div>
-            <span className="text-gray-400 text-sm">Saidas Previstas</span>
-            <p className="text-white font-semibold">
+            <span className="text-[var(--t-text-secondary)] text-sm">Saidas Previstas</span>
+            <p className="text-[var(--t-text)] font-semibold">
               {formatBRL(fluxo.reduce((s, m) => s + m.saidasPrevistas, 0))}
             </p>
           </div>
           <div>
-            <span className="text-gray-400 text-sm">Saidas Realizadas</span>
+            <span className="text-[var(--t-text-secondary)] text-sm">Saidas Realizadas</span>
             <p className="text-red-400 font-semibold">{formatBRL(totalSaidas)}</p>
           </div>
           <div>
-            <span className="text-gray-400 text-sm">Saldo Final</span>
+            <span className="text-[var(--t-text-secondary)] text-sm">Saldo Final</span>
             <p
               className={`font-bold text-lg ${
                 saldoFinal >= 0 ? 'text-green-400' : 'text-red-400'

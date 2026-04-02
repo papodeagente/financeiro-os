@@ -39,8 +39,8 @@ export function GuiaTab({ grupo, onChange }: Props) {
 
   return (
     <div className="space-y-8">
-      <div className="bg-[#1a1a2e] text-white p-4 rounded-lg">
-        <span className="text-xs text-[#d4a853]">Total GUIA por PAX</span>
+      <div className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-4 rounded-lg">
+        <span className="text-xs text-[var(--t-accent)]">Total GUIA por PAX</span>
         <div className="text-lg font-bold">{formatBRL(totals.totalPorPax)}</div>
       </div>
 
@@ -53,18 +53,18 @@ export function GuiaTab({ grupo, onChange }: Props) {
         const melhor = minPositivo(dest.fornecedores.map(f => f.valor_total));
         return (
           <div key={dIdx} className="border rounded-lg overflow-hidden">
-            <div className="bg-[#1a1a2e] text-white p-3 flex items-center justify-between">
+            <div className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="font-semibold">{periodo?.destino || `Destino ${dIdx + 1}`}</span>
-                <span className="text-sm text-gray-300">Mín. PAX: {minPax}</span>
-                <Input type="date" value={dest.inicio || ''} onChange={e => updateDestino(dIdx, 'inicio', e.target.value || null)} className="h-8 w-36 bg-white/10 text-white border-white/20" placeholder="Início" />
-                <Input type="date" value={dest.termino || ''} onChange={e => updateDestino(dIdx, 'termino', e.target.value || null)} className="h-8 w-36 bg-white/10 text-white border-white/20" placeholder="Término" />
+                <span className="text-sm text-[var(--t-text-secondary)]">Mín. PAX: {minPax}</span>
+                <Input type="date" value={dest.inicio || ''} onChange={e => updateDestino(dIdx, 'inicio', e.target.value || null)} className="h-8 w-36 bg-[var(--t-input-bg)] text-[var(--t-text)] border-[var(--t-border)]" placeholder="Início" />
+                <Input type="date" value={dest.termino || ''} onChange={e => updateDestino(dIdx, 'termino', e.target.value || null)} className="h-8 w-36 bg-[var(--t-input-bg)] text-[var(--t-text)] border-[var(--t-border)]" placeholder="Término" />
               </div>
               {grupo.guia.destinos.length > 1 && <Button variant="ghost" size="sm" onClick={() => removeDestino(dIdx)} className="text-red-300"><Trash2 className="w-4 h-4" /></Button>}
             </div>
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
-                <thead><tr className="bg-gray-100">
+                <thead><tr className="bg-[var(--t-surface-hover)]">
                   <th className="p-2 text-left border">Guia</th>
                   <th className="p-2 border w-36">Valor Total</th>
                   <th className="p-2 border w-28">Valor/PAX</th>
@@ -78,7 +78,7 @@ export function GuiaTab({ grupo, onChange }: Props) {
                     const valPax = f.valor_total ? f.valor_total / minPax : 0;
                     const isMin = f.valor_total !== null && f.valor_total > 0 && f.valor_total === melhor;
                     return (
-                      <tr key={fIdx} className={fIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      <tr key={fIdx} className={fIdx % 2 === 0 ? 'bg-[var(--t-surface)]' : 'bg-[var(--t-surface-hover)]'}>
                         <td className="p-1 border"><Input value={f.nome} onChange={e => updateFornecedor(dIdx, fIdx, 'nome', e.target.value)} className="h-8" /></td>
                         <td className="p-1 border"><MoneyInput value={f.valor_total} onChange={v => updateFornecedor(dIdx, fIdx, 'valor_total', v)} highlight={isMin} /></td>
                         <td className="p-2 border text-right">{formatBRL(valPax)}</td>

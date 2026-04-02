@@ -26,7 +26,7 @@ const TIPO_LABEL: Record<TipoFornecedor, string> = Object.fromEntries(
 ) as Record<TipoFornecedor, string>;
 
 const TIPO_COLOR: Record<TipoFornecedor, string> = {
-  OPERADORA: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  OPERADORA: 'bg-[var(--t-blue-bg)]0/20 text-blue-400 border-blue-500/30',
   CONSOLIDADORA: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
   CIA_AEREA: 'bg-sky-500/20 text-sky-400 border-sky-500/30',
   HOTEL: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
@@ -34,7 +34,7 @@ const TIPO_COLOR: Record<TipoFornecedor, string> = {
   SEGURADORA: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
   LOCADORA: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
   CRUZEIRO: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
-  OUTROS: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+  OUTROS: 'bg-[var(--t-surface-hover)]0/20 text-[var(--t-text-secondary)] border-[var(--t-border)]/30',
 };
 
 export default function FornecedoresPage() {
@@ -118,30 +118,30 @@ export default function FornecedoresPage() {
   const canSave = !!(form.nome_fantasia.trim() || form.razao_social.trim());
 
   return (
-    <div className="min-h-screen bg-[#0f0f1a] text-gray-100 p-6">
+    <div className="min-h-screen bg-[var(--t-bg)] text-[var(--t-text)] p-6">
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#d4a853]">Fornecedores</h1>
-          <p className="text-sm text-gray-400 mt-1">
+          <h1 className="text-2xl font-bold text-[var(--t-accent)]">Fornecedores</h1>
+          <p className="text-sm text-[var(--t-text-secondary)] mt-1">
             {fornecedores.length} fornecedor{fornecedores.length !== 1 ? 'es' : ''} cadastrado{fornecedores.length !== 1 ? 's' : ''}
           </p>
         </div>
         <Button
           onClick={openNew}
-          className="bg-[#d4a853] hover:bg-[#c49743] text-[#1a1a2e] font-semibold gap-2"
+          className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold gap-2"
         >
           <Plus size={16} /> Novo Fornecedor
         </Button>
       </div>
 
       {/* Filters */}
-      <Card className="bg-[#1a1a2e] border-[#2a2a4e] mb-4">
+      <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)] mb-4">
         <CardContent className="p-4 flex flex-wrap gap-3">
           <div className="relative flex-1 min-w-[200px]">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--t-text-secondary)]" />
             <Input
-              className="pl-9 bg-[#0f0f1a] border-[#2a2a4e] text-gray-100 placeholder:text-gray-500"
+              className="pl-9 bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)] placeholder:text-[var(--t-text-secondary)]"
               placeholder="Buscar por nome ou CNPJ..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -149,7 +149,7 @@ export default function FornecedoresPage() {
           </div>
           <div className="relative">
             <select
-              className="appearance-none bg-[#0f0f1a] border border-[#2a2a4e] text-gray-300 rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+              className="appearance-none bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
               value={filterTipo}
               onChange={(e) => setFilterTipo(e.target.value as TipoFornecedor | '')}
             >
@@ -158,11 +158,11 @@ export default function FornecedoresPage() {
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
-            <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--t-text-secondary)] pointer-events-none" />
           </div>
           <div className="relative">
             <select
-              className="appearance-none bg-[#0f0f1a] border border-[#2a2a4e] text-gray-300 rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+              className="appearance-none bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as '' | 'ATIVO' | 'INATIVO')}
             >
@@ -170,20 +170,20 @@ export default function FornecedoresPage() {
               <option value="ATIVO">Ativo</option>
               <option value="INATIVO">Inativo</option>
             </select>
-            <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--t-text-secondary)] pointer-events-none" />
           </div>
         </CardContent>
       </Card>
 
       {/* Inline Form */}
       {showForm && (
-        <Card className="bg-[#1a1a2e] border-[#d4a853]/40 mb-4">
+        <Card className="bg-[var(--t-header-bg)] border-[var(--t-accent)]/40 mb-4">
           <CardContent className="p-5">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-semibold text-[#d4a853]">
+              <h2 className="text-lg font-semibold text-[var(--t-accent)]">
                 {editingId ? 'Editar Fornecedor' : 'Novo Fornecedor'}
               </h2>
-              <button onClick={closeForm} className="text-gray-400 hover:text-gray-200">
+              <button onClick={closeForm} className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)]">
                 <X size={20} />
               </button>
             </div>
@@ -191,9 +191,9 @@ export default function FornecedoresPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Tipo */}
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Tipo *</label>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Tipo *</label>
                 <select
-                  className="w-full bg-[#0f0f1a] border border-[#2a2a4e] text-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+                  className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
                   value={form.tipo}
                   onChange={(e) => setField('tipo', e.target.value as TipoFornecedor)}
                 >
@@ -205,9 +205,9 @@ export default function FornecedoresPage() {
 
               {/* Razão Social */}
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Razão Social</label>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Razão Social</label>
                 <Input
-                  className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                  className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                   value={form.razao_social}
                   onChange={(e) => setField('razao_social', e.target.value)}
                 />
@@ -215,9 +215,9 @@ export default function FornecedoresPage() {
 
               {/* Nome Fantasia */}
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Nome Fantasia *</label>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Nome Fantasia *</label>
                 <Input
-                  className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                  className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                   value={form.nome_fantasia}
                   onChange={(e) => setField('nome_fantasia', e.target.value)}
                 />
@@ -225,9 +225,9 @@ export default function FornecedoresPage() {
 
               {/* CNPJ */}
               <div>
-                <label className="block text-xs text-gray-400 mb-1">CNPJ</label>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">CNPJ</label>
                 <Input
-                  className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                  className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                   value={form.cnpj}
                   onChange={(e) => setField('cnpj', e.target.value)}
                 />
@@ -235,9 +235,9 @@ export default function FornecedoresPage() {
 
               {/* Telefone */}
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Telefone</label>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Telefone</label>
                 <Input
-                  className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                  className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                   value={form.telefone}
                   onChange={(e) => setField('telefone', e.target.value)}
                 />
@@ -245,9 +245,9 @@ export default function FornecedoresPage() {
 
               {/* WhatsApp */}
               <div>
-                <label className="block text-xs text-gray-400 mb-1">WhatsApp</label>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">WhatsApp</label>
                 <Input
-                  className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                  className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                   value={form.whatsapp}
                   onChange={(e) => setField('whatsapp', e.target.value)}
                 />
@@ -255,10 +255,10 @@ export default function FornecedoresPage() {
 
               {/* Email */}
               <div>
-                <label className="block text-xs text-gray-400 mb-1">E-mail</label>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">E-mail</label>
                 <Input
                   type="email"
-                  className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                  className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                   value={form.email}
                   onChange={(e) => setField('email', e.target.value)}
                 />
@@ -266,9 +266,9 @@ export default function FornecedoresPage() {
 
               {/* Site */}
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Site</label>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Site</label>
                 <Input
-                  className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                  className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                   placeholder="https://"
                   value={form.site}
                   onChange={(e) => setField('site', e.target.value)}
@@ -277,9 +277,9 @@ export default function FornecedoresPage() {
 
               {/* Contato Principal */}
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Contato Principal</label>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Contato Principal</label>
                 <Input
-                  className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                  className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                   value={form.contato_principal}
                   onChange={(e) => setField('contato_principal', e.target.value)}
                 />
@@ -287,9 +287,9 @@ export default function FornecedoresPage() {
 
               {/* Endereço Completo */}
               <div className="sm:col-span-2">
-                <label className="block text-xs text-gray-400 mb-1">Endereço Completo</label>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Endereço Completo</label>
                 <Input
-                  className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                  className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                   value={form.endereco_completo}
                   onChange={(e) => setField('endereco_completo', e.target.value)}
                 />
@@ -297,9 +297,9 @@ export default function FornecedoresPage() {
 
               {/* Cidade */}
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Cidade</label>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Cidade</label>
                 <Input
-                  className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                  className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                   value={form.cidade}
                   onChange={(e) => setField('cidade', e.target.value)}
                 />
@@ -307,9 +307,9 @@ export default function FornecedoresPage() {
 
               {/* Estado */}
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Estado</label>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Estado</label>
                 <Input
-                  className="bg-[#0f0f1a] border-[#2a2a4e] text-gray-100"
+                  className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                   value={form.estado}
                   onChange={(e) => setField('estado', e.target.value)}
                   maxLength={2}
@@ -318,9 +318,9 @@ export default function FornecedoresPage() {
 
               {/* Status */}
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Status</label>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Status</label>
                 <select
-                  className="w-full bg-[#0f0f1a] border border-[#2a2a4e] text-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+                  className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
                   value={form.status}
                   onChange={(e) => setField('status', e.target.value as 'ATIVO' | 'INATIVO')}
                 >
@@ -331,9 +331,9 @@ export default function FornecedoresPage() {
 
               {/* Observações */}
               <div className="sm:col-span-2 lg:col-span-3">
-                <label className="block text-xs text-gray-400 mb-1">Observações</label>
+                <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Observações</label>
                 <textarea
-                  className="w-full bg-[#0f0f1a] border border-[#2a2a4e] text-gray-100 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853] resize-none"
+                  className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853] resize-none"
                   rows={3}
                   value={form.observacoes}
                   onChange={(e) => setField('observacoes', e.target.value)}
@@ -342,16 +342,16 @@ export default function FornecedoresPage() {
             </div>
 
             {/* Form Actions */}
-            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-[#2a2a4e]">
+            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-[var(--t-border)]">
               <Button
                 variant="outline"
-                className="border-[#2a2a4e] text-gray-300 hover:bg-[#2a2a4e]"
+                className="border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]"
                 onClick={closeForm}
               >
                 Cancelar
               </Button>
               <Button
-                className="bg-[#d4a853] hover:bg-[#c49743] text-[#1a1a2e] font-semibold min-w-[100px]"
+                className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold min-w-[100px]"
                 onClick={handleSave}
                 disabled={saving || !canSave}
               >
@@ -363,12 +363,12 @@ export default function FornecedoresPage() {
       )}
 
       {/* Table */}
-      <Card className="bg-[#1a1a2e] border-[#2a2a4e]">
+      <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)]">
         <CardContent className="p-0">
           {loading ? (
-            <div className="flex items-center justify-center py-16 text-gray-400">Carregando...</div>
+            <div className="flex items-center justify-center py-16 text-[var(--t-text-secondary)]">Carregando...</div>
           ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-gray-500">
+            <div className="flex flex-col items-center justify-center py-16 text-[var(--t-text-secondary)]">
               <Building2 size={40} className="mb-3 opacity-30" />
               <p>Nenhum fornecedor encontrado</p>
             </div>
@@ -376,7 +376,7 @@ export default function FornecedoresPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-[#2a2a4e] text-gray-400 text-xs uppercase tracking-wider">
+                  <tr className="border-b border-[var(--t-border)] text-[var(--t-text-secondary)] text-xs uppercase tracking-wider">
                     <th className="text-left px-4 py-3">Nome</th>
                     <th className="text-left px-4 py-3 hidden sm:table-cell">CNPJ</th>
                     <th className="text-left px-4 py-3">Tipo</th>
@@ -391,25 +391,25 @@ export default function FornecedoresPage() {
                   {filtered.map((f) => (
                     <tr
                       key={f.id}
-                      className="border-b border-[#2a2a4e]/50 hover:bg-[#0f0f1a]/50 transition-colors"
+                      className="border-b border-[var(--t-border)]/50 hover:bg-[var(--t-bg)]/50 transition-colors"
                     >
                       <td className="px-4 py-3">
-                        <div className="font-medium text-gray-100">
+                        <div className="font-medium text-[var(--t-text)]">
                           {f.nome_fantasia || f.razao_social}
                         </div>
                         {f.nome_fantasia && f.razao_social && (
-                          <div className="text-xs text-gray-500">{f.razao_social}</div>
+                          <div className="text-xs text-[var(--t-text-secondary)]">{f.razao_social}</div>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-gray-300 hidden sm:table-cell">{f.cnpj}</td>
+                      <td className="px-4 py-3 text-[var(--t-text-secondary)] hidden sm:table-cell">{f.cnpj}</td>
                       <td className="px-4 py-3">
                         <Badge className={`${TIPO_COLOR[f.tipo]} text-xs hover:${TIPO_COLOR[f.tipo]}`}>
                           {TIPO_LABEL[f.tipo]}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 text-gray-300 hidden md:table-cell">{f.telefone}</td>
-                      <td className="px-4 py-3 text-gray-300 hidden lg:table-cell">{f.email}</td>
-                      <td className="px-4 py-3 text-gray-300 hidden xl:table-cell">
+                      <td className="px-4 py-3 text-[var(--t-text-secondary)] hidden md:table-cell">{f.telefone}</td>
+                      <td className="px-4 py-3 text-[var(--t-text-secondary)] hidden lg:table-cell">{f.email}</td>
+                      <td className="px-4 py-3 text-[var(--t-text-secondary)] hidden xl:table-cell">
                         {[f.cidade, f.estado].filter(Boolean).join(' / ')}
                       </td>
                       <td className="px-4 py-3">
@@ -427,7 +427,7 @@ export default function FornecedoresPage() {
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => openEdit(f)}
-                            className="p-1.5 rounded hover:bg-[#2a2a4e] text-gray-400 hover:text-[#d4a853] transition-colors"
+                            className="p-1.5 rounded hover:bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] hover:text-[var(--t-accent)] transition-colors"
                           >
                             <Pencil size={14} />
                           </button>
@@ -441,7 +441,7 @@ export default function FornecedoresPage() {
                               </button>
                               <button
                                 onClick={() => setConfirmDelete(null)}
-                                className="px-2 py-1 rounded bg-[#2a2a4e] text-gray-400 text-xs"
+                                className="px-2 py-1 rounded bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] text-xs"
                               >
                                 Cancelar
                               </button>
@@ -449,7 +449,7 @@ export default function FornecedoresPage() {
                           ) : (
                             <button
                               onClick={() => setConfirmDelete(f.id)}
-                              className="p-1.5 rounded hover:bg-[#2a2a4e] text-gray-400 hover:text-red-400 transition-colors"
+                              className="p-1.5 rounded hover:bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] hover:text-red-400 transition-colors"
                             >
                               <Trash2 size={14} />
                             </button>
@@ -467,7 +467,7 @@ export default function FornecedoresPage() {
 
       {/* Summary */}
       {!loading && filtered.length > 0 && (
-        <p className="text-xs text-gray-500 mt-3 text-right">
+        <p className="text-xs text-[var(--t-text-secondary)] mt-3 text-right">
           Exibindo {filtered.length} de {fornecedores.length} fornecedor{fornecedores.length !== 1 ? 'es' : ''}
         </p>
       )}
