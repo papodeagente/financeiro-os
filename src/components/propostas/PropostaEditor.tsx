@@ -9,7 +9,7 @@ import {
   Save, ArrowLeft, Copy, MessageCircle, GripVertical,
   ChevronUp, ChevronDown, Trash2, Plane, Hotel,
   Type, Calendar, Image, CheckSquare, DollarSign, Quote, MousePointer,
-  Check, Loader2, Sparkles,
+  Check, Loader2, Sparkles, FileDown,
 } from 'lucide-react';
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor,
@@ -240,6 +240,48 @@ export function PropostaEditor({ proposta: initialProposta, clientes, membros, i
     window.open(`https://wa.me/55${phone.replace(/\D/g, '')}?text=${msg}`, '_blank');
   };
 
+  const [generatingPDF, setGeneratingPDF] = useState(false);
+
+  const handleDownloadPDF = async () => {
+    setGeneratingPDF(true);
+    try {
+      const slug = proposta.id.slice(0, 8);
+      // Open preview in hidden iframe, render, then capture
+      const html2pdf = (await import('html2pdf.js')).default;
+      const previewWindow = window.open(`/p/${slug}`, '_blank', 'width=800,height=600');
+      if (!previewWindow) {
+        // Fallback: generate from current page context
+        alert('Permita popups para gerar o PDF, ou use o link publico.');
+        setGeneratingPDF(false);
+        return;
+      }
+      // Wait for page to load then capture
+      previewWindow.onload = () => {
+        setTimeout(() => {
+          const body = previewWindow.document.body;
+          html2pdf()
+            .set({
+              margin: 0,
+              filename: `${proposta.numero || 'proposta'}.pdf`,
+              image: { type: 'jpeg', quality: 0.95 },
+              html2canvas: { scale: 2, useCORS: true, logging: false },
+              jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+              pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+            })
+            .from(body)
+            .save()
+            .then(() => {
+              previewWindow.close();
+              setGeneratingPDF(false);
+            });
+        }, 2000); // Wait for images/fonts to load
+      };
+    } catch {
+      alert('Erro ao gerar PDF');
+      setGeneratingPDF(false);
+    }
+  };
+
   const handleFlightSelect = (offer: FlightOffer) => {
     const conteudo = formatFlightForProposta(offer);
     update(p => ({
@@ -364,6 +406,11 @@ export function PropostaEditor({ proposta: initialProposta, clientes, membros, i
               <Copy className="w-3 h-3" /> Copiar link
             </Button>
           )}
+          <Button variant="outline" size="sm" className="gap-1 text-xs border-[var(--t-border)] text-[var(--t-text-secondary)]"
+            onClick={handleDownloadPDF} disabled={generatingPDF}>
+            {generatingPDF ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileDown className="w-3 h-3" />}
+            PDF
+          </Button>
           {proposta.cliente_id && (
             <Button variant="outline" size="sm" className="gap-1 text-xs border-[var(--t-border)] text-emerald-400"
               onClick={handleEnviarWhatsApp}>
