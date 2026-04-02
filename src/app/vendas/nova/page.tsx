@@ -2,7 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2, ChevronDown, ChevronUp, ArrowLeft, Save } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronUp, ArrowLeft, Save, Search, Plane, Hotel } from 'lucide-react';
+import { FlightSearchModal } from '@/components/FlightSearchModal';
+import { HotelSearchModal } from '@/components/HotelSearchModal';
+import { formatFlightForVenda } from '@/lib/flight-data-mapper';
+import { formatHotelForVenda } from '@/lib/hotel-data-mapper';
+import type { FlightOffer } from '@/lib/flight-data-mapper';
+import type { GooglePlace } from '@/lib/hotel-data-mapper';
 import {
   VendaCRM,
   ProdutoVenda,
@@ -92,6 +98,8 @@ export default function NovaVendaPage() {
 
   const numero = `V${Date.now().toString(36).toUpperCase()}`;
   const [venda, setVenda] = useState<VendaCRM>(() => createVendaCRM(numero));
+  const [flightModalIdx, setFlightModalIdx] = useState<number | null>(null);
+  const [hotelModalIdx, setHotelModalIdx] = useState<number | null>(null);
 
   useEffect(() => {
     loadEntities<Cliente>('clientes').then(setClientes);
@@ -582,31 +590,52 @@ export default function NovaVendaPage() {
 
                 {/* AEREO specific */}
                 {prod.tipo === 'AEREO' && (
-                  <div className="grid grid-cols-2 gap-3 mb-3 pt-3 border-t border-[#2a2a4e]">
-                    <div>
-                      <label className={labelClass}>Cia Aérea</label>
-                      <Input
-                        value={prod.cia_aerea}
-                        onChange={e => updateProduto(idx, 'cia_aerea', e.target.value)}
-                        placeholder="Ex: LATAM, GOL, AZUL"
-                        className={inputClass}
-                      />
+                  <div className="mb-3 pt-3 border-t border-[#2a2a4e]">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-gray-400">Dados do voo</span>
+                      <button
+                        onClick={() => setFlightModalIdx(idx)}
+                        className="flex items-center gap-1 px-2 py-1 bg-blue-500/10 text-blue-400 text-xs rounded hover:bg-blue-500/20"
+                      >
+                        <Search className="w-3 h-3" /> Buscar voo via API
+                      </button>
                     </div>
-                    <div>
-                      <label className={labelClass}>Trecho</label>
-                      <Input
-                        value={prod.trecho}
-                        onChange={e => updateProduto(idx, 'trecho', e.target.value)}
-                        placeholder="Ex: GRU-MIA"
-                        className={inputClass}
-                      />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelClass}>Cia Aérea</label>
+                        <Input
+                          value={prod.cia_aerea}
+                          onChange={e => updateProduto(idx, 'cia_aerea', e.target.value)}
+                          placeholder="Ex: LATAM, GOL, AZUL"
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Trecho</label>
+                        <Input
+                          value={prod.trecho}
+                          onChange={e => updateProduto(idx, 'trecho', e.target.value)}
+                          placeholder="Ex: GRU-MIA"
+                          className={inputClass}
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
 
                 {/* HOTEL specific */}
                 {prod.tipo === 'HOTEL' && (
-                  <div className="grid grid-cols-3 gap-3 mb-3 pt-3 border-t border-[#2a2a4e]">
+                  <div className="mb-3 pt-3 border-t border-[#2a2a4e]">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-gray-400">Dados do hotel</span>
+                      <button
+                        onClick={() => setHotelModalIdx(idx)}
+                        className="flex items-center gap-1 px-2 py-1 bg-emerald-500/10 text-emerald-400 text-xs rounded hover:bg-emerald-500/20"
+                      >
+                        <Search className="w-3 h-3" /> Buscar hotel via API
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
                     <div>
                       <label className={labelClass}>Hotel</label>
                       <Input
@@ -633,6 +662,7 @@ export default function NovaVendaPage() {
                         placeholder="Ex: Café, Meia pensão"
                         className={inputClass}
                       />
+                    </div>
                     </div>
                   </div>
                 )}
@@ -835,6 +865,31 @@ export default function NovaVendaPage() {
           {saving ? 'Salvando...' : 'Salvar Venda'}
         </Button>
       </div>
+
+      {/* Flight Search Modal */}
+      <FlightSearchModal
+        open={flightModalIdx !== null}
+        onClose={() => setFlightModalIdx(null)}
+        onSelect={(offer: FlightOffer) => {
+          if (flightModalIdx === null) return;
+          const mapped = formatFlightForVenda(offer);
+          updateProduto(flightModalIdx, 'cia_aerea', mapped.cia_aerea);
+          updateProduto(flightModalIdx, 'trecho', mapped.trecho);
+          updateProduto(flightModalIdx, 'descricao', mapped.descricao);
+        }}
+      />
+
+      {/* Hotel Search Modal */}
+      <HotelSearchModal
+        open={hotelModalIdx !== null}
+        onClose={() => setHotelModalIdx(null)}
+        onSelect={(place: GooglePlace) => {
+          if (hotelModalIdx === null) return;
+          const mapped = formatHotelForVenda(place);
+          updateProduto(hotelModalIdx, 'hotel_nome', mapped.hotel_nome);
+          updateProduto(hotelModalIdx, 'descricao', mapped.descricao);
+        }}
+      />
     </div>
   );
 }

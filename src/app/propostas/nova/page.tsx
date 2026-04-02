@@ -12,8 +12,14 @@ import {
   FileText, Save, Send, Eye, ArrowLeft, Plus, Trash2,
   GripVertical, ChevronUp, ChevronDown, Type, Plane,
   Calendar, Image, CheckSquare, DollarSign, Quote, MousePointer,
-  MessageCircle, Mail, Copy, Link as LinkIcon,
+  MessageCircle, Mail, Copy, Link as LinkIcon, Hotel, Search,
 } from 'lucide-react';
+import { FlightSearchModal } from '@/components/FlightSearchModal';
+import { HotelSearchModal } from '@/components/HotelSearchModal';
+import { formatFlightForProposta } from '@/lib/flight-data-mapper';
+import { formatHotelForProposta } from '@/lib/hotel-data-mapper';
+import type { FlightOffer } from '@/lib/flight-data-mapper';
+import type { GooglePlace } from '@/lib/hotel-data-mapper';
 
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -55,6 +61,8 @@ function EditorInner() {
   const [saving, setSaving] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [showAddBloco, setShowAddBloco] = useState(false);
+  const [flightModalOpen, setFlightModalOpen] = useState(false);
+  const [hotelModalOpen, setHotelModalOpen] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -663,6 +671,20 @@ function EditorInner() {
                       );
                     })}
                   </div>
+                  <div className="flex gap-2 mt-3 pt-3 border-t border-[var(--t-border)]">
+                    <button
+                      onClick={() => { setFlightModalOpen(true); setShowAddBloco(false); }}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/20 hover:border-blue-400 text-blue-400 text-xs font-medium transition-all"
+                    >
+                      <Plane className="w-4 h-4" /> Buscar Voo (API)
+                    </button>
+                    <button
+                      onClick={() => { setHotelModalOpen(true); setShowAddBloco(false); }}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 hover:border-emerald-400 text-emerald-400 text-xs font-medium transition-all"
+                    >
+                      <Hotel className="w-4 h-4" /> Buscar Hotel (API)
+                    </button>
+                  </div>
                   <Button variant="ghost" size="sm" className="mt-2 text-xs text-[var(--t-text-secondary)]"
                     onClick={() => setShowAddBloco(false)}>
                     Cancelar
@@ -707,6 +729,42 @@ function EditorInner() {
           </Card>
         </div>
       </div>
+
+      {/* Flight & Hotel Search Modals */}
+      <FlightSearchModal
+        open={flightModalOpen}
+        onClose={() => setFlightModalOpen(false)}
+        onSelect={(offer: FlightOffer) => {
+          const conteudo = formatFlightForProposta(offer);
+          update(p => {
+            p.secoes = [...p.secoes, {
+              id: generateId(),
+              tipo: 'SERVICO' as SecaoProposta['tipo'],
+              ordem: p.secoes.length,
+              visivel: true,
+              conteudo,
+            }];
+            return p;
+          });
+        }}
+      />
+      <HotelSearchModal
+        open={hotelModalOpen}
+        onClose={() => setHotelModalOpen(false)}
+        onSelect={(place: GooglePlace) => {
+          const conteudo = formatHotelForProposta(place);
+          update(p => {
+            p.secoes = [...p.secoes, {
+              id: generateId(),
+              tipo: 'SERVICO' as SecaoProposta['tipo'],
+              ordem: p.secoes.length,
+              visivel: true,
+              conteudo,
+            }];
+            return p;
+          });
+        }}
+      />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { GrupoViagem } from '@/lib/types';
 import { createHtlHotel } from '@/lib/defaults';
 import { minPositivo, formatBRL, calcDiarias } from '@/lib/utils';
@@ -9,7 +10,10 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Hotel } from 'lucide-react';
+import { HotelSearchModal } from '@/components/HotelSearchModal';
+import { formatHotelForHtlInfo } from '@/lib/hotel-data-mapper';
+import type { GooglePlace } from '@/lib/hotel-data-mapper';
 
 interface Props {
   grupo: GrupoViagem;
@@ -21,6 +25,7 @@ const TIPO_LABELS: Record<string, string> = { sgl: 'SGL', dbl: 'DBL', tpl: 'TPL'
 
 export function HtlTab({ grupo, onChange }: Props) {
   const totals = calcHtlTotals(grupo);
+  const [hotelModalOpen, setHotelModalOpen] = useState<number | null>(null);
 
   const updateFonte = (hotelIdx: number, fonteIdx: number, field: string, value: number | null) => {
     const htl = { ...grupo.htl, hoteis: [...grupo.htl.hoteis] };
@@ -43,6 +48,25 @@ export function HtlTab({ grupo, onChange }: Props) {
 
   const removeHotel = (idx: number) => {
     onChange({ ...grupo, htl: { hoteis: grupo.htl.hoteis.filter((_, i) => i !== idx) } });
+  };
+
+  const handleHotelSelect = (hotelIdx: number, place: GooglePlace) => {
+    const htl = { ...grupo.htl, hoteis: [...grupo.htl.hoteis] };
+    htl.hoteis[hotelIdx] = { ...htl.hoteis[hotelIdx], info: { ...htl.hoteis[hotelIdx].info } };
+    const info = htl.hoteis[hotelIdx].info;
+    const mapped = formatHotelForHtlInfo(place);
+
+    // Fill empty fields only
+    if (!info.estacionamento && mapped.estacionamento) info.estacionamento = mapped.estacionamento;
+
+    // Always append API data to info_adicional
+    if (mapped.info_adicional) {
+      info.info_adicional = info.info_adicional
+        ? `${info.info_adicional}\n\n${mapped.info_adicional}`
+        : mapped.info_adicional;
+    }
+
+    onChange({ ...grupo, htl });
   };
 
   return (
@@ -75,11 +99,16 @@ export function HtlTab({ grupo, onChange }: Props) {
                   </span>
                 )}
               </div>
-              {grupo.htl.hoteis.length > 1 && (
-                <Button variant="ghost" size="sm" onClick={() => removeHotel(hIdx)} className="text-red-300">
-                  <Trash2 className="w-4 h-4" />
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => setHotelModalOpen(hIdx)} className="text-emerald-300 border-emerald-300/30 hover:bg-emerald-500/10 hover:text-emerald-200">
+                  <Hotel className="w-4 h-4 mr-1" /> Buscar hotel via API
                 </Button>
-              )}
+                {grupo.htl.hoteis.length > 1 && (
+                  <Button variant="ghost" size="sm" onClick={() => removeHotel(hIdx)} className="text-red-300">
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
@@ -126,6 +155,17 @@ export function HtlTab({ grupo, onChange }: Props) {
           </div>
         );
       })}
+
+      {/* Hotel Search Modal */}
+      <HotelSearchModal
+        open={hotelModalOpen !== null}
+        onClose={() => setHotelModalOpen(null)}
+        onSelect={(place) => {
+          if (hotelModalOpen !== null) handleHotelSelect(hotelModalOpen, place);
+        }}
+        defaultDestino={hotelModalOpen !== null ? grupo.periodos[hotelModalOpen]?.destino || '' : ''}
+        defaultHotelName={hotelModalOpen !== null ? grupo.periodos[hotelModalOpen]?.hotel || '' : ''}
+      />
     </div>
   );
 }

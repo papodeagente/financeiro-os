@@ -5,47 +5,9 @@ import {
   Plane, Search, Loader2, ArrowRight, Clock, Luggage,
   ChevronDown, ChevronUp, Trophy, AlertCircle,
 } from 'lucide-react';
-
-interface AirportOption {
-  iataCode: string;
-  name: string;
-  cityName: string;
-  countryCode: string;
-}
-
-interface FlightSegment {
-  departure: { iataCode: string; terminal?: string; at: string };
-  arrival: { iataCode: string; terminal?: string; at: string };
-  carrierCode: string;
-  number: string;
-  duration: string;
-  numberOfStops: number;
-}
-
-interface FlightOffer {
-  id: string;
-  itineraries: Array<{
-    duration: string;
-    segments: FlightSegment[];
-  }>;
-  price: { total: string; currency: string; grandTotal: string };
-  travelerPricings: Array<{
-    travelerType: string;
-    price: { total: string };
-    fareDetailsBySegment: Array<{
-      cabin: string;
-      includedCheckedBags?: { weight?: number; weightUnit?: string; quantity?: number };
-    }>;
-  }>;
-}
-
-function formatDuration(iso: string) {
-  const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
-  if (!match) return iso;
-  const h = match[1] || '0';
-  const m = match[2] || '0';
-  return `${h}h${m.padStart(2, '0')}`;
-}
+import { AirportInput } from '@/components/AirportInput';
+import type { FlightOffer } from '@/lib/flight-data-mapper';
+import { formatIsoDuration } from '@/lib/flight-data-mapper';
 
 function formatTime(dateStr: string) {
   return dateStr.split('T')[1]?.substring(0, 5) || '';
@@ -54,81 +16,6 @@ function formatTime(dateStr: string) {
 function formatDate(dateStr: string) {
   const d = new Date(dateStr);
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-}
-
-function AirportInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string, display: string) => void }) {
-  const [query, setQuery] = useState('');
-  const [options, setOptions] = useState<AirportOption[]>([]);
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [display, setDisplay] = useState(value);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const search = useCallback(async (kw: string) => {
-    if (kw.length < 2) { setOptions([]); return; }
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/flights/airports?keyword=${encodeURIComponent(kw)}`);
-      const json = await res.json();
-      const locs = json.data?.data || [];
-      setOptions(locs.map((l: { iataCode: string; name: string; address?: { cityName?: string; countryCode?: string } }) => ({
-        iataCode: l.iataCode,
-        name: l.name,
-        cityName: l.address?.cityName || '',
-        countryCode: l.address?.countryCode || '',
-      })));
-    } catch { setOptions([]); }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => search(query), 300);
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [query, search]);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  return (
-    <div ref={containerRef} className="relative">
-      <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">{label}</label>
-      <input
-        value={open ? query : display}
-        onChange={e => { setQuery(e.target.value); setOpen(true); }}
-        onFocus={() => setOpen(true)}
-        placeholder="Código IATA ou cidade"
-        className="w-full px-3 py-2 bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded-lg text-sm text-[var(--t-text)]"
-      />
-      {open && (options.length > 0 || loading) && (
-        <div className="absolute z-50 top-full mt-1 w-full bg-[var(--t-surface)] border border-[var(--t-border)] rounded-lg shadow-xl max-h-48 overflow-y-auto">
-          {loading && <div className="px-3 py-2 text-xs text-[var(--t-text-secondary)]">Buscando...</div>}
-          {options.map(o => (
-            <button
-              key={o.iataCode}
-              className="w-full px-3 py-2 text-left hover:bg-[var(--t-hover)] text-sm"
-              onClick={() => {
-                const d = `${o.iataCode} — ${o.cityName}, ${o.countryCode}`;
-                setDisplay(d);
-                onChange(o.iataCode, d);
-                setOpen(false);
-              }}
-            >
-              <span className="font-mono font-bold text-[var(--t-green)]">{o.iataCode}</span>
-              <span className="text-[var(--t-text)]"> — {o.cityName || o.name}, {o.countryCode}</span>
-              <div className="text-xs text-[var(--t-text-muted)] truncate">{o.name}</div>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }
 
 export default function VoosPage() {
@@ -361,7 +248,7 @@ export default function VoosPage() {
                               )}
                             </div>
                             <div className="flex items-center gap-3 mt-1 text-xs text-[var(--t-text-muted)]">
-                              <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {formatDuration(itin.duration)}</span>
+                              <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {formatIsoDuration(itin.duration)}</span>
                               <span className="flex items-center gap-1"><Luggage className="w-3 h-3" /> {getBaggage(offer)}</span>
                             </div>
                           </div>
@@ -414,7 +301,7 @@ export default function VoosPage() {
                                 <span>{seg.departure.iataCode} {formatTime(seg.departure.at)}</span>
                                 <ArrowRight className="w-3 h-3" />
                                 <span>{seg.arrival.iataCode} {formatTime(seg.arrival.at)}</span>
-                                <span className="text-[var(--t-text-muted)]">({formatDuration(seg.duration)})</span>
+                                <span className="text-[var(--t-text-muted)]">({formatIsoDuration(seg.duration)})</span>
                               </div>
                             ))}
                           </div>
