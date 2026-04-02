@@ -10,7 +10,7 @@ import {
   FolderOpen, Receipt, Factory, TrendingUp, FileText, Gauge,
   DollarSign, CreditCard, BookOpen, Landmark, Package,
   Settings, Building, UserCog, Target, ArrowRightLeft,
-  FileSpreadsheet, BarChart3,
+  FileSpreadsheet, BarChart3, Trophy, Percent, Medal,
   ChevronDown, ChevronRight, Sun, Moon,
 } from 'lucide-react';
 
@@ -80,6 +80,16 @@ const MENU: MenuItem[] = [
     children: [
       { key: 'cac-dashboard', label: 'Dashboard', icon: Gauge, href: '/cac/dashboard' },
       { key: 'cac-cenarios', label: 'Cenários', icon: TrendingUp, href: '/cac/cenarios' },
+    ],
+  },
+  {
+    key: 'equipe-menu',
+    label: 'Equipe',
+    icon: Trophy,
+    children: [
+      { key: 'metas', label: 'Metas e Ranking', icon: Medal, href: '/equipe/metas' },
+      { key: 'comissoes', label: 'Comissões', icon: Percent, href: '/equipe/comissoes' },
+      { key: 'planos-comissao', label: 'Planos de Comissão', icon: Settings, href: '/equipe/planos-comissao' },
     ],
   },
   {

@@ -471,6 +471,71 @@ export interface ExtratoLinha {
 }
 
 // ============================================================
+// FASE 4 — COMISSOES E METAS
+// ============================================================
+
+export type TipoBaseComissao = 'MARKUP' | 'VALOR_VENDA' | 'COMISSAO_FORNECEDOR' | 'LUCRO';
+
+export interface FaixaComissao {
+  de: number;
+  ate: number;
+  percentual: number;
+}
+
+export interface PlanoComissao {
+  id: string;
+  nome: string;
+  descricao: string;
+  base_calculo: TipoBaseComissao;
+  percentual_padrao: number;
+  faixas: FaixaComissao[];
+  regras_produto: Array<{
+    tipo_produto: string;
+    percentual: number;
+  }>;
+  ativo: boolean;
+  criado_em: string;
+}
+
+export type StatusComissao = 'CALCULADA' | 'APROVADA' | 'PAGA' | 'CANCELADA';
+
+export interface ComissaoVenda {
+  id: string;
+  venda_id: string;
+  venda_numero: string;
+  vendedor_id: string;
+  vendedor_nome: string;
+  plano_comissao_id: string;
+  plano_nome: string;
+  data_venda: string;
+  valor_base: number;
+  percentual_aplicado: number;
+  valor_comissao: number;
+  status: StatusComissao;
+  data_aprovacao: string | null;
+  data_pagamento: string | null;
+  observacoes: string;
+}
+
+export type PeriodoMeta = 'MENSAL' | 'TRIMESTRAL' | 'ANUAL';
+
+export interface MetaVendedor {
+  id: string;
+  vendedor_id: string;
+  vendedor_nome: string;
+  periodo: PeriodoMeta;
+  mes_referencia: string; // YYYY-MM
+  meta_valor: number;
+  meta_quantidade: number;
+  realizado_valor: number;
+  realizado_quantidade: number;
+  percentual_atingido_valor: number;
+  percentual_atingido_quantidade: number;
+  bonus_meta: number;
+  criado_em: string;
+}
+
+// ============================================================
 // CONFIGURACOES
 // ============================================================
 
@@ -632,6 +697,20 @@ export function createTransferencia(): TransferenciaBancaria {
     data_efetivacao: null,
     descricao: '',
     status: 'PENDENTE',
+    criado_em: new Date().toISOString(),
+  };
+}
+
+export function createPlanoComissao(): PlanoComissao {
+  return {
+    id: generateId(),
+    nome: '',
+    descricao: '',
+    base_calculo: 'MARKUP',
+    percentual_padrao: 10,
+    faixas: [],
+    regras_produto: [],
+    ativo: true,
     criado_em: new Date().toISOString(),
   };
 }

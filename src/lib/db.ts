@@ -156,6 +156,32 @@ export async function initDB() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    CREATE TABLE IF NOT EXISTS planos_comissao (
+      id TEXT PRIMARY KEY,
+      nome TEXT NOT NULL DEFAULT '',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS comissoes (
+      id TEXT PRIMARY KEY,
+      venda_id TEXT NOT NULL DEFAULT '',
+      vendedor_id TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'CALCULADA',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS metas (
+      id TEXT PRIMARY KEY,
+      vendedor_id TEXT NOT NULL DEFAULT '',
+      mes_referencia TEXT NOT NULL DEFAULT '',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
   initialized = true;
 }
