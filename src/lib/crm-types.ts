@@ -263,12 +263,16 @@ export interface Orcamento {
 // FINANCEIRO DA AGENCIA
 // ============================================================
 
+export type NaturezaCusto = 'FIXO' | 'VARIAVEL' | 'COMPRA_UNICA';
+
 export interface PlanoContas {
   id: string;
   codigo: string;
   nome: string;
   tipo: 'RECEITA' | 'DESPESA' | 'TRANSFERENCIA';
   categoria_pai_id: string | null;
+  natureza_custo: NaturezaCusto | null;
+  is_custo_comercial: boolean;
   ativo: boolean;
 }
 
@@ -349,10 +353,75 @@ export interface ContaPagar {
   comprovante: string;
   parcela_numero: number;
   total_parcelas: number;
+  natureza_custo: NaturezaCusto | null;
+  is_custo_comercial: boolean;
   status: StatusContaPagar;
   rateio: Array<{ centro_custo: string; percentual: number; valor: number }>;
   anexos: Array<{ nome: string; url: string }>;
   observacoes: string;
+}
+
+// ============================================================
+// CAC - CUSTO DE AQUISICAO DO CLIENTE
+// ============================================================
+
+export interface CACMensal {
+  id: string;
+  mes: string; // YYYY-MM
+  total_despesas_comerciais: number;
+  total_despesas_fixas: number;
+  total_despesas_variaveis: number;
+  total_vendas: number;
+  quantidade_clientes_novos: number;
+  quantidade_vendas: number;
+  cac: number; // total_despesas_comerciais / quantidade_clientes_novos
+  ticket_medio: number;
+  roi: number;
+  detalhamento: Array<{
+    categoria_id: string;
+    categoria_nome: string;
+    natureza: NaturezaCusto;
+    valor: number;
+  }>;
+  calculado_em: string;
+}
+
+export interface CenarioCAC {
+  id: string;
+  nome: string;
+  descricao: string;
+  mes_referencia: string; // YYYY-MM
+
+  // Valores base (copiados do mês de referência)
+  despesas_fixas_base: number;
+  despesas_variaveis_base: number;
+
+  // Ajustes do cenário
+  investimento_ads: number;
+  ads_detalhamento: Array<{
+    plataforma: string; // Google Ads, Meta Ads, etc.
+    investimento_mensal: number;
+    cpc_estimado: number;
+    taxa_conversao: number;
+    leads_estimados: number;
+    clientes_estimados: number;
+  }>;
+
+  outros_investimentos: Array<{
+    descricao: string;
+    valor: number;
+    tipo: NaturezaCusto;
+  }>;
+
+  // Resultados simulados
+  clientes_novos_estimados: number;
+  cac_projetado: number;
+  ticket_medio_alvo: number;
+  roi_projetado: number;
+  payback_meses: number;
+
+  criado_em: string;
+  atualizado_em: string;
 }
 
 export interface CentroCusto {
@@ -507,6 +576,7 @@ export function createContaPagar(): ContaPagar {
     data_pagamento: null, valor_pago: null,
     conta_bancaria_id: null, forma_pagamento: '', comprovante: '',
     parcela_numero: 1, total_parcelas: 1,
+    natureza_custo: null, is_custo_comercial: false,
     status: 'PENDENTE', rateio: [], anexos: [], observacoes: '',
   };
 }
@@ -515,8 +585,11 @@ export function createContaPagar(): ContaPagar {
 export function getPlanoContasPadrao(): PlanoContas[] {
   const contas: PlanoContas[] = [];
   let id = 1;
-  const add = (codigo: string, nome: string, tipo: 'RECEITA' | 'DESPESA', pai: string | null) => {
-    contas.push({ id: String(id++), codigo, nome, tipo, categoria_pai_id: pai, ativo: true });
+  const add = (
+    codigo: string, nome: string, tipo: 'RECEITA' | 'DESPESA', pai: string | null,
+    natureza: NaturezaCusto | null = null, comercial = false
+  ) => {
+    contas.push({ id: String(id++), codigo, nome, tipo, categoria_pai_id: pai, natureza_custo: natureza, is_custo_comercial: comercial, ativo: true });
   };
 
   // RECEITAS
@@ -545,38 +618,49 @@ export function getPlanoContasPadrao(): PlanoContas[] {
 
   // DESPESAS
   add('2', 'DESPESAS', 'DESPESA', null);
-  add('2.1', 'Custos de Vendas (CMV)', 'DESPESA', '23');
-  add('2.1.01', 'Aereo', 'DESPESA', '24');
-  add('2.1.02', 'Hotel', 'DESPESA', '24');
-  add('2.1.03', 'Pacote', 'DESPESA', '24');
-  add('2.1.04', 'Seguro', 'DESPESA', '24');
-  add('2.1.05', 'Receptivo', 'DESPESA', '24');
-  add('2.1.06', 'Locacao Veiculos', 'DESPESA', '24');
-  add('2.1.07', 'Cruzeiro', 'DESPESA', '24');
-  add('2.1.08', 'Ingressos', 'DESPESA', '24');
-  add('2.1.09', 'Brindes', 'DESPESA', '24');
-  add('2.2', 'Despesas Operacionais', 'DESPESA', '23');
-  add('2.2.01', 'Aluguel', 'DESPESA', '34');
-  add('2.2.02', 'Energia/Agua/Internet', 'DESPESA', '34');
-  add('2.2.03', 'Salarios e Encargos', 'DESPESA', '34');
-  add('2.2.04', 'Comissao Equipe', 'DESPESA', '34');
-  add('2.2.05', 'Comissao Intermediarios', 'DESPESA', '34');
-  add('2.2.06', 'Sistemas e Software', 'DESPESA', '34');
-  add('2.2.07', 'Marketing e Publicidade', 'DESPESA', '34');
-  add('2.2.08', 'Material de Escritorio', 'DESPESA', '34');
-  add('2.2.09', 'Viagens a Trabalho', 'DESPESA', '34');
-  add('2.3', 'Taxas e Impostos', 'DESPESA', '23');
-  add('2.3.01', 'Simples Nacional', 'DESPESA', '44');
-  add('2.3.02', 'ISS', 'DESPESA', '44');
-  add('2.3.03', 'Taxa Adquirencia Cartao', 'DESPESA', '44');
-  add('2.3.04', 'Taxa Boleto', 'DESPESA', '44');
-  add('2.3.05', 'IOF', 'DESPESA', '44');
-  add('2.4', 'Despesas Financeiras', 'DESPESA', '23');
-  add('2.4.01', 'Juros', 'DESPESA', '50');
-  add('2.4.02', 'Multas', 'DESPESA', '50');
-  add('2.4.03', 'Variacao Cambial', 'DESPESA', '50');
-  add('2.4.04', 'Tarifas Bancarias', 'DESPESA', '50');
+  add('2.1', 'Custos de Vendas (CMV)', 'DESPESA', '23', 'VARIAVEL');
+  add('2.1.01', 'Aereo', 'DESPESA', '24', 'VARIAVEL');
+  add('2.1.02', 'Hotel', 'DESPESA', '24', 'VARIAVEL');
+  add('2.1.03', 'Pacote', 'DESPESA', '24', 'VARIAVEL');
+  add('2.1.04', 'Seguro', 'DESPESA', '24', 'VARIAVEL');
+  add('2.1.05', 'Receptivo', 'DESPESA', '24', 'VARIAVEL');
+  add('2.1.06', 'Locacao Veiculos', 'DESPESA', '24', 'VARIAVEL');
+  add('2.1.07', 'Cruzeiro', 'DESPESA', '24', 'VARIAVEL');
+  add('2.1.08', 'Ingressos', 'DESPESA', '24', 'VARIAVEL');
+  add('2.1.09', 'Brindes', 'DESPESA', '24', 'VARIAVEL');
+  add('2.2', 'Despesas Operacionais', 'DESPESA', '23', 'FIXO');
+  add('2.2.01', 'Aluguel', 'DESPESA', '34', 'FIXO');
+  add('2.2.02', 'Energia/Agua/Internet', 'DESPESA', '34', 'FIXO');
+  add('2.2.03', 'Salarios e Encargos', 'DESPESA', '34', 'FIXO');
+  add('2.2.04', 'Comissao Equipe', 'DESPESA', '34', 'VARIAVEL', true);
+  add('2.2.05', 'Comissao Intermediarios', 'DESPESA', '34', 'VARIAVEL', true);
+  add('2.2.06', 'Sistemas e Software', 'DESPESA', '34', 'FIXO');
+  add('2.2.07', 'Marketing e Publicidade', 'DESPESA', '34', 'VARIAVEL', true);
+  add('2.2.08', 'Material de Escritorio', 'DESPESA', '34', 'FIXO');
+  add('2.2.09', 'Viagens a Trabalho', 'DESPESA', '34', 'VARIAVEL');
+  add('2.3', 'Taxas e Impostos', 'DESPESA', '23', 'VARIAVEL');
+  add('2.3.01', 'Simples Nacional', 'DESPESA', '44', 'VARIAVEL');
+  add('2.3.02', 'ISS', 'DESPESA', '44', 'VARIAVEL');
+  add('2.3.03', 'Taxa Adquirencia Cartao', 'DESPESA', '44', 'VARIAVEL');
+  add('2.3.04', 'Taxa Boleto', 'DESPESA', '44', 'VARIAVEL');
+  add('2.3.05', 'IOF', 'DESPESA', '44', 'VARIAVEL');
+  add('2.4', 'Despesas Financeiras', 'DESPESA', '23', 'VARIAVEL');
+  add('2.4.01', 'Juros', 'DESPESA', '50', 'VARIAVEL');
+  add('2.4.02', 'Multas', 'DESPESA', '50', 'VARIAVEL');
+  add('2.4.03', 'Variacao Cambial', 'DESPESA', '50', 'VARIAVEL');
+  add('2.4.04', 'Tarifas Bancarias', 'DESPESA', '50', 'FIXO');
   add('2.5', 'Outras Despesas', 'DESPESA', '23');
+
+  // CUSTOS COMERCIAIS (para calculo do CAC)
+  add('2.6', 'Custos Comerciais', 'DESPESA', '23', 'VARIAVEL', true);
+  add('2.6.01', 'Google Ads', 'DESPESA', '56', 'VARIAVEL', true);
+  add('2.6.02', 'Meta Ads (Facebook/Instagram)', 'DESPESA', '56', 'VARIAVEL', true);
+  add('2.6.03', 'Anuncios Outros', 'DESPESA', '56', 'VARIAVEL', true);
+  add('2.6.04', 'Producao de Conteudo', 'DESPESA', '56', 'VARIAVEL', true);
+  add('2.6.05', 'Ferramentas de Marketing', 'DESPESA', '56', 'FIXO', true);
+  add('2.6.06', 'Eventos e Feiras', 'DESPESA', '56', 'COMPRA_UNICA', true);
+  add('2.6.07', 'Brindes Comerciais', 'DESPESA', '56', 'VARIAVEL', true);
+  add('2.6.08', 'CRM e Automacao', 'DESPESA', '56', 'FIXO', true);
 
   return contas;
 }
