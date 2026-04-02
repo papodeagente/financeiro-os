@@ -48,7 +48,7 @@ export default function MapaRoteiroInterno({ pontos, height = '300px' }: Props) 
       const icon = L.divIcon({
         className: 'custom-marker',
         html: `<div style="
-          background: #10b981;
+          background: #00F0FF;
           color: white;
           width: 28px; height: 28px;
           border-radius: 50%;
@@ -72,7 +72,7 @@ export default function MapaRoteiroInterno({ pontos, height = '300px' }: Props) 
     // Draw route line
     if (markers.length > 1) {
       L.polyline(markers, {
-        color: '#10b981',
+        color: '#00F0FF',
         weight: 3,
         opacity: 0.7,
         dashArray: '8, 8',

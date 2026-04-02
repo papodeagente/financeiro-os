@@ -52,7 +52,7 @@ function defaultConteudo(tipo: string): Record<string, unknown> {
     case 'INCLUSOS': return { inclusos: [''], nao_inclusos: [''] };
     case 'VALORES': return { opcoes: [{ titulo: 'Opcao 1', valor_total: 0, destaque: false, parcelas: [{ forma: 'A vista PIX', valor_parcela: 0, valor_total: 0, destaque: true }] }], observacoes_valores: '', validade: '' };
     case 'DEPOIMENTO': return { depoimentos: [{ texto: '', autor: '', foto: '', destino: '' }] };
-    case 'CTA': return { texto_botao: 'Quero reservar minha viagem!', tipo_acao: 'WHATSAPP', numero_whatsapp: '', mensagem_predefinida: '', cor_botao: '#10b981' };
+    case 'CTA': return { texto_botao: 'Quero reservar minha viagem!', tipo_acao: 'WHATSAPP', numero_whatsapp: '', mensagem_predefinida: '', cor_botao: '#00F0FF' };
     case 'VIDEO': return { url: '', titulo: '' };
     case 'MAPA': return { titulo: '', pontos: [], zoom: 10 };
     case 'FAQ': return { titulo: 'Perguntas Frequentes', perguntas: [] };

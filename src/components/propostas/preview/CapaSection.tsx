@@ -7,7 +7,7 @@ interface Props {
 
 export function CapaSection({ proposta }: Props) {
   const { visual, cabecalho } = proposta;
-  const corPrimaria = visual.cor_primaria || '#10b981';
+  const corPrimaria = visual.cor_primaria || '#00F0FF';
   const i18n = t((proposta.idioma || 'pt-BR') as IdiomaProposal);
 
   if (visual.estilo_capa === 'FULLSCREEN' && visual.imagem_capa) {

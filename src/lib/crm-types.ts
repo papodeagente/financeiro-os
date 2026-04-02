@@ -705,7 +705,7 @@ export function createProposta(numero: string): Proposta {
     template_id: '',
     idioma: 'pt-BR',
     visual: {
-      tema: 'padrao', cor_primaria: '#10b981', cor_secundaria: '#0a0a14', cor_texto: '#ffffff',
+      tema: 'padrao', cor_primaria: '#00F0FF', cor_secundaria: '#0a0a14', cor_texto: '#ffffff',
       cor_fundo: '#ffffff', fonte: 'Inter', imagem_capa: '', estilo_capa: 'FULLSCREEN',
     },
     cabecalho: { titulo: '', subtitulo: '', mensagem_abertura: '', data_proposta: new Date().toISOString().split('T')[0], validade: '' },

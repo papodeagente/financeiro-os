@@ -7,7 +7,7 @@ interface Props {
 
 export function RodapeSection({ proposta }: Props) {
   const { rodape, visual } = proposta;
-  const corPrimaria = visual.cor_primaria || '#10b981';
+  const corPrimaria = visual.cor_primaria || '#00F0FF';
 
   return (
     <div className="border-t border-gray-200 mt-12 pt-8 pb-12">
