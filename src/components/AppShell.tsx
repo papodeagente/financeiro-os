@@ -2,13 +2,14 @@
 
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { AppSidebar } from './AppSidebar';
+import { TopRail } from './TopRail';
+import { PillarSidebar } from './PillarSidebar';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, loading } = useAuth();
 
-  // Login page and public proposal preview — no sidebar, no auth check
+  // Login page and public proposal preview — no shell
   if (pathname === '/login' || pathname.startsWith('/p/')) {
     return <>{children}</>;
   }
@@ -22,7 +23,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Not authenticated — middleware handles redirect, but just in case
+  // Not authenticated
   if (!user) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -31,11 +32,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Authenticated — show sidebar + content
+  // Authenticated — Top Rail + Pillar Sidebar + Content
   return (
-    <div className="flex h-full">
-      <AppSidebar />
-      <div className="flex-1 overflow-hidden">{children}</div>
+    <div className="flex flex-col h-full">
+      <TopRail />
+      <div className="flex flex-1 overflow-hidden">
+        <PillarSidebar />
+        <div className="flex-1 overflow-hidden">{children}</div>
+      </div>
     </div>
   );
 }
