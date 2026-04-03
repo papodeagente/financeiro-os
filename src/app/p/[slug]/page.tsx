@@ -9,6 +9,7 @@ import { RodapeSection } from '@/components/propostas/preview/RodapeSection';
 import { AceitarProposta } from '@/components/propostas/preview/AceitarProposta';
 import { LeadCapture } from '@/components/propostas/preview/LeadCapture';
 import { ChatWidget } from '@/components/propostas/preview/ChatWidget';
+import { DiscoveryRenderer } from '@/components/propostas/preview/discovery/DiscoveryRenderer';
 import { t, type IdiomaProposal } from '@/lib/i18n-proposta';
 
 export default function PublicPropostaPage() {
@@ -88,6 +89,17 @@ export default function PublicPropostaPage() {
     );
   }
 
+  // Discovery layout
+  if (proposta.visual.layout === 'DISCOVERY') {
+    return (
+      <>
+        <DiscoveryRenderer proposta={proposta} slug={slug} idioma={idioma} />
+        <ChatWidget slug={slug} corPrimaria={proposta.visual.cor_primaria || '#004aad'} idioma={idioma} />
+      </>
+    );
+  }
+
+  // Classic layout
   const corFundo = proposta.visual.cor_fundo || '#ffffff';
   const corTexto = proposta.visual.cor_texto || '#1a1a2e';
   const fonte = proposta.visual.fonte || 'Inter';
@@ -141,7 +153,7 @@ export default function PublicPropostaPage() {
         />
       )}
 
-      {/* Lead Capture — shown for proposals without specific client */}
+      {/* Lead Capture ��� shown for proposals without specific client */}
       <LeadCapture
         slug={slug}
         corPrimaria={proposta.visual.cor_primaria || '#004aad'}

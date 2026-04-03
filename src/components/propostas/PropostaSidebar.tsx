@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Proposta, Cliente, Membro, Destino, SecaoProposta } from '@/lib/crm-types';
+import { Proposta, Cliente, Membro, Destino, SecaoProposta, type LayoutProposta, type DestinoRoteiro } from '@/lib/crm-types';
 import { generateId } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { DestinoAutocomplete } from './DestinoAutocomplete';
@@ -10,7 +10,7 @@ import { ImageUpload } from './ImageUpload';
 import { TEMAS } from '@/lib/temas-proposta';
 import { IDIOMAS, type IdiomaProposal } from '@/lib/i18n-proposta';
 
-type Tab = 'config' | 'destinos';
+type Tab = 'config' | 'destinos' | 'viagem';
 
 interface Props {
   proposta: Proposta;
@@ -23,6 +23,8 @@ interface Props {
 export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAIDestino }: Props) {
   const [tab, setTab] = useState<Tab>('config');
   const [selectedDestino, setSelectedDestino] = useState<Destino | null>(null);
+  const [newTag, setNewTag] = useState('');
+  const isDiscovery = proposta.visual.layout === 'DISCOVERY';
 
   const addBlock = (tipo: string, conteudo: Record<string, unknown>) => {
     onUpdate(p => ({
@@ -61,10 +63,24 @@ export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAI
         >
           Destinos
         </button>
+        {isDiscovery && (
+          <button
+            onClick={() => setTab('viagem')}
+            className={`flex-1 py-2.5 text-xs font-medium transition-colors ${
+              tab === 'viagem'
+                ? 'text-[var(--t-green)] border-b-2 border-[var(--t-green)]'
+                : 'text-[var(--t-text-muted)] hover:text-[var(--t-text)]'
+            }`}
+          >
+            Viagem
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {tab === 'destinos' ? (
+        {tab === 'viagem' && isDiscovery ? (
+          <ViagemTab proposta={proposta} onUpdate={onUpdate} newTag={newTag} setNewTag={setNewTag} />
+        ) : tab === 'destinos' ? (
           <div className="p-4 space-y-4">
             <DestinoAutocomplete onSelect={d => setSelectedDestino(d)} />
 
@@ -292,6 +308,73 @@ export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAI
                     ))}
                   </div>
                 </div>
+                {/* Layout toggle */}
+                <div>
+                  <label className="text-xs text-[var(--t-text-secondary)]">Layout da proposta</label>
+                  <div className="flex gap-1.5 mt-1.5">
+                    {([
+                      { id: 'CLASSICO' as LayoutProposta, label: 'Classico', desc: 'Blocos em sequencia' },
+                      { id: 'DISCOVERY' as LayoutProposta, label: 'Discovery', desc: 'Estilo Wetu (pro)' },
+                    ]).map(layout => (
+                      <button
+                        key={layout.id}
+                        onClick={() => onUpdate(p => { p.visual.layout = layout.id; return p; })}
+                        className={`flex-1 p-2 rounded-lg border text-center transition-all ${
+                          (proposta.visual.layout || 'CLASSICO') === layout.id
+                            ? 'border-[var(--t-green)] bg-[var(--t-green)]/10'
+                            : 'border-[var(--t-border)] hover:border-[var(--t-text-muted)]'
+                        }`}
+                      >
+                        <div className={`text-xs font-medium ${(proposta.visual.layout || 'CLASSICO') === layout.id ? 'text-[var(--t-green)]' : 'text-[var(--t-text)]'}`}>{layout.label}</div>
+                        <div className="text-[9px] text-[var(--t-text-muted)]">{layout.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Discovery-specific fields */}
+                {(proposta.visual.layout === 'DISCOVERY') && (
+                  <>
+                    <div>
+                      <label className="text-xs text-[var(--t-text-secondary)]">Logo da agencia</label>
+                      <div className="mt-1 space-y-2">
+                        <ImageUpload
+                          compact
+                          currentUrl={proposta.visual.logo_agencia || ''}
+                          onUpload={urls => onUpdate(p => { p.visual.logo_agencia = urls[0]; return p; })}
+                          onRemove={() => onUpdate(p => { p.visual.logo_agencia = ''; return p; })}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs text-[var(--t-text-secondary)]">Sobre a agencia</label>
+                      <textarea
+                        value={proposta.viagem?.sobre_agencia || ''}
+                        onChange={e => onUpdate(p => ({
+                          ...p,
+                          viagem: { ...p.viagem!, sobre_agencia: e.target.value },
+                        }))}
+                        placeholder="Breve descricao da agencia..."
+                        rows={3}
+                        className="w-full mt-1 bg-[var(--t-input-bg)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-xs resize-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-[var(--t-text-secondary)]">Termos e condicoes</label>
+                      <textarea
+                        value={proposta.viagem?.termos_condicoes || ''}
+                        onChange={e => onUpdate(p => ({
+                          ...p,
+                          viagem: { ...p.viagem!, termos_condicoes: e.target.value },
+                        }))}
+                        placeholder="Termos e condicoes da proposta..."
+                        rows={4}
+                        className="w-full mt-1 bg-[var(--t-input-bg)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-xs resize-none"
+                      />
+                    </div>
+                  </>
+                )}
+
                 <div>
                   <label className="text-xs text-[var(--t-text-secondary)]">Imagem de capa</label>
                   <div className="mt-1 space-y-2">
@@ -373,6 +456,217 @@ export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAI
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// -- Viagem Tab (Discovery mode) --
+function ViagemTab({
+  proposta, onUpdate, newTag, setNewTag,
+}: {
+  proposta: Proposta;
+  onUpdate: (fn: (p: Proposta) => Proposta) => void;
+  newTag: string;
+  setNewTag: (v: string) => void;
+}) {
+  const viagem = proposta.viagem;
+  if (!viagem) return null;
+
+  const destinos = viagem.destinos || [];
+  const tags = viagem.interesses_tags || [];
+
+  const updateViagem = (patch: Partial<typeof viagem>) => {
+    onUpdate(p => ({ ...p, viagem: { ...p.viagem!, ...patch } }));
+  };
+
+  const addDestino = () => {
+    updateViagem({
+      destinos: [...destinos, {
+        id: generateId(),
+        nome: '',
+        dias_inicio: destinos.length > 0 ? destinos[destinos.length - 1].dias_fim + 1 : 1,
+        dias_fim: destinos.length > 0 ? destinos[destinos.length - 1].dias_fim + 3 : 3,
+        alojamento_ids: [],
+      }],
+    });
+  };
+
+  const updateDestino = (idx: number, patch: Partial<DestinoRoteiro>) => {
+    const updated = [...destinos];
+    updated[idx] = { ...updated[idx], ...patch };
+    updateViagem({ destinos: updated });
+  };
+
+  const removeDestino = (idx: number) => {
+    updateViagem({ destinos: destinos.filter((_, i) => i !== idx) });
+  };
+
+  const addTag = () => {
+    if (!newTag.trim()) return;
+    updateViagem({ interesses_tags: [...tags, newTag.trim()] });
+    setNewTag('');
+  };
+
+  const autoOrganize = () => {
+    // Infer destinos from ALOJAMENTO blocks
+    const alojamentos = viagem.alojamentos || [];
+    if (alojamentos.length === 0) return;
+
+    let dayStart = 1;
+    const newDestinos: DestinoRoteiro[] = alojamentos.map(a => {
+      const noites = a.noites || 1;
+      const dest: DestinoRoteiro = {
+        id: generateId(),
+        nome: a.destino_nome || a.hotel_nome || '',
+        dias_inicio: dayStart,
+        dias_fim: dayStart + noites - 1,
+        alojamento_ids: [a.id],
+      };
+      dayStart += noites;
+      return dest;
+    });
+
+    const totalNoites = alojamentos.reduce((sum, a) => sum + (a.noites || 1), 0);
+    updateViagem({
+      destinos: newDestinos,
+      duracao_dias: totalNoites + 1,
+      duracao_noites: totalNoites,
+    });
+  };
+
+  return (
+    <div className="p-4 space-y-5">
+      {/* Duration */}
+      <div>
+        <label className="text-xs font-medium text-[var(--t-text-secondary)]">Duracao</label>
+        <div className="grid grid-cols-2 gap-2 mt-1">
+          <div>
+            <label className="text-[10px] text-[var(--t-text-muted)]">Dias</label>
+            <Input
+              type="number"
+              min={1}
+              value={viagem.duracao_dias || 0}
+              onChange={e => updateViagem({ duracao_dias: Number(e.target.value) })}
+              className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)] text-sm"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] text-[var(--t-text-muted)]">Noites</label>
+            <Input
+              type="number"
+              min={0}
+              value={viagem.duracao_noites || 0}
+              onChange={e => updateViagem({ duracao_noites: Number(e.target.value) })}
+              className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)] text-sm"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Interest tags */}
+      <div>
+        <label className="text-xs font-medium text-[var(--t-text-secondary)]">Tags de interesse</label>
+        <div className="flex flex-wrap gap-1.5 mt-1.5">
+          {tags.map((tag, i) => (
+            <span key={i} className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-[var(--t-green-bg)] text-[var(--t-green)] text-xs">
+              {tag}
+              <button
+                onClick={() => updateViagem({ interesses_tags: tags.filter((_, j) => j !== i) })}
+                className="hover:text-red-400"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+        <div className="flex gap-1 mt-1.5">
+          <Input
+            value={newTag}
+            onChange={e => setNewTag(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addTag())}
+            placeholder="Nova tag..."
+            className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)] text-xs flex-1"
+          />
+          <button onClick={addTag} className="px-2 text-[var(--t-green)] text-sm font-bold">+</button>
+        </div>
+      </div>
+
+      {/* Destinos */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-xs font-medium text-[var(--t-text-secondary)]">Destinos da viagem</label>
+          <button onClick={autoOrganize} className="text-[10px] text-[var(--t-green)] hover:underline">
+            Auto-organizar
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          {destinos.map((dest, i) => (
+            <div key={dest.id} className="p-2.5 rounded-lg bg-[var(--t-bg)] border border-[var(--t-border)] space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold text-white" style={{ backgroundColor: 'var(--t-green)' }}>
+                  {i + 1}
+                </span>
+                <Input
+                  value={dest.nome}
+                  onChange={e => updateDestino(i, { nome: e.target.value })}
+                  placeholder="Nome do destino"
+                  className="bg-transparent border-[var(--t-border)] text-[var(--t-text)] text-xs flex-1 h-7"
+                />
+                <button
+                  onClick={() => removeDestino(i)}
+                  className="text-red-400 hover:text-red-300 text-xs px-1"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <div>
+                  <label className="text-[10px] text-[var(--t-text-muted)]">Dia inicio</label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={dest.dias_inicio}
+                    onChange={e => updateDestino(i, { dias_inicio: Number(e.target.value) })}
+                    className="bg-transparent border-[var(--t-border)] text-[var(--t-text)] text-xs h-7"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-[var(--t-text-muted)]">Dia fim</label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={dest.dias_fim}
+                    onChange={e => updateDestino(i, { dias_fim: Number(e.target.value) })}
+                    className="bg-transparent border-[var(--t-border)] text-[var(--t-text)] text-xs h-7"
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <button
+          onClick={addDestino}
+          className="w-full mt-2 py-2 rounded-lg border border-dashed border-[var(--t-border)] text-xs text-[var(--t-text-secondary)] hover:text-[var(--t-green)] hover:border-[var(--t-green)] transition-colors"
+        >
+          + Adicionar destino
+        </button>
+      </div>
+
+      {/* Summary */}
+      {destinos.length > 0 && (
+        <div className="p-3 rounded-lg bg-[var(--t-green-bg)] text-xs text-[var(--t-green)]">
+          <div className="font-medium mb-1">Timeline</div>
+          {destinos.map((d, i) => (
+            <div key={d.id} className="flex items-center gap-1.5 py-0.5">
+              <span className="w-4 text-center font-bold">{i + 1}</span>
+              <span className="flex-1 truncate">{d.nome || '(sem nome)'}</span>
+              <span className="text-[10px] opacity-70">D{d.dias_inicio}–D{d.dias_fim}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

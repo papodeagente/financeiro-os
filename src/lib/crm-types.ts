@@ -540,8 +540,68 @@ export interface MetaVendedor {
 // ============================================================
 
 export type StatusProposta = 'RASCUNHO' | 'ENVIADO' | 'VISUALIZADO' | 'ACEITO' | 'RECUSADO' | 'EXPIRADO' | 'CONVERTIDO';
-export type TipoSecaoProposta = 'TEXTO' | 'SERVICO' | 'ROTEIRO_DIA' | 'GALERIA' | 'INCLUSOS' | 'VALORES' | 'DEPOIMENTO' | 'CTA' | 'VIDEO' | 'MAPA' | 'FAQ' | 'COUNTDOWN';
+export type TipoSecaoProposta = 'TEXTO' | 'SERVICO' | 'ROTEIRO_DIA' | 'GALERIA' | 'INCLUSOS' | 'VALORES' | 'DEPOIMENTO' | 'CTA' | 'VIDEO' | 'MAPA' | 'FAQ' | 'COUNTDOWN' | 'ALOJAMENTO' | 'TRANSPORTE';
 export type EstiloCapa = 'FULLSCREEN' | 'SPLIT' | 'MINIMAL';
+export type LayoutProposta = 'CLASSICO' | 'DISCOVERY';
+export type RegimeRefeicao = 'RO' | 'BB' | 'HB' | 'FB' | 'AI';
+export type TipoTransporte = 'VOO' | 'TRANSFER' | 'TREM' | 'ONIBUS' | 'CARRO' | 'BARCO';
+
+export interface AlojamentoData {
+  id: string;
+  viagem_noturna?: boolean;
+  destino_nome: string;
+  hotel_nome: string;
+  hotel_estrelas?: number;
+  hotel_imagem?: string;
+  hotel_galeria?: string[];
+  hotel_descricao?: string;
+  hotel_link?: string;
+  check_in: string;
+  check_out: string;
+  noites: number;
+  regime: RegimeRefeicao;
+  quarto_tipo?: string;
+  bebidas?: string;
+  lat?: number;
+  lng?: number;
+}
+
+export interface TransporteData {
+  id: string;
+  tipo: TipoTransporte;
+  data: string;
+  origem: string;
+  destino: string;
+  companhia?: string;
+  numero_voo?: string;
+  horario_saida?: string;
+  horario_chegada?: string;
+  distancia_km?: number;
+  tempo_estimado?: string;
+  detalhes?: string;
+}
+
+export interface DestinoRoteiro {
+  id: string;
+  nome: string;
+  descricao?: string;
+  imagens?: string[];
+  coordenadas?: { lat: number; lng: number };
+  dias_inicio: number;
+  dias_fim: number;
+  alojamento_ids: string[];
+}
+
+export interface ViagemEstruturada {
+  duracao_dias: number;
+  duracao_noites: number;
+  destinos: DestinoRoteiro[];
+  alojamentos: AlojamentoData[];
+  transportes: TransporteData[];
+  interesses_tags: string[];
+  termos_condicoes?: string;
+  sobre_agencia?: string;
+}
 
 export interface SecaoProposta {
   id: string;
@@ -566,6 +626,8 @@ export interface Proposta {
 
   visual: {
     tema: string;
+    layout?: LayoutProposta;
+    logo_agencia?: string;
     cor_primaria: string;
     cor_secundaria: string;
     cor_texto: string;
@@ -574,6 +636,8 @@ export interface Proposta {
     imagem_capa: string;
     estilo_capa: EstiloCapa;
   };
+
+  viagem?: ViagemEstruturada;
 
   cabecalho: {
     titulo: string;
@@ -705,8 +769,13 @@ export function createProposta(numero: string): Proposta {
     template_id: '',
     idioma: 'pt-BR',
     visual: {
-      tema: 'padrao', cor_primaria: '#004aad', cor_secundaria: '#0a0a14', cor_texto: '#ffffff',
+      tema: 'padrao', layout: 'CLASSICO', logo_agencia: '',
+      cor_primaria: '#004aad', cor_secundaria: '#0a0a14', cor_texto: '#ffffff',
       cor_fundo: '#ffffff', fonte: 'Inter', imagem_capa: '', estilo_capa: 'FULLSCREEN',
+    },
+    viagem: {
+      duracao_dias: 0, duracao_noites: 0, destinos: [], alojamentos: [],
+      transportes: [], interesses_tags: [],
     },
     cabecalho: { titulo: '', subtitulo: '', mensagem_abertura: '', data_proposta: new Date().toISOString().split('T')[0], validade: '' },
     secoes: [],

@@ -190,3 +190,27 @@ export function formatFlightForProposta(offer: FlightOffer): Record<string, unkn
     exibir_valor: false,
   };
 }
+
+/**
+ * Format flight for Propostas Discovery — returns TRANSPORTE block conteudo
+ */
+export function formatFlightForTransporte(offer: FlightOffer): Record<string, unknown>[] {
+  return offer.itineraries.map(itin => {
+    const info = describeItinerary(itin);
+    const firstSeg = itin.segments[0];
+    return {
+      id: crypto.randomUUID?.() || Math.random().toString(36).slice(2),
+      tipo: 'VOO',
+      data: firstSeg.departure.at.split('T')[0] || '',
+      origem: info.origin,
+      destino: info.destination,
+      companhia: info.carrierName,
+      numero_voo: info.flightNumber,
+      horario_saida: info.depTime,
+      horario_chegada: info.arrTime,
+      distancia_km: 0,
+      tempo_estimado: info.duration,
+      detalhes: info.stops === 0 ? 'Voo direto' : `${info.stops} escala(s): ${info.stopAirports}`,
+    };
+  });
+}

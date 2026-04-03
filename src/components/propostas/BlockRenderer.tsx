@@ -12,6 +12,8 @@ import { VideoBlock } from './blocks/VideoBlock';
 import { MapaBlock } from './blocks/MapaBlock';
 import { FAQBlock } from './blocks/FAQBlock';
 import { CountdownBlock } from './blocks/CountdownBlock';
+import { AlojamentoBlock } from './blocks/AlojamentoBlock';
+import { TransporteBlock } from './blocks/TransporteBlock';
 
 interface Props {
   tipo: string;
@@ -33,6 +35,8 @@ export function BlockRenderer({ tipo, conteudo, onChange }: Props) {
     case 'MAPA': return <MapaBlock conteudo={conteudo} onChange={onChange} />;
     case 'FAQ': return <FAQBlock conteudo={conteudo} onChange={onChange} />;
     case 'COUNTDOWN': return <CountdownBlock conteudo={conteudo} onChange={onChange} />;
+    case 'ALOJAMENTO': return <AlojamentoBlock conteudo={conteudo} onChange={onChange} />;
+    case 'TRANSPORTE': return <TransporteBlock conteudo={conteudo} onChange={onChange} />;
     default: return <div className="text-xs text-[var(--t-text-muted)]">Tipo desconhecido: {tipo}</div>;
   }
 }

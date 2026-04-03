@@ -150,3 +150,32 @@ export function formatHotelForProposta(place: GooglePlace): Record<string, unkno
     exibir_valor: false,
   };
 }
+
+/**
+ * Format hotel for Propostas Discovery — returns ALOJAMENTO block conteudo
+ */
+export function formatHotelForAlojamento(place: GooglePlace): Record<string, unknown> {
+  const nome = place.displayName?.text || 'Hotel';
+  const photoRef = getFirstPhotoUrl(place);
+  const estrelas = place.rating ? Math.round(place.rating) : 0;
+
+  return {
+    id: crypto.randomUUID?.() || Math.random().toString(36).slice(2),
+    destino_nome: place.formattedAddress?.split(',').slice(-2, -1)[0]?.trim() || '',
+    hotel_nome: nome,
+    hotel_estrelas: Math.min(estrelas, 5),
+    hotel_imagem: photoRef,
+    hotel_galeria: (place.photos || []).slice(0, 5).map(p => p.name),
+    hotel_descricao: place.editorialSummary?.text || '',
+    hotel_link: place.websiteUri || place.googleMapsUri || '',
+    check_in: '',
+    check_out: '',
+    noites: 0,
+    regime: 'BB',
+    quarto_tipo: '',
+    bebidas: '',
+    viagem_noturna: false,
+    lat: place.location?.latitude,
+    lng: place.location?.longitude,
+  };
+}

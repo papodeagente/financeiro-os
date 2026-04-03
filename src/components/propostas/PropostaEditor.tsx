@@ -10,7 +10,7 @@ import {
   ChevronUp, ChevronDown, Trash2, Plane, Hotel,
   Type, Calendar, Image, CheckSquare, DollarSign, Quote, MousePointer,
   Check, Loader2, Sparkles, FileDown, GitBranch,
-  Video, Map, HelpCircle, Timer,
+  Video, Map, HelpCircle, Timer, Bed, Car,
 } from 'lucide-react';
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor,
@@ -27,20 +27,23 @@ import { BlockToolbar } from './BlockToolbar';
 import { PropostaSidebar } from './PropostaSidebar';
 import { FlightSearchModal } from '@/components/FlightSearchModal';
 import { HotelSearchModal } from '@/components/HotelSearchModal';
-import { formatFlightForProposta } from '@/lib/flight-data-mapper';
-import { formatHotelForProposta } from '@/lib/hotel-data-mapper';
+import { formatFlightForProposta, formatFlightForTransporte } from '@/lib/flight-data-mapper';
+import { formatHotelForProposta, formatHotelForAlojamento } from '@/lib/hotel-data-mapper';
 import type { FlightOffer } from '@/lib/flight-data-mapper';
 import type { GooglePlace } from '@/lib/hotel-data-mapper';
+import type { AlojamentoData, TransporteData } from '@/lib/crm-types';
 
 const TIPO_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   TEXTO: Type, SERVICO: Plane, ROTEIRO_DIA: Calendar, GALERIA: Image,
   INCLUSOS: CheckSquare, VALORES: DollarSign, DEPOIMENTO: Quote, CTA: MousePointer,
   VIDEO: Video, MAPA: Map, FAQ: HelpCircle, COUNTDOWN: Timer,
+  ALOJAMENTO: Bed, TRANSPORTE: Car,
 };
 const TIPO_LABELS: Record<string, string> = {
   TEXTO: 'Texto', SERVICO: 'Servico', ROTEIRO_DIA: 'Roteiro', GALERIA: 'Galeria',
   INCLUSOS: 'Inclusos', VALORES: 'Valores', DEPOIMENTO: 'Depoimento', CTA: 'CTA',
   VIDEO: 'Video', MAPA: 'Mapa', FAQ: 'FAQ', COUNTDOWN: 'Countdown',
+  ALOJAMENTO: 'Alojamento', TRANSPORTE: 'Transporte',
 };
 
 function defaultConteudo(tipo: string): Record<string, unknown> {
@@ -57,6 +60,8 @@ function defaultConteudo(tipo: string): Record<string, unknown> {
     case 'MAPA': return { titulo: '', pontos: [], zoom: 10 };
     case 'FAQ': return { titulo: 'Perguntas Frequentes', perguntas: [] };
     case 'COUNTDOWN': return { titulo: '', data_evento: '', mensagem: '' };
+    case 'ALOJAMENTO': return { id: generateId(), destino_nome: '', hotel_nome: '', hotel_estrelas: 0, hotel_imagem: '', hotel_galeria: [], hotel_descricao: '', hotel_link: '', check_in: '', check_out: '', noites: 0, regime: 'BB', quarto_tipo: '', bebidas: '', viagem_noturna: false };
+    case 'TRANSPORTE': return { id: generateId(), tipo: 'TRANSFER', data: '', origem: '', destino: '', companhia: '', numero_voo: '', horario_saida: '', horario_chegada: '', distancia_km: 0, tempo_estimado: '', detalhes: '' };
     default: return {};
   }
 }
@@ -145,6 +150,18 @@ export function PropostaEditor({ proposta: initialProposta, clientes, membros, i
   const update = useCallback((fn: (p: Proposta) => Proposta) => {
     setProposta(prev => {
       const next = fn({ ...prev });
+      // Sync ALOJAMENTO/TRANSPORTE blocks → viagem
+      if (next.viagem) {
+        next.viagem = {
+          ...next.viagem,
+          alojamentos: next.secoes
+            .filter(s => s.tipo === 'ALOJAMENTO')
+            .map(s => s.conteudo as unknown as AlojamentoData),
+          transportes: next.secoes
+            .filter(s => s.tipo === 'TRANSPORTE')
+            .map(s => s.conteudo as unknown as TransporteData),
+        };
+      }
       hasUnsaved.current = true;
       return next;
     });
@@ -325,31 +342,61 @@ export function PropostaEditor({ proposta: initialProposta, clientes, membros, i
   };
 
   const handleFlightSelect = (offer: FlightOffer) => {
-    const conteudo = formatFlightForProposta(offer);
-    update(p => ({
-      ...p,
-      secoes: [...p.secoes, {
-        id: generateId(),
-        tipo: 'SERVICO' as SecaoProposta['tipo'],
-        ordem: p.secoes.length,
-        visivel: true,
-        conteudo,
-      }],
-    }));
+    const isDiscovery = proposta.visual.layout === 'DISCOVERY';
+    if (isDiscovery) {
+      const transportes = formatFlightForTransporte(offer);
+      update(p => ({
+        ...p,
+        secoes: [...p.secoes, ...transportes.map((conteudo, i) => ({
+          id: generateId(),
+          tipo: 'TRANSPORTE' as SecaoProposta['tipo'],
+          ordem: p.secoes.length + i,
+          visivel: true,
+          conteudo,
+        }))],
+      }));
+    } else {
+      const conteudo = formatFlightForProposta(offer);
+      update(p => ({
+        ...p,
+        secoes: [...p.secoes, {
+          id: generateId(),
+          tipo: 'SERVICO' as SecaoProposta['tipo'],
+          ordem: p.secoes.length,
+          visivel: true,
+          conteudo,
+        }],
+      }));
+    }
   };
 
   const handleHotelSelect = (place: GooglePlace) => {
-    const conteudo = formatHotelForProposta(place);
-    update(p => ({
-      ...p,
-      secoes: [...p.secoes, {
-        id: generateId(),
-        tipo: 'SERVICO' as SecaoProposta['tipo'],
-        ordem: p.secoes.length,
-        visivel: true,
-        conteudo,
-      }],
-    }));
+    const isDiscovery = proposta.visual.layout === 'DISCOVERY';
+    if (isDiscovery) {
+      const conteudo = formatHotelForAlojamento(place);
+      update(p => ({
+        ...p,
+        secoes: [...p.secoes, {
+          id: generateId(),
+          tipo: 'ALOJAMENTO' as SecaoProposta['tipo'],
+          ordem: p.secoes.length,
+          visivel: true,
+          conteudo,
+        }],
+      }));
+    } else {
+      const conteudo = formatHotelForProposta(place);
+      update(p => ({
+        ...p,
+        secoes: [...p.secoes, {
+          id: generateId(),
+          tipo: 'SERVICO' as SecaoProposta['tipo'],
+          ordem: p.secoes.length,
+          visivel: true,
+          conteudo,
+        }],
+      }));
+    }
   };
 
   const getAIContext = useCallback(() => ({

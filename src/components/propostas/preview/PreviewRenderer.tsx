@@ -1,6 +1,6 @@
 'use client';
 
-import { SecaoProposta } from '@/lib/crm-types';
+import { SecaoProposta, type AlojamentoData, type TransporteData } from '@/lib/crm-types';
 import { CheckCircle2, XCircle, MessageCircle, Star } from 'lucide-react';
 import { MapaRoteiro } from '@/components/propostas/MapaRoteiro';
 import { t, type IdiomaProposal } from '@/lib/i18n-proposta';
@@ -336,6 +336,63 @@ function CountdownPreview({ conteudo, idioma }: { conteudo: Record<string, unkno
   );
 }
 
+const REGIME_LABELS: Record<string, string> = {
+  RO: 'Room Only', BB: 'Bed & Breakfast', HB: 'Half Board', FB: 'Full Board', AI: 'All Inclusive',
+};
+const TRANSPORTE_ICONS: Record<string, string> = {
+  VOO: '✈️', TRANSFER: '🚐', TREM: '🚆', ONIBUS: '🚌', CARRO: '🚗', BARCO: '⛴️',
+};
+
+function AlojamentoPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
+  const a = conteudo as Partial<AlojamentoData>;
+  return (
+    <div className="flex gap-4 p-4 rounded-xl bg-gradient-to-r from-blue-50/50 to-transparent border border-blue-100">
+      {a.hotel_imagem && (
+        <img src={a.hotel_imagem} alt={a.hotel_nome || ''} className="w-28 h-20 rounded-lg object-cover shrink-0" />
+      )}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">🏨</span>
+          <h4 className="text-lg font-semibold truncate">{a.viagem_noturna ? '✈ Viagem Noturna' : (a.hotel_nome || 'Hotel')}</h4>
+          {a.hotel_estrelas ? <span className="text-amber-500 text-sm">{'★'.repeat(a.hotel_estrelas)}</span> : null}
+        </div>
+        <p className="text-sm opacity-70 mt-0.5">{a.destino_nome}</p>
+        <div className="flex flex-wrap gap-3 mt-2 text-xs opacity-60">
+          {a.check_in && <span>Check-in: {new Date(a.check_in + 'T12:00:00').toLocaleDateString('pt-BR')}</span>}
+          {a.check_out && <span>Check-out: {new Date(a.check_out + 'T12:00:00').toLocaleDateString('pt-BR')}</span>}
+          {a.noites ? <span>{a.noites} noite(s)</span> : null}
+          {a.regime && <span>{REGIME_LABELS[a.regime] || a.regime}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TransportePreview({ conteudo }: { conteudo: Record<string, unknown> }) {
+  const tr = conteudo as Partial<TransporteData>;
+  const icon = TRANSPORTE_ICONS[tr.tipo || 'TRANSFER'] || '🚐';
+  return (
+    <div className="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-indigo-50/50 to-transparent border border-indigo-100">
+      <span className="text-2xl">{icon}</span>
+      <div className="flex-1 min-w-0">
+        <h4 className="text-lg font-semibold">
+          {tr.origem || '?'} → {tr.destino || '?'}
+        </h4>
+        <div className="flex flex-wrap gap-3 mt-1 text-xs opacity-60">
+          {tr.data && <span>{new Date(tr.data + 'T12:00:00').toLocaleDateString('pt-BR')}</span>}
+          {tr.companhia && <span>{tr.companhia}</span>}
+          {tr.numero_voo && <span>{tr.numero_voo}</span>}
+          {tr.horario_saida && <span>Saida: {tr.horario_saida}</span>}
+          {tr.horario_chegada && <span>Chegada: {tr.horario_chegada}</span>}
+          {tr.distancia_km ? <span>{tr.distancia_km}km</span> : null}
+          {tr.tempo_estimado && <span>{tr.tempo_estimado}</span>}
+        </div>
+        {tr.detalhes && <p className="text-sm opacity-70 mt-1">{tr.detalhes}</p>}
+      </div>
+    </div>
+  );
+}
+
 interface Props {
   secoes: SecaoProposta[];
   corPrimaria: string;
@@ -359,6 +416,8 @@ export function PreviewRenderer({ secoes, corPrimaria, idioma }: Props) {
           {secao.tipo === 'MAPA' && <MapaPreview conteudo={secao.conteudo} />}
           {secao.tipo === 'FAQ' && <FAQPreview conteudo={secao.conteudo} />}
           {secao.tipo === 'COUNTDOWN' && <CountdownPreview conteudo={secao.conteudo} idioma={idioma} />}
+          {secao.tipo === 'ALOJAMENTO' && <AlojamentoPreview conteudo={secao.conteudo} />}
+          {secao.tipo === 'TRANSPORTE' && <TransportePreview conteudo={secao.conteudo} />}
         </div>
       ))}
     </div>

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import {
   Plus, Type, Plane, Calendar, Image, CheckSquare,
   DollarSign, Quote, MousePointer, Hotel, Sparkles, Loader2,
-  Video, Map, HelpCircle, Timer,
+  Video, Map, HelpCircle, Timer, Bed, Car,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -22,6 +22,8 @@ const SECAO_TIPOS = [
   { tipo: 'MAPA', label: 'Mapa', icon: Map, desc: 'Pontos no mapa' },
   { tipo: 'FAQ', label: 'FAQ', icon: HelpCircle, desc: 'Perguntas frequentes' },
   { tipo: 'COUNTDOWN', label: 'Countdown', icon: Timer, desc: 'Contagem regressiva' },
+  { tipo: 'ALOJAMENTO', label: 'Alojamento', icon: Bed, desc: 'Hotel estruturado' },
+  { tipo: 'TRANSPORTE', label: 'Transporte', icon: Car, desc: 'Voo, transfer, trem...' },
 ] as const;
 
 interface Props {

@@ -45,6 +45,39 @@ interface Translations {
   propostaNaoEncontrada: string;
   linkExpirado: string;
   contateAgente: string;
+  // Discovery
+  inicio: string;
+  resumoAlojamentos: string;
+  resumoTransportes: string;
+  mapaRota: string;
+  itinerario: string;
+  precos: string;
+  reserveAgora: string;
+  voos: string;
+  transfers: string;
+  checkIn: string;
+  checkOut: string;
+  noites: string;
+  estadia: string;
+  regime: string;
+  base: string;
+  alojamento: string;
+  destino: string;
+  distancia: string;
+  tempoEstimado: string;
+  introducao: string;
+  termos: string;
+  sobreAgencia: string;
+  embarque: string;
+  desembarque: string;
+  regimeRO: string;
+  regimeBB: string;
+  regimeHB: string;
+  regimeFB: string;
+  regimeAI: string;
+  viagemNoturna: string;
+  fimItinerario: string;
+  conecteSe: string;
 }
 
 const translations: Record<IdiomaProposal, Translations> = {
@@ -85,6 +118,38 @@ const translations: Record<IdiomaProposal, Translations> = {
     propostaNaoEncontrada: 'Proposta nao encontrada',
     linkExpirado: 'Este link pode ter expirado ou a proposta foi removida.',
     contateAgente: 'Entre em contato com seu agente de viagens para obter um novo link.',
+    inicio: 'Inicio',
+    resumoAlojamentos: 'Resumo dos Alojamentos',
+    resumoTransportes: 'Resumo de Transportes',
+    mapaRota: 'Mapa da Rota',
+    itinerario: 'Itinerario',
+    precos: 'Precos',
+    reserveAgora: 'Reserve Agora',
+    voos: 'Voos',
+    transfers: 'Transfers',
+    checkIn: 'Check-in',
+    checkOut: 'Check-out',
+    noites: 'Noites',
+    estadia: 'Estadia',
+    regime: 'Regime',
+    base: 'Base',
+    alojamento: 'Alojamento',
+    destino: 'Destino',
+    distancia: 'Distancia',
+    tempoEstimado: 'Tempo estimado',
+    introducao: 'Introducao',
+    termos: 'Termos e Condicoes',
+    sobreAgencia: 'Sobre',
+    embarque: 'Embarque',
+    desembarque: 'Desembarque',
+    regimeRO: 'Somente Hospedagem',
+    regimeBB: 'Cafe da Manha',
+    regimeHB: 'Meia Pensao',
+    regimeFB: 'Pensao Completa',
+    regimeAI: 'All Inclusive',
+    viagemNoturna: 'Viagem noturna',
+    fimItinerario: 'Fim do Itinerario',
+    conecteSe: 'Conecte-se com',
   },
   en: {
     suaProposta: 'Your Travel Proposal',
@@ -123,6 +188,38 @@ const translations: Record<IdiomaProposal, Translations> = {
     propostaNaoEncontrada: 'Proposal not found',
     linkExpirado: 'This link may have expired or the proposal has been removed.',
     contateAgente: 'Contact your travel agent for a new link.',
+    inicio: 'Home',
+    resumoAlojamentos: 'Accommodation Summary',
+    resumoTransportes: 'Transport Summary',
+    mapaRota: 'Route Map',
+    itinerario: 'Itinerary',
+    precos: 'Pricing',
+    reserveAgora: 'Book Now',
+    voos: 'Flights',
+    transfers: 'Transfers',
+    checkIn: 'Check-in',
+    checkOut: 'Check-out',
+    noites: 'Nights',
+    estadia: 'Stay',
+    regime: 'Meal Plan',
+    base: 'Basis',
+    alojamento: 'Accommodation',
+    destino: 'Destination',
+    distancia: 'Distance',
+    tempoEstimado: 'Estimated time',
+    introducao: 'Introduction',
+    termos: 'Terms & Conditions',
+    sobreAgencia: 'About',
+    embarque: 'Pickup',
+    desembarque: 'Dropoff',
+    regimeRO: 'Room Only',
+    regimeBB: 'Bed & Breakfast',
+    regimeHB: 'Half Board',
+    regimeFB: 'Full Board',
+    regimeAI: 'All Inclusive',
+    viagemNoturna: 'Overnight travel',
+    fimItinerario: 'End of Itinerary',
+    conecteSe: 'Connect with',
   },
   es: {
     suaProposta: 'Tu Propuesta de Viaje',
@@ -161,6 +258,38 @@ const translations: Record<IdiomaProposal, Translations> = {
     propostaNaoEncontrada: 'Propuesta no encontrada',
     linkExpirado: 'Este enlace puede haber expirado o la propuesta fue eliminada.',
     contateAgente: 'Contacte a su agente de viajes para obtener un nuevo enlace.',
+    inicio: 'Inicio',
+    resumoAlojamentos: 'Resumen de Alojamientos',
+    resumoTransportes: 'Resumen de Transportes',
+    mapaRota: 'Mapa de Ruta',
+    itinerario: 'Itinerario',
+    precos: 'Precios',
+    reserveAgora: 'Reserve Ahora',
+    voos: 'Vuelos',
+    transfers: 'Transfers',
+    checkIn: 'Check-in',
+    checkOut: 'Check-out',
+    noites: 'Noches',
+    estadia: 'Estadia',
+    regime: 'Regimen',
+    base: 'Base',
+    alojamento: 'Alojamiento',
+    destino: 'Destino',
+    distancia: 'Distancia',
+    tempoEstimado: 'Tiempo estimado',
+    introducao: 'Introduccion',
+    termos: 'Terminos y Condiciones',
+    sobreAgencia: 'Acerca de',
+    embarque: 'Embarque',
+    desembarque: 'Desembarque',
+    regimeRO: 'Solo Alojamiento',
+    regimeBB: 'Desayuno Incluido',
+    regimeHB: 'Media Pension',
+    regimeFB: 'Pension Completa',
+    regimeAI: 'Todo Incluido',
+    viagemNoturna: 'Viaje nocturno',
+    fimItinerario: 'Fin del Itinerario',
+    conecteSe: 'Conectese con',
   },
 };
 
