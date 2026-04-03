@@ -15,7 +15,7 @@ const TEMPLATES: Omit<TemplateProposta, 'id'>[] = [
     icone: '💕',
     imagem_preview: 'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=600&q=80',
     visual: {
-      tema: 'padrao', cor_primaria: '#e11d48', cor_secundaria: '#0a0a14', cor_texto: '#ffffff',
+      tema: 'padrao', cor_primaria: '#e11d48', cor_secundaria: '#0a0a14', cor_texto: '#1a1a2e',
       cor_fundo: '#fff1f2', fonte: 'Inter', imagem_capa: 'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=1200&q=80', estilo_capa: 'FULLSCREEN',
     },
     secoes_padrao: [
@@ -43,7 +43,7 @@ const TEMPLATES: Omit<TemplateProposta, 'id'>[] = [
     icone: '🏔️',
     imagem_preview: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=600&q=80',
     visual: {
-      tema: 'padrao', cor_primaria: '#059669', cor_secundaria: '#0a0a14', cor_texto: '#ffffff',
+      tema: 'padrao', cor_primaria: '#059669', cor_secundaria: '#0a0a14', cor_texto: '#1a1a2e',
       cor_fundo: '#ecfdf5', fonte: 'Inter', imagem_capa: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1200&q=80', estilo_capa: 'FULLSCREEN',
     },
     secoes_padrao: [
@@ -71,7 +71,7 @@ const TEMPLATES: Omit<TemplateProposta, 'id'>[] = [
     icone: '🏰',
     imagem_preview: 'https://images.unsplash.com/photo-1597466599360-3b9775841aec?w=600&q=80',
     visual: {
-      tema: 'padrao', cor_primaria: '#7c3aed', cor_secundaria: '#0a0a14', cor_texto: '#ffffff',
+      tema: 'padrao', cor_primaria: '#7c3aed', cor_secundaria: '#0a0a14', cor_texto: '#1a1a2e',
       cor_fundo: '#faf5ff', fonte: 'Inter', imagem_capa: 'https://images.unsplash.com/photo-1597466599360-3b9775841aec?w=1200&q=80', estilo_capa: 'SPLIT',
     },
     secoes_padrao: [
@@ -103,7 +103,7 @@ const TEMPLATES: Omit<TemplateProposta, 'id'>[] = [
     icone: '🚢',
     imagem_preview: 'https://images.unsplash.com/photo-1548574505-5e239809ee19?w=600&q=80',
     visual: {
-      tema: 'padrao', cor_primaria: '#0284c7', cor_secundaria: '#0a0a14', cor_texto: '#ffffff',
+      tema: 'padrao', cor_primaria: '#0284c7', cor_secundaria: '#0a0a14', cor_texto: '#1a1a2e',
       cor_fundo: '#f0f9ff', fonte: 'Inter', imagem_capa: 'https://images.unsplash.com/photo-1548574505-5e239809ee19?w=1200&q=80', estilo_capa: 'FULLSCREEN',
     },
     secoes_padrao: [
@@ -132,7 +132,7 @@ const TEMPLATES: Omit<TemplateProposta, 'id'>[] = [
     icone: '💼',
     imagem_preview: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=600&q=80',
     visual: {
-      tema: 'padrao', cor_primaria: '#1e293b', cor_secundaria: '#0a0a14', cor_texto: '#ffffff',
+      tema: 'padrao', cor_primaria: '#1e293b', cor_secundaria: '#0a0a14', cor_texto: '#1a1a2e',
       cor_fundo: '#f8fafc', fonte: 'Inter', imagem_capa: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=1200&q=80', estilo_capa: 'MINIMAL',
     },
     secoes_padrao: [
@@ -155,7 +155,7 @@ const TEMPLATES: Omit<TemplateProposta, 'id'>[] = [
     icone: '🏖️',
     imagem_preview: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&q=80',
     visual: {
-      tema: 'padrao', cor_primaria: '#0891b2', cor_secundaria: '#0a0a14', cor_texto: '#ffffff',
+      tema: 'padrao', cor_primaria: '#0891b2', cor_secundaria: '#0a0a14', cor_texto: '#1a1a2e',
       cor_fundo: '#ecfeff', fonte: 'Inter', imagem_capa: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1200&q=80', estilo_capa: 'FULLSCREEN',
     },
     secoes_padrao: [

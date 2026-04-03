@@ -770,7 +770,7 @@ export function createProposta(numero: string): Proposta {
     idioma: 'pt-BR',
     visual: {
       tema: 'padrao', layout: 'CLASSICO', logo_agencia: '',
-      cor_primaria: '#004aad', cor_secundaria: '#0a0a14', cor_texto: '#ffffff',
+      cor_primaria: '#004aad', cor_secundaria: '#0a0a14', cor_texto: '#1a1a2e',
       cor_fundo: '#ffffff', fonte: 'Inter', imagem_capa: '', estilo_capa: 'FULLSCREEN',
     },
     viagem: {

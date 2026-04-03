@@ -3,7 +3,11 @@ import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { generateId } from '@/lib/utils';
 
-const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads');
+// Use /app/data/uploads in production (persistent volume), fallback to public/uploads in dev
+const UPLOAD_DIR = process.env.NODE_ENV === 'production'
+  ? path.join(process.cwd(), 'data', 'uploads')
+  : path.join(process.cwd(), 'public', 'uploads');
+
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'];
 
@@ -35,7 +39,7 @@ export async function POST(req: Request) {
       await writeFile(filePath, buffer);
 
       results.push({
-        url: `/uploads/${fileName}`,
+        url: `/api/uploads/${fileName}`,
         nome: file.name,
         tamanho: file.size,
       });
