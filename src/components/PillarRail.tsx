@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useActivePillar, PILLARS, type Pillar } from '@/hooks/useActivePillar';
+import { Logo } from './Logo';
 
 const PILLAR_ROUTES: Record<Pillar, string> = {
   planejamento: '/cac/dashboard',
@@ -23,7 +24,7 @@ export function PillarRail({ onPillarClick }: Props) {
       <div className="pt-5 pb-4">
         <Link href="/dashboard" className="block">
           <div className="w-10 h-10 rounded-2xl bg-[var(--t-green)] flex items-center justify-center shadow-md shadow-[var(--t-green-shadow)]">
-            <span className="text-white font-bold text-base">E</span>
+            <Logo variant="icon" className="text-[13px]" />
           </div>
         </Link>
       </div>

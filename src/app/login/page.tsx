@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Lock, Mail, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
+import { Logo } from '@/components/Logo';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -46,16 +47,8 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-xl bg-[var(--t-green)] flex items-center justify-center">
-              <span className="text-white font-bold text-xl dark:text-[#0a0a14]">E</span>
-            </div>
-            <div className="text-left">
-              <div className="text-xl font-bold text-[var(--t-text)] tracking-tight">
-                Entur <span className="text-[var(--t-green)]">OS</span>
-              </div>
-              <div className="text-xs text-[var(--t-text-secondary)] -mt-0.5">Financeiro</div>
-            </div>
+          <div className="mb-4">
+            <Logo variant="full" className="text-3xl justify-center" />
           </div>
           <p className="text-sm text-[var(--t-text-secondary)]">
             Acesse sua conta para continuar
