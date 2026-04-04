@@ -20,17 +20,8 @@ export function PillarRail({ onPillarClick }: Props) {
 
   return (
     <aside className="w-[72px] bg-[var(--t-pillar-bg)] flex flex-col items-center shrink-0 border-r border-[var(--t-border)] z-40">
-      {/* Logo */}
-      <div className="pt-5 pb-4">
-        <Link href="/dashboard" className="block">
-          <div className="w-11 h-11 rounded-2xl bg-[var(--t-green)] flex items-center justify-center shadow-md shadow-[var(--t-green-shadow)]">
-            <Logo variant="icon" />
-          </div>
-        </Link>
-      </div>
-
       {/* Pillar icons */}
-      <nav className="flex-1 flex flex-col items-center gap-1 pt-2">
+      <nav className="flex-1 flex flex-col items-center gap-1 pt-5">
         {PILLARS.map(pillar => {
           const Icon = pillar.icon;
           const isActive = activePillar === pillar.id;
