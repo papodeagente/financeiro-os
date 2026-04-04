@@ -1,60 +1,51 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 
-type LogoVariant = 'full' | 'compact' | 'icon';
+type LogoVariant = 'full' | 'sidebar' | 'icon';
 
 interface Props {
   variant?: LogoVariant;
   href?: string;
   className?: string;
+  invertOnDark?: boolean;
 }
 
 /**
- * enturOS FIN logo — 3 variantes:
- * - full:    enturOS [FIN]  (login, onboarding)
- * - compact: eOS [FIN]     (topbar, headers)
- * - icon:    eOS            (pillar rail, favicon)
+ * enturOS FIN — logo oficial
+ *
+ * Variantes:
+ * - full:    Logo completa, tamanho grande (login, onboarding)
+ * - sidebar: Logo compacta para FeaturePanel header
+ * - icon:    Badge pequeno para PillarRail (40px)
+ *
+ * invertOnDark: aplica filtro para inverter preto→branco no dark mode
+ *               mantém o azul do "OS" intacto
  */
-export function Logo({ variant = 'full', href, className = '' }: Props) {
+
+const SIZES: Record<LogoVariant, { width: number; height: number }> = {
+  full: { width: 220, height: 42 },
+  sidebar: { width: 130, height: 26 },
+  icon: { width: 56, height: 12 },
+};
+
+export function Logo({ variant = 'full', href, className = '', invertOnDark = true }: Props) {
+  const size = SIZES[variant];
+  const isIcon = variant === 'icon';
+
   const content = (
-    <span className={`inline-flex items-center gap-1.5 select-none ${className}`}>
-      {variant === 'full' && (
-        <>
-          <span className="font-bold tracking-tight text-[var(--t-text)]" style={{ letterSpacing: '-0.03em' }}>
-            entur
-          </span>
-          <span className="font-bold tracking-tight text-[var(--t-green)]" style={{ letterSpacing: '-0.03em' }}>
-            OS
-          </span>
-          <span className="text-[0.55em] font-semibold text-[var(--t-text)] border border-[var(--t-text)] rounded-md px-[0.4em] py-[0.1em] leading-none uppercase tracking-wide ml-0.5">
-            FIN
-          </span>
-        </>
-      )}
-      {variant === 'compact' && (
-        <>
-          <span className="font-bold tracking-tight text-[var(--t-text)]" style={{ letterSpacing: '-0.02em' }}>
-            e
-          </span>
-          <span className="font-bold tracking-tight text-[var(--t-green)]" style={{ letterSpacing: '-0.02em' }}>
-            OS
-          </span>
-          <span className="text-[0.5em] font-semibold text-[var(--t-text-secondary)] border border-[var(--t-border-hover)] rounded px-[0.35em] py-[0.08em] leading-none uppercase tracking-wide ml-0.5">
-            FIN
-          </span>
-        </>
-      )}
-      {variant === 'icon' && (
-        <>
-          <span className="font-bold text-white" style={{ letterSpacing: '-0.02em' }}>
-            e
-          </span>
-          <span className="font-bold text-white/80" style={{ letterSpacing: '-0.02em' }}>
-            OS
-          </span>
-        </>
-      )}
+    <span className={`inline-flex items-center select-none ${className}`}>
+      <Image
+        src="/logo-enturos-fin.svg"
+        alt="enturOS FIN"
+        width={size.width}
+        height={size.height}
+        priority
+        className={`h-auto ${invertOnDark ? 'dark:logo-invert' : ''} ${isIcon ? 'logo-icon-invert' : ''}`}
+        style={{ width: size.width, height: 'auto' }}
+        draggable={false}
+      />
     </span>
   );
 

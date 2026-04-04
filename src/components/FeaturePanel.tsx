@@ -34,7 +34,7 @@ export function FeaturePanel() {
     <aside className="w-[240px] bg-[var(--t-surface)] border-r border-[var(--t-border)] flex flex-col shrink-0 overflow-hidden">
       {/* Header */}
       <div className="px-5 pt-4 pb-3 border-b border-[var(--t-border)]">
-        <Logo variant="compact" href="/dashboard" className="text-[15px] mb-2" />
+        <Logo variant="sidebar" href="/dashboard" className="mb-2" />
         <h2 className="text-[var(--text-body)] font-semibold text-[var(--t-text)] tracking-tight">
           {pillarConfig?.label}
         </h2>

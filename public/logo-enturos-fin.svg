@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 80" fill="none">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@800&amp;display=swap');
+    .logo-text { font-family: 'Inter', sans-serif; font-weight: 800; }
+    .badge-text { font-family: 'Inter', sans-serif; font-weight: 700; }
+  </style>
+  <!-- "entur" -->
+  <text x="0" y="65" class="logo-text" font-size="72" letter-spacing="-3" fill="#000000">entur</text>
+  <!-- "OS" -->
+  <text x="228" y="65" class="logo-text" font-size="72" letter-spacing="-3" fill="#3B8BF6">os</text>
+  <!-- FIN badge -->
+  <rect x="330" y="22" width="72" height="38" rx="9" ry="9" stroke="#000000" stroke-width="3" fill="none"/>
+  <text x="342" y="49" class="badge-text" font-size="22" letter-spacing="2.5" fill="#000000">FIN</text>
+</svg>
