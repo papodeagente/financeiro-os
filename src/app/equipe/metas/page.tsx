@@ -187,37 +187,37 @@ export default function MetasPage() {
           </div>
         </div>
 
-        {/* Team KPIs (bento) */}
-        <div className="bento-grid">
-          <div className="bento-3 bento-card">
+        {/* Team KPIs */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bento-card">
             <div className="flex items-center gap-2 mb-3">
               <Target className="w-5 h-5 text-[var(--t-blue)]" />
               <span className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide">Meta Equipe</span>
             </div>
-            <p className="kpi-hero text-[var(--t-blue)]">{BRL(teamTotals.metaTotal)}</p>
+            <p className="text-2xl font-bold text-[var(--t-blue)]">{BRL(teamTotals.metaTotal)}</p>
           </div>
-          <div className="bento-3 bento-card">
+          <div className="bento-card">
             <div className="flex items-center gap-2 mb-3">
               <TrendingUp className="w-5 h-5 text-[var(--t-green)]" />
               <span className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide">Realizado</span>
             </div>
-            <p className="kpi-hero text-[var(--t-green)]">{BRL(teamTotals.realizadoTotal)}</p>
+            <p className="text-2xl font-bold text-[var(--t-green)]">{BRL(teamTotals.realizadoTotal)}</p>
           </div>
-          <div className="bento-3 bento-card">
+          <div className="bento-card">
             <div className="flex items-center gap-2 mb-3">
               <BarChart3 className="w-5 h-5 text-[var(--t-amber)]" />
               <span className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide">% Atingido</span>
             </div>
-            <p className={`kpi-hero ${teamTotals.pctTotal >= 100 ? 'text-[var(--t-green)]' : teamTotals.pctTotal >= 70 ? 'text-[var(--t-amber)]' : 'text-[var(--t-red)]'}`}>
+            <p className={`text-2xl font-bold ${teamTotals.pctTotal >= 100 ? 'text-[var(--t-green)]' : teamTotals.pctTotal >= 70 ? 'text-[var(--t-amber)]' : 'text-[var(--t-red)]'}`}>
               {teamTotals.pctTotal.toFixed(1)}%
             </p>
           </div>
-          <div className="bento-3 bento-card">
+          <div className="bento-card">
             <div className="flex items-center gap-2 mb-3">
               <DollarSign className="w-5 h-5 text-purple-400" />
-              <span className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide">Comissões do M��s</span>
+              <span className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide">Comissões do Mês</span>
             </div>
-            <p className="kpi-hero text-purple-400">{BRL(monthCommissions)}</p>
+            <p className="text-2xl font-bold text-purple-400">{BRL(monthCommissions)}</p>
           </div>
         </div>
 

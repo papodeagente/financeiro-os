@@ -547,8 +547,8 @@ export default function DashboardPage() {
 
       <div className="px-8 pb-8 space-y-6">
 
-        {/* FAIXA 2: HERO KPIs (bento grid) */}
-        <div className="bento-grid">
+        {/* FAIXA 2: HERO KPIs */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {kpis.slice(0, 4).map((kpi, i) => {
             const Icon = kpi.icon;
             const deltaPositive = kpi.invertDelta ? (kpi.delta !== null && kpi.delta < 0) : (kpi.delta !== null && kpi.delta > 0);
@@ -560,7 +560,7 @@ export default function DashboardPage() {
             const metaAtingida = metaPct !== null && metaPct >= 100;
 
             return (
-              <div key={i} className="bento-3 bento-card relative overflow-hidden">
+              <div key={i} className="bento-card relative overflow-hidden min-w-0">
                 {metaAtingida && (
                   <div className="absolute top-4 right-4" title="Meta atingida!">
                     <Trophy className="w-5 h-5 text-amber-400" />

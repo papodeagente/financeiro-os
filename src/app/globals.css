@@ -302,13 +302,16 @@
   box-shadow: var(--t-card-shadow-hover);
 }
 
-/* KPI hero numbers (48px) */
+/* KPI hero numbers — responsive, nunca excede o card */
 .kpi-hero {
-  font-size: var(--text-kpi);
+  font-size: clamp(20px, 3vw, 48px);
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums lining-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Panel animations */

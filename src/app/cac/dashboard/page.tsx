@@ -222,9 +222,9 @@ export default function CACDashboardPage() {
 
         {monthData && (
           <>
-            {/* Main KPIs (bento) */}
-            <div className="bento-grid">
-              <div className="bento-3 bento-card">
+            {/* Main KPIs */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bento-card">
                 <div className="flex items-center justify-between mb-3">
                   <Target className="w-5 h-5 text-[var(--t-green)]" />
                   {cacTrend !== null && (
@@ -234,42 +234,42 @@ export default function CACDashboardPage() {
                     </Badge>
                   )}
                 </div>
-                <p className="kpi-hero text-[var(--t-text)]">{BRL(monthData.cac)}</p>
+                <p className="text-2xl font-bold text-[var(--t-text)]">{BRL(monthData.cac)}</p>
                 <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mt-2 uppercase tracking-wide">CAC do Mês</p>
               </div>
 
-              <div className="bento-3 bento-card">
+              <div className="bento-card">
                 <div className="flex items-center justify-between mb-3">
                   <DollarSign className="w-5 h-5 text-[var(--t-blue)]" />
                 </div>
-                <p className="kpi-hero text-[var(--t-text)]">{BRL(monthData.ticketMedio)}</p>
+                <p className="text-2xl font-bold text-[var(--t-text)]">{BRL(monthData.ticketMedio)}</p>
                 <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mt-2 uppercase tracking-wide">Ticket Médio</p>
               </div>
 
-              <div className="bento-3 bento-card">
+              <div className="bento-card">
                 <div className="flex items-center justify-between mb-3">
                   <TrendingUp className="w-5 h-5 text-[var(--t-amber)]" />
                 </div>
-                <p className={`kpi-hero ${monthData.roi >= 0 ? 'text-[var(--t-green)]' : 'text-[var(--t-red)]'}`}>
+                <p className={`text-2xl font-bold ${monthData.roi >= 0 ? 'text-[var(--t-green)]' : 'text-[var(--t-red)]'}`}>
                   {PCT(monthData.roi)}
                 </p>
                 <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mt-2 uppercase tracking-wide">ROI Comercial</p>
               </div>
 
-              <div className="bento-3 bento-card">
+              <div className="bento-card">
                 <div className="flex items-center justify-between mb-3">
                   <Users className="w-5 h-5 text-purple-400" />
                 </div>
-                <p className="kpi-hero text-[var(--t-text)]">{monthData.qtdClientesNovos}</p>
+                <p className="text-2xl font-bold text-[var(--t-text)]">{monthData.qtdClientesNovos}</p>
                 <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mt-2 uppercase tracking-wide">Clientes Novos</p>
               </div>
             </div>
 
-            {/* Financial Summary (bento) */}
-            <div className="bento-grid">
+            {/* Financial Summary */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
               {/* Expenses Breakdown */}
-              <Card className="bento-6 bg-[var(--t-surface)]">
+              <Card className="bg-[var(--t-surface)]">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-[var(--t-text)] text-base flex items-center gap-2">
                     <BarChart3 className="w-4 h-4 text-[var(--t-green)]" />
@@ -337,7 +337,7 @@ export default function CACDashboardPage() {
               </Card>
 
               {/* Revenue & Efficiency */}
-              <Card className="bento-6 bg-[var(--t-surface)]">
+              <Card className="bg-[var(--t-surface)]">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-[var(--t-text)] text-base flex items-center gap-2">
                     <Calculator className="w-4 h-4 text-[var(--t-green)]" />
