@@ -334,6 +334,12 @@ export default function PropostaNovaPage() {
                     </option>
                   ))}
                 </select>
+                {!wizard.cliente_id && (
+                  <p className="mt-1.5 text-xs text-amber-500 flex items-center gap-1">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    Nenhum cliente vinculado — a proposta será criada sem cliente
+                  </p>
+                )}
               </div>
 
               {/* Destino */}

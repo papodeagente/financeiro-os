@@ -34,7 +34,10 @@ export default function ComissoesPage() {
   const [calculating, setCalculating] = useState(false);
   const [filterStatus, setFilterStatus] = useState<StatusComissao | 'TODOS'>('TODOS');
   const [filterVendedor, setFilterVendedor] = useState('');
-  const [filterMonth, setFilterMonth] = useState('');
+  const [filterMonth, setFilterMonth] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
 
   async function load() {
     setLoading(true);

@@ -30,7 +30,7 @@ interface SidebarSection {
 const PLANEJAMENTO_MENU: SidebarSection[] = [
   {
     items: [
-      { key: 'custos-negocio', label: 'Custos do negocio', icon: Wallet, href: '/planejamento/custos' },
+      { key: 'custos-negocio', label: 'Custos do negócio', icon: Wallet, href: '/planejamento/custos' },
       { key: 'custos-projeto', label: 'Projetos comerciais', icon: FolderKanban, href: '/planejamento/projetos' },
       { key: 'cac-dashboard', label: 'Dashboard CAC', icon: Gauge, href: '/cac/dashboard' },
       { key: 'cac-cenarios', label: 'Simulador CAC', icon: TrendingUp, href: '/cac/cenarios' },
@@ -43,8 +43,8 @@ const METAS_MENU: SidebarSection[] = [
     items: [
       { key: 'dashboard-kpi', label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
       { key: 'metas-ranking', label: 'Metas da equipe', icon: Medal, href: '/equipe/metas' },
-      { key: 'comissoes', label: 'Comissoes', icon: Percent, href: '/equipe/comissoes' },
-      { key: 'planos-comissao', label: 'Planos de comissao', icon: Settings, href: '/equipe/planos-comissao' },
+      { key: 'comissoes', label: 'Comissões', icon: Percent, href: '/equipe/comissoes' },
+      { key: 'planos-comissao', label: 'Planos de comissão', icon: Settings, href: '/equipe/planos-comissao' },
     ],
   },
 ];
@@ -54,7 +54,7 @@ const PRODUTOS_MENU: SidebarSection[] = [
     items: [
       { key: 'grupos', label: 'Grupos', icon: FolderOpen, href: '/grupos' },
       { key: 'minhas-propostas', label: 'Propostas', icon: FileText, href: '/propostas' },
-      { key: 'orcamentos', label: 'Orcamentos', icon: BarChart3, href: '/vendas/orcamentos' },
+      { key: 'orcamentos', label: 'Orçamentos', icon: BarChart3, href: '/vendas/orcamentos' },
       { key: 'nova-venda', label: 'Nova venda', icon: ShoppingCart, href: '/vendas/nova' },
     ],
   },
@@ -62,7 +62,7 @@ const PRODUTOS_MENU: SidebarSection[] = [
     title: 'Ferramentas',
     items: [
       { key: 'buscar-voos', label: 'Voos', icon: Plane, href: '/voos' },
-      { key: 'buscar-hoteis', label: 'Hoteis', icon: Hotel, href: '/hoteis' },
+      { key: 'buscar-hoteis', label: 'Hotéis', icon: Hotel, href: '/hoteis' },
       { key: 'destinos', label: 'Destinos', icon: Globe, href: '/destinos' },
     ],
   },
@@ -70,17 +70,17 @@ const PRODUTOS_MENU: SidebarSection[] = [
 
 const FINANCEIRO_MENU: SidebarSection[] = [
   {
-    title: 'Visao geral',
+    title: 'Visão geral',
     items: [
-      { key: 'fin-hub', label: 'Visao geral', icon: FluxoIcon, href: '/financeiro-ag' },
+      { key: 'fin-hub', label: 'Visão geral', icon: FluxoIcon, href: '/financeiro-ag' },
       { key: 'fluxo-caixa', label: 'Fluxo de caixa', icon: FluxoIcon, href: '/financeiro-ag/fluxo-caixa' },
       { key: 'dre', label: 'DRE', icon: FileSpreadsheet, href: '/financeiro-ag/dre' },
       { key: 'receber', label: 'Contas a receber', icon: Receipt, href: '/financeiro-ag/receber' },
       { key: 'pagar', label: 'Contas a pagar', icon: CreditCard, href: '/financeiro-ag/pagar' },
-      { key: 'conciliacao', label: 'Conciliacao', icon: FileSpreadsheet, href: '/financeiro-ag/conciliacao' },
-      { key: 'transferencias', label: 'Transferencias', icon: ArrowRightLeft, href: '/financeiro-ag/transferencias' },
+      { key: 'conciliacao', label: 'Conciliação', icon: FileSpreadsheet, href: '/financeiro-ag/conciliacao' },
+      { key: 'transferencias', label: 'Transferências', icon: ArrowRightLeft, href: '/financeiro-ag/transferencias' },
       { key: 'plano-contas', label: 'Plano de contas', icon: BookOpen, href: '/financeiro-ag/plano-contas' },
-      { key: 'contas-bancarias', label: 'Contas bancarias', icon: Landmark, href: '/financeiro-ag/contas-bancarias' },
+      { key: 'contas-bancarias', label: 'Contas bancárias', icon: Landmark, href: '/financeiro-ag/contas-bancarias' },
     ],
   },
   {
@@ -99,17 +99,17 @@ const FINANCEIRO_MENU: SidebarSection[] = [
     ],
   },
   {
-    title: 'Relatorios',
+    title: 'Relatórios',
     items: [
-      { key: 'rel-financeiro', label: 'Relatorios', icon: DollarSign, href: '/relatorios/financeiro' },
+      { key: 'rel-financeiro', label: 'Relatórios', icon: DollarSign, href: '/relatorios/financeiro' },
       { key: 'rel-rentabilidade', label: 'Rentabilidade', icon: RentIcon, href: '/relatorios/rentabilidade' },
       { key: 'rel-comparativo', label: 'Comparativo mensal', icon: BarChart3, href: '/relatorios/comparativo' },
     ],
   },
   {
-    title: 'Integracao',
+    title: 'Integração',
     items: [
-      { key: 'crm-config', label: 'Integracao CRM', icon: Link2, href: '/config/crm' },
+      { key: 'crm-config', label: 'Integração CRM', icon: Link2, href: '/config/crm' },
     ],
   },
 ];

@@ -94,7 +94,7 @@ export function createGrupoViagem(): GrupoViagem {
   const now = new Date().toISOString();
   return {
     id: generateId(),
-    grp_id: '',
+    grp_id: 'GRP-' + Date.now().toString(36).toUpperCase(),
     origem_destino: '',
     created_at: now,
     updated_at: now,

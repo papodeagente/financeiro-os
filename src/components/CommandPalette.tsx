@@ -22,33 +22,33 @@ const NAVIGATION_ITEMS: CommandItem[] = [
   { id: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-4 h-4" />, section: 'navegacao' },
   { id: 'grupos', label: 'Grupos', href: '/grupos', icon: <FolderOpen className="w-4 h-4" />, section: 'navegacao' },
   { id: 'propostas', label: 'Propostas', href: '/propostas', icon: <FileText className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'orcamentos', label: 'Orcamentos', href: '/vendas/orcamentos', icon: <BarChart3 className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'orcamentos', label: 'Orçamentos', href: '/vendas/orcamentos', icon: <BarChart3 className="w-4 h-4" />, section: 'navegacao' },
   { id: 'vendas', label: 'Vendas fechadas', href: '/vendas', icon: <ListOrdered className="w-4 h-4" />, section: 'navegacao' },
   { id: 'voos', label: 'Buscar voos', href: '/voos', icon: <Plane className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'hoteis', label: 'Buscar hoteis', href: '/hoteis', icon: <Hotel className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'hoteis', label: 'Buscar hotéis', href: '/hoteis', icon: <Hotel className="w-4 h-4" />, section: 'navegacao' },
   { id: 'destinos', label: 'Destinos', href: '/destinos', icon: <Globe className="w-4 h-4" />, section: 'navegacao' },
   { id: 'fluxo', label: 'Fluxo de caixa', href: '/financeiro-ag/fluxo-caixa', icon: <DollarSign className="w-4 h-4" />, section: 'navegacao' },
   { id: 'dre', label: 'DRE', href: '/financeiro-ag/dre', icon: <FileSpreadsheet className="w-4 h-4" />, section: 'navegacao' },
   { id: 'receber', label: 'Contas a receber', href: '/financeiro-ag/receber', icon: <Receipt className="w-4 h-4" />, section: 'navegacao' },
   { id: 'pagar', label: 'Contas a pagar', href: '/financeiro-ag/pagar', icon: <CreditCard className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'conciliacao', label: 'Conciliacao', href: '/financeiro-ag/conciliacao', icon: <FileSpreadsheet className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'transferencias', label: 'Transferencias', href: '/financeiro-ag/transferencias', icon: <ArrowRightLeft className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'conciliacao', label: 'Conciliação', href: '/financeiro-ag/conciliacao', icon: <FileSpreadsheet className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'transferencias', label: 'Transferências', href: '/financeiro-ag/transferencias', icon: <ArrowRightLeft className="w-4 h-4" />, section: 'navegacao' },
   { id: 'plano-contas', label: 'Plano de contas', href: '/financeiro-ag/plano-contas', icon: <BookOpen className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'contas-bancarias', label: 'Contas bancarias', href: '/financeiro-ag/contas-bancarias', icon: <Landmark className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'contas-bancarias', label: 'Contas bancárias', href: '/financeiro-ag/contas-bancarias', icon: <Landmark className="w-4 h-4" />, section: 'navegacao' },
   { id: 'fin-grupos', label: 'Financeiro por grupo', href: '/financeiro-grupos', icon: <Package className="w-4 h-4" />, section: 'navegacao' },
   { id: 'clientes', label: 'Clientes', href: '/pessoas/clientes', icon: <UserPlus className="w-4 h-4" />, section: 'navegacao' },
   { id: 'fornecedores', label: 'Fornecedores', href: '/pessoas/fornecedores', icon: <Building2 className="w-4 h-4" />, section: 'navegacao' },
   { id: 'equipe', label: 'Equipe', href: '/pessoas/equipe', icon: <Briefcase className="w-4 h-4" />, section: 'navegacao' },
   { id: 'metas', label: 'Metas da equipe', href: '/equipe/metas', icon: <Medal className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'comissoes', label: 'Comissoes', href: '/equipe/comissoes', icon: <Percent className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'planos-comissao', label: 'Planos de comissao', href: '/equipe/planos-comissao', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'custos', label: 'Custos do negocio', href: '/planejamento/custos', icon: <Wallet className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'comissoes', label: 'Comissões', href: '/equipe/comissoes', icon: <Percent className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'planos-comissao', label: 'Planos de comissão', href: '/equipe/planos-comissao', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'custos', label: 'Custos do negócio', href: '/planejamento/custos', icon: <Wallet className="w-4 h-4" />, section: 'navegacao' },
   { id: 'projetos', label: 'Projetos comerciais', href: '/planejamento/projetos', icon: <FolderKanban className="w-4 h-4" />, section: 'navegacao' },
   { id: 'cac', label: 'Dashboard CAC', href: '/cac/dashboard', icon: <Gauge className="w-4 h-4" />, section: 'navegacao' },
   { id: 'cenarios', label: 'Simulador CAC', href: '/cac/cenarios', icon: <TrendingUp className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'relatorios', label: 'Relatorios financeiros', href: '/relatorios/financeiro', icon: <DollarSign className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'relatorios', label: 'Relatórios financeiros', href: '/relatorios/financeiro', icon: <DollarSign className="w-4 h-4" />, section: 'navegacao' },
   { id: 'rentabilidade', label: 'Rentabilidade', href: '/relatorios/rentabilidade', icon: <TrendingUp className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'config-agencia', label: 'Configuracoes', href: '/config/agencia', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'config-agencia', label: 'Configurações', href: '/config/agencia', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
 ];
 
 const CREATE_ITEMS: CommandItem[] = [
@@ -58,7 +58,7 @@ const CREATE_ITEMS: CommandItem[] = [
 ];
 
 const CRM_ITEMS: CommandItem[] = [
-  { id: 'crm-status', label: 'Status da integracao CRM', href: '/config/crm', icon: <Link2 className="w-4 h-4" />, section: 'crm' },
+  { id: 'crm-status', label: 'Status da integração CRM', href: '/config/crm', icon: <Link2 className="w-4 h-4" />, section: 'crm' },
 ];
 
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -119,8 +119,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const sectionLabels: Record<string, string> = {
     criar: 'Criar',
     recentes: 'Recentes',
-    navegacao: 'Navegacao',
-    crm: 'Integracao',
+    navegacao: 'Navegação',
+    crm: 'Integração',
   };
 
   let lastSection = '';

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 
 interface CrmStatusData {
   ativo: boolean;
@@ -46,18 +47,21 @@ export function CrmStatusBadge({ variant = 'compacto' }: CrmStatusBadgeProps) {
     ? `CRM: ${status.eventos_falha} falha(s)`
     : 'CRM conectado';
 
+  const needsAction = !status.ativo || status.circuit_breaker === 'aberto' || status.eventos_falha > 0;
+
   if (variant === 'compacto') {
-    return (
+    const content = (
       <div className="relative group" title={label} role="status">
         <span
-          className="block w-2 h-2 rounded-full"
+          className={`block w-2 h-2 rounded-full ${needsAction ? 'cursor-pointer' : ''}`}
           style={{ backgroundColor: color }}
         />
         <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-[10px] text-white bg-gray-900 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-          {label}
+          {label}{needsAction ? ' — Clique para configurar' : ''}
         </span>
       </div>
     );
+    return needsAction ? <Link href="/config/crm">{content}</Link> : content;
   }
 
   return (
@@ -67,6 +71,11 @@ export function CrmStatusBadge({ variant = 'compacto' }: CrmStatusBadgeProps) {
         style={{ backgroundColor: color }}
       />
       <span className="text-[var(--t-text-muted)]">{label}</span>
+      {needsAction && (
+        <Link href="/config/crm" className="text-[var(--t-green)] hover:underline ml-1">
+          Configurar →
+        </Link>
+      )}
     </div>
   );
 }

@@ -105,7 +105,7 @@ export default function GruposPage() {
                   <div className="flex items-start justify-between mb-3">
                     <div>
                       <h3 className="font-bold text-lg text-[var(--t-text)]">{g.grp_id || 'Sem ID'}</h3>
-                      <p className="text-sm text-[var(--t-text-secondary)]">{g.origem_destino || 'Sem destino'}</p>
+                      <p className="text-sm text-[var(--t-text-secondary)]">{g.origem_destino || <span className="italic text-[var(--t-text-muted)]">Destino não definido</span>}</p>
                     </div>
                   </div>
                   <div className="text-xs text-[var(--t-text-secondary)] mb-4">

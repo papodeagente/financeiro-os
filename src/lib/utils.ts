@@ -19,7 +19,7 @@ export function calcDiarias(checkIn: string | null, checkOut: string | null): nu
 }
 
 export function formatBRL(value: number | null | undefined): string {
-  if (value === null || value === undefined || value === 0) return '\u2014';
+  if (value === null || value === undefined) return '\u2014';
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
