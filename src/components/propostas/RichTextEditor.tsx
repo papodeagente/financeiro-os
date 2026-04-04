@@ -94,7 +94,7 @@ export function RichTextEditor({ content, onChange, placeholder }: Props) {
   const s = 3.5;
 
   return (
-    <div className="border border-[var(--t-border)] rounded-lg overflow-hidden bg-[var(--t-bg)]">
+    <div className="shadow-[var(--t-card-shadow)] rounded-lg overflow-hidden bg-[var(--t-bg)]">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-0.5 px-2 py-1.5 border-b border-[var(--t-border)] bg-[var(--t-surface)]">
         {/* Text formatting */}

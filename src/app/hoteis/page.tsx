@@ -131,7 +131,7 @@ export default function HoteisPage() {
         </div>
 
         {/* Search form */}
-        <div className="bg-[var(--t-surface)] rounded-xl border border-[var(--t-border)] p-5">
+        <div className="bg-[var(--t-surface)] rounded-xl shadow-[var(--t-card-shadow)] p-5">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="md:col-span-2">
               <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Destino</label>
@@ -197,7 +197,7 @@ export default function HoteisPage() {
               const hasPhotos = hotel.photos && hotel.photos.length > 0;
 
               return (
-                <div key={hotel.id} className="bg-[var(--t-surface)] rounded-xl border border-[var(--t-border)] overflow-hidden">
+                <div key={hotel.id} className="bg-[var(--t-surface)] rounded-xl shadow-[var(--t-card-shadow)] overflow-hidden">
                   <div className="p-5">
                     <div className="flex gap-4">
                       {/* Photo placeholder */}

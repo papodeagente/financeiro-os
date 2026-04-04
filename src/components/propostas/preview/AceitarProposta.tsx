@@ -31,7 +31,7 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
   if (status === 'ACEITO' || mode === 'aceito') {
     return (
       <div className="max-w-3xl mx-auto px-6 py-12">
-        <div className="text-center p-8 rounded-2xl border-2 border-emerald-200 bg-emerald-50">
+        <div className="text-center p-8 rounded-[20px] border-2 border-emerald-200 bg-emerald-50">
           <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
             <ThumbsUp className="w-8 h-8 text-emerald-600" />
           </div>
@@ -56,7 +56,7 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
   if (status === 'RECUSADO') {
     return (
       <div className="max-w-3xl mx-auto px-6 py-12">
-        <div className="text-center p-8 rounded-2xl border-2 border-red-200 bg-red-50">
+        <div className="text-center p-8 rounded-[20px] border-2 border-red-200 bg-red-50">
           <h3 className="text-lg font-bold text-red-800">Proposta Recusada</h3>
         </div>
       </div>
@@ -67,7 +67,7 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
   if (mode === 'feedback_sent') {
     return (
       <div className="max-w-3xl mx-auto px-6 py-12">
-        <div className="text-center p-8 rounded-2xl border-2 border-blue-200 bg-blue-50">
+        <div className="text-center p-8 rounded-[20px] border-2 border-blue-200 bg-blue-50">
           <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
             <Send className="w-8 h-8 text-blue-600" />
           </div>
@@ -122,7 +122,7 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-12">
-      <div className="rounded-2xl border-2 overflow-hidden" style={{ borderColor: `${corPrimaria}30` }}>
+      <div className="rounded-[20px] border-2 overflow-hidden" style={{ borderColor: `${corPrimaria}30` }}>
         {/* Header */}
         <div className="p-6 text-center" style={{ backgroundColor: `${corPrimaria}08` }}>
           <h3 className="text-xl font-bold" style={{ color: corPrimaria }}>

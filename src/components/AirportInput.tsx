@@ -68,7 +68,7 @@ export function AirportInput({ label, value, onChange }: AirportInputProps) {
         className="w-full px-3 py-2 bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded-lg text-sm text-[var(--t-text)]"
       />
       {open && (options.length > 0 || loading) && (
-        <div className="absolute z-50 top-full mt-1 w-full bg-[var(--t-surface)] border border-[var(--t-border)] rounded-lg shadow-xl max-h-48 overflow-y-auto">
+        <div className="absolute z-50 top-full mt-1 w-full bg-[var(--t-surface)] shadow-[var(--t-card-shadow)] rounded-lg shadow-xl max-h-48 overflow-y-auto">
           {loading && <div className="px-3 py-2 text-xs text-[var(--t-text-secondary)]">Buscando...</div>}
           {options.map(o => (
             <button

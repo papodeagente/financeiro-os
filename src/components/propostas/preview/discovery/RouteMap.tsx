@@ -7,7 +7,7 @@ import { t, type IdiomaProposal } from '@/lib/i18n-proposta';
 const RouteMapInterno = dynamic(() => import('./RouteMapInterno'), {
   ssr: false,
   loading: () => (
-    <div className="w-full bg-gray-100 rounded-2xl flex items-center justify-center text-gray-400 text-sm" style={{ height: 500 }}>
+    <div className="w-full bg-gray-100 rounded-[20px] flex items-center justify-center text-gray-400 text-sm" style={{ height: 500 }}>
       Carregando mapa...
     </div>
   ),

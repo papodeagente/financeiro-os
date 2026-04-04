@@ -45,16 +45,16 @@ export function HtlSegTab({ grupo }: Props) {
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead><tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
-            <th className="p-2 border border-[var(--t-border)]">Tipo</th>
-            <th className="p-2 border border-[var(--t-border)]">Ocup.</th>
-            <th className="p-2 border border-[var(--t-border)]">Total Apto (HTL)</th>
-            <th className="p-2 border border-[var(--t-border)]">Seguro</th>
-            <th className="p-2 border border-[var(--t-border)]">Total (HTL+SEG)</th>
-            <th className="p-2 border border-[var(--t-border)]">Total p/ ADT</th>
-            <th className="p-2 border border-[var(--t-border)]">Entrada (10%)</th>
-            <th className="p-2 border border-[var(--t-border)]">{parcelas}x Parcela</th>
-            <th className="p-2 border border-[var(--t-border)]">Parcela p/ ADT</th>
-            <th className="p-2 border border-[var(--t-border)]">Prova do 9</th>
+            <th className="p-2 shadow-[var(--t-card-shadow)]">Tipo</th>
+            <th className="p-2 shadow-[var(--t-card-shadow)]">Ocup.</th>
+            <th className="p-2 shadow-[var(--t-card-shadow)]">Total Apto (HTL)</th>
+            <th className="p-2 shadow-[var(--t-card-shadow)]">Seguro</th>
+            <th className="p-2 shadow-[var(--t-card-shadow)]">Total (HTL+SEG)</th>
+            <th className="p-2 shadow-[var(--t-card-shadow)]">Total p/ ADT</th>
+            <th className="p-2 shadow-[var(--t-card-shadow)]">Entrada (10%)</th>
+            <th className="p-2 shadow-[var(--t-card-shadow)]">{parcelas}x Parcela</th>
+            <th className="p-2 shadow-[var(--t-card-shadow)]">Parcela p/ ADT</th>
+            <th className="p-2 shadow-[var(--t-card-shadow)]">Prova do 9</th>
           </tr></thead>
           <tbody>
             {rows.map((r, i) => (

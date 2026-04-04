@@ -124,7 +124,7 @@ export default function ProjetosPage() {
                     draggable
                     onDragStart={() => setDragItem(proj.id)}
                     onClick={() => { setEditing(proj); setSheetOpen(true); }}
-                    className="p-4 rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] cursor-pointer hover:border-[var(--t-border-hover)] transition-colors"
+                    className="p-4 rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] cursor-pointer hover:border-[var(--t-border-hover)] transition-colors"
                   >
                     <div className="flex items-start gap-2">
                       <GripVertical className="w-4 h-4 text-[var(--t-text-muted)] mt-0.5 shrink-0 cursor-grab" />
@@ -166,12 +166,12 @@ export default function ProjetosPage() {
               <div>
                 <label htmlFor="proj-nome" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Nome</label>
                 <input id="proj-nome" value={editing.nome} onChange={e => setEditing({ ...editing, nome: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border border-[var(--t-border)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
+                  className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
               </div>
               <div>
                 <label htmlFor="proj-canal" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Canal</label>
                 <select id="proj-canal" value={editing.canal} onChange={e => setEditing({ ...editing, canal: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border border-[var(--t-border)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]">
+                  className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]">
                   {CANAIS.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
@@ -186,7 +186,7 @@ export default function ProjetosPage() {
               <div>
                 <label htmlFor="proj-resp" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Responsavel</label>
                 <select id="proj-resp" value={editing.responsavel} onChange={e => setEditing({ ...editing, responsavel: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border border-[var(--t-border)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]">
+                  className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]">
                   <option value="">Selecionar...</option>
                   {membros.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
                 </select>
@@ -195,18 +195,18 @@ export default function ProjetosPage() {
                 <div>
                   <label htmlFor="proj-inicio" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Inicio</label>
                   <input id="proj-inicio" type="date" value={editing.data_inicio} onChange={e => setEditing({ ...editing, data_inicio: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg border border-[var(--t-border)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
+                    className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
                 </div>
                 <div>
                   <label htmlFor="proj-fim" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Fim</label>
                   <input id="proj-fim" type="date" value={editing.data_fim} onChange={e => setEditing({ ...editing, data_fim: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg border border-[var(--t-border)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
+                    className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
                 </div>
               </div>
               <div>
                 <label htmlFor="proj-status" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Status</label>
                 <select id="proj-status" value={editing.status} onChange={e => setEditing({ ...editing, status: e.target.value as Projeto['status'] })}
-                  className="w-full px-3 py-2 rounded-lg border border-[var(--t-border)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]">
+                  className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]">
                   {COLUMNS.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
                 </select>
               </div>

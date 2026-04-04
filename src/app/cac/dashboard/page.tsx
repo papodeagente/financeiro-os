@@ -222,62 +222,54 @@ export default function CACDashboardPage() {
 
         {monthData && (
           <>
-            {/* Main KPIs */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-                <CardContent className="p-5">
-                  <div className="flex items-center justify-between mb-3">
-                    <Target className="w-5 h-5 text-[var(--t-green)]" />
-                    {cacTrend !== null && (
-                      <Badge className={`${cacTrend <= 0 ? 'bg-[var(--t-green-bg)] text-[var(--t-green)]' : 'bg-[var(--t-red-bg)] text-[var(--t-red)]'} border-0 text-xs flex items-center gap-0.5`}>
-                        {cacTrend <= 0 ? <ArrowDownRight className="w-3 h-3" /> : <ArrowUpRight className="w-3 h-3" />}
-                        {Math.abs(cacTrend).toFixed(1)}%
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-2xl font-bold text-[var(--t-text)]">{BRL(monthData.cac)}</p>
-                  <p className="text-xs text-[var(--t-text-muted)] mt-1">CAC do Mês</p>
-                </CardContent>
-              </Card>
+            {/* Main KPIs (bento) */}
+            <div className="bento-grid">
+              <div className="bento-3 bento-card">
+                <div className="flex items-center justify-between mb-3">
+                  <Target className="w-5 h-5 text-[var(--t-green)]" />
+                  {cacTrend !== null && (
+                    <Badge className={`${cacTrend <= 0 ? 'bg-[var(--t-green-bg)] text-[var(--t-green)]' : 'bg-[var(--t-red-bg)] text-[var(--t-red)]'} border-0 text-xs flex items-center gap-0.5`}>
+                      {cacTrend <= 0 ? <ArrowDownRight className="w-3 h-3" /> : <ArrowUpRight className="w-3 h-3" />}
+                      {Math.abs(cacTrend).toFixed(1)}%
+                    </Badge>
+                  )}
+                </div>
+                <p className="kpi-hero text-[var(--t-text)]">{BRL(monthData.cac)}</p>
+                <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mt-2 uppercase tracking-wide">CAC do Mês</p>
+              </div>
 
-              <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-                <CardContent className="p-5">
-                  <div className="flex items-center justify-between mb-3">
-                    <DollarSign className="w-5 h-5 text-[var(--t-blue)]" />
-                  </div>
-                  <p className="text-2xl font-bold text-[var(--t-text)]">{BRL(monthData.ticketMedio)}</p>
-                  <p className="text-xs text-[var(--t-text-muted)] mt-1">Ticket Médio</p>
-                </CardContent>
-              </Card>
+              <div className="bento-3 bento-card">
+                <div className="flex items-center justify-between mb-3">
+                  <DollarSign className="w-5 h-5 text-[var(--t-blue)]" />
+                </div>
+                <p className="kpi-hero text-[var(--t-text)]">{BRL(monthData.ticketMedio)}</p>
+                <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mt-2 uppercase tracking-wide">Ticket Médio</p>
+              </div>
 
-              <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-                <CardContent className="p-5">
-                  <div className="flex items-center justify-between mb-3">
-                    <TrendingUp className="w-5 h-5 text-[var(--t-amber)]" />
-                  </div>
-                  <p className={`text-2xl font-bold ${monthData.roi >= 0 ? 'text-[var(--t-green)]' : 'text-[var(--t-red)]'}`}>
-                    {PCT(monthData.roi)}
-                  </p>
-                  <p className="text-xs text-[var(--t-text-muted)] mt-1">ROI Comercial</p>
-                </CardContent>
-              </Card>
+              <div className="bento-3 bento-card">
+                <div className="flex items-center justify-between mb-3">
+                  <TrendingUp className="w-5 h-5 text-[var(--t-amber)]" />
+                </div>
+                <p className={`kpi-hero ${monthData.roi >= 0 ? 'text-[var(--t-green)]' : 'text-[var(--t-red)]'}`}>
+                  {PCT(monthData.roi)}
+                </p>
+                <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mt-2 uppercase tracking-wide">ROI Comercial</p>
+              </div>
 
-              <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-                <CardContent className="p-5">
-                  <div className="flex items-center justify-between mb-3">
-                    <Users className="w-5 h-5 text-purple-400" />
-                  </div>
-                  <p className="text-2xl font-bold text-[var(--t-text)]">{monthData.qtdClientesNovos}</p>
-                  <p className="text-xs text-[var(--t-text-muted)] mt-1">Clientes Novos</p>
-                </CardContent>
-              </Card>
+              <div className="bento-3 bento-card">
+                <div className="flex items-center justify-between mb-3">
+                  <Users className="w-5 h-5 text-purple-400" />
+                </div>
+                <p className="kpi-hero text-[var(--t-text)]">{monthData.qtdClientesNovos}</p>
+                <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mt-2 uppercase tracking-wide">Clientes Novos</p>
+              </div>
             </div>
 
-            {/* Financial Summary */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Financial Summary (bento) */}
+            <div className="bento-grid">
 
               {/* Expenses Breakdown */}
-              <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
+              <Card className="bento-6 bg-[var(--t-surface)]">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-[var(--t-text)] text-base flex items-center gap-2">
                     <BarChart3 className="w-4 h-4 text-[var(--t-green)]" />
@@ -345,7 +337,7 @@ export default function CACDashboardPage() {
               </Card>
 
               {/* Revenue & Efficiency */}
-              <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
+              <Card className="bento-6 bg-[var(--t-surface)]">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-[var(--t-text)] text-base flex items-center gap-2">
                     <Calculator className="w-4 h-4 text-[var(--t-green)]" />
@@ -403,7 +395,7 @@ export default function CACDashboardPage() {
 
             {/* Historical CAC */}
             {cacHistorico.length > 0 && (
-              <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
+              <Card className="bg-[var(--t-surface)]">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-[var(--t-text)] text-base flex items-center gap-2">
                     <TrendingDown className="w-4 h-4 text-[var(--t-green)]" />

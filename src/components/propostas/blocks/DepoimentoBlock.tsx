@@ -23,7 +23,7 @@ export function DepoimentoBlock({ conteudo, onChange }: BlockProps) {
               }}
               rows={2}
               placeholder="Depoimento..."
-              className="w-full bg-[var(--t-bg)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-sm resize-none"
+              className="w-full bg-[var(--t-bg)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-3 py-2 text-sm resize-none"
             />
             <div className="grid grid-cols-2 gap-1">
               <Input

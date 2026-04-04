@@ -121,7 +121,7 @@ export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAI
                         return p;
                       });
                     }}
-                    className="w-full mt-1 bg-[var(--t-input-bg)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-sm"
+                    className="w-full mt-1 bg-[var(--t-input-bg)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-3 py-2 text-sm"
                   >
                     <option value="">Selecionar cliente</option>
                     {clientes.filter(c => c.status === 'ATIVO').map(c => (
@@ -146,7 +146,7 @@ export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAI
                         return p;
                       });
                     }}
-                    className="w-full mt-1 bg-[var(--t-input-bg)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-sm"
+                    className="w-full mt-1 bg-[var(--t-input-bg)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-3 py-2 text-sm"
                   >
                     <option value="">Selecionar vendedor</option>
                     {membros.filter(m => m.status === 'ATIVO').map(m => (
@@ -179,7 +179,7 @@ export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAI
                     onChange={e => onUpdate(p => { p.cabecalho.mensagem_abertura = e.target.value; return p; })}
                     rows={3}
                     placeholder="Ola! Preparei esta proposta com todo carinho..."
-                    className="w-full mt-1 bg-[var(--t-input-bg)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-sm resize-none"
+                    className="w-full mt-1 bg-[var(--t-input-bg)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-3 py-2 text-sm resize-none"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -237,7 +237,7 @@ export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAI
                     onChange={e => onUpdate(p => { p.rodape.mensagem = e.target.value; return p; })}
                     rows={2}
                     placeholder="Mensagem de encerramento..."
-                    className="w-full mt-1 bg-[var(--t-input-bg)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-sm resize-none"
+                    className="w-full mt-1 bg-[var(--t-input-bg)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-3 py-2 text-sm resize-none"
                   />
                 </div>
                 <div>
@@ -356,7 +356,7 @@ export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAI
                         }))}
                         placeholder="Breve descricao da agencia..."
                         rows={3}
-                        className="w-full mt-1 bg-[var(--t-input-bg)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-xs resize-none"
+                        className="w-full mt-1 bg-[var(--t-input-bg)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-3 py-2 text-xs resize-none"
                       />
                     </div>
                     <div>
@@ -369,7 +369,7 @@ export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAI
                         }))}
                         placeholder="Termos e condicoes da proposta..."
                         rows={4}
-                        className="w-full mt-1 bg-[var(--t-input-bg)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-xs resize-none"
+                        className="w-full mt-1 bg-[var(--t-input-bg)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-3 py-2 text-xs resize-none"
                       />
                     </div>
                   </>
@@ -397,7 +397,7 @@ export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAI
                   <select
                     value={proposta.visual.estilo_capa}
                     onChange={e => onUpdate(p => { p.visual.estilo_capa = e.target.value as Proposta['visual']['estilo_capa']; return p; })}
-                    className="w-full mt-1 bg-[var(--t-input-bg)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-sm"
+                    className="w-full mt-1 bg-[var(--t-input-bg)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-3 py-2 text-sm"
                   >
                     <option value="FULLSCREEN">Fullscreen</option>
                     <option value="SPLIT">Split</option>
@@ -409,7 +409,7 @@ export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAI
                   <select
                     value={proposta.visual.fonte || 'Inter'}
                     onChange={e => onUpdate(p => { p.visual.fonte = e.target.value; return p; })}
-                    className="w-full mt-1 bg-[var(--t-input-bg)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-sm"
+                    className="w-full mt-1 bg-[var(--t-input-bg)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-3 py-2 text-sm"
                   >
                     <option value="Inter">Inter (Moderna)</option>
                     <option value="Playfair Display">Playfair Display (Elegante)</option>
@@ -425,7 +425,7 @@ export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAI
                         type="color"
                         value={proposta.visual.cor_primaria || '#004aad'}
                         onChange={e => onUpdate(p => { p.visual.cor_primaria = e.target.value; return p; })}
-                        className="w-8 h-8 rounded cursor-pointer border border-[var(--t-border)]"
+                        className="w-8 h-8 rounded cursor-pointer shadow-[var(--t-card-shadow)]"
                       />
                       <Input
                         value={proposta.visual.cor_primaria}
@@ -441,7 +441,7 @@ export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAI
                         type="color"
                         value={proposta.visual.cor_fundo || '#ffffff'}
                         onChange={e => onUpdate(p => { p.visual.cor_fundo = e.target.value; return p; })}
-                        className="w-8 h-8 rounded cursor-pointer border border-[var(--t-border)]"
+                        className="w-8 h-8 rounded cursor-pointer shadow-[var(--t-card-shadow)]"
                       />
                       <Input
                         value={proposta.visual.cor_fundo}
@@ -602,7 +602,7 @@ function ViagemTab({
 
         <div className="space-y-2">
           {destinos.map((dest, i) => (
-            <div key={dest.id} className="p-2.5 rounded-lg bg-[var(--t-bg)] border border-[var(--t-border)] space-y-1.5">
+            <div key={dest.id} className="p-2.5 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] space-y-1.5">
               <div className="flex items-center gap-1.5">
                 <span className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold text-white" style={{ backgroundColor: 'var(--t-green)' }}>
                   {i + 1}

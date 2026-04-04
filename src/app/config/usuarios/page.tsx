@@ -217,7 +217,7 @@ export default function UsuariosPage() {
                   <select
                     value={editing.perfil}
                     onChange={(e) => setEditField('perfil', e.target.value as Usuario['perfil'])}
-                    className="w-full h-10 rounded-md border border-[var(--t-border)] bg-[var(--t-bg)] text-[var(--t-text)] px-3 text-sm focus:outline-none focus:border-[var(--t-accent)]"
+                    className="w-full h-10 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-bg)] text-[var(--t-text)] px-3 text-sm focus:outline-none focus:border-[var(--t-accent)]"
                   >
                     {(Object.keys(PERFIL_LABELS) as Usuario['perfil'][]).map((p) => (
                       <option key={p} value={p}>{PERFIL_LABELS[p]}</option>
@@ -362,7 +362,7 @@ export default function UsuariosPage() {
                             className={
                               u.ativo
                                 ? 'bg-green-900/40 text-green-300 border border-green-800 hover:bg-green-900/40'
-                                : 'bg-[var(--t-surface)]/40 text-[var(--t-text-secondary)] border border-[var(--t-border)] hover:bg-[var(--t-surface)]/40'
+                                : 'bg-[var(--t-surface)]/40 text-[var(--t-text-secondary)] shadow-[var(--t-card-shadow)] hover:bg-[var(--t-surface)]/40'
                             }
                           >
                             {u.ativo ? 'Ativo' : 'Inativo'}

@@ -27,12 +27,12 @@ export function BrindeTab({ grupo, onChange }: Props) {
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead><tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
-            <th className="p-2 text-left border border-[var(--t-border)]">Fornecedor</th>
-            <th className="p-2 border border-[var(--t-border)] w-32">Valor Unid.</th>
-            <th className="p-2 border border-[var(--t-border)]">Descrição</th>
-            <th className="p-2 border border-[var(--t-border)]">Contato</th>
-            <th className="p-2 border border-[var(--t-border)] w-36">Deadline</th>
-            <th className="p-2 border border-[var(--t-border)]">Prazo Entrega</th>
+            <th className="p-2 text-left shadow-[var(--t-card-shadow)]">Fornecedor</th>
+            <th className="p-2 shadow-[var(--t-card-shadow)] w-32">Valor Unid.</th>
+            <th className="p-2 shadow-[var(--t-card-shadow)]">Descrição</th>
+            <th className="p-2 shadow-[var(--t-card-shadow)]">Contato</th>
+            <th className="p-2 shadow-[var(--t-card-shadow)] w-36">Deadline</th>
+            <th className="p-2 shadow-[var(--t-card-shadow)]">Prazo Entrega</th>
           </tr></thead>
           <tbody>
             {grupo.brinde.fornecedores.map((f, fIdx) => {

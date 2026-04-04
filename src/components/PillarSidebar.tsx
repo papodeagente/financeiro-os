@@ -15,14 +15,14 @@ import {
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 
-interface SidebarItem {
+export interface SidebarItem {
   key: string;
   label: string;
   icon: ComponentType<{ className?: string }>;
   href: string;
 }
 
-interface SidebarSection {
+export interface SidebarSection {
   title?: string;
   items: SidebarItem[];
 }
@@ -114,7 +114,7 @@ const FINANCEIRO_MENU: SidebarSection[] = [
   },
 ];
 
-const PILLAR_MENUS: Record<Pillar, SidebarSection[]> = {
+export const PILLAR_MENUS: Record<Pillar, SidebarSection[]> = {
   planejamento: PLANEJAMENTO_MENU,
   metas: METAS_MENU,
   produtos: PRODUTOS_MENU,

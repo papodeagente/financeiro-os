@@ -149,7 +149,7 @@ export default function FornecedoresPage() {
           </div>
           <div className="relative">
             <select
-              className="appearance-none bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+              className="appearance-none bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
               value={filterTipo}
               onChange={(e) => setFilterTipo(e.target.value as TipoFornecedor | '')}
             >
@@ -162,7 +162,7 @@ export default function FornecedoresPage() {
           </div>
           <div className="relative">
             <select
-              className="appearance-none bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+              className="appearance-none bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as '' | 'ATIVO' | 'INATIVO')}
             >
@@ -193,7 +193,7 @@ export default function FornecedoresPage() {
               <div>
                 <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Tipo *</label>
                 <select
-                  className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+                  className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
                   value={form.tipo}
                   onChange={(e) => setField('tipo', e.target.value as TipoFornecedor)}
                 >
@@ -320,7 +320,7 @@ export default function FornecedoresPage() {
               <div>
                 <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Status</label>
                 <select
-                  className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+                  className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
                   value={form.status}
                   onChange={(e) => setField('status', e.target.value as 'ATIVO' | 'INATIVO')}
                 >
@@ -333,7 +333,7 @@ export default function FornecedoresPage() {
               <div className="sm:col-span-2 lg:col-span-3">
                 <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Observações</label>
                 <textarea
-                  className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853] resize-none"
+                  className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853] resize-none"
                   rows={3}
                   value={form.observacoes}
                   onChange={(e) => setField('observacoes', e.target.value)}

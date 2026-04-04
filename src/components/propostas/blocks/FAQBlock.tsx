@@ -20,7 +20,7 @@ export function FAQBlock({ conteudo, onChange }: BlockProps) {
         className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
       />
       {perguntas.map((faq, i) => (
-        <div key={i} className="p-3 rounded-lg bg-[var(--t-bg)] border border-[var(--t-border)] space-y-2">
+        <div key={i} className="p-3 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] space-y-2">
           <div className="flex gap-2">
             <Input
               value={faq.pergunta}
@@ -44,7 +44,7 @@ export function FAQBlock({ conteudo, onChange }: BlockProps) {
             }}
             rows={2}
             placeholder="Resposta..."
-            className="w-full bg-[var(--t-bg-secondary)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-sm resize-none"
+            className="w-full bg-[var(--t-bg-secondary)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-3 py-2 text-sm resize-none"
           />
         </div>
       ))}

@@ -78,7 +78,7 @@ export function DestinoQuickFill({ destino, onAddTextoBlock, onAddGaleriaBlock, 
       {destino.fast_facts.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {destino.fast_facts.slice(0, 6).map((f, i) => (
-            <span key={i} className="text-[10px] bg-[var(--t-bg)] border border-[var(--t-border)] px-1.5 py-0.5 rounded text-[var(--t-text)]">
+            <span key={i} className="text-[10px] bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] px-1.5 py-0.5 rounded text-[var(--t-text)]">
               <strong>{f.label}:</strong> {f.valor}
             </span>
           ))}

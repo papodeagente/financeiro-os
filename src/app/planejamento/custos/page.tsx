@@ -129,9 +129,9 @@ export default function CustosPage() {
               type="month"
               value={mes}
               onChange={e => setMes(e.target.value)}
-              className="px-3 py-1.5 rounded-lg border border-[var(--t-border)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
+              className="px-3 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
             />
-            <button onClick={copyFromPrev} className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] border border-[var(--t-border)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)] transition-colors">
+            <button onClick={copyFromPrev} className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)] transition-colors">
               <Copy className="w-3.5 h-3.5" /> Copiar do anterior
             </button>
           </div>
@@ -144,7 +144,7 @@ export default function CustosPage() {
           {/* Custos Fixos */}
           <section>
             <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-3">Custos fixos</h2>
-            <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] overflow-hidden">
+            <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] overflow-hidden">
               {data.custos_fixos.map((item, i) => (
                 <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-[var(--t-border)] last:border-b-0">
                   <span className="text-[var(--text-body-sm)] text-[var(--t-text)] w-48 shrink-0">{item.categoria}</span>
@@ -164,7 +164,7 @@ export default function CustosPage() {
                       setData({ ...data, custos_fixos: c });
                     }}
                     placeholder="Observacao"
-                    className="flex-1 px-3 py-1.5 rounded-lg border border-[var(--t-border)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
+                    className="flex-1 px-3 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
                   />
                 </div>
               ))}
@@ -178,7 +178,7 @@ export default function CustosPage() {
           {/* Custos Variaveis */}
           <section>
             <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-3">Custos variaveis por venda</h2>
-            <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] overflow-hidden">
+            <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] overflow-hidden">
               {data.custos_variaveis.map((item, i) => (
                 <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-[var(--t-border)] last:border-b-0">
                   <span className="text-[var(--text-body-sm)] text-[var(--t-text)] w-64 shrink-0">{item.nome}</span>
@@ -191,7 +191,7 @@ export default function CustosPage() {
                         c[i] = { ...c[i], percentual: parseFloat(e.target.value) || 0 };
                         setData({ ...data, custos_variaveis: c });
                       }}
-                      className="w-20 px-3 py-1.5 rounded-lg border border-[var(--t-border)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)] text-right"
+                      className="w-20 px-3 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)] text-right"
                     />
                     <span className="text-[var(--text-body-sm)] text-[var(--t-text-muted)]">%</span>
                   </div>
@@ -210,7 +210,7 @@ export default function CustosPage() {
           {/* Marketing */}
           <section>
             <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-3">Investimento em marketing</h2>
-            <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] overflow-hidden">
+            <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] overflow-hidden">
               {data.marketing.map((item, i) => (
                 <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-[var(--t-border)] last:border-b-0">
                   <span className="text-[var(--text-body-sm)] text-[var(--t-text)] w-48 shrink-0">{item.canal}</span>
@@ -234,7 +234,7 @@ export default function CustosPage() {
 
         {/* Sticky summary panel */}
         <div className="w-[260px] shrink-0">
-          <div className="sticky top-6 space-y-4 p-5 rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)]">
+          <div className="sticky top-6 space-y-4 p-5 rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)]">
             <div>
               <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">Total fixo mensal</p>
               <p className="text-[var(--text-title)] font-medium text-[var(--t-text)]">{formatBRL(totalFixo)}</p>
@@ -257,7 +257,7 @@ export default function CustosPage() {
                 type="number"
                 value={data.margem_minima || ''}
                 onChange={e => setData({ ...data, margem_minima: parseFloat(e.target.value) || 0 })}
-                className="w-full px-3 py-1.5 rounded-lg border border-[var(--t-border)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
+                className="w-full px-3 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
               />
             </div>
           </div>

@@ -43,7 +43,7 @@ const FORMAS_PAGAMENTO = [
 const inputClass =
   'bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)] placeholder:text-[var(--t-text-secondary)] focus:border-[var(--t-accent)]';
 const labelClass = 'block text-sm text-[var(--t-text-secondary)] mb-1';
-const sectionClass = 'bg-[var(--t-header-bg)] border border-[var(--t-border)] rounded-lg p-5 mb-4';
+const sectionClass = 'bg-[var(--t-header-bg)] shadow-[var(--t-card-shadow)] rounded-lg p-5 mb-4';
 
 function SectionHeader({
   title,
@@ -303,7 +303,7 @@ export default function NovaVendaPage() {
                 className={inputClass}
               />
               {showClienteList && clienteSearch && (
-                <div className="absolute z-10 left-0 right-0 top-full mt-1 bg-[var(--t-header-bg)] border border-[var(--t-border)] rounded-md shadow-xl max-h-48 overflow-y-auto">
+                <div className="absolute z-10 left-0 right-0 top-full mt-1 bg-[var(--t-header-bg)] shadow-[var(--t-card-shadow)] rounded-md shadow-xl max-h-48 overflow-y-auto">
                   {filteredClientes.length === 0 ? (
                     <p className="px-3 py-2 text-sm text-[var(--t-text-secondary)]">Nenhum cliente encontrado</p>
                   ) : (
@@ -344,7 +344,7 @@ export default function NovaVendaPage() {
                 onChange={e =>
                   setVenda(prev => ({ ...prev, status: e.target.value as VendaCRM['status'] }))
                 }
-                className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm"
+                className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm"
               >
                 <option value="ORCAMENTO">Orçamento</option>
                 <option value="RESERVADO">Reservado</option>
@@ -394,7 +394,7 @@ export default function NovaVendaPage() {
             {venda.passageiros.map((p, idx) => (
               <div
                 key={idx}
-                className="bg-[var(--t-bg)] border border-[var(--t-border)] rounded-lg p-4"
+                className="bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] rounded-lg p-4"
               >
                 <div className="flex items-center justify-between mb-3">
                   <Badge className="bg-[var(--t-accent)]/10 text-[var(--t-accent)] border-[var(--t-accent)]/30 text-xs">
@@ -423,7 +423,7 @@ export default function NovaVendaPage() {
                     <select
                       value={p.tipo}
                       onChange={e => updatePassageiro(idx, 'tipo', e.target.value)}
-                      className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm"
+                      className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm"
                     >
                       <option value="ADT">ADT (Adulto)</option>
                       <option value="CHD">CHD (Criança)</option>
@@ -483,7 +483,7 @@ export default function NovaVendaPage() {
             {venda.produtos.map((prod, idx) => (
               <div
                 key={prod.id}
-                className="bg-[var(--t-bg)] border border-[var(--t-border)] rounded-lg p-4"
+                className="bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] rounded-lg p-4"
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
@@ -510,7 +510,7 @@ export default function NovaVendaPage() {
                     <select
                       value={prod.tipo}
                       onChange={e => updateProduto(idx, 'tipo', e.target.value)}
-                      className="w-full bg-[var(--t-header-bg)] border border-[var(--t-border)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm"
+                      className="w-full bg-[var(--t-header-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm"
                     >
                       {TIPOS_PRODUTO.map(t => (
                         <option key={t} value={t}>{t}</option>
@@ -696,7 +696,7 @@ export default function NovaVendaPage() {
                     <select
                       value={prod.moeda}
                       onChange={e => updateProduto(idx, 'moeda', e.target.value)}
-                      className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm"
+                      className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm"
                     >
                       <option value="BRL">BRL</option>
                       <option value="USD">USD</option>
@@ -790,7 +790,7 @@ export default function NovaVendaPage() {
                     forma_pagamento: e.target.value as VendaCRM['forma_pagamento'],
                   }))
                 }
-                className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm"
+                className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm"
               >
                 {FORMAS_PAGAMENTO.map(f => (
                   <option key={f.value} value={f.value}>{f.label}</option>
@@ -842,7 +842,7 @@ export default function NovaVendaPage() {
             onChange={e => setVenda(prev => ({ ...prev, observacoes: e.target.value }))}
             placeholder="Observações internas sobre esta venda..."
             rows={4}
-            className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm placeholder:text-[var(--t-text-secondary)] resize-none focus:outline-none focus:border-[var(--t-accent)]"
+            className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm placeholder:text-[var(--t-text-secondary)] resize-none focus:outline-none focus:border-[var(--t-accent)]"
           />
         )}
       </div>

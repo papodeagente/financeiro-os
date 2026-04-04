@@ -30,7 +30,7 @@ export function TransporteBlock({ conteudo, onChange }: BlockProps) {
           <select
             value={c.tipo || 'TRANSFER'}
             onChange={e => update({ tipo: e.target.value as TipoTransporte })}
-            className="w-full bg-[var(--t-bg)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-2 py-2 text-sm"
+            className="w-full bg-[var(--t-bg)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-2 py-2 text-sm"
           >
             {TIPOS.map(t => <option key={t.id} value={t.id}>{t.icon} {t.label}</option>)}
           </select>
@@ -142,7 +142,7 @@ export function TransporteBlock({ conteudo, onChange }: BlockProps) {
           onChange={e => update({ detalhes: e.target.value })}
           rows={2}
           placeholder="Informacoes adicionais..."
-          className="w-full bg-[var(--t-bg)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-sm resize-none"
+          className="w-full bg-[var(--t-bg)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-3 py-2 text-sm resize-none"
         />
       </div>
     </div>

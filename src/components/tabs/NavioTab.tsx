@@ -51,8 +51,8 @@ export function NavioTab({ grupo, onChange }: Props) {
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead><tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
-            <th className="p-2 text-left border border-[var(--t-border)]">Fornecedor</th>
-            {TIPOS.map(t => <th key={t} className="p-2 border border-[var(--t-border)] w-28">{LABELS[t]}</th>)}
+            <th className="p-2 text-left shadow-[var(--t-card-shadow)]">Fornecedor</th>
+            {TIPOS.map(t => <th key={t} className="p-2 shadow-[var(--t-card-shadow)] w-28">{LABELS[t]}</th>)}
           </tr></thead>
           <tbody>
             {grupo.navio.fornecedores.map((f, fIdx) => (

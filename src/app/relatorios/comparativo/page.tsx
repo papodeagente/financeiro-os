@@ -167,7 +167,7 @@ export default function ComparativoMensalPage() {
           <select
             value={mesesExibir}
             onChange={(e) => setMesesExibir(Number(e.target.value))}
-            className="bg-[var(--t-bg-secondary)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-sm"
+            className="bg-[var(--t-bg-secondary)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-3 py-2 text-sm"
           >
             <option value={3}>3 meses</option>
             <option value={6}>6 meses</option>

@@ -324,7 +324,7 @@ export default function AgenciaPage() {
                 <select
                   value={data.regime_tributario}
                   onChange={(e) => setField('regime_tributario', e.target.value as Agencia['regime_tributario'])}
-                  className="w-full h-10 rounded-md border border-[var(--t-border)] bg-[var(--t-bg)] text-[var(--t-text)] px-3 text-sm focus:outline-none focus:border-[var(--t-accent)]"
+                  className="w-full h-10 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-bg)] text-[var(--t-text)] px-3 text-sm focus:outline-none focus:border-[var(--t-accent)]"
                 >
                   <option value="SIMPLES">Simples Nacional</option>
                   <option value="LUCRO_PRESUMIDO">Lucro Presumido</option>
@@ -364,7 +364,7 @@ export default function AgenciaPage() {
                     type="color"
                     value={data.cores_identidade.primaria}
                     onChange={(e) => setCores('primaria', e.target.value)}
-                    className="w-10 h-10 rounded cursor-pointer border border-[var(--t-border)] bg-transparent p-0.5"
+                    className="w-10 h-10 rounded cursor-pointer shadow-[var(--t-card-shadow)] bg-transparent p-0.5"
                   />
                   <Input
                     value={data.cores_identidade.primaria}
@@ -374,7 +374,7 @@ export default function AgenciaPage() {
                   />
                 </div>
                 <div
-                  className="h-8 rounded-md border border-[var(--t-border)]"
+                  className="h-8 rounded-md shadow-[var(--t-card-shadow)]"
                   style={{ backgroundColor: data.cores_identidade.primaria }}
                 />
               </div>
@@ -385,7 +385,7 @@ export default function AgenciaPage() {
                     type="color"
                     value={data.cores_identidade.secundaria}
                     onChange={(e) => setCores('secundaria', e.target.value)}
-                    className="w-10 h-10 rounded cursor-pointer border border-[var(--t-border)] bg-transparent p-0.5"
+                    className="w-10 h-10 rounded cursor-pointer shadow-[var(--t-card-shadow)] bg-transparent p-0.5"
                   />
                   <Input
                     value={data.cores_identidade.secundaria}
@@ -395,7 +395,7 @@ export default function AgenciaPage() {
                   />
                 </div>
                 <div
-                  className="h-8 rounded-md border border-[var(--t-border)]"
+                  className="h-8 rounded-md shadow-[var(--t-card-shadow)]"
                   style={{ backgroundColor: data.cores_identidade.secundaria }}
                 />
               </div>

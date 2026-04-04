@@ -150,7 +150,7 @@ export default function TransferenciasPage() {
         {contas.length > 0 && (
           <div className="flex gap-3 overflow-x-auto pb-1">
             {contas.map(c => (
-              <div key={c.id} className="flex-shrink-0 px-4 py-2 rounded-lg bg-[var(--t-surface)] border border-[var(--t-border)] text-sm">
+              <div key={c.id} className="flex-shrink-0 px-4 py-2 rounded-lg bg-[var(--t-surface)] shadow-[var(--t-card-shadow)] text-sm">
                 <span className="text-[var(--t-text-secondary)]">{c.nome}</span>
                 <span className="ml-2 font-mono font-medium text-[var(--t-text)]">{BRL(c.saldo_atual)}</span>
               </div>

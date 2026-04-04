@@ -75,7 +75,7 @@ export function AlojamentoBlock({ conteudo, onChange }: BlockProps) {
           <select
             value={c.hotel_estrelas || 0}
             onChange={e => update({ hotel_estrelas: Number(e.target.value) })}
-            className="w-full bg-[var(--t-bg)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-2 py-2 text-sm"
+            className="w-full bg-[var(--t-bg)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-2 py-2 text-sm"
           >
             <option value={0}>—</option>
             {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{'★'.repeat(n)}</option>)}
@@ -86,7 +86,7 @@ export function AlojamentoBlock({ conteudo, onChange }: BlockProps) {
           <select
             value={c.regime || 'BB'}
             onChange={e => update({ regime: e.target.value as RegimeRefeicao })}
-            className="w-full bg-[var(--t-bg)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-2 py-2 text-sm"
+            className="w-full bg-[var(--t-bg)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-2 py-2 text-sm"
           >
             {REGIMES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
           </select>
@@ -139,7 +139,7 @@ export function AlojamentoBlock({ conteudo, onChange }: BlockProps) {
           onChange={e => update({ hotel_descricao: e.target.value })}
           rows={2}
           placeholder="Descricao, comodidades..."
-          className="w-full bg-[var(--t-bg)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-sm resize-none"
+          className="w-full bg-[var(--t-bg)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-3 py-2 text-sm resize-none"
         />
       </div>
 

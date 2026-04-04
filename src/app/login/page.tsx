@@ -63,7 +63,7 @@ export default function LoginPage() {
         </div>
 
         {/* Form */}
-        <div className="bg-[var(--t-surface)] rounded-2xl border border-[var(--t-border)] p-8">
+        <div className="bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] p-8">
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Error */}
             {error && (
@@ -88,7 +88,7 @@ export default function LoginPage() {
                   required
                   autoComplete="email"
                   autoFocus
-                  className="w-full h-11 pl-10 pr-4 rounded-lg bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text)] text-sm placeholder:text-[var(--t-text-muted)] focus:outline-none focus:border-[var(--t-green)] transition-colors"
+                  className="w-full h-11 pl-10 pr-4 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text)] text-sm placeholder:text-[var(--t-text-muted)] focus:outline-none focus:border-[var(--t-green)] transition-colors"
                 />
               </div>
             </div>
@@ -107,7 +107,7 @@ export default function LoginPage() {
                   placeholder="Sua senha"
                   required
                   autoComplete="current-password"
-                  className="w-full h-11 pl-10 pr-11 rounded-lg bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text)] text-sm placeholder:text-[var(--t-text-muted)] focus:outline-none focus:border-[var(--t-green)] transition-colors"
+                  className="w-full h-11 pl-10 pr-11 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text)] text-sm placeholder:text-[var(--t-text-muted)] focus:outline-none focus:border-[var(--t-green)] transition-colors"
                 />
                 <button
                   type="button"

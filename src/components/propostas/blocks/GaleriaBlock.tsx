@@ -24,7 +24,7 @@ export function GaleriaBlock({ conteudo, onChange }: BlockProps) {
           {imgs.map((img, i) => (
             <div key={i} className="flex items-center gap-2">
               {img.url && (
-                <div className="w-16 h-12 rounded overflow-hidden border border-[var(--t-border)] shrink-0">
+                <div className="w-16 h-12 rounded overflow-hidden shadow-[var(--t-card-shadow)] shrink-0">
                   <img src={img.url} alt={img.legenda} className="w-full h-full object-cover" />
                 </div>
               )}

@@ -128,7 +128,7 @@ export default function IntegracoesPage() {
         </div>
 
         {/* Amadeus */}
-        <div className="bg-[var(--t-surface)] rounded-xl border border-[var(--t-border)] p-6">
+        <div className="bg-[var(--t-surface)] rounded-xl shadow-[var(--t-card-shadow)] p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 rounded-lg bg-[var(--t-blue-bg)]0/10 flex items-center justify-center">
               <Plane className="w-5 h-5 text-blue-400" />
@@ -218,7 +218,7 @@ export default function IntegracoesPage() {
         </div>
 
         {/* AviationStack */}
-        <div className="bg-[var(--t-surface)] rounded-xl border border-[var(--t-border)] p-6">
+        <div className="bg-[var(--t-surface)] rounded-xl shadow-[var(--t-card-shadow)] p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
               <Plane className="w-5 h-5 text-amber-400" />
@@ -256,7 +256,7 @@ export default function IntegracoesPage() {
         </div>
 
         {/* Google Places */}
-        <div className="bg-[var(--t-surface)] rounded-xl border border-[var(--t-border)] p-6">
+        <div className="bg-[var(--t-surface)] rounded-xl shadow-[var(--t-card-shadow)] p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
               <Hotel className="w-5 h-5 text-emerald-400" />
@@ -310,7 +310,7 @@ export default function IntegracoesPage() {
         </div>
 
         {/* Anthropic (Claude AI) */}
-        <div className="bg-[var(--t-surface)] rounded-xl border border-[var(--t-border)] p-6">
+        <div className="bg-[var(--t-surface)] rounded-xl shadow-[var(--t-card-shadow)] p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
               <Sparkles className="w-5 h-5 text-purple-400" />
@@ -361,7 +361,7 @@ export default function IntegracoesPage() {
         </div>
 
         {/* Cache Stats */}
-        <div className="bg-[var(--t-surface)] rounded-xl border border-[var(--t-border)] p-6">
+        <div className="bg-[var(--t-surface)] rounded-xl shadow-[var(--t-card-shadow)] p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
               <BarChart3 className="w-5 h-5 text-purple-400" />

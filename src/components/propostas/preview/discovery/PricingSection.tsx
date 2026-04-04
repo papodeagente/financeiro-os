@@ -54,7 +54,7 @@ export function PricingSection({ valoresSecoes, inclusosSecoes, idioma, corPrima
           {opcoes.map((op, i) => (
             <div
               key={i}
-              className={`rounded-2xl border-2 p-6 text-center transition-all ${
+              className={`rounded-[20px] border-2 p-6 text-center transition-all ${
                 op.destaque
                   ? 'border-current shadow-lg scale-[1.02]'
                   : 'border-gray-200'

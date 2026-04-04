@@ -95,7 +95,7 @@ export function ChatWidget({ slug, corPrimaria, idioma }: Props) {
   }
 
   return (
-    <div className="fixed bottom-6 right-6 w-[360px] max-w-[calc(100vw-2rem)] h-[500px] max-h-[calc(100vh-3rem)] rounded-2xl shadow-2xl flex flex-col overflow-hidden z-50 border border-gray-200 bg-white">
+    <div className="fixed bottom-6 right-6 w-[360px] max-w-[calc(100vw-2rem)] h-[500px] max-h-[calc(100vh-3rem)] rounded-[20px] shadow-2xl flex flex-col overflow-hidden z-50 border border-gray-200 bg-white">
       {/* Header */}
       <div
         className="flex items-center justify-between px-4 py-3 text-white shrink-0"
@@ -120,7 +120,7 @@ export function ChatWidget({ slug, corPrimaria, idioma }: Props) {
             <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white" style={{ backgroundColor: corPrimaria }}>
               <Bot className="w-4 h-4" />
             </div>
-            <div className="bg-gray-100 rounded-2xl rounded-tl-sm px-3 py-2 text-sm text-gray-700 max-w-[80%]">
+            <div className="bg-gray-100 rounded-[20px] rounded-tl-sm px-3 py-2 text-sm text-gray-700 max-w-[80%]">
               {greeting}
             </div>
           </div>
@@ -134,7 +134,7 @@ export function ChatWidget({ slug, corPrimaria, idioma }: Props) {
               </div>
             )}
             <div
-              className={`rounded-2xl px-3 py-2 text-sm max-w-[80%] whitespace-pre-wrap ${
+              className={`rounded-[20px] px-3 py-2 text-sm max-w-[80%] whitespace-pre-wrap ${
                 msg.role === 'user'
                   ? 'text-white rounded-tr-sm'
                   : 'bg-gray-100 text-gray-700 rounded-tl-sm'
@@ -151,7 +151,7 @@ export function ChatWidget({ slug, corPrimaria, idioma }: Props) {
             <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white" style={{ backgroundColor: corPrimaria }}>
               <Bot className="w-4 h-4" />
             </div>
-            <div className="bg-gray-100 rounded-2xl rounded-tl-sm px-3 py-2">
+            <div className="bg-gray-100 rounded-[20px] rounded-tl-sm px-3 py-2">
               <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
             </div>
           </div>

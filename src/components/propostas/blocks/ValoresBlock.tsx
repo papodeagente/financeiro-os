@@ -21,7 +21,7 @@ export function ValoresBlock({ conteudo, onChange }: BlockProps) {
   return (
     <div className="space-y-3">
       {opcoes.map((opc, i) => (
-        <div key={i} className="p-3 rounded-lg bg-[var(--t-bg)] border border-[var(--t-border)] space-y-2">
+        <div key={i} className="p-3 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] space-y-2">
           <div className="grid grid-cols-3 gap-2">
             <Input
               value={opc.titulo}

@@ -46,7 +46,7 @@ export function ImageUpload({ onUpload, multiple, currentUrl, onRemove, compact 
     return (
       <div className="flex items-center gap-2">
         {currentUrl && (
-          <div className="relative w-16 h-12 rounded overflow-hidden border border-[var(--t-border)]">
+          <div className="relative w-16 h-12 rounded overflow-hidden shadow-[var(--t-card-shadow)]">
             <img src={currentUrl} alt="" className="w-full h-full object-cover" />
             {onRemove && (
               <button onClick={onRemove} className="absolute top-0 right-0 bg-black/60 rounded-bl p-0.5">

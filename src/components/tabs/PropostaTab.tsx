@@ -42,8 +42,8 @@ export function PropostaTab({ grupo }: Props) {
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead><tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
-            <th className="p-2 text-left border border-[var(--t-border)] w-40">Serviço</th>
-            {TIPOS.map(t => <th key={t} className="p-2 border border-[var(--t-border)] w-32">{LABELS[t]}</th>)}
+            <th className="p-2 text-left shadow-[var(--t-card-shadow)] w-40">Serviço</th>
+            {TIPOS.map(t => <th key={t} className="p-2 shadow-[var(--t-card-shadow)] w-32">{LABELS[t]}</th>)}
           </tr></thead>
           <tbody>
             {p.lines.map((line, i) => {
@@ -63,8 +63,8 @@ export function PropostaTab({ grupo }: Props) {
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead><tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
-            <th className="p-2 text-left border border-[var(--t-border)] w-40">Modalidade</th>
-            {TIPOS.map(t => <th key={t} className="p-2 border border-[var(--t-border)] w-32">{LABELS[t]}</th>)}
+            <th className="p-2 text-left shadow-[var(--t-card-shadow)] w-40">Modalidade</th>
+            {TIPOS.map(t => <th key={t} className="p-2 shadow-[var(--t-card-shadow)] w-32">{LABELS[t]}</th>)}
           </tr></thead>
           <tbody>
             <Row label="À Vista / PIX" values={p.totalAvista} className="bg-green-50 font-bold" />
@@ -79,8 +79,8 @@ export function PropostaTab({ grupo }: Props) {
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead><tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
-            <th className="p-2 text-left border border-[var(--t-border)] w-40">Modalidade</th>
-            {TIPOS.map(t => <th key={t} className="p-2 border border-[var(--t-border)] w-32">{LABELS[t]}</th>)}
+            <th className="p-2 text-left shadow-[var(--t-card-shadow)] w-40">Modalidade</th>
+            {TIPOS.map(t => <th key={t} className="p-2 shadow-[var(--t-card-shadow)] w-32">{LABELS[t]}</th>)}
           </tr></thead>
           <tbody>
             <Row label="Parcela CC" values={p.parcelaAptoCC} className="bg-[var(--t-blue-bg)]" />
@@ -94,8 +94,8 @@ export function PropostaTab({ grupo }: Props) {
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead><tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
-            <th className="p-2 text-left border border-[var(--t-border)] w-40">Modalidade</th>
-            {TIPOS.map(t => <th key={t} className="p-2 border border-[var(--t-border)] w-32">{LABELS[t]}</th>)}
+            <th className="p-2 text-left shadow-[var(--t-card-shadow)] w-40">Modalidade</th>
+            {TIPOS.map(t => <th key={t} className="p-2 shadow-[var(--t-card-shadow)] w-32">{LABELS[t]}</th>)}
           </tr></thead>
           <tbody>
             <Row label="À Vista / PIX" values={p.totalPaxAvista} className="bg-green-50 font-bold" />
@@ -110,8 +110,8 @@ export function PropostaTab({ grupo }: Props) {
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead><tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
-            <th className="p-2 text-left border border-[var(--t-border)] w-40">Modalidade</th>
-            {TIPOS.map(t => <th key={t} className="p-2 border border-[var(--t-border)] w-32">{LABELS[t]}</th>)}
+            <th className="p-2 text-left shadow-[var(--t-card-shadow)] w-40">Modalidade</th>
+            {TIPOS.map(t => <th key={t} className="p-2 shadow-[var(--t-card-shadow)] w-32">{LABELS[t]}</th>)}
           </tr></thead>
           <tbody>
             <Row label="Parcela CC" values={p.parcelaPaxCC} className="bg-[var(--t-blue-bg)]" />

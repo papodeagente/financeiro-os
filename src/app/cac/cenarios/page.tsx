@@ -256,7 +256,7 @@ export default function CACCenariosPage() {
                 </div>
 
                 {/* Base costs */}
-                <div className="p-4 rounded-lg bg-[var(--t-bg)] border border-[var(--t-border)]">
+                <div className="p-4 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)]">
                   <p className="text-sm font-medium text-[var(--t-text)] mb-3">Custos Base (do mês de referência)</p>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -285,7 +285,7 @@ export default function CACCenariosPage() {
                 </div>
 
                 {/* Ads Calculator */}
-                <div className="p-4 rounded-lg bg-[var(--t-bg)] border border-[var(--t-border)]">
+                <div className="p-4 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)]">
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-sm font-medium text-[var(--t-text)] flex items-center gap-2">
                       <Zap className="w-4 h-4 text-[var(--t-amber)]" /> Investimento em Ads
@@ -299,7 +299,7 @@ export default function CACCenariosPage() {
                     {adsLines.map((line, idx) => {
                       const calc = calcAdsLine(line);
                       return (
-                        <div key={idx} className="grid grid-cols-6 gap-2 items-end p-3 rounded bg-[var(--t-surface)] border border-[var(--t-border)]">
+                        <div key={idx} className="grid grid-cols-6 gap-2 items-end p-3 rounded bg-[var(--t-surface)] shadow-[var(--t-card-shadow)]">
                           <div>
                             <label className="text-[10px] text-[var(--t-text-muted)] mb-0.5 block">Plataforma</label>
                             <select
@@ -363,7 +363,7 @@ export default function CACCenariosPage() {
                 </div>
 
                 {/* Other Investments */}
-                <div className="p-4 rounded-lg bg-[var(--t-bg)] border border-[var(--t-border)]">
+                <div className="p-4 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)]">
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-sm font-medium text-[var(--t-text)]">Outros Investimentos</p>
                     <Button size="sm" variant="outline" onClick={addOutroInvestimento} className="border-[var(--t-border)] text-[var(--t-text-secondary)] h-7 text-xs">
@@ -525,7 +525,7 @@ export default function CACCenariosPage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {cenarios.sort((a, b) => b.criado_em.localeCompare(a.criado_em)).map(c => (
-                  <div key={c.id} className="p-4 rounded-lg bg-[var(--t-bg)] border border-[var(--t-border)] hover:border-[var(--t-border-hover)] transition-colors">
+                  <div key={c.id} className="p-4 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] hover:border-[var(--t-border-hover)] transition-colors">
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <h3 className="font-medium text-[var(--t-text)]">{c.nome}</h3>

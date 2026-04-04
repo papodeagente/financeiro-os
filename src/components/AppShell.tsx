@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useActivePillar } from '@/hooks/useActivePillar';
 import { TopRail } from './TopRail';
-import { PillarSidebar } from './PillarSidebar';
+import { SubNav } from './SubNav';
 import { CommandPalette } from './CommandPalette';
 import { useState, useEffect, useCallback } from 'react';
 
@@ -16,36 +16,36 @@ const BREADCRUMB_MAP: Record<string, string> = {
   '/propostas/analytics': 'Analytics',
   '/vendas': 'Vendas fechadas',
   '/vendas/nova': 'Nova venda',
-  '/vendas/orcamentos': 'Orcamentos',
+  '/vendas/orcamentos': 'Orçamentos',
   '/voos': 'Buscar voos',
-  '/hoteis': 'Buscar hoteis',
+  '/hoteis': 'Buscar hotéis',
   '/destinos': 'Destinos',
-  '/financeiro-ag': 'Visao geral',
+  '/financeiro-ag': 'Visão geral',
   '/financeiro-ag/fluxo-caixa': 'Fluxo de caixa',
   '/financeiro-ag/dre': 'DRE',
-  '/financeiro-ag/conciliacao': 'Conciliacao',
+  '/financeiro-ag/conciliacao': 'Conciliação',
   '/financeiro-ag/receber': 'Contas a receber',
   '/financeiro-ag/pagar': 'Contas a pagar',
   '/financeiro-ag/plano-contas': 'Plano de contas',
-  '/financeiro-ag/contas-bancarias': 'Contas bancarias',
-  '/financeiro-ag/transferencias': 'Transferencias',
+  '/financeiro-ag/contas-bancarias': 'Contas bancárias',
+  '/financeiro-ag/transferencias': 'Transferências',
   '/financeiro-grupos': 'Financeiro por grupo',
   '/pessoas/clientes': 'Clientes',
   '/pessoas/fornecedores': 'Fornecedores',
   '/pessoas/equipe': 'Equipe',
   '/equipe/metas': 'Metas da equipe',
-  '/equipe/comissoes': 'Comissoes',
-  '/equipe/planos-comissao': 'Planos de comissao',
+  '/equipe/comissoes': 'Comissões',
+  '/equipe/planos-comissao': 'Planos de comissão',
   '/cac/dashboard': 'Dashboard CAC',
   '/cac/cenarios': 'Simulador CAC',
-  '/planejamento/custos': 'Custos do negocio',
+  '/planejamento/custos': 'Custos do negócio',
   '/planejamento/projetos': 'Projetos comerciais',
-  '/relatorios/financeiro': 'Relatorios financeiros',
+  '/relatorios/financeiro': 'Relatórios financeiros',
   '/relatorios/rentabilidade': 'Rentabilidade',
   '/relatorios/comparativo': 'Comparativo mensal',
-  '/config/agencia': 'Configuracoes',
-  '/config/usuarios': 'Usuarios',
-  '/config/crm': 'Integracao CRM',
+  '/config/agencia': 'Configurações',
+  '/config/usuarios': 'Usuários',
+  '/config/crm': 'Integração CRM',
 };
 
 const PILLAR_LABELS: Record<string, string> = {
@@ -108,18 +108,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex flex-col h-full">
       <TopRail onCommandPalette={() => setCommandPaletteOpen(true)} />
-      <div className="flex flex-1 overflow-hidden">
-        <PillarSidebar />
-        <div className="flex-1 overflow-y-auto">
-          {showBreadcrumb && (
-            <div className="px-6 pt-4 pb-0">
-              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">
-                {pillarLabel} <span className="mx-1">›</span> {breadcrumbLabel}
-              </p>
-            </div>
-          )}
-          {children}
-        </div>
+      <SubNav />
+      <div className="flex-1 overflow-y-auto">
+        {showBreadcrumb && (
+          <div className="px-8 pt-5 pb-0">
+            <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">
+              {pillarLabel} <span className="mx-1">›</span> {breadcrumbLabel}
+            </p>
+          </div>
+        )}
+        {children}
       </div>
       <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} />
     </div>

@@ -148,7 +148,7 @@ export default function VendasPage() {
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
-              className="bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm min-w-[160px]"
+              className="bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm min-w-[160px]"
             >
               <option value="">Todos os status</option>
               {ALL_STATUSES.map(s => (

@@ -179,7 +179,7 @@ export default function ClientesPage() {
           </div>
           <div className="relative">
             <select
-              className="appearance-none bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+              className="appearance-none bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
               value={filterTipo}
               onChange={(e) => setFilterTipo(e.target.value as '' | 'PF' | 'PJ')}
             >
@@ -191,7 +191,7 @@ export default function ClientesPage() {
           </div>
           <div className="relative">
             <select
-              className="appearance-none bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+              className="appearance-none bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as '' | 'ATIVO' | 'INATIVO')}
             >
@@ -226,7 +226,7 @@ export default function ClientesPage() {
                   className={`px-4 py-1.5 rounded text-sm font-medium transition-colors ${
                     form.tipo === t
                       ? 'bg-[var(--t-accent)] text-[var(--t-text)]'
-                      : 'bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] hover:text-[var(--t-text)]'
+                      : 'bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] hover:text-[var(--t-text)]'
                   }`}
                 >
                   {t === 'PF' ? 'Pessoa Física' : 'Pessoa Jurídica'}
@@ -310,7 +310,7 @@ export default function ClientesPage() {
                     <div>
                       <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Gênero</label>
                       <select
-                        className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+                        className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
                         value={form.genero}
                         onChange={(e) => setField('genero', e.target.value as Cliente['genero'])}
                       >
@@ -322,7 +322,7 @@ export default function ClientesPage() {
                     <div>
                       <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Estado Civil</label>
                       <select
-                        className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+                        className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
                         value={form.estado_civil}
                         onChange={(e) => setField('estado_civil', e.target.value)}
                       >
@@ -353,7 +353,7 @@ export default function ClientesPage() {
                 <div>
                   <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Status</label>
                   <select
-                    className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+                    className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
                     value={form.status}
                     onChange={(e) => setField('status', e.target.value as 'ATIVO' | 'INATIVO')}
                   >
@@ -364,7 +364,7 @@ export default function ClientesPage() {
                 <div className="sm:col-span-2 lg:col-span-3">
                   <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Observações</label>
                   <textarea
-                    className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853] resize-none"
+                    className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853] resize-none"
                     rows={3}
                     value={form.observacoes}
                     onChange={(e) => setField('observacoes', e.target.value)}
@@ -476,7 +476,7 @@ export default function ClientesPage() {
                 <div>
                   <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Classe de Voo Preferida</label>
                   <select
-                    className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+                    className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
                     value={form.preferencias.classe_voo}
                     onChange={(e) =>
                       setField('preferencias', { ...form.preferencias, classe_voo: e.target.value })
@@ -490,7 +490,7 @@ export default function ClientesPage() {
                 <div>
                   <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Tipo de Hotel</label>
                   <select
-                    className="w-full bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+                    className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
                     value={form.preferencias.tipo_hotel}
                     onChange={(e) =>
                       setField('preferencias', { ...form.preferencias, tipo_hotel: e.target.value })
@@ -556,7 +556,7 @@ export default function ClientesPage() {
                           className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                             selected
                               ? 'bg-[var(--t-accent)] text-[var(--t-text)]'
-                              : 'bg-[var(--t-bg)] border border-[var(--t-border)] text-[var(--t-text-secondary)] hover:border-[var(--t-accent)]'
+                              : 'bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] hover:border-[var(--t-accent)]'
                           }`}
                         >
                           {opt}

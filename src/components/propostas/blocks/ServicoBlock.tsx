@@ -27,7 +27,7 @@ export function ServicoBlock({ conteudo, onChange }: BlockProps) {
         onChange={e => onChange({ ...conteudo, descricao: e.target.value })}
         rows={2}
         placeholder="Descricao do servico..."
-        className="w-full bg-[var(--t-bg)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-sm resize-none"
+        className="w-full bg-[var(--t-bg)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-3 py-2 text-sm resize-none"
       />
       <div className="flex items-center gap-2">
         <Input

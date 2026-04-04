@@ -265,16 +265,16 @@ export function VendasTab({ grupo, onChange }: Props) {
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
-              <th className="p-2 border border-[var(--t-border)] text-left">Data</th>
-              <th className="p-2 border border-[var(--t-border)] text-left">Cliente</th>
-              <th className="p-2 border border-[var(--t-border)] text-center">Tipo</th>
-              <th className="p-2 border border-[var(--t-border)] text-center">PAX</th>
-              <th className="p-2 border border-[var(--t-border)] text-center">Forma</th>
-              <th className="p-2 border border-[var(--t-border)] text-right">Valor</th>
-              <th className="p-2 border border-[var(--t-border)] text-right">Desconto</th>
-              <th className="p-2 border border-[var(--t-border)] text-right">Final</th>
-              <th className="p-2 border border-[var(--t-border)] text-center">Status</th>
-              <th className="p-2 border border-[var(--t-border)] text-center">Acoes</th>
+              <th className="p-2 shadow-[var(--t-card-shadow)] text-left">Data</th>
+              <th className="p-2 shadow-[var(--t-card-shadow)] text-left">Cliente</th>
+              <th className="p-2 shadow-[var(--t-card-shadow)] text-center">Tipo</th>
+              <th className="p-2 shadow-[var(--t-card-shadow)] text-center">PAX</th>
+              <th className="p-2 shadow-[var(--t-card-shadow)] text-center">Forma</th>
+              <th className="p-2 shadow-[var(--t-card-shadow)] text-right">Valor</th>
+              <th className="p-2 shadow-[var(--t-card-shadow)] text-right">Desconto</th>
+              <th className="p-2 shadow-[var(--t-card-shadow)] text-right">Final</th>
+              <th className="p-2 shadow-[var(--t-card-shadow)] text-center">Status</th>
+              <th className="p-2 shadow-[var(--t-card-shadow)] text-center">Acoes</th>
             </tr>
           </thead>
           <tbody>

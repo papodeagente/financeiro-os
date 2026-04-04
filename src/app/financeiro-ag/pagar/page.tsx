@@ -504,7 +504,7 @@ export default function ContasPagarPage() {
               </div>
 
               {/* Classification fields */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 p-3 rounded-lg bg-[var(--t-bg)] border border-[var(--t-border)]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 p-3 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)]">
                 <div>
                   <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Natureza do Custo</label>
                   <select

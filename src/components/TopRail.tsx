@@ -13,6 +13,13 @@ interface Props {
   onCommandPalette?: () => void;
 }
 
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Bom dia';
+  if (h < 18) return 'Boa tarde';
+  return 'Boa noite';
+}
+
 export function TopRail({ onPillarClick, onCommandPalette }: Props) {
   const activePillar = useActivePillar();
   const { theme, toggleTheme } = useTheme();
@@ -31,16 +38,23 @@ export function TopRail({ onPillarClick, onCommandPalette }: Props) {
   }, []);
 
   return (
-    <header className="h-[52px] bg-[var(--t-sidebar-bg)] border-b border-[var(--t-border)] flex items-center px-4 shrink-0 z-40">
-      {/* Logo */}
-      <Link href="/dashboard" className="flex items-center gap-2 mr-8 shrink-0">
-        <div className="w-7 h-7 rounded-lg bg-[var(--t-green)] flex items-center justify-center">
-          <span className="text-white font-bold text-xs dark:text-[#0a0a14]">E</span>
-        </div>
-      </Link>
+    <header className="h-[60px] bg-[var(--t-surface)]/85 backdrop-blur-xl border-b border-[var(--t-border)] flex items-center px-5 shrink-0 z-40">
+      {/* Logo + Greeting */}
+      <div className="flex items-center gap-3 mr-6 shrink-0">
+        <Link href="/dashboard" className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-xl bg-[var(--t-green)] flex items-center justify-center shadow-sm">
+            <span className="text-white font-bold text-sm">E</span>
+          </div>
+        </Link>
+        {user && (
+          <span className="text-[var(--text-body-sm)] text-[var(--t-text-secondary)] hidden lg:inline">
+            {getGreeting()}, <span className="text-[var(--t-text)] font-medium">{user.nome?.split(' ')[0]}</span>
+          </span>
+        )}
+      </div>
 
       {/* Pillar pills */}
-      <nav className="flex-1 flex items-center justify-center gap-1.5">
+      <nav className="flex-1 flex items-center justify-center gap-1">
         {PILLARS.map(pillar => {
           const Icon = pillar.icon;
           const isActive = activePillar === pillar.id;
@@ -50,10 +64,10 @@ export function TopRail({ onPillarClick, onCommandPalette }: Props) {
               key={pillar.id}
               href={getPillarDefaultRoute(pillar.id)}
               onClick={() => onPillarClick?.(pillar.id)}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[var(--text-body-sm)] font-medium transition-all duration-150 ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[var(--text-body-sm)] font-medium transition-all duration-150 ${
                 isActive
-                  ? 'bg-[var(--t-green)]/8 text-[var(--t-green)]'
-                  : 'text-[var(--t-text-muted)] hover:text-[var(--t-text)] hover:bg-[var(--t-sidebar-item-hover)]'
+                  ? 'bg-[var(--t-green)]/10 text-[var(--t-green)]'
+                  : 'text-[var(--t-text-muted)] hover:text-[var(--t-text)] hover:bg-[var(--t-surface-hover)]'
               }`}
             >
               <Icon className="w-4 h-4" />
@@ -64,12 +78,12 @@ export function TopRail({ onPillarClick, onCommandPalette }: Props) {
       </nav>
 
       {/* Utilities */}
-      <div className="flex items-center gap-1 shrink-0">
+      <div className="flex items-center gap-1.5 shrink-0">
         {/* Command palette trigger */}
         <button
           onClick={onCommandPalette}
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-text)] hover:bg-[var(--t-sidebar-item-hover)] transition-colors"
-          aria-label="Busca rapida"
+          className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-text)] hover:bg-[var(--t-surface-hover)] transition-colors"
+          aria-label="Busca rápida"
           title="⌘K"
         >
           <Search className="w-4 h-4" />
@@ -81,7 +95,7 @@ export function TopRail({ onPillarClick, onCommandPalette }: Props) {
         {/* Theme toggle */}
         <button
           onClick={toggleTheme}
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-text)] hover:bg-[var(--t-sidebar-item-hover)] transition-colors"
+          className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-text)] hover:bg-[var(--t-surface-hover)] transition-colors"
           aria-label={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
         >
           {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
@@ -92,10 +106,10 @@ export function TopRail({ onPillarClick, onCommandPalette }: Props) {
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center gap-1.5 ml-1 px-2 py-1 rounded-lg hover:bg-[var(--t-sidebar-item-hover)] transition-colors"
+              className="flex items-center gap-2 ml-1 px-2 py-1.5 rounded-xl hover:bg-[var(--t-surface-hover)] transition-colors"
             >
-              <div className="w-7 h-7 rounded-full bg-[var(--t-green)]/20 flex items-center justify-center">
-                <span className="text-[10px] font-bold text-[var(--t-green)]">
+              <div className="w-8 h-8 rounded-full bg-[var(--t-green)]/15 flex items-center justify-center ring-2 ring-[var(--t-green)]/20">
+                <span className="text-[11px] font-bold text-[var(--t-green)]">
                   {user.nome?.charAt(0)?.toUpperCase() || 'U'}
                 </span>
               </div>
@@ -103,29 +117,29 @@ export function TopRail({ onPillarClick, onCommandPalette }: Props) {
             </button>
 
             {dropdownOpen && (
-              <div className="absolute right-0 top-full mt-1 w-48 bg-[var(--t-surface)] border border-[var(--t-border)] rounded-lg shadow-lg py-1 z-50">
-                <div className="px-3 py-2 border-b border-[var(--t-border)]">
+              <div className="absolute right-0 top-full mt-2 w-52 bg-[var(--t-surface)] shadow-[var(--t-card-shadow)] rounded-[20px] shadow-lg py-1.5 z-50">
+                <div className="px-4 py-2.5 border-b border-[var(--t-border)]">
                   <p className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)]">{user.nome}</p>
                   <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">{user.email}</p>
                 </div>
                 <Link
                   href="/config/crm"
-                  className="block px-3 py-2 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] hover:bg-[var(--t-sidebar-item-hover)]"
+                  className="block px-4 py-2 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)] rounded-lg mx-1.5 my-0.5"
                   onClick={() => setDropdownOpen(false)}
                 >
-                  Integracao CRM
+                  Integração CRM
                 </Link>
                 <Link
                   href="/config/agencia"
-                  className="block px-3 py-2 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] hover:bg-[var(--t-sidebar-item-hover)]"
+                  className="block px-4 py-2 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)] rounded-lg mx-1.5 my-0.5"
                   onClick={() => setDropdownOpen(false)}
                 >
-                  Configuracoes
+                  Configurações
                 </Link>
                 <div className="border-t border-[var(--t-border)] mt-1 pt-1">
                   <button
                     onClick={logout}
-                    className="w-full text-left px-3 py-2 text-[var(--text-body-sm)] text-red-400 hover:bg-red-400/10 flex items-center gap-2"
+                    className="w-full text-left px-4 py-2 text-[var(--text-body-sm)] text-red-400 hover:bg-red-400/10 flex items-center gap-2 rounded-lg mx-1.5"
                   >
                     <LogOut className="w-3.5 h-3.5" />
                     Sair

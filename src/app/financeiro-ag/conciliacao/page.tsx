@@ -312,7 +312,7 @@ export default function ConciliacaoPage() {
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                 filterStatus === s
                   ? 'bg-[var(--t-green)] text-white dark:text-[#0a0a14]'
-                  : 'bg-[var(--t-surface)] text-[var(--t-text-secondary)] border border-[var(--t-border)]'
+                  : 'bg-[var(--t-surface)] text-[var(--t-text-secondary)] shadow-[var(--t-card-shadow)]'
               }`}
             >
               {s}
@@ -332,7 +332,7 @@ export default function ConciliacaoPage() {
               </button>
             </CardHeader>
             <CardContent>
-              <div className="p-3 rounded-lg bg-[var(--t-bg)] border border-[var(--t-border)] mb-4">
+              <div className="p-3 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] mb-4">
                 <div className="flex justify-between items-center">
                   <div>
                     <p className="text-sm text-[var(--t-text)]">{conciliarItem.descricao}</p>
@@ -355,7 +355,7 @@ export default function ConciliacaoPage() {
                 return (
                   <div className="space-y-2 max-h-60 overflow-y-auto">
                     {matches.map(m => (
-                      <div key={m.id} className="flex items-center justify-between p-3 rounded-lg bg-[var(--t-bg)] border border-[var(--t-border)] hover:border-[var(--t-green)]/50 cursor-pointer transition-colors"
+                      <div key={m.id} className="flex items-center justify-between p-3 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] hover:border-[var(--t-green)]/50 cursor-pointer transition-colors"
                         onClick={() => handleConciliar(conciliarItem, m.id, m.tipo)}
                       >
                         <div>

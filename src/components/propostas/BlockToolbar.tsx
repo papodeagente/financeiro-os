@@ -58,7 +58,7 @@ export function BlockToolbar({ onAddBlock, onSearchFlight, onSearchHotel, onGene
               <button
                 key={t.tipo}
                 onClick={() => { onAddBlock(t.tipo); setOpen(false); }}
-                className="flex items-center gap-2 p-3 rounded-lg bg-[var(--t-bg)] border border-[var(--t-border)] hover:border-[var(--t-green)] hover:bg-[var(--t-green)]/5 transition-all text-left"
+                className="flex items-center gap-2 p-3 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] hover:border-[var(--t-green)] hover:bg-[var(--t-green)]/5 transition-all text-left"
               >
                 <Icon className="w-4 h-4 text-[var(--t-green)]" />
                 <div>

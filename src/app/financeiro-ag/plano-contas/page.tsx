@@ -242,7 +242,7 @@ export default function PlanoContasPage() {
 
               {/* Classification fields — only for DESPESA */}
               {form.tipo === 'DESPESA' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 p-3 rounded-lg bg-[var(--t-bg)] border border-[var(--t-border)]">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 p-3 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)]">
                   <div>
                     <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Natureza do Custo</label>
                     <select
@@ -302,7 +302,7 @@ export default function PlanoContasPage() {
               className={`px-4 py-1.5 rounded-full text-xs font-medium transition-colors ${
                 filterTipo === t
                   ? 'bg-[var(--t-green)] text-white dark:text-[#0a0a14]'
-                  : 'bg-[var(--t-surface)] text-[var(--t-text-secondary)] hover:text-[var(--t-text)] border border-[var(--t-border)]'
+                  : 'bg-[var(--t-surface)] text-[var(--t-text-secondary)] hover:text-[var(--t-text)] shadow-[var(--t-card-shadow)]'
               }`}
             >
               {t}

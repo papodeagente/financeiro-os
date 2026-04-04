@@ -101,30 +101,30 @@ export default function FinanceiroAgHubPage() {
     <div className="p-6">
       <PageHeader title="Financeiro" crmBadge />
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      {/* KPI Cards (bento) */}
+      <div className="bento-grid mb-8">
         {[
           { label: 'Saldo hoje', value: kpis?.saldo || 0 },
-          { label: 'A receber este mes', value: kpis?.a_receber || 0 },
-          { label: 'A pagar este mes', value: kpis?.a_pagar || 0 },
-          { label: 'Resultado do mes', value: kpis?.resultado || 0 },
+          { label: 'A receber este mês', value: kpis?.a_receber || 0 },
+          { label: 'A pagar este mês', value: kpis?.a_pagar || 0 },
+          { label: 'Resultado do mês', value: kpis?.resultado || 0 },
         ].map((kpi, i) => (
-          <div key={i} className="p-5 rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)]">
-            <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mb-1">{kpi.label}</p>
-            <p className={`text-[var(--text-title)] font-medium ${kpi.value >= 0 ? 'text-[var(--t-text)]' : 'text-[var(--crm-err)]'}`}>
+          <div key={i} className="bento-3 bento-card">
+            <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide mb-2">{kpi.label}</p>
+            <p className={`kpi-hero ${kpi.value >= 0 ? 'text-[var(--t-text)]' : 'text-[var(--crm-err)]'}`}>
               {formatBRL(kpi.value)}
             </p>
           </div>
         ))}
       </div>
 
-      {/* Shortcuts grid */}
-      <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-4">Acesso rapido</h2>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+      {/* Shortcuts grid (bento) */}
+      <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-4">Acesso rápido</h2>
+      <div className="bento-grid mb-8">
         {SHORTCUTS.map(item => {
           const Icon = item.icon;
           return (
-            <Link key={item.href} href={item.href} className="p-4 rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] hover:border-[var(--t-border-hover)] transition-colors group">
+            <Link key={item.href} href={item.href} className="bento-3 bento-card group hover:shadow-[var(--t-card-shadow-hover)]">
               <Icon className="w-5 h-5 text-[var(--t-text-muted)] group-hover:text-[var(--t-green)] transition-colors mb-2" />
               <p className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)]">{item.label}</p>
               <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">{item.desc}</p>
@@ -133,11 +133,11 @@ export default function FinanceiroAgHubPage() {
         })}
       </div>
 
-      {/* Recent movements */}
-      <div className="grid grid-cols-2 gap-6">
-        <div>
-          <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-3">Ultimas movimentacoes</h2>
-          <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] divide-y divide-[var(--t-border)]">
+      {/* Recent movements (bento) */}
+      <div className="bento-grid">
+        <div className="bento-8">
+          <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-3">Últimas movimentações</h2>
+          <div className="rounded-[20px] shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] divide-y divide-[var(--t-border)]">
             {ultimos.length === 0 ? (
               <p className="px-4 py-6 text-center text-[var(--text-body-sm)] text-[var(--t-text-muted)]">Nenhuma movimentacao</p>
             ) : ultimos.map((item, i) => (
@@ -162,9 +162,9 @@ export default function FinanceiroAgHubPage() {
           </div>
         </div>
 
-        <div>
-          <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-3">Integracao CRM</h2>
-          <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-4">
+        <div className="bento-4">
+          <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-3">Integração CRM</h2>
+          <div className="rounded-[20px] shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] p-4">
             <CrmStatusBadge variant="completo" />
             <div className="mt-3 pt-3 border-t border-[var(--t-border)]">
               <Link href="/config/crm" className="text-[var(--text-body-sm)] text-[var(--t-green)] hover:underline">

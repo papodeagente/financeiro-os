@@ -160,7 +160,7 @@ export default function PlanosComissaoPage() {
               </div>
 
               {/* Faixas progressivas */}
-              <div className="p-4 rounded-lg bg-[var(--t-bg)] border border-[var(--t-border)]">
+              <div className="p-4 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)]">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-sm font-medium text-[var(--t-text)]">Faixas Progressivas (opcional)</p>
                   <Button size="sm" variant="outline" onClick={addFaixa} className="border-[var(--t-border)] text-[var(--t-text-secondary)] h-7 text-xs">
@@ -199,7 +199,7 @@ export default function PlanosComissaoPage() {
               </div>
 
               {/* Regras por produto */}
-              <div className="p-4 rounded-lg bg-[var(--t-bg)] border border-[var(--t-border)]">
+              <div className="p-4 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)]">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-sm font-medium text-[var(--t-text)]">% por Tipo de Produto (opcional)</p>
                   <Button size="sm" variant="outline" onClick={addRegraProduto} className="border-[var(--t-border)] text-[var(--t-text-secondary)] h-7 text-xs">
@@ -312,7 +312,7 @@ export default function PlanosComissaoPage() {
                           <p className="text-xs text-[var(--t-text-muted)] uppercase mb-2">Regras por Produto</p>
                           <div className="flex flex-wrap gap-2">
                             {p.regras_produto.map((r, i) => (
-                              <Badge key={i} className="bg-[var(--t-surface)] text-[var(--t-text-secondary)] border border-[var(--t-border)] text-xs">
+                              <Badge key={i} className="bg-[var(--t-surface)] text-[var(--t-text-secondary)] shadow-[var(--t-card-shadow)] text-xs">
                                 {r.tipo_produto}: {r.percentual}%
                               </Badge>
                             ))}

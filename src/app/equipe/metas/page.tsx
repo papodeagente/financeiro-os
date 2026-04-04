@@ -187,50 +187,42 @@ export default function MetasPage() {
           </div>
         </div>
 
-        {/* Team KPIs */}
-        <div className="grid grid-cols-4 gap-4">
-          <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-            <CardContent className="p-4 flex items-center gap-4">
-              <Target className="w-8 h-8 text-[var(--t-blue)] shrink-0" />
-              <div>
-                <p className="text-[var(--t-text-muted)] text-xs uppercase">Meta Equipe</p>
-                <p className="text-xl font-bold text-[var(--t-blue)]">{BRL(teamTotals.metaTotal)}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-            <CardContent className="p-4 flex items-center gap-4">
-              <TrendingUp className="w-8 h-8 text-[var(--t-green)] shrink-0" />
-              <div>
-                <p className="text-[var(--t-text-muted)] text-xs uppercase">Realizado</p>
-                <p className="text-xl font-bold text-[var(--t-green)]">{BRL(teamTotals.realizadoTotal)}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-            <CardContent className="p-4 flex items-center gap-4">
-              <BarChart3 className="w-8 h-8 text-[var(--t-amber)] shrink-0" />
-              <div>
-                <p className="text-[var(--t-text-muted)] text-xs uppercase">% Atingido</p>
-                <p className={`text-xl font-bold ${teamTotals.pctTotal >= 100 ? 'text-[var(--t-green)]' : teamTotals.pctTotal >= 70 ? 'text-[var(--t-amber)]' : 'text-[var(--t-red)]'}`}>
-                  {teamTotals.pctTotal.toFixed(1)}%
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-            <CardContent className="p-4 flex items-center gap-4">
-              <DollarSign className="w-8 h-8 text-purple-400 shrink-0" />
-              <div>
-                <p className="text-[var(--t-text-muted)] text-xs uppercase">Comissões do Mês</p>
-                <p className="text-xl font-bold text-purple-400">{BRL(monthCommissions)}</p>
-              </div>
-            </CardContent>
-          </Card>
+        {/* Team KPIs (bento) */}
+        <div className="bento-grid">
+          <div className="bento-3 bento-card">
+            <div className="flex items-center gap-2 mb-3">
+              <Target className="w-5 h-5 text-[var(--t-blue)]" />
+              <span className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide">Meta Equipe</span>
+            </div>
+            <p className="kpi-hero text-[var(--t-blue)]">{BRL(teamTotals.metaTotal)}</p>
+          </div>
+          <div className="bento-3 bento-card">
+            <div className="flex items-center gap-2 mb-3">
+              <TrendingUp className="w-5 h-5 text-[var(--t-green)]" />
+              <span className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide">Realizado</span>
+            </div>
+            <p className="kpi-hero text-[var(--t-green)]">{BRL(teamTotals.realizadoTotal)}</p>
+          </div>
+          <div className="bento-3 bento-card">
+            <div className="flex items-center gap-2 mb-3">
+              <BarChart3 className="w-5 h-5 text-[var(--t-amber)]" />
+              <span className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide">% Atingido</span>
+            </div>
+            <p className={`kpi-hero ${teamTotals.pctTotal >= 100 ? 'text-[var(--t-green)]' : teamTotals.pctTotal >= 70 ? 'text-[var(--t-amber)]' : 'text-[var(--t-red)]'}`}>
+              {teamTotals.pctTotal.toFixed(1)}%
+            </p>
+          </div>
+          <div className="bento-3 bento-card">
+            <div className="flex items-center gap-2 mb-3">
+              <DollarSign className="w-5 h-5 text-purple-400" />
+              <span className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide">Comissões do M��s</span>
+            </div>
+            <p className="kpi-hero text-purple-400">{BRL(monthCommissions)}</p>
+          </div>
         </div>
 
         {/* Team progress bar */}
-        <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
+        <Card className="bg-[var(--t-surface)]">
           <CardContent className="p-4">
             <div className="flex justify-between text-sm mb-2">
               <span className="text-[var(--t-text-secondary)]">Progresso da Equipe</span>
@@ -306,8 +298,8 @@ export default function MetasPage() {
               ) : (
                 <div className="space-y-3">
                   {ranking.map((r, i) => (
-                    <div key={r.id} className="flex items-center gap-3 p-3 rounded-lg bg-[var(--t-bg)] border border-[var(--t-border)]">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center bg-[var(--t-surface)] border border-[var(--t-border)]">
+                    <div key={r.id} className="flex items-center gap-3 p-3 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)]">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center bg-[var(--t-surface)] shadow-[var(--t-card-shadow)]">
                         {i < 3 ? (
                           <Medal className={`w-5 h-5 ${MEDAL_COLORS[i]}`} />
                         ) : (
@@ -335,7 +327,7 @@ export default function MetasPage() {
               <Users className="w-4 h-4" /> Metas Individuais
             </h2>
             {monthMetas.length === 0 ? (
-              <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
+              <Card className="bg-[var(--t-surface)]">
                 <CardContent className="py-8 text-center">
                   <Target className="w-10 h-10 text-[var(--t-text-muted)] mx-auto mb-3" />
                   <p className="text-[var(--t-text-muted)] text-sm">Defina metas para os vendedores deste mês.</p>

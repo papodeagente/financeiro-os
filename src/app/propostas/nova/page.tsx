@@ -207,7 +207,7 @@ export default function PropostaNovaPage() {
             }`}>1</div>
             <div className="w-8 h-0.5 bg-[var(--t-border)]" />
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ${
-              step === 'dados' ? 'bg-[var(--t-green)] text-white dark:text-[#0a0a14]' : 'bg-[var(--t-bg)] text-[var(--t-text-muted)] border border-[var(--t-border)]'
+              step === 'dados' ? 'bg-[var(--t-green)] text-white dark:text-[#0a0a14]' : 'bg-[var(--t-bg)] text-[var(--t-text-muted)] shadow-[var(--t-card-shadow)]'
             }`}>2</div>
           </div>
         </div>
@@ -300,7 +300,7 @@ export default function PropostaNovaPage() {
             </div>
 
             {wizard.template && (
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--t-bg-secondary)] border border-[var(--t-border)]">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--t-bg-secondary)] shadow-[var(--t-card-shadow)]">
                 <span className="text-2xl">{wizard.template.icone}</span>
                 <div className="flex-1">
                   <div className="text-sm font-medium text-[var(--t-text)]">{wizard.template.nome}</div>
@@ -325,7 +325,7 @@ export default function PropostaNovaPage() {
                 <select
                   value={wizard.cliente_id}
                   onChange={e => setWizard(prev => ({ ...prev, cliente_id: e.target.value }))}
-                  className="w-full bg-[var(--t-input-bg)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2.5 text-sm"
+                  className="w-full bg-[var(--t-input-bg)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-3 py-2.5 text-sm"
                 >
                   <option value="">Selecionar cliente (opcional)</option>
                   {clientes.filter(c => c.status === 'ATIVO').map(c => (

@@ -66,7 +66,7 @@ export function DestinoAutocomplete({ onSelect }: Props) {
       </div>
 
       {open && results.length > 0 && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-[var(--t-surface)] border border-[var(--t-border)] rounded-lg shadow-xl max-h-60 overflow-y-auto">
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-[var(--t-surface)] shadow-[var(--t-card-shadow)] rounded-lg shadow-xl max-h-60 overflow-y-auto">
           {results.map(d => (
             <button
               key={d.id}

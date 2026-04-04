@@ -67,7 +67,7 @@ export function FlightSearchModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
       <div
-        className="relative bg-[var(--t-surface)] rounded-xl border border-[var(--t-border)] shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden"
+        className="relative bg-[var(--t-surface)] rounded-xl shadow-[var(--t-card-shadow)] shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -131,7 +131,7 @@ export function FlightSearchModal({
 
           {results.map(offer => {
             return (
-              <div key={offer.id} className="bg-[var(--t-bg)] rounded-lg border border-[var(--t-border)] p-3 hover:border-[var(--t-green)]/50 transition-colors">
+              <div key={offer.id} className="bg-[var(--t-bg)] rounded-lg shadow-[var(--t-card-shadow)] p-3 hover:border-[var(--t-green)]/50 transition-colors">
                 {offer.itineraries.map((itin, iIdx) => {
                   const firstSeg = itin.segments[0];
                   const lastSeg = itin.segments[itin.segments.length - 1];

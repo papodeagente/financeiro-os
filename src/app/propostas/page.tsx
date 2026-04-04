@@ -194,7 +194,7 @@ export default function PropostasPage() {
         <select
           value={filtroStatus}
           onChange={(e) => setFiltroStatus(e.target.value)}
-          className="bg-[var(--t-bg-secondary)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-sm"
+          className="bg-[var(--t-bg-secondary)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-3 py-2 text-sm"
         >
           <option value="TODOS">Todos os status</option>
           {Object.entries(statusConfig).map(([k, v]) => (

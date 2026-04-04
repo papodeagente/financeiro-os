@@ -100,7 +100,7 @@ export default function VoosPage() {
         </div>
 
         {/* Search form */}
-        <div className="bg-[var(--t-surface)] rounded-xl border border-[var(--t-border)] p-5">
+        <div className="bg-[var(--t-surface)] rounded-xl shadow-[var(--t-card-shadow)] p-5">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <AirportInput label="Origem" value={origemDisplay} onChange={(v, d) => { setOrigem(v); setOrigemDisplay(d); }} />
             <AirportInput label="Destino" value={destinoDisplay} onChange={(v, d) => { setDestino(v); setDestinoDisplay(d); }} />

@@ -138,7 +138,7 @@ export default function CrmConfigPage() {
       {/* Configuration */}
       <section className="mb-8">
         <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-4">Configuracao</h2>
-        <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-5 space-y-4">
+        <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] p-5 space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)]">Integracao ativa</p>
@@ -157,13 +157,13 @@ export default function CrmConfigPage() {
               <label htmlFor="crm-url-crm" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">URL do webhook do CRM</label>
               <input id="crm-url-crm" value={config.webhook_url_crm} onChange={e => setConfig({ ...config, webhook_url_crm: e.target.value })}
                 placeholder="https://crm.example.com/webhook"
-                className="w-full px-3 py-2 rounded-lg border border-[var(--t-border)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
+                className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
             </div>
             <div>
               <label htmlFor="crm-url-entur" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">URL do webhook do Entur OS</label>
               <input id="crm-url-entur" value={config.webhook_url_entur} onChange={e => setConfig({ ...config, webhook_url_entur: e.target.value })}
                 placeholder="https://entur.example.com/api/v1/crm/webhook"
-                className="w-full px-3 py-2 rounded-lg border border-[var(--t-border)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
+                className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
             </div>
           </div>
 
@@ -171,14 +171,14 @@ export default function CrmConfigPage() {
             <div>
               <label htmlFor="crm-key-crm" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">API Key do CRM</label>
               <input id="crm-key-crm" type="password" value={config.api_key_crm} onChange={e => setConfig({ ...config, api_key_crm: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg border border-[var(--t-border)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
+                className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
             </div>
             <div>
               <label htmlFor="crm-key-entur" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">API Key do Entur OS (somente leitura)</label>
               <div className="flex gap-2">
                 <input id="crm-key-entur" readOnly value={config.api_key_entur || 'Gerar ao salvar'}
-                  className="flex-1 px-3 py-2 rounded-lg border border-[var(--t-border)] bg-[var(--t-surface-hover)] text-[var(--text-body-sm)] text-[var(--t-text-muted)]" />
-                <button onClick={() => { navigator.clipboard.writeText(config.api_key_entur); }} className="px-3 py-2 text-[var(--text-caption)] text-[var(--t-text-muted)] border border-[var(--t-border)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)]">Copiar</button>
+                  className="flex-1 px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-surface-hover)] text-[var(--text-body-sm)] text-[var(--t-text-muted)]" />
+                <button onClick={() => { navigator.clipboard.writeText(config.api_key_entur); }} className="px-3 py-2 text-[var(--text-caption)] text-[var(--t-text-muted)] shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)]">Copiar</button>
               </div>
             </div>
           </div>
@@ -187,12 +187,12 @@ export default function CrmConfigPage() {
             <div>
               <label htmlFor="crm-retry" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Maximo de tentativas</label>
               <input id="crm-retry" type="number" value={config.retry_max} onChange={e => setConfig({ ...config, retry_max: parseInt(e.target.value) || 5 })}
-                className="w-full px-3 py-2 rounded-lg border border-[var(--t-border)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
+                className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
             </div>
             <div>
               <label htmlFor="crm-threshold" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Threshold circuit breaker</label>
               <input id="crm-threshold" type="number" value={config.circuit_breaker_threshold} onChange={e => setConfig({ ...config, circuit_breaker_threshold: parseInt(e.target.value) || 10 })}
-                className="w-full px-3 py-2 rounded-lg border border-[var(--t-border)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
+                className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
             </div>
           </div>
 
@@ -202,7 +202,7 @@ export default function CrmConfigPage() {
               {saving ? 'Salvando...' : 'Salvar configuracao'}
             </button>
             <button onClick={testConnection}
-              className="px-4 py-2 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] border border-[var(--t-border)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)]">
+              className="px-4 py-2 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)]">
               Testar conexao
             </button>
             {testResult && (
@@ -220,7 +220,7 @@ export default function CrmConfigPage() {
         <section className="mb-8">
           <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-4">Status em tempo real</h2>
           <div className="grid grid-cols-3 gap-4">
-            <div className="p-4 rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)]">
+            <div className="p-4 rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)]">
               <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">Circuit breaker</p>
               <p className={`text-[var(--text-body-sm)] font-medium mt-1 ${
                 status.circuit_breaker === 'fechado' ? 'text-[var(--crm-ok)]' :
@@ -229,13 +229,13 @@ export default function CrmConfigPage() {
                 {circuitLabel[status.circuit_breaker] || status.circuit_breaker}
               </p>
             </div>
-            <div className="p-4 rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)]">
+            <div className="p-4 rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)]">
               <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">Eventos pendentes / com falha</p>
               <p className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)] mt-1">
                 {status.eventos_pendentes} pendentes / {status.eventos_falha} falhas
               </p>
             </div>
-            <div className="p-4 rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)]">
+            <div className="p-4 rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)]">
               <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">Processados hoje</p>
               <p className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)] mt-1">{status.eventos_processados_hoje}</p>
             </div>
@@ -249,20 +249,20 @@ export default function CrmConfigPage() {
           <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)]">Log de eventos</h2>
           <div className="flex items-center gap-2">
             <select value={direcao} onChange={e => setDirecao(e.target.value as 'saida' | 'entrada')}
-              className="px-3 py-1.5 rounded-lg border border-[var(--t-border)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]">
+              className="px-3 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]">
               <option value="saida">Eventos enviados</option>
               <option value="entrada">Eventos recebidos</option>
             </select>
             {direcao === 'saida' && (
               <button onClick={retryAll} disabled={retrying}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] border border-[var(--t-border)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)] disabled:opacity-50">
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)] disabled:opacity-50">
                 <RefreshCw className={`w-3.5 h-3.5 ${retrying ? 'animate-spin' : ''}`} /> Retentar falhas
               </button>
             )}
           </div>
         </div>
 
-        <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] overflow-hidden">
+        <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] overflow-hidden">
           {eventos.length === 0 ? (
             <p className="px-4 py-8 text-center text-[var(--text-body-sm)] text-[var(--t-text-muted)]">
               Nenhum evento registrado. Configure a integracao para comecar.

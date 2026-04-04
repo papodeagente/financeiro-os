@@ -118,7 +118,7 @@ export default function DestinosPage() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Buscar destinos..."
-            className="w-full pl-10 pr-4 py-2.5 bg-[var(--t-surface)] border border-[var(--t-border)] rounded-lg text-sm text-[var(--t-text)]"
+            className="w-full pl-10 pr-4 py-2.5 bg-[var(--t-surface)] shadow-[var(--t-card-shadow)] rounded-lg text-sm text-[var(--t-text)]"
           />
         </div>
 
@@ -132,7 +132,7 @@ export default function DestinosPage() {
         ) : (
           <div className="space-y-2">
             {filtered.map(d => (
-              <div key={d.id} className="bg-[var(--t-surface)] rounded-lg border border-[var(--t-border)] overflow-hidden">
+              <div key={d.id} className="bg-[var(--t-surface)] rounded-lg shadow-[var(--t-card-shadow)] overflow-hidden">
                 <div
                   className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-[var(--t-surface-hover)] transition-colors"
                   onClick={() => setExpandedId(expandedId === d.id ? null : d.id)}
@@ -167,7 +167,7 @@ export default function DestinosPage() {
                     {d.fast_facts.length > 0 && (
                       <div className="flex flex-wrap gap-2 mt-3">
                         {d.fast_facts.map((f, i) => (
-                          <span key={i} className="text-[11px] bg-[var(--t-bg)] border border-[var(--t-border)] px-2 py-1 rounded text-[var(--t-text)]">
+                          <span key={i} className="text-[11px] bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] px-2 py-1 rounded text-[var(--t-text)]">
                             <strong>{f.label}:</strong> {f.valor}
                           </span>
                         ))}
@@ -199,7 +199,7 @@ export default function DestinosPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setEditando(null)}>
             <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
             <div
-              className="relative bg-[var(--t-surface)] rounded-xl border border-[var(--t-border)] shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden"
+              className="relative bg-[var(--t-surface)] rounded-xl shadow-[var(--t-card-shadow)] shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden"
               onClick={e => e.stopPropagation()}
             >
               {/* Modal Header */}

@@ -537,7 +537,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-3">
             <button
               onClick={fetchAll}
-              className="flex items-center gap-2 px-3 py-2 bg-[var(--t-bg-secondary)] border border-[var(--t-border)] rounded-lg text-sm text-[var(--t-text-secondary)] hover:text-[var(--t-text)] hover:bg-[var(--t-surface-hover)] transition-colors"
+              className="flex items-center gap-2 px-3 py-2 bg-[var(--t-bg-secondary)] shadow-[var(--t-card-shadow)] rounded-lg text-sm text-[var(--t-text-secondary)] hover:text-[var(--t-text)] hover:bg-[var(--t-surface-hover)] transition-colors"
             >
               <RefreshCw className="w-4 h-4" /> Atualizar
             </button>
@@ -547,9 +547,9 @@ export default function DashboardPage() {
 
       <div className="px-8 pb-8 space-y-6">
 
-        {/* FAIXA 2: KPIs */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {kpis.map((kpi, i) => {
+        {/* FAIXA 2: HERO KPIs (bento grid) */}
+        <div className="bento-grid">
+          {kpis.slice(0, 4).map((kpi, i) => {
             const Icon = kpi.icon;
             const deltaPositive = kpi.invertDelta ? (kpi.delta !== null && kpi.delta < 0) : (kpi.delta !== null && kpi.delta > 0);
             const deltaNeutral = kpi.delta === null || kpi.delta === 0;
@@ -560,22 +560,22 @@ export default function DashboardPage() {
             const metaAtingida = metaPct !== null && metaPct >= 100;
 
             return (
-              <div key={i} className="bg-[var(--t-surface)] rounded-2xl p-5 border border-[var(--t-border)] hover:border-[var(--t-border-hover)] transition-colors relative overflow-hidden">
+              <div key={i} className="bento-3 bento-card relative overflow-hidden">
                 {metaAtingida && (
-                  <div className="absolute top-2 right-2 text-lg" title="Meta atingida!">
+                  <div className="absolute top-4 right-4" title="Meta atingida!">
                     <Trophy className="w-5 h-5 text-amber-400" />
                   </div>
                 )}
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs text-[var(--t-text-secondary)] uppercase tracking-wide">{kpi.label}</span>
-                  <div className={`w-8 h-8 rounded-lg ${kpi.bgColor} flex items-center justify-center`}>
+                <div className="flex items-center gap-2 mb-4">
+                  <div className={`w-8 h-8 rounded-xl ${kpi.bgColor} flex items-center justify-center`}>
                     <Icon className={`w-4 h-4 ${kpi.color}`} />
                   </div>
+                  <span className="text-[var(--text-caption)] text-[var(--t-text-secondary)] uppercase tracking-wide">{kpi.label}</span>
                 </div>
-                <div className="text-2xl font-bold text-[var(--t-text)] leading-none">{kpi.valor}</div>
-                <div className="flex items-center gap-2 mt-2">
+                <div className="kpi-hero text-[var(--t-text)]">{kpi.valor}</div>
+                <div className="flex items-center gap-2 mt-3">
                   {!deltaNeutral && (
-                    <span className={`text-xs font-medium flex items-center gap-0.5 ${deltaPositive ? 'text-emerald-400' : 'text-red-400'}`}>
+                    <span className={`text-xs font-medium flex items-center gap-0.5 px-2 py-0.5 rounded-full ${deltaPositive ? 'text-emerald-400 bg-emerald-400/10' : 'text-red-400 bg-red-400/10'}`}>
                       {deltaPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
                       {PCT(kpi.delta!)}
                     </span>
@@ -583,12 +583,12 @@ export default function DashboardPage() {
                   <span className="text-[10px] text-[var(--t-text-muted)]">{kpi.deltaLabel}</span>
                 </div>
                 {metaPct !== null && (
-                  <div className="mt-3">
-                    <div className="flex justify-between text-[10px] text-[var(--t-text-secondary)] mb-1">
+                  <div className="mt-4">
+                    <div className="flex justify-between text-[10px] text-[var(--t-text-secondary)] mb-1.5">
                       <span>{kpi.metaLabel}: {kpi.label === 'Vendas' ? kpi.meta : BRL(kpi.meta!)}</span>
-                      <span>{metaPct.toFixed(0)}%</span>
+                      <span className="font-medium">{metaPct.toFixed(0)}%</span>
                     </div>
-                    <div className="h-1.5 rounded-full bg-[var(--t-border)] overflow-hidden">
+                    <div className="h-2 rounded-full bg-[var(--t-border)] overflow-hidden">
                       <div className={`h-full rounded-full ${metaCor} transition-all`} style={{ width: `${metaPct}%` }} />
                     </div>
                   </div>
@@ -598,12 +598,36 @@ export default function DashboardPage() {
           })}
         </div>
 
-        {/* FAIXA 3: ALERTAS + ACOES RAPIDAS */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* FAIXA 2B: KPIs SECUNDARIOS */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {kpis.slice(4).map((kpi, i) => {
+            const Icon = kpi.icon;
+            const deltaPositive = kpi.invertDelta ? (kpi.delta !== null && kpi.delta < 0) : (kpi.delta !== null && kpi.delta > 0);
+            const deltaNeutral = kpi.delta === null || kpi.delta === 0;
+            return (
+              <div key={i} className="bg-[var(--t-surface)] rounded-[20px] p-4 shadow-[var(--t-card-shadow)] transition-shadow hover:shadow-[var(--t-card-shadow-hover)]">
+                <div className="flex items-center gap-2 mb-2">
+                  <Icon className={`w-4 h-4 ${kpi.color}`} />
+                  <span className="text-[var(--text-caption)] text-[var(--t-text-secondary)]">{kpi.label}</span>
+                </div>
+                <div className="text-xl font-bold text-[var(--t-text)]">{kpi.valor}</div>
+                {!deltaNeutral && (
+                  <span className={`text-[10px] font-medium flex items-center gap-0.5 mt-1 ${deltaPositive ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {deltaPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                    {PCT(kpi.delta!)} <span className="text-[var(--t-text-muted)] ml-1">{kpi.deltaLabel}</span>
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* FAIXA 3: ALERTAS + ACOES RAPIDAS (bento) */}
+        <div className="bento-grid">
           {/* Alertas */}
-          <div className="lg:col-span-2 bg-[var(--t-surface)] rounded-2xl border border-[var(--t-border)] overflow-hidden">
-            <div className="px-5 py-4 flex items-center justify-between border-b border-[var(--t-border)]">
-              <h2 className="text-sm font-medium text-[var(--t-text)] flex items-center gap-2">
+          <div className="bento-8 bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] overflow-hidden">
+            <div className="px-6 py-4 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-[var(--t-text)] flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-400" />
                 Alertas Ativos ({alertas.length})
               </h2>
@@ -631,28 +655,28 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Acoes Rapidas */}
-          <div className="bg-[var(--t-surface)] rounded-2xl border border-[var(--t-border)] overflow-hidden">
-            <div className="px-5 py-4 border-b border-[var(--t-border)]">
-              <h2 className="text-sm font-medium text-[var(--t-text)] flex items-center gap-2">
-                <Zap className="w-4 h-4 text-amber-400" /> Acoes Rapidas
+          {/* Acoes Rapidas — dark card */}
+          <div className="bento-4 bg-[#1e1e2a] dark:bg-[#2A2724] rounded-[20px] shadow-[var(--t-card-shadow)] overflow-hidden">
+            <div className="px-5 py-4">
+              <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+                <Zap className="w-4 h-4 text-[var(--t-green)]" /> Ações Rápidas
               </h2>
             </div>
-            <div className="p-4 space-y-2">
+            <div className="p-4 space-y-1.5">
               {[
                 { href: '/vendas/nova', icon: ShoppingCart, label: 'Nova Venda', primary: true },
-                { href: '/vendas/orcamentos', icon: FileText, label: 'Novo Orcamento', primary: false },
+                { href: '/vendas/orcamentos', icon: FileText, label: 'Novo Orçamento', primary: false },
                 { href: '/pessoas/clientes', icon: Users, label: 'Novo Cliente', primary: false },
                 { href: '/grupos', icon: Package, label: 'Novo Grupo', primary: false },
                 { href: '/financeiro-ag/receber', icon: Receipt, label: 'Registrar Recebimento', primary: false },
                 { href: '/financeiro-ag/pagar', icon: CreditCard, label: 'Registrar Pagamento', primary: false },
               ].map(a => (
                 <Link key={a.href} href={a.href}>
-                  <div className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                  <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${
                     a.primary
-                      ? 'bg-[var(--t-green)] text-white dark:text-[#0a0a14] font-medium shadow-lg hover:opacity-90'
-                      : 'text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)] hover:text-[var(--t-text)]'
-                  }`} style={a.primary ? { boxShadow: '0 4px 15px var(--t-green-shadow)' } : {}}>
+                      ? 'bg-[var(--t-green)] text-white font-medium shadow-lg hover:opacity-90'
+                      : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                  }`}>
                     <a.icon className="w-4 h-4" />
                     {a.label}
                   </div>
@@ -660,25 +684,25 @@ export default function DashboardPage() {
               ))}
             </div>
             {/* Quick counters */}
-            <div className="px-4 pb-4 space-y-1.5 border-t border-[var(--t-border)] pt-3 mx-4">
+            <div className="px-4 pb-4 space-y-1.5 border-t border-white/10 pt-3 mx-4">
               {[
-                { label: 'Orcamentos pendentes', count: vendas.filter(v => v.status === 'ORCAMENTO').length, href: '/vendas/orcamentos' },
+                { label: 'Orçamentos pendentes', count: vendas.filter(v => v.status === 'ORCAMENTO').length, href: '/vendas/orcamentos' },
                 { label: 'Contas a receber', count: receber.filter(r => r.status === 'PENDENTE' || r.status === 'ATRASADO').length, href: '/financeiro-ag/receber' },
                 { label: 'Contas a pagar', count: pagar.filter(p => p.status === 'PENDENTE' || p.status === 'VENCIDO').length, href: '/financeiro-ag/pagar' },
               ].map(q => (
-                <Link key={q.href} href={q.href} className="flex items-center justify-between text-xs text-[var(--t-text-secondary)] hover:text-[var(--t-text)] transition-colors">
+                <Link key={q.href} href={q.href} className="flex items-center justify-between text-xs text-gray-400 hover:text-white transition-colors">
                   <span>{q.label}</span>
-                  <span className="bg-[var(--t-bg)] px-2 py-0.5 rounded-full text-[10px] font-medium">{q.count}</span>
+                  <span className="bg-white/10 px-2 py-0.5 rounded-full text-[10px] font-medium text-white">{q.count}</span>
                 </Link>
               ))}
             </div>
           </div>
         </div>
 
-        {/* FAIXA 4: GRAFICOS */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* FAIXA 4: GRAFICOS (bento) */}
+        <div className="bento-grid">
           {/* Grafico 1: Faturamento */}
-          <div className="bg-[var(--t-surface)] rounded-2xl border border-[var(--t-border)] overflow-hidden">
+          <div className="bento-5 bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] overflow-hidden">
             <div className="px-5 py-4 border-b border-[var(--t-border)]">
               <h2 className="text-sm font-medium text-[var(--t-text)]">Faturamento (6 meses)</h2>
             </div>
@@ -700,7 +724,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Grafico 2: Entradas vs Saidas */}
-          <div className="bg-[var(--t-surface)] rounded-2xl border border-[var(--t-border)] overflow-hidden">
+          <div className="bento-4 bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] overflow-hidden">
             <div className="px-5 py-4 border-b border-[var(--t-border)]">
               <h2 className="text-sm font-medium text-[var(--t-text)]">Entradas vs Saidas</h2>
             </div>
@@ -728,7 +752,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Grafico 3: Composicao */}
-          <div className="bg-[var(--t-surface)] rounded-2xl border border-[var(--t-border)] overflow-hidden">
+          <div className="bento-3 bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] overflow-hidden">
             <div className="px-5 py-4 border-b border-[var(--t-border)]">
               <h2 className="text-sm font-medium text-[var(--t-text)]">Composicao de Vendas</h2>
             </div>
@@ -757,21 +781,21 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* RESUMO TEXTUAL */}
-        <div className="bg-[var(--t-surface)] rounded-2xl border border-[var(--t-border)] p-5">
-          <h2 className="text-sm font-medium text-[var(--t-text)] flex items-center gap-2 mb-3">
-            <BarChart3 className="w-4 h-4 text-[var(--t-green)]" />
-            Resumo — {getMonthName(mesAtual)}
-          </h2>
-          <div className="text-sm text-[var(--t-text-secondary)] space-y-1 leading-relaxed">
-            {resumo.map((p, i) => <p key={i}>{p}</p>)}
+        {/* FAIXA 5: RESUMO + ANIVERSARIANTES + DATAS (bento) */}
+        <div className="bento-grid">
+          {/* Resumo */}
+          <div className="bento-12 bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] p-5">
+            <h2 className="text-sm font-medium text-[var(--t-text)] flex items-center gap-2 mb-3">
+              <BarChart3 className="w-4 h-4 text-[var(--t-green)]" />
+              Resumo — {getMonthName(mesAtual)}
+            </h2>
+            <div className="text-sm text-[var(--t-text-secondary)] space-y-1 leading-relaxed">
+              {resumo.map((p, i) => <p key={i}>{p}</p>)}
+            </div>
           </div>
-        </div>
 
-        {/* FAIXA 5: ANIVERSARIANTES + DATAS */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Aniversariantes */}
-          <div className="bg-[var(--t-surface)] rounded-2xl border border-[var(--t-border)] overflow-hidden">
+          <div className="bento-6 bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] overflow-hidden">
             <div className="px-5 py-4 flex items-center justify-between border-b border-[var(--t-border)]">
               <h2 className="text-sm font-medium text-[var(--t-text)] flex items-center gap-2">
                 <Cake className="w-4 h-4 text-pink-400" /> Aniversariantes
@@ -860,7 +884,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Datas Importantes */}
-          <div className="bg-[var(--t-surface)] rounded-2xl border border-[var(--t-border)] overflow-hidden">
+          <div className="bento-6 bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] overflow-hidden">
             <div className="px-5 py-4 flex items-center justify-between border-b border-[var(--t-border)]">
               <h2 className="text-sm font-medium text-[var(--t-text)] flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-blue-400" /> Proximos 7 Dias
@@ -899,8 +923,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Ultimas Vendas (mantido como faixa bonus) */}
-        <div className="bg-[var(--t-surface)] rounded-2xl border border-[var(--t-border)] overflow-hidden">
+        {/* Ultimas Vendas */}
+        <div className="bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] overflow-hidden">
           <div className="px-5 py-4 flex items-center justify-between border-b border-[var(--t-border)]">
             <h2 className="text-sm font-medium text-[var(--t-text)]">Ultimas Vendas</h2>
             <Link href="/vendas" className="text-xs text-[var(--t-green)] flex items-center gap-1 hover:underline">

@@ -28,7 +28,7 @@ export function RoteiroDiaBlock({ conteudo, onChange }: BlockProps) {
   return (
     <div className="space-y-2">
       {dias.map((dia, i) => (
-        <div key={i} className="p-3 rounded-lg bg-[var(--t-bg)] border border-[var(--t-border)] space-y-2">
+        <div key={i} className="p-3 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] space-y-2">
           <div className="flex gap-2">
             <Input
               value={dia.titulo}
@@ -46,7 +46,7 @@ export function RoteiroDiaBlock({ conteudo, onChange }: BlockProps) {
             onChange={e => updateDia(i, { descricao: e.target.value })}
             rows={2}
             placeholder="Descricao do dia..."
-            className="w-full bg-[var(--t-bg-secondary)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-sm resize-none"
+            className="w-full bg-[var(--t-bg-secondary)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-3 py-2 text-sm resize-none"
           />
           <div className="flex items-center gap-2">
             <ImageUpload

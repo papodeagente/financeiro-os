@@ -125,17 +125,17 @@ export default function AuditoriaPage() {
           />
         </div>
         <select value={filtroUsuario} onChange={(e) => { setFiltroUsuario(e.target.value); setPage(0); }}
-          className="bg-[var(--t-bg-secondary)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-sm">
+          className="bg-[var(--t-bg-secondary)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-3 py-2 text-sm">
           <option value="TODOS">Todos os usuarios</option>
           {usuarios.map(u => <option key={u} value={u}>{u}</option>)}
         </select>
         <select value={filtroModulo} onChange={(e) => { setFiltroModulo(e.target.value); setPage(0); }}
-          className="bg-[var(--t-bg-secondary)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-sm">
+          className="bg-[var(--t-bg-secondary)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-3 py-2 text-sm">
           <option value="TODOS">Todos os modulos</option>
           {modulos.map(m => <option key={m} value={m}>{m}</option>)}
         </select>
         <select value={filtroAcao} onChange={(e) => { setFiltroAcao(e.target.value); setPage(0); }}
-          className="bg-[var(--t-bg-secondary)] text-[var(--t-text)] border border-[var(--t-border)] rounded-lg px-3 py-2 text-sm">
+          className="bg-[var(--t-bg-secondary)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-3 py-2 text-sm">
           <option value="TODOS">Todas as acoes</option>
           {Object.entries(acaoConfig).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>

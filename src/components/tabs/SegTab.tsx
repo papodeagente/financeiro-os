@@ -32,10 +32,10 @@ export function SegTab({ grupo, onChange }: Props) {
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead><tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
-            <th className="p-2 text-left border border-[var(--t-border)]">Seguradora</th>
-            {TIPOS.map(t => <th key={t} className="p-2 border border-[var(--t-border)] w-28">{LABELS[t]}</th>)}
-            <th className="p-2 border border-[var(--t-border)] w-36">Deadline</th>
-            <th className="p-2 border border-[var(--t-border)]">Descrição</th>
+            <th className="p-2 text-left shadow-[var(--t-card-shadow)]">Seguradora</th>
+            {TIPOS.map(t => <th key={t} className="p-2 shadow-[var(--t-card-shadow)] w-28">{LABELS[t]}</th>)}
+            <th className="p-2 shadow-[var(--t-card-shadow)] w-36">Deadline</th>
+            <th className="p-2 shadow-[var(--t-card-shadow)]">Descrição</th>
           </tr></thead>
           <tbody>
             {grupo.seg.seguradoras.map((seg, sIdx) => {

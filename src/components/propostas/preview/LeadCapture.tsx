@@ -24,7 +24,7 @@ export function LeadCapture({ slug, corPrimaria, vendedorNome, idioma }: Props) 
   if (sent) {
     return (
       <div className="max-w-3xl mx-auto px-6 py-10">
-        <div className="text-center p-8 rounded-2xl border-2 border-emerald-200 bg-emerald-50">
+        <div className="text-center p-8 rounded-[20px] border-2 border-emerald-200 bg-emerald-50">
           <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-7 h-7 text-emerald-600" />
           </div>
@@ -58,7 +58,7 @@ export function LeadCapture({ slug, corPrimaria, vendedorNome, idioma }: Props) 
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-10">
-      <div className="rounded-2xl border overflow-hidden" style={{ borderColor: `${corPrimaria}25` }}>
+      <div className="rounded-[20px] border overflow-hidden" style={{ borderColor: `${corPrimaria}25` }}>
         <div className="p-5 text-center" style={{ backgroundColor: `${corPrimaria}08` }}>
           <h3 className="text-lg font-bold text-gray-800">{i18n.interesseViagem}</h3>
         </div>
