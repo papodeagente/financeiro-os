@@ -3,8 +3,9 @@
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useActivePillar } from '@/hooks/useActivePillar';
-import { TopRail } from './TopRail';
-import { SubNav } from './SubNav';
+import { PillarRail } from './PillarRail';
+import { FeaturePanel } from './FeaturePanel';
+import { TopBar } from './TopBar';
 import { CommandPalette } from './CommandPalette';
 import { useState, useEffect, useCallback } from 'react';
 
@@ -103,22 +104,36 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Build breadcrumb
   const breadcrumbLabel = BREADCRUMB_MAP[pathname];
   const pillarLabel = activePillar ? PILLAR_LABELS[activePillar] : null;
-  const showBreadcrumb = breadcrumbLabel && pillarLabel && pathname.includes('/');
+  const breadcrumbNode = breadcrumbLabel && pillarLabel ? (
+    <p className="text-[var(--text-body-sm)] text-[var(--t-text-muted)]">
+      <span className="text-[var(--t-text-secondary)] font-medium">{pillarLabel}</span>
+      <span className="mx-1.5 text-[var(--t-text-muted)]">›</span>
+      <span>{breadcrumbLabel}</span>
+    </p>
+  ) : undefined;
 
   return (
-    <div className="flex flex-col h-full">
-      <TopRail onCommandPalette={() => setCommandPaletteOpen(true)} />
-      <SubNav />
-      <div className="flex-1 overflow-y-auto">
-        {showBreadcrumb && (
-          <div className="px-8 pt-5 pb-0">
-            <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">
-              {pillarLabel} <span className="mx-1">›</span> {breadcrumbLabel}
-            </p>
-          </div>
-        )}
-        {children}
+    <div className="flex h-full">
+      {/* Column 1: Pillar Rail (72px) */}
+      <PillarRail />
+
+      {/* Column 2: Feature Panel (240px) */}
+      <FeaturePanel />
+
+      {/* Column 3: Content area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Top bar */}
+        <TopBar
+          onCommandPalette={() => setCommandPaletteOpen(true)}
+          breadcrumb={breadcrumbNode}
+        />
+
+        {/* Main content */}
+        <main className="flex-1 overflow-y-auto bg-[var(--t-bg)]">
+          {children}
+        </main>
       </div>
+
       <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} />
     </div>
   );

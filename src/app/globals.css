@@ -101,6 +101,7 @@
   --t-blue-bg: rgba(37, 99, 235, 0.08);
   --t-amber: #d97706;
   --t-amber-bg: rgba(217, 119, 6, 0.1);
+  --t-pillar-bg: #f7f3ec;
   --t-sidebar-bg: #ffffff;
   --t-sidebar-active-bg: #004aad;
   --t-sidebar-active-text: #ffffff;
@@ -201,6 +202,7 @@
   --t-blue-bg: rgba(96, 165, 250, 0.1);
   --t-amber: #fbbf24;
   --t-amber-bg: rgba(251, 191, 36, 0.15);
+  --t-pillar-bg: #1E1C1A;
   --t-sidebar-bg: #1E1C1A;
   --t-sidebar-active-bg: #3b82f6;
   --t-sidebar-active-text: #ffffff;
@@ -309,13 +311,21 @@
   font-variant-numeric: tabular-nums lining-nums;
 }
 
-/* Sub-nav animation */
+/* Panel animations */
 @keyframes subnav-slide {
   from { opacity: 0; transform: translateY(-8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 .subnav-content {
   animation: subnav-slide 150ms ease-out;
+}
+
+@keyframes panel-fade {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.feature-panel-content {
+  animation: panel-fade 180ms ease-out;
 }
 
 /* Skeleton shimmer */
