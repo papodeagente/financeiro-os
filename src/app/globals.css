@@ -314,12 +314,12 @@
   white-space: nowrap;
 }
 
-/* Logo dark mode: inverte preto→branco, preserva azul */
+/* Logo dark mode: inverte preto→branco */
 .dark .dark\:logo-invert {
-  filter: brightness(0) invert(1) brightness(1.1);
+  filter: brightness(0) invert(1);
 }
-/* Logo no ícone (PillarRail badge azul): sempre branco */
-.logo-icon-invert {
+/* Logo PillarRail: sempre branco (fundo azul) */
+.logo-white {
   filter: brightness(0) invert(1);
 }
 

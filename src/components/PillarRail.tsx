@@ -24,7 +24,7 @@ export function PillarRail({ onPillarClick }: Props) {
       <div className="pt-5 pb-4">
         <Link href="/dashboard" className="block">
           <div className="w-11 h-11 rounded-2xl bg-[var(--t-green)] flex items-center justify-center shadow-md shadow-[var(--t-green-shadow)]">
-            <Logo variant="icon" invertOnDark={false} />
+            <Logo variant="icon" />
           </div>
         </Link>
       </div>

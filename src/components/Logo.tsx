@@ -9,53 +9,52 @@ interface Props {
   variant?: LogoVariant;
   href?: string;
   className?: string;
-  invertOnDark?: boolean;
 }
 
 /**
- * enturOS FIN — logo oficial
+ * enturOS FIN — logo oficial (PNG exata do upload)
  *
- * Variantes:
- * - full:    Logo completa, tamanho grande (login, onboarding)
- * - sidebar: Logo compacta para FeaturePanel header
- * - icon:    Badge pequeno para PillarRail (40px)
- *
- * invertOnDark: aplica filtro para inverter preto→branco no dark mode
- *               mantém o azul do "OS" intacto
+ * - full:    Login, onboarding (200px largura)
+ * - sidebar: FeaturePanel header (120px largura)
+ * - icon:    PillarRail badge (48px largura, sempre branco)
  */
 
-const SIZES: Record<LogoVariant, { width: number; height: number }> = {
-  full: { width: 220, height: 42 },
-  sidebar: { width: 130, height: 26 },
-  icon: { width: 56, height: 12 },
+const WIDTHS: Record<LogoVariant, number> = {
+  full: 200,
+  sidebar: 120,
+  icon: 48,
 };
 
-export function Logo({ variant = 'full', href, className = '', invertOnDark = true }: Props) {
-  const size = SIZES[variant];
+export function Logo({ variant = 'full', href, className = '' }: Props) {
+  const w = WIDTHS[variant];
   const isIcon = variant === 'icon';
 
-  const content = (
+  const img = (
+    <Image
+      src="/logo-enturos-fin.png"
+      alt="enturOS FIN"
+      width={500}
+      height={150}
+      priority
+      draggable={false}
+      className={isIcon ? 'logo-white' : 'dark:logo-invert'}
+      style={{ width: w, height: 'auto' }}
+    />
+  );
+
+  const wrapper = (
     <span className={`inline-flex items-center select-none ${className}`}>
-      <Image
-        src="/logo-enturos-fin.svg"
-        alt="enturOS FIN"
-        width={size.width}
-        height={size.height}
-        priority
-        className={`h-auto ${invertOnDark ? 'dark:logo-invert' : ''} ${isIcon ? 'logo-icon-invert' : ''}`}
-        style={{ width: size.width, height: 'auto' }}
-        draggable={false}
-      />
+      {img}
     </span>
   );
 
   if (href) {
     return (
       <Link href={href} className="inline-flex items-center hover:opacity-80 transition-opacity">
-        {content}
+        {wrapper}
       </Link>
     );
   }
 
-  return content;
+  return wrapper;
 }
