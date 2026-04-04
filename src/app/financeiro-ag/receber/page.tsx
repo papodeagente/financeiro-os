@@ -138,7 +138,7 @@ export default function ContasReceberPage() {
   const STATUSES: Array<StatusContaReceber | 'TODOS'> = ['TODOS', 'PENDENTE', 'RECEBIDO', 'ATRASADO', 'CANCELADO', 'PARCIAL'];
 
   return (
-    <div className="min-h-screen bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-6">
+    <div className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-6">
       <div className="max-w-7xl mx-auto space-y-6">
 
         {/* Header */}

@@ -81,7 +81,7 @@ export default function FinanceiroPage({ params }: { params: Promise<{ id: strin
   };
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-y-auto">
       {/* Top bar */}
       <header className="bg-[var(--t-surface)] border-b border-[var(--t-border)] px-6 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2 text-sm text-[var(--t-text-secondary)]">

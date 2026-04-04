@@ -155,11 +155,11 @@ export default function RentabilidadePage() {
   }
 
   if (loading) {
-    return <div className="min-h-screen bg-[var(--t-bg)] text-[var(--t-text)] p-6 flex items-center justify-center"><p className="text-[var(--t-text-secondary)]">Carregando...</p></div>;
+    return <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6 flex items-center justify-center"><p className="text-[var(--t-text-secondary)]">Carregando...</p></div>;
   }
 
   return (
-    <div className="min-h-screen bg-[var(--t-bg)] text-[var(--t-text)] p-6">
+    <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
       <div className="max-w-7xl mx-auto space-y-6">
 
         <div className="flex items-center justify-between">

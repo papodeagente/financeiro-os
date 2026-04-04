@@ -64,7 +64,7 @@ export default function FinanceiroGruposPage() {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-y-auto">
       <header className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] shadow-lg shrink-0">
         <div className="px-6 py-5 flex items-center justify-between">
           <div>

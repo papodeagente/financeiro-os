@@ -160,7 +160,7 @@ export default function UsuariosPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--t-bg)] text-[var(--t-text)] p-6">
+    <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
       <div className="max-w-4xl mx-auto space-y-6">
 
         {/* Header */}

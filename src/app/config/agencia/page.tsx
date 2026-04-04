@@ -92,14 +92,14 @@ export default function AgenciaPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[var(--t-bg)] flex items-center justify-center">
+      <div className="bg-[var(--t-bg)] flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-[var(--t-accent)] animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[var(--t-bg)] text-[var(--t-text)] p-6">
+    <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
       <div className="max-w-3xl mx-auto space-y-6">
 
         {/* Header */}

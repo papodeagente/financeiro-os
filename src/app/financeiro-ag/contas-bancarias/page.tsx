@@ -149,7 +149,7 @@ export default function ContasBancariasPage() {
   const totalSaldo = items.reduce((s, i) => s + i.saldo_atual, 0);
 
   return (
-    <div className="min-h-screen bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-6">
+    <div className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-6">
       <div className="max-w-6xl mx-auto space-y-6">
 
         {/* Header */}

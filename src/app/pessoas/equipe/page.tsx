@@ -104,7 +104,7 @@ export default function EquipePage() {
   const ativos = membros.filter((m) => m.status === 'ATIVO').length;
 
   return (
-    <div className="min-h-screen bg-[var(--t-bg)] text-[var(--t-text)] p-6">
+    <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>

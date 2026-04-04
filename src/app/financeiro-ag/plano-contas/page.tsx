@@ -145,7 +145,7 @@ export default function PlanoContasPage() {
   const totalComerciais = items.filter(i => i.is_custo_comercial).length;
 
   return (
-    <div className="min-h-screen bg-[var(--t-bg)] text-[var(--t-text)] p-6">
+    <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
       <div className="max-w-5xl mx-auto space-y-6">
 
         {/* Header */}

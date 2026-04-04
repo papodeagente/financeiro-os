@@ -110,7 +110,7 @@ export default function TransferenciasPage() {
   const totalEfetivada = items.filter(i => i.status === 'EFETIVADA').reduce((s, i) => s + i.valor, 0);
 
   return (
-    <div className="min-h-screen bg-[var(--t-bg)] text-[var(--t-text)] p-6">
+    <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
       <div className="max-w-6xl mx-auto space-y-6">
 
         {/* Header */}

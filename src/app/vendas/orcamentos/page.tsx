@@ -65,7 +65,7 @@ export default function OrcamentosPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--t-bg)] text-[var(--t-text)] p-6">
+    <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
