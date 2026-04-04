@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
+import { emitirEventoCRM } from '@/lib/crm-integration';
 
 export async function GET() {
   if (!pool) return NextResponse.json([]);
@@ -21,5 +22,13 @@ export async function POST(req: NextRequest) {
     [grupo.id, grupo.grp_id || '', grupo.origem_destino || '',
      JSON.stringify(grupo), grupo.created_at, grupo.updated_at]
   );
+
+  // CRM: emit product published
+  emitirEventoCRM('PRODUTO_PUBLICADO', {
+    grupo_id: grupo.id,
+    origem_destino: grupo.origem_destino,
+    data: grupo,
+  });
+
   return NextResponse.json(grupo);
 }

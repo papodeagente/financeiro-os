@@ -115,6 +115,32 @@
   --t-accent-muted: rgba(5, 150, 105, 0.12);
   --t-table-header-bg: #f0fdf4;
   --t-table-header-text: #065f46;
+
+  /* Design System — Escala tipografica */
+  --text-micro: 11px;
+  --text-caption: 12px;
+  --text-body-sm: 13px;
+  --text-body: 14px;
+  --text-body-lg: 16px;
+  --text-title-sm: 18px;
+  --text-title: 22px;
+  --text-display: 28px;
+
+  /* Espacamento 4pt */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
+  --space-12: 48px; --space-16: 64px;
+
+  /* Motion */
+  --motion-fast: 150ms ease-out;
+  --motion-base: 250ms ease-in-out;
+  --motion-slow: 400ms ease-in-out;
+
+  /* CRM status */
+  --crm-ok: #16a34a;
+  --crm-warn: #d97706;
+  --crm-err: #dc2626;
+  --crm-off: #9ca3af;
 }
 
 /* Dark theme */
@@ -194,6 +220,22 @@
   html {
     @apply font-sans;
   }
+}
+
+/* Skeleton shimmer */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg,
+    var(--t-surface) 25%,
+    var(--t-surface-hover) 50%,
+    var(--t-surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 6px;
 }
 
 /* Sidebar crossfade on pillar switch */

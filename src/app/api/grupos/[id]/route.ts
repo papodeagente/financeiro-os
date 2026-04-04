@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
+import { emitirEventoCRM } from '@/lib/crm-integration';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!pool) return NextResponse.json(null, { status: 503 });
@@ -24,6 +25,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     [id, grupo.grp_id || '', grupo.origem_destino || '',
      JSON.stringify(grupo), grupo.created_at, grupo.updated_at]
   );
+
+  // CRM: emit product updated
+  if (grupo.periodos?.length > 0) {
+    emitirEventoCRM('PRODUTO_PUBLICADO', {
+      grupo_id: id,
+      origem_destino: grupo.origem_destino,
+      data: grupo,
+      atualizado: true,
+    });
+  }
+
   return NextResponse.json(grupo);
 }
 

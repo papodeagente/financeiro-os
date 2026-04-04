@@ -21,6 +21,7 @@ export const PILLARS: PillarConfig[] = [
   { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
 ];
 
+// Order matters: more specific prefixes must come first
 const ROUTE_MAP: [string, Pillar][] = [
   // Planejamento
   ['/cac', 'planejamento'],
@@ -28,12 +29,13 @@ const ROUTE_MAP: [string, Pillar][] = [
   // Metas
   ['/dashboard', 'metas'],
   ['/equipe', 'metas'],
-  // Produtos
+  // Produtos (specific vendas routes before generic /vendas)
   ['/grupos', 'produtos'],
   ['/grupo/', 'produtos'],
   ['/propostas', 'produtos'],
   ['/vendas/orcamentos', 'produtos'],
   ['/vendas/nova-orcamento', 'produtos'],
+  ['/vendas/nova', 'produtos'],
   ['/voos', 'produtos'],
   ['/hoteis', 'produtos'],
   ['/destinos', 'produtos'],
@@ -42,16 +44,17 @@ const ROUTE_MAP: [string, Pillar][] = [
   ['/vendas', 'financeiro'],
   ['/pessoas', 'financeiro'],
   ['/relatorios', 'financeiro'],
+  ['/config', 'financeiro'],
 ];
 
 export function useActivePillar(): Pillar | null {
   const pathname = usePathname();
 
-  if (!pathname || pathname === '/login' || pathname.startsWith('/p/') || pathname.startsWith('/config')) {
+  if (!pathname || pathname === '/login' || pathname.startsWith('/p/')) {
     return null;
   }
 
-  // /vendas/orcamentos must match 'produtos' before /vendas matches 'financeiro'
+  // Match most specific prefix first
   for (const [prefix, pillar] of ROUTE_MAP) {
     if (pathname === prefix || pathname.startsWith(prefix + '/') || pathname.startsWith(prefix)) {
       return pillar;

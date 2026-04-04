@@ -1,8 +1,179 @@
 'use client';
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-export default function FinanceiroAgPage() {
-  const router = useRouter();
-  useEffect(() => { router.replace('/financeiro-ag/receber'); }, [router]);
-  return null;
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { PageHeader } from '@/components/PageHeader';
+import { CrmStatusBadge } from '@/components/CrmStatusBadge';
+import { SkeletonCardGrid } from '@/components/SkeletonCard';
+import { formatBRL } from '@/lib/utils';
+import {
+  BarChart3, FileSpreadsheet, Receipt, CreditCard,
+  ArrowRightLeft, BookOpen, Landmark, Package,
+  ListOrdered, FileText,
+} from 'lucide-react';
+
+interface KPIs {
+  saldo: number;
+  a_receber: number;
+  a_pagar: number;
+  resultado: number;
+}
+
+const SHORTCUTS = [
+  { icon: BarChart3, label: 'Fluxo de caixa', desc: 'Entradas e saidas por periodo', href: '/financeiro-ag/fluxo-caixa' },
+  { icon: FileSpreadsheet, label: 'DRE', desc: 'Demonstrativo de resultado', href: '/financeiro-ag/dre' },
+  { icon: Receipt, label: 'Contas a receber', desc: 'Parcelas e recebimentos', href: '/financeiro-ag/receber' },
+  { icon: CreditCard, label: 'Contas a pagar', desc: 'Despesas e fornecedores', href: '/financeiro-ag/pagar' },
+  { icon: FileSpreadsheet, label: 'Conciliacao', desc: 'Extrato vs lancamentos', href: '/financeiro-ag/conciliacao' },
+  { icon: ArrowRightLeft, label: 'Transferencias', desc: 'Entre contas bancarias', href: '/financeiro-ag/transferencias' },
+  { icon: BookOpen, label: 'Plano de contas', desc: 'Categorias contabeis', href: '/financeiro-ag/plano-contas' },
+  { icon: Landmark, label: 'Contas bancarias', desc: 'Cadastro de contas', href: '/financeiro-ag/contas-bancarias' },
+];
+
+export default function FinanceiroAgHubPage() {
+  const [kpis, setKpis] = useState<KPIs | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [ultimos, setUltimos] = useState<Array<{ descricao: string; valor: number; tipo: string; data: string; origem: string }>>([]);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const [receberRes, pagarRes] = await Promise.all([
+          fetch('/api/contas-receber').then(r => r.json()),
+          fetch('/api/contas-pagar').then(r => r.json()),
+        ]);
+
+        const receber = receberRes || [];
+        const pagar = pagarRes || [];
+        const now = new Date();
+        const mesAtual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+        const aReceberMes = receber
+          .filter((r: Record<string, unknown>) => r.status === 'pendente' && typeof r.vencimento === 'string' && (r.vencimento as string).startsWith(mesAtual))
+          .reduce((s: number, r: Record<string, unknown>) => s + ((r.valor as number) || 0), 0);
+
+        const aPagarMes = pagar
+          .filter((r: Record<string, unknown>) => r.status === 'pendente' && typeof r.vencimento === 'string' && (r.vencimento as string).startsWith(mesAtual))
+          .reduce((s: number, r: Record<string, unknown>) => s + ((r.valor_custo as number) || (r.valor as number) || 0), 0);
+
+        setKpis({
+          saldo: 0,
+          a_receber: aReceberMes,
+          a_pagar: aPagarMes,
+          resultado: aReceberMes - aPagarMes,
+        });
+
+        // Build recent items
+        const items: Array<{ descricao: string; valor: number; tipo: string; data: string; origem: string }> = [];
+        receber.slice(0, 3).forEach((r: Record<string, unknown>) => {
+          items.push({
+            descricao: `Receber: ${r.cliente_id || 'N/A'}`,
+            valor: (r.valor as number) || 0,
+            tipo: 'receber',
+            data: (r.vencimento as string) || '',
+            origem: (r.origem as string) || 'Manual',
+          });
+        });
+        pagar.slice(0, 2).forEach((r: Record<string, unknown>) => {
+          items.push({
+            descricao: `Pagar: ${r.fornecedor_id || 'N/A'}`,
+            valor: (r.valor_custo as number) || (r.valor as number) || 0,
+            tipo: 'pagar',
+            data: (r.vencimento as string) || '',
+            origem: (r.origem as string) || 'Manual',
+          });
+        });
+        setUltimos(items);
+      } catch { /* silent */ }
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  if (loading) return (
+    <div className="p-6">
+      <PageHeader title="Financeiro" crmBadge />
+      <SkeletonCardGrid count={4} />
+    </div>
+  );
+
+  return (
+    <div className="p-6">
+      <PageHeader title="Financeiro" crmBadge />
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-4 gap-4 mb-8">
+        {[
+          { label: 'Saldo hoje', value: kpis?.saldo || 0 },
+          { label: 'A receber este mes', value: kpis?.a_receber || 0 },
+          { label: 'A pagar este mes', value: kpis?.a_pagar || 0 },
+          { label: 'Resultado do mes', value: kpis?.resultado || 0 },
+        ].map((kpi, i) => (
+          <div key={i} className="p-5 rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)]">
+            <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mb-1">{kpi.label}</p>
+            <p className={`text-[var(--text-title)] font-medium ${kpi.value >= 0 ? 'text-[var(--t-text)]' : 'text-[var(--crm-err)]'}`}>
+              {formatBRL(kpi.value)}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* Shortcuts grid */}
+      <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-4">Acesso rapido</h2>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+        {SHORTCUTS.map(item => {
+          const Icon = item.icon;
+          return (
+            <Link key={item.href} href={item.href} className="p-4 rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] hover:border-[var(--t-border-hover)] transition-colors group">
+              <Icon className="w-5 h-5 text-[var(--t-text-muted)] group-hover:text-[var(--t-green)] transition-colors mb-2" />
+              <p className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)]">{item.label}</p>
+              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">{item.desc}</p>
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Recent movements */}
+      <div className="grid grid-cols-2 gap-6">
+        <div>
+          <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-3">Ultimas movimentacoes</h2>
+          <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] divide-y divide-[var(--t-border)]">
+            {ultimos.length === 0 ? (
+              <p className="px-4 py-6 text-center text-[var(--text-body-sm)] text-[var(--t-text-muted)]">Nenhuma movimentacao</p>
+            ) : ultimos.map((item, i) => (
+              <div key={i} className="flex items-center justify-between px-4 py-3">
+                <div className="flex items-center gap-3">
+                  {item.tipo === 'receber' ? <Receipt className="w-4 h-4 text-[var(--crm-ok)]" /> : <CreditCard className="w-4 h-4 text-[var(--crm-err)]" />}
+                  <div>
+                    <p className="text-[var(--text-body-sm)] text-[var(--t-text)]">{item.descricao}</p>
+                    <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">{item.data}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className={`text-[var(--text-body-sm)] font-medium ${item.tipo === 'receber' ? 'text-[var(--crm-ok)]' : 'text-[var(--crm-err)]'}`}>
+                    {item.tipo === 'pagar' ? '-' : '+'}{formatBRL(item.valor)}
+                  </p>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${item.origem === 'crm' ? 'bg-[var(--t-green-bg)] text-[var(--t-green)]' : 'bg-[var(--t-sidebar-item-hover)] text-[var(--t-text-muted)]'}`}>
+                    {item.origem === 'crm' ? 'CRM' : 'Manual'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-3">Integracao CRM</h2>
+          <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-4">
+            <CrmStatusBadge variant="completo" />
+            <div className="mt-3 pt-3 border-t border-[var(--t-border)]">
+              <Link href="/config/crm" className="text-[var(--text-body-sm)] text-[var(--t-green)] hover:underline">
+                Ver log completo →
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }

@@ -246,6 +246,66 @@ export async function initDB() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS crm_config (
+      id TEXT PRIMARY KEY DEFAULT 'singleton',
+      data JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS crm_eventos_saida (
+      id TEXT PRIMARY KEY,
+      tipo TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'PENDENTE',
+      tentativas INTEGER NOT NULL DEFAULT 0,
+      proxima_tentativa TIMESTAMPTZ,
+      latencia_ms INTEGER,
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS crm_eventos_entrada (
+      id TEXT PRIMARY KEY,
+      idempotency_key TEXT NOT NULL DEFAULT '',
+      tipo TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'RECEBIDO',
+      processado BOOLEAN NOT NULL DEFAULT false,
+      erro TEXT,
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS planejamento_custos (
+      id TEXT PRIMARY KEY,
+      mes TEXT NOT NULL DEFAULT '',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS planejamento_projetos (
+      id TEXT PRIMARY KEY,
+      nome TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'planejando',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
+
+  // Create indices for new tables (IF NOT EXISTS prevents errors on re-run)
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_crm_eventos_saida_tipo ON crm_eventos_saida(tipo);
+    CREATE INDEX IF NOT EXISTS idx_crm_eventos_saida_status ON crm_eventos_saida(status);
+    CREATE INDEX IF NOT EXISTS idx_crm_eventos_saida_proxima ON crm_eventos_saida(proxima_tentativa);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_crm_eventos_entrada_idem ON crm_eventos_entrada(idempotency_key);
+    CREATE INDEX IF NOT EXISTS idx_crm_eventos_entrada_tipo ON crm_eventos_entrada(tipo);
+    CREATE INDEX IF NOT EXISTS idx_crm_eventos_entrada_proc ON crm_eventos_entrada(processado);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_planejamento_custos_mes ON planejamento_custos(mes);
+    CREATE INDEX IF NOT EXISTS idx_planejamento_projetos_nome ON planejamento_projetos(nome);
+    CREATE INDEX IF NOT EXISTS idx_planejamento_projetos_status ON planejamento_projetos(status);
+  `);
+
   initialized = true;
 }
