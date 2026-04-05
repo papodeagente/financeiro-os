@@ -172,7 +172,7 @@ export async function POST(req: Request) {
         id: generateId(), tipo: 'SERVICO', ordem: ordem++, visivel: true,
         conteudo: {
           icone: '✈️',
-          titulo: origem && destinoVoo ? `${origem} → ${destinoVoo}` : `Trecho ${tIdx + 1}`,
+          titulo: `Aéreo${origem && destinoVoo ? ` — ${origem} → ${destinoVoo}` : ` — Trecho ${tIdx + 1}`}`,
           descricao: [
             infoTrecho?.data ? fmtDate(infoTrecho.data) : '',
             bestFonte?.nome || '',
@@ -219,7 +219,7 @@ export async function POST(req: Request) {
         id: generateId(), tipo: 'SERVICO', ordem: ordem++, visivel: true,
         conteudo: {
           icone: '🏨',
-          titulo: per?.hotel || bestFonte.nome || 'Hotel',
+          titulo: `Hotel${per?.hotel ? ` — ${per.hotel}` : bestFonte.nome ? ` — ${bestFonte.nome}` : ''}`,
           descricao: [
             per?.destino || '',
             per?.check_in ? `${fmtDate(per.check_in)} a ${fmtDate(per.check_out)}` : '',
@@ -249,7 +249,7 @@ export async function POST(req: Request) {
         id: generateId(), tipo: 'SERVICO', ordem: ordem++, visivel: true,
         conteudo: {
           icone: '🎯',
-          titulo: passeio.nome || 'Passeio',
+          titulo: `Receptivo${passeio.nome ? ` — ${passeio.nome}` : ''}`,
           descricao: passeio.data ? fmtDate(passeio.data) : '',
           detalhes,
           imagem: '',
@@ -278,7 +278,7 @@ export async function POST(req: Request) {
         id: generateId(), tipo: 'SERVICO', ordem: ordem++, visivel: true,
         conteudo: {
           icone: '🧑‍🏫',
-          titulo: `Guia — ${per?.destino || `Destino ${dIdx + 1}`}`,
+          titulo: `Guia${per?.destino ? ` — ${per.destino}` : ''}`,
           descricao: bestForn?.nome || '',
           detalhes,
           imagem: '',
@@ -304,7 +304,7 @@ export async function POST(req: Request) {
         id: generateId(), tipo: 'SERVICO', ordem: ordem++, visivel: true,
         conteudo: {
           icone: '🚐',
-          titulo: `Transfer ${transp.origem || ''} → ${transp.destino || ''}`,
+          titulo: `Carro${transp.origem || transp.destino ? ` — ${transp.origem || ''} → ${transp.destino || ''}` : ''}`,
           descricao: bestEmp?.nome || '',
           detalhes,
           imagem: '',
@@ -346,7 +346,7 @@ export async function POST(req: Request) {
           id: generateId(), tipo: 'SERVICO', ordem: ordem++, visivel: true,
           conteudo: {
             icone: '🛡️',
-            titulo: 'Seguro Viagem',
+            titulo: 'Seguro',
             descricao: primaryBest?.nome || '',
             detalhes,
             imagem: '',
@@ -372,7 +372,7 @@ export async function POST(req: Request) {
         id: generateId(), tipo: 'SERVICO', ordem: ordem++, visivel: true,
         conteudo: {
           icone: '🎟️',
-          titulo: atr.nome || 'Ingresso',
+          titulo: `Ingresso${atr.nome ? ` — ${atr.nome}` : ''}`,
           descricao: atr.data ? fmtDate(atr.data) : '',
           detalhes,
           imagem: '',
@@ -407,7 +407,7 @@ export async function POST(req: Request) {
           id: generateId(), tipo: 'SERVICO', ordem: ordem++, visivel: true,
           conteudo: {
             icone: '🚢',
-            titulo: ni.nome_cruzeiro || 'Cruzeiro',
+            titulo: `Navio${ni.nome_cruzeiro ? ` — ${ni.nome_cruzeiro}` : ''}`,
             descricao: `${ni.cidade_embarque || ''} → ${ni.cidade_desembarque || ''}`,
             detalhes,
             imagem: '',
