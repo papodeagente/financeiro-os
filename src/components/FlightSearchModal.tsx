@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Plane, Search, Loader2, Clock, Luggage, X, Check, ArrowRight } from 'lucide-react';
+import { Plane, Search, Loader2, Clock, X, Check, ArrowRight } from 'lucide-react';
 import { AirportInput } from './AirportInput';
 import type { FlightOffer } from '@/lib/flight-data-mapper';
-import { formatIsoDuration, extractCarrierName } from '@/lib/flight-data-mapper';
+import { mapSearchAPIToOffers } from '@/lib/flight-data-mapper';
 
 interface FlightSearchModalProps {
   open: boolean;
@@ -18,8 +18,15 @@ interface FlightSearchModalProps {
   defaultCriancas?: number;
 }
 
-function formatTime(dateStr: string) {
-  return dateStr.split('T')[1]?.substring(0, 5) || '';
+function formatMinutes(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${h}h${String(m).padStart(2, '0')}`;
+}
+
+function extractTime(dateStr: string): string {
+  const parts = dateStr.split(' ');
+  return parts[1]?.substring(0, 5) || '';
 }
 
 export function FlightSearchModal({
@@ -53,7 +60,12 @@ export function FlightSearchModal({
       });
       const json = await res.json();
       if (json.error) { setError(json.error); setSearching(false); return; }
-      setResults(json.data?.data || []);
+
+      // SearchAPI returns { data: { best_flights, other_flights, ... } }
+      const apiData = json.data || {};
+      const offers = mapSearchAPIToOffers(apiData.best_flights, apiData.other_flights);
+      setResults(offers);
+      if (offers.length === 0) setError('Nenhum voo encontrado para essa rota/data');
     } catch { setError('Erro ao buscar voos'); }
     setSearching(false);
   };
@@ -130,45 +142,80 @@ export function FlightSearchModal({
           )}
 
           {results.map(offer => {
+            const firstSeg = offer.flights[0];
+            const lastSeg = offer.flights[offer.flights.length - 1];
+            const stops = offer.flights.length - 1;
+            const layoverNames = offer.layovers?.map(l => l.id).join(', ');
+
             return (
               <div key={offer.id} className="bg-[var(--t-bg)] rounded-lg shadow-[var(--t-card-shadow)] p-3 hover:border-[var(--t-green)]/50 transition-colors">
-                {offer.itineraries.map((itin, iIdx) => {
-                  const firstSeg = itin.segments[0];
-                  const lastSeg = itin.segments[itin.segments.length - 1];
-                  const stops = itin.segments.length - 1;
-                  const stopAirports = stops > 0 ? itin.segments.slice(0, -1).map(s => s.arrival.iataCode).join(', ') : null;
+                {/* Outbound */}
+                <div className="flex items-center gap-3 mb-1.5">
+                  {firstSeg.airline_logo && (
+                    <img src={firstSeg.airline_logo} alt="" className="w-5 h-5 rounded" />
+                  )}
+                  <span className="text-[10px] font-medium text-[var(--t-text-muted)] w-10">IDA</span>
+                  <span className="text-xs font-bold text-[var(--t-text)]">
+                    {firstSeg.airline} {firstSeg.flight_number}
+                  </span>
+                  <span className="text-xs text-[var(--t-text)]">
+                    {firstSeg.departure_airport.id} {extractTime(firstSeg.departure_airport.time || '')}
+                  </span>
+                  <span className="text-[10px] text-[var(--t-text-muted)] flex items-center gap-1">
+                    <ArrowRight className="w-3 h-3" />
+                    {stops === 0 ? 'Direto' : `${stops}x (${layoverNames || ''})`}
+                  </span>
+                  <span className="text-xs text-[var(--t-text)]">
+                    {lastSeg.arrival_airport.id} {extractTime(lastSeg.arrival_airport.time || '')}
+                  </span>
+                  <span className="flex items-center gap-1 text-[10px] text-[var(--t-text-muted)]">
+                    <Clock className="w-3 h-3" /> {formatMinutes(offer.totalDuration)}
+                  </span>
+                  {/* Extensions (baggage, etc) */}
+                  {firstSeg.extensions && firstSeg.extensions.length > 0 && (
+                    <span className="text-[10px] text-[var(--t-text-muted)]">
+                      {firstSeg.extensions.slice(0, 2).join(' · ')}
+                    </span>
+                  )}
+                </div>
 
+                {/* Return flights if present */}
+                {offer.returnFlights && offer.returnFlights.length > 0 && (() => {
+                  const retFirst = offer.returnFlights[0];
+                  const retLast = offer.returnFlights[offer.returnFlights.length - 1];
+                  const retStops = offer.returnFlights.length - 1;
+                  const retLayovers = offer.returnLayovers?.map(l => l.id).join(', ');
                   return (
-                    <div key={iIdx} className="flex items-center gap-3 mb-1.5">
-                      <span className="text-[10px] font-medium text-[var(--t-text-muted)] w-10">{iIdx === 0 ? 'IDA' : 'VOLTA'}</span>
+                    <div className="flex items-center gap-3 mb-1.5">
+                      {retFirst.airline_logo && (
+                        <img src={retFirst.airline_logo} alt="" className="w-5 h-5 rounded" />
+                      )}
+                      <span className="text-[10px] font-medium text-[var(--t-text-muted)] w-10">VOLTA</span>
                       <span className="text-xs font-bold text-[var(--t-text)]">
-                        {extractCarrierName(firstSeg.carrierCode)} {firstSeg.carrierCode}{firstSeg.number}
+                        {retFirst.airline} {retFirst.flight_number}
                       </span>
                       <span className="text-xs text-[var(--t-text)]">
-                        {firstSeg.departure.iataCode} {formatTime(firstSeg.departure.at)}
+                        {retFirst.departure_airport.id} {extractTime(retFirst.departure_airport.time || '')}
                       </span>
                       <span className="text-[10px] text-[var(--t-text-muted)] flex items-center gap-1">
                         <ArrowRight className="w-3 h-3" />
-                        {stops === 0 ? 'Direto' : `${stops}x (${stopAirports})`}
+                        {retStops === 0 ? 'Direto' : `${retStops}x (${retLayovers || ''})`}
                       </span>
                       <span className="text-xs text-[var(--t-text)]">
-                        {lastSeg.arrival.iataCode} {formatTime(lastSeg.arrival.at)}
+                        {retLast.arrival_airport.id} {extractTime(retLast.arrival_airport.time || '')}
                       </span>
                       <span className="flex items-center gap-1 text-[10px] text-[var(--t-text-muted)]">
-                        <Clock className="w-3 h-3" /> {formatIsoDuration(itin.duration)}
+                        <Clock className="w-3 h-3" /> {formatMinutes(offer.returnDuration || 0)}
                       </span>
-                      {iIdx === 0 && (() => {
-                        const seg = offer.travelerPricings?.[0]?.fareDetailsBySegment?.[0];
-                        const bag = seg?.includedCheckedBags;
-                        if (!bag) return null;
-                        const bagStr = bag.weight ? `${bag.weight}${bag.weightUnit || 'kg'}` : bag.quantity ? `${bag.quantity} mala(s)` : null;
-                        if (!bagStr) return null;
-                        return <span className="flex items-center gap-1 text-[10px] text-[var(--t-text-muted)]"><Luggage className="w-3 h-3" /> {bagStr}</span>;
-                      })()}
                     </div>
                   );
-                })}
-                <div className="flex items-center justify-end mt-1">
+                })()}
+
+                {/* Price + select */}
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-sm font-bold text-[var(--t-green)]">
+                    R$ {offer.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
                   <button
                     onClick={() => handleSelect(offer)}
                     className="flex items-center gap-1 px-3 py-1 bg-[var(--t-green)]/10 text-[var(--t-green)] text-xs rounded hover:bg-[var(--t-green)]/20 font-medium"
@@ -183,7 +230,7 @@ export function FlightSearchModal({
 
         {/* Footer */}
         <div className="px-5 py-2 border-t border-[var(--t-border)] text-[10px] text-[var(--t-text-muted)]">
-          Dados fornecidos por Amadeus
+          Dados fornecidos por Google Flights via SearchAPI
         </div>
       </div>
     </div>

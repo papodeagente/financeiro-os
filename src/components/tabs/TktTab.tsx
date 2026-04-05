@@ -52,11 +52,11 @@ export function TktTab({ grupo, onChange }: Props) {
     const tkt = { ...grupo.tkt, trechos: [...grupo.tkt.trechos] };
     tkt.trechos[tIdx] = { ...tkt.trechos[tIdx], fontes: [...tkt.trechos[tIdx].fontes] };
     const mapped = formatFlightForTkt(offer, 0);
-    const existingIdx = tkt.trechos[tIdx].fontes.findIndex(f => f.nome === 'API Amadeus');
+    const existingIdx = tkt.trechos[tIdx].fontes.findIndex(f => f.nome === 'Google Flights');
     if (existingIdx >= 0) {
-      tkt.trechos[tIdx].fontes[existingIdx] = { ...tkt.trechos[tIdx].fontes[existingIdx], partida_chegada: mapped.partida_chegada };
+      tkt.trechos[tIdx].fontes[existingIdx] = { ...tkt.trechos[tIdx].fontes[existingIdx], partida_chegada: mapped.partida_chegada, valor_adt: mapped.valor_adt };
     } else {
-      tkt.trechos[tIdx].fontes.push({ nome: mapped.nome, valor_adt: null, valor_chd: null, partida_chegada: mapped.partida_chegada });
+      tkt.trechos[tIdx].fontes.push({ nome: mapped.nome, valor_adt: mapped.valor_adt, valor_chd: null, partida_chegada: mapped.partida_chegada });
     }
     onChange({ ...grupo, tkt });
   };

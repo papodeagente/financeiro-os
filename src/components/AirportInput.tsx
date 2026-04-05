@@ -32,12 +32,12 @@ export function AirportInput({ label, value, onChange }: AirportInputProps) {
     try {
       const res = await fetch(`/api/flights/airports?keyword=${encodeURIComponent(kw)}`);
       const json = await res.json();
-      const locs = json.data?.data || [];
-      setOptions(locs.map((l: { iataCode: string; name: string; address?: { cityName?: string; countryCode?: string } }) => ({
+      const locs = json.data || [];
+      setOptions(locs.map((l: { iataCode: string; name: string; cityName?: string; countryCode?: string; address?: { cityName?: string; countryCode?: string } }) => ({
         iataCode: l.iataCode,
         name: l.name,
-        cityName: l.address?.cityName || '',
-        countryCode: l.address?.countryCode || '',
+        cityName: l.cityName || l.address?.cityName || '',
+        countryCode: l.countryCode || l.address?.countryCode || '',
       })));
     } catch { setOptions([]); }
     setLoading(false);

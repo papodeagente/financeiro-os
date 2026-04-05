@@ -1,122 +1,130 @@
-// Flight data mapper — converts Amadeus API responses to system formats
+// Flight data mapper — converts SearchAPI Google Flights responses to system formats
 
-export interface FlightSegment {
-  departure: { iataCode: string; terminal?: string; at: string };
-  arrival: { iataCode: string; terminal?: string; at: string };
-  carrierCode: string;
-  number: string;
-  duration: string;
-  numberOfStops: number;
-}
+import type { SearchAPIFlightGroup, SearchAPIFlightSegment } from './searchapi-flights';
 
+// Normalized flight offer used throughout the system
 export interface FlightOffer {
   id: string;
-  itineraries: Array<{
-    duration: string;
-    segments: FlightSegment[];
-  }>;
-  price: { total: string; currency: string; grandTotal: string };
-  travelerPricings: Array<{
-    travelerType: string;
-    price: { total: string };
-    fareDetailsBySegment: Array<{
-      cabin: string;
-      includedCheckedBags?: { weight?: number; weightUnit?: string; quantity?: number };
-    }>;
-  }>;
+  flights: SearchAPIFlightSegment[];
+  totalDuration: number; // minutes
+  price: number;
+  airlineLogo?: string;
+  layovers?: Array<{ duration: number; name: string; id: string }>;
+  // For round-trip: return leg
+  returnFlights?: SearchAPIFlightSegment[];
+  returnDuration?: number;
+  returnLayovers?: Array<{ duration: number; name: string; id: string }>;
 }
 
-const CARRIER_NAMES: Record<string, string> = {
-  LA: 'LATAM', JJ: 'LATAM', G3: 'GOL', AD: 'AZUL',
-  TP: 'TAP', IB: 'Iberia', AA: 'American', UA: 'United',
-  DL: 'Delta', AF: 'Air France', LH: 'Lufthansa', BA: 'British Airways',
-  KL: 'KLM', AZ: 'ITA Airways', EK: 'Emirates', QR: 'Qatar',
-  TK: 'Turkish', ET: 'Ethiopian', AC: 'Air Canada', AV: 'Avianca',
-  CM: 'Copa', AR: 'Aerolineas Argentinas', UX: 'Air Europa',
-};
-
-export function extractCarrierName(code: string): string {
-  return CARRIER_NAMES[code] || code;
+/**
+ * Convert SearchAPI response groups into normalized FlightOffer[]
+ */
+export function mapSearchAPIToOffers(
+  bestFlights: SearchAPIFlightGroup[] = [],
+  otherFlights: SearchAPIFlightGroup[] = [],
+): FlightOffer[] {
+  const all = [...bestFlights, ...otherFlights];
+  return all.map((group, i) => ({
+    id: `sa-${i}`,
+    flights: group.flights,
+    totalDuration: group.total_duration,
+    price: group.price,
+    airlineLogo: group.airline_logo,
+    layovers: group.layovers,
+  }));
 }
 
-export function formatIsoDuration(iso: string): string {
-  const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
-  if (!match) return iso;
-  const h = match[1] || '0';
-  const m = match[2] || '0';
-  return `${h}h${m.padStart(2, '0')}`;
+// --- Helper functions ---
+
+function formatMinutes(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${h}h${String(m).padStart(2, '0')}`;
 }
 
-function formatTime(dateStr: string): string {
-  return dateStr.split('T')[1]?.substring(0, 5) || '';
+function extractTime(dateStr: string): string {
+  // "2026-04-10 06:15" → "06:15"
+  const parts = dateStr.split(' ');
+  return parts[1]?.substring(0, 5) || '';
+}
+
+function extractDate(dateStr: string): string {
+  // "2026-04-10 06:15" → "2026-04-10"
+  return dateStr.split(' ')[0] || '';
 }
 
 function isDifferentDay(dep: string, arr: string): boolean {
-  return dep.split('T')[0] !== arr.split('T')[0];
+  return extractDate(dep) !== extractDate(arr);
 }
 
-function getBaggage(offer: FlightOffer): string {
-  const seg = offer.travelerPricings?.[0]?.fareDetailsBySegment?.[0];
-  if (!seg?.includedCheckedBags) return '';
-  if (seg.includedCheckedBags.weight) return `${seg.includedCheckedBags.weight}${seg.includedCheckedBags.weightUnit || 'kg'}`;
-  if (seg.includedCheckedBags.quantity) return `${seg.includedCheckedBags.quantity} mala(s)`;
+function extractCarrierCode(flightNumber: string): string {
+  // "G3 1380" → "G3"
+  return flightNumber.split(' ')[0] || '';
+}
+
+export function extractCarrierName(flightNumber: string): string {
+  // Prefer the airline name from the segment directly
+  return flightNumber;
+}
+
+function getBaggage(seg: SearchAPIFlightSegment): string {
+  const exts = seg.extensions || [];
+  for (const ext of exts) {
+    const lower = ext.toLowerCase();
+    if (lower.includes('bag') || lower.includes('mala') || lower.includes('checked') || lower.includes('despacha')) {
+      return ext;
+    }
+  }
   return '';
 }
 
-function describeItinerary(itin: FlightOffer['itineraries'][0]): {
-  carrier: string;
-  carrierName: string;
-  flightNumber: string;
-  origin: string;
-  destination: string;
-  depTime: string;
-  arrTime: string;
-  duration: string;
-  stops: number;
-  stopAirports: string;
-  nextDay: boolean;
-} {
-  const firstSeg = itin.segments[0];
-  const lastSeg = itin.segments[itin.segments.length - 1];
-  const stops = itin.segments.length - 1;
-  const stopAirports = stops > 0
-    ? itin.segments.slice(0, -1).map(s => s.arrival.iataCode).join(', ')
-    : '';
+function describeFlightGroup(flights: SearchAPIFlightSegment[], totalDuration: number, layovers?: Array<{ duration: number; name: string; id: string }>) {
+  const firstSeg = flights[0];
+  const lastSeg = flights[flights.length - 1];
+  const stops = flights.length - 1;
+  const stopNames = layovers?.map(l => l.id).join(', ') || flights.slice(0, -1).map(s => s.arrival_airport.id).join(', ');
 
   return {
-    carrier: firstSeg.carrierCode,
-    carrierName: extractCarrierName(firstSeg.carrierCode),
-    flightNumber: `${firstSeg.carrierCode}${firstSeg.number}`,
-    origin: firstSeg.departure.iataCode,
-    destination: lastSeg.arrival.iataCode,
-    depTime: formatTime(firstSeg.departure.at),
-    arrTime: formatTime(lastSeg.arrival.at),
-    duration: formatIsoDuration(itin.duration),
+    airline: firstSeg.airline,
+    carrierCode: extractCarrierCode(firstSeg.flight_number),
+    flightNumber: firstSeg.flight_number,
+    origin: firstSeg.departure_airport.id,
+    originName: firstSeg.departure_airport.name,
+    destination: lastSeg.arrival_airport.id,
+    destinationName: lastSeg.arrival_airport.name,
+    depTime: extractTime(firstSeg.departure_airport.time || ''),
+    arrTime: extractTime(lastSeg.arrival_airport.time || ''),
+    depDate: extractDate(firstSeg.departure_airport.time || ''),
+    duration: formatMinutes(totalDuration),
+    durationMin: totalDuration,
     stops,
-    stopAirports,
-    nextDay: isDifferentDay(firstSeg.departure.at, lastSeg.arrival.at),
+    stopAirports: stopNames,
+    nextDay: isDifferentDay(firstSeg.departure_airport.time || '', lastSeg.arrival_airport.time || ''),
+    baggage: getBaggage(firstSeg),
   };
 }
 
 /**
  * Format flight for TktTab — returns fonte row data
  */
-export function formatFlightForTkt(offer: FlightOffer, itineraryIndex = 0): {
+export function formatFlightForTkt(offer: FlightOffer, legIndex = 0): {
   nome: string;
   partida_chegada: string;
+  valor_adt: number;
 } {
-  const itin = offer.itineraries[itineraryIndex];
-  if (!itin) return { nome: 'API Amadeus', partida_chegada: '' };
+  const flights = legIndex === 0 ? offer.flights : (offer.returnFlights || offer.flights);
+  const duration = legIndex === 0 ? offer.totalDuration : (offer.returnDuration || offer.totalDuration);
+  const layovers = legIndex === 0 ? offer.layovers : offer.returnLayovers;
 
-  const info = describeItinerary(itin);
+  const info = describeFlightGroup(flights, duration, layovers);
   const nextDayStr = info.nextDay ? ' (+1)' : '';
   const stopsStr = info.stops === 0 ? 'Direto' : `${info.stops} escala${info.stops > 1 ? 's' : ''} (${info.stopAirports})`;
-  const bag = getBaggage(offer);
-  const bagStr = bag ? ` | Bag: ${bag}` : '';
+  const bagStr = info.baggage ? ` | ${info.baggage}` : '';
 
   return {
-    nome: 'API Amadeus',
-    partida_chegada: `${info.carrierName} ${info.flightNumber} | ${info.origin} ${info.depTime} → ${info.destination} ${info.arrTime}${nextDayStr} | ${info.duration} | ${stopsStr}${bagStr}`,
+    nome: 'Google Flights',
+    partida_chegada: `${info.airline} ${info.flightNumber} | ${info.origin} ${info.depTime} → ${info.destination} ${info.arrTime}${nextDayStr} | ${info.duration} | ${stopsStr}${bagStr}`,
+    valor_adt: offer.price,
   };
 }
 
@@ -128,25 +136,20 @@ export function formatFlightForVenda(offer: FlightOffer): {
   trecho: string;
   descricao: string;
 } {
-  const ida = offer.itineraries[0];
-  if (!ida) return { cia_aerea: '', trecho: '', descricao: '' };
-
-  const info = describeItinerary(ida);
+  const info = describeFlightGroup(offer.flights, offer.totalDuration, offer.layovers);
   const stopsStr = info.stops === 0 ? 'Direto' : `${info.stops} escala(s)`;
-  const bag = getBaggage(offer);
-  const bagStr = bag ? ` | Bag: ${bag}` : '';
+  const bagStr = info.baggage ? ` | ${info.baggage}` : '';
 
   let descricao = `${info.flightNumber} ${info.origin} ${info.depTime} → ${info.destination} ${info.arrTime} | ${stopsStr} | ${info.duration}${bagStr}`;
 
-  // Add return flight info if exists
-  if (offer.itineraries[1]) {
-    const volta = describeItinerary(offer.itineraries[1]);
+  if (offer.returnFlights && offer.returnFlights.length > 0) {
+    const volta = describeFlightGroup(offer.returnFlights, offer.returnDuration || 0, offer.returnLayovers);
     const voltaStops = volta.stops === 0 ? 'Direto' : `${volta.stops} escala(s)`;
     descricao += ` // Volta: ${volta.flightNumber} ${volta.origin} ${volta.depTime} → ${volta.destination} ${volta.arrTime} | ${voltaStops} | ${volta.duration}`;
   }
 
   return {
-    cia_aerea: info.carrierName,
+    cia_aerea: info.airline,
     trecho: `${info.origin}-${info.destination}`,
     descricao,
   };
@@ -156,24 +159,20 @@ export function formatFlightForVenda(offer: FlightOffer): {
  * Format flight for Propostas — returns SERVICO block conteudo
  */
 export function formatFlightForProposta(offer: FlightOffer): Record<string, unknown> {
-  const ida = offer.itineraries[0];
-  if (!ida) return { icone: '✈️', titulo: '', descricao: '', detalhes: [], imagem: '', valor: 0, exibir_valor: false };
-
-  const info = describeItinerary(ida);
-  const bag = getBaggage(offer);
+  const info = describeFlightGroup(offer.flights, offer.totalDuration, offer.layovers);
   const detalhes: string[] = [
-    `Cia: ${info.carrierName} (${info.flightNumber})`,
+    `Cia: ${info.airline} (${info.flightNumber})`,
     `Partida: ${info.origin} ${info.depTime}`,
     `Chegada: ${info.destination} ${info.arrTime}${info.nextDay ? ' (+1 dia)' : ''}`,
     `Duração: ${info.duration}`,
     info.stops === 0 ? 'Voo direto' : `Escalas: ${info.stops} (${info.stopAirports})`,
   ];
-  if (bag) detalhes.push(`Bagagem: ${bag}`);
+  if (info.baggage) detalhes.push(`Bagagem: ${info.baggage}`);
 
-  if (offer.itineraries[1]) {
-    const volta = describeItinerary(offer.itineraries[1]);
+  if (offer.returnFlights && offer.returnFlights.length > 0) {
+    const volta = describeFlightGroup(offer.returnFlights, offer.returnDuration || 0, offer.returnLayovers);
     detalhes.push('---');
-    detalhes.push(`Volta: ${volta.carrierName} (${volta.flightNumber})`);
+    detalhes.push(`Volta: ${volta.airline} (${volta.flightNumber})`);
     detalhes.push(`Partida: ${volta.origin} ${volta.depTime}`);
     detalhes.push(`Chegada: ${volta.destination} ${volta.arrTime}${volta.nextDay ? ' (+1 dia)' : ''}`);
     detalhes.push(`Duração: ${volta.duration}`);
@@ -183,9 +182,9 @@ export function formatFlightForProposta(offer: FlightOffer): Record<string, unkn
   return {
     icone: '✈️',
     titulo: `Voo ${info.origin} → ${info.destination}`,
-    descricao: `${info.carrierName} ${info.flightNumber} — ${info.duration} — ${info.stops === 0 ? 'Direto' : `${info.stops} escala(s)`}`,
+    descricao: `${info.airline} ${info.flightNumber} — ${info.duration} — ${info.stops === 0 ? 'Direto' : `${info.stops} escala(s)`}`,
     detalhes,
-    imagem: '',
+    imagem: offer.airlineLogo || '',
     valor: 0,
     exibir_valor: false,
   };
@@ -195,22 +194,50 @@ export function formatFlightForProposta(offer: FlightOffer): Record<string, unkn
  * Format flight for Propostas Discovery — returns TRANSPORTE block conteudo
  */
 export function formatFlightForTransporte(offer: FlightOffer): Record<string, unknown>[] {
-  return offer.itineraries.map(itin => {
-    const info = describeItinerary(itin);
-    const firstSeg = itin.segments[0];
-    return {
+  const results: Record<string, unknown>[] = [];
+
+  const info = describeFlightGroup(offer.flights, offer.totalDuration, offer.layovers);
+  results.push({
+    id: crypto.randomUUID?.() || Math.random().toString(36).slice(2),
+    tipo: 'VOO',
+    data: info.depDate,
+    origem: info.origin,
+    destino: info.destination,
+    companhia: info.airline,
+    numero_voo: info.flightNumber,
+    horario_saida: info.depTime,
+    horario_chegada: info.arrTime,
+    distancia_km: 0,
+    tempo_estimado: info.duration,
+    detalhes: info.stops === 0 ? 'Voo direto' : `${info.stops} escala(s): ${info.stopAirports}`,
+  });
+
+  if (offer.returnFlights && offer.returnFlights.length > 0) {
+    const volta = describeFlightGroup(offer.returnFlights, offer.returnDuration || 0, offer.returnLayovers);
+    results.push({
       id: crypto.randomUUID?.() || Math.random().toString(36).slice(2),
       tipo: 'VOO',
-      data: firstSeg.departure.at.split('T')[0] || '',
-      origem: info.origin,
-      destino: info.destination,
-      companhia: info.carrierName,
-      numero_voo: info.flightNumber,
-      horario_saida: info.depTime,
-      horario_chegada: info.arrTime,
+      data: volta.depDate,
+      origem: volta.origin,
+      destino: volta.destination,
+      companhia: volta.airline,
+      numero_voo: volta.flightNumber,
+      horario_saida: volta.depTime,
+      horario_chegada: volta.arrTime,
       distancia_km: 0,
-      tempo_estimado: info.duration,
-      detalhes: info.stops === 0 ? 'Voo direto' : `${info.stops} escala(s): ${info.stopAirports}`,
-    };
-  });
+      tempo_estimado: volta.duration,
+      detalhes: volta.stops === 0 ? 'Voo direto' : `${volta.stops} escala(s): ${volta.stopAirports}`,
+    });
+  }
+
+  return results;
+}
+
+// Legacy compatibility — formatIsoDuration still exported for any remaining references
+export function formatIsoDuration(iso: string): string {
+  const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
+  if (!match) return iso;
+  const h = match[1] || '0';
+  const m = match[2] || '0';
+  return `${h}h${m.padStart(2, '0')}`;
 }
