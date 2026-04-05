@@ -8,15 +8,31 @@ import { formatDate } from '@/lib/utils';
 import { useApp } from '@/contexts/AppContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, Copy, Download, Upload, Trash2, FolderOpen } from 'lucide-react';
+import { Plus, Copy, Download, Upload, Trash2, FolderOpen, Filter } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
+
+const PIPELINE_COLORS: Record<string, string> = {
+  PRODUTO: 'bg-gray-200 text-gray-700',
+  PROPOSTA: 'bg-blue-100 text-blue-700',
+  ORCAMENTO: 'bg-amber-100 text-amber-700',
+  RESERVA: 'bg-purple-100 text-purple-700',
+  VENDA: 'bg-green-100 text-green-700',
+};
+
+const PIPELINE_OPTIONS = ['TODOS', 'PRODUTO', 'PROPOSTA', 'ORCAMENTO', 'RESERVA', 'VENDA'] as const;
 
 export default function GruposPage() {
   const [grupos, setGrupos] = useState<GrupoViagem[]>([]);
+  const [filtroStatus, setFiltroStatus] = useState<string>('TODOS');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { setActiveGrupo } = useApp();
 
   useEffect(() => { loadGrupos().then(setGrupos); }, []);
+
+  const gruposFiltrados = filtroStatus === 'TODOS'
+    ? grupos
+    : grupos.filter(g => (g.status_pipeline || 'PRODUTO') === filtroStatus);
 
   const criarGrupo = async () => {
     const novo = createGrupoViagem();
@@ -89,6 +105,26 @@ export default function GruposPage() {
         </div>
       </header>
 
+      {/* Filtros */}
+      {grupos.length > 0 && (
+        <div className="px-6 pt-4 flex items-center gap-2">
+          <Filter className="w-4 h-4 text-[var(--t-text-muted)]" />
+          {PIPELINE_OPTIONS.map(opt => (
+            <button
+              key={opt}
+              onClick={() => setFiltroStatus(opt)}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                filtroStatus === opt
+                  ? 'bg-[var(--t-accent)] text-white'
+                  : 'bg-[var(--t-bg)] text-[var(--t-text-muted)] hover:bg-[var(--t-surface-hover)]'
+              }`}
+            >
+              {opt === 'TODOS' ? `Todos (${grupos.length})` : `${opt} (${grupos.filter(g => (g.status_pipeline || 'PRODUTO') === opt).length})`}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Content */}
       <main className="flex-1 overflow-y-auto p-6">
         {grupos.length === 0 ? (
@@ -99,7 +135,9 @@ export default function GruposPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {grupos.map(g => (
+            {gruposFiltrados.map(g => {
+              const pipelineStatus = g.status_pipeline || 'PRODUTO';
+              return (
               <Card key={g.id} className="hover:shadow-lg transition-shadow border-l-4 border-l-[#d4a853]">
                 <CardContent className="p-5">
                   <div className="flex items-start justify-between mb-3">
@@ -107,6 +145,9 @@ export default function GruposPage() {
                       <h3 className="font-bold text-lg text-[var(--t-text)]">{g.grp_id || 'Sem ID'}</h3>
                       <p className="text-sm text-[var(--t-text-secondary)]">{g.origem_destino || <span className="italic text-[var(--t-text-muted)]">Destino não definido</span>}</p>
                     </div>
+                    <Badge className={`text-[10px] ${PIPELINE_COLORS[pipelineStatus] || PIPELINE_COLORS.PRODUTO}`}>
+                      {pipelineStatus}
+                    </Badge>
                   </div>
                   <div className="text-xs text-[var(--t-text-secondary)] mb-4">
                     <div>Criado: {formatDate(g.created_at?.split('T')[0])}</div>
@@ -129,7 +170,8 @@ export default function GruposPage() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>

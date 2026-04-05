@@ -74,13 +74,50 @@ export function HtlTab({ grupo, onChange }: Props) {
     htl.hoteis[hotelIdx] = { ...htl.hoteis[hotelIdx], info: { ...htl.hoteis[hotelIdx].info } };
     const info = htl.hoteis[hotelIdx].info;
     const mapped = formatHotelForHtlInfo(place);
+
+    // Merge check-in/out times
+    if (mapped.check_in_hora) info.check_in_hora = mapped.check_in_hora;
+    if (mapped.check_out_hora) info.check_out_hora = mapped.check_out_hora;
     if (!info.estacionamento && mapped.estacionamento) info.estacionamento = mapped.estacionamento;
     if (mapped.info_adicional) {
       info.info_adicional = info.info_adicional
         ? `${info.info_adicional}\n\n${mapped.info_adicional}`
         : mapped.info_adicional;
     }
-    onChange({ ...grupo, htl });
+
+    // Store API images and metadata for proposta generation
+    info.hotel_imagem = place.images?.[0]?.original || place.images?.[0]?.thumbnail || '';
+    info.hotel_galeria = (place.images || []).slice(0, 8).map(img => img.original || img.thumbnail);
+    info.hotel_estrelas = place.extracted_hotel_class || (place.rating ? Math.round(place.rating) : undefined);
+    info.hotel_link = place.link || '';
+    info.hotel_descricao = place.description || '';
+    if (place.gps_coordinates) {
+      info.hotel_lat = place.gps_coordinates.latitude;
+      info.hotel_lng = place.gps_coordinates.longitude;
+    }
+
+    // Also update periodo hotel name if available
+    const updatedGrupo = { ...grupo, htl };
+    if (place.name && updatedGrupo.periodos[hotelIdx]) {
+      updatedGrupo.periodos = [...updatedGrupo.periodos];
+      updatedGrupo.periodos[hotelIdx] = { ...updatedGrupo.periodos[hotelIdx], hotel: place.name };
+    }
+
+    // Auto-fill price in first empty fonte if API has price
+    if (place.total_price?.extracted_price_before_taxes) {
+      const totalPrice = place.total_price.extracted_price_before_taxes;
+      const fontes = [...htl.hoteis[hotelIdx].fontes];
+      const apiIdx = fontes.findIndex(f => f.nome === 'Google Hotels');
+      const priceEntry = { nome: 'Google Hotels', valor_sgl: totalPrice, valor_dbl: totalPrice, valor_tpl: totalPrice, valor_qdp: totalPrice, valor_chd: null as number | null };
+      if (apiIdx >= 0) {
+        fontes[apiIdx] = { ...fontes[apiIdx], ...priceEntry };
+      } else {
+        fontes.push(priceEntry);
+      }
+      htl.hoteis[hotelIdx] = { ...htl.hoteis[hotelIdx], fontes };
+    }
+
+    onChange(updatedGrupo);
   };
 
   const isVisible = (hIdx: number, fIdx: number) =>
@@ -261,6 +298,8 @@ export function HtlTab({ grupo, onChange }: Props) {
         onSelect={(place) => { if (hotelModalOpen !== null) handleHotelSelect(hotelModalOpen, place); }}
         defaultDestino={hotelModalOpen !== null ? grupo.periodos[hotelModalOpen]?.destino || '' : ''}
         defaultHotelName={hotelModalOpen !== null ? grupo.periodos[hotelModalOpen]?.hotel || '' : ''}
+        defaultCheckIn={hotelModalOpen !== null ? grupo.periodos[hotelModalOpen]?.check_in || '' : ''}
+        defaultCheckOut={hotelModalOpen !== null ? grupo.periodos[hotelModalOpen]?.check_out || '' : ''}
       />
     </div>
   );

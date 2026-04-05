@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Hotel, Search, Loader2, Star, MapPin, X, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import type { SearchAPIHotelProperty } from '@/lib/searchapi-hotels';
 import { formatAmenities } from '@/lib/hotel-data-mapper';
@@ -47,6 +47,18 @@ export function HotelSearchModal({
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Re-sync state when modal reopens with new defaults
+  useEffect(() => {
+    if (open) {
+      setQuery(defaultHotelName ? `${defaultHotelName} em ${defaultDestino}` : defaultDestino);
+      if (defaultCheckIn) setCheckIn(defaultCheckIn);
+      if (defaultCheckOut) setCheckOut(defaultCheckOut);
+      setResults([]);
+      setError('');
+      setExpandedId(null);
+    }
+  }, [open, defaultDestino, defaultHotelName, defaultCheckIn, defaultCheckOut]);
 
   if (!open) return null;
 
@@ -157,10 +169,12 @@ export function HotelSearchModal({
                   <div className="w-44 shrink-0 relative">
                     {hasImages ? (
                       <img
-                        src={hotel.images![0].original}
+                        src={hotel.images![0].thumbnail || hotel.images![0].original}
                         alt={hotel.name}
                         className="w-full h-full object-cover min-h-[140px]"
                         loading="lazy"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => { const t = e.currentTarget; if (t.src !== hotel.images![0].original) t.src = hotel.images![0].original; else t.style.display = 'none'; }}
                       />
                     ) : (
                       <div className="w-full h-full min-h-[140px] bg-[var(--t-surface)] flex items-center justify-center">
@@ -272,11 +286,12 @@ export function HotelSearchModal({
                           {hotel.images!.slice(0, 10).map((img, i) => (
                             <img
                               key={i}
-                              src={img.thumbnail}
+                              src={img.thumbnail || img.original}
                               alt={`${hotel.name} foto ${i + 1}`}
                               className="w-24 h-16 object-cover rounded-lg shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
-                              onClick={() => window.open(img.original, '_blank')}
+                              onClick={() => window.open(img.original || img.thumbnail, '_blank')}
                               loading="lazy"
+                              referrerPolicy="no-referrer"
                             />
                           ))}
                         </div>

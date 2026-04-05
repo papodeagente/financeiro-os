@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, Trash2, ChevronDown, ChevronUp, ArrowLeft, Save, Search, Plane, Hotel, FileText, X, Check } from 'lucide-react';
 import { FlightSearchModal } from '@/components/FlightSearchModal';
 import { HotelSearchModal } from '@/components/HotelSearchModal';
@@ -79,6 +79,7 @@ function SectionHeader({
 
 export default function NovaVendaPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [grupos, setGrupos] = useState<GrupoViagem[]>([]);
   const [propostas, setPropostas] = useState<Proposta[]>([]);
@@ -108,8 +109,47 @@ export default function NovaVendaPage() {
   useEffect(() => {
     loadEntities<Cliente>('clientes').then(setClientes);
     loadEntities<Proposta>('propostas').then(setPropostas);
-    loadGrupos().then(setGrupos);
-  }, []);
+    loadGrupos().then(gs => {
+      setGrupos(gs);
+      // Pre-fill from grupo_id query param
+      const grupoId = searchParams.get('grupo_id');
+      if (grupoId) {
+        const grupo = gs.find(g => g.id === grupoId);
+        if (grupo) {
+          try {
+            const produto = getProdutoGrupo(grupo);
+            const custoEntries = Object.values(produto.custos_por_apto) as Array<Record<string, number>>;
+            const custoSgl = custoEntries.reduce((sum, entry) => sum + (entry.sgl || 0), 0);
+            const vendaSgl = produto.precos.avista.sgl || 0;
+            setVenda(prev => ({
+              ...prev,
+              tipo: 'GRUPO',
+              grupo_id: grupo.id,
+              observacoes: `Importado do produto ${grupo.grp_id} — ${grupo.origem_destino}`,
+              produtos: [{
+                ...createProdutoVenda(),
+                tipo: 'GRUPO',
+                descricao: `Grupo: ${grupo.grp_id || 'Sem ID'} — ${grupo.origem_destino || ''}`,
+                fornecedor_nome: 'Operacao Propria',
+                valor_custo: custoSgl,
+                valor_venda: vendaSgl,
+                moeda: 'BRL',
+                cambio: 1,
+                projeto: grupo.id,
+              }],
+            }));
+          } catch {
+            setVenda(prev => ({
+              ...prev,
+              tipo: 'GRUPO',
+              grupo_id: grupo.id,
+              observacoes: `Importado do produto ${grupo.grp_id}`,
+            }));
+          }
+        }
+      }
+    });
+  }, [searchParams]);
 
   // When a produto is set to GRUPO, allow selecting a grupo and auto-fill values
   const selectGrupoForProduto = (idx: number, grupoId: string) => {

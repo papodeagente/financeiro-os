@@ -21,14 +21,15 @@ import { IngTab } from '@/components/tabs/IngTab';
 import { BrindeTab } from '@/components/tabs/BrindeTab';
 import { PropostaTab } from '@/components/tabs/PropostaTab';
 import { HtlSegTab } from '@/components/tabs/HtlSegTab';
+import { PainelPipelineTab } from '@/components/tabs/PainelPipelineTab';
 import { createFinanceiroGrupo } from '@/lib/financial-defaults';
 import { Save, FileText, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
-const ABAS_PLANEJAMENTO: AbaType[] = ['inf', 'tkt', 'htl', 'rec', 'car', 'guia', 'seg', 'navio', 'ing', 'brinde', 'proposta', 'htl_seg'];
+const ABAS_PLANEJAMENTO: AbaType[] = ['pipeline', 'inf', 'tkt', 'htl', 'rec', 'car', 'guia', 'seg', 'navio', 'ing', 'brinde', 'proposta', 'htl_seg'];
 
 const ABA_ICONS: Record<string, string> = {
-  inf: 'ℹ️', tkt: '✈️', htl: '🏨', rec: '🎯', car: '🚐', guia: '🧑‍🏫',
+  pipeline: '🔄', inf: 'ℹ️', tkt: '✈️', htl: '🏨', rec: '🎯', car: '🚐', guia: '🧑‍🏫',
   seg: '🛡️', navio: '🚢', ing: '🎟️', brinde: '🎁', proposta: '💰', htl_seg: '📊',
 };
 
@@ -53,7 +54,7 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
   const router = useRouter();
   const { setActiveGrupo } = useApp();
   const [grupo, setGrupo] = useState<GrupoViagem | null>(null);
-  const [activeTab, setActiveTab] = useState<AbaType>('inf');
+  const [activeTab, setActiveTab] = useState<AbaType>('pipeline');
   const [saved, setSaved] = useState(true);
   const [gerandoProposta, setGerandoProposta] = useState(false);
 
@@ -62,6 +63,11 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
       const found = grupos.find(g => g.id === id);
       if (found) {
         if (!found.financeiro) found.financeiro = createFinanceiroGrupo();
+        // Migrate existing grupos without pipeline fields
+        if (!found.status_pipeline) found.status_pipeline = 'PRODUTO';
+        if (found.proposta_id === undefined) found.proposta_id = null;
+        if (found.orcamento_id === undefined) found.orcamento_id = null;
+        if (found.venda_crm_id === undefined) found.venda_crm_id = null;
         setGrupo(found);
         setActiveGrupo(found.id, found.grp_id || 'Sem ID');
       } else {
@@ -93,6 +99,9 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
       });
       const data = await res.json();
       if (data.id) {
+        // Update local state with pipeline link
+        setGrupo(prev => prev ? { ...prev, proposta_id: data.id, status_pipeline: 'PROPOSTA' } : prev);
+        setSaved(false);
         router.push(`/propostas/${data.id}`);
       } else {
         alert(data.error || 'Erro ao gerar proposta');
@@ -101,6 +110,66 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
       alert('Erro ao gerar proposta');
     }
     setGerandoProposta(false);
+  };
+
+  const handleGerarOrcamento = async () => {
+    if (!grupo || !grupo.proposta_id) return;
+    try {
+      const res = await fetch('/api/orcamentos/from-proposta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proposta_id: grupo.proposta_id, grupo_id: grupo.id }),
+      });
+      const data = await res.json();
+      if (data.id) {
+        setGrupo(prev => prev ? { ...prev, orcamento_id: data.id, status_pipeline: 'ORCAMENTO' } : prev);
+        setSaved(false);
+      } else {
+        alert(data.error || 'Erro ao gerar orcamento');
+      }
+    } catch {
+      alert('Erro ao gerar orcamento');
+    }
+  };
+
+  const handleCriarReserva = async () => {
+    if (!grupo) return;
+    try {
+      const res = await fetch('/api/vendas/from-grupo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ grupo_id: grupo.id, status: 'RESERVADO' }),
+      });
+      const data = await res.json();
+      if (data.id) {
+        setGrupo(prev => prev ? { ...prev, venda_crm_id: data.id, status_pipeline: 'RESERVA' } : prev);
+        setSaved(false);
+      } else {
+        alert(data.error || 'Erro ao criar reserva');
+      }
+    } catch {
+      alert('Erro ao criar reserva');
+    }
+  };
+
+  const handleFecharVenda = async () => {
+    if (!grupo) return;
+    try {
+      const res = await fetch(`/api/grupos/${grupo.id}/pipeline`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'VENDA' }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setGrupo(prev => prev ? { ...prev, status_pipeline: 'VENDA' } : prev);
+        setSaved(false);
+      } else {
+        alert(data.error || 'Erro ao fechar venda');
+      }
+    } catch {
+      alert('Erro ao fechar venda');
+    }
   };
 
   const handleNext = useCallback(() => {
@@ -134,8 +203,26 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
 
   if (!grupo) return <div className="flex items-center justify-center h-full">Carregando...</div>;
 
+  const PIPELINE_BADGE_COLORS: Record<string, string> = {
+    PRODUTO: 'bg-gray-200 text-gray-700',
+    PROPOSTA: 'bg-blue-100 text-blue-700',
+    ORCAMENTO: 'bg-amber-100 text-amber-700',
+    RESERVA: 'bg-purple-100 text-purple-700',
+    VENDA: 'bg-green-100 text-green-700',
+  };
+
   const renderTab = () => {
     switch (activeTab) {
+      case 'pipeline': return (
+        <PainelPipelineTab
+          grupo={grupo}
+          onGerarProposta={handleGerarProposta}
+          onGerarOrcamento={handleGerarOrcamento}
+          onCriarReserva={handleCriarReserva}
+          onFecharVenda={handleFecharVenda}
+          gerandoProposta={gerandoProposta}
+        />
+      );
       case 'inf': return <InfTab grupo={grupo} onChange={handleChange} />;
       case 'tkt': return <TktTab grupo={grupo} onChange={handleChange} />;
       case 'htl': return <HtlTab grupo={grupo} onChange={handleChange} />;
@@ -161,6 +248,9 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
           <span className="font-semibold text-[var(--t-text)]">{grupo.grp_id || 'Sem ID'}</span>
           <span>/</span>
           <Badge variant="outline" className="text-[var(--t-accent)] border-[var(--t-accent)]">{ABA_LABELS[activeTab]}</Badge>
+          <Badge className={`text-[10px] ${PIPELINE_BADGE_COLORS[grupo.status_pipeline || 'PRODUTO']}`}>
+            {grupo.status_pipeline || 'PRODUTO'}
+          </Badge>
         </div>
         <div className="flex items-center gap-3">
           <span className={`text-xs ${saved ? 'text-green-600' : 'text-orange-500'}`}>

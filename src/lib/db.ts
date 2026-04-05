@@ -284,6 +284,18 @@ export async function initDB() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS orcamentos (
+      id TEXT PRIMARY KEY,
+      numero TEXT NOT NULL DEFAULT '',
+      cliente_id TEXT NOT NULL DEFAULT '',
+      grupo_id TEXT NOT NULL DEFAULT '',
+      proposta_id TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'RASCUNHO',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS planejamento_projetos (
       id TEXT PRIMARY KEY,
       nome TEXT NOT NULL DEFAULT '',

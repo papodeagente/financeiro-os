@@ -48,16 +48,43 @@ export function TktTab({ grupo, onChange }: Props) {
   const addTrecho = () => { if (grupo.tkt.trechos.length < 4) onChange({ ...grupo, tkt: { trechos: [...grupo.tkt.trechos, createTktTrecho()] } }); };
   const removeTrecho = (idx: number) => { onChange({ ...grupo, tkt: { trechos: grupo.tkt.trechos.filter((_, i) => i !== idx) } }); };
 
-  const handleFlightSelect = (tIdx: number, offer: FlightOffer) => {
+  const handleFlightSelect = (tIdx: number, ida: FlightOffer, volta?: FlightOffer) => {
     const tkt = { ...grupo.tkt, trechos: [...grupo.tkt.trechos] };
+
+    // Import IDA into current trecho
     tkt.trechos[tIdx] = { ...tkt.trechos[tIdx], fontes: [...tkt.trechos[tIdx].fontes] };
-    const mapped = formatFlightForTkt(offer, 0);
-    const existingIdx = tkt.trechos[tIdx].fontes.findIndex(f => f.nome === 'Google Flights');
-    if (existingIdx >= 0) {
-      tkt.trechos[tIdx].fontes[existingIdx] = { ...tkt.trechos[tIdx].fontes[existingIdx], partida_chegada: mapped.partida_chegada, valor_adt: mapped.valor_adt };
+    const mappedIda = formatFlightForTkt(ida, 0);
+    const existingIdaIdx = tkt.trechos[tIdx].fontes.findIndex(f => f.nome === 'Google Flights');
+    if (existingIdaIdx >= 0) {
+      tkt.trechos[tIdx].fontes[existingIdaIdx] = { ...tkt.trechos[tIdx].fontes[existingIdaIdx], partida_chegada: mappedIda.partida_chegada, valor_adt: mappedIda.valor_adt };
     } else {
-      tkt.trechos[tIdx].fontes.push({ nome: mapped.nome, valor_adt: mapped.valor_adt, valor_chd: null, partida_chegada: mapped.partida_chegada });
+      tkt.trechos[tIdx].fontes.push({ nome: mappedIda.nome, valor_adt: mappedIda.valor_adt, valor_chd: null, partida_chegada: mappedIda.partida_chegada });
     }
+
+    // Import VOLTA into next trecho (create if needed)
+    if (volta) {
+      const voltaIdx = tIdx + 1;
+      if (voltaIdx >= tkt.trechos.length) {
+        tkt.trechos.push(createTktTrecho());
+      }
+      tkt.trechos[voltaIdx] = { ...tkt.trechos[voltaIdx], fontes: [...tkt.trechos[voltaIdx].fontes] };
+      const mappedVolta = formatFlightForTkt(volta, 0);
+      const existingVoltaIdx = tkt.trechos[voltaIdx].fontes.findIndex(f => f.nome === 'Google Flights');
+      if (existingVoltaIdx >= 0) {
+        tkt.trechos[voltaIdx].fontes[existingVoltaIdx] = { ...tkt.trechos[voltaIdx].fontes[existingVoltaIdx], partida_chegada: mappedVolta.partida_chegada, valor_adt: mappedVolta.valor_adt };
+      } else {
+        tkt.trechos[voltaIdx].fontes.push({ nome: mappedVolta.nome, valor_adt: mappedVolta.valor_adt, valor_chd: null, partida_chegada: mappedVolta.partida_chegada });
+      }
+
+      // Also ensure trechos (InfTab) has a matching entry for the return flight
+      const updatedGrupo = { ...grupo, tkt };
+      if (voltaIdx >= updatedGrupo.trechos.length) {
+        updatedGrupo.trechos = [...updatedGrupo.trechos, { data: null, qtd_adt: updatedGrupo.trechos[tIdx]?.qtd_adt || 0, qtd_chd: updatedGrupo.trechos[tIdx]?.qtd_chd || 0 }];
+      }
+      onChange(updatedGrupo);
+      return;
+    }
+
     onChange({ ...grupo, tkt });
   };
 
@@ -181,8 +208,14 @@ export function TktTab({ grupo, onChange }: Props) {
       })}
 
       <FlightSearchModal open={flightModalOpen !== null} onClose={() => setFlightModalOpen(null)}
-        onSelect={(ida) => { if (flightModalOpen !== null) handleFlightSelect(flightModalOpen, ida); }}
+        onSelect={(ida, volta) => { if (flightModalOpen !== null) handleFlightSelect(flightModalOpen, ida, volta); }}
+        defaultOrigem={flightModalOpen !== null && flightModalOpen > 0
+          ? (grupo.tkt.trechos[flightModalOpen - 1]?.fontes.find(f => f.partida_chegada)?.partida_chegada?.split('→')[1]?.trim()?.split(' ')[0] || '')
+          : ''}
         defaultDataIda={flightModalOpen !== null ? grupo.trechos[flightModalOpen]?.data || '' : ''}
+        defaultDataVolta={flightModalOpen !== null && grupo.trechos[flightModalOpen + 1]?.data
+          ? grupo.trechos[flightModalOpen + 1].data || ''
+          : ''}
         defaultAdultos={flightModalOpen !== null ? grupo.trechos[flightModalOpen]?.qtd_adt || 1 : 1}
         defaultCriancas={flightModalOpen !== null ? grupo.trechos[flightModalOpen]?.qtd_chd || 0 : 0}
       />

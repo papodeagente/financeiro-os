@@ -55,19 +55,25 @@ export async function POST(req: Request) {
         if (sum > 0 && sum < bestTotal) { bestTotal = sum; bestFonteName = f.nome; }
       }
 
+      // Build description combining API and manual data
+      const descParts = [
+        h.info.hotel_descricao || '',
+        h.info.pensao ? `Pensão: ${h.info.pensao}` : '',
+        h.info.check_in_hora ? `Check-in: ${h.info.check_in_hora}` : '',
+        h.info.check_out_hora ? `Check-out: ${h.info.check_out_hora}` : '',
+        h.info.politica_chd ? `Política CHD: ${h.info.politica_chd}` : '',
+        (!h.info.hotel_descricao && h.info.info_adicional) ? h.info.info_adicional : '',
+      ].filter(Boolean).join('\n');
+
       return {
         id: generateId(),
         destino_nome: per?.destino || '',
         hotel_nome: per?.hotel || bestFonteName || 'Hotel',
-        hotel_estrelas: undefined,
-        hotel_imagem: '',
-        hotel_descricao: [
-          h.info.pensao ? `Pensão: ${h.info.pensao}` : '',
-          h.info.check_in_hora ? `Check-in: ${h.info.check_in_hora}` : '',
-          h.info.check_out_hora ? `Check-out: ${h.info.check_out_hora}` : '',
-          h.info.politica_chd ? `Política CHD: ${h.info.politica_chd}` : '',
-          h.info.info_adicional || '',
-        ].filter(Boolean).join('\n'),
+        hotel_estrelas: h.info.hotel_estrelas || undefined,
+        hotel_imagem: h.info.hotel_imagem || '',
+        hotel_galeria: h.info.hotel_galeria || [],
+        hotel_descricao: descParts,
+        hotel_link: h.info.hotel_link || '',
         check_in: per?.check_in || '',
         check_out: per?.check_out || '',
         noites: calcDiarias(per?.check_in || null, per?.check_out || null),
@@ -76,6 +82,8 @@ export async function POST(req: Request) {
           : h.info.pensao?.toUpperCase()?.startsWith('MEIA') ? 'HB'
           : h.info.pensao?.toUpperCase()?.startsWith('PENS') ? 'FB'
           : 'RO') as 'RO' | 'BB' | 'HB' | 'FB' | 'AI',
+        lat: h.info.hotel_lat,
+        lng: h.info.hotel_lng,
       };
     });
 
@@ -647,6 +655,13 @@ export async function POST(req: Request) {
     await pool.query(
       `INSERT INTO propostas (id, numero, cliente_id, vendedor_id, status, data) VALUES ($1, $2, $3, $4, $5, $6)`,
       [id, num, '', '', 'RASCUNHO', JSON.stringify(proposta)]
+    );
+
+    // Link proposta back to grupo and advance pipeline
+    const updatedGrupo = { ...grupo, proposta_id: id, status_pipeline: 'PROPOSTA' };
+    await pool.query(
+      `UPDATE grupos SET data = $1, updated_at = NOW() WHERE id = $2`,
+      [JSON.stringify(updatedGrupo), grupo_id]
     );
 
     return NextResponse.json({ id, numero: num });

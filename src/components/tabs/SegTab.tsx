@@ -7,9 +7,15 @@ import { calcSegTotals } from '@/lib/calculations';
 import { MoneyInput } from '@/components/MoneyInput';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Trash2, Trophy, Shield } from 'lucide-react';
+import { Plus, Trash2, Trophy, Shield, CalendarDays } from 'lucide-react';
 
 interface Props { grupo: GrupoViagem; onChange: (g: GrupoViagem) => void; }
+
+function formatDateBR(d: string | null): string {
+  if (!d) return '';
+  const [y, m, day] = d.split('-');
+  return `${day}/${m}/${y}`;
+}
 
 const TIPOS = ['sgl', 'dbl', 'tpl', 'qdp'] as const;
 const LABELS: Record<string, string> = { sgl: 'SGL', dbl: 'DBL', tpl: 'TPL', qdp: 'QDP' };
@@ -54,8 +60,24 @@ export function SegTab({ grupo, onChange }: Props) {
   const visibleIndices = grupo.seg.seguradoras.map((_, i) => i).filter(i => isVisible(i));
   const hiddenSources = grupo.seg.seguradoras.map((s, i) => ({ nome: s.nome, idx: i })).filter((_, i) => !isVisible(i));
 
+  // Compute travel period from periodos
+  const periodos = grupo.periodos || [];
+  const primeiraData = periodos[0]?.check_in || '';
+  const ultimaData = periodos[periodos.length - 1]?.check_out || '';
+
   return (
     <div className="space-y-6">
+      {/* Travel period reference */}
+      {primeiraData && ultimaData && (
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+          <CalendarDays className="w-5 h-5 text-blue-500 shrink-0" />
+          <div>
+            <span className="text-xs font-medium text-blue-700 dark:text-blue-300">Periodo da viagem: </span>
+            <span className="text-sm font-semibold text-blue-900 dark:text-blue-100">{formatDateBR(primeiraData)} a {formatDateBR(ultimaData)}</span>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {TIPOS.map(t => (
           <div key={t} className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-3" style={{ boxShadow: 'var(--elevation-1)' }}>
@@ -86,7 +108,7 @@ export function SegTab({ grupo, onChange }: Props) {
                 </div>
                 <button onClick={() => clearSource(sIdx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-status-danger)] hover:bg-[var(--t-status-danger-bg)] transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                 {TIPOS.map(t => {
                   const key = `valor_${t}` as keyof typeof seg;
                   const val = seg[key] as number | null;
@@ -98,12 +120,22 @@ export function SegTab({ grupo, onChange }: Props) {
                     </div>
                   );
                 })}
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+                <div>
+                  <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Data Inicio</label>
+                  <Input type="date" value={seg.data_inicio || primeiraData || ''} onChange={e => update(sIdx, 'data_inicio', e.target.value || null)} className="h-8" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Data Fim</label>
+                  <Input type="date" value={seg.data_fim || ultimaData || ''} onChange={e => update(sIdx, 'data_fim', e.target.value || null)} className="h-8" />
+                </div>
                 <div>
                   <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Deadline</label>
                   <Input type="date" value={seg.deadline || ''} onChange={e => update(sIdx, 'deadline', e.target.value || null)} className="h-8" />
                 </div>
                 <div>
-                  <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Descrição</label>
+                  <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Descricao</label>
                   <Textarea value={seg.descricao} onChange={e => update(sIdx, 'descricao', e.target.value)} rows={1} className="min-h-[32px]" />
                 </div>
               </div>

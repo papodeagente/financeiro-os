@@ -68,6 +68,14 @@ export interface HtlInfo {
   politica_chd: string;
   politica_free: string;
   info_adicional: string;
+  // API-sourced fields for proposta generation
+  hotel_imagem?: string;
+  hotel_galeria?: string[];
+  hotel_estrelas?: number;
+  hotel_link?: string;
+  hotel_descricao?: string;
+  hotel_lat?: number;
+  hotel_lng?: number;
 }
 
 export interface HtlHotel {
@@ -126,6 +134,8 @@ export interface SegSeguradora {
   valor_tpl: number | null;
   valor_qdp: number | null;
   deadline: string | null;
+  data_inicio: string | null;
+  data_fim: string | null;
   descricao: string;
 }
 
@@ -164,12 +174,20 @@ export interface BrindeFornecedor {
 
 import { FinanceiroGrupo } from './financial-types';
 
+export type StatusPipeline = 'PRODUTO' | 'PROPOSTA' | 'ORCAMENTO' | 'RESERVA' | 'VENDA';
+
 export interface GrupoViagem {
   id: string;
   grp_id: string;
   origem_destino: string;
   created_at: string;
   updated_at: string;
+
+  // Pipeline
+  status_pipeline: StatusPipeline;
+  proposta_id: string | null;
+  orcamento_id: string | null;
+  venda_crm_id: string | null;
 
   periodos: Periodo[];
   trechos: Trecho[];
@@ -192,9 +210,10 @@ export interface GrupoViagem {
   financeiro?: FinanceiroGrupo;
 }
 
-export type AbaType = 'inf' | 'tkt' | 'htl' | 'rec' | 'car' | 'guia' | 'seg' | 'navio' | 'ing' | 'brinde' | 'proposta' | 'htl_seg' | 'painel' | 'vendas' | 'recebimentos' | 'fornecedores' | 'fluxo_caixa' | 'dre' | 'indicadores';
+export type AbaType = 'pipeline' | 'inf' | 'tkt' | 'htl' | 'rec' | 'car' | 'guia' | 'seg' | 'navio' | 'ing' | 'brinde' | 'proposta' | 'htl_seg' | 'painel' | 'vendas' | 'recebimentos' | 'fornecedores' | 'fluxo_caixa' | 'dre' | 'indicadores';
 
 export const ABA_LABELS: Record<AbaType, string> = {
+  pipeline: 'Pipeline',
   inf: 'Info',
   tkt: 'Aéreo',
   htl: 'Hotel',

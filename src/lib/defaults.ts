@@ -61,7 +61,8 @@ export function createGuiaDestino(): GuiaDestino {
 export function createSegSeguradora(i: number): SegSeguradora {
   return {
     nome: `Seguradora ${i + 1}`, valor_sgl: null, valor_dbl: null,
-    valor_tpl: null, valor_qdp: null, deadline: null, descricao: '',
+    valor_tpl: null, valor_qdp: null, deadline: null,
+    data_inicio: null, data_fim: null, descricao: '',
   };
 }
 
@@ -98,6 +99,10 @@ export function createGrupoViagem(): GrupoViagem {
     origem_destino: '',
     created_at: now,
     updated_at: now,
+    status_pipeline: 'PRODUTO',
+    proposta_id: null,
+    orcamento_id: null,
+    venda_crm_id: null,
     periodos: [createPeriodo()],
     trechos: [createTrecho()],
     navio_info: { embarque: null, desembarque: null, cidade_embarque: '', cidade_desembarque: '', nome_cruzeiro: '' },
