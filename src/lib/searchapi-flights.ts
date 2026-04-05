@@ -46,11 +46,11 @@ export interface SearchAPIResponse {
   search_metadata?: Record<string, unknown>;
 }
 
-const CLASS_MAP: Record<string, number> = {
-  'economica': 1,
-  'executiva': 2,
-  'primeira': 3,
-  'premium_economy': 4,
+const CLASS_MAP: Record<string, string> = {
+  'economica': 'economy',
+  'executiva': 'business',
+  'primeira': 'first_class',
+  'premium_economy': 'premium_economy',
 };
 
 export async function searchFlights(params: {
@@ -72,7 +72,7 @@ export async function searchFlights(params: {
     arrival_id: params.destino,
     outbound_date: params.data_ida,
     type: params.data_volta ? '1' : '2', // 1=round trip, 2=one way
-    travel_class: String(CLASS_MAP[params.classe] || 1),
+    travel_class: CLASS_MAP[params.classe] || 'economy',
     adults: String(params.adultos),
     children: String(params.criancas),
     currency: 'BRL',
