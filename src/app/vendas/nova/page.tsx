@@ -771,7 +771,7 @@ export default function NovaVendaPage() {
                 {/* GRUPO specific */}
                 {prod.tipo === 'GRUPO' && (
                   <div className="mb-3 pt-3 border-t border-[var(--t-border)]">
-                    <label className={labelClass}>Selecionar Grupo (Produto)</label>
+                    <label className={labelClass}>Selecionar Produto</label>
                     <select
                       className={`w-full rounded-md px-3 py-2 text-sm ${inputClass}`}
                       value={prod.projeto || ''}

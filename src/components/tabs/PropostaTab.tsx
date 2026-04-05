@@ -6,11 +6,13 @@ import { formatBRL } from '@/lib/utils';
 
 interface Props { grupo: GrupoViagem; }
 
-const TIPOS = ['sgl', 'dbl', 'tpl', 'qdp', 'chd'] as const;
+const ALL_TIPOS = ['sgl', 'dbl', 'tpl', 'qdp', 'chd'] as const;
 const LABELS: Record<string, string> = { sgl: 'SGL', dbl: 'DBL', tpl: 'TPL', qdp: 'QDP', chd: 'CHD' };
 const PAX_MAP: Record<string, number> = { sgl: 1, dbl: 2, tpl: 3, qdp: 4, chd: 1 };
 
 export function PropostaTab({ grupo }: Props) {
+  const tarifas = grupo.tarifas_ativas || ['sgl', 'dbl', 'tpl', 'qdp'];
+  const TIPOS = [...tarifas.filter(t => ALL_TIPOS.includes(t as typeof ALL_TIPOS[number])), 'chd'] as typeof ALL_TIPOS[number][];
   const p = calcProposta(grupo);
 
   const Row = ({ label, values, className = '' }: { label: string; values: Record<string, number>; className?: string }) => (

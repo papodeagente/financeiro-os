@@ -68,14 +68,14 @@ export default function FinanceiroGruposPage() {
       <header className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] shadow-lg shrink-0">
         <div className="px-6 py-5 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Financeiro <span className="text-[var(--t-accent)]">de Grupos</span></h1>
-            <p className="text-sm text-[var(--t-text-secondary)] mt-1">Gestão financeira dos produtos de grupo</p>
+            <h1 className="text-2xl font-bold">Financeiro <span className="text-[var(--t-accent)]">de Produtos</span></h1>
+            <p className="text-sm text-[var(--t-text-secondary)] mt-1">Gestão financeira dos seus produtos</p>
           </div>
           <div className="relative w-72">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--t-text-secondary)]" />
             <Input
               className="pl-9 bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)] placeholder:text-[var(--t-text-secondary)]"
-              placeholder="Buscar grupo..."
+              placeholder="Buscar produto..."
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -88,11 +88,11 @@ export default function FinanceiroGruposPage() {
           <div className="text-center py-20">
             <Package className="w-16 h-16 mx-auto text-[var(--t-text-secondary)] mb-4" />
             <h2 className="text-xl font-semibold text-[var(--t-text-muted)]">
-              {grupos.length === 0 ? 'Nenhum grupo criado' : 'Nenhum grupo encontrado'}
+              {grupos.length === 0 ? 'Nenhum produto criado' : 'Nenhum produto encontrado'}
             </h2>
             <p className="text-[var(--t-text-secondary)] mt-2">
               {grupos.length === 0
-                ? 'Crie um produto em Produtos → Grupos primeiro'
+                ? 'Crie um produto primeiro'
                 : 'Tente outro termo de busca'}
             </p>
             {grupos.length === 0 && (

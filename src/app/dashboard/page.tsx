@@ -667,7 +667,7 @@ export default function DashboardPage() {
                 { href: '/vendas/nova', icon: ShoppingCart, label: 'Nova Venda', primary: true },
                 { href: '/vendas/orcamentos', icon: FileText, label: 'Novo Orçamento', primary: false },
                 { href: '/pessoas/clientes', icon: Users, label: 'Novo Cliente', primary: false },
-                { href: '/grupos', icon: Package, label: 'Novo Grupo', primary: false },
+                { href: '/grupos', icon: Package, label: 'Novo Produto', primary: false },
                 { href: '/financeiro-ag/receber', icon: Receipt, label: 'Registrar Recebimento', primary: false },
                 { href: '/financeiro-ag/pagar', icon: CreditCard, label: 'Registrar Pagamento', primary: false },
               ].map(a => (

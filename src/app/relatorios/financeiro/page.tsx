@@ -125,7 +125,7 @@ export default function RelatorioFinanceiroPage() {
   }, [receber, pagar, agrupamento, planoContas]);
 
   function handleExport() {
-    const headers = ['Grupo', 'Entradas', 'Saídas', 'Saldo', 'Qtd Lançamentos'];
+    const headers = ['Produto', 'Entradas', 'Saídas', 'Saldo', 'Qtd Lançamentos'];
     const rows = grouped.map(g => [
       g.label,
       g.entradas.toFixed(2),
@@ -266,7 +266,7 @@ export default function RelatorioFinanceiroPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[var(--t-border)] text-[var(--t-text-muted)] text-xs uppercase">
-                    <th className="text-left px-4 py-3">Grupo</th>
+                    <th className="text-left px-4 py-3">Produto</th>
                     <th className="text-right px-4 py-3">Entradas</th>
                     <th className="text-right px-4 py-3">Saídas</th>
                     <th className="px-4 py-3 w-48">Proporção</th>

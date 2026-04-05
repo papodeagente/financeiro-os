@@ -20,7 +20,7 @@ interface CommandItem {
 
 const NAVIGATION_ITEMS: CommandItem[] = [
   { id: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'grupos', label: 'Grupos', href: '/grupos', icon: <FolderOpen className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'grupos', label: 'Produtos', href: '/grupos', icon: <FolderOpen className="w-4 h-4" />, section: 'navegacao' },
   { id: 'propostas', label: 'Propostas', href: '/propostas', icon: <FileText className="w-4 h-4" />, section: 'navegacao' },
   { id: 'orcamentos', label: 'Orçamentos', href: '/vendas/orcamentos', icon: <BarChart3 className="w-4 h-4" />, section: 'navegacao' },
   { id: 'vendas', label: 'Vendas fechadas', href: '/vendas', icon: <ListOrdered className="w-4 h-4" />, section: 'navegacao' },
@@ -35,7 +35,7 @@ const NAVIGATION_ITEMS: CommandItem[] = [
   { id: 'transferencias', label: 'Transferências', href: '/financeiro-ag/transferencias', icon: <ArrowRightLeft className="w-4 h-4" />, section: 'navegacao' },
   { id: 'plano-contas', label: 'Plano de contas', href: '/financeiro-ag/plano-contas', icon: <BookOpen className="w-4 h-4" />, section: 'navegacao' },
   { id: 'contas-bancarias', label: 'Contas bancárias', href: '/financeiro-ag/contas-bancarias', icon: <Landmark className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'fin-grupos', label: 'Financeiro por grupo', href: '/financeiro-grupos', icon: <Package className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'fin-grupos', label: 'Financeiro por produto', href: '/financeiro-grupos', icon: <Package className="w-4 h-4" />, section: 'navegacao' },
   { id: 'clientes', label: 'Clientes', href: '/pessoas/clientes', icon: <UserPlus className="w-4 h-4" />, section: 'navegacao' },
   { id: 'fornecedores', label: 'Fornecedores', href: '/pessoas/fornecedores', icon: <Building2 className="w-4 h-4" />, section: 'navegacao' },
   { id: 'equipe', label: 'Equipe', href: '/pessoas/equipe', icon: <Briefcase className="w-4 h-4" />, section: 'navegacao' },
@@ -52,7 +52,7 @@ const NAVIGATION_ITEMS: CommandItem[] = [
 ];
 
 const CREATE_ITEMS: CommandItem[] = [
-  { id: 'novo-grupo', label: 'Novo grupo', href: '/grupos', icon: <Plus className="w-4 h-4" />, section: 'criar' },
+  { id: 'novo-grupo', label: 'Novo produto', href: '/grupos', icon: <Plus className="w-4 h-4" />, section: 'criar' },
   { id: 'nova-proposta', label: 'Nova proposta', href: '/propostas/nova', icon: <Plus className="w-4 h-4" />, section: 'criar' },
   { id: 'nova-venda', label: 'Nova venda', href: '/vendas/nova', icon: <ShoppingCart className="w-4 h-4" />, section: 'criar' },
 ];

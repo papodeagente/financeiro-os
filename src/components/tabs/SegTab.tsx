@@ -17,14 +17,15 @@ function formatDateBR(d: string | null): string {
   return `${day}/${m}/${y}`;
 }
 
-const TIPOS = ['sgl', 'dbl', 'tpl', 'qdp'] as const;
+const ALL_TIPOS = ['sgl', 'dbl', 'tpl', 'qdp'] as const;
 const LABELS: Record<string, string> = { sgl: 'SGL', dbl: 'DBL', tpl: 'TPL', qdp: 'QDP' };
 
 function segHasData(s: Record<string, unknown>) {
-  return TIPOS.some(t => { const v = s[`valor_${t}`] as number | null; return v !== null && v > 0; });
+  return ALL_TIPOS.some(t => { const v = s[`valor_${t}`] as number | null; return v !== null && v > 0; });
 }
 
 export function SegTab({ grupo, onChange }: Props) {
+  const TIPOS = (grupo.tarifas_ativas || ['sgl', 'dbl', 'tpl', 'qdp']).filter(t => ALL_TIPOS.includes(t as typeof ALL_TIPOS[number])) as typeof ALL_TIPOS[number][];
   const totals = calcSegTotals(grupo);
   const [addedSources, setAddedSources] = useState<Set<number>>(new Set());
   const [pickerOpen, setPickerOpen] = useState(false);

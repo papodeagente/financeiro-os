@@ -116,7 +116,7 @@ export default function RentabilidadePage() {
     } else if (agrupamento === 'GRUPO') {
       for (const venda of filtered) {
         const key = venda.grupo_id || 'avulsa';
-        const label = venda.grupo_id ? `Grupo ${venda.grupo_id.substring(0, 8)}` : 'Vendas Avulsas';
+        const label = venda.grupo_id ? `Produto ${venda.grupo_id.substring(0, 8)}` : 'Vendas Avulsas';
         const existing = map.get(key) || { key, label, receita: 0, custo: 0, markup: 0, margem: 0, qtd: 0 };
         existing.receita += venda.valor_final;
         existing.custo += venda.valor_total_custo;
@@ -148,7 +148,7 @@ export default function RentabilidadePage() {
   }, [filtered, agrupamento, membros]);
 
   function handleExport() {
-    const headers = ['Grupo', 'Receita', 'Custo', 'Markup', 'Margem %', 'Qtd'];
+    const headers = ['Produto', 'Receita', 'Custo', 'Markup', 'Margem %', 'Qtd'];
     const rows = grouped.map(g => [g.label, g.receita.toFixed(2), g.custo.toFixed(2), g.markup.toFixed(2), g.margem.toFixed(1), String(g.qtd)]);
     rows.push(['TOTAL', totals.receita.toFixed(2), totals.custo.toFixed(2), totals.markup.toFixed(2), totals.margem.toFixed(1), String(totals.qtd)]);
     exportCSV(`rentabilidade-${agrupamento.toLowerCase()}-${dateFrom}-${dateTo}`, headers, rows);
@@ -165,7 +165,7 @@ export default function RentabilidadePage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-[var(--t-text)]">Rentabilidade</h1>
-            <p className="text-[var(--t-text-secondary)] text-sm mt-1">Análise de margem e lucro por produto, vendedor e grupo</p>
+            <p className="text-[var(--t-text-secondary)] text-sm mt-1">Análise de margem e lucro por produto, vendedor e período</p>
           </div>
           <Button onClick={handleExport} className="bg-[var(--t-green)] hover:brightness-110 text-white dark:text-[#0a0a14] font-semibold">
             <Download className="w-4 h-4 mr-2" /> Exportar CSV
@@ -189,7 +189,7 @@ export default function RentabilidadePage() {
                 className="bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text)]">
                 <option value="TIPO_PRODUTO">Tipo de Produto</option>
                 <option value="VENDEDOR">Vendedor</option>
-                <option value="GRUPO">Grupo/Avulsa</option>
+                <option value="GRUPO">Produto/Avulsa</option>
                 <option value="MES">Mês</option>
               </select>
             </div>
@@ -241,7 +241,7 @@ export default function RentabilidadePage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-[var(--t-text)] text-base flex items-center gap-2">
               <PieChart className="w-4 h-4 text-[var(--t-green)]" />
-              Rentabilidade por {agrupamento === 'TIPO_PRODUTO' ? 'Produto' : agrupamento === 'VENDEDOR' ? 'Vendedor' : agrupamento === 'GRUPO' ? 'Grupo' : 'Mês'}
+              Rentabilidade por {agrupamento === 'TIPO_PRODUTO' ? 'Produto' : agrupamento === 'VENDEDOR' ? 'Vendedor' : agrupamento === 'GRUPO' ? 'Produto' : 'Mês'}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -249,7 +249,7 @@ export default function RentabilidadePage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[var(--t-border)] text-[var(--t-text-muted)] text-xs uppercase">
-                    <th className="text-left px-4 py-3">Grupo</th>
+                    <th className="text-left px-4 py-3">Produto</th>
                     <th className="text-right px-4 py-3">Receita</th>
                     <th className="text-right px-4 py-3">Custo</th>
                     <th className="text-right px-4 py-3">Markup</th>

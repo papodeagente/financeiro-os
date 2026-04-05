@@ -52,7 +52,7 @@ const METAS_MENU: SidebarSection[] = [
 const PRODUTOS_MENU: SidebarSection[] = [
   {
     items: [
-      { key: 'grupos', label: 'Grupos', icon: FolderOpen, href: '/grupos' },
+      { key: 'grupos', label: 'Produtos', icon: FolderOpen, href: '/grupos' },
       { key: 'minhas-propostas', label: 'Propostas', icon: FileText, href: '/propostas' },
       { key: 'orcamentos', label: 'Orçamentos', icon: BarChart3, href: '/vendas/orcamentos' },
       { key: 'nova-venda', label: 'Nova venda', icon: ShoppingCart, href: '/vendas/nova' },
@@ -84,9 +84,9 @@ const FINANCEIRO_MENU: SidebarSection[] = [
     ],
   },
   {
-    title: 'Grupos e vendas',
+    title: 'Produtos e vendas',
     items: [
-      { key: 'fin-grupos', label: 'Por grupo', icon: Package, href: '/financeiro-grupos' },
+      { key: 'fin-grupos', label: 'Por produto', icon: Package, href: '/financeiro-grupos' },
       { key: 'lista-vendas', label: 'Vendas fechadas', icon: ListOrdered, href: '/vendas' },
     ],
   },

@@ -193,6 +193,7 @@ export interface GrupoViagem {
   orcamento_id: string | null;
   venda_crm_id: string | null;
 
+  tarifas_ativas: ('sgl' | 'dbl' | 'tpl' | 'qdp')[];
   periodos: Periodo[];
   trechos: Trecho[];
   navio_info: NavioInfo;

@@ -12,14 +12,15 @@ import { Plus, Trash2, Trophy, Ship, Anchor, MapPin } from 'lucide-react';
 
 interface Props { grupo: GrupoViagem; onChange: (g: GrupoViagem) => void; }
 
-const TIPOS = ['sgl', 'dbl', 'tpl', 'qdp', 'chd'] as const;
+const ALL_TIPOS = ['sgl', 'dbl', 'tpl', 'qdp', 'chd'] as const;
 const LABELS: Record<string, string> = { sgl: 'SGL', dbl: 'DBL', tpl: 'TPL', qdp: 'QDP', chd: 'CHD' };
 
 function fornecedorHasData(f: Record<string, unknown>) {
-  return TIPOS.some(t => { const v = f[`valor_${t}`] as number | null; return v !== null && v > 0; });
+  return ALL_TIPOS.some(t => { const v = f[`valor_${t}`] as number | null; return v !== null && v > 0; });
 }
 
 export function NavioTab({ grupo, onChange }: Props) {
+  const TIPOS = [...(grupo.tarifas_ativas || ['sgl', 'dbl', 'tpl', 'qdp']).filter(t => ALL_TIPOS.includes(t as typeof ALL_TIPOS[number])), 'chd'] as typeof ALL_TIPOS[number][];
   const totals = calcNavioTotals(grupo);
   const ni = grupo.navio_info;
   const [addedSources, setAddedSources] = useState<Set<number>>(new Set());

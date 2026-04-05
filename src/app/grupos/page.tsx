@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { GrupoViagem } from '@/lib/types';
 import { createGrupoViagem } from '@/lib/defaults';
 import { loadGrupos, saveGrupos, deleteGrupo, exportGrupoJSON, importGrupoJSON } from '@/lib/storage';
@@ -8,7 +9,8 @@ import { formatDate } from '@/lib/utils';
 import { useApp } from '@/contexts/AppContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, Copy, Download, Upload, Trash2, FolderOpen, Filter } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Plus, Copy, Download, Upload, Trash2, FolderOpen, Filter, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 
@@ -22,9 +24,20 @@ const PIPELINE_COLORS: Record<string, string> = {
 
 const PIPELINE_OPTIONS = ['TODOS', 'PRODUTO', 'PROPOSTA', 'ORCAMENTO', 'RESERVA', 'VENDA'] as const;
 
+const TARIFA_OPTIONS = [
+  { key: 'sgl' as const, label: 'SGL', desc: 'Single — 1 pessoa' },
+  { key: 'dbl' as const, label: 'DBL', desc: 'Duplo — 2 pessoas' },
+  { key: 'tpl' as const, label: 'TPL', desc: 'Triplo — 3 pessoas' },
+  { key: 'qdp' as const, label: 'QDP', desc: 'Quádruplo — 4 pessoas' },
+] as const;
+
 export default function GruposPage() {
+  const router = useRouter();
   const [grupos, setGrupos] = useState<GrupoViagem[]>([]);
   const [filtroStatus, setFiltroStatus] = useState<string>('TODOS');
+  const [showNewModal, setShowNewModal] = useState(false);
+  const [newTarifas, setNewTarifas] = useState<Set<'sgl' | 'dbl' | 'tpl' | 'qdp'>>(new Set(['dbl']));
+  const [newNome, setNewNome] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { setActiveGrupo } = useApp();
 
@@ -34,11 +47,25 @@ export default function GruposPage() {
     ? grupos
     : grupos.filter(g => (g.status_pipeline || 'PRODUTO') === filtroStatus);
 
+  const toggleTarifa = (t: 'sgl' | 'dbl' | 'tpl' | 'qdp') => {
+    setNewTarifas(prev => {
+      const s = new Set(prev);
+      if (s.has(t)) { if (s.size > 1) s.delete(t); } else s.add(t);
+      return s;
+    });
+  };
+
   const criarGrupo = async () => {
     const novo = createGrupoViagem();
+    novo.tarifas_ativas = Array.from(newTarifas);
+    if (newNome) novo.origem_destino = newNome;
     const updated = [...grupos, novo];
     setGrupos(updated);
     await saveGrupos(updated);
+    setShowNewModal(false);
+    setNewTarifas(new Set(['dbl']));
+    setNewNome('');
+    router.push(`/grupo/${novo.id}`);
   };
 
   const duplicarGrupo = async (g: GrupoViagem) => {
@@ -49,7 +76,7 @@ export default function GruposPage() {
   };
 
   const removerGrupo = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir este grupo?')) return;
+    if (!confirm('Tem certeza que deseja excluir este produto?')) return;
     await deleteGrupo(id);
     setGrupos(grupos.filter(g => g.id !== id));
   };
@@ -90,12 +117,12 @@ export default function GruposPage() {
       <header className="bg-[var(--t-surface)] border-b border-[var(--t-border)] shrink-0">
         <div className="px-6 py-5 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[var(--t-text)]">Produtos <span className="text-[var(--t-green)]">— Grupos</span></h1>
-            <p className="text-sm text-[var(--t-text-muted)] mt-1">Crie e configure produtos de viagem em grupo para vender</p>
+            <h1 className="text-2xl font-bold text-[var(--t-text)]">Produtos</h1>
+            <p className="text-sm text-[var(--t-text-muted)] mt-1">Crie e configure produtos de viagem para vender</p>
           </div>
           <div className="flex gap-3">
-            <Button onClick={criarGrupo} className="bg-[var(--t-green)] hover:opacity-90 text-white font-semibold">
-              <Plus className="w-4 h-4 mr-2" /> Novo Grupo
+            <Button onClick={() => setShowNewModal(true)} className="bg-[var(--t-green)] hover:opacity-90 text-white font-semibold">
+              <Plus className="w-4 h-4 mr-2" /> Novo Produto
             </Button>
             <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
               <Upload className="w-4 h-4 mr-2" /> Importar JSON
@@ -131,7 +158,7 @@ export default function GruposPage() {
           <div className="text-center py-20">
             <FolderOpen className="w-16 h-16 mx-auto text-[var(--t-text-secondary)] mb-4" />
             <h2 className="text-xl font-semibold text-[var(--t-text-muted)]">Nenhum produto criado</h2>
-            <p className="text-[var(--t-text-secondary)] mt-2">Clique em &quot;Novo Grupo&quot; para criar um produto de viagem</p>
+            <p className="text-[var(--t-text-secondary)] mt-2">Clique em &quot;Novo Produto&quot; para criar um produto de viagem</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -175,6 +202,70 @@ export default function GruposPage() {
           </div>
         )}
       </main>
+
+      {/* New Product Modal */}
+      {showNewModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-[var(--t-surface)] border border-[var(--t-border)] rounded-2xl w-full max-w-md p-6" style={{ boxShadow: 'var(--elevation-4)' }}>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-semibold text-[var(--t-text)]">Novo Produto</h2>
+              <button onClick={() => setShowNewModal(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:bg-[var(--t-surface-hover)]">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1.5 block">Destino / Nome do produto</label>
+                <Input
+                  value={newNome}
+                  onChange={e => setNewNome(e.target.value)}
+                  placeholder="Ex: Europa 2026, Maldivas, Orlando..."
+                  className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-2 block">Tarifas que deseja cotar</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {TARIFA_OPTIONS.map(t => (
+                    <button
+                      key={t.key}
+                      onClick={() => toggleTarifa(t.key)}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left ${
+                        newTarifas.has(t.key)
+                          ? 'border-[var(--t-green)] bg-[var(--t-green)]/10'
+                          : 'border-[var(--t-border)] hover:border-[var(--t-text-muted)]'
+                      }`}
+                    >
+                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center text-xs font-bold ${
+                        newTarifas.has(t.key)
+                          ? 'border-[var(--t-green)] bg-[var(--t-green)] text-white'
+                          : 'border-[var(--t-border)]'
+                      }`}>
+                        {newTarifas.has(t.key) && '✓'}
+                      </div>
+                      <div>
+                        <div className="text-sm font-semibold text-[var(--t-text)]">{t.label}</div>
+                        <div className="text-[10px] text-[var(--t-text-muted)]">{t.desc}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-[var(--t-text-muted)] mt-2">Selecione as tarifas que precisa cotar. Você pode alterar depois.</p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <Button variant="outline" onClick={() => setShowNewModal(false)} className="flex-1">Cancelar</Button>
+              <Button onClick={criarGrupo} className="flex-1 bg-[var(--t-green)] hover:opacity-90 text-white font-semibold">
+                <Plus className="w-4 h-4 mr-1" /> Criar Produto
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

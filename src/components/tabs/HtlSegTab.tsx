@@ -6,7 +6,7 @@ import { formatBRL } from '@/lib/utils';
 
 interface Props { grupo: GrupoViagem; }
 
-const TIPOS_ROOM = [
+const ALL_TIPOS_ROOM = [
   { tipo: 'sgl', label: 'SGL', ocup: 1 },
   { tipo: 'dbl', label: 'DBL', ocup: 2 },
   { tipo: 'tpl', label: 'TPL', ocup: 3 },
@@ -14,6 +14,8 @@ const TIPOS_ROOM = [
 ] as const;
 
 export function HtlSegTab({ grupo }: Props) {
+  const tarifas = grupo.tarifas_ativas || ['sgl', 'dbl', 'tpl', 'qdp'];
+  const TIPOS_ROOM = ALL_TIPOS_ROOM.filter(t => tarifas.includes(t.tipo as 'sgl' | 'dbl' | 'tpl' | 'qdp'));
   const htl = calcHtlTotals(grupo);
   const seg = calcSegTotals(grupo);
   const parcelas = grupo.params.parcelas || 1;

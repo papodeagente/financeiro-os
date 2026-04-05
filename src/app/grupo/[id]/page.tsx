@@ -71,6 +71,7 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
         if (found.proposta_id === undefined) found.proposta_id = null;
         if (found.orcamento_id === undefined) found.orcamento_id = null;
         if (found.venda_crm_id === undefined) found.venda_crm_id = null;
+        if (!found.tarifas_ativas) found.tarifas_ativas = ['sgl', 'dbl', 'tpl', 'qdp'];
         setGrupo(found);
         setActiveGrupo(found.id, found.grp_id || 'Sem ID');
       } else {

@@ -64,6 +64,7 @@ export function HotelModal({ alojamento: a, idioma, corPrimaria, onClose }: Prop
               alt={a.hotel_nome}
               className="w-full h-56 sm:h-72 object-cover rounded-t-2xl"
               referrerPolicy="no-referrer"
+              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
             {a.hotel_estrelas && (
               <div className="absolute bottom-3 left-4 px-2.5 py-1 rounded-lg bg-black/50 text-amber-400 text-sm font-medium backdrop-blur-sm">
@@ -112,6 +113,7 @@ export function HotelModal({ alojamento: a, idioma, corPrimaria, onClose }: Prop
                     alt={`${a.hotel_nome} ${i + 1}`}
                     className="w-full h-24 sm:h-28 object-cover rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
                     referrerPolicy="no-referrer"
+                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
                   />
                 ))}
               </div>

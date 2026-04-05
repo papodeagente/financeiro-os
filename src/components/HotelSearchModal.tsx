@@ -292,6 +292,7 @@ export function HotelSearchModal({
                               onClick={() => window.open(img.original || img.thumbnail, '_blank')}
                               loading="lazy"
                               referrerPolicy="no-referrer"
+                              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
                             />
                           ))}
                         </div>

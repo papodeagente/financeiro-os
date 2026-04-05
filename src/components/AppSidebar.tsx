@@ -57,7 +57,7 @@ const MENU: MenuItem[] = [
     label: 'Produtos',
     icon: Package,
     children: [
-      { key: 'grupos', label: 'Grupos (Criar Produto)', icon: FolderOpen, href: '/grupos' },
+      { key: 'grupos', label: 'Produtos', icon: FolderOpen, href: '/grupos' },
     ],
   },
   {
@@ -65,7 +65,7 @@ const MENU: MenuItem[] = [
     label: 'Financeiro',
     icon: DollarSign,
     children: [
-      { key: 'fin-grupos', label: 'Financeiro de Grupos', icon: Package, href: '/financeiro-grupos' },
+      { key: 'fin-grupos', label: 'Financeiro de Produtos', icon: Package, href: '/financeiro-grupos' },
       { key: 'contas-receber', label: 'Contas a Receber', icon: Receipt, href: '/financeiro-ag/receber' },
       { key: 'contas-pagar', label: 'Contas a Pagar', icon: CreditCard, href: '/financeiro-ag/pagar' },
       { key: 'plano-contas', label: 'Plano de Contas', icon: BookOpen, href: '/financeiro-ag/plano-contas' },

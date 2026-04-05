@@ -20,17 +20,19 @@ interface Props {
   onChange: (grupo: GrupoViagem) => void;
 }
 
-const TIPOS = ['sgl', 'dbl', 'tpl', 'qdp', 'chd'] as const;
+const ALL_TIPOS = ['sgl', 'dbl', 'tpl', 'qdp', 'chd'] as const;
 const TIPO_LABELS: Record<string, string> = { sgl: 'SGL', dbl: 'DBL', tpl: 'TPL', qdp: 'QDP', chd: 'CHD' };
 
 function fonteHasData(fonte: { valor_sgl: number | null; valor_dbl: number | null; valor_tpl: number | null; valor_qdp: number | null; valor_chd: number | null }) {
-  return TIPOS.some(t => {
+  return ALL_TIPOS.some(t => {
     const v = fonte[`valor_${t}` as keyof typeof fonte] as number | null;
     return v !== null && v > 0;
   });
 }
 
 export function HtlTab({ grupo, onChange }: Props) {
+  const tarifas = grupo.tarifas_ativas || ['sgl', 'dbl', 'tpl', 'qdp'];
+  const TIPOS = [...tarifas.filter(t => ALL_TIPOS.includes(t as typeof ALL_TIPOS[number])), 'chd'] as typeof ALL_TIPOS[number][];
   const totals = calcHtlTotals(grupo);
   const [hotelModalOpen, setHotelModalOpen] = useState<number | null>(null);
   const [addedSources, setAddedSources] = useState<Record<number, Set<number>>>({});
