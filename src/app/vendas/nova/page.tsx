@@ -62,7 +62,7 @@ function SectionHeader({
       className="flex items-center justify-between cursor-pointer select-none mb-4"
       onClick={onToggle}
     >
-      <h2 className="text-base font-semibold text-[var(--t-accent)]">{title}</h2>
+      <h2 className="text-base font-semibold text-[var(--t-text)]">{title}</h2>
       <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
         {extra}
         <button
@@ -466,7 +466,7 @@ export default function NovaVendaPage() {
         <Button
           onClick={handleSave}
           disabled={saving}
-          className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold"
+          className="bg-[var(--t-green)] hover:opacity-90 text-white dark:text-[#0a0a14] font-semibold"
         >
           <Save className="w-4 h-4 mr-2" />
           {saving ? 'Salvando...' : 'Salvar Venda'}
@@ -570,7 +570,7 @@ export default function NovaVendaPage() {
               type="button"
               size="sm"
               variant="ghost"
-              className="text-[var(--t-accent)] hover:bg-[var(--t-accent)]/10 h-7 text-xs"
+              className="text-[var(--t-green)] hover:bg-[var(--t-green)]/10 border border-[var(--t-green)]/30 h-7 text-xs font-medium"
               onClick={addPassageiro}
             >
               <Plus className="w-3 h-3 mr-1" /> Adicionar
@@ -590,7 +590,7 @@ export default function NovaVendaPage() {
                 className="bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] rounded-lg p-4"
               >
                 <div className="flex items-center justify-between mb-3">
-                  <Badge className="bg-[var(--t-accent)]/10 text-[var(--t-accent)] border-[var(--t-accent)]/30 text-xs">
+                  <Badge className="bg-[var(--t-green)]/10 text-[var(--t-green)] border-[var(--t-green)]/30 text-xs font-medium">
                     Passageiro {idx + 1}
                   </Badge>
                   <button
@@ -660,7 +660,7 @@ export default function NovaVendaPage() {
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="text-blue-400 hover:bg-blue-500/10 h-7 text-xs"
+                className="text-blue-400 hover:bg-blue-500/10 border border-blue-500/30 h-7 text-xs font-medium"
                 onClick={() => setShowPropostaModal(true)}
               >
                 <FileText className="w-3 h-3 mr-1" /> Importar de Proposta
@@ -669,7 +669,7 @@ export default function NovaVendaPage() {
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="text-[var(--t-accent)] hover:bg-[var(--t-accent)]/10 h-7 text-xs"
+                className="text-[var(--t-green)] hover:bg-[var(--t-green)]/10 border border-[var(--t-green)]/30 h-7 text-xs font-medium"
                 onClick={addProduto}
               >
                 <Plus className="w-3 h-3 mr-1" /> Adicionar
@@ -691,7 +691,7 @@ export default function NovaVendaPage() {
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <Badge className="bg-[var(--t-blue-bg)]0/10 text-blue-400 border-blue-500/30 text-xs">
+                    <Badge className="bg-blue-500/15 text-blue-400 border-blue-500/30 text-xs font-medium">
                       Produto {idx + 1}
                     </Badge>
                     <Badge className="bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] border-[#3a3a5e] text-xs">
@@ -799,7 +799,7 @@ export default function NovaVendaPage() {
                       <span className="text-xs text-[var(--t-text-secondary)]">Dados do voo</span>
                       <button
                         onClick={() => setFlightModalIdx(idx)}
-                        className="flex items-center gap-1 px-2 py-1 bg-[var(--t-blue-bg)]0/10 text-blue-400 text-xs rounded hover:bg-[var(--t-blue-bg)]0/20"
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-500/10 text-blue-400 text-xs font-medium rounded-lg border border-blue-500/30 hover:bg-blue-500/20 transition-colors"
                       >
                         <Search className="w-3 h-3" /> Buscar voo via API
                       </button>
@@ -834,7 +834,7 @@ export default function NovaVendaPage() {
                       <span className="text-xs text-[var(--t-text-secondary)]">Dados do hotel</span>
                       <button
                         onClick={() => setHotelModalIdx(idx)}
-                        className="flex items-center gap-1 px-2 py-1 bg-emerald-500/10 text-emerald-400 text-xs rounded hover:bg-emerald-500/20"
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-500/10 text-emerald-400 text-xs font-medium rounded-lg border border-emerald-500/30 hover:bg-emerald-500/20 transition-colors"
                       >
                         <Search className="w-3 h-3" /> Buscar hotel via API
                       </button>
@@ -1056,14 +1056,14 @@ export default function NovaVendaPage() {
         <Button
           variant="ghost"
           onClick={() => router.push('/vendas')}
-          className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)]"
+          className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)] border border-[var(--t-border)]"
         >
           Cancelar
         </Button>
         <Button
           onClick={handleSave}
           disabled={saving}
-          className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold"
+          className="bg-[var(--t-green)] hover:opacity-90 text-white dark:text-[#0a0a14] font-semibold"
         >
           <Save className="w-4 h-4 mr-2" />
           {saving ? 'Salvando...' : 'Salvar Venda'}
