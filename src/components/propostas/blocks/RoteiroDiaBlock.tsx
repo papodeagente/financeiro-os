@@ -48,6 +48,32 @@ export function RoteiroDiaBlock({ conteudo, onChange }: BlockProps) {
             placeholder="Descricao do dia..."
             className="w-full bg-[var(--t-bg-secondary)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-3 py-2 text-sm resize-none"
           />
+          {/* Atividades */}
+          <div className="space-y-1">
+            <label className="text-[10px] uppercase tracking-wider text-[var(--t-text-muted)]">Atividades</label>
+            {(dia.atividades || []).map((atv, j) => (
+              <div key={j} className="flex gap-1">
+                <Input
+                  value={atv}
+                  onChange={e => {
+                    const atvs = [...(dia.atividades || [])];
+                    atvs[j] = e.target.value;
+                    updateDia(i, { atividades: atvs });
+                  }}
+                  placeholder={`Atividade ${j + 1}`}
+                  className="flex-1 bg-[var(--t-bg-secondary)] border-[var(--t-border)] text-[var(--t-text)] text-xs"
+                />
+                <Button variant="ghost" size="sm" className="text-red-400 shrink-0 h-8 w-8 p-0"
+                  onClick={() => updateDia(i, { atividades: (dia.atividades || []).filter((_, k) => k !== j) })}>
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              </div>
+            ))}
+            <Button variant="ghost" size="sm" className="text-[10px] text-[var(--t-text-muted)] h-6"
+              onClick={() => updateDia(i, { atividades: [...(dia.atividades || []), ''] })}>
+              <Plus className="w-3 h-3 mr-0.5" /> Atividade
+            </Button>
+          </div>
           <div className="flex items-center gap-2">
             <ImageUpload
               compact

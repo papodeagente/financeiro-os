@@ -12,6 +12,7 @@ import { RouteMap } from './RouteMap';
 import { PricingSection } from './PricingSection';
 import { DestinationBlock } from './DestinationBlock';
 import { DiscoveryFooter } from './DiscoveryFooter';
+import { PreviewRenderer } from '../PreviewRenderer';
 import { groupDaysByDestination } from '@/lib/discovery-utils';
 
 interface NavItem { id: string; label: string }
@@ -220,6 +221,20 @@ export function DiscoveryRenderer({ proposta, slug, idioma }: Props) {
           </div>
         </section>
       )}
+
+      {/* Remaining blocks (GALERIA, TEXTO, SERVICO, VIDEO, MAPA, COUNTDOWN, CTA) */}
+      {(() => {
+        const handledTypes = new Set(['ROTEIRO_DIA', 'VALORES', 'INCLUSOS', 'FAQ', 'DEPOIMENTO', 'ALOJAMENTO', 'TRANSPORTE']);
+        const remaining = proposta.secoes.filter(s => s.visivel && !handledTypes.has(s.tipo));
+        if (remaining.length === 0) return null;
+        return (
+          <section className="py-12 bg-white">
+            <div className="max-w-4xl mx-auto px-6">
+              <PreviewRenderer secoes={remaining} corPrimaria={corPrimaria} idioma={idioma} />
+            </div>
+          </section>
+        );
+      })()}
 
       {/* Footer */}
       <DiscoveryFooter proposta={proposta} slug={slug} idioma={idioma} />
