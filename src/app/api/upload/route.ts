@@ -1,15 +1,29 @@
 import { NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
+import { writeFile, mkdir, access } from 'fs/promises';
 import path from 'path';
 import { generateId } from '@/lib/utils';
 
-// Use /app/data/uploads in production (persistent volume), fallback to public/uploads in dev
-const UPLOAD_DIR = process.env.NODE_ENV === 'production'
-  ? path.join(process.cwd(), 'data', 'uploads')
-  : path.join(process.cwd(), 'public', 'uploads');
-
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'];
+
+async function getUploadDir(): Promise<string> {
+  if (process.env.NODE_ENV !== 'production') {
+    const dir = path.join(process.cwd(), 'public', 'uploads');
+    await mkdir(dir, { recursive: true });
+    return dir;
+  }
+  // Try preferred path first, fallback to /tmp if permission denied
+  const preferred = path.join(process.cwd(), 'data', 'uploads');
+  try {
+    await mkdir(preferred, { recursive: true });
+    await access(preferred);
+    return preferred;
+  } catch {
+    const fallback = '/tmp/uploads';
+    await mkdir(fallback, { recursive: true });
+    return fallback;
+  }
+}
 
 export async function POST(req: Request) {
   try {
@@ -20,7 +34,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 });
     }
 
-    await mkdir(UPLOAD_DIR, { recursive: true });
+    const UPLOAD_DIR = await getUploadDir();
 
     const results: { url: string; nome: string; tamanho: number }[] = [];
 
