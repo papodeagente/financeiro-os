@@ -23,6 +23,8 @@ import { PropostaTab } from '@/components/tabs/PropostaTab';
 import { HtlSegTab } from '@/components/tabs/HtlSegTab';
 import { PainelPipelineTab } from '@/components/tabs/PainelPipelineTab';
 import { createFinanceiroGrupo } from '@/lib/financial-defaults';
+import { TemplatePickerModal } from '@/components/TemplatePickerModal';
+import { TemplateProposta } from '@/lib/crm-types';
 import { Save, FileText, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -57,6 +59,7 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
   const [activeTab, setActiveTab] = useState<AbaType>('pipeline');
   const [saved, setSaved] = useState(true);
   const [gerandoProposta, setGerandoProposta] = useState(false);
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
 
   useEffect(() => {
     loadGrupos().then(grupos => {
@@ -88,18 +91,23 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
     }
   }, [grupo]);
 
-  const handleGerarProposta = async () => {
+  const handleGerarProposta = () => {
     if (!grupo) return;
+    setShowTemplatePicker(true);
+  };
+
+  const handleTemplateSelected = async (template: TemplateProposta | null) => {
+    if (!grupo) return;
+    setShowTemplatePicker(false);
     setGerandoProposta(true);
     try {
       const res = await fetch('/api/propostas/from-grupo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ grupo_id: grupo.id }),
+        body: JSON.stringify({ grupo_id: grupo.id, template_id: template?.id || null }),
       });
       const data = await res.json();
       if (data.id) {
-        // Update local state with pipeline link
         setGrupo(prev => prev ? { ...prev, proposta_id: data.id, status_pipeline: 'PROPOSTA' } : prev);
         setSaved(false);
         router.push(`/propostas/${data.id}`);
@@ -286,6 +294,12 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
           {renderTab()}
         </div>
       </main>
+
+      <TemplatePickerModal
+        open={showTemplatePicker}
+        onClose={() => setShowTemplatePicker(false)}
+        onSelect={handleTemplateSelected}
+      />
     </div>
   );
 }

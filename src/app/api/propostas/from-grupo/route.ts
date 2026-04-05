@@ -20,12 +20,22 @@ export async function POST(req: Request) {
     await initDB();
     if (!pool) return NextResponse.json({ error: 'DB not initialized' }, { status: 500 });
 
-    const { grupo_id } = await req.json();
+    const { grupo_id, template_id } = await req.json();
     if (!grupo_id) return NextResponse.json({ error: 'grupo_id obrigatorio' }, { status: 400 });
 
     const { rows: grupoRows } = await pool.query(`SELECT data FROM grupos WHERE id = $1`, [grupo_id]);
     if (grupoRows.length === 0) return NextResponse.json({ error: 'Grupo nao encontrado' }, { status: 404 });
     const grupo: GrupoViagem = grupoRows[0].data;
+
+    // Load template if specified
+    let templateVisual: Record<string, unknown> | null = null;
+    if (template_id) {
+      const { rows: tmplRows } = await pool.query(`SELECT data FROM templates_proposta WHERE id = $1`, [template_id]);
+      if (tmplRows.length > 0) {
+        const tmpl = tmplRows[0].data;
+        templateVisual = tmpl.visual || null;
+      }
+    }
 
     const { rows: countRows } = await pool.query(`SELECT COUNT(*) as c FROM propostas`);
     const num = `PROP-${String(parseInt(countRows[0].c) + 1).padStart(4, '0')}`;
@@ -626,9 +636,9 @@ export async function POST(req: Request) {
     const proposta = {
       id, numero: num, versao: 1, versao_anterior_id: null,
       cliente_id: '', cliente_nome: '', vendedor_id: '', vendedor_nome: '',
-      template_id: '', grupo_id,
+      template_id: template_id || '', grupo_id,
       idioma: 'pt-BR',
-      visual: {
+      visual: templateVisual ? { ...templateVisual } : {
         tema: 'padrao', layout: 'CLASSICO',
         cor_primaria: '#004aad', cor_secundaria: '#0a0a14', cor_texto: '#1a1a2e',
         cor_fundo: '#ffffff', fonte: 'Inter', imagem_capa: '', estilo_capa: 'FULLSCREEN',
