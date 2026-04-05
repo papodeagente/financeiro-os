@@ -91,11 +91,149 @@ export function DiscoveryRenderer({ proposta, slug, idioma }: Props) {
     window.scrollTo(0, 0);
   }, []);
 
-  // Extract sections for fallback rendering
-  const valoresSecoes = proposta.secoes.filter(s => s.tipo === 'VALORES' && s.visivel);
-  const inclusosSecoes = proposta.secoes.filter(s => s.tipo === 'INCLUSOS' && s.visivel);
-  const faqSecoes = proposta.secoes.filter(s => s.tipo === 'FAQ' && s.visivel);
-  const depoimentoSecoes = proposta.secoes.filter(s => s.tipo === 'DEPOIMENTO' && s.visivel);
+  // Build ordered render list — respects editor order
+  // ALOJAMENTO blocks trigger viagem summaries (accommodation + map) once
+  // TRANSPORTE blocks trigger viagem transport summary once
+  // ROTEIRO_DIA blocks are grouped into itinerary once
+  // VALORES + INCLUSOS are combined into pricing once
+  const rendered = new Set<string>(); // track one-time renders
+  const visibleSecoes = proposta.secoes.filter(s => s.visivel);
+
+  // Collect consecutive ROTEIRO_DIA groups
+  const roteiroDias = visibleSecoes.filter(s => s.tipo === 'ROTEIRO_DIA');
+  const hasItinerary = roteiroDias.length > 0;
+
+  // Collect VALORES + INCLUSOS for combined pricing
+  const valoresSecoes = visibleSecoes.filter(s => s.tipo === 'VALORES');
+  const inclusosSecoes = visibleSecoes.filter(s => s.tipo === 'INCLUSOS');
+
+  function renderSection(secao: typeof visibleSecoes[number], idx: number) {
+    const key = `${secao.id}-${idx}`;
+
+    // ALOJAMENTO → render accommodation summary + route map (once, at position of first ALOJAMENTO)
+    if (secao.tipo === 'ALOJAMENTO') {
+      if (rendered.has('ALOJAMENTO')) return null;
+      rendered.add('ALOJAMENTO');
+      const aloj = proposta.viagem?.alojamentos;
+      if (!aloj || aloj.length === 0) return null;
+      return (
+        <div key={key}>
+          <AccommodationSummary alojamentos={aloj} idioma={idioma} corPrimaria={corPrimaria} />
+          <RouteMap alojamentos={aloj} transportes={proposta.viagem?.transportes || []} idioma={idioma} corPrimaria={corPrimaria} />
+        </div>
+      );
+    }
+
+    // TRANSPORTE → render transport summary (once)
+    if (secao.tipo === 'TRANSPORTE') {
+      if (rendered.has('TRANSPORTE')) return null;
+      rendered.add('TRANSPORTE');
+      const transp = proposta.viagem?.transportes;
+      if (!transp || transp.length === 0) return null;
+      return <TransportSummary key={key} transportes={transp} idioma={idioma} corPrimaria={corPrimaria} />;
+    }
+
+    // ROTEIRO_DIA → render grouped itinerary (once, at position of first ROTEIRO_DIA)
+    if (secao.tipo === 'ROTEIRO_DIA') {
+      if (rendered.has('ROTEIRO_DIA')) return null;
+      rendered.add('ROTEIRO_DIA');
+      if (!hasItinerary) return null;
+      const groups = groupDaysByDestination(proposta);
+      if (groups.length === 0) return null;
+      return (
+        <section key={key} id="discovery-itinerary" className="py-16 bg-gray-50">
+          <div className="max-w-4xl mx-auto px-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-10">{i18n.itinerario}</h2>
+            {groups.map((group, gi) => (
+              <DestinationBlock key={gi} group={group} index={gi} idioma={idioma} corPrimaria={corPrimaria} />
+            ))}
+            <div className="text-center mt-8 pt-8 border-t border-gray-200">
+              <div className="inline-flex items-center gap-2 text-gray-400 text-sm">
+                <span className="w-2 h-2 rounded-full bg-gray-300" />
+                {i18n.fimItinerario}
+              </div>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    // VALORES → render pricing section with INCLUSOS (once)
+    if (secao.tipo === 'VALORES') {
+      if (rendered.has('VALORES')) return null;
+      rendered.add('VALORES');
+      return <PricingSection key={key} valoresSecoes={valoresSecoes} inclusosSecoes={inclusosSecoes} idioma={idioma} corPrimaria={corPrimaria} />;
+    }
+
+    // INCLUSOS → skip standalone (rendered with VALORES above). If VALORES comes later, render here.
+    if (secao.tipo === 'INCLUSOS') {
+      if (rendered.has('VALORES') || rendered.has('INCLUSOS')) return null;
+      // If no VALORES block exists, render pricing anyway
+      if (valoresSecoes.length === 0) {
+        rendered.add('INCLUSOS');
+        return <PricingSection key={key} valoresSecoes={[]} inclusosSecoes={inclusosSecoes} idioma={idioma} corPrimaria={corPrimaria} />;
+      }
+      return null; // will render when VALORES is reached
+    }
+
+    // FAQ → Discovery styled
+    if (secao.tipo === 'FAQ') {
+      const c = secao.conteudo as { perguntas?: { pergunta: string; resposta: string }[] };
+      const perguntas = c.perguntas || [];
+      if (perguntas.length === 0) return null;
+      return (
+        <section key={key} className="py-16 bg-gray-50">
+          <div className="max-w-3xl mx-auto px-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-8">{i18n.perguntasFrequentes}</h2>
+            {perguntas.map((faq, fi) => (
+              <details key={fi} className="mb-3 bg-white rounded-xl border border-gray-100 overflow-hidden group">
+                <summary className="px-5 py-4 cursor-pointer text-sm font-medium text-gray-800 hover:bg-gray-50 transition-colors">
+                  {faq.pergunta}
+                </summary>
+                <div className="px-5 pb-4 text-sm text-gray-600 leading-relaxed">{faq.resposta}</div>
+              </details>
+            ))}
+          </div>
+        </section>
+      );
+    }
+
+    // DEPOIMENTO → Discovery styled
+    if (secao.tipo === 'DEPOIMENTO') {
+      const c = secao.conteudo as { depoimentos?: { texto: string; autor: string; foto?: string; foto_url?: string; destino?: string }[] };
+      const deps = c.depoimentos || [];
+      if (deps.length === 0) return null;
+      return (
+        <section key={key} className="py-16 bg-white">
+          <div className="max-w-4xl mx-auto px-6">
+            <div className="grid sm:grid-cols-2 gap-6">
+              {deps.map((dep, di) => (
+                <div key={di} className="p-6 rounded-xl bg-gray-50 border border-gray-100">
+                  <p className="text-sm text-gray-700 italic leading-relaxed">&ldquo;{dep.texto}&rdquo;</p>
+                  <div className="mt-4 flex items-center gap-3">
+                    {(dep.foto_url || dep.foto) && <img src={dep.foto_url || dep.foto} alt="" className="w-10 h-10 rounded-full object-cover" />}
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">{dep.autor}</div>
+                      {dep.destino && <div className="text-xs text-gray-500">{dep.destino}</div>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    // All other blocks (TEXTO, SERVICO, GALERIA, VIDEO, MAPA, COUNTDOWN, CTA) → PreviewRenderer
+    return (
+      <section key={key} className="py-12 bg-white">
+        <div className="max-w-4xl mx-auto px-6">
+          <PreviewRenderer secoes={[secao]} corPrimaria={corPrimaria} idioma={idioma} />
+        </div>
+      </section>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white text-gray-900">
@@ -110,131 +248,7 @@ export function DiscoveryRenderer({ proposta, slug, idioma }: Props) {
 
       <IntroSection proposta={proposta} idioma={idioma} />
 
-      {/* Accommodation Summary */}
-      {proposta.viagem?.alojamentos && proposta.viagem.alojamentos.length > 0 && (
-        <AccommodationSummary
-          alojamentos={proposta.viagem.alojamentos}
-          idioma={idioma}
-          corPrimaria={corPrimaria}
-        />
-      )}
-
-      {/* Route Map */}
-      {proposta.viagem?.alojamentos && proposta.viagem.alojamentos.length > 0 && (
-        <RouteMap
-          alojamentos={proposta.viagem.alojamentos}
-          transportes={proposta.viagem?.transportes || []}
-          idioma={idioma}
-          corPrimaria={corPrimaria}
-        />
-      )}
-
-      {/* Transport Summary */}
-      {proposta.viagem?.transportes && proposta.viagem.transportes.length > 0 && (
-        <TransportSummary
-          transportes={proposta.viagem.transportes}
-          idioma={idioma}
-          corPrimaria={corPrimaria}
-        />
-      )}
-
-      {/* Itinerary grouped by destination */}
-      {proposta.secoes.some(s => s.tipo === 'ROTEIRO_DIA') && (() => {
-        const groups = groupDaysByDestination(proposta);
-        if (groups.length === 0) return null;
-        return (
-          <section id="discovery-itinerary" className="py-16 bg-gray-50">
-            <div className="max-w-4xl mx-auto px-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-10">{i18n.itinerario}</h2>
-              {groups.map((group, i) => (
-                <DestinationBlock
-                  key={i}
-                  group={group}
-                  index={i}
-                  idioma={idioma}
-                  corPrimaria={corPrimaria}
-                />
-              ))}
-              {/* End of itinerary marker */}
-              <div className="text-center mt-8 pt-8 border-t border-gray-200">
-                <div className="inline-flex items-center gap-2 text-gray-400 text-sm">
-                  <span className="w-2 h-2 rounded-full bg-gray-300" />
-                  {i18n.fimItinerario}
-                </div>
-              </div>
-            </div>
-          </section>
-        );
-      })()}
-
-      {/* Pricing */}
-      <PricingSection
-        valoresSecoes={valoresSecoes}
-        inclusosSecoes={inclusosSecoes}
-        idioma={idioma}
-        corPrimaria={corPrimaria}
-      />
-
-      {/* FAQ */}
-      {faqSecoes.length > 0 && (
-        <section className="py-16 bg-gray-50">
-          <div className="max-w-3xl mx-auto px-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-8">{i18n.perguntasFrequentes}</h2>
-            {faqSecoes.map(s => {
-              const c = s.conteudo as { perguntas?: { pergunta: string; resposta: string }[] };
-              return (c.perguntas || []).map((faq, i) => (
-                <details key={`${s.id}-${i}`} className="mb-3 bg-white rounded-xl border border-gray-100 overflow-hidden group">
-                  <summary className="px-5 py-4 cursor-pointer text-sm font-medium text-gray-800 hover:bg-gray-50 transition-colors">
-                    {faq.pergunta}
-                  </summary>
-                  <div className="px-5 pb-4 text-sm text-gray-600 leading-relaxed">
-                    {faq.resposta}
-                  </div>
-                </details>
-              ));
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* Testimonials */}
-      {depoimentoSecoes.length > 0 && (
-        <section className="py-16 bg-white">
-          <div className="max-w-4xl mx-auto px-6">
-            <div className="grid sm:grid-cols-2 gap-6">
-              {depoimentoSecoes.map(s => {
-                const c = s.conteudo as { depoimentos?: { texto: string; autor: string; foto?: string; foto_url?: string; destino?: string }[] };
-                return (c.depoimentos || []).map((dep, i) => (
-                  <div key={`${s.id}-${i}`} className="p-6 rounded-xl bg-gray-50 border border-gray-100">
-                    <p className="text-sm text-gray-700 italic leading-relaxed">&ldquo;{dep.texto}&rdquo;</p>
-                    <div className="mt-4 flex items-center gap-3">
-                      {(dep.foto_url || dep.foto) && <img src={dep.foto_url || dep.foto} alt="" className="w-10 h-10 rounded-full object-cover" />}
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{dep.autor}</div>
-                        {dep.destino && <div className="text-xs text-gray-500">{dep.destino}</div>}
-                      </div>
-                    </div>
-                  </div>
-                ));
-              })}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Remaining blocks (GALERIA, TEXTO, SERVICO, VIDEO, MAPA, COUNTDOWN, CTA) */}
-      {(() => {
-        const handledTypes = new Set(['ROTEIRO_DIA', 'VALORES', 'INCLUSOS', 'FAQ', 'DEPOIMENTO', 'ALOJAMENTO', 'TRANSPORTE']);
-        const remaining = proposta.secoes.filter(s => s.visivel && !handledTypes.has(s.tipo));
-        if (remaining.length === 0) return null;
-        return (
-          <section className="py-12 bg-white">
-            <div className="max-w-4xl mx-auto px-6">
-              <PreviewRenderer secoes={remaining} corPrimaria={corPrimaria} idioma={idioma} />
-            </div>
-          </section>
-        );
-      })()}
+      {visibleSecoes.map((s, i) => renderSection(s, i))}
 
       {/* Footer */}
       <DiscoveryFooter proposta={proposta} slug={slug} idioma={idioma} />
