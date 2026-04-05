@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2, ChevronDown, ChevronUp, ArrowLeft, Save, Search, Plane, Hotel } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronUp, ArrowLeft, Save, Search, Plane, Hotel, FileText, X, Check } from 'lucide-react';
 import { FlightSearchModal } from '@/components/FlightSearchModal';
 import { HotelSearchModal } from '@/components/HotelSearchModal';
 import { formatFlightForVenda } from '@/lib/flight-data-mapper';
@@ -13,6 +13,7 @@ import {
   VendaCRM,
   ProdutoVenda,
   Cliente,
+  Proposta,
   createVendaCRM,
   createProdutoVenda,
 } from '@/lib/crm-types';
@@ -80,9 +81,12 @@ export default function NovaVendaPage() {
   const router = useRouter();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [grupos, setGrupos] = useState<GrupoViagem[]>([]);
+  const [propostas, setPropostas] = useState<Proposta[]>([]);
   const [clienteSearch, setClienteSearch] = useState('');
   const [showClienteList, setShowClienteList] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showPropostaModal, setShowPropostaModal] = useState(false);
+  const [propostaSearch, setPropostaSearch] = useState('');
 
   const [openSections, setOpenSections] = useState({
     cliente: true,
@@ -103,6 +107,7 @@ export default function NovaVendaPage() {
 
   useEffect(() => {
     loadEntities<Cliente>('clientes').then(setClientes);
+    loadEntities<Proposta>('propostas').then(setPropostas);
     loadGrupos().then(setGrupos);
   }, []);
 
@@ -237,6 +242,154 @@ export default function NovaVendaPage() {
   const setDesconto = (val: number) => {
     setVenda(prev => recalcTotais({ ...prev, desconto: val }));
   };
+
+  // ---- Import from Proposta ----
+  const importFromProposta = (proposta: Proposta) => {
+    const produtos: ProdutoVenda[] = [];
+
+    // Map SERVICO sections → produtos
+    for (const s of proposta.secoes.filter(s => s.tipo === 'SERVICO' && s.visivel)) {
+      const c = s.conteudo as { titulo?: string; descricao?: string; valor?: number; detalhes?: string[] };
+      if (!c.titulo) continue;
+      const tipo = guessProductType(c.titulo);
+      produtos.push({
+        ...createProdutoVenda(),
+        tipo,
+        descricao: [c.titulo, c.descricao].filter(Boolean).join(' — '),
+        valor_venda: c.valor || 0,
+      });
+    }
+
+    // Map TRANSPORTE (from viagem) → AEREO or transport products
+    if (proposta.viagem?.transportes) {
+      for (const t of proposta.viagem.transportes) {
+        const isVoo = t.tipo === 'VOO';
+        const priceMatch = t.detalhes?.match(/R\$\s*([\d.,]+)/);
+        const price = priceMatch ? parseFloat(priceMatch[1].replace('.', '').replace(',', '.')) : 0;
+        produtos.push({
+          ...createProdutoVenda(),
+          tipo: isVoo ? 'AEREO' : 'CARRO',
+          descricao: `${t.origem} → ${t.destino}${t.companhia ? ` (${t.companhia})` : ''}${t.numero_voo ? ` ${t.numero_voo}` : ''}`,
+          cia_aerea: isVoo ? (t.companhia || '') : '',
+          trecho: `${t.origem}-${t.destino}`,
+          data_inicio: t.data || '',
+          fornecedor_nome: t.companhia || '',
+          valor_venda: price,
+        });
+      }
+    }
+
+    // Map ALOJAMENTO (from viagem) → HOTEL products
+    if (proposta.viagem?.alojamentos) {
+      for (const a of proposta.viagem.alojamentos) {
+        if (a.viagem_noturna) continue;
+        produtos.push({
+          ...createProdutoVenda(),
+          tipo: 'HOTEL',
+          descricao: `${a.hotel_nome} — ${a.destino_nome} (${a.noites}N)`,
+          hotel_nome: a.hotel_nome || '',
+          tipo_apto: a.quarto_tipo || '',
+          regime: a.regime || '',
+          data_inicio: a.check_in || '',
+          data_fim: a.check_out || '',
+          fornecedor_nome: a.hotel_nome || '',
+        });
+      }
+    }
+
+    // Map TRANSPORTE sections (block-level, for CLASSICO layout)
+    for (const s of proposta.secoes.filter(s => s.tipo === 'TRANSPORTE' && s.visivel)) {
+      const c = s.conteudo as { tipo?: string; origem?: string; destino?: string; companhia?: string; numero_voo?: string; data?: string; detalhes?: string };
+      if (!c.origem) continue;
+      // Skip if already imported from viagem.transportes
+      if (produtos.some(p => p.trecho === `${c.origem}-${c.destino}`)) continue;
+      const isVoo = c.tipo === 'VOO';
+      produtos.push({
+        ...createProdutoVenda(),
+        tipo: isVoo ? 'AEREO' : 'CARRO',
+        descricao: `${c.origem} → ${c.destino}${c.companhia ? ` (${c.companhia})` : ''}`,
+        cia_aerea: isVoo ? (c.companhia || '') : '',
+        trecho: `${c.origem}-${c.destino}`,
+        data_inicio: c.data || '',
+        fornecedor_nome: c.companhia || '',
+      });
+    }
+
+    // Map ALOJAMENTO sections (block-level)
+    for (const s of proposta.secoes.filter(s => s.tipo === 'ALOJAMENTO' && s.visivel)) {
+      const c = s.conteudo as { hotel_nome?: string; destino_nome?: string; noites?: number; quarto_tipo?: string; regime?: string; check_in?: string; check_out?: string; viagem_noturna?: boolean };
+      if (c.viagem_noturna || !c.hotel_nome) continue;
+      // Skip if already imported from viagem.alojamentos
+      if (produtos.some(p => p.hotel_nome === c.hotel_nome)) continue;
+      produtos.push({
+        ...createProdutoVenda(),
+        tipo: 'HOTEL',
+        descricao: `${c.hotel_nome} — ${c.destino_nome || ''} (${c.noites || 0}N)`,
+        hotel_nome: c.hotel_nome || '',
+        tipo_apto: c.quarto_tipo || '',
+        regime: c.regime || '',
+        data_inicio: c.check_in || '',
+        data_fim: c.check_out || '',
+        fornecedor_nome: c.hotel_nome || '',
+      });
+    }
+
+    // Extract pricing from VALORES sections if available
+    const valoresSecao = proposta.secoes.find(s => s.tipo === 'VALORES' && s.visivel);
+    if (valoresSecao) {
+      const vc = valoresSecao.conteudo as { opcoes?: Array<{ titulo: string; valor_total: number; destaque?: boolean }> };
+      const destaque = vc.opcoes?.find(o => o.destaque) || vc.opcoes?.[0];
+      if (destaque && destaque.valor_total > 0 && produtos.length > 0) {
+        // If no individual prices set, distribute total across products proportionally
+        const hasAnyPrice = produtos.some(p => p.valor_venda > 0);
+        if (!hasAnyPrice) {
+          // Add as a PACOTE product
+          produtos.unshift({
+            ...createProdutoVenda(),
+            tipo: 'PACOTE',
+            descricao: `Pacote: ${destaque.titulo || proposta.cabecalho.titulo}`,
+            valor_venda: destaque.valor_total,
+          });
+        }
+      }
+    }
+
+    // Apply to venda
+    setVenda(prev => {
+      const updated = {
+        ...prev,
+        produtos: [...prev.produtos, ...produtos],
+        observacoes: prev.observacoes
+          ? `${prev.observacoes}\nImportado da proposta: ${proposta.cabecalho.titulo} (${proposta.numero})`
+          : `Importado da proposta: ${proposta.cabecalho.titulo} (${proposta.numero})`,
+      };
+      // Pre-fill client if not set
+      if (!prev.cliente_id && proposta.cliente_id) {
+        updated.cliente_id = proposta.cliente_id;
+        const c = clientes.find(cl => cl.id === proposta.cliente_id);
+        if (c) {
+          const nome = c.tipo === 'PF' ? c.nome_completo : c.nome_fantasia || c.razao_social;
+          setClienteSearch(nome);
+        }
+      }
+      return recalcTotais(updated);
+    });
+
+    setShowPropostaModal(false);
+  };
+
+  function guessProductType(titulo: string): ProdutoVenda['tipo'] {
+    const t = titulo.toLowerCase();
+    if (/voo|a[eé]reo|flight|passagem/i.test(t)) return 'AEREO';
+    if (/hotel|hospedagem|resort|pousada/i.test(t)) return 'HOTEL';
+    if (/seguro|insurance|travel protect/i.test(t)) return 'SEGURO';
+    if (/transfer|carro|rent|locacao|aluguel/i.test(t)) return 'CARRO';
+    if (/cruzeiro|cruise|navio/i.test(t)) return 'CRUZEIRO';
+    if (/ingresso|ticket|entrada|passeio/i.test(t)) return 'INGRESSO';
+    if (/receptivo|guia|tour|excurs/i.test(t)) return 'RECEPTIVO';
+    if (/pacote|package/i.test(t)) return 'PACOTE';
+    return 'OUTROS';
+  }
 
   // ---- Save ----
   const handleSave = async () => {
@@ -462,15 +615,26 @@ export default function NovaVendaPage() {
           open={openSections.produtos}
           onToggle={() => toggleSection('produtos')}
           extra={
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className="text-[var(--t-accent)] hover:bg-[var(--t-accent)]/10 h-7 text-xs"
-              onClick={addProduto}
-            >
-              <Plus className="w-3 h-3 mr-1" /> Adicionar
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="text-blue-400 hover:bg-blue-500/10 h-7 text-xs"
+                onClick={() => setShowPropostaModal(true)}
+              >
+                <FileText className="w-3 h-3 mr-1" /> Importar de Proposta
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="text-[var(--t-accent)] hover:bg-[var(--t-accent)]/10 h-7 text-xs"
+                onClick={addProduto}
+              >
+                <Plus className="w-3 h-3 mr-1" /> Adicionar
+              </Button>
+            </div>
           }
         />
         {openSections.produtos && (
@@ -893,6 +1057,114 @@ export default function NovaVendaPage() {
           updateProduto(hotelModalIdx, 'descricao', mapped.descricao);
         }}
       />
+
+      {/* Import from Proposta Modal */}
+      {showPropostaModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={e => { if (e.target === e.currentTarget) setShowPropostaModal(false); }}
+        >
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative bg-[var(--t-header-bg)] rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--t-border)]">
+              <div>
+                <h3 className="text-lg font-bold text-[var(--t-text)]">Importar de Proposta</h3>
+                <p className="text-xs text-[var(--t-text-secondary)]">Selecione uma proposta para importar serviços, voos e hospedagens</p>
+              </div>
+              <button onClick={() => setShowPropostaModal(false)} className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)]">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Search */}
+            <div className="px-5 py-3 border-b border-[var(--t-border)]">
+              <Input
+                value={propostaSearch}
+                onChange={e => setPropostaSearch(e.target.value)}
+                placeholder="Buscar por título, cliente ou número..."
+                className={inputClass}
+              />
+            </div>
+
+            {/* List */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+              {propostas.length === 0 && (
+                <p className="text-center text-[var(--t-text-secondary)] py-8 text-sm">
+                  Nenhuma proposta encontrada. Crie propostas antes de importar.
+                </p>
+              )}
+              {propostas
+                .filter(p => {
+                  if (!propostaSearch) return true;
+                  const q = propostaSearch.toLowerCase();
+                  return (
+                    p.cabecalho.titulo?.toLowerCase().includes(q) ||
+                    p.cliente_nome?.toLowerCase().includes(q) ||
+                    p.numero?.toLowerCase().includes(q)
+                  );
+                })
+                .map(p => {
+                  const secCount = p.secoes.filter(s => s.visivel).length;
+                  const transportes = p.viagem?.transportes?.length || 0;
+                  const alojamentos = p.viagem?.alojamentos?.length || 0;
+                  const servicoCount = p.secoes.filter(s => s.tipo === 'SERVICO' && s.visivel).length;
+                  const totalItems = servicoCount + transportes + alojamentos;
+
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => importFromProposta(p)}
+                      className="w-full text-left p-4 rounded-xl bg-[var(--t-bg)] hover:bg-[var(--t-surface-hover)] border border-[var(--t-border)] hover:border-[var(--t-accent)]/50 transition-all group"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs text-[var(--t-text-secondary)]">{p.numero}</span>
+                            {p.visual.layout === 'DISCOVERY' && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">DISCOVERY</span>
+                            )}
+                          </div>
+                          <h4 className="font-semibold text-[var(--t-text)] mt-0.5 truncate">
+                            {p.cabecalho.titulo || 'Sem título'}
+                          </h4>
+                          {p.cliente_nome && (
+                            <p className="text-xs text-[var(--t-text-secondary)] mt-0.5">{p.cliente_nome}</p>
+                          )}
+                          <div className="flex flex-wrap items-center gap-2 mt-2">
+                            {servicoCount > 0 && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400">
+                                {servicoCount} serviço{servicoCount > 1 ? 's' : ''}
+                              </span>
+                            )}
+                            {transportes > 0 && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400">
+                                {transportes} transporte{transportes > 1 ? 's' : ''}
+                              </span>
+                            )}
+                            {alojamentos > 0 && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400">
+                                {alojamentos} hospedagem{alojamentos > 1 ? 'ns' : ''}
+                              </span>
+                            )}
+                            {totalItems === 0 && (
+                              <span className="text-[10px] text-[var(--t-text-muted)]">{secCount} blocos</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex items-center gap-1 text-xs text-[var(--t-accent)]">
+                            <Check className="w-4 h-4" /> Importar
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
