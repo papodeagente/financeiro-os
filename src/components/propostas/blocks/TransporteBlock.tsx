@@ -1,6 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import { Input } from '@/components/ui/input';
+import { Plane, Search } from 'lucide-react';
+import { FlightSearchModal } from '@/components/FlightSearchModal';
+import type { FlightOffer } from '@/lib/flight-data-mapper';
 import type { BlockProps } from './types';
 import type { TransporteData, TipoTransporte } from '@/lib/crm-types';
 
@@ -13,14 +17,50 @@ const TIPOS: { id: TipoTransporte; label: string; icon: string }[] = [
   { id: 'BARCO', label: 'Barco', icon: '⛴️' },
 ];
 
+function extractTime(dateStr: string): string {
+  return dateStr.split(' ')[1]?.substring(0, 5) || '';
+}
+
+function extractDate(dateStr: string): string {
+  return dateStr.split(' ')[0] || '';
+}
+
+function formatMinutes(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${h}h${String(m).padStart(2, '0')}`;
+}
+
 export function TransporteBlock({ conteudo, onChange }: BlockProps) {
   const c = conteudo as Partial<TransporteData>;
+  const [flightModalOpen, setFlightModalOpen] = useState(false);
 
   const update = (patch: Partial<TransporteData>) => {
     onChange({ ...conteudo, ...patch } as Record<string, unknown>);
   };
 
   const isVoo = c.tipo === 'VOO';
+
+  const handleFlightSelect = (offer: FlightOffer) => {
+    const firstSeg = offer.flights[0];
+    const lastSeg = offer.flights[offer.flights.length - 1];
+    const stops = offer.flights.length - 1;
+    const layoverNames = offer.layovers?.map(l => l.id).join(', ') || '';
+    const stopsStr = stops === 0 ? 'Voo direto' : `${stops} escala(s): ${layoverNames}`;
+
+    update({
+      tipo: 'VOO',
+      data: extractDate(firstSeg.departure_airport.time || ''),
+      origem: firstSeg.departure_airport.id,
+      destino: lastSeg.arrival_airport.id,
+      companhia: firstSeg.airline,
+      numero_voo: firstSeg.flight_number,
+      horario_saida: extractTime(firstSeg.departure_airport.time || ''),
+      horario_chegada: extractTime(lastSeg.arrival_airport.time || ''),
+      tempo_estimado: formatMinutes(offer.totalDuration),
+      detalhes: `${stopsStr} | R$ ${offer.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+    });
+  };
 
   return (
     <div className="space-y-3">
@@ -45,6 +85,18 @@ export function TransporteBlock({ conteudo, onChange }: BlockProps) {
           />
         </div>
       </div>
+
+      {/* Buscar Voo via API — só quando tipo = VOO */}
+      {isVoo && (
+        <button
+          onClick={() => setFlightModalOpen(true)}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/20 hover:border-blue-400 text-blue-400 text-xs font-medium transition-all"
+        >
+          <Plane className="w-4 h-4" />
+          <Search className="w-3.5 h-3.5" />
+          Buscar Voo na API
+        </button>
+      )}
 
       <div className="grid grid-cols-2 gap-2">
         <div>
@@ -135,6 +187,18 @@ export function TransporteBlock({ conteudo, onChange }: BlockProps) {
         </div>
       )}
 
+      {isVoo && (
+        <div>
+          <label className="text-[10px] text-[var(--t-text-muted)]">Tempo estimado</label>
+          <Input
+            value={c.tempo_estimado || ''}
+            onChange={e => update({ tempo_estimado: e.target.value })}
+            placeholder="10h30"
+            className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)] text-sm"
+          />
+        </div>
+      )}
+
       <div>
         <label className="text-[10px] text-[var(--t-text-muted)]">Detalhes</label>
         <textarea
@@ -145,6 +209,16 @@ export function TransporteBlock({ conteudo, onChange }: BlockProps) {
           className="w-full bg-[var(--t-bg)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-3 py-2 text-sm resize-none"
         />
       </div>
+
+      {/* Flight Search Modal */}
+      <FlightSearchModal
+        open={flightModalOpen}
+        onClose={() => setFlightModalOpen(false)}
+        onSelect={handleFlightSelect}
+        defaultOrigem={c.origem || ''}
+        defaultDestino={c.destino || ''}
+        defaultDataIda={c.data || ''}
+      />
     </div>
   );
 }
