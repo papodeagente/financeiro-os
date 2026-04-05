@@ -71,17 +71,17 @@ export default function GruposPage() {
   return (
     <div className="flex flex-col h-full overflow-y-auto">
       {/* Header */}
-      <header className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] shadow-lg shrink-0">
+      <header className="bg-[var(--t-surface)] border-b border-[var(--t-border)] shrink-0">
         <div className="px-6 py-5 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Produtos <span className="text-[var(--t-accent)]">— Grupos</span></h1>
-            <p className="text-sm text-[var(--t-text-secondary)] mt-1">Crie e configure produtos de viagem em grupo para vender</p>
+            <h1 className="text-2xl font-bold text-[var(--t-text)]">Produtos <span className="text-[var(--t-green)]">— Grupos</span></h1>
+            <p className="text-sm text-[var(--t-text-muted)] mt-1">Crie e configure produtos de viagem em grupo para vender</p>
           </div>
           <div className="flex gap-3">
-            <Button onClick={criarGrupo} className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold">
+            <Button onClick={criarGrupo} className="bg-[var(--t-green)] hover:opacity-90 text-white font-semibold">
               <Plus className="w-4 h-4 mr-2" /> Novo Grupo
             </Button>
-            <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="border-[var(--t-border)] text-[var(--t-text)] hover:bg-[var(--t-surface-hover)]">
+            <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
               <Upload className="w-4 h-4 mr-2" /> Importar JSON
             </Button>
             <input ref={fileInputRef} type="file" accept=".json" onChange={importar} className="hidden" />
@@ -119,7 +119,7 @@ export default function GruposPage() {
                       className="flex-1"
                       onClick={() => setActiveGrupo(g.id, g.grp_id || 'Sem ID')}
                     >
-                      <Button className="w-full bg-[var(--t-header-bg)] hover:bg-[var(--t-surface-hover)] text-white" size="sm">
+                      <Button className="w-full bg-[var(--t-green)] hover:opacity-90 text-white" size="sm">
                         <FolderOpen className="w-4 h-4 mr-1" /> Abrir
                       </Button>
                     </Link>
