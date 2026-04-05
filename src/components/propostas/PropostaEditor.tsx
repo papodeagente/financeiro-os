@@ -70,7 +70,7 @@ function defaultConteudo(tipo: string): Record<string, unknown> {
 const AI_SUPPORTED_TYPES = ['TEXTO', 'SERVICO', 'ROTEIRO_DIA', 'INCLUSOS', 'DEPOIMENTO', 'CTA'];
 
 function SortableBlock({
-  secao, index, total, onUpdate, onRemove, onMove, onGenerateAI, generating,
+  secao, index, total, onUpdate, onRemove, onMove, onGenerateAI, generating, onInsertAfter,
 }: {
   secao: SecaoProposta; index: number; total: number;
   onUpdate: (conteudo: Record<string, unknown>) => void;
@@ -78,6 +78,7 @@ function SortableBlock({
   onMove: (dir: -1 | 1) => void;
   onGenerateAI: () => void;
   generating: boolean;
+  onInsertAfter?: (tipo: string, conteudo: Record<string, unknown>) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: secao.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
@@ -115,7 +116,7 @@ function SortableBlock({
               <Trash2 className="w-4 h-4" />
             </Button>
           </div>
-          <BlockRenderer tipo={secao.tipo} conteudo={secao.conteudo} onChange={onUpdate} />
+          <BlockRenderer tipo={secao.tipo} conteudo={secao.conteudo} onChange={onUpdate} onInsertAfter={onInsertAfter} />
         </CardContent>
       </Card>
     </div>
@@ -222,6 +223,23 @@ export function PropostaEditor({ proposta: initialProposta, clientes, membros, i
         conteudo: defaultConteudo(tipo),
       }],
     }));
+  };
+
+  const insertSecaoAfter = (afterId: string, tipo: string, conteudo: Record<string, unknown>) => {
+    update(p => {
+      const idx = p.secoes.findIndex(s => s.id === afterId);
+      const insertAt = idx >= 0 ? idx + 1 : p.secoes.length;
+      const newSecao: SecaoProposta = {
+        id: generateId(),
+        tipo: tipo as SecaoProposta['tipo'],
+        ordem: insertAt,
+        visivel: true,
+        conteudo,
+      };
+      const arr = [...p.secoes];
+      arr.splice(insertAt, 0, newSecao);
+      return { ...p, secoes: arr };
+    });
   };
 
   const removeSecao = (id: string) => {
@@ -546,6 +564,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes, membros, i
                       onMove={dir => moveSecao(secao.id, dir)}
                       onGenerateAI={() => handleGenerateAI(secao.id, secao.tipo)}
                       generating={!!generatingAI[secao.id]}
+                      onInsertAfter={(tipo, conteudo) => insertSecaoAfter(secao.id, tipo, conteudo)}
                     />
                   ))}
                 </div>

@@ -31,7 +31,7 @@ function formatMinutes(min: number): string {
   return `${h}h${String(m).padStart(2, '0')}`;
 }
 
-export function TransporteBlock({ conteudo, onChange }: BlockProps) {
+export function TransporteBlock({ conteudo, onChange, onInsertAfter }: BlockProps) {
   const c = conteudo as Partial<TransporteData>;
   const [flightModalOpen, setFlightModalOpen] = useState(false);
 
@@ -42,6 +42,7 @@ export function TransporteBlock({ conteudo, onChange }: BlockProps) {
   const isVoo = c.tipo === 'VOO';
 
   const handleFlightSelect = (offer: FlightOffer) => {
+    // --- Outbound (IDA) ---
     const firstSeg = offer.flights[0];
     const lastSeg = offer.flights[offer.flights.length - 1];
     const stops = offer.flights.length - 1;
@@ -60,6 +61,29 @@ export function TransporteBlock({ conteudo, onChange }: BlockProps) {
       tempo_estimado: formatMinutes(offer.totalDuration),
       detalhes: `${stopsStr} | R$ ${offer.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
     });
+
+    // --- Return (VOLTA) — insert new block after this one ---
+    if (offer.returnFlights && offer.returnFlights.length > 0 && onInsertAfter) {
+      const retFirst = offer.returnFlights[0];
+      const retLast = offer.returnFlights[offer.returnFlights.length - 1];
+      const retStops = offer.returnFlights.length - 1;
+      const retLayoverNames = offer.returnLayovers?.map(l => l.id).join(', ') || '';
+      const retStopsStr = retStops === 0 ? 'Voo direto' : `${retStops} escala(s): ${retLayoverNames}`;
+
+      onInsertAfter('TRANSPORTE', {
+        id: crypto.randomUUID?.() || Math.random().toString(36).slice(2),
+        tipo: 'VOO',
+        data: extractDate(retFirst.departure_airport.time || ''),
+        origem: retFirst.departure_airport.id,
+        destino: retLast.arrival_airport.id,
+        companhia: retFirst.airline,
+        numero_voo: retFirst.flight_number,
+        horario_saida: extractTime(retFirst.departure_airport.time || ''),
+        horario_chegada: extractTime(retLast.arrival_airport.time || ''),
+        tempo_estimado: formatMinutes(offer.returnDuration || 0),
+        detalhes: `VOLTA | ${retStopsStr}`,
+      });
+    }
   };
 
   return (

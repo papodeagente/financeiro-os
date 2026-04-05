@@ -19,9 +19,10 @@ interface Props {
   tipo: string;
   conteudo: Record<string, unknown>;
   onChange: (conteudo: Record<string, unknown>) => void;
+  onInsertAfter?: (tipo: string, conteudo: Record<string, unknown>) => void;
 }
 
-export function BlockRenderer({ tipo, conteudo, onChange }: Props) {
+export function BlockRenderer({ tipo, conteudo, onChange, onInsertAfter }: Props) {
   switch (tipo) {
     case 'TEXTO': return <TextoBlock conteudo={conteudo} onChange={onChange} />;
     case 'SERVICO': return <ServicoBlock conteudo={conteudo} onChange={onChange} />;
@@ -36,7 +37,7 @@ export function BlockRenderer({ tipo, conteudo, onChange }: Props) {
     case 'FAQ': return <FAQBlock conteudo={conteudo} onChange={onChange} />;
     case 'COUNTDOWN': return <CountdownBlock conteudo={conteudo} onChange={onChange} />;
     case 'ALOJAMENTO': return <AlojamentoBlock conteudo={conteudo} onChange={onChange} />;
-    case 'TRANSPORTE': return <TransporteBlock conteudo={conteudo} onChange={onChange} />;
+    case 'TRANSPORTE': return <TransporteBlock conteudo={conteudo} onChange={onChange} onInsertAfter={onInsertAfter} />;
     default: return <div className="text-xs text-[var(--t-text-muted)]">Tipo desconhecido: {tipo}</div>;
   }
 }
