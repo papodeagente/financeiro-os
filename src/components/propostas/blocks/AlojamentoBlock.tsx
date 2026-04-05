@@ -1,7 +1,12 @@
 'use client';
 
+import { useState } from 'react';
 import { Input } from '@/components/ui/input';
+import { Hotel, Search } from 'lucide-react';
 import { ImageUpload } from '../ImageUpload';
+import { HotelSearchModal } from '@/components/HotelSearchModal';
+import { formatHotelForAlojamento } from '@/lib/hotel-data-mapper';
+import type { SearchAPIHotelProperty } from '@/lib/searchapi-hotels';
 import type { BlockProps } from './types';
 import type { AlojamentoData, RegimeRefeicao } from '@/lib/crm-types';
 
@@ -22,10 +27,10 @@ function calcNoites(checkIn: string, checkOut: string): number {
 
 export function AlojamentoBlock({ conteudo, onChange }: BlockProps) {
   const c = conteudo as Partial<AlojamentoData>;
+  const [hotelModalOpen, setHotelModalOpen] = useState(false);
 
   const update = (patch: Partial<AlojamentoData>) => {
     const merged = { ...conteudo, ...patch };
-    // Auto-calc noites
     if ('check_in' in patch || 'check_out' in patch) {
       merged.noites = calcNoites(
         (patch.check_in ?? c.check_in) || '',
@@ -33,6 +38,21 @@ export function AlojamentoBlock({ conteudo, onChange }: BlockProps) {
       );
     }
     onChange(merged as Record<string, unknown>);
+  };
+
+  const handleHotelSelect = (hotel: SearchAPIHotelProperty) => {
+    const mapped = formatHotelForAlojamento(hotel);
+    // Merge keeping check_in/check_out/noites/regime if already set
+    onChange({
+      ...conteudo,
+      ...mapped,
+      check_in: c.check_in || '',
+      check_out: c.check_out || '',
+      noites: c.noites || 0,
+      regime: c.regime || 'BB',
+      quarto_tipo: c.quarto_tipo || '',
+      bebidas: c.bebidas || '',
+    } as Record<string, unknown>);
   };
 
   return (
@@ -47,6 +67,16 @@ export function AlojamentoBlock({ conteudo, onChange }: BlockProps) {
         />
         Viagem noturna (transito aereo, sem hotel)
       </label>
+
+      {/* Buscar Hotel via API */}
+      <button
+        onClick={() => setHotelModalOpen(true)}
+        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 hover:border-emerald-400 text-emerald-400 text-xs font-medium transition-all"
+      >
+        <Hotel className="w-4 h-4" />
+        <Search className="w-3.5 h-3.5" />
+        Buscar Hotel na API
+      </button>
 
       <div className="grid grid-cols-2 gap-2">
         <div>
@@ -174,6 +204,20 @@ export function AlojamentoBlock({ conteudo, onChange }: BlockProps) {
         />
       </div>
 
+      {/* Gallery preview */}
+      {c.hotel_galeria && c.hotel_galeria.length > 0 && (
+        <div>
+          <label className="text-[10px] text-[var(--t-text-muted)]">Galeria ({c.hotel_galeria.length} fotos)</label>
+          <div className="flex gap-1.5 overflow-x-auto pb-1 mt-1">
+            {c.hotel_galeria.map((url, i) => (
+              <img key={i} src={url as string} alt={`Foto ${i + 1}`}
+                className="w-20 h-14 object-cover rounded shrink-0 cursor-pointer hover:opacity-80"
+                onClick={() => window.open(url as string, '_blank')} loading="lazy" />
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="text-[10px] text-[var(--t-text-muted)]">Latitude</label>
@@ -198,6 +242,17 @@ export function AlojamentoBlock({ conteudo, onChange }: BlockProps) {
           />
         </div>
       </div>
+
+      {/* Hotel Search Modal */}
+      <HotelSearchModal
+        open={hotelModalOpen}
+        onClose={() => setHotelModalOpen(false)}
+        onSelect={handleHotelSelect}
+        defaultDestino={c.destino_nome || ''}
+        defaultHotelName={c.hotel_nome || ''}
+        defaultCheckIn={c.check_in || ''}
+        defaultCheckOut={c.check_out || ''}
+      />
     </div>
   );
 }

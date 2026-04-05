@@ -1,30 +1,19 @@
 import { NextResponse } from 'next/server';
-import pool, { initDB } from '@/lib/db';
-import { searchHotels as searchGoogleHotels } from '@/lib/google-places-api';
-
-async function getGoogleConfig() {
-  await initDB();
-  if (!pool) return null;
-  const { rows } = await pool.query(`SELECT data FROM config_apis WHERE id = 'apis-config-singleton'`);
-  if (rows.length === 0) return null;
-  const cfg = rows[0].data;
-  if (!cfg.google_places?.ativo || !cfg.google_places?.api_key) return null;
-  return { api_key: cfg.google_places.api_key };
-}
+import { searchHotels } from '@/lib/searchapi-hotels';
 
 export async function POST(req: Request) {
   try {
-    const config = await getGoogleConfig();
-    if (!config) return NextResponse.json({ error: 'Google Places API não configurada' }, { status: 400 });
-
     const body = await req.json();
-    const result = await searchGoogleHotels(config, {
+    const result = await searchHotels({
       query: body.query || `hotéis em ${body.destino}`,
-      languageCode: 'pt-BR',
+      check_in: body.check_in,
+      check_out: body.check_out,
+      adults: body.adults || 2,
+      children: body.children || 0,
     });
 
     return NextResponse.json(result);
   } catch (e: unknown) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Error' }, { status: 500 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erro na busca de hotéis' }, { status: 500 });
   }
 }

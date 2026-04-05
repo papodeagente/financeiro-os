@@ -1,115 +1,111 @@
-// Hotel data mapper — converts Google Places API responses to system formats
+// Hotel data mapper — converts SearchAPI Google Hotels responses to system formats
 
 import type { HtlInfo } from './types';
+import type { SearchAPIHotelProperty } from './searchapi-hotels';
 
-export interface GooglePlace {
-  id: string;
-  displayName?: { text: string };
-  formattedAddress?: string;
-  rating?: number;
-  userRatingCount?: number;
-  reviews?: Array<{
-    authorAttribution?: { displayName: string; uri: string };
-    rating: number;
-    text?: { text: string };
-    relativePublishTimeDescription?: string;
-  }>;
-  photos?: Array<{
-    name: string;
-    widthPx: number;
-    heightPx: number;
-    authorAttributions?: Array<{ displayName: string }>;
-  }>;
-  priceLevel?: string;
-  websiteUri?: string;
-  internationalPhoneNumber?: string;
-  location?: { latitude: number; longitude: number };
-  editorialSummary?: { text: string };
-  googleMapsUri?: string;
-  types?: string[];
-}
+// Re-export as the canonical hotel type used across the system
+export type HotelResult = SearchAPIHotelProperty;
 
-const AMENITY_MAP: Record<string, string> = {
-  spa: 'Spa',
-  restaurant: 'Restaurante',
-  bar: 'Bar',
-  gym: 'Academia',
-  swimming_pool: 'Piscina',
-  parking: 'Estacionamento',
-  airport_shuttle: 'Transfer aeroporto',
-  room_service: 'Room service',
-  laundry_service: 'Lavanderia',
-  business_center: 'Business center',
-  meeting_room: 'Sala de reunião',
-  resort_hotel: 'Resort',
+// Legacy alias — components that imported GooglePlace now get SearchAPIHotelProperty
+export type GooglePlace = SearchAPIHotelProperty;
+
+const AMENITY_TRANSLATE: Record<string, string> = {
+  'Free Wi‑Fi': 'Wi-Fi grátis',
+  'Free Wi-Fi': 'Wi-Fi grátis',
+  'Pool': 'Piscina',
+  'Indoor pool': 'Piscina coberta',
+  'Outdoor pool': 'Piscina externa',
+  'Spa': 'Spa',
+  'Fitness center': 'Academia',
+  'Restaurant': 'Restaurante',
+  'Bar': 'Bar',
+  'Room service': 'Room service',
+  'Air conditioning': 'Ar condicionado',
+  'Parking ($)': 'Estacionamento (pago)',
+  'Free parking': 'Estacionamento grátis',
+  'Parking': 'Estacionamento',
+  'Kitchen': 'Cozinha',
+  'Washer': 'Lavadora',
+  'Full‑service laundry': 'Lavanderia',
+  'Full-service laundry': 'Lavanderia',
+  'Business center': 'Business center',
+  'Accessible': 'Acessível',
+  'Kid-friendly': 'Ideal para crianças',
+  'Smoke-free property': 'Proibido fumar',
+  'Airport shuttle': 'Transfer aeroporto',
+  'Breakfast': 'Café da manhã',
+  'Beach access': 'Acesso à praia',
+  'Pet-friendly': 'Aceita pets',
+  'EV charger': 'Carregador EV',
 };
 
-export function formatAmenities(types: string[]): string[] {
-  return types
-    .map(t => AMENITY_MAP[t])
-    .filter((a): a is string => !!a);
-}
-
-export function getFirstPhotoUrl(place: GooglePlace): string {
-  // Returns photo reference name — the actual URL needs the API key,
-  // which is added server-side via /api/hotels/photos
-  if (!place.photos || place.photos.length === 0) return '';
-  return place.photos[0].name;
+export function formatAmenities(amenities: string[]): string[] {
+  return amenities.map(a => AMENITY_TRANSLATE[a] || a);
 }
 
 function starString(rating: number): string {
   return `${rating}/5`;
 }
 
-/**
- * Format hotel for HtlTab info panel — fills empty fields only
- */
-export function formatHotelForHtlInfo(place: GooglePlace): Partial<HtlInfo> {
-  const result: Partial<HtlInfo> = {};
-  const amenities = formatAmenities(place.types || []);
+function formatPrice(prop: SearchAPIHotelProperty): string {
+  if (prop.price_per_night?.extracted_price_before_taxes) {
+    return `R$ ${prop.price_per_night.extracted_price_before_taxes.toLocaleString('pt-BR')} /noite`;
+  }
+  return '';
+}
 
-  // Estacionamento
-  if (place.types?.includes('parking') || amenities.includes('Estacionamento')) {
-    result.estacionamento = 'Disponível (Google Places)';
+/**
+ * Format hotel for HtlTab info panel
+ */
+export function formatHotelForHtlInfo(hotel: SearchAPIHotelProperty): Partial<HtlInfo> {
+  const result: Partial<HtlInfo> = {};
+
+  if (hotel.check_in_time) result.check_in_hora = hotel.check_in_time;
+  if (hotel.check_out_time) result.check_out_hora = hotel.check_out_time;
+
+  const hasParking = hotel.amenities?.some(a => a.toLowerCase().includes('parking'));
+  if (hasParking) {
+    const free = hotel.amenities?.some(a => a.toLowerCase().includes('free parking'));
+    result.estacionamento = free ? 'Gratuito' : 'Disponível (pago)';
   }
 
-  // Info adicional — always build (will be appended, not replaced)
   const infoLines: string[] = [];
-  if (place.displayName?.text) infoLines.push(`Hotel: ${place.displayName.text}`);
-  if (place.rating) infoLines.push(`Avaliação Google: ${starString(place.rating)} (${place.userRatingCount?.toLocaleString('pt-BR') || '0'} avaliações)`);
-  if (place.formattedAddress) infoLines.push(`Endereço: ${place.formattedAddress}`);
-  if (place.editorialSummary?.text) infoLines.push(`Descrição: ${place.editorialSummary.text}`);
-  if (amenities.length > 0) infoLines.push(`Amenities: ${amenities.join(', ')}`);
-  if (place.websiteUri) infoLines.push(`Site: ${place.websiteUri}`);
-  if (place.internationalPhoneNumber) infoLines.push(`Telefone: ${place.internationalPhoneNumber}`);
-  if (place.googleMapsUri) infoLines.push(`Google Maps: ${place.googleMapsUri}`);
+  if (hotel.name) infoLines.push(`Hotel: ${hotel.name}`);
+  if (hotel.extracted_hotel_class) infoLines.push(`Classificação: ${hotel.extracted_hotel_class} estrelas`);
+  if (hotel.rating) infoLines.push(`Avaliação Google: ${starString(hotel.rating)} (${hotel.reviews?.toLocaleString('pt-BR') || '0'} avaliações)`);
+  if (hotel.description) infoLines.push(`Descrição: ${hotel.description}`);
+  if (hotel.city) infoLines.push(`Cidade: ${hotel.city}, ${hotel.country || ''}`);
+  const price = formatPrice(hotel);
+  if (price) infoLines.push(`Preço: ${price}`);
+  if (hotel.amenities && hotel.amenities.length > 0) infoLines.push(`Amenities: ${formatAmenities(hotel.amenities).join(', ')}`);
+  if (hotel.link) infoLines.push(`Site: ${hotel.link}`);
 
   if (infoLines.length > 0) {
-    result.info_adicional = `[Dados Google Places]\n${infoLines.join('\n')}`;
+    result.info_adicional = `[Dados Google Hotels]\n${infoLines.join('\n')}`;
   }
 
   return result;
 }
 
 /**
- * Format hotel for Vendas — returns ProdutoVenda partial
+ * Format hotel for Vendas
  */
-export function formatHotelForVenda(place: GooglePlace): {
+export function formatHotelForVenda(hotel: SearchAPIHotelProperty): {
   hotel_nome: string;
   descricao: string;
 } {
-  const nome = place.displayName?.text || '';
   const parts: string[] = [];
 
-  if (place.rating) parts.push(`${starString(place.rating)} (${place.userRatingCount?.toLocaleString('pt-BR') || '0'} avaliações)`);
-  if (place.formattedAddress) parts.push(place.formattedAddress);
-
-  const amenities = formatAmenities(place.types || []);
-  if (amenities.length > 0) parts.push(amenities.join(', '));
-  if (place.editorialSummary?.text) parts.push(place.editorialSummary.text);
+  if (hotel.extracted_hotel_class) parts.push(`${hotel.extracted_hotel_class}★`);
+  if (hotel.rating) parts.push(`${starString(hotel.rating)} (${hotel.reviews?.toLocaleString('pt-BR') || '0'} avaliações)`);
+  if (hotel.city) parts.push(`${hotel.city}, ${hotel.country || ''}`);
+  const price = formatPrice(hotel);
+  if (price) parts.push(price);
+  if (hotel.amenities && hotel.amenities.length > 0) parts.push(formatAmenities(hotel.amenities.slice(0, 5)).join(', '));
+  if (hotel.description) parts.push(hotel.description);
 
   return {
-    hotel_nome: nome,
+    hotel_nome: hotel.name || '',
     descricao: parts.join(' | '),
   };
 }
@@ -117,35 +113,46 @@ export function formatHotelForVenda(place: GooglePlace): {
 /**
  * Format hotel for Propostas — returns SERVICO block conteudo
  */
-export function formatHotelForProposta(place: GooglePlace): Record<string, unknown> {
-  const nome = place.displayName?.text || 'Hotel';
-  const amenities = formatAmenities(place.types || []);
-  const photoRef = getFirstPhotoUrl(place);
-
+export function formatHotelForProposta(hotel: SearchAPIHotelProperty): Record<string, unknown> {
   const detalhes: string[] = [];
-  if (place.formattedAddress) detalhes.push(`Endereço: ${place.formattedAddress}`);
-  if (place.rating) detalhes.push(`Avaliação: ${starString(place.rating)} (${place.userRatingCount?.toLocaleString('pt-BR') || '0'} avaliações)`);
-  if (amenities.length > 0) detalhes.push(`Amenities: ${amenities.join(', ')}`);
-  if (place.internationalPhoneNumber) detalhes.push(`Telefone: ${place.internationalPhoneNumber}`);
-  if (place.websiteUri) detalhes.push(`Site: ${place.websiteUri}`);
 
-  // Add top reviews
-  if (place.reviews && place.reviews.length > 0) {
+  if (hotel.extracted_hotel_class) detalhes.push(`Classificação: ${hotel.extracted_hotel_class} estrelas`);
+  if (hotel.city) detalhes.push(`Localização: ${hotel.city}, ${hotel.country || ''}`);
+  if (hotel.rating) detalhes.push(`Avaliação: ${starString(hotel.rating)} (${hotel.reviews?.toLocaleString('pt-BR') || '0'} avaliações)`);
+  const price = formatPrice(hotel);
+  if (price) detalhes.push(`Preço: ${price}`);
+  if (hotel.amenities && hotel.amenities.length > 0) detalhes.push(`Amenities: ${formatAmenities(hotel.amenities).join(', ')}`);
+  if (hotel.check_in_time) detalhes.push(`Check-in: ${hotel.check_in_time}`);
+  if (hotel.check_out_time) detalhes.push(`Check-out: ${hotel.check_out_time}`);
+  if (hotel.link) detalhes.push(`Site: ${hotel.link}`);
+
+  // Nearby places
+  if (hotel.nearby_places && hotel.nearby_places.length > 0) {
     detalhes.push('---');
-    place.reviews.slice(0, 2).forEach(r => {
-      const author = r.authorAttribution?.displayName || 'Anônimo';
-      const stars = '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating);
-      const text = r.text?.text ? ` "${r.text.text.substring(0, 100)}${r.text.text.length > 100 ? '...' : ''}"` : '';
-      detalhes.push(`${stars} ${author}${text}`);
+    detalhes.push('Proximidades:');
+    hotel.nearby_places.forEach(np => {
+      const transps = np.transportations.map(t => `${t.type} ${t.duration}`).join(' / ');
+      detalhes.push(`  • ${np.name} — ${transps}`);
     });
   }
 
+  // Reviews breakdown
+  if (hotel.reviews_breakdown && hotel.reviews_breakdown.length > 0) {
+    detalhes.push('---');
+    hotel.reviews_breakdown.slice(0, 4).forEach(rb => {
+      const pct = rb.total > 0 ? Math.round((rb.positive / rb.total) * 100) : 0;
+      detalhes.push(`${rb.name}: ${pct}% positivo (${rb.total} menções)`);
+    });
+  }
+
+  const firstImage = hotel.images?.[0]?.original || '';
+
   return {
     icone: '🏨',
-    titulo: nome,
-    descricao: place.editorialSummary?.text || `${nome} — ${place.formattedAddress || ''}`,
+    titulo: hotel.name || 'Hotel',
+    descricao: hotel.description || `${hotel.name} — ${hotel.city || ''}`,
     detalhes,
-    imagem: photoRef,
+    imagem: firstImage,
     valor: 0,
     exibir_valor: false,
   };
@@ -154,20 +161,35 @@ export function formatHotelForProposta(place: GooglePlace): Record<string, unkno
 /**
  * Format hotel for Propostas Discovery — returns ALOJAMENTO block conteudo
  */
-export function formatHotelForAlojamento(place: GooglePlace): Record<string, unknown> {
-  const nome = place.displayName?.text || 'Hotel';
-  const photoRef = getFirstPhotoUrl(place);
-  const estrelas = place.rating ? Math.round(place.rating) : 0;
+export function formatHotelForAlojamento(hotel: SearchAPIHotelProperty): Record<string, unknown> {
+  const firstImage = hotel.images?.[0]?.original || '';
+  const gallery = (hotel.images || []).slice(0, 8).map(img => img.original);
+  const estrelas = hotel.extracted_hotel_class || (hotel.rating ? Math.round(hotel.rating) : 0);
+
+  // Build description with amenities + reviews
+  const descParts: string[] = [];
+  if (hotel.description) descParts.push(hotel.description);
+  if (hotel.amenities && hotel.amenities.length > 0) {
+    descParts.push(`Amenities: ${formatAmenities(hotel.amenities).join(', ')}`);
+  }
+  if (hotel.reviews_breakdown && hotel.reviews_breakdown.length > 0) {
+    const topPositive = hotel.reviews_breakdown
+      .filter(rb => rb.total > 0)
+      .sort((a, b) => (b.positive / b.total) - (a.positive / a.total))
+      .slice(0, 3)
+      .map(rb => `${rb.name} (${Math.round((rb.positive / rb.total) * 100)}% positivo)`);
+    if (topPositive.length > 0) descParts.push(`Destaques: ${topPositive.join(', ')}`);
+  }
 
   return {
     id: crypto.randomUUID?.() || Math.random().toString(36).slice(2),
-    destino_nome: place.formattedAddress?.split(',').slice(-2, -1)[0]?.trim() || '',
-    hotel_nome: nome,
+    destino_nome: hotel.city || '',
+    hotel_nome: hotel.name || 'Hotel',
     hotel_estrelas: Math.min(estrelas, 5),
-    hotel_imagem: photoRef,
-    hotel_galeria: (place.photos || []).slice(0, 5).map(p => p.name),
-    hotel_descricao: place.editorialSummary?.text || '',
-    hotel_link: place.websiteUri || place.googleMapsUri || '',
+    hotel_imagem: firstImage,
+    hotel_galeria: gallery,
+    hotel_descricao: descParts.join('\n'),
+    hotel_link: hotel.link || '',
     check_in: '',
     check_out: '',
     noites: 0,
@@ -175,7 +197,19 @@ export function formatHotelForAlojamento(place: GooglePlace): Record<string, unk
     quarto_tipo: '',
     bebidas: '',
     viagem_noturna: false,
-    lat: place.location?.latitude,
-    lng: place.location?.longitude,
+    lat: hotel.gps_coordinates?.latitude,
+    lng: hotel.gps_coordinates?.longitude,
+    preco_noite: hotel.price_per_night?.extracted_price_before_taxes || null,
+    preco_total: hotel.total_price?.extracted_price_before_taxes || null,
+    rating: hotel.rating,
+    reviews_count: hotel.reviews,
+    amenities: hotel.amenities || [],
   };
+}
+
+/**
+ * Get first image URL
+ */
+export function getFirstPhotoUrl(hotel: SearchAPIHotelProperty): string {
+  return hotel.images?.[0]?.original || '';
 }
