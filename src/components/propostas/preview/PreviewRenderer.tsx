@@ -1,59 +1,75 @@
 'use client';
 
 import { SecaoProposta, type AlojamentoData, type TransporteData } from '@/lib/crm-types';
-import { CheckCircle2, XCircle, MessageCircle, Star } from 'lucide-react';
+import { CheckCircle2, XCircle, MessageCircle, Star, Plane, Clock, MapPin } from 'lucide-react';
 import { MapaRoteiro } from '@/components/propostas/MapaRoteiro';
 import { t, type IdiomaProposal } from '@/lib/i18n-proposta';
 
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
+// ─── TEXTO ───
 function TextoPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
   const c = conteudo as { titulo?: string; corpo?: string };
   const isHTML = c.corpo?.includes('<');
   return (
-    <div className="space-y-2">
-      {c.titulo && <h3 className="text-xl font-semibold">{c.titulo}</h3>}
+    <div className="space-y-3">
+      {c.titulo && <h3 className="text-2xl font-bold tracking-tight">{c.titulo}</h3>}
       {c.corpo && (
         isHTML
-          ? <div className="prose prose-sm max-w-none leading-relaxed opacity-80 [&_a]:text-emerald-500 [&_a]:underline [&_mark]:bg-yellow-200/50 [&_blockquote]:border-l-2 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:opacity-70" dangerouslySetInnerHTML={{ __html: c.corpo }} />
-          : <p className="whitespace-pre-wrap leading-relaxed opacity-80">{c.corpo}</p>
+          ? <div className="prose prose-sm max-w-none leading-relaxed opacity-80 [&_a]:text-emerald-600 [&_a]:underline [&_mark]:bg-yellow-200/50 [&_blockquote]:border-l-4 [&_blockquote]:border-emerald-300 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:opacity-70" dangerouslySetInnerHTML={{ __html: c.corpo }} />
+          : <p className="whitespace-pre-wrap leading-relaxed opacity-80 text-[15px]">{c.corpo}</p>
       )}
     </div>
   );
 }
 
+// ─── SERVICO ───
 function ServicoPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
   const c = conteudo as { icone?: string; titulo?: string; descricao?: string; detalhes?: string[]; imagem?: string; valor?: number; exibir_valor?: boolean };
+  const hasImage = !!c.imagem;
+
   return (
-    <div className="flex gap-4">
-      {c.imagem && (
-        <img src={c.imagem} alt={c.titulo || ''} className="w-32 h-24 rounded-lg object-cover shrink-0" />
-      )}
-      <div className="flex-1">
-        <div className="flex items-center gap-2">
-          {c.icone && <span className="text-2xl">{c.icone}</span>}
-          <h4 className="text-lg font-semibold">{c.titulo}</h4>
+    <div className={`rounded-2xl overflow-hidden shadow-sm border border-gray-100 ${hasImage ? '' : 'p-5'}`}>
+      {hasImage && (
+        <div className="relative h-48 w-full">
+          <img src={c.imagem} alt={c.titulo || ''} className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+          <div className="absolute bottom-4 left-5 right-5">
+            <div className="flex items-center gap-2">
+              {c.icone && <span className="text-2xl drop-shadow-lg">{c.icone}</span>}
+              <h4 className="text-xl font-bold text-white drop-shadow-lg">{c.titulo}</h4>
+            </div>
+          </div>
         </div>
-        {c.descricao && <p className="mt-1 opacity-80 text-sm whitespace-pre-wrap">{c.descricao}</p>}
+      )}
+      <div className={hasImage ? 'p-5' : ''}>
+        {!hasImage && (
+          <div className="flex items-center gap-2 mb-2">
+            {c.icone && <span className="text-2xl">{c.icone}</span>}
+            <h4 className="text-lg font-bold">{c.titulo}</h4>
+          </div>
+        )}
+        {c.descricao && <p className="opacity-70 text-sm whitespace-pre-wrap leading-relaxed">{c.descricao}</p>}
         {c.detalhes && c.detalhes.length > 0 && (
-          <ul className="mt-2 space-y-1">
-            {c.detalhes.map((d, i) => (
-              <li key={i} className="flex items-start gap-1.5 text-sm">
-                <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />
+          <ul className="mt-3 space-y-1.5">
+            {c.detalhes.filter(d => d !== '---').map((d, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm">
+                <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-emerald-500" />
                 <span>{d}</span>
               </li>
             ))}
           </ul>
         )}
         {c.exibir_valor && c.valor && c.valor > 0 && (
-          <div className="mt-2 text-lg font-bold text-emerald-600">{BRL(c.valor)}</div>
+          <div className="mt-3 text-xl font-bold text-emerald-600">{BRL(c.valor)}</div>
         )}
       </div>
     </div>
   );
 }
 
+// ─── ROTEIRO DIA ───
 function RoteiroDiaPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
   const dias = (conteudo as { dias?: Array<{ numero: number; titulo: string; descricao: string; imagem?: string; lat?: number; lng?: number; atividades?: string[] }> }).dias || [];
   const pontosComCoord = dias.filter(d => d.lat && d.lng).map(d => ({
@@ -62,30 +78,30 @@ function RoteiroDiaPreview({ conteudo }: { conteudo: Record<string, unknown> }) 
 
   return (
     <div className="space-y-4">
-      {/* Mapa do roteiro */}
       {pontosComCoord.length > 0 && (
-        <div className="mb-6">
+        <div className="mb-6 rounded-2xl overflow-hidden shadow-sm">
           <MapaRoteiro pontos={pontosComCoord} height="320px" />
         </div>
       )}
-
       {dias.map((dia, i) => (
         <div key={i} className="flex gap-4">
           <div className="flex flex-col items-center">
-            <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-sm shrink-0">
+            <div className="w-11 h-11 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-md">
               {dia.numero}
             </div>
             {i < dias.length - 1 && <div className="w-0.5 flex-1 bg-emerald-200 mt-1" />}
           </div>
-          <div className="flex-1 pb-4">
-            <h4 className="font-semibold">{dia.titulo}</h4>
-            {dia.descricao && <p className="mt-1 text-sm opacity-80 whitespace-pre-wrap">{dia.descricao}</p>}
-            {dia.imagem && <img src={dia.imagem} alt={dia.titulo} className="mt-2 rounded-lg max-h-48 object-cover" />}
+          <div className="flex-1 pb-6">
+            <h4 className="font-bold text-lg">{dia.titulo}</h4>
+            {dia.imagem && (
+              <img src={dia.imagem} alt={dia.titulo} className="mt-2 rounded-xl w-full max-h-56 object-cover shadow-sm" />
+            )}
+            {dia.descricao && <p className="mt-2 text-sm opacity-75 whitespace-pre-wrap leading-relaxed">{dia.descricao}</p>}
             {dia.atividades && dia.atividades.length > 0 && (
               <ul className="mt-2 space-y-1">
                 {dia.atividades.map((a, j) => (
                   <li key={j} className="flex items-start gap-1.5 text-sm">
-                    <Star className="w-3 h-3 mt-0.5 shrink-0 text-amber-500" />
+                    <Star className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-500 fill-amber-500" />
                     <span>{a}</span>
                   </li>
                 ))}
@@ -98,25 +114,45 @@ function RoteiroDiaPreview({ conteudo }: { conteudo: Record<string, unknown> }) 
   );
 }
 
+// ─── GALERIA ───
 function GaleriaPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
   const imgs = (conteudo as { imagens?: Array<{ url: string; legenda?: string }> }).imagens || [];
   if (imgs.length === 0) return null;
+
+  // Hero layout: first image large, rest in grid
+  const [hero, ...rest] = imgs;
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-      {imgs.map((img, i) => (
-        <div key={i} className="relative group">
-          <img src={img.url} alt={img.legenda || ''} className="w-full h-48 object-cover rounded-lg" />
-          {img.legenda && (
-            <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-2 py-1 rounded-b-lg">
-              {img.legenda}
+    <div className="space-y-2">
+      {/* Hero image */}
+      <div className="relative rounded-2xl overflow-hidden shadow-sm">
+        <img src={hero.url} alt={hero.legenda || ''} className="w-full h-72 object-cover" />
+        {hero.legenda && (
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-4 py-3">
+            <span className="text-white text-sm font-medium">{hero.legenda}</span>
+          </div>
+        )}
+      </div>
+      {/* Thumbnails */}
+      {rest.length > 0 && (
+        <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
+          {rest.map((img, i) => (
+            <div key={i} className="relative group rounded-xl overflow-hidden">
+              <img src={img.url} alt={img.legenda || ''} className="w-full h-32 object-cover transition-transform group-hover:scale-105" />
+              {img.legenda && (
+                <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {img.legenda}
+                </div>
+              )}
             </div>
-          )}
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }
 
+// ─── INCLUSOS ───
 function InclusosPreview({ conteudo, idioma }: { conteudo: Record<string, unknown>; idioma?: IdiomaProposal }) {
   const c = conteudo as { inclusos?: string[]; nao_inclusos?: string[] };
   const inclusos = (c.inclusos || []).filter(Boolean);
@@ -125,14 +161,14 @@ function InclusosPreview({ conteudo, idioma }: { conteudo: Record<string, unknow
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       {inclusos.length > 0 && (
-        <div>
-          <h4 className="font-semibold text-emerald-700 mb-2 flex items-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4" /> {i18n.oQueEstaIncluso}
+        <div className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100">
+          <h4 className="font-bold text-emerald-800 mb-3 flex items-center gap-2 text-base">
+            <CheckCircle2 className="w-5 h-5" /> {i18n.oQueEstaIncluso}
           </h4>
-          <ul className="space-y-1.5">
+          <ul className="space-y-2">
             {inclusos.map((item, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm">
-                <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />
+              <li key={i} className="flex items-start gap-2 text-sm text-emerald-900">
+                <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-emerald-500" />
                 <span>{item}</span>
               </li>
             ))}
@@ -140,14 +176,14 @@ function InclusosPreview({ conteudo, idioma }: { conteudo: Record<string, unknow
         </div>
       )}
       {naoInclusos.length > 0 && (
-        <div>
-          <h4 className="font-semibold text-red-600 mb-2 flex items-center gap-1.5">
-            <XCircle className="w-4 h-4" /> {i18n.naoIncluso}
+        <div className="bg-red-50 rounded-2xl p-5 border border-red-100">
+          <h4 className="font-bold text-red-800 mb-3 flex items-center gap-2 text-base">
+            <XCircle className="w-5 h-5" /> {i18n.naoIncluso}
           </h4>
-          <ul className="space-y-1.5">
+          <ul className="space-y-2">
             {naoInclusos.map((item, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm">
-                <XCircle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-red-400" />
+              <li key={i} className="flex items-start gap-2 text-sm text-red-900">
+                <XCircle className="w-4 h-4 mt-0.5 shrink-0 text-red-400" />
                 <span>{item}</span>
               </li>
             ))}
@@ -158,21 +194,32 @@ function InclusosPreview({ conteudo, idioma }: { conteudo: Record<string, unknow
   );
 }
 
+// ─── VALORES ───
 function ValoresPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
   const c = conteudo as { opcoes?: Array<{ titulo: string; valor_total: number; destaque: boolean; parcelas: Array<{ forma: string; valor_parcela: number; valor_total: number; destaque: boolean }> }>; observacoes_valores?: string };
   const opcoes = c.opcoes || [];
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {opcoes.map((opc, i) => (
-          <div key={i} className={`rounded-xl p-4 border-2 ${opc.destaque ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-white'}`}>
-            <h4 className="font-semibold text-lg">{opc.titulo}</h4>
-            <div className="text-2xl font-bold text-emerald-600 mt-1">{BRL(opc.valor_total)}</div>
+          <div key={i} className={`rounded-2xl p-6 border-2 shadow-sm transition-transform ${
+            opc.destaque
+              ? 'border-emerald-500 bg-emerald-50 scale-[1.02]'
+              : 'border-gray-200 bg-white'
+          }`}>
+            {opc.destaque && (
+              <span className="inline-block bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-0.5 rounded-full mb-3">
+                Recomendado
+              </span>
+            )}
+            <h4 className="font-bold text-lg">{opc.titulo}</h4>
+            <div className="text-3xl font-black text-emerald-600 mt-2">{BRL(opc.valor_total)}</div>
             {opc.parcelas && opc.parcelas.length > 0 && (
-              <div className="mt-2 space-y-1">
+              <div className="mt-3 space-y-1.5 border-t border-gray-200 pt-3">
                 {opc.parcelas.map((p, pi) => (
-                  <div key={pi} className={`text-sm ${p.destaque ? 'font-semibold text-emerald-700' : 'opacity-70'}`}>
-                    {p.forma}: {BRL(p.valor_parcela)}
+                  <div key={pi} className={`text-sm flex justify-between ${p.destaque ? 'font-semibold text-emerald-700' : 'opacity-60'}`}>
+                    <span>{p.forma}</span>
+                    <span>{BRL(p.valor_parcela)}</span>
                   </div>
                 ))}
               </div>
@@ -181,25 +228,26 @@ function ValoresPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
         ))}
       </div>
       {c.observacoes_valores && (
-        <p className="text-xs opacity-60 mt-2">{c.observacoes_valores}</p>
+        <p className="text-xs opacity-50 text-center">{c.observacoes_valores}</p>
       )}
     </div>
   );
 }
 
+// ─── DEPOIMENTO ───
 function DepoimentoPreview({ conteudo, idioma }: { conteudo: Record<string, unknown>; idioma?: IdiomaProposal }) {
   const deps = (conteudo as { depoimentos?: Array<{ texto: string; autor: string; foto?: string; destino?: string }> }).depoimentos || [];
   const i18n = t(idioma);
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {deps.map((d, i) => (
-        <div key={i} className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-          <p className="italic text-sm leading-relaxed">&ldquo;{d.texto}&rdquo;</p>
-          <div className="flex items-center gap-2 mt-3">
-            {d.foto && <img src={d.foto} alt={d.autor} className="w-8 h-8 rounded-full object-cover" />}
+        <div key={i} className="bg-gray-50 rounded-2xl p-5 border border-gray-100 shadow-sm">
+          <p className="italic text-[15px] leading-relaxed text-gray-700">&ldquo;{d.texto}&rdquo;</p>
+          <div className="flex items-center gap-3 mt-4">
+            {d.foto && <img src={d.foto} alt={d.autor} className="w-10 h-10 rounded-full object-cover ring-2 ring-white shadow" />}
             <div>
-              <div className="text-sm font-semibold">{d.autor}</div>
-              {d.destino && <div className="text-xs opacity-60">{i18n.viajouPara} {d.destino}</div>}
+              <div className="text-sm font-bold">{d.autor}</div>
+              {d.destino && <div className="text-xs opacity-50">{i18n.viajouPara} {d.destino}</div>}
             </div>
           </div>
         </div>
@@ -208,6 +256,7 @@ function DepoimentoPreview({ conteudo, idioma }: { conteudo: Record<string, unkn
   );
 }
 
+// ─── CTA ───
 function CtaPreview({ conteudo, corPrimaria, idioma }: { conteudo: Record<string, unknown>; corPrimaria: string; idioma?: IdiomaProposal }) {
   const c = conteudo as { texto_botao?: string; tipo_acao?: string; numero_whatsapp?: string; mensagem_predefinida?: string; cor_botao?: string };
   const cor = c.cor_botao || corPrimaria || '#004aad';
@@ -220,11 +269,11 @@ function CtaPreview({ conteudo, corPrimaria, idioma }: { conteudo: Record<string
   };
 
   return (
-    <div className="text-center py-4">
+    <div className="text-center py-6">
       <button
         onClick={handleClick}
         style={{ backgroundColor: cor }}
-        className="inline-flex items-center gap-2 px-8 py-3 text-white font-semibold rounded-full text-lg shadow-lg hover:opacity-90 transition-opacity"
+        className="inline-flex items-center gap-2 px-10 py-4 text-white font-bold rounded-full text-lg shadow-xl hover:shadow-2xl hover:scale-105 transition-all"
       >
         {c.tipo_acao === 'WHATSAPP' && <MessageCircle className="w-5 h-5" />}
         {c.texto_botao || t(idioma).entrarEmContato}
@@ -233,11 +282,10 @@ function CtaPreview({ conteudo, corPrimaria, idioma }: { conteudo: Record<string
   );
 }
 
+// ─── VIDEO ───
 function VideoPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
   const c = conteudo as { url?: string; titulo?: string };
   if (!c.url) return null;
-
-  // Convert YouTube/Vimeo URLs to embed
   let embedUrl = '';
   const url = c.url;
   const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/);
@@ -248,48 +296,46 @@ function VideoPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
 
   return (
     <div className="space-y-2">
-      {c.titulo && <h3 className="text-xl font-semibold">{c.titulo}</h3>}
-      <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-        <iframe
-          src={embedUrl}
-          className="absolute inset-0 w-full h-full rounded-xl"
-          allowFullScreen
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        />
+      {c.titulo && <h3 className="text-xl font-bold">{c.titulo}</h3>}
+      <div className="relative w-full rounded-2xl overflow-hidden shadow-sm" style={{ paddingBottom: '56.25%' }}>
+        <iframe src={embedUrl} className="absolute inset-0 w-full h-full" allowFullScreen
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" />
       </div>
     </div>
   );
 }
 
+// ─── MAPA ───
 function MapaPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
   const c = conteudo as { titulo?: string; pontos?: Array<{ lat: number; lng: number; label: string }> };
   const pontos = (c.pontos || []).filter(p => p.lat && p.lng);
   if (pontos.length === 0) return null;
-
   return (
     <div className="space-y-2">
-      {c.titulo && <h3 className="text-xl font-semibold">{c.titulo}</h3>}
-      <MapaRoteiro pontos={pontos.map((p, i) => ({ ...p, dia: i + 1 }))} height="400px" />
+      {c.titulo && <h3 className="text-xl font-bold">{c.titulo}</h3>}
+      <div className="rounded-2xl overflow-hidden shadow-sm">
+        <MapaRoteiro pontos={pontos.map((p, i) => ({ ...p, dia: i + 1 }))} height="400px" />
+      </div>
     </div>
   );
 }
 
+// ─── FAQ ───
 function FAQPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
   const c = conteudo as { titulo?: string; perguntas?: Array<{ pergunta: string; resposta: string }> };
   const perguntas = (c.perguntas || []).filter(p => p.pergunta);
   if (perguntas.length === 0) return null;
-
   return (
     <div className="space-y-3">
-      {c.titulo && <h3 className="text-xl font-semibold">{c.titulo}</h3>}
+      {c.titulo && <h3 className="text-xl font-bold">{c.titulo}</h3>}
       <div className="space-y-2">
         {perguntas.map((faq, i) => (
-          <details key={i} className="group border border-gray-200 rounded-lg">
-            <summary className="flex items-center justify-between px-4 py-3 cursor-pointer font-medium text-sm hover:bg-gray-50 rounded-lg">
+          <details key={i} className="group rounded-xl border border-gray-200 overflow-hidden">
+            <summary className="flex items-center justify-between px-5 py-3.5 cursor-pointer font-medium text-sm hover:bg-gray-50">
               {faq.pergunta}
-              <span className="text-gray-400 group-open:rotate-180 transition-transform">&#9662;</span>
+              <span className="text-gray-400 group-open:rotate-180 transition-transform text-lg">&#9662;</span>
             </summary>
-            <div className="px-4 pb-3 text-sm opacity-80 whitespace-pre-wrap">{faq.resposta}</div>
+            <div className="px-5 pb-4 text-sm opacity-75 whitespace-pre-wrap leading-relaxed">{faq.resposta}</div>
           </details>
         ))}
       </div>
@@ -297,38 +343,34 @@ function FAQPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
   );
 }
 
+// ─── COUNTDOWN ───
 function CountdownPreview({ conteudo, idioma }: { conteudo: Record<string, unknown>; idioma?: IdiomaProposal }) {
   const c = conteudo as { titulo?: string; data_evento?: string; mensagem?: string };
   const i18n = t(idioma);
   if (!c.data_evento) return null;
-
   const target = new Date(c.data_evento + 'T00:00:00').getTime();
-  const now = Date.now();
-  const diff = target - now;
-
+  const diff = target - Date.now();
   if (diff <= 0) {
     return (
-      <div className="text-center py-6">
-        {c.titulo && <h3 className="text-xl font-semibold mb-2">{c.titulo}</h3>}
-        <p className="text-lg text-emerald-600 font-semibold">{c.mensagem || i18n.grandiaDiaChegou}</p>
+      <div className="text-center py-8">
+        {c.titulo && <h3 className="text-xl font-bold mb-2">{c.titulo}</h3>}
+        <p className="text-lg text-emerald-600 font-bold">{c.mensagem || i18n.grandiaDiaChegou}</p>
       </div>
     );
   }
-
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-
+  const days = Math.floor(diff / 86400000);
+  const hours = Math.floor((diff % 86400000) / 3600000);
+  const minutes = Math.floor((diff % 3600000) / 60000);
   return (
-    <div className="text-center py-6">
-      {c.titulo && <h3 className="text-xl font-semibold mb-4">{c.titulo}</h3>}
+    <div className="text-center py-8">
+      {c.titulo && <h3 className="text-xl font-bold mb-5">{c.titulo}</h3>}
       <div className="flex justify-center gap-4">
         {[{ v: days, l: i18n.dias }, { v: hours, l: i18n.horas }, { v: minutes, l: i18n.minutos }].map((item, i) => (
           <div key={i} className="flex flex-col items-center">
-            <div className="w-16 h-16 rounded-xl bg-emerald-50 border-2 border-emerald-200 flex items-center justify-center text-2xl font-bold text-emerald-700">
+            <div className="w-20 h-20 rounded-2xl bg-emerald-600 flex items-center justify-center text-3xl font-black text-white shadow-lg">
               {item.v}
             </div>
-            <span className="text-xs mt-1 opacity-60">{item.l}</span>
+            <span className="text-xs mt-2 font-medium opacity-50 uppercase tracking-wider">{item.l}</span>
           </div>
         ))}
       </div>
@@ -336,63 +378,225 @@ function CountdownPreview({ conteudo, idioma }: { conteudo: Record<string, unkno
   );
 }
 
+// ─── ALOJAMENTO — Card visual rico ───
 const REGIME_LABELS: Record<string, string> = {
   RO: 'Room Only', BB: 'Bed & Breakfast', HB: 'Half Board', FB: 'Full Board', AI: 'All Inclusive',
 };
+
+function AlojamentoPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
+  const a = conteudo as Partial<AlojamentoData & {
+    hotel_galeria?: string[];
+    preco_noite?: number;
+    preco_total?: number;
+    rating?: number;
+    reviews_count?: number;
+    amenities?: string[];
+  }>;
+
+  const hasGallery = a.hotel_galeria && a.hotel_galeria.length > 0;
+  const hasImage = !!a.hotel_imagem;
+  const starCount = a.hotel_estrelas || 0;
+
+  if (a.viagem_noturna) {
+    return (
+      <div className="flex items-center gap-3 p-4 rounded-xl bg-indigo-50 border border-indigo-100">
+        <span className="text-2xl">✈️</span>
+        <div>
+          <h4 className="font-bold">Viagem Noturna</h4>
+          <p className="text-sm opacity-60">{a.destino_nome}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl overflow-hidden shadow-sm border border-gray-100">
+      {/* Image hero */}
+      {hasImage && (
+        <div className="relative h-52 w-full">
+          <img src={a.hotel_imagem!} alt={a.hotel_nome || ''} className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+          <div className="absolute bottom-4 left-5 right-5">
+            <div className="flex items-center gap-2">
+              <h4 className="text-xl font-bold text-white drop-shadow-lg">{a.hotel_nome || 'Hotel'}</h4>
+              {starCount > 0 && <span className="text-amber-400 text-sm drop-shadow">{'★'.repeat(starCount)}</span>}
+            </div>
+            {a.destino_nome && (
+              <div className="flex items-center gap-1 mt-0.5 text-white/80 text-sm">
+                <MapPin className="w-3 h-3" /> {a.destino_nome}
+              </div>
+            )}
+          </div>
+          {/* Rating badge */}
+          {a.rating && (
+            <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm rounded-lg px-2.5 py-1 shadow">
+              <div className="flex items-center gap-1">
+                <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                <span className="text-sm font-bold">{a.rating}</span>
+                {a.reviews_count && <span className="text-[10px] text-gray-500">({a.reviews_count.toLocaleString('pt-BR')})</span>}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Gallery strip */}
+      {hasGallery && (
+        <div className="flex gap-0.5 overflow-x-auto bg-gray-100">
+          {a.hotel_galeria!.slice(0, 6).map((url, i) => (
+            <img key={i} src={url} alt="" className="w-20 h-14 object-cover shrink-0" loading="lazy" />
+          ))}
+        </div>
+      )}
+
+      {/* Info */}
+      <div className="p-5">
+        {!hasImage && (
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-2xl">🏨</span>
+            <h4 className="text-lg font-bold">{a.hotel_nome || 'Hotel'}</h4>
+            {starCount > 0 && <span className="text-amber-500 text-sm">{'★'.repeat(starCount)}</span>}
+          </div>
+        )}
+
+        {/* Stay info row */}
+        <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+          {a.check_in && (
+            <span><span className="opacity-50">Check-in:</span> <span className="font-medium">{new Date(a.check_in + 'T12:00:00').toLocaleDateString('pt-BR')}</span></span>
+          )}
+          {a.check_out && (
+            <span><span className="opacity-50">Check-out:</span> <span className="font-medium">{new Date(a.check_out + 'T12:00:00').toLocaleDateString('pt-BR')}</span></span>
+          )}
+          {a.noites ? <span className="font-medium">{a.noites} noite{a.noites !== 1 ? 's' : ''}</span> : null}
+          {a.regime && <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full text-xs font-medium">{REGIME_LABELS[a.regime] || a.regime}</span>}
+        </div>
+
+        {/* Price */}
+        {a.preco_noite && (
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-xl font-bold text-emerald-600">R$ {a.preco_noite.toLocaleString('pt-BR')}</span>
+            <span className="text-xs opacity-50">/noite</span>
+            {a.preco_total && <span className="text-sm opacity-50 ml-2">Total: R$ {a.preco_total.toLocaleString('pt-BR')}</span>}
+          </div>
+        )}
+
+        {/* Amenities */}
+        {a.amenities && a.amenities.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-3">
+            {a.amenities.slice(0, 8).map((am, i) => (
+              <span key={i} className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{am}</span>
+            ))}
+          </div>
+        )}
+
+        {/* Description */}
+        {a.hotel_descricao && (
+          <p className="text-sm opacity-60 mt-3 line-clamp-3 whitespace-pre-wrap">{a.hotel_descricao}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── TRANSPORTE — Boarding pass estilo cia aérea ───
 const TRANSPORTE_ICONS: Record<string, string> = {
   VOO: '✈️', TRANSFER: '🚐', TREM: '🚆', ONIBUS: '🚌', CARRO: '🚗', BARCO: '⛴️',
 };
 
-function AlojamentoPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
-  const a = conteudo as Partial<AlojamentoData>;
-  return (
-    <div className="flex gap-4 p-4 rounded-xl bg-gradient-to-r from-blue-50/50 to-transparent border border-blue-100">
-      {a.hotel_imagem && (
-        <img src={a.hotel_imagem} alt={a.hotel_nome || ''} className="w-28 h-20 rounded-lg object-cover shrink-0" />
-      )}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">🏨</span>
-          <h4 className="text-lg font-semibold truncate">{a.viagem_noturna ? '✈ Viagem Noturna' : (a.hotel_nome || 'Hotel')}</h4>
-          {a.hotel_estrelas ? <span className="text-amber-500 text-sm">{'★'.repeat(a.hotel_estrelas)}</span> : null}
-        </div>
-        <p className="text-sm opacity-70 mt-0.5">{a.destino_nome}</p>
-        <div className="flex flex-wrap gap-3 mt-2 text-xs opacity-60">
-          {a.check_in && <span>Check-in: {new Date(a.check_in + 'T12:00:00').toLocaleDateString('pt-BR')}</span>}
-          {a.check_out && <span>Check-out: {new Date(a.check_out + 'T12:00:00').toLocaleDateString('pt-BR')}</span>}
-          {a.noites ? <span>{a.noites} noite(s)</span> : null}
-          {a.regime && <span>{REGIME_LABELS[a.regime] || a.regime}</span>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function TransportePreview({ conteudo }: { conteudo: Record<string, unknown> }) {
   const tr = conteudo as Partial<TransporteData>;
-  const icon = TRANSPORTE_ICONS[tr.tipo || 'TRANSFER'] || '🚐';
-  return (
-    <div className="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-indigo-50/50 to-transparent border border-indigo-100">
-      <span className="text-2xl">{icon}</span>
-      <div className="flex-1 min-w-0">
-        <h4 className="text-lg font-semibold">
-          {tr.origem || '?'} → {tr.destino || '?'}
-        </h4>
-        <div className="flex flex-wrap gap-3 mt-1 text-xs opacity-60">
-          {tr.data && <span>{new Date(tr.data + 'T12:00:00').toLocaleDateString('pt-BR')}</span>}
-          {tr.companhia && <span>{tr.companhia}</span>}
-          {tr.numero_voo && <span>{tr.numero_voo}</span>}
-          {tr.horario_saida && <span>Saida: {tr.horario_saida}</span>}
-          {tr.horario_chegada && <span>Chegada: {tr.horario_chegada}</span>}
-          {tr.distancia_km ? <span>{tr.distancia_km}km</span> : null}
-          {tr.tempo_estimado && <span>{tr.tempo_estimado}</span>}
+  const isVoo = tr.tipo === 'VOO';
+
+  if (!isVoo) {
+    // Non-flight: clean card
+    const icon = TRANSPORTE_ICONS[tr.tipo || 'TRANSFER'] || '🚐';
+    return (
+      <div className="flex items-center gap-4 p-5 rounded-2xl bg-gray-50 border border-gray-100 shadow-sm">
+        <span className="text-3xl">{icon}</span>
+        <div className="flex-1 min-w-0">
+          <h4 className="text-lg font-bold">{tr.origem || '?'} → {tr.destino || '?'}</h4>
+          <div className="flex flex-wrap gap-3 mt-1 text-sm opacity-60">
+            {tr.data && <span>{new Date(tr.data + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}</span>}
+            {tr.horario_saida && tr.horario_chegada && <span>{tr.horario_saida} → {tr.horario_chegada}</span>}
+            {tr.tempo_estimado && <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {tr.tempo_estimado}</span>}
+            {tr.distancia_km ? <span>{tr.distancia_km} km</span> : null}
+          </div>
+          {tr.detalhes && <p className="text-sm opacity-60 mt-1">{tr.detalhes}</p>}
         </div>
-        {tr.detalhes && <p className="text-sm opacity-70 mt-1">{tr.detalhes}</p>}
       </div>
+    );
+  }
+
+  // ─── BOARDING PASS DESIGN ───
+  const formattedDate = tr.data
+    ? new Date(tr.data + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+    : '';
+
+  return (
+    <div className="boarding-pass rounded-2xl overflow-hidden shadow-md border border-gray-200">
+      {/* Header bar */}
+      <div className="bg-gray-900 text-white px-6 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Plane className="w-5 h-5 text-sky-400" />
+          <span className="font-bold text-sm tracking-wide">{tr.companhia || 'Voo'}</span>
+          {tr.numero_voo && <span className="text-sky-300 font-mono text-sm">{tr.numero_voo}</span>}
+        </div>
+        {formattedDate && (
+          <span className="text-xs text-gray-400 capitalize">{formattedDate}</span>
+        )}
+      </div>
+
+      {/* Route */}
+      <div className="bg-white px-6 py-6">
+        <div className="flex items-center justify-between gap-4">
+          {/* Departure */}
+          <div className="text-center flex-1">
+            <div className="text-3xl font-black tracking-tight">{tr.origem || '---'}</div>
+            {tr.horario_saida && (
+              <div className="text-lg font-bold text-gray-700 mt-1">{tr.horario_saida}</div>
+            )}
+            <div className="text-[11px] text-gray-400 uppercase tracking-wider mt-0.5">Partida</div>
+          </div>
+
+          {/* Route line */}
+          <div className="flex-1 flex items-center justify-center px-2">
+            <div className="flex items-center w-full gap-1">
+              <div className="w-2.5 h-2.5 rounded-full bg-sky-500 shrink-0" />
+              <div className="flex-1 relative">
+                <div className="border-t-2 border-dashed border-sky-300 w-full" />
+                {tr.tempo_estimado && (
+                  <div className="absolute -top-5 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-sky-50 text-sky-700 text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap">
+                    <Clock className="w-3 h-3" /> {tr.tempo_estimado}
+                  </div>
+                )}
+                <Plane className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 text-sky-500" />
+              </div>
+              <div className="w-2.5 h-2.5 rounded-full bg-sky-500 shrink-0" />
+            </div>
+          </div>
+
+          {/* Arrival */}
+          <div className="text-center flex-1">
+            <div className="text-3xl font-black tracking-tight">{tr.destino || '---'}</div>
+            {tr.horario_chegada && (
+              <div className="text-lg font-bold text-gray-700 mt-1">{tr.horario_chegada}</div>
+            )}
+            <div className="text-[11px] text-gray-400 uppercase tracking-wider mt-0.5">Chegada</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Details footer */}
+      {tr.detalhes && (
+        <div className="bg-gray-50 px-6 py-2.5 border-t border-dashed border-gray-200">
+          <p className="text-xs text-gray-500">{tr.detalhes}</p>
+        </div>
+      )}
     </div>
   );
 }
 
+// ─── MAIN RENDERER ───
 interface Props {
   secoes: SecaoProposta[];
   corPrimaria: string;
@@ -401,7 +605,7 @@ interface Props {
 
 export function PreviewRenderer({ secoes, corPrimaria, idioma }: Props) {
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       {secoes.filter(s => s.visivel).map(secao => (
         <div key={secao.id}>
           {secao.tipo === 'TEXTO' && <TextoPreview conteudo={secao.conteudo} />}
