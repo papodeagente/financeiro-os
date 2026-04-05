@@ -27,8 +27,8 @@ import Link from 'next/link';
 const ABAS_PLANEJAMENTO: AbaType[] = ['inf', 'tkt', 'htl', 'rec', 'car', 'guia', 'seg', 'navio', 'ing', 'brinde', 'proposta', 'htl_seg'];
 
 const ABA_ICONS: Record<string, string> = {
-  inf: 'ℹ', tkt: '✈', htl: '🏨', rec: '🎯', car: '🚌', guia: '👤',
-  seg: '🛡', navio: '🚢', ing: '🎫', brinde: '🎁', proposta: '💰', htl_seg: '📊',
+  inf: 'ℹ️', tkt: '✈️', htl: '🏨', rec: '🎯', car: '🚐', guia: '🧑‍🏫',
+  seg: '🛡️', navio: '🚢', ing: '🎟️', brinde: '🎁', proposta: '💰', htl_seg: '📊',
 };
 
 function hasData(grupo: GrupoViagem, aba: AbaType): boolean {
@@ -135,18 +135,18 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
   return (
     <div className="flex h-full">
       {/* Inner sidebar - Planning tabs only */}
-      <aside className="w-20 bg-[var(--t-bg)] text-[var(--t-text)] flex flex-col items-center py-3 gap-1 overflow-y-auto shrink-0 border-r border-[var(--t-border)]">
+      <aside className="w-[82px] bg-[var(--t-bg)] text-[var(--t-text)] flex flex-col items-center py-3 gap-1 overflow-y-auto shrink-0 border-r border-[var(--t-border)]">
         <div className="text-[8px] uppercase tracking-wider text-[var(--t-text-secondary)] mb-1">Produto</div>
         {ABAS_PLANEJAMENTO.map(aba => (
           <button
             key={aba}
             onClick={() => setActiveTab(aba)}
-            className={`w-16 py-1.5 rounded-lg text-center transition-all ${
+            className={`w-[72px] py-1.5 rounded-lg text-center transition-all ${
               activeTab === aba ? 'bg-[var(--t-accent)] text-[var(--t-text)]' : 'hover:bg-[var(--t-surface-hover)]'
             }`}
           >
             <div className="text-sm">{ABA_ICONS[aba]}</div>
-            <div className="text-[9px] font-semibold">{ABA_LABELS[aba]}</div>
+            <div className="text-[9px] font-semibold leading-tight">{ABA_LABELS[aba]}</div>
             {hasData(grupo, aba) && <div className="w-1.5 h-1.5 rounded-full bg-green-400 mx-auto mt-0.5" />}
           </button>
         ))}
