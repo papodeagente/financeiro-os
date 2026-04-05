@@ -168,84 +168,61 @@ export async function POST(req: Request) {
       },
     });
 
-    // 2. Flight sections (TKT)
-    for (let tIdx = 0; tIdx < grupo.tkt.trechos.length; tIdx++) {
-      const trecho = grupo.tkt.trechos[tIdx];
-      const infoTrecho = grupo.trechos[tIdx];
-      const melhorAdt = minPositivo(trecho.fontes.map(f => f.valor_adt));
-      const melhorChd = minPositivo(trecho.fontes.map(f => f.valor_chd));
-      const bestFonte = trecho.fontes.find(f => f.valor_adt === melhorAdt && melhorAdt > 0) || trecho.fontes.find(f => f.partida_chegada) || trecho.fontes[0];
-      const pc = bestFonte?.partida_chegada || '';
+    // 2. ALOJAMENTO sections (HTL) — rich hotel cards with gallery, map, click-to-expand
+    for (let hIdx = 0; hIdx < grupo.htl.hoteis.length; hIdx++) {
+      const hotel = grupo.htl.hoteis[hIdx];
+      const per = periodos[hIdx];
+      const aloj = alojamentos[hIdx];
+      if (!aloj) continue;
 
-      const detalhes: string[] = [];
-      if (pc) detalhes.push(`Horários: ${pc}`);
-      if (infoTrecho) detalhes.push(`PAX: ${infoTrecho.qtd_adt} ADT${infoTrecho.qtd_chd > 0 ? ` + ${infoTrecho.qtd_chd} CHD` : ''}`);
-      if (trecho.deadline) detalhes.push(`Deadline: ${fmtDate(trecho.deadline)}`);
-      if (bestFonte && bestFonte.nome) detalhes.push(`Fornecedor: ${bestFonte.nome}`);
-
-      const origem = pc.split('→')[0]?.trim()?.split(' ')[0] || '';
-      const destinoVoo = pc.split('→')[1]?.trim()?.split(' ')[0] || '';
+      // Find best DBL price for preco_noite/preco_total
+      let bestDbl = Infinity;
+      for (const f of hotel.fontes) {
+        if (f.valor_dbl !== null && f.valor_dbl > 0 && f.valor_dbl < bestDbl) bestDbl = f.valor_dbl;
+      }
+      const noites = calcDiarias(per?.check_in || null, per?.check_out || null);
+      const precoNoite = hotel.info.hotel_preco_noite || (bestDbl < Infinity && noites > 0 ? Math.round(bestDbl / noites) : 0);
+      const precoTotal = bestDbl < Infinity ? bestDbl : 0;
 
       secoes.push({
-        id: generateId(), tipo: 'SERVICO', ordem: ordem++, visivel: true,
+        id: aloj.id, tipo: 'ALOJAMENTO', ordem: ordem++, visivel: true,
         conteudo: {
-          icone: '✈️',
-          titulo: `Aéreo${origem && destinoVoo ? ` — ${origem} → ${destinoVoo}` : ` — Trecho ${tIdx + 1}`}`,
-          descricao: [
-            infoTrecho?.data ? fmtDate(infoTrecho.data) : '',
-            bestFonte?.nome || '',
-          ].filter(Boolean).join(' — '),
-          detalhes,
-          imagem: '',
-          valor: melhorAdt,
-          exibir_valor: false,
+          ...aloj,
+          rating: hotel.info.hotel_rating || undefined,
+          reviews_count: hotel.info.hotel_reviews_count || undefined,
+          amenities: hotel.info.hotel_amenities || [],
+          preco_noite: precoNoite,
+          preco_total: precoTotal,
+          viagem_noturna: false,
+          quarto_tipo: '',
+          bebidas: '',
         },
       });
     }
 
-    // 3. Hotel sections (HTL)
-    for (let hIdx = 0; hIdx < grupo.htl.hoteis.length; hIdx++) {
-      const hotel = grupo.htl.hoteis[hIdx];
-      const per = periodos[hIdx];
-      const tipos = ['sgl', 'dbl', 'tpl', 'qdp', 'chd'] as const;
+    // 3. TRANSPORTE sections (TKT) — flight cards with airline, route, click-to-expand
+    for (let tIdx = 0; tIdx < grupo.tkt.trechos.length; tIdx++) {
+      const transp = transportes[tIdx];
+      if (!transp) continue;
 
-      // Find best fonte
-      let bestFonte = { nome: '', total: Infinity };
-      for (const f of hotel.fontes) {
-        const dblVal = f.valor_dbl;
-        if (dblVal !== null && dblVal > 0 && dblVal < bestFonte.total) {
-          bestFonte = { nome: f.nome, total: dblVal };
-        }
-      }
+      const trecho = grupo.tkt.trechos[tIdx];
+      const bestFonte = trecho.fontes.find(f => f.partida_chegada) || trecho.fontes.find(f => (f.valor_adt ?? 0) > 0) || trecho.fontes[0];
+      const pc = bestFonte?.partida_chegada || '';
 
-      const detalhes: string[] = [];
-      if (per) {
-        const noites = calcDiarias(per.check_in, per.check_out);
-        detalhes.push(`${noites} noite${noites !== 1 ? 's' : ''}`);
-      }
-      if (hotel.info.pensao) detalhes.push(`Pensão: ${hotel.info.pensao}`);
-      if (hotel.info.check_in_hora) detalhes.push(`Check-in: ${hotel.info.check_in_hora}`);
-      if (hotel.info.check_out_hora) detalhes.push(`Check-out: ${hotel.info.check_out_hora}`);
-      if (hotel.info.politica_chd) detalhes.push(`CHD: ${hotel.info.politica_chd}`);
-      if (hotel.info.politica_free) detalhes.push(`Free: ${hotel.info.politica_free}`);
-      if (hotel.info.estacionamento) detalhes.push(`Estacionamento: ${hotel.info.estacionamento}`);
-      if (hotel.info.deadline) detalhes.push(`Deadline: ${fmtDate(hotel.info.deadline)}`);
-      if (bestFonte.nome) detalhes.push(`Fornecedor: ${bestFonte.nome}`);
-      if (hotel.info.info_adicional) detalhes.push(hotel.info.info_adicional);
+      // Parse flight details from partida_chegada format: "GRU 14:30 → DXB 22:40"
+      const parts = pc.split('→').map(s => s.trim());
+      const origemParts = parts[0]?.split(' ') || [];
+      const destParts = parts[1]?.split(' ') || [];
 
       secoes.push({
-        id: generateId(), tipo: 'SERVICO', ordem: ordem++, visivel: true,
+        id: transp.id, tipo: 'TRANSPORTE', ordem: ordem++, visivel: true,
         conteudo: {
-          icone: '🏨',
-          titulo: `Hotel${per?.hotel ? ` — ${per.hotel}` : bestFonte.nome ? ` — ${bestFonte.nome}` : ''}`,
-          descricao: [
-            per?.destino || '',
-            per?.check_in ? `${fmtDate(per.check_in)} a ${fmtDate(per.check_out)}` : '',
-          ].filter(Boolean).join(' — '),
-          detalhes,
-          imagem: '',
-          valor: bestFonte.total === Infinity ? 0 : bestFonte.total,
-          exibir_valor: false,
+          ...transp,
+          companhia: bestFonte?.nome || transp.companhia || '',
+          horario_saida: origemParts.slice(1).join(' ') || '',
+          horario_chegada: destParts.slice(1).join(' ') || '',
+          distancia_km: 0,
+          tempo_estimado: '',
         },
       });
     }
@@ -639,9 +616,9 @@ export async function POST(req: Request) {
       template_id: template_id || '', grupo_id,
       idioma: 'pt-BR',
       visual: templateVisual ? { ...templateVisual } : {
-        tema: 'padrao', layout: 'CLASSICO',
-        cor_primaria: '#004aad', cor_secundaria: '#0a0a14', cor_texto: '#1a1a2e',
-        cor_fundo: '#ffffff', fonte: 'Inter', imagem_capa: '', estilo_capa: 'FULLSCREEN',
+        tema: 'luxo', layout: 'DISCOVERY',
+        cor_primaria: '#d4a853', cor_secundaria: '#1a1a1a', cor_texto: '#e5e5e5',
+        cor_fundo: '#0a0a0a', fonte: 'Inter', imagem_capa: '', estilo_capa: 'MINIMAL',
       },
       viagem,
       cabecalho: {

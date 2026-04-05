@@ -91,6 +91,10 @@ export function HtlTab({ grupo, onChange }: Props) {
     info.hotel_estrelas = place.extracted_hotel_class || (place.rating ? Math.round(place.rating) : undefined);
     info.hotel_link = place.link || '';
     info.hotel_descricao = place.description || '';
+    info.hotel_rating = place.rating || undefined;
+    info.hotel_reviews_count = place.reviews || undefined;
+    info.hotel_amenities = place.amenities || undefined;
+    info.hotel_preco_noite = place.price_per_night?.extracted_price_before_taxes || undefined;
     if (place.gps_coordinates) {
       info.hotel_lat = place.gps_coordinates.latitude;
       info.hotel_lng = place.gps_coordinates.longitude;

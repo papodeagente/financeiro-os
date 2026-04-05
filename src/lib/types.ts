@@ -76,6 +76,10 @@ export interface HtlInfo {
   hotel_descricao?: string;
   hotel_lat?: number;
   hotel_lng?: number;
+  hotel_rating?: number;
+  hotel_reviews_count?: number;
+  hotel_amenities?: string[];
+  hotel_preco_noite?: number;
 }
 
 export interface HtlHotel {
