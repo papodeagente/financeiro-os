@@ -36,7 +36,7 @@ export function TopBar({ onCommandPalette, breadcrumb }: Props) {
   }, []);
 
   return (
-    <header className="h-[52px] bg-[var(--t-surface)] border-b border-[var(--t-border)] flex items-center px-6 shrink-0 z-30">
+    <header className="h-[52px] bg-[var(--t-surface)] border-b border-[var(--t-border)] flex items-center px-6 shrink-0 z-30" style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.02)' }}>
       {/* Breadcrumb / Greeting */}
       <div className="flex-1 min-w-0">
         {breadcrumb || (
@@ -53,12 +53,12 @@ export function TopBar({ onCommandPalette, breadcrumb }: Props) {
         {/* Search trigger */}
         <button
           onClick={onCommandPalette}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--t-bg)] text-[var(--t-text-muted)] hover:text-[var(--t-text)] hover:bg-[var(--t-surface-hover)] transition-colors text-[var(--text-body-sm)]"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-[var(--t-border)] bg-[var(--t-bg)] text-[var(--t-text-muted)] hover:text-[var(--t-text)] hover:border-[var(--t-border-hover)] transition-all text-[var(--text-body-sm)] min-w-[200px] lg:min-w-[280px]"
           title="⌘K"
         >
           <Search className="w-3.5 h-3.5" />
-          <span className="hidden lg:inline">Buscar...</span>
-          <kbd className="hidden lg:inline text-[10px] text-[var(--t-text-muted)] bg-[var(--t-surface)] px-1.5 py-0.5 rounded ml-2">⌘K</kbd>
+          <span className="hidden lg:inline flex-1 text-left">Buscar...</span>
+          <kbd className="hidden lg:inline text-[10px] text-[var(--t-text-muted)] bg-[var(--t-surface)] border border-[var(--t-border)] px-1.5 py-0.5 rounded ml-2" style={{ boxShadow: 'var(--elevation-1)' }}>⌘K</kbd>
         </button>
 
         {/* CRM status */}
@@ -80,16 +80,20 @@ export function TopBar({ onCommandPalette, breadcrumb }: Props) {
               onClick={() => setDropdownOpen(!dropdownOpen)}
               className="flex items-center gap-2 ml-1 px-2 py-1.5 rounded-xl hover:bg-[var(--t-surface-hover)] transition-colors"
             >
-              <div className="w-8 h-8 rounded-full bg-[var(--t-green)]/12 flex items-center justify-center ring-2 ring-[var(--t-green)]/20">
-                <span className="text-[11px] font-bold text-[var(--t-green)]">
+              <div
+                className="w-9 h-9 rounded-full flex items-center justify-center ring-2 ring-offset-2 ring-[var(--t-green)]/20 ring-offset-[var(--t-surface)] relative"
+                style={{ background: 'var(--t-accent-gradient)' }}
+              >
+                <span className="text-[11px] font-bold text-white">
                   {user.nome?.charAt(0)?.toUpperCase() || 'U'}
                 </span>
+                <span className="absolute bottom-0 right-0 w-[7px] h-[7px] rounded-full bg-emerald-500 ring-2 ring-[var(--t-surface)]" />
               </div>
               <ChevronDown className="w-3 h-3 text-[var(--t-text-muted)]" />
             </button>
 
             {dropdownOpen && (
-              <div className="absolute right-0 top-full mt-2 w-56 bg-[var(--t-surface)] border border-[var(--t-border)] rounded-2xl shadow-lg py-1.5 z-50">
+              <div className="absolute right-0 top-full mt-2 w-56 bg-[var(--t-surface)] border border-[var(--t-border)] rounded-2xl py-1.5 z-50 dropdown-enter" style={{ boxShadow: 'var(--elevation-4)' }}>
                 <div className="px-4 py-3 border-b border-[var(--t-border)]">
                   <p className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)]">{user.nome}</p>
                   <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">{user.email}</p>

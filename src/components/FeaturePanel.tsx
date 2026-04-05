@@ -47,10 +47,13 @@ export function FeaturePanel() {
       <nav className="flex-1 overflow-y-auto px-3 pb-4">
         <div className="feature-panel-content" key={activePillar}>
           {sections.map((section, sIdx) => (
-            <div key={sIdx} className={sIdx > 0 ? 'mt-4' : ''}>
+            <div key={sIdx} className={sIdx > 0 ? 'mt-5' : ''}>
               {section.title && (
-                <div className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--t-text-muted)]">
-                  {section.title}
+                <div className="flex items-center gap-2 px-3 mb-1.5">
+                  <span className="w-4 h-px bg-[var(--t-green)] opacity-30" />
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--t-green)] opacity-70">
+                    {section.title}
+                  </span>
                 </div>
               )}
               <div className="space-y-0.5">
@@ -68,7 +71,10 @@ export function FeaturePanel() {
                       }`}
                     >
                       {active && (
-                        <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full bg-[var(--t-green)]" />
+                        <span
+                          className="absolute left-0 top-2 bottom-2 w-[4px] rounded-r-full"
+                          style={{ background: 'var(--t-accent-gradient)' }}
+                        />
                       )}
                       <Icon className={`w-4 h-4 shrink-0 transition-colors ${
                         active ? '' : 'text-[var(--t-text-muted)] group-hover:text-[var(--t-text-secondary)]'

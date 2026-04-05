@@ -2,7 +2,7 @@
 
 export function SkeletonCard() {
   return (
-    <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] p-5 space-y-3">
+    <div className="rounded-[var(--t-card-radius)] border border-[var(--t-border)] shadow-[var(--elevation-1)] bg-[var(--t-surface)] p-5 space-y-3">
       <div className="skeleton h-4 w-3/4" />
       <div className="skeleton h-3 w-1/2" />
       <div className="skeleton h-3 w-2/3" />

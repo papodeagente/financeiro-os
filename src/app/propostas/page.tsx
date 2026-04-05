@@ -23,12 +23,12 @@ const fmtDate = (s: string) => {
 };
 
 const statusConfig: Record<string, { label: string; color: string; icon: React.ComponentType<{ className?: string }> }> = {
-  RASCUNHO: { label: 'Rascunho', color: 'bg-[var(--t-surface-hover)]0/10 text-[var(--t-text-secondary)]', icon: Clock },
-  ENVIADO: { label: 'Enviado', color: 'bg-[var(--t-blue-bg)]0/10 text-blue-400', icon: Send },
+  RASCUNHO: { label: 'Rascunho', color: 'bg-[var(--t-status-neutral-bg)] text-[var(--t-status-neutral)]', icon: Clock },
+  ENVIADO: { label: 'Enviado', color: 'bg-[var(--t-status-info-bg)] text-[var(--t-status-info)]', icon: Send },
   VISUALIZADO: { label: 'Visualizado', color: 'bg-purple-500/10 text-purple-400', icon: Eye },
-  ACEITO: { label: 'Aceito', color: 'bg-emerald-500/10 text-emerald-400', icon: CheckCircle },
-  RECUSADO: { label: 'Recusado', color: 'bg-red-500/10 text-red-400', icon: XCircle },
-  EXPIRADO: { label: 'Expirado', color: 'bg-amber-500/10 text-amber-400', icon: Clock },
+  ACEITO: { label: 'Aceito', color: 'bg-[var(--t-status-success-bg)] text-[var(--t-status-success)]', icon: CheckCircle },
+  RECUSADO: { label: 'Recusado', color: 'bg-[var(--t-status-danger-bg)] text-[var(--t-status-danger)]', icon: XCircle },
+  EXPIRADO: { label: 'Expirado', color: 'bg-[var(--t-status-warning-bg)] text-[var(--t-status-warning)]', icon: Clock },
   CONVERTIDO: { label: 'Convertido', color: 'bg-[var(--t-green)]/10 text-[var(--t-green)]', icon: ArrowRightLeft },
 };
 

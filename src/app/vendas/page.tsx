@@ -14,11 +14,11 @@ const fmt = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
 const STATUS_COLORS: Record<string, string> = {
-  ORCAMENTO: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-  RESERVADO: 'bg-[var(--t-blue-bg)]0/20 text-blue-400 border-blue-500/30',
-  CONFIRMADO: 'bg-green-500/20 text-green-400 border-green-500/30',
-  CANCELADO: 'bg-red-500/20 text-red-400 border-red-500/30',
-  CONCLUIDO: 'bg-[var(--t-surface-hover)]0/20 text-[var(--t-text-secondary)] border-[var(--t-border)]/30',
+  ORCAMENTO: 'bg-[var(--t-status-warning-bg)] text-[var(--t-status-warning)] border-[var(--t-status-warning)]/30',
+  RESERVADO: 'bg-[var(--t-status-info-bg)] text-[var(--t-status-info)] border-[var(--t-status-info)]/30',
+  CONFIRMADO: 'bg-[var(--t-status-success-bg)] text-[var(--t-status-success)] border-[var(--t-status-success)]/30',
+  CANCELADO: 'bg-[var(--t-status-danger-bg)] text-[var(--t-status-danger)] border-[var(--t-status-danger)]/30',
+  CONCLUIDO: 'bg-[var(--t-status-neutral-bg)] text-[var(--t-status-neutral)] border-[var(--t-status-neutral)]/30',
 };
 
 const STATUS_LABELS: Record<string, string> = {

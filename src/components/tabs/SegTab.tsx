@@ -6,6 +6,7 @@ import { calcSegTotals } from '@/lib/calculations';
 import { MoneyInput } from '@/components/MoneyInput';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Trophy, Shield } from 'lucide-react';
 
 interface Props { grupo: GrupoViagem; onChange: (g: GrupoViagem) => void; }
 
@@ -21,46 +22,65 @@ export function SegTab({ grupo, onChange }: Props) {
     onChange({ ...grupo, seg });
   };
 
+  const filledCount = grupo.seg.seguradoras.filter(s => TIPOS.some(t => {
+    const val = s[`valor_${t}` as keyof typeof s] as number | null;
+    return val !== null && val > 0;
+  })).length;
+
   return (
-    <div className="space-y-8">
-      <div className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-4 rounded-lg flex flex-wrap gap-4">
+    <div className="space-y-6">
+      {/* Summary */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {TIPOS.map(t => (
-          <div key={t}><span className="text-xs text-[var(--t-accent)]">Melhor {LABELS[t]}</span><div className="text-lg font-bold">{formatBRL(totals[t])}</div></div>
+          <div key={t} className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-3" style={{ boxShadow: 'var(--elevation-1)' }}>
+            <span className="text-[11px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide">Melhor {LABELS[t]}</span>
+            <div className="text-lg font-bold text-[var(--t-text)] mt-0.5">{formatBRL(totals[t])}</div>
+          </div>
         ))}
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
-          <thead><tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
-            <th className="p-2 text-left shadow-[var(--t-card-shadow)]">Seguradora</th>
-            {TIPOS.map(t => <th key={t} className="p-2 shadow-[var(--t-card-shadow)] w-28">{LABELS[t]}</th>)}
-            <th className="p-2 shadow-[var(--t-card-shadow)] w-36">Deadline</th>
-            <th className="p-2 shadow-[var(--t-card-shadow)]">Descrição</th>
-          </tr></thead>
-          <tbody>
-            {grupo.seg.seguradoras.map((seg, sIdx) => {
-              const bests = Object.fromEntries(TIPOS.map(t => [t, minPositivo(grupo.seg.seguradoras.map(s => s[`valor_${t}` as keyof typeof s] as number | null))]));
-              return (
-                <tr key={sIdx} className={sIdx % 2 === 0 ? 'bg-[var(--t-surface)]' : 'bg-[var(--t-surface-hover)]'}>
-                  <td className="p-1 border"><Input value={seg.nome} onChange={e => update(sIdx, 'nome', e.target.value)} className="h-8" /></td>
-                  {TIPOS.map(t => {
-                    const key = `valor_${t}` as keyof typeof seg;
-                    const val = seg[key] as number | null;
-                    const isMin = val !== null && val > 0 && val === bests[t];
-                    return <td key={t} className="p-1 border"><MoneyInput value={val} onChange={v => update(sIdx, key, v)} highlight={isMin} /></td>;
-                  })}
-                  <td className="p-1 border"><Input type="date" value={seg.deadline || ''} onChange={e => update(sIdx, 'deadline', e.target.value || null)} className="h-8" /></td>
-                  <td className="p-1 border"><Textarea value={seg.descricao} onChange={e => update(sIdx, 'descricao', e.target.value)} rows={1} className="min-h-[32px]" /></td>
-                </tr>
-              );
-            })}
-            <tr className="bg-green-100 font-bold">
-              <td className="p-2 border text-green-800">MELHOR R$</td>
-              {TIPOS.map(t => <td key={t} className="p-2 border text-right text-green-800">{formatBRL(totals[t])}</td>)}
-              <td className="p-2 border" colSpan={2}></td>
-            </tr>
-          </tbody>
-        </table>
+      {/* Supplier cards */}
+      <div className="space-y-3">
+        {grupo.seg.seguradoras.map((seg, sIdx) => {
+          const bests = Object.fromEntries(TIPOS.map(t => [t, minPositivo(grupo.seg.seguradoras.map(s => s[`valor_${t}` as keyof typeof s] as number | null))]));
+          const isBest = TIPOS.some(t => {
+            const val = seg[`valor_${t}` as keyof typeof seg] as number | null;
+            return val !== null && val > 0 && val === bests[t];
+          });
+
+          return (
+            <div key={sIdx} className={`rounded-xl border p-4 ${isBest ? 'border-[var(--t-status-success)]/30 bg-[var(--t-status-success-bg)]/30' : 'border-[var(--t-border)] bg-[var(--t-surface)]'}`} style={{ boxShadow: 'var(--elevation-1)' }}>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 rounded-lg bg-[var(--t-green)]/10 flex items-center justify-center">
+                  <Shield className="w-4 h-4 text-[var(--t-green)]" />
+                </div>
+                <Input value={seg.nome} onChange={e => update(sIdx, 'nome', e.target.value)} placeholder="Nome da seguradora" className="h-8 w-48 text-sm font-medium" />
+                {isBest && <span className="text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-[var(--t-status-success-bg)] text-[var(--t-status-success)]">Melhor</span>}
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                {TIPOS.map(t => {
+                  const key = `valor_${t}` as keyof typeof seg;
+                  const val = seg[key] as number | null;
+                  const isMin = val !== null && val > 0 && val === bests[t];
+                  return (
+                    <div key={t}>
+                      <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">{LABELS[t]}</label>
+                      <MoneyInput value={val} onChange={v => update(sIdx, key, v)} highlight={isMin} />
+                    </div>
+                  );
+                })}
+                <div>
+                  <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Deadline</label>
+                  <Input type="date" value={seg.deadline || ''} onChange={e => update(sIdx, 'deadline', e.target.value || null)} className="h-8" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Descrição</label>
+                  <Textarea value={seg.descricao} onChange={e => update(sIdx, 'descricao', e.target.value)} rows={1} className="min-h-[32px]" />
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

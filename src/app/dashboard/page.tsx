@@ -939,11 +939,11 @@ export default function DashboardPage() {
                 const cliente = clientes.find(c => c.id === v.cliente_id);
                 const nome = cliente ? (cliente.tipo === 'PF' ? cliente.nome_completo : cliente.nome_fantasia || cliente.razao_social) : 'Cliente';
                 const statusColor: Record<string, string> = {
-                  ORCAMENTO: 'bg-amber-500/10 text-amber-400',
-                  RESERVADO: 'bg-[var(--t-blue-bg)]0/10 text-blue-400',
-                  CONFIRMADO: 'bg-emerald-500/10 text-emerald-400',
-                  CANCELADO: 'bg-red-500/10 text-red-400',
-                  CONCLUIDO: 'bg-[var(--t-bg)] text-[var(--t-text-secondary)]',
+                  ORCAMENTO: 'bg-[var(--t-status-warning-bg)] text-[var(--t-status-warning)]',
+                  RESERVADO: 'bg-[var(--t-status-info-bg)] text-[var(--t-status-info)]',
+                  CONFIRMADO: 'bg-[var(--t-status-success-bg)] text-[var(--t-status-success)]',
+                  CANCELADO: 'bg-[var(--t-status-danger-bg)] text-[var(--t-status-danger)]',
+                  CONCLUIDO: 'bg-[var(--t-status-neutral-bg)] text-[var(--t-status-neutral)]',
                 };
                 return (
                   <div key={v.id} className="px-5 py-3 flex items-center gap-4 hover:bg-[var(--t-surface-hover)] transition-colors">

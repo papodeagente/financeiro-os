@@ -105,9 +105,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const breadcrumbLabel = BREADCRUMB_MAP[pathname];
   const pillarLabel = activePillar ? PILLAR_LABELS[activePillar] : null;
   const breadcrumbNode = breadcrumbLabel && pillarLabel ? (
-    <p className="text-[var(--text-body-sm)] text-[var(--t-text-muted)]">
+    <p className="text-[var(--text-body-sm)] text-[var(--t-text-muted)] flex items-center gap-1.5">
+      <span className="w-1.5 h-1.5 rounded-full bg-[var(--t-green)]" />
       <span className="text-[var(--t-text-secondary)] font-medium">{pillarLabel}</span>
-      <span className="mx-1.5 text-[var(--t-text-muted)]">›</span>
+      <span className="text-[var(--t-text-muted)]">›</span>
       <span>{breadcrumbLabel}</span>
     </p>
   ) : undefined;
@@ -130,7 +131,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Main content */}
         <main className="flex-1 overflow-y-auto bg-[var(--t-bg)]">
-          {children}
+          <div className="content-enter">
+            {children}
+          </div>
         </main>
       </div>
 

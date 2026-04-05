@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useRef, useEffect } from 'react';
 import { GrupoViagem } from '@/lib/types';
 import { minPositivo, formatBRL, calcDiarias } from '@/lib/utils';
 import { calcNavioTotals } from '@/lib/calculations';
@@ -7,6 +8,7 @@ import { MoneyInput } from '@/components/MoneyInput';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Trophy, Ship, Anchor, MapPin } from 'lucide-react';
 
 interface Props { grupo: GrupoViagem; onChange: (g: GrupoViagem) => void; }
 
@@ -28,55 +30,76 @@ export function NavioTab({ grupo, onChange }: Props) {
   };
 
   return (
-    <div className="space-y-8">
-      {/* Header info from INF */}
-      <div className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-4 rounded-lg space-y-2">
-        <div className="flex flex-wrap gap-6 text-sm">
-          <div><span className="text-[var(--t-accent)]">Cruzeiro:</span> {ni.nome_cruzeiro || '—'}</div>
-          <div><span className="text-[var(--t-accent)]">Embarque:</span> {ni.cidade_embarque || '—'}</div>
-          <div><span className="text-[var(--t-accent)]">Desembarque:</span> {ni.cidade_desembarque || '—'}</div>
-          <div><span className="text-[var(--t-accent)]">Diárias:</span> {calcDiarias(ni.embarque, ni.desembarque) || '—'}</div>
+    <div className="space-y-6">
+      {/* Cruise info card */}
+      <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-4" style={{ boxShadow: 'var(--elevation-1)' }}>
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-10 h-10 rounded-xl bg-[var(--t-green)]/10 flex items-center justify-center">
+            <Ship className="w-5 h-5 text-[var(--t-green)]" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-[var(--t-text)]">{ni.nome_cruzeiro || 'Cruzeiro'}</h3>
+            <div className="flex items-center gap-3 text-xs text-[var(--t-text-muted)] mt-0.5">
+              <span className="flex items-center gap-1"><Anchor className="w-3 h-3" /> {ni.cidade_embarque || '—'}</span>
+              <span>→</span>
+              <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {ni.cidade_desembarque || '—'}</span>
+              <span>| {calcDiarias(ni.embarque, ni.desembarque) || '—'} diárias</span>
+            </div>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-4 mt-2">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-3">
           {TIPOS.map(t => (
-            <div key={t}><span className="text-xs text-[var(--t-accent)]">Melhor {LABELS[t]}</span><div className="text-lg font-bold">{formatBRL(totals[t])}</div></div>
+            <div key={t} className="rounded-lg bg-[var(--t-bg)] p-2.5">
+              <span className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase">Melhor {LABELS[t]}</span>
+              <div className="text-base font-bold text-[var(--t-text)]">{formatBRL(totals[t])}</div>
+            </div>
           ))}
         </div>
       </div>
 
-      <div className="flex gap-4">
-        <div><Label>Deadline</Label><Input type="date" value={grupo.navio.deadline || ''} onChange={e => updateNavio('deadline', e.target.value || null)} /></div>
+      {/* Deadline */}
+      <div className="flex items-center gap-3">
+        <Label className="text-sm text-[var(--t-text-secondary)]">Deadline geral</Label>
+        <Input type="date" value={grupo.navio.deadline || ''} onChange={e => updateNavio('deadline', e.target.value || null)} className="h-9 w-48" />
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
-          <thead><tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
-            <th className="p-2 text-left shadow-[var(--t-card-shadow)]">Fornecedor</th>
-            {TIPOS.map(t => <th key={t} className="p-2 shadow-[var(--t-card-shadow)] w-28">{LABELS[t]}</th>)}
-          </tr></thead>
-          <tbody>
-            {grupo.navio.fornecedores.map((f, fIdx) => (
-              <tr key={fIdx} className={fIdx % 2 === 0 ? 'bg-[var(--t-surface)]' : 'bg-[var(--t-surface-hover)]'}>
-                <td className="p-1 border"><Input value={f.nome} onChange={e => updateFornecedor(fIdx, 'nome', e.target.value)} className="h-8" /></td>
+      {/* Supplier cards */}
+      <div className="space-y-3">
+        {grupo.navio.fornecedores.map((f, fIdx) => {
+          const isBest = TIPOS.some(t => {
+            const val = f[`valor_${t}` as keyof typeof f] as number | null;
+            return val !== null && val > 0 && val === totals[t];
+          });
+
+          return (
+            <div key={fIdx} className={`rounded-xl border p-4 ${isBest ? 'border-[var(--t-status-success)]/30 bg-[var(--t-status-success-bg)]/30' : 'border-[var(--t-border)] bg-[var(--t-surface)]'}`} style={{ boxShadow: 'var(--elevation-1)' }}>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xs font-bold text-[var(--t-text-muted)] w-6">{fIdx + 1}.</span>
+                <Input value={f.nome} onChange={e => updateFornecedor(fIdx, 'nome', e.target.value)} placeholder="Nome do fornecedor" className="h-8 w-48 text-sm font-medium" />
+                {isBest && <span className="text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-[var(--t-status-success-bg)] text-[var(--t-status-success)]">Melhor</span>}
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                 {TIPOS.map(t => {
                   const key = `valor_${t}` as keyof typeof f;
                   const val = f[key] as number | null;
                   const isMin = val !== null && val > 0 && val === totals[t];
-                  return <td key={t} className="p-1 border"><MoneyInput value={val} onChange={v => updateFornecedor(fIdx, key, v)} highlight={isMin} /></td>;
+                  return (
+                    <div key={t}>
+                      <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">{LABELS[t]}</label>
+                      <MoneyInput value={val} onChange={v => updateFornecedor(fIdx, key, v)} highlight={isMin} />
+                    </div>
+                  );
                 })}
-              </tr>
-            ))}
-            <tr className="bg-green-100 font-bold">
-              <td className="p-2 border text-green-800">MELHOR R$</td>
-              {TIPOS.map(t => <td key={t} className="p-2 border text-right text-green-800">{formatBRL(totals[t])}</td>)}
-            </tr>
-          </tbody>
-        </table>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
+      {/* Additional info */}
       <div>
-        <Label>Informações Adicionais / Roteiro</Label>
-        <Textarea value={grupo.navio.info_adicional} onChange={e => updateNavio('info_adicional', e.target.value)} rows={6} />
+        <Label className="text-sm text-[var(--t-text-secondary)]">Informações Adicionais / Roteiro</Label>
+        <Textarea value={grupo.navio.info_adicional} onChange={e => updateNavio('info_adicional', e.target.value)} rows={6} className="mt-1.5" />
       </div>
     </div>
   );

@@ -11,7 +11,7 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, subtitle, actions, crmBadge }: PageHeaderProps) {
   return (
-    <div className="flex items-center justify-between pb-6 mb-6">
+    <div className="flex items-center justify-between pb-6 mb-6 border-b border-[var(--t-border)]">
       <div className="flex items-center gap-3">
         <div>
           <h1 className="text-[var(--text-display)] font-semibold text-[var(--t-text)] tracking-tight">{title}</h1>

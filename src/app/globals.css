@@ -117,9 +117,27 @@
   --t-table-header-bg: #EBF0FA;
   --t-table-header-text: #1e40af;
 
+  /* Elevation system — 4 levels */
+  --elevation-1: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
+  --elevation-2: 0 4px 16px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
+  --elevation-3: 0 8px 30px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04);
+  --elevation-4: 0 16px 48px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06);
+
+  /* Surface gradients */
+  --t-surface-gradient: linear-gradient(135deg, #ffffff 0%, #FDFBF7 100%);
+  --t-pillar-gradient: linear-gradient(180deg, #F0EBE1 0%, #E8E2D6 100%);
+  --t-accent-gradient: linear-gradient(135deg, #004aad 0%, #0058CC 50%, #0066E0 100%);
+
+  /* Status tokens */
+  --t-status-success: #16a34a;     --t-status-success-bg: rgba(22,163,74,0.10);
+  --t-status-warning: #d97706;     --t-status-warning-bg: rgba(217,119,6,0.10);
+  --t-status-danger: #dc2626;      --t-status-danger-bg: rgba(220,38,38,0.08);
+  --t-status-info: #2563eb;        --t-status-info-bg: rgba(37,99,235,0.08);
+  --t-status-neutral: #6b7280;     --t-status-neutral-bg: rgba(107,114,128,0.08);
+
   /* Card styling */
-  --t-card-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  --t-card-shadow-hover: 0 4px 20px rgba(0, 0, 0, 0.08);
+  --t-card-shadow: var(--elevation-2);
+  --t-card-shadow-hover: var(--elevation-3);
   --t-card-radius: 20px;
   --t-nav-blur: blur(12px);
 
@@ -218,8 +236,19 @@
   --t-table-header-bg: #1e293b;
   --t-table-header-text: #93c5fd;
 
-  --t-card-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
-  --t-card-shadow-hover: 0 4px 20px rgba(0, 0, 0, 0.4);
+  /* Elevation system — dark */
+  --elevation-1: 0 1px 3px rgba(0,0,0,0.20), 0 1px 2px rgba(0,0,0,0.12);
+  --elevation-2: 0 4px 16px rgba(0,0,0,0.30), 0 1px 3px rgba(0,0,0,0.16);
+  --elevation-3: 0 8px 30px rgba(0,0,0,0.35), 0 2px 6px rgba(0,0,0,0.20);
+  --elevation-4: 0 16px 48px rgba(0,0,0,0.45), 0 4px 12px rgba(0,0,0,0.25);
+
+  /* Surface gradients — dark */
+  --t-surface-gradient: linear-gradient(135deg, #242220 0%, #2A2724 100%);
+  --t-pillar-gradient: linear-gradient(180deg, #1E1C1A 0%, #1A1816 100%);
+  --t-accent-gradient: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #4F8FF7 100%);
+
+  --t-card-shadow: var(--elevation-2);
+  --t-card-shadow-hover: var(--elevation-3);
 }
 
 @layer base {
@@ -292,15 +321,41 @@
 
 /* Bento card style */
 .bento-card {
-  background: var(--t-surface);
+  background: var(--t-surface-gradient);
+  border: 1px solid var(--t-border);
   border-radius: var(--t-card-radius);
-  box-shadow: var(--t-card-shadow);
+  box-shadow: var(--elevation-2);
   padding: var(--space-6);
-  transition: box-shadow var(--motion-fast);
+  transition: box-shadow 200ms ease-out, transform 200ms ease-out;
 }
 .bento-card:hover {
-  box-shadow: var(--t-card-shadow-hover);
+  box-shadow: var(--elevation-3);
+  transform: translateY(-1px);
 }
+
+/* Status badge system */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.status-badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.status-success { background: var(--t-status-success-bg); color: var(--t-status-success); }
+.status-warning { background: var(--t-status-warning-bg); color: var(--t-status-warning); }
+.status-danger  { background: var(--t-status-danger-bg);  color: var(--t-status-danger); }
+.status-info    { background: var(--t-status-info-bg);    color: var(--t-status-info); }
+.status-neutral { background: var(--t-status-neutral-bg); color: var(--t-status-neutral); }
 
 /* KPI hero numbers — responsive, nunca excede o card */
 .kpi-hero {
@@ -363,6 +418,30 @@
 }
 .sidebar-content {
   animation: sidebar-fade 150ms ease-out;
+}
+
+/* Content enter animation */
+@keyframes content-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.content-enter {
+  animation: content-enter 250ms ease-out;
+}
+
+/* Dropdown enter animation */
+@keyframes dropdown-enter {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.dropdown-enter {
+  animation: dropdown-enter 150ms ease-out;
+}
+
+/* Focus ring — premium double-ring */
+*:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--t-surface), 0 0 0 4px var(--t-green);
 }
 
 /* Scrollbar styling */

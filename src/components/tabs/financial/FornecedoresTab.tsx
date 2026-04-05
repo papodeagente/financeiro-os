@@ -57,11 +57,11 @@ const TIPOS_CUSTO: { value: TipoCusto; label: string }[] = [
 ];
 
 const STATUS_BADGE: Record<StatusFornecedor, { bg: string; text: string; label: string }> = {
-  PENDENTE: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'Pendente' },
-  PARCIAL: { bg: 'bg-[var(--t-blue-bg)]0/20', text: 'text-blue-400', label: 'Parcial' },
-  PAGO: { bg: 'bg-green-500/20', text: 'text-green-400', label: 'Pago' },
-  VENCIDO: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Vencido' },
-  CANCELADO: { bg: 'bg-[var(--t-surface-hover)]0/20', text: 'text-[var(--t-text-secondary)]', label: 'Cancelado' },
+  PENDENTE: { bg: 'bg-[var(--t-status-warning-bg)]', text: 'text-[var(--t-status-warning)]', label: 'Pendente' },
+  PARCIAL: { bg: 'bg-[var(--t-status-info-bg)]', text: 'text-[var(--t-status-info)]', label: 'Parcial' },
+  PAGO: { bg: 'bg-[var(--t-status-success-bg)]', text: 'text-[var(--t-status-success)]', label: 'Pago' },
+  VENCIDO: { bg: 'bg-[var(--t-status-danger-bg)]', text: 'text-[var(--t-status-danger)]', label: 'Vencido' },
+  CANCELADO: { bg: 'bg-[var(--t-status-neutral-bg)]', text: 'text-[var(--t-status-neutral)]', label: 'Cancelado' },
 };
 
 const CATEGORIA_ORDER: CategoriaFornecedor[] = [
