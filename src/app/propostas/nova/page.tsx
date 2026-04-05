@@ -64,13 +64,11 @@ export default function PropostaNovaPage() {
       setMembros(m);
       setPropostas(p);
       setLoading(false);
-      // Auto-seed if no templates
-      if (t.length === 0) {
-        fetch('/api/templates-proposta/seed', { method: 'POST' })
-          .then(r => r.json())
-          .then(() => loadEntities<TemplateProposta>('templates-proposta').then(setTemplates))
-          .catch(() => {});
-      }
+      // Auto-seed: always re-seed to keep templates up to date
+      fetch('/api/templates-proposta/seed', { method: 'POST' })
+        .then(r => r.json())
+        .then(() => loadEntities<TemplateProposta>('templates-proposta').then(setTemplates))
+        .catch(() => {});
     });
   }, []);
 

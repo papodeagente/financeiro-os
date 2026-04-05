@@ -439,10 +439,11 @@ export async function POST() {
     await initDB();
     if (!pool) return NextResponse.json({ error: 'DB not initialized' }, { status: 500 });
 
-    // Delete old seed templates
-    await pool.query(`DELETE FROM templates_proposta WHERE LOWER(nome) IN ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, [
+    // Delete all seed templates (is_padrao = true in JSONB data)
+    await pool.query(`DELETE FROM templates_proposta WHERE (data->>'is_padrao')::boolean = true`);
+    // Also delete old templates by known names (before is_padrao was used)
+    await pool.query(`DELETE FROM templates_proposta WHERE LOWER(nome) IN ($1, $2, $3, $4, $5, $6)`, [
       'europa romantica', 'aventura & natureza', 'disney em familia', 'cruzeiro maritimo', 'viagem corporativa', 'praia & relax',
-      'terra santa — israel completo', 'maldivas — lua de mel', 'patagonia — aventura glaciar',
     ]);
 
     let count = 0;
