@@ -94,6 +94,9 @@ export default function PropostaNovaPage() {
       p.visual = { ...tmpl.visual };
       p.secoes = tmpl.secoes_padrao.map(s => ({ ...s, id: generateId() }));
       p.cabecalho.mensagem_abertura = tmpl.mensagem_abertura_padrao;
+      if (tmpl.viagem_padrao) {
+        p.viagem = { ...tmpl.viagem_padrao };
+      }
     }
 
     // Apply wizard data

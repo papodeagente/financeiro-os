@@ -715,6 +715,7 @@ export interface TemplateProposta {
   mensagem_abertura_padrao: string;
   inclusos_padrao: string[];
   nao_inclusos_padrao: string[];
+  viagem_padrao?: ViagemEstruturada;
   is_padrao: boolean;
 }
 
