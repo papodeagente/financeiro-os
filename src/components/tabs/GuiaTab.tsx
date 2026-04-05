@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useRef, useEffect } from 'react';
 import { GrupoViagem } from '@/lib/types';
 import { createGuiaDestino } from '@/lib/defaults';
 import { minPositivo, formatBRL } from '@/lib/utils';
@@ -8,13 +9,26 @@ import { MoneyInput } from '@/components/MoneyInput';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Plus, Trash2, User, Trophy, MapPin, Calendar } from 'lucide-react';
+import { Plus, Trash2, User, Trophy, Calendar } from 'lucide-react';
 
 interface Props { grupo: GrupoViagem; onChange: (g: GrupoViagem) => void; }
+
+function fornecedorHasData(f: { valor_total: number | null }) {
+  return f.valor_total !== null && f.valor_total > 0;
+}
 
 export function GuiaTab({ grupo, onChange }: Props) {
   const totals = calcGuiaTotals(grupo);
   const minPax = grupo.params.qtd_min_pax || 1;
+  const [addedSources, setAddedSources] = useState<Record<number, Set<number>>>({});
+  const [pickerOpen, setPickerOpen] = useState<number | null>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPickerOpen(null); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const updateFornecedor = (dIdx: number, fIdx: number, field: string, value: number | null | string) => {
     const guia = { ...grupo.guia, destinos: [...grupo.guia.destinos] };
@@ -37,6 +51,22 @@ export function GuiaTab({ grupo, onChange }: Props) {
     onChange({ ...grupo, guia: { destinos: grupo.guia.destinos.filter((_, i) => i !== idx) } });
   };
 
+  const isVisible = (dIdx: number, fIdx: number) =>
+    fornecedorHasData(grupo.guia.destinos[dIdx].fornecedores[fIdx]) || addedSources[dIdx]?.has(fIdx) || false;
+
+  const addSource = (dIdx: number, fIdx: number) => {
+    setAddedSources(prev => ({ ...prev, [dIdx]: new Set([...(prev[dIdx] || []), fIdx]) }));
+    setPickerOpen(null);
+  };
+
+  const clearSource = (dIdx: number, fIdx: number) => {
+    const guia = { ...grupo.guia, destinos: [...grupo.guia.destinos] };
+    guia.destinos[dIdx] = { ...guia.destinos[dIdx], fornecedores: [...guia.destinos[dIdx].fornecedores] };
+    guia.destinos[dIdx].fornecedores[fIdx] = { ...guia.destinos[dIdx].fornecedores[fIdx], valor_total: null };
+    onChange({ ...grupo, guia });
+    setAddedSources(prev => { const s = new Set(prev[dIdx] || []); s.delete(fIdx); return { ...prev, [dIdx]: s }; });
+  };
+
   return (
     <div className="space-y-6">
       <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-3" style={{ boxShadow: 'var(--elevation-1)' }}>
@@ -51,7 +81,9 @@ export function GuiaTab({ grupo, onChange }: Props) {
       {grupo.guia.destinos.map((dest, dIdx) => {
         const periodo = grupo.periodos[dIdx];
         const melhor = minPositivo(dest.fornecedores.map(f => f.valor_total));
-        const filledCount = dest.fornecedores.filter(f => f.valor_total !== null && f.valor_total > 0).length;
+        const visibleIndices = dest.fornecedores.map((_, i) => i).filter(i => isVisible(dIdx, i));
+        const hiddenSources = dest.fornecedores.map((f, i) => ({ nome: f.nome, idx: i })).filter((_, i) => !isVisible(dIdx, i));
+        const filledCount = dest.fornecedores.filter(fornecedorHasData).length;
 
         return (
           <div key={dIdx} className="rounded-[var(--t-card-radius)] border border-[var(--t-border)] bg-[var(--t-surface)] overflow-hidden" style={{ boxShadow: 'var(--elevation-2)' }}>
@@ -92,16 +124,20 @@ export function GuiaTab({ grupo, onChange }: Props) {
               )}
 
               <div className="space-y-3">
-                {dest.fornecedores.map((f, fIdx) => {
+                {visibleIndices.map(fIdx => {
+                  const f = dest.fornecedores[fIdx];
                   const valPax = f.valor_total ? f.valor_total / minPax : 0;
                   const isMin = f.valor_total !== null && f.valor_total > 0 && f.valor_total === melhor;
 
                   return (
                     <div key={fIdx} className={`rounded-xl border p-4 ${isMin ? 'border-[var(--t-status-success)]/30 bg-[var(--t-status-success-bg)]/30' : 'border-[var(--t-border)] bg-[var(--t-bg)]'}`}>
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="text-xs font-bold text-[var(--t-text-muted)] w-6">{fIdx + 1}.</span>
-                        <Input value={f.nome} onChange={e => updateFornecedor(dIdx, fIdx, 'nome', e.target.value)} placeholder="Nome do guia" className="h-8 w-48 text-sm font-medium" />
-                        {isMin && <span className="text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-[var(--t-status-success-bg)] text-[var(--t-status-success)]">Melhor</span>}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-[var(--t-text-muted)] w-6">{fIdx + 1}.</span>
+                          <Input value={f.nome} onChange={e => updateFornecedor(dIdx, fIdx, 'nome', e.target.value)} placeholder="Nome do guia" className="h-8 w-48 text-sm font-medium" />
+                          {isMin && <span className="text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-[var(--t-status-success-bg)] text-[var(--t-status-success)]">Melhor</span>}
+                        </div>
+                        <button onClick={() => clearSource(dIdx, fIdx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-status-danger)] hover:bg-[var(--t-status-danger-bg)] transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                         <div>
@@ -133,6 +169,19 @@ export function GuiaTab({ grupo, onChange }: Props) {
                   );
                 })}
               </div>
+
+              {hiddenSources.length > 0 && (
+                <div className="relative" ref={pickerOpen === dIdx ? pickerRef : undefined}>
+                  <button onClick={() => setPickerOpen(pickerOpen === dIdx ? null : dIdx)} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-[var(--t-border)] text-sm text-[var(--t-text-muted)] hover:border-[var(--t-green)] hover:text-[var(--t-green)] transition-colors"><Plus className="w-4 h-4" /> Adicionar cotação</button>
+                  {pickerOpen === dIdx && (
+                    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-20 bg-[var(--t-surface)] border border-[var(--t-border)] rounded-xl p-1.5 w-56 dropdown-enter" style={{ boxShadow: 'var(--elevation-4)' }}>
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--t-text-muted)] px-3 py-1.5">Selecione o guia</div>
+                      {hiddenSources.map(s => (<button key={s.idx} onClick={() => addSource(dIdx, s.idx)} className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-[var(--t-surface-hover)] text-[var(--t-text)] transition-colors">{s.nome}</button>))}
+                    </div>
+                  )}
+                </div>
+              )}
+              {visibleIndices.length === 0 && <div className="text-center py-8 text-sm text-[var(--t-text-muted)]">Nenhuma cotação adicionada.</div>}
             </div>
           </div>
         );

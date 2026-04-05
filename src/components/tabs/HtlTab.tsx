@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { GrupoViagem } from '@/lib/types';
 import { createHtlHotel } from '@/lib/defaults';
 import { minPositivo, formatBRL, calcDiarias } from '@/lib/utils';
@@ -23,10 +23,28 @@ interface Props {
 const TIPOS = ['sgl', 'dbl', 'tpl', 'qdp', 'chd'] as const;
 const TIPO_LABELS: Record<string, string> = { sgl: 'SGL', dbl: 'DBL', tpl: 'TPL', qdp: 'QDP', chd: 'CHD' };
 
+function fonteHasData(fonte: { valor_sgl: number | null; valor_dbl: number | null; valor_tpl: number | null; valor_qdp: number | null; valor_chd: number | null }) {
+  return TIPOS.some(t => {
+    const v = fonte[`valor_${t}` as keyof typeof fonte] as number | null;
+    return v !== null && v > 0;
+  });
+}
+
 export function HtlTab({ grupo, onChange }: Props) {
   const totals = calcHtlTotals(grupo);
   const [hotelModalOpen, setHotelModalOpen] = useState<number | null>(null);
+  const [addedSources, setAddedSources] = useState<Record<number, Set<number>>>({});
+  const [pickerOpen, setPickerOpen] = useState<number | null>(null);
   const [expandedInfo, setExpandedInfo] = useState<Record<number, boolean>>({});
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPickerOpen(null);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const updateFonte = (hotelIdx: number, fonteIdx: number, field: string, value: number | null | string) => {
     const htl = { ...grupo.htl, hoteis: [...grupo.htl.hoteis] };
@@ -65,6 +83,22 @@ export function HtlTab({ grupo, onChange }: Props) {
     onChange({ ...grupo, htl });
   };
 
+  const isVisible = (hIdx: number, fIdx: number) =>
+    fonteHasData(grupo.htl.hoteis[hIdx].fontes[fIdx]) || addedSources[hIdx]?.has(fIdx) || false;
+
+  const addSource = (hIdx: number, fIdx: number) => {
+    setAddedSources(prev => ({ ...prev, [hIdx]: new Set([...(prev[hIdx] || []), fIdx]) }));
+    setPickerOpen(null);
+  };
+
+  const clearSource = (hIdx: number, fIdx: number) => {
+    const htl = { ...grupo.htl, hoteis: [...grupo.htl.hoteis] };
+    htl.hoteis[hIdx] = { ...htl.hoteis[hIdx], fontes: [...htl.hoteis[hIdx].fontes] };
+    htl.hoteis[hIdx].fontes[fIdx] = { ...htl.hoteis[hIdx].fontes[fIdx], valor_sgl: null, valor_dbl: null, valor_tpl: null, valor_qdp: null, valor_chd: null };
+    onChange({ ...grupo, htl });
+    setAddedSources(prev => { const s = new Set(prev[hIdx] || []); s.delete(fIdx); return { ...prev, [hIdx]: s }; });
+  };
+
   return (
     <div className="space-y-6">
       {/* Summary totals */}
@@ -77,18 +111,18 @@ export function HtlTab({ grupo, onChange }: Props) {
         ))}
       </div>
 
-      {/* Add hotel button */}
       <div className="flex justify-end">
         <Button variant="outline" size="sm" onClick={addHotel} disabled={grupo.htl.hoteis.length >= 10}>
           <Plus className="w-4 h-4 mr-1" /> Hotel
         </Button>
       </div>
 
-      {/* Hotels */}
       {grupo.htl.hoteis.map((hotel, hIdx) => {
         const periodo = grupo.periodos[hIdx];
         const bests = Object.fromEntries(TIPOS.map(t => [t, minPositivo(hotel.fontes.map(f => f[`valor_${t}` as keyof typeof f] as number | null))]));
-        const filledCount = hotel.fontes.filter(f => TIPOS.some(t => { const v = f[`valor_${t}` as keyof typeof f] as number | null; return v !== null && v > 0; })).length;
+        const visibleIndices = hotel.fontes.map((_, i) => i).filter(i => isVisible(hIdx, i));
+        const hiddenSources = hotel.fontes.map((f, i) => ({ nome: f.nome, idx: i })).filter((_, i) => !isVisible(hIdx, i));
+        const filledCount = hotel.fontes.filter(fonteHasData).length;
         const isInfoOpen = expandedInfo[hIdx] ?? false;
 
         return (
@@ -103,11 +137,9 @@ export function HtlTab({ grupo, onChange }: Props) {
                   <h3 className="font-semibold text-[var(--t-text)]">{periodo?.hotel || `Hotel ${hIdx + 1}`}</h3>
                   {periodo && (
                     <div className="flex items-center gap-2 text-xs text-[var(--t-text-muted)] mt-0.5">
-                      <MapPin className="w-3 h-3" />
-                      <span>{periodo.destino}</span>
+                      <MapPin className="w-3 h-3" /><span>{periodo.destino}</span>
                       <span className="text-[var(--t-border)]">|</span>
-                      <Clock className="w-3 h-3" />
-                      <span>{calcDiarias(periodo.check_in, periodo.check_out)} diárias</span>
+                      <Clock className="w-3 h-3" /><span>{calcDiarias(periodo.check_in, periodo.check_out)} diárias</span>
                     </div>
                   )}
                 </div>
@@ -142,34 +174,23 @@ export function HtlTab({ grupo, onChange }: Props) {
 
               {/* Source cards */}
               <div className="space-y-3">
-                {hotel.fontes.map((fonte, fIdx) => {
+                {visibleIndices.map(fIdx => {
+                  const fonte = hotel.fontes[fIdx];
                   const isBest = TIPOS.some(t => {
                     const val = fonte[`valor_${t}` as keyof typeof fonte] as number | null;
                     return val !== null && val > 0 && val === bests[t];
                   });
-
                   return (
-                    <div
-                      key={fIdx}
-                      className={`rounded-xl border p-4 transition-all ${
-                        isBest
-                          ? 'border-[var(--t-status-success)]/30 bg-[var(--t-status-success-bg)]/30'
-                          : 'border-[var(--t-border)] bg-[var(--t-bg)]'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="text-xs font-bold text-[var(--t-text-muted)] w-6">{fIdx + 1}.</span>
-                        <Input
-                          value={fonte.nome}
-                          onChange={e => updateFonte(hIdx, fIdx, 'nome', e.target.value)}
-                          className="h-8 w-48 text-sm font-medium"
-                          placeholder="Nome do fornecedor"
-                        />
-                        {isBest && (
-                          <span className="text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-[var(--t-status-success-bg)] text-[var(--t-status-success)]">
-                            Melhor
-                          </span>
-                        )}
+                    <div key={fIdx} className={`rounded-xl border p-4 transition-all ${isBest ? 'border-[var(--t-status-success)]/30 bg-[var(--t-status-success-bg)]/30' : 'border-[var(--t-border)] bg-[var(--t-bg)]'}`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-[var(--t-text-muted)] w-6">{fIdx + 1}.</span>
+                          <Input value={fonte.nome} onChange={e => updateFonte(hIdx, fIdx, 'nome', e.target.value)} className="h-8 w-48 text-sm font-medium" placeholder="Nome do fornecedor" />
+                          {isBest && <span className="text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-[var(--t-status-success-bg)] text-[var(--t-status-success)]">Melhor</span>}
+                        </div>
+                        <button onClick={() => clearSource(hIdx, fIdx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-status-danger)] hover:bg-[var(--t-status-danger-bg)] transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                         {TIPOS.map(t => {
@@ -189,11 +210,31 @@ export function HtlTab({ grupo, onChange }: Props) {
                 })}
               </div>
 
+              {/* Add source picker */}
+              {hiddenSources.length > 0 && (
+                <div className="relative" ref={pickerOpen === hIdx ? pickerRef : undefined}>
+                  <button onClick={() => setPickerOpen(pickerOpen === hIdx ? null : hIdx)} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-[var(--t-border)] text-sm text-[var(--t-text-muted)] hover:border-[var(--t-green)] hover:text-[var(--t-green)] transition-colors">
+                    <Plus className="w-4 h-4" /> Adicionar cotação
+                  </button>
+                  {pickerOpen === hIdx && (
+                    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-20 bg-[var(--t-surface)] border border-[var(--t-border)] rounded-xl p-1.5 w-56 dropdown-enter" style={{ boxShadow: 'var(--elevation-4)' }}>
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--t-text-muted)] px-3 py-1.5">Selecione a fonte</div>
+                      {hiddenSources.map(s => (
+                        <button key={s.idx} onClick={() => addSource(hIdx, s.idx)} className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-[var(--t-surface-hover)] text-[var(--t-text)] transition-colors">{s.nome}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {visibleIndices.length === 0 && (
+                <div className="text-center py-8 text-sm text-[var(--t-text-muted)]">
+                  Nenhuma cotação adicionada. Clique em &ldquo;Adicionar cotação&rdquo; para começar.
+                </div>
+              )}
+
               {/* Info panel toggle */}
-              <button
-                onClick={() => setExpandedInfo(prev => ({ ...prev, [hIdx]: !isInfoOpen }))}
-                className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-[var(--t-bg)] text-sm font-medium text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)] transition-colors"
-              >
+              <button onClick={() => setExpandedInfo(prev => ({ ...prev, [hIdx]: !isInfoOpen }))} className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-[var(--t-bg)] text-sm font-medium text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)] transition-colors">
                 <span>Informações do hotel</span>
                 {isInfoOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
@@ -217,9 +258,7 @@ export function HtlTab({ grupo, onChange }: Props) {
       <HotelSearchModal
         open={hotelModalOpen !== null}
         onClose={() => setHotelModalOpen(null)}
-        onSelect={(place) => {
-          if (hotelModalOpen !== null) handleHotelSelect(hotelModalOpen, place);
-        }}
+        onSelect={(place) => { if (hotelModalOpen !== null) handleHotelSelect(hotelModalOpen, place); }}
         defaultDestino={hotelModalOpen !== null ? grupo.periodos[hotelModalOpen]?.destino || '' : ''}
         defaultHotelName={hotelModalOpen !== null ? grupo.periodos[hotelModalOpen]?.hotel || '' : ''}
       />
