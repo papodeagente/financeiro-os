@@ -15,8 +15,12 @@ export function ServicoBlock({ conteudo, onChange }: BlockProps) {
 
   const isFlightService = (c.icone || '').includes('✈');
 
-  const handleFlightSelect = (offer: FlightOffer) => {
-    const mapped = formatFlightForProposta(offer);
+  const handleFlightSelect = (ida: FlightOffer, volta?: FlightOffer) => {
+    // Merge return data into the offer for the proposta format
+    const combined: FlightOffer = volta
+      ? { ...ida, returnFlights: volta.flights, returnDuration: volta.totalDuration, returnLayovers: volta.layovers }
+      : ida;
+    const mapped = formatFlightForProposta(combined);
     onChange({ ...conteudo, ...mapped });
   };
 

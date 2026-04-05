@@ -12,6 +12,7 @@ export async function POST(req: Request) {
       adultos: body.adultos || 1,
       criancas: body.criancas || 0,
       classe: body.classe || 'economica',
+      departure_token: body.departure_token,
     });
 
     return NextResponse.json(result);

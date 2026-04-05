@@ -359,13 +359,15 @@ export function PropostaEditor({ proposta: initialProposta, clientes, membros, i
     }
   };
 
-  const handleFlightSelect = (offer: FlightOffer) => {
+  const handleFlightSelect = (ida: FlightOffer, volta?: FlightOffer) => {
     const isDiscovery = proposta.visual.layout === 'DISCOVERY';
     if (isDiscovery) {
-      const transportes = formatFlightForTransporte(offer);
+      const idaTransportes = formatFlightForTransporte(ida);
+      const voltaTransportes = volta ? formatFlightForTransporte(volta) : [];
+      const allTransportes = [...idaTransportes, ...voltaTransportes];
       update(p => ({
         ...p,
-        secoes: [...p.secoes, ...transportes.map((conteudo, i) => ({
+        secoes: [...p.secoes, ...allTransportes.map((conteudo, i) => ({
           id: generateId(),
           tipo: 'TRANSPORTE' as SecaoProposta['tipo'],
           ordem: p.secoes.length + i,
@@ -374,7 +376,10 @@ export function PropostaEditor({ proposta: initialProposta, clientes, membros, i
         }))],
       }));
     } else {
-      const conteudo = formatFlightForProposta(offer);
+      const combined: FlightOffer = volta
+        ? { ...ida, returnFlights: volta.flights, returnDuration: volta.totalDuration, returnLayovers: volta.layovers }
+        : ida;
+      const conteudo = formatFlightForProposta(combined);
       update(p => ({
         ...p,
         secoes: [...p.secoes, {

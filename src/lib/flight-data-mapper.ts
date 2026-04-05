@@ -10,6 +10,7 @@ export interface FlightOffer {
   price: number;
   airlineLogo?: string;
   layovers?: Array<{ duration: number; name: string; id: string }>;
+  departureToken?: string;
   // For round-trip: return leg
   returnFlights?: SearchAPIFlightSegment[];
   returnDuration?: number;
@@ -31,6 +32,7 @@ export function mapSearchAPIToOffers(
     price: group.price,
     airlineLogo: group.airline_logo,
     layovers: group.layovers,
+    departureToken: group.departure_token,
   }));
 }
 

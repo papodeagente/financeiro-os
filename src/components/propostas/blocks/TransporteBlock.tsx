@@ -31,6 +31,27 @@ function formatMinutes(min: number): string {
   return `${h}h${String(m).padStart(2, '0')}`;
 }
 
+function offerToTransporte(offer: FlightOffer, extra?: string): Partial<TransporteData> {
+  const firstSeg = offer.flights[0];
+  const lastSeg = offer.flights[offer.flights.length - 1];
+  const stops = offer.flights.length - 1;
+  const layoverNames = offer.layovers?.map(l => l.id).join(', ') || '';
+  const stopsStr = stops === 0 ? 'Voo direto' : `${stops} escala(s): ${layoverNames}`;
+
+  return {
+    tipo: 'VOO',
+    data: extractDate(firstSeg.departure_airport.time || ''),
+    origem: firstSeg.departure_airport.id,
+    destino: lastSeg.arrival_airport.id,
+    companhia: firstSeg.airline,
+    numero_voo: firstSeg.flight_number,
+    horario_saida: extractTime(firstSeg.departure_airport.time || ''),
+    horario_chegada: extractTime(lastSeg.arrival_airport.time || ''),
+    tempo_estimado: formatMinutes(offer.totalDuration),
+    detalhes: extra ? `${extra} | ${stopsStr} | R$ ${offer.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : `${stopsStr} | R$ ${offer.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+  };
+}
+
 export function TransporteBlock({ conteudo, onChange, onInsertAfter }: BlockProps) {
   const c = conteudo as Partial<TransporteData>;
   const [flightModalOpen, setFlightModalOpen] = useState(false);
@@ -41,48 +62,16 @@ export function TransporteBlock({ conteudo, onChange, onInsertAfter }: BlockProp
 
   const isVoo = c.tipo === 'VOO';
 
-  const handleFlightSelect = (offer: FlightOffer) => {
-    // --- Outbound (IDA) ---
-    const firstSeg = offer.flights[0];
-    const lastSeg = offer.flights[offer.flights.length - 1];
-    const stops = offer.flights.length - 1;
-    const layoverNames = offer.layovers?.map(l => l.id).join(', ') || '';
-    const stopsStr = stops === 0 ? 'Voo direto' : `${stops} escala(s): ${layoverNames}`;
+  const handleFlightSelect = (ida: FlightOffer, volta?: FlightOffer) => {
+    // Fill current block with IDA
+    update(offerToTransporte(ida));
 
-    update({
-      tipo: 'VOO',
-      data: extractDate(firstSeg.departure_airport.time || ''),
-      origem: firstSeg.departure_airport.id,
-      destino: lastSeg.arrival_airport.id,
-      companhia: firstSeg.airline,
-      numero_voo: firstSeg.flight_number,
-      horario_saida: extractTime(firstSeg.departure_airport.time || ''),
-      horario_chegada: extractTime(lastSeg.arrival_airport.time || ''),
-      tempo_estimado: formatMinutes(offer.totalDuration),
-      detalhes: `${stopsStr} | R$ ${offer.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-    });
-
-    // --- Return (VOLTA) — insert new block after this one ---
-    if (offer.returnFlights && offer.returnFlights.length > 0 && onInsertAfter) {
-      const retFirst = offer.returnFlights[0];
-      const retLast = offer.returnFlights[offer.returnFlights.length - 1];
-      const retStops = offer.returnFlights.length - 1;
-      const retLayoverNames = offer.returnLayovers?.map(l => l.id).join(', ') || '';
-      const retStopsStr = retStops === 0 ? 'Voo direto' : `${retStops} escala(s): ${retLayoverNames}`;
-
+    // If there's a return flight, insert a new block after
+    if (volta && onInsertAfter) {
       onInsertAfter('TRANSPORTE', {
         id: crypto.randomUUID?.() || Math.random().toString(36).slice(2),
-        tipo: 'VOO',
-        data: extractDate(retFirst.departure_airport.time || ''),
-        origem: retFirst.departure_airport.id,
-        destino: retLast.arrival_airport.id,
-        companhia: retFirst.airline,
-        numero_voo: retFirst.flight_number,
-        horario_saida: extractTime(retFirst.departure_airport.time || ''),
-        horario_chegada: extractTime(retLast.arrival_airport.time || ''),
-        tempo_estimado: formatMinutes(offer.returnDuration || 0),
-        detalhes: `VOLTA | ${retStopsStr}`,
-      });
+        ...offerToTransporte(volta, 'VOLTA'),
+      } as Record<string, unknown>);
     }
   };
 
@@ -110,7 +99,7 @@ export function TransporteBlock({ conteudo, onChange, onInsertAfter }: BlockProp
         </div>
       </div>
 
-      {/* Buscar Voo via API — só quando tipo = VOO */}
+      {/* Buscar Voo via API */}
       {isVoo && (
         <button
           onClick={() => setFlightModalOpen(true)}

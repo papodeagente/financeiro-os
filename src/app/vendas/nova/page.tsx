@@ -870,9 +870,12 @@ export default function NovaVendaPage() {
       <FlightSearchModal
         open={flightModalIdx !== null}
         onClose={() => setFlightModalIdx(null)}
-        onSelect={(offer: FlightOffer) => {
+        onSelect={(ida: FlightOffer, volta?: FlightOffer) => {
           if (flightModalIdx === null) return;
-          const mapped = formatFlightForVenda(offer);
+          const combined: FlightOffer = volta
+            ? { ...ida, returnFlights: volta.flights, returnDuration: volta.totalDuration, returnLayovers: volta.layovers }
+            : ida;
+          const mapped = formatFlightForVenda(combined);
           updateProduto(flightModalIdx, 'cia_aerea', mapped.cia_aerea);
           updateProduto(flightModalIdx, 'trecho', mapped.trecho);
           updateProduto(flightModalIdx, 'descricao', mapped.descricao);

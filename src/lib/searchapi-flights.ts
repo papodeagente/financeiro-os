@@ -61,8 +61,11 @@ export async function searchFlights(params: {
   adultos: number;
   criancas: number;
   classe: string;
+  departure_token?: string;
 }): Promise<{ data: SearchAPIResponse; cached: boolean }> {
-  const cacheKey = `searchapi_flights:${params.origem}:${params.destino}:${params.data_ida}:${params.data_volta || ''}:${params.adultos}:${params.criancas}:${params.classe}`;
+  const cacheKey = params.departure_token
+    ? `searchapi_flights_return:${params.departure_token}`
+    : `searchapi_flights:${params.origem}:${params.destino}:${params.data_ida}:${params.data_volta || ''}:${params.adultos}:${params.criancas}:${params.classe}`;
   const cached = await getCached(cacheKey);
   if (cached) return { data: cached as SearchAPIResponse, cached: true };
 
@@ -83,6 +86,10 @@ export async function searchFlights(params: {
 
   if (params.data_volta) {
     queryParams.set('return_date', params.data_volta);
+  }
+
+  if (params.departure_token) {
+    queryParams.set('departure_token', params.departure_token);
   }
 
   const url = `${SEARCHAPI_BASE}?${queryParams.toString()}`;

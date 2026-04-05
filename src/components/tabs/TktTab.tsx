@@ -181,7 +181,7 @@ export function TktTab({ grupo, onChange }: Props) {
       })}
 
       <FlightSearchModal open={flightModalOpen !== null} onClose={() => setFlightModalOpen(null)}
-        onSelect={(offer) => { if (flightModalOpen !== null) handleFlightSelect(flightModalOpen, offer); }}
+        onSelect={(ida) => { if (flightModalOpen !== null) handleFlightSelect(flightModalOpen, ida); }}
         defaultDataIda={flightModalOpen !== null ? grupo.trechos[flightModalOpen]?.data || '' : ''}
         defaultAdultos={flightModalOpen !== null ? grupo.trechos[flightModalOpen]?.qtd_adt || 1 : 1}
         defaultCriancas={flightModalOpen !== null ? grupo.trechos[flightModalOpen]?.qtd_chd || 0 : 0}
