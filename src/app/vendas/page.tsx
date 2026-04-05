@@ -62,7 +62,10 @@ export default function VendasPage() {
   const filtered = vendas.filter(v => {
     const nome = getClienteNome(v.cliente_id).toLowerCase();
     const q = search.toLowerCase();
-    const matchSearch = !search || v.numero.toLowerCase().includes(q) || nome.includes(q);
+    const matchLocalizador = v.produtos?.some(p => p.localizador?.toLowerCase().includes(q)) || false;
+    const matchDescProduto = v.produtos?.some(p => p.descricao?.toLowerCase().includes(q)) || false;
+    const matchObs = v.observacoes?.toLowerCase().includes(q) || false;
+    const matchSearch = !search || v.numero.toLowerCase().includes(q) || nome.includes(q) || matchLocalizador || matchDescProduto || matchObs;
     const matchStatus = !statusFilter || v.status === statusFilter;
     const matchInicio = !dataInicio || v.data_venda >= dataInicio;
     const matchFim = !dataFim || v.data_venda <= dataFim;
@@ -88,7 +91,7 @@ export default function VendasPage() {
           <p className="text-[var(--t-text-secondary)] text-sm mt-1">Gestão de vendas e reservas</p>
         </div>
         <Link href="/vendas/nova">
-          <Button className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold">
+          <Button className="bg-[var(--t-green)] hover:opacity-90 text-white dark:text-[#0a0a14] font-semibold">
             <Plus className="w-4 h-4 mr-2" />
             Nova Venda
           </Button>
@@ -121,7 +124,7 @@ export default function VendasPage() {
         </Card>
         <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)]">
           <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-3 bg-[var(--t-blue-bg)]0/10 rounded-lg">
+            <div className="p-3 bg-blue-500/10 rounded-lg">
               <TrendingUp className="w-5 h-5 text-blue-400" />
             </div>
             <div>
@@ -139,7 +142,7 @@ export default function VendasPage() {
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--t-text-secondary)]" />
               <Input
-                placeholder="Buscar por número ou cliente..."
+                placeholder="Buscar por número, cliente ou localizador..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="pl-9 bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)] placeholder:text-[var(--t-text-secondary)]"
