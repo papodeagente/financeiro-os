@@ -172,8 +172,8 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
               {gerandoProposta ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
               {gerandoProposta ? 'Gerando...' : 'Gerar Proposta'}
             </Button>
-            <Button onClick={handleSave} size="sm" className="bg-[var(--t-header-bg)] hover:bg-[var(--t-surface-hover)]">
-              <Save className="w-4 h-4 mr-1" /> Salvar
+            <Button onClick={handleSave} size="sm" className="bg-[var(--t-green)] hover:bg-[var(--t-green)]/90 text-white gap-1">
+              <Save className="w-4 h-4" /> Salvar
             </Button>
           </div>
         </header>
