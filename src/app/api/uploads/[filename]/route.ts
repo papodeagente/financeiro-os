@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server';
 import { readFile, stat } from 'fs/promises';
 import path from 'path';
 
-// Check multiple dirs — upload may be in /app/data/uploads or /tmp/uploads
+// Persistent volume at /app/data/uploads in production
 const UPLOAD_DIRS = process.env.NODE_ENV === 'production'
-  ? [path.join(process.cwd(), 'data', 'uploads'), '/tmp/uploads']
+  ? ['/app/data/uploads']
   : [path.join(process.cwd(), 'public', 'uploads')];
 
 const MIME_TYPES: Record<string, string> = {

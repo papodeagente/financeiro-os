@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
-import { writeFile, mkdir, access } from 'fs/promises';
+import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { generateId } from '@/lib/utils';
 
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'];
+
+// Persistent volume mounted at /app/data by Coolify
+const UPLOAD_DIR_PROD = '/app/data/uploads';
 
 async function getUploadDir(): Promise<string> {
   if (process.env.NODE_ENV !== 'production') {
@@ -12,17 +15,8 @@ async function getUploadDir(): Promise<string> {
     await mkdir(dir, { recursive: true });
     return dir;
   }
-  // Try preferred path first, fallback to /tmp if permission denied
-  const preferred = path.join(process.cwd(), 'data', 'uploads');
-  try {
-    await mkdir(preferred, { recursive: true });
-    await access(preferred);
-    return preferred;
-  } catch {
-    const fallback = '/tmp/uploads';
-    await mkdir(fallback, { recursive: true });
-    return fallback;
-  }
+  await mkdir(UPLOAD_DIR_PROD, { recursive: true });
+  return UPLOAD_DIR_PROD;
 }
 
 export async function POST(req: Request) {
