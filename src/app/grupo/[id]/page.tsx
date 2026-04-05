@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useEffect, useCallback, use } from 'react';
+import { useState, useEffect, useCallback, useMemo, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { GrupoViagem, AbaType, ABA_LABELS } from '@/lib/types';
 import { loadGrupos, saveGrupo } from '@/lib/storage';
+import { calcProposta } from '@/lib/calculations';
 import { useApp } from '@/contexts/AppContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { FloatingResume } from '@/components/FloatingResume';
+import { GroupStepper } from '@/components/GroupStepper';
 import { InfTab } from '@/components/tabs/InfTab';
 import { TktTab } from '@/components/tabs/TktTab';
 import { HtlTab } from '@/components/tabs/HtlTab';
@@ -102,6 +103,15 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
     setGerandoProposta(false);
   };
 
+  const handleNext = useCallback(() => {
+    const idx = ABAS_PLANEJAMENTO.indexOf(activeTab);
+    if (idx < ABAS_PLANEJAMENTO.length - 1) setActiveTab(ABAS_PLANEJAMENTO[idx + 1]);
+  }, [activeTab]);
+  const handlePrev = useCallback(() => {
+    const idx = ABAS_PLANEJAMENTO.indexOf(activeTab);
+    if (idx > 0) setActiveTab(ABAS_PLANEJAMENTO[idx - 1]);
+  }, [activeTab]);
+
   // Auto-save every 5 seconds
   useEffect(() => {
     if (!saved && grupo) {
@@ -112,6 +122,15 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
       return () => clearTimeout(timer);
     }
   }, [saved, grupo]);
+
+  // Price summary for stepper
+  const priceSummary = useMemo(() => {
+    if (!grupo) return null;
+    const p = calcProposta(grupo);
+    const dblAvista = p.totalPaxAvista['dbl'] || 0;
+    const dblCartao = p.parcelaPaxCC['dbl'] || 0;
+    return { dblAvista, dblCartao, parcelas: grupo.params.parcelas };
+  }, [grupo]);
 
   if (!grupo) return <div className="flex items-center justify-center h-full">Carregando...</div>;
 
@@ -133,58 +152,50 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
   };
 
   return (
-    <div className="flex h-full">
-      {/* Inner sidebar - Planning tabs only */}
-      <aside className="w-[82px] bg-[var(--t-bg)] text-[var(--t-text)] flex flex-col items-center py-3 gap-1 overflow-y-auto shrink-0 border-r border-[var(--t-border)]">
-        <div className="text-[8px] uppercase tracking-wider text-[var(--t-text-secondary)] mb-1">Produto</div>
-        {ABAS_PLANEJAMENTO.map(aba => (
-          <button
-            key={aba}
-            onClick={() => setActiveTab(aba)}
-            className={`w-[72px] py-1.5 rounded-lg text-center transition-all ${
-              activeTab === aba ? 'bg-[var(--t-accent)] text-[var(--t-text)]' : 'hover:bg-[var(--t-surface-hover)]'
-            }`}
-          >
-            <div className="text-sm">{ABA_ICONS[aba]}</div>
-            <div className="text-[9px] font-semibold leading-tight">{ABA_LABELS[aba]}</div>
-            {hasData(grupo, aba) && <div className="w-1.5 h-1.5 rounded-full bg-green-400 mx-auto mt-0.5" />}
-          </button>
-        ))}
-      </aside>
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <header className="bg-[var(--t-surface)] border-b border-[var(--t-border)] px-6 py-3 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-2 text-sm text-[var(--t-text-secondary)]">
+          <Link href="/grupos" className="hover:text-[var(--t-text)]">Produtos</Link>
+          <span>/</span>
+          <span className="font-semibold text-[var(--t-text)]">{grupo.grp_id || 'Sem ID'}</span>
+          <span>/</span>
+          <Badge variant="outline" className="text-[var(--t-accent)] border-[var(--t-accent)]">{ABA_LABELS[activeTab]}</Badge>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className={`text-xs ${saved ? 'text-green-600' : 'text-orange-500'}`}>
+            {saved ? '● Salvo' : '○ Não salvo'}
+          </span>
+          <Button onClick={handleGerarProposta} size="sm" disabled={gerandoProposta}
+            className="bg-[var(--t-green)] hover:bg-[var(--t-green)]/90 text-white dark:text-[#0a0a14] gap-1">
+            {gerandoProposta ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+            {gerandoProposta ? 'Gerando...' : 'Gerar Proposta'}
+          </Button>
+          <Button onClick={handleSave} size="sm" className="bg-[var(--t-green)] hover:bg-[var(--t-green)]/90 text-white gap-1">
+            <Save className="w-4 h-4" /> Salvar
+          </Button>
+        </div>
+      </header>
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top bar */}
-        <header className="bg-[var(--t-surface)] border-b border-[var(--t-border)] px-6 py-3 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2 text-sm text-[var(--t-text-secondary)]">
-            <Link href="/grupos" className="hover:text-[var(--t-text)]">Produtos</Link>
-            <span>/</span>
-            <span className="font-semibold text-[var(--t-text)]">{grupo.grp_id || 'Sem ID'}</span>
-            <span>/</span>
-            <Badge variant="outline" className="text-[var(--t-accent)] border-[var(--t-accent)]">{ABA_LABELS[activeTab]}</Badge>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className={`text-xs ${saved ? 'text-green-600' : 'text-orange-500'}`}>
-              {saved ? '● Salvo' : '○ Não salvo'}
-            </span>
-            <Button onClick={handleGerarProposta} size="sm" disabled={gerandoProposta}
-              className="bg-[var(--t-green)] hover:bg-[var(--t-green)]/90 text-white dark:text-[#0a0a14] gap-1">
-              {gerandoProposta ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-              {gerandoProposta ? 'Gerando...' : 'Gerar Proposta'}
-            </Button>
-            <Button onClick={handleSave} size="sm" className="bg-[var(--t-green)] hover:bg-[var(--t-green)]/90 text-white gap-1">
-              <Save className="w-4 h-4" /> Salvar
-            </Button>
-          </div>
-        </header>
+      {/* Timeline Stepper */}
+      <GroupStepper
+        steps={ABAS_PLANEJAMENTO}
+        activeStep={activeTab}
+        onStepClick={setActiveTab}
+        onNext={handleNext}
+        onPrev={handlePrev}
+        hasData={(aba) => hasData(grupo, aba)}
+        icons={ABA_ICONS}
+        labels={ABA_LABELS}
+        priceSummary={priceSummary}
+      />
 
-        {/* Content */}
-        <main className="flex-1 overflow-y-auto p-6">
+      {/* Content */}
+      <main className="flex-1 overflow-y-auto p-6">
+        <div key={activeTab} className="content-enter">
           {renderTab()}
-        </main>
-      </div>
-
-      <FloatingResume grupo={grupo} />
+        </div>
+      </main>
     </div>
   );
 }
