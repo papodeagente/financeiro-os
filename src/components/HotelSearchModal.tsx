@@ -169,12 +169,11 @@ export function HotelSearchModal({
                   <div className="w-44 shrink-0 relative">
                     {hasImages ? (
                       <img
-                        src={hotel.images![0].thumbnail || hotel.images![0].original}
+                        src={`/api/img-proxy?url=${encodeURIComponent(hotel.images![0].thumbnail || hotel.images![0].original)}`}
                         alt={hotel.name}
                         className="w-full h-full object-cover min-h-[140px]"
                         loading="lazy"
-                        referrerPolicy="no-referrer"
-                        onError={(e) => { const t = e.currentTarget; if (t.src !== hotel.images![0].original) t.src = hotel.images![0].original; else t.style.display = 'none'; }}
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                       />
                     ) : (
                       <div className="w-full h-full min-h-[140px] bg-[var(--t-surface)] flex items-center justify-center">
@@ -286,12 +285,11 @@ export function HotelSearchModal({
                           {hotel.images!.slice(0, 10).map((img, i) => (
                             <img
                               key={i}
-                              src={img.thumbnail || img.original}
+                              src={`/api/img-proxy?url=${encodeURIComponent(img.thumbnail || img.original)}`}
                               alt={`${hotel.name} foto ${i + 1}`}
                               className="w-24 h-16 object-cover rounded-lg shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
                               onClick={() => window.open(img.original || img.thumbnail, '_blank')}
                               loading="lazy"
-                              referrerPolicy="no-referrer"
                               onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
                             />
                           ))}

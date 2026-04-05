@@ -28,7 +28,12 @@ export function HotelModal({ alojamento: a, idioma, corPrimaria, onClose }: Prop
   const overlayRef = useRef<HTMLDivElement>(null);
   const lang = idioma === 'en' ? 'en' : idioma === 'es' ? 'es' : 'pt';
   const regimeDesc = REGIME_LABELS[lang]?.[a.regime] || a.regime;
-  const galeria = a.hotel_galeria?.length ? a.hotel_galeria : a.hotel_imagem ? [a.hotel_imagem] : [];
+  const proxyImg = (url: string) => {
+    if (!url || url.startsWith('/')) return url;
+    return `/api/img-proxy?url=${encodeURIComponent(url)}`;
+  };
+  const rawGaleria = a.hotel_galeria?.length ? a.hotel_galeria : a.hotel_imagem ? [a.hotel_imagem] : [];
+  const galeria = rawGaleria.map(img => img.startsWith('/api/img-proxy') ? img : proxyImg(img));
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };

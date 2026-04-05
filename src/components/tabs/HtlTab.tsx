@@ -88,8 +88,14 @@ export function HtlTab({ grupo, onChange }: Props) {
     }
 
     // Store API images and metadata for proposta generation
-    info.hotel_imagem = place.images?.[0]?.original || place.images?.[0]?.thumbnail || '';
-    info.hotel_galeria = (place.images || []).slice(0, 8).map(img => img.original || img.thumbnail);
+    // Proxy external URLs to avoid CORS/referrer blocking
+    const proxyUrl = (url: string) => {
+      if (!url) return '';
+      if (url.startsWith('/')) return url; // local
+      return `/api/img-proxy?url=${encodeURIComponent(url)}`;
+    };
+    info.hotel_imagem = proxyUrl(place.images?.[0]?.original || place.images?.[0]?.thumbnail || '');
+    info.hotel_galeria = (place.images || []).slice(0, 8).map(img => proxyUrl(img.original || img.thumbnail));
     info.hotel_estrelas = place.extracted_hotel_class || (place.rating ? Math.round(place.rating) : undefined);
     info.hotel_link = place.link || '';
     info.hotel_descricao = place.description || '';

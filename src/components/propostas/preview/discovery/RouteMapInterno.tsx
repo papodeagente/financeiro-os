@@ -161,7 +161,7 @@ export default function RouteMapInterno({ alojamentos, transportes, corPrimaria 
     <div
       ref={mapRef}
       className="w-full rounded-[20px] overflow-hidden"
-      style={{ height: '500px' }}
+      style={{ height: '500px', position: 'relative', zIndex: 0 }}
     />
   );
 }

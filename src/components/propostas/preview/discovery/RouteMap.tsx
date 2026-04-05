@@ -28,7 +28,7 @@ export function RouteMap({ alojamentos, transportes, idioma, corPrimaria }: Prop
   if (!hasCoords) return null;
 
   return (
-    <section id="discovery-map" className="py-16 bg-gray-50">
+    <section id="discovery-map" className="py-16 bg-gray-50 relative" style={{ zIndex: 0 }}>
       <div className="max-w-5xl mx-auto px-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-8">{i18n.mapaRota}</h2>
         <RouteMapInterno
