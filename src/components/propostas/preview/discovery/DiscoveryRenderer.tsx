@@ -202,12 +202,12 @@ export function DiscoveryRenderer({ proposta, slug, idioma }: Props) {
           <div className="max-w-4xl mx-auto px-6">
             <div className="grid sm:grid-cols-2 gap-6">
               {depoimentoSecoes.map(s => {
-                const c = s.conteudo as { depoimentos?: { texto: string; autor: string; foto?: string; destino?: string }[] };
+                const c = s.conteudo as { depoimentos?: { texto: string; autor: string; foto?: string; foto_url?: string; destino?: string }[] };
                 return (c.depoimentos || []).map((dep, i) => (
                   <div key={`${s.id}-${i}`} className="p-6 rounded-xl bg-gray-50 border border-gray-100">
                     <p className="text-sm text-gray-700 italic leading-relaxed">&ldquo;{dep.texto}&rdquo;</p>
                     <div className="mt-4 flex items-center gap-3">
-                      {dep.foto && <img src={dep.foto} alt="" className="w-10 h-10 rounded-full object-cover" />}
+                      {(dep.foto_url || dep.foto) && <img src={dep.foto_url || dep.foto} alt="" className="w-10 h-10 rounded-full object-cover" />}
                       <div>
                         <div className="text-sm font-medium text-gray-900">{dep.autor}</div>
                         {dep.destino && <div className="text-xs text-gray-500">{dep.destino}</div>}

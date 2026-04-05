@@ -10,11 +10,16 @@ const BRL = (v: number) =>
 
 // ─── TEXTO ───
 function TextoPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
-  const c = conteudo as { titulo?: string; corpo?: string };
+  const c = conteudo as { titulo?: string; corpo?: string; imagem_url?: string };
   const isHTML = c.corpo?.includes('<');
   return (
     <div className="space-y-3">
       {c.titulo && <h3 className="text-2xl font-bold tracking-tight">{c.titulo}</h3>}
+      {c.imagem_url && (
+        <div className="rounded-xl overflow-hidden shadow-sm">
+          <img src={c.imagem_url} alt={c.titulo || ''} className="w-full h-auto max-h-[400px] object-cover" />
+        </div>
+      )}
       {c.corpo && (
         isHTML
           ? <div className="prose prose-sm max-w-none leading-relaxed opacity-80 [&_a]:text-emerald-600 [&_a]:underline [&_mark]:bg-yellow-200/50 [&_blockquote]:border-l-4 [&_blockquote]:border-emerald-300 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:opacity-70" dangerouslySetInnerHTML={{ __html: c.corpo }} />
@@ -236,7 +241,7 @@ function ValoresPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
 
 // ─── DEPOIMENTO ───
 function DepoimentoPreview({ conteudo, idioma }: { conteudo: Record<string, unknown>; idioma?: IdiomaProposal }) {
-  const deps = (conteudo as { depoimentos?: Array<{ texto: string; autor: string; foto?: string; destino?: string }> }).depoimentos || [];
+  const deps = (conteudo as { depoimentos?: Array<{ texto: string; autor: string; foto?: string; foto_url?: string; destino?: string }> }).depoimentos || [];
   const i18n = t(idioma);
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -244,7 +249,7 @@ function DepoimentoPreview({ conteudo, idioma }: { conteudo: Record<string, unkn
         <div key={i} className="bg-gray-50 rounded-2xl p-5 border border-gray-100 shadow-sm">
           <p className="italic text-[15px] leading-relaxed text-gray-700">&ldquo;{d.texto}&rdquo;</p>
           <div className="flex items-center gap-3 mt-4">
-            {d.foto && <img src={d.foto} alt={d.autor} className="w-10 h-10 rounded-full object-cover ring-2 ring-white shadow" />}
+            {(d.foto_url || d.foto) && <img src={d.foto_url || d.foto} alt={d.autor} className="w-10 h-10 rounded-full object-cover ring-2 ring-white shadow" />}
             <div>
               <div className="text-sm font-bold">{d.autor}</div>
               {d.destino && <div className="text-xs opacity-50">{i18n.viajouPara} {d.destino}</div>}
@@ -258,7 +263,7 @@ function DepoimentoPreview({ conteudo, idioma }: { conteudo: Record<string, unkn
 
 // ─── CTA ───
 function CtaPreview({ conteudo, corPrimaria, idioma }: { conteudo: Record<string, unknown>; corPrimaria: string; idioma?: IdiomaProposal }) {
-  const c = conteudo as { texto_botao?: string; tipo_acao?: string; numero_whatsapp?: string; mensagem_predefinida?: string; cor_botao?: string };
+  const c = conteudo as { texto_botao?: string; tipo_acao?: string; numero_whatsapp?: string; mensagem_predefinida?: string; cor_botao?: string; imagem_fundo?: string };
   const cor = c.cor_botao || corPrimaria || '#004aad';
 
   const handleClick = () => {
@@ -269,15 +274,21 @@ function CtaPreview({ conteudo, corPrimaria, idioma }: { conteudo: Record<string
   };
 
   return (
-    <div className="text-center py-6">
-      <button
-        onClick={handleClick}
-        style={{ backgroundColor: cor }}
-        className="inline-flex items-center gap-2 px-10 py-4 text-white font-bold rounded-full text-lg shadow-xl hover:shadow-2xl hover:scale-105 transition-all"
-      >
-        {c.tipo_acao === 'WHATSAPP' && <MessageCircle className="w-5 h-5" />}
-        {c.texto_botao || t(idioma).entrarEmContato}
-      </button>
+    <div
+      className="text-center py-12 rounded-2xl relative overflow-hidden"
+      style={c.imagem_fundo ? { backgroundImage: `url(${c.imagem_fundo})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
+    >
+      {c.imagem_fundo && <div className="absolute inset-0 bg-black/40" />}
+      <div className="relative z-10">
+        <button
+          onClick={handleClick}
+          style={{ backgroundColor: cor }}
+          className="inline-flex items-center gap-2 px-10 py-4 text-white font-bold rounded-full text-lg shadow-xl hover:shadow-2xl hover:scale-105 transition-all"
+        >
+          {c.tipo_acao === 'WHATSAPP' && <MessageCircle className="w-5 h-5" />}
+          {c.texto_botao || t(idioma).entrarEmContato}
+        </button>
+      </div>
     </div>
   );
 }

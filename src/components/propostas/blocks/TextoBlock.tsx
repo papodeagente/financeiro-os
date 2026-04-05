@@ -2,6 +2,7 @@
 
 import { Input } from '@/components/ui/input';
 import { RichTextEditor } from '@/components/propostas/RichTextEditor';
+import { ImageUpload } from '@/components/propostas/ImageUpload';
 import type { BlockProps } from './types';
 
 // Convert plain text to basic HTML paragraphs (backward compat)
@@ -12,7 +13,7 @@ function ensureHTML(text: string): string {
 }
 
 export function TextoBlock({ conteudo, onChange }: BlockProps) {
-  const c = conteudo as { titulo?: string; corpo?: string };
+  const c = conteudo as { titulo?: string; corpo?: string; imagem_url?: string };
   return (
     <div className="space-y-2">
       <Input
@@ -26,6 +27,15 @@ export function TextoBlock({ conteudo, onChange }: BlockProps) {
         onChange={html => onChange({ ...conteudo, corpo: html })}
         placeholder="Escreva o conteudo aqui..."
       />
+      <div>
+        <label className="text-[10px] uppercase tracking-wider text-[var(--t-text-muted)] mb-1 block">Imagem destaque (opcional)</label>
+        <ImageUpload
+          compact
+          currentUrl={c.imagem_url}
+          onUpload={urls => onChange({ ...conteudo, imagem_url: urls[0] })}
+          onRemove={() => onChange({ ...conteudo, imagem_url: '' })}
+        />
+      </div>
     </div>
   );
 }
