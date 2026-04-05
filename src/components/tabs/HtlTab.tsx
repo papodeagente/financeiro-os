@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { GrupoViagem } from '@/lib/types';
 import { createHtlHotel } from '@/lib/defaults';
 import { minPositivo, formatBRL, calcDiarias } from '@/lib/utils';
@@ -26,22 +26,9 @@ const TIPO_LABELS: Record<string, string> = { sgl: 'SGL', dbl: 'DBL', tpl: 'TPL'
 export function HtlTab({ grupo, onChange }: Props) {
   const totals = calcHtlTotals(grupo);
   const [hotelModalOpen, setHotelModalOpen] = useState<number | null>(null);
-  const [addedSources, setAddedSources] = useState<Record<number, Set<number>>>({});
-  const [pickerOpen, setPickerOpen] = useState<number | null>(null);
   const [expandedInfo, setExpandedInfo] = useState<Record<number, boolean>>({});
-  const pickerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        setPickerOpen(null);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  const updateFonte = (hotelIdx: number, fonteIdx: number, field: string, value: number | null) => {
+  const updateFonte = (hotelIdx: number, fonteIdx: number, field: string, value: number | null | string) => {
     const htl = { ...grupo.htl, hoteis: [...grupo.htl.hoteis] };
     htl.hoteis[hotelIdx] = { ...htl.hoteis[hotelIdx], fontes: [...htl.hoteis[hotelIdx].fontes] };
     htl.hoteis[hotelIdx].fontes[fonteIdx] = { ...htl.hoteis[hotelIdx].fontes[fonteIdx], [field]: value };
@@ -78,39 +65,6 @@ export function HtlTab({ grupo, onChange }: Props) {
     onChange({ ...grupo, htl });
   };
 
-  const isSourceVisible = (hIdx: number, fIdx: number) => {
-    const fonte = grupo.htl.hoteis[hIdx].fontes[fIdx];
-    const hasData = TIPOS.some(t => {
-      const val = fonte[`valor_${t}` as keyof typeof fonte] as number | null;
-      return val !== null && val > 0;
-    });
-    return hasData || addedSources[hIdx]?.has(fIdx) || false;
-  };
-
-  const addSource = (hIdx: number, fIdx: number) => {
-    setAddedSources(prev => {
-      const set = new Set(prev[hIdx] || []);
-      set.add(fIdx);
-      return { ...prev, [hIdx]: set };
-    });
-    setPickerOpen(null);
-  };
-
-  const clearSource = (hIdx: number, fIdx: number) => {
-    const htl = { ...grupo.htl, hoteis: [...grupo.htl.hoteis] };
-    htl.hoteis[hIdx] = { ...htl.hoteis[hIdx], fontes: [...htl.hoteis[hIdx].fontes] };
-    htl.hoteis[hIdx].fontes[fIdx] = {
-      ...htl.hoteis[hIdx].fontes[fIdx],
-      valor_sgl: null, valor_dbl: null, valor_tpl: null, valor_qdp: null, valor_chd: null,
-    };
-    onChange({ ...grupo, htl });
-    setAddedSources(prev => {
-      const set = new Set(prev[hIdx] || []);
-      set.delete(fIdx);
-      return { ...prev, [hIdx]: set };
-    });
-  };
-
   return (
     <div className="space-y-6">
       {/* Summary totals */}
@@ -134,8 +88,6 @@ export function HtlTab({ grupo, onChange }: Props) {
       {grupo.htl.hoteis.map((hotel, hIdx) => {
         const periodo = grupo.periodos[hIdx];
         const bests = Object.fromEntries(TIPOS.map(t => [t, minPositivo(hotel.fontes.map(f => f[`valor_${t}` as keyof typeof f] as number | null))]));
-        const visibleIndices = hotel.fontes.map((_, i) => i).filter(i => isSourceVisible(hIdx, i));
-        const hiddenSources = hotel.fontes.map((f, i) => ({ nome: f.nome, idx: i })).filter((_, i) => !isSourceVisible(hIdx, i));
         const filledCount = hotel.fontes.filter(f => TIPOS.some(t => { const v = f[`valor_${t}` as keyof typeof f] as number | null; return v !== null && v > 0; })).length;
         const isInfoOpen = expandedInfo[hIdx] ?? false;
 
@@ -190,8 +142,7 @@ export function HtlTab({ grupo, onChange }: Props) {
 
               {/* Source cards */}
               <div className="space-y-3">
-                {visibleIndices.map(fIdx => {
-                  const fonte = hotel.fontes[fIdx];
+                {hotel.fontes.map((fonte, fIdx) => {
                   const isBest = TIPOS.some(t => {
                     const val = fonte[`valor_${t}` as keyof typeof fonte] as number | null;
                     return val !== null && val > 0 && val === bests[t];
@@ -206,21 +157,19 @@ export function HtlTab({ grupo, onChange }: Props) {
                           : 'border-[var(--t-border)] bg-[var(--t-bg)]'
                       }`}
                     >
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-medium text-[var(--t-text)]">{fonte.nome}</h4>
-                          {isBest && (
-                            <span className="text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-[var(--t-status-success-bg)] text-[var(--t-status-success)]">
-                              Melhor
-                            </span>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => clearSource(hIdx, fIdx)}
-                          className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-status-danger)] hover:bg-[var(--t-status-danger-bg)] transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-xs font-bold text-[var(--t-text-muted)] w-6">{fIdx + 1}.</span>
+                        <Input
+                          value={fonte.nome}
+                          onChange={e => updateFonte(hIdx, fIdx, 'nome', e.target.value)}
+                          className="h-8 w-48 text-sm font-medium"
+                          placeholder="Nome do fornecedor"
+                        />
+                        {isBest && (
+                          <span className="text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-[var(--t-status-success-bg)] text-[var(--t-status-success)]">
+                            Melhor
+                          </span>
+                        )}
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                         {TIPOS.map(t => {
@@ -239,40 +188,6 @@ export function HtlTab({ grupo, onChange }: Props) {
                   );
                 })}
               </div>
-
-              {/* Add source button */}
-              {hiddenSources.length > 0 && (
-                <div className="relative" ref={pickerOpen === hIdx ? pickerRef : undefined}>
-                  <button
-                    onClick={() => setPickerOpen(pickerOpen === hIdx ? null : hIdx)}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-[var(--t-border)] text-sm text-[var(--t-text-muted)] hover:border-[var(--t-green)] hover:text-[var(--t-green)] transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Adicionar cotação
-                  </button>
-                  {pickerOpen === hIdx && (
-                    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-20 bg-[var(--t-surface)] border border-[var(--t-border)] rounded-xl p-1.5 w-56 dropdown-enter" style={{ boxShadow: 'var(--elevation-4)' }}>
-                      <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--t-text-muted)] px-3 py-1.5">Selecione a fonte</div>
-                      {hiddenSources.map(s => (
-                        <button
-                          key={s.idx}
-                          onClick={() => addSource(hIdx, s.idx)}
-                          className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-[var(--t-surface-hover)] text-[var(--t-text)] transition-colors"
-                        >
-                          {s.nome}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Empty state */}
-              {visibleIndices.length === 0 && hiddenSources.length > 0 && (
-                <div className="text-center py-8 text-sm text-[var(--t-text-muted)]">
-                  Nenhuma cotação adicionada. Clique em &ldquo;Adicionar cotação&rdquo; para começar.
-                </div>
-              )}
 
               {/* Info panel toggle */}
               <button

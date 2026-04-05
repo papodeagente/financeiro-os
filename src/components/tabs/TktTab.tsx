@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { GrupoViagem } from '@/lib/types';
 import { createTktTrecho } from '@/lib/defaults';
 import { minPositivo, formatBRL } from '@/lib/utils';
@@ -21,17 +21,6 @@ interface Props {
 export function TktTab({ grupo, onChange }: Props) {
   const totals = calcTktTotals(grupo);
   const [flightModalOpen, setFlightModalOpen] = useState<number | null>(null);
-  const [addedSources, setAddedSources] = useState<Record<number, Set<number>>>({});
-  const [pickerOpen, setPickerOpen] = useState<number | null>(null);
-  const pickerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPickerOpen(null);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
 
   const updateFonte = (trechoIdx: number, fonteIdx: number, field: string, value: number | null | string) => {
     const tkt = { ...grupo.tkt, trechos: [...grupo.tkt.trechos] };
@@ -67,33 +56,6 @@ export function TktTab({ grupo, onChange }: Props) {
     onChange({ ...grupo, tkt });
   };
 
-  const isSourceVisible = (tIdx: number, fIdx: number) => {
-    const fonte = grupo.tkt.trechos[tIdx].fontes[fIdx];
-    const hasData = (fonte.valor_adt !== null && fonte.valor_adt > 0) || (fonte.valor_chd !== null && fonte.valor_chd > 0) || !!fonte.partida_chegada;
-    return hasData || addedSources[tIdx]?.has(fIdx) || false;
-  };
-
-  const addSource = (tIdx: number, fIdx: number) => {
-    setAddedSources(prev => {
-      const set = new Set(prev[tIdx] || []);
-      set.add(fIdx);
-      return { ...prev, [tIdx]: set };
-    });
-    setPickerOpen(null);
-  };
-
-  const clearSource = (tIdx: number, fIdx: number) => {
-    const tkt = { ...grupo.tkt, trechos: [...grupo.tkt.trechos] };
-    tkt.trechos[tIdx] = { ...tkt.trechos[tIdx], fontes: [...tkt.trechos[tIdx].fontes] };
-    tkt.trechos[tIdx].fontes[fIdx] = { ...tkt.trechos[tIdx].fontes[fIdx], valor_adt: null, valor_chd: null, partida_chegada: '' };
-    onChange({ ...grupo, tkt });
-    setAddedSources(prev => {
-      const set = new Set(prev[tIdx] || []);
-      set.delete(fIdx);
-      return { ...prev, [tIdx]: set };
-    });
-  };
-
   return (
     <div className="space-y-6">
       {/* Summary totals */}
@@ -118,8 +80,6 @@ export function TktTab({ grupo, onChange }: Props) {
         const infTrecho = grupo.trechos[tIdx];
         const melhorAdt = minPositivo(trecho.fontes.map(f => f.valor_adt));
         const melhorChd = minPositivo(trecho.fontes.map(f => f.valor_chd));
-        const visibleIndices = trecho.fontes.map((_, i) => i).filter(i => isSourceVisible(tIdx, i));
-        const hiddenSources = trecho.fontes.map((f, i) => ({ nome: f.nome, idx: i })).filter((_, i) => !isSourceVisible(tIdx, i));
         const filledCount = trecho.fontes.filter(f => (f.valor_adt !== null && f.valor_adt > 0) || (f.valor_chd !== null && f.valor_chd > 0)).length;
 
         return (
@@ -167,8 +127,7 @@ export function TktTab({ grupo, onChange }: Props) {
 
               {/* Source cards */}
               <div className="space-y-3">
-                {visibleIndices.map(fIdx => {
-                  const fonte = trecho.fontes[fIdx];
+                {trecho.fontes.map((fonte, fIdx) => {
                   const isMinAdt = fonte.valor_adt !== null && fonte.valor_adt > 0 && fonte.valor_adt === melhorAdt;
                   const isMinChd = fonte.valor_chd !== null && fonte.valor_chd > 0 && fonte.valor_chd === melhorChd;
                   const isBest = isMinAdt || isMinChd;
@@ -183,15 +142,16 @@ export function TktTab({ grupo, onChange }: Props) {
                         : 'border-[var(--t-border)] bg-[var(--t-bg)]'
                       }`}
                     >
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-medium text-[var(--t-text)]">{fonte.nome}</h4>
-                          {isBest && <span className="text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-[var(--t-status-success-bg)] text-[var(--t-status-success)]">Melhor</span>}
-                          {isApi && <span className="text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-[var(--t-status-info-bg)] text-[var(--t-status-info)]">API</span>}
-                        </div>
-                        <button onClick={() => clearSource(tIdx, fIdx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-status-danger)] hover:bg-[var(--t-status-danger-bg)] transition-colors">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-xs font-bold text-[var(--t-text-muted)] w-6">{fIdx + 1}.</span>
+                        <Input
+                          value={fonte.nome}
+                          onChange={e => updateFonte(tIdx, fIdx, 'nome', e.target.value)}
+                          className="h-8 w-48 text-sm font-medium"
+                          placeholder="Nome da fonte"
+                        />
+                        {isBest && <span className="text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-[var(--t-status-success-bg)] text-[var(--t-status-success)]">Melhor</span>}
+                        {isApi && <span className="text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-[var(--t-status-info-bg)] text-[var(--t-status-info)]">API</span>}
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
@@ -211,27 +171,6 @@ export function TktTab({ grupo, onChange }: Props) {
                   );
                 })}
               </div>
-
-              {/* Add source */}
-              {hiddenSources.length > 0 && (
-                <div className="relative" ref={pickerOpen === tIdx ? pickerRef : undefined}>
-                  <button onClick={() => setPickerOpen(pickerOpen === tIdx ? null : tIdx)} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-[var(--t-border)] text-sm text-[var(--t-text-muted)] hover:border-[var(--t-green)] hover:text-[var(--t-green)] transition-colors">
-                    <Plus className="w-4 h-4" /> Adicionar cotação
-                  </button>
-                  {pickerOpen === tIdx && (
-                    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-20 bg-[var(--t-surface)] border border-[var(--t-border)] rounded-xl p-1.5 w-56 dropdown-enter" style={{ boxShadow: 'var(--elevation-4)' }}>
-                      <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--t-text-muted)] px-3 py-1.5">Selecione a fonte</div>
-                      {hiddenSources.map(s => (
-                        <button key={s.idx} onClick={() => addSource(tIdx, s.idx)} className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-[var(--t-surface-hover)] text-[var(--t-text)] transition-colors">
-                          {s.nome}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {visibleIndices.length === 0 && <div className="text-center py-8 text-sm text-[var(--t-text-muted)]">Nenhuma cotação adicionada.</div>}
             </div>
           </div>
         );
