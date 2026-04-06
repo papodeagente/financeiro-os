@@ -12,10 +12,11 @@ import {
 } from 'lucide-react';
 
 const BASES: Record<TipoBaseComissao, string> = {
+  RECEITA_AGENCIA: 'Receita da Agencia (Comissao)',
   MARKUP: 'Markup (Venda - Custo)',
-  VALOR_VENDA: 'Valor da Venda',
-  COMISSAO_FORNECEDOR: 'Comissão do Fornecedor',
-  LUCRO: 'Lucro Líquido',
+  VALOR_VENDA: 'Valor Total da Venda',
+  COMISSAO_FORNECEDOR: 'Comissao do Fornecedor',
+  LUCRO: 'Lucro Liquido',
 };
 
 const TIPOS_PRODUTO: TipoProdutoVenda[] = ['AEREO', 'HOTEL', 'PACOTE', 'SEGURO', 'RECEPTIVO', 'CRUZEIRO', 'CARRO', 'INGRESSO', 'GRUPO', 'OUTROS'];

@@ -474,7 +474,7 @@ export interface ExtratoLinha {
 // FASE 4 — COMISSOES E METAS
 // ============================================================
 
-export type TipoBaseComissao = 'MARKUP' | 'VALOR_VENDA' | 'COMISSAO_FORNECEDOR' | 'LUCRO';
+export type TipoBaseComissao = 'MARKUP' | 'VALOR_VENDA' | 'COMISSAO_FORNECEDOR' | 'LUCRO' | 'RECEITA_AGENCIA';
 
 export interface FaixaComissao {
   de: number;

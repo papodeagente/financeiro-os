@@ -16,6 +16,7 @@ interface CustoFixo {
 interface CustoVariavel {
   nome: string;
   percentual: number;
+  base?: 'VENDA' | 'COMISSAO';
 }
 
 interface CanalMarketing {
@@ -46,9 +47,9 @@ function createDefault(mes: string): CustosData {
     mes,
     custos_fixos: CATEGORIAS_FIXOS.map(c => ({ categoria: c, valor: 0, observacao: '' })),
     custos_variaveis: [
-      { nome: 'Comissao ao vendedor (%)', percentual: 0 },
-      { nome: 'Impostos sobre faturamento (%)', percentual: 0 },
-      { nome: 'Outros variaveis (%)', percentual: 0 },
+      { nome: 'Comissao ao vendedor', percentual: 0, base: 'COMISSAO' },
+      { nome: 'Impostos', percentual: 0, base: 'COMISSAO' },
+      { nome: 'Outros variaveis', percentual: 0, base: 'VENDA' },
     ],
     marketing: CANAIS_MARKETING.map(c => ({ canal: c, valor: 0 })),
     margem_minima: 15,
@@ -105,9 +106,15 @@ export default function CustosPage() {
   };
 
   const totalFixo = data?.custos_fixos.reduce((s, c) => s + (c.valor || 0), 0) || 0;
-  const totalVariavel = data?.custos_variaveis.reduce((s, c) => s + (c.percentual || 0), 0) || 0;
   const totalMarketing = data?.marketing.reduce((s, c) => s + (c.valor || 0), 0) || 0;
   const totalMensal = totalFixo + totalMarketing;
+  // Exemplo: venda R$10k, comissao R$2.5k
+  const exemploVenda = 10000;
+  const exemploComissao = 2500;
+  const totalVarExemplo = data?.custos_variaveis.reduce((s, c) => {
+    const base = c.base === 'COMISSAO' ? exemploComissao : exemploVenda;
+    return s + base * (c.percentual || 0) / 100;
+  }, 0) || 0;
 
   if (loading) return (
     <div className="p-6">
@@ -178,10 +185,13 @@ export default function CustosPage() {
           {/* Custos Variaveis */}
           <section>
             <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-3">Custos variaveis por venda</h2>
+            <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mb-3">
+              Defina se cada custo incide sobre o valor total da venda ou sobre a receita da agencia (comissao/markup).
+            </p>
             <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] overflow-hidden">
               {data.custos_variaveis.map((item, i) => (
                 <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-[var(--t-border)] last:border-b-0">
-                  <span className="text-[var(--text-body-sm)] text-[var(--t-text)] w-64 shrink-0">{item.nome}</span>
+                  <span className="text-[var(--text-body-sm)] text-[var(--t-text)] w-48 shrink-0">{item.nome}</span>
                   <div className="flex items-center gap-1">
                     <input
                       type="number"
@@ -195,16 +205,37 @@ export default function CustosPage() {
                     />
                     <span className="text-[var(--text-body-sm)] text-[var(--t-text-muted)]">%</span>
                   </div>
+                  <select
+                    value={item.base || 'VENDA'}
+                    onChange={e => {
+                      const c = [...data.custos_variaveis];
+                      c[i] = { ...c[i], base: e.target.value as 'VENDA' | 'COMISSAO' };
+                      setData({ ...data, custos_variaveis: c });
+                    }}
+                    className="px-2 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-caption)] text-[var(--t-text)] min-w-[160px]"
+                  >
+                    <option value="VENDA">% da venda total</option>
+                    <option value="COMISSAO">% da comissao</option>
+                  </select>
                 </div>
               ))}
-              <div className="flex items-center justify-between px-4 py-3 bg-[var(--t-surface-hover)]">
-                <span className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)]">Total variavel</span>
-                <span className="text-[var(--text-body)] font-medium text-[var(--t-text)]">{totalVariavel.toFixed(1)}%</span>
+            </div>
+            <div className="mt-3 p-3 rounded-lg bg-[var(--t-surface-hover)]">
+              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">
+                <strong>Exemplo</strong>: Venda de R$ 10.000 com custo fornecedor R$ 7.500 (comissao = R$ 2.500)
+              </p>
+              <div className="mt-1 space-y-0.5">
+                {data.custos_variaveis.filter(v => v.percentual > 0).map((item, i) => {
+                  const base = item.base === 'COMISSAO' ? 2500 : 10000;
+                  const valor = base * item.percentual / 100;
+                  return (
+                    <p key={i} className="text-[var(--text-caption)] text-[var(--t-text-secondary)]">
+                      {item.nome}: {item.percentual}% {item.base === 'COMISSAO' ? 'da comissao' : 'da venda'} = {formatBRL(valor)}
+                    </p>
+                  );
+                })}
               </div>
             </div>
-            <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mt-2">
-              Em uma venda de R$ 10.000: custo variavel = {formatBRL(10000 * totalVariavel / 100)} ({totalVariavel.toFixed(1)}%)
-            </p>
           </section>
 
           {/* Marketing */}
@@ -240,8 +271,8 @@ export default function CustosPage() {
               <p className="text-[var(--text-title)] font-medium text-[var(--t-text)]">{formatBRL(totalFixo)}</p>
             </div>
             <div>
-              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">Custo variavel medio</p>
-              <p className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)]">{totalVariavel.toFixed(1)}%</p>
+              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">Custo variavel (ex. venda R$ 10k)</p>
+              <p className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)]">{formatBRL(totalVarExemplo)}</p>
             </div>
             <div>
               <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">Marketing mensal</p>

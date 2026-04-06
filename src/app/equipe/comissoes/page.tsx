@@ -80,6 +80,11 @@ export default function ComissoesPage() {
       // Calculate base value
       let valorBase = 0;
       switch (plano.base_calculo) {
+        case 'RECEITA_AGENCIA':
+          // Receita da agencia = comissao = valor venda - custo fornecedores
+          // Esta e a receita real da agencia (intermediaria)
+          valorBase = venda.valor_final - venda.valor_total_custo;
+          break;
         case 'MARKUP':
           valorBase = venda.valor_final - venda.valor_total_custo;
           break;
