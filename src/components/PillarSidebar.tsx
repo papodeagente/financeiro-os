@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useActivePillar, type Pillar } from '@/hooks/useActivePillar';
 import {
-  Wallet, FolderKanban, Gauge, TrendingUp,
+  Wallet, Gauge, TrendingUp,
   LayoutDashboard, Medal, Percent, Settings,
   FolderOpen, FileText, BarChart3,
   Plane, Hotel, Globe,
@@ -31,7 +31,6 @@ const PLANEJAMENTO_MENU: SidebarSection[] = [
   {
     items: [
       { key: 'custos-negocio', label: 'Custos do negócio', icon: Wallet, href: '/planejamento/custos' },
-      { key: 'custos-projeto', label: 'Projetos comerciais', icon: FolderKanban, href: '/planejamento/projetos' },
       { key: 'cac-dashboard', label: 'Dashboard CAC', icon: Gauge, href: '/cac/dashboard' },
       { key: 'cac-cenarios', label: 'Simulador CAC', icon: TrendingUp, href: '/cac/cenarios' },
     ],

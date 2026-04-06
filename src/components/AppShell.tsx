@@ -41,7 +41,6 @@ const BREADCRUMB_MAP: Record<string, string> = {
   '/cac/dashboard': 'Dashboard CAC',
   '/cac/cenarios': 'Simulador CAC',
   '/planejamento/custos': 'Custos do negócio',
-  '/planejamento/projetos': 'Projetos comerciais',
   '/relatorios/financeiro': 'Relatórios financeiros',
   '/relatorios/rentabilidade': 'Rentabilidade',
   '/relatorios/comparativo': 'Comparativo mensal',

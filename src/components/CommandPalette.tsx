@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Search, FolderOpen, FileText, BarChart3, Plane, Hotel, Globe,
-  LayoutDashboard, Medal, Percent, Settings, Wallet, FolderKanban,
+  LayoutDashboard, Medal, Percent, Settings, Wallet,
   Gauge, TrendingUp, Receipt, CreditCard, BookOpen, Landmark,
   ArrowRightLeft, Package, ShoppingCart, ListOrdered, UserPlus,
   Building2, Briefcase, DollarSign, Link2, FileSpreadsheet, Plus,
@@ -43,7 +43,6 @@ const NAVIGATION_ITEMS: CommandItem[] = [
   { id: 'comissoes', label: 'Comissões', href: '/equipe/comissoes', icon: <Percent className="w-4 h-4" />, section: 'navegacao' },
   { id: 'planos-comissao', label: 'Planos de comissão', href: '/equipe/planos-comissao', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
   { id: 'custos', label: 'Custos do negócio', href: '/planejamento/custos', icon: <Wallet className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'projetos', label: 'Projetos comerciais', href: '/planejamento/projetos', icon: <FolderKanban className="w-4 h-4" />, section: 'navegacao' },
   { id: 'cac', label: 'Dashboard CAC', href: '/cac/dashboard', icon: <Gauge className="w-4 h-4" />, section: 'navegacao' },
   { id: 'cenarios', label: 'Simulador CAC', href: '/cac/cenarios', icon: <TrendingUp className="w-4 h-4" />, section: 'navegacao' },
   { id: 'relatorios', label: 'Relatórios financeiros', href: '/relatorios/financeiro', icon: <DollarSign className="w-4 h-4" />, section: 'navegacao' },
