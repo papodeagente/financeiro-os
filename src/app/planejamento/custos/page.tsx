@@ -1,11 +1,15 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { PageHeader } from '@/components/PageHeader';
 import { MoneyInput } from '@/components/MoneyInput';
 import { SkeletonTable } from '@/components/SkeletonTable';
 import { formatBRL, generateId } from '@/lib/utils';
-import { Copy } from 'lucide-react';
+import { Copy, Target, TrendingUp, Users, DollarSign, AlertTriangle, CheckCircle, ArrowRight, Zap, BarChart3 } from 'lucide-react';
+
+// ============================================================
+// TYPES
+// ============================================================
 
 interface CustoFixo {
   categoria: string;
@@ -30,7 +34,13 @@ interface CustosData {
   custos_fixos: CustoFixo[];
   custos_variaveis: CustoVariavel[];
   marketing: CanalMarketing[];
-  margem_minima: number;
+  // Indicadores de planejamento
+  ticket_medio: number;
+  margem_comissao: number;
+  taxa_conversao: number;
+  lucro_desejado: number;
+  dias_uteis: number;
+  vendedores_ativos: number;
 }
 
 const CATEGORIAS_FIXOS = ['Aluguel/Sede', 'Folha de pagamento', 'Ferramentas e software', 'Marketing fixo recorrente', 'Outros fixos'];
@@ -47,14 +57,139 @@ function createDefault(mes: string): CustosData {
     mes,
     custos_fixos: CATEGORIAS_FIXOS.map(c => ({ categoria: c, valor: 0, observacao: '' })),
     custos_variaveis: [
-      { nome: 'Comissao ao vendedor', percentual: 0, base: 'COMISSAO' },
-      { nome: 'Impostos', percentual: 0, base: 'COMISSAO' },
+      { nome: 'Comissao vendedor', percentual: 0, base: 'COMISSAO' },
+      { nome: 'Impostos', percentual: 6, base: 'COMISSAO' },
+      { nome: 'Taxa cartao/boleto', percentual: 4.5, base: 'VENDA' },
       { nome: 'Outros variaveis', percentual: 0, base: 'VENDA' },
     ],
     marketing: CANAIS_MARKETING.map(c => ({ canal: c, valor: 0 })),
-    margem_minima: 15,
+    ticket_medio: 8000,
+    margem_comissao: 25,
+    taxa_conversao: 10,
+    lucro_desejado: 10000,
+    dias_uteis: 22,
+    vendedores_ativos: 1,
   };
 }
+
+// ============================================================
+// CALCULATIONS
+// ============================================================
+
+interface Relatorio {
+  custoFixoTotal: number;
+  marketingTotal: number;
+  custoFixoMaisMarketing: number;
+  comissaoPorVenda: number;
+  custoVarPorVenda: number;
+  lucroPorVenda: number;
+  vendasBreakEven: number;
+  faturamentoBreakEven: number;
+  vendasMeta: number;
+  faturamentoMeta: number;
+  comissaoMeta: number;
+  atendimentosMeta: number;
+  atendimentosPorDia: number;
+  vendasPorVendedorMes: number;
+  atendimentosPorVendedorDia: number;
+  cplMaximo: number;
+  roiMarketing: number;
+  margemLiquidaPct: number;
+  comissaoMediaPorVenda: number;
+  faturamentoDiario: number;
+  vendasPorDia: number;
+}
+
+function calcRelatorio(data: CustosData): Relatorio {
+  const custoFixoTotal = data.custos_fixos.reduce((s, c) => s + (c.valor || 0), 0);
+  const marketingTotal = data.marketing.reduce((s, c) => s + (c.valor || 0), 0);
+  const custoFixoMaisMarketing = custoFixoTotal + marketingTotal;
+
+  const ticket = data.ticket_medio || 1;
+  const margemPct = (data.margem_comissao || 0) / 100;
+  const comissaoPorVenda = ticket * margemPct;
+
+  let custoVarPorVenda = 0;
+  for (const cv of data.custos_variaveis) {
+    const base = cv.base === 'COMISSAO' ? comissaoPorVenda : ticket;
+    custoVarPorVenda += base * (cv.percentual || 0) / 100;
+  }
+
+  const lucroPorVenda = comissaoPorVenda - custoVarPorVenda;
+
+  const vendasBreakEven = lucroPorVenda > 0 ? Math.ceil(custoFixoMaisMarketing / lucroPorVenda) : 0;
+  const faturamentoBreakEven = vendasBreakEven * ticket;
+
+  const vendasMeta = lucroPorVenda > 0 ? Math.ceil((custoFixoMaisMarketing + (data.lucro_desejado || 0)) / lucroPorVenda) : 0;
+  const faturamentoMeta = vendasMeta * ticket;
+  const comissaoMeta = vendasMeta * comissaoPorVenda;
+
+  const taxaConv = (data.taxa_conversao || 1) / 100;
+  const atendimentosMeta = taxaConv > 0 ? Math.ceil(vendasMeta / taxaConv) : 0;
+  const diasUteis = data.dias_uteis || 22;
+  const vendedores = data.vendedores_ativos || 1;
+  const atendimentosPorDia = diasUteis > 0 ? Math.ceil(atendimentosMeta / diasUteis) : 0;
+  const vendasPorVendedorMes = vendedores > 0 ? Math.ceil(vendasMeta / vendedores) : 0;
+  const atendimentosPorVendedorDia = (diasUteis * vendedores) > 0 ? Math.ceil(atendimentosMeta / (diasUteis * vendedores)) : 0;
+
+  const cplMaximo = atendimentosMeta > 0 ? marketingTotal / atendimentosMeta : 0;
+  const roiMarketing = marketingTotal > 0 ? faturamentoMeta / marketingTotal : 0;
+
+  const margemLiquidaPct = faturamentoMeta > 0 ? ((data.lucro_desejado || 0) / faturamentoMeta) * 100 : 0;
+  const faturamentoDiario = diasUteis > 0 ? faturamentoMeta / diasUteis : 0;
+  const vendasPorDia = diasUteis > 0 ? vendasMeta / diasUteis : 0;
+
+  return {
+    custoFixoTotal, marketingTotal, custoFixoMaisMarketing,
+    comissaoPorVenda, custoVarPorVenda, lucroPorVenda,
+    vendasBreakEven, faturamentoBreakEven,
+    vendasMeta, faturamentoMeta, comissaoMeta,
+    atendimentosMeta, atendimentosPorDia, vendasPorVendedorMes, atendimentosPorVendedorDia,
+    cplMaximo, roiMarketing,
+    margemLiquidaPct, comissaoMediaPorVenda: comissaoPorVenda, faturamentoDiario, vendasPorDia,
+  };
+}
+
+// ============================================================
+// COMPONENTS
+// ============================================================
+
+function MetricCard({ label, value, sub, icon: Icon, color }: {
+  label: string; value: string; sub?: string; icon: React.ElementType; color: string;
+}) {
+  return (
+    <div className="p-4 rounded-xl bg-[var(--t-surface)] shadow-[var(--t-card-shadow)]">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-[var(--t-text-muted)]">{label}</p>
+          <p className="text-xl font-bold mt-1" style={{ color }}>{value}</p>
+          {sub && <p className="text-[11px] text-[var(--t-text-muted)] mt-0.5">{sub}</p>}
+        </div>
+        <div className="p-2 rounded-lg" style={{ backgroundColor: color + '18' }}>
+          <Icon className="w-4 h-4" style={{ color }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReportLine({ label, value, highlight, warn }: {
+  label: string; value: string; highlight?: boolean; warn?: boolean;
+}) {
+  return (
+    <div className={`flex items-center justify-between py-2.5 px-4 ${highlight ? 'bg-[var(--t-surface-hover)]' : ''}`}>
+      <div className="flex items-center gap-2">
+        {warn ? <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> : highlight ? <CheckCircle className="w-3.5 h-3.5 text-green-500" /> : <ArrowRight className="w-3 h-3 text-[var(--t-text-muted)]" />}
+        <span className={`text-sm ${highlight ? 'font-semibold text-[var(--t-text)]' : 'text-[var(--t-text-secondary)]'}`}>{label}</span>
+      </div>
+      <span className={`text-sm font-mono ${highlight ? 'font-bold text-[var(--t-text)]' : 'text-[var(--t-text)]'}`}>{value}</span>
+    </div>
+  );
+}
+
+// ============================================================
+// MAIN PAGE
+// ============================================================
 
 export default function CustosPage() {
   const [mes, setMes] = useState(mesAtual());
@@ -67,14 +202,21 @@ export default function CustosPage() {
     try {
       const res = await fetch(`/api/planejamento/custos?mes=${m}`);
       const json = await res.json();
-      setData(json || createDefault(m));
+      if (json) {
+        const merged = { ...createDefault(m), ...json, mes: m };
+        if (!merged.custos_variaveis?.some((c: CustoVariavel) => c.base)) {
+          merged.custos_variaveis = createDefault(m).custos_variaveis;
+        }
+        setData(merged);
+      } else {
+        setData(createDefault(m));
+      }
     } catch { setData(createDefault(m)); }
     setLoading(false);
   }, []);
 
   useEffect(() => { load(mes); }, [mes, load]);
 
-  // Auto-save debounce
   useEffect(() => {
     if (!data || loading) return;
     setSaving(true);
@@ -99,36 +241,28 @@ export default function CustosPage() {
     try {
       const res = await fetch(`/api/planejamento/custos?mes=${prevKey}`);
       const json = await res.json();
-      if (json) {
-        setData({ ...json, id: generateId(), mes });
-      }
+      if (json) setData({ ...json, id: generateId(), mes });
     } catch { /* ignore */ }
   };
 
-  const totalFixo = data?.custos_fixos.reduce((s, c) => s + (c.valor || 0), 0) || 0;
-  const totalMarketing = data?.marketing.reduce((s, c) => s + (c.valor || 0), 0) || 0;
-  const totalMensal = totalFixo + totalMarketing;
-  // Exemplo: venda R$10k, comissao R$2.5k
-  const exemploVenda = 10000;
-  const exemploComissao = 2500;
-  const totalVarExemplo = data?.custos_variaveis.reduce((s, c) => {
-    const base = c.base === 'COMISSAO' ? exemploComissao : exemploVenda;
-    return s + base * (c.percentual || 0) / 100;
-  }, 0) || 0;
+  const rel = useMemo(() => data ? calcRelatorio(data) : null, [data]);
 
   if (loading) return (
     <div className="p-6">
-      <PageHeader title="Custos do negocio" />
+      <PageHeader title="Planejamento Mensal" />
       <SkeletonTable rows={5} cols={3} />
     </div>
   );
 
-  if (!data) return null;
+  if (!data || !rel) return null;
+
+  const totalFixo = rel.custoFixoTotal;
+  const totalMarketing = rel.marketingTotal;
 
   return (
-    <div className="p-6">
+    <div className="p-6 max-w-[1400px] mx-auto">
       <PageHeader
-        title="Custos do negocio"
+        title="Planejamento Mensal"
         subtitle={saving ? 'Salvando...' : 'Salvo'}
         actions={
           <div className="flex items-center gap-3">
@@ -145,38 +279,65 @@ export default function CustosPage() {
         }
       />
 
-      <div className="flex gap-6">
-        {/* Main content */}
-        <div className="flex-1 space-y-8">
+      {/* ============================================================ */}
+      {/* INDICADORES DO MES */}
+      {/* ============================================================ */}
+      <section className="mb-8">
+        <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-4 flex items-center gap-2">
+          <Target className="w-5 h-5" style={{ color: '#d4a853' }} />
+          Indicadores do mes
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="p-3 rounded-xl bg-[var(--t-surface)] shadow-[var(--t-card-shadow)]">
+            <label className="text-[10px] uppercase tracking-wider text-[var(--t-text-muted)] block mb-1">Ticket medio</label>
+            <MoneyInput value={data.ticket_medio} onChange={v => setData({ ...data, ticket_medio: v ?? 0 })} />
+          </div>
+          <div className="p-3 rounded-xl bg-[var(--t-surface)] shadow-[var(--t-card-shadow)]">
+            <label className="text-[10px] uppercase tracking-wider text-[var(--t-text-muted)] block mb-1">Margem comissao (%)</label>
+            <input type="number" min={0} max={100} step={0.5} value={data.margem_comissao || ''} onChange={e => setData({ ...data, margem_comissao: parseFloat(e.target.value) || 0 })}
+              className="w-full px-3 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
+            <p className="text-[10px] text-[var(--t-text-muted)] mt-1">Comissao: {formatBRL(rel.comissaoPorVenda)}/venda</p>
+          </div>
+          <div className="p-3 rounded-xl bg-[var(--t-surface)] shadow-[var(--t-card-shadow)]">
+            <label className="text-[10px] uppercase tracking-wider text-[var(--t-text-muted)] block mb-1">Taxa conversao (%)</label>
+            <input type="number" min={0} max={100} step={0.5} value={data.taxa_conversao || ''} onChange={e => setData({ ...data, taxa_conversao: parseFloat(e.target.value) || 0 })}
+              className="w-full px-3 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
+            <p className="text-[10px] text-[var(--t-text-muted)] mt-1">A cada 100 leads, {data.taxa_conversao} viram venda</p>
+          </div>
+          <div className="p-3 rounded-xl bg-[var(--t-surface)] shadow-[var(--t-card-shadow)]">
+            <label className="text-[10px] uppercase tracking-wider text-[var(--t-text-muted)] block mb-1">Lucro desejado</label>
+            <MoneyInput value={data.lucro_desejado} onChange={v => setData({ ...data, lucro_desejado: v ?? 0 })} />
+          </div>
+          <div className="p-3 rounded-xl bg-[var(--t-surface)] shadow-[var(--t-card-shadow)]">
+            <label className="text-[10px] uppercase tracking-wider text-[var(--t-text-muted)] block mb-1">Dias uteis</label>
+            <input type="number" min={1} max={31} value={data.dias_uteis || ''} onChange={e => setData({ ...data, dias_uteis: parseInt(e.target.value) || 0 })}
+              className="w-full px-3 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
+          </div>
+          <div className="p-3 rounded-xl bg-[var(--t-surface)] shadow-[var(--t-card-shadow)]">
+            <label className="text-[10px] uppercase tracking-wider text-[var(--t-text-muted)] block mb-1">Vendedores ativos</label>
+            <input type="number" min={1} max={100} value={data.vendedores_ativos || ''} onChange={e => setData({ ...data, vendedores_ativos: parseInt(e.target.value) || 0 })}
+              className="w-full px-3 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
+          </div>
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-6">
+        {/* LEFT: Inputs */}
+        <div className="space-y-8">
           {/* Custos Fixos */}
           <section>
-            <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-3">Custos fixos</h2>
+            <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-3">Custos fixos mensais</h2>
             <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] overflow-hidden">
               {data.custos_fixos.map((item, i) => (
-                <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-[var(--t-border)] last:border-b-0">
+                <div key={i} className="flex items-center gap-4 px-4 py-2.5 border-b border-[var(--t-border)] last:border-b-0">
                   <span className="text-[var(--text-body-sm)] text-[var(--t-text)] w-48 shrink-0">{item.categoria}</span>
-                  <MoneyInput
-                    value={item.valor}
-                    onChange={v => {
-                      const c = [...data.custos_fixos];
-                      c[i] = { ...c[i], valor: v ?? 0 };
-                      setData({ ...data, custos_fixos: c });
-                    }}
-                  />
-                  <input
-                    value={item.observacao}
-                    onChange={e => {
-                      const c = [...data.custos_fixos];
-                      c[i] = { ...c[i], observacao: e.target.value };
-                      setData({ ...data, custos_fixos: c });
-                    }}
-                    placeholder="Observacao"
-                    className="flex-1 px-3 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
-                  />
+                  <MoneyInput value={item.valor} onChange={v => { const c = [...data.custos_fixos]; c[i] = { ...c[i], valor: v ?? 0 }; setData({ ...data, custos_fixos: c }); }} />
+                  <input value={item.observacao} onChange={e => { const c = [...data.custos_fixos]; c[i] = { ...c[i], observacao: e.target.value }; setData({ ...data, custos_fixos: c }); }}
+                    placeholder="Obs" className="flex-1 px-3 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
                 </div>
               ))}
-              <div className="flex items-center justify-between px-4 py-3 bg-[var(--t-surface-hover)]">
-                <span className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)]">Total fixo mensal</span>
+              <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--t-surface-hover)]">
+                <span className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)]">Total fixo</span>
                 <span className="text-[var(--text-body)] font-medium text-[var(--t-text)]">{formatBRL(totalFixo)}</span>
               </div>
             </div>
@@ -185,55 +346,28 @@ export default function CustosPage() {
           {/* Custos Variaveis */}
           <section>
             <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-3">Custos variaveis por venda</h2>
-            <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mb-3">
-              Defina se cada custo incide sobre o valor total da venda ou sobre a receita da agencia (comissao/markup).
-            </p>
             <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] overflow-hidden">
               {data.custos_variaveis.map((item, i) => (
-                <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-[var(--t-border)] last:border-b-0">
-                  <span className="text-[var(--text-body-sm)] text-[var(--t-text)] w-48 shrink-0">{item.nome}</span>
+                <div key={i} className="flex items-center gap-3 px-4 py-2.5 border-b border-[var(--t-border)] last:border-b-0">
+                  <span className="text-[var(--text-body-sm)] text-[var(--t-text)] w-40 shrink-0">{item.nome}</span>
                   <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      value={item.percentual || ''}
-                      onChange={e => {
-                        const c = [...data.custos_variaveis];
-                        c[i] = { ...c[i], percentual: parseFloat(e.target.value) || 0 };
-                        setData({ ...data, custos_variaveis: c });
-                      }}
-                      className="w-20 px-3 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)] text-right"
-                    />
+                    <input type="number" value={item.percentual || ''} onChange={e => { const c = [...data.custos_variaveis]; c[i] = { ...c[i], percentual: parseFloat(e.target.value) || 0 }; setData({ ...data, custos_variaveis: c }); }}
+                      className="w-16 px-2 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)] text-right" />
                     <span className="text-[var(--text-body-sm)] text-[var(--t-text-muted)]">%</span>
                   </div>
-                  <select
-                    value={item.base || 'VENDA'}
-                    onChange={e => {
-                      const c = [...data.custos_variaveis];
-                      c[i] = { ...c[i], base: e.target.value as 'VENDA' | 'COMISSAO' };
-                      setData({ ...data, custos_variaveis: c });
-                    }}
-                    className="px-2 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-caption)] text-[var(--t-text)] min-w-[160px]"
-                  >
-                    <option value="VENDA">% da venda total</option>
+                  <select value={item.base || 'VENDA'} onChange={e => { const c = [...data.custos_variaveis]; c[i] = { ...c[i], base: e.target.value as 'VENDA' | 'COMISSAO' }; setData({ ...data, custos_variaveis: c }); }}
+                    className="px-2 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-caption)] text-[var(--t-text)] min-w-[140px]">
+                    <option value="VENDA">% da venda</option>
                     <option value="COMISSAO">% da comissao</option>
                   </select>
+                  <span className="text-[var(--text-caption)] text-[var(--t-text-muted)] ml-auto">
+                    {formatBRL((item.base === 'COMISSAO' ? rel.comissaoPorVenda : data.ticket_medio) * (item.percentual || 0) / 100)}/venda
+                  </span>
                 </div>
               ))}
-            </div>
-            <div className="mt-3 p-3 rounded-lg bg-[var(--t-surface-hover)]">
-              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">
-                <strong>Exemplo</strong>: Venda de R$ 10.000 com custo fornecedor R$ 7.500 (comissao = R$ 2.500)
-              </p>
-              <div className="mt-1 space-y-0.5">
-                {data.custos_variaveis.filter(v => v.percentual > 0).map((item, i) => {
-                  const base = item.base === 'COMISSAO' ? 2500 : 10000;
-                  const valor = base * item.percentual / 100;
-                  return (
-                    <p key={i} className="text-[var(--text-caption)] text-[var(--t-text-secondary)]">
-                      {item.nome}: {item.percentual}% {item.base === 'COMISSAO' ? 'da comissao' : 'da venda'} = {formatBRL(valor)}
-                    </p>
-                  );
-                })}
+              <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--t-surface-hover)]">
+                <span className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)]">Total variavel por venda</span>
+                <span className="text-[var(--text-body)] font-medium text-[var(--t-text)]">{formatBRL(rel.custoVarPorVenda)}</span>
               </div>
             </div>
           </section>
@@ -243,19 +377,12 @@ export default function CustosPage() {
             <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-3">Investimento em marketing</h2>
             <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] overflow-hidden">
               {data.marketing.map((item, i) => (
-                <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-[var(--t-border)] last:border-b-0">
+                <div key={i} className="flex items-center gap-4 px-4 py-2.5 border-b border-[var(--t-border)] last:border-b-0">
                   <span className="text-[var(--text-body-sm)] text-[var(--t-text)] w-48 shrink-0">{item.canal}</span>
-                  <MoneyInput
-                    value={item.valor}
-                    onChange={v => {
-                      const c = [...data.marketing];
-                      c[i] = { ...c[i], valor: v ?? 0 };
-                      setData({ ...data, marketing: c });
-                    }}
-                  />
+                  <MoneyInput value={item.valor} onChange={v => { const c = [...data.marketing]; c[i] = { ...c[i], valor: v ?? 0 }; setData({ ...data, marketing: c }); }} />
                 </div>
               ))}
-              <div className="flex items-center justify-between px-4 py-3 bg-[var(--t-surface-hover)]">
+              <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--t-surface-hover)]">
                 <span className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)]">Total marketing</span>
                 <span className="text-[var(--text-body)] font-medium text-[var(--t-text)]">{formatBRL(totalMarketing)}</span>
               </div>
@@ -263,33 +390,108 @@ export default function CustosPage() {
           </section>
         </div>
 
-        {/* Sticky summary panel */}
-        <div className="w-[260px] shrink-0">
-          <div className="sticky top-6 space-y-4 p-5 rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)]">
-            <div>
-              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">Total fixo mensal</p>
-              <p className="text-[var(--text-title)] font-medium text-[var(--t-text)]">{formatBRL(totalFixo)}</p>
+        {/* RIGHT: Relatorio de Precisão */}
+        <div className="space-y-4">
+          <div className="sticky top-4 space-y-4">
+
+            {/* Cards resumo */}
+            <div className="grid grid-cols-2 gap-3">
+              <MetricCard label="Ponto de Equilibrio" value={`${rel.vendasBreakEven} vendas`} sub={formatBRL(rel.faturamentoBreakEven)} icon={Target} color="#f59e0b" />
+              <MetricCard label="Meta Lucro" value={`${rel.vendasMeta} vendas`} sub={formatBRL(rel.faturamentoMeta)} icon={TrendingUp} color="#22c55e" />
+              <MetricCard label="Atendimentos/mes" value={`${rel.atendimentosMeta}`} sub={`${rel.atendimentosPorDia}/dia`} icon={Users} color="#3b82f6" />
+              <MetricCard label="CPL Maximo" value={formatBRL(rel.cplMaximo)} sub={`ROI: ${rel.roiMarketing.toFixed(1)}x`} icon={DollarSign} color="#8b5cf6" />
             </div>
-            <div>
-              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">Custo variavel (ex. venda R$ 10k)</p>
-              <p className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)]">{formatBRL(totalVarExemplo)}</p>
-            </div>
-            <div>
-              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">Marketing mensal</p>
-              <p className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)]">{formatBRL(totalMarketing)}</p>
-            </div>
-            <div className="pt-3 border-t border-[var(--t-border)]">
-              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">Custo total mensal</p>
-              <p className="text-[var(--text-title)] font-medium text-[var(--t-green)]">{formatBRL(totalMensal)}</p>
-            </div>
-            <div className="pt-3 border-t border-[var(--t-border)]">
-              <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Margem minima por venda (%)</label>
-              <input
-                type="number"
-                value={data.margem_minima || ''}
-                onChange={e => setData({ ...data, margem_minima: parseFloat(e.target.value) || 0 })}
-                className="w-full px-3 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
-              />
+
+            {/* Relatorio detalhado */}
+            <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] overflow-hidden">
+              <div className="px-4 py-3 flex items-center gap-2" style={{ backgroundColor: '#1a1a2e' }}>
+                <BarChart3 className="w-4 h-4" style={{ color: '#d4a853' }} />
+                <span className="text-sm font-semibold text-[var(--t-text)]">Relatorio de Precisao</span>
+              </div>
+
+              {/* Estrutura de custos */}
+              <div className="px-4 py-2 bg-[var(--t-surface-hover)]">
+                <span className="text-[10px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)]">Estrutura de custos</span>
+              </div>
+              <ReportLine label="Custos fixos + marketing" value={formatBRL(rel.custoFixoMaisMarketing)} />
+              <ReportLine label="Comissao por venda" value={formatBRL(rel.comissaoPorVenda)} />
+              <ReportLine label="Custo variavel por venda" value={formatBRL(rel.custoVarPorVenda)} />
+              <ReportLine label="Lucro liquido por venda" value={formatBRL(rel.lucroPorVenda)} highlight />
+
+              {/* Ponto de equilíbrio */}
+              <div className="px-4 py-2 bg-[var(--t-surface-hover)]">
+                <span className="text-[10px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)]">Ponto de equilibrio</span>
+              </div>
+              <ReportLine label="Vendas para cobrir custos" value={`${rel.vendasBreakEven} vendas`} warn={rel.vendasBreakEven > rel.vendasMeta} />
+              <ReportLine label="Faturamento minimo" value={formatBRL(rel.faturamentoBreakEven)} highlight />
+
+              {/* Meta mensal */}
+              <div className="px-4 py-2 bg-[var(--t-surface-hover)]">
+                <span className="text-[10px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)]">Meta para lucro de {formatBRL(data.lucro_desejado)}</span>
+              </div>
+              <ReportLine label="Vendas necessarias" value={`${rel.vendasMeta} vendas`} highlight />
+              <ReportLine label="Faturamento necessario" value={formatBRL(rel.faturamentoMeta)} />
+              <ReportLine label="Comissao total" value={formatBRL(rel.comissaoMeta)} />
+              <ReportLine label="Margem liquida s/ faturamento" value={`${rel.margemLiquidaPct.toFixed(1)}%`} />
+
+              {/* Ritmo diario */}
+              <div className="px-4 py-2 bg-[var(--t-surface-hover)]">
+                <span className="text-[10px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)]">Ritmo diario ({data.dias_uteis} dias uteis)</span>
+              </div>
+              <ReportLine label="Faturamento por dia" value={formatBRL(rel.faturamentoDiario)} />
+              <ReportLine label="Vendas por dia" value={`${rel.vendasPorDia.toFixed(1)}`} />
+              {data.vendedores_ativos > 1 && (
+                <>
+                  <ReportLine label={`Vendas/vendedor/mes (${data.vendedores_ativos} vendedores)`} value={`${rel.vendasPorVendedorMes}`} />
+                  <ReportLine label="Atendimentos/vendedor/dia" value={`${rel.atendimentosPorVendedorDia}`} />
+                </>
+              )}
+
+              {/* Funil de vendas */}
+              <div className="px-4 py-2 bg-[var(--t-surface-hover)]">
+                <span className="text-[10px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)]">Funil de vendas (conversao {data.taxa_conversao}%)</span>
+              </div>
+              <ReportLine label="Leads/atendimentos necessarios" value={`${rel.atendimentosMeta}`} highlight />
+              <ReportLine label="Atendimentos por dia" value={`${rel.atendimentosPorDia}`} />
+              <ReportLine label="CPL maximo viavel" value={formatBRL(rel.cplMaximo)} highlight warn={rel.cplMaximo < 5} />
+              <ReportLine label="ROI do marketing" value={`${rel.roiMarketing.toFixed(1)}x`} warn={rel.roiMarketing < 3} />
+
+              {/* Alertas e insights */}
+              <div className="px-4 py-3 space-y-2 border-t border-[var(--t-border)]">
+                {rel.lucroPorVenda <= 0 && (
+                  <div className="flex items-start gap-2 p-2 rounded-lg bg-red-500/10">
+                    <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+                    <p className="text-xs text-red-400">A comissao por venda nao cobre os custos variaveis. Revise a margem ou os custos.</p>
+                  </div>
+                )}
+                {rel.cplMaximo > 0 && rel.cplMaximo < 10 && (
+                  <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-500/10">
+                    <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                    <p className="text-xs text-amber-400">CPL maximo muito baixo ({formatBRL(rel.cplMaximo)}). Considere aumentar o investimento em marketing ou melhorar a taxa de conversao.</p>
+                  </div>
+                )}
+                {rel.roiMarketing > 0 && rel.roiMarketing < 3 && (
+                  <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-500/10">
+                    <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                    <p className="text-xs text-amber-400">ROI do marketing abaixo de 3x. Otimize os canais ou reduza investimento nos menos eficientes.</p>
+                  </div>
+                )}
+                {rel.atendimentosPorVendedorDia > 8 && (
+                  <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-500/10">
+                    <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                    <p className="text-xs text-amber-400">Mais de 8 atendimentos/vendedor/dia pode comprometer a qualidade. Considere contratar mais vendedores.</p>
+                  </div>
+                )}
+                {rel.vendasMeta > 0 && rel.lucroPorVenda > 0 && (
+                  <div className="flex items-start gap-2 p-2 rounded-lg bg-green-500/10">
+                    <Zap className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />
+                    <p className="text-xs text-green-400">
+                      Para lucrar {formatBRL(data.lucro_desejado)}: fature {formatBRL(rel.faturamentoMeta)} com {rel.vendasMeta} vendas,
+                      gerando {rel.atendimentosMeta} leads a no maximo {formatBRL(rel.cplMaximo)} cada.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
