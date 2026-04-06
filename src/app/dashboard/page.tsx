@@ -8,13 +8,13 @@ import type {
   ContaBancaria, CACMensal, MetaVendedor, Membro,
 } from '@/lib/crm-types';
 import {
-  TrendingUp, TrendingDown, ShoppingCart, Users, DollarSign,
+  TrendingUp, ShoppingCart, Users, DollarSign,
   Target, Wallet, BarChart3, AlertTriangle, ChevronRight,
-  RefreshCw, Plus, FileText, Package, Receipt, CreditCard,
+  RefreshCw, FileText, Package, Receipt, CreditCard,
   Cake, Calendar, MessageCircle, Mail, ArrowUpRight,
-  ArrowDownRight, Minus, Trophy, Gauge, Clock,
-  PieChart as PieChartIcon, AlertCircle, CheckCircle2,
-  Info, Zap, ExternalLink,
+  ArrowDownRight, Trophy, Gauge,
+  AlertCircle, CheckCircle2,
+  Info, Zap,
 } from 'lucide-react';
 
 const BRL = (v: number) =>
@@ -523,31 +523,50 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
-      {/* FAIXA 1: BARRA DE CONTEXTO */}
-      <div className="px-8 pt-6 pb-4">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-[var(--t-text)]">
-              {getGreeting()} <span className="text-[var(--t-green)]">Bruno</span>
-            </h1>
-            <p className="text-sm text-[var(--t-text-secondary)] mt-1">
-              {getMonthName(mesAtual)} &middot; Ultima atualizacao: {lastUpdate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
+      <div className="px-8 pt-6 pb-8 space-y-6">
+
+        {/* HERO CARD */}
+        <div className="rounded-[20px] overflow-hidden relative" style={{ background: 'var(--t-hero-gradient)' }}>
+          <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 80% 20%, rgba(255,255,255,0.3) 0%, transparent 60%)' }} />
+          <div className="relative px-8 py-7 flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-white">
+                {getMonthName(mesAtual)}
+              </h1>
+              <p className="text-white/70 text-sm mt-1">
+                {calc.qtdVendas} vendas fechadas &middot; {BRL(calc.faturamento)} faturados
+              </p>
+            </div>
+            <div className="text-right hidden lg:block">
+              <div className="text-3xl font-bold text-white tracking-tight">{BRL(calc.faturamento)}</div>
+              <div className="flex items-center gap-2 justify-end mt-1">
+                {calc.faturamentoAnt > 0 && (
+                  <span className={`text-xs font-medium flex items-center gap-0.5 px-2 py-0.5 rounded-full ${
+                    calc.delta(calc.faturamento, calc.faturamentoAnt) >= 0
+                      ? 'bg-white/20 text-emerald-200'
+                      : 'bg-white/20 text-red-200'
+                  }`}>
+                    {calc.delta(calc.faturamento, calc.faturamentoAnt) >= 0
+                      ? <ArrowUpRight className="w-3 h-3" />
+                      : <ArrowDownRight className="w-3 h-3" />
+                    }
+                    {PCT(calc.delta(calc.faturamento, calc.faturamentoAnt))}
+                  </span>
+                )}
+                <span className="text-white/50 text-xs">vs mes anterior</span>
+              </div>
+            </div>
             <button
               onClick={fetchAll}
-              className="flex items-center gap-2 px-3 py-2 bg-[var(--t-bg-secondary)] shadow-[var(--t-card-shadow)] rounded-lg text-sm text-[var(--t-text-secondary)] hover:text-[var(--t-text)] hover:bg-[var(--t-surface-hover)] transition-colors"
+              className="absolute top-4 right-4 w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/70 hover:text-white transition-colors"
+              title="Atualizar dados"
             >
-              <RefreshCw className="w-4 h-4" /> Atualizar
+              <RefreshCw className="w-4 h-4" />
             </button>
           </div>
         </div>
-      </div>
 
-      <div className="px-8 pb-8 space-y-6">
-
-        {/* FAIXA 2: HERO KPIs */}
+        {/* KPIs PRIMARIOS — com borda colorida no topo */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {kpis.slice(0, 4).map((kpi, i) => {
             const Icon = kpi.icon;
@@ -558,19 +577,22 @@ export default function DashboardPage() {
               ? metaPct >= 80 ? 'bg-emerald-400' : metaPct >= 50 ? 'bg-amber-400' : 'bg-red-400'
               : '';
             const metaAtingida = metaPct !== null && metaPct >= 100;
+            const borderColors = ['from-blue-500 to-blue-400', 'from-indigo-500 to-blue-400', 'from-violet-500 to-purple-400', 'from-emerald-500 to-teal-400'];
 
             return (
-              <div key={i} className="bento-card relative overflow-hidden min-w-0">
+              <div key={i} className="bento-card bento-card-glow relative overflow-hidden min-w-0">
+                {/* Colored top border */}
+                <div className={`absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r ${borderColors[i]}`} />
                 {metaAtingida && (
                   <div className="absolute top-4 right-4" title="Meta atingida!">
                     <Trophy className="w-5 h-5 text-amber-400" />
                   </div>
                 )}
-                <div className="flex items-center gap-2 mb-4">
-                  <div className={`w-8 h-8 rounded-xl ${kpi.bgColor} flex items-center justify-center`}>
-                    <Icon className={`w-4 h-4 ${kpi.color}`} />
+                <div className="flex items-center gap-2.5 mb-4">
+                  <div className={`w-10 h-10 rounded-xl ${kpi.bgColor} flex items-center justify-center`}>
+                    <Icon className={`w-5 h-5 ${kpi.color}`} />
                   </div>
-                  <span className="text-[var(--text-caption)] text-[var(--t-text-secondary)] uppercase tracking-wide">{kpi.label}</span>
+                  <span className="text-[var(--text-caption)] text-[var(--t-text-secondary)] uppercase tracking-wide font-medium">{kpi.label}</span>
                 </div>
                 <div className="kpi-hero text-[var(--t-text)]">{kpi.valor}</div>
                 <div className="flex items-center gap-2 mt-3">
@@ -598,21 +620,29 @@ export default function DashboardPage() {
           })}
         </div>
 
-        {/* FAIXA 2B: KPIs SECUNDARIOS */}
+        {/* KPIs SECUNDARIOS — compactos com sparkline visual */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {kpis.slice(4).map((kpi, i) => {
             const Icon = kpi.icon;
             const deltaPositive = kpi.invertDelta ? (kpi.delta !== null && kpi.delta < 0) : (kpi.delta !== null && kpi.delta > 0);
             const deltaNeutral = kpi.delta === null || kpi.delta === 0;
             return (
-              <div key={i} className="bg-[var(--t-surface)] rounded-[20px] p-4 shadow-[var(--t-card-shadow)] transition-shadow hover:shadow-[var(--t-card-shadow-hover)]">
-                <div className="flex items-center gap-2 mb-2">
-                  <Icon className={`w-4 h-4 ${kpi.color}`} />
-                  <span className="text-[var(--text-caption)] text-[var(--t-text-secondary)]">{kpi.label}</span>
+              <div key={i} className="bg-[var(--t-surface)] rounded-[20px] p-5 shadow-[var(--t-card-shadow)] transition-all hover:shadow-[var(--t-card-shadow-hover)] hover-lift">
+                <div className="flex items-center justify-between mb-3">
+                  <div className={`w-9 h-9 rounded-xl ${kpi.bgColor} flex items-center justify-center`}>
+                    <Icon className={`w-4 h-4 ${kpi.color}`} />
+                  </div>
+                  {/* Mini sparkline bars */}
+                  <div className="flex items-end gap-[2px] h-5">
+                    {[0.3, 0.5, 0.4, 0.8, 0.6, 1].map((h, j) => (
+                      <div key={j} className="w-[3px] rounded-full bg-[var(--t-green)]/20" style={{ height: `${h * 100}%` }} />
+                    ))}
+                  </div>
                 </div>
+                <div className="text-[var(--text-caption)] text-[var(--t-text-secondary)] mb-1">{kpi.label}</div>
                 <div className="text-xl font-bold text-[var(--t-text)]">{kpi.valor}</div>
                 {!deltaNeutral && (
-                  <span className={`text-[10px] font-medium flex items-center gap-0.5 mt-1 ${deltaPositive ? 'text-emerald-400' : 'text-red-400'}`}>
+                  <span className={`text-[10px] font-medium flex items-center gap-0.5 mt-1.5 ${deltaPositive ? 'text-emerald-400' : 'text-red-400'}`}>
                     {deltaPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
                     {PCT(kpi.delta!)} <span className="text-[var(--t-text-muted)] ml-1">{kpi.deltaLabel}</span>
                   </span>
@@ -622,14 +652,17 @@ export default function DashboardPage() {
           })}
         </div>
 
-        {/* FAIXA 3: ALERTAS + ACOES RAPIDAS (bento) */}
+        {/* ALERTAS + ACOES RAPIDAS */}
         <div className="bento-grid">
           {/* Alertas */}
           <div className="bento-8 bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] overflow-hidden">
             <div className="px-6 py-4 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-[var(--t-text)] flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-400" />
-                Alertas Ativos ({alertas.length})
+                Alertas Ativos
+                {alertas.length > 0 && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 font-medium">{alertas.length}</span>
+                )}
               </h2>
             </div>
             {alertas.length === 0 ? (
@@ -655,17 +688,17 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Acoes Rapidas — dark card */}
-          <div className="bento-4 bg-[#1e1e2a] dark:bg-[#2A2724] rounded-[20px] shadow-[var(--t-card-shadow)] overflow-hidden">
+          {/* Acoes Rapidas — blue gradient card */}
+          <div className="bento-4 rounded-[20px] shadow-[var(--t-card-shadow)] overflow-hidden" style={{ background: 'var(--t-accent-gradient)' }}>
             <div className="px-5 py-4">
               <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-                <Zap className="w-4 h-4 text-[var(--t-green)]" /> Ações Rápidas
+                <Zap className="w-4 h-4 text-white/80" /> Acoes Rapidas
               </h2>
             </div>
             <div className="p-4 space-y-1.5">
               {[
                 { href: '/vendas/nova', icon: ShoppingCart, label: 'Nova Venda', primary: true },
-                { href: '/vendas/orcamentos', icon: FileText, label: 'Novo Orçamento', primary: false },
+                { href: '/vendas/orcamentos', icon: FileText, label: 'Novo Orcamento', primary: false },
                 { href: '/pessoas/clientes', icon: Users, label: 'Novo Cliente', primary: false },
                 { href: '/grupos', icon: Package, label: 'Novo Produto', primary: false },
                 { href: '/financeiro-ag/receber', icon: Receipt, label: 'Registrar Recebimento', primary: false },
@@ -674,8 +707,8 @@ export default function DashboardPage() {
                 <Link key={a.href} href={a.href}>
                   <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${
                     a.primary
-                      ? 'bg-[var(--t-green)] text-white font-medium shadow-lg hover:opacity-90'
-                      : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                      ? 'bg-white text-[#004aad] font-semibold shadow-lg hover:bg-white/90'
+                      : 'text-white/70 hover:bg-white/10 hover:text-white'
                   }`}>
                     <a.icon className="w-4 h-4" />
                     {a.label}
@@ -683,39 +716,47 @@ export default function DashboardPage() {
                 </Link>
               ))}
             </div>
-            {/* Quick counters */}
-            <div className="px-4 pb-4 space-y-1.5 border-t border-white/10 pt-3 mx-4">
+            <div className="px-4 pb-4 space-y-1.5 border-t border-white/15 pt-3 mx-4">
               {[
-                { label: 'Orçamentos pendentes', count: vendas.filter(v => v.status === 'ORCAMENTO').length, href: '/vendas/orcamentos' },
+                { label: 'Orcamentos pendentes', count: vendas.filter(v => v.status === 'ORCAMENTO').length, href: '/vendas/orcamentos' },
                 { label: 'Contas a receber', count: receber.filter(r => r.status === 'PENDENTE' || r.status === 'ATRASADO').length, href: '/financeiro-ag/receber' },
                 { label: 'Contas a pagar', count: pagar.filter(p => p.status === 'PENDENTE' || p.status === 'VENCIDO').length, href: '/financeiro-ag/pagar' },
               ].map(q => (
-                <Link key={q.href} href={q.href} className="flex items-center justify-between text-xs text-gray-400 hover:text-white transition-colors">
+                <Link key={q.href} href={q.href} className="flex items-center justify-between text-xs text-white/60 hover:text-white transition-colors">
                   <span>{q.label}</span>
-                  <span className="bg-white/10 px-2 py-0.5 rounded-full text-[10px] font-medium text-white">{q.count}</span>
+                  <span className="bg-white/15 px-2 py-0.5 rounded-full text-[10px] font-medium text-white">{q.count}</span>
                 </Link>
               ))}
             </div>
           </div>
         </div>
 
-        {/* FAIXA 4: GRAFICOS (bento) */}
+        {/* GRAFICOS */}
         <div className="bento-grid">
-          {/* Grafico 1: Faturamento */}
+          {/* Faturamento */}
           <div className="bento-5 bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] overflow-hidden">
             <div className="px-5 py-4 border-b border-[var(--t-border)]">
               <h2 className="text-sm font-medium text-[var(--t-text)]">Faturamento (6 meses)</h2>
             </div>
             <div className="px-4 py-4">
-              <div className="flex items-end gap-1.5 justify-between" style={{ height: 160 }}>
-                {chartFaturamento.map(m => {
+              <div className="flex items-end gap-2 justify-between" style={{ height: 160 }}>
+                {chartFaturamento.map((m, idx) => {
                   const h = Math.max((m.faturamento / maxFat) * 140, 4);
+                  const isLast = idx === chartFaturamento.length - 1;
                   return (
-                    <div key={m.mes} className="flex flex-col items-center flex-1" title={`${m.label}: ${BRL(m.faturamento)}`}>
+                    <div key={m.mes} className="flex flex-col items-center flex-1 group" title={`${m.label}: ${BRL(m.faturamento)}`}>
                       <div className="flex items-end" style={{ height: 140 }}>
-                        <div className="w-full max-w-[32px] rounded-t bg-[var(--t-green)]/70 transition-all mx-auto" style={{ height: h }} />
+                        <div
+                          className="w-full max-w-[28px] rounded-lg transition-all mx-auto group-hover:opacity-90"
+                          style={{
+                            height: h,
+                            background: isLast
+                              ? 'linear-gradient(180deg, #3b82f6 0%, #004aad 100%)'
+                              : 'linear-gradient(180deg, rgba(0,74,173,0.4) 0%, rgba(0,74,173,0.2) 100%)',
+                          }}
+                        />
                       </div>
-                      <span className="text-[9px] text-[var(--t-text-muted)] mt-1">{m.label}</span>
+                      <span className={`text-[9px] mt-1.5 ${isLast ? 'text-[var(--t-green)] font-semibold' : 'text-[var(--t-text-muted)]'}`}>{m.label}</span>
                     </div>
                   );
                 })}
@@ -723,7 +764,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Grafico 2: Entradas vs Saidas */}
+          {/* Entradas vs Saidas */}
           <div className="bento-4 bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] overflow-hidden">
             <div className="px-5 py-4 border-b border-[var(--t-border)]">
               <h2 className="text-sm font-medium text-[var(--t-text)]">Entradas vs Saidas</h2>
@@ -736,8 +777,8 @@ export default function DashboardPage() {
                   return (
                     <div key={m.mes} className="flex flex-col items-center flex-1">
                       <div className="flex items-end gap-0.5" style={{ height: 130 }}>
-                        <div className="w-3 rounded-t bg-emerald-500/70" style={{ height: hEnt }} title={`Entradas: ${BRL(m.entradas)}`} />
-                        <div className="w-3 rounded-t bg-red-500/70" style={{ height: hSai }} title={`Saidas: ${BRL(m.saidas)}`} />
+                        <div className="w-3 rounded-lg bg-emerald-500/70" style={{ height: hEnt }} title={`Entradas: ${BRL(m.entradas)}`} />
+                        <div className="w-3 rounded-lg bg-red-400/60" style={{ height: hSai }} title={`Saidas: ${BRL(m.saidas)}`} />
                       </div>
                       <span className="text-[9px] text-[var(--t-text-muted)] mt-1">{m.label}</span>
                     </div>
@@ -746,12 +787,12 @@ export default function DashboardPage() {
               </div>
               <div className="flex items-center gap-4 justify-center mt-2 pt-2 border-t border-[var(--t-border)]">
                 <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded bg-emerald-500/70" /><span className="text-[9px] text-[var(--t-text-muted)]">Entradas</span></div>
-                <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded bg-red-500/70" /><span className="text-[9px] text-[var(--t-text-muted)]">Saidas</span></div>
+                <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded bg-red-400/60" /><span className="text-[9px] text-[var(--t-text-muted)]">Saidas</span></div>
               </div>
             </div>
           </div>
 
-          {/* Grafico 3: Composicao */}
+          {/* Composicao */}
           <div className="bento-3 bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] overflow-hidden">
             <div className="px-5 py-4 border-b border-[var(--t-border)]">
               <h2 className="text-sm font-medium text-[var(--t-text)]">Composicao de Vendas</h2>
@@ -763,14 +804,13 @@ export default function DashboardPage() {
                 <div className="space-y-2">
                   {chartComposicao.slice(0, 6).map(c => (
                     <div key={c.tipo} className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.cor }} />
+                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: c.cor }} />
                       <span className="text-xs text-[var(--t-text-secondary)] flex-1">{c.tipo}</span>
                       <span className="text-xs text-[var(--t-text)] font-medium">{BRL(c.valor)}</span>
                       <span className="text-[10px] text-[var(--t-text-muted)] w-10 text-right">{c.pct.toFixed(0)}%</span>
                     </div>
                   ))}
-                  {/* Mini bar */}
-                  <div className="flex rounded-full overflow-hidden h-2 mt-3">
+                  <div className="flex rounded-full overflow-hidden h-2.5 mt-3">
                     {chartComposicao.map(c => (
                       <div key={c.tipo} style={{ width: `${c.pct}%`, backgroundColor: c.cor }} className="transition-all" />
                     ))}
@@ -781,19 +821,48 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* FAIXA 5: RESUMO + ANIVERSARIANTES + DATAS (bento) */}
+        {/* JORNADA + RESUMO */}
         <div className="bento-grid">
+          {/* Card de Jornada dos 4 Pilares */}
+          <div className="bento-4 bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] p-5">
+            <h2 className="text-sm font-semibold text-[var(--t-text)] flex items-center gap-2 mb-4">
+              <Target className="w-4 h-4 text-[var(--t-green)]" /> Jornada do Negocio
+            </h2>
+            <div className="space-y-3">
+              {[
+                { num: 1, label: 'Planejar', desc: 'Custos e cenarios', href: '/planejamento/custos', color: 'from-blue-500 to-cyan-500' },
+                { num: 2, label: 'Metas', desc: 'KPIs e comissoes', href: '/equipe/metas', color: 'from-violet-500 to-purple-500' },
+                { num: 3, label: 'Produtos', desc: 'Grupos e propostas', href: '/grupos', color: 'from-emerald-500 to-teal-500' },
+                { num: 4, label: 'Financeiro', desc: 'Contas e relatorios', href: '/financeiro-ag', color: 'from-amber-500 to-orange-500' },
+              ].map(step => (
+                <Link key={step.num} href={step.href} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-[var(--t-surface-hover)] transition-colors group">
+                  <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${step.color} flex items-center justify-center shrink-0`}>
+                    <span className="text-xs font-bold text-white">{step.num}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-[var(--t-text)]">{step.label}</div>
+                    <div className="text-[11px] text-[var(--t-text-muted)]">{step.desc}</div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-[var(--t-text-muted)] group-hover:text-[var(--t-text)] transition-colors" />
+                </Link>
+              ))}
+            </div>
+          </div>
+
           {/* Resumo */}
-          <div className="bento-12 bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] p-5">
+          <div className="bento-8 bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] p-5">
             <h2 className="text-sm font-medium text-[var(--t-text)] flex items-center gap-2 mb-3">
               <BarChart3 className="w-4 h-4 text-[var(--t-green)]" />
               Resumo — {getMonthName(mesAtual)}
             </h2>
-            <div className="text-sm text-[var(--t-text-secondary)] space-y-1 leading-relaxed">
+            <div className="text-sm text-[var(--t-text-secondary)] space-y-1.5 leading-relaxed">
               {resumo.map((p, i) => <p key={i}>{p}</p>)}
             </div>
           </div>
+        </div>
 
+        {/* ANIVERSARIANTES + DATAS */}
+        <div className="bento-grid">
           {/* Aniversariantes */}
           <div className="bento-6 bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] overflow-hidden">
             <div className="px-5 py-4 flex items-center justify-between border-b border-[var(--t-border)]">
@@ -807,7 +876,6 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="divide-y divide-[var(--t-border)]">
-                {/* Hoje */}
                 {aniversariantes.filter(a => a.isHoje).length > 0 && (
                   <div className="px-5 py-2">
                     <span className="text-[10px] text-pink-400 uppercase tracking-wider font-medium">Hoje</span>
@@ -833,7 +901,7 @@ export default function DashboardPage() {
                       )}
                       {a.email && (
                         <a href={`mailto:${a.email}?subject=Feliz Aniversario!&body=Ola ${a.nome?.split(' ')[0]}! A ENTUR Viagens deseja um feliz aniversario!`}
-                          className="w-7 h-7 rounded-lg bg-[var(--t-blue-bg)]0/10 flex items-center justify-center hover:bg-[var(--t-blue-bg)]0/20 transition-colors"
+                          className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center hover:bg-blue-500/20 transition-colors"
                           title="E-mail">
                           <Mail className="w-3.5 h-3.5 text-blue-400" />
                         </a>
@@ -841,8 +909,6 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 ))}
-
-                {/* Esta semana */}
                 {aniversariantes.filter(a => a.isSemana).length > 0 && (
                   <div className="px-5 py-2">
                     <span className="text-[10px] text-[var(--t-text-secondary)] uppercase tracking-wider font-medium">Esta semana</span>
@@ -865,8 +931,6 @@ export default function DashboardPage() {
                     )}
                   </div>
                 ))}
-
-                {/* Este mes */}
                 {aniversariantes.filter(a => !a.isHoje && !a.isSemana && a.diasAte <= 30).length > 0 && (
                   <div className="px-5 py-2">
                     <span className="text-[10px] text-[var(--t-text-secondary)] uppercase tracking-wider font-medium">Este mes (+{aniversariantes.filter(a => !a.isHoje && !a.isSemana).length})</span>
@@ -947,7 +1011,7 @@ export default function DashboardPage() {
                 };
                 return (
                   <div key={v.id} className="px-5 py-3 flex items-center gap-4 hover:bg-[var(--t-surface-hover)] transition-colors">
-                    <div className="w-9 h-9 rounded-full bg-[var(--t-green)]/10 flex items-center justify-center shrink-0">
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: 'var(--t-primary-bg)' }}>
                       <DollarSign className="w-4 h-4 text-[var(--t-green)]" />
                     </div>
                     <div className="flex-1 min-w-0">

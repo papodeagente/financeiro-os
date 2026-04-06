@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { CrmStatusBadge } from './CrmStatusBadge';
-import { Sun, Moon, Search, LogOut, ChevronDown, Settings } from 'lucide-react';
+import { Sun, Moon, Search, LogOut, ChevronDown, Settings, Plus } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 
 interface Props {
@@ -17,6 +17,15 @@ function getGreeting(): string {
   if (h < 12) return 'Bom dia';
   if (h < 18) return 'Boa tarde';
   return 'Boa noite';
+}
+
+function getDateString(): string {
+  return new Date().toLocaleDateString('pt-BR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
 }
 
 export function TopBar({ onCommandPalette, breadcrumb }: Props) {
@@ -36,24 +45,51 @@ export function TopBar({ onCommandPalette, breadcrumb }: Props) {
   }, []);
 
   return (
-    <header className="h-[52px] bg-[var(--t-surface)] border-b border-[var(--t-border)] flex items-center px-6 shrink-0 z-30" style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.02)' }}>
-      {/* Breadcrumb / Greeting */}
+    <header className="h-[64px] bg-[var(--t-surface)] border-b border-[var(--t-border)] flex items-center px-6 shrink-0 z-30" style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.02)' }}>
+      {/* Greeting + breadcrumb */}
       <div className="flex-1 min-w-0">
-        {breadcrumb || (
-          user && (
-            <span className="text-[var(--text-body-sm)] text-[var(--t-text-secondary)]">
-              {getGreeting()}, <span className="text-[var(--t-text)] font-medium">{user.nome?.split(' ')[0]}</span>
+        {user && (
+          <div className="flex flex-col justify-center">
+            <span className="text-[var(--text-body-lg)] font-semibold text-[var(--t-text)] leading-tight">
+              {getGreeting()}, <span className="text-[var(--t-green)]">{user.nome?.split(' ')[0]}</span>
             </span>
-          )
+            <div className="flex items-center gap-2 mt-0.5">
+              {breadcrumb || (
+                <span className="text-[11px] text-[var(--t-text-muted)] capitalize">
+                  {getDateString()}
+                </span>
+              )}
+            </div>
+          </div>
         )}
       </div>
 
       {/* Utilities */}
-      <div className="flex items-center gap-1 shrink-0">
+      <div className="flex items-center gap-2 shrink-0">
+        {/* Quick actions */}
+        <Link
+          href="/vendas/nova"
+          className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-medium text-white transition-all hover:brightness-110"
+          style={{ background: 'var(--t-accent-gradient)', boxShadow: '0 1px 3px var(--t-green-shadow)' }}
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Nova Venda
+        </Link>
+        <Link
+          href="/propostas/nova"
+          className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-medium border border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)] hover:text-[var(--t-text)] transition-all"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Proposta
+        </Link>
+
+        {/* Separator */}
+        <div className="w-px h-6 bg-[var(--t-border)] mx-1" />
+
         {/* Search trigger */}
         <button
           onClick={onCommandPalette}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-[var(--t-border)] bg-[var(--t-bg)] text-[var(--t-text-muted)] hover:text-[var(--t-text)] hover:border-[var(--t-border-hover)] transition-all text-[var(--text-body-sm)] min-w-[200px] lg:min-w-[280px]"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-2xl border border-[var(--t-border)] bg-[var(--t-bg)] text-[var(--t-text-muted)] hover:text-[var(--t-text)] hover:border-[var(--t-border-hover)] transition-all text-[var(--text-body-sm)] min-w-[200px] lg:min-w-[280px]"
           title="⌘K"
         >
           <Search className="w-3.5 h-3.5" />
@@ -81,13 +117,13 @@ export function TopBar({ onCommandPalette, breadcrumb }: Props) {
               className="flex items-center gap-2 ml-1 px-2 py-1.5 rounded-xl hover:bg-[var(--t-surface-hover)] transition-colors"
             >
               <div
-                className="w-9 h-9 rounded-full flex items-center justify-center ring-2 ring-offset-2 ring-[var(--t-green)]/20 ring-offset-[var(--t-surface)] relative"
+                className="w-10 h-10 rounded-full flex items-center justify-center ring-2 ring-offset-2 ring-[var(--t-green)]/20 ring-offset-[var(--t-surface)] relative"
                 style={{ background: 'var(--t-accent-gradient)' }}
               >
-                <span className="text-[11px] font-bold text-white">
+                <span className="text-[12px] font-bold text-white">
                   {user.nome?.charAt(0)?.toUpperCase() || 'U'}
                 </span>
-                <span className="absolute bottom-0 right-0 w-[7px] h-[7px] rounded-full bg-emerald-500 ring-2 ring-[var(--t-surface)]" />
+                <span className="absolute bottom-0 right-0 w-[8px] h-[8px] rounded-full bg-emerald-500 ring-2 ring-[var(--t-surface)]" />
               </div>
               <ChevronDown className="w-3 h-3 text-[var(--t-text-muted)]" />
             </button>

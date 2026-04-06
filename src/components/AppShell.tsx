@@ -8,6 +8,7 @@ import { FeaturePanel } from './FeaturePanel';
 import { TopBar } from './TopBar';
 import { CommandPalette } from './CommandPalette';
 import { ImpersonationBanner } from './ImpersonationBanner';
+import { usePillarProgress } from '@/hooks/usePillarProgress';
 import { useState, useEffect, useCallback } from 'react';
 
 const BREADCRUMB_MAP: Record<string, string> = {
@@ -60,6 +61,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, loading } = useAuth();
   const activePillar = useActivePillar();
+  const { markVisited } = usePillarProgress();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -73,6 +75,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
+
+  // Track pillar progress
+  useEffect(() => {
+    if (activePillar) markVisited(activePillar);
+  }, [activePillar, markVisited]);
 
   // Track recent pages
   useEffect(() => {
@@ -117,7 +124,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex flex-col h-full">
       <ImpersonationBanner />
       <div className="flex flex-1 min-h-0">
-      {/* Column 1: Pillar Rail (72px) */}
+      {/* Column 1: Pillar Rail (80px) */}
       <PillarRail />
 
       {/* Column 2: Feature Panel (240px) */}
