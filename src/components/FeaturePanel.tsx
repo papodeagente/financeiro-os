@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useActivePillar, PILLARS, type Pillar } from '@/hooks/useActivePillar';
 import { PILLAR_MENUS } from './PillarSidebar';
+import { Logo } from './Logo';
 
 const PILLAR_DESCRIPTIONS: Record<Pillar, string> = {
   planejamento: 'Custos, CAC e cenários',
@@ -32,8 +33,13 @@ export function FeaturePanel() {
 
   return (
     <aside className="w-[240px] bg-[var(--t-surface)] border-r border-[var(--t-border)] flex flex-col shrink-0 overflow-hidden">
+      {/* Logo */}
+      <div className="px-5 pt-4 pb-3">
+        <Logo variant="sidebar" href="/dashboard" />
+      </div>
+
       {/* Header with pillar context */}
-      <div className="px-5 pt-5 pb-4 border-b border-[var(--t-border)]">
+      <div className="px-5 pb-4 border-b border-[var(--t-border)]">
         <div className="flex items-center gap-3">
           {/* Pillar icon badge */}
           {PillarIcon && (

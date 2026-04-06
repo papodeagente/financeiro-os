@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { useActivePillar, PILLARS, type Pillar } from '@/hooks/useActivePillar';
 import { usePillarProgress } from '@/hooks/usePillarProgress';
-import { Logo } from './Logo';
 import { Check } from 'lucide-react';
 
 const PILLAR_ROUTES: Record<Pillar, string> = {
@@ -33,16 +32,11 @@ export function PillarRail({ onPillarClick }: Props) {
       className="w-[80px] flex flex-col items-center shrink-0 z-40"
       style={{ background: 'var(--t-pillar-gradient)' }}
     >
-      {/* Logo */}
-      <div className="pt-4 pb-2">
-        <Logo variant="icon" href="/dashboard" className="opacity-90 hover:opacity-100 transition-opacity" />
-      </div>
+      {/* Top spacer */}
+      <div className="pt-6" />
 
-      {/* Separator */}
-      <div className="w-8 h-px bg-white/10 mb-3" />
-
-      {/* Journey steps */}
-      <nav className="flex-1 flex flex-col items-center pt-1">
+      {/* Journey steps — larger items with more spacing */}
+      <nav className="flex-1 flex flex-col items-center justify-center gap-[50px]">
         {PILLARS.map((pillar, index) => {
           const Icon = pillar.icon;
           const isActive = activePillar === pillar.id;
@@ -50,18 +44,22 @@ export function PillarRail({ onPillarClick }: Props) {
           const stepNum = index + 1;
 
           return (
-            <div key={pillar.id} className="flex flex-col items-center">
+            <div key={pillar.id} className="flex flex-col items-center relative">
               {/* Connector line (not before first) */}
               {index > 0 && (
-                <div className={`pillar-connector ${isVisited || visited.has(PILLARS[index - 1].id) ? 'visited' : ''}`} />
+                <div
+                  className={`absolute -top-[30px] left-1/2 -translate-x-1/2 w-[2px] h-[12px] rounded-full ${
+                    isVisited || visited.has(PILLARS[index - 1].id) ? 'bg-white/35' : 'bg-white/12'
+                  }`}
+                />
               )}
 
-              {/* Step button */}
+              {/* Step button — 50px bigger (w-16 h-16 = 64px, was w-14 h-14 = 56px) */}
               <Link
                 href={PILLAR_ROUTES[pillar.id]}
                 onClick={() => onPillarClick?.(pillar.id)}
                 title={pillar.label}
-                className={`group relative flex flex-col items-center justify-center w-14 h-14 rounded-2xl transition-all duration-200 ${
+                className={`group relative flex flex-col items-center justify-center w-16 h-16 rounded-2xl transition-all duration-200 ${
                   isActive
                     ? 'pillar-current'
                     : 'hover:bg-white/8'
@@ -73,7 +71,7 @@ export function PillarRail({ onPillarClick }: Props) {
                 } : undefined}
               >
                 {/* Step number badge */}
-                <span className={`absolute -top-1 -right-1 w-[18px] h-[18px] rounded-full flex items-center justify-center text-[9px] font-bold transition-all ${
+                <span className={`absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
                   isActive
                     ? 'bg-white text-[#004aad]'
                     : isVisited
@@ -81,21 +79,21 @@ export function PillarRail({ onPillarClick }: Props) {
                       : 'bg-white/10 text-white/50'
                 }`}>
                   {isVisited && !isActive ? (
-                    <Check className="w-2.5 h-2.5" />
+                    <Check className="w-3 h-3" />
                   ) : (
                     stepNum
                   )}
                 </span>
 
                 {/* Icon */}
-                <Icon className={`w-[22px] h-[22px] transition-colors ${
+                <Icon className={`w-6 h-6 transition-colors ${
                   isActive
                     ? 'text-white'
                     : 'text-[var(--t-pillar-rail-text)] group-hover:text-[var(--t-pillar-rail-text-active)]'
                 }`} />
 
                 {/* Label */}
-                <span className={`text-[9px] mt-1 leading-none tracking-wide uppercase transition-colors ${
+                <span className={`text-[9px] mt-1.5 leading-none tracking-wide uppercase transition-colors ${
                   isActive
                     ? 'font-bold text-white'
                     : 'font-medium text-[var(--t-pillar-rail-text)] group-hover:text-[var(--t-pillar-rail-text-active)]'
@@ -109,7 +107,7 @@ export function PillarRail({ onPillarClick }: Props) {
       </nav>
 
       {/* Bottom spacer */}
-      <div className="pb-4" />
+      <div className="pb-6" />
     </aside>
   );
 }
