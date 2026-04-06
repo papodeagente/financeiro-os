@@ -2,33 +2,43 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { hashPassword } from '@/lib/auth';
 
-export async function POST() {
+export async function POST(req: Request) {
   try {
     await initDB();
     if (!pool) {
       return NextResponse.json({ error: 'Banco de dados indisponivel' }, { status: 503 });
     }
 
-    const { rows } = await pool.query('SELECT COUNT(*) as cnt FROM super_admins');
-    const count = parseInt(rows[0].cnt, 10);
+    // Accept optional body with custom credentials
+    let body: { email?: string; senha?: string; nome?: string } = {};
+    try { body = await req.json(); } catch { /* no body is fine */ }
 
-    if (count > 0) {
+    const email = body.email || process.env.SUPER_ADMIN_EMAIL || 'super@entur.com.br';
+    const password = body.senha || process.env.SUPER_ADMIN_PASSWORD || 'super123';
+    const nome = body.nome || 'Super Admin';
+
+    // Check if this email already exists
+    const { rows: existing } = await pool.query(
+      `SELECT id FROM super_admins WHERE email = $1`,
+      [email]
+    );
+
+    if (existing.length > 0) {
       return NextResponse.json(
-        { error: 'Ja existem super admins cadastrados' },
+        { error: `Super admin com email ${email} ja existe` },
         { status: 400 }
       );
     }
 
-    const email = process.env.SUPER_ADMIN_EMAIL || 'super@entur.com.br';
-    const password = process.env.SUPER_ADMIN_PASSWORD || 'super123';
     const senhaHash = await hashPassword(password);
     const id = Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
 
     const admin = {
       id,
-      nome: 'Super Admin',
+      nome,
       email,
       senha_hash: senhaHash,
+      ativo: true,
     };
 
     await pool.query(
@@ -41,8 +51,6 @@ export async function POST() {
       ok: true,
       message: 'Super admin criado com sucesso',
       email: admin.email,
-      senha_hint: password.substring(0, 3) + '***',
-      aviso: 'TROQUE A SENHA IMEDIATAMENTE APOS O PRIMEIRO LOGIN',
     });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Erro desconhecido';
