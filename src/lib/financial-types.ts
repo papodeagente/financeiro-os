@@ -154,3 +154,60 @@ export const ABA_FINANCEIRA_LABELS: Record<AbaFinanceiraType, string> = {
 };
 
 export const PAX_PER_APTO: Record<TipoApto, number> = { SGL: 1, DBL: 2, TPL: 3, QDP: 4 };
+
+// ============================================================
+// DRE — Contabilidade de Agência de Viagens
+// ============================================================
+// A agência é intermediária (Lei 11.771/2008).
+// Receita = comissão/markup, NÃO o valor total do pacote.
+// Impostos incidem sobre a comissão, não sobre o faturamento.
+
+export interface DREAgenciaResult {
+  // FATURAMENTO (total cobrado do cliente)
+  faturamentoBrutoPorTipo: Record<string, number>;
+  faturamentoChdExtras: number;
+  faturamentoBruto: number;
+
+  // DEDUÇÕES DO FATURAMENTO
+  cancelamentos: number;
+  cortesias: number;
+  faturamentoLiquido: number;
+
+  // REPASSES A FORNECEDORES (pass-through — não é receita da agência)
+  repassesPorCategoria: Record<string, number>;
+  repassesCustosExtras: number;
+  repassesTotal: number;
+
+  // RECEITA DA AGÊNCIA (comissão = faturamento - repasses)
+  receitaBrutaAgencia: number;
+
+  // DEDUÇÕES DA RECEITA
+  descontosConcedidos: number;
+  receitaLiquidaAgencia: number;
+
+  // CUSTOS OPERACIONAIS (custos próprios da agência)
+  taxaAdquirencia: number;
+  taxaBoleto: number;
+  contratoComissao: number;
+  variacaoCambial: number;
+  custosAdmin: number;
+  custosOpTotal: number;
+
+  // LUCRO OPERACIONAL
+  lucroOperacional: number;
+  margemOperacional: number;
+
+  // IMPOSTOS (sobre RECEITA da agência, não faturamento)
+  aliquotaImposto: number;
+  impostos: number;
+  outrasTaxas: number;
+  totalImpostos: number;
+
+  // LUCRO LÍQUIDO
+  lucroLiquido: number;
+  margemLiquida: number;
+
+  // REFERÊNCIA
+  margemSobreFaturamento: number;
+  markupEfetivo: number;
+}

@@ -111,7 +111,7 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
     margemSeguranca: indicadores.margemSeguranca,
   };
   const mg = {
-    margemBruta: indicadores.margemBruta,
+    comissaoMediaPax: indicadores.comissaoMediaPax,
     margemOperacional: indicadores.margemOperacional,
     margemLiquida: indicadores.margemLiquida,
     markupEfetivo: indicadores.markupEfetivo,
@@ -293,7 +293,7 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {[
-              { label: 'Margem Bruta', value: mg.margemBruta ?? 0 },
+              { label: 'Comissao Media/PAX', value: mg.comissaoMediaPax ?? 0, isCurrency: true },
               { label: 'Margem Operacional', value: mg.margemOperacional ?? 0 },
               { label: 'Margem Liquida', value: mg.margemLiquida ?? 0 },
               { label: 'Markup Efetivo', value: mg.markupEfetivo ?? 0 },
@@ -305,15 +305,17 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
                     m.value >= 0 ? 'text-green-600' : 'text-red-600'
                   }`}
                 >
-                  {m.value.toFixed(1)}%
+                  {'isCurrency' in m && m.isCurrency ? formatBRL(m.value) : `${m.value.toFixed(1)}%`}
                 </p>
-                <div className="mt-2">
-                  <ProgressBar
-                    value={Math.max(m.value, 0)}
-                    max={100}
-                    color={m.value >= 20 ? '#22c55e' : m.value >= 0 ? '#f59e0b' : '#ef4444'}
-                  />
-                </div>
+                {'isCurrency' in m && m.isCurrency ? null : (
+                  <div className="mt-2">
+                    <ProgressBar
+                      value={Math.max(m.value, 0)}
+                      max={100}
+                      color={m.value >= 20 ? '#22c55e' : m.value >= 0 ? '#f59e0b' : '#ef4444'}
+                    />
+                  </div>
+                )}
               </div>
             ))}
           </div>

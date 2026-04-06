@@ -1,5 +1,5 @@
 import { GrupoViagem } from './types';
-import { FinanceiroGrupo, Venda, Parcela, PagamentoFornecedor, FormaPagamento, TipoApto, PAX_PER_APTO } from './financial-types';
+import { FinanceiroGrupo, Venda, Parcela, PagamentoFornecedor, FormaPagamento, TipoApto, PAX_PER_APTO, DREAgenciaResult } from './financial-types';
 import { calcProposta, PropostaResult } from './calculations';
 import { generateId } from './utils';
 
@@ -228,14 +228,20 @@ export interface FluxoMensal {
   saidasRealizadas: number;
   saldoMensal: number;
   saldoAcumulado: number;
+  // Visão da agência (só comissão)
+  entradasComissao: number;
+  saidasRepasses: number;
+  saldoAgencia: number;
+  saldoAgenciaAcumulado: number;
 }
 
-export function calcFluxoCaixa(fin: FinanceiroGrupo): FluxoMensal[] {
-  const meses = new Map<string, { ep: number; er: number; sp: number; sr: number }>();
+export function calcFluxoCaixa(fin: FinanceiroGrupo, ratioComissao?: number): FluxoMensal[] {
+  const ratio = ratioComissao ?? 1;
+  const meses = new Map<string, { ep: number; er: number; sp: number; sr: number; ec: number; srp: number }>();
 
   const getMonth = (d: string) => d.substring(0, 7);
   const ensureMonth = (m: string) => {
-    if (!meses.has(m)) meses.set(m, { ep: 0, er: 0, sp: 0, sr: 0 });
+    if (!meses.has(m)) meses.set(m, { ep: 0, er: 0, sp: 0, sr: 0, ec: 0, srp: 0 });
     return meses.get(m)!;
   };
 
@@ -246,16 +252,19 @@ export function calcFluxoCaixa(fin: FinanceiroGrupo): FluxoMensal[] {
     const entry = ensureMonth(m);
     if (p.status === 'RECEBIDO' && p.data_recebimento) {
       const mr = getMonth(p.data_recebimento);
-      ensureMonth(mr).er += p.valor_recebido || p.valor;
+      const val = p.valor_recebido || p.valor;
+      ensureMonth(mr).er += val;
+      ensureMonth(mr).ec += val * ratio;
     }
     if (p.status === 'PENDENTE' || p.status === 'ATRASADO') {
       entry.ep += p.valor;
+      entry.ec += p.valor * ratio;
     } else if (p.status === 'RECEBIDO') {
       entry.ep += p.valor;
     }
   }
 
-  // Exits from supplier payments
+  // Exits from supplier payments (repasses)
   for (const pg of fin.pagamentos_fornecedores) {
     if (pg.status === 'CANCELADO') continue;
     if (pg.data_vencimento) {
@@ -263,6 +272,7 @@ export function calcFluxoCaixa(fin: FinanceiroGrupo): FluxoMensal[] {
       const entry = ensureMonth(m);
       const val = pg.valor_negociado * (pg.cambio_pagamento || pg.cambio_cotacao);
       entry.sp += val;
+      entry.srp += val;
     }
     if (pg.data_pagamento) {
       const m = getMonth(pg.data_pagamento);
@@ -273,9 +283,12 @@ export function calcFluxoCaixa(fin: FinanceiroGrupo): FluxoMensal[] {
   // Sort and calculate accumulated
   const sorted = Array.from(meses.entries()).sort(([a], [b]) => a.localeCompare(b));
   let acum = 0;
+  let acumAgencia = 0;
   return sorted.map(([mes, d]) => {
     const saldo = d.ep - d.sp;
     acum += saldo;
+    const saldoAg = d.ec - d.srp;
+    acumAgencia += saldoAg;
     return {
       mes,
       entradasPrevistas: d.ep,
@@ -284,78 +297,60 @@ export function calcFluxoCaixa(fin: FinanceiroGrupo): FluxoMensal[] {
       saidasRealizadas: d.sr,
       saldoMensal: saldo,
       saldoAcumulado: acum,
+      entradasComissao: d.ec,
+      saidasRepasses: d.srp,
+      saldoAgencia: saldoAg,
+      saldoAgenciaAcumulado: acumAgencia,
     };
   });
 }
 
-// DRE calculation
-export interface DREResult {
-  receitaBruta: number;
-  receitaPorTipo: Record<string, number>;
-  receitaChdExtras: number;
-  descontos: number;
-  cancelamentos: number;
-  cortesias: number;
-  receitaLiquida: number;
-  custosPorCategoria: Record<string, number>;
-  custosDiretosTotal: number;
-  lucroBruto: number;
-  margemBruta: number;
-  taxaAdquirencia: number;
-  taxaBoleto: number;
-  contratoComissao: number;
-  variacaoCambial: number;
-  custosAdmin: number;
-  custosOpTotal: number;
-  lucroOperacional: number;
-  margemOperacional: number;
-  impostos: number;
-  outrasTaxas: number;
-  totalImpostos: number;
-  lucroLiquido: number;
-  margemLiquida: number;
-}
+// DRE — Contabilidade de Agência de Viagens
+// A agência é intermediária. Receita = comissão, não valor total do pacote.
+// Impostos incidem sobre a comissão (Lei 11.771/2008).
 
-export function calcDRE(g: GrupoViagem, fin: FinanceiroGrupo): DREResult {
+export function calcDRE(g: GrupoViagem, fin: FinanceiroGrupo): DREAgenciaResult {
   const ativas = fin.vendas.filter(v => v.status !== 'CANCELADO');
   const canceladas = fin.vendas.filter(v => v.status === 'CANCELADO');
-  const cortesias = ativas.filter(v => v.is_cortesia);
+  const cortesiasVendas = ativas.filter(v => v.is_cortesia);
 
-  // 1. Receita Bruta
-  const receitaPorTipo: Record<string, number> = { SGL: 0, DBL: 0, TPL: 0, QDP: 0 };
+  // 1. FATURAMENTO BRUTO (total cobrado do cliente)
+  const faturamentoBrutoPorTipo: Record<string, number> = { SGL: 0, DBL: 0, TPL: 0, QDP: 0 };
   for (const v of ativas) {
-    receitaPorTipo[v.tipo_apto] += v.valor_total_apto;
+    faturamentoBrutoPorTipo[v.tipo_apto] += v.valor_total_apto;
   }
-  const receitaChdExtras = ativas.reduce((s, v) => s + v.chds_extras.reduce((ss, c) => ss + c.valor_final, 0), 0);
-  const receitaBruta = ativas.reduce((s, v) => s + v.valor_total_apto, 0) + receitaChdExtras;
+  const faturamentoChdExtras = ativas.reduce((s, v) => s + v.chds_extras.reduce((ss, c) => ss + c.valor_final, 0), 0);
+  const faturamentoBruto = ativas.reduce((s, v) => s + v.valor_total_apto, 0) + faturamentoChdExtras;
 
-  // 2. Deductions
-  const descontos = ativas.reduce((s, v) => s + v.desconto_concedido, 0);
+  // 2. DEDUÇÕES DO FATURAMENTO (cancelamentos e cortesias)
   const cancelamentoVal = canceladas.reduce((s, v) => s + v.valor_final, 0);
-  const cortesiaVal = cortesias.reduce((s, v) => s + v.valor_total_apto, 0);
-  const receitaLiquida = receitaBruta - descontos - cancelamentoVal - cortesiaVal;
+  const cortesiaVal = cortesiasVendas.reduce((s, v) => s + v.valor_total_apto, 0);
+  const faturamentoLiquido = faturamentoBruto - cancelamentoVal - cortesiaVal;
 
-  // 3. Direct costs
+  // 3. REPASSES A FORNECEDORES (pass-through — não é receita da agência)
   const categorias = ['TKT', 'HTL', 'REC', 'CAR', 'GUIA', 'SEG', 'NAVIO', 'ING', 'BRINDE'] as const;
-  const custosPorCategoria: Record<string, number> = {};
+  const repassesPorCategoria: Record<string, number> = {};
   for (const cat of categorias) {
     const fornecedores = fin.pagamentos_fornecedores.filter(p => p.categoria === cat && p.status !== 'CANCELADO');
-    custosPorCategoria[cat] = fornecedores.reduce((s, p) => {
+    repassesPorCategoria[cat] = fornecedores.reduce((s, p) => {
       const val = p.valor_negociado > 0 ? p.valor_negociado : p.valor_cotado;
       return s + val * (p.cambio_pagamento || p.cambio_cotacao);
     }, 0);
   }
-  const custosDiretosTotal = Object.values(custosPorCategoria).reduce((a, b) => a + b, 0)
-    + fin.custos_extras.reduce((s, c) => s + c.valor, 0);
+  const repassesCustosExtras = fin.custos_extras.reduce((s, c) => s + c.valor, 0);
+  const repassesTotal = Object.values(repassesPorCategoria).reduce((a, b) => a + b, 0) + repassesCustosExtras;
 
-  // 4. Lucro Bruto
-  const lucroBruto = receitaLiquida - custosDiretosTotal;
-  const margemBruta = receitaLiquida > 0 ? (lucroBruto / receitaLiquida) * 100 : 0;
+  // 4. RECEITA DA AGÊNCIA (comissão = faturamento - repasses)
+  const receitaBrutaAgencia = faturamentoLiquido - repassesTotal;
 
-  // 5. Operational costs
+  // 5. DEDUÇÕES DA RECEITA (descontos saem da margem da agência)
+  const descontosConcedidos = ativas.reduce((s, v) => s + v.desconto_concedido, 0);
+  const receitaLiquidaAgencia = receitaBrutaAgencia - descontosConcedidos;
+
+  // 6. CUSTOS OPERACIONAIS (custos próprios da agência)
   const vendasCartao = ativas.filter(v => v.forma_pagamento === 'CARTAO');
-  const receitaCartao = vendasCartao.reduce((s, v) => s + v.valor_final, 0);
-  const taxaAdquirencia = receitaCartao > 0 ? receitaCartao - (receitaCartao * g.params.tx_ad_mp) : 0;
+  const faturamentoCartao = vendasCartao.reduce((s, v) => s + v.valor_final, 0);
+  const taxaAdquirencia = faturamentoCartao > 0 ? faturamentoCartao - (faturamentoCartao * g.params.tx_ad_mp) : 0;
 
   const vendasBoleto = ativas.filter(v => v.forma_pagamento === 'BOLETO');
   const totalBoletos = vendasBoleto.reduce((s, v) => s + v.qtd_parcelas, 0);
@@ -374,30 +369,32 @@ export function calcDRE(g: GrupoViagem, fin: FinanceiroGrupo): DREResult {
   const custosAdmin = fin.config.custos_administrativos;
   const custosOpTotal = taxaAdquirencia + taxaBoleto + contratoComissao + variacaoCambial + custosAdmin;
 
-  // 6. Lucro Operacional
-  const lucroOperacional = lucroBruto - custosOpTotal;
-  const margemOperacional = receitaLiquida > 0 ? (lucroOperacional / receitaLiquida) * 100 : 0;
+  // 7. LUCRO OPERACIONAL
+  const lucroOperacional = receitaLiquidaAgencia - custosOpTotal;
+  const margemOperacional = receitaLiquidaAgencia > 0 ? (lucroOperacional / receitaLiquidaAgencia) * 100 : 0;
 
-  // 7. Impostos
-  const impostos = receitaLiquida * (fin.config.aliquota_imposto / 100);
+  // 8. IMPOSTOS (sobre RECEITA da agência, não sobre faturamento!)
+  const aliquotaImposto = fin.config.aliquota_imposto;
+  const impostos = receitaLiquidaAgencia > 0 ? receitaLiquidaAgencia * (aliquotaImposto / 100) : 0;
   const outrasTaxas = 0;
   const totalImpostos = impostos + outrasTaxas;
 
-  // 8. Lucro Liquido
+  // 9. LUCRO LÍQUIDO
   const lucroLiquido = lucroOperacional - totalImpostos;
-  const margemLiquida = receitaLiquida > 0 ? (lucroLiquido / receitaLiquida) * 100 : 0;
+  const margemLiquida = receitaLiquidaAgencia > 0 ? (lucroLiquido / receitaLiquidaAgencia) * 100 : 0;
 
   return {
-    receitaBruta, receitaPorTipo, receitaChdExtras,
-    descontos, cancelamentos: cancelamentoVal, cortesias: cortesiaVal,
-    receitaLiquida,
-    custosPorCategoria, custosDiretosTotal,
-    lucroBruto, margemBruta,
-    taxaAdquirencia, taxaBoleto, contratoComissao, variacaoCambial, custosAdmin,
-    custosOpTotal,
+    faturamentoBrutoPorTipo, faturamentoChdExtras, faturamentoBruto,
+    cancelamentos: cancelamentoVal, cortesias: cortesiaVal, faturamentoLiquido,
+    repassesPorCategoria, repassesCustosExtras, repassesTotal,
+    receitaBrutaAgencia,
+    descontosConcedidos, receitaLiquidaAgencia,
+    taxaAdquirencia, taxaBoleto, contratoComissao, variacaoCambial, custosAdmin, custosOpTotal,
     lucroOperacional, margemOperacional,
-    impostos, outrasTaxas, totalImpostos,
+    aliquotaImposto, impostos, outrasTaxas, totalImpostos,
     lucroLiquido, margemLiquida,
+    margemSobreFaturamento: faturamentoLiquido > 0 ? (lucroLiquido / faturamentoLiquido) * 100 : 0,
+    markupEfetivo: repassesTotal > 0 ? (receitaBrutaAgencia / repassesTotal) * 100 : 0,
   };
 }
 
@@ -413,18 +410,18 @@ export interface Indicadores {
   breakEvenPax: number;
   breakEvenAtingido: boolean;
   margemSeguranca: number;
-  // Margins
-  margemBruta: number;
+  // Margins (baseadas em comissão/receita da agência)
   margemOperacional: number;
   margemLiquida: number;
   markupEfetivo: number;
+  comissaoMediaPax: number;
   // Velocity
   diasDesdeAbertura: number;
   paxPorDia: number;
   diasParaLotar: number;
   dataEstimadaLotacao: string | null;
   vaiLotarATempo: boolean;
-  // Scenarios
+  // Scenarios (baseados em comissão)
   cenarioPessimista: { pax: number; receita: number; custo: number; lucro: number; margem: number };
   cenarioRealista: { pax: number; receita: number; custo: number; lucro: number; margem: number };
   cenarioOtimista: { pax: number; receita: number; custo: number; lucro: number; margem: number };
@@ -439,16 +436,15 @@ export function calcIndicadores(g: GrupoViagem, fin: FinanceiroGrupo): Indicador
   const vagasDisponiveis = maxPax - paxVendidos;
 
   const dre = calcDRE(g, fin);
-  const receitaLiquida = dre.receitaLiquida;
-  const custoTotal = dre.custosDiretosTotal;
+  // Usar receita da agência (comissão), não faturamento total
+  const receitaAgencia = dre.receitaLiquidaAgencia;
+  const custosOp = dre.custosOpTotal;
 
-  // Fixed vs variable costs
-  const fixas = ['CAR', 'GUIA'];
-  const custoFixo = fixas.reduce((s, c) => s + (dre.custosPorCategoria[c] || 0), 0) + fin.config.custos_administrativos;
-  const custoVariavel = custoTotal - custoFixo;
-  const custoVarPorPax = paxVendidos > 0 ? custoVariavel / paxVendidos : 0;
-  const ticketMedioPax = paxVendidos > 0 ? receitaLiquida / paxVendidos : 0;
-  const breakEvenPax = (ticketMedioPax - custoVarPorPax) > 0 ? custoFixo / (ticketMedioPax - custoVarPorPax) : 0;
+  // Break-even baseado na comissão por pax
+  const comissaoPorPax = paxVendidos > 0 ? receitaAgencia / paxVendidos : 0;
+  const custoOpPorPax = paxVendidos > 0 ? custosOp / paxVendidos : 0;
+  const custoFixo = fin.config.custos_administrativos;
+  const breakEvenPax = (comissaoPorPax - custoOpPorPax) > 0 ? custoFixo / (comissaoPorPax - custoOpPorPax) : 0;
 
   // Velocity
   const datasVenda = ativas.map(v => v.data_venda).sort();
@@ -464,20 +460,20 @@ export function calcIndicadores(g: GrupoViagem, fin: FinanceiroGrupo): Indicador
   dataLotacao.setDate(dataLotacao.getDate() + diasParaLotar);
   const diasAteViagem = primeiraPartida ? Math.floor((new Date(primeiraPartida).getTime() - hoje.getTime()) / 86400000) : Infinity;
 
-  // Scenarios
+  // Cenários baseados em comissão (receita da agência)
   const taxaConv = fin.config.taxa_conversao_estimada / 100;
   const paxAdicionaisRealista = Math.round(vagasDisponiveis * taxaConv);
 
   const cenarioPessimista = {
     pax: paxVendidos,
-    receita: receitaLiquida,
-    custo: custoTotal,
-    lucro: receitaLiquida - custoTotal,
-    margem: receitaLiquida > 0 ? ((receitaLiquida - custoTotal) / receitaLiquida) * 100 : 0,
+    receita: receitaAgencia,
+    custo: custosOp,
+    lucro: receitaAgencia - custosOp,
+    margem: receitaAgencia > 0 ? ((receitaAgencia - custosOp) / receitaAgencia) * 100 : 0,
   };
 
-  const receitaRealista = receitaLiquida + (paxAdicionaisRealista * ticketMedioPax);
-  const custoRealista = custoTotal + (paxAdicionaisRealista * custoVarPorPax);
+  const receitaRealista = receitaAgencia + (paxAdicionaisRealista * comissaoPorPax);
+  const custoRealista = custosOp + (paxAdicionaisRealista * custoOpPorPax);
   const cenarioRealista = {
     pax: paxVendidos + paxAdicionaisRealista,
     receita: receitaRealista,
@@ -486,8 +482,8 @@ export function calcIndicadores(g: GrupoViagem, fin: FinanceiroGrupo): Indicador
     margem: receitaRealista > 0 ? ((receitaRealista - custoRealista) / receitaRealista) * 100 : 0,
   };
 
-  const receitaOtimista = receitaLiquida + (vagasDisponiveis * ticketMedioPax);
-  const custoOtimista = custoTotal + (vagasDisponiveis * custoVarPorPax);
+  const receitaOtimista = receitaAgencia + (vagasDisponiveis * comissaoPorPax);
+  const custoOtimista = custosOp + (vagasDisponiveis * custoOpPorPax);
   const cenarioOtimista = {
     pax: maxPax,
     receita: receitaOtimista,
@@ -503,10 +499,10 @@ export function calcIndicadores(g: GrupoViagem, fin: FinanceiroGrupo): Indicador
     breakEvenPax: Math.ceil(breakEvenPax),
     breakEvenAtingido: paxVendidos >= breakEvenPax,
     margemSeguranca: paxVendidos - Math.ceil(breakEvenPax),
-    margemBruta: dre.margemBruta,
     margemOperacional: dre.margemOperacional,
     margemLiquida: dre.margemLiquida,
-    markupEfetivo: custoTotal > 0 ? receitaLiquida / custoTotal : 0,
+    markupEfetivo: dre.markupEfetivo,
+    comissaoMediaPax: comissaoPorPax,
     diasDesdeAbertura,
     paxPorDia,
     diasParaLotar: diasParaLotar === Infinity ? 0 : Math.ceil(diasParaLotar),

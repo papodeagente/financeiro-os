@@ -105,10 +105,11 @@ export default function PainelTab({ grupo, onChange }: PainelTabProps) {
 
   const paxVendidos = indicadores.paxVendidos;
   const paxRestantes = indicadores.vagasDisponiveis;
-  const receitaProjetada = dre.receitaBruta;
+  const faturamento = dre.faturamentoBruto;
+  const receita = dre.receitaBrutaAgencia;
   const receitaRecebida = recebimentos.totalRecebido;
   const aReceber = recebimentos.totalPendente;
-  const custoTotal = dre.custosDiretosTotal;
+  const repassesTotal = dre.repassesTotal;
   const aPagar = fornecedoresMetrics.totalAPagar;
   const lucroProjetado = dre.lucroLiquido;
   const margemPct = dre.margemLiquida;
@@ -123,10 +124,10 @@ export default function PainelTab({ grupo, onChange }: PainelTabProps) {
     QDP: '#22c55e',
   };
 
-  // Custo por categoria
-  const custosPorCategoriaEntries = Object.entries(dre.custosPorCategoria);
-  const maxCusto = custosPorCategoriaEntries.length > 0
-    ? Math.max(...custosPorCategoriaEntries.map(([, v]) => Math.abs(v)), 1)
+  // Repasses por categoria
+  const repassesPorCategoriaEntries = Object.entries(dre.repassesPorCategoria);
+  const maxRepasse = repassesPorCategoriaEntries.length > 0
+    ? Math.max(...repassesPorCategoriaEntries.map(([, v]) => Math.abs(v)), 1)
     : 1;
   const catColors = [
     '#ef4444', '#f59e0b', '#3b82f6', '#8b5cf6', '#22c55e',
@@ -195,16 +196,23 @@ export default function PainelTab({ grupo, onChange }: PainelTabProps) {
           bgColor="#f3f4f6"
         />
         <BigNumberCard
-          label="Receita Projetada"
-          value={formatBRL(receitaProjetada)}
+          label="Faturamento"
+          value={formatBRL(faturamento)}
           icon={TrendingUp}
+          color="#3b82f6"
+          bgColor="#dbeafe"
+        />
+        <BigNumberCard
+          label="Receita (Comissao)"
+          value={formatBRL(receita)}
+          icon={DollarSign}
           color="#22c55e"
           bgColor="#dcfce7"
         />
         <BigNumberCard
-          label="Receita Recebida"
+          label="Recebido"
           value={formatBRL(receitaRecebida)}
-          icon={DollarSign}
+          icon={Wallet}
           color="#22c55e"
           bgColor="#dcfce7"
         />
@@ -216,8 +224,8 @@ export default function PainelTab({ grupo, onChange }: PainelTabProps) {
           bgColor="#fef3c7"
         />
         <BigNumberCard
-          label="Custo Total"
-          value={formatBRL(custoTotal)}
+          label="Repasses Fornecedores"
+          value={formatBRL(repassesTotal)}
           icon={Receipt}
           color="#ef4444"
           bgColor="#fee2e2"
@@ -274,30 +282,30 @@ export default function PainelTab({ grupo, onChange }: PainelTabProps) {
           </CardContent>
         </Card>
 
-        {/* Custo por categoria */}
+        {/* Repasses por categoria */}
         <Card className="border-0 shadow-md">
           <CardHeader style={{ backgroundColor: '#1a1a2e' }}>
             <CardTitle className="text-[var(--t-text)] text-sm flex items-center gap-2">
               <Receipt className="h-4 w-4" style={{ color: '#d4a853' }} />
-              Custo por Categoria
+              Repasses por Categoria
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-4 space-y-3">
-            {custosPorCategoriaEntries.map(
+            {repassesPorCategoriaEntries.map(
               ([cat, valor], idx) => (
                 <HorizontalBar
                   key={cat}
                   label={cat}
                   value={Math.abs(valor)}
-                  maxValue={maxCusto}
+                  maxValue={maxRepasse}
                   color={catColors[idx % catColors.length]}
                   displayValue={formatBRL(Math.abs(valor))}
                 />
               )
             )}
-            {custosPorCategoriaEntries.length === 0 && (
+            {repassesPorCategoriaEntries.length === 0 && (
               <p className="text-sm text-[var(--t-text-secondary)] text-center py-4">
-                Nenhum custo cadastrado
+                Nenhum repasse cadastrado
               </p>
             )}
           </CardContent>
