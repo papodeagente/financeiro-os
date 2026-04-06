@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getPromptForBlock, getPromptForFullProposal } from '@/lib/ai-prompts';
 import type { AIPropostaContext } from '@/lib/ai-prompts';
+import { getTenantId } from '@/lib/tenant';
 
-async function getAnthropicConfig() {
+async function getAnthropicConfig(tenantId: string) {
   await initDB();
   if (!pool) return null;
-  const { rows } = await pool.query(`SELECT data FROM config_apis WHERE id = 'apis-config-singleton'`);
+  const { rows } = await pool.query(`SELECT data FROM config_apis WHERE id = 'apis-config-singleton' AND tenant_id = $1`, [tenantId]);
   if (rows.length === 0) return null;
   const cfg = rows[0].data;
   if (!cfg.anthropic?.ativo || !cfg.anthropic?.api_key) return null;
@@ -39,7 +40,8 @@ async function callClaude(apiKey: string, modelo: string, prompt: string): Promi
 
 export async function POST(req: Request) {
   try {
-    const config = await getAnthropicConfig();
+    const tenantId = await getTenantId();
+    const config = await getAnthropicConfig(tenantId);
     if (!config) {
       return NextResponse.json(
         { error: 'API Anthropic nao configurada. Va em Configuracoes > Integracoes.' },
@@ -58,8 +60,8 @@ export async function POST(req: Request) {
     if (contexto.destino && pool) {
       try {
         const { rows } = await pool.query(
-          `SELECT data FROM destinos WHERE LOWER(data->>'nome') = LOWER($1) LIMIT 1`,
-          [contexto.destino]
+          `SELECT data FROM destinos WHERE LOWER(data->>'nome') = LOWER($1) AND tenant_id = $2 LIMIT 1`,
+          [contexto.destino, tenantId]
         );
         if (rows.length > 0) {
           const dest = rows[0].data;

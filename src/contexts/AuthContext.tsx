@@ -9,6 +9,11 @@ interface AuthUser {
   email: string;
   perfil: string;
   permissoes: Record<string, boolean | string[]>;
+  tenantId?: string;
+  tenantSlug?: string;
+  isSuperAdmin?: boolean;
+  impersonatingTenantId?: string | null;
+  impersonatingTenantSlug?: string | null;
 }
 
 interface AuthContextType {
@@ -52,7 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (pathname === '/login') {
+    if (pathname === '/login' || pathname?.startsWith('/admin')) {
       setLoading(false);
       return;
     }

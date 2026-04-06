@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
+import { getTenantId } from '@/lib/tenant';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     await initDB();
     if (!pool) return NextResponse.json({ error: 'DB not initialized' }, { status: 500 });
 
+    const tenantId = await getTenantId();
     const { id } = await params;
     const { status } = await req.json();
 
@@ -14,13 +16,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: 'Status invalido' }, { status: 400 });
     }
 
-    const { rows } = await pool.query(`SELECT data FROM grupos WHERE id = $1`, [id]);
+    const { rows } = await pool.query(`SELECT data FROM grupos WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
     if (rows.length === 0) return NextResponse.json({ error: 'Grupo nao encontrado' }, { status: 404 });
 
     const grupoData = { ...rows[0].data, status_pipeline: status };
     await pool.query(
-      `UPDATE grupos SET data = $1, updated_at = NOW() WHERE id = $2`,
-      [JSON.stringify(grupoData), id]
+      `UPDATE grupos SET data = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3`,
+      [JSON.stringify(grupoData), id, tenantId]
     );
 
     return NextResponse.json({ ok: true, status });

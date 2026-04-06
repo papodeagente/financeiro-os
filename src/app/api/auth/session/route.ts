@@ -14,6 +14,11 @@ export async function GET() {
       email: session.email,
       perfil: session.perfil,
       permissoes: session.permissoes,
+      tenantId: session.tenantId,
+      tenantSlug: session.tenantSlug,
+      isSuperAdmin: session.isSuperAdmin || false,
+      impersonatingTenantId: session.impersonatingTenantId || null,
+      impersonatingTenantSlug: session.impersonatingTenantSlug || null,
     },
   });
 }

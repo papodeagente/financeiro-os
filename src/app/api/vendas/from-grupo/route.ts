@@ -4,21 +4,23 @@ import { generateId, minPositivo } from '@/lib/utils';
 import { calcProposta } from '@/lib/calculations';
 import type { GrupoViagem } from '@/lib/types';
 import type { VendaCRM, ProdutoVenda } from '@/lib/crm-types';
+import { getTenantId } from '@/lib/tenant';
 
 export async function POST(req: Request) {
   try {
     await initDB();
     if (!pool) return NextResponse.json({ error: 'DB not initialized' }, { status: 500 });
 
+    const tenantId = await getTenantId();
     const { grupo_id, status = 'RESERVADO' } = await req.json();
     if (!grupo_id) return NextResponse.json({ error: 'grupo_id obrigatorio' }, { status: 400 });
 
-    const { rows: grupoRows } = await pool.query(`SELECT data FROM grupos WHERE id = $1`, [grupo_id]);
+    const { rows: grupoRows } = await pool.query(`SELECT data FROM grupos WHERE id = $1 AND tenant_id = $2`, [grupo_id, tenantId]);
     if (grupoRows.length === 0) return NextResponse.json({ error: 'Grupo nao encontrado' }, { status: 404 });
     const grupo: GrupoViagem = grupoRows[0].data;
 
     const pricing = calcProposta(grupo);
-    const { rows: countRows } = await pool.query(`SELECT COUNT(*) as c FROM vendas_crm`);
+    const { rows: countRows } = await pool.query(`SELECT COUNT(*) as c FROM vendas_crm WHERE tenant_id = $1`, [tenantId]);
     const num = `VND-${String(parseInt(countRows[0].c) + 1).padStart(4, '0')}`;
 
     const id = generateId();
@@ -244,16 +246,16 @@ export async function POST(req: Request) {
     };
 
     await pool.query(
-      `INSERT INTO vendas_crm (id, cliente_id, vendedor_id, status, data) VALUES ($1, $2, $3, $4, $5)`,
-      [id, '', '', status, JSON.stringify(venda)]
+      `INSERT INTO vendas_crm (id, tenant_id, cliente_id, vendedor_id, status, data) VALUES ($1, $2, $3, $4, $5, $6)`,
+      [id, tenantId, '', '', status, JSON.stringify(venda)]
     );
 
     // Update grupo pipeline
     const newStatus = status === 'RESERVADO' ? 'RESERVA' : 'VENDA';
     const updatedGrupo = { ...grupo, venda_crm_id: id, status_pipeline: newStatus };
     await pool.query(
-      `UPDATE grupos SET data = $1, updated_at = NOW() WHERE id = $2`,
-      [JSON.stringify(updatedGrupo), grupo_id]
+      `UPDATE grupos SET data = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3`,
+      [JSON.stringify(updatedGrupo), grupo_id, tenantId]
     );
 
     return NextResponse.json({ id, numero: num });

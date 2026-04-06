@@ -14,9 +14,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Banco de dados indisponivel' }, { status: 503 });
     }
 
-    // Find user by email
+    // Find user by email, JOIN with tenants for tenant context
     const { rows } = await pool.query(
-      `SELECT data FROM usuarios WHERE data->>'email' = $1 LIMIT 1`,
+      `SELECT u.data, u.tenant_id, t.slug as tenant_slug, t.status as tenant_status, t.nome as tenant_nome
+       FROM usuarios u
+       LEFT JOIN tenants t ON t.id = u.tenant_id
+       WHERE u.data->>'email' = $1
+       LIMIT 1`,
       [email.toLowerCase().trim()]
     );
 
@@ -24,10 +28,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Email ou senha incorretos' }, { status: 401 });
     }
 
-    const user = rows[0].data;
+    const row = rows[0];
+    const user = row.data;
 
     if (!user.ativo) {
       return NextResponse.json({ error: 'Usuario inativo. Contate o administrador.' }, { status: 403 });
+    }
+
+    // Check tenant status
+    if (row.tenant_status && row.tenant_status !== 'ativo') {
+      return NextResponse.json({ error: 'Agencia suspensa. Contate o suporte.' }, { status: 403 });
     }
 
     if (!user.senha_hash) {
@@ -40,13 +50,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Email ou senha incorretos' }, { status: 401 });
     }
 
-    // Create JWT session
+    // Create JWT session with tenant context
     const token = await createSession({
       userId: user.id,
       nome: user.nome,
       email: user.email,
       perfil: user.perfil,
       permissoes: user.permissoes || {},
+      tenantId: row.tenant_id || '',
+      tenantSlug: row.tenant_slug || '',
     });
 
     const response = NextResponse.json({
@@ -57,6 +69,9 @@ export async function POST(req: Request) {
         email: user.email,
         perfil: user.perfil,
         permissoes: user.permissoes,
+        tenantId: row.tenant_id,
+        tenantSlug: row.tenant_slug,
+        tenantNome: row.tenant_nome,
       },
     });
 

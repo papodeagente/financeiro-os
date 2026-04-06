@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
+import { getTenantId } from '@/lib/tenant';
 
 export async function GET(req: NextRequest) {
   try {
     if (!pool) return NextResponse.json({ items: [], total: 0 });
     await initDB();
 
+    const tenantId = await getTenantId();
     const url = new URL(req.url);
     const direcao = url.searchParams.get('direcao') || 'saida';
     const tipo = url.searchParams.get('tipo');
@@ -15,9 +17,9 @@ export async function GET(req: NextRequest) {
     const offset = (pagina - 1) * limite;
 
     const table = direcao === 'entrada' ? 'crm_eventos_entrada' : 'crm_eventos_saida';
-    const conditions: string[] = [];
-    const params: unknown[] = [];
-    let paramIdx = 1;
+    const conditions: string[] = [`tenant_id = $1`];
+    const params: unknown[] = [tenantId];
+    let paramIdx = 2;
 
     if (tipo) {
       conditions.push(`tipo = $${paramIdx++}`);
@@ -28,7 +30,7 @@ export async function GET(req: NextRequest) {
       params.push(status);
     }
 
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const where = `WHERE ${conditions.join(' AND ')}`;
 
     const countQuery = `SELECT COUNT(*) as total FROM ${table} ${where}`;
     const { rows: countRows } = await pool.query(countQuery, params);

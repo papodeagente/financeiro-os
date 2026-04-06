@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { emitirEventoCRM } from '@/lib/crm-integration';
+import { getTenantId } from '@/lib/tenant';
 
 const TABLE = 'vendas_crm';
 const INDEX_COLS = ['cliente_id', 'vendedor_id', 'status'];
@@ -9,7 +10,8 @@ export async function GET() {
   try {
     await initDB();
     if (!pool) return NextResponse.json([]);
-    const { rows } = await pool.query(`SELECT data FROM ${TABLE} ORDER BY created_at DESC`);
+    const tenantId = await getTenantId();
+    const { rows } = await pool.query(`SELECT data FROM ${TABLE} WHERE tenant_id = $1 ORDER BY created_at DESC`, [tenantId]);
     return NextResponse.json(rows.map(r => r.data));
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Unknown error';
@@ -23,13 +25,14 @@ export async function POST(req: Request) {
     const item = await req.json();
     if (!pool) return NextResponse.json(item);
 
-    const paramValues: unknown[] = [item.id, JSON.stringify(item)];
-    const insertCols = ['id', 'data'];
-    const insertVals = ['$1', '$2'];
-    const updateSets = ['data = $2', 'updated_at = NOW()'];
+    const tenantId = await getTenantId();
+    const paramValues: unknown[] = [item.id, tenantId, JSON.stringify(item)];
+    const insertCols = ['id', 'tenant_id', 'data'];
+    const insertVals = ['$1', '$2', '$3'];
+    const updateSets = ['data = $3', 'updated_at = NOW()'];
 
     INDEX_COLS.forEach((col, i) => {
-      const paramNum = i + 3;
+      const paramNum = i + 4;
       paramValues.push((item as Record<string, unknown>)[col] ?? '');
       insertCols.push(col);
       insertVals.push(`$${paramNum}`);

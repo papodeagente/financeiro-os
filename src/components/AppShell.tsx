@@ -7,6 +7,7 @@ import { PillarRail } from './PillarRail';
 import { FeaturePanel } from './FeaturePanel';
 import { TopBar } from './TopBar';
 import { CommandPalette } from './CommandPalette';
+import { ImpersonationBanner } from './ImpersonationBanner';
 import { useState, useEffect, useCallback } from 'react';
 
 const BREADCRUMB_MAP: Record<string, string> = {
@@ -114,7 +115,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   ) : undefined;
 
   return (
-    <div className="flex h-full">
+    <div className="flex flex-col h-full">
+      <ImpersonationBanner />
+      <div className="flex flex-1 min-h-0">
       {/* Column 1: Pillar Rail (72px) */}
       <PillarRail />
 
@@ -138,6 +141,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} />
+      </div>
     </div>
   );
 }

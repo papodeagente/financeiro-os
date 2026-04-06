@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { createHmac } from 'crypto';
+import { getTenantId } from '@/lib/tenant';
 
 export async function POST() {
   try {
     if (!pool) return NextResponse.json({ error: 'no db' }, { status: 503 });
     await initDB();
 
-    const { rows } = await pool.query("SELECT data FROM crm_config WHERE id = 'singleton'");
+    const tenantId = await getTenantId();
+    const { rows } = await pool.query("SELECT data FROM crm_config WHERE id = 'singleton' AND tenant_id = $1", [tenantId]);
     if (rows.length === 0) {
       return NextResponse.json({ sucesso: false, erro: 'Configuracao CRM nao encontrada' });
     }

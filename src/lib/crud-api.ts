@@ -1,12 +1,17 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from './db';
+import { getTenantId } from './tenant';
 
 export function createCrudHandlers(tableName: string, indexColumns: string[] = []) {
   async function GET() {
     try {
       await initDB();
       if (!pool) return NextResponse.json([]);
-      const { rows } = await pool.query(`SELECT data FROM ${tableName} ORDER BY created_at DESC`);
+      const tenantId = await getTenantId();
+      const { rows } = await pool.query(
+        `SELECT data FROM ${tableName} WHERE tenant_id = $1 ORDER BY created_at DESC`,
+        [tenantId]
+      );
       return NextResponse.json(rows.map(r => r.data));
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
@@ -19,15 +24,16 @@ export function createCrudHandlers(tableName: string, indexColumns: string[] = [
       await initDB();
       const item = await req.json();
       if (!pool) return NextResponse.json(item);
+      const tenantId = await getTenantId();
 
-      // Build dynamic upsert
-      const paramValues: unknown[] = [item.id, JSON.stringify(item)];
-      const insertCols = ['id', 'data'];
-      const insertVals = ['$1', '$2'];
-      const updateSets = ['data = $2', 'updated_at = NOW()'];
+      // Build dynamic upsert with tenant_id
+      const paramValues: unknown[] = [item.id, tenantId, JSON.stringify(item)];
+      const insertCols = ['id', 'tenant_id', 'data'];
+      const insertVals = ['$1', '$2', '$3'];
+      const updateSets = ['data = $3', 'updated_at = NOW()'];
 
       indexColumns.forEach((col, i) => {
-        const paramNum = i + 3;
+        const paramNum = i + 4;
         paramValues.push((item as Record<string, unknown>)[col] ?? '');
         insertCols.push(col);
         insertVals.push(`$${paramNum}`);
@@ -57,7 +63,11 @@ export function createCrudItemHandlers(tableName: string, indexColumns: string[]
       await initDB();
       const { id } = await params;
       if (!pool) return NextResponse.json(null);
-      const { rows } = await pool.query(`SELECT data FROM ${tableName} WHERE id = $1`, [id]);
+      const tenantId = await getTenantId();
+      const { rows } = await pool.query(
+        `SELECT data FROM ${tableName} WHERE id = $1 AND tenant_id = $2`,
+        [id, tenantId]
+      );
       if (rows.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
       return NextResponse.json(rows[0].data);
     } catch (e: unknown) {
@@ -72,18 +82,19 @@ export function createCrudItemHandlers(tableName: string, indexColumns: string[]
       const { id } = await params;
       const item = await req.json();
       if (!pool) return NextResponse.json(item);
+      const tenantId = await getTenantId();
 
-      const paramValues: unknown[] = [id, JSON.stringify(item)];
-      const setClauses = ['data = $2', 'updated_at = NOW()'];
+      const paramValues: unknown[] = [id, tenantId, JSON.stringify(item)];
+      const setClauses = ['data = $3', 'updated_at = NOW()'];
 
       indexColumns.forEach((col, i) => {
-        const paramNum = i + 3;
+        const paramNum = i + 4;
         paramValues.push((item as Record<string, unknown>)[col] ?? '');
         setClauses.push(`${col} = $${paramNum}`);
       });
 
       await pool.query(
-        `UPDATE ${tableName} SET ${setClauses.join(', ')} WHERE id = $1`,
+        `UPDATE ${tableName} SET ${setClauses.join(', ')} WHERE id = $1 AND tenant_id = $2`,
         paramValues
       );
 
@@ -99,7 +110,11 @@ export function createCrudItemHandlers(tableName: string, indexColumns: string[]
       await initDB();
       const { id } = await params;
       if (pool) {
-        await pool.query(`DELETE FROM ${tableName} WHERE id = $1`, [id]);
+        const tenantId = await getTenantId();
+        await pool.query(
+          `DELETE FROM ${tableName} WHERE id = $1 AND tenant_id = $2`,
+          [id, tenantId]
+        );
       }
       return NextResponse.json({ ok: true });
     } catch (e: unknown) {

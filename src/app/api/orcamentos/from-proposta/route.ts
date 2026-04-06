@@ -2,22 +2,24 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { generateId } from '@/lib/utils';
 import type { Orcamento } from '@/lib/crm-types';
+import { getTenantId } from '@/lib/tenant';
 
 export async function POST(req: Request) {
   try {
     await initDB();
     if (!pool) return NextResponse.json({ error: 'DB not initialized' }, { status: 500 });
 
+    const tenantId = await getTenantId();
     const { proposta_id, grupo_id } = await req.json();
     if (!proposta_id) return NextResponse.json({ error: 'proposta_id obrigatorio' }, { status: 400 });
 
     // Load proposta
-    const { rows: propRows } = await pool.query(`SELECT data FROM propostas WHERE id = $1`, [proposta_id]);
+    const { rows: propRows } = await pool.query(`SELECT data FROM propostas WHERE id = $1 AND tenant_id = $2`, [proposta_id, tenantId]);
     if (propRows.length === 0) return NextResponse.json({ error: 'Proposta nao encontrada' }, { status: 404 });
     const proposta = propRows[0].data;
 
     // Generate orcamento number
-    const { rows: countRows } = await pool.query(`SELECT COUNT(*) as c FROM orcamentos`);
+    const { rows: countRows } = await pool.query(`SELECT COUNT(*) as c FROM orcamentos WHERE tenant_id = $1`, [tenantId]);
     const num = `ORC-${String(parseInt(countRows[0].c) + 1).padStart(4, '0')}`;
 
     const id = generateId();
@@ -91,16 +93,16 @@ export async function POST(req: Request) {
     };
 
     await pool.query(
-      `INSERT INTO orcamentos (id, numero, cliente_id, grupo_id, proposta_id, status, data) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [id, num, proposta.cliente_id || '', grupo_id || '', proposta_id, 'RASCUNHO', JSON.stringify(orcamento)]
+      `INSERT INTO orcamentos (id, tenant_id, numero, cliente_id, grupo_id, proposta_id, status, data) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [id, tenantId, num, proposta.cliente_id || '', grupo_id || '', proposta_id, 'RASCUNHO', JSON.stringify(orcamento)]
     );
 
     // Update grupo pipeline status
     if (grupo_id) {
-      const { rows: grupoRows } = await pool.query(`SELECT data FROM grupos WHERE id = $1`, [grupo_id]);
+      const { rows: grupoRows } = await pool.query(`SELECT data FROM grupos WHERE id = $1 AND tenant_id = $2`, [grupo_id, tenantId]);
       if (grupoRows.length > 0) {
         const grupoData = { ...grupoRows[0].data, orcamento_id: id, status_pipeline: 'ORCAMENTO' };
-        await pool.query(`UPDATE grupos SET data = $1, updated_at = NOW() WHERE id = $2`, [JSON.stringify(grupoData), grupo_id]);
+        await pool.query(`UPDATE grupos SET data = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3`, [JSON.stringify(grupoData), grupo_id, tenantId]);
       }
     }
 

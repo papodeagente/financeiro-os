@@ -319,5 +319,71 @@ export async function initDB() {
     CREATE INDEX IF NOT EXISTS idx_planejamento_projetos_status ON planejamento_projetos(status);
   `);
 
+  // ============================================================
+  // MULTI-TENANT TABLES
+  // ============================================================
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS tenants (
+      id TEXT PRIMARY KEY,
+      slug TEXT NOT NULL UNIQUE,
+      nome TEXT NOT NULL DEFAULT '',
+      cnpj TEXT NOT NULL DEFAULT '',
+      plano TEXT NOT NULL DEFAULT 'free',
+      status TEXT NOT NULL DEFAULT 'ativo',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tenants_slug ON tenants(slug);
+    CREATE INDEX IF NOT EXISTS idx_tenants_status ON tenants(status);
+
+    CREATE TABLE IF NOT EXISTS super_admins (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL DEFAULT '',
+      nome TEXT NOT NULL DEFAULT '',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS tenant_usage (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL DEFAULT '',
+      mes TEXT NOT NULL DEFAULT '',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_super_admins_email ON super_admins(email);
+    CREATE INDEX IF NOT EXISTS idx_tenant_usage_tenant ON tenant_usage(tenant_id);
+  `);
+
+  // ============================================================
+  // ADD tenant_id TO ALL EXISTING TABLES
+  // ============================================================
+  const TENANT_TABLES = [
+    'grupos', 'clientes', 'fornecedores_crm', 'membros', 'vendas_crm',
+    'contas_receber', 'contas_pagar', 'plano_contas', 'contas_bancarias',
+    'centros_custo', 'agencia', 'usuarios', 'cac_mensal', 'cenarios_cac',
+    'transferencias', 'extrato_bancario', 'planos_comissao', 'comissoes',
+    'metas', 'propostas', 'templates_proposta', 'audit_log', 'api_cache',
+    'voos_monitorados', 'config_apis', 'destinos', 'crm_config',
+    'crm_eventos_saida', 'crm_eventos_entrada', 'planejamento_custos',
+    'orcamentos', 'planejamento_projetos',
+  ];
+  for (const table of TENANT_TABLES) {
+    await pool.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT ''`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_${table}_tenant ON ${table}(tenant_id)`);
+  }
+
+  // Drop the old unique constraint on planejamento_custos(mes) — now needs (tenant_id, mes)
+  await pool.query(`DROP INDEX IF EXISTS idx_planejamento_custos_mes`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_planejamento_custos_tenant_mes ON planejamento_custos(tenant_id, mes)`);
+
+  // Run multi-tenant migration (assign existing data to default tenant)
+  const { migrateToMultiTenant } = await import('./migrate-multitenant');
+  await migrateToMultiTenant();
+
   initialized = true;
 }

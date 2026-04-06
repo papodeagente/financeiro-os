@@ -13,6 +13,11 @@ export interface SessionPayload {
   email: string;
   perfil: string;
   permissoes: Record<string, boolean | string[]>;
+  tenantId: string;
+  tenantSlug: string;
+  isSuperAdmin?: boolean;
+  impersonatingTenantId?: string;
+  impersonatingTenantSlug?: string;
 }
 
 // ============================================================

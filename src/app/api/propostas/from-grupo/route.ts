@@ -4,6 +4,7 @@ import { generateId } from '@/lib/utils';
 import { calcProposta } from '@/lib/calculations';
 import { minPositivo, calcDiarias } from '@/lib/utils';
 import type { GrupoViagem } from '@/lib/types';
+import { getTenantId } from '@/lib/tenant';
 
 function fmtDate(d: string | null): string {
   if (!d) return '';
@@ -20,24 +21,25 @@ export async function POST(req: Request) {
     await initDB();
     if (!pool) return NextResponse.json({ error: 'DB not initialized' }, { status: 500 });
 
+    const tenantId = await getTenantId();
     const { grupo_id, template_id } = await req.json();
     if (!grupo_id) return NextResponse.json({ error: 'grupo_id obrigatorio' }, { status: 400 });
 
-    const { rows: grupoRows } = await pool.query(`SELECT data FROM grupos WHERE id = $1`, [grupo_id]);
+    const { rows: grupoRows } = await pool.query(`SELECT data FROM grupos WHERE id = $1 AND tenant_id = $2`, [grupo_id, tenantId]);
     if (grupoRows.length === 0) return NextResponse.json({ error: 'Grupo nao encontrado' }, { status: 404 });
     const grupo: GrupoViagem = grupoRows[0].data;
 
     // Load template if specified
     let templateVisual: Record<string, unknown> | null = null;
     if (template_id) {
-      const { rows: tmplRows } = await pool.query(`SELECT data FROM templates_proposta WHERE id = $1`, [template_id]);
+      const { rows: tmplRows } = await pool.query(`SELECT data FROM templates_proposta WHERE id = $1 AND tenant_id = $2`, [template_id, tenantId]);
       if (tmplRows.length > 0) {
         const tmpl = tmplRows[0].data;
         templateVisual = tmpl.visual || null;
       }
     }
 
-    const { rows: countRows } = await pool.query(`SELECT COUNT(*) as c FROM propostas`);
+    const { rows: countRows } = await pool.query(`SELECT COUNT(*) as c FROM propostas WHERE tenant_id = $1`, [tenantId]);
     const num = `PROP-${String(parseInt(countRows[0].c) + 1).padStart(4, '0')}`;
 
     // --- Compute pricing ---
@@ -640,15 +642,15 @@ export async function POST(req: Request) {
     };
 
     await pool.query(
-      `INSERT INTO propostas (id, numero, cliente_id, vendedor_id, status, data) VALUES ($1, $2, $3, $4, $5, $6)`,
-      [id, num, '', '', 'RASCUNHO', JSON.stringify(proposta)]
+      `INSERT INTO propostas (id, tenant_id, numero, cliente_id, vendedor_id, status, data) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [id, tenantId, num, '', '', 'RASCUNHO', JSON.stringify(proposta)]
     );
 
     // Link proposta back to grupo and advance pipeline
     const updatedGrupo = { ...grupo, proposta_id: id, status_pipeline: 'PROPOSTA' };
     await pool.query(
-      `UPDATE grupos SET data = $1, updated_at = NOW() WHERE id = $2`,
-      [JSON.stringify(updatedGrupo), grupo_id]
+      `UPDATE grupos SET data = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3`,
+      [JSON.stringify(updatedGrupo), grupo_id, tenantId]
     );
 
     return NextResponse.json({ id, numero: num });

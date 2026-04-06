@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { generateId } from '@/lib/utils';
 import type { TemplateProposta, SecaoProposta, AlojamentoData, TransporteData } from '@/lib/crm-types';
+import { getTenantId } from '@/lib/tenant';
 
 function s(tipo: SecaoProposta['tipo'], ordem: number, conteudo: Record<string, unknown>): SecaoProposta {
   return { id: generateId(), tipo, ordem, visivel: true, conteudo };
@@ -439,11 +440,12 @@ export async function POST() {
     await initDB();
     if (!pool) return NextResponse.json({ error: 'DB not initialized' }, { status: 500 });
 
+    const tenantId = await getTenantId();
     // Delete all seed templates (is_padrao = true in JSONB data)
-    await pool.query(`DELETE FROM templates_proposta WHERE (data->>'is_padrao')::boolean = true`);
+    await pool.query(`DELETE FROM templates_proposta WHERE (data->>'is_padrao')::boolean = true AND tenant_id = $1`, [tenantId]);
     // Also delete old templates by known names (before is_padrao was used)
-    await pool.query(`DELETE FROM templates_proposta WHERE LOWER(nome) IN ($1, $2, $3, $4, $5, $6)`, [
-      'europa romantica', 'aventura & natureza', 'disney em familia', 'cruzeiro maritimo', 'viagem corporativa', 'praia & relax',
+    await pool.query(`DELETE FROM templates_proposta WHERE LOWER(nome) IN ($1, $2, $3, $4, $5, $6) AND tenant_id = $7`, [
+      'europa romantica', 'aventura & natureza', 'disney em familia', 'cruzeiro maritimo', 'viagem corporativa', 'praia & relax', tenantId,
     ]);
 
     let count = 0;
@@ -451,8 +453,8 @@ export async function POST() {
       const id = generateId();
       const data = { ...tmpl, id };
       await pool.query(
-        `INSERT INTO templates_proposta (id, nome, data) VALUES ($1, $2, $3)`,
-        [id, tmpl.nome, JSON.stringify(data)]
+        `INSERT INTO templates_proposta (id, tenant_id, nome, data) VALUES ($1, $2, $3, $4)`,
+        [id, tenantId, tmpl.nome, JSON.stringify(data)]
       );
       count++;
     }

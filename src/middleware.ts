@@ -8,7 +8,12 @@ const JWT_SECRET = new TextEncoder().encode(
 const COOKIE_NAME = 'entur-session';
 
 // Public routes that don't require authentication
-const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/seed', '/api/auth/session', '/p/', '/api/propostas/public/', '/api/uploads/', '/api/v1/crm/webhook', '/api/v1/crm/health'];
+const PUBLIC_PATHS = [
+  '/login', '/api/auth/login', '/api/auth/seed', '/api/auth/session',
+  '/p/', '/api/propostas/public/', '/api/uploads/',
+  '/api/v1/crm/webhook', '/api/v1/crm/health',
+  '/admin/login', '/api/admin/auth/login', '/api/admin/auth/seed',
+];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -34,16 +39,32 @@ export async function middleware(request: NextRequest) {
   const token = request.cookies.get(COOKIE_NAME)?.value;
 
   if (!token) {
-    // API routes return 401, pages redirect to login
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'Nao autenticado' }, { status: 401 });
+    }
+    // Admin pages redirect to admin login
+    if (pathname.startsWith('/admin')) {
+      return NextResponse.redirect(new URL('/admin/login', request.url));
     }
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
   // Verify JWT
   try {
-    await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, JWT_SECRET);
+
+    // Admin routes: require isSuperAdmin
+    const isAdminRoute = pathname.startsWith('/admin') || pathname.startsWith('/api/admin/');
+    if (isAdminRoute) {
+      if (!payload.isSuperAdmin) {
+        if (pathname.startsWith('/api/')) {
+          return NextResponse.json({ error: 'Acesso restrito a super admins' }, { status: 403 });
+        }
+        return NextResponse.redirect(new URL('/admin/login', request.url));
+      }
+      return NextResponse.next();
+    }
+
     return NextResponse.next();
   } catch {
     // Invalid/expired token — clear cookie and redirect
@@ -52,7 +73,8 @@ export async function middleware(request: NextRequest) {
       response.cookies.set(COOKIE_NAME, '', { maxAge: 0, path: '/' });
       return response;
     }
-    const response = NextResponse.redirect(new URL('/login', request.url));
+    const loginPath = pathname.startsWith('/admin') ? '/admin/login' : '/login';
+    const response = NextResponse.redirect(new URL(loginPath, request.url));
     response.cookies.set(COOKIE_NAME, '', { maxAge: 0, path: '/' });
     return response;
   }

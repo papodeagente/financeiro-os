@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
+import { getTenantId } from '@/lib/tenant';
 
-async function getAnthropicConfig() {
+async function getAnthropicConfig(tenantId: string) {
   await initDB();
   if (!pool) return null;
-  const { rows } = await pool.query(`SELECT data FROM config_apis WHERE id = 'apis-config-singleton'`);
+  const { rows } = await pool.query(`SELECT data FROM config_apis WHERE id = 'apis-config-singleton' AND tenant_id = $1`, [tenantId]);
   if (rows.length === 0) return null;
   const cfg = rows[0].data;
   if (!cfg.anthropic?.ativo || !cfg.anthropic?.api_key) return null;
@@ -13,7 +14,8 @@ async function getAnthropicConfig() {
 
 export async function POST(req: Request) {
   try {
-    const config = await getAnthropicConfig();
+    const tenantId = await getTenantId();
+    const config = await getAnthropicConfig(tenantId);
     if (!config) {
       return NextResponse.json({ error: 'API Anthropic não configurada. Vá em Configurações > Integrações.' }, { status: 400 });
     }
