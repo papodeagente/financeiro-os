@@ -89,7 +89,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   // Login page and public proposal preview — no shell
-  if (pathname === '/login' || pathname.startsWith('/p/')) {
+  if (pathname === '/login' || pathname.startsWith('/p/') || pathname.startsWith('/admin')) {
     return <>{children}</>;
   }
 
