@@ -61,7 +61,7 @@ const TERRA_SANTA_TRANSP: TransporteData[] = [
 
 const terraSanta: Omit<TemplateProposta, 'id'> = {
   nome: 'Terra Santa — Israel Completo',
-  descricao: 'Roteiro completo por Israel: Jerusalem, Mar Morto e Tel Aviv. 8 dias com guia, hoteis 5 estrelas e experiencias unicas. Modelo DISCOVERY com todos os recursos.',
+  descricao: 'Roteiro completo por Israel: Jerusalém, Mar Morto e Tel Aviv. 8 dias com guia, hotéis 5 estrelas e experiências únicas. Modelo DISCOVERY que demonstra TODOS os 14 tipos de blocos disponíveis (texto, galeria, vídeo, mapa, roteiro, alojamentos, transportes, inclusos, valores, FAQ, depoimento, CTA e countdown).',
   tipo_viagem: 'CULTURAL',
   icone: '✡️',
   imagem_preview: 'https://images.unsplash.com/photo-1549298916-b41d501d3772?w=600&q=80',
@@ -85,8 +85,27 @@ const terraSanta: Omit<TemplateProposta, 'id'> = {
       'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=800&q=80',
       'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80',
     ] }),
+    // VIDEO — apresentacao do roteiro
+    s('VIDEO', 2, {
+      titulo: 'Conheça a Terra Santa em 2 minutos',
+      url: 'https://www.youtube.com/watch?v=JXk_4WaBDKQ',
+    }),
+    // MAPA — pontos da rota
+    s('MAPA', 3, {
+      titulo: 'Sua rota pela Terra Santa',
+      zoom: 8,
+      pontos: [
+        { lat: 31.7767, lng: 35.2245, label: 'Jerusalém — Cidade Velha' },
+        { lat: 31.7857, lng: 35.2400, label: 'Monte das Oliveiras' },
+        { lat: 31.7054, lng: 35.2024, label: 'Belém — Igreja da Natividade' },
+        { lat: 31.3156, lng: 35.3536, label: 'Massada' },
+        { lat: 31.5000, lng: 35.3700, label: 'Mar Morto' },
+        { lat: 32.0741, lng: 34.7764, label: 'Tel Aviv — White City' },
+        { lat: 32.0536, lng: 34.7521, label: 'Jaffa antiga' },
+      ],
+    }),
     // ROTEIRO DIA A DIA
-    s('ROTEIRO_DIA', 2, { dias: [
+    s('ROTEIRO_DIA', 4, { dias: [
       { numero: 1, titulo: 'Dia 1 — Embarque no Brasil', descricao: 'Saida de Sao Paulo (GRU) no voo LATAM LA8084 com destino a Tel Aviv. Voo noturno direto — jantar e cafe da manha servidos a bordo.', imagem: '', atividades: ['Check-in no aeroporto de Guarulhos', 'Embarque as 23:55'], refeicoes_inclusas: 'Jantar e cafe a bordo', lat: -23.4356, lng: -46.4731 },
       { numero: 2, titulo: 'Dia 2 — Chegada em Israel e Jerusalem', descricao: 'Chegada ao Aeroporto Ben Gurion as 18:30. Recepcao com guia em portugues e transfer privativo ate Jerusalem. Check-in no David Citadel Hotel com vista para as muralhas.', imagem: 'https://images.unsplash.com/photo-1549298916-b41d501d3772?w=800&q=80', atividades: ['Transfer aeroporto → Jerusalem (1h15)', 'Check-in David Citadel Hotel 5★', 'Jantar de boas-vindas no rooftop'], refeicoes_inclusas: 'Jantar', lat: 31.7767, lng: 35.2245 },
       { numero: 3, titulo: 'Dia 3 — Cidade Velha de Jerusalem', descricao: 'Dia inteiro explorando a Cidade Velha: Via Dolorosa, Santo Sepulcro, Muro das Lamentacoes, Monte do Templo. Almoco em restaurante tipico no bairro armenio.', imagem: 'https://images.unsplash.com/photo-1580502304784-8985b7eb7260?w=800&q=80', atividades: ['Via Dolorosa — 14 estacoes', 'Basilica do Santo Sepulcro', 'Muro das Lamentacoes', 'Monte do Templo / Esplanada das Mesquitas', 'Almoco tipico no bairro armenio'], refeicoes_inclusas: 'Cafe da manha e almoco', lat: 31.7784, lng: 35.2296 },
@@ -96,8 +115,58 @@ const terraSanta: Omit<TemplateProposta, 'id'> = {
       { numero: 7, titulo: 'Dia 7 — Tel Aviv e Jaffa', descricao: 'City tour por Tel Aviv: White City (Bauhaus), mercado Carmel, praia de Gordon. Tarde na antiga Jaffa com suas galerias de arte. Jantar de despedida em restaurante a beira-mar.', imagem: '', atividades: ['White City — arquitetura Bauhaus (UNESCO)', 'Mercado Carmel', 'Praia de Gordon Beach', 'Old Jaffa — galerias e porto historico', 'Jantar de despedida a beira-mar'], refeicoes_inclusas: 'Cafe da manha e jantar', lat: 32.0536, lng: 34.7521 },
       { numero: 8, titulo: 'Dia 8 — Retorno ao Brasil', descricao: 'Dia livre para compras e ultimos passeios. Transfer ao Aeroporto Ben Gurion. Voo LATAM LA8085 de volta a Sao Paulo, chegando as 09:15.', imagem: '', atividades: ['Manha livre para compras', 'Transfer hotel → aeroporto', 'Voo TLV → GRU (14h45)'], refeicoes_inclusas: 'Cafe da manha', lat: 32.0055, lng: 34.8854 },
     ] }),
+    // ALOJAMENTO — David Citadel Jerusalém
+    s('ALOJAMENTO', 5, {
+      id: generateId(),
+      destino_nome: 'Jerusalém', hotel_nome: 'David Citadel Hotel', hotel_estrelas: 5,
+      hotel_imagem: 'https://images.unsplash.com/photo-1549298916-b41d501d3772?w=800&q=80',
+      hotel_galeria: [
+        'https://images.unsplash.com/photo-1549298916-b41d501d3772?w=600&q=80',
+        'https://images.unsplash.com/photo-1580502304784-8985b7eb7260?w=600&q=80',
+      ],
+      hotel_descricao: 'Hotel 5 estrelas com vista para as muralhas da Cidade Velha. Piscina, spa, restaurante kosher premiado.',
+      hotel_link: 'https://www.thedavidcitadel.com', check_in: '2026-06-10', check_out: '2026-06-13', noites: 3,
+      regime: 'BB', quarto_tipo: 'Deluxe', bebidas: 'Não inclusas',
+      lat: 31.7767, lng: 35.2245, viagem_noturna: false,
+    }),
+    // ALOJAMENTO — Isrotel Mar Morto
+    s('ALOJAMENTO', 6, {
+      id: generateId(),
+      destino_nome: 'Mar Morto', hotel_nome: 'Isrotel Dead Sea Resort', hotel_estrelas: 5,
+      hotel_imagem: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=800&q=80',
+      hotel_galeria: [],
+      hotel_descricao: 'Resort à beira do Mar Morto com spa terapêutico, piscinas de água mineral e acesso privativo à praia.',
+      hotel_link: '', check_in: '2026-06-13', check_out: '2026-06-14', noites: 1,
+      regime: 'HB', quarto_tipo: 'Superior', bebidas: 'Inclusas no jantar',
+      lat: 31.5, lng: 35.37, viagem_noturna: false,
+    }),
+    // ALOJAMENTO — The Norman Tel Aviv
+    s('ALOJAMENTO', 7, {
+      id: generateId(),
+      destino_nome: 'Tel Aviv', hotel_nome: 'The Norman Hotel', hotel_estrelas: 5,
+      hotel_imagem: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80',
+      hotel_galeria: [],
+      hotel_descricao: 'Boutique hotel de luxo na White City. Restaurante rooftop, piscina com vista para o Mediterrâneo.',
+      hotel_link: '', check_in: '2026-06-14', check_out: '2026-06-17', noites: 3,
+      regime: 'BB', quarto_tipo: 'Deluxe Sea View', bebidas: '',
+      lat: 32.0741, lng: 34.7764, viagem_noturna: false,
+    }),
+    // TRANSPORTE — Voo de ida
+    s('TRANSPORTE', 8, {
+      id: generateId(), tipo: 'VOO', data: '2026-06-09',
+      origem: 'GRU', destino: 'TLV', companhia: 'LATAM', numero_voo: 'LA8084',
+      horario_saida: '23:55', horario_chegada: '18:30', tempo_estimado: '14h35',
+      detalhes: 'Voo direto São Paulo → Tel Aviv | R$ 4.850,00 ida e volta',
+    }),
+    // TRANSPORTE — Voo de volta
+    s('TRANSPORTE', 9, {
+      id: generateId(), tipo: 'VOO', data: '2026-06-17',
+      origem: 'TLV', destino: 'GRU', companhia: 'LATAM', numero_voo: 'LA8085',
+      horario_saida: '00:30', horario_chegada: '09:15', tempo_estimado: '14h45',
+      detalhes: 'VOLTA | Voo direto Tel Aviv → São Paulo',
+    }),
     // INCLUSOS
-    s('INCLUSOS', 3, {
+    s('INCLUSOS', 10, {
       inclusos: [
         'Passagem aerea LATAM GRU↔TLV (voo direto, classe economica)',
         'Hospedagem 7 noites em hoteis 5 estrelas (David Citadel, Isrotel, The Norman)',
@@ -120,7 +189,7 @@ const terraSanta: Omit<TemplateProposta, 'id'> = {
       ],
     }),
     // VALORES com 2 opcoes
-    s('VALORES', 4, {
+    s('VALORES', 11, {
       opcoes: [
         {
           titulo: 'Apto Duplo (por pessoa)',
@@ -146,21 +215,21 @@ const terraSanta: Omit<TemplateProposta, 'id'> = {
       validade: '2026-05-15',
     }),
     // FAQ
-    s('FAQ', 5, { titulo: 'Perguntas Frequentes', perguntas: [
+    s('FAQ', 12, { titulo: 'Perguntas Frequentes', perguntas: [
       { pergunta: 'Preciso de visto para Israel?', resposta: 'Brasileiros nao precisam de visto para estadias de ate 90 dias. Basta passaporte valido com pelo menos 6 meses de validade.' },
       { pergunta: 'Qual a moeda local?', resposta: 'O Shekel (ILS). Cartoes de credito internacionais sao aceitos na maioria dos estabelecimentos. Recomendamos levar dolares para trocar.' },
       { pergunta: 'E seguro viajar para Israel?', resposta: 'Sim. As areas turisticas sao extremamente seguras e bem policiadas. Nosso guia acompanha o grupo o tempo todo.' },
       { pergunta: 'Qual a melhor epoca para ir?', resposta: 'Junho e ideal: clima seco, temperaturas agradaveis (25-30°C) e pouca chuva. Perfeito para passeios ao ar livre.' },
     ] }),
     // DEPOIMENTO
-    s('DEPOIMENTO', 6, { depoimentos: [
+    s('DEPOIMENTO', 13, { depoimentos: [
       { texto: 'A viagem a Terra Santa mudou minha vida. Cada lugar que visitamos tem um significado profundo. O David Citadel e espetacular — acordar vendo as muralhas de Jerusalem nao tem preco.', autor: 'Maria e Joao S.', foto: '', destino: 'Israel 2025' },
       { texto: 'Organização impecavel do inicio ao fim. O guia sabia tudo sobre a historia, a comida era incrivel e flutuar no Mar Morto foi a experiencia mais surreal da minha vida!', autor: 'Carlos M.', foto: '', destino: 'Israel 2024' },
     ] }),
     // CTA
-    s('CTA', 7, { texto_botao: 'Quero conhecer a Terra Santa!', tipo_acao: 'WHATSAPP', numero_whatsapp: '', mensagem_predefinida: 'Ola! Vi a proposta Terra Santa e quero reservar minha viagem a Israel.', cor_botao: '#1e40af' }),
+    s('CTA', 14, { texto_botao: 'Quero conhecer a Terra Santa!', tipo_acao: 'WHATSAPP', numero_whatsapp: '', mensagem_predefinida: 'Ola! Vi a proposta Terra Santa e quero reservar minha viagem a Israel.', cor_botao: '#1e40af' }),
     // COUNTDOWN
-    s('COUNTDOWN', 8, { titulo: 'Embarque em', data_evento: '2026-06-09T23:55:00', mensagem: 'Faltam poucos dias para a viagem dos sonhos!' }),
+    s('COUNTDOWN', 15, { titulo: 'Embarque em', data_evento: '2026-06-09T23:55:00', mensagem: 'Faltam poucos dias para a viagem dos sonhos!' }),
   ],
   mensagem_abertura_padrao: 'Prezado(a) cliente,\n\nE com grande alegria que apresentamos este roteiro pela Terra Santa. Cada detalhe foi cuidadosamente planejado para proporcionar uma experiencia transformadora — combinando fe, historia milenar e paisagens de tirar o folego.\n\nEstamos a disposicao para personalizar qualquer detalhe.',
   inclusos_padrao: ['Passagem aerea', 'Hoteis 5★', 'Guia portugues', 'Transfers', 'Seguro'],
