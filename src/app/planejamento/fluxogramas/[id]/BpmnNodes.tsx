@@ -17,11 +17,50 @@ const HANDLE_STYLE: React.CSSProperties = {
   border: '2px solid #ffffff',
 };
 
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
+}
+
 interface BpmnNodeData extends Record<string, unknown> {
   label?: string;
   description?: string;
   bgColor?: string;
   textColor?: string;
+  instructions?: string;
+  checklist?: ChecklistItem[];
+}
+
+/** Pequeno indicador de cartão (instruções + checklist) no canto do nó. */
+function CardBadge({ data }: { data: BpmnNodeData }) {
+  const list = Array.isArray(data.checklist) ? data.checklist : [];
+  const done = list.filter(i => i.done).length;
+  const total = list.length;
+  const hasInstr = (data.instructions ?? '').trim().length > 0;
+  if (!hasInstr && total === 0) return null;
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        bottom: 4,
+        right: 6,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 4,
+        fontSize: 9,
+        fontWeight: 600,
+        color: 'rgba(15, 23, 42, 0.75)',
+        background: 'rgba(255,255,255,0.85)',
+        padding: '1px 5px',
+        borderRadius: 8,
+        pointerEvents: 'none',
+      }}
+    >
+      {hasInstr && <span aria-label="Tem instruções">📝</span>}
+      {total > 0 && <span aria-label="Checklist">☑ {done}/{total}</span>}
+    </div>
+  );
 }
 
 /**
@@ -148,9 +187,10 @@ export const TaskNode = memo(({ data, selected }: NodeProps) => {
     <div
       className="flex items-center justify-center"
       style={{
-        minWidth: 140,
-        minHeight: 70,
-        padding: '10px 14px',
+        position: 'relative',
+        minWidth: 160,
+        minHeight: 80,
+        padding: '10px 14px 18px',
         borderRadius: 12,
         border: `2px solid ${selected ? '#004aad' : '#3b82f6'}`,
         background: d.bgColor || '#dbeafe',
@@ -169,6 +209,7 @@ export const TaskNode = memo(({ data, selected }: NodeProps) => {
           )}
         </div>,
       )}
+      <CardBadge data={d} />
     </div>
   );
 });
@@ -181,9 +222,9 @@ export const UserTaskNode = memo(({ data, selected }: NodeProps) => {
     <div
       className="flex items-center"
       style={{
-        minWidth: 150,
-        minHeight: 70,
-        padding: '10px 14px 10px 32px',
+        minWidth: 170,
+        minHeight: 80,
+        padding: '10px 14px 18px 32px',
         borderRadius: 12,
         border: `2px solid ${selected ? '#004aad' : '#8b5cf6'}`,
         background: d.bgColor || '#ede9fe',
@@ -221,6 +262,7 @@ export const UserTaskNode = memo(({ data, selected }: NodeProps) => {
           )}
         </div>,
       )}
+      <CardBadge data={d} />
     </div>
   );
 });
@@ -233,9 +275,9 @@ export const ServiceTaskNode = memo(({ data, selected }: NodeProps) => {
     <div
       className="flex items-center"
       style={{
-        minWidth: 150,
-        minHeight: 70,
-        padding: '10px 14px 10px 32px',
+        minWidth: 170,
+        minHeight: 80,
+        padding: '10px 14px 18px 32px',
         borderRadius: 12,
         border: `2px solid ${selected ? '#004aad' : '#0891b2'}`,
         background: d.bgColor || '#cffafe',
@@ -273,6 +315,7 @@ export const ServiceTaskNode = memo(({ data, selected }: NodeProps) => {
           )}
         </div>,
       )}
+      <CardBadge data={d} />
     </div>
   );
 });
@@ -371,6 +414,7 @@ export const SubprocessNode = memo(({ data, selected }: NodeProps) => {
         +
       </span>
       {withHandles(<span className="leading-tight">{d.label || 'Subprocesso'}</span>)}
+      <CardBadge data={d} />
     </div>
   );
 });

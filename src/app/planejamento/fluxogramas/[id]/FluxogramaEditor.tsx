@@ -27,9 +27,10 @@ import {
   ArrowLeft, Save, Download, Trash2, Check, Loader2,
   Circle, CircleDot, Square, Diamond as DiamondIcon, Box,
   StickyNote, Layers, User, Cog, CircleDashed,
+  Plus, X as XIcon, ListChecks, FileText,
 } from 'lucide-react';
 import { generateId } from '@/lib/utils';
-import { NODE_TYPES } from './BpmnNodes';
+import { NODE_TYPES, type ChecklistItem } from './BpmnNodes';
 
 interface Categoria { id: string; nome: string; ordem: number }
 interface FluxogramaPayload {
@@ -199,6 +200,25 @@ function EditorInner({ id }: EditorProps) {
     if (!selectedNode) return;
     setNodes(nds => nds.map(n => n.id === selectedNode.id ? { ...n, data: { ...n.data, ...patch } } : n));
     setSelectedNode(prev => prev ? { ...prev, data: { ...prev.data, ...patch } } : prev);
+  };
+
+  const getChecklist = (): ChecklistItem[] => {
+    const list = (selectedNode?.data as { checklist?: ChecklistItem[] } | undefined)?.checklist;
+    return Array.isArray(list) ? list : [];
+  };
+
+  const setChecklist = (next: ChecklistItem[]) => updateSelectedNodeData({ checklist: next });
+
+  const addChecklistItem = () => {
+    setChecklist([...getChecklist(), { id: generateId(), text: '', done: false }]);
+  };
+
+  const updateChecklistItem = (id: string, patch: Partial<ChecklistItem>) => {
+    setChecklist(getChecklist().map(it => it.id === id ? { ...it, ...patch } : it));
+  };
+
+  const removeChecklistItem = (id: string) => {
+    setChecklist(getChecklist().filter(it => it.id !== id));
   };
 
   const updateMeta = (patch: Partial<FluxogramaPayload>) => {
@@ -423,7 +443,7 @@ function EditorInner({ id }: EditorProps) {
         </div>
 
         {/* Inspetor à direita */}
-        <aside className="w-[280px] shrink-0 border-l border-[var(--t-border)] bg-[var(--t-surface)] overflow-y-auto p-4">
+        <aside className="w-[320px] shrink-0 border-l border-[var(--t-border)] bg-[var(--t-surface)] overflow-y-auto p-4">
           <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wider mb-3">Inspetor</p>
 
           {!selectedNode && !selectedEdge && (
@@ -494,6 +514,81 @@ function EditorInner({ id }: EditorProps) {
                   />
                 </div>
               </div>
+
+              {/* Cartão da tarefa: instruções + checklist */}
+              <div className="pt-3 mt-1 border-t border-[var(--t-border)] space-y-3">
+                <div className="flex items-center gap-1.5 text-[var(--text-caption)] font-semibold text-[var(--t-text-secondary)] uppercase tracking-wider">
+                  <FileText className="w-3 h-3" /> Cartão da tarefa
+                </div>
+
+                <div>
+                  <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Instruções de execução</label>
+                  <textarea
+                    value={(selectedNode.data as { instructions?: string }).instructions ?? ''}
+                    onChange={e => updateSelectedNodeData({ instructions: e.target.value })}
+                    rows={6}
+                    placeholder="Como executar esta tarefa? Quem é responsável, quais ferramentas usar, qual o resultado esperado..."
+                    className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)] resize-y leading-snug"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="flex items-center gap-1.5 text-[var(--text-caption)] text-[var(--t-text-muted)]">
+                      <ListChecks className="w-3 h-3" /> Checklist
+                      {getChecklist().length > 0 && (
+                        <span className="text-[var(--t-text-secondary)]">
+                          ({getChecklist().filter(i => i.done).length}/{getChecklist().length})
+                        </span>
+                      )}
+                    </span>
+                    <button
+                      onClick={addChecklistItem}
+                      className="flex items-center gap-1 text-[var(--text-caption)] text-[var(--t-green)] hover:underline"
+                    >
+                      <Plus className="w-3 h-3" /> Adicionar
+                    </button>
+                  </div>
+
+                  {getChecklist().length === 0 ? (
+                    <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] italic px-1">
+                      Nenhum item ainda. Adicione passos verificáveis para esta tarefa.
+                    </p>
+                  ) : (
+                    <ul className="space-y-1.5">
+                      {getChecklist().map(item => (
+                        <li
+                          key={item.id}
+                          className="group flex items-start gap-2 p-1.5 rounded-md hover:bg-[var(--t-surface-hover)]"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={item.done}
+                            onChange={e => updateChecklistItem(item.id, { done: e.target.checked })}
+                            className="mt-1 w-3.5 h-3.5 accent-[var(--t-green)] cursor-pointer shrink-0"
+                          />
+                          <input
+                            value={item.text}
+                            onChange={e => updateChecklistItem(item.id, { text: e.target.value })}
+                            placeholder="Descreva o passo..."
+                            className={`flex-1 min-w-0 bg-transparent text-[var(--text-body-sm)] outline-none border-b border-transparent focus:border-[var(--t-border)] ${
+                              item.done ? 'line-through text-[var(--t-text-muted)]' : 'text-[var(--t-text)]'
+                            }`}
+                          />
+                          <button
+                            onClick={() => removeChecklistItem(item.id)}
+                            className="opacity-0 group-hover:opacity-100 w-5 h-5 rounded flex items-center justify-center text-[var(--t-text-muted)] hover:bg-red-500/10 hover:text-red-500 shrink-0"
+                            title="Remover item"
+                          >
+                            <XIcon className="w-3 h-3" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+
               <button
                 onClick={deleteSelected}
                 className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] text-red-500 border border-red-500/30 rounded-lg hover:bg-red-500/10"
