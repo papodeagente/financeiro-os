@@ -314,7 +314,9 @@ export async function initDB() {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_crm_eventos_entrada_idem ON crm_eventos_entrada(idempotency_key);
     CREATE INDEX IF NOT EXISTS idx_crm_eventos_entrada_tipo ON crm_eventos_entrada(tipo);
     CREATE INDEX IF NOT EXISTS idx_crm_eventos_entrada_proc ON crm_eventos_entrada(processado);
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_planejamento_custos_mes ON planejamento_custos(mes);
+    -- NOTE: o índice único em planejamento_custos é (tenant_id, mes) — criado mais abaixo
+    -- após o ALTER TABLE que adiciona tenant_id. Não criar UNIQUE em mes apenas, pois
+    -- duplicatas entre tenants quebram initDB() e impedem login.
     CREATE INDEX IF NOT EXISTS idx_planejamento_projetos_nome ON planejamento_projetos(nome);
     CREATE INDEX IF NOT EXISTS idx_planejamento_projetos_status ON planejamento_projetos(status);
   `);
@@ -379,6 +381,14 @@ export async function initDB() {
 
   // Drop the old unique constraint on planejamento_custos(mes) — now needs (tenant_id, mes)
   await pool.query(`DROP INDEX IF EXISTS idx_planejamento_custos_mes`);
+  // Deduplicate planejamento_custos before creating the composite unique index.
+  // Keep only the row with the highest updated_at per (tenant_id, mes); fallback to id as tiebreaker.
+  await pool.query(`
+    DELETE FROM planejamento_custos a USING planejamento_custos b
+    WHERE a.tenant_id IS NOT DISTINCT FROM b.tenant_id
+      AND a.mes IS NOT DISTINCT FROM b.mes
+      AND (a.updated_at < b.updated_at OR (a.updated_at = b.updated_at AND a.id < b.id))
+  `);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_planejamento_custos_tenant_mes ON planejamento_custos(tenant_id, mes)`);
 
   // Run multi-tenant migration (assign existing data to default tenant)
