@@ -7,6 +7,7 @@ import {
   ReactFlowProvider,
   Background,
   BackgroundVariant,
+  ConnectionMode,
   Controls,
   MiniMap,
   MarkerType,
@@ -396,6 +397,7 @@ function EditorInner({ id }: EditorProps) {
             onDragOver={onDragOver}
             onSelectionChange={onSelectionChange}
             nodeTypes={NODE_TYPES}
+            connectionMode={ConnectionMode.Loose}
             fitView
             snapToGrid
             snapGrid={[12, 12]}

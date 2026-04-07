@@ -24,14 +24,31 @@ interface BpmnNodeData extends Record<string, unknown> {
   textColor?: string;
 }
 
+/**
+ * Renderiza 4 handles bidirecionais (top/right/bottom/left).
+ * Combinado com `connectionMode="loose"` no <ReactFlow>, qualquer um
+ * dos 4 handles aceita iniciar OU receber uma conexão, permitindo
+ * ligar nós por qualquer um dos lados em qualquer direção.
+ *
+ * Cada handle tem `id` único — sem isso, React Flow não consegue
+ * distinguir handles do mesmo (type, position) e a conexão falha.
+ *
+ * Cada lado expõe DOIS handles sobrepostos (source + target) para que
+ * a UI funcione tanto em loose mode quanto em strict mode, e para que
+ * setas que terminam num lado apontem corretamente para o handle alvo.
+ */
 function withHandles(children: React.ReactNode) {
   return (
     <>
-      <Handle type="target" position={Position.Top} style={HANDLE_STYLE} />
-      <Handle type="target" position={Position.Left} style={HANDLE_STYLE} />
+      <Handle id="t-top" type="target" position={Position.Top} style={HANDLE_STYLE} isConnectable />
+      <Handle id="s-top" type="source" position={Position.Top} style={{ ...HANDLE_STYLE, opacity: 0 }} isConnectable />
+      <Handle id="t-right" type="target" position={Position.Right} style={HANDLE_STYLE} isConnectable />
+      <Handle id="s-right" type="source" position={Position.Right} style={{ ...HANDLE_STYLE, opacity: 0 }} isConnectable />
+      <Handle id="t-bottom" type="target" position={Position.Bottom} style={HANDLE_STYLE} isConnectable />
+      <Handle id="s-bottom" type="source" position={Position.Bottom} style={{ ...HANDLE_STYLE, opacity: 0 }} isConnectable />
+      <Handle id="t-left" type="target" position={Position.Left} style={HANDLE_STYLE} isConnectable />
+      <Handle id="s-left" type="source" position={Position.Left} style={{ ...HANDLE_STYLE, opacity: 0 }} isConnectable />
       {children}
-      <Handle type="source" position={Position.Right} style={HANDLE_STYLE} />
-      <Handle type="source" position={Position.Bottom} style={HANDLE_STYLE} />
     </>
   );
 }
@@ -376,9 +393,7 @@ export const AnnotationNode = memo(({ data, selected }: NodeProps) => {
         boxShadow: selected ? '0 0 0 3px rgba(0,74,173,0.2)' : '0 1px 3px rgba(0,0,0,0.08)',
       }}
     >
-      <Handle type="target" position={Position.Left} style={HANDLE_STYLE} />
-      {d.label || 'Anotação...'}
-      <Handle type="source" position={Position.Right} style={HANDLE_STYLE} />
+      {withHandles(<>{d.label || 'Anotação...'}</>)}
     </div>
   );
 });
@@ -418,6 +433,7 @@ export const PoolNode = memo(({ data, selected }: NodeProps) => {
         >
           {d.label || 'Pool'}
         </div>
+        {withHandles(<></>)}
       </div>
     </>
   );
