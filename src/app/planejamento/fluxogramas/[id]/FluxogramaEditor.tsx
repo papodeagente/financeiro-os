@@ -14,6 +14,7 @@ import {
   addEdge,
   applyNodeChanges,
   applyEdgeChanges,
+  reconnectEdge,
   useReactFlow,
   type Node,
   type Edge,
@@ -163,6 +164,27 @@ function EditorInner({ id }: EditorProps) {
       markerEnd: { type: MarkerType.ArrowClosed, color: '#1A1A1A' },
       style: { stroke: '#1A1A1A', strokeWidth: 1.5 },
     }, eds));
+  }, []);
+
+  // Reconexão: permite agarrar o endpoint de uma edge existente
+  // e arrastá-lo para outro handle/nó sem precisar recriar a conexão.
+  const edgeReconnectSuccessful = useRef(true);
+
+  const onReconnectStart = useCallback(() => {
+    edgeReconnectSuccessful.current = false;
+  }, []);
+
+  const onReconnect = useCallback((oldEdge: Edge, newConnection: Connection) => {
+    edgeReconnectSuccessful.current = true;
+    setEdges(eds => reconnectEdge(oldEdge, newConnection, eds));
+  }, []);
+
+  const onReconnectEnd = useCallback((_event: unknown, edge: Edge) => {
+    // Se o usuário soltou a ponta fora de um handle válido, remove a edge.
+    if (!edgeReconnectSuccessful.current) {
+      setEdges(eds => eds.filter(e => e.id !== edge.id));
+    }
+    edgeReconnectSuccessful.current = true;
   }, []);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -412,17 +434,22 @@ function EditorInner({ id }: EditorProps) {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onReconnect={onReconnect}
+            onReconnectStart={onReconnectStart}
+            onReconnectEnd={onReconnectEnd}
             onInit={setRfInstance}
             onDrop={onDrop}
             onDragOver={onDragOver}
             onSelectionChange={onSelectionChange}
             nodeTypes={NODE_TYPES}
             connectionMode={ConnectionMode.Loose}
+            edgesReconnectable
             fitView
             snapToGrid
             snapGrid={[12, 12]}
             defaultEdgeOptions={{
               type: 'smoothstep',
+              reconnectable: true,
               markerEnd: { type: MarkerType.ArrowClosed, color: '#1A1A1A' },
               style: { stroke: '#1A1A1A', strokeWidth: 1.5 },
             }}
