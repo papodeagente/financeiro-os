@@ -304,6 +304,24 @@ export async function initDB() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS fluxograma_categorias (
+      id TEXT PRIMARY KEY,
+      nome TEXT NOT NULL DEFAULT '',
+      ordem INTEGER NOT NULL DEFAULT 0,
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS fluxogramas (
+      id TEXT PRIMARY KEY,
+      nome TEXT NOT NULL DEFAULT '',
+      categoria_id TEXT NOT NULL DEFAULT '',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
 
   // Create indices for new tables (IF NOT EXISTS prevents errors on re-run)
@@ -319,6 +337,9 @@ export async function initDB() {
     -- duplicatas entre tenants quebram initDB() e impedem login.
     CREATE INDEX IF NOT EXISTS idx_planejamento_projetos_nome ON planejamento_projetos(nome);
     CREATE INDEX IF NOT EXISTS idx_planejamento_projetos_status ON planejamento_projetos(status);
+    CREATE INDEX IF NOT EXISTS idx_fluxograma_categorias_ordem ON fluxograma_categorias(ordem);
+    CREATE INDEX IF NOT EXISTS idx_fluxogramas_categoria ON fluxogramas(categoria_id);
+    CREATE INDEX IF NOT EXISTS idx_fluxogramas_nome ON fluxogramas(nome);
   `);
 
   // ============================================================
@@ -373,6 +394,7 @@ export async function initDB() {
     'voos_monitorados', 'config_apis', 'destinos', 'crm_config',
     'crm_eventos_saida', 'crm_eventos_entrada', 'planejamento_custos',
     'orcamentos', 'planejamento_projetos',
+    'fluxograma_categorias', 'fluxogramas',
   ];
   for (const table of TENANT_TABLES) {
     await pool.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT ''`);

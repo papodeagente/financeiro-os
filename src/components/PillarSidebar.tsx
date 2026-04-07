@@ -12,6 +12,7 @@ import {
   BookOpen, Landmark, ArrowRightLeft, Package,
   ShoppingCart, ListOrdered, UserPlus, Building2, Briefcase,
   DollarSign, TrendingUp as RentIcon, Link2,
+  Workflow,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 
@@ -33,6 +34,7 @@ const PLANEJAMENTO_MENU: SidebarSection[] = [
       { key: 'custos-negocio', label: 'Custos do negócio', icon: Wallet, href: '/planejamento/custos' },
       { key: 'cac-dashboard', label: 'Dashboard CAC', icon: Gauge, href: '/cac/dashboard' },
       { key: 'cac-cenarios', label: 'Simulador CAC', icon: TrendingUp, href: '/cac/cenarios' },
+      { key: 'fluxogramas', label: 'Fluxogramas', icon: Workflow, href: '/planejamento/fluxogramas' },
     ],
   },
 ];
