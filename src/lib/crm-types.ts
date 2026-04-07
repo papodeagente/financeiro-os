@@ -579,6 +579,34 @@ export interface TransporteData {
   distancia_km?: number;
   tempo_estimado?: string;
   detalhes?: string;
+  // Campos enriquecidos (preenchidos automaticamente quando importado do Google Flights via SearchAPI)
+  valor?: number;
+  companhia_logo?: string;
+  aeroporto_origem_nome?: string;
+  aeroporto_destino_nome?: string;
+  data_chegada?: string; // YYYY-MM-DD para identificar voos que chegam no dia seguinte
+  aeronave?: string;
+  classe?: string;
+  bagagem?: string;
+  legroom?: string;
+  emissao_carbono_kg?: number;
+  emissao_carbono_diff_percent?: number;
+  escalas?: number;
+  escalas_info?: Array<{ aeroporto: string; nome?: string; duracao_min?: number }>;
+  segmentos?: Array<{
+    companhia: string;
+    numero_voo: string;
+    origem: string;
+    destino: string;
+    aeroporto_origem_nome?: string;
+    aeroporto_destino_nome?: string;
+    horario_saida: string;
+    horario_chegada: string;
+    duracao_min: number;
+    aeronave?: string;
+    classe?: string;
+  }>;
+  muitas_vezes_atrasado?: boolean;
 }
 
 export interface DestinoRoteiro {

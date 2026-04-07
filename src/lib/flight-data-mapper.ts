@@ -80,14 +80,30 @@ function getBaggage(seg: SearchAPIFlightSegment): string {
   return '';
 }
 
+function getCarbonFromExtensions(seg: SearchAPIFlightSegment): { kg?: number; ext?: string } {
+  const exts = seg.extensions || [];
+  for (const ext of exts) {
+    const lower = ext.toLowerCase();
+    if (lower.includes('co2') || lower.includes('carbon')) {
+      // Try to parse "168 kg CO2" or similar
+      const match = ext.match(/(\d+(?:[.,]\d+)?)\s*kg/i);
+      if (match) return { kg: Number(match[1].replace(',', '.')), ext };
+      return { ext };
+    }
+  }
+  return {};
+}
+
 function describeFlightGroup(flights: SearchAPIFlightSegment[], totalDuration: number, layovers?: Array<{ duration: number; name: string; id: string }>) {
   const firstSeg = flights[0];
   const lastSeg = flights[flights.length - 1];
   const stops = flights.length - 1;
   const stopNames = layovers?.map(l => l.id).join(', ') || flights.slice(0, -1).map(s => s.arrival_airport.id).join(', ');
+  const carbon = getCarbonFromExtensions(firstSeg);
 
   return {
     airline: firstSeg.airline,
+    airlineLogo: firstSeg.airline_logo,
     carrierCode: extractCarrierCode(firstSeg.flight_number),
     flightNumber: firstSeg.flight_number,
     origin: firstSeg.departure_airport.id,
@@ -97,12 +113,32 @@ function describeFlightGroup(flights: SearchAPIFlightSegment[], totalDuration: n
     depTime: extractTime(firstSeg.departure_airport.time || ''),
     arrTime: extractTime(lastSeg.arrival_airport.time || ''),
     depDate: extractDate(firstSeg.departure_airport.time || ''),
+    arrDate: extractDate(lastSeg.arrival_airport.time || ''),
     duration: formatMinutes(totalDuration),
     durationMin: totalDuration,
     stops,
     stopAirports: stopNames,
     nextDay: isDifferentDay(firstSeg.departure_airport.time || '', lastSeg.arrival_airport.time || ''),
     baggage: getBaggage(firstSeg),
+    aircraft: firstSeg.airplane,
+    travelClass: firstSeg.travel_class,
+    legroom: firstSeg.legroom,
+    oftenDelayed: firstSeg.often_delayed_by_over_30_min,
+    carbonKg: carbon.kg,
+    layoversInfo: (layovers || []).map(l => ({ aeroporto: l.id, nome: l.name, duracao_min: l.duration })),
+    segments: flights.map(s => ({
+      companhia: s.airline,
+      numero_voo: s.flight_number,
+      origem: s.departure_airport.id,
+      destino: s.arrival_airport.id,
+      aeroporto_origem_nome: s.departure_airport.name,
+      aeroporto_destino_nome: s.arrival_airport.name,
+      horario_saida: extractTime(s.departure_airport.time || ''),
+      horario_chegada: extractTime(s.arrival_airport.time || ''),
+      duracao_min: s.duration,
+      aeronave: s.airplane,
+      classe: s.travel_class,
+    })),
   };
 }
 
@@ -194,41 +230,73 @@ export function formatFlightForProposta(offer: FlightOffer): Record<string, unkn
 
 /**
  * Format flight for Propostas Discovery — returns TRANSPORTE block conteudo
+ * Populates rich fields from SearchAPI: aeronave, classe, bagagem, emissão CO2, escalas, etc.
  */
 export function formatFlightForTransporte(offer: FlightOffer): Record<string, unknown>[] {
   const results: Record<string, unknown>[] = [];
+  const hasReturn = !!(offer.returnFlights && offer.returnFlights.length > 0);
+  const idaPrice = hasReturn ? Math.round(offer.price / 2) : offer.price;
+  const voltaPrice = hasReturn ? offer.price - idaPrice : 0;
 
   const info = describeFlightGroup(offer.flights, offer.totalDuration, offer.layovers);
   results.push({
     id: crypto.randomUUID?.() || Math.random().toString(36).slice(2),
     tipo: 'VOO',
     data: info.depDate,
+    data_chegada: info.arrDate,
     origem: info.origin,
     destino: info.destination,
+    aeroporto_origem_nome: info.originName,
+    aeroporto_destino_nome: info.destinationName,
     companhia: info.airline,
+    companhia_logo: info.airlineLogo || offer.airlineLogo || '',
     numero_voo: info.flightNumber,
     horario_saida: info.depTime,
     horario_chegada: info.arrTime,
     distancia_km: 0,
     tempo_estimado: info.duration,
+    valor: idaPrice,
+    aeronave: info.aircraft,
+    classe: info.travelClass,
+    bagagem: info.baggage,
+    legroom: info.legroom,
+    emissao_carbono_kg: info.carbonKg,
+    escalas: info.stops,
+    escalas_info: info.layoversInfo,
+    segmentos: info.segments,
+    muitas_vezes_atrasado: info.oftenDelayed,
     detalhes: info.stops === 0 ? 'Voo direto' : `${info.stops} escala(s): ${info.stopAirports}`,
   });
 
-  if (offer.returnFlights && offer.returnFlights.length > 0) {
-    const volta = describeFlightGroup(offer.returnFlights, offer.returnDuration || 0, offer.returnLayovers);
+  if (hasReturn) {
+    const volta = describeFlightGroup(offer.returnFlights!, offer.returnDuration || 0, offer.returnLayovers);
     results.push({
       id: crypto.randomUUID?.() || Math.random().toString(36).slice(2),
       tipo: 'VOO',
       data: volta.depDate,
+      data_chegada: volta.arrDate,
       origem: volta.origin,
       destino: volta.destination,
+      aeroporto_origem_nome: volta.originName,
+      aeroporto_destino_nome: volta.destinationName,
       companhia: volta.airline,
+      companhia_logo: volta.airlineLogo || offer.airlineLogo || '',
       numero_voo: volta.flightNumber,
       horario_saida: volta.depTime,
       horario_chegada: volta.arrTime,
       distancia_km: 0,
       tempo_estimado: volta.duration,
-      detalhes: volta.stops === 0 ? 'Voo direto' : `${volta.stops} escala(s): ${volta.stopAirports}`,
+      valor: voltaPrice,
+      aeronave: volta.aircraft,
+      classe: volta.travelClass,
+      bagagem: volta.baggage,
+      legroom: volta.legroom,
+      emissao_carbono_kg: volta.carbonKg,
+      escalas: volta.stops,
+      escalas_info: volta.layoversInfo,
+      segmentos: volta.segments,
+      muitas_vezes_atrasado: volta.oftenDelayed,
+      detalhes: 'VOLTA | ' + (volta.stops === 0 ? 'Voo direto' : `${volta.stops} escala(s): ${volta.stopAirports}`),
     });
   }
 

@@ -1,9 +1,10 @@
 'use client';
 
 import { SecaoProposta, type AlojamentoData, type TransporteData } from '@/lib/crm-types';
-import { CheckCircle2, XCircle, MessageCircle, Star, Plane, Clock, MapPin } from 'lucide-react';
+import { CheckCircle2, XCircle, MessageCircle, Star, Clock, MapPin } from 'lucide-react';
 import { MapaRoteiro } from '@/components/propostas/MapaRoteiro';
 import { t, type IdiomaProposal } from '@/lib/i18n-proposta';
+import { RichFlightCard } from './RichFlightCard';
 
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -517,7 +518,6 @@ const TRANSPORTE_ICONS: Record<string, string> = {
 function TransportePreview({ conteudo, corPrimaria }: { conteudo: Record<string, unknown>; corPrimaria: string }) {
   const tr = conteudo as Partial<TransporteData>;
   const isVoo = tr.tipo === 'VOO';
-  const cor = corPrimaria || '#3b82f6';
 
   if (!isVoo) {
     const icon = TRANSPORTE_ICONS[tr.tipo || 'TRANSFER'] || '🚐';
@@ -538,79 +538,8 @@ function TransportePreview({ conteudo, corPrimaria }: { conteudo: Record<string,
     );
   }
 
-  // ─── BOARDING PASS — cor personalizavel ───
-  const formattedDate = tr.data
-    ? new Date(tr.data + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })
-    : '';
-
-  // Detect if detalhes has "VOLTA" tag
-  const isVolta = tr.detalhes?.startsWith('VOLTA');
-  const label = isVolta ? 'VOLTA' : undefined;
-
-  return (
-    <div className="rounded-xl overflow-hidden border-2 shadow-md" style={{ borderColor: cor }}>
-      {/* Header bar — cor primaria */}
-      <div className="text-white px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-2" style={{ backgroundColor: cor }}>
-        <div className="flex items-center gap-2 min-w-0">
-          <Plane className="w-4 h-4 shrink-0 opacity-80" />
-          <span className="font-bold text-sm tracking-wide truncate">{tr.companhia || 'Voo'}</span>
-          {tr.numero_voo && <span className="font-mono text-sm opacity-80">{tr.numero_voo}</span>}
-          {label && (
-            <span className="text-[10px] font-bold bg-white/20 px-1.5 py-0.5 rounded">{label}</span>
-          )}
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
-          {formattedDate && <span className="text-xs opacity-70 capitalize">{formattedDate}</span>}
-        </div>
-      </div>
-
-      {/* Route */}
-      <div className="bg-white px-4 sm:px-6 py-5 sm:py-6">
-        <div className="flex items-center justify-between gap-3 sm:gap-4">
-          {/* Departure */}
-          <div className="text-center shrink-0">
-            <div className="text-2xl sm:text-3xl font-black tracking-tight text-gray-900">{tr.origem || '---'}</div>
-            {tr.horario_saida && (
-              <div className="text-base sm:text-lg font-bold text-gray-700 mt-1">{tr.horario_saida}</div>
-            )}
-            <div className="text-[10px] sm:text-[11px] text-gray-400 uppercase tracking-wider mt-0.5">Partida</div>
-          </div>
-
-          {/* Route line */}
-          <div className="flex-1 flex flex-col items-center gap-1 min-w-0 px-1 sm:px-2">
-            {tr.tempo_estimado && (
-              <div className="flex items-center gap-1 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap"
-                style={{ backgroundColor: `${cor}12`, color: cor }}>
-                <Clock className="w-3 h-3" /> {tr.tempo_estimado}
-              </div>
-            )}
-            <div className="flex items-center w-full">
-              <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full shrink-0" style={{ backgroundColor: cor }} />
-              <div className="flex-1 relative h-[2px] mx-0.5">
-                <div className="absolute inset-0 border-t-2 border-dashed" style={{ borderColor: `${cor}50` }} />
-                <Plane className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3.5 h-3.5 sm:w-4 sm:h-4" style={{ color: cor }} />
-              </div>
-              <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full shrink-0" style={{ backgroundColor: cor }} />
-            </div>
-            {tr.detalhes && (
-              <div className="text-[9px] sm:text-[10px] text-gray-500 text-center truncate max-w-full">
-                {tr.detalhes.replace(/^VOLTA \| /, '').split(' | ')[0]}
-              </div>
-            )}
-          </div>
-
-          {/* Arrival */}
-          <div className="text-center shrink-0">
-            <div className="text-2xl sm:text-3xl font-black tracking-tight text-gray-900">{tr.destino || '---'}</div>
-            {tr.horario_chegada && (
-              <div className="text-base sm:text-lg font-bold text-gray-700 mt-1">{tr.horario_chegada}</div>
-            )}
-            <div className="text-[10px] sm:text-[11px] text-gray-400 uppercase tracking-wider mt-0.5">Chegada</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  // VOO → cartão rico com expansão
+  return <RichFlightCard voo={tr} corPrimaria={corPrimaria} />;
 }
 
 // ─── MAIN RENDERER ───

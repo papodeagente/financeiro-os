@@ -28,7 +28,9 @@ function extTime(s: string): string { return s.split(' ')[1]?.substring(0, 5) ||
 function extDate(s: string): string { return s.split(' ')[0] || ''; }
 function fmtDateShort(s: string): string {
   if (!s) return '';
-  return new Date(s + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' });
+  const d = new Date(s + 'T12:00:00');
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' });
 }
 
 // ─── FLIGHT CARD ───

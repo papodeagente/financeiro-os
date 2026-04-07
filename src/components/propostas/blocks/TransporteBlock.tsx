@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Plane, Search } from 'lucide-react';
 import { FlightSearchModal } from '@/components/FlightSearchModal';
 import type { FlightOffer } from '@/lib/flight-data-mapper';
+import { formatFlightForTransporte } from '@/lib/flight-data-mapper';
 import type { BlockProps } from './types';
 import type { TransporteData, TipoTransporte } from '@/lib/crm-types';
 
@@ -17,39 +18,17 @@ const TIPOS: { id: TipoTransporte; label: string; icon: string }[] = [
   { id: 'BARCO', label: 'Barco', icon: '⛴️' },
 ];
 
-function extractTime(dateStr: string): string {
-  return dateStr.split(' ')[1]?.substring(0, 5) || '';
-}
-
-function extractDate(dateStr: string): string {
-  return dateStr.split(' ')[0] || '';
-}
-
-function formatMinutes(min: number): string {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return `${h}h${String(m).padStart(2, '0')}`;
-}
-
-function offerToTransporte(offer: FlightOffer, extra?: string): Partial<TransporteData> {
-  const firstSeg = offer.flights[0];
-  const lastSeg = offer.flights[offer.flights.length - 1];
-  const stops = offer.flights.length - 1;
-  const layoverNames = offer.layovers?.map(l => l.id).join(', ') || '';
-  const stopsStr = stops === 0 ? 'Voo direto' : `${stops} escala(s): ${layoverNames}`;
-
-  return {
-    tipo: 'VOO',
-    data: extractDate(firstSeg.departure_airport.time || ''),
-    origem: firstSeg.departure_airport.id,
-    destino: lastSeg.arrival_airport.id,
-    companhia: firstSeg.airline,
-    numero_voo: firstSeg.flight_number,
-    horario_saida: extractTime(firstSeg.departure_airport.time || ''),
-    horario_chegada: extractTime(lastSeg.arrival_airport.time || ''),
-    tempo_estimado: formatMinutes(offer.totalDuration),
-    detalhes: extra ? `${extra} | ${stopsStr} | R$ ${offer.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : `${stopsStr} | R$ ${offer.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-  };
+/**
+ * Converte um FlightOffer único (já sem returnFlights) em conteúdo de bloco TRANSPORTE.
+ * Reaproveita o mapper completo passando uma cópia sem o return leg.
+ */
+function offerToTransporte(offer: FlightOffer, isVolta = false): Partial<TransporteData> {
+  const oneWayOffer: FlightOffer = { ...offer, returnFlights: undefined, returnDuration: undefined, returnLayovers: undefined };
+  const [conteudo] = formatFlightForTransporte(oneWayOffer) as unknown as Partial<TransporteData>[];
+  if (isVolta) {
+    conteudo.detalhes = `VOLTA | ${(conteudo.detalhes || '').replace(/^VOLTA \| /, '')}`;
+  }
+  return conteudo;
 }
 
 export function TransporteBlock({ conteudo, onChange, onInsertAfter }: BlockProps) {
@@ -70,7 +49,7 @@ export function TransporteBlock({ conteudo, onChange, onInsertAfter }: BlockProp
     if (volta && onInsertAfter) {
       onInsertAfter('TRANSPORTE', {
         id: crypto.randomUUID?.() || Math.random().toString(36).slice(2),
-        ...offerToTransporte(volta, 'VOLTA'),
+        ...offerToTransporte(volta, true),
       } as Record<string, unknown>);
     }
   };
