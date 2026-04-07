@@ -104,6 +104,17 @@ export function calcBrindeTotals(g: GrupoViagem) {
   return { melhorPreco: minPositivo(g.brinde.fornecedores.map(f => f.valor_unidade)) };
 }
 
+// DIVULGAÇÃO totals — soma de todos os canais ativos, rateada por pax
+export function calcDivulgacaoTotals(g: GrupoViagem) {
+  const minPax = g.params.qtd_min_pax || 1;
+  const lista = g.divulgacao?.fornecedores || [];
+  const totalGeral = lista.reduce((acc, f) => acc + (f.valor_total || 0), 0);
+  return {
+    totalGeral,
+    totalPorPax: totalGeral / minPax,
+  };
+}
+
 // PROPOSTA - full pricing calculation
 export interface PropostaLine {
   label: string;
@@ -134,6 +145,7 @@ export function calcProposta(g: GrupoViagem): PropostaResult {
   const nav = calcNavioTotals(g);
   const ing = calcIngTotals(g);
   const brinde = calcBrindeTotals(g);
+  const divulgacao = calcDivulgacaoTotals(g);
   const c = g.cambio;
   const p = g.params;
 
@@ -211,9 +223,15 @@ export function calcProposta(g: GrupoViagem): PropostaResult {
     lineValues['BRINDE'][tipo] = brinde.melhorPreco * PAX_MAP[tipo] * getCambio('brinde');
   }
 
+  // DIVULGAÇÃO (custo total rateado por pax, depois multiplicado pelo nº de pax do apto)
+  lineValues['DIVULGACAO'] = {};
+  for (const tipo of TIPOS) {
+    lineValues['DIVULGACAO'][tipo] = divulgacao.totalPorPax * PAX_MAP[tipo] * getCambio('divulgacao');
+  }
+
   // CORTESIA
   lineValues['CORTESIA'] = {};
-  const serviceKeys = ['TKT', 'HTL', 'REC', 'CAR', 'GUIA', 'SEG', 'NAVIO', 'ING', 'BRINDE'];
+  const serviceKeys = ['TKT', 'HTL', 'REC', 'CAR', 'GUIA', 'SEG', 'NAVIO', 'ING', 'BRINDE', 'DIVULGACAO'];
   for (const tipo of TIPOS) {
     const soma = serviceKeys.reduce((acc, k) => acc + (lineValues[k]?.[tipo] || 0), 0);
     lineValues['CORTESIA'][tipo] = (soma / (p.qtd_min_pax || 1)) * p.cortesia;
@@ -227,7 +245,7 @@ export function calcProposta(g: GrupoViagem): PropostaResult {
 
   // MARKUP (divisor, only on specific items)
   lineValues['MARKUP'] = {};
-  const markupItems = ['TKT', 'HTL', 'ING', 'REC', 'SEG', 'CAR', 'BRINDE'];
+  const markupItems = ['TKT', 'HTL', 'ING', 'REC', 'SEG', 'CAR', 'BRINDE', 'DIVULGACAO'];
   for (const tipo of TIPOS) {
     let somaMarcavel: number;
     if (tipo === 'chd') {

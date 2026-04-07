@@ -176,6 +176,16 @@ export interface BrindeFornecedor {
   prazo_entrega: string;
 }
 
+export interface DivulgacaoFornecedor {
+  nome: string;
+  valor_total: number | null;
+  canal: string;
+  descricao: string;
+  contato: string;
+  deadline: string | null;
+  periodo: string;
+}
+
 import { FinanceiroGrupo } from './financial-types';
 
 export type StatusPipeline = 'PRODUTO' | 'PROPOSTA' | 'ORCAMENTO' | 'RESERVA' | 'VENDA';
@@ -211,11 +221,12 @@ export interface GrupoViagem {
   navio: { fornecedores: NavioFornecedor[]; deadline: string | null; info_adicional: string };
   ing: { atrativos: IngAtrativo[] };
   brinde: { fornecedores: BrindeFornecedor[] };
+  divulgacao: { fornecedores: DivulgacaoFornecedor[] };
 
   financeiro?: FinanceiroGrupo;
 }
 
-export type AbaType = 'pipeline' | 'inf' | 'tkt' | 'htl' | 'rec' | 'car' | 'guia' | 'seg' | 'navio' | 'ing' | 'brinde' | 'proposta' | 'htl_seg' | 'painel' | 'vendas' | 'recebimentos' | 'fornecedores' | 'fluxo_caixa' | 'dre' | 'indicadores';
+export type AbaType = 'pipeline' | 'inf' | 'tkt' | 'htl' | 'rec' | 'car' | 'guia' | 'seg' | 'navio' | 'ing' | 'brinde' | 'divulgacao' | 'proposta' | 'htl_seg' | 'painel' | 'vendas' | 'recebimentos' | 'fornecedores' | 'fluxo_caixa' | 'dre' | 'indicadores';
 
 export const ABA_LABELS: Record<AbaType, string> = {
   pipeline: 'Pipeline',
@@ -229,6 +240,7 @@ export const ABA_LABELS: Record<AbaType, string> = {
   navio: 'Navio',
   ing: 'Ingresso',
   brinde: 'Brinde',
+  divulgacao: 'Divulgação',
   proposta: 'Proposta',
   htl_seg: 'HTL+SEG',
   painel: 'PAINEL',
@@ -251,6 +263,6 @@ export const HTL_FONTES = [
   'Fornecedor 8', 'Decolar', 'Trivago', 'Booking',
 ];
 
-export const SERVICOS = ['tkt', 'htl', 'rec', 'car', 'guia', 'seg', 'navio', 'ing', 'brinde'] as const;
+export const SERVICOS = ['tkt', 'htl', 'rec', 'car', 'guia', 'seg', 'navio', 'ing', 'brinde', 'divulgacao'] as const;
 
 export const MOEDAS = ['BRL', 'USD', 'EUR', 'GBP', 'ARS', 'CLP', 'PEN'] as const;

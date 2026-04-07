@@ -1,7 +1,7 @@
 import {
   GrupoViagem, Periodo, Trecho, TktTrecho, HtlHotel, RecPasseio,
   CarTransporte, GuiaDestino, SegSeguradora, NavioFornecedor, IngAtrativo,
-  BrindeFornecedor, TKT_FONTES, HTL_FONTES,
+  BrindeFornecedor, DivulgacaoFornecedor, TKT_FONTES, HTL_FONTES,
 } from './types';
 import { createFinanceiroGrupo } from './financial-defaults';
 import { generateId } from './utils';
@@ -89,7 +89,24 @@ export function createBrindeFornecedor(i: number): BrindeFornecedor {
   };
 }
 
-const SERVICOS_KEYS = ['tkt', 'htl', 'rec', 'car', 'guia', 'seg', 'navio', 'ing', 'brinde'];
+const DIVULGACAO_CANAIS = [
+  'Instagram Ads', 'Facebook Ads', 'Google Ads', 'YouTube Ads',
+  'Influenciador', 'E-mail Marketing', 'Material Impresso', 'Eventos / Feiras',
+];
+
+export function createDivulgacaoFornecedor(i: number): DivulgacaoFornecedor {
+  return {
+    nome: DIVULGACAO_CANAIS[i] || `Canal ${i + 1}`,
+    valor_total: null,
+    canal: DIVULGACAO_CANAIS[i] || '',
+    descricao: '',
+    contato: '',
+    deadline: null,
+    periodo: '',
+  };
+}
+
+const SERVICOS_KEYS = ['tkt', 'htl', 'rec', 'car', 'guia', 'seg', 'navio', 'ing', 'brinde', 'divulgacao'];
 
 export function createGrupoViagem(): GrupoViagem {
   const now = new Date().toISOString();
@@ -123,6 +140,7 @@ export function createGrupoViagem(): GrupoViagem {
     navio: { fornecedores: Array.from({ length: 11 }, (_, i) => createNavioFornecedor(i)), deadline: null, info_adicional: '' },
     ing: { atrativos: [createIngAtrativo()] },
     brinde: { fornecedores: Array.from({ length: 13 }, (_, i) => createBrindeFornecedor(i)) },
+    divulgacao: { fornecedores: Array.from({ length: 8 }, (_, i) => createDivulgacaoFornecedor(i)) },
     financeiro: createFinanceiroGrupo(),
   };
 }

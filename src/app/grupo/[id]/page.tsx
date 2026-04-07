@@ -19,20 +19,22 @@ import { SegTab } from '@/components/tabs/SegTab';
 import { NavioTab } from '@/components/tabs/NavioTab';
 import { IngTab } from '@/components/tabs/IngTab';
 import { BrindeTab } from '@/components/tabs/BrindeTab';
+import { DivulgacaoTab } from '@/components/tabs/DivulgacaoTab';
 import { PropostaTab } from '@/components/tabs/PropostaTab';
 import { HtlSegTab } from '@/components/tabs/HtlSegTab';
 import { PainelPipelineTab } from '@/components/tabs/PainelPipelineTab';
 import { createFinanceiroGrupo } from '@/lib/financial-defaults';
+import { createDivulgacaoFornecedor } from '@/lib/defaults';
 import { TemplatePickerModal } from '@/components/TemplatePickerModal';
 import { TemplateProposta } from '@/lib/crm-types';
 import { Save, FileText, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
-const ABAS_PLANEJAMENTO: AbaType[] = ['pipeline', 'inf', 'tkt', 'htl', 'rec', 'car', 'guia', 'seg', 'navio', 'ing', 'brinde', 'proposta', 'htl_seg'];
+const ABAS_PLANEJAMENTO: AbaType[] = ['pipeline', 'inf', 'tkt', 'htl', 'rec', 'car', 'guia', 'seg', 'navio', 'ing', 'brinde', 'divulgacao', 'proposta', 'htl_seg'];
 
 const ABA_ICONS: Record<string, string> = {
   pipeline: '🔄', inf: 'ℹ️', tkt: '✈️', htl: '🏨', rec: '🎯', car: '🚐', guia: '🧑‍🏫',
-  seg: '🛡️', navio: '🚢', ing: '🎟️', brinde: '🎁', proposta: '💰', htl_seg: '📊',
+  seg: '🛡️', navio: '🚢', ing: '🎟️', brinde: '🎁', divulgacao: '📢', proposta: '💰', htl_seg: '📊',
 };
 
 function hasData(grupo: GrupoViagem, aba: AbaType): boolean {
@@ -47,6 +49,7 @@ function hasData(grupo: GrupoViagem, aba: AbaType): boolean {
     case 'navio': return grupo.navio.fornecedores.some(f => f.valor_sgl !== null && f.valor_sgl > 0);
     case 'ing': return grupo.ing.atrativos.some(a => a.fontes.some(f => f.valor_adt !== null && f.valor_adt > 0));
     case 'brinde': return grupo.brinde.fornecedores.some(f => f.valor_unidade !== null && f.valor_unidade > 0);
+    case 'divulgacao': return (grupo.divulgacao?.fornecedores || []).some(f => f.valor_total !== null && f.valor_total > 0);
     default: return false;
   }
 }
@@ -66,6 +69,13 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
       const found = grupos.find(g => g.id === id);
       if (found) {
         if (!found.financeiro) found.financeiro = createFinanceiroGrupo();
+        // Migrate existing grupos without divulgação field
+        if (!found.divulgacao) {
+          found.divulgacao = { fornecedores: Array.from({ length: 8 }, (_, i) => createDivulgacaoFornecedor(i)) };
+        }
+        if (!found.cambio?.divulgacao) {
+          found.cambio = { ...(found.cambio || {}), divulgacao: { valor: 1.0, moeda: 'BRL', deadline: null } };
+        }
         // Migrate existing grupos without pipeline fields
         if (!found.status_pipeline) found.status_pipeline = 'PRODUTO';
         if (found.proposta_id === undefined) found.proposta_id = null;
@@ -242,6 +252,7 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
       case 'navio': return <NavioTab grupo={grupo} onChange={handleChange} />;
       case 'ing': return <IngTab grupo={grupo} onChange={handleChange} />;
       case 'brinde': return <BrindeTab grupo={grupo} onChange={handleChange} />;
+      case 'divulgacao': return <DivulgacaoTab grupo={grupo} onChange={handleChange} />;
       case 'proposta': return <PropostaTab grupo={grupo} />;
       case 'htl_seg': return <HtlSegTab grupo={grupo} />;
     }
