@@ -12,6 +12,7 @@ const DEFAULT_CONFIG: ConfiguracaoAPIs = {
   aviationstack: { api_key: '', ativo: false },
   google_places: { api_key: '', ativo: false },
   anthropic: { api_key: '', modelo: 'claude-sonnet-4-20250514', ativo: false },
+  openai: { api_key: '', modelo_imagem: 'gpt-image-1', ativo: false },
   cache: {
     busca_voos_ttl: 86400,
     aeroportos_ttl: 2592000,
@@ -358,6 +359,60 @@ export default function IntegracoesPage() {
               </select>
             </div>
           </div>
+        </div>
+
+        {/* OpenAI (Geração de imagens) */}
+        <div className="bg-[var(--t-surface)] rounded-xl shadow-[var(--t-card-shadow)] p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+              <Sparkles className="w-5 h-5 text-emerald-400" />
+            </div>
+            <div className="flex-1">
+              <h2 className="text-lg font-semibold text-[var(--t-text)]">OpenAI (Geração de Imagens)</h2>
+              <p className="text-xs text-[var(--t-text-secondary)]">Cria fotos de capa, hotéis, destinos e atrações via IA dentro do editor de propostas</p>
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={config.openai?.ativo ?? false}
+                onChange={e => setConfig(c => ({ ...c, openai: { api_key: c.openai?.api_key ?? '', modelo_imagem: c.openai?.modelo_imagem ?? 'gpt-image-1', ativo: e.target.checked } }))}
+                className="w-4 h-4 rounded accent-[var(--t-green)]"
+              />
+              <span className="text-sm text-[var(--t-text)]">Ativo</span>
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">API Key</label>
+              <div className="flex gap-2">
+                <input
+                  type={showSecrets['openai_key'] ? 'text' : 'password'}
+                  value={config.openai?.api_key ?? ''}
+                  onChange={e => setConfig(c => ({ ...c, openai: { api_key: e.target.value, modelo_imagem: c.openai?.modelo_imagem ?? 'gpt-image-1', ativo: c.openai?.ativo ?? false } }))}
+                  className="flex-1 px-3 py-2 bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded-lg text-sm text-[var(--t-text)]"
+                  placeholder="sk-..."
+                />
+                <button onClick={() => toggleSecret('openai_key')} className="px-2 text-[var(--t-text-secondary)] hover:text-[var(--t-text)]">
+                  {showSecrets['openai_key'] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Modelo de imagem</label>
+              <select
+                value={config.openai?.modelo_imagem ?? 'gpt-image-1'}
+                onChange={e => setConfig(c => ({ ...c, openai: { api_key: c.openai?.api_key ?? '', modelo_imagem: e.target.value, ativo: c.openai?.ativo ?? false } }))}
+                className="w-full px-3 py-2 bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded-lg text-sm text-[var(--t-text)]"
+              >
+                <option value="gpt-image-1">gpt-image-1 (recomendado)</option>
+                <option value="dall-e-3">DALL·E 3</option>
+              </select>
+            </div>
+          </div>
+          <p className="mt-3 text-[11px] text-[var(--t-text-muted)]">
+            A chave é armazenada por tenant. Imagens geradas são salvas no volume de uploads do servidor.
+          </p>
         </div>
 
         {/* Cache Stats */}

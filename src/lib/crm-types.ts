@@ -870,6 +870,11 @@ export interface ConfiguracaoAPIs {
     modelo: string;
     ativo: boolean;
   };
+  openai?: {
+    api_key: string;
+    modelo_imagem: string;
+    ativo: boolean;
+  };
   cache: {
     busca_voos_ttl: number;
     aeroportos_ttl: number;
