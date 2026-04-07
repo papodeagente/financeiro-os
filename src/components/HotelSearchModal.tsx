@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Hotel, Search, Loader2, Star, MapPin, X, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import type { SearchAPIHotelProperty } from '@/lib/searchapi-hotels';
-import { formatAmenities } from '@/lib/hotel-data-mapper';
+import { formatAmenities, importHotelImages } from '@/lib/hotel-data-mapper';
 
 interface HotelSearchModalProps {
   open: boolean;
@@ -45,6 +45,7 @@ export function HotelSearchModal({
   const [adults, setAdults] = useState(2);
   const [results, setResults] = useState<SearchAPIHotelProperty[]>([]);
   const [searching, setSearching] = useState(false);
+  const [importingId, setImportingId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -88,9 +89,17 @@ export function HotelSearchModal({
     setSearching(false);
   };
 
-  const handleSelect = (hotel: SearchAPIHotelProperty) => {
-    onSelect(hotel);
-    onClose();
+  const handleSelect = async (hotel: SearchAPIHotelProperty) => {
+    // Download remote images to local storage so the proposta keeps them
+    // forever even if Google rotates/expires the CDN URLs.
+    setImportingId(hotel.property_token);
+    try {
+      const withLocalImages = await importHotelImages(hotel);
+      onSelect(withLocalImages);
+      onClose();
+    } finally {
+      setImportingId(null);
+    }
   };
 
   return (
@@ -266,9 +275,20 @@ export function HotelSearchModal({
                         {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                         {expanded ? 'Menos' : 'Fotos e detalhes'}
                       </button>
-                      <button onClick={() => handleSelect(hotel)}
-                        className="flex items-center gap-1 px-3 py-1 bg-[var(--t-green)]/10 text-[var(--t-green)] text-xs rounded hover:bg-[var(--t-green)]/20 font-medium">
-                        <Check className="w-3 h-3" /> Selecionar
+                      <button
+                        onClick={() => handleSelect(hotel)}
+                        disabled={importingId === hotel.property_token}
+                        className="flex items-center gap-1 px-3 py-1 bg-[var(--t-green)]/10 text-[var(--t-green)] text-xs rounded hover:bg-[var(--t-green)]/20 font-medium disabled:opacity-60 disabled:cursor-wait"
+                      >
+                        {importingId === hotel.property_token ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin" /> Importando fotos...
+                          </>
+                        ) : (
+                          <>
+                            <Check className="w-3 h-3" /> Selecionar
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>

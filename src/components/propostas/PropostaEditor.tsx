@@ -27,8 +27,8 @@ import { BlockToolbar } from './BlockToolbar';
 import { PropostaSidebar } from './PropostaSidebar';
 import { FlightSearchModal } from '@/components/FlightSearchModal';
 import { HotelSearchModal } from '@/components/HotelSearchModal';
-import { formatFlightForProposta, formatFlightForTransporte } from '@/lib/flight-data-mapper';
-import { formatHotelForProposta, formatHotelForAlojamento } from '@/lib/hotel-data-mapper';
+import { formatFlightForTransporte } from '@/lib/flight-data-mapper';
+import { formatHotelForAlojamento } from '@/lib/hotel-data-mapper';
 import type { FlightOffer } from '@/lib/flight-data-mapper';
 import type { GooglePlace } from '@/lib/hotel-data-mapper';
 import type { AlojamentoData, TransporteData } from '@/lib/crm-types';
@@ -360,66 +360,51 @@ export function PropostaEditor({ proposta: initialProposta, clientes, membros, i
   };
 
   const handleFlightSelect = (ida: FlightOffer, volta?: FlightOffer) => {
-    const isDiscovery = proposta.visual.layout === 'DISCOVERY';
-    if (isDiscovery) {
-      const idaTransportes = formatFlightForTransporte(ida);
-      const voltaTransportes = volta ? formatFlightForTransporte(volta) : [];
-      const allTransportes = [...idaTransportes, ...voltaTransportes];
-      update(p => ({
-        ...p,
-        secoes: [...p.secoes, ...allTransportes.map((conteudo, i) => ({
+    // Combine ida + volta into a single offer so the mapper produces two
+    // tagged TRANSPORTE entries (IDA + VOLTA). Use volta.price as the total
+    // because SearchAPI returns the full round-trip price on the volta leg.
+    const combined: FlightOffer = volta
+      ? {
+          ...ida,
+          price: volta.price || ida.price,
+          returnFlights: volta.flights,
+          returnDuration: volta.totalDuration,
+          returnLayovers: volta.layovers,
+        }
+      : ida;
+
+    const transportes = formatFlightForTransporte(combined);
+
+    update(p => ({
+      ...p,
+      secoes: [
+        ...p.secoes,
+        ...transportes.map((conteudo, i) => ({
           id: generateId(),
           tipo: 'TRANSPORTE' as SecaoProposta['tipo'],
           ordem: p.secoes.length + i,
           visivel: true,
           conteudo,
-        }))],
-      }));
-    } else {
-      const combined: FlightOffer = volta
-        ? { ...ida, returnFlights: volta.flights, returnDuration: volta.totalDuration, returnLayovers: volta.layovers }
-        : ida;
-      const conteudo = formatFlightForProposta(combined);
-      update(p => ({
-        ...p,
-        secoes: [...p.secoes, {
-          id: generateId(),
-          tipo: 'SERVICO' as SecaoProposta['tipo'],
-          ordem: p.secoes.length,
-          visivel: true,
-          conteudo,
-        }],
-      }));
-    }
+        })),
+      ],
+    }));
   };
 
   const handleHotelSelect = (place: GooglePlace) => {
-    const isDiscovery = proposta.visual.layout === 'DISCOVERY';
-    if (isDiscovery) {
-      const conteudo = formatHotelForAlojamento(place);
-      update(p => ({
-        ...p,
-        secoes: [...p.secoes, {
-          id: generateId(),
-          tipo: 'ALOJAMENTO' as SecaoProposta['tipo'],
-          ordem: p.secoes.length,
-          visivel: true,
-          conteudo,
-        }],
-      }));
-    } else {
-      const conteudo = formatHotelForProposta(place);
-      update(p => ({
-        ...p,
-        secoes: [...p.secoes, {
-          id: generateId(),
-          tipo: 'SERVICO' as SecaoProposta['tipo'],
-          ordem: p.secoes.length,
-          visivel: true,
-          conteudo,
-        }],
-      }));
-    }
+    // Always create rich ALOJAMENTO blocks regardless of layout — both
+    // CLASSICO and DISCOVERY renderers know how to show them with photo,
+    // gallery, amenities and ratings.
+    const conteudo = formatHotelForAlojamento(place);
+    update(p => ({
+      ...p,
+      secoes: [...p.secoes, {
+        id: generateId(),
+        tipo: 'ALOJAMENTO' as SecaoProposta['tipo'],
+        ordem: p.secoes.length,
+        visivel: true,
+        conteudo,
+      }],
+    }));
   };
 
   const getAIContext = useCallback(() => ({

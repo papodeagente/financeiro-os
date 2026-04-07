@@ -564,6 +564,12 @@ export interface AlojamentoData {
   bebidas?: string;
   lat?: number;
   lng?: number;
+  // Campos enriquecidos (preenchidos automaticamente quando importado do Google Hotels via SearchAPI)
+  preco_noite?: number | null;
+  preco_total?: number | null;
+  rating?: number;
+  reviews_count?: number;
+  amenities?: string[];
 }
 
 export interface TransporteData {

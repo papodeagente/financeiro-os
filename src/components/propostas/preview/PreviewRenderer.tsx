@@ -395,15 +395,18 @@ const REGIME_LABELS: Record<string, string> = {
   RO: 'Room Only', BB: 'Bed & Breakfast', HB: 'Half Board', FB: 'Full Board', AI: 'All Inclusive',
 };
 
+function safeImg(url?: string): string {
+  if (!url) return '';
+  // Local uploads + same-origin paths render directly
+  if (url.startsWith('/')) return url;
+  // Already proxied
+  if (url.includes('/api/img-proxy')) return url;
+  // External — go through proxy so referrer/CORS issues don't break it
+  return `/api/img-proxy?url=${encodeURIComponent(url)}`;
+}
+
 function AlojamentoPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
-  const a = conteudo as Partial<AlojamentoData & {
-    hotel_galeria?: string[];
-    preco_noite?: number;
-    preco_total?: number;
-    rating?: number;
-    reviews_count?: number;
-    amenities?: string[];
-  }>;
+  const a = conteudo as Partial<AlojamentoData>;
 
   const hasGallery = a.hotel_galeria && a.hotel_galeria.length > 0;
   const hasImage = !!a.hotel_imagem;
@@ -426,7 +429,7 @@ function AlojamentoPreview({ conteudo }: { conteudo: Record<string, unknown> }) 
       {/* Image hero */}
       {hasImage && (
         <div className="relative h-52 w-full">
-          <img src={a.hotel_imagem!} alt={a.hotel_nome || ''} className="w-full h-full object-cover" />
+          <img src={safeImg(a.hotel_imagem)} alt={a.hotel_nome || ''} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
           <div className="absolute bottom-4 left-5 right-5">
             <div className="flex items-center gap-2">
@@ -456,7 +459,7 @@ function AlojamentoPreview({ conteudo }: { conteudo: Record<string, unknown> }) 
       {hasGallery && (
         <div className="flex gap-0.5 overflow-x-auto bg-gray-100">
           {a.hotel_galeria!.slice(0, 6).map((url, i) => (
-            <img key={i} src={url} alt="" className="w-20 h-14 object-cover shrink-0" loading="lazy" />
+            <img key={i} src={safeImg(url)} alt="" className="w-20 h-14 object-cover shrink-0" loading="lazy" referrerPolicy="no-referrer" />
           ))}
         </div>
       )}

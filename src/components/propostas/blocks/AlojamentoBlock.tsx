@@ -7,6 +7,8 @@ import { ImageUpload } from '../ImageUpload';
 import { HotelSearchModal } from '@/components/HotelSearchModal';
 import { formatHotelForAlojamento } from '@/lib/hotel-data-mapper';
 import type { SearchAPIHotelProperty } from '@/lib/searchapi-hotels';
+// Note: HotelSearchModal already runs importHotelImages() before calling
+// onSelect, so the hotel argument here always has local image URLs.
 import type { BlockProps } from './types';
 import type { AlojamentoData, RegimeRefeicao } from '@/lib/crm-types';
 
@@ -23,6 +25,12 @@ function calcNoites(checkIn: string, checkOut: string): number {
   const d1 = new Date(checkIn + 'T12:00:00');
   const d2 = new Date(checkOut + 'T12:00:00');
   return Math.max(0, Math.round((d2.getTime() - d1.getTime()) / 86400000));
+}
+
+function proxiedImg(url: string): string {
+  if (!url) return '';
+  if (url.startsWith('/') || url.includes('/api/img-proxy')) return url;
+  return `/api/img-proxy?url=${encodeURIComponent(url)}`;
 }
 
 export function AlojamentoBlock({ conteudo, onChange }: BlockProps) {
@@ -210,7 +218,8 @@ export function AlojamentoBlock({ conteudo, onChange }: BlockProps) {
           <label className="text-[10px] text-[var(--t-text-muted)]">Galeria ({c.hotel_galeria.length} fotos)</label>
           <div className="flex gap-1.5 overflow-x-auto pb-1 mt-1">
             {c.hotel_galeria.map((url, i) => (
-              <img key={i} src={url as string} alt={`Foto ${i + 1}`}
+              <img key={i} src={proxiedImg(url as string)} alt={`Foto ${i + 1}`}
+                referrerPolicy="no-referrer"
                 className="w-20 h-14 object-cover rounded shrink-0 cursor-pointer hover:opacity-80"
                 onClick={() => window.open(url as string, '_blank')} loading="lazy" />
             ))}

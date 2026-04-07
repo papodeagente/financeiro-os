@@ -1,7 +1,56 @@
 // Hotel data mapper — converts SearchAPI Google Hotels responses to system formats
 
 import type { HtlInfo } from './types';
-import type { SearchAPIHotelProperty } from './searchapi-hotels';
+import type { SearchAPIHotelProperty, SearchAPIHotelImage } from './searchapi-hotels';
+
+/**
+ * Downloads remote hotel images to local storage and returns a hotel
+ * object with images replaced by local URLs.
+ *
+ * Google Hotels image URLs (lh*.googleusercontent.com, bstatic.com, etc.)
+ * are not stable: they can rotate, expire, or be blocked by referrer
+ * policies. Persisting them as-is on the proposta makes the photos
+ * disappear later. Downloading once on import keeps them forever.
+ *
+ * Falls back to original URLs if the import endpoint is unavailable.
+ */
+export async function importHotelImages(
+  hotel: SearchAPIHotelProperty,
+  maxImages = 12,
+): Promise<SearchAPIHotelProperty> {
+  const original = hotel.images || [];
+  if (original.length === 0) return hotel;
+
+  // Pick the largest URL available for each image
+  const sourceUrls: string[] = original
+    .slice(0, maxImages)
+    .map((img) => img.original || img.thumbnail || '')
+    .filter(Boolean);
+
+  if (sourceUrls.length === 0) return hotel;
+
+  try {
+    const res = await fetch('/api/import-images', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urls: sourceUrls }),
+    });
+    if (!res.ok) return hotel;
+    const data = await res.json();
+    const localUrls: (string | null)[] = data.urls || [];
+
+    const newImages: SearchAPIHotelImage[] = sourceUrls.map((src, i) => {
+      const local = localUrls[i];
+      if (local) return { original: local, thumbnail: local };
+      // Fallback to original if download failed
+      return { original: src, thumbnail: original[i]?.thumbnail || src };
+    });
+
+    return { ...hotel, images: newImages };
+  } catch {
+    return hotel;
+  }
+}
 
 // Re-export as the canonical hotel type used across the system
 export type HotelResult = SearchAPIHotelProperty;
