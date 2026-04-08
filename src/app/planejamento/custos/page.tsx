@@ -57,10 +57,10 @@ function createDefault(mes: string): CustosData {
     mes,
     custos_fixos: CATEGORIAS_FIXOS.map(c => ({ categoria: c, valor: 0, observacao: '' })),
     custos_variaveis: [
-      { nome: 'Comissao vendedor', percentual: 0, base: 'COMISSAO' },
+      { nome: 'Comissão vendedor', percentual: 0, base: 'COMISSAO' },
       { nome: 'Impostos', percentual: 6, base: 'COMISSAO' },
-      { nome: 'Taxa cartao/boleto', percentual: 4.5, base: 'VENDA' },
-      { nome: 'Outros variaveis', percentual: 0, base: 'VENDA' },
+      { nome: 'Taxa cartão/boleto', percentual: 4.5, base: 'VENDA' },
+      { nome: 'Outros variáveis', percentual: 0, base: 'VENDA' },
     ],
     marketing: CANAIS_MARKETING.map(c => ({ canal: c, valor: 0 })),
     ticket_medio: 8000,
@@ -159,13 +159,13 @@ function MetricCard({ label, value, sub, icon: Icon, color }: {
 }) {
   return (
     <div className="p-4 rounded-xl bg-[var(--t-surface)] shadow-[var(--t-card-shadow)]">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-[var(--t-text-muted)]">{label}</p>
-          <p className="text-xl font-bold mt-1" style={{ color }}>{value}</p>
-          {sub && <p className="text-[11px] text-[var(--t-text-muted)] mt-0.5">{sub}</p>}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--t-text-secondary)]">{label}</p>
+          <p className="text-xl font-bold mt-1 truncate" style={{ color }} title={value}>{value}</p>
+          {sub && <p className="text-[12px] text-[var(--t-text-secondary)] mt-0.5 truncate">{sub}</p>}
         </div>
-        <div className="p-2 rounded-lg" style={{ backgroundColor: color + '18' }}>
+        <div className="p-2 rounded-lg shrink-0" style={{ backgroundColor: color + '18' }}>
           <Icon className="w-4 h-4" style={{ color }} />
         </div>
       </div>
@@ -177,12 +177,12 @@ function ReportLine({ label, value, highlight, warn }: {
   label: string; value: string; highlight?: boolean; warn?: boolean;
 }) {
   return (
-    <div className={`flex items-center justify-between py-2.5 px-4 ${highlight ? 'bg-[var(--t-surface-hover)]' : ''}`}>
-      <div className="flex items-center gap-2">
-        {warn ? <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> : highlight ? <CheckCircle className="w-3.5 h-3.5 text-green-500" /> : <ArrowRight className="w-3 h-3 text-[var(--t-text-muted)]" />}
-        <span className={`text-sm ${highlight ? 'font-semibold text-[var(--t-text)]' : 'text-[var(--t-text-secondary)]'}`}>{label}</span>
+    <div className={`flex items-center justify-between gap-3 py-2.5 px-4 ${highlight ? 'bg-[var(--t-surface-hover)]' : ''}`}>
+      <div className="flex items-center gap-2 min-w-0">
+        {warn ? <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" /> : highlight ? <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0" /> : <ArrowRight className="w-3 h-3 text-[var(--t-text-secondary)] shrink-0" />}
+        <span className={`text-sm leading-snug ${highlight ? 'font-semibold text-[var(--t-text)]' : 'text-[var(--t-text-secondary)]'}`}>{label}</span>
       </div>
-      <span className={`text-sm font-mono ${highlight ? 'font-bold text-[var(--t-text)]' : 'text-[var(--t-text)]'}`}>{value}</span>
+      <span className={`text-sm font-mono tabular-nums whitespace-nowrap ${highlight ? 'font-bold text-[var(--t-text)]' : 'text-[var(--t-text)]'}`}>{value}</span>
     </div>
   );
 }
@@ -280,41 +280,41 @@ export default function CustosPage() {
       />
 
       {/* ============================================================ */}
-      {/* INDICADORES DO MES */}
+      {/* INDICADORES DO MÊS */}
       {/* ============================================================ */}
       <section className="mb-8">
-        <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-4 flex items-center gap-2">
+        <h2 className="text-[var(--text-body-lg)] font-semibold text-[var(--t-text)] mb-4 flex items-center gap-2">
           <Target className="w-5 h-5" style={{ color: '#d4a853' }} />
-          Indicadores do mes
+          Indicadores do mês
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <div className="p-3 rounded-xl bg-[var(--t-surface)] shadow-[var(--t-card-shadow)]">
-            <label className="text-[10px] uppercase tracking-wider text-[var(--t-text-muted)] block mb-1">Ticket medio</label>
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-[var(--t-text-secondary)] block mb-1.5">Ticket médio</label>
             <MoneyInput value={data.ticket_medio} onChange={v => setData({ ...data, ticket_medio: v ?? 0 })} />
           </div>
           <div className="p-3 rounded-xl bg-[var(--t-surface)] shadow-[var(--t-card-shadow)]">
-            <label className="text-[10px] uppercase tracking-wider text-[var(--t-text-muted)] block mb-1">Margem comissao (%)</label>
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-[var(--t-text-secondary)] block mb-1.5">Margem comissão (%)</label>
             <input type="number" min={0} max={100} step={0.5} value={data.margem_comissao || ''} onChange={e => setData({ ...data, margem_comissao: parseFloat(e.target.value) || 0 })}
               className="w-full px-3 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
-            <p className="text-[10px] text-[var(--t-text-muted)] mt-1">Comissao: {formatBRL(rel.comissaoPorVenda)}/venda</p>
+            <p className="text-[12px] text-[var(--t-text-secondary)] mt-1.5">Comissão: {formatBRL(rel.comissaoPorVenda)}/venda</p>
           </div>
           <div className="p-3 rounded-xl bg-[var(--t-surface)] shadow-[var(--t-card-shadow)]">
-            <label className="text-[10px] uppercase tracking-wider text-[var(--t-text-muted)] block mb-1">Taxa conversao (%)</label>
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-[var(--t-text-secondary)] block mb-1.5">Taxa conversão (%)</label>
             <input type="number" min={0} max={100} step={0.5} value={data.taxa_conversao || ''} onChange={e => setData({ ...data, taxa_conversao: parseFloat(e.target.value) || 0 })}
               className="w-full px-3 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
-            <p className="text-[10px] text-[var(--t-text-muted)] mt-1">A cada 100 leads, {data.taxa_conversao} viram venda</p>
+            <p className="text-[12px] text-[var(--t-text-secondary)] mt-1.5">A cada 100 leads, {data.taxa_conversao} viram venda</p>
           </div>
           <div className="p-3 rounded-xl bg-[var(--t-surface)] shadow-[var(--t-card-shadow)]">
-            <label className="text-[10px] uppercase tracking-wider text-[var(--t-text-muted)] block mb-1">Lucro desejado</label>
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-[var(--t-text-secondary)] block mb-1.5">Lucro desejado</label>
             <MoneyInput value={data.lucro_desejado} onChange={v => setData({ ...data, lucro_desejado: v ?? 0 })} />
           </div>
           <div className="p-3 rounded-xl bg-[var(--t-surface)] shadow-[var(--t-card-shadow)]">
-            <label className="text-[10px] uppercase tracking-wider text-[var(--t-text-muted)] block mb-1">Dias uteis</label>
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-[var(--t-text-secondary)] block mb-1.5">Dias úteis</label>
             <input type="number" min={1} max={31} value={data.dias_uteis || ''} onChange={e => setData({ ...data, dias_uteis: parseInt(e.target.value) || 0 })}
               className="w-full px-3 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
           </div>
           <div className="p-3 rounded-xl bg-[var(--t-surface)] shadow-[var(--t-card-shadow)]">
-            <label className="text-[10px] uppercase tracking-wider text-[var(--t-text-muted)] block mb-1">Vendedores ativos</label>
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-[var(--t-text-secondary)] block mb-1.5">Vendedores ativos</label>
             <input type="number" min={1} max={100} value={data.vendedores_ativos || ''} onChange={e => setData({ ...data, vendedores_ativos: parseInt(e.target.value) || 0 })}
               className="w-full px-3 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
           </div>
@@ -326,26 +326,26 @@ export default function CustosPage() {
         <div className="space-y-8">
           {/* Custos Fixos */}
           <section>
-            <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-3">Custos fixos mensais</h2>
+            <h2 className="text-[var(--text-body-lg)] font-semibold text-[var(--t-text)] mb-3">Custos fixos mensais</h2>
             <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] overflow-hidden">
               {data.custos_fixos.map((item, i) => (
                 <div key={i} className="flex items-center gap-4 px-4 py-2.5 border-b border-[var(--t-border)] last:border-b-0">
                   <span className="text-[var(--text-body-sm)] text-[var(--t-text)] w-48 shrink-0">{item.categoria}</span>
                   <MoneyInput value={item.valor} onChange={v => { const c = [...data.custos_fixos]; c[i] = { ...c[i], valor: v ?? 0 }; setData({ ...data, custos_fixos: c }); }} />
                   <input value={item.observacao} onChange={e => { const c = [...data.custos_fixos]; c[i] = { ...c[i], observacao: e.target.value }; setData({ ...data, custos_fixos: c }); }}
-                    placeholder="Obs" className="flex-1 px-3 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
+                    placeholder="Observação" className="flex-1 px-3 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
                 </div>
               ))}
               <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--t-surface-hover)]">
-                <span className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)]">Total fixo</span>
-                <span className="text-[var(--text-body)] font-medium text-[var(--t-text)]">{formatBRL(totalFixo)}</span>
+                <span className="text-[var(--text-body-sm)] font-semibold text-[var(--t-text)]">Total fixo</span>
+                <span className="text-[var(--text-body)] font-semibold text-[var(--t-text)]">{formatBRL(totalFixo)}</span>
               </div>
             </div>
           </section>
 
-          {/* Custos Variaveis */}
+          {/* Custos Variáveis */}
           <section>
-            <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-3">Custos variaveis por venda</h2>
+            <h2 className="text-[var(--text-body-lg)] font-semibold text-[var(--t-text)] mb-3">Custos variáveis por venda</h2>
             <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] overflow-hidden">
               {data.custos_variaveis.map((item, i) => (
                 <div key={i} className="flex items-center gap-3 px-4 py-2.5 border-b border-[var(--t-border)] last:border-b-0">
@@ -353,28 +353,28 @@ export default function CustosPage() {
                   <div className="flex items-center gap-1">
                     <input type="number" value={item.percentual || ''} onChange={e => { const c = [...data.custos_variaveis]; c[i] = { ...c[i], percentual: parseFloat(e.target.value) || 0 }; setData({ ...data, custos_variaveis: c }); }}
                       className="w-16 px-2 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)] text-right" />
-                    <span className="text-[var(--text-body-sm)] text-[var(--t-text-muted)]">%</span>
+                    <span className="text-[var(--text-body-sm)] text-[var(--t-text-secondary)]">%</span>
                   </div>
                   <select value={item.base || 'VENDA'} onChange={e => { const c = [...data.custos_variaveis]; c[i] = { ...c[i], base: e.target.value as 'VENDA' | 'COMISSAO' }; setData({ ...data, custos_variaveis: c }); }}
-                    className="px-2 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-caption)] text-[var(--t-text)] min-w-[140px]">
+                    className="px-2 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[12px] text-[var(--t-text)] min-w-[140px]">
                     <option value="VENDA">% da venda</option>
-                    <option value="COMISSAO">% da comissao</option>
+                    <option value="COMISSAO">% da comissão</option>
                   </select>
-                  <span className="text-[var(--text-caption)] text-[var(--t-text-muted)] ml-auto">
+                  <span className="text-[12px] text-[var(--t-text-secondary)] ml-auto whitespace-nowrap">
                     {formatBRL((item.base === 'COMISSAO' ? rel.comissaoPorVenda : data.ticket_medio) * (item.percentual || 0) / 100)}/venda
                   </span>
                 </div>
               ))}
               <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--t-surface-hover)]">
-                <span className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)]">Total variavel por venda</span>
-                <span className="text-[var(--text-body)] font-medium text-[var(--t-text)]">{formatBRL(rel.custoVarPorVenda)}</span>
+                <span className="text-[var(--text-body-sm)] font-semibold text-[var(--t-text)]">Total variável por venda</span>
+                <span className="text-[var(--text-body)] font-semibold text-[var(--t-text)]">{formatBRL(rel.custoVarPorVenda)}</span>
               </div>
             </div>
           </section>
 
           {/* Marketing */}
           <section>
-            <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-3">Investimento em marketing</h2>
+            <h2 className="text-[var(--text-body-lg)] font-semibold text-[var(--t-text)] mb-3">Investimento em marketing</h2>
             <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] overflow-hidden">
               {data.marketing.map((item, i) => (
                 <div key={i} className="flex items-center gap-4 px-4 py-2.5 border-b border-[var(--t-border)] last:border-b-0">
@@ -383,8 +383,8 @@ export default function CustosPage() {
                 </div>
               ))}
               <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--t-surface-hover)]">
-                <span className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)]">Total marketing</span>
-                <span className="text-[var(--text-body)] font-medium text-[var(--t-text)]">{formatBRL(totalMarketing)}</span>
+                <span className="text-[var(--text-body-sm)] font-semibold text-[var(--t-text)]">Total marketing</span>
+                <span className="text-[var(--text-body)] font-semibold text-[var(--t-text)]">{formatBRL(totalMarketing)}</span>
               </div>
             </div>
           </section>
@@ -396,64 +396,64 @@ export default function CustosPage() {
 
             {/* Cards resumo */}
             <div className="grid grid-cols-2 gap-3">
-              <MetricCard label="Ponto de Equilibrio" value={`${rel.vendasBreakEven} vendas`} sub={formatBRL(rel.faturamentoBreakEven)} icon={Target} color="#f59e0b" />
+              <MetricCard label="Ponto de Equilíbrio" value={`${rel.vendasBreakEven} vendas`} sub={formatBRL(rel.faturamentoBreakEven)} icon={Target} color="#f59e0b" />
               <MetricCard label="Meta Lucro" value={`${rel.vendasMeta} vendas`} sub={formatBRL(rel.faturamentoMeta)} icon={TrendingUp} color="#22c55e" />
-              <MetricCard label="Atendimentos/mes" value={`${rel.atendimentosMeta}`} sub={`${rel.atendimentosPorDia}/dia`} icon={Users} color="#3b82f6" />
-              <MetricCard label="CPL Maximo" value={formatBRL(rel.cplMaximo)} sub={`ROI: ${rel.roiMarketing.toFixed(1)}x`} icon={DollarSign} color="#8b5cf6" />
+              <MetricCard label="Atendimentos/mês" value={`${rel.atendimentosMeta}`} sub={`${rel.atendimentosPorDia}/dia`} icon={Users} color="#3b82f6" />
+              <MetricCard label="CPL Máximo" value={formatBRL(rel.cplMaximo)} sub={`ROI: ${rel.roiMarketing.toFixed(1)}x`} icon={DollarSign} color="#8b5cf6" />
             </div>
 
-            {/* Relatorio detalhado */}
+            {/* Relatório detalhado */}
             <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] overflow-hidden">
               <div className="px-4 py-3 flex items-center gap-2" style={{ backgroundColor: '#1a1a2e' }}>
                 <BarChart3 className="w-4 h-4" style={{ color: '#d4a853' }} />
-                <span className="text-sm font-semibold text-[var(--t-text)]">Relatorio de Precisao</span>
+                <span className="text-sm font-semibold text-white">Relatório de Precisão</span>
               </div>
 
               {/* Estrutura de custos */}
               <div className="px-4 py-2 bg-[var(--t-surface-hover)]">
-                <span className="text-[10px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)]">Estrutura de custos</span>
+                <span className="text-[11px] uppercase tracking-wider font-semibold text-[var(--t-text-secondary)]">Estrutura de custos</span>
               </div>
               <ReportLine label="Custos fixos + marketing" value={formatBRL(rel.custoFixoMaisMarketing)} />
-              <ReportLine label="Comissao por venda" value={formatBRL(rel.comissaoPorVenda)} />
-              <ReportLine label="Custo variavel por venda" value={formatBRL(rel.custoVarPorVenda)} />
-              <ReportLine label="Lucro liquido por venda" value={formatBRL(rel.lucroPorVenda)} highlight />
+              <ReportLine label="Comissão por venda" value={formatBRL(rel.comissaoPorVenda)} />
+              <ReportLine label="Custo variável por venda" value={formatBRL(rel.custoVarPorVenda)} />
+              <ReportLine label="Lucro líquido por venda" value={formatBRL(rel.lucroPorVenda)} highlight />
 
               {/* Ponto de equilíbrio */}
               <div className="px-4 py-2 bg-[var(--t-surface-hover)]">
-                <span className="text-[10px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)]">Ponto de equilibrio</span>
+                <span className="text-[11px] uppercase tracking-wider font-semibold text-[var(--t-text-secondary)]">Ponto de equilíbrio</span>
               </div>
               <ReportLine label="Vendas para cobrir custos" value={`${rel.vendasBreakEven} vendas`} warn={rel.vendasBreakEven > rel.vendasMeta} />
-              <ReportLine label="Faturamento minimo" value={formatBRL(rel.faturamentoBreakEven)} highlight />
+              <ReportLine label="Faturamento mínimo" value={formatBRL(rel.faturamentoBreakEven)} highlight />
 
               {/* Meta mensal */}
               <div className="px-4 py-2 bg-[var(--t-surface-hover)]">
-                <span className="text-[10px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)]">Meta para lucro de {formatBRL(data.lucro_desejado)}</span>
+                <span className="text-[11px] uppercase tracking-wider font-semibold text-[var(--t-text-secondary)]">Meta para lucro de {formatBRL(data.lucro_desejado)}</span>
               </div>
-              <ReportLine label="Vendas necessarias" value={`${rel.vendasMeta} vendas`} highlight />
-              <ReportLine label="Faturamento necessario" value={formatBRL(rel.faturamentoMeta)} />
-              <ReportLine label="Comissao total" value={formatBRL(rel.comissaoMeta)} />
-              <ReportLine label="Margem liquida s/ faturamento" value={`${rel.margemLiquidaPct.toFixed(1)}%`} />
+              <ReportLine label="Vendas necessárias" value={`${rel.vendasMeta} vendas`} highlight />
+              <ReportLine label="Faturamento necessário" value={formatBRL(rel.faturamentoMeta)} />
+              <ReportLine label="Comissão total" value={formatBRL(rel.comissaoMeta)} />
+              <ReportLine label="Margem líquida s/ faturamento" value={`${rel.margemLiquidaPct.toFixed(1)}%`} />
 
-              {/* Ritmo diario */}
+              {/* Ritmo diário */}
               <div className="px-4 py-2 bg-[var(--t-surface-hover)]">
-                <span className="text-[10px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)]">Ritmo diario ({data.dias_uteis} dias uteis)</span>
+                <span className="text-[11px] uppercase tracking-wider font-semibold text-[var(--t-text-secondary)]">Ritmo diário ({data.dias_uteis} dias úteis)</span>
               </div>
               <ReportLine label="Faturamento por dia" value={formatBRL(rel.faturamentoDiario)} />
               <ReportLine label="Vendas por dia" value={`${rel.vendasPorDia.toFixed(1)}`} />
               {data.vendedores_ativos > 1 && (
                 <>
-                  <ReportLine label={`Vendas/vendedor/mes (${data.vendedores_ativos} vendedores)`} value={`${rel.vendasPorVendedorMes}`} />
+                  <ReportLine label={`Vendas/vendedor/mês (${data.vendedores_ativos} vendedores)`} value={`${rel.vendasPorVendedorMes}`} />
                   <ReportLine label="Atendimentos/vendedor/dia" value={`${rel.atendimentosPorVendedorDia}`} />
                 </>
               )}
 
               {/* Funil de vendas */}
               <div className="px-4 py-2 bg-[var(--t-surface-hover)]">
-                <span className="text-[10px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)]">Funil de vendas (conversao {data.taxa_conversao}%)</span>
+                <span className="text-[11px] uppercase tracking-wider font-semibold text-[var(--t-text-secondary)]">Funil de vendas (conversão {data.taxa_conversao}%)</span>
               </div>
-              <ReportLine label="Leads/atendimentos necessarios" value={`${rel.atendimentosMeta}`} highlight />
+              <ReportLine label="Leads/atendimentos necessários" value={`${rel.atendimentosMeta}`} highlight />
               <ReportLine label="Atendimentos por dia" value={`${rel.atendimentosPorDia}`} />
-              <ReportLine label="CPL maximo viavel" value={formatBRL(rel.cplMaximo)} highlight warn={rel.cplMaximo < 5} />
+              <ReportLine label="CPL máximo viável" value={formatBRL(rel.cplMaximo)} highlight warn={rel.cplMaximo < 5} />
               <ReportLine label="ROI do marketing" value={`${rel.roiMarketing.toFixed(1)}x`} warn={rel.roiMarketing < 3} />
 
               {/* Alertas e insights */}
@@ -461,33 +461,33 @@ export default function CustosPage() {
                 {rel.lucroPorVenda <= 0 && (
                   <div className="flex items-start gap-2 p-2 rounded-lg bg-red-500/10">
                     <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
-                    <p className="text-xs text-red-400">A comissao por venda nao cobre os custos variaveis. Revise a margem ou os custos.</p>
+                    <p className="text-[13px] leading-snug text-red-500 dark:text-red-400">A comissão por venda não cobre os custos variáveis. Revise a margem ou os custos.</p>
                   </div>
                 )}
                 {rel.cplMaximo > 0 && rel.cplMaximo < 10 && (
                   <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-500/10">
                     <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-                    <p className="text-xs text-amber-400">CPL maximo muito baixo ({formatBRL(rel.cplMaximo)}). Considere aumentar o investimento em marketing ou melhorar a taxa de conversao.</p>
+                    <p className="text-[13px] leading-snug text-amber-600 dark:text-amber-400">CPL máximo muito baixo ({formatBRL(rel.cplMaximo)}). Considere aumentar o investimento em marketing ou melhorar a taxa de conversão.</p>
                   </div>
                 )}
                 {rel.roiMarketing > 0 && rel.roiMarketing < 3 && (
                   <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-500/10">
                     <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-                    <p className="text-xs text-amber-400">ROI do marketing abaixo de 3x. Otimize os canais ou reduza investimento nos menos eficientes.</p>
+                    <p className="text-[13px] leading-snug text-amber-600 dark:text-amber-400">ROI do marketing abaixo de 3x. Otimize os canais ou reduza investimento nos menos eficientes.</p>
                   </div>
                 )}
                 {rel.atendimentosPorVendedorDia > 8 && (
                   <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-500/10">
                     <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-                    <p className="text-xs text-amber-400">Mais de 8 atendimentos/vendedor/dia pode comprometer a qualidade. Considere contratar mais vendedores.</p>
+                    <p className="text-[13px] leading-snug text-amber-600 dark:text-amber-400">Mais de 8 atendimentos/vendedor/dia pode comprometer a qualidade. Considere contratar mais vendedores.</p>
                   </div>
                 )}
                 {rel.vendasMeta > 0 && rel.lucroPorVenda > 0 && (
                   <div className="flex items-start gap-2 p-2 rounded-lg bg-green-500/10">
                     <Zap className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />
-                    <p className="text-xs text-green-400">
+                    <p className="text-[13px] leading-snug text-green-600 dark:text-green-400">
                       Para lucrar {formatBRL(data.lucro_desejado)}: fature {formatBRL(rel.faturamentoMeta)} com {rel.vendasMeta} vendas,
-                      gerando {rel.atendimentosMeta} leads a no maximo {formatBRL(rel.cplMaximo)} cada.
+                      gerando {rel.atendimentosMeta} leads a no máximo {formatBRL(rel.cplMaximo)} cada.
                     </p>
                   </div>
                 )}
