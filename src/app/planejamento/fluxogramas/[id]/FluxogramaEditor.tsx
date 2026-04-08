@@ -331,7 +331,7 @@ function EditorInner({ id }: EditorProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-120px)] text-[var(--t-text-muted)]">
+      <div className="flex items-center justify-center h-screen bg-[var(--t-bg)] text-[var(--t-text-muted)]">
         <Loader2 className="w-5 h-5 animate-spin mr-2" /> Carregando fluxograma...
       </div>
     );
@@ -339,12 +339,12 @@ function EditorInner({ id }: EditorProps) {
 
   if (error || !meta) {
     return (
-      <div className="p-6">
+      <div className="h-screen bg-[var(--t-bg)] p-6">
         <button
           onClick={() => router.push('/planejamento/fluxogramas')}
           className="flex items-center gap-1.5 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] hover:text-[var(--t-text)]"
         >
-          <ArrowLeft className="w-4 h-4" /> Voltar
+          <ArrowLeft className="w-4 h-4" /> Voltar ao sistema
         </button>
         <p className="mt-6 text-[var(--text-body)] text-red-500">{error || 'Não encontrado'}</p>
       </div>
@@ -352,16 +352,18 @@ function EditorInner({ id }: EditorProps) {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-56px)]">
+    <div className="flex flex-col h-screen bg-[var(--t-bg)]">
       {/* Topbar */}
-      <header className="flex items-center gap-3 px-4 py-2 border-b border-[var(--t-border)] bg-[var(--t-surface)]">
+      <header className="flex items-center gap-3 px-4 py-2 border-b border-[var(--t-border)] bg-[var(--t-surface)] shrink-0">
         <button
           onClick={() => router.push('/planejamento/fluxogramas')}
-          className="p-1.5 rounded-md hover:bg-[var(--t-surface-hover)] text-[var(--t-text-muted)]"
-          title="Voltar"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md hover:bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] hover:text-[var(--t-text)] text-[var(--text-body-sm)] font-medium"
+          title="Voltar ao sistema"
         >
           <ArrowLeft className="w-4 h-4" />
+          <span>Voltar ao sistema</span>
         </button>
+        <span className="h-5 w-px bg-[var(--t-border)]" />
         <input
           value={meta.nome}
           onChange={e => updateMeta({ nome: e.target.value })}

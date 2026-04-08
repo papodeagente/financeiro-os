@@ -56,6 +56,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
+  // Fluxograma editor — fullscreen canvas (sem PillarRail/FeaturePanel/TopBar)
+  // A listagem (/planejamento/fluxogramas) continua dentro do shell padrão.
+  if (/^\/planejamento\/fluxogramas\/[^/]+$/.test(pathname)) {
+    return <>{children}</>;
+  }
+
   // Loading session
   if (loading || !user) {
     return (
