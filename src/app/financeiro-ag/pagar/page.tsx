@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ContaPagar, PlanoContas, NaturezaCusto, createContaPagar, StatusContaPagar } from '@/lib/crm-types';
+import { ContaPagar, PlanoContas, NaturezaCusto, createContaPagar, StatusContaPagar, CartaoCorporativo } from '@/lib/crm-types';
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -48,6 +48,7 @@ type FormState = {
   cambio: number;
   data_vencimento: string;
   forma_pagamento: ContaPagar['forma_pagamento'];
+  cartao_id: string;
   natureza_custo: NaturezaCusto | null;
   is_custo_comercial: boolean;
   observacoes: string;
@@ -63,6 +64,7 @@ const EMPTY_FORM: FormState = {
   cambio: 1,
   data_vencimento: '',
   forma_pagamento: '',
+  cartao_id: '',
   natureza_custo: null,
   is_custo_comercial: false,
   observacoes: '',
@@ -83,6 +85,7 @@ function addMonth(ym: string): string {
 export default function ContasPagarPage() {
   const [items, setItems] = useState<ContaPagar[]>([]);
   const [planoContas, setPlanoContas] = useState<PlanoContas[]>([]);
+  const [cartoes, setCartoes] = useState<CartaoCorporativo[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -97,12 +100,14 @@ export default function ContasPagarPage() {
 
   async function load() {
     setLoading(true);
-    const [data, contas] = await Promise.all([
+    const [data, contas, cards] = await Promise.all([
       loadEntities<ContaPagar>('contas-pagar'),
       loadEntities<PlanoContas>('plano-contas'),
+      loadEntities<CartaoCorporativo>('cartoes-corp'),
     ]);
     setItems(data);
     setPlanoContas(contas);
+    setCartoes(cards);
     setLoading(false);
   }
 
@@ -136,6 +141,7 @@ export default function ContasPagarPage() {
       cambio: item.cambio,
       data_vencimento: item.data_vencimento,
       forma_pagamento: item.forma_pagamento,
+      cartao_id: item.cartao_id || '',
       natureza_custo: item.natureza_custo ?? null,
       is_custo_comercial: item.is_custo_comercial ?? false,
       observacoes: item.observacoes,
@@ -147,11 +153,13 @@ export default function ContasPagarPage() {
   async function handleSave() {
     if (!form.fornecedor_nome || !form.descricao || !form.data_vencimento || form.valor_original <= 0) return;
     const valorBrl = form.valor_original * form.cambio;
+    const cartaoIdFinal = form.forma_pagamento === 'CARTAO_CORP' ? (form.cartao_id || null) : null;
     if (editId) {
       const existing = items.find(i => i.id === editId)!;
       const updated: ContaPagar = {
         ...existing,
         ...form,
+        cartao_id: cartaoIdFinal,
         valor_final: form.valor_original,
         valor_brl: valorBrl,
       };
@@ -160,6 +168,7 @@ export default function ContasPagarPage() {
       const nova: ContaPagar = {
         ...createContaPagar(),
         ...form,
+        cartao_id: cartaoIdFinal,
         valor_final: form.valor_original,
         valor_brl: valorBrl,
       };
@@ -600,6 +609,29 @@ export default function ContasPagarPage() {
                     <option value="DEPOSITO">Depósito</option>
                   </select>
                 </div>
+                {form.forma_pagamento === 'CARTAO_CORP' && (
+                  <div>
+                    <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Cartão usado</label>
+                    {cartoes.filter(c => c.ativo).length === 0 ? (
+                      <div className="text-xs text-[var(--t-text-muted)] py-2">
+                        Nenhum cartão ativo. <a href="/financeiro-ag/cartoes" className="text-[var(--t-accent)] underline">Cadastrar</a>
+                      </div>
+                    ) : (
+                      <select
+                        value={form.cartao_id}
+                        onChange={e => setForm(f => ({ ...f, cartao_id: e.target.value }))}
+                        className="w-full bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text)]"
+                      >
+                        <option value="">Selecione o cartão</option>
+                        {cartoes.filter(c => c.ativo).map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.apelido}{c.ultimos_digitos ? ` •••• ${c.ultimos_digitos}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Classification fields */}
