@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { SkeletonCardGrid } from '@/components/SkeletonCard';
 import { generateId } from '@/lib/utils';
+import { toast } from '@/lib/toast';
 import {
   Workflow, Plus, X, FolderPlus, Pencil, Trash2,
   Search, Calendar,
@@ -139,7 +140,7 @@ export default function FluxogramasPage() {
   const removeCategoria = async (id: string) => {
     const usados = fluxogramas.filter(f => f.categoria_id === id).length;
     if (usados > 0) {
-      alert(`Esta categoria possui ${usados} fluxograma(s). Mova-os antes de excluir.`);
+      toast.warning('Não é possível excluir', `Esta categoria possui ${usados} fluxograma(s). Mova-os antes de excluir.`);
       return;
     }
     if (!confirm('Excluir esta categoria?')) return;

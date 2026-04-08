@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { toast } from '@/lib/toast';
 
 const ENDPOINT = 'usuarios';
 
@@ -111,7 +112,7 @@ export default function UsuariosPage() {
       // Hash password if it was changed (not empty and not already a hash)
       if (toSave.senha_hash && !toSave.senha_hash.includes(':')) {
         if (toSave.senha_hash.length < 6) {
-          alert('A senha deve ter no minimo 6 caracteres');
+          toast.error('A senha deve ter no mínimo 6 caracteres');
           setSaving(false);
           return;
         }
@@ -124,7 +125,7 @@ export default function UsuariosPage() {
           const { hash } = await hashRes.json();
           toSave.senha_hash = hash;
         } else {
-          alert('Erro ao processar senha');
+          toast.error('Erro ao processar senha');
           setSaving(false);
           return;
         }

@@ -13,6 +13,9 @@ import {
   Clock, Trash2, Copy, ExternalLink, MessageCircle, Mail,
   ArrowRightLeft, Filter, Bell, UserPlus,
 } from 'lucide-react';
+import { PageShell } from '@/components/PageShell';
+import { PageHeader } from '@/components/PageHeader';
+import { EmptyState } from '@/components/EmptyState';
 
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -89,33 +92,29 @@ export default function PropostasPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--t-text)] flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[var(--t-green)]/10 flex items-center justify-center">
-              <FileText className="w-5 h-5 text-[var(--t-green)]" />
-            </div>
-            Propostas
-          </h1>
-          <p className="text-sm text-[var(--t-text-secondary)] mt-1">
-            Gerencie orcamentos e propostas de viagem
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href="/propostas/analytics">
-            <Button variant="outline" className="gap-2 border-[var(--t-border)] text-purple-400">
-              <Eye className="w-4 h-4" /> Analytics
-            </Button>
-          </Link>
-          <Link href="/propostas/nova">
-            <Button className="bg-[var(--t-green)] hover:bg-[var(--t-green)]/90 text-white dark:text-[#0a0a14] gap-2">
-              <Plus className="w-4 h-4" /> Nova Proposta
-            </Button>
-          </Link>
-        </div>
-      </div>
+    <PageShell
+      header={
+        <PageHeader
+          title="Propostas"
+          subtitle="Gerencie orçamentos e propostas de viagem"
+          icon={<FileText className="w-5 h-5" />}
+          actions={
+            <>
+              <Link href="/propostas/analytics">
+                <Button variant="outline" className="gap-2 border-[var(--t-border)] text-purple-400">
+                  <Eye className="w-4 h-4" /> Analytics
+                </Button>
+              </Link>
+              <Link href="/propostas/nova">
+                <Button className="bg-[var(--t-green)] hover:bg-[var(--t-green)]/90 text-white dark:text-[#0a0a14] gap-2">
+                  <Plus className="w-4 h-4" /> Nova Proposta
+                </Button>
+              </Link>
+            </>
+          }
+        />
+      }
+    >
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -205,21 +204,20 @@ export default function PropostasPage() {
 
       {/* List */}
       {filtered.length === 0 ? (
-        <Card className="bg-[var(--t-bg-secondary)] border-[var(--t-border)]">
-          <CardContent className="py-16 text-center">
-            <FileText className="w-12 h-12 text-[var(--t-text-muted)] mx-auto mb-3" />
-            <p className="text-[var(--t-text-secondary)]">
-              {propostas.length === 0 ? 'Nenhuma proposta criada ainda' : 'Nenhuma proposta encontrada'}
-            </p>
-            {propostas.length === 0 && (
+        <EmptyState
+          icon={<FileText className="w-7 h-7" />}
+          title={propostas.length === 0 ? 'Nenhuma proposta criada' : 'Nenhuma proposta encontrada'}
+          description={propostas.length === 0 ? 'Crie sua primeira proposta para começar a acompanhar conversões.' : 'Ajuste os filtros ou a busca para ver mais resultados.'}
+          action={
+            propostas.length === 0 ? (
               <Link href="/propostas/nova">
-                <Button className="mt-4 bg-[var(--t-green)] text-white dark:text-[#0a0a14]">
+                <Button className="bg-[var(--t-green)] text-white dark:text-[#0a0a14]">
                   Criar primeira proposta
                 </Button>
               </Link>
-            )}
-          </CardContent>
-        </Card>
+            ) : undefined
+          }
+        />
       ) : (
         <div className="space-y-3">
           {filtered.map(p => {
@@ -316,6 +314,6 @@ export default function PropostasPage() {
           })}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

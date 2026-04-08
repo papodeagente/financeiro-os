@@ -13,6 +13,10 @@ import { Input } from '@/components/ui/input';
 import { Plus, Copy, Download, Upload, Trash2, FolderOpen, Filter, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
+import { PageShell } from '@/components/PageShell';
+import { PageHeader } from '@/components/PageHeader';
+import { EmptyState } from '@/components/EmptyState';
+import { toast } from '@/lib/toast';
 
 const PIPELINE_COLORS: Record<string, string> = {
   PRODUTO: 'bg-gray-200 text-gray-700',
@@ -104,7 +108,7 @@ export default function GruposPage() {
         setGrupos(updated);
         await saveGrupos(updated);
       } else {
-        alert('Arquivo JSON invalido');
+        toast.error('Arquivo JSON inválido', 'Verifique se o arquivo foi exportado corretamente.');
       }
     };
     reader.readAsText(file);
@@ -113,53 +117,52 @@ export default function GruposPage() {
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
-      {/* Header */}
-      <header className="bg-[var(--t-surface)] border-b border-[var(--t-border)] shrink-0">
-        <div className="px-6 py-5 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-[var(--t-text)]">Produtos</h1>
-            <p className="text-sm text-[var(--t-text-muted)] mt-1">Crie e configure produtos de viagem para vender</p>
+      <PageShell
+        header={
+          <PageHeader
+            title="Produtos"
+            subtitle="Crie e configure produtos de viagem para vender"
+            actions={
+              <>
+                <Button onClick={() => setShowNewModal(true)} className="bg-[var(--t-green)] hover:opacity-90 text-white font-semibold">
+                  <Plus className="w-4 h-4 mr-2" /> Novo Produto
+                </Button>
+                <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+                  <Upload className="w-4 h-4 mr-2" /> Importar JSON
+                </Button>
+                <input ref={fileInputRef} type="file" accept=".json" onChange={importar} className="hidden" />
+              </>
+            }
+          />
+        }
+      >
+        {/* Filtros */}
+        {grupos.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-[var(--t-text-muted)]" />
+            {PIPELINE_OPTIONS.map(opt => (
+              <button
+                key={opt}
+                onClick={() => setFiltroStatus(opt)}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                  filtroStatus === opt
+                    ? 'bg-[var(--t-accent)] text-white'
+                    : 'bg-[var(--t-bg)] text-[var(--t-text-muted)] hover:bg-[var(--t-surface-hover)]'
+                }`}
+              >
+                {opt === 'TODOS' ? `Todos (${grupos.length})` : `${opt} (${grupos.filter(g => (g.status_pipeline || 'PRODUTO') === opt).length})`}
+              </button>
+            ))}
           </div>
-          <div className="flex gap-3">
-            <Button onClick={() => setShowNewModal(true)} className="bg-[var(--t-green)] hover:opacity-90 text-white font-semibold">
-              <Plus className="w-4 h-4 mr-2" /> Novo Produto
-            </Button>
-            <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
-              <Upload className="w-4 h-4 mr-2" /> Importar JSON
-            </Button>
-            <input ref={fileInputRef} type="file" accept=".json" onChange={importar} className="hidden" />
-          </div>
-        </div>
-      </header>
+        )}
 
-      {/* Filtros */}
-      {grupos.length > 0 && (
-        <div className="px-6 pt-4 flex items-center gap-2">
-          <Filter className="w-4 h-4 text-[var(--t-text-muted)]" />
-          {PIPELINE_OPTIONS.map(opt => (
-            <button
-              key={opt}
-              onClick={() => setFiltroStatus(opt)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                filtroStatus === opt
-                  ? 'bg-[var(--t-accent)] text-white'
-                  : 'bg-[var(--t-bg)] text-[var(--t-text-muted)] hover:bg-[var(--t-surface-hover)]'
-              }`}
-            >
-              {opt === 'TODOS' ? `Todos (${grupos.length})` : `${opt} (${grupos.filter(g => (g.status_pipeline || 'PRODUTO') === opt).length})`}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Content */}
-      <main className="flex-1 overflow-y-auto p-6">
         {grupos.length === 0 ? (
-          <div className="text-center py-20">
-            <FolderOpen className="w-16 h-16 mx-auto text-[var(--t-text-secondary)] mb-4" />
-            <h2 className="text-xl font-semibold text-[var(--t-text-muted)]">Nenhum produto criado</h2>
-            <p className="text-[var(--t-text-secondary)] mt-2">Clique em &quot;Novo Produto&quot; para criar um produto de viagem</p>
-          </div>
+          <EmptyState
+            icon={<FolderOpen className="w-7 h-7" />}
+            title="Nenhum produto criado"
+            description="Crie seu primeiro produto de viagem para começar a montar propostas e fechar vendas."
+            action={{ label: 'Novo Produto', onClick: () => setShowNewModal(true) }}
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {gruposFiltrados.map(g => {
@@ -201,7 +204,7 @@ export default function GruposPage() {
             })}
           </div>
         )}
-      </main>
+      </PageShell>
 
       {/* New Product Modal */}
       {showNewModal && (

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Loader2, Users, Layers, DollarSign, UserCheck, Pause, Play, Save } from 'lucide-react'
+import { toast } from '@/lib/toast'
 
 interface TenantDetail {
   id: string
@@ -67,7 +68,7 @@ export default function AdminTenantDetailPage() {
         window.location.href = data.url
       }
     } catch {
-      alert('Erro ao impersonar agencia')
+      toast.error('Erro ao impersonar agência')
     } finally {
       setActionLoading('')
     }
@@ -81,7 +82,7 @@ export default function AdminTenantDetailPage() {
       if (!res.ok) throw new Error('Falha ao suspender')
       await fetchTenant()
     } catch {
-      alert('Erro ao suspender agencia')
+      toast.error('Erro ao suspender agência')
     } finally {
       setActionLoading('')
     }
@@ -94,7 +95,7 @@ export default function AdminTenantDetailPage() {
       if (!res.ok) throw new Error('Falha ao reativar')
       await fetchTenant()
     } catch {
-      alert('Erro ao reativar agencia')
+      toast.error('Erro ao reativar agência')
     } finally {
       setActionLoading('')
     }

@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { toast } from '@/lib/toast';
 
 const fmt = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -58,7 +59,7 @@ export default function OrcamentosPage() {
       await updateEntity('vendas-crm', updated);
       setVendas(prev => prev.filter(v => v.id !== venda.id));
     } catch {
-      alert('Erro ao converter orçamento.');
+      toast.error('Erro ao converter orçamento');
     } finally {
       setConverting(null);
     }

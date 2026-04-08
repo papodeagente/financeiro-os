@@ -11,6 +11,9 @@ import {
   Plus, X, Check, Trash2, TrendingDown, Clock, AlertCircle, CreditCard,
   Copy, Target, Calendar,
 } from 'lucide-react';
+import { PageShell } from '@/components/PageShell';
+import { PageHeader } from '@/components/PageHeader';
+import { DataTable, DataTableColumn } from '@/components/ui/data-table';
 
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -253,32 +256,128 @@ export default function ContasPagarPage() {
   const STATUSES: Array<StatusContaPagar | 'TODOS'> = ['TODOS', 'PENDENTE', 'PAGO', 'VENCIDO', 'CANCELADO', 'PARCIAL'];
   const despesaContas = planoContas.filter(c => c.tipo === 'DESPESA' && c.codigo.includes('.'));
 
-  return (
-    <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-[var(--t-text)]">Contas a Pagar</h1>
-            <p className="text-[var(--t-text-secondary)] text-sm mt-1">Gestão de obrigações financeiras da agência</p>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              onClick={openCopyModal}
-              variant="outline"
-              className="border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]"
-            >
-              <Copy className="w-4 h-4 mr-2" /> Copiar Mês
-            </Button>
-            <Button
-              onClick={openNew}
-              className="bg-[var(--t-green)] hover:brightness-110 text-white dark:text-[#0a0a14] font-semibold"
-            >
-              <Plus className="w-4 h-4 mr-2" /> Nova Conta
-            </Button>
-          </div>
+  const columns: DataTableColumn<ContaPagar>[] = [
+    {
+      key: 'fornecedor',
+      header: 'Fornecedor',
+      sortable: true,
+      sortAccessor: i => i.fornecedor_nome || '',
+      cell: i => <span className="font-medium text-[var(--t-text)]">{i.fornecedor_nome || '—'}</span>,
+    },
+    {
+      key: 'descricao',
+      header: 'Descrição',
+      cell: i => (
+        <div className="flex items-center gap-2 text-[var(--t-text-secondary)] max-w-xs truncate">
+          <span>{i.descricao}</span>
+          {i.is_custo_comercial && (
+            <span title="Custo Comercial (CAC)">
+              <Target className="w-3 h-3 text-[var(--t-amber)] shrink-0" />
+            </span>
+          )}
         </div>
+      ),
+    },
+    {
+      key: 'valor',
+      header: 'Valor',
+      align: 'right',
+      sortable: true,
+      sortAccessor: i => i.valor_final,
+      cell: i => <span className="font-mono text-[var(--t-text)]">{BRL(i.valor_final)}</span>,
+    },
+    {
+      key: 'natureza',
+      header: 'Natureza',
+      cell: i =>
+        i.natureza_custo ? (
+          <Badge className={`${NATUREZA_COLORS[i.natureza_custo]} border-0 text-[10px]`}>
+            {NATUREZA_LABEL[i.natureza_custo]}
+          </Badge>
+        ) : (
+          <span className="text-[var(--t-text-muted)] text-xs">—</span>
+        ),
+    },
+    {
+      key: 'vencimento',
+      header: 'Vencimento',
+      sortable: true,
+      sortAccessor: i => i.data_vencimento || '',
+      cell: i => (
+        <span className="text-[var(--t-text-secondary)]">
+          {i.data_vencimento ? new Date(i.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: i => (
+        <Badge className={`${STATUS_BADGE[i.status]} border-0 text-xs`}>{i.status}</Badge>
+      ),
+    },
+    {
+      key: 'acoes',
+      header: 'Ações',
+      align: 'right',
+      cell: i => (
+        <div className="flex items-center justify-end gap-2">
+          {(i.status === 'PENDENTE' || i.status === 'VENCIDO' || i.status === 'PARCIAL') && (
+            <Button
+              size="sm"
+              onClick={() => handlePagar(i)}
+              className="bg-[var(--t-green)] hover:brightness-110 text-white dark:text-[#0a0a14] h-7 px-3 text-xs"
+            >
+              <Check className="w-3 h-3 mr-1" /> Pagar
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => openEdit(i)}
+            className="border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)] h-7 px-3 text-xs"
+          >
+            Editar
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleDelete(i.id)}
+            className="border-[var(--t-red)]/30 text-[var(--t-red)] hover:bg-[var(--t-red-bg)] h-7 px-2"
+          >
+            <Trash2 className="w-3 h-3" />
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <PageShell
+      header={
+        <PageHeader
+          title="Contas a Pagar"
+          subtitle="Gestão de obrigações financeiras da agência"
+          actions={
+            <>
+              <Button
+                onClick={openCopyModal}
+                variant="outline"
+                className="border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]"
+              >
+                <Copy className="w-4 h-4 mr-2" /> Copiar Mês
+              </Button>
+              <Button
+                onClick={openNew}
+                className="bg-[var(--t-green)] hover:brightness-110 text-white dark:text-[#0a0a14] font-semibold"
+              >
+                <Plus className="w-4 h-4 mr-2" /> Nova Conta
+              </Button>
+            </>
+          }
+        />
+      }
+    >
 
         {/* Summary Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -623,94 +722,20 @@ export default function ContasPagarPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            {loading ? (
-              <p className="text-[var(--t-text-secondary)] text-sm p-6">Carregando...</p>
-            ) : filtered.length === 0 ? (
-              <p className="text-[var(--t-text-muted)] text-sm p-6 text-center">Nenhum lançamento encontrado.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-[var(--t-border)] text-[var(--t-text-muted)] text-xs uppercase">
-                      <th className="text-left px-4 py-3">Fornecedor</th>
-                      <th className="text-left px-4 py-3">Descrição</th>
-                      <th className="text-right px-4 py-3">Valor</th>
-                      <th className="text-left px-4 py-3">Natureza</th>
-                      <th className="text-left px-4 py-3">Vencimento</th>
-                      <th className="text-left px-4 py-3">Status</th>
-                      <th className="text-right px-4 py-3">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map(item => (
-                      <tr key={item.id} className="border-b border-[var(--t-border)] hover:bg-[var(--t-surface-hover)] transition-colors">
-                        <td className="px-4 py-3 font-medium text-[var(--t-text)]">{item.fornecedor_nome || '—'}</td>
-                        <td className="px-4 py-3 text-[var(--t-text-secondary)] max-w-xs truncate">
-                          <div className="flex items-center gap-2">
-                            <span>{item.descricao}</span>
-                            {item.is_custo_comercial && (
-                              <span title="Custo Comercial (CAC)"><Target className="w-3 h-3 text-[var(--t-amber)] shrink-0" /></span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono text-[var(--t-text)]">{BRL(item.valor_final)}</td>
-                        <td className="px-4 py-3">
-                          {item.natureza_custo ? (
-                            <Badge className={`${NATUREZA_COLORS[item.natureza_custo]} border-0 text-[10px]`}>
-                              {NATUREZA_LABEL[item.natureza_custo]}
-                            </Badge>
-                          ) : (
-                            <span className="text-[var(--t-text-muted)] text-xs">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-[var(--t-text-secondary)]">
-                          {item.data_vencimento
-                            ? new Date(item.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')
-                            : '—'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge className={`${STATUS_BADGE[item.status]} border-0 text-xs`}>
-                            {item.status}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-2">
-                            {(item.status === 'PENDENTE' || item.status === 'VENCIDO' || item.status === 'PARCIAL') && (
-                              <Button
-                                size="sm"
-                                onClick={() => handlePagar(item)}
-                                className="bg-[var(--t-green)] hover:brightness-110 text-white dark:text-[#0a0a14] h-7 px-3 text-xs"
-                              >
-                                <Check className="w-3 h-3 mr-1" /> Pagar
-                              </Button>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openEdit(item)}
-                              className="border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)] h-7 px-3 text-xs"
-                            >
-                              Editar
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleDelete(item.id)}
-                              className="border-[var(--t-red)]/30 text-[var(--t-red)] hover:bg-[var(--t-red-bg)] h-7 px-2"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <DataTable<ContaPagar>
+              columns={columns}
+              data={filtered}
+              loading={loading}
+              rowKey={i => i.id}
+              zebra
+              emptyState={{
+                icon: <CreditCard className="w-10 h-10 opacity-30" />,
+                title: 'Nenhum lançamento encontrado',
+                description: 'Ajuste os filtros ou cadastre uma nova conta a pagar.',
+              }}
+            />
           </CardContent>
         </Card>
-      </div>
-    </div>
+    </PageShell>
   );
 }

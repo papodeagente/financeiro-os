@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Cliente, createCliente } from '@/lib/crm-types';
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
+import { PageHeader } from '@/components/PageHeader';
+import { DataTable, DataTableColumn } from '@/components/ui/data-table';
 
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -149,21 +151,137 @@ export default function ClientesPage() {
     { id: 'preferencias', label: 'Preferências', icon: <Star size={14} /> },
   ];
 
+  const clienteNome = (c: Cliente) =>
+    c.tipo === 'PF' ? c.nome_completo : (c.nome_fantasia || c.razao_social || '');
+
+  const columns: DataTableColumn<Cliente>[] = [
+    {
+      key: 'nome',
+      header: 'Nome',
+      sortable: true,
+      sortAccessor: c => clienteNome(c).toLowerCase(),
+      cell: c => (
+        <div>
+          <div className="font-medium text-[var(--t-text)]">{c.nome_completo || c.razao_social}</div>
+          <div className="text-xs text-[var(--t-text-secondary)]">
+            {c.tipo === 'PF' ? 'Pessoa Física' : 'Pessoa Jurídica'}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'documento',
+      header: 'CPF/CNPJ',
+      headerClassName: 'hidden sm:table-cell',
+      className: 'hidden sm:table-cell',
+      cell: c => <span className="text-[var(--t-text-secondary)]">{c.tipo === 'PF' ? c.cpf : c.cnpj}</span>,
+    },
+    {
+      key: 'telefone',
+      header: 'Telefone',
+      headerClassName: 'hidden md:table-cell',
+      className: 'hidden md:table-cell',
+      cell: c => <span className="text-[var(--t-text-secondary)]">{c.telefone_principal}</span>,
+    },
+    {
+      key: 'email',
+      header: 'E-mail',
+      headerClassName: 'hidden lg:table-cell',
+      className: 'hidden lg:table-cell',
+      cell: c => <span className="text-[var(--t-text-secondary)]">{c.email}</span>,
+    },
+    {
+      key: 'cidade',
+      header: 'Cidade/UF',
+      headerClassName: 'hidden xl:table-cell',
+      className: 'hidden xl:table-cell',
+      cell: c => (
+        <span className="text-[var(--t-text-secondary)]">
+          {[c.cidade, c.estado].filter(Boolean).join(' / ')}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: c => (
+        <Badge
+          className={
+            c.status === 'ATIVO'
+              ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+              : 'bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/20'
+          }
+        >
+          {c.status}
+        </Badge>
+      ),
+    },
+    {
+      key: 'total',
+      header: 'Total Compras',
+      align: 'right',
+      headerClassName: 'hidden lg:table-cell',
+      className: 'hidden lg:table-cell',
+      sortable: true,
+      sortAccessor: c => c.valor_total_historico,
+      cell: c => (
+        <span className="text-[var(--t-accent)] font-medium">{BRL(c.valor_total_historico)}</span>
+      ),
+    },
+    {
+      key: 'acoes',
+      header: '',
+      align: 'right',
+      cell: c => (
+        <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={() => openEdit(c)}
+            className="p-1.5 rounded hover:bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] hover:text-[var(--t-accent)] transition-colors"
+          >
+            <Pencil size={14} />
+          </button>
+          {confirmDelete === c.id ? (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => handleDelete(c.id)}
+                className="px-2 py-1 rounded bg-red-500/20 text-red-400 text-xs hover:bg-red-500/30"
+              >
+                Confirmar
+              </button>
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="px-2 py-1 rounded bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] text-xs"
+              >
+                Cancelar
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmDelete(c.id)}
+              className="p-1.5 rounded hover:bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] hover:text-red-400 transition-colors"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--t-accent)]">Clientes</h1>
-          <p className="text-sm text-[var(--t-text-secondary)] mt-1">{clientes.length} cliente{clientes.length !== 1 ? 's' : ''} cadastrado{clientes.length !== 1 ? 's' : ''}</p>
-        </div>
-        <Button
-          onClick={openNew}
-          className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold gap-2"
-        >
-          <Plus size={16} /> Novo Cliente
-        </Button>
-      </div>
+      <PageHeader
+        title="Clientes"
+        subtitle={`${clientes.length} cliente${clientes.length !== 1 ? 's' : ''} cadastrado${clientes.length !== 1 ? 's' : ''}`}
+        actions={
+          <Button
+            onClick={openNew}
+            className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold gap-2"
+          >
+            <Plus size={16} /> Novo Cliente
+          </Button>
+        }
+      />
 
       {/* Filters */}
       <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)] mb-4">
@@ -625,99 +743,18 @@ export default function ClientesPage() {
       {/* Table */}
       <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)]">
         <CardContent className="p-0">
-          {loading ? (
-            <div className="flex items-center justify-center py-16 text-[var(--t-text-secondary)]">Carregando...</div>
-          ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-[var(--t-text-secondary)]">
-              <User size={40} className="mb-3 opacity-30" />
-              <p>Nenhum cliente encontrado</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--t-border)] text-[var(--t-text-secondary)] text-xs uppercase tracking-wider">
-                    <th className="text-left px-4 py-3">Nome</th>
-                    <th className="text-left px-4 py-3 hidden sm:table-cell">CPF/CNPJ</th>
-                    <th className="text-left px-4 py-3 hidden md:table-cell">Telefone</th>
-                    <th className="text-left px-4 py-3 hidden lg:table-cell">E-mail</th>
-                    <th className="text-left px-4 py-3 hidden xl:table-cell">Cidade/UF</th>
-                    <th className="text-left px-4 py-3">Status</th>
-                    <th className="text-right px-4 py-3 hidden lg:table-cell">Total Compras</th>
-                    <th className="px-4 py-3" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((c) => (
-                    <tr
-                      key={c.id}
-                      className="border-b border-[var(--t-border)]/50 hover:bg-[var(--t-bg)]/50 transition-colors"
-                    >
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-[var(--t-text)]">{c.nome_completo || c.razao_social}</div>
-                        <div className="text-xs text-[var(--t-text-secondary)]">{c.tipo === 'PF' ? 'Pessoa Física' : 'Pessoa Jurídica'}</div>
-                      </td>
-                      <td className="px-4 py-3 text-[var(--t-text-secondary)] hidden sm:table-cell">
-                        {c.tipo === 'PF' ? c.cpf : c.cnpj}
-                      </td>
-                      <td className="px-4 py-3 text-[var(--t-text-secondary)] hidden md:table-cell">{c.telefone_principal}</td>
-                      <td className="px-4 py-3 text-[var(--t-text-secondary)] hidden lg:table-cell">{c.email}</td>
-                      <td className="px-4 py-3 text-[var(--t-text-secondary)] hidden xl:table-cell">
-                        {[c.cidade, c.estado].filter(Boolean).join(' / ')}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge
-                          className={
-                            c.status === 'ATIVO'
-                              ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
-                              : 'bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/20'
-                          }
-                        >
-                          {c.status}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-right text-[var(--t-accent)] font-medium hidden lg:table-cell">
-                        {BRL(c.valor_total_historico)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => openEdit(c)}
-                            className="p-1.5 rounded hover:bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] hover:text-[var(--t-accent)] transition-colors"
-                          >
-                            <Pencil size={14} />
-                          </button>
-                          {confirmDelete === c.id ? (
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => handleDelete(c.id)}
-                                className="px-2 py-1 rounded bg-red-500/20 text-red-400 text-xs hover:bg-red-500/30"
-                              >
-                                Confirmar
-                              </button>
-                              <button
-                                onClick={() => setConfirmDelete(null)}
-                                className="px-2 py-1 rounded bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] text-xs"
-                              >
-                                Cancelar
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => setConfirmDelete(c.id)}
-                              className="p-1.5 rounded hover:bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] hover:text-red-400 transition-colors"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <DataTable<Cliente>
+            columns={columns}
+            data={filtered}
+            loading={loading}
+            rowKey={c => c.id}
+            zebra
+            emptyState={{
+              icon: <User size={40} className="opacity-30" />,
+              title: 'Nenhum cliente encontrado',
+              description: 'Cadastre um novo cliente ou ajuste os filtros de busca.',
+            }}
+          />
         </CardContent>
       </Card>
 

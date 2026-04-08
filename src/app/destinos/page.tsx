@@ -6,6 +6,7 @@ import {
   MapPin, Plus, Search, Trash2, Sparkles, Loader2, Save,
   ChevronDown, ChevronRight, Globe, X,
 } from 'lucide-react';
+import { toast } from '@/lib/toast';
 
 export default function DestinosPage() {
   const [destinos, setDestinos] = useState<Destino[]>([]);
@@ -58,7 +59,7 @@ export default function DestinosPage() {
       });
       const data = await res.json();
       if (data.error) {
-        alert(data.error);
+        toast.error('Erro ao enriquecer destino', data.error);
       } else {
         setEditando(prev => prev ? {
           ...prev,
@@ -68,7 +69,7 @@ export default function DestinosPage() {
         } : null);
       }
     } catch {
-      alert('Erro ao enriquecer destino');
+      toast.error('Erro ao enriquecer destino');
     }
     setEnriching(false);
   };

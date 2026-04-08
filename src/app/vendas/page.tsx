@@ -9,6 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { PageShell } from '@/components/PageShell';
+import { PageHeader } from '@/components/PageHeader';
+import { DataTable, DataTableColumn } from '@/components/ui/data-table';
 
 const fmt = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -82,21 +85,97 @@ export default function VendasPage() {
     setVendas(prev => prev.filter(v => v.id !== id));
   };
 
-  return (
-    <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--t-text)]">Vendas</h1>
-          <p className="text-[var(--t-text-secondary)] text-sm mt-1">Gestão de vendas e reservas</p>
-        </div>
-        <Link href="/vendas/nova">
-          <Button className="bg-[var(--t-green)] hover:opacity-90 text-white dark:text-[#0a0a14] font-semibold">
-            <Plus className="w-4 h-4 mr-2" />
-            Nova Venda
+  const columns: DataTableColumn<VendaCRM>[] = [
+    {
+      key: 'numero',
+      header: 'Número',
+      sortable: true,
+      sortAccessor: v => v.numero,
+      cell: v => <span className="font-mono text-[var(--t-accent)] font-medium">{v.numero}</span>,
+    },
+    {
+      key: 'data',
+      header: 'Data',
+      sortable: true,
+      sortAccessor: v => v.data_venda || '',
+      cell: v => (
+        <span className="text-[var(--t-text-secondary)]">
+          {v.data_venda ? new Date(v.data_venda + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'cliente',
+      header: 'Cliente',
+      sortable: true,
+      sortAccessor: v => getClienteNome(v.cliente_id),
+      cell: v => <span className="text-[var(--t-text)]">{getClienteNome(v.cliente_id)}</span>,
+    },
+    {
+      key: 'valor',
+      header: 'Valor Final',
+      align: 'right',
+      sortable: true,
+      sortAccessor: v => v.valor_final || 0,
+      cell: v => (
+        <span className="text-green-400 font-medium">{fmt(v.valor_final || 0)}</span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      align: 'center',
+      cell: v => (
+        <Badge className={`border text-xs ${STATUS_COLORS[v.status] || ''}`}>
+          {STATUS_LABELS[v.status] || v.status}
+        </Badge>
+      ),
+    },
+    {
+      key: 'acoes',
+      header: 'Ações',
+      align: 'center',
+      cell: v => (
+        <div className="flex items-center justify-center gap-2">
+          <Link href={`/vendas/${v.id}/editar`}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 p-0 text-[var(--t-text-secondary)] hover:text-[var(--t-accent)] hover:bg-[var(--t-accent)]/10"
+            >
+              <Edit className="w-4 h-4" />
+            </Button>
+          </Link>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 w-8 p-0 text-[var(--t-text-secondary)] hover:text-red-400 hover:bg-red-500/10"
+            onClick={() => handleDelete(v.id)}
+          >
+            <Trash2 className="w-4 h-4" />
           </Button>
-        </Link>
-      </div>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <PageShell
+      header={
+        <PageHeader
+          title="Vendas"
+          subtitle="Gestão de vendas e reservas"
+          actions={
+            <Link href="/vendas/nova">
+              <Button className="bg-[var(--t-green)] hover:opacity-90 text-white dark:text-[#0a0a14] font-semibold">
+                <Plus className="w-4 h-4 mr-2" />
+                Nova Venda
+              </Button>
+            </Link>
+          }
+        />
+      }
+    >
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -188,80 +267,22 @@ export default function VendasPage() {
       {/* Table */}
       <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)]">
         <CardContent className="p-0">
-          {loading ? (
-            <div className="flex items-center justify-center py-16 text-[var(--t-text-secondary)]">
-              Carregando...
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-[var(--t-text-secondary)]">
-              <ShoppingCart className="w-10 h-10 mb-3 opacity-30" />
-              <p>Nenhuma venda encontrada</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--t-border)]">
-                    <th className="text-left px-4 py-3 text-[var(--t-text-secondary)] font-medium">Número</th>
-                    <th className="text-left px-4 py-3 text-[var(--t-text-secondary)] font-medium">Data</th>
-                    <th className="text-left px-4 py-3 text-[var(--t-text-secondary)] font-medium">Cliente</th>
-                    <th className="text-right px-4 py-3 text-[var(--t-text-secondary)] font-medium">Valor Final</th>
-                    <th className="text-center px-4 py-3 text-[var(--t-text-secondary)] font-medium">Status</th>
-                    <th className="text-center px-4 py-3 text-[var(--t-text-secondary)] font-medium">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((venda, idx) => (
-                    <tr
-                      key={venda.id}
-                      className={`border-b border-[var(--t-border)]/50 hover:bg-[var(--t-surface-hover)]/30 transition-colors ${
-                        idx % 2 === 0 ? '' : 'bg-[var(--t-bg)]/30'
-                      }`}
-                    >
-                      <td className="px-4 py-3 font-mono text-[var(--t-accent)] font-medium">{venda.numero}</td>
-                      <td className="px-4 py-3 text-[var(--t-text-secondary)]">
-                        {venda.data_venda
-                          ? new Date(venda.data_venda + 'T00:00:00').toLocaleDateString('pt-BR')
-                          : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-[var(--t-text)]">{getClienteNome(venda.cliente_id)}</td>
-                      <td className="px-4 py-3 text-right text-green-400 font-medium">
-                        {fmt(venda.valor_final || 0)}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <Badge className={`border text-xs ${STATUS_COLORS[venda.status] || ''}`}>
-                          {STATUS_LABELS[venda.status] || venda.status}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-center gap-2">
-                          <Link href={`/vendas/${venda.id}/editar`}>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-8 w-8 p-0 text-[var(--t-text-secondary)] hover:text-[var(--t-accent)] hover:bg-[var(--t-accent)]/10"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                          </Link>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 w-8 p-0 text-[var(--t-text-secondary)] hover:text-red-400 hover:bg-red-500/10"
-                            onClick={() => handleDelete(venda.id)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <DataTable<VendaCRM>
+            columns={columns}
+            data={filtered}
+            loading={loading}
+            rowKey={v => v.id}
+            zebra
+            emptyState={{
+              icon: <ShoppingCart className="w-10 h-10 opacity-30" />,
+              title: 'Nenhuma venda encontrada',
+              description: search || statusFilter || dataInicio || dataFim
+                ? 'Ajuste os filtros para ver mais resultados.'
+                : 'Comece criando sua primeira venda.',
+            }}
+          />
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

@@ -10,6 +10,9 @@ import { Input } from '@/components/ui/input';
 import {
   Plus, X, Check, Trash2, TrendingUp, Clock, AlertCircle, DollarSign,
 } from 'lucide-react';
+import { PageShell } from '@/components/PageShell';
+import { PageHeader } from '@/components/PageHeader';
+import { DataTable, DataTableColumn } from '@/components/ui/data-table';
 
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -137,23 +140,100 @@ export default function ContasReceberPage() {
 
   const STATUSES: Array<StatusContaReceber | 'TODOS'> = ['TODOS', 'PENDENTE', 'RECEBIDO', 'ATRASADO', 'CANCELADO', 'PARCIAL'];
 
-  return (
-    <div className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-[var(--t-accent)]">Contas a Receber</h1>
-            <p className="text-[var(--t-text-secondary)] text-sm mt-1">Gestão de recebíveis da agência</p>
-          </div>
+  const columns: DataTableColumn<ContaReceber>[] = [
+    {
+      key: 'cliente',
+      header: 'Cliente',
+      sortable: true,
+      sortAccessor: i => i.cliente_nome || '',
+      cell: i => <span className="font-medium text-[var(--t-text)]">{i.cliente_nome || '—'}</span>,
+    },
+    {
+      key: 'descricao',
+      header: 'Descrição',
+      cell: i => (
+        <span className="text-[var(--t-text-secondary)] block max-w-xs truncate">{i.descricao}</span>
+      ),
+    },
+    {
+      key: 'valor',
+      header: 'Valor',
+      align: 'right',
+      sortable: true,
+      sortAccessor: i => i.valor_final,
+      cell: i => <span className="font-mono text-[var(--t-text)]">{BRL(i.valor_final)}</span>,
+    },
+    {
+      key: 'vencimento',
+      header: 'Vencimento',
+      sortable: true,
+      sortAccessor: i => i.data_vencimento || '',
+      cell: i => (
+        <span className="text-[var(--t-text-secondary)]">
+          {i.data_vencimento ? new Date(i.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: i => (
+        <Badge className={`${STATUS_BADGE[i.status]} border-0 text-xs`}>{i.status}</Badge>
+      ),
+    },
+    {
+      key: 'acoes',
+      header: 'Ações',
+      align: 'right',
+      cell: i => (
+        <div className="flex items-center justify-end gap-2">
+          {(i.status === 'PENDENTE' || i.status === 'ATRASADO' || i.status === 'PARCIAL') && (
+            <Button
+              size="sm"
+              onClick={() => handleBaixar(i)}
+              className="bg-green-600 hover:bg-green-700 text-white h-7 px-3 text-xs"
+            >
+              <Check className="w-3 h-3 mr-1" /> Baixar
+            </Button>
+          )}
           <Button
-            onClick={openNew}
-            className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold"
+            size="sm"
+            variant="outline"
+            onClick={() => openEdit(i)}
+            className="border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface)] h-7 px-3 text-xs"
           >
-            <Plus className="w-4 h-4 mr-2" /> Nova Conta
+            Editar
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleDelete(i.id)}
+            className="border-red-700 text-red-400 hover:bg-red-900/30 h-7 px-2"
+          >
+            <Trash2 className="w-3 h-3" />
           </Button>
         </div>
+      ),
+    },
+  ];
+
+  return (
+    <PageShell
+      header={
+        <PageHeader
+          title="Contas a Receber"
+          subtitle="Gestão de recebíveis da agência"
+          actions={
+            <Button
+              onClick={openNew}
+              className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold"
+            >
+              <Plus className="w-4 h-4 mr-2" /> Nova Conta
+            </Button>
+          }
+        />
+      }
+    >
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -379,77 +459,20 @@ export default function ContasReceberPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            {loading ? (
-              <p className="text-[var(--t-text-secondary)] text-sm p-6">Carregando...</p>
-            ) : filtered.length === 0 ? (
-              <p className="text-[var(--t-text-secondary)] text-sm p-6 text-center">Nenhum lançamento encontrado.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-[var(--t-border)] text-[var(--t-text-secondary)] text-xs uppercase">
-                      <th className="text-left px-4 py-3">Cliente</th>
-                      <th className="text-left px-4 py-3">Descrição</th>
-                      <th className="text-right px-4 py-3">Valor</th>
-                      <th className="text-left px-4 py-3">Vencimento</th>
-                      <th className="text-left px-4 py-3">Status</th>
-                      <th className="text-right px-4 py-3">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map(item => (
-                      <tr key={item.id} className="border-b border-[var(--t-border)]/50 hover:bg-[var(--t-header-bg)]/40 transition-colors">
-                        <td className="px-4 py-3 font-medium text-[var(--t-text)]">{item.cliente_nome || '—'}</td>
-                        <td className="px-4 py-3 text-[var(--t-text-secondary)] max-w-xs truncate">{item.descricao}</td>
-                        <td className="px-4 py-3 text-right font-mono text-[var(--t-text)]">{BRL(item.valor_final)}</td>
-                        <td className="px-4 py-3 text-[var(--t-text-secondary)]">
-                          {item.data_vencimento
-                            ? new Date(item.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')
-                            : '—'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge className={`${STATUS_BADGE[item.status]} border-0 text-xs`}>
-                            {item.status}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-2">
-                            {item.status === 'PENDENTE' || item.status === 'ATRASADO' || item.status === 'PARCIAL' ? (
-                              <Button
-                                size="sm"
-                                onClick={() => handleBaixar(item)}
-                                className="bg-green-600 hover:bg-green-700 text-white h-7 px-3 text-xs"
-                              >
-                                <Check className="w-3 h-3 mr-1" /> Baixar
-                              </Button>
-                            ) : null}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openEdit(item)}
-                              className="border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface)] h-7 px-3 text-xs"
-                            >
-                              Editar
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleDelete(item.id)}
-                              className="border-red-700 text-red-400 hover:bg-red-900/30 h-7 px-2"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <DataTable<ContaReceber>
+              columns={columns}
+              data={filtered}
+              loading={loading}
+              rowKey={i => i.id}
+              zebra
+              emptyState={{
+                icon: <DollarSign className="w-10 h-10 opacity-30" />,
+                title: 'Nenhum lançamento encontrado',
+                description: 'Ajuste os filtros ou cadastre uma nova conta a receber.',
+              }}
+            />
           </CardContent>
         </Card>
-      </div>
-    </div>
+    </PageShell>
   );
 }

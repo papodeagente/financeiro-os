@@ -16,6 +16,7 @@ import {
   AlertCircle, CheckCircle2,
   Info, Zap,
 } from 'lucide-react';
+import { KPIGridSkeleton } from '@/components/skeletons';
 
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -498,8 +499,12 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="w-8 h-8 border-2 border-[var(--t-green)] border-t-transparent rounded-full animate-spin" />
+      <div className="flex flex-col h-full overflow-y-auto">
+        <div className="px-8 pt-6 pb-8 space-y-6">
+          <div className="rounded-[20px] h-[112px] skeleton" />
+          <KPIGridSkeleton count={4} columns={4} />
+          <KPIGridSkeleton count={6} columns={6} />
+        </div>
       </div>
     );
   }

@@ -25,6 +25,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { toast } from '@/lib/toast';
 
 const fmt = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -434,7 +435,7 @@ export default function NovaVendaPage() {
   // ---- Save ----
   const handleSave = async () => {
     if (!venda.cliente_id) {
-      alert('Selecione um cliente.');
+      toast.error('Selecione um cliente');
       return;
     }
     setSaving(true);
@@ -442,7 +443,7 @@ export default function NovaVendaPage() {
       await saveEntity('vendas-crm', venda);
       router.push('/vendas');
     } catch {
-      alert('Erro ao salvar venda.');
+      toast.error('Erro ao salvar venda');
       setSaving(false);
     }
   };

@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { PageShell } from '@/components/PageShell';
 import { PageHeader } from '@/components/PageHeader';
 import { CrmStatusBadge } from '@/components/CrmStatusBadge';
-import { SkeletonCardGrid } from '@/components/SkeletonCard';
+import { KPIGridSkeleton } from '@/components/skeletons';
 import { formatBRL } from '@/lib/utils';
 import {
   BarChart3, FileSpreadsheet, Receipt, CreditCard,
@@ -91,15 +92,13 @@ export default function FinanceiroAgHubPage() {
   }, []);
 
   if (loading) return (
-    <div className="p-6">
-      <PageHeader title="Financeiro" crmBadge />
-      <SkeletonCardGrid count={4} />
-    </div>
+    <PageShell header={<PageHeader title="Financeiro" crmBadge />}>
+      <KPIGridSkeleton count={4} columns={4} />
+    </PageShell>
   );
 
   return (
-    <div className="p-6">
-      <PageHeader title="Financeiro" crmBadge />
+    <PageShell header={<PageHeader title="Financeiro" crmBadge />}>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -174,6 +173,6 @@ export default function FinanceiroAgHubPage() {
           </div>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

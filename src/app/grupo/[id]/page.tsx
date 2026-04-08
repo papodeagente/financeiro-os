@@ -29,6 +29,7 @@ import { TemplatePickerModal } from '@/components/TemplatePickerModal';
 import { TemplateProposta } from '@/lib/crm-types';
 import { Save, FileText, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { toast } from '@/lib/toast';
 
 const ABAS_PLANEJAMENTO: AbaType[] = ['pipeline', 'inf', 'tkt', 'htl', 'rec', 'car', 'guia', 'seg', 'navio', 'ing', 'brinde', 'divulgacao', 'proposta', 'htl_seg'];
 
@@ -121,12 +122,13 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
       if (data.id) {
         setGrupo(prev => prev ? { ...prev, proposta_id: data.id, status_pipeline: 'PROPOSTA' } : prev);
         setSaved(false);
+        toast.success('Proposta gerada');
         router.push(`/propostas/${data.id}`);
       } else {
-        alert(data.error || 'Erro ao gerar proposta');
+        toast.error('Erro ao gerar proposta', data.error);
       }
     } catch {
-      alert('Erro ao gerar proposta');
+      toast.error('Erro ao gerar proposta');
     }
     setGerandoProposta(false);
   };
@@ -143,11 +145,12 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
       if (data.id) {
         setGrupo(prev => prev ? { ...prev, orcamento_id: data.id, status_pipeline: 'ORCAMENTO' } : prev);
         setSaved(false);
+        toast.success('Orçamento gerado');
       } else {
-        alert(data.error || 'Erro ao gerar orcamento');
+        toast.error('Erro ao gerar orçamento', data.error);
       }
     } catch {
-      alert('Erro ao gerar orcamento');
+      toast.error('Erro ao gerar orçamento');
     }
   };
 
@@ -163,11 +166,12 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
       if (data.id) {
         setGrupo(prev => prev ? { ...prev, venda_crm_id: data.id, status_pipeline: 'RESERVA' } : prev);
         setSaved(false);
+        toast.success('Reserva criada');
       } else {
-        alert(data.error || 'Erro ao criar reserva');
+        toast.error('Erro ao criar reserva', data.error);
       }
     } catch {
-      alert('Erro ao criar reserva');
+      toast.error('Erro ao criar reserva');
     }
   };
 
@@ -183,11 +187,12 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
       if (data.ok) {
         setGrupo(prev => prev ? { ...prev, status_pipeline: 'VENDA' } : prev);
         setSaved(false);
+        toast.success('Venda fechada');
       } else {
-        alert(data.error || 'Erro ao fechar venda');
+        toast.error('Erro ao fechar venda', data.error);
       }
     } catch {
-      alert('Erro ao fechar venda');
+      toast.error('Erro ao fechar venda');
     }
   };
 
