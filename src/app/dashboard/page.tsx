@@ -533,17 +533,17 @@ export default function DashboardPage() {
         {/* HERO CARD */}
         <div className="rounded-[20px] overflow-hidden relative" style={{ background: 'var(--t-hero-gradient)' }}>
           <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 80% 20%, rgba(255,255,255,0.3) 0%, transparent 60%)' }} />
-          <div className="relative px-8 py-7 flex items-center justify-between">
-            <div>
+          <div className="relative px-8 py-7 flex items-center justify-between gap-4">
+            <div className="min-w-0">
               <h1 className="text-2xl font-bold text-white">
                 {getMonthName(mesAtual)}
               </h1>
-              <p className="text-white/70 text-sm mt-1">
+              <p className="text-white/70 text-sm mt-1 truncate">
                 {calc.qtdVendas} vendas fechadas &middot; {BRL(calc.faturamento)} faturados
               </p>
             </div>
-            <div className="text-right hidden lg:block">
-              <div className="text-3xl font-bold text-white tracking-tight">{BRL(calc.faturamento)}</div>
+            <div className="text-right hidden lg:block min-w-0">
+              <div className="text-3xl font-bold text-white tracking-tight whitespace-nowrap" title={BRL(calc.faturamento)}>{BRL(calc.faturamento)}</div>
               <div className="flex items-center gap-2 justify-end mt-1">
                 {calc.faturamentoAnt > 0 && (
                   <span className={`text-xs font-medium flex items-center gap-0.5 px-2 py-0.5 rounded-full ${
@@ -599,7 +599,7 @@ export default function DashboardPage() {
                   </div>
                   <span className="text-[var(--text-caption)] text-[var(--t-text-secondary)] uppercase tracking-wide font-medium">{kpi.label}</span>
                 </div>
-                <div className="kpi-hero text-[var(--t-text)]">{kpi.valor}</div>
+                <div className="kpi-hero text-[var(--t-text)]" title={kpi.valor}>{kpi.valor}</div>
                 <div className="flex items-center gap-2 mt-3">
                   {!deltaNeutral && (
                     <span className={`text-xs font-medium flex items-center gap-0.5 px-2 py-0.5 rounded-full ${deltaPositive ? 'text-emerald-400 bg-emerald-400/10' : 'text-red-400 bg-red-400/10'}`}>
@@ -632,7 +632,7 @@ export default function DashboardPage() {
             const deltaPositive = kpi.invertDelta ? (kpi.delta !== null && kpi.delta < 0) : (kpi.delta !== null && kpi.delta > 0);
             const deltaNeutral = kpi.delta === null || kpi.delta === 0;
             return (
-              <div key={i} className="bg-[var(--t-surface)] rounded-[20px] p-5 shadow-[var(--t-card-shadow)] transition-all hover:shadow-[var(--t-card-shadow-hover)] hover-lift">
+              <div key={i} className="bg-[var(--t-surface)] rounded-[20px] p-5 shadow-[var(--t-card-shadow)] transition-all hover:shadow-[var(--t-card-shadow-hover)] hover-lift min-w-0 overflow-hidden">
                 <div className="flex items-center justify-between mb-3">
                   <div className={`w-9 h-9 rounded-xl ${kpi.bgColor} flex items-center justify-center`}>
                     <Icon className={`w-4 h-4 ${kpi.color}`} />
@@ -644,8 +644,8 @@ export default function DashboardPage() {
                     ))}
                   </div>
                 </div>
-                <div className="text-[var(--text-caption)] text-[var(--t-text-secondary)] mb-1">{kpi.label}</div>
-                <div className="text-xl font-bold text-[var(--t-text)]">{kpi.valor}</div>
+                <div className="text-[var(--text-caption)] text-[var(--t-text-secondary)] mb-1 truncate">{kpi.label}</div>
+                <div className="kpi-hero-sm text-[var(--t-text)]" title={kpi.valor}>{kpi.valor}</div>
                 {!deltaNeutral && (
                   <span className={`text-[10px] font-medium flex items-center gap-0.5 mt-1.5 ${deltaPositive ? 'text-emerald-400' : 'text-red-400'}`}>
                     {deltaPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
