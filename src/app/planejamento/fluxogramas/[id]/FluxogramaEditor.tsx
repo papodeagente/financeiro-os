@@ -32,7 +32,7 @@ import {
   Clock, Mail, MessageCircle,
 } from 'lucide-react';
 import { generateId } from '@/lib/utils';
-import { NODE_TYPES, type ChecklistItem, type DelayUnit } from './BpmnNodes';
+import { NODE_TYPES, type ChecklistItem, type DelayUnit, type LabelPosition } from './BpmnNodes';
 
 interface Categoria { id: string; nome: string; ordem: number }
 interface FluxogramaPayload {
@@ -562,6 +562,28 @@ function EditorInner({ id }: EditorProps) {
                   />
                 </div>
               </div>
+
+              {/* Configuração específica: Decisão (gateway) */}
+              {selectedNode.type === 'gateway' && (
+                <div className="pt-3 mt-1 border-t border-[var(--t-border)] space-y-2">
+                  <div className="flex items-center gap-1.5 text-[var(--text-caption)] font-semibold text-[var(--t-text-secondary)] uppercase tracking-wider">
+                    <DiamondIcon className="w-3 h-3" /> Decisão
+                  </div>
+                  <div>
+                    <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Posição do rótulo</label>
+                    <select
+                      value={(selectedNode.data as { labelPosition?: LabelPosition }).labelPosition ?? 'bottom'}
+                      onChange={e => updateSelectedNodeData({ labelPosition: e.target.value as LabelPosition })}
+                      className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
+                    >
+                      <option value="top">Acima</option>
+                      <option value="bottom">Abaixo</option>
+                      <option value="left">À esquerda</option>
+                      <option value="right">À direita</option>
+                    </select>
+                  </div>
+                </div>
+              )}
 
               {/* Configuração específica: Aguardar (delay) */}
               {selectedNode.type === 'delay' && (

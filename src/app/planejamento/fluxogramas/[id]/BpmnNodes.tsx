@@ -24,6 +24,7 @@ export interface ChecklistItem {
 }
 
 export type DelayUnit = 'minutos' | 'horas' | 'dias' | 'semanas';
+export type LabelPosition = 'top' | 'bottom' | 'left' | 'right';
 
 interface BpmnNodeData extends Record<string, unknown> {
   label?: string;
@@ -38,6 +39,8 @@ interface BpmnNodeData extends Record<string, unknown> {
   // Email/WhatsApp nodes
   template?: string;
   subject?: string;
+  // Gateway label placement
+  labelPosition?: LabelPosition;
 }
 
 /** Pequeno indicador de cartão (instruções + checklist) no canto do nó. */
@@ -330,8 +333,16 @@ export const ServiceTaskNode = memo(({ data, selected }: NodeProps) => {
 ServiceTaskNode.displayName = 'ServiceTaskNode';
 
 /* ---------- Gateway (Decisão / Diamond) ---------- */
+const GATEWAY_LABEL_STYLES: Record<LabelPosition, React.CSSProperties> = {
+  top:    { bottom: 'calc(100% + 4px)', left: '50%', transform: 'translateX(-50%)', textAlign: 'center' },
+  bottom: { top:    'calc(100% + 4px)', left: '50%', transform: 'translateX(-50%)', textAlign: 'center' },
+  left:   { right:  'calc(100% + 4px)', top: '50%',  transform: 'translateY(-50%)', textAlign: 'right' },
+  right:  { left:   'calc(100% + 4px)', top: '50%',  transform: 'translateY(-50%)', textAlign: 'left' },
+};
+
 export const GatewayNode = memo(({ data, selected }: NodeProps) => {
   const d = data as BpmnNodeData;
+  const labelPos: LabelPosition = d.labelPosition ?? 'bottom';
   return (
     <div
       style={{
@@ -367,11 +378,12 @@ export const GatewayNode = memo(({ data, selected }: NodeProps) => {
       <div
         style={{
           position: 'absolute',
-          bottom: -18,
           fontSize: 11,
           fontWeight: 600,
           color: '#1A1A1A',
           whiteSpace: 'nowrap',
+          pointerEvents: 'none',
+          ...GATEWAY_LABEL_STYLES[labelPos],
         }}
       >
         {d.label || 'Decisão'}
