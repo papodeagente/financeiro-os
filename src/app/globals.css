@@ -398,6 +398,19 @@
   .kpi-hero { font-size: clamp(22px, 1.4vw + 4px, 30px); }
 }
 
+/* PillarDrawer — slide-in da esquerda quando o usuário clica no rail */
+@keyframes pillar-drawer-in {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.pillar-drawer {
+  animation: pillar-drawer-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pillar-drawer { animation: none; }
+}
+
 /* Variante compacta para KPIs secundárias */
 .kpi-hero-sm {
   font-size: clamp(16px, 0.9vw + 4px, 22px);

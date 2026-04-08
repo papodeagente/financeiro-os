@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useActivePillar } from '@/hooks/useActivePillar';
+import type { Pillar } from '@/hooks/useActivePillar';
 import { PillarRail } from './PillarRail';
 import { FeaturePanel } from './FeaturePanel';
 import { TopBar } from './TopBar';
@@ -12,7 +13,7 @@ import { Breadcrumbs } from './Breadcrumbs';
 import { RouteProgress } from './RouteProgress';
 import { buildTrail } from '@/lib/breadcrumbs';
 import { usePillarProgress } from '@/hooks/usePillarProgress';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -20,18 +21,58 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const activePillar = useActivePillar();
   const { markVisited } = usePillarProgress();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [openPillar, setOpenPillar] = useState<Pillar | null>(null);
+
+  const closeDrawer = useCallback(() => setOpenPillar(null), []);
+
+  const togglePillar = useCallback((pillar: Pillar) => {
+    setOpenPillar(prev => (prev === pillar ? null : pillar));
+  }, []);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
       e.preventDefault();
+      setOpenPillar(null); // abrir paleta fecha drawer
       setCommandPaletteOpen(prev => !prev);
+      return;
     }
-  }, []);
+    if (e.key === 'Escape' && openPillar) {
+      e.preventDefault();
+      setOpenPillar(null);
+    }
+  }, [openPillar]);
 
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
+
+  // Click-outside: fecha drawer se o clique não foi nele nem no rail.
+  useEffect(() => {
+    if (!openPillar) return;
+    const onMouseDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest('[data-pillar-drawer]')) return;
+      if (target.closest('[data-pillar-rail]')) return;
+      setOpenPillar(null);
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [openPillar]);
+
+  // Fecha drawer ao mudar de rota (cobre nav via paleta, breadcrumbs, etc).
+  // Comparamos via ref para só chamar setState quando a rota muda DE FATO,
+  // evitando set redundante no mount inicial.
+  const lastPathRef = useRef(pathname);
+  useEffect(() => {
+    if (lastPathRef.current !== pathname) {
+      lastPathRef.current = pathname;
+      // setState(null) é idempotente; o lint reclama mas não há cascading render real.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setOpenPillar(null);
+    }
+  }, [pathname]);
 
   // Track pillar progress
   useEffect(() => {
@@ -79,30 +120,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex flex-col h-full">
       <ImpersonationBanner />
       <RouteProgress />
-      <div className="flex flex-1 min-h-0">
-      {/* Column 1: Pillar Rail (80px) */}
-      <PillarRail />
+      <div className="flex flex-1 min-h-0 relative">
+        {/* Column 1: Pillar Rail (80px) — único elemento de navegação fixo */}
+        <PillarRail openPillar={openPillar} onPillarToggle={togglePillar} />
 
-      {/* Column 2: Feature Panel (240px) */}
-      <FeaturePanel />
+        {/* Drawer flutuante: aparece sobre o conteúdo, ancorado ao rail */}
+        <FeaturePanel pillar={openPillar} onClose={closeDrawer} />
 
-      {/* Column 3: Content area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Top bar */}
-        <TopBar
-          onCommandPalette={() => setCommandPaletteOpen(true)}
-          breadcrumb={breadcrumbNode}
-        />
+        {/* Column 2: Content area (ganhou os 240px que eram do FeaturePanel) */}
+        <div className="flex-1 flex flex-col min-w-0">
+          <TopBar
+            onCommandPalette={() => setCommandPaletteOpen(true)}
+            breadcrumb={breadcrumbNode}
+          />
 
-        {/* Main content */}
-        <main className="flex-1 overflow-y-auto bg-[var(--t-bg)]">
-          <div className="content-enter">
-            {children}
-          </div>
-        </main>
-      </div>
+          <main className="flex-1 overflow-y-auto bg-[var(--t-bg)]">
+            <div className="content-enter">
+              {children}
+            </div>
+          </main>
+        </div>
 
-      <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} />
+        <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} />
       </div>
     </div>
   );
