@@ -8,55 +8,11 @@ import { FeaturePanel } from './FeaturePanel';
 import { TopBar } from './TopBar';
 import { CommandPalette } from './CommandPalette';
 import { ImpersonationBanner } from './ImpersonationBanner';
+import { Breadcrumbs } from './Breadcrumbs';
+import { RouteProgress } from './RouteProgress';
+import { buildTrail } from '@/lib/breadcrumbs';
 import { usePillarProgress } from '@/hooks/usePillarProgress';
 import { useState, useEffect, useCallback } from 'react';
-
-const BREADCRUMB_MAP: Record<string, string> = {
-  '/dashboard': 'Dashboard',
-  '/grupos': 'Grupos',
-  '/propostas': 'Propostas',
-  '/propostas/nova': 'Nova proposta',
-  '/propostas/analytics': 'Analytics',
-  '/vendas': 'Vendas fechadas',
-  '/vendas/nova': 'Nova venda',
-  '/vendas/orcamentos': 'Orçamentos',
-  '/voos': 'Buscar voos',
-  '/hoteis': 'Buscar hotéis',
-  '/destinos': 'Destinos',
-  '/financeiro-ag': 'Visão geral',
-  '/financeiro-ag/fluxo-caixa': 'Fluxo de caixa',
-  '/financeiro-ag/dre': 'DRE',
-  '/financeiro-ag/conciliacao': 'Conciliação',
-  '/financeiro-ag/receber': 'Contas a receber',
-  '/financeiro-ag/pagar': 'Contas a pagar',
-  '/financeiro-ag/plano-contas': 'Plano de contas',
-  '/financeiro-ag/contas-bancarias': 'Contas bancárias',
-  '/financeiro-ag/transferencias': 'Transferências',
-  '/financeiro-grupos': 'Financeiro por grupo',
-  '/pessoas/clientes': 'Clientes',
-  '/pessoas/fornecedores': 'Fornecedores',
-  '/pessoas/equipe': 'Equipe',
-  '/equipe/metas': 'Metas da equipe',
-  '/equipe/comissoes': 'Comissões',
-  '/equipe/planos-comissao': 'Planos de comissão',
-  '/cac/dashboard': 'Dashboard CAC',
-  '/cac/cenarios': 'Simulador CAC',
-  '/planejamento/custos': 'Custos do negócio',
-  '/planejamento/fluxogramas': 'Fluxogramas',
-  '/relatorios/financeiro': 'Relatórios financeiros',
-  '/relatorios/rentabilidade': 'Rentabilidade',
-  '/relatorios/comparativo': 'Comparativo mensal',
-  '/config/agencia': 'Configurações',
-  '/config/usuarios': 'Usuários',
-  '/config/crm': 'Integração CRM',
-};
-
-const PILLAR_LABELS: Record<string, string> = {
-  planejamento: 'Planejamento',
-  metas: 'Metas',
-  produtos: 'Produtos',
-  financeiro: 'Financeiro',
-};
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -109,21 +65,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Build breadcrumb
-  const breadcrumbLabel = BREADCRUMB_MAP[pathname];
-  const pillarLabel = activePillar ? PILLAR_LABELS[activePillar] : null;
-  const breadcrumbNode = breadcrumbLabel && pillarLabel ? (
-    <p className="text-[var(--text-body-sm)] text-[var(--t-text-muted)] flex items-center gap-1.5">
-      <span className="w-1.5 h-1.5 rounded-full bg-[var(--t-green)]" />
-      <span className="text-[var(--t-text-secondary)] font-medium">{pillarLabel}</span>
-      <span className="text-[var(--t-text-muted)]">›</span>
-      <span>{breadcrumbLabel}</span>
-    </p>
-  ) : undefined;
+  // Build breadcrumb trail (navegável)
+  const trail = buildTrail(pathname);
+  const breadcrumbNode = trail.length ? <Breadcrumbs trail={trail} /> : undefined;
 
   return (
     <div className="flex flex-col h-full">
       <ImpersonationBanner />
+      <RouteProgress />
       <div className="flex flex-1 min-h-0">
       {/* Column 1: Pillar Rail (80px) */}
       <PillarRail />

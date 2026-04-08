@@ -5,6 +5,7 @@ import { AppProvider } from "@/contexts/AppContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AppShell } from "@/components/AppShell";
+import { Toaster } from "@/components/Toaster";
 
 const inter = Inter({
   subsets: ["latin", "latin-ext"],
@@ -39,6 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <AuthProvider>
             <AppProvider>
               <AppShell>{children}</AppShell>
+              <Toaster />
             </AppProvider>
           </AuthProvider>
         </ThemeProvider>
