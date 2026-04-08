@@ -322,6 +322,16 @@ export async function initDB() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS cartoes_corp (
+      id TEXT PRIMARY KEY,
+      apelido TEXT NOT NULL DEFAULT '',
+      bandeira TEXT NOT NULL DEFAULT '',
+      ativo BOOLEAN NOT NULL DEFAULT true,
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
 
   // Create indices for new tables (IF NOT EXISTS prevents errors on re-run)
@@ -395,6 +405,7 @@ export async function initDB() {
     'crm_eventos_saida', 'crm_eventos_entrada', 'planejamento_custos',
     'orcamentos', 'planejamento_projetos',
     'fluxograma_categorias', 'fluxogramas',
+    'cartoes_corp',
   ];
   for (const table of TENANT_TABLES) {
     await pool.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT ''`);

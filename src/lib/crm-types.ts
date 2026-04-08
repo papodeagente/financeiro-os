@@ -350,6 +350,7 @@ export interface ContaPagar {
   valor_pago: number | null;
   conta_bancaria_id: string | null;
   forma_pagamento: 'PIX' | 'TED' | 'CARTAO_CORP' | 'BOLETO' | 'DEPOSITO' | '';
+  cartao_id: string | null;
   comprovante: string;
   parcela_numero: number;
   total_parcelas: number;
@@ -358,6 +359,29 @@ export interface ContaPagar {
   status: StatusContaPagar;
   rateio: Array<{ centro_custo: string; percentual: number; valor: number }>;
   anexos: Array<{ nome: string; url: string }>;
+  observacoes: string;
+}
+
+// ============================================================
+// CARTOES CORPORATIVOS
+// ============================================================
+
+export type BandeiraCartao = 'VISA' | 'MASTERCARD' | 'ELO' | 'AMEX' | 'HIPERCARD' | 'OUTRA';
+
+export interface CartaoCorporativo {
+  id: string;
+  apelido: string;
+  bandeira: BandeiraCartao;
+  ultimos_digitos: string;
+  titular: string;
+  banco_emissor: string;
+  limite_total: number;
+  dia_fechamento: number;
+  dia_vencimento: number;
+  taxa_antecipacao: number;
+  taxa_parcelamento: number;
+  taxa_anuidade: number;
+  ativo: boolean;
   observacoes: string;
 }
 
@@ -1165,7 +1189,7 @@ export function createContaPagar(): ContaPagar {
     moeda: 'BRL', cambio: 1, valor_brl: 0,
     data_emissao: new Date().toISOString().split('T')[0], data_vencimento: '',
     data_pagamento: null, valor_pago: null,
-    conta_bancaria_id: null, forma_pagamento: '', comprovante: '',
+    conta_bancaria_id: null, forma_pagamento: '', cartao_id: null, comprovante: '',
     parcela_numero: 1, total_parcelas: 1,
     natureza_custo: null, is_custo_comercial: false,
     status: 'PENDENTE', rateio: [], anexos: [], observacoes: '',
