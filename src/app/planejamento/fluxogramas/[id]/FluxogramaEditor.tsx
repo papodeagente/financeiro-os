@@ -29,9 +29,10 @@ import {
   Circle, CircleDot, Square, Diamond as DiamondIcon, Box,
   StickyNote, Layers, User, Cog, CircleDashed,
   Plus, X as XIcon, ListChecks, FileText,
+  Clock, Mail, MessageCircle,
 } from 'lucide-react';
 import { generateId } from '@/lib/utils';
-import { NODE_TYPES, type ChecklistItem } from './BpmnNodes';
+import { NODE_TYPES, type ChecklistItem, type DelayUnit } from './BpmnNodes';
 
 interface Categoria { id: string; nome: string; ordem: number }
 interface FluxogramaPayload {
@@ -90,6 +91,14 @@ const PALETTE_SECTIONS: { title: string; shapes: PaletteShape[] }[] = [
         defaultStyle: { width: 480, height: 200 },
       },
       { type: 'annotation', label: 'Anotação', hint: 'Sticky note', icon: StickyNote, defaultLabel: 'Anotação...' },
+    ],
+  },
+  {
+    title: 'Mensagens & Tempo',
+    shapes: [
+      { type: 'delay', label: 'Aguardar', hint: 'Tempo de espera', icon: Clock, defaultLabel: 'Aguardar' },
+      { type: 'email', label: 'E-mail', hint: 'Enviar e-mail', icon: Mail, defaultLabel: 'Enviar e-mail' },
+      { type: 'whatsapp', label: 'WhatsApp', hint: 'Enviar WhatsApp', icon: MessageCircle, defaultLabel: 'Enviar WhatsApp' },
     ],
   },
 ];
@@ -198,11 +207,21 @@ function EditorInner({ id }: EditorProps) {
     if (!type || !SHAPE_INDEX[type]) return;
     const shape = SHAPE_INDEX[type];
     const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+    const initialData: Record<string, unknown> = { label: shape.defaultLabel };
+    if (type === 'delay') {
+      initialData.delayValue = 1;
+      initialData.delayUnit = 'horas';
+    } else if (type === 'email') {
+      initialData.subject = '';
+      initialData.template = '';
+    } else if (type === 'whatsapp') {
+      initialData.template = '';
+    }
     const newNode: Node = {
       id: generateId(),
       type,
       position,
-      data: { label: shape.defaultLabel },
+      data: initialData,
       ...(shape.defaultStyle ? { style: shape.defaultStyle } : {}),
     };
     setNodes(nds => nds.concat(newNode));
@@ -543,6 +562,93 @@ function EditorInner({ id }: EditorProps) {
                   />
                 </div>
               </div>
+
+              {/* Configuração específica: Aguardar (delay) */}
+              {selectedNode.type === 'delay' && (
+                <div className="pt-3 mt-1 border-t border-[var(--t-border)] space-y-3">
+                  <div className="flex items-center gap-1.5 text-[var(--text-caption)] font-semibold text-[var(--t-text-secondary)] uppercase tracking-wider">
+                    <Clock className="w-3 h-3" /> Tempo de espera
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Quantidade</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={(selectedNode.data as { delayValue?: number }).delayValue ?? 1}
+                        onChange={e => updateSelectedNodeData({ delayValue: Number(e.target.value) })}
+                        className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Unidade</label>
+                      <select
+                        value={(selectedNode.data as { delayUnit?: DelayUnit }).delayUnit ?? 'horas'}
+                        onChange={e => updateSelectedNodeData({ delayUnit: e.target.value as DelayUnit })}
+                        className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
+                      >
+                        <option value="minutos">minutos</option>
+                        <option value="horas">horas</option>
+                        <option value="dias">dias</option>
+                        <option value="semanas">semanas</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Configuração específica: E-mail */}
+              {selectedNode.type === 'email' && (
+                <div className="pt-3 mt-1 border-t border-[var(--t-border)] space-y-3">
+                  <div className="flex items-center gap-1.5 text-[var(--text-caption)] font-semibold text-[var(--t-text-secondary)] uppercase tracking-wider">
+                    <Mail className="w-3 h-3" /> Mensagem de e-mail
+                  </div>
+                  <div>
+                    <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Assunto</label>
+                    <input
+                      value={(selectedNode.data as { subject?: string }).subject ?? ''}
+                      onChange={e => updateSelectedNodeData({ subject: e.target.value })}
+                      placeholder="Ex.: Confirmação da sua reserva"
+                      className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Template do e-mail</label>
+                    <textarea
+                      value={(selectedNode.data as { template?: string }).template ?? ''}
+                      onChange={e => updateSelectedNodeData({ template: e.target.value })}
+                      rows={8}
+                      placeholder="Olá {{cliente}}, sua viagem está confirmada..."
+                      className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)] resize-y leading-snug font-mono"
+                    />
+                    <p className="mt-1 text-[var(--text-caption)] text-[var(--t-text-muted)]">
+                      Use variáveis como <code>{'{{cliente}}'}</code> ou <code>{'{{grupo}}'}</code>.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Configuração específica: WhatsApp */}
+              {selectedNode.type === 'whatsapp' && (
+                <div className="pt-3 mt-1 border-t border-[var(--t-border)] space-y-3">
+                  <div className="flex items-center gap-1.5 text-[var(--text-caption)] font-semibold text-[var(--t-text-secondary)] uppercase tracking-wider">
+                    <MessageCircle className="w-3 h-3" /> Mensagem de WhatsApp
+                  </div>
+                  <div>
+                    <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Template da mensagem</label>
+                    <textarea
+                      value={(selectedNode.data as { template?: string }).template ?? ''}
+                      onChange={e => updateSelectedNodeData({ template: e.target.value })}
+                      rows={8}
+                      placeholder="Olá {{cliente}}! 👋 Tudo certo para sua viagem..."
+                      className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)] resize-y leading-snug font-mono"
+                    />
+                    <p className="mt-1 text-[var(--text-caption)] text-[var(--t-text-muted)]">
+                      Use variáveis como <code>{'{{cliente}}'}</code> ou <code>{'{{grupo}}'}</code>.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Cartão da tarefa: instruções + checklist */}
               <div className="pt-3 mt-1 border-t border-[var(--t-border)] space-y-3">

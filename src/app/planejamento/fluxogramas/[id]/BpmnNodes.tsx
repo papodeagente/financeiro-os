@@ -23,6 +23,8 @@ export interface ChecklistItem {
   done: boolean;
 }
 
+export type DelayUnit = 'minutos' | 'horas' | 'dias' | 'semanas';
+
 interface BpmnNodeData extends Record<string, unknown> {
   label?: string;
   description?: string;
@@ -30,6 +32,12 @@ interface BpmnNodeData extends Record<string, unknown> {
   textColor?: string;
   instructions?: string;
   checklist?: ChecklistItem[];
+  // Delay node
+  delayValue?: number;
+  delayUnit?: DelayUnit;
+  // Email/WhatsApp nodes
+  template?: string;
+  subject?: string;
 }
 
 /** Pequeno indicador de cartão (instruções + checklist) no canto do nó. */
@@ -484,6 +492,177 @@ export const PoolNode = memo(({ data, selected }: NodeProps) => {
 });
 PoolNode.displayName = 'PoolNode';
 
+/* ---------- Delay / Tempo de espera ---------- */
+export const DelayNode = memo(({ data, selected }: NodeProps) => {
+  const d = data as BpmnNodeData;
+  const value = d.delayValue ?? 1;
+  const unit = d.delayUnit ?? 'horas';
+  return (
+    <div
+      className="flex items-center"
+      style={{
+        minWidth: 170,
+        minHeight: 80,
+        padding: '10px 14px 18px 32px',
+        borderRadius: 12,
+        border: `2px solid ${selected ? '#004aad' : '#0ea5e9'}`,
+        background: d.bgColor || '#e0f2fe',
+        color: d.textColor || '#075985',
+        fontSize: 12,
+        fontWeight: 600,
+        textAlign: 'left',
+        position: 'relative',
+        boxShadow: selected ? '0 0 0 3px rgba(0,74,173,0.2)' : '0 1px 3px rgba(0,0,0,0.08)',
+      }}
+    >
+      <span
+        style={{
+          position: 'absolute',
+          left: 8,
+          top: 10,
+          width: 18,
+          height: 18,
+          borderRadius: '50%',
+          background: '#0ea5e9',
+          color: '#fff',
+          fontSize: 11,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        ⏱
+      </span>
+      {withHandles(
+        <div className="leading-tight">
+          {d.label || 'Aguardar'}
+          <div className="mt-1 text-[10px] font-normal opacity-80">
+            {value} {unit}
+          </div>
+        </div>,
+      )}
+      <CardBadge data={d} />
+    </div>
+  );
+});
+DelayNode.displayName = 'DelayNode';
+
+/* ---------- Email message ---------- */
+export const EmailNode = memo(({ data, selected }: NodeProps) => {
+  const d = data as BpmnNodeData;
+  const hasTemplate = (d.template ?? '').trim().length > 0;
+  return (
+    <div
+      className="flex items-center"
+      style={{
+        minWidth: 180,
+        minHeight: 80,
+        padding: '10px 14px 18px 32px',
+        borderRadius: 12,
+        border: `2px solid ${selected ? '#004aad' : '#6366f1'}`,
+        background: d.bgColor || '#e0e7ff',
+        color: d.textColor || '#312e81',
+        fontSize: 12,
+        fontWeight: 600,
+        textAlign: 'left',
+        position: 'relative',
+        boxShadow: selected ? '0 0 0 3px rgba(0,74,173,0.2)' : '0 1px 3px rgba(0,0,0,0.08)',
+      }}
+    >
+      <span
+        style={{
+          position: 'absolute',
+          left: 8,
+          top: 10,
+          width: 18,
+          height: 18,
+          borderRadius: 4,
+          background: '#6366f1',
+          color: '#fff',
+          fontSize: 11,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        ✉
+      </span>
+      {withHandles(
+        <div className="leading-tight">
+          {d.label || 'Enviar e-mail'}
+          {d.subject && (
+            <div className="mt-1 text-[10px] font-normal opacity-80 truncate" style={{ maxWidth: 180 }}>
+              {d.subject}
+            </div>
+          )}
+          {!d.subject && hasTemplate && (
+            <div className="mt-1 text-[10px] font-normal opacity-70 italic">Template salvo</div>
+          )}
+        </div>,
+      )}
+      <CardBadge data={d} />
+    </div>
+  );
+});
+EmailNode.displayName = 'EmailNode';
+
+/* ---------- WhatsApp message ---------- */
+export const WhatsappNode = memo(({ data, selected }: NodeProps) => {
+  const d = data as BpmnNodeData;
+  const hasTemplate = (d.template ?? '').trim().length > 0;
+  const preview = (d.template ?? '').split('\n')[0]?.slice(0, 40) ?? '';
+  return (
+    <div
+      className="flex items-center"
+      style={{
+        minWidth: 180,
+        minHeight: 80,
+        padding: '10px 14px 18px 32px',
+        borderRadius: 12,
+        border: `2px solid ${selected ? '#004aad' : '#22c55e'}`,
+        background: d.bgColor || '#dcfce7',
+        color: d.textColor || '#14532d',
+        fontSize: 12,
+        fontWeight: 600,
+        textAlign: 'left',
+        position: 'relative',
+        boxShadow: selected ? '0 0 0 3px rgba(0,74,173,0.2)' : '0 1px 3px rgba(0,0,0,0.08)',
+      }}
+    >
+      <span
+        style={{
+          position: 'absolute',
+          left: 8,
+          top: 10,
+          width: 18,
+          height: 18,
+          borderRadius: '50%',
+          background: '#22c55e',
+          color: '#fff',
+          fontSize: 11,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        ⌬
+      </span>
+      {withHandles(
+        <div className="leading-tight">
+          {d.label || 'Enviar WhatsApp'}
+          {hasTemplate && (
+            <div className="mt-1 text-[10px] font-normal opacity-80 truncate" style={{ maxWidth: 180 }}>
+              {preview}{preview.length === 40 ? '…' : ''}
+            </div>
+          )}
+        </div>,
+      )}
+      <CardBadge data={d} />
+    </div>
+  );
+});
+WhatsappNode.displayName = 'WhatsappNode';
+
 export const NODE_TYPES = {
   startEvent: StartEventNode,
   endEvent: EndEventNode,
@@ -495,4 +674,7 @@ export const NODE_TYPES = {
   subprocess: SubprocessNode,
   annotation: AnnotationNode,
   pool: PoolNode,
+  delay: DelayNode,
+  email: EmailNode,
+  whatsapp: WhatsappNode,
 };
