@@ -23,6 +23,9 @@ export function createCrudHandlers(tableName: string, indexColumns: string[] = [
     try {
       await initDB();
       const item = await req.json();
+      if (!item || typeof item !== 'object' || !item.id || typeof item.id !== 'string') {
+        return NextResponse.json({ error: 'Invalid payload: id is required' }, { status: 400 });
+      }
       if (!pool) return NextResponse.json(item);
       const tenantId = await getTenantId();
 
@@ -80,7 +83,11 @@ export function createCrudItemHandlers(tableName: string, indexColumns: string[]
     try {
       await initDB();
       const { id } = await params;
+      if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
       const item = await req.json();
+      if (!item || typeof item !== 'object') {
+        return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
+      }
       if (!pool) return NextResponse.json(item);
       const tenantId = await getTenantId();
 

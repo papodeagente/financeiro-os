@@ -79,10 +79,8 @@ export function calcularVencimentoComissao(
 
   // dia_fixo_mes: próximo mês no dia fixo
   const dia = Math.min(regra.valor, 28);
-  let mes = dv.getMonth() + 1;
-  let ano = dv.getFullYear();
-  if (mes > 11) { mes = 0; ano++; }
-  return `${ano}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+  const nextMonth = new Date(dv.getFullYear(), dv.getMonth() + 1, dia);
+  return nextMonth.toISOString().split('T')[0];
 }
 
 export function calcularComissao(

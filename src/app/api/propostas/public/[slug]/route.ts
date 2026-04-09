@@ -5,12 +5,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   try {
     await initDB();
     const { slug } = await params;
-    if (!pool || !slug || slug.length < 6) {
+    if (!pool || !slug || slug.length < 10) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+    // Sanitize: only allow alphanumeric, hyphens, underscores
+    if (!/^[\w-]+$/.test(slug)) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
     const { rows } = await pool.query(
-      `SELECT data FROM propostas WHERE id LIKE $1 LIMIT 1`,
-      [`${slug}%`]
+      `SELECT data FROM propostas WHERE id = $1 LIMIT 1`,
+      [slug]
     );
     if (rows.length === 0) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });

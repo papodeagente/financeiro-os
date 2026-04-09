@@ -5,12 +5,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   try {
     await initDB();
     const { slug } = await params;
-    if (!pool || !slug) return NextResponse.json({ ok: false });
+    if (!pool || !slug || slug.length < 10 || !/^[\w-]+$/.test(slug)) {
+      return NextResponse.json({ ok: false });
+    }
 
     // Find the proposta
     const { rows } = await pool.query(
-      `SELECT id, data FROM propostas WHERE id LIKE $1 LIMIT 1`,
-      [`${slug}%`]
+      `SELECT id, data FROM propostas WHERE id = $1 LIMIT 1`,
+      [slug]
     );
     if (rows.length === 0) return NextResponse.json({ ok: false });
 

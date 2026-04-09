@@ -2,20 +2,24 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { hashPassword } from '@/lib/auth';
 
-export async function POST(req: Request) {
+export async function POST() {
   try {
     await initDB();
     if (!pool) {
       return NextResponse.json({ error: 'Banco de dados indisponivel' }, { status: 503 });
     }
 
-    // Accept optional body with custom credentials
-    let body: { email?: string; senha?: string; nome?: string } = {};
-    try { body = await req.json(); } catch { /* no body is fine */ }
+    const email = process.env.SUPER_ADMIN_EMAIL;
+    const password = process.env.SUPER_ADMIN_PASSWORD;
 
-    const email = body.email || process.env.SUPER_ADMIN_EMAIL || 'super@entur.com.br';
-    const password = body.senha || process.env.SUPER_ADMIN_PASSWORD || 'super123';
-    const nome = body.nome || 'Super Admin';
+    if (!email || !password) {
+      return NextResponse.json(
+        { error: 'SUPER_ADMIN_EMAIL and SUPER_ADMIN_PASSWORD env vars are required' },
+        { status: 400 }
+      );
+    }
+
+    const nome = 'Super Admin';
 
     // Check if this email already exists
     const { rows: existing } = await pool.query(

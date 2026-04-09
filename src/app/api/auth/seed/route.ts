@@ -42,13 +42,19 @@ export async function POST() {
       );
     }
 
-    // Create default admin with tenant_id
-    const senhaHash = await hashPassword('admin123');
+    // Generate a random password for security
+    const randomPwd = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+      .map(b => b.toString(36).padStart(2, '0'))
+      .join('')
+      .slice(0, 16);
+
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@entur.com.br';
+    const senhaHash = await hashPassword(randomPwd);
     const id = Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
     const admin = {
       id,
       nome: 'Administrador',
-      email: 'admin@entur.com.br',
+      email: adminEmail,
       senha_hash: senhaHash,
       perfil: 'ADMIN',
       permissoes: {
@@ -73,9 +79,9 @@ export async function POST() {
       ok: true,
       message: 'Admin criado com sucesso',
       email: admin.email,
-      senha: 'admin123',
+      senha: randomPwd,
       tenantId,
-      aviso: 'TROQUE A SENHA IMEDIATAMENTE APOS O PRIMEIRO LOGIN',
+      aviso: 'ANOTE ESTA SENHA! Ela nao sera exibida novamente. Troque apos o primeiro login.',
     });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Erro desconhecido';

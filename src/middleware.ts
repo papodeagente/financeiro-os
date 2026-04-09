@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'entur-os-secret-key-change-in-production-2026'
-);
+let _jwtSecret: Uint8Array | null = null;
+function getJwtSecret() {
+  if (!_jwtSecret) {
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+      throw new Error('JWT_SECRET environment variable is required.');
+    }
+    _jwtSecret = new TextEncoder().encode(secret);
+  }
+  return _jwtSecret;
+}
 
 const COOKIE_NAME = 'entur-session';
 
@@ -15,12 +23,21 @@ const PUBLIC_PATHS = [
   '/admin/login', '/api/admin/auth/login', '/api/admin/auth/seed',
 ];
 
+function addSecurityHeaders(response: NextResponse) {
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('X-Frame-Options', 'SAMEORIGIN');
+  response.headers.set('X-XSS-Protection', '1; mode=block');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  return response;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow public paths
   if (PUBLIC_PATHS.some(p => pathname.startsWith(p))) {
-    return NextResponse.next();
+    return addSecurityHeaders(NextResponse.next());
   }
 
   // Allow static assets and Next.js internals
@@ -51,7 +68,7 @@ export async function middleware(request: NextRequest) {
 
   // Verify JWT
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecret());
 
     // Admin routes: require isSuperAdmin
     const isAdminRoute = pathname.startsWith('/admin') || pathname.startsWith('/api/admin/');
@@ -62,10 +79,10 @@ export async function middleware(request: NextRequest) {
         }
         return NextResponse.redirect(new URL('/admin/login', request.url));
       }
-      return NextResponse.next();
+      return addSecurityHeaders(NextResponse.next());
     }
 
-    return NextResponse.next();
+    return addSecurityHeaders(NextResponse.next());
   } catch {
     // Invalid/expired token — clear cookie and redirect
     if (pathname.startsWith('/api/')) {

@@ -5,7 +5,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ slug: st
   try {
     await initDB();
     const { slug } = await params;
-    if (!pool || !slug) return NextResponse.json({ error: 'Bad request' }, { status: 400 });
+    if (!pool || !slug || slug.length < 10 || !/^[\w-]+$/.test(slug)) {
+      return NextResponse.json({ error: 'Bad request' }, { status: 400 });
+    }
 
     const body = await req.json();
     const { nome_aceite } = body;
@@ -14,8 +16,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ slug: st
     }
 
     const { rows } = await pool.query(
-      `SELECT id, data FROM propostas WHERE id LIKE $1 LIMIT 1`,
-      [`${slug}%`]
+      `SELECT id, data FROM propostas WHERE id = $1 LIMIT 1`,
+      [slug]
     );
     if (rows.length === 0) return NextResponse.json({ error: 'Proposta nao encontrada' }, { status: 404 });
 

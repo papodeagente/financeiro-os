@@ -14,6 +14,9 @@ async function getAnthropicConfig() {
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
+    if (!slug || slug.length < 10 || !/^[\w-]+$/.test(slug)) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
     const { mensagem, historico } = await req.json();
     if (!mensagem?.trim()) {
       return NextResponse.json({ error: 'Mensagem vazia' }, { status: 400 });
@@ -28,8 +31,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     await initDB();
     if (!pool) return NextResponse.json({ error: 'DB offline' }, { status: 500 });
     const { rows } = await pool.query(
-      `SELECT data FROM propostas WHERE id LIKE $1 LIMIT 1`,
-      [`${slug}%`]
+      `SELECT data FROM propostas WHERE id = $1 LIMIT 1`,
+      [slug]
     );
     if (rows.length === 0) {
       return NextResponse.json({ error: 'Proposta nao encontrada' }, { status: 404 });
