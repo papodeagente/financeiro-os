@@ -209,8 +209,8 @@ function EditorInner({ id }: { id: string }) {
     setEdges(eds => addEdge({
       ...connection,
       type: 'smoothstep',
-      markerEnd: { type: MarkerType.ArrowClosed, color: '#64748b' },
-      style: { stroke: '#64748b', strokeWidth: 1.5 },
+      markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' },
+      style: { stroke: '#3b82f6', strokeWidth: 2, strokeDasharray: '8 4' },
       data: { taxa_conversao_override: null },
     }, eds));
     scheduleSave();

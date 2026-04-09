@@ -360,10 +360,10 @@ function FunilNodeInner({ data, selected }: NodeProps<FunilNodeType>) {
   };
 
   return (
-    <div className="flex flex-col items-center" style={{ minWidth: 80 }}>
+    <div className="relative flex flex-col items-center" style={{ minWidth: 80 }}>
       <Handles />
 
-      {/* Gargalo ring */}
+      {/* Gargalo ring — this is the measured part for handle centering */}
       <div className={`relative ${gargalo ? 'ring-2 ring-red-500 ring-offset-2 rounded-2xl' : ''} ${selected ? 'ring-2 ring-blue-400 ring-offset-2 rounded-2xl' : ''}`}>
         {visual === 'circle' && <CircleIllustration info={info} brandColor={brandColor} />}
         {visual === 'page' && <PageIllustration catColor={catInfo.color} ctaText={ctaText} />}
@@ -377,20 +377,23 @@ function FunilNodeInner({ data, selected }: NodeProps<FunilNodeType>) {
         {visual === 'diamond' && <DiamondIllustration brandColor={brandColor} info={info} />}
       </div>
 
-      {/* Label */}
-      <p className="mt-1.5 text-[10px] font-semibold text-[#374151] text-center leading-tight max-w-[160px]">
-        {data.label}
-      </p>
+      {/* Label + badges: absolute so they don't inflate the node's bounding box.
+          Handles center on the illustration only. */}
+      <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none" style={{ top: '100%', paddingTop: 6 }}>
+        <p className="text-[10px] font-semibold text-[#374151] text-center leading-tight max-w-[160px] whitespace-nowrap">
+          {data.label}
+        </p>
 
-      {/* Gargalo badge */}
-      {gargalo && (
-        <div className="mt-0.5 flex items-center gap-0.5 text-[8px] font-bold text-red-600 uppercase tracking-wider">
-          <AlertTriangle className="w-2.5 h-2.5" /> Gargalo
-        </div>
-      )}
+        {/* Gargalo badge */}
+        {gargalo && (
+          <div className="mt-0.5 flex items-center gap-0.5 text-[8px] font-bold text-red-600 uppercase tracking-wider">
+            <AlertTriangle className="w-2.5 h-2.5" /> Gargalo
+          </div>
+        )}
 
-      {/* Resultado da simulação */}
-      {r && r.entrantes > 0 && <ResultBadge r={r} />}
+        {/* Resultado da simulação */}
+        {r && r.entrantes > 0 && <ResultBadge r={r} />}
+      </div>
     </div>
   );
 }
