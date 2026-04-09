@@ -332,6 +332,30 @@ export async function initDB() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS funis (
+      id TEXT PRIMARY KEY,
+      nome TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'rascunho',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS funis_simulacoes (
+      id TEXT PRIMARY KEY,
+      funil_id TEXT NOT NULL DEFAULT '',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS funis_templates (
+      id TEXT PRIMARY KEY,
+      nome TEXT NOT NULL DEFAULT '',
+      categoria TEXT NOT NULL DEFAULT '',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
 
   // Create indices for new tables (IF NOT EXISTS prevents errors on re-run)
@@ -350,6 +374,10 @@ export async function initDB() {
     CREATE INDEX IF NOT EXISTS idx_fluxograma_categorias_ordem ON fluxograma_categorias(ordem);
     CREATE INDEX IF NOT EXISTS idx_fluxogramas_categoria ON fluxogramas(categoria_id);
     CREATE INDEX IF NOT EXISTS idx_fluxogramas_nome ON fluxogramas(nome);
+    CREATE INDEX IF NOT EXISTS idx_funis_nome ON funis(nome);
+    CREATE INDEX IF NOT EXISTS idx_funis_status ON funis(status);
+    CREATE INDEX IF NOT EXISTS idx_funis_simulacoes_funil ON funis_simulacoes(funil_id);
+    CREATE INDEX IF NOT EXISTS idx_funis_templates_categoria ON funis_templates(categoria);
   `);
 
   // ============================================================
@@ -406,6 +434,7 @@ export async function initDB() {
     'orcamentos', 'planejamento_projetos',
     'fluxograma_categorias', 'fluxogramas',
     'cartoes_corp',
+    'funis', 'funis_simulacoes', 'funis_templates',
   ];
   for (const table of TENANT_TABLES) {
     await pool.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT ''`);
@@ -427,6 +456,18 @@ export async function initDB() {
   // Run multi-tenant migration (assign existing data to default tenant)
   const { migrateToMultiTenant } = await import('./migrate-multitenant');
   await migrateToMultiTenant();
+
+  // Seed dos 6 templates de funis (idempotente via WHERE NOT EXISTS por id fixo).
+  // Templates são globais (tenant_id = '') para aparecer em qualquer tenant.
+  const { FUNIL_TEMPLATES_SEED } = await import('./funil-templates-seed');
+  for (const tpl of FUNIL_TEMPLATES_SEED) {
+    await pool.query(
+      `INSERT INTO funis_templates (id, nome, categoria, data, tenant_id, created_at)
+       SELECT $1, $2, $3, $4::jsonb, '', NOW()
+       WHERE NOT EXISTS (SELECT 1 FROM funis_templates WHERE id = $1)`,
+      [tpl.id, tpl.nome, tpl.categoria, JSON.stringify(tpl.data)],
+    );
+  }
 
   initialized = true;
 }
