@@ -156,6 +156,19 @@ export default function ContasReceberPage() {
       ),
     },
     {
+      key: 'origem_tipo',
+      header: 'Origem',
+      headerClassName: 'hidden md:table-cell',
+      className: 'hidden md:table-cell',
+      cell: i => {
+        const isAuto = (i as ContaReceber).auto_gerado;
+        if (i.origem === 'COMISSAO_FORNECEDOR') return <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/30 text-[10px]">Comissão</Badge>;
+        if (isAuto) return <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/30 text-[10px]">Venda (auto)</Badge>;
+        if (i.origem === 'VENDA') return <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/30 text-[10px]">Venda</Badge>;
+        return <Badge className="bg-[var(--t-surface-hover)] text-[var(--t-text-muted)] border-[var(--t-border)] text-[10px]">{i.origem || 'Manual'}</Badge>;
+      },
+    },
+    {
       key: 'valor',
       header: 'Valor',
       align: 'right',

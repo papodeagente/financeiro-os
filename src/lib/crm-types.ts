@@ -112,6 +112,7 @@ export interface FornecedorCRM {
     dia_vencimento: number;
     comissao_padrao: number;
     moeda_padrao: 'BRL' | 'USD' | 'EUR';
+    regra_vencimento_comissao?: RegraVencimentoComissao;
   };
 
   integracao_ativa: boolean;
@@ -148,6 +149,31 @@ export type TipoProdutoVenda = 'AEREO' | 'HOTEL' | 'PACOTE' | 'SEGURO' | 'RECEPT
 export type StatusProdutoVenda = 'RESERVADO' | 'CONFIRMADO' | 'EMITIDO' | 'CANCELADO' | 'ALTERADO';
 export type StatusVendaCRM = 'ORCAMENTO' | 'RESERVADO' | 'CONFIRMADO' | 'CANCELADO' | 'CONCLUIDO';
 export type FormaPagamentoCRM = 'AVISTA_PIX' | 'CARTAO' | 'BOLETO' | 'FATURADO' | 'MISTO';
+
+export type MeioPagamento = 'proprio' | 'fornecedor';
+
+export interface RegraVencimentoComissao {
+  tipo: 'dia_fixo_mes' | 'dias_apos_venda';
+  valor: number;
+}
+
+export interface ItemVendaData {
+  tipo: TipoProdutoVenda;
+  descricao: string;
+  fornecedor_nome: string;
+  meio_pagamento: MeioPagamento;
+  valor_custo: number;
+  valor_venda: number;
+  comissao_percentual: number;
+  comissao_valor: number;
+  moeda: 'BRL' | 'USD' | 'EUR';
+  cambio: number;
+  localizador: string;
+  data_inicio: string;
+  data_fim: string;
+  observacoes: string;
+  contas_geradas_ids: string[];
+}
 
 export interface ProdutoVenda {
   id: string;
@@ -225,6 +251,9 @@ export interface VendaCRM {
   anexos: Array<{ nome: string; url: string }>;
   observacoes: string;
   campos_personalizados: Record<string, string>;
+  itens_count?: number;
+  contas_geradas?: boolean;
+  contas_geradas_em?: string;
 }
 
 export interface Orcamento {
@@ -322,6 +351,9 @@ export interface ContaReceber {
   rateio: Array<{ centro_custo: string; percentual: number; valor: number }>;
   anexos: Array<{ nome: string; url: string }>;
   observacoes: string;
+  origem_venda_id?: string;
+  origem_item_id?: string;
+  auto_gerado?: boolean;
 }
 
 export type StatusContaPagar = 'PENDENTE' | 'PAGO' | 'VENCIDO' | 'CANCELADO' | 'PARCIAL';
@@ -360,6 +392,9 @@ export interface ContaPagar {
   rateio: Array<{ centro_custo: string; percentual: number; valor: number }>;
   anexos: Array<{ nome: string; url: string }>;
   observacoes: string;
+  origem_venda_id?: string;
+  origem_item_id?: string;
+  auto_gerado?: boolean;
 }
 
 // ============================================================
@@ -1223,6 +1258,33 @@ export function createPlanoComissao(): PlanoComissao {
     regras_produto: [],
     ativo: true,
     criado_em: new Date().toISOString(),
+  };
+}
+
+export function createItemVenda(): { id: string; venda_id: string; fornecedor_id: string; sequencia: number; status: string; data: ItemVendaData } {
+  return {
+    id: generateId(),
+    venda_id: '',
+    fornecedor_id: '',
+    sequencia: 1,
+    status: 'ativo',
+    data: {
+      tipo: 'AEREO',
+      descricao: '',
+      fornecedor_nome: '',
+      meio_pagamento: 'proprio',
+      valor_custo: 0,
+      valor_venda: 0,
+      comissao_percentual: 0,
+      comissao_valor: 0,
+      moeda: 'BRL',
+      cambio: 1,
+      localizador: '',
+      data_inicio: '',
+      data_fim: '',
+      observacoes: '',
+      contas_geradas_ids: [],
+    },
   };
 }
 

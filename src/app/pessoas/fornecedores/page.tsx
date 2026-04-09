@@ -165,6 +165,19 @@ export default function FornecedoresPage() {
       cell: f => <span className="text-[var(--t-text-secondary)]">{f.email}</span>,
     },
     {
+      key: 'comissao',
+      header: 'Comissão',
+      headerClassName: 'hidden lg:table-cell',
+      className: 'hidden lg:table-cell',
+      cell: f => (
+        <span className="text-[var(--t-text-secondary)]">
+          {f.regras_faturamento?.comissao_padrao
+            ? `${f.regras_faturamento.comissao_padrao}%`
+            : '—'}
+        </span>
+      ),
+    },
+    {
       key: 'cidade',
       header: 'Cidade/UF',
       headerClassName: 'hidden xl:table-cell',
@@ -448,6 +461,108 @@ export default function FornecedoresPage() {
                   value={form.observacoes}
                   onChange={(e) => setField('observacoes', e.target.value)}
                 />
+              </div>
+            </div>
+
+            {/* Condições de comissão */}
+            <div className="mt-6 pt-4 border-t border-[var(--t-border)]">
+              <h3 className="text-sm font-semibold text-[var(--t-text)] mb-3">Condições de comissão</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Comissão padrão (%)</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.1}
+                    className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
+                    value={form.regras_faturamento.comissao_padrao || ''}
+                    onChange={(e) =>
+                      setForm(prev => ({
+                        ...prev,
+                        regras_faturamento: { ...prev.regras_faturamento, comissao_padrao: parseFloat(e.target.value) || 0 },
+                      }))
+                    }
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Regra de vencimento</label>
+                  <select
+                    className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+                    value={form.regras_faturamento.regra_vencimento_comissao?.tipo || ''}
+                    onChange={(e) => {
+                      const tipo = e.target.value as 'dia_fixo_mes' | 'dias_apos_venda' | '';
+                      setForm(prev => ({
+                        ...prev,
+                        regras_faturamento: {
+                          ...prev.regras_faturamento,
+                          regra_vencimento_comissao: tipo
+                            ? { tipo, valor: prev.regras_faturamento.regra_vencimento_comissao?.valor ?? (tipo === 'dia_fixo_mes' ? 15 : 30) }
+                            : undefined,
+                        },
+                      }));
+                    }}
+                  >
+                    <option value="">Padrão (30 dias)</option>
+                    <option value="dia_fixo_mes">Dia fixo do mês</option>
+                    <option value="dias_apos_venda">Dias após a venda</option>
+                  </select>
+                </div>
+
+                {form.regras_faturamento.regra_vencimento_comissao && (
+                  <div>
+                    <label className="block text-xs text-[var(--t-text-secondary)] mb-1">
+                      {form.regras_faturamento.regra_vencimento_comissao.tipo === 'dia_fixo_mes' ? 'Dia do mês (1-28)' : 'Quantidade de dias'}
+                    </label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={form.regras_faturamento.regra_vencimento_comissao.tipo === 'dia_fixo_mes' ? 28 : 365}
+                      className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)]"
+                      value={form.regras_faturamento.regra_vencimento_comissao.valor}
+                      onChange={(e) =>
+                        setForm(prev => ({
+                          ...prev,
+                          regras_faturamento: {
+                            ...prev.regras_faturamento,
+                            regra_vencimento_comissao: {
+                              ...prev.regras_faturamento.regra_vencimento_comissao!,
+                              valor: parseInt(e.target.value) || 0,
+                            },
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+                )}
+
+                {form.regras_faturamento.comissao_padrao > 0 && (
+                  <div className="flex items-end">
+                    <p className="text-xs text-[var(--t-text-muted)] bg-[var(--t-surface-hover)] rounded-md px-3 py-2">
+                      Para uma venda hoje, vencimento seria:{' '}
+                      <span className="font-medium text-[var(--t-text)]">
+                        {(() => {
+                          const hoje = new Date().toISOString().split('T')[0];
+                          const regra = form.regras_faturamento.regra_vencimento_comissao;
+                          if (!regra) {
+                            const d = new Date(); d.setDate(d.getDate() + 30);
+                            return d.toLocaleDateString('pt-BR');
+                          }
+                          if (regra.tipo === 'dias_apos_venda') {
+                            const d = new Date(hoje + 'T12:00:00'); d.setDate(d.getDate() + regra.valor);
+                            return d.toLocaleDateString('pt-BR');
+                          }
+                          const d = new Date(hoje + 'T12:00:00');
+                          const dia = Math.min(regra.valor, 28);
+                          let mes = d.getMonth() + 1; let ano = d.getFullYear();
+                          if (mes > 11) { mes = 0; ano++; }
+                          return new Date(ano, mes, dia).toLocaleDateString('pt-BR');
+                        })()}
+                      </span>
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 

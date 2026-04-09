@@ -288,6 +288,19 @@ export default function ContasPagarPage() {
       ),
     },
     {
+      key: 'referente',
+      header: 'Referente a',
+      headerClassName: 'hidden lg:table-cell',
+      className: 'hidden lg:table-cell',
+      cell: i => {
+        const isAuto = (i as ContaPagar).auto_gerado;
+        if (isAuto && i.origem === 'VENDA') return <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/30 text-[10px]">Venda (auto)</Badge>;
+        if (i.origem === 'VENDA') return <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/30 text-[10px]">Venda</Badge>;
+        if (i.origem === 'GRUPO') return <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/30 text-[10px]">Produto</Badge>;
+        return <span className="text-[var(--t-text-muted)] text-xs">{i.origem || '—'}</span>;
+      },
+    },
+    {
       key: 'valor',
       header: 'Valor',
       align: 'right',

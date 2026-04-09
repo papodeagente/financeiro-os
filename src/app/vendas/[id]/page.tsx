@@ -6,8 +6,9 @@ import {
   ArrowLeft, User, Calendar, CreditCard, Package,
   FileText, Users, Plane, Hotel, ShieldCheck,
   MapPin, Car, Ship, Ticket, Briefcase, Copy,
+  DollarSign, Receipt, Wallet,
 } from 'lucide-react';
-import { VendaCRM, Cliente, FornecedorCRM } from '@/lib/crm-types';
+import { VendaCRM, Cliente, FornecedorCRM, ContaReceber, ContaPagar } from '@/lib/crm-types';
 import { loadEntities } from '@/lib/crm-storage';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -65,13 +66,17 @@ export default function VendaDetalhe() {
   const [cliente, setCliente] = useState<Cliente | null>(null);
   const [fornecedores, setFornecedores] = useState<Record<string, FornecedorCRM>>({});
   const [loading, setLoading] = useState(true);
+  const [contasReceber, setContasReceber] = useState<ContaReceber[]>([]);
+  const [contasPagar, setContasPagar] = useState<ContaPagar[]>([]);
+  const [resumoFin, setResumoFin] = useState<Record<string, number> | null>(null);
 
   useEffect(() => {
     Promise.all([
       fetch(`/api/vendas-crm/${id}`).then(r => r.json()),
       loadEntities<Cliente>('clientes'),
       loadEntities<FornecedorCRM>('fornecedores-crm'),
-    ]).then(([v, cs, fs]) => {
+      fetch(`/api/vendas-crm/${id}/financeiro`).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([v, cs, fs, fin]) => {
       if (v && !v.error) {
         setVenda(v);
         const c = cs.find((cl: Cliente) => cl.id === v.cliente_id);
@@ -79,6 +84,11 @@ export default function VendaDetalhe() {
         const fMap: Record<string, FornecedorCRM> = {};
         fs.forEach((f: FornecedorCRM) => { fMap[f.id] = f; });
         setFornecedores(fMap);
+      }
+      if (fin && !fin.error) {
+        setContasReceber(fin.contas_receber || []);
+        setContasPagar(fin.contas_pagar || []);
+        setResumoFin(fin.resumo || null);
       }
       setLoading(false);
     });
@@ -266,6 +276,93 @@ export default function VendaDetalhe() {
             <Info label="Valor Final" value={fmt(venda.valor_final || 0)} highlight />
           </div>
         </Section>
+
+        {/* Financeiro — Contas geradas automaticamente */}
+        {(contasReceber.length > 0 || contasPagar.length > 0) && (
+          <>
+            {/* Resumo financeiro detalhado */}
+            {resumoFin && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <SummaryCard label="Total a receber" value={fmt(resumoFin.total_receber || 0)} color="text-blue-400" />
+                <SummaryCard label="Recebido" value={fmt(resumoFin.total_recebido || 0)} color="text-green-400" />
+                <SummaryCard label="Total a pagar" value={fmt(resumoFin.total_pagar || 0)} color="text-orange-400" />
+                <SummaryCard label="Pago" value={fmt(resumoFin.total_pago || 0)} color="text-emerald-400" />
+              </div>
+            )}
+
+            {/* Contas a receber */}
+            {contasReceber.length > 0 && (
+              <Section icon={Receipt} title={`Contas a receber (${contasReceber.length})`}>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-[10px] text-[var(--t-text-muted)] uppercase tracking-wider">
+                        <th className="text-left py-1.5 pr-3">Descricao</th>
+                        <th className="text-left py-1.5 pr-3">Origem</th>
+                        <th className="text-right py-1.5 pr-3">Valor</th>
+                        <th className="text-left py-1.5 pr-3">Vencimento</th>
+                        <th className="text-left py-1.5">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--t-border)]">
+                      {contasReceber.map(cr => (
+                        <tr key={cr.id}>
+                          <td className="py-2 pr-3 text-[var(--t-text)]">{cr.descricao}</td>
+                          <td className="py-2 pr-3">
+                            <Badge className={`text-[10px] ${cr.origem === 'COMISSAO_FORNECEDOR' ? 'bg-purple-500/10 text-purple-400 border-purple-500/30' : 'bg-blue-500/10 text-blue-400 border-blue-500/30'}`}>
+                              {cr.origem === 'COMISSAO_FORNECEDOR' ? 'Comissao' : 'Venda'}
+                            </Badge>
+                          </td>
+                          <td className="py-2 pr-3 text-right font-medium text-blue-400">{fmt(cr.valor_final)}</td>
+                          <td className="py-2 pr-3 text-[var(--t-text-secondary)]">{fmtDate(cr.data_vencimento)}</td>
+                          <td className="py-2">
+                            <Badge className={`text-[10px] border ${cr.status === 'RECEBIDO' ? 'bg-green-500/10 text-green-400 border-green-500/30' : cr.status === 'ATRASADO' ? 'bg-red-500/10 text-red-400 border-red-500/30' : 'bg-amber-500/10 text-amber-400 border-amber-500/30'}`}>
+                              {cr.status}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Section>
+            )}
+
+            {/* Contas a pagar */}
+            {contasPagar.length > 0 && (
+              <Section icon={Wallet} title={`Contas a pagar (${contasPagar.length})`}>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-[10px] text-[var(--t-text-muted)] uppercase tracking-wider">
+                        <th className="text-left py-1.5 pr-3">Descricao</th>
+                        <th className="text-left py-1.5 pr-3">Fornecedor</th>
+                        <th className="text-right py-1.5 pr-3">Valor</th>
+                        <th className="text-left py-1.5 pr-3">Vencimento</th>
+                        <th className="text-left py-1.5">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--t-border)]">
+                      {contasPagar.map(cp => (
+                        <tr key={cp.id}>
+                          <td className="py-2 pr-3 text-[var(--t-text)]">{cp.descricao}</td>
+                          <td className="py-2 pr-3 text-[var(--t-text-secondary)]">{cp.fornecedor_nome || '—'}</td>
+                          <td className="py-2 pr-3 text-right font-medium text-orange-400">{fmt(cp.valor_final)}</td>
+                          <td className="py-2 pr-3 text-[var(--t-text-secondary)]">{fmtDate(cp.data_vencimento)}</td>
+                          <td className="py-2">
+                            <Badge className={`text-[10px] border ${cp.status === 'PAGO' ? 'bg-green-500/10 text-green-400 border-green-500/30' : cp.status === 'VENCIDO' ? 'bg-red-500/10 text-red-400 border-red-500/30' : 'bg-amber-500/10 text-amber-400 border-amber-500/30'}`}>
+                              {cp.status}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Section>
+            )}
+          </>
+        )}
 
         {/* Observacoes */}
         {venda.observacoes && (

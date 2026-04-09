@@ -356,6 +356,17 @@ export async function initDB() {
       data JSONB NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS itens_venda (
+      id TEXT PRIMARY KEY,
+      venda_id TEXT NOT NULL DEFAULT '',
+      fornecedor_id TEXT NOT NULL DEFAULT '',
+      sequencia INTEGER NOT NULL DEFAULT 1,
+      status TEXT NOT NULL DEFAULT 'ativo',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
 
   // Create indices for new tables (IF NOT EXISTS prevents errors on re-run)
@@ -378,6 +389,7 @@ export async function initDB() {
     CREATE INDEX IF NOT EXISTS idx_funis_status ON funis(status);
     CREATE INDEX IF NOT EXISTS idx_funis_simulacoes_funil ON funis_simulacoes(funil_id);
     CREATE INDEX IF NOT EXISTS idx_funis_templates_categoria ON funis_templates(categoria);
+    CREATE INDEX IF NOT EXISTS idx_itens_venda_venda ON itens_venda(venda_id);
   `);
 
   // ============================================================
@@ -435,6 +447,7 @@ export async function initDB() {
     'fluxograma_categorias', 'fluxogramas',
     'cartoes_corp',
     'funis', 'funis_simulacoes', 'funis_templates',
+    'itens_venda',
   ];
   for (const table of TENANT_TABLES) {
     await pool.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT ''`);

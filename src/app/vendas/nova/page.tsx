@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, Trash2, ChevronDown, ChevronUp, ArrowLeft, Save, Search, Plane, Hotel, FileText, X, Check, UserPlus } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronUp, ArrowLeft, Save, Search, Plane, Hotel, FileText, X, Check, UserPlus, DollarSign } from 'lucide-react';
 import { FlightSearchModal } from '@/components/FlightSearchModal';
 import { HotelSearchModal } from '@/components/HotelSearchModal';
 import { formatFlightForVenda } from '@/lib/flight-data-mapper';
@@ -16,11 +16,14 @@ import {
   Proposta,
   FornecedorCRM,
   TipoFornecedor,
+  MeioPagamento,
   createVendaCRM,
   createProdutoVenda,
+  createItemVenda,
   createCliente,
   createFornecedorCRM,
 } from '@/lib/crm-types';
+import { gerarContasVenda, type ItemVendaInput, type FornecedorInfo } from '@/lib/venda-financeiro';
 import { GrupoViagem } from '@/lib/types';
 import { loadEntities, saveEntity } from '@/lib/crm-storage';
 import { loadGrupos } from '@/lib/storage';
@@ -263,8 +266,16 @@ export default function NovaVendaPage() {
   };
 
   const selectFornecedor = (f: FornecedorCRM, idx: number) => {
-    updateProduto(idx, 'fornecedor_nome', f.nome_fantasia || f.razao_social);
-    updateProduto(idx, 'fornecedor_id', f.id);
+    setVenda(prev => {
+      const produtos = [...prev.produtos];
+      produtos[idx] = {
+        ...produtos[idx],
+        fornecedor_nome: f.nome_fantasia || f.razao_social,
+        fornecedor_id: f.id,
+        comissao_fornecedor: f.regras_faturamento?.comissao_padrao || produtos[idx].comissao_fornecedor,
+      };
+      return recalcTotais({ ...prev, produtos });
+    });
     setActiveFornecedorIdx(null);
   };
 
@@ -511,6 +522,51 @@ export default function NovaVendaPage() {
     return 'OUTROS';
   }
 
+  // ---- Financial Preview ----
+  const financialPreview = (() => {
+    if (venda.produtos.length === 0) return null;
+    const itensInput: ItemVendaInput[] = venda.produtos.map((p, idx) => {
+      const base = createItemVenda();
+      return {
+        ...base,
+        id: p.id,
+        venda_id: venda.id,
+        fornecedor_id: p.fornecedor_id,
+        sequencia: idx + 1,
+        data: {
+          ...base.data,
+          tipo: p.tipo,
+          descricao: p.descricao,
+          fornecedor_nome: p.fornecedor_nome,
+          meio_pagamento: ((p as ProdutoVenda & { meio_pagamento?: MeioPagamento }).meio_pagamento || 'proprio') as MeioPagamento,
+          valor_custo: (p.valor_custo || 0) * (p.cambio || 1),
+          valor_venda: (p.valor_venda || 0) * (p.cambio || 1),
+          comissao_percentual: p.comissao_fornecedor || 0,
+          comissao_valor: 0,
+          moeda: p.moeda,
+          cambio: p.cambio,
+          localizador: p.localizador,
+          data_inicio: p.data_inicio,
+          data_fim: p.data_fim,
+          observacoes: '',
+          contas_geradas_ids: [],
+        },
+      };
+    });
+    const fornecedorInfos: FornecedorInfo[] = fornecedores
+      .filter(f => venda.produtos.some(p => p.fornecedor_id === f.id))
+      .map(f => ({ id: f.id, nome_fantasia: f.nome_fantasia, regras_faturamento: f.regras_faturamento }));
+
+    try {
+      return gerarContasVenda({
+        venda: venda as VendaCRM,
+        itens: itensInput,
+        fornecedores: fornecedorInfos,
+        cliente_nome: clienteNome,
+      });
+    } catch { return null; }
+  })();
+
   // ---- Save ----
   const handleSave = async () => {
     if (!venda.cliente_id) {
@@ -519,7 +575,56 @@ export default function NovaVendaPage() {
     }
     setSaving(true);
     try {
-      await saveEntity('vendas-crm', venda);
+      // Build itens from produtos
+      const itens: ItemVendaInput[] = venda.produtos.map((p, idx) => {
+        const base = createItemVenda();
+        return {
+          ...base,
+          id: p.id,
+          venda_id: venda.id,
+          fornecedor_id: p.fornecedor_id,
+          sequencia: idx + 1,
+          data: {
+            ...base.data,
+            tipo: p.tipo,
+            descricao: p.descricao,
+            fornecedor_nome: p.fornecedor_nome,
+            meio_pagamento: ((p as ProdutoVenda & { meio_pagamento?: MeioPagamento }).meio_pagamento || 'proprio') as MeioPagamento,
+            valor_custo: (p.valor_custo || 0) * (p.cambio || 1),
+            valor_venda: (p.valor_venda || 0) * (p.cambio || 1),
+            comissao_percentual: p.comissao_fornecedor || 0,
+            comissao_valor: 0,
+            moeda: p.moeda,
+            cambio: p.cambio,
+            localizador: p.localizador,
+            data_inicio: p.data_inicio,
+            data_fim: p.data_fim,
+            observacoes: '',
+            contas_geradas_ids: [],
+          },
+        };
+      });
+
+      if (itens.length > 0) {
+        // New transactional flow
+        const res = await fetch('/api/vendas-crm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            venda,
+            itens,
+            cliente_nome: clienteNome,
+          }),
+        });
+        if (!res.ok) throw new Error('Erro ao salvar');
+        const data = await res.json();
+        if (data.resumo) {
+          toast.success(`Venda salva! ${data.contas_receber_count} conta(s) a receber, ${data.contas_pagar_count} conta(s) a pagar geradas.`);
+        }
+      } else {
+        // Legacy flow (no itens)
+        await saveEntity('vendas-crm', venda);
+      }
       router.push('/vendas');
     } catch {
       toast.error('Erro ao salvar venda');
@@ -1089,6 +1194,47 @@ export default function NovaVendaPage() {
                     </span>
                   </div>
                 )}
+
+                {/* Meio de pagamento e Comissão */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 pt-3 mt-3 border-t border-[var(--t-border)]">
+                  <div>
+                    <label className={labelClass}>Meio de pagamento</label>
+                    <select
+                      value={(prod as ProdutoVenda & { meio_pagamento?: MeioPagamento }).meio_pagamento || 'proprio'}
+                      onChange={e => updateProduto(idx, 'meio_pagamento', e.target.value)}
+                      className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm"
+                    >
+                      <option value="proprio">Agência paga fornecedor</option>
+                      <option value="fornecedor">Cliente paga fornecedor</option>
+                    </select>
+                    <p className="text-[10px] text-[var(--t-text-muted)] mt-1">
+                      {(prod as ProdutoVenda & { meio_pagamento?: string }).meio_pagamento === 'fornecedor'
+                        ? 'Gera conta a receber da comissão'
+                        : 'Gera conta a receber do cliente + conta a pagar'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Comissão (%)</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      value={prod.comissao_fornecedor || ''}
+                      onChange={e => updateProduto(idx, 'comissao_fornecedor', parseFloat(e.target.value) || 0)}
+                      className={inputClass}
+                    />
+                  </div>
+                  {prod.comissao_fornecedor > 0 && (
+                    <div className="flex items-end">
+                      <p className="text-xs text-[var(--t-text-muted)] bg-[var(--t-surface-hover)] rounded-md px-3 py-2">
+                        Comissão: <span className="font-medium text-[var(--t-green)]">
+                          {fmt(prod.valor_venda * prod.comissao_fornecedor / 100)}
+                        </span>
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -1207,6 +1353,43 @@ export default function NovaVendaPage() {
           />
         )}
       </div>
+
+      {/* 7. Preview Financeiro */}
+      {financialPreview && venda.produtos.length > 0 && (
+        <div className={sectionClass}>
+          <div className="flex items-center gap-2 mb-4">
+            <DollarSign className="w-4 h-4 text-[var(--t-green)]" />
+            <h2 className="text-base font-semibold text-[var(--t-text)]">Preview Financeiro</h2>
+            <span className="text-[10px] text-[var(--t-text-muted)] bg-[var(--t-surface-hover)] px-2 py-0.5 rounded-full">auto</span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="bg-[var(--t-bg)] rounded-lg p-3 text-center">
+              <p className="text-[10px] text-[var(--t-text-secondary)] mb-1 uppercase tracking-wide">Receber do cliente</p>
+              <p className="text-lg font-bold text-blue-400">{fmt(financialPreview.resumo.total_cliente)}</p>
+              <p className="text-[10px] text-[var(--t-text-muted)]">{financialPreview.resumo.itens_proprio} item(ns) próprio(s)</p>
+            </div>
+            <div className="bg-[var(--t-bg)] rounded-lg p-3 text-center">
+              <p className="text-[10px] text-[var(--t-text-secondary)] mb-1 uppercase tracking-wide">Comissões a receber</p>
+              <p className="text-lg font-bold text-emerald-400">{fmt(financialPreview.resumo.total_comissoes)}</p>
+              <p className="text-[10px] text-[var(--t-text-muted)]">{financialPreview.resumo.itens_fornecedor} item(ns) fornecedor</p>
+            </div>
+            <div className="bg-[var(--t-bg)] rounded-lg p-3 text-center">
+              <p className="text-[10px] text-[var(--t-text-secondary)] mb-1 uppercase tracking-wide">Custos a pagar</p>
+              <p className="text-lg font-bold text-orange-400">{fmt(financialPreview.resumo.total_custos)}</p>
+              <p className="text-[10px] text-[var(--t-text-muted)]">{financialPreview.contas_pagar.length} conta(s)</p>
+            </div>
+            <div className="bg-[var(--t-bg)] rounded-lg p-3 text-center">
+              <p className="text-[10px] text-[var(--t-text-secondary)] mb-1 uppercase tracking-wide">Lucro previsto</p>
+              <p className={`text-lg font-bold ${financialPreview.resumo.lucro_previsto >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {fmt(financialPreview.resumo.lucro_previsto)}
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 text-[11px] text-[var(--t-text-muted)]">
+            Ao salvar, serão geradas {financialPreview.contas_receber.length} conta(s) a receber e {financialPreview.contas_pagar.length} conta(s) a pagar automaticamente.
+          </div>
+        </div>
+      )}
 
       {/* Bottom Save */}
       <div className="flex justify-end gap-3 mt-2">
