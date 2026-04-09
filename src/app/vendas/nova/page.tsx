@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, Trash2, ChevronDown, ChevronUp, ArrowLeft, Save, Search, Plane, Hotel, FileText, X, Check } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronUp, ArrowLeft, Save, Search, Plane, Hotel, FileText, X, Check, UserPlus } from 'lucide-react';
 import { FlightSearchModal } from '@/components/FlightSearchModal';
 import { HotelSearchModal } from '@/components/HotelSearchModal';
 import { formatFlightForVenda } from '@/lib/flight-data-mapper';
@@ -14,8 +14,12 @@ import {
   ProdutoVenda,
   Cliente,
   Proposta,
+  FornecedorCRM,
+  TipoFornecedor,
   createVendaCRM,
   createProdutoVenda,
+  createCliente,
+  createFornecedorCRM,
 } from '@/lib/crm-types';
 import { GrupoViagem } from '@/lib/types';
 import { loadEntities, saveEntity } from '@/lib/crm-storage';
@@ -82,6 +86,7 @@ export default function NovaVendaPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [fornecedores, setFornecedores] = useState<FornecedorCRM[]>([]);
   const [grupos, setGrupos] = useState<GrupoViagem[]>([]);
   const [propostas, setPropostas] = useState<Proposta[]>([]);
   const [clienteSearch, setClienteSearch] = useState('');
@@ -89,6 +94,23 @@ export default function NovaVendaPage() {
   const [saving, setSaving] = useState(false);
   const [showPropostaModal, setShowPropostaModal] = useState(false);
   const [propostaSearch, setPropostaSearch] = useState('');
+
+  // Inline quick-create states
+  const [showNovoCliente, setShowNovoCliente] = useState(false);
+  const [novoClienteTipo, setNovoClienteTipo] = useState<'PF' | 'PJ'>('PF');
+  const [novoClienteNome, setNovoClienteNome] = useState('');
+  const [novoClienteEmail, setNovoClienteEmail] = useState('');
+  const [novoClienteTelefone, setNovoClienteTelefone] = useState('');
+  const [savingCliente, setSavingCliente] = useState(false);
+
+  const [showNovoFornecedor, setShowNovoFornecedor] = useState(false);
+  const [novoFornecedorTipo, setNovoFornecedorTipo] = useState<TipoFornecedor>('OUTROS');
+  const [novoFornecedorNome, setNovoFornecedorNome] = useState('');
+  const [novoFornecedorEmail, setNovoFornecedorEmail] = useState('');
+  const [novoFornecedorTelefone, setNovoFornecedorTelefone] = useState('');
+  const [savingFornecedor, setSavingFornecedor] = useState(false);
+  const [fornecedorProdutoIdx, setFornecedorProdutoIdx] = useState<number | null>(null);
+  const [activeFornecedorIdx, setActiveFornecedorIdx] = useState<number | null>(null);
 
   const [openSections, setOpenSections] = useState({
     cliente: true,
@@ -109,6 +131,7 @@ export default function NovaVendaPage() {
 
   useEffect(() => {
     loadEntities<Cliente>('clientes').then(setClientes);
+    loadEntities<FornecedorCRM>('fornecedores-crm').then(setFornecedores);
     loadEntities<Proposta>('propostas').then(setPropostas);
     loadGrupos().then(gs => {
       setGrupos(gs);
@@ -211,6 +234,62 @@ export default function NovaVendaPage() {
     setVenda(prev => ({ ...prev, cliente_id: c.id }));
     setClienteSearch(nome);
     setShowClienteList(false);
+  };
+
+  const handleCriarCliente = async () => {
+    if (!novoClienteNome.trim()) { toast.error('Informe o nome do cliente'); return; }
+    setSavingCliente(true);
+    try {
+      const novo = createCliente();
+      novo.tipo = novoClienteTipo;
+      if (novoClienteTipo === 'PF') {
+        novo.nome_completo = novoClienteNome.trim();
+      } else {
+        novo.nome_fantasia = novoClienteNome.trim();
+      }
+      novo.email = novoClienteEmail.trim();
+      novo.telefone_principal = novoClienteTelefone.trim();
+      await saveEntity('clientes', novo);
+      setClientes(prev => [...prev, novo]);
+      selectCliente(novo);
+      setShowNovoCliente(false);
+      setNovoClienteNome(''); setNovoClienteEmail(''); setNovoClienteTelefone('');
+      toast.success('Cliente cadastrado!');
+    } catch {
+      toast.error('Erro ao cadastrar cliente');
+    } finally {
+      setSavingCliente(false);
+    }
+  };
+
+  const selectFornecedor = (f: FornecedorCRM, idx: number) => {
+    updateProduto(idx, 'fornecedor_nome', f.nome_fantasia || f.razao_social);
+    updateProduto(idx, 'fornecedor_id', f.id);
+    setActiveFornecedorIdx(null);
+  };
+
+  const handleCriarFornecedor = async () => {
+    if (!novoFornecedorNome.trim()) { toast.error('Informe o nome do fornecedor'); return; }
+    if (fornecedorProdutoIdx === null) return;
+    setSavingFornecedor(true);
+    try {
+      const novo = createFornecedorCRM();
+      novo.tipo = novoFornecedorTipo;
+      novo.nome_fantasia = novoFornecedorNome.trim();
+      novo.email = novoFornecedorEmail.trim();
+      novo.telefone = novoFornecedorTelefone.trim();
+      await saveEntity('fornecedores-crm', novo);
+      setFornecedores(prev => [...prev, novo]);
+      selectFornecedor(novo, fornecedorProdutoIdx);
+      setShowNovoFornecedor(false);
+      setNovoFornecedorNome(''); setNovoFornecedorEmail(''); setNovoFornecedorTelefone('');
+      setFornecedorProdutoIdx(null);
+      toast.success('Fornecedor cadastrado!');
+    } catch {
+      toast.error('Erro ao cadastrar fornecedor');
+    } finally {
+      setSavingFornecedor(false);
+    }
   };
 
   // ---- Passageiros ----
@@ -490,35 +569,78 @@ export default function NovaVendaPage() {
                 onChange={e => {
                   setClienteSearch(e.target.value);
                   setShowClienteList(true);
+                  setShowNovoCliente(false);
                   if (!e.target.value) setVenda(prev => ({ ...prev, cliente_id: '' }));
                 }}
                 onFocus={() => setShowClienteList(true)}
                 placeholder="Buscar cliente..."
                 className={inputClass}
               />
-              {showClienteList && clienteSearch && (
-                <div className="absolute z-10 left-0 right-0 top-full mt-1 bg-[var(--t-header-bg)] shadow-[var(--t-card-shadow)] rounded-md shadow-xl max-h-48 overflow-y-auto">
-                  {filteredClientes.length === 0 ? (
-                    <p className="px-3 py-2 text-sm text-[var(--t-text-secondary)]">Nenhum cliente encontrado</p>
-                  ) : (
-                    filteredClientes.map(c => {
-                      const nome =
-                        c.tipo === 'PF' ? c.nome_completo : c.nome_fantasia || c.razao_social;
-                      return (
-                        <button
-                          key={c.id}
-                          type="button"
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--t-surface-hover)] text-[var(--t-text)]"
-                          onMouseDown={() => selectCliente(c)}
-                        >
-                          <span className="font-medium">{nome}</span>
-                          {c.email && (
-                            <span className="text-[var(--t-text-secondary)] ml-2 text-xs">{c.email}</span>
-                          )}
-                        </button>
-                      );
-                    })
+              {showClienteList && clienteSearch && !showNovoCliente && (
+                <div className="absolute z-10 left-0 right-0 top-full mt-1 bg-[var(--t-header-bg)] shadow-[var(--t-card-shadow)] rounded-md shadow-xl max-h-56 overflow-y-auto">
+                  {filteredClientes.map(c => {
+                    const nome =
+                      c.tipo === 'PF' ? c.nome_completo : c.nome_fantasia || c.razao_social;
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--t-surface-hover)] text-[var(--t-text)]"
+                        onMouseDown={() => selectCliente(c)}
+                      >
+                        <span className="font-medium">{nome}</span>
+                        {c.email && (
+                          <span className="text-[var(--t-text-secondary)] ml-2 text-xs">{c.email}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                  {filteredClientes.length === 0 && (
+                    <p className="px-3 py-1.5 text-xs text-[var(--t-text-secondary)]">Nenhum cliente encontrado</p>
                   )}
+                  <button
+                    type="button"
+                    className="w-full text-left px-3 py-2 text-sm font-medium text-[var(--t-green)] hover:bg-[var(--t-green-bg)]/30 border-t border-[var(--t-border)] flex items-center gap-1.5"
+                    onMouseDown={() => {
+                      setShowNovoCliente(true);
+                      setShowClienteList(false);
+                      setNovoClienteNome(clienteSearch);
+                    }}
+                  >
+                    <UserPlus className="w-3.5 h-3.5" /> Cadastrar novo cliente
+                  </button>
+                </div>
+              )}
+              {showNovoCliente && (
+                <div className="mt-2 p-3 rounded-lg border border-[var(--t-green)]/30 bg-[var(--t-surface)] space-y-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-semibold text-[var(--t-green)]">Novo cliente</span>
+                    <button type="button" onClick={() => setShowNovoCliente(false)} className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)]">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setNovoClienteTipo('PF')}
+                      className={`flex-1 text-xs py-1.5 rounded-md border transition-colors ${novoClienteTipo === 'PF' ? 'border-[var(--t-green)] bg-[var(--t-green-bg)]/30 text-[var(--t-green)] font-semibold' : 'border-[var(--t-border)] text-[var(--t-text-secondary)]'}`}>
+                      Pessoa Física
+                    </button>
+                    <button type="button" onClick={() => setNovoClienteTipo('PJ')}
+                      className={`flex-1 text-xs py-1.5 rounded-md border transition-colors ${novoClienteTipo === 'PJ' ? 'border-[var(--t-green)] bg-[var(--t-green-bg)]/30 text-[var(--t-green)] font-semibold' : 'border-[var(--t-border)] text-[var(--t-text-secondary)]'}`}>
+                      Pessoa Jurídica
+                    </button>
+                  </div>
+                  <Input value={novoClienteNome} onChange={e => setNovoClienteNome(e.target.value)}
+                    placeholder={novoClienteTipo === 'PF' ? 'Nome completo' : 'Nome fantasia'} className={inputClass} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input value={novoClienteEmail} onChange={e => setNovoClienteEmail(e.target.value)}
+                      placeholder="E-mail" type="email" className={inputClass} />
+                    <Input value={novoClienteTelefone} onChange={e => setNovoClienteTelefone(e.target.value)}
+                      placeholder="Telefone" className={inputClass} />
+                  </div>
+                  <Button type="button" onClick={handleCriarCliente} disabled={savingCliente}
+                    className="w-full bg-[var(--t-green)] hover:opacity-90 text-white dark:text-[#0a0a14] text-xs h-8">
+                    {savingCliente ? 'Salvando...' : 'Cadastrar e selecionar'}
+                  </Button>
                 </div>
               )}
             </div>
@@ -731,14 +853,48 @@ export default function NovaVendaPage() {
                       className={inputClass}
                     />
                   </div>
-                  <div>
+                  <div className="relative">
                     <label className={labelClass}>Fornecedor</label>
                     <Input
                       value={prod.fornecedor_nome}
-                      onChange={e => updateProduto(idx, 'fornecedor_nome', e.target.value)}
-                      placeholder="Nome do fornecedor"
+                      onChange={e => {
+                        updateProduto(idx, 'fornecedor_nome', e.target.value);
+                        updateProduto(idx, 'fornecedor_id', '');
+                        setActiveFornecedorIdx(idx);
+                      }}
+                      onFocus={() => setActiveFornecedorIdx(idx)}
+                      onBlur={() => setTimeout(() => setActiveFornecedorIdx(null), 150)}
+                      placeholder="Buscar fornecedor..."
                       className={inputClass}
                     />
+                    {activeFornecedorIdx === idx && prod.fornecedor_nome && (
+                      <div className="absolute z-10 left-0 right-0 top-full mt-1 bg-[var(--t-header-bg)] shadow-[var(--t-card-shadow)] rounded-md shadow-xl max-h-48 overflow-y-auto">
+                        {fornecedores
+                          .filter(f => {
+                            const q = prod.fornecedor_nome.toLowerCase();
+                            return (f.nome_fantasia || f.razao_social).toLowerCase().includes(q);
+                          })
+                          .slice(0, 8)
+                          .map(f => (
+                            <button key={f.id} type="button"
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--t-surface-hover)] text-[var(--t-text)]"
+                              onMouseDown={() => selectFornecedor(f, idx)}>
+                              <span className="font-medium">{f.nome_fantasia || f.razao_social}</span>
+                              <span className="text-[var(--t-text-secondary)] ml-2 text-xs">{f.tipo}</span>
+                            </button>
+                          ))}
+                        <button type="button"
+                          className="w-full text-left px-3 py-2 text-sm font-medium text-[var(--t-green)] hover:bg-[var(--t-green-bg)]/30 border-t border-[var(--t-border)] flex items-center gap-1.5"
+                          onMouseDown={() => {
+                            setShowNovoFornecedor(true);
+                            setFornecedorProdutoIdx(idx);
+                            setNovoFornecedorNome(prod.fornecedor_nome);
+                            setActiveFornecedorIdx(null);
+                          }}>
+                          <UserPlus className="w-3.5 h-3.5" /> Cadastrar novo fornecedor
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className={labelClass}>Data Início</label>
@@ -1070,6 +1226,48 @@ export default function NovaVendaPage() {
           {saving ? 'Salvando...' : 'Salvar Venda'}
         </Button>
       </div>
+
+      {/* Quick-create Fornecedor Modal */}
+      {showNovoFornecedor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) setShowNovoFornecedor(false); }}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative bg-[var(--t-header-bg)] rounded-xl shadow-2xl w-full max-w-md p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-[var(--t-text)]">Novo Fornecedor</h3>
+              <button type="button" onClick={() => setShowNovoFornecedor(false)} className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)]">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div>
+              <label className={labelClass}>Tipo</label>
+              <select value={novoFornecedorTipo} onChange={e => setNovoFornecedorTipo(e.target.value as TipoFornecedor)}
+                className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm">
+                {(['OPERADORA', 'CONSOLIDADORA', 'CIA_AEREA', 'HOTEL', 'RECEPTIVO', 'SEGURADORA', 'LOCADORA', 'CRUZEIRO', 'OUTROS'] as TipoFornecedor[]).map(t => (
+                  <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>Nome fantasia *</label>
+              <Input value={novoFornecedorNome} onChange={e => setNovoFornecedorNome(e.target.value)} placeholder="Nome do fornecedor" className={inputClass} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>E-mail</label>
+                <Input value={novoFornecedorEmail} onChange={e => setNovoFornecedorEmail(e.target.value)} placeholder="E-mail" type="email" className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>Telefone</label>
+                <Input value={novoFornecedorTelefone} onChange={e => setNovoFornecedorTelefone(e.target.value)} placeholder="Telefone" className={inputClass} />
+              </div>
+            </div>
+            <Button type="button" onClick={handleCriarFornecedor} disabled={savingFornecedor}
+              className="w-full bg-[var(--t-green)] hover:opacity-90 text-white dark:text-[#0a0a14] font-semibold">
+              {savingFornecedor ? 'Salvando...' : 'Cadastrar e selecionar'}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Flight Search Modal */}
       <FlightSearchModal
