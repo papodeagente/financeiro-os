@@ -15,12 +15,19 @@ export async function GET() {
     if (!pool) return NextResponse.json([]);
     const tenantId = await getTenantId();
     const { rows } = await pool.query(
-      `SELECT data FROM funis_templates
+      `SELECT id, nome, categoria, data FROM funis_templates
        WHERE tenant_id = '' OR tenant_id = $1
        ORDER BY created_at ASC`,
       [tenantId],
     );
-    return NextResponse.json(rows.map(r => r.data));
+    // Normalize: seed stores inner data in JSONB, salvar-template stores full object.
+    // Always reconstruct from SQL columns + inner data for consistency.
+    return NextResponse.json(rows.map(r => ({
+      id: r.id,
+      nome: r.nome,
+      categoria: r.categoria,
+      data: r.data.data ?? r.data,
+    })));
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Unknown error';
     return NextResponse.json({ error: msg }, { status: 500 });

@@ -465,7 +465,7 @@ export async function initDB() {
       `INSERT INTO funis_templates (id, nome, categoria, data, tenant_id, created_at)
        SELECT $1, $2, $3, $4::jsonb, '', NOW()
        WHERE NOT EXISTS (SELECT 1 FROM funis_templates WHERE id = $1)`,
-      [tpl.id, tpl.nome, tpl.categoria, JSON.stringify(tpl.data)],
+      [tpl.id, tpl.nome, tpl.categoria, JSON.stringify(tpl)],
     );
   }
 
