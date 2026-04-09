@@ -1,12 +1,18 @@
 import type { CartaoCorporativo, ContaPagar, BandeiraCartao } from './crm-types';
 
 /**
- * Soma das contas a pagar pendentes/parciais associadas a um cartão.
- * Representa o "limite usado" — o quanto está comprometido mas ainda não pago.
+ * Soma das despesas vinculadas a um cartão — representa o limite consumido.
+ *
+ * Conta TODAS as contas exceto CANCELADO, independente do status de pagamento:
+ * marcar a conta a pagar como PAGO não libera o limite, pois quem libera é
+ * o pagamento da própria fatura do cartão (que hoje ainda não é modelado
+ * como entidade separada). Enquanto isso, toda despesa lançada no cartão
+ * permanece consumindo o limite — comportamento esperado pelo usuário e
+ * consistente com como cartões funcionam na prática.
  */
 export function calcLimiteUsado(cartaoId: string, contas: ContaPagar[]): number {
   return contas
-    .filter(c => c.cartao_id === cartaoId && (c.status === 'PENDENTE' || c.status === 'PARCIAL'))
+    .filter(c => c.cartao_id === cartaoId && c.status !== 'CANCELADO')
     .reduce((sum, c) => sum + (c.valor_final || 0), 0);
 }
 
