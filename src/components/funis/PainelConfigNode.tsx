@@ -150,7 +150,7 @@ export function PainelConfigNode({ node, onChange, dadosReais, usarDadosReais }:
           </Field>
           <SliderField
             label="Margem líquida"
-            value={config.margem_liquida ?? 0}
+            value={config.margem_liquida ?? 100}
             max={100}
             suffix="%"
             onChange={v => updateConfig({ margem_liquida: v })}

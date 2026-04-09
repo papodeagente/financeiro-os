@@ -138,6 +138,19 @@ function EditorInner({ id }: { id: string }) {
     return () => { cancelled = true; };
   }, [id]);
 
+  // Fingerprint das configs dos nodes — muda quando qualquer config é editada,
+  // mas NÃO quando apenas o `resultado` muda (evita loop infinito).
+  const configFingerprint = useMemo(
+    () => nodes.map(n => JSON.stringify(n.data.config ?? {})).join('|'),
+    [nodes],
+  );
+
+  // Fingerprint das edges — detecta reconexões / remoções / overrides.
+  const edgesFingerprint = useMemo(
+    () => edges.map(e => `${e.source}-${e.target}-${(e.data as Record<string, unknown>)?.taxa_conversao_override ?? ''}`).join('|'),
+    [edges],
+  );
+
   // Live simulation: roda o motor no client a cada mudança relevante
   useEffect(() => {
     if (nodes.length === 0) { setKpis(null); return; }
@@ -155,11 +168,8 @@ function EditorInner({ id }: { id: string }) {
       return updated ? { ...n, data: { ...n.data, resultado: updated.data.resultado } } : n;
     }));
     setKpis(result.kpis);
-    // Intencionalmente omite `nodes` e `edges` para evitar loop:
-    // a função já produz nodes atualizados e só o nodes.length
-    // / config / cenário disparam re-cálculo.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes.length, edges.length, cenarioAtivo, usarDadosReais, dadosReais, cenarios]);
+  }, [configFingerprint, edgesFingerprint, cenarioAtivo, usarDadosReais, dadosReais, cenarios]);
 
   // Auto-save debounce 3s
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
