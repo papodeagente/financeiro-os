@@ -94,13 +94,24 @@ export function PainelConfigNode({ node, onChange, dadosReais, usarDadosReais }:
 
       {/* Captura/Nutrição/Qualificação/Proposta/Upsell: taxa */}
       {['captura', 'nutricao', 'qualificacao', 'proposta', 'upsell'].includes(node.data.categoria) && (
-        <SliderField
-          label="Taxa de conversão"
-          value={config.taxa_conversao ?? 0}
-          max={100}
-          suffix="%"
-          onChange={v => updateConfig({ taxa_conversao: v })}
-        />
+        <>
+          <SliderField
+            label="Taxa de conversão"
+            value={config.taxa_conversao ?? 0}
+            max={100}
+            suffix="%"
+            onChange={v => updateConfig({ taxa_conversao: v })}
+          />
+          {node.data.categoria === 'proposta' && usarDadosReais && dadosReais && dadosReais.taxa_proposta_aceita > 0 && (
+            <button
+              onClick={() => updateConfig({ taxa_conversao: dadosReais.taxa_proposta_aceita })}
+              className="mt-1 text-[10px] text-[var(--t-green)] hover:underline"
+              type="button"
+            >
+              Usar taxa real ({dadosReais.taxa_proposta_aceita.toFixed(1)}%)
+            </button>
+          )}
+        </>
       )}
 
       {/* Nutrição: taxa de resposta/abertura */}

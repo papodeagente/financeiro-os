@@ -65,19 +65,13 @@ function aplicarCenario(nodes: NodeFunil[], cenario?: CenarioComparativo): void 
 // ----------------------------------------------------------------------------
 
 function aplicarDadosReais(
-  nodes: NodeFunil[],
-  dadosReais: DadosReaisAgencia | undefined,
-  usarDadosReais: boolean,
+  _nodes: NodeFunil[],
+  _dadosReais: DadosReaisAgencia | undefined,
+  _usarDadosReais: boolean,
 ): void {
-  if (!usarDadosReais || !dadosReais) return;
-  for (const n of nodes) {
-    if (n.data.categoria === 'proposta' && dadosReais.taxa_proposta_aceita > 0) {
-      n.data.config.taxa_conversao = dadosReais.taxa_proposta_aceita;
-    }
-    if (n.data.categoria === 'fechamento' && dadosReais.ticket_medio > 0) {
-      n.data.config.valor_produto = dadosReais.ticket_medio;
-    }
-  }
+  // Dados reais são exibidos como referência no painel direito (PainelConfigNode).
+  // O usuário aplica manualmente via botões "Usar ticket médio real" / "Usar taxa real".
+  // Não sobrescrevemos automaticamente — o valor configurado pelo usuário sempre prevalece.
 }
 
 // ----------------------------------------------------------------------------
