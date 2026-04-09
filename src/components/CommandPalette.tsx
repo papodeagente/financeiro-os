@@ -43,9 +43,8 @@ const NAVIGATION_ITEMS: CommandItem[] = [
   { id: 'comissoes', label: 'Comissões', href: '/equipe/comissoes', icon: <Percent className="w-4 h-4" />, section: 'navegacao' },
   { id: 'planos-comissao', label: 'Planos de comissão', href: '/equipe/planos-comissao', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
   { id: 'custos', label: 'Custos do negócio', href: '/planejamento/custos', icon: <Wallet className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'cac', label: 'Dashboard CAC', href: '/cac/dashboard', icon: <Gauge className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'cenarios', label: 'Simulador CAC', href: '/cac/cenarios', icon: <TrendingUp className="w-4 h-4" />, section: 'navegacao' },
   { id: 'relatorios', label: 'Relatórios financeiros', href: '/relatorios/financeiro', icon: <DollarSign className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'cac', label: 'Dashboard CAC', href: '/cac/dashboard', icon: <Gauge className="w-4 h-4" />, section: 'navegacao' },
   { id: 'rentabilidade', label: 'Rentabilidade', href: '/relatorios/rentabilidade', icon: <TrendingUp className="w-4 h-4" />, section: 'navegacao' },
   { id: 'config-agencia', label: 'Configurações', href: '/config/agencia', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
 ];

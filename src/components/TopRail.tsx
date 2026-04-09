@@ -156,7 +156,7 @@ export function TopRail({ onPillarClick, onCommandPalette }: Props) {
 
 function getPillarDefaultRoute(pillar: Pillar): string {
   switch (pillar) {
-    case 'planejamento': return '/cac/dashboard';
+    case 'planejamento': return '/planejamento/custos';
     case 'metas': return '/dashboard';
     case 'produtos': return '/grupos';
     case 'financeiro': return '/financeiro-ag';

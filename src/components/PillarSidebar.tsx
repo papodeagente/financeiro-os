@@ -32,8 +32,6 @@ const PLANEJAMENTO_MENU: SidebarSection[] = [
   {
     items: [
       { key: 'custos-negocio', label: 'Custos do negócio', icon: Wallet, href: '/planejamento/custos' },
-      { key: 'cac-dashboard', label: 'Dashboard CAC', icon: Gauge, href: '/cac/dashboard' },
-      { key: 'cac-cenarios', label: 'Simulador CAC', icon: TrendingUp, href: '/cac/cenarios' },
       { key: 'fluxogramas', label: 'Fluxogramas', icon: Workflow, href: '/planejamento/fluxogramas' },
       { key: 'funis-campanhas', label: 'Funis e campanhas', icon: FunilIcon, href: '/planejamento/funis' },
     ],
@@ -107,6 +105,7 @@ const FINANCEIRO_MENU: SidebarSection[] = [
       { key: 'rel-financeiro', label: 'Relatórios', icon: DollarSign, href: '/relatorios/financeiro' },
       { key: 'rel-rentabilidade', label: 'Rentabilidade', icon: RentIcon, href: '/relatorios/rentabilidade' },
       { key: 'rel-comparativo', label: 'Comparativo mensal', icon: BarChart3, href: '/relatorios/comparativo' },
+      { key: 'cac-dashboard', label: 'Dashboard CAC', icon: Gauge, href: '/cac/dashboard' },
     ],
   },
   {

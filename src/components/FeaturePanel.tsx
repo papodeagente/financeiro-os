@@ -9,7 +9,7 @@ import { Logo } from './Logo';
 import { X } from 'lucide-react';
 
 const PILLAR_DESCRIPTIONS: Record<Pillar, string> = {
-  planejamento: 'Custos, CAC e cenários',
+  planejamento: 'Custos, funis e fluxogramas',
   metas: 'KPIs, metas e comissões',
   produtos: 'Grupos, propostas e vendas',
   financeiro: 'Contas, relatórios e CRM',

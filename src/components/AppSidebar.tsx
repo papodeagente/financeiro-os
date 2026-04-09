@@ -82,7 +82,6 @@ const MENU: MenuItem[] = [
     icon: Target,
     children: [
       { key: 'cac-dashboard', label: 'Dashboard', icon: Gauge, href: '/cac/dashboard' },
-      { key: 'cac-cenarios', label: 'Cenários', icon: TrendingUp, href: '/cac/cenarios' },
     ],
   },
   {
