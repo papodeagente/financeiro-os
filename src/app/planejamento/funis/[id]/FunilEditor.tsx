@@ -394,7 +394,7 @@ function EditorInner({ id }: { id: string }) {
             onDragOver={onDragOver}
             onSelectionChange={onSelectionChange}
             nodeTypes={nodeTypes}
-            connectionMode={ConnectionMode.Loose}
+            connectionMode={ConnectionMode.Strict}
             deleteKeyCode={['Backspace', 'Delete']}
             fitView
             snapToGrid

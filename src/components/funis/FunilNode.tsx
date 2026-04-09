@@ -39,6 +39,7 @@ type FunilNodeType = Node<FunilNodeData, 'funilNode'>;
 // Handles
 // ============================================================
 
+/** Handle principal (esquerda/direita): mais visivel */
 const H: React.CSSProperties = {
   width: 10,
   height: 10,
@@ -46,20 +47,24 @@ const H: React.CSSProperties = {
   border: '2px solid #ffffff',
   zIndex: 10,
 };
-const H_HIDDEN: React.CSSProperties = { ...H, opacity: 0, pointerEvents: 'all' as const };
+/** Handle secundario (cima/baixo): menor, sutil */
+const H_SEC: React.CSSProperties = {
+  width: 8,
+  height: 8,
+  background: '#94a3b8',
+  border: '2px solid #ffffff',
+  zIndex: 10,
+};
 
 function Handles() {
   return (
     <>
+      {/* Fluxo horizontal: source = direita, target = esquerda */}
       <Handle id="t-left"   type="target" position={Position.Left}   style={H} isConnectable />
       <Handle id="s-right"  type="source" position={Position.Right}  style={H} isConnectable />
-      <Handle id="t-top"    type="target" position={Position.Top}    style={H_HIDDEN} isConnectable />
-      <Handle id="s-bottom" type="source" position={Position.Bottom} style={H_HIDDEN} isConnectable />
-      {/* extras for flexibility */}
-      <Handle id="s-left"   type="source" position={Position.Left}   style={H_HIDDEN} isConnectable />
-      <Handle id="t-right"  type="target" position={Position.Right}  style={H_HIDDEN} isConnectable />
-      <Handle id="s-top"    type="source" position={Position.Top}    style={H_HIDDEN} isConnectable />
-      <Handle id="t-bottom" type="target" position={Position.Bottom} style={H_HIDDEN} isConnectable />
+      {/* Fluxo vertical: source = baixo, target = cima */}
+      <Handle id="t-top"    type="target" position={Position.Top}    style={H_SEC} isConnectable />
+      <Handle id="s-bottom" type="source" position={Position.Bottom} style={H_SEC} isConnectable />
     </>
   );
 }
