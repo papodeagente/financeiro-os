@@ -23,7 +23,7 @@ import {
   type NodeTypes,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { ArrowLeft, Check, Loader2, Sparkles } from 'lucide-react';
+import { ArrowLeft, Check, Loader2, Sparkles, Trash2 } from 'lucide-react';
 import { generateId } from '@/lib/utils';
 import { simularFunil, cenariosPadrao } from '@/lib/funil-engine';
 import type {
@@ -262,6 +262,15 @@ function EditorInner({ id }: { id: string }) {
     scheduleSave();
   }, [selectedNode, scheduleSave]);
 
+  const deleteSelected = useCallback(() => {
+    if (!selectedNode) return;
+    const id = selectedNode.id;
+    setNodes(nds => nds.filter(n => n.id !== id));
+    setEdges(eds => eds.filter(e => e.source !== id && e.target !== id));
+    setSelectedNode(null);
+    scheduleSave();
+  }, [selectedNode, scheduleSave]);
+
   const simularServer = useCallback(async () => {
     if (!meta) return;
     setSimulando(true);
@@ -386,6 +395,7 @@ function EditorInner({ id }: { id: string }) {
             onSelectionChange={onSelectionChange}
             nodeTypes={nodeTypes}
             connectionMode={ConnectionMode.Loose}
+            deleteKeyCode={['Backspace', 'Delete']}
             fitView
             snapToGrid
             snapGrid={[12, 12]}
@@ -437,12 +447,20 @@ function EditorInner({ id }: { id: string }) {
               )}
             </div>
           ) : (
-            <PainelConfigNode
-              node={selectedNode}
-              onChange={updateSelectedNodeData}
-              dadosReais={dadosReais}
-              usarDadosReais={usarDadosReais}
-            />
+            <>
+              <PainelConfigNode
+                node={selectedNode}
+                onChange={updateSelectedNodeData}
+                dadosReais={dadosReais}
+                usarDadosReais={usarDadosReais}
+              />
+              <button
+                onClick={deleteSelected}
+                className="mt-4 w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[var(--text-body-sm)] font-medium text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Excluir elemento
+              </button>
+            </>
           )}
         </aside>
       </div>
