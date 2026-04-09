@@ -1,14 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { Proposta, Cliente, Membro, Destino, SecaoProposta, type LayoutProposta, type DestinoRoteiro } from '@/lib/crm-types';
+import { Proposta, Cliente, Membro, Destino, SecaoProposta, type LayoutProposta, type DestinoRoteiro, createCliente } from '@/lib/crm-types';
 import { generateId } from '@/lib/utils';
+import { saveEntity } from '@/lib/crm-storage';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { DestinoAutocomplete } from './DestinoAutocomplete';
 import { DestinoQuickFill } from './DestinoQuickFill';
 import { ImageUpload } from './ImageUpload';
 import { TEMAS } from '@/lib/temas-proposta';
 import { IDIOMAS, type IdiomaProposal } from '@/lib/i18n-proposta';
+import { UserPlus, X } from 'lucide-react';
+import { toast } from '@/lib/toast';
 
 type Tab = 'config' | 'destinos' | 'viagem';
 
@@ -18,13 +22,73 @@ interface Props {
   membros: Membro[];
   onUpdate: (fn: (p: Proposta) => Proposta) => void;
   onSetAIDestino?: (destino: Destino) => void;
+  onClienteCreated?: (c: Cliente) => void;
 }
 
-export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAIDestino }: Props) {
+export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAIDestino, onClienteCreated }: Props) {
   const [tab, setTab] = useState<Tab>('config');
   const [selectedDestino, setSelectedDestino] = useState<Destino | null>(null);
   const [newTag, setNewTag] = useState('');
   const isDiscovery = proposta.visual.layout === 'DISCOVERY';
+
+  // Inline client quick-create
+  const [clienteSearch, setClienteSearch] = useState('');
+  const [showClienteList, setShowClienteList] = useState(false);
+  const [showNovoCliente, setShowNovoCliente] = useState(false);
+  const [novoClienteTipo, setNovoClienteTipo] = useState<'PF' | 'PJ'>('PF');
+  const [novoClienteNome, setNovoClienteNome] = useState('');
+  const [novoClienteEmail, setNovoClienteEmail] = useState('');
+  const [novoClienteTelefone, setNovoClienteTelefone] = useState('');
+  const [savingCliente, setSavingCliente] = useState(false);
+
+  const filteredClientesSidebar = clientes.filter(c => {
+    if (c.status !== 'ATIVO') return false;
+    if (!clienteSearch) return true;
+    const q = clienteSearch.toLowerCase();
+    const nome = c.tipo === 'PF' ? c.nome_completo : c.nome_fantasia || c.razao_social;
+    return nome.toLowerCase().includes(q) || c.email.toLowerCase().includes(q);
+  });
+
+  const selectClienteSidebar = (c: Cliente) => {
+    const nome = c.tipo === 'PF' ? c.nome_completo : c.nome_fantasia || c.razao_social;
+    onUpdate(p => {
+      p.cliente_id = c.id;
+      p.cliente_nome = nome;
+      if (!p.cabecalho.subtitulo) p.cabecalho.subtitulo = `Preparada especialmente para ${nome}`;
+      return p;
+    });
+    setClienteSearch(nome);
+    setShowClienteList(false);
+  };
+
+  const handleCriarClienteSidebar = async () => {
+    if (!novoClienteNome.trim()) { toast.error('Informe o nome do cliente'); return; }
+    setSavingCliente(true);
+    try {
+      const novo = createCliente();
+      novo.tipo = novoClienteTipo;
+      if (novoClienteTipo === 'PF') novo.nome_completo = novoClienteNome.trim();
+      else novo.nome_fantasia = novoClienteNome.trim();
+      novo.email = novoClienteEmail.trim();
+      novo.telefone_principal = novoClienteTelefone.trim();
+      await saveEntity('clientes', novo);
+      if (onClienteCreated) onClienteCreated(novo);
+      selectClienteSidebar(novo);
+      setShowNovoCliente(false);
+      setNovoClienteNome(''); setNovoClienteEmail(''); setNovoClienteTelefone('');
+      toast.success('Cliente cadastrado!');
+    } catch {
+      toast.error('Erro ao cadastrar cliente');
+    } finally {
+      setSavingCliente(false);
+    }
+  };
+
+  // Sync search text when proposta.cliente_id changes externally
+  const currentCliente = clientes.find(c => c.id === proposta.cliente_id);
+  const currentClienteNome = currentCliente
+    ? (currentCliente.tipo === 'PF' ? currentCliente.nome_completo : currentCliente.nome_fantasia || currentCliente.razao_social)
+    : '';
 
   const addBlock = (tipo: string, conteudo: Record<string, unknown>) => {
     onUpdate(p => ({
@@ -108,28 +172,76 @@ export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAI
             <section>
               <h4 className="text-xs font-semibold text-[var(--t-text-muted)] uppercase tracking-wider mb-3">Cabecalho</h4>
               <div className="space-y-3">
-                <div>
+                <div className="relative">
                   <label className="text-xs text-[var(--t-text-secondary)]">Cliente</label>
-                  <select
-                    value={proposta.cliente_id}
+                  <Input
+                    value={clienteSearch || currentClienteNome}
                     onChange={e => {
-                      const c = clientes.find(cl => cl.id === e.target.value);
-                      onUpdate(p => {
-                        p.cliente_id = e.target.value;
-                        p.cliente_nome = c ? (c.tipo === 'PF' ? c.nome_completo : c.nome_fantasia || c.razao_social) : '';
-                        if (c && !p.cabecalho.subtitulo) p.cabecalho.subtitulo = `Preparada especialmente para ${p.cliente_nome}`;
-                        return p;
-                      });
+                      setClienteSearch(e.target.value);
+                      setShowClienteList(true);
+                      setShowNovoCliente(false);
+                      if (!e.target.value) onUpdate(p => { p.cliente_id = ''; p.cliente_nome = ''; return p; });
                     }}
-                    className="w-full mt-1 bg-[var(--t-input-bg)] text-[var(--t-text)] shadow-[var(--t-card-shadow)] rounded-lg px-3 py-2 text-sm"
-                  >
-                    <option value="">Selecionar cliente</option>
-                    {clientes.filter(c => c.status === 'ATIVO').map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.tipo === 'PF' ? c.nome_completo : c.nome_fantasia || c.razao_social}
-                      </option>
-                    ))}
-                  </select>
+                    onFocus={() => { setShowClienteList(true); if (!clienteSearch && currentClienteNome) setClienteSearch(currentClienteNome); }}
+                    placeholder="Buscar cliente..."
+                    className="mt-1 bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)] text-sm"
+                  />
+                  {showClienteList && clienteSearch && !showNovoCliente && (
+                    <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-[var(--t-surface)] shadow-xl rounded-lg max-h-48 overflow-y-auto border border-[var(--t-border)]">
+                      {filteredClientesSidebar.map(c => {
+                        const nome = c.tipo === 'PF' ? c.nome_completo : c.nome_fantasia || c.razao_social;
+                        return (
+                          <button key={c.id} type="button"
+                            className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--t-surface-hover)] text-[var(--t-text)]"
+                            onMouseDown={() => selectClienteSidebar(c)}>
+                            <span className="font-medium">{nome}</span>
+                            {c.email && <span className="text-[var(--t-text-secondary)] ml-1.5 text-[10px]">{c.email}</span>}
+                          </button>
+                        );
+                      })}
+                      {filteredClientesSidebar.length === 0 && (
+                        <p className="px-3 py-1.5 text-[10px] text-[var(--t-text-secondary)]">Nenhum cliente encontrado</p>
+                      )}
+                      <button type="button"
+                        className="w-full text-left px-3 py-1.5 text-xs font-medium text-[var(--t-green)] hover:bg-[var(--t-green-bg)]/30 border-t border-[var(--t-border)] flex items-center gap-1"
+                        onMouseDown={() => { setShowNovoCliente(true); setShowClienteList(false); setNovoClienteNome(clienteSearch); }}>
+                        <UserPlus className="w-3 h-3" /> Cadastrar novo
+                      </button>
+                    </div>
+                  )}
+                  {showNovoCliente && (
+                    <div className="mt-2 p-2.5 rounded-lg border border-[var(--t-green)]/30 bg-[var(--t-bg)] space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-semibold text-[var(--t-green)]">Novo cliente</span>
+                        <button type="button" onClick={() => setShowNovoCliente(false)} className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)]">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <button type="button" onClick={() => setNovoClienteTipo('PF')}
+                          className={`flex-1 text-[10px] py-1 rounded border transition-colors ${novoClienteTipo === 'PF' ? 'border-[var(--t-green)] bg-[var(--t-green-bg)]/30 text-[var(--t-green)] font-semibold' : 'border-[var(--t-border)] text-[var(--t-text-secondary)]'}`}>
+                          PF
+                        </button>
+                        <button type="button" onClick={() => setNovoClienteTipo('PJ')}
+                          className={`flex-1 text-[10px] py-1 rounded border transition-colors ${novoClienteTipo === 'PJ' ? 'border-[var(--t-green)] bg-[var(--t-green-bg)]/30 text-[var(--t-green)] font-semibold' : 'border-[var(--t-border)] text-[var(--t-text-secondary)]'}`}>
+                          PJ
+                        </button>
+                      </div>
+                      <Input value={novoClienteNome} onChange={e => setNovoClienteNome(e.target.value)}
+                        placeholder={novoClienteTipo === 'PF' ? 'Nome completo' : 'Nome fantasia'}
+                        className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)] text-xs h-8" />
+                      <Input value={novoClienteEmail} onChange={e => setNovoClienteEmail(e.target.value)}
+                        placeholder="E-mail" type="email"
+                        className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)] text-xs h-8" />
+                      <Input value={novoClienteTelefone} onChange={e => setNovoClienteTelefone(e.target.value)}
+                        placeholder="Telefone"
+                        className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)] text-xs h-8" />
+                      <Button type="button" onClick={handleCriarClienteSidebar} disabled={savingCliente}
+                        className="w-full bg-[var(--t-green)] hover:bg-[var(--t-green)]/90 text-white dark:text-[#0a0a14] text-[10px] h-7">
+                        {savingCliente ? 'Salvando...' : 'Cadastrar e selecionar'}
+                      </Button>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="text-xs text-[var(--t-text-secondary)]">Vendedor</label>

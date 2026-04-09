@@ -130,9 +130,10 @@ interface Props {
   isEdit: boolean;
 }
 
-export function PropostaEditor({ proposta: initialProposta, clientes, membros, isEdit }: Props) {
+export function PropostaEditor({ proposta: initialProposta, clientes: clientesProp, membros, isEdit }: Props) {
   const router = useRouter();
   const [proposta, setProposta] = useState<Proposta>(initialProposta);
+  const [allClientes, setAllClientes] = useState<Cliente[]>(clientesProp);
   const [saving, setSaving] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving' | 'idle'>('idle');
   const [flightModalOpen, setFlightModalOpen] = useState(false);
@@ -273,7 +274,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes, membros, i
   };
 
   const handleEnviarWhatsApp = () => {
-    const cliente = clientes.find(c => c.id === proposta.cliente_id);
+    const cliente = allClientes.find(c => c.id === proposta.cliente_id);
     const phone = cliente?.whatsapp || cliente?.telefone_principal || '';
     const nome = proposta.cliente_nome || cliente?.nome_completo || 'Cliente';
     const msg = encodeURIComponent(
@@ -575,10 +576,11 @@ export function PropostaEditor({ proposta: initialProposta, clientes, membros, i
         {/* Sidebar */}
         <PropostaSidebar
           proposta={proposta}
-          clientes={clientes}
+          clientes={allClientes}
           membros={membros}
           onUpdate={update}
           onSetAIDestino={setAIDestino}
+          onClienteCreated={c => setAllClientes(prev => [...prev, c])}
         />
       </div>
 
