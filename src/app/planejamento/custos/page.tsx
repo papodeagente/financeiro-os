@@ -5,7 +5,9 @@ import { PageHeader } from '@/components/PageHeader';
 import { MoneyInput } from '@/components/MoneyInput';
 import { SkeletonTable } from '@/components/SkeletonTable';
 import { formatBRL, generateId } from '@/lib/utils';
-import { Copy, Target, TrendingUp, Users, DollarSign, AlertTriangle, CheckCircle, ArrowRight, Zap, BarChart3 } from 'lucide-react';
+import { Copy, Target, TrendingUp, Users, DollarSign, AlertTriangle, CheckCircle, ArrowRight, Zap, BarChart3, Filter as FunilIcon, Download } from 'lucide-react';
+import Link from 'next/link';
+import type { FunilPayload } from '@/lib/funil-types';
 
 // ============================================================
 // TYPES
@@ -191,11 +193,56 @@ function ReportLine({ label, value, highlight, warn }: {
 // MAIN PAGE
 // ============================================================
 
+// ------------------------------------------------------------
+// Helpers para integração com funis em execução
+// ------------------------------------------------------------
+
+interface FunilResumoExec {
+  count: number;
+  investimentoTotal: number;
+  receitaProjetada: number;
+  /** Investimento agrupado por canal (chave casando com CANAIS_MARKETING quando possível) */
+  porCanal: Record<string, number>;
+}
+
+function resumirFunisExecucao(funis: FunilPayload[]): FunilResumoExec {
+  const ativos = funis.filter(f => f.status === 'em_execucao');
+  let investimentoTotal = 0;
+  let receitaProjetada = 0;
+  const porCanal: Record<string, number> = {};
+
+  for (const f of ativos) {
+    const nodes = f.data?.nodes ?? [];
+    for (const n of nodes) {
+      if (n.data?.categoria === 'trafego') {
+        const invest = n.data.config?.investimento ?? 0;
+        investimentoTotal += invest;
+        const canal = canalDoTipo(n.data.tipo);
+        porCanal[canal] = (porCanal[canal] ?? 0) + invest;
+      }
+    }
+    receitaProjetada += f.data?.cenarios?.[0]?.kpis?.receita_bruta ?? 0;
+  }
+
+  return { count: ativos.length, investimentoTotal, receitaProjetada, porCanal };
+}
+
+/** Mapeia os tipos de tráfego do funil para os canais usados em /custos. */
+function canalDoTipo(tipo: string): string {
+  if (tipo.includes('instagram')) return 'Instagram Ads';
+  if (tipo.includes('google') || tipo.includes('sem')) return 'Google Ads';
+  if (tipo.includes('influen')) return 'Influenciadores';
+  if (tipo.includes('evento')) return 'Eventos';
+  if (tipo.includes('afiliad')) return 'Afiliados';
+  return 'Outros';
+}
+
 export default function CustosPage() {
   const [mes, setMes] = useState(mesAtual());
   const [data, setData] = useState<CustosData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [funis, setFunis] = useState<FunilPayload[]>([]);
 
   const load = useCallback(async (m: string) => {
     setLoading(true);
@@ -216,6 +263,14 @@ export default function CustosPage() {
   }, []);
 
   useEffect(() => { load(mes); }, [mes, load]);
+
+  useEffect(() => {
+    fetch('/api/funis').then(r => r.json()).then((list: FunilPayload[]) => {
+      setFunis(Array.isArray(list) ? list : []);
+    }).catch(() => setFunis([]));
+  }, []);
+
+  const resumoFunis = useMemo(() => resumirFunisExecucao(funis), [funis]);
 
   useEffect(() => {
     if (!data || loading) return;
@@ -246,6 +301,15 @@ export default function CustosPage() {
   };
 
   const rel = useMemo(() => data ? calcRelatorio(data) : null, [data]);
+
+  const importarCustosFunis = () => {
+    if (!data || resumoFunis.count === 0) return;
+    const nova = data.marketing.map(item => ({
+      ...item,
+      valor: resumoFunis.porCanal[item.canal] ?? item.valor,
+    }));
+    setData({ ...data, marketing: nova });
+  };
 
   if (loading) return (
     <div className="p-6">
@@ -374,7 +438,19 @@ export default function CustosPage() {
 
           {/* Marketing */}
           <section>
-            <h2 className="text-[var(--text-body-lg)] font-semibold text-[var(--t-text)] mb-3">Investimento em marketing</h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-[var(--text-body-lg)] font-semibold text-[var(--t-text)]">Investimento em marketing</h2>
+              {resumoFunis.count > 0 && (
+                <button
+                  onClick={importarCustosFunis}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] font-medium text-[var(--t-green)] border border-[var(--t-green)] rounded-lg hover:bg-[var(--t-green-bg)] transition-colors"
+                  title={`Importa o investimento de ${resumoFunis.count} funil(is) em execução, agrupado por canal`}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Importar custos dos funis ativos
+                </button>
+              )}
+            </div>
             <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] overflow-hidden">
               {data.marketing.map((item, i) => (
                 <div key={i} className="flex items-center gap-4 px-4 py-2.5 border-b border-[var(--t-border)] last:border-b-0">
@@ -393,6 +469,36 @@ export default function CustosPage() {
         {/* RIGHT: Relatorio de Precisão */}
         <div className="space-y-4">
           <div className="sticky top-4 space-y-4">
+
+            {/* Funis em execução */}
+            {resumoFunis.count > 0 && (
+              <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] overflow-hidden">
+                <div className="px-4 py-3 flex items-center gap-2 bg-[var(--t-green-bg)]">
+                  <FunilIcon className="w-4 h-4 text-[var(--t-green)]" />
+                  <span className="text-sm font-semibold text-[var(--t-text)]">Funis em execução este mês</span>
+                </div>
+                <div className="px-4 py-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px] text-[var(--t-text-secondary)]">Funis ativos</span>
+                    <span className="text-sm font-semibold text-[var(--t-text)]">{resumoFunis.count}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px] text-[var(--t-text-secondary)]">Investimento projetado</span>
+                    <span className="text-sm font-mono text-[var(--t-text)]">{formatBRL(resumoFunis.investimentoTotal)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px] text-[var(--t-text-secondary)]">Receita projetada</span>
+                    <span className="text-sm font-mono text-[var(--t-green)]">{formatBRL(resumoFunis.receitaProjetada)}</span>
+                  </div>
+                  <Link
+                    href="/planejamento/funis"
+                    className="flex items-center justify-center gap-1 mt-2 px-3 py-1.5 text-[var(--text-body-sm)] text-[var(--t-green)] hover:underline"
+                  >
+                    Ver funis <ArrowRight className="w-3 h-3" />
+                  </Link>
+                </div>
+              </div>
+            )}
 
             {/* Cards resumo */}
             <div className="grid grid-cols-2 gap-3">

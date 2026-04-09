@@ -9,6 +9,7 @@ import {
   TrendingUp, TrendingDown, ArrowUpCircle, ArrowDownCircle, Wallet,
   Calendar, BarChart3,
 } from 'lucide-react';
+import type { FunilPayload } from '@/lib/funil-types';
 
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -44,6 +45,8 @@ export default function FluxoCaixaPage() {
   const [contasReceber, setContasReceber] = useState<ContaReceber[]>([]);
   const [contasPagar, setContasPagar] = useState<ContaPagar[]>([]);
   const [contasBancarias, setContasBancarias] = useState<ContaBancaria[]>([]);
+  const [funis, setFunis] = useState<FunilPayload[]>([]);
+  const [incluirFunis, setIncluirFunis] = useState(false);
   const [loading, setLoading] = useState(true);
   const [periodo, setPeriodo] = useState<Periodo>('MENSAL');
   const [meses, setMeses] = useState(6);
@@ -51,18 +54,44 @@ export default function FluxoCaixaPage() {
 
   async function load() {
     setLoading(true);
-    const [cr, cp, cb] = await Promise.all([
+    const [cr, cp, cb, fs] = await Promise.all([
       loadEntities<ContaReceber>('contas-receber'),
       loadEntities<ContaPagar>('contas-pagar'),
       loadEntities<ContaBancaria>('contas-bancarias'),
+      loadEntities<FunilPayload>('funis'),
     ]);
     setContasReceber(cr);
     setContasPagar(cp);
     setContasBancarias(cb);
+    setFunis(fs);
     setLoading(false);
   }
 
   useEffect(() => { load(); }, []);
+
+  /**
+   * Soma a receita/investimento projetado dos funis em execução.
+   * A projeção é aplicada uniformemente sobre os períodos futuros (simplificação consciente:
+   * o funil não carrega calendário próprio — é uma estimativa mensal distribuída por período).
+   */
+  const projecaoFunis = useMemo(() => {
+    const ativos = funis.filter(f => f.status === 'em_execucao');
+    let receita = 0;
+    let investimento = 0;
+    for (const f of ativos) {
+      const kpis = f.data?.cenarios?.[0]?.kpis;
+      if (!kpis) continue;
+      receita += kpis.receita_liquida ?? kpis.receita_bruta ?? 0;
+      investimento += kpis.investimento_total ?? 0;
+    }
+    // Se for semanal, dividir por 4 (aproximação mês/semana)
+    const divisor = periodo === 'MENSAL' ? 1 : 4;
+    return {
+      count: ativos.length,
+      receita: receita / divisor,
+      investimento: investimento / divisor,
+    };
+  }, [funis, periodo]);
 
   const saldoAtual = useMemo(() =>
     contasBancarias.reduce((s, c) => s + (c.saldo_atual || 0), 0),
@@ -210,6 +239,17 @@ export default function FluxoCaixaPage() {
               <option value={6}>6 meses</option>
               <option value={12}>12 meses</option>
             </select>
+            {projecaoFunis.count > 0 && (
+              <label className="flex items-center gap-2 px-3 py-2 rounded border border-dashed border-[var(--t-green)] text-sm text-[var(--t-text)] cursor-pointer hover:bg-[var(--t-green-bg)]/30">
+                <input
+                  type="checkbox"
+                  checked={incluirFunis}
+                  onChange={e => setIncluirFunis(e.target.checked)}
+                  className="accent-[var(--t-green)]"
+                />
+                Incluir projeção de funis ({projecaoFunis.count})
+              </label>
+            )}
           </div>
         </div>
 
@@ -290,13 +330,27 @@ export default function FluxoCaixaPage() {
                         <td className="px-4 py-3">
                           <div className="space-y-1">
                             <div className="flex items-center gap-1">
-                              <div className="w-full bg-[var(--t-bg)] rounded-full h-2">
+                              <div className="w-full bg-[var(--t-bg)] rounded-full h-2 relative">
                                 <div className="bg-[var(--t-green)] h-2 rounded-full" style={{ width: `${(f.entradas / maxVal) * 100}%` }} />
+                                {incluirFunis && projecaoFunis.receita > 0 && (
+                                  <div
+                                    className="absolute inset-y-0 left-0 h-2 rounded-full border border-dashed border-[var(--t-green)] pointer-events-none"
+                                    style={{ width: `${Math.min(100, ((f.entradas + projecaoFunis.receita) / maxVal) * 100)}%` }}
+                                    title={`+ ${BRL(projecaoFunis.receita)} de projeção de funis`}
+                                  />
+                                )}
                               </div>
                             </div>
                             <div className="flex items-center gap-1">
-                              <div className="w-full bg-[var(--t-bg)] rounded-full h-2">
+                              <div className="w-full bg-[var(--t-bg)] rounded-full h-2 relative">
                                 <div className="bg-[var(--t-red)] h-2 rounded-full" style={{ width: `${(f.saidas / maxVal) * 100}%` }} />
+                                {incluirFunis && projecaoFunis.investimento > 0 && (
+                                  <div
+                                    className="absolute inset-y-0 left-0 h-2 rounded-full border border-dashed border-[var(--t-red)] pointer-events-none"
+                                    style={{ width: `${Math.min(100, ((f.saidas + projecaoFunis.investimento) / maxVal) * 100)}%` }}
+                                    title={`+ ${BRL(projecaoFunis.investimento)} de investimento projetado`}
+                                  />
+                                )}
                               </div>
                             </div>
                           </div>
