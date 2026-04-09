@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Search, Trash2, Edit, TrendingUp, ShoppingCart, DollarSign } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Plus, Search, Trash2, Eye, TrendingUp, ShoppingCart, DollarSign } from 'lucide-react';
 import { VendaCRM, Cliente } from '@/lib/crm-types';
 import { loadEntities, deleteEntity } from '@/lib/crm-storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,6 +36,7 @@ const STATUS_LABELS: Record<string, string> = {
 const ALL_STATUSES = ['ORCAMENTO', 'RESERVADO', 'CONFIRMADO', 'CANCELADO', 'CONCLUIDO'] as const;
 
 export default function VendasPage() {
+  const router = useRouter();
   const [vendas, setVendas] = useState<VendaCRM[]>([]);
   const [clientes, setClientes] = useState<Record<string, Cliente>>({});
   const [loading, setLoading] = useState(true);
@@ -137,15 +139,14 @@ export default function VendasPage() {
       align: 'center',
       cell: v => (
         <div className="flex items-center justify-center gap-2">
-          <Link href={`/vendas/${v.id}/editar`}>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-8 w-8 p-0 text-[var(--t-text-secondary)] hover:text-[var(--t-accent)] hover:bg-[var(--t-accent)]/10"
-            >
-              <Edit className="w-4 h-4" />
-            </Button>
-          </Link>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 w-8 p-0 text-[var(--t-text-secondary)] hover:text-[var(--t-accent)] hover:bg-[var(--t-accent)]/10"
+            onClick={() => router.push(`/vendas/${v.id}`)}
+          >
+            <Eye className="w-4 h-4" />
+          </Button>
           <Button
             size="sm"
             variant="ghost"
@@ -272,6 +273,7 @@ export default function VendasPage() {
             data={filtered}
             loading={loading}
             rowKey={v => v.id}
+            onRowClick={v => router.push(`/vendas/${v.id}`)}
             zebra
             emptyState={{
               icon: <ShoppingCart className="w-10 h-10 opacity-30" />,
