@@ -8,7 +8,7 @@
 
 import type { Node } from '@xyflow/react';
 import type { CategoriaNode, NodeConfig, TipoNode, DadosReaisAgencia } from '@/lib/funil-types';
-import { CATEGORIA_INFO } from './categorias';
+import { CATEGORIA_INFO, tipoInfo } from './categorias';
 import { MoneyInput } from '@/components/MoneyInput';
 
 interface NodeData extends Record<string, unknown> {
@@ -37,7 +37,16 @@ export function PainelConfigNode({ node, onChange, dadosReais, usarDadosReais }:
     <div className="space-y-4">
       {/* Cabeçalho com cor da categoria */}
       <div className="flex items-center gap-2 pb-2 border-b border-[var(--t-border)]">
-        <div className="w-4 h-4 rounded" style={{ background: info.color }} />
+        {(() => {
+          const tInfo = tipoInfo(node.data.tipo);
+          const TIcon = tInfo?.icone ?? info.icon;
+          const brandColor = tInfo?.brandColor ?? info.color;
+          return (
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: brandColor + '18' }}>
+              <TIcon className="w-3.5 h-3.5" style={{ color: brandColor }} />
+            </div>
+          );
+        })()}
         <div className="min-w-0">
           <p className="text-[10px] text-[var(--t-text-muted)] uppercase tracking-wider">{info.label}</p>
           <p className="text-[var(--text-body-sm)] font-semibold text-[var(--t-text)] truncate">

@@ -71,8 +71,8 @@ function edgeFunilToRf(e: EdgeFunil): Edge {
     source: e.source,
     target: e.target,
     type: 'smoothstep',
-    markerEnd: { type: MarkerType.ArrowClosed, color: '#64748b' },
-    style: { stroke: '#64748b', strokeWidth: 1.5 },
+    markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' },
+    style: { stroke: '#3b82f6', strokeWidth: 2, strokeDasharray: '8 4' },
     data: { taxa_conversao_override: e.taxa_conversao_override ?? null },
   };
 }
@@ -374,7 +374,7 @@ function EditorInner({ id }: { id: string }) {
       <div className="flex flex-1 min-h-0">
         <BibliotecaNodes onDragStart={onDragStartPalette} />
 
-        <div ref={wrapperRef} className="flex-1 relative bg-[var(--t-bg)] min-w-0">
+        <div ref={wrapperRef} className="flex-1 relative bg-[#f8fafc] min-w-0">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -391,12 +391,12 @@ function EditorInner({ id }: { id: string }) {
             snapGrid={[12, 12]}
             defaultEdgeOptions={{
               type: 'smoothstep',
-              markerEnd: { type: MarkerType.ArrowClosed, color: '#64748b' },
-              style: { stroke: '#64748b', strokeWidth: 1.5 },
+              markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' },
+              style: { stroke: '#3b82f6', strokeWidth: 2, strokeDasharray: '8 4' },
             }}
             proOptions={{ hideAttribution: true }}
           >
-            <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#cbd5e1" />
+            <Background variant={BackgroundVariant.Dots} gap={24} size={1.2} color="#d1d5db" />
             <Controls />
             <MiniMap pannable zoomable nodeStrokeWidth={2} maskColor="rgba(0,0,0,0.04)" />
           </ReactFlow>

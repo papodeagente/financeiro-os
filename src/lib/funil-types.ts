@@ -38,16 +38,17 @@ export type CategoriaNode =
 export type TipoNode =
   // trafego
   | 'ads_meta' | 'ads_google' | 'ads_tiktok' | 'seo_organico' | 'indicacao'
+  | 'youtube_ads' | 'linkedin_ads' | 'afiliados'
   // captura
-  | 'landing_page' | 'formulario' | 'lead_magnet'
+  | 'landing_page' | 'formulario' | 'lead_magnet' | 'pagina_obrigado' | 'popup'
   // nutricao
-  | 'email_sequencia' | 'whatsapp_ativo' | 'remarketing'
+  | 'email_sequencia' | 'whatsapp_ativo' | 'remarketing' | 'sms' | 'material_rico'
   // qualificacao
-  | 'sdr_ligacao' | 'quiz' | 'agendamento'
+  | 'sdr_ligacao' | 'quiz' | 'agendamento' | 'webinar'
   // proposta
-  | 'apresentacao' | 'proposta_enviada' | 'followup'
+  | 'apresentacao' | 'proposta_enviada' | 'followup' | 'video_vendas'
   // fechamento
-  | 'contrato' | 'pagamento' | 'venda_direta'
+  | 'contrato' | 'pagamento' | 'venda_direta' | 'checkout'
   // upsell
   | 'upsell_produto' | 'cross_sell' | 'recompra_indicacao'
   // saida
