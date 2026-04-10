@@ -22,51 +22,39 @@ import { groupDaysByDestination } from '@/lib/discovery-utils';
 // Sections to exclude from PDF (non-functional in static output)
 const EXCLUDED_TIPOS = new Set(['VIDEO', 'MAPA', 'COUNTDOWN', 'CTA']);
 
-// Regex matching lab()/oklch()/oklab() color functions (with possible nested alpha)
-const UNSUPPORTED_COLOR_RE = /(?:lab|oklch|oklab)\s*\([^)]*\)/g;
-
 /**
  * Tailwind v4 emits lab()/oklch()/oklab() colors that html2canvas cannot parse.
- * This function sanitizes ALL CSS sources in the document:
- * 1. Replaces unsupported color functions in every stylesheet rule (CSSOM)
- * 2. Replaces in <style> tag textContent (fallback for CSSOM access failures)
- * 3. Removes <link> stylesheets that can't be accessed and may contain lab()
+ *
+ * Strategy: Read all CSS rules from the MAIN document (where they're loaded),
+ * serialize them, replace unsupported color functions with rgb fallbacks,
+ * then inject the sanitized CSS into the CLONED document — replacing all
+ * original stylesheets. The main document is NEVER modified.
  */
-function sanitizeStylesForHtml2Canvas(doc: Document) {
-  // 1. Walk all stylesheet rules via CSSOM and rewrite in-place
-  const sheets = Array.from(doc.styleSheets);
-  for (const sheet of sheets) {
+function buildSanitizedCss(): string {
+  const allRules: string[] = [];
+  for (const sheet of Array.from(document.styleSheets)) {
     try {
       const rules = sheet.cssRules;
       if (!rules) continue;
       for (let i = 0; i < rules.length; i++) {
-        const rule = rules[i];
-        if (UNSUPPORTED_COLOR_RE.test(rule.cssText)) {
-          // Delete and re-insert with sanitized text
-          const sanitized = rule.cssText.replace(UNSUPPORTED_COLOR_RE, 'transparent');
-          sheet.deleteRule(i);
-          try {
-            sheet.insertRule(sanitized, i);
-          } catch {
-            // If re-insert fails, just leave it deleted
-          }
-        }
+        allRules.push(rules[i].cssText);
       }
     } catch {
-      // Cross-origin or inaccessible stylesheet — remove it entirely
-      // to prevent html2canvas from trying to parse it
-      if (sheet.ownerNode) {
-        sheet.ownerNode.parentNode?.removeChild(sheet.ownerNode);
-      }
+      // Cross-origin stylesheet — skip (cannot read rules)
     }
   }
+  // Replace lab()/oklch()/oklab() with transparent
+  return allRules.join('\n').replace(/(?:lab|oklch|oklab)\s*\([^)]*\)/g, 'transparent');
+}
 
-  // 2. Fallback: also sanitize <style> tag textContent directly
-  doc.querySelectorAll('style').forEach(style => {
-    if (style.textContent && UNSUPPORTED_COLOR_RE.test(style.textContent)) {
-      style.textContent = style.textContent.replace(UNSUPPORTED_COLOR_RE, 'transparent');
-    }
-  });
+function applyCleanStylesheet(clonedDoc: Document, sanitizedCss: string) {
+  // Remove ALL existing stylesheets from the cloned doc
+  clonedDoc.querySelectorAll('style, link[rel="stylesheet"]').forEach(el => el.remove());
+
+  // Inject single sanitized stylesheet
+  const style = clonedDoc.createElement('style');
+  style.textContent = sanitizedCss;
+  clonedDoc.head.appendChild(style);
 }
 
 type PdfStep = 'rendering' | 'images' | 'generating' | 'done';
@@ -364,8 +352,8 @@ export function PdfExportModal({ proposta, open, onClose }: Props) {
 
       if (!containerRef.current) throw new Error('Container de renderização não encontrado');
 
-      // Inline all computed colors before capture to avoid lab()/oklch() parsing errors
-      sanitizeStylesForHtml2Canvas(document);
+      // Pre-build sanitized CSS from the main document (never modifies it)
+      const sanitizedCss = buildSanitizedCss();
 
       await html2pdf()
         .set({
@@ -380,7 +368,8 @@ export function PdfExportModal({ proposta, open, onClose }: Props) {
             windowWidth: 794,
             allowTaint: false,
             onclone: (clonedDoc: Document) => {
-              sanitizeStylesForHtml2Canvas(clonedDoc);
+              // Replace all stylesheets in the clone with sanitized CSS
+              applyCleanStylesheet(clonedDoc, sanitizedCss);
             },
           },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
