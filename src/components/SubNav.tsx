@@ -30,7 +30,7 @@ export function SubNav() {
   });
 
   return (
-    <div className="h-[44px] bg-[var(--t-surface)] border-b border-[var(--t-border)] flex items-center px-6 shrink-0 overflow-x-auto z-30">
+    <div className="h-[40px] bg-[var(--t-surface)] border-b border-[var(--t-border)] flex items-center px-6 shrink-0 overflow-x-auto z-30">
       <nav className="subnav-content flex items-center gap-1" key={activePillar}>
         {allItems.map((item) => {
           if ('divider' in item && item.divider) {

@@ -398,18 +398,7 @@
   .kpi-hero { font-size: clamp(22px, 1.4vw + 4px, 30px); }
 }
 
-/* PillarDrawer — slide-in da esquerda quando o usuário clica no rail */
-@keyframes pillar-drawer-in {
-  from { opacity: 0; transform: translateX(-12px); }
-  to   { opacity: 1; transform: translateX(0); }
-}
-.pillar-drawer {
-  animation: pillar-drawer-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: transform, opacity;
-}
-@media (prefers-reduced-motion: reduce) {
-  .pillar-drawer { animation: none; }
-}
+/* (drawer animations removed — navigation moved to top bar) */
 
 /* Variante compacta para KPIs secundárias */
 .kpi-hero-sm {
@@ -519,27 +508,7 @@
   border-radius: var(--t-card-radius);
 }
 
-/* Pillar journey connector */
-.pillar-connector {
-  width: 2px;
-  height: 16px;
-  background: var(--t-pillar-connector);
-  border-radius: 1px;
-  margin: 2px auto;
-  transition: background 0.3s ease;
-}
-.pillar-connector.visited {
-  background: rgba(255, 255, 255, 0.35);
-}
-
-/* Pillar active pulse */
-@keyframes pillar-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.3); }
-  50% { box-shadow: 0 0 0 6px rgba(255, 255, 255, 0); }
-}
-.pillar-current {
-  animation: pillar-pulse 2.5s ease-in-out infinite;
-}
+/* (pillar rail connector/pulse removed — navigation moved to top bar) */
 
 /* Breadcrumb crumb enter */
 @keyframes crumb-enter {

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useActivePillar, PILLARS, type Pillar } from '@/hooks/useActivePillar';
 import { CrmStatusBadge } from './CrmStatusBadge';
 import { Sun, Moon, Search, LogOut, ChevronDown, Settings, Plus } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
@@ -19,16 +20,18 @@ function getGreeting(): string {
   return 'Boa noite';
 }
 
-function getDateString(): string {
-  return new Date().toLocaleDateString('pt-BR', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+function getPillarDefaultRoute(pillar: Pillar): string {
+  switch (pillar) {
+    case 'planejamento': return '/planejamento/custos';
+    case 'metas': return '/dashboard';
+    case 'produtos': return '/grupos';
+    case 'financeiro': return '/financeiro-ag';
+    case 'configuracoes': return '/config/agencia';
+  }
 }
 
 export function TopBar({ onCommandPalette, breadcrumb }: Props) {
+  const activePillar = useActivePillar();
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -45,31 +48,55 @@ export function TopBar({ onCommandPalette, breadcrumb }: Props) {
   }, []);
 
   return (
-    <header className="h-[64px] bg-[var(--t-surface)] border-b border-[var(--t-border)] flex items-center px-6 shrink-0 z-30" style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.02)' }}>
-      {/* Greeting + breadcrumb */}
-      <div className="flex-1 min-w-0">
+    <header className="h-[56px] bg-[var(--t-surface)]/90 backdrop-blur-xl border-b border-[var(--t-border)] flex items-center px-5 shrink-0 z-40" style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.03)' }}>
+      {/* Left: Logo + Greeting */}
+      <div className="flex items-center gap-3 shrink-0 mr-4">
+        <Link href="/dashboard" className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center shadow-sm" style={{ background: 'var(--t-accent-gradient)' }}>
+            <span className="text-white font-bold text-sm">E</span>
+          </div>
+        </Link>
         {user && (
-          <div className="flex flex-col justify-center">
-            <span className="text-[var(--text-body-lg)] font-semibold text-[var(--t-text)] leading-tight">
-              {getGreeting()}, <span className="text-[var(--t-green)]">{user.nome?.split(' ')[0]}</span>
+          <div className="hidden lg:flex flex-col justify-center">
+            <span className="text-[var(--text-body-sm)] text-[var(--t-text-secondary)] leading-tight">
+              {getGreeting()}, <span className="text-[var(--t-text)] font-medium">{user.nome?.split(' ')[0]}</span>
             </span>
-            <div className="flex items-center gap-2 mt-0.5">
-              {breadcrumb || (
-                <span className="text-[11px] text-[var(--t-text-muted)] capitalize">
-                  {getDateString()}
-                </span>
-              )}
-            </div>
+            {breadcrumb && (
+              <div className="mt-0.5">{breadcrumb}</div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Utilities */}
-      <div className="flex items-center gap-2 shrink-0">
+      {/* Center: Pillar pills */}
+      <nav className="flex-1 flex items-center justify-center gap-1">
+        {PILLARS.map(pillar => {
+          const Icon = pillar.icon;
+          const isActive = activePillar === pillar.id;
+
+          return (
+            <Link
+              key={pillar.id}
+              href={getPillarDefaultRoute(pillar.id)}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-[var(--text-body-sm)] font-medium transition-all duration-150 ${
+                isActive
+                  ? 'bg-[var(--t-green)]/10 text-[var(--t-green)]'
+                  : 'text-[var(--t-text-muted)] hover:text-[var(--t-text)] hover:bg-[var(--t-surface-hover)]'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              <span className="hidden md:inline">{pillar.label}</span>
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* Right: Actions + Utilities */}
+      <div className="flex items-center gap-1.5 shrink-0">
         {/* Quick actions */}
         <Link
           href="/vendas/nova"
-          className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-medium text-white transition-all hover:brightness-110"
+          className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-medium text-white transition-all hover:brightness-110"
           style={{ background: 'var(--t-accent-gradient)', boxShadow: '0 1px 3px var(--t-green-shadow)' }}
         >
           <Plus className="w-3.5 h-3.5" />
@@ -77,24 +104,24 @@ export function TopBar({ onCommandPalette, breadcrumb }: Props) {
         </Link>
         <Link
           href="/propostas/nova"
-          className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-medium border border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)] hover:text-[var(--t-text)] transition-all"
+          className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-medium border border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)] hover:text-[var(--t-text)] transition-all"
         >
           <Plus className="w-3.5 h-3.5" />
           Proposta
         </Link>
 
         {/* Separator */}
-        <div className="w-px h-6 bg-[var(--t-border)] mx-1" />
+        <div className="w-px h-5 bg-[var(--t-border)] mx-1 hidden xl:block" />
 
         {/* Search trigger */}
         <button
           onClick={onCommandPalette}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-2xl border border-[var(--t-border)] bg-[var(--t-bg)] text-[var(--t-text-muted)] hover:text-[var(--t-text)] hover:border-[var(--t-border-hover)] transition-all text-[var(--text-body-sm)] min-w-[200px] lg:min-w-[280px]"
+          className="flex items-center gap-2 px-2.5 py-1.5 rounded-2xl border border-[var(--t-border)] bg-[var(--t-bg)] text-[var(--t-text-muted)] hover:text-[var(--t-text)] hover:border-[var(--t-border-hover)] transition-all text-[var(--text-body-sm)] min-w-[140px] lg:min-w-[200px]"
           title="⌘K"
         >
           <Search className="w-3.5 h-3.5" />
           <span className="hidden lg:inline flex-1 text-left">Buscar...</span>
-          <kbd className="hidden lg:inline text-[10px] text-[var(--t-text-muted)] bg-[var(--t-surface)] border border-[var(--t-border)] px-1.5 py-0.5 rounded ml-2" style={{ boxShadow: 'var(--elevation-1)' }}>⌘K</kbd>
+          <kbd className="hidden lg:inline text-[10px] text-[var(--t-text-muted)] bg-[var(--t-surface)] border border-[var(--t-border)] px-1.5 py-0.5 rounded ml-1" style={{ boxShadow: 'var(--elevation-1)' }}>⌘K</kbd>
         </button>
 
         {/* CRM status */}
@@ -114,16 +141,15 @@ export function TopBar({ onCommandPalette, breadcrumb }: Props) {
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center gap-2 ml-1 px-2 py-1.5 rounded-xl hover:bg-[var(--t-surface-hover)] transition-colors"
+              className="flex items-center gap-1.5 ml-0.5 px-1.5 py-1 rounded-xl hover:bg-[var(--t-surface-hover)] transition-colors"
             >
               <div
-                className="w-10 h-10 rounded-full flex items-center justify-center ring-2 ring-offset-2 ring-[var(--t-green)]/20 ring-offset-[var(--t-surface)] relative"
+                className="w-8 h-8 rounded-full flex items-center justify-center ring-2 ring-offset-1 ring-[var(--t-green)]/20 ring-offset-[var(--t-surface)]"
                 style={{ background: 'var(--t-accent-gradient)' }}
               >
-                <span className="text-[12px] font-bold text-white">
+                <span className="text-[11px] font-bold text-white">
                   {user.nome?.charAt(0)?.toUpperCase() || 'U'}
                 </span>
-                <span className="absolute bottom-0 right-0 w-[8px] h-[8px] rounded-full bg-emerald-500 ring-2 ring-[var(--t-surface)]" />
               </div>
               <ChevronDown className="w-3 h-3 text-[var(--t-text-muted)]" />
             </button>
@@ -134,14 +160,6 @@ export function TopBar({ onCommandPalette, breadcrumb }: Props) {
                   <p className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)]">{user.nome}</p>
                   <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">{user.email}</p>
                 </div>
-                <Link
-                  href="/config/crm"
-                  className="flex items-center gap-2 px-4 py-2.5 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)] mx-1.5 my-0.5 rounded-lg"
-                  onClick={() => setDropdownOpen(false)}
-                >
-                  <Settings className="w-3.5 h-3.5" />
-                  Integração CRM
-                </Link>
                 <Link
                   href="/config/agencia"
                   className="flex items-center gap-2 px-4 py-2.5 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)] mx-1.5 my-0.5 rounded-lg"
