@@ -92,10 +92,10 @@ export default function PublicPropostaPage() {
   // Discovery layout
   if (proposta.visual.layout === 'DISCOVERY') {
     return (
-      <div data-proposta-ready="true">
+      <>
         <DiscoveryRenderer proposta={proposta} slug={slug} idioma={idioma} />
         <ChatWidget slug={slug} corPrimaria={proposta.visual.cor_primaria || '#004aad'} idioma={idioma} />
-      </div>
+      </>
     );
   }
 
@@ -106,7 +106,7 @@ export default function PublicPropostaPage() {
   const needsPlayfair = fonte === 'Playfair Display';
 
   return (
-    <div className="min-h-screen" data-proposta-ready="true" style={{ backgroundColor: corFundo, color: corTexto, fontFamily: `'${fonte}', sans-serif` }}>
+    <div className="min-h-screen" style={{ backgroundColor: corFundo, color: corTexto, fontFamily: `'${fonte}', sans-serif` }}>
       {/* Google Fonts */}
       {needsPlayfair && (
         // eslint-disable-next-line @next/next/no-page-custom-font
