@@ -287,45 +287,87 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
 
   const handleDownloadPDF = async () => {
     setGeneratingPDF(true);
+    let iframe: HTMLIFrameElement | null = null;
     try {
       const html2pdf = (await import('html2pdf.js')).default;
 
-      // Create hidden iframe (same-origin — DOM access guaranteed)
-      const iframe = document.createElement('iframe');
-      iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;height:600px;border:none;';
+      // Create hidden iframe large enough for A4 rendering
+      iframe = document.createElement('iframe');
+      iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:1200px;height:1600px;border:none;opacity:0;pointer-events:none;';
       document.body.appendChild(iframe);
 
       iframe.src = `/p/${proposta.id}`;
 
+      // Wait for iframe initial load
       await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error('timeout')), 15000);
-        iframe.onload = () => { clearTimeout(timeout); resolve(); };
-        iframe.onerror = () => { clearTimeout(timeout); reject(new Error('load failed')); };
+        const timeout = setTimeout(() => reject(new Error('Iframe load timeout')), 20000);
+        iframe!.onload = () => { clearTimeout(timeout); resolve(); };
+        iframe!.onerror = () => { clearTimeout(timeout); reject(new Error('Iframe load failed')); };
       });
 
-      // Wait for images/fonts to render
-      await new Promise(r => setTimeout(r, 2500));
+      // Poll for data-proposta-ready attribute (React finished rendering with data)
+      await new Promise<void>((resolve, reject) => {
+        let elapsed = 0;
+        const interval = setInterval(() => {
+          elapsed += 300;
+          const doc = iframe?.contentDocument;
+          if (doc?.querySelector('[data-proposta-ready]')) {
+            clearInterval(interval);
+            resolve();
+          } else if (elapsed > 15000) {
+            clearInterval(interval);
+            reject(new Error('Proposta render timeout — conteúdo não carregou'));
+          }
+        }, 300);
+      });
 
-      const body = iframe.contentDocument?.body;
-      if (!body) throw new Error('No content');
+      // Extra wait for images and fonts to settle
+      await new Promise(r => setTimeout(r, 1500));
+
+      const doc = iframe.contentDocument;
+      if (!doc?.body) throw new Error('Iframe sem conteúdo acessível');
+
+      // Clone body content to avoid cross-frame issues with html2canvas
+      const container = document.createElement('div');
+      container.innerHTML = doc.body.innerHTML;
+
+      // Copy computed styles from iframe to ensure correct rendering
+      const iframeStyles = doc.querySelectorAll('style, link[rel="stylesheet"]');
+      iframeStyles.forEach(s => {
+        container.insertBefore(s.cloneNode(true), container.firstChild);
+      });
+
+      // Hide interactive elements that shouldn't appear in PDF
+      container.querySelectorAll('[class*="ChatWidget"], button, [data-chat]').forEach(el => {
+        (el as HTMLElement).style.display = 'none';
+      });
+
+      // Temporarily append to main document for html2canvas
+      container.style.cssText = 'position:fixed;left:-9999px;top:0;width:1200px;';
+      document.body.appendChild(container);
 
       await html2pdf()
         .set({
           margin: 0,
           filename: `${proposta.numero || 'proposta'}.pdf`,
           image: { type: 'jpeg', quality: 0.95 },
-          html2canvas: { scale: 2, useCORS: true, logging: false },
+          html2canvas: { scale: 2, useCORS: true, logging: false, width: 1200 },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
           pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
         })
-        .from(body)
+        .from(container)
         .save();
 
-      document.body.removeChild(iframe);
-    } catch {
+      document.body.removeChild(container);
+    } catch (err) {
+      console.error('[PDF export]', err);
       alert('Erro ao gerar PDF. Tente novamente.');
+    } finally {
+      if (iframe && iframe.parentNode) {
+        iframe.parentNode.removeChild(iframe);
+      }
+      setGeneratingPDF(false);
     }
-    setGeneratingPDF(false);
   };
 
   const handleNovaVersao = async () => {
