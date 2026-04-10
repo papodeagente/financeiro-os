@@ -23,103 +23,55 @@ import { groupDaysByDestination } from '@/lib/discovery-utils';
 const EXCLUDED_TIPOS = new Set(['VIDEO', 'MAPA', 'COUNTDOWN', 'CTA']);
 
 /**
- * Tailwind v4 emits lab()/oklch()/oklab() colors inside @supports blocks:
- *   @supports (color: lab(0% 0 0)) { :root { --color-red-500: lab(...); } }
- * html2canvas v1.4.1 cannot parse these color functions and throws.
- *
- * Strategy: Serialize CSS from the main document but SKIP any @supports rule
- * whose condition tests for lab/oklch/oklab. Tailwind always provides hex/rgb
- * fallbacks outside the @supports block, so colors still resolve correctly.
- * Any stray lab/oklch/oklab values outside @supports are also removed.
+ * Generate PDF using html2canvas-pro (supports lab/oklch/oklab) + jsPDF.
+ * No CSS sanitization needed — html2canvas-pro handles Tailwind v4 colors natively.
  */
-const LAB_COLOR_RE = /(?:lab|oklch|oklab)\s*\(/;
-
-function buildSanitizedCss(): string {
-  const allRules: string[] = [];
-  for (const sheet of Array.from(document.styleSheets)) {
-    try {
-      const rules = sheet.cssRules;
-      if (!rules) continue;
-      for (let i = 0; i < rules.length; i++) {
-        const rule = rules[i];
-
-        // Skip entire @supports blocks that test for lab/oklch/oklab
-        if (rule instanceof CSSSupportsRule) {
-          if (LAB_COLOR_RE.test(rule.conditionText)) {
-            continue; // Drop block — hex/rgb fallbacks remain in base rules
-          }
-        }
-
-        // For any remaining rule, check if it still has lab/oklch/oklab
-        const text = rule.cssText;
-        if (LAB_COLOR_RE.test(text)) {
-          // Remove individual declarations with unsupported colors
-          // by stripping the entire rule (the hex fallback from a base rule covers it)
-          continue;
-        }
-
-        allRules.push(text);
-      }
-    } catch {
-      // Cross-origin stylesheet — skip
-    }
-  }
-  return allRules.join('\n');
-}
-
-/**
- * Create an isolated iframe with sanitized CSS and the rendered HTML,
- * then run html2pdf on the iframe's body. This ensures html2canvas
- * only sees clean CSS — no lab()/oklch()/oklab().
- */
-async function generatePdfInIframe(
+async function captureAndSavePdf(
   container: HTMLElement,
   filename: string,
 ): Promise<void> {
-  const html2pdf = (await import('html2pdf.js')).default;
-  const sanitizedCss = buildSanitizedCss();
-  const renderedHtml = container.innerHTML;
+  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+    import('html2canvas-pro'),
+    import('jspdf'),
+  ]);
 
-  // Create isolated iframe
-  const iframe = document.createElement('iframe');
-  iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:1200px;border:none;opacity:0;pointer-events:none;';
-  document.body.appendChild(iframe);
+  // Capture the container to canvas
+  const canvas = await html2canvas(container, {
+    scale: 2,
+    useCORS: true,
+    logging: false,
+    width: 794,
+    windowWidth: 794,
+  });
 
-  try {
-    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-    if (!iframeDoc) throw new Error('Não foi possível acessar o iframe');
+  // Convert canvas to PDF pages (A4)
+  const imgData = canvas.toDataURL('image/jpeg', 0.92);
+  const pxWidth = canvas.width;
+  const pxHeight = canvas.height;
 
-    // Write clean document with sanitized CSS + rendered HTML
-    iframeDoc.open();
-    iframeDoc.write(`<!DOCTYPE html>
-<html><head><meta charset="utf-8"><style>${sanitizedCss}</style></head>
-<body style="margin:0;padding:0;width:794px;">${renderedHtml}</body></html>`);
-    iframeDoc.close();
+  const pdfWidth = 210; // A4 mm
+  const pdfHeight = 297;
+  const imgWidth = pdfWidth;
+  const imgHeight = (pxHeight * pdfWidth) / pxWidth;
 
-    // Wait for images inside the iframe to load
-    await waitForImages(iframeDoc.body);
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
 
-    // Generate PDF from the iframe's clean body
-    await html2pdf()
-      .set({
-        margin: [8, 0, 8, 0],
-        filename,
-        image: { type: 'jpeg', quality: 0.92 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          logging: false,
-          width: 794,
-          windowWidth: 794,
-        },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak: { mode: ['css', 'legacy'], avoid: ['.no-break'] },
-      })
-      .from(iframeDoc.body)
-      .save();
-  } finally {
-    document.body.removeChild(iframe);
+  let position = 0;
+  let remainingHeight = imgHeight;
+
+  // First page
+  pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
+  remainingHeight -= pdfHeight;
+
+  // Additional pages if content is taller than one page
+  while (remainingHeight > 0) {
+    position -= pdfHeight;
+    pdf.addPage();
+    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+    remainingHeight -= pdfHeight;
   }
+
+  pdf.save(filename);
 }
 
 type PdfStep = 'rendering' | 'images' | 'generating' | 'done';
@@ -411,12 +363,12 @@ export function PdfExportModal({ proposta, open, onClose }: Props) {
 
       if (cancelledRef.current) return;
 
-      // Step 3: Generate PDF in isolated iframe (avoids Tailwind v4 lab/oklch errors)
+      // Step 3: Capture and generate PDF
       setStep('generating');
 
       if (!containerRef.current) throw new Error('Container de renderização não encontrado');
 
-      await generatePdfInIframe(
+      await captureAndSavePdf(
         containerRef.current,
         `${proposta.numero || 'proposta'}.pdf`,
       );
