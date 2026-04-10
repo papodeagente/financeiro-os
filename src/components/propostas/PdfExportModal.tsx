@@ -25,10 +25,9 @@ const EXCLUDED_TIPOS = new Set(['VIDEO', 'MAPA', 'COUNTDOWN', 'CTA']);
 /**
  * Tailwind v4 emits lab()/oklch()/oklab() colors that html2canvas cannot parse.
  *
- * Strategy: Read all CSS rules from the MAIN document (where they're loaded),
- * serialize them, replace unsupported color functions with rgb fallbacks,
- * then inject the sanitized CSS into the CLONED document — replacing all
- * original stylesheets. The main document is NEVER modified.
+ * Strategy: Serialize all CSS from the main document, replace unsupported color
+ * functions, then render the PDF inside an isolated iframe whose document ONLY
+ * has the sanitized CSS. html2canvas never touches the main document.
  */
 function buildSanitizedCss(): string {
   const allRules: string[] = [];
@@ -40,21 +39,65 @@ function buildSanitizedCss(): string {
         allRules.push(rules[i].cssText);
       }
     } catch {
-      // Cross-origin stylesheet — skip (cannot read rules)
+      // Cross-origin stylesheet — skip
     }
   }
-  // Replace lab()/oklch()/oklab() with transparent
   return allRules.join('\n').replace(/(?:lab|oklch|oklab)\s*\([^)]*\)/g, 'transparent');
 }
 
-function applyCleanStylesheet(clonedDoc: Document, sanitizedCss: string) {
-  // Remove ALL existing stylesheets from the cloned doc
-  clonedDoc.querySelectorAll('style, link[rel="stylesheet"]').forEach(el => el.remove());
+/**
+ * Create an isolated iframe with sanitized CSS and the rendered HTML,
+ * then run html2pdf on the iframe's body. This ensures html2canvas
+ * only sees clean CSS — no lab()/oklch()/oklab().
+ */
+async function generatePdfInIframe(
+  container: HTMLElement,
+  filename: string,
+): Promise<void> {
+  const html2pdf = (await import('html2pdf.js')).default;
+  const sanitizedCss = buildSanitizedCss();
+  const renderedHtml = container.innerHTML;
 
-  // Inject single sanitized stylesheet
-  const style = clonedDoc.createElement('style');
-  style.textContent = sanitizedCss;
-  clonedDoc.head.appendChild(style);
+  // Create isolated iframe
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:1200px;border:none;opacity:0;pointer-events:none;';
+  document.body.appendChild(iframe);
+
+  try {
+    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!iframeDoc) throw new Error('Não foi possível acessar o iframe');
+
+    // Write clean document with sanitized CSS + rendered HTML
+    iframeDoc.open();
+    iframeDoc.write(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>${sanitizedCss}</style></head>
+<body style="margin:0;padding:0;width:794px;">${renderedHtml}</body></html>`);
+    iframeDoc.close();
+
+    // Wait for images inside the iframe to load
+    await waitForImages(iframeDoc.body);
+
+    // Generate PDF from the iframe's clean body
+    await html2pdf()
+      .set({
+        margin: [8, 0, 8, 0],
+        filename,
+        image: { type: 'jpeg', quality: 0.92 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          width: 794,
+          windowWidth: 794,
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['css', 'legacy'], avoid: ['.no-break'] },
+      })
+      .from(iframeDoc.body)
+      .save();
+  } finally {
+    document.body.removeChild(iframe);
+  }
 }
 
 type PdfStep = 'rendering' | 'images' | 'generating' | 'done';
@@ -346,37 +389,15 @@ export function PdfExportModal({ proposta, open, onClose }: Props) {
 
       if (cancelledRef.current) return;
 
-      // Step 3: Generate PDF
+      // Step 3: Generate PDF in isolated iframe (avoids Tailwind v4 lab/oklch errors)
       setStep('generating');
-      const html2pdf = (await import('html2pdf.js')).default;
 
       if (!containerRef.current) throw new Error('Container de renderização não encontrado');
 
-      // Pre-build sanitized CSS from the main document (never modifies it)
-      const sanitizedCss = buildSanitizedCss();
-
-      await html2pdf()
-        .set({
-          margin: [8, 0, 8, 0],
-          filename: `${proposta.numero || 'proposta'}.pdf`,
-          image: { type: 'jpeg', quality: 0.92 },
-          html2canvas: {
-            scale: 2,
-            useCORS: true,
-            logging: false,
-            width: 794,
-            windowWidth: 794,
-            allowTaint: false,
-            onclone: (clonedDoc: Document) => {
-              // Replace all stylesheets in the clone with sanitized CSS
-              applyCleanStylesheet(clonedDoc, sanitizedCss);
-            },
-          },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          pagebreak: { mode: ['css', 'legacy'], avoid: ['.no-break'] },
-        })
-        .from(containerRef.current)
-        .save();
+      await generatePdfInIframe(
+        containerRef.current,
+        `${proposta.numero || 'proposta'}.pdf`,
+      );
 
       if (cancelledRef.current) return;
 
