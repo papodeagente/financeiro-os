@@ -22,6 +22,44 @@ import { groupDaysByDestination } from '@/lib/discovery-utils';
 // Sections to exclude from PDF (non-functional in static output)
 const EXCLUDED_TIPOS = new Set(['VIDEO', 'MAPA', 'COUNTDOWN', 'CTA']);
 
+// CSS color properties that html2canvas needs to parse
+const COLOR_PROPS = [
+  'color', 'backgroundColor', 'borderColor',
+  'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
+  'outlineColor', 'textDecorationColor', 'boxShadow', 'caretColor',
+] as const;
+
+// Tailwind v4 emits lab()/oklch()/oklab() colors that html2canvas cannot parse.
+// This inlines all computed color values (which the browser resolves to rgb)
+// on every element, so html2canvas doesn't need to parse the raw CSS rules.
+function fixUnsupportedColors(doc: Document) {
+  const els = doc.querySelectorAll('*');
+  els.forEach(el => {
+    const htmlEl = el as HTMLElement;
+    const computed = getComputedStyle(htmlEl);
+    for (const prop of COLOR_PROPS) {
+      const val = computed[prop];
+      if (val && val !== '' && val !== 'none' && val !== 'transparent') {
+        htmlEl.style.setProperty(
+          prop.replace(/[A-Z]/g, m => '-' + m.toLowerCase()),
+          val,
+        );
+      }
+    }
+  });
+
+  // Also strip any <style> tags that contain lab()/oklch()/oklab() to prevent
+  // html2canvas from parsing them. The inline styles we just set take precedence.
+  doc.querySelectorAll('style').forEach(style => {
+    if (style.textContent && /(?:lab|oklch|oklab)\s*\(/.test(style.textContent)) {
+      style.textContent = style.textContent.replace(
+        /(?:lab|oklch|oklab)\s*\([^)]*\)/g,
+        'transparent'
+      );
+    }
+  });
+}
+
 type PdfStep = 'rendering' | 'images' | 'generating' | 'done';
 
 const STEP_CONFIG: { key: PdfStep; label: string }[] = [
@@ -317,6 +355,9 @@ export function PdfExportModal({ proposta, open, onClose }: Props) {
 
       if (!containerRef.current) throw new Error('Container de renderização não encontrado');
 
+      // Inline all computed colors before capture to avoid lab()/oklch() parsing errors
+      fixUnsupportedColors(document);
+
       await html2pdf()
         .set({
           margin: [8, 0, 8, 0],
@@ -329,6 +370,9 @@ export function PdfExportModal({ proposta, open, onClose }: Props) {
             width: 794,
             windowWidth: 794,
             allowTaint: false,
+            onclone: (clonedDoc: Document) => {
+              fixUnsupportedColors(clonedDoc);
+            },
           },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
           pagebreak: { mode: ['css', 'legacy'], avoid: ['.no-break'] },
