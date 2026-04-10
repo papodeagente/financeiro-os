@@ -5,6 +5,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useActivePillar, PILLARS, type Pillar } from '@/hooks/useActivePillar';
 import { CrmStatusBadge } from './CrmStatusBadge';
+import { Logo } from './Logo';
 import { Sun, Moon, Search, LogOut, ChevronDown, Settings, Plus } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 
@@ -50,12 +51,8 @@ export function TopBar({ onCommandPalette, breadcrumb }: Props) {
   return (
     <header className="h-[56px] bg-[var(--t-surface)]/90 backdrop-blur-xl border-b border-[var(--t-border)] flex items-center px-5 shrink-0 z-40" style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.03)' }}>
       {/* Left: Logo + Greeting */}
-      <div className="flex items-center gap-3 shrink-0 mr-4">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center shadow-sm" style={{ background: 'var(--t-accent-gradient)' }}>
-            <span className="text-white font-bold text-sm">E</span>
-          </div>
-        </Link>
+      <div className="flex items-center gap-4 shrink-0 mr-4">
+        <Logo variant="sidebar" href="/dashboard" />
         {user && (
           <div className="hidden lg:flex flex-col justify-center">
             <span className="text-[var(--text-body-sm)] text-[var(--t-text-secondary)] leading-tight">
