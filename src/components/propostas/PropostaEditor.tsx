@@ -289,40 +289,44 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
     setGeneratingPDF(true);
     try {
       const slug = proposta.id.slice(0, 8);
-      // Open preview in hidden iframe, render, then capture
       const html2pdf = (await import('html2pdf.js')).default;
-      const previewWindow = window.open(`/p/${slug}`, '_blank', 'width=800,height=600');
-      if (!previewWindow) {
-        // Fallback: generate from current page context
-        alert('Permita popups para gerar o PDF, ou use o link publico.');
-        setGeneratingPDF(false);
-        return;
-      }
-      // Wait for page to load then capture
-      previewWindow.onload = () => {
-        setTimeout(() => {
-          const body = previewWindow.document.body;
-          html2pdf()
-            .set({
-              margin: 0,
-              filename: `${proposta.numero || 'proposta'}.pdf`,
-              image: { type: 'jpeg', quality: 0.95 },
-              html2canvas: { scale: 2, useCORS: true, logging: false },
-              jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-              pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
-            })
-            .from(body)
-            .save()
-            .then(() => {
-              previewWindow.close();
-              setGeneratingPDF(false);
-            });
-        }, 2000); // Wait for images/fonts to load
-      };
+
+      // Create hidden iframe (same-origin — DOM access guaranteed)
+      const iframe = document.createElement('iframe');
+      iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;height:600px;border:none;';
+      document.body.appendChild(iframe);
+
+      iframe.src = `/p/${slug}`;
+
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('timeout')), 15000);
+        iframe.onload = () => { clearTimeout(timeout); resolve(); };
+        iframe.onerror = () => { clearTimeout(timeout); reject(new Error('load failed')); };
+      });
+
+      // Wait for images/fonts to render
+      await new Promise(r => setTimeout(r, 2500));
+
+      const body = iframe.contentDocument?.body;
+      if (!body) throw new Error('No content');
+
+      await html2pdf()
+        .set({
+          margin: 0,
+          filename: `${proposta.numero || 'proposta'}.pdf`,
+          image: { type: 'jpeg', quality: 0.95 },
+          html2canvas: { scale: 2, useCORS: true, logging: false },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+        })
+        .from(body)
+        .save();
+
+      document.body.removeChild(iframe);
     } catch {
-      alert('Erro ao gerar PDF');
-      setGeneratingPDF(false);
+      alert('Erro ao gerar PDF. Tente novamente.');
     }
+    setGeneratingPDF(false);
   };
 
   const handleNovaVersao = async () => {
