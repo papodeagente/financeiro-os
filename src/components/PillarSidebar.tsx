@@ -13,6 +13,7 @@ import {
   ShoppingCart, ListOrdered, UserPlus, Building2, Briefcase,
   DollarSign, TrendingUp as RentIcon, Link2,
   Workflow, Filter as FunilIcon,
+  Sparkles, Users, ClipboardList,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 
@@ -108,10 +109,32 @@ const FINANCEIRO_MENU: SidebarSection[] = [
       { key: 'cac-dashboard', label: 'Dashboard CAC', icon: Gauge, href: '/cac/dashboard' },
     ],
   },
+];
+
+const CONFIGURACOES_MENU: SidebarSection[] = [
   {
-    title: 'Integração',
+    title: 'Geral',
     items: [
-      { key: 'crm-config', label: 'Integração CRM', icon: Link2, href: '/config/crm' },
+      { key: 'cfg-agencia', label: 'Dados da agência', icon: Building2, href: '/config/agencia' },
+      { key: 'cfg-usuarios', label: 'Usuários', icon: Users, href: '/config/usuarios' },
+    ],
+  },
+  {
+    title: 'Inteligência Artificial',
+    items: [
+      { key: 'cfg-ia', label: 'Chaves de API (IA)', icon: Sparkles, href: '/config/integracoes' },
+    ],
+  },
+  {
+    title: 'Integrações',
+    items: [
+      { key: 'cfg-crm', label: 'Integração CRM', icon: Link2, href: '/config/crm' },
+    ],
+  },
+  {
+    title: 'Sistema',
+    items: [
+      { key: 'cfg-auditoria', label: 'Auditoria', icon: ClipboardList, href: '/config/auditoria' },
     ],
   },
 ];
@@ -121,6 +144,7 @@ export const PILLAR_MENUS: Record<Pillar, SidebarSection[]> = {
   metas: METAS_MENU,
   produtos: PRODUTOS_MENU,
   financeiro: FINANCEIRO_MENU,
+  configuracoes: CONFIGURACOES_MENU,
 };
 
 export function PillarSidebar() {

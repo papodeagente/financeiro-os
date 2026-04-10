@@ -13,6 +13,7 @@ const PILLAR_DESCRIPTIONS: Record<Pillar, string> = {
   metas: 'KPIs, metas e comissões',
   produtos: 'Grupos, propostas e vendas',
   financeiro: 'Contas, relatórios e CRM',
+  configuracoes: 'APIs, usuários e integrações',
 };
 
 interface Props {

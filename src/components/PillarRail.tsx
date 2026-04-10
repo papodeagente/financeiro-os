@@ -9,6 +9,7 @@ const SHORT_LABELS: Record<Pillar, string> = {
   metas: 'Metas',
   produtos: 'Produtos',
   financeiro: 'Financ.',
+  configuracoes: 'Config.',
 };
 
 interface Props {

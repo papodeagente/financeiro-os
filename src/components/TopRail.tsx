@@ -160,5 +160,6 @@ function getPillarDefaultRoute(pillar: Pillar): string {
     case 'metas': return '/dashboard';
     case 'produtos': return '/grupos';
     case 'financeiro': return '/financeiro-ag';
+    case 'configuracoes': return '/config/agencia';
   }
 }

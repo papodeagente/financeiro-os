@@ -7,7 +7,7 @@
  * humanized version of the slug.
  */
 
-export type Pillar = 'planejamento' | 'metas' | 'produtos' | 'financeiro';
+export type Pillar = 'planejamento' | 'metas' | 'produtos' | 'financeiro' | 'configuracoes';
 
 export interface Crumb {
   href: string;
@@ -20,6 +20,7 @@ export const PILLAR_LABELS: Record<Pillar, string> = {
   metas: 'Metas',
   produtos: 'Produtos',
   financeiro: 'Financeiro',
+  configuracoes: 'Configurações',
 };
 
 export const PILLAR_HOME: Record<Pillar, string> = {
@@ -27,6 +28,7 @@ export const PILLAR_HOME: Record<Pillar, string> = {
   metas: '/dashboard',
   produtos: '/grupos',
   financeiro: '/financeiro-ag',
+  configuracoes: '/config/agencia',
 };
 
 export const BREADCRUMB_MAP: Record<string, string> = {

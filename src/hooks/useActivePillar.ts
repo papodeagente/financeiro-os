@@ -2,11 +2,11 @@
 
 import { usePathname } from 'next/navigation';
 import {
-  Calculator, Target, Package, DollarSign,
+  Calculator, Target, Package, DollarSign, Settings,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 
-export type Pillar = 'planejamento' | 'metas' | 'produtos' | 'financeiro';
+export type Pillar = 'planejamento' | 'metas' | 'produtos' | 'financeiro' | 'configuracoes';
 
 export interface PillarConfig {
   id: Pillar;
@@ -19,6 +19,7 @@ export const PILLARS: PillarConfig[] = [
   { id: 'metas', label: 'Metas', icon: Target },
   { id: 'produtos', label: 'Produtos', icon: Package },
   { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
+  { id: 'configuracoes', label: 'Configurações', icon: Settings },
 ];
 
 // Order matters: more specific prefixes must come first
@@ -44,7 +45,8 @@ const ROUTE_MAP: [string, Pillar][] = [
   ['/vendas', 'financeiro'],
   ['/pessoas', 'financeiro'],
   ['/relatorios', 'financeiro'],
-  ['/config', 'financeiro'],
+  // Configurações
+  ['/config', 'configuracoes'],
 ];
 
 export function useActivePillar(): Pillar | null {
