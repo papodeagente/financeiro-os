@@ -59,14 +59,6 @@ const PRODUTOS_MENU: SidebarSection[] = [
       { key: 'nova-venda', label: 'Nova venda', icon: ShoppingCart, href: '/vendas/nova' },
     ],
   },
-  {
-    title: 'Ferramentas',
-    items: [
-      { key: 'buscar-voos', label: 'Voos', icon: Plane, href: '/voos' },
-      { key: 'buscar-hoteis', label: 'Hotéis', icon: Hotel, href: '/hoteis' },
-      { key: 'destinos', label: 'Destinos', icon: Globe, href: '/destinos' },
-    ],
-  },
 ];
 
 const FINANCEIRO_MENU: SidebarSection[] = [
