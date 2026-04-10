@@ -179,7 +179,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
       try {
         const p = { ...proposta, atualizado_em: new Date().toISOString() };
         if (!p.link_publico) {
-          p.link_publico = `${window.location.origin}/p/${p.id.slice(0, 8)}`;
+          p.link_publico = `${window.location.origin}/p/${p.id}`;
         }
         await fetch(`/api/propostas${isEdit ? `/${p.id}` : ''}`, {
           method: isEdit ? 'PUT' : 'POST',
@@ -201,7 +201,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     const p = { ...proposta, atualizado_em: new Date().toISOString() };
     if (!p.link_publico) {
-      p.link_publico = `${window.location.origin}/p/${p.id.slice(0, 8)}`;
+      p.link_publico = `${window.location.origin}/p/${p.id}`;
     }
     await fetch(`/api/propostas${isEdit ? `/${p.id}` : ''}`, {
       method: isEdit ? 'PUT' : 'POST',
@@ -288,7 +288,6 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
   const handleDownloadPDF = async () => {
     setGeneratingPDF(true);
     try {
-      const slug = proposta.id.slice(0, 8);
       const html2pdf = (await import('html2pdf.js')).default;
 
       // Create hidden iframe (same-origin — DOM access guaranteed)
@@ -296,7 +295,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
       iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;height:600px;border:none;';
       document.body.appendChild(iframe);
 
-      iframe.src = `/p/${slug}`;
+      iframe.src = `/p/${proposta.id}`;
 
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error('timeout')), 15000);
@@ -353,7 +352,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
       atualizado_em: new Date().toISOString(),
       secoes: current.secoes.map(s => ({ ...s, id: generateId() })),
     };
-    nova.link_publico = `${window.location.origin}/p/${nova.id.slice(0, 8)}`;
+    nova.link_publico = `${window.location.origin}/p/${nova.id}`;
     const res = await fetch('/api/propostas', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
