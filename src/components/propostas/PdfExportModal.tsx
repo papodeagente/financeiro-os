@@ -23,12 +23,17 @@ import { groupDaysByDestination } from '@/lib/discovery-utils';
 const EXCLUDED_TIPOS = new Set(['VIDEO', 'MAPA', 'COUNTDOWN', 'CTA']);
 
 /**
- * Tailwind v4 emits lab()/oklch()/oklab() colors that html2canvas cannot parse.
+ * Tailwind v4 emits lab()/oklch()/oklab() colors inside @supports blocks:
+ *   @supports (color: lab(0% 0 0)) { :root { --color-red-500: lab(...); } }
+ * html2canvas v1.4.1 cannot parse these color functions and throws.
  *
- * Strategy: Serialize all CSS from the main document, replace unsupported color
- * functions, then render the PDF inside an isolated iframe whose document ONLY
- * has the sanitized CSS. html2canvas never touches the main document.
+ * Strategy: Serialize CSS from the main document but SKIP any @supports rule
+ * whose condition tests for lab/oklch/oklab. Tailwind always provides hex/rgb
+ * fallbacks outside the @supports block, so colors still resolve correctly.
+ * Any stray lab/oklch/oklab values outside @supports are also removed.
  */
+const LAB_COLOR_RE = /(?:lab|oklch|oklab)\s*\(/;
+
 function buildSanitizedCss(): string {
   const allRules: string[] = [];
   for (const sheet of Array.from(document.styleSheets)) {
@@ -36,13 +41,30 @@ function buildSanitizedCss(): string {
       const rules = sheet.cssRules;
       if (!rules) continue;
       for (let i = 0; i < rules.length; i++) {
-        allRules.push(rules[i].cssText);
+        const rule = rules[i];
+
+        // Skip entire @supports blocks that test for lab/oklch/oklab
+        if (rule instanceof CSSSupportsRule) {
+          if (LAB_COLOR_RE.test(rule.conditionText)) {
+            continue; // Drop block — hex/rgb fallbacks remain in base rules
+          }
+        }
+
+        // For any remaining rule, check if it still has lab/oklch/oklab
+        const text = rule.cssText;
+        if (LAB_COLOR_RE.test(text)) {
+          // Remove individual declarations with unsupported colors
+          // by stripping the entire rule (the hex fallback from a base rule covers it)
+          continue;
+        }
+
+        allRules.push(text);
       }
     } catch {
       // Cross-origin stylesheet — skip
     }
   }
-  return allRules.join('\n').replace(/(?:lab|oklch|oklab)\s*\([^)]*\)/g, 'transparent');
+  return allRules.join('\n');
 }
 
 /**
