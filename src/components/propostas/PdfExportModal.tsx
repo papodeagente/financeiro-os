@@ -22,40 +22,49 @@ import { groupDaysByDestination } from '@/lib/discovery-utils';
 // Sections to exclude from PDF (non-functional in static output)
 const EXCLUDED_TIPOS = new Set(['VIDEO', 'MAPA', 'COUNTDOWN', 'CTA']);
 
-// CSS color properties that html2canvas needs to parse
-const COLOR_PROPS = [
-  'color', 'backgroundColor', 'borderColor',
-  'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
-  'outlineColor', 'textDecorationColor', 'boxShadow', 'caretColor',
-] as const;
+// Regex matching lab()/oklch()/oklab() color functions (with possible nested alpha)
+const UNSUPPORTED_COLOR_RE = /(?:lab|oklch|oklab)\s*\([^)]*\)/g;
 
-// Tailwind v4 emits lab()/oklch()/oklab() colors that html2canvas cannot parse.
-// This inlines all computed color values (which the browser resolves to rgb)
-// on every element, so html2canvas doesn't need to parse the raw CSS rules.
-function fixUnsupportedColors(doc: Document) {
-  const els = doc.querySelectorAll('*');
-  els.forEach(el => {
-    const htmlEl = el as HTMLElement;
-    const computed = getComputedStyle(htmlEl);
-    for (const prop of COLOR_PROPS) {
-      const val = computed[prop];
-      if (val && val !== '' && val !== 'none' && val !== 'transparent') {
-        htmlEl.style.setProperty(
-          prop.replace(/[A-Z]/g, m => '-' + m.toLowerCase()),
-          val,
-        );
+/**
+ * Tailwind v4 emits lab()/oklch()/oklab() colors that html2canvas cannot parse.
+ * This function sanitizes ALL CSS sources in the document:
+ * 1. Replaces unsupported color functions in every stylesheet rule (CSSOM)
+ * 2. Replaces in <style> tag textContent (fallback for CSSOM access failures)
+ * 3. Removes <link> stylesheets that can't be accessed and may contain lab()
+ */
+function sanitizeStylesForHtml2Canvas(doc: Document) {
+  // 1. Walk all stylesheet rules via CSSOM and rewrite in-place
+  const sheets = Array.from(doc.styleSheets);
+  for (const sheet of sheets) {
+    try {
+      const rules = sheet.cssRules;
+      if (!rules) continue;
+      for (let i = 0; i < rules.length; i++) {
+        const rule = rules[i];
+        if (UNSUPPORTED_COLOR_RE.test(rule.cssText)) {
+          // Delete and re-insert with sanitized text
+          const sanitized = rule.cssText.replace(UNSUPPORTED_COLOR_RE, 'transparent');
+          sheet.deleteRule(i);
+          try {
+            sheet.insertRule(sanitized, i);
+          } catch {
+            // If re-insert fails, just leave it deleted
+          }
+        }
+      }
+    } catch {
+      // Cross-origin or inaccessible stylesheet — remove it entirely
+      // to prevent html2canvas from trying to parse it
+      if (sheet.ownerNode) {
+        sheet.ownerNode.parentNode?.removeChild(sheet.ownerNode);
       }
     }
-  });
+  }
 
-  // Also strip any <style> tags that contain lab()/oklch()/oklab() to prevent
-  // html2canvas from parsing them. The inline styles we just set take precedence.
+  // 2. Fallback: also sanitize <style> tag textContent directly
   doc.querySelectorAll('style').forEach(style => {
-    if (style.textContent && /(?:lab|oklch|oklab)\s*\(/.test(style.textContent)) {
-      style.textContent = style.textContent.replace(
-        /(?:lab|oklch|oklab)\s*\([^)]*\)/g,
-        'transparent'
-      );
+    if (style.textContent && UNSUPPORTED_COLOR_RE.test(style.textContent)) {
+      style.textContent = style.textContent.replace(UNSUPPORTED_COLOR_RE, 'transparent');
     }
   });
 }
@@ -356,7 +365,7 @@ export function PdfExportModal({ proposta, open, onClose }: Props) {
       if (!containerRef.current) throw new Error('Container de renderização não encontrado');
 
       // Inline all computed colors before capture to avoid lab()/oklch() parsing errors
-      fixUnsupportedColors(document);
+      sanitizeStylesForHtml2Canvas(document);
 
       await html2pdf()
         .set({
@@ -371,7 +380,7 @@ export function PdfExportModal({ proposta, open, onClose }: Props) {
             windowWidth: 794,
             allowTaint: false,
             onclone: (clonedDoc: Document) => {
-              fixUnsupportedColors(clonedDoc);
+              sanitizeStylesForHtml2Canvas(clonedDoc);
             },
           },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
