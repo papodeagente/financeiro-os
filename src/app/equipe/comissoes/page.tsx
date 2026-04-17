@@ -198,6 +198,17 @@ export default function ComissoesPage() {
           </Button>
         </div>
 
+        {/* Banner: sem plano de comissão */}
+        {planos.length === 0 && (
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+            <Calculator className="w-5 h-5 text-amber-500 shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-[var(--t-text)]">Nenhum Plano de Comissão configurado</p>
+              <p className="text-xs text-[var(--t-text-secondary)] mt-0.5">Crie um plano com regras de comissão para que o botão &quot;Calcular Comissões&quot; funcione corretamente.</p>
+            </div>
+          </div>
+        )}
+
         {/* KPIs */}
         <div className="grid grid-cols-3 gap-4">
           <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">

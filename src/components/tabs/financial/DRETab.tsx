@@ -348,7 +348,7 @@ export default function DRETab({ grupo, onChange }: DRETabProps) {
               ({aliquotaImposto.toFixed(1)}% sobre receita liquida da agencia)
             </span>
           </div>
-          <DRELine label={`Impostos (${aliquotaImposto.toFixed(1)}% s/ comissao)`} value={-dre.impostos} level={1} />
+          <DRELine label={`Impostos (${aliquotaImposto.toFixed(1)}% s/ receita líquida)`} value={-dre.impostos} level={1} />
           <DRELine label="Outras Taxas" value={-dre.outrasTaxas} level={1} />
 
           <Separator />

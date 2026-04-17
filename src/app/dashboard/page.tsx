@@ -61,7 +61,7 @@ function getGreeting(): string {
 
 function getMonthName(yyyymm: string): string {
   const [y, m] = yyyymm.split('-');
-  const meses = ['Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
   return `${meses[parseInt(m) - 1]} ${y}`;
 }
 
@@ -91,6 +91,7 @@ interface KPI {
   color: string;
   bgColor: string;
   invertDelta?: boolean; // true = menor e melhor (CAC)
+  link?: string;
 }
 
 // ============================================================
@@ -150,26 +151,40 @@ export default function DashboardPage() {
     const ticketMedio = qtdVendas > 0 ? faturamento / qtdVendas : 0;
     const ticketMedioAnt = qtdVendasAnt > 0 ? faturamentoAnt / qtdVendasAnt : 0;
 
-    // Receita = comissao + markup (soma dos produtos)
+    // Receita da agência = comissão + markup (soma dos produtos)
     const calcReceita = (vs: VendaCRM[]) =>
       vs.reduce((s, v) => s + (v.markup_realizado || 0) + v.produtos.reduce((ps, p) => ps + (p.comissao_fornecedor || 0), 0), 0);
     const receita = calcReceita(vendasMes);
     const receitaAnt = calcReceita(vendasMesAnt);
 
-    // Margem liquida
-    const receitasMes = receber.filter(r => r.status === 'RECEBIDO' && (r.data_recebimento || r.data_vencimento)?.startsWith(mesAtual))
-      .reduce((s, r) => s + r.valor_final, 0);
-    const despesasMes = pagar.filter(p => p.status === 'PAGO' && (p.data_pagamento || p.data_vencimento)?.startsWith(mesAtual))
-      .reduce((s, p) => s + p.valor_final, 0);
-    const receitasMesAnt = receber.filter(r => r.status === 'RECEBIDO' && (r.data_recebimento || r.data_vencimento)?.startsWith(mesAnterior))
-      .reduce((s, r) => s + r.valor_final, 0);
-    const despesasMesAnt = pagar.filter(p => p.status === 'PAGO' && (p.data_pagamento || p.data_vencimento)?.startsWith(mesAnterior))
-      .reduce((s, p) => s + p.valor_final, 0);
+    // Lucro e Margem — mesma lógica do DRE (receita bruta - total despesas)
+    const calcDRELucro = (mes: string) => {
+      const mVendas = vendas.filter(v => v.data_venda?.startsWith(mes) && v.status !== 'CANCELADO');
+      const mReceber = receber.filter(r => r.data_vencimento?.startsWith(mes) && (r.status === 'RECEBIDO' || r.status === 'PENDENTE'));
+      const mPagar = pagar.filter(p => p.data_vencimento?.startsWith(mes) && (p.status === 'PAGO' || p.status === 'PENDENTE'));
 
-    const lucro = receitasMes - despesasMes;
-    const lucroAnt = receitasMesAnt - despesasMesAnt;
-    const margem = receitasMes > 0 ? (lucro / receitasMes) * 100 : 0;
-    const margemAnt = receitasMesAnt > 0 ? (lucroAnt / receitasMesAnt) * 100 : 0;
+      const recBrutaVendas = mVendas.reduce((s, v) => s + v.valor_final, 0);
+      const recComissoes = mReceber.filter(cr => cr.origem === 'COMISSAO_FORNECEDOR').reduce((s, cr) => s + cr.valor_final, 0);
+      const recFee = mReceber.filter(cr => cr.origem === 'FEE').reduce((s, cr) => s + cr.valor_final, 0);
+      const recOutras = mReceber.filter(cr => cr.origem === 'OUTROS').reduce((s, cr) => s + cr.valor_final, 0);
+      const receitaBruta = recBrutaVendas + recComissoes + recFee + recOutras;
+
+      const cmv = mVendas.reduce((s, v) => s + (v.valor_total_custo || 0), 0);
+      const totalDesp = mPagar.reduce((s, p) => s + p.valor_final, 0);
+      const totalDespesas = cmv + totalDesp;
+
+      const lucroLiq = receitaBruta - totalDespesas;
+      const margemLiq = receitaBruta > 0 ? (lucroLiq / receitaBruta) * 100 : 0;
+      return { receitaBruta, lucroLiq, margemLiq };
+    };
+
+    const dreMes = calcDRELucro(mesAtual);
+    const dreMesAnt = calcDRELucro(mesAnterior);
+
+    const lucro = dreMes.lucroLiq;
+    const lucroAnt = dreMesAnt.lucroLiq;
+    const margem = dreMes.margemLiq;
+    const margemAnt = dreMesAnt.margemLiq;
 
     // CAC
     const cacMes = cacData.find(c => c.mes === mesAtual);
@@ -189,7 +204,7 @@ export default function DashboardPage() {
       ticketMedio, ticketMedioAnt, receita, receitaAnt,
       margem, margemAnt, cacValor, cacValorAnt,
       saldoCaixa, lucro, lucroAnt,
-      receitasMes, despesasMes,
+      receitaBrutaDRE: dreMes.receitaBruta,
       delta,
       vendasMes,
     };
@@ -204,6 +219,7 @@ export default function DashboardPage() {
       meta: metas.reduce((s, m) => s + (m.meta_valor || 0), 0) || null,
       metaLabel: 'Meta',
       icon: TrendingUp, color: 'text-[var(--t-green)]', bgColor: 'bg-[var(--t-green)]/10',
+      link: '/financeiro-ag',
     },
     {
       label: 'Vendas', valor: String(calc.qtdVendas), valorNum: calc.qtdVendas,
@@ -212,25 +228,28 @@ export default function DashboardPage() {
       meta: metas.reduce((s, m) => s + (m.meta_quantidade || 0), 0) || null,
       metaLabel: 'Meta',
       icon: ShoppingCart, color: 'text-blue-400', bgColor: 'bg-blue-400/10',
+      link: '/vendas',
     },
     {
-      label: 'Ticket Medio', valor: BRL(calc.ticketMedio), valorNum: calc.ticketMedio,
+      label: 'Ticket Médio', valor: BRL(calc.ticketMedio), valorNum: calc.ticketMedio,
       delta: calc.ticketMedioAnt > 0 ? calc.delta(calc.ticketMedio, calc.ticketMedioAnt) : null,
       deltaLabel: 'vs mes anterior', meta: null, metaLabel: '',
       icon: BarChart3, color: 'text-purple-400', bgColor: 'bg-purple-400/10',
     },
     {
-      label: 'Receita (Agencia)', valor: BRL(calc.receita), valorNum: calc.receita,
+      label: 'Receita (Agência)', valor: BRL(calc.receita), valorNum: calc.receita,
       delta: calc.receitaAnt > 0 ? calc.delta(calc.receita, calc.receitaAnt) : null,
       deltaLabel: 'vs mes anterior', meta: null, metaLabel: '',
       icon: DollarSign, color: 'text-emerald-400', bgColor: 'bg-emerald-400/10',
+      link: '/financeiro-ag/dre',
     },
     {
-      label: 'Margem Liquida', valor: `${calc.margem.toFixed(1)}%`, valorNum: calc.margem,
+      label: 'Margem Líquida', valor: `${calc.margem.toFixed(1)}%`, valorNum: calc.margem,
       delta: calc.margemAnt > 0 ? calc.margem - calc.margemAnt : null,
       deltaLabel: 'pp vs anterior', meta: null, metaLabel: '',
       icon: Gauge, color: calc.margem >= 15 ? 'text-emerald-400' : calc.margem >= 10 ? 'text-[var(--t-amber)]' : 'text-red-400',
       bgColor: calc.margem >= 15 ? 'bg-emerald-400/10' : calc.margem >= 10 ? 'bg-amber-400/10' : 'bg-red-400/10',
+      link: '/financeiro-ag/dre',
     },
     {
       label: 'CAC', valor: BRL(calc.cacValor), valorNum: calc.cacValor,
@@ -238,18 +257,21 @@ export default function DashboardPage() {
       deltaLabel: 'vs mes anterior', meta: null, metaLabel: '',
       icon: Target, color: 'text-orange-400', bgColor: 'bg-orange-400/10',
       invertDelta: true,
+      link: '/cac/dashboard',
     },
     {
       label: 'Saldo em Caixa', valor: BRL(calc.saldoCaixa), valorNum: calc.saldoCaixa,
       delta: null, deltaLabel: 'soma de todas as contas', meta: null, metaLabel: '',
       icon: Wallet, color: 'text-cyan-400', bgColor: 'bg-cyan-400/10',
+      link: '/financeiro-ag/contas-bancarias',
     },
     {
-      label: 'Lucro do Mes', valor: BRL(calc.lucro), valorNum: calc.lucro,
+      label: 'Lucro do Mês', valor: BRL(calc.lucro), valorNum: calc.lucro,
       delta: calc.lucroAnt !== 0 ? calc.delta(calc.lucro, Math.abs(calc.lucroAnt)) : null,
       deltaLabel: 'vs mes anterior', meta: null, metaLabel: '',
       icon: Trophy, color: calc.lucro >= 0 ? 'text-emerald-400' : 'text-red-400',
       bgColor: calc.lucro >= 0 ? 'bg-emerald-400/10' : 'bg-red-400/10',
+      link: '/financeiro-ag/dre',
     },
   ], [calc, metas]);
 
@@ -486,7 +508,7 @@ export default function DashboardPage() {
     if (calc.cacValor > 0) {
       parts.push(`O CAC ficou em ${BRL(calc.cacValor)} por cliente.`);
     }
-    parts.push(`O fluxo de caixa ${calc.lucro >= 0 ? 'fechou positivo' : 'ficou negativo'} em ${BRL(calc.lucro)}.`);
+    parts.push(`O lucro líquido ${calc.lucro >= 0 ? 'fechou positivo' : 'ficou negativo'} em ${BRL(calc.lucro)}.`);
     if (contas.length > 0) {
       parts.push(`Saldo total em caixa: ${BRL(calc.saldoCaixa)} (${contas.length} conta${contas.length > 1 ? 's' : ''}).`);
     }
@@ -584,8 +606,11 @@ export default function DashboardPage() {
             const metaAtingida = metaPct !== null && metaPct >= 100;
             const borderColors = ['from-blue-500 to-blue-400', 'from-indigo-500 to-blue-400', 'from-violet-500 to-purple-400', 'from-emerald-500 to-teal-400'];
 
+            const Wrapper = kpi.link ? Link : 'div';
+            const wrapperProps = kpi.link ? { href: kpi.link } : {};
+
             return (
-              <div key={i} className="bento-card bento-card-glow relative overflow-hidden min-w-0">
+              <Wrapper key={i} {...wrapperProps as any} className="bento-card bento-card-glow relative overflow-hidden min-w-0 cursor-pointer">
                 {/* Colored top border */}
                 <div className={`absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r ${borderColors[i]}`} />
                 {metaAtingida && (
@@ -620,7 +645,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 )}
-              </div>
+              </Wrapper>
             );
           })}
         </div>
@@ -631,8 +656,10 @@ export default function DashboardPage() {
             const Icon = kpi.icon;
             const deltaPositive = kpi.invertDelta ? (kpi.delta !== null && kpi.delta < 0) : (kpi.delta !== null && kpi.delta > 0);
             const deltaNeutral = kpi.delta === null || kpi.delta === 0;
+            const Wrapper = kpi.link ? Link : 'div';
+            const wrapperProps = kpi.link ? { href: kpi.link } : {};
             return (
-              <div key={i} className="bg-[var(--t-surface)] rounded-[20px] p-5 shadow-[var(--t-card-shadow)] transition-all hover:shadow-[var(--t-card-shadow-hover)] hover-lift min-w-0 overflow-hidden">
+              <Wrapper key={i} {...wrapperProps as any} className="bg-[var(--t-surface)] rounded-[20px] p-5 shadow-[var(--t-card-shadow)] transition-all hover:shadow-[var(--t-card-shadow-hover)] hover-lift min-w-0 overflow-hidden cursor-pointer">
                 <div className="flex items-center justify-between mb-3">
                   <div className={`w-9 h-9 rounded-xl ${kpi.bgColor} flex items-center justify-center`}>
                     <Icon className={`w-4 h-4 ${kpi.color}`} />
@@ -652,12 +679,12 @@ export default function DashboardPage() {
                     {PCT(kpi.delta!)} <span className="text-[var(--t-text-muted)] ml-1">{kpi.deltaLabel}</span>
                   </span>
                 )}
-              </div>
+              </Wrapper>
             );
           })}
         </div>
 
-        {/* ALERTAS + ACOES RAPIDAS */}
+        {/* ALERTAS + AÇÕES RÁPIDAS */}
         <div className="bento-grid">
           {/* Alertas */}
           <div className="bento-8 bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] overflow-hidden">
@@ -697,13 +724,13 @@ export default function DashboardPage() {
           <div className="bento-4 rounded-[20px] shadow-[var(--t-card-shadow)] overflow-hidden" style={{ background: 'var(--t-accent-gradient)' }}>
             <div className="px-5 py-4">
               <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-                <Zap className="w-4 h-4 text-white/80" /> Acoes Rapidas
+                <Zap className="w-4 h-4 text-white/80" /> Ações Rápidas
               </h2>
             </div>
             <div className="p-4 space-y-1.5">
               {[
                 { href: '/vendas/nova', icon: ShoppingCart, label: 'Nova Venda', primary: true },
-                { href: '/vendas/orcamentos', icon: FileText, label: 'Novo Orcamento', primary: false },
+                { href: '/vendas/orcamentos', icon: FileText, label: 'Novo Orçamento', primary: false },
                 { href: '/pessoas/clientes', icon: Users, label: 'Novo Cliente', primary: false },
                 { href: '/grupos', icon: Package, label: 'Novo Produto', primary: false },
                 { href: '/financeiro-ag/receber', icon: Receipt, label: 'Registrar Recebimento', primary: false },
@@ -723,7 +750,7 @@ export default function DashboardPage() {
             </div>
             <div className="px-4 pb-4 space-y-1.5 border-t border-white/15 pt-3 mx-4">
               {[
-                { label: 'Orcamentos pendentes', count: vendas.filter(v => v.status === 'ORCAMENTO').length, href: '/vendas/orcamentos' },
+                { label: 'Orçamentos pendentes', count: vendas.filter(v => v.status === 'ORCAMENTO').length, href: '/vendas/orcamentos' },
                 { label: 'Contas a receber', count: receber.filter(r => r.status === 'PENDENTE' || r.status === 'ATRASADO').length, href: '/financeiro-ag/receber' },
                 { label: 'Contas a pagar', count: pagar.filter(p => p.status === 'PENDENTE' || p.status === 'VENCIDO').length, href: '/financeiro-ag/pagar' },
               ].map(q => (

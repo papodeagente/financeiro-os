@@ -60,9 +60,13 @@ export default function GruposPage() {
   };
 
   const criarGrupo = async () => {
+    if (!newNome || newNome.trim().length < 3) {
+      toast.error('Nome deve ter ao menos 3 caracteres');
+      return;
+    }
     const novo = createGrupoViagem();
     novo.tarifas_ativas = Array.from(newTarifas);
-    if (newNome) novo.origem_destino = newNome;
+    novo.origem_destino = newNome.trim();
     const updated = [...grupos, novo];
     setGrupos(updated);
     await saveGrupos(updated);

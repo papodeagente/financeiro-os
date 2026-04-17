@@ -274,7 +274,7 @@ export function VendasTab({ grupo, onChange }: Props) {
               <th className="p-2 shadow-[var(--t-card-shadow)] text-right">Desconto</th>
               <th className="p-2 shadow-[var(--t-card-shadow)] text-right">Final</th>
               <th className="p-2 shadow-[var(--t-card-shadow)] text-center">Status</th>
-              <th className="p-2 shadow-[var(--t-card-shadow)] text-center">Acoes</th>
+              <th className="p-2 shadow-[var(--t-card-shadow)] text-center">Ações</th>
             </tr>
           </thead>
           <tbody>

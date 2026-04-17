@@ -277,7 +277,7 @@ export default function RecebimentosTab({ grupo, onChange }: RecebimentosTabProp
                 'Status',
                 'Dt Recebimento',
                 'Valor Recebido',
-                'Acoes',
+                'Ações',
               ].map((col) => (
                 <th
                   key={col}

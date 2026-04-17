@@ -21,7 +21,7 @@ interface Props {
 const PIPELINE_STEPS: { key: StatusPipeline; label: string; icon: typeof Package }[] = [
   { key: 'PRODUTO', label: 'Produto', icon: Package },
   { key: 'PROPOSTA', label: 'Proposta', icon: FileText },
-  { key: 'ORCAMENTO', label: 'Orcamento', icon: ClipboardList },
+  { key: 'ORCAMENTO', label: 'Orçamento', icon: ClipboardList },
   { key: 'RESERVA', label: 'Reserva', icon: BookmarkCheck },
   { key: 'VENDA', label: 'Venda', icon: BadgeDollarSign },
 ];

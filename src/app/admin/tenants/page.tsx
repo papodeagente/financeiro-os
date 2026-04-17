@@ -78,7 +78,7 @@ export default function AdminTenantsPage() {
                 <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-5 py-3">Status</th>
                 <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-5 py-3">Usuarios</th>
                 <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-5 py-3">Criado em</th>
-                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-5 py-3">Acoes</th>
+                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-5 py-3">Ações</th>
               </tr>
             </thead>
             <tbody>

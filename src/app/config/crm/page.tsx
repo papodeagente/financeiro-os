@@ -276,7 +276,7 @@ export default function CrmConfigPage() {
                   <th className="px-4 py-2.5 font-medium">Status</th>
                   {direcao === 'saida' && <th className="px-4 py-2.5 font-medium">Tentativas</th>}
                   {direcao === 'saida' && <th className="px-4 py-2.5 font-medium">Latencia</th>}
-                  <th className="px-4 py-2.5 font-medium w-24">Acoes</th>
+                  <th className="px-4 py-2.5 font-medium w-24">Ações</th>
                 </tr>
               </thead>
               <tbody>

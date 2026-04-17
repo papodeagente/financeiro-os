@@ -187,7 +187,7 @@ export default function AdminTenantDetailPage() {
 
       {/* Actions */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-6">
-        <h2 className="text-lg font-semibold text-gray-100 mb-4">Acoes</h2>
+        <h2 className="text-lg font-semibold text-gray-100 mb-4">Ações</h2>
         <div className="flex flex-wrap gap-3">
           <button
             onClick={handleImpersonate}

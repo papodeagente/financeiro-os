@@ -293,9 +293,9 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {[
-              { label: 'Comissao Media/PAX', value: mg.comissaoMediaPax ?? 0, isCurrency: true },
+              { label: 'Comissão Média/PAX', value: mg.comissaoMediaPax ?? 0, isCurrency: true },
               { label: 'Margem Operacional', value: mg.margemOperacional ?? 0 },
-              { label: 'Margem Liquida', value: mg.margemLiquida ?? 0 },
+              { label: 'Margem Líquida', value: mg.margemLiquida ?? 0 },
               { label: 'Markup Efetivo', value: mg.markupEfetivo ?? 0 },
             ].map((m) => (
               <div key={m.label} className="text-center">

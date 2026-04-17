@@ -105,7 +105,12 @@ interface Relatorio {
 function calcRelatorio(data: CustosData): Relatorio {
   const custoFixoTotal = data.custos_fixos.reduce((s, c) => s + (c.valor || 0), 0);
   const marketingTotal = data.marketing.reduce((s, c) => s + (c.valor || 0), 0);
-  const custoFixoMaisMarketing = custoFixoTotal + marketingTotal;
+  // Excluir "Marketing fixo recorrente" dos fixos para evitar dupla contagem
+  // (já que marketing é somado separadamente via array data.marketing)
+  const mktFixoRecorrente = data.custos_fixos
+    .filter(c => c.categoria === 'Marketing fixo recorrente')
+    .reduce((s, c) => s + (c.valor || 0), 0);
+  const custoFixoMaisMarketing = (custoFixoTotal - mktFixoRecorrente) + marketingTotal;
 
   const ticket = data.ticket_medio || 1;
   const margemPct = (data.margem_comissao || 0) / 100;

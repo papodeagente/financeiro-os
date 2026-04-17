@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { MetaVendedor, Membro, VendaCRM, ComissaoVenda, PeriodoMeta } from '@/lib/crm-types';
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -60,7 +60,16 @@ export default function MetasPage() {
     setLoading(false);
   }
 
+  const loadedRef = React.useRef(false);
   useEffect(() => { load(); }, []);
+
+  // Auto-recalcular ao carregar dados
+  useEffect(() => {
+    if (!loading && metas.length > 0 && vendas.length >= 0 && selectedMonth && !loadedRef.current) {
+      loadedRef.current = true;
+      handleRecalcular();
+    }
+  }, [loading, metas.length, vendas.length, selectedMonth]);
 
   function openNew() {
     setFormVendedorId(membros[0]?.id || '');
@@ -129,11 +138,30 @@ export default function MetasPage() {
 
   const monthMetas = metas.filter(m => m.mes_referencia === selectedMonth);
 
-  // Ranking
+  // Ranking — consolidado por vendedor (agrupa múltiplas metas do mesmo vendedor)
   const ranking = useMemo(() => {
-    return [...monthMetas]
+    const byVendedor = new Map<string, { vendedor_id: string; vendedor_nome: string; realizado_valor: number; realizado_quantidade: number; meta_valor: number; percentual_atingido_valor: number }>();
+    for (const m of monthMetas) {
+      const cur = byVendedor.get(m.vendedor_id);
+      if (cur) {
+        cur.realizado_valor += m.realizado_valor;
+        cur.realizado_quantidade += m.realizado_quantidade;
+        cur.meta_valor += m.meta_valor;
+        cur.percentual_atingido_valor = cur.meta_valor > 0 ? (cur.realizado_valor / cur.meta_valor) * 100 : 0;
+      } else {
+        byVendedor.set(m.vendedor_id, {
+          vendedor_id: m.vendedor_id,
+          vendedor_nome: m.vendedor_nome,
+          realizado_valor: m.realizado_valor,
+          realizado_quantidade: m.realizado_quantidade,
+          meta_valor: m.meta_valor,
+          percentual_atingido_valor: m.meta_valor > 0 ? (m.realizado_valor / m.meta_valor) * 100 : 0,
+        });
+      }
+    }
+    return [...byVendedor.values()]
       .sort((a, b) => b.realizado_valor - a.realizado_valor)
-      .map((m, i) => ({ ...m, posicao: i + 1 }));
+      .map((v, i) => ({ ...v, posicao: i + 1, id: v.vendedor_id }));
   }, [monthMetas]);
 
   // Team totals
