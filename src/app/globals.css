@@ -816,18 +816,57 @@
   transform: translateY(-2px);
 }
 
-/* Scrollbar styling */
+/* Scrollbar styling — cross-browser, Windows-friendly */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--t-border) transparent;
+}
+
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--t-bg);
+  border-radius: 5px;
 }
 ::-webkit-scrollbar-thumb {
   background: var(--t-border);
-  border-radius: 3px;
+  border-radius: 5px;
+  border: 2px solid var(--t-bg);
+  min-height: 40px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--t-border-hover);
+  background: var(--t-text-muted);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Sidebar scroll — thinner but still grabbable */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--t-border) transparent;
+}
+.sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+}
+.sidebar-scroll:hover::-webkit-scrollbar-thumb {
+  background: var(--t-border);
+}
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--t-text-muted);
+}
+
+/* Sidebar item — larger click targets for mouse users */
+.sidebar-item {
+  min-height: 36px;
+  font-size: var(--text-body-sm);
 }

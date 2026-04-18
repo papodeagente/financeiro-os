@@ -12,6 +12,8 @@ import { useState, useRef, useEffect } from 'react';
 interface Props {
   onCommandPalette?: () => void;
   breadcrumb?: React.ReactNode;
+  sidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 function getGreeting(): string {
@@ -31,7 +33,7 @@ function getPillarDefaultRoute(pillar: Pillar): string {
   }
 }
 
-export function TopBar({ onCommandPalette, breadcrumb }: Props) {
+export function TopBar({ onCommandPalette, breadcrumb, sidebarCollapsed, onToggleSidebar }: Props) {
   const activePillar = useActivePillar();
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();

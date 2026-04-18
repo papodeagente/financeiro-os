@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useActivePillar } from '@/hooks/useActivePillar';
 import { TopBar } from './TopBar';
-import { SubNav } from './SubNav';
+import { PillarSidebar } from './PillarSidebar';
 import { CommandPalette } from './CommandPalette';
 import { ImpersonationBanner } from './ImpersonationBanner';
 import { Breadcrumbs } from './Breadcrumbs';
@@ -19,13 +19,35 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const activePillar = useActivePillar();
   const { markVisited } = usePillarProgress();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Persist sidebar state
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('entur:sidebar-collapsed');
+      if (saved === 'true') setSidebarCollapsed(true);
+    } catch { /* ignore */ }
+  }, []);
+
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed(prev => {
+      const next = !prev;
+      try { localStorage.setItem('entur:sidebar-collapsed', String(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
       e.preventDefault();
       setCommandPaletteOpen(prev => !prev);
     }
-  }, []);
+    // Ctrl+B to toggle sidebar (VS Code shortcut)
+    if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+      e.preventDefault();
+      toggleSidebar();
+    }
+  }, [toggleSidebar]);
 
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);
@@ -80,13 +102,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <TopBar
         onCommandPalette={() => setCommandPaletteOpen(true)}
         breadcrumb={breadcrumbNode}
+        sidebarCollapsed={sidebarCollapsed}
+        onToggleSidebar={toggleSidebar}
       />
-      <SubNav />
-      <main className="flex-1 overflow-y-auto bg-[var(--t-bg)]">
-        <div className="content-enter">
-          {children}
-        </div>
-      </main>
+      <div className="flex flex-1 overflow-hidden">
+        <PillarSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+        <main className="flex-1 overflow-y-auto bg-[var(--t-bg)]">
+          <div className="content-enter">
+            {children}
+          </div>
+        </main>
+      </div>
       <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} />
     </div>
   );
