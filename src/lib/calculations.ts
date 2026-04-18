@@ -229,12 +229,13 @@ export function calcProposta(g: GrupoViagem): PropostaResult {
     lineValues['DIVULGACAO'][tipo] = divulgacao.totalPorPax * PAX_MAP[tipo] * getCambio('divulgacao');
   }
 
-  // CORTESIA
+  // CORTESIA — rateia o custo dos cortesias entre os pagantes
   lineValues['CORTESIA'] = {};
   const serviceKeys = ['TKT', 'HTL', 'REC', 'CAR', 'GUIA', 'SEG', 'NAVIO', 'ING', 'BRINDE', 'DIVULGACAO'];
+  const pagantes = Math.max((p.qtd_min_pax || 1) - (p.cortesia || 0), 1);
   for (const tipo of TIPOS) {
     const soma = serviceKeys.reduce((acc, k) => acc + (lineValues[k]?.[tipo] || 0), 0);
-    lineValues['CORTESIA'][tipo] = (soma / (p.qtd_min_pax || 1)) * p.cortesia;
+    lineValues['CORTESIA'][tipo] = (soma / pagantes) * p.cortesia;
   }
 
   // CONTRATO
@@ -280,20 +281,23 @@ export function calcProposta(g: GrupoViagem): PropostaResult {
   const parcelaPaxCC: Record<string, number> = {};
   const parcelaPaxBoleto: Record<string, number> = {};
 
+  const r2 = (v: number) => Math.round(v * 100) / 100;
+
   for (const tipo of TIPOS) {
     const soma = allLineKeys.reduce((acc, k) => acc + (lineValues[k]?.[tipo] || 0), 0);
-    totalAvista[tipo] = soma;
-    totalCartao[tipo] = p.tx_ad_mp > 0 ? soma / p.tx_ad_mp : 0;
-    totalBoleto[tipo] = totalCartao[tipo] + (p.tx_boleto * p.parcelas);
-    parcelaAptoCC[tipo] = p.parcelas > 0 ? totalCartao[tipo] / p.parcelas : 0;
-    parcelaAptoBoleto[tipo] = p.parcelas > 0 ? totalBoleto[tipo] / p.parcelas : 0;
+    totalAvista[tipo] = r2(soma);
+    totalCartao[tipo] = r2(p.tx_ad_mp > 0 ? soma / p.tx_ad_mp : 0);
+    // Boleto parte do valor à vista (não do cartão) + taxa de boleto por parcela
+    totalBoleto[tipo] = r2(soma + (p.tx_boleto * p.parcelas));
+    parcelaAptoCC[tipo] = r2(p.parcelas > 0 ? totalCartao[tipo] / p.parcelas : 0);
+    parcelaAptoBoleto[tipo] = r2(p.parcelas > 0 ? totalBoleto[tipo] / p.parcelas : 0);
 
     const pax = PAX_MAP[tipo];
-    totalPaxAvista[tipo] = totalAvista[tipo] / pax;
-    totalPaxCartao[tipo] = totalCartao[tipo] / pax;
-    totalPaxBoleto[tipo] = totalBoleto[tipo] / pax;
-    parcelaPaxCC[tipo] = p.parcelas > 0 ? totalPaxCartao[tipo] / p.parcelas : 0;
-    parcelaPaxBoleto[tipo] = p.parcelas > 0 ? totalPaxBoleto[tipo] / p.parcelas : 0;
+    totalPaxAvista[tipo] = r2(totalAvista[tipo] / pax);
+    totalPaxCartao[tipo] = r2(totalCartao[tipo] / pax);
+    totalPaxBoleto[tipo] = r2(totalBoleto[tipo] / pax);
+    parcelaPaxCC[tipo] = r2(p.parcelas > 0 ? totalPaxCartao[tipo] / p.parcelas : 0);
+    parcelaPaxBoleto[tipo] = r2(p.parcelas > 0 ? totalPaxBoleto[tipo] / p.parcelas : 0);
   }
 
   return {
