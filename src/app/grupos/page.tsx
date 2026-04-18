@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { GrupoViagem } from '@/lib/types';
 import { createGrupoViagem } from '@/lib/defaults';
 import { loadGrupos, saveGrupos, deleteGrupo, exportGrupoJSON, importGrupoJSON } from '@/lib/storage';
-import { formatDate } from '@/lib/utils';
 import { useApp } from '@/contexts/AppContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import {
   Plus, Copy, Download, Upload, Trash2, FolderOpen, X,
   Search, Calendar, MapPin, Users, ArrowUpDown, LayoutGrid, List,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, AlertTriangle,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
@@ -25,30 +24,33 @@ import { toast } from '@/lib/toast';
 /* ─── Constants ─── */
 
 const PIPELINE_COLORS: Record<string, string> = {
-  PRODUTO: 'bg-gray-200 text-gray-700',
+  PRODUTO: 'bg-green-100 text-green-700',
   PROPOSTA: 'bg-blue-100 text-blue-700',
   ORCAMENTO: 'bg-amber-100 text-amber-700',
   RESERVA: 'bg-purple-100 text-purple-700',
-  VENDA: 'bg-green-100 text-green-700',
+  VENDA: 'bg-emerald-100 text-emerald-700',
+  INCOMPLETO: 'bg-red-100 text-red-600',
 };
 
 const PIPELINE_BORDER: Record<string, string> = {
-  PRODUTO: 'border-t-gray-400',
+  PRODUTO: 'border-t-green-500',
   PROPOSTA: 'border-t-blue-500',
   ORCAMENTO: 'border-t-amber-500',
   RESERVA: 'border-t-purple-500',
-  VENDA: 'border-t-green-500',
+  VENDA: 'border-t-emerald-500',
+  INCOMPLETO: 'border-t-red-400',
 };
 
 const PIPELINE_DOT: Record<string, string> = {
-  PRODUTO: 'bg-gray-400',
+  PRODUTO: 'bg-green-500',
   PROPOSTA: 'bg-blue-500',
   ORCAMENTO: 'bg-amber-500',
   RESERVA: 'bg-purple-500',
-  VENDA: 'bg-green-500',
+  VENDA: 'bg-emerald-500',
+  INCOMPLETO: 'bg-red-400',
 };
 
-const PIPELINE_OPTIONS = ['TODOS', 'PRODUTO', 'PROPOSTA', 'ORCAMENTO', 'RESERVA', 'VENDA'] as const;
+const PIPELINE_OPTIONS = ['TODOS', 'PRODUTO', 'PROPOSTA', 'ORCAMENTO', 'RESERVA', 'VENDA', 'INCOMPLETOS'] as const;
 const PIPELINE_LABELS: Record<string, string> = {
   TODOS: 'Todos',
   PRODUTO: 'Produto',
@@ -56,6 +58,8 @@ const PIPELINE_LABELS: Record<string, string> = {
   ORCAMENTO: 'Orçamento',
   RESERVA: 'Reserva',
   VENDA: 'Venda',
+  INCOMPLETOS: 'Incompletos',
+  INCOMPLETO: 'Incompleto',
 };
 
 const PIPELINE_ORDER: Record<string, number> = {
@@ -83,6 +87,26 @@ const SERVICES: { key: string; label: string; check: (g: GrupoViagem) => boolean
 ];
 
 /* ─── Helpers ─── */
+
+function isIncomplete(g: GrupoViagem): boolean {
+  const noDestino = !g.origem_destino || g.origem_destino.trim() === '';
+  const noDates = !g.periodos?.some(p => p.check_in);
+  const noServices = getServiceCount(g) === 0;
+  return noDestino || (noDates && noServices);
+}
+
+function getMissingItems(g: GrupoViagem): string[] {
+  const missing: string[] = [];
+  if (!g.origem_destino || g.origem_destino.trim() === '') missing.push('destino');
+  if (!g.periodos?.some(p => p.check_in)) missing.push('datas de viagem');
+  if (getServiceCount(g) === 0) missing.push('serviços');
+  return missing;
+}
+
+function getEffectiveStatus(g: GrupoViagem): string {
+  if (isIncomplete(g)) return 'INCOMPLETO';
+  return g.status_pipeline || 'PRODUTO';
+}
 
 function getMonthKey(g: GrupoViagem): string {
   const d = g.periodos?.[0]?.check_in || g.created_at;
@@ -140,6 +164,31 @@ function getSortDate(g: GrupoViagem): string {
   return g.periodos?.[0]?.check_in || g.created_at || '';
 }
 
+/** Completion percentage (0-100) based on filled fields */
+function getCompletionPercent(g: GrupoViagem): number {
+  let filled = 0;
+  const total = 5; // destino, datas, serviços (>=1), pax, tarifas
+  if (g.origem_destino && g.origem_destino.trim()) filled++;
+  if (g.periodos?.some(p => p.check_in)) filled++;
+  if (getServiceCount(g) > 0) filled++;
+  if (g.params?.qtd_min_pax > 0 || g.params?.qtd_max_pax > 0) filled++;
+  if (g.tarifas_ativas?.length > 0) filled++;
+  return Math.round((filled / total) * 100);
+}
+
+/** Semantic color for completion bar */
+function getCompletionColor(pct: number): string {
+  if (pct >= 80) return 'bg-green-500';
+  if (pct >= 40) return 'bg-amber-500';
+  return 'bg-red-400';
+}
+
+function getCompletionLabel(pct: number): string {
+  if (pct >= 80) return 'text-green-600';
+  if (pct >= 40) return 'text-amber-600';
+  return 'text-red-500';
+}
+
 /* ─── Component ─── */
 
 export default function GruposPage() {
@@ -181,14 +230,26 @@ export default function GruposPage() {
     return [...set].sort().reverse();
   }, [grupos]);
 
+  // Status counts (including INCOMPLETOS)
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = { PRODUTO: 0, PROPOSTA: 0, ORCAMENTO: 0, RESERVA: 0, VENDA: 0, INCOMPLETOS: 0 };
+    for (const g of grupos) {
+      counts[g.status_pipeline || 'PRODUTO'] = (counts[g.status_pipeline || 'PRODUTO'] || 0) + 1;
+      if (isIncomplete(g)) counts.INCOMPLETOS++;
+    }
+    return counts;
+  }, [grupos]);
+
   // Filter → Sort → Group pipeline
   const { grouped, filteredCount } = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
 
     let filtered = grupos;
 
-    // Status filter
-    if (filtroStatus !== 'TODOS') {
+    // Status filter (INCOMPLETOS is a virtual status)
+    if (filtroStatus === 'INCOMPLETOS') {
+      filtered = filtered.filter(g => isIncomplete(g));
+    } else if (filtroStatus !== 'TODOS') {
       filtered = filtered.filter(g => (g.status_pipeline || 'PRODUTO') === filtroStatus);
     }
 
@@ -246,7 +307,7 @@ export default function GruposPage() {
     });
   };
 
-  // CRUD handlers (unchanged)
+  // CRUD handlers
   const toggleTarifa = (t: 'sgl' | 'dbl' | 'tpl' | 'qdp') => {
     setNewTarifas(prev => {
       const s = new Set(prev);
@@ -315,13 +376,6 @@ export default function GruposPage() {
     e.target.value = '';
   };
 
-  // Status counts for stats bar
-  const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = { PRODUTO: 0, PROPOSTA: 0, ORCAMENTO: 0, RESERVA: 0, VENDA: 0 };
-    for (const g of grupos) counts[g.status_pipeline || 'PRODUTO'] = (counts[g.status_pipeline || 'PRODUTO'] || 0) + 1;
-    return counts;
-  }, [grupos]);
-
   /* ─── Render ─── */
 
   return (
@@ -346,9 +400,10 @@ export default function GruposPage() {
           />
         }
       >
-        {/* Stats Bar */}
+        {/* Stats Bar — filtros rápidos por status com contagens */}
         {grupos.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Todos */}
             <button
               onClick={() => setFiltroStatus('TODOS')}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-sm transition-all ${
@@ -358,8 +413,10 @@ export default function GruposPage() {
               }`}
             >
               <span className="font-bold text-base">{grupos.length}</span>
-              <span className="text-xs">Total</span>
+              <span className="text-xs">Todos</span>
             </button>
+
+            {/* Pipeline statuses */}
             {(['PRODUTO', 'PROPOSTA', 'ORCAMENTO', 'RESERVA', 'VENDA'] as const).map(status => (
               <button
                 key={status}
@@ -375,6 +432,22 @@ export default function GruposPage() {
                 <span className="text-xs hidden sm:inline">{PIPELINE_LABELS[status]}</span>
               </button>
             ))}
+
+            {/* Incompletos — filtro especial */}
+            {statusCounts.INCOMPLETOS > 0 && (
+              <button
+                onClick={() => setFiltroStatus(filtroStatus === 'INCOMPLETOS' ? 'TODOS' : 'INCOMPLETOS')}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm transition-all ${
+                  filtroStatus === 'INCOMPLETOS'
+                    ? 'border-red-400 bg-red-50 text-red-600 font-semibold ring-1 ring-red-200'
+                    : 'border-[var(--t-border)] bg-[var(--t-surface)] text-red-400 hover:bg-red-50/50'
+                }`}
+              >
+                <AlertTriangle className="w-3.5 h-3.5" />
+                <span className="font-semibold">{statusCounts.INCOMPLETOS}</span>
+                <span className="text-xs hidden sm:inline">Incompletos</span>
+              </button>
+            )}
           </div>
         )}
 
@@ -489,7 +562,6 @@ export default function GruposPage() {
           <div className="space-y-2">
             {[...grouped.entries()].map(([monthKey, monthGrupos]) => {
               const isCollapsed = collapsedMonths.has(monthKey);
-              // Mini status breakdown for month header
               const monthStatusCounts: Record<string, number> = {};
               for (const g of monthGrupos) {
                 const st = g.status_pipeline || 'PRODUTO';
@@ -511,7 +583,6 @@ export default function GruposPage() {
                     <span className="text-xs bg-[var(--t-surface)] border border-[var(--t-border)] text-[var(--t-text-secondary)] px-2 py-0.5 rounded-full font-medium">
                       {monthGrupos.length}
                     </span>
-                    {/* Mini status dots */}
                     <div className="flex items-center gap-1 ml-1">
                       {(['PRODUTO', 'PROPOSTA', 'ORCAMENTO', 'RESERVA', 'VENDA'] as const).map(st =>
                         (monthStatusCounts[st] || 0) > 0 ? (
@@ -640,26 +711,46 @@ interface CardProps {
 }
 
 function GridCard({ g, onOpen, onDuplicate, onExport, onDelete }: CardProps) {
-  const status = g.status_pipeline || 'PRODUTO';
+  const incomplete = isIncomplete(g);
+  const effectiveStatus = getEffectiveStatus(g);
   const range = getDateRange(g);
-  const serviceCount = getServiceCount(g);
+  const completionPct = getCompletionPercent(g);
   const firstDestino = g.periodos?.[0]?.destino;
+  const missing = incomplete ? getMissingItems(g) : [];
+  const hasDestino = !!(g.origem_destino && g.origem_destino.trim());
 
   return (
-    <Card className={`hover:shadow-lg transition-all border-t-[3px] ${PIPELINE_BORDER[status]} flex flex-col`}>
+    <Card className={`hover:shadow-lg transition-all border-t-[3px] ${PIPELINE_BORDER[effectiveStatus]} flex flex-col`}>
       <CardContent className="p-5 flex flex-col flex-1">
-        {/* Header */}
+        {/* Header — destino é o hero, GRP desce para metadado discreto */}
         <div className="flex items-start justify-between gap-2 mb-1">
           <div className="min-w-0 flex-1">
-            <h3 className="font-bold text-lg text-[var(--t-text)] truncate leading-tight">
-              {g.origem_destino || <span className="italic text-[var(--t-text-muted)]">Sem destino</span>}
-            </h3>
-            <p className="text-xs text-[var(--t-text-muted)] mt-0.5 truncate">{g.grp_id}</p>
+            {hasDestino ? (
+              <h3 className="font-bold text-lg text-[var(--t-text)] truncate leading-tight">
+                {g.origem_destino}
+              </h3>
+            ) : (
+              <h3 className="text-lg leading-tight">
+                <span className="italic text-[var(--t-text-muted)]">Sem destino definido</span>
+              </h3>
+            )}
+            {/* GRP code — metadado discreto em fonte mono pequena */}
+            <p className="text-[11px] text-[var(--t-text-muted)] mt-0.5 truncate font-mono opacity-60">{g.grp_id}</p>
           </div>
-          <Badge className={`text-[10px] shrink-0 ${PIPELINE_COLORS[status]}`}>
-            {PIPELINE_LABELS[status] || status}
+          <Badge className={`text-[10px] shrink-0 ${PIPELINE_COLORS[effectiveStatus]}`}>
+            {PIPELINE_LABELS[effectiveStatus] || effectiveStatus}
           </Badge>
         </div>
+
+        {/* Alerta inline para incompletos */}
+        {incomplete && (
+          <div className="mt-2 flex items-start gap-2 px-2.5 py-2 rounded-lg bg-red-50 border border-red-100">
+            <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+            <span className="text-[11px] text-red-600 leading-snug">
+              Falta preencher: {missing.join(', ')}
+            </span>
+          </div>
+        )}
 
         {/* Date & Route */}
         <div className="mt-3 space-y-1.5">
@@ -682,19 +773,17 @@ function GridCard({ g, onOpen, onDuplicate, onExport, onDelete }: CardProps) {
           )}
         </div>
 
-        {/* Service completion */}
+        {/* Barra de completude — substitui os dots */}
         <div className="mt-4">
-          <div className="flex items-center gap-1">
-            {SERVICES.map(s => (
-              <div
-                key={s.key}
-                className={`w-[9px] h-[9px] rounded-full transition-colors ${
-                  s.check(g) ? 'bg-[var(--t-green)]' : 'bg-[var(--t-border)]'
-                }`}
-                title={`${s.label}: ${s.check(g) ? 'Configurado' : 'Pendente'}`}
-              />
-            ))}
-            <span className="text-[11px] text-[var(--t-text-muted)] ml-2">{serviceCount}/10</span>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[11px] text-[var(--t-text-muted)]">Completude</span>
+            <span className={`text-[11px] font-semibold ${getCompletionLabel(completionPct)}`}>{completionPct}%</span>
+          </div>
+          <div className="w-full h-1.5 bg-[var(--t-border)] rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${getCompletionColor(completionPct)}`}
+              style={{ width: `${completionPct}%` }}
+            />
           </div>
         </div>
 
@@ -714,16 +803,22 @@ function GridCard({ g, onOpen, onDuplicate, onExport, onDelete }: CardProps) {
           )}
         </div>
 
-        {/* Actions */}
+        {/* Actions — botão suave, CTA contextual */}
         <div className="flex gap-2 mt-auto pt-4">
           <Link
             href={`/grupo/${g.id}`}
             className="flex-1"
             onClick={onOpen}
           >
-            <Button className="w-full bg-[var(--t-green)] hover:opacity-90 text-white" size="sm">
-              <FolderOpen className="w-4 h-4 mr-1.5" /> Abrir
-            </Button>
+            {incomplete ? (
+              <Button className="w-full bg-amber-500 hover:bg-amber-600 text-white" size="sm">
+                <AlertTriangle className="w-4 h-4 mr-1.5" /> Completar grupo
+              </Button>
+            ) : (
+              <Button className="w-full bg-blue-500/15 hover:bg-blue-500/25 text-blue-600 border border-blue-200" size="sm" variant="outline">
+                <FolderOpen className="w-4 h-4 mr-1.5" /> Abrir
+              </Button>
+            )}
           </Link>
           <Button variant="outline" size="sm" onClick={onDuplicate} title="Duplicar"><Copy className="w-4 h-4" /></Button>
           <Button variant="outline" size="sm" onClick={onExport} title="Exportar JSON"><Download className="w-4 h-4" /></Button>
@@ -737,25 +832,32 @@ function GridCard({ g, onOpen, onDuplicate, onExport, onDelete }: CardProps) {
 /* ─── List Row ─── */
 
 function ListRow({ g, onOpen, onDuplicate, onExport, onDelete }: CardProps) {
-  const status = g.status_pipeline || 'PRODUTO';
+  const incomplete = isIncomplete(g);
+  const effectiveStatus = getEffectiveStatus(g);
   const range = getDateRange(g);
-  const serviceCount = getServiceCount(g);
+  const completionPct = getCompletionPercent(g);
+  const hasDestino = !!(g.origem_destino && g.origem_destino.trim());
 
   return (
-    <div className="flex items-center gap-4 px-4 py-3 bg-[var(--t-surface)] border border-[var(--t-border)] rounded-xl hover:shadow-md transition-all group">
+    <div className={`flex items-center gap-4 px-4 py-3 bg-[var(--t-surface)] border rounded-xl hover:shadow-md transition-all group ${
+      incomplete ? 'border-red-200' : 'border-[var(--t-border)]'
+    }`}>
       {/* Color indicator */}
-      <div className={`w-1 h-10 rounded-full shrink-0 ${PIPELINE_DOT[status]}`} />
+      <div className={`w-1 h-10 rounded-full shrink-0 ${PIPELINE_DOT[effectiveStatus]}`} />
 
-      {/* Destination */}
+      {/* Destination — hero text */}
       <Link
         href={`/grupo/${g.id}`}
         onClick={onOpen}
         className="flex-1 min-w-0 hover:underline underline-offset-2"
       >
-        <div className="font-semibold text-[var(--t-text)] truncate">
-          {g.origem_destino || <span className="italic text-[var(--t-text-muted)]">Sem destino</span>}
-        </div>
-        <div className="text-[11px] text-[var(--t-text-muted)] truncate">{g.grp_id}</div>
+        {hasDestino ? (
+          <div className="font-semibold text-[var(--t-text)] truncate">{g.origem_destino}</div>
+        ) : (
+          <div className="italic text-[var(--t-text-muted)] truncate">Sem destino definido</div>
+        )}
+        {/* GRP code — discreto em mono */}
+        <div className="text-[10px] text-[var(--t-text-muted)] truncate font-mono opacity-60">{g.grp_id}</div>
       </Link>
 
       {/* Date */}
@@ -770,23 +872,22 @@ function ListRow({ g, onOpen, onDuplicate, onExport, onDelete }: CardProps) {
         )}
       </div>
 
-      {/* Service dots */}
-      <div className="flex items-center gap-0.5 shrink-0 hidden lg:flex">
-        {SERVICES.map(s => (
-          <div
-            key={s.key}
-            className={`w-[7px] h-[7px] rounded-full ${
-              s.check(g) ? 'bg-[var(--t-green)]' : 'bg-[var(--t-border)]'
-            }`}
-            title={s.label}
-          />
-        ))}
-        <span className="text-[10px] text-[var(--t-text-muted)] ml-1.5">{serviceCount}/10</span>
+      {/* Completion bar — mini version */}
+      <div className="w-20 shrink-0 hidden lg:block">
+        <div className="flex items-center gap-1.5">
+          <div className="flex-1 h-1 bg-[var(--t-border)] rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full ${getCompletionColor(completionPct)}`}
+              style={{ width: `${completionPct}%` }}
+            />
+          </div>
+          <span className={`text-[10px] font-medium ${getCompletionLabel(completionPct)}`}>{completionPct}%</span>
+        </div>
       </div>
 
       {/* Badge */}
-      <Badge className={`text-[10px] shrink-0 ${PIPELINE_COLORS[status]}`}>
-        {PIPELINE_LABELS[status] || status}
+      <Badge className={`text-[10px] shrink-0 ${PIPELINE_COLORS[effectiveStatus]}`}>
+        {PIPELINE_LABELS[effectiveStatus] || effectiveStatus}
       </Badge>
 
       {/* Actions */}
