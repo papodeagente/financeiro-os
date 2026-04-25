@@ -496,12 +496,820 @@ const patagonia: Omit<TemplateProposta, 'id'> = {
 };
 
 // ═══════════════════════════════════════════════════════════════
+// TEMPLATE 4: DISNEY ORLANDO — Família com 4 parques + Universal
+// Demonstra: layout CLASSICO, multiplos servicos com fotos, roteiro 10 dias, mapa Orlando
+// ═══════════════════════════════════════════════════════════════
+const DISNEY_ALOJ: AlojamentoData[] = [
+  aloj({
+    destino_nome: 'Orlando — Disney Resort', hotel_nome: 'Disney\'s Art of Animation Resort', hotel_estrelas: 4,
+    hotel_imagem: 'https://images.unsplash.com/photo-1605108042851-6a8b6f73fbf7?w=800&q=80',
+    hotel_galeria: [
+      'https://images.unsplash.com/photo-1597466765990-64ad1c35dafc?w=600&q=80',
+      'https://images.unsplash.com/photo-1531219572328-a0171b4448a3?w=600&q=80',
+    ],
+    hotel_descricao: 'Hotel oficial da Disney com tema dos filmes Procurando Nemo, Carros, Rei Leao e Pequena Sereia. Suites familiares para ate 6 pessoas, piscina com fundo musical, transporte gratuito para todos os parques.',
+    hotel_link: 'https://disneyworld.disney.go.com/resorts/art-of-animation-resort/',
+    check_in: '2026-07-10', check_out: '2026-07-19', noites: 9,
+    regime: 'RO', quarto_tipo: 'Family Suite (Pequena Sereia)', bebidas: '',
+    lat: 28.3585, lng: -81.5454, viagem_noturna: false,
+  }),
+];
+
+const DISNEY_TRANSP: TransporteData[] = [
+  transp({ tipo: 'VOO', data: '2026-07-10', origem: 'GRU', destino: 'MCO', companhia: 'LATAM', numero_voo: 'LA8124', horario_saida: '21:55', horario_chegada: '06:30', tempo_estimado: '9h35', detalhes: 'Voo direto noturno' }),
+  transp({ tipo: 'TRANSFER', data: '2026-07-10', origem: 'Aeroporto MCO', destino: 'Disney Resort', companhia: 'Mears Connect', numero_voo: '', horario_saida: '07:30', horario_chegada: '08:30', distancia_km: 35, tempo_estimado: '1h', detalhes: 'Transfer compartilhado oficial Disney' }),
+  transp({ tipo: 'CARRO', data: '2026-07-15', origem: 'Disney Resort', destino: 'Universal Studios', companhia: 'Alamo Rent-a-Car', numero_voo: '', horario_saida: '08:00', horario_chegada: '08:30', distancia_km: 18, tempo_estimado: '30min', detalhes: 'Aluguel por 4 dias (jul/15-19) — categoria SUV' }),
+  transp({ tipo: 'TRANSFER', data: '2026-07-19', origem: 'Disney Resort', destino: 'Aeroporto MCO', companhia: 'Mears Connect', numero_voo: '', horario_saida: '17:00', horario_chegada: '18:00', distancia_km: 35, tempo_estimado: '1h', detalhes: 'Transfer ao aeroporto' }),
+  transp({ tipo: 'VOO', data: '2026-07-19', origem: 'MCO', destino: 'GRU', companhia: 'LATAM', numero_voo: 'LA8125', horario_saida: '21:30', horario_chegada: '07:15', tempo_estimado: '9h45', detalhes: 'VOLTA | Voo direto noturno' }),
+];
+
+const disney: Omit<TemplateProposta, 'id'> = {
+  nome: 'Disney Orlando — Família Mágica',
+  descricao: '10 dias em Orlando com 4 parques Disney + Universal Studios. Hotel oficial Disney, Magic Bands, Genie+ inclusos. Layout CLASSICO completo para famílias.',
+  tipo_viagem: 'FAMILIA',
+  icone: '🎢',
+  imagem_preview: 'https://images.unsplash.com/photo-1597466765990-64ad1c35dafc?w=600&q=80',
+  visual: {
+    tema: 'padrao', layout: 'CLASSICO', cor_primaria: '#7c3aed', cor_secundaria: '#0a0a14', cor_texto: '#1a1a2e',
+    cor_fundo: '#faf5ff', fonte: 'Inter',
+    imagem_capa: 'https://images.unsplash.com/photo-1597466765990-64ad1c35dafc?w=1400&q=80',
+    estilo_capa: 'FULLSCREEN',
+  },
+  secoes_padrao: [
+    s('TEXTO', 0, {
+      titulo: 'Onde os sonhos se tornam realidade',
+      corpo: '<p>Sua família vai viver <strong>10 dias mágicos</strong> em Orlando — caminhando pelo Castelo da Cinderella, voando com Peter Pan, desafiando Hulk na Universal e mergulhando no mundo de Harry Potter.</p><p>Reservamos cada detalhe: hotel oficial Disney, transporte, Magic Bands, ingressos com Genie+ e até o aluguel de carro para a Universal.</p>',
+      alinhamento: 'center',
+    }),
+    s('GALERIA', 1, { imagens: [
+      'https://images.unsplash.com/photo-1597466765990-64ad1c35dafc?w=800&q=80',
+      'https://images.unsplash.com/photo-1605108042851-6a8b6f73fbf7?w=800&q=80',
+      'https://images.unsplash.com/photo-1607861716497-e65ab29fc7ac?w=800&q=80',
+      'https://images.unsplash.com/photo-1531219572328-a0171b4448a3?w=800&q=80',
+      'https://images.unsplash.com/photo-1610375461246-83df859d849d?w=800&q=80',
+      'https://images.unsplash.com/photo-1573481078476-baef74ddec76?w=800&q=80',
+    ] }),
+    s('VIDEO', 2, {
+      titulo: 'Walt Disney World — Tour pelos 4 parques',
+      url: 'https://www.youtube.com/watch?v=yMlUWp4ckqo',
+    }),
+    s('MAPA', 3, {
+      titulo: 'Orlando — todos os parques que você visitará',
+      zoom: 11,
+      pontos: [
+        { lat: 28.4177, lng: -81.5812, label: 'Magic Kingdom — Castelo' },
+        { lat: 28.3747, lng: -81.5494, label: 'Epcot — Spaceship Earth' },
+        { lat: 28.3597, lng: -81.5586, label: 'Hollywood Studios — Star Wars' },
+        { lat: 28.3553, lng: -81.5901, label: 'Animal Kingdom — Pandora' },
+        { lat: 28.4750, lng: -81.4683, label: 'Universal Studios' },
+        { lat: 28.4717, lng: -81.4727, label: 'Islands of Adventure — Hogwarts' },
+        { lat: 28.3585, lng: -81.5454, label: 'Disney\'s Art of Animation Resort' },
+      ],
+    }),
+    s('SERVICO', 4, {
+      icone: '🏰', titulo: 'Magic Kingdom — Dia 1', detalhes: [
+        'Castelo da Cinderella e show Happily Ever After (fogos)',
+        'Space Mountain, Big Thunder Mountain, Splash Mountain',
+        'Encontro com personagens (Mickey, Princesas, Stitch)',
+        'Parade Festival of Fantasy as 15h',
+        'Genie+ incluso — fila rápida em 7 atrações',
+      ],
+      descricao: 'O parque mais icônico da Disney. Comece pelo Castelo da Cinderella, deixando para os fogos do show Happily Ever After fechar o dia.',
+      imagem: 'https://images.unsplash.com/photo-1597466765990-64ad1c35dafc?w=800&q=80',
+      valor: 0, exibir_valor: false,
+    }),
+    s('SERVICO', 5, {
+      icone: '🌍', titulo: 'Epcot — Dia 2', detalhes: [
+        'Spaceship Earth (a esfera gigante)',
+        '11 países do World Showcase (México, Japão, Itália, Alemanha...)',
+        'Test Track — simulador de carros',
+        'Soarin\' Around the World',
+        'Festival de Sabores Internacionais',
+      ],
+      descricao: 'Cultura, gastronomia e tecnologia. Um dia para passear pelos 11 países e experimentar comidas autênticas. Perfeito para casais e adultos.',
+      imagem: 'https://images.unsplash.com/photo-1610375461246-83df859d849d?w=800&q=80',
+      valor: 0, exibir_valor: false,
+    }),
+    s('SERVICO', 6, {
+      icone: '🎬', titulo: 'Hollywood Studios — Dia 3', detalhes: [
+        'Star Wars: Galaxy\'s Edge (planeta Batuu)',
+        'Rise of the Resistance — atração nº 1 da Disney',
+        'Tower of Terror (queda de elevador 13 andares)',
+        'Rock \'n\' Roller Coaster (Aerosmith)',
+        'Toy Story Land',
+      ],
+      descricao: 'Cinema e Star Wars em estado puro. Para os fãs, esse é o dia mais aguardado da viagem.',
+      imagem: 'https://images.unsplash.com/photo-1607861716497-e65ab29fc7ac?w=800&q=80',
+      valor: 0, exibir_valor: false,
+    }),
+    s('SERVICO', 7, {
+      icone: '🦁', titulo: 'Animal Kingdom — Dia 4', detalhes: [
+        'Pandora — World of Avatar e Flight of Passage',
+        'Expedition Everest (montanha-russa Yeti)',
+        'Kilimanjaro Safaris (safari real com leões e girafas)',
+        'Festival of the Lion King',
+        'Tree of Life à noite com show Awakenings',
+      ],
+      descricao: 'O parque mais natural da Disney. Safari de verdade, atrações inspiradas em Avatar e o show noturno mais bonito de Orlando.',
+      imagem: 'https://images.unsplash.com/photo-1605114985479-0a8b4f7989da?w=800&q=80',
+      valor: 0, exibir_valor: false,
+    }),
+    s('SERVICO', 8, {
+      icone: '🧙', titulo: 'Universal Studios + Islands of Adventure — Dias 6 e 7', detalhes: [
+        'Wizarding World of Harry Potter (Diagon Alley + Hogsmeade)',
+        'Hogwarts Express conectando os 2 parques',
+        'Velocicoaster (montanha-russa nº 1 do mundo 2024)',
+        'Hulk Coaster + Spider-Man Adventure',
+        'Express Pass incluso — fila rápida ilimitada',
+      ],
+      descricao: '2 dias completos no universo Universal. Para os fãs de Harry Potter, é uma experiência transformadora.',
+      imagem: 'https://images.unsplash.com/photo-1573481078476-baef74ddec76?w=800&q=80',
+      valor: 0, exibir_valor: false,
+    }),
+    s('ROTEIRO_DIA', 9, { dias: [
+      { numero: 1, titulo: 'Dia 1 — Embarque', descricao: 'Saída de São Paulo no voo LATAM LA8124 (direto noturno) com destino a Orlando. Jantar e café da manhã servidos a bordo.', imagem: '', atividades: ['Check-in GRU 19h', 'Embarque 21:55'], refeicoes_inclusas: 'Refeições a bordo', lat: -23.4356, lng: -46.4731 },
+      { numero: 2, titulo: 'Dia 2 — Chegada Orlando + Disney Springs', descricao: 'Chegada em Orlando às 06:30. Transfer ao Disney\'s Art of Animation. Check-in antecipado, descanso e à tarde Disney Springs (compras, jantar, Cirque du Soleil opcional).', imagem: 'https://images.unsplash.com/photo-1605108042851-6a8b6f73fbf7?w=800&q=80', atividades: ['Transfer MCO → Disney Resort', 'Check-in Art of Animation', 'Tarde livre em Disney Springs', 'Retirada dos Magic Bands'], refeicoes_inclusas: '', lat: 28.3585, lng: -81.5454 },
+      { numero: 3, titulo: 'Dia 3 — Magic Kingdom', descricao: 'O parque mais icônico da Disney. Castelo da Cinderella, atrações clássicas e show de fogos Happily Ever After.', imagem: 'https://images.unsplash.com/photo-1597466765990-64ad1c35dafc?w=800&q=80', atividades: ['Magic Kingdom 9h-22h', 'Encontro com personagens', 'Parade Festival of Fantasy', 'Show Happily Ever After'], refeicoes_inclusas: '', lat: 28.4177, lng: -81.5812 },
+      { numero: 4, titulo: 'Dia 4 — Epcot', descricao: 'Tour pelos 11 países do World Showcase, atrações futuristas e festival de sabores.', imagem: 'https://images.unsplash.com/photo-1610375461246-83df859d849d?w=800&q=80', atividades: ['Spaceship Earth', 'World Showcase (11 países)', 'Test Track e Soarin\'', 'Show noturno EPCOT Forever'], refeicoes_inclusas: '', lat: 28.3747, lng: -81.5494 },
+      { numero: 5, titulo: 'Dia 5 — Hollywood Studios', descricao: 'Star Wars: Galaxy\'s Edge, Toy Story Land e atrações cinematográficas.', imagem: 'https://images.unsplash.com/photo-1607861716497-e65ab29fc7ac?w=800&q=80', atividades: ['Rise of the Resistance', 'Galaxy\'s Edge — Batuu', 'Tower of Terror', 'Rock\'n\'Roller Coaster'], refeicoes_inclusas: '', lat: 28.3597, lng: -81.5586 },
+      { numero: 6, titulo: 'Dia 6 — Animal Kingdom', descricao: 'Pandora, safári real e o icônico show noturno Tree of Life Awakenings.', imagem: '', atividades: ['Pandora — Flight of Passage', 'Kilimanjaro Safaris', 'Expedition Everest', 'Festival of the Lion King'], refeicoes_inclusas: '', lat: 28.3553, lng: -81.5901 },
+      { numero: 7, titulo: 'Dia 7 — Universal Studios', descricao: 'Início da experiência Universal. Diagon Alley, simuladores e atrações cinematográficas. Carro alugado retirado pela manhã.', imagem: 'https://images.unsplash.com/photo-1573481078476-baef74ddec76?w=800&q=80', atividades: ['Retirada do carro alugado', 'Universal Studios', 'Diagon Alley (Harry Potter)', 'Hogwarts Express → Islands'], refeicoes_inclusas: '', lat: 28.4750, lng: -81.4683 },
+      { numero: 8, titulo: 'Dia 8 — Islands of Adventure', descricao: 'Hogsmeade, Velocicoaster e Hulk. Todos os super-heróis e dragões de Harry Potter no mesmo dia.', imagem: '', atividades: ['Hogsmeade & Hogwarts Castle', 'Velocicoaster (top 1 mundial)', 'Hulk Coaster', 'Spider-Man Adventure'], refeicoes_inclusas: '', lat: 28.4717, lng: -81.4727 },
+      { numero: 9, titulo: 'Dia 9 — Outlets + Volcano Bay', descricao: 'Manhã de compras nos outlets premium (Vineland ou Orlando International). Tarde no Volcano Bay (parque aquático Universal) ou Disney Typhoon Lagoon — opcional.', imagem: '', atividades: ['Compras em Outlets premium', 'Almoço no Cheesecake Factory', 'Tarde livre — opcional Volcano Bay', 'Devolução do carro'], refeicoes_inclusas: '', lat: 28.4267, lng: -81.4505 },
+      { numero: 10, titulo: 'Dia 10 — Retorno', descricao: 'Manhã livre. Late check-out às 16h. Transfer ao aeroporto e voo de volta a São Paulo.', imagem: '', atividades: ['Manhã livre / piscina', 'Late check-out 16h', 'Transfer ao aeroporto', 'Voo MCO → GRU 21:30'], refeicoes_inclusas: '', lat: 28.4294, lng: -81.3089 },
+    ] }),
+    s('ALOJAMENTO', 10, {
+      id: generateId(),
+      destino_nome: 'Orlando — Disney Resort', hotel_nome: 'Disney\'s Art of Animation Resort', hotel_estrelas: 4,
+      hotel_imagem: 'https://images.unsplash.com/photo-1605108042851-6a8b6f73fbf7?w=800&q=80',
+      hotel_galeria: [
+        'https://images.unsplash.com/photo-1597466765990-64ad1c35dafc?w=600&q=80',
+        'https://images.unsplash.com/photo-1531219572328-a0171b4448a3?w=600&q=80',
+      ],
+      hotel_descricao: 'Hotel oficial Disney com suítes familiares temáticas (Pequena Sereia, Carros, Rei Leão, Procurando Nemo). Acomoda até 6 pessoas. Inclui transporte gratuito a todos os parques, Early Park Entry e Extended Evening Hours.',
+      hotel_link: 'https://disneyworld.disney.go.com/resorts/art-of-animation-resort/',
+      check_in: '2026-07-10', check_out: '2026-07-19', noites: 9,
+      regime: 'RO', quarto_tipo: 'Family Suite (Pequena Sereia)', bebidas: '',
+      lat: 28.3585, lng: -81.5454, viagem_noturna: false,
+    }),
+    s('TRANSPORTE', 11, {
+      id: generateId(), tipo: 'VOO', data: '2026-07-10',
+      origem: 'GRU', destino: 'MCO', companhia: 'LATAM', numero_voo: 'LA8124',
+      horario_saida: '21:55', horario_chegada: '06:30', tempo_estimado: '9h35',
+      detalhes: 'Voo direto noturno São Paulo → Orlando',
+    }),
+    s('TRANSPORTE', 12, {
+      id: generateId(), tipo: 'CARRO', data: '2026-07-15',
+      origem: 'Alamo Disney Resort', destino: 'Universal Studios', companhia: 'Alamo Rent-a-Car', numero_voo: '',
+      horario_saida: '08:00', horario_chegada: '08:30', tempo_estimado: '30min',
+      detalhes: 'SUV intermediário — 4 dias com seguro full coverage',
+    }),
+    s('TRANSPORTE', 13, {
+      id: generateId(), tipo: 'VOO', data: '2026-07-19',
+      origem: 'MCO', destino: 'GRU', companhia: 'LATAM', numero_voo: 'LA8125',
+      horario_saida: '21:30', horario_chegada: '07:15', tempo_estimado: '9h45',
+      detalhes: 'VOLTA | Voo direto noturno',
+    }),
+    s('INCLUSOS', 14, {
+      inclusos: [
+        'Passagem aérea LATAM GRU↔MCO direto (classe econômica)',
+        'Hospedagem 9 noites Disney\'s Art of Animation — Family Suite (acomoda 6)',
+        'Ingressos 4 dias Park Hopper (Magic Kingdom, Epcot, Hollywood Studios, Animal Kingdom)',
+        'Genie+ incluso em todos os dias Disney',
+        'Ingressos 2 dias Park-to-Park Universal Studios + Islands of Adventure',
+        'Express Pass Universal — fila rápida ilimitada',
+        'Magic Bands para toda a família',
+        'Transfer Mears Connect aeroporto ↔ hotel (ida e volta)',
+        'Aluguel de carro SUV por 4 dias com seguro full',
+        'Transporte gratuito Disney entre todos os parques e hotel',
+        'Early Park Entry (30min antes da abertura)',
+        'Seguro viagem com cobertura USD 100.000',
+        'Chip de celular com 5GB de internet por pessoa',
+      ],
+      nao_inclusos: [
+        'Refeições nos parques e hotel',
+        'Volcano Bay e Typhoon Lagoon (parques aquáticos)',
+        'Disney Memory Maker (fotos profissionais — opcional USD 199)',
+        'Cirque du Soleil em Disney Springs',
+        'Excesso de bagagem',
+        'Gorjetas e despesas pessoais',
+        'Estacionamento nos parques (incluso no carro)',
+      ],
+    }),
+    s('VALORES', 15, {
+      opcoes: [
+        {
+          titulo: 'Família 4 pessoas (2 adultos + 2 crianças)',
+          valor_total: 47800,
+          destaque: true,
+          parcelas: [
+            { forma: 'À vista PIX (5% desc.)', valor_parcela: 45410, valor_total: 45410, destaque: true },
+            { forma: '12x cartão s/ juros', valor_parcela: 3983, valor_total: 47800, destaque: false },
+            { forma: '6x boleto', valor_parcela: 7967, valor_total: 47800, destaque: false },
+          ],
+        },
+        {
+          titulo: 'Família 6 pessoas (Suíte completa)',
+          valor_total: 68900,
+          destaque: false,
+          parcelas: [
+            { forma: 'À vista PIX', valor_parcela: 65455, valor_total: 65455, destaque: true },
+            { forma: '12x cartão s/ juros', valor_parcela: 5742, valor_total: 68900, destaque: false },
+          ],
+        },
+        {
+          titulo: 'Casal sem crianças (Standard Room)',
+          valor_total: 32500,
+          destaque: false,
+          parcelas: [
+            { forma: 'À vista PIX', valor_parcela: 32500, valor_total: 32500, destaque: true },
+            { forma: '10x cartão s/ juros', valor_parcela: 3250, valor_total: 32500, destaque: false },
+          ],
+        },
+      ],
+      observacoes_valores: 'Valores totais para a família, não por pessoa. Crianças menores de 3 anos não pagam ingressos. Embarque jul/2026 (alta temporada). Para baixa temporada: -25%.',
+      validade: '2026-06-15',
+    }),
+    s('FAQ', 16, { titulo: 'Perguntas Frequentes', perguntas: [
+      { pergunta: 'Qual a melhor idade para levar crianças?', resposta: 'A partir dos 4 anos as crianças aproveitam plenamente. Bebês até 2 anos têm acesso gratuito mas não lembrarão da experiência. Dica: idade ideal entre 5 e 12 anos.' },
+      { pergunta: 'Preciso de visto americano?', resposta: 'Sim. Visto B1/B2 (turismo) com validade de 10 anos. Cobramos a taxa do consulado USD 185 separadamente — entrevista presencial obrigatória em SP, RJ ou Recife.' },
+      { pergunta: 'Vale a pena alugar carro?', resposta: 'Para Universal SIM (não há transporte Disney até lá). Entre os parques Disney, o transporte gratuito do hotel é eficiente — não precisa de carro.' },
+      { pergunta: 'O que é Genie+ e Express Pass?', resposta: 'Sistemas de fila rápida. Genie+ na Disney (incluso) permite reservar horários nas atrações. Express Pass na Universal (incluso) é fila ilimitada — economiza 4-5 horas por dia.' },
+      { pergunta: 'Posso comprar refeições à parte?', resposta: 'Sim. Custo médio USD 60-80 por pessoa/dia comendo nos parques. Ofereço pacote Disney Dining Plan opcional por +R$ 4.800 por pessoa para 9 dias.' },
+    ] }),
+    s('DEPOIMENTO', 17, { depoimentos: [
+      { texto: 'Levamos nossas duas filhas (7 e 10) em julho. Foi a viagem dos sonhos! O hotel temático foi um sucesso, as Magic Bands abriam tudo sozinhas e o Genie+ economizou nossas pernas. Voltamos esgotados mas felizes.', autor: 'Família Almeida', foto: '', destino: 'Orlando 2025' },
+      { texto: 'O Express Pass na Universal foi a melhor decisão. Fizemos as principais atrações 3 vezes. Velocicoaster é incrível! Nossa filha de 12 anos não queria ir embora.', autor: 'Roberta e Pedro', foto: '', destino: 'Orlando 2024' },
+    ] }),
+    s('CTA', 18, { texto_botao: 'Reservar a viagem mágica!', tipo_acao: 'WHATSAPP', numero_whatsapp: '', mensagem_predefinida: 'Olá! Quero reservar a viagem Disney Orlando para minha família!', cor_botao: '#7c3aed' }),
+    s('COUNTDOWN', 19, { titulo: 'Embarque para a Disney em', data_evento: '2026-07-10T21:55:00', mensagem: 'A magia está chegando!' }),
+  ],
+  mensagem_abertura_padrao: 'Querida família,\n\nSeu sonho de levar as crianças (e o coração de criança dos pais) a Orlando se torna realidade neste roteiro. Cuidamos de cada detalhe — do hotel temático Disney até o Express Pass Universal — para que vocês foquem apenas em criar memórias inesquecíveis.\n\nPreparem-se: serão 10 dias de pura magia.',
+  inclusos_padrao: ['Aéreo direto', 'Hotel Disney 9 noites', '4 parques Disney + Universal', 'Genie+ e Express Pass', 'Carro alugado', 'Seguro'],
+  nao_inclusos_padrao: ['Refeições', 'Visto', 'Memory Maker'],
+  is_padrao: true,
+};
+(disney as Record<string, unknown>).viagem_padrao = {
+  duracao_dias: 10, duracao_noites: 9,
+  destinos: [
+    { id: generateId(), nome: 'Orlando', descricao: '4 parques Disney + Universal Studios', dias_inicio: 2, dias_fim: 10, alojamento_ids: [DISNEY_ALOJ[0].id] },
+  ],
+  alojamentos: DISNEY_ALOJ,
+  transportes: DISNEY_TRANSP,
+  interesses_tags: ['Família', 'Disney', 'Universal', 'Crianças', 'Compras'],
+  termos_condicoes: 'Cancelamento até 60 dias antes: reembolso integral. 30-59 dias: 70%. 15-29 dias: 40%. Menos de 15 dias: sem reembolso. Visto americano de responsabilidade do cliente.',
+  sobre_agencia: 'Especialistas em viagens à Disney há mais de 12 anos. Mais de 800 famílias atendidas com avaliação 4.9/5.',
+};
+
+// ═══════════════════════════════════════════════════════════════
+// TEMPLATE 5: MEDITERRÂNEO ROYAL CARIBBEAN — Cruzeiro 7 noites + pré/pós
+// Demonstra: layout DISCOVERY, multiplos servicos, transporte misto, alojamento + cabines
+// ═══════════════════════════════════════════════════════════════
+const CRUZ_ALOJ: AlojamentoData[] = [
+  aloj({
+    destino_nome: 'Roma (Pré-cruzeiro)', hotel_nome: 'Hotel Splendide Royal', hotel_estrelas: 5,
+    hotel_imagem: 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?w=800&q=80',
+    hotel_galeria: [], hotel_descricao: 'Palácio do século XIX a 200m da Villa Borghese. Restaurante Mirabelle com estrela Michelin e terraço panorâmico sobre Roma.',
+    hotel_link: '', check_in: '2026-09-05', check_out: '2026-09-07', noites: 2,
+    regime: 'BB', quarto_tipo: 'Deluxe Junior Suite', bebidas: '',
+    lat: 41.9098, lng: 12.4884, viagem_noturna: false,
+  }),
+  aloj({
+    destino_nome: 'Mediterrâneo (Cruzeiro)', hotel_nome: 'Symphony of the Seas — Royal Caribbean', hotel_estrelas: 5,
+    hotel_imagem: 'https://images.unsplash.com/photo-1548574505-5e239809ee19?w=800&q=80',
+    hotel_galeria: [
+      'https://images.unsplash.com/photo-1599058917765-a780eda07a3e?w=600&q=80',
+      'https://images.unsplash.com/photo-1566375638485-0a8be9bcfb83?w=600&q=80',
+    ],
+    hotel_descricao: 'O 2º maior cruzeiro do mundo com 18 decks, parque aquático, robô-bartender, simulador de surfe FlowRider, escalada e show da Broadway. Cabine Balcony deck 10 — vista panorâmica direta para o mar.',
+    hotel_link: 'https://www.royalcaribbean.com/symphony-of-the-seas',
+    check_in: '2026-09-07', check_out: '2026-09-14', noites: 7,
+    regime: 'AI', quarto_tipo: 'Cabine Balcony — Deck 10 (Cat. 4D)', bebidas: 'Pacote Deluxe Beverage incluso',
+    lat: 41.5912, lng: 2.6556, viagem_noturna: true,
+  }),
+  aloj({
+    destino_nome: 'Barcelona (Pós-cruzeiro)', hotel_nome: 'Hotel Casa Fuster', hotel_estrelas: 5,
+    hotel_imagem: 'https://images.unsplash.com/photo-1583422409516-2895a77efded?w=800&q=80',
+    hotel_galeria: [], hotel_descricao: 'Edifício modernista de 1908 no Passeig de Gràcia. Rooftop com vista para Sagrada Família, café Vienés histórico e jazz ao vivo.',
+    hotel_link: '', check_in: '2026-09-14', check_out: '2026-09-16', noites: 2,
+    regime: 'BB', quarto_tipo: 'Deluxe Premium Modernist', bebidas: '',
+    lat: 41.3960, lng: 2.1614, viagem_noturna: false,
+  }),
+];
+
+const CRUZ_TRANSP: TransporteData[] = [
+  transp({ tipo: 'VOO', data: '2026-09-04', origem: 'GRU', destino: 'FCO', companhia: 'ITA Airways', numero_voo: 'AZ675', horario_saida: '17:30', horario_chegada: '09:45', tempo_estimado: '12h15', detalhes: 'Voo direto São Paulo → Roma' }),
+  transp({ tipo: 'TRANSFER', data: '2026-09-05', origem: 'Aeroporto Fiumicino', destino: 'Hotel Splendide Royal Roma', companhia: '', numero_voo: '', horario_saida: '10:30', horario_chegada: '11:30', distancia_km: 32, tempo_estimado: '1h', detalhes: 'Mercedes Classe E privativo' }),
+  transp({ tipo: 'TRANSFER', data: '2026-09-07', origem: 'Hotel Roma', destino: 'Porto de Civitavecchia', companhia: '', numero_voo: '', horario_saida: '11:00', horario_chegada: '13:00', distancia_km: 80, tempo_estimado: '2h', detalhes: 'Transfer privativo ao porto de embarque' }),
+  transp({ tipo: 'BARCO', data: '2026-09-07', origem: 'Civitavecchia (Roma)', destino: 'Mediterrâneo', companhia: 'Royal Caribbean', numero_voo: 'Symphony of the Seas', horario_saida: '17:00', horario_chegada: '07:00', tempo_estimado: '7 noites', detalhes: 'Embarque cruzeiro 7 noites: Civitavecchia → Nápoles → Em alto mar → Palma de Mallorca → Marselha → Em alto mar → Barcelona' }),
+  transp({ tipo: 'TRANSFER', data: '2026-09-14', origem: 'Porto de Barcelona', destino: 'Hotel Casa Fuster', companhia: '', numero_voo: '', horario_saida: '08:00', horario_chegada: '08:45', distancia_km: 6, tempo_estimado: '45min', detalhes: 'Desembarque e transfer privativo' }),
+  transp({ tipo: 'VOO', data: '2026-09-16', origem: 'BCN', destino: 'GRU', companhia: 'ITA Airways', numero_voo: 'AZ677', horario_saida: '14:20', horario_chegada: '23:50', tempo_estimado: '12h30', detalhes: 'VOLTA | Voo direto Barcelona → São Paulo' }),
+];
+
+const cruzeiro: Omit<TemplateProposta, 'id'> = {
+  nome: 'Mediterrâneo — Cruzeiro Royal Caribbean',
+  descricao: '11 dias com cruzeiro Symphony of the Seas pelo Mediterrâneo + Roma e Barcelona. 6 destinos em 1 viagem. Layout DISCOVERY com cabine Balcony, all-inclusive premium e pacote de bebidas.',
+  tipo_viagem: 'CRUZEIRO',
+  icone: '🚢',
+  imagem_preview: 'https://images.unsplash.com/photo-1548574505-5e239809ee19?w=600&q=80',
+  visual: {
+    tema: 'padrao', layout: 'DISCOVERY', cor_primaria: '#0369a1', cor_secundaria: '#0a0a14', cor_texto: '#0f172a',
+    cor_fundo: '#f0f9ff', fonte: 'Inter',
+    imagem_capa: 'https://images.unsplash.com/photo-1548574505-5e239809ee19?w=1400&q=80',
+    estilo_capa: 'FULLSCREEN',
+  },
+  secoes_padrao: [
+    s('TEXTO', 0, {
+      titulo: 'Uma viagem, seis destinos',
+      corpo: 'Imagine acordar em Nápoles, almoçar em Mallorca e jantar em Marselha — sem fazer e desfazer malas. Com o Symphony of the Seas, cada porto é uma nova aventura, e o navio em si é um destino completo: parque aquático, robôs, escalada, shows da Broadway.',
+      alinhamento: 'center',
+    }),
+    s('GALERIA', 1, { imagens: [
+      'https://images.unsplash.com/photo-1548574505-5e239809ee19?w=800&q=80',
+      'https://images.unsplash.com/photo-1599058917765-a780eda07a3e?w=800&q=80',
+      'https://images.unsplash.com/photo-1552832230-c0197dd311b5?w=800&q=80',
+      'https://images.unsplash.com/photo-1583422409516-2895a77efded?w=800&q=80',
+      'https://images.unsplash.com/photo-1518659526054-190340b32735?w=800&q=80',
+      'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=800&q=80',
+    ] }),
+    s('VIDEO', 2, {
+      titulo: 'Symphony of the Seas — tour completo do navio',
+      url: 'https://www.youtube.com/watch?v=K5IIoOl6FZM',
+    }),
+    s('MAPA', 3, {
+      titulo: 'Sua rota pelo Mediterrâneo',
+      zoom: 5,
+      pontos: [
+        { lat: 41.9098, lng: 12.4884, label: 'Roma — Pré-cruzeiro 2 noites' },
+        { lat: 42.0942, lng: 11.7958, label: 'Civitavecchia — Embarque' },
+        { lat: 40.8518, lng: 14.2681, label: 'Nápoles — Pompeia & Capri' },
+        { lat: 39.5696, lng: 2.6502, label: 'Palma de Mallorca' },
+        { lat: 43.2965, lng: 5.3698, label: 'Marselha — Provença' },
+        { lat: 41.3851, lng: 2.1734, label: 'Barcelona — Desembarque' },
+        { lat: 41.3960, lng: 2.1614, label: 'Casa Fuster — Pós 2 noites' },
+      ],
+    }),
+    s('SERVICO', 4, {
+      icone: '🚢', titulo: 'Symphony of the Seas — o navio', detalhes: [
+        '6.680 passageiros · 18 decks · 362m de comprimento',
+        '7 piscinas · 4 slides · FlowRider (simulador de surfe)',
+        'Escalada · Tirolesa · Patinação no gelo',
+        '50+ restaurantes e bares (10 inclusos no pacote)',
+        'Shows da Broadway: HAIRSPRAY (incluso)',
+        'AquaTheater · Robô-bartender Bionic Bar',
+      ],
+      descricao: 'O 2º maior cruzeiro do mundo. Cada deck é uma cidade — bairro Central Park com plantas reais, Boardwalk com carrossel, Royal Promenade com lojas e desfiles.',
+      imagem: 'https://images.unsplash.com/photo-1599058917765-a780eda07a3e?w=800&q=80',
+      valor: 0, exibir_valor: false,
+    }),
+    s('SERVICO', 5, {
+      icone: '🛏️', titulo: 'Cabine Balcony — Deck 10', detalhes: [
+        '17m² + 5m² de varanda privativa',
+        'Cama King-size (ou 2 twin)',
+        'Banheiro completo com chuveiro',
+        'TV interativa + minibar',
+        'Cofre digital · Secador',
+        'Vista mar com porta de vidro panorâmica',
+      ],
+      descricao: 'A categoria mais procurada — varanda privativa para tomar café da manhã com vista para o mar e curtir os pôr-do-sol em alto mar.',
+      imagem: 'https://images.unsplash.com/photo-1566375638485-0a8be9bcfb83?w=800&q=80',
+      valor: 0, exibir_valor: false,
+    }),
+    s('SERVICO', 6, {
+      icone: '🍷', titulo: 'Pacote Deluxe Beverage incluso', detalhes: [
+        'Bebidas alcoólicas até USD 14 (drinks, vinhos, cervejas)',
+        'Refrigerantes ilimitados em todos os bares',
+        'Cafés especiais e cappuccinos',
+        'Sucos premium e águas',
+        'Validez em todos os 18 bares do navio',
+        'Sem limite diário',
+      ],
+      descricao: 'Sem se preocupar com a conta no fim do cruzeiro. Use livremente em qualquer bar do navio — economia média de USD 800 por pessoa em 7 noites.',
+      imagem: 'https://images.unsplash.com/photo-1535970793482-07de93762dc4?w=800&q=80',
+      valor: 0, exibir_valor: false,
+    }),
+    s('ROTEIRO_DIA', 7, { dias: [
+      { numero: 1, titulo: 'Dia 1 — Voo São Paulo → Roma', descricao: 'Saída de São Paulo às 17:30 no voo direto da ITA Airways. Jantar e cinema a bordo.', imagem: '', atividades: ['Embarque GRU 17:30', 'Voo noturno 12h15'], refeicoes_inclusas: 'Refeições a bordo', lat: -23.4356, lng: -46.4731 },
+      { numero: 2, titulo: 'Dia 2 — Chegada em Roma', descricao: 'Chegada em Fiumicino às 09:45. Transfer privativo ao Splendide Royal. Tarde livre — sugestão: Villa Borghese e Piazza del Popolo.', imagem: 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?w=800&q=80', atividades: ['Transfer privativo Mercedes', 'Check-in Splendide Royal', 'Villa Borghese (a pé)', 'Jantar no terraço Mirabelle'], refeicoes_inclusas: 'Jantar', lat: 41.9098, lng: 12.4884 },
+      { numero: 3, titulo: 'Dia 3 — Coliseu, Vaticano e Trastevere', descricao: 'City tour completo de Roma: Coliseu (skip the line), Fórum Romano, Vaticano com Capela Sistina, jantar em Trastevere.', imagem: 'https://images.unsplash.com/photo-1518659526054-190340b32735?w=800&q=80', atividades: ['Coliseu skip the line', 'Fórum Romano + Palatino', 'Vaticano e Capela Sistina', 'Jantar em Trastevere'], refeicoes_inclusas: 'Café e jantar', lat: 41.8902, lng: 12.4922 },
+      { numero: 4, titulo: 'Dia 4 — Embarque no cruzeiro', descricao: 'Manhã livre em Roma. Transfer ao porto de Civitavecchia. Embarque no Symphony of the Seas. Jantar a bordo e show inaugural.', imagem: 'https://images.unsplash.com/photo-1548574505-5e239809ee19?w=800&q=80', atividades: ['Manhã livre Roma', 'Transfer Civitavecchia (2h)', 'Embarque 13:00', 'Saída 17:00 - Show inaugural'], refeicoes_inclusas: 'Café da manhã + All-inclusive', lat: 42.0942, lng: 11.7958 },
+      { numero: 5, titulo: 'Dia 5 — Nápoles (Pompeia & Capri opcional)', descricao: 'Chegada em Nápoles às 07h. Excursão opcional Pompeia (USD 89) ou Capri (USD 199) — não inclusas. Saída do navio às 18h.', imagem: 'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=800&q=80', atividades: ['Chegada Nápoles 07h', 'Excursão Pompeia (opcional)', 'Excursão Capri (opcional)', 'Pizza autêntica em Spaccanapoli'], refeicoes_inclusas: 'All-inclusive a bordo', lat: 40.8518, lng: 14.2681 },
+      { numero: 6, titulo: 'Dia 6 — Em alto mar', descricao: 'Dia inteiro navegando. Aproveite todas as atrações do Symphony: FlowRider, escalada, parque aquático, show HAIRSPRAY na Broadway.', imagem: '', atividades: ['FlowRider — surfe a bordo', 'Escalada e tirolesa', 'Show Broadway: HAIRSPRAY', 'Jantar no Wonderland (especialidade)'], refeicoes_inclusas: 'All-inclusive premium' },
+      { numero: 7, titulo: 'Dia 7 — Palma de Mallorca', descricao: 'Chegada em Palma às 08h. Catedral La Seu, centro histórico, banho na praia. Saída às 17h.', imagem: '', atividades: ['Catedral La Seu', 'Centro histórico', 'Praia de Palma', 'Tapas em La Lonja'], refeicoes_inclusas: 'All-inclusive', lat: 39.5696, lng: 2.6502 },
+      { numero: 8, titulo: 'Dia 8 — Marselha (Provença)', descricao: 'Chegada em Marselha às 09h. Excursão opcional a Aix-en-Provence (USD 119) ou Cassis (USD 99). Vieux-Port e Notre-Dame de la Garde.', imagem: '', atividades: ['Vieux-Port', 'Notre-Dame de la Garde', 'Excursão Provença (opcional)', 'Bouillabaisse no porto'], refeicoes_inclusas: 'All-inclusive', lat: 43.2965, lng: 5.3698 },
+      { numero: 9, titulo: 'Dia 9 — Em alto mar', descricao: 'Último dia de cruzeiro. Spa, brunch, show de despedida.', imagem: '', atividades: ['Spa & Wellness', 'Brunch champagne', 'Show de despedida', 'Jantar de gala'], refeicoes_inclusas: 'All-inclusive premium' },
+      { numero: 10, titulo: 'Dia 10 — Desembarque em Barcelona', descricao: 'Desembarque às 07h. Transfer ao Hotel Casa Fuster. Tarde livre — Sagrada Família ao por do sol.', imagem: 'https://images.unsplash.com/photo-1583422409516-2895a77efded?w=800&q=80', atividades: ['Desembarque 07h', 'Check-in Casa Fuster', 'Sagrada Família (skip the line)', 'Jantar no rooftop'], refeicoes_inclusas: 'Café da manhã + jantar', lat: 41.3960, lng: 2.1614 },
+      { numero: 11, titulo: 'Dia 11 — Park Güell, Las Ramblas', descricao: 'Manhã no Park Güell e Las Ramblas. Transfer ao aeroporto. Voo de volta a São Paulo.', imagem: '', atividades: ['Park Güell', 'Las Ramblas', 'Mercado da Boqueria', 'Transfer aeroporto BCN'], refeicoes_inclusas: 'Café da manhã + a bordo', lat: 41.4145, lng: 2.1527 },
+    ] }),
+    s('ALOJAMENTO', 8, {
+      id: generateId(),
+      destino_nome: 'Mediterrâneo — Cabine no Symphony', hotel_nome: 'Symphony of the Seas — Royal Caribbean', hotel_estrelas: 5,
+      hotel_imagem: 'https://images.unsplash.com/photo-1548574505-5e239809ee19?w=800&q=80',
+      hotel_galeria: [
+        'https://images.unsplash.com/photo-1599058917765-a780eda07a3e?w=600&q=80',
+        'https://images.unsplash.com/photo-1566375638485-0a8be9bcfb83?w=600&q=80',
+      ],
+      hotel_descricao: 'O 2º maior cruzeiro do mundo. 18 decks com parque aquático, escalada, FlowRider, AquaTheater e show HAIRSPRAY. Cabine Balcony Deck 10 (Cat. 4D).',
+      hotel_link: 'https://www.royalcaribbean.com/symphony-of-the-seas',
+      check_in: '2026-09-07', check_out: '2026-09-14', noites: 7,
+      regime: 'AI', quarto_tipo: 'Cabine Balcony — Deck 10 (Cat. 4D)', bebidas: 'Pacote Deluxe Beverage incluso',
+      lat: 41.5912, lng: 2.6556, viagem_noturna: true,
+    }),
+    s('TRANSPORTE', 9, {
+      id: generateId(), tipo: 'VOO', data: '2026-09-04',
+      origem: 'GRU', destino: 'FCO', companhia: 'ITA Airways', numero_voo: 'AZ675',
+      horario_saida: '17:30', horario_chegada: '09:45', tempo_estimado: '12h15',
+      detalhes: 'Voo direto São Paulo → Roma',
+    }),
+    s('TRANSPORTE', 10, {
+      id: generateId(), tipo: 'BARCO', data: '2026-09-07',
+      origem: 'Civitavecchia (Roma)', destino: 'Barcelona', companhia: 'Royal Caribbean', numero_voo: 'Symphony of the Seas',
+      horario_saida: '17:00', horario_chegada: '07:00', tempo_estimado: '7 noites',
+      detalhes: 'Cruzeiro 7 noites: Roma → Nápoles → Mar → Mallorca → Marselha → Mar → Barcelona',
+    }),
+    s('TRANSPORTE', 11, {
+      id: generateId(), tipo: 'VOO', data: '2026-09-16',
+      origem: 'BCN', destino: 'GRU', companhia: 'ITA Airways', numero_voo: 'AZ677',
+      horario_saida: '14:20', horario_chegada: '23:50', tempo_estimado: '12h30',
+      detalhes: 'VOLTA | Voo direto Barcelona → São Paulo',
+    }),
+    s('INCLUSOS', 12, {
+      inclusos: [
+        'Passagem aérea ITA Airways GRU↔FCO/BCN (em open jaw, voos diretos)',
+        'Hotel Splendide Royal Roma — 2 noites (Junior Suite, café da manhã)',
+        'Cruzeiro Symphony of the Seas — 7 noites em Cabine Balcony Deck 10',
+        'All-inclusive premium a bordo (refeições, drinks, shows)',
+        'Pacote Deluxe Beverage incluso (bebidas até USD 14)',
+        'Hotel Casa Fuster Barcelona — 2 noites (Deluxe, café da manhã)',
+        'Todos os transfers privativos em Mercedes Classe E',
+        'Tour guiado em Roma (Coliseu, Vaticano com skip the line)',
+        'Tour em Barcelona (Sagrada Família com skip the line + Park Güell)',
+        'Taxas portuárias e gorjetas a bordo',
+        'Wi-Fi VOOM a bordo (1 dispositivo por pessoa)',
+        'Seguro viagem com cobertura USD 200.000',
+      ],
+      nao_inclusos: [
+        'Excursões em portos (Pompeia, Capri, Provença) — opcionais USD 89-199',
+        'Refeições nos restaurantes de especialidade do navio (USD 35-65)',
+        'Tratamentos de spa a bordo',
+        'Compras a bordo e onshore',
+        'Gorjetas para guias em terra',
+        'Excesso de bagagem',
+      ],
+    }),
+    s('VALORES', 13, {
+      opcoes: [
+        {
+          titulo: 'Cabine Balcony Deck 10 (por pessoa, casal)',
+          valor_total: 38900,
+          destaque: true,
+          parcelas: [
+            { forma: 'À vista PIX (5% desc.)', valor_parcela: 36955, valor_total: 36955, destaque: true },
+            { forma: '12x cartão s/ juros', valor_parcela: 3242, valor_total: 38900, destaque: false },
+            { forma: '6x boleto', valor_parcela: 6483, valor_total: 38900, destaque: false },
+          ],
+        },
+        {
+          titulo: 'Upgrade Suite Junior (com Concierge)',
+          valor_total: 54200,
+          destaque: false,
+          parcelas: [
+            { forma: 'À vista PIX', valor_parcela: 51490, valor_total: 51490, destaque: true },
+            { forma: '12x cartão s/ juros', valor_parcela: 4517, valor_total: 54200, destaque: false },
+          ],
+        },
+        {
+          titulo: 'Cabine Interna (econômica, sem janela)',
+          valor_total: 28900,
+          destaque: false,
+          parcelas: [
+            { forma: 'À vista PIX', valor_parcela: 28900, valor_total: 28900, destaque: true },
+            { forma: '10x cartão s/ juros', valor_parcela: 2890, valor_total: 28900, destaque: false },
+          ],
+        },
+      ],
+      observacoes_valores: 'Valores por pessoa em ocupação dupla. Embarque set/2026. Sujeito a disponibilidade — categorias premium esgotam 6+ meses antes.',
+      validade: '2026-06-30',
+    }),
+    s('FAQ', 14, { titulo: 'Perguntas Frequentes', perguntas: [
+      { pergunta: 'Sofro de enjoo — vou passar mal no cruzeiro?', resposta: 'O Symphony tem estabilizadores avançados — você praticamente não sente o movimento. Caso seja muito sensível, levamos Dramin diariamente. As cabines no centro do navio (decks 6-10) são as mais estáveis.' },
+      { pergunta: 'Preciso de visto para Itália e Espanha?', resposta: 'Brasileiros não precisam de visto Schengen para até 90 dias. ETIAS começa em maio/2026 — incluímos a taxa de €7 no pacote.' },
+      { pergunta: 'É preciso ir junto às excursões em portos?', resposta: 'Não. Você pode descer livremente nos portos. Excursões oficiais Royal Caribbean garantem retorno antes do navio zarpar — recomendado para Pompeia (35km de Nápoles).' },
+      { pergunta: 'Quantas malas posso levar?', resposta: 'Voo: 23kg + 8kg de mão por pessoa. Cruzeiro: ilimitado (mas o quarto é compacto — recomendamos 1 mala grande + 1 de mão por pessoa).' },
+      { pergunta: 'A internet a bordo funciona bem?', resposta: 'O Wi-Fi VOOM é via satélite — funciona bem para mensagens, e-mails e redes sociais. Streaming de vídeo (Netflix) tem qualidade reduzida.' },
+    ] }),
+    s('DEPOIMENTO', 15, { depoimentos: [
+      { texto: 'O Symphony é um mundo à parte. Não tem como se entediar — a cada hora tem uma atividade nova. A cabine balcony foi transformadora: ver os portos chegando ao amanhecer da varanda é mágico. Indico de olhos fechados.', autor: 'Carlos e Beatriz', foto: '', destino: 'Mediterrâneo 2025' },
+      { texto: 'Pacote de bebidas é OBRIGATÓRIO. Tomei champagne, drinks e cafés especiais à vontade — só nesse item economizei mais de USD 600. O show da Broadway foi de cair o queixo!', autor: 'Marcela R.', foto: '', destino: 'Mediterrâneo 2024' },
+    ] }),
+    s('CTA', 16, { texto_botao: 'Reservar minha cabine!', tipo_acao: 'WHATSAPP', numero_whatsapp: '', mensagem_predefinida: 'Olá! Quero reservar o cruzeiro Mediterrâneo Royal Caribbean!', cor_botao: '#0369a1' }),
+    s('COUNTDOWN', 17, { titulo: 'Embarque para o Mediterrâneo em', data_evento: '2026-09-04T17:30:00', mensagem: 'Sua aventura mediterrânea está chegando!' }),
+  ],
+  mensagem_abertura_padrao: 'Prezados,\n\nApresentamos uma das experiências mais completas do nosso portfólio: 11 dias combinando o melhor da Itália, da Espanha e do Mediterrâneo a bordo do Symphony of the Seas — um dos maiores cruzeiros do mundo.\n\nVocês vão acordar em uma cidade nova praticamente todos os dias, sem fazer e desfazer malas. É a viagem perfeita para quem quer eficiência sem abrir mão do conforto.',
+  inclusos_padrao: ['Aéreo direto', 'Hotéis 5★ em Roma e Barcelona', 'Cruzeiro 7 noites Cabine Balcony', 'All-inclusive premium', 'Pacote bebidas', 'Tours guiados'],
+  nao_inclusos_padrao: ['Excursões em portos', 'Spa', 'Restaurantes de especialidade'],
+  is_padrao: true,
+};
+(cruzeiro as Record<string, unknown>).viagem_padrao = {
+  duracao_dias: 11, duracao_noites: 10,
+  destinos: [
+    { id: generateId(), nome: 'Roma', descricao: 'Pré-cruzeiro 2 noites', dias_inicio: 2, dias_fim: 3, alojamento_ids: [CRUZ_ALOJ[0].id] },
+    { id: generateId(), nome: 'Mediterrâneo', descricao: 'Cruzeiro Symphony of the Seas — 7 noites', dias_inicio: 4, dias_fim: 9, alojamento_ids: [CRUZ_ALOJ[1].id] },
+    { id: generateId(), nome: 'Barcelona', descricao: 'Pós-cruzeiro 2 noites', dias_inicio: 10, dias_fim: 11, alojamento_ids: [CRUZ_ALOJ[2].id] },
+  ],
+  alojamentos: CRUZ_ALOJ,
+  transportes: CRUZ_TRANSP,
+  interesses_tags: ['Cruzeiro', 'Mediterrâneo', 'Cultura', 'Gastronomia', 'Luxo'],
+  termos_condicoes: 'Cancelamento até 90 dias antes: reembolso integral menos taxas Royal Caribbean. 60-89 dias: 75%. 30-59 dias: 50%. Menos de 30 dias: sem reembolso (cobertura via seguro viagem).',
+  sobre_agencia: 'Agência certificada Royal Caribbean Diamond Plus há 8 anos. Mais de 1.200 cabines vendidas com avaliação média 4.9/5.',
+};
+
+// ═══════════════════════════════════════════════════════════════
+// TEMPLATE 6: JAPÃO SAKURA — Tóquio + Kyoto + Osaka com Cerejeiras
+// Demonstra: layout DISCOVERY, JR Pass, ryokan tradicional, multiplos transportes
+// ═══════════════════════════════════════════════════════════════
+const JAPAO_ALOJ: AlojamentoData[] = [
+  aloj({
+    destino_nome: 'Tóquio', hotel_nome: 'Park Hotel Tokyo', hotel_estrelas: 5,
+    hotel_imagem: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=800&q=80',
+    hotel_galeria: [
+      'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=600&q=80',
+      'https://images.unsplash.com/photo-1542051841857-5f90071e7989?w=600&q=80',
+    ],
+    hotel_descricao: 'Hotel 5 estrelas no Shiodome (Shiodome Media Tower). Cada quarto é uma obra de arte pintada por artistas japoneses. Vista panorâmica para a Tokyo Tower e o Monte Fuji em dias claros.',
+    hotel_link: '', check_in: '2026-04-02', check_out: '2026-04-06', noites: 4,
+    regime: 'BB', quarto_tipo: 'Artist Room — Tokyo Tower View', bebidas: '',
+    lat: 35.6586, lng: 139.7595, viagem_noturna: false,
+  }),
+  aloj({
+    destino_nome: 'Kyoto', hotel_nome: 'Tawaraya Ryokan', hotel_estrelas: 5,
+    hotel_imagem: 'https://images.unsplash.com/photo-1528360983277-13d401cdc186?w=800&q=80',
+    hotel_galeria: [
+      'https://images.unsplash.com/photo-1523359346063-d879354c0ea5?w=600&q=80',
+    ],
+    hotel_descricao: 'Ryokan tradicional fundado em 1709 — hospedagem mais antiga do Japão em operação contínua. Tatami, futon, kaiseki dinner (jantar imperial), onsen privativo no quarto.',
+    hotel_link: '', check_in: '2026-04-06', check_out: '2026-04-09', noites: 3,
+    regime: 'HB', quarto_tipo: 'Tatami Suite com Onsen privativo', bebidas: 'Cerimônia do chá inclusa',
+    lat: 35.0117, lng: 135.7681, viagem_noturna: false,
+  }),
+  aloj({
+    destino_nome: 'Osaka', hotel_nome: 'The St. Regis Osaka', hotel_estrelas: 5,
+    hotel_imagem: 'https://images.unsplash.com/photo-1545569341-9eb8b30979d9?w=800&q=80',
+    hotel_galeria: [], hotel_descricao: 'Hotel 5 estrelas em Honmachi com mordomo 24h, restaurante La Veduta (italiano premiado) e view de cidade. Conexão direta com metrô.',
+    hotel_link: '', check_in: '2026-04-09', check_out: '2026-04-11', noites: 2,
+    regime: 'BB', quarto_tipo: 'Deluxe Premier', bebidas: '',
+    lat: 34.6829, lng: 135.5004, viagem_noturna: false,
+  }),
+];
+
+const JAPAO_TRANSP: TransporteData[] = [
+  transp({ tipo: 'VOO', data: '2026-04-01', origem: 'GRU', destino: 'NRT', companhia: 'Japan Airlines', numero_voo: 'JL8500', horario_saida: '13:30', horario_chegada: '20:45', tempo_estimado: '24h15', detalhes: 'Voo via NYC (JFK) — Japan Airlines em codeshare LATAM. 1 escala' }),
+  transp({ tipo: 'TREM', data: '2026-04-02', origem: 'Aeroporto Narita', destino: 'Estação Tóquio', companhia: 'Narita Express', numero_voo: 'N\'EX 17', horario_saida: '09:30', horario_chegada: '10:30', distancia_km: 67, tempo_estimado: '1h', detalhes: 'Trem expresso direto — incluso no JR Pass' }),
+  transp({ tipo: 'TREM', data: '2026-04-06', origem: 'Estação Tóquio', destino: 'Estação Kyoto', companhia: 'Shinkansen Nozomi', numero_voo: 'Nozomi 219', horario_saida: '10:00', horario_chegada: '12:18', distancia_km: 513, tempo_estimado: '2h18', detalhes: 'Trem-bala 320km/h — assento reservado primeira classe (Green Car)' }),
+  transp({ tipo: 'TREM', data: '2026-04-09', origem: 'Estação Kyoto', destino: 'Estação Shin-Osaka', companhia: 'Shinkansen Hikari', numero_voo: 'Hikari 506', horario_saida: '10:30', horario_chegada: '10:45', distancia_km: 39, tempo_estimado: '15min', detalhes: 'Trem-bala — incluso no JR Pass' }),
+  transp({ tipo: 'TREM', data: '2026-04-11', origem: 'Estação Shin-Osaka', destino: 'Aeroporto Kansai (KIX)', companhia: 'Haruka Express', numero_voo: 'Haruka 12', horario_saida: '14:00', horario_chegada: '14:50', distancia_km: 65, tempo_estimado: '50min', detalhes: 'Expresso direto ao aeroporto — incluso no JR Pass' }),
+  transp({ tipo: 'VOO', data: '2026-04-11', origem: 'KIX', destino: 'GRU', companhia: 'Japan Airlines', numero_voo: 'JL8501', horario_saida: '17:45', horario_chegada: '20:30', tempo_estimado: '23h45', detalhes: 'VOLTA | Via NYC (JFK)' }),
+];
+
+const japao: Omit<TemplateProposta, 'id'> = {
+  nome: 'Japão Sakura — Tóquio, Kyoto e Osaka',
+  descricao: '11 dias no Japão na temporada das cerejeiras (hanami). Tóquio moderna, Kyoto tradicional (ryokan + onsen), Osaka gastronômica. Layout DISCOVERY com JR Pass e Shinkansen.',
+  tipo_viagem: 'CULTURAL',
+  icone: '🌸',
+  imagem_preview: 'https://images.unsplash.com/photo-1522383225653-ed111181a951?w=600&q=80',
+  visual: {
+    tema: 'padrao', layout: 'DISCOVERY', cor_primaria: '#db2777', cor_secundaria: '#0a0a14', cor_texto: '#1a1a2e',
+    cor_fundo: '#fdf2f8', fonte: 'Inter',
+    imagem_capa: 'https://images.unsplash.com/photo-1522383225653-ed111181a951?w=1400&q=80',
+    estilo_capa: 'FULLSCREEN',
+  },
+  secoes_padrao: [
+    s('TEXTO', 0, {
+      titulo: 'Hanami — a magia das cerejeiras em flor',
+      corpo: '<p>Por apenas 10-14 dias ao ano, o Japão se transforma em um cenário irreal: milhões de cerejeiras desabrocham simultaneamente em um espetáculo que transcende fotografia. É o <strong>hanami</strong> — a tradição milenar de contemplar a beleza efêmera da flor de sakura.</p><p>Você verá Tóquio em todo o seu contraste — neon de Shibuya pela noite, parque Ueno coberto de pétalas pela manhã. Em Kyoto, dormirá em um ryokan de 1709 com onsen privativo. Em Osaka, mergulhará na gastronomia de rua mais famosa do mundo.</p>',
+      alinhamento: 'center',
+    }),
+    s('GALERIA', 1, { imagens: [
+      'https://images.unsplash.com/photo-1522383225653-ed111181a951?w=800&q=80',
+      'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=800&q=80',
+      'https://images.unsplash.com/photo-1528360983277-13d401cdc186?w=800&q=80',
+      'https://images.unsplash.com/photo-1542051841857-5f90071e7989?w=800&q=80',
+      'https://images.unsplash.com/photo-1545569341-9eb8b30979d9?w=800&q=80',
+      'https://images.unsplash.com/photo-1535139262971-c51845709a48?w=800&q=80',
+    ] }),
+    s('VIDEO', 2, {
+      titulo: 'Sakura — a estação mais bonita do Japão',
+      url: 'https://www.youtube.com/watch?v=JcSaXbSnh0o',
+    }),
+    s('MAPA', 3, {
+      titulo: 'Sua rota pelo Japão',
+      zoom: 6,
+      pontos: [
+        { lat: 35.6586, lng: 139.7595, label: 'Tóquio — Park Hotel (4 noites)' },
+        { lat: 35.7148, lng: 139.7967, label: 'Asakusa — Senso-ji' },
+        { lat: 35.6586, lng: 139.7454, label: 'Shibuya Crossing' },
+        { lat: 35.3606, lng: 138.7274, label: 'Monte Fuji' },
+        { lat: 35.0117, lng: 135.7681, label: 'Kyoto — Tawaraya Ryokan' },
+        { lat: 34.9671, lng: 135.7727, label: 'Fushimi Inari — 10.000 torii' },
+        { lat: 35.0394, lng: 135.6720, label: 'Arashiyama — Bambuzal' },
+        { lat: 34.6829, lng: 135.5004, label: 'Osaka — St. Regis (2 noites)' },
+        { lat: 34.6687, lng: 135.5012, label: 'Dotonbori — gastronomia' },
+      ],
+    }),
+    s('SERVICO', 4, {
+      icone: '🚄', titulo: 'Japan Rail Pass — 7 dias ilimitado', detalhes: [
+        'Viagens ilimitadas em todas as linhas JR (incluindo Shinkansen)',
+        'Trem-bala Tóquio ↔ Kyoto ↔ Osaka',
+        'Narita Express e Haruka Express ao aeroporto',
+        'Green Car (1ª classe) — assentos reservados',
+        'Linhas JR locais em todas as cidades',
+        'Ferries JR (Hiroshima ↔ Miyajima opcional)',
+      ],
+      descricao: 'O passe que torna o Japão acessível. 7 dias de uso ilimitado com Green Car (1ª classe) — economia média de USD 800 por pessoa em comparação a tickets avulsos.',
+      imagem: 'https://images.unsplash.com/photo-1535139262971-c51845709a48?w=800&q=80',
+      valor: 0, exibir_valor: false,
+    }),
+    s('SERVICO', 5, {
+      icone: '⛩️', titulo: 'Tawaraya Ryokan — experiência tradicional', detalhes: [
+        'Hospedagem fundada em 1709 — mais antiga do Japão',
+        'Quartos com tatami e futon (8 tatames = ~13m²)',
+        'Onsen privativo no quarto (banho termal)',
+        'Yukata (kimono leve) e geta (sandália) inclusos',
+        'Cerimônia do chá pela tarde',
+        'Kaiseki dinner — jantar imperial com 12 pratos',
+      ],
+      descricao: 'A experiência mais autêntica do Japão. Sem TV, sem internet exposta — apenas você, jardim zen e a tradição mais refinada do país.',
+      imagem: 'https://images.unsplash.com/photo-1528360983277-13d401cdc186?w=800&q=80',
+      valor: 0, exibir_valor: false,
+    }),
+    s('SERVICO', 6, {
+      icone: '🍜', titulo: 'Tour gastronômico em Dotonbori', detalhes: [
+        'Takoyaki (bolinhos de polvo) — Aizuya original',
+        'Okonomiyaki (panqueca japonesa) em Mizuno',
+        'Kushikatsu (espetinhos fritos) em Daruma',
+        'Ramen tonkotsu em Ichiran (24h)',
+        'Sushi no mercado Kuromon',
+        'Wagyu A5 grelhado em yakiniku',
+      ],
+      descricao: 'Osaka é a cozinha do Japão. Tour de 4 horas com guia local pelos melhores spots de Dotonbori, com 6 paradas e degustação inclusa em todas.',
+      imagem: 'https://images.unsplash.com/photo-1545569341-9eb8b30979d9?w=800&q=80',
+      valor: 0, exibir_valor: false,
+    }),
+    s('ROTEIRO_DIA', 7, { dias: [
+      { numero: 1, titulo: 'Dia 1 — Embarque', descricao: 'Saída de São Paulo para Tóquio via Nova York. Voo longo de 24h com escala em JFK.', imagem: '', atividades: ['Check-in GRU 11h', 'Voo GRU → JFK', 'Conexão JFK', 'Voo JFK → NRT'], refeicoes_inclusas: 'Refeições a bordo', lat: -23.4356, lng: -46.4731 },
+      { numero: 2, titulo: 'Dia 2 — Chegada Tóquio', descricao: 'Chegada em Narita às 20:45 (já no dia 2 — passa-se a linha de data). Narita Express ao centro de Tóquio. Check-in no Park Hotel. Descanso.', imagem: '', atividades: ['Imigração e retirada do JR Pass', 'Narita Express → Tóquio (1h)', 'Check-in Park Hotel', 'Jantar leve no hotel'], refeicoes_inclusas: 'Jantar', lat: 35.6586, lng: 139.7595 },
+      { numero: 3, titulo: 'Dia 3 — Tóquio: Asakusa & Akihabara', descricao: 'Manhã no templo Senso-ji em Asakusa (cerejeiras no rio Sumida). Almoço típico. Tarde em Akihabara — anime, mangá e tecnologia.', imagem: 'https://images.unsplash.com/photo-1542051841857-5f90071e7989?w=800&q=80', atividades: ['Templo Senso-ji', 'Rio Sumida — barco hanami', 'Akihabara — Electric Town', 'Maid Café (opcional)'], refeicoes_inclusas: 'Café e almoço', lat: 35.7148, lng: 139.7967 },
+      { numero: 4, titulo: 'Dia 4 — Tóquio: Shibuya & Harajuku', descricao: 'Shibuya Crossing (cruzamento mais famoso do mundo), estátua do Hachiko. Harajuku — cultura jovem. Meiji Jingu para hanami. Jantar em Ginza.', imagem: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=800&q=80', atividades: ['Shibuya Crossing', 'Estátua do Hachiko', 'Takeshita-dori (Harajuku)', 'Meiji Jingu (cerejeiras)', 'Jantar em Ginza'], refeicoes_inclusas: 'Café e jantar', lat: 35.6586, lng: 139.7454 },
+      { numero: 5, titulo: 'Dia 5 — Excursão ao Monte Fuji', descricao: 'Excursão de dia inteiro ao Monte Fuji (dia opcional, mas incluso). Hakone com teleférico, lago Ashi e ryokan-onsen para banho termal. Retorno a Tóquio.', imagem: '', atividades: ['Monte Fuji 5ª estação', 'Lago Ashi (barco pirata)', 'Hakone Ropeway', 'Onsen banho termal', 'Retorno a Tóquio'], refeicoes_inclusas: 'Café e almoço', lat: 35.3606, lng: 138.7274 },
+      { numero: 6, titulo: 'Dia 6 — Shinkansen para Kyoto', descricao: 'Shinkansen Nozomi de Tóquio para Kyoto (2h18 a 320km/h). Check-in no Tawaraya Ryokan — vestir yukata, cerimônia do chá. À noite, kaiseki dinner imperial.', imagem: 'https://images.unsplash.com/photo-1528360983277-13d401cdc186?w=800&q=80', atividades: ['Shinkansen Tóquio→Kyoto', 'Check-in Tawaraya Ryokan', 'Cerimônia do chá', 'Kaiseki dinner (12 pratos)', 'Onsen privativo'], refeicoes_inclusas: 'Café da manhã + Kaiseki', lat: 35.0117, lng: 135.7681 },
+      { numero: 7, titulo: 'Dia 7 — Kyoto: Fushimi Inari & Gion', descricao: 'Manhã cedo no Fushimi Inari (10.000 torii vermelhos). Tarde no bairro de Gion — busca por gueixas e maikos. Jantar tradicional.', imagem: '', atividades: ['Fushimi Inari (10.000 torii)', 'Caminhada Inari Mountain', 'Gion — distrito das gueixas', 'Jantar em Pontocho'], refeicoes_inclusas: 'Café + jantar', lat: 34.9671, lng: 135.7727 },
+      { numero: 8, titulo: 'Dia 8 — Kyoto: Arashiyama & Templos', descricao: 'Bambuzal de Arashiyama (icônico). Templo Tenryu-ji. Tarde em Kinkaku-ji (Pavilhão de Ouro). Hanami no rio Kamogawa.', imagem: '', atividades: ['Bambuzal de Arashiyama', 'Templo Tenryu-ji', 'Kinkaku-ji (Pavilhão de Ouro)', 'Ginkaku-ji (Pavilhão de Prata)', 'Hanami rio Kamogawa'], refeicoes_inclusas: 'Café + jantar', lat: 35.0394, lng: 135.6720 },
+      { numero: 9, titulo: 'Dia 9 — Shinkansen para Osaka', descricao: 'Trem-bala curtíssimo (15min). Check-in no St. Regis Osaka. Tarde no Castelo de Osaka durante hanami. À noite, primeiro contato com Dotonbori.', imagem: 'https://images.unsplash.com/photo-1545569341-9eb8b30979d9?w=800&q=80', atividades: ['Shinkansen Kyoto→Osaka', 'Check-in St. Regis Osaka', 'Castelo de Osaka (cerejeiras)', 'Dotonbori à noite'], refeicoes_inclusas: 'Café da manhã', lat: 34.6829, lng: 135.5004 },
+      { numero: 10, titulo: 'Dia 10 — Osaka: Tour Gastronômico', descricao: 'Tour gastronômico em Dotonbori — 6 paradas com guia. Tarde em Shinsekai e Universal Studios Japan opcional. Despedida com sushi premium.', imagem: '', atividades: ['Tour gastronômico Dotonbori (4h)', 'Mercado Kuromon', 'Universal Studios Japan (opcional)', 'Jantar de despedida — sushi'], refeicoes_inclusas: 'Café + tour gastronômico (almoço)', lat: 34.6687, lng: 135.5012 },
+      { numero: 11, titulo: 'Dia 11 — Retorno', descricao: 'Manhã livre. Haruka Express ao Kansai Airport. Voo de volta a São Paulo via NYC.', imagem: '', atividades: ['Manhã livre — compras', 'Check-out 12h', 'Haruka Express → KIX', 'Voo KIX → JFK → GRU'], refeicoes_inclusas: 'Café + a bordo', lat: 34.4347, lng: 135.2440 },
+    ] }),
+    s('ALOJAMENTO', 8, {
+      id: generateId(),
+      destino_nome: 'Tóquio', hotel_nome: 'Park Hotel Tokyo', hotel_estrelas: 5,
+      hotel_imagem: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=800&q=80',
+      hotel_galeria: ['https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=600&q=80'],
+      hotel_descricao: 'Hotel 5 estrelas no Shiodome. Cada quarto é uma obra de arte pintada. Vista para Tokyo Tower e Monte Fuji.',
+      hotel_link: '', check_in: '2026-04-02', check_out: '2026-04-06', noites: 4,
+      regime: 'BB', quarto_tipo: 'Artist Room — Tokyo Tower View', bebidas: '',
+      lat: 35.6586, lng: 139.7595, viagem_noturna: false,
+    }),
+    s('ALOJAMENTO', 9, {
+      id: generateId(),
+      destino_nome: 'Kyoto', hotel_nome: 'Tawaraya Ryokan', hotel_estrelas: 5,
+      hotel_imagem: 'https://images.unsplash.com/photo-1528360983277-13d401cdc186?w=800&q=80',
+      hotel_galeria: ['https://images.unsplash.com/photo-1523359346063-d879354c0ea5?w=600&q=80'],
+      hotel_descricao: 'Ryokan tradicional fundado em 1709. Tatami, futon, kaiseki dinner imperial, onsen privativo.',
+      hotel_link: '', check_in: '2026-04-06', check_out: '2026-04-09', noites: 3,
+      regime: 'HB', quarto_tipo: 'Tatami Suite com Onsen privativo', bebidas: 'Cerimônia do chá inclusa',
+      lat: 35.0117, lng: 135.7681, viagem_noturna: false,
+    }),
+    s('ALOJAMENTO', 10, {
+      id: generateId(),
+      destino_nome: 'Osaka', hotel_nome: 'The St. Regis Osaka', hotel_estrelas: 5,
+      hotel_imagem: 'https://images.unsplash.com/photo-1545569341-9eb8b30979d9?w=800&q=80',
+      hotel_galeria: [],
+      hotel_descricao: 'Hotel 5 estrelas em Honmachi com mordomo 24h, restaurante La Veduta premiado.',
+      hotel_link: '', check_in: '2026-04-09', check_out: '2026-04-11', noites: 2,
+      regime: 'BB', quarto_tipo: 'Deluxe Premier', bebidas: '',
+      lat: 34.6829, lng: 135.5004, viagem_noturna: false,
+    }),
+    s('TRANSPORTE', 11, {
+      id: generateId(), tipo: 'VOO', data: '2026-04-01',
+      origem: 'GRU', destino: 'NRT', companhia: 'Japan Airlines', numero_voo: 'JL8500',
+      horario_saida: '13:30', horario_chegada: '20:45', tempo_estimado: '24h15',
+      detalhes: 'Voo via NYC (JFK) — 1 escala',
+    }),
+    s('TRANSPORTE', 12, {
+      id: generateId(), tipo: 'TREM', data: '2026-04-06',
+      origem: 'Estação Tóquio', destino: 'Estação Kyoto', companhia: 'Shinkansen Nozomi', numero_voo: 'Nozomi 219',
+      horario_saida: '10:00', horario_chegada: '12:18', tempo_estimado: '2h18',
+      detalhes: 'Trem-bala 320km/h — Green Car (1ª classe) com assentos reservados',
+    }),
+    s('TRANSPORTE', 13, {
+      id: generateId(), tipo: 'VOO', data: '2026-04-11',
+      origem: 'KIX', destino: 'GRU', companhia: 'Japan Airlines', numero_voo: 'JL8501',
+      horario_saida: '17:45', horario_chegada: '20:30', tempo_estimado: '23h45',
+      detalhes: 'VOLTA | Via NYC (JFK)',
+    }),
+    s('INCLUSOS', 14, {
+      inclusos: [
+        'Passagem aérea Japan Airlines GRU↔NRT/KIX em open jaw',
+        'Hotel Park Hotel Tokyo — 4 noites (Artist Room com vista)',
+        'Tawaraya Ryokan Kyoto — 3 noites (Tatami Suite com onsen privativo)',
+        'Kaiseki dinner imperial no ryokan (12 pratos)',
+        'St. Regis Osaka — 2 noites (Deluxe Premier)',
+        'Japan Rail Pass 7 dias — Green Car (1ª classe)',
+        'Shinkansen Tóquio↔Kyoto↔Osaka',
+        'Excursão de dia inteiro ao Monte Fuji e Hakone',
+        'Tour gastronômico em Dotonbori (4h, 6 paradas)',
+        'Cerimônia do chá em Kyoto',
+        'Wi-Fi pocket (1 dispositivo) por toda a viagem',
+        'Seguro viagem com cobertura USD 150.000',
+        'Manual de bolso com frases em japonês',
+      ],
+      nao_inclusos: [
+        'Refeições não mencionadas (média USD 35-50/dia)',
+        'Universal Studios Japan (opcional ¥9.800)',
+        'Maid Café em Akihabara',
+        'Shopping pessoal',
+        'Taxa de banho termal em onsens públicos (¥800)',
+        'Excesso de bagagem',
+      ],
+    }),
+    s('VALORES', 15, {
+      opcoes: [
+        {
+          titulo: 'Pacote Completo (por pessoa, apto duplo)',
+          valor_total: 36500,
+          destaque: true,
+          parcelas: [
+            { forma: 'À vista PIX (5% desc.)', valor_parcela: 34675, valor_total: 34675, destaque: true },
+            { forma: '12x cartão s/ juros', valor_parcela: 3042, valor_total: 36500, destaque: false },
+            { forma: '6x boleto', valor_parcela: 6083, valor_total: 36500, destaque: false },
+          ],
+        },
+        {
+          titulo: 'Single (quarto individual)',
+          valor_total: 49800,
+          destaque: false,
+          parcelas: [
+            { forma: 'À vista PIX', valor_parcela: 49800, valor_total: 49800, destaque: true },
+            { forma: '12x cartão s/ juros', valor_parcela: 4150, valor_total: 49800, destaque: false },
+          ],
+        },
+      ],
+      observacoes_valores: 'Valores válidos para hanami 2026 (alta temporada). Sakura é fenômeno natural — datas exatas confirmadas 30 dias antes. Reserva mínima de 90 dias antes.',
+      validade: '2026-02-15',
+    }),
+    s('FAQ', 16, { titulo: 'Perguntas Frequentes', perguntas: [
+      { pergunta: 'Quando é o pico das cerejeiras?', resposta: 'Em Tóquio: tipicamente 25 mar - 5 abr. Em Kyoto: 28 mar - 8 abr. Como é fenômeno natural, varia ano a ano. Nosso roteiro de 02-11/abr captura o pico nas três cidades em 90% dos anos.' },
+      { pergunta: 'Brasileiros precisam de visto?', resposta: 'Sim. Visto de turista válido para 90 dias — entrevista no consulado SP/RJ. Demoramos 5-7 dias úteis. Custo ¥3.000 incluso no pacote (taxa).' },
+      { pergunta: 'Como funciona dormir em ryokan?', resposta: 'Você dorme em futon sobre tatami. O quarto é vazio durante o dia (mesa baixa para o chá), e a equipe arruma o futon antes do jantar. Yukata (kimono leve) é fornecido — usa-se até para o jantar.' },
+      { pergunta: 'É difícil se virar sem falar japonês?', resposta: 'Tóquio e Osaka têm bom inglês em hotéis e principais turísticos. Em Kyoto e ryokans, oferecemos manual de frases em japonês + nosso guia digital fica disponível 24h via WhatsApp.' },
+      { pergunta: 'Tatuagens são problema em onsens?', resposta: 'Sim, em onsens públicos. Mas no Tawaraya Ryokan o onsen é PRIVATIVO no quarto — sem restrições. Em Hakone usamos onsen com aceitação de tatuagens.' },
+      { pergunta: 'Posso usar real ou cartão de crédito?', resposta: 'O Japão ainda usa muito dinheiro físico. Recomendamos levar yen em espécie (¥80.000 por pessoa). Cartões internacionais funcionam em hotéis e lojas grandes mas não em pequenos restaurantes.' },
+    ] }),
+    s('DEPOIMENTO', 17, { depoimentos: [
+      { texto: 'O Tawaraya foi a experiência mais surreal da minha vida. Dormir sobre tatami, jantar 12 pratos servidos um a um por mulheres em quimono, ter onsen privativo... isso não é hotelaria, é arte. Vale CADA centavo.', autor: 'Patrícia M.', foto: '', destino: 'Japão Sakura 2025' },
+      { texto: 'Fomos no exato pico das cerejeiras em Kyoto. O Fushimi Inari ao amanhecer, com pétalas caindo nos torii, é uma imagem que vai ficar gravada para sempre. Roteiro impecável, o JR Pass facilita demais.', autor: 'Ricardo e Marina', foto: '', destino: 'Japão Sakura 2024' },
+    ] }),
+    s('CTA', 18, { texto_botao: 'Reservar Sakura 2026!', tipo_acao: 'WHATSAPP', numero_whatsapp: '', mensagem_predefinida: 'Olá! Quero reservar a viagem Japão Sakura 2026!', cor_botao: '#db2777' }),
+    s('COUNTDOWN', 19, { titulo: 'Embarque para o Japão em', data_evento: '2026-04-01T13:30:00', mensagem: 'A floração das cerejeiras está chegando!' }),
+  ],
+  mensagem_abertura_padrao: 'Prezados,\n\nViajar ao Japão durante o hanami é como pisar dentro de uma pintura. Por 10-14 dias ao ano, milhões de cerejeiras desabrocham simultaneamente — e quem está lá testemunha um espetáculo natural inesquecível.\n\nDesenhamos cada detalhe: do hotel-galeria em Tóquio ao ryokan de 1709 em Kyoto, da culinária de Osaka ao Shinkansen de 320km/h. Vocês vão atravessar o Japão moderno e o tradicional em sua estação mais bonita.',
+  inclusos_padrao: ['Aéreo', 'Hotel 5★ Tóquio', 'Ryokan Kyoto + Kaiseki', 'St. Regis Osaka', 'JR Pass 7 dias', 'Excursões e tours'],
+  nao_inclusos_padrao: ['Refeições não mencionadas', 'Universal Japan', 'Compras pessoais'],
+  is_padrao: true,
+};
+(japao as Record<string, unknown>).viagem_padrao = {
+  duracao_dias: 11, duracao_noites: 9,
+  destinos: [
+    { id: generateId(), nome: 'Tóquio', descricao: 'Capital moderna — Shibuya, Asakusa, Shinjuku', dias_inicio: 2, dias_fim: 5, alojamento_ids: [JAPAO_ALOJ[0].id] },
+    { id: generateId(), nome: 'Kyoto', descricao: 'Capital tradicional — Templos, gueixas, ryokan', dias_inicio: 6, dias_fim: 8, alojamento_ids: [JAPAO_ALOJ[1].id] },
+    { id: generateId(), nome: 'Osaka', descricao: 'Capital gastronômica — Dotonbori', dias_inicio: 9, dias_fim: 11, alojamento_ids: [JAPAO_ALOJ[2].id] },
+  ],
+  alojamentos: JAPAO_ALOJ,
+  transportes: JAPAO_TRANSP,
+  interesses_tags: ['Cultural', 'Gastronomia', 'Tradição', 'Hanami', 'Fotografia'],
+  termos_condicoes: 'Reserva mínima de 90 dias antes. Cancelamento até 60 dias: 80% reembolso. 30-59 dias: 50%. Menos de 30 dias: sem reembolso (sakura é alta demanda). Visto japonês de responsabilidade do cliente.',
+  sobre_agencia: 'Especialistas em Japão há 9 anos. Parceria oficial com Tawaraya Ryokan e JR East. Mais de 600 viajantes atendidos.',
+};
+
+// ═══════════════════════════════════════════════════════════════
 // ALL TEMPLATES
 // ═══════════════════════════════════════════════════════════════
 const TEMPLATES: Omit<TemplateProposta, 'id'>[] = [
   terraSanta,
   maldivas,
   patagonia,
+  disney,
+  cruzeiro,
+  japao,
 ];
 
 export async function POST() {
