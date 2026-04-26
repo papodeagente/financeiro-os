@@ -60,6 +60,7 @@ export function AccommodationSummary({ alojamentos, idioma, corPrimaria }: Props
                   return (
                     <tr
                       key={a.id || i}
+                      {...(i > 0 ? { 'data-pdf-break': true } : {})}
                       className={`border-b border-gray-100 transition-colors ${isClickable ? 'hover:bg-gray-100/70 cursor-pointer' : 'hover:bg-gray-100/50'}`}
                       onClick={() => isClickable && setSelectedHotel(a)}
                     >

@@ -74,13 +74,14 @@ export function DestinationBlock({ group, index, idioma, corPrimaria }: Props) {
       {/* Days */}
       <div>
         {group.dias.map((day, i) => (
-          <DayEntry
-            key={day.numero}
-            day={day}
-            isLast={i === group.dias.length - 1}
-            idioma={idioma}
-            corPrimaria={corPrimaria}
-          />
+          <div key={day.numero} {...(i > 0 ? { 'data-pdf-break': true } : {})}>
+            <DayEntry
+              day={day}
+              isLast={i === group.dias.length - 1}
+              idioma={idioma}
+              corPrimaria={corPrimaria}
+            />
+          </div>
         ))}
       </div>
     </div>

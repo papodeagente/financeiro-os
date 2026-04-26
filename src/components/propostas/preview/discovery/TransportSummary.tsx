@@ -44,7 +44,9 @@ export function TransportSummary({ transportes, idioma, corPrimaria }: Props) {
             </h3>
             <div className="space-y-4">
               {voos.map((v, i) => (
-                <RichFlightCard key={v.id || i} voo={v} idioma={idioma} corPrimaria={cor} />
+                <div key={v.id || i} {...(i > 0 ? { 'data-pdf-break': true } : {})}>
+                  <RichFlightCard voo={v} idioma={idioma} corPrimaria={cor} />
+                </div>
               ))}
             </div>
           </div>
@@ -58,7 +60,11 @@ export function TransportSummary({ transportes, idioma, corPrimaria }: Props) {
             </h3>
             <div className="space-y-3">
               {outros.map((tr, i) => (
-                <div key={tr.id || i} className="flex items-center gap-4 p-4 sm:p-5 rounded-xl bg-gray-50 border border-gray-100 shadow-sm">
+                <div
+                  key={tr.id || i}
+                  {...(i > 0 ? { 'data-pdf-break': true } : {})}
+                  className="flex items-center gap-4 p-4 sm:p-5 rounded-xl bg-gray-50 border border-gray-100 shadow-sm"
+                >
                   <span className="text-2xl sm:text-3xl">{TIPO_ICONS[tr.tipo] || '🚐'}</span>
                   <div className="flex-1 min-w-0">
                     <h4 className="text-base sm:text-lg font-bold text-gray-900">{tr.origem || '?'} → {tr.destino || '?'}</h4>

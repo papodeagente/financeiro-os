@@ -217,7 +217,7 @@ function PdfDiscoveryHero({ proposta }: { proposta: Proposta }) {
       style={{
         position: 'relative',
         width: '100%',
-        height: 420,
+        height: 340,
         overflow: 'hidden',
         backgroundColor: corPrimaria,
       }}
@@ -263,16 +263,16 @@ function PdfDiscoveryHero({ proposta }: { proposta: Proposta }) {
         }}
       >
         {proposta.cliente_nome && (
-          <p style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.4em', color: 'rgba(255,255,255,0.75)', marginBottom: 18 }}>
+          <p style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.4em', color: 'rgba(255,255,255,0.75)', marginBottom: 12 }}>
             Proposta exclusiva para {proposta.cliente_nome}
           </p>
         )}
         {subtitulo && (
-          <p style={{ fontSize: 18, fontStyle: 'italic', fontWeight: 300, color: 'rgba(255,255,255,0.85)', marginBottom: 12, maxWidth: 600 }}>
+          <p style={{ fontSize: 16, fontStyle: 'italic', fontWeight: 300, color: 'rgba(255,255,255,0.85)', marginBottom: 10, maxWidth: 600 }}>
             {subtitulo}
           </p>
         )}
-        <h1 style={{ fontSize: 48, fontWeight: 700, lineHeight: 1.1, letterSpacing: '-0.02em', marginBottom: 18, maxWidth: 700 }}>
+        <h1 style={{ fontSize: 40, fontWeight: 700, lineHeight: 1.1, letterSpacing: '-0.02em', marginBottom: 14, maxWidth: 700 }}>
           {titulo}
         </h1>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
@@ -910,11 +910,20 @@ export function PdfExportModal({ proposta, open, onClose }: Props) {
           [data-pdf-container] details { display: block !important; }
           /* Compact vertical rhythm — overrides the live components' generous py-16/py-20.
              Keeps PDFs from spreading across many half-empty pages. */
-          [data-pdf-container] section { padding-top: 32px !important; padding-bottom: 32px !important; }
-          /* Tighten the inner section margins of IntroSection cards/tags */
-          [data-pdf-container] section .mt-10 { margin-top: 1.5rem !important; }
-          [data-pdf-container] section .mb-10 { margin-bottom: 1.5rem !important; }
-          [data-pdf-container] section .mb-12 { margin-bottom: 2rem !important; }
+          [data-pdf-container] section { padding-top: 24px !important; padding-bottom: 24px !important; }
+          /* Tighten inner spacing aggressively in PDF context */
+          [data-pdf-container] .mt-14, [data-pdf-container] .mt-12 { margin-top: 1.25rem !important; }
+          [data-pdf-container] .mt-10, [data-pdf-container] .mt-8 { margin-top: 1rem !important; }
+          [data-pdf-container] .mb-14, [data-pdf-container] .mb-12 { margin-bottom: 1.25rem !important; }
+          [data-pdf-container] .mb-10, [data-pdf-container] .mb-8 { margin-bottom: 1rem !important; }
+          [data-pdf-container] .pt-10, [data-pdf-container] .pt-8 { padding-top: 1rem !important; }
+          [data-pdf-container] .pb-10, [data-pdf-container] .pb-8 { padding-bottom: 1rem !important; }
+          [data-pdf-container] .py-12, [data-pdf-container] .py-16, [data-pdf-container] .py-20 { padding-top: 24px !important; padding-bottom: 24px !important; }
+          /* DayEntry pb-8 is too tall for PDF — give days breathing room without huge gaps */
+          [data-pdf-container] .pb-8 { padding-bottom: 1rem !important; }
+          /* Trim default spacing inside cards */
+          [data-pdf-container] .space-y-4 > * + * { margin-top: 0.75rem !important; }
+          [data-pdf-container] .gap-6 { gap: 1rem !important; }
         `}</style>
         <div data-pdf-container>
           {proposta.visual.layout === 'DISCOVERY' ? (
