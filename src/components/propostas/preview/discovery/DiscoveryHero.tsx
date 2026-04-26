@@ -15,7 +15,6 @@ export function DiscoveryHero({ proposta }: Props) {
   const img = proposta.visual.imagem_capa;
   const corPrimaria = proposta.visual.cor_primaria || '#004aad';
   const viagem = proposta.viagem;
-  const logo = proposta.visual.logo_agencia;
   const { r, g, b } = hexToRgb(corPrimaria);
 
   const destinos = viagem?.destinos?.map(d => d.nome).filter(Boolean) || [];
@@ -156,13 +155,6 @@ export function DiscoveryHero({ proposta }: Props) {
           </button>
         </div>
       </div>
-
-      {/* Logo bottom-right */}
-      {logo && (
-        <div className="absolute bottom-6 right-6 z-10">
-          <img src={logo} alt="" className="h-8 sm:h-10 w-auto opacity-90 drop-shadow-md" />
-        </div>
-      )}
 
       {/* Scroll indicator — subtle line + arrow */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 pointer-events-none">
