@@ -13,6 +13,7 @@ import { PricingSection } from './PricingSection';
 import { DestinationBlock } from './DestinationBlock';
 import { DiscoveryFooter } from './DiscoveryFooter';
 import { PreviewRenderer } from '../PreviewRenderer';
+import { AceitarProposta } from '../AceitarProposta';
 import { groupDaysByDestination } from '@/lib/discovery-utils';
 
 interface NavItem { id: string; label: string }
@@ -318,6 +319,20 @@ export function DiscoveryRenderer({ proposta, slug, idioma }: Props) {
       <IntroSection proposta={proposta} idioma={idioma} />
 
       {visibleSecoes.map((s, i) => renderSection(s, i))}
+
+      {/* Aceitação digital — fechar o negócio antes do rodapé */}
+      {proposta.status !== 'EXPIRADO' && proposta.status !== 'CONVERTIDO' && (
+        <section className="py-12 bg-white" id="discovery-aceitar">
+          <AceitarProposta
+            slug={slug}
+            status={proposta.status}
+            corPrimaria={corPrimaria}
+            vendedorNome={proposta.rodape.nome_vendedor}
+            aceite={proposta.aceite}
+            idioma={idioma}
+          />
+        </section>
+      )}
 
       {/* Footer */}
       <DiscoveryFooter proposta={proposta} slug={slug} idioma={idioma} />

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
+import { criarNotificacao } from '@/lib/notificacoes';
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -44,6 +45,23 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       `UPDATE propostas SET data = $1, status = 'ACEITO', updated_at = NOW() WHERE id = $2 AND tenant_id = $3`,
       [JSON.stringify(proposta), id, tenantId]
     );
+
+    const cliente = proposta.cliente_nome || nome_aceite.trim();
+    const numero = proposta.numero || id;
+    await criarNotificacao({
+      tenantId,
+      tipo: 'PROPOSTA_ACEITA',
+      titulo: `${cliente} aceitou a proposta ${numero}`,
+      descricao: `Aceite registrado por ${nome_aceite.trim()}`,
+      link: `/propostas/${id}`,
+      vendedorId: proposta.vendedor_id || '',
+      data: {
+        proposta_id: id,
+        proposta_numero: numero,
+        cliente_nome: cliente,
+        nome_aceite: nome_aceite.trim(),
+      },
+    });
 
     return NextResponse.json({ ok: true, status: 'ACEITO' });
   } catch (e: unknown) {

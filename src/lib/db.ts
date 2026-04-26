@@ -367,6 +367,24 @@ export async function initDB() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS notificacoes (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL DEFAULT '',
+      tipo TEXT NOT NULL DEFAULT '',
+      titulo TEXT NOT NULL DEFAULT '',
+      descricao TEXT NOT NULL DEFAULT '',
+      link TEXT NOT NULL DEFAULT '',
+      vendedor_id TEXT NOT NULL DEFAULT '',
+      lida BOOLEAN NOT NULL DEFAULT FALSE,
+      data JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_notificacoes_tenant_lida_data ON notificacoes(tenant_id, lida, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_notificacoes_vendedor ON notificacoes(vendedor_id);
   `);
 
   // Create indices for new tables (IF NOT EXISTS prevents errors on re-run)

@@ -5,6 +5,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useActivePillar, PILLARS, type Pillar } from '@/hooks/useActivePillar';
 import { CrmStatusBadge } from './CrmStatusBadge';
+import { NotificacoesBell } from './NotificacoesBell';
 import { Logo } from './Logo';
 import { Sun, Moon, Search, LogOut, ChevronDown, Settings, Plus } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
@@ -125,6 +126,9 @@ export function TopBar({ onCommandPalette, breadcrumb, sidebarCollapsed, onToggl
 
         {/* CRM status */}
         <CrmStatusBadge variant="compacto" />
+
+        {/* Notifications */}
+        <NotificacoesBell />
 
         {/* Theme toggle */}
         <button
