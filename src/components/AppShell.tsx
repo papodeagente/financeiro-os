@@ -82,6 +82,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
+  // Funil editor — fullscreen canvas
+  if (/^\/planejamento\/funis\/[^/]+$/.test(pathname)) {
+    return <>{children}</>;
+  }
+
   // Loading session
   if (loading || !user) {
     return (
