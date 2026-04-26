@@ -11,7 +11,6 @@ import { PreviewRenderer } from './preview/PreviewRenderer';
 import { RodapeSection } from './preview/RodapeSection';
 
 // Preview components — Discovery
-import { IntroSection } from './preview/discovery/IntroSection';
 import { AccommodationSummary } from './preview/discovery/AccommodationSummary';
 import { TransportSummary } from './preview/discovery/TransportSummary';
 import { DestinationBlock } from './preview/discovery/DestinationBlock';
@@ -199,6 +198,18 @@ function calcEconomia(o: ValorOpcao): number {
 
 // ---------- PDF Discovery Hero (no absolute CTAs, no animations) ----------
 
+function smartTitulo(proposta: Proposta): string {
+  const t = proposta.cabecalho.titulo?.trim();
+  // Discard generic placeholders — derive from destinos.
+  const generic = !t || /^proposta( de viagem)?$/i.test(t);
+  if (!generic) return t!;
+  const destinos = proposta.viagem?.destinos?.map(d => d.nome).filter(Boolean) || [];
+  if (destinos.length === 0) return 'Sua próxima viagem';
+  if (destinos.length === 1) return destinos[0];
+  if (destinos.length === 2) return `${destinos[0]} & ${destinos[1]}`;
+  return `${destinos[0]}, ${destinos[1]} & ${destinos[destinos.length - 1]}`;
+}
+
 function PdfDiscoveryHero({ proposta }: { proposta: Proposta }) {
   const img = proposta.visual.imagem_capa;
   const corPrimaria = proposta.visual.cor_primaria || '#004aad';
@@ -207,9 +218,14 @@ function PdfDiscoveryHero({ proposta }: { proposta: Proposta }) {
   const { r, g, b } = hexToRgb(corPrimaria);
 
   const destinos = viagem?.destinos?.map(d => d.nome).filter(Boolean) || [];
-  const duracao = viagem ? `${viagem.duracao_dias} dias · ${viagem.duracao_noites} noites` : '';
   const subtitulo = proposta.cabecalho.subtitulo;
-  const titulo = proposta.cabecalho.titulo || 'Proposta de Viagem';
+  const titulo = smartTitulo(proposta);
+
+  // Build a numeric stats row — premium, scannable, no plastic chips.
+  const stats: { label: string; value: string }[] = [];
+  if (viagem?.duracao_dias) stats.push({ label: 'Dias', value: String(viagem.duracao_dias) });
+  if (viagem?.duracao_noites) stats.push({ label: 'Noites', value: String(viagem.duracao_noites) });
+  if (destinos.length > 0) stats.push({ label: 'Destinos', value: String(destinos.length) });
 
   return (
     <div
@@ -217,7 +233,7 @@ function PdfDiscoveryHero({ proposta }: { proposta: Proposta }) {
       style={{
         position: 'relative',
         width: '100%',
-        height: 340,
+        height: 360,
         overflow: 'hidden',
         backgroundColor: corPrimaria,
       }}
@@ -237,14 +253,14 @@ function PdfDiscoveryHero({ proposta }: { proposta: Proposta }) {
         style={{
           position: 'absolute',
           inset: 0,
-          background: 'linear-gradient(180deg, rgba(0,0,0,0.30) 0%, rgba(0,0,0,0.20) 50%, rgba(0,0,0,0.80) 100%)',
+          background: 'linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.25) 45%, rgba(0,0,0,0.85) 100%)',
         }}
       />
       <div
         style={{
           position: 'absolute',
           inset: 0,
-          opacity: 0.4,
+          opacity: 0.45,
           background: `linear-gradient(135deg, rgba(${r},${g},${b},0.7) 0%, transparent 50%, rgba(0,0,0,0.4) 100%)`,
           mixBlendMode: 'multiply',
         }}
@@ -259,54 +275,61 @@ function PdfDiscoveryHero({ proposta }: { proposta: Proposta }) {
           justifyContent: 'center',
           textAlign: 'center',
           color: '#ffffff',
-          padding: '0 32px',
+          padding: '0 40px',
         }}
       >
         {proposta.cliente_nome && (
-          <p style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.4em', color: 'rgba(255,255,255,0.75)', marginBottom: 12 }}>
-            Proposta exclusiva para {proposta.cliente_nome}
+          <p style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.45em', color: 'rgba(255,255,255,0.75)', marginBottom: 14, fontWeight: 500 }}>
+            ✦ Exclusivamente para {proposta.cliente_nome} ✦
           </p>
         )}
         {subtitulo && (
-          <p style={{ fontSize: 16, fontStyle: 'italic', fontWeight: 300, color: 'rgba(255,255,255,0.85)', marginBottom: 10, maxWidth: 600 }}>
+          <p style={{ fontSize: 15, fontStyle: 'italic', fontWeight: 300, color: 'rgba(255,255,255,0.88)', marginBottom: 14, maxWidth: 560, lineHeight: 1.4 }}>
             {subtitulo}
           </p>
         )}
-        <h1 style={{ fontSize: 40, fontWeight: 700, lineHeight: 1.1, letterSpacing: '-0.02em', marginBottom: 14, maxWidth: 700 }}>
+        <h1 style={{ fontSize: 42, fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.025em', marginBottom: 18, maxWidth: 700 }}>
           {titulo}
         </h1>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
-          {duracao && (
-            <span
-              style={{
-                padding: '6px 16px',
-                borderRadius: 999,
-                fontSize: 13,
-                fontWeight: 600,
-                background: `rgba(${r},${g},${b},0.45)`,
-                border: '1px solid rgba(255,255,255,0.30)',
-              }}
-            >
-              {duracao}
-            </span>
-          )}
-          {destinos.map((d, i) => (
-            <span
-              key={i}
-              style={{
-                padding: '6px 12px',
-                borderRadius: 999,
-                fontSize: 12,
-                fontWeight: 500,
-                background: 'rgba(255,255,255,0.10)',
-                border: '1px solid rgba(255,255,255,0.15)',
-                color: 'rgba(255,255,255,0.90)',
-              }}
-            >
-              {d}
-            </span>
-          ))}
-        </div>
+        {/* Decorative divider */}
+        <div style={{
+          width: 64,
+          height: 1,
+          background: 'rgba(255,255,255,0.4)',
+          marginBottom: 18,
+        }} />
+        {/* Stats row — refined, not plastic chips */}
+        {stats.length > 0 && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 28,
+            color: '#ffffff',
+          }}>
+            {stats.map((s, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
+                {i > 0 && <span style={{ width: 4, height: 4, borderRadius: 999, background: 'rgba(255,255,255,0.4)' }} />}
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1, letterSpacing: '-0.02em' }}>{s.value}</div>
+                  <div style={{ fontSize: 9, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.25em', opacity: 0.7, marginTop: 4 }}>{s.label}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {/* Destinos route line */}
+        {destinos.length > 0 && (
+          <div style={{
+            marginTop: 18,
+            fontSize: 11,
+            fontWeight: 500,
+            letterSpacing: '0.2em',
+            textTransform: 'uppercase',
+            color: 'rgba(255,255,255,0.85)',
+          }}>
+            {destinos.join('  ·  ')}
+          </div>
+        )}
       </div>
       {logo && (
         <img
@@ -319,18 +342,47 @@ function PdfDiscoveryHero({ proposta }: { proposta: Proposta }) {
   );
 }
 
-// ---------- PDF Discovery Pricing (no <details>, no scroll button) ----------
+// ---------- PDF Discovery Pricing ----------
+
+// Format validade as urgency text + days remaining.
+function formatValidade(validade: string): { label: string; days: number; tone: 'calm' | 'warn' | 'hot' } | null {
+  if (!validade) return null;
+  try {
+    const d = new Date(validade + (validade.length === 10 ? 'T23:59:59' : ''));
+    const now = new Date();
+    const diffMs = d.getTime() - now.getTime();
+    const days = Math.max(Math.ceil(diffMs / (1000 * 60 * 60 * 24)), 0);
+    const dateStr = d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' });
+    let tone: 'calm' | 'warn' | 'hot' = 'calm';
+    if (days <= 7) tone = 'hot';
+    else if (days <= 30) tone = 'warn';
+    const label = days === 0
+      ? `Última oportunidade — expira hoje`
+      : days === 1
+        ? `Última chance — apenas 1 dia restante`
+        : days <= 7
+          ? `Apenas ${days} dias restantes — encerra ${dateStr}`
+          : days <= 30
+            ? `${days} dias para reservar — válida até ${dateStr}`
+            : `Reserva válida até ${dateStr}`;
+    return { label, days, tone };
+  } catch {
+    return null;
+  }
+}
 
 function PdfDiscoveryPricing({
   valoresSecoes,
   inclusosSecoes,
   idioma,
   corPrimaria,
+  proposta,
 }: {
   valoresSecoes: SecaoProposta[];
   inclusosSecoes: SecaoProposta[];
   idioma: IdiomaProposal;
   corPrimaria: string;
+  proposta: Proposta;
 }) {
   const i18n = t(idioma);
 
@@ -344,21 +396,39 @@ function PdfDiscoveryPricing({
     if (c.validade) validade = c.validade;
   }
   let inclusos: string[] = [];
-  let naoInclusos: string[] = [];
   for (const s of inclusosSecoes) {
-    const c = s.conteudo as { inclusos?: string[]; nao_inclusos?: string[] };
+    const c = s.conteudo as { inclusos?: string[] };
     if (c.inclusos) inclusos = inclusos.concat(c.inclusos.filter(Boolean));
-    if (c.nao_inclusos) naoInclusos = naoInclusos.concat(c.nao_inclusos.filter(Boolean));
   }
 
-  if (opcoes.length === 0 && inclusos.length === 0 && naoInclusos.length === 0) return null;
+  if (opcoes.length === 0 && inclusos.length === 0) return null;
 
-  let validadeFormatada = '';
-  if (validade) {
-    try {
-      validadeFormatada = new Date(validade).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' });
-    } catch {}
+  const validInfo = formatValidade(validade);
+  const validToneStyle = validInfo
+    ? validInfo.tone === 'hot'
+      ? { bg: '#fef2f2', border: '#fecaca', color: '#b91c1c' }
+      : validInfo.tone === 'warn'
+        ? { bg: '#fffbeb', border: '#fde68a', color: '#b45309' }
+        : { bg: '#f0fdf4', border: '#bbf7d0', color: '#166534' }
+    : null;
+
+  // Trust strip — derive from viagem and inclusos. Pure visual, scannable
+  // shorthand of what's in the package. Helps justify the ticket size.
+  const viagem = proposta.viagem;
+  const trustItems: { icon: string; label: string }[] = [];
+  if (viagem?.transportes?.some(t => t.tipo === 'VOO')) trustItems.push({ icon: '✈', label: 'Aéreo internacional' });
+  if (viagem?.alojamentos && viagem.alojamentos.length > 0) {
+    const hasFiveStar = viagem.alojamentos.some(a => (a.hotel_estrelas || 0) >= 5);
+    trustItems.push({ icon: '★', label: hasFiveStar ? 'Hotéis selecionados 5★' : 'Hotéis selecionados' });
   }
+  if (viagem?.transportes?.some(t => ['TREM', 'TRANSFER', 'CARRO', 'ONIBUS'].includes(t.tipo))) {
+    trustItems.push({ icon: '⇄', label: 'Translados e transfers' });
+  }
+  if (viagem?.alojamentos?.some(a => a.regime && a.regime !== 'RO')) {
+    trustItems.push({ icon: '◉', label: 'Refeições inclusas' });
+  }
+  if (inclusos.some(i => /seguro/i.test(i))) trustItems.push({ icon: '⛨', label: 'Seguro viagem' });
+  if (inclusos.some(i => /suporte|24h|whats/i.test(i))) trustItems.push({ icon: '⌬', label: 'Suporte dedicado' });
 
   const gridCols = opcoes.length >= 3 ? 'grid-cols-3' : opcoes.length === 2 ? 'grid-cols-2' : 'max-w-md mx-auto';
 
@@ -377,13 +447,22 @@ function PdfDiscoveryPricing({
             {i18n.precos}
           </span>
         </div>
-        <h2 className="text-3xl font-bold text-gray-900 mb-3 text-center">Sua viagem começa aqui</h2>
-        {validadeFormatada && (
-          <p className="text-center text-sm text-gray-600 mb-10">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
-              <span className="font-semibold">Reserva válida até {validadeFormatada}</span>
-            </span>
-          </p>
+        <h2 className="text-3xl font-bold text-gray-900 mb-3 text-center">Seu investimento</h2>
+
+        {validInfo && validToneStyle && (
+          <div className="flex justify-center mb-8">
+            <div
+              className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold"
+              style={{
+                backgroundColor: validToneStyle.bg,
+                border: `1px solid ${validToneStyle.border}`,
+                color: validToneStyle.color,
+              }}
+            >
+              <span style={{ fontSize: 13 }}>⏱</span>
+              <span>{validInfo.label}</span>
+            </div>
+          </div>
         )}
 
         {opcoes.length > 0 && (
@@ -462,48 +541,307 @@ function PdfDiscoveryPricing({
           <p className="mt-6 text-center text-xs text-gray-500 italic max-w-2xl mx-auto">{observacoes}</p>
         )}
 
-        {(inclusos.length > 0 || naoInclusos.length > 0) && (
-          <div data-pdf-break className="mt-12 pt-10 border-t border-gray-200 grid sm:grid-cols-2 gap-8">
-            {inclusos.length > 0 && (
-              <div>
-                <h3 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-xs">
-                    ✓
+        {/* Trust strip — what every pacote includes */}
+        {trustItems.length > 0 && (
+          <div data-pdf-break className="mt-10 pt-8 border-t border-gray-200">
+            <div className="text-center mb-5">
+              <span className="text-[10px] font-bold tracking-widest uppercase text-gray-400">
+                Tudo isso está incluso no seu investimento
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {trustItems.map((item, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg"
+                  style={{ backgroundColor: `${corPrimaria}08` }}
+                >
+                  <span
+                    className="inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-bold shrink-0"
+                    style={{ backgroundColor: corPrimaria, color: '#fff' }}
+                  >
+                    {item.icon}
                   </span>
-                  {i18n.oQueEstaIncluso}
-                </h3>
-                <ul className="space-y-2">
-                  {inclusos.map((item, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-gray-700 leading-snug">
-                      <span className="mt-0.5 text-emerald-500 shrink-0">✓</span>
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {naoInclusos.length > 0 && (
-              <div>
-                <h3 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 text-gray-500 text-xs">
-                    ×
-                  </span>
-                  {i18n.naoIncluso}
-                </h3>
-                <ul className="space-y-2">
-                  {naoInclusos.map((item, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-gray-500 leading-snug">
-                      <span className="mt-0.5 text-gray-400 shrink-0">×</span>
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+                  <span className="text-xs font-medium text-gray-700 leading-tight">{item.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Full inclusos list — readable, single column on PDF, no não-inclusos here */}
+        {inclusos.length > 0 && (
+          <div data-pdf-break className="mt-10 pt-8 border-t border-gray-200">
+            <h3 className="text-base font-bold text-gray-900 mb-5 flex items-center gap-2">
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-xs">
+                ✓
+              </span>
+              {i18n.oQueEstaIncluso}
+            </h3>
+            <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2">
+              {inclusos.map((item, i) => (
+                <li key={i} {...(i > 0 ? { 'data-pdf-break': true } : {})} className="flex items-start gap-2 text-sm text-gray-700 leading-snug">
+                  <span className="mt-1 text-emerald-500 shrink-0">✓</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </div>
     </section>
+  );
+}
+
+// ---------- PDF Intro (compact, no duplicated stats) ----------
+
+function PdfIntro({ proposta, idioma }: { proposta: Proposta; idioma: IdiomaProposal }) {
+  const i18n = t(idioma);
+  const viagem = proposta.viagem;
+  const mensagem = proposta.cabecalho.mensagem_abertura;
+  const tags = viagem?.interesses_tags || [];
+  const corPrimaria = proposta.visual.cor_primaria || '#004aad';
+
+  if (!mensagem && tags.length === 0) return null;
+
+  return (
+    <section data-pdf-section className="py-10 bg-white">
+      <div className="max-w-3xl mx-auto px-8 text-center">
+        <h2 className="text-2xl font-bold text-gray-900 mb-5">{i18n.introducao}</h2>
+        {mensagem && (
+          <p className="text-gray-600 text-base leading-relaxed whitespace-pre-line">
+            {mensagem}
+          </p>
+        )}
+        {tags.length > 0 && (
+          <div className="mt-6 flex flex-wrap justify-center gap-1.5">
+            {tags.map((tag, i) => (
+              <span
+                key={i}
+                className="px-2.5 py-1 rounded-full text-[11px] font-medium"
+                style={{
+                  backgroundColor: `${corPrimaria}15`,
+                  color: corPrimaria,
+                  border: `1px solid ${corPrimaria}25`,
+                }}
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ---------- PDF Footer (close the deal) ----------
+
+function PdfFooter({
+  proposta,
+  inclusosSecoes,
+  idioma,
+}: {
+  proposta: Proposta;
+  inclusosSecoes: SecaoProposta[];
+  idioma: IdiomaProposal;
+}) {
+  const i18n = t(idioma);
+  const corPrimaria = proposta.visual.cor_primaria || '#004aad';
+  const rodape = proposta.rodape;
+  const viagem = proposta.viagem;
+  const sobre = viagem?.sobre_agencia || '';
+
+  // Não inclusos — moved here, post-decision
+  const naoInclusos: string[] = [];
+  for (const s of inclusosSecoes) {
+    const c = s.conteudo as { nao_inclusos?: string[] };
+    if (c.nao_inclusos) naoInclusos.push(...c.nao_inclusos.filter(Boolean));
+  }
+
+  // Try to extract trust metrics from sobre_agencia
+  const metrics: string[] = [];
+  const yearMatch = sobre.match(/(\d+)\s*anos/i);
+  if (yearMatch) metrics.push(`${yearMatch[1]} anos de mercado`);
+  const tripsMatch = sobre.match(/(\d[\d.]*)\s*\+?\s*(viagens|viajantes|passageiros|fam[ií]lias|cabines)/i);
+  if (tripsMatch) metrics.push(`${tripsMatch[1]}+ ${tripsMatch[2].toLowerCase()}`);
+  const partnerMatch = sobre.match(/(parceria|oficial|representante|exclusiv[oa])/i);
+  if (partnerMatch) metrics.push('Parcerias oficiais');
+
+  const validInfo = formatValidade(proposta.cabecalho.validade);
+  const whatsapp = (rodape.whatsapp_vendedor || rodape.telefone_vendedor || '').replace(/\D/g, '');
+  const tituloViagem = smartTitulo(proposta);
+  const initials = (rodape.nome_vendedor || '').split(/\s+/).map(p => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '✦';
+
+  return (
+    <>
+      {/* Não-inclusos — discreet, after the buying decision */}
+      {naoInclusos.length > 0 && (
+        <section data-pdf-section className="py-10 bg-white">
+          <div className="max-w-4xl mx-auto px-8">
+            <h3 className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-100 text-gray-500 text-[10px]">
+                ×
+              </span>
+              {i18n.naoIncluso}
+            </h3>
+            <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5">
+              {naoInclusos.map((item, i) => (
+                <li key={i} {...(i > 0 ? { 'data-pdf-break': true } : {})} className="flex items-start gap-2 text-xs text-gray-500 leading-snug">
+                  <span className="mt-0.5 text-gray-400 shrink-0">×</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      )}
+
+      {/* Próximos passos — 3-step timeline */}
+      <section
+        data-pdf-section
+        className="py-10"
+        style={{ background: `linear-gradient(180deg, #ffffff 0%, ${corPrimaria}06 100%)` }}
+      >
+        <div className="max-w-4xl mx-auto px-8">
+          <div className="text-center mb-8">
+            <span
+              className="inline-block px-3 py-1 rounded-full text-[11px] font-bold tracking-widest uppercase"
+              style={{ backgroundColor: `${corPrimaria}15`, color: corPrimaria }}
+            >
+              Como funciona
+            </span>
+            <h3 className="mt-3 text-2xl font-bold text-gray-900">Seus próximos passos</h3>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            {[
+              { n: 1, title: 'Aceite', desc: 'Confirme a proposta pelo WhatsApp ou e-mail. Em até 1 dia útil emitimos o contrato.' },
+              { n: 2, title: 'Sinal', desc: 'Pagamento de 30% no PIX para fechar reservas e tarifas. Restante pode ser parcelado.' },
+              { n: 3, title: 'Embarque', desc: 'Recebe roteiro digital, voucher de hotéis e suporte 24h durante toda a viagem.' },
+            ].map(step => (
+              <div
+                key={step.n}
+                {...(step.n > 1 ? { 'data-pdf-break': true } : {})}
+                className="relative rounded-xl p-5 bg-white border border-gray-100"
+                style={{ boxShadow: '0 4px 12px -4px rgba(0,0,0,0.06)' }}
+              >
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-base mb-3"
+                  style={{ backgroundColor: corPrimaria }}
+                >
+                  {step.n}
+                </div>
+                <div className="text-sm font-bold text-gray-900 mb-1">{step.title}</div>
+                <p className="text-xs text-gray-600 leading-relaxed">{step.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Vendor card + mega CTA */}
+      <section
+        data-pdf-section
+        className="py-12"
+        style={{ background: `linear-gradient(135deg, ${corPrimaria} 0%, ${corPrimaria}dd 100%)` }}
+      >
+        <div className="max-w-4xl mx-auto px-8 text-white">
+          <div className="text-center mb-8">
+            <span className="inline-block px-3 py-1 rounded-full text-[11px] font-bold tracking-widest uppercase bg-white/15 text-white">
+              Vamos conversar
+            </span>
+            <h3 className="mt-3 text-3xl font-bold">{tituloViagem} aguarda você</h3>
+            {rodape.mensagem && (
+              <p className="mt-4 text-white/85 italic max-w-2xl mx-auto leading-relaxed">{rodape.mensagem}</p>
+            )}
+          </div>
+
+          {rodape.nome_vendedor && (
+            <div
+              className="rounded-2xl p-6 max-w-2xl mx-auto"
+              style={{ backgroundColor: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.18)' }}
+            >
+              <div className="flex items-start gap-4">
+                <div
+                  className="w-14 h-14 rounded-full flex items-center justify-center font-bold text-base shrink-0"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.20)', border: '2px solid rgba(255,255,255,0.30)' }}
+                >
+                  {initials}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] font-semibold uppercase tracking-widest text-white/65 mb-1">Seu consultor</div>
+                  <div className="text-lg font-bold text-white">{rodape.nome_vendedor}</div>
+                  <div className="mt-2 space-y-0.5 text-sm text-white/85">
+                    {rodape.email_vendedor && <div>✉ {rodape.email_vendedor}</div>}
+                    {rodape.telefone_vendedor && <div>☏ {rodape.telefone_vendedor}</div>}
+                    {rodape.whatsapp_vendedor && <div>WhatsApp · {rodape.whatsapp_vendedor}</div>}
+                  </div>
+                </div>
+              </div>
+
+              {whatsapp && (
+                <div className="mt-5 pt-5 border-t border-white/15 text-center">
+                  <div
+                    className="inline-flex items-center gap-2.5 px-6 py-3 rounded-full bg-white text-base font-bold"
+                    style={{ color: corPrimaria, boxShadow: '0 8px 20px -8px rgba(0,0,0,0.4)' }}
+                  >
+                    <span style={{ fontSize: 16 }}>✆</span>
+                    <span>Confirmar viagem pelo WhatsApp</span>
+                  </div>
+                  <div className="mt-2 text-[11px] text-white/70">
+                    Resposta em até 1 hora útil · Sem compromisso
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {validInfo && (
+            <p className="mt-6 text-center text-xs text-white/75">
+              {validInfo.label}
+            </p>
+          )}
+        </div>
+      </section>
+
+      {/* Sobre a agência with trust metrics */}
+      {sobre && (
+        <section data-pdf-section className="py-10 bg-gray-50 border-t border-gray-200">
+          <div className="max-w-3xl mx-auto px-8 text-center">
+            <h3 className="text-base font-bold text-gray-900 mb-4">{i18n.sobreAgencia}</h3>
+            <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line mb-5">{sobre}</p>
+            {metrics.length > 0 && (
+              <div className="flex flex-wrap justify-center gap-2 sm:gap-4">
+                {metrics.map((m, i) => (
+                  <span
+                    key={i}
+                    className="px-3 py-1.5 rounded-full text-xs font-semibold"
+                    style={{ backgroundColor: '#fff', color: corPrimaria, border: `1px solid ${corPrimaria}25` }}
+                  >
+                    {m}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Bottom strip with proposal ID and validity */}
+      <section data-pdf-section className="py-6 bg-gray-900 text-white">
+        <div className="max-w-5xl mx-auto px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
+          <div className="text-gray-400">
+            {proposta.numero ? `Proposta ${proposta.numero}` : 'Proposta de Viagem'}
+            {proposta.cliente_nome && <span className="text-gray-500"> · para {proposta.cliente_nome}</span>}
+          </div>
+          {validInfo && (
+            <div className="text-gray-300 font-medium">
+              {i18n.validaAte} {new Date(proposta.cabecalho.validade + 'T12:00:00').toLocaleDateString('pt-BR')}
+            </div>
+          )}
+        </div>
+      </section>
+    </>
   );
 }
 
@@ -646,6 +984,7 @@ function PdfDiscoveryLayout({
           inclusosSecoes={inclusosSecoes}
           idioma={idioma}
           corPrimaria={corPrimaria}
+          proposta={proposta}
         />
       );
     }
@@ -661,6 +1000,7 @@ function PdfDiscoveryLayout({
             inclusosSecoes={inclusosSecoes}
             idioma={idioma}
             corPrimaria={corPrimaria}
+            proposta={proposta}
           />
         );
       }
@@ -775,32 +1115,11 @@ function PdfDiscoveryLayout({
     <div className="bg-white text-gray-900">
       <PdfDiscoveryHero proposta={proposta} />
 
-      <div data-pdf-section>
-        <IntroSection proposta={proposta} idioma={idioma} />
-      </div>
+      <PdfIntro proposta={proposta} idioma={idioma} />
 
       {visibleSecoes.map((s, i) => renderSection(s, i))}
 
-      <div data-pdf-section className="py-10 bg-gray-50 border-t border-gray-200">
-        <div className="max-w-3xl mx-auto px-8 text-center">
-          {proposta.rodape.mensagem && (
-            <p className="text-gray-600 italic mb-5">{proposta.rodape.mensagem}</p>
-          )}
-          <p className="text-lg font-semibold text-gray-900">{proposta.rodape.nome_vendedor}</p>
-          <div className="mt-2 text-sm text-gray-500 space-y-1">
-            {proposta.rodape.email_vendedor && <p>{proposta.rodape.email_vendedor}</p>}
-            {proposta.rodape.telefone_vendedor && <p>{proposta.rodape.telefone_vendedor}</p>}
-          </div>
-          {proposta.cabecalho.validade && (
-            <p className="mt-5 text-xs text-gray-400">
-              {i18n.validaAte}{' '}
-              {new Date(proposta.cabecalho.validade + 'T12:00:00').toLocaleDateString(
-                idioma === 'en' ? 'en-US' : idioma === 'es' ? 'es-ES' : 'pt-BR',
-              )}
-            </p>
-          )}
-        </div>
-      </div>
+      <PdfFooter proposta={proposta} inclusosSecoes={inclusosSecoes} idioma={idioma} />
     </div>
   );
 }
