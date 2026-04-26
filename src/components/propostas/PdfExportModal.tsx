@@ -33,7 +33,7 @@ const CSS_WIDTH = 794;            // A4 width @ 96dpi ≈ 794 CSS px
 const A4_RATIO = 297 / 210;       // height/width ratio
 const PAGE_CSS_HEIGHT = CSS_WIDTH * A4_RATIO; // ≈ 1123.4 px
 const PDF_WIDTH_MM = 210;
-const MIN_PAGE_PROGRESS = 220;    // never produce pages shorter than this (px)
+const MIN_PAGE_PROGRESS = 120;    // never produce pages shorter than this (px)
 
 async function captureAndSavePdf(container: HTMLElement, filename: string): Promise<void> {
   const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
@@ -59,12 +59,17 @@ async function captureAndSavePdf(container: HTMLElement, filename: string): Prom
 
   const totalCss = canvas.height / SCALE;
 
-  // Collect break candidates: top edge of each section/break element.
+  // Collect break candidates: top AND bottom edge of each section/break element.
+  // Using both ends lets a page end at a section's bottom even when the next
+  // section starts past the page boundary — avoids huge whitespace tails.
   const containerRect = container.getBoundingClientRect();
   const candidates = new Set<number>([0]);
   container.querySelectorAll('[data-pdf-section], [data-pdf-break]').forEach(el => {
-    const top = (el as HTMLElement).getBoundingClientRect().top - containerRect.top;
+    const r = (el as HTMLElement).getBoundingClientRect();
+    const top = r.top - containerRect.top;
+    const bottom = r.bottom - containerRect.top;
     if (top > 0 && top < totalCss) candidates.add(Math.round(top));
+    if (bottom > 0 && bottom < totalCss) candidates.add(Math.round(bottom));
   });
   candidates.add(totalCss);
   const breakpoints = Array.from(candidates).sort((a, b) => a - b);
@@ -212,7 +217,7 @@ function PdfDiscoveryHero({ proposta }: { proposta: Proposta }) {
       style={{
         position: 'relative',
         width: '100%',
-        height: 560,
+        height: 420,
         overflow: 'hidden',
         backgroundColor: corPrimaria,
       }}
@@ -267,7 +272,7 @@ function PdfDiscoveryHero({ proposta }: { proposta: Proposta }) {
             {subtitulo}
           </p>
         )}
-        <h1 style={{ fontSize: 56, fontWeight: 700, lineHeight: 1.1, letterSpacing: '-0.02em', marginBottom: 22, maxWidth: 700 }}>
+        <h1 style={{ fontSize: 48, fontWeight: 700, lineHeight: 1.1, letterSpacing: '-0.02em', marginBottom: 18, maxWidth: 700 }}>
           {titulo}
         </h1>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
@@ -360,7 +365,7 @@ function PdfDiscoveryPricing({
   return (
     <section
       data-pdf-section
-      className="py-14"
+      className="py-10"
       style={{ background: `linear-gradient(180deg, #ffffff 0%, ${corPrimaria}05 100%)` }}
     >
       <div className="max-w-5xl mx-auto px-8">
@@ -390,7 +395,6 @@ function PdfDiscoveryPricing({
               return (
                 <div
                   key={i}
-                  data-pdf-break
                   className="relative rounded-2xl p-5 bg-white flex flex-col"
                   style={{
                     border: op.destaque ? `2px solid ${corPrimaria}` : '1px solid #e5e7eb',
@@ -619,11 +623,11 @@ function PdfDiscoveryLayout({
       const groups = groupDaysByDestination(proposta);
       if (groups.length === 0) return null;
       return (
-        <section key={key} data-pdf-section className="py-14 bg-gray-50">
+        <section key={key} data-pdf-section className="py-10 bg-gray-50">
           <div className="max-w-4xl mx-auto px-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-8">{i18n.itinerario}</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">{i18n.itinerario}</h2>
             {groups.map((group, gi) => (
-              <div key={gi} data-pdf-break>
+              <div key={gi} {...(gi > 0 ? { 'data-pdf-break': true } : {})}>
                 <DestinationBlock group={group} index={gi} idioma={idioma} corPrimaria={corPrimaria} />
               </div>
             ))}
@@ -668,12 +672,16 @@ function PdfDiscoveryLayout({
       const perguntas = c.perguntas || [];
       if (perguntas.length === 0) return null;
       return (
-        <section key={key} data-pdf-section className="py-14 bg-gray-50">
+        <section key={key} data-pdf-section className="py-10 bg-gray-50">
           <div className="max-w-3xl mx-auto px-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-7">{i18n.perguntasFrequentes}</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">{i18n.perguntasFrequentes}</h2>
             <div className="space-y-3">
               {perguntas.map((faq, fi) => (
-                <div key={fi} data-pdf-break className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                <div
+                  key={fi}
+                  {...(fi > 0 ? { 'data-pdf-break': true } : {})}
+                  className="bg-white rounded-2xl border border-gray-200 overflow-hidden"
+                >
                   <div className="px-5 py-4 text-sm font-semibold text-gray-900">{faq.pergunta}</div>
                   <div className="px-5 pb-4 text-sm text-gray-600 leading-relaxed border-t border-gray-100 pt-3">
                     {faq.resposta}
@@ -692,12 +700,16 @@ function PdfDiscoveryLayout({
       };
       const deps = c.depoimentos || [];
       if (deps.length === 0) return null;
+      const { r: dr, g: dg, b: db } = hexToRgb(corPrimaria);
+      // Solid dark gradient (no alpha-blend mid-stop) so white text stays
+      // legible no matter where the slicer cuts the section across pages.
+      const darkMid = `rgb(${Math.round(dr * 0.18 + 10)}, ${Math.round(dg * 0.18 + 10)}, ${Math.round(db * 0.18 + 18)})`;
       return (
         <section
           key={key}
           data-pdf-section
-          className="py-14"
-          style={{ background: `linear-gradient(135deg, #0a0a14 0%, ${corPrimaria}30 50%, #0a0a14 100%)` }}
+          className="py-10"
+          style={{ background: `linear-gradient(135deg, #0a0a14 0%, ${darkMid} 50%, #0a0a14 100%)` }}
         >
           <div className="max-w-5xl mx-auto px-8">
             <div className="text-center mb-10">
@@ -710,11 +722,11 @@ function PdfDiscoveryLayout({
               {deps.map((dep, di) => (
                 <div
                   key={di}
-                  data-pdf-break
+                  {...(di > 0 ? { 'data-pdf-break': true } : {})}
                   className="p-6 rounded-2xl border"
                   style={{
-                    background: 'rgba(255,255,255,0.07)',
-                    borderColor: 'rgba(255,255,255,0.10)',
+                    background: 'rgba(20, 20, 35, 0.55)',
+                    borderColor: 'rgba(255,255,255,0.12)',
                   }}
                 >
                   <div className="text-4xl leading-none font-serif mb-2" style={{ color: corPrimaria, opacity: 0.7 }}>
@@ -896,6 +908,13 @@ export function PdfExportModal({ proposta, open, onClose }: Props) {
           }
           [data-pdf-container] details > summary { display: none !important; }
           [data-pdf-container] details { display: block !important; }
+          /* Compact vertical rhythm — overrides the live components' generous py-16/py-20.
+             Keeps PDFs from spreading across many half-empty pages. */
+          [data-pdf-container] section { padding-top: 32px !important; padding-bottom: 32px !important; }
+          /* Tighten the inner section margins of IntroSection cards/tags */
+          [data-pdf-container] section .mt-10 { margin-top: 1.5rem !important; }
+          [data-pdf-container] section .mb-10 { margin-bottom: 1.5rem !important; }
+          [data-pdf-container] section .mb-12 { margin-bottom: 2rem !important; }
         `}</style>
         <div data-pdf-container>
           {proposta.visual.layout === 'DISCOVERY' ? (

@@ -122,15 +122,17 @@ function RoteiroDiaPreview({ conteudo }: { conteudo: Record<string, unknown> }) 
 
 // ─── GALERIA ───
 function GaleriaPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
-  const imgs = (conteudo as { imagens?: Array<{ url: string; legenda?: string }> }).imagens || [];
+  const raw = (conteudo as { imagens?: Array<{ url: string; legenda?: string } | string> }).imagens || [];
+  // Tolerate both string[] and {url,legenda}[] — older seeds and the live editor save different shapes.
+  const imgs = raw
+    .map(it => (typeof it === 'string' ? { url: it, legenda: '' } : it))
+    .filter(it => it && it.url);
   if (imgs.length === 0) return null;
 
-  // Hero layout: first image large, rest in grid
   const [hero, ...rest] = imgs;
 
   return (
     <div className="space-y-2">
-      {/* Hero image */}
       <div className="relative rounded-2xl overflow-hidden shadow-sm">
         <img src={hero.url} alt={hero.legenda || ''} className="w-full h-72 object-cover" />
         {hero.legenda && (
@@ -139,7 +141,6 @@ function GaleriaPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
           </div>
         )}
       </div>
-      {/* Thumbnails */}
       {rest.length > 0 && (
         <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
           {rest.map((img, i) => (
