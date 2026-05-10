@@ -71,6 +71,10 @@ export default function CrmConfigPage() {
   const [copied, setCopied] = useState<string | null>(null);
   const [cleaning, setCleaning] = useState(false);
   const [cleanupResult, setCleanupResult] = useState<Record<string, number> | null>(null);
+  const [diag, setDiag] = useState<Record<string, unknown> | null>(null);
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [simulating, setSimulating] = useState(false);
+  const [simResult, setSimResult] = useState<Record<string, unknown> | null>(null);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -165,6 +169,31 @@ export default function CrmConfigPage() {
       await loadAll();
     } catch { /* silent */ }
     setRetrying(false);
+  };
+
+  const loadDiagnostico = async () => {
+    setDiagLoading(true);
+    try {
+      const r = await fetch('/api/v1/crm/diagnostico').then(r => r.json());
+      setDiag(r);
+    } catch (e) {
+      setDiag({ error: e instanceof Error ? e.message : 'falha' });
+    }
+    setDiagLoading(false);
+  };
+
+  const simularVenda = async () => {
+    setSimulating(true);
+    setSimResult(null);
+    try {
+      const r = await fetch('/api/v1/crm/simular-venda', { method: 'POST' }).then(r => r.json());
+      setSimResult(r);
+      await loadAll();
+      await loadDiagnostico();
+    } catch (e) {
+      setSimResult({ error: e instanceof Error ? e.message : 'falha' });
+    }
+    setSimulating(false);
   };
 
   const cleanupZombies = async () => {
@@ -424,6 +453,46 @@ export default function CrmConfigPage() {
           </div>
         </section>
       )}
+
+      {/* Diagnostico — auditoria do estado da integracao */}
+      <section className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)]">Diagnostico</h2>
+          <div className="flex items-center gap-2">
+            <button onClick={loadDiagnostico} disabled={diagLoading}
+              className="px-3 py-1.5 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)] disabled:opacity-50">
+              {diagLoading ? 'Carregando...' : 'Recarregar diagnostico'}
+            </button>
+            <button onClick={simularVenda} disabled={simulating}
+              className="px-3 py-1.5 text-[var(--text-body-sm)] text-white bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50">
+              {simulating ? 'Simulando...' : 'Simular venda do CRM'}
+            </button>
+          </div>
+        </div>
+        <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] p-5">
+          {!diag && (
+            <p className="text-[var(--text-body-sm)] text-[var(--t-text-muted)] italic">
+              Clique em <strong>Recarregar diagnostico</strong> para ver config, contagens e ultimos eventos.
+            </p>
+          )}
+          {diag && (
+            <pre className="text-[var(--text-caption)] text-[var(--t-text-secondary)] overflow-x-auto whitespace-pre-wrap font-mono max-h-96">
+              {JSON.stringify(diag, null, 2)}
+            </pre>
+          )}
+          {simResult && (
+            <div className="mt-4 rounded-lg border border-[var(--t-border)] p-3 bg-[var(--t-surface-hover)]/40">
+              <p className="text-[var(--text-caption)] font-semibold mb-2"
+                 style={{ color: (simResult.ok ? 'var(--crm-ok)' : 'var(--crm-err)') }}>
+                {simResult.ok ? 'Simulacao OK' : 'Simulacao FALHOU'}
+              </p>
+              <pre className="text-[var(--text-caption)] text-[var(--t-text-secondary)] overflow-x-auto whitespace-pre-wrap font-mono max-h-72">
+                {JSON.stringify(simResult, null, 2)}
+              </pre>
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* Maintenance — cleanup CRM zombies */}
       <section className="mb-8">
