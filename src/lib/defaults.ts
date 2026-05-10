@@ -126,9 +126,13 @@ export function createGrupoViagem(): GrupoViagem {
     trechos: [createTrecho()],
     navio_info: { embarque: null, desembarque: null, cidade_embarque: '', cidade_desembarque: '', nome_cruzeiro: '' },
     params: {
-      markup: 0.80, contrato: 3.50, tx_ad_mp: 0.9561,
-      tx_boleto: 8.92, parcelas: 10, qtd_min_pax: 20, qtd_max_pax: 30,
-      cortesia: 1, cortesia_apto: 'dbl',
+      // Novo modelo (custo+venda manual): markup/contrato/tx_* zerados
+      // por default. Quem preenche venda em cada item nao precisa deles.
+      // Para grupos no fluxo antigo, basta ajustar via "Configuracoes
+      // avancadas" no InfTab.
+      markup: 0, contrato: 0, tx_ad_mp: 0, tx_boleto: 0,
+      parcelas: 1, qtd_min_pax: 10, qtd_max_pax: 20,
+      cortesia: 0, cortesia_apto: 'dbl',
     },
     cambio: Object.fromEntries(SERVICOS_KEYS.map(k => [k, { valor: 1.0, moeda: 'BRL', deadline: null }])),
     links: {},

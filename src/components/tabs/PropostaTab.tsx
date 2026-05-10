@@ -50,6 +50,13 @@ export function PropostaTab({ grupo }: Props) {
 
   // Margem média do grupo — média ponderada das tarifas ativas pelos PAX por apto
   // Apenas para Grupo. Proposta usa só o tipoBase.
+  // Modo simples: markup=0 + tx_ad_mp=0 + tx_boleto=0 → Cartão/Boleto
+  // ficam iguais a "À Vista". Esconde linhas redundantes na proposta.
+  const modoSimples =
+    (grupo.params.markup ?? 0) === 0 &&
+    (grupo.params.tx_ad_mp ?? 0) === 0 &&
+    (grupo.params.tx_boleto ?? 0) === 0;
+
   let margemMediaPct = margemPct;
   if (tipo === 'GRUPO') {
     let somaPesos = 0;
@@ -129,27 +136,37 @@ export function PropostaTab({ grupo }: Props) {
             {TIPOS.map(t => <th key={t} className="p-2 shadow-[var(--t-card-shadow)] w-32">{LABELS[t]}</th>)}
           </tr></thead>
           <tbody>
-            <Row label="À Vista / PIX" values={p.totalPaxAvista} className="bg-green-50 dark:bg-green-950/20 font-bold" />
-            <Row label="Cartão de Crédito" values={p.totalPaxCartao} className="bg-blue-50 dark:bg-blue-950/20" />
-            <Row label="Boleto" values={p.totalPaxBoleto} className="bg-orange-50 dark:bg-orange-950/20" />
+            <Row label={modoSimples ? 'Preço de venda' : 'À Vista / PIX'} values={p.totalPaxAvista} className="bg-green-50 dark:bg-green-950/20 font-bold" />
+            {!modoSimples && <Row label="Cartão de Crédito" values={p.totalPaxCartao} className="bg-blue-50 dark:bg-blue-950/20" />}
+            {!modoSimples && <Row label="Boleto" values={p.totalPaxBoleto} className="bg-orange-50 dark:bg-orange-950/20" />}
           </tbody>
         </table>
       </div>
 
-      {/* Parcela por PAX */}
-      <h3 className="text-lg font-semibold text-[var(--t-text)]">Parcela por Pessoa ({grupo.params.parcelas}x)</h3>
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
-          <thead><tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
-            <th className="p-2 text-left shadow-[var(--t-card-shadow)] w-40">Modalidade</th>
-            {TIPOS.map(t => <th key={t} className="p-2 shadow-[var(--t-card-shadow)] w-32">{LABELS[t]}</th>)}
-          </tr></thead>
-          <tbody>
-            <Row label="Parcela Cartão" values={p.parcelaPaxCC} className="bg-blue-50 dark:bg-blue-950/20" />
-            <Row label="Parcela Boleto" values={p.parcelaPaxBoleto} className="bg-orange-50 dark:bg-orange-950/20" />
-          </tbody>
-        </table>
-      </div>
+      {/* Parcela por PAX — só faz sentido com >1 parcela */}
+      {grupo.params.parcelas > 1 && (
+        <>
+          <h3 className="text-lg font-semibold text-[var(--t-text)]">Parcela por Pessoa ({grupo.params.parcelas}x)</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead><tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
+                <th className="p-2 text-left shadow-[var(--t-card-shadow)] w-40">Modalidade</th>
+                {TIPOS.map(t => <th key={t} className="p-2 shadow-[var(--t-card-shadow)] w-32">{LABELS[t]}</th>)}
+              </tr></thead>
+              <tbody>
+                {modoSimples ? (
+                  <Row label="Valor da parcela" values={p.parcelaPaxCC} className="bg-blue-50 dark:bg-blue-950/20" />
+                ) : (
+                  <>
+                    <Row label="Parcela Cartão" values={p.parcelaPaxCC} className="bg-blue-50 dark:bg-blue-950/20" />
+                    <Row label="Parcela Boleto" values={p.parcelaPaxBoleto} className="bg-orange-50 dark:bg-orange-950/20" />
+                  </>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       {/* ============================================================ */}
       {/* CUSTOS POR SERVIÇO — detalhamento                            */}
@@ -187,27 +204,37 @@ export function PropostaTab({ grupo }: Props) {
             {TIPOS.map(t => <th key={t} className="p-2 shadow-[var(--t-card-shadow)] w-32">{LABELS[t]}</th>)}
           </tr></thead>
           <tbody>
-            <Row label="À Vista / PIX" values={p.totalAvista} className="bg-green-50 dark:bg-green-950/20 font-bold" />
-            <Row label="Cartão de Crédito" values={p.totalCartao} className="bg-blue-50 dark:bg-blue-950/20" />
-            <Row label="Boleto" values={p.totalBoleto} className="bg-orange-50 dark:bg-orange-950/20" />
+            <Row label={modoSimples ? 'Preço de venda' : 'À Vista / PIX'} values={p.totalAvista} className="bg-green-50 dark:bg-green-950/20 font-bold" />
+            {!modoSimples && <Row label="Cartão de Crédito" values={p.totalCartao} className="bg-blue-50 dark:bg-blue-950/20" />}
+            {!modoSimples && <Row label="Boleto" values={p.totalBoleto} className="bg-orange-50 dark:bg-orange-950/20" />}
           </tbody>
         </table>
       </div>
 
-      {/* Parcela por Apartamento */}
-      <h3 className="text-lg font-semibold text-[var(--t-text)]">Parcela por Apartamento ({grupo.params.parcelas}x)</h3>
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
-          <thead><tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
-            <th className="p-2 text-left shadow-[var(--t-card-shadow)] w-40">Modalidade</th>
-            {TIPOS.map(t => <th key={t} className="p-2 shadow-[var(--t-card-shadow)] w-32">{LABELS[t]}</th>)}
-          </tr></thead>
-          <tbody>
-            <Row label="Parcela Cartão" values={p.parcelaAptoCC} className="bg-blue-50 dark:bg-blue-950/20" />
-            <Row label="Parcela Boleto" values={p.parcelaAptoBoleto} className="bg-orange-50 dark:bg-orange-950/20" />
-          </tbody>
-        </table>
-      </div>
+      {/* Parcela por Apartamento — só faz sentido com >1 parcela */}
+      {grupo.params.parcelas > 1 && (
+        <>
+          <h3 className="text-lg font-semibold text-[var(--t-text)]">Parcela por Apartamento ({grupo.params.parcelas}x)</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead><tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
+                <th className="p-2 text-left shadow-[var(--t-card-shadow)] w-40">Modalidade</th>
+                {TIPOS.map(t => <th key={t} className="p-2 shadow-[var(--t-card-shadow)] w-32">{LABELS[t]}</th>)}
+              </tr></thead>
+              <tbody>
+                {modoSimples ? (
+                  <Row label="Valor da parcela" values={p.parcelaAptoCC} className="bg-blue-50 dark:bg-blue-950/20" />
+                ) : (
+                  <>
+                    <Row label="Parcela Cartão" values={p.parcelaAptoCC} className="bg-blue-50 dark:bg-blue-950/20" />
+                    <Row label="Parcela Boleto" values={p.parcelaAptoBoleto} className="bg-orange-50 dark:bg-orange-950/20" />
+                  </>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }

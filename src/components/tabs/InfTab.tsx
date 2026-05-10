@@ -184,57 +184,106 @@ export function InfTab({ grupo, onChange }: Props) {
         <span className="text-2xl font-bold text-[var(--t-accent)]">{totalDiarias}</span>
       </div>
 
-      {/* Parâmetros Financeiros */}
+      {/* Parâmetros do roteiro — apenas o essencial pro modelo custo+venda */}
       <div>
-        <h3 className="text-lg font-semibold text-[var(--t-text)] mb-3">Parâmetros Financeiros</h3>
+        <h3 className="text-lg font-semibold text-[var(--t-text)] mb-3">Parâmetros do roteiro</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {(() => {
-            const isGrupo = (grupo.tipo ?? 'GRUPO') === 'GRUPO';
-            // Campos comuns a ambos os tipos
-            const base: [string, string, number][] = [
-              ['markup', 'Markup', 0.01],
-              ['contrato', 'Contrato (R$)', 0.01],
-              ['tx_ad_mp', 'TX AD MP', 0.0001],
-              ['tx_boleto', 'TX Boleto (R$)', 0.01],
-              ['parcelas', 'Parcelas', 1],
-            ];
-            // Quantidade de PAX e cortesia só fazem sentido quando é Grupo
-            const grupoOnly: [string, string, number][] = isGrupo ? [
-              ['qtd_min_pax', 'QTD Mín. PAX', 1],
-              ['qtd_max_pax', 'QTD Máx. PAX', 1],
-              ['cortesia', 'Cortesia', 1],
-            ] : [];
-            return [...base, ...grupoOnly].map(([key, label, step]) => (
-              <div key={key}>
-                <Label>{label}</Label>
+          <div>
+            <Label>Parcelas</Label>
+            <Input
+              type="number"
+              step={1}
+              min={1}
+              value={grupo.params.parcelas}
+              onChange={e => updateParams('parcelas', parseInt(e.target.value) || 1)}
+            />
+          </div>
+          {(grupo.tipo ?? 'GRUPO') === 'GRUPO' && (
+            <>
+              <div>
+                <Label>QTD Mín. PAX</Label>
                 <Input
                   type="number"
-                  step={step}
-                  value={grupo.params[key as keyof typeof grupo.params] as number}
-                  onChange={e => updateParams(key, parseFloat(e.target.value) || 0)}
+                  step={1}
+                  min={1}
+                  value={grupo.params.qtd_min_pax}
+                  onChange={e => updateParams('qtd_min_pax', parseInt(e.target.value) || 1)}
                 />
               </div>
-            ));
-          })()}
-          {/* Apto onde a vaga de cortesia fica — só se Grupo + cortesia > 0 */}
-          {(grupo.tipo ?? 'GRUPO') === 'GRUPO' && grupo.params.cortesia > 0 && (
-            <div>
-              <Label>Cortesia no apto</Label>
-              <select
-                value={grupo.params.cortesia_apto ?? 'dbl'}
-                onChange={e => update({
-                  params: { ...grupo.params, cortesia_apto: e.target.value as 'sgl' | 'dbl' | 'tpl' | 'qdp' },
-                })}
-                className="flex h-10 w-full rounded-md border border-[var(--t-border)] bg-[var(--t-input-bg)] px-3 py-2 text-sm"
-              >
-                <option value="sgl">SGL</option>
-                <option value="dbl">DBL</option>
-                <option value="tpl">TPL</option>
-                <option value="qdp">QDP</option>
-              </select>
-            </div>
+              <div>
+                <Label>QTD Máx. PAX</Label>
+                <Input
+                  type="number"
+                  step={1}
+                  min={1}
+                  value={grupo.params.qtd_max_pax}
+                  onChange={e => updateParams('qtd_max_pax', parseInt(e.target.value) || 1)}
+                />
+              </div>
+              <div>
+                <Label>Cortesia</Label>
+                <Input
+                  type="number"
+                  step={1}
+                  min={0}
+                  value={grupo.params.cortesia}
+                  onChange={e => updateParams('cortesia', parseInt(e.target.value) || 0)}
+                />
+              </div>
+              {grupo.params.cortesia > 0 && (
+                <div>
+                  <Label>Cortesia no apto</Label>
+                  <select
+                    value={grupo.params.cortesia_apto ?? 'dbl'}
+                    onChange={e => update({
+                      params: { ...grupo.params, cortesia_apto: e.target.value as 'sgl' | 'dbl' | 'tpl' | 'qdp' },
+                    })}
+                    className="flex h-10 w-full rounded-md border border-[var(--t-border)] bg-[var(--t-input-bg)] px-3 py-2 text-sm"
+                  >
+                    <option value="sgl">SGL</option>
+                    <option value="dbl">DBL</option>
+                    <option value="tpl">TPL</option>
+                    <option value="qdp">QDP</option>
+                  </select>
+                </div>
+              )}
+            </>
           )}
         </div>
+
+        {/* Configurações avançadas — só para quem usa o fluxo antigo de
+            markup automático em vez de preço de venda manual. Default
+            zerado em novos grupos. */}
+        <details className="mt-4 rounded-lg border border-[var(--t-border)] bg-[var(--t-surface)] overflow-hidden">
+          <summary className="px-4 py-2.5 cursor-pointer text-sm text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)] select-none">
+            Configurações avançadas (markup e taxas — opcional)
+          </summary>
+          <div className="p-4 border-t border-[var(--t-border)]">
+            <p className="text-xs text-[var(--t-text-muted)] mb-3">
+              No modelo novo (preço de venda manual por item), estes campos não são usados.
+              Mantenha em <strong>0</strong> para usar o fluxo simplificado. Para grupos legados
+              com markup automático, edite aqui.
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {([
+                ['markup', 'Markup', 0.01],
+                ['contrato', 'Contrato (R$)', 0.01],
+                ['tx_ad_mp', 'TX AD MP', 0.0001],
+                ['tx_boleto', 'TX Boleto (R$)', 0.01],
+              ] as [string, string, number][]).map(([key, label, step]) => (
+                <div key={key}>
+                  <Label>{label}</Label>
+                  <Input
+                    type="number"
+                    step={step}
+                    value={grupo.params[key as keyof typeof grupo.params] as number}
+                    onChange={e => updateParams(key, parseFloat(e.target.value) || 0)}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </details>
       </div>
 
       {/* Câmbio por Serviço */}

@@ -406,8 +406,10 @@ export function calcProposta(g: GrupoViagem): PropostaResult {
   for (const tipo of TIPOS) {
     const soma = allLineKeys.reduce((acc, k) => acc + (lineValues[k]?.[tipo] || 0), 0);
     totalAvista[tipo] = r2(soma);
-    totalCartao[tipo] = r2(p.tx_ad_mp > 0 ? soma / p.tx_ad_mp : 0);
-    // Boleto parte do valor à vista (não do cartão) + taxa de boleto por parcela
+    // tx_ad_mp = 0 (novo modelo simples) → cartão = à vista, sem multiplicador.
+    // > 0 → divide pelo coeficiente (modelo legado).
+    totalCartao[tipo] = r2(p.tx_ad_mp > 0 ? soma / p.tx_ad_mp : soma);
+    // tx_boleto = 0 → boleto = à vista; > 0 → adiciona taxa por parcela.
     totalBoleto[tipo] = r2(soma + (p.tx_boleto * p.parcelas));
     parcelaAptoCC[tipo] = r2(p.parcelas > 0 ? totalCartao[tipo] / p.parcelas : 0);
     parcelaAptoBoleto[tipo] = r2(p.parcelas > 0 ? totalBoleto[tipo] / p.parcelas : 0);
