@@ -1,6 +1,8 @@
 import pool, { initDB } from './db';
 import { generateId } from './utils';
 import { createHmac } from 'crypto';
+import { getProdutoGrupo } from './financial-calculations';
+import type { GrupoViagem } from './types';
 
 // ──────────────────────────────────────────
 // Types
@@ -25,6 +27,77 @@ interface CrmStatus {
   eventos_processados_hoje: number;
   ultimo_evento_saida: { tipo: string; status: string; timestamp: string } | null;
   ultimo_evento_entrada: { tipo: string; processado: boolean; timestamp: string } | null;
+}
+
+// ──────────────────────────────────────────
+// Outbound payload builders
+// ──────────────────────────────────────────
+
+// Builds the payload sent to the CRM when a product (GrupoViagem) is
+// published or updated. Pulls dates, destinations, images and the full
+// price tree (avista/cartao/boleto by SGL/DBL/TPL/QDP/CHD) from the
+// product calculator so the CRM can attach it to a deal.
+export function buildProdutoPayload(grupo: GrupoViagem): Record<string, unknown> {
+  const summary = getProdutoGrupo(grupo);
+
+  // Pick the first hotel image we find — used as the product cover.
+  const imagem = grupo.htl?.hoteis?.[0]?.info?.hotel_imagem || null;
+
+  // Distinct list of destinations across all periods.
+  const destinos = Array.from(
+    new Set((grupo.periodos || []).map(p => p.destino).filter(Boolean)),
+  );
+
+  // Hotels named in the periods.
+  const hoteis = Array.from(
+    new Set((grupo.periodos || []).map(p => p.hotel).filter(Boolean)),
+  );
+
+  // Trip duration in nights (last_check_out - first_check_in).
+  let duracao_noites: number | null = null;
+  if (summary.datas.primeira_partida && summary.datas.ultimo_retorno) {
+    const ms =
+      new Date(summary.datas.ultimo_retorno).getTime() -
+      new Date(summary.datas.primeira_partida).getTime();
+    if (!Number.isNaN(ms) && ms > 0) {
+      duracao_noites = Math.round(ms / (1000 * 60 * 60 * 24));
+    }
+  }
+
+  return {
+    grupo_id: grupo.id,
+    grp_id: grupo.grp_id,
+    nome: grupo.origem_destino,
+    descricao: grupo.descricao_orcamento || '',
+    imagem,
+    status_pipeline: grupo.status_pipeline,
+
+    // Trip facts
+    destinos,
+    hoteis,
+    data_inicio: summary.datas.primeira_partida,
+    data_fim: summary.datas.ultimo_retorno,
+    duracao_noites,
+    qtd_min_pax: summary.qtd_min_pax,
+    qtd_max_pax: summary.qtd_max_pax,
+
+    // Pricing — full breakdown by tariff (SGL/DBL/TPL/QDP/CHD) and
+    // payment form (avista/cartao/boleto). Per-apto and per-pax.
+    tarifas_ativas: grupo.tarifas_ativas,
+    precos: summary.precos,
+    precos_por_pax: summary.precos_por_pax,
+    parcelas_apto: summary.parcelas_apto,
+
+    // Cost breakdown by service line (TKT/HTL/REC/CAR/...). Useful for
+    // the CRM to display where the price comes from.
+    custos_por_apto: summary.custos_por_apto,
+
+    // Markup, tx, parcelas, etc.
+    params: summary.params,
+    deadlines: summary.deadlines,
+
+    updated_at: grupo.updated_at,
+  };
 }
 
 // ──────────────────────────────────────────
@@ -300,8 +373,9 @@ export async function processarEventoCRM(
 
     switch (tipo) {
       case 'VENDA_FECHADA': {
-        // 1) Resolve external IDs (cliente, vendedor, fornecedores) to internal IDs.
-        //    Creates rows on first sight using the denormalized data the CRM sends.
+        // 1) Resolve external IDs (cliente, vendedor, fornecedores) to
+        //    internal IDs. Creates rows on first sight using denormalized
+        //    data the CRM sends.
         const clienteExternalId = asStr(payload.cliente_id);
         if (!clienteExternalId) {
           throw new Error('VENDA_FECHADA sem cliente_id');
@@ -327,6 +401,29 @@ export async function processarEventoCRM(
           );
         }
 
+        // 2) Compute commercial metrics. The CRM may send `custo_total`,
+        //    `rentabilidade` and `comissao` directly (preferred — that's
+        //    what the salesperson committed to). Otherwise we derive from
+        //    the fornecedores breakdown.
+        const valorTotal = Number(payload.valor_total) || 0;
+        const fornecedoresPayload = (payload.fornecedores as Array<Record<string, unknown>>) || [];
+        const custoFornecedores = fornecedoresPayload.reduce(
+          (acc, f) => acc + (Number(f.valor_custo) || 0),
+          0,
+        );
+        const custoTotal = payload.custo_total != null
+          ? Number(payload.custo_total)
+          : custoFornecedores;
+        const rentabilidade = payload.rentabilidade != null
+          ? Number(payload.rentabilidade)
+          : Math.max(valorTotal - custoTotal, 0);
+        const comissao = payload.comissao != null
+          ? Number(payload.comissao)
+          : null;
+        const margemPercentual = valorTotal > 0
+          ? Number(((rentabilidade / valorTotal) * 100).toFixed(2))
+          : 0;
+
         const vendaId = generateId();
         const vendaData = {
           id: vendaId,
@@ -337,7 +434,11 @@ export async function processarEventoCRM(
           grupo_id: payload.entur_grupo_id || '',
           proposta_id: payload.entur_proposta_id || '',
           crm_venda_id: payload.crm_venda_id || '',
-          valor_total: payload.valor_total || 0,
+          valor_total: valorTotal,
+          custo_total: custoTotal,
+          rentabilidade,
+          margem_percentual: margemPercentual,
+          comissao,
           moeda: payload.moeda || 'BRL',
           status: 'vendido',
           origem: 'crm',
@@ -349,7 +450,7 @@ export async function processarEventoCRM(
           [vendaId, clienteId, vendedorId, JSON.stringify(vendaData), tenantId]
         );
 
-        // 2) Create contas_receber for each parcela.
+        // 3) Create contas_receber for each parcela.
         const parcelas = (payload.condicoes_pagamento as Array<Record<string, unknown>>) || [];
         for (const parcela of parcelas) {
           const parcelaId = generateId();
@@ -371,7 +472,7 @@ export async function processarEventoCRM(
           );
         }
 
-        // 3) Create contas_pagar for each fornecedor (upsert fornecedor first).
+        // 4) Create contas_pagar for each fornecedor (upsert fornecedor first).
         const fornecedores = (payload.fornecedores as Array<Record<string, unknown>>) || [];
         for (const forn of fornecedores) {
           const fornExternalId = asStr(forn.fornecedor_id);

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
-import { emitirEventoCRM } from '@/lib/crm-integration';
+import { emitirEventoCRM, buildProdutoPayload } from '@/lib/crm-integration';
 import { getTenantId } from '@/lib/tenant';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -29,14 +29,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
      JSON.stringify(grupo), grupo.created_at, grupo.updated_at]
   );
 
-  // CRM: emit product updated
+  // CRM: re-publish the full product snapshot on every meaningful update.
   if (grupo.periodos?.length > 0) {
-    emitirEventoCRM('PRODUTO_PUBLICADO', {
-      grupo_id: id,
-      origem_destino: grupo.origem_destino,
-      data: grupo,
-      atualizado: true,
-    }, { tenantId });
+    emitirEventoCRM(
+      'PRODUTO_PUBLICADO',
+      { ...buildProdutoPayload(grupo), atualizado: true },
+      { tenantId },
+    );
   }
 
   return NextResponse.json(grupo);
@@ -48,5 +47,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const tenantId = await getTenantId();
   const { id } = await params;
   await pool.query('DELETE FROM grupos WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
+
+  // CRM: signal that the product is no longer available.
+  emitirEventoCRM('PRODUTO_DESPUBLICADO', { grupo_id: id }, { tenantId });
+
   return NextResponse.json({ ok: true });
 }

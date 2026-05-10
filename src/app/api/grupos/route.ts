@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
-import { emitirEventoCRM } from '@/lib/crm-integration';
+import { emitirEventoCRM, buildProdutoPayload } from '@/lib/crm-integration';
 import { getTenantId } from '@/lib/tenant';
 
 export async function GET() {
@@ -26,12 +26,9 @@ export async function POST(req: NextRequest) {
      JSON.stringify(grupo), grupo.created_at, grupo.updated_at]
   );
 
-  // CRM: emit product published
-  emitirEventoCRM('PRODUTO_PUBLICADO', {
-    grupo_id: grupo.id,
-    origem_destino: grupo.origem_destino,
-    data: grupo,
-  }, { tenantId });
+  // CRM: publish the product (full snapshot — price tree, dates, hotels,
+  // destinations) so it can be attached to a deal in the CRM.
+  emitirEventoCRM('PRODUTO_PUBLICADO', buildProdutoPayload(grupo), { tenantId });
 
   return NextResponse.json(grupo);
 }
