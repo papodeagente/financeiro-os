@@ -40,11 +40,96 @@ interface CrmStatus {
 // ──────────────────────────────────────────
 
 // Builds the payload sent to the CRM when a product (GrupoViagem) is
-// published or updated. Pulls dates, destinations, images and the full
-// price tree (avista/cartao/boleto by SGL/DBL/TPL/QDP/CHD) from the
-// product calculator so the CRM can attach it to a deal.
+// published or updated. The CRM uses this to populate the product list
+// at /settings/products, so we include the headline numbers (cost,
+// sale, margin) plus the full price tree for richer displays.
 export function buildProdutoPayload(grupo: GrupoViagem): Record<string, unknown> {
   const summary = getProdutoGrupo(grupo);
+
+  // Public-facing host. Configurable via env so non-prod tenants can use
+  // their own domains without code changes. Falls back to the
+  // Coolify-injected URL, then to production.
+  const publicUrl = (
+    process.env.PUBLIC_APP_URL
+    || process.env.COOLIFY_URL
+    || (process.env.COOLIFY_FQDN ? `https://${process.env.COOLIFY_FQDN}` : '')
+    || 'https://fin.enturos.com'
+  ).replace(/\/$/, '');
+
+  // --- Headline figures (DBL as the reference room type) -----------------
+  // Aggregate cost across all service lines (TKT/HTL/REC/CAR/...) — no markup.
+  let preco_custo = 0;
+  for (const tipo of ['tkt', 'htl', 'rec', 'car', 'guia', 'seg', 'navio', 'ing'] as const) {
+    const linha = summary.custos_por_apto[tipo] as { dbl?: number } | undefined;
+    if (linha?.dbl) preco_custo += linha.dbl;
+  }
+  preco_custo = Number(preco_custo.toFixed(2));
+
+  const preco_venda = Number((summary.precos.avista?.dbl ?? 0).toFixed(2));
+  const margem = Number(Math.max(preco_venda - preco_custo, 0).toFixed(2));
+  const margem_percentual = preco_venda > 0
+    ? Number(((margem / preco_venda) * 100).toFixed(2))
+    : 0;
+
+  // --- Suppliers list (unique by name, tagged by service) ----------------
+  // CRM /settings/products usually wants one "supplier" per product, but
+  // travel groups bundle many — we send them all so the CRM can show or
+  // pick a primary one. Keeps name, type and an estimated cost share.
+  const fornecedoresMap = new Map<string, { nome: string; tipo: string; servico: string; valor_estimado: number }>();
+  const addFornecedor = (nome: string, tipo: string, servico: string, valor: number) => {
+    if (!nome) return;
+    const key = `${tipo}::${nome}`;
+    const prev = fornecedoresMap.get(key);
+    fornecedoresMap.set(key, {
+      nome,
+      tipo,
+      servico,
+      valor_estimado: (prev?.valor_estimado || 0) + (Number.isFinite(valor) ? valor : 0),
+    });
+  };
+  // TKT (companhias aereas)
+  for (const trecho of grupo.tkt?.trechos || []) {
+    for (const fonte of trecho.fontes || []) {
+      addFornecedor(fonte.nome, 'TKT', 'Aéreo', Number(fonte.valor_adt) || 0);
+    }
+  }
+  // HTL (hoteis)
+  for (const hotel of grupo.htl?.hoteis || []) {
+    for (const fonte of hotel.fontes || []) {
+      addFornecedor(fonte.nome, 'HTL', 'Hotel', Number(fonte.valor_dbl) || 0);
+    }
+  }
+  // REC (receptivos)
+  for (const passeio of grupo.rec?.passeios || []) {
+    for (const fonte of passeio.fornecedores || []) {
+      addFornecedor(fonte.nome, 'REC', 'Receptivo', Number(fonte.valor_adt) || 0);
+    }
+  }
+  // CAR (transportes)
+  for (const transp of grupo.car?.transportes || []) {
+    for (const empresa of transp.empresas || []) {
+      addFornecedor(empresa.nome, 'CAR', 'Transporte', Number(empresa.valor_veiculo) || 0);
+    }
+  }
+  // GUIA, SEG, NAVIO etc — só os nomes (sem valor por simplicidade)
+  for (const destino of grupo.guia?.destinos || []) {
+    for (const f of destino.fornecedores || []) addFornecedor(f.nome, 'GUIA', 'Guia', Number(f.valor_total) || 0);
+  }
+  for (const s of grupo.seg?.seguradoras || []) addFornecedor(s.nome, 'SEG', 'Seguro', Number(s.valor_dbl) || 0);
+  for (const n of grupo.navio?.fornecedores || []) addFornecedor(n.nome, 'NAVIO', 'Cruzeiro', Number(n.valor_dbl) || 0);
+  for (const a of grupo.ing?.atrativos || []) {
+    for (const f of a.fontes || []) addFornecedor(f.nome, 'ING', 'Ingresso', Number(f.valor_adt) || 0);
+  }
+  const fornecedores = Array.from(fornecedoresMap.values());
+
+  // --- Links --------------------------------------------------------------
+  // link_proposta: only when there's a proposta attached (status >= PROPOSTA).
+  // link_produto: internal edit URL — always works for the agency user.
+  const propostaId = grupo.proposta_id;
+  const link_proposta = propostaId
+    ? `${publicUrl}/p/${String(propostaId).slice(0, 8)}`
+    : null;
+  const link_produto = `${publicUrl}/grupo/${grupo.id}`;
 
   // Pick the first hotel image we find — used as the product cover.
   const imagem = grupo.htl?.hoteis?.[0]?.info?.hotel_imagem || null;
@@ -53,13 +138,11 @@ export function buildProdutoPayload(grupo: GrupoViagem): Record<string, unknown>
   const destinos = Array.from(
     new Set((grupo.periodos || []).map(p => p.destino).filter(Boolean)),
   );
-
-  // Hotels named in the periods.
   const hoteis = Array.from(
     new Set((grupo.periodos || []).map(p => p.hotel).filter(Boolean)),
   );
 
-  // Trip duration in nights (last_check_out - first_check_in).
+  // Trip duration in nights.
   let duracao_noites: number | null = null;
   if (summary.datas.primeira_partida && summary.datas.ultimo_retorno) {
     const ms =
@@ -71,12 +154,27 @@ export function buildProdutoPayload(grupo: GrupoViagem): Record<string, unknown>
   }
 
   return {
+    // Identification
     grupo_id: grupo.id,
     grp_id: grupo.grp_id,
     nome: grupo.origem_destino,
     descricao: grupo.descricao_orcamento || '',
     imagem,
     status_pipeline: grupo.status_pipeline,
+
+    // Headline figures (DBL reference) — what /settings/products renders
+    preco_custo,
+    preco_venda,
+    margem,
+    margem_percentual,
+    moeda: 'BRL',
+
+    // Suppliers (one entry per supplier×service)
+    fornecedores,
+
+    // Direct links
+    link_proposta,
+    link_produto,
 
     // Trip facts
     destinos,
@@ -87,15 +185,11 @@ export function buildProdutoPayload(grupo: GrupoViagem): Record<string, unknown>
     qtd_min_pax: summary.qtd_min_pax,
     qtd_max_pax: summary.qtd_max_pax,
 
-    // Pricing — full breakdown by tariff (SGL/DBL/TPL/QDP/CHD) and
-    // payment form (avista/cartao/boleto). Per-apto and per-pax.
+    // Full price tree by tariff (SGL/DBL/TPL/QDP/CHD) and payment form
     tarifas_ativas: grupo.tarifas_ativas,
     precos: summary.precos,
     precos_por_pax: summary.precos_por_pax,
     parcelas_apto: summary.parcelas_apto,
-
-    // Cost breakdown by service line (TKT/HTL/REC/CAR/...). Useful for
-    // the CRM to display where the price comes from.
     custos_por_apto: summary.custos_por_apto,
 
     // Markup, tx, parcelas, etc.
