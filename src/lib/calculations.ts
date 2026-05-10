@@ -182,6 +182,260 @@ export function calcDivulgacaoTotals(g: GrupoViagem) {
   };
 }
 
+// ============================================================
+// Itens incluidos — visao clean da aba Proposta
+// ============================================================
+// Lista apenas os servicos que tem dados, com custo/venda/margem
+// no tipo de apto de referencia (DBL para Grupo, SGL para Proposta).
+// Fornecedores listados sao aqueles com algum valor preenchido.
+
+export interface ItemIncluido {
+  servico: string;        // 'TKT' | 'HTL' | ...
+  label: string;          // 'Aéreo' | 'Hotel' | ...
+  fornecedores: string[]; // nomes únicos com algum valor preenchido
+  custo: number;          // custo no tipoBase (sem markup)
+  venda: number;          // venda manual se preenchida; senão custo / markup
+  margem: number;         // venda - custo
+  margemPct: number;      // (margem/venda)*100
+  detalhes: string;       // ex: "3 trechos", "2 hotéis"
+  vendaManual: boolean;   // true se usuário definiu valor_venda_*
+}
+
+const SERVICO_LABEL: Record<string, string> = {
+  TKT: 'Aéreo',
+  HTL: 'Hotel',
+  REC: 'Receptivo',
+  CAR: 'Carro / Transporte',
+  GUIA: 'Guia',
+  SEG: 'Seguro',
+  NAVIO: 'Cruzeiro',
+  ING: 'Ingresso',
+  BRINDE: 'Brinde',
+  DIVULGACAO: 'Divulgação',
+};
+
+// Aplica markup aproximado quando nao ha venda manual (modelo legado).
+// Reproduz a logica de calcProposta isoladamente para o servico.
+function aplicarMargemAproximada(custo: number, markup: number): number {
+  if (markup <= 0) return custo;
+  return Number((custo / markup).toFixed(2));
+}
+
+export function calcItensIncluidos(g: GrupoViagem, tipoBase: string): ItemIncluido[] {
+  const out: ItemIncluido[] = [];
+  const c = g.cambio;
+  const params = g.params;
+  const cambio = (k: string) => c[k]?.valor || 1;
+  const minPax = params.qtd_min_pax || 1;
+  const paxBase = PAX_MAP[tipoBase] || 1;
+  const markup = params.markup || 0;
+
+  // helper p/ extrair nomes únicos com algum valor preenchido
+  const uniq = (arr: string[]) => Array.from(new Set(arr.filter(s => s && s.trim())));
+
+  // TKT
+  const tkt = calcTktTotals(g);
+  if (tkt.totalAdt > 0 || tkt.totalChd > 0 || tkt.hasVenda) {
+    const custo = tipoBase === 'chd'
+      ? tkt.totalChd * cambio('tkt')
+      : tkt.totalAdt * paxBase * cambio('tkt');
+    const venda = tkt.hasVenda
+      ? (tipoBase === 'chd' ? tkt.totalChdVenda : tkt.totalAdtVenda * paxBase)
+      : aplicarMargemAproximada(custo, markup);
+    out.push({
+      servico: 'TKT',
+      label: SERVICO_LABEL.TKT,
+      fornecedores: uniq(g.tkt.trechos.flatMap(t => t.fontes.filter(f => f.valor_adt || f.valor_chd || f.valor_venda_adt || f.valor_venda_chd).map(f => f.nome))),
+      custo, venda,
+      margem: Math.max(venda - custo, 0),
+      margemPct: venda > 0 ? ((venda - custo) / venda) * 100 : 0,
+      detalhes: `${g.tkt.trechos.length} trecho${g.tkt.trechos.length > 1 ? 's' : ''}`,
+      vendaManual: tkt.hasVenda,
+    });
+  }
+
+  // HTL
+  const htl = calcHtlTotals(g);
+  const htlTotals = htl.totals as Record<string, number>;
+  const htlTotalsVenda = htl.totalsVenda as Record<string, number>;
+  const custoHtl = (htlTotals[tipoBase] || 0) * cambio('htl');
+  const vendaHtlManual = htl.hasVenda ? (htlTotalsVenda[tipoBase] || 0) : 0;
+  if (custoHtl > 0 || vendaHtlManual > 0) {
+    const venda = htl.hasVenda ? vendaHtlManual : aplicarMargemAproximada(custoHtl, markup);
+    out.push({
+      servico: 'HTL',
+      label: SERVICO_LABEL.HTL,
+      fornecedores: uniq(g.htl.hoteis.flatMap(h => h.fontes.filter(f => f.valor_sgl || f.valor_dbl || f.valor_tpl || f.valor_qdp || f.valor_venda_sgl || f.valor_venda_dbl).map(f => f.nome))),
+      custo: custoHtl, venda,
+      margem: Math.max(venda - custoHtl, 0),
+      margemPct: venda > 0 ? ((venda - custoHtl) / venda) * 100 : 0,
+      detalhes: `${g.htl.hoteis.length} hotel/hotéis`,
+      vendaManual: htl.hasVenda,
+    });
+  }
+
+  // REC
+  const rec = calcRecTotals(g);
+  if (rec.totalAdt > 0 || rec.totalChd > 0 || rec.hasVenda) {
+    const custo = tipoBase === 'chd'
+      ? rec.totalChd * cambio('rec')
+      : rec.totalAdt * paxBase * cambio('rec');
+    const venda = rec.hasVenda
+      ? (tipoBase === 'chd' ? rec.totalChdVenda : rec.totalAdtVenda * paxBase)
+      : aplicarMargemAproximada(custo, markup);
+    out.push({
+      servico: 'REC',
+      label: SERVICO_LABEL.REC,
+      fornecedores: uniq(g.rec.passeios.flatMap(p => p.fornecedores.filter(f => f.valor_adt || f.valor_chd || f.valor_venda_adt || f.valor_venda_chd).map(f => f.nome))),
+      custo, venda,
+      margem: Math.max(venda - custo, 0),
+      margemPct: venda > 0 ? ((venda - custo) / venda) * 100 : 0,
+      detalhes: `${g.rec.passeios.length} passeio${g.rec.passeios.length > 1 ? 's' : ''}`,
+      vendaManual: rec.hasVenda,
+    });
+  }
+
+  // CAR
+  const car = calcCarTotals(g);
+  if (car.totalPorPax > 0 || car.hasVenda) {
+    const custo = car.totalPorPax * paxBase * cambio('car');
+    const venda = car.hasVenda
+      ? car.totalPorPaxVenda * paxBase
+      : aplicarMargemAproximada(custo, markup);
+    out.push({
+      servico: 'CAR',
+      label: SERVICO_LABEL.CAR,
+      fornecedores: uniq(g.car.transportes.flatMap(t => t.empresas.filter(e => e.valor_veiculo || e.valor_venda_veiculo).map(e => e.nome))),
+      custo, venda,
+      margem: Math.max(venda - custo, 0),
+      margemPct: venda > 0 ? ((venda - custo) / venda) * 100 : 0,
+      detalhes: `${g.car.transportes.length} transporte${g.car.transportes.length > 1 ? 's' : ''}`,
+      vendaManual: car.hasVenda,
+    });
+  }
+
+  // GUIA
+  const guia = calcGuiaTotals(g);
+  if (guia.totalPorPax > 0 || guia.hasVenda) {
+    const custo = guia.totalPorPax * paxBase * cambio('guia');
+    const venda = guia.hasVenda
+      ? guia.totalPorPaxVenda * paxBase
+      : aplicarMargemAproximada(custo, markup);
+    out.push({
+      servico: 'GUIA',
+      label: SERVICO_LABEL.GUIA,
+      fornecedores: uniq(g.guia.destinos.flatMap(d => d.fornecedores.filter(f => f.valor_total || f.valor_venda_total).map(f => f.nome))),
+      custo, venda,
+      margem: Math.max(venda - custo, 0),
+      margemPct: venda > 0 ? ((venda - custo) / venda) * 100 : 0,
+      detalhes: `${g.guia.destinos.length} destino${g.guia.destinos.length > 1 ? 's' : ''}`,
+      vendaManual: guia.hasVenda,
+    });
+  }
+
+  // SEG
+  const seg = calcSegTotals(g);
+  const segCustoTipo = tipoBase === 'chd' ? (seg['sgl'] || 0) : (seg[tipoBase] || 0);
+  const segVendaTipo = tipoBase === 'chd' ? (seg.venda['sgl'] || 0) : (seg.venda[tipoBase] || 0);
+  if (segCustoTipo > 0 || segVendaTipo > 0) {
+    const custo = segCustoTipo * cambio('seg');
+    const venda = seg.hasVenda ? segVendaTipo : aplicarMargemAproximada(custo, markup);
+    out.push({
+      servico: 'SEG',
+      label: SERVICO_LABEL.SEG,
+      fornecedores: uniq(g.seg.seguradoras.filter(s => s.valor_sgl || s.valor_dbl || s.valor_venda_sgl || s.valor_venda_dbl).map(s => s.nome)),
+      custo, venda,
+      margem: Math.max(venda - custo, 0),
+      margemPct: venda > 0 ? ((venda - custo) / venda) * 100 : 0,
+      detalhes: '',
+      vendaManual: seg.hasVenda,
+    });
+  }
+
+  // NAVIO
+  const nav = calcNavioTotals(g);
+  const navCustoTipo = nav[tipoBase] || 0;
+  const navVendaTipo = nav.venda[tipoBase] || 0;
+  if (navCustoTipo > 0 || navVendaTipo > 0) {
+    const custo = navCustoTipo * cambio('navio');
+    const venda = nav.hasVenda ? navVendaTipo : aplicarMargemAproximada(custo, markup);
+    out.push({
+      servico: 'NAVIO',
+      label: SERVICO_LABEL.NAVIO,
+      fornecedores: uniq(g.navio.fornecedores.filter(f => f.valor_sgl || f.valor_dbl || f.valor_venda_sgl || f.valor_venda_dbl).map(f => f.nome)),
+      custo, venda,
+      margem: Math.max(venda - custo, 0),
+      margemPct: venda > 0 ? ((venda - custo) / venda) * 100 : 0,
+      detalhes: g.navio_info.nome_cruzeiro || '',
+      vendaManual: nav.hasVenda,
+    });
+  }
+
+  // ING
+  const ing = calcIngTotals(g);
+  if (ing.totalAdt > 0 || ing.totalChd > 0 || ing.hasVenda) {
+    const custo = tipoBase === 'chd'
+      ? ing.totalChd * cambio('ing')
+      : ing.totalAdt * paxBase * cambio('ing');
+    const venda = ing.hasVenda
+      ? (tipoBase === 'chd' ? ing.totalChdVenda : ing.totalAdtVenda * paxBase)
+      : aplicarMargemAproximada(custo, markup);
+    out.push({
+      servico: 'ING',
+      label: SERVICO_LABEL.ING,
+      fornecedores: uniq(g.ing.atrativos.flatMap(a => a.fontes.filter(f => f.valor_adt || f.valor_chd || f.valor_venda_adt || f.valor_venda_chd).map(f => f.nome))),
+      custo, venda,
+      margem: Math.max(venda - custo, 0),
+      margemPct: venda > 0 ? ((venda - custo) / venda) * 100 : 0,
+      detalhes: `${g.ing.atrativos.length} atrativo${g.ing.atrativos.length > 1 ? 's' : ''}`,
+      vendaManual: ing.hasVenda,
+    });
+  }
+
+  // BRINDE
+  const brinde = calcBrindeTotals(g);
+  if (brinde.melhorPreco > 0 || brinde.hasVenda) {
+    const custo = brinde.melhorPreco * paxBase * cambio('brinde');
+    const venda = brinde.hasVenda
+      ? brinde.melhorPrecoVenda * paxBase
+      : aplicarMargemAproximada(custo, markup);
+    out.push({
+      servico: 'BRINDE',
+      label: SERVICO_LABEL.BRINDE,
+      fornecedores: uniq(g.brinde.fornecedores.filter(f => f.valor_unidade || f.valor_venda_unidade).map(f => f.nome)),
+      custo, venda,
+      margem: Math.max(venda - custo, 0),
+      margemPct: venda > 0 ? ((venda - custo) / venda) * 100 : 0,
+      detalhes: '',
+      vendaManual: brinde.hasVenda,
+    });
+  }
+
+  // DIVULGAÇÃO
+  const div = calcDivulgacaoTotals(g);
+  if (div.totalGeral > 0 || div.hasVenda) {
+    const custo = div.totalPorPax * paxBase * cambio('divulgacao');
+    const venda = div.hasVenda
+      ? div.totalPorPaxVenda * paxBase
+      : aplicarMargemAproximada(custo, markup);
+    out.push({
+      servico: 'DIVULGACAO',
+      label: SERVICO_LABEL.DIVULGACAO,
+      fornecedores: uniq(g.divulgacao.fornecedores.filter(f => f.valor_total || f.valor_venda_total).map(f => f.nome)),
+      custo, venda,
+      margem: Math.max(venda - custo, 0),
+      margemPct: venda > 0 ? ((venda - custo) / venda) * 100 : 0,
+      detalhes: '',
+      vendaManual: div.hasVenda,
+    });
+  }
+
+  // helper p/ silenciar warnings de variável não usada — minPax usado em outras versões
+  void minPax;
+
+  return out;
+}
+
 // PROPOSTA - full pricing calculation
 export interface PropostaLine {
   label: string;
