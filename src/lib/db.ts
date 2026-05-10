@@ -489,6 +489,28 @@ export async function initDB() {
       ON fornecedores_crm(tenant_id, external_id) WHERE external_id IS NOT NULL AND external_id <> '';
   `);
 
+  // ============================================================
+  // crm_config — composite PK (id, tenant_id)
+  // ============================================================
+  // The original PK was just `id` (with DEFAULT 'singleton'), which
+  // physically allowed only one row in the whole DB. Multi-tenant
+  // integration requires one config per tenant, so we promote the PK.
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'crm_config'::regclass
+          AND contype = 'p'
+          AND pg_get_constraintdef(oid) NOT LIKE '%tenant_id%'
+      ) THEN
+        ALTER TABLE crm_config DROP CONSTRAINT crm_config_pkey;
+        ALTER TABLE crm_config ADD PRIMARY KEY (id, tenant_id);
+      END IF;
+    END
+    $$;
+  `);
+
   // Drop the old unique constraint on planejamento_custos(mes) — now needs (tenant_id, mes)
   await pool.query(`DROP INDEX IF EXISTS idx_planejamento_custos_mes`);
   // Deduplicate planejamento_custos before creating the composite unique index.
