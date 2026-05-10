@@ -172,7 +172,7 @@ export default function CrmConfigPage() {
     setCleaning(true);
     setCleanupResult(null);
     try {
-      const res = await fetch('/api/admin/crm/cleanup-zombies', { method: 'POST' });
+      const res = await fetch('/api/v1/crm/cleanup-zombies', { method: 'POST' });
       const j = await res.json();
       if (j.ok) {
         setCleanupResult(j.counts);
