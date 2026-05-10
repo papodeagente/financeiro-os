@@ -21,7 +21,6 @@ import { IngTab } from '@/components/tabs/IngTab';
 import { BrindeTab } from '@/components/tabs/BrindeTab';
 import { DivulgacaoTab } from '@/components/tabs/DivulgacaoTab';
 import { PropostaTab } from '@/components/tabs/PropostaTab';
-import { HtlSegTab } from '@/components/tabs/HtlSegTab';
 import { PainelPipelineTab } from '@/components/tabs/PainelPipelineTab';
 import { createFinanceiroGrupo } from '@/lib/financial-defaults';
 import { createDivulgacaoFornecedor } from '@/lib/defaults';
@@ -31,11 +30,13 @@ import { Save, FileText, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from '@/lib/toast';
 
-const ABAS_PLANEJAMENTO: AbaType[] = ['pipeline', 'inf', 'tkt', 'htl', 'rec', 'car', 'guia', 'seg', 'navio', 'ing', 'brinde', 'divulgacao', 'proposta', 'htl_seg'];
+// 'htl_seg' (tabela auxiliar HTL+SEG combinada) foi removida da timeline
+// — ficava ao final e duplicava info que a aba "Proposta" já mostra.
+const ABAS_PLANEJAMENTO: AbaType[] = ['pipeline', 'inf', 'tkt', 'htl', 'rec', 'car', 'guia', 'seg', 'navio', 'ing', 'brinde', 'divulgacao', 'proposta'];
 
 const ABA_ICONS: Record<string, string> = {
   pipeline: '🔄', inf: 'ℹ️', tkt: '✈️', htl: '🏨', rec: '🎯', car: '🚐', guia: '🧑‍🏫',
-  seg: '🛡️', navio: '🚢', ing: '🎟️', brinde: '🎁', divulgacao: '📢', proposta: '💰', htl_seg: '📊',
+  seg: '🛡️', navio: '🚢', ing: '🎟️', brinde: '🎁', divulgacao: '📢', proposta: '💰',
 };
 
 function hasData(grupo: GrupoViagem, aba: AbaType): boolean {
@@ -83,6 +84,9 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
         if (found.orcamento_id === undefined) found.orcamento_id = null;
         if (found.venda_crm_id === undefined) found.venda_crm_id = null;
         if (!found.tarifas_ativas) found.tarifas_ativas = ['sgl', 'dbl', 'tpl', 'qdp'];
+        // Tipo: GRUPO/PROPOSTA — legacy grupos viram GRUPO. Cortesia em DBL default.
+        if (!found.tipo) found.tipo = 'GRUPO';
+        if (!found.params.cortesia_apto) found.params.cortesia_apto = 'dbl';
         setGrupo(found);
         setActiveGrupo(found.id, found.grp_id || 'Sem ID');
       } else {
@@ -259,7 +263,6 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
       case 'brinde': return <BrindeTab grupo={grupo} onChange={handleChange} />;
       case 'divulgacao': return <DivulgacaoTab grupo={grupo} onChange={handleChange} />;
       case 'proposta': return <PropostaTab grupo={grupo} />;
-      case 'htl_seg': return <HtlSegTab grupo={grupo} />;
     }
   };
 

@@ -30,6 +30,9 @@ export interface Params {
   qtd_min_pax: number;
   qtd_max_pax: number;
   cortesia: number;
+  // Em qual tipo de apartamento a(s) vaga(s) de cortesia ficam. Usado
+  // só quando GrupoViagem.tipo === 'GRUPO' e cortesia > 0. Default 'dbl'.
+  cortesia_apto?: 'sgl' | 'dbl' | 'tpl' | 'qdp';
 }
 
 export interface CambioItem {
@@ -190,12 +193,18 @@ import { FinanceiroGrupo } from './financial-types';
 
 export type StatusPipeline = 'PRODUTO' | 'PROPOSTA' | 'ORCAMENTO' | 'RESERVA' | 'VENDA';
 
+// 'GRUPO' = produto com mais de um pax, libera tipos de apto (SGL/DBL/TPL/QDP) e cortesia.
+// 'PROPOSTA' = cotação pontual sem distinção por apto. Default 'GRUPO' para
+// compatibilidade com registros legados que não tinham essa flag.
+export type TipoProduto = 'GRUPO' | 'PROPOSTA';
+
 export interface GrupoViagem {
   id: string;
   grp_id: string;
   origem_destino: string;
   created_at: string;
   updated_at: string;
+  tipo?: TipoProduto;
 
   // Pipeline
   status_pipeline: StatusPipeline;

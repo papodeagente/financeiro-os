@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { GrupoViagem } from '@/lib/types';
+import { GrupoViagem, TipoProduto } from '@/lib/types';
 import { createGrupoViagem } from '@/lib/defaults';
 import { loadGrupos, saveGrupos, deleteGrupo, exportGrupoJSON, importGrupoJSON } from '@/lib/storage';
 import { useApp } from '@/contexts/AppContext';
@@ -197,6 +197,7 @@ export default function GruposPage() {
   const [showNewModal, setShowNewModal] = useState(false);
   const [newTarifas, setNewTarifas] = useState<Set<'sgl' | 'dbl' | 'tpl' | 'qdp'>>(new Set(['dbl']));
   const [newNome, setNewNome] = useState('');
+  const [newTipo, setNewTipo] = useState<TipoProduto>('GRUPO');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { setActiveGrupo } = useApp();
 
@@ -322,7 +323,17 @@ export default function GruposPage() {
       return;
     }
     const novo = createGrupoViagem();
-    novo.tarifas_ativas = Array.from(newTarifas);
+    novo.tipo = newTipo;
+    // Modo PROPOSTA: cotacao pontual, 1 pax, sem distincao por apto.
+    // Mantem o array para compatibilidade com calculos existentes.
+    if (newTipo === 'PROPOSTA') {
+      novo.tarifas_ativas = ['sgl'];
+      novo.params.qtd_min_pax = 1;
+      novo.params.qtd_max_pax = 1;
+      novo.params.cortesia = 0;
+    } else {
+      novo.tarifas_ativas = Array.from(newTarifas);
+    }
     novo.origem_destino = newNome.trim();
     const updated = [...grupos, novo];
     setGrupos(updated);
@@ -330,6 +341,7 @@ export default function GruposPage() {
     setShowNewModal(false);
     setNewTarifas(new Set(['dbl']));
     setNewNome('');
+    setNewTipo('GRUPO');
     router.push(`/grupo/${novo.id}`);
   };
 
@@ -645,6 +657,39 @@ export default function GruposPage() {
             </div>
 
             <div className="space-y-4">
+              {/* Tipo de produto: Grupo ou Proposta */}
+              <div>
+                <label className="text-xs font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-2 block">Tipo de produto</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { key: 'GRUPO',    titulo: 'Grupo',    desc: 'Mais de um pax. Libera SGL/DBL/TPL/QDP + CHD e cortesia.' },
+                    { key: 'PROPOSTA', titulo: 'Proposta', desc: 'Cotação pontual sem distinção por apartamento.' },
+                  ] as { key: TipoProduto; titulo: string; desc: string }[]).map(opt => (
+                    <button
+                      key={opt.key}
+                      onClick={() => setNewTipo(opt.key)}
+                      className={`flex flex-col gap-1 px-4 py-3 rounded-xl border-2 transition-all text-left ${
+                        newTipo === opt.key
+                          ? 'border-[var(--t-green)] bg-[var(--t-green)]/10'
+                          : 'border-[var(--t-border)] hover:border-[var(--t-text-muted)]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                          newTipo === opt.key
+                            ? 'border-[var(--t-green)] bg-[var(--t-green)]'
+                            : 'border-[var(--t-border)]'
+                        }`}>
+                          {newTipo === opt.key && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </div>
+                        <span className="text-sm font-semibold text-[var(--t-text)]">{opt.titulo}</span>
+                      </div>
+                      <span className="text-[10px] text-[var(--t-text-muted)] leading-tight">{opt.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div>
                 <label className="text-xs font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1.5 block">Destino / Nome do produto</label>
                 <Input
@@ -656,35 +701,38 @@ export default function GruposPage() {
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-2 block">Tarifas que deseja cotar</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {TARIFA_OPTIONS.map(t => (
-                    <button
-                      key={t.key}
-                      onClick={() => toggleTarifa(t.key)}
-                      className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left ${
-                        newTarifas.has(t.key)
-                          ? 'border-[var(--t-green)] bg-[var(--t-green)]/10'
-                          : 'border-[var(--t-border)] hover:border-[var(--t-text-muted)]'
-                      }`}
-                    >
-                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center text-xs font-bold ${
-                        newTarifas.has(t.key)
-                          ? 'border-[var(--t-green)] bg-[var(--t-green)] text-white'
-                          : 'border-[var(--t-border)]'
-                      }`}>
-                        {newTarifas.has(t.key) && '✓'}
-                      </div>
-                      <div>
-                        <div className="text-sm font-semibold text-[var(--t-text)]">{t.label}</div>
-                        <div className="text-[10px] text-[var(--t-text-muted)]">{t.desc}</div>
-                      </div>
-                    </button>
-                  ))}
+              {/* Tarifas — só relevantes para Grupo */}
+              {newTipo === 'GRUPO' && (
+                <div>
+                  <label className="text-xs font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-2 block">Tarifas que deseja cotar</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {TARIFA_OPTIONS.map(t => (
+                      <button
+                        key={t.key}
+                        onClick={() => toggleTarifa(t.key)}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left ${
+                          newTarifas.has(t.key)
+                            ? 'border-[var(--t-green)] bg-[var(--t-green)]/10'
+                            : 'border-[var(--t-border)] hover:border-[var(--t-text-muted)]'
+                        }`}
+                      >
+                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center text-xs font-bold ${
+                          newTarifas.has(t.key)
+                            ? 'border-[var(--t-green)] bg-[var(--t-green)] text-white'
+                            : 'border-[var(--t-border)]'
+                        }`}>
+                          {newTarifas.has(t.key) && '✓'}
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-[var(--t-text)]">{t.label}</div>
+                          <div className="text-[10px] text-[var(--t-text-muted)]">{t.desc}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-[var(--t-text-muted)] mt-2">Selecione as tarifas que precisa cotar. Você pode alterar depois.</p>
                 </div>
-                <p className="text-[10px] text-[var(--t-text-muted)] mt-2">Selecione as tarifas que precisa cotar. Você pode alterar depois.</p>
-              </div>
+              )}
             </div>
 
             <div className="flex gap-3 mt-6">
