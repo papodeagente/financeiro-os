@@ -62,6 +62,17 @@ export async function GET(req: NextRequest) {
         LIMIT 5`,
       [tenantId],
     );
+
+    // Last VENDA_FECHADA payload (raw body the CRM sent). Critical to
+    // compare against what the handler expects when contas don't show up.
+    const ultVenda = await pool.query(
+      `SELECT id, status, processado, erro, data, created_at
+         FROM crm_eventos_entrada
+        WHERE tenant_id = $1 AND tipo = 'VENDA_FECHADA'
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [tenantId],
+    );
     const ultSaida = await pool.query(
       `SELECT id, tipo, status, tentativas, latencia_ms, created_at
          FROM crm_eventos_saida
@@ -87,6 +98,7 @@ export async function GET(req: NextRequest) {
       contagens: counts,
       ultimos_eventos_entrada: ultEntrada.rows,
       ultimos_eventos_saida: ultSaida.rows,
+      ultima_venda_fechada: ultVenda.rows[0] ?? null,
       sanity: {
         contas_receber_sem_valor_final: parseInt(zr.rows[0].count, 10),
         contas_pagar_sem_valor_final: parseInt(zp.rows[0].count, 10),
