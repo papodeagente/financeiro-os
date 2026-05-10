@@ -10,6 +10,7 @@ import {
   buildContaPagarAgregada,
   buildComissaoReceberAgregada,
   calcularComissaoFornecedor,
+  normalizeCnpj,
 } from '../src/lib/crm-integration';
 import type { ContaReceber, ContaPagar } from '../src/lib/crm-types';
 
@@ -195,6 +196,40 @@ const crB = buildComissaoReceberFromFornecedor(fornsCenario[1], 'fb', ctx, comis
 assert(cpA.valor_final === 6000 && cpB.valor_final === 4000, 'CP totais corretos');
 assert(crA.valor_final === 900 && crB.valor_final === 600, 'CR comissões corretas');
 assert(cpA.fornecedor_id === 'fa' && crA.origem_item_id === 'fa', 'CP e CR ligados ao fornecedor A');
+
+// ────────────────────────────────────────
+// 12.5. normalizeCnpj
+// ────────────────────────────────────────
+console.log('\n[12.5] normalizeCnpj — varios formatos');
+assert(normalizeCnpj('12.345.678/0001-90') === '12345678000190', 'CNPJ formatado -> digitos');
+assert(normalizeCnpj('12345678000190') === '12345678000190', 'CNPJ já em digitos');
+assert(normalizeCnpj('123.456.789-01') === '12345678901', 'CPF formatado -> digitos');
+assert(normalizeCnpj('  123 ') === '', 'invalido (menos digitos) -> vazio');
+assert(normalizeCnpj(null) === '', 'null -> vazio');
+assert(normalizeCnpj(undefined) === '', 'undefined -> vazio');
+assert(normalizeCnpj(12345678000190 as unknown as string) === '12345678000190', 'number -> string digitos');
+
+console.log('\n[12.6] CP propaga fornecedor_cnpj no JSONB');
+const fornComCnpj = {
+  fornecedor_id: 'crm_supplier_x',
+  fornecedor_nome: 'X',
+  fornecedor_cnpj: '12.345.678/0001-90',
+  servico: 'S',
+  valor_custo: 100,
+};
+const cpComCnpj = buildContaPagarFromFornecedor(fornComCnpj, 'fl_x', ctx);
+assert(
+  (cpComCnpj as unknown as { fornecedor_cnpj: string }).fornecedor_cnpj === '12345678000190',
+  'fornecedor_cnpj propagado (digitos) no JSONB',
+);
+
+console.log('\n[12.7] CP com CNPJ ausente — campo vazio, sem quebrar');
+const fornSemCnpj = { fornecedor_id: 'crm_supplier_y', fornecedor_nome: 'Y', valor_custo: 50 };
+const cpSemCnpj = buildContaPagarFromFornecedor(fornSemCnpj, 'fl_y', ctx);
+assert(
+  (cpSemCnpj as unknown as { fornecedor_cnpj: string }).fornecedor_cnpj === '',
+  'fornecedor_cnpj vazio quando nao informado',
+);
 
 // ────────────────────────────────────────
 // 13. Fallback agregado — fornecedores=[] mas custo_total e margem > 0

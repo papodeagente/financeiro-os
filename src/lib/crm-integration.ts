@@ -159,6 +159,15 @@ function asStr(v: unknown): string {
   return typeof v === 'string' ? v : v == null ? '' : String(v);
 }
 
+// Strip everything that isn't a digit. Returns '' for empty/invalid input.
+// 14 digits = CNPJ, 11 digits = CPF — we accept both lengths so the same
+// helper works for any document; downstream dedupes use (tenant_id, cnpj)
+// for fornecedores and (tenant_id, cpf_cnpj) for clientes.
+export function normalizeCnpj(v: unknown): string {
+  const s = asStr(v).replace(/\D+/g, '');
+  return s.length === 11 || s.length === 14 ? s : '';
+}
+
 function asNum(v: unknown): number {
   if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
   if (typeof v === 'string') {
@@ -358,6 +367,7 @@ export function buildContaPagarFromFornecedor(
   ctx: VendaContext,
 ): ContaPagar {
   const fornecedorNome = asStr(forn.fornecedor_nome);
+  const fornecedorCnpj = normalizeCnpj(forn.fornecedor_cnpj);
   const valorCusto = asNum(forn.valor_custo);
   const servico = asStr(forn.servico);
   const descricao = servico
@@ -387,8 +397,11 @@ export function buildContaPagarFromFornecedor(
     observacoes: ctx.crmVendaId
       ? `Pago pelo cliente direto ao fornecedor — comprovante obrigatório (venda ${ctx.crmVendaId})`
       : 'Pago pelo cliente direto ao fornecedor — comprovante obrigatório',
-    // Augment as a JSONB extension (TS-narrow via cast — UI consumes via JSON path).
-    ...({ requer_comprovante: true } as object),
+    // JSONB extensions consumed via JSON path (UI/reports).
+    ...({
+      requer_comprovante: true,
+      fornecedor_cnpj: fornecedorCnpj,
+    } as object),
   } as ContaPagar;
 }
 
@@ -453,34 +466,72 @@ async function upsertVendedorByExternalId(
   return id;
 }
 
+// 3-stage upsert so the same supplier is never duplicated across systems.
+//
+//   1) match by (tenant_id, external_id) — strongest signal, idempotent
+//      across replays of the same CRM event
+//   2) match by (tenant_id, cnpj)        — survives CRM id changes
+//      (resync/merge) and recognizes the same supplier between systems.
+//      When matched here we also store the latest external_id on the row
+//      so step 1 wins on the next call.
+//   3) INSERT — new supplier
 async function upsertFornecedorByExternalId(
   externalId: string,
-  dados: { nome?: unknown },
+  dados: { nome?: unknown; cnpj?: unknown },
   tenantId: string,
 ): Promise<string> {
   if (!pool || !externalId) throw new Error('upsertFornecedor: external_id obrigatorio');
 
-  const { rows } = await pool.query(
-    `SELECT id FROM fornecedores_crm WHERE external_id = $1 AND tenant_id = $2 LIMIT 1`,
+  // (1) match by external_id
+  const byExt = await pool.query(
+    `SELECT id, data FROM fornecedores_crm
+      WHERE external_id = $1 AND tenant_id = $2 LIMIT 1`,
     [externalId, tenantId],
   );
-  if (rows.length > 0) return rows[0].id as string;
+  if (byExt.rows.length > 0) {
+    return byExt.rows[0].id as string;
+  }
 
-  const id = generateId();
+  const cnpj = normalizeCnpj(dados.cnpj);
   const nome = asStr(dados.nome);
+
+  // (2) match by cnpj
+  if (cnpj) {
+    const byCnpj = await pool.query(
+      `SELECT id, data FROM fornecedores_crm
+        WHERE cnpj = $1 AND tenant_id = $2 LIMIT 1`,
+      [cnpj, tenantId],
+    );
+    if (byCnpj.rows.length > 0) {
+      const existingId = byCnpj.rows[0].id as string;
+      const prevData = (byCnpj.rows[0].data as Record<string, unknown>) || {};
+      // Stamp the latest external_id on the row so future calls hit (1).
+      const mergedData = { ...prevData, external_id: externalId };
+      await pool.query(
+        `UPDATE fornecedores_crm
+            SET external_id = $1, data = $2, updated_at = NOW()
+          WHERE id = $3 AND tenant_id = $4`,
+        [externalId, JSON.stringify(mergedData), existingId, tenantId],
+      );
+      return existingId;
+    }
+  }
+
+  // (3) new row
+  const id = generateId();
   const data = {
     id,
     nome_fantasia: nome,
     razao_social: nome,
-    cnpj: '',
+    cnpj,
     categoria: '',
     origem: 'crm',
     external_id: externalId,
   };
   await pool.query(
     `INSERT INTO fornecedores_crm (id, nome_fantasia, cnpj, categoria, data, external_id, tenant_id, created_at, updated_at)
-     VALUES ($1, $2, '', '', $3, $4, $5, NOW(), NOW())`,
-    [id, nome, JSON.stringify(data), externalId, tenantId],
+     VALUES ($1, $2, $3, '', $4, $5, $6, NOW(), NOW())`,
+    [id, nome, cnpj, JSON.stringify(data), externalId, tenantId],
   );
   return id;
 }
@@ -733,7 +784,10 @@ export async function processarEventoCRM(
             const fornExternalId = asStr(forn.fornecedor_id);
             const fornecedorId = await upsertFornecedorByExternalId(
               fornExternalId,
-              { nome: forn.fornecedor_nome },
+              {
+                nome: forn.fornecedor_nome,
+                cnpj: forn.fornecedor_cnpj,
+              },
               tenantId,
             );
 

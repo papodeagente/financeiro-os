@@ -487,6 +487,11 @@ export async function initDB() {
       ON usuarios(tenant_id, external_id) WHERE external_id IS NOT NULL AND external_id <> '';
     CREATE UNIQUE INDEX IF NOT EXISTS idx_fornecedores_crm_external_id
       ON fornecedores_crm(tenant_id, external_id) WHERE external_id IS NOT NULL AND external_id <> '';
+    -- CNPJ dedupe so the CRM and Financeiro recognize the same supplier
+    -- across systems even if the CRM's internal id changes (resync, merge,
+    -- etc.). Stores cnpj as digits-only.
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_fornecedores_crm_cnpj
+      ON fornecedores_crm(tenant_id, cnpj) WHERE cnpj IS NOT NULL AND cnpj <> '';
   `);
 
   // ============================================================
