@@ -59,7 +59,7 @@ function randomHex(bytes: number): string {
 export default function CrmConfigPage() {
   const [config, setConfig] = useState<CrmConfig>(defaultConfig);
   const [hmacInput, setHmacInput] = useState('');
-  const [showSecret, setShowSecret] = useState(false);
+  const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
   const [status, setStatus] = useState<CrmStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -80,7 +80,8 @@ export default function CrmConfigPage() {
       ]);
       if (configRes && !configRes.error) {
         setConfig({ ...defaultConfig, ...configRes });
-        setHmacInput(''); // never prefill the masked secret in the editable field
+        setHmacInput('');
+        setRevealedSecret(null);
       }
       if (statusRes) setStatus(statusRes);
       if (eventosRes?.items) setEventos(eventosRes.items);
@@ -113,16 +114,27 @@ export default function CrmConfigPage() {
 
   const generateHmac = () => {
     setHmacInput(randomHex(32));
-    setShowSecret(true);
   };
 
   const revealStoredSecret = async () => {
     try {
       const r = await fetch('/api/v1/crm/config/secret').then(r => r.json());
       if (r.secret) {
-        setHmacInput(r.secret);
-        setShowSecret(true);
+        setRevealedSecret(r.secret);
       }
+    } catch { /* silent */ }
+  };
+
+  const hideStoredSecret = () => setRevealedSecret(null);
+
+  const copyStoredSecret = async () => {
+    try {
+      let s = revealedSecret;
+      if (!s) {
+        const r = await fetch('/api/v1/crm/config/secret').then(r => r.json());
+        s = r.secret || null;
+      }
+      if (s) await copy('stored-secret', s);
     } catch { /* silent */ }
   };
 
@@ -178,8 +190,8 @@ export default function CrmConfigPage() {
   };
 
   const inboundUrl = config.suggested_webhook_url_entur || config.webhook_url_entur;
-  const hasStoredSecret = config.api_key_crm.startsWith('****') || (!!config.api_key_crm && !config.api_key_crm.startsWith(''));
-  const conected = status?.ativo && hasStoredSecret;
+  const hasStoredSecret = !!config.api_key_crm && config.api_key_crm.startsWith('****');
+  const conected = !!(status?.ativo && hasStoredSecret);
 
   return (
     <div className="p-6 max-w-5xl">
@@ -211,39 +223,83 @@ export default function CrmConfigPage() {
         <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-4">Configuracao</h2>
         <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] p-5 space-y-5">
 
-          {/* HMAC */}
-          <div>
-            <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">HMAC Secret (compartilhado entre Financeiro e CRM)</label>
-            <div className="flex gap-2">
-              <input
-                type={showSecret ? 'text' : 'password'}
-                value={hmacInput || (config.api_key_crm.startsWith('****') ? config.api_key_crm : '')}
-                onChange={e => setHmacInput(e.target.value)}
-                placeholder="Cole um secret existente ou clique em Gerar novo"
-                className="flex-1 px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)] font-mono"
-              />
-              <button onClick={() => setShowSecret(s => !s)} title={showSecret ? 'Ocultar' : 'Mostrar'}
-                className="px-3 py-2 shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)]">
-                {showSecret ? <EyeOff className="w-4 h-4 text-[var(--t-text-muted)]" /> : <Eye className="w-4 h-4 text-[var(--t-text-muted)]" />}
-              </button>
-              <button onClick={revealStoredSecret} title="Ver secret salvo"
-                className="px-3 py-2 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)]">
-                Recuperar salvo
-              </button>
-              <button onClick={generateHmac}
-                className="px-3 py-2 flex items-center gap-1.5 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)]">
-                <Sparkles className="w-3.5 h-3.5" /> Gerar novo
-              </button>
-              {hmacInput && (
-                <button onClick={() => copy('hmac', hmacInput)} title="Copiar"
-                  className="px-3 py-2 shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)]">
-                  <Copy className="w-4 h-4 text-[var(--t-text-muted)]" />
-                </button>
+          {/* HMAC — current vs new (separated) */}
+          <div className="space-y-3">
+            <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block">HMAC Secret (compartilhado entre Financeiro e CRM)</label>
+
+            {/* Current secret — read-only */}
+            <div className="rounded-lg border border-[var(--t-border)] p-3 bg-[var(--t-surface-hover)]/40">
+              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mb-1.5">Secret atual</p>
+              {hasStoredSecret ? (
+                <div className="flex gap-2 items-center">
+                  <code className="flex-1 px-3 py-2 rounded-lg bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)] font-mono break-all">
+                    {revealedSecret ?? config.api_key_crm}
+                  </code>
+                  {revealedSecret ? (
+                    <button onClick={hideStoredSecret} title="Ocultar"
+                      className="px-3 py-2 shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)]">
+                      <EyeOff className="w-4 h-4 text-[var(--t-text-muted)]" />
+                    </button>
+                  ) : (
+                    <button onClick={revealStoredSecret} title="Mostrar valor"
+                      className="px-3 py-2 shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)]">
+                      <Eye className="w-4 h-4 text-[var(--t-text-muted)]" />
+                    </button>
+                  )}
+                  <button onClick={copyStoredSecret} title="Copiar para a area de transferencia"
+                    className="px-3 py-2 shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)]">
+                    <Copy className="w-4 h-4 text-[var(--t-text-muted)]" />
+                  </button>
+                </div>
+              ) : (
+                <p className="text-[var(--text-body-sm)] text-[var(--t-text-muted)] italic">
+                  Nenhum secret salvo ainda. Defina abaixo e salve a configuracao.
+                </p>
+              )}
+              {copied === 'stored-secret' && (
+                <p className="text-[var(--text-caption)] text-[var(--crm-ok)] mt-1">copiado para a area de transferencia</p>
               )}
             </div>
-            <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mt-1">
+
+            {/* Set new secret — only used when filled */}
+            <div className="rounded-lg border border-[var(--t-border)] p-3">
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">
+                  Definir novo HMAC <span className="opacity-70">(deixe em branco para manter o atual)</span>
+                </p>
+                {hmacInput && (
+                  <button onClick={() => setHmacInput('')}
+                    className="text-[var(--text-caption)] text-[var(--t-text-muted)] hover:text-[var(--t-text)]">
+                    Limpar
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={hmacInput}
+                  onChange={e => setHmacInput(e.target.value)}
+                  placeholder="Cole um secret existente ou clique em Gerar novo"
+                  className="flex-1 px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)] font-mono"
+                />
+                <button onClick={generateHmac}
+                  className="px-3 py-2 flex items-center gap-1.5 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)]">
+                  <Sparkles className="w-3.5 h-3.5" /> Gerar novo
+                </button>
+                {hmacInput && (
+                  <button onClick={() => copy('hmac-new', hmacInput)} title="Copiar"
+                    className="px-3 py-2 shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)]">
+                    <Copy className="w-4 h-4 text-[var(--t-text-muted)]" />
+                  </button>
+                )}
+              </div>
+              {copied === 'hmac-new' && (
+                <p className="text-[var(--text-caption)] text-[var(--crm-ok)] mt-1">copiado para a area de transferencia</p>
+              )}
+            </div>
+
+            <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">
               Cole o mesmo valor no CRM em <strong>Settings &gt; Integracoes &gt; Entur OS Financeiro &gt; HMAC Secret</strong>.
-              {copied === 'hmac' && <span className="ml-2 text-[var(--crm-ok)]">copiado!</span>}
             </p>
           </div>
 
