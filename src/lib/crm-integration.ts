@@ -207,42 +207,87 @@ interface VendaContext {
   crmVendaId: string;
 }
 
-export function buildContaReceberFromParcela(
-  parcela: Record<string, unknown>,
+// Resolves the commission the agency earns from a single supplier on this
+// sale. Uses what the CRM sent (preferred), falls back to a proportional
+// split of the total commission across suppliers' costs.
+//
+//   1. forn.comissao / forn.valor_comissao  → uses verbatim
+//   2. forn.percentual_comissao             → percent over valor_custo
+//   3. proportional split of `comissaoTotal` weighted by valor_custo
+export function calcularComissaoFornecedor(
+  forn: Record<string, unknown>,
+  fornecedoresArray: Array<Record<string, unknown>>,
+  comissaoTotal: number,
+): number {
+  if (forn.comissao != null) return asNum(forn.comissao);
+  if (forn.valor_comissao != null) return asNum(forn.valor_comissao);
+
+  const valorCusto = asNum(forn.valor_custo);
+
+  if (forn.percentual_comissao != null) {
+    const pct = asNum(forn.percentual_comissao);
+    return Number(((valorCusto * pct) / 100).toFixed(2));
+  }
+
+  if (comissaoTotal > 0 && fornecedoresArray.length > 0) {
+    const custoTotalSomado = fornecedoresArray.reduce(
+      (acc, f) => acc + asNum(f.valor_custo),
+      0,
+    );
+    if (custoTotalSomado <= 0) {
+      // No costs to weigh by — split equally.
+      return Number((comissaoTotal / fornecedoresArray.length).toFixed(2));
+    }
+    return Number(((valorCusto / custoTotalSomado) * comissaoTotal).toFixed(2));
+  }
+
+  return 0;
+}
+
+// Builds the supplier-side commission as a ContaReceber row. This replaces
+// the old "1 CR per cliente parcela" flow — the customer pays the supplier
+// directly, and only the commission flows back to the agency.
+export function buildComissaoReceberFromFornecedor(
+  forn: Record<string, unknown>,
+  fornecedorId: string,
   ctx: VendaContext,
-  parcelaIndex: number,
-  totalParcelas: number,
+  valorComissao: number,
 ): ContaReceber {
-  const parcelaNumero = Number(parcela.parcela) || (parcelaIndex + 1);
-  const valor = asNum(parcela.valor);
-  const descricao = totalParcelas > 1
-    ? `Parcela ${parcelaNumero}/${totalParcelas} — Venda ${ctx.crmVendaId || ctx.vendaId}`
-    : `Venda ${ctx.crmVendaId || ctx.vendaId}`;
+  const fornecedorNome = asStr(forn.fornecedor_nome);
+  const servico = asStr(forn.servico);
+  const descricao = servico
+    ? `Comissão ${servico} — ${fornecedorNome || 'Fornecedor'}`
+    : `Comissão — ${fornecedorNome || 'Fornecedor'}`;
+  const vencimento = asDateYMD(forn.vencimento_comissao || forn.vencimento_pagamento);
 
   return {
     ...createContaReceber(),
     id: generateId(),
-    origem: 'VENDA',
+    origem: 'COMISSAO_FORNECEDOR',
     venda_id: ctx.vendaId,
     grupo_id: ctx.enturGrupoId || null,
     cliente_id: ctx.clienteId,
     cliente_nome: ctx.clienteNome,
     descricao,
-    valor_original: valor,
-    valor_final: valor,
-    data_vencimento: asDateYMD(parcela.vencimento),
-    forma_recebimento: mapFormaRecebimento(asStr(parcela.forma_pagamento)),
-    parcela_numero: parcelaNumero,
-    total_parcelas: totalParcelas,
+    valor_original: valorComissao,
+    valor_final: valorComissao,
+    data_vencimento: vencimento,
+    forma_recebimento: '',
+    parcela_numero: 1,
+    total_parcelas: 1,
     status: 'PENDENTE',
     auto_gerado: true,
     origem_venda_id: ctx.vendaId,
+    origem_item_id: fornecedorId,
     observacoes: ctx.crmVendaId
-      ? `Importado do CRM (venda ${ctx.crmVendaId})`
-      : 'Importado do CRM',
+      ? `Comissão devida por ${fornecedorNome || 'fornecedor'} (venda ${ctx.crmVendaId})`
+      : `Comissão devida por ${fornecedorNome || 'fornecedor'}`,
   };
 }
 
+// ContaPagar = supplier cost. Flagged with requer_comprovante=true because
+// the customer typically pays the supplier directly — the agency still
+// needs proof of payment to close the books.
 export function buildContaPagarFromFornecedor(
   forn: Record<string, unknown>,
   fornecedorId: string,
@@ -255,8 +300,12 @@ export function buildContaPagarFromFornecedor(
     ? `${servico} — ${fornecedorNome || 'Fornecedor'}`
     : `${fornecedorNome || 'Fornecedor'} — Venda ${ctx.crmVendaId || ctx.vendaId}`;
 
+  // The interface doesn't have a typed `requer_comprovante` field, so we
+  // attach it as a JSONB extension. Any UI/report that wants to surface
+  // it reads from data->>'requer_comprovante'.
+  const base = createContaPagar();
   return {
-    ...createContaPagar(),
+    ...base,
     id: generateId(),
     origem: 'VENDA',
     venda_id: ctx.vendaId,
@@ -272,9 +321,11 @@ export function buildContaPagarFromFornecedor(
     auto_gerado: true,
     origem_venda_id: ctx.vendaId,
     observacoes: ctx.crmVendaId
-      ? `Importado do CRM (venda ${ctx.crmVendaId})`
-      : 'Importado do CRM',
-  };
+      ? `Pago pelo cliente direto ao fornecedor — comprovante obrigatório (venda ${ctx.crmVendaId})`
+      : 'Pago pelo cliente direto ao fornecedor — comprovante obrigatório',
+    // Augment as a JSONB extension (TS-narrow via cast — UI consumes via JSON path).
+    ...({ requer_comprovante: true } as object),
+  } as ContaPagar;
 }
 
 async function upsertClienteByExternalId(
@@ -548,6 +599,16 @@ export async function processarEventoCRM(
           ? Number(((rentabilidade / valorTotal) * 100).toFixed(2))
           : 0;
 
+        // Total commission to distribute across suppliers. Prefer the
+        // explicit value from the CRM; fall back to the gross margin.
+        const comissaoTotal = comissao != null ? comissao : rentabilidade;
+
+        // Cliente parcelas (condicoes_pagamento) are kept as a payment
+        // history reference on the venda — they DO NOT become contas a
+        // receber. The customer pays the supplier directly; only the
+        // commission flows back to the agency.
+        const parcelasCliente = (payload.condicoes_pagamento as Array<Record<string, unknown>>) || [];
+
         const vendaId = generateId();
         const vendaData = {
           id: vendaId,
@@ -562,11 +623,14 @@ export async function processarEventoCRM(
           custo_total: custoTotal,
           rentabilidade,
           margem_percentual: margemPercentual,
-          comissao,
+          comissao: comissaoTotal,
           moeda: payload.moeda || 'BRL',
           status: 'vendido',
           origem: 'crm',
           data_venda: new Date().toISOString(),
+          // Audit trail of how the customer is paying the supplier(s).
+          // Not financial liability for the agency.
+          parcelas_cliente: parcelasCliente,
         };
         await pool.query(
           `INSERT INTO vendas_crm (id, cliente_id, vendedor_id, status, data, tenant_id, created_at, updated_at)
@@ -574,9 +638,9 @@ export async function processarEventoCRM(
           [vendaId, clienteId, vendedorId, JSON.stringify(vendaData), tenantId]
         );
 
-        // 3) Create contas_receber and contas_pagar. JSONB shape must
-        //    match what the UI renders — uses the shared builders so any
-        //    schema change here is captured by the unit tests.
+        // 3) For each supplier:
+        //    - 1 conta_pagar (cost passed through customer, requires receipt)
+        //    - 1 conta_receber (commission the supplier owes the agency)
         const ctx: VendaContext = {
           vendaId,
           clienteId,
@@ -585,20 +649,10 @@ export async function processarEventoCRM(
           crmVendaId: asStr(payload.crm_venda_id),
         };
 
-        const parcelas = (payload.condicoes_pagamento as Array<Record<string, unknown>>) || [];
-        const totalParcelas = parcelas.length || 1;
+        let comissoesGeradas = 0;
+        let comissoesValor = 0;
 
-        for (let i = 0; i < parcelas.length; i++) {
-          const conta = buildContaReceberFromParcela(parcelas[i], ctx, i, totalParcelas);
-          await pool.query(
-            `INSERT INTO contas_receber (id, venda_id, cliente_id, status, data, tenant_id, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5::jsonb, $6, NOW(), NOW())`,
-            [conta.id, vendaId, clienteId, conta.status, JSON.stringify(conta), tenantId],
-          );
-        }
-
-        const fornecedores = (payload.fornecedores as Array<Record<string, unknown>>) || [];
-        for (const forn of fornecedores) {
+        for (const forn of fornecedoresPayload) {
           const fornExternalId = asStr(forn.fornecedor_id);
           if (!fornExternalId) continue;
           const fornecedorId = await upsertFornecedorByExternalId(
@@ -606,14 +660,29 @@ export async function processarEventoCRM(
             { nome: forn.fornecedor_nome },
             tenantId,
           );
-          const conta = buildContaPagarFromFornecedor(forn, fornecedorId, ctx);
+
+          // 3a) ContaPagar — supplier cost (with receipt requirement)
+          const contaPagar = buildContaPagarFromFornecedor(forn, fornecedorId, ctx);
           await pool.query(
             `INSERT INTO contas_pagar (id, fornecedor_id, status, data, tenant_id, created_at, updated_at)
              VALUES ($1, $2, $3, $4::jsonb, $5, NOW(), NOW())`,
-            [conta.id, fornecedorId, conta.status, JSON.stringify(conta), tenantId],
+            [contaPagar.id, fornecedorId, contaPagar.status, JSON.stringify(contaPagar), tenantId],
           );
+
+          // 3b) ContaReceber — commission to be paid by this supplier
+          const valorComissao = calcularComissaoFornecedor(forn, fornecedoresPayload, comissaoTotal);
+          if (valorComissao > 0) {
+            const contaReceber = buildComissaoReceberFromFornecedor(forn, fornecedorId, ctx, valorComissao);
+            await pool.query(
+              `INSERT INTO contas_receber (id, venda_id, cliente_id, status, data, tenant_id, created_at, updated_at)
+               VALUES ($1, $2, $3, $4, $5::jsonb, $6, NOW(), NOW())`,
+              [contaReceber.id, vendaId, clienteId, contaReceber.status, JSON.stringify(contaReceber), tenantId],
+            );
+            comissoesGeradas++;
+            comissoesValor += valorComissao;
+          }
         }
-        acao = `venda criada (${vendaId}), cliente ${clienteId}, ${parcelas.length} receber, ${fornecedores.length} pagar`;
+        acao = `venda criada (${vendaId}), cliente ${clienteId}, ${fornecedoresPayload.length} CP (custo), ${comissoesGeradas} CR (comissão R$ ${comissoesValor.toFixed(2)})`;
         break;
       }
 
