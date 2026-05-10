@@ -59,7 +59,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
           cliente_id: item.cliente_id,
           valor_total: item.valor_total,
           link_publico: `/p/${id.substring(0, 8)}`,
-        });
+        }, { tenantId });
       } else if (newStatus === 'ACEITO') {
         emitirEventoCRM('PROPOSTA_ACEITA', {
           proposta_id: id,
@@ -68,14 +68,14 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
           valor_total: item.valor_total,
           aceite_timestamp: new Date().toISOString(),
           grupo_id: item.grupo_id,
-        });
+        }, { tenantId });
       } else if (newStatus === 'REJEITADO') {
         emitirEventoCRM('PROPOSTA_REJEITADA', {
           proposta_id: id,
           numero: item.numero,
           cliente_id: item.cliente_id,
           motivo: item.motivo ?? null,
-        });
+        }, { tenantId });
       }
     }
 

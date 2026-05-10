@@ -74,7 +74,7 @@ async function postLegado(item: Record<string, unknown>, tenantId: string) {
     grupo_id: item.grupo_id,
     proposta_id: item.proposta_id,
     valor_total: item.valor_total,
-  });
+  }, { tenantId });
 
   return NextResponse.json(item);
 }
@@ -202,7 +202,7 @@ async function postComItens(body: PostComItensBody, tenantId: string) {
       itens_count: itens.length,
       contas_receber: resultado.contas_receber.length,
       contas_pagar: resultado.contas_pagar.length,
-    });
+    }, { tenantId });
 
     return NextResponse.json({
       venda: vendaData,

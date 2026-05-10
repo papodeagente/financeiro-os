@@ -55,7 +55,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         venda_id: id,
         motivo: item.motivo ?? 'nao informado',
         cancelado_por: item.cancelado_por ?? '',
-      });
+      }, { tenantId });
     }
 
     return NextResponse.json(item);

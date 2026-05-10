@@ -43,12 +43,28 @@ function calcNextRetry(tentativas: number): Date {
   return new Date(Date.now() + ms);
 }
 
-async function getCrmConfig(): Promise<CrmConfig | null> {
+async function getCrmConfig(tenantId: string): Promise<CrmConfig | null> {
   if (!pool) return null;
   await initDB();
-  const { rows } = await pool.query("SELECT data FROM crm_config WHERE id = 'singleton'");
+  const { rows } = await pool.query(
+    "SELECT data FROM crm_config WHERE id = 'singleton' AND tenant_id = $1",
+    [tenantId],
+  );
   if (rows.length === 0) return null;
   return rows[0].data as CrmConfig;
+}
+
+// Lists every active CRM config across tenants. Used only by the legacy
+// (tenant-less) webhook fallback to reverse-lookup the tenant via HMAC.
+async function listarCrmConfigsAtivas(): Promise<Array<{ tenantId: string; config: CrmConfig }>> {
+  if (!pool) return [];
+  await initDB();
+  const { rows } = await pool.query(
+    `SELECT tenant_id, data FROM crm_config WHERE id = 'singleton'`,
+  );
+  return rows
+    .map(r => ({ tenantId: r.tenant_id as string, config: r.data as CrmConfig }))
+    .filter(r => r.config?.ativo);
 }
 
 // ──────────────────────────────────────────
@@ -164,25 +180,27 @@ async function upsertFornecedorByExternalId(
 export async function emitirEventoCRM(
   tipo: string,
   payload: Record<string, unknown>,
-  opcoes?: { idempotency_key?: string }
+  opcoes: { tenantId: string; idempotency_key?: string }
 ): Promise<void> {
   try {
     if (!pool) return;
+    if (!opcoes?.tenantId) return; // tenant context required
     await initDB();
 
-    const id = opcoes?.idempotency_key || generateId();
+    const tenantId = opcoes.tenantId;
+    const id = opcoes.idempotency_key || generateId();
     const timestamp = new Date().toISOString();
     const eventBody = { id, tipo, timestamp, versao: 'v1', origem: 'entur-os', payload };
 
-    // Insert as PENDENTE
+    // Insert as PENDENTE (scoped to tenant).
     await pool.query(
-      `INSERT INTO crm_eventos_saida (id, tipo, status, tentativas, data, created_at, updated_at)
-       VALUES ($1, $2, 'PENDENTE', 0, $3, NOW(), NOW())
+      `INSERT INTO crm_eventos_saida (id, tipo, status, tentativas, data, tenant_id, created_at, updated_at)
+       VALUES ($1, $2, 'PENDENTE', 0, $3, $4, NOW(), NOW())
        ON CONFLICT (id) DO NOTHING`,
-      [id, tipo, JSON.stringify(eventBody)]
+      [id, tipo, JSON.stringify(eventBody), tenantId]
     );
 
-    const config = await getCrmConfig();
+    const config = await getCrmConfig(tenantId);
     if (!config || !config.ativo || config.circuit_breaker_status === 'aberto') {
       return;
     }
@@ -226,14 +244,18 @@ export async function emitirEventoCRM(
         [id, tentativas, proxima.toISOString()]
       );
 
-      // Check circuit breaker
+      // Check circuit breaker (scoped to this tenant's recent failures).
       const { rows } = await pool.query(
-        `SELECT COUNT(*) as cnt FROM crm_eventos_saida WHERE status = 'FALHA' AND created_at > NOW() - INTERVAL '1 hour'`
+        `SELECT COUNT(*) as cnt FROM crm_eventos_saida
+         WHERE status = 'FALHA' AND tenant_id = $1 AND created_at > NOW() - INTERVAL '1 hour'`,
+        [tenantId]
       );
       const failCount = parseInt(rows[0].cnt, 10);
       if (failCount >= (config.circuit_breaker_threshold || 10)) {
         await pool.query(
-          `UPDATE crm_config SET data = jsonb_set(data, '{circuit_breaker_status}', '"aberto"'), updated_at = NOW() WHERE id = 'singleton'`
+          `UPDATE crm_config SET data = jsonb_set(data, '{circuit_breaker_status}', '"aberto"'), updated_at = NOW()
+           WHERE id = 'singleton' AND tenant_id = $1`,
+          [tenantId]
         );
       }
     }
@@ -249,16 +271,19 @@ export async function emitirEventoCRM(
 export async function processarEventoCRM(
   tipo: string,
   payload: Record<string, unknown>,
-  idempotency_key: string
+  idempotency_key: string,
+  tenantId: string,
 ): Promise<{ processado: boolean; acao: string; erro?: string }> {
   try {
     if (!pool) return { processado: false, acao: 'sem banco de dados' };
+    if (!tenantId) return { processado: false, acao: 'tenant ausente' };
     await initDB();
 
-    // Check idempotency
+    // Idempotency is scoped per-tenant: same idempotency_key from different
+    // tenants is treated as different events.
     const { rows: existing } = await pool.query(
-      `SELECT id FROM crm_eventos_entrada WHERE idempotency_key = $1`,
-      [idempotency_key]
+      `SELECT id FROM crm_eventos_entrada WHERE idempotency_key = $1 AND tenant_id = $2`,
+      [idempotency_key, tenantId]
     );
     if (existing.length > 0) {
       return { processado: true, acao: 'duplicata ignorada' };
@@ -266,20 +291,15 @@ export async function processarEventoCRM(
 
     const id = generateId();
     await pool.query(
-      `INSERT INTO crm_eventos_entrada (id, idempotency_key, tipo, status, processado, data, created_at)
-       VALUES ($1, $2, $3, 'RECEBIDO', false, $4, NOW())`,
-      [id, idempotency_key, tipo, JSON.stringify({ tipo, payload, received_at: new Date().toISOString() })]
+      `INSERT INTO crm_eventos_entrada (id, idempotency_key, tipo, status, processado, data, tenant_id, created_at)
+       VALUES ($1, $2, $3, 'RECEBIDO', false, $4, $5, NOW())`,
+      [id, idempotency_key, tipo, JSON.stringify({ tipo, payload, received_at: new Date().toISOString() }), tenantId]
     );
 
     let acao = '';
 
     switch (tipo) {
       case 'VENDA_FECHADA': {
-        // Single tenant per Financeiro instance (crm_config is a singleton),
-        // so all CRM-originated rows live under the same tenant context as
-        // existing CRM-integration data ('').
-        const tenantId = '';
-
         // 1) Resolve external IDs (cliente, vendedor, fornecedores) to internal IDs.
         //    Creates rows on first sight using the denormalized data the CRM sends.
         const clienteExternalId = asStr(payload.cliente_id);
@@ -500,7 +520,7 @@ export async function processarEventoCRM(
 // statusIntegracaoCRM
 // ──────────────────────────────────────────
 
-export async function statusIntegracaoCRM(): Promise<CrmStatus> {
+export async function statusIntegracaoCRM(tenantId: string): Promise<CrmStatus> {
   const defaults: CrmStatus = {
     ativo: false,
     circuit_breaker: 'fechado',
@@ -512,32 +532,38 @@ export async function statusIntegracaoCRM(): Promise<CrmStatus> {
   };
 
   try {
-    if (!pool) return defaults;
+    if (!pool || !tenantId) return defaults;
     await initDB();
 
-    const config = await getCrmConfig();
+    const config = await getCrmConfig(tenantId);
     if (config) {
       defaults.ativo = config.ativo;
       defaults.circuit_breaker = config.circuit_breaker_status || 'fechado';
     }
 
     const pendentes = await pool.query(
-      `SELECT COUNT(*) as cnt FROM crm_eventos_saida WHERE status = 'PENDENTE'`
+      `SELECT COUNT(*) as cnt FROM crm_eventos_saida WHERE status = 'PENDENTE' AND tenant_id = $1`,
+      [tenantId]
     );
     defaults.eventos_pendentes = parseInt(pendentes.rows[0].cnt, 10);
 
     const falhas = await pool.query(
-      `SELECT COUNT(*) as cnt FROM crm_eventos_saida WHERE status = 'FALHA'`
+      `SELECT COUNT(*) as cnt FROM crm_eventos_saida WHERE status = 'FALHA' AND tenant_id = $1`,
+      [tenantId]
     );
     defaults.eventos_falha = parseInt(falhas.rows[0].cnt, 10);
 
     const hoje = await pool.query(
-      `SELECT COUNT(*) as cnt FROM crm_eventos_entrada WHERE processado = true AND created_at > CURRENT_DATE`
+      `SELECT COUNT(*) as cnt FROM crm_eventos_entrada
+       WHERE processado = true AND tenant_id = $1 AND created_at > CURRENT_DATE`,
+      [tenantId]
     );
     defaults.eventos_processados_hoje = parseInt(hoje.rows[0].cnt, 10);
 
     const ultimoSaida = await pool.query(
-      `SELECT tipo, status, created_at FROM crm_eventos_saida ORDER BY created_at DESC LIMIT 1`
+      `SELECT tipo, status, created_at FROM crm_eventos_saida
+       WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      [tenantId]
     );
     if (ultimoSaida.rows.length > 0) {
       defaults.ultimo_evento_saida = {
@@ -548,7 +574,9 @@ export async function statusIntegracaoCRM(): Promise<CrmStatus> {
     }
 
     const ultimoEntrada = await pool.query(
-      `SELECT tipo, processado, created_at FROM crm_eventos_entrada ORDER BY created_at DESC LIMIT 1`
+      `SELECT tipo, processado, created_at FROM crm_eventos_entrada
+       WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      [tenantId]
     );
     if (ultimoEntrada.rows.length > 0) {
       defaults.ultimo_evento_entrada = {
@@ -568,30 +596,29 @@ export async function statusIntegracaoCRM(): Promise<CrmStatus> {
 // retentarEventosFalha
 // ──────────────────────────────────────────
 
-export async function retentarEventosFalha(ids?: string[]): Promise<{
+export async function retentarEventosFalha(tenantId: string, ids?: string[]): Promise<{
   retentados: number;
   sucesso: number;
   falha: number;
 }> {
   const result = { retentados: 0, sucesso: 0, falha: 0 };
   try {
-    if (!pool) return result;
+    if (!pool || !tenantId) return result;
     await initDB();
 
-    const config = await getCrmConfig();
+    const config = await getCrmConfig(tenantId);
     if (!config || !config.ativo || !config.webhook_url_crm) return result;
 
-    let query = `SELECT id, tipo, tentativas, data FROM crm_eventos_saida WHERE status = 'FALHA'`;
-    const params: string[] = [];
+    let query = `SELECT id, tipo, tentativas, data FROM crm_eventos_saida
+                 WHERE status = 'FALHA' AND tenant_id = $1`;
     if (ids && ids.length > 0) {
-      query += ` AND id = ANY($1)`;
-      params.push(ids as unknown as string);
+      query += ` AND id = ANY($2)`;
     }
     query += ` ORDER BY created_at ASC LIMIT 50`;
 
     const { rows } = ids && ids.length > 0
-      ? await pool.query(query, [ids])
-      : await pool.query(query);
+      ? await pool.query(query, [tenantId, ids])
+      : await pool.query(query, [tenantId]);
 
     for (const row of rows) {
       result.retentados++;
@@ -645,13 +672,40 @@ export async function retentarEventosFalha(ids?: string[]): Promise<{
 // Verify inbound HMAC signature
 // ──────────────────────────────────────────
 
-export async function verificarAssinaturaCRM(body: string, signature: string): Promise<boolean> {
+// Direct verification when the tenant is known from the request path.
+export async function verificarAssinaturaCRM(
+  body: string,
+  signature: string,
+  tenantId: string,
+): Promise<boolean> {
   try {
-    const config = await getCrmConfig();
+    if (!tenantId || !signature) return false;
+    const config = await getCrmConfig(tenantId);
     if (!config || !config.api_key_entur) return false;
     const expected = hmacSign(body, config.api_key_entur);
     return expected === signature;
   } catch {
     return false;
+  }
+}
+
+// Reverse-lookup for the legacy tenant-less webhook URL: tries each active
+// CRM config and returns the tenantId whose api_key_entur matches the
+// HMAC signature. Used only as a backward-compat fallback.
+export async function resolverTenantPorAssinaturaCRM(
+  body: string,
+  signature: string,
+): Promise<string | null> {
+  try {
+    if (!signature) return null;
+    const configs = await listarCrmConfigsAtivas();
+    for (const { tenantId, config } of configs) {
+      if (!config.api_key_entur) continue;
+      const expected = hmacSign(body, config.api_key_entur);
+      if (expected === signature) return tenantId;
+    }
+    return null;
+  } catch {
+    return null;
   }
 }

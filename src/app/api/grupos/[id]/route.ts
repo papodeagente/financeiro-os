@@ -36,7 +36,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       origem_destino: grupo.origem_destino,
       data: grupo,
       atualizado: true,
-    });
+    }, { tenantId });
   }
 
   return NextResponse.json(grupo);

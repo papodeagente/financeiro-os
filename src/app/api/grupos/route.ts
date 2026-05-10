@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     grupo_id: grupo.id,
     origem_destino: grupo.origem_destino,
     data: grupo,
-  });
+  }, { tenantId });
 
   return NextResponse.json(grupo);
 }

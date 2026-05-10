@@ -1,20 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  processarEventoCRM,
-  resolverTenantPorAssinaturaCRM,
-} from '@/lib/crm-integration';
+import { processarEventoCRM, verificarAssinaturaCRM } from '@/lib/crm-integration';
 
-// Legacy tenant-less webhook. Kept for backward compatibility — new
-// integrations must use /api/v1/crm/webhook/<tenantId>. Resolves the
-// tenant by reverse-lookup of the HMAC signature against every active
-// crm_config row.
-export async function POST(req: NextRequest) {
+export async function POST(
+  req: NextRequest,
+  ctx: { params: Promise<{ tenantId: string }> },
+) {
   try {
+    const { tenantId } = await ctx.params;
+    if (!tenantId) {
+      return NextResponse.json({ error: 'tenantId ausente no path' }, { status: 400 });
+    }
+
     const bodyText = await req.text();
     const signature = req.headers.get('x-crm-signature') || '';
 
-    const tenantId = await resolverTenantPorAssinaturaCRM(bodyText, signature);
-    if (!tenantId) {
+    const valid = await verificarAssinaturaCRM(bodyText, signature, tenantId);
+    if (!valid) {
       return NextResponse.json({ error: 'Assinatura invalida' }, { status: 401 });
     }
 

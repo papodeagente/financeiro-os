@@ -36,11 +36,20 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    await pool.query(
-      `INSERT INTO crm_config (id, tenant_id, data, updated_at) VALUES ('singleton', $1, $2, NOW())
-       ON CONFLICT (id) DO UPDATE SET data = $2, updated_at = NOW()`,
+    // Multi-tenant upsert: one config row per tenant. Cannot use
+    // ON CONFLICT (id) since id='singleton' for all tenants.
+    const upsert = await pool.query(
+      `UPDATE crm_config SET data = $2, updated_at = NOW()
+       WHERE id = 'singleton' AND tenant_id = $1`,
       [tenantId, JSON.stringify(body)]
     );
+    if (upsert.rowCount === 0) {
+      await pool.query(
+        `INSERT INTO crm_config (id, tenant_id, data, updated_at)
+         VALUES ('singleton', $1, $2, NOW())`,
+        [tenantId, JSON.stringify(body)]
+      );
+    }
     return NextResponse.json({ ok: true });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Erro';
