@@ -285,6 +285,70 @@ export function buildComissaoReceberFromFornecedor(
   };
 }
 
+// Aggregate fallback when the CRM doesn't itemize suppliers (fornecedores=[]).
+// Creates one "summary" ContaPagar with the total cost so the agency still
+// sees the liability — the user can later split per supplier manually.
+export function buildContaPagarAgregada(
+  ctx: VendaContext,
+  custoTotal: number,
+): ContaPagar {
+  const valor = asNum(custoTotal);
+  const base = createContaPagar();
+  return {
+    ...base,
+    id: generateId(),
+    origem: 'VENDA',
+    venda_id: ctx.vendaId,
+    grupo_id: ctx.enturGrupoId || null,
+    fornecedor_id: '',
+    fornecedor_nome: 'Custo da venda (a detalhar)',
+    descricao: `Custo da venda ${ctx.crmVendaId || ctx.vendaId}`,
+    valor_original: valor,
+    valor_final: valor,
+    valor_brl: valor,
+    data_vencimento: '',
+    status: 'PENDENTE',
+    auto_gerado: true,
+    origem_venda_id: ctx.vendaId,
+    observacoes: ctx.crmVendaId
+      ? `Custo agregado — fornecedor(es) não detalhado(s) pelo CRM (venda ${ctx.crmVendaId}). Editar para vincular fornecedor e anexar comprovante.`
+      : 'Custo agregado — fornecedor(es) não detalhado(s) pelo CRM. Editar para vincular fornecedor e anexar comprovante.',
+    ...({ requer_comprovante: true } as object),
+  } as ContaPagar;
+}
+
+// Aggregate fallback for the supplier commission when fornecedores=[] but
+// there is a positive gross margin. Uses 'COMISSAO_FORNECEDOR' so the UI
+// renders the "Comissão" badge consistently with the per-supplier flow.
+export function buildComissaoReceberAgregada(
+  ctx: VendaContext,
+  valorComissao: number,
+): ContaReceber {
+  const valor = asNum(valorComissao);
+  return {
+    ...createContaReceber(),
+    id: generateId(),
+    origem: 'COMISSAO_FORNECEDOR',
+    venda_id: ctx.vendaId,
+    grupo_id: ctx.enturGrupoId || null,
+    cliente_id: ctx.clienteId,
+    cliente_nome: ctx.clienteNome,
+    descricao: `Margem — Venda ${ctx.crmVendaId || ctx.vendaId}`,
+    valor_original: valor,
+    valor_final: valor,
+    data_vencimento: '',
+    forma_recebimento: '',
+    parcela_numero: 1,
+    total_parcelas: 1,
+    status: 'PENDENTE',
+    auto_gerado: true,
+    origem_venda_id: ctx.vendaId,
+    observacoes: ctx.crmVendaId
+      ? `Margem agregada — fornecedor(es) não detalhado(s) pelo CRM (venda ${ctx.crmVendaId})`
+      : 'Margem agregada — fornecedor(es) não detalhado(s) pelo CRM',
+  };
+}
+
 // ContaPagar = supplier cost. Flagged with requer_comprovante=true because
 // the customer typically pays the supplier directly — the agency still
 // needs proof of payment to close the books.
@@ -600,8 +664,10 @@ export async function processarEventoCRM(
           : 0;
 
         // Total commission to distribute across suppliers. Prefer the
-        // explicit value from the CRM; fall back to the gross margin.
-        const comissaoTotal = comissao != null ? comissao : rentabilidade;
+        // explicit value from the CRM; treat 0 as "not modeled" (the CRM
+        // sends 0 when it doesn't track commission per deal yet) and fall
+        // back to the gross margin so the agency still sees a receivable.
+        const comissaoTotal = (comissao != null && comissao > 0) ? comissao : rentabilidade;
 
         // Cliente parcelas (condicoes_pagamento) are kept as a payment
         // history reference on the venda — they DO NOT become contas a
@@ -638,9 +704,11 @@ export async function processarEventoCRM(
           [vendaId, clienteId, vendedorId, JSON.stringify(vendaData), tenantId]
         );
 
-        // 3) For each supplier:
-        //    - 1 conta_pagar (cost passed through customer, requires receipt)
-        //    - 1 conta_receber (commission the supplier owes the agency)
+        // 3) Generate CP + CR. Two paths:
+        //    a) Per-supplier (CRM detailed fornecedores[] with id+nome+custo)
+        //    b) Aggregated   (CRM didn't itemize — fornecedores=[]) — uses
+        //       custo_total / margem to keep the agency seeing the venda
+        //       in /financeiro-ag/{receber,pagar}.
         const ctx: VendaContext = {
           vendaId,
           clienteId,
@@ -649,40 +717,71 @@ export async function processarEventoCRM(
           crmVendaId: asStr(payload.crm_venda_id),
         };
 
-        let comissoesGeradas = 0;
-        let comissoesValor = 0;
+        let cpGerados = 0;
+        let crGerados = 0;
+        let crValor = 0;
+        let modo = '';
 
-        for (const forn of fornecedoresPayload) {
-          const fornExternalId = asStr(forn.fornecedor_id);
-          if (!fornExternalId) continue;
-          const fornecedorId = await upsertFornecedorByExternalId(
-            fornExternalId,
-            { nome: forn.fornecedor_nome },
-            tenantId,
-          );
+        const fornecedoresValidos = fornecedoresPayload.filter(
+          f => !!asStr(f.fornecedor_id),
+        );
 
-          // 3a) ContaPagar — supplier cost (with receipt requirement)
-          const contaPagar = buildContaPagarFromFornecedor(forn, fornecedorId, ctx);
-          await pool.query(
-            `INSERT INTO contas_pagar (id, fornecedor_id, status, data, tenant_id, created_at, updated_at)
-             VALUES ($1, $2, $3, $4::jsonb, $5, NOW(), NOW())`,
-            [contaPagar.id, fornecedorId, contaPagar.status, JSON.stringify(contaPagar), tenantId],
-          );
+        if (fornecedoresValidos.length > 0) {
+          // (a) Per-supplier
+          modo = 'per-supplier';
+          for (const forn of fornecedoresValidos) {
+            const fornExternalId = asStr(forn.fornecedor_id);
+            const fornecedorId = await upsertFornecedorByExternalId(
+              fornExternalId,
+              { nome: forn.fornecedor_nome },
+              tenantId,
+            );
 
-          // 3b) ContaReceber — commission to be paid by this supplier
-          const valorComissao = calcularComissaoFornecedor(forn, fornecedoresPayload, comissaoTotal);
-          if (valorComissao > 0) {
-            const contaReceber = buildComissaoReceberFromFornecedor(forn, fornecedorId, ctx, valorComissao);
+            const contaPagar = buildContaPagarFromFornecedor(forn, fornecedorId, ctx);
+            await pool.query(
+              `INSERT INTO contas_pagar (id, fornecedor_id, status, data, tenant_id, created_at, updated_at)
+               VALUES ($1, $2, $3, $4::jsonb, $5, NOW(), NOW())`,
+              [contaPagar.id, fornecedorId, contaPagar.status, JSON.stringify(contaPagar), tenantId],
+            );
+            cpGerados++;
+
+            const valorComissao = calcularComissaoFornecedor(forn, fornecedoresValidos, comissaoTotal);
+            if (valorComissao > 0) {
+              const contaReceber = buildComissaoReceberFromFornecedor(forn, fornecedorId, ctx, valorComissao);
+              await pool.query(
+                `INSERT INTO contas_receber (id, venda_id, cliente_id, status, data, tenant_id, created_at, updated_at)
+                 VALUES ($1, $2, $3, $4, $5::jsonb, $6, NOW(), NOW())`,
+                [contaReceber.id, vendaId, clienteId, contaReceber.status, JSON.stringify(contaReceber), tenantId],
+              );
+              crGerados++;
+              crValor += valorComissao;
+            }
+          }
+        } else {
+          // (b) Aggregated — CRM didn't list suppliers
+          modo = 'aggregated';
+          if (custoTotal > 0) {
+            const cp = buildContaPagarAgregada(ctx, custoTotal);
+            await pool.query(
+              `INSERT INTO contas_pagar (id, fornecedor_id, status, data, tenant_id, created_at, updated_at)
+               VALUES ($1, $2, $3, $4::jsonb, $5, NOW(), NOW())`,
+              [cp.id, '', cp.status, JSON.stringify(cp), tenantId],
+            );
+            cpGerados++;
+          }
+          if (comissaoTotal > 0) {
+            const cr = buildComissaoReceberAgregada(ctx, comissaoTotal);
             await pool.query(
               `INSERT INTO contas_receber (id, venda_id, cliente_id, status, data, tenant_id, created_at, updated_at)
                VALUES ($1, $2, $3, $4, $5::jsonb, $6, NOW(), NOW())`,
-              [contaReceber.id, vendaId, clienteId, contaReceber.status, JSON.stringify(contaReceber), tenantId],
+              [cr.id, vendaId, clienteId, cr.status, JSON.stringify(cr), tenantId],
             );
-            comissoesGeradas++;
-            comissoesValor += valorComissao;
+            crGerados++;
+            crValor += comissaoTotal;
           }
         }
-        acao = `venda criada (${vendaId}), cliente ${clienteId}, ${fornecedoresPayload.length} CP (custo), ${comissoesGeradas} CR (comissão R$ ${comissoesValor.toFixed(2)})`;
+
+        acao = `venda criada (${vendaId}, ${modo}): ${cpGerados} CP (custo R$ ${custoTotal.toFixed(2)}), ${crGerados} CR (comissão R$ ${crValor.toFixed(2)})`;
         break;
       }
 

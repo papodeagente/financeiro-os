@@ -7,6 +7,8 @@
 import {
   buildContaPagarFromFornecedor,
   buildComissaoReceberFromFornecedor,
+  buildContaPagarAgregada,
+  buildComissaoReceberAgregada,
   calcularComissaoFornecedor,
 } from '../src/lib/crm-integration';
 import type { ContaReceber, ContaPagar } from '../src/lib/crm-types';
@@ -193,6 +195,35 @@ const crB = buildComissaoReceberFromFornecedor(fornsCenario[1], 'fb', ctx, comis
 assert(cpA.valor_final === 6000 && cpB.valor_final === 4000, 'CP totais corretos');
 assert(crA.valor_final === 900 && crB.valor_final === 600, 'CR comissões corretas');
 assert(cpA.fornecedor_id === 'fa' && crA.origem_item_id === 'fa', 'CP e CR ligados ao fornecedor A');
+
+// ────────────────────────────────────────
+// 13. Fallback agregado — fornecedores=[] mas custo_total e margem > 0
+// ────────────────────────────────────────
+console.log('\n[13] Fallback agregado — CP genérica de custo');
+const cpAgr = buildContaPagarAgregada(ctx, 40000);
+assert(cpAgr.origem === 'VENDA', "origem === 'VENDA'");
+assert(cpAgr.status === 'PENDENTE', "status === 'PENDENTE'");
+assert(cpAgr.fornecedor_id === '', 'fornecedor_id vazio (a detalhar)');
+assert(cpAgr.fornecedor_nome === 'Custo da venda (a detalhar)', 'fornecedor_nome placeholder');
+assert(cpAgr.valor_final === 40000, 'valor_final === custo_total');
+assert(cpAgr.descricao.includes('Custo da venda'), 'descricao informativa');
+assert(cpAgr.observacoes.includes('agregado'), 'observacoes deixa claro que é agregado');
+assert((cpAgr as unknown as { requer_comprovante: boolean }).requer_comprovante === true, 'requer_comprovante mantido');
+assert(cpAgr.auto_gerado === true, 'auto_gerado true');
+
+console.log('\n[14] Fallback agregado — CR genérica de margem');
+const crAgr = buildComissaoReceberAgregada(ctx, 10000);
+assert(crAgr.origem === 'COMISSAO_FORNECEDOR', "origem mantém 'COMISSAO_FORNECEDOR'");
+assert(crAgr.status === 'PENDENTE', "status === 'PENDENTE'");
+assert(crAgr.valor_final === 10000, 'valor_final === margem');
+assert(crAgr.descricao.startsWith('Margem'), 'descricao começa com "Margem"');
+assert(crAgr.cliente_nome === ctx.clienteNome, 'cliente_nome preservado');
+
+console.log('\n[15] NaN protection nos agregados');
+const cpAgrSemValor = buildContaPagarAgregada(ctx, NaN);
+assert(cpAgrSemValor.valor_final === 0, 'NaN -> 0');
+const cpAgrStr = buildContaPagarAgregada(ctx, '40000' as unknown as number);
+assert(cpAgrStr.valor_final === 40000, 'string numérica -> number');
 
 // ────────────────────────────────────────
 console.log('\n────────────────────────────────────');
