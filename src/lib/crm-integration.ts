@@ -3,6 +3,12 @@ import { generateId } from './utils';
 import { createHmac } from 'crypto';
 import { getProdutoGrupo } from './financial-calculations';
 import type { GrupoViagem } from './types';
+import {
+  createContaReceber,
+  createContaPagar,
+  type ContaReceber,
+  type ContaPagar,
+} from './crm-types';
 
 // ──────────────────────────────────────────
 // Types
@@ -151,6 +157,124 @@ async function listarCrmConfigsAtivas(): Promise<Array<{ tenantId: string; confi
 
 function asStr(v: unknown): string {
   return typeof v === 'string' ? v : v == null ? '' : String(v);
+}
+
+function asNum(v: unknown): number {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  if (typeof v === 'string') {
+    const n = parseFloat(v.replace(',', '.'));
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+}
+
+// Normalizes the date-like value the CRM may send (Date, ISO string, or
+// "YYYY-MM-DD") into the "YYYY-MM-DD" form the UI expects.
+function asDateYMD(v: unknown): string {
+  if (!v) return '';
+  const s = asStr(v);
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toISOString().slice(0, 10);
+}
+
+// CRM may use varied tokens ("pix", "Pix", "nao_definida", "cartao_credito").
+// Coerce to the strict enum the UI renders.
+function mapFormaRecebimento(s: string): ContaReceber['forma_recebimento'] {
+  const u = s.toUpperCase();
+  if (u.includes('PIX')) return 'PIX';
+  if (u.includes('TED')) return 'TED';
+  if (u.includes('CART')) return 'CARTAO';
+  if (u.includes('BOL')) return 'BOLETO';
+  if (u.includes('DIN')) return 'DINHEIRO';
+  if (u.includes('CHEQ')) return 'CHEQUE';
+  return '';
+}
+
+// ──────────────────────────────────────────
+// Builders — pure mapping from CRM payload to local entity shape
+// --------------------------------------------------------------------
+// Exported so they can be unit-tested without a DB connection. The
+// caller is still responsible for INSERTing the returned object.
+// ──────────────────────────────────────────
+
+interface VendaContext {
+  vendaId: string;
+  clienteId: string;
+  clienteNome: string;
+  enturGrupoId: string;
+  crmVendaId: string;
+}
+
+export function buildContaReceberFromParcela(
+  parcela: Record<string, unknown>,
+  ctx: VendaContext,
+  parcelaIndex: number,
+  totalParcelas: number,
+): ContaReceber {
+  const parcelaNumero = Number(parcela.parcela) || (parcelaIndex + 1);
+  const valor = asNum(parcela.valor);
+  const descricao = totalParcelas > 1
+    ? `Parcela ${parcelaNumero}/${totalParcelas} — Venda ${ctx.crmVendaId || ctx.vendaId}`
+    : `Venda ${ctx.crmVendaId || ctx.vendaId}`;
+
+  return {
+    ...createContaReceber(),
+    id: generateId(),
+    origem: 'VENDA',
+    venda_id: ctx.vendaId,
+    grupo_id: ctx.enturGrupoId || null,
+    cliente_id: ctx.clienteId,
+    cliente_nome: ctx.clienteNome,
+    descricao,
+    valor_original: valor,
+    valor_final: valor,
+    data_vencimento: asDateYMD(parcela.vencimento),
+    forma_recebimento: mapFormaRecebimento(asStr(parcela.forma_pagamento)),
+    parcela_numero: parcelaNumero,
+    total_parcelas: totalParcelas,
+    status: 'PENDENTE',
+    auto_gerado: true,
+    origem_venda_id: ctx.vendaId,
+    observacoes: ctx.crmVendaId
+      ? `Importado do CRM (venda ${ctx.crmVendaId})`
+      : 'Importado do CRM',
+  };
+}
+
+export function buildContaPagarFromFornecedor(
+  forn: Record<string, unknown>,
+  fornecedorId: string,
+  ctx: VendaContext,
+): ContaPagar {
+  const fornecedorNome = asStr(forn.fornecedor_nome);
+  const valorCusto = asNum(forn.valor_custo);
+  const servico = asStr(forn.servico);
+  const descricao = servico
+    ? `${servico} — ${fornecedorNome || 'Fornecedor'}`
+    : `${fornecedorNome || 'Fornecedor'} — Venda ${ctx.crmVendaId || ctx.vendaId}`;
+
+  return {
+    ...createContaPagar(),
+    id: generateId(),
+    origem: 'VENDA',
+    venda_id: ctx.vendaId,
+    grupo_id: ctx.enturGrupoId || null,
+    fornecedor_id: fornecedorId,
+    fornecedor_nome: fornecedorNome,
+    descricao,
+    valor_original: valorCusto,
+    valor_final: valorCusto,
+    valor_brl: valorCusto,
+    data_vencimento: asDateYMD(forn.vencimento_pagamento),
+    status: 'PENDENTE',
+    auto_gerado: true,
+    origem_venda_id: ctx.vendaId,
+    observacoes: ctx.crmVendaId
+      ? `Importado do CRM (venda ${ctx.crmVendaId})`
+      : 'Importado do CRM',
+  };
 }
 
 async function upsertClienteByExternalId(
@@ -450,29 +574,29 @@ export async function processarEventoCRM(
           [vendaId, clienteId, vendedorId, JSON.stringify(vendaData), tenantId]
         );
 
-        // 3) Create contas_receber for each parcela.
+        // 3) Create contas_receber and contas_pagar. JSONB shape must
+        //    match what the UI renders — uses the shared builders so any
+        //    schema change here is captured by the unit tests.
+        const ctx: VendaContext = {
+          vendaId,
+          clienteId,
+          clienteNome: asStr(payload.cliente_nome),
+          enturGrupoId: asStr(payload.entur_grupo_id),
+          crmVendaId: asStr(payload.crm_venda_id),
+        };
+
         const parcelas = (payload.condicoes_pagamento as Array<Record<string, unknown>>) || [];
-        for (const parcela of parcelas) {
-          const parcelaId = generateId();
-          const parcelaData = {
-            id: parcelaId,
-            venda_id: vendaId,
-            cliente_id: clienteId,
-            parcela: parcela.parcela,
-            valor: parcela.valor,
-            vencimento: parcela.vencimento,
-            forma_pagamento: parcela.forma_pagamento,
-            status: 'pendente',
-            origem: 'crm',
-          };
+        const totalParcelas = parcelas.length || 1;
+
+        for (let i = 0; i < parcelas.length; i++) {
+          const conta = buildContaReceberFromParcela(parcelas[i], ctx, i, totalParcelas);
           await pool.query(
             `INSERT INTO contas_receber (id, venda_id, cliente_id, status, data, tenant_id, created_at, updated_at)
-             VALUES ($1, $2, $3, 'pendente', $4, $5, NOW(), NOW())`,
-            [parcelaId, vendaId, clienteId, JSON.stringify(parcelaData), tenantId]
+             VALUES ($1, $2, $3, $4, $5::jsonb, $6, NOW(), NOW())`,
+            [conta.id, vendaId, clienteId, conta.status, JSON.stringify(conta), tenantId],
           );
         }
 
-        // 4) Create contas_pagar for each fornecedor (upsert fornecedor first).
         const fornecedores = (payload.fornecedores as Array<Record<string, unknown>>) || [];
         for (const forn of fornecedores) {
           const fornExternalId = asStr(forn.fornecedor_id);
@@ -482,23 +606,11 @@ export async function processarEventoCRM(
             { nome: forn.fornecedor_nome },
             tenantId,
           );
-
-          const fornId = generateId();
-          const fornData = {
-            id: fornId,
-            venda_id: vendaId,
-            fornecedor_id: fornecedorId,
-            fornecedor_external_id: fornExternalId,
-            servico: forn.servico,
-            valor_custo: forn.valor_custo,
-            vencimento: forn.vencimento_pagamento,
-            status: 'pendente',
-            origem: 'crm',
-          };
+          const conta = buildContaPagarFromFornecedor(forn, fornecedorId, ctx);
           await pool.query(
             `INSERT INTO contas_pagar (id, fornecedor_id, status, data, tenant_id, created_at, updated_at)
-             VALUES ($1, $2, 'pendente', $3, $4, NOW(), NOW())`,
-            [fornId, fornecedorId, JSON.stringify(fornData), tenantId]
+             VALUES ($1, $2, $3, $4::jsonb, $5, NOW(), NOW())`,
+            [conta.id, fornecedorId, conta.status, JSON.stringify(conta), tenantId],
           );
         }
         acao = `venda criada (${vendaId}), cliente ${clienteId}, ${parcelas.length} receber, ${fornecedores.length} pagar`;
