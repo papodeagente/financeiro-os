@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { GrupoViagem } from '@/lib/types';
 import { minPositivo, formatBRL } from '@/lib/utils';
 import { calcBrindeTotals } from '@/lib/calculations';
-import { MoneyInput } from '@/components/MoneyInput';
+import { MoneyCustoVenda } from '@/components/MoneyCustoVenda';
 import { Input } from '@/components/ui/input';
 import { Plus, Trash2, Gift } from 'lucide-react';
 
@@ -74,15 +74,21 @@ export function BrindeTab({ grupo, onChange }: Props) {
                 </div>
                 <button onClick={() => clearSource(fIdx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-status-danger)] hover:bg-[var(--t-status-danger-bg)] transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                <div>
-                  <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Valor Unid.</label>
-                  <MoneyInput value={f.valor_unidade} onChange={v => update(fIdx, 'valor_unidade', v)} highlight={isMin} />
-                </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                <MoneyCustoVenda
+                  label="Valor Unidade"
+                  custo={f.valor_unidade}
+                  venda={f.valor_venda_unidade}
+                  onCustoChange={v => update(fIdx, 'valor_unidade', v)}
+                  onVendaChange={v => update(fIdx, 'valor_venda_unidade', v)}
+                  highlightCusto={isMin}
+                />
                 <div>
                   <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Descrição</label>
                   <Input value={f.descricao} onChange={e => update(fIdx, 'descricao', e.target.value)} className="h-8" />
                 </div>
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
                 <div>
                   <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Contato</label>
                   <Input value={f.contato} onChange={e => update(fIdx, 'contato', e.target.value)} className="h-8" />

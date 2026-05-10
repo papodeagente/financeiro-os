@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { GrupoViagem } from '@/lib/types';
 import { minPositivo, formatBRL, calcDiarias } from '@/lib/utils';
 import { calcNavioTotals } from '@/lib/calculations';
-import { MoneyInput } from '@/components/MoneyInput';
+import { MoneyCustoVenda } from '@/components/MoneyCustoVenda';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -114,16 +114,23 @@ export function NavioTab({ grupo, onChange }: Props) {
                 </div>
                 <button onClick={() => clearSource(fIdx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-status-danger)] hover:bg-[var(--t-status-danger-bg)] transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {TIPOS.map(t => {
                   const key = `valor_${t}` as keyof typeof f;
+                  const vendaKey = `valor_venda_${t}` as keyof typeof f;
                   const val = f[key] as number | null;
+                  const vendaVal = f[vendaKey] as number | null | undefined;
                   const isMin = val !== null && val > 0 && val === totals[t];
                   return (
-                    <div key={t}>
-                      <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">{LABELS[t]}</label>
-                      <MoneyInput value={val} onChange={v => updateFornecedor(fIdx, key, v)} highlight={isMin} />
-                    </div>
+                    <MoneyCustoVenda
+                      key={t}
+                      label={LABELS[t]}
+                      custo={val}
+                      venda={vendaVal}
+                      onCustoChange={v => updateFornecedor(fIdx, key, v)}
+                      onVendaChange={v => updateFornecedor(fIdx, vendaKey, v)}
+                      highlightCusto={isMin}
+                    />
                   );
                 })}
               </div>

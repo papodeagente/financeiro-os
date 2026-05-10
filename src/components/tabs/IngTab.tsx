@@ -5,7 +5,7 @@ import { GrupoViagem } from '@/lib/types';
 import { createIngAtrativo } from '@/lib/defaults';
 import { minPositivo, formatBRL } from '@/lib/utils';
 import { calcIngTotals } from '@/lib/calculations';
-import { MoneyInput } from '@/components/MoneyInput';
+import { MoneyCustoVenda } from '@/components/MoneyCustoVenda';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -122,14 +122,29 @@ export function IngTab({ grupo, onChange }: Props) {
                         </div>
                         <button onClick={() => clearSource(aIdx, fIdx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-status-danger)] hover:bg-[var(--t-status-danger-bg)] transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                         {TIPOS.map(t => {
                           const key = `valor_${t}` as keyof typeof fonte;
+                          const vendaKey = `valor_venda_${t}` as keyof typeof fonte;
                           const val = fonte[key] as number | null;
+                          const vendaVal = fonte[vendaKey] as number | null | undefined;
                           const isMin = val !== null && val > 0 && val === bests[t];
-                          return (<div key={t}><label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">{TIPO_LABELS[t]}</label><MoneyInput value={val} onChange={v => updateFonte(aIdx, fIdx, key, v)} highlight={isMin} /></div>);
+                          return (
+                            <MoneyCustoVenda
+                              key={t}
+                              label={TIPO_LABELS[t]}
+                              custo={val}
+                              venda={vendaVal}
+                              onCustoChange={v => updateFonte(aIdx, fIdx, key, v)}
+                              onVendaChange={v => updateFonte(aIdx, fIdx, vendaKey, v)}
+                              highlightCusto={isMin}
+                            />
+                          );
                         })}
-                        <div><label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Info</label><Textarea value={fonte.info} onChange={e => updateFonte(aIdx, fIdx, 'info', e.target.value)} rows={1} className="min-h-[32px]" /></div>
+                      </div>
+                      <div className="mt-3">
+                        <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Info</label>
+                        <Textarea value={fonte.info} onChange={e => updateFonte(aIdx, fIdx, 'info', e.target.value)} rows={1} className="min-h-[32px]" />
                       </div>
                     </div>
                   );

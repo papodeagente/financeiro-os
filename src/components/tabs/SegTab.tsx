@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { GrupoViagem } from '@/lib/types';
 import { minPositivo, formatBRL } from '@/lib/utils';
 import { calcSegTotals } from '@/lib/calculations';
-import { MoneyInput } from '@/components/MoneyInput';
+import { MoneyCustoVenda } from '@/components/MoneyCustoVenda';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Trash2, Trophy, Shield, CalendarDays } from 'lucide-react';
@@ -109,16 +109,23 @@ export function SegTab({ grupo, onChange }: Props) {
                 </div>
                 <button onClick={() => clearSource(sIdx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-status-danger)] hover:bg-[var(--t-status-danger-bg)] transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {TIPOS.map(t => {
                   const key = `valor_${t}` as keyof typeof seg;
+                  const vendaKey = `valor_venda_${t}` as keyof typeof seg;
                   const val = seg[key] as number | null;
+                  const vendaVal = seg[vendaKey] as number | null | undefined;
                   const isMin = val !== null && val > 0 && val === bests[t];
                   return (
-                    <div key={t}>
-                      <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">{LABELS[t]}</label>
-                      <MoneyInput value={val} onChange={v => update(sIdx, key, v)} highlight={isMin} />
-                    </div>
+                    <MoneyCustoVenda
+                      key={t}
+                      label={LABELS[t]}
+                      custo={val}
+                      venda={vendaVal}
+                      onCustoChange={v => update(sIdx, key, v)}
+                      onVendaChange={v => update(sIdx, vendaKey, v)}
+                      highlightCusto={isMin}
+                    />
                   );
                 })}
               </div>

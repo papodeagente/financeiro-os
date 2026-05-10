@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { GrupoViagem } from '@/lib/types';
 import { formatBRL } from '@/lib/utils';
 import { calcDivulgacaoTotals } from '@/lib/calculations';
-import { MoneyInput } from '@/components/MoneyInput';
+import { MoneyCustoVenda } from '@/components/MoneyCustoVenda';
 import { Input } from '@/components/ui/input';
 import { Plus, Trash2, Megaphone } from 'lucide-react';
 
@@ -95,15 +95,20 @@ export function DivulgacaoTab({ grupo, onChange }: Props) {
                 </div>
                 <button onClick={() => clearSource(fIdx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-status-danger)] hover:bg-[var(--t-status-danger-bg)] transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                <div>
-                  <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Valor Total</label>
-                  <MoneyInput value={f.valor_total} onChange={v => update(fIdx, 'valor_total', v)} />
-                </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                <MoneyCustoVenda
+                  label="Valor Total"
+                  custo={f.valor_total}
+                  venda={f.valor_venda_total}
+                  onCustoChange={v => update(fIdx, 'valor_total', v)}
+                  onVendaChange={v => update(fIdx, 'valor_venda_total', v)}
+                />
                 <div>
                   <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Canal / Mídia</label>
                   <Input value={f.canal} onChange={e => update(fIdx, 'canal', e.target.value)} placeholder="Ex: Instagram Ads" className="h-8" />
                 </div>
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
                 <div>
                   <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Descrição</label>
                   <Input value={f.descricao} onChange={e => update(fIdx, 'descricao', e.target.value)} className="h-8" />
