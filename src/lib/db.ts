@@ -472,6 +472,23 @@ export async function initDB() {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_${table}_tenant ON ${table}(tenant_id)`);
   }
 
+  // ============================================================
+  // CRM INTEGRATION — external_id for idempotent upsert by CRM ID
+  // ============================================================
+  // Enables receiving "crm_contact_123" / "crm_user_45" / "crm_supplier_22"
+  // from the CRM and resolving them to internal IDs without duplicating.
+  await pool.query(`
+    ALTER TABLE clientes ADD COLUMN IF NOT EXISTS external_id TEXT;
+    ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS external_id TEXT;
+    ALTER TABLE fornecedores_crm ADD COLUMN IF NOT EXISTS external_id TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_clientes_external_id
+      ON clientes(tenant_id, external_id) WHERE external_id IS NOT NULL AND external_id <> '';
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_usuarios_external_id
+      ON usuarios(tenant_id, external_id) WHERE external_id IS NOT NULL AND external_id <> '';
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_fornecedores_crm_external_id
+      ON fornecedores_crm(tenant_id, external_id) WHERE external_id IS NOT NULL AND external_id <> '';
+  `);
+
   // Drop the old unique constraint on planejamento_custos(mes) — now needs (tenant_id, mes)
   await pool.query(`DROP INDEX IF EXISTS idx_planejamento_custos_mes`);
   // Deduplicate planejamento_custos before creating the composite unique index.

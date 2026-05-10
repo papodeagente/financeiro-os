@@ -52,6 +52,112 @@ async function getCrmConfig(): Promise<CrmConfig | null> {
 }
 
 // ──────────────────────────────────────────
+// Idempotent upserts by external_id
+// --------------------------------------------------------------------
+// The CRM emits prefixed external IDs ("crm_contact_<id>", "crm_user_<id>",
+// "crm_supplier_<id>") that don't exist locally. These helpers resolve
+// them to internal IDs, creating the row on first sight using the
+// denormalized data the CRM sends alongside.
+// ──────────────────────────────────────────
+
+function asStr(v: unknown): string {
+  return typeof v === 'string' ? v : v == null ? '' : String(v);
+}
+
+async function upsertClienteByExternalId(
+  externalId: string,
+  dados: { nome?: unknown; cpf?: unknown; email?: unknown; telefone?: unknown },
+  tenantId: string,
+): Promise<string> {
+  if (!pool || !externalId) throw new Error('upsertCliente: external_id obrigatorio');
+
+  const { rows } = await pool.query(
+    `SELECT id FROM clientes WHERE external_id = $1 AND tenant_id = $2 LIMIT 1`,
+    [externalId, tenantId],
+  );
+  if (rows.length > 0) return rows[0].id as string;
+
+  const id = generateId();
+  const nome = asStr(dados.nome);
+  const cpf = asStr(dados.cpf);
+  const email = asStr(dados.email);
+  const telefone = asStr(dados.telefone);
+  const data = {
+    id,
+    nome,
+    cpf_cnpj: cpf,
+    tipo: 'fisica',
+    email,
+    telefone,
+    origem: 'crm',
+    external_id: externalId,
+  };
+  await pool.query(
+    `INSERT INTO clientes (id, nome, cpf_cnpj, tipo, data, external_id, tenant_id, created_at, updated_at)
+     VALUES ($1, $2, $3, 'fisica', $4, $5, $6, NOW(), NOW())`,
+    [id, nome, cpf, JSON.stringify(data), externalId, tenantId],
+  );
+  return id;
+}
+
+async function upsertVendedorByExternalId(
+  externalId: string,
+  dados: { nome?: unknown; email?: unknown },
+  tenantId: string,
+): Promise<string> {
+  if (!pool || !externalId) throw new Error('upsertVendedor: external_id obrigatorio');
+
+  const { rows } = await pool.query(
+    `SELECT id FROM usuarios WHERE external_id = $1 AND tenant_id = $2 LIMIT 1`,
+    [externalId, tenantId],
+  );
+  if (rows.length > 0) return rows[0].id as string;
+
+  const id = generateId();
+  const nome = asStr(dados.nome);
+  const email = asStr(dados.email);
+  const data = { id, nome, email, origem: 'crm', external_id: externalId };
+  await pool.query(
+    `INSERT INTO usuarios (id, nome, email, data, external_id, tenant_id, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
+    [id, nome, email, JSON.stringify(data), externalId, tenantId],
+  );
+  return id;
+}
+
+async function upsertFornecedorByExternalId(
+  externalId: string,
+  dados: { nome?: unknown },
+  tenantId: string,
+): Promise<string> {
+  if (!pool || !externalId) throw new Error('upsertFornecedor: external_id obrigatorio');
+
+  const { rows } = await pool.query(
+    `SELECT id FROM fornecedores_crm WHERE external_id = $1 AND tenant_id = $2 LIMIT 1`,
+    [externalId, tenantId],
+  );
+  if (rows.length > 0) return rows[0].id as string;
+
+  const id = generateId();
+  const nome = asStr(dados.nome);
+  const data = {
+    id,
+    nome_fantasia: nome,
+    razao_social: nome,
+    cnpj: '',
+    categoria: '',
+    origem: 'crm',
+    external_id: externalId,
+  };
+  await pool.query(
+    `INSERT INTO fornecedores_crm (id, nome_fantasia, cnpj, categoria, data, external_id, tenant_id, created_at, updated_at)
+     VALUES ($1, $2, '', '', $3, $4, $5, NOW(), NOW())`,
+    [id, nome, JSON.stringify(data), externalId, tenantId],
+  );
+  return id;
+}
+
+// ──────────────────────────────────────────
 // emitirEventoCRM — fire-and-forget
 // ──────────────────────────────────────────
 
@@ -169,11 +275,45 @@ export async function processarEventoCRM(
 
     switch (tipo) {
       case 'VENDA_FECHADA': {
+        // Single tenant per Financeiro instance (crm_config is a singleton),
+        // so all CRM-originated rows live under the same tenant context as
+        // existing CRM-integration data ('').
+        const tenantId = '';
+
+        // 1) Resolve external IDs (cliente, vendedor, fornecedores) to internal IDs.
+        //    Creates rows on first sight using the denormalized data the CRM sends.
+        const clienteExternalId = asStr(payload.cliente_id);
+        if (!clienteExternalId) {
+          throw new Error('VENDA_FECHADA sem cliente_id');
+        }
+        const clienteId = await upsertClienteByExternalId(
+          clienteExternalId,
+          {
+            nome: payload.cliente_nome,
+            cpf: payload.cliente_cpf,
+            email: payload.cliente_email,
+            telefone: payload.cliente_telefone,
+          },
+          tenantId,
+        );
+
+        const vendedorExternalId = asStr(payload.vendedor_id);
+        let vendedorId = '';
+        if (vendedorExternalId) {
+          vendedorId = await upsertVendedorByExternalId(
+            vendedorExternalId,
+            { nome: payload.vendedor_nome, email: payload.vendedor_email },
+            tenantId,
+          );
+        }
+
         const vendaId = generateId();
         const vendaData = {
           id: vendaId,
-          cliente_id: payload.cliente_id || '',
-          vendedor_id: payload.vendedor_id || '',
+          cliente_id: clienteId,
+          cliente_external_id: clienteExternalId,
+          vendedor_id: vendedorId,
+          vendedor_external_id: vendedorExternalId,
           grupo_id: payload.entur_grupo_id || '',
           proposta_id: payload.entur_proposta_id || '',
           crm_venda_id: payload.crm_venda_id || '',
@@ -184,19 +324,19 @@ export async function processarEventoCRM(
           data_venda: new Date().toISOString(),
         };
         await pool.query(
-          `INSERT INTO vendas_crm (id, cliente_id, vendedor_id, status, data, created_at, updated_at)
-           VALUES ($1, $2, $3, 'vendido', $4, NOW(), NOW())`,
-          [vendaId, vendaData.cliente_id, vendaData.vendedor_id, JSON.stringify(vendaData)]
+          `INSERT INTO vendas_crm (id, cliente_id, vendedor_id, status, data, tenant_id, created_at, updated_at)
+           VALUES ($1, $2, $3, 'vendido', $4, $5, NOW(), NOW())`,
+          [vendaId, clienteId, vendedorId, JSON.stringify(vendaData), tenantId]
         );
 
-        // Create contas_receber for each parcela
+        // 2) Create contas_receber for each parcela.
         const parcelas = (payload.condicoes_pagamento as Array<Record<string, unknown>>) || [];
         for (const parcela of parcelas) {
           const parcelaId = generateId();
           const parcelaData = {
             id: parcelaId,
             venda_id: vendaId,
-            cliente_id: vendaData.cliente_id,
+            cliente_id: clienteId,
             parcela: parcela.parcela,
             valor: parcela.valor,
             vencimento: parcela.vencimento,
@@ -205,20 +345,29 @@ export async function processarEventoCRM(
             origem: 'crm',
           };
           await pool.query(
-            `INSERT INTO contas_receber (id, venda_id, cliente_id, status, data, created_at, updated_at)
-             VALUES ($1, $2, $3, 'pendente', $4, NOW(), NOW())`,
-            [parcelaId, vendaId, vendaData.cliente_id, JSON.stringify(parcelaData)]
+            `INSERT INTO contas_receber (id, venda_id, cliente_id, status, data, tenant_id, created_at, updated_at)
+             VALUES ($1, $2, $3, 'pendente', $4, $5, NOW(), NOW())`,
+            [parcelaId, vendaId, clienteId, JSON.stringify(parcelaData), tenantId]
           );
         }
 
-        // Create contas_pagar for each fornecedor
+        // 3) Create contas_pagar for each fornecedor (upsert fornecedor first).
         const fornecedores = (payload.fornecedores as Array<Record<string, unknown>>) || [];
         for (const forn of fornecedores) {
+          const fornExternalId = asStr(forn.fornecedor_id);
+          if (!fornExternalId) continue;
+          const fornecedorId = await upsertFornecedorByExternalId(
+            fornExternalId,
+            { nome: forn.fornecedor_nome },
+            tenantId,
+          );
+
           const fornId = generateId();
           const fornData = {
             id: fornId,
             venda_id: vendaId,
-            fornecedor_id: forn.fornecedor_id || '',
+            fornecedor_id: fornecedorId,
+            fornecedor_external_id: fornExternalId,
             servico: forn.servico,
             valor_custo: forn.valor_custo,
             vencimento: forn.vencimento_pagamento,
@@ -226,12 +375,12 @@ export async function processarEventoCRM(
             origem: 'crm',
           };
           await pool.query(
-            `INSERT INTO contas_pagar (id, fornecedor_id, status, data, created_at, updated_at)
-             VALUES ($1, $2, 'pendente', $3, NOW(), NOW())`,
-            [fornId, fornData.fornecedor_id, JSON.stringify(fornData)]
+            `INSERT INTO contas_pagar (id, fornecedor_id, status, data, tenant_id, created_at, updated_at)
+             VALUES ($1, $2, 'pendente', $3, $4, NOW(), NOW())`,
+            [fornId, fornecedorId, JSON.stringify(fornData), tenantId]
           );
         }
-        acao = `venda criada (${vendaId}), ${parcelas.length} receber, ${fornecedores.length} pagar`;
+        acao = `venda criada (${vendaId}), cliente ${clienteId}, ${parcelas.length} receber, ${fornecedores.length} pagar`;
         break;
       }
 
@@ -279,21 +428,23 @@ export async function processarEventoCRM(
       }
 
       case 'CLIENTE_ATUALIZADO': {
-        const { cliente_id, campos_alterados } = payload;
-        if (cliente_id && campos_alterados) {
+        const externalId = asStr(payload.cliente_id);
+        const camposAlterados = payload.campos_alterados as Record<string, unknown> | undefined;
+        if (externalId && camposAlterados) {
+          // CRM sends prefixed external_id ("crm_contact_<id>"), not internal id.
           const { rows: cliRows } = await pool.query(
-            `SELECT data FROM clientes WHERE id = $1`,
-            [cliente_id]
+            `SELECT id, data FROM clientes WHERE external_id = $1 LIMIT 1`,
+            [externalId]
           );
           if (cliRows.length > 0) {
-            const merged = { ...cliRows[0].data, ...(campos_alterados as Record<string, unknown>) };
+            const merged = { ...cliRows[0].data, ...camposAlterados };
             await pool.query(
               `UPDATE clientes SET data = $2, updated_at = NOW() WHERE id = $1`,
-              [cliente_id, JSON.stringify(merged)]
+              [cliRows[0].id, JSON.stringify(merged)]
             );
           }
         }
-        acao = `cliente ${cliente_id} atualizado`;
+        acao = `cliente ${externalId} atualizado`;
         break;
       }
 
