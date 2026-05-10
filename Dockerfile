@@ -7,6 +7,10 @@ RUN npm ci
 
 FROM base AS builder
 WORKDIR /app
+# Next 16 typecheck em build pode estourar 2GB. Damos folga p/ ambientes
+# com pouca RAM (Coolify) — sem isso o tsc morre silencioso apos
+# "Running TypeScript ..." e o build retorna exit 255 sem stack trace.
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
