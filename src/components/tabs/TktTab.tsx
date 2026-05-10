@@ -5,7 +5,7 @@ import { GrupoViagem } from '@/lib/types';
 import { createTktTrecho } from '@/lib/defaults';
 import { minPositivo, formatBRL } from '@/lib/utils';
 import { calcTktTotals } from '@/lib/calculations';
-import { MoneyInput } from '@/components/MoneyInput';
+import { MoneyCustoVenda } from '@/components/MoneyCustoVenda';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Plus, Trash2, Plane, Trophy } from 'lucide-react';
@@ -178,10 +178,27 @@ export function TktTab({ grupo, onChange }: Props) {
                         </div>
                         <button onClick={() => clearSource(tIdx, fIdx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-status-danger)] hover:bg-[var(--t-status-danger-bg)] transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div><label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Valor ADT</label><MoneyInput value={fonte.valor_adt} onChange={v => updateFonte(tIdx, fIdx, 'valor_adt', v)} highlight={isMinAdt} /></div>
-                        <div><label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Valor CHD</label><MoneyInput value={fonte.valor_chd} onChange={v => updateFonte(tIdx, fIdx, 'valor_chd', v)} highlight={isMinChd} /></div>
-                        <div><label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Partida / Chegada</label><Input value={fonte.partida_chegada} onChange={e => updateFonte(tIdx, fIdx, 'partida_chegada', e.target.value)} className="h-8" placeholder="GRU 10:00 → LIS 22:00" /></div>
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        <MoneyCustoVenda
+                          label="ADT"
+                          custo={fonte.valor_adt}
+                          venda={fonte.valor_venda_adt}
+                          onCustoChange={v => updateFonte(tIdx, fIdx, 'valor_adt', v)}
+                          onVendaChange={v => updateFonte(tIdx, fIdx, 'valor_venda_adt', v)}
+                          highlightCusto={isMinAdt}
+                        />
+                        <MoneyCustoVenda
+                          label="CHD"
+                          custo={fonte.valor_chd}
+                          venda={fonte.valor_venda_chd}
+                          onCustoChange={v => updateFonte(tIdx, fIdx, 'valor_chd', v)}
+                          onVendaChange={v => updateFonte(tIdx, fIdx, 'valor_venda_chd', v)}
+                          highlightCusto={isMinChd}
+                        />
+                      </div>
+                      <div className="mt-3">
+                        <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Partida / Chegada</label>
+                        <Input value={fonte.partida_chegada} onChange={e => updateFonte(tIdx, fIdx, 'partida_chegada', e.target.value)} className="h-8" placeholder="GRU 10:00 → LIS 22:00" />
                       </div>
                     </div>
                   );

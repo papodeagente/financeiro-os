@@ -46,6 +46,10 @@ export interface TktFonte {
   valor_adt: number | null;
   valor_chd: number | null;
   partida_chegada: string;
+  // Preço de venda manual (Fase 2). Quando preenchido, calcProposta usa
+  // direto sem aplicar markup — a margem fica embutida (venda-custo).
+  valor_venda_adt?: number | null;
+  valor_venda_chd?: number | null;
 }
 
 export interface TktTrecho {
@@ -60,6 +64,11 @@ export interface HtlFonte {
   valor_tpl: number | null;
   valor_qdp: number | null;
   valor_chd: number | null;
+  valor_venda_sgl?: number | null;
+  valor_venda_dbl?: number | null;
+  valor_venda_tpl?: number | null;
+  valor_venda_qdp?: number | null;
+  valor_venda_chd?: number | null;
 }
 
 export interface HtlInfo {
@@ -96,6 +105,8 @@ export interface RecFornecedor {
   valor_chd: number | null;
   deadline: string | null;
   info: string;
+  valor_venda_adt?: number | null;
+  valor_venda_chd?: number | null;
 }
 
 export interface RecPasseio {
@@ -111,6 +122,7 @@ export interface CarEmpresa {
   email: string;
   contato: string;
   deadline: string | null;
+  valor_venda_veiculo?: number | null;
 }
 
 export interface CarTransporte {
@@ -126,6 +138,7 @@ export interface GuiaFornecedor {
   email: string;
   deadline: string | null;
   anotacoes: string;
+  valor_venda_total?: number | null;
 }
 
 export interface GuiaDestino {
@@ -144,6 +157,10 @@ export interface SegSeguradora {
   data_inicio: string | null;
   data_fim: string | null;
   descricao: string;
+  valor_venda_sgl?: number | null;
+  valor_venda_dbl?: number | null;
+  valor_venda_tpl?: number | null;
+  valor_venda_qdp?: number | null;
 }
 
 export interface NavioFornecedor {
@@ -153,6 +170,11 @@ export interface NavioFornecedor {
   valor_tpl: number | null;
   valor_qdp: number | null;
   valor_chd: number | null;
+  valor_venda_sgl?: number | null;
+  valor_venda_dbl?: number | null;
+  valor_venda_tpl?: number | null;
+  valor_venda_qdp?: number | null;
+  valor_venda_chd?: number | null;
 }
 
 export interface IngFonte {
@@ -162,6 +184,10 @@ export interface IngFonte {
   valor_inf: number | null;
   valor_meia: number | null;
   info: string;
+  valor_venda_adt?: number | null;
+  valor_venda_chd?: number | null;
+  valor_venda_inf?: number | null;
+  valor_venda_meia?: number | null;
 }
 
 export interface IngAtrativo {
@@ -177,6 +203,7 @@ export interface BrindeFornecedor {
   contato: string;
   deadline: string | null;
   prazo_entrega: string;
+  valor_venda_unidade?: number | null;
 }
 
 export interface DivulgacaoFornecedor {
@@ -187,6 +214,7 @@ export interface DivulgacaoFornecedor {
   contato: string;
   deadline: string | null;
   periodo: string;
+  valor_venda_total?: number | null;
 }
 
 import { FinanceiroGrupo } from './financial-types';

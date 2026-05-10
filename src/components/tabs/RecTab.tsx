@@ -5,7 +5,7 @@ import { GrupoViagem } from '@/lib/types';
 import { createRecPasseio } from '@/lib/defaults';
 import { minPositivo, formatBRL } from '@/lib/utils';
 import { calcRecTotals } from '@/lib/calculations';
-import { MoneyInput } from '@/components/MoneyInput';
+import { MoneyCustoVenda } from '@/components/MoneyCustoVenda';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -140,15 +140,25 @@ export function RecTab({ grupo, onChange }: Props) {
                         </div>
                         <button onClick={() => clearSource(pIdx, fIdx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-status-danger)] hover:bg-[var(--t-status-danger-bg)] transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <div>
-                          <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Valor ADT</label>
-                          <MoneyInput value={f.valor_adt} onChange={v => updateFornecedor(pIdx, fIdx, 'valor_adt', v)} highlight={isMinAdt} />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Valor CHD</label>
-                          <MoneyInput value={f.valor_chd} onChange={v => updateFornecedor(pIdx, fIdx, 'valor_chd', v)} highlight={isMinChd} />
-                        </div>
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        <MoneyCustoVenda
+                          label="ADT"
+                          custo={f.valor_adt}
+                          venda={f.valor_venda_adt}
+                          onCustoChange={v => updateFornecedor(pIdx, fIdx, 'valor_adt', v)}
+                          onVendaChange={v => updateFornecedor(pIdx, fIdx, 'valor_venda_adt', v)}
+                          highlightCusto={isMinAdt}
+                        />
+                        <MoneyCustoVenda
+                          label="CHD"
+                          custo={f.valor_chd}
+                          venda={f.valor_venda_chd}
+                          onCustoChange={v => updateFornecedor(pIdx, fIdx, 'valor_chd', v)}
+                          onVendaChange={v => updateFornecedor(pIdx, fIdx, 'valor_venda_chd', v)}
+                          highlightCusto={isMinChd}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 mt-3">
                         <div>
                           <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Deadline</label>
                           <Input type="date" value={f.deadline || ''} onChange={e => updateFornecedor(pIdx, fIdx, 'deadline', e.target.value || null)} className="h-8" />

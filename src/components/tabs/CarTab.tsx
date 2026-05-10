@@ -5,7 +5,7 @@ import { GrupoViagem } from '@/lib/types';
 import { createCarTransporte } from '@/lib/defaults';
 import { minPositivo, formatBRL } from '@/lib/utils';
 import { calcCarTotals } from '@/lib/calculations';
-import { MoneyInput } from '@/components/MoneyInput';
+import { MoneyCustoVenda } from '@/components/MoneyCustoVenda';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Plus, Trash2, Bus, Trophy, ArrowRight } from 'lucide-react';
@@ -130,15 +130,21 @@ export function CarTab({ grupo, onChange }: Props) {
                         </div>
                         <button onClick={() => clearSource(tIdx, eIdx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-status-danger)] hover:bg-[var(--t-status-danger-bg)] transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        <MoneyCustoVenda
+                          label="Valor Veículo"
+                          custo={emp.valor_veiculo}
+                          venda={emp.valor_venda_veiculo}
+                          onCustoChange={v => updateEmpresa(tIdx, eIdx, 'valor_veiculo', v)}
+                          onVendaChange={v => updateEmpresa(tIdx, eIdx, 'valor_venda_veiculo', v)}
+                          highlightCusto={isMin}
+                        />
                         <div>
-                          <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Valor Veículo</label>
-                          <MoneyInput value={emp.valor_veiculo} onChange={v => updateEmpresa(tIdx, eIdx, 'valor_veiculo', v)} highlight={isMin} />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Valor/PAX</label>
+                          <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Valor/PAX (rateio)</label>
                           <div className="h-8 flex items-center text-sm font-medium text-[var(--t-text)]">{formatBRL(valPax)}</div>
                         </div>
+                      </div>
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
                         <div>
                           <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">Telefone</label>
                           <Input value={emp.telefone} onChange={e => updateEmpresa(tIdx, eIdx, 'telefone', e.target.value)} className="h-8" />

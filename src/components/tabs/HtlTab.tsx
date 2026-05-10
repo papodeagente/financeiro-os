@@ -5,7 +5,7 @@ import { GrupoViagem } from '@/lib/types';
 import { createHtlHotel } from '@/lib/defaults';
 import { minPositivo, formatBRL, calcDiarias } from '@/lib/utils';
 import { calcHtlTotals } from '@/lib/calculations';
-import { MoneyInput } from '@/components/MoneyInput';
+import { MoneyCustoVenda } from '@/components/MoneyCustoVenda';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -241,16 +241,23 @@ export function HtlTab({ grupo, onChange }: Props) {
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                         {TIPOS.map(t => {
                           const key = `valor_${t}` as keyof typeof fonte;
+                          const vendaKey = `valor_venda_${t}` as keyof typeof fonte;
                           const val = fonte[key] as number | null;
+                          const vendaVal = fonte[vendaKey] as number | null | undefined;
                           const isMin = val !== null && val > 0 && val === bests[t];
                           return (
-                            <div key={t}>
-                              <label className="text-[10px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-1 block">{TIPO_LABELS[t]}</label>
-                              <MoneyInput value={val} onChange={v => updateFonte(hIdx, fIdx, key, v)} highlight={isMin} />
-                            </div>
+                            <MoneyCustoVenda
+                              key={t}
+                              label={TIPO_LABELS[t]}
+                              custo={val}
+                              venda={vendaVal}
+                              onCustoChange={v => updateFonte(hIdx, fIdx, key, v)}
+                              onVendaChange={v => updateFonte(hIdx, fIdx, vendaKey, v)}
+                              highlightCusto={isMin}
+                            />
                           );
                         })}
                       </div>
