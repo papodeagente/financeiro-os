@@ -69,6 +69,8 @@ export default function CrmConfigPage() {
   const [expandedEvento, setExpandedEvento] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [cleaning, setCleaning] = useState(false);
+  const [cleanupResult, setCleanupResult] = useState<Record<string, number> | null>(null);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -163,6 +165,25 @@ export default function CrmConfigPage() {
       await loadAll();
     } catch { /* silent */ }
     setRetrying(false);
+  };
+
+  const cleanupZombies = async () => {
+    if (!confirm('Apagar lancamentos antigos do CRM (gravados antes do fix de shape) e liberar reenvio? Acao reversivel apenas via reenvio do CRM.')) return;
+    setCleaning(true);
+    setCleanupResult(null);
+    try {
+      const res = await fetch('/api/admin/crm/cleanup-zombies', { method: 'POST' });
+      const j = await res.json();
+      if (j.ok) {
+        setCleanupResult(j.counts);
+        await loadAll();
+      } else {
+        alert('Erro: ' + (j.error || 'desconhecido'));
+      }
+    } catch (e) {
+      alert('Falha na requisicao: ' + (e instanceof Error ? e.message : 'desconhecido'));
+    }
+    setCleaning(false);
   };
 
   const retrySingle = async (id: string) => {
@@ -403,6 +424,41 @@ export default function CrmConfigPage() {
           </div>
         </section>
       )}
+
+      {/* Maintenance — cleanup CRM zombies */}
+      <section className="mb-8">
+        <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-4">Manutencao</h2>
+        <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)]">Limpar lancamentos antigos do CRM</p>
+              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mt-1 max-w-2xl">
+                Apaga contas a receber/pagar e vendas gravadas antes do fix
+                de shape do payload (R$ NaN, sem cliente). Tambem libera os
+                idempotency keys para o CRM poder reenviar os mesmos eventos.
+                Idempotente — pode ser executado mais de uma vez sem efeito
+                colateral. Acao escopada ao tenant atual.
+              </p>
+            </div>
+            <button onClick={cleanupZombies} disabled={cleaning}
+              className="px-4 py-2 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)] disabled:opacity-50 shrink-0">
+              {cleaning ? 'Limpando...' : 'Limpar zumbis'}
+            </button>
+          </div>
+          {cleanupResult && (
+            <div className="mt-4 rounded-lg border border-[var(--t-border)] p-3 bg-[var(--t-surface-hover)]/40">
+              <p className="text-[var(--text-caption)] text-[var(--crm-ok)] font-semibold mb-2">Limpeza concluida</p>
+              <ul className="text-[var(--text-caption)] text-[var(--t-text-muted)] space-y-0.5 font-mono">
+                <li>contas_receber apagadas: <span className="text-[var(--t-text)]">{cleanupResult.contas_receber_apagadas}</span></li>
+                <li>contas_pagar apagadas: <span className="text-[var(--t-text)]">{cleanupResult.contas_pagar_apagadas}</span></li>
+                <li>vendas_crm apagadas: <span className="text-[var(--t-text)]">{cleanupResult.vendas_crm_apagadas}</span></li>
+                <li>eventos_entrada apagados: <span className="text-[var(--t-text)]">{cleanupResult.eventos_entrada_apagados}</span></li>
+                <li>eventos_saida marcados FALHA: <span className="text-[var(--t-text)]">{cleanupResult.eventos_saida_marcados_falha}</span></li>
+              </ul>
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* Event Log */}
       <section>
