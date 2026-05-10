@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/PageHeader';
 import { SkeletonTable } from '@/components/SkeletonTable';
-import { Link2, RefreshCw, Check, X, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Link2, RefreshCw, Check, X, Copy, Eye, EyeOff, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 
 interface CrmConfig {
   ativo: boolean;
@@ -14,6 +14,8 @@ interface CrmConfig {
   retry_max: number;
   circuit_breaker_threshold: number;
   circuit_breaker_status: string;
+  tenant_id?: string;
+  suggested_webhook_url_entur?: string;
 }
 
 interface CrmStatus {
@@ -48,8 +50,16 @@ const defaultConfig: CrmConfig = {
   circuit_breaker_status: 'fechado',
 };
 
+function randomHex(bytes: number): string {
+  const arr = new Uint8Array(bytes);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 export default function CrmConfigPage() {
   const [config, setConfig] = useState<CrmConfig>(defaultConfig);
+  const [hmacInput, setHmacInput] = useState('');
+  const [showSecret, setShowSecret] = useState(false);
   const [status, setStatus] = useState<CrmStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -58,6 +68,7 @@ export default function CrmConfigPage() {
   const [direcao, setDirecao] = useState<'saida' | 'entrada'>('saida');
   const [expandedEvento, setExpandedEvento] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -67,7 +78,10 @@ export default function CrmConfigPage() {
         fetch('/api/v1/crm/status').then(r => r.json()),
         fetch(`/api/v1/crm/eventos?direcao=${direcao}&limite=20`).then(r => r.json()),
       ]);
-      if (configRes && !configRes.error) setConfig({ ...defaultConfig, ...configRes });
+      if (configRes && !configRes.error) {
+        setConfig({ ...defaultConfig, ...configRes });
+        setHmacInput(''); // never prefill the masked secret in the editable field
+      }
       if (statusRes) setStatus(statusRes);
       if (eventosRes?.items) setEventos(eventosRes.items);
     } catch { /* silent */ }
@@ -79,13 +93,45 @@ export default function CrmConfigPage() {
   const saveConfig = async () => {
     setSaving(true);
     try {
+      const payload: CrmConfig = { ...config };
+      // Only send the secret when the user explicitly typed/generated one.
+      // Otherwise leave the masked placeholder so the backend preserves it.
+      if (hmacInput.trim()) {
+        payload.api_key_crm = hmacInput.trim();
+        payload.api_key_entur = hmacInput.trim();
+      }
       await fetch('/api/v1/crm/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config),
+        body: JSON.stringify(payload),
       });
+      await loadAll();
+      setHmacInput('');
     } catch { /* silent */ }
     setSaving(false);
+  };
+
+  const generateHmac = () => {
+    setHmacInput(randomHex(32));
+    setShowSecret(true);
+  };
+
+  const revealStoredSecret = async () => {
+    try {
+      const r = await fetch('/api/v1/crm/config/secret').then(r => r.json());
+      if (r.secret) {
+        setHmacInput(r.secret);
+        setShowSecret(true);
+      }
+    } catch { /* silent */ }
+  };
+
+  const copy = async (label: string, value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(label);
+      setTimeout(() => setCopied(null), 1500);
+    } catch { /* silent */ }
   };
 
   const testConnection = async () => {
@@ -131,56 +177,102 @@ export default function CrmConfigPage() {
     'semi-aberto': 'Semi-aberto (testando)',
   };
 
+  const inboundUrl = config.suggested_webhook_url_entur || config.webhook_url_entur;
+  const hasStoredSecret = config.api_key_crm.startsWith('****') || (!!config.api_key_crm && !config.api_key_crm.startsWith(''));
+  const conected = status?.ativo && hasStoredSecret;
+
   return (
     <div className="p-6 max-w-5xl">
       <PageHeader title="Integracao CRM" crmBadge />
 
-      {/* Configuration */}
+      {/* Tenant + connection summary */}
+      <section className="mb-6">
+        <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] p-4 flex items-center gap-4">
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${conected ? 'bg-green-500/10' : 'bg-amber-500/10'}`}>
+            <Link2 className={`w-5 h-5 ${conected ? 'text-[var(--crm-ok)]' : 'text-[var(--crm-warn)]'}`} />
+          </div>
+          <div className="flex-1">
+            <p className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)]">
+              Tenant <span className="font-mono">{config.tenant_id || '—'}</span>
+              {' · '}
+              {conected ? 'CRM conectado' : 'CRM desconectado'}
+            </p>
+            <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">
+              {conected
+                ? 'Eventos sao trocados automaticamente entre Financeiro e CRM.'
+                : 'Configure URL + HMAC abaixo, depois ative a integracao.'}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Setup wizard */}
       <section className="mb-8">
         <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-4">Configuracao</h2>
-        <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)]">Integracao ativa</p>
-              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">Desabilitar pausa a emissao sem perder dados</p>
+        <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] p-5 space-y-5">
+
+          {/* HMAC */}
+          <div>
+            <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">HMAC Secret (compartilhado entre Financeiro e CRM)</label>
+            <div className="flex gap-2">
+              <input
+                type={showSecret ? 'text' : 'password'}
+                value={hmacInput || (config.api_key_crm.startsWith('****') ? config.api_key_crm : '')}
+                onChange={e => setHmacInput(e.target.value)}
+                placeholder="Cole um secret existente ou clique em Gerar novo"
+                className="flex-1 px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)] font-mono"
+              />
+              <button onClick={() => setShowSecret(s => !s)} title={showSecret ? 'Ocultar' : 'Mostrar'}
+                className="px-3 py-2 shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)]">
+                {showSecret ? <EyeOff className="w-4 h-4 text-[var(--t-text-muted)]" /> : <Eye className="w-4 h-4 text-[var(--t-text-muted)]" />}
+              </button>
+              <button onClick={revealStoredSecret} title="Ver secret salvo"
+                className="px-3 py-2 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)]">
+                Recuperar salvo
+              </button>
+              <button onClick={generateHmac}
+                className="px-3 py-2 flex items-center gap-1.5 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)]">
+                <Sparkles className="w-3.5 h-3.5" /> Gerar novo
+              </button>
+              {hmacInput && (
+                <button onClick={() => copy('hmac', hmacInput)} title="Copiar"
+                  className="px-3 py-2 shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)]">
+                  <Copy className="w-4 h-4 text-[var(--t-text-muted)]" />
+                </button>
+              )}
             </div>
-            <button
-              onClick={() => setConfig({ ...config, ativo: !config.ativo })}
-              className={`w-11 h-6 rounded-full transition-colors relative ${config.ativo ? 'bg-[var(--t-green)]' : 'bg-[var(--t-border)]'}`}
-            >
-              <span className={`block w-5 h-5 rounded-full bg-white shadow absolute top-0.5 transition-transform ${config.ativo ? 'translate-x-5.5' : 'translate-x-0.5'}`} />
-            </button>
+            <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mt-1">
+              Cole o mesmo valor no CRM em <strong>Settings &gt; Integracoes &gt; Entur OS Financeiro &gt; HMAC Secret</strong>.
+              {copied === 'hmac' && <span className="ml-2 text-[var(--crm-ok)]">copiado!</span>}
+            </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="crm-url-crm" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">URL do webhook do CRM</label>
-              <input id="crm-url-crm" value={config.webhook_url_crm} onChange={e => setConfig({ ...config, webhook_url_crm: e.target.value })}
-                placeholder="https://crm.example.com/webhook"
-                className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
+          {/* URL inbound (read-only, copy for CRM) */}
+          <div>
+            <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">URL para o CRM enviar eventos para o Financeiro</label>
+            <div className="flex gap-2">
+              <input readOnly value={inboundUrl}
+                className="flex-1 px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-surface-hover)] text-[var(--text-body-sm)] text-[var(--t-text-muted)] font-mono" />
+              <button onClick={() => copy('inbound', inboundUrl)}
+                className="px-3 py-2 shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)]">
+                <Copy className="w-4 h-4 text-[var(--t-text-muted)]" />
+              </button>
             </div>
-            <div>
-              <label htmlFor="crm-url-entur" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">URL do webhook do Entur OS</label>
-              <input id="crm-url-entur" value={config.webhook_url_entur} onChange={e => setConfig({ ...config, webhook_url_entur: e.target.value })}
-                placeholder="https://entur.example.com/api/v1/crm/webhook"
-                className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
-            </div>
+            <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mt-1">
+              Cole essa URL no CRM em <strong>URL do webhook</strong>.
+              {copied === 'inbound' && <span className="ml-2 text-[var(--crm-ok)]">copiado!</span>}
+            </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="crm-key-crm" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">API Key do CRM</label>
-              <input id="crm-key-crm" type="password" value={config.api_key_crm} onChange={e => setConfig({ ...config, api_key_crm: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
-            </div>
-            <div>
-              <label htmlFor="crm-key-entur" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">API Key do Entur OS (somente leitura)</label>
-              <div className="flex gap-2">
-                <input id="crm-key-entur" readOnly value={config.api_key_entur || 'Gerar ao salvar'}
-                  className="flex-1 px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-surface-hover)] text-[var(--text-body-sm)] text-[var(--t-text-muted)]" />
-                <button onClick={() => { navigator.clipboard.writeText(config.api_key_entur); }} className="px-3 py-2 text-[var(--text-caption)] text-[var(--t-text-muted)] shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)]">Copiar</button>
-              </div>
-            </div>
+          {/* URL outbound (CRM webhook) */}
+          <div>
+            <label htmlFor="crm-url-crm" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">URL do webhook do CRM (para onde o Financeiro envia eventos)</label>
+            <input id="crm-url-crm" value={config.webhook_url_crm} onChange={e => setConfig({ ...config, webhook_url_crm: e.target.value })}
+              placeholder="https://stagingcrm.enturos.com/api/integracao-financeiro/webhook/<TENANT_CRM>"
+              className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)] font-mono" />
+            <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mt-1">
+              Pegue do CRM. Tipicamente <span className="font-mono">https://stagingcrm.enturos.com/api/integracao-financeiro/webhook/&lt;tenantId-no-CRM&gt;</span>.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -196,21 +288,34 @@ export default function CrmConfigPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 pt-2">
-            <button onClick={saveConfig} disabled={saving}
-              className="px-4 py-2 text-[var(--text-body-sm)] font-medium text-white bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50">
-              {saving ? 'Salvando...' : 'Salvar configuracao'}
-            </button>
-            <button onClick={testConnection}
-              className="px-4 py-2 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)]">
-              Testar conexao
-            </button>
-            {testResult && (
-              <span className={`text-[var(--text-body-sm)] flex items-center gap-1 ${testResult.sucesso ? 'text-[var(--crm-ok)]' : 'text-[var(--crm-err)]'}`}>
-                {testResult.sucesso ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
-                {testResult.sucesso ? `OK (${testResult.latencia_ms}ms)` : testResult.erro}
+          <div className="flex items-center justify-between pt-2 border-t border-[var(--t-border)]">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setConfig({ ...config, ativo: !config.ativo })}
+                className={`w-11 h-6 rounded-full transition-colors relative ${config.ativo ? 'bg-[var(--t-green)]' : 'bg-[var(--t-border)]'}`}
+              >
+                <span className={`block w-5 h-5 rounded-full bg-white shadow absolute top-0.5 transition-transform ${config.ativo ? 'translate-x-5.5' : 'translate-x-0.5'}`} />
+              </button>
+              <span className="text-[var(--text-body-sm)] text-[var(--t-text)]">
+                {config.ativo ? 'Integracao ativa' : 'Integracao pausada'}
               </span>
-            )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={testConnection}
+                className="px-4 py-2 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)]">
+                Testar conexao
+              </button>
+              {testResult && (
+                <span className={`text-[var(--text-body-sm)] flex items-center gap-1 ${testResult.sucesso ? 'text-[var(--crm-ok)]' : 'text-[var(--crm-err)]'}`}>
+                  {testResult.sucesso ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
+                  {testResult.sucesso ? `OK (${testResult.latencia_ms}ms)` : testResult.erro}
+                </span>
+              )}
+              <button onClick={saveConfig} disabled={saving}
+                className="px-4 py-2 text-[var(--text-body-sm)] font-medium text-white bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50">
+                {saving ? 'Salvando...' : 'Salvar configuracao'}
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -276,7 +381,7 @@ export default function CrmConfigPage() {
                   <th className="px-4 py-2.5 font-medium">Status</th>
                   {direcao === 'saida' && <th className="px-4 py-2.5 font-medium">Tentativas</th>}
                   {direcao === 'saida' && <th className="px-4 py-2.5 font-medium">Latencia</th>}
-                  <th className="px-4 py-2.5 font-medium w-24">Ações</th>
+                  <th className="px-4 py-2.5 font-medium w-24">Acoes</th>
                 </tr>
               </thead>
               <tbody>
