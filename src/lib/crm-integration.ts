@@ -56,16 +56,43 @@ export function buildProdutoPayload(grupo: GrupoViagem): Record<string, unknown>
     || 'https://fin.enturos.com'
   ).replace(/\/$/, '');
 
-  // --- Headline figures (DBL as the reference room type) -----------------
-  // Aggregate cost across all service lines (TKT/HTL/REC/CAR/...) — no markup.
+  // --- Headline figures -------------------------------------------------
+  // Escolhe o tipo de apto de referência. Grupo usa o primeiro da tarifa
+  // ativa (DBL por convenção, mas pode ser SGL/TPL/QDP se foi o configurado).
+  // Proposta usa SGL (cotação pontual, 1 pax). Em ambos os casos, faz
+  // fallback para SGL se o tipo escolhido vier zerado.
+  const tarifas = (grupo.tarifas_ativas || ['sgl', 'dbl', 'tpl', 'qdp']) as string[];
+  const tipoRefPreferido = (grupo.tipo ?? 'GRUPO') === 'PROPOSTA' ? 'sgl' : (tarifas[0] ?? 'dbl');
+
+  const calcCustoNoTipo = (tipo: string): number => {
+    let soma = 0;
+    for (const servico of ['tkt', 'htl', 'rec', 'car', 'guia', 'seg', 'navio', 'ing'] as const) {
+      const linha = summary.custos_por_apto[servico] as Record<string, number> | undefined;
+      const v = linha?.[tipo];
+      if (typeof v === 'number') soma += v;
+    }
+    return soma;
+  };
+  const precosAvista = summary.precos.avista as Record<string, number>;
+  const calcVendaNoTipo = (tipo: string): number => precosAvista?.[tipo] ?? 0;
+
+  // Tenta tipo preferido; se zerou tudo, percorre outros tipos com valor.
+  const ordemTentativa: string[] = [tipoRefPreferido, 'dbl', 'sgl', 'tpl', 'qdp'];
+  let tipoRef = tipoRefPreferido;
   let preco_custo = 0;
-  for (const tipo of ['tkt', 'htl', 'rec', 'car', 'guia', 'seg', 'navio', 'ing'] as const) {
-    const linha = summary.custos_por_apto[tipo] as { dbl?: number } | undefined;
-    if (linha?.dbl) preco_custo += linha.dbl;
+  let preco_venda = 0;
+  for (const t of ordemTentativa) {
+    const c = calcCustoNoTipo(t);
+    const v = calcVendaNoTipo(t);
+    if (c > 0 || v > 0) {
+      tipoRef = t;
+      preco_custo = c;
+      preco_venda = v;
+      break;
+    }
   }
   preco_custo = Number(preco_custo.toFixed(2));
-
-  const preco_venda = Number((summary.precos.avista?.dbl ?? 0).toFixed(2));
+  preco_venda = Number(preco_venda.toFixed(2));
   const margem = Number(Math.max(preco_venda - preco_custo, 0).toFixed(2));
   const margem_percentual = preco_venda > 0
     ? Number(((margem / preco_venda) * 100).toFixed(2))
@@ -162,11 +189,14 @@ export function buildProdutoPayload(grupo: GrupoViagem): Record<string, unknown>
     imagem,
     status_pipeline: grupo.status_pipeline,
 
-    // Headline figures (DBL reference) — what /settings/products renders
+    // Headline figures — what /settings/products renders.
+    // tipo_ref indica o apto de referência (sgl/dbl/tpl/qdp). Útil para o
+    // CRM apresentar "Preço DBL: R$ X" em vez de só "Preço: R$ X".
     preco_custo,
     preco_venda,
     margem,
     margem_percentual,
+    tipo_ref: tipoRef,
     moeda: 'BRL',
 
     // Suppliers (one entry per supplier×service)
