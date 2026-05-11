@@ -1229,6 +1229,84 @@ export async function retentarEventosFalha(tenantId: string, ids?: string[]): Pr
 }
 
 // ──────────────────────────────────────────
+// disparaEventosPendentes — processa eventos em PENDENTE
+// --------------------------------------------------------------------
+// Eventos ficam em PENDENTE quando a config CRM estava desativada no
+// momento do gatilho. Depois que o usuario ativa a config, esses
+// eventos antigos nao sao retentados automaticamente — este endpoint
+// disparado pela UI processa todos eles em lote.
+// ──────────────────────────────────────────
+
+export async function disparaEventosPendentes(tenantId: string): Promise<{
+  processados: number;
+  sucesso: number;
+  falha: number;
+}> {
+  const result = { processados: 0, sucesso: 0, falha: 0 };
+  try {
+    if (!pool || !tenantId) return result;
+    await initDB();
+
+    const config = await getCrmConfig(tenantId);
+    if (!config || !config.ativo || !config.webhook_url_crm) return result;
+    if (config.circuit_breaker_status === 'aberto') return result;
+
+    const { rows } = await pool.query(
+      `SELECT id, tipo, tentativas, data FROM crm_eventos_saida
+        WHERE status = 'PENDENTE' AND tenant_id = $1
+        ORDER BY created_at ASC LIMIT 200`,
+      [tenantId],
+    );
+
+    for (const row of rows) {
+      result.processados++;
+      const bodyStr = JSON.stringify(row.data);
+      const signature = hmacSign(bodyStr, config.api_key_crm || '');
+      const start = Date.now();
+
+      try {
+        const res = await fetch(config.webhook_url_crm, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-entur-event': row.tipo,
+            'x-entur-signature': signature,
+            'x-entur-event-id': row.id,
+            'x-entur-timestamp': new Date().toISOString(),
+          },
+          body: bodyStr,
+          signal: AbortSignal.timeout(5000),
+        });
+
+        const latencia = Date.now() - start;
+
+        if (res.ok) {
+          await pool.query(
+            `UPDATE crm_eventos_saida SET status = 'ENVIADO', latencia_ms = $2, updated_at = NOW() WHERE id = $1`,
+            [row.id, latencia],
+          );
+          result.sucesso++;
+        } else {
+          throw new Error(`HTTP ${res.status}`);
+        }
+      } catch {
+        const tentativas = (row.tentativas || 0) + 1;
+        const proxima = calcNextRetry(tentativas);
+        await pool.query(
+          `UPDATE crm_eventos_saida SET status = 'FALHA', tentativas = $2, proxima_tentativa = $3, updated_at = NOW() WHERE id = $1`,
+          [row.id, tentativas, proxima.toISOString()],
+        );
+        result.falha++;
+      }
+    }
+
+    return result;
+  } catch {
+    return result;
+  }
+}
+
+// ──────────────────────────────────────────
 // Verify inbound HMAC signature
 // ──────────────────────────────────────────
 

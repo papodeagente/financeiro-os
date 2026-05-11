@@ -171,6 +171,21 @@ export default function CrmConfigPage() {
     setRetrying(false);
   };
 
+  const dispararPendentes = async () => {
+    setRetrying(true);
+    try {
+      const r = await fetch('/api/v1/crm/eventos/disparar-pendentes', { method: 'POST' });
+      const j = await r.json();
+      if (j.processados > 0) {
+        alert(`Disparados: ${j.processados}\nSucesso: ${j.sucesso}\nFalha: ${j.falha}`);
+      } else {
+        alert('Nenhum evento PENDENTE encontrado. Verifique se a integração está ativa.');
+      }
+      await loadAll();
+    } catch { /* silent */ }
+    setRetrying(false);
+  };
+
   const loadDiagnostico = async () => {
     setDiagLoading(true);
     try {
@@ -540,10 +555,16 @@ export default function CrmConfigPage() {
               <option value="entrada">Eventos recebidos</option>
             </select>
             {direcao === 'saida' && (
-              <button onClick={retryAll} disabled={retrying}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)] disabled:opacity-50">
-                <RefreshCw className={`w-3.5 h-3.5 ${retrying ? 'animate-spin' : ''}`} /> Retentar falhas
-              </button>
+              <>
+                <button onClick={dispararPendentes} disabled={retrying}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] text-white bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50">
+                  <RefreshCw className={`w-3.5 h-3.5 ${retrying ? 'animate-spin' : ''}`} /> Disparar pendentes
+                </button>
+                <button onClick={retryAll} disabled={retrying}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)] disabled:opacity-50">
+                  <RefreshCw className={`w-3.5 h-3.5 ${retrying ? 'animate-spin' : ''}`} /> Retentar falhas
+                </button>
+              </>
             )}
           </div>
         </div>
