@@ -5,6 +5,7 @@ import { GrupoViagem } from '@/lib/types';
 import { formatBRL } from '@/lib/utils';
 import { calcDivulgacaoTotals } from '@/lib/calculations';
 import { MoneyCustoVenda } from '@/components/MoneyCustoVenda';
+import { FornecedorPicker } from '@/components/FornecedorPicker';
 import { Input } from '@/components/ui/input';
 import { Plus, Trash2, Megaphone } from 'lucide-react';
 
@@ -91,7 +92,18 @@ export function DivulgacaoTab({ grupo, onChange }: Props) {
                   <div className="w-8 h-8 rounded-lg bg-[var(--t-green)]/10 flex items-center justify-center">
                     <Megaphone className="w-4 h-4 text-[var(--t-green)]" />
                   </div>
-                  <Input value={f.nome} onChange={e => update(fIdx, 'nome', e.target.value)} placeholder="Nome do canal / fornecedor" className="h-8 w-56 text-sm font-medium" />
+                  <div className="w-72">
+                    <FornecedorPicker
+                      value={f.fornecedor_id}
+                      nome={f.nome}
+                      tipoSugerido="OUTROS"
+                      placeholder="Selecionar canal/fornecedor"
+                      onChange={sel => {
+                        update(fIdx, 'fornecedor_id', sel?.id || '');
+                        update(fIdx, 'nome', sel?.nome || '');
+                      }}
+                    />
+                  </div>
                 </div>
                 <button onClick={() => clearSource(fIdx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-status-danger)] hover:bg-[var(--t-status-danger-bg)] transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>

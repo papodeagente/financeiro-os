@@ -5,6 +5,7 @@ import { GrupoViagem } from '@/lib/types';
 import { minPositivo, formatBRL } from '@/lib/utils';
 import { calcSegTotals } from '@/lib/calculations';
 import { MoneyCustoVenda } from '@/components/MoneyCustoVenda';
+import { FornecedorPicker } from '@/components/FornecedorPicker';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Trash2, Trophy, Shield, CalendarDays } from 'lucide-react';
@@ -104,7 +105,18 @@ export function SegTab({ grupo, onChange }: Props) {
                   <div className="w-8 h-8 rounded-lg bg-[var(--t-green)]/10 flex items-center justify-center">
                     <Shield className="w-4 h-4 text-[var(--t-green)]" />
                   </div>
-                  <Input value={seg.nome} onChange={e => update(sIdx, 'nome', e.target.value)} placeholder="Nome da seguradora" className="h-8 w-48 text-sm font-medium" />
+                  <div className="w-64">
+                    <FornecedorPicker
+                      value={seg.fornecedor_id}
+                      nome={seg.nome}
+                      tipoSugerido="SEGURADORA"
+                      placeholder="Selecionar seguradora"
+                      onChange={f => {
+                        update(sIdx, 'fornecedor_id', f?.id || '');
+                        update(sIdx, 'nome', f?.nome || '');
+                      }}
+                    />
+                  </div>
                   {isBest && <span className="text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-[var(--t-status-success-bg)] text-[var(--t-status-success)]">Melhor</span>}
                 </div>
                 <button onClick={() => clearSource(sIdx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-status-danger)] hover:bg-[var(--t-status-danger-bg)] transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>

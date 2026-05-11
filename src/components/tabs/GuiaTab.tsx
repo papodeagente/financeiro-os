@@ -6,6 +6,7 @@ import { createGuiaDestino } from '@/lib/defaults';
 import { minPositivo, formatBRL } from '@/lib/utils';
 import { calcGuiaTotals } from '@/lib/calculations';
 import { MoneyCustoVenda } from '@/components/MoneyCustoVenda';
+import { FornecedorPicker } from '@/components/FornecedorPicker';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -134,7 +135,18 @@ export function GuiaTab({ grupo, onChange }: Props) {
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-bold text-[var(--t-text-muted)] w-6">{fIdx + 1}.</span>
-                          <Input value={f.nome} onChange={e => updateFornecedor(dIdx, fIdx, 'nome', e.target.value)} placeholder="Nome do guia" className="h-8 w-48 text-sm font-medium" />
+                          <div className="w-64">
+                            <FornecedorPicker
+                              value={f.fornecedor_id}
+                              nome={f.nome}
+                              tipoSugerido="OUTROS"
+                              placeholder="Selecionar fornecedor"
+                              onChange={sel => {
+                                updateFornecedor(dIdx, fIdx, 'fornecedor_id', sel?.id || '');
+                                updateFornecedor(dIdx, fIdx, 'nome', sel?.nome || '');
+                              }}
+                            />
+                          </div>
                           {isMin && <span className="text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-[var(--t-status-success-bg)] text-[var(--t-status-success)]">Melhor</span>}
                         </div>
                         <button onClick={() => clearSource(dIdx, fIdx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-status-danger)] hover:bg-[var(--t-status-danger-bg)] transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>

@@ -953,8 +953,22 @@ export async function processarEventoCRM(
         const parcelasCliente = (payload.condicoes_pagamento as Array<Record<string, unknown>>) || [];
 
         const vendaId = generateId();
+        // Data da venda: prefere o que veio do CRM (data real do fechamento),
+        // senão usa hoje.
+        const dataVenda = asStr(payload.data_venda) || new Date().toISOString().slice(0, 10);
+        // Próximo número sequencial — usado pelas telas legadas (dashboard,
+        // /vendas). Formato VND-NNNN.
+        const { rows: countRows } = await pool.query(
+          `SELECT COUNT(*) AS c FROM vendas_crm WHERE tenant_id = $1`,
+          [tenantId],
+        );
+        const numeroVenda = `VND-${String(parseInt(countRows[0].c) + 1).padStart(4, '0')}`;
+
+        const vendaId_ = vendaId;
         const vendaData = {
+          // ---- Identificação ----
           id: vendaId,
+          numero: numeroVenda,                     // legado: dashboard mostra
           cliente_id: clienteId,
           cliente_external_id: clienteExternalId,
           vendedor_id: vendedorId,
@@ -962,23 +976,45 @@ export async function processarEventoCRM(
           grupo_id: payload.entur_grupo_id || '',
           proposta_id: payload.entur_proposta_id || '',
           crm_venda_id: payload.crm_venda_id || '',
+
+          // ---- Datas ----
+          data_venda: dataVenda,                    // legado: filtros mensais
+          created_at: new Date().toISOString(),
+
+          // ---- Métricas comerciais (novo modelo) ----
           valor_total: valorTotal,
           custo_total: custoTotal,
           rentabilidade,
           margem_percentual: margemPercentual,
           comissao: comissaoTotal,
+
+          // ---- Aliases para schema LEGADO (DRE/indicadores/dashboard lêem) ----
+          valor_final: valorTotal,                  // alias valor_total
+          valor_total_venda: valorTotal,
+          valor_total_custo: custoTotal,            // alias custo_total
+          markup_realizado: comissaoTotal,          // margem bruta
+          desconto: 0,
+
+          // ---- Arrays obrigatórios (telas fazem reduce/forEach) ----
+          passageiros: [],
+          pagantes: [],
+          produtos: [],                             // CRM ainda não envia itemizado
+
+          // ---- Status e metadata ----
           moeda: payload.moeda || 'BRL',
-          status: 'vendido',
+          status: 'CONFIRMADO',                     // legado: enum StatusVendaCRM
+          tipo: payload.entur_grupo_id ? 'GRUPO' : 'AVULSA',
           origem: 'crm',
-          data_venda: new Date().toISOString(),
+          forma_pagamento: 'AVISTA_PIX',
+          parcelas: parcelasCliente.length || 1,
           // Audit trail of how the customer is paying the supplier(s).
           // Not financial liability for the agency.
           parcelas_cliente: parcelasCliente,
         };
         await pool.query(
           `INSERT INTO vendas_crm (id, cliente_id, vendedor_id, status, data, tenant_id, created_at, updated_at)
-           VALUES ($1, $2, $3, 'vendido', $4, $5, NOW(), NOW())`,
-          [vendaId, clienteId, vendedorId, JSON.stringify(vendaData), tenantId]
+           VALUES ($1, $2, $3, 'CONFIRMADO', $4, $5, NOW(), NOW())`,
+          [vendaId_, clienteId, vendedorId, JSON.stringify(vendaData), tenantId]
         );
 
         // 3) Generate CP + CR. Two paths:

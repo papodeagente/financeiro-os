@@ -5,6 +5,7 @@ import { GrupoViagem } from '@/lib/types';
 import { minPositivo, formatBRL } from '@/lib/utils';
 import { calcBrindeTotals } from '@/lib/calculations';
 import { MoneyCustoVenda } from '@/components/MoneyCustoVenda';
+import { FornecedorPicker } from '@/components/FornecedorPicker';
 import { Input } from '@/components/ui/input';
 import { Plus, Trash2, Gift } from 'lucide-react';
 
@@ -69,7 +70,18 @@ export function BrindeTab({ grupo, onChange }: Props) {
                   <div className="w-8 h-8 rounded-lg bg-[var(--t-green)]/10 flex items-center justify-center">
                     <Gift className="w-4 h-4 text-[var(--t-green)]" />
                   </div>
-                  <Input value={f.nome} onChange={e => update(fIdx, 'nome', e.target.value)} placeholder="Nome do fornecedor" className="h-8 w-48 text-sm font-medium" />
+                  <div className="w-64">
+                    <FornecedorPicker
+                      value={f.fornecedor_id}
+                      nome={f.nome}
+                      tipoSugerido="OUTROS"
+                      placeholder="Selecionar fornecedor"
+                      onChange={sel => {
+                        update(fIdx, 'fornecedor_id', sel?.id || '');
+                        update(fIdx, 'nome', sel?.nome || '');
+                      }}
+                    />
+                  </div>
                   {isMin && <span className="text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-[var(--t-status-success-bg)] text-[var(--t-status-success)]">Melhor</span>}
                 </div>
                 <button onClick={() => clearSource(fIdx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-status-danger)] hover:bg-[var(--t-status-danger-bg)] transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>

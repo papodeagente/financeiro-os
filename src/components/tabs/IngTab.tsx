@@ -6,6 +6,7 @@ import { createIngAtrativo } from '@/lib/defaults';
 import { minPositivo, formatBRL } from '@/lib/utils';
 import { calcIngTotals } from '@/lib/calculations';
 import { MoneyCustoVenda } from '@/components/MoneyCustoVenda';
+import { FornecedorPicker } from '@/components/FornecedorPicker';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -117,7 +118,18 @@ export function IngTab({ grupo, onChange }: Props) {
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-bold text-[var(--t-text-muted)] w-6">{fIdx + 1}.</span>
-                          <Input value={fonte.nome} onChange={e => updateFonte(aIdx, fIdx, 'nome', e.target.value)} className="h-8 w-48 text-sm font-medium" placeholder="Nome da fonte" />
+                          <div className="w-64">
+                            <FornecedorPicker
+                              value={fonte.fornecedor_id}
+                              nome={fonte.nome}
+                              tipoSugerido="OUTROS"
+                              placeholder="Selecionar fornecedor"
+                              onChange={sel => {
+                                updateFonte(aIdx, fIdx, 'fornecedor_id', sel?.id || '');
+                                updateFonte(aIdx, fIdx, 'nome', sel?.nome || '');
+                              }}
+                            />
+                          </div>
                           {isBest && <span className="text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-[var(--t-status-success-bg)] text-[var(--t-status-success)]">Melhor</span>}
                         </div>
                         <button onClick={() => clearSource(aIdx, fIdx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-status-danger)] hover:bg-[var(--t-status-danger-bg)] transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>

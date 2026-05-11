@@ -138,6 +138,7 @@ export interface CarTransporte {
 
 export interface GuiaFornecedor {
   nome: string;
+  fornecedor_id?: string;
   valor_total: number | null;
   telefone: string;
   email: string;
@@ -154,6 +155,7 @@ export interface GuiaDestino {
 
 export interface SegSeguradora {
   nome: string;
+  fornecedor_id?: string;
   valor_sgl: number | null;
   valor_dbl: number | null;
   valor_tpl: number | null;
@@ -170,6 +172,7 @@ export interface SegSeguradora {
 
 export interface NavioFornecedor {
   nome: string;
+  fornecedor_id?: string;
   valor_sgl: number | null;
   valor_dbl: number | null;
   valor_tpl: number | null;
@@ -184,6 +187,7 @@ export interface NavioFornecedor {
 
 export interface IngFonte {
   nome: string;
+  fornecedor_id?: string;
   valor_adt: number | null;
   valor_chd: number | null;
   valor_inf: number | null;
@@ -203,6 +207,7 @@ export interface IngAtrativo {
 
 export interface BrindeFornecedor {
   nome: string;
+  fornecedor_id?: string;
   valor_unidade: number | null;
   descricao: string;
   contato: string;
@@ -213,6 +218,7 @@ export interface BrindeFornecedor {
 
 export interface DivulgacaoFornecedor {
   nome: string;
+  fornecedor_id?: string;
   valor_total: number | null;
   canal: string;
   descricao: string;

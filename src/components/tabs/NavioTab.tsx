@@ -5,6 +5,7 @@ import { GrupoViagem } from '@/lib/types';
 import { minPositivo, formatBRL, calcDiarias } from '@/lib/utils';
 import { calcNavioTotals } from '@/lib/calculations';
 import { MoneyCustoVenda } from '@/components/MoneyCustoVenda';
+import { FornecedorPicker } from '@/components/FornecedorPicker';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -109,7 +110,18 @@ export function NavioTab({ grupo, onChange }: Props) {
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-[var(--t-text-muted)] w-6">{fIdx + 1}.</span>
-                  <Input value={f.nome} onChange={e => updateFornecedor(fIdx, 'nome', e.target.value)} placeholder="Nome do fornecedor" className="h-8 w-48 text-sm font-medium" />
+                  <div className="w-64">
+                    <FornecedorPicker
+                      value={f.fornecedor_id}
+                      nome={f.nome}
+                      tipoSugerido="CRUZEIRO"
+                      placeholder="Selecionar fornecedor"
+                      onChange={sel => {
+                        updateFornecedor(fIdx, 'fornecedor_id', sel?.id || '');
+                        updateFornecedor(fIdx, 'nome', sel?.nome || '');
+                      }}
+                    />
+                  </div>
                   {isBest && <span className="text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-[var(--t-status-success-bg)] text-[var(--t-status-success)]">Melhor</span>}
                 </div>
                 <button onClick={() => clearSource(fIdx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-status-danger)] hover:bg-[var(--t-status-danger-bg)] transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
