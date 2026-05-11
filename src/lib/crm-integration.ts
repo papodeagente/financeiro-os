@@ -997,6 +997,37 @@ export async function processarEventoCRM(
         break;
       }
 
+      case 'ORCAMENTO_ATRIBUIDO': {
+        // O CRM avisa que o produto entrou em um card de funil (estagio
+        // 'ORCAMENTO'). Apenas atualiza status_pipeline e referencia ao
+        // deal — SEM efeito financeiro (nada de CR/CP).
+        const grupoId = asStr(payload.grupo_id || payload.entur_grupo_id);
+        const crmDealId = asStr(payload.crm_deal_id || payload.crm_venda_id);
+        const dealUrl = asStr(payload.deal_url);
+        if (!grupoId) {
+          acao = 'ORCAMENTO_ATRIBUIDO sem grupo_id';
+          break;
+        }
+        const { rows: gRows } = await pool.query(
+          `SELECT data FROM grupos WHERE id = $1 AND tenant_id = $2`,
+          [grupoId, tenantId],
+        );
+        if (gRows.length === 0) {
+          acao = `grupo ${grupoId} nao encontrado`;
+          break;
+        }
+        const gData = gRows[0].data as Record<string, unknown>;
+        gData.status_pipeline = 'ORCAMENTO';
+        if (crmDealId) gData.orcamento_id = crmDealId;
+        if (dealUrl) gData.crm_deal_url = dealUrl;
+        await pool.query(
+          `UPDATE grupos SET data = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3`,
+          [JSON.stringify(gData), grupoId, tenantId],
+        );
+        acao = `grupo ${grupoId} -> ORCAMENTO${crmDealId ? ` (deal ${crmDealId})` : ''}`;
+        break;
+      }
+
       case 'PROPOSTA_VISUALIZADA': {
         const { proposta_id, timestamp, duracao_segundos } = payload;
         if (proposta_id) {

@@ -73,6 +73,17 @@ export async function GET(req: NextRequest) {
         LIMIT 1`,
       [tenantId],
     );
+
+    // Last ORCAMENTO_ATRIBUIDO — confirma que o CRM esta enviando o
+    // estagio do funil de volta pro Entur OS.
+    const ultOrc = await pool.query(
+      `SELECT id, status, processado, erro, data, created_at
+         FROM crm_eventos_entrada
+        WHERE tenant_id = $1 AND tipo = 'ORCAMENTO_ATRIBUIDO'
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [tenantId],
+    );
     const ultSaida = await pool.query(
       `SELECT id, tipo, status, tentativas, latencia_ms, created_at
          FROM crm_eventos_saida
@@ -126,6 +137,7 @@ export async function GET(req: NextRequest) {
       ultimos_eventos_saida: ultSaida.rows,
       ultimos_por_tipo_saida: ultimosPorTipo,
       ultima_venda_fechada: ultVenda.rows[0] ?? null,
+      ultimo_orcamento_atribuido: ultOrc.rows[0] ?? null,
       sanity: {
         contas_receber_sem_valor_final: parseInt(zr.rows[0].count, 10),
         contas_pagar_sem_valor_final: parseInt(zp.rows[0].count, 10),
