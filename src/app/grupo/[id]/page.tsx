@@ -26,6 +26,8 @@ import { createFinanceiroGrupo } from '@/lib/financial-defaults';
 import { createDivulgacaoFornecedor } from '@/lib/defaults';
 import { TemplatePickerModal } from '@/components/TemplatePickerModal';
 import { TemplateProposta } from '@/lib/crm-types';
+import { StatusPipelineSelector } from '@/components/StatusPipelineSelector';
+import type { StatusPipeline } from '@/lib/types';
 import { Save, FileText, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from '@/lib/toast';
@@ -212,12 +214,10 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
 
   if (!grupo) return <div className="flex items-center justify-center h-full">Carregando...</div>;
 
-  const PIPELINE_BADGE_COLORS: Record<string, string> = {
-    PRODUTO: 'bg-gray-200 text-gray-700',
-    PROPOSTA: 'bg-blue-100 text-blue-700',
-    ORCAMENTO: 'bg-amber-100 text-amber-700',
-    RESERVA: 'bg-purple-100 text-purple-700',
-    VENDA: 'bg-green-100 text-green-700',
+  const handleChangeStatus = (status: StatusPipeline) => {
+    setGrupo({ ...grupo, status_pipeline: status });
+    setSaved(false);
+    toast.success(`Estágio alterado para ${status}`);
   };
 
   const renderTab = () => {
@@ -256,9 +256,11 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
           <span className="font-semibold text-[var(--t-text)]">{grupo.grp_id || 'Sem ID'}</span>
           <span>/</span>
           <Badge variant="outline" className="text-[var(--t-accent)] border-[var(--t-accent)]">{ABA_LABELS[activeTab]}</Badge>
-          <Badge className={`text-[10px] ${PIPELINE_BADGE_COLORS[grupo.status_pipeline || 'PRODUTO']}`}>
-            {grupo.status_pipeline || 'PRODUTO'}
-          </Badge>
+          <span className="text-[10px] text-[var(--t-text-muted)] uppercase tracking-wide ml-2">Estágio:</span>
+          <StatusPipelineSelector
+            value={grupo.status_pipeline}
+            onChange={handleChangeStatus}
+          />
         </div>
         <div className="flex items-center gap-3">
           <span className={`text-xs ${saved ? 'text-green-600' : 'text-orange-500'}`}>
