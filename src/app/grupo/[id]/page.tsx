@@ -80,6 +80,8 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
         }
         // Migrate existing grupos without pipeline fields
         if (!found.status_pipeline) found.status_pipeline = 'PRODUTO';
+        // RESERVA virou ORCAMENTO no novo fluxo (4 estagios) — migração silenciosa.
+        if (found.status_pipeline === 'RESERVA') found.status_pipeline = 'ORCAMENTO';
         if (found.proposta_id === undefined) found.proposta_id = null;
         if (found.orcamento_id === undefined) found.orcamento_id = null;
         if (found.venda_crm_id === undefined) found.venda_crm_id = null;
@@ -158,27 +160,6 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
     }
   };
 
-  const handleCriarReserva = async () => {
-    if (!grupo) return;
-    try {
-      const res = await fetch('/api/vendas/from-grupo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ grupo_id: grupo.id, status: 'RESERVADO' }),
-      });
-      const data = await res.json();
-      if (data.id) {
-        setGrupo(prev => prev ? { ...prev, venda_crm_id: data.id, status_pipeline: 'RESERVA' } : prev);
-        setSaved(false);
-        toast.success('Reserva criada');
-      } else {
-        toast.error('Erro ao criar reserva', data.error);
-      }
-    } catch {
-      toast.error('Erro ao criar reserva');
-    }
-  };
-
   const handleFecharVenda = async () => {
     if (!grupo) return;
     try {
@@ -246,7 +227,6 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
           grupo={grupo}
           onGerarProposta={handleGerarProposta}
           onGerarOrcamento={handleGerarOrcamento}
-          onCriarReserva={handleCriarReserva}
           onFecharVenda={handleFecharVenda}
           gerandoProposta={gerandoProposta}
         />

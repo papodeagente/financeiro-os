@@ -82,6 +82,32 @@ export async function GET(req: NextRequest) {
       [tenantId],
     );
 
+    // --- último de cada tipo emitido (saída) -----------------------------
+    // Saber se cada gatilho (PRODUTO_PUBLICADO, PROPOSTA_GERADA, etc.) já
+    // disparou pelo menos uma vez ajuda muito a debugar gaps de envio.
+    const TIPOS_SAIDA = [
+      'PRODUTO_PUBLICADO',
+      'PRODUTO_DESPUBLICADO',
+      'PROPOSTA_GERADA',
+      'PROPOSTA_ENVIADA',
+      'PROPOSTA_ACEITA',
+      'PROPOSTA_REJEITADA',
+      'VENDA_CRIADA',
+      'VENDA_CANCELADA',
+      'PAGAMENTO_CONFIRMADO',
+    ];
+    const ultimosPorTipo: Record<string, { id: string; status: string; tentativas: number; created_at: string } | null> = {};
+    for (const tipo of TIPOS_SAIDA) {
+      const r = await pool.query(
+        `SELECT id, status, tentativas, latencia_ms, created_at
+           FROM crm_eventos_saida
+          WHERE tenant_id = $1 AND tipo = $2
+          ORDER BY created_at DESC LIMIT 1`,
+        [tenantId, tipo],
+      );
+      ultimosPorTipo[tipo] = r.rows[0] ?? null;
+    }
+
     // --- linhas zumbi remanescentes (sanity) -----------------------------
     const zr = await pool.query(
       `SELECT COUNT(*) FROM contas_receber WHERE tenant_id = $1 AND data->>'valor_final' IS NULL`,
@@ -98,6 +124,7 @@ export async function GET(req: NextRequest) {
       contagens: counts,
       ultimos_eventos_entrada: ultEntrada.rows,
       ultimos_eventos_saida: ultSaida.rows,
+      ultimos_por_tipo_saida: ultimosPorTipo,
       ultima_venda_fechada: ultVenda.rows[0] ?? null,
       sanity: {
         contas_receber_sem_valor_final: parseInt(zr.rows[0].count, 10),

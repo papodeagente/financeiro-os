@@ -1,10 +1,11 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { generateId } from '@/lib/utils';
 import { calcProposta } from '@/lib/calculations';
 import { minPositivo, calcDiarias } from '@/lib/utils';
 import type { GrupoViagem } from '@/lib/types';
 import { getTenantId } from '@/lib/tenant';
+import { emitirEventoCRM } from '@/lib/crm-integration';
 
 function fmtDate(d: string | null): string {
   if (!d) return '';
@@ -16,7 +17,7 @@ function fmtBRL(v: number): string {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     await initDB();
     if (!pool) return NextResponse.json({ error: 'DB not initialized' }, { status: 500 });
@@ -652,6 +653,28 @@ export async function POST(req: Request) {
       `UPDATE grupos SET data = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3`,
       [JSON.stringify(updatedGrupo), grupo_id, tenantId]
     );
+
+    // CRM: notify that a proposta was generated for this product so the
+    // CRM can attach the visual document to the contact/deal. SEM efeito
+    // financeiro — apenas referência ao link e número.
+    const proto = req.headers.get('x-forwarded-proto') || 'https';
+    const host = req.headers.get('host') || 'fin.enturos.com';
+    const baseUrl = `${proto}://${host}`;
+    const valorTotalRef = (pricing.totalAvista['dbl'] || pricing.totalAvista['sgl'] || 0);
+    emitirEventoCRM('PROPOSTA_GERADA', {
+      grupo_id,
+      proposta_id: id,
+      numero: num,
+      titulo: `Viagem — ${destino}`,
+      link_publico: `${baseUrl}/p/${id.slice(0, 8)}`,
+      link_editor:  `${baseUrl}/propostas/${id}`,
+      valor_total_referencia: valorTotalRef,
+      moeda: 'BRL',
+      data_inicio: dataInicio,
+      data_fim: dataFim,
+      template_id: template_id || null,
+      status: 'PROPOSTA',
+    }, { tenantId });
 
     return NextResponse.json({ id, numero: num });
   } catch (e: unknown) {

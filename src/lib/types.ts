@@ -219,7 +219,10 @@ export interface DivulgacaoFornecedor {
 
 import { FinanceiroGrupo } from './financial-types';
 
-export type StatusPipeline = 'PRODUTO' | 'PROPOSTA' | 'ORCAMENTO' | 'RESERVA' | 'VENDA';
+// 4 estagios do fluxo (PRODUTO/PROPOSTA no Entur OS, ORCAMENTO/VENDA no CRM).
+// 'RESERVA' aceito apenas para retrocompatibilidade — registros legados sao
+// tratados como ORCAMENTO na UI ao serem abertos.
+export type StatusPipeline = 'PRODUTO' | 'PROPOSTA' | 'ORCAMENTO' | 'VENDA' | 'RESERVA';
 
 // 'GRUPO' = produto com mais de um pax, libera tipos de apto (SGL/DBL/TPL/QDP) e cortesia.
 // 'PROPOSTA' = cotação pontual sem distinção por apto. Default 'GRUPO' para

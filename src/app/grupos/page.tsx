@@ -23,11 +23,13 @@ import { toast } from '@/lib/toast';
 
 /* ─── Constants ─── */
 
+// 4 estagios: PRODUTO/PROPOSTA (Entur OS) -> ORCAMENTO/VENDA (CRM).
+// RESERVA mantido como alias visual de ORCAMENTO para grupos legados.
 const PIPELINE_COLORS: Record<string, string> = {
   PRODUTO: 'bg-green-100 text-green-700',
   PROPOSTA: 'bg-blue-100 text-blue-700',
   ORCAMENTO: 'bg-amber-100 text-amber-700',
-  RESERVA: 'bg-purple-100 text-purple-700',
+  RESERVA: 'bg-amber-100 text-amber-700',
   VENDA: 'bg-emerald-100 text-emerald-700',
   INCOMPLETO: 'bg-red-100 text-red-600',
 };
@@ -36,7 +38,7 @@ const PIPELINE_BORDER: Record<string, string> = {
   PRODUTO: 'border-t-green-500',
   PROPOSTA: 'border-t-blue-500',
   ORCAMENTO: 'border-t-amber-500',
-  RESERVA: 'border-t-purple-500',
+  RESERVA: 'border-t-amber-500',
   VENDA: 'border-t-emerald-500',
   INCOMPLETO: 'border-t-red-400',
 };
@@ -45,25 +47,25 @@ const PIPELINE_DOT: Record<string, string> = {
   PRODUTO: 'bg-green-500',
   PROPOSTA: 'bg-blue-500',
   ORCAMENTO: 'bg-amber-500',
-  RESERVA: 'bg-purple-500',
+  RESERVA: 'bg-amber-500',
   VENDA: 'bg-emerald-500',
   INCOMPLETO: 'bg-red-400',
 };
 
-const PIPELINE_OPTIONS = ['TODOS', 'PRODUTO', 'PROPOSTA', 'ORCAMENTO', 'RESERVA', 'VENDA', 'INCOMPLETOS'] as const;
+const PIPELINE_OPTIONS = ['TODOS', 'PRODUTO', 'PROPOSTA', 'ORCAMENTO', 'VENDA', 'INCOMPLETOS'] as const;
 const PIPELINE_LABELS: Record<string, string> = {
   TODOS: 'Todos',
   PRODUTO: 'Produto',
   PROPOSTA: 'Proposta',
   ORCAMENTO: 'Orçamento',
-  RESERVA: 'Reserva',
+  RESERVA: 'Orçamento', // legado
   VENDA: 'Venda',
   INCOMPLETOS: 'Incompletos',
   INCOMPLETO: 'Incompleto',
 };
 
 const PIPELINE_ORDER: Record<string, number> = {
-  PRODUTO: 0, PROPOSTA: 1, ORCAMENTO: 2, RESERVA: 3, VENDA: 4,
+  PRODUTO: 0, PROPOSTA: 1, ORCAMENTO: 2, RESERVA: 2, VENDA: 3,
 };
 
 const TARIFA_OPTIONS = [
@@ -231,11 +233,14 @@ export default function GruposPage() {
     return [...set].sort().reverse();
   }, [grupos]);
 
-  // Status counts (including INCOMPLETOS)
+  // Status counts (including INCOMPLETOS). Grupos legados com 'RESERVA'
+  // sao contados como ORCAMENTO (mesma posicao no funil novo).
   const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = { PRODUTO: 0, PROPOSTA: 0, ORCAMENTO: 0, RESERVA: 0, VENDA: 0, INCOMPLETOS: 0 };
+    const counts: Record<string, number> = { PRODUTO: 0, PROPOSTA: 0, ORCAMENTO: 0, VENDA: 0, INCOMPLETOS: 0 };
     for (const g of grupos) {
-      counts[g.status_pipeline || 'PRODUTO'] = (counts[g.status_pipeline || 'PRODUTO'] || 0) + 1;
+      const raw = g.status_pipeline || 'PRODUTO';
+      const key = raw === 'RESERVA' ? 'ORCAMENTO' : raw;
+      counts[key] = (counts[key] || 0) + 1;
       if (isIncomplete(g)) counts.INCOMPLETOS++;
     }
     return counts;
@@ -429,7 +434,7 @@ export default function GruposPage() {
             </button>
 
             {/* Pipeline statuses */}
-            {(['PRODUTO', 'PROPOSTA', 'ORCAMENTO', 'RESERVA', 'VENDA'] as const).map(status => (
+            {(['PRODUTO', 'PROPOSTA', 'ORCAMENTO', 'VENDA'] as const).map(status => (
               <button
                 key={status}
                 onClick={() => setFiltroStatus(filtroStatus === status ? 'TODOS' : status)}
@@ -596,7 +601,7 @@ export default function GruposPage() {
                       {monthGrupos.length}
                     </span>
                     <div className="flex items-center gap-1 ml-1">
-                      {(['PRODUTO', 'PROPOSTA', 'ORCAMENTO', 'RESERVA', 'VENDA'] as const).map(st =>
+                      {(['PRODUTO', 'PROPOSTA', 'ORCAMENTO', 'VENDA'] as const).map(st =>
                         (monthStatusCounts[st] || 0) > 0 ? (
                           <div key={st} className="flex items-center gap-0.5">
                             <span className={`w-1.5 h-1.5 rounded-full ${PIPELINE_DOT[st]}`} />
