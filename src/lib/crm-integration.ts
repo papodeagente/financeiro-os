@@ -163,20 +163,25 @@ export function buildProdutoPayload(grupo: GrupoViagem): Record<string, unknown>
   // CRM /settings/products usually wants one "supplier" per product, but
   // travel groups bundle many — we send them all so the CRM can show or
   // pick a primary one. Keeps name, type and an estimated cost share.
-  const fornecedoresMap = new Map<string, { nome: string; tipo: string; servico: string; valor_estimado: number }>();
-  const addFornecedor = (nome: string, tipo: string, servico: string, valor: number) => {
+  const fornecedoresMap = new Map<string, { nome: string; tipo: string; servico: string; valor_estimado: number; fornecedor_id?: string; external_id?: string }>();
+  const addFornecedor = (
+    nome: string,
+    tipo: string,
+    servico: string,
+    valor: number,
+    fornecedorIdInterno?: string,
+  ) => {
     if (!nome) return;
-    // Filtra fornecedor sem valor preenchido. Evita poluir o payload com
-    // os nomes default das fontes (Direto CIA, Consolidadora 1, etc.)
-    // que existem só pra UI do editor.
     if (!Number.isFinite(valor) || valor <= 0) return;
-    const key = `${tipo}::${nome}`;
+    const key = fornecedorIdInterno ? `id::${fornecedorIdInterno}` : `${tipo}::${nome}`;
     const prev = fornecedoresMap.get(key);
     fornecedoresMap.set(key, {
       nome,
       tipo,
       servico,
       valor_estimado: (prev?.valor_estimado || 0) + valor,
+      fornecedor_id: fornecedorIdInterno || prev?.fornecedor_id,
+      external_id: fornecedorIdInterno ? `entur_fornecedor_${fornecedorIdInterno}` : prev?.external_id,
     });
   };
   // Helper p/ ler qualquer campo de valor — checa custo E venda
@@ -190,7 +195,7 @@ export function buildProdutoPayload(grupo: GrupoViagem): Record<string, unknown>
   for (const trecho of grupo.tkt?.trechos || []) {
     for (const fonte of trecho.fontes || []) {
       if (!hasAnyValue(fonte as unknown as Record<string, unknown>, ['valor_adt', 'valor_chd', 'valor_venda_adt', 'valor_venda_chd'])) continue;
-      addFornecedor(fonte.nome, 'TKT', 'Aéreo', Number(fonte.valor_adt) || Number(fonte.valor_venda_adt) || 0);
+      addFornecedor(fonte.nome, 'TKT', 'Aéreo', Number(fonte.valor_adt) || Number(fonte.valor_venda_adt) || 0, fonte.fornecedor_id);
     }
   }
   // HTL (hoteis)
@@ -199,21 +204,21 @@ export function buildProdutoPayload(grupo: GrupoViagem): Record<string, unknown>
       const keys = ['valor_sgl', 'valor_dbl', 'valor_tpl', 'valor_qdp', 'valor_chd',
                     'valor_venda_sgl', 'valor_venda_dbl', 'valor_venda_tpl', 'valor_venda_qdp', 'valor_venda_chd'];
       if (!hasAnyValue(fonte as unknown as Record<string, unknown>, keys)) continue;
-      addFornecedor(fonte.nome, 'HTL', 'Hotel', Number(fonte.valor_dbl) || Number(fonte.valor_sgl) || 0);
+      addFornecedor(fonte.nome, 'HTL', 'Hotel', Number(fonte.valor_dbl) || Number(fonte.valor_sgl) || 0, fonte.fornecedor_id);
     }
   }
   // REC (receptivos)
   for (const passeio of grupo.rec?.passeios || []) {
     for (const fonte of passeio.fornecedores || []) {
       if (!hasAnyValue(fonte as unknown as Record<string, unknown>, ['valor_adt', 'valor_chd', 'valor_venda_adt', 'valor_venda_chd'])) continue;
-      addFornecedor(fonte.nome, 'REC', 'Receptivo', Number(fonte.valor_adt) || 0);
+      addFornecedor(fonte.nome, 'REC', 'Receptivo', Number(fonte.valor_adt) || 0, fonte.fornecedor_id);
     }
   }
   // CAR (transportes)
   for (const transp of grupo.car?.transportes || []) {
     for (const empresa of transp.empresas || []) {
       if (!hasAnyValue(empresa as unknown as Record<string, unknown>, ['valor_veiculo', 'valor_venda_veiculo'])) continue;
-      addFornecedor(empresa.nome, 'CAR', 'Transporte', Number(empresa.valor_veiculo) || 0);
+      addFornecedor(empresa.nome, 'CAR', 'Transporte', Number(empresa.valor_veiculo) || 0, empresa.fornecedor_id);
     }
   }
   // GUIA

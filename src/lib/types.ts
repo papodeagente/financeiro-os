@@ -43,11 +43,13 @@ export interface CambioItem {
 
 export interface TktFonte {
   nome: string;
+  // Vincula à entidade fornecedores_crm. Quando preenchido, o sistema
+  // sincroniza CNPJ + external_id com o CRM e agrupa por fornecedor
+  // no resumo da proposta.
+  fornecedor_id?: string;
   valor_adt: number | null;
   valor_chd: number | null;
   partida_chegada: string;
-  // Preço de venda manual (Fase 2). Quando preenchido, calcProposta usa
-  // direto sem aplicar markup — a margem fica embutida (venda-custo).
   valor_venda_adt?: number | null;
   valor_venda_chd?: number | null;
 }
@@ -59,6 +61,7 @@ export interface TktTrecho {
 
 export interface HtlFonte {
   nome: string;
+  fornecedor_id?: string;
   valor_sgl: number | null;
   valor_dbl: number | null;
   valor_tpl: number | null;
@@ -101,6 +104,7 @@ export interface HtlHotel {
 
 export interface RecFornecedor {
   nome: string;
+  fornecedor_id?: string;
   valor_adt: number | null;
   valor_chd: number | null;
   deadline: string | null;
@@ -117,6 +121,7 @@ export interface RecPasseio {
 
 export interface CarEmpresa {
   nome: string;
+  fornecedor_id?: string;
   valor_veiculo: number | null;
   telefone: string;
   email: string;

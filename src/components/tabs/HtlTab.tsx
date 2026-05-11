@@ -6,6 +6,7 @@ import { createHtlHotel } from '@/lib/defaults';
 import { minPositivo, formatBRL, calcDiarias } from '@/lib/utils';
 import { calcHtlTotals } from '@/lib/calculations';
 import { MoneyCustoVenda } from '@/components/MoneyCustoVenda';
+import { FornecedorPicker } from '@/components/FornecedorPicker';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -234,7 +235,18 @@ export function HtlTab({ grupo, onChange }: Props) {
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-bold text-[var(--t-text-muted)] w-6">{fIdx + 1}.</span>
-                          <Input value={fonte.nome} onChange={e => updateFonte(hIdx, fIdx, 'nome', e.target.value)} className="h-8 w-48 text-sm font-medium" placeholder="Nome do fornecedor" />
+                          <div className="w-64">
+                            <FornecedorPicker
+                              value={fonte.fornecedor_id}
+                              nome={fonte.nome}
+                              tipoSugerido="HOTEL"
+                              placeholder="Selecionar fornecedor"
+                              onChange={f => {
+                                updateFonte(hIdx, fIdx, 'fornecedor_id', f?.id || '');
+                                updateFonte(hIdx, fIdx, 'nome', f?.nome || '');
+                              }}
+                            />
+                          </div>
                           {isBest && <span className="text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-[var(--t-status-success-bg)] text-[var(--t-status-success)]">Melhor</span>}
                         </div>
                         <button onClick={() => clearSource(hIdx, fIdx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-status-danger)] hover:bg-[var(--t-status-danger-bg)] transition-colors">

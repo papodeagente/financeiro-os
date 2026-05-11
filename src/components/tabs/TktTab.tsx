@@ -6,6 +6,7 @@ import { createTktTrecho } from '@/lib/defaults';
 import { minPositivo, formatBRL } from '@/lib/utils';
 import { calcTktTotals } from '@/lib/calculations';
 import { MoneyCustoVenda } from '@/components/MoneyCustoVenda';
+import { FornecedorPicker } from '@/components/FornecedorPicker';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Plus, Trash2, Plane, Trophy } from 'lucide-react';
@@ -169,14 +170,25 @@ export function TktTab({ grupo, onChange }: Props) {
                   const isApi = fonte.nome === 'API Amadeus';
                   return (
                     <div key={fIdx} className={`rounded-xl border p-4 transition-all ${isBest ? 'border-[var(--t-status-success)]/30 bg-[var(--t-status-success-bg)]/30' : isApi ? 'border-[var(--t-status-info)]/30 bg-[var(--t-status-info-bg)]/30' : 'border-[var(--t-border)] bg-[var(--t-bg)]'}`}>
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-[var(--t-text-muted)] w-6">{fIdx + 1}.</span>
-                          <Input value={fonte.nome} onChange={e => updateFonte(tIdx, fIdx, 'nome', e.target.value)} className="h-8 w-48 text-sm font-medium" placeholder="Nome da fonte" />
+                      <div className="flex items-center justify-between mb-3 gap-2">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <span className="text-xs font-bold text-[var(--t-text-muted)] w-6 shrink-0">{fIdx + 1}.</span>
+                          <div className="w-64 shrink-0">
+                            <FornecedorPicker
+                              value={fonte.fornecedor_id}
+                              nome={fonte.nome}
+                              tipoSugerido="CIA_AEREA"
+                              placeholder="Selecionar fornecedor"
+                              onChange={f => {
+                                updateFonte(tIdx, fIdx, 'fornecedor_id', f?.id || '');
+                                updateFonte(tIdx, fIdx, 'nome', f?.nome || '');
+                              }}
+                            />
+                          </div>
                           {isBest && <span className="text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-[var(--t-status-success-bg)] text-[var(--t-status-success)]">Melhor</span>}
                           {isApi && <span className="text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-[var(--t-status-info-bg)] text-[var(--t-status-info)]">API</span>}
                         </div>
-                        <button onClick={() => clearSource(tIdx, fIdx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-status-danger)] hover:bg-[var(--t-status-danger-bg)] transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => clearSource(tIdx, fIdx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:text-[var(--t-status-danger)] hover:bg-[var(--t-status-danger-bg)] transition-colors shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                         <MoneyCustoVenda

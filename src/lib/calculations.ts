@@ -436,6 +436,100 @@ export function calcItensIncluidos(g: GrupoViagem, tipoBase: string): ItemInclui
   return out;
 }
 
+// ============================================================
+// Resumo por fornecedor — agrupa items vinculados a fornecedores
+// (custo, venda e margem por fornecedor), para a aba Proposta.
+// ============================================================
+export interface ResumoFornecedor {
+  fornecedor_id: string;    // id interno (vazio = nome livre sem cadastro)
+  nome: string;
+  servicos: string[];       // ['TKT', 'HTL', ...] onde aparece
+  custo: number;
+  venda: number;
+  margem: number;
+  margemPct: number;
+}
+
+export function calcResumoFornecedores(g: GrupoViagem, tipoBase: string): ResumoFornecedor[] {
+  const PAX = PAX_MAP[tipoBase] || 1;
+  const c = g.cambio;
+  const cambio = (k: string) => c[k]?.valor || 1;
+
+  // key = fornecedor_id || `nome::${nome}` para itens sem id
+  type Bucket = { id: string; nome: string; custo: number; venda: number; servicos: Set<string> };
+  const map = new Map<string, Bucket>();
+  const ensure = (id: string, nome: string): Bucket => {
+    const key = id || `nome::${nome.toLowerCase().trim()}`;
+    let b = map.get(key);
+    if (!b) {
+      b = { id, nome, custo: 0, venda: 0, servicos: new Set() };
+      map.set(key, b);
+    }
+    return b;
+  };
+  const accumulate = (id: string | undefined, nome: string, servico: string, custo: number, venda: number) => {
+    if (!nome) return;
+    if (custo <= 0 && venda <= 0) return;
+    const b = ensure(id || '', nome);
+    b.custo += custo;
+    b.venda += venda;
+    b.servicos.add(servico);
+  };
+
+  // TKT — melhor fonte por trecho (a que tem menor custo OU maior venda)
+  for (const trecho of g.tkt?.trechos || []) {
+    for (const f of trecho.fontes || []) {
+      const custoAdt = Number(f.valor_adt) || 0;
+      const vendaAdt = Number(f.valor_venda_adt) || 0;
+      if (custoAdt === 0 && vendaAdt === 0) continue;
+      accumulate(f.fornecedor_id, f.nome, 'TKT', custoAdt * PAX * cambio('tkt'), vendaAdt * PAX);
+    }
+  }
+  // HTL — fonte tem preço por tipo de apto
+  for (const hotel of g.htl?.hoteis || []) {
+    for (const f of hotel.fontes || []) {
+      const keyCusto = `valor_${tipoBase}` as keyof typeof f;
+      const keyVenda = `valor_venda_${tipoBase}` as keyof typeof f;
+      const custo = Number(f[keyCusto]) || 0;
+      const venda = Number(f[keyVenda]) || 0;
+      if (custo === 0 && venda === 0) continue;
+      accumulate(f.fornecedor_id, f.nome, 'HTL', custo * cambio('htl'), venda);
+    }
+  }
+  // REC
+  for (const passeio of g.rec?.passeios || []) {
+    for (const f of passeio.fornecedores || []) {
+      const custo = Number(f.valor_adt) || 0;
+      const venda = Number(f.valor_venda_adt) || 0;
+      if (custo === 0 && venda === 0) continue;
+      accumulate(f.fornecedor_id, f.nome, 'REC', custo * PAX * cambio('rec'), venda * PAX);
+    }
+  }
+  // CAR
+  const minPax = g.params.qtd_min_pax || 1;
+  for (const transp of g.car?.transportes || []) {
+    for (const e of transp.empresas || []) {
+      const custo = Number(e.valor_veiculo) || 0;
+      const venda = Number(e.valor_venda_veiculo) || 0;
+      if (custo === 0 && venda === 0) continue;
+      accumulate(e.fornecedor_id, e.nome, 'CAR', (custo / minPax) * PAX * cambio('car'), (venda / minPax) * PAX);
+    }
+  }
+
+  return Array.from(map.values()).map(b => {
+    const custo = Number(b.custo.toFixed(2));
+    const venda = Number(b.venda.toFixed(2));
+    const margem = Math.max(venda - custo, 0);
+    const margemPct = venda > 0 ? (margem / venda) * 100 : 0;
+    return {
+      fornecedor_id: b.id,
+      nome: b.nome,
+      servicos: Array.from(b.servicos),
+      custo, venda, margem, margemPct,
+    };
+  }).sort((a, b) => b.venda - a.venda);
+}
+
 // PROPOSTA - full pricing calculation
 export interface PropostaLine {
   label: string;

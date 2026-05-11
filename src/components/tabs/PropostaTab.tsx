@@ -1,9 +1,9 @@
 'use client';
 
 import { GrupoViagem } from '@/lib/types';
-import { calcProposta, calcItensIncluidos, type ItemIncluido } from '@/lib/calculations';
+import { calcProposta, calcItensIncluidos, calcResumoFornecedores, type ItemIncluido, type ResumoFornecedor } from '@/lib/calculations';
 import { formatBRL } from '@/lib/utils';
-import { Sparkles, Users } from 'lucide-react';
+import { Sparkles, Users, Building2 } from 'lucide-react';
 
 interface Props { grupo: GrupoViagem; }
 
@@ -22,6 +22,15 @@ export function PropostaTab({ grupo }: Props) {
   // Itens efetivamente incluídos no roteiro (so os com dados preenchidos).
   const itens: ItemIncluido[] = calcItensIncluidos(grupo, tipoBase);
   const temItens = itens.length > 0;
+
+  // Resumo por fornecedor — agrupa items vinculados a fornecedores
+  // (cadastrados ou por nome livre).
+  const fornecedores: ResumoFornecedor[] = calcResumoFornecedores(grupo, tipoBase);
+  const totalForn = fornecedores.reduce((acc, f) => ({
+    custo: acc.custo + f.custo,
+    venda: acc.venda + f.venda,
+    margem: acc.margem + f.margem,
+  }), { custo: 0, venda: 0, margem: 0 });
 
   // Resumo geral — referência tipoBase
   const SERVICOS_CUSTO = ['TKT', 'HTL', 'REC', 'CAR', 'GUIA', 'SEG', 'NAVIO', 'ING', 'BRINDE', 'DIVULGACAO'];
@@ -171,6 +180,76 @@ export function PropostaTab({ grupo }: Props) {
           </div>
         )}
       </div>
+
+      {/* Resumo por fornecedor — quanto cada fornecedor vendeu e a margem */}
+      {fornecedores.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-semibold text-[var(--t-text)] flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-[var(--t-accent)]" />
+              Por fornecedor
+              <span className="text-xs text-[var(--t-text-muted)] font-normal">({fornecedores.length})</span>
+            </h3>
+          </div>
+          <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
+                  <th className="text-left px-3 py-2 font-medium">Fornecedor</th>
+                  <th className="text-left px-3 py-2 font-medium">Serviços</th>
+                  <th className="text-right px-3 py-2 font-medium">Custo</th>
+                  <th className="text-right px-3 py-2 font-medium">Venda</th>
+                  <th className="text-right px-3 py-2 font-medium">Margem</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fornecedores.map(f => (
+                  <tr key={f.fornecedor_id || f.nome} className="border-t border-[var(--t-border)] hover:bg-[var(--t-surface-hover)]">
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        {f.fornecedor_id && <Building2 className="w-3.5 h-3.5 text-[var(--t-green)] shrink-0" />}
+                        <span className="text-[var(--t-text)]">{f.nome}</span>
+                        {!f.fornecedor_id && (
+                          <span className="text-[9px] text-amber-600 dark:text-amber-400 ml-1 italic">não cadastrado</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex flex-wrap gap-1">
+                        {f.servicos.map(s => (
+                          <span key={s} className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--t-bg)] text-[var(--t-text-secondary)]">{s}</span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-[var(--t-text-secondary)]">{formatBRL(f.custo)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-[var(--t-text)]">{formatBRL(f.venda)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      <span className={f.margem > 0 ? 'text-green-600 dark:text-green-400 font-medium' : 'text-[var(--t-text-muted)]'}>
+                        {formatBRL(f.margem)}
+                        {f.venda > 0 && (
+                          <span className="text-[10px] ml-1 opacity-70">{f.margemPct.toFixed(1)}%</span>
+                        )}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+                <tr className="border-t-2 border-[var(--t-border)] bg-[var(--t-surface-hover)] font-semibold">
+                  <td colSpan={2} className="px-3 py-2 text-[var(--t-text)]">Total</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{formatBRL(totalForn.custo)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{formatBRL(totalForn.venda)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-green-600 dark:text-green-400">{formatBRL(totalForn.margem)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          {fornecedores.some(f => !f.fornecedor_id) && (
+            <p className="text-[10px] text-[var(--t-text-muted)] mt-2 italic">
+              Itens com fornecedor &quot;não cadastrado&quot; não são sincronizados com o cadastro central.
+              Vincule um fornecedor cadastrado nas abas de serviço para sincronizar com o CRM.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Preço final ao cliente — só se houver itens */}
       {temItens && (
