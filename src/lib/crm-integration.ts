@@ -6,9 +6,15 @@ import type { GrupoViagem } from './types';
 import {
   createContaReceber,
   createContaPagar,
+  createVendaCRM,
+  createItemVenda,
   type ContaReceber,
   type ContaPagar,
+  type VendaCRM,
+  type ItemVendaData,
+  type TipoProdutoVenda,
 } from './crm-types';
+import { gerarContasVenda, type ItemVendaInput, type FornecedorInfo } from './venda-financeiro';
 
 // ──────────────────────────────────────────
 // Types
@@ -964,144 +970,205 @@ export async function processarEventoCRM(
         );
         const numeroVenda = `VND-${String(parseInt(countRows[0].c) + 1).padStart(4, '0')}`;
 
-        const vendaId_ = vendaId;
-        const vendaData = {
-          // ---- Identificação ----
+        // Build venda partindo de createVendaCRM (todos os campos da
+        // interface VendaCRM preenchidos com defaults). Em cima disso,
+        // sobrescreve com os campos vindos do CRM. Previne erro de
+        // renderização em /vendas/[id] por campos undefined.
+        const baseVenda = createVendaCRM(numeroVenda);
+        const vendaData: VendaCRM & Record<string, unknown> = {
+          ...baseVenda,
           id: vendaId,
-          numero: numeroVenda,                     // legado: dashboard mostra
+          numero: numeroVenda,
           cliente_id: clienteId,
-          cliente_external_id: clienteExternalId,
           vendedor_id: vendedorId,
+          grupo_id: asStr(payload.entur_grupo_id) || null,
+          data_venda: dataVenda,
+          tipo: payload.entur_grupo_id ? 'GRUPO' : 'AVULSA',
+          status: 'CONFIRMADO',
+          forma_pagamento: 'AVISTA_PIX',
+          parcelas: parcelasCliente.length || 1,
+          valor_total_venda: valorTotal,
+          valor_total_custo: custoTotal,
+          valor_final: valorTotal,
+          markup_realizado: (comissao != null && comissao > 0) ? comissao : 0,
+          observacoes: payload.crm_venda_id
+            ? `Recebida do CRM (venda ${payload.crm_venda_id})`
+            : 'Recebida do CRM',
+          // ---- Extensões JSONB (não na interface VendaCRM, lidas via data->> em queries) ----
+          cliente_external_id: clienteExternalId,
           vendedor_external_id: vendedorExternalId,
-          grupo_id: payload.entur_grupo_id || '',
-          proposta_id: payload.entur_proposta_id || '',
-          crm_venda_id: payload.crm_venda_id || '',
-
-          // ---- Datas ----
-          data_venda: dataVenda,                    // legado: filtros mensais
+          proposta_id: asStr(payload.entur_proposta_id),
+          crm_venda_id: asStr(payload.crm_venda_id),
           created_at: new Date().toISOString(),
-
-          // ---- Métricas comerciais (novo modelo) ----
           valor_total: valorTotal,
           custo_total: custoTotal,
           rentabilidade,
           margem_percentual: margemPercentual,
           comissao: comissaoTotal,
-
-          // ---- Aliases para schema LEGADO (DRE/indicadores/dashboard lêem) ----
-          valor_final: valorTotal,                  // alias valor_total
-          valor_total_venda: valorTotal,
-          valor_total_custo: custoTotal,            // alias custo_total
-          // markup_realizado = receita líquida da agência (só comissão REAL).
-          // Se CRM não envia comissão explícita, fica 0. O KPI "Margem Bruta"
-          // (valor − custo) é calculado no dashboard a partir de
-          // valor_total_venda/valor_total_custo, então não perdemos a info.
-          markup_realizado: (comissao != null && comissao > 0) ? comissao : 0,
-          desconto: 0,
-
-          // ---- Arrays obrigatórios (telas fazem reduce/forEach) ----
-          passageiros: [],
-          pagantes: [],
-          produtos: [],                             // CRM ainda não envia itemizado
-
-          // ---- Status e metadata ----
-          moeda: payload.moeda || 'BRL',
-          status: 'CONFIRMADO',                     // legado: enum StatusVendaCRM
-          tipo: payload.entur_grupo_id ? 'GRUPO' : 'AVULSA',
+          moeda: asStr(payload.moeda) || 'BRL',
           origem: 'crm',
-          forma_pagamento: 'AVISTA_PIX',
-          parcelas: parcelasCliente.length || 1,
-          // Audit trail of how the customer is paying the supplier(s).
-          // Not financial liability for the agency.
           parcelas_cliente: parcelasCliente,
         };
         await pool.query(
           `INSERT INTO vendas_crm (id, cliente_id, vendedor_id, status, data, tenant_id, created_at, updated_at)
-           VALUES ($1, $2, $3, 'CONFIRMADO', $4, $5, NOW(), NOW())`,
-          [vendaId_, clienteId, vendedorId, JSON.stringify(vendaData), tenantId]
+           VALUES ($1, $2, $3, 'CONFIRMADO', $4, $5, NOW(), NOW())
+           ON CONFLICT (id) DO UPDATE SET data = $4, updated_at = NOW()`,
+          [vendaId, clienteId, vendedorId, JSON.stringify(vendaData), tenantId]
         );
 
-        // 3) Generate CP + CR. Two paths:
-        //    a) Per-supplier (CRM detailed fornecedores[] with id+nome+custo)
-        //    b) Aggregated   (CRM didn't itemize — fornecedores=[]) — uses
-        //       custo_total / margem to keep the agency seeing the venda
-        //       in /financeiro-ag/{receber,pagar}.
-        const ctx: VendaContext = {
-          vendaId,
-          clienteId,
-          clienteNome: asStr(payload.cliente_nome),
-          enturGrupoId: asStr(payload.entur_grupo_id),
-          crmVendaId: asStr(payload.crm_venda_id),
-        };
-
-        let cpGerados = 0;
-        let crGerados = 0;
-        let crValor = 0;
-        let modo = '';
-
+        // 3) Cria itens_venda + contas via fluxo UNIFICADO (mesma lógica
+        //    de venda manual /vendas/nova). Cada fornecedor vira um item
+        //    com meio_pagamento='fornecedor' (cliente paga direto ao
+        //    fornecedor, agência recebe comissão). Se CRM não detalhou
+        //    fornecedores, cria 1 item agregado 'OUTROS'.
         const fornecedoresValidos = fornecedoresPayload.filter(
           f => !!asStr(f.fornecedor_id),
         );
+        const itensInput: ItemVendaInput[] = [];
+        const fornecedoresInfo: FornecedorInfo[] = [];
 
         if (fornecedoresValidos.length > 0) {
-          // (a) Per-supplier
-          modo = 'per-supplier';
-          for (const forn of fornecedoresValidos) {
+          for (let i = 0; i < fornecedoresValidos.length; i++) {
+            const forn = fornecedoresValidos[i];
             const fornExternalId = asStr(forn.fornecedor_id);
             const fornecedorId = await upsertFornecedorByExternalId(
               fornExternalId,
-              {
-                nome: forn.fornecedor_nome,
-                cnpj: forn.fornecedor_cnpj,
-              },
+              { nome: forn.fornecedor_nome, cnpj: forn.fornecedor_cnpj },
               tenantId,
             );
-
-            const contaPagar = buildContaPagarFromFornecedor(forn, fornecedorId, ctx);
-            await pool.query(
-              `INSERT INTO contas_pagar (id, fornecedor_id, status, data, tenant_id, created_at, updated_at)
-               VALUES ($1, $2, $3, $4::jsonb, $5, NOW(), NOW())`,
-              [contaPagar.id, fornecedorId, contaPagar.status, JSON.stringify(contaPagar), tenantId],
+            // Carrega regras_faturamento do fornecedor (para regra de
+            // vencimento de comissão e prazo de pagamento).
+            const { rows: fornRows } = await pool.query(
+              `SELECT data FROM fornecedores_crm WHERE id = $1 AND tenant_id = $2`,
+              [fornecedorId, tenantId],
             );
-            cpGerados++;
+            const fornData = (fornRows[0]?.data ?? {}) as Record<string, unknown>;
+            fornecedoresInfo.push({
+              id: fornecedorId,
+              nome_fantasia: asStr(forn.fornecedor_nome) || asStr(fornData.nome_fantasia) || 'Fornecedor',
+              regras_faturamento: (fornData.regras_faturamento ?? null) as FornecedorInfo['regras_faturamento'],
+            });
 
-            const valorComissao = calcularComissaoFornecedor(forn, fornecedoresValidos, comissaoTotal);
-            if (valorComissao > 0) {
-              const contaReceber = buildComissaoReceberFromFornecedor(forn, fornecedorId, ctx, valorComissao);
-              await pool.query(
-                `INSERT INTO contas_receber (id, venda_id, cliente_id, status, data, tenant_id, created_at, updated_at)
-                 VALUES ($1, $2, $3, $4, $5::jsonb, $6, NOW(), NOW())`,
-                [contaReceber.id, vendaId, clienteId, contaReceber.status, JSON.stringify(contaReceber), tenantId],
-              );
-              crGerados++;
-              crValor += valorComissao;
-            }
+            const valorCustoForn = asNum(forn.valor_custo);
+            const valorVendaForn = asNum(forn.valor_venda) || valorCustoForn;
+            const comissaoFornValor = calcularComissaoFornecedor(forn, fornecedoresValidos, comissaoTotal);
+            const comissaoFornPct = valorVendaForn > 0
+              ? Number(((comissaoFornValor / valorVendaForn) * 100).toFixed(2))
+              : 0;
+
+            const tipoServico = (asStr(forn.servico).toUpperCase() as TipoProdutoVenda) || 'OUTROS';
+            const tiposValidos: TipoProdutoVenda[] = ['AEREO', 'HOTEL', 'PACOTE', 'SEGURO', 'RECEPTIVO', 'CRUZEIRO', 'CARRO', 'INGRESSO', 'GRUPO', 'OUTROS'];
+            const tipoFinal: TipoProdutoVenda = tiposValidos.includes(tipoServico) ? tipoServico : 'OUTROS';
+
+            const item = createItemVenda();
+            const itemData: ItemVendaData = {
+              ...item.data,
+              tipo: tipoFinal,
+              descricao: asStr(forn.servico) || asStr(forn.descricao) || asStr(forn.fornecedor_nome),
+              fornecedor_nome: asStr(forn.fornecedor_nome),
+              meio_pagamento: 'fornecedor',
+              valor_custo: valorCustoForn,
+              valor_venda: valorVendaForn,
+              comissao_percentual: comissaoFornPct,
+              comissao_valor: comissaoFornValor,
+              moeda: 'BRL',
+              cambio: 1,
+              localizador: asStr(forn.localizador),
+              data_inicio: asDateYMD(forn.data_inicio),
+              data_fim: asDateYMD(forn.data_fim),
+              observacoes: '',
+              contas_geradas_ids: [],
+            };
+            itensInput.push({
+              id: item.id,
+              venda_id: vendaId,
+              fornecedor_id: fornecedorId,
+              sequencia: i + 1,
+              status: 'ativo',
+              data: itemData,
+            });
           }
         } else {
-          // (b) Aggregated — CRM didn't list suppliers
-          modo = 'aggregated';
-          if (custoTotal > 0) {
-            const cp = buildContaPagarAgregada(ctx, custoTotal);
-            await pool.query(
-              `INSERT INTO contas_pagar (id, fornecedor_id, status, data, tenant_id, created_at, updated_at)
-               VALUES ($1, $2, $3, $4::jsonb, $5, NOW(), NOW())`,
-              [cp.id, '', cp.status, JSON.stringify(cp), tenantId],
-            );
-            cpGerados++;
-          }
-          if (comissaoTotal > 0) {
-            const cr = buildComissaoReceberAgregada(ctx, comissaoTotal);
-            await pool.query(
-              `INSERT INTO contas_receber (id, venda_id, cliente_id, status, data, tenant_id, created_at, updated_at)
-               VALUES ($1, $2, $3, $4, $5::jsonb, $6, NOW(), NOW())`,
-              [cr.id, vendaId, clienteId, cr.status, JSON.stringify(cr), tenantId],
-            );
-            crGerados++;
-            crValor += comissaoTotal;
-          }
+          // Fallback agregado — CRM não detalhou fornecedores. Cria 1
+          // item OUTROS com o custo total e o valor da venda total.
+          const item = createItemVenda();
+          itensInput.push({
+            id: item.id,
+            venda_id: vendaId,
+            fornecedor_id: '',
+            sequencia: 1,
+            status: 'ativo',
+            data: {
+              ...item.data,
+              tipo: 'OUTROS',
+              descricao: `Venda ${payload.crm_venda_id || vendaId} — fornecedor(es) a detalhar`,
+              fornecedor_nome: '',
+              meio_pagamento: 'proprio',
+              valor_custo: custoTotal,
+              valor_venda: valorTotal,
+              comissao_percentual: 0,
+              comissao_valor: 0,
+              moeda: 'BRL',
+              cambio: 1,
+              localizador: '',
+              data_inicio: '',
+              data_fim: '',
+              observacoes: 'Custo e venda agregados — editar para detalhar fornecedores',
+              contas_geradas_ids: [],
+            },
+          });
         }
 
-        acao = `venda criada (${vendaId}, ${modo}): ${cpGerados} CP (custo R$ ${custoTotal.toFixed(2)}), ${crGerados} CR (comissão R$ ${crValor.toFixed(2)})`;
+        // Persiste itens_venda (idempotente — apaga antigos e reinsere)
+        await pool.query(
+          `DELETE FROM itens_venda WHERE venda_id = $1 AND tenant_id = $2`,
+          [vendaId, tenantId],
+        );
+        for (const it of itensInput) {
+          await pool.query(
+            `INSERT INTO itens_venda (id, tenant_id, venda_id, fornecedor_id, sequencia, status, data, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, NOW(), NOW())`,
+            [it.id, tenantId, it.venda_id, it.fornecedor_id, it.sequencia, it.status, JSON.stringify(it.data)],
+          );
+        }
+
+        // Gera CR/CP via lógica unificada (mesma usada por /vendas/nova).
+        const contasGen = gerarContasVenda({
+          venda: vendaData as VendaCRM,
+          itens: itensInput,
+          fornecedores: fornecedoresInfo,
+          cliente_nome: asStr(payload.cliente_nome),
+        });
+
+        // Idempotência: apaga CR/CP auto_gerado anteriores desta venda.
+        await pool.query(
+          `DELETE FROM contas_receber WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2 AND data->>'auto_gerado' = 'true'`,
+          [tenantId, vendaId],
+        );
+        await pool.query(
+          `DELETE FROM contas_pagar WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2 AND data->>'auto_gerado' = 'true'`,
+          [tenantId, vendaId],
+        );
+
+        for (const cr of contasGen.contas_receber) {
+          await pool.query(
+            `INSERT INTO contas_receber (id, tenant_id, venda_id, cliente_id, status, data, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6::jsonb, NOW(), NOW())`,
+            [cr.id, tenantId, cr.venda_id || vendaId, cr.cliente_id || clienteId, cr.status, JSON.stringify(cr)],
+          );
+        }
+        for (const cp of contasGen.contas_pagar) {
+          await pool.query(
+            `INSERT INTO contas_pagar (id, tenant_id, fornecedor_id, status, data, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5::jsonb, NOW(), NOW())`,
+            [cp.id, tenantId, cp.fornecedor_id || '', cp.status, JSON.stringify(cp)],
+          );
+        }
+
+        const cpGerados = contasGen.contas_pagar.length;
+        const crGerados = contasGen.contas_receber.length;
+        const crValor = contasGen.resumo.total_comissoes + contasGen.resumo.total_cliente;
+        acao = `venda criada (${vendaId}): ${itensInput.length} itens, ${cpGerados} CP, ${crGerados} CR (R$ ${crValor.toFixed(2)})`;
         break;
       }
 
@@ -1535,9 +1602,15 @@ export async function reprocessarVendasLegadas(tenantId: string): Promise<{
         const statusAtual = String(data.status ?? '');
         const novoStatus = statusAtual === 'vendido' || !statusAtual ? 'CONFIRMADO' : statusAtual;
 
+        // Base com todos os campos da interface VendaCRM (passageiros,
+        // pagantes, produtos, anexos, observacoes, centro_custo, etc).
+        // Spread por cima do data antigo para não perder nada do CRM.
+        const numeroDefault = `VND-${String(row.id).slice(0, 8).toUpperCase()}`;
+        const base = createVendaCRM(String(data.numero || numeroDefault));
         const atualizado = {
+          ...base,
           ...data,
-          // Aliases legados (sem perder originais)
+          // Garantias após o spread
           valor_final: valorTotal,
           valor_total_venda: valorTotal,
           valor_total_custo: custoTotal,
@@ -1555,7 +1628,7 @@ export async function reprocessarVendasLegadas(tenantId: string): Promise<{
             ?? (typeof (data as { created_at?: string }).created_at === 'string'
                 ? String(data.created_at).slice(0, 10)
                 : new Date().toISOString().slice(0, 10)),
-          numero: data.numero ?? `VND-${String(row.id).slice(0, 8).toUpperCase()}`,
+          numero: data.numero ?? numeroDefault,
         };
 
         await pool.query(
