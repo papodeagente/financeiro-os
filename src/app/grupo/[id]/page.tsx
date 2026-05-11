@@ -27,6 +27,7 @@ import { createDivulgacaoFornecedor } from '@/lib/defaults';
 import { TemplatePickerModal } from '@/components/TemplatePickerModal';
 import { TemplateProposta } from '@/lib/crm-types';
 import { StatusPipelineSelector } from '@/components/StatusPipelineSelector';
+import { PropostaStatusSelector, type StatusProposta } from '@/components/PropostaStatusSelector';
 import type { StatusPipeline } from '@/lib/types';
 import { Save, FileText, Loader2 } from 'lucide-react';
 import Link from 'next/link';
@@ -67,6 +68,7 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
   const [saved, setSaved] = useState(true);
   const [gerandoProposta, setGerandoProposta] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [propostaStatus, setPropostaStatus] = useState<StatusProposta | null>(null);
 
   useEffect(() => {
     loadGrupos().then(grupos => {
@@ -103,6 +105,39 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
     setGrupo(updated);
     setSaved(false);
   }, []);
+
+  // Carrega status da proposta vinculada (se houver) para refletir no
+  // seletor do header.
+  useEffect(() => {
+    const propId = grupo?.proposta_id;
+    if (!propId) { setPropostaStatus(null); return; }
+    fetch(`/api/propostas/${propId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data && data.status) setPropostaStatus(data.status as StatusProposta);
+      })
+      .catch(() => { /* silent */ });
+  }, [grupo?.proposta_id]);
+
+  const handleChangePropostaStatus = useCallback(async (status: StatusProposta) => {
+    if (!grupo?.proposta_id) return;
+    setPropostaStatus(status); // otimista
+    try {
+      // Busca o objeto inteiro pra fazer um PUT consistente (a rota PUT
+      // aceita o objeto completo).
+      const cur = await fetch(`/api/propostas/${grupo.proposta_id}`).then(r => r.json());
+      const updated = { ...cur, status };
+      const res = await fetch(`/api/propostas/${grupo.proposta_id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+      if (!res.ok) throw new Error('falha');
+      toast.success(`Proposta ${status === 'ENVIADO' ? 'marcada como enviada' : `marcada como ${status}`}`);
+    } catch {
+      toast.error('Erro ao atualizar status da proposta');
+    }
+  }, [grupo?.proposta_id]);
 
   const handleSave = useCallback(async () => {
     if (grupo) {
@@ -261,6 +296,15 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
             value={grupo.status_pipeline}
             onChange={handleChangeStatus}
           />
+          {grupo.proposta_id && propostaStatus && (
+            <>
+              <span className="text-[10px] text-[var(--t-text-muted)] uppercase tracking-wide ml-1">Proposta:</span>
+              <PropostaStatusSelector
+                value={propostaStatus}
+                onChange={handleChangePropostaStatus}
+              />
+            </>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <span className={`text-xs ${saved ? 'text-green-600' : 'text-orange-500'}`}>
