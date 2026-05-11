@@ -1475,6 +1475,103 @@ export async function disparaEventosPendentes(tenantId: string): Promise<{
 }
 
 // ──────────────────────────────────────────
+// reprocessarVendasLegadas — atualiza vendas_crm antigas
+// --------------------------------------------------------------------
+// Vendas gravadas antes do fix de 2026-05-11 não tinham os campos
+// alias do schema legado (valor_final, valor_total_custo,
+// markup_realizado, passageiros[], pagantes[], produtos[], etc.) nem
+// o status 'CONFIRMADO'. Resultado: DRE/Indicadores/Dashboard
+// ignoravam essas vendas porque os fields esperados estavam undefined.
+//
+// Este helper percorre todas as vendas do tenant com origem='crm' e
+// preenche os aliases a partir dos campos novos (valor_total →
+// valor_final, custo_total → valor_total_custo, etc.) sem perda de
+// informação. Idempotente: só atualiza onde os aliases ainda não
+// existem.
+// ──────────────────────────────────────────
+
+export async function reprocessarVendasLegadas(tenantId: string): Promise<{
+  total: number;
+  atualizadas: number;
+  ja_compatibilidade: number;
+  erros: number;
+}> {
+  const result = { total: 0, atualizadas: 0, ja_compatibilidade: 0, erros: 0 };
+  try {
+    if (!pool || !tenantId) return result;
+    await initDB();
+    const { rows } = await pool.query(
+      `SELECT id, data, status FROM vendas_crm WHERE tenant_id = $1`,
+      [tenantId],
+    );
+    result.total = rows.length;
+
+    for (const row of rows) {
+      try {
+        const data = (row.data ?? {}) as Record<string, unknown>;
+        // Se já tem valor_final + status correto, skip.
+        const jaOk = typeof data.valor_final === 'number'
+          && typeof data.valor_total_custo === 'number'
+          && Array.isArray(data.passageiros)
+          && Array.isArray(data.pagantes)
+          && Array.isArray(data.produtos)
+          && (data.status === 'CONFIRMADO' || data.status === 'CANCELADO' || data.status === 'CONCLUIDO');
+        if (jaOk && row.status !== 'vendido') {
+          result.ja_compatibilidade++;
+          continue;
+        }
+
+        const valorTotal = Number(data.valor_total) || Number(data.valor_final) || 0;
+        const custoTotal = Number(data.custo_total) || Number(data.valor_total_custo) || 0;
+        const comissao = data.comissao != null ? Number(data.comissao) : null;
+        const rentabilidade = Number(data.rentabilidade) || Math.max(valorTotal - custoTotal, 0);
+        const markup = comissao != null && comissao > 0 ? comissao : rentabilidade;
+        const statusAtual = String(data.status ?? '');
+        const novoStatus = statusAtual === 'vendido' || !statusAtual ? 'CONFIRMADO' : statusAtual;
+
+        const atualizado = {
+          ...data,
+          // Aliases legados (sem perder originais)
+          valor_final: valorTotal,
+          valor_total_venda: valorTotal,
+          valor_total_custo: custoTotal,
+          markup_realizado: markup,
+          desconto: typeof data.desconto === 'number' ? data.desconto : 0,
+          passageiros: Array.isArray(data.passageiros) ? data.passageiros : [],
+          pagantes: Array.isArray(data.pagantes) ? data.pagantes : [],
+          produtos: Array.isArray(data.produtos) ? data.produtos : [],
+          forma_pagamento: data.forma_pagamento ?? 'AVISTA_PIX',
+          parcelas: typeof data.parcelas === 'number' ? data.parcelas
+            : Array.isArray(data.parcelas_cliente) ? (data.parcelas_cliente as unknown[]).length : 1,
+          status: novoStatus,
+          tipo: data.tipo ?? (data.grupo_id ? 'GRUPO' : 'AVULSA'),
+          data_venda: data.data_venda
+            ?? (typeof (data as { created_at?: string }).created_at === 'string'
+                ? String(data.created_at).slice(0, 10)
+                : new Date().toISOString().slice(0, 10)),
+          numero: data.numero ?? `VND-${String(row.id).slice(0, 8).toUpperCase()}`,
+        };
+
+        await pool.query(
+          `UPDATE vendas_crm
+              SET data = $1::jsonb,
+                  status = CASE WHEN status = 'vendido' THEN 'CONFIRMADO' ELSE status END,
+                  updated_at = NOW()
+            WHERE id = $2 AND tenant_id = $3`,
+          [JSON.stringify(atualizado), row.id, tenantId],
+        );
+        result.atualizadas++;
+      } catch {
+        result.erros++;
+      }
+    }
+    return result;
+  } catch {
+    return result;
+  }
+}
+
+// ──────────────────────────────────────────
 // Verify inbound HMAC signature
 // ──────────────────────────────────────────
 

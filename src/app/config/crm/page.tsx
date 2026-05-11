@@ -211,6 +211,24 @@ export default function CrmConfigPage() {
     setSimulating(false);
   };
 
+  const reprocessarVendas = async () => {
+    if (!confirm('Reprocessar vendas antigas? Preenche os campos legados que DRE, Dashboard e Indicadores esperam (valor_final, valor_total_custo, etc.). Idempotente — pode rodar várias vezes.')) return;
+    setCleaning(true);
+    try {
+      const r = await fetch('/api/v1/crm/reprocessar-vendas-legadas', { method: 'POST' });
+      const j = await r.json();
+      if (j.error) {
+        alert('Erro: ' + j.error);
+      } else {
+        alert(`Vendas no tenant: ${j.total}\nAtualizadas: ${j.atualizadas}\nJá estavam OK: ${j.ja_compatibilidade}\nErros: ${j.erros}`);
+      }
+      await loadAll();
+    } catch (e) {
+      alert('Falha: ' + (e instanceof Error ? e.message : ''));
+    }
+    setCleaning(false);
+  };
+
   const cleanupZombies = async () => {
     if (!confirm('Apagar lancamentos antigos do CRM (gravados antes do fix de shape) e liberar reenvio? Acao reversivel apenas via reenvio do CRM.')) return;
     setCleaning(true);
@@ -512,6 +530,28 @@ export default function CrmConfigPage() {
       {/* Maintenance — cleanup CRM zombies */}
       <section className="mb-8">
         <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-4">Manutencao</h2>
+
+        {/* Reprocessar vendas legadas */}
+        <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] p-5 mb-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)]">Reprocessar vendas antigas</p>
+              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mt-1 max-w-2xl">
+                Vendas recebidas do CRM antes do fix de sincronia financeira não
+                tinham os campos legados que DRE, Dashboard e Indicadores
+                esperam (valor_final, valor_total_custo, markup_realizado,
+                passageiros/pagantes/produtos, status CONFIRMADO). Este botão
+                preenche esses aliases a partir dos campos novos sem perder
+                dado nenhum. Idempotente — vendas já corretas são puladas.
+              </p>
+            </div>
+            <button onClick={reprocessarVendas} disabled={cleaning}
+              className="px-4 py-2 text-[var(--text-body-sm)] text-white bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50 shrink-0">
+              {cleaning ? 'Processando...' : 'Reprocessar vendas'}
+            </button>
+          </div>
+        </div>
+
         <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] p-5">
           <div className="flex items-start justify-between gap-4">
             <div>
