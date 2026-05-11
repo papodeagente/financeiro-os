@@ -6,6 +6,7 @@ import { loadEntities } from '@/lib/crm-storage';
 import type {
   Cliente, VendaCRM, ContaReceber, ContaPagar,
   ContaBancaria, CACMensal, MetaVendedor, Membro,
+  StatusVendaCRM,
 } from '@/lib/crm-types';
 import {
   TrendingUp, ShoppingCart, Users, DollarSign,
@@ -65,6 +66,70 @@ function getMonthName(yyyymm: string): string {
   return `${meses[parseInt(m) - 1]} ${y}`;
 }
 
+// VendaCRM tem 2 formas no banco:
+// 1) Legacy: campos completos (numero, produtos[], valor_final, valor_total_custo,
+//    markup_realizado, status='CONFIRMADO'|...) — vindo da UI /vendas/nova
+// 2) Nova (vinda do VENDA_FECHADA do CRM): valor_total/custo_total/comissao/
+//    rentabilidade, status='vendido', sem produtos[] (vendas fechadas pelo
+//    funil do CRM ainda não detalhadas por produto)
+//
+// O dashboard espera (1). normalizeVenda mapeia (2) para o shape (1) para
+// que reduce/forEach em produtos não estourem.
+function normalizeVenda(v: Partial<VendaCRM> & Record<string, unknown>): VendaCRM {
+  const statusRaw = String(v.status ?? '').toLowerCase();
+  const status: StatusVendaCRM =
+    statusRaw === 'vendido' ? 'CONFIRMADO' :
+    (['ORCAMENTO', 'RESERVADO', 'CONFIRMADO', 'CANCELADO', 'CONCLUIDO'] as const).includes(v.status as StatusVendaCRM)
+      ? v.status as StatusVendaCRM
+      : 'CONFIRMADO';
+
+  const valor_total_venda =
+    (v.valor_final as number | undefined)
+    ?? (v.valor_total_venda as number | undefined)
+    ?? (v.valor_total as number | undefined)
+    ?? 0;
+  const valor_total_custo =
+    (v.valor_total_custo as number | undefined)
+    ?? (v.custo_total as number | undefined)
+    ?? 0;
+  const markup_realizado =
+    (v.markup_realizado as number | undefined)
+    ?? (v.rentabilidade as number | undefined)
+    ?? (v.comissao as number | undefined)
+    ?? Math.max(valor_total_venda - valor_total_custo, 0);
+
+  return {
+    id: (v.id as string) ?? '',
+    numero: (v.numero as string) ?? (v.crm_venda_id as string) ?? String(v.id ?? '').slice(0, 8) ?? '—',
+    data_venda: (v.data_venda as string) ?? '',
+    tipo: (v.tipo as 'AVULSA' | 'GRUPO') ?? (v.grupo_id ? 'GRUPO' : 'AVULSA'),
+    grupo_id: (v.grupo_id as string | null) ?? null,
+    cliente_id: (v.cliente_id as string) ?? '',
+    vendedor_id: (v.vendedor_id as string) ?? '',
+    passageiros: (v.passageiros as VendaCRM['passageiros']) ?? [],
+    pagantes: (v.pagantes as VendaCRM['pagantes']) ?? [],
+    produtos: (v.produtos as VendaCRM['produtos']) ?? [],
+    valor_total_custo,
+    valor_total_venda,
+    markup_realizado,
+    desconto: (v.desconto as number) ?? 0,
+    valor_final: valor_total_venda,
+    forma_pagamento: (v.forma_pagamento as VendaCRM['forma_pagamento']) ?? 'AVISTA_PIX',
+    parcelas: (v.parcelas as number) ?? 1,
+    pagamento_detalhado: (v.pagamento_detalhado as VendaCRM['pagamento_detalhado']) ?? [],
+    status,
+    motivo_cancelamento: (v.motivo_cancelamento as string) ?? '',
+    recibo_emitido: (v.recibo_emitido as boolean) ?? false,
+    intermediario_id: (v.intermediario_id as string | null) ?? null,
+    comissao_intermediario: (v.comissao_intermediario as number) ?? 0,
+    centro_custo: (v.centro_custo as string) ?? '',
+    numero_po: (v.numero_po as string) ?? '',
+    anexos: (v.anexos as VendaCRM['anexos']) ?? [],
+    observacoes: (v.observacoes as string) ?? '',
+    campos_personalizados: (v.campos_personalizados as Record<string, string>) ?? {},
+  };
+}
+
 // ============================================================
 // TIPOS INTERNOS
 // ============================================================
@@ -122,7 +187,11 @@ export default function DashboardPage() {
       loadEntities<MetaVendedor>('metas'),
       loadEntities<Membro>('membros'),
     ]).then(([cl, vn, cr, cp, cb, cac, mt, mb]) => {
-      setClientes(cl); setVendas(vn); setReceber(cr); setPagar(cp);
+      setClientes(cl);
+      // Normaliza vendas vindas de fontes diferentes (UI antiga + handler do
+      // VENDA_FECHADA do CRM). Garante produtos[]/valor_final/etc presentes.
+      setVendas(vn.map(v => normalizeVenda(v as Partial<VendaCRM> & Record<string, unknown>)));
+      setReceber(cr); setPagar(cp);
       setContas(cb); setCacData(cac); setMetas(mt); setMembros(mb);
       setLoading(false);
       setLastUpdate(new Date());
