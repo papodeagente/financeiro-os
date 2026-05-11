@@ -64,15 +64,76 @@ export function buildProdutoPayload(grupo: GrupoViagem): Record<string, unknown>
   const tarifas = (grupo.tarifas_ativas || ['sgl', 'dbl', 'tpl', 'qdp']) as string[];
   const tipoRefPreferido = (grupo.tipo ?? 'GRUPO') === 'PROPOSTA' ? 'sgl' : (tarifas[0] ?? 'dbl');
 
+  // Custo REAL no tipo de apto: somatório dos valores brutos (sem markup,
+  // sem venda manual) direto da estrutura do grupo. Não usar
+  // summary.custos_por_apto quando há venda manual — nesse caso
+  // lineValues[servico] é a venda, não o custo.
+  const PAX_MAP: Record<string, number> = { sgl: 1, dbl: 2, tpl: 3, qdp: 4, chd: 1 };
+  const cambio = (k: string) => grupo.cambio?.[k]?.valor || 1;
+  const minPositivo = (arr: Array<number | null | undefined>) => {
+    const ok = arr.filter((v): v is number => typeof v === 'number' && v > 0);
+    return ok.length === 0 ? 0 : Math.min(...ok);
+  };
+
   const calcCustoNoTipo = (tipo: string): number => {
+    const pax = PAX_MAP[tipo] || 1;
     let soma = 0;
-    for (const servico of ['tkt', 'htl', 'rec', 'car', 'guia', 'seg', 'navio', 'ing'] as const) {
-      const linha = summary.custos_por_apto[servico] as Record<string, number> | undefined;
-      const v = linha?.[tipo];
-      if (typeof v === 'number') soma += v;
+    // TKT: melhor valor_adt por trecho × pax (ou totalChd se chd)
+    for (const trecho of grupo.tkt?.trechos || []) {
+      const best = tipo === 'chd'
+        ? minPositivo((trecho.fontes || []).map(f => f.valor_chd))
+        : minPositivo((trecho.fontes || []).map(f => f.valor_adt)) * pax;
+      soma += best * cambio('tkt');
+    }
+    // HTL: melhor valor_<tipo> por hotel (preço total do quarto)
+    for (const hotel of grupo.htl?.hoteis || []) {
+      const best = minPositivo((hotel.fontes || []).map(f => {
+        const v = (f as unknown as Record<string, number | null>)[`valor_${tipo}`];
+        return typeof v === 'number' ? v : null;
+      }));
+      soma += best * cambio('htl');
+    }
+    // REC
+    for (const passeio of grupo.rec?.passeios || []) {
+      const best = tipo === 'chd'
+        ? minPositivo((passeio.fornecedores || []).map(f => f.valor_chd))
+        : minPositivo((passeio.fornecedores || []).map(f => f.valor_adt)) * pax;
+      soma += best * cambio('rec');
+    }
+    // CAR (valor_veiculo rateado por minPax × pax do apto)
+    const minPax = grupo.params.qtd_min_pax || 1;
+    for (const transp of grupo.car?.transportes || []) {
+      const best = minPositivo((transp.empresas || []).map(e => e.valor_veiculo));
+      soma += (best / minPax) * pax * cambio('car');
+    }
+    // GUIA (idem CAR)
+    for (const dest of grupo.guia?.destinos || []) {
+      const best = minPositivo((dest.fornecedores || []).map(f => f.valor_total));
+      soma += (best / minPax) * pax * cambio('guia');
+    }
+    // SEG (per room — CHD usa SGL)
+    const segKey = tipo === 'chd' ? 'sgl' : tipo;
+    const bestSeg = minPositivo((grupo.seg?.seguradoras || []).map(s => {
+      const v = (s as unknown as Record<string, number | null>)[`valor_${segKey}`];
+      return typeof v === 'number' ? v : null;
+    }));
+    soma += bestSeg * cambio('seg');
+    // NAVIO (per cabin)
+    const bestNavio = minPositivo((grupo.navio?.fornecedores || []).map(f => {
+      const v = (f as unknown as Record<string, number | null>)[`valor_${tipo}`];
+      return typeof v === 'number' ? v : null;
+    }));
+    soma += bestNavio * cambio('navio');
+    // ING
+    for (const atr of grupo.ing?.atrativos || []) {
+      const best = tipo === 'chd'
+        ? minPositivo((atr.fontes || []).map(f => f.valor_chd))
+        : minPositivo((atr.fontes || []).map(f => f.valor_adt)) * pax;
+      soma += best * cambio('ing');
     }
     return soma;
   };
+
   const precosAvista = summary.precos.avista as Record<string, number>;
   const calcVendaNoTipo = (tipo: string): number => precosAvista?.[tipo] ?? 0;
 
@@ -105,47 +166,83 @@ export function buildProdutoPayload(grupo: GrupoViagem): Record<string, unknown>
   const fornecedoresMap = new Map<string, { nome: string; tipo: string; servico: string; valor_estimado: number }>();
   const addFornecedor = (nome: string, tipo: string, servico: string, valor: number) => {
     if (!nome) return;
+    // Filtra fornecedor sem valor preenchido. Evita poluir o payload com
+    // os nomes default das fontes (Direto CIA, Consolidadora 1, etc.)
+    // que existem só pra UI do editor.
+    if (!Number.isFinite(valor) || valor <= 0) return;
     const key = `${tipo}::${nome}`;
     const prev = fornecedoresMap.get(key);
     fornecedoresMap.set(key, {
       nome,
       tipo,
       servico,
-      valor_estimado: (prev?.valor_estimado || 0) + (Number.isFinite(valor) ? valor : 0),
+      valor_estimado: (prev?.valor_estimado || 0) + valor,
     });
   };
+  // Helper p/ ler qualquer campo de valor — checa custo E venda
+  const hasAnyValue = (obj: Record<string, unknown>, keys: string[]) =>
+    keys.some(k => {
+      const v = obj[k];
+      return typeof v === 'number' && v > 0;
+    });
+
   // TKT (companhias aereas)
   for (const trecho of grupo.tkt?.trechos || []) {
     for (const fonte of trecho.fontes || []) {
-      addFornecedor(fonte.nome, 'TKT', 'Aéreo', Number(fonte.valor_adt) || 0);
+      if (!hasAnyValue(fonte as unknown as Record<string, unknown>, ['valor_adt', 'valor_chd', 'valor_venda_adt', 'valor_venda_chd'])) continue;
+      addFornecedor(fonte.nome, 'TKT', 'Aéreo', Number(fonte.valor_adt) || Number(fonte.valor_venda_adt) || 0);
     }
   }
   // HTL (hoteis)
   for (const hotel of grupo.htl?.hoteis || []) {
     for (const fonte of hotel.fontes || []) {
-      addFornecedor(fonte.nome, 'HTL', 'Hotel', Number(fonte.valor_dbl) || 0);
+      const keys = ['valor_sgl', 'valor_dbl', 'valor_tpl', 'valor_qdp', 'valor_chd',
+                    'valor_venda_sgl', 'valor_venda_dbl', 'valor_venda_tpl', 'valor_venda_qdp', 'valor_venda_chd'];
+      if (!hasAnyValue(fonte as unknown as Record<string, unknown>, keys)) continue;
+      addFornecedor(fonte.nome, 'HTL', 'Hotel', Number(fonte.valor_dbl) || Number(fonte.valor_sgl) || 0);
     }
   }
   // REC (receptivos)
   for (const passeio of grupo.rec?.passeios || []) {
     for (const fonte of passeio.fornecedores || []) {
+      if (!hasAnyValue(fonte as unknown as Record<string, unknown>, ['valor_adt', 'valor_chd', 'valor_venda_adt', 'valor_venda_chd'])) continue;
       addFornecedor(fonte.nome, 'REC', 'Receptivo', Number(fonte.valor_adt) || 0);
     }
   }
   // CAR (transportes)
   for (const transp of grupo.car?.transportes || []) {
     for (const empresa of transp.empresas || []) {
+      if (!hasAnyValue(empresa as unknown as Record<string, unknown>, ['valor_veiculo', 'valor_venda_veiculo'])) continue;
       addFornecedor(empresa.nome, 'CAR', 'Transporte', Number(empresa.valor_veiculo) || 0);
     }
   }
-  // GUIA, SEG, NAVIO etc — só os nomes (sem valor por simplicidade)
+  // GUIA
   for (const destino of grupo.guia?.destinos || []) {
-    for (const f of destino.fornecedores || []) addFornecedor(f.nome, 'GUIA', 'Guia', Number(f.valor_total) || 0);
+    for (const f of destino.fornecedores || []) {
+      if (!hasAnyValue(f as unknown as Record<string, unknown>, ['valor_total', 'valor_venda_total'])) continue;
+      addFornecedor(f.nome, 'GUIA', 'Guia', Number(f.valor_total) || 0);
+    }
   }
-  for (const s of grupo.seg?.seguradoras || []) addFornecedor(s.nome, 'SEG', 'Seguro', Number(s.valor_dbl) || 0);
-  for (const n of grupo.navio?.fornecedores || []) addFornecedor(n.nome, 'NAVIO', 'Cruzeiro', Number(n.valor_dbl) || 0);
+  // SEG
+  for (const s of grupo.seg?.seguradoras || []) {
+    const keys = ['valor_sgl', 'valor_dbl', 'valor_tpl', 'valor_qdp',
+                  'valor_venda_sgl', 'valor_venda_dbl', 'valor_venda_tpl', 'valor_venda_qdp'];
+    if (!hasAnyValue(s as unknown as Record<string, unknown>, keys)) continue;
+    addFornecedor(s.nome, 'SEG', 'Seguro', Number(s.valor_dbl) || 0);
+  }
+  // NAVIO
+  for (const n of grupo.navio?.fornecedores || []) {
+    const keys = ['valor_sgl', 'valor_dbl', 'valor_tpl', 'valor_qdp', 'valor_chd',
+                  'valor_venda_sgl', 'valor_venda_dbl', 'valor_venda_tpl', 'valor_venda_qdp', 'valor_venda_chd'];
+    if (!hasAnyValue(n as unknown as Record<string, unknown>, keys)) continue;
+    addFornecedor(n.nome, 'NAVIO', 'Cruzeiro', Number(n.valor_dbl) || 0);
+  }
+  // ING
   for (const a of grupo.ing?.atrativos || []) {
-    for (const f of a.fontes || []) addFornecedor(f.nome, 'ING', 'Ingresso', Number(f.valor_adt) || 0);
+    for (const f of a.fontes || []) {
+      if (!hasAnyValue(f as unknown as Record<string, unknown>, ['valor_adt', 'valor_chd', 'valor_inf', 'valor_meia', 'valor_venda_adt', 'valor_venda_chd'])) continue;
+      addFornecedor(f.nome, 'ING', 'Ingresso', Number(f.valor_adt) || 0);
+    }
   }
   const fornecedores = Array.from(fornecedoresMap.values());
 
