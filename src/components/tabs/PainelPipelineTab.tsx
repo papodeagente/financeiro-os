@@ -8,6 +8,7 @@ import {
   Package, FileText, ClipboardList, BadgeDollarSign,
   ExternalLink, Loader2, CheckCircle2, Circle,
 } from 'lucide-react';
+import { GrupoSyncStatus } from '@/components/GrupoSyncStatus';
 
 interface Props {
   grupo: GrupoViagem;
@@ -155,6 +156,10 @@ export function PainelPipelineTab({ grupo, onGerarProposta, onGerarOrcamento, on
           ) : (
             <p className="text-sm text-[var(--t-text-muted)]">Nenhum servico preenchido ainda. Preencha as abas de servico.</p>
           )}
+          {/* Status de sincronização com CRM */}
+          <div className="mt-3 pt-3 border-t border-[var(--t-border)]">
+            <GrupoSyncStatus grupoId={grupo.id} />
+          </div>
         </div>
 
         {/* PROPOSTA */}

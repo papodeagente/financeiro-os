@@ -30,12 +30,18 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   );
 
   // CRM: re-publish the full product snapshot on every meaningful update.
+  // Wrapped in try/catch — payload build pode falhar em grupos
+  // parcialmente preenchidos, mas isso nao deve quebrar o salvar.
   if (grupo.periodos?.length > 0) {
-    emitirEventoCRM(
-      'PRODUTO_PUBLICADO',
-      { ...buildProdutoPayload(grupo), atualizado: true },
-      { tenantId },
-    );
+    try {
+      emitirEventoCRM(
+        'PRODUTO_PUBLICADO',
+        { ...buildProdutoPayload(grupo), atualizado: true },
+        { tenantId },
+      );
+    } catch (e) {
+      console.error('[PRODUTO_PUBLICADO] falha ao construir payload', e);
+    }
   }
 
   return NextResponse.json(grupo);

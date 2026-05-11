@@ -27,8 +27,14 @@ export async function POST(req: NextRequest) {
   );
 
   // CRM: publish the product (full snapshot — price tree, dates, hotels,
-  // destinations) so it can be attached to a deal in the CRM.
-  emitirEventoCRM('PRODUTO_PUBLICADO', buildProdutoPayload(grupo), { tenantId });
+  // destinations) so it can be attached to a deal in the CRM. Wrapped in
+  // try/catch to avoid breaking the save when payload build fails on a
+  // partially-filled grupo (e.g. sem cambio, sem hoteis).
+  try {
+    emitirEventoCRM('PRODUTO_PUBLICADO', buildProdutoPayload(grupo), { tenantId });
+  } catch (e) {
+    console.error('[PRODUTO_PUBLICADO] falha ao construir payload', e);
+  }
 
   return NextResponse.json(grupo);
 }
