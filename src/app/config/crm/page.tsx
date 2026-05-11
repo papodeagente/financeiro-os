@@ -229,6 +229,24 @@ export default function CrmConfigPage() {
     setCleaning(false);
   };
 
+  const reprocessarVencimentos = async () => {
+    if (!confirm('Bumpar contas a receber/pagar PENDENTES com vencimento no passado para o futuro? Mantém a estrutura de parcelas, só atualiza a data. Idempotente — só toca o que está vencido.')) return;
+    setCleaning(true);
+    try {
+      const r = await fetch('/api/v1/crm/reprocessar-vencimentos', { method: 'POST' });
+      const j = await r.json();
+      if (j.error) {
+        alert('Erro: ' + j.error);
+      } else {
+        alert(`Total pendentes vencidas: ${j.total_pendentes_vencidas}\nReceber atualizadas: ${j.receber_atualizadas}\nPagar atualizadas: ${j.pagar_atualizadas}\nErros: ${j.erros}`);
+      }
+      await loadAll();
+    } catch (e) {
+      alert('Falha: ' + (e instanceof Error ? e.message : ''));
+    }
+    setCleaning(false);
+  };
+
   const cleanupZombies = async () => {
     if (!confirm('Apagar lancamentos antigos do CRM (gravados antes do fix de shape) e liberar reenvio? Acao reversivel apenas via reenvio do CRM.')) return;
     setCleaning(true);
@@ -548,6 +566,26 @@ export default function CrmConfigPage() {
             <button onClick={reprocessarVendas} disabled={cleaning}
               className="px-4 py-2 text-[var(--text-body-sm)] text-white bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50 shrink-0">
               {cleaning ? 'Processando...' : 'Reprocessar vendas'}
+            </button>
+          </div>
+        </div>
+
+        {/* Reprocessar vencimentos atrasados */}
+        <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] p-5 mb-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)]">Reprocessar vencimentos atrasados</p>
+              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mt-1 max-w-2xl">
+                Vendas legadas geraram contas a receber/pagar com data_vencimento
+                no passado (calculado a partir de data_venda antiga). O Fluxo
+                de Caixa Projetado filtra só vencimentos futuros, então ficam
+                invisíveis. Este botão bumpa as contas PENDENTES vencidas para
+                hoje + 30d × parcela. Idempotente — só toca o que está vencido.
+              </p>
+            </div>
+            <button onClick={reprocessarVencimentos} disabled={cleaning}
+              className="px-4 py-2 text-[var(--text-body-sm)] text-white bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50 shrink-0">
+              {cleaning ? 'Processando...' : 'Reprocessar vencimentos'}
             </button>
           </div>
         </div>

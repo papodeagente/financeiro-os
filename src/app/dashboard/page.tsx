@@ -92,11 +92,14 @@ function normalizeVenda(v: Partial<VendaCRM> & Record<string, unknown>): VendaCR
     (v.valor_total_custo as number | undefined)
     ?? (v.custo_total as number | undefined)
     ?? 0;
+  // markup_realizado = receita real da agência (comissão efetiva).
+  // Só aceita campos que representem comissão de verdade. NÃO faz fallback
+  // para rentabilidade/(valor−custo) — isso é margem bruta, não receita.
+  // Se CRM não enviar comissão, fica 0 (KPI "Margem Bruta" mostra o resto).
   const markup_realizado =
     (v.markup_realizado as number | undefined)
-    ?? (v.rentabilidade as number | undefined)
     ?? (v.comissao as number | undefined)
-    ?? Math.max(valor_total_venda - valor_total_custo, 0);
+    ?? 0;
 
   return {
     id: (v.id as string) ?? '',
@@ -220,11 +223,22 @@ export default function DashboardPage() {
     const ticketMedio = qtdVendas > 0 ? faturamento / qtdVendas : 0;
     const ticketMedioAnt = qtdVendasAnt > 0 ? faturamentoAnt / qtdVendasAnt : 0;
 
-    // Receita da agência = comissão + markup (soma dos produtos)
+    // Receita da agência = comissão REAL apenas (markup_realizado já filtra
+    // só comissões explícitas via normalizeVenda). Soma com comissoes por
+    // produto quando existirem.
     const calcReceita = (vs: VendaCRM[]) =>
       vs.reduce((s, v) => s + (v.markup_realizado || 0) + v.produtos.reduce((ps, p) => ps + (p.comissao_fornecedor || 0), 0), 0);
     const receita = calcReceita(vendasMes);
     const receitaAnt = calcReceita(vendasMesAnt);
+
+    // Margem Bruta = Faturamento - CMV. Representa quanto sobrou após
+    // pagar fornecedores, ANTES das despesas operacionais.
+    const calcMargemBruta = (vs: VendaCRM[]) =>
+      vs.reduce((s, v) => s + Math.max((v.valor_final || 0) - (v.valor_total_custo || 0), 0), 0);
+    const margemBruta = calcMargemBruta(vendasMes);
+    const margemBrutaAnt = calcMargemBruta(vendasMesAnt);
+    const margemBrutaPct = faturamento > 0 ? (margemBruta / faturamento) * 100 : 0;
+    const margemBrutaPctAnt = faturamentoAnt > 0 ? (margemBrutaAnt / faturamentoAnt) * 100 : 0;
 
     // Lucro e Margem — mesma lógica do DRE (receita bruta - total despesas)
     const calcDRELucro = (mes: string) => {
@@ -273,6 +287,7 @@ export default function DashboardPage() {
       ticketMedio, ticketMedioAnt, receita, receitaAnt,
       margem, margemAnt, cacValor, cacValorAnt,
       saldoCaixa, lucro, lucroAnt,
+      margemBruta, margemBrutaAnt, margemBrutaPct, margemBrutaPctAnt,
       receitaBrutaDRE: dreMes.receitaBruta,
       delta,
       vendasMes,
@@ -306,9 +321,17 @@ export default function DashboardPage() {
       icon: BarChart3, color: 'text-purple-400', bgColor: 'bg-purple-400/10',
     },
     {
+      label: 'Margem Bruta', valor: `${BRL(calc.margemBruta)} (${calc.margemBrutaPct.toFixed(1)}%)`, valorNum: calc.margemBruta,
+      delta: calc.margemBrutaPctAnt > 0 ? calc.margemBrutaPct - calc.margemBrutaPctAnt : null,
+      deltaLabel: 'pp vs anterior', meta: null, metaLabel: '',
+      icon: DollarSign, color: 'text-emerald-400', bgColor: 'bg-emerald-400/10',
+      link: '/financeiro-ag/dre',
+    },
+    {
       label: 'Receita (Agência)', valor: BRL(calc.receita), valorNum: calc.receita,
       delta: calc.receitaAnt > 0 ? calc.delta(calc.receita, calc.receitaAnt) : null,
-      deltaLabel: 'vs mes anterior', meta: null, metaLabel: '',
+      deltaLabel: calc.receita === 0 && calc.faturamento > 0 ? 'aguardando comissão do CRM' : 'vs mes anterior',
+      meta: null, metaLabel: '',
       icon: DollarSign, color: 'text-emerald-400', bgColor: 'bg-emerald-400/10',
       link: '/financeiro-ag/dre',
     },

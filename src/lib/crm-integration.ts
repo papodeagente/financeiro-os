@@ -992,7 +992,11 @@ export async function processarEventoCRM(
           valor_final: valorTotal,                  // alias valor_total
           valor_total_venda: valorTotal,
           valor_total_custo: custoTotal,            // alias custo_total
-          markup_realizado: comissaoTotal,          // margem bruta
+          // markup_realizado = receita líquida da agência (só comissão REAL).
+          // Se CRM não envia comissão explícita, fica 0. O KPI "Margem Bruta"
+          // (valor − custo) é calculado no dashboard a partir de
+          // valor_total_venda/valor_total_custo, então não perdemos a info.
+          markup_realizado: (comissao != null && comissao > 0) ? comissao : 0,
           desconto: 0,
 
           // ---- Arrays obrigatórios (telas fazem reduce/forEach) ----
@@ -1524,8 +1528,10 @@ export async function reprocessarVendasLegadas(tenantId: string): Promise<{
         const valorTotal = Number(data.valor_total) || Number(data.valor_final) || 0;
         const custoTotal = Number(data.custo_total) || Number(data.valor_total_custo) || 0;
         const comissao = data.comissao != null ? Number(data.comissao) : null;
-        const rentabilidade = Number(data.rentabilidade) || Math.max(valorTotal - custoTotal, 0);
-        const markup = comissao != null && comissao > 0 ? comissao : rentabilidade;
+        // markup_realizado = só comissão real reportada pelo CRM. Não cai para
+        // rentabilidade (margem bruta), senão "Receita Agência" fica inflada
+        // quando CRM ainda não modela comissão por venda.
+        const markup = comissao != null && comissao > 0 ? comissao : 0;
         const statusAtual = String(data.status ?? '');
         const novoStatus = statusAtual === 'vendido' || !statusAtual ? 'CONFIRMADO' : statusAtual;
 
@@ -1565,6 +1571,98 @@ export async function reprocessarVendasLegadas(tenantId: string): Promise<{
         result.erros++;
       }
     }
+    return result;
+  } catch {
+    return result;
+  }
+}
+
+// ──────────────────────────────────────────
+// reprocessarVencimentosAtrasados — fix contas com vencimento passado
+// --------------------------------------------------------------------
+// Vendas legadas geraram CR/CP com data_vencimento no passado (a partir
+// de `data_venda + 30d × parcela_numero`, e data_venda já estava atrás).
+// Como o Fluxo de Caixa Projetado filtra `data_vencimento >= hoje`,
+// essas contas ficam invisíveis e o gráfico mostra R$ 0.
+//
+// Estratégia: para cada conta PENDENTE com vencimento no passado,
+// mantém o gap entre parcelas (30d) mas usa `hoje + 30d × parcela_numero`
+// como nova base. Idempotente: só toca quem está vencido E pendente.
+// ──────────────────────────────────────────
+
+function addDaysISO(base: Date, days: number): string {
+  const d = new Date(base);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+export async function reprocessarVencimentosAtrasados(tenantId: string): Promise<{
+  receber_atualizadas: number;
+  pagar_atualizadas: number;
+  total_pendentes_vencidas: number;
+  erros: number;
+}> {
+  const result = { receber_atualizadas: 0, pagar_atualizadas: 0, total_pendentes_vencidas: 0, erros: 0 };
+  try {
+    if (!pool || !tenantId) return result;
+    await initDB();
+    const hoje = new Date().toISOString().slice(0, 10);
+    const hojeDate = new Date(hoje + 'T00:00:00');
+
+    // Contas a receber pendentes com vencimento passado
+    const { rows: crRows } = await pool.query(
+      `SELECT id, data FROM contas_receber
+        WHERE tenant_id = $1
+          AND (data->>'status') = 'PENDENTE'
+          AND (data->>'data_vencimento') < $2`,
+      [tenantId, hoje],
+    );
+    result.total_pendentes_vencidas += crRows.length;
+
+    for (const row of crRows) {
+      try {
+        const data = (row.data ?? {}) as Record<string, unknown>;
+        const parcelaNumero = Number(data.parcela_numero) || 1;
+        const novoVenc = addDaysISO(hojeDate, 30 * parcelaNumero);
+        const atualizado = { ...data, data_vencimento: novoVenc };
+        await pool.query(
+          `UPDATE contas_receber SET data = $1::jsonb, updated_at = NOW()
+            WHERE id = $2 AND tenant_id = $3`,
+          [JSON.stringify(atualizado), row.id, tenantId],
+        );
+        result.receber_atualizadas++;
+      } catch {
+        result.erros++;
+      }
+    }
+
+    // Contas a pagar pendentes com vencimento passado
+    const { rows: cpRows } = await pool.query(
+      `SELECT id, data FROM contas_pagar
+        WHERE tenant_id = $1
+          AND (data->>'status') = 'PENDENTE'
+          AND (data->>'data_vencimento') < $2`,
+      [tenantId, hoje],
+    );
+    result.total_pendentes_vencidas += cpRows.length;
+
+    for (const row of cpRows) {
+      try {
+        const data = (row.data ?? {}) as Record<string, unknown>;
+        const parcelaNumero = Number(data.parcela_numero) || 1;
+        const novoVenc = addDaysISO(hojeDate, 30 * parcelaNumero);
+        const atualizado = { ...data, data_vencimento: novoVenc };
+        await pool.query(
+          `UPDATE contas_pagar SET data = $1::jsonb, updated_at = NOW()
+            WHERE id = $2 AND tenant_id = $3`,
+          [JSON.stringify(atualizado), row.id, tenantId],
+        );
+        result.pagar_atualizadas++;
+      } catch {
+        result.erros++;
+      }
+    }
+
     return result;
   } catch {
     return result;

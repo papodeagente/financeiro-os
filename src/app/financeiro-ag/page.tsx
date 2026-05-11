@@ -8,7 +8,7 @@ import { CrmStatusBadge } from '@/components/CrmStatusBadge';
 import { KPIGridSkeleton } from '@/components/skeletons';
 import { formatBRL } from '@/lib/utils';
 import { calcLimiteUsado } from '@/lib/cartoes-utils';
-import type { CartaoCorporativo, ContaPagar } from '@/lib/crm-types';
+import type { CartaoCorporativo, ContaPagar, ContaReceber } from '@/lib/crm-types';
 import {
   BarChart3, FileSpreadsheet, Receipt, CreditCard,
   ArrowRightLeft, BookOpen, Landmark, Package,
@@ -56,14 +56,13 @@ export default function FinanceiroAgHubPage() {
           fetch('/api/cartoes-corp').then(r => r.json()).catch(() => []),
         ]);
 
-        const receber = receberRes || [];
-        const pagar = pagarRes || [];
+        const receber: ContaReceber[] = Array.isArray(receberRes) ? receberRes : [];
+        const pagar: ContaPagar[] = Array.isArray(pagarRes) ? pagarRes : [];
         const cartoes: CartaoCorporativo[] = Array.isArray(cartoesRes) ? cartoesRes : [];
-        const contasPagar: ContaPagar[] = Array.isArray(pagar) ? pagar : [];
 
         if (cartoes.length > 0) {
           const limite = cartoes.reduce((s, c) => s + (c.limite_total || 0), 0);
-          const usado = cartoes.reduce((s, c) => s + calcLimiteUsado(c.id, contasPagar), 0);
+          const usado = cartoes.reduce((s, c) => s + calcLimiteUsado(c.id, pagar), 0);
           const pct = limite > 0 ? (usado / limite) * 100 : 0;
           setCartoesKpi({ limite, usado, pct, count: cartoes.filter(c => c.ativo).length });
         }
@@ -71,12 +70,12 @@ export default function FinanceiroAgHubPage() {
         const mesAtual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
         const aReceberMes = receber
-          .filter((r: Record<string, unknown>) => r.status === 'pendente' && typeof r.vencimento === 'string' && (r.vencimento as string).startsWith(mesAtual))
-          .reduce((s: number, r: Record<string, unknown>) => s + ((r.valor as number) || 0), 0);
+          .filter(r => r.status === 'PENDENTE' && r.data_vencimento?.startsWith(mesAtual))
+          .reduce((s, r) => s + (r.valor_final || 0), 0);
 
         const aPagarMes = pagar
-          .filter((r: Record<string, unknown>) => r.status === 'pendente' && typeof r.vencimento === 'string' && (r.vencimento as string).startsWith(mesAtual))
-          .reduce((s: number, r: Record<string, unknown>) => s + ((r.valor_custo as number) || (r.valor as number) || 0), 0);
+          .filter(p => p.status === 'PENDENTE' && p.data_vencimento?.startsWith(mesAtual))
+          .reduce((s, p) => s + (p.valor_final || 0), 0);
 
         setKpis({
           saldo: 0,
@@ -85,24 +84,25 @@ export default function FinanceiroAgHubPage() {
           resultado: aReceberMes - aPagarMes,
         });
 
-        // Build recent items
-        const items: Array<{ descricao: string; valor: number; tipo: string; data: string; origem: string }> = [];
-        receber.slice(0, 3).forEach((r: Record<string, unknown>) => {
+        // Últimas movimentações: ordena por data_emissao desc, junta receber + pagar
+        type Mov = { descricao: string; valor: number; tipo: 'receber' | 'pagar'; data: string; origem: string };
+        const items: Mov[] = [];
+        receber.slice().sort((a, b) => (b.data_emissao || '').localeCompare(a.data_emissao || '')).slice(0, 3).forEach(r => {
           items.push({
-            descricao: `Receber: ${r.cliente_id || 'N/A'}`,
-            valor: (r.valor as number) || 0,
+            descricao: r.descricao || r.cliente_nome || 'Conta a receber',
+            valor: r.valor_final || 0,
             tipo: 'receber',
-            data: (r.vencimento as string) || '',
-            origem: (r.origem as string) || 'Manual',
+            data: r.data_vencimento || '',
+            origem: (r.auto_gerado ? 'crm' : 'Manual'),
           });
         });
-        pagar.slice(0, 2).forEach((r: Record<string, unknown>) => {
+        pagar.slice().sort((a, b) => (b.data_emissao || '').localeCompare(a.data_emissao || '')).slice(0, 2).forEach(p => {
           items.push({
-            descricao: `Pagar: ${r.fornecedor_id || 'N/A'}`,
-            valor: (r.valor_custo as number) || (r.valor as number) || 0,
+            descricao: p.descricao || p.fornecedor_nome || 'Conta a pagar',
+            valor: p.valor_final || 0,
             tipo: 'pagar',
-            data: (r.vencimento as string) || '',
-            origem: (r.origem as string) || 'Manual',
+            data: p.data_vencimento || '',
+            origem: (p.auto_gerado ? 'crm' : 'Manual'),
           });
         });
         setUltimos(items);
