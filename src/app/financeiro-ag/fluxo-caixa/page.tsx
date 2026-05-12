@@ -101,104 +101,117 @@ export default function FluxoCaixaPage() {
     [contasBancarias, contasReceber, contasPagar]
   );
 
+  // Data EFETIVA do movimento: para RECEBIDO/PAGO usa data_recebimento/
+  // data_pagamento (quando houve de fato a entrada/saída). Para PENDENTE
+  // ou ATRASADO usa data_vencimento (quando deveria ocorrer).
+  const dataEfetivaCR = (cr: ContaReceber): string => {
+    if (cr.status === 'RECEBIDO' && cr.data_recebimento) return cr.data_recebimento;
+    return cr.data_vencimento || '';
+  };
+  const dataEfetivaCP = (cp: ContaPagar): string => {
+    if (cp.status === 'PAGO' && cp.data_pagamento) return cp.data_pagamento;
+    return cp.data_vencimento || '';
+  };
+  const valorCR = (cr: ContaReceber) =>
+    cr.status === 'RECEBIDO' ? (cr.valor_recebido || cr.valor_final || 0) : (cr.valor_final || 0);
+  const valorCP = (cp: ContaPagar) =>
+    cp.status === 'PAGO' ? (cp.valor_pago || cp.valor_final || 0) : (cp.valor_final || 0);
+
   const fluxo = useMemo(() => {
     const today = new Date();
     const lines: FluxoLine[] = [];
+
+    // Helper para construir uma linha do período [startStr, endStr] inclusive
+    // (formato 'YYYY-MM' para mensal e 'YYYY-MM-DD' para semanal).
+    const buildLine = (periodoId: string, label: string, isInPeriod: (date: string) => boolean): FluxoLine => {
+      const entradas = contasReceber.filter(cr =>
+        cr.status !== 'CANCELADO' && isInPeriod(dataEfetivaCR(cr))
+      );
+      const saidas = contasPagar.filter(cp =>
+        cp.status !== 'CANCELADO' && isInPeriod(dataEfetivaCP(cp))
+      );
+      const totalEntradas = entradas.reduce((s, cr) => s + valorCR(cr), 0);
+      const totalSaidas = saidas.reduce((s, cp) => s + valorCP(cp), 0);
+      return {
+        periodo: periodoId,
+        label,
+        entradas: totalEntradas,
+        saidas: totalSaidas,
+        saldo: totalEntradas - totalSaidas,
+        saldoAcumulado: 0, // preenchido depois
+        detalhesEntradas: entradas.map(cr => ({
+          desc: `${cr.cliente_nome || '—'} — ${cr.descricao || ''}`,
+          valor: valorCR(cr),
+          data: dataEfetivaCR(cr),
+        })),
+        detalhesSaidas: saidas.map(cp => ({
+          desc: `${cp.fornecedor_nome || '—'} — ${cp.descricao || ''}`,
+          valor: valorCP(cp),
+          data: dataEfetivaCP(cp),
+        })),
+      };
+    };
+
+    // Linha base = saldo_inicial + movimentos ANTERIORES ao primeiro mês.
+    // Garante que acumulado fim do mês = saldo real naquele momento.
+    let primeiroPeriodoStart: string;
+    if (periodo === 'MENSAL') {
+      primeiroPeriodoStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+    } else {
+      const ws = new Date(today);
+      ws.setDate(ws.getDate() - ws.getDay());
+      primeiroPeriodoStart = ws.toISOString().split('T')[0];
+    }
+    let linhaBase = contasBancarias.reduce((s, c) => s + (c.saldo_inicial || 0), 0);
+    for (const cr of contasReceber) {
+      if (cr.status === 'CANCELADO') continue;
+      const d = dataEfetivaCR(cr);
+      if (d && d < primeiroPeriodoStart) linhaBase += valorCR(cr);
+    }
+    for (const cp of contasPagar) {
+      if (cp.status === 'CANCELADO') continue;
+      const d = dataEfetivaCP(cp);
+      if (d && d < primeiroPeriodoStart) linhaBase -= valorCP(cp);
+    }
 
     if (periodo === 'MENSAL') {
       for (let i = 0; i < meses; i++) {
         const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
         const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        const label = getMonthLabel(ym);
-
-        const entradas = contasReceber.filter(cr =>
-          cr.data_vencimento?.substring(0, 7) === ym && cr.status !== 'CANCELADO' && cr.status !== 'RECEBIDO'
-        );
-        const saidas = contasPagar.filter(cp =>
-          cp.data_vencimento?.substring(0, 7) === ym && cp.status !== 'CANCELADO' && cp.status !== 'PAGO'
-        );
-
-        const totalEntradas = entradas.reduce((s, cr) => s + cr.valor_final, 0);
-        const totalSaidas = saidas.reduce((s, cp) => s + cp.valor_final, 0);
-        const saldo = totalEntradas - totalSaidas;
-
-        const prevAcum = lines.length > 0 ? lines[lines.length - 1].saldoAcumulado : saldoAtual;
-
-        lines.push({
-          periodo: ym,
-          label,
-          entradas: totalEntradas,
-          saidas: totalSaidas,
-          saldo,
-          saldoAcumulado: prevAcum + saldo,
-          detalhesEntradas: entradas.map(cr => ({
-            desc: `${cr.cliente_nome} — ${cr.descricao}`,
-            valor: cr.valor_final,
-            data: cr.data_vencimento,
-          })),
-          detalhesSaidas: saidas.map(cp => ({
-            desc: `${cp.fornecedor_nome} — ${cp.descricao}`,
-            valor: cp.valor_final,
-            data: cp.data_vencimento,
-          })),
-        });
+        const line = buildLine(ym, getMonthLabel(ym), (date) => date.substring(0, 7) === ym);
+        const prevAcum = lines.length > 0 ? lines[lines.length - 1].saldoAcumulado : linhaBase;
+        line.saldoAcumulado = prevAcum + line.saldo;
+        lines.push(line);
       }
     } else {
-      // Weekly
       const weeks = meses * 4;
       for (let i = 0; i < weeks; i++) {
-        const weekStart = new Date(today);
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay() + i * 7);
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekEnd.getDate() + 6);
-
-        const startStr = weekStart.toISOString().split('T')[0];
-        const endStr = weekEnd.toISOString().split('T')[0];
-        const label = getWeekRange(weekStart);
-
-        const entradas = contasReceber.filter(cr =>
-          cr.data_vencimento >= startStr && cr.data_vencimento <= endStr &&
-          cr.status !== 'CANCELADO' && cr.status !== 'RECEBIDO'
-        );
-        const saidas = contasPagar.filter(cp =>
-          cp.data_vencimento >= startStr && cp.data_vencimento <= endStr &&
-          cp.status !== 'CANCELADO' && cp.status !== 'PAGO'
-        );
-
-        const totalEntradas = entradas.reduce((s, cr) => s + cr.valor_final, 0);
-        const totalSaidas = saidas.reduce((s, cp) => s + cp.valor_final, 0);
-        const saldo = totalEntradas - totalSaidas;
-
-        const prevAcum = lines.length > 0 ? lines[lines.length - 1].saldoAcumulado : saldoAtual;
-
-        lines.push({
-          periodo: startStr,
-          label,
-          entradas: totalEntradas,
-          saidas: totalSaidas,
-          saldo,
-          saldoAcumulado: prevAcum + saldo,
-          detalhesEntradas: entradas.map(cr => ({
-            desc: `${cr.cliente_nome} — ${cr.descricao}`,
-            valor: cr.valor_final,
-            data: cr.data_vencimento,
-          })),
-          detalhesSaidas: saidas.map(cp => ({
-            desc: `${cp.fornecedor_nome} — ${cp.descricao}`,
-            valor: cp.valor_final,
-            data: cp.data_vencimento,
-          })),
-        });
+        const ws = new Date(today);
+        ws.setDate(ws.getDate() - ws.getDay() + i * 7);
+        const we = new Date(ws);
+        we.setDate(we.getDate() + 6);
+        const startStr = ws.toISOString().split('T')[0];
+        const endStr = we.toISOString().split('T')[0];
+        const line = buildLine(startStr, getWeekRange(ws), (date) => date >= startStr && date <= endStr);
+        const prevAcum = lines.length > 0 ? lines[lines.length - 1].saldoAcumulado : linhaBase;
+        line.saldoAcumulado = prevAcum + line.saldo;
+        lines.push(line);
       }
     }
 
     return lines;
-  }, [contasReceber, contasPagar, saldoAtual, periodo, meses]);
+  }, [contasReceber, contasPagar, contasBancarias, periodo, meses]);
 
+  // KPIs "Previstas" = só PENDENTE (não realizado), ANY date. Diferente
+  // dos totais da tabela (que somam realizado + pendente).
   const totals = useMemo(() => ({
-    entradas: fluxo.reduce((s, f) => s + f.entradas, 0),
-    saidas: fluxo.reduce((s, f) => s + f.saidas, 0),
-  }), [fluxo]);
+    entradas: contasReceber
+      .filter(cr => cr.status === 'PENDENTE' || cr.status === 'ATRASADO' || cr.status === 'PARCIAL')
+      .reduce((s, cr) => s + (cr.valor_final || 0), 0),
+    saidas: contasPagar
+      .filter(cp => cp.status === 'PENDENTE' || cp.status === 'VENCIDO' || cp.status === 'PARCIAL')
+      .reduce((s, cp) => s + (cp.valor_final || 0), 0),
+  }), [contasReceber, contasPagar]);
 
   // Visual bar scale
   const maxVal = useMemo(() =>
