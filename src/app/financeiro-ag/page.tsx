@@ -1,20 +1,25 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { PageShell } from '@/components/PageShell';
 import { PageHeader } from '@/components/PageHeader';
 import { CrmStatusBadge } from '@/components/CrmStatusBadge';
 import { KPIGridSkeleton } from '@/components/skeletons';
+import { OnboardingChecklist, type OnboardingStep } from '@/components/financeiro/OnboardingChecklist';
+import { MetricExplainer } from '@/components/financeiro/MetricExplainer';
 import { formatBRL } from '@/lib/utils';
 import { calcLimiteUsado } from '@/lib/cartoes-utils';
 import { useModoIniciante } from '@/lib/modo-iniciante';
 import { calcularSaldoBancario } from '@/lib/saldo-bancario';
-import type { CartaoCorporativo, ContaPagar, ContaReceber, ContaBancaria, VendaCRM } from '@/lib/crm-types';
+import { toast } from '@/lib/toast';
+import type { CartaoCorporativo, ContaPagar, ContaReceber, ContaBancaria, VendaCRM, PlanoContas } from '@/lib/crm-types';
 import {
   BarChart3, FileSpreadsheet, Receipt, CreditCard,
   ArrowRightLeft, BookOpen, Landmark, Package,
-  ListOrdered, FileText,
+  ListOrdered, FileText, RefreshCw, ChevronDown, ChevronUp,
+  Plus, TrendingDown,
 } from 'lucide-react';
 
 interface KPIs {
@@ -60,16 +65,24 @@ export default function FinanceiroAgHubPage() {
   const [ultimos, setUltimos] = useState<Array<{ descricao: string; valor: number; tipo: string; data: string; origem: string }>>([]);
   const [modoIniciante] = useModoIniciante();
   const SHORTCUTS = modoIniciante ? SHORTCUTS_BASIC : [...SHORTCUTS_BASIC, ...SHORTCUTS_ADVANCED];
+  const router = useRouter();
+  // Estado para onboarding checklist
+  const [onboardingSteps, setOnboardingSteps] = useState<OnboardingStep[]>([]);
+  // Estado para "Ver mais indicadores" (linha 2 expandível)
+  const [expandirIndicadores, setExpandirIndicadores] = useState(false);
+  // Frescor dos dados — mostra "Atualizado há X" abaixo dos KPIs
+  const [ultimaAtualizacao, setUltimaAtualizacao] = useState<Date>(new Date());
+  const [recarregando, setRecarregando] = useState(false);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const [receberRes, pagarRes, cartoesRes, contasBancariasRes, vendasRes] = await Promise.all([
+  const load = useCallback(async () => {
+    try {
+        const [receberRes, pagarRes, cartoesRes, contasBancariasRes, vendasRes, planoContasRes] = await Promise.all([
           fetch('/api/contas-receber').then(r => r.json()),
           fetch('/api/contas-pagar').then(r => r.json()),
           fetch('/api/cartoes-corp').then(r => r.json()).catch(() => []),
           fetch('/api/contas-bancarias').then(r => r.json()).catch(() => []),
           fetch('/api/vendas-crm').then(r => r.json()).catch(() => []),
+          fetch('/api/plano-contas').then(r => r.json()).catch(() => []),
         ]);
 
         const receber: ContaReceber[] = Array.isArray(receberRes) ? receberRes : [];
@@ -158,11 +171,57 @@ export default function FinanceiroAgHubPage() {
           });
         });
         setUltimos(items);
+
+        // Detecta passos do onboarding com base nos dados carregados
+        const plano: PlanoContas[] = Array.isArray(planoContasRes) ? planoContasRes : [];
+        const temCaixa = contasBancarias.length > 0;
+        const temPlanoContas = plano.length > 0;
+        const temDespesa = pagar.length > 0;
+        const temPagamento = pagar.some(p => p.status === 'PAGO');
+        setOnboardingSteps([
+          {
+            key: 'caixa',
+            label: 'Conta bancária cadastrada',
+            description: temCaixa ? 'Pronto · sua Caixa Geral está ativa.' : 'Toda baixa de pagamento/recebimento entra ou sai daqui.',
+            done: temCaixa,
+            href: '/financeiro-ag/contas-bancarias',
+          },
+          {
+            key: 'plano-contas',
+            label: 'Plano de contas configurado',
+            description: temPlanoContas ? `${plano.length} categorias prontas.` : 'Carregue o plano padrão (CNAE 7911-2 — Agências de Viagens) em 1 clique.',
+            done: temPlanoContas,
+            href: '/financeiro-ag/plano-contas',
+          },
+          {
+            key: 'primeira-despesa',
+            label: 'Primeira despesa lançada',
+            description: temDespesa ? 'Tudo certo.' : 'Cadastre uma despesa para começar a controlar o caixa.',
+            done: temDespesa,
+            href: '/financeiro-ag/pagar',
+          },
+          {
+            key: 'primeiro-pagamento',
+            label: 'Primeiro pagamento confirmado',
+            description: temPagamento ? 'Você já marcou pagamentos como concluídos.' : 'Marque uma despesa como paga para atualizar o saldo bancário.',
+            done: temPagamento,
+            href: '/financeiro-ag/pagar',
+          },
+        ]);
+
+        setUltimaAtualizacao(new Date());
       } catch { /* silent */ }
       setLoading(false);
-    }
-    load();
-  }, []);
+    }, []);
+
+    useEffect(() => { load(); }, [load]);
+
+    const recarregar = async () => {
+      setRecarregando(true);
+      await load();
+      setRecarregando(false);
+      toast.success('Dados atualizados');
+    };
 
   if (loading) return (
     <PageShell header={<PageHeader title="Financeiro" crmBadge />}>
@@ -173,16 +232,42 @@ export default function FinanceiroAgHubPage() {
   return (
     <PageShell header={<PageHeader title="Financeiro" crmBadge />}>
 
-      {/* KPI Cards — totais all-time (pendente + realizado) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+      {/* Onboarding checklist — esconde quando dispensado ou 4/4 completo */}
+      {onboardingSteps.length > 0 && <OnboardingChecklist steps={onboardingSteps} />}
+
+      {/* KPI Cards — 4 essenciais. Mais indicadores em "Ver mais" expandível */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-2">
         {[
-          { label: 'Saldo bancário', value: kpis?.saldo || 0, hint: 'Somatório das contas' },
-          { label: 'A receber (pendente)', value: kpis?.a_receber || 0, hint: 'Total ainda não recebido' },
-          { label: 'A pagar (pendente)', value: kpis?.a_pagar || 0, hint: 'Total ainda não pago' },
-          { label: 'Resultado projetado', value: kpis?.resultado_projetado || 0, hint: 'A receber − a pagar' },
+          {
+            label: 'Saldo bancário',
+            value: kpis?.saldo || 0,
+            hint: 'Somatório das contas',
+            explainer: 'Total acumulado nas suas contas bancárias. Atualiza automaticamente quando você confirma um recebimento ou pagamento.',
+          },
+          {
+            label: 'A receber (pendente)',
+            value: kpis?.a_receber || 0,
+            hint: 'Total ainda não recebido',
+            explainer: 'Soma de todas as contas a receber com status PENDENTE, independente do mês de vencimento.',
+          },
+          {
+            label: 'A pagar (pendente)',
+            value: kpis?.a_pagar || 0,
+            hint: 'Total ainda não pago',
+            explainer: 'Soma de todas as contas a pagar com status PENDENTE, independente do mês de vencimento.',
+          },
+          {
+            label: 'Lucro do mês',
+            value: kpis?.resultado_realizado || 0,
+            hint: 'Recebido − pago neste mês',
+            explainer: 'Resultado realizado: tudo que entrou no caixa menos tudo que saiu. Não inclui valores pendentes.',
+          },
         ].map((kpi, i) => (
           <div key={i} className="bento-card">
-            <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide mb-2">{kpi.label}</p>
+            <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide mb-2 flex items-center">
+              {kpi.label}
+              <MetricExplainer title={kpi.label} text={kpi.explainer} />
+            </p>
             <p className={`text-2xl font-bold ${kpi.value >= 0 ? 'text-[var(--t-text)]' : 'text-[var(--crm-err)]'}`}>
               {formatBRL(kpi.value)}
             </p>
@@ -191,44 +276,119 @@ export default function FinanceiroAgHubPage() {
         ))}
       </div>
 
-      {/* Receita gerada — destaque (comissão das vendas, independente de baixa) */}
-      <div className="mb-4 rounded-[var(--t-card-radius)] border border-[var(--t-green)]/30 bg-gradient-to-br from-[var(--t-green)]/5 to-transparent p-5">
-        <div className="flex items-end justify-between gap-4 flex-wrap">
-          <div>
-            <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide mb-2">
-              Receita gerada (comissão)
-            </p>
-            <p className="text-3xl font-bold text-[var(--t-green)]">{formatBRL(kpis?.receita_gerada || 0)}</p>
-            <p className="text-[11px] text-[var(--t-text-muted)] mt-1">
-              Margem bruta de todas as vendas, antes de descontar pagamentos
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide mb-1">
-              Margem do período
-            </p>
-            <p className={`text-2xl font-bold ${(kpis?.margem_pct || 0) >= 15 ? 'text-[var(--crm-ok)]' : (kpis?.margem_pct || 0) >= 8 ? 'text-[var(--t-amber)]' : 'text-[var(--crm-err)]'}`}>
-              {(kpis?.margem_pct || 0).toFixed(1)}%
-            </p>
-            <p className="text-[10px] text-[var(--t-text-muted)] mt-0.5">
-              sobre {formatBRL(kpis?.faturamento_vendas || 0)} faturado
-            </p>
-          </div>
-        </div>
+      {/* Indicador de frescor + "Ver mais indicadores" */}
+      <div className="flex items-center justify-between mb-6 px-1">
+        <p className="text-[11px] text-[var(--t-text-muted)] flex items-center gap-2">
+          <span>Atualizado às {ultimaAtualizacao.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+          <button
+            onClick={recarregar}
+            disabled={recarregando}
+            className="inline-flex items-center gap-1 hover:text-[var(--t-text)] transition-colors disabled:opacity-50"
+            title="Recarregar dados"
+          >
+            <RefreshCw className={`w-3 h-3 ${recarregando ? 'animate-spin' : ''}`} />
+            <span>{recarregando ? 'Atualizando…' : 'Recarregar'}</span>
+          </button>
+        </p>
+        <button
+          onClick={() => setExpandirIndicadores(v => !v)}
+          className="text-[11px] text-[var(--t-text-muted)] hover:text-[var(--t-text)] transition-colors inline-flex items-center gap-1"
+        >
+          {expandirIndicadores ? (
+            <><ChevronUp className="w-3 h-3" /> Ocultar indicadores avançados</>
+          ) : (
+            <><ChevronDown className="w-3 h-3" /> Ver mais indicadores</>
+          )}
+        </button>
       </div>
 
-      {/* Segunda linha — Realizado */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-        {[
-          { label: 'Faturamento', value: kpis?.recebido || 0, color: 'text-[var(--crm-ok)]' },
-          { label: 'Despesas', value: kpis?.pago || 0, color: 'text-[var(--crm-err)]' },
-          { label: 'Lucro', value: kpis?.resultado_realizado || 0, color: (kpis?.resultado_realizado || 0) >= 0 ? 'text-[var(--crm-ok)]' : 'text-[var(--crm-err)]' },
-        ].map((kpi, i) => (
-          <div key={i} className="bento-card">
-            <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide mb-2">{kpi.label}</p>
-            <p className={`text-2xl font-bold ${kpi.color}`}>{formatBRL(kpi.value)}</p>
+      {/* Indicadores avançados — só quando expandido */}
+      {expandirIndicadores && (
+        <>
+          <div className="mb-4 rounded-[var(--t-card-radius)] border border-[var(--t-green)]/30 bg-gradient-to-br from-[var(--t-green)]/5 to-transparent p-5">
+            <div className="flex items-end justify-between gap-4 flex-wrap">
+              <div>
+                <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide mb-2 flex items-center">
+                  Receita gerada (comissão)
+                  <MetricExplainer
+                    title="Receita da agência (CNAE 7911-2)"
+                    text={'É o que sua agência ganha de fato — a margem das vendas após pagar fornecedores.\n\nDiferente de "Faturamento", que é o valor TOTAL transacionado (passagens, hotéis), e do qual a agência fica com apenas a comissão.'}
+                  />
+                </p>
+                <p className="text-3xl font-bold text-[var(--t-green)]">{formatBRL(kpis?.receita_gerada || 0)}</p>
+                <p className="text-[11px] text-[var(--t-text-muted)] mt-1">
+                  Margem bruta de todas as vendas, antes de descontar pagamentos
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide mb-1">
+                  Margem do período
+                </p>
+                <p className={`text-2xl font-bold ${(kpis?.margem_pct || 0) >= 15 ? 'text-[var(--crm-ok)]' : (kpis?.margem_pct || 0) >= 8 ? 'text-[var(--t-amber)]' : 'text-[var(--crm-err)]'}`}>
+                  {(kpis?.margem_pct || 0).toFixed(1)}%
+                </p>
+                <p className="text-[10px] text-[var(--t-text-muted)] mt-0.5">
+                  sobre {formatBRL(kpis?.faturamento_vendas || 0)} faturado
+                </p>
+              </div>
+            </div>
           </div>
-        ))}
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="bento-card">
+              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide mb-2 flex items-center">
+                Resultado projetado
+                <MetricExplainer text="Quanto vai sobrar quando todas as contas pendentes forem liquidadas: a receber − a pagar." />
+              </p>
+              <p className={`text-2xl font-bold ${(kpis?.resultado_projetado || 0) >= 0 ? 'text-[var(--t-text)]' : 'text-[var(--crm-err)]'}`}>
+                {formatBRL(kpis?.resultado_projetado || 0)}
+              </p>
+            </div>
+            <div className="bento-card">
+              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide mb-2 flex items-center">
+                Faturamento
+                <MetricExplainer text="Total recebido das vendas confirmadas (status RECEBIDO)." />
+              </p>
+              <p className="text-2xl font-bold text-[var(--crm-ok)]">{formatBRL(kpis?.recebido || 0)}</p>
+            </div>
+            <div className="bento-card">
+              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide mb-2 flex items-center">
+                Despesas
+                <MetricExplainer text="Total já pago (status PAGO) — saídas reais do caixa." />
+              </p>
+              <p className="text-2xl font-bold text-[var(--crm-err)]">{formatBRL(kpis?.pago || 0)}</p>
+            </div>
+            <div className="bento-card">
+              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide mb-2 flex items-center">
+                Faturamento de vendas
+                <MetricExplainer text="Valor total transacionado em vendas (incluindo pendentes). Volume operacional, NÃO é receita líquida." />
+              </p>
+              <p className="text-2xl font-bold text-[var(--t-text)]">{formatBRL(kpis?.faturamento_vendas || 0)}</p>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Quick Actions Bar — 3 atalhos de 1 clique pras ações mais usadas */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+        <button
+          onClick={() => router.push('/financeiro-ag/pagar')}
+          className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[var(--crm-err)]/10 border border-[var(--crm-err)]/30 hover:bg-[var(--crm-err)]/15 text-[var(--crm-err)] font-medium transition-colors"
+        >
+          <Plus className="w-4 h-4" /> Nova despesa
+        </button>
+        <button
+          onClick={() => router.push('/financeiro-ag/receber')}
+          className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[var(--crm-ok)]/10 border border-[var(--crm-ok)]/30 hover:bg-[var(--crm-ok)]/15 text-[var(--crm-ok)] font-medium transition-colors"
+        >
+          <Plus className="w-4 h-4" /> Novo recebimento
+        </button>
+        <button
+          onClick={() => router.push('/financeiro-ag/fluxo-caixa')}
+          className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[var(--t-surface)] border border-[var(--t-border)] hover:bg-[var(--t-surface-hover)] text-[var(--t-text)] font-medium transition-colors"
+        >
+          <TrendingDown className="w-4 h-4" /> Ver fluxo de caixa
+        </button>
       </div>
 
       {/* Cartões KPI */}
@@ -287,7 +447,15 @@ export default function FinanceiroAgHubPage() {
           <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-3">Últimas movimentações</h2>
           <div className="rounded-[20px] shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] divide-y divide-[var(--t-border)]">
             {ultimos.length === 0 ? (
-              <p className="px-4 py-6 text-center text-[var(--text-body-sm)] text-[var(--t-text-muted)]">Nenhuma movimentacao</p>
+              <div className="px-4 py-8 text-center">
+                <Receipt className="w-8 h-8 text-[var(--t-text-muted)] mx-auto mb-2 opacity-40" />
+                <p className="text-[var(--text-body-sm)] text-[var(--t-text)] font-medium mb-1">Nada por aqui ainda</p>
+                <p className="text-[11px] text-[var(--t-text-muted)] mb-3">Comece lançando uma despesa ou recebimento</p>
+                <div className="flex justify-center gap-2">
+                  <button onClick={() => router.push('/financeiro-ag/pagar')} className="text-xs px-3 py-1.5 rounded-lg border border-[var(--t-border)] hover:bg-[var(--t-surface-hover)] text-[var(--t-text)] transition-colors">+ Despesa</button>
+                  <button onClick={() => router.push('/financeiro-ag/receber')} className="text-xs px-3 py-1.5 rounded-lg border border-[var(--t-border)] hover:bg-[var(--t-surface-hover)] text-[var(--t-text)] transition-colors">+ Recebimento</button>
+                </div>
+              </div>
             ) : ultimos.map((item, i) => (
               <div key={i} className="flex items-center justify-between px-4 py-3">
                 <div className="flex items-center gap-3">

@@ -11,6 +11,8 @@ import {
   Plus, X, Check, Trash2, TrendingDown, Clock, AlertCircle, CreditCard,
   Copy, Target, Calendar, Search,
 } from 'lucide-react';
+import { toast } from '@/lib/toast';
+import { MetricExplainer } from '@/components/financeiro/MetricExplainer';
 import { PageShell } from '@/components/PageShell';
 import { PageHeader } from '@/components/PageHeader';
 import { DataTable, DataTableColumn } from '@/components/ui/data-table';
@@ -178,7 +180,11 @@ export default function ContasPagarPage() {
   }
 
   async function handleSave() {
-    if (!form.fornecedor_nome || !form.descricao || !form.data_vencimento || form.valor_original <= 0) return;
+    // Validações com feedback específico em vez de return silencioso
+    if (!form.fornecedor_nome.trim()) { toast.error('Informe o fornecedor'); return; }
+    if (!form.descricao.trim()) { toast.error('Informe uma descrição'); return; }
+    if (!form.data_vencimento) { toast.error('Informe a data de vencimento'); return; }
+    if (form.valor_original <= 0) { toast.error('Valor deve ser maior que zero'); return; }
     const valorBrl = form.valor_original * form.cambio;
     const cartaoIdFinal = form.forma_pagamento === 'CARTAO_CORP' ? (form.cartao_id || null) : null;
 
@@ -195,6 +201,7 @@ export default function ContasPagarPage() {
       await updateEntity('contas-pagar', updated);
       setShowForm(false);
       setEditId(null);
+      toast.success('Despesa atualizada');
       load();
       return;
     }
@@ -228,23 +235,54 @@ export default function ContasPagarPage() {
 
     setShowForm(false);
     setEditId(null);
+    if (total > 1) {
+      const primeiroVenc = form.data_vencimento;
+      const ultimoVenc = avancarData(form.data_vencimento, form.recorrencia_periodo, total - 1);
+      toast.success(`${total} parcelas criadas`, `Vencimentos de ${primeiroVenc.split('-').reverse().join('/')} a ${ultimoVenc.split('-').reverse().join('/')}`);
+    } else {
+      toast.success('Despesa criada', `${form.fornecedor_nome} · ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(form.valor_original)}`);
+    }
     load();
   }
 
-  async function handlePagar(item: ContaPagar) {
+  // Estado do modal de confirmação de pagamento
+  const [pagarModal, setPagarModal] = useState<{
+    item: ContaPagar;
+    dataPagamento: string;
+    valorPago: number;
+    observacao: string;
+  } | null>(null);
+
+  function abrirModalPagar(item: ContaPagar) {
+    setPagarModal({
+      item,
+      dataPagamento: new Date().toISOString().split('T')[0],
+      valorPago: item.valor_final,
+      observacao: '',
+    });
+  }
+
+  async function confirmarPagamento() {
+    if (!pagarModal) return;
+    const { item, dataPagamento, valorPago, observacao } = pagarModal;
     const updated: ContaPagar = {
       ...item,
       status: 'PAGO',
-      data_pagamento: new Date().toISOString().split('T')[0],
-      valor_pago: item.valor_final,
+      data_pagamento: dataPagamento,
+      valor_pago: valorPago,
+      observacoes: observacao ? `${item.observacoes ? item.observacoes + ' · ' : ''}${observacao}` : item.observacoes,
     };
     await updateEntity('contas-pagar', updated);
+    setPagarModal(null);
+    toast.success('Pagamento confirmado', `${item.fornecedor_nome} · ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorPago)}`);
     load();
   }
 
   async function handleDelete(id: string) {
     if (!confirm('Confirmar exclusão?')) return;
+    const item = items.find(i => i.id === id);
     await deleteEntity('contas-pagar', id);
+    toast.success('Despesa removida', item?.fornecedor_nome || '');
     load();
   }
 
@@ -462,7 +500,7 @@ export default function ContasPagarPage() {
           {(i.status === 'PENDENTE' || i.status === 'VENCIDO' || i.status === 'PARCIAL') && (
             <Button
               size="sm"
-              onClick={() => handlePagar(i)}
+              onClick={() => abrirModalPagar(i)}
               className="bg-[var(--t-green)] hover:brightness-110 text-white dark:text-[#0a0a14] h-7 px-3 text-xs"
             >
               <Check className="w-3 h-3 mr-1" /> Pagar
@@ -519,10 +557,10 @@ export default function ContasPagarPage() {
         {/* Summary Cards — clicáveis, refletem o período/filtros ativos */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
-            { key: 'PENDENTE' as const, label: 'Pendente', icon: Clock, color: 'text-[var(--t-amber)]', value: totalPendente, hint: 'Ainda não pago' },
-            { key: 'PAGO' as const, label: 'Pago', icon: TrendingDown, color: 'text-[var(--t-green)]', value: totalPago, hint: 'Já quitado' },
-            { key: 'VENCIDO' as const, label: 'Vencido', icon: AlertCircle, color: 'text-[var(--t-red)]', value: totalVencido, hint: 'Pendente após o vencimento' },
-            { key: 'COMERCIAL' as const, label: 'Custo Comercial', icon: Target, color: 'text-[var(--t-blue)]', value: totalComercial, hint: 'Marketing, CAC' },
+            { key: 'PENDENTE' as const, label: 'Pendente', icon: Clock, color: 'text-[var(--t-amber)]', value: totalPendente, hint: 'Ainda não pago', explainer: 'Despesas cadastradas mas ainda não quitadas. Clique no card para filtrar a lista.' },
+            { key: 'PAGO' as const, label: 'Pago', icon: TrendingDown, color: 'text-[var(--t-green)]', value: totalPago, hint: 'Já quitado', explainer: 'Despesas já pagas neste período. Saídas reais do caixa.' },
+            { key: 'VENCIDO' as const, label: 'Vencido', icon: AlertCircle, color: 'text-[var(--t-red)]', value: totalVencido, hint: 'Pendente após o vencimento', explainer: 'Despesas pendentes com vencimento anterior a hoje. Resolva o quanto antes para evitar juros/multa.' },
+            { key: 'COMERCIAL' as const, label: 'Custo Comercial', icon: Target, color: 'text-[var(--t-blue)]', value: totalComercial, hint: 'Marketing, CAC', explainer: 'Despesas relacionadas a marketing, anúncios e aquisição de clientes (CAC). Categoria 2.6 do plano de contas.' },
           ].map(card => {
             const ativo = (card.key === 'PENDENTE' || card.key === 'PAGO' || card.key === 'VENCIDO') && filterStatus === card.key;
             const Icon = card.icon;
@@ -542,7 +580,12 @@ export default function ContasPagarPage() {
                 <div className="flex items-center gap-3">
                   <Icon className={`w-7 h-7 shrink-0 ${card.color}`} />
                   <div className="min-w-0">
-                    <p className="text-[var(--t-text-muted)] text-[10px] uppercase tracking-wide">{card.label}</p>
+                    <p className="text-[var(--t-text-muted)] text-[10px] uppercase tracking-wide flex items-center">
+                      {card.label}
+                      <span onClick={e => e.stopPropagation()}>
+                        <MetricExplainer title={card.label} text={card.explainer} size={11} />
+                      </span>
+                    </p>
                     <p className={`text-xl font-bold ${card.color}`}>{BRL(card.value)}</p>
                     <p className="text-[10px] text-[var(--t-text-muted)] mt-0.5">{card.hint}</p>
                   </div>
@@ -1002,6 +1045,67 @@ export default function ContasPagarPage() {
             />
           </CardContent>
         </Card>
+
+      {/* Modal de confirmação de pagamento */}
+      {pagarModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setPagarModal(null)}>
+          <div className="bg-[var(--t-surface)] rounded-xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-[var(--t-border)] flex items-center justify-between">
+              <h3 className="text-base font-semibold text-[var(--t-text)]">Confirmar pagamento</h3>
+              <button onClick={() => setPagarModal(null)} className="text-[var(--t-text-muted)] hover:text-[var(--t-text)]">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="p-3 rounded-lg bg-[var(--t-bg)] border border-[var(--t-border)]">
+                <p className="text-[10px] uppercase text-[var(--t-text-muted)] tracking-wide">Despesa</p>
+                <p className="text-sm font-medium text-[var(--t-text)]">{pagarModal.item.fornecedor_nome}</p>
+                <p className="text-xs text-[var(--t-text-muted)] mt-0.5">{pagarModal.item.descricao}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Data do pagamento</label>
+                  <Input
+                    type="date"
+                    value={pagarModal.dataPagamento}
+                    onChange={e => setPagarModal({ ...pagarModal, dataPagamento: e.target.value })}
+                    className="bg-[var(--t-input-bg)]"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Valor pago</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={pagarModal.valorPago}
+                    onChange={e => setPagarModal({ ...pagarModal, valorPago: parseFloat(e.target.value) || 0 })}
+                    className="bg-[var(--t-input-bg)]"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Observação (opcional)</label>
+                <Input
+                  value={pagarModal.observacao}
+                  onChange={e => setPagarModal({ ...pagarModal, observacao: e.target.value })}
+                  placeholder="Ex: pago via PIX"
+                  className="bg-[var(--t-input-bg)]"
+                />
+              </div>
+              <p className="text-[11px] text-[var(--t-text-muted)]">
+                O saldo da Caixa Geral será atualizado automaticamente após confirmar.
+              </p>
+            </div>
+            <div className="px-5 py-3 border-t border-[var(--t-border)] flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setPagarModal(null)}>Cancelar</Button>
+              <Button onClick={confirmarPagamento} className="bg-[var(--t-green)] hover:brightness-110 text-white dark:text-[#0a0a14]">
+                <Check className="w-4 h-4 mr-1" /> Confirmar pagamento
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </PageShell>
   );
 }

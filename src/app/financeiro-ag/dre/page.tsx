@@ -7,7 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
   FileText, TrendingUp, TrendingDown, DollarSign, Minus, Equal,
+  Info, X,
 } from 'lucide-react';
+import { MetricExplainer } from '@/components/financeiro/MetricExplainer';
+import { toast } from '@/lib/toast';
 
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -36,6 +39,38 @@ export default function DREPage() {
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState('');
   const [compareMonth, setCompareMonth] = useState('');
+  // Modo Simplificado (default) vs Completo — persistido em localStorage
+  const [modoSimplificado, setModoSimplificado] = useState<boolean>(true);
+  // Banner "Como ler" — fechável, persiste em localStorage
+  const [bannerVisivel, setBannerVisivel] = useState<boolean>(true);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const m = window.localStorage.getItem('dre-modo-simplificado');
+    if (m !== null) setModoSimplificado(m === 'true');
+    const b = window.localStorage.getItem('dre-banner-dismissed');
+    if (b === 'true') setBannerVisivel(false);
+  }, []);
+
+  const alternarModo = (simpl: boolean) => {
+    setModoSimplificado(simpl);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('dre-modo-simplificado', String(simpl));
+    }
+  };
+
+  const dispensarBanner = () => {
+    setBannerVisivel(false);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('dre-banner-dismissed', 'true');
+    }
+  };
+
+  // Toast quando troca de mês
+  const trocarMes = (m: string) => {
+    setSelectedMonth(m);
+    toast.info(`DRE carregada · ${getMonthLabel(m)}`);
+  };
 
   async function load() {
     setLoading(true);
@@ -193,6 +228,33 @@ export default function DREPage() {
   const receitaLiquida = dreMain.find(l => l.nome === 'RECEITA LÍQUIDA')?.valor || 0;
   const lucroLiquido = dreMain.find(l => l.nome === 'LUCRO LÍQUIDO')?.valor || 0;
 
+  // Modo Simplificado: mostra só os totais principais. Modo Completo: tudo.
+  // Iniciante consegue ler 4-6 linhas; contador prefere ver detalhe.
+  const SIMPL_KEEP = [
+    'RECEITA BRUTA',
+    '(-) IMPOSTOS SOBRE A RECEITA',
+    'RECEITA LÍQUIDA',
+    '(-) DESPESAS OPERACIONAIS',
+    '(-) DESPESAS FINANCEIRAS',
+    '(-) OUTRAS DESPESAS',
+    'LUCRO LÍQUIDO',
+  ];
+  const dreFiltrado = modoSimplificado
+    ? dreMain.filter(l => {
+        // Mantém só headers/totals/subtotais principais + linhas que começam com "Margem"
+        const ehChave = SIMPL_KEEP.some(k => l.nome.startsWith(k));
+        const ehMargem = l.nome.startsWith('Margem');
+        return ehChave || ehMargem;
+      })
+    : dreMain;
+  const dreCompareFiltrado = modoSimplificado
+    ? dreCompare.filter(l => {
+        const ehChave = SIMPL_KEEP.some(k => l.nome.startsWith(k));
+        const ehMargem = l.nome.startsWith('Margem');
+        return ehChave || ehMargem;
+      })
+    : dreCompare;
+
   if (loading) {
     return (
       <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6 flex items-center justify-center">
@@ -206,17 +268,40 @@ export default function DREPage() {
       <div className="max-w-5xl mx-auto space-y-6">
 
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold text-[var(--t-text)]">DRE — Demonstrativo de Resultado</h1>
             <p className="text-[var(--t-text-secondary)] text-sm mt-1">
               Regime de intermediação <span className="font-medium text-[var(--t-text)]">CNAE 7911-2/00</span> · Receita Bruta = comissão (margem), não o valor total transacionado
             </p>
           </div>
-          <div className="flex gap-2 items-center">
+          <div className="flex gap-2 items-center flex-wrap">
+            {/* Toggle Simplificado / Completo */}
+            <div className="inline-flex rounded-lg border border-[var(--t-border)] overflow-hidden">
+              <button
+                onClick={() => alternarModo(true)}
+                className={`px-3 py-2 text-xs font-medium transition-colors ${
+                  modoSimplificado
+                    ? 'bg-[var(--t-green)] text-white dark:text-[#0a0a14]'
+                    : 'bg-[var(--t-surface)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]'
+                }`}
+              >
+                Simplificado
+              </button>
+              <button
+                onClick={() => alternarModo(false)}
+                className={`px-3 py-2 text-xs font-medium transition-colors ${
+                  !modoSimplificado
+                    ? 'bg-[var(--t-green)] text-white dark:text-[#0a0a14]'
+                    : 'bg-[var(--t-surface)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]'
+                }`}
+              >
+                Completo
+              </button>
+            </div>
             <select
               value={selectedMonth}
-              onChange={e => setSelectedMonth(e.target.value)}
+              onChange={e => trocarMes(e.target.value)}
               className="bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text)]"
             >
               {availableMonths.map(m => (
@@ -237,13 +322,35 @@ export default function DREPage() {
           </div>
         </div>
 
+        {/* Banner explicativo — primeira visita */}
+        {bannerVisivel && (
+          <div className="rounded-xl border border-[var(--t-blue)]/30 bg-[var(--t-blue-bg)] p-4 flex items-start gap-3">
+            <Info className="w-5 h-5 text-[var(--t-blue)] shrink-0 mt-0.5" />
+            <div className="flex-1 text-sm text-[var(--t-text)]">
+              <p className="font-semibold mb-1">Como ler esta DRE</p>
+              <p className="text-[var(--t-text-secondary)]">
+                Sua agência opera no regime de intermediação <strong>CNAE 7911-2/00</strong>. Isso significa que o que você fatura para o cliente (passagens, hotéis) <strong>NÃO é sua receita</strong> — sua receita é só a comissão. Por isso o DRE mostra <strong>Volume Intermediado</strong> (informativo) separado da <strong>Receita Bruta</strong> (sua margem real, sobre a qual incidem impostos).
+              </p>
+            </div>
+            <button onClick={dispensarBanner} className="text-[var(--t-text-muted)] hover:text-[var(--t-text)] shrink-0" aria-label="Fechar">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* KPIs */}
         <div className="grid grid-cols-3 gap-4">
           <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
             <CardContent className="p-4 flex items-center gap-4">
               <DollarSign className="w-8 h-8 text-[var(--t-blue)] shrink-0" />
               <div>
-                <p className="text-[var(--t-text-muted)] text-xs uppercase">Receita Bruta</p>
+                <p className="text-[var(--t-text-muted)] text-xs uppercase flex items-center">
+                  Receita Bruta
+                  <MetricExplainer
+                    title="Receita Bruta (agência)"
+                    text={'Margem das vendas + comissões de fornecedores + fees + outras receitas próprias da agência.\n\nÉ sobre este valor que incidem impostos (ISS, PIS/COFINS, Simples).'}
+                  />
+                </p>
                 <p className="text-xl font-bold text-[var(--t-blue)]">{BRL(receitaBruta)}</p>
               </div>
             </CardContent>
@@ -252,7 +359,13 @@ export default function DREPage() {
             <CardContent className="p-4 flex items-center gap-4">
               <TrendingUp className="w-8 h-8 text-[var(--t-green)] shrink-0" />
               <div>
-                <p className="text-[var(--t-text-muted)] text-xs uppercase">Receita Líquida</p>
+                <p className="text-[var(--t-text-muted)] text-xs uppercase flex items-center">
+                  Receita Líquida
+                  <MetricExplainer
+                    title="Receita Líquida"
+                    text="Receita Bruta menos os impostos sobre faturamento (ISS, PIS, COFINS). É a receita que efetivamente sobra para cobrir despesas operacionais."
+                  />
+                </p>
                 <p className={`text-xl font-bold ${receitaLiquida >= 0 ? 'text-[var(--t-green)]' : 'text-[var(--t-red)]'}`}>{BRL(receitaLiquida)}</p>
               </div>
             </CardContent>
@@ -291,8 +404,8 @@ export default function DREPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {dreMain.map((line, idx) => {
-                    const compareLine = dreCompare[idx];
+                  {dreFiltrado.map((line, idx) => {
+                    const compareLine = dreCompareFiltrado[idx];
                     const variacao = compareLine ? line.valor - compareLine.valor : 0;
                     const isMargin = line.nome.startsWith('Margem');
 
