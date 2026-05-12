@@ -12,9 +12,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Plus, Trash2, Hotel, Trophy, ChevronDown, ChevronUp, MapPin, Clock } from 'lucide-react';
-import { HotelSearchModal } from '@/components/HotelSearchModal';
 import { formatHotelForHtlInfo } from '@/lib/hotel-data-mapper';
 import type { GooglePlace } from '@/lib/hotel-data-mapper';
+import { initiateHotelSearch, consumePendingHotelHandoff } from '@/lib/api-search-handoff';
 
 interface Props {
   grupo: GrupoViagem;
@@ -37,7 +37,6 @@ export function HtlTab({ grupo, onChange }: Props) {
   // PROPOSTA final pro cliente, não a captura de cotações do fornecedor.
   const TIPOS = ALL_TIPOS;
   const totals = calcHtlTotals(grupo);
-  const [hotelModalOpen, setHotelModalOpen] = useState<number | null>(null);
   const [addedSources, setAddedSources] = useState<Record<number, Set<number>>>({});
   const [pickerOpen, setPickerOpen] = useState<number | null>(null);
   const [expandedInfo, setExpandedInfo] = useState<Record<number, boolean>>({});
@@ -73,6 +72,34 @@ export function HtlTab({ grupo, onChange }: Props) {
   const removeHotel = (idx: number) => {
     onChange({ ...grupo, htl: { hoteis: grupo.htl.hoteis.filter((_, i) => i !== idx) } });
   };
+
+  // Abre a página /hoteis em modo handoff, prefilada com o destino/datas
+  // do período correspondente. Quando o user seleciona, é redirecionado de
+  // volta para o grupo, e o useEffect abaixo consome o resultado.
+  const abrirBuscaHotel = (hotelIdx: number) => {
+    const periodo = grupo.periodos[hotelIdx];
+    const returnTo = `${window.location.pathname}?tab=htl`;
+    initiateHotelSearch({
+      grupoId: grupo.id,
+      hIdx: hotelIdx,
+      destino: periodo?.destino || '',
+      hotelNome: periodo?.hotel || '',
+      checkIn: periodo?.check_in || '',
+      checkOut: periodo?.check_out || '',
+      adults: grupo.params?.qtd_min_pax || 2,
+      returnTo,
+    });
+  };
+
+  // Consome o resultado da busca de hotel quando a tab remonta após
+  // o usuário ter selecionado um hotel em /hoteis.
+  useEffect(() => {
+    const pending = consumePendingHotelHandoff(grupo.id);
+    if (pending) {
+      handleHotelSelect(pending.ctx.hIdx, pending.hotel as unknown as GooglePlace);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleHotelSelect = (hotelIdx: number, place: GooglePlace) => {
     const htl = { ...grupo.htl, hoteis: [...grupo.htl.hoteis] };
@@ -197,7 +224,7 @@ export function HtlTab({ grupo, onChange }: Props) {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => setHotelModalOpen(hIdx)}>
+                <Button variant="outline" size="sm" onClick={() => abrirBuscaHotel(hIdx)}>
                   <Hotel className="w-4 h-4 mr-1" /> Buscar via API
                 </Button>
                 {grupo.htl.hoteis.length > 1 && (
@@ -325,15 +352,6 @@ export function HtlTab({ grupo, onChange }: Props) {
         );
       })}
 
-      <HotelSearchModal
-        open={hotelModalOpen !== null}
-        onClose={() => setHotelModalOpen(null)}
-        onSelect={(place) => { if (hotelModalOpen !== null) handleHotelSelect(hotelModalOpen, place); }}
-        defaultDestino={hotelModalOpen !== null ? grupo.periodos[hotelModalOpen]?.destino || '' : ''}
-        defaultHotelName={hotelModalOpen !== null ? grupo.periodos[hotelModalOpen]?.hotel || '' : ''}
-        defaultCheckIn={hotelModalOpen !== null ? grupo.periodos[hotelModalOpen]?.check_in || '' : ''}
-        defaultCheckOut={hotelModalOpen !== null ? grupo.periodos[hotelModalOpen]?.check_out || '' : ''}
-      />
     </div>
   );
 }

@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Hotel, Search, Loader2, Star, MapPin, Phone, Globe,
-  AlertCircle, ChevronDown, ChevronUp,
+  AlertCircle, ChevronDown, ChevronUp, Check, ArrowLeft,
 } from 'lucide-react';
 import type { SearchAPIHotelProperty } from '@/lib/searchapi-hotels';
-import { formatAmenities } from '@/lib/hotel-data-mapper';
+import { formatAmenities, importHotelImages } from '@/lib/hotel-data-mapper';
+import { completeHotelHandoff, getActiveHandoffInfo } from '@/lib/api-search-handoff';
 
 function StarRating({ rating }: { rating: number }) {
   return (
@@ -19,6 +21,7 @@ function StarRating({ rating }: { rating: number }) {
 }
 
 export default function HoteisPage() {
+  const searchParams = useSearchParams();
   const [destino, setDestino] = useState('');
   const [checkIn, setCheckIn] = useState('');
   const [checkOut, setCheckOut] = useState('');
@@ -28,18 +31,43 @@ export default function HoteisPage() {
   const [error, setError] = useState('');
   const [cached, setCached] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selecting, setSelecting] = useState<string | null>(null);
 
-  const buscar = async () => {
-    if (!destino) { setError('Informe o destino'); return; }
+  // Modo handoff: vindo do botão "Buscar via API" de uma tab do grupo
+  const handoff = getActiveHandoffInfo();
+  const isHandoff = !!handoff && !!handoff.returnTo;
+  const autoRanRef = useRef(false);
+
+  // Prefill via query params + auto-search uma vez
+  useEffect(() => {
+    const d = searchParams.get('destino') || '';
+    const h = searchParams.get('hotel') || '';
+    const ci = searchParams.get('checkin') || '';
+    const co = searchParams.get('checkout') || '';
+    const ad = searchParams.get('adults');
+    if (d || h) setDestino(h ? `${h} ${d}`.trim() : d);
+    if (ci) setCheckIn(ci);
+    if (co) setCheckOut(co);
+    if (ad) setAdults(Math.max(1, parseInt(ad) || 2));
+    if ((d || h) && !autoRanRef.current) {
+      autoRanRef.current = true;
+      // Pequeno delay garante que o state acima foi aplicado antes da busca
+      setTimeout(() => buscarComQuery(h ? `${h} ${d}`.trim() : d, ci, co, parseInt(ad || '2')), 50);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const buscarComQuery = async (destinoArg: string, ciArg: string, coArg: string, adArg: number) => {
+    if (!destinoArg) { setError('Informe o destino'); return; }
     setError('');
     setSearching(true);
     setResults([]);
     try {
-      const query = destino.toLowerCase().includes('hotel') ? destino : `hotéis em ${destino}`;
+      const query = destinoArg.toLowerCase().includes('hotel') ? destinoArg : `hotéis em ${destinoArg}`;
       const res = await fetch('/api/hotels/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, check_in: checkIn || undefined, check_out: checkOut || undefined, adults }),
+        body: JSON.stringify({ query, check_in: ciArg || undefined, check_out: coArg || undefined, adults: adArg }),
       });
       const json = await res.json();
       if (json.error) { setError(json.error); setSearching(false); return; }
@@ -51,6 +79,20 @@ export default function HoteisPage() {
       setError('Erro ao buscar hotéis');
     }
     setSearching(false);
+  };
+
+  const buscar = () => buscarComQuery(destino, checkIn, checkOut, adults);
+
+  const selecionarHotel = async (hotel: SearchAPIHotelProperty) => {
+    if (!handoff?.key || !handoff?.returnTo) return;
+    setSelecting(hotel.property_token);
+    try {
+      // Baixa as imagens para storage local (proposta mantém após URLs do CDN expirarem)
+      const withLocalImages = await importHotelImages(hotel);
+      completeHotelHandoff(handoff.key, withLocalImages, handoff.returnTo);
+    } finally {
+      setSelecting(null);
+    }
   };
 
   const noites = checkIn && checkOut
@@ -70,6 +112,22 @@ export default function HoteisPage() {
             Busque hotéis com fotos, preços e avaliações via Google Hotels
           </p>
         </div>
+
+        {/* Faixa de handoff — só aparece quando vindo de um grupo */}
+        {isHandoff && handoff?.returnTo && (
+          <div className="flex items-center justify-between gap-3 bg-[var(--t-green-bg)] border border-[var(--t-green)]/30 rounded-xl px-4 py-3">
+            <div className="flex items-center gap-2 text-sm text-[var(--t-green)]">
+              <Hotel className="w-4 h-4 shrink-0" />
+              <span>Selecione um hotel para inserir no grupo. Ele ficará salvo com fotos, avaliações e localização.</span>
+            </div>
+            <a
+              href={handoff.returnTo}
+              className="flex items-center gap-1 text-xs text-[var(--t-text-secondary)] hover:text-[var(--t-text)] shrink-0"
+            >
+              <ArrowLeft className="w-3 h-3" /> Voltar sem selecionar
+            </a>
+          </div>
+        )}
 
         {/* Search form */}
         <div className="bg-[var(--t-surface)] rounded-xl shadow-[var(--t-card-shadow)] p-5">
@@ -234,10 +292,25 @@ export default function HoteisPage() {
                             </a>
                           )}
                         </div>
-                        <button onClick={() => setExpandedId(expanded ? null : hotel.property_token)}
-                          className="flex items-center gap-1 text-xs text-[var(--t-text-secondary)] hover:text-[var(--t-text)]">
-                          {expanded ? <><ChevronUp className="w-3.5 h-3.5" /> Menos</> : <><ChevronDown className="w-3.5 h-3.5" /> Fotos e avaliações</>}
-                        </button>
+                        <div className="flex items-center gap-3">
+                          {isHandoff && (
+                            <button
+                              onClick={() => selecionarHotel(hotel)}
+                              disabled={selecting !== null}
+                              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-[var(--t-green)] text-white rounded-lg hover:opacity-90 disabled:opacity-50"
+                            >
+                              {selecting === hotel.property_token ? (
+                                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Selecionando...</>
+                              ) : (
+                                <><Check className="w-3.5 h-3.5" /> Selecionar este hotel</>
+                              )}
+                            </button>
+                          )}
+                          <button onClick={() => setExpandedId(expanded ? null : hotel.property_token)}
+                            className="flex items-center gap-1 text-xs text-[var(--t-text-secondary)] hover:text-[var(--t-text)]">
+                            {expanded ? <><ChevronUp className="w-3.5 h-3.5" /> Menos</> : <><ChevronDown className="w-3.5 h-3.5" /> Fotos e avaliações</>}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>

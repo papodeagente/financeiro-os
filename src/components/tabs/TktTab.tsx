@@ -10,9 +10,9 @@ import { FornecedorPicker } from '@/components/FornecedorPicker';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Plus, Trash2, Plane, Trophy } from 'lucide-react';
-import { FlightSearchModal } from '@/components/FlightSearchModal';
 import { formatFlightForTkt } from '@/lib/flight-data-mapper';
 import type { FlightOffer } from '@/lib/flight-data-mapper';
+import { initiateFlightSearch, consumePendingFlightHandoff } from '@/lib/api-search-handoff';
 
 interface Props { grupo: GrupoViagem; onChange: (grupo: GrupoViagem) => void; }
 
@@ -22,15 +22,40 @@ function fonteHasData(f: { valor_adt: number | null; valor_chd: number | null; p
 
 export function TktTab({ grupo, onChange }: Props) {
   const totals = calcTktTotals(grupo);
-  const [flightModalOpen, setFlightModalOpen] = useState<number | null>(null);
   const [addedSources, setAddedSources] = useState<Record<number, Set<number>>>({});
   const [pickerOpen, setPickerOpen] = useState<number | null>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
+
+  // Abre /voos em modo handoff. Como TktTrecho não armazena origem/destino
+  // diretamente, pega datas dos períodos do grupo (1º período = ida).
+  const abrirBuscaVoo = (tIdx: number) => {
+    const returnTo = `${window.location.pathname}?tab=tkt`;
+    const firstPeriodo = grupo.periodos?.[0];
+    const lastPeriodo = grupo.periodos?.[grupo.periodos.length - 1];
+    initiateFlightSearch({
+      grupoId: grupo.id,
+      tIdx,
+      dataIda: firstPeriodo?.check_in || '',
+      dataVolta: lastPeriodo?.check_out || '',
+      adultos: grupo.params?.qtd_min_pax || 1,
+      classe: 'economica',
+      returnTo,
+    });
+  };
 
   useEffect(() => {
     const handler = (e: MouseEvent) => { if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPickerOpen(null); };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Consome handoff de voo quando o usuário volta da página /voos.
+  useEffect(() => {
+    const pending = consumePendingFlightHandoff(grupo.id);
+    if (pending) {
+      handleFlightSelect(pending.ctx.tIdx, pending.flight);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const updateFonte = (tIdx: number, fIdx: number, field: string, value: number | null | string) => {
@@ -143,7 +168,7 @@ export function TktTab({ grupo, onChange }: Props) {
                   <span>Deadline</span>
                   <Input type="date" value={trecho.deadline || ''} onChange={e => updateDeadline(tIdx, e.target.value || null)} className="h-8 w-40" />
                 </div>
-                <Button variant="outline" size="sm" onClick={() => setFlightModalOpen(tIdx)}><Plane className="w-4 h-4 mr-1" /> Buscar via API</Button>
+                <Button variant="outline" size="sm" onClick={() => abrirBuscaVoo(tIdx)}><Plane className="w-4 h-4 mr-1" /> Buscar via API</Button>
                 {grupo.tkt.trechos.length > 1 && (
                   <Button variant="ghost" size="sm" onClick={() => removeTrecho(tIdx)} className="text-[var(--t-status-danger)] hover:bg-[var(--t-status-danger-bg)]"><Trash2 className="w-4 h-4" /></Button>
                 )}
@@ -236,18 +261,6 @@ export function TktTab({ grupo, onChange }: Props) {
         );
       })}
 
-      <FlightSearchModal open={flightModalOpen !== null} onClose={() => setFlightModalOpen(null)}
-        onSelect={(ida, volta) => { if (flightModalOpen !== null) handleFlightSelect(flightModalOpen, ida, volta); }}
-        defaultOrigem={flightModalOpen !== null && flightModalOpen > 0
-          ? (grupo.tkt.trechos[flightModalOpen - 1]?.fontes.find(f => f.partida_chegada)?.partida_chegada?.split('→')[1]?.trim()?.split(' ')[0] || '')
-          : ''}
-        defaultDataIda={flightModalOpen !== null ? grupo.trechos[flightModalOpen]?.data || '' : ''}
-        defaultDataVolta={flightModalOpen !== null && grupo.trechos[flightModalOpen + 1]?.data
-          ? grupo.trechos[flightModalOpen + 1].data || ''
-          : ''}
-        defaultAdultos={flightModalOpen !== null ? grupo.trechos[flightModalOpen]?.qtd_adt || 1 : 1}
-        defaultCriancas={flightModalOpen !== null ? grupo.trechos[flightModalOpen]?.qtd_chd || 0 : 0}
-      />
     </div>
   );
 }

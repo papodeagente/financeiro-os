@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, use } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { GrupoViagem, AbaType, ABA_LABELS } from '@/lib/types';
 import { loadGrupos, saveGrupo } from '@/lib/storage';
 import { calcProposta } from '@/lib/calculations';
@@ -72,9 +72,13 @@ function hasData(grupo: GrupoViagem, aba: AbaType): boolean {
 export default function GrupoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { setActiveGrupo } = useApp();
   const [grupo, setGrupo] = useState<GrupoViagem | null>(null);
-  const [activeTab, setActiveTab] = useState<AbaType>('pipeline');
+  // Detecta ?tab=xxx no URL (vindo do retorno de /hoteis ou /voos após
+  // selecionar). Default 'pipeline'.
+  const tabFromUrl = (searchParams.get('tab') || 'pipeline') as AbaType;
+  const [activeTab, setActiveTab] = useState<AbaType>(tabFromUrl);
   const [saved, setSaved] = useState(true);
   const [gerandoProposta, setGerandoProposta] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);

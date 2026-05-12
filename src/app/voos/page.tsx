@@ -1,13 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Plane, Search, Loader2, ArrowRight, Clock,
-  ChevronDown, ChevronUp, Trophy, AlertCircle,
+  ChevronDown, ChevronUp, Trophy, AlertCircle, Check, ArrowLeft,
 } from 'lucide-react';
 import { AirportInput } from '@/components/AirportInput';
 import type { FlightOffer } from '@/lib/flight-data-mapper';
 import { mapSearchAPIToOffers } from '@/lib/flight-data-mapper';
+import { completeFlightHandoff, getActiveHandoffInfo } from '@/lib/api-search-handoff';
 
 function formatMinutes(min: number): string {
   const h = Math.floor(min / 60);
@@ -20,6 +22,7 @@ function extractTime(dateStr: string): string {
 }
 
 export default function VoosPage() {
+  const searchParams = useSearchParams();
   const [origem, setOrigem] = useState('');
   const [destino, setDestino] = useState('');
   const [origemDisplay, setOrigemDisplay] = useState('');
@@ -35,9 +38,45 @@ export default function VoosPage() {
   const [cached, setCached] = useState(false);
   const [sortBy, setSortBy] = useState<'price' | 'duration'>('price');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selecting, setSelecting] = useState<string | null>(null);
 
-  const buscar = async () => {
-    if (!origem || !destino || !dataIda) {
+  // Handoff vindo da tab do grupo
+  const handoff = getActiveHandoffInfo();
+  const isHandoff = !!handoff && !!handoff.returnTo;
+  const autoRanRef = useRef(false);
+
+  // Prefill via query params + auto-search uma vez quando todos os obrigatórios
+  // estiverem presentes (origem + destino + ida).
+  useEffect(() => {
+    const o = searchParams.get('origem') || '';
+    const d = searchParams.get('destino') || '';
+    const ida = searchParams.get('ida') || '';
+    const volta = searchParams.get('volta') || '';
+    const ad = searchParams.get('adultos');
+    const cr = searchParams.get('criancas');
+    const cl = searchParams.get('classe') || '';
+    if (o) { setOrigem(o); setOrigemDisplay(o); }
+    if (d) { setDestino(d); setDestinoDisplay(d); }
+    if (ida) setDataIda(ida);
+    if (volta) setDataVolta(volta);
+    if (ad) setAdultos(Math.max(1, parseInt(ad) || 1));
+    if (cr) setCriancas(Math.max(0, parseInt(cr) || 0));
+    if (cl) setClasse(cl);
+    if (o && d && ida && !autoRanRef.current) {
+      autoRanRef.current = true;
+      setTimeout(() => buscarComArgs({
+        origem: o, destino: d, dataIda: ida, dataVolta: volta,
+        adultos: parseInt(ad || '1'), criancas: parseInt(cr || '0'), classe: cl || 'economica',
+      }), 50);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const buscarComArgs = async (a: {
+    origem: string; destino: string; dataIda: string; dataVolta?: string;
+    adultos: number; criancas: number; classe: string;
+  }) => {
+    if (!a.origem || !a.destino || !a.dataIda) {
       setError('Preencha origem, destino e data de ida');
       return;
     }
@@ -48,7 +87,7 @@ export default function VoosPage() {
       const res = await fetch('/api/flights/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ origem, destino, data_ida: dataIda, data_volta: dataVolta || undefined, adultos, criancas, classe }),
+        body: JSON.stringify({ origem: a.origem, destino: a.destino, data_ida: a.dataIda, data_volta: a.dataVolta || undefined, adultos: a.adultos, criancas: a.criancas, classe: a.classe }),
       });
       const json = await res.json();
       if (json.error) { setError(json.error); setSearching(false); return; }
@@ -61,6 +100,18 @@ export default function VoosPage() {
       setError('Erro ao buscar voos');
     }
     setSearching(false);
+  };
+
+  const buscar = () => buscarComArgs({ origem, destino, dataIda, dataVolta, adultos, criancas, classe });
+
+  const selecionarVoo = async (offer: FlightOffer) => {
+    if (!handoff?.key || !handoff?.returnTo) return;
+    setSelecting(offer.id);
+    try {
+      completeFlightHandoff(handoff.key, offer, handoff.returnTo);
+    } finally {
+      setSelecting(null);
+    }
   };
 
   const sorted = [...results].sort((a, b) => {
@@ -81,6 +132,22 @@ export default function VoosPage() {
             Busque voos reais com preços via Google Flights
           </p>
         </div>
+
+        {/* Faixa de handoff — só aparece quando vindo de um grupo */}
+        {isHandoff && handoff?.returnTo && (
+          <div className="flex items-center justify-between gap-3 bg-[var(--t-green-bg)] border border-[var(--t-green)]/30 rounded-xl px-4 py-3">
+            <div className="flex items-center gap-2 text-sm text-[var(--t-green)]">
+              <Plane className="w-4 h-4 shrink-0" />
+              <span>Selecione um voo para inserir no trecho. Companhia, horários, escalas e preço ficam salvos.</span>
+            </div>
+            <a
+              href={handoff.returnTo}
+              className="flex items-center gap-1 text-xs text-[var(--t-text-secondary)] hover:text-[var(--t-text)] shrink-0"
+            >
+              <ArrowLeft className="w-3 h-3" /> Voltar sem selecionar
+            </a>
+          </div>
+        )}
 
         {/* Search form */}
         <div className="bg-[var(--t-surface)] rounded-xl shadow-[var(--t-card-shadow)] p-5">
@@ -243,10 +310,25 @@ export default function VoosPage() {
                         </div>
                       </div>
 
-                      <button onClick={() => setExpandedId(expanded ? null : offer.id)}
-                        className="flex items-center gap-1 text-xs text-[var(--t-text-secondary)] hover:text-[var(--t-text)]">
-                        {expanded ? <><ChevronUp className="w-3.5 h-3.5" /> Menos</> : <><ChevronDown className="w-3.5 h-3.5" /> Detalhes</>}
-                      </button>
+                      <div className="flex items-center gap-3">
+                        {isHandoff && (
+                          <button
+                            onClick={() => selecionarVoo(offer)}
+                            disabled={selecting !== null}
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-[var(--t-green)] text-white rounded-lg hover:opacity-90 disabled:opacity-50"
+                          >
+                            {selecting === offer.id ? (
+                              <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Selecionando...</>
+                            ) : (
+                              <><Check className="w-3.5 h-3.5" /> Selecionar este voo</>
+                            )}
+                          </button>
+                        )}
+                        <button onClick={() => setExpandedId(expanded ? null : offer.id)}
+                          className="flex items-center gap-1 text-xs text-[var(--t-text-secondary)] hover:text-[var(--t-text)]">
+                          {expanded ? <><ChevronUp className="w-3.5 h-3.5" /> Menos</> : <><ChevronDown className="w-3.5 h-3.5" /> Detalhes</>}
+                        </button>
+                      </div>
                     </div>
 
                     {/* Expanded details */}
