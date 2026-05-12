@@ -169,7 +169,7 @@ export default function FinanceiroAgHubPage() {
         {[
           { label: 'Faturamento', value: kpis?.recebido || 0, color: 'text-[var(--crm-ok)]' },
           { label: 'Despesas', value: kpis?.pago || 0, color: 'text-[var(--crm-err)]' },
-          { label: 'Comissão', value: kpis?.resultado_realizado || 0, color: (kpis?.resultado_realizado || 0) >= 0 ? 'text-[var(--crm-ok)]' : 'text-[var(--crm-err)]' },
+          { label: 'Lucro', value: kpis?.resultado_realizado || 0, color: (kpis?.resultado_realizado || 0) >= 0 ? 'text-[var(--crm-ok)]' : 'text-[var(--crm-err)]' },
         ].map((kpi, i) => (
           <div key={i} className="bento-card">
             <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide mb-2">{kpi.label}</p>
