@@ -32,8 +32,10 @@ function fonteHasData(fonte: { valor_sgl: number | null; valor_dbl: number | nul
 }
 
 export function HtlTab({ grupo, onChange }: Props) {
-  const tarifas = grupo.tarifas_ativas || ['sgl', 'dbl', 'tpl', 'qdp'];
-  const TIPOS = [...tarifas.filter(t => ALL_TIPOS.includes(t as typeof ALL_TIPOS[number])), 'chd'] as typeof ALL_TIPOS[number][];
+  // Captura de custos: SEMPRE mostra todos os tipos (SGL/DBL/TPL/QDP/CHD)
+  // independente de tarifas_ativas. tarifas_ativas filtra apenas a
+  // PROPOSTA final pro cliente, não a captura de cotações do fornecedor.
+  const TIPOS = ALL_TIPOS;
   const totals = calcHtlTotals(grupo);
   const [hotelModalOpen, setHotelModalOpen] = useState<number | null>(null);
   const [addedSources, setAddedSources] = useState<Record<number, Set<number>>>({});

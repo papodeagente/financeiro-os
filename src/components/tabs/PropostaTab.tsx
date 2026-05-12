@@ -32,12 +32,13 @@ export function PropostaTab({ grupo }: Props) {
     margem: acc.margem + f.margem,
   }), { custo: 0, venda: 0, margem: 0 });
 
-  // Resumo geral — referência tipoBase
-  const SERVICOS_CUSTO = ['TKT', 'HTL', 'REC', 'CAR', 'GUIA', 'SEG', 'NAVIO', 'ING', 'BRINDE', 'DIVULGACAO'];
-  const custoApto = p.lines
-    .filter(l => SERVICOS_CUSTO.includes(l.label))
-    .reduce((sum, l) => sum + (l[tipoBase as keyof typeof l] as number || 0), 0);
-  const vendaApto = (p.totalAvista[tipoBase] as number) || 0;
+  // Resumo geral — referência tipoBase.
+  // Soma direto dos `itens` (calcItensIncluidos) porque p.lines mistura
+  // custo e venda (venda quando usuário preenche valor_venda_*, custo
+  // caso contrário) — usar p.lines como custo inflava o resumo quando
+  // todos os items tinham venda manual.
+  const custoApto = itens.reduce((sum, it) => sum + (it.custo || 0), 0);
+  const vendaApto = itens.reduce((sum, it) => sum + (it.venda || 0), 0);
   const margemApto = Math.max(vendaApto - custoApto, 0);
   const margemPct = vendaApto > 0 ? (margemApto / vendaApto) * 100 : 0;
 
@@ -46,15 +47,17 @@ export function PropostaTab({ grupo }: Props) {
     (grupo.params.tx_ad_mp ?? 0) === 0 &&
     (grupo.params.tx_boleto ?? 0) === 0;
 
+  // Margem média ponderada por tipo (peso = ocupação do apto).
+  // Usa calcItensIncluidos para cada tipo para garantir custo correto
+  // (p.lines mistura custo e venda quando há venda manual).
   let margemMediaPct = margemPct;
   if (tipo === 'GRUPO') {
     let somaPesos = 0;
     let somaMargemPct = 0;
     for (const t of tarifas) {
-      const c = p.lines
-        .filter(l => SERVICOS_CUSTO.includes(l.label))
-        .reduce((sum, l) => sum + (l[t as keyof typeof l] as number || 0), 0);
-      const v = (p.totalAvista[t] as number) || 0;
+      const itensT = calcItensIncluidos(grupo, t);
+      const c = itensT.reduce((sum, it) => sum + (it.custo || 0), 0);
+      const v = itensT.reduce((sum, it) => sum + (it.venda || 0), 0);
       const m = Math.max(v - c, 0);
       const pct = v > 0 ? (m / v) * 100 : 0;
       const peso = PAX_MAP[t] || 1;

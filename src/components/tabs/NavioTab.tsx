@@ -21,7 +21,9 @@ function fornecedorHasData(f: Record<string, unknown>) {
 }
 
 export function NavioTab({ grupo, onChange }: Props) {
-  const TIPOS = [...(grupo.tarifas_ativas || ['sgl', 'dbl', 'tpl', 'qdp']).filter(t => ALL_TIPOS.includes(t as typeof ALL_TIPOS[number])), 'chd'] as typeof ALL_TIPOS[number][];
+  // Captura de custos: SEMPRE todos os tipos. tarifas_ativas filtra
+  // apenas a proposta final, não a entrada de cotações.
+  const TIPOS = ALL_TIPOS;
   const totals = calcNavioTotals(grupo);
   const ni = grupo.navio_info;
   const [addedSources, setAddedSources] = useState<Set<number>>(new Set());

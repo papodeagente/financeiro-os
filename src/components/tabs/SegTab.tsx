@@ -26,7 +26,9 @@ function segHasData(s: Record<string, unknown>) {
 }
 
 export function SegTab({ grupo, onChange }: Props) {
-  const TIPOS = (grupo.tarifas_ativas || ['sgl', 'dbl', 'tpl', 'qdp']).filter(t => ALL_TIPOS.includes(t as typeof ALL_TIPOS[number])) as typeof ALL_TIPOS[number][];
+  // Captura de custos: SEMPRE todos os tipos (sgl/dbl/tpl/qdp).
+  // tarifas_ativas só filtra a proposta final pro cliente.
+  const TIPOS = ALL_TIPOS;
   const totals = calcSegTotals(grupo);
   const [addedSources, setAddedSources] = useState<Set<number>>(new Set());
   const [pickerOpen, setPickerOpen] = useState(false);
