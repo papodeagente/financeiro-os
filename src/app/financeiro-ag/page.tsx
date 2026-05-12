@@ -8,6 +8,7 @@ import { CrmStatusBadge } from '@/components/CrmStatusBadge';
 import { KPIGridSkeleton } from '@/components/skeletons';
 import { formatBRL } from '@/lib/utils';
 import { calcLimiteUsado } from '@/lib/cartoes-utils';
+import { useModoIniciante } from '@/lib/modo-iniciante';
 import type { CartaoCorporativo, ContaPagar, ContaReceber, ContaBancaria } from '@/lib/crm-types';
 import {
   BarChart3, FileSpreadsheet, Receipt, CreditCard,
@@ -32,11 +33,15 @@ interface CartoesKpi {
   count: number;
 }
 
-const SHORTCUTS = [
+// Atalhos básicos (modo iniciante mostra apenas estes 4).
+const SHORTCUTS_BASIC = [
   { icon: BarChart3, label: 'Fluxo de caixa', desc: 'Entradas e saidas por periodo', href: '/financeiro-ag/fluxo-caixa' },
   { icon: FileSpreadsheet, label: 'DRE', desc: 'Demonstrativo de resultado', href: '/financeiro-ag/dre' },
   { icon: Receipt, label: 'Contas a receber', desc: 'Parcelas e recebimentos', href: '/financeiro-ag/receber' },
   { icon: CreditCard, label: 'Contas a pagar', desc: 'Despesas e fornecedores', href: '/financeiro-ag/pagar' },
+];
+// Atalhos avançados (cadastros + conciliação) — só aparecem com modo avançado.
+const SHORTCUTS_ADVANCED = [
   { icon: FileSpreadsheet, label: 'Conciliação', desc: 'Extrato vs lançamentos', href: '/financeiro-ag/conciliacao' },
   { icon: ArrowRightLeft, label: 'Transferências', desc: 'Entre contas bancárias', href: '/financeiro-ag/transferencias' },
   { icon: BookOpen, label: 'Plano de contas', desc: 'Categorias contabeis', href: '/financeiro-ag/plano-contas' },
@@ -49,6 +54,8 @@ export default function FinanceiroAgHubPage() {
   const [cartoesKpi, setCartoesKpi] = useState<CartoesKpi | null>(null);
   const [loading, setLoading] = useState(true);
   const [ultimos, setUltimos] = useState<Array<{ descricao: string; valor: number; tipo: string; data: string; origem: string }>>([]);
+  const [modoIniciante] = useModoIniciante();
+  const SHORTCUTS = modoIniciante ? SHORTCUTS_BASIC : [...SHORTCUTS_BASIC, ...SHORTCUTS_ADVANCED];
 
   useEffect(() => {
     async function load() {
@@ -168,7 +175,7 @@ export default function FinanceiroAgHubPage() {
       </div>
 
       {/* Cartões KPI */}
-      {cartoesKpi && (
+      {cartoesKpi && !modoIniciante && (
         <Link href="/financeiro-ag/cartoes" className="block mb-8">
           <div className="bento-card hover:shadow-[var(--t-card-shadow-hover)] transition-shadow">
             <div className="flex items-center justify-between gap-4 flex-wrap">

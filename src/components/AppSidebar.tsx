@@ -16,6 +16,7 @@ import {
   Plane, Hotel, Globe,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useModoIniciante, MODO_INICIANTE_HIDDEN_KEYS } from '@/lib/modo-iniciante';
 
 interface MenuItem {
   key: string;
@@ -141,6 +142,14 @@ export function AppSidebar() {
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [modoIniciante, setModo] = useModoIniciante();
+
+  // Filtra recursivamente o menu pelo modo iniciante.
+  const filterMenu = (items: MenuItem[]): MenuItem[] =>
+    items
+      .filter(it => !modoIniciante || !MODO_INICIANTE_HIDDEN_KEYS.has(it.key))
+      .map(it => it.children ? { ...it, children: filterMenu(it.children) } : it);
+  const MENU_FILTRADO = filterMenu(MENU);
 
   const toggle = (key: string) => {
     setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
@@ -233,8 +242,22 @@ export function AppSidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">
-        {MENU.map(item => renderItem(item))}
+        {MENU_FILTRADO.map(item => renderItem(item))}
       </nav>
+
+      {/* Modo iniciante toggle */}
+      <div className="px-3 py-2 border-t border-[var(--t-border)]">
+        <button
+          onClick={() => setModo(!modoIniciante)}
+          className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] rounded-lg text-[var(--t-text-muted)] hover:bg-[var(--t-sidebar-item-hover)] hover:text-[var(--t-text)] transition-colors"
+          title={modoIniciante ? 'Mostrar telas avançadas' : 'Ocultar telas avançadas'}
+        >
+          <span>{modoIniciante ? 'Modo simples' : 'Modo avançado'}</span>
+          <span className={`w-7 h-3.5 rounded-full relative transition-colors ${modoIniciante ? 'bg-[var(--t-border)]' : 'bg-[var(--t-green)]'}`}>
+            <span className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white transition-all ${modoIniciante ? 'left-0.5' : 'left-4'}`} />
+          </span>
+        </button>
+      </div>
 
       {/* Footer — User + Logout */}
       <div className="px-4 py-3 border-t border-[var(--t-border)]">
