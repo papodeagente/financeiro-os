@@ -264,9 +264,13 @@ export function PropostaTab({ grupo }: Props) {
             </div>
           )}
 
+          {/* Preço ao cliente — SEMPRE por pessoa (SGL/DBL/TPL/QDP).
+              Para grupos, o cliente entende melhor "quanto cada um paga"
+              do que "valor do apto". Para PROPOSTA (avulsa), SGL = 1 pax
+              já é por pessoa por definição. */}
           <div>
             <h3 className="text-lg font-semibold text-[var(--t-text)] mb-3">
-              {tipo === 'GRUPO' ? 'Preço por apartamento' : 'Preço ao cliente'}
+              Preço ao cliente <span className="text-xs text-[var(--t-text-muted)] font-normal">(por pessoa)</span>
             </h3>
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
@@ -275,37 +279,18 @@ export function PropostaTab({ grupo }: Props) {
                   {TIPOS_PRECO.map(t => <th key={t} className="p-2 shadow-[var(--t-card-shadow)] w-32">{LABELS[t]}</th>)}
                 </tr></thead>
                 <tbody>
-                  <Row label={modoSimples ? 'Preço de venda' : 'À Vista / PIX'} values={p.totalAvista} className="bg-green-50 dark:bg-green-950/20 font-bold" />
-                  {!modoSimples && <Row label="Cartão de Crédito" values={p.totalCartao} className="bg-blue-50 dark:bg-blue-950/20" />}
-                  {!modoSimples && <Row label="Boleto" values={p.totalBoleto} className="bg-orange-50 dark:bg-orange-950/20" />}
+                  <Row label={modoSimples ? 'Preço de venda' : 'À Vista / PIX'} values={p.totalPaxAvista} className="bg-green-50 dark:bg-green-950/20 font-bold" />
+                  {!modoSimples && <Row label="Cartão de Crédito" values={p.totalPaxCartao} className="bg-blue-50 dark:bg-blue-950/20" />}
+                  {!modoSimples && <Row label="Boleto" values={p.totalPaxBoleto} className="bg-orange-50 dark:bg-orange-950/20" />}
                 </tbody>
               </table>
             </div>
           </div>
 
-          {tipo === 'GRUPO' && (
-            <div>
-              <h3 className="text-lg font-semibold text-[var(--t-text)] mb-3">Preço por pessoa</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-sm">
-                  <thead><tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
-                    <th className="p-2 text-left shadow-[var(--t-card-shadow)] w-40">Modalidade</th>
-                    {TIPOS_PRECO.map(t => <th key={t} className="p-2 shadow-[var(--t-card-shadow)] w-32">{LABELS[t]}</th>)}
-                  </tr></thead>
-                  <tbody>
-                    <Row label={modoSimples ? 'Preço de venda' : 'À Vista / PIX'} values={p.totalPaxAvista} className="bg-green-50 dark:bg-green-950/20 font-bold" />
-                    {!modoSimples && <Row label="Cartão de Crédito" values={p.totalPaxCartao} className="bg-blue-50 dark:bg-blue-950/20" />}
-                    {!modoSimples && <Row label="Boleto" values={p.totalPaxBoleto} className="bg-orange-50 dark:bg-orange-950/20" />}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
           {grupo.params.parcelas > 1 && (
             <div>
               <h3 className="text-lg font-semibold text-[var(--t-text)] mb-3">
-                Parcelamento ({grupo.params.parcelas}x)
+                Parcelamento ({grupo.params.parcelas}x) <span className="text-xs text-[var(--t-text-muted)] font-normal">(por pessoa)</span>
               </h3>
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse text-sm">
@@ -315,11 +300,11 @@ export function PropostaTab({ grupo }: Props) {
                   </tr></thead>
                   <tbody>
                     {modoSimples ? (
-                      <Row label={tipo === 'GRUPO' ? 'Parcela por apto' : 'Valor da parcela'} values={p.parcelaAptoCC} className="bg-blue-50 dark:bg-blue-950/20" />
+                      <Row label="Valor da parcela" values={p.parcelaPaxCC} className="bg-blue-50 dark:bg-blue-950/20" />
                     ) : (
                       <>
-                        <Row label="Parcela Cartão" values={p.parcelaAptoCC} className="bg-blue-50 dark:bg-blue-950/20" />
-                        <Row label="Parcela Boleto" values={p.parcelaAptoBoleto} className="bg-orange-50 dark:bg-orange-950/20" />
+                        <Row label="Parcela Cartão" values={p.parcelaPaxCC} className="bg-blue-50 dark:bg-blue-950/20" />
+                        <Row label="Parcela Boleto" values={p.parcelaPaxBoleto} className="bg-orange-50 dark:bg-orange-950/20" />
                       </>
                     )}
                   </tbody>
