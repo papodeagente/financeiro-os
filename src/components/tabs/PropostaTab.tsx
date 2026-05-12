@@ -11,13 +11,35 @@ const ALL_TIPOS = ['sgl', 'dbl', 'tpl', 'qdp', 'chd'] as const;
 const LABELS: Record<string, string> = { sgl: 'SGL', dbl: 'DBL', tpl: 'TPL', qdp: 'QDP', chd: 'CHD' };
 const PAX_MAP: Record<string, number> = { sgl: 1, dbl: 2, tpl: 3, qdp: 4, chd: 1 };
 
+// Para PROPOSTA (cotação avulsa) o sistema não tem tarifa ativa pré-definida.
+// Detecta automaticamente o tipo de apartamento que o usuário cadastrou nos
+// serviços per-apto (Hotel/Seguro/Navio). Sem essa detecção, força sgl e
+// hotel/seguro/navio cadastrados em DBL/TPL/QDP somem do resumo.
+function autoTipoBaseProposta(g: GrupoViagem): 'sgl' | 'dbl' | 'tpl' | 'qdp' {
+  const tipos: Array<'sgl' | 'dbl' | 'tpl' | 'qdp'> = ['sgl', 'dbl', 'tpl', 'qdp'];
+  const temNoTipo = (t: string) => {
+    const k = `valor_${t}`;
+    const v = `valor_venda_${t}`;
+    const get = (obj: unknown, key: string): number => {
+      const val = (obj as Record<string, unknown>)[key];
+      return typeof val === 'number' ? val : 0;
+    };
+    const inHtl = g.htl?.hoteis?.some(h => h.fontes.some(f => get(f, k) > 0 || get(f, v) > 0)) ?? false;
+    const inSeg = g.seg?.seguradoras?.some(s => get(s, k) > 0 || get(s, v) > 0) ?? false;
+    const inNavio = g.navio?.fornecedores?.some(f => get(f, k) > 0 || get(f, v) > 0) ?? false;
+    return inHtl || inSeg || inNavio;
+  };
+  for (const t of tipos) if (temNoTipo(t)) return t;
+  return 'sgl';
+}
+
 export function PropostaTab({ grupo }: Props) {
   const tipo = grupo.tipo ?? 'GRUPO';
   const tarifas = grupo.tarifas_ativas || ['sgl', 'dbl', 'tpl', 'qdp'];
   const TIPOS = [...tarifas.filter(t => ALL_TIPOS.includes(t as typeof ALL_TIPOS[number])), 'chd'] as typeof ALL_TIPOS[number][];
   const p = calcProposta(grupo);
 
-  const tipoBase = tipo === 'PROPOSTA' ? 'sgl' : (tarifas[0] ?? 'dbl');
+  const tipoBase = tipo === 'PROPOSTA' ? autoTipoBaseProposta(grupo) : (tarifas[0] ?? 'dbl');
 
   // Itens efetivamente incluídos no roteiro (so os com dados preenchidos).
   const itens: ItemIncluido[] = calcItensIncluidos(grupo, tipoBase);
@@ -68,8 +90,9 @@ export function PropostaTab({ grupo }: Props) {
   }
 
   // Tipos a mostrar nas tabelas de preço final.
-  // Modo PROPOSTA: só SGL faz sentido.
-  const TIPOS_PRECO = tipo === 'PROPOSTA' ? ['sgl'] : TIPOS;
+  // PROPOSTA: só mostra o tipoBase detectado (1 coluna). Se user cadastrou
+  // hotel em DBL, mostra coluna DBL. Se cadastrou SGL, mostra SGL.
+  const TIPOS_PRECO = tipo === 'PROPOSTA' ? [tipoBase] : TIPOS;
 
   const Row = ({ label, values, className = '' }: { label: string; values: Record<string, number>; className?: string }) => (
     <tr className={className}>
