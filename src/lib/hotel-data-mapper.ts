@@ -253,6 +253,11 @@ export function formatHotelForAlojamento(hotel: SearchAPIHotelProperty): Record<
     rating: hotel.rating,
     reviews_count: hotel.reviews,
     amenities: hotel.amenities || [],
+    // Default visível quando hotel é importado da API. Vendedor pode
+    // desligar manualmente no editor da proposta antes de enviar.
+    mostrar_avaliacao_google: true,
+    mostrar_amenities: true,
+    mostrar_galeria: true,
   };
 }
 

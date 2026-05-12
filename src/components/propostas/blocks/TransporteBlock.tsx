@@ -1,11 +1,10 @@
 'use client';
 
-import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Plane, Search } from 'lucide-react';
-import { FlightSearchModal } from '@/components/FlightSearchModal';
 import type { FlightOffer } from '@/lib/flight-data-mapper';
 import { formatFlightForTransporte } from '@/lib/flight-data-mapper';
+import { initiateProposalFlightSearch } from '@/lib/api-search-handoff';
 import type { BlockProps } from './types';
 import type { TransporteData, TipoTransporte } from '@/lib/crm-types';
 
@@ -31,9 +30,8 @@ function offerToTransporte(offer: FlightOffer, isVolta = false): Partial<Transpo
   return conteudo;
 }
 
-export function TransporteBlock({ conteudo, onChange, onInsertAfter }: BlockProps) {
+export function TransporteBlock({ conteudo, onChange, onInsertAfter: _onInsertAfter }: BlockProps) {
   const c = conteudo as Partial<TransporteData>;
-  const [flightModalOpen, setFlightModalOpen] = useState(false);
 
   const update = (patch: Partial<TransporteData>) => {
     onChange({ ...conteudo, ...patch } as Record<string, unknown>);
@@ -41,17 +39,22 @@ export function TransporteBlock({ conteudo, onChange, onInsertAfter }: BlockProp
 
   const isVoo = c.tipo === 'VOO';
 
-  const handleFlightSelect = (ida: FlightOffer, volta?: FlightOffer) => {
-    // Fill current block with IDA
-    update(offerToTransporte(ida));
-
-    // If there's a return flight, insert a new block after
-    if (volta && onInsertAfter) {
-      onInsertAfter('TRANSPORTE', {
-        id: crypto.randomUUID?.() || Math.random().toString(36).slice(2),
-        ...offerToTransporte(volta, true),
-      } as Record<string, unknown>);
-    }
+  // Navega para /voos em modo handoff. PropostaEditor consome o resultado
+  // no remount via consumePendingPropostaFlightHandoff.
+  const abrirBuscaVoo = () => {
+    const match = window.location.pathname.match(/\/propostas\/([^/?#]+)/);
+    const propostaId = match?.[1] || '';
+    const blockId = c.id || '';
+    if (!propostaId || !blockId) return;
+    initiateProposalFlightSearch({
+      propostaId,
+      blockId,
+      origem: c.origem || '',
+      destino: c.destino || '',
+      dataIda: c.data || '',
+      adultos: 1,
+      returnTo: `${window.location.pathname}${window.location.search}`,
+    });
   };
 
   return (
@@ -78,10 +81,10 @@ export function TransporteBlock({ conteudo, onChange, onInsertAfter }: BlockProp
         </div>
       </div>
 
-      {/* Buscar Voo via API */}
+      {/* Buscar Voo via API — abre tela inteira /voos em modo handoff */}
       {isVoo && (
         <button
-          onClick={() => setFlightModalOpen(true)}
+          onClick={abrirBuscaVoo}
           className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/20 hover:border-blue-400 text-blue-400 text-xs font-medium transition-all"
         >
           <Plane className="w-4 h-4" />
@@ -202,15 +205,6 @@ export function TransporteBlock({ conteudo, onChange, onInsertAfter }: BlockProp
         />
       </div>
 
-      {/* Flight Search Modal */}
-      <FlightSearchModal
-        open={flightModalOpen}
-        onClose={() => setFlightModalOpen(false)}
-        onSelect={handleFlightSelect}
-        defaultOrigem={c.origem || ''}
-        defaultDestino={c.destino || ''}
-        defaultDataIda={c.data || ''}
-      />
     </div>
   );
 }

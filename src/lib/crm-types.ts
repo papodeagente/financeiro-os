@@ -629,6 +629,11 @@ export interface AlojamentoData {
   rating?: number;
   reviews_count?: number;
   amenities?: string[];
+  // Toggles de visibilidade na proposta vista pelo cliente. Default true
+  // quando o hotel é importado da API (vendedor pode desligar manualmente).
+  mostrar_avaliacao_google?: boolean;
+  mostrar_amenities?: boolean;
+  mostrar_galeria?: boolean;
 }
 
 export interface TransporteData {

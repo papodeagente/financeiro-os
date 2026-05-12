@@ -1,14 +1,9 @@
 'use client';
 
-import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Hotel, Search } from 'lucide-react';
 import { ImageUpload } from '../ImageUpload';
-import { HotelSearchModal } from '@/components/HotelSearchModal';
-import { formatHotelForAlojamento } from '@/lib/hotel-data-mapper';
-import type { SearchAPIHotelProperty } from '@/lib/searchapi-hotels';
-// Note: HotelSearchModal already runs importHotelImages() before calling
-// onSelect, so the hotel argument here always has local image URLs.
+import { initiateProposalHotelSearch } from '@/lib/api-search-handoff';
 import type { BlockProps } from './types';
 import type { AlojamentoData, RegimeRefeicao } from '@/lib/crm-types';
 
@@ -35,7 +30,6 @@ function proxiedImg(url: string): string {
 
 export function AlojamentoBlock({ conteudo, onChange }: BlockProps) {
   const c = conteudo as Partial<AlojamentoData>;
-  const [hotelModalOpen, setHotelModalOpen] = useState(false);
 
   const update = (patch: Partial<AlojamentoData>) => {
     const merged = { ...conteudo, ...patch };
@@ -48,19 +42,27 @@ export function AlojamentoBlock({ conteudo, onChange }: BlockProps) {
     onChange(merged as Record<string, unknown>);
   };
 
-  const handleHotelSelect = (hotel: SearchAPIHotelProperty) => {
-    const mapped = formatHotelForAlojamento(hotel);
-    // Merge keeping check_in/check_out/noites/regime if already set
-    onChange({
-      ...conteudo,
-      ...mapped,
-      check_in: c.check_in || '',
-      check_out: c.check_out || '',
-      noites: c.noites || 0,
-      regime: c.regime || 'BB',
-      quarto_tipo: c.quarto_tipo || '',
-      bebidas: c.bebidas || '',
-    } as Record<string, unknown>);
+  // Navega para /hoteis em modo handoff. PropostaEditor consome o resultado
+  // no remount via consumePendingPropostaHotelHandoff.
+  const abrirBuscaHotel = () => {
+    // Extrai propostaId do path atual /propostas/[id]
+    const match = window.location.pathname.match(/\/propostas\/([^/?#]+)/);
+    const propostaId = match?.[1] || '';
+    const blockId = c.id || '';
+    if (!propostaId || !blockId) {
+      console.warn('AlojamentoBlock: propostaId ou blockId ausente', { propostaId, blockId });
+      return;
+    }
+    initiateProposalHotelSearch({
+      propostaId,
+      blockId,
+      destino: c.destino_nome || '',
+      hotelNome: c.hotel_nome || '',
+      checkIn: c.check_in || '',
+      checkOut: c.check_out || '',
+      adults: 2,
+      returnTo: `${window.location.pathname}${window.location.search}`,
+    });
   };
 
   return (
@@ -76,9 +78,9 @@ export function AlojamentoBlock({ conteudo, onChange }: BlockProps) {
         Viagem noturna (transito aereo, sem hotel)
       </label>
 
-      {/* Buscar Hotel via API */}
+      {/* Buscar Hotel via API — abre tela inteira /hoteis em modo handoff */}
       <button
-        onClick={() => setHotelModalOpen(true)}
+        onClick={abrirBuscaHotel}
         className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 hover:border-emerald-400 text-emerald-400 text-xs font-medium transition-all"
       >
         <Hotel className="w-4 h-4" />
@@ -252,16 +254,49 @@ export function AlojamentoBlock({ conteudo, onChange }: BlockProps) {
         </div>
       </div>
 
-      {/* Hotel Search Modal */}
-      <HotelSearchModal
-        open={hotelModalOpen}
-        onClose={() => setHotelModalOpen(false)}
-        onSelect={handleHotelSelect}
-        defaultDestino={c.destino_nome || ''}
-        defaultHotelName={c.hotel_nome || ''}
-        defaultCheckIn={c.check_in || ''}
-        defaultCheckOut={c.check_out || ''}
-      />
+      {/* Toggles de visibilidade na proposta pro cliente — só aparecem
+          quando o hotel tem dados ricos importados da API */}
+      {(c.rating || c.reviews_count || (c.amenities && c.amenities.length > 0) || (c.hotel_galeria && c.hotel_galeria.length > 1)) && (
+        <div className="mt-3 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20 space-y-2">
+          <div className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wide">
+            Detalhes do Google na proposta
+          </div>
+          {(c.rating !== undefined && c.rating !== null) && (
+            <label className="flex items-center gap-2 text-xs text-[var(--t-text)] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={c.mostrar_avaliacao_google !== false}
+                onChange={e => update({ mostrar_avaliacao_google: e.target.checked })}
+                className="rounded"
+              />
+              <span>Mostrar avaliação Google ({c.rating}/5{c.reviews_count ? ` · ${c.reviews_count.toLocaleString('pt-BR')} avaliações` : ''})</span>
+            </label>
+          )}
+          {c.amenities && c.amenities.length > 0 && (
+            <label className="flex items-center gap-2 text-xs text-[var(--t-text)] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={c.mostrar_amenities !== false}
+                onChange={e => update({ mostrar_amenities: e.target.checked })}
+                className="rounded"
+              />
+              <span>Mostrar comodidades ({c.amenities.length})</span>
+            </label>
+          )}
+          {c.hotel_galeria && c.hotel_galeria.length > 1 && (
+            <label className="flex items-center gap-2 text-xs text-[var(--t-text)] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={c.mostrar_galeria !== false}
+                onChange={e => update({ mostrar_galeria: e.target.checked })}
+                className="rounded"
+              />
+              <span>Mostrar galeria de fotos ({c.hotel_galeria.length} imagens)</span>
+            </label>
+          )}
+        </div>
+      )}
+
     </div>
   );
 }

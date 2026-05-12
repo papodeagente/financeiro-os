@@ -87,6 +87,24 @@ export function HotelModal({ alojamento: a, idioma, corPrimaria, onClose }: Prop
             <p className="text-sm text-gray-500 mt-0.5">{a.destino_nome}</p>
           </div>
 
+          {/* Avaliação Google (apenas se vendedor habilitou + dados disponíveis) */}
+          {a.mostrar_avaliacao_google !== false && a.rating && a.rating > 0 && (
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-100">
+              <div className="flex items-center gap-1">
+                <span className="text-2xl">⭐</span>
+                <div>
+                  <div className="text-2xl font-bold text-amber-700 leading-none">{a.rating.toFixed(1)}</div>
+                  <div className="text-[10px] text-amber-600 uppercase tracking-wide">Google Reviews</div>
+                </div>
+              </div>
+              {a.reviews_count !== undefined && a.reviews_count > 0 && (
+                <div className="text-sm text-gray-700 ml-2">
+                  Baseado em <span className="font-semibold">{a.reviews_count.toLocaleString(idioma === 'en' ? 'en-US' : idioma === 'es' ? 'es-ES' : 'pt-BR')}</span> {idioma === 'en' ? 'reviews' : idioma === 'es' ? 'reseñas' : 'avaliações'}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Description */}
           {a.hotel_descricao && (
             <p className="text-sm text-gray-700 leading-relaxed">{a.hotel_descricao}</p>
@@ -106,8 +124,32 @@ export function HotelModal({ alojamento: a, idioma, corPrimaria, onClose }: Prop
             {a.bebidas && <InfoCard label={idioma === 'en' ? 'Beverages' : 'Bebidas'} value={a.bebidas} icon="🥂" />}
           </div>
 
-          {/* Gallery */}
-          {galeria.length > 1 && (
+          {/* Comodidades (Google amenities) — só se habilitado */}
+          {a.mostrar_amenities !== false && a.amenities && a.amenities.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">
+                {idioma === 'en' ? 'Amenities' : idioma === 'es' ? 'Comodidades' : 'Comodidades'}
+              </h4>
+              <div className="flex flex-wrap gap-1.5">
+                {a.amenities.slice(0, 20).map((am, i) => (
+                  <span
+                    key={i}
+                    className="text-[11px] px-2 py-1 rounded-full bg-gray-100 text-gray-700 border border-gray-200"
+                  >
+                    {am}
+                  </span>
+                ))}
+                {a.amenities.length > 20 && (
+                  <span className="text-[11px] px-2 py-1 rounded-full bg-gray-50 text-gray-500">
+                    +{a.amenities.length - 20}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Gallery (só se habilitado) */}
+          {a.mostrar_galeria !== false && galeria.length > 1 && (
             <div>
               <h4 className="text-sm font-semibold text-gray-700 mb-2">{idioma === 'en' ? 'Gallery' : idioma === 'es' ? 'Galería' : 'Galeria'}</h4>
               <div className="grid grid-cols-3 gap-2">

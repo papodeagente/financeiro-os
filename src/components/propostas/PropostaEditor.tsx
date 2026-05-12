@@ -33,6 +33,8 @@ import type { FlightOffer } from '@/lib/flight-data-mapper';
 import type { GooglePlace } from '@/lib/hotel-data-mapper';
 import type { AlojamentoData, TransporteData } from '@/lib/crm-types';
 import { PdfExportModal } from './PdfExportModal';
+import { consumePendingPropostaHotelHandoff, consumePendingPropostaFlightHandoff } from '@/lib/api-search-handoff';
+import type { SearchAPIHotelProperty } from '@/lib/searchapi-hotels';
 
 const TIPO_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   TEXTO: Type, SERVICO: Plane, ROTEIRO_DIA: Calendar, GALERIA: Image,
@@ -168,6 +170,51 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
       hasUnsaved.current = true;
       return next;
     });
+  }, []);
+
+  // Consome handoff de busca de hotel/voo. Disparado uma vez no mount —
+  // quando o usuário volta de /hoteis ou /voos após selecionar um item.
+  useEffect(() => {
+    const hotelHandoff = consumePendingPropostaHotelHandoff(initialProposta.id);
+    if (hotelHandoff) {
+      const mapped = formatHotelForAlojamento(hotelHandoff.hotel as SearchAPIHotelProperty);
+      setProposta(prev => ({
+        ...prev,
+        secoes: prev.secoes.map(s =>
+          s.id === hotelHandoff.ctx.blockId && s.tipo === 'ALOJAMENTO'
+            ? {
+                ...s,
+                conteudo: {
+                  ...s.conteudo,
+                  ...mapped,
+                  // Preserva config existente
+                  check_in: (s.conteudo as Partial<AlojamentoData>).check_in || '',
+                  check_out: (s.conteudo as Partial<AlojamentoData>).check_out || '',
+                  noites: (s.conteudo as Partial<AlojamentoData>).noites || 0,
+                  regime: (s.conteudo as Partial<AlojamentoData>).regime || 'BB',
+                  id: hotelHandoff.ctx.blockId,
+                } as Record<string, unknown>,
+              }
+            : s
+        ),
+      }));
+      hasUnsaved.current = true;
+    }
+    const flightHandoff = consumePendingPropostaFlightHandoff(initialProposta.id);
+    if (flightHandoff) {
+      const oneWay = { ...flightHandoff.flight, returnFlights: undefined, returnDuration: undefined, returnLayovers: undefined };
+      const [mapped] = formatFlightForTransporte(oneWay) as unknown as Partial<TransporteData>[];
+      setProposta(prev => ({
+        ...prev,
+        secoes: prev.secoes.map(s =>
+          s.id === flightHandoff.ctx.blockId && s.tipo === 'TRANSPORTE'
+            ? { ...s, conteudo: { ...s.conteudo, ...mapped, id: flightHandoff.ctx.blockId } as Record<string, unknown> }
+            : s
+        ),
+      }));
+      hasUnsaved.current = true;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Auto-save with debounce
