@@ -252,6 +252,23 @@ export default function CrmConfigPage() {
     setCleaning(false);
   };
 
+  const recalcularSaldos = async () => {
+    setCleaning(true);
+    try {
+      const r = await fetch('/api/v1/crm/recalcular-saldos', { method: 'POST' });
+      const j = await r.json();
+      if (j.error) {
+        alert('Erro: ' + j.error);
+      } else {
+        alert(`Saldos recalculados:\n• Contas atualizadas: ${j.contas_atualizadas}\n• Total recebido: R$ ${(j.total_recebido || 0).toFixed(2)}\n• Total pago: R$ ${(j.total_pago || 0).toFixed(2)}\n• Saldo Caixa Geral: R$ ${(j.saldo_final_caixa_geral || 0).toFixed(2)}${j.caixa_geral_criada ? '\n• Caixa Geral criada automaticamente' : ''}${j.erros?.length ? '\n\nErros: ' + j.erros.join(', ') : ''}`);
+      }
+      await loadAll();
+    } catch (e) {
+      alert('Falha: ' + (e instanceof Error ? e.message : ''));
+    }
+    setCleaning(false);
+  };
+
   const reprocessarVencimentos = async () => {
     if (!confirm('Bumpar contas a receber/pagar PENDENTES com vencimento no passado para o futuro? Mantém a estrutura de parcelas, só atualiza a data. Idempotente — só toca o que está vencido.')) return;
     setCleaning(true);
@@ -613,6 +630,26 @@ export default function CrmConfigPage() {
             <button onClick={resetVendas} disabled={cleaning}
               className="px-4 py-2 text-[var(--text-body-sm)] text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 shrink-0 font-semibold">
               {cleaning ? 'Processando...' : 'Resetar tudo'}
+            </button>
+          </div>
+        </div>
+
+        {/* Recalcular saldo das contas bancárias */}
+        <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] p-5 mb-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)]">Recalcular saldo bancário</p>
+              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mt-1 max-w-2xl">
+                Reconstrói o saldo das contas bancárias somando todas as contas
+                a receber RECEBIDAS e subtraindo as a pagar PAGAS. Útil quando
+                as baixas foram feitas antes do sistema sincronizar saldo
+                automaticamente, ou quando o saldo não bate com o realizado.
+                Idempotente — pode rodar várias vezes.
+              </p>
+            </div>
+            <button onClick={recalcularSaldos} disabled={cleaning}
+              className="px-4 py-2 text-[var(--text-body-sm)] text-white bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50 shrink-0">
+              {cleaning ? 'Processando...' : 'Recalcular saldos'}
             </button>
           </div>
         </div>
