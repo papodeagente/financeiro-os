@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { ContaReceber, ContaPagar, ContaBancaria } from '@/lib/crm-types';
 import { loadEntities } from '@/lib/crm-storage';
+import { calcularSaldoBancario } from '@/lib/caixa-helpers';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -93,9 +94,11 @@ export default function FluxoCaixaPage() {
     };
   }, [funis, periodo]);
 
+  // Saldo computado: saldo_inicial + recebido - pago. Sempre bate com
+  // o histórico de baixas, independente de saldo_atual persistido.
   const saldoAtual = useMemo(() =>
-    contasBancarias.reduce((s, c) => s + (c.saldo_atual || 0), 0),
-    [contasBancarias]
+    calcularSaldoBancario(contasBancarias, contasReceber, contasPagar),
+    [contasBancarias, contasReceber, contasPagar]
   );
 
   const fluxo = useMemo(() => {

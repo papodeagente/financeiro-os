@@ -9,6 +9,7 @@ import { KPIGridSkeleton } from '@/components/skeletons';
 import { formatBRL } from '@/lib/utils';
 import { calcLimiteUsado } from '@/lib/cartoes-utils';
 import { useModoIniciante } from '@/lib/modo-iniciante';
+import { calcularSaldoBancario } from '@/lib/caixa-helpers';
 import type { CartaoCorporativo, ContaPagar, ContaReceber, ContaBancaria } from '@/lib/crm-types';
 import {
   BarChart3, FileSpreadsheet, Receipt, CreditCard,
@@ -81,7 +82,10 @@ export default function FinanceiroAgHubPage() {
 
         // Totais all-time. "Este mês" zerava quando vencimentos caíam em mês
         // futuro (caso comum com vendas CRM cujas parcelas vencem em 30/60d).
-        const saldoBancario = contasBancarias.reduce((s, c) => s + (c.saldo_atual || 0), 0);
+        // Saldo bancário é COMPUTADO: saldo_inicial + recebido - pago. Não
+        // depende de saldo_atual persistido (que pode estar stale se o user
+        // marcou baixas antes do override PUT entrar em produção).
+        const saldoBancario = calcularSaldoBancario(contasBancarias, receber, pagar);
         const aReceberTotal = receber
           .filter(r => r.status === 'PENDENTE')
           .reduce((s, r) => s + (r.valor_final || 0), 0);

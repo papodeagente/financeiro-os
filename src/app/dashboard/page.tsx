@@ -18,6 +18,7 @@ import {
   Info, Zap,
 } from 'lucide-react';
 import { KPIGridSkeleton } from '@/components/skeletons';
+import { calcularSaldoBancario } from '@/lib/caixa-helpers';
 
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -276,7 +277,9 @@ export default function DashboardPage() {
     const cacValorAnt = cacMesAnt?.cac || 0;
 
     // Saldo em caixa
-    const saldoCaixa = contas.reduce((s, c) => s + (c.saldo_atual || 0), 0);
+    // Saldo computado: saldo_inicial + recebido - pago. Não depende de
+    // saldo_atual persistido nas contas (pode ficar stale).
+    const saldoCaixa = calcularSaldoBancario(contas, receber, pagar);
 
     // Deltas
     const delta = (atual: number, anterior: number) =>
