@@ -10,7 +10,7 @@ import { formatBRL } from '@/lib/utils';
 import { calcLimiteUsado } from '@/lib/cartoes-utils';
 import { useModoIniciante } from '@/lib/modo-iniciante';
 import { calcularSaldoBancario } from '@/lib/saldo-bancario';
-import type { CartaoCorporativo, ContaPagar, ContaReceber, ContaBancaria } from '@/lib/crm-types';
+import type { CartaoCorporativo, ContaPagar, ContaReceber, ContaBancaria, VendaCRM } from '@/lib/crm-types';
 import {
   BarChart3, FileSpreadsheet, Receipt, CreditCard,
   ArrowRightLeft, BookOpen, Landmark, Package,
@@ -25,6 +25,9 @@ interface KPIs {
   pago: number;                // PAGO total
   resultado_projetado: number; // a_receber - a_pagar
   resultado_realizado: number; // recebido - pago
+  receita_gerada: number;      // Σ (valor_venda − custo) de TODAS vendas não canceladas
+  faturamento_vendas: number;  // Σ valor_venda das vendas (base para margem %)
+  margem_pct: number;          // receita_gerada / faturamento_vendas × 100
 }
 
 interface CartoesKpi {
@@ -61,17 +64,19 @@ export default function FinanceiroAgHubPage() {
   useEffect(() => {
     async function load() {
       try {
-        const [receberRes, pagarRes, cartoesRes, contasBancariasRes] = await Promise.all([
+        const [receberRes, pagarRes, cartoesRes, contasBancariasRes, vendasRes] = await Promise.all([
           fetch('/api/contas-receber').then(r => r.json()),
           fetch('/api/contas-pagar').then(r => r.json()),
           fetch('/api/cartoes-corp').then(r => r.json()).catch(() => []),
           fetch('/api/contas-bancarias').then(r => r.json()).catch(() => []),
+          fetch('/api/vendas-crm').then(r => r.json()).catch(() => []),
         ]);
 
         const receber: ContaReceber[] = Array.isArray(receberRes) ? receberRes : [];
         const pagar: ContaPagar[] = Array.isArray(pagarRes) ? pagarRes : [];
         const cartoes: CartaoCorporativo[] = Array.isArray(cartoesRes) ? cartoesRes : [];
         const contasBancarias: ContaBancaria[] = Array.isArray(contasBancariasRes) ? contasBancariasRes : [];
+        const vendas: Array<Partial<VendaCRM> & Record<string, unknown>> = Array.isArray(vendasRes) ? vendasRes : [];
 
         if (cartoes.length > 0) {
           const limite = cartoes.reduce((s, c) => s + (c.limite_total || 0), 0);
@@ -99,6 +104,25 @@ export default function FinanceiroAgHubPage() {
           .filter(p => p.status === 'PAGO')
           .reduce((s, p) => s + (p.valor_pago || p.valor_final || 0), 0);
 
+        // Receita gerada (comissão) das vendas — independente de baixa.
+        // É a margem bruta acumulada: faturamento_vendas − custo_vendas.
+        // Aceita tanto o shape novo (valor_total/custo_total) quanto o
+        // legado (valor_total_venda/valor_total_custo).
+        const vendasAtivas = vendas.filter(v => {
+          const s = String(v.status ?? '').toUpperCase();
+          return s !== 'CANCELADO';
+        });
+        const faturamentoVendas = vendasAtivas.reduce((s, v) => {
+          const venda = Number(v.valor_final) || Number(v.valor_total_venda) || Number(v.valor_total) || 0;
+          return s + venda;
+        }, 0);
+        const custoVendas = vendasAtivas.reduce((s, v) => {
+          const custo = Number(v.valor_total_custo) || Number(v.custo_total) || 0;
+          return s + custo;
+        }, 0);
+        const receitaGerada = Math.max(faturamentoVendas - custoVendas, 0);
+        const margemPct = faturamentoVendas > 0 ? (receitaGerada / faturamentoVendas) * 100 : 0;
+
         setKpis({
           saldo: saldoBancario,
           a_receber: aReceberTotal,
@@ -107,6 +131,9 @@ export default function FinanceiroAgHubPage() {
           pago: pagoTotal,
           resultado_projetado: aReceberTotal - aPagarTotal,
           resultado_realizado: recebidoTotal - pagoTotal,
+          receita_gerada: receitaGerada,
+          faturamento_vendas: faturamentoVendas,
+          margem_pct: margemPct,
         });
 
         // Últimas movimentações: ordena por data_emissao desc, junta receber + pagar
@@ -162,6 +189,32 @@ export default function FinanceiroAgHubPage() {
             <p className="text-[10px] text-[var(--t-text-muted)] mt-1">{kpi.hint}</p>
           </div>
         ))}
+      </div>
+
+      {/* Receita gerada — destaque (comissão das vendas, independente de baixa) */}
+      <div className="mb-4 rounded-[var(--t-card-radius)] border border-[var(--t-green)]/30 bg-gradient-to-br from-[var(--t-green)]/5 to-transparent p-5">
+        <div className="flex items-end justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide mb-2">
+              Receita gerada (comissão)
+            </p>
+            <p className="text-3xl font-bold text-[var(--t-green)]">{formatBRL(kpis?.receita_gerada || 0)}</p>
+            <p className="text-[11px] text-[var(--t-text-muted)] mt-1">
+              Margem bruta de todas as vendas, antes de descontar pagamentos
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide mb-1">
+              Margem do período
+            </p>
+            <p className={`text-2xl font-bold ${(kpis?.margem_pct || 0) >= 15 ? 'text-[var(--crm-ok)]' : (kpis?.margem_pct || 0) >= 8 ? 'text-[var(--t-amber)]' : 'text-[var(--crm-err)]'}`}>
+              {(kpis?.margem_pct || 0).toFixed(1)}%
+            </p>
+            <p className="text-[10px] text-[var(--t-text-muted)] mt-0.5">
+              sobre {formatBRL(kpis?.faturamento_vendas || 0)} faturado
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Segunda linha — Realizado */}
