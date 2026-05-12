@@ -65,6 +65,18 @@ function defaultConteudo(tipo: string): Record<string, unknown> {
     case 'COUNTDOWN': return { titulo: '', data_evento: '', mensagem: '' };
     case 'ALOJAMENTO': return { id: generateId(), destino_nome: '', hotel_nome: '', hotel_estrelas: 0, hotel_imagem: '', hotel_galeria: [], hotel_descricao: '', hotel_link: '', check_in: '', check_out: '', noites: 0, regime: 'BB', quarto_tipo: '', bebidas: '', viagem_noturna: false };
     case 'TRANSPORTE': return { id: generateId(), tipo: 'TRANSFER', data: '', origem: '', destino: '', companhia: '', numero_voo: '', horario_saida: '', horario_chegada: '', distancia_km: 0, tempo_estimado: '', detalhes: '' };
+    case 'VOO': return {
+      id: generateId(),
+      data: '', origem: '', destino: '',
+      companhia: '', numero_voo: '', horario_saida: '', horario_chegada: '',
+      detalhes: '',
+      // Defaults dos toggles — visíveis quando o voo for importado da API
+      mostrar_segmentos: true,
+      mostrar_emissao_co2: true,
+      mostrar_aeronave: true,
+      mostrar_bagagem: true,
+      mostrar_alerta_atraso: false,
+    };
     default: return {};
   }
 }
