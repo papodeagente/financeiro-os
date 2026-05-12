@@ -229,6 +229,29 @@ export default function CrmConfigPage() {
     setCleaning(false);
   };
 
+  const resetVendas = async () => {
+    const c1 = prompt('⚠️ RESET COMPLETO\n\nEssa ação APAGA permanentemente:\n• Todas as vendas\n• Todas as contas a receber\n• Todas as contas a pagar\n• Itens de venda\n• Eventos CRM (entrada/saída)\n\nPRESERVA: configuração da integração, contas bancárias, cartões, plano de contas, clientes, fornecedores, grupos/produtos, propostas, metas, equipe.\n\nDigite RESETAR para confirmar:');
+    if (c1 !== 'RESETAR') return;
+    if (!confirm('Tem certeza ABSOLUTA? Esta ação NÃO pode ser desfeita.')) return;
+    setCleaning(true);
+    try {
+      const r = await fetch('/api/v1/crm/reset-vendas', {
+        method: 'POST',
+        headers: { 'x-confirm-reset': 'SIM' },
+      });
+      const j = await r.json();
+      if (j.error) {
+        alert('Erro: ' + j.error);
+      } else {
+        alert(`Reset concluído:\n• Vendas: ${j.vendas}\n• Itens venda: ${j.itens_venda}\n• Contas receber: ${j.contas_receber}\n• Contas pagar: ${j.contas_pagar}\n• Eventos entrada: ${j.eventos_entrada}\n• Eventos saída: ${j.eventos_saida}\n${j.erros?.length ? '\nErros: ' + j.erros.join(', ') : ''}`);
+      }
+      await loadAll();
+    } catch (e) {
+      alert('Falha: ' + (e instanceof Error ? e.message : ''));
+    }
+    setCleaning(false);
+  };
+
   const reprocessarVencimentos = async () => {
     if (!confirm('Bumpar contas a receber/pagar PENDENTES com vencimento no passado para o futuro? Mantém a estrutura de parcelas, só atualiza a data. Idempotente — só toca o que está vencido.')) return;
     setCleaning(true);
@@ -566,6 +589,30 @@ export default function CrmConfigPage() {
             <button onClick={reprocessarVendas} disabled={cleaning}
               className="px-4 py-2 text-[var(--text-body-sm)] text-white bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50 shrink-0">
               {cleaning ? 'Processando...' : 'Reprocessar vendas'}
+            </button>
+          </div>
+        </div>
+
+        {/* Reset completo de vendas (zerar para testar) */}
+        <div className="rounded-xl border-2 border-red-500/30 bg-red-500/5 p-5 mb-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[var(--text-body-sm)] font-medium text-red-500">⚠️ Reset completo de vendas</p>
+              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mt-1 max-w-2xl">
+                Apaga TODAS as vendas, contas a receber, contas a pagar, itens
+                de venda e eventos CRM deste tenant. Útil para começar testes
+                do zero quando dados antigos e novos da integração estão
+                misturados. <strong className="text-red-500">NÃO REVERSÍVEL.</strong>
+                <br /><br />
+                <strong>Preserva:</strong> configuração da integração CRM
+                (chaves, URLs), contas bancárias, cartões, plano de contas,
+                clientes, fornecedores, grupos/produtos, propostas, metas,
+                equipe.
+              </p>
+            </div>
+            <button onClick={resetVendas} disabled={cleaning}
+              className="px-4 py-2 text-[var(--text-body-sm)] text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 shrink-0 font-semibold">
+              {cleaning ? 'Processando...' : 'Resetar tudo'}
             </button>
           </div>
         </div>

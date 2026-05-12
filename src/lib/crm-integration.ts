@@ -1750,6 +1750,67 @@ export async function reprocessarVencimentosAtrasados(tenantId: string): Promise
 }
 
 // ──────────────────────────────────────────
+// resetarDadosVendas — limpa TODAS vendas + contas + eventos CRM
+// --------------------------------------------------------------------
+// Operação destrutiva. Apaga só dados transacionais do tenant.
+// PRESERVA: crm_config, contas_bancarias, cartoes, plano de contas,
+// clientes, fornecedores, grupos, propostas, metas, equipe, etc.
+//
+// Uso: começar testes do zero após mistura de dados antigos/novos
+// na integração. NÃO REVERSÍVEL.
+// ──────────────────────────────────────────
+
+export async function resetarDadosVendas(tenantId: string): Promise<{
+  vendas: number;
+  itens_venda: number;
+  contas_receber: number;
+  contas_pagar: number;
+  eventos_entrada: number;
+  eventos_saida: number;
+  erros: string[];
+}> {
+  const result = {
+    vendas: 0,
+    itens_venda: 0,
+    contas_receber: 0,
+    contas_pagar: 0,
+    eventos_entrada: 0,
+    eventos_saida: 0,
+    erros: [] as string[],
+  };
+  if (!pool || !tenantId) {
+    result.erros.push('pool ou tenantId ausente');
+    return result;
+  }
+  try {
+    await initDB();
+    const tables: Array<{ key: keyof typeof result; table: string }> = [
+      { key: 'contas_receber', table: 'contas_receber' },
+      { key: 'contas_pagar', table: 'contas_pagar' },
+      { key: 'itens_venda', table: 'itens_venda' },
+      { key: 'vendas', table: 'vendas_crm' },
+      { key: 'eventos_entrada', table: 'crm_eventos_entrada' },
+      { key: 'eventos_saida', table: 'crm_eventos_saida' },
+    ];
+    for (const { key, table } of tables) {
+      try {
+        const r = await pool.query(
+          `DELETE FROM ${table} WHERE tenant_id = $1`,
+          [tenantId],
+        );
+        (result[key] as number) = r.rowCount ?? 0;
+      } catch (e) {
+        result.erros.push(`${table}: ${e instanceof Error ? e.message : 'erro'}`);
+      }
+    }
+    return result;
+  } catch (e) {
+    result.erros.push(e instanceof Error ? e.message : 'erro geral');
+    return result;
+  }
+}
+
+// ──────────────────────────────────────────
 // Verify inbound HMAC signature
 // ──────────────────────────────────────────
 
