@@ -69,10 +69,15 @@ export default function DREPage() {
     return [...months].sort().reverse();
   }, [contasReceber, contasPagar, vendas]);
 
+  // DRE para AGÊNCIA DE VIAGENS — CNAE 7911-2/00
+  // Regime de INTERMEDIAÇÃO: a agência recebe apenas a COMISSÃO sobre a
+  // venda. O valor pago à companhia aérea/hotel/operadora é repasse, não
+  // custo da agência (CMV = 0). Receita Bruta = comissão (valor_venda −
+  // custo_pago_ao_fornecedor) + comissões diretas + fees + outras receitas
+  // próprias. Sem 'Vendas de Serviços' inflando a receita.
   function buildDRE(month: string): DRELine[] {
     if (!month) return [];
 
-    // Filter data for this month
     const monthReceber = contasReceber.filter(cr =>
       cr.data_vencimento?.substring(0, 7) === month && (cr.status === 'RECEBIDO' || cr.status === 'PENDENTE')
     );
@@ -83,10 +88,17 @@ export default function DREPage() {
       v.data_venda?.substring(0, 7) === month && v.status !== 'CANCELADO'
     );
 
-    // Revenue from sales
-    const receitaBrutaVendas = monthVendas.reduce((s, v) => s + v.valor_final, 0);
+    // VOLUME intermediado (informativo — não entra na DRE; é só
+    // referência de quanto a agência movimentou)
+    const volumeIntermediado = monthVendas.reduce((s, v) => s + (v.valor_final || 0), 0);
 
-    // Revenue from receivables (comissoes, fees, etc.)
+    // RECEITA BRUTA = margem (comissão) das vendas + comissões de
+    // fornecedores recebidas explicitamente + fees + outras receitas.
+    // É a base sobre a qual incidem impostos (ISS, PIS/COFINS).
+    const comissaoVendas = monthVendas.reduce((s, v) => {
+      const margem = (v.valor_final || 0) - (v.valor_total_custo || 0);
+      return s + Math.max(margem, 0);
+    }, 0);
     const receitaComissoes = monthReceber
       .filter(cr => cr.origem === 'COMISSAO_FORNECEDOR')
       .reduce((s, cr) => s + cr.valor_final, 0);
@@ -97,72 +109,77 @@ export default function DREPage() {
       .filter(cr => cr.origem === 'OUTROS')
       .reduce((s, cr) => s + cr.valor_final, 0);
 
-    const receitaBruta = receitaBrutaVendas + receitaComissoes + receitaFee + receitaOutras;
+    const receitaBruta = comissaoVendas + receitaComissoes + receitaFee + receitaOutras;
 
-    // Costs by category (using plano de contas)
     function sumByCategory(prefix: string): number {
       const catIds = planoContas.filter(p => p.codigo.startsWith(prefix)).map(p => p.id);
       return monthPagar.filter(cp => catIds.includes(cp.categoria_id)).reduce((s, cp) => s + cp.valor_final, 0);
     }
 
-    // Direct costs (CMV = Cost of Merchandise Sold)
-    const cmv = sumByCategory('2.1');
-    // If no categorization, approximate from vendas custo
-    const cmvReal = cmv || monthVendas.reduce((s, v) => s + v.valor_total_custo, 0);
-
-    // Operational expenses
+    // CNAE 7911-2: não tem CMV. Custo do fornecedor é repasse direto
+    // do cliente, não despesa da agência. Categorias 2.2..2.6 cobrem
+    // as despesas operacionais reais.
     const despOperacionais = sumByCategory('2.2');
     const despComerciais = sumByCategory('2.6');
     const despTaxas = sumByCategory('2.3');
     const despFinanceiras = sumByCategory('2.4');
     const despOutras = sumByCategory('2.5');
 
-    // Uncategorized expenses
     const categorizedIds = new Set(planoContas.map(p => p.id));
     const uncategorized = monthPagar
       .filter(cp => !categorizedIds.has(cp.categoria_id) && !cp.categoria_id)
+      // Exclui CP auto-gerada de venda (custo de repasse ao fornecedor,
+      // que NÃO é despesa da agência neste regime).
+      .filter(cp => !(cp.auto_gerado && cp.origem === 'VENDA'))
       .reduce((s, cp) => s + cp.valor_final, 0);
 
-    const totalDespesas = cmvReal + despOperacionais + despComerciais + despTaxas + despFinanceiras + despOutras + uncategorized;
-    const lucroBruto = receitaBruta - cmvReal;
-    const lucroOperacional = lucroBruto - despOperacionais - despComerciais;
+    const totalDespesas = despOperacionais + despComerciais + despTaxas + despFinanceiras + despOutras + uncategorized;
+    const receitaLiquida = receitaBruta - despTaxas;
+    const resultadoOperacional = receitaLiquida - despOperacionais - despComerciais;
     const lucroLiquido = receitaBruta - totalDespesas;
-    const margemBruta = receitaBruta > 0 ? (lucroBruto / receitaBruta) * 100 : 0;
     const margemLiquida = receitaBruta > 0 ? (lucroLiquido / receitaBruta) * 100 : 0;
+    const margemSobreVolume = volumeIntermediado > 0 ? (receitaBruta / volumeIntermediado) * 100 : 0;
 
-    const lines: DRELine[] = [
-      { codigo: '', nome: 'RECEITA BRUTA', valor: receitaBruta, tipo: 'header', indent: 0 },
-      { codigo: '1.0', nome: 'Vendas de Serviços', valor: receitaBrutaVendas, tipo: 'item', indent: 1 },
-      { codigo: '1.1', nome: 'Comissões de Fornecedores', valor: receitaComissoes, tipo: 'item', indent: 1 },
-      { codigo: '1.3', nome: 'Fee de Serviço', valor: receitaFee, tipo: 'item', indent: 1 },
-      { codigo: '1.5', nome: 'Outras Receitas', valor: receitaOutras, tipo: 'item', indent: 1 },
+    const lines: DRELine[] = [];
 
-      { codigo: '', nome: '(-) CUSTOS DIRETOS (CMV)', valor: -cmvReal, tipo: 'header', indent: 0 },
-      { codigo: '2.1', nome: 'Custos de Vendas', valor: cmvReal, tipo: 'item', indent: 1 },
+    // Informativo no topo: volume intermediado (não entra na conta)
+    if (volumeIntermediado > 0) {
+      lines.push({ codigo: '', nome: 'VOLUME INTERMEDIADO (informativo)', valor: volumeIntermediado, tipo: 'header', indent: 0 });
+      lines.push({ codigo: '0.1', nome: 'Total transacionado (passagens, hotéis, etc.)', valor: volumeIntermediado, tipo: 'item', indent: 1 });
+    }
 
-      { codigo: '', nome: 'LUCRO BRUTO', valor: lucroBruto, tipo: 'subtotal', indent: 0 },
+    lines.push(
+      { codigo: '', nome: 'RECEITA BRUTA (comissão + serviços)', valor: receitaBruta, tipo: 'header', indent: 0 },
+      { codigo: '1.1', nome: 'Comissão sobre vendas', valor: comissaoVendas, tipo: 'item', indent: 1 },
+      { codigo: '1.2', nome: 'Comissões de fornecedores', valor: receitaComissoes, tipo: 'item', indent: 1 },
+      { codigo: '1.3', nome: 'Fee de serviço', valor: receitaFee, tipo: 'item', indent: 1 },
+      { codigo: '1.5', nome: 'Outras receitas', valor: receitaOutras, tipo: 'item', indent: 1 },
+
+      { codigo: '', nome: '(-) IMPOSTOS SOBRE A RECEITA', valor: -despTaxas, tipo: 'header', indent: 0 },
+      { codigo: '2.3', nome: 'ISS, PIS, COFINS e outros', valor: despTaxas, tipo: 'item', indent: 1 },
+
+      { codigo: '', nome: 'RECEITA LÍQUIDA', valor: receitaLiquida, tipo: 'subtotal', indent: 0 },
 
       { codigo: '', nome: '(-) DESPESAS OPERACIONAIS', valor: -(despOperacionais + despComerciais), tipo: 'header', indent: 0 },
-      { codigo: '2.2', nome: 'Despesas Operacionais', valor: despOperacionais, tipo: 'item', indent: 1 },
-      { codigo: '2.6', nome: 'Custos Comerciais', valor: despComerciais, tipo: 'item', indent: 1 },
+      { codigo: '2.2', nome: 'Despesas operacionais (aluguel, salários, etc.)', valor: despOperacionais, tipo: 'item', indent: 1 },
+      { codigo: '2.6', nome: 'Despesas comerciais (marketing, comissão vendedor)', valor: despComerciais, tipo: 'item', indent: 1 },
 
-      { codigo: '', nome: 'LUCRO OPERACIONAL', valor: lucroOperacional, tipo: 'subtotal', indent: 0 },
+      { codigo: '', nome: 'RESULTADO OPERACIONAL', valor: resultadoOperacional, tipo: 'subtotal', indent: 0 },
 
-      { codigo: '', nome: '(-) DESPESAS FINANCEIRAS E IMPOSTOS', valor: -(despTaxas + despFinanceiras), tipo: 'header', indent: 0 },
-      { codigo: '2.3', nome: 'Taxas e Impostos', valor: despTaxas, tipo: 'item', indent: 1 },
-      { codigo: '2.4', nome: 'Despesas Financeiras', valor: despFinanceiras, tipo: 'item', indent: 1 },
-    ];
+      { codigo: '', nome: '(-) DESPESAS FINANCEIRAS', valor: -despFinanceiras, tipo: 'header', indent: 0 },
+      { codigo: '2.4', nome: 'Juros, tarifas bancárias', valor: despFinanceiras, tipo: 'item', indent: 1 },
+    );
 
     if (despOutras > 0 || uncategorized > 0) {
       lines.push({ codigo: '', nome: '(-) OUTRAS DESPESAS', valor: -(despOutras + uncategorized), tipo: 'header', indent: 0 });
-      if (despOutras > 0) lines.push({ codigo: '2.5', nome: 'Outras Despesas', valor: despOutras, tipo: 'item', indent: 1 });
-      if (uncategorized > 0) lines.push({ codigo: '', nome: 'Não Categorizadas', valor: uncategorized, tipo: 'item', indent: 1 });
+      if (despOutras > 0) lines.push({ codigo: '2.5', nome: 'Outras despesas', valor: despOutras, tipo: 'item', indent: 1 });
+      if (uncategorized > 0) lines.push({ codigo: '', nome: 'Não categorizadas', valor: uncategorized, tipo: 'item', indent: 1 });
     }
 
     lines.push(
       { codigo: '', nome: 'LUCRO LÍQUIDO', valor: lucroLiquido, tipo: 'total', indent: 0 },
-      { codigo: '', nome: `Margem Bruta: ${PCT(margemBruta)}`, valor: margemBruta, tipo: 'item', indent: 0 },
-      { codigo: '', nome: `Margem Líquida: ${PCT(margemLiquida)}`, valor: margemLiquida, tipo: 'item', indent: 0 },
+      { codigo: '', nome: `Margem líquida (sobre receita): ${PCT(margemLiquida)}`, valor: margemLiquida, tipo: 'item', indent: 0 },
+      { codigo: '', nome: `Margem sobre volume intermediado: ${PCT(margemSobreVolume)}`, valor: margemSobreVolume, tipo: 'item', indent: 0 },
     );
 
     return lines;
@@ -172,8 +189,8 @@ export default function DREPage() {
   const dreCompare = useMemo(() => compareMonth ? buildDRE(compareMonth) : [], [compareMonth, contasReceber, contasPagar, vendas, planoContas]);
 
   // Summary metrics from main DRE
-  const receitaBruta = dreMain.find(l => l.nome === 'RECEITA BRUTA')?.valor || 0;
-  const lucroBruto = dreMain.find(l => l.nome === 'LUCRO BRUTO')?.valor || 0;
+  const receitaBruta = dreMain.find(l => l.nome.startsWith('RECEITA BRUTA'))?.valor || 0;
+  const receitaLiquida = dreMain.find(l => l.nome === 'RECEITA LÍQUIDA')?.valor || 0;
   const lucroLiquido = dreMain.find(l => l.nome === 'LUCRO LÍQUIDO')?.valor || 0;
 
   if (loading) {
@@ -192,7 +209,9 @@ export default function DREPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-[var(--t-text)]">DRE — Demonstrativo de Resultado</h1>
-            <p className="text-[var(--t-text-secondary)] text-sm mt-1">Resultado financeiro calculado automaticamente a partir dos lançamentos</p>
+            <p className="text-[var(--t-text-secondary)] text-sm mt-1">
+              Regime de intermediação <span className="font-medium text-[var(--t-text)]">CNAE 7911-2/00</span> · Receita Bruta = comissão (margem), não o valor total transacionado
+            </p>
           </div>
           <div className="flex gap-2 items-center">
             <select
@@ -233,8 +252,8 @@ export default function DREPage() {
             <CardContent className="p-4 flex items-center gap-4">
               <TrendingUp className="w-8 h-8 text-[var(--t-green)] shrink-0" />
               <div>
-                <p className="text-[var(--t-text-muted)] text-xs uppercase">Lucro Bruto</p>
-                <p className={`text-xl font-bold ${lucroBruto >= 0 ? 'text-[var(--t-green)]' : 'text-[var(--t-red)]'}`}>{BRL(lucroBruto)}</p>
+                <p className="text-[var(--t-text-muted)] text-xs uppercase">Receita Líquida</p>
+                <p className={`text-xl font-bold ${receitaLiquida >= 0 ? 'text-[var(--t-green)]' : 'text-[var(--t-red)]'}`}>{BRL(receitaLiquida)}</p>
               </div>
             </CardContent>
           </Card>
