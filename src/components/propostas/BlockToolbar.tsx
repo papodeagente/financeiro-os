@@ -24,7 +24,7 @@ const SECAO_TIPOS = [
   { tipo: 'MAPA', label: 'Mapa', icon: Map, desc: 'Pontos no mapa' },
   { tipo: 'FAQ', label: 'FAQ', icon: HelpCircle, desc: 'Perguntas frequentes' },
   { tipo: 'COUNTDOWN', label: 'Countdown', icon: Timer, desc: 'Contagem regressiva' },
-  { tipo: 'ALOJAMENTO', label: 'Alojamento', icon: Bed, desc: 'Hotel estruturado' },
+  { tipo: 'ALOJAMENTO', label: 'Hospedagem', icon: Bed, desc: 'Hotel estruturado' },
   { tipo: 'TRANSPORTE', label: 'Transporte', icon: Car, desc: 'Transfer, carro, trem...' },
 ] as const;
 

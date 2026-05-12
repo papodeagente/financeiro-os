@@ -133,7 +133,7 @@ const translations: Record<IdiomaProposal, Translations> = {
     estadia: 'Estadia',
     regime: 'Regime',
     base: 'Base',
-    alojamento: 'Alojamento',
+    alojamento: 'Hospedagem',
     destino: 'Destino',
     distancia: 'Distância',
     tempoEstimado: 'Tempo estimado',

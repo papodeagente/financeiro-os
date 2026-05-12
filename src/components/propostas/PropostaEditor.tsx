@@ -46,7 +46,7 @@ const TIPO_LABELS: Record<string, string> = {
   TEXTO: 'Texto', SERVICO: 'Servico', VOO: 'Voo', ROTEIRO_DIA: 'Roteiro', GALERIA: 'Galeria',
   INCLUSOS: 'Inclusos', VALORES: 'Valores', DEPOIMENTO: 'Depoimento', CTA: 'CTA',
   VIDEO: 'Video', MAPA: 'Mapa', FAQ: 'FAQ', COUNTDOWN: 'Countdown',
-  ALOJAMENTO: 'Alojamento', TRANSPORTE: 'Transporte',
+  ALOJAMENTO: 'Hospedagem', TRANSPORTE: 'Transporte',
 };
 
 function defaultConteudo(tipo: string): Record<string, unknown> {
