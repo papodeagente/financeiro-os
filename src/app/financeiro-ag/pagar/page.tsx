@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
   Plus, X, Check, Trash2, TrendingDown, Clock, AlertCircle, CreditCard,
-  Copy, Target, Calendar,
+  Copy, Target, Calendar, Search,
 } from 'lucide-react';
 import { PageShell } from '@/components/PageShell';
 import { PageHeader } from '@/components/PageHeader';
@@ -114,6 +114,9 @@ export default function ContasPagarPage() {
   const [filterStatus, setFilterStatus] = useState<StatusContaPagar | 'TODOS'>('TODOS');
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
+  const [filterCategoria, setFilterCategoria] = useState('TODAS');
+  const [filterBusca, setFilterBusca] = useState('');
+  const [filterPeriodo, setFilterPeriodo] = useState<'TODOS' | 'MES_ATUAL' | 'PROX_30D' | 'PROX_90D' | 'VENCIDOS' | 'MES_PASSADO' | 'CUSTOM'>('MES_ATUAL');
   const [showCopyModal, setShowCopyModal] = useState(false);
   const [copySourceMonth, setCopySourceMonth] = useState('');
   const [copyTargetMonth, setCopyTargetMonth] = useState('');
@@ -299,17 +302,77 @@ export default function ContasPagarPage() {
   // Get unique months from data for the copy modal
   const availableMonths = [...new Set(items.map(i => i.data_vencimento?.substring(0, 7)).filter(Boolean))].sort();
 
-  const filtered = items.filter(i => {
-    if (filterStatus !== 'TODOS' && i.status !== filterStatus) return false;
-    if (filterDateFrom && i.data_vencimento < filterDateFrom) return false;
-    if (filterDateTo && i.data_vencimento > filterDateTo) return false;
+  // Resolve período pré-definido em range concreto de datas (sobrescreve
+  // filterDateFrom/To quando o usuário usa um atalho).
+  const today = new Date().toISOString().split('T')[0];
+  const periodoRange = (() => {
+    const d = new Date();
+    const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    if (filterPeriodo === 'MES_ATUAL') {
+      const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+      return { de: `${ym}-01`, ate: last.toISOString().split('T')[0] };
+    }
+    if (filterPeriodo === 'PROX_30D') {
+      const fim = new Date(d); fim.setDate(fim.getDate() + 30);
+      return { de: today, ate: fim.toISOString().split('T')[0] };
+    }
+    if (filterPeriodo === 'PROX_90D') {
+      const fim = new Date(d); fim.setDate(fim.getDate() + 90);
+      return { de: today, ate: fim.toISOString().split('T')[0] };
+    }
+    if (filterPeriodo === 'VENCIDOS') {
+      return { de: '', ate: today, somentePendente: true };
+    }
+    if (filterPeriodo === 'MES_PASSADO') {
+      const ini = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+      const fim = new Date(d.getFullYear(), d.getMonth(), 0);
+      return { de: ini.toISOString().split('T')[0], ate: fim.toISOString().split('T')[0] };
+    }
+    if (filterPeriodo === 'CUSTOM') return { de: filterDateFrom, ate: filterDateTo };
+    return { de: '', ate: '' };
+  })() as { de: string; ate: string; somentePendente?: boolean };
+
+  // Aplica TODOS os filtros menos status — usado pelos KPIs (que somam
+  // por status). A tabela aplica também o filterStatus por cima.
+  const filteredBase = items.filter(i => {
+    if (periodoRange.de && i.data_vencimento < periodoRange.de) return false;
+    if (periodoRange.ate && i.data_vencimento > periodoRange.ate) return false;
+    if (periodoRange.somentePendente && i.status !== 'PENDENTE' && i.status !== 'VENCIDO') return false;
+    if (filterCategoria !== 'TODAS' && i.categoria_id !== filterCategoria) return false;
+    if (filterBusca) {
+      const q = filterBusca.toLowerCase();
+      const match = (i.fornecedor_nome || '').toLowerCase().includes(q)
+        || (i.descricao || '').toLowerCase().includes(q);
+      if (!match) return false;
+    }
     return true;
   });
 
-  const totalPendente = items.filter(i => i.status === 'PENDENTE').reduce((s, i) => s + i.valor_final, 0);
-  const totalPago = items.filter(i => i.status === 'PAGO').reduce((s, i) => s + (i.valor_pago ?? i.valor_final), 0);
-  const totalVencido = items.filter(i => i.status === 'VENCIDO').reduce((s, i) => s + i.valor_final, 0);
-  const totalComercial = items.filter(i => i.is_custo_comercial && (i.status === 'PAGO' || i.status === 'PENDENTE')).reduce((s, i) => s + i.valor_final, 0);
+  const filtered = filteredBase.filter(i =>
+    filterStatus === 'TODOS' ? true : i.status === filterStatus
+  );
+
+  // KPIs RESPEITAM o filtro do período/categoria/busca — só não filtram
+  // por status (cada KPI corresponde a um status).
+  const totalPendente = filteredBase.filter(i => i.status === 'PENDENTE').reduce((s, i) => s + i.valor_final, 0);
+  const totalPago = filteredBase.filter(i => i.status === 'PAGO').reduce((s, i) => s + (i.valor_pago ?? i.valor_final), 0);
+  const totalVencido = filteredBase.filter(i => i.status === 'VENCIDO' || (i.status === 'PENDENTE' && i.data_vencimento < today)).reduce((s, i) => s + i.valor_final, 0);
+  const totalComercial = filteredBase.filter(i => i.is_custo_comercial && (i.status === 'PAGO' || i.status === 'PENDENTE')).reduce((s, i) => s + i.valor_final, 0);
+
+  const filtrosAtivos =
+    (filterPeriodo !== 'MES_ATUAL' ? 1 : 0) +
+    (filterStatus !== 'TODOS' ? 1 : 0) +
+    (filterCategoria !== 'TODAS' ? 1 : 0) +
+    (filterBusca ? 1 : 0);
+
+  const limparFiltros = () => {
+    setFilterStatus('TODOS');
+    setFilterPeriodo('MES_ATUAL');
+    setFilterCategoria('TODAS');
+    setFilterBusca('');
+    setFilterDateFrom('');
+    setFilterDateTo('');
+  };
 
   const STATUSES: Array<StatusContaPagar | 'TODOS'> = ['TODOS', 'PENDENTE', 'PAGO', 'VENCIDO', 'CANCELADO', 'PARCIAL'];
   // Mostra todas as categorias de DESPESA (com ou sem subcódigo). Antes
@@ -453,44 +516,40 @@ export default function ContasPagarPage() {
       }
     >
 
-        {/* Summary Cards */}
+        {/* Summary Cards — clicáveis, refletem o período/filtros ativos */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-            <CardContent className="p-4 flex items-center gap-4">
-              <Clock className="w-8 h-8 text-[var(--t-amber)] shrink-0" />
-              <div>
-                <p className="text-[var(--t-text-muted)] text-xs uppercase">Pendente</p>
-                <p className="text-xl font-bold text-[var(--t-amber)]">{BRL(totalPendente)}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-            <CardContent className="p-4 flex items-center gap-4">
-              <TrendingDown className="w-8 h-8 text-[var(--t-green)] shrink-0" />
-              <div>
-                <p className="text-[var(--t-text-muted)] text-xs uppercase">Pago</p>
-                <p className="text-xl font-bold text-[var(--t-green)]">{BRL(totalPago)}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-            <CardContent className="p-4 flex items-center gap-4">
-              <AlertCircle className="w-8 h-8 text-[var(--t-red)] shrink-0" />
-              <div>
-                <p className="text-[var(--t-text-muted)] text-xs uppercase">Vencido</p>
-                <p className="text-xl font-bold text-[var(--t-red)]">{BRL(totalVencido)}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-            <CardContent className="p-4 flex items-center gap-4">
-              <Target className="w-8 h-8 text-[var(--t-blue)] shrink-0" />
-              <div>
-                <p className="text-[var(--t-text-muted)] text-xs uppercase">Custo Comercial</p>
-                <p className="text-xl font-bold text-[var(--t-blue)]">{BRL(totalComercial)}</p>
-              </div>
-            </CardContent>
-          </Card>
+          {[
+            { key: 'PENDENTE' as const, label: 'Pendente', icon: Clock, color: 'text-[var(--t-amber)]', value: totalPendente, hint: 'Ainda não pago' },
+            { key: 'PAGO' as const, label: 'Pago', icon: TrendingDown, color: 'text-[var(--t-green)]', value: totalPago, hint: 'Já quitado' },
+            { key: 'VENCIDO' as const, label: 'Vencido', icon: AlertCircle, color: 'text-[var(--t-red)]', value: totalVencido, hint: 'Pendente após o vencimento' },
+            { key: 'COMERCIAL' as const, label: 'Custo Comercial', icon: Target, color: 'text-[var(--t-blue)]', value: totalComercial, hint: 'Marketing, CAC' },
+          ].map(card => {
+            const ativo = (card.key === 'PENDENTE' || card.key === 'PAGO' || card.key === 'VENCIDO') && filterStatus === card.key;
+            const Icon = card.icon;
+            return (
+              <button
+                key={card.key}
+                type="button"
+                onClick={() => {
+                  if (card.key === 'COMERCIAL') return;
+                  setFilterStatus(filterStatus === card.key ? 'TODOS' : card.key);
+                }}
+                disabled={card.key === 'COMERCIAL'}
+                className={`text-left rounded-[var(--t-card-radius)] bg-[var(--t-surface)] p-4 border transition-all ${
+                  ativo ? 'border-[var(--t-green)] shadow-[0_0_0_3px_var(--t-green-shadow)]' : 'border-[var(--t-border)] hover:border-[var(--t-text-muted)]'
+                } ${card.key === 'COMERCIAL' ? 'cursor-default' : 'cursor-pointer'}`}
+              >
+                <div className="flex items-center gap-3">
+                  <Icon className={`w-7 h-7 shrink-0 ${card.color}`} />
+                  <div className="min-w-0">
+                    <p className="text-[var(--t-text-muted)] text-[10px] uppercase tracking-wide">{card.label}</p>
+                    <p className={`text-xl font-bold ${card.color}`}>{BRL(card.value)}</p>
+                    <p className="text-[10px] text-[var(--t-text-muted)] mt-0.5">{card.hint}</p>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
         </div>
 
         {/* Copy Month Modal */}
@@ -812,49 +871,111 @@ export default function ContasPagarPage() {
           </Card>
         )}
 
-        {/* Filters */}
+        {/* Filters — busca + chips de período + categoria + clear */}
         <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-          <CardContent className="p-4 flex flex-wrap gap-3 items-end">
-            <div>
-              <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Status</label>
+          <CardContent className="p-4 space-y-3">
+            {/* Linha 1: busca + categoria + limpar */}
+            <div className="flex flex-wrap gap-3 items-center">
+              <div className="relative flex-1 min-w-[240px]">
+                <Search className="w-4 h-4 text-[var(--t-text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
+                <Input
+                  value={filterBusca}
+                  onChange={e => setFilterBusca(e.target.value)}
+                  placeholder="Buscar por fornecedor ou descrição..."
+                  className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)] pl-9"
+                />
+              </div>
               <select
-                value={filterStatus}
-                onChange={e => setFilterStatus(e.target.value as StatusContaPagar | 'TODOS')}
-                className="bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text)]"
+                value={filterCategoria}
+                onChange={e => setFilterCategoria(e.target.value)}
+                className="bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text)] min-w-[180px]"
               >
-                {STATUSES.map(s => (
-                  <option key={s} value={s}>{s}</option>
+                <option value="TODAS">Todas as categorias</option>
+                {despesaContas.sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true })).map(c => (
+                  <option key={c.id} value={c.id}>{c.codigo} — {c.nome}</option>
                 ))}
               </select>
+              {filtrosAtivos > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={limparFiltros}
+                  className="border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]"
+                >
+                  <X className="w-3 h-3 mr-1" /> Limpar filtros ({filtrosAtivos})
+                </Button>
+              )}
             </div>
-            <div>
-              <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Vencimento De</label>
-              <Input
-                type="date"
-                value={filterDateFrom}
-                onChange={e => setFilterDateFrom(e.target.value)}
-                className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)] w-40"
-              />
+
+            {/* Linha 2: chips de período rápido */}
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="text-[10px] uppercase tracking-wide text-[var(--t-text-muted)] mr-1">Período:</span>
+              {[
+                { key: 'MES_ATUAL', label: 'Este mês' },
+                { key: 'PROX_30D', label: 'Próximos 30d' },
+                { key: 'PROX_90D', label: 'Próximos 90d' },
+                { key: 'VENCIDOS', label: 'Vencidos' },
+                { key: 'MES_PASSADO', label: 'Mês passado' },
+                { key: 'TODOS', label: 'Tudo' },
+                { key: 'CUSTOM', label: 'Personalizado' },
+              ].map(p => (
+                <button
+                  key={p.key}
+                  type="button"
+                  onClick={() => setFilterPeriodo(p.key as typeof filterPeriodo)}
+                  className={`text-xs px-3 py-1.5 rounded-full transition-colors ${
+                    filterPeriodo === p.key
+                      ? 'bg-[var(--t-green)] text-white dark:text-[#0a0a14] font-medium'
+                      : 'bg-[var(--t-bg)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)] border border-[var(--t-border)]'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
             </div>
-            <div>
-              <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Vencimento Até</label>
-              <Input
-                type="date"
-                value={filterDateTo}
-                onChange={e => setFilterDateTo(e.target.value)}
-                className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)] w-40"
-              />
-            </div>
-            {(filterStatus !== 'TODOS' || filterDateFrom || filterDateTo) && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => { setFilterStatus('TODOS'); setFilterDateFrom(''); setFilterDateTo(''); }}
-                className="border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]"
-              >
-                <X className="w-3 h-3 mr-1" /> Limpar
-              </Button>
+
+            {/* Linha 3: date pickers (só quando CUSTOM) */}
+            {filterPeriodo === 'CUSTOM' && (
+              <div className="flex gap-3 items-end">
+                <div>
+                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">De</label>
+                  <Input
+                    type="date"
+                    value={filterDateFrom}
+                    onChange={e => setFilterDateFrom(e.target.value)}
+                    className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)] w-40"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Até</label>
+                  <Input
+                    type="date"
+                    value={filterDateTo}
+                    onChange={e => setFilterDateTo(e.target.value)}
+                    className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)] w-40"
+                  />
+                </div>
+              </div>
             )}
+
+            {/* Linha 4: chips de status */}
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="text-[10px] uppercase tracking-wide text-[var(--t-text-muted)] mr-1">Status:</span>
+              {STATUSES.map(s => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setFilterStatus(s)}
+                  className={`text-xs px-3 py-1.5 rounded-full transition-colors ${
+                    filterStatus === s
+                      ? 'bg-[var(--t-green)] text-white dark:text-[#0a0a14] font-medium'
+                      : 'bg-[var(--t-bg)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)] border border-[var(--t-border)]'
+                  }`}
+                >
+                  {s === 'TODOS' ? 'Todos' : s.charAt(0) + s.slice(1).toLowerCase()}
+                </button>
+              ))}
+            </div>
           </CardContent>
         </Card>
 
