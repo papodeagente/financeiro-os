@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Hotel, Search, Loader2, Star, MapPin, X, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import type { SearchAPIHotelProperty } from '@/lib/searchapi-hotels';
 import { formatAmenities, importHotelImages } from '@/lib/hotel-data-mapper';
@@ -49,7 +50,11 @@ export function HotelSearchModal({
   const [error, setError] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // Re-sync state when modal reopens with new defaults
+  // Re-sync state APENAS quando o modal abre. Antes esse useEffect ouvia
+  // defaultDestino/defaultHotelName/etc — props que mudam de referência a
+  // cada render do pai (em proposta, blocos passam string literais inline).
+  // O reset constante causava o efeito de tremida ao mover o mouse, pq
+  // qualquer hover state no pai disparava re-render e reset aqui.
   useEffect(() => {
     if (open) {
       setQuery(defaultHotelName ? `${defaultHotelName} em ${defaultDestino}` : defaultDestino);
@@ -59,9 +64,20 @@ export function HotelSearchModal({
       setError('');
       setExpandedId(null);
     }
-  }, [open, defaultDestino, defaultHotelName, defaultCheckIn, defaultCheckOut]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Trava o scroll do body enquanto o modal está aberto — evita que a
+  // página atrás continue rolando e produza movimento visual no fundo.
+  useEffect(() => {
+    if (!open) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, [open]);
 
   if (!open) return null;
+  if (typeof document === 'undefined') return null;
 
   const buscar = async () => {
     if (!query.trim()) { setError('Informe o destino ou nome do hotel'); return; }
@@ -102,11 +118,14 @@ export function HotelSearchModal({
     }
   };
 
-  return (
+  // Renderiza em portal direto no body — isolado da árvore do pai. Re-renders
+  // do PropostaEditor/bloco não disparam mais render do modal (que estava
+  // causando o tremor ao mover o mouse).
+  return createPortal((
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
+      <div className="fixed inset-0 bg-black/50" />
       <div
-        className="relative bg-[var(--t-surface)] rounded-xl shadow-[var(--t-card-shadow)] shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden"
+        className="relative bg-[var(--t-surface)] rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -417,5 +436,5 @@ export function HotelSearchModal({
         </div>
       </div>
     </div>
-  );
+  ), document.body);
 }

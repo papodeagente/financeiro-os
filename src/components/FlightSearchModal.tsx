@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Plane, Search, Loader2, Clock, X, Check, ArrowRight, ArrowLeftRight, ChevronRight, RotateCcw } from 'lucide-react';
 import { AirportInput } from './AirportInput';
 import type { FlightOffer } from '@/lib/flight-data-mapper';
@@ -195,7 +196,9 @@ export function FlightSearchModal({
     adultos: number; criancas: number; classe: string;
   } | null>(null);
 
-  // Reset state when modal opens with new defaults
+  // Reseta estado APENAS quando o modal abre. Antes ouvia as defaults —
+  // que são literais inline no pai e mudam de referência a cada render,
+  // causando reset do step/form/results no meio da interação (tremor).
   useEffect(() => {
     if (open) {
       setOrigem(defaultOrigem);
@@ -213,7 +216,16 @@ export function FlightSearchModal({
       setError('');
       setSearching(false);
     }
-  }, [open, defaultOrigem, defaultDestino, defaultDataIda, defaultDataVolta, defaultAdultos, defaultCriancas]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Trava scroll do body para o fundo não rolar e produzir tremor.
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
 
   const reset = useCallback(() => {
     setStep('search');
@@ -225,6 +237,7 @@ export function FlightSearchModal({
   }, []);
 
   if (!open) return null;
+  if (typeof document === 'undefined') return null;
 
   const buscarIda = async () => {
     if (!origem || !destino || !dataIda) { setError('Preencha origem, destino e data de ida'); return; }
@@ -323,9 +336,10 @@ export function FlightSearchModal({
 
   const closeModal = () => { onClose(); };
 
-  return (
+  // Portal no body — isolado de re-renders do pai (PropostaEditor/blocos).
+  return createPortal((
     <div className="fixed inset-0 z-[60] flex flex-col">
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={closeModal} />
+      <div className="fixed inset-0 bg-black/70" onClick={closeModal} />
       <div className="relative flex-1 flex flex-col bg-[var(--t-surface)] m-2 sm:m-4 md:m-6 rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden z-10">
 
         {/* ─── TOP BAR ─── */}
@@ -542,5 +556,5 @@ export function FlightSearchModal({
         </div>
       </div>
     </div>
-  );
+  ), document.body);
 }
