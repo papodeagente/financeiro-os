@@ -8,7 +8,7 @@ import { CrmStatusBadge } from '@/components/CrmStatusBadge';
 import { KPIGridSkeleton } from '@/components/skeletons';
 import { formatBRL } from '@/lib/utils';
 import { calcLimiteUsado } from '@/lib/cartoes-utils';
-import type { CartaoCorporativo, ContaPagar, ContaReceber } from '@/lib/crm-types';
+import type { CartaoCorporativo, ContaPagar, ContaReceber, ContaBancaria } from '@/lib/crm-types';
 import {
   BarChart3, FileSpreadsheet, Receipt, CreditCard,
   ArrowRightLeft, BookOpen, Landmark, Package,
@@ -17,9 +17,12 @@ import {
 
 interface KPIs {
   saldo: number;
-  a_receber: number;
-  a_pagar: number;
-  resultado: number;
+  a_receber: number;          // PENDENTE total (todos meses)
+  recebido: number;            // RECEBIDO total
+  a_pagar: number;             // PENDENTE total
+  pago: number;                // PAGO total
+  resultado_projetado: number; // a_receber - a_pagar
+  resultado_realizado: number; // recebido - pago
 }
 
 interface CartoesKpi {
@@ -50,15 +53,17 @@ export default function FinanceiroAgHubPage() {
   useEffect(() => {
     async function load() {
       try {
-        const [receberRes, pagarRes, cartoesRes] = await Promise.all([
+        const [receberRes, pagarRes, cartoesRes, contasBancariasRes] = await Promise.all([
           fetch('/api/contas-receber').then(r => r.json()),
           fetch('/api/contas-pagar').then(r => r.json()),
           fetch('/api/cartoes-corp').then(r => r.json()).catch(() => []),
+          fetch('/api/contas-bancarias').then(r => r.json()).catch(() => []),
         ]);
 
         const receber: ContaReceber[] = Array.isArray(receberRes) ? receberRes : [];
         const pagar: ContaPagar[] = Array.isArray(pagarRes) ? pagarRes : [];
         const cartoes: CartaoCorporativo[] = Array.isArray(cartoesRes) ? cartoesRes : [];
+        const contasBancarias: ContaBancaria[] = Array.isArray(contasBancariasRes) ? contasBancariasRes : [];
 
         if (cartoes.length > 0) {
           const limite = cartoes.reduce((s, c) => s + (c.limite_total || 0), 0);
@@ -66,22 +71,31 @@ export default function FinanceiroAgHubPage() {
           const pct = limite > 0 ? (usado / limite) * 100 : 0;
           setCartoesKpi({ limite, usado, pct, count: cartoes.filter(c => c.ativo).length });
         }
-        const now = new Date();
-        const mesAtual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-        const aReceberMes = receber
-          .filter(r => r.status === 'PENDENTE' && r.data_vencimento?.startsWith(mesAtual))
+        // Totais all-time. "Este mês" zerava quando vencimentos caíam em mês
+        // futuro (caso comum com vendas CRM cujas parcelas vencem em 30/60d).
+        const saldoBancario = contasBancarias.reduce((s, c) => s + (c.saldo_atual || 0), 0);
+        const aReceberTotal = receber
+          .filter(r => r.status === 'PENDENTE')
           .reduce((s, r) => s + (r.valor_final || 0), 0);
-
-        const aPagarMes = pagar
-          .filter(p => p.status === 'PENDENTE' && p.data_vencimento?.startsWith(mesAtual))
+        const recebidoTotal = receber
+          .filter(r => r.status === 'RECEBIDO')
+          .reduce((s, r) => s + (r.valor_recebido || r.valor_final || 0), 0);
+        const aPagarTotal = pagar
+          .filter(p => p.status === 'PENDENTE')
           .reduce((s, p) => s + (p.valor_final || 0), 0);
+        const pagoTotal = pagar
+          .filter(p => p.status === 'PAGO')
+          .reduce((s, p) => s + (p.valor_pago || p.valor_final || 0), 0);
 
         setKpis({
-          saldo: 0,
-          a_receber: aReceberMes,
-          a_pagar: aPagarMes,
-          resultado: aReceberMes - aPagarMes,
+          saldo: saldoBancario,
+          a_receber: aReceberTotal,
+          recebido: recebidoTotal,
+          a_pagar: aPagarTotal,
+          pago: pagoTotal,
+          resultado_projetado: aReceberTotal - aPagarTotal,
+          resultado_realizado: recebidoTotal - pagoTotal,
         });
 
         // Últimas movimentações: ordena por data_emissao desc, junta receber + pagar
@@ -121,19 +135,34 @@ export default function FinanceiroAgHubPage() {
   return (
     <PageShell header={<PageHeader title="Financeiro" crmBadge />}>
 
-      {/* KPI Cards */}
+      {/* KPI Cards — totais all-time (pendente + realizado) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         {[
-          { label: 'Saldo hoje', value: kpis?.saldo || 0 },
-          { label: 'A receber este mês', value: kpis?.a_receber || 0 },
-          { label: 'A pagar este mês', value: kpis?.a_pagar || 0 },
-          { label: 'Resultado do mês', value: kpis?.resultado || 0 },
+          { label: 'Saldo bancário', value: kpis?.saldo || 0, hint: 'Somatório das contas' },
+          { label: 'A receber (pendente)', value: kpis?.a_receber || 0, hint: 'Total ainda não recebido' },
+          { label: 'A pagar (pendente)', value: kpis?.a_pagar || 0, hint: 'Total ainda não pago' },
+          { label: 'Resultado projetado', value: kpis?.resultado_projetado || 0, hint: 'A receber − a pagar' },
         ].map((kpi, i) => (
           <div key={i} className="bento-card">
             <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide mb-2">{kpi.label}</p>
             <p className={`text-2xl font-bold ${kpi.value >= 0 ? 'text-[var(--t-text)]' : 'text-[var(--crm-err)]'}`}>
               {formatBRL(kpi.value)}
             </p>
+            <p className="text-[10px] text-[var(--t-text-muted)] mt-1">{kpi.hint}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Segunda linha — Realizado */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+        {[
+          { label: 'Recebido (acumulado)', value: kpis?.recebido || 0, color: 'text-[var(--crm-ok)]' },
+          { label: 'Pago (acumulado)', value: kpis?.pago || 0, color: 'text-[var(--crm-err)]' },
+          { label: 'Resultado realizado', value: kpis?.resultado_realizado || 0, color: (kpis?.resultado_realizado || 0) >= 0 ? 'text-[var(--crm-ok)]' : 'text-[var(--crm-err)]' },
+        ].map((kpi, i) => (
+          <div key={i} className="bento-card">
+            <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide mb-2">{kpi.label}</p>
+            <p className={`text-2xl font-bold ${kpi.color}`}>{formatBRL(kpi.value)}</p>
           </div>
         ))}
       </div>

@@ -1624,10 +1624,17 @@ export async function reprocessarVendasLegadas(tenantId: string): Promise<{
             : Array.isArray(data.parcelas_cliente) ? (data.parcelas_cliente as unknown[]).length : 1,
           status: novoStatus,
           tipo: data.tipo ?? (data.grupo_id ? 'GRUPO' : 'AVULSA'),
-          data_venda: data.data_venda
-            ?? (typeof (data as { created_at?: string }).created_at === 'string'
-                ? String(data.created_at).slice(0, 10)
-                : new Date().toISOString().slice(0, 10)),
+          // data_venda válida: valida formato YYYY-MM-DD; senão usa
+          // created_at; senão today. Sem isso, vendas legadas com
+          // data_venda vazia/inválida ficavam invisíveis no dashboard
+          // (filtro por mês não casava).
+          data_venda: (() => {
+            const raw = String(data.data_venda ?? '');
+            if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+            const ca = (data as { created_at?: string }).created_at;
+            if (typeof ca === 'string' && /^\d{4}-\d{2}-\d{2}/.test(ca)) return ca.slice(0, 10);
+            return new Date().toISOString().slice(0, 10);
+          })(),
           numero: data.numero ?? numeroDefault,
         };
 
