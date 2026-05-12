@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { ContaReceber, ContaPagar, ContaBancaria } from '@/lib/crm-types';
 import { loadEntities } from '@/lib/crm-storage';
-import { calcularSaldoBancario } from '@/lib/caixa-helpers';
+import { calcularSaldoBancario } from '@/lib/saldo-bancario';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {

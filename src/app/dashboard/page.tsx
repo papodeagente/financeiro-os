@@ -18,7 +18,7 @@ import {
   Info, Zap,
 } from 'lucide-react';
 import { KPIGridSkeleton } from '@/components/skeletons';
-import { calcularSaldoBancario } from '@/lib/caixa-helpers';
+import { calcularSaldoBancario } from '@/lib/saldo-bancario';
 
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);

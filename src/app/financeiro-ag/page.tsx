@@ -9,7 +9,7 @@ import { KPIGridSkeleton } from '@/components/skeletons';
 import { formatBRL } from '@/lib/utils';
 import { calcLimiteUsado } from '@/lib/cartoes-utils';
 import { useModoIniciante } from '@/lib/modo-iniciante';
-import { calcularSaldoBancario } from '@/lib/caixa-helpers';
+import { calcularSaldoBancario } from '@/lib/saldo-bancario';
 import type { CartaoCorporativo, ContaPagar, ContaReceber, ContaBancaria } from '@/lib/crm-types';
 import {
   BarChart3, FileSpreadsheet, Receipt, CreditCard,
