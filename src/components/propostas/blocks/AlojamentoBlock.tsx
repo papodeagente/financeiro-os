@@ -148,7 +148,13 @@ export function AlojamentoBlock({ conteudo, onChange }: BlockProps) {
           <Input
             type="date"
             value={c.check_in || ''}
-            onChange={e => update({ check_in: e.target.value })}
+            onChange={e => {
+              const v = e.target.value;
+              const patch: Partial<AlojamentoData> = { check_in: v };
+              // Se check-out for antes do novo check-in, limpa
+              if (c.check_out && v && c.check_out <= v) patch.check_out = '';
+              update(patch);
+            }}
             className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)] text-sm"
           />
         </div>
@@ -157,8 +163,11 @@ export function AlojamentoBlock({ conteudo, onChange }: BlockProps) {
           <Input
             type="date"
             value={c.check_out || ''}
+            min={c.check_in ? new Date(new Date(c.check_in).getTime() + 86400000).toISOString().split('T')[0] : ''}
+            disabled={!c.check_in}
+            title={!c.check_in ? 'Defina primeiro o check-in' : ''}
             onChange={e => update({ check_out: e.target.value })}
-            className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)] text-sm"
+            className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)] text-sm disabled:opacity-50"
           />
         </div>
         <div>

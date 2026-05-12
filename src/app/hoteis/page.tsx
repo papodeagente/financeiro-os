@@ -141,13 +141,30 @@ export default function HoteisPage() {
             </div>
             <div>
               <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Check-in</label>
-              <input type="date" value={checkIn} onChange={e => setCheckIn(e.target.value)}
-                className="w-full px-3 py-2 bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded-lg text-sm text-[var(--t-text)]" />
+              <input
+                type="date"
+                value={checkIn}
+                min={new Date().toISOString().split('T')[0]}
+                onChange={e => {
+                  const v = e.target.value;
+                  setCheckIn(v);
+                  // Se check-out ficou antes do novo check-in, limpa
+                  if (checkOut && v && checkOut <= v) setCheckOut('');
+                }}
+                className="w-full px-3 py-2 bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded-lg text-sm text-[var(--t-text)]"
+              />
             </div>
             <div>
               <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Check-out</label>
-              <input type="date" value={checkOut} onChange={e => setCheckOut(e.target.value)}
-                className="w-full px-3 py-2 bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded-lg text-sm text-[var(--t-text)]" />
+              <input
+                type="date"
+                value={checkOut}
+                min={checkIn ? new Date(new Date(checkIn).getTime() + 86400000).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]}
+                onChange={e => setCheckOut(e.target.value)}
+                disabled={!checkIn}
+                title={!checkIn ? 'Defina primeiro o check-in' : ''}
+                className="w-full px-3 py-2 bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded-lg text-sm text-[var(--t-text)] disabled:opacity-50"
+              />
             </div>
             <div className="flex items-end">
               <button onClick={buscar} disabled={searching}

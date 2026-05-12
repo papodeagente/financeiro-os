@@ -156,13 +156,30 @@ export default function VoosPage() {
             <AirportInput label="Destino" value={destinoDisplay} onChange={(v, d) => { setDestino(v); setDestinoDisplay(d); }} />
             <div>
               <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Data Ida</label>
-              <input type="date" value={dataIda} onChange={e => setDataIda(e.target.value)}
-                className="w-full px-3 py-2 bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded-lg text-sm text-[var(--t-text)]" />
+              <input
+                type="date"
+                value={dataIda}
+                min={new Date().toISOString().split('T')[0]}
+                onChange={e => {
+                  const v = e.target.value;
+                  setDataIda(v);
+                  // Se data de volta ficou antes da ida, limpa pra evitar inconsistência
+                  if (dataVolta && v && dataVolta < v) setDataVolta('');
+                }}
+                className="w-full px-3 py-2 bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded-lg text-sm text-[var(--t-text)]"
+              />
             </div>
             <div>
               <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Data Volta (opcional)</label>
-              <input type="date" value={dataVolta} onChange={e => setDataVolta(e.target.value)}
-                className="w-full px-3 py-2 bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded-lg text-sm text-[var(--t-text)]" />
+              <input
+                type="date"
+                value={dataVolta}
+                min={dataIda || new Date().toISOString().split('T')[0]}
+                onChange={e => setDataVolta(e.target.value)}
+                disabled={!dataIda}
+                title={!dataIda ? 'Defina primeiro a data de ida' : ''}
+                className="w-full px-3 py-2 bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded-lg text-sm text-[var(--t-text)] disabled:opacity-50"
+              />
             </div>
           </div>
 

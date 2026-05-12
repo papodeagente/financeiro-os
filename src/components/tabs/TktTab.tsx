@@ -13,6 +13,7 @@ import { Plus, Trash2, Plane, Trophy } from 'lucide-react';
 import { formatFlightForTkt } from '@/lib/flight-data-mapper';
 import type { FlightOffer } from '@/lib/flight-data-mapper';
 import { initiateFlightSearch, consumePendingFlightHandoff } from '@/lib/api-search-handoff';
+import { getPrimeiraDataViagem, getUltimaDataViagem } from '@/lib/grupo-datas';
 
 interface Props { grupo: GrupoViagem; onChange: (grupo: GrupoViagem) => void; }
 
@@ -26,17 +27,19 @@ export function TktTab({ grupo, onChange }: Props) {
   const [pickerOpen, setPickerOpen] = useState<number | null>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
 
-  // Abre /voos em modo handoff. Como TktTrecho não armazena origem/destino
-  // diretamente, pega datas dos períodos do grupo (1º período = ida).
+  // Abre /voos em modo handoff. Usa getPrimeiraDataViagem/getUltimaDataViagem
+  // como fonte única de verdade — mesma lógica usada em outros tabs.
   const abrirBuscaVoo = (tIdx: number) => {
     const returnTo = `${window.location.pathname}?tab=tkt`;
-    const firstPeriodo = grupo.periodos?.[0];
-    const lastPeriodo = grupo.periodos?.[grupo.periodos.length - 1];
+    // Se trecho atual já tem data, usa ela. Senão, primeira data da viagem.
+    const trechoAtual = grupo.trechos?.[tIdx];
+    const dataIda = trechoAtual?.data || getPrimeiraDataViagem(grupo);
+    const dataVolta = tIdx === 0 ? getUltimaDataViagem(grupo) : '';
     initiateFlightSearch({
       grupoId: grupo.id,
       tIdx,
-      dataIda: firstPeriodo?.check_in || '',
-      dataVolta: lastPeriodo?.check_out || '',
+      dataIda,
+      dataVolta,
       adultos: grupo.params?.qtd_min_pax || 1,
       classe: 'economica',
       returnTo,

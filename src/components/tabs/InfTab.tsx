@@ -103,11 +103,37 @@ export function InfTab({ grupo, onChange }: Props) {
               </tr>
             </thead>
             <tbody>
-              {grupo.periodos.map((p, i) => (
+              {grupo.periodos.map((p, i) => {
+                // check_in mínimo: data de check_out do período anterior
+                // (sequência cronológica). Para o 1º período, sem restrição.
+                const checkInMin = i > 0 ? (grupo.periodos[i - 1]?.check_out || '') : '';
+                // check_out deve ser depois do check_in deste período
+                const checkOutMin = p.check_in
+                  ? new Date(new Date(p.check_in).getTime() + 86400000).toISOString().split('T')[0]
+                  : '';
+                return (
                 <tr key={i} className={i % 2 === 0 ? 'bg-[var(--t-surface)]' : 'bg-[var(--t-surface-hover)]'}>
                   <td className="p-2 font-medium">{i + 1}</td>
-                  <td className="p-2"><Input type="date" value={p.check_in || ''} onChange={e => updatePeriodo(i, 'check_in', e.target.value || null)} className="h-8" /></td>
-                  <td className="p-2"><Input type="date" value={p.check_out || ''} onChange={e => updatePeriodo(i, 'check_out', e.target.value || null)} className="h-8" /></td>
+                  <td className="p-2">
+                    <Input
+                      type="date"
+                      value={p.check_in || ''}
+                      min={checkInMin}
+                      onChange={e => updatePeriodo(i, 'check_in', e.target.value || null)}
+                      className="h-8"
+                    />
+                  </td>
+                  <td className="p-2">
+                    <Input
+                      type="date"
+                      value={p.check_out || ''}
+                      min={checkOutMin}
+                      onChange={e => updatePeriodo(i, 'check_out', e.target.value || null)}
+                      disabled={!p.check_in}
+                      title={!p.check_in ? 'Defina primeiro o check-in' : ''}
+                      className="h-8"
+                    />
+                  </td>
                   <td className="p-2 text-center font-bold">{calcDiarias(p.check_in, p.check_out) || '—'}</td>
                   <td className="p-2"><Input value={p.destino} onChange={e => updatePeriodo(i, 'destino', e.target.value)} className="h-8" placeholder="Cidade" /></td>
                   <td className="p-2"><Input value={p.hotel} onChange={e => updatePeriodo(i, 'hotel', e.target.value)} className="h-8" placeholder="Hotel" /></td>
@@ -119,7 +145,8 @@ export function InfTab({ grupo, onChange }: Props) {
                     )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -145,10 +172,24 @@ export function InfTab({ grupo, onChange }: Props) {
               </tr>
             </thead>
             <tbody>
-              {grupo.trechos.map((t, i) => (
+              {grupo.trechos.map((t, i) => {
+                // Trechos seguem cronologicamente. 1º trecho = depois do
+                // 1º check_in da viagem. Demais = depois do trecho anterior.
+                const trechoMin = i > 0
+                  ? (grupo.trechos[i - 1]?.data || '')
+                  : (grupo.periodos[0]?.check_in || '');
+                return (
                 <tr key={i} className={i % 2 === 0 ? 'bg-[var(--t-surface)]' : 'bg-[var(--t-surface-hover)]'}>
                   <td className="p-2 font-medium">Trecho {i + 1}</td>
-                  <td className="p-2"><Input type="date" value={t.data || ''} onChange={e => updateTrecho(i, 'data', e.target.value || null)} className="h-8" /></td>
+                  <td className="p-2">
+                    <Input
+                      type="date"
+                      value={t.data || ''}
+                      min={trechoMin}
+                      onChange={e => updateTrecho(i, 'data', e.target.value || null)}
+                      className="h-8"
+                    />
+                  </td>
                   <td className="p-2"><Input type="number" min={0} value={t.qtd_adt || ''} onChange={e => updateTrecho(i, 'qtd_adt', parseInt(e.target.value) || 0)} className="h-8 w-20 text-center" /></td>
                   <td className="p-2"><Input type="number" min={0} value={t.qtd_chd || ''} onChange={e => updateTrecho(i, 'qtd_chd', parseInt(e.target.value) || 0)} className="h-8 w-20 text-center" /></td>
                   <td className="p-2">
@@ -159,7 +200,8 @@ export function InfTab({ grupo, onChange }: Props) {
                     )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -169,8 +211,28 @@ export function InfTab({ grupo, onChange }: Props) {
       <div>
         <h3 className="text-lg font-semibold text-[var(--t-text)] mb-3">Cruzeiro (Navio)</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div><Label>Embarque</Label><Input type="date" value={grupo.navio_info.embarque || ''} onChange={e => updateNavio('embarque', e.target.value || null)} /></div>
-          <div><Label>Desembarque</Label><Input type="date" value={grupo.navio_info.desembarque || ''} onChange={e => updateNavio('desembarque', e.target.value || null)} /></div>
+          <div>
+            <Label>Embarque</Label>
+            <Input
+              type="date"
+              value={grupo.navio_info.embarque || ''}
+              min={grupo.periodos[0]?.check_in || ''}
+              onChange={e => updateNavio('embarque', e.target.value || null)}
+            />
+          </div>
+          <div>
+            <Label>Desembarque</Label>
+            <Input
+              type="date"
+              value={grupo.navio_info.desembarque || ''}
+              min={grupo.navio_info.embarque
+                ? new Date(new Date(grupo.navio_info.embarque).getTime() + 86400000).toISOString().split('T')[0]
+                : ''}
+              disabled={!grupo.navio_info.embarque}
+              title={!grupo.navio_info.embarque ? 'Defina primeiro o embarque' : ''}
+              onChange={e => updateNavio('desembarque', e.target.value || null)}
+            />
+          </div>
           <div><Label>Diárias</Label><Input disabled value={calcDiarias(grupo.navio_info.embarque, grupo.navio_info.desembarque) || '—'} /></div>
           <div><Label>Cidade Embarque</Label><Input value={grupo.navio_info.cidade_embarque} onChange={e => updateNavio('cidade_embarque', e.target.value)} /></div>
           <div><Label>Cidade Desembarque</Label><Input value={grupo.navio_info.cidade_desembarque} onChange={e => updateNavio('cidade_desembarque', e.target.value)} /></div>

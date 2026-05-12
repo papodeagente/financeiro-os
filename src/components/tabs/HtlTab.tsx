@@ -15,6 +15,7 @@ import { Plus, Trash2, Hotel, Trophy, ChevronDown, ChevronUp, MapPin, Clock } fr
 import { formatHotelForHtlInfo } from '@/lib/hotel-data-mapper';
 import type { GooglePlace } from '@/lib/hotel-data-mapper';
 import { initiateHotelSearch, consumePendingHotelHandoff } from '@/lib/api-search-handoff';
+import { getPrimeiraDataViagem, getUltimaDataViagem } from '@/lib/grupo-datas';
 
 interface Props {
   grupo: GrupoViagem;
@@ -73,9 +74,9 @@ export function HtlTab({ grupo, onChange }: Props) {
     onChange({ ...grupo, htl: { hoteis: grupo.htl.hoteis.filter((_, i) => i !== idx) } });
   };
 
-  // Abre a página /hoteis em modo handoff, prefilada com o destino/datas
-  // do período correspondente. Quando o user seleciona, é redirecionado de
-  // volta para o grupo, e o useEffect abaixo consome o resultado.
+  // Abre a página /hoteis em modo handoff. Se o período correspondente
+  // ao hotelIdx não tem datas/destino, faz fallback para a primeira data
+  // da viagem — assim novos hotéis sempre puxam a data da viagem como base.
   const abrirBuscaHotel = (hotelIdx: number) => {
     const periodo = grupo.periodos[hotelIdx];
     const returnTo = `${window.location.pathname}?tab=htl`;
@@ -84,8 +85,8 @@ export function HtlTab({ grupo, onChange }: Props) {
       hIdx: hotelIdx,
       destino: periodo?.destino || '',
       hotelNome: periodo?.hotel || '',
-      checkIn: periodo?.check_in || '',
-      checkOut: periodo?.check_out || '',
+      checkIn: periodo?.check_in || getPrimeiraDataViagem(grupo),
+      checkOut: periodo?.check_out || getUltimaDataViagem(grupo),
       adults: grupo.params?.qtd_min_pax || 2,
       returnTo,
     });
