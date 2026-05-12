@@ -42,19 +42,29 @@ const ABA_ICONS: Record<string, string> = {
   seg: '🛡️', navio: '🚢', ing: '🎟️', brinde: '🎁', divulgacao: '📢', proposta: '💰',
 };
 
+// Indicador de aba preenchida (bolinha verde no menu). Checa custo OU venda
+// em qualquer tipo (sgl/dbl/tpl/qdp/chd ou adt/chd) — antes só checava o
+// primeiro tipo, então cadastros em DBL/TPL/QDP não acendiam o indicador.
+const has = (v: unknown): boolean => typeof v === 'number' && v > 0;
+const anyTipoApto = (obj: Record<string, unknown>): boolean =>
+  has(obj.valor_sgl) || has(obj.valor_dbl) || has(obj.valor_tpl) || has(obj.valor_qdp) || has(obj.valor_chd) ||
+  has(obj.valor_venda_sgl) || has(obj.valor_venda_dbl) || has(obj.valor_venda_tpl) || has(obj.valor_venda_qdp) || has(obj.valor_venda_chd);
+const anyAdtChd = (obj: Record<string, unknown>): boolean =>
+  has(obj.valor_adt) || has(obj.valor_chd) || has(obj.valor_venda_adt) || has(obj.valor_venda_chd);
+
 function hasData(grupo: GrupoViagem, aba: AbaType): boolean {
   switch (aba) {
     case 'inf': return !!grupo.grp_id;
-    case 'tkt': return grupo.tkt.trechos.some(t => t.fontes.some(f => f.valor_adt !== null && f.valor_adt > 0));
-    case 'htl': return grupo.htl.hoteis.some(h => h.fontes.some(f => f.valor_sgl !== null && f.valor_sgl > 0));
-    case 'rec': return grupo.rec.passeios.some(p => p.fornecedores.some(f => f.valor_adt !== null && f.valor_adt > 0));
-    case 'car': return grupo.car.transportes.some(t => t.empresas.some(e => e.valor_veiculo !== null && e.valor_veiculo > 0));
-    case 'guia': return grupo.guia.destinos.some(d => d.fornecedores.some(f => f.valor_total !== null && f.valor_total > 0));
-    case 'seg': return grupo.seg.seguradoras.some(s => s.valor_sgl !== null && s.valor_sgl > 0);
-    case 'navio': return grupo.navio.fornecedores.some(f => f.valor_sgl !== null && f.valor_sgl > 0);
-    case 'ing': return grupo.ing.atrativos.some(a => a.fontes.some(f => f.valor_adt !== null && f.valor_adt > 0));
-    case 'brinde': return grupo.brinde.fornecedores.some(f => f.valor_unidade !== null && f.valor_unidade > 0);
-    case 'divulgacao': return (grupo.divulgacao?.fornecedores || []).some(f => f.valor_total !== null && f.valor_total > 0);
+    case 'tkt': return grupo.tkt.trechos.some(t => t.fontes.some(f => anyAdtChd(f as unknown as Record<string, unknown>)));
+    case 'htl': return grupo.htl.hoteis.some(h => h.fontes.some(f => anyTipoApto(f as unknown as Record<string, unknown>)));
+    case 'rec': return grupo.rec.passeios.some(p => p.fornecedores.some(f => anyAdtChd(f as unknown as Record<string, unknown>)));
+    case 'car': return grupo.car.transportes.some(t => t.empresas.some(e => has(e.valor_veiculo) || has(e.valor_venda_veiculo)));
+    case 'guia': return grupo.guia.destinos.some(d => d.fornecedores.some(f => has(f.valor_total) || has(f.valor_venda_total)));
+    case 'seg': return grupo.seg.seguradoras.some(s => anyTipoApto(s as unknown as Record<string, unknown>));
+    case 'navio': return grupo.navio.fornecedores.some(f => anyTipoApto(f as unknown as Record<string, unknown>));
+    case 'ing': return grupo.ing.atrativos.some(a => a.fontes.some(f => anyAdtChd(f as unknown as Record<string, unknown>)));
+    case 'brinde': return grupo.brinde.fornecedores.some(f => has(f.valor_unidade) || has(f.valor_venda_unidade));
+    case 'divulgacao': return (grupo.divulgacao?.fornecedores || []).some(f => has(f.valor_total) || has(f.valor_venda_total));
     default: return false;
   }
 }
