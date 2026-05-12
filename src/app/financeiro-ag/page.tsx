@@ -167,9 +167,9 @@ export default function FinanceiroAgHubPage() {
       {/* Segunda linha — Realizado */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         {[
-          { label: 'Recebido (acumulado)', value: kpis?.recebido || 0, color: 'text-[var(--crm-ok)]' },
-          { label: 'Pago (acumulado)', value: kpis?.pago || 0, color: 'text-[var(--crm-err)]' },
-          { label: 'Resultado realizado', value: kpis?.resultado_realizado || 0, color: (kpis?.resultado_realizado || 0) >= 0 ? 'text-[var(--crm-ok)]' : 'text-[var(--crm-err)]' },
+          { label: 'Faturamento', value: kpis?.recebido || 0, color: 'text-[var(--crm-ok)]' },
+          { label: 'Despesas', value: kpis?.pago || 0, color: 'text-[var(--crm-err)]' },
+          { label: 'Comissão', value: kpis?.resultado_realizado || 0, color: (kpis?.resultado_realizado || 0) >= 0 ? 'text-[var(--crm-ok)]' : 'text-[var(--crm-err)]' },
         ].map((kpi, i) => (
           <div key={i} className="bento-card">
             <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide mb-2">{kpi.label}</p>
