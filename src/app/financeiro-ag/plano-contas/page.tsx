@@ -45,7 +45,10 @@ type FormState = {
   is_custo_comercial: boolean;
 };
 
-const EMPTY_FORM: FormState = { codigo: '', nome: '', tipo: 'RECEITA', natureza_custo: null, is_custo_comercial: false };
+// Default DESPESA (caso mais comum no dia a dia — aluguel, salários,
+// impostos, etc.). Antes default RECEITA fazia categorias novas
+// sumirem do dropdown de contas a pagar.
+const EMPTY_FORM: FormState = { codigo: '', nome: '', tipo: 'DESPESA', natureza_custo: null, is_custo_comercial: false };
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 9);

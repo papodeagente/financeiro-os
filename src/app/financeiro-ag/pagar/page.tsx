@@ -38,6 +38,8 @@ const NATUREZA_COLORS: Record<string, string> = {
   COMPRA_UNICA: 'bg-purple-500/10 text-purple-400',
 };
 
+type RecorrenciaPeriodo = 'MENSAL' | 'SEMANAL' | 'QUINZENAL';
+
 type FormState = {
   origem: ContaPagar['origem'];
   fornecedor_nome: string;
@@ -52,6 +54,10 @@ type FormState = {
   natureza_custo: NaturezaCusto | null;
   is_custo_comercial: boolean;
   observacoes: string;
+  // Recorrência (só quando origem = DESPESA_FIXA)
+  recorrencia_ativa: boolean;
+  recorrencia_periodo: RecorrenciaPeriodo;
+  recorrencia_repeticoes: number;
 };
 
 const EMPTY_FORM: FormState = {
@@ -68,7 +74,22 @@ const EMPTY_FORM: FormState = {
   natureza_custo: null,
   is_custo_comercial: false,
   observacoes: '',
+  recorrencia_ativa: false,
+  recorrencia_periodo: 'MENSAL',
+  recorrencia_repeticoes: 12,
 };
+
+// Calcula próximo vencimento dado base e tipo de recorrência.
+function avancarData(baseISO: string, periodo: RecorrenciaPeriodo, count: number): string {
+  const [y, m, d] = baseISO.split('-').map(Number);
+  if (periodo === 'MENSAL') {
+    const nova = new Date(y, m - 1 + count, d);
+    return `${nova.getFullYear()}-${String(nova.getMonth() + 1).padStart(2, '0')}-${String(nova.getDate()).padStart(2, '0')}`;
+  }
+  const dias = periodo === 'SEMANAL' ? 7 : 14;
+  const nova = new Date(y, m - 1, d + dias * count);
+  return `${nova.getFullYear()}-${String(nova.getMonth() + 1).padStart(2, '0')}-${String(nova.getDate()).padStart(2, '0')}`;
+}
 
 function getMonthLabel(ym: string): string {
   const [y, m] = ym.split('-');
@@ -145,6 +166,9 @@ export default function ContasPagarPage() {
       natureza_custo: item.natureza_custo ?? null,
       is_custo_comercial: item.is_custo_comercial ?? false,
       observacoes: item.observacoes,
+      recorrencia_ativa: false,
+      recorrencia_periodo: 'MENSAL',
+      recorrencia_repeticoes: 12,
     });
     setEditId(item.id);
     setShowForm(true);
@@ -154,6 +178,8 @@ export default function ContasPagarPage() {
     if (!form.fornecedor_nome || !form.descricao || !form.data_vencimento || form.valor_original <= 0) return;
     const valorBrl = form.valor_original * form.cambio;
     const cartaoIdFinal = form.forma_pagamento === 'CARTAO_CORP' ? (form.cartao_id || null) : null;
+
+    // Edição NÃO suporta recorrência (só aplica em criação).
     if (editId) {
       const existing = items.find(i => i.id === editId)!;
       const updated: ContaPagar = {
@@ -164,16 +190,39 @@ export default function ContasPagarPage() {
         valor_brl: valorBrl,
       };
       await updateEntity('contas-pagar', updated);
-    } else {
+      setShowForm(false);
+      setEditId(null);
+      load();
+      return;
+    }
+
+    // Quantas contas criar — 1 para única, N para recorrente.
+    const isDespesaFixa = form.origem === 'DESPESA_FIXA';
+    const recorrer = isDespesaFixa && form.recorrencia_ativa && form.recorrencia_repeticoes > 1;
+    const total = recorrer ? form.recorrencia_repeticoes : 1;
+    const periodoLabel: Record<RecorrenciaPeriodo, string> = {
+      MENSAL: 'mensal', SEMANAL: 'semanal', QUINZENAL: 'quinzenal',
+    };
+
+    for (let i = 0; i < total; i++) {
+      const vencimento = i === 0 ? form.data_vencimento : avancarData(form.data_vencimento, form.recorrencia_periodo, i);
+      const desc = recorrer
+        ? `${form.descricao} (${i + 1}/${total} — ${periodoLabel[form.recorrencia_periodo]})`
+        : form.descricao;
       const nova: ContaPagar = {
         ...createContaPagar(),
         ...form,
         cartao_id: cartaoIdFinal,
+        descricao: desc,
+        data_vencimento: vencimento,
         valor_final: form.valor_original,
         valor_brl: valorBrl,
+        parcela_numero: i + 1,
+        total_parcelas: total,
       };
       await saveEntity('contas-pagar', nova);
     }
+
     setShowForm(false);
     setEditId(null);
     load();
@@ -263,7 +312,10 @@ export default function ContasPagarPage() {
   const totalComercial = items.filter(i => i.is_custo_comercial && (i.status === 'PAGO' || i.status === 'PENDENTE')).reduce((s, i) => s + i.valor_final, 0);
 
   const STATUSES: Array<StatusContaPagar | 'TODOS'> = ['TODOS', 'PENDENTE', 'PAGO', 'VENCIDO', 'CANCELADO', 'PARCIAL'];
-  const despesaContas = planoContas.filter(c => c.tipo === 'DESPESA' && c.codigo.includes('.'));
+  // Mostra todas as categorias de DESPESA (com ou sem subcódigo). Antes
+  // filtrava só com '.' no código, então categorias customizadas como
+  // "Aluguel" (sem código numérico) sumiam.
+  const despesaContas = planoContas.filter(c => c.tipo === 'DESPESA');
 
   const columns: DataTableColumn<ContaPagar>[] = [
     {
@@ -688,6 +740,54 @@ export default function ContasPagarPage() {
                   className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)]"
                 />
               </div>
+
+              {/* Recorrência — aparece apenas se Origem = DESPESA_FIXA e for criação (não edição) */}
+              {form.origem === 'DESPESA_FIXA' && !editId && (
+                <div className="mt-4 p-4 rounded-lg border border-[var(--t-blue)]/30 bg-[var(--t-blue-bg)]/20">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.recorrencia_ativa}
+                      onChange={e => setForm(f => ({ ...f, recorrencia_ativa: e.target.checked }))}
+                      className="accent-[var(--t-blue)]"
+                    />
+                    <span className="text-sm font-medium text-[var(--t-text)]">Repetir esta despesa automaticamente</span>
+                  </label>
+                  {form.recorrencia_ativa && (
+                    <div className="grid grid-cols-2 gap-3 mt-3">
+                      <div>
+                        <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Periodicidade</label>
+                        <select
+                          value={form.recorrencia_periodo}
+                          onChange={e => setForm(f => ({ ...f, recorrencia_periodo: e.target.value as RecorrenciaPeriodo }))}
+                          className="w-full bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text)]"
+                        >
+                          <option value="MENSAL">Mensal (todo mês no mesmo dia)</option>
+                          <option value="QUINZENAL">Quinzenal (a cada 14 dias)</option>
+                          <option value="SEMANAL">Semanal (a cada 7 dias)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Quantidade de parcelas</label>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={120}
+                          value={form.recorrencia_repeticoes}
+                          onChange={e => setForm(f => ({ ...f, recorrencia_repeticoes: Math.max(1, parseInt(e.target.value) || 1) }))}
+                          className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)]"
+                        />
+                      </div>
+                      <p className="col-span-2 text-[11px] text-[var(--t-text-secondary)] mt-1">
+                        Vão ser criadas <strong>{form.recorrencia_repeticoes} contas a pagar</strong> a partir de {form.data_vencimento || '(sem data)'},
+                        com vencimento avançando {form.recorrencia_periodo === 'MENSAL' ? 'mês a mês' : form.recorrencia_periodo === 'QUINZENAL' ? 'a cada 15 dias' : 'a cada 7 dias'}.
+                        Cada parcela pode ser editada/paga individualmente.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {form.moeda !== 'BRL' && (
                 <p className="text-sm text-[var(--t-text-secondary)] mt-2">
                   Valor BRL: <span className="text-[var(--t-text)] font-semibold">{BRL(form.valor_original * form.cambio)}</span>
