@@ -572,6 +572,7 @@ export function PreviewRenderer({ secoes, corPrimaria, idioma }: Props) {
           {secao.tipo === 'COUNTDOWN' && <CountdownPreview conteudo={secao.conteudo} idioma={idioma} />}
           {secao.tipo === 'ALOJAMENTO' && <AlojamentoPreview conteudo={secao.conteudo} />}
           {secao.tipo === 'TRANSPORTE' && <TransportePreview conteudo={secao.conteudo} corPrimaria={corPrimaria} />}
+          {secao.tipo === 'VOO' && <RichFlightCard voo={secao.conteudo as Partial<import('@/lib/crm-types').TransporteData>} corPrimaria={corPrimaria} idioma={idioma} />}
         </div>
       ))}
     </div>

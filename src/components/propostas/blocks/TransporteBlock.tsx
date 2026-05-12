@@ -8,8 +8,10 @@ import { initiateProposalFlightSearch } from '@/lib/api-search-handoff';
 import type { BlockProps } from './types';
 import type { TransporteData, TipoTransporte } from '@/lib/crm-types';
 
+// Voo foi separado em bloco dedicado 'VOO'. Aqui ficam só os transportes
+// terrestres/marítimos. Bloco TRANSPORTE pré-existente com tipo='VOO' continua
+// renderizando normal (back-compat), só não pode mais ser criado novo.
 const TIPOS: { id: TipoTransporte; label: string; icon: string }[] = [
-  { id: 'VOO', label: 'Voo', icon: '✈️' },
   { id: 'TRANSFER', label: 'Transfer', icon: '🚐' },
   { id: 'TREM', label: 'Trem', icon: '🚆' },
   { id: 'ONIBUS', label: 'Onibus', icon: '🚌' },

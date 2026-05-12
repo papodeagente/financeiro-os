@@ -599,7 +599,7 @@ export interface MetaVendedor {
 // ============================================================
 
 export type StatusProposta = 'RASCUNHO' | 'ENVIADO' | 'VISUALIZADO' | 'ACEITO' | 'RECUSADO' | 'EXPIRADO' | 'CONVERTIDO';
-export type TipoSecaoProposta = 'TEXTO' | 'SERVICO' | 'ROTEIRO_DIA' | 'GALERIA' | 'INCLUSOS' | 'VALORES' | 'DEPOIMENTO' | 'CTA' | 'VIDEO' | 'MAPA' | 'FAQ' | 'COUNTDOWN' | 'ALOJAMENTO' | 'TRANSPORTE';
+export type TipoSecaoProposta = 'TEXTO' | 'SERVICO' | 'VOO' | 'ROTEIRO_DIA' | 'GALERIA' | 'INCLUSOS' | 'VALORES' | 'DEPOIMENTO' | 'CTA' | 'VIDEO' | 'MAPA' | 'FAQ' | 'COUNTDOWN' | 'ALOJAMENTO' | 'TRANSPORTE';
 export type EstiloCapa = 'FULLSCREEN' | 'SPLIT' | 'MINIMAL';
 export type LayoutProposta = 'CLASSICO' | 'DISCOVERY';
 export type RegimeRefeicao = 'RO' | 'BB' | 'HB' | 'FB' | 'AI';
@@ -677,6 +677,54 @@ export interface TransporteData {
     classe?: string;
   }>;
   muitas_vezes_atrasado?: boolean;
+}
+
+// Bloco VOO dedicado — usa a mesma estrutura de TransporteData mas
+// escopado para voos (sem campo tipo). Capturado via /voos com handoff
+// e renderizado com timeline visual de cada segmento + escalas.
+export interface VooData {
+  id: string;
+  data: string;
+  origem: string;
+  destino: string;
+  companhia?: string;
+  companhia_logo?: string;
+  numero_voo?: string;
+  horario_saida?: string;
+  horario_chegada?: string;
+  data_chegada?: string;
+  aeroporto_origem_nome?: string;
+  aeroporto_destino_nome?: string;
+  aeronave?: string;
+  classe?: string;
+  bagagem?: string;
+  legroom?: string;
+  valor?: number;
+  emissao_carbono_kg?: number;
+  emissao_carbono_diff_percent?: number;
+  escalas?: number;
+  escalas_info?: Array<{ aeroporto: string; nome?: string; duracao_min?: number }>;
+  segmentos?: Array<{
+    companhia: string;
+    numero_voo: string;
+    origem: string;
+    destino: string;
+    aeroporto_origem_nome?: string;
+    aeroporto_destino_nome?: string;
+    horario_saida: string;
+    horario_chegada: string;
+    duracao_min: number;
+    aeronave?: string;
+    classe?: string;
+  }>;
+  muitas_vezes_atrasado?: boolean;
+  detalhes?: string;
+  // Toggles de visibilidade para a proposta vista pelo cliente
+  mostrar_segmentos?: boolean;
+  mostrar_emissao_co2?: boolean;
+  mostrar_aeronave?: boolean;
+  mostrar_bagagem?: boolean;
+  mostrar_alerta_atraso?: boolean;
 }
 
 export interface DestinoRoteiro {

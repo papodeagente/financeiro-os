@@ -37,13 +37,13 @@ import { consumePendingPropostaHotelHandoff, consumePendingPropostaFlightHandoff
 import type { SearchAPIHotelProperty } from '@/lib/searchapi-hotels';
 
 const TIPO_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  TEXTO: Type, SERVICO: Plane, ROTEIRO_DIA: Calendar, GALERIA: Image,
+  TEXTO: Type, SERVICO: Plane, VOO: Plane, ROTEIRO_DIA: Calendar, GALERIA: Image,
   INCLUSOS: CheckSquare, VALORES: DollarSign, DEPOIMENTO: Quote, CTA: MousePointer,
   VIDEO: Video, MAPA: Map, FAQ: HelpCircle, COUNTDOWN: Timer,
   ALOJAMENTO: Bed, TRANSPORTE: Car,
 };
 const TIPO_LABELS: Record<string, string> = {
-  TEXTO: 'Texto', SERVICO: 'Servico', ROTEIRO_DIA: 'Roteiro', GALERIA: 'Galeria',
+  TEXTO: 'Texto', SERVICO: 'Servico', VOO: 'Voo', ROTEIRO_DIA: 'Roteiro', GALERIA: 'Galeria',
   INCLUSOS: 'Inclusos', VALORES: 'Valores', DEPOIMENTO: 'Depoimento', CTA: 'CTA',
   VIDEO: 'Video', MAPA: 'Mapa', FAQ: 'FAQ', COUNTDOWN: 'Countdown',
   ALOJAMENTO: 'Alojamento', TRANSPORTE: 'Transporte',
@@ -204,13 +204,24 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
     if (flightHandoff) {
       const oneWay = { ...flightHandoff.flight, returnFlights: undefined, returnDuration: undefined, returnLayovers: undefined };
       const [mapped] = formatFlightForTransporte(oneWay) as unknown as Partial<TransporteData>[];
+      // Aplica ao bloco que disparou o handoff — pode ser VOO (novo) ou
+      // TRANSPORTE (legado). Defaults toggles visíveis para o novo VOO.
+      const enriched: Record<string, unknown> = {
+        ...mapped,
+        id: flightHandoff.ctx.blockId,
+        mostrar_segmentos: true,
+        mostrar_emissao_co2: true,
+        mostrar_aeronave: true,
+        mostrar_bagagem: true,
+        mostrar_alerta_atraso: false,
+      };
       setProposta(prev => ({
         ...prev,
-        secoes: prev.secoes.map(s =>
-          s.id === flightHandoff.ctx.blockId && s.tipo === 'TRANSPORTE'
-            ? { ...s, conteudo: { ...s.conteudo, ...mapped, id: flightHandoff.ctx.blockId } as Record<string, unknown> }
-            : s
-        ),
+        secoes: prev.secoes.map(s => {
+          if (s.id !== flightHandoff.ctx.blockId) return s;
+          if (s.tipo !== 'TRANSPORTE' && s.tipo !== 'VOO') return s;
+          return { ...s, conteudo: { ...s.conteudo, ...enriched } as Record<string, unknown> };
+        }),
       }));
       hasUnsaved.current = true;
     }

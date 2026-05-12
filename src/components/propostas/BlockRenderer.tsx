@@ -14,6 +14,7 @@ import { FAQBlock } from './blocks/FAQBlock';
 import { CountdownBlock } from './blocks/CountdownBlock';
 import { AlojamentoBlock } from './blocks/AlojamentoBlock';
 import { TransporteBlock } from './blocks/TransporteBlock';
+import { VooBlock } from './blocks/VooBlock';
 
 interface Props {
   tipo: string;
@@ -38,6 +39,7 @@ export function BlockRenderer({ tipo, conteudo, onChange, onInsertAfter }: Props
     case 'COUNTDOWN': return <CountdownBlock conteudo={conteudo} onChange={onChange} />;
     case 'ALOJAMENTO': return <AlojamentoBlock conteudo={conteudo} onChange={onChange} />;
     case 'TRANSPORTE': return <TransporteBlock conteudo={conteudo} onChange={onChange} onInsertAfter={onInsertAfter} />;
+    case 'VOO': return <VooBlock conteudo={conteudo} onChange={onChange} />;
     default: return <div className="text-xs text-[var(--t-text-muted)]">Tipo desconhecido: {tipo}</div>;
   }
 }

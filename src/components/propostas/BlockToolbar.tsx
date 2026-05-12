@@ -11,7 +11,9 @@ import { Card, CardContent } from '@/components/ui/card';
 
 const SECAO_TIPOS = [
   { tipo: 'TEXTO', label: 'Texto', icon: Type, desc: 'Bloco de texto livre' },
-  { tipo: 'SERVICO', label: 'Servico', icon: Plane, desc: 'Voo, hotel, transfer...' },
+  // 'Voos' substitui o antigo tile 'Servico' (que era genérico para voo, hotel, transfer).
+  // Hotel agora é 'Alojamento' (já existe), transfer é 'Transporte' (sem voo).
+  { tipo: 'VOO', label: 'Voos', icon: Plane, desc: 'Voo com detalhes do Google' },
   { tipo: 'ROTEIRO_DIA', label: 'Roteiro', icon: Calendar, desc: 'Dia a dia da viagem' },
   { tipo: 'GALERIA', label: 'Galeria', icon: Image, desc: 'Grid de fotos' },
   { tipo: 'INCLUSOS', label: 'Inclusos', icon: CheckSquare, desc: 'O que esta/nao esta incluso' },
@@ -23,7 +25,7 @@ const SECAO_TIPOS = [
   { tipo: 'FAQ', label: 'FAQ', icon: HelpCircle, desc: 'Perguntas frequentes' },
   { tipo: 'COUNTDOWN', label: 'Countdown', icon: Timer, desc: 'Contagem regressiva' },
   { tipo: 'ALOJAMENTO', label: 'Alojamento', icon: Bed, desc: 'Hotel estruturado' },
-  { tipo: 'TRANSPORTE', label: 'Transporte', icon: Car, desc: 'Voo, transfer, trem...' },
+  { tipo: 'TRANSPORTE', label: 'Transporte', icon: Car, desc: 'Transfer, carro, trem...' },
 ] as const;
 
 interface Props {
