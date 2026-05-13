@@ -29,7 +29,7 @@ import { TemplateProposta } from '@/lib/crm-types';
 import { StatusPipelineSelector } from '@/components/StatusPipelineSelector';
 import { PropostaStatusSelector, type StatusProposta } from '@/components/PropostaStatusSelector';
 import type { StatusPipeline } from '@/lib/types';
-import { Save, FileText, Loader2 } from 'lucide-react';
+import { Save, FileText, Loader2, Users } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from '@/lib/toast';
 
@@ -324,6 +324,11 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
           <span className={`text-xs ${saved ? 'text-green-600' : 'text-orange-500'}`}>
             {saved ? '● Salvo' : '○ Não salvo'}
           </span>
+          <Link href={`/grupo/${id}/gestao`}>
+            <Button variant="outline" size="sm" className="gap-1">
+              <Users className="w-4 h-4" /> Gestão
+            </Button>
+          </Link>
           <Button onClick={handleGerarProposta} size="sm" disabled={gerandoProposta}
             className="bg-[var(--t-green)] hover:bg-[var(--t-green)]/90 text-white dark:text-[#0a0a14] gap-1">
             {gerandoProposta ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}

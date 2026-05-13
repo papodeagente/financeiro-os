@@ -451,6 +451,63 @@ export async function initDB() {
   `);
 
   // ============================================================
+  // GESTÃO DE GRUPOS — vagas, reservas e materiais por grupo
+  // ============================================================
+  // Criadas automaticamente quando um grupo é criado (trigger em
+  // /api/grupos POST). Mantêm os contadores de vagas calculados a
+  // partir das reservas (não editar manualmente).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS gestao_grupos (
+      id TEXT PRIMARY KEY,
+      grupo_id TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'ativo',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_gestao_grupos_grupo ON gestao_grupos(grupo_id);
+
+    CREATE TABLE IF NOT EXISTS grupo_periodos_vagas (
+      id TEXT PRIMARY KEY,
+      grupo_id TEXT NOT NULL DEFAULT '',
+      periodo_index INTEGER NOT NULL DEFAULT 0,
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_grupo_periodos_vagas_grupo ON grupo_periodos_vagas(grupo_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_grupo_periodos_vagas_grupo_idx
+      ON grupo_periodos_vagas(grupo_id, periodo_index);
+
+    CREATE TABLE IF NOT EXISTS grupo_reservas (
+      id TEXT PRIMARY KEY,
+      grupo_id TEXT NOT NULL DEFAULT '',
+      periodo_id TEXT NOT NULL DEFAULT '',
+      cliente_id TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'reservado',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_grupo_reservas_grupo ON grupo_reservas(grupo_id);
+    CREATE INDEX IF NOT EXISTS idx_grupo_reservas_periodo ON grupo_reservas(periodo_id);
+    CREATE INDEX IF NOT EXISTS idx_grupo_reservas_cliente ON grupo_reservas(cliente_id);
+    CREATE INDEX IF NOT EXISTS idx_grupo_reservas_status ON grupo_reservas(status);
+
+    CREATE TABLE IF NOT EXISTS grupo_materiais (
+      id TEXT PRIMARY KEY,
+      grupo_id TEXT NOT NULL DEFAULT '',
+      tipo TEXT NOT NULL DEFAULT 'arquivo',
+      nome TEXT NOT NULL DEFAULT '',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_grupo_materiais_grupo ON grupo_materiais(grupo_id);
+    CREATE INDEX IF NOT EXISTS idx_grupo_materiais_tipo ON grupo_materiais(tipo);
+  `);
+
+  // ============================================================
   // ADD tenant_id TO ALL EXISTING TABLES
   // ============================================================
   const TENANT_TABLES = [
@@ -466,6 +523,7 @@ export async function initDB() {
     'cartoes_corp',
     'funis', 'funis_simulacoes', 'funis_templates',
     'itens_venda',
+    'gestao_grupos', 'grupo_periodos_vagas', 'grupo_reservas', 'grupo_materiais',
   ];
   for (const table of TENANT_TABLES) {
     await pool.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT ''`);

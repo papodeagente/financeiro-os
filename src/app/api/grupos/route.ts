@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { emitirEventoCRM, buildProdutoPayload } from '@/lib/crm-integration';
 import { getTenantId } from '@/lib/tenant';
+import { ensureGestaoGrupo } from '@/lib/gestao-grupos';
 
 export async function GET() {
   if (!pool) return NextResponse.json([]);
@@ -25,6 +26,15 @@ export async function POST(req: NextRequest) {
     [grupo.id, tenantId, grupo.grp_id || '', grupo.origem_destino || '',
      JSON.stringify(grupo), grupo.created_at, grupo.updated_at]
   );
+
+  // Gestão de Grupos: garante registros (gestao_grupos + 1 periodo_vagas
+  // por período do grupo). Idempotente — POST é também upsert do grupo,
+  // então cria só o que falta sem zerar contadores.
+  try {
+    await ensureGestaoGrupo(pool, grupo, tenantId);
+  } catch (e) {
+    console.error('[GESTAO_GRUPO] falha ao criar/sincronizar', e);
+  }
 
   // CRM: publish the product (full snapshot — price tree, dates, hotels,
   // destinations) so it can be attached to a deal in the CRM. Wrapped in
