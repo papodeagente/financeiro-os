@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { ensureGestaoGrupo, type GestaoGrupoData, type PeriodoVagasData } from '@/lib/gestao-grupos';
+import { ensureGestaoGrupo, KANBAN_STAGES, type GestaoGrupoData, type KanbanStage, type PeriodoVagasData } from '@/lib/gestao-grupos';
 import type { GrupoViagem } from '@/lib/types';
 
 // GET /api/gestao-grupos/[grupo_id]
@@ -84,9 +84,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ grup
   if (rows.length === 0) return NextResponse.json({ error: 'gestao_grupo não encontrado' }, { status: 404 });
 
   const atual = rows[0].data as GestaoGrupoData;
+  const stagesValidos: KanbanStage[] = KANBAN_STAGES.map(s => s.key);
+  const kanbanStage: KanbanStage | undefined =
+    typeof body.kanban_stage === 'string' && stagesValidos.includes(body.kanban_stage as KanbanStage)
+      ? (body.kanban_stage as KanbanStage)
+      : atual.kanban_stage;
   const atualizado: GestaoGrupoData = {
     observacoes: typeof body.observacoes === 'string' ? body.observacoes : atual.observacoes,
     config_vagas: body.config_vagas ? { ...atual.config_vagas, ...body.config_vagas } : atual.config_vagas,
+    kanban_stage: kanbanStage,
   };
   await pool.query(
     `UPDATE gestao_grupos SET data = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3`,

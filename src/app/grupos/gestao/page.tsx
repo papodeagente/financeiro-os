@@ -1,9 +1,12 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { Users, Loader2, ChevronRight, Search, AlertTriangle } from 'lucide-react';
+import { Users, Loader2, ChevronRight, Search, AlertTriangle, LayoutGrid, List } from 'lucide-react';
 import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
+import { Kanban } from './Kanban';
+import type { KanbanStage } from '@/lib/gestao-grupos';
+import { toast } from '@/lib/toast';
 
 interface ResumoGrupo {
   id: string;
@@ -11,6 +14,7 @@ interface ResumoGrupo {
   origem_destino: string;
   status_pipeline: string;
   gestao_status: string | null;
+  kanban_stage: KanbanStage;
   data_inicio: string;
   data_fim: string;
   periodos_count: number;
@@ -28,6 +32,9 @@ interface ResumoGrupo {
   updated_at: string;
 }
 
+type View = 'tabela' | 'kanban';
+const VIEW_KEY = 'entur:gestao-grupos:view';
+
 type FiltroVagas = 'todos' | 'disponiveis' | 'alerta' | 'lotado';
 
 function fmtData(iso: string): string {
@@ -41,12 +48,45 @@ export default function VisaoGeralGestaoPage() {
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState('');
   const [filtroVagas, setFiltroVagas] = useState<FiltroVagas>('todos');
+  const [view, setView] = useState<View>('kanban');
+
+  // Persiste view escolhida pelo usuário entre sessões
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(VIEW_KEY);
+      if (saved === 'tabela' || saved === 'kanban') setView(saved);
+    } catch { /* ignore */ }
+  }, []);
+
+  const setViewPersist = (v: View) => {
+    setView(v);
+    try { localStorage.setItem(VIEW_KEY, v); } catch { /* ignore */ }
+  };
 
   useEffect(() => {
     fetch('/api/gestao-grupos')
       .then(r => r.ok ? r.json() : [])
       .then(json => setData(Array.isArray(json) ? json : []))
       .finally(() => setLoading(false));
+  }, []);
+
+  // Move card do kanban — chamado pelo onDragEnd do Kanban
+  const handleStageChange = useCallback(async (grupoId: string, stage: KanbanStage) => {
+    // Otimista: atualiza UI antes da resposta
+    setData(prev => prev.map(g => g.id === grupoId ? { ...g, kanban_stage: stage } : g));
+    const res = await fetch(`/api/gestao-grupos/${grupoId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kanban_stage: stage }),
+    });
+    if (!res.ok) {
+      // Reverte em caso de erro
+      const json = await fetch('/api/gestao-grupos').then(r => r.json()).catch(() => null);
+      if (Array.isArray(json)) setData(json);
+      toast.error('Falha ao mover card — UI revertida');
+      return;
+    }
+    toast.success('Card movido');
   }, []);
 
   const filtrados = useMemo(() => {
@@ -92,7 +132,7 @@ export default function VisaoGeralGestaoPage() {
           }
         />
 
-        {/* Filtros */}
+        {/* Filtros + toggle Tabela/Kanban */}
         <div className="flex items-center gap-3 flex-wrap">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: 'var(--ink-3)' }} />
@@ -101,11 +141,11 @@ export default function VisaoGeralGestaoPage() {
               value={busca}
               onChange={e => setBusca(e.target.value)}
               placeholder="Buscar por destino ou GRP ID"
-              className="h-[34px] pl-8 pr-3 border text-[12px] w-[320px]"
+              className="h-[34px] pl-8 pr-3 border text-[12px] w-[320px] rounded-[8px]"
               style={{ borderColor: 'var(--line)', background: 'var(--ink-bg)', color: 'var(--ink)' }}
             />
           </div>
-          <div className="flex items-stretch border" style={{ borderColor: 'var(--line)', height: '34px' }}>
+          <div className="flex items-stretch border rounded-[8px] overflow-hidden" style={{ borderColor: 'var(--line)', height: '34px' }}>
             {(['todos', 'disponiveis', 'alerta', 'lotado'] as const).map((k, i, arr) => {
               const ativo = filtroVagas === k;
               const labels: Record<FiltroVagas, string> = {
@@ -131,15 +171,42 @@ export default function VisaoGeralGestaoPage() {
               );
             })}
           </div>
+
+          {/* Toggle Tabela/Kanban */}
+          <div className="ml-auto flex items-stretch border rounded-[8px] overflow-hidden" style={{ borderColor: 'var(--line)', height: '34px' }}>
+            {([
+              { key: 'kanban' as const, label: 'Kanban', Icon: LayoutGrid },
+              { key: 'tabela' as const, label: 'Tabela', Icon: List },
+            ]).map((opt, i, arr) => {
+              const ativo = view === opt.key;
+              const Icon = opt.Icon;
+              return (
+                <button
+                  key={opt.key}
+                  onClick={() => setViewPersist(opt.key)}
+                  className="px-3 text-[11px] transition-colors flex items-center gap-1.5"
+                  style={{
+                    color: ativo ? 'var(--lg-accent)' : 'var(--ink-3)',
+                    fontWeight: ativo ? 600 : 400,
+                    background: ativo ? 'var(--lg-accent-fill)' : 'transparent',
+                    borderRight: i < arr.length - 1 ? '1px solid var(--line)' : 'none',
+                  }}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        {/* Tabela */}
+        {/* Tabela ou Kanban */}
         {loading ? (
-          <div className="border p-10 text-center" style={{ borderColor: 'var(--line)' }}>
+          <div className="border p-10 text-center rounded-[12px]" style={{ borderColor: 'var(--line)' }}>
             <Loader2 className="w-5 h-5 animate-spin mx-auto" style={{ color: 'var(--ink-3)' }} />
           </div>
         ) : filtrados.length === 0 ? (
-          <div className="border p-10 text-center" style={{ borderColor: 'var(--line)', background: 'var(--ink-surface)' }}>
+          <div className="border p-10 text-center rounded-[12px]" style={{ borderColor: 'var(--line)', background: 'var(--ink-surface)' }}>
             <Users className="w-7 h-7 mx-auto mb-2" style={{ color: 'var(--ink-3)' }} />
             <p className="text-[13px]" style={{ color: 'var(--ink-2)' }}>
               {data.length === 0 ? 'Nenhum grupo cadastrado ainda.' : 'Nenhum grupo encontrado com esses filtros.'}
@@ -150,8 +217,10 @@ export default function VisaoGeralGestaoPage() {
               </Link>
             )}
           </div>
+        ) : view === 'kanban' ? (
+          <Kanban grupos={filtrados} onStageChange={handleStageChange} />
         ) : (
-          <div className="border overflow-hidden" style={{ borderColor: 'var(--line)', background: 'var(--ink-surface)' }}>
+          <div className="border overflow-hidden rounded-[12px]" style={{ borderColor: 'var(--line)', background: 'var(--ink-surface)' }}>
             <table className="w-full text-[12px]">
               <thead>
                 <tr style={{ background: 'var(--ink-surface-2)', borderBottom: '1px solid var(--line)' }}>

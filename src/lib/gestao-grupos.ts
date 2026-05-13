@@ -20,9 +20,21 @@ export interface ConfigVagas {
   alerta_vagas_restantes: number;
 }
 
+export type KanbanStage = 'novo' | 'formalizacao' | 'vendas' | 'fechado' | 'embarque' | 'finalizado';
+
+export const KANBAN_STAGES: Array<{ key: KanbanStage; label: string; color: string; fill: string }> = [
+  { key: 'novo',         label: 'Novo Grupo',    color: '#64748B', fill: '#F1F5F9' },
+  { key: 'formalizacao', label: 'Formalização',  color: '#F59E0B', fill: '#FFFBEB' },
+  { key: 'vendas',       label: 'Vendas',        color: '#2563EB', fill: '#EFF6FF' },
+  { key: 'fechado',      label: 'Fechado',       color: '#10B981', fill: '#ECFDF5' },
+  { key: 'embarque',     label: 'Embarque',      color: '#6366F1', fill: '#EEF2FF' },
+  { key: 'finalizado',   label: 'Finalizado',    color: '#475569', fill: '#E2E8F0' },
+];
+
 export interface GestaoGrupoData {
   observacoes: string;
   config_vagas: ConfigVagas;
+  kanban_stage?: KanbanStage;
 }
 
 export interface PeriodoVagasData {
@@ -95,7 +107,7 @@ export async function ensureGestaoGrupo(
     [grupo.id, tenantId],
   );
   if (existsRes.rows.length === 0) {
-    const data: GestaoGrupoData = { observacoes: '', config_vagas: { ...DEFAULT_CONFIG } };
+    const data: GestaoGrupoData = { observacoes: '', config_vagas: { ...DEFAULT_CONFIG }, kanban_stage: 'novo' };
     await pool.query(
       `INSERT INTO gestao_grupos (id, grupo_id, status, data, tenant_id, created_at, updated_at)
        VALUES ($1, $2, 'ativo', $3, $4, NOW(), NOW())

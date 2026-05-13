@@ -53,7 +53,9 @@ export async function GET() {
     const totalVagas = periodos.reduce((s, p) => s + (p.vagas_total || 0), 0);
     const ocupadas = periodos.reduce((s, p) => s + (p.vagas_reservadas || 0) + (p.vagas_confirmadas || 0), 0);
     const disponiveis = periodos.reduce((s, p) => s + (p.vagas_disponiveis || 0), 0);
-    const config = (r.gestao_data as GestaoGrupoData | null)?.config_vagas;
+    const gestaoData = r.gestao_data as GestaoGrupoData | null;
+    const config = gestaoData?.config_vagas;
+    const kanbanStage = gestaoData?.kanban_stage || 'novo';
 
     const dataInicio = grupo.periodos?.[0]?.check_in || '';
     const dataFim = grupo.periodos?.[grupo.periodos.length - 1]?.check_out || '';
@@ -64,6 +66,7 @@ export async function GET() {
       origem_destino: grupo.origem_destino || '',
       status_pipeline: grupo.status_pipeline || 'PRODUTO',
       gestao_status: r.gestao_status || null,
+      kanban_stage: kanbanStage,
       data_inicio: dataInicio,
       data_fim: dataFim,
       periodos_count: periodos.length,
