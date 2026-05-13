@@ -5,6 +5,7 @@ import { TransferenciaBancaria, ContaBancaria, createTransferencia, StatusTransf
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
@@ -113,16 +114,19 @@ export default function TransferenciasPage() {
     <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
       <div className="max-w-6xl mx-auto space-y-6">
 
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-[var(--t-text)]">Transferências entre Contas</h1>
-            <p className="text-[var(--t-text-secondary)] text-sm mt-1">Movimentações entre contas bancárias da agência</p>
-          </div>
-          <Button onClick={openNew} className="bg-[var(--t-green)] hover:brightness-110 text-white dark:text-[#0a0a14] font-semibold">
-            <Plus className="w-4 h-4 mr-2" /> Nova Transferência
-          </Button>
-        </div>
+        <MinimalPageHead
+          title="Transferências entre contas"
+          meta={<p className="mt-2.5 text-[12px]" style={{ color: 'var(--ink-3)' }}>Movimentações entre contas bancárias da agência</p>}
+          actions={
+            <button
+              onClick={openNew}
+              className="h-[34px] px-3 text-[12px] font-medium"
+              style={{ background: 'var(--ink)', color: 'var(--ink-bg)' }}
+            >
+              <Plus className="w-3.5 h-3.5 inline mr-2" /> Nova transferência
+            </button>
+          }
+        />
 
         {/* Summary */}
         <div className="grid grid-cols-2 gap-4">
@@ -310,6 +314,8 @@ export default function TransferenciasPage() {
             )}
           </CardContent>
         </Card>
+
+        <MinimalFooter pageId="transferências" />
       </div>
     </div>
   );

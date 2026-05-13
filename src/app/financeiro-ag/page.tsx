@@ -10,10 +10,12 @@ import { KPIGridSkeleton } from '@/components/skeletons';
 import { OnboardingChecklist, type OnboardingStep } from '@/components/financeiro/OnboardingChecklist';
 import { MetricExplainer } from '@/components/financeiro/MetricExplainer';
 import { Sparkline } from '@/components/financeiro/Sparkline';
+import { MinimalFooter } from '@/components/financeiro/MinimalPageHead';
 import { formatBRL } from '@/lib/utils';
 import { calcLimiteUsado } from '@/lib/cartoes-utils';
 import { useModoIniciante } from '@/lib/modo-iniciante';
 import { calcularSaldoBancario } from '@/lib/saldo-bancario';
+import { calcularHistoricoKpis, calcDelta, type HistoricoKpis } from '@/lib/historico-kpis';
 import { toast } from '@/lib/toast';
 import type { CartaoCorporativo, ContaPagar, ContaReceber, ContaBancaria, VendaCRM, PlanoContas } from '@/lib/crm-types';
 import {
@@ -78,6 +80,8 @@ export default function FinanceiroAgHubPage() {
   const [periodoHeader, setPeriodoHeader] = useState<'hoje' | '7d' | 'mes' | 'trimestre' | 'ano'>('mes');
   // Tab das movimentações
   const [movsTab, setMovsTab] = useState<'todas' | 'entradas' | 'saidas' | 'nc'>('todas');
+  // Série histórica computada (10 meses) — alimenta sparklines e deltas reais
+  const [historico, setHistorico] = useState<HistoricoKpis | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -177,6 +181,9 @@ export default function FinanceiroAgHubPage() {
         });
         setUltimos(items);
 
+        // Histórico real de 10 meses para sparklines e deltas
+        setHistorico(calcularHistoricoKpis(contasBancarias, receber, pagar, 10));
+
         // Detecta passos do onboarding com base nos dados carregados
         const plano: PlanoContas[] = Array.isArray(planoContasRes) ? planoContasRes : [];
         const temCaixa = contasBancarias.length > 0;
@@ -234,15 +241,18 @@ export default function FinanceiroAgHubPage() {
     </PageShell>
   );
 
-  // KPIs essenciais — formato handoff minimal (label uppercase + idx mono,
-  // valor 38px, delta com seta + comparativo, sparkline 1.2px).
-  // Deltas e sparklines: placeholders determinísticos por hora (gerados a
-  // partir do valor atual). Quando série histórica estiver disponível no
-  // backend, substituir aqui sem mexer no JSX.
-  const sparkFromValue = (v: number, seed: number): number[] => {
-    const base = Math.max(1, Math.log(Math.abs(v || 1) + 1));
-    return Array.from({ length: 10 }, (_, i) => base * (0.6 + Math.sin((i + seed) * 0.7) * 0.4));
-  };
+  // KPIs essenciais — sparklines e deltas com HISTÓRICO REAL.
+  // calcularHistoricoKpis computa 10 meses de série a partir das CRs/CPs
+  // já carregadas (data_recebimento/data_pagamento agrupadas por mês).
+  // Sem histórico → série fica em zeros (estado válido pra workspace novo).
+  const histSaldo = historico?.saldo || [];
+  const histReceber = historico?.aReceber || [];
+  const histPagar = historico?.aPagar || [];
+  const histLucro = historico?.lucro || [];
+  const dSaldo = calcDelta(histSaldo);
+  const dReceber = calcDelta(histReceber);
+  const dPagar = calcDelta(histPagar);
+  const dLucro = calcDelta(histLucro);
   const kpiList = [
     {
       idx: '01',
@@ -251,9 +261,9 @@ export default function FinanceiroAgHubPage() {
       sub: 'Somatório das contas correntes.',
       explainer: 'Total acumulado nas suas contas bancárias. Atualiza automaticamente quando você confirma um recebimento ou pagamento.',
       tone: (kpis?.saldo || 0) >= 0 ? 'pos' : 'neg',
-      delta: -12.4,
-      deltaDir: 'down' as const,
-      spark: sparkFromValue(kpis?.saldo || 0, 1),
+      delta: dSaldo.delta,
+      deltaDir: dSaldo.dir,
+      spark: histSaldo,
     },
     {
       idx: '02',
@@ -262,9 +272,9 @@ export default function FinanceiroAgHubPage() {
       sub: 'Total ainda não recebido neste mês.',
       explainer: 'Soma de todas as contas a receber com status PENDENTE, independente do mês de vencimento.',
       tone: 'neutral' as const,
-      delta: 0,
-      deltaDir: 'flat' as const,
-      spark: sparkFromValue(kpis?.a_receber || 0, 2),
+      delta: dReceber.delta,
+      deltaDir: dReceber.dir,
+      spark: histReceber,
     },
     {
       idx: '03',
@@ -273,9 +283,9 @@ export default function FinanceiroAgHubPage() {
       sub: 'Total ainda não pago neste mês.',
       explainer: 'Soma de todas as contas a pagar com status PENDENTE, independente do mês de vencimento.',
       tone: 'neutral' as const,
-      delta: 8.1,
-      deltaDir: 'up' as const,
-      spark: sparkFromValue(kpis?.a_pagar || 0, 3),
+      delta: dPagar.delta,
+      deltaDir: dPagar.dir,
+      spark: histPagar,
     },
     {
       idx: '04',
@@ -284,9 +294,9 @@ export default function FinanceiroAgHubPage() {
       sub: 'Recebido menos pago neste mês.',
       explainer: 'Resultado realizado: tudo que entrou no caixa menos tudo que saiu. Não inclui valores pendentes.',
       tone: (kpis?.resultado_realizado || 0) >= 0 ? 'pos' : 'neg',
-      delta: -3.2,
-      deltaDir: (kpis?.resultado_realizado || 0) >= 0 ? 'up' as const : 'down' as const,
-      spark: sparkFromValue(kpis?.resultado_realizado || 0, 4),
+      delta: dLucro.delta,
+      deltaDir: dLucro.dir,
+      spark: histLucro,
     },
   ];
 
@@ -790,12 +800,7 @@ export default function FinanceiroAgHubPage() {
         </aside>
       </div>
 
-      {/* Footer minimal — versão / build / locale */}
-      <div className="pt-6 mt-4 border-t flex justify-between mono text-[11px]" style={{ borderColor: 'var(--line)', color: 'var(--ink-3)', letterSpacing: '0.02em' }}>
-        <span>enturos / fin · <b style={{ color: 'var(--ink-2)', fontWeight: 400 }}>visão geral</b></span>
-        <span>build {new Date().toISOString().slice(0, 10)}</span>
-        <span><b style={{ color: 'var(--ink-2)', fontWeight: 400 }}>BRL</b> · UTC−3</span>
-      </div>
+      <MinimalFooter pageId="visão geral" />
 
     </div>
     </PageShell>

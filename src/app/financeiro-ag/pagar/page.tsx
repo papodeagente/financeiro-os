@@ -14,7 +14,7 @@ import {
 import { toast } from '@/lib/toast';
 import { MetricExplainer } from '@/components/financeiro/MetricExplainer';
 import { PageShell } from '@/components/PageShell';
-import { PageHeader } from '@/components/PageHeader';
+import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
 import { DataTable, DataTableColumn } from '@/components/ui/data-table';
 
 const BRL = (v: number) =>
@@ -528,31 +528,29 @@ export default function ContasPagarPage() {
   ];
 
   return (
-    <PageShell
-      header={
-        <PageHeader
-          title="Contas a Pagar"
-          subtitle="Gestão de obrigações financeiras da agência"
+    <PageShell>
+        <MinimalPageHead
+          title="Contas a pagar"
+          meta={<p className="mt-2.5 text-[12px]" style={{ color: 'var(--ink-3)' }}>Gestão de obrigações financeiras da agência</p>}
           actions={
             <>
-              <Button
+              <button
                 onClick={openCopyModal}
-                variant="outline"
-                className="border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]"
+                className="h-[34px] px-3 text-[12px] border transition-colors hover:bg-[var(--ink-surface-2)]"
+                style={{ borderColor: 'var(--line)', color: 'var(--ink-2)' }}
               >
-                <Copy className="w-4 h-4 mr-2" /> Copiar Mês
-              </Button>
-              <Button
+                <Copy className="w-3.5 h-3.5 inline mr-2" /> Copiar mês
+              </button>
+              <button
                 onClick={openNew}
-                className="bg-[var(--t-green)] hover:brightness-110 text-white dark:text-[#0a0a14] font-semibold"
+                className="h-[34px] px-3 text-[12px] font-medium"
+                style={{ background: 'var(--ink)', color: 'var(--ink-bg)' }}
               >
-                <Plus className="w-4 h-4 mr-2" /> Nova Conta
-              </Button>
+                <Plus className="w-3.5 h-3.5 inline mr-2" /> Nova conta
+              </button>
             </>
           }
         />
-      }
-    >
 
         {/* Summary Cards — clicáveis, refletem o período/filtros ativos */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -1106,6 +1104,7 @@ export default function ContasPagarPage() {
           </div>
         </div>
       )}
+      <MinimalFooter pageId="contas a pagar" />
     </PageShell>
   );
 }

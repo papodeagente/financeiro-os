@@ -5,6 +5,7 @@ import { ExtratoLinha, ContaBancaria, ContaReceber, ContaPagar, StatusConciliaca
 import { loadEntities, saveEntity, updateEntity } from '@/lib/crm-storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
@@ -237,31 +238,31 @@ export default function ConciliacaoPage() {
     <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
       <div className="max-w-7xl mx-auto space-y-6">
 
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-[var(--t-text)]">Conciliação Bancária</h1>
-            <p className="text-[var(--t-text-secondary)] text-sm mt-1">Importe extratos e concilie com lançamentos do sistema</p>
-          </div>
-          <div className="flex gap-2 items-center">
-            <select
-              value={selectedConta}
-              onChange={e => setSelectedConta(e.target.value)}
-              className="bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text)]"
-            >
-              {contas.map(c => (
-                <option key={c.id} value={c.id}>{c.nome}</option>
-              ))}
-            </select>
-            <label className="cursor-pointer">
-              <input type="file" accept=".csv,.ofx,.qfx,.txt" onChange={handleImport} className="hidden" />
-              <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--t-green)] hover:brightness-110 text-white dark:text-[#0a0a14] font-semibold text-sm cursor-pointer">
-                <Upload className="w-4 h-4" />
-                {importing ? 'Importando...' : 'Importar Extrato'}
-              </div>
-            </label>
-          </div>
-        </div>
+        <MinimalPageHead
+          title="Conciliação bancária"
+          meta={<p className="mt-2.5 text-[12px]" style={{ color: 'var(--ink-3)' }}>Importe extratos e concilie com lançamentos do sistema</p>}
+          actions={
+            <>
+              <select
+                value={selectedConta}
+                onChange={e => setSelectedConta(e.target.value)}
+                className="h-[34px] px-3 text-[12px] border"
+                style={{ borderColor: 'var(--line)', background: 'var(--ink-surface)', color: 'var(--ink)' }}
+              >
+                {contas.map(c => (
+                  <option key={c.id} value={c.id}>{c.nome}</option>
+                ))}
+              </select>
+              <label className="cursor-pointer">
+                <input type="file" accept=".csv,.ofx,.qfx,.txt" onChange={handleImport} className="hidden" />
+                <div className="h-[34px] px-3 text-[12px] font-medium flex items-center gap-2 cursor-pointer" style={{ background: 'var(--ink)', color: 'var(--ink-bg)' }}>
+                  <Upload className="w-3.5 h-3.5" />
+                  {importing ? 'Importando…' : 'Importar extrato'}
+                </div>
+              </label>
+            </>
+          }
+        />
 
         {/* Stats */}
         <div className="grid grid-cols-4 gap-4">
@@ -461,6 +462,8 @@ export default function ConciliacaoPage() {
             )}
           </CardContent>
         </Card>
+
+        <MinimalFooter pageId="conciliação" />
       </div>
     </div>
   );

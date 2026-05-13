@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { ContaReceber, ContaPagar, ContaBancaria } from '@/lib/crm-types';
 import { loadEntities } from '@/lib/crm-storage';
 import { calcularSaldoBancario } from '@/lib/saldo-bancario';
+import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -231,43 +232,44 @@ export default function FluxoCaixaPage() {
     <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
       <div className="max-w-7xl mx-auto space-y-6">
 
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-[var(--t-text)]">Fluxo de Caixa Projetado</h1>
-            <p className="text-[var(--t-text-secondary)] text-sm mt-1">Projeção de entradas e saídas com base nos lançamentos pendentes</p>
-          </div>
-          <div className="flex gap-2 items-center">
-            <select
-              value={periodo}
-              onChange={e => setPeriodo(e.target.value as Periodo)}
-              className="bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text)]"
-            >
-              <option value="SEMANAL">Semanal</option>
-              <option value="MENSAL">Mensal</option>
-            </select>
-            <select
-              value={meses}
-              onChange={e => setMeses(parseInt(e.target.value))}
-              className="bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text)]"
-            >
-              <option value={3}>3 meses</option>
-              <option value={6}>6 meses</option>
-              <option value={12}>12 meses</option>
-            </select>
-            {projecaoFunis.count > 0 && (
-              <label className="flex items-center gap-2 px-3 py-2 rounded border border-dashed border-[var(--t-green)] text-sm text-[var(--t-text)] cursor-pointer hover:bg-[var(--t-green-bg)]/30">
-                <input
-                  type="checkbox"
-                  checked={incluirFunis}
-                  onChange={e => setIncluirFunis(e.target.checked)}
-                  className="accent-[var(--t-green)]"
-                />
-                Incluir projeção de funis ({projecaoFunis.count})
-              </label>
-            )}
-          </div>
-        </div>
+        {/* Header padronizado MinimalPageHead */}
+        <MinimalPageHead
+          title="Fluxo de caixa projetado"
+          meta={<p className="mt-2.5 text-[12px]" style={{ color: 'var(--ink-3)' }}>Projeção de entradas e saídas com base nos lançamentos pendentes</p>}
+          actions={
+            <>
+              <select
+                value={periodo}
+                onChange={e => setPeriodo(e.target.value as Periodo)}
+                className="h-[34px] px-3 text-[12px] border"
+                style={{ borderColor: 'var(--line)', background: 'var(--ink-surface)', color: 'var(--ink)' }}
+              >
+                <option value="SEMANAL">Semanal</option>
+                <option value="MENSAL">Mensal</option>
+              </select>
+              <select
+                value={meses}
+                onChange={e => setMeses(parseInt(e.target.value))}
+                className="h-[34px] px-3 text-[12px] border"
+                style={{ borderColor: 'var(--line)', background: 'var(--ink-surface)', color: 'var(--ink)' }}
+              >
+                <option value={3}>3 meses</option>
+                <option value={6}>6 meses</option>
+                <option value={12}>12 meses</option>
+              </select>
+              {projecaoFunis.count > 0 && (
+                <label className="flex items-center gap-2 h-[34px] px-3 border border-dashed text-[12px] cursor-pointer" style={{ borderColor: 'var(--ink-3)', color: 'var(--ink)' }}>
+                  <input
+                    type="checkbox"
+                    checked={incluirFunis}
+                    onChange={e => setIncluirFunis(e.target.checked)}
+                  />
+                  Incluir projeção de funis ({projecaoFunis.count})
+                </label>
+              )}
+            </>
+          }
+        />
 
         {/* KPIs */}
         <div className="grid grid-cols-4 gap-4">
@@ -432,6 +434,8 @@ export default function FluxoCaixaPage() {
             </div>
           </CardContent>
         </Card>
+
+        <MinimalFooter pageId="fluxo de caixa" />
       </div>
     </div>
   );

@@ -10,6 +10,7 @@ import {
   Info, X,
 } from 'lucide-react';
 import { MetricExplainer } from '@/components/financeiro/MetricExplainer';
+import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
 import { toast } from '@/lib/toast';
 
 const BRL = (v: number) =>
@@ -267,60 +268,62 @@ export default function DREPage() {
     <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
       <div className="max-w-5xl mx-auto space-y-6">
 
-        {/* Header */}
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-[var(--t-text)]">DRE — Demonstrativo de Resultado</h1>
-            <p className="text-[var(--t-text-secondary)] text-sm mt-1">
-              Regime de intermediação <span className="font-medium text-[var(--t-text)]">CNAE 7911-2/00</span> · Receita Bruta = comissão (margem), não o valor total transacionado
+        {/* Header padronizado MinimalPageHead com toggle + dropdowns como actions */}
+        <MinimalPageHead
+          title="DRE — Demonstrativo de Resultado"
+          meta={
+            <p className="mt-2.5 text-[12px]" style={{ color: 'var(--ink-3)' }}>
+              Regime de intermediação <span className="font-medium" style={{ color: 'var(--ink-2)' }}>CNAE 7911-2/00</span> · Receita Bruta = comissão (margem), não o valor total
             </p>
-          </div>
-          <div className="flex gap-2 items-center flex-wrap">
-            {/* Toggle Simplificado / Completo */}
-            <div className="inline-flex rounded-lg border border-[var(--t-border)] overflow-hidden">
-              <button
-                onClick={() => alternarModo(true)}
-                className={`px-3 py-2 text-xs font-medium transition-colors ${
-                  modoSimplificado
-                    ? 'bg-[var(--t-green)] text-white dark:text-[#0a0a14]'
-                    : 'bg-[var(--t-surface)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]'
-                }`}
+          }
+          actions={
+            <>
+              {/* Toggle Simplificado / Completo (segmented control) */}
+              <div className="inline-flex border" style={{ borderColor: 'var(--line)', height: '34px' }}>
+                {[
+                  { key: 'simpl', label: 'Simplificado', active: modoSimplificado },
+                  { key: 'comp', label: 'Completo', active: !modoSimplificado },
+                ].map((opt, i, arr) => (
+                  <button
+                    key={opt.key}
+                    onClick={() => alternarModo(opt.key === 'simpl')}
+                    className="px-3 text-[12px] transition-colors"
+                    style={{
+                      color: opt.active ? 'var(--ink)' : 'var(--ink-3)',
+                      fontWeight: opt.active ? 500 : 400,
+                      background: opt.active ? 'var(--ink-surface-2)' : 'transparent',
+                      borderRight: i < arr.length - 1 ? '1px solid var(--line)' : 'none',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <select
+                value={selectedMonth}
+                onChange={e => trocarMes(e.target.value)}
+                className="h-[34px] px-3 text-[12px] border"
+                style={{ borderColor: 'var(--line)', background: 'var(--ink-surface)', color: 'var(--ink)' }}
               >
-                Simplificado
-              </button>
-              <button
-                onClick={() => alternarModo(false)}
-                className={`px-3 py-2 text-xs font-medium transition-colors ${
-                  !modoSimplificado
-                    ? 'bg-[var(--t-green)] text-white dark:text-[#0a0a14]'
-                    : 'bg-[var(--t-surface)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]'
-                }`}
+                {availableMonths.map(m => (
+                  <option key={m} value={m}>{getMonthLabel(m)}</option>
+                ))}
+              </select>
+              <span className="text-[11px]" style={{ color: 'var(--ink-3)' }}>vs</span>
+              <select
+                value={compareMonth}
+                onChange={e => setCompareMonth(e.target.value)}
+                className="h-[34px] px-3 text-[12px] border"
+                style={{ borderColor: 'var(--line)', background: 'var(--ink-surface)', color: 'var(--ink)' }}
               >
-                Completo
-              </button>
-            </div>
-            <select
-              value={selectedMonth}
-              onChange={e => trocarMes(e.target.value)}
-              className="bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text)]"
-            >
-              {availableMonths.map(m => (
-                <option key={m} value={m}>{getMonthLabel(m)}</option>
-              ))}
-            </select>
-            <span className="text-xs text-[var(--t-text-muted)]">vs</span>
-            <select
-              value={compareMonth}
-              onChange={e => setCompareMonth(e.target.value)}
-              className="bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text)]"
-            >
-              <option value="">Sem comparação</option>
-              {availableMonths.filter(m => m !== selectedMonth).map(m => (
-                <option key={m} value={m}>{getMonthLabel(m)}</option>
-              ))}
-            </select>
-          </div>
-        </div>
+                <option value="">Sem comparação</option>
+                {availableMonths.filter(m => m !== selectedMonth).map(m => (
+                  <option key={m} value={m}>{getMonthLabel(m)}</option>
+                ))}
+              </select>
+            </>
+          }
+        />
 
         {/* Banner explicativo — primeira visita */}
         {bannerVisivel && (
@@ -474,6 +477,8 @@ export default function DREPage() {
             </div>
           </CardContent>
         </Card>
+
+        <MinimalFooter pageId="DRE" />
       </div>
     </div>
   );

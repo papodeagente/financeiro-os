@@ -5,6 +5,7 @@ import { PlanoContas, NaturezaCusto, getPlanoContasPadrao } from '@/lib/crm-type
 import { loadEntities, saveEntity, deleteEntity } from '@/lib/crm-storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Plus, X, Check, Trash2, Download, BookOpen, ChevronRight, Target } from 'lucide-react';
@@ -151,30 +152,30 @@ export default function PlanoContasPage() {
     <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
       <div className="max-w-5xl mx-auto space-y-6">
 
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-[var(--t-text)]">Plano de Contas</h1>
-            <p className="text-[var(--t-text-secondary)] text-sm mt-1">Estrutura hierárquica de categorias financeiras</p>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              onClick={handleCarregarPadrao}
-              disabled={loadingPadrao}
-              variant="outline"
-              className="border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              {loadingPadrao ? 'Carregando...' : 'Carregar Padrão'}
-            </Button>
-            <Button
-              onClick={openNew}
-              className="bg-[var(--t-green)] hover:brightness-110 text-white dark:text-[#0a0a14] font-semibold"
-            >
-              <Plus className="w-4 h-4 mr-2" /> Nova Conta
-            </Button>
-          </div>
-        </div>
+        <MinimalPageHead
+          title="Plano de contas"
+          meta={<p className="mt-2.5 text-[12px]" style={{ color: 'var(--ink-3)' }}>Estrutura hierárquica de categorias financeiras</p>}
+          actions={
+            <>
+              <button
+                onClick={handleCarregarPadrao}
+                disabled={loadingPadrao}
+                className="h-[34px] px-3 text-[12px] border transition-colors hover:bg-[var(--ink-surface-2)] disabled:opacity-50"
+                style={{ borderColor: 'var(--line)', color: 'var(--ink-2)' }}
+              >
+                <Download className="w-3.5 h-3.5 inline mr-2" />
+                {loadingPadrao ? 'Carregando…' : 'Carregar padrão'}
+              </button>
+              <button
+                onClick={openNew}
+                className="h-[34px] px-3 text-[12px] font-medium"
+                style={{ background: 'var(--ink)', color: 'var(--ink-bg)' }}
+              >
+                <Plus className="w-3.5 h-3.5 inline mr-2" /> Nova conta
+              </button>
+            </>
+          }
+        />
 
         {/* Summary */}
         <div className="grid grid-cols-3 gap-4">
@@ -391,6 +392,8 @@ export default function PlanoContasPage() {
             )}
           </CardContent>
         </Card>
+
+        <MinimalFooter pageId="plano de contas" />
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import type { CartaoCorporativo, ContaPagar, BandeiraCartao } from '@/lib/crm-ty
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { formatBRL, generateId } from '@/lib/utils';
@@ -151,19 +152,19 @@ export default function CartoesCorpPage() {
     <div className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-6">
       <div className="max-w-6xl mx-auto space-y-6">
 
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-[var(--t-accent)]">Cartões Corporativos</h1>
-            <p className="text-[var(--t-text-secondary)] text-sm mt-1">Gestão de limites, faturas e lançamentos por cartão</p>
-          </div>
-          <Button
-            onClick={openNew}
-            className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold"
-          >
-            <Plus className="w-4 h-4 mr-2" /> Novo Cartão
-          </Button>
-        </div>
+        <MinimalPageHead
+          title="Cartões corporativos"
+          meta={<p className="mt-2.5 text-[12px]" style={{ color: 'var(--ink-3)' }}>Gestão de limites, faturas e lançamentos por cartão</p>}
+          actions={
+            <button
+              onClick={openNew}
+              className="h-[34px] px-3 text-[12px] font-medium"
+              style={{ background: 'var(--ink)', color: 'var(--ink-bg)' }}
+            >
+              <Plus className="w-3.5 h-3.5 inline mr-2" /> Novo cartão
+            </button>
+          }
+        />
 
         {/* KPI consolidado */}
         <Card className="bg-[var(--t-surface)] border-[var(--t-accent)]/30">
@@ -553,6 +554,8 @@ export default function CartoesCorpPage() {
             </CardContent>
           </Card>
         )}
+
+        <MinimalFooter pageId="cartões" />
       </div>
     </div>
   );

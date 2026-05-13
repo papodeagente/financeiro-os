@@ -11,7 +11,7 @@ import {
   Plus, X, Check, Trash2, TrendingUp, Clock, AlertCircle, DollarSign,
 } from 'lucide-react';
 import { PageShell } from '@/components/PageShell';
-import { PageHeader } from '@/components/PageHeader';
+import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
 import { DataTable, DataTableColumn } from '@/components/ui/data-table';
 
 const BRL = (v: number) =>
@@ -231,22 +231,20 @@ export default function ContasReceberPage() {
   ];
 
   return (
-    <PageShell
-      header={
-        <PageHeader
-          title="Contas a Receber"
-          subtitle="Gestão de recebíveis da agência"
+    <PageShell>
+        <MinimalPageHead
+          title="Contas a receber"
+          meta={<p className="mt-2.5 text-[12px]" style={{ color: 'var(--ink-3)' }}>Gestão de recebíveis da agência</p>}
           actions={
-            <Button
+            <button
               onClick={openNew}
-              className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold"
+              className="h-[34px] px-3 text-[12px] font-medium"
+              style={{ background: 'var(--ink)', color: 'var(--ink-bg)' }}
             >
-              <Plus className="w-4 h-4 mr-2" /> Nova Conta
-            </Button>
+              <Plus className="w-3.5 h-3.5 inline mr-2" /> Nova conta
+            </button>
           }
         />
-      }
-    >
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -486,6 +484,7 @@ export default function ContasReceberPage() {
             />
           </CardContent>
         </Card>
+        <MinimalFooter pageId="contas a receber" />
     </PageShell>
   );
 }
