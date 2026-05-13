@@ -39,7 +39,20 @@ interface ResumoGrupo {
   confirmadas: number;
   materiais: number;
   alerta_vagas_restantes: number;
+  financeiro?: {
+    previsto: number;
+    recebido: number;
+    em_aberto: number;
+    vencido: number;
+  };
   updated_at: string;
+}
+
+function fmtBRLCompact(v: number): string {
+  if (!v) return 'R$ 0';
+  if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1).replace('.', ',')}M`;
+  if (v >= 1_000) return `R$ ${(v / 1_000).toFixed(1).replace('.', ',')}k`;
+  return `R$ ${v.toFixed(0)}`;
 }
 
 interface Props {
@@ -158,6 +171,32 @@ function GroupCard({ g, isDragging = false }: { g: ResumoGrupo; isDragging?: boo
             <div
               className="h-full transition-all duration-300"
               style={{ width: `${pct}%`, background: corBarra }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Linha financeira — só quando há receita prevista (alguma reserva confirmada) */}
+      {g.financeiro && g.financeiro.previsto > 0 && (
+        <div className="pl-2 pr-4 mt-3 pt-3 border-t border-[#F1F5F9]">
+          <div className="flex items-center justify-between text-[10px] mb-1">
+            <span className="font-semibold text-[#0F172A] tabular-nums">
+              {fmtBRLCompact(g.financeiro.recebido)}
+              <span className="text-[#94A3B8] font-normal"> de {fmtBRLCompact(g.financeiro.previsto)}</span>
+            </span>
+            {g.financeiro.vencido > 0 && (
+              <span className="badge badge--danger" style={{ fontSize: '9px', padding: '1px 6px' }}>
+                vencido {fmtBRLCompact(g.financeiro.vencido)}
+              </span>
+            )}
+          </div>
+          <div className="h-1 bg-[#F1F5F9] rounded-full overflow-hidden">
+            <div
+              className="h-full transition-all duration-300"
+              style={{
+                width: `${Math.min((g.financeiro.recebido / g.financeiro.previsto) * 100, 100)}%`,
+                background: g.financeiro.vencido > 0 ? '#F59E0B' : '#10B981',
+              }}
             />
           </div>
         </div>

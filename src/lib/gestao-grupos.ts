@@ -128,6 +128,119 @@ export interface PassageiroData {
   observacoes_internas?: string;
 }
 
+// ============================================================
+// STATUS FINANCEIRO DERIVADO (Fase C)
+// ============================================================
+// Calcula o status financeiro de uma reserva a partir das contas_receber
+// vinculadas à venda confirmada. Não é persistido — sempre computado on
+// the fly. Espelha a saúde real do pagamento sem duplicar fonte de verdade.
+
+export type StatusFinanceiroReserva = 'pago' | 'parcial' | 'pendente' | 'vencida' | 'n/a';
+
+export interface ContaReceberMinima {
+  data: {
+    valor_final?: number;
+    data_vencimento?: string;     // YYYY-MM-DD
+    data_recebimento?: string | null;
+    valor_recebido?: number | null;
+    status?: string;              // 'PENDENTE' | 'PAGO' | 'VENCIDO' | 'CANCELADO' | 'PARCIAL'
+    parcela_numero?: number;
+    total_parcelas?: number;
+  };
+}
+
+export interface FinanceiroReserva {
+  status: StatusFinanceiroReserva;
+  total_previsto: number;
+  total_recebido: number;
+  total_vencido: number;
+  total_pendente: number;
+  qtd_parcelas: number;
+  qtd_pagas: number;
+  qtd_vencidas: number;
+  proxima_parcela: { data_vencimento: string; valor_final: number; parcela_numero: number } | null;
+}
+
+export function calcReservaFinanceiro(
+  contas: ContaReceberMinima[],
+  reservaStatus: string,
+): FinanceiroReserva {
+  // Reserva ainda não confirmada: sem cobrança gerada — n/a
+  if (reservaStatus !== 'confirmado' || contas.length === 0) {
+    return {
+      status: 'n/a',
+      total_previsto: 0,
+      total_recebido: 0,
+      total_vencido: 0,
+      total_pendente: 0,
+      qtd_parcelas: contas.length,
+      qtd_pagas: 0,
+      qtd_vencidas: 0,
+      proxima_parcela: null,
+    };
+  }
+
+  const hoje = new Date().toISOString().split('T')[0];
+  let totalPrev = 0;
+  let totalReceb = 0;
+  let totalVenc = 0;
+  let totalPend = 0;
+  let qtdPagas = 0;
+  let qtdVencidas = 0;
+
+  // Próxima parcela: a mais antiga ainda não paga
+  let proxima: FinanceiroReserva['proxima_parcela'] = null;
+
+  for (const c of contas) {
+    const d = c.data;
+    if (d.status === 'CANCELADO') continue;
+    const valor = d.valor_final || 0;
+    totalPrev += valor;
+
+    const isPago = d.status === 'PAGO' || (d.valor_recebido && d.valor_recebido >= valor);
+    if (isPago) {
+      qtdPagas++;
+      totalReceb += d.valor_recebido || valor;
+    } else {
+      const venc = d.data_vencimento || '';
+      const vencida = venc && venc < hoje;
+      if (vencida) {
+        qtdVencidas++;
+        totalVenc += valor;
+      } else {
+        totalPend += valor;
+      }
+      // Mantém a mais antiga não-paga como próxima
+      if (!proxima || (venc && (!proxima.data_vencimento || venc < proxima.data_vencimento))) {
+        proxima = {
+          data_vencimento: venc,
+          valor_final: valor,
+          parcela_numero: d.parcela_numero || 0,
+        };
+      }
+    }
+  }
+
+  // Resolve status agregado
+  let status: StatusFinanceiroReserva;
+  if (qtdPagas === contas.length) status = 'pago';
+  else if (qtdVencidas > 0) status = 'vencida';
+  else if (qtdPagas > 0) status = 'parcial';
+  else status = 'pendente';
+
+  return {
+    status,
+    total_previsto: totalPrev,
+    total_recebido: totalReceb,
+    total_vencido: totalVenc,
+    total_pendente: totalPend,
+    qtd_parcelas: contas.length,
+    qtd_pagas: qtdPagas,
+    qtd_vencidas: qtdVencidas,
+    proxima_parcela: proxima,
+  };
+}
+
 export function createPassageiroData(nome: string, opts?: Partial<PassageiroData>): PassageiroData {
   return {
     data_nascimento: '',

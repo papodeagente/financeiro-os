@@ -39,7 +39,33 @@ export async function GET() {
          SELECT COUNT(*)::int FROM grupo_materiais m
           WHERE m.grupo_id = g.id AND m.tenant_id = g.tenant_id
             AND (m.data->>'removido') IS DISTINCT FROM 'true'
-       ) AS materiais
+       ) AS materiais,
+       -- Agregados financeiros via JOIN com contas_receber das vendas
+       -- vinculadas (origem='VENDA' garante que só pega o que veio de
+       -- reservas confirmadas).
+       (
+         SELECT COALESCE(SUM((cr.data->>'valor_final')::numeric), 0)::numeric
+           FROM contas_receber cr
+          WHERE cr.grupo_id = g.id AND cr.tenant_id = g.tenant_id
+            AND cr.status != 'CANCELADO'
+       ) AS valor_previsto,
+       (
+         SELECT COALESCE(SUM(
+           CASE WHEN cr.status = 'PAGO'
+                THEN COALESCE((cr.data->>'valor_recebido')::numeric, (cr.data->>'valor_final')::numeric)
+                ELSE 0
+           END
+         ), 0)::numeric
+           FROM contas_receber cr
+          WHERE cr.grupo_id = g.id AND cr.tenant_id = g.tenant_id
+       ) AS valor_recebido,
+       (
+         SELECT COALESCE(SUM((cr.data->>'valor_final')::numeric), 0)::numeric
+           FROM contas_receber cr
+          WHERE cr.grupo_id = g.id AND cr.tenant_id = g.tenant_id
+            AND cr.status NOT IN ('PAGO', 'CANCELADO')
+            AND (cr.data->>'data_vencimento') < to_char(NOW(), 'YYYY-MM-DD')
+       ) AS valor_vencido
      FROM grupos g
      LEFT JOIN gestao_grupos gg ON gg.grupo_id = g.id AND gg.tenant_id = g.tenant_id
      WHERE g.tenant_id = $1
@@ -81,6 +107,13 @@ export async function GET() {
       confirmadas: r.confirmadas as number,
       materiais: r.materiais as number,
       alerta_vagas_restantes: config?.alerta_vagas_restantes ?? 5,
+      // Agregados financeiros (Fase C) — calculados via JOIN com contas_receber
+      financeiro: {
+        previsto: Number(r.valor_previsto) || 0,
+        recebido: Number(r.valor_recebido) || 0,
+        em_aberto: Math.max(Number(r.valor_previsto) - Number(r.valor_recebido), 0),
+        vencido: Number(r.valor_vencido) || 0,
+      },
       updated_at: r.updated_at,
     };
   });

@@ -13,6 +13,18 @@ interface PeriodoMinimo {
   vagas_total: number;
 }
 
+interface ReservaFinanceiro {
+  status: 'pago' | 'parcial' | 'pendente' | 'vencida' | 'n/a';
+  total_previsto: number;
+  total_recebido: number;
+  total_vencido: number;
+  total_pendente: number;
+  qtd_parcelas: number;
+  qtd_pagas: number;
+  qtd_vencidas: number;
+  proxima_parcela: { data_vencimento: string; valor_final: number; parcela_numero: number } | null;
+}
+
 interface Reserva {
   id: string;
   grupo_id: string;
@@ -30,6 +42,7 @@ interface Reserva {
   venda_id: string | null;
   motivo_cancelamento?: string;
   status: 'reservado' | 'confirmado' | 'cancelado' | 'lista_espera';
+  financeiro?: ReservaFinanceiro;
   created_at?: string;
   updated_at?: string;
 }
@@ -298,6 +311,7 @@ export function ReservasTab({ grupoId, periodos, tarifasAtivas, permiteListaEspe
                 <th className="text-left px-3 py-2 font-medium" style={{ color: 'var(--ink-2)' }}>Apto</th>
                 <th className="text-right px-3 py-2 font-medium" style={{ color: 'var(--ink-2)' }}>Valor</th>
                 <th className="text-left px-3 py-2 font-medium" style={{ color: 'var(--ink-2)' }}>Status</th>
+                <th className="text-left px-3 py-2 font-medium" style={{ color: 'var(--ink-2)' }}>Pgto</th>
                 <th className="text-left px-3 py-2 font-medium" style={{ color: 'var(--ink-2)' }}>Docs</th>
                 <th className="text-right px-3 py-2 font-medium" style={{ color: 'var(--ink-2)' }}>Ações</th>
               </tr>
@@ -334,6 +348,34 @@ export function ReservasTab({ grupoId, periodos, tarifasAtivas, permiteListaEspe
                       {cancelada && r.motivo_cancelamento && (
                         <div className="text-[10px] mt-0.5 italic" style={{ color: 'var(--ink-3)' }}>{r.motivo_cancelamento}</div>
                       )}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      {(() => {
+                        const fin = r.financeiro;
+                        if (!fin || fin.status === 'n/a') {
+                          return <span className="text-[10px]" style={{ color: 'var(--ink-4)' }}>—</span>;
+                        }
+                        const pgtoCfg: Record<string, { label: string; cls: string }> = {
+                          pago: { label: 'Pago', cls: 'badge badge--success' },
+                          parcial: { label: 'Parcial', cls: 'badge badge--info' },
+                          pendente: { label: 'Pendente', cls: 'badge badge--warning' },
+                          vencida: { label: 'Vencida', cls: 'badge badge--danger' },
+                        };
+                        const cfg = pgtoCfg[fin.status] || pgtoCfg.pendente;
+                        const titulo = fin.proxima_parcela
+                          ? `Próxima ${fin.proxima_parcela.parcela_numero}/${fin.qtd_parcelas}: ${fmtData(fin.proxima_parcela.data_vencimento)} · ${fmtBRL(fin.proxima_parcela.valor_final)}`
+                          : `${fin.qtd_pagas}/${fin.qtd_parcelas} parcelas pagas`;
+                        return (
+                          <div title={titulo}>
+                            <span className={cfg.cls}>{cfg.label}</span>
+                            {fin.qtd_parcelas > 0 && (
+                              <div className="text-[10px] mono mt-0.5" style={{ color: 'var(--ink-3)' }}>
+                                {fin.qtd_pagas}/{fin.qtd_parcelas}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-3 py-2.5">
                       {r.documentos_ok ? (

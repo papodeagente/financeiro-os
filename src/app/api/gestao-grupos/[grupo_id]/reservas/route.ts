@@ -2,7 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { generateId } from '@/lib/utils';
 import { getTenantId } from '@/lib/tenant';
-import { recalcularVagasPeriodo, type ReservaData, type ReservaStatus, type PeriodoVagasData, type GestaoGrupoData } from '@/lib/gestao-grupos';
+import {
+  recalcularVagasPeriodo,
+  calcReservaFinanceiro,
+  type ReservaData,
+  type ReservaStatus,
+  type PeriodoVagasData,
+  type GestaoGrupoData,
+  type ContaReceberMinima,
+} from '@/lib/gestao-grupos';
 
 // GET /api/gestao-grupos/[grupo_id]/reservas
 // Query params: periodo_id, status, busca (nome do passageiro)
@@ -35,6 +43,26 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ grup
     params_,
   );
 
+  // Carrega TODAS as contas_receber das vendas vinculadas às reservas
+  // confirmadas, em uma única query agrupada — evita N+1.
+  const vendaIds = (rows as Array<{ data: ReservaData; status: string }>)
+    .map(r => (r.status === 'confirmado' && r.data?.venda_id) ? r.data.venda_id : null)
+    .filter((v): v is string => !!v);
+
+  const contasPorVenda: Record<string, ContaReceberMinima[]> = {};
+  if (vendaIds.length > 0) {
+    const { rows: crRows } = await pool.query(
+      `SELECT venda_id, data FROM contas_receber
+        WHERE tenant_id = $1 AND venda_id = ANY($2::text[])`,
+      [tenantId, vendaIds],
+    );
+    for (const cr of crRows) {
+      const vId = cr.venda_id as string;
+      if (!contasPorVenda[vId]) contasPorVenda[vId] = [];
+      contasPorVenda[vId].push({ data: cr.data });
+    }
+  }
+
   type Cliente = { nome_completo?: string; nome_fantasia?: string; razao_social?: string; nome?: string; tipo?: string };
   const reservas = rows
     .map(r => {
@@ -43,6 +71,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ grup
         ? (c.nome_fantasia || c.razao_social || '')
         : (c.nome_completo || c.nome || '');
       const periodo = (r.periodo_data || {}) as PeriodoVagasData;
+      const reservaData = r.data as ReservaData;
+      const vendaId = reservaData.venda_id || '';
+      const contas = vendaId ? (contasPorVenda[vendaId] || []) : [];
+      const financeiro = calcReservaFinanceiro(contas, r.status);
       return {
         id: r.id,
         grupo_id,
@@ -51,12 +83,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ grup
         cliente_id: r.cliente_id,
         cliente_nome: clienteNome,
         status: r.status as ReservaStatus,
-        ...(r.data as ReservaData),
+        ...reservaData,
+        financeiro,
         created_at: r.created_at,
         updated_at: r.updated_at,
       };
     })
-    .filter(r => !busca || r.nome_passageiro.toLowerCase().includes(busca) || r.cliente_nome.toLowerCase().includes(busca));
+    .filter(r => !busca || (r.nome_passageiro || '').toLowerCase().includes(busca) || r.cliente_nome.toLowerCase().includes(busca));
 
   return NextResponse.json(reservas);
 }

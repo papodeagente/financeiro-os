@@ -29,6 +29,12 @@ interface ResumoGrupo {
   confirmadas: number;
   materiais: number;
   alerta_vagas_restantes: number;
+  financeiro?: {
+    previsto: number;
+    recebido: number;
+    em_aberto: number;
+    vencido: number;
+  };
   updated_at: string;
 }
 
@@ -109,10 +115,17 @@ export default function VisaoGeralGestaoPage() {
         disponiveis: acc.disponiveis + g.vagas.disponiveis,
         reservas: acc.reservas + g.reservas,
         confirmadas: acc.confirmadas + g.confirmadas,
+        previsto: acc.previsto + (g.financeiro?.previsto || 0),
+        recebido: acc.recebido + (g.financeiro?.recebido || 0),
+        em_aberto: acc.em_aberto + (g.financeiro?.em_aberto || 0),
+        vencido: acc.vencido + (g.financeiro?.vencido || 0),
       }),
-      { grupos: 0, vagasTotal: 0, disponiveis: 0, reservas: 0, confirmadas: 0 },
+      { grupos: 0, vagasTotal: 0, disponiveis: 0, reservas: 0, confirmadas: 0, previsto: 0, recebido: 0, em_aberto: 0, vencido: 0 },
     );
   }, [data]);
+
+  const fmtBRL = (v: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
@@ -131,6 +144,45 @@ export default function VisaoGeralGestaoPage() {
             </div>
           }
         />
+
+        {/* KPIs financeiros — só quando há receita prevista (Fase C) */}
+        {agg.previsto > 0 && (
+          <div className="kpi-grid">
+            <div className="kpi-card">
+              <div className="kpi-card__label">Receita prevista</div>
+              <div className="kpi-card__value tabular-nums">{fmtBRL(agg.previsto)}</div>
+              <div className="kpi-card__meta">Total das reservas confirmadas</div>
+            </div>
+            <div className="kpi-card">
+              <div className="kpi-card__label">Recebido</div>
+              <div className="kpi-card__value tabular-nums" style={{ color: 'var(--lg-pos)' }}>
+                {fmtBRL(agg.recebido)}
+              </div>
+              <div className="kpi-card__meta">
+                {agg.previsto > 0
+                  ? `${((agg.recebido / agg.previsto) * 100).toFixed(0)}% do previsto`
+                  : '—'}
+              </div>
+            </div>
+            <div className="kpi-card">
+              <div className="kpi-card__label">Em aberto</div>
+              <div className="kpi-card__value tabular-nums">{fmtBRL(agg.em_aberto)}</div>
+              <div className="kpi-card__meta">A receber nas próximas parcelas</div>
+            </div>
+            <div className="kpi-card">
+              <div className="kpi-card__label">Vencido</div>
+              <div
+                className="kpi-card__value tabular-nums"
+                style={{ color: agg.vencido > 0 ? 'var(--lg-neg)' : 'var(--lg-text-4)' }}
+              >
+                {fmtBRL(agg.vencido)}
+              </div>
+              <div className="kpi-card__meta">
+                {agg.vencido > 0 ? 'Cobrar com urgência' : 'Nenhuma parcela vencida'}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Filtros + toggle Tabela/Kanban */}
         <div className="flex items-center gap-3 flex-wrap">
