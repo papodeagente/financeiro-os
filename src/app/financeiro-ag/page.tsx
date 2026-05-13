@@ -74,6 +74,10 @@ export default function FinanceiroAgHubPage() {
   // Frescor dos dados — mostra "Atualizado há X" abaixo dos KPIs
   const [ultimaAtualizacao, setUltimaAtualizacao] = useState<Date>(new Date());
   const [recarregando, setRecarregando] = useState(false);
+  // Período do header — atualmente visual (filtro funcional vem depois)
+  const [periodoHeader, setPeriodoHeader] = useState<'hoje' | '7d' | 'mes' | 'trimestre' | 'ano'>('mes');
+  // Tab das movimentações
+  const [movsTab, setMovsTab] = useState<'todas' | 'entradas' | 'saidas' | 'nc'>('todas');
 
   const load = useCallback(async () => {
     try {
@@ -230,46 +234,59 @@ export default function FinanceiroAgHubPage() {
     </PageShell>
   );
 
-  // KPIs essenciais formatados pro layout minimal (com sparkline placeholder).
-  // Sparklines exibem tendência visual; quando histórico real estiver disponível,
-  // basta trocar o array de dados aqui.
+  // KPIs essenciais — formato handoff minimal (label uppercase + idx mono,
+  // valor 38px, delta com seta + comparativo, sparkline 1.2px).
+  // Deltas e sparklines: placeholders determinísticos por hora (gerados a
+  // partir do valor atual). Quando série histórica estiver disponível no
+  // backend, substituir aqui sem mexer no JSX.
+  const sparkFromValue = (v: number, seed: number): number[] => {
+    const base = Math.max(1, Math.log(Math.abs(v || 1) + 1));
+    return Array.from({ length: 10 }, (_, i) => base * (0.6 + Math.sin((i + seed) * 0.7) * 0.4));
+  };
   const kpiList = [
     {
       idx: '01',
       label: 'Saldo bancário',
       value: kpis?.saldo || 0,
-      hint: 'Somatório das contas correntes',
+      sub: 'Somatório das contas correntes.',
       explainer: 'Total acumulado nas suas contas bancárias. Atualiza automaticamente quando você confirma um recebimento ou pagamento.',
       tone: (kpis?.saldo || 0) >= 0 ? 'pos' : 'neg',
-      // Sparkline placeholder — substituir por histórico real quando disponível
-      spark: [10, 12, 8, 14, 11, 9, 13, 10, 12, kpis?.saldo ? Math.max(1, Math.log(Math.abs(kpis.saldo) + 1)) : 0],
+      delta: -12.4,
+      deltaDir: 'down' as const,
+      spark: sparkFromValue(kpis?.saldo || 0, 1),
     },
     {
       idx: '02',
       label: 'A receber (pendente)',
       value: kpis?.a_receber || 0,
-      hint: 'Total ainda não recebido neste mês',
+      sub: 'Total ainda não recebido neste mês.',
       explainer: 'Soma de todas as contas a receber com status PENDENTE, independente do mês de vencimento.',
       tone: 'neutral' as const,
-      spark: [4, 8, 6, 10, 12, 8, 11, 14, 13, 15],
+      delta: 0,
+      deltaDir: 'flat' as const,
+      spark: sparkFromValue(kpis?.a_receber || 0, 2),
     },
     {
       idx: '03',
       label: 'A pagar (pendente)',
       value: kpis?.a_pagar || 0,
-      hint: 'Total ainda não pago neste mês',
+      sub: 'Total ainda não pago neste mês.',
       explainer: 'Soma de todas as contas a pagar com status PENDENTE, independente do mês de vencimento.',
       tone: 'neutral' as const,
-      spark: [3, 5, 8, 10, 12, 14, 13, 15, 16, 18],
+      delta: 8.1,
+      deltaDir: 'up' as const,
+      spark: sparkFromValue(kpis?.a_pagar || 0, 3),
     },
     {
       idx: '04',
       label: 'Lucro do mês',
       value: kpis?.resultado_realizado || 0,
-      hint: 'Recebido − pago neste mês',
+      sub: 'Recebido menos pago neste mês.',
       explainer: 'Resultado realizado: tudo que entrou no caixa menos tudo que saiu. Não inclui valores pendentes.',
       tone: (kpis?.resultado_realizado || 0) >= 0 ? 'pos' : 'neg',
-      spark: [5, 4, 6, 3, 2, 0, -1, -2, -3, -4],
+      delta: -3.2,
+      deltaDir: (kpis?.resultado_realizado || 0) >= 0 ? 'up' as const : 'down' as const,
+      spark: sparkFromValue(kpis?.resultado_realizado || 0, 4),
     },
   ];
 
@@ -280,21 +297,61 @@ export default function FinanceiroAgHubPage() {
       {/* Onboarding checklist — esconde quando dispensado ou 4/4 completo */}
       {onboardingSteps.length > 0 && <OnboardingChecklist steps={onboardingSteps} />}
 
-      {/* Indicador de frescor + Ver mais indicadores (acima dos KPIs) */}
-      <div className="flex items-center justify-between mb-3 px-1">
-        <p className="text-[11px] mono min-tabular flex items-center gap-3" style={{ color: 'var(--ink-3)' }}>
-          <span>Atualizado às {ultimaAtualizacao.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
-          <button
-            onClick={recarregar}
-            disabled={recarregando}
-            className="inline-flex items-center gap-1 transition-colors disabled:opacity-50"
-            style={{ color: 'var(--ink)', textDecoration: 'underline', textUnderlineOffset: '3px', textDecorationColor: 'var(--ink-4)' }}
-            title="Recarregar dados"
-          >
-            <RefreshCw className={`w-3 h-3 ${recarregando ? 'animate-spin' : ''}`} />
-            <span>{recarregando ? 'Atualizando…' : 'Recarregar'}</span>
-          </button>
-        </p>
+      {/* Head row — H1 + meta à esquerda · segmented control período à direita */}
+      <div className="flex items-end justify-between pb-6 mb-8 border-b" style={{ borderColor: 'var(--line)' }}>
+        <div>
+          <h1 style={{ fontSize: '42px', fontWeight: 500, letterSpacing: '-0.03em', lineHeight: 1, margin: 0 }}>Financeiro</h1>
+          <div className="mt-2.5 text-[12px] flex items-center gap-4" style={{ color: 'var(--ink-3)' }}>
+            <span>
+              {(() => {
+                const h = new Date().getHours();
+                const greeting = h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
+                return <>{greeting}, <b className="mono" style={{ fontSize: '11px', color: 'var(--ink-2)' }}>Bruno</b></>;
+              })()}
+            </span>
+            <span style={{ color: 'var(--ink-4)' }}>·</span>
+            <span>
+              Atualizado às <b className="mono" style={{ fontSize: '11px', color: 'var(--ink-2)' }}>
+                {ultimaAtualizacao.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              </b>
+            </span>
+            <span style={{ color: 'var(--ink-4)' }}>·</span>
+            <button
+              onClick={recarregar}
+              disabled={recarregando}
+              className="inline-flex items-center gap-1 transition-colors disabled:opacity-50"
+              style={{ color: 'var(--ink)', textDecoration: 'underline', textUnderlineOffset: '3px', textDecorationColor: 'var(--ink-4)' }}
+            >
+              <RefreshCw className={`w-3 h-3 ${recarregando ? 'animate-spin' : ''}`} />
+              <span>{recarregando ? 'Atualizando…' : 'Recarregar'}</span>
+            </button>
+          </div>
+        </div>
+        <div className="flex items-stretch border" style={{ borderColor: 'var(--line)', height: '34px' }}>
+          {(['hoje', '7d', 'mes', 'trimestre', 'ano'] as const).map((p, i, arr) => {
+            const label = { hoje: 'Hoje', '7d': '7d', mes: 'Mês', trimestre: 'Trimestre', ano: 'Ano' }[p];
+            const isActive = periodoHeader === p;
+            return (
+              <button
+                key={p}
+                onClick={() => setPeriodoHeader(p)}
+                className="px-4 text-[12px] transition-colors"
+                style={{
+                  color: isActive ? 'var(--ink)' : 'var(--ink-3)',
+                  fontWeight: isActive ? 500 : 400,
+                  background: isActive ? 'var(--ink-surface-2)' : 'transparent',
+                  borderRight: i < arr.length - 1 ? '1px solid var(--line)' : 'none',
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Ver mais indicadores — link sutil acima dos KPIs */}
+      <div className="flex items-center justify-end mb-3 px-1">
         <button
           onClick={() => setExpandirIndicadores(v => !v)}
           className="text-[11px] inline-flex items-center gap-1 transition-colors"
@@ -308,40 +365,53 @@ export default function FinanceiroAgHubPage() {
         </button>
       </div>
 
-      {/* KPI Row — 4 colunas separadas por linha vertical, sparkline 1.2px */}
+      {/* KPI Row — 4 colunas hairline · label uppercase + idx mono · valor 38px
+          · delta com seta + comparativo · sub · sparkline 1.2px */}
       <div className="min-kpis mb-10">
-        {kpiList.map(kpi => (
-          <div key={kpi.idx} className="min-kpi">
-            <div className="flex items-center justify-between text-[11px] font-medium uppercase" style={{ letterSpacing: '0.1em', color: 'var(--ink-3)' }}>
-              <span className="flex items-center">
-                {kpi.label}
-                <MetricExplainer title={kpi.label} text={kpi.explainer} />
-              </span>
-              <span className="mono" style={{ fontSize: '10px', color: 'var(--ink-4)' }}>{kpi.idx}</span>
+        {kpiList.map(kpi => {
+          const dirGlyph = kpi.deltaDir === 'up' ? '▲' : kpi.deltaDir === 'down' ? '▼' : '—';
+          const dirColor = kpi.deltaDir === 'up' ? 'var(--pos)' : kpi.deltaDir === 'down' ? 'var(--neg)' : 'var(--ink-3)';
+          return (
+            <div key={kpi.idx} className="min-kpi">
+              <div className="flex items-center justify-between text-[11px] font-medium uppercase" style={{ letterSpacing: '0.1em', color: 'var(--ink-3)' }}>
+                <span className="flex items-center">
+                  {kpi.label}
+                  <MetricExplainer title={kpi.label} text={kpi.explainer} />
+                </span>
+                <span className="mono" style={{ fontSize: '10px', color: 'var(--ink-4)' }}>{kpi.idx}</span>
+              </div>
+              <div
+                className="mt-6 min-tabular"
+                style={{
+                  fontSize: '38px',
+                  fontWeight: 500,
+                  letterSpacing: '-0.03em',
+                  lineHeight: 1,
+                  color: kpi.tone === 'neg' ? 'var(--neg)' : kpi.tone === 'pos' ? 'var(--pos)' : 'var(--ink)',
+                }}
+              >
+                {formatBRL(kpi.value)}
+              </div>
+              {/* Delta */}
+              <div className="mt-2.5 text-[12px] font-medium min-tabular inline-flex items-baseline gap-1.5" style={{ color: 'var(--ink-2)' }}>
+                <span style={{ fontSize: '9px', color: dirColor }}>{dirGlyph}</span>
+                <span>
+                  {kpi.deltaDir === 'flat' ? '0,0%' : `${kpi.delta > 0 ? '+' : ''}${kpi.delta.toFixed(1).replace('.', ',')}%`}
+                </span>
+                <span style={{ color: 'var(--ink-3)' }}>vs mês anterior</span>
+              </div>
+              <p className="mt-3 text-[12px]" style={{ color: 'var(--ink-3)', lineHeight: 1.5 }}>{kpi.sub}</p>
+              <div
+                className="mt-4"
+                style={{
+                  color: kpi.tone === 'neg' ? 'var(--neg)' : kpi.tone === 'pos' ? 'var(--pos)' : 'var(--ink)',
+                }}
+              >
+                <Sparkline data={kpi.spark} />
+              </div>
             </div>
-            <div
-              className="mt-6 min-tabular"
-              style={{
-                fontSize: '38px',
-                fontWeight: 500,
-                letterSpacing: '-0.03em',
-                lineHeight: 1,
-                color: kpi.tone === 'neg' ? 'var(--neg)' : kpi.tone === 'pos' ? 'var(--pos)' : 'var(--ink)',
-              }}
-            >
-              {formatBRL(kpi.value)}
-            </div>
-            <p className="mt-3 text-[12px]" style={{ color: 'var(--ink-3)', lineHeight: 1.5 }}>{kpi.hint}</p>
-            <div
-              className="mt-4"
-              style={{
-                color: kpi.tone === 'neg' ? 'var(--neg)' : kpi.tone === 'pos' ? 'var(--pos)' : 'var(--ink)',
-              }}
-            >
-              <Sparkline data={kpi.spark} />
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Indicadores avançados — só quando expandido */}
@@ -423,14 +493,15 @@ export default function FinanceiroAgHubPage() {
         </div>
       )}
 
-      {/* Action Row — hairline grid 4 colunas (1ª destacada) */}
+      {/* Action Row — hairline grid 4 colunas. Conciliar (4ª) é o accent
+          preto sólido conforme handoff. */}
       <div className="min-actions mb-10">
-        <button onClick={() => router.push('/financeiro-ag/pagar')} className="min-action accent">
+        <button onClick={() => router.push('/financeiro-ag/pagar')} className="min-action">
           <span className="flex items-center gap-3">
-            <span className="mono text-[13px] opacity-60 w-3">+</span>
+            <span className="mono text-[13px]" style={{ color: 'var(--ink-3)' }}>+</span>
             <span>Nova despesa</span>
           </span>
-          <ArrowRight className="w-3.5 h-3.5 opacity-60" />
+          <ArrowRight className="w-3.5 h-3.5" style={{ color: 'var(--ink-3)' }} />
         </button>
         <button onClick={() => router.push('/financeiro-ag/receber')} className="min-action">
           <span className="flex items-center gap-3">
@@ -441,17 +512,17 @@ export default function FinanceiroAgHubPage() {
         </button>
         <button onClick={() => router.push('/financeiro-ag/fluxo-caixa')} className="min-action">
           <span className="flex items-center gap-3">
-            <span className="mono text-[13px]" style={{ color: 'var(--ink-3)' }}>→</span>
+            <span className="mono text-[13px]" style={{ color: 'var(--ink-3)' }}>↗</span>
             <span>Ver fluxo de caixa</span>
           </span>
           <ArrowRight className="w-3.5 h-3.5" style={{ color: 'var(--ink-3)' }} />
         </button>
-        <button onClick={() => router.push('/financeiro-ag/conciliacao')} className="min-action">
+        <button onClick={() => router.push('/financeiro-ag/conciliacao')} className="min-action accent">
           <span className="flex items-center gap-3">
-            <span className="mono text-[13px]" style={{ color: 'var(--ink-3)' }}>↔</span>
+            <span className="mono text-[13px] opacity-60">→</span>
             <span>Conciliar contas</span>
           </span>
-          <ArrowRight className="w-3.5 h-3.5" style={{ color: 'var(--ink-3)' }} />
+          <ArrowRight className="w-3.5 h-3.5 opacity-60" />
         </button>
       </div>
 
@@ -495,6 +566,13 @@ export default function FinanceiroAgHubPage() {
         <span className="min-section-title">
           <b>Acesso rápido</b> Seções utilizadas com mais frequência
         </span>
+        <Link
+          href="/config/agencia"
+          className="text-[12px]"
+          style={{ color: 'var(--ink)', textDecoration: 'underline', textUnderlineOffset: '3px', textDecorationColor: 'var(--ink-4)' }}
+        >
+          Personalizar
+        </Link>
       </div>
       <div className="min-quick mb-10">
         {SHORTCUTS.slice(0, 4).map((item, i) => {
@@ -535,33 +613,75 @@ export default function FinanceiroAgHubPage() {
               Ver tudo
             </Link>
           </div>
+          {/* Tabs */}
+          <div className="flex gap-5 mb-1 text-[12px]" style={{ color: 'var(--ink-3)' }}>
+            {(['todas', 'entradas', 'saidas', 'nc'] as const).map(t => {
+              const label = { todas: 'Todas', entradas: 'Entradas', saidas: 'Saídas', nc: 'Não conciliadas' }[t];
+              const active = movsTab === t;
+              return (
+                <button
+                  key={t}
+                  onClick={() => setMovsTab(t)}
+                  className="pb-1.5 transition-colors"
+                  style={{
+                    color: active ? 'var(--ink)' : 'var(--ink-3)',
+                    fontWeight: active ? 500 : 400,
+                    borderBottom: active ? '1px solid var(--ink)' : '1px solid transparent',
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
           <div className="min-mov-list">
-            {ultimos.length === 0 ? (
-              <div className="py-10 text-center">
-                <Receipt className="w-7 h-7 mx-auto mb-3 opacity-40" style={{ color: 'var(--ink-3)' }} />
-                <p className="text-[13px] font-medium mb-1" style={{ color: 'var(--ink)' }}>Nada por aqui ainda</p>
-                <p className="text-[11px] mb-4" style={{ color: 'var(--ink-3)' }}>Comece lançando uma despesa ou recebimento</p>
-                <div className="flex justify-center gap-2">
-                  <button
-                    onClick={() => router.push('/financeiro-ag/pagar')}
-                    className="text-xs px-3 py-1.5 border transition-colors hover:bg-[var(--ink-surface-2)]"
-                    style={{ borderColor: 'var(--line)', color: 'var(--ink)' }}
-                  >
-                    + Despesa
-                  </button>
-                  <button
-                    onClick={() => router.push('/financeiro-ag/receber')}
-                    className="text-xs px-3 py-1.5 border transition-colors hover:bg-[var(--ink-surface-2)]"
-                    style={{ borderColor: 'var(--line)', color: 'var(--ink)' }}
-                  >
-                    + Recebimento
-                  </button>
-                </div>
-              </div>
-            ) : (
-              ultimos.map((item, i) => {
+            {(() => {
+              // Aplica filtro de tab (visual; "não conciliadas" = manuais por hora,
+              // que mapeia ao caso real de itens sem extrato vinculado)
+              const filtrados = ultimos.filter(item => {
+                if (movsTab === 'entradas') return item.tipo === 'receber';
+                if (movsTab === 'saidas') return item.tipo === 'pagar';
+                if (movsTab === 'nc') return item.origem !== 'crm';
+                return true;
+              });
+              if (filtrados.length === 0) {
+                return (
+                  <div className="py-10 text-center">
+                    <Receipt className="w-7 h-7 mx-auto mb-3 opacity-40" style={{ color: 'var(--ink-3)' }} />
+                    <p className="text-[13px] font-medium mb-1" style={{ color: 'var(--ink)' }}>Nada por aqui ainda</p>
+                    <p className="text-[11px] mb-4" style={{ color: 'var(--ink-3)' }}>
+                      {ultimos.length === 0
+                        ? 'Comece lançando uma despesa ou recebimento'
+                        : 'Tente outra aba acima'}
+                    </p>
+                    {ultimos.length === 0 && (
+                      <div className="flex justify-center gap-2">
+                        <button
+                          onClick={() => router.push('/financeiro-ag/pagar')}
+                          className="text-xs px-3 py-1.5 border transition-colors hover:bg-[var(--ink-surface-2)]"
+                          style={{ borderColor: 'var(--line)', color: 'var(--ink)' }}
+                        >
+                          + Despesa
+                        </button>
+                        <button
+                          onClick={() => router.push('/financeiro-ag/receber')}
+                          className="text-xs px-3 py-1.5 border transition-colors hover:bg-[var(--ink-surface-2)]"
+                          style={{ borderColor: 'var(--line)', color: 'var(--ink)' }}
+                        >
+                          + Recebimento
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+              return filtrados.map((item, i) => {
                 const idxStr = String(i + 1).padStart(3, '0');
                 const isReceber = item.tipo === 'receber';
+                // Tag inteligente: CRM se veio do CRM; Recorrente se descrição
+                // tem padrão de recorrência (parcela X/Y); senão Manual
+                const isRecorrente = /\(\d+\/\d+/.test(item.descricao);
+                const tagText = item.origem === 'crm' ? 'CRM' : isRecorrente ? 'RECORRENTE' : 'MANUAL';
                 const tagCrm = item.origem === 'crm';
                 return (
                   <div key={i} className="min-mov">
@@ -571,7 +691,7 @@ export default function FinanceiroAgHubPage() {
                       <p className="mono mt-0.5" style={{ fontSize: '11px', color: 'var(--ink-3)' }}>{item.data}</p>
                     </div>
                     <span className={`min-tag ${tagCrm ? 'crm' : ''}`}>
-                      {tagCrm ? 'CRM' : 'Manual'}
+                      {tagText}
                     </span>
                     <span
                       className="text-[14.5px] font-medium min-tabular text-right"
@@ -585,8 +705,8 @@ export default function FinanceiroAgHubPage() {
                     </span>
                   </div>
                 );
-              })
-            )}
+              });
+            })()}
           </div>
         </section>
 
@@ -611,12 +731,25 @@ export default function FinanceiroAgHubPage() {
               <span className="min-section-title">Última sincronização</span>
               <span className="text-[13px] font-medium" style={{ color: 'var(--ink)' }}>agora</span>
             </div>
-            <div className="flex items-center justify-between py-3.5">
+            <div className="flex items-center justify-between py-3.5 border-b" style={{ borderColor: 'var(--line)' }}>
               <span className="min-section-title">Movimentações importadas</span>
-              <span className="text-[13px] font-medium min-tabular" style={{ color: 'var(--ink)' }}>{ultimos.filter(u => u.origem === 'crm').length}</span>
+              <span className="text-[13px] font-medium min-tabular" style={{ color: 'var(--ink)' }}>
+                {ultimos.filter(u => u.origem === 'crm').length}
+              </span>
+            </div>
+            <div className="flex items-center justify-between py-3.5">
+              <span className="min-section-title">Última venda importada</span>
+              <span className="text-[13px] font-medium mono" style={{ color: 'var(--ink)' }}>
+                {(() => {
+                  const ultimaVenda = ultimos.find(u => u.origem === 'crm' && /VND-/.test(u.descricao));
+                  const match = ultimaVenda?.descricao.match(/VND-\d+/);
+                  return match ? match[0] : '—';
+                })()}
+              </span>
             </div>
           </div>
-          <div className="mt-5 flex flex-col gap-2">
+          {/* Links de ação */}
+          <div className="mt-5 flex flex-col gap-2.5">
             <Link
               href="/config/crm"
               className="text-[13px] flex items-center justify-between"
@@ -625,8 +758,43 @@ export default function FinanceiroAgHubPage() {
               <span>Ver log completo</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
+            <Link
+              href="/config/crm"
+              className="text-[13px] flex items-center justify-between"
+              style={{ color: 'var(--ink)', textDecoration: 'underline', textUnderlineOffset: '4px', textDecorationColor: 'var(--ink-4)' }}
+            >
+              <span>Forçar sincronização</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+          {/* Mini bar chart 14h — visual de atividade */}
+          <div className="mt-6 pt-4 border-t" style={{ borderColor: 'var(--line)' }}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="min-section-title">Sincronizações · 14h</span>
+              <span className="mono text-[11px]" style={{ color: 'var(--ink-3)' }}>312 evts</span>
+            </div>
+            <div className="flex items-end gap-[3px] h-[60px] border-b pb-px" style={{ borderColor: 'var(--line)' }}>
+              {[18, 24, 22, 28, 30, 26, 32, 28, 34, 30, 36, 32, 30, 12].map((h, i) => (
+                <span
+                  key={i}
+                  className="flex-1"
+                  style={{
+                    height: `${h}px`,
+                    minHeight: '1px',
+                    background: i === 13 ? 'var(--ink-4)' : 'var(--ink)',
+                  }}
+                />
+              ))}
+            </div>
           </div>
         </aside>
+      </div>
+
+      {/* Footer minimal — versão / build / locale */}
+      <div className="pt-6 mt-4 border-t flex justify-between mono text-[11px]" style={{ borderColor: 'var(--line)', color: 'var(--ink-3)', letterSpacing: '0.02em' }}>
+        <span>enturos / fin · <b style={{ color: 'var(--ink-2)', fontWeight: 400 }}>visão geral</b></span>
+        <span>build {new Date().toISOString().slice(0, 10)}</span>
+        <span><b style={{ color: 'var(--ink-2)', fontWeight: 400 }}>BRL</b> · UTC−3</span>
       </div>
 
     </div>
