@@ -203,37 +203,166 @@ function InclusosPreview({ conteudo, idioma }: { conteudo: Record<string, unknow
 
 // ─── VALORES ───
 function ValoresPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
-  const c = conteudo as { opcoes?: Array<{ titulo: string; valor_total: number; destaque: boolean; parcelas: Array<{ forma: string; valor_parcela: number; valor_total: number; destaque: boolean }> }>; observacoes_valores?: string };
+  const c = conteudo as {
+    opcoes?: Array<{ titulo: string; valor_total: number; destaque: boolean; parcelas: Array<{ forma: string; valor_parcela: number; valor_total: number; destaque: boolean }> }>;
+    observacoes_valores?: string;
+    detalhamento_pax?: {
+      qtd_adt: number;
+      qtd_chd: number;
+      idades_chd?: number[];
+      preco_adt: number;
+      preco_chd: number;
+      apto_adulto?: string;
+      apto_adulto_label?: string;
+      total_geral: number;
+      parcelas?: number;
+      parcela_adt?: number;
+      parcela_chd?: number;
+      total_parcela?: number;
+    };
+  };
   const opcoes = c.opcoes || [];
+  const det = c.detalhamento_pax;
+
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {opcoes.map((opc, i) => (
-          <div key={i} className={`rounded-2xl p-6 border-2 shadow-sm transition-transform ${
-            opc.destaque
-              ? 'border-emerald-500 bg-emerald-50 scale-[1.02]'
-              : 'border-gray-200 bg-white'
-          }`}>
-            {opc.destaque && (
-              <span className="inline-block bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-0.5 rounded-full mb-3">
-                Recomendado
-              </span>
-            )}
-            <h4 className="font-bold text-lg">{opc.titulo}</h4>
-            <div className="text-3xl font-black text-emerald-600 mt-2">{BRL(opc.valor_total)}</div>
-            {opc.parcelas && opc.parcelas.length > 0 && (
-              <div className="mt-3 space-y-1.5 border-t border-gray-200 pt-3">
-                {opc.parcelas.map((p, pi) => (
-                  <div key={pi} className={`text-sm flex justify-between ${p.destaque ? 'font-semibold text-emerald-700' : 'opacity-60'}`}>
-                    <span>{p.forma}</span>
-                    <span>{BRL(p.valor_parcela)}</span>
+    <div className="space-y-6">
+      {/* Card destaque — Total da sua viagem (quando há passageiros) */}
+      {det && det.total_geral > 0 && (
+        <div className="rounded-3xl border-2 border-emerald-500/40 bg-gradient-to-br from-emerald-50 to-white p-6 md:p-8 shadow-lg">
+          <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.15em] text-emerald-700 font-semibold">
+                Investimento total da sua viagem
+              </p>
+              <p className="text-sm text-gray-600 mt-1">
+                Para {det.qtd_adt} adulto{det.qtd_adt !== 1 ? 's' : ''}
+                {det.qtd_chd > 0 && (
+                  <>
+                    {' + '}{det.qtd_chd} criança{det.qtd_chd !== 1 ? 's' : ''}
+                    {det.idades_chd && det.idades_chd.length > 0 && (
+                      <span className="text-gray-500"> (idades {det.idades_chd.join(', ')})</span>
+                    )}
+                  </>
+                )}
+              </p>
+            </div>
+            <div className="text-right">
+              <div className="text-4xl md:text-5xl font-black text-emerald-600 tabular-nums leading-none">
+                {BRL(det.total_geral)}
+              </div>
+              {det.parcelas && det.parcelas > 1 && det.total_parcela && det.total_parcela > 0 && (
+                <p className="text-sm text-emerald-700 mt-1.5 font-medium">
+                  ou <span className="tabular-nums">{det.parcelas}× {BRL(det.total_parcela)}</span> no cartão
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Detalhamento ADT / CHD lado a lado */}
+          <div className={`grid gap-3 ${det.qtd_chd > 0 ? 'md:grid-cols-2' : 'md:grid-cols-1'}`}>
+            {det.qtd_adt > 0 && (
+              <div className="rounded-2xl bg-white border border-emerald-100 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+                      Adulto{det.qtd_adt !== 1 ? 's' : ''} ({det.qtd_adt}×)
+                      {det.apto_adulto_label && (
+                        <span className="ml-1 text-gray-400 normal-case font-normal">· apto {det.apto_adulto_label}</span>
+                      )}
+                    </p>
+                    <p className="text-2xl font-bold text-gray-900 tabular-nums mt-1">
+                      {BRL(det.preco_adt)}
+                    </p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">por pessoa</p>
                   </div>
-                ))}
+                  <div className="text-right">
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Subtotal</p>
+                    <p className="text-lg font-semibold text-gray-700 tabular-nums">
+                      {BRL(det.qtd_adt * det.preco_adt)}
+                    </p>
+                  </div>
+                </div>
+                {det.parcelas && det.parcelas > 1 && det.parcela_adt && det.parcela_adt > 0 && (
+                  <p className="text-[11px] text-gray-500 mt-3 pt-3 border-t border-gray-100">
+                    ou <b className="text-gray-700 tabular-nums">{det.parcelas}× {BRL(det.parcela_adt)}</b> por adulto no cartão
+                  </p>
+                )}
+              </div>
+            )}
+
+            {det.qtd_chd > 0 && (
+              <div className="rounded-2xl bg-white border border-emerald-100 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+                      Criança{det.qtd_chd !== 1 ? 's' : ''} ({det.qtd_chd}×)
+                      {det.idades_chd && det.idades_chd.length > 0 && (
+                        <span className="ml-1 text-gray-400 normal-case font-normal">
+                          · {det.idades_chd.join(', ')} ano{det.idades_chd.length !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-2xl font-bold text-gray-900 tabular-nums mt-1">
+                      {BRL(det.preco_chd)}
+                    </p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">por criança</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Subtotal</p>
+                    <p className="text-lg font-semibold text-gray-700 tabular-nums">
+                      {BRL(det.qtd_chd * det.preco_chd)}
+                    </p>
+                  </div>
+                </div>
+                {det.parcelas && det.parcelas > 1 && det.parcela_chd && det.parcela_chd > 0 && (
+                  <p className="text-[11px] text-gray-500 mt-3 pt-3 border-t border-gray-100">
+                    ou <b className="text-gray-700 tabular-nums">{det.parcelas}× {BRL(det.parcela_chd)}</b> por criança no cartão
+                  </p>
+                )}
               </div>
             )}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
+
+      {/* Opções de apartamento — sempre visíveis quando há valor */}
+      {opcoes.length > 0 && (
+        <div>
+          {det && det.total_geral > 0 && (
+            <p className="text-xs uppercase tracking-[0.12em] text-gray-500 font-semibold mb-3 text-center">
+              Outras opções de acomodação
+            </p>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {opcoes.map((opc, i) => (
+              <div key={i} className={`rounded-2xl p-6 border-2 shadow-sm transition-transform ${
+                opc.destaque
+                  ? 'border-emerald-500 bg-emerald-50 scale-[1.02]'
+                  : 'border-gray-200 bg-white'
+              }`}>
+                {opc.destaque && (
+                  <span className="inline-block bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-0.5 rounded-full mb-3">
+                    Recomendado
+                  </span>
+                )}
+                <h4 className="font-bold text-lg">{opc.titulo}</h4>
+                <div className="text-3xl font-black text-emerald-600 mt-2 tabular-nums">{BRL(opc.valor_total)}</div>
+                {opc.parcelas && opc.parcelas.length > 0 && (
+                  <div className="mt-3 space-y-1.5 border-t border-gray-200 pt-3">
+                    {opc.parcelas.map((p, pi) => (
+                      <div key={pi} className={`text-sm flex justify-between tabular-nums ${p.destaque ? 'font-semibold text-emerald-700' : 'opacity-60'}`}>
+                        <span>{p.forma}</span>
+                        <span>{BRL(p.valor_parcela)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {c.observacoes_valores && (
         <p className="text-xs opacity-50 text-center">{c.observacoes_valores}</p>
       )}

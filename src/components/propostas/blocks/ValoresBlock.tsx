@@ -2,15 +2,27 @@
 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Users } from 'lucide-react';
 import type { BlockProps } from './types';
 
 interface Parcela { forma: string; valor_parcela: number; valor_total: number; destaque: boolean }
 interface Opcao { titulo: string; valor_total: number; destaque: boolean; parcelas: Parcela[] }
+interface DetalhamentoPax {
+  qtd_adt: number;
+  qtd_chd: number;
+  idades_chd?: number[];
+  preco_adt: number;
+  preco_chd: number;
+  apto_adulto_label?: string;
+  total_geral: number;
+}
+
+const BRL = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
 export function ValoresBlock({ conteudo, onChange }: BlockProps) {
-  const cont = conteudo as { opcoes?: Opcao[]; observacoes_valores?: string };
+  const cont = conteudo as { opcoes?: Opcao[]; observacoes_valores?: string; detalhamento_pax?: DetalhamentoPax };
   const opcoes = cont.opcoes || [];
+  const det = cont.detalhamento_pax;
 
   const updateOpcao = (i: number, patch: Partial<Opcao>) => {
     const arr = [...opcoes];
@@ -20,6 +32,44 @@ export function ValoresBlock({ conteudo, onChange }: BlockProps) {
 
   return (
     <div className="space-y-3">
+      {/* Detalhamento por pessoa — só leitura, vem do produto. Mostra ao
+          vendedor o que o cliente verá no card destaque da proposta. */}
+      {det && det.total_geral > 0 && (
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 space-y-2">
+          <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+            <Users className="w-3.5 h-3.5" />
+            Total da viagem · {det.qtd_adt} adulto{det.qtd_adt !== 1 ? 's' : ''}
+            {det.qtd_chd > 0 && ` + ${det.qtd_chd} criança${det.qtd_chd !== 1 ? 's' : ''}`}
+            <span className="ml-auto text-[10px] text-[var(--t-text-muted)] uppercase tracking-wide font-normal">
+              gerado do produto · só leitura
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-[11px]">
+            {det.qtd_adt > 0 && (
+              <div>
+                <p className="text-[var(--t-text-muted)]">Adulto{det.apto_adulto_label ? ` · ${det.apto_adulto_label}` : ''}</p>
+                <p className="font-semibold text-[var(--t-text)] tabular-nums">{BRL(det.preco_adt)}</p>
+              </div>
+            )}
+            {det.qtd_chd > 0 && (
+              <div>
+                <p className="text-[var(--t-text-muted)]">
+                  Criança{det.idades_chd && det.idades_chd.length > 0 ? ` · ${det.idades_chd.join(', ')}a` : ''}
+                </p>
+                <p className="font-semibold text-[var(--t-text)] tabular-nums">{BRL(det.preco_chd)}</p>
+              </div>
+            )}
+            <div>
+              <p className="text-emerald-700 dark:text-emerald-400">Total geral</p>
+              <p className="font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">{BRL(det.total_geral)}</p>
+            </div>
+          </div>
+          <p className="text-[10px] text-[var(--t-text-muted)] italic">
+            Para alterar, edite a lista de passageiros na aba Info do produto e gere a proposta novamente.
+          </p>
+        </div>
+      )}
+
       {opcoes.map((opc, i) => (
         <div key={i} className="p-3 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] space-y-2">
           <div className="grid grid-cols-3 gap-2">

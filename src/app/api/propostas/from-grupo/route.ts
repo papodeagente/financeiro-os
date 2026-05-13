@@ -517,14 +517,29 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 13. Valores — computed from calcProposta
+    // 13. Valores — computed from calcProposta + detalhamento por pessoa
+    //
+    // Estrutura: opções por tipo de apto (DBL/TPL/QDP/SGL conforme houver)
+    // + bloco "detalhamento_pax" com Adulto/Criança e total geral quando
+    // o produto tem lista de passageiros cadastrados na aba INFO.
     {
-      const tiposValor = ['sgl', 'dbl', 'tpl'] as const;
-      const tipoLabels: Record<string, string> = { sgl: 'Single', dbl: 'Duplo', tpl: 'Triplo' };
+      const tiposValor = ['sgl', 'dbl', 'tpl', 'qdp'] as const;
+      const tipoLabels: Record<string, string> = { sgl: 'Individual', dbl: 'Duplo', tpl: 'Triplo', qdp: 'Quádruplo' };
+      const tipoPax: Record<string, number> = { sgl: 1, dbl: 2, tpl: 3, qdp: 4 };
+
+      const passageirosLista = grupo.passageiros || [];
+      const qtdAdt = passageirosLista.filter(pp => pp.tipo === 'ADT').length;
+      const qtdChd = passageirosLista.filter(pp => pp.tipo === 'CHD').length;
+      const temPassageiros = passageirosLista.length > 0;
+
+      // Apto preferencial dos adultos: bate qtd_adt com SGL/DBL/TPL/QDP
+      // (1→SGL, 2→DBL, 3→TPL, 4→QDP). 5+ ou 0: DBL como referência geral.
+      const aptoAdulto: 'sgl' | 'dbl' | 'tpl' | 'qdp' =
+        (['sgl', 'dbl', 'tpl', 'qdp'] as const)[qtdAdt - 1] || 'dbl';
 
       const opcoes = tiposValor
         .filter(t => (pricing.totalAvista[t] || 0) > 0)
-        .map((t, i) => {
+        .map((t) => {
           const parcelas: Array<{ forma: string; valor_parcela: number; valor_total: number; destaque: boolean }> = [];
 
           // À vista PIX
@@ -558,34 +573,72 @@ export async function POST(req: NextRequest) {
           }
 
           return {
-            titulo: `Apto ${tipoLabels[t]} — por pessoa`,
+            titulo: `Apto ${tipoLabels[t]} — por pessoa${tipoPax[t] > 1 ? ` (${tipoPax[t]} ocupantes)` : ''}`,
             valor_total: pricing.totalPaxAvista[t],
-            destaque: t === 'dbl',
+            // Destaca o apto que casa com a quantidade de adultos da
+            // proposta; senão, DBL como referência mais comum.
+            destaque: temPassageiros ? t === aptoAdulto : t === 'dbl',
             parcelas,
           };
         });
 
-      // Add CHD if there are children
-      const hasChd = grupo.trechos.some(t => t.qtd_chd > 0);
+      // Adiciona CHD quando há crianças (na lista ou nos trechos legados)
+      const hasChd = qtdChd > 0 || grupo.trechos.some(t => t.qtd_chd > 0);
       if (hasChd && (pricing.totalPaxAvista['chd'] || 0) > 0) {
+        const chdParcelas: Array<{ forma: string; valor_parcela: number; valor_total: number; destaque: boolean }> = [{
+          forma: 'À vista (PIX)',
+          valor_parcela: pricing.totalPaxAvista['chd'],
+          valor_total: pricing.totalPaxAvista['chd'],
+          destaque: true,
+        }];
+        if (p.parcelas > 0 && pricing.totalPaxCartao['chd'] > 0) {
+          chdParcelas.push({
+            forma: `${p.parcelas}x Cartão`,
+            valor_parcela: pricing.parcelaPaxCC['chd'],
+            valor_total: pricing.totalPaxCartao['chd'],
+            destaque: false,
+          });
+        }
         opcoes.push({
-          titulo: 'Criança (CHD) — por pessoa',
+          titulo: 'Criança — por pessoa',
           valor_total: pricing.totalPaxAvista['chd'],
           destaque: false,
-          parcelas: [{
-            forma: 'À vista (PIX)',
-            valor_parcela: pricing.totalPaxAvista['chd'],
-            valor_total: pricing.totalPaxAvista['chd'],
-            destaque: true,
-          }],
+          parcelas: chdParcelas,
         });
       }
 
-      // Build cost breakdown as observacoes
+      // Detalhamento por pessoa: total real da proposta considerando os
+      // passageiros cadastrados. Esse é o card destaque que o cliente vê.
+      let detalhamentoPax: Record<string, unknown> | undefined;
+      if (temPassageiros) {
+        const precoAdt = pricing.totalPaxAvista[aptoAdulto] || 0;
+        const precoChd = pricing.totalPaxAvista['chd'] || 0;
+        const totalGeral = qtdAdt * precoAdt + qtdChd * precoChd;
+        const parcelaAdt = p.parcelas > 1 ? (pricing.parcelaPaxCC[aptoAdulto] || 0) : 0;
+        const parcelaChd = p.parcelas > 1 ? (pricing.parcelaPaxCC['chd'] || 0) : 0;
+        const totalParcela = qtdAdt * parcelaAdt + qtdChd * parcelaChd;
+
+        detalhamentoPax = {
+          qtd_adt: qtdAdt,
+          qtd_chd: qtdChd,
+          idades_chd: passageirosLista.filter(pp => pp.tipo === 'CHD').map(pp => pp.idade ?? 0),
+          preco_adt: precoAdt,
+          preco_chd: precoChd,
+          apto_adulto: aptoAdulto,
+          apto_adulto_label: tipoLabels[aptoAdulto],
+          total_geral: totalGeral,
+          parcelas: p.parcelas > 1 ? p.parcelas : 0,
+          parcela_adt: parcelaAdt,
+          parcela_chd: parcelaChd,
+          total_parcela: totalParcela,
+        };
+      }
+
+      // Quebra do custo como linha informativa (rodapé sutil)
       const breakdown = pricing.lines
         .filter(l => l.dbl > 0 || l.sgl > 0)
         .map(l => `${l.label}: ${fmtBRL(l.dbl || l.sgl)}`)
-        .join(' | ');
+        .join(' · ');
 
       secoes.push({
         id: generateId(), tipo: 'VALORES', ordem: ordem++, visivel: true,
@@ -596,6 +649,7 @@ export async function POST(req: NextRequest) {
             destaque: true,
             parcelas: [{ forma: 'À vista PIX', valor_parcela: 0, valor_total: 0, destaque: true }],
           }],
+          detalhamento_pax: detalhamentoPax,
           observacoes_valores: breakdown || '',
           validade: '',
         },
@@ -624,15 +678,28 @@ export async function POST(req: NextRequest) {
         cor_fundo: '#0a0a0a', fonte: 'Inter', imagem_capa: '', estilo_capa: 'MINIMAL',
       },
       viagem,
-      cabecalho: {
-        titulo: `Proposta de Viagem — ${destino}`,
-        subtitulo: dataInicio && dataFim
+      cabecalho: (() => {
+        const passageirosCount = grupo.passageiros?.length || 0;
+        const qtdAdt = grupo.passageiros?.filter(pp => pp.tipo === 'ADT').length || 0;
+        const qtdChd = grupo.passageiros?.filter(pp => pp.tipo === 'CHD').length || 0;
+        const paxLabel = passageirosCount > 0
+          ? `${qtdAdt} adulto${qtdAdt !== 1 ? 's' : ''}${qtdChd > 0 ? ` + ${qtdChd} criança${qtdChd !== 1 ? 's' : ''}` : ''}`
+          : '';
+        const datasLabel = dataInicio && dataFim
           ? `${fmtDate(dataInicio)} a ${fmtDate(dataFim)}`
-          : '',
-        mensagem_abertura: '',
-        data_proposta: new Date().toISOString().split('T')[0],
-        validade: '',
-      },
+          : '';
+        const partes = [datasLabel, totalNoites > 0 ? `${totalNoites} noite${totalNoites !== 1 ? 's' : ''}` : '', paxLabel]
+          .filter(Boolean)
+          .join(' · ');
+
+        return {
+          titulo: destino ? `${destino}` : 'Sua próxima viagem',
+          subtitulo: partes,
+          mensagem_abertura: 'Preparamos esta proposta com cuidado, considerando cada detalhe da sua viagem. Os valores e itens descritos refletem fielmente o que combinamos.',
+          data_proposta: new Date().toISOString().split('T')[0],
+          validade: '',
+        };
+      })(),
       secoes,
       rodape: { mensagem: '', nome_vendedor: '', telefone_vendedor: '', whatsapp_vendedor: '', email_vendedor: '' },
       status: 'RASCUNHO',
