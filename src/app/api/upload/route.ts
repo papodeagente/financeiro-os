@@ -3,8 +3,23 @@ import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { generateId } from '@/lib/utils';
 
-const MAX_SIZE = 10 * 1024 * 1024; // 10MB
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'];
+const MAX_SIZE = 25 * 1024 * 1024; // 25MB (PDFs/contratos costumam passar de 10MB)
+const ALLOWED_TYPES = [
+  // imagens
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif',
+  // documentos
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  // texto
+  'text/plain', 'text/csv',
+  // arquivos compactados
+  'application/zip', 'application/x-zip-compressed',
+];
 
 // Persistent volume mounted at /app/data by Coolify
 const UPLOAD_DIR_PROD = '/app/data/uploads';
@@ -37,7 +52,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: `Tipo nao permitido: ${file.type}` }, { status: 400 });
       }
       if (file.size > MAX_SIZE) {
-        return NextResponse.json({ error: `Arquivo muito grande: ${file.name} (max 10MB)` }, { status: 400 });
+        return NextResponse.json({ error: `Arquivo muito grande: ${file.name} (max 25MB)` }, { status: 400 });
       }
 
       const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';

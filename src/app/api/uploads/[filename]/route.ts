@@ -8,12 +8,26 @@ const UPLOAD_DIRS = process.env.NODE_ENV === 'production'
   : [path.join(process.cwd(), 'public', 'uploads')];
 
 const MIME_TYPES: Record<string, string> = {
+  // imagens
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
   png: 'image/png',
   webp: 'image/webp',
   gif: 'image/gif',
   avif: 'image/avif',
+  // documentos
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  // texto
+  txt: 'text/plain',
+  csv: 'text/csv',
+  // compactados
+  zip: 'application/zip',
 };
 
 export async function GET(

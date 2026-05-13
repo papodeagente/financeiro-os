@@ -6,6 +6,7 @@ import { ArrowLeft, Users, FileText, Folder, AlertTriangle, Check, Loader2, Edit
 import { MinimalPageHead, MinimalFooter, MinimalSectionHeader } from '@/components/financeiro/MinimalPageHead';
 import { toast } from '@/lib/toast';
 import { ReservasTab } from './ReservasTab';
+import { MateriaisTab } from './MateriaisTab';
 
 type SubAba = 'vagas' | 'reservas' | 'materiais';
 
@@ -297,15 +298,9 @@ export default function GestaoGrupoPage({ params }: { params: Promise<{ id: stri
           />
         )}
 
-        {/* Aba MATERIAIS — placeholder Fase 3 */}
+        {/* Aba MATERIAIS */}
         {aba === 'materiais' && (
-          <div className="border p-10 text-center" style={{ borderColor: 'var(--line)', background: 'var(--ink-surface)' }}>
-            <Folder className="w-8 h-8 mx-auto mb-3" style={{ color: 'var(--ink-3)' }} />
-            <p className="text-[14px] font-medium" style={{ color: 'var(--ink)' }}>Materiais em breve</p>
-            <p className="text-[12px] mt-1 max-w-md mx-auto" style={{ color: 'var(--ink-3)' }}>
-              Próxima fase: upload de roteiros, contratos, vouchers e links externos. Cada material poderá ser marcado como visível para o passageiro.
-            </p>
-          </div>
+          <MateriaisTab grupoId={grupoId} onChange={() => { void carregar(); }} />
         )}
 
         <MinimalFooter pageId={`gestão · ${data.grupo.grp_id || ''}`} />
