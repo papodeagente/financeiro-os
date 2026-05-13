@@ -165,21 +165,25 @@ export function PillarSidebar({ collapsed = false, onToggle }: PillarSidebarProp
   return (
     <TooltipProvider delay={collapsed ? 100 : 600}>
       <aside
-        className={`bg-[var(--t-sidebar-bg)] border-r border-[var(--t-border)] flex flex-col shrink-0 overflow-hidden transition-[width] duration-200 ease-in-out ${
+        className={`bg-[var(--ink-surface)] border-r border-[var(--line)] flex flex-col shrink-0 overflow-hidden transition-[width] duration-200 ease-in-out ${
           collapsed ? 'w-[56px]' : 'w-[240px]'
         }`}
+        style={{ fontFamily: 'var(--font-inter-tight), var(--font-inter), system-ui, sans-serif' }}
       >
         <nav className="flex-1 overflow-y-auto sidebar-scroll px-2 py-3">
           <div className="sidebar-content" key={activePillar}>
             {sections.map((section, sIdx) => (
               <div key={sIdx} className={sIdx > 0 ? 'mt-4' : ''}>
                 {section.title && !collapsed && (
-                  <div className="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t-text-muted)]">
+                  <div
+                    className="px-3 mb-2 mt-1 pb-1.5 text-[10px] font-medium uppercase border-b border-[var(--line)]"
+                    style={{ letterSpacing: '0.12em', color: 'var(--ink-3)' }}
+                  >
                     {section.title}
                   </div>
                 )}
                 {section.title && collapsed && (
-                  <div className="mx-2 mb-1.5 border-t border-[var(--t-border)]" />
+                  <div className="mx-2 mb-1.5 border-t border-[var(--line)]" />
                 )}
                 <div className="space-y-0.5">
                   {section.items.map(item => {
@@ -190,24 +194,26 @@ export function PillarSidebar({ collapsed = false, onToggle }: PillarSidebarProp
                       <Link
                         key={item.key}
                         href={item.href}
-                        className={`sidebar-item flex items-center rounded-lg transition-colors duration-150 relative ${
+                        className={`sidebar-item flex items-center transition-colors duration-150 relative ${
                           collapsed
                             ? 'justify-center w-10 h-10 mx-auto'
-                            : 'gap-3 px-3 py-2.5'
+                            : 'gap-3 px-3 py-2'
                         } ${
                           active
-                            ? 'bg-[var(--t-green)]/8 text-[var(--t-green)] font-medium'
-                            : 'text-[var(--t-sidebar-item)] hover:bg-[var(--t-sidebar-item-hover)] hover:text-[var(--t-text)]'
+                            ? 'text-[var(--ink)] font-medium'
+                            : 'text-[var(--ink-2)] hover:text-[var(--ink)]'
                         }`}
+                        style={{ fontSize: '13.5px', letterSpacing: '-0.005em' }}
                       >
+                        {/* Indicador ativo: traço horizontal de 14px antes do texto (handoff minimal) */}
                         {active && !collapsed && (
-                          <span className="absolute left-0 top-2 bottom-2 w-[2px] rounded-r-full bg-[var(--t-green)]" />
+                          <span className="inline-block w-3.5 border-t border-[var(--ink)]" />
                         )}
                         {active && collapsed && (
-                          <span className="absolute left-0 top-1 bottom-1 w-[2px] rounded-r-full bg-[var(--t-green)]" />
+                          <span className="absolute left-0 top-1 bottom-1 w-[2px] bg-[var(--ink)]" />
                         )}
                         <Icon className={`shrink-0 ${collapsed ? 'w-5 h-5' : 'w-4 h-4'}`} />
-                        {!collapsed && <span className="truncate">{item.label}</span>}
+                        {!collapsed && <span className="truncate flex-1">{item.label}</span>}
                       </Link>
                     );
 

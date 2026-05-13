@@ -112,7 +112,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       />
       <div className="flex flex-1 overflow-hidden">
         <PillarSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
-        <main className="flex-1 overflow-y-auto bg-[var(--t-bg)]">
+        <main className="flex-1 overflow-y-auto bg-[var(--t-bg)] min-shell">
           <div className="content-enter">
             {children}
           </div>

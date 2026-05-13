@@ -1058,3 +1058,80 @@
   .min-shell .min-action:last-child,
   .min-shell .min-qcard:last-child { border-bottom: 0; }
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   MINIMAL — Overrides globais aplicados a TODA app dentro de .min-shell
+   (que envolve <main> no AppShell). Reduz sombras/rounded grandes,
+   privilegia hairlines, mantém bg/fg dos tokens --t-*.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* Background do .min-shell — usa --t-bg para casar com o resto do app
+   (override do .min-shell minimal que setava --ink-bg) */
+.min-shell { background: var(--t-bg); }
+
+/* Bento card minimal: hairline + sombra suave em vez de elevação forte */
+.min-shell .bento-card {
+  background: var(--ink-surface);
+  border: 1px solid var(--line);
+  border-radius: 0;
+  box-shadow: none;
+  transition: background-color 180ms ease, border-color 180ms ease;
+}
+.min-shell .bento-card:hover {
+  background: var(--ink-surface-2);
+  border-color: var(--line-strong);
+  transform: none;
+  box-shadow: none;
+}
+
+/* Botões shadcn dentro do .min-shell — radius 0, sem sombra,
+   border hairline. Variant primary fica preto puro (ink). */
+.min-shell [data-slot="button"] {
+  border-radius: 0;
+  box-shadow: none;
+  font-family: var(--font-inter-tight), inherit;
+  letter-spacing: -0.005em;
+}
+
+/* Inputs minimal: hairline + bg sutil */
+.min-shell input,
+.min-shell textarea,
+.min-shell select {
+  border-radius: 0;
+  border-color: var(--line);
+}
+.min-shell input:focus,
+.min-shell textarea:focus,
+.min-shell select:focus {
+  border-color: var(--line-strong);
+  outline: none;
+}
+
+/* Cards (shadcn Card) — hairline em vez de elevation */
+.min-shell [data-slot="card"] {
+  border-radius: 0;
+  border-color: var(--line);
+  box-shadow: none;
+  background: var(--ink-surface);
+}
+
+/* Headings — Inter Tight com kerning editorial */
+.min-shell h1,
+.min-shell h2,
+.min-shell h3 {
+  font-family: var(--font-inter-tight), var(--font-inter), system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
+.min-shell h1 { letter-spacing: -0.03em; }
+
+/* Badges com bordas hairline */
+.min-shell [data-slot="badge"] {
+  border-radius: 0;
+  border-width: 1px;
+}
+
+/* Tabelas: bordas hairline */
+.min-shell table th,
+.min-shell table td {
+  border-color: var(--line);
+}

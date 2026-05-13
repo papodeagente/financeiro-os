@@ -52,7 +52,7 @@ export function TopBar({ onCommandPalette, breadcrumb, sidebarCollapsed, onToggl
   }, []);
 
   return (
-    <header className="h-[56px] bg-[var(--t-surface)]/90 backdrop-blur-xl border-b border-[var(--t-border)] flex items-center px-5 shrink-0 z-40" style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.03)' }}>
+    <header className="h-[56px] bg-[var(--ink-surface)] border-b border-[var(--line)] flex items-center px-5 shrink-0 z-40" style={{ fontFamily: 'var(--font-inter-tight), var(--font-inter), system-ui, sans-serif' }}>
       {/* Left: Logo + Greeting */}
       <div className="flex items-center gap-4 shrink-0 mr-4">
         <Logo variant="sidebar" href="/dashboard" />
@@ -78,10 +78,10 @@ export function TopBar({ onCommandPalette, breadcrumb, sidebarCollapsed, onToggl
             <Link
               key={pillar.id}
               href={getPillarDefaultRoute(pillar.id)}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-[var(--text-body-sm)] font-medium transition-all duration-150 ${
+              className={`flex items-center gap-2 px-3.5 h-9 text-[13px] font-medium transition-colors duration-150 border-b-2 ${
                 isActive
-                  ? 'bg-[var(--t-green)]/10 text-[var(--t-green)]'
-                  : 'text-[var(--t-text-muted)] hover:text-[var(--t-text)] hover:bg-[var(--t-surface-hover)]'
+                  ? 'border-[var(--ink)] text-[var(--ink)]'
+                  : 'border-transparent text-[var(--ink-3)] hover:text-[var(--ink)]'
               }`}
             >
               <Icon className="w-4 h-4" />
