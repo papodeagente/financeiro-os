@@ -73,6 +73,89 @@ export interface MaterialData {
 
 export type MaterialTipo = 'arquivo' | 'link' | 'roteiro' | 'contrato' | 'voucher' | 'outro';
 
+// ============================================================
+// PASSAGEIROS (Fase B)
+// ============================================================
+// Entidade dedicada por reserva. Cada reserva pode ter N passageiros.
+// O responsável financeiro continua sendo o cliente da reserva (campo
+// cliente_id em grupo_reservas). Os passageiros são as pessoas que
+// efetivamente viajam — podem ser diferentes do contratante (ex: pai
+// compra para a família inteira).
+
+export type PassageiroTipo = 'ADT' | 'CHD' | 'INF';
+export type PassageiroGenero = 'M' | 'F' | 'OUTRO' | '';
+
+export interface PassageiroData {
+  // ---- Identificação básica
+  data_nascimento: string;           // YYYY-MM-DD
+  tipo: PassageiroTipo;              // ADT/CHD/INF (segue convenção VendaCRM)
+  genero?: PassageiroGenero;
+  nacionalidade?: string;
+
+  // ---- Documentos
+  cpf?: string;
+  rg?: string;
+  rg_orgao_emissor?: string;
+  passaporte?: string;
+  passaporte_vencimento?: string;
+  passaporte_pais_emissao?: string;
+
+  // ---- Contato
+  email?: string;
+  telefone?: string;
+  whatsapp?: string;
+
+  // ---- Emergência
+  contato_emergencia_nome?: string;
+  contato_emergencia_telefone?: string;
+  contato_emergencia_relacao?: string;
+
+  // ---- Saúde
+  restricoes_alimentares?: string;
+  alergias?: string;
+  necessidades_especiais?: string;
+  medicamentos_continuos?: string;
+
+  // ---- Operação
+  local_embarque?: string;
+  assento?: string;
+  tipo_acomodacao?: string;          // SGL/DBL/TPL/QDP
+  quarto_id?: string;                // FK pra grupo_quartos (Fase E)
+
+  // ---- Flags
+  is_responsavel_financeiro?: boolean;  // marca o passageiro que também é contratante
+
+  observacoes_internas?: string;
+}
+
+export function createPassageiroData(nome: string, opts?: Partial<PassageiroData>): PassageiroData {
+  return {
+    data_nascimento: '',
+    tipo: 'ADT',
+    genero: '',
+    cpf: '',
+    rg: '',
+    passaporte: '',
+    passaporte_vencimento: '',
+    email: '',
+    telefone: '',
+    whatsapp: '',
+    contato_emergencia_nome: '',
+    contato_emergencia_telefone: '',
+    contato_emergencia_relacao: '',
+    restricoes_alimentares: '',
+    alergias: '',
+    necessidades_especiais: '',
+    medicamentos_continuos: '',
+    local_embarque: '',
+    assento: '',
+    tipo_acomodacao: '',
+    observacoes_internas: '',
+    is_responsavel_financeiro: false,
+    ...opts,
+  };
+}
+
 const DEFAULT_CONFIG: ConfigVagas = {
   controle_por_periodo: true,
   permitir_lista_espera: false,

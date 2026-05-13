@@ -505,6 +505,24 @@ export async function initDB() {
     );
     CREATE INDEX IF NOT EXISTS idx_grupo_materiais_grupo ON grupo_materiais(grupo_id);
     CREATE INDEX IF NOT EXISTS idx_grupo_materiais_tipo ON grupo_materiais(tipo);
+
+    -- Passageiros (Fase B) — entidade própria por reserva.
+    -- Cada reserva pode ter N passageiros. O responsável financeiro
+    -- continua sendo o cliente da reserva (cliente_id). Os passageiros
+    -- são as pessoas que efetivamente viajam (podem ser diferentes do
+    -- contratante).
+    CREATE TABLE IF NOT EXISTS grupo_passageiros (
+      id TEXT PRIMARY KEY,
+      grupo_id TEXT NOT NULL DEFAULT '',
+      reserva_id TEXT NOT NULL DEFAULT '',
+      nome_completo TEXT NOT NULL DEFAULT '',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_grupo_passageiros_grupo ON grupo_passageiros(grupo_id);
+    CREATE INDEX IF NOT EXISTS idx_grupo_passageiros_reserva ON grupo_passageiros(reserva_id);
+    CREATE INDEX IF NOT EXISTS idx_grupo_passageiros_nome ON grupo_passageiros(nome_completo);
   `);
 
   // ============================================================
@@ -524,6 +542,7 @@ export async function initDB() {
     'funis', 'funis_simulacoes', 'funis_templates',
     'itens_venda',
     'gestao_grupos', 'grupo_periodos_vagas', 'grupo_reservas', 'grupo_materiais',
+    'grupo_passageiros',
   ];
   for (const table of TENANT_TABLES) {
     await pool.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT ''`);
