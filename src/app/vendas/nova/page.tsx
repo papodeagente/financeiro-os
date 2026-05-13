@@ -227,9 +227,9 @@ export default function NovaVendaPage() {
 
   const filteredClientes = clientes.filter(c => {
     const q = clienteSearch.toLowerCase();
-    const nome =
-      c.tipo === 'PF' ? c.nome_completo : c.nome_fantasia || c.razao_social;
-    return nome.toLowerCase().includes(q) || c.email.toLowerCase().includes(q);
+    const nome = (c.tipo === 'PF' ? c.nome_completo : c.nome_fantasia || c.razao_social) || '';
+    const email = c.email || '';
+    return nome.toLowerCase().includes(q) || email.toLowerCase().includes(q);
   });
 
   const selectCliente = (c: Cliente) => {
@@ -510,7 +510,7 @@ export default function NovaVendaPage() {
   };
 
   function guessProductType(titulo: string): ProdutoVenda['tipo'] {
-    const t = titulo.toLowerCase();
+    const t = (titulo || '').toLowerCase();
     if (/voo|a[eé]reo|flight|passagem/i.test(t)) return 'AEREO';
     if (/hotel|hospedagem|resort|pousada/i.test(t)) return 'HOTEL';
     if (/seguro|insurance|travel protect/i.test(t)) return 'SEGURO';
@@ -976,8 +976,9 @@ export default function NovaVendaPage() {
                       <div className="absolute z-10 left-0 right-0 top-full mt-1 bg-[var(--t-header-bg)] shadow-[var(--t-card-shadow)] rounded-md shadow-xl max-h-48 overflow-y-auto">
                         {fornecedores
                           .filter(f => {
-                            const q = prod.fornecedor_nome.toLowerCase();
-                            return (f.nome_fantasia || f.razao_social).toLowerCase().includes(q);
+                            const q = (prod.fornecedor_nome || '').toLowerCase();
+                            const nome = (f.nome_fantasia || f.razao_social || '').toLowerCase();
+                            return nome.includes(q);
                           })
                           .slice(0, 8)
                           .map(f => (
