@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { KPIGridSkeleton } from '@/components/skeletons';
 import { calcularSaldoBancario } from '@/lib/saldo-bancario';
+import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
 
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -618,7 +619,14 @@ export default function DashboardPage() {
     return (
       <div className="flex flex-col h-full overflow-y-auto">
         <div className="px-8 pt-6 pb-8 space-y-6">
-          <div className="rounded-[20px] h-[112px] skeleton" />
+          <MinimalPageHead
+            title={getMonthName(mesAtual)}
+            meta={
+              <div className="mt-2.5 text-[12px]" style={{ color: 'var(--ink-3)' }}>
+                Carregando dados…
+              </div>
+            }
+          />
           <KPIGridSkeleton count={4} columns={4} />
           <KPIGridSkeleton count={6} columns={6} />
         </div>
@@ -647,46 +655,56 @@ export default function DashboardPage() {
     <div className="flex flex-col h-full overflow-y-auto">
       <div className="px-8 pt-6 pb-8 space-y-6">
 
-        {/* HERO CARD */}
-        <div className="rounded-[20px] overflow-hidden relative" style={{ background: 'var(--t-hero-gradient)' }}>
-          <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 80% 20%, rgba(255,255,255,0.3) 0%, transparent 60%)' }} />
-          <div className="relative px-8 py-7 flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <h1 className="text-2xl font-bold text-white">
-                {getMonthName(mesAtual)}
-              </h1>
-              <p className="text-white/70 text-sm mt-1 truncate">
-                {calc.qtdVendas} vendas fechadas &middot; {BRL(calc.faturamento)} faturados
-              </p>
-            </div>
-            <div className="text-right hidden lg:block min-w-0">
-              <div className="text-3xl font-bold text-white tracking-tight whitespace-nowrap" title={BRL(calc.faturamento)}>{BRL(calc.faturamento)}</div>
-              <div className="flex items-center gap-2 justify-end mt-1">
-                {calc.faturamentoAnt > 0 && (
-                  <span className={`text-xs font-medium flex items-center gap-0.5 px-2 py-0.5 rounded-full ${
-                    calc.delta(calc.faturamento, calc.faturamentoAnt) >= 0
-                      ? 'bg-white/20 text-emerald-200'
-                      : 'bg-white/20 text-red-200'
-                  }`}>
-                    {calc.delta(calc.faturamento, calc.faturamentoAnt) >= 0
-                      ? <ArrowUpRight className="w-3 h-3" />
-                      : <ArrowDownRight className="w-3 h-3" />
-                    }
-                    {PCT(calc.delta(calc.faturamento, calc.faturamentoAnt))}
+        <MinimalPageHead
+          title={getMonthName(mesAtual)}
+          meta={
+            <div className="mt-2.5 text-[12px] flex items-center gap-3 flex-wrap" style={{ color: 'var(--ink-3)' }}>
+              <span>
+                <b className="mono" style={{ fontSize: '11px', color: 'var(--ink-2)' }}>{calc.qtdVendas}</b> vendas fechadas
+              </span>
+              <span style={{ color: 'var(--ink-4)' }}>·</span>
+              <span>
+                <b className="mono" style={{ fontSize: '11px', color: 'var(--ink-2)' }}>{BRL(calc.faturamento)}</b> faturados
+              </span>
+              {calc.faturamentoAnt > 0 && (
+                <>
+                  <span style={{ color: 'var(--ink-4)' }}>·</span>
+                  <span
+                    className="mono"
+                    style={{
+                      fontSize: '11px',
+                      color: calc.delta(calc.faturamento, calc.faturamentoAnt) >= 0 ? 'var(--pos)' : 'var(--neg)',
+                    }}
+                  >
+                    {PCT(calc.delta(calc.faturamento, calc.faturamentoAnt))} vs mês anterior
                   </span>
-                )}
-                <span className="text-white/50 text-xs">vs mes anterior</span>
-              </div>
+                </>
+              )}
+              <span style={{ color: 'var(--ink-4)' }}>·</span>
+              <span>
+                Atualizado às{' '}
+                <b className="mono" style={{ fontSize: '11px', color: 'var(--ink-2)' }}>
+                  {lastUpdate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                </b>
+              </span>
+              <span style={{ color: 'var(--ink-4)' }}>·</span>
+              <button
+                onClick={fetchAll}
+                disabled={loading}
+                className="inline-flex items-center gap-1 transition-colors disabled:opacity-50"
+                style={{
+                  color: 'var(--ink)',
+                  textDecoration: 'underline',
+                  textUnderlineOffset: '3px',
+                  textDecorationColor: 'var(--ink-4)',
+                }}
+              >
+                <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+                <span>{loading ? 'Atualizando…' : 'Recarregar'}</span>
+              </button>
             </div>
-            <button
-              onClick={fetchAll}
-              className="absolute top-4 right-4 w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/70 hover:text-white transition-colors"
-              title="Atualizar dados"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+          }
+        />
 
         {/* KPIs PRIMARIOS — com borda colorida no topo */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1155,6 +1173,8 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
+
+        <MinimalFooter pageId="visão geral" />
       </div>
     </div>
   );

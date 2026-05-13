@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { PageHeader } from '@/components/PageHeader';
+import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
 import { MoneyInput } from '@/components/MoneyInput';
 import { SkeletonTable } from '@/components/SkeletonTable';
 import { formatBRL, generateId } from '@/lib/utils';
@@ -318,7 +319,7 @@ export default function CustosPage() {
 
   if (loading) return (
     <div className="p-6">
-      <PageHeader title="Planejamento Mensal" />
+      <MinimalPageHead title="Planejamento mensal" meta={<p className="mt-2.5 text-[12px]" style={{ color: 'var(--ink-3)' }}>Carregando…</p>} />
       <SkeletonTable rows={5} cols={3} />
     </div>
   );
@@ -330,21 +331,30 @@ export default function CustosPage() {
 
   return (
     <div className="p-6 max-w-[1400px] mx-auto">
-      <PageHeader
-        title="Planejamento Mensal"
-        subtitle={saving ? 'Salvando...' : 'Salvo'}
+      <MinimalPageHead
+        title="Planejamento mensal"
+        meta={
+          <p className="mt-2.5 text-[12px]" style={{ color: 'var(--ink-3)' }}>
+            Metas de receita, custos fixos e variáveis · <b style={{ color: 'var(--ink-2)', fontWeight: 500 }}>{saving ? 'Salvando…' : 'Salvo'}</b>
+          </p>
+        }
         actions={
-          <div className="flex items-center gap-3">
+          <>
             <input
               type="month"
               value={mes}
               onChange={e => setMes(e.target.value)}
-              className="px-3 py-1.5 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
+              className="h-[34px] px-3 text-[12px] border"
+              style={{ borderColor: 'var(--line)', background: 'var(--ink-surface)', color: 'var(--ink)' }}
             />
-            <button onClick={copyFromPrev} className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] shadow-[var(--t-card-shadow)] rounded-lg hover:bg-[var(--t-sidebar-item-hover)] transition-colors">
-              <Copy className="w-3.5 h-3.5" /> Copiar do anterior
+            <button
+              onClick={copyFromPrev}
+              className="h-[34px] px-3 text-[12px] border transition-colors hover:bg-[var(--ink-surface-2)]"
+              style={{ borderColor: 'var(--line)', color: 'var(--ink-2)' }}
+            >
+              <Copy className="w-3.5 h-3.5 inline mr-2" /> Copiar do anterior
             </button>
-          </div>
+          </>
         }
       />
 
@@ -607,6 +617,8 @@ export default function CustosPage() {
           </div>
         </div>
       </div>
+
+      <MinimalFooter pageId="planejamento mensal" />
     </div>
   );
 }
