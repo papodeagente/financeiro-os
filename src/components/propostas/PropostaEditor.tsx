@@ -214,27 +214,53 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
     }
     const flightHandoff = consumePendingPropostaFlightHandoff(initialProposta.id);
     if (flightHandoff) {
-      const oneWay = { ...flightHandoff.flight, returnFlights: undefined, returnDuration: undefined, returnLayovers: undefined };
-      const [mapped] = formatFlightForTransporte(oneWay) as unknown as Partial<TransporteData>[];
-      // Aplica ao bloco que disparou o handoff — pode ser VOO (novo) ou
-      // TRANSPORTE (legado). Defaults toggles visíveis para o novo VOO.
-      const enriched: Record<string, unknown> = {
-        ...mapped,
-        id: flightHandoff.ctx.blockId,
+      // Round-trip: mapper devolve [ida, volta] — aplica IDA no bloco que
+      // disparou o handoff e insere VOLTA como bloco VOO logo depois.
+      // One-way: só [ida], aplica no bloco e pronto.
+      const mapped = formatFlightForTransporte(flightHandoff.flight) as unknown as Partial<TransporteData>[];
+      const defaultsToggles = {
         mostrar_segmentos: true,
         mostrar_emissao_co2: true,
         mostrar_aeronave: true,
         mostrar_bagagem: true,
         mostrar_alerta_atraso: false,
       };
-      setProposta(prev => ({
-        ...prev,
-        secoes: prev.secoes.map(s => {
+      const idaEnriched: Record<string, unknown> = {
+        ...(mapped[0] || {}),
+        id: flightHandoff.ctx.blockId,
+        ...defaultsToggles,
+      };
+      setProposta(prev => {
+        const idx = prev.secoes.findIndex(s => s.id === flightHandoff.ctx.blockId);
+        const novasSecoes = prev.secoes.map(s => {
           if (s.id !== flightHandoff.ctx.blockId) return s;
           if (s.tipo !== 'TRANSPORTE' && s.tipo !== 'VOO') return s;
-          return { ...s, conteudo: { ...s.conteudo, ...enriched } as Record<string, unknown> };
-        }),
-      }));
+          // Força tipo VOO quando o mapper sinaliza voo_etapa (round-trip
+          // sempre cria pares VOO mesmo se o bloco original era TRANSPORTE
+          // legado — mantém consistência visual).
+          const tipoFinal: SecaoProposta['tipo'] = idaEnriched.voo_etapa ? 'VOO' : s.tipo;
+          return { ...s, tipo: tipoFinal, conteudo: { ...s.conteudo, ...idaEnriched } as Record<string, unknown> };
+        });
+        // Insere bloco VOLTA logo após o bloco IDA quando aplicável
+        if (mapped[1] && idx >= 0) {
+          const voltaConteudo: Record<string, unknown> = {
+            ...(mapped[1] as Record<string, unknown>),
+            id: generateId(),
+            ...defaultsToggles,
+          };
+          const voltaSecao: SecaoProposta = {
+            id: voltaConteudo.id as string,
+            tipo: 'VOO',
+            ordem: idx + 1,
+            visivel: true,
+            conteudo: voltaConteudo,
+          };
+          const arr = [...novasSecoes];
+          arr.splice(idx + 1, 0, voltaSecao);
+          return { ...prev, secoes: arr };
+        }
+        return { ...prev, secoes: novasSecoes };
+      });
       hasUnsaved.current = true;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

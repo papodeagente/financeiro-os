@@ -266,6 +266,7 @@ export function formatFlightForTransporte(offer: FlightOffer): Record<string, un
     segmentos: info.segments,
     muitas_vezes_atrasado: info.oftenDelayed,
     detalhes: info.stops === 0 ? 'Voo direto' : `${info.stops} escala(s): ${info.stopAirports}`,
+    voo_etapa: hasReturn ? 'IDA' : undefined,
   });
 
   if (hasReturn) {
@@ -296,7 +297,8 @@ export function formatFlightForTransporte(offer: FlightOffer): Record<string, un
       escalas_info: volta.layoversInfo,
       segmentos: volta.segments,
       muitas_vezes_atrasado: volta.oftenDelayed,
-      detalhes: 'VOLTA | ' + (volta.stops === 0 ? 'Voo direto' : `${volta.stops} escala(s): ${volta.stopAirports}`),
+      detalhes: volta.stops === 0 ? 'Voo direto' : `${volta.stops} escala(s): ${volta.stopAirports}`,
+      voo_etapa: 'VOLTA',
     });
   }
 

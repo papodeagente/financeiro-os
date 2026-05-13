@@ -719,6 +719,10 @@ export interface VooData {
   }>;
   muitas_vezes_atrasado?: boolean;
   detalhes?: string;
+  tempo_estimado?: string;
+  // Marcador de etapa quando o bloco veio de uma busca round-trip — usado
+  // pelo VooBlock pra mostrar selo "IDA" / "VOLTA". Opcional.
+  voo_etapa?: 'IDA' | 'VOLTA';
   // Toggles de visibilidade para a proposta vista pelo cliente
   mostrar_segmentos?: boolean;
   mostrar_emissao_co2?: boolean;

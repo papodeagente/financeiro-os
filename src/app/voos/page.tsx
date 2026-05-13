@@ -32,6 +32,9 @@ export default function VoosPage() {
   const [adultos, setAdultos] = useState(1);
   const [criancas, setCriancas] = useState(0);
   const [classe, setClasse] = useState('economica');
+  // Filtro opcional por número do voo (ex: LA8084, AD4123). Aplicado
+  // client-side sobre os resultados — SearchAPI não oferece esse filtro.
+  const [numeroVoo, setNumeroVoo] = useState('');
   const [results, setResults] = useState<FlightOffer[]>([]);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState('');
@@ -39,6 +42,13 @@ export default function VoosPage() {
   const [sortBy, setSortBy] = useState<'price' | 'duration'>('price');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selecting, setSelecting] = useState<string | null>(null);
+  // Flow round-trip: 'ida' (mostra ofertas de ida) → ao escolher ida com
+  // dataVolta preenchida, buscamos voltas combinadas via departure_token
+  // e mudamos para 'volta'. Ao escolher volta, combinamos e finalizamos.
+  const [step, setStep] = useState<'ida' | 'volta'>('ida');
+  const [selectedIda, setSelectedIda] = useState<FlightOffer | null>(null);
+  const [returnResults, setReturnResults] = useState<FlightOffer[]>([]);
+  const [loadingVolta, setLoadingVolta] = useState(false);
 
   // Handoff vindo da tab do grupo
   const handoff = getActiveHandoffInfo();
@@ -83,6 +93,9 @@ export default function VoosPage() {
     setError('');
     setSearching(true);
     setResults([]);
+    setReturnResults([]);
+    setSelectedIda(null);
+    setStep('ida');
     try {
       const res = await fetch('/api/flights/search', {
         method: 'POST',
@@ -104,7 +117,64 @@ export default function VoosPage() {
 
   const buscar = () => buscarComArgs({ origem, destino, dataIda, dataVolta, adultos, criancas, classe });
 
-  const selecionarVoo = async (offer: FlightOffer) => {
+  const isRoundTrip = !!dataVolta;
+
+  // Round-trip: ao escolher uma ida, busca as voltas com o departure_token
+  // daquela ida (combinações garantidas pela SearchAPI). Mostra resultados
+  // de volta em vez de finalizar imediato.
+  const escolherIda = async (offer: FlightOffer) => {
+    if (!offer.departureToken) {
+      // Sem token, finaliza direto como one-way (fallback defensivo)
+      finalizar(offer);
+      return;
+    }
+    setSelectedIda(offer);
+    setLoadingVolta(true);
+    setError('');
+    try {
+      const res = await fetch('/api/flights/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          origem, destino, data_ida: dataIda, data_volta: dataVolta,
+          adultos, criancas, classe, departure_token: offer.departureToken,
+        }),
+      });
+      const json = await res.json();
+      if (json.error) { setError(json.error); setLoadingVolta(false); return; }
+      const apiData = json.data || {};
+      const offers = mapSearchAPIToOffers(apiData.best_flights, apiData.other_flights);
+      setReturnResults(offers);
+      setStep('volta');
+      if (offers.length === 0) setError('Nenhuma opção de volta encontrada — escolha outra ida');
+    } catch {
+      setError('Erro ao buscar voltas');
+    }
+    setLoadingVolta(false);
+  };
+
+  const voltarParaIda = () => {
+    setStep('ida');
+    setSelectedIda(null);
+    setReturnResults([]);
+    setError('');
+  };
+
+  // Combina ida+volta numa única FlightOffer e finaliza o handoff. O price
+  // da volta é o total round-trip retornado pela SearchAPI no segundo step.
+  const escolherVolta = (voltaOffer: FlightOffer) => {
+    if (!selectedIda) return;
+    const combined: FlightOffer = {
+      ...selectedIda,
+      price: voltaOffer.price || selectedIda.price,
+      returnFlights: voltaOffer.flights,
+      returnDuration: voltaOffer.totalDuration,
+      returnLayovers: voltaOffer.layovers,
+    };
+    finalizar(combined);
+  };
+
+  const finalizar = (offer: FlightOffer) => {
     if (!handoff?.key || !handoff?.returnTo) return;
     setSelecting(offer.id);
     try {
@@ -114,7 +184,37 @@ export default function VoosPage() {
     }
   };
 
-  const sorted = [...results].sort((a, b) => {
+  const selecionarVoo = async (offer: FlightOffer) => {
+    if (!handoff?.key || !handoff?.returnTo) return;
+    // One-way: finaliza direto. Round-trip: vai pro passo de volta.
+    if (isRoundTrip && step === 'ida') {
+      await escolherIda(offer);
+      return;
+    }
+    if (isRoundTrip && step === 'volta') {
+      escolherVolta(offer);
+      return;
+    }
+    finalizar(offer);
+  };
+
+  // Quando estamos no passo 'volta' do round-trip, exibimos returnResults
+  // (ofertas combinadas com a ida escolhida); senão exibimos os results
+  // normais (ida ou one-way).
+  const baseResults = step === 'volta' ? returnResults : results;
+
+  // Filtro client-side por número do voo — match em qualquer segmento.
+  // Normaliza removendo espaços (LA 8084 == LA8084).
+  const normFlight = (s: string) => s.replace(/\s+/g, '').toUpperCase();
+  const numeroVooNorm = normFlight(numeroVoo);
+  const filtered = numeroVooNorm
+    ? baseResults.filter(o => {
+        const segs = [...(o.flights || []), ...(o.returnFlights || [])];
+        return segs.some(s => normFlight(s.flight_number || '').includes(numeroVooNorm));
+      })
+    : baseResults;
+
+  const sorted = [...filtered].sort((a, b) => {
     if (sortBy === 'price') return a.price - b.price;
     return a.totalDuration - b.totalDuration;
   });
@@ -133,12 +233,20 @@ export default function VoosPage() {
           </p>
         </div>
 
-        {/* Faixa de handoff — só aparece quando vindo de um grupo */}
+        {/* Faixa de handoff — só aparece quando vindo de um grupo/proposta */}
         {isHandoff && handoff?.returnTo && (
           <div className="flex items-center justify-between gap-3 bg-[var(--t-green-bg)] border border-[var(--t-green)]/30 rounded-xl px-4 py-3">
             <div className="flex items-center gap-2 text-sm text-[var(--t-green)]">
               <Plane className="w-4 h-4 shrink-0" />
-              <span>Selecione um voo para inserir no trecho. Companhia, horários, escalas e preço ficam salvos.</span>
+              {isRoundTrip ? (
+                <span>
+                  {step === 'ida'
+                    ? 'Round-trip: escolha primeiro a IDA. Depois você escolhe a VOLTA combinada.'
+                    : 'Agora escolha a VOLTA — preços são para o par ida+volta.'}
+                </span>
+              ) : (
+                <span>Selecione um voo para inserir na proposta. Companhia, horários, escalas e preço ficam salvos.</span>
+              )}
             </div>
             <a
               href={handoff.returnTo}
@@ -146,6 +254,40 @@ export default function VoosPage() {
             >
               <ArrowLeft className="w-3 h-3" /> Voltar sem selecionar
             </a>
+          </div>
+        )}
+
+        {/* Breadcrumb round-trip — Ida ✓ → Volta */}
+        {isHandoff && isRoundTrip && (results.length > 0 || step === 'volta') && (
+          <div className="flex items-center gap-3 text-xs">
+            <button
+              onClick={voltarParaIda}
+              disabled={step === 'ida'}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--t-border)] disabled:opacity-50 hover:bg-[var(--t-surface-hover)] transition-colors"
+            >
+              <span className={step === 'ida' ? 'text-[var(--t-green)] font-medium' : 'text-[var(--t-text-secondary)]'}>1.</span>
+              {step === 'volta' && selectedIda ? (
+                <>
+                  <Check className="w-3 h-3 text-[var(--t-green)]" />
+                  <span className="text-[var(--t-text)]">
+                    IDA · {selectedIda.flights[0]?.flight_number} ({selectedIda.flights[0]?.departure_airport.id} → {selectedIda.flights[selectedIda.flights.length - 1]?.arrival_airport.id})
+                  </span>
+                  <span className="text-[var(--t-text-muted)] ml-1">(trocar)</span>
+                </>
+              ) : (
+                <span className="text-[var(--t-text-secondary)]">Escolher IDA</span>
+              )}
+            </button>
+            <ArrowRight className="w-3 h-3 text-[var(--t-text-muted)] shrink-0" />
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border ${
+              step === 'volta' ? 'border-[var(--t-green)]/40 bg-[var(--t-green-bg)]' : 'border-[var(--t-border)]'
+            }`}>
+              <span className={step === 'volta' ? 'text-[var(--t-green)] font-medium' : 'text-[var(--t-text-muted)]'}>2.</span>
+              <span className={step === 'volta' ? 'text-[var(--t-text)]' : 'text-[var(--t-text-muted)]'}>
+                Escolher VOLTA
+              </span>
+            </div>
+            {loadingVolta && <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--t-green)]" />}
           </div>
         )}
 
@@ -211,6 +353,25 @@ export default function VoosPage() {
               </button>
             </div>
           </div>
+
+          {/* Filtro opcional: número do voo */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-3">
+            <div className="md:col-span-2">
+              <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">
+                Nº do voo <span className="text-[var(--t-text-muted)]">(opcional — ex: LA8084, AD4123)</span>
+              </label>
+              <input
+                type="text"
+                value={numeroVoo}
+                onChange={e => setNumeroVoo(e.target.value.toUpperCase())}
+                placeholder="LA8084"
+                className="w-full px-3 py-2 bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded-lg text-sm text-[var(--t-text)] uppercase tracking-wide"
+              />
+            </div>
+            <div className="md:col-span-2 flex items-end text-[11px] text-[var(--t-text-muted)] leading-relaxed">
+              Preenchendo o número do voo, os resultados são filtrados para mostrar apenas voos onde esse código aparece (ida ou volta, qualquer segmento).
+            </div>
+          </div>
         </div>
 
         {error && (
@@ -224,7 +385,12 @@ export default function VoosPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="text-sm text-[var(--t-text-secondary)]">
-                {results.length} resultado{results.length !== 1 ? 's' : ''} encontrado{results.length !== 1 ? 's' : ''}
+                {sorted.length} resultado{sorted.length !== 1 ? 's' : ''}
+                {numeroVooNorm && (
+                  <span className="ml-1 text-[var(--t-text-muted)]">
+                    filtrado{sorted.length !== 1 ? 's' : ''} por <b className="text-[var(--t-text)]">{numeroVooNorm}</b> (de {results.length})
+                  </span>
+                )}
                 {cached && <span className="ml-2 text-xs text-amber-400">(cache)</span>}
               </div>
               <div className="flex items-center gap-2">
@@ -255,9 +421,11 @@ export default function VoosPage() {
                   )}
 
                   <div className="p-4 space-y-3">
-                    {/* Outbound */}
+                    {/* Outbound (ou volta quando no step volta) */}
                     <div className="flex items-center gap-4">
-                      <div className="text-xs text-[var(--t-text-muted)] w-10 shrink-0 font-medium">IDA</div>
+                      <div className="text-xs text-[var(--t-text-muted)] w-12 shrink-0 font-medium">
+                        {step === 'volta' ? 'VOLTA' : 'IDA'}
+                      </div>
                       {firstSeg.airline_logo && <img src={firstSeg.airline_logo} alt="" className="w-6 h-6 rounded" />}
                       <div className="flex-1">
                         <div className="flex items-center gap-2 text-sm">
@@ -331,13 +499,18 @@ export default function VoosPage() {
                         {isHandoff && (
                           <button
                             onClick={() => selecionarVoo(offer)}
-                            disabled={selecting !== null}
+                            disabled={selecting !== null || loadingVolta}
                             className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-[var(--t-green)] text-white rounded-lg hover:opacity-90 disabled:opacity-50"
                           >
-                            {selecting === offer.id ? (
-                              <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Selecionando...</>
+                            {(selecting === offer.id || (loadingVolta && step === 'ida')) ? (
+                              <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {step === 'ida' && isRoundTrip ? 'Buscando voltas...' : 'Selecionando...'}</>
                             ) : (
-                              <><Check className="w-3.5 h-3.5" /> Selecionar este voo</>
+                              <>
+                                <Check className="w-3.5 h-3.5" />
+                                {isRoundTrip
+                                  ? (step === 'ida' ? 'Escolher esta IDA' : 'Confirmar par ida + volta')
+                                  : 'Selecionar este voo'}
+                              </>
                             )}
                           </button>
                         )}
