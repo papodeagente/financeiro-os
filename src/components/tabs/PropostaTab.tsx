@@ -3,7 +3,7 @@
 import { GrupoViagem } from '@/lib/types';
 import { calcProposta, calcItensIncluidos, calcResumoFornecedores, type ItemIncluido, type ResumoFornecedor } from '@/lib/calculations';
 import { formatBRL } from '@/lib/utils';
-import { Sparkles, Users, Building2 } from 'lucide-react';
+import { Sparkles, Users, Building2, Baby, User2 } from 'lucide-react';
 
 interface Props { grupo: GrupoViagem; }
 
@@ -93,6 +93,31 @@ export function PropostaTab({ grupo }: Props) {
   // PROPOSTA: só mostra o tipoBase detectado (1 coluna). Se user cadastrou
   // hotel em DBL, mostra coluna DBL. Se cadastrou SGL, mostra SGL.
   const TIPOS_PRECO = tipo === 'PROPOSTA' ? [tipoBase] : TIPOS;
+
+  // ---- Detalhamento por pessoa (Adulto/Criança) -------------------------
+  // Quando há passageiros cadastrados na aba INFO, mostra o preço total
+  // que cada adulto e cada criança paga, considerando o tipo de apto onde
+  // os adultos vão se acomodar.
+  //
+  // Regra: pra 1/2/3/4 adultos, usa SGL/DBL/TPL/QDP respectivamente — o
+  // tipo que minimiza o preço por pessoa. Pra 5+ adultos, mantém o
+  // tipoBase detectado (com fallback DBL).
+  const passageiros = grupo.passageiros || [];
+  const qtdAdt = passageiros.filter(p => p.tipo === 'ADT').length;
+  const qtdChd = passageiros.filter(p => p.tipo === 'CHD').length;
+  const temPassageiros = passageiros.length > 0;
+
+  const aptoPorQtdAdt: Record<number, 'sgl' | 'dbl' | 'tpl' | 'qdp'> = {
+    1: 'sgl', 2: 'dbl', 3: 'tpl', 4: 'qdp',
+  };
+  const aptoAdulto = aptoPorQtdAdt[qtdAdt]
+    ?? (tipo === 'GRUPO' ? tipoBase : autoTipoBaseProposta(grupo));
+
+  const precoAdt = p.totalPaxAvista[aptoAdulto] || 0;
+  const precoChd = p.totalPaxAvista.chd || 0;
+  const totalGeral = qtdAdt * precoAdt + qtdChd * precoChd;
+  const parcelaAdt = grupo.params.parcelas > 1 ? (p.parcelaPaxCC[aptoAdulto] || 0) : 0;
+  const parcelaChd = grupo.params.parcelas > 1 ? (p.parcelaPaxCC.chd || 0) : 0;
 
   const Row = ({ label, values, className = '' }: { label: string; values: Record<string, number>; className?: string }) => (
     <tr className={className}>
@@ -333,6 +358,93 @@ export function PropostaTab({ grupo }: Props) {
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+
+          {/* Detalhamento por pessoa — Adulto / Criança a partir dos
+              passageiros cadastrados na aba INFO. Mostra preço por
+              pessoa e o total geral da proposta. */}
+          {temPassageiros && (
+            <div>
+              <h3 className="text-lg font-semibold text-[var(--t-text)] mb-3 flex items-center gap-2">
+                <Users className="w-4 h-4 text-[var(--t-accent)]" />
+                Detalhamento por pessoa
+                <span className="text-xs text-[var(--t-text-muted)] font-normal">
+                  {qtdAdt} adulto{qtdAdt !== 1 ? 's' : ''}
+                  {qtdChd > 0 && ` · ${qtdChd} criança${qtdChd > 1 ? 's' : ''}`}
+                </span>
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {/* Adulto */}
+                {qtdAdt > 0 && (
+                  <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <User2 className="w-4 h-4 text-[var(--t-text-secondary)]" />
+                      <span className="text-[11px] uppercase tracking-wide text-[var(--t-text-muted)] font-medium">
+                        Adulto · apto {LABELS[aptoAdulto]}
+                      </span>
+                    </div>
+                    <p className="text-xl font-bold text-[var(--t-text)] tabular-nums">{formatBRL(precoAdt)}</p>
+                    <p className="text-[11px] text-[var(--t-text-muted)] mt-0.5">por pessoa</p>
+                    {grupo.params.parcelas > 1 && parcelaAdt > 0 && (
+                      <p className="text-[11px] text-[var(--t-text-secondary)] mt-2 pt-2 border-t border-[var(--t-border)]">
+                        ou <b className="text-[var(--t-text)] tabular-nums">{grupo.params.parcelas}x {formatBRL(parcelaAdt)}</b> no cartão
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Criança */}
+                {qtdChd > 0 && (
+                  <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Baby className="w-4 h-4 text-[var(--t-text-secondary)]" />
+                      <span className="text-[11px] uppercase tracking-wide text-[var(--t-text-muted)] font-medium">
+                        Criança · CHD
+                      </span>
+                    </div>
+                    <p className="text-xl font-bold text-[var(--t-text)] tabular-nums">{formatBRL(precoChd)}</p>
+                    <p className="text-[11px] text-[var(--t-text-muted)] mt-0.5">
+                      por criança · idades {passageiros.filter(p => p.tipo === 'CHD').map(p => p.idade ?? 0).join(', ')}
+                    </p>
+                    {grupo.params.parcelas > 1 && parcelaChd > 0 && (
+                      <p className="text-[11px] text-[var(--t-text-secondary)] mt-2 pt-2 border-t border-[var(--t-border)]">
+                        ou <b className="text-[var(--t-text)] tabular-nums">{grupo.params.parcelas}x {formatBRL(parcelaChd)}</b> no cartão
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Total geral */}
+                <div className="rounded-xl border-2 border-green-500/40 bg-green-500/5 p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Sparkles className="w-4 h-4 text-green-600 dark:text-green-400" />
+                    <span className="text-[11px] uppercase tracking-wide text-[var(--t-text-muted)] font-medium">
+                      Total da proposta
+                    </span>
+                  </div>
+                  <p className="text-xl font-bold text-green-700 dark:text-green-400 tabular-nums">{formatBRL(totalGeral)}</p>
+                  <p className="text-[11px] text-[var(--t-text-muted)] mt-0.5">
+                    {qtdAdt > 0 && <>{qtdAdt}× {formatBRL(precoAdt)}</>}
+                    {qtdAdt > 0 && qtdChd > 0 && <> + </>}
+                    {qtdChd > 0 && <>{qtdChd}× {formatBRL(precoChd)}</>}
+                  </p>
+                  {grupo.params.parcelas > 1 && (parcelaAdt > 0 || parcelaChd > 0) && (
+                    <p className="text-[11px] text-[var(--t-text-secondary)] mt-2 pt-2 border-t border-green-500/30">
+                      ou <b className="text-green-700 dark:text-green-400 tabular-nums">
+                        {grupo.params.parcelas}x {formatBRL(qtdAdt * parcelaAdt + qtdChd * parcelaChd)}
+                      </b> no cartão
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <p className="text-[11px] text-[var(--t-text-muted)] mt-2 italic">
+                Preço do adulto considera apto {LABELS[aptoAdulto]} ({qtdAdt} pessoa{qtdAdt !== 1 ? 's' : ''} por quarto).
+                {qtdChd > 0 && ' Crianças usam tarifa CHD do hotel.'}
+                {' '}Edite a lista de passageiros na aba Info para recalcular.
+              </p>
             </div>
           )}
         </>
