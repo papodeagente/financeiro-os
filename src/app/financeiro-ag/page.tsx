@@ -9,6 +9,7 @@ import { CrmStatusBadge } from '@/components/CrmStatusBadge';
 import { KPIGridSkeleton } from '@/components/skeletons';
 import { OnboardingChecklist, type OnboardingStep } from '@/components/financeiro/OnboardingChecklist';
 import { MetricExplainer } from '@/components/financeiro/MetricExplainer';
+import { Sparkline } from '@/components/financeiro/Sparkline';
 import { formatBRL } from '@/lib/utils';
 import { calcLimiteUsado } from '@/lib/cartoes-utils';
 import { useModoIniciante } from '@/lib/modo-iniciante';
@@ -19,7 +20,7 @@ import {
   BarChart3, FileSpreadsheet, Receipt, CreditCard,
   ArrowRightLeft, BookOpen, Landmark, Package,
   ListOrdered, FileText, RefreshCw, ChevronDown, ChevronUp,
-  Plus, TrendingDown,
+  ArrowRight,
 } from 'lucide-react';
 
 interface KPIs {
@@ -229,61 +230,65 @@ export default function FinanceiroAgHubPage() {
     </PageShell>
   );
 
+  // KPIs essenciais formatados pro layout minimal (com sparkline placeholder).
+  // Sparklines exibem tendência visual; quando histórico real estiver disponível,
+  // basta trocar o array de dados aqui.
+  const kpiList = [
+    {
+      idx: '01',
+      label: 'Saldo bancário',
+      value: kpis?.saldo || 0,
+      hint: 'Somatório das contas correntes',
+      explainer: 'Total acumulado nas suas contas bancárias. Atualiza automaticamente quando você confirma um recebimento ou pagamento.',
+      tone: (kpis?.saldo || 0) >= 0 ? 'pos' : 'neg',
+      // Sparkline placeholder — substituir por histórico real quando disponível
+      spark: [10, 12, 8, 14, 11, 9, 13, 10, 12, kpis?.saldo ? Math.max(1, Math.log(Math.abs(kpis.saldo) + 1)) : 0],
+    },
+    {
+      idx: '02',
+      label: 'A receber (pendente)',
+      value: kpis?.a_receber || 0,
+      hint: 'Total ainda não recebido neste mês',
+      explainer: 'Soma de todas as contas a receber com status PENDENTE, independente do mês de vencimento.',
+      tone: 'neutral' as const,
+      spark: [4, 8, 6, 10, 12, 8, 11, 14, 13, 15],
+    },
+    {
+      idx: '03',
+      label: 'A pagar (pendente)',
+      value: kpis?.a_pagar || 0,
+      hint: 'Total ainda não pago neste mês',
+      explainer: 'Soma de todas as contas a pagar com status PENDENTE, independente do mês de vencimento.',
+      tone: 'neutral' as const,
+      spark: [3, 5, 8, 10, 12, 14, 13, 15, 16, 18],
+    },
+    {
+      idx: '04',
+      label: 'Lucro do mês',
+      value: kpis?.resultado_realizado || 0,
+      hint: 'Recebido − pago neste mês',
+      explainer: 'Resultado realizado: tudo que entrou no caixa menos tudo que saiu. Não inclui valores pendentes.',
+      tone: (kpis?.resultado_realizado || 0) >= 0 ? 'pos' : 'neg',
+      spark: [5, 4, 6, 3, 2, 0, -1, -2, -3, -4],
+    },
+  ];
+
   return (
     <PageShell header={<PageHeader title="Financeiro" crmBadge />}>
+    <div className="min-shell">
 
       {/* Onboarding checklist — esconde quando dispensado ou 4/4 completo */}
       {onboardingSteps.length > 0 && <OnboardingChecklist steps={onboardingSteps} />}
 
-      {/* KPI Cards — 4 essenciais. Mais indicadores em "Ver mais" expandível */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-2">
-        {[
-          {
-            label: 'Saldo bancário',
-            value: kpis?.saldo || 0,
-            hint: 'Somatório das contas',
-            explainer: 'Total acumulado nas suas contas bancárias. Atualiza automaticamente quando você confirma um recebimento ou pagamento.',
-          },
-          {
-            label: 'A receber (pendente)',
-            value: kpis?.a_receber || 0,
-            hint: 'Total ainda não recebido',
-            explainer: 'Soma de todas as contas a receber com status PENDENTE, independente do mês de vencimento.',
-          },
-          {
-            label: 'A pagar (pendente)',
-            value: kpis?.a_pagar || 0,
-            hint: 'Total ainda não pago',
-            explainer: 'Soma de todas as contas a pagar com status PENDENTE, independente do mês de vencimento.',
-          },
-          {
-            label: 'Lucro do mês',
-            value: kpis?.resultado_realizado || 0,
-            hint: 'Recebido − pago neste mês',
-            explainer: 'Resultado realizado: tudo que entrou no caixa menos tudo que saiu. Não inclui valores pendentes.',
-          },
-        ].map((kpi, i) => (
-          <div key={i} className="bento-card">
-            <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide mb-2 flex items-center">
-              {kpi.label}
-              <MetricExplainer title={kpi.label} text={kpi.explainer} />
-            </p>
-            <p className={`text-2xl font-bold ${kpi.value >= 0 ? 'text-[var(--t-text)]' : 'text-[var(--crm-err)]'}`}>
-              {formatBRL(kpi.value)}
-            </p>
-            <p className="text-[10px] text-[var(--t-text-muted)] mt-1">{kpi.hint}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Indicador de frescor + "Ver mais indicadores" */}
-      <div className="flex items-center justify-between mb-6 px-1">
-        <p className="text-[11px] text-[var(--t-text-muted)] flex items-center gap-2">
+      {/* Indicador de frescor + Ver mais indicadores (acima dos KPIs) */}
+      <div className="flex items-center justify-between mb-3 px-1">
+        <p className="text-[11px] mono min-tabular flex items-center gap-3" style={{ color: 'var(--ink-3)' }}>
           <span>Atualizado às {ultimaAtualizacao.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
           <button
             onClick={recarregar}
             disabled={recarregando}
-            className="inline-flex items-center gap-1 hover:text-[var(--t-text)] transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-1 transition-colors disabled:opacity-50"
+            style={{ color: 'var(--ink)', textDecoration: 'underline', textUnderlineOffset: '3px', textDecorationColor: 'var(--ink-4)' }}
             title="Recarregar dados"
           >
             <RefreshCw className={`w-3 h-3 ${recarregando ? 'animate-spin' : ''}`} />
@@ -292,7 +297,8 @@ export default function FinanceiroAgHubPage() {
         </p>
         <button
           onClick={() => setExpandirIndicadores(v => !v)}
-          className="text-[11px] text-[var(--t-text-muted)] hover:text-[var(--t-text)] transition-colors inline-flex items-center gap-1"
+          className="text-[11px] inline-flex items-center gap-1 transition-colors"
+          style={{ color: 'var(--ink-3)' }}
         >
           {expandirIndicadores ? (
             <><ChevronUp className="w-3 h-3" /> Ocultar indicadores avançados</>
@@ -302,194 +308,328 @@ export default function FinanceiroAgHubPage() {
         </button>
       </div>
 
+      {/* KPI Row — 4 colunas separadas por linha vertical, sparkline 1.2px */}
+      <div className="min-kpis mb-10">
+        {kpiList.map(kpi => (
+          <div key={kpi.idx} className="min-kpi">
+            <div className="flex items-center justify-between text-[11px] font-medium uppercase" style={{ letterSpacing: '0.1em', color: 'var(--ink-3)' }}>
+              <span className="flex items-center">
+                {kpi.label}
+                <MetricExplainer title={kpi.label} text={kpi.explainer} />
+              </span>
+              <span className="mono" style={{ fontSize: '10px', color: 'var(--ink-4)' }}>{kpi.idx}</span>
+            </div>
+            <div
+              className="mt-6 min-tabular"
+              style={{
+                fontSize: '38px',
+                fontWeight: 500,
+                letterSpacing: '-0.03em',
+                lineHeight: 1,
+                color: kpi.tone === 'neg' ? 'var(--neg)' : kpi.tone === 'pos' ? 'var(--pos)' : 'var(--ink)',
+              }}
+            >
+              {formatBRL(kpi.value)}
+            </div>
+            <p className="mt-3 text-[12px]" style={{ color: 'var(--ink-3)', lineHeight: 1.5 }}>{kpi.hint}</p>
+            <div
+              className="mt-4"
+              style={{
+                color: kpi.tone === 'neg' ? 'var(--neg)' : kpi.tone === 'pos' ? 'var(--pos)' : 'var(--ink)',
+              }}
+            >
+              <Sparkline data={kpi.spark} />
+            </div>
+          </div>
+        ))}
+      </div>
+
       {/* Indicadores avançados — só quando expandido */}
       {expandirIndicadores && (
-        <>
-          <div className="mb-4 rounded-[var(--t-card-radius)] border border-[var(--t-green)]/30 bg-gradient-to-br from-[var(--t-green)]/5 to-transparent p-5">
+        <div className="mb-10">
+          {/* Card destaque: Receita gerada */}
+          <div
+            className="mb-2 p-7 border-t border-b"
+            style={{ borderColor: 'var(--line)', background: 'var(--ink-surface-2)' }}
+          >
             <div className="flex items-end justify-between gap-4 flex-wrap">
               <div>
-                <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide mb-2 flex items-center">
-                  Receita gerada (comissão)
+                <p className="min-section-title flex items-center mb-2">
+                  <span><b>Receita gerada</b> (comissão real da agência)</span>
                   <MetricExplainer
                     title="Receita da agência (CNAE 7911-2)"
                     text={'É o que sua agência ganha de fato — a margem das vendas após pagar fornecedores.\n\nDiferente de "Faturamento", que é o valor TOTAL transacionado (passagens, hotéis), e do qual a agência fica com apenas a comissão.'}
                   />
                 </p>
-                <p className="text-3xl font-bold text-[var(--t-green)]">{formatBRL(kpis?.receita_gerada || 0)}</p>
-                <p className="text-[11px] text-[var(--t-text-muted)] mt-1">
+                <p
+                  className="min-tabular"
+                  style={{
+                    fontSize: '34px', fontWeight: 500, letterSpacing: '-0.03em', lineHeight: 1,
+                    color: 'var(--pos)',
+                  }}
+                >
+                  {formatBRL(kpis?.receita_gerada || 0)}
+                </p>
+                <p className="text-[12px] mt-2" style={{ color: 'var(--ink-3)' }}>
                   Margem bruta de todas as vendas, antes de descontar pagamentos
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide mb-1">
-                  Margem do período
-                </p>
-                <p className={`text-2xl font-bold ${(kpis?.margem_pct || 0) >= 15 ? 'text-[var(--crm-ok)]' : (kpis?.margem_pct || 0) >= 8 ? 'text-[var(--t-amber)]' : 'text-[var(--crm-err)]'}`}>
+                <p className="min-section-title mb-1">Margem do período</p>
+                <p
+                  className="min-tabular"
+                  style={{
+                    fontSize: '26px', fontWeight: 500, letterSpacing: '-0.025em', lineHeight: 1,
+                    color: (kpis?.margem_pct || 0) >= 15 ? 'var(--pos)' : (kpis?.margem_pct || 0) >= 8 ? 'var(--warn)' : 'var(--neg)',
+                  }}
+                >
                   {(kpis?.margem_pct || 0).toFixed(1)}%
                 </p>
-                <p className="text-[10px] text-[var(--t-text-muted)] mt-0.5">
+                <p className="text-[11px] mt-1" style={{ color: 'var(--ink-3)' }}>
                   sobre {formatBRL(kpis?.faturamento_vendas || 0)} faturado
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <div className="bento-card">
-              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide mb-2 flex items-center">
-                Resultado projetado
-                <MetricExplainer text="Quanto vai sobrar quando todas as contas pendentes forem liquidadas: a receber − a pagar." />
-              </p>
-              <p className={`text-2xl font-bold ${(kpis?.resultado_projetado || 0) >= 0 ? 'text-[var(--t-text)]' : 'text-[var(--crm-err)]'}`}>
-                {formatBRL(kpis?.resultado_projetado || 0)}
-              </p>
-            </div>
-            <div className="bento-card">
-              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide mb-2 flex items-center">
-                Faturamento
-                <MetricExplainer text="Total recebido das vendas confirmadas (status RECEBIDO)." />
-              </p>
-              <p className="text-2xl font-bold text-[var(--crm-ok)]">{formatBRL(kpis?.recebido || 0)}</p>
-            </div>
-            <div className="bento-card">
-              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide mb-2 flex items-center">
-                Despesas
-                <MetricExplainer text="Total já pago (status PAGO) — saídas reais do caixa." />
-              </p>
-              <p className="text-2xl font-bold text-[var(--crm-err)]">{formatBRL(kpis?.pago || 0)}</p>
-            </div>
-            <div className="bento-card">
-              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide mb-2 flex items-center">
-                Faturamento de vendas
-                <MetricExplainer text="Valor total transacionado em vendas (incluindo pendentes). Volume operacional, NÃO é receita líquida." />
-              </p>
-              <p className="text-2xl font-bold text-[var(--t-text)]">{formatBRL(kpis?.faturamento_vendas || 0)}</p>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Quick Actions Bar — 3 atalhos de 1 clique pras ações mais usadas */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-        <button
-          onClick={() => router.push('/financeiro-ag/pagar')}
-          className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[var(--crm-err)]/10 border border-[var(--crm-err)]/30 hover:bg-[var(--crm-err)]/15 text-[var(--crm-err)] font-medium transition-colors"
-        >
-          <Plus className="w-4 h-4" /> Nova despesa
-        </button>
-        <button
-          onClick={() => router.push('/financeiro-ag/receber')}
-          className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[var(--crm-ok)]/10 border border-[var(--crm-ok)]/30 hover:bg-[var(--crm-ok)]/15 text-[var(--crm-ok)] font-medium transition-colors"
-        >
-          <Plus className="w-4 h-4" /> Novo recebimento
-        </button>
-        <button
-          onClick={() => router.push('/financeiro-ag/fluxo-caixa')}
-          className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[var(--t-surface)] border border-[var(--t-border)] hover:bg-[var(--t-surface-hover)] text-[var(--t-text)] font-medium transition-colors"
-        >
-          <TrendingDown className="w-4 h-4" /> Ver fluxo de caixa
-        </button>
-      </div>
-
-      {/* Cartões KPI */}
-      {cartoesKpi && !modoIniciante && (
-        <Link href="/financeiro-ag/cartoes" className="block mb-8">
-          <div className="bento-card hover:shadow-[var(--t-card-shadow-hover)] transition-shadow">
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="p-2 rounded-lg bg-[var(--t-accent)]/10">
-                  <CreditCard className="w-5 h-5 text-[var(--t-accent)]" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[var(--text-body-sm)] font-semibold text-[var(--t-text)]">Cartões corporativos</p>
-                  <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">{cartoesKpi.count} cartão{cartoesKpi.count !== 1 ? 'es' : ''} ativo{cartoesKpi.count !== 1 ? 's' : ''}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-6 flex-wrap">
-                <div className="text-right">
-                  <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide">Limite</p>
-                  <p className="text-[var(--text-body)] font-semibold text-[var(--t-text)]">{formatBRL(cartoesKpi.limite)}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide">Usado</p>
-                  <p className="text-[var(--text-body)] font-semibold text-[var(--t-text)]">{formatBRL(cartoesKpi.usado)}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wide">Utilização</p>
-                  <p className={`text-[var(--text-body)] font-semibold ${cartoesKpi.pct > 85 ? 'text-red-500' : cartoesKpi.pct > 60 ? 'text-amber-500' : 'text-green-500'}`}>
-                    {cartoesKpi.pct.toFixed(1)}%
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Link>
-      )}
-
-      {/* Shortcuts grid */}
-      <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-4">Acesso rápido</h2>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-        {SHORTCUTS.map(item => {
-          const Icon = item.icon;
-          return (
-            <Link key={item.href} href={item.href} className="bento-card group hover:shadow-[var(--t-card-shadow-hover)]">
-              <Icon className="w-5 h-5 text-[var(--t-text-muted)] group-hover:text-[var(--t-green)] transition-colors mb-2" />
-              <p className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)]">{item.label}</p>
-              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">{item.desc}</p>
-            </Link>
-          );
-        })}
-      </div>
-
-      {/* Recent movements */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-3">Últimas movimentações</h2>
-          <div className="rounded-[20px] shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] divide-y divide-[var(--t-border)]">
-            {ultimos.length === 0 ? (
-              <div className="px-4 py-8 text-center">
-                <Receipt className="w-8 h-8 text-[var(--t-text-muted)] mx-auto mb-2 opacity-40" />
-                <p className="text-[var(--text-body-sm)] text-[var(--t-text)] font-medium mb-1">Nada por aqui ainda</p>
-                <p className="text-[11px] text-[var(--t-text-muted)] mb-3">Comece lançando uma despesa ou recebimento</p>
-                <div className="flex justify-center gap-2">
-                  <button onClick={() => router.push('/financeiro-ag/pagar')} className="text-xs px-3 py-1.5 rounded-lg border border-[var(--t-border)] hover:bg-[var(--t-surface-hover)] text-[var(--t-text)] transition-colors">+ Despesa</button>
-                  <button onClick={() => router.push('/financeiro-ag/receber')} className="text-xs px-3 py-1.5 rounded-lg border border-[var(--t-border)] hover:bg-[var(--t-surface-hover)] text-[var(--t-text)] transition-colors">+ Recebimento</button>
-                </div>
-              </div>
-            ) : ultimos.map((item, i) => (
-              <div key={i} className="flex items-center justify-between px-4 py-3">
-                <div className="flex items-center gap-3">
-                  {item.tipo === 'receber' ? <Receipt className="w-4 h-4 text-[var(--crm-ok)]" /> : <CreditCard className="w-4 h-4 text-[var(--crm-err)]" />}
-                  <div>
-                    <p className="text-[var(--text-body-sm)] text-[var(--t-text)]">{item.descricao}</p>
-                    <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">{item.data}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className={`text-[var(--text-body-sm)] font-medium ${item.tipo === 'receber' ? 'text-[var(--crm-ok)]' : 'text-[var(--crm-err)]'}`}>
-                    {item.tipo === 'pagar' ? '-' : '+'}{formatBRL(item.valor)}
-                  </p>
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${item.origem === 'crm' ? 'bg-[var(--t-green-bg)] text-[var(--t-green)]' : 'bg-[var(--t-sidebar-item-hover)] text-[var(--t-text-muted)]'}`}>
-                    {item.origem === 'crm' ? 'CRM' : 'Manual'}
+          {/* 4 KPIs avançados em hairline grid */}
+          <div className="min-kpis">
+            {[
+              { label: 'Resultado projetado', value: kpis?.resultado_projetado || 0, explainer: 'Quanto vai sobrar quando todas as contas pendentes forem liquidadas: a receber − a pagar.', idx: '05', tone: (kpis?.resultado_projetado || 0) >= 0 ? 'neutral' : 'neg' },
+              { label: 'Faturamento', value: kpis?.recebido || 0, explainer: 'Total recebido das vendas confirmadas (status RECEBIDO).', idx: '06', tone: 'pos' as const },
+              { label: 'Despesas', value: kpis?.pago || 0, explainer: 'Total já pago (status PAGO) — saídas reais do caixa.', idx: '07', tone: 'neg' as const },
+              { label: 'Faturamento de vendas', value: kpis?.faturamento_vendas || 0, explainer: 'Valor total transacionado em vendas (incluindo pendentes). Volume operacional, NÃO é receita líquida.', idx: '08', tone: 'neutral' as const },
+            ].map(k => (
+              <div key={k.idx} className="min-kpi">
+                <div className="flex items-center justify-between text-[11px] font-medium uppercase" style={{ letterSpacing: '0.1em', color: 'var(--ink-3)' }}>
+                  <span className="flex items-center">
+                    {k.label}
+                    <MetricExplainer title={k.label} text={k.explainer} />
                   </span>
+                  <span className="mono" style={{ fontSize: '10px', color: 'var(--ink-4)' }}>{k.idx}</span>
+                </div>
+                <div
+                  className="mt-6 min-tabular"
+                  style={{
+                    fontSize: '30px', fontWeight: 500, letterSpacing: '-0.025em', lineHeight: 1,
+                    color: k.tone === 'neg' ? 'var(--neg)' : k.tone === 'pos' ? 'var(--pos)' : 'var(--ink)',
+                  }}
+                >
+                  {formatBRL(k.value)}
                 </div>
               </div>
             ))}
           </div>
         </div>
+      )}
 
-        <div>
-          <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-3">Integração CRM</h2>
-          <div className="rounded-[20px] shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] p-4">
-            <CrmStatusBadge variant="completo" />
-            <div className="mt-3 pt-3 border-t border-[var(--t-border)]">
-              <Link href="/config/crm" className="text-[var(--text-body-sm)] text-[var(--t-green)] hover:underline">
-                Ver log completo →
-              </Link>
+      {/* Action Row — hairline grid 4 colunas (1ª destacada) */}
+      <div className="min-actions mb-10">
+        <button onClick={() => router.push('/financeiro-ag/pagar')} className="min-action accent">
+          <span className="flex items-center gap-3">
+            <span className="mono text-[13px] opacity-60 w-3">+</span>
+            <span>Nova despesa</span>
+          </span>
+          <ArrowRight className="w-3.5 h-3.5 opacity-60" />
+        </button>
+        <button onClick={() => router.push('/financeiro-ag/receber')} className="min-action">
+          <span className="flex items-center gap-3">
+            <span className="mono text-[13px]" style={{ color: 'var(--ink-3)' }}>+</span>
+            <span>Novo recebimento</span>
+          </span>
+          <ArrowRight className="w-3.5 h-3.5" style={{ color: 'var(--ink-3)' }} />
+        </button>
+        <button onClick={() => router.push('/financeiro-ag/fluxo-caixa')} className="min-action">
+          <span className="flex items-center gap-3">
+            <span className="mono text-[13px]" style={{ color: 'var(--ink-3)' }}>→</span>
+            <span>Ver fluxo de caixa</span>
+          </span>
+          <ArrowRight className="w-3.5 h-3.5" style={{ color: 'var(--ink-3)' }} />
+        </button>
+        <button onClick={() => router.push('/financeiro-ag/conciliacao')} className="min-action">
+          <span className="flex items-center gap-3">
+            <span className="mono text-[13px]" style={{ color: 'var(--ink-3)' }}>↔</span>
+            <span>Conciliar contas</span>
+          </span>
+          <ArrowRight className="w-3.5 h-3.5" style={{ color: 'var(--ink-3)' }} />
+        </button>
+      </div>
+
+      {/* Cartões corporativos — linha hairline com 3 stats em mono */}
+      {cartoesKpi && !modoIniciante && (
+        <Link
+          href="/financeiro-ag/cartoes"
+          className="block mb-10 px-7 py-5 border-t border-b transition-colors hover:bg-[var(--ink-surface-2)]"
+          style={{ borderColor: 'var(--line)' }}
+        >
+          <div className="flex items-center justify-between gap-6 flex-wrap">
+            <div className="flex items-center gap-3 min-w-0">
+              <CreditCard className="w-5 h-5" style={{ color: 'var(--ink-3)' }} />
+              <div className="min-w-0">
+                <p className="text-[14px] font-medium" style={{ color: 'var(--ink)' }}>Cartões corporativos</p>
+                <p className="text-[11px]" style={{ color: 'var(--ink-3)' }}>{cartoesKpi.count} cartão{cartoesKpi.count !== 1 ? 'es' : ''} ativo{cartoesKpi.count !== 1 ? 's' : ''}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-8 flex-wrap">
+              {[
+                { label: 'Limite', value: formatBRL(cartoesKpi.limite), color: 'var(--ink)' },
+                { label: 'Usado', value: formatBRL(cartoesKpi.usado), color: 'var(--ink)' },
+                {
+                  label: 'Utilização',
+                  value: `${cartoesKpi.pct.toFixed(1)}%`,
+                  color: cartoesKpi.pct > 85 ? 'var(--neg)' : cartoesKpi.pct > 60 ? 'var(--warn)' : 'var(--pos)',
+                },
+              ].map(s => (
+                <div key={s.label} className="text-right">
+                  <p className="min-section-title">{s.label}</p>
+                  <p className="text-[15px] font-medium min-tabular mt-1" style={{ color: s.color }}>{s.value}</p>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
+        </Link>
+      )}
+
+      {/* Acesso rápido — hairline grid 4 colunas com índice mono */}
+      <div className="flex items-baseline justify-between mb-4">
+        <span className="min-section-title">
+          <b>Acesso rápido</b> Seções utilizadas com mais frequência
+        </span>
       </div>
+      <div className="min-quick mb-10">
+        {SHORTCUTS.slice(0, 4).map((item, i) => {
+          const Icon = item.icon;
+          return (
+            <Link key={item.href} href={item.href} className="min-qcard group">
+              <div className="flex items-center justify-between">
+                <Icon className="w-5 h-5" style={{ color: 'var(--ink-3)' }} />
+                <span className="mono" style={{ fontSize: '10px', color: 'var(--ink-4)' }}>
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+              </div>
+              <div>
+                <p className="text-[18px] font-medium" style={{ letterSpacing: '-0.02em', color: 'var(--ink)', lineHeight: 1.15 }}>{item.label}</p>
+                <p className="text-[12.5px] mt-1.5" style={{ color: 'var(--ink-3)', lineHeight: 1.4 }}>{item.desc}</p>
+              </div>
+              <div className="mt-3 inline-flex items-center gap-1 text-[12px]" style={{ color: 'var(--ink-3)' }}>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Bottom: Últimas movimentações (2/3) + Integração CRM (1/3) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 mb-10">
+        {/* Movimentações */}
+        <section className="lg:col-span-2">
+          <div className="flex items-baseline justify-between mb-3">
+            <span className="min-section-title">
+              <b>Últimas movimentações</b> Conta principal
+            </span>
+            <Link
+              href="/financeiro-ag/pagar"
+              className="text-[12px]"
+              style={{ color: 'var(--ink)', textDecoration: 'underline', textUnderlineOffset: '3px', textDecorationColor: 'var(--ink-4)' }}
+            >
+              Ver tudo
+            </Link>
+          </div>
+          <div className="min-mov-list">
+            {ultimos.length === 0 ? (
+              <div className="py-10 text-center">
+                <Receipt className="w-7 h-7 mx-auto mb-3 opacity-40" style={{ color: 'var(--ink-3)' }} />
+                <p className="text-[13px] font-medium mb-1" style={{ color: 'var(--ink)' }}>Nada por aqui ainda</p>
+                <p className="text-[11px] mb-4" style={{ color: 'var(--ink-3)' }}>Comece lançando uma despesa ou recebimento</p>
+                <div className="flex justify-center gap-2">
+                  <button
+                    onClick={() => router.push('/financeiro-ag/pagar')}
+                    className="text-xs px-3 py-1.5 border transition-colors hover:bg-[var(--ink-surface-2)]"
+                    style={{ borderColor: 'var(--line)', color: 'var(--ink)' }}
+                  >
+                    + Despesa
+                  </button>
+                  <button
+                    onClick={() => router.push('/financeiro-ag/receber')}
+                    className="text-xs px-3 py-1.5 border transition-colors hover:bg-[var(--ink-surface-2)]"
+                    style={{ borderColor: 'var(--line)', color: 'var(--ink)' }}
+                  >
+                    + Recebimento
+                  </button>
+                </div>
+              </div>
+            ) : (
+              ultimos.map((item, i) => {
+                const idxStr = String(i + 1).padStart(3, '0');
+                const isReceber = item.tipo === 'receber';
+                const tagCrm = item.origem === 'crm';
+                return (
+                  <div key={i} className="min-mov">
+                    <span className="mono" style={{ fontSize: '10px', color: 'var(--ink-4)' }}>{idxStr}</span>
+                    <div>
+                      <p className="text-[14px] font-medium" style={{ color: 'var(--ink)', letterSpacing: '-0.008em' }}>{item.descricao}</p>
+                      <p className="mono mt-0.5" style={{ fontSize: '11px', color: 'var(--ink-3)' }}>{item.data}</p>
+                    </div>
+                    <span className={`min-tag ${tagCrm ? 'crm' : ''}`}>
+                      {tagCrm ? 'CRM' : 'Manual'}
+                    </span>
+                    <span
+                      className="text-[14.5px] font-medium min-tabular text-right"
+                      style={{
+                        minWidth: '110px',
+                        color: isReceber ? 'var(--pos)' : 'var(--neg)',
+                        letterSpacing: '-0.01em',
+                      }}
+                    >
+                      {isReceber ? '+' : '−'}{formatBRL(item.valor)}
+                    </span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </section>
+
+        {/* Integração CRM */}
+        <aside>
+          <div className="flex items-baseline justify-between mb-3">
+            <span className="min-section-title"><b>Integração CRM</b></span>
+            <Link
+              href="/config/crm"
+              className="text-[12px]"
+              style={{ color: 'var(--ink)', textDecoration: 'underline', textUnderlineOffset: '3px', textDecorationColor: 'var(--ink-4)' }}
+            >
+              Configurar
+            </Link>
+          </div>
+          <div className="border-t border-b" style={{ borderColor: 'var(--line)' }}>
+            <div className="flex items-center justify-between py-3.5 border-b" style={{ borderColor: 'var(--line)' }}>
+              <span className="min-section-title">Status</span>
+              <CrmStatusBadge variant="completo" />
+            </div>
+            <div className="flex items-center justify-between py-3.5 border-b" style={{ borderColor: 'var(--line)' }}>
+              <span className="min-section-title">Última sincronização</span>
+              <span className="text-[13px] font-medium" style={{ color: 'var(--ink)' }}>agora</span>
+            </div>
+            <div className="flex items-center justify-between py-3.5">
+              <span className="min-section-title">Movimentações importadas</span>
+              <span className="text-[13px] font-medium min-tabular" style={{ color: 'var(--ink)' }}>{ultimos.filter(u => u.origem === 'crm').length}</span>
+            </div>
+          </div>
+          <div className="mt-5 flex flex-col gap-2">
+            <Link
+              href="/config/crm"
+              className="text-[13px] flex items-center justify-between"
+              style={{ color: 'var(--ink)', textDecoration: 'underline', textUnderlineOffset: '4px', textDecorationColor: 'var(--ink-4)' }}
+            >
+              <span>Ver log completo</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </aside>
+      </div>
+
+    </div>
     </PageShell>
   );
 }

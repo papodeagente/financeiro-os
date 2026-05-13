@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Inter, Inter_Tight, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { AppProvider } from "@/contexts/AppContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
@@ -10,6 +10,13 @@ import { Toaster } from "@/components/Toaster";
 const inter = Inter({
   subsets: ["latin", "latin-ext"],
   variable: "--font-inter",
+  display: "swap",
+});
+// Inter Tight é usada como display/UI no tema minimal do Financeiro
+// (kerning levemente mais apertado, design mais editorial).
+const interTight = Inter_Tight({
+  subsets: ["latin", "latin-ext"],
+  variable: "--font-inter-tight",
   display: "swap",
 });
 const jetbrainsMono = JetBrains_Mono({
@@ -25,7 +32,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased dark`} suppressHydrationWarning>
+    <html lang="pt-BR" className={`${inter.variable} ${interTight.variable} ${jetbrainsMono.variable} h-full antialiased dark`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: `
           (function() {

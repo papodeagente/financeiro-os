@@ -870,3 +870,191 @@
   min-height: 36px;
   font-size: var(--text-body-sm);
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   MINIMAL THEME — Tokens para a tela /financeiro-ag
+   Inspirado no Conta Azul: hierarquia 100% via hairlines, tipografia
+   editorial (Inter Tight), mono para metadata/ids.
+   Coexiste com tokens --t-* atuais — não substitui, só adiciona.
+   ════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Surfaces */
+  --ink-bg:        #ffffff;
+  --ink-surface:   #ffffff;
+  --ink-surface-2: #f7f7f8;
+  /* Text scale */
+  --ink:           #0a0a0a;
+  --ink-2:         #3a3a3c;
+  --ink-3:         #86868b;
+  --ink-4:         #c7c7cc;
+  /* Lines */
+  --line:          #ececec;
+  --line-strong:   #1f1f1f;
+  /* Semantic */
+  --pos:           #0a8a4a;
+  --neg:           #c52f2a;
+  --warn:          #d97706;
+  /* Mono font */
+  --font-mono-display: var(--font-jetbrains-mono);
+}
+
+.dark {
+  --ink-bg:        #0a0a0a;
+  --ink-surface:   #0a0a0a;
+  --ink-surface-2: #141414;
+  --ink:           #fafafa;
+  --ink-2:         #c7c7cc;
+  --ink-3:         #86868b;
+  --ink-4:         #3a3a3c;
+  --line:          #1c1c1c;
+  --line-strong:   #ffffff;
+  --pos:           #4ade80;
+  --neg:           #f87171;
+}
+
+/* Helpers minimal — escopados no root .min-shell pra não vazar
+   pra outras telas. */
+.min-shell {
+  font-family: var(--font-inter-tight), var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  letter-spacing: -0.011em;
+  color: var(--ink);
+  background: var(--ink-bg);
+}
+.min-shell .mono {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  letter-spacing: 0;
+}
+.min-shell .min-tabular { font-variant-numeric: tabular-nums; }
+
+/* Section headers em uppercase */
+.min-shell .min-section-title {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.min-shell .min-section-title b {
+  color: var(--ink);
+  font-weight: 600;
+  margin-right: 10px;
+}
+
+/* KPI hairline grid — 4 colunas sem gap, separadas por linha vertical */
+.min-shell .min-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.min-shell .min-kpi {
+  padding: 28px 32px 32px;
+  border-right: 1px solid var(--line);
+  transition: background 0.2s ease;
+}
+.min-shell .min-kpi:last-child { border-right: 0; }
+.min-shell .min-kpi:hover { background: var(--ink-surface-2); }
+
+/* Action row — mesma estrutura hairline; 4 colunas */
+.min-shell .min-actions {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.min-shell .min-action {
+  padding: 18px 28px;
+  border-right: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--ink-surface);
+  transition: background 0.18s ease;
+  cursor: pointer;
+  text-align: left;
+}
+.min-shell .min-action:last-child { border-right: 0; }
+.min-shell .min-action:hover { background: var(--ink-surface-2); }
+.min-shell .min-action.accent {
+  background: var(--ink);
+  color: var(--ink-bg);
+}
+.min-shell .min-action.accent:hover { background: var(--ink-2); }
+
+/* Quick access cards — 4 colunas hairline */
+.min-shell .min-quick {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.min-shell .min-qcard {
+  padding: 24px 28px;
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 140px;
+  cursor: pointer;
+  transition: background 0.18s ease;
+  text-align: left;
+  background: var(--ink-surface);
+  color: var(--ink);
+}
+.min-shell .min-qcard:last-child { border-right: 0; }
+.min-shell .min-qcard:hover { background: var(--ink-surface-2); }
+
+/* Lista de movimentações */
+.min-shell .min-mov-list { border-top: 1px solid var(--line); }
+.min-shell .min-mov {
+  display: grid;
+  grid-template-columns: 42px 1fr auto auto;
+  gap: 18px;
+  align-items: center;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+  transition: background 0.15s ease;
+}
+.min-shell .min-mov:hover { background: var(--ink-surface-2); }
+.min-shell .min-tag {
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+}
+.min-shell .min-tag.crm { color: var(--ink); border-color: var(--ink); }
+
+/* Responsivo: < 1200px = 2 cols; < 768px = 1 col */
+@media (max-width: 1200px) {
+  .min-shell .min-kpis,
+  .min-shell .min-actions,
+  .min-shell .min-quick {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .min-shell .min-kpi:nth-child(2),
+  .min-shell .min-action:nth-child(2),
+  .min-shell .min-qcard:nth-child(2) { border-right: 0; }
+  .min-shell .min-kpi:nth-child(-n+2),
+  .min-shell .min-action:nth-child(-n+2),
+  .min-shell .min-qcard:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+}
+@media (max-width: 768px) {
+  .min-shell .min-kpis,
+  .min-shell .min-actions,
+  .min-shell .min-quick {
+    grid-template-columns: 1fr;
+  }
+  .min-shell .min-kpi,
+  .min-shell .min-action,
+  .min-shell .min-qcard { border-right: 0; border-bottom: 1px solid var(--line); }
+  .min-shell .min-kpi:last-child,
+  .min-shell .min-action:last-child,
+  .min-shell .min-qcard:last-child { border-bottom: 0; }
+}
