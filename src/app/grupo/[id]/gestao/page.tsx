@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, Users, FileText, Folder, AlertTriangle, Check, Loader2, Edit2 } from 'lucide-react';
 import { MinimalPageHead, MinimalFooter, MinimalSectionHeader } from '@/components/financeiro/MinimalPageHead';
 import { toast } from '@/lib/toast';
+import { ReservasTab } from './ReservasTab';
 
 type SubAba = 'vagas' | 'reservas' | 'materiais';
 
@@ -23,7 +24,7 @@ interface PeriodoVagas {
 
 interface GestaoData {
   grupo_id: string;
-  grupo: { id: string; grp_id: string; origem_destino: string; tipo?: string };
+  grupo: { id: string; grp_id: string; origem_destino: string; tipo?: string; tarifas_ativas?: string[] };
   gestao: {
     id: string;
     status: string;
@@ -280,15 +281,20 @@ export default function GestaoGrupoPage({ params }: { params: Promise<{ id: stri
           </div>
         )}
 
-        {/* Aba RESERVAS — placeholder Fase 2 */}
+        {/* Aba RESERVAS */}
         {aba === 'reservas' && (
-          <div className="border p-10 text-center" style={{ borderColor: 'var(--line)', background: 'var(--ink-surface)' }}>
-            <FileText className="w-8 h-8 mx-auto mb-3" style={{ color: 'var(--ink-3)' }} />
-            <p className="text-[14px] font-medium" style={{ color: 'var(--ink)' }}>Reservas em breve</p>
-            <p className="text-[12px] mt-1 max-w-md mx-auto" style={{ color: 'var(--ink-3)' }}>
-              Próxima fase: cadastro de passageiros vinculados a clientes, status (reservado / confirmado / lista de espera) e ação Confirmar → gera venda automaticamente.
-            </p>
-          </div>
+          <ReservasTab
+            grupoId={grupoId}
+            periodos={data.periodos.map(p => ({
+              id: p.id,
+              label: p.label,
+              vagas_disponiveis: p.vagas_disponiveis,
+              vagas_total: p.vagas_total,
+            }))}
+            tarifasAtivas={data.grupo.tarifas_ativas || []}
+            permiteListaEspera={!!data.gestao?.config_vagas.permitir_lista_espera}
+            onReservaChange={() => { void carregar(); }}
+          />
         )}
 
         {/* Aba MATERIAIS — placeholder Fase 3 */}
