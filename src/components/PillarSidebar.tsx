@@ -56,6 +56,7 @@ const PRODUTOS_MENU: SidebarSection[] = [
   {
     items: [
       { key: 'grupos', label: 'Produtos', icon: FolderOpen, href: '/grupos' },
+      { key: 'gestao-grupos', label: 'Gestão de grupos', icon: Users, href: '/grupos/gestao' },
       { key: 'minhas-propostas', label: 'Propostas', icon: FileText, href: '/propostas' },
       { key: 'orcamentos', label: 'Orçamentos', icon: BarChart3, href: '/vendas/orcamentos' },
       { key: 'nova-venda', label: 'Nova venda', icon: ShoppingCart, href: '/vendas/nova' },
