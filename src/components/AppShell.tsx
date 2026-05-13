@@ -112,7 +112,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       />
       <div className="flex flex-1 overflow-hidden">
         <PillarSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
-        <main className="flex-1 overflow-y-auto bg-[var(--t-bg)] min-shell">
+        <main
+          className="flex-1 overflow-y-auto min-shell relative"
+          style={{
+            background: 'var(--lg-bg)',
+            // Wallpaper sutil decorativo — valoriza o efeito glass nos cards
+            // por cima. Dois orbes em diagonal com cores Apple (azul + roxo
+            // muito suaves), invisíveis no resultado final mas geram a
+            // refração de cor por trás do vidro fosco.
+            backgroundImage: `
+              radial-gradient(at 18% 12%, rgba(10, 132, 255, 0.06) 0px, transparent 50%),
+              radial-gradient(at 82% 88%, rgba(191, 90, 242, 0.05) 0px, transparent 55%)
+            `,
+            backgroundAttachment: 'fixed',
+          }}
+        >
           <div className="content-enter">
             {children}
           </div>

@@ -95,19 +95,22 @@ export function MinimalPageHead({
       <div className="flex items-center gap-3 flex-wrap">
         {actions}
         {periodos && periodos.length > 0 && (
-          <div className="flex items-stretch border" style={{ borderColor: 'var(--line)', height: '34px' }}>
+          <div
+            className="flex items-stretch lg-glass-regular overflow-hidden"
+            style={{ height: '34px', borderRadius: 'var(--lg-radius-md)' }}
+          >
             {periodos.map((p, i, arr) => {
               const isActive = periodoAtivo === p.key;
               return (
                 <button
                   key={p.key}
                   onClick={() => onPeriodoChange?.(p.key)}
-                  className="px-4 text-[12px] transition-colors"
+                  className="px-4 text-[12px] transition-all duration-200"
                   style={{
-                    color: isActive ? 'var(--ink)' : 'var(--ink-3)',
+                    color: isActive ? 'var(--lg-accent)' : 'var(--ink-3)',
                     fontWeight: isActive ? 500 : 400,
-                    background: isActive ? 'var(--ink-surface-2)' : 'transparent',
-                    borderRight: i < arr.length - 1 ? '1px solid var(--line)' : 'none',
+                    background: isActive ? 'var(--lg-accent-fill)' : 'transparent',
+                    borderRight: i < arr.length - 1 ? '1px solid var(--lg-border-base)' : 'none',
                   }}
                 >
                   {p.label}

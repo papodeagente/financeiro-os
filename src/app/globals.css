@@ -83,6 +83,63 @@
   --sidebar-border: rgba(0, 0, 0, 0.04);
   --sidebar-ring: #004aad;
 
+  /* ============================================================
+   * LIQUID GLASS — Apple iOS 26 / macOS Tahoe design system
+   * ============================================================
+   * Materials, blur tiers, Apple system blue, radii iOS pattern.
+   * Tokens legados (--t-*, --ink-*) são aliasados no final deste
+   * bloco para herdar o novo visual sem mexer no JSX existente. */
+
+  /* Materials — tiered blur surfaces (light) */
+  --lg-material-thin:    rgba(255, 255, 255, 0.55);
+  --lg-material-regular: rgba(255, 255, 255, 0.72);
+  --lg-material-thick:   rgba(255, 255, 255, 0.88);
+  --lg-blur-thin:    blur(20px) saturate(180%);
+  --lg-blur-regular: blur(16px) saturate(180%);
+  --lg-blur-thick:   blur(28px) saturate(180%);
+
+  /* Background base (sob o glass) — iOS systemGroupedBackground */
+  --lg-bg:            #f2f2f7;
+  --lg-bg-deep:       #ffffff;
+  --lg-surface-solid: #ffffff;
+
+  /* Borders — duas camadas (highlight superior + base inferior) */
+  --lg-border-highlight: rgba(255, 255, 255, 0.5);
+  --lg-border-base:      rgba(0, 0, 0, 0.08);
+  --lg-border-strong:    rgba(0, 0, 0, 0.16);
+
+  /* Text — paleta neutra Apple */
+  --lg-text:    #1d1d1f;
+  --lg-text-2:  #3a3a3c;
+  --lg-text-3:  #8e8e93;
+  --lg-text-4:  #c7c7cc;
+
+  /* Accent — Apple system blue */
+  --lg-accent:        #0a84ff;
+  --lg-accent-fill:   rgba(10, 132, 255, 0.18);
+  --lg-accent-hover:  #2a9bff;
+
+  /* Semantic */
+  --lg-pos:       #30d158;  --lg-pos-fill:  rgba(48, 209, 88, 0.16);
+  --lg-neg:       #ff453a;  --lg-neg-fill:  rgba(255, 69, 58, 0.16);
+  --lg-warn:      #ff9f0a;  --lg-warn-fill: rgba(255, 159, 10, 0.16);
+
+  /* Shadow — uma sombra única por nível, suave */
+  --lg-shadow-card: 0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06);
+  --lg-shadow-pop:  0 12px 32px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.06);
+
+  /* Radii — iOS pattern */
+  --lg-radius-sm: 8px;
+  --lg-radius-md: 14px;
+  --lg-radius-lg: 20px;
+  --lg-radius-xl: 28px;
+
+  /* Motion Apple */
+  --lg-ease:   cubic-bezier(0.4, 0.0, 0.2, 1);
+  --lg-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --lg-fast:   200ms var(--lg-ease);
+  --lg-base:   350ms var(--lg-spring);
+
   /* Semantic tokens for components */
   --t-bg: #F7F8FC;
   --t-surface: #ffffff;
@@ -177,6 +234,61 @@
   --crm-warn: #d97706;
   --crm-err: #dc2626;
   --crm-off: #9ca3af;
+
+  /* ============================================================
+   * LIQUID GLASS — aliases dos tokens legados
+   * ============================================================
+   * Sobrescreve os valores acima apontando pros tokens --lg-*.
+   * Resultado: páginas que usam var(--t-*) ou var(--ink-*) ganham
+   * o novo visual sem precisar de mexer no JSX. */
+  --t-bg: var(--lg-bg);
+  --t-surface: var(--lg-material-regular);
+  --t-surface-hover: var(--lg-material-thick);
+  --t-border: var(--lg-border-base);
+  --t-border-hover: var(--lg-border-strong);
+  --t-text: var(--lg-text);
+  --t-text-secondary: var(--lg-text-2);
+  --t-text-muted: var(--lg-text-3);
+  --t-green: var(--lg-accent);
+  --t-green-bg: var(--lg-accent-fill);
+  --t-green-shadow: rgba(10, 132, 255, 0.16);
+  --t-primary: var(--lg-accent);
+  --t-primary-bg: var(--lg-accent-fill);
+  --t-red: var(--lg-neg);
+  --t-red-bg: var(--lg-neg-fill);
+  --t-blue: var(--lg-accent);
+  --t-blue-bg: var(--lg-accent-fill);
+  --t-amber: var(--lg-warn);
+  --t-amber-bg: var(--lg-warn-fill);
+  --t-sidebar-bg: var(--lg-material-thin);
+  --t-sidebar-active-bg: var(--lg-accent-fill);
+  --t-sidebar-active-text: var(--lg-accent);
+  --t-sidebar-item: var(--lg-text-2);
+  --t-sidebar-item-hover: var(--lg-material-thick);
+  --t-sidebar-group: var(--lg-material-thick);
+  --t-sidebar-group-text: var(--lg-accent);
+  --t-input-bg: rgba(255, 255, 255, 0.6);
+  --t-header-bg: var(--lg-material-regular);
+  --t-header-text: var(--lg-text);
+  --t-accent: var(--lg-accent);
+  --t-accent-muted: var(--lg-accent-fill);
+  --t-table-header-bg: var(--lg-material-thick);
+  --t-table-header-text: var(--lg-text-2);
+  --t-hero-gradient: linear-gradient(135deg, var(--lg-accent-fill) 0%, transparent 100%);
+  --t-glass-bg: var(--lg-material-regular);
+  --t-glass-border: var(--lg-border-highlight);
+  --t-surface-gradient: linear-gradient(135deg, var(--lg-material-regular) 0%, var(--lg-material-thick) 100%);
+  --t-accent-gradient: linear-gradient(135deg, var(--lg-accent) 0%, var(--lg-accent-hover) 100%);
+  --t-card-radius: var(--lg-radius-lg);
+  --t-card-shadow: var(--lg-shadow-card);
+  --t-card-shadow-hover: var(--lg-shadow-pop);
+
+  /* Status alinhados aos --lg-* */
+  --t-status-success: var(--lg-pos);     --t-status-success-bg: var(--lg-pos-fill);
+  --t-status-warning: var(--lg-warn);    --t-status-warning-bg: var(--lg-warn-fill);
+  --t-status-danger:  var(--lg-neg);     --t-status-danger-bg:  var(--lg-neg-fill);
+  --t-status-info:    var(--lg-accent);  --t-status-info-bg:    var(--lg-accent-fill);
+  --t-status-neutral: var(--lg-text-3);  --t-status-neutral-bg: rgba(142,142,147,0.12);
 }
 
 /* Dark theme — cool blue-dark */
@@ -269,6 +381,83 @@
 
   --t-card-shadow: var(--elevation-2);
   --t-card-shadow-hover: var(--elevation-3);
+
+  /* ============================================================
+   * LIQUID GLASS — dark theme (macOS Tahoe Pro Display style)
+   * ============================================================ */
+  --lg-material-thin:    rgba(28, 28, 30, 0.55);
+  --lg-material-regular: rgba(28, 28, 30, 0.72);
+  --lg-material-thick:   rgba(28, 28, 30, 0.92);
+
+  --lg-bg:            #000000;
+  --lg-bg-deep:       #0a0a0c;
+  --lg-surface-solid: #1c1c1e;
+
+  --lg-border-highlight: rgba(255, 255, 255, 0.12);
+  --lg-border-base:      rgba(255, 255, 255, 0.08);
+  --lg-border-strong:    rgba(255, 255, 255, 0.16);
+
+  --lg-text:    #f5f5f7;
+  --lg-text-2:  #ebebf5;
+  --lg-text-3:  #98989e;
+  --lg-text-4:  #48484a;
+
+  --lg-accent:        #0a84ff;
+  --lg-accent-fill:   rgba(10, 132, 255, 0.22);
+  --lg-accent-hover:  #409cff;
+
+  --lg-pos:  #30d158; --lg-pos-fill:  rgba(48, 209, 88, 0.20);
+  --lg-neg:  #ff453a; --lg-neg-fill:  rgba(255, 69, 58, 0.20);
+  --lg-warn: #ff9f0a; --lg-warn-fill: rgba(255, 159, 10, 0.20);
+
+  --lg-shadow-card: 0 1px 2px rgba(0,0,0,0.30), 0 8px 24px rgba(0,0,0,0.40);
+  --lg-shadow-pop:  0 12px 32px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.30);
+
+  /* Aliases dos tokens legados — dark */
+  --t-bg: var(--lg-bg);
+  --t-surface: var(--lg-material-regular);
+  --t-surface-hover: var(--lg-material-thick);
+  --t-border: var(--lg-border-base);
+  --t-border-hover: var(--lg-border-strong);
+  --t-text: var(--lg-text);
+  --t-text-secondary: var(--lg-text-2);
+  --t-text-muted: var(--lg-text-3);
+  --t-green: var(--lg-accent);
+  --t-green-bg: var(--lg-accent-fill);
+  --t-green-shadow: rgba(10, 132, 255, 0.32);
+  --t-primary: var(--lg-accent);
+  --t-primary-bg: var(--lg-accent-fill);
+  --t-red: var(--lg-neg);    --t-red-bg: var(--lg-neg-fill);
+  --t-blue: var(--lg-accent); --t-blue-bg: var(--lg-accent-fill);
+  --t-amber: var(--lg-warn); --t-amber-bg: var(--lg-warn-fill);
+  --t-sidebar-bg: var(--lg-material-thin);
+  --t-sidebar-active-bg: var(--lg-accent-fill);
+  --t-sidebar-active-text: var(--lg-accent);
+  --t-sidebar-item: var(--lg-text-2);
+  --t-sidebar-item-hover: var(--lg-material-thick);
+  --t-sidebar-group: var(--lg-material-thick);
+  --t-sidebar-group-text: var(--lg-accent);
+  --t-input-bg: rgba(255, 255, 255, 0.04);
+  --t-header-bg: var(--lg-material-regular);
+  --t-header-text: var(--lg-text);
+  --t-accent: var(--lg-accent);
+  --t-accent-muted: var(--lg-accent-fill);
+  --t-table-header-bg: var(--lg-material-thick);
+  --t-table-header-text: var(--lg-text-2);
+  --t-hero-gradient: linear-gradient(135deg, var(--lg-accent-fill) 0%, transparent 100%);
+  --t-glass-bg: var(--lg-material-regular);
+  --t-glass-border: var(--lg-border-highlight);
+  --t-surface-gradient: linear-gradient(135deg, var(--lg-material-regular) 0%, var(--lg-material-thick) 100%);
+  --t-accent-gradient: linear-gradient(135deg, var(--lg-accent) 0%, var(--lg-accent-hover) 100%);
+  --t-card-radius: var(--lg-radius-lg);
+  --t-card-shadow: var(--lg-shadow-card);
+  --t-card-shadow-hover: var(--lg-shadow-pop);
+
+  --t-status-success: var(--lg-pos);     --t-status-success-bg: var(--lg-pos-fill);
+  --t-status-warning: var(--lg-warn);    --t-status-warning-bg: var(--lg-warn-fill);
+  --t-status-danger:  var(--lg-neg);     --t-status-danger-bg:  var(--lg-neg-fill);
+  --t-status-info:    var(--lg-accent);  --t-status-info-bg:    var(--lg-accent-fill);
+  --t-status-neutral: var(--lg-text-3);  --t-status-neutral-bg: rgba(152,152,158,0.16);
 }
 
 @layer base {
@@ -879,39 +1068,27 @@
    ════════════════════════════════════════════════════════════════════ */
 
 :root {
-  /* Surfaces */
-  --ink-bg:        #ffffff;
-  --ink-surface:   #ffffff;
-  --ink-surface-2: #f7f7f8;
-  /* Text scale */
-  --ink:           #0a0a0a;
-  --ink-2:         #3a3a3c;
-  --ink-3:         #86868b;
-  --ink-4:         #c7c7cc;
-  /* Lines */
-  --line:          #ececec;
-  --line-strong:   #1f1f1f;
-  /* Semantic */
-  --pos:           #0a8a4a;
-  --neg:           #c52f2a;
-  --warn:          #d97706;
+  /* Minimal tokens — agora aliasados pros --lg-* (Liquid Glass) pra
+     ficar visualmente coerente com o resto do app. Páginas que
+     escrevem var(--ink-*) inline continuam funcionando. */
+  --ink-bg:        var(--lg-bg);
+  --ink-surface:   var(--lg-material-regular);
+  --ink-surface-2: var(--lg-material-thick);
+  --ink:           var(--lg-text);
+  --ink-2:         var(--lg-text-2);
+  --ink-3:         var(--lg-text-3);
+  --ink-4:         var(--lg-text-4);
+  --line:          var(--lg-border-base);
+  --line-strong:   var(--lg-border-strong);
+  --pos:           var(--lg-pos);
+  --neg:           var(--lg-neg);
+  --warn:          var(--lg-warn);
   /* Mono font */
   --font-mono-display: var(--font-jetbrains-mono);
 }
 
-.dark {
-  --ink-bg:        #0a0a0a;
-  --ink-surface:   #0a0a0a;
-  --ink-surface-2: #141414;
-  --ink:           #fafafa;
-  --ink-2:         #c7c7cc;
-  --ink-3:         #86868b;
-  --ink-4:         #3a3a3c;
-  --line:          #1c1c1c;
-  --line-strong:   #ffffff;
-  --pos:           #4ade80;
-  --neg:           #f87171;
-}
+/* .dark herda os --ink-* via aliases acima — .dark já redefine --lg-*
+   acima neste arquivo, então --ink-* segue automaticamente. */
 
 /* Helpers minimal — escopados no root .min-shell pra não vazar
    pra outras telas. */
@@ -1134,4 +1311,98 @@
 .min-shell table th,
 .min-shell table td {
   border-color: var(--line);
+}
+
+/* ==============================================================
+ * LIQUID GLASS — classes utilitárias (Apple iOS 26 / Tahoe)
+ * ============================================================== */
+
+/* Thin material — TopBar, headers translúcidos sobre conteúdo rolando */
+.lg-glass-thin {
+  background: var(--lg-material-thin);
+  backdrop-filter: var(--lg-blur-thin);
+  -webkit-backdrop-filter: var(--lg-blur-thin);
+  border-bottom: 1px solid var(--lg-border-base);
+}
+
+/* Regular material — cards, painéis, conteúdo principal */
+.lg-glass-regular {
+  background: var(--lg-material-regular);
+  backdrop-filter: var(--lg-blur-regular);
+  -webkit-backdrop-filter: var(--lg-blur-regular);
+  border: 1px solid var(--lg-border-base);
+  border-top-color: var(--lg-border-highlight);
+  border-radius: var(--lg-radius-lg);
+}
+
+/* Thick material — modais, sheets, FloatingResume, popovers */
+.lg-glass-thick {
+  background: var(--lg-material-thick);
+  backdrop-filter: var(--lg-blur-thick);
+  -webkit-backdrop-filter: var(--lg-blur-thick);
+  border: 1px solid var(--lg-border-base);
+  border-top-color: var(--lg-border-highlight);
+  border-radius: var(--lg-radius-xl);
+  box-shadow: var(--lg-shadow-pop);
+}
+
+/* Fallback browsers sem backdrop-filter (Firefox antigo, IE) */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .lg-glass-thin, .lg-glass-regular, .lg-glass-thick {
+    background: var(--lg-surface-solid);
+  }
+}
+
+/* Controles — hover/focus glass shimmer (usado em buttons/inputs ghost) */
+.lg-control {
+  transition: background var(--lg-fast), border-color var(--lg-fast), box-shadow var(--lg-fast);
+}
+.lg-control:hover { background: var(--lg-material-thick); }
+.lg-control:focus-visible {
+  outline: none;
+  border-color: var(--lg-accent);
+  box-shadow: 0 0 0 4px var(--lg-accent-fill);
+}
+
+/* Reescreve .bento-card pra usar glass material regular */
+.bento-card {
+  background: var(--lg-material-regular);
+  backdrop-filter: var(--lg-blur-regular);
+  -webkit-backdrop-filter: var(--lg-blur-regular);
+  border: 1px solid var(--lg-border-base);
+  border-top-color: var(--lg-border-highlight);
+  border-radius: var(--lg-radius-lg);
+  box-shadow: var(--lg-shadow-card);
+  transition: transform var(--lg-fast), box-shadow var(--lg-fast), background var(--lg-fast);
+}
+.bento-card:hover {
+  background: var(--lg-material-thick);
+  box-shadow: var(--lg-shadow-pop);
+  transform: translateY(-1px);
+}
+
+/* Reescreve .glass-card legado pra coincidir com glass-regular */
+.glass-card {
+  background: var(--lg-material-regular);
+  backdrop-filter: var(--lg-blur-regular);
+  -webkit-backdrop-filter: var(--lg-blur-regular);
+  border: 1px solid var(--lg-border-base);
+  border-top-color: var(--lg-border-highlight);
+  border-radius: var(--lg-radius-lg);
+}
+
+/* Reduced motion — respeita preferência do usuário */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Mobile — reduz blur thick em telas pequenas (performance) */
+@media (max-width: 768px) {
+  .lg-glass-thick {
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+  }
 }

@@ -45,8 +45,8 @@ export function PageHeader({
 }: PageHeaderProps) {
   const wrapperClasses = [
     'flex items-center justify-between pb-6 mb-6',
-    bordered ? 'border-b border-[var(--t-border)]' : '',
-    sticky ? 'sticky top-0 z-20 bg-[var(--t-surface)]/85 backdrop-blur-md -mx-6 px-6 pt-4' : '',
+    bordered ? 'border-b border-[var(--lg-border-base)]' : '',
+    sticky ? 'sticky top-0 z-20 lg-glass-thin -mx-6 px-6 pt-4' : '',
     className ?? '',
   ]
     .filter(Boolean)
@@ -56,7 +56,14 @@ export function PageHeader({
     <div className={wrapperClasses}>
       <div className="flex items-center gap-3 min-w-0">
         {icon && (
-          <div className="w-10 h-10 rounded-xl bg-[var(--t-accent)]/10 flex items-center justify-center text-[var(--t-accent)] shrink-0">
+          <div
+            className="w-10 h-10 flex items-center justify-center shrink-0"
+            style={{
+              background: 'var(--lg-accent-fill)',
+              color: 'var(--lg-accent)',
+              borderRadius: 'var(--lg-radius-md)',
+            }}
+          >
             {icon}
           </div>
         )}

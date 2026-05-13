@@ -52,7 +52,7 @@ export function TopBar({ onCommandPalette, breadcrumb, sidebarCollapsed, onToggl
   }, []);
 
   return (
-    <header className="h-[56px] bg-[var(--ink-surface)] border-b border-[var(--line)] flex items-center px-5 shrink-0 z-40" style={{ fontFamily: 'var(--font-inter-tight), var(--font-inter), system-ui, sans-serif' }}>
+    <header className="h-[56px] lg-glass-thin flex items-center px-5 shrink-0 z-40" style={{ fontFamily: 'var(--font-inter-tight), var(--font-inter), system-ui, sans-serif' }}>
       {/* Left: Logo + Greeting */}
       <div className="flex items-center gap-4 shrink-0 mr-4">
         <Logo variant="sidebar" href="/dashboard" />
@@ -158,7 +158,7 @@ export function TopBar({ onCommandPalette, breadcrumb, sidebarCollapsed, onToggl
             </button>
 
             {dropdownOpen && (
-              <div className="absolute right-0 top-full mt-2 w-56 bg-[var(--t-surface)] border border-[var(--t-border)] rounded-2xl py-1.5 z-50 dropdown-enter" style={{ boxShadow: 'var(--elevation-4)' }}>
+              <div className="absolute right-0 top-full mt-2 w-56 lg-glass-thick py-1.5 z-50 dropdown-enter">
                 <div className="px-4 py-3 border-b border-[var(--t-border)]">
                   <p className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)]">{user.nome}</p>
                   <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">{user.email}</p>

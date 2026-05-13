@@ -166,10 +166,14 @@ export function PillarSidebar({ collapsed = false, onToggle }: PillarSidebarProp
   return (
     <TooltipProvider delay={collapsed ? 100 : 600}>
       <aside
-        className={`bg-[var(--ink-surface)] border-r border-[var(--line)] flex flex-col shrink-0 overflow-hidden transition-[width] duration-200 ease-in-out ${
+        className={`lg-glass-thin flex flex-col shrink-0 overflow-hidden transition-[width] duration-200 ease-in-out ${
           collapsed ? 'w-[56px]' : 'w-[240px]'
         }`}
-        style={{ fontFamily: 'var(--font-inter-tight), var(--font-inter), system-ui, sans-serif' }}
+        style={{
+          fontFamily: 'var(--font-inter-tight), var(--font-inter), system-ui, sans-serif',
+          borderRight: '1px solid var(--lg-border-base)',
+          borderBottom: 'none',
+        }}
       >
         <nav className="flex-1 overflow-y-auto sidebar-scroll px-2 py-3">
           <div className="sidebar-content" key={activePillar}>
@@ -195,23 +199,35 @@ export function PillarSidebar({ collapsed = false, onToggle }: PillarSidebarProp
                       <Link
                         key={item.key}
                         href={item.href}
-                        className={`sidebar-item flex items-center transition-colors duration-150 relative ${
+                        className={`sidebar-item flex items-center transition-all duration-200 relative ${
                           collapsed
                             ? 'justify-center w-10 h-10 mx-auto'
                             : 'gap-3 px-3 py-2'
                         } ${
                           active
-                            ? 'text-[var(--ink)] font-medium'
+                            ? 'font-medium'
                             : 'text-[var(--ink-2)] hover:text-[var(--ink)]'
                         }`}
-                        style={{ fontSize: '13.5px', letterSpacing: '-0.005em' }}
+                        style={{
+                          fontSize: '13.5px',
+                          letterSpacing: '-0.005em',
+                          color: active ? 'var(--lg-accent)' : undefined,
+                          background: active && !collapsed ? 'var(--lg-accent-fill)' : undefined,
+                          borderRadius: active && !collapsed ? 'var(--lg-radius-md)' : undefined,
+                        }}
                       >
-                        {/* Indicador ativo: traço horizontal de 14px antes do texto (handoff minimal) */}
+                        {/* Indicador ativo Apple-style: barra lateral azul + pílula glass tinted */}
                         {active && !collapsed && (
-                          <span className="inline-block w-3.5 border-t border-[var(--ink)]" />
+                          <span
+                            className="absolute left-0 top-1.5 bottom-1.5 w-[3px]"
+                            style={{ background: 'var(--lg-accent)', borderRadius: '0 2px 2px 0' }}
+                          />
                         )}
                         {active && collapsed && (
-                          <span className="absolute left-0 top-1 bottom-1 w-[2px] bg-[var(--ink)]" />
+                          <span
+                            className="absolute left-0 top-1 bottom-1 w-[3px]"
+                            style={{ background: 'var(--lg-accent)', borderRadius: '0 2px 2px 0' }}
+                          />
                         )}
                         <Icon className={`shrink-0 ${collapsed ? 'w-5 h-5' : 'w-4 h-4'}`} />
                         {!collapsed && <span className="truncate flex-1">{item.label}</span>}
