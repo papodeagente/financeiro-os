@@ -84,9 +84,9 @@ export function MinimalPageHead({
     ) : null);
 
   return (
-    <div className="flex items-end justify-between pb-6 mb-8 border-b flex-wrap gap-4" style={{ borderColor: 'var(--line)' }}>
+    <div className="flex items-start justify-between mb-6 flex-wrap gap-4">
       <div>
-        <h1 style={{ fontSize: '42px', fontWeight: 500, letterSpacing: '-0.03em', lineHeight: 1, margin: 0 }}>
+        <h1 style={{ fontSize: '24px', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1.2, margin: 0, color: 'var(--lg-text)' }}>
           {title}
         </h1>
         {metaPadrao}

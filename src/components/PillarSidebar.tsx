@@ -33,6 +33,7 @@ export interface SidebarSection {
 
 const PLANEJAMENTO_MENU: SidebarSection[] = [
   {
+    title: 'Planejamento',
     items: [
       { key: 'custos-negocio', label: 'Custos do negócio', icon: Wallet, href: '/planejamento/custos' },
       { key: 'fluxogramas', label: 'Fluxogramas', icon: Workflow, href: '/planejamento/fluxogramas' },
@@ -43,9 +44,15 @@ const PLANEJAMENTO_MENU: SidebarSection[] = [
 
 const METAS_MENU: SidebarSection[] = [
   {
+    title: 'Visão geral',
     items: [
       { key: 'dashboard-kpi', label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
       { key: 'metas-ranking', label: 'Metas da equipe', icon: Medal, href: '/equipe/metas' },
+    ],
+  },
+  {
+    title: 'Equipe',
+    items: [
       { key: 'comissoes', label: 'Comissões', icon: Percent, href: '/equipe/comissoes' },
       { key: 'planos-comissao', label: 'Planos de comissão', icon: Settings, href: '/equipe/planos-comissao' },
     ],
@@ -54,9 +61,15 @@ const METAS_MENU: SidebarSection[] = [
 
 const PRODUTOS_MENU: SidebarSection[] = [
   {
+    title: 'Catálogo',
     items: [
       { key: 'grupos', label: 'Produtos', icon: FolderOpen, href: '/grupos' },
       { key: 'gestao-grupos', label: 'Gestão de grupos', icon: Users, href: '/grupos/gestao' },
+    ],
+  },
+  {
+    title: 'Vendas',
+    items: [
       { key: 'minhas-propostas', label: 'Propostas', icon: FileText, href: '/propostas' },
       { key: 'orcamentos', label: 'Orçamentos', icon: BarChart3, href: '/vendas/orcamentos' },
       { key: 'nova-venda', label: 'Nova venda', icon: ShoppingCart, href: '/vendas/nova' },
@@ -166,13 +179,13 @@ export function PillarSidebar({ collapsed = false, onToggle }: PillarSidebarProp
   return (
     <TooltipProvider delay={collapsed ? 100 : 600}>
       <aside
-        className={`lg-glass-thin flex flex-col shrink-0 overflow-hidden transition-[width] duration-200 ease-in-out ${
-          collapsed ? 'w-[56px]' : 'w-[240px]'
+        className={`flex flex-col shrink-0 overflow-hidden transition-[width] duration-200 ease-in-out ${
+          collapsed ? 'w-[56px]' : 'w-[220px]'
         }`}
         style={{
-          fontFamily: 'var(--font-inter-tight), var(--font-inter), system-ui, sans-serif',
-          borderRight: '1px solid var(--lg-border-base)',
-          borderBottom: 'none',
+          fontFamily: 'var(--font-inter), system-ui, sans-serif',
+          background: 'var(--lg-surface-solid)',
+          borderRight: '1px solid #F1F5F9',
         }}
       >
         <nav className="flex-1 overflow-y-auto sidebar-scroll px-2 py-3">
@@ -181,14 +194,14 @@ export function PillarSidebar({ collapsed = false, onToggle }: PillarSidebarProp
               <div key={sIdx} className={sIdx > 0 ? 'mt-4' : ''}>
                 {section.title && !collapsed && (
                   <div
-                    className="px-3 mb-2 mt-1 pb-1.5 text-[10px] font-medium uppercase border-b border-[var(--line)]"
-                    style={{ letterSpacing: '0.12em', color: 'var(--ink-3)' }}
+                    className="px-3 pt-3 pb-2 text-[11px] font-semibold uppercase"
+                    style={{ letterSpacing: '0.05em', color: 'var(--lg-text-4)' }}
                   >
                     {section.title}
                   </div>
                 )}
                 {section.title && collapsed && (
-                  <div className="mx-2 mb-1.5 border-t border-[var(--line)]" />
+                  <div className="mx-2 mb-1.5 border-t border-[var(--lg-border-light,#F1F5F9)]" />
                 )}
                 <div className="space-y-0.5">
                   {section.items.map(item => {
@@ -199,37 +212,22 @@ export function PillarSidebar({ collapsed = false, onToggle }: PillarSidebarProp
                       <Link
                         key={item.key}
                         href={item.href}
-                        className={`sidebar-item flex items-center transition-all duration-200 relative ${
+                        className={`sidebar-item flex items-center transition-colors duration-150 ${
                           collapsed
-                            ? 'justify-center w-10 h-10 mx-auto'
-                            : 'gap-3 px-3 py-2'
+                            ? 'justify-center w-10 h-10 mx-auto rounded-lg'
+                            : 'gap-2.5 px-3 py-2 rounded-lg'
                         } ${
                           active
-                            ? 'font-medium'
-                            : 'text-[var(--ink-2)] hover:text-[var(--ink)]'
+                            ? 'font-semibold'
+                            : 'hover:bg-[#F1F5F9]'
                         }`}
                         style={{
-                          fontSize: '13.5px',
-                          letterSpacing: '-0.005em',
-                          color: active ? 'var(--lg-accent)' : undefined,
-                          background: active && !collapsed ? 'var(--lg-accent-fill)' : undefined,
-                          borderRadius: active && !collapsed ? 'var(--lg-radius-md)' : undefined,
+                          fontSize: '14px',
+                          color: active ? 'var(--lg-accent)' : 'var(--lg-text-2)',
+                          background: active ? 'var(--lg-accent-fill)' : undefined,
                         }}
                       >
-                        {/* Indicador ativo Apple-style: barra lateral azul + pílula glass tinted */}
-                        {active && !collapsed && (
-                          <span
-                            className="absolute left-0 top-1.5 bottom-1.5 w-[3px]"
-                            style={{ background: 'var(--lg-accent)', borderRadius: '0 2px 2px 0' }}
-                          />
-                        )}
-                        {active && collapsed && (
-                          <span
-                            className="absolute left-0 top-1 bottom-1 w-[3px]"
-                            style={{ background: 'var(--lg-accent)', borderRadius: '0 2px 2px 0' }}
-                          />
-                        )}
-                        <Icon className={`shrink-0 ${collapsed ? 'w-5 h-5' : 'w-4 h-4'}`} />
+                        <Icon className="shrink-0 w-[18px] h-[18px]" />
                         {!collapsed && <span className="truncate flex-1">{item.label}</span>}
                       </Link>
                     );

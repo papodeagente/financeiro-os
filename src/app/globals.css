@@ -84,61 +84,64 @@
   --sidebar-ring: #004aad;
 
   /* ============================================================
-   * LIQUID GLASS — Apple iOS 26 / macOS Tahoe design system
+   * MINIMAL DESIGN SYSTEM — slate/blue clean SaaS
    * ============================================================
-   * Materials, blur tiers, Apple system blue, radii iOS pattern.
-   * Tokens legados (--t-*, --ink-*) são aliasados no final deste
-   * bloco para herdar o novo visual sem mexer no JSX existente. */
+   * Paleta sólida sem blur, tipografia profissional, espaço em
+   * branco generoso. Tokens legados (--t-*, --ink-*) são aliasados
+   * no final deste bloco pra herdar o visual via cascata. Os nomes
+   * --lg-* permanecem pra não quebrar referências; valores foram
+   * trocados pelo design system minimal. */
 
-  /* Materials — tiered blur surfaces (light) */
-  --lg-material-thin:    rgba(255, 255, 255, 0.55);
-  --lg-material-regular: rgba(255, 255, 255, 0.72);
-  --lg-material-thick:   rgba(255, 255, 255, 0.88);
-  --lg-blur-thin:    blur(20px) saturate(180%);
-  --lg-blur-regular: blur(16px) saturate(180%);
-  --lg-blur-thick:   blur(28px) saturate(180%);
+  /* Surfaces — sólidas, sem translucência */
+  --lg-material-thin:    #FFFFFF;
+  --lg-material-regular: #FFFFFF;
+  --lg-material-thick:   #FFFFFF;
+  --lg-blur-thin:    none;
+  --lg-blur-regular: none;
+  --lg-blur-thick:   none;
 
-  /* Background base (sob o glass) — iOS systemGroupedBackground */
-  --lg-bg:            #f2f2f7;
-  --lg-bg-deep:       #ffffff;
-  --lg-surface-solid: #ffffff;
+  /* Backgrounds */
+  --lg-bg:            #F8FAFC;
+  --lg-bg-deep:       #FFFFFF;
+  --lg-surface-solid: #FFFFFF;
 
-  /* Borders — duas camadas (highlight superior + base inferior) */
-  --lg-border-highlight: rgba(255, 255, 255, 0.5);
-  --lg-border-base:      rgba(0, 0, 0, 0.08);
-  --lg-border-strong:    rgba(0, 0, 0, 0.16);
+  /* Borders */
+  --lg-border-highlight: transparent;
+  --lg-border-base:      #E2E8F0;
+  --lg-border-strong:    #CBD5E1;
+  --lg-border-light:     #F1F5F9;
 
-  /* Text — paleta neutra Apple */
-  --lg-text:    #1d1d1f;
-  --lg-text-2:  #3a3a3c;
-  --lg-text-3:  #8e8e93;
-  --lg-text-4:  #c7c7cc;
+  /* Text — slate scale */
+  --lg-text:    #0F172A;
+  --lg-text-2:  #475569;
+  --lg-text-3:  #64748B;
+  --lg-text-4:  #94A3B8;
 
-  /* Accent — Apple system blue */
-  --lg-accent:        #0a84ff;
-  --lg-accent-fill:   rgba(10, 132, 255, 0.18);
-  --lg-accent-hover:  #2a9bff;
+  /* Accent — Tailwind blue-600 */
+  --lg-accent:        #2563EB;
+  --lg-accent-fill:   #EFF6FF;
+  --lg-accent-hover:  #1D4ED8;
 
-  /* Semantic */
-  --lg-pos:       #30d158;  --lg-pos-fill:  rgba(48, 209, 88, 0.16);
-  --lg-neg:       #ff453a;  --lg-neg-fill:  rgba(255, 69, 58, 0.16);
-  --lg-warn:      #ff9f0a;  --lg-warn-fill: rgba(255, 159, 10, 0.16);
+  /* Semantic — moderado, sem cores saturadas */
+  --lg-pos:  #10B981;  --lg-pos-fill:  #ECFDF5;
+  --lg-neg:  #EF4444;  --lg-neg-fill:  #FEF2F2;
+  --lg-warn: #F59E0B;  --lg-warn-fill: #FFFBEB;
 
-  /* Shadow — uma sombra única por nível, suave */
-  --lg-shadow-card: 0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06);
-  --lg-shadow-pop:  0 12px 32px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.06);
+  /* Shadow — uma sombra única e sutil */
+  --lg-shadow-card: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
+  --lg-shadow-pop:  0 4px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.04);
 
-  /* Radii — iOS pattern */
-  --lg-radius-sm: 8px;
-  --lg-radius-md: 14px;
-  --lg-radius-lg: 20px;
-  --lg-radius-xl: 28px;
+  /* Radii */
+  --lg-radius-sm: 6px;
+  --lg-radius-md: 8px;
+  --lg-radius-lg: 12px;
+  --lg-radius-xl: 16px;
 
-  /* Motion Apple */
+  /* Motion */
   --lg-ease:   cubic-bezier(0.4, 0.0, 0.2, 1);
   --lg-spring: cubic-bezier(0.32, 0.72, 0, 1);
-  --lg-fast:   200ms var(--lg-ease);
-  --lg-base:   350ms var(--lg-spring);
+  --lg-fast:   150ms var(--lg-ease);
+  --lg-base:   200ms var(--lg-ease);
 
   /* Semantic tokens for components */
   --t-bg: #F7F8FC;
@@ -383,35 +386,36 @@
   --t-card-shadow-hover: var(--elevation-3);
 
   /* ============================================================
-   * LIQUID GLASS — dark theme (macOS Tahoe Pro Display style)
+   * MINIMAL — dark theme (slate-900 base, mesma estrutura)
    * ============================================================ */
-  --lg-material-thin:    rgba(28, 28, 30, 0.55);
-  --lg-material-regular: rgba(28, 28, 30, 0.72);
-  --lg-material-thick:   rgba(28, 28, 30, 0.92);
+  --lg-material-thin:    #1E293B;
+  --lg-material-regular: #1E293B;
+  --lg-material-thick:   #1E293B;
 
-  --lg-bg:            #000000;
-  --lg-bg-deep:       #0a0a0c;
-  --lg-surface-solid: #1c1c1e;
+  --lg-bg:            #0F172A;
+  --lg-bg-deep:       #020617;
+  --lg-surface-solid: #1E293B;
 
-  --lg-border-highlight: rgba(255, 255, 255, 0.12);
-  --lg-border-base:      rgba(255, 255, 255, 0.08);
-  --lg-border-strong:    rgba(255, 255, 255, 0.16);
+  --lg-border-highlight: transparent;
+  --lg-border-base:      #334155;
+  --lg-border-strong:    #475569;
+  --lg-border-light:     #1E293B;
 
-  --lg-text:    #f5f5f7;
-  --lg-text-2:  #ebebf5;
-  --lg-text-3:  #98989e;
-  --lg-text-4:  #48484a;
+  --lg-text:    #F1F5F9;
+  --lg-text-2:  #CBD5E1;
+  --lg-text-3:  #94A3B8;
+  --lg-text-4:  #64748B;
 
-  --lg-accent:        #0a84ff;
-  --lg-accent-fill:   rgba(10, 132, 255, 0.22);
-  --lg-accent-hover:  #409cff;
+  --lg-accent:        #3B82F6;
+  --lg-accent-fill:   rgba(59, 130, 246, 0.16);
+  --lg-accent-hover:  #60A5FA;
 
-  --lg-pos:  #30d158; --lg-pos-fill:  rgba(48, 209, 88, 0.20);
-  --lg-neg:  #ff453a; --lg-neg-fill:  rgba(255, 69, 58, 0.20);
-  --lg-warn: #ff9f0a; --lg-warn-fill: rgba(255, 159, 10, 0.20);
+  --lg-pos:  #34D399; --lg-pos-fill:  rgba(52, 211, 153, 0.14);
+  --lg-neg:  #F87171; --lg-neg-fill:  rgba(248, 113, 113, 0.14);
+  --lg-warn: #FBBF24; --lg-warn-fill: rgba(251, 191, 36, 0.14);
 
-  --lg-shadow-card: 0 1px 2px rgba(0,0,0,0.30), 0 8px 24px rgba(0,0,0,0.40);
-  --lg-shadow-pop:  0 12px 32px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.30);
+  --lg-shadow-card: 0 1px 3px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.15);
+  --lg-shadow-pop:  0 8px 24px rgba(0,0,0,0.35), 0 2px 6px rgba(0,0,0,0.20);
 
   /* Aliases dos tokens legados — dark */
   --t-bg: var(--lg-bg);
@@ -1314,95 +1318,244 @@
 }
 
 /* ==============================================================
- * LIQUID GLASS — classes utilitárias (Apple iOS 26 / Tahoe)
+ * MINIMAL DESIGN SYSTEM — surface helpers (clean, sólido, sem blur)
  * ============================================================== */
 
-/* Thin material — TopBar, headers translúcidos sobre conteúdo rolando */
+/* TopBar / Sidebar — fundo branco sólido + border base */
 .lg-glass-thin {
   background: var(--lg-material-thin);
-  backdrop-filter: var(--lg-blur-thin);
-  -webkit-backdrop-filter: var(--lg-blur-thin);
   border-bottom: 1px solid var(--lg-border-base);
 }
 
-/* Regular material — cards, painéis, conteúdo principal */
+/* Cards / painéis principais */
 .lg-glass-regular {
   background: var(--lg-material-regular);
-  backdrop-filter: var(--lg-blur-regular);
-  -webkit-backdrop-filter: var(--lg-blur-regular);
   border: 1px solid var(--lg-border-base);
-  border-top-color: var(--lg-border-highlight);
   border-radius: var(--lg-radius-lg);
 }
 
-/* Thick material — modais, sheets, FloatingResume, popovers */
+/* Modais / sheets / popovers */
 .lg-glass-thick {
   background: var(--lg-material-thick);
-  backdrop-filter: var(--lg-blur-thick);
-  -webkit-backdrop-filter: var(--lg-blur-thick);
   border: 1px solid var(--lg-border-base);
-  border-top-color: var(--lg-border-highlight);
-  border-radius: var(--lg-radius-xl);
+  border-radius: var(--lg-radius-lg);
   box-shadow: var(--lg-shadow-pop);
 }
 
-/* Fallback browsers sem backdrop-filter (Firefox antigo, IE) */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .lg-glass-thin, .lg-glass-regular, .lg-glass-thick {
-    background: var(--lg-surface-solid);
-  }
-}
-
-/* Controles — hover/focus glass shimmer (usado em buttons/inputs ghost) */
 .lg-control {
   transition: background var(--lg-fast), border-color var(--lg-fast), box-shadow var(--lg-fast);
 }
-.lg-control:hover { background: var(--lg-material-thick); }
+.lg-control:hover { background: var(--lg-bg); }
 .lg-control:focus-visible {
   outline: none;
   border-color: var(--lg-accent);
-  box-shadow: 0 0 0 4px var(--lg-accent-fill);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
-/* Reescreve .bento-card pra usar glass material regular */
+/* Cards do bento layout — branco sólido com sombra sutil */
 .bento-card {
-  background: var(--lg-material-regular);
-  backdrop-filter: var(--lg-blur-regular);
-  -webkit-backdrop-filter: var(--lg-blur-regular);
+  background: var(--lg-surface-solid);
   border: 1px solid var(--lg-border-base);
-  border-top-color: var(--lg-border-highlight);
   border-radius: var(--lg-radius-lg);
   box-shadow: var(--lg-shadow-card);
-  transition: transform var(--lg-fast), box-shadow var(--lg-fast), background var(--lg-fast);
+  transition: box-shadow var(--lg-fast), transform var(--lg-fast);
 }
 .bento-card:hover {
-  background: var(--lg-material-thick);
   box-shadow: var(--lg-shadow-pop);
   transform: translateY(-1px);
 }
-
-/* Reescreve .glass-card legado pra coincidir com glass-regular */
 .glass-card {
-  background: var(--lg-material-regular);
-  backdrop-filter: var(--lg-blur-regular);
-  -webkit-backdrop-filter: var(--lg-blur-regular);
+  background: var(--lg-surface-solid);
   border: 1px solid var(--lg-border-base);
-  border-top-color: var(--lg-border-highlight);
   border-radius: var(--lg-radius-lg);
+  box-shadow: var(--lg-shadow-card);
 }
 
-/* Reduced motion — respeita preferência do usuário */
+/* ==============================================================
+ * Classes do prompt de padronização visual
+ * ============================================================== */
+
+/* Page header — título 24px/700 + subtítulo 14px/400 */
+.page-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--lg-text);
+  line-height: 1.2;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+.page-subtitle {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--lg-text-3);
+  margin-top: 4px;
+  margin-bottom: 0;
+}
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* KPI cards */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+.kpi-card {
+  background: var(--lg-surface-solid);
+  border: 1px solid var(--lg-border-base);
+  border-radius: var(--lg-radius-lg);
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: var(--lg-shadow-card);
+}
+.kpi-card__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--lg-text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.kpi-card__value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--lg-text);
+  line-height: 1.15;
+}
+.kpi-card__meta {
+  font-size: 12px;
+  color: var(--lg-text-4);
+}
+
+/* Empty state */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 24px;
+  text-align: center;
+}
+.empty-state__icon {
+  width: 48px;
+  height: 48px;
+  color: #CBD5E1;
+  margin-bottom: 16px;
+  stroke-width: 1.5;
+}
+.empty-state__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--lg-text-2);
+  margin-bottom: 4px;
+}
+.empty-state__description {
+  font-size: 13px;
+  color: var(--lg-text-4);
+  max-width: 320px;
+  line-height: 1.5;
+}
+
+/* Banners */
+.banner-info {
+  background: #EFF6FF;
+  border: 1px solid #BFDBFE;
+  border-radius: 10px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 13px;
+  color: #1E40AF;
+  line-height: 1.5;
+}
+.banner-warning {
+  background: #FFFBEB;
+  border: 1px solid #FDE68A;
+  border-radius: 10px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 13px;
+  color: #92400E;
+  line-height: 1.5;
+}
+
+/* Badges — 5 variantes padronizadas */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.badge--success  { background: #ECFDF5; color: #065F46; }
+.badge--warning  { background: #FFFBEB; color: #92400E; }
+.badge--danger   { background: #FEF2F2; color: #991B1B; }
+.badge--info     { background: #EFF6FF; color: #1E40AF; }
+.badge--neutral  { background: #F1F5F9; color: #475569; }
+
+/* Filtros padronizados */
+.filters-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.filter-input, .filter-select {
+  height: 40px;
+  border: 1px solid var(--lg-border-base);
+  border-radius: 8px;
+  padding: 0 12px;
+  font-size: 14px;
+  color: var(--lg-text);
+  background: var(--lg-surface-solid);
+  outline: none;
+  transition: border-color var(--lg-fast), box-shadow var(--lg-fast);
+}
+.filter-input:focus, .filter-select:focus {
+  border-color: var(--lg-accent);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* Table actions */
+.table-action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--lg-text-4);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--lg-fast), color var(--lg-fast);
+}
+.table-action-btn:hover {
+  background: #F1F5F9;
+  color: var(--lg-text-2);
+}
+.table-action-btn--danger:hover {
+  background: #FEF2F2;
+  color: var(--lg-neg);
+}
+
+/* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
-  }
-}
-
-/* Mobile — reduz blur thick em telas pequenas (performance) */
-@media (max-width: 768px) {
-  .lg-glass-thick {
-    backdrop-filter: blur(16px) saturate(160%);
-    -webkit-backdrop-filter: blur(16px) saturate(160%);
   }
 }
