@@ -35,6 +35,18 @@ export interface Params {
   cortesia_apto?: 'sgl' | 'dbl' | 'tpl' | 'qdp';
 }
 
+// Passageiros da proposta (mesmo quando não é grupo). Cada linha distingue
+// adulto (ADT) ou criança (CHD) com idade 0-12. Usado para calcular o
+// preço total por pessoa e gerar proposta detalhada — quando preenchido,
+// alimenta automaticamente qtd_min_pax dos cálculos e qtd_adt/qtd_chd
+// dos trechos aéreos.
+export interface Passageiro {
+  id: string;
+  tipo: 'ADT' | 'CHD';
+  idade?: number; // 0-12, obrigatório quando tipo === 'CHD'
+  nome?: string;
+}
+
 export interface CambioItem {
   valor: number;
   moeda: string;
@@ -259,6 +271,10 @@ export interface GrupoViagem {
   trechos: Trecho[];
   navio_info: NavioInfo;
   params: Params;
+  // Lista de passageiros da proposta (ADT/CHD + idade 0-12). Opcional —
+  // quando vazio, qtd_min_pax e qtd_adt/qtd_chd dos trechos são editados
+  // manualmente. Quando preenchido, é a fonte de verdade.
+  passageiros?: Passageiro[];
   cambio: Record<string, CambioItem>;
   links: Record<string, string>;
   descricao_orcamento: string;

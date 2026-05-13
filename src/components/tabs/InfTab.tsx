@@ -1,14 +1,15 @@
 'use client';
 
-import { GrupoViagem, SERVICOS, MOEDAS } from '@/lib/types';
-import { createPeriodo, createTrecho } from '@/lib/defaults';
+import { GrupoViagem, Passageiro, SERVICOS, MOEDAS } from '@/lib/types';
+import { createPassageiro, createPeriodo, createTrecho } from '@/lib/defaults';
 import { calcDiarias } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Users, UserPlus, RefreshCw } from 'lucide-react';
+import { toast } from '@/lib/toast';
 
 interface Props {
   grupo: GrupoViagem;
@@ -17,6 +18,48 @@ interface Props {
 
 export function InfTab({ grupo, onChange }: Props) {
   const update = (partial: Partial<GrupoViagem>) => onChange({ ...grupo, ...partial });
+
+  // ---- Passageiros ---------------------------------------------------
+  const passageiros: Passageiro[] = grupo.passageiros || [];
+  const qtdAdt = passageiros.filter(p => p.tipo === 'ADT').length;
+  const qtdChd = passageiros.filter(p => p.tipo === 'CHD').length;
+  const totalPax = passageiros.length;
+
+  const setPassageiros = (lista: Passageiro[]) => update({ passageiros: lista });
+
+  const addPassageiro = (tipo: 'ADT' | 'CHD') => {
+    setPassageiros([...passageiros, createPassageiro(tipo)]);
+  };
+
+  const updatePassageiro = (id: string, patch: Partial<Passageiro>) => {
+    setPassageiros(passageiros.map(p => {
+      if (p.id !== id) return p;
+      const next = { ...p, ...patch };
+      // Quando muda CHD→ADT, zera idade. Quando muda ADT→CHD, default 0.
+      if (patch.tipo === 'ADT') next.idade = undefined;
+      else if (patch.tipo === 'CHD' && next.idade === undefined) next.idade = 0;
+      return next;
+    }));
+  };
+
+  const removePassageiro = (id: string) => {
+    setPassageiros(passageiros.filter(p => p.id !== id));
+  };
+
+  // Aplica os passageiros como fonte de verdade: preenche qtd_min_pax
+  // (usado nos cálculos por pax) e qtd_adt/qtd_chd de cada trecho aéreo.
+  const aplicarAosCalculos = () => {
+    if (totalPax === 0) return;
+    const trechosSync = grupo.trechos.map(t => ({ ...t, qtd_adt: qtdAdt, qtd_chd: qtdChd }));
+    update({
+      passageiros,
+      trechos: trechosSync,
+      params: { ...grupo.params, qtd_min_pax: totalPax },
+    });
+    toast.success(`${totalPax} passageiro${totalPax > 1 ? 's' : ''} aplicados`, `${qtdAdt} ADT · ${qtdChd} CHD em ${grupo.trechos.length} trecho${grupo.trechos.length !== 1 ? 's' : ''} aéreo${grupo.trechos.length !== 1 ? 's' : ''}`);
+  };
+
+  // ---- Períodos ------------------------------------------------------
 
   const updatePeriodo = (idx: number, field: string, value: string | null) => {
     const periodos = [...grupo.periodos];
@@ -79,6 +122,100 @@ export function InfTab({ grupo, onChange }: Props) {
           <Label>Origem x Destino</Label>
           <Input value={grupo.origem_destino} onChange={e => update({ origem_destino: e.target.value })} placeholder="São Paulo x Lisboa" />
         </div>
+      </div>
+
+      {/* Passageiros — fonte de verdade pra qtd_pax e qtd_adt/chd nos
+          trechos. Disponível pra GRUPO e PROPOSTA (mesmo quando não é
+          grupo o vendedor pode listar os pax da proposta com idades). */}
+      <div className="border border-[var(--t-border)] bg-[var(--t-surface)] rounded-xl overflow-hidden">
+        <div className="px-4 py-3 flex items-center justify-between border-b border-[var(--t-border)]">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-[var(--t-text-secondary)]" />
+            <h3 className="text-sm font-semibold text-[var(--t-text)]">Passageiros</h3>
+            {totalPax > 0 && (
+              <span className="text-[11px] text-[var(--t-text-muted)] ml-2">
+                {totalPax} {totalPax === 1 ? 'pessoa' : 'pessoas'} ·
+                {' '}<b className="text-[var(--t-text-secondary)]">{qtdAdt}</b> adulto{qtdAdt !== 1 ? 's' : ''} ·
+                {' '}<b className="text-[var(--t-text-secondary)]">{qtdChd}</b> criança{qtdChd !== 1 ? 's' : ''}
+                {qtdChd > 0 && (
+                  <>
+                    {' '}<span className="text-[var(--t-text-muted)]">(idades {passageiros.filter(p => p.tipo === 'CHD').map(p => p.idade ?? 0).join(', ')})</span>
+                  </>
+                )}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => addPassageiro('ADT')} className="h-8">
+              <UserPlus className="w-3.5 h-3.5 mr-1" /> Adulto
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => addPassageiro('CHD')} className="h-8">
+              <UserPlus className="w-3.5 h-3.5 mr-1" /> Criança
+            </Button>
+          </div>
+        </div>
+
+        {passageiros.length === 0 ? (
+          <div className="px-4 py-6 text-center">
+            <Users className="w-6 h-6 text-[var(--t-text-muted)] mx-auto mb-2" />
+            <p className="text-sm text-[var(--t-text-secondary)] mb-1">Nenhum passageiro cadastrado ainda.</p>
+            <p className="text-xs text-[var(--t-text-muted)]">
+              Liste todas as pessoas da proposta (adulto / criança com idade) para gerar o preço total por pessoa.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="divide-y divide-[var(--t-border)]">
+              {passageiros.map((p, i) => (
+                <div key={p.id} className="px-4 py-2.5 grid grid-cols-[24px_120px_minmax(120px,180px)_1fr_32px] items-center gap-3">
+                  <div className="text-[11px] font-mono text-[var(--t-text-muted)] tabular-nums">{i + 1}.</div>
+                  <select
+                    value={p.tipo}
+                    onChange={e => updatePassageiro(p.id, { tipo: e.target.value as 'ADT' | 'CHD' })}
+                    className="h-8 px-2 rounded-md border border-[var(--t-border)] bg-[var(--t-input-bg)] text-sm text-[var(--t-text)]"
+                  >
+                    <option value="ADT">Adulto</option>
+                    <option value="CHD">Criança</option>
+                  </select>
+                  {p.tipo === 'CHD' ? (
+                    <select
+                      value={p.idade ?? 0}
+                      onChange={e => updatePassageiro(p.id, { idade: parseInt(e.target.value) })}
+                      className="h-8 px-2 rounded-md border border-[var(--t-border)] bg-[var(--t-input-bg)] text-sm text-[var(--t-text)]"
+                    >
+                      {Array.from({ length: 13 }, (_, n) => (
+                        <option key={n} value={n}>
+                          {n === 0 ? 'Menor de 1 ano' : `${n} ${n === 1 ? 'ano' : 'anos'}`}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="h-8 flex items-center px-2 text-xs text-[var(--t-text-muted)]">
+                      Idade adulta
+                    </div>
+                  )}
+                  <Input
+                    value={p.nome || ''}
+                    onChange={e => updatePassageiro(p.id, { nome: e.target.value })}
+                    placeholder="Nome (opcional)"
+                    className="h-8"
+                  />
+                  <Button variant="ghost" size="sm" onClick={() => removePassageiro(p.id)} className="h-8 w-8 p-0 text-red-500" title="Remover passageiro">
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <div className="px-4 py-2.5 bg-[var(--t-surface-hover)] flex items-center justify-between gap-3 text-xs text-[var(--t-text-secondary)]">
+              <span>
+                Esses passageiros alimentam <b className="text-[var(--t-text)]">qtd. ADT/CHD</b> dos trechos aéreos e a <b className="text-[var(--t-text)]">qtd. de pax</b> usada nos cálculos por pessoa.
+              </span>
+              <Button variant="outline" size="sm" onClick={aplicarAosCalculos} className="h-8 shrink-0">
+                <RefreshCw className="w-3.5 h-3.5 mr-1" /> Aplicar aos trechos
+              </Button>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Períodos */}

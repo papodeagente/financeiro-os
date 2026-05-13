@@ -5,6 +5,15 @@ import { minPositivo } from './utils';
 const PAX_MAP: Record<string, number> = { sgl: 1, dbl: 2, tpl: 3, qdp: 4, chd: 1 };
 const TIPOS = ['sgl', 'dbl', 'tpl', 'qdp', 'chd'] as const;
 
+// Quantidade total de pax usada como divisor nos cálculos por pessoa.
+// Quando o grupo tem lista de passageiros cadastrados, ela é a fonte de
+// verdade (independe do tipo GRUPO/PROPOSTA). Senão, cai no qtd_min_pax
+// editado manualmente (compat com grupos legados sem lista).
+export function getPaxCount(g: GrupoViagem): number {
+  if (g.passageiros && g.passageiros.length > 0) return g.passageiros.length;
+  return g.params.qtd_min_pax || 1;
+}
+
 // "Melhor preço de venda" — pega o MAIOR valor preenchido (não mais barato).
 // Faz sentido porque venda é receita: quem cobra mais e ainda fecha é a
 // referência. Retorna 0 se nenhuma fonte preencheu o campo.
@@ -75,7 +84,7 @@ export function calcRecTotals(g: GrupoViagem) {
 
 // CAR totals
 export function calcCarTotals(g: GrupoViagem) {
-  const minPax = g.params.qtd_min_pax || 1;
+  const minPax = getPaxCount(g);
   let totalPorPax = 0;
   let totalPorPaxVenda = 0;
   let hasVenda = false;
@@ -93,7 +102,7 @@ export function calcCarTotals(g: GrupoViagem) {
 
 // GUIA totals
 export function calcGuiaTotals(g: GrupoViagem) {
-  const minPax = g.params.qtd_min_pax || 1;
+  const minPax = getPaxCount(g);
   let totalPorPax = 0;
   let totalPorPaxVenda = 0;
   let hasVenda = false;
@@ -169,7 +178,7 @@ export function calcBrindeTotals(g: GrupoViagem) {
 
 // DIVULGAÇÃO totals — soma de todos os canais ativos, rateada por pax
 export function calcDivulgacaoTotals(g: GrupoViagem) {
-  const minPax = g.params.qtd_min_pax || 1;
+  const minPax = getPaxCount(g);
   const lista = g.divulgacao?.fornecedores || [];
   const totalGeral = lista.reduce((acc, f) => acc + (f.valor_total || 0), 0);
   const totalGeralVenda = lista.reduce((acc, f) => acc + (f.valor_venda_total || 0), 0);
@@ -226,7 +235,7 @@ export function calcItensIncluidos(g: GrupoViagem, tipoBase: string): ItemInclui
   const c = g.cambio;
   const params = g.params;
   const cambio = (k: string) => c[k]?.valor || 1;
-  const minPax = params.qtd_min_pax || 1;
+  const minPax = getPaxCount(g);
   const paxBase = PAX_MAP[tipoBase] || 1;
   const markup = params.markup || 0;
 
@@ -506,7 +515,7 @@ export function calcResumoFornecedores(g: GrupoViagem, tipoBase: string): Resumo
     }
   }
   // CAR
-  const minPax = g.params.qtd_min_pax || 1;
+  const minPax = getPaxCount(g);
   for (const transp of g.car?.transportes || []) {
     for (const e of transp.empresas || []) {
       const custo = Number(e.valor_veiculo) || 0;
@@ -698,7 +707,7 @@ export function calcProposta(g: GrupoViagem): PropostaResult {
   // CORTESIA — rateia o custo dos cortesias entre os pagantes
   lineValues['CORTESIA'] = {};
   const serviceKeys = ['TKT', 'HTL', 'REC', 'CAR', 'GUIA', 'SEG', 'NAVIO', 'ING', 'BRINDE', 'DIVULGACAO'];
-  const pagantes = Math.max((p.qtd_min_pax || 1) - (p.cortesia || 0), 1);
+  const pagantes = Math.max(getPaxCount(g) - (p.cortesia || 0), 1);
   for (const tipo of TIPOS) {
     const soma = serviceKeys.reduce((acc, k) => acc + (lineValues[k]?.[tipo] || 0), 0);
     lineValues['CORTESIA'][tipo] = (soma / pagantes) * p.cortesia;

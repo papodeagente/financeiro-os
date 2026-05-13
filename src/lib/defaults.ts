@@ -1,7 +1,7 @@
 import {
   GrupoViagem, Periodo, Trecho, TktTrecho, HtlHotel, RecPasseio,
   CarTransporte, GuiaDestino, SegSeguradora, NavioFornecedor, IngAtrativo,
-  BrindeFornecedor, DivulgacaoFornecedor, TKT_FONTES, HTL_FONTES,
+  BrindeFornecedor, DivulgacaoFornecedor, Passageiro, TKT_FONTES, HTL_FONTES,
 } from './types';
 import { createFinanceiroGrupo } from './financial-defaults';
 import { generateId } from './utils';
@@ -12,6 +12,10 @@ export function createPeriodo(): Periodo {
 
 export function createTrecho(): Trecho {
   return { data: null, qtd_adt: 0, qtd_chd: 0 };
+}
+
+export function createPassageiro(tipo: 'ADT' | 'CHD' = 'ADT'): Passageiro {
+  return { id: generateId(), tipo, idade: tipo === 'CHD' ? 0 : undefined };
 }
 
 export function createTktTrecho(): TktTrecho {
@@ -135,6 +139,7 @@ export function createGrupoViagem(): GrupoViagem {
       cortesia: 0, cortesia_apto: 'dbl',
     },
     cambio: Object.fromEntries(SERVICOS_KEYS.map(k => [k, { valor: 1.0, moeda: 'BRL', deadline: null }])),
+    passageiros: [],
     links: {},
     descricao_orcamento: '',
     tkt: { trechos: [createTktTrecho()] },
