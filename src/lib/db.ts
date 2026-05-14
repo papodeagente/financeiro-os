@@ -555,6 +555,36 @@ export async function initDB() {
     CREATE INDEX IF NOT EXISTS idx_grupo_documentos_grupo ON grupo_documentos(grupo_id);
     CREATE INDEX IF NOT EXISTS idx_grupo_documentos_passageiro ON grupo_documentos(passageiro_id);
     CREATE INDEX IF NOT EXISTS idx_grupo_documentos_status ON grupo_documentos(status);
+
+    -- Tarefas operacionais (Fase F) — checklist por grupo com prazo,
+    -- prioridade, responsável.
+    CREATE TABLE IF NOT EXISTS grupo_tarefas (
+      id TEXT PRIMARY KEY,
+      grupo_id TEXT NOT NULL DEFAULT '',
+      tipo TEXT NOT NULL DEFAULT 'outros',
+      status TEXT NOT NULL DEFAULT 'pendente',
+      prioridade TEXT NOT NULL DEFAULT 'media',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_grupo_tarefas_grupo ON grupo_tarefas(grupo_id);
+    CREATE INDEX IF NOT EXISTS idx_grupo_tarefas_status ON grupo_tarefas(status);
+    CREATE INDEX IF NOT EXISTS idx_grupo_tarefas_prioridade ON grupo_tarefas(prioridade);
+
+    -- Histórico de eventos (Fase F) — timeline imutável de mudanças no
+    -- grupo. Quem fez, quando, o que mudou. Não usa audit_log existente
+    -- pra manter contexto rico (entidade, dados antes/depois).
+    CREATE TABLE IF NOT EXISTS grupo_eventos (
+      id TEXT PRIMARY KEY,
+      grupo_id TEXT NOT NULL DEFAULT '',
+      tipo TEXT NOT NULL DEFAULT 'outros',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_grupo_eventos_grupo ON grupo_eventos(grupo_id);
+    CREATE INDEX IF NOT EXISTS idx_grupo_eventos_created ON grupo_eventos(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_grupo_eventos_tipo ON grupo_eventos(tipo);
   `);
 
   // ============================================================
@@ -575,6 +605,7 @@ export async function initDB() {
     'itens_venda',
     'gestao_grupos', 'grupo_periodos_vagas', 'grupo_reservas', 'grupo_materiais',
     'grupo_passageiros', 'grupo_quartos', 'grupo_documentos',
+    'grupo_tarefas', 'grupo_eventos',
   ];
 
   // ============================================================

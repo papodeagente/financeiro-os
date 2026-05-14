@@ -4,6 +4,7 @@ import { generateId } from '@/lib/utils';
 import { getTenantId } from '@/lib/tenant';
 import {
   createQuartoData,
+  registrarEvento,
   TIPO_ACOMODACAO_LABEL,
   type QuartoData,
   type TipoAcomodacaoQuarto,
@@ -134,6 +135,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ gru
      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
     [id, grupo_id, numero, tipo, capacidade, JSON.stringify(data), tenantId],
   );
+
+  await registrarEvento(pool, {
+    grupo_id, tenant_id: tenantId, tipo: 'quarto_criado',
+    descricao: `Quarto ${numero} criado (${TIPO_ACOMODACAO_LABEL[tipo].label}, capacidade ${capacidade})`,
+    entidade_id: id, entidade_label: numero,
+  });
 
   return NextResponse.json({ id, grupo_id, numero, tipo_acomodacao: tipo, capacidade, ...data });
 }

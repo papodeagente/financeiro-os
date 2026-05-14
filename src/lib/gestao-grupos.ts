@@ -345,6 +345,191 @@ export interface DocumentoData {
   aprovador?: string;
 }
 
+// ============================================================
+// TAREFAS OPERACIONAIS (Fase F)
+// ============================================================
+
+export type TarefaTipo =
+  | 'confirmar_fornecedor'
+  | 'enviar_contrato'
+  | 'coletar_documentos'
+  | 'fechar_rooming_list'
+  | 'confirmar_transporte'
+  | 'enviar_orientacoes'
+  | 'enviar_voucher'
+  | 'cobrar_inadimplentes'
+  | 'fechar_financeiro'
+  | 'enviar_pesquisa_pos'
+  | 'outros';
+
+export const TAREFA_TIPO_LABEL: Record<TarefaTipo, string> = {
+  confirmar_fornecedor: 'Confirmar fornecedor',
+  enviar_contrato: 'Enviar contrato',
+  coletar_documentos: 'Coletar documentos',
+  fechar_rooming_list: 'Fechar rooming list',
+  confirmar_transporte: 'Confirmar transporte',
+  enviar_orientacoes: 'Enviar orientações',
+  enviar_voucher: 'Enviar voucher',
+  cobrar_inadimplentes: 'Cobrar inadimplentes',
+  fechar_financeiro: 'Fechar financeiro',
+  enviar_pesquisa_pos: 'Enviar pesquisa pós-viagem',
+  outros: 'Outros',
+};
+
+export type TarefaStatus = 'pendente' | 'em_andamento' | 'concluida' | 'cancelada';
+export const TAREFA_STATUS_LABEL: Record<TarefaStatus, string> = {
+  pendente: 'Pendente',
+  em_andamento: 'Em andamento',
+  concluida: 'Concluída',
+  cancelada: 'Cancelada',
+};
+
+export type TarefaPrioridade = 'baixa' | 'media' | 'alta' | 'urgente';
+export const TAREFA_PRIORIDADE_LABEL: Record<TarefaPrioridade, { label: string; cor: string }> = {
+  baixa:    { label: 'Baixa',    cor: '#94A3B8' },
+  media:    { label: 'Média',    cor: '#2563EB' },
+  alta:     { label: 'Alta',     cor: '#F59E0B' },
+  urgente:  { label: 'Urgente',  cor: '#EF4444' },
+};
+
+export interface TarefaData {
+  titulo: string;
+  descricao?: string;
+  reserva_id?: string;
+  passageiro_id?: string;
+  responsavel_id?: string;
+  responsavel_nome?: string;
+  prazo?: string;            // YYYY-MM-DD
+  observacoes?: string;
+  data_conclusao?: string;
+  concluida_por?: string;
+}
+
+export function createTarefaData(titulo: string): TarefaData {
+  return {
+    titulo,
+    descricao: '',
+    reserva_id: '',
+    passageiro_id: '',
+    responsavel_id: '',
+    responsavel_nome: '',
+    prazo: '',
+    observacoes: '',
+  };
+}
+
+// ============================================================
+// HISTÓRICO / AUDITORIA (Fase F)
+// ============================================================
+
+export type EventoTipo =
+  | 'grupo_criado' | 'grupo_alterado'
+  | 'reserva_criada' | 'reserva_confirmada' | 'reserva_cancelada' | 'reserva_status_alterado'
+  | 'venda_gerada'
+  | 'passageiro_adicionado' | 'passageiro_alterado' | 'passageiro_removido'
+  | 'quarto_criado' | 'quarto_alterado' | 'quarto_removido' | 'quarto_bloqueado' | 'quarto_desbloqueado'
+  | 'passageiro_alocado' | 'passageiro_desalocado'
+  | 'documento_criado' | 'documento_aprovado' | 'documento_reprovado' | 'documento_atualizado' | 'documento_removido'
+  | 'material_anexado' | 'material_removido'
+  | 'despesa_vinculada' | 'despesa_desvinculada'
+  | 'tarefa_criada' | 'tarefa_concluida' | 'tarefa_cancelada'
+  | 'kanban_stage_alterado'
+  | 'outros';
+
+export const EVENTO_TIPO_LABEL: Record<EventoTipo, string> = {
+  grupo_criado: 'Grupo criado',
+  grupo_alterado: 'Grupo alterado',
+  reserva_criada: 'Reserva criada',
+  reserva_confirmada: 'Reserva confirmada',
+  reserva_cancelada: 'Reserva cancelada',
+  reserva_status_alterado: 'Status da reserva alterado',
+  venda_gerada: 'Venda gerada',
+  passageiro_adicionado: 'Passageiro adicionado',
+  passageiro_alterado: 'Passageiro alterado',
+  passageiro_removido: 'Passageiro removido',
+  quarto_criado: 'Quarto criado',
+  quarto_alterado: 'Quarto alterado',
+  quarto_removido: 'Quarto removido',
+  quarto_bloqueado: 'Quarto bloqueado',
+  quarto_desbloqueado: 'Quarto desbloqueado',
+  passageiro_alocado: 'Passageiro alocado a quarto',
+  passageiro_desalocado: 'Passageiro removido do quarto',
+  documento_criado: 'Documento criado',
+  documento_aprovado: 'Documento aprovado',
+  documento_reprovado: 'Documento reprovado',
+  documento_atualizado: 'Documento atualizado',
+  documento_removido: 'Documento removido',
+  material_anexado: 'Material anexado',
+  material_removido: 'Material removido',
+  despesa_vinculada: 'Despesa vinculada',
+  despesa_desvinculada: 'Despesa desvinculada',
+  tarefa_criada: 'Tarefa criada',
+  tarefa_concluida: 'Tarefa concluída',
+  tarefa_cancelada: 'Tarefa cancelada',
+  kanban_stage_alterado: 'Estágio do kanban alterado',
+  outros: 'Outros',
+};
+
+export interface EventoData {
+  descricao: string;
+  reserva_id?: string;
+  passageiro_id?: string;
+  entidade_id?: string;
+  entidade_label?: string;
+  dados_anteriores?: Record<string, unknown>;
+  dados_novos?: Record<string, unknown>;
+  usuario_id?: string;
+  usuario_nome?: string;
+}
+
+// Helper para gravar evento. Recebe pool ou cliente de transação.
+// Falha silenciosamente em produção pra não bloquear operação principal
+// caso o registro de log dê erro (logado no server).
+interface PoolLike {
+  query: (text: string, values?: unknown[]) => Promise<unknown>;
+}
+
+export async function registrarEvento(
+  poolOrClient: PoolLike,
+  args: {
+    grupo_id: string;
+    tenant_id: string;
+    tipo: EventoTipo;
+    descricao: string;
+    reserva_id?: string;
+    passageiro_id?: string;
+    entidade_id?: string;
+    entidade_label?: string;
+    dados_anteriores?: Record<string, unknown>;
+    dados_novos?: Record<string, unknown>;
+    usuario_id?: string;
+    usuario_nome?: string;
+  },
+): Promise<void> {
+  // Importação dinâmica pra evitar circular dep com utils
+  const { generateId } = await import('./utils');
+  const data: EventoData = {
+    descricao: args.descricao,
+    reserva_id: args.reserva_id,
+    passageiro_id: args.passageiro_id,
+    entidade_id: args.entidade_id,
+    entidade_label: args.entidade_label,
+    dados_anteriores: args.dados_anteriores,
+    dados_novos: args.dados_novos,
+    usuario_id: args.usuario_id,
+    usuario_nome: args.usuario_nome,
+  };
+  try {
+    await poolOrClient.query(
+      `INSERT INTO grupo_eventos (id, grupo_id, tipo, data, tenant_id, created_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())`,
+      [generateId(), args.grupo_id, args.tipo, JSON.stringify(data), args.tenant_id],
+    );
+  } catch (e) {
+    console.error('[registrarEvento] falha', args.tipo, e);
+  }
+}
+
 export function createDocumentoData(): DocumentoData {
   return {
     nome_personalizado: '',

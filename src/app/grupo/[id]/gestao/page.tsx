@@ -2,7 +2,7 @@
 
 import { useEffect, useState, use, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Users, FileText, Folder, AlertTriangle, Check, Loader2, Edit2, UserCircle2, DollarSign, Bed, FileCheck2 } from 'lucide-react';
+import { ArrowLeft, Users, FileText, Folder, AlertTriangle, Check, Loader2, Edit2, UserCircle2, DollarSign, Bed, FileCheck2, ListChecks, History } from 'lucide-react';
 import { MinimalPageHead, MinimalFooter, MinimalSectionHeader } from '@/components/financeiro/MinimalPageHead';
 import { toast } from '@/lib/toast';
 import { ReservasTab } from './ReservasTab';
@@ -11,8 +11,10 @@ import { PassageirosTab } from './PassageirosTab';
 import { FinanceiroTab } from './FinanceiroTab';
 import { RoomingListTab } from './RoomingListTab';
 import { DocumentosTab } from './DocumentosTab';
+import { TarefasTab } from './TarefasTab';
+import { HistoricoTab } from './HistoricoTab';
 
-type SubAba = 'vagas' | 'reservas' | 'passageiros' | 'rooming' | 'documentos' | 'financeiro' | 'materiais';
+type SubAba = 'vagas' | 'reservas' | 'passageiros' | 'rooming' | 'documentos' | 'financeiro' | 'tarefas' | 'materiais' | 'historico';
 
 interface PeriodoVagas {
   id: string;
@@ -147,7 +149,9 @@ export default function GestaoGrupoPage({ params }: { params: Promise<{ id: stri
             { key: 'rooming', label: 'Rooming list', icon: Bed, count: 0 },
             { key: 'documentos', label: 'Documentos', icon: FileCheck2, count: 0 },
             { key: 'financeiro', label: 'Financeiro', icon: DollarSign, count: 0 },
+            { key: 'tarefas', label: 'Tarefas', icon: ListChecks, count: 0 },
             { key: 'materiais', label: 'Materiais', icon: Folder, count: data.materiais.length },
+            { key: 'historico', label: 'Histórico', icon: History, count: 0 },
           ] as const).map((t, i, arr) => {
             const ativo = aba === t.key;
             const Icon = t.icon;
@@ -326,9 +330,19 @@ export default function GestaoGrupoPage({ params }: { params: Promise<{ id: stri
           <FinanceiroTab grupoId={grupoId} origemDestino={data.grupo.origem_destino} />
         )}
 
+        {/* Aba TAREFAS */}
+        {aba === 'tarefas' && (
+          <TarefasTab grupoId={grupoId} />
+        )}
+
         {/* Aba MATERIAIS */}
         {aba === 'materiais' && (
           <MateriaisTab grupoId={grupoId} onChange={() => { void carregar(); }} />
+        )}
+
+        {/* Aba HISTÓRICO */}
+        {aba === 'historico' && (
+          <HistoricoTab grupoId={grupoId} />
         )}
 
         <MinimalFooter pageId={`gestão · ${data.grupo.grp_id || ''}`} />

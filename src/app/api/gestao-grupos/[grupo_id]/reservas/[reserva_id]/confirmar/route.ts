@@ -5,6 +5,7 @@ import { getTenantId } from '@/lib/tenant';
 import { emitirEventoCRM } from '@/lib/crm-integration';
 import {
   recalcularVagasPeriodo,
+  registrarEvento,
   type ReservaData,
   type PeriodoVagasData,
   type GestaoGrupoData,
@@ -286,6 +287,27 @@ export async function POST(
 
     // Recalcula vagas após COMMIT (função usa pool fora da transação)
     const periodoAtualizado = await recalcularVagasPeriodo(pool, reserva.periodo_id, tenantId);
+
+    // -------- 7.5 Histórico (Fase F) — fora da tx pra não bloquear
+    await registrarEvento(pool, {
+      grupo_id, tenant_id: tenantId, tipo: 'reserva_confirmada',
+      descricao: `Reserva confirmada: ${reservaData.nome_passageiro || reserva_id} — ${valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`,
+      reserva_id, entidade_id: reserva_id, entidade_label: reservaData.nome_passageiro,
+    });
+    await registrarEvento(pool, {
+      grupo_id, tenant_id: tenantId, tipo: 'venda_gerada',
+      descricao: `Venda ${numero} gerada para ${clienteNome} — ${valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} em ${parcelas}x`,
+      reserva_id, entidade_id: vendaId, entidade_label: numero,
+      dados_novos: { valor, parcelas, cliente_id: reserva.cliente_id },
+    });
+    if (novoKanbanStage) {
+      await registrarEvento(pool, {
+        grupo_id, tenant_id: tenantId, tipo: 'kanban_stage_alterado',
+        descricao: `Kanban movido automaticamente para ${novoKanbanStage}`,
+        entidade_label: novoKanbanStage,
+        dados_novos: { kanban_stage: novoKanbanStage },
+      });
+    }
 
     // -------- 8. CRM event
     try {

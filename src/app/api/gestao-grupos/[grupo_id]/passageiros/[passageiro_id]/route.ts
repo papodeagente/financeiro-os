@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { generateId } from '@/lib/utils';
 import { getTenantId } from '@/lib/tenant';
-import { createPassageiroData, type PassageiroData, type ReservaData } from '@/lib/gestao-grupos';
+import { createPassageiroData, registrarEvento, type PassageiroData, type ReservaData } from '@/lib/gestao-grupos';
 
 // PUT /api/gestao-grupos/[grupo_id]/passageiros/[passageiro_id]
 // Atualiza campos do passageiro. Aceita também ids virtuais "legado:RESERVA_ID":
@@ -136,9 +136,21 @@ export async function DELETE(
     return NextResponse.json({ ok: true, _legado: true });
   }
 
+  // Pega nome antes de remover pra evento
+  const { rows: paxR } = await pool.query(
+    `SELECT nome_completo FROM grupo_passageiros WHERE id = $1 AND grupo_id = $2 AND tenant_id = $3`,
+    [passageiro_id, grupo_id, tenantId],
+  );
+  const nome = paxR[0]?.nome_completo || passageiro_id;
+
   await pool.query(
     `DELETE FROM grupo_passageiros WHERE id = $1 AND grupo_id = $2 AND tenant_id = $3`,
     [passageiro_id, grupo_id, tenantId],
   );
+  await registrarEvento(pool, {
+    grupo_id, tenant_id: tenantId, tipo: 'passageiro_removido',
+    descricao: `Passageiro removido: ${nome}`,
+    passageiro_id, entidade_id: passageiro_id, entidade_label: nome,
+  });
   return NextResponse.json({ ok: true });
 }

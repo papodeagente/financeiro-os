@@ -3,7 +3,7 @@ import pool, { initDB } from '@/lib/db';
 import { generateId } from '@/lib/utils';
 import { getTenantId } from '@/lib/tenant';
 import {
-  createDocumentoData,
+  createDocumentoData, registrarEvento,
   DOCUMENTO_TIPO_LABEL,
   DOCUMENTO_STATUS_LABEL,
   type DocumentoData,
@@ -104,6 +104,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ gru
      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
     [id, grupo_id, passageiroId, tipo, status, JSON.stringify(data), tenantId],
   );
+
+  await registrarEvento(pool, {
+    grupo_id, tenant_id: tenantId, tipo: 'documento_criado',
+    descricao: `Documento ${DOCUMENTO_TIPO_LABEL[tipo]} criado (${DOCUMENTO_STATUS_LABEL[status]})`,
+    passageiro_id: passageiroId, entidade_id: id, entidade_label: DOCUMENTO_TIPO_LABEL[tipo],
+  });
 
   return NextResponse.json({ id, grupo_id, passageiro_id: passageiroId, tipo, status, ...data });
 }

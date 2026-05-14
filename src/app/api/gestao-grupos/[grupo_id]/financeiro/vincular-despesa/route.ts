@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
 import type { ContaPagar } from '@/lib/crm-types';
+import { registrarEvento } from '@/lib/gestao-grupos';
 
 // POST /api/gestao-grupos/[grupo_id]/financeiro/vincular-despesa
 // Body: { conta_pagar_id: string }
@@ -55,6 +56,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ gru
     [grupo_id, JSON.stringify(dataNova), contaId, tenantId],
   );
 
+  await registrarEvento(pool, {
+    grupo_id, tenant_id: tenantId, tipo: 'despesa_vinculada',
+    descricao: `Despesa vinculada: ${dataNova.descricao || '(sem descrição)'} — ${(dataNova.valor_final || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`,
+    entidade_id: contaId, entidade_label: dataNova.descricao,
+    dados_novos: { fornecedor_nome: dataNova.fornecedor_nome, valor_final: dataNova.valor_final },
+  });
+
   return NextResponse.json({ ok: true, conta_pagar_id: contaId, grupo_id });
 }
 
@@ -84,6 +92,12 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ g
     `UPDATE contas_pagar SET grupo_id = '', data = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3`,
     [JSON.stringify(dataNova), contaId, tenantId],
   );
+
+  await registrarEvento(pool, {
+    grupo_id, tenant_id: tenantId, tipo: 'despesa_desvinculada',
+    descricao: `Despesa desvinculada: ${dataNova.descricao || '(sem descrição)'}`,
+    entidade_id: contaId, entidade_label: dataNova.descricao,
+  });
 
   return NextResponse.json({ ok: true });
 }

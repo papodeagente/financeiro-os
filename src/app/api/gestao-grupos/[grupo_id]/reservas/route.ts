@@ -5,6 +5,7 @@ import { getTenantId } from '@/lib/tenant';
 import {
   recalcularVagasPeriodo,
   calcReservaFinanceiro,
+  registrarEvento,
   type ReservaData,
   type ReservaStatus,
   type PeriodoVagasData,
@@ -165,6 +166,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ gru
   );
 
   const periodoAtualizado = await recalcularVagasPeriodo(pool, periodoId, tenantId);
+
+  await registrarEvento(pool, {
+    grupo_id, tenant_id: tenantId, tipo: 'reserva_criada',
+    descricao: `Reserva criada para ${data.nome_passageiro || 'passageiro'} (apto ${data.tipo_acomodacao}, ${statusFinal})`,
+    reserva_id: reservaId,
+    entidade_id: reservaId,
+    entidade_label: data.nome_passageiro,
+    dados_novos: { ...data, status: statusFinal },
+  });
 
   return NextResponse.json({
     id: reservaId,

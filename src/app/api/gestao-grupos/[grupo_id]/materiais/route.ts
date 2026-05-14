@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { generateId } from '@/lib/utils';
 import { getTenantId } from '@/lib/tenant';
-import type { MaterialData, MaterialTipo } from '@/lib/gestao-grupos';
+import { registrarEvento, type MaterialData, type MaterialTipo } from '@/lib/gestao-grupos';
 
 const TIPOS_VALIDOS: MaterialTipo[] = ['arquivo', 'link', 'roteiro', 'contrato', 'voucher', 'outro'];
 
@@ -74,6 +74,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ gru
      VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
     [id, grupo_id, tipo, nome, JSON.stringify(data), tenantId],
   );
+
+  await registrarEvento(pool, {
+    grupo_id, tenant_id: tenantId, tipo: 'material_anexado',
+    descricao: `Material anexado: ${nome} (${tipo})`,
+    entidade_id: id, entidade_label: nome,
+  });
 
   return NextResponse.json({ id, grupo_id, tipo, nome, ...data });
 }

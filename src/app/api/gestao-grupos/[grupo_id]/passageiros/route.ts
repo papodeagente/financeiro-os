@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { generateId } from '@/lib/utils';
 import { getTenantId } from '@/lib/tenant';
-import { createPassageiroData, type PassageiroData, type ReservaData } from '@/lib/gestao-grupos';
+import { createPassageiroData, registrarEvento, type PassageiroData, type ReservaData } from '@/lib/gestao-grupos';
 
 interface PassageiroRow {
   id: string;
@@ -170,6 +170,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ gru
      VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
     [id, grupo_id, reservaId, nomeCompleto, JSON.stringify(dataJson), tenantId],
   );
+
+  await registrarEvento(pool, {
+    grupo_id, tenant_id: tenantId, tipo: 'passageiro_adicionado',
+    descricao: `Passageiro adicionado: ${nomeCompleto} (${dataJson.tipo})`,
+    passageiro_id: id, reserva_id: reservaId,
+    entidade_id: id, entidade_label: nomeCompleto,
+  });
 
   return NextResponse.json({ id, grupo_id, reserva_id: reservaId, nome_completo: nomeCompleto, ...dataJson });
 }

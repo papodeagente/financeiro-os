@@ -4,6 +4,7 @@ import { getTenantId } from '@/lib/tenant';
 import {
   DOCUMENTO_TIPO_LABEL,
   DOCUMENTO_STATUS_LABEL,
+  registrarEvento,
   type DocumentoData,
   type DocumentoTipo,
   type DocumentoStatus,
@@ -66,6 +67,27 @@ export async function PUT(
     `UPDATE grupo_documentos SET tipo = $1, status = $2, data = $3, updated_at = NOW() WHERE id = $4 AND tenant_id = $5`,
     [tipoNovo, statusNovo, JSON.stringify(dataNova), documento_id, tenantId],
   );
+
+  // Eventos específicos pra mudanças de status críticas
+  if (statusNovo === 'aprovado' && atual.status !== 'aprovado') {
+    await registrarEvento(pool, {
+      grupo_id, tenant_id: tenantId, tipo: 'documento_aprovado',
+      descricao: `${DOCUMENTO_TIPO_LABEL[tipoNovo]} aprovado`,
+      passageiro_id: atual.passageiro_id, entidade_id: documento_id, entidade_label: DOCUMENTO_TIPO_LABEL[tipoNovo],
+    });
+  } else if (statusNovo === 'reprovado' && atual.status !== 'reprovado') {
+    await registrarEvento(pool, {
+      grupo_id, tenant_id: tenantId, tipo: 'documento_reprovado',
+      descricao: `${DOCUMENTO_TIPO_LABEL[tipoNovo]} reprovado${dataNova.motivo_reprovacao ? ': ' + dataNova.motivo_reprovacao : ''}`,
+      passageiro_id: atual.passageiro_id, entidade_id: documento_id, entidade_label: DOCUMENTO_TIPO_LABEL[tipoNovo],
+    });
+  } else if (statusNovo !== atual.status || tipoNovo !== atual.tipo) {
+    await registrarEvento(pool, {
+      grupo_id, tenant_id: tenantId, tipo: 'documento_atualizado',
+      descricao: `${DOCUMENTO_TIPO_LABEL[tipoNovo]}: ${atual.status} → ${statusNovo}`,
+      passageiro_id: atual.passageiro_id, entidade_id: documento_id,
+    });
+  }
 
   return NextResponse.json({ id: documento_id, grupo_id, passageiro_id: atual.passageiro_id, tipo: tipoNovo, status: statusNovo, ...dataNova });
 }

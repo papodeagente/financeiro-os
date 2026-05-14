@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { recalcularVagasPeriodo, type ReservaData, type ReservaStatus } from '@/lib/gestao-grupos';
+import { recalcularVagasPeriodo, registrarEvento, type ReservaData, type ReservaStatus } from '@/lib/gestao-grupos';
 
 // PUT /api/gestao-grupos/[grupo_id]/reservas/[reserva_id]
 // Atualiza campos editáveis da reserva. Quando status muda pra
@@ -58,6 +58,21 @@ export async function PUT(
   let periodoAtualizado = null;
   if (novoStatus !== reservaAtual.status) {
     periodoAtualizado = await recalcularVagasPeriodo(pool, reservaAtual.periodo_id, tenantId);
+    if (novoStatus === 'cancelado') {
+      await registrarEvento(pool, {
+        grupo_id, tenant_id: tenantId, tipo: 'reserva_cancelada',
+        descricao: `Reserva cancelada: ${dataNova.nome_passageiro || reserva_id}${dataNova.motivo_cancelamento ? ' — ' + dataNova.motivo_cancelamento : ''}`,
+        reserva_id, entidade_id: reserva_id, entidade_label: dataNova.nome_passageiro,
+      });
+    } else {
+      await registrarEvento(pool, {
+        grupo_id, tenant_id: tenantId, tipo: 'reserva_status_alterado',
+        descricao: `Status da reserva ${dataNova.nome_passageiro || reserva_id}: ${reservaAtual.status} → ${novoStatus}`,
+        reserva_id, entidade_id: reserva_id,
+        dados_anteriores: { status: reservaAtual.status },
+        dados_novos: { status: novoStatus },
+      });
+    }
   }
 
   return NextResponse.json({
@@ -99,6 +114,12 @@ export async function DELETE(
   );
 
   await recalcularVagasPeriodo(pool, rows[0].periodo_id, tenantId);
+
+  await registrarEvento(pool, {
+    grupo_id, tenant_id: tenantId, tipo: 'reserva_cancelada',
+    descricao: `Reserva cancelada: ${data.nome_passageiro || reserva_id} — ${motivo}`,
+    reserva_id, entidade_id: reserva_id, entidade_label: data.nome_passageiro,
+  });
 
   return NextResponse.json({ ok: true });
 }

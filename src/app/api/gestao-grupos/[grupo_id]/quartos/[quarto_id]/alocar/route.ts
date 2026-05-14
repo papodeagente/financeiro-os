@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import type { QuartoData, PassageiroData } from '@/lib/gestao-grupos';
+import { registrarEvento, type QuartoData, type PassageiroData } from '@/lib/gestao-grupos';
 
 // POST /api/gestao-grupos/[grupo_id]/quartos/[quarto_id]/alocar
 // Body: { passageiro_id }
@@ -85,6 +85,22 @@ export async function POST(
     );
 
     await client.query('COMMIT');
+
+    // Busca quarto e passageiro pra evento
+    const { rows: qInfo } = await pool.query(
+      `SELECT numero FROM grupo_quartos WHERE id = $1 AND tenant_id = $2`,
+      [quarto_id, tenantId],
+    );
+    const { rows: pInfo } = await pool.query(
+      `SELECT nome_completo FROM grupo_passageiros WHERE id = $1 AND tenant_id = $2`,
+      [passageiroId, tenantId],
+    );
+    await registrarEvento(pool, {
+      grupo_id, tenant_id: tenantId, tipo: 'passageiro_alocado',
+      descricao: `${pInfo[0]?.nome_completo || 'Passageiro'} alocado ao quarto ${qInfo[0]?.numero || quarto_id}`,
+      passageiro_id: passageiroId, entidade_id: quarto_id, entidade_label: qInfo[0]?.numero || '',
+    });
+
     return NextResponse.json({ ok: true, passageiro_id: passageiroId, quarto_id });
   } catch (e: unknown) {
     await client.query('ROLLBACK');
@@ -115,11 +131,21 @@ export async function DELETE(
   );
   if (rows.length === 0) return NextResponse.json({ error: 'Passageiro não encontrado' }, { status: 404 });
 
-  const dataNova: PassageiroData = { ...(rows[0].data as PassageiroData), quarto_id: '' };
+  const dataAtual = rows[0].data as PassageiroData;
+  const quartoAnterior = dataAtual.quarto_id || '';
+  const dataNova: PassageiroData = { ...dataAtual, quarto_id: '' };
   await pool.query(
     `UPDATE grupo_passageiros SET data = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3`,
     [JSON.stringify(dataNova), passageiroId, tenantId],
   );
+
+  if (quartoAnterior) {
+    await registrarEvento(pool, {
+      grupo_id, tenant_id: tenantId, tipo: 'passageiro_desalocado',
+      descricao: `Passageiro removido do quarto`,
+      passageiro_id: passageiroId, entidade_id: quartoAnterior,
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }
