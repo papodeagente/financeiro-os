@@ -6,7 +6,7 @@ import { formatBRL } from '@/lib/utils';
 import {
   ChevronLeft, ChevronRight, LayoutDashboard, Info, Plane, Hotel,
   MapPin, Car, UserCheck, Shield, Ship, Ticket, Gift, Megaphone,
-  DollarSign, BarChart3, Check,
+  DollarSign, BarChart3, Check, Luggage,
 } from 'lucide-react';
 import {
   Tooltip, TooltipTrigger, TooltipContent, TooltipProvider,
@@ -16,6 +16,7 @@ import {
 const STEP_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   pipeline: LayoutDashboard,
   inf: Info,
+  pacote: Luggage,
   tkt: Plane,
   htl: Hotel,
   rec: MapPin,
