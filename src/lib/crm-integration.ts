@@ -63,12 +63,19 @@ export function buildProdutoPayload(grupo: GrupoViagem): Record<string, unknown>
   ).replace(/\/$/, '');
 
   // --- Headline figures -------------------------------------------------
-  // Escolhe o tipo de apto de referência. Grupo usa o primeiro da tarifa
-  // ativa (DBL por convenção, mas pode ser SGL/TPL/QDP se foi o configurado).
-  // Proposta usa SGL (cotação pontual, 1 pax). Em ambos os casos, faz
-  // fallback para SGL se o tipo escolhido vier zerado.
+  // Escolhe o tipo de apto de referência.
+  // - GRUPO: DBL por padrão (no CRM vamos vender um a um e o preço de
+  //   DBL é a tarifa de referência mais usada). Se DBL não estiver entre
+  //   tarifas_ativas, cai pra primeira tarifa ativa.
+  // - PROPOSTA: SGL (cotação pontual, 1 pax).
+  // - OPERADORA: tratado em bloco dedicado abaixo.
+  // Em todos os casos, faz fallback automático pra outro tipo se o
+  // preferido vier zerado.
   const tarifas = (grupo.tarifas_ativas || ['sgl', 'dbl', 'tpl', 'qdp']) as string[];
-  const tipoRefPreferido = (grupo.tipo ?? 'GRUPO') === 'PROPOSTA' ? 'sgl' : (tarifas[0] ?? 'dbl');
+  const tipoProdutoRef = grupo.tipo ?? 'GRUPO';
+  const tipoRefPreferido = tipoProdutoRef === 'PROPOSTA'
+    ? 'sgl'
+    : tarifas.includes('dbl') ? 'dbl' : (tarifas[0] ?? 'dbl');
 
   // Custo REAL no tipo de apto: somatório dos valores brutos (sem markup,
   // sem venda manual) direto da estrutura do grupo. Não usar
@@ -148,16 +155,33 @@ export function buildProdutoPayload(grupo: GrupoViagem): Record<string, unknown>
   let tipoRef = tipoRefPreferido;
   let preco_custo = 0;
   let preco_venda = 0;
-  for (const t of ordemTentativa) {
-    const c = calcCustoNoTipo(t);
-    const v = calcVendaNoTipo(t);
-    if (c > 0 || v > 0) {
-      tipoRef = t;
-      preco_custo = c;
-      preco_venda = v;
-      break;
+
+  if (tipoProdutoRef === 'OPERADORA' && grupo.operadora) {
+    // OPERADORA já guarda valores POR PESSOA (campo Pacote). Não passa
+    // pelo calcCustoNoTipo (que itera tkt/htl/etc. vazios). DBL fica
+    // como tipo_ref simbólico — no CRM o que importa é o preço por PAX.
+    tipoRef = 'dbl';
+    preco_custo = grupo.operadora.valor_custo || 0;
+    preco_venda = grupo.operadora.valor_venda || 0;
+  } else {
+    for (const t of ordemTentativa) {
+      const c = calcCustoNoTipo(t);
+      const v = calcVendaNoTipo(t);
+      if (c > 0 || v > 0) {
+        tipoRef = t;
+        preco_custo = c;
+        preco_venda = v;
+        break;
+      }
     }
+    // Os cálculos acima retornam o TOTAL do apto (DBL = preço pros 2 pax,
+    // TPL = pros 3, etc.). O CRM vende um a um, então convertemos para
+    // POR PESSOA dividindo pelo nº de pax do apto.
+    const paxDoApto = PAX_MAP[tipoRef] || 1;
+    preco_custo = preco_custo / paxDoApto;
+    preco_venda = preco_venda / paxDoApto;
   }
+
   preco_custo = Number(preco_custo.toFixed(2));
   preco_venda = Number(preco_venda.toFixed(2));
   const margem = Number(Math.max(preco_venda - preco_custo, 0).toFixed(2));
@@ -326,14 +350,18 @@ export function buildProdutoPayload(grupo: GrupoViagem): Record<string, unknown>
     operadora: operadora_info,
 
     // Headline figures — what /settings/products renders.
-    // tipo_ref indica o apto de referência (sgl/dbl/tpl/qdp). Útil para o
-    // CRM apresentar "Preço DBL: R$ X" em vez de só "Preço: R$ X".
+    // preco_custo e preco_venda são SEMPRE POR PESSOA. O CRM vende um a
+    // um, então a tarifa exibida é o valor por PAX (não o total do apto).
+    // tipo_ref indica o apto de referência usado pra derivar o preço (DBL
+    // por padrão em grupos; SGL em propostas pontuais; DBL simbólico
+    // quando OPERADORA).
     preco_custo,
     preco_venda,
     margem,
     margem_percentual,
     tipo_ref: tipoRef,
-    moeda: 'BRL',
+    preco_por_pax: true,
+    moeda: grupo.moeda || 'BRL',
 
     // Suppliers (one entry per supplier×service)
     fornecedores,
