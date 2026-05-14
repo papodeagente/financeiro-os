@@ -523,6 +523,38 @@ export async function initDB() {
     CREATE INDEX IF NOT EXISTS idx_grupo_passageiros_grupo ON grupo_passageiros(grupo_id);
     CREATE INDEX IF NOT EXISTS idx_grupo_passageiros_reserva ON grupo_passageiros(reserva_id);
     CREATE INDEX IF NOT EXISTS idx_grupo_passageiros_nome ON grupo_passageiros(nome_completo);
+
+    -- Quartos (Fase E) — rooming list por grupo. Cada quarto tem
+    -- capacidade e tipo de acomodação. Passageiros são alocados via
+    -- campo quarto_id em grupo_passageiros.data.
+    CREATE TABLE IF NOT EXISTS grupo_quartos (
+      id TEXT PRIMARY KEY,
+      grupo_id TEXT NOT NULL DEFAULT '',
+      numero TEXT NOT NULL DEFAULT '',
+      tipo_acomodacao TEXT NOT NULL DEFAULT 'DBL_CASAL',
+      capacidade INTEGER NOT NULL DEFAULT 2,
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_grupo_quartos_grupo ON grupo_quartos(grupo_id);
+
+    -- Documentos por passageiro (Fase E). Cada passageiro pode ter
+    -- múltiplos documentos (RG, CPF, passaporte, autorização menor,
+    -- etc.) com status de validação independente.
+    CREATE TABLE IF NOT EXISTS grupo_documentos (
+      id TEXT PRIMARY KEY,
+      grupo_id TEXT NOT NULL DEFAULT '',
+      passageiro_id TEXT NOT NULL DEFAULT '',
+      tipo TEXT NOT NULL DEFAULT 'outros',
+      status TEXT NOT NULL DEFAULT 'pendente',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_grupo_documentos_grupo ON grupo_documentos(grupo_id);
+    CREATE INDEX IF NOT EXISTS idx_grupo_documentos_passageiro ON grupo_documentos(passageiro_id);
+    CREATE INDEX IF NOT EXISTS idx_grupo_documentos_status ON grupo_documentos(status);
   `);
 
   // ============================================================
@@ -542,7 +574,7 @@ export async function initDB() {
     'funis', 'funis_simulacoes', 'funis_templates',
     'itens_venda',
     'gestao_grupos', 'grupo_periodos_vagas', 'grupo_reservas', 'grupo_materiais',
-    'grupo_passageiros',
+    'grupo_passageiros', 'grupo_quartos', 'grupo_documentos',
   ];
 
   // ============================================================

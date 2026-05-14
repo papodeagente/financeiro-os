@@ -241,6 +241,123 @@ export function calcReservaFinanceiro(
   };
 }
 
+// ============================================================
+// ROOMING LIST (Fase E) — quartos por grupo
+// ============================================================
+
+export type TipoAcomodacaoQuarto =
+  | 'SGL'           // Single
+  | 'DBL_CASAL'     // Duplo cama de casal
+  | 'DBL_TWIN'      // Duplo cama solteiro
+  | 'TPL'           // Triplo
+  | 'QDP'           // Quádruplo
+  | 'COMP_FEM'      // Compartilhado feminino
+  | 'COMP_MASC'     // Compartilhado masculino
+  | 'FAMILIA'       // Família
+  | 'CABINE_INT'    // Cabine interna (cruzeiro)
+  | 'CABINE_EXT'    // Cabine externa
+  | 'CABINE_VAR';   // Cabine com varanda
+
+export const TIPO_ACOMODACAO_LABEL: Record<TipoAcomodacaoQuarto, { label: string; capacidadeDefault: number }> = {
+  SGL:        { label: 'Single', capacidadeDefault: 1 },
+  DBL_CASAL:  { label: 'Duplo (casal)', capacidadeDefault: 2 },
+  DBL_TWIN:   { label: 'Duplo (twin)', capacidadeDefault: 2 },
+  TPL:        { label: 'Triplo', capacidadeDefault: 3 },
+  QDP:        { label: 'Quádruplo', capacidadeDefault: 4 },
+  COMP_FEM:   { label: 'Compartilhado feminino', capacidadeDefault: 4 },
+  COMP_MASC:  { label: 'Compartilhado masculino', capacidadeDefault: 4 },
+  FAMILIA:    { label: 'Família', capacidadeDefault: 4 },
+  CABINE_INT: { label: 'Cabine interna', capacidadeDefault: 2 },
+  CABINE_EXT: { label: 'Cabine externa', capacidadeDefault: 2 },
+  CABINE_VAR: { label: 'Cabine com varanda', capacidadeDefault: 2 },
+};
+
+export interface QuartoData {
+  hotel_nome?: string;       // pra grupos com mais de 1 hospedagem
+  bloqueado?: boolean;
+  motivo_bloqueio?: string;
+  observacoes?: string;
+}
+
+export function createQuartoData(): QuartoData {
+  return { hotel_nome: '', bloqueado: false, motivo_bloqueio: '', observacoes: '' };
+}
+
+// ============================================================
+// DOCUMENTOS POR PASSAGEIRO (Fase E)
+// ============================================================
+
+export type DocumentoTipo =
+  | 'rg'
+  | 'cpf'
+  | 'passaporte'
+  | 'visto'
+  | 'autorizacao_menor'
+  | 'seguro_viagem'
+  | 'contrato_assinado'
+  | 'ficha_medica'
+  | 'comprovante_pagamento'
+  | 'outros';
+
+export const DOCUMENTO_TIPO_LABEL: Record<DocumentoTipo, string> = {
+  rg: 'RG',
+  cpf: 'CPF',
+  passaporte: 'Passaporte',
+  visto: 'Visto',
+  autorizacao_menor: 'Autorização de menor',
+  seguro_viagem: 'Seguro viagem',
+  contrato_assinado: 'Contrato assinado',
+  ficha_medica: 'Ficha médica',
+  comprovante_pagamento: 'Comprovante de pagamento',
+  outros: 'Outros',
+};
+
+export type DocumentoStatus =
+  | 'pendente'
+  | 'enviado'
+  | 'em_analise'
+  | 'aprovado'
+  | 'reprovado'
+  | 'vencido'
+  | 'nao_aplica';
+
+export const DOCUMENTO_STATUS_LABEL: Record<DocumentoStatus, string> = {
+  pendente: 'Pendente',
+  enviado: 'Enviado',
+  em_analise: 'Em análise',
+  aprovado: 'Aprovado',
+  reprovado: 'Reprovado',
+  vencido: 'Vencido',
+  nao_aplica: 'Não se aplica',
+};
+
+export interface DocumentoData {
+  nome_personalizado?: string;     // pra tipo='outros'
+  url?: string;                    // upload de arquivo
+  nome_arquivo?: string;
+  tamanho_bytes?: number | null;
+  extensao?: string | null;
+  data_vencimento?: string;
+  observacoes?: string;
+  motivo_reprovacao?: string;
+  data_envio?: string;
+  data_aprovacao?: string;
+  aprovador?: string;
+}
+
+export function createDocumentoData(): DocumentoData {
+  return {
+    nome_personalizado: '',
+    url: '',
+    nome_arquivo: '',
+    tamanho_bytes: null,
+    extensao: null,
+    data_vencimento: '',
+    observacoes: '',
+    motivo_reprovacao: '',
+  };
+}
+
 export function createPassageiroData(nome: string, opts?: Partial<PassageiroData>): PassageiroData {
   return {
     data_nascimento: '',

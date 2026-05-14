@@ -2,15 +2,17 @@
 
 import { useEffect, useState, use, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Users, FileText, Folder, AlertTriangle, Check, Loader2, Edit2, UserCircle2, DollarSign } from 'lucide-react';
+import { ArrowLeft, Users, FileText, Folder, AlertTriangle, Check, Loader2, Edit2, UserCircle2, DollarSign, Bed, FileCheck2 } from 'lucide-react';
 import { MinimalPageHead, MinimalFooter, MinimalSectionHeader } from '@/components/financeiro/MinimalPageHead';
 import { toast } from '@/lib/toast';
 import { ReservasTab } from './ReservasTab';
 import { MateriaisTab } from './MateriaisTab';
 import { PassageirosTab } from './PassageirosTab';
 import { FinanceiroTab } from './FinanceiroTab';
+import { RoomingListTab } from './RoomingListTab';
+import { DocumentosTab } from './DocumentosTab';
 
-type SubAba = 'vagas' | 'reservas' | 'passageiros' | 'financeiro' | 'materiais';
+type SubAba = 'vagas' | 'reservas' | 'passageiros' | 'rooming' | 'documentos' | 'financeiro' | 'materiais';
 
 interface PeriodoVagas {
   id: string;
@@ -142,6 +144,8 @@ export default function GestaoGrupoPage({ params }: { params: Promise<{ id: stri
             { key: 'vagas', label: 'Vagas', icon: Users, count: data.periodos.length },
             { key: 'reservas', label: 'Reservas', icon: FileText, count: reservasTotal + confirmadasTotal },
             { key: 'passageiros', label: 'Passageiros', icon: UserCircle2, count: 0 },
+            { key: 'rooming', label: 'Rooming list', icon: Bed, count: 0 },
+            { key: 'documentos', label: 'Documentos', icon: FileCheck2, count: 0 },
             { key: 'financeiro', label: 'Financeiro', icon: DollarSign, count: 0 },
             { key: 'materiais', label: 'Materiais', icon: Folder, count: data.materiais.length },
           ] as const).map((t, i, arr) => {
@@ -305,6 +309,16 @@ export default function GestaoGrupoPage({ params }: { params: Promise<{ id: stri
         {/* Aba PASSAGEIROS */}
         {aba === 'passageiros' && (
           <PassageirosTab grupoId={grupoId} onChange={() => { void carregar(); }} />
+        )}
+
+        {/* Aba ROOMING LIST */}
+        {aba === 'rooming' && (
+          <RoomingListTab grupoId={grupoId} />
+        )}
+
+        {/* Aba DOCUMENTOS */}
+        {aba === 'documentos' && (
+          <DocumentosTab grupoId={grupoId} />
         )}
 
         {/* Aba FINANCEIRO */}
