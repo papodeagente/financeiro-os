@@ -599,6 +599,12 @@ export async function ensureGestaoGrupo(
   grupo: GrupoViagem,
   tenantId: string,
 ): Promise<void> {
+  // Só produtos do tipo GRUPO entram em Gestão de Grupos.
+  // Personalizado (PROPOSTA) e Operadora não usam o módulo —
+  // logo não vale criar tabelas vazias pra eles.
+  const tipo = grupo.tipo || 'GRUPO';
+  if (tipo !== 'GRUPO') return;
+
   // 1. Cria/garante registro de gestao_grupos
   const existsRes = await pool.query(
     `SELECT id FROM gestao_grupos WHERE grupo_id = $1 AND tenant_id = $2 LIMIT 1`,

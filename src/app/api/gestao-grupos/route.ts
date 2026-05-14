@@ -69,6 +69,11 @@ export async function GET() {
      FROM grupos g
      LEFT JOIN gestao_grupos gg ON gg.grupo_id = g.id AND gg.tenant_id = g.tenant_id
      WHERE g.tenant_id = $1
+       -- Só produtos do tipo GRUPO entram na Gestão de Grupos.
+       -- Personalizado e Operadora ficam fora porque não envolvem
+       -- múltiplos passageiros + saídas + rooming list.
+       -- Default 'GRUPO' quando data.tipo é null (compat legados).
+       AND COALESCE(g.data->>'tipo', 'GRUPO') = 'GRUPO'
      ORDER BY g.updated_at DESC`,
     [tenantId],
   );
