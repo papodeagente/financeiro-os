@@ -228,6 +228,33 @@ export function InfTab({ grupo, onChange }: Props) {
           As datas dos voos, hotéis, navios e demais serviços ficam dentro deste intervalo e podem ser editadas em cada aba. A proposta final é apresentada na moeda escolhida — sem conversão de câmbio.
         </p>
       </div>
+
+      {/* Quantidade de pessoas — apenas para GRUPO. Usado nos cálculos
+          financeiros (custo total ÷ pax = custo por pessoa). Vagas
+          continuam sendo geridas em Gestão de Grupos. */}
+      {isGrupo && (
+        <div>
+          <h3 className="text-lg font-semibold text-[var(--t-text)] mb-3">Quantidade de pessoas</h3>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <Label>Pessoas no grupo</Label>
+              <Input
+                type="number"
+                min={1}
+                step={1}
+                value={grupo.params.qtd_min_pax || 1}
+                onChange={e => {
+                  const qtd = Math.max(1, parseInt(e.target.value) || 1);
+                  update({ params: { ...grupo.params, qtd_min_pax: qtd, qtd_max_pax: Math.max(qtd, grupo.params.qtd_max_pax || qtd) } });
+                }}
+              />
+            </div>
+          </div>
+          <p className="text-xs text-[var(--t-text-muted)] mt-2">
+            Quantidade orçada de passageiros do grupo. É a base do cálculo financeiro (custo total ÷ qtd. de pessoas = custo por PAX). As vagas disponíveis para venda são geridas em <b>Gestão de Grupos</b>.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
