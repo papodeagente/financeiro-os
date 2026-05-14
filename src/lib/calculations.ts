@@ -231,6 +231,25 @@ function aplicarMargemAproximada(custo: number, markup: number): number {
 }
 
 export function calcItensIncluidos(g: GrupoViagem, tipoBase: string): ItemIncluido[] {
+  // OPERADORA: lista os itens do pacote (sem cotação individual).
+  // Custo/venda aparecem só no item agregado "PACOTE OPERADORA".
+  if (g.tipo === 'OPERADORA' && g.operadora) {
+    const op = g.operadora;
+    const itensExibiveis = op.itens.filter(i => i.exibir_na_proposta);
+    const pacoteItem: ItemIncluido = {
+      servico: 'PACOTE',
+      label: op.fornecedor_nome ? `Pacote — ${op.fornecedor_nome}` : 'Pacote operadora',
+      fornecedores: op.fornecedor_nome ? [op.fornecedor_nome] : [],
+      custo: op.valor_custo || 0,
+      venda: op.valor_venda || 0,
+      margem: Math.max((op.valor_venda || 0) - (op.valor_custo || 0), 0),
+      margemPct: op.valor_venda > 0 ? ((op.valor_venda - op.valor_custo) / op.valor_venda) * 100 : 0,
+      detalhes: `${itensExibiveis.length} ${itensExibiveis.length === 1 ? 'item exibido' : 'itens exibidos'} na proposta`,
+      vendaManual: true,
+    };
+    return [pacoteItem];
+  }
+
   const out: ItemIncluido[] = [];
   const c = g.cambio;
   const params = g.params;
@@ -559,7 +578,47 @@ export interface PropostaResult {
   parcelaPaxBoleto: Record<string, number>;
 }
 
+// Cálculo dedicado pra OPERADORA — não tem cotação por item, só preço
+// final do pacote. Mantém o mesmo shape de PropostaResult pra UI não
+// precisar bifurcar.
+function calcPropostaOperadora(g: GrupoViagem): PropostaResult {
+  const operadora = g.operadora || { itens: [], valor_custo: 0, valor_venda: 0 };
+  const valor = operadora.valor_venda || 0;
+  const custo = operadora.valor_custo || 0;
+  const parcelas = g.params.parcelas || 1;
+  const txCC = g.params.tx_ad_mp || 0;
+  const txBol = g.params.tx_boleto || 0;
+  const totalCartao = valor * (1 + txCC);
+  const totalBoleto = valor + txBol;
+
+  // Pacote de operadora não distingue tipo de apto — replica o valor em
+  // todos pra não quebrar tabelas que iteram nos tipos.
+  const tipos = ['sgl', 'dbl', 'tpl', 'qdp', 'chd'] as const;
+  const replicar = (v: number) => Object.fromEntries(tipos.map(t => [t, v])) as Record<string, number>;
+
+  return {
+    lines: [
+      { label: 'PACOTE OPERADORA', sgl: custo, dbl: custo, tpl: custo, qdp: custo, chd: custo },
+    ],
+    totalAvista: replicar(valor),
+    totalCartao: replicar(totalCartao),
+    totalBoleto: replicar(totalBoleto),
+    parcelaAptoCC: replicar(totalCartao / parcelas),
+    parcelaAptoBoleto: replicar(totalBoleto / parcelas),
+    totalPaxAvista: replicar(valor),
+    totalPaxCartao: replicar(totalCartao),
+    totalPaxBoleto: replicar(totalBoleto),
+    parcelaPaxCC: replicar(totalCartao / parcelas),
+    parcelaPaxBoleto: replicar(totalBoleto / parcelas),
+  };
+}
+
 export function calcProposta(g: GrupoViagem): PropostaResult {
+  // Operadora tem cálculo dedicado — sai cedo.
+  if (g.tipo === 'OPERADORA') {
+    return calcPropostaOperadora(g);
+  }
+
   const tkt = calcTktTotals(g);
   const htl = calcHtlTotals(g);
   const rec = calcRecTotals(g);

@@ -140,6 +140,7 @@ export function createGrupoViagem(): GrupoViagem {
     },
     cambio: Object.fromEntries(SERVICOS_KEYS.map(k => [k, { valor: 1.0, moeda: 'BRL', deadline: null }])),
     passageiros: [],
+    operadora: { itens: [], valor_custo: 0, valor_venda: 0, fornecedor_nome: '', observacoes_gerais: '' },
     links: {},
     descricao_orcamento: '',
     tkt: { trechos: [createTktTrecho()] },

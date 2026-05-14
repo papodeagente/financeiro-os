@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { GroupStepper } from '@/components/GroupStepper';
 import { InfTab } from '@/components/tabs/InfTab';
+import { PacoteTab } from '@/components/tabs/PacoteTab';
 import { TktTab } from '@/components/tabs/TktTab';
 import { HtlTab } from '@/components/tabs/HtlTab';
 import { RecTab } from '@/components/tabs/RecTab';
@@ -33,12 +34,20 @@ import { Save, FileText, Loader2, Users } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from '@/lib/toast';
 
-// 'htl_seg' (tabela auxiliar HTL+SEG combinada) foi removida da timeline
-// — ficava ao final e duplicava info que a aba "Proposta" já mostra.
-const ABAS_PLANEJAMENTO: AbaType[] = ['pipeline', 'inf', 'tkt', 'htl', 'rec', 'car', 'guia', 'seg', 'navio', 'ing', 'brinde', 'divulgacao', 'proposta'];
+// 'htl_seg' (tabela auxiliar HTL+SEG combinada) foi removida da timeline.
+//
+// Abas variam por TIPO de produto:
+// - GRUPO/PROPOSTA (Personalizado): fluxo completo com Aéreo/Hotel/Receptivo/etc.
+// - OPERADORA: pacote pronto de fornecedor único — apenas Pipeline/Info/Pacote/Proposta.
+const ABAS_GRUPO_PROPOSTA: AbaType[] = ['pipeline', 'inf', 'tkt', 'htl', 'rec', 'car', 'guia', 'seg', 'navio', 'ing', 'brinde', 'divulgacao', 'proposta'];
+const ABAS_OPERADORA: AbaType[] = ['pipeline', 'inf', 'pacote', 'proposta'];
+
+function abasParaTipo(tipo: GrupoViagem['tipo']): AbaType[] {
+  return tipo === 'OPERADORA' ? ABAS_OPERADORA : ABAS_GRUPO_PROPOSTA;
+}
 
 const ABA_ICONS: Record<string, string> = {
-  pipeline: '🔄', inf: 'ℹ️', tkt: '✈️', htl: '🏨', rec: '🎯', car: '🚐', guia: '🧑‍🏫',
+  pipeline: '🔄', inf: 'ℹ️', pacote: '📦', tkt: '✈️', htl: '🏨', rec: '🎯', car: '🚐', guia: '🧑‍🏫',
   seg: '🛡️', navio: '🚢', ing: '🎟️', brinde: '🎁', divulgacao: '📢', proposta: '💰',
 };
 
@@ -232,14 +241,16 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
     }
   };
 
+  const abasAtivas = abasParaTipo(grupo?.tipo);
+
   const handleNext = useCallback(() => {
-    const idx = ABAS_PLANEJAMENTO.indexOf(activeTab);
-    if (idx < ABAS_PLANEJAMENTO.length - 1) setActiveTab(ABAS_PLANEJAMENTO[idx + 1]);
-  }, [activeTab]);
+    const idx = abasAtivas.indexOf(activeTab);
+    if (idx < abasAtivas.length - 1) setActiveTab(abasAtivas[idx + 1]);
+  }, [activeTab, abasAtivas]);
   const handlePrev = useCallback(() => {
-    const idx = ABAS_PLANEJAMENTO.indexOf(activeTab);
-    if (idx > 0) setActiveTab(ABAS_PLANEJAMENTO[idx - 1]);
-  }, [activeTab]);
+    const idx = abasAtivas.indexOf(activeTab);
+    if (idx > 0) setActiveTab(abasAtivas[idx - 1]);
+  }, [activeTab, abasAtivas]);
 
   // Auto-save every 5 seconds
   useEffect(() => {
@@ -281,6 +292,7 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
         />
       );
       case 'inf': return <InfTab grupo={grupo} onChange={handleChange} />;
+      case 'pacote': return <PacoteTab grupo={grupo} onChange={handleChange} />;
       case 'tkt': return <TktTab grupo={grupo} onChange={handleChange} />;
       case 'htl': return <HtlTab grupo={grupo} onChange={handleChange} />;
       case 'rec': return <RecTab grupo={grupo} onChange={handleChange} />;
@@ -342,7 +354,7 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
 
       {/* Timeline Stepper */}
       <GroupStepper
-        steps={ABAS_PLANEJAMENTO}
+        steps={abasAtivas}
         activeStep={activeTab}
         onStepClick={setActiveTab}
         onNext={handleNext}

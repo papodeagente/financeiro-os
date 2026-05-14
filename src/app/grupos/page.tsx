@@ -662,13 +662,14 @@ export default function GruposPage() {
             </div>
 
             <div className="space-y-4">
-              {/* Tipo de produto: Grupo ou Proposta */}
+              {/* Tipo de produto: 3 opções */}
               <div>
                 <label className="text-xs font-medium text-[var(--t-text-muted)] uppercase tracking-wide mb-2 block">Tipo de produto</label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2">
                   {([
-                    { key: 'GRUPO',    titulo: 'Grupo',    desc: 'Mais de um pax. Libera SGL/DBL/TPL/QDP + CHD e cortesia.' },
-                    { key: 'PROPOSTA', titulo: 'Proposta', desc: 'Cotação pontual sem distinção por apartamento.' },
+                    { key: 'PROPOSTA',  titulo: 'Personalizado', desc: 'Cotação pontual personalizada por cliente. Cada serviço é cotado e detalhado.' },
+                    { key: 'GRUPO',     titulo: 'Grupo',         desc: 'Viagem em grupo. SGL/DBL/TPL/QDP + CHD com cortesia e tarifas múltiplas.' },
+                    { key: 'OPERADORA', titulo: 'Operadora',     desc: 'Pacote pronto de fornecedor único. Apenas lista de itens + custo/venda no final.' },
                   ] as { key: TipoProduto; titulo: string; desc: string }[]).map(opt => (
                     <button
                       key={opt.key}
@@ -689,7 +690,7 @@ export default function GruposPage() {
                         </div>
                         <span className="text-sm font-semibold text-[var(--t-text)]">{opt.titulo}</span>
                       </div>
-                      <span className="text-[10px] text-[var(--t-text-muted)] leading-tight">{opt.desc}</span>
+                      <span className="text-[11px] text-[var(--t-text-muted)] leading-snug pl-6">{opt.desc}</span>
                     </button>
                   ))}
                 </div>

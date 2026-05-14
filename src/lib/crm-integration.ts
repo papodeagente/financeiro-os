@@ -288,6 +288,29 @@ export function buildProdutoPayload(grupo: GrupoViagem): Record<string, unknown>
     }
   }
 
+  // Tipo de produto + itens do pacote (quando OPERADORA) — permite ao
+  // CRM exibir corretamente "Personalizado / Grupo / Operadora" e, para
+  // operadora, listar o que está incluso no pacote.
+  const tipoProduto = grupo.tipo || 'GRUPO';
+  const pacote_itens = tipoProduto === 'OPERADORA' && grupo.operadora
+    ? grupo.operadora.itens.map(it => ({
+        tipo: it.tipo,
+        descricao: it.descricao,
+        quantidade: it.quantidade,
+        exibir_na_proposta: it.exibir_na_proposta,
+        valor_individual: it.valor_individual,
+        observacoes: it.observacoes,
+      }))
+    : undefined;
+  const operadora_info = tipoProduto === 'OPERADORA' && grupo.operadora
+    ? {
+        fornecedor_nome: grupo.operadora.fornecedor_nome || '',
+        valor_custo: grupo.operadora.valor_custo,
+        valor_venda: grupo.operadora.valor_venda,
+        observacoes_gerais: grupo.operadora.observacoes_gerais || '',
+      }
+    : undefined;
+
   return {
     // Identification
     grupo_id: grupo.id,
@@ -296,6 +319,11 @@ export function buildProdutoPayload(grupo: GrupoViagem): Record<string, unknown>
     descricao: grupo.descricao_orcamento || '',
     imagem,
     status_pipeline: grupo.status_pipeline,
+    tipo_produto: tipoProduto,
+    // Quando OPERADORA: itens do pacote pra mostrar no CRM com
+    // informação de cada produto incluso. Senão undefined.
+    pacote_itens,
+    operadora: operadora_info,
 
     // Headline figures — what /settings/products renders.
     // tipo_ref indica o apto de referência (sgl/dbl/tpl/qdp). Útil para o

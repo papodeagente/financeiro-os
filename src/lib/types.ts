@@ -247,10 +247,67 @@ import { FinanceiroGrupo } from './financial-types';
 // tratados como ORCAMENTO na UI ao serem abertos.
 export type StatusPipeline = 'PRODUTO' | 'PROPOSTA' | 'ORCAMENTO' | 'VENDA' | 'RESERVA';
 
-// 'GRUPO' = produto com mais de um pax, libera tipos de apto (SGL/DBL/TPL/QDP) e cortesia.
-// 'PROPOSTA' = cotação pontual sem distinção por apto. Default 'GRUPO' para
-// compatibilidade com registros legados que não tinham essa flag.
-export type TipoProduto = 'GRUPO' | 'PROPOSTA';
+// Três tipos de produto que a agência opera:
+//
+// 'GRUPO'     — viagem em grupo (vários pax). Libera SGL/DBL/TPL/QDP/CHD
+//               com cortesia e detalhamento por fornecedor em cada
+//               categoria (Aéreo/Hotel/Receptivo/etc.).
+//
+// 'PROPOSTA'  — produto personalizado (cotação pontual). Mesmo motor
+//               de SGL/DBL/etc. mas geralmente 1 pax. Label público:
+//               "Personalizado". Mantido como 'PROPOSTA' no banco por
+//               retrocompat com registros existentes.
+//
+// 'OPERADORA' — pacote pronto de fornecedor único (operadora terceira).
+//               NÃO abre precificação por item — apenas lista descritiva
+//               do que está incluso + 3 campos finais (custo/venda/margem).
+//
+// Default 'GRUPO' para compatibilidade com registros legados.
+export type TipoProduto = 'GRUPO' | 'PROPOSTA' | 'OPERADORA';
+
+export const TIPO_PRODUTO_LABEL: Record<TipoProduto, string> = {
+  GRUPO: 'Grupo',
+  PROPOSTA: 'Personalizado',
+  OPERADORA: 'Operadora',
+};
+
+// Item descritivo de um pacote OPERADORA.
+// SEM precificação — pacote tem preço único no final.
+export type ItemPacoteTipo =
+  | 'AEREO' | 'HOTEL' | 'TRANSFER' | 'RECEPTIVO' | 'PASSEIO'
+  | 'CRUZEIRO' | 'INGRESSO' | 'SEGURO' | 'GUIA' | 'OUTROS';
+
+export const ITEM_PACOTE_LABEL: Record<ItemPacoteTipo, string> = {
+  AEREO: 'Aéreo',
+  HOTEL: 'Hotel',
+  TRANSFER: 'Transfer',
+  RECEPTIVO: 'Receptivo',
+  PASSEIO: 'Passeio',
+  CRUZEIRO: 'Cruzeiro',
+  INGRESSO: 'Ingresso',
+  SEGURO: 'Seguro',
+  GUIA: 'Guia',
+  OUTROS: 'Outros',
+};
+
+export interface ItemPacote {
+  id: string;
+  tipo: ItemPacoteTipo;
+  descricao: string;
+  quantidade: number;
+  exibir_na_proposta: boolean;       // se sai na proposta visual do cliente
+  valor_individual?: number;         // opcional — só pra exibir, não soma
+  observacoes?: string;
+}
+
+export interface OperadoraData {
+  fornecedor_id?: string;
+  fornecedor_nome?: string;
+  itens: ItemPacote[];
+  valor_custo: number;               // total pago à operadora
+  valor_venda: number;               // total cobrado do cliente
+  observacoes_gerais?: string;
+}
 
 export interface GrupoViagem {
   id: string;
@@ -279,6 +336,10 @@ export interface GrupoViagem {
   links: Record<string, string>;
   descricao_orcamento: string;
 
+  // Pacote da operadora (preenchido só quando tipo === 'OPERADORA').
+  // Tipos GRUPO/PROPOSTA seguem usando tkt/htl/rec/car/etc.
+  operadora?: OperadoraData;
+
   tkt: { trechos: TktTrecho[] };
   htl: { hoteis: HtlHotel[] };
   rec: { passeios: RecPasseio[] };
@@ -293,11 +354,12 @@ export interface GrupoViagem {
   financeiro?: FinanceiroGrupo;
 }
 
-export type AbaType = 'pipeline' | 'inf' | 'tkt' | 'htl' | 'rec' | 'car' | 'guia' | 'seg' | 'navio' | 'ing' | 'brinde' | 'divulgacao' | 'proposta' | 'htl_seg' | 'painel' | 'vendas' | 'recebimentos' | 'fornecedores' | 'fluxo_caixa' | 'dre' | 'indicadores';
+export type AbaType = 'pipeline' | 'inf' | 'pacote' | 'tkt' | 'htl' | 'rec' | 'car' | 'guia' | 'seg' | 'navio' | 'ing' | 'brinde' | 'divulgacao' | 'proposta' | 'htl_seg' | 'painel' | 'vendas' | 'recebimentos' | 'fornecedores' | 'fluxo_caixa' | 'dre' | 'indicadores';
 
 export const ABA_LABELS: Record<AbaType, string> = {
   pipeline: 'Pipeline',
   inf: 'Info',
+  pacote: 'Pacote',
   tkt: 'Aéreo',
   htl: 'Hotel',
   rec: 'Receptivo',
