@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import {
   Plus, Trash2, Package, Plane, Hotel, MapPin, Car, Ship, Ticket,
-  Shield, UserCog, MoreHorizontal, Edit2, Eye, EyeOff, X, Check,
+  Shield, UserCog, MoreHorizontal, Edit2, Eye, EyeOff, X, Check, Luggage,
 } from 'lucide-react';
 import {
   ITEM_PACOTE_LABEL,
@@ -71,10 +71,18 @@ export function PacoteTab({ grupo, onChange }: Props) {
     update(patch);
   };
 
+  // Valores são POR PESSOA. Totais derivam da qtd. de pessoas definida
+  // na aba Info (grupo.params.qtd_min_pax). Para tipo OPERADORA isso
+  // funciona tanto quando ha passageiros listados (proposta) quanto
+  // quando é só uma quantidade orçada (grupo).
+  const qtdPessoas = Math.max(1, grupo.passageiros?.length || grupo.params.qtd_min_pax || 1);
+  const custoTotal = (operadora.valor_custo || 0) * qtdPessoas;
+  const vendaTotal = (operadora.valor_venda || 0) * qtdPessoas;
   const margem = operadora.valor_venda > 0
     ? ((operadora.valor_venda - operadora.valor_custo) / operadora.valor_venda) * 100
     : 0;
-  const lucro = operadora.valor_venda - operadora.valor_custo;
+  const lucroPorPessoa = (operadora.valor_venda || 0) - (operadora.valor_custo || 0);
+  const lucroTotal = lucroPorPessoa * qtdPessoas;
 
   const corMargem = margem >= 20
     ? 'var(--lg-pos, #10B981)'
@@ -144,13 +152,26 @@ export function PacoteTab({ grupo, onChange }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h2 className="text-lg font-semibold text-[var(--t-text)]">Pacote da operadora</h2>
-        <p className="text-sm text-[var(--t-text-secondary)] mt-1">
-          Cadastre o que está incluso no pacote da operadora e o preço final (custo, venda e margem).
-          Os itens marcados <b>Exibir na proposta</b> aparecem para o cliente.
-        </p>
+      {/* Header com ícone de pacote de viagem */}
+      <div className="flex items-start gap-3">
+        <div
+          className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
+          style={{
+            background: 'var(--t-blue-bg, rgba(37,99,235,0.10))',
+            color: 'var(--t-blue, #2563EB)',
+            border: '1px solid var(--t-border)',
+          }}
+          aria-hidden
+        >
+          <Luggage className="w-6 h-6" />
+        </div>
+        <div className="flex-1">
+          <h2 className="text-lg font-semibold text-[var(--t-text)]">Pacote da operadora</h2>
+          <p className="text-sm text-[var(--t-text-secondary)] mt-1">
+            Cadastre o que está incluso no pacote da operadora e o preço final por pessoa (custo, venda e margem).
+            Os itens marcados <b>Exibir na proposta</b> aparecem para o cliente.
+          </p>
+        </div>
       </div>
 
       {/* Fornecedor / operadora principal */}
@@ -275,15 +296,26 @@ export function PacoteTab({ grupo, onChange }: Props) {
         )}
       </div>
 
-      {/* Precificação final */}
+      {/* Precificação final — sempre POR PESSOA. Qtd. de pessoas vem da
+          aba Info (Quantidade de pessoas em GRUPO ou lista de
+          passageiros em Personalizado). */}
       <div
         className="rounded-[12px] p-5"
         style={{ background: 'var(--t-surface)', border: '1px solid var(--t-border)', boxShadow: 'var(--t-card-shadow)' }}
       >
-        <h3 className="text-base font-semibold text-[var(--t-text)] mb-4">Precificação do pacote</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-semibold text-[var(--t-text)]">Precificação do pacote (por pessoa)</h3>
+          <span
+            className="text-[11px] uppercase tracking-wide font-semibold px-2 py-1 rounded-md"
+            style={{ background: 'var(--t-blue-bg, rgba(37,99,235,0.10))', color: 'var(--t-blue, #2563EB)' }}
+            title="Definido em Info"
+          >
+            {qtdPessoas} {qtdPessoas === 1 ? 'pessoa' : 'pessoas'}
+          </span>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <Label>Preço de custo (operadora)</Label>
+            <Label>Custo por pessoa (operadora)</Label>
             <Input
               type="number"
               step="0.01"
@@ -293,10 +325,10 @@ export function PacoteTab({ grupo, onChange }: Props) {
               placeholder="0,00"
               className="mono"
             />
-            <p className="text-[10px] text-[var(--t-text-muted)] mt-1">Quanto a agência paga à operadora</p>
+            <p className="text-[10px] text-[var(--t-text-muted)] mt-1">Quanto a agência paga à operadora por PAX</p>
           </div>
           <div>
-            <Label>Preço de venda (cliente)</Label>
+            <Label>Venda por pessoa (cliente)</Label>
             <Input
               type="number"
               step="0.01"
@@ -306,7 +338,7 @@ export function PacoteTab({ grupo, onChange }: Props) {
               placeholder="0,00"
               className="mono"
             />
-            <p className="text-[10px] text-[var(--t-text-muted)] mt-1">Quanto a agência cobra do cliente</p>
+            <p className="text-[10px] text-[var(--t-text-muted)] mt-1">Quanto a agência cobra do cliente por PAX</p>
           </div>
           <div>
             <Label>Margem (calculada)</Label>
@@ -319,11 +351,33 @@ export function PacoteTab({ grupo, onChange }: Props) {
               }}
             >
               <span>{margem.toFixed(1)}%</span>
-              <span className="text-[13px] font-normal">{fmtBRL(lucro)}</span>
+              <span className="text-[13px] font-normal">{fmtBRL(lucroPorPessoa)}/pax</span>
             </div>
-            <p className="text-[10px] text-[var(--t-text-muted)] mt-1">Lucro bruto sobre venda</p>
+            <p className="text-[10px] text-[var(--t-text-muted)] mt-1">Lucro bruto por pessoa</p>
           </div>
         </div>
+
+        {/* Totais do pacote — derivados de valor por pessoa × qtd */}
+        <div
+          className="mt-4 rounded-md p-3 grid grid-cols-3 gap-4"
+          style={{ background: 'var(--t-bg)', border: '1px solid var(--t-border)' }}
+        >
+          <div>
+            <div className="text-[10px] uppercase tracking-wide font-semibold text-[var(--t-text-muted)]">Custo total</div>
+            <div className="mono text-[15px] font-semibold text-[var(--t-text)]">{fmtBRL(custoTotal)}</div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wide font-semibold text-[var(--t-text-muted)]">Venda total</div>
+            <div className="mono text-[15px] font-semibold text-[var(--t-text)]">{fmtBRL(vendaTotal)}</div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wide font-semibold text-[var(--t-text-muted)]">Lucro total</div>
+            <div className="mono text-[15px] font-semibold" style={{ color: corMargem }}>{fmtBRL(lucroTotal)}</div>
+          </div>
+        </div>
+        <p className="text-[10px] text-[var(--t-text-muted)] mt-2">
+          Totais = valor por pessoa × <b>{qtdPessoas}</b>. A quantidade de pessoas é definida na aba <b>Info</b>.
+        </p>
 
         <div className="mt-4">
           <Label>Observações gerais do pacote</Label>
