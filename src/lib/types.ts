@@ -324,6 +324,10 @@ export interface GrupoViagem {
   venda_crm_id: string | null;
 
   tarifas_ativas: ('sgl' | 'dbl' | 'tpl' | 'qdp')[];
+  // Moeda em que o produto é precificado. Quando definida, a proposta
+  // final é apresentada nessa moeda sem conversão de câmbio (cambio
+  // por serviço deixou de ser editável na UI). Default 'BRL' nos defaults.
+  moeda?: typeof MOEDAS[number];
   periodos: Periodo[];
   trechos: Trecho[];
   navio_info: NavioInfo;

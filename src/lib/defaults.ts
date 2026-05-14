@@ -126,6 +126,7 @@ export function createGrupoViagem(): GrupoViagem {
     orcamento_id: null,
     venda_crm_id: null,
     tarifas_ativas: ['sgl', 'dbl', 'tpl', 'qdp'],
+    moeda: 'BRL',
     periodos: [createPeriodo()],
     trechos: [createTrecho()],
     navio_info: { embarque: null, desembarque: null, cidade_embarque: '', cidade_desembarque: '', nome_cruzeiro: '' },
