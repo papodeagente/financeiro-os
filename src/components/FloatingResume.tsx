@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { GrupoViagem } from '@/lib/types';
-import { calcProposta } from '@/lib/calculations';
+import { calcProposta, type PropostaResult } from '@/lib/calculations';
 import { formatBRL } from '@/lib/utils';
 import { Users } from 'lucide-react';
 
@@ -14,11 +14,35 @@ interface VagasResumo {
   alerta: number;
 }
 
+const TIPO_LABEL: Record<string, string> = { sgl: 'SGL', dbl: 'DBL', tpl: 'TPL', qdp: 'QDP', chd: 'CHD' };
+
+// Escolhe o tipo de apto de referência pro FloatingResume.
+// Antes era hardcoded 'dbl' — agora respeita o que o produto realmente
+// tem configurado (tarifas_ativas + valor preenchido).
+function escolherTipoApto(g: GrupoViagem, p: PropostaResult): string {
+  // OPERADORA: pacote único — todos os tipos têm o mesmo valor.
+  // Usa a primeira tarifa ativa só pra rotular ("DBL"/"TPL" no header).
+  if (g.tipo === 'OPERADORA') return (g.tarifas_ativas?.[0] as string) || 'dbl';
+
+  // Tarifas ativas em ordem: pega a primeira que tem valor preenchido.
+  const tarifas = (g.tarifas_ativas as string[] | undefined) || ['sgl', 'dbl', 'tpl', 'qdp'];
+  for (const t of tarifas) {
+    if ((p.totalPaxAvista[t] || 0) > 0) return t;
+  }
+  // Fallback: qualquer tipo que tenha valor > 0
+  for (const t of ['sgl', 'dbl', 'tpl', 'qdp']) {
+    if ((p.totalPaxAvista[t] || 0) > 0) return t;
+  }
+  return tarifas[0] || 'dbl';
+}
+
 export function FloatingResume({ grupo }: { grupo: GrupoViagem }) {
   const proposta = calcProposta(grupo);
-  const dblAvista = proposta.totalPaxAvista['dbl'] || 0;
-  const dblCartao = proposta.parcelaPaxCC['dbl'] || 0;
+  const tipo = escolherTipoApto(grupo, proposta);
+  const valorAvista = proposta.totalPaxAvista[tipo] || 0;
+  const valorCartao = proposta.parcelaPaxCC[tipo] || 0;
   const parcelas = grupo.params.parcelas;
+  const labelTipo = TIPO_LABEL[tipo] || tipo.toUpperCase();
 
   const [vagas, setVagas] = useState<VagasResumo | null>(null);
 
@@ -42,7 +66,7 @@ export function FloatingResume({ grupo }: { grupo: GrupoViagem }) {
     return () => { alive = false; };
   }, [grupo.id]);
 
-  if (dblAvista === 0 && !vagas) return null;
+  if (valorAvista === 0 && !vagas) return null;
 
   const corVagas = vagas
     ? vagas.disponiveis === 0 && vagas.total > 0
@@ -57,22 +81,24 @@ export function FloatingResume({ grupo }: { grupo: GrupoViagem }) {
       className="lg-glass-thick fixed bottom-4 right-4 z-50 p-4 min-w-[240px] space-y-3"
       style={{ color: 'var(--lg-text)' }}
     >
-      {dblAvista > 0 && (
+      {valorAvista > 0 && (
         <div>
           <div className="text-[10px] uppercase tracking-[0.1em] font-semibold mb-1" style={{ color: 'var(--lg-accent)' }}>
-            Preço por PAX (DBL)
+            {grupo.tipo === 'OPERADORA' ? 'Preço do pacote' : `Preço por PAX (${labelTipo})`}
           </div>
-          <div className="text-xl font-bold tabular-nums" style={{ color: 'var(--lg-text)' }}>{formatBRL(dblAvista)}</div>
-          <div className="text-xs mt-1" style={{ color: 'var(--lg-text-2)' }}>
-            ou {parcelas}x de <span className="tabular-nums">{formatBRL(dblCartao)}</span>
-          </div>
+          <div className="text-xl font-bold tabular-nums" style={{ color: 'var(--lg-text)' }}>{formatBRL(valorAvista)}</div>
+          {parcelas > 1 && valorCartao > 0 && (
+            <div className="text-xs mt-1" style={{ color: 'var(--lg-text-2)' }}>
+              ou {parcelas}x de <span className="tabular-nums">{formatBRL(valorCartao)}</span>
+            </div>
+          )}
         </div>
       )}
 
       {vagas && vagas.total > 0 && (
         <div
-          className={dblAvista > 0 ? 'pt-3' : ''}
-          style={{ borderTop: dblAvista > 0 ? '1px solid var(--lg-border-base)' : undefined }}
+          className={valorAvista > 0 ? 'pt-3' : ''}
+          style={{ borderTop: valorAvista > 0 ? '1px solid var(--lg-border-base)' : undefined }}
         >
           <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.1em] font-semibold mb-1" style={{ color: 'var(--lg-accent)' }}>
             <Users className="w-3 h-3" /> Gestão do grupo
