@@ -1,13 +1,13 @@
 'use client';
 
 import { GrupoViagem, Passageiro, MOEDAS } from '@/lib/types';
-import { createPassageiro, createPeriodo, createTrecho } from '@/lib/defaults';
+import { createPassageiro, createPeriodo } from '@/lib/defaults';
 import { calcDiarias } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, Users, UserPlus, RefreshCw } from 'lucide-react';
+import { Trash2, Users, UserPlus, RefreshCw } from 'lucide-react';
 import { toast } from '@/lib/toast';
 
 interface Props {
@@ -61,10 +61,9 @@ export function InfTab({ grupo, onChange }: Props) {
   };
 
   // ---- Data única da viagem -----------------------------------------
-  // Em vez de uma tabela de múltiplos períodos, mantemos um intervalo
-  // único (início → fim). Internamente continua sendo um array com 1
-  // entrada; os hotéis, voos e demais serviços terão suas próprias
-  // datas dentro deste intervalo, editáveis em cada aba.
+  // Intervalo único (início → fim). Hotéis, voos, navios e demais
+  // serviços têm suas próprias datas dentro deste intervalo, editáveis
+  // em cada aba específica.
   const periodoUnico = grupo.periodos[0] || createPeriodo();
   const dataInicio = periodoUnico.check_in || '';
   const dataFim = periodoUnico.check_out || '';
@@ -73,29 +72,6 @@ export function InfTab({ grupo, onChange }: Props) {
     const novoPeriodo = { ...periodoUnico, [field]: value };
     update({ periodos: [novoPeriodo] });
   };
-
-  // ---- Trechos Aéreos -----------------------------------------------
-  const updateTrecho = (idx: number, field: string, value: string | number | null) => {
-    const trechos = [...grupo.trechos];
-    trechos[idx] = { ...trechos[idx], [field]: value };
-    update({ trechos });
-  };
-
-  const addTrecho = () => {
-    if (grupo.trechos.length < 4) update({ trechos: [...grupo.trechos, createTrecho()] });
-  };
-
-  const removeTrecho = (idx: number) => {
-    update({ trechos: grupo.trechos.filter((_, i) => i !== idx) });
-  };
-
-  // ---- Navio --------------------------------------------------------
-  const updateNavio = (field: string, value: string | null) => {
-    update({ navio_info: { ...grupo.navio_info, [field]: value } });
-  };
-
-  const totalDiarias = calcDiarias(dataInicio, dataFim)
-    + calcDiarias(grupo.navio_info.embarque, grupo.navio_info.desembarque);
 
   return (
     <div className="space-y-8">
@@ -249,100 +225,8 @@ export function InfTab({ grupo, onChange }: Props) {
           </div>
         </div>
         <p className="text-xs text-[var(--t-text-muted)] mt-2">
-          As datas de hotéis, voos e demais serviços ficam dentro deste intervalo e podem ser editadas em cada aba. A proposta final é apresentada na moeda escolhida — sem conversão de câmbio.
+          As datas dos voos, hotéis, navios e demais serviços ficam dentro deste intervalo e podem ser editadas em cada aba. A proposta final é apresentada na moeda escolhida — sem conversão de câmbio.
         </p>
-      </div>
-
-      {/* Trechos Aéreos */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold text-[var(--t-text)]">Trechos Aéreos</h3>
-          <Button variant="outline" size="sm" onClick={addTrecho} disabled={grupo.trechos.length >= 4}>
-            <Plus className="w-4 h-4 mr-1" /> Trecho
-          </Button>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
-                <th className="p-2 text-left">Trecho</th>
-                <th className="p-2">Data</th>
-                <th className="p-2">QTD ADT</th>
-                <th className="p-2">QTD CHD</th>
-                <th className="p-2 w-10"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {grupo.trechos.map((t, i) => {
-                const trechoMin = i > 0
-                  ? (grupo.trechos[i - 1]?.data || '')
-                  : (dataInicio || '');
-                return (
-                <tr key={i} className={i % 2 === 0 ? 'bg-[var(--t-surface)]' : 'bg-[var(--t-surface-hover)]'}>
-                  <td className="p-2 font-medium">Trecho {i + 1}</td>
-                  <td className="p-2">
-                    <Input
-                      type="date"
-                      value={t.data || ''}
-                      min={trechoMin}
-                      onChange={e => updateTrecho(i, 'data', e.target.value || null)}
-                      className="h-8"
-                    />
-                  </td>
-                  <td className="p-2"><Input type="number" min={0} value={t.qtd_adt || ''} onChange={e => updateTrecho(i, 'qtd_adt', parseInt(e.target.value) || 0)} className="h-8 w-20 text-center" /></td>
-                  <td className="p-2"><Input type="number" min={0} value={t.qtd_chd || ''} onChange={e => updateTrecho(i, 'qtd_chd', parseInt(e.target.value) || 0)} className="h-8 w-20 text-center" /></td>
-                  <td className="p-2">
-                    {grupo.trechos.length > 1 && (
-                      <Button variant="ghost" size="sm" onClick={() => removeTrecho(i)} className="h-8 w-8 p-0 text-red-500">
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Navio */}
-      <div>
-        <h3 className="text-lg font-semibold text-[var(--t-text)] mb-3">Cruzeiro (Navio)</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <Label>Embarque</Label>
-            <Input
-              type="date"
-              value={grupo.navio_info.embarque || ''}
-              min={dataInicio || ''}
-              onChange={e => updateNavio('embarque', e.target.value || null)}
-            />
-          </div>
-          <div>
-            <Label>Desembarque</Label>
-            <Input
-              type="date"
-              value={grupo.navio_info.desembarque || ''}
-              min={grupo.navio_info.embarque
-                ? new Date(new Date(grupo.navio_info.embarque).getTime() + 86400000).toISOString().split('T')[0]
-                : ''}
-              disabled={!grupo.navio_info.embarque}
-              title={!grupo.navio_info.embarque ? 'Defina primeiro o embarque' : ''}
-              onChange={e => updateNavio('desembarque', e.target.value || null)}
-            />
-          </div>
-          <div><Label>Diárias</Label><Input disabled value={calcDiarias(grupo.navio_info.embarque, grupo.navio_info.desembarque) || '—'} /></div>
-          <div><Label>Cidade Embarque</Label><Input value={grupo.navio_info.cidade_embarque} onChange={e => updateNavio('cidade_embarque', e.target.value)} /></div>
-          <div><Label>Cidade Desembarque</Label><Input value={grupo.navio_info.cidade_desembarque} onChange={e => updateNavio('cidade_desembarque', e.target.value)} /></div>
-          <div><Label>Nome do Cruzeiro</Label><Input value={grupo.navio_info.nome_cruzeiro} onChange={e => updateNavio('nome_cruzeiro', e.target.value)} /></div>
-        </div>
-      </div>
-
-      {/* Total Diárias */}
-      <div className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-4 rounded-lg flex items-center justify-between">
-        <span className="font-semibold">Total de Diárias</span>
-        <span className="text-2xl font-bold text-[var(--t-accent)]">{totalDiarias}</span>
       </div>
     </div>
   );
