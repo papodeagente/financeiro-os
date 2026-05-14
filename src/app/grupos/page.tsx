@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { GrupoViagem, TipoProduto } from '@/lib/types';
+import { GrupoViagem, TipoProduto, TIPO_PRODUTO_LABEL } from '@/lib/types';
 import { createGrupoViagem } from '@/lib/defaults';
 import { loadGrupos, saveGrupos, deleteGrupo, exportGrupoJSON, importGrupoJSON } from '@/lib/storage';
 import { useApp } from '@/contexts/AppContext';
@@ -205,6 +205,7 @@ export default function GruposPage() {
 
   // Filter/sort/view state
   const [filtroStatus, setFiltroStatus] = useState<string>('TODOS');
+  const [filtroTipo, setFiltroTipo] = useState<TipoProduto | 'TODOS'>('TODOS');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'name' | 'status'>('date-desc');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -274,6 +275,11 @@ export default function GruposPage() {
       filtered = filtered.filter(g => getMonthKey(g) === filtroMes);
     }
 
+    // Tipo filter (Personalizado / Grupo / Operadora)
+    if (filtroTipo !== 'TODOS') {
+      filtered = filtered.filter(g => (g.tipo || 'GRUPO') === filtroTipo);
+    }
+
     // Sort
     const sorted = [...filtered].sort((a, b) => {
       switch (sortBy) {
@@ -295,12 +301,13 @@ export default function GruposPage() {
     }
 
     return { grouped: map, filteredCount: sorted.length };
-  }, [grupos, filtroStatus, searchQuery, filtroMes, sortBy]);
+  }, [grupos, filtroStatus, filtroTipo, searchQuery, filtroMes, sortBy]);
 
-  const hasActiveFilters = filtroStatus !== 'TODOS' || searchQuery !== '' || filtroMes !== 'TODOS';
+  const hasActiveFilters = filtroStatus !== 'TODOS' || filtroTipo !== 'TODOS' || searchQuery !== '' || filtroMes !== 'TODOS';
 
   const clearFilters = () => {
     setFiltroStatus('TODOS');
+    setFiltroTipo('TODOS');
     setSearchQuery('');
     setFiltroMes('TODOS');
   };
@@ -465,6 +472,34 @@ export default function GruposPage() {
                 <span className="text-xs hidden sm:inline">Incompletos</span>
               </button>
             )}
+
+            {/* Divisor visual entre filtros de status e de tipo */}
+            <span className="h-6 w-px bg-[var(--t-border)] mx-1 hidden sm:inline-block" />
+
+            {/* Filtro por tipo de produto */}
+            <button
+              onClick={() => setFiltroTipo('TODOS')}
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm transition-all ${
+                filtroTipo === 'TODOS'
+                  ? 'border-[var(--t-blue)] bg-[var(--t-blue)]/8 text-[var(--t-blue)] font-semibold ring-1 ring-[var(--t-blue)]/20'
+                  : 'border-[var(--t-border)] bg-[var(--t-surface)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]'
+              }`}
+            >
+              <span className="text-xs">Todos os tipos</span>
+            </button>
+            {(['PROPOSTA', 'GRUPO', 'OPERADORA'] as const).map(tipo => (
+              <button
+                key={tipo}
+                onClick={() => setFiltroTipo(filtroTipo === tipo ? 'TODOS' : tipo)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm transition-all ${
+                  filtroTipo === tipo
+                    ? 'border-[var(--t-blue)] bg-[var(--t-blue)]/8 text-[var(--t-text)] font-semibold ring-1 ring-[var(--t-blue)]/20'
+                    : 'border-[var(--t-border)] bg-[var(--t-surface)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]'
+                }`}
+              >
+                <span className="text-xs">{TIPO_PRODUTO_LABEL[tipo]}</span>
+              </button>
+            ))}
           </div>
         )}
 
