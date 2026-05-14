@@ -544,6 +544,26 @@ export async function initDB() {
     'gestao_grupos', 'grupo_periodos_vagas', 'grupo_reservas', 'grupo_materiais',
     'grupo_passageiros',
   ];
+
+  // ============================================================
+  // contas_receber / contas_pagar — coluna escalar grupo_id
+  // ============================================================
+  // Adiciona coluna grupo_id em contas_receber e contas_pagar para
+  // permitir queries indexadas filtrando pelo grupo. Faz backfill a
+  // partir do JSONB data->>grupo_id (preenchido pelo /confirmar).
+  // Aditivo: não remove nada.
+  await pool.query(`
+    ALTER TABLE contas_receber ADD COLUMN IF NOT EXISTS grupo_id TEXT NOT NULL DEFAULT '';
+    ALTER TABLE contas_pagar   ADD COLUMN IF NOT EXISTS grupo_id TEXT NOT NULL DEFAULT '';
+    UPDATE contas_receber
+       SET grupo_id = COALESCE(data->>'grupo_id', '')
+     WHERE grupo_id = '' AND (data->>'grupo_id') IS NOT NULL AND (data->>'grupo_id') <> '';
+    UPDATE contas_pagar
+       SET grupo_id = COALESCE(data->>'grupo_id', '')
+     WHERE grupo_id = '' AND (data->>'grupo_id') IS NOT NULL AND (data->>'grupo_id') <> '';
+    CREATE INDEX IF NOT EXISTS idx_contas_receber_grupo ON contas_receber(grupo_id) WHERE grupo_id <> '';
+    CREATE INDEX IF NOT EXISTS idx_contas_pagar_grupo   ON contas_pagar(grupo_id)   WHERE grupo_id <> '';
+  `);
   for (const table of TENANT_TABLES) {
     await pool.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT ''`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_${table}_tenant ON ${table}(tenant_id)`);

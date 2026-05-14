@@ -209,9 +209,9 @@ export async function POST(
         auto_gerado: true,
       };
       await client.query(
-        `INSERT INTO contas_receber (id, tenant_id, venda_id, cliente_id, status, data, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, 'PENDENTE', $5::jsonb, NOW(), NOW())`,
-        [crId, tenantId, vendaId, reserva.cliente_id, JSON.stringify(cr)],
+        `INSERT INTO contas_receber (id, tenant_id, venda_id, cliente_id, grupo_id, status, data, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, 'PENDENTE', $6::jsonb, NOW(), NOW())`,
+        [crId, tenantId, vendaId, reserva.cliente_id, grupo_id, JSON.stringify(cr)],
       );
     }
 

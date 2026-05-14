@@ -143,7 +143,7 @@ export interface ContaReceberMinima {
     data_vencimento?: string;     // YYYY-MM-DD
     data_recebimento?: string | null;
     valor_recebido?: number | null;
-    status?: string;              // 'PENDENTE' | 'PAGO' | 'VENCIDO' | 'CANCELADO' | 'PARCIAL'
+    status?: string;              // 'PENDENTE' | 'RECEBIDO' | 'ATRASADO' | 'CANCELADO' | 'PARCIAL'
     parcela_numero?: number;
     total_parcelas?: number;
   };
@@ -197,7 +197,7 @@ export function calcReservaFinanceiro(
     const valor = d.valor_final || 0;
     totalPrev += valor;
 
-    const isPago = d.status === 'PAGO' || (d.valor_recebido && d.valor_recebido >= valor);
+    const isPago = d.status === 'RECEBIDO' || (d.valor_recebido && d.valor_recebido >= valor);
     if (isPago) {
       qtdPagas++;
       totalReceb += d.valor_recebido || valor;

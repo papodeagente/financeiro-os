@@ -51,7 +51,7 @@ export async function GET() {
        ) AS valor_previsto,
        (
          SELECT COALESCE(SUM(
-           CASE WHEN cr.status = 'PAGO'
+           CASE WHEN cr.status = 'RECEBIDO'
                 THEN COALESCE((cr.data->>'valor_recebido')::numeric, (cr.data->>'valor_final')::numeric)
                 ELSE 0
            END
@@ -63,7 +63,7 @@ export async function GET() {
          SELECT COALESCE(SUM((cr.data->>'valor_final')::numeric), 0)::numeric
            FROM contas_receber cr
           WHERE cr.grupo_id = g.id AND cr.tenant_id = g.tenant_id
-            AND cr.status NOT IN ('PAGO', 'CANCELADO')
+            AND cr.status NOT IN ('RECEBIDO', 'CANCELADO')
             AND (cr.data->>'data_vencimento') < to_char(NOW(), 'YYYY-MM-DD')
        ) AS valor_vencido
      FROM grupos g
