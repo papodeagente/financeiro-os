@@ -12,7 +12,7 @@ import {
   Check, Loader2, Sparkles, FileDown, GitBranch,
   Video, Map, HelpCircle, Timer, Bed, Car,
   Eye, EyeOff, CopyPlus, ChevronsDownUp, ChevronsUpDown,
-  Columns2, Settings2,
+  Columns2, Settings2, Undo2, Redo2, Keyboard,
 } from 'lucide-react';
 import {
   DndContext, closestCenter, pointerWithin, KeyboardSensor, PointerSensor,
@@ -92,17 +92,19 @@ function defaultConteudo(tipo: string): Record<string, unknown> {
 const AI_SUPPORTED_TYPES = ['TEXTO', 'SERVICO', 'ROTEIRO_DIA', 'INCLUSOS', 'DEPOIMENTO', 'CTA'];
 
 function SortableBlock({
-  secao, index, total, collapsed, onUpdate, onRemove, onMove, onDuplicate,
-  onToggleVisivel, onToggleCollapsed, onGenerateAI, generating, onInsertAfter,
+  secao, index, total, collapsed, focused, onUpdate, onRemove, onMove, onDuplicate,
+  onToggleVisivel, onToggleCollapsed, onFocus, onGenerateAI, generating, onInsertAfter,
 }: {
   secao: SecaoProposta; index: number; total: number;
   collapsed: boolean;
+  focused: boolean;
   onUpdate: (conteudo: Record<string, unknown>) => void;
   onRemove: () => void;
   onMove: (dir: -1 | 1) => void;
   onDuplicate: () => void;
   onToggleVisivel: () => void;
   onToggleCollapsed: () => void;
+  onFocus: () => void;
   onGenerateAI: () => void;
   generating: boolean;
   onInsertAfter?: (tipo: string, conteudo: Record<string, unknown>) => void;
@@ -118,9 +120,11 @@ function SortableBlock({
   const canAI = AI_SUPPORTED_TYPES.includes(secao.tipo);
 
   return (
-    <div ref={setNodeRef} style={style}>
+    <div ref={setNodeRef} style={style} onPointerDown={onFocus}>
       <Card
-        className="bg-[var(--t-bg-secondary)] border-[var(--t-border)]"
+        className={`bg-[var(--t-bg-secondary)] border-[var(--t-border)] transition-shadow ${
+          focused ? 'ring-2 ring-[var(--t-green)] ring-offset-1 ring-offset-[var(--t-bg)]' : ''
+        }`}
         // Borda esquerda colorida acentua o estado: verde quando visível,
         // cinza pontilhada quando oculto. Facilita escanear lista grande.
         style={{
@@ -245,6 +249,71 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
   // de configuracao pelo LivePreviewPanel — usuario ve a proposta sendo
   // renderizada (igual /p/[slug]) ao lado do canvas de edicao.
   const [livePreview, setLivePreview] = useState(false);
+  // Bloco com foco do teclado — usado pelos atalhos D/H/Del/Arrows.
+  // Click no header de qualquer bloco seta esse id; click fora limpa.
+  const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+
+  // History stack para undo/redo. Guarda snapshots da proposta inteira.
+  // Updates frequentes (typing dentro de bloco) sao coalescidos com
+  // debounce de 600ms — uma "sessao de edicao" vira uma entrada no
+  // historico. Operacoes estruturais (delete, duplicate, drop) tambem
+  // passam por esse caminho mas sao tao espacadas no tempo que viram
+  // entradas separadas naturalmente.
+  const historyRef = useRef<Proposta[]>([initialProposta]);
+  const historyIdxRef = useRef(0);
+  const historyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSnapshotRef = useRef<Proposta | null>(null);
+  // Render trigger pra UI saber se undo/redo estao disponiveis.
+  const [, forceHistoryRender] = useState(0);
+  const bumpHistoryUI = () => forceHistoryRender(n => n + 1);
+
+  const commitPendingSnapshot = useCallback(() => {
+    if (!pendingSnapshotRef.current) return;
+    const next = pendingSnapshotRef.current;
+    // Descarta historia futura quando o usuario edita depois de um undo.
+    const baseline = historyRef.current.slice(0, historyIdxRef.current + 1);
+    baseline.push(next);
+    // Cap memory: max 50 snapshots por proposta (suficiente pra rollback
+    // de uma sessao de edicao normal sem explodir RAM).
+    if (baseline.length > 50) baseline.shift();
+    historyRef.current = baseline;
+    historyIdxRef.current = baseline.length - 1;
+    pendingSnapshotRef.current = null;
+    if (historyDebounceRef.current) clearTimeout(historyDebounceRef.current);
+    historyDebounceRef.current = null;
+    bumpHistoryUI();
+  }, []);
+
+  const pushHistory = useCallback((p: Proposta) => {
+    pendingSnapshotRef.current = p;
+    if (historyDebounceRef.current) clearTimeout(historyDebounceRef.current);
+    historyDebounceRef.current = setTimeout(commitPendingSnapshot, 600);
+  }, [commitPendingSnapshot]);
+
+  const canUndo = historyIdxRef.current > 0 || !!pendingSnapshotRef.current;
+  const canRedo = historyIdxRef.current < historyRef.current.length - 1;
+
+  const undo = useCallback(() => {
+    // Compromete o snapshot pendente primeiro, senao o usuario pode
+    // "perder" uma edicao recem-feita ao apertar Ctrl+Z muito rapido.
+    commitPendingSnapshot();
+    if (historyIdxRef.current <= 0) return;
+    historyIdxRef.current--;
+    const snap = historyRef.current[historyIdxRef.current];
+    setProposta(snap);
+    hasUnsaved.current = true;
+    bumpHistoryUI();
+  }, [commitPendingSnapshot]);
+
+  const redo = useCallback(() => {
+    if (historyIdxRef.current >= historyRef.current.length - 1) return;
+    historyIdxRef.current++;
+    const snap = historyRef.current[historyIdxRef.current];
+    setProposta(snap);
+    hasUnsaved.current = true;
+    bumpHistoryUI();
+  }, []);
   const toggleCollapsed = (id: string) => {
     setCollapsedBlocks(prev => {
       const next = new Set(prev);
@@ -278,9 +347,12 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
         };
       }
       hasUnsaved.current = true;
+      // Empurra para o stack de history (com debounce — typing rapido
+      // coalesce em uma unica entrada).
+      pushHistory(next);
       return next;
     });
-  }, []);
+  }, [pushHistory]);
 
   // Consome handoff de busca de hotel/voo. Disparado uma vez no mount —
   // quando o usuário volta de /hoteis ou /voos após selecionar um item.
@@ -363,6 +435,87 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Keyboard shortcuts globais. Ctrl+Z / Cmd+Z faz undo; Ctrl+Y /
+  // Ctrl+Shift+Z / Cmd+Shift+Z faz redo. Quando ha um bloco focado
+  // (click no header), Del/Backspace deleta, D duplica, H toggle
+  // visibilidade, Setas movem.
+  //
+  // Pula quando o usuario esta digitando em input/textarea/contenteditable
+  // (so executa atalhos quando o foco esta no "shell" do editor).
+  useEffect(() => {
+    const isTypingInForm = () => {
+      const el = document.activeElement as HTMLElement | null;
+      if (!el) return false;
+      const tag = el.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+      if (el.isContentEditable) return true;
+      return false;
+    };
+
+    const handler = (e: KeyboardEvent) => {
+      const meta = e.metaKey || e.ctrlKey;
+      const key = e.key.toLowerCase();
+
+      // Esc: fecha shortcuts e limpa foco. Funciona em qualquer contexto.
+      if (key === 'escape') {
+        if (showShortcuts) { setShowShortcuts(false); return; }
+        if (focusedBlockId && !isTypingInForm()) {
+          setFocusedBlockId(null);
+          return;
+        }
+      }
+
+      // Undo / Redo — funcionam mesmo dentro de inputs (CTRL+Z padrao
+      // do navegador ja faz undo de texto, entao so interceptamos
+      // quando o foco NAO esta num input — senao atrapalha digitacao).
+      if (meta && key === 'z' && !isTypingInForm()) {
+        e.preventDefault();
+        if (e.shiftKey) redo(); else undo();
+        return;
+      }
+      if (meta && key === 'y' && !isTypingInForm()) {
+        e.preventDefault();
+        redo();
+        return;
+      }
+
+      // Atalhos por bloco — so quando ha bloco focado e nao estamos
+      // digitando.
+      if (!focusedBlockId || isTypingInForm()) return;
+
+      if (key === 'delete' || key === 'backspace') {
+        e.preventDefault();
+        removeSecao(focusedBlockId);
+        setFocusedBlockId(null);
+        return;
+      }
+      if (key === 'd' && !meta) {
+        e.preventDefault();
+        duplicateSecao(focusedBlockId);
+        return;
+      }
+      if (key === 'h' && !meta) {
+        e.preventDefault();
+        toggleVisivelSecao(focusedBlockId);
+        return;
+      }
+      if (key === 'arrowup') {
+        e.preventDefault();
+        moveSecao(focusedBlockId, -1);
+        return;
+      }
+      if (key === 'arrowdown') {
+        e.preventDefault();
+        moveSecao(focusedBlockId, 1);
+        return;
+      }
+    };
+
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusedBlockId, showShortcuts, undo, redo]);
 
   // Auto-save with debounce
   useEffect(() => {
@@ -750,6 +903,38 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* Undo / Redo (Fase 6). Funcionam tanto pelos botoes quanto
+              por Ctrl/Cmd+Z e Ctrl/Cmd+Shift+Z. */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 text-[var(--t-text-secondary)] disabled:opacity-30"
+            onClick={undo}
+            disabled={!canUndo}
+            title="Desfazer (Ctrl+Z)"
+          >
+            <Undo2 className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 text-[var(--t-text-secondary)] disabled:opacity-30"
+            onClick={redo}
+            disabled={!canRedo}
+            title="Refazer (Ctrl+Shift+Z)"
+          >
+            <Redo2 className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 text-[var(--t-text-secondary)]"
+            onClick={() => setShowShortcuts(true)}
+            title="Atalhos de teclado"
+          >
+            <Keyboard className="w-4 h-4" />
+          </Button>
+
           {/* Toggle Preview ao vivo (Fase 5). Quando ligado, mostra a
               proposta renderizada lado a lado com o editor (troca a
               PropostaSidebar pelo LivePreviewPanel). */}
@@ -855,12 +1040,14 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                             index={idx}
                             total={proposta.secoes.length}
                             collapsed={collapsedBlocks.has(secao.id)}
+                            focused={focusedBlockId === secao.id}
                             onUpdate={c => updateSecao(secao.id, c)}
                             onRemove={() => removeSecao(secao.id)}
                             onMove={dir => moveSecao(secao.id, dir)}
                             onDuplicate={() => duplicateSecao(secao.id)}
                             onToggleVisivel={() => toggleVisivelSecao(secao.id)}
                             onToggleCollapsed={() => toggleCollapsed(secao.id)}
+                            onFocus={() => setFocusedBlockId(secao.id)}
                             onGenerateAI={() => handleGenerateAI(secao.id, secao.tipo)}
                             generating={!!generatingAI[secao.id]}
                             onInsertAfter={(tipo, conteudo) => insertSecaoAfter(secao.id, tipo, conteudo)}
@@ -924,6 +1111,73 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
       <FlightSearchModal open={flightModalOpen} onClose={() => setFlightModalOpen(false)} onSelect={handleFlightSelect} />
       <HotelSearchModal open={hotelModalOpen} onClose={() => setHotelModalOpen(false)} onSelect={handleHotelSelect} />
       <PdfExportModal proposta={proposta} open={pdfModalOpen} onClose={() => setPdfModalOpen(false)} />
+
+      {/* Atalhos de teclado (Fase 6). Modal lista todos os atalhos
+          disponiveis. Fecha com Esc ou click fora. */}
+      {showShortcuts && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => setShowShortcuts(false)}
+        >
+          <div
+            className="bg-[var(--t-surface)] border border-[var(--t-border)] rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-5 py-3 flex items-center justify-between border-b border-[var(--t-border)]">
+              <h3 className="text-sm font-semibold text-[var(--t-text)] flex items-center gap-2">
+                <Keyboard className="w-4 h-4" /> Atalhos de teclado
+              </h3>
+              <button
+                onClick={() => setShowShortcuts(false)}
+                className="text-[var(--t-text-muted)] hover:text-[var(--t-text)]"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-5 space-y-4 text-sm">
+              <div>
+                <h4 className="text-[10px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)] mb-2">Histórico</h4>
+                <div className="space-y-1.5">
+                  <ShortcutRow keys={['Ctrl', 'Z']} label="Desfazer" />
+                  <ShortcutRow keys={['Ctrl', 'Shift', 'Z']} label="Refazer" />
+                  <ShortcutRow keys={['Ctrl', 'Y']} label="Refazer (alternativo)" />
+                </div>
+              </div>
+              <div>
+                <h4 className="text-[10px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)] mb-2">Bloco focado</h4>
+                <p className="text-[11px] text-[var(--t-text-muted)] mb-2">
+                  Clique num bloco pra focá-lo (anel verde). Atalhos não disparam enquanto você digita num campo.
+                </p>
+                <div className="space-y-1.5">
+                  <ShortcutRow keys={['D']} label="Duplicar bloco" />
+                  <ShortcutRow keys={['H']} label="Ocultar / mostrar" />
+                  <ShortcutRow keys={['Del']} label="Deletar" />
+                  <ShortcutRow keys={['↑']} label="Mover para cima" />
+                  <ShortcutRow keys={['↓']} label="Mover para baixo" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ShortcutRow({ keys, label }: { keys: string[]; label: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-[var(--t-text-secondary)]">{label}</span>
+      <span className="flex items-center gap-1">
+        {keys.map((k, i) => (
+          <span key={i}>
+            {i > 0 && <span className="text-[var(--t-text-muted)] mx-0.5">+</span>}
+            <kbd className="inline-flex items-center justify-center min-w-[24px] h-6 px-1.5 rounded border border-[var(--t-border)] bg-[var(--t-bg)] text-[10px] font-mono font-medium text-[var(--t-text)]">
+              {k}
+            </kbd>
+          </span>
+        ))}
+      </span>
     </div>
   );
 }
