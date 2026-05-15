@@ -4,8 +4,9 @@ import { useState } from 'react';
 import {
   Plane, Hotel, Type, Calendar, Image as ImageIcon, CheckSquare, DollarSign,
   Quote, MousePointer, Video, Map as MapIcon, HelpCircle, Timer, Bed, Car,
-  Sparkles, PanelLeftClose, PanelLeftOpen, Loader2,
+  Sparkles, PanelLeftClose, PanelLeftOpen, Loader2, GripVertical,
 } from 'lucide-react';
+import { useDraggable } from '@dnd-kit/core';
 import type { ComponentType } from 'react';
 
 type IconType = ComponentType<{ className?: string }>;
@@ -69,6 +70,64 @@ const CATEGORIES: Category[] = [
   },
 ];
 
+// Item draggable da paleta. Wrapping em useDraggable expoe data.source
+// 'palette' + tipo do bloco — consumido em handleDragEnd do editor
+// para inserir o tipo na posicao do drop. Click continua adicionando
+// no fim da lista (fallback sem drag).
+function DraggablePaletteItem({ item, onClick, expanded }: {
+  item: PaletteItem;
+  onClick: () => void;
+  expanded: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `palette-${item.tipo}`,
+    data: { source: 'palette', tipo: item.tipo },
+  });
+  const Icon = item.icon;
+
+  if (!expanded) {
+    return (
+      <button
+        ref={setNodeRef}
+        {...attributes}
+        {...listeners}
+        onClick={onClick}
+        className={`w-9 h-9 flex items-center justify-center rounded-lg text-[var(--t-text-secondary)] hover:bg-[var(--t-green)]/10 hover:text-[var(--t-green)] transition-colors cursor-grab active:cursor-grabbing ${
+          isDragging ? 'opacity-40' : ''
+        }`}
+        title={`${item.label} — arraste para o canvas ou clique para adicionar no fim`}
+      >
+        <Icon className="w-4 h-4" />
+      </button>
+    );
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
+      className={`w-full flex items-start gap-2 px-2 py-1.5 rounded-md text-left hover:bg-[var(--t-surface-hover)] transition-colors group cursor-grab active:cursor-grabbing ${
+        isDragging ? 'opacity-40' : ''
+      }`}
+      title={`${item.label} — arraste para o canvas ou clique para adicionar no fim`}
+    >
+      <div className="w-7 h-7 shrink-0 flex items-center justify-center rounded-md bg-[var(--t-bg)] border border-[var(--t-border)] group-hover:border-[var(--t-green)] group-hover:bg-[var(--t-green)]/10 transition-colors">
+        <Icon className="w-3.5 h-3.5 text-[var(--t-text-secondary)] group-hover:text-[var(--t-green)] transition-colors" />
+      </div>
+      <div className="min-w-0 flex-1 pt-0.5">
+        <div className="text-xs font-medium text-[var(--t-text)] truncate">{item.label}</div>
+        <div className="text-[10px] text-[var(--t-text-muted)] truncate">{item.desc}</div>
+      </div>
+      <GripVertical className="w-3 h-3 text-[var(--t-text-muted)] opacity-0 group-hover:opacity-100 mt-1 shrink-0" />
+    </div>
+  );
+}
+
 interface Props {
   onAddBlock: (tipo: string) => void;
   onSearchFlight: () => void;
@@ -96,19 +155,14 @@ export function BlockPalette({
           <PanelLeftOpen className="w-4 h-4" />
         </button>
         <div className="w-6 h-px bg-[var(--t-border)] my-1" />
-        {CATEGORIES.flatMap(c => c.items).map(item => {
-          const Icon = item.icon;
-          return (
-            <button
-              key={item.tipo}
-              onClick={() => onAddBlock(item.tipo)}
-              className="w-9 h-9 flex items-center justify-center rounded-lg text-[var(--t-text-secondary)] hover:bg-[var(--t-green)]/10 hover:text-[var(--t-green)] transition-colors"
-              title={`${item.label} — ${item.desc}`}
-            >
-              <Icon className="w-4 h-4" />
-            </button>
-          );
-        })}
+        {CATEGORIES.flatMap(c => c.items).map(item => (
+          <DraggablePaletteItem
+            key={item.tipo}
+            item={item}
+            onClick={() => onAddBlock(item.tipo)}
+            expanded={false}
+          />
+        ))}
       </aside>
     );
   }
@@ -169,25 +223,14 @@ export function BlockPalette({
               {cat.label}
             </h4>
             <div className="space-y-0.5">
-              {cat.items.map(item => {
-                const Icon = item.icon;
-                return (
-                  <button
-                    key={item.tipo}
-                    onClick={() => onAddBlock(item.tipo)}
-                    className="w-full flex items-start gap-2 px-2 py-1.5 rounded-md text-left hover:bg-[var(--t-surface-hover)] transition-colors group"
-                    title={`Adicionar ${item.label}`}
-                  >
-                    <div className="w-7 h-7 shrink-0 flex items-center justify-center rounded-md bg-[var(--t-bg)] border border-[var(--t-border)] group-hover:border-[var(--t-green)] group-hover:bg-[var(--t-green)]/10 transition-colors">
-                      <Icon className="w-3.5 h-3.5 text-[var(--t-text-secondary)] group-hover:text-[var(--t-green)] transition-colors" />
-                    </div>
-                    <div className="min-w-0 flex-1 pt-0.5">
-                      <div className="text-xs font-medium text-[var(--t-text)] truncate">{item.label}</div>
-                      <div className="text-[10px] text-[var(--t-text-muted)] truncate">{item.desc}</div>
-                    </div>
-                  </button>
-                );
-              })}
+              {cat.items.map(item => (
+                <DraggablePaletteItem
+                  key={item.tipo}
+                  item={item}
+                  onClick={() => onAddBlock(item.tipo)}
+                  expanded={true}
+                />
+              ))}
             </div>
           </div>
         ))}

@@ -14,8 +14,9 @@ import {
   Eye, EyeOff, CopyPlus, ChevronsDownUp, ChevronsUpDown,
 } from 'lucide-react';
 import {
-  DndContext, closestCenter, KeyboardSensor, PointerSensor,
-  useSensor, useSensors, DragEndEvent,
+  DndContext, closestCenter, pointerWithin, KeyboardSensor, PointerSensor,
+  useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverlay,
+  type CollisionDetection,
 } from '@dnd-kit/core';
 import {
   arrayMove, SortableContext, sortableKeyboardCoordinates,
@@ -26,6 +27,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { BlockRenderer } from './BlockRenderer';
 import { BlockToolbar } from './BlockToolbar';
 import { BlockPalette } from './BlockPalette';
+import { DropZone } from './DropZone';
 import { PropostaSidebar } from './PropostaSidebar';
 import { FlightSearchModal } from '@/components/FlightSearchModal';
 import { HotelSearchModal } from '@/components/HotelSearchModal';
@@ -222,6 +224,9 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
   // Estado UI-only (não persistido): blocos colapsados visualmente para
   // o usuário escanear a lista. Reset a cada montagem.
   const [collapsedBlocks, setCollapsedBlocks] = useState<Set<string>>(new Set());
+  // Tipo do bloco sendo arrastado da paleta. Quando != null, drop zones
+  // ficam visiveis no canvas (caso contrario ocupam apenas 8px).
+  const [paletteDragging, setPaletteDragging] = useState<string | null>(null);
   const toggleCollapsed = (id: string) => {
     setCollapsedBlocks(prev => {
       const next = new Set(prev);
@@ -415,6 +420,24 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
     });
   };
 
+  // Insere um novo bloco numa posicao especifica (usado pelo handleDragEnd
+  // quando o usuario solta um item da paleta sobre uma drop zone).
+  const insertSecaoAt = (tipo: string, index: number) => {
+    update(p => {
+      const insertAt = Math.max(0, Math.min(index, p.secoes.length));
+      const newSecao: SecaoProposta = {
+        id: generateId(),
+        tipo: tipo as SecaoProposta['tipo'],
+        ordem: insertAt,
+        visivel: true,
+        conteudo: defaultConteudo(tipo),
+      };
+      const arr = [...p.secoes];
+      arr.splice(insertAt, 0, newSecao);
+      return { ...p, secoes: arr };
+    });
+  };
+
   const removeSecao = (id: string) => {
     update(p => ({ ...p, secoes: p.secoes.filter(s => s.id !== id) }));
   };
@@ -463,13 +486,59 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
     update(p => ({ ...p, secoes: p.secoes.map(s => s.id === id ? { ...s, conteudo } : s) }));
   };
 
+  const handleDragStart = (event: DragStartEvent) => {
+    const data = event.active.data.current as { source?: string; tipo?: string } | undefined;
+    if (data?.source === 'palette' && typeof data.tipo === 'string') {
+      setPaletteDragging(data.tipo);
+    }
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
+    setPaletteDragging(null);
+    if (!over) return;
+
+    const activeData = active.data.current as { source?: string; tipo?: string } | undefined;
+    const overData = over.data.current as { kind?: string; index?: number } | undefined;
+
+    // Drop vindo da paleta: insere bloco na posicao da drop zone.
+    if (activeData?.source === 'palette' && typeof activeData.tipo === 'string') {
+      if (overData?.kind === 'drop-zone' && typeof overData.index === 'number') {
+        insertSecaoAt(activeData.tipo, overData.index);
+      }
+      return;
+    }
+
+    // Reordenacao canvas → canvas: troca posicao do bloco arrastado.
+    if (active.id === over.id) return;
     update(p => {
       const oldIndex = p.secoes.findIndex(s => s.id === active.id);
       const newIndex = p.secoes.findIndex(s => s.id === over.id);
+      if (oldIndex < 0 || newIndex < 0) return p;
       return { ...p, secoes: arrayMove(p.secoes, oldIndex, newIndex) };
+    });
+  };
+
+  // Collision detection sensivel ao tipo de drag:
+  //  - paleta -> so vamos olhar drop zones
+  //  - canvas -> so vamos olhar blocos sortable
+  // Isso evita conflito em listas pequenas onde uma drop zone fica
+  // proxima de um bloco e o dnd-kit poderia escolher o "errado".
+  const collisionDetection: CollisionDetection = (args) => {
+    const activeData = args.active.data.current as { source?: string } | undefined;
+    if (activeData?.source === 'palette') {
+      return pointerWithin({
+        ...args,
+        droppableContainers: args.droppableContainers.filter(
+          c => (c.data.current as { kind?: string } | undefined)?.kind === 'drop-zone',
+        ),
+      });
+    }
+    return closestCenter({
+      ...args,
+      droppableContainers: args.droppableContainers.filter(
+        c => (c.data.current as { kind?: string } | undefined)?.kind !== 'drop-zone',
+      ),
     });
   };
 
@@ -692,25 +761,30 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
         </div>
       </div>
 
-      {/* Main area: Paleta + Editor + Sidebar (3 colunas) */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Paleta lateral de blocos (Fase 2) */}
-        <BlockPalette
-          onAddBlock={addSecao}
-          onSearchFlight={() => setFlightModalOpen(true)}
-          onSearchHotel={() => setHotelModalOpen(true)}
-          onGenerateFullAI={handleGenerateFullProposal}
-          generatingFull={generatingFull}
-        />
+      {/* Main area: Paleta + Editor + Sidebar (3 colunas, DnD unificado) */}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={collisionDetection}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragCancel={() => setPaletteDragging(null)}
+      >
+        <div className="flex-1 flex overflow-hidden">
+          {/* Paleta lateral de blocos (Fase 2/3) */}
+          <BlockPalette
+            onAddBlock={addSecao}
+            onSearchFlight={() => setFlightModalOpen(true)}
+            onSearchHotel={() => setHotelModalOpen(true)}
+            onGenerateFullAI={handleGenerateFullProposal}
+            generatingFull={generatingFull}
+          />
 
-        {/* Editor */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-[900px] mx-auto p-6 space-y-6">
-            {/* Sections with drag-drop */}
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          {/* Editor */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="max-w-[900px] mx-auto p-6 space-y-6">
               <SortableContext items={proposta.secoes.map(s => s.id)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between mb-2">
                     <h3 className="text-sm font-medium text-[var(--t-text)]">Blocos da Proposta ({proposta.secoes.length})</h3>
                     {proposta.secoes.length > 0 && (
                       <div className="flex items-center gap-1">
@@ -730,49 +804,81 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                       </div>
                     )}
                   </div>
-                  {proposta.secoes.map((secao, idx) => (
-                    <SortableBlock
-                      key={secao.id}
-                      secao={secao}
-                      index={idx}
-                      total={proposta.secoes.length}
-                      collapsed={collapsedBlocks.has(secao.id)}
-                      onUpdate={c => updateSecao(secao.id, c)}
-                      onRemove={() => removeSecao(secao.id)}
-                      onMove={dir => moveSecao(secao.id, dir)}
-                      onDuplicate={() => duplicateSecao(secao.id)}
-                      onToggleVisivel={() => toggleVisivelSecao(secao.id)}
-                      onToggleCollapsed={() => toggleCollapsed(secao.id)}
-                      onGenerateAI={() => handleGenerateAI(secao.id, secao.tipo)}
-                      generating={!!generatingAI[secao.id]}
-                      onInsertAfter={(tipo, conteudo) => insertSecaoAfter(secao.id, tipo, conteudo)}
-                    />
-                  ))}
+
+                  {/* Empty state — quando a proposta nao tem blocos, vira
+                       um alvo gigante de drop encorajando o usuario a
+                       arrastar da paleta. */}
+                  {proposta.secoes.length === 0 ? (
+                    <DropZone index={0} active={!!paletteDragging} label="Soltar primeiro bloco aqui" />
+                  ) : (
+                    <>
+                      {/* Drop zone antes do primeiro bloco */}
+                      <DropZone index={0} active={!!paletteDragging} />
+                      {proposta.secoes.map((secao, idx) => (
+                        <div key={secao.id}>
+                          <SortableBlock
+                            secao={secao}
+                            index={idx}
+                            total={proposta.secoes.length}
+                            collapsed={collapsedBlocks.has(secao.id)}
+                            onUpdate={c => updateSecao(secao.id, c)}
+                            onRemove={() => removeSecao(secao.id)}
+                            onMove={dir => moveSecao(secao.id, dir)}
+                            onDuplicate={() => duplicateSecao(secao.id)}
+                            onToggleVisivel={() => toggleVisivelSecao(secao.id)}
+                            onToggleCollapsed={() => toggleCollapsed(secao.id)}
+                            onGenerateAI={() => handleGenerateAI(secao.id, secao.tipo)}
+                            generating={!!generatingAI[secao.id]}
+                            onInsertAfter={(tipo, conteudo) => insertSecaoAfter(secao.id, tipo, conteudo)}
+                          />
+                          {/* Drop zone apos cada bloco */}
+                          <DropZone index={idx + 1} active={!!paletteDragging} />
+                        </div>
+                      ))}
+                    </>
+                  )}
+
+                  {proposta.secoes.length === 0 && (
+                    <div className="text-center py-12 text-[var(--t-text-muted)]">
+                      <p className="text-sm">Comece arrastando um bloco da paleta à esquerda</p>
+                      <p className="text-[11px] mt-1">ou clique num item da paleta para adicionar no fim</p>
+                    </div>
+                  )}
                 </div>
               </SortableContext>
-            </DndContext>
 
-            {/* Add block toolbar */}
-            <BlockToolbar
-              onAddBlock={addSecao}
-              onSearchFlight={() => setFlightModalOpen(true)}
-              onSearchHotel={() => setHotelModalOpen(true)}
-              onGenerateFullAI={handleGenerateFullProposal}
-              generatingFull={generatingFull}
-            />
+              {/* Add block toolbar (atalho redundante, continua util como
+                  fallback de "adicionar no fim sem precisar arrastar") */}
+              <BlockToolbar
+                onAddBlock={addSecao}
+                onSearchFlight={() => setFlightModalOpen(true)}
+                onSearchHotel={() => setHotelModalOpen(true)}
+                onGenerateFullAI={handleGenerateFullProposal}
+                generatingFull={generatingFull}
+              />
+            </div>
           </div>
+
+          {/* Sidebar */}
+          <PropostaSidebar
+            proposta={proposta}
+            clientes={allClientes}
+            membros={membros}
+            onUpdate={update}
+            onSetAIDestino={setAIDestino}
+            onClienteCreated={c => setAllClientes(prev => [...prev, c])}
+          />
         </div>
 
-        {/* Sidebar */}
-        <PropostaSidebar
-          proposta={proposta}
-          clientes={allClientes}
-          membros={membros}
-          onUpdate={update}
-          onSetAIDestino={setAIDestino}
-          onClienteCreated={c => setAllClientes(prev => [...prev, c])}
-        />
-      </div>
+        {/* DragOverlay mostra preview do bloco sendo arrastado da paleta */}
+        <DragOverlay>
+          {paletteDragging && (
+            <div className="px-3 py-2 rounded-lg bg-[var(--t-green)] text-white text-xs font-medium shadow-2xl pointer-events-none">
+              + {paletteDragging}
+            </div>
+          )}
+        </DragOverlay>
+      </DndContext>
 
       {/* Modals */}
       <FlightSearchModal open={flightModalOpen} onClose={() => setFlightModalOpen(false)} onSelect={handleFlightSelect} />
