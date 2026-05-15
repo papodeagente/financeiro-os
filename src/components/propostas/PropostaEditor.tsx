@@ -25,6 +25,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Card, CardContent } from '@/components/ui/card';
 import { BlockRenderer } from './BlockRenderer';
 import { BlockToolbar } from './BlockToolbar';
+import { BlockPalette } from './BlockPalette';
 import { PropostaSidebar } from './PropostaSidebar';
 import { FlightSearchModal } from '@/components/FlightSearchModal';
 import { HotelSearchModal } from '@/components/HotelSearchModal';
@@ -691,8 +692,17 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
         </div>
       </div>
 
-      {/* Main area: Editor + Sidebar */}
+      {/* Main area: Paleta + Editor + Sidebar (3 colunas) */}
       <div className="flex-1 flex overflow-hidden">
+        {/* Paleta lateral de blocos (Fase 2) */}
+        <BlockPalette
+          onAddBlock={addSecao}
+          onSearchFlight={() => setFlightModalOpen(true)}
+          onSearchHotel={() => setHotelModalOpen(true)}
+          onGenerateFullAI={handleGenerateFullProposal}
+          generatingFull={generatingFull}
+        />
+
         {/* Editor */}
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-[900px] mx-auto p-6 space-y-6">
