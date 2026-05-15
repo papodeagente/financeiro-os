@@ -112,17 +112,59 @@ export function HotelModal({ alojamento: a, idioma, corPrimaria, onClose }: Prop
 
           {/* Info grid */}
           <div className="grid grid-cols-2 gap-3">
-            <InfoCard label={i18n.checkIn} value={formatDate(a.check_in, idioma)} icon="📅" />
-            <InfoCard label={i18n.checkOut} value={formatDate(a.check_out, idioma)} icon="📅" />
+            <InfoCard
+              label={i18n.checkIn}
+              value={formatDate(a.check_in, idioma) + (a.check_in_hora ? ` · ${a.check_in_hora}` : '')}
+              icon="📅"
+            />
+            <InfoCard
+              label={i18n.checkOut}
+              value={formatDate(a.check_out, idioma) + (a.check_out_hora ? ` · ${a.check_out_hora}` : '')}
+              icon="📅"
+            />
             <InfoCard
               label={i18n.estadia}
               value={`${a.noites} ${a.noites === 1 ? (idioma === 'en' ? 'night' : 'noite') : i18n.noites}`}
               icon="🌙"
             />
-            <InfoCard label={i18n.base} value={regimeDesc} icon="🍽️" />
+            <InfoCard label={i18n.base} value={a.pensao_descricao || regimeDesc} icon="🍽️" />
             {a.quarto_tipo && <InfoCard label={idioma === 'en' ? 'Room type' : 'Tipo de quarto'} value={a.quarto_tipo} icon="🛏️" />}
             {a.bebidas && <InfoCard label={idioma === 'en' ? 'Beverages' : 'Bebidas'} value={a.bebidas} icon="🥂" />}
           </div>
+
+          {/* Política CHD (se houver) */}
+          {a.politica_chd && (
+            <div className="p-3 rounded-xl bg-blue-50/60 border border-blue-100">
+              <div className="text-[10px] uppercase tracking-wider text-blue-700 font-semibold mb-1">
+                {idioma === 'en' ? 'Child policy' : idioma === 'es' ? 'Política de niños' : 'Política de crianças'}
+              </div>
+              <div className="text-sm text-gray-800 leading-relaxed">{a.politica_chd}</div>
+            </div>
+          )}
+
+          {/* Preço (quando importado da API) */}
+          {(a.preco_noite || a.preco_total) ? (
+            <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-50/60 border border-emerald-100">
+              {a.preco_noite ? (
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold">
+                    {idioma === 'en' ? 'Per night' : idioma === 'es' ? 'Por noche' : 'Por noite'}
+                  </div>
+                  <div className="text-lg font-bold text-emerald-800">
+                    {new Intl.NumberFormat(idioma === 'en' ? 'en-US' : 'pt-BR', { style: 'currency', currency: 'BRL' }).format(a.preco_noite)}
+                  </div>
+                </div>
+              ) : <div />}
+              {a.preco_total ? (
+                <div className="text-right">
+                  <div className="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold">Total</div>
+                  <div className="text-lg font-bold text-emerald-800">
+                    {new Intl.NumberFormat(idioma === 'en' ? 'en-US' : 'pt-BR', { style: 'currency', currency: 'BRL' }).format(a.preco_total)}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           {/* Comodidades (Google amenities) — só se habilitado */}
           {a.mostrar_amenities !== false && a.amenities && a.amenities.length > 0 && (
@@ -164,6 +206,35 @@ export function HotelModal({ alojamento: a, idioma, corPrimaria, onClose }: Prop
                   />
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Proximidades — POIs próximos com transports (default visível) */}
+          {a.mostrar_proximidades !== false && a.proximidades && a.proximidades.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">
+                {idioma === 'en' ? 'Nearby places' : idioma === 'es' ? 'Lugares cercanos' : 'O que tem por perto'}
+              </h4>
+              <ul className="space-y-2">
+                {a.proximidades.slice(0, 8).map((p, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm">
+                    <span className="text-base shrink-0 mt-0.5">📍</span>
+                    <div className="min-w-0">
+                      <div className="font-medium text-gray-900">{p.nome}</div>
+                      {p.transports && p.transports.length > 0 && (
+                        <div className="text-[12px] text-gray-500">
+                          {p.transports.map((t, j) => (
+                            <span key={j}>
+                              {j > 0 && <span className="mx-1 text-gray-300">·</span>}
+                              {t.tipo} {t.duracao}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 

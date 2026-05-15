@@ -66,9 +66,54 @@ export interface TktFonte {
   valor_venda_chd?: number | null;
 }
 
+// Metadados ricos quando o voo veio da API SearchAPI (Google Flights).
+// Preservamos o snapshot pra que ao gerar proposta o RichFlightCard
+// receba bagagem/aeronave/CO2/legroom/segmentos sem precisar refazer
+// busca. Opcional — voos digitados a mão não populam isso.
+export interface TktVooApiMeta {
+  companhia: string;
+  companhia_logo?: string;
+  numero_voo: string;
+  aeroporto_origem_nome?: string;
+  aeroporto_destino_nome?: string;
+  origem: string;
+  destino: string;
+  data: string;
+  data_chegada?: string;
+  horario_saida: string;
+  horario_chegada: string;
+  duracao: string;
+  aeronave?: string;
+  classe?: string;
+  bagagem?: string;
+  legroom?: string;
+  emissao_carbono_kg?: number;
+  escalas?: number;
+  escalas_info?: Array<{ aeroporto: string; nome?: string; duracao_min?: number }>;
+  segmentos?: Array<{
+    companhia: string;
+    numero_voo: string;
+    origem: string;
+    destino: string;
+    aeroporto_origem_nome?: string;
+    aeroporto_destino_nome?: string;
+    horario_saida: string;
+    horario_chegada: string;
+    duracao_min: number;
+    aeronave?: string;
+    classe?: string;
+  }>;
+  muitas_vezes_atrasado?: boolean;
+  valor: number;
+}
+
 export interface TktTrecho {
   fontes: TktFonte[];
   deadline: string | null;
+  // Quando o trecho foi populado via /voos (SearchAPI), guarda snapshot
+  // dos dados ricos do voo. Consumido em from-grupo pra construir
+  // TransporteData rico (logo cia, segmentos, bagagem etc.).
+  voo_api?: TktVooApiMeta | null;
 }
 
 export interface HtlFonte {
@@ -86,6 +131,13 @@ export interface HtlFonte {
   valor_venda_chd?: number | null;
 }
 
+// Item de proximidade (POI próximo ao hotel) capturado da SearchAPI.
+// Renderizado como bloco "O que tem por perto" na proposta visual.
+export interface HotelProximidade {
+  nome: string;
+  transports: Array<{ tipo: string; duracao: string }>;
+}
+
 export interface HtlInfo {
   deadline: string | null;
   check_in_hora: string;
@@ -100,6 +152,9 @@ export interface HtlInfo {
   hotel_galeria?: string[];
   hotel_estrelas?: number;
   hotel_link?: string;
+  // Descrição PURA do hotel (sem concatenação de pensão/check-in/CHD).
+  // Esses campos estruturados ficam em check_in_hora/check_out_hora/
+  // pensao/politica_chd e seguem separados pra proposta.
   hotel_descricao?: string;
   hotel_lat?: number;
   hotel_lng?: number;
@@ -107,6 +162,9 @@ export interface HtlInfo {
   hotel_reviews_count?: number;
   hotel_amenities?: string[];
   hotel_preco_noite?: number;
+  // Proximidades vindas da SearchAPI (pontos de interesse + transports).
+  // Renderizado como bloco "O que tem por perto" na proposta visual.
+  hotel_proximidades?: HotelProximidade[];
 }
 
 export interface HtlHotel {

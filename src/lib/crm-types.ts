@@ -617,6 +617,14 @@ export interface AlojamentoData {
   hotel_link?: string;
   check_in: string;
   check_out: string;
+  // Horários de check-in/out vindos da API (texto "15:00") — quando
+  // presentes, exibimos separado de check_in/check_out (datas).
+  check_in_hora?: string;
+  check_out_hora?: string;
+  // Pensão/regime em texto livre, separado da regime tipada.
+  pensao_descricao?: string;
+  // Política de CHD em texto livre (vinda do HtlInfo.politica_chd).
+  politica_chd?: string;
   noites: number;
   regime: RegimeRefeicao;
   quarto_tipo?: string;
@@ -629,11 +637,18 @@ export interface AlojamentoData {
   rating?: number;
   reviews_count?: number;
   amenities?: string[];
+  // Proximidades (pontos de interesse próximos + transports). Renderizado
+  // como bloco "O que tem por perto" no HotelModal.
+  proximidades?: Array<{
+    nome: string;
+    transports: Array<{ tipo: string; duracao: string }>;
+  }>;
   // Toggles de visibilidade na proposta vista pelo cliente. Default true
   // quando o hotel é importado da API (vendedor pode desligar manualmente).
   mostrar_avaliacao_google?: boolean;
   mostrar_amenities?: boolean;
   mostrar_galeria?: boolean;
+  mostrar_proximidades?: boolean;
 }
 
 export interface TransporteData {

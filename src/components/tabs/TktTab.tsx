@@ -10,8 +10,9 @@ import { FornecedorPicker } from '@/components/FornecedorPicker';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Plus, Trash2, Plane, Trophy } from 'lucide-react';
-import { formatFlightForTkt } from '@/lib/flight-data-mapper';
+import { formatFlightForTkt, formatFlightForTransporte } from '@/lib/flight-data-mapper';
 import type { FlightOffer } from '@/lib/flight-data-mapper';
+import type { TktVooApiMeta } from '@/lib/types';
 import { initiateFlightSearch, consumePendingFlightHandoff } from '@/lib/api-search-handoff';
 import { getPrimeiraDataViagem, getUltimaDataViagem } from '@/lib/grupo-datas';
 
@@ -77,6 +78,38 @@ export function TktTab({ grupo, onChange }: Props) {
   const addTrecho = () => { if (grupo.tkt.trechos.length < 4) onChange({ ...grupo, tkt: { trechos: [...grupo.tkt.trechos, createTktTrecho()] } }); };
   const removeTrecho = (idx: number) => { onChange({ ...grupo, tkt: { trechos: grupo.tkt.trechos.filter((_, i) => i !== idx) } }); };
 
+  // Constrói o snapshot rico do voo a ser preservado no trecho. Reaproveita
+  // formatFlightForTransporte (já trata IDA + VOLTA dividindo preço).
+  const buildVooApiMeta = (offer: FlightOffer, leg: 0 | 1): TktVooApiMeta | undefined => {
+    const arr = formatFlightForTransporte(offer);
+    const t = arr[leg] as Record<string, unknown> | undefined;
+    if (!t) return undefined;
+    return {
+      companhia: String(t.companhia || ''),
+      companhia_logo: t.companhia_logo as string | undefined,
+      numero_voo: String(t.numero_voo || ''),
+      aeroporto_origem_nome: t.aeroporto_origem_nome as string | undefined,
+      aeroporto_destino_nome: t.aeroporto_destino_nome as string | undefined,
+      origem: String(t.origem || ''),
+      destino: String(t.destino || ''),
+      data: String(t.data || ''),
+      data_chegada: t.data_chegada as string | undefined,
+      horario_saida: String(t.horario_saida || ''),
+      horario_chegada: String(t.horario_chegada || ''),
+      duracao: String(t.tempo_estimado || ''),
+      aeronave: t.aeronave as string | undefined,
+      classe: t.classe as string | undefined,
+      bagagem: t.bagagem as string | undefined,
+      legroom: t.legroom as string | undefined,
+      emissao_carbono_kg: t.emissao_carbono_kg as number | undefined,
+      escalas: t.escalas as number | undefined,
+      escalas_info: t.escalas_info as TktVooApiMeta['escalas_info'],
+      segmentos: t.segmentos as TktVooApiMeta['segmentos'],
+      muitas_vezes_atrasado: t.muitas_vezes_atrasado as boolean | undefined,
+      valor: Number(t.valor) || 0,
+    };
+  };
+
   const handleFlightSelect = (tIdx: number, ida: FlightOffer, volta?: FlightOffer) => {
     const tkt = { ...grupo.tkt, trechos: [...grupo.tkt.trechos] };
 
@@ -88,6 +121,34 @@ export function TktTab({ grupo, onChange }: Props) {
       tkt.trechos[tIdx].fontes[existingIdaIdx] = { ...tkt.trechos[tIdx].fontes[existingIdaIdx], partida_chegada: mappedIda.partida_chegada, valor_adt: mappedIda.valor_adt };
     } else {
       tkt.trechos[tIdx].fontes.push({ nome: mappedIda.nome, valor_adt: mappedIda.valor_adt, valor_chd: null, partida_chegada: mappedIda.partida_chegada });
+    }
+    // Preserva snapshot rico do voo IDA (logo, segmentos, bagagem, CO2…).
+    tkt.trechos[tIdx].voo_api = buildVooApiMeta(ida, 0);
+
+    // Round-trip num único FlightOffer (offer.returnFlights presente):
+    // popula tIdx+1 com a volta. Caso o handoff já tenha sido feito como
+    // round-trip, isso evita perder o trecho de volta.
+    if (!volta && ida.returnFlights && ida.returnFlights.length > 0) {
+      const voltaIdx = tIdx + 1;
+      if (voltaIdx >= tkt.trechos.length) {
+        tkt.trechos.push(createTktTrecho());
+      }
+      tkt.trechos[voltaIdx] = { ...tkt.trechos[voltaIdx], fontes: [...tkt.trechos[voltaIdx].fontes] };
+      // formatFlightForTkt já mapeia returnFlights quando legIndex=1.
+      const mappedVolta = formatFlightForTkt(ida, 1);
+      const exVoltaIdx = tkt.trechos[voltaIdx].fontes.findIndex(f => f.nome === 'Google Flights');
+      if (exVoltaIdx >= 0) {
+        tkt.trechos[voltaIdx].fontes[exVoltaIdx] = { ...tkt.trechos[voltaIdx].fontes[exVoltaIdx], partida_chegada: mappedVolta.partida_chegada, valor_adt: mappedVolta.valor_adt };
+      } else {
+        tkt.trechos[voltaIdx].fontes.push({ nome: mappedVolta.nome, valor_adt: mappedVolta.valor_adt, valor_chd: null, partida_chegada: mappedVolta.partida_chegada });
+      }
+      tkt.trechos[voltaIdx].voo_api = buildVooApiMeta(ida, 1);
+      const updatedGrupo = { ...grupo, tkt };
+      if (voltaIdx >= updatedGrupo.trechos.length) {
+        updatedGrupo.trechos = [...updatedGrupo.trechos, { data: null, qtd_adt: updatedGrupo.trechos[tIdx]?.qtd_adt || 0, qtd_chd: updatedGrupo.trechos[tIdx]?.qtd_chd || 0 }];
+      }
+      onChange(updatedGrupo);
+      return;
     }
 
     // Import VOLTA into next trecho (create if needed)
@@ -104,6 +165,7 @@ export function TktTab({ grupo, onChange }: Props) {
       } else {
         tkt.trechos[voltaIdx].fontes.push({ nome: mappedVolta.nome, valor_adt: mappedVolta.valor_adt, valor_chd: null, partida_chegada: mappedVolta.partida_chegada });
       }
+      tkt.trechos[voltaIdx].voo_api = buildVooApiMeta(volta, 0);
 
       // Also ensure trechos (InfTab) has a matching entry for the return flight
       const updatedGrupo = { ...grupo, tkt };

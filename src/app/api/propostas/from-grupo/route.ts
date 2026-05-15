@@ -68,15 +68,13 @@ export async function POST(req: NextRequest) {
         if (sum > 0 && sum < bestTotal) { bestTotal = sum; bestFonteName = f.nome; }
       }
 
-      // Build description combining API and manual data
-      const descParts = [
-        h.info.hotel_descricao || '',
-        h.info.pensao ? `Pensão: ${h.info.pensao}` : '',
-        h.info.check_in_hora ? `Check-in: ${h.info.check_in_hora}` : '',
-        h.info.check_out_hora ? `Check-out: ${h.info.check_out_hora}` : '',
-        h.info.politica_chd ? `Política CHD: ${h.info.politica_chd}` : '',
-        (!h.info.hotel_descricao && h.info.info_adicional) ? h.info.info_adicional : '',
-      ].filter(Boolean).join('\n');
+      // Mantém a descrição PURA (vinda da API ou digitada). Pensão,
+      // check-in/out e política CHD vão pra campos estruturados próprios
+      // no AlojamentoData — o HotelModal renderiza cada um em sua seção.
+      // Quando não há descrição nem info_adicional, deixamos string vazia.
+      const descricaoPura = h.info.hotel_descricao
+        || h.info.info_adicional
+        || '';
 
       return {
         id: generateId(),
@@ -85,10 +83,14 @@ export async function POST(req: NextRequest) {
         hotel_estrelas: h.info.hotel_estrelas || undefined,
         hotel_imagem: h.info.hotel_imagem || '',
         hotel_galeria: h.info.hotel_galeria || [],
-        hotel_descricao: descParts,
+        hotel_descricao: descricaoPura,
         hotel_link: h.info.hotel_link || '',
         check_in: per?.check_in || '',
         check_out: per?.check_out || '',
+        check_in_hora: h.info.check_in_hora || undefined,
+        check_out_hora: h.info.check_out_hora || undefined,
+        pensao_descricao: h.info.pensao || undefined,
+        politica_chd: h.info.politica_chd || undefined,
         noites: calcDiarias(per?.check_in || null, per?.check_out || null),
         regime: (h.info.pensao?.toUpperCase()?.startsWith('ALL') ? 'AI'
           : h.info.pensao?.toUpperCase()?.startsWith('CAFE') ? 'BB'
@@ -194,6 +196,13 @@ export async function POST(req: NextRequest) {
           rating: hotel.info.hotel_rating || undefined,
           reviews_count: hotel.info.hotel_reviews_count || undefined,
           amenities: hotel.info.hotel_amenities || [],
+          // Proximidades vão direto pro conteúdo do bloco. HotelModal
+          // pode renderizar como "O que tem por perto" (toggle default on).
+          proximidades: hotel.info.hotel_proximidades || [],
+          mostrar_proximidades: (hotel.info.hotel_proximidades?.length || 0) > 0,
+          mostrar_avaliacao_google: true,
+          mostrar_amenities: true,
+          mostrar_galeria: true,
           preco_noite: precoNoite,
           preco_total: precoTotal,
           viagem_noturna: false,
@@ -217,15 +226,35 @@ export async function POST(req: NextRequest) {
       const origemParts = parts[0]?.split(' ') || [];
       const destParts = parts[1]?.split(' ') || [];
 
+      // Quando o trecho veio da SearchAPI (Google Flights), usamos o
+      // snapshot rico salvo em trecho.voo_api — assim RichFlightCard
+      // recebe logo da cia, segmentos, bagagem, CO2, classe e legroom.
+      const voo = trecho.voo_api;
+
       secoes.push({
         id: transp.id, tipo: 'TRANSPORTE', ordem: ordem++, visivel: true,
         conteudo: {
           ...transp,
-          companhia: bestFonte?.nome || transp.companhia || '',
-          horario_saida: origemParts.slice(1).join(' ') || '',
-          horario_chegada: destParts.slice(1).join(' ') || '',
+          companhia: voo?.companhia || bestFonte?.nome || transp.companhia || '',
+          companhia_logo: voo?.companhia_logo,
+          numero_voo: voo?.numero_voo || transp.numero_voo || '',
+          aeroporto_origem_nome: voo?.aeroporto_origem_nome,
+          aeroporto_destino_nome: voo?.aeroporto_destino_nome,
+          data_chegada: voo?.data_chegada,
+          horario_saida: voo?.horario_saida || origemParts.slice(1).join(' ') || '',
+          horario_chegada: voo?.horario_chegada || destParts.slice(1).join(' ') || '',
           distancia_km: 0,
-          tempo_estimado: '',
+          tempo_estimado: voo?.duracao || '',
+          aeronave: voo?.aeronave,
+          classe: voo?.classe,
+          bagagem: voo?.bagagem,
+          legroom: voo?.legroom,
+          emissao_carbono_kg: voo?.emissao_carbono_kg,
+          escalas: voo?.escalas,
+          escalas_info: voo?.escalas_info,
+          segmentos: voo?.segmentos,
+          muitas_vezes_atrasado: voo?.muitas_vezes_atrasado,
+          valor: voo?.valor ?? (bestFonte?.valor_adt ?? 0),
         },
       });
     }

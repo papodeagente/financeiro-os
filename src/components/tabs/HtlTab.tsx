@@ -126,9 +126,14 @@ export function HtlTab({ grupo, onChange }: Props) {
       return `/api/img-proxy?url=${encodeURIComponent(url)}`;
     };
     info.hotel_imagem = proxyUrl(place.images?.[0]?.original || place.images?.[0]?.thumbnail || '');
-    info.hotel_galeria = (place.images || []).slice(0, 8).map(img => proxyUrl(img.original || img.thumbnail));
+    // Salva TODAS as imagens importadas (até 12 baixadas pelo importer).
+    // Antes limitávamos a 8, descartando fotos que o cliente nunca via.
+    info.hotel_galeria = (place.images || []).map(img => proxyUrl(img.original || img.thumbnail));
     info.hotel_estrelas = place.extracted_hotel_class || (place.rating ? Math.round(place.rating) : undefined);
     info.hotel_link = place.link || '';
+    // Descrição PURA — sem concat com pensão/check-in/CHD. Esses ficam
+    // em campos estruturados (check_in_hora, politica_chd etc.) e a
+    // proposta os renderiza separadamente.
     info.hotel_descricao = place.description || '';
     info.hotel_rating = place.rating || undefined;
     info.hotel_reviews_count = place.reviews || undefined;
@@ -137,6 +142,14 @@ export function HtlTab({ grupo, onChange }: Props) {
     if (place.gps_coordinates) {
       info.hotel_lat = place.gps_coordinates.latitude;
       info.hotel_lng = place.gps_coordinates.longitude;
+    }
+    // Proximidades: a API retorna pontos de interesse com transports.
+    // Salvamos pra renderizar "O que tem por perto" na proposta visual.
+    if (place.nearby_places && place.nearby_places.length > 0) {
+      info.hotel_proximidades = place.nearby_places.map(np => ({
+        nome: np.name,
+        transports: (np.transportations || []).map(t => ({ tipo: t.type, duracao: t.duration })),
+      }));
     }
 
     // Also update periodo hotel name if available
