@@ -2,10 +2,6 @@
 
 import { memo, useEffect, useRef, useState } from 'react';
 import type { Proposta } from '@/lib/crm-types';
-import { CapaSection } from './preview/CapaSection';
-import { PreviewRenderer } from './preview/PreviewRenderer';
-import { RodapeSection } from './preview/RodapeSection';
-import { DiscoveryRenderer } from './preview/discovery/DiscoveryRenderer';
 import { PhoneFrame } from './PhoneFrame';
 import { Eye, X } from 'lucide-react';
 
@@ -22,31 +18,28 @@ interface Props {
 // Funciona pros dois layouts (CLASSICO e DISCOVERY) consumindo os
 // mesmos renderers usados em /p/[slug].
 function LivePreviewPanelInner({ proposta, onClose }: Props) {
-  const isDiscovery = proposta.visual?.layout === 'DISCOVERY';
-  const corFundo = proposta.visual?.cor_fundo || '#ffffff';
-  const corTexto = proposta.visual?.cor_texto || '#1a1a2e';
-  const corPrimaria = proposta.visual?.cor_primaria || '#004aad';
-  const fonte = proposta.visual?.fonte || 'Inter';
-  const idioma = proposta.idioma || 'pt-BR';
-
-  // O frame e desenhado em 430px de largura. Quando o painel disponivel
-  // for menor, escalamos via CSS transform pra caber. Medimos o
-  // container e calculamos um scale dinamico.
+  // O frame e desenhado em 430px de largura (escala 1:1 do iPhone Pro
+  // Max). Quando o painel disponivel for menor, escalamos via CSS
+  // transform pra caber sem cortar. Medimos o painel via ResizeObserver
+  // e calculamos scale dinamico.
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [scale, setScale] = useState(1);
+  const [iframeReady, setIframeReady] = useState(false);
+  const PHONE_W = 430;
+  const PHONE_H = 932;
 
   useEffect(() => {
     const el = stageRef.current;
     if (!el) return;
-    // Phone base: 430 px largura, ~932 px altura (aspect 9:19.5).
-    // Deixamos margem de 32px nos dois eixos.
     const compute = () => {
+      // Margem interna pra dar respiro (16px top, 16px laterais, 16px bottom).
       const w = el.clientWidth - 32;
       const h = el.clientHeight - 32;
-      const sx = w / 430;
-      const sy = h / 932;
-      const s = Math.min(sx, sy, 1); // nunca passa de 1:1
-      setScale(Math.max(0.35, s));
+      const sx = w / PHONE_W;
+      const sy = h / PHONE_H;
+      const s = Math.min(sx, sy, 1); // nunca passa de 1:1 (real size)
+      setScale(Math.max(0.3, s));
     };
     compute();
     const ro = new ResizeObserver(compute);
@@ -54,42 +47,28 @@ function LivePreviewPanelInner({ proposta, onClose }: Props) {
     return () => ro.disconnect();
   }, []);
 
-  // Conteudo da proposta — encapsulado pra ser reutilizado dentro do
-  // PhoneFrame. CapaSection/PreviewRenderer/RodapeSection consomem o
-  // tema (cor_fundo/cor_texto/fonte) via style externo.
-  const propostaContent = (
-    <div
-      className="min-h-full"
-      style={{ backgroundColor: corFundo, color: corTexto, fontFamily: `'${fonte}', sans-serif` }}
-    >
-      {isDiscovery ? (
-        // Discovery renderiza tudo (hero + sections + footer). slug
-        // 'preview' e simbolico — chat/lead-capture nao sao ativados.
-        <DiscoveryRenderer proposta={proposta} slug="preview" idioma={idioma} />
-      ) : (
-        <>
-          <CapaSection proposta={proposta} />
-          {proposta.cabecalho.mensagem_abertura && (
-            <div className="px-4 py-6 text-center">
-              <p className="text-sm leading-relaxed opacity-80 italic">
-                {proposta.cabecalho.mensagem_abertura}
-              </p>
-            </div>
-          )}
-          <div className="px-4 py-4">
-            <PreviewRenderer
-              secoes={proposta.secoes}
-              corPrimaria={corPrimaria}
-              idioma={idioma}
-            />
-          </div>
-          <div className="px-4 pb-8">
-            <RodapeSection proposta={proposta} />
-          </div>
-        </>
-      )}
-    </div>
-  );
+  // Listener pra mensagem 'ready' do iframe child. Quando o iframe
+  // monta e avisa que esta pronto, marcamos pra mandar o estado.
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      const data = e.data as { kind?: string } | undefined;
+      if (data?.kind === 'entur:preview:ready') {
+        setIframeReady(true);
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  // Sempre que a proposta mudar (ou o iframe avisar que esta pronto),
+  // envia o estado atual via postMessage. O iframe re-renderiza com os
+  // dados novos — sem reload, sem flicker.
+  useEffect(() => {
+    if (!iframeReady) return;
+    const win = iframeRef.current?.contentWindow;
+    if (!win) return;
+    win.postMessage({ kind: 'entur:preview:proposta', proposta }, '*');
+  }, [proposta, iframeReady]);
 
   return (
     <aside
@@ -116,23 +95,53 @@ function LivePreviewPanelInner({ proposta, onClose }: Props) {
         </button>
       </div>
 
-      {/* Stage: gradient sutil de fundo + flex centralizado. O frame
-          do celular fica centralizado e escalado pra caber. */}
+      {/* Stage: gradient sutil de fundo. Phone alinhado ao TOPO pra que
+          o cabecalho da proposta fique sempre visivel. Wrapper com
+          dimensoes escaladas reserva exatamente o espaco visual do
+          phone (transformOrigin top-left + container com tamanho
+          escalado), sem deixar whitespace ao redor. */}
       <div
         ref={stageRef}
-        className="flex-1 flex items-center justify-center p-4 overflow-hidden"
+        className="flex-1 flex items-start justify-center pt-4 pb-4 px-4 overflow-hidden"
         style={{
-          background: 'radial-gradient(circle at 50% 30%, rgba(10, 132, 255, 0.06), transparent 60%), var(--t-bg)',
+          background: 'radial-gradient(circle at 50% 20%, rgba(10, 132, 255, 0.06), transparent 60%), var(--t-bg)',
         }}
       >
         <div
+          // Container com dimensoes escaladas — assim o flex pai trata
+          // o phone visualmente como se fosse desse tamanho. Sem isso,
+          // o wrapper interno teria 430×932 no DOM e haveria
+          // whitespace ao redor do phone visivel.
           style={{
-            transform: `scale(${scale})`,
-            transformOrigin: 'center center',
-            transition: 'transform 200ms ease-out',
+            width: PHONE_W * scale,
+            height: PHONE_H * scale,
+            position: 'relative',
+            flexShrink: 0,
           }}
         >
-          <PhoneFrame>{propostaContent}</PhoneFrame>
+          <div
+            style={{
+              transform: `scale(${scale})`,
+              transformOrigin: 'top left',
+              transition: 'transform 200ms ease-out',
+              width: PHONE_W,
+              height: PHONE_H,
+            }}
+          >
+            <PhoneFrame>
+              {/* iframe ocupa toda a tela do phone (cobre safe areas
+                  intencionalmente — em iOS o conteudo vai por baixo do
+                  status bar; mantemos esse comportamento). Largura
+                  efetiva ~410px = renderiza em mobile breakpoint real. */}
+              <iframe
+                ref={iframeRef}
+                src="/preview-iframe"
+                title="Preview da proposta"
+                className="w-full h-full border-0"
+                style={{ display: 'block' }}
+              />
+            </PhoneFrame>
+          </div>
         </div>
       </div>
     </aside>

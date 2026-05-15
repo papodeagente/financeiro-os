@@ -103,14 +103,11 @@ export function PhoneFrame({ children, time }: Props) {
               }}
             />
 
-            {/* Conteudo scrollavel — recebe a proposta */}
-            <div
-              className="absolute inset-0 overflow-y-auto"
-              style={{
-                paddingTop: '54px', // espaco pra status bar
-                paddingBottom: '18px', // espaco pro home indicator
-              }}
-            >
+            {/* Conteudo full-bleed — em iOS real o conteudo vai por baixo
+                da status bar e do home indicator. Aqui o iframe (ou
+                qualquer children) ocupa 100% da tela e os overlays
+                ficam por cima. */}
+            <div className="absolute inset-0">
               {children}
             </div>
 
