@@ -37,6 +37,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  // Canal de controle externo: telas que precisam de mais espaco
+  // (ex.: editor de proposta drag-and-drop) podem forcar o colapso da
+  // sidebar via CustomEvent e restaurar no unmount. Nao persiste no
+  // localStorage — preferencia do usuario fica intacta.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ collapsed: boolean }>).detail;
+      if (detail && typeof detail.collapsed === 'boolean') {
+        setSidebarCollapsed(detail.collapsed);
+      }
+    };
+    window.addEventListener('entur:force-sidebar', handler);
+    return () => window.removeEventListener('entur:force-sidebar', handler);
+  }, []);
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
       e.preventDefault();

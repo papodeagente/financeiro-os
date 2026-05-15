@@ -1,11 +1,12 @@
 'use client';
 
-import { memo } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import type { Proposta } from '@/lib/crm-types';
 import { CapaSection } from './preview/CapaSection';
 import { PreviewRenderer } from './preview/PreviewRenderer';
 import { RodapeSection } from './preview/RodapeSection';
 import { DiscoveryRenderer } from './preview/discovery/DiscoveryRenderer';
+import { PhoneFrame } from './PhoneFrame';
 import { Eye, X } from 'lucide-react';
 
 interface Props {
@@ -28,6 +29,68 @@ function LivePreviewPanelInner({ proposta, onClose }: Props) {
   const fonte = proposta.visual?.fonte || 'Inter';
   const idioma = proposta.idioma || 'pt-BR';
 
+  // O frame e desenhado em 430px de largura. Quando o painel disponivel
+  // for menor, escalamos via CSS transform pra caber. Medimos o
+  // container e calculamos um scale dinamico.
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    // Phone base: 430 px largura, ~932 px altura (aspect 9:19.5).
+    // Deixamos margem de 32px nos dois eixos.
+    const compute = () => {
+      const w = el.clientWidth - 32;
+      const h = el.clientHeight - 32;
+      const sx = w / 430;
+      const sy = h / 932;
+      const s = Math.min(sx, sy, 1); // nunca passa de 1:1
+      setScale(Math.max(0.35, s));
+    };
+    compute();
+    const ro = new ResizeObserver(compute);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Conteudo da proposta — encapsulado pra ser reutilizado dentro do
+  // PhoneFrame. CapaSection/PreviewRenderer/RodapeSection consomem o
+  // tema (cor_fundo/cor_texto/fonte) via style externo.
+  const propostaContent = (
+    <div
+      className="min-h-full"
+      style={{ backgroundColor: corFundo, color: corTexto, fontFamily: `'${fonte}', sans-serif` }}
+    >
+      {isDiscovery ? (
+        // Discovery renderiza tudo (hero + sections + footer). slug
+        // 'preview' e simbolico — chat/lead-capture nao sao ativados.
+        <DiscoveryRenderer proposta={proposta} slug="preview" idioma={idioma} />
+      ) : (
+        <>
+          <CapaSection proposta={proposta} />
+          {proposta.cabecalho.mensagem_abertura && (
+            <div className="px-4 py-6 text-center">
+              <p className="text-sm leading-relaxed opacity-80 italic">
+                {proposta.cabecalho.mensagem_abertura}
+              </p>
+            </div>
+          )}
+          <div className="px-4 py-4">
+            <PreviewRenderer
+              secoes={proposta.secoes}
+              corPrimaria={corPrimaria}
+              idioma={idioma}
+            />
+          </div>
+          <div className="px-4 pb-8">
+            <RodapeSection proposta={proposta} />
+          </div>
+        </>
+      )}
+    </div>
+  );
+
   return (
     <aside
       className="flex-1 border-l border-[var(--t-border)] bg-[var(--t-bg)] flex flex-col overflow-hidden"
@@ -41,7 +104,7 @@ function LivePreviewPanelInner({ proposta, onClose }: Props) {
             Preview ao vivo
           </span>
           <span className="text-[10px] text-[var(--t-text-muted)]">
-            · {proposta.secoes.filter(s => s.visivel).length} blocos visíveis
+            · iPhone Pro Max · {proposta.secoes.filter(s => s.visivel).length} blocos visíveis
           </span>
         </div>
         <button
@@ -53,38 +116,24 @@ function LivePreviewPanelInner({ proposta, onClose }: Props) {
         </button>
       </div>
 
-      {/* Iframe-like container — escopo da fonte e cores pra nao
-          vazar pro chrome do editor. Scroll proprio. */}
+      {/* Stage: gradient sutil de fundo + flex centralizado. O frame
+          do celular fica centralizado e escalado pra caber. */}
       <div
-        className="flex-1 overflow-y-auto"
-        style={{ backgroundColor: corFundo, color: corTexto, fontFamily: `'${fonte}', sans-serif` }}
+        ref={stageRef}
+        className="flex-1 flex items-center justify-center p-4 overflow-hidden"
+        style={{
+          background: 'radial-gradient(circle at 50% 30%, rgba(10, 132, 255, 0.06), transparent 60%), var(--t-bg)',
+        }}
       >
-        {isDiscovery ? (
-          // Discovery renderiza tudo (hero + sections + footer). slug
-          // 'preview' e simbolico — chat/lead-capture nao sao ativados.
-          <DiscoveryRenderer proposta={proposta} slug="preview" idioma={idioma} />
-        ) : (
-          <>
-            <CapaSection proposta={proposta} />
-            {proposta.cabecalho.mensagem_abertura && (
-              <div className="max-w-3xl mx-auto px-6 py-10 text-center">
-                <p className="text-lg leading-relaxed opacity-80 italic">
-                  {proposta.cabecalho.mensagem_abertura}
-                </p>
-              </div>
-            )}
-            <div className="max-w-3xl mx-auto px-6 py-8">
-              <PreviewRenderer
-                secoes={proposta.secoes}
-                corPrimaria={corPrimaria}
-                idioma={idioma}
-              />
-            </div>
-            <div className="max-w-3xl mx-auto px-6 pb-12">
-              <RodapeSection proposta={proposta} />
-            </div>
-          </>
-        )}
+        <div
+          style={{
+            transform: `scale(${scale})`,
+            transformOrigin: 'center center',
+            transition: 'transform 200ms ease-out',
+          }}
+        >
+          <PhoneFrame>{propostaContent}</PhoneFrame>
+        </div>
       </div>
     </aside>
   );

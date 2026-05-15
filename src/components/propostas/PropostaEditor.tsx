@@ -517,6 +517,20 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusedBlockId, showShortcuts, undo, redo]);
 
+  // Quando o editor monta, forca a sidebar do AppShell a colapsar pra
+  // dar mais espaco horizontal pra paleta + canvas + preview/sidebar.
+  // Restaura preferencia do usuario no unmount.
+  useEffect(() => {
+    let prevCollapsed = false;
+    try {
+      prevCollapsed = localStorage.getItem('entur:sidebar-collapsed') === 'true';
+    } catch { /* ignore */ }
+    window.dispatchEvent(new CustomEvent('entur:force-sidebar', { detail: { collapsed: true } }));
+    return () => {
+      window.dispatchEvent(new CustomEvent('entur:force-sidebar', { detail: { collapsed: prevCollapsed } }));
+    };
+  }, []);
+
   // Auto-save with debounce
   useEffect(() => {
     if (!hasUnsaved.current) return;
