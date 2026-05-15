@@ -28,6 +28,7 @@ import { BlockRenderer } from './BlockRenderer';
 import { BlockToolbar } from './BlockToolbar';
 import { BlockPalette } from './BlockPalette';
 import { DropZone } from './DropZone';
+import { BlockHeaderSummary } from './BlockHeaderSummary';
 import { PropostaSidebar } from './PropostaSidebar';
 import { FlightSearchModal } from '@/components/FlightSearchModal';
 import { HotelSearchModal } from '@/components/HotelSearchModal';
@@ -143,19 +144,30 @@ function SortableBlock({
               title={collapsed ? 'Expandir bloco' : 'Colapsar bloco'}
             >
               <TipoIcon className={`w-4 h-4 shrink-0 ${hidden ? 'text-[var(--t-text-muted)]' : 'text-[var(--t-green)]'}`} />
-              <span className={`text-xs font-medium truncate ${hidden ? 'text-[var(--t-text-muted)] line-through' : 'text-[var(--t-text)]'}`}>
+              <span className={`text-[10px] uppercase tracking-wider font-semibold shrink-0 ${hidden ? 'text-[var(--t-text-muted)] line-through' : 'text-[var(--t-text-muted)]'}`}>
                 {TIPO_LABELS[secao.tipo] || secao.tipo}
               </span>
+              {/* Resumo visual do conteudo — vira o "preview" no header
+                  e faz o editor ler como uma timeline da proposta.
+                  Quando o bloco esta oculto, suprimimos o resumo
+                  pra reforcar visualmente o estado off. */}
+              {!hidden && (
+                <div className="min-w-0 flex-1 hidden sm:block">
+                  <BlockHeaderSummary tipo={secao.tipo} conteudo={secao.conteudo} />
+                </div>
+              )}
               {hidden && (
                 <span className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-[var(--t-text-muted)]/10 text-[var(--t-text-muted)] font-semibold">
                   Oculto
                 </span>
               )}
-              {collapsed ? (
-                <ChevronsUpDown className="w-3 h-3 text-[var(--t-text-muted)] ml-1" />
-              ) : (
-                <ChevronsDownUp className="w-3 h-3 text-[var(--t-text-muted)] ml-1" />
-              )}
+              <span className="shrink-0 ml-auto">
+                {collapsed ? (
+                  <ChevronsUpDown className="w-3 h-3 text-[var(--t-text-muted)]" />
+                ) : (
+                  <ChevronsDownUp className="w-3 h-3 text-[var(--t-text-muted)]" />
+                )}
+              </span>
             </button>
             {canAI && !collapsed && (
               <Button variant="ghost" size="sm" className="h-7 px-2 text-purple-400 hover:bg-purple-400/10 gap-1 text-[10px]"
