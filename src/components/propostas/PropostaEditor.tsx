@@ -11,6 +11,7 @@ import {
   Type, Calendar, Image, CheckSquare, DollarSign, Quote, MousePointer,
   Check, Loader2, Sparkles, FileDown, GitBranch,
   Video, Map, HelpCircle, Timer, Bed, Car,
+  Eye, EyeOff, CopyPlus, ChevronsDownUp, ChevronsUpDown,
 } from 'lucide-react';
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor,
@@ -85,53 +86,114 @@ function defaultConteudo(tipo: string): Record<string, unknown> {
 const AI_SUPPORTED_TYPES = ['TEXTO', 'SERVICO', 'ROTEIRO_DIA', 'INCLUSOS', 'DEPOIMENTO', 'CTA'];
 
 function SortableBlock({
-  secao, index, total, onUpdate, onRemove, onMove, onGenerateAI, generating, onInsertAfter,
+  secao, index, total, collapsed, onUpdate, onRemove, onMove, onDuplicate,
+  onToggleVisivel, onToggleCollapsed, onGenerateAI, generating, onInsertAfter,
 }: {
   secao: SecaoProposta; index: number; total: number;
+  collapsed: boolean;
   onUpdate: (conteudo: Record<string, unknown>) => void;
   onRemove: () => void;
   onMove: (dir: -1 | 1) => void;
+  onDuplicate: () => void;
+  onToggleVisivel: () => void;
+  onToggleCollapsed: () => void;
   onGenerateAI: () => void;
   generating: boolean;
   onInsertAfter?: (tipo: string, conteudo: Record<string, unknown>) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: secao.id });
-  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  const hidden = secao.visivel === false;
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : hidden ? 0.55 : 1,
+  };
   const TipoIcon = TIPO_ICONS[secao.tipo] || Type;
   const canAI = AI_SUPPORTED_TYPES.includes(secao.tipo);
 
   return (
     <div ref={setNodeRef} style={style}>
-      <Card className="bg-[var(--t-bg-secondary)] border-[var(--t-border)]">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing touch-none">
+      <Card
+        className="bg-[var(--t-bg-secondary)] border-[var(--t-border)]"
+        // Borda esquerda colorida acentua o estado: verde quando visível,
+        // cinza pontilhada quando oculto. Facilita escanear lista grande.
+        style={{
+          borderLeft: hidden
+            ? '3px dashed var(--t-text-muted)'
+            : '3px solid var(--t-green)',
+        }}
+      >
+        <CardContent className={collapsed ? 'p-3' : 'p-4'}>
+          <div className={`flex items-center gap-2 ${collapsed ? '' : 'mb-3'}`}>
+            <div
+              {...attributes}
+              {...listeners}
+              className="cursor-grab active:cursor-grabbing touch-none p-1 -m-1 rounded hover:bg-[var(--t-surface-hover)]"
+              title="Arrastar para reordenar"
+            >
               <GripVertical className="w-4 h-4 text-[var(--t-text-muted)]" />
             </div>
-            <TipoIcon className="w-4 h-4 text-[var(--t-green)]" />
-            <span className="text-xs font-medium text-[var(--t-text)] flex-1">
-              {TIPO_LABELS[secao.tipo] || secao.tipo}
-            </span>
-            {canAI && (
+            <button
+              type="button"
+              onClick={onToggleCollapsed}
+              className="flex items-center gap-2 flex-1 min-w-0 text-left hover:bg-[var(--t-surface-hover)] rounded px-1.5 py-0.5 -mx-1.5"
+              title={collapsed ? 'Expandir bloco' : 'Colapsar bloco'}
+            >
+              <TipoIcon className={`w-4 h-4 shrink-0 ${hidden ? 'text-[var(--t-text-muted)]' : 'text-[var(--t-green)]'}`} />
+              <span className={`text-xs font-medium truncate ${hidden ? 'text-[var(--t-text-muted)] line-through' : 'text-[var(--t-text)]'}`}>
+                {TIPO_LABELS[secao.tipo] || secao.tipo}
+              </span>
+              {hidden && (
+                <span className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-[var(--t-text-muted)]/10 text-[var(--t-text-muted)] font-semibold">
+                  Oculto
+                </span>
+              )}
+              {collapsed ? (
+                <ChevronsUpDown className="w-3 h-3 text-[var(--t-text-muted)] ml-1" />
+              ) : (
+                <ChevronsDownUp className="w-3 h-3 text-[var(--t-text-muted)] ml-1" />
+              )}
+            </button>
+            {canAI && !collapsed && (
               <Button variant="ghost" size="sm" className="h-7 px-2 text-purple-400 hover:bg-purple-400/10 gap-1 text-[10px]"
                 onClick={onGenerateAI} disabled={generating}>
                 {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                 {generating ? 'Gerando...' : 'IA'}
               </Button>
             )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0 text-[var(--t-text-secondary)]"
+              onClick={onToggleVisivel}
+              title={hidden ? 'Tornar visível' : 'Ocultar da proposta'}
+            >
+              {hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0 text-[var(--t-text-secondary)]"
+              onClick={onDuplicate}
+              title="Duplicar bloco"
+            >
+              <CopyPlus className="w-4 h-4" />
+            </Button>
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-[var(--t-text-secondary)]"
-              onClick={() => onMove(-1)} disabled={index === 0}>
+              onClick={() => onMove(-1)} disabled={index === 0} title="Mover para cima">
               <ChevronUp className="w-4 h-4" />
             </Button>
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-[var(--t-text-secondary)]"
-              onClick={() => onMove(1)} disabled={index === total - 1}>
+              onClick={() => onMove(1)} disabled={index === total - 1} title="Mover para baixo">
               <ChevronDown className="w-4 h-4" />
             </Button>
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-400" onClick={onRemove}>
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-400" onClick={onRemove} title="Deletar bloco">
               <Trash2 className="w-4 h-4" />
             </Button>
           </div>
-          <BlockRenderer tipo={secao.tipo} conteudo={secao.conteudo} onChange={onUpdate} onInsertAfter={onInsertAfter} />
+          {!collapsed && (
+            <BlockRenderer tipo={secao.tipo} conteudo={secao.conteudo} onChange={onUpdate} onInsertAfter={onInsertAfter} />
+          )}
         </CardContent>
       </Card>
     </div>
@@ -156,6 +218,18 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
   const [generatingAI, setGeneratingAI] = useState<Record<string, boolean>>({});
   const [generatingFull, setGeneratingFull] = useState(false);
   const [aiDestino, setAIDestino] = useState<Destino | null>(null);
+  // Estado UI-only (não persistido): blocos colapsados visualmente para
+  // o usuário escanear a lista. Reset a cada montagem.
+  const [collapsedBlocks, setCollapsedBlocks] = useState<Set<string>>(new Set());
+  const toggleCollapsed = (id: string) => {
+    setCollapsedBlocks(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const collapseAll = () => setCollapsedBlocks(new Set(proposta.secoes.map(s => s.id)));
+  const expandAll = () => setCollapsedBlocks(new Set());
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasUnsaved = useRef(false);
 
@@ -342,6 +416,34 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
 
   const removeSecao = (id: string) => {
     update(p => ({ ...p, secoes: p.secoes.filter(s => s.id !== id) }));
+  };
+
+  const duplicateSecao = (id: string) => {
+    update(p => {
+      const idx = p.secoes.findIndex(s => s.id === id);
+      if (idx < 0) return p;
+      const src = p.secoes[idx];
+      // Cópia profunda do conteúdo + novo id. Mantém visivel original.
+      // Se o conteúdo tiver um `id` interno (caso de ALOJAMENTO/TRANSPORTE/VOO),
+      // ele também é renovado para evitar colisão no viagem.alojamentos/transportes.
+      const cloneConteudo = JSON.parse(JSON.stringify(src.conteudo)) as Record<string, unknown>;
+      if (typeof cloneConteudo.id === 'string') cloneConteudo.id = generateId();
+      const dup: SecaoProposta = {
+        ...src,
+        id: generateId(),
+        conteudo: cloneConteudo,
+      };
+      const arr = [...p.secoes];
+      arr.splice(idx + 1, 0, dup);
+      return { ...p, secoes: arr };
+    });
+  };
+
+  const toggleVisivelSecao = (id: string) => {
+    update(p => ({
+      ...p,
+      secoes: p.secoes.map(s => s.id === id ? { ...s, visivel: !s.visivel } : s),
+    }));
   };
 
   const moveSecao = (id: string, dir: -1 | 1) => {
@@ -600,6 +702,23 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-medium text-[var(--t-text)]">Blocos da Proposta ({proposta.secoes.length})</h3>
+                    {proposta.secoes.length > 0 && (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-[10px] text-[var(--t-text-secondary)] gap-1"
+                          onClick={collapsedBlocks.size === proposta.secoes.length ? expandAll : collapseAll}
+                          title={collapsedBlocks.size === proposta.secoes.length ? 'Expandir todos' : 'Colapsar todos'}
+                        >
+                          {collapsedBlocks.size === proposta.secoes.length ? (
+                            <><ChevronsUpDown className="w-3 h-3" /> Expandir todos</>
+                          ) : (
+                            <><ChevronsDownUp className="w-3 h-3" /> Colapsar todos</>
+                          )}
+                        </Button>
+                      </div>
+                    )}
                   </div>
                   {proposta.secoes.map((secao, idx) => (
                     <SortableBlock
@@ -607,9 +726,13 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                       secao={secao}
                       index={idx}
                       total={proposta.secoes.length}
+                      collapsed={collapsedBlocks.has(secao.id)}
                       onUpdate={c => updateSecao(secao.id, c)}
                       onRemove={() => removeSecao(secao.id)}
                       onMove={dir => moveSecao(secao.id, dir)}
+                      onDuplicate={() => duplicateSecao(secao.id)}
+                      onToggleVisivel={() => toggleVisivelSecao(secao.id)}
+                      onToggleCollapsed={() => toggleCollapsed(secao.id)}
                       onGenerateAI={() => handleGenerateAI(secao.id, secao.tipo)}
                       generating={!!generatingAI[secao.id]}
                       onInsertAfter={(tipo, conteudo) => insertSecaoAfter(secao.id, tipo, conteudo)}
