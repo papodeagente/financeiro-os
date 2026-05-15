@@ -12,6 +12,7 @@ import {
   Check, Loader2, Sparkles, FileDown, GitBranch,
   Video, Map, HelpCircle, Timer, Bed, Car,
   Eye, EyeOff, CopyPlus, ChevronsDownUp, ChevronsUpDown,
+  Columns2, Settings2,
 } from 'lucide-react';
 import {
   DndContext, closestCenter, pointerWithin, KeyboardSensor, PointerSensor,
@@ -29,6 +30,7 @@ import { BlockToolbar } from './BlockToolbar';
 import { BlockPalette } from './BlockPalette';
 import { DropZone } from './DropZone';
 import { BlockHeaderSummary } from './BlockHeaderSummary';
+import { LivePreviewPanel } from './LivePreviewPanel';
 import { PropostaSidebar } from './PropostaSidebar';
 import { FlightSearchModal } from '@/components/FlightSearchModal';
 import { HotelSearchModal } from '@/components/HotelSearchModal';
@@ -239,6 +241,10 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
   // Tipo do bloco sendo arrastado da paleta. Quando != null, drop zones
   // ficam visiveis no canvas (caso contrario ocupam apenas 8px).
   const [paletteDragging, setPaletteDragging] = useState<string | null>(null);
+  // Modo preview ao vivo (Fase 5). Quando ligado, troca a PropostaSidebar
+  // de configuracao pelo LivePreviewPanel — usuario ve a proposta sendo
+  // renderizada (igual /p/[slug]) ao lado do canvas de edicao.
+  const [livePreview, setLivePreview] = useState(false);
   const toggleCollapsed = (id: string) => {
     setCollapsedBlocks(prev => {
       const next = new Set(prev);
@@ -744,6 +750,22 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* Toggle Preview ao vivo (Fase 5). Quando ligado, mostra a
+              proposta renderizada lado a lado com o editor (troca a
+              PropostaSidebar pelo LivePreviewPanel). */}
+          <Button
+            variant={livePreview ? 'default' : 'outline'}
+            size="sm"
+            className={`gap-1 text-xs ${livePreview
+              ? 'bg-[var(--t-green)] text-white dark:text-[#0a0a14]'
+              : 'border-[var(--t-border)] text-[var(--t-text-secondary)]'
+            }`}
+            onClick={() => setLivePreview(v => !v)}
+            title={livePreview ? 'Voltar para configuração' : 'Ver preview ao vivo'}
+          >
+            {livePreview ? <Settings2 className="w-3 h-3" /> : <Columns2 className="w-3 h-3" />}
+            {livePreview ? 'Configurar' : 'Preview'}
+          </Button>
           {proposta.link_publico && (
             <Button variant="outline" size="sm" className="gap-1 text-xs border-[var(--t-border)] text-[var(--t-text-secondary)]"
               onClick={() => navigator.clipboard.writeText(proposta.link_publico)}>
@@ -871,15 +893,21 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
             </div>
           </div>
 
-          {/* Sidebar */}
-          <PropostaSidebar
-            proposta={proposta}
-            clientes={allClientes}
-            membros={membros}
-            onUpdate={update}
-            onSetAIDestino={setAIDestino}
-            onClienteCreated={c => setAllClientes(prev => [...prev, c])}
-          />
+          {/* Sidebar de configuracao OU Preview ao vivo. So um dos dois
+              renderiza por vez — espaco horizontal e disputado pela
+              paleta + canvas. Toggle no topo da toolbar alterna. */}
+          {livePreview ? (
+            <LivePreviewPanel proposta={proposta} onClose={() => setLivePreview(false)} />
+          ) : (
+            <PropostaSidebar
+              proposta={proposta}
+              clientes={allClientes}
+              membros={membros}
+              onUpdate={update}
+              onSetAIDestino={setAIDestino}
+              onClienteCreated={c => setAllClientes(prev => [...prev, c])}
+            />
+          )}
         </div>
 
         {/* DragOverlay mostra preview do bloco sendo arrastado da paleta */}
