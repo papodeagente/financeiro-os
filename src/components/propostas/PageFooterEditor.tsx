@@ -18,7 +18,7 @@ interface Props {
 export function PageFooterEditor({ proposta, onUpdate, onClose }: Props) {
   return (
     <aside
-      className="w-[360px] shrink-0 border-l border-[var(--t-border)] bg-[var(--t-surface)] flex flex-col overflow-hidden"
+      className="w-[320px] xl:w-[360px] shrink-0 border-l border-[var(--t-border)] bg-[var(--t-surface)] flex flex-col overflow-hidden"
       aria-label="Editar rodapé da proposta"
     >
       {/* Header */}

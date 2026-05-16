@@ -798,12 +798,12 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Toolbar */}
-      <div className="relative px-6 py-3 flex items-center justify-between border-b border-[var(--t-border)] bg-[var(--t-surface)] shrink-0">
-        {/* Viewport toggle (Fase C) — centralizado absoluto pra nao
-            depender do flow do flex. Em telas <lg fica escondido pra
-            nao colidir com as outras toolbars. */}
-        <div className="hidden lg:flex absolute left-1/2 -translate-x-1/2 items-center bg-[var(--t-bg)] border border-[var(--t-border)] rounded-lg overflow-hidden">
+      {/* Toolbar — responsivo: titulo/autosave shrink, botoes da direita
+          ficam icon-only em telas <xl pra evitar overflow horizontal. */}
+      <div className="relative w-full px-3 sm:px-6 py-3 flex items-center justify-between gap-2 border-b border-[var(--t-border)] bg-[var(--t-surface)] shrink-0 min-w-0 overflow-hidden">
+        {/* Viewport toggle — centralizado absoluto. So aparece em telas
+            >=xl (1280px) pra nao sobrepor os outros grupos. */}
+        <div className="hidden xl:flex absolute left-1/2 -translate-x-1/2 items-center bg-[var(--t-bg)] border border-[var(--t-border)] rounded-lg overflow-hidden">
           {([
             { mode: 'desktop' as const, Icon: Monitor, label: 'Desktop (900px)' },
             { mode: 'tablet' as const, Icon: Tablet, label: 'Tablet (768px)' },
@@ -826,11 +826,11 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
           ))}
         </div>
 
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => router.push('/propostas')} className="text-[var(--t-text-secondary)]">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink">
+          <Button variant="ghost" size="sm" onClick={() => router.push('/propostas')} className="text-[var(--t-text-secondary)] shrink-0">
             <ArrowLeft className="w-4 h-4" />
           </Button>
-          <span className="text-sm font-medium text-[var(--t-text)]">
+          <span className="text-sm font-medium text-[var(--t-text)] truncate min-w-0">
             {isEdit ? `Editar ${proposta.numero}` : 'Nova Proposta'}
             {proposta.versao > 1 && (
               <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-400">
@@ -838,19 +838,19 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
               </span>
             )}
           </span>
-          {/* Auto-save indicator */}
+          {/* Auto-save indicator — some em telas estreitas */}
           {autoSaveStatus === 'saving' && (
-            <span className="flex items-center gap-1 text-[10px] text-[var(--t-text-muted)]">
+            <span className="hidden sm:flex items-center gap-1 text-[10px] text-[var(--t-text-muted)] shrink-0">
               <Loader2 className="w-3 h-3 animate-spin" /> Salvando...
             </span>
           )}
           {autoSaveStatus === 'saved' && (
-            <span className="flex items-center gap-1 text-[10px] text-[var(--t-green)]">
+            <span className="hidden sm:flex items-center gap-1 text-[10px] text-[var(--t-green)] shrink-0">
               <Check className="w-3 h-3" /> Salvo
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           {/* Undo / Redo (Fase 6). Funcionam tanto pelos botoes quanto
               por Ctrl/Cmd+Z e Ctrl/Cmd+Shift+Z. */}
           <Button
@@ -885,29 +885,38 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
 
           {proposta.link_publico && (
             <Button variant="outline" size="sm" className="gap-1 text-xs border-[var(--t-border)] text-[var(--t-text-secondary)]"
-              onClick={() => navigator.clipboard.writeText(proposta.link_publico)}>
-              <Copy className="w-3 h-3" /> Copiar link
+              onClick={() => navigator.clipboard.writeText(proposta.link_publico)}
+              title="Copiar link público">
+              <Copy className="w-3 h-3" />
+              <span className="hidden xl:inline">Copiar link</span>
             </Button>
           )}
           {isEdit && (
             <Button variant="outline" size="sm" className="gap-1 text-xs border-[var(--t-border)] text-purple-400"
-              onClick={handleNovaVersao}>
-              <GitBranch className="w-3 h-3" /> v{proposta.versao + 1}
+              onClick={handleNovaVersao}
+              title={`Criar versão ${proposta.versao + 1}`}>
+              <GitBranch className="w-3 h-3" />
+              <span className="hidden xl:inline">v{proposta.versao + 1}</span>
             </Button>
           )}
           <Button variant="outline" size="sm" className="gap-1 text-xs border-[var(--t-border)] text-[var(--t-text-secondary)]"
-            onClick={() => setPdfModalOpen(true)}>
+            onClick={() => setPdfModalOpen(true)}
+            title="Exportar PDF">
             <FileDown className="w-3 h-3" />
-            PDF
+            <span className="hidden xl:inline">PDF</span>
           </Button>
           {proposta.cliente_id && (
             <Button variant="outline" size="sm" className="gap-1 text-xs border-[var(--t-border)] text-emerald-400"
-              onClick={handleEnviarWhatsApp}>
-              <MessageCircle className="w-3 h-3" /> WhatsApp
+              onClick={handleEnviarWhatsApp}
+              title="Enviar via WhatsApp">
+              <MessageCircle className="w-3 h-3" />
+              <span className="hidden xl:inline">WhatsApp</span>
             </Button>
           )}
-          <Button onClick={handleSave} disabled={saving} className="bg-[var(--t-green)] text-white dark:text-[#0a0a14] gap-1 text-sm">
-            <Save className="w-4 h-4" /> {saving ? 'Salvando...' : 'Salvar e Fechar'}
+          <Button onClick={handleSave} disabled={saving} className="bg-[var(--t-green)] text-white dark:text-[#0a0a14] gap-1 text-sm shrink-0">
+            <Save className="w-4 h-4" />
+            <span className="hidden sm:inline">{saving ? 'Salvando...' : 'Salvar'}</span>
+            <span className="hidden xl:inline">e Fechar</span>
           </Button>
         </div>
       </div>
