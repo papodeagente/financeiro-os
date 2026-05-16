@@ -318,23 +318,33 @@ export function DiscoveryRenderer({ proposta, slug, idioma }: Props) {
     );
   }
 
+  // Flags de exibicao com defaults true (proposta personalizavel —
+  // agencia/cliente podem ocultar elementos fixos especificos).
+  const exibir = proposta.visual.exibir || {};
+  const showHeader = exibir.header_sticky !== false;
+  const showHero = exibir.hero !== false;
+  const showIntro = exibir.mensagem_abertura !== false;
+  const showAceite = exibir.aceite_digital !== false;
+
   return (
     <div className="min-h-screen bg-white text-gray-900">
-      <DiscoveryHeader
-        proposta={proposta}
-        idioma={idioma}
-        navItems={navItems}
-        activeSection={activeSection}
-      />
+      {showHeader && (
+        <DiscoveryHeader
+          proposta={proposta}
+          idioma={idioma}
+          navItems={navItems}
+          activeSection={activeSection}
+        />
+      )}
 
-      <DiscoveryHero proposta={proposta} />
+      {showHero && <DiscoveryHero proposta={proposta} />}
 
-      <IntroSection proposta={proposta} idioma={idioma} />
+      {showIntro && <IntroSection proposta={proposta} idioma={idioma} />}
 
       {visibleSecoes.map((s, i) => renderSection(s, i))}
 
       {/* Aceitação digital — fechar o negócio antes do rodapé */}
-      {proposta.status !== 'EXPIRADO' && proposta.status !== 'CONVERTIDO' && (
+      {showAceite && proposta.status !== 'EXPIRADO' && proposta.status !== 'CONVERTIDO' && (
         <section className="py-12 bg-white" id="discovery-aceitar">
           <AceitarProposta
             slug={slug}

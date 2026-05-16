@@ -318,19 +318,6 @@ export function PricingSection({ valoresSecoes, inclusosSecoes, idioma, corPrima
           </details>
         )}
 
-        {/* Bottom mega-CTA */}
-        <div className="mt-14 text-center">
-          <button
-            onClick={() => document.getElementById('discovery-footer')?.scrollIntoView({ behavior: 'smooth' })}
-            className="px-10 py-4 rounded-full text-white font-bold text-base transition-all hover:scale-105 shadow-xl"
-            style={{ backgroundColor: corPrimaria, boxShadow: `0 10px 30px -10px ${corPrimaria}` }}
-          >
-            {i18n.reserveAgora} →
-          </button>
-          <p className="mt-3 text-xs text-gray-500">
-            Resposta em até 1 hora útil · Sem compromisso
-          </p>
-        </div>
       </div>
     </section>
   );

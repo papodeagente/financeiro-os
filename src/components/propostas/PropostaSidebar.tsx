@@ -583,6 +583,50 @@ export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAI
                     </div>
                   </div>
                 </div>
+
+                {/* Exibicao de elementos fixos — toggles individuais
+                    pra que cada proposta personalize quais elementos
+                    estruturais aparecem na view publica. Blocos da
+                    proposta tem .visivel proprio (toolbar do bloco). */}
+                <div className="pt-2 border-t border-[var(--t-border)]">
+                  <label className="text-[10px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)] mb-2 block">
+                    Exibir na proposta
+                  </label>
+                  <div className="space-y-2">
+                    {([
+                      { key: 'header_sticky' as const, label: 'Menu sticky no topo (Discovery)', help: 'Barra fixa no topo da pagina com nav e CTA' },
+                      { key: 'hero' as const, label: 'Capa em destaque (Discovery)', help: 'Imagem grande de abertura' },
+                      { key: 'mensagem_abertura' as const, label: 'Mensagem de abertura', help: 'Texto introdutorio antes dos blocos' },
+                      { key: 'aceite_digital' as const, label: 'Aceite digital', help: 'Formulario do cliente aceitar a proposta' },
+                      { key: 'validade_no_fim' as const, label: 'Validade no final', help: '"Valida ate {data}" no fim da pagina' },
+                      { key: 'marca_entur' as const, label: 'Marca "Proposta gerada por Entur OS"', help: 'Texto discreto no rodape' },
+                    ]).map(opt => {
+                      const ativo = proposta.visual.exibir?.[opt.key] !== false;
+                      return (
+                        <label key={opt.key} className="flex items-start gap-2 cursor-pointer p-2 rounded-md hover:bg-[var(--t-surface-hover)] transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={ativo}
+                            onChange={() => onUpdate(p => {
+                              if (!p.visual.exibir) p.visual.exibir = {};
+                              p.visual.exibir[opt.key] = !ativo;
+                              return p;
+                            })}
+                            className="mt-0.5 accent-[var(--t-green)]"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-medium text-[var(--t-text)] leading-tight">
+                              {opt.label}
+                            </div>
+                            <div className="text-[10px] text-[var(--t-text-muted)] mt-0.5 leading-tight">
+                              {opt.help}
+                            </div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </section>
           </div>

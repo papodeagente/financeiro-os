@@ -161,8 +161,8 @@ export default function PublicPropostaPage() {
         idioma={idioma}
       />
 
-      {/* Validade */}
-      {proposta.cabecalho.validade && (
+      {/* Validade — pode ser oculto via visual.exibir.validade_no_fim */}
+      {proposta.cabecalho.validade && proposta.visual.exibir?.validade_no_fim !== false && (
         <div className="text-center pb-8 text-sm opacity-40">
           {i18n.validaAte} {new Date(proposta.cabecalho.validade + 'T12:00:00').toLocaleDateString(idioma === 'en' ? 'en-US' : idioma === 'es' ? 'es-ES' : 'pt-BR')}
         </div>

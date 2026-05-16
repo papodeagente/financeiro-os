@@ -811,6 +811,18 @@ export interface Proposta {
     fonte: string;
     imagem_capa: string;
     estilo_capa: EstiloCapa;
+    // Toggles de exibicao de elementos fixos da proposta (alem dos
+    // blocos individuais que ja tem .visivel). Default true em todos
+    // — proposta personalizada por agencia/cliente. Cada flag oculta
+    // 1 elemento estrutural da view publica /p/[slug].
+    exibir?: {
+      header_sticky?: boolean;     // DiscoveryHeader fixo no topo com nav e CTA
+      hero?: boolean;              // DiscoveryHero (capa grande)
+      mensagem_abertura?: boolean; // IntroSection com texto introdutorio
+      aceite_digital?: boolean;    // AceitarProposta — form de aceite antes do rodape
+      marca_entur?: boolean;       // "Proposta gerada por Entur OS" no rodape
+      validade_no_fim?: boolean;   // "Valida ate {data}" no CLASSICO no final
+    };
   };
 
   viagem?: ViagemEstruturada;

@@ -8,6 +8,7 @@ interface Props {
 export function RodapeSection({ proposta }: Props) {
   const { rodape, visual } = proposta;
   const corPrimaria = visual.cor_primaria || '#004aad';
+  const showMarcaEntur = visual.exibir?.marca_entur !== false;
 
   return (
     <div className="border-t border-gray-200 mt-12 pt-8 pb-12">
@@ -46,9 +47,11 @@ export function RodapeSection({ proposta }: Props) {
         </div>
       </div>
 
-      <div className="text-center text-xs opacity-30 mt-8">
-        Proposta gerada por Entur OS
-      </div>
+      {showMarcaEntur && (
+        <div className="text-center text-xs opacity-30 mt-8">
+          Proposta gerada por Entur OS
+        </div>
+      )}
     </div>
   );
 }

@@ -1529,8 +1529,9 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                 </SelectablePageSection>
               </div>
 
-              {/* Validade no fim — espelhando /p/[slug] */}
-              {proposta.cabecalho.validade && (
+              {/* Validade no fim — espelhando /p/[slug]. Pode ser oculto
+                  via proposta.visual.exibir.validade_no_fim = false. */}
+              {proposta.cabecalho.validade && proposta.visual.exibir?.validade_no_fim !== false && (
                 <div className="text-center pb-8 pt-4 text-sm opacity-40">
                   Válida até{' '}
                   {new Date(proposta.cabecalho.validade + 'T12:00:00').toLocaleDateString('pt-BR')}
