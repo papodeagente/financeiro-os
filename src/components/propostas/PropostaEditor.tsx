@@ -1007,27 +1007,49 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                     PreviewEditorProvider redireciona pra setSelectedBlockId.
                     A capa/cabecalho e editavel via aba Estrutura ou
                     seletor visual no proprio canvas. */}
+                {/* DROP ZONE no topo — insere bloco no inicio das secoes
+                    (entre DiscoveryHero e AccommodationSummary) */}
+                {paletteDragging && (
+                  <div className="px-6 py-3">
+                    <SortableContext items={proposta.secoes.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                      <DropZone
+                        index={0}
+                        draggingType={paletteDragging}
+                        variant="page"
+                        label="Soltar no início (após capa)"
+                      />
+                    </SortableContext>
+                  </div>
+                )}
+
                 <DiscoveryRenderer
                   proposta={proposta}
                   slug="preview"
                   idioma={(proposta.idioma || 'pt-BR') as IdiomaProposal}
                 />
 
-                {/* Drop zones + bloco no rodape mantidos nesse layout
-                    pra adicionar blocos novos sem sair do canvas */}
+                {/* DROP ZONE no fim — insere bloco apos todas as secoes
+                    (antes do rodape Discovery + CTA aceitar) */}
                 {paletteDragging && (
-                  <div className="px-6 py-4 bg-blue-50/40 border-t-2 border-dashed border-blue-300">
-                    <p className="text-[11px] uppercase tracking-wider font-semibold text-blue-600 text-center mb-2">
-                      Solte o bloco aqui — vai aparecer na seção apropriada
-                    </p>
+                  <div className="px-6 py-3">
                     <SortableContext items={proposta.secoes.map(s => s.id)} strategy={verticalListSortingStrategy}>
-                      <DropZone index={proposta.secoes.length} draggingType={paletteDragging} forceVisible label="Adicionar ao fim" />
+                      <DropZone
+                        index={proposta.secoes.length}
+                        draggingType={paletteDragging}
+                        variant="page"
+                        label="Soltar no fim (antes do rodapé)"
+                      />
                     </SortableContext>
                   </div>
                 )}
               </PreviewEditorProvider>
             ) : (
               // ============ DESKTOP + LAYOUT CLASSICO ============
+              // Estrutura otimizada pra drag-and-drop flexivel:
+              // capa → DROP-ZONE-page → abertura? → DROP-ZONE-page →
+              // blocos (com inner drop zones) → DROP-ZONE-page → rodape.
+              // Drop zones de pagina sao full-width (mais inviting que
+              // os drop zones inner limitados ao container 768px).
               <>
               {/* CAPA — secao de pagina (nao draggavel). Click abre o
                   PageHeaderEditor no painel direito. */}
@@ -1039,6 +1061,21 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
               >
                 <CapaSection proposta={proposta} />
               </SelectablePageSection>
+
+              {/* DROP ZONE PAGE-LEVEL — logo apos a capa (visivel durante
+                  drag da paleta). Insere bloco na posicao 0 da secoes. */}
+              {paletteDragging && (
+                <div className="px-6 py-3">
+                  <SortableContext items={[]} strategy={verticalListSortingStrategy}>
+                    <DropZone
+                      index={0}
+                      draggingType={paletteDragging}
+                      variant="page"
+                      label={`Soltar logo após a capa`}
+                    />
+                  </SortableContext>
+                </div>
+              )}
 
               {/* MENSAGEM DE ABERTURA — so renderiza quando preenchida.
                   Selecao tambem leva ao PageHeaderEditor (mesmo editor
@@ -1073,7 +1110,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                   <div className="py-12">
                     {/* Drop zone gigante quando ha drag em curso */}
                     {paletteDragging && (
-                      <DropZone index={0} draggingType={paletteDragging} forceVisible label="Soltar primeiro bloco aqui" />
+                      <DropZone index={0} draggingType={paletteDragging} forceVisible label="Soltar primeiro bloco aqui" variant="page" />
                     )}
                     {/* Empty state ilustrado com CTAs grandes */}
                     {!paletteDragging && (
@@ -1171,6 +1208,21 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                 />
               </div>
               </div>{/* /CONTAINER DOS BLOCOS */}
+
+              {/* DROP ZONE PAGE-LEVEL — antes do rodape (visivel durante
+                  drag da paleta). Insere bloco no FIM da secoes. */}
+              {paletteDragging && (
+                <div className="px-6 py-3">
+                  <SortableContext items={[]} strategy={verticalListSortingStrategy}>
+                    <DropZone
+                      index={proposta.secoes.length}
+                      draggingType={paletteDragging}
+                      variant="page"
+                      label="Soltar logo antes do rodapé"
+                    />
+                  </SortableContext>
+                </div>
+              )}
 
               {/* RODAPE — secao de pagina (nao draggavel). Click abre o
                   PageFooterEditor no painel direito. */}
