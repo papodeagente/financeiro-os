@@ -7,7 +7,6 @@ import { CapaSection } from '@/components/propostas/preview/CapaSection';
 import { PreviewRenderer } from '@/components/propostas/preview/PreviewRenderer';
 import { RodapeSection } from '@/components/propostas/preview/RodapeSection';
 import { AceitarProposta } from '@/components/propostas/preview/AceitarProposta';
-import { LeadCapture } from '@/components/propostas/preview/LeadCapture';
 import { ChatWidget } from '@/components/propostas/preview/ChatWidget';
 import { DiscoveryRenderer } from '@/components/propostas/preview/discovery/DiscoveryRenderer';
 import { t, type IdiomaProposal } from '@/lib/i18n-proposta';
@@ -141,8 +140,11 @@ export default function PublicPropostaPage() {
         <RodapeSection proposta={proposta} />
       </div>
 
-      {/* Aceitacao Digital */}
-      {proposta.status !== 'EXPIRADO' && proposta.status !== 'CONVERTIDO' && (
+      {/* Aceitacao Digital — unico CTA da pagina. Form pega nome/telefone/
+          email + (alteracao) anotacao, cria Cliente+Venda no CRM auto. */}
+      {proposta.status !== 'EXPIRADO'
+        && proposta.status !== 'CONVERTIDO'
+        && proposta.visual.exibir?.aceite_digital !== false && (
         <AceitarProposta
           slug={slug}
           status={proposta.status}
@@ -152,14 +154,6 @@ export default function PublicPropostaPage() {
           idioma={idioma}
         />
       )}
-
-      {/* Lead Capture ��� shown for proposals without specific client */}
-      <LeadCapture
-        slug={slug}
-        corPrimaria={proposta.visual.cor_primaria || '#004aad'}
-        vendedorNome={proposta.rodape.nome_vendedor}
-        idioma={idioma}
-      />
 
       {/* Validade — pode ser oculto via visual.exibir.validade_no_fim */}
       {proposta.cabecalho.validade && proposta.visual.exibir?.validade_no_fim !== false && (

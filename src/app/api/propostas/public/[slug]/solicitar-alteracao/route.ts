@@ -3,7 +3,11 @@ import pool, { initDB } from '@/lib/db';
 import { criarNotificacao } from '@/lib/notificacoes';
 import { criarVendaDaPropostaPublica } from '@/lib/proposta-aceite-crm';
 
-export async function PUT(req: Request, { params }: { params: Promise<{ slug: string }> }) {
+// Cliente clicou "Solicitar Alteracoes" na view publica da proposta:
+// preenche nome/telefone/email + descricao da alteracao. NAO marca a
+// proposta como aceita — apenas registra o feedback e cria uma
+// negociacao (Venda CRM em ORCAMENTO) com a anotacao da alteracao.
+export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
     await initDB();
     const { slug } = await params;
@@ -12,15 +16,19 @@ export async function PUT(req: Request, { params }: { params: Promise<{ slug: st
     }
 
     const body = await req.json();
-    const nome = String(body.nome || body.nome_aceite || '').trim();
+    const nome = String(body.nome || '').trim();
     const telefone = String(body.telefone || '').trim();
     const email = String(body.email || '').trim();
+    const anotacao = String(body.anotacao || body.mensagem || '').trim();
 
     if (!nome) {
       return NextResponse.json({ error: 'Nome obrigatorio' }, { status: 400 });
     }
     if (!email && !telefone) {
       return NextResponse.json({ error: 'Informe telefone ou email para contato' }, { status: 400 });
+    }
+    if (!anotacao) {
+      return NextResponse.json({ error: 'Descreva a alteracao desejada' }, { status: 400 });
     }
 
     const { rows } = await pool.query(
@@ -43,23 +51,22 @@ export async function PUT(req: Request, { params }: { params: Promise<{ slug: st
       || req.headers.get('x-real-ip')
       || 'unknown';
 
-    proposta.status = 'ACEITO';
-    proposta.aceite = {
-      nome_aceite: nome,
-      data_aceite: new Date().toISOString(),
-      ip_aceite: ip,
-      telefone,
-      email,
-    };
+    // Registra o feedback no array de feedbacks da proposta (pra historico)
+    if (!Array.isArray(proposta.feedbacks)) proposta.feedbacks = [];
+    proposta.feedbacks.push({
+      id: `fb-${Date.now()}`,
+      tipo: 'ALTERACAO',
+      mensagem: anotacao,
+      nome, telefone, email,
+      data: new Date().toISOString(),
+      ip,
+    });
     proposta.atualizado_em = new Date().toISOString();
-
     await pool.query(
-      `UPDATE propostas SET data = $1, status = 'ACEITO', updated_at = NOW() WHERE id = $2`,
+      `UPDATE propostas SET data = $1, updated_at = NOW() WHERE id = $2`,
       [JSON.stringify(proposta), rows[0].id]
     );
 
-    // Cria Cliente + Negociacao (VendaCRM em status ORCAMENTO) no CRM
-    // do tenant. Vendedor da agencia abre depois pra prosseguir.
     let vendaCriada: { vendaId: string; vendaNumero: string; valorTotal: number } | null = null;
     if (tenantId) {
       try {
@@ -71,13 +78,13 @@ export async function PUT(req: Request, { params }: { params: Promise<{ slug: st
           nome,
           telefone,
           email,
-          tipo: 'aceite',
+          tipo: 'alteracao',
+          anotacao,
           ip,
         });
         vendaCriada = result;
       } catch (e) {
-        // Falha em criar venda nao deve bloquear o aceite — log e segue.
-        console.error('Falha ao criar venda CRM apos aceite:', e);
+        console.error('Falha ao criar venda CRM apos solicitacao de alteracao:', e);
       }
     }
 
@@ -86,19 +93,17 @@ export async function PUT(req: Request, { params }: { params: Promise<{ slug: st
       const numero = proposta.numero || rows[0].id;
       await criarNotificacao({
         tenantId,
-        tipo: 'PROPOSTA_ACEITA',
-        titulo: `${cliente} aceitou a proposta ${numero}`,
-        descricao: vendaCriada
-          ? `Aceite registrado por ${nome}. Negociacao ${vendaCriada.vendaNumero} criada no CRM.`
-          : `Aceite registrado por ${nome}.`,
+        tipo: 'PROPOSTA_FEEDBACK',
+        titulo: `${cliente} solicitou alteracoes na proposta ${numero}`,
+        descricao: anotacao.length > 100 ? `${anotacao.slice(0, 97)}...` : anotacao,
         link: vendaCriada ? `/vendas/${vendaCriada.vendaId}` : `/propostas/${rows[0].id}`,
         vendedorId: proposta.vendedor_id || '',
         data: {
           proposta_id: rows[0].id,
           proposta_numero: numero,
           cliente_nome: cliente,
-          nome_aceite: nome,
-          telefone, email,
+          nome, telefone, email,
+          anotacao,
           venda_id: vendaCriada?.vendaId || null,
         },
       });
@@ -106,7 +111,6 @@ export async function PUT(req: Request, { params }: { params: Promise<{ slug: st
 
     return NextResponse.json({
       ok: true,
-      status: 'ACEITO',
       venda: vendaCriada,
     });
   } catch (e: unknown) {
