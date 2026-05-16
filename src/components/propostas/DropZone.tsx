@@ -11,27 +11,11 @@ const TIPO_LABELS: Record<string, string> = {
 };
 
 interface Props {
-  // Posição na lista onde a inserção vai acontecer. Quando o usuário
-  // arrasta um item da paleta e solta na drop zone N, o novo bloco é
-  // inserido em secoes[N].
   index: number;
-  // CHAVE UNICA dentro do DndContext. Cada DropZone PRECISA de uma
-  // locationKey unica — varias drop zones podem apontar pro mesmo
-  // index (ex.: page-level + inner ambas inserem na pos 0) mas
-  // devem ter ids diferentes pra dnd-kit registrar todas.
   locationKey: string;
-  // Tipo do bloco sendo arrastado da paleta. Quando definido, drop
-  // zones ficam visíveis e mostram contexto (nome do bloco).
   draggingType?: string | null;
-  // Texto opcional do hint. Default e contextual (nome do bloco) ou
-  // "Soltar aqui" se sem draggingType.
   label?: string;
-  // Forca visivel mesmo sem drag (ex.: empty state)
   forceVisible?: boolean;
-  // Variante visual:
-  //  - 'inline' (default): drop zone discreta entre blocos
-  //  - 'page' : drop zone full-width entre secoes de pagina (capa/
-  //    blocos/rodape) — visual mais prominente
   variant?: 'inline' | 'page';
 }
 
@@ -43,39 +27,41 @@ export function DropZone({ index, locationKey, draggingType, label, forceVisible
 
   const active = !!draggingType || !!forceVisible;
   if (!active) {
-    // Em repouso, drop zone ocupa o minimo possivel pra nao interferir.
-    return <div ref={setNodeRef} className={variant === 'page' ? 'h-1' : 'h-2'} />;
+    // Em repouso, ocupa minimo. Pequeno padding pra dnd-kit registrar
+    // bounds positivas (zero-height pode causar issues).
+    return <div ref={setNodeRef} className="h-2" />;
   }
 
   const tipoLabel = draggingType ? (TIPO_LABELS[draggingType] || draggingType) : '';
   const displayLabel = label || (tipoLabel ? `Soltar ${tipoLabel} aqui` : 'Soltar aqui');
 
-  // Variant 'page' e mais prominente — usado entre capa/blocos/rodape.
-  // Variant 'inline' e usado entre blocos individuais.
-  const baseHeight = variant === 'page' ? 'h-20' : 'h-12';
-  const overHeight = variant === 'page' ? 'h-24' : 'h-16';
+  // Drop zones MUITO visiveis durante drag. Mesmo design pra inline e
+  // page — diferenca so na altura. Cores fortes, bordas grossas,
+  // animacao bounce quando isOver pra confirmacao visual clara.
+  const baseHeight = variant === 'page' ? 'min-h-24' : 'min-h-16';
 
   return (
     <div
       ref={setNodeRef}
-      className={`transition-all rounded-xl border-2 border-dashed flex items-center justify-center text-xs font-medium ${
+      className={`${baseHeight} my-2 transition-all rounded-xl border-2 border-dashed flex items-center justify-center text-sm font-semibold uppercase tracking-wider ${
         isOver
-          ? `${overHeight} bg-[var(--t-green)]/25 border-[var(--t-green)] text-[var(--t-green)] scale-[1.01] shadow-lg`
-          : `${baseHeight} bg-[var(--t-green)]/8 border-[var(--t-green)]/40 text-[var(--t-green)]/80`
+          ? 'bg-blue-500 border-blue-600 text-white shadow-xl scale-[1.02]'
+          : 'bg-blue-50 border-blue-300 text-blue-700'
       }`}
       aria-label={`Soltar bloco na posição ${index}`}
+      data-drop-zone-key={locationKey}
     >
       {isOver ? (
-        <span className="flex items-center gap-2 uppercase tracking-wider font-bold">
-          <span className="animate-bounce text-base">↓</span>
+        <span className="flex items-center gap-2 text-base">
+          <span className="text-xl animate-bounce">↓</span>
           {displayLabel}
-          <span className="animate-bounce text-base">↓</span>
+          <span className="text-xl animate-bounce">↓</span>
         </span>
       ) : (
-        <span className="flex items-center gap-1.5 opacity-80">
-          <span className="w-1 h-1 rounded-full bg-current" />
-          {tipoLabel ? `Soltar ${tipoLabel} aqui` : displayLabel}
-          <span className="w-1 h-1 rounded-full bg-current" />
+        <span className="flex items-center gap-2 opacity-90">
+          <span className="text-xs">●</span>
+          {displayLabel}
+          <span className="text-xs">●</span>
         </span>
       )}
     </div>

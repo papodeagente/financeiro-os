@@ -640,26 +640,35 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
+    const wasDraggingPalette = paletteDragging;
     setPaletteDragging(null);
-    if (!over) return;
 
     const activeData = active.data.current as { source?: string; tipo?: string } | undefined;
-    const overData = over.data.current as { kind?: string; index?: number } | undefined;
+    const overData = over?.data.current as { kind?: string; index?: number } | undefined;
 
     // Drop vindo da paleta: insere bloco na posicao da drop zone.
     if (activeData?.source === 'palette' && typeof activeData.tipo === 'string') {
+      if (!over) {
+        // Drop fora de qualquer drop zone valida — feedback claro
+        if (wasDraggingPalette) {
+          toast.error('Solte sobre uma área azul para adicionar', 'Tente novamente');
+        }
+        return;
+      }
       if (overData?.kind === 'drop-zone' && typeof overData.index === 'number') {
         const newId = insertSecaoAt(activeData.tipo, overData.index);
-        // Feedback visual: toast + auto-seleciona o bloco recem-criado
-        // pra abrir o painel de propriedades direto na edicao.
         toast.success(`${TIPO_LABELS_GLOBAL[activeData.tipo] || activeData.tipo} adicionado`);
         setSelectedBlockId(newId);
+        return;
       }
+      // Drop em algo que nao e drop-zone — improvavel pelo collision
+      // detection mas defensivo
+      toast.error('Posição de destino inválida', 'Tente soltar entre os blocos');
       return;
     }
 
     // Reordenacao canvas → canvas: troca posicao do bloco arrastado.
-    if (active.id === over.id) return;
+    if (!over || active.id === over.id) return;
     update(p => {
       const oldIndex = p.secoes.findIndex(s => s.id === active.id);
       const newIndex = p.secoes.findIndex(s => s.id === over.id);
@@ -1230,27 +1239,22 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                         return (
                           <div key={`row-${row[0].id}`} className="space-y-2">
                             <div className={isPair ? 'grid grid-cols-2 gap-3' : ''}>
-                              {row.map((secao, localIdx) => {
-                                const absIndex = rowStartIdx + localIdx;
-                                return (
-                                  <SelectableBlock
-                                    key={secao.id}
-                                    secao={secao}
-                                    index={absIndex}
-                                    selected={selectedBlockId === secao.id}
-                                    onSelect={() => setSelectedBlockId(secao.id)}
-                                    onDuplicate={() => duplicateSecao(secao.id)}
-                                    onToggleVisivel={() => toggleVisivelSecao(secao.id)}
-                                    onRemove={() => {
-                                      removeSecao(secao.id);
-                                      if (selectedBlockId === secao.id) setSelectedBlockId(null);
-                                    }}
-                                    paletteDragging={paletteDragging}
-                                    corPrimaria={proposta.visual?.cor_primaria || '#004aad'}
-                                    idioma={(proposta.idioma || 'pt-BR') as 'pt-BR' | 'en' | 'es'}
-                                  />
-                                );
-                              })}
+                              {row.map((secao) => (
+                                <SelectableBlock
+                                  key={secao.id}
+                                  secao={secao}
+                                  selected={selectedBlockId === secao.id}
+                                  onSelect={() => setSelectedBlockId(secao.id)}
+                                  onDuplicate={() => duplicateSecao(secao.id)}
+                                  onToggleVisivel={() => toggleVisivelSecao(secao.id)}
+                                  onRemove={() => {
+                                    removeSecao(secao.id);
+                                    if (selectedBlockId === secao.id) setSelectedBlockId(null);
+                                  }}
+                                  corPrimaria={proposta.visual?.cor_primaria || '#004aad'}
+                                  idioma={(proposta.idioma || 'pt-BR') as 'pt-BR' | 'en' | 'es'}
+                                />
+                              ))}
                             </div>
                             {/* Drop zone apos a row (so durante drag) */}
                             <DropZone
@@ -1417,13 +1421,23 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
         </div>
 
         {/* DragOverlay mostra preview do bloco sendo arrastado da paleta */}
-        <DragOverlay>
+        <DragOverlay dropAnimation={null}>
           {paletteDragging && (
-            <div className="px-3 py-2 rounded-lg bg-[var(--t-green)] text-white text-xs font-medium shadow-2xl pointer-events-none">
-              + {paletteDragging}
+            <div className="px-4 py-2 rounded-lg bg-blue-500 text-white text-sm font-bold shadow-2xl pointer-events-none border-2 border-white/30">
+              📦 Arrastando: {paletteDragging}
             </div>
           )}
         </DragOverlay>
+
+        {/* Banner diagnostico fixo no topo durante drag — confirma
+            visualmente que o drag iniciou e mostra onde soltar. */}
+        {paletteDragging && (
+          <div
+            className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full bg-blue-600 text-white text-sm font-semibold shadow-2xl border-2 border-white/30 pointer-events-none animate-pulse"
+          >
+            🎯 Solte em uma área azul para adicionar o bloco
+          </div>
+        )}
       </DndContext>
 
       {/* Modals */}
