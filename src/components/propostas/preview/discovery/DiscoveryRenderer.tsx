@@ -129,8 +129,10 @@ export function DiscoveryRenderer({ proposta, slug, idioma }: Props) {
       );
     }
 
-    // TRANSPORTE → render transport summary (once)
-    if (secao.tipo === 'TRANSPORTE') {
+    // TRANSPORTE ou VOO → render transport summary (once).
+    // VOO foi separado em tipo proprio (ao editar bloco existente), mas
+    // ambos sao agrupados em viagem.transportes pelo sync do update().
+    if (secao.tipo === 'TRANSPORTE' || secao.tipo === 'VOO') {
       if (rendered.has('TRANSPORTE')) return null;
       rendered.add('TRANSPORTE');
       const transp = proposta.viagem?.transportes;

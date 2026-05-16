@@ -300,7 +300,10 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
   const update = useCallback((fn: (p: Proposta) => Proposta) => {
     setProposta(prev => {
       const next = fn({ ...prev });
-      // Sync ALOJAMENTO/TRANSPORTE blocks → viagem
+      // Sync ALOJAMENTO/TRANSPORTE/VOO blocks → viagem.
+      // Blocos VOO sao incluidos em transportes pra que o DiscoveryRenderer/
+      // TransportSummary renderize ida+volta corretamente (TransportSummary
+      // ja filtra por conteudo.tipo === 'VOO' pra renderizar como voo rico).
       if (next.viagem) {
         next.viagem = {
           ...next.viagem,
@@ -308,8 +311,15 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
             .filter(s => s.tipo === 'ALOJAMENTO')
             .map(s => s.conteudo as unknown as AlojamentoData),
           transportes: next.secoes
-            .filter(s => s.tipo === 'TRANSPORTE')
-            .map(s => s.conteudo as unknown as TransporteData),
+            .filter(s => s.tipo === 'TRANSPORTE' || s.tipo === 'VOO')
+            .map(s => {
+              const c = s.conteudo as Record<string, unknown>;
+              // Bloco VOO nem sempre tem `tipo: 'VOO'` no conteudo (ex.
+              // criado vazio pela paleta). Garante a marca pra
+              // TransportSummary classificar como voo.
+              if (s.tipo === 'VOO' && !c.tipo) c.tipo = 'VOO';
+              return c as unknown as TransporteData;
+            }),
         };
       }
       hasUnsaved.current = true;

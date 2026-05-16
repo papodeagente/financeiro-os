@@ -39,7 +39,7 @@ export function BlockRenderer({ tipo, conteudo, onChange, onInsertAfter }: Props
     case 'COUNTDOWN': return <CountdownBlock conteudo={conteudo} onChange={onChange} />;
     case 'ALOJAMENTO': return <AlojamentoBlock conteudo={conteudo} onChange={onChange} />;
     case 'TRANSPORTE': return <TransporteBlock conteudo={conteudo} onChange={onChange} onInsertAfter={onInsertAfter} />;
-    case 'VOO': return <VooBlock conteudo={conteudo} onChange={onChange} />;
+    case 'VOO': return <VooBlock conteudo={conteudo} onChange={onChange} onInsertAfter={onInsertAfter} />;
     default: return <div className="text-xs text-[var(--t-text-muted)]">Tipo desconhecido: {tipo}</div>;
   }
 }
