@@ -3,6 +3,7 @@
 import type { TransporteData } from '@/lib/crm-types';
 import { t, type IdiomaProposal } from '@/lib/i18n-proposta';
 import { RichFlightCard } from '../RichFlightCard';
+import { usePreviewEditor } from '../../PreviewEditorContext';
 
 const TIPO_ICONS: Record<string, string> = {
   VOO: '✈️', TRANSFER: '🚐', TREM: '🚆', ONIBUS: '🚌', CARRO: '🚗', BARCO: '⛴️',
@@ -25,6 +26,8 @@ function formatDate(d: string, idioma: IdiomaProposal): string {
 export function TransportSummary({ transportes, idioma, corPrimaria }: Props) {
   const i18n = t(idioma);
   const cor = corPrimaria || '#3b82f6';
+  const { onBlockSelect } = usePreviewEditor();
+  const editorMode = !!onBlockSelect;
 
   if (transportes.length === 0) return null;
 
@@ -44,7 +47,17 @@ export function TransportSummary({ transportes, idioma, corPrimaria }: Props) {
             </h3>
             <div className="space-y-4">
               {voos.map((v, i) => (
-                <div key={v.id || i} {...(i > 0 ? { 'data-pdf-break': true } : {})}>
+                <div
+                  key={v.id || i}
+                  {...(i > 0 ? { 'data-pdf-break': true } : {})}
+                  data-block-id={v.id}
+                  data-block-type="VOO_OR_TRANSPORTE"
+                  onClick={editorMode ? (e) => {
+                    e.stopPropagation();
+                    if (v.id) onBlockSelect!('VOO_OR_TRANSPORTE', v.id);
+                  } : undefined}
+                  className={editorMode ? 'cursor-pointer hover:opacity-90 transition-opacity' : ''}
+                >
                   <RichFlightCard voo={v} idioma={idioma} corPrimaria={cor} />
                 </div>
               ))}
@@ -63,7 +76,15 @@ export function TransportSummary({ transportes, idioma, corPrimaria }: Props) {
                 <div
                   key={tr.id || i}
                   {...(i > 0 ? { 'data-pdf-break': true } : {})}
-                  className="flex items-center gap-4 p-4 sm:p-5 rounded-xl bg-gray-50 border border-gray-100 shadow-sm"
+                  data-block-id={tr.id}
+                  data-block-type="VOO_OR_TRANSPORTE"
+                  onClick={editorMode ? (e) => {
+                    e.stopPropagation();
+                    if (tr.id) onBlockSelect!('VOO_OR_TRANSPORTE', tr.id);
+                  } : undefined}
+                  className={`flex items-center gap-4 p-4 sm:p-5 rounded-xl bg-gray-50 border border-gray-100 shadow-sm ${
+                    editorMode ? 'cursor-pointer hover:bg-gray-100 transition-colors' : ''
+                  }`}
                 >
                   <span className="text-2xl sm:text-3xl">{TIPO_ICONS[tr.tipo] || '🚐'}</span>
                   <div className="flex-1 min-w-0">

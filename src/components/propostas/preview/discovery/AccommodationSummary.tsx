@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { AlojamentoData } from '@/lib/crm-types';
 import { t, type IdiomaProposal } from '@/lib/i18n-proposta';
 import { HotelModal } from './HotelModal';
+import { usePreviewEditor } from '../../PreviewEditorContext';
 
 const REGIME_KEYS: Record<string, keyof ReturnType<typeof t>> = {
   RO: 'regimeRO', BB: 'regimeBB', HB: 'regimeHB', FB: 'regimeFB', AI: 'regimeAI',
@@ -29,6 +30,10 @@ function formatDate(d: string, idioma: IdiomaProposal): string {
 export function AccommodationSummary({ alojamentos, idioma, corPrimaria }: Props) {
   const i18n = t(idioma);
   const [selectedHotel, setSelectedHotel] = useState<AlojamentoData | null>(null);
+  // Quando em modo editor, click abre seletor do bloco no painel direito
+  // ao inves do HotelModal publico.
+  const { onBlockSelect } = usePreviewEditor();
+  const editorMode = !!onBlockSelect;
 
   if (alojamentos.length === 0) return null;
 
@@ -61,8 +66,17 @@ export function AccommodationSummary({ alojamentos, idioma, corPrimaria }: Props
                     <tr
                       key={a.id || i}
                       {...(i > 0 ? { 'data-pdf-break': true } : {})}
-                      className={`border-b border-gray-100 transition-colors ${isClickable ? 'hover:bg-gray-100/70 cursor-pointer' : 'hover:bg-gray-100/50'}`}
-                      onClick={() => isClickable && setSelectedHotel(a)}
+                      data-block-id={a.id}
+                      data-block-type="ALOJAMENTO"
+                      className={`border-b border-gray-100 transition-colors ${(isClickable || editorMode) ? 'hover:bg-gray-100/70 cursor-pointer' : 'hover:bg-gray-100/50'}`}
+                      onClick={(e) => {
+                        if (editorMode) {
+                          e.stopPropagation();
+                          onBlockSelect!('ALOJAMENTO', a.id);
+                          return;
+                        }
+                        if (isClickable) setSelectedHotel(a);
+                      }}
                     >
                       <td className="py-3 px-3">
                         <div className="flex items-center gap-2">

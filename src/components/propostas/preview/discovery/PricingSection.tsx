@@ -2,6 +2,7 @@
 
 import type { Proposta, SecaoProposta } from '@/lib/crm-types';
 import { t, type IdiomaProposal } from '@/lib/i18n-proposta';
+import { usePreviewEditor } from '../../PreviewEditorContext';
 
 interface ValorOpcao {
   titulo: string;
@@ -83,10 +84,22 @@ export function PricingSection({ valoresSecoes, inclusosSecoes, idioma, corPrima
     } catch {}
   }
 
+  // Primeiro VALORES (ou INCLUSOS) — usado pelo editor pra mapear click
+  // em qualquer ponto do PricingSection de volta pra um bloco editavel.
+  const primarySecaoId = (valoresSecoes[0]?.id || inclusosSecoes[0]?.id);
+  const { onBlockSelect } = usePreviewEditor();
+  const editorMode = !!onBlockSelect;
+
   return (
     <section
       id="discovery-pricing"
-      className="py-20 relative"
+      className={`py-20 relative ${editorMode ? 'cursor-pointer' : ''}`}
+      data-block-id={primarySecaoId}
+      data-block-type-section="VALORES_OR_INCLUSOS"
+      onClick={editorMode && primarySecaoId ? (e) => {
+        e.stopPropagation();
+        onBlockSelect!('VALORES_OR_INCLUSOS', primarySecaoId);
+      } : undefined}
       style={{
         background: `linear-gradient(180deg, #ffffff 0%, ${corPrimaria}05 100%)`,
       }}

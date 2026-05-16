@@ -32,6 +32,7 @@ import { PropostaSidebar } from './PropostaSidebar';
 import { CapaSection } from './preview/CapaSection';
 import { RodapeSection } from './preview/RodapeSection';
 import { DiscoveryRenderer } from './preview/discovery/DiscoveryRenderer';
+import { PreviewEditorProvider, type PreviewEditorBlockType } from './PreviewEditorContext';
 import type { IdiomaProposal } from '@/lib/i18n-proposta';
 import { FlightSearchModal } from '@/components/FlightSearchModal';
 import { HotelSearchModal } from '@/components/HotelSearchModal';
@@ -911,27 +912,56 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
             >
             {proposta.visual?.layout === 'DISCOVERY' ? (
               // ============ LAYOUT DISCOVERY ============
-              // Renderiza com a engine completa do /p/[slug] DISCOVERY.
-              // Block selection acontece via aba "Estrutura" da paleta
-              // (a abordagem que melhor funciona quando renderers
-              // agrupam multiplos blocos numa unica secao visual —
-              // ex.: AccommodationSummary agrega todos os ALOJAMENTO).
-              <>
-                {/* Header da pagina (DiscoveryHero + nav) clickavel */}
-                <SelectablePageSection
-                  id="__page_header__"
-                  label="Capa e cabeçalho"
-                  selected={selectedBlockId === '__page_header__'}
-                  onSelect={() => setSelectedBlockId('__page_header__')}
-                >
-                  <div className="-m-0">
-                    <DiscoveryRenderer
-                      proposta={proposta}
-                      slug="preview"
-                      idioma={(proposta.idioma || 'pt-BR') as IdiomaProposal}
-                    />
-                  </div>
-                </SelectablePageSection>
+              // DiscoveryRenderer encapsula tudo (hero, nav, accommodations,
+              // transports, itinerario, pricing, footer). Para selecao
+              // de bloco no canvas, encapsulamos com PreviewEditorProvider
+              // — assim os renderers internos (AccommodationSummary,
+              // TransportSummary, PricingSection) detectam que estao em
+              // modo editor e disparam onBlockSelect ao inves do
+              // comportamento publico (HotelModal, etc.).
+              <PreviewEditorProvider
+                value={{
+                  onBlockSelect: (blockType: PreviewEditorBlockType, conteudoId: string) => {
+                    let secaoId: string | null = null;
+                    if (blockType === 'ALOJAMENTO') {
+                      const s = proposta.secoes.find(s =>
+                        s.tipo === 'ALOJAMENTO' &&
+                        (s.conteudo as { id?: string })?.id === conteudoId,
+                      );
+                      secaoId = s?.id || null;
+                    } else if (blockType === 'VOO_OR_TRANSPORTE') {
+                      const s = proposta.secoes.find(s =>
+                        (s.tipo === 'VOO' || s.tipo === 'TRANSPORTE') &&
+                        (s.conteudo as { id?: string })?.id === conteudoId,
+                      );
+                      secaoId = s?.id || null;
+                    } else if (blockType === 'VALORES_OR_INCLUSOS') {
+                      // conteudoId IS secao.id direto (PricingSection ja
+                      // sabe qual secao representa).
+                      secaoId = conteudoId;
+                    } else if (blockType === 'ROTEIRO_DIA') {
+                      const s = proposta.secoes.find(s =>
+                        s.tipo === 'ROTEIRO_DIA' &&
+                        (s.conteudo as { id?: string })?.id === conteudoId,
+                      );
+                      secaoId = s?.id || null;
+                    }
+                    if (secaoId) setSelectedBlockId(secaoId);
+                  },
+                }}
+              >
+                {/* DiscoveryRenderer renderiza tudo nativamente — sem
+                    wrapper pointer-events-none, pra que clicks nas rows
+                    de AccommodationSummary, voos do TransportSummary,
+                    etc. cheguem aos onClick handlers que o
+                    PreviewEditorProvider redireciona pra setSelectedBlockId.
+                    A capa/cabecalho e editavel via aba Estrutura ou
+                    seletor visual no proprio canvas. */}
+                <DiscoveryRenderer
+                  proposta={proposta}
+                  slug="preview"
+                  idioma={(proposta.idioma || 'pt-BR') as IdiomaProposal}
+                />
 
                 {/* Drop zones + bloco no rodape mantidos nesse layout
                     pra adicionar blocos novos sem sair do canvas */}
@@ -945,7 +975,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                     </SortableContext>
                   </div>
                 )}
-              </>
+              </PreviewEditorProvider>
             ) : (
               // ============ LAYOUT CLASSICO ============
               <>
