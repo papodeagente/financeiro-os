@@ -380,6 +380,96 @@ export async function initDB() {
       data JSONB NOT NULL DEFAULT '{}'::jsonb,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    -- Eventos da proposta publica (aceite/solicitacao alteracao).
+    -- Persistencia LOCAL do evento, independente da sincronizacao com CRM.
+    -- Garante que mesmo se a integracao falhar o envio do cliente esta salvo.
+    CREATE TABLE IF NOT EXISTS proposta_eventos_publicos (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL DEFAULT '',
+      proposta_id TEXT NOT NULL,
+      proposta_url TEXT NOT NULL DEFAULT '',
+      action_type TEXT NOT NULL,            -- 'aceite' | 'alteracao'
+      customer_name TEXT NOT NULL DEFAULT '',
+      customer_phone TEXT NOT NULL DEFAULT '',
+      customer_email TEXT NOT NULL DEFAULT '',
+      change_request_text TEXT,
+      cliente_id TEXT,
+      crm_negotiation_id TEXT,              -- vendas_crm.id (existente ou criada)
+      crm_task_id TEXT,
+      matched_existing_negotiation BOOLEAN NOT NULL DEFAULT FALSE,
+      request_id TEXT NOT NULL DEFAULT '',  -- idempotencia client-side
+      sync_status TEXT NOT NULL DEFAULT 'ok',  -- 'ok' | 'pending' | 'error'
+      sync_error TEXT,
+      payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    -- Anotacoes vinculadas a uma negociacao (vendas_crm).
+    -- Origem: 'sistema' (auto gerada), 'manual' (vendedor escreveu).
+    CREATE TABLE IF NOT EXISTS negociacao_anotacoes (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL DEFAULT '',
+      venda_id TEXT NOT NULL,
+      autor_id TEXT NOT NULL DEFAULT '',
+      autor_nome TEXT NOT NULL DEFAULT '',
+      texto TEXT NOT NULL,
+      origem TEXT NOT NULL DEFAULT 'manual',
+      tipo_evento TEXT,                     -- 'aceite' | 'alteracao' | NULL
+      data JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    -- Tarefas vinculadas a uma negociacao (vendas_crm) ou cliente.
+    CREATE TABLE IF NOT EXISTS negociacao_tarefas (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL DEFAULT '',
+      venda_id TEXT,
+      cliente_id TEXT,
+      responsavel_id TEXT NOT NULL DEFAULT '',
+      titulo TEXT NOT NULL,
+      descricao TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'pendente',  -- 'pendente' | 'em_andamento' | 'concluida' | 'cancelada'
+      prioridade TEXT NOT NULL DEFAULT 'normal', -- 'baixa' | 'normal' | 'alta' | 'urgente'
+      origem TEXT NOT NULL DEFAULT 'manual',    -- 'manual' | 'sistema' (auto)
+      data_vencimento DATE,
+      data JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    -- Indices para eventos publicos
+    CREATE INDEX IF NOT EXISTS idx_prop_eventos_pub_tenant_proposta
+      ON proposta_eventos_publicos(tenant_id, proposta_id, created_at DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_prop_eventos_pub_request
+      ON proposta_eventos_publicos(proposta_id, request_id)
+      WHERE request_id <> '';
+    CREATE INDEX IF NOT EXISTS idx_prop_eventos_pub_sync
+      ON proposta_eventos_publicos(sync_status, created_at)
+      WHERE sync_status <> 'ok';
+
+    -- Indices para anotacoes
+    CREATE INDEX IF NOT EXISTS idx_neg_anotacoes_venda
+      ON negociacao_anotacoes(venda_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_neg_anotacoes_tenant
+      ON negociacao_anotacoes(tenant_id, created_at DESC);
+
+    -- Indices para tarefas
+    CREATE INDEX IF NOT EXISTS idx_neg_tarefas_venda
+      ON negociacao_tarefas(venda_id, status, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_neg_tarefas_responsavel
+      ON negociacao_tarefas(responsavel_id, status, data_vencimento);
+    CREATE INDEX IF NOT EXISTS idx_neg_tarefas_tenant
+      ON negociacao_tarefas(tenant_id, status, created_at DESC);
+
+    -- Indices auxiliares pra busca por telefone/email em vendas_crm e clientes
+    -- (telefone normalizado: so digitos). Usados na busca de negociacao ativa.
+    CREATE INDEX IF NOT EXISTS idx_clientes_email_lower
+      ON clientes (tenant_id, (LOWER(COALESCE(data->>'email', ''))));
+    CREATE INDEX IF NOT EXISTS idx_vendas_crm_cliente_status
+      ON vendas_crm (tenant_id, cliente_id, status);
   `);
 
   await pool.query(`

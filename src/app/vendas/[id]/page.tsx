@@ -6,13 +6,14 @@ import {
   ArrowLeft, User, Calendar, CreditCard, Package,
   FileText, Users, Plane, Hotel, ShieldCheck,
   MapPin, Car, Ship, Ticket, Briefcase, Copy,
-  DollarSign, Receipt, Wallet,
+  DollarSign, Receipt, Wallet, Activity,
 } from 'lucide-react';
 import { VendaCRM, Cliente, FornecedorCRM, ContaReceber, ContaPagar } from '@/lib/crm-types';
 import { loadEntities } from '@/lib/crm-storage';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/lib/toast';
+import { NegociacaoAtividade } from '@/components/vendas/NegociacaoAtividade';
 
 const fmt = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -203,6 +204,12 @@ export default function VendaDetalhe() {
             </div>
           </Section>
         )}
+
+        {/* Atividade: anotacoes + tarefas (incluindo auto criadas pela
+            proposta publica). Sempre visivel — coracao do CRM. */}
+        <Section icon={Activity} title="Atividade da negociação">
+          <NegociacaoAtividade vendaId={venda.id} />
+        </Section>
 
         {/* Produtos */}
         <Section icon={Package} title={`Produtos (${venda.produtos.length})`}>

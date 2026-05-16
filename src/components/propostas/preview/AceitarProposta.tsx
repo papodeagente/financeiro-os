@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle, MessageSquare, Loader2, ThumbsUp, Send, X, User, Phone, Mail, FileText } from 'lucide-react';
 import { t, type IdiomaProposal } from '@/lib/i18n-proposta';
 
@@ -15,12 +15,35 @@ interface Props {
 
 type Mode = 'idle' | 'aceitar' | 'alteracao' | 'aceito' | 'alteracao_enviada';
 
-// Formulario UNICO de aceite/alteracao da proposta publica.
-// Cliente escolhe entre "Aceitar Proposta" ou "Solicitar Alteracoes".
-// Em ambos os casos preenche nome + telefone + email; "Solicitar
-// Alteracoes" tem campo extra de anotacao.
-// Submit cria automaticamente Cliente + Negociacao (Venda CRM) no
-// backend pra o vendedor ja achar tudo organizado no CRM.
+// ============ Validacoes ============
+
+function validarEmail(s: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
+}
+function validarTelefone(s: string): boolean {
+  const digits = s.replace(/\D/g, '');
+  return digits.length >= 10 && digits.length <= 15;
+}
+function validarNome(s: string): boolean {
+  const t = s.trim();
+  return t.length >= 3 && /\s/.test(t); // ao menos 2 palavras
+}
+
+// ============ Idempotency key ============
+// Gera um request_id por SESSAO do componente. Re-cliques ou
+// re-submits do mesmo form usam o mesmo id → backend bloqueia
+// duplicidade. Reset apos sucesso (so se o usuario fechar e abrir
+// de novo, mas ai ele ja vai ver tela de sucesso).
+function gerarRequestId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+// Chave do localStorage que registra que esta sessao de browser ja
+// enviou pra essa proposta (proteciona contra reenvio apos refresh).
+function localStorageKey(slug: string, tipo: 'aceite' | 'alteracao'): string {
+  return `entur:proposta-submit:${slug}:${tipo}`;
+}
+
 export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceite, idioma }: Props) {
   const i18n = t(idioma);
   const [mode, setMode] = useState<Mode>(status === 'ACEITO' ? 'aceito' : 'idle');
@@ -32,9 +55,36 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Idempotency: cada par (modo, tentativa) tem um request_id. Reset
+  // quando trocar modo idle <-> form.
+  const requestIdRef = useRef<{ aceite: string; alteracao: string }>({
+    aceite: gerarRequestId(),
+    alteracao: gerarRequestId(),
+  });
+
+  // Verifica no mount: se ja enviou nesta proposta+modo, marca como
+  // concluido sem mostrar form (protege contra refresh apos sucesso).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const aceiteEnv = localStorage.getItem(localStorageKey(slug, 'aceite'));
+      const altEnv = localStorage.getItem(localStorageKey(slug, 'alteracao'));
+      if (aceiteEnv) setMode('aceito');
+      else if (altEnv) setMode('alteracao_enviada');
+    } catch { /* ignore */ }
+  }, [slug]);
+
   const locale = idioma === 'en' ? 'en-US' : idioma === 'es' ? 'es-ES' : 'pt-BR';
 
-  // Already accepted
+  const validation = useMemo(() => {
+    const v: { nome?: string; telefone?: string; email?: string; anotacao?: string; termos?: string } = {};
+    if (nome.trim() && !validarNome(nome)) v.nome = 'Informe nome e sobrenome';
+    if (telefone.trim() && !validarTelefone(telefone)) v.telefone = 'Telefone inválido';
+    if (email.trim() && !validarEmail(email)) v.email = 'E-mail inválido';
+    return v;
+  }, [nome, telefone, email]);
+
+  // Already accepted (server ou local storage)
   if (status === 'ACEITO' || mode === 'aceito') {
     return (
       <div className="max-w-3xl mx-auto px-6 py-12">
@@ -42,13 +92,15 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
           <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
             <ThumbsUp className="w-8 h-8 text-emerald-600" />
           </div>
-          <h3 className="text-xl font-bold text-emerald-800">{i18n.propostaAceita}</h3>
-          <p className="text-emerald-600 mt-2 text-sm">
-            {aceite?.nome_aceite
-              ? `${aceite.nome_aceite} — ${new Date(aceite.data_aceite).toLocaleDateString(locale, { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`
-              : i18n.obrigadoAceite
-            }
+          <h3 className="text-xl font-bold text-emerald-800">Recebemos sua confirmação</h3>
+          <p className="text-emerald-700 mt-2 text-sm leading-relaxed max-w-md mx-auto">
+            Nossa equipe continuará o atendimento com você em breve.
           </p>
+          {aceite?.nome_aceite && (
+            <p className="text-emerald-600 mt-3 text-xs">
+              {aceite.nome_aceite} — {new Date(aceite.data_aceite).toLocaleDateString(locale, { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+            </p>
+          )}
           {vendedorNome && (
             <p className="text-emerald-500 text-sm mt-3">
               {vendedorNome} {i18n.voltarContato}
@@ -59,7 +111,6 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
     );
   }
 
-  // Already rejected
   if (status === 'RECUSADO') {
     return (
       <div className="max-w-3xl mx-auto px-6 py-12">
@@ -70,7 +121,6 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
     );
   }
 
-  // Solicitacao de alteracao enviada
   if (mode === 'alteracao_enviada') {
     return (
       <div className="max-w-3xl mx-auto px-6 py-12">
@@ -78,8 +128,10 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
           <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
             <Send className="w-8 h-8 text-blue-600" />
           </div>
-          <h3 className="text-xl font-bold text-blue-800">{i18n.feedbackEnviado}</h3>
-          <p className="text-blue-600 mt-2 text-sm">{i18n.obrigadoFeedback}</p>
+          <h3 className="text-xl font-bold text-blue-800">Recebemos sua solicitação de alteração</h3>
+          <p className="text-blue-700 mt-2 text-sm leading-relaxed max-w-md mx-auto">
+            Nossa equipe vai revisar as observações e retornar em breve.
+          </p>
           {vendedorNome && (
             <p className="text-blue-500 text-sm mt-3">
               {vendedorNome} {i18n.voltarContato}
@@ -90,16 +142,22 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
     );
   }
 
-  function validarComuns(): string {
-    if (!nome.trim()) return i18n.nomeCompleto;
-    if (!telefone.trim() && !email.trim()) return 'Informe telefone ou email para contato';
+  function validarSubmit(tipo: 'aceitar' | 'alteracao'): string {
+    if (!nome.trim()) return 'Nome obrigatório';
+    if (!validarNome(nome)) return 'Informe nome e sobrenome';
+    if (!telefone.trim()) return 'Telefone obrigatório';
+    if (!validarTelefone(telefone)) return 'Telefone inválido (10-15 dígitos)';
+    if (!email.trim()) return 'E-mail obrigatório';
+    if (!validarEmail(email)) return 'E-mail inválido';
+    if (tipo === 'aceitar' && !termos) return 'Aceite os termos para continuar';
+    if (tipo === 'alteracao' && !anotacao.trim()) return 'Descreva a alteração desejada';
     return '';
   }
 
   const handleAceitar = async () => {
-    const err = validarComuns();
+    if (loading) return; // double-click guard
+    const err = validarSubmit('aceitar');
     if (err) { setError(err); return; }
-    if (!termos) { setError(i18n.termosCondicoes); return; }
 
     setLoading(true);
     setError('');
@@ -111,21 +169,23 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
           nome: nome.trim(),
           telefone: telefone.trim(),
           email: email.trim(),
+          request_id: requestIdRef.current.aceite,
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error');
+      if (!res.ok) throw new Error(data.error || 'Erro ao enviar');
+      try { localStorage.setItem(localStorageKey(slug, 'aceite'), new Date().toISOString()); } catch { /* ignore */ }
       setMode('aceito');
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Error');
+      setError(e instanceof Error ? e.message : 'Erro');
     }
     setLoading(false);
   };
 
   const handleAlteracao = async () => {
-    const err = validarComuns();
+    if (loading) return;
+    const err = validarSubmit('alteracao');
     if (err) { setError(err); return; }
-    if (!anotacao.trim()) { setError('Descreva a alteracao desejada'); return; }
 
     setLoading(true);
     setError('');
@@ -138,13 +198,15 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
           telefone: telefone.trim(),
           email: email.trim(),
           anotacao: anotacao.trim(),
+          request_id: requestIdRef.current.alteracao,
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error');
+      if (!res.ok) throw new Error(data.error || 'Erro ao enviar');
+      try { localStorage.setItem(localStorageKey(slug, 'alteracao'), new Date().toISOString()); } catch { /* ignore */ }
       setMode('alteracao_enviada');
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Error');
+      setError(e instanceof Error ? e.message : 'Erro');
     }
     setLoading(false);
   };
@@ -159,7 +221,6 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
           </h3>
         </div>
 
-        {/* Idle: show 2 botoes */}
         {mode === 'idle' && (
           <div className="p-6 flex flex-col sm:flex-row gap-3">
             <button
@@ -181,15 +242,17 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
           </div>
         )}
 
-        {/* FORM UNICO — nome/telefone/email pra ambos os caminhos.
-            Solicitar Alteracoes ganha textarea extra de anotacao. */}
         {(mode === 'aceitar' || mode === 'alteracao') && (
           <div className="p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h4 className="font-semibold text-gray-800">
                 {mode === 'aceitar' ? i18n.aceitarProposta : i18n.solicitarAlteracoes}
               </h4>
-              <button onClick={() => setMode('idle')} className="text-gray-400 hover:text-gray-600">
+              <button
+                onClick={() => { setMode('idle'); setError(''); }}
+                className="text-gray-400 hover:text-gray-600"
+                disabled={loading}
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -197,16 +260,21 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
             {/* Nome */}
             <div>
               <label className="text-sm text-gray-600 flex items-center gap-1.5 mb-1">
-                <User className="w-3.5 h-3.5" /> {i18n.nomeCompleto} *
+                <User className="w-3.5 h-3.5" /> Nome completo *
               </label>
               <input
                 type="text"
                 value={nome}
                 onChange={e => setNome(e.target.value)}
-                placeholder={i18n.nomeCompleto}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:border-transparent"
+                placeholder="Seu nome e sobrenome"
+                autoComplete="name"
+                disabled={loading}
+                className={`w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:border-transparent disabled:opacity-60 ${
+                  validation.nome ? 'border-red-300' : 'border-gray-200'
+                }`}
                 style={{ '--tw-ring-color': corPrimaria } as React.CSSProperties}
               />
+              {validation.nome && <p className="text-[11px] text-red-500 mt-1">{validation.nome}</p>}
             </div>
 
             {/* Telefone */}
@@ -219,9 +287,14 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
                 value={telefone}
                 onChange={e => setTelefone(e.target.value)}
                 placeholder="(11) 99999-9999"
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:border-transparent"
+                autoComplete="tel"
+                disabled={loading}
+                className={`w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:border-transparent disabled:opacity-60 ${
+                  validation.telefone ? 'border-red-300' : 'border-gray-200'
+                }`}
                 style={{ '--tw-ring-color': corPrimaria } as React.CSSProperties}
               />
+              {validation.telefone && <p className="text-[11px] text-red-500 mt-1">{validation.telefone}</p>}
             </div>
 
             {/* Email */}
@@ -234,49 +307,59 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="seu@email.com"
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:border-transparent"
+                autoComplete="email"
+                disabled={loading}
+                className={`w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:border-transparent disabled:opacity-60 ${
+                  validation.email ? 'border-red-300' : 'border-gray-200'
+                }`}
                 style={{ '--tw-ring-color': corPrimaria } as React.CSSProperties}
               />
+              {validation.email && <p className="text-[11px] text-red-500 mt-1">{validation.email}</p>}
             </div>
 
-            {/* Anotacao — so em modo alteracao */}
             {mode === 'alteracao' && (
               <div>
                 <label className="text-sm text-gray-600 flex items-center gap-1.5 mb-1">
-                  <FileText className="w-3.5 h-3.5" /> Sua solicitacao *
+                  <FileText className="w-3.5 h-3.5" /> Descrição da alteração *
                 </label>
                 <textarea
                   value={anotacao}
                   onChange={e => setAnotacao(e.target.value)}
                   rows={4}
-                  placeholder="Descreva o que voce gostaria de mudar (datas, hotel, voos, valor, etc)"
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:border-transparent"
+                  placeholder="Descreva o que você gostaria de mudar (datas, hotel, voos, valor, etc)"
+                  disabled={loading}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:border-transparent disabled:opacity-60"
                   style={{ '--tw-ring-color': corPrimaria } as React.CSSProperties}
                 />
               </div>
             )}
 
-            {/* Termos — so em modo aceitar */}
             {mode === 'aceitar' && (
               <label className="flex items-start gap-3 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={termos}
                   onChange={e => setTermos(e.target.checked)}
+                  disabled={loading}
                   className="w-4 h-4 mt-0.5 rounded border-gray-300"
                 />
                 <span className="text-sm text-gray-600 leading-relaxed">
-                  {i18n.liEConcordo} {i18n.termosCondicoes}.
+                  Li e concordo com os termos da proposta.
                 </span>
               </label>
             )}
 
-            {error && <p className="text-sm text-red-500">{error}</p>}
+            {error && (
+              <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 flex items-start gap-2">
+                <span className="font-bold shrink-0">!</span>
+                <span>{error}</span>
+              </div>
+            )}
 
             <button
               onClick={mode === 'aceitar' ? handleAceitar : handleAlteracao}
               disabled={loading}
-              className={`w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all hover:opacity-90 disabled:opacity-50 ${
+              className={`w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all hover:opacity-90 disabled:opacity-60 disabled:cursor-wait ${
                 mode === 'aceitar' ? 'text-white' : 'border-2'
               }`}
               style={mode === 'aceitar'
@@ -285,11 +368,16 @@ export function AceitarProposta({ slug, status, corPrimaria, vendedorNome, aceit
               }
             >
               {loading
-                ? <Loader2 className="w-4 h-4 animate-spin" />
-                : mode === 'aceitar' ? <CheckCircle className="w-4 h-4" /> : <Send className="w-4 h-4" />
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> Enviando…</>
+                : mode === 'aceitar'
+                  ? <><CheckCircle className="w-4 h-4" /> Confirmar aceite</>
+                  : <><Send className="w-4 h-4" /> Enviar solicitação</>
               }
-              {mode === 'aceitar' ? i18n.confirmarAceite : i18n.enviarSolicitacao}
             </button>
+
+            <p className="text-[10px] text-gray-400 text-center leading-relaxed">
+              Ao enviar, seus dados serão registrados pelo vendedor desta proposta para retorno do atendimento.
+            </p>
           </div>
         )}
       </div>
