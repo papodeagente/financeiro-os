@@ -24,8 +24,13 @@ import { BlockToolbar } from './BlockToolbar';
 import { BlockPalette } from './BlockPalette';
 import { DropZone } from './DropZone';
 import { SelectableBlock } from './SelectableBlock';
+import { SelectablePageSection } from './SelectablePageSection';
 import { BlockPropertiesPanel } from './BlockPropertiesPanel';
+import { PageHeaderEditor } from './PageHeaderEditor';
+import { PageFooterEditor } from './PageFooterEditor';
 import { PropostaSidebar } from './PropostaSidebar';
+import { CapaSection } from './preview/CapaSection';
+import { RodapeSection } from './preview/RodapeSection';
 import { FlightSearchModal } from '@/components/FlightSearchModal';
 import { HotelSearchModal } from '@/components/HotelSearchModal';
 import { formatFlightForTransporte } from '@/lib/flight-data-mapper';
@@ -873,20 +878,65 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
             }}
           />
 
-          {/* Editor — canvas estilo Elementor: cada bloco vira o preview
-              ao vivo (o que o cliente vai ver). Click seleciona; o
-              painel direito abre o editor desse bloco. Click no fundo
-              do canvas deseleciona. */}
+          {/* Editor — canvas estilo Elementor: copia visual fiel de
+              /p/[slug] com capa, blocos, rodape — todos editaveis com
+              click. Fundo aplica proposta.visual.cor_fundo (vs editor
+              cinza generico) pra fidelidade total ao resultado final.
+              Click no fundo do canvas deseleciona. */}
           <div
             className="flex-1 overflow-y-auto"
             onClick={() => setSelectedBlockId(null)}
-            style={{ background: '#f5f5f7' }}
+            style={{ background: '#e5e7eb' }}
           >
             <div
-              className="mx-auto p-6 transition-[max-width] duration-300 ease-out"
-              style={{ maxWidth: `${VIEWPORT_WIDTHS[viewportMode]}px` }}
+              className="mx-auto my-6 shadow-2xl rounded-lg overflow-hidden transition-[max-width] duration-300 ease-out"
+              style={{
+                maxWidth: `${VIEWPORT_WIDTHS[viewportMode]}px`,
+                background: proposta.visual?.cor_fundo || '#ffffff',
+                color: proposta.visual?.cor_texto || '#1a1a2e',
+                fontFamily: `'${proposta.visual?.fonte || 'Inter'}', sans-serif`,
+              }}
               onClick={e => e.stopPropagation()}
             >
+              {/* CAPA — secao de pagina (nao draggavel). Click abre o
+                  PageHeaderEditor no painel direito. */}
+              <SelectablePageSection
+                id="__page_header__"
+                label="Capa"
+                selected={selectedBlockId === '__page_header__'}
+                onSelect={() => setSelectedBlockId('__page_header__')}
+              >
+                <CapaSection proposta={proposta} />
+              </SelectablePageSection>
+
+              {/* MENSAGEM DE ABERTURA — so renderiza quando preenchida.
+                  Selecao tambem leva ao PageHeaderEditor (mesmo editor
+                  cuida do cabecalho inteiro). */}
+              {proposta.cabecalho.mensagem_abertura && (
+                <div className="mt-4">
+                  <SelectablePageSection
+                    id="__opening_message__"
+                    label="Mensagem de abertura"
+                    selected={selectedBlockId === '__opening_message__'}
+                    onSelect={() => setSelectedBlockId('__page_header__')}
+                  >
+                    <div className="max-w-3xl mx-auto px-6 py-10 text-center">
+                      <p className="text-lg leading-relaxed opacity-80 italic">
+                        {proposta.cabecalho.mensagem_abertura}
+                      </p>
+                    </div>
+                  </SelectablePageSection>
+                </div>
+              )}
+
+              {/* CONTAINER DOS BLOCOS — mesmo max-w e padding do /p/[slug]
+                  classico pra fidelidade visual. */}
+              <div
+                className="mx-auto px-6 py-8 transition-all"
+                style={{
+                  maxWidth: viewportMode === 'mobile' ? '100%' : '768px',
+                }}
+              >
               <SortableContext items={proposta.secoes.map(s => s.id)} strategy={verticalListSortingStrategy}>
                 {proposta.secoes.length === 0 ? (
                   <div className="space-y-3">
@@ -934,13 +984,53 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                   generatingFull={generatingFull}
                 />
               </div>
+              </div>{/* /CONTAINER DOS BLOCOS */}
+
+              {/* RODAPE — secao de pagina (nao draggavel). Click abre o
+                  PageFooterEditor no painel direito. */}
+              <div
+                className="mx-auto px-6"
+                style={{ maxWidth: viewportMode === 'mobile' ? '100%' : '768px' }}
+              >
+                <SelectablePageSection
+                  id="__page_footer__"
+                  label="Rodapé"
+                  selected={selectedBlockId === '__page_footer__'}
+                  onSelect={() => setSelectedBlockId('__page_footer__')}
+                >
+                  <RodapeSection proposta={proposta} />
+                </SelectablePageSection>
+              </div>
+
+              {/* Validade no fim — espelhando /p/[slug] */}
+              {proposta.cabecalho.validade && (
+                <div className="text-center pb-8 pt-4 text-sm opacity-40">
+                  Válida até{' '}
+                  {new Date(proposta.cabecalho.validade + 'T12:00:00').toLocaleDateString('pt-BR')}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Painel direito Elementor-like:
-              - Bloco selecionado → editor desse bloco (BlockPropertiesPanel)
-              - Sem selecao         → configuracao da proposta (PropostaSidebar) */}
-          {selectedBlockId && proposta.secoes.find(s => s.id === selectedBlockId) ? (
+          {/* Painel direito Elementor-like — roteamento por tipo de
+              selecao no canvas:
+              - "__page_header__" → PageHeaderEditor (capa + abertura)
+              - "__page_footer__" → PageFooterEditor (rodape)
+              - id de secao        → BlockPropertiesPanel
+              - null               → PropostaSidebar (config geral) */}
+          {selectedBlockId === '__page_header__' ? (
+            <PageHeaderEditor
+              proposta={proposta}
+              onUpdate={update}
+              onClose={() => setSelectedBlockId(null)}
+            />
+          ) : selectedBlockId === '__page_footer__' ? (
+            <PageFooterEditor
+              proposta={proposta}
+              onUpdate={update}
+              onClose={() => setSelectedBlockId(null)}
+            />
+          ) : selectedBlockId && proposta.secoes.find(s => s.id === selectedBlockId) ? (
             <BlockPropertiesPanel
               secao={proposta.secoes.find(s => s.id === selectedBlockId)!}
               onChange={c => updateSecao(selectedBlockId, c)}
