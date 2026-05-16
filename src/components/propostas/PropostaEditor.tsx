@@ -9,6 +9,7 @@ import {
   Save, ArrowLeft, Copy, MessageCircle,
   Check, Loader2, FileDown, GitBranch,
   Undo2, Redo2, Keyboard,
+  Monitor, Tablet, Smartphone,
 } from 'lucide-react';
 import {
   DndContext, closestCenter, pointerWithin, KeyboardSensor, PointerSensor,
@@ -97,6 +98,11 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
   // pelos atalhos de teclado (D/H/Del/Arrows).
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  // Modo de viewport do canvas (Fase C). Constrai largura do canvas
+  // pra simular como a proposta vai aparecer em cada dispositivo.
+  // Default 'desktop' (900px — igual antes da feature).
+  const [viewportMode, setViewportMode] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
+  const VIEWPORT_WIDTHS = { desktop: 900, tablet: 768, mobile: 410 } as const;
 
   // History stack para undo/redo. Guarda snapshots da proposta inteira.
   // Updates frequentes (typing dentro de bloco) sao coalescidos com
@@ -726,7 +732,33 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Toolbar */}
-      <div className="px-6 py-3 flex items-center justify-between border-b border-[var(--t-border)] bg-[var(--t-surface)] shrink-0">
+      <div className="relative px-6 py-3 flex items-center justify-between border-b border-[var(--t-border)] bg-[var(--t-surface)] shrink-0">
+        {/* Viewport toggle (Fase C) — centralizado absoluto pra nao
+            depender do flow do flex. Em telas <lg fica escondido pra
+            nao colidir com as outras toolbars. */}
+        <div className="hidden lg:flex absolute left-1/2 -translate-x-1/2 items-center bg-[var(--t-bg)] border border-[var(--t-border)] rounded-lg overflow-hidden">
+          {([
+            { mode: 'desktop' as const, Icon: Monitor, label: 'Desktop (900px)' },
+            { mode: 'tablet' as const, Icon: Tablet, label: 'Tablet (768px)' },
+            { mode: 'mobile' as const, Icon: Smartphone, label: 'Mobile (410px)' },
+          ]).map(({ mode, Icon, label }) => (
+            <button
+              key={mode}
+              onClick={() => setViewportMode(mode)}
+              className={`w-9 h-8 flex items-center justify-center transition-colors ${
+                viewportMode === mode
+                  ? 'bg-[var(--t-green)] text-white dark:text-[#0a0a14]'
+                  : 'text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]'
+              }`}
+              title={label}
+              aria-label={label}
+              aria-pressed={viewportMode === mode}
+            >
+              <Icon className="w-4 h-4" />
+            </button>
+          ))}
+        </div>
+
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => router.push('/propostas')} className="text-[var(--t-text-secondary)]">
             <ArrowLeft className="w-4 h-4" />
@@ -841,7 +873,8 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
             style={{ background: '#f5f5f7' }}
           >
             <div
-              className="max-w-[900px] mx-auto p-6"
+              className="mx-auto p-6 transition-[max-width] duration-300 ease-out"
+              style={{ maxWidth: `${VIEWPORT_WIDTHS[viewportMode]}px` }}
               onClick={e => e.stopPropagation()}
             >
               <SortableContext items={proposta.secoes.map(s => s.id)} strategy={verticalListSortingStrategy}>
