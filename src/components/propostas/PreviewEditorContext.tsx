@@ -14,7 +14,11 @@ export type PreviewEditorBlockType =
   | 'ALOJAMENTO'
   | 'VOO_OR_TRANSPORTE'
   | 'VALORES_OR_INCLUSOS'
-  | 'ROTEIRO_DIA';
+  | 'ROTEIRO_DIA'
+  // SECAO_ID: o conteudoId passado JA e a secao.id (vs conteudo.id
+  // que e o caso de ALOJAMENTO etc.). Usado pelos wrappers genericos
+  // de TEXTO, FAQ, DEPOIMENTO, GALERIA, VIDEO etc.
+  | 'SECAO_ID';
 
 interface PreviewEditorContextValue {
   // Quando definido, o preview esta sendo renderizado dentro do editor.

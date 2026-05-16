@@ -14,6 +14,7 @@ import { DestinationBlock } from './DestinationBlock';
 import { DiscoveryFooter } from './DiscoveryFooter';
 import { PreviewRenderer } from '../PreviewRenderer';
 import { AceitarProposta } from '../AceitarProposta';
+import { EditorClickable } from '../EditorClickable';
 import { groupDaysByDestination } from '@/lib/discovery-utils';
 
 interface NavItem { id: string; label: string }
@@ -142,20 +143,22 @@ export function DiscoveryRenderer({ proposta, slug, idioma }: Props) {
       const groups = groupDaysByDestination(proposta);
       if (groups.length === 0) return null;
       return (
-        <section key={key} id="discovery-itinerary" className="py-16 bg-gray-50">
-          <div className="max-w-4xl mx-auto px-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-10">{i18n.itinerario}</h2>
-            {groups.map((group, gi) => (
-              <DestinationBlock key={gi} group={group} index={gi} idioma={idioma} corPrimaria={corPrimaria} />
-            ))}
-            <div className="text-center mt-8 pt-8 border-t border-gray-200">
-              <div className="inline-flex items-center gap-2 text-gray-400 text-sm">
-                <span className="w-2 h-2 rounded-full bg-gray-300" />
-                {i18n.fimItinerario}
+        <EditorClickable key={key} id={secao.id} blockType="SECAO_ID">
+          <section id="discovery-itinerary" className="py-16 bg-gray-50">
+            <div className="max-w-4xl mx-auto px-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-10">{i18n.itinerario}</h2>
+              {groups.map((group, gi) => (
+                <DestinationBlock key={gi} group={group} index={gi} idioma={idioma} corPrimaria={corPrimaria} />
+              ))}
+              <div className="text-center mt-8 pt-8 border-t border-gray-200">
+                <div className="inline-flex items-center gap-2 text-gray-400 text-sm">
+                  <span className="w-2 h-2 rounded-full bg-gray-300" />
+                  {i18n.fimItinerario}
+                </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+        </EditorClickable>
       );
     }
 
@@ -183,7 +186,8 @@ export function DiscoveryRenderer({ proposta, slug, idioma }: Props) {
       const perguntas = c.perguntas || [];
       if (perguntas.length === 0) return null;
       return (
-        <section key={key} className="py-20 bg-gray-50">
+        <EditorClickable key={key} id={secao.id} blockType="SECAO_ID">
+        <section className="py-20 bg-gray-50">
           <div className="max-w-3xl mx-auto px-6">
             <div className="text-center mb-3">
               <span
@@ -218,6 +222,7 @@ export function DiscoveryRenderer({ proposta, slug, idioma }: Props) {
             </div>
           </div>
         </section>
+        </EditorClickable>
       );
     }
 
@@ -227,8 +232,8 @@ export function DiscoveryRenderer({ proposta, slug, idioma }: Props) {
       const deps = c.depoimentos || [];
       if (deps.length === 0) return null;
       return (
+        <EditorClickable key={key} id={secao.id} blockType="SECAO_ID">
         <section
-          key={key}
           className="py-24 relative overflow-hidden"
           style={{
             background: `linear-gradient(135deg, #0a0a14 0%, ${corPrimaria}30 50%, #0a0a14 100%)`,
@@ -292,16 +297,19 @@ export function DiscoveryRenderer({ proposta, slug, idioma }: Props) {
             </div>
           </div>
         </section>
+        </EditorClickable>
       );
     }
 
     // All other blocks (TEXTO, SERVICO, GALERIA, VIDEO, MAPA, COUNTDOWN, CTA) → PreviewRenderer
     return (
-      <section key={key} className="py-12 bg-white">
-        <div className="max-w-4xl mx-auto px-6">
-          <PreviewRenderer secoes={[secao]} corPrimaria={corPrimaria} idioma={idioma} />
-        </div>
-      </section>
+      <EditorClickable key={key} id={secao.id} blockType="SECAO_ID">
+        <section className="py-12 bg-white">
+          <div className="max-w-4xl mx-auto px-6">
+            <PreviewRenderer secoes={[secao]} corPrimaria={corPrimaria} idioma={idioma} />
+          </div>
+        </section>
+      </EditorClickable>
     );
   }
 

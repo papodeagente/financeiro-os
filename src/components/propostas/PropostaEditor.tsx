@@ -960,6 +960,11 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                         (s.conteudo as { id?: string })?.id === conteudoId,
                       );
                       secaoId = s?.id || null;
+                    } else if (blockType === 'SECAO_ID') {
+                      // O conteudoId JA e a secao.id (caso de TEXTO, FAQ,
+                      // DEPOIMENTO, GALERIA, VIDEO, MAPA, COUNTDOWN, CTA,
+                      // ROTEIRO_DIA section em DiscoveryRenderer).
+                      secaoId = conteudoId;
                     }
                     if (secaoId) setSelectedBlockId(secaoId);
                   },
