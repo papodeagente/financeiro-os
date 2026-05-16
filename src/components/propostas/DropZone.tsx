@@ -15,6 +15,11 @@ interface Props {
   // arrasta um item da paleta e solta na drop zone N, o novo bloco é
   // inserido em secoes[N].
   index: number;
+  // CHAVE UNICA dentro do DndContext. Cada DropZone PRECISA de uma
+  // locationKey unica — varias drop zones podem apontar pro mesmo
+  // index (ex.: page-level + inner ambas inserem na pos 0) mas
+  // devem ter ids diferentes pra dnd-kit registrar todas.
+  locationKey: string;
   // Tipo do bloco sendo arrastado da paleta. Quando definido, drop
   // zones ficam visíveis e mostram contexto (nome do bloco).
   draggingType?: string | null;
@@ -30,9 +35,9 @@ interface Props {
   variant?: 'inline' | 'page';
 }
 
-export function DropZone({ index, draggingType, label, forceVisible, variant = 'inline' }: Props) {
+export function DropZone({ index, locationKey, draggingType, label, forceVisible, variant = 'inline' }: Props) {
   const { setNodeRef, isOver } = useDroppable({
-    id: `drop-zone-${index}`,
+    id: `drop-zone-${locationKey}`,
     data: { kind: 'drop-zone', index },
   });
 

@@ -37,8 +37,17 @@ import { PreviewEditorProvider, type PreviewEditorBlockType } from './PreviewEdi
 import { PreviewIframeCanvas } from './PreviewIframeCanvas';
 import { buildPropostaLink } from '@/lib/proposta-link';
 import { loadAgencia } from '@/lib/crm-storage';
+import { toast } from '@/lib/toast';
 import type { Agencia } from '@/lib/crm-types';
 import type { IdiomaProposal } from '@/lib/i18n-proposta';
+
+const TIPO_LABELS_GLOBAL: Record<string, string> = {
+  TEXTO: 'Texto', SERVICO: 'Serviço', VOO: 'Voo', ROTEIRO_DIA: 'Roteiro',
+  GALERIA: 'Galeria', INCLUSOS: 'Inclusos', VALORES: 'Valores',
+  DEPOIMENTO: 'Depoimento', CTA: 'CTA', VIDEO: 'Vídeo', MAPA: 'Mapa',
+  FAQ: 'FAQ', COUNTDOWN: 'Countdown', ALOJAMENTO: 'Hospedagem',
+  TRANSPORTE: 'Transporte',
+};
 import { FlightSearchModal } from '@/components/FlightSearchModal';
 import { HotelSearchModal } from '@/components/HotelSearchModal';
 import { formatFlightForTransporte } from '@/lib/flight-data-mapper';
@@ -524,11 +533,13 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
 
   // Insere um novo bloco numa posicao especifica (usado pelo handleDragEnd
   // quando o usuario solta um item da paleta sobre uma drop zone).
-  const insertSecaoAt = (tipo: string, index: number) => {
+  // Retorna o id do bloco criado pra que o caller possa selecionar.
+  const insertSecaoAt = (tipo: string, index: number): string => {
+    const newId = generateId();
     update(p => {
       const insertAt = Math.max(0, Math.min(index, p.secoes.length));
       const newSecao: SecaoProposta = {
-        id: generateId(),
+        id: newId,
         tipo: tipo as SecaoProposta['tipo'],
         ordem: insertAt,
         visivel: true,
@@ -538,6 +549,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
       arr.splice(insertAt, 0, newSecao);
       return { ...p, secoes: arr };
     });
+    return newId;
   };
 
   const removeSecao = (id: string) => {
@@ -606,7 +618,11 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
     // Drop vindo da paleta: insere bloco na posicao da drop zone.
     if (activeData?.source === 'palette' && typeof activeData.tipo === 'string') {
       if (overData?.kind === 'drop-zone' && typeof overData.index === 'number') {
-        insertSecaoAt(activeData.tipo, overData.index);
+        const newId = insertSecaoAt(activeData.tipo, overData.index);
+        // Feedback visual: toast + auto-seleciona o bloco recem-criado
+        // pra abrir o painel de propriedades direto na edicao.
+        toast.success(`${TIPO_LABELS_GLOBAL[activeData.tipo] || activeData.tipo} adicionado`);
+        setSelectedBlockId(newId);
       }
       return;
     }
@@ -1007,18 +1023,20 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                     PreviewEditorProvider redireciona pra setSelectedBlockId.
                     A capa/cabecalho e editavel via aba Estrutura ou
                     seletor visual no proprio canvas. */}
-                {/* DROP ZONE no topo — insere bloco no inicio das secoes
-                    (entre DiscoveryHero e AccommodationSummary) */}
+                {/* DROP ZONE no topo (DISCOVERY) — insere no inicio.
+                    SortableContext separado pros blocos sortable continua
+                    funcionando dentro do DiscoveryRenderer (que tem seus
+                    proprios elementos). Drop zones nao precisam de
+                    SortableContext — sao apenas droppables. */}
                 {paletteDragging && (
                   <div className="px-6 py-3">
-                    <SortableContext items={proposta.secoes.map(s => s.id)} strategy={verticalListSortingStrategy}>
-                      <DropZone
-                        index={0}
-                        draggingType={paletteDragging}
-                        variant="page"
-                        label="Soltar no início (após capa)"
-                      />
-                    </SortableContext>
+                    <DropZone
+                      index={0}
+                      locationKey="discovery-top"
+                      draggingType={paletteDragging}
+                      variant="page"
+                      label="Soltar no início (após capa)"
+                    />
                   </div>
                 )}
 
@@ -1028,18 +1046,17 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                   idioma={(proposta.idioma || 'pt-BR') as IdiomaProposal}
                 />
 
-                {/* DROP ZONE no fim — insere bloco apos todas as secoes
-                    (antes do rodape Discovery + CTA aceitar) */}
+                {/* DROP ZONE no fim (DISCOVERY) — insere apos todas as
+                    secoes. */}
                 {paletteDragging && (
                   <div className="px-6 py-3">
-                    <SortableContext items={proposta.secoes.map(s => s.id)} strategy={verticalListSortingStrategy}>
-                      <DropZone
-                        index={proposta.secoes.length}
-                        draggingType={paletteDragging}
-                        variant="page"
-                        label="Soltar no fim (antes do rodapé)"
-                      />
-                    </SortableContext>
+                    <DropZone
+                      index={proposta.secoes.length}
+                      locationKey="discovery-bottom"
+                      draggingType={paletteDragging}
+                      variant="page"
+                      label="Soltar no fim (antes do rodapé)"
+                    />
                   </div>
                 )}
               </PreviewEditorProvider>
@@ -1066,14 +1083,13 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                   drag da paleta). Insere bloco na posicao 0 da secoes. */}
               {paletteDragging && (
                 <div className="px-6 py-3">
-                  <SortableContext items={[]} strategy={verticalListSortingStrategy}>
-                    <DropZone
-                      index={0}
-                      draggingType={paletteDragging}
-                      variant="page"
-                      label={`Soltar logo após a capa`}
-                    />
-                  </SortableContext>
+                  <DropZone
+                    index={0}
+                    locationKey="classico-page-top"
+                    draggingType={paletteDragging}
+                    variant="page"
+                    label="Soltar logo após a capa"
+                  />
                 </div>
               )}
 
@@ -1110,7 +1126,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                   <div className="py-12">
                     {/* Drop zone gigante quando ha drag em curso */}
                     {paletteDragging && (
-                      <DropZone index={0} draggingType={paletteDragging} forceVisible label="Soltar primeiro bloco aqui" variant="page" />
+                      <DropZone index={0} locationKey="empty-state" draggingType={paletteDragging} forceVisible label="Soltar primeiro bloco aqui" variant="page" />
                     )}
                     {/* Empty state ilustrado com CTAs grandes */}
                     {!paletteDragging && (
@@ -1156,7 +1172,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                 ) : (
                   <div className="space-y-2">
                     {/* Drop zone antes do primeiro bloco (so durante drag) */}
-                    <DropZone index={0} draggingType={paletteDragging} />
+                    <DropZone index={0} locationKey="inner-first" draggingType={paletteDragging} />
                     {/* Quick add inline antes do primeiro bloco (hover) */}
                     {!paletteDragging && (
                       <InsertBlockButton
@@ -1181,7 +1197,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                           idioma={(proposta.idioma || 'pt-BR') as 'pt-BR' | 'en' | 'es'}
                         />
                         {/* Drop zone apos cada bloco (so durante drag) */}
-                        <DropZone index={idx + 1} draggingType={paletteDragging} />
+                        <DropZone index={idx + 1} locationKey={`inner-after-${secao.id}`} draggingType={paletteDragging} />
                         {/* Quick add inline entre/depois dos blocos (hover) */}
                         {!paletteDragging && (
                           <InsertBlockButton
@@ -1213,14 +1229,13 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                   drag da paleta). Insere bloco no FIM da secoes. */}
               {paletteDragging && (
                 <div className="px-6 py-3">
-                  <SortableContext items={[]} strategy={verticalListSortingStrategy}>
-                    <DropZone
-                      index={proposta.secoes.length}
-                      draggingType={paletteDragging}
-                      variant="page"
-                      label="Soltar logo antes do rodapé"
-                    />
-                  </SortableContext>
+                  <DropZone
+                    index={proposta.secoes.length}
+                    locationKey="classico-page-bottom"
+                    draggingType={paletteDragging}
+                    variant="page"
+                    label="Soltar logo antes do rodapé"
+                  />
                 </div>
               )}
 
