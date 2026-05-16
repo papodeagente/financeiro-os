@@ -723,19 +723,32 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
     const overData = over?.data.current as { kind?: string } | undefined;
 
     // ============ DROP DA PALETA ============
-    // Toda a area do documento (canvas-drop) aceita o drop. Calculamos
-    // a posicao de insercao via Y do ponteiro vs centros DOM dos blocos.
     if (activeData?.source === 'palette' && typeof activeData.tipo === 'string') {
-      if (!over || overData?.kind !== 'canvas') {
-        if (wasDraggingPalette) {
-          toast.error('Solte dentro do documento da proposta', 'Tente novamente');
+      // Caso 1: drop sobre PLACEHOLDER → preenche o slot (transforma o
+      // tipo do placeholder no tipo arrastado, preservando id/cols/ordem).
+      if (over && overData?.kind === 'placeholder-slot') {
+        const secaoId = String(over.id);
+        const alvo = proposta.secoes.find(s => s.id === secaoId);
+        if (alvo && alvo.tipo === 'PLACEHOLDER') {
+          changeTipoSecao(secaoId, activeData.tipo);
+          toast.success(`${TIPO_LABELS_GLOBAL[activeData.tipo] || activeData.tipo} preenchido no slot`);
+          setSelectedBlockId(secaoId);
+          return;
         }
+      }
+      // Caso 2: drop em qualquer outro lugar do documento → insere novo
+      // bloco na posicao calculada via Y do cursor.
+      if (over && overData?.kind === 'canvas') {
+        const insertIndex = computeInsertIndex(pointerYRef.current);
+        const newId = insertSecaoAt(activeData.tipo, insertIndex);
+        toast.success(`${TIPO_LABELS_GLOBAL[activeData.tipo] || activeData.tipo} adicionado`);
+        setSelectedBlockId(newId);
         return;
       }
-      const insertIndex = computeInsertIndex(pointerYRef.current);
-      const newId = insertSecaoAt(activeData.tipo, insertIndex);
-      toast.success(`${TIPO_LABELS_GLOBAL[activeData.tipo] || activeData.tipo} adicionado`);
-      setSelectedBlockId(newId);
+      // Caso 3: drop fora — feedback claro.
+      if (wasDraggingPalette) {
+        toast.error('Solte dentro do documento da proposta', 'Tente novamente');
+      }
       return;
     }
 
@@ -751,11 +764,23 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
   };
 
   // Collision detection sensivel ao tipo de drag:
-  //  - paleta -> canvas-drop unico (toda a area do documento)
-  //  - canvas -> sortable blocks (reorder)
+  //  - paleta: aceita canvas-drop + placeholder-slot. Se houver
+  //    placeholder sob o cursor, ele tem prioridade (preenche o slot).
+  //    Senao cai no canvas (insere onde o cursor solta).
+  //  - canvas: aceita sortable blocks (reorder). Exclui canvas-drop e
+  //    placeholder-slot pra evitar self-drop.
   const collisionDetection: CollisionDetection = (args) => {
     const activeData = args.active.data.current as { source?: string } | undefined;
     if (activeData?.source === 'palette') {
+      // Primeiro tenta achar placeholder-slot sob o cursor (prioridade)
+      const placeholderHits = pointerWithin({
+        ...args,
+        droppableContainers: args.droppableContainers.filter(
+          c => (c.data.current as { kind?: string } | undefined)?.kind === 'placeholder-slot',
+        ),
+      });
+      if (placeholderHits.length > 0) return placeholderHits;
+      // Fallback: canvas-drop generico
       return pointerWithin({
         ...args,
         droppableContainers: args.droppableContainers.filter(
@@ -765,9 +790,10 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
     }
     return closestCenter({
       ...args,
-      droppableContainers: args.droppableContainers.filter(
-        c => (c.data.current as { kind?: string } | undefined)?.kind !== 'canvas',
-      ),
+      droppableContainers: args.droppableContainers.filter(c => {
+        const kind = (c.data.current as { kind?: string } | undefined)?.kind;
+        return kind !== 'canvas';
+      }),
     });
   };
 
@@ -1195,45 +1221,66 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
               <SortableContext items={proposta.secoes.map(s => s.id)} strategy={verticalListSortingStrategy}>
                 {proposta.secoes.length === 0 ? (
                   <div className="py-12">
-                    {/* Empty state ilustrado com CTAs grandes.
-                        Drop funciona no documento inteiro via CanvasDropArea. */}
+                    {/* Empty state — workflow guiado: comece pela ESTRUTURA.
+                        Linha 1/2/3/4 cols → preenche slots arrastando da paleta. */}
                     {!paletteDragging && (
                       <div className="text-center max-w-md mx-auto">
                         <div className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-blue-100 to-emerald-100 flex items-center justify-center">
                           <svg className="w-8 h-8 text-[var(--t-green)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M3 12h18M3 20h18" />
                           </svg>
                         </div>
                         <h3 className="text-base font-semibold text-[var(--t-text)] mb-1">
-                          Comece a construir sua proposta
+                          Comece adicionando uma linha
                         </h3>
                         <p className="text-sm text-[var(--t-text-muted)] mb-6">
-                          Arraste blocos da paleta lateral, use os atalhos abaixo, ou peça pra IA gerar uma estrutura inicial.
+                          Defina primeiro a estrutura (1, 2, 3 ou 4 colunas), depois arraste blocos da paleta pra cada slot.
                         </p>
+                        <div className="text-[10px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)] mb-2">
+                          Adicionar linha com:
+                        </div>
+                        <div className="grid grid-cols-4 gap-2 mb-5">
+                          {([1, 2, 3, 4] as const).map(n => (
+                            <button
+                              key={n}
+                              onClick={() => {
+                                const id = addEmptyRow(n);
+                                setSelectedBlockId(id);
+                              }}
+                              className="flex flex-col items-center justify-center py-3 rounded-lg border-2 border-[var(--t-border)] bg-white hover:border-blue-500 hover:bg-blue-50 transition-colors"
+                              title={`Linha de ${n} ${n === 1 ? 'coluna' : 'colunas'}`}
+                            >
+                              <span className="text-lg font-bold text-blue-600">{n}</span>
+                              <span className="text-[10px] text-[var(--t-text-muted)]">
+                                {n === 1 ? '100%' : n === 2 ? '50%' : n === 3 ? '33%' : '25%'}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                        <div className="text-[10px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)] mb-2">
+                          Ou atalhos:
+                        </div>
                         <div className="space-y-2">
                           <button
                             onClick={() => setHotelModalOpen(true)}
-                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-[var(--t-text)] bg-white border-2 border-[var(--t-border)] hover:border-[var(--t-green)] hover:bg-[var(--t-green)]/5 transition-colors"
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-[var(--t-text)] bg-white border border-[var(--t-border)] hover:border-[var(--t-green)] hover:bg-[var(--t-green)]/5 transition-colors"
                           >
                             🏨 Buscar hotel via API
                           </button>
                           <button
                             onClick={() => setFlightModalOpen(true)}
-                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-[var(--t-text)] bg-white border-2 border-[var(--t-border)] hover:border-[var(--t-green)] hover:bg-[var(--t-green)]/5 transition-colors"
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-[var(--t-text)] bg-white border border-[var(--t-border)] hover:border-[var(--t-green)] hover:bg-[var(--t-green)]/5 transition-colors"
                           >
                             ✈️ Buscar voo via API
                           </button>
                           <button
                             onClick={handleGenerateFullProposal}
                             disabled={generatingFull}
-                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-purple-700 bg-purple-50 border-2 border-purple-200 hover:bg-purple-100 transition-colors disabled:opacity-50"
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-purple-700 bg-purple-50 border border-purple-200 hover:bg-purple-100 transition-colors disabled:opacity-50"
                           >
                             {generatingFull ? '⏳ Gerando...' : '✨ Gerar proposta completa com IA'}
                           </button>
                         </div>
-                        <p className="text-[11px] text-[var(--t-text-muted)] mt-5">
-                          Ou clique no <kbd className="px-1.5 py-0.5 mx-0.5 rounded bg-[var(--t-bg)] border border-[var(--t-border)] text-[10px] font-mono">+</kbd> entre blocos pra adicionar com 1 click
-                        </p>
                       </div>
                     )}
                   </div>
@@ -1290,6 +1337,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                                     canMoveDown={secaoIdx >= 0 && secaoIdx < proposta.secoes.length - 1}
                                     corPrimaria={proposta.visual?.cor_primaria || '#004aad'}
                                     idioma={(proposta.idioma || 'pt-BR') as 'pt-BR' | 'en' | 'es'}
+                                    paletteDragging={paletteDragging}
                                   />
                                 );
                               })}

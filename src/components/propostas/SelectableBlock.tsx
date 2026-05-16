@@ -40,6 +40,10 @@ interface Props {
   canMoveDown?: boolean;
   corPrimaria: string;
   idioma: IdiomaProposal;
+  // Tipo do bloco sendo arrastado da paleta. Quando != null e o bloco
+  // for PLACEHOLDER, o visual fica mais convidativo ("Solte aqui pra
+  // preencher esta coluna").
+  paletteDragging?: string | null;
 }
 
 // Wrapper Elementor-like de cada bloco no canvas. O bloco renderiza o
@@ -56,11 +60,17 @@ interface Props {
 function SelectableBlockInner({
   secao, selected, onSelect, onDuplicate, onToggleVisivel, onRemove,
   onMoveUp, onMoveDown, canMoveUp, canMoveDown,
-  corPrimaria, idioma,
+  corPrimaria, idioma, paletteDragging,
 }: Props) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const isPlaceholder = secao.tipo === 'PLACEHOLDER';
+  // Marca o sortable com kind apropriado pra que o collisionDetection
+  // do PropostaEditor saiba diferenciar PLACEHOLDERs (que aceitam drop
+  // pra serem preenchidos) de blocos normais (que aceitam reorder).
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
     id: secao.id,
+    data: { kind: isPlaceholder ? 'placeholder-slot' : 'block' },
   });
+  const showDropHint = isPlaceholder && !!paletteDragging;
   const hidden = secao.visivel === false;
   // Scroll suave pro bloco quando ele e selecionado (ex.: via Estrutura
   // tab ou prev/next no painel direito). Evita perder o bloco editado de
@@ -236,23 +246,58 @@ function SelectableBlockInner({
         </div>
       )}
 
-      {/* PLACEHOLDER — coluna vazia de uma row estrutural. CTA grande
-          convidando o usuario a clicar pra escolher o tipo do bloco no
-          painel direito. So aparece no editor (preview publico nao
-          renderiza PLACEHOLDER). */}
-      {secao.tipo === 'PLACEHOLDER' && !hidden ? (
-        <div className="pointer-events-none cursor-pointer py-6 px-3">
-          <div className="bg-blue-50/50 border-2 border-dashed border-blue-300 rounded-xl px-3 py-8 text-center hover:bg-blue-50 hover:border-blue-400 transition-colors min-h-[140px] flex flex-col items-center justify-center">
-            <div className="text-3xl mb-2" aria-hidden>＋</div>
-            <div className="text-sm font-semibold text-blue-700 mb-1">
-              Coluna vazia
-            </div>
-            <div className="text-[11px] text-blue-600/80 leading-relaxed mb-3 max-w-[200px]">
-              Clique pra escolher um tipo de bloco
-            </div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-blue-600 text-white text-[10px] uppercase tracking-wider font-semibold">
-              <Pencil className="w-3 h-3" /> Escolher tipo
-            </div>
+      {/* PLACEHOLDER — coluna vazia de uma row estrutural. UI muda em 3
+          estados:
+            - Repouso: card azul tracejado, CTA "Clique ou arraste".
+            - paletteDragging != null: pulsa indicando que aceita drop.
+            - isOver (cursor da paleta sobre o slot): solido azul forte
+              + "SOLTE AQUI" — feedback imediato pre-drop.
+          So aparece no editor; preview publico nao renderiza PLACEHOLDER. */}
+      {isPlaceholder && !hidden ? (
+        <div className="pointer-events-none cursor-pointer py-3 px-2">
+          <div
+            className={`rounded-xl px-3 py-8 text-center transition-all min-h-[160px] flex flex-col items-center justify-center ${
+              isOver && paletteDragging
+                ? 'bg-blue-600 border-4 border-blue-700 text-white shadow-2xl scale-[1.02]'
+                : showDropHint
+                  ? 'bg-blue-100 border-2 border-dashed border-blue-500 text-blue-700 animate-pulse'
+                  : 'bg-blue-50/60 border-2 border-dashed border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400'
+            }`}
+          >
+            {isOver && paletteDragging ? (
+              <>
+                <div className="text-4xl mb-2 animate-bounce" aria-hidden>↓</div>
+                <div className="text-base font-bold uppercase tracking-wider">
+                  Solte aqui
+                </div>
+                <div className="text-[11px] opacity-90 mt-1">
+                  para preencher esta coluna
+                </div>
+              </>
+            ) : showDropHint ? (
+              <>
+                <div className="text-3xl mb-2" aria-hidden>＋</div>
+                <div className="text-sm font-bold">
+                  Slot disponível
+                </div>
+                <div className="text-[11px] mt-1 opacity-90">
+                  Solte um bloco aqui
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-3xl mb-2" aria-hidden>＋</div>
+                <div className="text-sm font-semibold mb-1">
+                  Coluna vazia
+                </div>
+                <div className="text-[11px] opacity-80 leading-relaxed mb-3 max-w-[220px]">
+                  Arraste um bloco da paleta ou clique pra escolher
+                </div>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-blue-600 text-white text-[10px] uppercase tracking-wider font-semibold">
+                  <Pencil className="w-3 h-3" /> Escolher tipo
+                </div>
+              </>
+            )}
           </div>
         </div>
       ) : emptyHint && !hidden ? (
