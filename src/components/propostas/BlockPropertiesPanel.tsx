@@ -101,7 +101,7 @@ export function BlockPropertiesPanel({
 
   return (
     <aside
-      className="w-[320px] xl:w-[360px] shrink-0 border-l border-[var(--t-border)] bg-[var(--t-surface)] flex flex-col overflow-hidden"
+      className="w-[320px] xl:w-[360px] shrink-0 border-l border-[var(--t-border)] bg-[var(--t-surface)] flex flex-col overflow-hidden animate-in slide-in-from-right-2 fade-in duration-200"
       aria-label="Propriedades do bloco selecionado"
     >
       {/* Breadcrumb — abre config da pagina (substitui o editor de bloco) */}

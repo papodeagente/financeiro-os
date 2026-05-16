@@ -8,6 +8,7 @@ import { GripVertical, EyeOff, Eye, CopyPlus, Trash2, Pencil } from 'lucide-reac
 import type { SecaoProposta } from '@/lib/crm-types';
 import type { IdiomaProposal } from '@/lib/i18n-proposta';
 import { PreviewRenderer } from './preview/PreviewRenderer';
+import { getEmptyHint } from '@/lib/proposta-empty';
 
 const TIPO_LABELS: Record<string, string> = {
   TEXTO: 'Texto',
@@ -99,6 +100,11 @@ function SelectableBlockInner({
     fn();
   };
 
+  // Detecta se o bloco esta vazio pra mostrar empty state overlay com
+  // dica + CTA pra editar. So aparece no editor (no /p/[slug] o bloco
+  // renderiza como esta). Helper centralizado em /lib/proposta-empty.ts.
+  const emptyHint = getEmptyHint(secao);
+
   return (
     <div
       ref={(el) => {
@@ -106,7 +112,7 @@ function SelectableBlockInner({
         scrollRef.current = el;
       }}
       onClick={(e) => { e.stopPropagation(); onSelect(); }}
-      className="relative group"
+      className="relative group animate-in fade-in slide-in-from-top-2 duration-300"
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
@@ -249,15 +255,37 @@ function SelectableBlockInner({
         </div>
       )}
 
-      {/* Conteudo renderizado — pointer-events-none pra que clicks
-          passem direto pro wrapper externo (selecao do bloco) */}
-      <div className="pointer-events-none cursor-pointer">
-        <PreviewRenderer
-          secoes={[{ ...secao, visivel: true }]}
-          corPrimaria={corPrimaria}
-          idioma={idioma}
-        />
-      </div>
+      {/* Empty state — quando o bloco esta sem conteudo significativo,
+          substitui o preview por um card convidativo com hint e CTA.
+          Click no card seleciona o bloco e abre o painel direito.
+          Aparece SO no editor (PreviewRenderer publico nao envolve
+          este wrapper). */}
+      {emptyHint && !hidden ? (
+        <div className="pointer-events-none cursor-pointer py-12 px-4">
+          <div className="mx-auto bg-white border-2 border-dashed border-[var(--t-green)]/40 rounded-xl px-5 py-6 max-w-md text-center shadow-sm">
+            <div className="text-4xl mb-2" aria-hidden>{emptyHint.icon}</div>
+            <div className="text-base font-semibold text-[var(--t-text)] mb-1">
+              {emptyHint.title}
+            </div>
+            <div className="text-xs text-[var(--t-text-muted)] leading-relaxed mb-3">
+              {emptyHint.description}
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[var(--t-green)]/10 text-[var(--t-green)] text-[10px] uppercase tracking-wider font-semibold">
+              <Pencil className="w-3 h-3" /> Clique para editar
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Conteudo renderizado normal — pointer-events-none pra que
+           clicks passem direto pro wrapper externo (selecao do bloco) */
+        <div className="pointer-events-none cursor-pointer">
+          <PreviewRenderer
+            secoes={[{ ...secao, visivel: true }]}
+            corPrimaria={corPrimaria}
+            idioma={idioma}
+          />
+        </div>
+      )}
     </div>
   );
 }

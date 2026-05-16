@@ -107,7 +107,9 @@ export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAI
   };
 
   return (
-    <div className="w-80 border-l border-[var(--t-border)] bg-[var(--t-surface)] flex flex-col shrink-0 hidden lg:flex">
+    <div className={`w-80 border-l border-[var(--t-border)] bg-[var(--t-surface)] flex flex-col shrink-0 hidden lg:flex ${
+      onClose ? 'animate-in slide-in-from-right-2 fade-in duration-200' : ''
+    }`}>
       {/* Header com botao de fechar (quando em modo drawer) */}
       {onClose && (
         <div className="px-3 py-2 border-b border-[var(--t-border)] flex items-center justify-between shrink-0">
