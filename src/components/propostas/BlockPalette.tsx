@@ -5,9 +5,12 @@ import {
   Plane, Hotel, Type, Calendar, Image as ImageIcon, CheckSquare, DollarSign,
   Quote, MousePointer, Video, Map as MapIcon, HelpCircle, Timer, Bed, Car,
   Sparkles, PanelLeftClose, PanelLeftOpen, Loader2, GripVertical,
+  LayoutGrid, ListTree, EyeOff,
 } from 'lucide-react';
 import { useDraggable } from '@dnd-kit/core';
 import type { ComponentType } from 'react';
+import type { SecaoProposta } from '@/lib/crm-types';
+import { BlockHeaderSummary } from './BlockHeaderSummary';
 
 type IconType = ComponentType<{ className?: string }>;
 
@@ -23,10 +26,9 @@ interface Category {
   items: PaletteItem[];
 }
 
-// Agrupamento dos tipos de bloco por finalidade. Ordem intencional:
-// primeiro os blocos "ricos" (hospedagem/transporte/roteiro) que sao o
-// coracao da proposta; conteudo geral logo abaixo; comercial e social
-// no fim.
+// Mesma estrutura que o BlockPalette anterior — agrupamento intencional
+// por finalidade: primeiro os blocos "ricos" (hospedagem/transporte/
+// roteiro), depois conteudo geral, comercial e social.
 const CATEGORIES: Category[] = [
   {
     label: 'Hospedagem & Transporte',
@@ -39,7 +41,7 @@ const CATEGORIES: Category[] = [
   {
     label: 'Roteiro',
     items: [
-      { tipo: 'ROTEIRO_DIA', icon: Calendar, label: 'Roteiro Dia a Dia', desc: 'Atividades por dia da viagem' },
+      { tipo: 'ROTEIRO_DIA', icon: Calendar, label: 'Roteiro', desc: 'Atividades por dia' },
       { tipo: 'MAPA', icon: MapIcon, label: 'Mapa', desc: 'Pontos no mapa interativo' },
     ],
   },
@@ -55,7 +57,7 @@ const CATEGORIES: Category[] = [
     label: 'Comercial',
     items: [
       { tipo: 'VALORES', icon: DollarSign, label: 'Valores', desc: 'Opções e parcelamento' },
-      { tipo: 'INCLUSOS', icon: CheckSquare, label: 'Inclusos / Não inclusos', desc: 'Duas colunas' },
+      { tipo: 'INCLUSOS', icon: CheckSquare, label: 'Inclusos', desc: 'Lista de inclusos e não inclusos' },
       { tipo: 'SERVICO', icon: Sparkles, label: 'Serviço', desc: 'Item com preço opcional' },
       { tipo: 'CTA', icon: MousePointer, label: 'CTA', desc: 'Botão de ação principal' },
     ],
@@ -70,37 +72,21 @@ const CATEGORIES: Category[] = [
   },
 ];
 
-// Item draggable da paleta. Wrapping em useDraggable expoe data.source
-// 'palette' + tipo do bloco — consumido em handleDragEnd do editor
-// para inserir o tipo na posicao do drop. Click continua adicionando
-// no fim da lista (fallback sem drag).
-function DraggablePaletteItem({ item, onClick, expanded }: {
-  item: PaletteItem;
-  onClick: () => void;
-  expanded: boolean;
-}) {
+const TIPO_ICONS: Record<string, IconType> = CATEGORIES.flatMap(c => c.items)
+  .reduce((acc, it) => ({ ...acc, [it.tipo]: it.icon }), {} as Record<string, IconType>);
+const TIPO_LABELS: Record<string, string> = CATEGORIES.flatMap(c => c.items)
+  .reduce((acc, it) => ({ ...acc, [it.tipo]: it.label }), {} as Record<string, string>);
+
+// Item Elementor-style: 2-col grid, card quadrado com icone centralizado
+// no topo e label abaixo. Descricao vira tooltip on hover (title attr).
+// Draggable via useDraggable (data.source = 'palette') e clickable como
+// fallback (adiciona no fim da lista).
+function DraggablePaletteCard({ item, onClick }: { item: PaletteItem; onClick: () => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `palette-${item.tipo}`,
     data: { source: 'palette', tipo: item.tipo },
   });
   const Icon = item.icon;
-
-  if (!expanded) {
-    return (
-      <button
-        ref={setNodeRef}
-        {...attributes}
-        {...listeners}
-        onClick={onClick}
-        className={`w-9 h-9 flex items-center justify-center rounded-lg text-[var(--t-text-secondary)] hover:bg-[var(--t-green)]/10 hover:text-[var(--t-green)] transition-colors cursor-grab active:cursor-grabbing ${
-          isDragging ? 'opacity-40' : ''
-        }`}
-        title={`${item.label} — arraste para o canvas ou clique para adicionar no fim`}
-      >
-        <Icon className="w-4 h-4" />
-      </button>
-    );
-  }
 
   return (
     <div
@@ -111,19 +97,15 @@ function DraggablePaletteItem({ item, onClick, expanded }: {
       role="button"
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
-      className={`w-full flex items-start gap-2 px-2 py-1.5 rounded-md text-left hover:bg-[var(--t-surface-hover)] transition-colors group cursor-grab active:cursor-grabbing ${
-        isDragging ? 'opacity-40' : ''
+      className={`flex flex-col items-center justify-center gap-1.5 aspect-square p-2 rounded-lg border bg-[var(--t-bg)] cursor-grab active:cursor-grabbing transition-all hover:border-[var(--t-green)] hover:bg-[var(--t-green)]/5 hover:shadow-sm ${
+        isDragging ? 'opacity-40 border-[var(--t-green)]' : 'border-[var(--t-border)]'
       }`}
-      title={`${item.label} — arraste para o canvas ou clique para adicionar no fim`}
+      title={`${item.label} — ${item.desc}. Arraste pro canvas ou clique pra adicionar no fim.`}
     >
-      <div className="w-7 h-7 shrink-0 flex items-center justify-center rounded-md bg-[var(--t-bg)] border border-[var(--t-border)] group-hover:border-[var(--t-green)] group-hover:bg-[var(--t-green)]/10 transition-colors">
-        <Icon className="w-3.5 h-3.5 text-[var(--t-text-secondary)] group-hover:text-[var(--t-green)] transition-colors" />
-      </div>
-      <div className="min-w-0 flex-1 pt-0.5">
-        <div className="text-xs font-medium text-[var(--t-text)] truncate">{item.label}</div>
-        <div className="text-[10px] text-[var(--t-text-muted)] truncate">{item.desc}</div>
-      </div>
-      <GripVertical className="w-3 h-3 text-[var(--t-text-muted)] opacity-0 group-hover:opacity-100 mt-1 shrink-0" />
+      <Icon className="w-6 h-6 text-[var(--t-text-secondary)] group-hover:text-[var(--t-green)]" />
+      <span className="text-[11px] font-medium text-[var(--t-text)] leading-tight text-center">
+        {item.label}
+      </span>
     </div>
   );
 }
@@ -134,13 +116,20 @@ interface Props {
   onSearchHotel: () => void;
   onGenerateFullAI: () => void;
   generatingFull: boolean;
+  // Tab Estrutura (outline) — listagem dos blocos atuais.
+  secoes: SecaoProposta[];
+  selectedBlockId: string | null;
+  onSelectBlock: (id: string) => void;
 }
 
 export function BlockPalette({
   onAddBlock, onSearchFlight, onSearchHotel, onGenerateFullAI, generatingFull,
+  secoes, selectedBlockId, onSelectBlock,
 }: Props) {
   const [collapsed, setCollapsed] = useState(false);
+  const [tab, setTab] = useState<'blocos' | 'estrutura'>('blocos');
 
+  // Modo colapsado: so icones verticais — preserva comportamento anterior.
   if (collapsed) {
     return (
       <aside
@@ -156,12 +145,7 @@ export function BlockPalette({
         </button>
         <div className="w-6 h-px bg-[var(--t-border)] my-1" />
         {CATEGORIES.flatMap(c => c.items).map(item => (
-          <DraggablePaletteItem
-            key={item.tipo}
-            item={item}
-            onClick={() => onAddBlock(item.tipo)}
-            expanded={false}
-          />
+          <CollapsedItem key={item.tipo} item={item} onClick={() => onAddBlock(item.tipo)} />
         ))}
       </aside>
     );
@@ -169,25 +153,45 @@ export function BlockPalette({
 
   return (
     <aside
-      className="w-64 shrink-0 border-r border-[var(--t-border)] bg-[var(--t-surface)] overflow-y-auto"
+      className="w-72 shrink-0 border-r border-[var(--t-border)] bg-[var(--t-surface)] flex flex-col overflow-hidden"
       aria-label="Paleta de blocos"
     >
-      {/* Header da paleta */}
-      <div className="px-3 py-2.5 flex items-center justify-between border-b border-[var(--t-border)] sticky top-0 bg-[var(--t-surface)] z-10">
-        <h3 className="text-[11px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)]">
-          Adicionar bloco
-        </h3>
+      {/* Tabs no topo */}
+      <div className="shrink-0 flex items-center border-b border-[var(--t-border)] bg-[var(--t-surface)]">
+        <button
+          onClick={() => setTab('blocos')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] uppercase tracking-wider font-semibold transition-all ${
+            tab === 'blocos'
+              ? 'text-[var(--t-text)] border-b-2 border-[var(--t-green)]'
+              : 'text-[var(--t-text-muted)] border-b-2 border-transparent hover:text-[var(--t-text-secondary)]'
+          }`}
+        >
+          <LayoutGrid className="w-3.5 h-3.5" /> Blocos
+        </button>
+        <button
+          onClick={() => setTab('estrutura')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] uppercase tracking-wider font-semibold transition-all ${
+            tab === 'estrutura'
+              ? 'text-[var(--t-text)] border-b-2 border-[var(--t-green)]'
+              : 'text-[var(--t-text-muted)] border-b-2 border-transparent hover:text-[var(--t-text-secondary)]'
+          }`}
+        >
+          <ListTree className="w-3.5 h-3.5" /> Estrutura
+          {secoes.length > 0 && (
+            <span className="text-[9px] font-normal text-[var(--t-text-muted)]">({secoes.length})</span>
+          )}
+        </button>
         <button
           onClick={() => setCollapsed(true)}
-          className="w-6 h-6 flex items-center justify-center rounded text-[var(--t-text-muted)] hover:bg-[var(--t-surface-hover)] hover:text-[var(--t-text)]"
+          className="w-9 h-9 flex items-center justify-center text-[var(--t-text-muted)] hover:bg-[var(--t-surface-hover)] hover:text-[var(--t-text)] border-l border-[var(--t-border)]"
           title="Colapsar paleta"
         >
           <PanelLeftClose className="w-3.5 h-3.5" />
         </button>
       </div>
 
-      {/* Atalhos especiais */}
-      <div className="px-3 py-3 border-b border-[var(--t-border)] space-y-1.5">
+      {/* Atalhos especiais — sempre visiveis, independente da tab */}
+      <div className="shrink-0 px-3 py-2.5 border-b border-[var(--t-border)] space-y-1.5">
         <button
           onClick={onSearchHotel}
           className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-medium text-[var(--t-text)] bg-[var(--t-bg)] border border-[var(--t-border)] hover:border-[var(--t-green)] hover:bg-[var(--t-green)]/5 transition-colors"
@@ -215,26 +219,106 @@ export function BlockPalette({
         </button>
       </div>
 
-      {/* Categorias */}
-      <div className="py-1">
-        {CATEGORIES.map(cat => (
-          <div key={cat.label} className="px-2 py-1.5">
-            <h4 className="text-[10px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)] px-2 mb-1">
-              {cat.label}
-            </h4>
-            <div className="space-y-0.5">
-              {cat.items.map(item => (
-                <DraggablePaletteItem
-                  key={item.tipo}
-                  item={item}
-                  onClick={() => onAddBlock(item.tipo)}
-                  expanded={true}
-                />
-              ))}
-            </div>
+      {/* Conteudo da tab */}
+      <div className="flex-1 overflow-y-auto">
+        {tab === 'blocos' ? (
+          // ========== Tab: Blocos ==========
+          <div className="py-2">
+            {CATEGORIES.map(cat => (
+              <div key={cat.label} className="px-3 py-1.5">
+                <h4 className="text-[10px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)] mb-2">
+                  {cat.label}
+                </h4>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {cat.items.map(item => (
+                    <DraggablePaletteCard
+                      key={item.tipo}
+                      item={item}
+                      onClick={() => onAddBlock(item.tipo)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
+        ) : (
+          // ========== Tab: Estrutura ==========
+          <div className="py-1">
+            {secoes.length === 0 ? (
+              <div className="px-4 py-8 text-center">
+                <ListTree className="w-6 h-6 text-[var(--t-text-muted)] mx-auto mb-2" />
+                <p className="text-xs text-[var(--t-text-muted)]">Nenhum bloco ainda</p>
+                <p className="text-[10px] text-[var(--t-text-muted)] mt-1">Adicione pela aba Blocos</p>
+              </div>
+            ) : (
+              <div className="px-1.5 py-1">
+                {secoes.map((s, i) => {
+                  const Icon = TIPO_ICONS[s.tipo] || Type;
+                  const isSelected = selectedBlockId === s.id;
+                  const isHidden = s.visivel === false;
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => onSelectBlock(s.id)}
+                      className={`w-full flex items-start gap-2 px-2 py-2 rounded-md text-left transition-colors mb-0.5 ${
+                        isSelected
+                          ? 'bg-[var(--t-green)]/10 ring-1 ring-[var(--t-green)]/40'
+                          : 'hover:bg-[var(--t-surface-hover)]'
+                      }`}
+                      title={`Ir para ${TIPO_LABELS[s.tipo] || s.tipo}`}
+                    >
+                      <span className="text-[9px] font-mono text-[var(--t-text-muted)] mt-1 w-4 text-right shrink-0">
+                        {i + 1}
+                      </span>
+                      <div className={`w-6 h-6 shrink-0 rounded-md flex items-center justify-center ${
+                        isSelected ? 'bg-[var(--t-green)]/20' : 'bg-[var(--t-bg)] border border-[var(--t-border)]'
+                      }`}>
+                        <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-[var(--t-green)]' : 'text-[var(--t-text-secondary)]'}`} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1 mb-0.5">
+                          <span className={`text-[10px] uppercase tracking-wider font-semibold truncate ${
+                            isHidden ? 'text-[var(--t-text-muted)] line-through' : 'text-[var(--t-text)]'
+                          }`}>
+                            {TIPO_LABELS[s.tipo] || s.tipo}
+                          </span>
+                          {isHidden && <EyeOff className="w-3 h-3 text-[var(--t-text-muted)] shrink-0" />}
+                        </div>
+                        <div className={`min-w-0 ${isHidden ? 'opacity-50' : ''}`}>
+                          <BlockHeaderSummary tipo={s.tipo} conteudo={s.conteudo} />
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </aside>
+  );
+}
+
+// Item da paleta colapsada (so icone). Draggable + clickable.
+function CollapsedItem({ item, onClick }: { item: PaletteItem; onClick: () => void }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `palette-${item.tipo}`,
+    data: { source: 'palette', tipo: item.tipo },
+  });
+  const Icon = item.icon;
+  return (
+    <button
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      onClick={onClick}
+      className={`w-9 h-9 flex items-center justify-center rounded-lg text-[var(--t-text-secondary)] hover:bg-[var(--t-green)]/10 hover:text-[var(--t-green)] transition-colors cursor-grab active:cursor-grabbing ${
+        isDragging ? 'opacity-40' : ''
+      }`}
+      title={`${item.label} — arraste para o canvas ou clique para adicionar no fim`}
+    >
+      <Icon className="w-4 h-4" />
+    </button>
   );
 }

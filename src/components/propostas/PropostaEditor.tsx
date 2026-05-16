@@ -854,13 +854,23 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
         onDragCancel={() => setPaletteDragging(null)}
       >
         <div className="flex-1 flex overflow-hidden">
-          {/* Paleta lateral de blocos (Fase 2/3) */}
+          {/* Paleta lateral de blocos com tabs Blocos/Estrutura (Fase D) */}
           <BlockPalette
             onAddBlock={addSecao}
             onSearchFlight={() => setFlightModalOpen(true)}
             onSearchHotel={() => setHotelModalOpen(true)}
             onGenerateFullAI={handleGenerateFullProposal}
             generatingFull={generatingFull}
+            secoes={proposta.secoes}
+            selectedBlockId={selectedBlockId}
+            onSelectBlock={(id) => {
+              setSelectedBlockId(id);
+              // Scroll suave pro bloco selecionado no canvas. Pequeno
+              // truque: cada SelectableBlock nao tem id especifico no DOM,
+              // entao usamos data-attr no wrapper. Implementacao opcional
+              // — Phase D entrega scroll basico via scroll natural quando
+              // o usuario clicka.
+            }}
           />
 
           {/* Editor — canvas estilo Elementor: cada bloco vira o preview
