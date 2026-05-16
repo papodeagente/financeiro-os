@@ -376,22 +376,41 @@ export function FlightSearchModal({
         {/* ─── SEARCH FORM ─── */}
         {step === 'search' && (
           <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-[var(--t-border)] bg-[var(--t-bg-secondary)] shrink-0">
-            {/* Trip type */}
-            <div className="flex items-center gap-4 mb-3">
-              <label className="flex items-center gap-1.5 cursor-pointer text-sm text-[var(--t-text)]">
-                <input type="radio" checked={roundTrip} onChange={() => setRoundTrip(true)} className="accent-blue-500" />
-                <ArrowLeftRight className="w-3.5 h-3.5 text-[var(--t-text-muted)]" />
+            {/* Trip type — toggle buttons grandes (substitui radios
+                pequenos que passavam batido). Selecao clara antes de
+                preencher os campos. */}
+            <div className="inline-flex p-1 rounded-lg bg-[var(--t-input-bg)] border border-[var(--t-border)] mb-3">
+              <button
+                type="button"
+                onClick={() => setRoundTrip(true)}
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${
+                  roundTrip
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-[var(--t-text-secondary)] hover:text-[var(--t-text)]'
+                }`}
+                aria-pressed={roundTrip}
+              >
+                <ArrowLeftRight className="w-3.5 h-3.5" />
                 Ida e volta
-              </label>
-              <label className="flex items-center gap-1.5 cursor-pointer text-sm text-[var(--t-text)]">
-                <input type="radio" checked={!roundTrip} onChange={() => setRoundTrip(false)} className="accent-blue-500" />
-                <ArrowRight className="w-3.5 h-3.5 text-[var(--t-text-muted)]" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setRoundTrip(false)}
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${
+                  !roundTrip
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-[var(--t-text-secondary)] hover:text-[var(--t-text)]'
+                }`}
+                aria-pressed={!roundTrip}
+              >
+                <ArrowRight className="w-3.5 h-3.5" />
                 Somente ida
-              </label>
+              </button>
             </div>
 
-            {/* Fields */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
+            {/* Fields — grid se ajusta: 4 cols com Data Volta (round trip)
+                ou 3 cols sem Data Volta (one way). */}
+            <div className={`grid grid-cols-1 sm:grid-cols-2 ${roundTrip ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-2 sm:gap-3`}>
               <AirportInput label="Origem" value={origem} onChange={(v) => setOrigem(v)} />
               <AirportInput label="Destino" value={destino} onChange={(v) => setDestino(v)} />
               <div>
@@ -399,12 +418,13 @@ export function FlightSearchModal({
                 <input type="date" value={dataIda} onChange={e => setDataIda(e.target.value)}
                   className="w-full px-3 py-2 bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded-lg text-sm text-[var(--t-text)]" />
               </div>
-              <div>
-                <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Data volta</label>
-                <input type="date" value={dataVolta} onChange={e => setDataVolta(e.target.value)}
-                  disabled={!roundTrip}
-                  className="w-full px-3 py-2 bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded-lg text-sm text-[var(--t-text)] disabled:opacity-30" />
-              </div>
+              {roundTrip && (
+                <div>
+                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Data volta</label>
+                  <input type="date" value={dataVolta} onChange={e => setDataVolta(e.target.value)}
+                    className="w-full px-3 py-2 bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded-lg text-sm text-[var(--t-text)]" />
+                </div>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-3">
