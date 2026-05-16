@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { X, Eye, EyeOff, CopyPlus, Trash2, Sparkles, Loader2, ChevronLeft, ChevronRight, ChevronLeft as BackIcon, Monitor, Tablet, Smartphone, Columns2 as ColsIcon, Square as FullIcon } from 'lucide-react';
+import { X, Eye, EyeOff, CopyPlus, Trash2, Sparkles, Loader2, ChevronLeft, ChevronRight, ChevronLeft as BackIcon, Monitor, Tablet, Smartphone, Columns2 as ColsIcon, Square as FullIcon, ArrowUp, ArrowDown } from 'lucide-react';
 import type { ComponentType } from 'react';
 import {
   Plane, Type, Calendar, Image as ImageIcon, CheckSquare,
@@ -58,6 +58,12 @@ interface Props {
   onChangeTipo?: (tipo: string) => void;
   // Responsivo: lista de viewports onde o bloco fica oculto.
   onChangeResponsive?: (hideOn: Array<'desktop' | 'tablet' | 'mobile'>) => void;
+  // Reordenacao manual: move o bloco 1 posicao pra cima/baixo na lista
+  // flat de secoes. Disabled quando ja esta na extremidade.
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
 }
 
 // Painel direito do editor — vira o "Properties Panel" estilo Elementor
@@ -68,6 +74,7 @@ export function BlockPropertiesPanel({
   secao, onChange, onClose, onDuplicate, onToggleVisivel, onRemove,
   onGenerateAI, generating, onInsertAfter, onPrev, onNext, position,
   onGoToPageSettings, onChangeCols, onChangeResponsive, onChangeTipo,
+  onMoveUp, onMoveDown, canMoveUp, canMoveDown,
 }: Props) {
   const cols = secao.cols ?? 1;
   const hideOn = secao.responsive?.hideOn ?? [];
@@ -216,6 +223,40 @@ export function BlockPropertiesPanel({
           {deleteConfirming && <span>Confirmar?</span>}
         </button>
       </div>
+
+      {/* Mover bloco — barra ALTA VISIBILIDADE. Sempre visivel quando o
+          bloco esta selecionado. Botoes grandes pra subir/descer 1
+          posicao na lista. Disabled nas extremidades. */}
+      {(onMoveUp || onMoveDown) && (
+        <div className="shrink-0 px-3 py-2 border-b border-[var(--t-border)] bg-blue-50/40">
+          <div className="text-[10px] uppercase tracking-wider font-semibold text-blue-700 mb-1.5 flex items-center justify-between">
+            <span>Mover bloco</span>
+            {position && (
+              <span className="text-[9px] font-mono text-blue-600/70">
+                Posição {position.current} de {position.total}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              onClick={onMoveUp}
+              disabled={!canMoveUp}
+              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-md bg-white border-2 border-blue-300 text-blue-700 font-semibold text-xs hover:bg-blue-50 hover:border-blue-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-blue-300"
+              title="Mover bloco 1 posição pra cima"
+            >
+              <ArrowUp className="w-4 h-4" /> Subir
+            </button>
+            <button
+              onClick={onMoveDown}
+              disabled={!canMoveDown}
+              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-md bg-white border-2 border-blue-300 text-blue-700 font-semibold text-xs hover:bg-blue-50 hover:border-blue-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-blue-300"
+              title="Mover bloco 1 posição pra baixo"
+            >
+              <ArrowDown className="w-4 h-4" /> Descer
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Content editor — scrollavel */}
       <div className="flex-1 overflow-y-auto">

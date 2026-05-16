@@ -1483,6 +1483,10 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                   onChangeCols={(cols) => changeColsSecao(selectedBlockId, cols)}
                   onChangeResponsive={(hideOn) => changeResponsiveSecao(selectedBlockId, hideOn)}
                   onChangeTipo={(tipo) => changeTipoSecao(selectedBlockId, tipo)}
+                  onMoveUp={() => moveSecao(selectedBlockId, -1)}
+                  onMoveDown={() => moveSecao(selectedBlockId, 1)}
+                  canMoveUp={currentIdx > 0}
+                  canMoveDown={currentIdx >= 0 && currentIdx < proposta.secoes.length - 1}
                 />
               );
             })()
