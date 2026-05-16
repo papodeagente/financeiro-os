@@ -122,7 +122,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const breadcrumbNode = trail.length ? <Breadcrumbs trail={trail} /> : undefined;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full w-full overflow-x-hidden">
       <ImpersonationBanner />
       <RouteProgress />
       <TopBar
@@ -131,10 +131,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={toggleSidebar}
       />
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden min-w-0">
         <PillarSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
         <main
-          className="flex-1 overflow-y-auto min-shell"
+          className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 min-shell"
           style={{ background: 'var(--lg-bg)' }}
         >
           <div className="content-enter">
