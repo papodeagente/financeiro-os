@@ -1067,18 +1067,18 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                     SortableContext separado pros blocos sortable continua
                     funcionando dentro do DiscoveryRenderer (que tem seus
                     proprios elementos). Drop zones nao precisam de
-                    SortableContext — sao apenas droppables. */}
-                {paletteDragging && (
-                  <div className="px-6 py-3">
-                    <DropZone
-                      index={0}
-                      locationKey="discovery-top"
-                      draggingType={paletteDragging}
-                      variant="page"
-                      label="Soltar no início (após capa)"
-                    />
-                  </div>
-                )}
+                    SortableContext — sao apenas droppables.
+                    SEMPRE renderizado pra que dnd-kit registre o droppable
+                    no mount (conditional rendering causava timing issues). */}
+                <div className="px-6">
+                  <DropZone
+                    index={0}
+                    locationKey="discovery-top"
+                    draggingType={paletteDragging}
+                    variant="page"
+                    label="Soltar no início (após capa)"
+                  />
+                </div>
 
                 <DiscoveryRenderer
                   proposta={proposta}
@@ -1087,18 +1087,16 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                 />
 
                 {/* DROP ZONE no fim (DISCOVERY) — insere apos todas as
-                    secoes. */}
-                {paletteDragging && (
-                  <div className="px-6 py-3">
-                    <DropZone
-                      index={proposta.secoes.length}
-                      locationKey="discovery-bottom"
-                      draggingType={paletteDragging}
-                      variant="page"
-                      label="Soltar no fim (antes do rodapé)"
-                    />
-                  </div>
-                )}
+                    secoes. SEMPRE renderizado. */}
+                <div className="px-6">
+                  <DropZone
+                    index={proposta.secoes.length}
+                    locationKey="discovery-bottom"
+                    draggingType={paletteDragging}
+                    variant="page"
+                    label="Soltar no fim (antes do rodapé)"
+                  />
+                </div>
               </PreviewEditorProvider>
             ) : (
               // ============ DESKTOP + LAYOUT CLASSICO ============
@@ -1119,19 +1117,18 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                 <CapaSection proposta={proposta} />
               </SelectablePageSection>
 
-              {/* DROP ZONE PAGE-LEVEL — logo apos a capa (visivel durante
-                  drag da paleta). Insere bloco na posicao 0 da secoes. */}
-              {paletteDragging && (
-                <div className="px-6 py-3">
-                  <DropZone
-                    index={0}
-                    locationKey="classico-page-top"
-                    draggingType={paletteDragging}
-                    variant="page"
-                    label="Soltar logo após a capa"
-                  />
-                </div>
-              )}
+              {/* DROP ZONE PAGE-LEVEL — logo apos a capa.
+                  Insere bloco na posicao 0 da secoes. SEMPRE renderizado
+                  pra que dnd-kit registre o droppable corretamente. */}
+              <div className="px-6">
+                <DropZone
+                  index={0}
+                  locationKey="classico-page-top"
+                  draggingType={paletteDragging}
+                  variant="page"
+                  label="Soltar logo após a capa"
+                />
+              </div>
 
               {/* MENSAGEM DE ABERTURA — so renderiza quando preenchida.
                   Selecao tambem leva ao PageHeaderEditor (mesmo editor
@@ -1239,22 +1236,29 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                         return (
                           <div key={`row-${row[0].id}`} className="space-y-2">
                             <div className={isPair ? 'grid grid-cols-2 gap-3' : ''}>
-                              {row.map((secao) => (
-                                <SelectableBlock
-                                  key={secao.id}
-                                  secao={secao}
-                                  selected={selectedBlockId === secao.id}
-                                  onSelect={() => setSelectedBlockId(secao.id)}
-                                  onDuplicate={() => duplicateSecao(secao.id)}
-                                  onToggleVisivel={() => toggleVisivelSecao(secao.id)}
-                                  onRemove={() => {
-                                    removeSecao(secao.id);
-                                    if (selectedBlockId === secao.id) setSelectedBlockId(null);
-                                  }}
-                                  corPrimaria={proposta.visual?.cor_primaria || '#004aad'}
-                                  idioma={(proposta.idioma || 'pt-BR') as 'pt-BR' | 'en' | 'es'}
-                                />
-                              ))}
+                              {row.map((secao) => {
+                                const secaoIdx = proposta.secoes.findIndex(s => s.id === secao.id);
+                                return (
+                                  <SelectableBlock
+                                    key={secao.id}
+                                    secao={secao}
+                                    selected={selectedBlockId === secao.id}
+                                    onSelect={() => setSelectedBlockId(secao.id)}
+                                    onDuplicate={() => duplicateSecao(secao.id)}
+                                    onToggleVisivel={() => toggleVisivelSecao(secao.id)}
+                                    onRemove={() => {
+                                      removeSecao(secao.id);
+                                      if (selectedBlockId === secao.id) setSelectedBlockId(null);
+                                    }}
+                                    onMoveUp={() => moveSecao(secao.id, -1)}
+                                    onMoveDown={() => moveSecao(secao.id, 1)}
+                                    canMoveUp={secaoIdx > 0}
+                                    canMoveDown={secaoIdx >= 0 && secaoIdx < proposta.secoes.length - 1}
+                                    corPrimaria={proposta.visual?.cor_primaria || '#004aad'}
+                                    idioma={(proposta.idioma || 'pt-BR') as 'pt-BR' | 'en' | 'es'}
+                                  />
+                                );
+                              })}
                             </div>
                             {/* Drop zone apos a row (so durante drag) */}
                             <DropZone
@@ -1291,19 +1295,17 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
               </div>
               </div>{/* /CONTAINER DOS BLOCOS */}
 
-              {/* DROP ZONE PAGE-LEVEL — antes do rodape (visivel durante
-                  drag da paleta). Insere bloco no FIM da secoes. */}
-              {paletteDragging && (
-                <div className="px-6 py-3">
-                  <DropZone
-                    index={proposta.secoes.length}
-                    locationKey="classico-page-bottom"
-                    draggingType={paletteDragging}
-                    variant="page"
-                    label="Soltar logo antes do rodapé"
-                  />
-                </div>
-              )}
+              {/* DROP ZONE PAGE-LEVEL — antes do rodape.
+                  Insere bloco no FIM da secoes. SEMPRE renderizado. */}
+              <div className="px-6">
+                <DropZone
+                  index={proposta.secoes.length}
+                  locationKey="classico-page-bottom"
+                  draggingType={paletteDragging}
+                  variant="page"
+                  label="Soltar logo antes do rodapé"
+                />
+              </div>
 
               {/* RODAPE — secao de pagina (nao draggavel). Click abre o
                   PageFooterEditor no painel direito. */}

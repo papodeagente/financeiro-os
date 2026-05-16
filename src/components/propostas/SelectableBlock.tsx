@@ -3,7 +3,7 @@
 import { memo, useEffect, useRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, EyeOff, Eye, CopyPlus, Trash2, Pencil } from 'lucide-react';
+import { GripVertical, EyeOff, Eye, CopyPlus, Trash2, Pencil, ChevronUp, ChevronDown } from 'lucide-react';
 import type { SecaoProposta } from '@/lib/crm-types';
 import type { IdiomaProposal } from '@/lib/i18n-proposta';
 import { PreviewRenderer } from './preview/PreviewRenderer';
@@ -34,6 +34,10 @@ interface Props {
   onDuplicate: () => void;
   onToggleVisivel: () => void;
   onRemove: () => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
   corPrimaria: string;
   idioma: IdiomaProposal;
 }
@@ -51,6 +55,7 @@ interface Props {
 // passa pelo wrapper (click = selecionar; resto vai pro painel direito).
 function SelectableBlockInner({
   secao, selected, onSelect, onDuplicate, onToggleVisivel, onRemove,
+  onMoveUp, onMoveDown, canMoveUp, canMoveDown,
   corPrimaria, idioma,
 }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -142,6 +147,38 @@ function SelectableBlockInner({
             <GripVertical className="w-3.5 h-3.5" />
           </button>
           <span className="w-px h-3.5 bg-white/30" />
+
+          {/* Mover pra cima */}
+          {onMoveUp && (
+            <>
+              <button
+                onClick={action(onMoveUp)}
+                disabled={!canMoveUp}
+                className="w-7 h-6 flex items-center justify-center text-white hover:bg-black/15 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Mover para cima"
+                aria-label="Mover para cima"
+              >
+                <ChevronUp className="w-3.5 h-3.5" />
+              </button>
+              <span className="w-px h-3.5 bg-white/30" />
+            </>
+          )}
+
+          {/* Mover pra baixo */}
+          {onMoveDown && (
+            <>
+              <button
+                onClick={action(onMoveDown)}
+                disabled={!canMoveDown}
+                className="w-7 h-6 flex items-center justify-center text-white hover:bg-black/15 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Mover para baixo"
+                aria-label="Mover para baixo"
+              >
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+              <span className="w-px h-3.5 bg-white/30" />
+            </>
+          )}
 
           {/* Editar (selecionar — abre painel direito) */}
           <button
