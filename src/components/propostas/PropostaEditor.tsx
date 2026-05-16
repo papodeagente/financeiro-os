@@ -31,6 +31,8 @@ import { PageFooterEditor } from './PageFooterEditor';
 import { PropostaSidebar } from './PropostaSidebar';
 import { CapaSection } from './preview/CapaSection';
 import { RodapeSection } from './preview/RodapeSection';
+import { DiscoveryRenderer } from './preview/discovery/DiscoveryRenderer';
+import type { IdiomaProposal } from '@/lib/i18n-proposta';
 import { FlightSearchModal } from '@/components/FlightSearchModal';
 import { HotelSearchModal } from '@/components/HotelSearchModal';
 import { formatFlightForTransporte } from '@/lib/flight-data-mapper';
@@ -879,9 +881,12 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
           />
 
           {/* Editor — canvas estilo Elementor: copia visual fiel de
-              /p/[slug] com capa, blocos, rodape — todos editaveis com
-              click. Fundo aplica proposta.visual.cor_fundo (vs editor
-              cinza generico) pra fidelidade total ao resultado final.
+              /p/[slug]. Bifurca por layout: DISCOVERY (default novo) usa
+              o DiscoveryRenderer completo (hero, nav, accommodations
+              summary table, transport summary, itinerary, pricing,
+              footer com cta de reserva); CLASSICO usa capa + blocos +
+              rodape modular. Fundo aplica proposta.visual.cor_fundo
+              pra fidelidade total ao resultado final.
               Click no fundo do canvas deseleciona. */}
           <div
             className="flex-1 overflow-y-auto"
@@ -898,6 +903,46 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
               }}
               onClick={e => e.stopPropagation()}
             >
+            {proposta.visual?.layout === 'DISCOVERY' ? (
+              // ============ LAYOUT DISCOVERY ============
+              // Renderiza com a engine completa do /p/[slug] DISCOVERY.
+              // Block selection acontece via aba "Estrutura" da paleta
+              // (a abordagem que melhor funciona quando renderers
+              // agrupam multiplos blocos numa unica secao visual —
+              // ex.: AccommodationSummary agrega todos os ALOJAMENTO).
+              <>
+                {/* Header da pagina (DiscoveryHero + nav) clickavel */}
+                <SelectablePageSection
+                  id="__page_header__"
+                  label="Capa e cabeçalho"
+                  selected={selectedBlockId === '__page_header__'}
+                  onSelect={() => setSelectedBlockId('__page_header__')}
+                >
+                  <div className="-m-0">
+                    <DiscoveryRenderer
+                      proposta={proposta}
+                      slug="preview"
+                      idioma={(proposta.idioma || 'pt-BR') as IdiomaProposal}
+                    />
+                  </div>
+                </SelectablePageSection>
+
+                {/* Drop zones + bloco no rodape mantidos nesse layout
+                    pra adicionar blocos novos sem sair do canvas */}
+                {paletteDragging && (
+                  <div className="px-6 py-4 bg-blue-50/40 border-t-2 border-dashed border-blue-300">
+                    <p className="text-[11px] uppercase tracking-wider font-semibold text-blue-600 text-center mb-2">
+                      Solte o bloco aqui — vai aparecer na seção apropriada
+                    </p>
+                    <SortableContext items={proposta.secoes.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                      <DropZone index={proposta.secoes.length} active label="Adicionar ao fim" />
+                    </SortableContext>
+                  </div>
+                )}
+              </>
+            ) : (
+              // ============ LAYOUT CLASSICO ============
+              <>
               {/* CAPA — secao de pagina (nao draggavel). Click abre o
                   PageHeaderEditor no painel direito. */}
               <SelectablePageSection
@@ -1009,6 +1054,8 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                   {new Date(proposta.cabecalho.validade + 'T12:00:00').toLocaleDateString('pt-BR')}
                 </div>
               )}
+              </>
+            )}
             </div>
           </div>
 
