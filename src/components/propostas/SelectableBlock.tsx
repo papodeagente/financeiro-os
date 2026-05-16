@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, EyeOff, Eye, CopyPlus, Trash2, Pencil } from 'lucide-react';
@@ -55,6 +56,18 @@ export function SelectableBlock({
     id: secao.id,
   });
   const hidden = secao.visivel === false;
+  // Scroll suave pro bloco quando ele e selecionado (ex.: via Estrutura
+  // tab ou prev/next no painel direito). Evita perder o bloco editado de
+  // vista quando esta fora da janela. Skip se ja esta visivel.
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!selected || !scrollRef.current) return;
+    const rect = scrollRef.current.getBoundingClientRect();
+    const inView = rect.top >= 0 && rect.bottom <= window.innerHeight;
+    if (!inView) {
+      scrollRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [selected]);
   // Tons azuis estilo Elementor — selected mais saturado que hover.
   const colorBg = selected ? '#2563EB' : '#60A5FA';
 
@@ -67,7 +80,10 @@ export function SelectableBlock({
 
   return (
     <div
-      ref={setNodeRef}
+      ref={(el) => {
+        setNodeRef(el);
+        scrollRef.current = el;
+      }}
       onClick={(e) => { e.stopPropagation(); onSelect(); }}
       className="relative group"
       style={{

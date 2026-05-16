@@ -25,6 +25,7 @@ import { BlockPalette } from './BlockPalette';
 import { DropZone } from './DropZone';
 import { SelectableBlock } from './SelectableBlock';
 import { SelectablePageSection } from './SelectablePageSection';
+import { InsertBlockButton } from './InsertBlockButton';
 import { BlockPropertiesPanel } from './BlockPropertiesPanel';
 import { PageHeaderEditor } from './PageHeaderEditor';
 import { PageFooterEditor } from './PageFooterEditor';
@@ -351,12 +352,26 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
       }
       if (key === 'arrowup') {
         e.preventDefault();
-        moveSecao(selectedBlockId, -1);
+        // Ctrl/Cmd + Up: navegar pro bloco anterior (sem mover)
+        if (meta) {
+          const idx = proposta.secoes.findIndex(s => s.id === selectedBlockId);
+          if (idx > 0) setSelectedBlockId(proposta.secoes[idx - 1].id);
+        } else {
+          moveSecao(selectedBlockId, -1);
+        }
         return;
       }
       if (key === 'arrowdown') {
         e.preventDefault();
-        moveSecao(selectedBlockId, 1);
+        // Ctrl/Cmd + Down: navegar pro proximo bloco (sem mover)
+        if (meta) {
+          const idx = proposta.secoes.findIndex(s => s.id === selectedBlockId);
+          if (idx >= 0 && idx < proposta.secoes.length - 1) {
+            setSelectedBlockId(proposta.secoes[idx + 1].id);
+          }
+        } else {
+          moveSecao(selectedBlockId, 1);
+        }
         return;
       }
     };
@@ -971,7 +986,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                       Solte o bloco aqui — vai aparecer na seção apropriada
                     </p>
                     <SortableContext items={proposta.secoes.map(s => s.id)} strategy={verticalListSortingStrategy}>
-                      <DropZone index={proposta.secoes.length} active label="Adicionar ao fim" />
+                      <DropZone index={proposta.secoes.length} draggingType={paletteDragging} forceVisible label="Adicionar ao fim" />
                     </SortableContext>
                   </div>
                 )}
@@ -1020,19 +1035,66 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
               >
               <SortableContext items={proposta.secoes.map(s => s.id)} strategy={verticalListSortingStrategy}>
                 {proposta.secoes.length === 0 ? (
-                  <div className="space-y-3">
-                    <DropZone index={0} active={!!paletteDragging} label="Soltar primeiro bloco aqui" />
-                    <div className="text-center py-12 text-[var(--t-text-muted)]">
-                      <p className="text-sm">Comece arrastando um bloco da paleta à esquerda</p>
-                      <p className="text-[11px] mt-1">ou clique num item da paleta para adicionar no fim</p>
-                    </div>
+                  <div className="py-12">
+                    {/* Drop zone gigante quando ha drag em curso */}
+                    {paletteDragging && (
+                      <DropZone index={0} draggingType={paletteDragging} forceVisible label="Soltar primeiro bloco aqui" />
+                    )}
+                    {/* Empty state ilustrado com CTAs grandes */}
+                    {!paletteDragging && (
+                      <div className="text-center max-w-md mx-auto">
+                        <div className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-blue-100 to-emerald-100 flex items-center justify-center">
+                          <svg className="w-8 h-8 text-[var(--t-green)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </div>
+                        <h3 className="text-base font-semibold text-[var(--t-text)] mb-1">
+                          Comece a construir sua proposta
+                        </h3>
+                        <p className="text-sm text-[var(--t-text-muted)] mb-6">
+                          Arraste blocos da paleta lateral, use os atalhos abaixo, ou peça pra IA gerar uma estrutura inicial.
+                        </p>
+                        <div className="space-y-2">
+                          <button
+                            onClick={() => setHotelModalOpen(true)}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-[var(--t-text)] bg-white border-2 border-[var(--t-border)] hover:border-[var(--t-green)] hover:bg-[var(--t-green)]/5 transition-colors"
+                          >
+                            🏨 Buscar hotel via API
+                          </button>
+                          <button
+                            onClick={() => setFlightModalOpen(true)}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-[var(--t-text)] bg-white border-2 border-[var(--t-border)] hover:border-[var(--t-green)] hover:bg-[var(--t-green)]/5 transition-colors"
+                          >
+                            ✈️ Buscar voo via API
+                          </button>
+                          <button
+                            onClick={handleGenerateFullProposal}
+                            disabled={generatingFull}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-purple-700 bg-purple-50 border-2 border-purple-200 hover:bg-purple-100 transition-colors disabled:opacity-50"
+                          >
+                            {generatingFull ? '⏳ Gerando...' : '✨ Gerar proposta completa com IA'}
+                          </button>
+                        </div>
+                        <p className="text-[11px] text-[var(--t-text-muted)] mt-5">
+                          Ou clique no <kbd className="px-1.5 py-0.5 mx-0.5 rounded bg-[var(--t-bg)] border border-[var(--t-border)] text-[10px] font-mono">+</kbd> entre blocos pra adicionar com 1 click
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  <div className="space-y-6">
-                    {/* Drop zone antes do primeiro bloco */}
-                    <DropZone index={0} active={!!paletteDragging} />
+                  <div className="space-y-2">
+                    {/* Drop zone antes do primeiro bloco (so durante drag) */}
+                    <DropZone index={0} draggingType={paletteDragging} />
+                    {/* Quick add inline antes do primeiro bloco (hover) */}
+                    {!paletteDragging && (
+                      <InsertBlockButton
+                        onInsert={(tipo) => insertSecaoAt(tipo, 0)}
+                        onSearchHotel={() => setHotelModalOpen(true)}
+                        onSearchFlight={() => setFlightModalOpen(true)}
+                      />
+                    )}
                     {proposta.secoes.map((secao, idx) => (
-                      <div key={secao.id} className="space-y-6">
+                      <div key={secao.id} className="space-y-2">
                         <SelectableBlock
                           secao={secao}
                           selected={selectedBlockId === secao.id}
@@ -1046,8 +1108,16 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                           corPrimaria={proposta.visual?.cor_primaria || '#004aad'}
                           idioma={(proposta.idioma || 'pt-BR') as 'pt-BR' | 'en' | 'es'}
                         />
-                        {/* Drop zone apos cada bloco */}
-                        <DropZone index={idx + 1} active={!!paletteDragging} />
+                        {/* Drop zone apos cada bloco (so durante drag) */}
+                        <DropZone index={idx + 1} draggingType={paletteDragging} />
+                        {/* Quick add inline entre/depois dos blocos (hover) */}
+                        {!paletteDragging && (
+                          <InsertBlockButton
+                            onInsert={(tipo) => insertSecaoAt(tipo, idx + 1)}
+                            onSearchHotel={() => setHotelModalOpen(true)}
+                            onSearchFlight={() => setFlightModalOpen(true)}
+                          />
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1114,20 +1184,34 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
               onClose={() => setSelectedBlockId(null)}
             />
           ) : selectedBlockId && proposta.secoes.find(s => s.id === selectedBlockId) ? (
-            <BlockPropertiesPanel
-              secao={proposta.secoes.find(s => s.id === selectedBlockId)!}
-              onChange={c => updateSecao(selectedBlockId, c)}
-              onClose={() => setSelectedBlockId(null)}
-              onDuplicate={() => duplicateSecao(selectedBlockId)}
-              onToggleVisivel={() => toggleVisivelSecao(selectedBlockId)}
-              onRemove={() => { removeSecao(selectedBlockId); setSelectedBlockId(null); }}
-              onGenerateAI={() => {
-                const s = proposta.secoes.find(s => s.id === selectedBlockId);
-                if (s) handleGenerateAI(selectedBlockId, s.tipo);
-              }}
-              generating={!!generatingAI[selectedBlockId]}
-              onInsertAfter={(tipo, conteudo) => insertSecaoAfter(selectedBlockId, tipo, conteudo)}
-            />
+            (() => {
+              // Calcula prev/next pra navegacao entre blocos sem
+              // fechar+reabrir o painel. Permite editar uma sequencia
+              // de blocos de forma fluida.
+              const currentIdx = proposta.secoes.findIndex(s => s.id === selectedBlockId);
+              const prevId = currentIdx > 0 ? proposta.secoes[currentIdx - 1].id : null;
+              const nextId = currentIdx >= 0 && currentIdx < proposta.secoes.length - 1
+                ? proposta.secoes[currentIdx + 1].id : null;
+              return (
+                <BlockPropertiesPanel
+                  secao={proposta.secoes[currentIdx]}
+                  onChange={c => updateSecao(selectedBlockId, c)}
+                  onClose={() => setSelectedBlockId(null)}
+                  onDuplicate={() => duplicateSecao(selectedBlockId)}
+                  onToggleVisivel={() => toggleVisivelSecao(selectedBlockId)}
+                  onRemove={() => { removeSecao(selectedBlockId); setSelectedBlockId(null); }}
+                  onGenerateAI={() => {
+                    const s = proposta.secoes.find(s => s.id === selectedBlockId);
+                    if (s) handleGenerateAI(selectedBlockId, s.tipo);
+                  }}
+                  generating={!!generatingAI[selectedBlockId]}
+                  onInsertAfter={(tipo, conteudo) => insertSecaoAfter(selectedBlockId, tipo, conteudo)}
+                  onPrev={prevId ? () => setSelectedBlockId(prevId) : undefined}
+                  onNext={nextId ? () => setSelectedBlockId(nextId) : undefined}
+                  position={{ current: currentIdx + 1, total: proposta.secoes.length }}
+                />
+              );
+            })()
           ) : (
             <PropostaSidebar
               proposta={proposta}
