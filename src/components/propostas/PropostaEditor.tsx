@@ -22,7 +22,7 @@ import {
 } from '@dnd-kit/sortable';
 import { BlockToolbar } from './BlockToolbar';
 import { BlockPalette } from './BlockPalette';
-import { DropZone } from './DropZone';
+import { CanvasDropArea } from './CanvasDropArea';
 import { SelectableBlock } from './SelectableBlock';
 import { SelectablePageSection } from './SelectablePageSection';
 import { InsertBlockButton } from './InsertBlockButton';
@@ -116,6 +116,16 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
   // Tipo do bloco sendo arrastado da paleta. Quando != null, drop zones
   // ficam visiveis no canvas (caso contrario ocupam apenas 8px).
   const [paletteDragging, setPaletteDragging] = useState<string | null>(null);
+  // Rastreia a posicao Y do ponteiro globalmente. Usado pelo handleDragEnd
+  // pra calcular onde inserir o bloco no canvas-drop (qual posicao da
+  // lista de secoes baseado em quao "alto" o usuario soltou). Atualiza em
+  // pointermove (cobre mouse, pen, touch).
+  const pointerYRef = useRef<number>(0);
+  useEffect(() => {
+    const handle = (e: PointerEvent) => { pointerYRef.current = e.clientY; };
+    document.addEventListener('pointermove', handle, { passive: true });
+    return () => document.removeEventListener('pointermove', handle);
+  }, []);
   // Bloco selecionado (Elementor-like): click no canvas seleciona, abre
   // editor no painel direito. Esc / click fora deseleciona. Tambem usado
   // pelos atalhos de teclado (D/H/Del/Arrows).
@@ -638,36 +648,59 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
     }
   };
 
+  // Calcula o indice de insercao baseado no Y atual do ponteiro vs a
+  // posicao DOM dos blocos existentes. Se o cursor esta acima do meio
+  // do bloco N, insere antes dele; se esta abaixo do meio do ultimo
+  // bloco, insere no fim. Os blocos sao identificados via data-block-id
+  // (SelectableBlock).
+  const computeInsertIndex = useCallback((dropY: number): number => {
+    const blockEls = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-block-id]'),
+    );
+    // Filtra elementos visiveis na proposta atual (descarta orfaos do
+    // DOM e elementos de outras propostas/regions). A ordem do DOM segue
+    // a ordem de proposta.secoes ja que renderizam sequencialmente.
+    const idsInOrder = proposta.secoes.map(s => s.id);
+    const visible = blockEls
+      .map(el => ({ el, id: el.dataset.blockId || '' }))
+      .filter(b => idsInOrder.includes(b.id))
+      .sort((a, b) => idsInOrder.indexOf(a.id) - idsInOrder.indexOf(b.id));
+
+    for (let i = 0; i < visible.length; i++) {
+      const r = visible[i].el.getBoundingClientRect();
+      const mid = r.top + r.height / 2;
+      if (dropY < mid) return i;
+    }
+    return visible.length;
+  }, [proposta.secoes]);
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     const wasDraggingPalette = paletteDragging;
     setPaletteDragging(null);
 
     const activeData = active.data.current as { source?: string; tipo?: string } | undefined;
-    const overData = over?.data.current as { kind?: string; index?: number } | undefined;
+    const overData = over?.data.current as { kind?: string } | undefined;
 
-    // Drop vindo da paleta: insere bloco na posicao da drop zone.
+    // ============ DROP DA PALETA ============
+    // Toda a area do documento (canvas-drop) aceita o drop. Calculamos
+    // a posicao de insercao via Y do ponteiro vs centros DOM dos blocos.
     if (activeData?.source === 'palette' && typeof activeData.tipo === 'string') {
-      if (!over) {
-        // Drop fora de qualquer drop zone valida — feedback claro
+      if (!over || overData?.kind !== 'canvas') {
         if (wasDraggingPalette) {
-          toast.error('Solte sobre uma área azul para adicionar', 'Tente novamente');
+          toast.error('Solte dentro do documento da proposta', 'Tente novamente');
         }
         return;
       }
-      if (overData?.kind === 'drop-zone' && typeof overData.index === 'number') {
-        const newId = insertSecaoAt(activeData.tipo, overData.index);
-        toast.success(`${TIPO_LABELS_GLOBAL[activeData.tipo] || activeData.tipo} adicionado`);
-        setSelectedBlockId(newId);
-        return;
-      }
-      // Drop em algo que nao e drop-zone — improvavel pelo collision
-      // detection mas defensivo
-      toast.error('Posição de destino inválida', 'Tente soltar entre os blocos');
+      const insertIndex = computeInsertIndex(pointerYRef.current);
+      const newId = insertSecaoAt(activeData.tipo, insertIndex);
+      toast.success(`${TIPO_LABELS_GLOBAL[activeData.tipo] || activeData.tipo} adicionado`);
+      setSelectedBlockId(newId);
       return;
     }
 
-    // Reordenacao canvas → canvas: troca posicao do bloco arrastado.
+    // ============ REORDER CANVAS → CANVAS ============
+    // Sortable: troca posicoes via arrayMove.
     if (!over || active.id === over.id) return;
     update(p => {
       const oldIndex = p.secoes.findIndex(s => s.id === active.id);
@@ -678,24 +711,22 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
   };
 
   // Collision detection sensivel ao tipo de drag:
-  //  - paleta -> so vamos olhar drop zones
-  //  - canvas -> so vamos olhar blocos sortable
-  // Isso evita conflito em listas pequenas onde uma drop zone fica
-  // proxima de um bloco e o dnd-kit poderia escolher o "errado".
+  //  - paleta -> canvas-drop unico (toda a area do documento)
+  //  - canvas -> sortable blocks (reorder)
   const collisionDetection: CollisionDetection = (args) => {
     const activeData = args.active.data.current as { source?: string } | undefined;
     if (activeData?.source === 'palette') {
       return pointerWithin({
         ...args,
         droppableContainers: args.droppableContainers.filter(
-          c => (c.data.current as { kind?: string } | undefined)?.kind === 'drop-zone',
+          c => (c.data.current as { kind?: string } | undefined)?.kind === 'canvas',
         ),
       });
     }
     return closestCenter({
       ...args,
       droppableContainers: args.droppableContainers.filter(
-        c => (c.data.current as { kind?: string } | undefined)?.kind !== 'drop-zone',
+        c => (c.data.current as { kind?: string } | undefined)?.kind !== 'canvas',
       ),
     });
   };
@@ -1025,8 +1056,9 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
             onClick={() => setSelectedBlockId(null)}
             style={{ background: '#e5e7eb' }}
           >
-            <div
-              className="mx-auto my-6 shadow-2xl rounded-lg overflow-hidden transition-[max-width] duration-300 ease-out relative"
+            <CanvasDropArea
+              draggingType={paletteDragging}
+              className="mx-auto my-6 shadow-2xl rounded-lg overflow-hidden transition-[max-width] duration-300 ease-out"
               style={{
                 maxWidth: `${VIEWPORT_WIDTHS[viewportMode]}px`,
                 background: proposta.visual?.cor_fundo || '#ffffff',
@@ -1063,40 +1095,11 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                     PreviewEditorProvider redireciona pra setSelectedBlockId.
                     A capa/cabecalho e editavel via aba Estrutura ou
                     seletor visual no proprio canvas. */}
-                {/* DROP ZONE no topo (DISCOVERY) — insere no inicio.
-                    SortableContext separado pros blocos sortable continua
-                    funcionando dentro do DiscoveryRenderer (que tem seus
-                    proprios elementos). Drop zones nao precisam de
-                    SortableContext — sao apenas droppables.
-                    SEMPRE renderizado pra que dnd-kit registre o droppable
-                    no mount (conditional rendering causava timing issues). */}
-                <div className="px-6">
-                  <DropZone
-                    index={0}
-                    locationKey="discovery-top"
-                    draggingType={paletteDragging}
-                    variant="page"
-                    label="Soltar no início (após capa)"
-                  />
-                </div>
-
                 <DiscoveryRenderer
                   proposta={proposta}
                   slug="preview"
                   idioma={(proposta.idioma || 'pt-BR') as IdiomaProposal}
                 />
-
-                {/* DROP ZONE no fim (DISCOVERY) — insere apos todas as
-                    secoes. SEMPRE renderizado. */}
-                <div className="px-6">
-                  <DropZone
-                    index={proposta.secoes.length}
-                    locationKey="discovery-bottom"
-                    draggingType={paletteDragging}
-                    variant="page"
-                    label="Soltar no fim (antes do rodapé)"
-                  />
-                </div>
               </PreviewEditorProvider>
             ) : (
               // ============ DESKTOP + LAYOUT CLASSICO ============
@@ -1116,19 +1119,6 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
               >
                 <CapaSection proposta={proposta} />
               </SelectablePageSection>
-
-              {/* DROP ZONE PAGE-LEVEL — logo apos a capa.
-                  Insere bloco na posicao 0 da secoes. SEMPRE renderizado
-                  pra que dnd-kit registre o droppable corretamente. */}
-              <div className="px-6">
-                <DropZone
-                  index={0}
-                  locationKey="classico-page-top"
-                  draggingType={paletteDragging}
-                  variant="page"
-                  label="Soltar logo após a capa"
-                />
-              </div>
 
               {/* MENSAGEM DE ABERTURA — so renderiza quando preenchida.
                   Selecao tambem leva ao PageHeaderEditor (mesmo editor
@@ -1161,11 +1151,8 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
               <SortableContext items={proposta.secoes.map(s => s.id)} strategy={verticalListSortingStrategy}>
                 {proposta.secoes.length === 0 ? (
                   <div className="py-12">
-                    {/* Drop zone gigante quando ha drag em curso */}
-                    {paletteDragging && (
-                      <DropZone index={0} locationKey="empty-state" draggingType={paletteDragging} forceVisible label="Soltar primeiro bloco aqui" variant="page" />
-                    )}
-                    {/* Empty state ilustrado com CTAs grandes */}
+                    {/* Empty state ilustrado com CTAs grandes.
+                        Drop funciona no documento inteiro via CanvasDropArea. */}
                     {!paletteDragging && (
                       <div className="text-center max-w-md mx-auto">
                         <div className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-blue-100 to-emerald-100 flex items-center justify-center">
@@ -1208,9 +1195,9 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {/* Drop zone antes do primeiro bloco (so durante drag) */}
-                    <DropZone index={0} locationKey="inner-first" draggingType={paletteDragging} />
-                    {/* Quick add inline antes do primeiro bloco (hover) */}
+                    {/* Quick add inline antes do primeiro bloco (hover).
+                        Drop por drag funciona no documento inteiro via
+                        CanvasDropArea — sem zonas discretas. */}
                     {!paletteDragging && (
                       <InsertBlockButton
                         onInsert={(tipo) => insertSecaoAt(tipo, 0)}
@@ -1224,13 +1211,11 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                         DOM structure. */}
                     {(() => {
                       const rows = groupIntoRows(proposta.secoes);
-                      // Calcula o indice absoluto de cada secao na lista
-                      // flat — usado pra drop zones (que sempre operam
-                      // em indices flat de secoes).
+                      // Indice flat usado pelo botao InsertBlockButton
+                      // (hover) pra inserir apos cada row.
                       let absIdx = 0;
                       return rows.map((row, rowIdx) => {
                         const isPair = row.length === 2;
-                        const rowStartIdx = absIdx;
                         absIdx += row.length;
                         const rowEndIdx = absIdx;
                         return (
@@ -1260,13 +1245,8 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                                 );
                               })}
                             </div>
-                            {/* Drop zone apos a row (so durante drag) */}
-                            <DropZone
-                              index={rowEndIdx}
-                              locationKey={`inner-after-row-${rowIdx}`}
-                              draggingType={paletteDragging}
-                            />
-                            {/* Quick add inline apos a row (hover) */}
+                            {/* Quick add inline apos a row (hover).
+                                Drop por drag: documento inteiro aceita. */}
                             {!paletteDragging && (
                               <InsertBlockButton
                                 onInsert={(tipo) => insertSecaoAt(tipo, rowEndIdx)}
@@ -1295,18 +1275,6 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
               </div>
               </div>{/* /CONTAINER DOS BLOCOS */}
 
-              {/* DROP ZONE PAGE-LEVEL — antes do rodape.
-                  Insere bloco no FIM da secoes. SEMPRE renderizado. */}
-              <div className="px-6">
-                <DropZone
-                  index={proposta.secoes.length}
-                  locationKey="classico-page-bottom"
-                  draggingType={paletteDragging}
-                  variant="page"
-                  label="Soltar logo antes do rodapé"
-                />
-              </div>
-
               {/* RODAPE — secao de pagina (nao draggavel). Click abre o
                   PageFooterEditor no painel direito. */}
               <div
@@ -1332,7 +1300,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
               )}
               </>
             )}
-            </div>
+            </CanvasDropArea>
           </div>
 
           {/* Painel direito como DRAWER — fechado por padrao pra

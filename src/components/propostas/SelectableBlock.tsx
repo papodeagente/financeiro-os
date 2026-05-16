@@ -97,6 +97,7 @@ function SelectableBlockInner({
       }}
       onClick={(e) => { e.stopPropagation(); onSelect(); }}
       className="relative group"
+      data-block-id={secao.id}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
