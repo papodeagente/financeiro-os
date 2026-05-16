@@ -1,9 +1,12 @@
 'use client';
 
+import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Hotel, Search } from 'lucide-react';
 import { ImageUpload } from '../ImageUpload';
-import { initiateProposalHotelSearch } from '@/lib/api-search-handoff';
+import { HotelSearchModal } from '@/components/HotelSearchModal';
+import { formatHotelForAlojamento } from '@/lib/hotel-data-mapper';
+import type { SearchAPIHotelProperty } from '@/lib/searchapi-hotels';
 import type { BlockProps } from './types';
 import type { AlojamentoData, RegimeRefeicao } from '@/lib/crm-types';
 
@@ -30,6 +33,7 @@ function proxiedImg(url: string): string {
 
 export function AlojamentoBlock({ conteudo, onChange }: BlockProps) {
   const c = conteudo as Partial<AlojamentoData>;
+  const [hotelModalOpen, setHotelModalOpen] = useState(false);
 
   const update = (patch: Partial<AlojamentoData>) => {
     const merged = { ...conteudo, ...patch };
@@ -42,26 +46,25 @@ export function AlojamentoBlock({ conteudo, onChange }: BlockProps) {
     onChange(merged as Record<string, unknown>);
   };
 
-  // Navega para /hoteis em modo handoff. PropostaEditor consome o resultado
-  // no remount via consumePendingPropostaHotelHandoff.
-  const abrirBuscaHotel = () => {
-    // Extrai propostaId do path atual /propostas/[id]
-    const match = window.location.pathname.match(/\/propostas\/([^/?#]+)/);
-    const propostaId = match?.[1] || '';
-    const blockId = c.id || '';
-    if (!propostaId || !blockId) {
-      console.warn('AlojamentoBlock: propostaId ou blockId ausente', { propostaId, blockId });
-      return;
-    }
-    initiateProposalHotelSearch({
-      propostaId,
-      blockId,
-      destino: c.destino_nome || '',
-      hotelNome: c.hotel_nome || '',
-      checkIn: c.check_in || '',
-      checkOut: c.check_out || '',
-      adults: 2,
-      returnTo: `${window.location.pathname}${window.location.search}`,
+  // Aplica os dados do hotel selecionado na API direto no bloco atual.
+  // Preserva configuracoes do usuario que NAO vem da API: check_in,
+  // check_out, noites, regime, quarto_tipo, bebidas — pra que datas/
+  // base ja preenchidas nao sejam sobrescritas.
+  const handleHotelSelect = (hotel: SearchAPIHotelProperty) => {
+    const mapped = formatHotelForAlojamento(hotel);
+    onChange({
+      ...conteudo,
+      ...mapped,
+      // Preserva o id do bloco existente (NAO substituir pelo id gerado
+      // pelo mapper — quebraria refs).
+      id: c.id || (mapped.id as string),
+      // Preserva datas/regime que o usuario ja configurou
+      check_in: c.check_in || '',
+      check_out: c.check_out || '',
+      noites: c.noites || 0,
+      regime: c.regime || 'BB',
+      quarto_tipo: c.quarto_tipo || '',
+      bebidas: c.bebidas || '',
     });
   };
 
@@ -78,15 +81,25 @@ export function AlojamentoBlock({ conteudo, onChange }: BlockProps) {
         Viagem noturna (transito aereo, sem hotel)
       </label>
 
-      {/* Buscar Hotel via API — abre tela inteira /hoteis em modo handoff */}
+      {/* Buscar Hotel na API — abre modal in-place e ATUALIZA este bloco
+          com o hotel selecionado (preserva datas/regime ja preenchidos). */}
       <button
-        onClick={abrirBuscaHotel}
-        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 hover:border-emerald-400 text-emerald-400 text-xs font-medium transition-all"
+        onClick={() => setHotelModalOpen(true)}
+        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 hover:border-emerald-400 text-emerald-600 text-xs font-medium transition-all"
       >
         <Hotel className="w-4 h-4" />
         <Search className="w-3.5 h-3.5" />
-        Buscar Hotel na API
+        {c.hotel_nome ? 'Trocar hotel via API' : 'Buscar Hotel na API'}
       </button>
+      <HotelSearchModal
+        open={hotelModalOpen}
+        onClose={() => setHotelModalOpen(false)}
+        onSelect={handleHotelSelect}
+        defaultDestino={c.destino_nome || ''}
+        defaultHotelName={c.hotel_nome || ''}
+        defaultCheckIn={c.check_in || ''}
+        defaultCheckOut={c.check_out || ''}
+      />
 
       <div className="grid grid-cols-2 gap-2">
         <div>

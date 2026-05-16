@@ -1,8 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Plane, Search, Clock, Leaf, AlertTriangle, ArrowRight } from 'lucide-react';
-import { initiateProposalFlightSearch } from '@/lib/api-search-handoff';
+import type { FlightOffer } from '@/lib/flight-data-mapper';
+import { formatFlightForTransporte } from '@/lib/flight-data-mapper';
+import { FlightSearchModal } from '@/components/FlightSearchModal';
 import type { BlockProps } from './types';
 import type { VooData } from '@/lib/crm-types';
 
@@ -23,8 +26,9 @@ function extTime(s?: string): string {
   return s.split(' ')[1]?.substring(0, 5) || s;
 }
 
-export function VooBlock({ conteudo, onChange }: BlockProps) {
+export function VooBlock({ conteudo, onChange, onInsertAfter }: BlockProps) {
   const c = conteudo as Partial<VooData>;
+  const [flightModalOpen, setFlightModalOpen] = useState(false);
   const update = (patch: Partial<VooData>) => {
     onChange({ ...conteudo, ...patch } as Record<string, unknown>);
   };
@@ -34,27 +38,39 @@ export function VooBlock({ conteudo, onChange }: BlockProps) {
   const escalas = c.escalas || 0;
   const segs = c.segmentos || [];
 
-  const abrirBuscaVoo = () => {
-    const match = window.location.pathname.match(/\/propostas\/([^/?#]+)/);
-    const propostaId = match?.[1] || '';
-    const blockId = c.id || '';
-    if (!propostaId || !blockId) return;
-    initiateProposalFlightSearch({
-      propostaId,
-      blockId,
-      origem: c.origem || '',
-      destino: c.destino || '',
-      dataIda: c.data || '',
-      adultos: 1,
-      returnTo: `${window.location.pathname}${window.location.search}`,
-    });
+  // Aplica voo da API direto neste bloco. Round-trip cria 2o bloco VOO
+  // (VOLTA) via onInsertAfter, preservando ID do bloco atual.
+  const handleFlightSelect = (ida: FlightOffer, volta?: FlightOffer) => {
+    const oneWayIda: FlightOffer = {
+      ...ida,
+      returnFlights: undefined,
+      returnDuration: undefined,
+      returnLayovers: undefined,
+    };
+    const [idaContent] = formatFlightForTransporte(oneWayIda) as unknown as Partial<VooData>[];
+    onChange({
+      ...conteudo,
+      ...idaContent,
+      id: c.id || idaContent.id,
+      voo_etapa: volta ? 'IDA' : undefined,
+    } as Record<string, unknown>);
+    if (volta && onInsertAfter) {
+      const oneWayVolta: FlightOffer = {
+        ...volta,
+        returnFlights: undefined,
+        returnDuration: undefined,
+        returnLayovers: undefined,
+      };
+      const [voltaContent] = formatFlightForTransporte(oneWayVolta) as unknown as Partial<VooData>[];
+      onInsertAfter('VOO', { ...voltaContent, voo_etapa: 'VOLTA' } as Record<string, unknown>);
+    }
   };
 
   return (
     <div className="space-y-4">
-      {/* Botão de busca rica — padrão minimal */}
+      {/* Botão de busca rica — modal in-place, atualiza ESTE bloco */}
       <button
-        onClick={abrirBuscaVoo}
+        onClick={() => setFlightModalOpen(true)}
         className="w-full flex items-center justify-center gap-2 px-3 h-[34px] text-[12px] transition-colors border"
         style={{
           background: 'var(--ink-surface)',
@@ -66,6 +82,14 @@ export function VooBlock({ conteudo, onChange }: BlockProps) {
         <Search className="w-3 h-3" />
         {temDadosImportados ? 'Trocar voo (buscar de novo)' : 'Buscar voo na API · Google Flights'}
       </button>
+      <FlightSearchModal
+        open={flightModalOpen}
+        onClose={() => setFlightModalOpen(false)}
+        onSelect={handleFlightSelect}
+        defaultOrigem={c.origem || ''}
+        defaultDestino={c.destino || ''}
+        defaultDataIda={c.data || ''}
+      />
 
       {/* Resumo visual quando há dados importados — minimal w/ hairlines */}
       {temDadosImportados && (
