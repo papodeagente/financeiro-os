@@ -9,7 +9,7 @@ import {
   Save, ArrowLeft, Copy, MessageCircle,
   Check, Loader2, FileDown, GitBranch,
   Undo2, Redo2, Keyboard,
-  Monitor, Tablet, Smartphone,
+  Monitor, Tablet, Smartphone, Settings2,
 } from 'lucide-react';
 import {
   DndContext, closestCenter, pointerWithin, KeyboardSensor, PointerSensor,
@@ -107,6 +107,11 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
   // pelos atalhos de teclado (D/H/Del/Arrows).
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  // Drawer-mode pro painel direito: por padrao FECHADO pra maximizar
+  // o espaco do canvas. Abre quando o usuario clica num bloco
+  // (selectedBlockId muda) OU explicitamente abre Configuracoes da
+  // pagina (pageSettingsOpen).
+  const [pageSettingsOpen, setPageSettingsOpen] = useState(false);
   // Modo de viewport do canvas (Fase C). Constrai largura do canvas
   // pra simular como a proposta vai aparecer em cada dispositivo.
   // Default 'desktop' (900px — igual antes da feature).
@@ -314,6 +319,10 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
           setSelectedBlockId(null);
           return;
         }
+        if (pageSettingsOpen && !isTypingInForm()) {
+          setPageSettingsOpen(false);
+          return;
+        }
       }
 
       // Undo / Redo — funcionam mesmo dentro de inputs (CTRL+Z padrao
@@ -379,7 +388,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedBlockId, showShortcuts, undo, redo]);
+  }, [selectedBlockId, showShortcuts, pageSettingsOpen, undo, redo]);
 
   // Quando o editor monta, forca a sidebar do AppShell a colapsar pra
   // dar mais espaco horizontal pra paleta + canvas + preview/sidebar.
@@ -1170,12 +1179,15 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
             </div>
           </div>
 
-          {/* Painel direito Elementor-like — roteamento por tipo de
-              selecao no canvas:
-              - "__page_header__" → PageHeaderEditor (capa + abertura)
-              - "__page_footer__" → PageFooterEditor (rodape)
-              - id de secao        → BlockPropertiesPanel
-              - null               → PropostaSidebar (config geral) */}
+          {/* Painel direito como DRAWER — fechado por padrao pra
+              maximizar canvas. Abre quando o usuario seleciona um bloco
+              (selectedBlockId) ou clica em "Configurações" (pageSettingsOpen).
+              Routing por tipo de selecao:
+                - "__page_header__"  → PageHeaderEditor
+                - "__page_footer__"  → PageFooterEditor
+                - id de secao         → BlockPropertiesPanel
+                - pageSettingsOpen    → PropostaSidebar
+                - nada                → painel oculto + botao flutuante */}
           {selectedBlockId === '__page_header__' ? (
             <PageHeaderEditor
               proposta={proposta}
@@ -1190,9 +1202,6 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
             />
           ) : selectedBlockId && proposta.secoes.find(s => s.id === selectedBlockId) ? (
             (() => {
-              // Calcula prev/next pra navegacao entre blocos sem
-              // fechar+reabrir o painel. Permite editar uma sequencia
-              // de blocos de forma fluida.
               const currentIdx = proposta.secoes.findIndex(s => s.id === selectedBlockId);
               const prevId = currentIdx > 0 ? proposta.secoes[currentIdx - 1].id : null;
               const nextId = currentIdx >= 0 && currentIdx < proposta.secoes.length - 1
@@ -1214,10 +1223,14 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                   onPrev={prevId ? () => setSelectedBlockId(prevId) : undefined}
                   onNext={nextId ? () => setSelectedBlockId(nextId) : undefined}
                   position={{ current: currentIdx + 1, total: proposta.secoes.length }}
+                  onGoToPageSettings={() => {
+                    setSelectedBlockId(null);
+                    setPageSettingsOpen(true);
+                  }}
                 />
               );
             })()
-          ) : (
+          ) : pageSettingsOpen ? (
             <PropostaSidebar
               proposta={proposta}
               clientes={allClientes}
@@ -1225,7 +1238,29 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
               onUpdate={update}
               onSetAIDestino={setAIDestino}
               onClienteCreated={c => setAllClientes(prev => [...prev, c])}
+              onClose={() => setPageSettingsOpen(false)}
             />
+          ) : (
+            // Painel fechado: tira vertical estreita (40px) com botao
+            // de configuracoes. Maximiza largura do canvas.
+            <aside
+              className="w-10 shrink-0 border-l border-[var(--t-border)] bg-[var(--t-surface)] flex flex-col items-center py-3 gap-1.5"
+              aria-label="Barra lateral de ações"
+            >
+              <button
+                onClick={() => setPageSettingsOpen(true)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--t-text-secondary)] hover:bg-[var(--t-green)]/10 hover:text-[var(--t-green)] transition-colors"
+                title="Configurações da página"
+                aria-label="Abrir configurações da página"
+              >
+                <Settings2 className="w-4 h-4" />
+              </button>
+              <div className="w-6 h-px bg-[var(--t-border)] my-1" />
+              <span className="text-[9px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)] writing-vertical text-center px-1 mt-2"
+                style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}>
+                Clique num bloco para editar
+              </span>
+            </aside>
           )}
         </div>
 

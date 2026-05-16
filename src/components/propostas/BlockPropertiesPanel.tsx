@@ -47,6 +47,9 @@ interface Props {
   onPrev?: () => void;
   onNext?: () => void;
   position?: { current: number; total: number };
+  // Quando definido, breadcrumb leva direto pra config da pagina ao
+  // inves de apenas fechar.
+  onGoToPageSettings?: () => void;
 }
 
 // Painel direito do editor — vira o "Properties Panel" estilo Elementor
@@ -56,6 +59,7 @@ interface Props {
 export function BlockPropertiesPanel({
   secao, onChange, onClose, onDuplicate, onToggleVisivel, onRemove,
   onGenerateAI, generating, onInsertAfter, onPrev, onNext, position,
+  onGoToPageSettings,
 }: Props) {
   const TipoIcon = TIPO_ICONS[secao.tipo] || Type;
   const hidden = secao.visivel === false;
@@ -85,11 +89,11 @@ export function BlockPropertiesPanel({
       className="w-[360px] shrink-0 border-l border-[var(--t-border)] bg-[var(--t-surface)] flex flex-col overflow-hidden"
       aria-label="Propriedades do bloco selecionado"
     >
-      {/* Breadcrumb — volta pra config da pagina */}
+      {/* Breadcrumb — abre config da pagina (substitui o editor de bloco) */}
       <button
-        onClick={onClose}
+        onClick={onGoToPageSettings || onClose}
         className="shrink-0 flex items-center gap-1.5 px-4 py-2 text-[11px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)] hover:bg-[var(--t-surface-hover)] hover:text-[var(--t-text)] border-b border-[var(--t-border)] transition-colors group"
-        title="Voltar para configuração da página"
+        title="Ir para configuração da página"
       >
         <BackIcon className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
         <span>Configuração da página</span>

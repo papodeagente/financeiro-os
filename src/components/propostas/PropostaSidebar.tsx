@@ -23,9 +23,12 @@ interface Props {
   onUpdate: (fn: (p: Proposta) => Proposta) => void;
   onSetAIDestino?: (destino: Destino) => void;
   onClienteCreated?: (c: Cliente) => void;
+  // Quando definido, renderiza botao de fechar no header e o sidebar
+  // funciona como drawer abrindo/fechando sob demanda (vs sempre visivel).
+  onClose?: () => void;
 }
 
-export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAIDestino, onClienteCreated }: Props) {
+export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAIDestino, onClienteCreated, onClose }: Props) {
   const [tab, setTab] = useState<Tab>('config');
   const [selectedDestino, setSelectedDestino] = useState<Destino | null>(null);
   const [newTag, setNewTag] = useState('');
@@ -105,6 +108,21 @@ export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAI
 
   return (
     <div className="w-80 border-l border-[var(--t-border)] bg-[var(--t-surface)] flex flex-col shrink-0 hidden lg:flex">
+      {/* Header com botao de fechar (quando em modo drawer) */}
+      {onClose && (
+        <div className="px-3 py-2 border-b border-[var(--t-border)] flex items-center justify-between shrink-0">
+          <span className="text-[10px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)]">
+            Configuração da página
+          </span>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 flex items-center justify-center rounded text-[var(--t-text-muted)] hover:bg-[var(--t-surface-hover)] hover:text-[var(--t-text)]"
+            title="Fechar (Esc)"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
       {/* Tabs */}
       <div className="flex border-b border-[var(--t-border)] shrink-0">
         <button
