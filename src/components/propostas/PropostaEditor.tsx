@@ -854,15 +854,21 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-6">
                     {/* Drop zone antes do primeiro bloco */}
                     <DropZone index={0} active={!!paletteDragging} />
                     {proposta.secoes.map((secao, idx) => (
-                      <div key={secao.id} className="space-y-2">
+                      <div key={secao.id} className="space-y-6">
                         <SelectableBlock
                           secao={secao}
                           selected={selectedBlockId === secao.id}
                           onSelect={() => setSelectedBlockId(secao.id)}
+                          onDuplicate={() => duplicateSecao(secao.id)}
+                          onToggleVisivel={() => toggleVisivelSecao(secao.id)}
+                          onRemove={() => {
+                            removeSecao(secao.id);
+                            if (selectedBlockId === secao.id) setSelectedBlockId(null);
+                          }}
                           corPrimaria={proposta.visual?.cor_primaria || '#004aad'}
                           idioma={(proposta.idioma || 'pt-BR') as 'pt-BR' | 'en' | 'es'}
                         />

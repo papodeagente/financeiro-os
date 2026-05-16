@@ -2,7 +2,7 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, EyeOff } from 'lucide-react';
+import { GripVertical, EyeOff, Eye, CopyPlus, Trash2, Pencil } from 'lucide-react';
 import type { SecaoProposta } from '@/lib/crm-types';
 import type { IdiomaProposal } from '@/lib/i18n-proposta';
 import { PreviewRenderer } from './preview/PreviewRenderer';
@@ -29,6 +29,9 @@ interface Props {
   secao: SecaoProposta;
   selected: boolean;
   onSelect: () => void;
+  onDuplicate: () => void;
+  onToggleVisivel: () => void;
+  onRemove: () => void;
   corPrimaria: string;
   idioma: IdiomaProposal;
 }
@@ -36,66 +39,131 @@ interface Props {
 // Wrapper Elementor-like de cada bloco no canvas. O bloco renderiza o
 // que o cliente final ve (via PreviewRenderer com 1 secao) e ganha:
 // - Outline azul quando hover/selecionado
-// - Label flutuante no topo com tipo do bloco
-// - Drag handle pra reordenar (dnd-kit sortable)
-// - Overlay cinzento sobre o conteudo quando 'oculto' na proposta
-// - Click no bloco -> onSelect
+// - Mini-toolbar flutuante no topo: label (esq) + cluster de acoes (dir):
+//   drag, editar (= selecionar), duplicar, ocultar, deletar
+// - Overlay cinzento quando 'oculto' na proposta
+// - Click no bloco -> onSelect (abre painel de propriedades a direita)
 //
 // O conteudo renderizado fica com pointer-events-none pra que clicks
 // dentro de imagens/botoes nao tirem o foco do bloco — toda interacao
-// passa pelo wrapper (click = selecionar; o resto vai pro painel direito).
-export function SelectableBlock({ secao, selected, onSelect, corPrimaria, idioma }: Props) {
+// passa pelo wrapper (click = selecionar; resto vai pro painel direito).
+export function SelectableBlock({
+  secao, selected, onSelect, onDuplicate, onToggleVisivel, onRemove,
+  corPrimaria, idioma,
+}: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: secao.id,
   });
   const hidden = secao.visivel === false;
+  // Tons azuis estilo Elementor — selected mais saturado que hover.
+  const colorBg = selected ? '#2563EB' : '#60A5FA';
+
+  // Cada acao precisa stopPropagation pra nao re-disparar onSelect ao
+  // clicar num botao da toolbar.
+  const action = (fn: () => void) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    fn();
+  };
 
   return (
     <div
       ref={setNodeRef}
       onClick={(e) => { e.stopPropagation(); onSelect(); }}
-      className="relative group cursor-pointer"
+      className="relative group"
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isDragging ? 0.5 : 1,
       }}
     >
-      {/* Outline (ring) — sempre presente quando selected; aparece on hover senao */}
+      {/* Outline (ring) — visivel quando selected (forte) ou hover (suave).
+          Posicionado absoluto pra nao mexer no layout do conteudo. */}
       <div
-        className={`absolute inset-0 pointer-events-none rounded-lg transition-all ${
+        className={`absolute -inset-0.5 pointer-events-none rounded-lg transition-all ${
           selected
-            ? 'ring-2 ring-[#2563EB] ring-offset-2 ring-offset-white shadow-lg shadow-blue-500/10'
-            : 'ring-0 group-hover:ring-2 group-hover:ring-blue-300 group-hover:ring-offset-2 group-hover:ring-offset-white'
+            ? 'ring-2 ring-[#2563EB] shadow-lg shadow-blue-500/15'
+            : 'ring-0 group-hover:ring-2 group-hover:ring-blue-300'
         }`}
         style={{ zIndex: 5 }}
       />
 
-      {/* Label flutuante no topo com tipo + drag handle */}
+      {/* Mini-toolbar Elementor-like — label esq + cluster acoes dir.
+          Visivel quando selected ou hover. */}
       <div
-        className={`absolute -top-6 left-0 right-0 flex items-center justify-between transition-opacity z-20 ${
+        className={`absolute -top-7 left-0 right-0 flex items-center justify-between pointer-events-none transition-opacity z-20 ${
           selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
         }`}
       >
+        {/* Label do tipo (esquerda) */}
         <div
-          className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider font-semibold text-white ${
-            selected ? 'bg-[#2563EB]' : 'bg-blue-400/90'
-          }`}
+          className="pointer-events-auto inline-flex items-center gap-1 px-2 h-6 rounded-t-md text-[10px] uppercase tracking-wider font-semibold text-white shadow-sm"
+          style={{ background: colorBg }}
         >
           {hidden && <EyeOff className="w-3 h-3" />}
           {TIPO_LABELS[secao.tipo] || secao.tipo}
         </div>
-        <button
-          {...attributes}
-          {...listeners}
-          onClick={(e) => e.stopPropagation()}
-          className={`flex items-center justify-center w-5 h-5 rounded cursor-grab active:cursor-grabbing text-white ${
-            selected ? 'bg-[#2563EB]' : 'bg-blue-400/90'
-          }`}
-          title="Arrastar para reordenar"
+
+        {/* Cluster de acoes (direita) */}
+        <div
+          className="pointer-events-auto inline-flex items-center h-6 rounded-t-md overflow-hidden shadow-sm"
+          style={{ background: colorBg }}
         >
-          <GripVertical className="w-3 h-3" />
-        </button>
+          {/* Drag handle — usa listeners do useSortable */}
+          <button
+            {...attributes}
+            {...listeners}
+            onClick={(e) => e.stopPropagation()}
+            className="w-7 h-6 flex items-center justify-center text-white hover:bg-black/15 cursor-grab active:cursor-grabbing transition-colors"
+            title="Arrastar para reordenar"
+            aria-label="Arrastar"
+          >
+            <GripVertical className="w-3.5 h-3.5" />
+          </button>
+          <span className="w-px h-3.5 bg-white/30" />
+
+          {/* Editar (selecionar — abre painel direito) */}
+          <button
+            onClick={action(onSelect)}
+            className="w-7 h-6 flex items-center justify-center text-white hover:bg-black/15 transition-colors"
+            title="Editar bloco"
+            aria-label="Editar"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <span className="w-px h-3.5 bg-white/30" />
+
+          {/* Duplicar */}
+          <button
+            onClick={action(onDuplicate)}
+            className="w-7 h-6 flex items-center justify-center text-white hover:bg-black/15 transition-colors"
+            title="Duplicar bloco"
+            aria-label="Duplicar"
+          >
+            <CopyPlus className="w-3.5 h-3.5" />
+          </button>
+          <span className="w-px h-3.5 bg-white/30" />
+
+          {/* Ocultar / mostrar */}
+          <button
+            onClick={action(onToggleVisivel)}
+            className="w-7 h-6 flex items-center justify-center text-white hover:bg-black/15 transition-colors"
+            title={hidden ? 'Tornar visível' : 'Ocultar da proposta'}
+            aria-label={hidden ? 'Mostrar' : 'Ocultar'}
+          >
+            {hidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+          </button>
+          <span className="w-px h-3.5 bg-white/30" />
+
+          {/* Deletar */}
+          <button
+            onClick={action(onRemove)}
+            className="w-7 h-6 flex items-center justify-center text-white hover:bg-red-500 transition-colors"
+            title="Deletar bloco"
+            aria-label="Deletar"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* Overlay de bloco oculto */}
@@ -110,7 +178,7 @@ export function SelectableBlock({ secao, selected, onSelect, corPrimaria, idioma
 
       {/* Conteudo renderizado — pointer-events-none pra que clicks
           passem direto pro wrapper externo (selecao do bloco) */}
-      <div className="pointer-events-none">
+      <div className="pointer-events-none cursor-pointer">
         <PreviewRenderer
           secoes={[{ ...secao, visivel: true }]}
           corPrimaria={corPrimaria}
