@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Save, Building2, MapPin, Phone, DollarSign, Palette, Loader2, CheckCircle2 } from 'lucide-react';
+import { Save, Building2, MapPin, Phone, DollarSign, Palette, Loader2, CheckCircle2, Globe, ExternalLink } from 'lucide-react';
 import { Agencia } from '@/lib/crm-types';
 import { loadAgencia, saveAgencia } from '@/lib/crm-storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,6 +24,7 @@ const defaultAgencia: Agencia = {
   cores_identidade: { primaria: '#1a1a2e', secundaria: '#d4a853' },
   regime_tributario: 'SIMPLES',
   aliquota_padrao: 6,
+  custom_proposta_domain: '',
 };
 
 export default function AgenciaPage() {
@@ -400,6 +401,76 @@ export default function AgenciaPage() {
                 />
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Section 6: Domínio personalizado para propostas */}
+        <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)]">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-[var(--t-accent)] flex items-center gap-2 text-base">
+              <Globe className="w-4 h-4" />
+              Domínio personalizado para propostas
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-[var(--t-text-secondary)]">
+              Personalize a URL que seus clientes recebem ao abrir uma proposta. O caminho{' '}
+              <code className="px-1 py-0.5 rounded bg-[var(--t-bg)] text-xs text-[var(--t-text)]">/p/&lt;id&gt;</code>{' '}
+              continua o mesmo — só o domínio muda. As propostas internas continuam acessíveis pelo domínio padrão.
+            </p>
+
+            <div className="space-y-1">
+              <label className="text-xs text-[var(--t-text-secondary)] uppercase tracking-wide">
+                Domínio (sem https://)
+              </label>
+              <Input
+                value={data.custom_proposta_domain || ''}
+                onChange={(e) => setField('custom_proposta_domain', e.target.value)}
+                placeholder="proposta.suaagencia.com.br"
+                className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)] placeholder:text-[var(--t-text-muted)] focus:border-[var(--t-accent)]"
+              />
+            </div>
+
+            {/* Preview do link */}
+            {data.custom_proposta_domain ? (
+              <div className="p-3 rounded-md bg-[var(--t-bg)] border border-[var(--t-border)] space-y-1">
+                <div className="text-[10px] uppercase tracking-wide text-[var(--t-text-muted)] font-semibold">
+                  Preview do link
+                </div>
+                <div className="font-mono text-sm text-[var(--t-text)] break-all">
+                  https://{data.custom_proposta_domain.replace(/^https?:\/\//, '').replace(/\/+$/, '')}/p/&lt;id-da-proposta&gt;
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 rounded-md bg-[var(--t-bg)] border border-[var(--t-border)] space-y-1">
+                <div className="text-[10px] uppercase tracking-wide text-[var(--t-text-muted)] font-semibold">
+                  Link atual (sem domínio personalizado)
+                </div>
+                <div className="font-mono text-sm text-[var(--t-text-muted)] break-all">
+                  https://fin.enturos.com/p/&lt;id-da-proposta&gt;
+                </div>
+              </div>
+            )}
+
+            {/* Instrucoes de DNS */}
+            <details className="rounded-md border border-[var(--t-border)] bg-[var(--t-bg)]">
+              <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-[var(--t-text)] hover:bg-[var(--t-surface-hover)] list-none flex items-center gap-2">
+                <ExternalLink className="w-3.5 h-3.5 text-[var(--t-accent)]" />
+                Como configurar o DNS
+              </summary>
+              <div className="px-3 pb-3 pt-1 text-sm text-[var(--t-text-secondary)] space-y-2">
+                <p>No painel de controle do seu provedor de DNS (Registro.br, Cloudflare, GoDaddy, etc.), adicione um registro <strong>CNAME</strong>:</p>
+                <div className="p-2.5 rounded bg-[var(--t-header-bg)] border border-[var(--t-border)] font-mono text-xs space-y-1">
+                  <div><span className="text-[var(--t-text-muted)]">Tipo:</span> <span className="text-[var(--t-text)]">CNAME</span></div>
+                  <div><span className="text-[var(--t-text-muted)]">Nome:</span> <span className="text-[var(--t-text)]">{data.custom_proposta_domain ? data.custom_proposta_domain.split('.')[0] : 'proposta'}</span></div>
+                  <div><span className="text-[var(--t-text-muted)]">Valor:</span> <span className="text-[var(--t-text)]">fin.enturos.com</span></div>
+                  <div><span className="text-[var(--t-text-muted)]">TTL:</span> <span className="text-[var(--t-text)]">3600 (1 hora)</span></div>
+                </div>
+                <p className="text-xs text-[var(--t-text-muted)]">
+                  ⚠️ Após configurar o CNAME, a propagação DNS pode levar até 24h. Em seguida, o domínio precisa ser registrado em nosso servidor — entre em contato com o suporte da Entur OS pra finalizar a ativação (emissão do certificado SSL).
+                </p>
+              </div>
+            </details>
           </CardContent>
         </Card>
 

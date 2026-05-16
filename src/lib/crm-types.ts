@@ -1181,6 +1181,14 @@ export interface Agencia {
   cores_identidade: { primaria: string; secundaria: string };
   regime_tributario: 'SIMPLES' | 'LUCRO_PRESUMIDO' | 'LUCRO_REAL';
   aliquota_padrao: number;
+  // Dominio customizado pra propostas publicas. Quando preenchido
+  // (ex.: "proposta.minhaagencia.com.br"), o link enviado ao cliente
+  // troca fin.enturos.com pelo dominio do tenant — preservando o path
+  // /p/{slug}. O DNS do dominio precisa apontar via CNAME pra
+  // fin.enturos.com e a infraestrutura precisa estar configurada
+  // pra aceitar esse host. So o LINK externo muda; o sistema
+  // continua identificando a proposta pelo slug.
+  custom_proposta_domain?: string;
 }
 
 export interface Usuario {

@@ -35,6 +35,9 @@ import { RodapeSection } from './preview/RodapeSection';
 import { DiscoveryRenderer } from './preview/discovery/DiscoveryRenderer';
 import { PreviewEditorProvider, type PreviewEditorBlockType } from './PreviewEditorContext';
 import { PreviewIframeCanvas } from './PreviewIframeCanvas';
+import { buildPropostaLink } from '@/lib/proposta-link';
+import { loadAgencia } from '@/lib/crm-storage';
+import type { Agencia } from '@/lib/crm-types';
 import type { IdiomaProposal } from '@/lib/i18n-proposta';
 import { FlightSearchModal } from '@/components/FlightSearchModal';
 import { HotelSearchModal } from '@/components/HotelSearchModal';
@@ -108,6 +111,12 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
   // pelos atalhos de teclado (D/H/Del/Arrows).
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  // Agencia do tenant — usada pra resolver o dominio customizado das
+  // propostas publicas. Carregada uma vez no mount.
+  const [agencia, setAgencia] = useState<Agencia | null>(null);
+  useEffect(() => {
+    loadAgencia<Agencia>().then(a => { if (a) setAgencia(a); });
+  }, []);
   // Drawer-mode pro painel direito: por padrao FECHADO pra maximizar
   // o espaco do canvas. Abre quando o usuario clica num bloco
   // (selectedBlockId muda) OU explicitamente abre Configuracoes da
@@ -449,7 +458,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
       try {
         const p = { ...proposta, atualizado_em: new Date().toISOString() };
         if (!p.link_publico) {
-          p.link_publico = `${window.location.origin}/p/${p.id}`;
+          p.link_publico = buildPropostaLink(p.id, agencia, window.location.origin);
         }
         await fetch(`/api/propostas${isEdit ? `/${p.id}` : ''}`, {
           method: isEdit ? 'PUT' : 'POST',
@@ -671,7 +680,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
       atualizado_em: new Date().toISOString(),
       secoes: current.secoes.map(s => ({ ...s, id: generateId() })),
     };
-    nova.link_publico = `${window.location.origin}/p/${nova.id}`;
+    nova.link_publico = buildPropostaLink(nova.id, agencia, window.location.origin);
     const res = await fetch('/api/propostas', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
