@@ -47,7 +47,8 @@ interface Translations {
   contateAgente: string;
   // Discovery
   inicio: string;
-  resumoAlojamentos: string;
+  hospedagem: string;
+  hospedagens: string;
   resumoTransportes: string;
   mapaRota: string;
   itinerario: string;
@@ -119,7 +120,8 @@ const translations: Record<IdiomaProposal, Translations> = {
     linkExpirado: 'Este link pode ter expirado ou a proposta foi removida.',
     contateAgente: 'Entre em contato com seu agente de viagens para obter um novo link.',
     inicio: 'Início',
-    resumoAlojamentos: 'Resumo dos Alojamentos',
+    hospedagem: 'Hospedagem',
+    hospedagens: 'Hospedagens',
     resumoTransportes: 'Resumo de Transportes',
     mapaRota: 'Mapa da Rota',
     itinerario: 'Itinerário',
@@ -189,7 +191,8 @@ const translations: Record<IdiomaProposal, Translations> = {
     linkExpirado: 'This link may have expired or the proposal has been removed.',
     contateAgente: 'Contact your travel agent for a new link.',
     inicio: 'Home',
-    resumoAlojamentos: 'Accommodation Summary',
+    hospedagem: 'Accommodation',
+    hospedagens: 'Accommodations',
     resumoTransportes: 'Transport Summary',
     mapaRota: 'Route Map',
     itinerario: 'Itinerary',
@@ -259,7 +262,8 @@ const translations: Record<IdiomaProposal, Translations> = {
     linkExpirado: 'Este enlace puede haber expirado o la propuesta fue eliminada.',
     contateAgente: 'Contacte a su agente de viajes para obtener un nuevo enlace.',
     inicio: 'Inicio',
-    resumoAlojamentos: 'Resumen de Alojamientos',
+    hospedagem: 'Alojamiento',
+    hospedagens: 'Alojamientos',
     resumoTransportes: 'Resumen de Transportes',
     mapaRota: 'Mapa de Ruta',
     itinerario: 'Itinerario',

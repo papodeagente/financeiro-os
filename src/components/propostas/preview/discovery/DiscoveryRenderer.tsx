@@ -31,7 +31,10 @@ function buildNavItems(proposta: Proposta, idioma: IdiomaProposal): NavItem[] {
 
   const viagem = proposta.viagem;
   if (viagem?.alojamentos && viagem.alojamentos.length > 0) {
-    items.push({ id: 'discovery-accommodations', label: i18n.resumoAlojamentos });
+    items.push({
+      id: 'discovery-accommodations',
+      label: viagem.alojamentos.length > 1 ? i18n.hospedagens : i18n.hospedagem,
+    });
   }
   // Map — if any alojamento has coordinates
   if (viagem?.alojamentos?.some(a => a.lat && a.lng)) {

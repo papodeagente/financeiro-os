@@ -41,7 +41,9 @@ export function AccommodationSummary({ alojamentos, idioma, corPrimaria }: Props
     <>
       <section id="discovery-accommodations" className="py-16 bg-gray-50">
         <div className="max-w-5xl mx-auto px-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-8">{i18n.resumoAlojamentos}</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-8">
+            {alojamentos.length > 1 ? i18n.hospedagens : i18n.hospedagem}
+          </h2>
 
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
