@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import {
   DndContext, closestCenter, pointerWithin, KeyboardSensor, PointerSensor, TouchSensor,
-  useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverlay,
+  useSensor, useSensors, DragEndEvent, DragStartEvent, DragMoveEvent, DragOverlay,
   type CollisionDetection,
 } from '@dnd-kit/core';
 import {
@@ -121,13 +121,24 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
   const [paletteDragging, setPaletteDragging] = useState<string | null>(null);
   // Rastreia a posicao Y do ponteiro globalmente. Usado pelo handleDragEnd
   // pra calcular onde inserir o bloco no canvas-drop (qual posicao da
-  // lista de secoes baseado em quao "alto" o usuario soltou). Atualiza em
-  // pointermove (cobre mouse, pen, touch).
+  // lista de secoes baseado em quao "alto" o usuario soltou).
+  //
+  // 2 fontes de atualizacao:
+  // 1. pointermove com capture:true (recebe ANTES do dnd-kit processar e
+  //    eventualmente chamar stopPropagation/setPointerCapture).
+  // 2. onDragMove do dnd-kit como fallback: usa active.rect.initial +
+  //    event.delta.y pra calcular centro do overlay (fallback robusto
+  //    quando pointermove é silenciado durante drag).
   const pointerYRef = useRef<number>(0);
   useEffect(() => {
     const handle = (e: PointerEvent) => { pointerYRef.current = e.clientY; };
-    document.addEventListener('pointermove', handle, { passive: true });
-    return () => document.removeEventListener('pointermove', handle);
+    const opts: AddEventListenerOptions = { passive: true, capture: true };
+    document.addEventListener('pointermove', handle, opts);
+    document.addEventListener('pointerup', handle, opts);
+    return () => {
+      document.removeEventListener('pointermove', handle, opts);
+      document.removeEventListener('pointerup', handle, opts);
+    };
   }, []);
   // Bloco selecionado (Elementor-like): click no canvas seleciona, abre
   // editor no painel direito. Esc / click fora deseleciona. Tambem usado
@@ -720,6 +731,18 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
     }
   };
 
+  // Fallback robusto pra rastrear Y do drag: dnd-kit emite onDragMove
+  // continuamente. Usamos active.rect.initial.top + delta.y pra calcular
+  // o centro Y do drag overlay. Isso funciona mesmo se pointermove for
+  // silenciado durante drag (ex: dnd-kit usa setPointerCapture em
+  // certas plataformas mobile).
+  const handleDragMove = (event: DragMoveEvent) => {
+    const initial = event.active.rect.current.initial;
+    if (initial) {
+      pointerYRef.current = initial.top + initial.height / 2 + event.delta.y;
+    }
+  };
+
   // Calcula o indice de insercao baseado no Y atual do ponteiro vs a
   // posicao DOM dos blocos existentes. Se o cursor esta acima do meio
   // do bloco N, insere antes dele; se esta abaixo do meio do ultimo
@@ -804,7 +827,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
   const collisionDetection: CollisionDetection = (args) => {
     const activeData = args.active.data.current as { source?: string } | undefined;
     if (activeData?.source === 'palette') {
-      // Primeiro tenta achar placeholder-slot sob o cursor (prioridade)
+      // 1. Prioridade absoluta: placeholder-slot sob o cursor.
       const placeholderHits = pointerWithin({
         ...args,
         droppableContainers: args.droppableContainers.filter(
@@ -812,13 +835,16 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
         ),
       });
       if (placeholderHits.length > 0) return placeholderHits;
-      // Fallback: canvas-drop generico
-      return pointerWithin({
-        ...args,
-        droppableContainers: args.droppableContainers.filter(
-          c => (c.data.current as { kind?: string } | undefined)?.kind === 'canvas',
-        ),
-      });
+      // 2. canvas-drop via pointerWithin (cursor literalmente dentro).
+      const canvasContainers = args.droppableContainers.filter(
+        c => (c.data.current as { kind?: string } | undefined)?.kind === 'canvas',
+      );
+      const canvasHits = pointerWithin({ ...args, droppableContainers: canvasContainers });
+      if (canvasHits.length > 0) return canvasHits;
+      // 3. Fallback robusto: closestCenter no canvas. Garante que QUALQUER
+      // drop dentro da janela acerta o canvas-drop, mesmo quando o cursor
+      // esta sobre conteudo z-index alto que o pointerWithin nao detecta.
+      return closestCenter({ ...args, droppableContainers: canvasContainers });
     }
     return closestCenter({
       ...args,
@@ -891,20 +917,28 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
       : ida;
 
     const transportes = formatFlightForTransporte(combined);
-
-    update(p => ({
-      ...p,
-      secoes: [
-        ...p.secoes,
-        ...transportes.map((conteudo, i) => ({
-          id: generateId(),
-          tipo: 'TRANSPORTE' as SecaoProposta['tipo'],
-          ordem: p.secoes.length + i,
-          visivel: true,
-          conteudo,
-        })),
-      ],
-    }));
+    const novasIds = transportes.map(() => generateId());
+    update(p => {
+      const isPageSelection = selectedBlockId === '__page_header__'
+        || selectedBlockId === '__page_footer__'
+        || selectedBlockId === '__opening_message__';
+      const selectedIdx = !isPageSelection && selectedBlockId
+        ? p.secoes.findIndex(s => s.id === selectedBlockId)
+        : -1;
+      const insertAt = selectedIdx >= 0 ? selectedIdx + 1 : p.secoes.length;
+      const novas: SecaoProposta[] = transportes.map((conteudo, i) => ({
+        id: novasIds[i],
+        tipo: 'TRANSPORTE' as SecaoProposta['tipo'],
+        ordem: insertAt + i,
+        visivel: true,
+        conteudo,
+      }));
+      const arr = [...p.secoes];
+      arr.splice(insertAt, 0, ...novas);
+      return { ...p, secoes: arr };
+    });
+    if (novasIds[0]) setSelectedBlockId(novasIds[0]);
+    toast.success(novasIds.length > 1 ? 'Voos adicionados (ida + volta)' : 'Voo adicionado à proposta');
   };
 
   const handleHotelSelect = (place: GooglePlace) => {
@@ -912,16 +946,30 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
     // CLASSICO and DISCOVERY renderers know how to show them with photo,
     // gallery, amenities and ratings.
     const conteudo = formatHotelForAlojamento(place);
-    update(p => ({
-      ...p,
-      secoes: [...p.secoes, {
-        id: generateId(),
-        tipo: 'ALOJAMENTO' as SecaoProposta['tipo'],
-        ordem: p.secoes.length,
+    const newId = generateId();
+    update(p => {
+      // Se ha bloco selecionado e nao for placeholder de pagina (capa/
+      // rodape), insere logo apos ele. Senao append no fim.
+      const isPageSelection = selectedBlockId === '__page_header__'
+        || selectedBlockId === '__page_footer__'
+        || selectedBlockId === '__opening_message__';
+      const selectedIdx = !isPageSelection && selectedBlockId
+        ? p.secoes.findIndex(s => s.id === selectedBlockId)
+        : -1;
+      const insertAt = selectedIdx >= 0 ? selectedIdx + 1 : p.secoes.length;
+      const novo: SecaoProposta = {
+        id: newId,
+        tipo: 'ALOJAMENTO',
+        ordem: insertAt,
         visivel: true,
         conteudo,
-      }],
-    }));
+      };
+      const arr = [...p.secoes];
+      arr.splice(insertAt, 0, novo);
+      return { ...p, secoes: arr };
+    });
+    setSelectedBlockId(newId);
+    toast.success('Hospedagem adicionada à proposta');
   };
 
   const getAIContext = useCallback(() => ({
@@ -1120,6 +1168,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
         sensors={sensors}
         collisionDetection={collisionDetection}
         onDragStart={handleDragStart}
+        onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}
         onDragCancel={() => setPaletteDragging(null)}
       >
