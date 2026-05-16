@@ -32,8 +32,7 @@ import { PageFooterEditor } from './PageFooterEditor';
 import { PropostaSidebar } from './PropostaSidebar';
 import { CapaSection } from './preview/CapaSection';
 import { RodapeSection } from './preview/RodapeSection';
-import { DiscoveryRenderer } from './preview/discovery/DiscoveryRenderer';
-import { PreviewEditorProvider, type PreviewEditorBlockType } from './PreviewEditorContext';
+import { type PreviewEditorBlockType } from './PreviewEditorContext';
 import { PreviewIframeCanvas } from './PreviewIframeCanvas';
 import { buildPropostaLink } from '@/lib/proposta-link';
 import { groupIntoRows } from '@/lib/proposta-layout';
@@ -43,7 +42,6 @@ import { getDatasViagemDefaults } from '@/lib/proposta-datas';
 import { PropostaOnboarding } from './PropostaOnboarding';
 import { toast } from '@/lib/toast';
 import type { Agencia } from '@/lib/crm-types';
-import type { IdiomaProposal } from '@/lib/i18n-proposta';
 
 const TIPO_LABELS_GLOBAL: Record<string, string> = {
   TEXTO: 'Texto', SERVICO: 'Serviço', VOO: 'Voo', ROTEIRO_DIA: 'Roteiro',
@@ -1287,39 +1285,34 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
             {viewportMode !== 'desktop' ? (
               // ============ TABLET / MOBILE → IFRAME ============
               // Pra fidelidade real ao dispositivo, renderiza dentro de
-              // iframe da rota /preview-iframe. O viewport interno do
-              // iframe e o do dispositivo simulado, entao Tailwind
-              // dispara breakpoints corretos (md:, lg:, etc.).
-              // PostMessage mantem o iframe sincronizado com proposta
-              // e captura clicks pra abrir editor.
+              // iframe da rota /preview-iframe (que usa DiscoveryRenderer
+              // ou PreviewRenderer conforme layout). PostMessage mantem
+              // o iframe sincronizado com a proposta e captura clicks
+              // pra abrir o editor.
               <PreviewIframeCanvas
                 proposta={proposta}
                 onBlockSelect={handleBlockSelectFromPreview}
               />
-            ) : proposta.visual?.layout === 'DISCOVERY' ? (
-              // ============ DESKTOP + LAYOUT DISCOVERY ============
-              <PreviewEditorProvider value={{ onBlockSelect: handleBlockSelectFromPreview }}>
-                {/* DiscoveryRenderer renderiza tudo nativamente — sem
-                    wrapper pointer-events-none, pra que clicks nas rows
-                    de AccommodationSummary, voos do TransportSummary,
-                    etc. cheguem aos onClick handlers que o
-                    PreviewEditorProvider redireciona pra setSelectedBlockId.
-                    A capa/cabecalho e editavel via aba Estrutura ou
-                    seletor visual no proprio canvas. */}
-                <DiscoveryRenderer
-                  proposta={proposta}
-                  slug="preview"
-                  idioma={(proposta.idioma || 'pt-BR') as IdiomaProposal}
-                />
-              </PreviewEditorProvider>
             ) : (
-              // ============ DESKTOP + LAYOUT CLASSICO ============
-              // Estrutura otimizada pra drag-and-drop flexivel:
-              // capa → DROP-ZONE-page → abertura? → DROP-ZONE-page →
-              // blocos (com inner drop zones) → DROP-ZONE-page → rodape.
-              // Drop zones de pagina sao full-width (mais inviting que
-              // os drop zones inner limitados ao container 768px).
+              // ============ DESKTOP — EDIÇÃO POR BLOCO ============
+              // Independente do layout (CLASSICO ou DISCOVERY), o canvas
+              // do editor SEMPRE renderiza blocos individualmente pra
+              // que cada um tenha mini-toolbar (mover/duplicar/ocultar/
+              // deletar), drag handle, painel direito de edicao e
+              // InsertBlockButton entre blocos. A visualizacao agregada
+              // do DISCOVERY (TransportSummary, AccommodationSummary,
+              // RouteMap) so aparece pro cliente final em /p/[slug].
+              // Esta paridade evita confusao "Discovery nao deixa
+              // editar como o Classico".
               <>
+              {/* Banner informativo quando layout = DISCOVERY */}
+              {proposta.visual?.layout === 'DISCOVERY' && (
+                <div className="mx-auto px-6 pt-3" style={{ maxWidth: '768px' }}>
+                  <div className="rounded-md bg-purple-50 border border-purple-200 px-3 py-2 text-[11px] text-purple-700 leading-relaxed">
+                    <strong className="font-semibold">Layout Discovery ativo.</strong> Edite cada bloco individualmente aqui. Na view pública, hotéis, voos e roteiro são apresentados <strong>agrupados</strong> ao cliente (Discovery style).
+                  </div>
+                </div>
+              )}
               {/* CAPA — secao de pagina (nao draggavel). Click abre o
                   PageHeaderEditor no painel direito. */}
               <SelectablePageSection
