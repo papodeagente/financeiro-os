@@ -666,6 +666,19 @@
   animation: content-enter 250ms ease-out;
 }
 
+/* Flash highlight — usado pra dar feedback visual quando um bloco
+   acabou de ser inserido na proposta (hotel/voo via API, drop da paleta).
+   Pulso amarelo curto chama atencao pro novo bloco sem ser intrusivo. */
+@keyframes flash-highlight {
+  0%   { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0); }
+  20%  { box-shadow: 0 0 0 6px rgba(250, 204, 21, 0.6); }
+  100% { box-shadow: 0 0 0 12px rgba(250, 204, 21, 0); }
+}
+.flash-highlight {
+  animation: flash-highlight 2s ease-out;
+  border-radius: 12px;
+}
+
 /* Stepper track — hidden scrollbar */
 .stepper-track {
   display: flex;

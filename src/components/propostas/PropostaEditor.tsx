@@ -39,6 +39,7 @@ import { buildPropostaLink } from '@/lib/proposta-link';
 import { groupIntoRows } from '@/lib/proposta-layout';
 import { loadAgencia } from '@/lib/crm-storage';
 import { aplicarExemploNaProposta } from '@/lib/proposta-exemplo';
+import { getDatasViagemDefaults } from '@/lib/proposta-datas';
 import { PropostaOnboarding } from './PropostaOnboarding';
 import { toast } from '@/lib/toast';
 import type { Agencia } from '@/lib/crm-types';
@@ -917,7 +918,17 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
       : ida;
 
     const transportes = formatFlightForTransporte(combined);
+    // Propaga datas da viagem como defaults para a IDA (e VOLTA quando
+    // hasReturn). Se voos vieram da API ja preenchidos com data, usa do
+    // mapper — caso contrario fallback pra datas da proposta.
+    const datas = getDatasViagemDefaults(proposta);
+    transportes.forEach((c, i) => {
+      const isVolta = i > 0;
+      const dataDefault = isVolta ? datas.checkOut : datas.checkIn;
+      if (dataDefault && !c.data) c.data = dataDefault;
+    });
     const novasIds = transportes.map(() => generateId());
+    let insertedAtIdx = 0;
     update(p => {
       const isPageSelection = selectedBlockId === '__page_header__'
         || selectedBlockId === '__page_footer__'
@@ -926,6 +937,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
         ? p.secoes.findIndex(s => s.id === selectedBlockId)
         : -1;
       const insertAt = selectedIdx >= 0 ? selectedIdx + 1 : p.secoes.length;
+      insertedAtIdx = insertAt;
       const novas: SecaoProposta[] = transportes.map((conteudo, i) => ({
         id: novasIds[i],
         tipo: 'TRANSPORTE' as SecaoProposta['tipo'],
@@ -937,8 +949,21 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
       arr.splice(insertAt, 0, ...novas);
       return { ...p, secoes: arr };
     });
-    if (novasIds[0]) setSelectedBlockId(novasIds[0]);
-    toast.success(novasIds.length > 1 ? 'Voos adicionados (ida + volta)' : 'Voo adicionado à proposta');
+    const firstId = novasIds[0];
+    if (firstId) setSelectedBlockId(firstId);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const el = firstId ? document.querySelector(`[data-block-id="${firstId}"]`) : null;
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('flash-highlight');
+        setTimeout(() => el.classList.remove('flash-highlight'), 2000);
+      }
+    }));
+    toast.success(
+      novasIds.length > 1
+        ? `Voos adicionados (ida + volta, posição ${insertedAtIdx + 1})`
+        : `Voo adicionado (posição ${insertedAtIdx + 1})`,
+    );
   };
 
   const handleHotelSelect = (place: GooglePlace) => {
@@ -946,7 +971,21 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
     // CLASSICO and DISCOVERY renderers know how to show them with photo,
     // gallery, amenities and ratings.
     const conteudo = formatHotelForAlojamento(place);
+    // Propaga datas da viagem se configuradas (cabecalho.data_inicio_viagem
+    // e data_fim_viagem). Hotel ganha check_in/check_out preenchidos
+    // que o usuario pode editar.
+    const datas = getDatasViagemDefaults(proposta);
+    if (datas.checkIn) conteudo.check_in = datas.checkIn;
+    if (datas.checkOut) conteudo.check_out = datas.checkOut;
+    if (datas.checkIn && datas.checkOut) {
+      const noites = Math.max(0, Math.round(
+        (new Date(datas.checkOut + 'T12:00:00').getTime()
+         - new Date(datas.checkIn + 'T12:00:00').getTime()) / 86400000
+      ));
+      if (noites > 0) conteudo.noites = noites;
+    }
     const newId = generateId();
+    let insertedAtIdx = 0;
     update(p => {
       // Se ha bloco selecionado e nao for placeholder de pagina (capa/
       // rodape), insere logo apos ele. Senao append no fim.
@@ -957,6 +996,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
         ? p.secoes.findIndex(s => s.id === selectedBlockId)
         : -1;
       const insertAt = selectedIdx >= 0 ? selectedIdx + 1 : p.secoes.length;
+      insertedAtIdx = insertAt;
       const novo: SecaoProposta = {
         id: newId,
         tipo: 'ALOJAMENTO',
@@ -969,7 +1009,17 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
       return { ...p, secoes: arr };
     });
     setSelectedBlockId(newId);
-    toast.success('Hospedagem adicionada à proposta');
+    // Scroll garantido + flash visual apos DOM atualizar. 2 frames pra
+    // garantir reflow do React + dnd-kit.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-block-id="${newId}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('flash-highlight');
+        setTimeout(() => el.classList.remove('flash-highlight'), 2000);
+      }
+    }));
+    toast.success(`Hospedagem adicionada (posição ${insertedAtIdx + 1})`);
   };
 
   const getAIContext = useCallback(() => ({

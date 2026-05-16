@@ -124,7 +124,7 @@ export function PageHeaderEditor({ proposta, onUpdate, onClose }: Props) {
           )}
         </div>
 
-        {/* Datas */}
+        {/* Datas da PROPOSTA (criacao + validade) */}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label className="flex items-center gap-1.5 text-xs">
@@ -145,6 +145,40 @@ export function PageHeaderEditor({ proposta, onUpdate, onClose }: Props) {
               value={proposta.cabecalho.validade || ''}
               onChange={e => onUpdate(p => { p.cabecalho.validade = e.target.value; return p; })}
             />
+          </div>
+        </div>
+
+        {/* Datas da VIAGEM — usadas como defaults pros blocos de hotel/voo
+            /passeio adicionados depois. Diferente de "Data" (criacao da
+            proposta) e "Validade" (limite pra aceite do cliente). */}
+        <div className="pt-3 mt-3 border-t border-[var(--t-border)]">
+          <h4 className="text-[10px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)] mb-1.5">
+            Datas da viagem
+          </h4>
+          <p className="text-[11px] text-[var(--t-text-muted)] mb-2 leading-relaxed">
+            Quando preenchidas, hospedagens, voos e passeios novos vão herdar essas datas (editáveis depois).
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="flex items-center gap-1.5 text-xs">
+                <Calendar className="w-3 h-3" /> Início (check-in)
+              </Label>
+              <Input
+                type="date"
+                value={proposta.cabecalho.data_inicio_viagem || ''}
+                onChange={e => onUpdate(p => { p.cabecalho.data_inicio_viagem = e.target.value; return p; })}
+              />
+            </div>
+            <div>
+              <Label className="flex items-center gap-1.5 text-xs">
+                <Calendar className="w-3 h-3" /> Fim (check-out)
+              </Label>
+              <Input
+                type="date"
+                value={proposta.cabecalho.data_fim_viagem || ''}
+                onChange={e => onUpdate(p => { p.cabecalho.data_fim_viagem = e.target.value; return p; })}
+              />
+            </div>
           </div>
         </div>
       </div>

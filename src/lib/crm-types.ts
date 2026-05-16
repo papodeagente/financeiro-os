@@ -821,6 +821,12 @@ export interface Proposta {
     mensagem_abertura: string;
     data_proposta: string;
     validade: string;
+    // Datas EFETIVAS da viagem (check-in/check-out, embarque/desembarque).
+    // Quando preenchidas, viram defaults pros blocos de hotel/voo/passeio.
+    // Diferente de data_proposta (data de criacao) e validade (limite p/
+    // aceite). Backwards compat: opcional.
+    data_inicio_viagem?: string;
+    data_fim_viagem?: string;
   };
 
   secoes: SecaoProposta[];

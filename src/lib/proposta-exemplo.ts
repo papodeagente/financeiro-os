@@ -230,6 +230,8 @@ export function aplicarExemploNaProposta(p: Proposta): Proposta {
       titulo: p.cabecalho.titulo || 'Sua viagem para Santiago',
       subtitulo: p.cabecalho.subtitulo || '7 noites · Hospedagem + Voos + Roteiro completo',
       mensagem_abertura: p.cabecalho.mensagem_abertura || 'Olá! Preparei esta proposta com todo o cuidado para sua viagem. Veja os detalhes abaixo.',
+      data_inicio_viagem: p.cabecalho.data_inicio_viagem || '2026-07-15',
+      data_fim_viagem: p.cabecalho.data_fim_viagem || '2026-07-22',
     },
     secoes: buildSecoesExemplo(),
     rodape: {
