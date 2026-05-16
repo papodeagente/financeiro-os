@@ -797,7 +797,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
   };
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full w-full overflow-hidden min-w-0">
       {/* Toolbar — responsivo: titulo/autosave shrink, botoes da direita
           ficam icon-only em telas <xl pra evitar overflow horizontal. */}
       <div className="relative w-full px-3 sm:px-6 py-3 flex items-center justify-between gap-2 border-b border-[var(--t-border)] bg-[var(--t-surface)] shrink-0 min-w-0 overflow-hidden">
@@ -929,7 +929,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
         onDragEnd={handleDragEnd}
         onDragCancel={() => setPaletteDragging(null)}
       >
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden min-w-0 w-full">
           {/* Paleta lateral de blocos com tabs Blocos/Estrutura (Fase D) */}
           <BlockPalette
             onAddBlock={addSecao}
@@ -950,15 +950,13 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
           />
 
           {/* Editor — canvas estilo Elementor: copia visual fiel de
-              /p/[slug]. Bifurca por layout: DISCOVERY (default novo) usa
-              o DiscoveryRenderer completo (hero, nav, accommodations
-              summary table, transport summary, itinerary, pricing,
-              footer com cta de reserva); CLASSICO usa capa + blocos +
-              rodape modular. Fundo aplica proposta.visual.cor_fundo
-              pra fidelidade total ao resultado final.
-              Click no fundo do canvas deseleciona. */}
+              /p/[slug]. min-w-0 e CRITICO em flex layout — sem ele,
+              flex-1 respeita min-content width do conteudo e pode
+              vazar pro lado direito se o canvas wrapper for "wide".
+              overflow-x-hidden defensivo pra clipar qualquer conteudo
+              que ultrapasse mesmo apos shrink. */}
           <div
-            className="flex-1 overflow-y-auto"
+            className="flex-1 overflow-y-auto overflow-x-hidden min-w-0"
             onClick={() => setSelectedBlockId(null)}
             style={{ background: '#e5e7eb' }}
           >
