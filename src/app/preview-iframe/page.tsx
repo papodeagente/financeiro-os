@@ -14,32 +14,43 @@ import { CapaSection } from '@/components/propostas/preview/CapaSection';
 import { PreviewRenderer } from '@/components/propostas/preview/PreviewRenderer';
 import { RodapeSection } from '@/components/propostas/preview/RodapeSection';
 import { DiscoveryRenderer } from '@/components/propostas/preview/discovery/DiscoveryRenderer';
+import { PreviewEditorProvider, type PreviewEditorBlockType } from '@/components/propostas/PreviewEditorContext';
 import type { IdiomaProposal } from '@/lib/i18n-proposta';
 
 interface PreviewMessage {
   kind: 'entur:preview:proposta';
   proposta: Proposta;
+  // Quando true, conteudo dentro do iframe e clicavel pra edicao —
+  // dispara postMessage de volta pro parent com o id selecionado.
+  editor?: boolean;
 }
 
 export default function PreviewIframePage() {
   const [proposta, setProposta] = useState<Proposta | null>(null);
+  const [editor, setEditor] = useState(false);
 
   useEffect(() => {
-    // Aceita mensagens do parent (LivePreviewPanel). Em producao, o
-    // parent e o mesmo origin (fin.enturos.com) entao postMessage e
-    // direto. Em iframe cross-origin precisaria checar event.origin —
-    // aqui assumimos same-origin.
     const handler = (e: MessageEvent) => {
       const data = e.data as PreviewMessage | undefined;
       if (data && data.kind === 'entur:preview:proposta' && data.proposta) {
         setProposta(data.proposta);
+        setEditor(!!data.editor);
       }
     };
     window.addEventListener('message', handler);
-    // Sinaliza ao parent que esta pronto pra receber dados.
     window.parent?.postMessage({ kind: 'entur:preview:ready' }, '*');
     return () => window.removeEventListener('message', handler);
   }, []);
+
+  // Callback que iframe usa quando o usuario clica num bloco editavel —
+  // posta de volta pro parent que vai abrir o painel de edicao.
+  const handleBlockSelect = (blockType: PreviewEditorBlockType, conteudoId: string) => {
+    window.parent?.postMessage({
+      kind: 'entur:preview:select',
+      blockType,
+      conteudoId,
+    }, '*');
+  };
 
   if (!proposta) {
     return (
@@ -59,18 +70,14 @@ export default function PreviewIframePage() {
   const fonte = proposta.visual?.fonte || 'Inter';
   const idioma = (proposta.idioma || 'pt-BR') as IdiomaProposal;
 
-  // Discovery encapsula tudo (hero + sections + footer + cta proprio).
-  if (isDiscovery) {
-    return (
-      <div style={{ fontFamily: `'${fonte}', sans-serif` }}>
-        <DiscoveryRenderer proposta={proposta} slug="preview" idioma={idioma} />
-      </div>
-    );
-  }
-
-  // Classico — replica exatamente o layout de /p/[slug] sem widgets de
-  // engajamento (chat/lead/aceitacao) que nao fazem sentido em preview.
-  return (
+  // PreviewEditorProvider envolve o conteudo: quando editor=true, clicks
+  // em blocos disparam postMessage de volta pro parent (que abre o
+  // painel de edicao). Quando editor=false, e preview puro.
+  const content = isDiscovery ? (
+    <div style={{ fontFamily: `'${fonte}', sans-serif` }}>
+      <DiscoveryRenderer proposta={proposta} slug="preview" idioma={idioma} />
+    </div>
+  ) : (
     <div
       className="min-h-screen"
       style={{ backgroundColor: corFundo, color: corTexto, fontFamily: `'${fonte}', sans-serif` }}
@@ -94,5 +101,11 @@ export default function PreviewIframePage() {
         <RodapeSection proposta={proposta} />
       </div>
     </div>
+  );
+
+  return (
+    <PreviewEditorProvider value={editor ? { onBlockSelect: handleBlockSelect } : {}}>
+      {content}
+    </PreviewEditorProvider>
   );
 }

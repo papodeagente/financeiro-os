@@ -34,6 +34,7 @@ import { CapaSection } from './preview/CapaSection';
 import { RodapeSection } from './preview/RodapeSection';
 import { DiscoveryRenderer } from './preview/discovery/DiscoveryRenderer';
 import { PreviewEditorProvider, type PreviewEditorBlockType } from './PreviewEditorContext';
+import { PreviewIframeCanvas } from './PreviewIframeCanvas';
 import type { IdiomaProposal } from '@/lib/i18n-proposta';
 import { FlightSearchModal } from '@/components/FlightSearchModal';
 import { HotelSearchModal } from '@/components/HotelSearchModal';
@@ -112,6 +113,40 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
   // (selectedBlockId muda) OU explicitamente abre Configuracoes da
   // pagina (pageSettingsOpen).
   const [pageSettingsOpen, setPageSettingsOpen] = useState(false);
+
+  // Handler reutilizado pelos dois caminhos de preview (inline e iframe):
+  // mapeia conteudoId (vindo dos renderers de DISCOVERY) de volta pra
+  // secao.id da proposta e seleciona o bloco no editor.
+  const handleBlockSelectFromPreview = useCallback(
+    (blockType: PreviewEditorBlockType, conteudoId: string) => {
+      let secaoId: string | null = null;
+      if (blockType === 'ALOJAMENTO') {
+        const s = proposta.secoes.find(s =>
+          s.tipo === 'ALOJAMENTO' &&
+          (s.conteudo as { id?: string })?.id === conteudoId,
+        );
+        secaoId = s?.id || null;
+      } else if (blockType === 'VOO_OR_TRANSPORTE') {
+        const s = proposta.secoes.find(s =>
+          (s.tipo === 'VOO' || s.tipo === 'TRANSPORTE') &&
+          (s.conteudo as { id?: string })?.id === conteudoId,
+        );
+        secaoId = s?.id || null;
+      } else if (blockType === 'VALORES_OR_INCLUSOS') {
+        secaoId = conteudoId;
+      } else if (blockType === 'ROTEIRO_DIA') {
+        const s = proposta.secoes.find(s =>
+          s.tipo === 'ROTEIRO_DIA' &&
+          (s.conteudo as { id?: string })?.id === conteudoId,
+        );
+        secaoId = s?.id || null;
+      } else if (blockType === 'SECAO_ID') {
+        secaoId = conteudoId;
+      }
+      if (secaoId) setSelectedBlockId(secaoId);
+    },
+    [proposta.secoes],
+  );
   // Modo de viewport do canvas (Fase C). Constrai largura do canvas
   // pra simular como a proposta vai aparecer em cada dispositivo.
   // Default 'desktop' (900px — igual antes da feature).
@@ -934,51 +969,21 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
               }}
               onClick={e => e.stopPropagation()}
             >
-            {proposta.visual?.layout === 'DISCOVERY' ? (
-              // ============ LAYOUT DISCOVERY ============
-              // DiscoveryRenderer encapsula tudo (hero, nav, accommodations,
-              // transports, itinerario, pricing, footer). Para selecao
-              // de bloco no canvas, encapsulamos com PreviewEditorProvider
-              // — assim os renderers internos (AccommodationSummary,
-              // TransportSummary, PricingSection) detectam que estao em
-              // modo editor e disparam onBlockSelect ao inves do
-              // comportamento publico (HotelModal, etc.).
-              <PreviewEditorProvider
-                value={{
-                  onBlockSelect: (blockType: PreviewEditorBlockType, conteudoId: string) => {
-                    let secaoId: string | null = null;
-                    if (blockType === 'ALOJAMENTO') {
-                      const s = proposta.secoes.find(s =>
-                        s.tipo === 'ALOJAMENTO' &&
-                        (s.conteudo as { id?: string })?.id === conteudoId,
-                      );
-                      secaoId = s?.id || null;
-                    } else if (blockType === 'VOO_OR_TRANSPORTE') {
-                      const s = proposta.secoes.find(s =>
-                        (s.tipo === 'VOO' || s.tipo === 'TRANSPORTE') &&
-                        (s.conteudo as { id?: string })?.id === conteudoId,
-                      );
-                      secaoId = s?.id || null;
-                    } else if (blockType === 'VALORES_OR_INCLUSOS') {
-                      // conteudoId IS secao.id direto (PricingSection ja
-                      // sabe qual secao representa).
-                      secaoId = conteudoId;
-                    } else if (blockType === 'ROTEIRO_DIA') {
-                      const s = proposta.secoes.find(s =>
-                        s.tipo === 'ROTEIRO_DIA' &&
-                        (s.conteudo as { id?: string })?.id === conteudoId,
-                      );
-                      secaoId = s?.id || null;
-                    } else if (blockType === 'SECAO_ID') {
-                      // O conteudoId JA e a secao.id (caso de TEXTO, FAQ,
-                      // DEPOIMENTO, GALERIA, VIDEO, MAPA, COUNTDOWN, CTA,
-                      // ROTEIRO_DIA section em DiscoveryRenderer).
-                      secaoId = conteudoId;
-                    }
-                    if (secaoId) setSelectedBlockId(secaoId);
-                  },
-                }}
-              >
+            {viewportMode !== 'desktop' ? (
+              // ============ TABLET / MOBILE → IFRAME ============
+              // Pra fidelidade real ao dispositivo, renderiza dentro de
+              // iframe da rota /preview-iframe. O viewport interno do
+              // iframe e o do dispositivo simulado, entao Tailwind
+              // dispara breakpoints corretos (md:, lg:, etc.).
+              // PostMessage mantem o iframe sincronizado com proposta
+              // e captura clicks pra abrir editor.
+              <PreviewIframeCanvas
+                proposta={proposta}
+                onBlockSelect={handleBlockSelectFromPreview}
+              />
+            ) : proposta.visual?.layout === 'DISCOVERY' ? (
+              // ============ DESKTOP + LAYOUT DISCOVERY ============
+              <PreviewEditorProvider value={{ onBlockSelect: handleBlockSelectFromPreview }}>
                 {/* DiscoveryRenderer renderiza tudo nativamente — sem
                     wrapper pointer-events-none, pra que clicks nas rows
                     de AccommodationSummary, voos do TransportSummary,
@@ -1006,7 +1011,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                 )}
               </PreviewEditorProvider>
             ) : (
-              // ============ LAYOUT CLASSICO ============
+              // ============ DESKTOP + LAYOUT CLASSICO ============
               <>
               {/* CAPA — secao de pagina (nao draggavel). Click abre o
                   PageHeaderEditor no painel direito. */}
@@ -1044,7 +1049,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
               <div
                 className="mx-auto px-6 py-8 transition-all"
                 style={{
-                  maxWidth: viewportMode === 'mobile' ? '100%' : '768px',
+                  maxWidth: '768px',
                 }}
               >
               <SortableContext items={proposta.secoes.map(s => s.id)} strategy={verticalListSortingStrategy}>
@@ -1155,7 +1160,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                   PageFooterEditor no painel direito. */}
               <div
                 className="mx-auto px-6"
-                style={{ maxWidth: viewportMode === 'mobile' ? '100%' : '768px' }}
+                style={{ maxWidth: '768px' }}
               >
                 <SelectablePageSection
                   id="__page_footer__"
