@@ -17,13 +17,6 @@ interface Props {
   onToggleSidebar?: () => void;
 }
 
-function getGreeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return 'Bom dia';
-  if (h < 18) return 'Boa tarde';
-  return 'Boa noite';
-}
-
 function getPillarDefaultRoute(pillar: Pillar): string {
   switch (pillar) {
     case 'planejamento': return '/planejamento/custos';
@@ -34,7 +27,7 @@ function getPillarDefaultRoute(pillar: Pillar): string {
   }
 }
 
-export function TopBar({ onCommandPalette, breadcrumb, sidebarCollapsed, onToggleSidebar }: Props) {
+export function TopBar({ onCommandPalette }: Props) {
   const activePillar = useActivePillar();
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
@@ -53,23 +46,14 @@ export function TopBar({ onCommandPalette, breadcrumb, sidebarCollapsed, onToggl
 
   return (
     <header className="h-[56px] w-full lg-glass-thin flex items-center px-3 sm:px-5 shrink-0 z-40 min-w-0 overflow-hidden" style={{ fontFamily: 'var(--font-inter-tight), var(--font-inter), system-ui, sans-serif' }}>
-      {/* Left: Logo + Greeting */}
-      <div className="flex items-center gap-2 sm:gap-4 shrink-0 mr-2 sm:mr-4 min-w-0">
+      {/* Left: Logo somente — saudacao/breadcrumb removidos pra ganhar
+          espaco e manter a topbar limpa (so icones e logo). */}
+      <div className="flex items-center shrink-0 mr-2 sm:mr-4">
         <Logo variant="sidebar" href="/dashboard" />
-        {user && (
-          <div className="hidden xl:flex flex-col justify-center min-w-0">
-            <span className="text-[var(--text-body-sm)] text-[var(--t-text-secondary)] leading-tight truncate">
-              {getGreeting()}, <span className="text-[var(--t-text)] font-medium">{user.nome?.split(' ')[0]}</span>
-            </span>
-            {breadcrumb && (
-              <div className="mt-0.5">{breadcrumb}</div>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* Center: Pillar pills — labels somem progressivamente em telas
-          mais estreitas pra dar espaco pra direita nao cortar. */}
+      {/* Center: Pillar icons — so icones, sem labels, com tooltip
+          nativo (title) revelando o nome ao hover. */}
       <nav className="flex-1 flex items-center justify-center gap-0.5 sm:gap-1 min-w-0 overflow-hidden">
         {PILLARS.map(pillar => {
           const Icon = pillar.icon;
@@ -79,55 +63,44 @@ export function TopBar({ onCommandPalette, breadcrumb, sidebarCollapsed, onToggl
             <Link
               key={pillar.id}
               href={getPillarDefaultRoute(pillar.id)}
-              className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3.5 h-9 text-[13px] font-medium transition-colors duration-150 border-b-2 shrink-0 ${
+              className={`flex items-center justify-center w-9 h-9 rounded-lg transition-colors duration-150 shrink-0 ${
                 isActive
-                  ? 'border-[var(--ink)] text-[var(--ink)]'
-                  : 'border-transparent text-[var(--ink-3)] hover:text-[var(--ink)]'
+                  ? 'bg-[var(--ink)]/10 text-[var(--ink)]'
+                  : 'text-[var(--ink-3)] hover:text-[var(--ink)] hover:bg-[var(--ink)]/5'
               }`}
               title={pillar.label}
+              aria-label={pillar.label}
             >
               <Icon className="w-4 h-4 shrink-0" />
-              <span className="hidden xl:inline">{pillar.label}</span>
             </Link>
           );
         })}
       </nav>
 
-      {/* Right: Actions + Utilities */}
-      <div className="flex items-center gap-0.5 sm:gap-1.5 shrink-0">
-        {/* Quick actions — so em telas bem largas */}
+      {/* Right: Actions + Utilities — todos como icone unico */}
+      <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+        {/* Nova Venda — botao primario icon-only */}
         <Link
           href="/vendas/nova"
-          className="hidden 2xl:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-medium text-white transition-all hover:brightness-110"
+          className="w-8 h-8 flex items-center justify-center rounded-xl text-white transition-all hover:brightness-110 shrink-0"
           style={{ background: 'var(--t-accent-gradient)', boxShadow: '0 1px 3px var(--t-green-shadow)' }}
+          title="Nova venda"
+          aria-label="Nova venda"
         >
-          <Plus className="w-3.5 h-3.5" />
-          Nova Venda
-        </Link>
-        <Link
-          href="/propostas/nova"
-          className="hidden 2xl:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-medium border border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)] hover:text-[var(--t-text)] transition-all"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          Proposta
+          <Plus className="w-4 h-4" />
         </Link>
 
-        {/* Separator */}
-        <div className="w-px h-5 bg-[var(--t-border)] mx-1 hidden 2xl:block" />
-
-        {/* Search trigger — compacto em telas medias, expandido so em xl+ */}
+        {/* Search trigger — icon-only com tooltip; abre o cmd palette */}
         <button
           onClick={onCommandPalette}
-          className="flex items-center gap-2 px-2 sm:px-2.5 py-1.5 rounded-2xl border border-[var(--t-border)] bg-[var(--t-bg)] text-[var(--t-text-muted)] hover:text-[var(--t-text)] hover:border-[var(--t-border-hover)] transition-all text-[var(--text-body-sm)] xl:min-w-[200px] shrink-0"
+          className="w-8 h-8 flex items-center justify-center rounded-xl text-[var(--t-text-muted)] hover:text-[var(--t-text)] hover:bg-[var(--t-surface-hover)] transition-colors shrink-0"
           title="Buscar (⌘K)"
           aria-label="Buscar"
         >
-          <Search className="w-3.5 h-3.5 shrink-0" />
-          <span className="hidden xl:inline flex-1 text-left">Buscar...</span>
-          <kbd className="hidden xl:inline text-[10px] text-[var(--t-text-muted)] bg-[var(--t-surface)] border border-[var(--t-border)] px-1.5 py-0.5 rounded ml-1" style={{ boxShadow: 'var(--elevation-1)' }}>⌘K</kbd>
+          <Search className="w-4 h-4" />
         </button>
 
-        {/* CRM status — so em telas largas */}
+        {/* CRM status — so em telas largas (icone compacto ja) */}
         <div className="hidden lg:flex items-center shrink-0">
           <CrmStatusBadge variant="compacto" />
         </div>
