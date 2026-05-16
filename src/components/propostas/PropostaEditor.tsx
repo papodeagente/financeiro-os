@@ -38,6 +38,8 @@ import { PreviewIframeCanvas } from './PreviewIframeCanvas';
 import { buildPropostaLink } from '@/lib/proposta-link';
 import { groupIntoRows } from '@/lib/proposta-layout';
 import { loadAgencia } from '@/lib/crm-storage';
+import { aplicarExemploNaProposta } from '@/lib/proposta-exemplo';
+import { PropostaOnboarding } from './PropostaOnboarding';
 import { toast } from '@/lib/toast';
 import type { Agencia } from '@/lib/crm-types';
 import type { IdiomaProposal } from '@/lib/i18n-proposta';
@@ -137,6 +139,27 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
   const [agencia, setAgencia] = useState<Agencia | null>(null);
   useEffect(() => {
     loadAgencia<Agencia>().then(a => { if (a) setAgencia(a); });
+  }, []);
+
+  // Onboarding guiado — aparece na 1a vez que o usuario abre uma proposta
+  // vazia. Mostra modal com 3 opcoes: aplicar exemplo, gerar com IA, ou
+  // comecar do zero. Flag persistida em localStorage pra nao mostrar de
+  // novo apos dismissar/completar. Pula automatico se proposta ja tem
+  // conteudo (so faz sentido em editor vazio).
+  const ONBOARDING_KEY = 'entur:onboarding-proposta-v1';
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  useEffect(() => {
+    if (initialProposta.secoes.length > 0) return;
+    try {
+      const done = localStorage.getItem(ONBOARDING_KEY);
+      if (done !== 'completed') {
+        setOnboardingOpen(true);
+      }
+    } catch { /* ignore */ }
+  }, [initialProposta.secoes.length]);
+  const dismissOnboarding = useCallback(() => {
+    try { localStorage.setItem(ONBOARDING_KEY, 'completed'); } catch { /* ignore */ }
+    setOnboardingOpen(false);
   }, []);
   // Drawer-mode pro painel direito: por padrao FECHADO pra maximizar
   // o espaco do canvas. Abre quando o usuario clica num bloco
@@ -601,6 +624,15 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
   const removeSecao = (id: string) => {
     update(p => ({ ...p, secoes: p.secoes.filter(s => s.id !== id) }));
   };
+
+  // Aplica a proposta exemplo no onboarding: substitui secoes/cabecalho/
+  // rodape pelos defaults com conteudo realista (Santiago/Chile). Cliente,
+  // visual, id e demais campos sao preservados.
+  const applyExempleProposta = useCallback(() => {
+    update(p => aplicarExemploNaProposta(p));
+    dismissOnboarding();
+    toast.success('Proposta exemplo aplicada', 'Edite cada bloco clicando nele');
+  }, [update, dismissOnboarding]);
 
   const duplicateSecao = (id: string) => {
     update(p => {
@@ -1512,6 +1544,17 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
       <FlightSearchModal open={flightModalOpen} onClose={() => setFlightModalOpen(false)} onSelect={handleFlightSelect} />
       <HotelSearchModal open={hotelModalOpen} onClose={() => setHotelModalOpen(false)} onSelect={handleHotelSelect} />
       <PdfExportModal proposta={proposta} open={pdfModalOpen} onClose={() => setPdfModalOpen(false)} />
+
+      {/* Onboarding guiado — primeira vez que o usuario abre uma proposta
+          vazia. Modal central com 3 opcoes (aplicar exemplo, gerar IA,
+          comecar do zero). Flag localStorage controla repeticao. */}
+      <PropostaOnboarding
+        open={onboardingOpen}
+        onApplyExample={applyExempleProposta}
+        onUseAI={() => { dismissOnboarding(); handleGenerateFullProposal(); }}
+        onStartFromScratch={dismissOnboarding}
+        generatingAI={generatingFull}
+      />
 
       {/* Atalhos de teclado (Fase 6). Modal lista todos os atalhos
           disponiveis. Fecha com Esc ou click fora. */}
