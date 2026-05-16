@@ -121,6 +121,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const trail = buildTrail(pathname);
   const breadcrumbNode = trail.length ? <Breadcrumbs trail={trail} /> : undefined;
 
+  // Rotas que precisam de altura fixa (editor com layout flex de 3 colunas
+  // e scroll interno no canvas, pra que paineis laterais fiquem visualmente
+  // sticky enquanto a proposta scrolla). Default das demais paginas continua
+  // sendo height auto -> scroll no <main> (comportamento atual preservado).
+  const needsFixedHeight = pathname
+    ? /^\/propostas\/(nova|[^/]+)$/.test(pathname)
+    : false;
+
   return (
     <div className="flex flex-col h-full w-full overflow-x-hidden">
       <ImpersonationBanner />
@@ -137,7 +145,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 min-shell"
           style={{ background: 'var(--lg-bg)' }}
         >
-          <div className="content-enter">
+          <div className={`content-enter ${needsFixedHeight ? 'h-full' : ''}`}>
             {children}
           </div>
         </main>
