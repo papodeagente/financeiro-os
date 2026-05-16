@@ -6,13 +6,9 @@ import { Proposta, SecaoProposta, Cliente, Membro, Destino } from '@/lib/crm-typ
 import { generateId } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
-  Save, ArrowLeft, Copy, MessageCircle, GripVertical,
-  ChevronUp, ChevronDown, Trash2, Plane, Hotel,
-  Type, Calendar, Image, CheckSquare, DollarSign, Quote, MousePointer,
-  Check, Loader2, Sparkles, FileDown, GitBranch,
-  Video, Map, HelpCircle, Timer, Bed, Car,
-  Eye, EyeOff, CopyPlus, ChevronsDownUp, ChevronsUpDown,
-  Columns2, Settings2, Undo2, Redo2, Keyboard,
+  Save, ArrowLeft, Copy, MessageCircle,
+  Check, Loader2, FileDown, GitBranch,
+  Undo2, Redo2, Keyboard,
 } from 'lucide-react';
 import {
   DndContext, closestCenter, pointerWithin, KeyboardSensor, PointerSensor,
@@ -21,16 +17,13 @@ import {
 } from '@dnd-kit/core';
 import {
   arrayMove, SortableContext, sortableKeyboardCoordinates,
-  useSortable, verticalListSortingStrategy,
+  verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { Card, CardContent } from '@/components/ui/card';
-import { BlockRenderer } from './BlockRenderer';
 import { BlockToolbar } from './BlockToolbar';
 import { BlockPalette } from './BlockPalette';
 import { DropZone } from './DropZone';
-import { BlockHeaderSummary } from './BlockHeaderSummary';
-import { LivePreviewPanel } from './LivePreviewPanel';
+import { SelectableBlock } from './SelectableBlock';
+import { BlockPropertiesPanel } from './BlockPropertiesPanel';
 import { PropostaSidebar } from './PropostaSidebar';
 import { FlightSearchModal } from '@/components/FlightSearchModal';
 import { HotelSearchModal } from '@/components/HotelSearchModal';
@@ -42,19 +35,6 @@ import type { AlojamentoData, TransporteData } from '@/lib/crm-types';
 import { PdfExportModal } from './PdfExportModal';
 import { consumePendingPropostaHotelHandoff, consumePendingPropostaFlightHandoff } from '@/lib/api-search-handoff';
 import type { SearchAPIHotelProperty } from '@/lib/searchapi-hotels';
-
-const TIPO_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  TEXTO: Type, SERVICO: Plane, VOO: Plane, ROTEIRO_DIA: Calendar, GALERIA: Image,
-  INCLUSOS: CheckSquare, VALORES: DollarSign, DEPOIMENTO: Quote, CTA: MousePointer,
-  VIDEO: Video, MAPA: Map, FAQ: HelpCircle, COUNTDOWN: Timer,
-  ALOJAMENTO: Bed, TRANSPORTE: Car,
-};
-const TIPO_LABELS: Record<string, string> = {
-  TEXTO: 'Texto', SERVICO: 'Servico', VOO: 'Voo', ROTEIRO_DIA: 'Roteiro', GALERIA: 'Galeria',
-  INCLUSOS: 'Inclusos', VALORES: 'Valores', DEPOIMENTO: 'Depoimento', CTA: 'CTA',
-  VIDEO: 'Video', MAPA: 'Mapa', FAQ: 'FAQ', COUNTDOWN: 'Countdown',
-  ALOJAMENTO: 'Hospedagem', TRANSPORTE: 'Transporte',
-};
 
 function defaultConteudo(tipo: string): Record<string, unknown> {
   switch (tipo) {
@@ -88,138 +68,8 @@ function defaultConteudo(tipo: string): Record<string, unknown> {
   }
 }
 
-// Sortable block wrapper
+// AI nao e suportado em todos os blocos. Lista historica preservada.
 const AI_SUPPORTED_TYPES = ['TEXTO', 'SERVICO', 'ROTEIRO_DIA', 'INCLUSOS', 'DEPOIMENTO', 'CTA'];
-
-function SortableBlock({
-  secao, index, total, collapsed, focused, onUpdate, onRemove, onMove, onDuplicate,
-  onToggleVisivel, onToggleCollapsed, onFocus, onGenerateAI, generating, onInsertAfter,
-}: {
-  secao: SecaoProposta; index: number; total: number;
-  collapsed: boolean;
-  focused: boolean;
-  onUpdate: (conteudo: Record<string, unknown>) => void;
-  onRemove: () => void;
-  onMove: (dir: -1 | 1) => void;
-  onDuplicate: () => void;
-  onToggleVisivel: () => void;
-  onToggleCollapsed: () => void;
-  onFocus: () => void;
-  onGenerateAI: () => void;
-  generating: boolean;
-  onInsertAfter?: (tipo: string, conteudo: Record<string, unknown>) => void;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: secao.id });
-  const hidden = secao.visivel === false;
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : hidden ? 0.55 : 1,
-  };
-  const TipoIcon = TIPO_ICONS[secao.tipo] || Type;
-  const canAI = AI_SUPPORTED_TYPES.includes(secao.tipo);
-
-  return (
-    <div ref={setNodeRef} style={style} onPointerDown={onFocus}>
-      <Card
-        className={`bg-[var(--t-bg-secondary)] border-[var(--t-border)] transition-shadow ${
-          focused ? 'ring-2 ring-[var(--t-green)] ring-offset-1 ring-offset-[var(--t-bg)]' : ''
-        }`}
-        // Borda esquerda colorida acentua o estado: verde quando visível,
-        // cinza pontilhada quando oculto. Facilita escanear lista grande.
-        style={{
-          borderLeft: hidden
-            ? '3px dashed var(--t-text-muted)'
-            : '3px solid var(--t-green)',
-        }}
-      >
-        <CardContent className={collapsed ? 'p-3' : 'p-4'}>
-          <div className={`flex items-center gap-2 ${collapsed ? '' : 'mb-3'}`}>
-            <div
-              {...attributes}
-              {...listeners}
-              className="cursor-grab active:cursor-grabbing touch-none p-1 -m-1 rounded hover:bg-[var(--t-surface-hover)]"
-              title="Arrastar para reordenar"
-            >
-              <GripVertical className="w-4 h-4 text-[var(--t-text-muted)]" />
-            </div>
-            <button
-              type="button"
-              onClick={onToggleCollapsed}
-              className="flex items-center gap-2 flex-1 min-w-0 text-left hover:bg-[var(--t-surface-hover)] rounded px-1.5 py-0.5 -mx-1.5"
-              title={collapsed ? 'Expandir bloco' : 'Colapsar bloco'}
-            >
-              <TipoIcon className={`w-4 h-4 shrink-0 ${hidden ? 'text-[var(--t-text-muted)]' : 'text-[var(--t-green)]'}`} />
-              <span className={`text-[10px] uppercase tracking-wider font-semibold shrink-0 ${hidden ? 'text-[var(--t-text-muted)] line-through' : 'text-[var(--t-text-muted)]'}`}>
-                {TIPO_LABELS[secao.tipo] || secao.tipo}
-              </span>
-              {/* Resumo visual do conteudo — vira o "preview" no header
-                  e faz o editor ler como uma timeline da proposta.
-                  Quando o bloco esta oculto, suprimimos o resumo
-                  pra reforcar visualmente o estado off. */}
-              {!hidden && (
-                <div className="min-w-0 flex-1 hidden sm:block">
-                  <BlockHeaderSummary tipo={secao.tipo} conteudo={secao.conteudo} />
-                </div>
-              )}
-              {hidden && (
-                <span className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-[var(--t-text-muted)]/10 text-[var(--t-text-muted)] font-semibold">
-                  Oculto
-                </span>
-              )}
-              <span className="shrink-0 ml-auto">
-                {collapsed ? (
-                  <ChevronsUpDown className="w-3 h-3 text-[var(--t-text-muted)]" />
-                ) : (
-                  <ChevronsDownUp className="w-3 h-3 text-[var(--t-text-muted)]" />
-                )}
-              </span>
-            </button>
-            {canAI && !collapsed && (
-              <Button variant="ghost" size="sm" className="h-7 px-2 text-purple-400 hover:bg-purple-400/10 gap-1 text-[10px]"
-                onClick={onGenerateAI} disabled={generating}>
-                {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                {generating ? 'Gerando...' : 'IA'}
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0 text-[var(--t-text-secondary)]"
-              onClick={onToggleVisivel}
-              title={hidden ? 'Tornar visível' : 'Ocultar da proposta'}
-            >
-              {hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0 text-[var(--t-text-secondary)]"
-              onClick={onDuplicate}
-              title="Duplicar bloco"
-            >
-              <CopyPlus className="w-4 h-4" />
-            </Button>
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-[var(--t-text-secondary)]"
-              onClick={() => onMove(-1)} disabled={index === 0} title="Mover para cima">
-              <ChevronUp className="w-4 h-4" />
-            </Button>
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-[var(--t-text-secondary)]"
-              onClick={() => onMove(1)} disabled={index === total - 1} title="Mover para baixo">
-              <ChevronDown className="w-4 h-4" />
-            </Button>
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-400" onClick={onRemove} title="Deletar bloco">
-              <Trash2 className="w-4 h-4" />
-            </Button>
-          </div>
-          {!collapsed && (
-            <BlockRenderer tipo={secao.tipo} conteudo={secao.conteudo} onChange={onUpdate} onInsertAfter={onInsertAfter} />
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
 
 interface Props {
   proposta: Proposta;
@@ -239,19 +89,13 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
   const [generatingAI, setGeneratingAI] = useState<Record<string, boolean>>({});
   const [generatingFull, setGeneratingFull] = useState(false);
   const [aiDestino, setAIDestino] = useState<Destino | null>(null);
-  // Estado UI-only (não persistido): blocos colapsados visualmente para
-  // o usuário escanear a lista. Reset a cada montagem.
-  const [collapsedBlocks, setCollapsedBlocks] = useState<Set<string>>(new Set());
   // Tipo do bloco sendo arrastado da paleta. Quando != null, drop zones
   // ficam visiveis no canvas (caso contrario ocupam apenas 8px).
   const [paletteDragging, setPaletteDragging] = useState<string | null>(null);
-  // Modo preview ao vivo (Fase 5). Quando ligado, troca a PropostaSidebar
-  // de configuracao pelo LivePreviewPanel — usuario ve a proposta sendo
-  // renderizada (igual /p/[slug]) ao lado do canvas de edicao.
-  const [livePreview, setLivePreview] = useState(false);
-  // Bloco com foco do teclado — usado pelos atalhos D/H/Del/Arrows.
-  // Click no header de qualquer bloco seta esse id; click fora limpa.
-  const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
+  // Bloco selecionado (Elementor-like): click no canvas seleciona, abre
+  // editor no painel direito. Esc / click fora deseleciona. Tambem usado
+  // pelos atalhos de teclado (D/H/Del/Arrows).
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
 
   // History stack para undo/redo. Guarda snapshots da proposta inteira.
@@ -314,15 +158,6 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
     hasUnsaved.current = true;
     bumpHistoryUI();
   }, []);
-  const toggleCollapsed = (id: string) => {
-    setCollapsedBlocks(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-  const collapseAll = () => setCollapsedBlocks(new Set(proposta.secoes.map(s => s.id)));
-  const expandAll = () => setCollapsedBlocks(new Set());
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasUnsaved = useRef(false);
 
@@ -460,8 +295,8 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
       // Esc: fecha shortcuts e limpa foco. Funciona em qualquer contexto.
       if (key === 'escape') {
         if (showShortcuts) { setShowShortcuts(false); return; }
-        if (focusedBlockId && !isTypingInForm()) {
-          setFocusedBlockId(null);
+        if (selectedBlockId && !isTypingInForm()) {
+          setSelectedBlockId(null);
           return;
         }
       }
@@ -482,32 +317,32 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
 
       // Atalhos por bloco — so quando ha bloco focado e nao estamos
       // digitando.
-      if (!focusedBlockId || isTypingInForm()) return;
+      if (!selectedBlockId || isTypingInForm()) return;
 
       if (key === 'delete' || key === 'backspace') {
         e.preventDefault();
-        removeSecao(focusedBlockId);
-        setFocusedBlockId(null);
+        removeSecao(selectedBlockId);
+        setSelectedBlockId(null);
         return;
       }
       if (key === 'd' && !meta) {
         e.preventDefault();
-        duplicateSecao(focusedBlockId);
+        duplicateSecao(selectedBlockId);
         return;
       }
       if (key === 'h' && !meta) {
         e.preventDefault();
-        toggleVisivelSecao(focusedBlockId);
+        toggleVisivelSecao(selectedBlockId);
         return;
       }
       if (key === 'arrowup') {
         e.preventDefault();
-        moveSecao(focusedBlockId, -1);
+        moveSecao(selectedBlockId, -1);
         return;
       }
       if (key === 'arrowdown') {
         e.preventDefault();
-        moveSecao(focusedBlockId, 1);
+        moveSecao(selectedBlockId, 1);
         return;
       }
     };
@@ -515,7 +350,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusedBlockId, showShortcuts, undo, redo]);
+  }, [selectedBlockId, showShortcuts, undo, redo]);
 
   // Quando o editor monta, forca a sidebar do AppShell a colapsar pra
   // dar mais espaco horizontal pra paleta + canvas + preview/sidebar.
@@ -949,22 +784,6 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
             <Keyboard className="w-4 h-4" />
           </Button>
 
-          {/* Toggle Preview ao vivo (Fase 5). Quando ligado, mostra a
-              proposta renderizada lado a lado com o editor (troca a
-              PropostaSidebar pelo LivePreviewPanel). */}
-          <Button
-            variant={livePreview ? 'default' : 'outline'}
-            size="sm"
-            className={`gap-1 text-xs ${livePreview
-              ? 'bg-[var(--t-green)] text-white dark:text-[#0a0a14]'
-              : 'border-[var(--t-border)] text-[var(--t-text-secondary)]'
-            }`}
-            onClick={() => setLivePreview(v => !v)}
-            title={livePreview ? 'Voltar para configuração' : 'Ver preview ao vivo'}
-          >
-            {livePreview ? <Settings2 className="w-3 h-3" /> : <Columns2 className="w-3 h-3" />}
-            {livePreview ? 'Configurar' : 'Preview'}
-          </Button>
           {proposta.link_publico && (
             <Button variant="outline" size="sm" className="gap-1 text-xs border-[var(--t-border)] text-[var(--t-text-secondary)]"
               onClick={() => navigator.clipboard.writeText(proposta.link_publico)}>
@@ -1012,93 +831,81 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
             generatingFull={generatingFull}
           />
 
-          {/* Editor */}
-          <div className="flex-1 overflow-y-auto">
-            <div className="max-w-[900px] mx-auto p-6 space-y-6">
+          {/* Editor — canvas estilo Elementor: cada bloco vira o preview
+              ao vivo (o que o cliente vai ver). Click seleciona; o
+              painel direito abre o editor desse bloco. Click no fundo
+              do canvas deseleciona. */}
+          <div
+            className="flex-1 overflow-y-auto"
+            onClick={() => setSelectedBlockId(null)}
+            style={{ background: '#f5f5f7' }}
+          >
+            <div
+              className="max-w-[900px] mx-auto p-6"
+              onClick={e => e.stopPropagation()}
+            >
               <SortableContext items={proposta.secoes.map(s => s.id)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-medium text-[var(--t-text)]">Blocos da Proposta ({proposta.secoes.length})</h3>
-                    {proposta.secoes.length > 0 && (
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2 text-[10px] text-[var(--t-text-secondary)] gap-1"
-                          onClick={collapsedBlocks.size === proposta.secoes.length ? expandAll : collapseAll}
-                          title={collapsedBlocks.size === proposta.secoes.length ? 'Expandir todos' : 'Colapsar todos'}
-                        >
-                          {collapsedBlocks.size === proposta.secoes.length ? (
-                            <><ChevronsUpDown className="w-3 h-3" /> Expandir todos</>
-                          ) : (
-                            <><ChevronsDownUp className="w-3 h-3" /> Colapsar todos</>
-                          )}
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Empty state — quando a proposta nao tem blocos, vira
-                       um alvo gigante de drop encorajando o usuario a
-                       arrastar da paleta. */}
-                  {proposta.secoes.length === 0 ? (
+                {proposta.secoes.length === 0 ? (
+                  <div className="space-y-3">
                     <DropZone index={0} active={!!paletteDragging} label="Soltar primeiro bloco aqui" />
-                  ) : (
-                    <>
-                      {/* Drop zone antes do primeiro bloco */}
-                      <DropZone index={0} active={!!paletteDragging} />
-                      {proposta.secoes.map((secao, idx) => (
-                        <div key={secao.id}>
-                          <SortableBlock
-                            secao={secao}
-                            index={idx}
-                            total={proposta.secoes.length}
-                            collapsed={collapsedBlocks.has(secao.id)}
-                            focused={focusedBlockId === secao.id}
-                            onUpdate={c => updateSecao(secao.id, c)}
-                            onRemove={() => removeSecao(secao.id)}
-                            onMove={dir => moveSecao(secao.id, dir)}
-                            onDuplicate={() => duplicateSecao(secao.id)}
-                            onToggleVisivel={() => toggleVisivelSecao(secao.id)}
-                            onToggleCollapsed={() => toggleCollapsed(secao.id)}
-                            onFocus={() => setFocusedBlockId(secao.id)}
-                            onGenerateAI={() => handleGenerateAI(secao.id, secao.tipo)}
-                            generating={!!generatingAI[secao.id]}
-                            onInsertAfter={(tipo, conteudo) => insertSecaoAfter(secao.id, tipo, conteudo)}
-                          />
-                          {/* Drop zone apos cada bloco */}
-                          <DropZone index={idx + 1} active={!!paletteDragging} />
-                        </div>
-                      ))}
-                    </>
-                  )}
-
-                  {proposta.secoes.length === 0 && (
                     <div className="text-center py-12 text-[var(--t-text-muted)]">
                       <p className="text-sm">Comece arrastando um bloco da paleta à esquerda</p>
                       <p className="text-[11px] mt-1">ou clique num item da paleta para adicionar no fim</p>
                     </div>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {/* Drop zone antes do primeiro bloco */}
+                    <DropZone index={0} active={!!paletteDragging} />
+                    {proposta.secoes.map((secao, idx) => (
+                      <div key={secao.id} className="space-y-2">
+                        <SelectableBlock
+                          secao={secao}
+                          selected={selectedBlockId === secao.id}
+                          onSelect={() => setSelectedBlockId(secao.id)}
+                          corPrimaria={proposta.visual?.cor_primaria || '#004aad'}
+                          idioma={(proposta.idioma || 'pt-BR') as 'pt-BR' | 'en' | 'es'}
+                        />
+                        {/* Drop zone apos cada bloco */}
+                        <DropZone index={idx + 1} active={!!paletteDragging} />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </SortableContext>
 
-              {/* Add block toolbar (atalho redundante, continua util como
-                  fallback de "adicionar no fim sem precisar arrastar") */}
-              <BlockToolbar
-                onAddBlock={addSecao}
-                onSearchFlight={() => setFlightModalOpen(true)}
-                onSearchHotel={() => setHotelModalOpen(true)}
-                onGenerateFullAI={handleGenerateFullProposal}
-                generatingFull={generatingFull}
-              />
+              {/* Add block toolbar — atalho redundante de "adicionar no
+                  fim" pra quem nao quer arrastar */}
+              <div className="mt-6">
+                <BlockToolbar
+                  onAddBlock={addSecao}
+                  onSearchFlight={() => setFlightModalOpen(true)}
+                  onSearchHotel={() => setHotelModalOpen(true)}
+                  onGenerateFullAI={handleGenerateFullProposal}
+                  generatingFull={generatingFull}
+                />
+              </div>
             </div>
           </div>
 
-          {/* Sidebar de configuracao OU Preview ao vivo. So um dos dois
-              renderiza por vez — espaco horizontal e disputado pela
-              paleta + canvas. Toggle no topo da toolbar alterna. */}
-          {livePreview ? (
-            <LivePreviewPanel proposta={proposta} onClose={() => setLivePreview(false)} />
+          {/* Painel direito Elementor-like:
+              - Bloco selecionado → editor desse bloco (BlockPropertiesPanel)
+              - Sem selecao         → configuracao da proposta (PropostaSidebar) */}
+          {selectedBlockId && proposta.secoes.find(s => s.id === selectedBlockId) ? (
+            <BlockPropertiesPanel
+              secao={proposta.secoes.find(s => s.id === selectedBlockId)!}
+              onChange={c => updateSecao(selectedBlockId, c)}
+              onClose={() => setSelectedBlockId(null)}
+              onDuplicate={() => duplicateSecao(selectedBlockId)}
+              onToggleVisivel={() => toggleVisivelSecao(selectedBlockId)}
+              onRemove={() => { removeSecao(selectedBlockId); setSelectedBlockId(null); }}
+              onGenerateAI={() => {
+                const s = proposta.secoes.find(s => s.id === selectedBlockId);
+                if (s) handleGenerateAI(selectedBlockId, s.tipo);
+              }}
+              generating={!!generatingAI[selectedBlockId]}
+              onInsertAfter={(tipo, conteudo) => insertSecaoAfter(selectedBlockId, tipo, conteudo)}
+            />
           ) : (
             <PropostaSidebar
               proposta={proposta}
