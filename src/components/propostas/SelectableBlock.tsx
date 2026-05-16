@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
+import { useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, EyeOff, Eye, CopyPlus, Trash2, Pencil } from 'lucide-react';
 import type { SecaoProposta } from '@/lib/crm-types';
@@ -28,11 +29,17 @@ const TIPO_LABELS: Record<string, string> = {
 
 interface Props {
   secao: SecaoProposta;
+  // Indice absoluto deste bloco em proposta.secoes — usado pelos drop
+  // zones direcionais (top half = insert before, bottom half = after).
+  index: number;
   selected: boolean;
   onSelect: () => void;
   onDuplicate: () => void;
   onToggleVisivel: () => void;
   onRemove: () => void;
+  // Quando true, ha um drag em curso da paleta — ativa indicadores
+  // direcionais (top/bottom half do bloco viram drop zones visuais).
+  paletteDragging?: string | null;
   corPrimaria: string;
   idioma: IdiomaProposal;
 }
@@ -48,12 +55,26 @@ interface Props {
 // O conteudo renderizado fica com pointer-events-none pra que clicks
 // dentro de imagens/botoes nao tirem o foco do bloco — toda interacao
 // passa pelo wrapper (click = selecionar; resto vai pro painel direito).
-export function SelectableBlock({
-  secao, selected, onSelect, onDuplicate, onToggleVisivel, onRemove,
-  corPrimaria, idioma,
+function SelectableBlockInner({
+  secao, index, selected, onSelect, onDuplicate, onToggleVisivel, onRemove,
+  paletteDragging, corPrimaria, idioma,
 }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: secao.id,
+  });
+  // Drop zones direcionais (Fase 3) — top half insere ANTES deste
+  // bloco (index), bottom half insere DEPOIS (index+1). So registra
+  // como droppable quando ha drag da paleta — durante reorder canvas
+  // → canvas a SortableContext cuida.
+  const topDrop = useDroppable({
+    id: `block-top-${secao.id}`,
+    data: { kind: 'drop-zone', index },
+    disabled: !paletteDragging,
+  });
+  const bottomDrop = useDroppable({
+    id: `block-bottom-${secao.id}`,
+    data: { kind: 'drop-zone', index: index + 1 },
+    disabled: !paletteDragging,
   });
   const hidden = secao.visivel === false;
   // Scroll suave pro bloco quando ele e selecionado (ex.: via Estrutura
@@ -92,6 +113,42 @@ export function SelectableBlock({
         opacity: isDragging ? 0.5 : 1,
       }}
     >
+      {/* Drop zones direcionais (Fase 3) — so renderizam quando ha drag
+          da paleta. Top half = insert antes; bottom half = insert depois.
+          Cada metade ocupa 50% da altura do bloco em camada absoluta. */}
+      {paletteDragging && (
+        <>
+          <div
+            ref={topDrop.setNodeRef}
+            className="absolute left-0 right-0 top-0 h-1/2 z-30"
+            aria-label="Soltar antes deste bloco"
+          >
+            {/* Indicador visual: linha azul no topo quando isOver */}
+            {topDrop.isOver && (
+              <div className="absolute -top-1 left-0 right-0 h-1 bg-[var(--t-green)] rounded-full shadow-lg shadow-[var(--t-green)]/40 animate-pulse">
+                <span className="absolute -top-6 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded bg-[var(--t-green)] text-white text-[10px] uppercase tracking-wider font-bold whitespace-nowrap">
+                  ↑ Inserir antes
+                </span>
+              </div>
+            )}
+          </div>
+          <div
+            ref={bottomDrop.setNodeRef}
+            className="absolute left-0 right-0 bottom-0 h-1/2 z-30"
+            aria-label="Soltar depois deste bloco"
+          >
+            {/* Indicador visual: linha azul no rodape quando isOver */}
+            {bottomDrop.isOver && (
+              <div className="absolute -bottom-1 left-0 right-0 h-1 bg-[var(--t-green)] rounded-full shadow-lg shadow-[var(--t-green)]/40 animate-pulse">
+                <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded bg-[var(--t-green)] text-white text-[10px] uppercase tracking-wider font-bold whitespace-nowrap">
+                  ↓ Inserir depois
+                </span>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
       {/* Outline (ring) — visivel quando selected (forte) ou hover (suave).
           Posicionado absoluto pra nao mexer no layout do conteudo. */}
       <div
@@ -204,3 +261,20 @@ export function SelectableBlock({
     </div>
   );
 }
+
+
+// Memoiza por valor de props — re-render so quando o secao (referencia),
+// selected, paletteDragging ou os callbacks mudarem. Como callbacks vem
+// inline de PropostaEditor, eles mudam a cada render do parent — mas
+// React.memo com comparacao customizada evita re-render se secao
+// nao mudou.
+export const SelectableBlock = memo(
+  SelectableBlockInner,
+  (prev, next) =>
+    prev.secao === next.secao &&
+    prev.index === next.index &&
+    prev.selected === next.selected &&
+    prev.paletteDragging === next.paletteDragging &&
+    prev.corPrimaria === next.corPrimaria &&
+    prev.idioma === next.idioma,
+);

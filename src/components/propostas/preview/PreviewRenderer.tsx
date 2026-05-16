@@ -5,6 +5,7 @@ import { CheckCircle2, XCircle, MessageCircle, Star, Clock, MapPin } from 'lucid
 import { MapaRoteiro } from '@/components/propostas/MapaRoteiro';
 import { t, type IdiomaProposal } from '@/lib/i18n-proposta';
 import { RichFlightCard } from './RichFlightCard';
+import { groupIntoRows } from '@/lib/proposta-layout';
 
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -682,26 +683,62 @@ interface Props {
   idioma?: IdiomaProposal;
 }
 
+// Renderer de uma unica secao — extraido pra ser reutilizado dentro
+// de rows agrupados (cols=2 lado-a-lado).
+function renderSecao(secao: SecaoProposta, corPrimaria: string, idioma?: IdiomaProposal) {
+  return (
+    <>
+      {secao.tipo === 'TEXTO' && <TextoPreview conteudo={secao.conteudo} />}
+      {secao.tipo === 'SERVICO' && <ServicoPreview conteudo={secao.conteudo} />}
+      {secao.tipo === 'ROTEIRO_DIA' && <RoteiroDiaPreview conteudo={secao.conteudo} />}
+      {secao.tipo === 'GALERIA' && <GaleriaPreview conteudo={secao.conteudo} />}
+      {secao.tipo === 'INCLUSOS' && <InclusosPreview conteudo={secao.conteudo} idioma={idioma} />}
+      {secao.tipo === 'VALORES' && <ValoresPreview conteudo={secao.conteudo} />}
+      {secao.tipo === 'DEPOIMENTO' && <DepoimentoPreview conteudo={secao.conteudo} idioma={idioma} />}
+      {secao.tipo === 'CTA' && <CtaPreview conteudo={secao.conteudo} corPrimaria={corPrimaria} idioma={idioma} />}
+      {secao.tipo === 'VIDEO' && <VideoPreview conteudo={secao.conteudo} />}
+      {secao.tipo === 'MAPA' && <MapaPreview conteudo={secao.conteudo} />}
+      {secao.tipo === 'FAQ' && <FAQPreview conteudo={secao.conteudo} />}
+      {secao.tipo === 'COUNTDOWN' && <CountdownPreview conteudo={secao.conteudo} idioma={idioma} />}
+      {secao.tipo === 'ALOJAMENTO' && <AlojamentoPreview conteudo={secao.conteudo} />}
+      {secao.tipo === 'TRANSPORTE' && <TransportePreview conteudo={secao.conteudo} corPrimaria={corPrimaria} />}
+      {secao.tipo === 'VOO' && <RichFlightCard voo={secao.conteudo as Partial<import('@/lib/crm-types').TransporteData>} corPrimaria={corPrimaria} idioma={idioma} />}
+    </>
+  );
+}
+
 export function PreviewRenderer({ secoes, corPrimaria, idioma }: Props) {
+  // Filtra blocos visiveis e respeita responsive.hideOn em mobile (a
+  // view publica /p/[slug] roda no proprio dispositivo do cliente —
+  // matchMedia detecta a viewport real). Em SSR fallback pra 'desktop'.
+  const viewport: 'mobile' | 'tablet' | 'desktop' =
+    typeof window !== 'undefined' && window.matchMedia
+      ? (window.matchMedia('(max-width: 640px)').matches ? 'mobile'
+         : window.matchMedia('(max-width: 1024px)').matches ? 'tablet'
+         : 'desktop')
+      : 'desktop';
+
+  const visible = secoes.filter(s => {
+    if (!s.visivel) return false;
+    if (s.responsive?.hideOn?.includes(viewport)) return false;
+    return true;
+  });
+
+  // Agrupa em rows pra renderizar cols=2 adjacentes lado-a-lado.
+  const rows = groupIntoRows(visible);
+
   return (
     <div className="space-y-10">
-      {secoes.filter(s => s.visivel).map(secao => (
-        <div key={secao.id}>
-          {secao.tipo === 'TEXTO' && <TextoPreview conteudo={secao.conteudo} />}
-          {secao.tipo === 'SERVICO' && <ServicoPreview conteudo={secao.conteudo} />}
-          {secao.tipo === 'ROTEIRO_DIA' && <RoteiroDiaPreview conteudo={secao.conteudo} />}
-          {secao.tipo === 'GALERIA' && <GaleriaPreview conteudo={secao.conteudo} />}
-          {secao.tipo === 'INCLUSOS' && <InclusosPreview conteudo={secao.conteudo} idioma={idioma} />}
-          {secao.tipo === 'VALORES' && <ValoresPreview conteudo={secao.conteudo} />}
-          {secao.tipo === 'DEPOIMENTO' && <DepoimentoPreview conteudo={secao.conteudo} idioma={idioma} />}
-          {secao.tipo === 'CTA' && <CtaPreview conteudo={secao.conteudo} corPrimaria={corPrimaria} idioma={idioma} />}
-          {secao.tipo === 'VIDEO' && <VideoPreview conteudo={secao.conteudo} />}
-          {secao.tipo === 'MAPA' && <MapaPreview conteudo={secao.conteudo} />}
-          {secao.tipo === 'FAQ' && <FAQPreview conteudo={secao.conteudo} />}
-          {secao.tipo === 'COUNTDOWN' && <CountdownPreview conteudo={secao.conteudo} idioma={idioma} />}
-          {secao.tipo === 'ALOJAMENTO' && <AlojamentoPreview conteudo={secao.conteudo} />}
-          {secao.tipo === 'TRANSPORTE' && <TransportePreview conteudo={secao.conteudo} corPrimaria={corPrimaria} />}
-          {secao.tipo === 'VOO' && <RichFlightCard voo={secao.conteudo as Partial<import('@/lib/crm-types').TransporteData>} corPrimaria={corPrimaria} idioma={idioma} />}
+      {rows.map((row, rowIdx) => (
+        <div
+          key={`row-${rowIdx}-${row[0].id}`}
+          className={row.length === 2 ? 'grid grid-cols-1 sm:grid-cols-2 gap-6' : ''}
+        >
+          {row.map(secao => (
+            <div key={secao.id}>
+              {renderSecao(secao, corPrimaria, idioma)}
+            </div>
+          ))}
         </div>
       ))}
     </div>

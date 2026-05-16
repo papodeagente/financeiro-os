@@ -774,6 +774,16 @@ export interface SecaoProposta {
   ordem: number;
   visivel: boolean;
   conteudo: Record<string, unknown>;
+  // Layout (Fase 1 Opção B) — quando cols=2, o bloco ocupa metade da
+  // largura. Blocos cols=2 adjacentes sao agrupados em rows lado-a-lado.
+  // Default 1 (full-width) quando undefined — backwards compat total.
+  cols?: 1 | 2;
+  // Responsividade (Fase 2) — viewports onde o bloco fica oculto.
+  // Default visivel em todos. Aplicado tanto no editor (com overlay
+  // "Oculto em X") quanto no /p/[slug].
+  responsive?: {
+    hideOn?: Array<'desktop' | 'tablet' | 'mobile'>;
+  };
 }
 
 export interface Proposta {

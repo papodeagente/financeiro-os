@@ -12,7 +12,7 @@ import {
   Monitor, Tablet, Smartphone, Settings2,
 } from 'lucide-react';
 import {
-  DndContext, closestCenter, pointerWithin, KeyboardSensor, PointerSensor,
+  DndContext, closestCenter, pointerWithin, KeyboardSensor, PointerSensor, TouchSensor,
   useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverlay,
   type CollisionDetection,
 } from '@dnd-kit/core';
@@ -36,6 +36,7 @@ import { DiscoveryRenderer } from './preview/discovery/DiscoveryRenderer';
 import { PreviewEditorProvider, type PreviewEditorBlockType } from './PreviewEditorContext';
 import { PreviewIframeCanvas } from './PreviewIframeCanvas';
 import { buildPropostaLink } from '@/lib/proposta-link';
+import { groupIntoRows } from '@/lib/proposta-layout';
 import { loadAgencia } from '@/lib/crm-storage';
 import { toast } from '@/lib/toast';
 import type { Agencia } from '@/lib/crm-types';
@@ -235,7 +236,18 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
   const hasUnsaved = useRef(false);
 
   const sensors = useSensors(
+    // PointerSensor cobre mouse + pen + touch via PointerEvent unificado.
+    // distance: 8px evita disparar drag em clicks. Funciona em desktop
+    // e em browsers mobile modernos (Chrome Android, iOS Safari 13+).
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    // TouchSensor explicito pra dispositivos que nao implementam
+    // PointerEvent corretamente (Safari < 13, alguns Android antigos).
+    // delay: 200ms long-press impede que swipe pra scrollar dispare
+    // drag acidental — gestos de scroll continuam normais; segurar
+    // por 200ms ativa o drag.
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 200, tolerance: 5 },
+    }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
@@ -480,7 +492,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
       } catch {
         setAutoSaveStatus('idle');
       }
-    }, 2000);
+    }, 1500);
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
   }, [proposta, isEdit]);
 
@@ -581,6 +593,25 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
     update(p => ({
       ...p,
       secoes: p.secoes.map(s => s.id === id ? { ...s, visivel: !s.visivel } : s),
+    }));
+  };
+
+  // Layout (Fase 1): muda largura do bloco (1=full, 2=metade).
+  const changeColsSecao = (id: string, cols: 1 | 2) => {
+    update(p => ({
+      ...p,
+      secoes: p.secoes.map(s => s.id === id ? { ...s, cols } : s),
+    }));
+  };
+
+  // Responsive (Fase 2): viewports onde o bloco fica oculto.
+  const changeResponsiveSecao = (id: string, hideOn: Array<'desktop' | 'tablet' | 'mobile'>) => {
+    update(p => ({
+      ...p,
+      secoes: p.secoes.map(s => s.id === id
+        ? { ...s, responsive: hideOn.length > 0 ? { hideOn } : undefined }
+        : s,
+      ),
     }));
   };
 
@@ -1181,33 +1212,64 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                         onSearchFlight={() => setFlightModalOpen(true)}
                       />
                     )}
-                    {proposta.secoes.map((secao, idx) => (
-                      <div key={secao.id} className="space-y-2">
-                        <SelectableBlock
-                          secao={secao}
-                          selected={selectedBlockId === secao.id}
-                          onSelect={() => setSelectedBlockId(secao.id)}
-                          onDuplicate={() => duplicateSecao(secao.id)}
-                          onToggleVisivel={() => toggleVisivelSecao(secao.id)}
-                          onRemove={() => {
-                            removeSecao(secao.id);
-                            if (selectedBlockId === secao.id) setSelectedBlockId(null);
-                          }}
-                          corPrimaria={proposta.visual?.cor_primaria || '#004aad'}
-                          idioma={(proposta.idioma || 'pt-BR') as 'pt-BR' | 'en' | 'es'}
-                        />
-                        {/* Drop zone apos cada bloco (so durante drag) */}
-                        <DropZone index={idx + 1} locationKey={`inner-after-${secao.id}`} draggingType={paletteDragging} />
-                        {/* Quick add inline entre/depois dos blocos (hover) */}
-                        {!paletteDragging && (
-                          <InsertBlockButton
-                            onInsert={(tipo) => insertSecaoAt(tipo, idx + 1)}
-                            onSearchHotel={() => setHotelModalOpen(true)}
-                            onSearchFlight={() => setFlightModalOpen(true)}
-                          />
-                        )}
-                      </div>
-                    ))}
+                    {/* Agrupa secoes em rows — pares cols=2 lado-a-lado;
+                        cols=1 (ou undefined) sozinhos. dnd-kit sortable
+                        continua trackando IDs individuais regardless of
+                        DOM structure. */}
+                    {(() => {
+                      const rows = groupIntoRows(proposta.secoes);
+                      // Calcula o indice absoluto de cada secao na lista
+                      // flat — usado pra drop zones (que sempre operam
+                      // em indices flat de secoes).
+                      let absIdx = 0;
+                      return rows.map((row, rowIdx) => {
+                        const isPair = row.length === 2;
+                        const rowStartIdx = absIdx;
+                        absIdx += row.length;
+                        const rowEndIdx = absIdx;
+                        return (
+                          <div key={`row-${row[0].id}`} className="space-y-2">
+                            <div className={isPair ? 'grid grid-cols-2 gap-3' : ''}>
+                              {row.map((secao, localIdx) => {
+                                const absIndex = rowStartIdx + localIdx;
+                                return (
+                                  <SelectableBlock
+                                    key={secao.id}
+                                    secao={secao}
+                                    index={absIndex}
+                                    selected={selectedBlockId === secao.id}
+                                    onSelect={() => setSelectedBlockId(secao.id)}
+                                    onDuplicate={() => duplicateSecao(secao.id)}
+                                    onToggleVisivel={() => toggleVisivelSecao(secao.id)}
+                                    onRemove={() => {
+                                      removeSecao(secao.id);
+                                      if (selectedBlockId === secao.id) setSelectedBlockId(null);
+                                    }}
+                                    paletteDragging={paletteDragging}
+                                    corPrimaria={proposta.visual?.cor_primaria || '#004aad'}
+                                    idioma={(proposta.idioma || 'pt-BR') as 'pt-BR' | 'en' | 'es'}
+                                  />
+                                );
+                              })}
+                            </div>
+                            {/* Drop zone apos a row (so durante drag) */}
+                            <DropZone
+                              index={rowEndIdx}
+                              locationKey={`inner-after-row-${rowIdx}`}
+                              draggingType={paletteDragging}
+                            />
+                            {/* Quick add inline apos a row (hover) */}
+                            {!paletteDragging && (
+                              <InsertBlockButton
+                                onInsert={(tipo) => insertSecaoAt(tipo, rowEndIdx)}
+                                onSearchHotel={() => setHotelModalOpen(true)}
+                                onSearchFlight={() => setFlightModalOpen(true)}
+                              />
+                            )}
+                          </div>
+                        );
+                      });
+                    })()}
                   </div>
                 )}
               </SortableContext>
@@ -1315,6 +1377,8 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                     setSelectedBlockId(null);
                     setPageSettingsOpen(true);
                   }}
+                  onChangeCols={(cols) => changeColsSecao(selectedBlockId, cols)}
+                  onChangeResponsive={(hideOn) => changeResponsiveSecao(selectedBlockId, hideOn)}
                 />
               );
             })()

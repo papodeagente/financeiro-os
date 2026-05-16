@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { X, Eye, EyeOff, CopyPlus, Trash2, Sparkles, Loader2, ChevronLeft, ChevronRight, ChevronLeft as BackIcon } from 'lucide-react';
+import { X, Eye, EyeOff, CopyPlus, Trash2, Sparkles, Loader2, ChevronLeft, ChevronRight, ChevronLeft as BackIcon, Monitor, Tablet, Smartphone, Columns2 as ColsIcon, Square as FullIcon } from 'lucide-react';
 import type { ComponentType } from 'react';
 import {
   Plane, Type, Calendar, Image as ImageIcon, CheckSquare,
@@ -50,6 +50,11 @@ interface Props {
   // Quando definido, breadcrumb leva direto pra config da pagina ao
   // inves de apenas fechar.
   onGoToPageSettings?: () => void;
+  // Layout: muda a largura do bloco (1 = full / 2 = metade).
+  // Blocos cols=2 adjacentes ficam lado-a-lado.
+  onChangeCols?: (cols: 1 | 2) => void;
+  // Responsivo: lista de viewports onde o bloco fica oculto.
+  onChangeResponsive?: (hideOn: Array<'desktop' | 'tablet' | 'mobile'>) => void;
 }
 
 // Painel direito do editor — vira o "Properties Panel" estilo Elementor
@@ -59,8 +64,18 @@ interface Props {
 export function BlockPropertiesPanel({
   secao, onChange, onClose, onDuplicate, onToggleVisivel, onRemove,
   onGenerateAI, generating, onInsertAfter, onPrev, onNext, position,
-  onGoToPageSettings,
+  onGoToPageSettings, onChangeCols, onChangeResponsive,
 }: Props) {
+  const cols = secao.cols ?? 1;
+  const hideOn = secao.responsive?.hideOn ?? [];
+
+  const toggleHideOn = (viewport: 'desktop' | 'tablet' | 'mobile') => {
+    if (!onChangeResponsive) return;
+    const next = hideOn.includes(viewport)
+      ? hideOn.filter(v => v !== viewport)
+      : [...hideOn, viewport];
+    onChangeResponsive(next);
+  };
   const TipoIcon = TIPO_ICONS[secao.tipo] || Type;
   const hidden = secao.visivel === false;
   const canAI = AI_SUPPORTED_TYPES.includes(secao.tipo);
@@ -200,13 +215,101 @@ export function BlockPropertiesPanel({
       </div>
 
       {/* Content editor — scrollavel */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <BlockRenderer
-          tipo={secao.tipo}
-          conteudo={secao.conteudo}
-          onChange={onChange}
-          onInsertAfter={onInsertAfter}
-        />
+      <div className="flex-1 overflow-y-auto">
+        {/* Layout + Responsivo (Fases 1+2) — controles compactos no topo
+            do painel, antes do form especifico do bloco. */}
+        {(onChangeCols || onChangeResponsive) && (
+          <div className="px-4 py-3 border-b border-[var(--t-border)] bg-[var(--t-bg)] space-y-3">
+            {onChangeCols && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)] mb-1.5">
+                  Largura
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    onClick={() => onChangeCols(1)}
+                    className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md border text-[11px] font-medium transition-colors ${
+                      cols === 1
+                        ? 'border-[var(--t-green)] bg-[var(--t-green)]/10 text-[var(--t-text)]'
+                        : 'border-[var(--t-border)] text-[var(--t-text-secondary)] hover:border-[var(--t-green)]/50'
+                    }`}
+                    title="Bloco ocupa 100% da largura"
+                  >
+                    <FullIcon className="w-3.5 h-3.5" />
+                    100%
+                  </button>
+                  <button
+                    onClick={() => onChangeCols(2)}
+                    className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md border text-[11px] font-medium transition-colors ${
+                      cols === 2
+                        ? 'border-[var(--t-green)] bg-[var(--t-green)]/10 text-[var(--t-text)]'
+                        : 'border-[var(--t-border)] text-[var(--t-text-secondary)] hover:border-[var(--t-green)]/50'
+                    }`}
+                    title="Bloco ocupa 50% — pareia com o próximo cols=50% adjacente"
+                  >
+                    <ColsIcon className="w-3.5 h-3.5" />
+                    50%
+                  </button>
+                </div>
+                {cols === 2 && (
+                  <p className="text-[10px] text-[var(--t-text-muted)] mt-1 leading-tight">
+                    Pareia lado a lado com o próximo bloco se ele também for 50%.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {onChangeResponsive && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)] mb-1.5">
+                  Ocultar em
+                </div>
+                <div className="grid grid-cols-3 gap-1">
+                  {([
+                    { v: 'desktop' as const, Icon: Monitor, label: 'Desktop' },
+                    { v: 'tablet' as const, Icon: Tablet, label: 'Tablet' },
+                    { v: 'mobile' as const, Icon: Smartphone, label: 'Mobile' },
+                  ]).map(({ v, Icon, label }) => {
+                    const active = hideOn.includes(v);
+                    return (
+                      <button
+                        key={v}
+                        onClick={() => toggleHideOn(v)}
+                        className={`flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md border text-[10px] font-medium transition-colors ${
+                          active
+                            ? 'border-red-400 bg-red-50 text-red-600'
+                            : 'border-[var(--t-border)] text-[var(--t-text-secondary)] hover:border-[var(--t-green)]/50'
+                        }`}
+                        title={active ? `Bloco oculto em ${label}` : `Mostrar em ${label}`}
+                      >
+                        <span className="relative">
+                          <Icon className="w-3.5 h-3.5" />
+                          {active && <span className="absolute inset-0 flex items-center justify-center text-red-600 font-bold text-[10px]">✕</span>}
+                        </span>
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {hideOn.length > 0 && (
+                  <p className="text-[10px] text-[var(--t-text-muted)] mt-1 leading-tight">
+                    Bloco será oculto em {hideOn.join(', ')} na visualização do cliente.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Form especifico do bloco */}
+        <div className="p-4">
+          <BlockRenderer
+            tipo={secao.tipo}
+            conteudo={secao.conteudo}
+            onChange={onChange}
+            onInsertAfter={onInsertAfter}
+          />
+        </div>
       </div>
     </aside>
   );
