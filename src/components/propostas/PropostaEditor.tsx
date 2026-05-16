@@ -894,12 +894,18 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
             style={{ background: '#e5e7eb' }}
           >
             <div
-              className="mx-auto my-6 shadow-2xl rounded-lg overflow-hidden transition-[max-width] duration-300 ease-out"
+              className="mx-auto my-6 shadow-2xl rounded-lg overflow-hidden transition-[max-width] duration-300 ease-out relative"
               style={{
                 maxWidth: `${VIEWPORT_WIDTHS[viewportMode]}px`,
                 background: proposta.visual?.cor_fundo || '#ffffff',
                 color: proposta.visual?.cor_texto || '#1a1a2e',
                 fontFamily: `'${proposta.visual?.fonte || 'Inter'}', sans-serif`,
+                // transform cria containing block para position:fixed
+                // descendentes (DiscoveryHeader, etc.) — sem isso o
+                // menu vaza pro topo da janela do editor. translateZ(0)
+                // e a forma classica e cheap de acionar isso sem efeito
+                // visual colateral.
+                transform: 'translateZ(0)',
               }}
               onClick={e => e.stopPropagation()}
             >
