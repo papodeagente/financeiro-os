@@ -720,19 +720,27 @@ export function PreviewRenderer({ secoes, corPrimaria, idioma }: Props) {
 
   const visible = secoes.filter(s => {
     if (!s.visivel) return false;
+    if (s.tipo === 'PLACEHOLDER') return false; // nao renderiza no /p/[slug]
     if (s.responsive?.hideOn?.includes(viewport)) return false;
     return true;
   });
 
-  // Agrupa em rows pra renderizar cols=2 adjacentes lado-a-lado.
+  // Agrupa em rows pra renderizar cols=N adjacentes lado-a-lado.
   const rows = groupIntoRows(visible);
+
+  // Grid responsivo: rows com 2/3/4 cols vira grid; mobile cai pra 1col.
+  const gridClassFor = (n: number) =>
+    n === 2 ? 'grid grid-cols-1 sm:grid-cols-2 gap-6'
+    : n === 3 ? 'grid grid-cols-1 sm:grid-cols-3 gap-6'
+    : n === 4 ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6'
+    : '';
 
   return (
     <div className="space-y-10">
       {rows.map((row, rowIdx) => (
         <div
           key={`row-${rowIdx}-${row[0].id}`}
-          className={row.length === 2 ? 'grid grid-cols-1 sm:grid-cols-2 gap-6' : ''}
+          className={gridClassFor(row.length)}
         >
           {row.map(secao => (
             <div key={secao.id}>

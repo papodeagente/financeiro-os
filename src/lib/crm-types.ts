@@ -599,7 +599,7 @@ export interface MetaVendedor {
 // ============================================================
 
 export type StatusProposta = 'RASCUNHO' | 'ENVIADO' | 'VISUALIZADO' | 'ACEITO' | 'RECUSADO' | 'EXPIRADO' | 'CONVERTIDO';
-export type TipoSecaoProposta = 'TEXTO' | 'SERVICO' | 'VOO' | 'ROTEIRO_DIA' | 'GALERIA' | 'INCLUSOS' | 'VALORES' | 'DEPOIMENTO' | 'CTA' | 'VIDEO' | 'MAPA' | 'FAQ' | 'COUNTDOWN' | 'ALOJAMENTO' | 'TRANSPORTE';
+export type TipoSecaoProposta = 'TEXTO' | 'SERVICO' | 'VOO' | 'ROTEIRO_DIA' | 'GALERIA' | 'INCLUSOS' | 'VALORES' | 'DEPOIMENTO' | 'CTA' | 'VIDEO' | 'MAPA' | 'FAQ' | 'COUNTDOWN' | 'ALOJAMENTO' | 'TRANSPORTE' | 'PLACEHOLDER';
 export type EstiloCapa = 'FULLSCREEN' | 'SPLIT' | 'MINIMAL';
 export type LayoutProposta = 'CLASSICO' | 'DISCOVERY';
 export type RegimeRefeicao = 'RO' | 'BB' | 'HB' | 'FB' | 'AI';
@@ -774,10 +774,11 @@ export interface SecaoProposta {
   ordem: number;
   visivel: boolean;
   conteudo: Record<string, unknown>;
-  // Layout (Fase 1 Opção B) — quando cols=2, o bloco ocupa metade da
-  // largura. Blocos cols=2 adjacentes sao agrupados em rows lado-a-lado.
-  // Default 1 (full-width) quando undefined — backwards compat total.
-  cols?: 1 | 2;
+  // Layout — cols define quantos blocos cabem na mesma row.
+  // cols=1 (default): full-width.
+  // cols=2/3/4: agrupado com vizinhos do mesmo cols pra formar uma row
+  // lado-a-lado (50%/33%/25% cada). Backwards compat: undefined = 1.
+  cols?: 1 | 2 | 3 | 4;
   // Responsividade (Fase 2) — viewports onde o bloco fica oculto.
   // Default visivel em todos. Aplicado tanto no editor (com overlay
   // "Oculto em X") quanto no /p/[slug].

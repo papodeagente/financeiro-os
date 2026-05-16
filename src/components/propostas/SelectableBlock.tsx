@@ -236,12 +236,26 @@ function SelectableBlockInner({
         </div>
       )}
 
-      {/* Empty state — quando o bloco esta sem conteudo significativo,
-          substitui o preview por um card convidativo com hint e CTA.
-          Click no card seleciona o bloco e abre o painel direito.
-          Aparece SO no editor (PreviewRenderer publico nao envolve
-          este wrapper). */}
-      {emptyHint && !hidden ? (
+      {/* PLACEHOLDER — coluna vazia de uma row estrutural. CTA grande
+          convidando o usuario a clicar pra escolher o tipo do bloco no
+          painel direito. So aparece no editor (preview publico nao
+          renderiza PLACEHOLDER). */}
+      {secao.tipo === 'PLACEHOLDER' && !hidden ? (
+        <div className="pointer-events-none cursor-pointer py-6 px-3">
+          <div className="bg-blue-50/50 border-2 border-dashed border-blue-300 rounded-xl px-3 py-8 text-center hover:bg-blue-50 hover:border-blue-400 transition-colors min-h-[140px] flex flex-col items-center justify-center">
+            <div className="text-3xl mb-2" aria-hidden>＋</div>
+            <div className="text-sm font-semibold text-blue-700 mb-1">
+              Coluna vazia
+            </div>
+            <div className="text-[11px] text-blue-600/80 leading-relaxed mb-3 max-w-[200px]">
+              Clique pra escolher um tipo de bloco
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-blue-600 text-white text-[10px] uppercase tracking-wider font-semibold">
+              <Pencil className="w-3 h-3" /> Escolher tipo
+            </div>
+          </div>
+        </div>
+      ) : emptyHint && !hidden ? (
         <div className="pointer-events-none cursor-pointer py-12 px-4">
           <div className="mx-auto bg-white border-2 border-dashed border-[var(--t-green)]/40 rounded-xl px-5 py-6 max-w-md text-center shadow-sm">
             <div className="text-4xl mb-2" aria-hidden>{emptyHint.icon}</div>

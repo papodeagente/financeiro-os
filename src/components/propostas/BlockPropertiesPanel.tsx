@@ -50,9 +50,12 @@ interface Props {
   // Quando definido, breadcrumb leva direto pra config da pagina ao
   // inves de apenas fechar.
   onGoToPageSettings?: () => void;
-  // Layout: muda a largura do bloco (1 = full / 2 = metade).
-  // Blocos cols=2 adjacentes ficam lado-a-lado.
-  onChangeCols?: (cols: 1 | 2) => void;
+  // Layout: muda a largura do bloco (1=full, 2=50%, 3=33%, 4=25%).
+  // Blocos do mesmo cols adjacentes ficam lado-a-lado.
+  onChangeCols?: (cols: 1 | 2 | 3 | 4) => void;
+  // Quando definido e o bloco e PLACEHOLDER, permite transformar o
+  // placeholder no tipo escolhido (mantendo cols, ordem, id).
+  onChangeTipo?: (tipo: string) => void;
   // Responsivo: lista de viewports onde o bloco fica oculto.
   onChangeResponsive?: (hideOn: Array<'desktop' | 'tablet' | 'mobile'>) => void;
 }
@@ -64,7 +67,7 @@ interface Props {
 export function BlockPropertiesPanel({
   secao, onChange, onClose, onDuplicate, onToggleVisivel, onRemove,
   onGenerateAI, generating, onInsertAfter, onPrev, onNext, position,
-  onGoToPageSettings, onChangeCols, onChangeResponsive,
+  onGoToPageSettings, onChangeCols, onChangeResponsive, onChangeTipo,
 }: Props) {
   const cols = secao.cols ?? 1;
   const hideOn = secao.responsive?.hideOn ?? [];
@@ -225,35 +228,33 @@ export function BlockPropertiesPanel({
                 <div className="text-[10px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)] mb-1.5">
                   Largura
                 </div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <button
-                    onClick={() => onChangeCols(1)}
-                    className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md border text-[11px] font-medium transition-colors ${
-                      cols === 1
-                        ? 'border-[var(--t-green)] bg-[var(--t-green)]/10 text-[var(--t-text)]'
-                        : 'border-[var(--t-border)] text-[var(--t-text-secondary)] hover:border-[var(--t-green)]/50'
-                    }`}
-                    title="Bloco ocupa 100% da largura"
-                  >
-                    <FullIcon className="w-3.5 h-3.5" />
-                    100%
-                  </button>
-                  <button
-                    onClick={() => onChangeCols(2)}
-                    className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md border text-[11px] font-medium transition-colors ${
-                      cols === 2
-                        ? 'border-[var(--t-green)] bg-[var(--t-green)]/10 text-[var(--t-text)]'
-                        : 'border-[var(--t-border)] text-[var(--t-text-secondary)] hover:border-[var(--t-green)]/50'
-                    }`}
-                    title="Bloco ocupa 50% — pareia com o próximo cols=50% adjacente"
-                  >
-                    <ColsIcon className="w-3.5 h-3.5" />
-                    50%
-                  </button>
+                <div className="grid grid-cols-4 gap-1">
+                  {([
+                    { n: 1 as const, label: '100%' },
+                    { n: 2 as const, label: '50%' },
+                    { n: 3 as const, label: '33%' },
+                    { n: 4 as const, label: '25%' },
+                  ]).map(({ n, label }) => (
+                    <button
+                      key={n}
+                      onClick={() => onChangeCols(n)}
+                      className={`flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md border text-[10px] font-medium transition-colors ${
+                        cols === n
+                          ? 'border-[var(--t-green)] bg-[var(--t-green)]/10 text-[var(--t-text)]'
+                          : 'border-[var(--t-border)] text-[var(--t-text-secondary)] hover:border-[var(--t-green)]/50'
+                      }`}
+                      title={n === 1
+                        ? 'Bloco ocupa 100% da largura'
+                        : `Bloco ocupa ${label} — pareia com ${n - 1} vizinho(s) do mesmo tamanho`}
+                    >
+                      <span className="font-mono">{n}</span>
+                      <span className="text-[9px]">{label}</span>
+                    </button>
+                  ))}
                 </div>
-                {cols === 2 && (
+                {cols > 1 && (
                   <p className="text-[10px] text-[var(--t-text-muted)] mt-1 leading-tight">
-                    Pareia lado a lado com o próximo bloco se ele também for 50%.
+                    Pareia lado a lado com vizinhos do mesmo tamanho.
                   </p>
                 )}
               </div>
@@ -301,14 +302,56 @@ export function BlockPropertiesPanel({
           </div>
         )}
 
-        {/* Form especifico do bloco */}
+        {/* Form especifico do bloco — ou picker de tipo pra PLACEHOLDER */}
         <div className="p-4">
-          <BlockRenderer
-            tipo={secao.tipo}
-            conteudo={secao.conteudo}
-            onChange={onChange}
-            onInsertAfter={onInsertAfter}
-          />
+          {secao.tipo === 'PLACEHOLDER' && onChangeTipo ? (
+            <div>
+              <div className="text-[11px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)] mb-2">
+                Escolha o tipo do bloco
+              </div>
+              <p className="text-xs text-[var(--t-text-muted)] mb-3 leading-relaxed">
+                Esta coluna está vazia. Selecione abaixo o que vai dentro dela.
+              </p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {([
+                  { tipo: 'TEXTO', label: 'Texto' },
+                  { tipo: 'SERVICO', label: 'Serviço' },
+                  { tipo: 'GALERIA', label: 'Galeria' },
+                  { tipo: 'VIDEO', label: 'Vídeo' },
+                  { tipo: 'CTA', label: 'CTA' },
+                  { tipo: 'INCLUSOS', label: 'Inclusos' },
+                  { tipo: 'VALORES', label: 'Valores' },
+                  { tipo: 'DEPOIMENTO', label: 'Depoimento' },
+                  { tipo: 'FAQ', label: 'FAQ' },
+                  { tipo: 'COUNTDOWN', label: 'Countdown' },
+                  { tipo: 'MAPA', label: 'Mapa' },
+                  { tipo: 'ROTEIRO_DIA', label: 'Roteiro' },
+                  { tipo: 'ALOJAMENTO', label: 'Hospedagem' },
+                  { tipo: 'VOO', label: 'Voo' },
+                  { tipo: 'TRANSPORTE', label: 'Transporte' },
+                ]).map(({ tipo, label }) => {
+                  const Icon = TIPO_ICONS[tipo] || Type;
+                  return (
+                    <button
+                      key={tipo}
+                      onClick={() => onChangeTipo(tipo)}
+                      className="flex flex-col items-center gap-1 px-2 py-2 rounded-md border border-[var(--t-border)] hover:border-[var(--t-green)] hover:bg-[var(--t-green)]/5 text-[var(--t-text)] transition-colors"
+                    >
+                      <Icon className="w-4 h-4 text-[var(--t-text-secondary)]" />
+                      <span className="text-[10px] font-medium leading-none">{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <BlockRenderer
+              tipo={secao.tipo}
+              conteudo={secao.conteudo}
+              onChange={onChange}
+              onInsertAfter={onInsertAfter}
+            />
+          )}
         </div>
       </div>
     </aside>

@@ -5,7 +5,7 @@ import {
   Plane, Hotel, Type, Calendar, Image as ImageIcon, CheckSquare, DollarSign,
   Quote, MousePointer, Video, Map as MapIcon, HelpCircle, Timer, Bed, Car,
   Sparkles, PanelLeftClose, PanelLeftOpen, Loader2,
-  EyeOff, Layers, ListTree, ChevronRight,
+  EyeOff, Layers, ListTree, ChevronRight, Rows3, Columns2, Columns3, Columns4,
 } from 'lucide-react';
 import { useDraggable } from '@dnd-kit/core';
 import type { ComponentType } from 'react';
@@ -110,6 +110,7 @@ function DraggablePaletteCard({ item, onClick }: { item: PaletteItem; onClick: (
 
 interface Props {
   onAddBlock: (tipo: string) => void;
+  onAddRow: (numCols: 1 | 2 | 3 | 4) => void;
   onSearchFlight: () => void;
   onSearchHotel: () => void;
   onGenerateFullAI: () => void;
@@ -120,7 +121,7 @@ interface Props {
 }
 
 export function BlockPalette({
-  onAddBlock, onSearchFlight, onSearchHotel, onGenerateFullAI, generatingFull,
+  onAddBlock, onAddRow, onSearchFlight, onSearchHotel, onGenerateFullAI, generatingFull,
   secoes, selectedBlockId, onSelectBlock,
 }: Props) {
   const [collapsed, setCollapsed] = useState(false);
@@ -228,6 +229,54 @@ export function BlockPalette({
         {tab === 'blocos' ? (
           // ========== Tab Blocos — categorias colapsaveis ==========
           <div className="py-1">
+            {/* Estrutura (Elementor-like) — cria linhas vazias com N
+                colunas. Cada coluna vira um PLACEHOLDER selecionavel que
+                o usuario transforma no tipo desejado clicando. */}
+            <div className="px-2 mb-1">
+              <div className="px-1 py-1.5 text-[9px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)] flex items-center gap-1">
+                <Rows3 className="w-3 h-3" /> Estrutura
+              </div>
+              <div className="grid grid-cols-4 gap-1 px-1 pb-1.5">
+                <button
+                  onClick={() => onAddRow(1)}
+                  className="flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-md border border-[var(--t-border)] bg-[var(--t-bg)] hover:border-[var(--t-green)] transition-colors"
+                  title="Linha com 1 coluna (full width)"
+                  aria-label="Linha 1 coluna"
+                >
+                  <Type className="w-3.5 h-3.5 text-[var(--t-text-secondary)]" />
+                  <span className="text-[9px] font-mono text-[var(--t-text-muted)]">1</span>
+                </button>
+                <button
+                  onClick={() => onAddRow(2)}
+                  className="flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-md border border-[var(--t-border)] bg-[var(--t-bg)] hover:border-[var(--t-green)] transition-colors"
+                  title="Linha com 2 colunas (50% cada)"
+                  aria-label="Linha 2 colunas"
+                >
+                  <Columns2 className="w-3.5 h-3.5 text-[var(--t-text-secondary)]" />
+                  <span className="text-[9px] font-mono text-[var(--t-text-muted)]">2</span>
+                </button>
+                <button
+                  onClick={() => onAddRow(3)}
+                  className="flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-md border border-[var(--t-border)] bg-[var(--t-bg)] hover:border-[var(--t-green)] transition-colors"
+                  title="Linha com 3 colunas (33% cada)"
+                  aria-label="Linha 3 colunas"
+                >
+                  <Columns3 className="w-3.5 h-3.5 text-[var(--t-text-secondary)]" />
+                  <span className="text-[9px] font-mono text-[var(--t-text-muted)]">3</span>
+                </button>
+                <button
+                  onClick={() => onAddRow(4)}
+                  className="flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-md border border-[var(--t-border)] bg-[var(--t-bg)] hover:border-[var(--t-green)] transition-colors"
+                  title="Linha com 4 colunas (25% cada)"
+                  aria-label="Linha 4 colunas"
+                >
+                  <Columns4 className="w-3.5 h-3.5 text-[var(--t-text-secondary)]" />
+                  <span className="text-[9px] font-mono text-[var(--t-text-muted)]">4</span>
+                </button>
+              </div>
+            </div>
+            <div className="border-t border-[var(--t-border)] mx-2 mb-1" />
+
             {CATEGORIES.map(cat => {
               const isCatCollapsed = collapsedCats.has(cat.label);
               return (

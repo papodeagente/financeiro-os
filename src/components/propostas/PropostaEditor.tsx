@@ -88,6 +88,7 @@ function defaultConteudo(tipo: string): Record<string, unknown> {
       mostrar_bagagem: true,
       mostrar_alerta_atraso: false,
     };
+    case 'PLACEHOLDER': return {};
     default: return {};
   }
 }
@@ -574,6 +575,29 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
     return newId;
   };
 
+  // Cria uma linha estrutural vazia com N colunas — N PLACEHOLDERs cols=N
+  // consecutivos. O groupIntoRows agrupa eles em 1 row visual. Cada
+  // placeholder e clicavel pra ser transformado em qualquer tipo de bloco
+  // via o painel direito. Inserido no fim da lista de secoes.
+  const addEmptyRow = (numCols: 1 | 2 | 3 | 4): string => {
+    const firstId = generateId();
+    update(p => {
+      const novas: SecaoProposta[] = [];
+      for (let i = 0; i < numCols; i++) {
+        novas.push({
+          id: i === 0 ? firstId : generateId(),
+          tipo: 'PLACEHOLDER',
+          ordem: p.secoes.length + i,
+          visivel: true,
+          conteudo: {},
+          cols: numCols,
+        });
+      }
+      return { ...p, secoes: [...p.secoes, ...novas] };
+    });
+    return firstId;
+  };
+
   const removeSecao = (id: string) => {
     update(p => ({ ...p, secoes: p.secoes.filter(s => s.id !== id) }));
   };
@@ -606,11 +630,27 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
     }));
   };
 
-  // Layout (Fase 1): muda largura do bloco (1=full, 2=metade).
-  const changeColsSecao = (id: string, cols: 1 | 2) => {
+  // Layout: muda largura do bloco (1=full, 2=50%, 3=33%, 4=25%).
+  const changeColsSecao = (id: string, cols: 1 | 2 | 3 | 4) => {
     update(p => ({
       ...p,
       secoes: p.secoes.map(s => s.id === id ? { ...s, cols } : s),
+    }));
+  };
+
+  // Transforma um PLACEHOLDER no tipo escolhido. Preserva id/ordem/cols,
+  // popula conteudo default do novo tipo.
+  const changeTipoSecao = (id: string, tipo: string) => {
+    update(p => ({
+      ...p,
+      secoes: p.secoes.map(s => s.id === id
+        ? {
+            ...s,
+            tipo: tipo as SecaoProposta['tipo'],
+            conteudo: defaultConteudo(tipo),
+          }
+        : s,
+      ),
     }));
   };
 
@@ -1029,6 +1069,10 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
           {/* Paleta lateral de blocos com tabs Blocos/Estrutura (Fase D) */}
           <BlockPalette
             onAddBlock={addSecao}
+            onAddRow={(n) => {
+              const id = addEmptyRow(n);
+              setSelectedBlockId(id);
+            }}
             onSearchFlight={() => setFlightModalOpen(true)}
             onSearchHotel={() => setHotelModalOpen(true)}
             onGenerateFullAI={handleGenerateFullProposal}
@@ -1215,12 +1259,17 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                       // (hover) pra inserir apos cada row.
                       let absIdx = 0;
                       return rows.map((row, rowIdx) => {
-                        const isPair = row.length === 2;
                         absIdx += row.length;
                         const rowEndIdx = absIdx;
+                        // Grid responsivo: row de N blocos -> grid-cols-N.
+                        // Mobile (md:) cai pra 1 coluna em rows >= 3 cols.
+                        const gridClass = row.length === 2 ? 'grid grid-cols-2 gap-3'
+                          : row.length === 3 ? 'grid md:grid-cols-3 gap-3'
+                          : row.length === 4 ? 'grid md:grid-cols-4 gap-3'
+                          : '';
                         return (
                           <div key={`row-${row[0].id}`} className="space-y-2">
-                            <div className={isPair ? 'grid grid-cols-2 gap-3' : ''}>
+                            <div className={gridClass}>
                               {row.map((secao) => {
                                 const secaoIdx = proposta.secoes.findIndex(s => s.id === secao.id);
                                 return (
@@ -1353,6 +1402,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                   }}
                   onChangeCols={(cols) => changeColsSecao(selectedBlockId, cols)}
                   onChangeResponsive={(hideOn) => changeResponsiveSecao(selectedBlockId, hideOn)}
+                  onChangeTipo={(tipo) => changeTipoSecao(selectedBlockId, tipo)}
                 />
               );
             })()
