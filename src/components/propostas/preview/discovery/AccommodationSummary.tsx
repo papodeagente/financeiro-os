@@ -32,7 +32,7 @@ export function AccommodationSummary({ alojamentos, idioma, corPrimaria }: Props
   const [selectedHotel, setSelectedHotel] = useState<AlojamentoData | null>(null);
   // Quando em modo editor, click abre seletor do bloco no painel direito
   // ao inves do HotelModal publico.
-  const { onBlockSelect } = usePreviewEditor();
+  const { onBlockSelect, selectedConteudoId } = usePreviewEditor();
   const editorMode = !!onBlockSelect;
 
   if (alojamentos.length === 0) return null;
@@ -64,13 +64,17 @@ export function AccommodationSummary({ alojamentos, idioma, corPrimaria }: Props
                   const markerColor = MARKER_COLORS[i % MARKER_COLORS.length];
                   const isClickable = !a.viagem_noturna && a.hotel_nome;
 
+                  const isSelected = editorMode && selectedConteudoId === a.id;
                   return (
                     <tr
                       key={a.id || i}
                       {...(i > 0 ? { 'data-pdf-break': true } : {})}
                       data-block-id={a.id}
                       data-block-type="ALOJAMENTO"
-                      className={`border-b border-gray-100 transition-colors ${(isClickable || editorMode) ? 'hover:bg-gray-100/70 cursor-pointer' : 'hover:bg-gray-100/50'}`}
+                      className={`border-b border-gray-100 transition-colors ${
+                        isSelected ? 'bg-blue-50 outline outline-2 outline-blue-500 outline-offset-[-2px]'
+                        : (isClickable || editorMode) ? 'hover:bg-gray-100/70 cursor-pointer' : 'hover:bg-gray-100/50'
+                      }`}
                       onClick={(e) => {
                         if (editorMode) {
                           e.stopPropagation();

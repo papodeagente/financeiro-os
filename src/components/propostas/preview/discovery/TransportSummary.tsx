@@ -26,7 +26,7 @@ function formatDate(d: string, idioma: IdiomaProposal): string {
 export function TransportSummary({ transportes, idioma, corPrimaria }: Props) {
   const i18n = t(idioma);
   const cor = corPrimaria || '#3b82f6';
-  const { onBlockSelect } = usePreviewEditor();
+  const { onBlockSelect, selectedConteudoId } = usePreviewEditor();
   const editorMode = !!onBlockSelect;
 
   if (transportes.length === 0) return null;
@@ -46,7 +46,9 @@ export function TransportSummary({ transportes, idioma, corPrimaria }: Props) {
               ✈️ {i18n.voos}
             </h3>
             <div className="space-y-4">
-              {voos.map((v, i) => (
+              {voos.map((v, i) => {
+                const isSelected = editorMode && selectedConteudoId === v.id;
+                return (
                 <div
                   key={v.id || i}
                   {...(i > 0 ? { 'data-pdf-break': true } : {})}
@@ -56,11 +58,15 @@ export function TransportSummary({ transportes, idioma, corPrimaria }: Props) {
                     e.stopPropagation();
                     if (v.id) onBlockSelect!('VOO_OR_TRANSPORTE', v.id);
                   } : undefined}
-                  className={editorMode ? 'cursor-pointer hover:opacity-90 transition-opacity' : ''}
+                  className={`rounded-xl ${
+                    isSelected ? 'ring-2 ring-blue-500 ring-offset-2'
+                    : editorMode ? 'cursor-pointer hover:opacity-90 transition-opacity' : ''
+                  }`}
                 >
                   <RichFlightCard voo={v} idioma={idioma} corPrimaria={cor} />
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -72,7 +78,9 @@ export function TransportSummary({ transportes, idioma, corPrimaria }: Props) {
               🚐 {i18n.transfers}
             </h3>
             <div className="space-y-3">
-              {outros.map((tr, i) => (
+              {outros.map((tr, i) => {
+                const isSelected = editorMode && selectedConteudoId === tr.id;
+                return (
                 <div
                   key={tr.id || i}
                   {...(i > 0 ? { 'data-pdf-break': true } : {})}
@@ -83,7 +91,8 @@ export function TransportSummary({ transportes, idioma, corPrimaria }: Props) {
                     if (tr.id) onBlockSelect!('VOO_OR_TRANSPORTE', tr.id);
                   } : undefined}
                   className={`flex items-center gap-4 p-4 sm:p-5 rounded-xl bg-gray-50 border border-gray-100 shadow-sm ${
-                    editorMode ? 'cursor-pointer hover:bg-gray-100 transition-colors' : ''
+                    isSelected ? 'ring-2 ring-blue-500 ring-offset-2'
+                    : editorMode ? 'cursor-pointer hover:bg-gray-100 transition-colors' : ''
                   }`}
                 >
                   <span className="text-2xl sm:text-3xl">{TIPO_ICONS[tr.tipo] || '🚐'}</span>
@@ -98,7 +107,8 @@ export function TransportSummary({ transportes, idioma, corPrimaria }: Props) {
                     {tr.detalhes && <p className="text-xs sm:text-sm text-gray-500 mt-1">{tr.detalhes}</p>}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

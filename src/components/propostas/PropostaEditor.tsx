@@ -32,10 +32,12 @@ import { PageFooterEditor } from './PageFooterEditor';
 import { PropostaSidebar } from './PropostaSidebar';
 import { CapaSection } from './preview/CapaSection';
 import { RodapeSection } from './preview/RodapeSection';
-import { type PreviewEditorBlockType } from './PreviewEditorContext';
+import { DiscoveryRenderer } from './preview/discovery/DiscoveryRenderer';
+import { PreviewEditorProvider, type PreviewEditorBlockType } from './PreviewEditorContext';
 import { PreviewIframeCanvas } from './PreviewIframeCanvas';
 import { buildPropostaLink } from '@/lib/proposta-link';
 import { groupIntoRows } from '@/lib/proposta-layout';
+import type { IdiomaProposal } from '@/lib/i18n-proposta';
 import { loadAgencia } from '@/lib/crm-storage';
 import { aplicarExemploNaProposta } from '@/lib/proposta-exemplo';
 import { getDatasViagemDefaults } from '@/lib/proposta-datas';
@@ -1293,26 +1295,76 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                 proposta={proposta}
                 onBlockSelect={handleBlockSelectFromPreview}
               />
-            ) : (
-              // ============ DESKTOP — EDIÇÃO POR BLOCO ============
-              // Independente do layout (CLASSICO ou DISCOVERY), o canvas
-              // do editor SEMPRE renderiza blocos individualmente pra
-              // que cada um tenha mini-toolbar (mover/duplicar/ocultar/
-              // deletar), drag handle, painel direito de edicao e
-              // InsertBlockButton entre blocos. A visualizacao agregada
-              // do DISCOVERY (TransportSummary, AccommodationSummary,
-              // RouteMap) so aparece pro cliente final em /p/[slug].
-              // Esta paridade evita confusao "Discovery nao deixa
-              // editar como o Classico".
-              <>
-              {/* Banner informativo quando layout = DISCOVERY */}
-              {proposta.visual?.layout === 'DISCOVERY' && (
-                <div className="mx-auto px-6 pt-3" style={{ maxWidth: '768px' }}>
-                  <div className="rounded-md bg-purple-50 border border-purple-200 px-3 py-2 text-[11px] text-purple-700 leading-relaxed">
-                    <strong className="font-semibold">Layout Discovery ativo.</strong> Edite cada bloco individualmente aqui. Na view pública, hotéis, voos e roteiro são apresentados <strong>agrupados</strong> ao cliente (Discovery style).
+            ) : proposta.visual?.layout === 'DISCOVERY' ? (
+              // ============ DESKTOP + LAYOUT DISCOVERY ============
+              // Preview FIEL ao /p/[slug] (DiscoveryRenderer agrega
+              // hoteis/voos/roteiro). PreviewEditorProvider redireciona
+              // clicks pra o painel direito do bloco correspondente —
+              // mesma experiencia de edicao do CLASSICO sem perder o
+              // visual rico do Discovery. Toolbar de ações flutuante
+              // (mover/duplicar/ocultar/deletar) aparece quando ha bloco
+              // selecionado.
+              <PreviewEditorProvider value={{
+                onBlockSelect: handleBlockSelectFromPreview,
+                // Map selectedBlockId -> conteudoId que os componentes
+                // Discovery comparam. Para ALOJAMENTO/VOO/TRANSPORTE o
+                // conteudoId e (secao.conteudo as { id }).id; para
+                // ROTEIRO/VALORES/etc e a propria secao.id.
+                selectedConteudoId: (() => {
+                  if (!selectedBlockId) return undefined;
+                  const s = proposta.secoes.find(x => x.id === selectedBlockId);
+                  if (!s) return selectedBlockId;
+                  const innerId = (s.conteudo as { id?: string }).id;
+                  return innerId || selectedBlockId;
+                })(),
+              }}>
+                <SortableContext items={proposta.secoes.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                  <DiscoveryRenderer
+                    proposta={proposta}
+                    slug="preview"
+                    idioma={(proposta.idioma || 'pt-BR') as IdiomaProposal}
+                  />
+                </SortableContext>
+                {/* Fab "Adicionar bloco" sempre visivel no canto inferior
+                    direito do canvas em layout DISCOVERY. Click abre a
+                    paleta — o usuario continua editando sem sair do
+                    preview real. */}
+                <div className="sticky bottom-4 z-30 flex justify-center px-6 pb-6 -mt-4">
+                  <div className="bg-white rounded-full shadow-2xl border border-[var(--t-border)] flex items-center gap-1 p-1">
+                    <button
+                      onClick={() => setHotelModalOpen(true)}
+                      className="px-3 py-1.5 rounded-full text-xs font-medium text-emerald-700 hover:bg-emerald-50 transition-colors"
+                    >
+                      🏨 Hotel
+                    </button>
+                    <button
+                      onClick={() => setFlightModalOpen(true)}
+                      className="px-3 py-1.5 rounded-full text-xs font-medium text-blue-700 hover:bg-blue-50 transition-colors"
+                    >
+                      ✈️ Voo
+                    </button>
+                    <div className="w-px h-4 bg-[var(--t-border)]" />
+                    {([1, 2, 3, 4] as const).map(n => (
+                      <button
+                        key={n}
+                        onClick={() => {
+                          const id = addEmptyRow(n);
+                          setSelectedBlockId(id);
+                        }}
+                        className="px-2.5 py-1.5 rounded-full text-xs font-medium text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)] hover:text-[var(--t-text)] transition-colors"
+                        title={`Linha ${n} coluna${n > 1 ? 's' : ''}`}
+                      >
+                        + {n}col
+                      </button>
+                    ))}
                   </div>
                 </div>
-              )}
+              </PreviewEditorProvider>
+            ) : (
+              // ============ DESKTOP + LAYOUT CLASSICO ============
+              // Estrutura editavel: capa + opening message + blocos
+              // sortable + InsertBlockButton entre rows + rodape + validade.
+              <>
               {/* CAPA — secao de pagina (nao draggavel). Click abre o
                   PageHeaderEditor no painel direito. */}
               <SelectablePageSection

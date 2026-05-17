@@ -25,6 +25,10 @@ interface PreviewEditorContextValue {
   // Renderers devem chamar essa funcao no click ao inves do
   // comportamento publico (modal, expand, scroll, etc).
   onBlockSelect?: (blockType: PreviewEditorBlockType, conteudoId: string) => void;
+  // Id da secao atualmente selecionada — pros renderers destacarem o
+  // item correspondente com ring/outline. Usado pelo AccommodationSummary
+  // (a.id), TransportSummary (v.id), etc.
+  selectedConteudoId?: string;
 }
 
 const PreviewEditorContext = createContext<PreviewEditorContextValue>({});
