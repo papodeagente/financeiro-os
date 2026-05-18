@@ -8,7 +8,7 @@ async function getAnthropicConfig() {
   if (rows.length === 0) return null;
   const cfg = rows[0].data;
   if (!cfg.anthropic?.ativo || !cfg.anthropic?.api_key) return null;
-  return { api_key: cfg.anthropic.api_key, modelo: cfg.anthropic.modelo || 'claude-sonnet-4-20250514' };
+  return { api_key: cfg.anthropic.api_key, modelo: cfg.anthropic.modelo || 'claude-sonnet-4-5-20250929' };
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {

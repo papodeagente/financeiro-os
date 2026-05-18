@@ -1070,8 +1070,12 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
         body: JSON.stringify({ contexto: getAIContext(), modo: 'completo' }),
       });
       const data = await res.json();
-      if (data.error) {
-        alert(data.error);
+      if (!res.ok || data.error) {
+        // Erro detalhado da API — ja vem com motivo (Anthropic 404, JSON
+        // truncado, API key faltando, etc). Toast em vez de alert pra
+        // experiencia menos invasiva, mas mostra a mensagem completa.
+        toast.error(data.error || 'Erro ao gerar proposta', 'Verifique Configurações > Integrações');
+        console.error('[generate-full-proposal]', data);
       } else {
         update(p => {
           if (data.cabecalho) {
@@ -1091,9 +1095,12 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
           }
           return p;
         });
+        toast.success('Proposta gerada pela IA');
       }
-    } catch {
-      alert('Erro ao gerar proposta com IA');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro de rede';
+      toast.error('Erro ao gerar proposta', msg);
+      console.error('[generate-full-proposal] network error', e);
     }
     setGeneratingFull(false);
   };

@@ -3,7 +3,7 @@ import { testConnection as testAmadeus } from '@/lib/amadeus-api';
 import { testConnection as testGoogle } from '@/lib/google-places-api';
 
 async function testAnthropic(config: { api_key: string; modelo?: string }) {
-  const modelo = config.modelo || 'claude-sonnet-4-20250514';
+  const modelo = config.modelo || 'claude-sonnet-4-5-20250929';
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {

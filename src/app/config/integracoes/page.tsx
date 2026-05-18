@@ -12,7 +12,7 @@ const DEFAULT_CONFIG: ConfiguracaoAPIs = {
   amadeus: { api_key: '', api_secret: '', ambiente: 'test', ativo: false },
   aviationstack: { api_key: '', ativo: false },
   google_places: { api_key: '', ativo: false },
-  anthropic: { api_key: '', modelo: 'claude-sonnet-4-20250514', ativo: false },
+  anthropic: { api_key: '', modelo: 'claude-sonnet-4-5-20250929', ativo: false },
   openai: { api_key: '', modelo_imagem: 'gpt-image-1', ativo: false },
   cache: {
     busca_voos_ttl: 86400,
@@ -338,7 +338,7 @@ export default function IntegracoesPage() {
               <input
                 type="checkbox"
                 checked={config.anthropic?.ativo ?? false}
-                onChange={e => setConfig(c => ({ ...c, anthropic: { ...c.anthropic, api_key: c.anthropic?.api_key ?? '', modelo: c.anthropic?.modelo ?? 'claude-sonnet-4-20250514', ativo: e.target.checked } }))}
+                onChange={e => setConfig(c => ({ ...c, anthropic: { ...c.anthropic, api_key: c.anthropic?.api_key ?? '', modelo: c.anthropic?.modelo ?? 'claude-sonnet-4-5-20250929', ativo: e.target.checked } }))}
                 className="w-4 h-4 rounded accent-[var(--t-green)]"
               />
               <span className="text-sm text-[var(--t-text)]">Ativo</span>
@@ -375,7 +375,7 @@ export default function IntegracoesPage() {
                 <input
                   type={showSecrets['anthropic_key'] ? 'text' : 'password'}
                   value={config.anthropic?.api_key ?? ''}
-                  onChange={e => setConfig(c => ({ ...c, anthropic: { ...c.anthropic, api_key: e.target.value, modelo: c.anthropic?.modelo ?? 'claude-sonnet-4-20250514', ativo: c.anthropic?.ativo ?? false } }))}
+                  onChange={e => setConfig(c => ({ ...c, anthropic: { ...c.anthropic, api_key: e.target.value, modelo: c.anthropic?.modelo ?? 'claude-sonnet-4-5-20250929', ativo: c.anthropic?.ativo ?? false } }))}
                   className="flex-1 px-3 py-2 bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded-lg text-sm text-[var(--t-text)]"
                   placeholder="sk-ant-..."
                 />
@@ -387,13 +387,14 @@ export default function IntegracoesPage() {
             <div>
               <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Modelo</label>
               <select
-                value={config.anthropic?.modelo ?? 'claude-sonnet-4-20250514'}
+                value={config.anthropic?.modelo ?? 'claude-sonnet-4-5-20250929'}
                 onChange={e => setConfig(c => ({ ...c, anthropic: { ...c.anthropic, api_key: c.anthropic?.api_key ?? '', modelo: e.target.value, ativo: c.anthropic?.ativo ?? false } }))}
                 className="w-full px-3 py-2 bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded-lg text-sm text-[var(--t-text)]"
               >
-                <option value="claude-opus-4-6">Claude Opus 4.6 (mais inteligente)</option>
+                <option value="claude-opus-4-7">Claude Opus 4.7 (mais inteligente)</option>
+                <option value="claude-opus-4-6">Claude Opus 4.6</option>
                 <option value="claude-sonnet-4-6">Claude Sonnet 4.6 (recomendado)</option>
-                <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
+                <option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5</option>
                 <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (mais rápido)</option>
               </select>
             </div>
