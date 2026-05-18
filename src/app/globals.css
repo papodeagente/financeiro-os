@@ -995,6 +995,69 @@
   .route-progress { animation: none; opacity: 0; }
 }
 
+/* =========================================================================
+   Funil — fluxo de dados nas edges
+   ========================================================================= */
+
+/* Tracinhos correndo ao longo da edge — efeito "dado passando".
+   stroke-dashoffset negativo faz o padrao tracejado se mover na direcao
+   do source -> target (mesma direcao das particulas). */
+@keyframes funil-flow-dash {
+  to { stroke-dashoffset: -28; }
+}
+.funil-edge-flow {
+  animation: funil-flow-dash 1.4s linear infinite;
+}
+
+/* Hover sutil nos nodes — sombra ganha brilho azul */
+.funil-node-card {
+  transition: box-shadow 250ms cubic-bezier(0.4, 0, 0.2, 1),
+              transform 250ms cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 200ms ease;
+}
+.funil-node-card:hover {
+  box-shadow:
+    0 0 0 1px rgba(59, 130, 246, 0.25),
+    0 8px 24px -8px rgba(59, 130, 246, 0.35),
+    0 4px 12px -4px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+/* Background do canvas — gradient radial sutil com manchas de cor */
+.funil-canvas-bg {
+  background:
+    radial-gradient(circle at 20% 30%, rgba(59, 130, 246, 0.06) 0%, transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(16, 185, 129, 0.05) 0%, transparent 40%),
+    linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+/* MiniMap e Controls com glass effect */
+.react-flow__minimap,
+.react-flow__controls {
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  border-radius: 12px !important;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    0 8px 24px -4px rgba(0, 0, 0, 0.08) !important;
+}
+.react-flow__controls button {
+  background: transparent !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
+  color: #475569;
+  transition: background 150ms ease;
+}
+.react-flow__controls button:hover {
+  background: rgba(59, 130, 246, 0.08) !important;
+  color: #1d4ed8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .funil-edge-flow { animation: none; }
+}
+
 /* Bento card glow on hover */
 .bento-card-glow {
   position: relative;

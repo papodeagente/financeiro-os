@@ -16,11 +16,11 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ReactFlow, ReactFlowProvider, Background, BackgroundVariant,
-  Controls, MiniMap, MarkerType, ConnectionMode,
+  Controls, MiniMap, ConnectionMode,
   addEdge, applyNodeChanges, applyEdgeChanges,
   useReactFlow,
   type Node, type Edge, type Connection, type NodeChange, type EdgeChange,
-  type NodeTypes,
+  type NodeTypes, type EdgeTypes,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { ArrowLeft, Check, Loader2, Sparkles, Trash2 } from 'lucide-react';
@@ -31,6 +31,7 @@ import type {
   DadosReaisAgencia, KPIsFunil, CenarioComparativo,
 } from '@/lib/funil-types';
 import { FunilNode } from '@/components/funis/FunilNode';
+import { AnimatedFlowEdge } from '@/components/funis/AnimatedFlowEdge';
 import { BibliotecaNodes } from '@/components/funis/BibliotecaNodes';
 import { PainelConfigNode } from '@/components/funis/PainelConfigNode';
 import { PainelKPIs } from '@/components/funis/PainelKPIs';
@@ -46,6 +47,7 @@ type FunilNodeData = {
 };
 
 const nodeTypes: NodeTypes = { funilNode: FunilNode };
+const edgeTypes: EdgeTypes = { animatedFlow: AnimatedFlowEdge };
 
 function nodeFunilToRf(n: NodeFunil): Node<FunilNodeData> {
   return {
@@ -70,9 +72,9 @@ function edgeFunilToRf(e: EdgeFunil): Edge {
     id: e.id,
     source: e.source,
     target: e.target,
-    type: 'smoothstep',
-    markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' },
-    style: { stroke: '#3b82f6', strokeWidth: 2, strokeDasharray: '8 4' },
+    // Tipo customizado com gradient + particulas SVG animadas pra
+    // sensacao de "dados fluindo" entre os nodes do funil.
+    type: 'animatedFlow',
     data: { taxa_conversao_override: e.taxa_conversao_override ?? null },
   };
 }
@@ -82,6 +84,8 @@ function rfToEdgeFunil(e: Edge): EdgeFunil {
     id: e.id,
     source: e.source,
     target: e.target,
+    // Persiste como 'smoothstep' pra compat com motor de simulacao e
+    // payloads antigos (frontend converte pra animatedFlow ao montar).
     type: 'smoothstep',
     taxa_conversao_override: ((e.data as { taxa_conversao_override?: number | null } | undefined)?.taxa_conversao_override) ?? null,
   };
@@ -218,9 +222,7 @@ function EditorInner({ id }: { id: string }) {
   const onConnect = useCallback((connection: Connection) => {
     setEdges(eds => addEdge({
       ...connection,
-      type: 'smoothstep',
-      markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' },
-      style: { stroke: '#3b82f6', strokeWidth: 2, strokeDasharray: '8 4' },
+      type: 'animatedFlow',
       data: { taxa_conversao_override: null },
     }, eds));
     scheduleSave();
@@ -393,7 +395,7 @@ function EditorInner({ id }: { id: string }) {
       <div className="flex flex-1 min-h-0">
         <BibliotecaNodes onDragStart={onDragStartPalette} />
 
-        <div ref={wrapperRef} className="flex-1 relative bg-[#f8fafc] min-w-0">
+        <div ref={wrapperRef} className="flex-1 relative funil-canvas-bg min-w-0">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -404,21 +406,35 @@ function EditorInner({ id }: { id: string }) {
             onDragOver={onDragOver}
             onSelectionChange={onSelectionChange}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             connectionMode={ConnectionMode.Strict}
             deleteKeyCode={['Backspace', 'Delete']}
             fitView
             snapToGrid
             snapGrid={[12, 12]}
             defaultEdgeOptions={{
-              type: 'smoothstep',
-              markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' },
-              style: { stroke: '#3b82f6', strokeWidth: 2, strokeDasharray: '8 4' },
+              type: 'animatedFlow',
             }}
             proOptions={{ hideAttribution: true }}
           >
-            <Background variant={BackgroundVariant.Dots} gap={24} size={1.2} color="#d1d5db" />
+            <Background variant={BackgroundVariant.Dots} gap={28} size={1} color="#cbd5e1" />
             <Controls />
-            <MiniMap pannable zoomable nodeStrokeWidth={2} maskColor="rgba(0,0,0,0.04)" />
+            <MiniMap
+              pannable zoomable
+              nodeStrokeWidth={2}
+              maskColor="rgba(15, 23, 42, 0.04)"
+              nodeColor={(node) => {
+                const cat = (node.data as { categoria?: string })?.categoria;
+                return cat === 'trafego' ? '#3b82f6'
+                  : cat === 'captura' ? '#8b5cf6'
+                  : cat === 'nutricao' ? '#ec4899'
+                  : cat === 'qualificacao' ? '#f59e0b'
+                  : cat === 'proposta' ? '#10b981'
+                  : cat === 'fechamento' ? '#06b6d4'
+                  : cat === 'upsell' ? '#14b8a6'
+                  : '#94a3b8';
+              }}
+            />
           </ReactFlow>
 
           {nodes.length === 0 && (
