@@ -24,6 +24,7 @@ const PUBLIC_PATHS = [
   '/api/v1/crm/webhook', '/api/v1/crm/health',
   '/admin/login', '/api/admin/auth/login', '/api/admin/auth/seed',
   '/api/planos',
+  '/api/marketing/',
 ];
 
 // Caminho exato — '/' nao pode ser prefixo (capturaria tudo). Landing

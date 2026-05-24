@@ -556,6 +556,14 @@ export async function initDB() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    -- Configs globais do SaaS (key/value). Editaveis no /admin/marketing.
+    -- Atual: 'login_campanha' (imagem + link da pagina /login).
+    CREATE TABLE IF NOT EXISTS saas_config (
+      key TEXT PRIMARY KEY,
+      data JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     -- Assinaturas — relacao tenant -> plano + status + datas. Permite
     -- historico (suspensoes, mudanca de plano). Status: trial, ativa,
     -- suspensa, cancelada, inadimplente.
@@ -602,6 +610,14 @@ export async function initDB() {
       )
     ON CONFLICT (id) DO NOTHING;
   `);
+
+  // Seed default login_campanha — vazio inicialmente. Super admin
+  // edita em /admin/marketing.
+  await pool.query(
+    `INSERT INTO saas_config (key, data)
+     VALUES ('login_campanha', '{"image_url":"","link_url":"","alt":"Campanha Entur OS","ativo":true}'::jsonb)
+     ON CONFLICT (key) DO NOTHING`,
+  );
 
   // Bruno como super admin (idempotente). Cobre o caso de tenant
   // existente sem o owner Bruno cadastrado.
