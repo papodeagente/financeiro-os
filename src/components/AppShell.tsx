@@ -87,10 +87,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [pathname]);
 
-  // Login page, public proposal preview, admin e iframe de preview no
-  // editor — sem shell.
+  // Login page, signup, landing page, public proposal preview, admin
+  // e iframe de preview no editor — sem shell (sao paginas publicas
+  // ou sem header/sidebar).
   if (
+    pathname === '/' ||
     pathname === '/login' ||
+    pathname === '/signup' ||
     pathname.startsWith('/p/') ||
     pathname.startsWith('/admin') ||
     pathname === '/preview-iframe'
