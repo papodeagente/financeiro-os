@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Sparkles, Check, Loader2 } from 'lucide-react';
+import { ArrowLeft, Check, Loader2 } from 'lucide-react';
+import { Logo } from '@/components/Logo';
 
 interface Plano {
   slug: string;
@@ -99,11 +100,8 @@ export function SignupClient() {
         <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-8 bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
           {/* Form */}
           <div className="p-8 sm:p-10">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-emerald-500 flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-white" />
-              </div>
-              <span className="font-bold text-slate-900">Entur OS</span>
+            <div className="mb-4">
+              <Logo variant="sidebar" href="/" />
             </div>
             <h1 className="text-2xl font-bold text-slate-900 mb-1">Crie sua conta</h1>
             <p className="text-sm text-slate-600 mb-6">14 dias grátis · sem cartão de crédito</p>
