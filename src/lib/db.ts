@@ -534,11 +534,89 @@ export async function initDB() {
       data JSONB NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    -- Planos do SaaS (Basic, Founder, Founder Pro). Editaveis no
+    -- /admin/planos pra ajustar preco/limites/features sem deploy.
+    -- slug e a referencia estavel usada em tenants.plano.
+    CREATE TABLE IF NOT EXISTS planos (
+      id TEXT PRIMARY KEY,
+      slug TEXT NOT NULL UNIQUE,
+      nome TEXT NOT NULL DEFAULT '',
+      descricao TEXT NOT NULL DEFAULT '',
+      preco_mensal NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      preco_anual NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      moeda TEXT NOT NULL DEFAULT 'BRL',
+      destaque BOOLEAN NOT NULL DEFAULT FALSE,
+      ordem INTEGER NOT NULL DEFAULT 0,
+      ativo BOOLEAN NOT NULL DEFAULT TRUE,
+      limites JSONB NOT NULL DEFAULT '{}'::jsonb,
+      features JSONB NOT NULL DEFAULT '[]'::jsonb,
+      data JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    -- Assinaturas — relacao tenant -> plano + status + datas. Permite
+    -- historico (suspensoes, mudanca de plano). Status: trial, ativa,
+    -- suspensa, cancelada, inadimplente.
+    CREATE TABLE IF NOT EXISTS assinaturas (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      plano_slug TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'trial',
+      trial_ends_at TIMESTAMPTZ,
+      ciclo TEXT NOT NULL DEFAULT 'mensal',
+      proxima_cobranca DATE,
+      data JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
   await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_super_admins_email ON super_admins(email);
     CREATE INDEX IF NOT EXISTS idx_tenant_usage_tenant ON tenant_usage(tenant_id);
+    CREATE INDEX IF NOT EXISTS idx_planos_ordem ON planos(ordem) WHERE ativo = TRUE;
+    CREATE INDEX IF NOT EXISTS idx_assinaturas_tenant ON assinaturas(tenant_id, status);
+    CREATE INDEX IF NOT EXISTS idx_assinaturas_trial ON assinaturas(trial_ends_at) WHERE status = 'trial';
   `);
+
+  // Seed dos planos padrao (idempotente — ON CONFLICT DO NOTHING).
+  // Precos sao PLACEHOLDERS que o user edita em /admin/planos.
+  await pool.query(`
+    INSERT INTO planos (id, slug, nome, descricao, preco_mensal, preco_anual, moeda, destaque, ordem, ativo, limites, features)
+    VALUES
+      ('plano-basic', 'basic', 'Basic', 'Para agências que estão começando.',
+        97, 970, 'BRL', FALSE, 1, TRUE,
+        '{"usuarios": 3, "propostas_mes": 50, "grupos": 10, "ai_enabled": false, "white_label": false}'::jsonb,
+        '["Até 3 usuários", "50 propostas/mês", "Hub de viagens", "Templates prontos", "Suporte por email"]'::jsonb
+      ),
+      ('plano-founder', 'founder', 'Founder', 'Para agências em crescimento que precisam de mais ferramentas.',
+        197, 1970, 'BRL', TRUE, 2, TRUE,
+        '{"usuarios": 10, "propostas_mes": 200, "grupos": 50, "ai_enabled": true, "white_label": false}'::jsonb,
+        '["Até 10 usuários", "200 propostas/mês", "Geração com IA (Claude)", "CRM completo", "Funis e campanhas", "API de hotéis e voos", "Suporte prioritário"]'::jsonb
+      ),
+      ('plano-founder-pro', 'founder-pro', 'Founder Pro', 'Para agências consolidadas com alto volume e necessidade de white-label.',
+        397, 3970, 'BRL', FALSE, 3, TRUE,
+        '{"usuarios": -1, "propostas_mes": -1, "grupos": -1, "ai_enabled": true, "white_label": true}'::jsonb,
+        '["Usuários ilimitados", "Propostas ilimitadas", "Geração com IA (Claude)", "CRM completo + automações", "Domínio personalizado nas propostas", "White-label completo", "Suporte dedicado", "Onboarding 1-a-1"]'::jsonb
+      )
+    ON CONFLICT (id) DO NOTHING;
+  `);
+
+  // Bruno como super admin (idempotente). Cobre o caso de tenant
+  // existente sem o owner Bruno cadastrado.
+  if (process.env.SUPER_ADMIN_EMAIL || true) {
+    const email = (process.env.SUPER_ADMIN_EMAIL || 'bruno@entur.com.br').toLowerCase();
+    const senhaHash = process.env.SUPER_ADMIN_PASSWORD_HASH || '';
+    // Idempotente: nao sobrescreve senha se ja existe.
+    await pool.query(
+      `INSERT INTO super_admins (id, email, nome, data)
+       VALUES ('super-bruno', $1, 'Bruno Barbosa',
+         jsonb_build_object('senha_hash', $2, 'ativo', true))
+       ON CONFLICT (id) DO NOTHING`,
+      [email, senhaHash],
+    );
+  }
 
   // ============================================================
   // GESTÃO DE GRUPOS — vagas, reservas e materiais por grupo

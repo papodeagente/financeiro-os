@@ -44,10 +44,17 @@ export async function getTenant(tenantId: string): Promise<TenantInfo | null> {
   };
 }
 
+// Fallback static — usado quando a query a tabela planos falha. Fonte
+// REAL de limites/features e a tabela planos (editavel via /admin/planos).
+// Aliases legados (free/pro/enterprise) mantidos pra tenants criados
+// antes da migracao para Basic/Founder/Founder Pro.
 const PLAN_LIMITS = {
-  free:       { usuarios: 3,  grupos: 10,  propostas: 50, features: [] },
-  pro:        { usuarios: 15, grupos: 100, propostas: -1, features: ['crm', 'ai'] },
-  enterprise: { usuarios: -1, grupos: -1,  propostas: -1, features: ['crm', 'ai', 'propostas'] },
+  basic:         { usuarios: 3,   grupos: 10,  propostas: 50,  features: [] },
+  founder:       { usuarios: 10,  grupos: 50,  propostas: 200, features: ['crm', 'ai'] },
+  'founder-pro': { usuarios: -1,  grupos: -1,  propostas: -1,  features: ['crm', 'ai', 'white_label'] },
+  free:          { usuarios: 3,   grupos: 10,  propostas: 50,  features: [] },
+  pro:           { usuarios: 15,  grupos: 100, propostas: -1,  features: ['crm', 'ai'] },
+  enterprise:    { usuarios: -1,  grupos: -1,  propostas: -1,  features: ['crm', 'ai', 'white_label'] },
 };
 
 export async function checkPlanLimit(tenantId: string, table: string): Promise<string | null> {

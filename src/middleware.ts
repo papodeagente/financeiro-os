@@ -18,10 +18,18 @@ const COOKIE_NAME = 'entur-session';
 // Public routes that don't require authentication
 const PUBLIC_PATHS = [
   '/login', '/api/auth/login', '/api/auth/seed', '/api/auth/session',
+  '/api/auth/signup',
+  '/signup',
   '/p/', '/api/propostas/public/', '/api/uploads/',
   '/api/v1/crm/webhook', '/api/v1/crm/health',
   '/admin/login', '/api/admin/auth/login', '/api/admin/auth/seed',
+  '/api/planos',
 ];
+
+// Caminho exato — '/' nao pode ser prefixo (capturaria tudo). Landing
+// page acessivel sem auth; logged-in users veem a LP normalmente
+// tambem (o /page.tsx redireciona logged-in pro dashboard via client).
+const PUBLIC_EXACT_PATHS = new Set(['/']);
 
 function addSecurityHeaders(response: NextResponse) {
   response.headers.set('X-Content-Type-Options', 'nosniff');
@@ -35,8 +43,8 @@ function addSecurityHeaders(response: NextResponse) {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow public paths
-  if (PUBLIC_PATHS.some(p => pathname.startsWith(p))) {
+  // Allow public paths (prefixos + exatos)
+  if (PUBLIC_EXACT_PATHS.has(pathname) || PUBLIC_PATHS.some(p => pathname.startsWith(p))) {
     return addSecurityHeaders(NextResponse.next());
   }
 
