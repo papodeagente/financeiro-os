@@ -619,20 +619,19 @@ export async function initDB() {
      ON CONFLICT (key) DO NOTHING`,
   );
 
-  // Bruno como super admin (idempotente). Cobre o caso de tenant
-  // existente sem o owner Bruno cadastrado.
-  if (process.env.SUPER_ADMIN_EMAIL || true) {
-    const email = (process.env.SUPER_ADMIN_EMAIL || 'bruno@entur.com.br').toLowerCase();
-    const senhaHash = process.env.SUPER_ADMIN_PASSWORD_HASH || '';
-    // Idempotente: nao sobrescreve senha se ja existe.
-    await pool.query(
-      `INSERT INTO super_admins (id, email, nome, data)
-       VALUES ('super-bruno', $1, 'Bruno Barbosa',
-         jsonb_build_object('senha_hash', $2, 'ativo', true))
-       ON CONFLICT (id) DO NOTHING`,
-      [email, senhaHash],
-    );
-  }
+  // Super admin criado APENAS via /api/admin/auth/seed (que aceita
+  // SUPER_ADMIN_EMAIL + SUPER_ADMIN_PASSWORD env). Antes inseria aqui
+  // com senha vazia, o que travava o seed posterior pelo conflito de
+  // 'ja existe'. Removido — seed e responsabilidade da rota /seed.
+
+  // Limpa registro 'super-bruno' antigo (criado por versao anterior do
+  // initDB com senha vazia) pra que /api/admin/auth/seed possa criar
+  // com senha real. So executa se a senha estiver realmente vazia.
+  await pool.query(
+    `DELETE FROM super_admins
+     WHERE id = 'super-bruno'
+       AND (data->>'senha_hash' IS NULL OR data->>'senha_hash' = '')`,
+  );
 
   // ============================================================
   // GESTÃO DE GRUPOS — vagas, reservas e materiais por grupo
