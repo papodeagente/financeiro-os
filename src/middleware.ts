@@ -25,6 +25,7 @@ const PUBLIC_PATHS = [
   '/admin/login', '/api/admin/auth/login', '/api/admin/auth/seed',
   '/api/planos',
   '/api/marketing/',
+  '/api/convites/',
 ];
 
 // Caminho exato — '/' nao pode ser prefixo (capturaria tudo). Landing

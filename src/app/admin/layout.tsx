@@ -3,12 +3,13 @@
 import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LayoutDashboard, Building2, LogOut, Shield, Sparkles, Image as ImageIcon } from 'lucide-react'
+import { LayoutDashboard, Building2, LogOut, Shield, Sparkles, Image as ImageIcon, Link as LinkIcon } from 'lucide-react'
 
 const navItems = [
   { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/tenants', label: 'Agencias', icon: Building2 },
   { href: '/admin/planos', label: 'Planos', icon: Sparkles },
+  { href: '/admin/convites', label: 'Convites', icon: LinkIcon },
   { href: '/admin/marketing', label: 'Marketing', icon: ImageIcon },
 ]
 

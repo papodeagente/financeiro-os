@@ -579,6 +579,48 @@ export async function initDB() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    -- Convites: links rastreaveis criados pelo super admin pra dar
+    -- acesso por tempo definido (ex: "Alunos Clube de IA" = 365 dias).
+    -- Codigo gerado vai pra URL /signup?convite=CODIGO. Ao usar, o
+    -- tenant criado herda plano + duracao + tag deste convite.
+    CREATE TABLE IF NOT EXISTS convites (
+      id TEXT PRIMARY KEY,
+      codigo TEXT NOT NULL UNIQUE,
+      nome TEXT NOT NULL,
+      descricao TEXT NOT NULL DEFAULT '',
+      plano_slug TEXT NOT NULL,
+      duracao_dias INTEGER NOT NULL DEFAULT 365,
+      max_usos INTEGER,                     -- NULL = ilimitado
+      usos_atuais INTEGER NOT NULL DEFAULT 0,
+      expira_em TIMESTAMPTZ,                -- NULL = link nunca expira
+      ativo BOOLEAN NOT NULL DEFAULT TRUE,
+      criado_por TEXT NOT NULL DEFAULT '',
+      tag TEXT NOT NULL DEFAULT '',         -- ex: "clube-ia" pra agrupar
+      data JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    -- Cada uso de um convite — historico completo pra rastreamento.
+    CREATE TABLE IF NOT EXISTS convite_usos (
+      id TEXT PRIMARY KEY,
+      convite_id TEXT NOT NULL,
+      tenant_id TEXT NOT NULL,
+      usuario_id TEXT NOT NULL,
+      nome_cliente TEXT NOT NULL DEFAULT '',
+      email_cliente TEXT NOT NULL DEFAULT '',
+      ip TEXT NOT NULL DEFAULT '',
+      user_agent TEXT NOT NULL DEFAULT '',
+      used_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_convites_codigo ON convites(codigo) WHERE ativo = TRUE;
+    CREATE INDEX IF NOT EXISTS idx_convites_tag ON convites(tag) WHERE ativo = TRUE;
+    CREATE INDEX IF NOT EXISTS idx_convite_usos_convite ON convite_usos(convite_id, used_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_convite_usos_tenant ON convite_usos(tenant_id);
   `);
   await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_super_admins_email ON super_admins(email);

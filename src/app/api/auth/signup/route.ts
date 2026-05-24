@@ -33,7 +33,8 @@ export async function POST(req: Request) {
     const email = String(body.email || '').trim().toLowerCase();
     const senha = String(body.senha || '');
     const telefone = String(body.telefone || '').trim();
-    const planoSlug = String(body.plano_slug || 'basic').trim();
+    let planoSlug = String(body.plano_slug || 'basic').trim();
+    const codigoConvite = String(body.codigo_convite || '').trim().toUpperCase();
 
     if (!nomeAgencia) return NextResponse.json({ error: 'Nome da agência obrigatório' }, { status: 400 });
     if (!nomeCompleto) return NextResponse.json({ error: 'Nome completo obrigatório' }, { status: 400 });
@@ -49,7 +50,42 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Este e-mail já está cadastrado. Faça login ou recupere a senha.' }, { status: 400 });
     }
 
-    // Verifica plano selecionado
+    // Se ha codigo de convite, valida + sobrescreve plano/duracao.
+    // Convite e fonte de verdade: plano selecionado pelo user e ignorado
+    // (alguem que tem convite Founder Pro nao pode trocar pra Basic).
+    let conviteInfo: {
+      id: string;
+      duracao_dias: number;
+      max_usos: number | null;
+      usos_atuais: number;
+    } | null = null;
+    if (codigoConvite) {
+      const { rows: cv } = await pool.query(
+        `SELECT id, plano_slug, duracao_dias, max_usos, usos_atuais, expira_em, ativo
+         FROM convites WHERE codigo = $1 LIMIT 1`,
+        [codigoConvite],
+      );
+      if (cv.length === 0) {
+        return NextResponse.json({ error: 'Convite inválido' }, { status: 400 });
+      }
+      const c = cv[0];
+      if (!c.ativo) return NextResponse.json({ error: 'Convite desativado' }, { status: 410 });
+      if (c.expira_em && new Date(c.expira_em) < new Date()) {
+        return NextResponse.json({ error: 'Convite expirado' }, { status: 410 });
+      }
+      if (c.max_usos != null && c.usos_atuais >= c.max_usos) {
+        return NextResponse.json({ error: 'Convite esgotado' }, { status: 410 });
+      }
+      planoSlug = c.plano_slug; // sobrescreve
+      conviteInfo = {
+        id: c.id,
+        duracao_dias: c.duracao_dias,
+        max_usos: c.max_usos,
+        usos_atuais: c.usos_atuais,
+      };
+    }
+
+    // Verifica plano (apos convite eventual ter sobrescrito)
     const { rows: planos } = await pool.query(
       `SELECT slug, nome, limites, features FROM planos WHERE slug = $1 AND ativo = TRUE LIMIT 1`,
       [planoSlug],
@@ -79,7 +115,14 @@ export async function POST(req: Request) {
     const userId = generateId();
     const assinaturaId = generateId();
     const senhaHash = await hashPassword(senha);
-    const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 86400 * 1000);
+    // Convite tem duracao propria (ex: 365 dias pra Clube de IA);
+    // sem convite, trial padrao de 14 dias.
+    const duracaoDias = conviteInfo?.duracao_dias ?? TRIAL_DAYS;
+    const trialEndsAt = new Date(Date.now() + duracaoDias * 86400 * 1000);
+    // Convite = acesso ja garantido pelo periodo definido (nao e trial
+    // que precisa converter — e acesso pago/concedido); status 'ativa'.
+    // Sem convite = trial padrao 14d.
+    const assinaturaStatus = conviteInfo ? 'ativa' : 'trial';
 
     const tenantData = {
       id: tenantId,
@@ -93,8 +136,9 @@ export async function POST(req: Request) {
       max_grupos: (plano.limites?.grupos ?? 10),
       features: plano.features ?? [],
       trial_ends_at: trialEndsAt.toISOString(),
-      assinatura_status: 'trial',
-      criado_via: 'signup_publico',
+      assinatura_status: assinaturaStatus,
+      criado_via: conviteInfo ? 'convite' : 'signup_publico',
+      convite_id: conviteInfo?.id || null,
       created_at: new Date().toISOString(),
     };
 
@@ -140,16 +184,36 @@ export async function POST(req: Request) {
       await client.query(
         `INSERT INTO assinaturas
            (id, tenant_id, plano_slug, status, trial_ends_at, ciclo, data)
-         VALUES ($1, $2, $3, 'trial', $4, 'mensal', $5)`,
+         VALUES ($1, $2, $3, $4, $5, 'mensal', $6)`,
         [
-          assinaturaId, tenantId, planoSlug, trialEndsAt,
+          assinaturaId, tenantId, planoSlug,
+          assinaturaStatus, trialEndsAt,
           JSON.stringify({
             plano_nome: plano.nome,
-            preco_origem: 'placeholder',
-            origem: 'signup_publico',
+            origem: conviteInfo ? 'convite' : 'signup_publico',
+            convite_id: conviteInfo?.id || null,
+            convite_codigo: conviteInfo ? codigoConvite : null,
+            duracao_dias: duracaoDias,
           }),
         ],
       );
+
+      // Se veio via convite, registra o uso + incrementa contador.
+      if (conviteInfo) {
+        const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+          || req.headers.get('x-real-ip') || '';
+        const ua = req.headers.get('user-agent') || '';
+        await client.query(
+          `INSERT INTO convite_usos
+             (id, convite_id, tenant_id, usuario_id, nome_cliente, email_cliente, ip, user_agent)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [generateId(), conviteInfo.id, tenantId, userId, nomeCompleto, email, ip, ua],
+        );
+        await client.query(
+          `UPDATE convites SET usos_atuais = usos_atuais + 1, updated_at = NOW() WHERE id = $1`,
+          [conviteInfo.id],
+        );
+      }
 
       // Bootstrap minimo: cria a agencia singleton dentro do tenant
       // (legacy compat: alguns componentes carregam /api/agencia).
@@ -184,6 +248,8 @@ export async function POST(req: Request) {
       tenant: { id: tenantId, slug: tenantSlug, nome: nomeAgencia },
       plano: { slug: planoSlug, nome: plano.nome },
       trial_ends_at: trialEndsAt.toISOString(),
+      duracao_dias: duracaoDias,
+      via_convite: !!conviteInfo,
       redirect: '/dashboard',
     });
     res.cookies.set(COOKIE_NAME, token, {

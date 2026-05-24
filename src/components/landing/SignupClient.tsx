@@ -15,6 +15,21 @@ interface Plano {
   features: string[];
 }
 
+interface Convite {
+  codigo: string;
+  nome: string;
+  descricao: string;
+  plano_slug: string;
+  plano_nome: string;
+  plano_descricao?: string;
+  preco_mensal?: number;
+  features?: string[];
+  duracao_dias: number;
+  usos_atuais: number;
+  max_usos: number | null;
+  expira_em: string | null;
+}
+
 function validarEmail(s: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
 }
@@ -22,8 +37,11 @@ function validarEmail(s: string): boolean {
 export function SignupClient() {
   const router = useRouter();
   const sp = useSearchParams();
+  const codigoConvite = (sp.get('convite') || sp.get('invite') || '').toUpperCase();
   const [planos, setPlanos] = useState<Plano[]>([]);
   const [planoSlug, setPlanoSlug] = useState(sp.get('plano') || '');
+  const [convite, setConvite] = useState<Convite | null>(null);
+  const [conviteErro, setConviteErro] = useState<string | null>(null);
   const [nomeAgencia, setNomeAgencia] = useState('');
   const [nomeCompleto, setNomeCompleto] = useState('');
   const [email, setEmail] = useState('');
@@ -45,7 +63,23 @@ export function SignupClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const planoSelecionado = planos.find(p => p.slug === planoSlug);
+  // Se ha codigo de convite na URL, valida + carrega info. Trava o
+  // seletor de plano no plano do convite.
+  useEffect(() => {
+    if (!codigoConvite) return;
+    fetch(`/api/convites/${codigoConvite}`)
+      .then(async r => {
+        const data = await r.json();
+        if (!r.ok) { setConviteErro(data.error || 'Convite inválido'); return; }
+        setConvite(data as Convite);
+        setPlanoSlug(data.plano_slug);
+      })
+      .catch(() => setConviteErro('Falha ao validar convite'));
+  }, [codigoConvite]);
+
+  const planoSelecionado = convite
+    ? planos.find(p => p.slug === convite.plano_slug) || null
+    : planos.find(p => p.slug === planoSlug);
 
   function validar(): string {
     if (!nomeAgencia.trim()) return 'Informe o nome da agência';
@@ -75,6 +109,7 @@ export function SignupClient() {
           telefone: telefone.trim(),
           senha,
           plano_slug: planoSlug,
+          codigo_convite: codigoConvite || undefined,
         }),
       });
       const data = await res.json();
@@ -104,7 +139,37 @@ export function SignupClient() {
               <Logo variant="sidebar" href="/" />
             </div>
             <h1 className="text-2xl font-bold text-slate-900 mb-1">Crie sua conta</h1>
-            <p className="text-sm text-slate-600 mb-6">14 dias grátis · sem cartão de crédito</p>
+            <p className="text-sm text-slate-600 mb-4">
+              {convite
+                ? `${convite.duracao_dias} dias de acesso garantido · plano ${convite.plano_nome}`
+                : '14 dias grátis · sem cartão de crédito'}
+            </p>
+
+            {/* Banner do convite */}
+            {convite && (
+              <div className="mb-5 p-3 rounded-xl bg-gradient-to-br from-emerald-50 to-blue-50 border border-emerald-200">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center shrink-0">
+                    <Check className="w-4 h-4 text-white" strokeWidth={3} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] uppercase tracking-wider font-bold text-emerald-700 mb-0.5">
+                      Convite especial · {codigoConvite}
+                    </div>
+                    <div className="text-sm font-bold text-slate-900 truncate">{convite.nome}</div>
+                    {convite.descricao && (
+                      <div className="text-xs text-slate-600 mt-0.5">{convite.descricao}</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {conviteErro && (
+              <div className="mb-5 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
+                <strong>Convite inválido:</strong> {conviteErro}
+              </div>
+            )}
 
             <form onSubmit={submit} className="space-y-3">
               <Field label="Nome da agência *">
@@ -145,7 +210,9 @@ export function SignupClient() {
                 />
               </Field>
 
-              {/* Seletor de plano (chips) */}
+              {/* Seletor de plano (chips) — ocultado quando ha convite
+                  ativo (plano vem trancado do convite). */}
+              {!convite && (
               <Field label="Plano">
                 <div className="grid grid-cols-3 gap-2">
                   {planos.map(p => {
@@ -175,6 +242,7 @@ export function SignupClient() {
                   })}
                 </div>
               </Field>
+              )}
 
               {error && (
                 <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
@@ -191,7 +259,10 @@ export function SignupClient() {
               </button>
 
               <p className="text-[11px] text-slate-500 text-center">
-                Ao criar a conta, você concorda com nossos termos. Após 14 dias, entraremos em contato para ativar o plano escolhido.
+                Ao criar a conta, você concorda com nossos termos.{' '}
+                {convite
+                  ? `Acesso garantido por ${convite.duracao_dias} dias pelo convite "${convite.nome}".`
+                  : 'Após 14 dias, entraremos em contato para ativar o plano escolhido.'}
               </p>
 
               <div className="text-center pt-2 text-sm text-slate-600">
@@ -211,7 +282,9 @@ export function SignupClient() {
                   <span className="text-4xl font-bold">R$ {Number(planoSelecionado.preco_mensal).toLocaleString('pt-BR')}</span>
                   <span className="text-slate-400 text-sm">/mês</span>
                 </div>
-                <p className="text-xs text-blue-300 mt-1">grátis nos primeiros 14 dias</p>
+                <p className="text-xs text-blue-300 mt-1">
+                  {convite ? `acesso garantido por ${convite.duracao_dias} dias` : 'grátis nos primeiros 14 dias'}
+                </p>
 
                 <div className="mt-8 space-y-2.5 flex-1">
                   {(planoSelecionado.features || []).map((f, i) => (
