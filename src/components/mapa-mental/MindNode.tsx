@@ -1,8 +1,14 @@
 'use client';
 
 import { memo, useEffect, useRef, useState } from 'react';
-import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
-import { ChevronRight, ChevronLeft, Plus, StickyNote } from 'lucide-react';
+import { Handle, Position, NodeToolbar, type NodeProps, type Node } from '@xyflow/react';
+import {
+  ChevronRight, ChevronLeft, Plus, StickyNote,
+  Palette, Smile, MessageSquare, MoreHorizontal,
+} from 'lucide-react';
+
+const QUICK_COLORS = ['#3B82F6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#ef4444', '#06b6d4', '#475569'];
+const QUICK_ICONS = ['💡', '⭐', '🎯', '🚀', '⚡', '🔥', '✅', '❓', '📌', '💰'];
 
 export interface MindNodeData extends Record<string, unknown> {
   text: string;
@@ -19,6 +25,9 @@ export interface MindNodeData extends Record<string, unknown> {
   onStartEdit: () => void;
   onToggleCollapse: () => void;
   onAddChild: () => void;
+  onSetColor?: (c: string | undefined) => void;
+  onSetIcon?: (i: string | undefined) => void;
+  onOpenPanel?: () => void;
 }
 
 type MindNodeType = Node<MindNodeData, 'mindNode'>;
@@ -43,24 +52,120 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
     data.onCommitEdit(v === '' ? text : v);
   };
 
+  const [openPicker, setOpenPicker] = useState<null | 'color' | 'icon'>(null);
+
+  // Toolbar contextual flutuante (renderizada acima do nó via NodeToolbar)
+  const contextualToolbar = !editing && selected ? (
+    <NodeToolbar position={Position.Top} offset={10} isVisible>
+      <div
+        className="bg-white rounded-xl border border-slate-200 px-1.5 py-1.5 flex items-center gap-0.5"
+        style={{ boxShadow: '0 6px 24px rgba(15,23,42,0.12), 0 2px 6px rgba(15,23,42,0.06)' }}
+      >
+        {/* Cor */}
+        <div className="relative">
+          <button
+            onClick={(e) => { e.stopPropagation(); setOpenPicker(p => p === 'color' ? null : 'color'); }}
+            className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 inline-flex items-center"
+            title="Cor"
+          >
+            <Palette className="w-3.5 h-3.5" />
+            <span className="ml-1 w-2.5 h-2.5 rounded-full" style={{ background: color }} />
+          </button>
+          {openPicker === 'color' && (
+            <div
+              className="absolute top-full mt-2 left-0 bg-white rounded-lg border border-slate-200 p-2 flex flex-wrap gap-1 w-[160px] z-50"
+              style={{ boxShadow: '0 10px 32px rgba(15,23,42,0.18)' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <button
+                onClick={() => { data.onSetColor?.(undefined); setOpenPicker(null); }}
+                className="w-6 h-6 rounded-full border-2 border-slate-200 flex items-center justify-center text-[9px] font-bold text-slate-500 hover:scale-110 transition-transform"
+                title="Auto"
+              >
+                A
+              </button>
+              {QUICK_COLORS.map(c => (
+                <button
+                  key={c}
+                  onClick={() => { data.onSetColor?.(c); setOpenPicker(null); }}
+                  className="w-6 h-6 rounded-full transition-transform hover:scale-110"
+                  style={{ background: c, boxShadow: '0 1px 2px rgba(0,0,0,0.15)' }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Ícone */}
+        <div className="relative">
+          <button
+            onClick={(e) => { e.stopPropagation(); setOpenPicker(p => p === 'icon' ? null : 'icon'); }}
+            className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600"
+            title="Ícone"
+          >
+            <Smile className="w-3.5 h-3.5" />
+          </button>
+          {openPicker === 'icon' && (
+            <div
+              className="absolute top-full mt-2 left-0 bg-white rounded-lg border border-slate-200 p-2 flex flex-wrap gap-1 w-[180px] z-50"
+              style={{ boxShadow: '0 10px 32px rgba(15,23,42,0.18)' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <button
+                onClick={() => { data.onSetIcon?.(undefined); setOpenPicker(null); }}
+                className="w-7 h-7 rounded text-[10px] text-slate-500 border border-slate-200 hover:bg-slate-50"
+              >∅</button>
+              {QUICK_ICONS.map(ic => (
+                <button
+                  key={ic}
+                  onClick={() => { data.onSetIcon?.(ic); setOpenPicker(null); }}
+                  className="w-7 h-7 rounded text-base hover:bg-slate-100 transition-colors"
+                >
+                  {ic}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="w-px h-4 bg-slate-200 mx-0.5" />
+
+        {/* Nota */}
+        <button
+          onClick={(e) => { e.stopPropagation(); data.onOpenPanel?.(); }}
+          className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600"
+          title="Nota"
+        >
+          <MessageSquare className="w-3.5 h-3.5" />
+        </button>
+
+        {/* Mais */}
+        <button
+          onClick={(e) => { e.stopPropagation(); data.onOpenPanel?.(); }}
+          className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600"
+          title="Mais opções"
+        >
+          <MoreHorizontal className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </NodeToolbar>
+  ) : null;
+
   // ============ RAIZ ============
   if (isRoot) {
     return (
       <div className="relative group" onDoubleClick={() => data.onStartEdit()}>
-        <Handle type="source" position={Position.Right} id="r" style={handleStyle(color)} />
-        <Handle type="source" position={Position.Left} id="l" style={handleStyle(color)} />
+        {contextualToolbar}
+        <Handle type="source" position={Position.Right} id="r" style={bulletHandle(color)} />
+        <Handle type="source" position={Position.Left}  id="l" style={bulletHandle(color)} />
         <div
-          className={`flex items-center gap-2 px-6 py-3.5 rounded-[18px] text-white font-bold text-[15px] transition-all ${
-            selected ? 'ring-4' : ''
-          }`}
+          className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white transition-all"
           style={{
-            background: `linear-gradient(135deg, ${color} 0%, ${shade(color, -18)} 100%)`,
+            border: `2px solid ${color}`,
             boxShadow: selected
-              ? `0 12px 36px ${color}66, 0 0 0 4px ${color}33, inset 0 1px 0 rgba(255,255,255,0.35)`
-              : `0 10px 28px ${color}55, inset 0 1px 0 rgba(255,255,255,0.3)`,
-            minWidth: 200,
-            // @ts-expect-error css var
-            '--tw-ring-color': `${color}33`,
+              ? `0 0 0 4px ${color}22, 0 6px 18px ${color}25`
+              : `0 1px 2px rgba(15,23,42,0.04), 0 4px 12px rgba(15,23,42,0.06)`,
+            minWidth: 180,
           }}
         >
           {icon && <span className="text-lg leading-none shrink-0">{icon}</span>}
@@ -74,59 +179,60 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit(); }
                 if (e.key === 'Escape') { setLocal(text); data.onCommitEdit(text); }
               }}
-              className="flex-1 bg-transparent text-white placeholder-white/60 outline-none font-bold"
+              className="flex-1 bg-transparent outline-none font-bold text-slate-900 text-center text-[15px]"
               placeholder="Ideia central"
             />
           ) : (
-            <span className="flex-1 truncate">{text || 'Ideia central'}</span>
+            <span className="flex-1 text-center font-bold text-slate-900 text-[15px] leading-snug whitespace-pre-line">
+              {text || 'Ideia central'}
+            </span>
           )}
-          {hasNotes && <StickyNote className="w-3.5 h-3.5 text-white/80 shrink-0" />}
+          {hasNotes && <StickyNote className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
         </div>
-        {/* Botão "+" inline aparece no hover/selected */}
-        <button
-          onClick={(e) => { e.stopPropagation(); data.onAddChild(); }}
-          className={`absolute top-1/2 -translate-y-1/2 w-7 h-7 rounded-full text-white shadow-lg flex items-center justify-center transition-all ${
-            selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-          }`}
-          style={{
-            background: color,
-            right: -38,
-            boxShadow: `0 4px 12px ${color}55`,
-          }}
-          title="Adicionar filho (Tab)"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
+        {/* Botão "+" flutuante */}
+        {selected && (
+          <button
+            onClick={(e) => { e.stopPropagation(); data.onAddChild(); }}
+            className="absolute top-1/2 -translate-y-1/2 w-7 h-7 rounded-full text-white flex items-center justify-center transition-all"
+            style={{
+              background: color,
+              right: -38,
+              boxShadow: `0 4px 12px ${color}55`,
+            }}
+            title="Adicionar filho (Tab)"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        )}
       </div>
     );
   }
 
-  // ============ FILHO ============
+  // ============ FILHO — apenas texto, sem caixa ============
   const isLeft = side === 'left';
   const handleSource = isLeft ? Position.Left : Position.Right;
   const handleTarget = isLeft ? Position.Right : Position.Left;
 
   return (
-    <div className="relative group" onDoubleClick={() => data.onStartEdit()}>
-      <Handle type="target" position={handleTarget} id="t" style={handleStyle(color)} />
-      <Handle type="source" position={handleSource} id="s" style={handleStyle(color)} />
+    <div className={`relative group ${isLeft ? 'text-right' : 'text-left'}`} onDoubleClick={() => data.onStartEdit()}>
+      {contextualToolbar}
+      <Handle type="target" position={handleTarget} id="t" style={bulletHandle(color)} />
+      <Handle type="source" position={handleSource} id="s" style={bulletHandle(color)} />
       <div
-        className={`flex items-center gap-1.5 rounded-[12px] bg-white transition-all ${
-          isLeft ? 'flex-row-reverse pr-3 pl-2' : 'pl-3 pr-2'
-        } py-2`}
+        className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md transition-all ${
+          isLeft ? 'flex-row-reverse' : ''
+        }`}
         style={{
-          borderBottom: `3px solid ${color}`,
-          boxShadow: selected
-            ? `0 0 0 2px ${color}, 0 8px 20px ${color}30`
-            : `0 2px 8px rgba(15,23,42,0.08), 0 1px 0 rgba(15,23,42,0.04)`,
-          minWidth: 140,
+          background: selected ? `${color}10` : 'transparent',
+          outline: selected ? `2px solid ${color}` : 'none',
+          minWidth: 60,
         }}
       >
-        {/* Toggle collapse — fica do lado oposto ao crescimento */}
+        {/* Toggle collapse */}
         {childCount > 0 && (
           <button
             onClick={(e) => { e.stopPropagation(); data.onToggleCollapse(); }}
-            className="shrink-0 w-4 h-4 rounded-full flex items-center justify-center hover:bg-slate-100 transition-colors"
+            className="shrink-0 w-4 h-4 rounded-full flex items-center justify-center hover:bg-slate-200 transition-colors"
             title={collapsed ? 'Expandir' : 'Recolher'}
           >
             {isLeft ? (
@@ -153,11 +259,14 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
               if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit(); }
               if (e.key === 'Escape') { setLocal(text); data.onCommitEdit(text); }
             }}
-            className="flex-1 bg-transparent text-slate-800 placeholder-slate-400 outline-none text-sm font-medium"
+            className="bg-transparent text-slate-800 placeholder-slate-400 outline-none text-[13.5px] font-normal min-w-[60px]"
             placeholder="Novo tópico"
+            style={{ width: `${Math.max(60, local.length * 8)}px` }}
           />
         ) : (
-          <span className="flex-1 truncate text-sm font-medium text-slate-800">{text || 'Novo tópico'}</span>
+          <span className="text-[13.5px] font-normal text-slate-800 leading-snug whitespace-pre-line">
+            {text || 'Novo tópico'}
+          </span>
         )}
         {hasNotes && <StickyNote className="w-3 h-3 text-amber-500 shrink-0" />}
       </div>
@@ -176,41 +285,34 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
         </span>
       )}
 
-      {/* Botão "+" inline (aparece selected/hover) */}
-      <button
-        onClick={(e) => { e.stopPropagation(); data.onAddChild(); }}
-        className={`absolute top-1/2 -translate-y-1/2 w-6 h-6 rounded-full text-white shadow flex items-center justify-center transition-all ${
-          selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-        }`}
-        style={{
-          background: color,
-          [isLeft ? 'left' : 'right']: -32,
-          boxShadow: `0 2px 8px ${color}55`,
-        }}
-        title="Adicionar filho (Tab)"
-      >
-        <Plus className="w-3.5 h-3.5" />
-      </button>
+      {/* Botão "+" inline flutuante */}
+      {selected && (
+        <button
+          onClick={(e) => { e.stopPropagation(); data.onAddChild(); }}
+          className="absolute top-1/2 -translate-y-1/2 w-6 h-6 rounded-full text-white flex items-center justify-center transition-all z-10"
+          style={{
+            background: color,
+            [isLeft ? 'left' : 'right']: -30,
+            boxShadow: `0 3px 10px ${color}55`,
+          }}
+          title="Adicionar filho (Tab)"
+        >
+          <Plus className="w-3.5 h-3.5" />
+        </button>
+      )}
     </div>
   );
 }
 
-function handleStyle(color: string): React.CSSProperties {
+// Bullet visível no handle (círculo branco com borda colorida)
+function bulletHandle(color: string): React.CSSProperties {
   return {
-    width: 6, height: 6,
-    background: color,
-    border: 'none',
-    opacity: 0,
+    width: 9,
+    height: 9,
+    background: '#fff',
+    border: `2px solid ${color}`,
+    opacity: 1,
   };
-}
-
-function shade(hex: string, percent: number): string {
-  const h = hex.replace('#', '');
-  const num = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h, 16);
-  const r = Math.max(0, Math.min(255, ((num >> 16) & 0xff) + Math.round((percent / 100) * 255)));
-  const g = Math.max(0, Math.min(255, ((num >> 8) & 0xff) + Math.round((percent / 100) * 255)));
-  const b = Math.max(0, Math.min(255, (num & 0xff) + Math.round((percent / 100) * 255)));
-  return `#${[r, g, b].map(v => v.toString(16).padStart(2, '0')).join('')}`;
 }
 
 export const MindNode = memo(MindNodeInner);

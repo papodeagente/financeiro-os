@@ -1,43 +1,36 @@
 'use client';
 
-import { BaseEdge, getBezierPath, type EdgeProps } from '@xyflow/react';
+import { BaseEdge, getSmoothStepPath, type EdgeProps } from '@xyflow/react';
 
-// Edge curva entre nodes do mapa mental — funciona simétrica nos dois
-// lados (left/right) porque getBezierPath usa source/target positions.
-// Traço sólido com gradiente sutil pra dar profundidade.
+// Edge em L (smoothstep) entre nodes — estilo XMind/Whimsical clean.
+// Sai do handle do parent, faz um canto arredondado e chega no handle
+// do filho. Funciona simetricamente nos dois lados via positions.
 export function MindEdge(props: EdgeProps) {
   const {
     sourceX, sourceY, targetX, targetY,
-    sourcePosition, targetPosition, data, id,
+    sourcePosition, targetPosition, data,
   } = props;
 
-  const color = (data as { color?: string } | undefined)?.color || '#94a3b8';
+  const color = (data as { color?: string } | undefined)?.color || '#3B82F6';
 
-  const [edgePath] = getBezierPath({
+  const [edgePath] = getSmoothStepPath({
     sourceX, sourceY, targetX, targetY,
     sourcePosition, targetPosition,
-    curvature: 0.45,
+    borderRadius: 16,
+    offset: 20,
   });
 
-  const gradId = `mind-edge-${id}`;
-
   return (
-    <>
-      <defs>
-        <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor={color} stopOpacity="0.4" />
-          <stop offset="100%" stopColor={color} stopOpacity="0.9" />
-        </linearGradient>
-      </defs>
-      <BaseEdge
-        path={edgePath}
-        style={{
-          stroke: `url(#${gradId})`,
-          strokeWidth: 2.5,
-          fill: 'none',
-          strokeLinecap: 'round',
-        }}
-      />
-    </>
+    <BaseEdge
+      path={edgePath}
+      style={{
+        stroke: color,
+        strokeWidth: 1.5,
+        fill: 'none',
+        strokeLinecap: 'round',
+        strokeLinejoin: 'round',
+        opacity: 0.85,
+      }}
+    />
   );
 }

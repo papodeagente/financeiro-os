@@ -39,7 +39,8 @@ export function createMindMap(nome: string = 'Sem título'): MapaMentalData {
     nodes: {
       [rootId]: { id: rootId, text: 'Ideia central', parentId: null, ordem: 0 },
     },
-    theme: 'rainbow',
+    theme: 'minimal',
+    layout: 'logical',
     view: {},
   };
 }
@@ -277,8 +278,9 @@ export function layoutMindMap(data: MapaMentalData): LayoutNode[] {
 // Paleta — cor por nivel de profundidade (theme rainbow)
 // ============================================================
 
-// Paletas estilo XMind — pensadas pra contraste em ramo, não rainbow caótico.
+// Paletas — minimal mono-azul é o default (estilo XMind/Whimsical clean).
 const PALETTES: Record<string, string[]> = {
+  minimal: ['#3B82F6', '#3B82F6', '#3B82F6', '#3B82F6', '#3B82F6', '#3B82F6', '#3B82F6'],
   rainbow: ['#0a84ff', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#84cc16'],
   ocean:   ['#0369a1', '#0891b2', '#0d9488', '#0e7490', '#1e40af', '#155e75', '#164e63'],
   sunset:  ['#db2777', '#ea580c', '#d97706', '#dc2626', '#be185d', '#c2410c', '#9f1239'],
@@ -287,9 +289,10 @@ const PALETTES: Record<string, string[]> = {
   classic: ['#0f172a', '#334155', '#475569', '#64748b', '#475569', '#334155', '#0f172a'],
 };
 
-export type Theme = 'classic' | 'rainbow' | 'mono' | 'ocean' | 'sunset' | 'forest';
+export type Theme = 'minimal' | 'classic' | 'rainbow' | 'mono' | 'ocean' | 'sunset' | 'forest';
 
 export const THEMES: { id: Theme; label: string; preview: string[] }[] = [
+  { id: 'minimal', label: 'Minimal',   preview: ['#3B82F6'] },
   { id: 'rainbow', label: 'Arco-íris', preview: ['#0a84ff', '#10b981', '#f59e0b', '#ec4899'] },
   { id: 'ocean',   label: 'Oceano',    preview: ['#0369a1', '#0891b2', '#0d9488', '#0e7490'] },
   { id: 'sunset',  label: 'Pôr do sol', preview: ['#db2777', '#ea580c', '#d97706', '#dc2626'] },
@@ -297,8 +300,8 @@ export const THEMES: { id: Theme; label: string; preview: string[] }[] = [
   { id: 'mono',    label: 'Mono',      preview: ['#1e293b', '#475569', '#64748b'] },
 ];
 
-export function colorForDepth(depth: number, theme: Theme = 'rainbow'): string {
-  const palette = PALETTES[theme] || PALETTES.rainbow;
+export function colorForDepth(depth: number, theme: Theme = 'minimal'): string {
+  const palette = PALETTES[theme] || PALETTES.minimal;
   return palette[depth % palette.length];
 }
 
