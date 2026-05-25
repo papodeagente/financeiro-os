@@ -330,6 +330,7 @@ export async function initDB() {
     --     icon?, notes?, collapsed?, ordem}}, theme?, view? }
     CREATE TABLE IF NOT EXISTS mapas_mentais (
       id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL DEFAULT '',
       nome TEXT NOT NULL DEFAULT 'Sem título',
       data JSONB NOT NULL DEFAULT '{}'::jsonb,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -844,6 +845,7 @@ export async function initDB() {
     'gestao_grupos', 'grupo_periodos_vagas', 'grupo_reservas', 'grupo_materiais',
     'grupo_passageiros', 'grupo_quartos', 'grupo_documentos',
     'grupo_tarefas', 'grupo_eventos',
+    'mapas_mentais',
   ];
 
   // ============================================================
