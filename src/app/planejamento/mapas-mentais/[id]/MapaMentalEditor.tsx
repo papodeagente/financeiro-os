@@ -63,14 +63,56 @@ function EditorInner({ id }: Props) {
   // ============ LOAD ============
   useEffect(() => {
     let cancel = false;
-    fetch(`/api/mapas-mentais/${id}`).then(r => r.ok ? r.json() : null).then(d => {
+    const cacheKey = `mapa-mental:${id}`;
+
+    // 1. Tenta cache do sessionStorage (vindo da pagina lista que acabou
+    //    de criar este mapa) — abre o editor INSTANTANEAMENTE, sem
+    //    esperar GET. Race condition com servidor evitada.
+    try {
+      const cached = typeof window !== 'undefined' ? sessionStorage.getItem(cacheKey) : null;
+      if (cached) {
+        const md = JSON.parse(cached) as MapaMentalData;
+        setData(md);
+        setSelectedId(md.rootId);
+        setLoading(false);
+        sessionStorage.removeItem(cacheKey);
+        return; // pula GET
+      }
+    } catch { /* ignore */ }
+
+    // 2. GET normal. Se 404, auto-cria mapa novo (cobre o caso de
+    //    navegacao direta pra /[id] inexistente).
+    fetch(`/api/mapas-mentais/${id}`).then(async r => {
       if (cancel) return;
-      if (!d || d.error) {
-        setError('Mapa não encontrado.');
+      if (r.status === 404) {
+        // Mapa nao existe — cria automaticamente com o id pedido.
+        const fresh = createMindMap('Novo mapa mental');
+        fresh.id = id;
+        try {
+          await fetch('/api/mapas-mentais', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(fresh),
+          });
+        } catch { /* ignore — auto-save futuro recupera */ }
+        if (cancel) return;
+        setData(fresh);
+        setSelectedId(fresh.rootId);
         setLoading(false);
         return;
       }
-      // Compat: se d e payload antigo, completa shape.
+      if (!r.ok) {
+        setError('Falha ao carregar mapa.');
+        setLoading(false);
+        return;
+      }
+      const d = await r.json();
+      if (cancel) return;
+      if (!d || d.error) {
+        setError(d?.error || 'Mapa não encontrado.');
+        setLoading(false);
+        return;
+      }
       const md: MapaMentalData = {
         id: d.id || id,
         nome: d.nome || 'Sem título',
@@ -80,7 +122,6 @@ function EditorInner({ id }: Props) {
         view: d.view || {},
       };
       if (!md.rootId || !md.nodes[md.rootId]) {
-        // mapa novo sem inicializacao — cria
         const fresh = createMindMap(md.nome);
         md.rootId = fresh.rootId;
         md.nodes = fresh.nodes;

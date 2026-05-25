@@ -32,12 +32,24 @@ export default function ListaMapasMentaisPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(mapa),
       });
-      if (res.ok) {
-        router.push(`/planejamento/mapas-mentais/${mapa.id}`);
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        console.error('[criar mapa] POST falhou', res.status, errText);
+        alert(`Erro ao criar mapa: ${res.status} ${errText.slice(0, 200) || 'sem detalhe'}`);
+        setCreating(false);
         return;
       }
-    } catch { /* ignore */ }
-    setCreating(false);
+      // POST OK — guarda em sessionStorage pra o editor pegar imediato
+      // (evita race com a leitura no GET da rota [id]).
+      try {
+        sessionStorage.setItem(`mapa-mental:${mapa.id}`, JSON.stringify(mapa));
+      } catch { /* ignore */ }
+      router.push(`/planejamento/mapas-mentais/${mapa.id}`);
+    } catch (e) {
+      console.error('[criar mapa] erro de rede', e);
+      alert(`Erro de rede: ${e instanceof Error ? e.message : 'desconhecido'}`);
+      setCreating(false);
+    }
   };
 
   const remover = async (id: string, nome: string) => {
