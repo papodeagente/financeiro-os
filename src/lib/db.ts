@@ -323,6 +323,19 @@ export async function initDB() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    -- Mapas mentais estilo MindMeister. Estrutura hierarquica de nodes
+    -- (pai/filhos) com layout automatico horizontal. Dados serializados
+    -- em JSONB pra flexibilidade — schema do conteudo:
+    --   data: { rootId, nodes: {[id]: {id, text, parentId, color?,
+    --     icon?, notes?, collapsed?, ordem}}, theme?, view? }
+    CREATE TABLE IF NOT EXISTS mapas_mentais (
+      id TEXT PRIMARY KEY,
+      nome TEXT NOT NULL DEFAULT 'Sem título',
+      data JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS cartoes_corp (
       id TEXT PRIMARY KEY,
       apelido TEXT NOT NULL DEFAULT '',
