@@ -130,6 +130,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // sendo height auto -> scroll no <main> (comportamento atual preservado).
   const needsFixedHeight = pathname
     ? /^\/propostas\/(nova|[^/]+)$/.test(pathname)
+      || /^\/planejamento\/mapas-mentais\/[^/]+$/.test(pathname)
     : false;
 
   return (
