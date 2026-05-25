@@ -2,7 +2,7 @@
 
 import { memo, useEffect, useRef, useState } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
-import { ChevronRight, Plus } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Plus, StickyNote } from 'lucide-react';
 
 export interface MindNodeData extends Record<string, unknown> {
   text: string;
@@ -12,6 +12,9 @@ export interface MindNodeData extends Record<string, unknown> {
   collapsed: boolean;
   childCount: number;
   editing: boolean;
+  side: 'left' | 'right';
+  icon?: string;
+  hasNotes?: boolean;
   onCommitEdit: (text: string) => void;
   onStartEdit: () => void;
   onToggleCollapse: () => void;
@@ -21,7 +24,7 @@ export interface MindNodeData extends Record<string, unknown> {
 type MindNodeType = Node<MindNodeData, 'mindNode'>;
 
 function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
-  const { text, depth, color, isRoot, collapsed, childCount, editing } = data;
+  const { text, color, isRoot, collapsed, childCount, editing, side, icon, hasNotes } = data;
   const inputRef = useRef<HTMLInputElement>(null);
   const [local, setLocal] = useState(text);
 
@@ -40,24 +43,27 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
     data.onCommitEdit(v === '' ? text : v);
   };
 
-  // Visual diferenciado pra raiz (pill grande colorido) vs filhos
-  // (pill menor com sombra colorida sutil)
+  // ============ RAIZ ============
   if (isRoot) {
     return (
-      <div className="relative" onDoubleClick={() => data.onStartEdit()}>
-        <Handle type="source" position={Position.Right} style={handleStyle(color)} />
+      <div className="relative group" onDoubleClick={() => data.onStartEdit()}>
+        <Handle type="source" position={Position.Right} id="r" style={handleStyle(color)} />
+        <Handle type="source" position={Position.Left} id="l" style={handleStyle(color)} />
         <div
-          className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-white font-bold text-base transition-all ${
-            selected ? 'ring-4 ring-offset-2' : ''
+          className={`flex items-center gap-2 px-6 py-3.5 rounded-[18px] text-white font-bold text-[15px] transition-all ${
+            selected ? 'ring-4' : ''
           }`}
           style={{
-            background: `linear-gradient(135deg, ${color} 0%, ${shade(color, -12)} 100%)`,
-            boxShadow: `0 8px 24px ${color}55, inset 0 1px 0 rgba(255,255,255,0.3)`,
+            background: `linear-gradient(135deg, ${color} 0%, ${shade(color, -18)} 100%)`,
+            boxShadow: selected
+              ? `0 12px 36px ${color}66, 0 0 0 4px ${color}33, inset 0 1px 0 rgba(255,255,255,0.35)`
+              : `0 10px 28px ${color}55, inset 0 1px 0 rgba(255,255,255,0.3)`,
             minWidth: 200,
             // @ts-expect-error css var
-            '--tw-ring-color': `${color}55`,
+            '--tw-ring-color': `${color}33`,
           }}
         >
+          {icon && <span className="text-lg leading-none shrink-0">{icon}</span>}
           {editing ? (
             <input
               ref={inputRef}
@@ -69,42 +75,74 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
                 if (e.key === 'Escape') { setLocal(text); data.onCommitEdit(text); }
               }}
               className="flex-1 bg-transparent text-white placeholder-white/60 outline-none font-bold"
+              placeholder="Ideia central"
             />
           ) : (
             <span className="flex-1 truncate">{text || 'Ideia central'}</span>
           )}
+          {hasNotes && <StickyNote className="w-3.5 h-3.5 text-white/80 shrink-0" />}
         </div>
+        {/* Botão "+" inline aparece no hover/selected */}
+        <button
+          onClick={(e) => { e.stopPropagation(); data.onAddChild(); }}
+          className={`absolute top-1/2 -translate-y-1/2 w-7 h-7 rounded-full text-white shadow-lg flex items-center justify-center transition-all ${
+            selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+          }`}
+          style={{
+            background: color,
+            right: -38,
+            boxShadow: `0 4px 12px ${color}55`,
+          }}
+          title="Adicionar filho (Tab)"
+        >
+          <Plus className="w-4 h-4" />
+        </button>
       </div>
     );
   }
 
+  // ============ FILHO ============
+  const isLeft = side === 'left';
+  const handleSource = isLeft ? Position.Left : Position.Right;
+  const handleTarget = isLeft ? Position.Right : Position.Left;
+
   return (
     <div className="relative group" onDoubleClick={() => data.onStartEdit()}>
-      <Handle type="target" position={Position.Left} style={handleStyle(color)} />
-      <Handle type="source" position={Position.Right} style={handleStyle(color)} />
+      <Handle type="target" position={handleTarget} id="t" style={handleStyle(color)} />
+      <Handle type="source" position={handleSource} id="s" style={handleStyle(color)} />
       <div
-        className={`flex items-center gap-1.5 pl-3 pr-2 py-2 rounded-xl bg-white border-2 transition-all ${
-          selected ? 'shadow-lg' : 'hover:shadow-md'
-        }`}
+        className={`flex items-center gap-1.5 rounded-[12px] bg-white transition-all ${
+          isLeft ? 'flex-row-reverse pr-3 pl-2' : 'pl-3 pr-2'
+        } py-2`}
         style={{
-          borderColor: color,
-          boxShadow: selected ? `0 0 0 3px ${color}25, 0 4px 14px ${color}30` : `0 2px 8px rgba(15,23,42,0.06)`,
-          minWidth: 160,
+          borderBottom: `3px solid ${color}`,
+          boxShadow: selected
+            ? `0 0 0 2px ${color}, 0 8px 20px ${color}30`
+            : `0 2px 8px rgba(15,23,42,0.08), 0 1px 0 rgba(15,23,42,0.04)`,
+          minWidth: 140,
         }}
       >
-        {/* Toggle collapse */}
+        {/* Toggle collapse — fica do lado oposto ao crescimento */}
         {childCount > 0 && (
           <button
             onClick={(e) => { e.stopPropagation(); data.onToggleCollapse(); }}
             className="shrink-0 w-4 h-4 rounded-full flex items-center justify-center hover:bg-slate-100 transition-colors"
             title={collapsed ? 'Expandir' : 'Recolher'}
           >
-            <ChevronRight
-              className="w-3 h-3 text-slate-500 transition-transform"
-              style={{ transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)' }}
-            />
+            {isLeft ? (
+              <ChevronLeft
+                className="w-3 h-3 text-slate-500 transition-transform"
+                style={{ transform: collapsed ? 'rotate(0deg)' : 'rotate(-90deg)' }}
+              />
+            ) : (
+              <ChevronRight
+                className="w-3 h-3 text-slate-500 transition-transform"
+                style={{ transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)' }}
+              />
+            )}
           </button>
         )}
+        {icon && <span className="text-sm leading-none shrink-0">{icon}</span>}
         {editing ? (
           <input
             ref={inputRef}
@@ -116,38 +154,53 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
               if (e.key === 'Escape') { setLocal(text); data.onCommitEdit(text); }
             }}
             className="flex-1 bg-transparent text-slate-800 placeholder-slate-400 outline-none text-sm font-medium"
+            placeholder="Novo tópico"
           />
         ) : (
-          <span className="flex-1 truncate text-sm font-medium text-slate-800">{text || '...'}</span>
+          <span className="flex-1 truncate text-sm font-medium text-slate-800">{text || 'Novo tópico'}</span>
         )}
-        {/* Botao add child no hover */}
-        <button
-          onClick={(e) => { e.stopPropagation(); data.onAddChild(); }}
-          className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ background: color }}
-          title="Adicionar filho (Tab)"
-        >
-          <Plus className="w-3 h-3" />
-        </button>
+        {hasNotes && <StickyNote className="w-3 h-3 text-amber-500 shrink-0" />}
       </div>
+
+      {/* Indicador de filhos recolhidos */}
       {collapsed && childCount > 0 && (
         <span
-          className="absolute -right-7 top-1/2 -translate-y-1/2 text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white"
-          style={{ background: color }}
+          className="absolute top-1/2 -translate-y-1/2 text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white"
+          style={{
+            background: color,
+            [isLeft ? 'left' : 'right']: -28,
+          }}
           title={`${childCount} ${childCount === 1 ? 'filho recolhido' : 'filhos recolhidos'}`}
         >
           {childCount}
         </span>
       )}
+
+      {/* Botão "+" inline (aparece selected/hover) */}
+      <button
+        onClick={(e) => { e.stopPropagation(); data.onAddChild(); }}
+        className={`absolute top-1/2 -translate-y-1/2 w-6 h-6 rounded-full text-white shadow flex items-center justify-center transition-all ${
+          selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+        }`}
+        style={{
+          background: color,
+          [isLeft ? 'left' : 'right']: -32,
+          boxShadow: `0 2px 8px ${color}55`,
+        }}
+        title="Adicionar filho (Tab)"
+      >
+        <Plus className="w-3.5 h-3.5" />
+      </button>
     </div>
   );
 }
 
 function handleStyle(color: string): React.CSSProperties {
   return {
-    width: 8, height: 8,
-    background: color, border: '2px solid white',
-    opacity: 0.6,
+    width: 6, height: 6,
+    background: color,
+    border: 'none',
+    opacity: 0,
   };
 }
 

@@ -20,7 +20,8 @@ export interface MapaMentalData {
   nome: string;
   rootId: string;
   nodes: Record<string, MindNode>;
-  theme?: 'classic' | 'rainbow' | 'mono';
+  theme?: 'classic' | 'rainbow' | 'mono' | 'ocean' | 'sunset' | 'forest';
+  layout?: 'map' | 'logical' | 'right';  // map=balanced L/R, logical=tree right, right=alias
   view?: { zoom?: number; x?: number; y?: number };
 }
 
@@ -147,82 +148,128 @@ export interface LayoutNode extends MindNode {
   width: number;
   height: number;
   depth: number;
+  side: 'left' | 'right';   // de que lado da raiz o nó está
 }
 
 const NODE_WIDTH = 200;
 const NODE_HEIGHT = 44;
-const H_GAP = 80;      // espaco horizontal entre niveis
-const V_GAP = 12;      // espaco vertical entre siblings
+const H_GAP = 90;      // espaco horizontal entre niveis
+const V_GAP = 14;      // espaco vertical entre siblings
 
-interface SubtreeMetrics {
-  height: number;
-}
-
-function measureSubtree(
-  data: MapaMentalData,
-  nodeId: string,
-): SubtreeMetrics {
+function measureSubtree(data: MapaMentalData, nodeId: string): number {
   const node = data.nodes[nodeId];
-  if (!node) return { height: NODE_HEIGHT };
-
+  if (!node) return NODE_HEIGHT;
   const children = node.collapsed ? [] : getChildren(data, nodeId);
-  if (children.length === 0) return { height: NODE_HEIGHT };
-
+  if (children.length === 0) return NODE_HEIGHT;
   let total = 0;
-  for (const c of children) {
-    total += measureSubtree(data, c.id).height;
-  }
+  for (const c of children) total += measureSubtree(data, c.id);
   total += (children.length - 1) * V_GAP;
-  return { height: Math.max(NODE_HEIGHT, total) };
+  return Math.max(NODE_HEIGHT, total);
 }
 
+// Coloca uma subarvore num lado especifico (right=descendo a direita,
+// left=descendo a esquerda). x recebido eh a borda da raiz na direcao
+// de crescimento (ex: lado direito da raiz pra side=right).
 function placeSubtree(
   data: MapaMentalData,
   nodeId: string,
-  x: number,
+  anchorX: number,           // borda da raiz/parent na direcao de crescimento
   centerY: number,
   depth: number,
+  side: 'left' | 'right',
   out: LayoutNode[],
 ): void {
   const node = data.nodes[nodeId];
   if (!node) return;
 
-  const subHeight = measureSubtree(data, nodeId).height;
+  const x = side === 'right' ? anchorX + H_GAP : anchorX - H_GAP - NODE_WIDTH;
   const y = centerY - NODE_HEIGHT / 2;
 
   out.push({
     ...node,
-    x,
-    y,
+    x, y,
     width: NODE_WIDTH,
     height: NODE_HEIGHT,
     depth,
+    side,
   });
 
   if (node.collapsed) return;
-
   const children = getChildren(data, nodeId);
   if (children.length === 0) return;
 
-  // Distribui filhos verticalmente preservando centro alinhado
-  const childX = x + NODE_WIDTH + H_GAP;
-  // Calcula altura total dos filhos
-  const heights = children.map(c => measureSubtree(data, c.id).height);
-  const totalChildren = heights.reduce((s, h) => s + h, 0) + (children.length - 1) * V_GAP;
-  let cursor = centerY - totalChildren / 2;
+  const childAnchorX = side === 'right' ? x + NODE_WIDTH : x;
+  const heights = children.map(c => measureSubtree(data, c.id));
+  const totalH = heights.reduce((s, h) => s + h, 0) + (children.length - 1) * V_GAP;
+  let cursor = centerY - totalH / 2;
   for (let i = 0; i < children.length; i++) {
     const ch = heights[i];
-    const childCenterY = cursor + ch / 2;
-    placeSubtree(data, children[i].id, childX, childCenterY, depth + 1, out);
+    placeSubtree(data, children[i].id, childAnchorX, cursor + ch / 2, depth + 1, side, out);
     cursor += ch + V_GAP;
   }
-  // unused
-  void subHeight;
 }
 
 export function layoutMindMap(data: MapaMentalData): LayoutNode[] {
   const out: LayoutNode[] = [];
-  placeSubtree(data, data.rootId, 80, 400, 0, out);
+  const root = data.nodes[data.rootId];
+  if (!root) return out;
+
+  const ROOT_W = 220;          // raiz é um pouco mais larga
+  const centerY = 400;
+  const rootX = 0;
+  const layoutMode = data.layout || 'map';
+
+  out.push({
+    ...root,
+    x: rootX,
+    y: centerY - NODE_HEIGHT / 2,
+    width: ROOT_W,
+    height: NODE_HEIGHT,
+    depth: 0,
+    side: 'right',
+  });
+
+  if (root.collapsed) return out;
+  const children = getChildren(data, data.rootId);
+  if (children.length === 0) return out;
+
+  if (layoutMode === 'logical' || layoutMode === 'right') {
+    // Tudo cresce pra direita
+    const heights = children.map(c => measureSubtree(data, c.id));
+    const totalH = heights.reduce((s, h) => s + h, 0) + (children.length - 1) * V_GAP;
+    let cursor = centerY - totalH / 2;
+    const anchor = rootX + ROOT_W;
+    for (let i = 0; i < children.length; i++) {
+      placeSubtree(data, children[i].id, anchor, cursor + heights[i] / 2, 1, 'right', out);
+      cursor += heights[i] + V_GAP;
+    }
+    return out;
+  }
+
+  // layout='map' — balanceia filhos da raiz entre esquerda/direita
+  // alternando por ordem (par→direita, ímpar→esquerda) pra equilibrar.
+  const rightKids: MindNode[] = [];
+  const leftKids: MindNode[] = [];
+  children.forEach((c, i) => { (i % 2 === 0 ? rightKids : leftKids).push(c); });
+
+  // Lado direito
+  const rH = rightKids.map(c => measureSubtree(data, c.id));
+  const rTotal = rH.reduce((s, h) => s + h, 0) + Math.max(0, rightKids.length - 1) * V_GAP;
+  let cR = centerY - rTotal / 2;
+  for (let i = 0; i < rightKids.length; i++) {
+    placeSubtree(data, rightKids[i].id, rootX + ROOT_W, cR + rH[i] / 2, 1, 'right', out);
+    cR += rH[i] + V_GAP;
+  }
+
+  // Lado esquerdo
+  const lH = leftKids.map(c => measureSubtree(data, c.id));
+  const lTotal = lH.reduce((s, h) => s + h, 0) + Math.max(0, leftKids.length - 1) * V_GAP;
+  let cL = centerY - lTotal / 2;
+  for (let i = 0; i < leftKids.length; i++) {
+    placeSubtree(data, leftKids[i].id, rootX, cL + lH[i] / 2, 1, 'left', out);
+    cL += lH[i] + V_GAP;
+  }
+
   return out;
 }
 
@@ -230,20 +277,33 @@ export function layoutMindMap(data: MapaMentalData): LayoutNode[] {
 // Paleta — cor por nivel de profundidade (theme rainbow)
 // ============================================================
 
-const RAINBOW_COLORS = [
-  '#0a84ff', // root (azul Apple)
-  '#10b981', // nivel 1 (emerald)
-  '#f59e0b', // nivel 2 (amber)
-  '#ec4899', // nivel 3 (rose)
-  '#8b5cf6', // nivel 4 (violet)
-  '#06b6d4', // nivel 5 (cyan)
-  '#84cc16', // nivel 6 (lime)
+// Paletas estilo XMind — pensadas pra contraste em ramo, não rainbow caótico.
+const PALETTES: Record<string, string[]> = {
+  rainbow: ['#0a84ff', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#84cc16'],
+  ocean:   ['#0369a1', '#0891b2', '#0d9488', '#0e7490', '#1e40af', '#155e75', '#164e63'],
+  sunset:  ['#db2777', '#ea580c', '#d97706', '#dc2626', '#be185d', '#c2410c', '#9f1239'],
+  forest:  ['#15803d', '#65a30d', '#16a34a', '#047857', '#166534', '#3f6212', '#365314'],
+  mono:    ['#1e293b', '#334155', '#475569', '#64748b', '#475569', '#334155', '#1e293b'],
+  classic: ['#0f172a', '#334155', '#475569', '#64748b', '#475569', '#334155', '#0f172a'],
+};
+
+export type Theme = 'classic' | 'rainbow' | 'mono' | 'ocean' | 'sunset' | 'forest';
+
+export const THEMES: { id: Theme; label: string; preview: string[] }[] = [
+  { id: 'rainbow', label: 'Arco-íris', preview: ['#0a84ff', '#10b981', '#f59e0b', '#ec4899'] },
+  { id: 'ocean',   label: 'Oceano',    preview: ['#0369a1', '#0891b2', '#0d9488', '#0e7490'] },
+  { id: 'sunset',  label: 'Pôr do sol', preview: ['#db2777', '#ea580c', '#d97706', '#dc2626'] },
+  { id: 'forest',  label: 'Floresta',  preview: ['#15803d', '#65a30d', '#16a34a', '#047857'] },
+  { id: 'mono',    label: 'Mono',      preview: ['#1e293b', '#475569', '#64748b'] },
 ];
 
-export function colorForDepth(depth: number, theme: 'classic' | 'rainbow' | 'mono' = 'rainbow'): string {
-  if (theme === 'mono') return '#475569';
-  if (theme === 'classic') {
-    return depth === 0 ? '#0f172a' : '#475569';
-  }
-  return RAINBOW_COLORS[depth % RAINBOW_COLORS.length];
+export function colorForDepth(depth: number, theme: Theme = 'rainbow'): string {
+  const palette = PALETTES[theme] || PALETTES.rainbow;
+  return palette[depth % palette.length];
 }
+
+// Paleta de seleção rápida pra override de cor de um nó (painel direito).
+export const NODE_COLORS = [
+  '#0a84ff', '#10b981', '#f59e0b', '#ec4899',
+  '#8b5cf6', '#06b6d4', '#ef4444', '#475569',
+];
