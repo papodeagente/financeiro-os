@@ -61,11 +61,30 @@ function getRequestHost(request: NextRequest): string {
 function getCanonicalBase(): string {
   // Base pra redirecionar quando o host atual é um custom proposal
   // domain mas a rota não é de proposta. Prioriza PUBLIC_APP_URL.
-  return (
-    process.env.PUBLIC_APP_URL
-    || process.env.COOLIFY_URL
-    || 'https://fin.enturos.com'
-  ).replace(/\/+$/, '');
+  //
+  // Coolify seta COOLIFY_URL com lista de FQDNs separados por vírgula
+  // quando a app tem múltiplos domínios (ex.:
+  // "https://fin.enturos.com,https://proposta.entur.ia.br"). Filtro
+  // pra pegar o primeiro que NÃO é um host de proposta personalizado
+  // — usa CANONICAL_HOSTS pra decidir.
+  const candidates = [
+    process.env.PUBLIC_APP_URL,
+    ...(process.env.COOLIFY_URL?.split(',') || []),
+  ]
+    .map(v => v?.trim())
+    .filter(Boolean) as string[];
+
+  for (const raw of candidates) {
+    try {
+      const u = new URL(raw);
+      const h = u.hostname.toLowerCase();
+      if (CANONICAL_HOSTS.has(h)) {
+        return `${u.protocol}//${u.host}`;
+      }
+    } catch { /* invalid URL — skip */ }
+  }
+
+  return 'https://fin.enturos.com';
 }
 
 // Public routes that don't require authentication
