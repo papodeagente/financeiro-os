@@ -15,6 +15,59 @@ function getJwtSecret() {
 
 const COOKIE_NAME = 'entur-session';
 
+// Hosts canônicos do sistema — qualquer outro host que aponte pra essa
+// app é tratado como domínio personalizado de propostas (configurado
+// em Agencia.custom_proposta_domain) e SÓ pode servir rotas públicas
+// de proposta. CANONICAL_HOSTS env var pode estender via vírgula
+// (ex.: "fin.enturos.com,fin2.enturos.com").
+const CANONICAL_HOSTS = new Set<string>(
+  [
+    'fin.enturos.com',
+    'localhost',
+    '127.0.0.1',
+    '0.0.0.0',
+    process.env.COOLIFY_FQDN?.toLowerCase(),
+    ...(process.env.CANONICAL_HOSTS?.split(',').map(s => s.trim().toLowerCase()) || []),
+  ].filter(Boolean) as string[],
+);
+
+// Rotas permitidas em domínio personalizado de proposta. Tudo fora
+// desta whitelist é redirecionado pro domínio canônico.
+function isProposalAllowedPath(pathname: string): boolean {
+  return (
+    pathname === '/p' ||
+    pathname.startsWith('/p/') ||
+    pathname.startsWith('/api/propostas/public/') ||
+    pathname.startsWith('/api/uploads/') ||
+    pathname.startsWith('/_next/') ||
+    pathname.startsWith('/favicon') ||
+    pathname.endsWith('.ico') ||
+    pathname.endsWith('.png') ||
+    pathname.endsWith('.jpg') ||
+    pathname.endsWith('.svg') ||
+    pathname === '/robots.txt' ||
+    pathname === '/sitemap.xml'
+  );
+}
+
+function getRequestHost(request: NextRequest): string {
+  // x-forwarded-host vem do proxy reverso (Traefik no Coolify);
+  // priorizar sobre host porque Next pode ver "localhost" internamente.
+  const fwd = request.headers.get('x-forwarded-host');
+  const host = request.headers.get('host');
+  return (fwd || host || '').split(':')[0].toLowerCase();
+}
+
+function getCanonicalBase(): string {
+  // Base pra redirecionar quando o host atual é um custom proposal
+  // domain mas a rota não é de proposta. Prioriza PUBLIC_APP_URL.
+  return (
+    process.env.PUBLIC_APP_URL
+    || process.env.COOLIFY_URL
+    || 'https://fin.enturos.com'
+  ).replace(/\/+$/, '');
+}
+
 // Public routes that don't require authentication
 const PUBLIC_PATHS = [
   '/login', '/api/auth/login', '/api/auth/seed', '/api/auth/session',
@@ -44,6 +97,26 @@ function addSecurityHeaders(response: NextResponse) {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // ============================================================
+  // Custom proposal domain — só serve rotas de proposta pública
+  // ============================================================
+  // Se o host não é canônico (ex.: proposta.entur.ia.br configurado
+  // em Agencia.custom_proposta_domain), bloqueia qualquer rota fora
+  // do whitelist redirecionando pro domínio canônico.
+  const host = getRequestHost(request);
+  if (host && !CANONICAL_HOSTS.has(host)) {
+    if (!isProposalAllowedPath(pathname)) {
+      const target = new URL(
+        `${pathname}${request.nextUrl.search}`,
+        getCanonicalBase(),
+      );
+      return NextResponse.redirect(target, 302);
+    }
+    // Rota permitida no domínio de proposta — segue sem checar auth
+    // (propostas públicas não exigem login).
+    return addSecurityHeaders(NextResponse.next());
+  }
 
   // Allow public paths (prefixos + exatos)
   if (PUBLIC_EXACT_PATHS.has(pathname) || PUBLIC_PATHS.some(p => pathname.startsWith(p))) {
