@@ -36,7 +36,20 @@ export default function AgenciaPage() {
 
   useEffect(() => {
     loadAgencia<Agencia>().then((result) => {
-      if (result) setData(result);
+      if (result) {
+        // Merge raso preservando defaults dos subobjects. Sem isso, se
+        // o registro salvo não tiver `endereco`/`cores_identidade`/
+        // `redes_sociais` (dados antigos ou tenants novos), o spread
+        // sumiria com esses objetos e a UI quebrava em
+        // data.endereco.cep.replace(...).
+        setData((prev) => ({
+          ...prev,
+          ...result,
+          endereco: { ...prev.endereco, ...((result as Agencia).endereco || {}) },
+          cores_identidade: { ...prev.cores_identidade, ...((result as Agencia).cores_identidade || {}) },
+          redes_sociais: { ...prev.redes_sociais, ...((result as Agencia).redes_sociais || {}) },
+        }));
+      }
       setLoading(false);
     });
   }, []);
@@ -54,7 +67,7 @@ export default function AgenciaPage() {
   }
 
   async function handleCepBlur() {
-    const cep = data.endereco.cep.replace(/\D/g, '');
+    const cep = (data.endereco?.cep || '').replace(/\D/g, '');
     if (cep.length !== 8) return;
     setCepLoading(true);
     try {
