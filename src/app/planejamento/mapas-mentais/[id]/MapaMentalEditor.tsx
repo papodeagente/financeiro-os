@@ -28,7 +28,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
-  ArrowLeft, Check, Loader2, Sparkles, Save,
+  ArrowLeft, Check, Loader2, Sparkles, Save, Trash2,
   Plus, GitBranch, Palette, StickyNote, Smile, Keyboard, X,
   ChevronRight as ChevR,
 } from 'lucide-react';
@@ -220,6 +220,19 @@ function EditorInner({ id }: Props) {
     });
   }, [scheduleSave]);
 
+  // Confirma apenas quando o nó tem filhos — leaves removem direto.
+  const handleDeleteWithConfirm = useCallback((nodeId: string) => {
+    if (!data || nodeId === data.rootId) return;
+    const filhos = getChildren(data, nodeId);
+    if (filhos.length === 0) {
+      handleDelete(nodeId);
+      return;
+    }
+    if (confirm(`Remover este nó e ${filhos.length === 1 ? 'seu filho' : `seus ${filhos.length} filhos (incluindo descendentes)`}?`)) {
+      handleDelete(nodeId);
+    }
+  }, [data, handleDelete]);
+
   const handleEditCommit = useCallback((nodeId: string, text: string) => {
     setData(d => {
       if (!d) return d;
@@ -272,9 +285,7 @@ function EditorInner({ id }: Props) {
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedId === data.rootId) return;
         e.preventDefault();
-        if (confirm('Remover este nó e seus filhos?')) {
-          handleDelete(selectedId);
-        }
+        handleDeleteWithConfirm(selectedId);
       } else if (e.key === 'Escape') {
         setEditingId(null);
       } else if (e.key === ' ') {
@@ -311,13 +322,13 @@ function EditorInner({ id }: Props) {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [data, selectedId, handleAddChild, handleAddSibling, handleDelete, handleToggleCollapse]);
+  }, [data, selectedId, handleAddChild, handleAddSibling, handleDeleteWithConfirm, handleToggleCollapse]);
 
   // ============ Conversão pro ReactFlow ============
   const { rfNodes, rfEdges } = useMemo(() => {
     if (!data) return { rfNodes: [] as Node[], rfEdges: [] as Edge[] };
     const layout = layoutMindMap(data);
-    const theme = (data.theme || 'rainbow') as Theme;
+    const theme = (data.theme || 'minimal') as Theme;
     const nodes: Node[] = layout.map(n => {
       const childCount = getChildren(data, n.id).length;
       const color = n.color || colorForDepth(n.depth, theme);
@@ -339,6 +350,7 @@ function EditorInner({ id }: Props) {
         onSetColor: (c: string | undefined) => handleSetColor(n.id, c),
         onSetIcon: (i: string | undefined) => handleSetIcon(n.id, i),
         onOpenPanel: () => setShowProperties(true),
+        onDelete: () => handleDeleteWithConfirm(n.id),
       };
       return {
         id: n.id,
@@ -353,11 +365,12 @@ function EditorInner({ id }: Props) {
     for (const n of layout) {
       if (n.parentId && data.nodes[n.parentId] && !data.nodes[n.parentId].collapsed) {
         const color = n.color || colorForDepth(n.depth, theme);
-        // Source handle vem do lado oposto ao filho — pra raiz, depende
-        // do side do filho; pros demais, o handle source segue a direção
-        // do side (mesma direção de crescimento).
+        // Convenção uniforme: source sai do lado de crescimento do filho
+        // (right→saida na direita do pai; left→saida na esquerda do pai).
+        // Target entra no lado oposto do filho. IDs dos handles são
+        // 'l' ou 'r' em TODOS os nós (incluindo raiz e intermediários).
         const sourceHandle = n.side === 'left' ? 'l' : 'r';
-        const targetHandle = 't';
+        const targetHandle = n.side === 'left' ? 'r' : 'l';
         edges.push({
           id: `e-${n.parentId}-${n.id}`,
           source: n.parentId,
@@ -370,7 +383,7 @@ function EditorInner({ id }: Props) {
       }
     }
     return { rfNodes: nodes, rfEdges: edges };
-  }, [data, selectedId, editingId, handleAddChild, handleEditCommit, handleToggleCollapse]);
+  }, [data, selectedId, editingId, handleAddChild, handleEditCommit, handleToggleCollapse, handleDeleteWithConfirm, handleSetColor, handleSetIcon]);
 
   // Fit view inicial
   const didFitRef = useRef(false);
@@ -520,13 +533,14 @@ function EditorInner({ id }: Props) {
           <PropertiesPanel
             node={selNode}
             isRoot={selIsRoot}
-            theme={(data.theme || 'rainbow') as Theme}
-            currentTheme={(data.theme || 'rainbow') as Theme}
+            theme={(data.theme || 'minimal') as Theme}
+            currentTheme={(data.theme || 'minimal') as Theme}
             onSetColor={(c) => handleSetColor(selNode.id, c)}
             onSetIcon={(i) => handleSetIcon(selNode.id, i)}
             onSetNotes={(n) => handleSetNotes(selNode.id, n)}
             onSetTheme={onSetTheme}
             onClose={() => setShowProperties(false)}
+            onDelete={() => handleDeleteWithConfirm(selNode.id)}
           />
         )}
       </div>
@@ -619,7 +633,7 @@ function FloatingSidebar({
 // ============ Painel direito de propriedades ============
 function PropertiesPanel({
   node, isRoot, currentTheme,
-  onSetColor, onSetIcon, onSetNotes, onSetTheme, onClose,
+  onSetColor, onSetIcon, onSetNotes, onSetTheme, onClose, onDelete,
 }: {
   node: { id: string; text: string; color?: string; icon?: string; notes?: string };
   isRoot: boolean;
@@ -630,6 +644,7 @@ function PropertiesPanel({
   onSetNotes: (n: string) => void;
   onSetTheme: (t: Theme) => void;
   onClose: () => void;
+  onDelete: () => void;
 }) {
   return (
     <aside className="w-[280px] shrink-0 border-l border-slate-200 bg-white flex flex-col overflow-hidden">
@@ -738,6 +753,18 @@ function PropertiesPanel({
           </Section>
         )}
       </div>
+
+      {/* Rodapé com ação destrutiva (só pra filhos) */}
+      {!isRoot && (
+        <div className="shrink-0 border-t border-slate-100 p-3">
+          <button
+            onClick={onDelete}
+            className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium text-red-600 hover:bg-red-50 transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5" /> Apagar tópico
+          </button>
+        </div>
+      )}
     </aside>
   );
 }

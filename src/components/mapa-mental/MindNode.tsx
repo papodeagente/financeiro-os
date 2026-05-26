@@ -4,7 +4,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { Handle, Position, NodeToolbar, type NodeProps, type Node } from '@xyflow/react';
 import {
   ChevronRight, ChevronLeft, Plus, StickyNote,
-  Palette, Smile, MessageSquare, MoreHorizontal,
+  Palette, Smile, MessageSquare, MoreHorizontal, Trash2,
 } from 'lucide-react';
 
 const QUICK_COLORS = ['#3B82F6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#ef4444', '#06b6d4', '#475569'];
@@ -28,6 +28,7 @@ export interface MindNodeData extends Record<string, unknown> {
   onSetColor?: (c: string | undefined) => void;
   onSetIcon?: (i: string | undefined) => void;
   onOpenPanel?: () => void;
+  onDelete?: () => void;
 }
 
 type MindNodeType = Node<MindNodeData, 'mindNode'>;
@@ -147,6 +148,20 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
         >
           <MoreHorizontal className="w-3.5 h-3.5" />
         </button>
+
+        {/* Apagar (só filhos) */}
+        {!isRoot && (
+          <>
+            <div className="w-px h-4 bg-slate-200 mx-0.5" />
+            <button
+              onClick={(e) => { e.stopPropagation(); data.onDelete?.(); }}
+              className="p-1.5 rounded-md hover:bg-red-50 text-slate-500 hover:text-red-600"
+              title="Apagar (Del)"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </>
+        )}
       </div>
     </NodeToolbar>
   ) : null;
@@ -210,14 +225,18 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
 
   // ============ FILHO — apenas texto, sem caixa ============
   const isLeft = side === 'left';
+  // Convenção: handle id corresponde à posição lateral ('l' ou 'r').
+  // Source fica no lado de crescimento, target no lado oposto.
+  const sourceSide: 'l' | 'r' = isLeft ? 'l' : 'r';
+  const targetSide: 'l' | 'r' = isLeft ? 'r' : 'l';
   const handleSource = isLeft ? Position.Left : Position.Right;
   const handleTarget = isLeft ? Position.Right : Position.Left;
 
   return (
     <div className={`relative group ${isLeft ? 'text-right' : 'text-left'}`} onDoubleClick={() => data.onStartEdit()}>
       {contextualToolbar}
-      <Handle type="target" position={handleTarget} id="t" style={bulletHandle(color)} />
-      <Handle type="source" position={handleSource} id="s" style={bulletHandle(color)} />
+      <Handle type="target" position={handleTarget} id={targetSide} style={bulletHandle(color)} />
+      <Handle type="source" position={handleSource} id={sourceSide} style={bulletHandle(color)} />
       <div
         className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md transition-all ${
           isLeft ? 'flex-row-reverse' : ''
