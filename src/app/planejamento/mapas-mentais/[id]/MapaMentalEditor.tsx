@@ -565,10 +565,12 @@ function EditorInner({ id }: Props) {
                 nodeTypes={nodeTypes}
                 edgeTypes={edgeTypes}
                 onNodeClick={(_, node) => setSelectedId(node.id)}
+                onNodeDoubleClick={(_, node) => { setSelectedId(node.id); setEditingId(node.id); }}
                 onPaneClick={() => { setSelectedId(null); setEditingId(null); }}
                 proOptions={{ hideAttribution: true }}
                 fitView
                 panOnScroll
+                zoomOnDoubleClick={false}
                 minZoom={0.3}
                 maxZoom={2.5}
                 defaultEdgeOptions={{ type: 'mind' }}
