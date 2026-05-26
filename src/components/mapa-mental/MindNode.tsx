@@ -5,6 +5,7 @@ import { Handle, Position, NodeToolbar, type NodeProps, type Node } from '@xyflo
 import {
   ChevronRight, ChevronLeft, Plus, StickyNote,
   Palette, Smile, MessageSquare, MoreHorizontal, Trash2,
+  Link2, Paperclip, Image as ImageIcon,
 } from 'lucide-react';
 
 const QUICK_COLORS = ['#3B82F6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#ef4444', '#06b6d4', '#475569'];
@@ -21,20 +22,33 @@ export interface MindNodeData extends Record<string, unknown> {
   side: 'left' | 'right';
   icon?: string;
   hasNotes?: boolean;
+  // Fase 2 — dados ricos
+  image?: { url: string; alt?: string };
+  links?: { label: string; url: string }[];
+  attachments?: { name: string; url: string }[];
+  shape?: 'rounded' | 'pill' | 'rect';
+  bold?: boolean;
+  // Callbacks
   onCommitEdit: (text: string) => void;
   onStartEdit: () => void;
   onToggleCollapse: () => void;
   onAddChild: () => void;
   onSetColor?: (c: string | undefined) => void;
   onSetIcon?: (i: string | undefined) => void;
-  onOpenPanel?: () => void;
+  onOpenPanel?: (section?: 'image' | 'links' | 'attachments' | 'notes') => void;
   onDelete?: () => void;
 }
 
 type MindNodeType = Node<MindNodeData, 'mindNode'>;
 
 function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
-  const { text, color, isRoot, collapsed, childCount, editing, side, icon, hasNotes } = data;
+  const {
+    text, color, isRoot, collapsed, childCount, editing, side,
+    icon, hasNotes, image, links, attachments, shape, bold,
+  } = data;
+  const hasLinks = !!(links && links.length);
+  const hasAttachments = !!(attachments && attachments.length);
+  const hasImage = !!(image && image.url);
   const inputRef = useRef<HTMLInputElement>(null);
   const [local, setLocal] = useState(text);
 
@@ -131,10 +145,39 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
 
         <div className="w-px h-4 bg-slate-200 mx-0.5" />
 
+        {/* Imagem */}
+        <button
+          onClick={(e) => { e.stopPropagation(); data.onOpenPanel?.('image'); }}
+          className={`p-1.5 rounded-md hover:bg-slate-100 ${hasImage ? 'text-blue-600' : 'text-slate-600'}`}
+          title="Imagem"
+        >
+          <ImageIcon className="w-3.5 h-3.5" />
+        </button>
+
+        {/* Anexo */}
+        <button
+          onClick={(e) => { e.stopPropagation(); data.onOpenPanel?.('attachments'); }}
+          className={`p-1.5 rounded-md hover:bg-slate-100 ${hasAttachments ? 'text-blue-600' : 'text-slate-600'}`}
+          title="Anexo"
+        >
+          <Paperclip className="w-3.5 h-3.5" />
+        </button>
+
+        {/* Link */}
+        <button
+          onClick={(e) => { e.stopPropagation(); data.onOpenPanel?.('links'); }}
+          className={`p-1.5 rounded-md hover:bg-slate-100 ${hasLinks ? 'text-blue-600' : 'text-slate-600'}`}
+          title="Link"
+        >
+          <Link2 className="w-3.5 h-3.5" />
+        </button>
+
+        <div className="w-px h-4 bg-slate-200 mx-0.5" />
+
         {/* Nota */}
         <button
-          onClick={(e) => { e.stopPropagation(); data.onOpenPanel?.(); }}
-          className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600"
+          onClick={(e) => { e.stopPropagation(); data.onOpenPanel?.('notes'); }}
+          className={`p-1.5 rounded-md hover:bg-slate-100 ${hasNotes ? 'text-amber-500' : 'text-slate-600'}`}
           title="Nota"
         >
           <MessageSquare className="w-3.5 h-3.5" />
@@ -166,43 +209,64 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
     </NodeToolbar>
   ) : null;
 
+  // Mapeia shape → border-radius
+  const shapeRadius = shape === 'pill' ? 9999 : shape === 'rect' ? 4 : 12;
+  const textBold = bold !== false;  // raiz: bold default = true se não definido
+
   // ============ RAIZ ============
   if (isRoot) {
+    const rootRadius = shape === 'pill' ? 9999 : shape === 'rect' ? 8 : 12;
     return (
       <div className="relative group" onDoubleClick={() => data.onStartEdit()}>
         {contextualToolbar}
         <Handle type="source" position={Position.Right} id="r" style={bulletHandle(color)} />
         <Handle type="source" position={Position.Left}  id="l" style={bulletHandle(color)} />
         <div
-          className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white transition-all"
+          className="bg-white transition-all overflow-hidden"
           style={{
             border: `2px solid ${color}`,
+            borderRadius: rootRadius,
             boxShadow: selected
               ? `0 0 0 4px ${color}22, 0 6px 18px ${color}25`
               : `0 1px 2px rgba(15,23,42,0.04), 0 4px 12px rgba(15,23,42,0.06)`,
             minWidth: 180,
           }}
         >
-          {icon && <span className="text-lg leading-none shrink-0">{icon}</span>}
-          {editing ? (
-            <input
-              ref={inputRef}
-              value={local}
-              onChange={e => setLocal(e.target.value)}
-              onBlur={commit}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit(); }
-                if (e.key === 'Escape') { setLocal(text); data.onCommitEdit(text); }
-              }}
-              className="flex-1 bg-transparent outline-none font-bold text-slate-900 text-center text-[15px]"
-              placeholder="Ideia central"
+          {hasImage && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={image!.url}
+              alt={image!.alt || ''}
+              className="w-full h-24 object-cover"
+              draggable={false}
             />
-          ) : (
-            <span className="flex-1 text-center font-bold text-slate-900 text-[15px] leading-snug whitespace-pre-line">
-              {text || 'Ideia central'}
-            </span>
           )}
-          {hasNotes && <StickyNote className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
+          <div className="flex items-center gap-2 px-5 py-3">
+            {icon && <span className="text-lg leading-none shrink-0">{icon}</span>}
+            {editing ? (
+              <input
+                ref={inputRef}
+                value={local}
+                onChange={e => setLocal(e.target.value)}
+                onBlur={commit}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit(); }
+                  if (e.key === 'Escape') { setLocal(text); data.onCommitEdit(text); }
+                }}
+                className={`flex-1 bg-transparent outline-none text-slate-900 text-center text-[15px] ${textBold ? 'font-bold' : 'font-normal'}`}
+                placeholder="Ideia central"
+              />
+            ) : (
+              <span className={`flex-1 text-center text-slate-900 text-[15px] leading-snug whitespace-pre-line ${textBold ? 'font-bold' : 'font-normal'}`}>
+                {text || 'Ideia central'}
+              </span>
+            )}
+            <div className="flex items-center gap-1 shrink-0">
+              {hasNotes && <StickyNote className="w-3.5 h-3.5 text-amber-500" />}
+              {hasLinks && <Link2 className="w-3.5 h-3.5 text-blue-500" />}
+              {hasAttachments && <Paperclip className="w-3.5 h-3.5 text-slate-500" />}
+            </div>
+          </div>
         </div>
         {/* Botão "+" flutuante */}
         {selected && (
@@ -232,20 +296,47 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
   const handleSource = isLeft ? Position.Left : Position.Right;
   const handleTarget = isLeft ? Position.Right : Position.Left;
 
+  // Se shape definida → caixa branca com borda colorida. Caso contrário,
+  // texto puro (estilo XMind/Whimsical default).
+  const hasShape = !!shape;
+  const childBoxStyle: React.CSSProperties = hasShape
+    ? {
+        background: '#ffffff',
+        border: `1.5px solid ${color}`,
+        borderRadius: shapeRadius,
+        boxShadow: selected
+          ? `0 0 0 3px ${color}33, 0 4px 12px ${color}20`
+          : `0 1px 3px rgba(15,23,42,0.06)`,
+        padding: '6px 12px',
+        minWidth: 60,
+      }
+    : {
+        background: selected ? `${color}10` : 'transparent',
+        outline: selected ? `2px solid ${color}` : 'none',
+        borderRadius: 6,
+        padding: '4px 8px',
+        minWidth: 60,
+      };
+
   return (
     <div className={`relative group ${isLeft ? 'text-right' : 'text-left'}`} onDoubleClick={() => data.onStartEdit()}>
       {contextualToolbar}
       <Handle type="target" position={handleTarget} id={targetSide} style={bulletHandle(color)} />
       <Handle type="source" position={handleSource} id={sourceSide} style={bulletHandle(color)} />
+      {hasImage && (
+        <div className={`mb-1.5 ${isLeft ? 'flex justify-end' : ''}`}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={image!.url}
+            alt={image!.alt || ''}
+            className="rounded-md border border-slate-200 max-w-[180px] max-h-[100px] object-cover"
+            draggable={false}
+          />
+        </div>
+      )}
       <div
-        className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md transition-all ${
-          isLeft ? 'flex-row-reverse' : ''
-        }`}
-        style={{
-          background: selected ? `${color}10` : 'transparent',
-          outline: selected ? `2px solid ${color}` : 'none',
-          minWidth: 60,
-        }}
+        className={`inline-flex items-center gap-1.5 transition-all ${isLeft ? 'flex-row-reverse' : ''}`}
+        style={childBoxStyle}
       >
         {/* Toggle collapse */}
         {childCount > 0 && (
@@ -278,16 +369,20 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
               if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit(); }
               if (e.key === 'Escape') { setLocal(text); data.onCommitEdit(text); }
             }}
-            className="bg-transparent text-slate-800 placeholder-slate-400 outline-none text-[13.5px] font-normal min-w-[60px]"
+            className={`bg-transparent text-slate-800 placeholder-slate-400 outline-none text-[13.5px] min-w-[60px] ${bold ? 'font-semibold' : 'font-normal'}`}
             placeholder="Novo tópico"
             style={{ width: `${Math.max(60, local.length * 8)}px` }}
           />
         ) : (
-          <span className="text-[13.5px] font-normal text-slate-800 leading-snug whitespace-pre-line">
+          <span className={`text-[13.5px] text-slate-800 leading-snug whitespace-pre-line ${bold ? 'font-semibold' : 'font-normal'}`}>
             {text || 'Novo tópico'}
           </span>
         )}
-        {hasNotes && <StickyNote className="w-3 h-3 text-amber-500 shrink-0" />}
+        <div className="inline-flex items-center gap-0.5 shrink-0">
+          {hasNotes && <StickyNote className="w-3 h-3 text-amber-500" />}
+          {hasLinks && <Link2 className="w-3 h-3 text-blue-500" />}
+          {hasAttachments && <Paperclip className="w-3 h-3 text-slate-500" />}
+        </div>
       </div>
 
       {/* Indicador de filhos recolhidos */}

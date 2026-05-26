@@ -31,9 +31,12 @@ import {
   ArrowLeft, Check, Loader2, Sparkles, Save, Trash2,
   Plus, GitBranch, Palette, StickyNote, Smile, Keyboard, X,
   ChevronRight as ChevR,
+  Shapes, Link2, Paperclip, Image as ImageIcon,
+  List, LayoutGrid,
 } from 'lucide-react';
 import { MindNode, type MindNodeData } from '@/components/mapa-mental/MindNode';
 import { MindEdge } from '@/components/mapa-mental/MindEdge';
+import { OutlineView } from '@/components/mapa-mental/OutlineView';
 import {
   type MapaMentalData, type Theme,
   layoutMindMap, colorForDepth, addChild, addSibling, updateNode, removeNode,
@@ -67,6 +70,13 @@ function EditorInner({ id }: Props) {
   const [saving, setSaving] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showProperties, setShowProperties] = useState(true);
+  const [panelFocus, setPanelFocus] = useState<PanelSection | undefined>(undefined);
+  const [viewMode, setViewMode] = useState<'map' | 'outline'>('map');
+
+  const openPanelWithFocus = useCallback((section?: PanelSection) => {
+    setShowProperties(true);
+    setPanelFocus(section);
+  }, []);
 
   // ============ LOAD ============
   useEffect(() => {
@@ -264,6 +274,36 @@ function EditorInner({ id }: Props) {
     mutate(d => updateNode(d, nodeId, { notes }));
   }, [mutate]);
 
+  const handleSetShape = useCallback((nodeId: string, shape: 'rounded' | 'pill' | 'rect' | undefined) => {
+    mutate(d => {
+      const cur = d.nodes[nodeId];
+      if (!cur) return d;
+      const style = { ...(cur.style || {}), shape };
+      return updateNode(d, nodeId, { style });
+    });
+  }, [mutate]);
+
+  const handleSetBold = useCallback((nodeId: string, bold: boolean) => {
+    mutate(d => {
+      const cur = d.nodes[nodeId];
+      if (!cur) return d;
+      const style = { ...(cur.style || {}), bold };
+      return updateNode(d, nodeId, { style });
+    });
+  }, [mutate]);
+
+  const handleSetImage = useCallback((nodeId: string, image: { url: string; alt?: string } | undefined) => {
+    mutate(d => updateNode(d, nodeId, { image }));
+  }, [mutate]);
+
+  const handleSetLinks = useCallback((nodeId: string, links: { label: string; url: string }[]) => {
+    mutate(d => updateNode(d, nodeId, { links }));
+  }, [mutate]);
+
+  const handleSetAttachments = useCallback((nodeId: string, attachments: { name: string; url: string }[]) => {
+    mutate(d => updateNode(d, nodeId, { attachments }));
+  }, [mutate]);
+
   // ============ Atalhos ============
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -347,9 +387,14 @@ function EditorInner({ id }: Props) {
         onStartEdit: () => setEditingId(n.id),
         onToggleCollapse: () => handleToggleCollapse(n.id),
         onAddChild: () => handleAddChild(n.id),
+        image: n.image,
+        links: n.links,
+        attachments: n.attachments,
+        shape: n.style?.shape,
+        bold: n.style?.bold,
         onSetColor: (c: string | undefined) => handleSetColor(n.id, c),
         onSetIcon: (i: string | undefined) => handleSetIcon(n.id, i),
-        onOpenPanel: () => setShowProperties(true),
+        onOpenPanel: (section) => { setSelectedId(n.id); openPanelWithFocus(section); },
         onDelete: () => handleDeleteWithConfirm(n.id),
       };
       return {
@@ -383,7 +428,7 @@ function EditorInner({ id }: Props) {
       }
     }
     return { rfNodes: nodes, rfEdges: edges };
-  }, [data, selectedId, editingId, handleAddChild, handleEditCommit, handleToggleCollapse, handleDeleteWithConfirm, handleSetColor, handleSetIcon]);
+  }, [data, selectedId, editingId, handleAddChild, handleEditCommit, handleToggleCollapse, handleDeleteWithConfirm, handleSetColor, handleSetIcon, openPanelWithFocus]);
 
   // Fit view inicial
   const didFitRef = useRef(false);
@@ -443,9 +488,34 @@ function EditorInner({ id }: Props) {
 
         {/* Ações principais — minimal estilo XMind */}
         <div className="flex items-center gap-1 shrink-0">
+          {/* Toggle Esboço/Mapa */}
+          <div className="inline-flex rounded-md border border-slate-200 overflow-hidden text-xs">
+            <button
+              onClick={() => setViewMode('map')}
+              className={`px-2.5 py-1.5 inline-flex items-center gap-1 ${
+                viewMode === 'map' ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-slate-600 hover:bg-slate-50'
+              }`}
+              title="Modo Mapa mental"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Mapa</span>
+            </button>
+            <button
+              onClick={() => setViewMode('outline')}
+              className={`px-2.5 py-1.5 inline-flex items-center gap-1 border-l border-slate-200 ${
+                viewMode === 'outline' ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-slate-600 hover:bg-slate-50'
+              }`}
+              title="Modo Esboço (outline)"
+            >
+              <List className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Esboço</span>
+            </button>
+          </div>
+
           <button
             onClick={() => onSetLayout(data.layout === 'logical' ? 'map' : 'logical')}
-            className="px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-700 hover:bg-slate-100 inline-flex items-center gap-1.5"
+            disabled={viewMode === 'outline'}
+            className="px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-700 hover:bg-slate-100 inline-flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
             title="Trocar layout"
           >
             <GitBranch className="w-3.5 h-3.5 rotate-90" />
@@ -484,46 +554,62 @@ function EditorInner({ id }: Props) {
         </div>
       </header>
 
-      {/* ========= CANVAS + PAINEL ========= */}
+      {/* ========= CANVAS / OUTLINE + PAINEL ========= */}
       <div className="flex-1 flex relative overflow-hidden">
         <div className="flex-1 relative">
-          <ReactFlow
-            nodes={rfNodes}
-            edges={rfEdges}
-            nodeTypes={nodeTypes}
-            edgeTypes={edgeTypes}
-            onNodeClick={(_, node) => setSelectedId(node.id)}
-            onPaneClick={() => { setSelectedId(null); setEditingId(null); }}
-            proOptions={{ hideAttribution: true }}
-            fitView
-            panOnScroll
-            minZoom={0.3}
-            maxZoom={2.5}
-            defaultEdgeOptions={{ type: 'mind' }}
-          >
-            <Background variant={BackgroundVariant.Dots} gap={26} size={1.2} color="#dbe2ea" />
-            <Controls
-              showInteractive={false}
-              showZoom
-              showFitView
-              position="bottom-left"
-              style={{
-                background: 'white',
-                border: '1px solid #e2e8f0',
-                borderRadius: 10,
-                boxShadow: '0 2px 6px rgba(15,23,42,0.06)',
-              }}
-            />
-          </ReactFlow>
+          {viewMode === 'map' ? (
+            <>
+              <ReactFlow
+                nodes={rfNodes}
+                edges={rfEdges}
+                nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
+                onNodeClick={(_, node) => setSelectedId(node.id)}
+                onPaneClick={() => { setSelectedId(null); setEditingId(null); }}
+                proOptions={{ hideAttribution: true }}
+                fitView
+                panOnScroll
+                minZoom={0.3}
+                maxZoom={2.5}
+                defaultEdgeOptions={{ type: 'mind' }}
+              >
+                <Background variant={BackgroundVariant.Dots} gap={26} size={1.2} color="#dbe2ea" />
+                <Controls
+                  showInteractive={false}
+                  showZoom
+                  showFitView
+                  position="bottom-left"
+                  style={{
+                    background: 'white',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 10,
+                    boxShadow: '0 2px 6px rgba(15,23,42,0.06)',
+                  }}
+                />
+              </ReactFlow>
 
-          {/* Barra lateral direita flutuante (estilo XMind) */}
-          {!showProperties && (
-            <FloatingSidebar
-              onAddChild={() => selectedId && handleAddChild(selectedId)}
-              canAdd={!!selectedId}
-              currentTheme={(data.theme || 'minimal') as Theme}
-              onSetTheme={onSetTheme}
-              onTogglePanel={() => setShowProperties(true)}
+              {/* Barra lateral direita flutuante (estilo XMind) */}
+              {!showProperties && (
+                <FloatingSidebar
+                  onAddChild={() => selectedId && handleAddChild(selectedId)}
+                  canAdd={!!selectedId}
+                  currentTheme={(data.theme || 'minimal') as Theme}
+                  onSetTheme={onSetTheme}
+                  onTogglePanel={() => setShowProperties(true)}
+                />
+              )}
+            </>
+          ) : (
+            <OutlineView
+              data={data}
+              selectedId={selectedId}
+              editingId={editingId}
+              onSelect={setSelectedId}
+              onStartEdit={setEditingId}
+              onCommitEdit={handleEditCommit}
+              onAddChild={handleAddChild}
+              onAddSibling={handleAddSibling}
+              onToggleCollapse={handleToggleCollapse}
             />
           )}
         </div>
@@ -535,11 +621,17 @@ function EditorInner({ id }: Props) {
             isRoot={selIsRoot}
             theme={(data.theme || 'minimal') as Theme}
             currentTheme={(data.theme || 'minimal') as Theme}
+            focusSection={panelFocus}
             onSetColor={(c) => handleSetColor(selNode.id, c)}
             onSetIcon={(i) => handleSetIcon(selNode.id, i)}
             onSetNotes={(n) => handleSetNotes(selNode.id, n)}
+            onSetShape={(s) => handleSetShape(selNode.id, s)}
+            onSetBold={(b) => handleSetBold(selNode.id, b)}
+            onSetImage={(img) => handleSetImage(selNode.id, img)}
+            onSetLinks={(l) => handleSetLinks(selNode.id, l)}
+            onSetAttachments={(a) => handleSetAttachments(selNode.id, a)}
             onSetTheme={onSetTheme}
-            onClose={() => setShowProperties(false)}
+            onClose={() => { setShowProperties(false); setPanelFocus(undefined); }}
             onDelete={() => handleDeleteWithConfirm(selNode.id)}
           />
         )}
@@ -632,22 +724,44 @@ function FloatingSidebar({
 
 // ============ Painel direito de propriedades ============
 function PropertiesPanel({
-  node, isRoot, currentTheme,
+  node, isRoot, currentTheme, focusSection,
   onSetColor, onSetIcon, onSetNotes, onSetTheme, onClose, onDelete,
+  onSetShape, onSetBold, onSetImage, onSetLinks, onSetAttachments,
 }: {
-  node: { id: string; text: string; color?: string; icon?: string; notes?: string };
+  node: MindNodeRecord;
   isRoot: boolean;
   theme: Theme;
   currentTheme: Theme;
+  focusSection?: PanelSection;
   onSetColor: (c: string | undefined) => void;
   onSetIcon: (i: string | undefined) => void;
   onSetNotes: (n: string) => void;
   onSetTheme: (t: Theme) => void;
   onClose: () => void;
   onDelete: () => void;
+  onSetShape: (s: 'rounded' | 'pill' | 'rect' | undefined) => void;
+  onSetBold: (b: boolean) => void;
+  onSetImage: (img: { url: string; alt?: string } | undefined) => void;
+  onSetLinks: (links: { label: string; url: string }[]) => void;
+  onSetAttachments: (atts: { name: string; url: string }[]) => void;
 }) {
+  const notesRef = useRef<HTMLTextAreaElement>(null);
+  const imageUrlRef = useRef<HTMLInputElement>(null);
+
+  // Auto-foco na seção pedida ao abrir o painel via toolbar contextual
+  useEffect(() => {
+    if (!focusSection) return;
+    const t = setTimeout(() => {
+      if (focusSection === 'notes') notesRef.current?.focus();
+      if (focusSection === 'image') imageUrlRef.current?.focus();
+      const el = document.getElementById(`panel-section-${focusSection}`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+    return () => clearTimeout(t);
+  }, [focusSection, node.id]);
+
   return (
-    <aside className="w-[280px] shrink-0 border-l border-slate-200 bg-white flex flex-col overflow-hidden">
+    <aside className="w-[300px] shrink-0 border-l border-slate-200 bg-white flex flex-col overflow-hidden">
       <div className="shrink-0 px-4 h-[42px] flex items-center justify-between border-b border-slate-100">
         <h3 className="text-[13px] font-semibold text-slate-900 truncate">
           {isRoot ? 'Mapa' : 'Tópico'}
@@ -688,6 +802,25 @@ function PropertiesPanel({
           </div>
         </Section>
 
+        {/* Forma */}
+        <Section icon={<Shapes className="w-3.5 h-3.5" />} title="Forma">
+          <div className="grid grid-cols-4 gap-1.5">
+            <ShapeBtn label="Texto" active={!node.style?.shape && !isRoot} onClick={() => onSetShape(undefined)} disabled={isRoot} preview="text" />
+            <ShapeBtn label="Arred." active={node.style?.shape === 'rounded' || (isRoot && !node.style?.shape)} onClick={() => onSetShape('rounded')} preview="rounded" />
+            <ShapeBtn label="Pill" active={node.style?.shape === 'pill'} onClick={() => onSetShape('pill')} preview="pill" />
+            <ShapeBtn label="Reto" active={node.style?.shape === 'rect'} onClick={() => onSetShape('rect')} preview="rect" />
+          </div>
+          <label className="mt-3 flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={!!node.style?.bold}
+              onChange={e => onSetBold(e.target.checked)}
+              className="rounded border-slate-300"
+            />
+            Negrito
+          </label>
+        </Section>
+
         {/* Ícone */}
         <Section icon={<Smile className="w-3.5 h-3.5" />} title="Ícone">
           <div className="flex flex-wrap gap-1">
@@ -715,16 +848,78 @@ function PropertiesPanel({
           </div>
         </Section>
 
+        {/* Imagem */}
+        <div id="panel-section-image">
+          <Section icon={<ImageIcon className="w-3.5 h-3.5" />} title="Imagem">
+            <input
+              ref={imageUrlRef}
+              type="url"
+              value={node.image?.url || ''}
+              onChange={e => {
+                const url = e.target.value.trim();
+                onSetImage(url ? { url, alt: node.image?.alt } : undefined);
+              }}
+              placeholder="https://..."
+              className="w-full text-xs bg-slate-50 border border-slate-200 rounded-md px-2.5 py-1.5 outline-none focus:border-blue-400 focus:bg-white"
+            />
+            {node.image?.url && (
+              <div className="mt-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={node.image.url} alt={node.image.alt || ''} className="w-full max-h-32 object-cover rounded border border-slate-200" />
+                <button
+                  onClick={() => onSetImage(undefined)}
+                  className="mt-1.5 text-[11px] text-red-500 hover:text-red-700"
+                >
+                  Remover imagem
+                </button>
+              </div>
+            )}
+          </Section>
+        </div>
+
+        {/* Links */}
+        <div id="panel-section-links">
+          <Section icon={<Link2 className="w-3.5 h-3.5" />} title="Links">
+            <ListEditor
+              items={node.links || []}
+              onChange={onSetLinks}
+              fields={[
+                { key: 'label', placeholder: 'Título' },
+                { key: 'url', placeholder: 'https://...' },
+              ]}
+              addLabel="+ link"
+            />
+          </Section>
+        </div>
+
+        {/* Anexos */}
+        <div id="panel-section-attachments">
+          <Section icon={<Paperclip className="w-3.5 h-3.5" />} title="Anexos">
+            <ListEditor
+              items={node.attachments || []}
+              onChange={onSetAttachments}
+              fields={[
+                { key: 'name', placeholder: 'Nome do arquivo' },
+                { key: 'url', placeholder: 'https://...' },
+              ]}
+              addLabel="+ anexo"
+            />
+          </Section>
+        </div>
+
         {/* Notas */}
-        <Section icon={<StickyNote className="w-3.5 h-3.5" />} title="Notas">
-          <textarea
-            value={node.notes || ''}
-            onChange={e => onSetNotes(e.target.value)}
-            placeholder="Adicione uma nota..."
-            rows={4}
-            className="w-full text-xs bg-slate-50 border border-slate-200 rounded-md px-2.5 py-2 outline-none focus:border-blue-400 focus:bg-white resize-none"
-          />
-        </Section>
+        <div id="panel-section-notes">
+          <Section icon={<StickyNote className="w-3.5 h-3.5" />} title="Notas">
+            <textarea
+              ref={notesRef}
+              value={node.notes || ''}
+              onChange={e => onSetNotes(e.target.value)}
+              placeholder="Adicione uma nota..."
+              rows={4}
+              className="w-full text-xs bg-slate-50 border border-slate-200 rounded-md px-2.5 py-2 outline-none focus:border-blue-400 focus:bg-white resize-none"
+            />
+          </Section>
+        </div>
 
         {/* Tema global (só se for raiz, mas mostramos sempre como conveniência) */}
         {isRoot && (
@@ -766,6 +961,100 @@ function PropertiesPanel({
         </div>
       )}
     </aside>
+  );
+}
+
+type PanelSection = 'image' | 'links' | 'attachments' | 'notes';
+type MindNodeRecord = {
+  id: string;
+  text: string;
+  color?: string;
+  icon?: string;
+  notes?: string;
+  image?: { url: string; alt?: string };
+  links?: { label: string; url: string }[];
+  attachments?: { name: string; url: string }[];
+  style?: { shape?: 'rounded' | 'pill' | 'rect'; bold?: boolean };
+};
+
+function ShapeBtn({
+  label, active, onClick, disabled, preview,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+  preview: 'text' | 'rounded' | 'pill' | 'rect';
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex flex-col items-center gap-1 p-1.5 rounded-md border transition-colors ${
+        active
+          ? 'border-blue-300 bg-blue-50'
+          : disabled
+            ? 'border-slate-100 text-slate-300 cursor-not-allowed'
+            : 'border-slate-200 hover:bg-slate-50'
+      }`}
+      title={preview === 'text' ? 'Apenas texto (filhos)' : `Forma ${label}`}
+    >
+      <span
+        className={`w-7 h-3 bg-slate-300 ${
+          preview === 'pill' ? 'rounded-full'
+          : preview === 'rect' ? 'rounded-sm'
+          : preview === 'rounded' ? 'rounded-md'
+          : 'bg-transparent border-b border-slate-400'
+        }`}
+      />
+      <span className="text-[10px] text-slate-600">{label}</span>
+    </button>
+  );
+}
+
+function ListEditor<T extends Record<string, string>>({
+  items, onChange, fields, addLabel,
+}: {
+  items: T[];
+  onChange: (next: T[]) => void;
+  fields: { key: keyof T; placeholder: string }[];
+  addLabel: string;
+}) {
+  return (
+    <div className="space-y-2">
+      {items.map((item, idx) => (
+        <div key={idx} className="flex flex-col gap-1 p-2 rounded border border-slate-200 bg-slate-50">
+          {fields.map(f => (
+            <input
+              key={String(f.key)}
+              value={item[f.key] || ''}
+              onChange={e => {
+                const next = [...items];
+                next[idx] = { ...next[idx], [f.key]: e.target.value };
+                onChange(next);
+              }}
+              placeholder={f.placeholder}
+              className="w-full text-xs bg-white border border-slate-200 rounded px-2 py-1 outline-none focus:border-blue-400"
+            />
+          ))}
+          <button
+            onClick={() => onChange(items.filter((_, i) => i !== idx))}
+            className="text-[10px] text-red-500 hover:text-red-700 self-end"
+          >
+            Remover
+          </button>
+        </div>
+      ))}
+      <button
+        onClick={() => {
+          const empty = Object.fromEntries(fields.map(f => [f.key, ''])) as T;
+          onChange([...items, empty]);
+        }}
+        className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+      >
+        {addLabel}
+      </button>
+    </div>
   );
 }
 

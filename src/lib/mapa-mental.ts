@@ -13,6 +13,14 @@ export interface MindNode {
   icon?: string;                 // emoji opcional
   notes?: string;                // texto rico em markdown (futuro)
   collapsed?: boolean;           // se true, filhos nao sao renderizados
+  // Fase 2 — dados ricos
+  image?: { url: string; alt?: string };
+  links?: { label: string; url: string }[];
+  attachments?: { name: string; url: string }[];
+  style?: {
+    shape?: 'rounded' | 'pill' | 'rect';  // undefined = texto puro (filhos)
+    bold?: boolean;
+  };
 }
 
 export interface MapaMentalData {
@@ -280,24 +288,35 @@ export function layoutMindMap(data: MapaMentalData): LayoutNode[] {
 
 // Paletas — minimal mono-azul é o default (estilo XMind/Whimsical clean).
 const PALETTES: Record<string, string[]> = {
-  minimal: ['#3B82F6', '#3B82F6', '#3B82F6', '#3B82F6', '#3B82F6', '#3B82F6', '#3B82F6'],
-  rainbow: ['#0a84ff', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#84cc16'],
-  ocean:   ['#0369a1', '#0891b2', '#0d9488', '#0e7490', '#1e40af', '#155e75', '#164e63'],
-  sunset:  ['#db2777', '#ea580c', '#d97706', '#dc2626', '#be185d', '#c2410c', '#9f1239'],
-  forest:  ['#15803d', '#65a30d', '#16a34a', '#047857', '#166534', '#3f6212', '#365314'],
-  mono:    ['#1e293b', '#334155', '#475569', '#64748b', '#475569', '#334155', '#1e293b'],
-  classic: ['#0f172a', '#334155', '#475569', '#64748b', '#475569', '#334155', '#0f172a'],
+  minimal:  ['#3B82F6', '#3B82F6', '#3B82F6', '#3B82F6', '#3B82F6', '#3B82F6', '#3B82F6'],
+  rainbow:  ['#0a84ff', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#84cc16'],
+  pastel:   ['#93C5FD', '#6EE7B7', '#FCD34D', '#F9A8D4', '#C4B5FD', '#67E8F9', '#BEF264'],
+  vibrante: ['#2563EB', '#DC2626', '#F59E0B', '#16A34A', '#7C3AED', '#DB2777', '#0891B2'],
+  escuro:   ['#60A5FA', '#34D399', '#FBBF24', '#F87171', '#A78BFA', '#22D3EE', '#A3E635'],
+  sepia:    ['#92400E', '#B45309', '#A16207', '#78350F', '#713F12', '#854D0E', '#92400E'],
+  ocean:    ['#0369a1', '#0891b2', '#0d9488', '#0e7490', '#1e40af', '#155e75', '#164e63'],
+  sunset:   ['#db2777', '#ea580c', '#d97706', '#dc2626', '#be185d', '#c2410c', '#9f1239'],
+  forest:   ['#15803d', '#65a30d', '#16a34a', '#047857', '#166534', '#3f6212', '#365314'],
+  mono:     ['#1e293b', '#334155', '#475569', '#64748b', '#475569', '#334155', '#1e293b'],
+  classic:  ['#0f172a', '#334155', '#475569', '#64748b', '#475569', '#334155', '#0f172a'],
 };
 
-export type Theme = 'minimal' | 'classic' | 'rainbow' | 'mono' | 'ocean' | 'sunset' | 'forest';
+export type Theme =
+  | 'minimal' | 'classic' | 'rainbow' | 'mono'
+  | 'ocean' | 'sunset' | 'forest'
+  | 'pastel' | 'vibrante' | 'escuro' | 'sepia';
 
 export const THEMES: { id: Theme; label: string; preview: string[] }[] = [
-  { id: 'minimal', label: 'Minimal',   preview: ['#3B82F6'] },
-  { id: 'rainbow', label: 'Arco-íris', preview: ['#0a84ff', '#10b981', '#f59e0b', '#ec4899'] },
-  { id: 'ocean',   label: 'Oceano',    preview: ['#0369a1', '#0891b2', '#0d9488', '#0e7490'] },
-  { id: 'sunset',  label: 'Pôr do sol', preview: ['#db2777', '#ea580c', '#d97706', '#dc2626'] },
-  { id: 'forest',  label: 'Floresta',  preview: ['#15803d', '#65a30d', '#16a34a', '#047857'] },
-  { id: 'mono',    label: 'Mono',      preview: ['#1e293b', '#475569', '#64748b'] },
+  { id: 'minimal',  label: 'Minimal',   preview: ['#3B82F6'] },
+  { id: 'rainbow',  label: 'Arco-íris', preview: ['#0a84ff', '#10b981', '#f59e0b', '#ec4899'] },
+  { id: 'pastel',   label: 'Pastel',    preview: ['#93C5FD', '#6EE7B7', '#FCD34D', '#F9A8D4'] },
+  { id: 'vibrante', label: 'Vibrante',  preview: ['#2563EB', '#DC2626', '#F59E0B', '#16A34A'] },
+  { id: 'escuro',   label: 'Escuro',    preview: ['#60A5FA', '#34D399', '#FBBF24', '#F87171'] },
+  { id: 'sepia',    label: 'Sépia',     preview: ['#92400E', '#B45309', '#A16207', '#78350F'] },
+  { id: 'ocean',    label: 'Oceano',    preview: ['#0369a1', '#0891b2', '#0d9488', '#0e7490'] },
+  { id: 'sunset',   label: 'Pôr do sol', preview: ['#db2777', '#ea580c', '#d97706', '#dc2626'] },
+  { id: 'forest',   label: 'Floresta',  preview: ['#15803d', '#65a30d', '#16a34a', '#047857'] },
+  { id: 'mono',     label: 'Mono',      preview: ['#1e293b', '#475569', '#64748b'] },
 ];
 
 export function colorForDepth(depth: number, theme: Theme = 'minimal'): string {
