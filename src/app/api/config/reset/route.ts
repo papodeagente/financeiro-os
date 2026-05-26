@@ -54,7 +54,7 @@ export const CATEGORIES = {
     'grupo_eventos',
   ],
   mapas_mentais: ['mapas_mentais'],
-  funis_simulacoes: ['funis_simulacoes'],
+  funis: ['funis', 'funis_simulacoes', 'funis_templates'],
   fluxogramas: ['fluxogramas', 'fluxograma_categorias'],
 } as const;
 

@@ -7,7 +7,7 @@ import {
   Wallet, Package, Users, Sparkles, Filter, Workflow,
 } from 'lucide-react';
 
-type CategoryId = 'financeiro' | 'produtos' | 'grupos' | 'mapas_mentais' | 'funis_simulacoes' | 'fluxogramas';
+type CategoryId = 'financeiro' | 'produtos' | 'grupos' | 'mapas_mentais' | 'funis' | 'fluxogramas';
 
 interface CategoryDef {
   id: CategoryId;
@@ -42,9 +42,9 @@ const CATEGORIES: CategoryDef[] = [
     icon: Sparkles,
   },
   {
-    id: 'funis_simulacoes',
-    label: 'Simulações de funis',
-    description: 'Simulações salvas (mantém os funis e templates intactos).',
+    id: 'funis',
+    label: 'Funis e campanhas',
+    description: 'Todos os funis criados, simulações salvas e templates de funil.',
     icon: Filter,
   },
   {
