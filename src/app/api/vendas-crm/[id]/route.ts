@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { emitirEventoCRM } from '@/lib/crm-integration';
 import { getTenantId } from '@/lib/tenant';
+import { getSession } from '@/lib/auth';
+import { podeVerVenda, podeExcluir } from '@/lib/permissoes';
 
 const TABLE = 'vendas_crm';
 const INDEX_COLS = ['cliente_id', 'vendedor_id', 'status'];
@@ -12,9 +14,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const { id } = await params;
     if (!pool) return NextResponse.json(null);
     const tenantId = await getTenantId();
+    const session = await getSession();
     const { rows } = await pool.query(`SELECT data FROM ${TABLE} WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
     if (rows.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    return NextResponse.json(rows[0].data);
+    const venda = rows[0].data;
+    // Vendedor só vê a própria venda — 404 (mesmo comportamento de não-existente)
+    if (session && !podeVerVenda(session, venda.vendedor_id || '')) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+    return NextResponse.json(venda);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Unknown error';
     return NextResponse.json({ error: msg }, { status: 500 });
@@ -69,6 +77,11 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   try {
     await initDB();
     const { id } = await params;
+    const session = await getSession();
+    // Só ADMIN pode excluir (OPERADOR/VENDEDOR bloqueados)
+    if (!podeExcluir(session)) {
+      return NextResponse.json({ error: 'Sem permissão para excluir' }, { status: 403 });
+    }
     if (pool) {
       const tenantId = await getTenantId();
       await pool.query(`DELETE FROM ${TABLE} WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);

@@ -142,21 +142,24 @@ export async function POST(req: Request) {
       created_at: new Date().toISOString(),
     };
 
+    // Criador da conta vira ADMIN com todas as permissoes canonicas.
     const userData = {
       id: userId,
       nome: nomeCompleto,
       email,
       telefone,
       senha_hash: senhaHash,
-      perfil: 'owner',
+      perfil: 'ADMIN',
       permissoes: {
-        // Owner tem todas permissoes
-        admin: true,
-        propostas: ['create', 'edit', 'delete'],
-        vendas: ['create', 'edit', 'delete'],
-        financeiro: ['create', 'edit', 'delete'],
-        grupos: ['create', 'edit', 'delete'],
-        config: ['edit'],
+        ver_vendas_todos: true,
+        ver_financeiro: true,
+        editar_financeiro: true,
+        ver_comissoes: true,
+        acessar_relatorios: true,
+        gerenciar_usuarios: true,
+        pode_excluir: true,
+        pode_exportar: true,
+        ver_extrato_contas: [] as string[],
       },
       ativo: true,
       criado_via: 'signup_publico',
@@ -237,7 +240,7 @@ export async function POST(req: Request) {
       userId,
       nome: nomeCompleto,
       email,
-      perfil: 'owner',
+      perfil: 'ADMIN',
       permissoes: userData.permissoes,
       tenantId,
       tenantSlug,

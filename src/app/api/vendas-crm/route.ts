@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { emitirEventoCRM } from '@/lib/crm-integration';
 import { getTenantId } from '@/lib/tenant';
+import { getSession } from '@/lib/auth';
+import { podeVerTodasVendas } from '@/lib/permissoes';
 import { gerarContasVenda, type ItemVendaInput, type FornecedorInfo } from '@/lib/venda-financeiro';
 
 const TABLE = 'vendas_crm';
@@ -12,6 +14,18 @@ export async function GET() {
     await initDB();
     if (!pool) return NextResponse.json([]);
     const tenantId = await getTenantId();
+    const session = await getSession();
+
+    // VENDEDOR só vê as próprias vendas (vendedor_id = session.userId).
+    // ADMIN/OPERADOR veem tudo do tenant.
+    if (session && !podeVerTodasVendas(session)) {
+      const { rows } = await pool.query(
+        `SELECT data FROM ${TABLE} WHERE tenant_id = $1 AND vendedor_id = $2 ORDER BY created_at DESC`,
+        [tenantId, session.userId || ''],
+      );
+      return NextResponse.json(rows.map(r => r.data));
+    }
+
     const { rows } = await pool.query(`SELECT data FROM ${TABLE} WHERE tenant_id = $1 ORDER BY created_at DESC`, [tenantId]);
     return NextResponse.json(rows.map(r => r.data));
   } catch (e: unknown) {

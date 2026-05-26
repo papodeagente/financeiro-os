@@ -1220,12 +1220,25 @@ export interface Agencia {
   custom_proposta_domain?: string;
 }
 
+// Perfis suportados. Os 3 principais: ADMIN/OPERADOR/VENDEDOR.
+// GERENTE/FINANCEIRO/VISUALIZADOR ficam pra compat com cadastros antigos
+// e são tratados como OPERADOR pelas regras de permissão.
+export type PerfilUsuario =
+  | 'ADMIN'
+  | 'OPERADOR'
+  | 'VENDEDOR'
+  | 'GERENTE'
+  | 'FINANCEIRO'
+  | 'VISUALIZADOR';
+
 export interface Usuario {
   id: string;
   nome: string;
   email: string;
+  foto?: string;
+  telefone?: string;
   senha_hash: string;
-  perfil: 'ADMIN' | 'GERENTE' | 'VENDEDOR' | 'FINANCEIRO' | 'VISUALIZADOR';
+  perfil: PerfilUsuario;
   permissoes: {
     ver_vendas_todos: boolean;
     ver_financeiro: boolean;
@@ -1233,6 +1246,8 @@ export interface Usuario {
     ver_comissoes: boolean;
     acessar_relatorios: boolean;
     gerenciar_usuarios: boolean;
+    pode_excluir: boolean;
+    pode_exportar: boolean;
     ver_extrato_contas: string[];
   };
   ativo: boolean;
