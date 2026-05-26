@@ -32,7 +32,7 @@ import {
   Plus, GitBranch, Palette, StickyNote, Smile, Keyboard, X,
   ChevronRight as ChevR,
   Shapes, Link2, Paperclip, Image as ImageIcon,
-  List, LayoutGrid,
+  List, LayoutGrid, Upload,
 } from 'lucide-react';
 import { MindNode, type MindNodeData } from '@/components/mapa-mental/MindNode';
 import { MindEdge } from '@/components/mapa-mental/MindEdge';
@@ -853,29 +853,44 @@ function PropertiesPanel({
         {/* Imagem */}
         <div id="panel-section-image">
           <Section icon={<ImageIcon className="w-3.5 h-3.5" />} title="Imagem">
-            <input
-              ref={imageUrlRef}
-              type="url"
-              value={node.image?.url || ''}
-              onChange={e => {
-                const url = e.target.value.trim();
-                onSetImage(url ? { url, alt: node.image?.alt } : undefined);
-              }}
-              placeholder="https://..."
-              className="w-full text-xs bg-slate-50 border border-slate-200 rounded-md px-2.5 py-1.5 outline-none focus:border-blue-400 focus:bg-white"
-            />
-            {node.image?.url && (
-              <div className="mt-2">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={node.image.url} alt={node.image.alt || ''} className="w-full max-h-32 object-cover rounded border border-slate-200" />
-                <button
-                  onClick={() => onSetImage(undefined)}
-                  className="mt-1.5 text-[11px] text-red-500 hover:text-red-700"
-                >
-                  Remover imagem
-                </button>
+            <div className="space-y-2">
+              <UploadButton
+                accept="image/*"
+                label="Enviar imagem"
+                onUploaded={(files) => {
+                  const f = files[0];
+                  if (f) onSetImage({ url: f.url, alt: f.nome });
+                }}
+              />
+              <div className="flex items-center gap-1 text-[10px] text-slate-400">
+                <span className="flex-1 h-px bg-slate-200" />
+                ou cole uma URL
+                <span className="flex-1 h-px bg-slate-200" />
               </div>
-            )}
+              <input
+                ref={imageUrlRef}
+                type="url"
+                value={node.image?.url || ''}
+                onChange={e => {
+                  const url = e.target.value.trim();
+                  onSetImage(url ? { url, alt: node.image?.alt } : undefined);
+                }}
+                placeholder="https://..."
+                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-md px-2.5 py-1.5 outline-none focus:border-blue-400 focus:bg-white"
+              />
+              {node.image?.url && (
+                <div>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={node.image.url} alt={node.image.alt || ''} className="w-full max-h-32 object-cover rounded border border-slate-200" />
+                  <button
+                    onClick={() => onSetImage(undefined)}
+                    className="mt-1.5 text-[11px] text-red-500 hover:text-red-700"
+                  >
+                    Remover imagem
+                  </button>
+                </div>
+              )}
+            </div>
           </Section>
         </div>
 
@@ -897,15 +912,27 @@ function PropertiesPanel({
         {/* Anexos */}
         <div id="panel-section-attachments">
           <Section icon={<Paperclip className="w-3.5 h-3.5" />} title="Anexos">
-            <ListEditor
-              items={node.attachments || []}
-              onChange={onSetAttachments}
-              fields={[
-                { key: 'name', placeholder: 'Nome do arquivo' },
-                { key: 'url', placeholder: 'https://...' },
-              ]}
-              addLabel="+ anexo"
-            />
+            <div className="space-y-2">
+              <UploadButton
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,image/*"
+                multiple
+                label="Enviar arquivos"
+                onUploaded={(files) => {
+                  const existing = node.attachments || [];
+                  const additions = files.map(f => ({ name: f.nome, url: f.url }));
+                  onSetAttachments([...existing, ...additions]);
+                }}
+              />
+              <ListEditor
+                items={node.attachments || []}
+                onChange={onSetAttachments}
+                fields={[
+                  { key: 'name', placeholder: 'Nome do arquivo' },
+                  { key: 'url', placeholder: 'https://...' },
+                ]}
+                addLabel="+ adicionar manualmente"
+              />
+            </div>
           </Section>
         </div>
 
@@ -1057,6 +1084,66 @@ function ListEditor<T extends Record<string, string>>({
         {addLabel}
       </button>
     </div>
+  );
+}
+
+// Botão de upload via /api/upload. accept controla quais tipos abrir no
+// file picker; multiple permite seleção múltipla (útil pra anexos).
+function UploadButton({
+  accept, multiple, label, onUploaded,
+}: {
+  accept: string;
+  multiple?: boolean;
+  label: string;
+  onUploaded: (files: { url: string; nome: string; tamanho: number }[]) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setError(null);
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      Array.from(files).forEach(f => fd.append('files', f));
+      const res = await fetch('/api/upload', { method: 'POST', body: fd });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({ error: 'falha' }));
+        throw new Error(j.error || `HTTP ${res.status}`);
+      }
+      const data = (await res.json()) as { url: string; nome: string; tamanho: number }[];
+      onUploaded(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro no upload');
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={uploading}
+        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-60 disabled:cursor-not-allowed"
+      >
+        {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+        {uploading ? 'Enviando...' : label}
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        multiple={multiple}
+        onChange={e => handleFiles(e.target.files)}
+        className="hidden"
+      />
+      {error && <p className="mt-1 text-[10px] text-red-500">{error}</p>}
+    </>
   );
 }
 
