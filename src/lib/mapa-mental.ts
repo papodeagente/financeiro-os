@@ -20,7 +20,7 @@ export interface MapaMentalData {
   nome: string;
   rootId: string;
   nodes: Record<string, MindNode>;
-  theme?: 'classic' | 'rainbow' | 'mono' | 'ocean' | 'sunset' | 'forest';
+  theme?: Theme;
   layout?: 'map' | 'logical' | 'right';  // map=balanced L/R, logical=tree right, right=alias
   view?: { zoom?: number; x?: number; y?: number };
 }
