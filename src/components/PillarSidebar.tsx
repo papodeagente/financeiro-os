@@ -15,6 +15,7 @@ import {
   Workflow, Filter as FunilIcon, GitBranch as MindIcon,
   Sparkles, Users, ClipboardList,
   PanelLeftClose, PanelLeftOpen,
+  Eraser,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -144,6 +145,7 @@ const CONFIGURACOES_MENU: SidebarSection[] = [
     title: 'Sistema',
     items: [
       { key: 'cfg-auditoria', label: 'Auditoria', icon: ClipboardList, href: '/config/auditoria' },
+      { key: 'cfg-reset', label: 'Resetar dados', icon: Eraser, href: '/config/reset' },
     ],
   },
 ];
