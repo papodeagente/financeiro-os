@@ -54,14 +54,16 @@ async function callClaude(apiKey: string, modelo: string, prompt: string, maxTok
 
 // ============================================================
 // Enriquecimento de imagens — converte image_query/image_queries
-// (texto descritivo gerado pela IA) em URLs reais do Unsplash com sig
-// determinístico pra garantir que a foto não muda em cada view.
+// (texto descritivo gerado pela IA) em URLs reais via Pollinations.AI
+// (Flux model). Gera imagem AI baseada no prompt, com seed
+// determinístico pra estabilizar a foto da proposta entre re-renders.
+// CDN Cloudflare + cache imutável = serve rápido.
+// `source.unsplash.com` foi descontinuado pelo Unsplash, daí a troca.
 // ============================================================
-function unsplashUrl(query: string, width: number, height: number, sigSeed: string): string {
+function imageUrl(query: string, width: number, height: number, sigSeed: string): string {
   const q = encodeURIComponent(query.trim());
-  // sig fixo (numero) garante mesma foto sempre para esse query+seed.
-  const sig = Math.abs(hashString(`${query}|${sigSeed}`)) % 1_000_000;
-  return `https://source.unsplash.com/${width}x${height}/?${q}&sig=${sig}`;
+  const seed = Math.abs(hashString(`${query}|${sigSeed}`)) % 1_000_000;
+  return `https://image.pollinations.ai/prompt/${q}?width=${width}&height=${height}&seed=${seed}&nologo=true`;
 }
 
 function hashString(s: string): number {
@@ -89,7 +91,7 @@ function enrichSecoes(secoes: Bloco[], propostaId: string): Bloco[] {
     if (s.tipo === 'GALERIA') {
       const queries = (c.image_queries as string[]) || [];
       const imagens = queries.map((q, i) => ({
-        url: unsplashUrl(q, 1600, 900, `${seed}-${i}`),
+        url: imageUrl(q, 1600, 900, `${seed}-${i}`),
         legenda: q,
       }));
       return { tipo: s.tipo, conteudo: { titulo: c.titulo || '', imagens } };
@@ -99,10 +101,10 @@ function enrichSecoes(secoes: Bloco[], propostaId: string): Bloco[] {
       const imgQuery = (c.image_query as string) || '';
       const galleryQs = ((c.gallery_queries as string[]) || []).filter(Boolean);
       if (imgQuery) {
-        c.hotel_imagem = unsplashUrl(imgQuery, 1600, 900, `${seed}-cover`);
+        c.hotel_imagem = imageUrl(imgQuery, 1600, 900, `${seed}-cover`);
       }
       if (galleryQs.length > 0) {
-        c.hotel_galeria = galleryQs.map((q, i) => unsplashUrl(q, 1200, 800, `${seed}-g${i}`));
+        c.hotel_galeria = galleryQs.map((q, i) => imageUrl(q, 1200, 800, `${seed}-g${i}`));
         c.mostrar_galeria = true;
       }
       // Limpa chaves auxiliares pra não vazar pro JSONB
@@ -123,7 +125,7 @@ function enrichSecoes(secoes: Bloco[], propostaId: string): Bloco[] {
     if (s.tipo === 'SERVICO') {
       const imgQuery = (c.image_query as string) || '';
       if (imgQuery && !c.imagem) {
-        c.imagem = unsplashUrl(imgQuery, 1200, 800, `${seed}-serv`);
+        c.imagem = imageUrl(imgQuery, 1200, 800, `${seed}-serv`);
         delete c.image_query;
       }
       return s;
