@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LayoutDashboard, Building2, LogOut, Shield, Sparkles, Image as ImageIcon, Link as LinkIcon } from 'lucide-react'
+import { LayoutDashboard, Building2, LogOut, Shield, Sparkles, Image as ImageIcon, Link as LinkIcon, MessageSquare } from 'lucide-react'
 
 const navItems = [
   { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -11,6 +11,7 @@ const navItems = [
   { href: '/admin/planos', label: 'Planos', icon: Sparkles },
   { href: '/admin/convites', label: 'Convites', icon: LinkIcon },
   { href: '/admin/marketing', label: 'Marketing', icon: ImageIcon },
+  { href: '/admin/support', label: 'Suporte', icon: MessageSquare },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

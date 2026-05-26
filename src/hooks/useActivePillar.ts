@@ -47,6 +47,7 @@ const ROUTE_MAP: [string, Pillar][] = [
   ['/relatorios', 'financeiro'],
   // Configurações
   ['/config', 'configuracoes'],
+  ['/suporte', 'configuracoes'],
 ];
 
 export function useActivePillar(): Pillar | null {

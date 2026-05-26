@@ -212,6 +212,53 @@ export async function initDB() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    -- Sistema de tickets de suporte. tenant_id obrigatorio (sempre
+    -- escopado ao tenant que abriu). Super admin lista todos sem filtro.
+    CREATE TABLE IF NOT EXISTS support_tickets (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL DEFAULT '',
+      numero TEXT NOT NULL DEFAULT '',
+      titulo TEXT NOT NULL DEFAULT '',
+      descricao TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'aberto',
+      prioridade TEXT NOT NULL DEFAULT 'normal',
+      categoria TEXT NOT NULL DEFAULT 'bug',
+      created_by TEXT NOT NULL DEFAULT '',
+      created_by_nome TEXT NOT NULL DEFAULT '',
+      created_by_email TEXT NOT NULL DEFAULT '',
+      url_origem TEXT NOT NULL DEFAULT '',
+      user_agent TEXT NOT NULL DEFAULT '',
+      anexos JSONB NOT NULL DEFAULT '[]'::jsonb,
+      data JSONB NOT NULL DEFAULT '{}'::jsonb,
+      mensagens_count INTEGER NOT NULL DEFAULT 0,
+      ultima_msg_at TIMESTAMPTZ,
+      tem_resposta_admin BOOLEAN NOT NULL DEFAULT false,
+      tem_nao_lida_usuario BOOLEAN NOT NULL DEFAULT false,
+      tem_nao_lida_admin BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      resolved_at TIMESTAMPTZ,
+      closed_at TIMESTAMPTZ
+    );
+
+    CREATE TABLE IF NOT EXISTS support_ticket_messages (
+      id TEXT PRIMARY KEY,
+      ticket_id TEXT NOT NULL,
+      tenant_id TEXT NOT NULL DEFAULT '',
+      from_type TEXT NOT NULL DEFAULT 'user',
+      from_id TEXT NOT NULL DEFAULT '',
+      from_nome TEXT NOT NULL DEFAULT '',
+      mensagem TEXT NOT NULL DEFAULT '',
+      anexos JSONB NOT NULL DEFAULT '[]'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_support_tickets_tenant ON support_tickets(tenant_id);
+    CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets(status);
+    CREATE INDEX IF NOT EXISTS idx_support_tickets_updated ON support_tickets(updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_support_messages_ticket ON support_ticket_messages(ticket_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_support_messages_tenant ON support_ticket_messages(tenant_id);
+
     CREATE TABLE IF NOT EXISTS api_cache (
       key TEXT PRIMARY KEY,
       source TEXT NOT NULL DEFAULT '',
