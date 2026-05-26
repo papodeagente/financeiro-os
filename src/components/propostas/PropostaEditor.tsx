@@ -1062,12 +1062,27 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
   };
 
   const handleGenerateFullProposal = async () => {
+    // Coleta destino e dias antes de gerar — sem destino, IA não consegue
+    // criar voos, hotel, roteiro com dados concretos. Pergunta o mínimo
+    // necessário se faltar (mais rápido que abrir modal completo).
+    let ctx = getAIContext();
+    if (!ctx.destino) {
+      const d = prompt('Para qual destino é a viagem? (ex.: Paris, Bali, Patagônia)');
+      if (!d?.trim()) return;
+      ctx = { ...ctx, destino: d.trim() };
+    }
+    if (!ctx.num_dias || ctx.num_dias < 1) {
+      const n = prompt('Quantos dias de viagem? (padrão 5)', '5');
+      const parsed = parseInt(n || '5', 10);
+      ctx = { ...ctx, num_dias: isFinite(parsed) && parsed > 0 ? parsed : 5 };
+    }
+
     setGeneratingFull(true);
     try {
       const res = await fetch('/api/ai/proposta', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contexto: getAIContext(), modo: 'completo' }),
+        body: JSON.stringify({ contexto: ctx, modo: 'completo' }),
       });
       const data = await res.json();
       if (!res.ok || data.error) {

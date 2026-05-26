@@ -4,10 +4,6 @@ import { getPromptForBlock, getPromptForFullProposal } from '@/lib/ai-prompts';
 import type { AIPropostaContext } from '@/lib/ai-prompts';
 import { getTenantId } from '@/lib/tenant';
 
-// Modelo fallback. Atualizado para Sonnet 4.5 (mais recente e estavel
-// em 2026). O modelo antigo claude-sonnet-4-20250514 pode retornar 404
-// em propostas geradas hoje. Cada tenant pode sobrescrever em
-// Configuracoes > Integracoes > Anthropic > Modelo.
 const MODELO_FALLBACK = 'claude-sonnet-4-5-20250929';
 
 async function getAnthropicConfig(tenantId: string) {
@@ -20,9 +16,7 @@ async function getAnthropicConfig(tenantId: string) {
   return { api_key: cfg.anthropic.api_key, modelo: cfg.anthropic.modelo || MODELO_FALLBACK };
 }
 
-async function callClaude(apiKey: string, modelo: string, prompt: string): Promise<string> {
-  // Tenta com modelo configurado; se 404 (model not found), retry com
-  // fallback. Isso protege contra modelos antigos depreciados na conta.
+async function callClaude(apiKey: string, modelo: string, prompt: string, maxTokens: number): Promise<string> {
   const tryCall = async (modelToUse: string) => {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -33,9 +27,7 @@ async function callClaude(apiKey: string, modelo: string, prompt: string): Promi
       },
       body: JSON.stringify({
         model: modelToUse,
-        // 8192 pra suportar proposta completa com varios blocos. JSON
-        // antes era truncado em 4096 quebrando o parse.
-        max_tokens: 8192,
+        max_tokens: maxTokens,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
@@ -43,7 +35,6 @@ async function callClaude(apiKey: string, modelo: string, prompt: string): Promi
   };
 
   let response = await tryCall(modelo);
-  // Se modelo nao encontrado (deprecated/typo), tenta o fallback.
   if (response.status === 404 && modelo !== MODELO_FALLBACK) {
     response = await tryCall(MODELO_FALLBACK);
   }
@@ -55,12 +46,91 @@ async function callClaude(apiKey: string, modelo: string, prompt: string): Promi
   }
 
   const result = await response.json();
-  // stop_reason possible: 'end_turn' | 'max_tokens' | 'stop_sequence' |
-  // 'tool_use' | 'pause_turn' | 'refusal'. Se 'max_tokens', alerta no log.
   if (result.stop_reason === 'max_tokens') {
     console.warn('[AI/proposta] stop_reason=max_tokens — JSON pode estar truncado');
   }
   return result.content?.[0]?.text || '';
+}
+
+// ============================================================
+// Enriquecimento de imagens — converte image_query/image_queries
+// (texto descritivo gerado pela IA) em URLs reais do Unsplash com sig
+// determinístico pra garantir que a foto não muda em cada view.
+// ============================================================
+function unsplashUrl(query: string, width: number, height: number, sigSeed: string): string {
+  const q = encodeURIComponent(query.trim());
+  // sig fixo (numero) garante mesma foto sempre para esse query+seed.
+  const sig = Math.abs(hashString(`${query}|${sigSeed}`)) % 1_000_000;
+  return `https://source.unsplash.com/${width}x${height}/?${q}&sig=${sig}`;
+}
+
+function hashString(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h << 5) - h + s.charCodeAt(i);
+    h |= 0;
+  }
+  return h;
+}
+
+function avatarUrl(nome: string): string {
+  // ui-avatars.com gera avatar com iniciais; ZERO config necessária.
+  const n = encodeURIComponent((nome || 'Cliente').trim());
+  return `https://ui-avatars.com/api/?name=${n}&background=0a84ff&color=fff&size=128&bold=true&format=png`;
+}
+
+type Bloco = { tipo: string; conteudo: Record<string, unknown> };
+
+function enrichSecoes(secoes: Bloco[], propostaId: string): Bloco[] {
+  return secoes.map((s, idx) => {
+    const seed = `${propostaId}-${idx}`;
+    const c = s.conteudo as Record<string, unknown>;
+
+    if (s.tipo === 'GALERIA') {
+      const queries = (c.image_queries as string[]) || [];
+      const imagens = queries.map((q, i) => ({
+        url: unsplashUrl(q, 1600, 900, `${seed}-${i}`),
+        legenda: q,
+      }));
+      return { tipo: s.tipo, conteudo: { titulo: c.titulo || '', imagens } };
+    }
+
+    if (s.tipo === 'ALOJAMENTO') {
+      const imgQuery = (c.image_query as string) || '';
+      const galleryQs = ((c.gallery_queries as string[]) || []).filter(Boolean);
+      if (imgQuery) {
+        c.hotel_imagem = unsplashUrl(imgQuery, 1600, 900, `${seed}-cover`);
+      }
+      if (galleryQs.length > 0) {
+        c.hotel_galeria = galleryQs.map((q, i) => unsplashUrl(q, 1200, 800, `${seed}-g${i}`));
+        c.mostrar_galeria = true;
+      }
+      // Limpa chaves auxiliares pra não vazar pro JSONB
+      delete c.image_query;
+      delete c.gallery_queries;
+      return s;
+    }
+
+    if (s.tipo === 'DEPOIMENTO') {
+      const deps = (c.depoimentos as Array<{ autor?: string; foto?: string }>) || [];
+      const enriched = deps.map(d => ({
+        ...d,
+        foto: d.foto || avatarUrl(d.autor || 'Cliente'),
+      }));
+      return { tipo: s.tipo, conteudo: { ...c, depoimentos: enriched } };
+    }
+
+    if (s.tipo === 'SERVICO') {
+      const imgQuery = (c.image_query as string) || '';
+      if (imgQuery && !c.imagem) {
+        c.imagem = unsplashUrl(imgQuery, 1200, 800, `${seed}-serv`);
+        delete c.image_query;
+      }
+      return s;
+    }
+
+    return s;
+  });
 }
 
 export async function POST(req: Request) {
@@ -81,7 +151,6 @@ export async function POST(req: Request) {
       modo?: 'bloco' | 'completo';
     };
 
-    // Enrich context with destination data if available
     if (contexto.destino && pool) {
       try {
         const { rows } = await pool.query(
@@ -98,8 +167,12 @@ export async function POST(req: Request) {
     }
 
     let prompt: string;
+    // Proposta completa precisa de muito mais tokens pra caber todos
+    // os blocos. 16384 é o cap atual do Claude Sonnet 4.5.
+    let maxTokens = 8192;
     if (modo === 'completo') {
       prompt = getPromptForFullProposal(contexto);
+      maxTokens = 16384;
     } else {
       if (!tipo_bloco) {
         return NextResponse.json({ error: 'tipo_bloco e obrigatorio' }, { status: 400 });
@@ -107,15 +180,12 @@ export async function POST(req: Request) {
       prompt = getPromptForBlock(tipo_bloco, contexto);
     }
 
-    const text = await callClaude(config.api_key, config.modelo, prompt);
+    const text = await callClaude(config.api_key, config.modelo, prompt, maxTokens);
 
     let parsed;
     try {
       parsed = JSON.parse(text);
     } catch {
-      // Try to extract JSON from the response — pode vir cercado de
-      // markdown ```json ... ``` ou texto preambulo. Regex pega o
-      // bloco entre primeira { e ultima }.
       const match = text.match(/\{[\s\S]*\}/);
       if (match) {
         try {
@@ -133,6 +203,16 @@ export async function POST(req: Request) {
           raw_preview: text.slice(0, 500),
         }, { status: 500 });
       }
+    }
+
+    // Enriquecimento server-side de imagens (galeria, hotel, depoimentos).
+    // A IA gera apenas image_query/queries — aqui convertemos pra URLs.
+    if (modo === 'completo' && parsed && Array.isArray(parsed.secoes)) {
+      // ID determinístico pra estabilizar sig do Unsplash (mesmo destino
+      // gera mesmas fotos em re-renders, mas propostas diferentes têm
+      // imagens diferentes).
+      const propostaSeed = `${contexto.destino || 'p'}-${Date.now()}`;
+      parsed.secoes = enrichSecoes(parsed.secoes as Bloco[], propostaSeed);
     }
 
     return NextResponse.json(parsed);
