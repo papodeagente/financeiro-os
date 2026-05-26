@@ -1,13 +1,14 @@
 'use client';
 
 import Link from 'next/link';
+import { createPortal } from 'react-dom';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useActivePillar, PILLARS, type Pillar } from '@/hooks/useActivePillar';
 import { CrmStatusBadge } from './CrmStatusBadge';
 import { NotificacoesBell } from './NotificacoesBell';
 import { Logo } from './Logo';
-import { Sun, Moon, Search, LogOut, ChevronDown, Settings, Plus } from 'lucide-react';
+import { Sun, Moon, Search, LogOut, ChevronDown, Settings, Plus, User as UserIcon } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 
 interface Props {
@@ -32,16 +33,47 @@ export function TopBar({ onCommandPalette }: Props) {
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
+
+  // Calcula posição do dropdown a partir do botão ao abrir — necessário
+  // porque o <header> tem overflow-hidden e clipava o menu antes.
+  // Render via portal pro body escapa esse clipping.
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (rect) {
+      setDropdownPos({
+        top: rect.bottom + 8,
+        right: window.innerWidth - rect.right,
+      });
+    }
+  }, [dropdownOpen]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      const t = e.target as Node;
+      if (
+        triggerRef.current && !triggerRef.current.contains(t)
+        && dropdownRef.current && !dropdownRef.current.contains(t)
+      ) {
         setDropdownOpen(false);
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDropdownOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
   }, []);
 
   return (
@@ -119,13 +151,24 @@ export function TopBar({ onCommandPalette }: Props) {
           {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>
 
-        {/* User dropdown — sempre visivel e nunca cortado */}
+        {/* User dropdown — botão; menu renderizado via portal pra
+            escapar do overflow-hidden do <header> */}
         {user && (
-          <div className="relative shrink-0" ref={dropdownRef}>
-            <button
-              onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center gap-1.5 ml-0.5 px-1.5 py-1 rounded-xl hover:bg-[var(--t-surface-hover)] transition-colors"
-            >
+          <button
+            ref={triggerRef}
+            onClick={() => setDropdownOpen(s => !s)}
+            className="flex items-center gap-1.5 ml-0.5 px-1.5 py-1 rounded-xl hover:bg-[var(--t-surface-hover)] transition-colors shrink-0"
+            aria-haspopup="menu"
+            aria-expanded={dropdownOpen}
+          >
+            {user.foto ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={user.foto}
+                alt={user.nome}
+                className="w-8 h-8 rounded-full object-cover ring-2 ring-offset-1 ring-[var(--t-green)]/20 ring-offset-[var(--t-surface)]"
+              />
+            ) : (
               <div
                 className="w-8 h-8 rounded-full flex items-center justify-center ring-2 ring-offset-1 ring-[var(--t-green)]/20 ring-offset-[var(--t-surface)]"
                 style={{ background: 'var(--t-accent-gradient)' }}
@@ -134,37 +177,76 @@ export function TopBar({ onCommandPalette }: Props) {
                   {user.nome?.charAt(0)?.toUpperCase() || 'U'}
                 </span>
               </div>
-              <ChevronDown className="w-3 h-3 text-[var(--t-text-muted)]" />
-            </button>
-
-            {dropdownOpen && (
-              <div className="absolute right-0 top-full mt-2 w-56 lg-glass-thick py-1.5 z-50 dropdown-enter">
-                <div className="px-4 py-3 border-b border-[var(--t-border)]">
-                  <p className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)]">{user.nome}</p>
-                  <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">{user.email}</p>
-                </div>
-                <Link
-                  href="/config/agencia"
-                  className="flex items-center gap-2 px-4 py-2.5 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)] mx-1.5 my-0.5 rounded-lg"
-                  onClick={() => setDropdownOpen(false)}
-                >
-                  <Settings className="w-3.5 h-3.5" />
-                  Configurações
-                </Link>
-                <div className="border-t border-[var(--t-border)] mt-1 pt-1">
-                  <button
-                    onClick={logout}
-                    className="w-full text-left px-4 py-2.5 text-[var(--text-body-sm)] text-red-400 hover:bg-red-400/10 flex items-center gap-2 mx-1.5 rounded-lg"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    Sair
-                  </button>
-                </div>
-              </div>
             )}
-          </div>
+            <ChevronDown className={`w-3 h-3 text-[var(--t-text-muted)] transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+          </button>
         )}
       </div>
+
+      {/* Menu via portal — fica fora do header pra escapar overflow */}
+      {mounted && user && dropdownOpen && dropdownPos && createPortal(
+        <div
+          ref={dropdownRef}
+          role="menu"
+          className="fixed w-60 bg-[var(--t-surface)] border border-[var(--t-border)] rounded-xl shadow-2xl py-1.5 z-[100] dropdown-enter"
+          style={{ top: dropdownPos.top, right: dropdownPos.right }}
+        >
+          <div className="px-4 py-3 border-b border-[var(--t-border)] flex items-center gap-3">
+            {user.foto ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={user.foto} alt={user.nome} className="w-10 h-10 rounded-full object-cover" />
+            ) : (
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center"
+                style={{ background: 'var(--t-accent-gradient)' }}
+              >
+                <span className="text-sm font-bold text-white">
+                  {user.nome?.charAt(0)?.toUpperCase() || 'U'}
+                </span>
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-semibold text-[var(--t-text)] truncate">{user.nome}</p>
+              <p className="text-[11px] text-[var(--t-text-muted)] truncate">{user.email}</p>
+            </div>
+          </div>
+          <Link
+            href="/perfil"
+            className="flex items-center gap-2 px-3 py-2 text-sm text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)] mx-1.5 my-0.5 rounded-lg"
+            onClick={() => setDropdownOpen(false)}
+            role="menuitem"
+          >
+            <UserIcon className="w-3.5 h-3.5" />
+            <div className="flex-1">
+              <div className="font-medium text-[var(--t-text)]">Meu perfil</div>
+              <div className="text-[10px] text-[var(--t-text-muted)]">Foto, nome, telefone</div>
+            </div>
+          </Link>
+          <Link
+            href="/config/agencia"
+            className="flex items-center gap-2 px-3 py-2 text-sm text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)] mx-1.5 my-0.5 rounded-lg"
+            onClick={() => setDropdownOpen(false)}
+            role="menuitem"
+          >
+            <Settings className="w-3.5 h-3.5" />
+            <div className="flex-1">
+              <div className="font-medium text-[var(--t-text)]">Configurações</div>
+              <div className="text-[10px] text-[var(--t-text-muted)]">Agência, usuários, integrações</div>
+            </div>
+          </Link>
+          <div className="border-t border-[var(--t-border)] mt-1 pt-1">
+            <button
+              onClick={() => { setDropdownOpen(false); logout(); }}
+              className="w-full text-left flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-red-500/10 mx-1.5 rounded-lg"
+              role="menuitem"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="font-medium">Sair</span>
+            </button>
+          </div>
+        </div>,
+        document.body,
+      )}
     </header>
   );
 }

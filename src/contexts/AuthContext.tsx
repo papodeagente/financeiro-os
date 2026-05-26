@@ -7,6 +7,7 @@ interface AuthUser {
   id: string;
   nome: string;
   email: string;
+  foto?: string;
   perfil: string;
   permissoes: Record<string, boolean | string[]>;
   tenantId?: string;
