@@ -1,25 +1,16 @@
 import { NextResponse } from 'next/server';
-import pool, { initDB } from '@/lib/db';
+import { initDB } from '@/lib/db';
+import { resolvePropostaForHost } from '@/lib/tenant-host';
 
-export async function GET(_req: Request, { params }: { params: Promise<{ slug: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
     await initDB();
     const { slug } = await params;
-    if (!pool || !slug || slug.length < 10) {
+    const result = await resolvePropostaForHost(req, slug);
+    if (!result.ok) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
-    // Sanitize: only allow alphanumeric, hyphens, underscores
-    if (!/^[\w-]+$/.test(slug)) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-    const { rows } = await pool.query(
-      `SELECT data FROM propostas WHERE id = $1 LIMIT 1`,
-      [slug]
-    );
-    if (rows.length === 0) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-    return NextResponse.json(rows[0].data);
+    return NextResponse.json(result.data);
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Error' }, { status: 500 });
   }

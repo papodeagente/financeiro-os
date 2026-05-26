@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
+import { isHostAuthorizedForProposta } from '@/lib/tenant-host';
 
 async function getAnthropicConfig() {
   await initDB();
@@ -31,10 +32,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     await initDB();
     if (!pool) return NextResponse.json({ error: 'DB offline' }, { status: 500 });
     const { rows } = await pool.query(
-      `SELECT data FROM propostas WHERE id = $1 LIMIT 1`,
+      `SELECT tenant_id, data FROM propostas WHERE id = $1 LIMIT 1`,
       [slug]
     );
     if (rows.length === 0) {
+      return NextResponse.json({ error: 'Proposta nao encontrada' }, { status: 404 });
+    }
+
+    if (!(await isHostAuthorizedForProposta(req, rows[0].tenant_id))) {
       return NextResponse.json({ error: 'Proposta nao encontrada' }, { status: 404 });
     }
 

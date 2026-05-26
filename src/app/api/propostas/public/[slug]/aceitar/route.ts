@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { criarNotificacao } from '@/lib/notificacoes';
 import { processarEventoPropostaPublica } from '@/lib/proposta-aceite-crm';
+import { isHostAuthorizedForProposta } from '@/lib/tenant-host';
 
 // Validacoes server-side (espelham client mas nao confiam nele).
 function validarEmail(s: string): boolean {
@@ -40,6 +41,12 @@ export async function PUT(req: Request, { params }: { params: Promise<{ slug: st
 
     const proposta = rows[0].data;
     const tenantId = rows[0].tenant_id || '';
+
+    // Se a request veio por dominio customizado, esse dominio precisa
+    // pertencer ao mesmo tenant da proposta. Senao, 404 (nao vaza nada).
+    if (!(await isHostAuthorizedForProposta(req, tenantId))) {
+      return NextResponse.json({ error: 'Proposta nao encontrada' }, { status: 404 });
+    }
 
     if (proposta.status === 'RECUSADO') {
       return NextResponse.json({ error: 'Proposta foi recusada' }, { status: 400 });

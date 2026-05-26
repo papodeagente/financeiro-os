@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
+import { isHostAuthorizedForProposta } from '@/lib/tenant-host';
 
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
@@ -16,10 +17,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     }
 
     const { rows } = await pool.query(
-      `SELECT id, data FROM propostas WHERE id = $1 LIMIT 1`,
+      `SELECT id, tenant_id, data FROM propostas WHERE id = $1 LIMIT 1`,
       [slug]
     );
     if (rows.length === 0) return NextResponse.json({ error: 'Proposta nao encontrada' }, { status: 404 });
+
+    if (!(await isHostAuthorizedForProposta(req, rows[0].tenant_id))) {
+      return NextResponse.json({ error: 'Proposta nao encontrada' }, { status: 404 });
+    }
 
     const proposta = rows[0].data;
     if (!proposta.leads) proposta.leads = [];

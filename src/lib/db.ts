@@ -928,6 +928,17 @@ export async function initDB() {
   `);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_planejamento_custos_tenant_mes ON planejamento_custos(tenant_id, mes)`);
 
+  // Unicidade do domínio personalizado de propostas — um domínio pode
+  // pertencer a UM tenant só. Normaliza removendo protocolo + trailing
+  // slash + lowercase no índice expressional pra casar com a query de
+  // resolução por hostname.
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_agencia_custom_proposta_domain
+    ON agencia (LOWER(TRIM(BOTH '/' FROM REGEXP_REPLACE(data->>'custom_proposta_domain', '^https?://', '', 'i'))))
+    WHERE data->>'custom_proposta_domain' IS NOT NULL
+      AND data->>'custom_proposta_domain' <> ''
+  `);
+
   // Run multi-tenant migration (assign existing data to default tenant)
   const { migrateToMultiTenant } = await import('./migrate-multitenant');
   await migrateToMultiTenant();

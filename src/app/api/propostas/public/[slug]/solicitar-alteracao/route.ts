@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { criarNotificacao } from '@/lib/notificacoes';
 import { processarEventoPropostaPublica } from '@/lib/proposta-aceite-crm';
+import { isHostAuthorizedForProposta } from '@/lib/tenant-host';
 
 function validarEmail(s: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
@@ -45,6 +46,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
     const proposta = rows[0].data;
     const tenantId = rows[0].tenant_id || '';
+
+    if (!(await isHostAuthorizedForProposta(req, tenantId))) {
+      return NextResponse.json({ error: 'Proposta nao encontrada' }, { status: 404 });
+    }
 
     if (proposta.status === 'ACEITO') {
       return NextResponse.json({ error: 'Proposta já foi aceita' }, { status: 400 });

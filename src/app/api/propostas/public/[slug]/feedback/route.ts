@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { criarNotificacao } from '@/lib/notificacoes';
+import { isHostAuthorizedForProposta } from '@/lib/tenant-host';
 
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
@@ -24,6 +25,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
     const proposta = rows[0].data;
     const tenantId = rows[0].tenant_id || '';
+
+    if (!(await isHostAuthorizedForProposta(req, tenantId))) {
+      return NextResponse.json({ error: 'Proposta nao encontrada' }, { status: 404 });
+    }
 
     if (!proposta.feedbacks) proposta.feedbacks = [];
     proposta.feedbacks.push({

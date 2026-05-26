@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
+import { isCanonicalHost, extractHost, getCanonicalBaseUrl } from './lib/canonical-hosts';
 
 let _jwtSecret: Uint8Array | null = null;
 function getJwtSecret() {
@@ -15,24 +16,10 @@ function getJwtSecret() {
 
 const COOKIE_NAME = 'entur-session';
 
-// Hosts canônicos do sistema — qualquer outro host que aponte pra essa
-// app é tratado como domínio personalizado de propostas (configurado
-// em Agencia.custom_proposta_domain) e SÓ pode servir rotas públicas
-// de proposta. CANONICAL_HOSTS env var pode estender via vírgula
-// (ex.: "fin.enturos.com,fin2.enturos.com").
-const CANONICAL_HOSTS = new Set<string>(
-  [
-    'fin.enturos.com',
-    'localhost',
-    '127.0.0.1',
-    '0.0.0.0',
-    process.env.COOLIFY_FQDN?.toLowerCase(),
-    ...(process.env.CANONICAL_HOSTS?.split(',').map(s => s.trim().toLowerCase()) || []),
-  ].filter(Boolean) as string[],
-);
-
 // Rotas permitidas em domínio personalizado de proposta. Tudo fora
-// desta whitelist é redirecionado pro domínio canônico.
+// desta whitelist é redirecionado pro domínio canônico. O middleware
+// NÃO valida tenant aqui (sem acesso a DB no edge runtime) — quem
+// valida é a rota /api/propostas/public/[slug] via tenant-host.ts.
 function isProposalAllowedPath(pathname: string): boolean {
   return (
     pathname === '/p' ||
@@ -48,43 +35,6 @@ function isProposalAllowedPath(pathname: string): boolean {
     pathname === '/robots.txt' ||
     pathname === '/sitemap.xml'
   );
-}
-
-function getRequestHost(request: NextRequest): string {
-  // x-forwarded-host vem do proxy reverso (Traefik no Coolify);
-  // priorizar sobre host porque Next pode ver "localhost" internamente.
-  const fwd = request.headers.get('x-forwarded-host');
-  const host = request.headers.get('host');
-  return (fwd || host || '').split(':')[0].toLowerCase();
-}
-
-function getCanonicalBase(): string {
-  // Base pra redirecionar quando o host atual é um custom proposal
-  // domain mas a rota não é de proposta. Prioriza PUBLIC_APP_URL.
-  //
-  // Coolify seta COOLIFY_URL com lista de FQDNs separados por vírgula
-  // quando a app tem múltiplos domínios (ex.:
-  // "https://fin.enturos.com,https://proposta.entur.ia.br"). Filtro
-  // pra pegar o primeiro que NÃO é um host de proposta personalizado
-  // — usa CANONICAL_HOSTS pra decidir.
-  const candidates = [
-    process.env.PUBLIC_APP_URL,
-    ...(process.env.COOLIFY_URL?.split(',') || []),
-  ]
-    .map(v => v?.trim())
-    .filter(Boolean) as string[];
-
-  for (const raw of candidates) {
-    try {
-      const u = new URL(raw);
-      const h = u.hostname.toLowerCase();
-      if (CANONICAL_HOSTS.has(h)) {
-        return `${u.protocol}//${u.host}`;
-      }
-    } catch { /* invalid URL — skip */ }
-  }
-
-  return 'https://fin.enturos.com';
 }
 
 // Public routes that don't require authentication
@@ -120,15 +70,18 @@ export async function middleware(request: NextRequest) {
   // ============================================================
   // Custom proposal domain — só serve rotas de proposta pública
   // ============================================================
-  // Se o host não é canônico (ex.: proposta.entur.ia.br configurado
-  // em Agencia.custom_proposta_domain), bloqueia qualquer rota fora
-  // do whitelist redirecionando pro domínio canônico.
-  const host = getRequestHost(request);
-  if (host && !CANONICAL_HOSTS.has(host)) {
+  // Se o host não é canônico (configurado por algum tenant em
+  // Agencia.custom_proposta_domain), bloqueia qualquer rota fora do
+  // whitelist redirecionando pro domínio canônico. A validação de
+  // "esse hostname pertence ao tenant da proposta X" acontece no
+  // server-side da rota (tenant-host.ts), porque o middleware roda
+  // em edge runtime e não pode tocar no Postgres.
+  const host = extractHost(request);
+  if (host && !isCanonicalHost(host)) {
     if (!isProposalAllowedPath(pathname)) {
       const target = new URL(
         `${pathname}${request.nextUrl.search}`,
-        getCanonicalBase(),
+        getCanonicalBaseUrl(),
       );
       return NextResponse.redirect(target, 302);
     }
