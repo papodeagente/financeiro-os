@@ -232,29 +232,101 @@ export function InfTab({ grupo, onChange }: Props) {
       {/* Quantidade de pessoas — apenas para GRUPO. Usado nos cálculos
           financeiros (custo total ÷ pax = custo por pessoa). Vagas
           continuam sendo geridas em Gestão de Grupos. */}
-      {isGrupo && (
-        <div>
-          <h3 className="text-lg font-semibold text-[var(--t-text)] mb-3">Quantidade de pessoas</h3>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <Label>Pessoas no grupo</Label>
-              <Input
-                type="number"
-                min={1}
-                step={1}
-                value={grupo.params.qtd_min_pax || 1}
-                onChange={e => {
-                  const qtd = Math.max(1, parseInt(e.target.value) || 1);
-                  update({ params: { ...grupo.params, qtd_min_pax: qtd, qtd_max_pax: Math.max(qtd, grupo.params.qtd_max_pax || qtd) } });
-                }}
-              />
+      {isGrupo && (() => {
+        const totalPax = Math.max(1, grupo.params.qtd_min_pax || 1);
+        const cortesia = Math.max(0, grupo.params.cortesia || 0);
+        const pagantes = Math.max(totalPax - cortesia, 1);
+        const aptoLabel: Record<NonNullable<typeof grupo.params.cortesia_apto>, string> = {
+          sgl: 'Single', dbl: 'Duplo', tpl: 'Triplo', qdp: 'Quádruplo',
+        };
+        return (
+          <div>
+            <h3 className="text-lg font-semibold text-[var(--t-text)] mb-3">Quantidade de pessoas</h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <Label>Pessoas no grupo</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={grupo.params.qtd_min_pax || 1}
+                  onChange={e => {
+                    const qtd = Math.max(1, parseInt(e.target.value) || 1);
+                    // Cortesia não pode ser maior que total de pessoas
+                    const novaCortesia = Math.min(grupo.params.cortesia || 0, qtd - 1);
+                    update({
+                      params: {
+                        ...grupo.params,
+                        qtd_min_pax: qtd,
+                        qtd_max_pax: Math.max(qtd, grupo.params.qtd_max_pax || qtd),
+                        cortesia: Math.max(0, novaCortesia),
+                      },
+                    });
+                  }}
+                />
+              </div>
+              <div>
+                <Label>Cortesias (acompanhantes)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={Math.max(0, totalPax - 1)}
+                  step={1}
+                  value={grupo.params.cortesia || 0}
+                  onChange={e => {
+                    const raw = parseInt(e.target.value) || 0;
+                    const novaCortesia = Math.min(Math.max(0, raw), Math.max(0, totalPax - 1));
+                    update({ params: { ...grupo.params, cortesia: novaCortesia } });
+                  }}
+                  placeholder="0"
+                />
+              </div>
+              {cortesia > 0 && (
+                <div>
+                  <Label>Apartamento da cortesia</Label>
+                  <Select
+                    value={grupo.params.cortesia_apto || 'dbl'}
+                    onValueChange={v => update({
+                      params: { ...grupo.params, cortesia_apto: v as 'sgl' | 'dbl' | 'tpl' | 'qdp' },
+                    })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sgl">Single (1 cortesia/apto)</SelectItem>
+                      <SelectItem value="dbl">Duplo (2 cortesias/apto)</SelectItem>
+                      <SelectItem value="tpl">Triplo (3 cortesias/apto)</SelectItem>
+                      <SelectItem value="qdp">Quádruplo (4 cortesias/apto)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <div>
+                <Label>Pagantes</Label>
+                <Input disabled value={pagantes} />
+              </div>
             </div>
+
+            {cortesia > 0 && (
+              <div className="mt-3 p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5">
+                <p className="text-[12px] text-[var(--t-text)] leading-relaxed">
+                  <b>{cortesia}</b> cortesia{cortesia !== 1 ? 's' : ''} ({aptoLabel[grupo.params.cortesia_apto || 'dbl']})
+                  {' '}para acompanhantes do grupo. O custo dessas vagas é{' '}
+                  <b>diluído entre os {pagantes} pagantes</b>, encarecendo cada vaga vendida — sem reduzir
+                  o número de pessoas que viajam.
+                </p>
+                <p className="text-[11px] text-[var(--t-text-muted)] mt-1">
+                  Fórmula: <span className="font-mono">(soma dos custos do grupo ÷ {pagantes} pagantes) × {cortesia} = custo extra por pax pagante</span>.
+                  O detalhamento aparece como linha <b>&quot;Cortesia&quot;</b> na aba Financeiro.
+                </p>
+              </div>
+            )}
+
+            <p className="text-xs text-[var(--t-text-muted)] mt-2">
+              Quantidade orçada de passageiros do grupo. É a base do cálculo financeiro (custo total ÷ pagantes = custo por PAX). As vagas disponíveis para venda são geridas em <b>Gestão de Grupos</b>.
+            </p>
           </div>
-          <p className="text-xs text-[var(--t-text-muted)] mt-2">
-            Quantidade orçada de passageiros do grupo. É a base do cálculo financeiro (custo total ÷ qtd. de pessoas = custo por PAX). As vagas disponíveis para venda são geridas em <b>Gestão de Grupos</b>.
-          </p>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
