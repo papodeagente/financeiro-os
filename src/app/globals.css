@@ -100,42 +100,51 @@
   --lg-blur-regular: none;
   --lg-blur-thick:   none;
 
-  /* Backgrounds */
-  --lg-bg:            #F8FAFC;
+  /* Backgrounds — neutro frio, estilo Notion/Linear */
+  --lg-bg:            #F5F5F7;
   --lg-bg-deep:       #FFFFFF;
   --lg-surface-solid: #FFFFFF;
 
-  /* Borders */
+  /* Borders — quase invisíveis */
   --lg-border-highlight: transparent;
-  --lg-border-base:      #E2E8F0;
-  --lg-border-strong:    #CBD5E1;
-  --lg-border-light:     #F1F5F9;
+  --lg-border-base:      #ECECEF;
+  --lg-border-strong:    #D9D9DC;
+  --lg-border-light:     #F2F2F4;
 
-  /* Text — slate scale */
+  /* Text — slate ligeiramente frio */
   --lg-text:    #0F172A;
   --lg-text-2:  #475569;
   --lg-text-3:  #64748B;
   --lg-text-4:  #94A3B8;
 
-  /* Accent — Tailwind blue-600 */
-  --lg-accent:        #2563EB;
-  --lg-accent-fill:   #EFF6FF;
-  --lg-accent-hover:  #1D4ED8;
+  /* Accent — indigo/violet (CTA "Novo", botões primários) */
+  --lg-accent:        #4F46E5;
+  --lg-accent-fill:   #EEF2FF;
+  --lg-accent-hover:  #4338CA;
+
+  /* Accents secundários pros KPI cards (top-border) */
+  --lg-stat-blue:    #4F46E5;
+  --lg-stat-green:   #10B981;
+  --lg-stat-red:     #EF4444;
+  --lg-stat-violet:  #8B5CF6;
+  --lg-stat-amber:   #F59E0B;
+  --lg-stat-cyan:    #06B6D4;
+  --lg-stat-pink:    #EC4899;
 
   /* Semantic — moderado, sem cores saturadas */
   --lg-pos:  #10B981;  --lg-pos-fill:  #ECFDF5;
   --lg-neg:  #EF4444;  --lg-neg-fill:  #FEF2F2;
   --lg-warn: #F59E0B;  --lg-warn-fill: #FFFBEB;
 
-  /* Shadow — uma sombra única e sutil */
-  --lg-shadow-card: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
-  --lg-shadow-pop:  0 4px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.04);
+  /* Shadow — ultra sutil pra parecer "papel" sobre fundo */
+  --lg-shadow-card: 0 1px 2px rgba(15,23,42,0.04);
+  --lg-shadow-pop:  0 4px 16px rgba(15,23,42,0.08), 0 1px 3px rgba(15,23,42,0.04);
 
-  /* Radii */
-  --lg-radius-sm: 6px;
-  --lg-radius-md: 8px;
-  --lg-radius-lg: 12px;
-  --lg-radius-xl: 16px;
+  /* Radii — mais arredondado, estilo card moderno */
+  --lg-radius-sm: 8px;
+  --lg-radius-md: 10px;
+  --lg-radius-lg: 14px;
+  --lg-radius-xl: 18px;
 
   /* Motion */
   --lg-ease:   cubic-bezier(0.4, 0.0, 0.2, 1);
@@ -532,18 +541,139 @@
   .bento-3, .bento-4, .bento-5, .bento-6 { grid-column: span 12; }
 }
 
-/* Bento card style */
+/* Bento card style — bg branco puro, shadow ultra sutil, sem hover-lift */
 .bento-card {
-  background: var(--t-surface-gradient);
-  border: 1px solid var(--t-border);
-  border-radius: var(--t-card-radius);
-  box-shadow: var(--elevation-2);
+  background: #ffffff;
+  border: 1px solid var(--lg-border-base);
+  border-radius: var(--lg-radius-xl);
+  box-shadow: var(--lg-shadow-card);
   padding: var(--space-6);
-  transition: box-shadow 200ms ease-out, transform 200ms ease-out;
+  transition: box-shadow 200ms ease-out, border-color 200ms ease-out;
 }
 .bento-card:hover {
-  box-shadow: var(--elevation-3);
+  box-shadow: var(--lg-shadow-pop);
+  border-color: var(--lg-border-strong);
+}
+
+/* ============================================================
+   KPI Card — card com top-border colorida pros indicadores
+   principais (Saldo, A receber, A pagar, Lucro, etc.). Variantes
+   via data-accent: blue (default) | green | red | violet | amber.
+============================================================ */
+.kpi-card {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid var(--lg-border-base);
+  border-radius: var(--lg-radius-xl);
+  box-shadow: var(--lg-shadow-card);
+  padding: 18px 20px;
+  overflow: hidden;
+  transition: box-shadow 200ms ease-out, transform 200ms ease-out;
+}
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: var(--kpi-accent, var(--lg-stat-blue));
+  border-radius: var(--lg-radius-xl) var(--lg-radius-xl) 0 0;
+}
+.kpi-card:hover {
+  box-shadow: var(--lg-shadow-pop);
   transform: translateY(-1px);
+}
+.kpi-card[data-accent="blue"]   { --kpi-accent: var(--lg-stat-blue); }
+.kpi-card[data-accent="green"]  { --kpi-accent: var(--lg-stat-green); }
+.kpi-card[data-accent="red"]    { --kpi-accent: var(--lg-stat-red); }
+.kpi-card[data-accent="violet"] { --kpi-accent: var(--lg-stat-violet); }
+.kpi-card[data-accent="amber"]  { --kpi-accent: var(--lg-stat-amber); }
+.kpi-card[data-accent="cyan"]   { --kpi-accent: var(--lg-stat-cyan); }
+.kpi-card[data-accent="pink"]   { --kpi-accent: var(--lg-stat-pink); }
+
+/* ============================================================
+   Quick action card — botões grandes tipo "Nova despesa",
+   "Novo recebimento", "Conciliar contas". Layout horizontal
+   (ícone + texto + chevron). Acionável.
+============================================================ */
+.quick-action {
+  background: #ffffff;
+  border: 1px solid var(--lg-border-base);
+  border-radius: var(--lg-radius-xl);
+  box-shadow: var(--lg-shadow-card);
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  cursor: pointer;
+  transition: box-shadow 200ms ease-out, border-color 200ms ease-out,
+              transform 100ms ease-out, background 200ms ease-out;
+  text-align: left;
+  width: 100%;
+}
+.quick-action:hover {
+  box-shadow: var(--lg-shadow-pop);
+  border-color: var(--lg-accent);
+}
+.quick-action:active {
+  transform: scale(0.99);
+}
+.quick-action[data-primary="true"] {
+  background: var(--lg-accent);
+  border-color: var(--lg-accent);
+  color: #ffffff;
+}
+.quick-action[data-primary="true"]:hover {
+  background: var(--lg-accent-hover);
+  border-color: var(--lg-accent-hover);
+}
+.quick-action[data-primary="true"] .qa-icon {
+  background: rgba(255,255,255,0.18);
+  color: #ffffff;
+}
+.qa-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--lg-accent-fill);
+  color: var(--lg-accent);
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   Section card — bloco padronizado pra gráficos/listas
+   (substitui o uso direto de <Card> da shadcn). Bg branco,
+   header com título + opcional link "Ver tudo".
+============================================================ */
+.section-card {
+  background: #ffffff;
+  border: 1px solid var(--lg-border-base);
+  border-radius: var(--lg-radius-xl);
+  box-shadow: var(--lg-shadow-card);
+  overflow: hidden;
+}
+.section-card-header {
+  padding: 16px 20px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.section-card-title {
+  font-weight: 600;
+  color: var(--lg-text);
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+.section-card-subtitle {
+  color: var(--lg-text-3);
+  font-size: 12px;
+  margin-top: 2px;
+}
+.section-card-body {
+  padding: 0 20px 20px 20px;
 }
 
 /* Status badge system */
@@ -1198,72 +1328,112 @@
   margin-right: 10px;
 }
 
-/* KPI hairline grid — 4 colunas sem gap, separadas por linha vertical */
+/* KPI grid — 4 cards individuais com gap, cada um com topo colorido.
+   A cor do topo é determinada pela ordem da coluna (1=azul, 2=verde,
+   3=vermelho, 4=violet) seguindo o padrão financeiro:
+   saldo(blue) / a receber(green) / a pagar(red) / lucro(violet).
+   Cards podem sobrescrever via data-accent="...". */
 .min-shell .min-kpis {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
 }
 .min-shell .min-kpi {
-  padding: 28px 32px 32px;
-  border-right: 1px solid var(--line);
-  transition: background 0.2s ease;
+  position: relative;
+  padding: 18px 20px 20px;
+  background: #ffffff;
+  border: 1px solid var(--lg-border-base);
+  border-radius: var(--lg-radius-xl);
+  box-shadow: var(--lg-shadow-card);
+  overflow: hidden;
+  transition: box-shadow 200ms ease-out, transform 200ms ease-out, border-color 200ms ease-out;
 }
-.min-shell .min-kpi:last-child { border-right: 0; }
-.min-shell .min-kpi:hover { background: var(--ink-surface-2); }
+.min-shell .min-kpi::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: var(--kpi-accent, var(--lg-stat-blue));
+  border-radius: var(--lg-radius-xl) var(--lg-radius-xl) 0 0;
+}
+.min-shell .min-kpi:nth-child(1) { --kpi-accent: var(--lg-stat-blue); }
+.min-shell .min-kpi:nth-child(2) { --kpi-accent: var(--lg-stat-green); }
+.min-shell .min-kpi:nth-child(3) { --kpi-accent: var(--lg-stat-red); }
+.min-shell .min-kpi:nth-child(4) { --kpi-accent: var(--lg-stat-violet); }
+.min-shell .min-kpi[data-accent="blue"]   { --kpi-accent: var(--lg-stat-blue); }
+.min-shell .min-kpi[data-accent="green"]  { --kpi-accent: var(--lg-stat-green); }
+.min-shell .min-kpi[data-accent="red"]    { --kpi-accent: var(--lg-stat-red); }
+.min-shell .min-kpi[data-accent="violet"] { --kpi-accent: var(--lg-stat-violet); }
+.min-shell .min-kpi[data-accent="amber"]  { --kpi-accent: var(--lg-stat-amber); }
+.min-shell .min-kpi:hover {
+  box-shadow: var(--lg-shadow-pop);
+  transform: translateY(-1px);
+  border-color: var(--lg-border-strong);
+}
 
-/* Action row — mesma estrutura hairline; 4 colunas */
+/* Action row — cards individuais com chevron à direita */
 .min-shell .min-actions {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
 }
 .min-shell .min-action {
-  padding: 18px 28px;
-  border-right: 1px solid var(--line);
+  padding: 16px 18px;
+  background: #ffffff;
+  border: 1px solid var(--lg-border-base);
+  border-radius: var(--lg-radius-xl);
+  box-shadow: var(--lg-shadow-card);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 14px;
   font-size: 13px;
   font-weight: 500;
   color: var(--ink);
-  background: var(--ink-surface);
-  transition: background 0.18s ease;
+  transition: box-shadow 200ms ease-out, border-color 200ms ease-out, transform 100ms ease-out, background 200ms ease-out;
   cursor: pointer;
   text-align: left;
 }
-.min-shell .min-action:last-child { border-right: 0; }
-.min-shell .min-action:hover { background: var(--ink-surface-2); }
-.min-shell .min-action.accent {
-  background: var(--ink);
-  color: var(--ink-bg);
+.min-shell .min-action:hover {
+  box-shadow: var(--lg-shadow-pop);
+  border-color: var(--lg-accent);
 }
-.min-shell .min-action.accent:hover { background: var(--ink-2); }
+.min-shell .min-action:active { transform: scale(0.99); }
+.min-shell .min-action.accent {
+  background: var(--lg-accent);
+  border-color: var(--lg-accent);
+  color: #ffffff;
+}
+.min-shell .min-action.accent:hover {
+  background: var(--lg-accent-hover);
+  border-color: var(--lg-accent-hover);
+}
 
-/* Quick access cards — 4 colunas hairline */
+/* Quick access cards — cards individuais com gap */
 .min-shell .min-quick {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
 }
 .min-shell .min-qcard {
-  padding: 24px 28px;
-  border-right: 1px solid var(--line);
+  padding: 20px;
+  background: #ffffff;
+  border: 1px solid var(--lg-border-base);
+  border-radius: var(--lg-radius-xl);
+  box-shadow: var(--lg-shadow-card);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   min-height: 140px;
   cursor: pointer;
-  transition: background 0.18s ease;
+  transition: box-shadow 200ms ease-out, border-color 200ms ease-out, transform 100ms ease-out;
   text-align: left;
-  background: var(--ink-surface);
   color: var(--ink);
 }
-.min-shell .min-qcard:last-child { border-right: 0; }
-.min-shell .min-qcard:hover { background: var(--ink-surface-2); }
+.min-shell .min-qcard:hover {
+  box-shadow: var(--lg-shadow-pop);
+  border-color: var(--lg-border-strong);
+  transform: translateY(-1px);
+}
 
 /* Lista de movimentações */
 .min-shell .min-mov-list { border-top: 1px solid var(--line); }
@@ -1288,32 +1458,13 @@
 }
 .min-shell .min-tag.crm { color: var(--ink); border-color: var(--ink); }
 
-/* Responsivo: < 1200px = 2 cols; < 768px = 1 col */
-@media (max-width: 1200px) {
-  .min-shell .min-kpis,
-  .min-shell .min-actions,
-  .min-shell .min-quick {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .min-shell .min-kpi:nth-child(2),
-  .min-shell .min-action:nth-child(2),
-  .min-shell .min-qcard:nth-child(2) { border-right: 0; }
-  .min-shell .min-kpi:nth-child(-n+2),
-  .min-shell .min-action:nth-child(-n+2),
-  .min-shell .min-qcard:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
-}
-@media (max-width: 768px) {
+/* Responsive — auto-fit já cuida do reflow; só forçamos 1 col em mobile */
+@media (max-width: 480px) {
   .min-shell .min-kpis,
   .min-shell .min-actions,
   .min-shell .min-quick {
     grid-template-columns: 1fr;
   }
-  .min-shell .min-kpi,
-  .min-shell .min-action,
-  .min-shell .min-qcard { border-right: 0; border-bottom: 1px solid var(--line); }
-  .min-shell .min-kpi:last-child,
-  .min-shell .min-action:last-child,
-  .min-shell .min-qcard:last-child { border-bottom: 0; }
 }
 
 /* ════════════════════════════════════════════════════════════════════

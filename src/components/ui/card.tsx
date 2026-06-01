@@ -12,10 +12,15 @@ function Card({
       data-slot="card"
       data-size={size}
       className={cn(
-        "lg-glass-regular group/card flex flex-col gap-4 overflow-hidden py-5 text-sm text-card-foreground hover:-translate-y-px transition-all duration-200 has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-[20px] *:[img:last-child]:rounded-b-[20px]",
+        "group/card flex flex-col gap-4 overflow-hidden py-5 text-sm text-card-foreground transition-shadow duration-200 has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-[18px] *:[img:last-child]:rounded-b-[18px]",
         className
       )}
-      style={{ boxShadow: 'var(--lg-shadow-card)' }}
+      style={{
+        background: '#ffffff',
+        border: '1px solid var(--lg-border-base)',
+        borderRadius: 'var(--lg-radius-xl)',
+        boxShadow: 'var(--lg-shadow-card)',
+      }}
       {...props}
     />
   )
