@@ -387,6 +387,7 @@ function EditorInner({ id }: Props) {
         onStartEdit: () => setEditingId(n.id),
         onToggleCollapse: () => handleToggleCollapse(n.id),
         onAddChild: () => handleAddChild(n.id),
+        onAddSibling: () => handleAddSibling(n.id),
         image: n.image,
         links: n.links,
         attachments: n.attachments,
@@ -428,7 +429,7 @@ function EditorInner({ id }: Props) {
       }
     }
     return { rfNodes: nodes, rfEdges: edges };
-  }, [data, selectedId, editingId, handleAddChild, handleEditCommit, handleToggleCollapse, handleDeleteWithConfirm, handleSetColor, handleSetIcon, openPanelWithFocus]);
+  }, [data, selectedId, editingId, handleAddChild, handleAddSibling, handleEditCommit, handleToggleCollapse, handleDeleteWithConfirm, handleSetColor, handleSetIcon, openPanelWithFocus]);
 
   // Fit view inicial
   const didFitRef = useRef(false);
@@ -569,10 +570,22 @@ function EditorInner({ id }: Props) {
                 onPaneClick={() => { setSelectedId(null); setEditingId(null); }}
                 proOptions={{ hideAttribution: true }}
                 fitView
-                panOnScroll
+                // Interação padrão de mind map:
+                // - drag no fundo (pane) → pan livre do canvas
+                // - scroll wheel → zoom in/out (padrão)
+                // - duplo-clique → editar nó (zoomOnDoubleClick desativado)
+                // - nodes não draggable (layout é auto-calculado)
+                panOnDrag
+                panOnScroll={false}
+                zoomOnScroll
+                zoomOnPinch
                 zoomOnDoubleClick={false}
-                minZoom={0.3}
-                maxZoom={2.5}
+                nodesDraggable={false}
+                nodesConnectable={false}
+                elementsSelectable
+                selectionOnDrag={false}
+                minZoom={0.2}
+                maxZoom={3}
                 defaultEdgeOptions={{ type: 'mind' }}
               >
                 <Background variant={BackgroundVariant.Dots} gap={26} size={1.2} color="#dbe2ea" />

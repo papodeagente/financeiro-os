@@ -37,6 +37,8 @@ export interface MindNodeData extends Record<string, unknown> {
   onSetIcon?: (i: string | undefined) => void;
   onOpenPanel?: (section?: 'image' | 'links' | 'attachments' | 'notes') => void;
   onDelete?: () => void;
+  /** Adiciona irmão depois do commit (Enter num filho) */
+  onAddSibling?: () => void;
 }
 
 type MindNodeType = Node<MindNodeData, 'mindNode'>;
@@ -250,14 +252,32 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
                 onChange={e => setLocal(e.target.value)}
                 onBlur={commit}
                 onKeyDown={e => {
-                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit(); }
-                  if (e.key === 'Escape') { setLocal(text); data.onCommitEdit(text); }
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    const v = local.trim();
+                    data.onCommitEdit(v === '' ? text : v);
+                    setTimeout(() => data.onAddChild(), 0);
+                  } else if (e.key === 'Tab') {
+                    e.preventDefault();
+                    const v = local.trim();
+                    data.onCommitEdit(v === '' ? text : v);
+                    setTimeout(() => data.onAddChild(), 0);
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setLocal(text);
+                    data.onCommitEdit(text);
+                  }
                 }}
                 className={`flex-1 bg-transparent outline-none text-slate-900 text-center text-[15px] ${textBold ? 'font-bold' : 'font-normal'}`}
                 placeholder="Ideia central"
+                size={Math.max(local.length, 12)}
+                style={{ fieldSizing: 'content', maxWidth: 600 } as React.CSSProperties}
               />
             ) : (
-              <span className={`flex-1 text-center text-slate-900 text-[15px] leading-snug whitespace-pre-line ${textBold ? 'font-bold' : 'font-normal'}`}>
+              <span
+                className={`flex-1 text-center text-slate-900 text-[15px] leading-snug break-words ${textBold ? 'font-bold' : 'font-normal'}`}
+                style={{ whiteSpace: 'pre-wrap', maxWidth: 600 }}
+              >
                 {text || 'Ideia central'}
               </span>
             )}
@@ -360,34 +380,45 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
         )}
         {icon && <span className="text-sm leading-none shrink-0">{icon}</span>}
         {editing ? (
-          // field-sizing:content faz o input crescer com o conteudo
-          // automaticamente (Chrome/Edge 123+, Safari 18+, Firefox 124+).
-          // Fallback: span ghost mede a largura real do texto e seta
-          // width via inline style — funciona em qualquer browser.
-          <span className="relative inline-block max-w-[600px]" style={{ minWidth: 60 }}>
-            <span
-              aria-hidden="true"
-              className={`invisible whitespace-pre text-[13.5px] ${bold ? 'font-semibold' : 'font-normal'}`}
-              style={{ padding: '0 2px' }}
-            >
-              {local || 'Novo tópico'}
-            </span>
-            <input
-              ref={inputRef}
-              value={local}
-              onChange={e => setLocal(e.target.value)}
-              onBlur={commit}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit(); }
-                if (e.key === 'Escape') { setLocal(text); data.onCommitEdit(text); }
-              }}
-              className={`absolute inset-0 w-full bg-transparent text-slate-800 placeholder-slate-400 outline-none text-[13.5px] ${bold ? 'font-semibold' : 'font-normal'}`}
-              placeholder="Novo tópico"
-              style={{ fieldSizing: 'content' } as React.CSSProperties}
-            />
-          </span>
+          // Input cresce com o conteúdo via field-sizing (Chrome 123+/
+          // Safari 18+/Firefox 124+); browsers antigos usam o atributo
+          // HTML `size` (chars). max-width evita explodir o canvas.
+          <input
+            ref={inputRef}
+            value={local}
+            onChange={e => setLocal(e.target.value)}
+            onBlur={commit}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                const v = local.trim();
+                data.onCommitEdit(v === '' ? text : v);
+                setTimeout(() => data.onAddSibling?.(), 0);
+              } else if (e.key === 'Tab') {
+                e.preventDefault();
+                const v = local.trim();
+                data.onCommitEdit(v === '' ? text : v);
+                setTimeout(() => data.onAddChild(), 0);
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                setLocal(text);
+                data.onCommitEdit(text);
+              }
+            }}
+            className={`bg-transparent text-slate-800 placeholder-slate-400 outline-none text-[13.5px] ${bold ? 'font-semibold' : 'font-normal'}`}
+            placeholder="Novo tópico"
+            size={Math.max(local.length, 6)}
+            style={{
+              fieldSizing: 'content',
+              minWidth: 60,
+              maxWidth: 600,
+            } as React.CSSProperties}
+          />
         ) : (
-          <span className={`text-[13.5px] text-slate-800 leading-snug whitespace-pre-line max-w-[600px] break-words ${bold ? 'font-semibold' : 'font-normal'}`}>
+          <span
+            className={`text-[13.5px] text-slate-800 leading-snug break-words ${bold ? 'font-semibold' : 'font-normal'}`}
+            style={{ maxWidth: 600, display: 'inline-block', whiteSpace: 'pre-wrap' }}
+          >
             {text || 'Novo tópico'}
           </span>
         )}
