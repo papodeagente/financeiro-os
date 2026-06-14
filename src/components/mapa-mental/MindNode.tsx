@@ -360,21 +360,34 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
         )}
         {icon && <span className="text-sm leading-none shrink-0">{icon}</span>}
         {editing ? (
-          <input
-            ref={inputRef}
-            value={local}
-            onChange={e => setLocal(e.target.value)}
-            onBlur={commit}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit(); }
-              if (e.key === 'Escape') { setLocal(text); data.onCommitEdit(text); }
-            }}
-            className={`bg-transparent text-slate-800 placeholder-slate-400 outline-none text-[13.5px] min-w-[60px] ${bold ? 'font-semibold' : 'font-normal'}`}
-            placeholder="Novo tópico"
-            style={{ width: `${Math.max(60, local.length * 8)}px` }}
-          />
+          // field-sizing:content faz o input crescer com o conteudo
+          // automaticamente (Chrome/Edge 123+, Safari 18+, Firefox 124+).
+          // Fallback: span ghost mede a largura real do texto e seta
+          // width via inline style — funciona em qualquer browser.
+          <span className="relative inline-block max-w-[600px]" style={{ minWidth: 60 }}>
+            <span
+              aria-hidden="true"
+              className={`invisible whitespace-pre text-[13.5px] ${bold ? 'font-semibold' : 'font-normal'}`}
+              style={{ padding: '0 2px' }}
+            >
+              {local || 'Novo tópico'}
+            </span>
+            <input
+              ref={inputRef}
+              value={local}
+              onChange={e => setLocal(e.target.value)}
+              onBlur={commit}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit(); }
+                if (e.key === 'Escape') { setLocal(text); data.onCommitEdit(text); }
+              }}
+              className={`absolute inset-0 w-full bg-transparent text-slate-800 placeholder-slate-400 outline-none text-[13.5px] ${bold ? 'font-semibold' : 'font-normal'}`}
+              placeholder="Novo tópico"
+              style={{ fieldSizing: 'content' } as React.CSSProperties}
+            />
+          </span>
         ) : (
-          <span className={`text-[13.5px] text-slate-800 leading-snug whitespace-pre-line ${bold ? 'font-semibold' : 'font-normal'}`}>
+          <span className={`text-[13.5px] text-slate-800 leading-snug whitespace-pre-line max-w-[600px] break-words ${bold ? 'font-semibold' : 'font-normal'}`}>
             {text || 'Novo tópico'}
           </span>
         )}
