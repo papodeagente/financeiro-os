@@ -40,9 +40,10 @@ export default function ListaMapasMentaisPage() {
         return;
       }
       // POST OK — guarda em sessionStorage pra o editor pegar imediato
-      // (evita race com a leitura no GET da rota [id]).
+      // (evita race com a leitura no GET da rota [id]). Entrada com
+      // timestamp: o editor só aceita se for recente (15s).
       try {
-        sessionStorage.setItem(`mapa-mental:${mapa.id}`, JSON.stringify(mapa));
+        sessionStorage.setItem(`mapa-mental:${mapa.id}`, JSON.stringify({ t: Date.now(), data: mapa }));
       } catch { /* ignore */ }
       router.push(`/planejamento/mapas-mentais/${mapa.id}`);
     } catch (e) {

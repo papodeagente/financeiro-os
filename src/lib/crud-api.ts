@@ -43,10 +43,13 @@ export function createCrudHandlers(tableName: string, indexColumns: string[] = [
         updateSets.push(`${col} = $${paramNum}`);
       });
 
+      // Guarda de tenant no conflito: id já existente de OUTRO tenant não
+      // pode ser sobrescrito por upsert (vira no-op silencioso).
       await pool.query(
         `INSERT INTO ${tableName} (${insertCols.join(', ')}, created_at, updated_at)
          VALUES (${insertVals.join(', ')}, NOW(), NOW())
-         ON CONFLICT (id) DO UPDATE SET ${updateSets.join(', ')}`,
+         ON CONFLICT (id) DO UPDATE SET ${updateSets.join(', ')}
+         WHERE ${tableName}.tenant_id = EXCLUDED.tenant_id`,
         paramValues
       );
 

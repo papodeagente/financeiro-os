@@ -11,11 +11,15 @@ interface Props {
   data: MapaMentalData;
   selectedId: string | null;
   editingId: string | null;
+  /** texto inicial ao entrar em edição digitando (digitar-pra-substituir) */
+  editSeed?: string;
   onSelect: (id: string | null) => void;
   onStartEdit: (id: string) => void;
   onCommitEdit: (id: string, text: string) => void;
+  onCancelEdit: (id: string) => void;
   onAddChild: (parentId: string) => void;
   onAddSibling: (refId: string) => void;
+  onOutdent: (id: string) => void;
   onToggleCollapse: (id: string) => void;
 }
 
@@ -27,8 +31,8 @@ interface Props {
  * Atalhos suportados dentro do input editando:
  *   Enter → commit + addSibling
  *   Tab   → commit + addChild
- *   Shift+Tab → não-implementado (outdent) — futuro
- *   Esc   → cancela edição
+ *   Shift+Tab → commit + outdent (sobe um nível)
+ *   Esc   → cancela edição (nó novo vazio é descartado)
  */
 export function OutlineView(props: Props) {
   return (
@@ -42,8 +46,8 @@ export function OutlineView(props: Props) {
 
 function OutlineNode({
   data, nodeId, depth,
-  selectedId, editingId,
-  onSelect, onStartEdit, onCommitEdit, onAddChild, onAddSibling, onToggleCollapse,
+  selectedId, editingId, editSeed,
+  onSelect, onStartEdit, onCommitEdit, onCancelEdit, onAddChild, onAddSibling, onOutdent, onToggleCollapse,
 }: Props & { nodeId: string; depth: number }) {
   const node = data.nodes[nodeId];
   if (!node) return null;
@@ -64,11 +68,14 @@ function OutlineNode({
         isCollapsed={isCollapsed}
         selected={selected}
         editing={editing}
+        editSeed={editing ? editSeed : undefined}
         onSelect={() => onSelect(nodeId)}
         onStartEdit={() => onStartEdit(nodeId)}
         onCommitEdit={(text) => onCommitEdit(nodeId, text)}
+        onCancelEdit={() => onCancelEdit(nodeId)}
         onAddChild={() => onAddChild(nodeId)}
         onAddSibling={() => onAddSibling(nodeId)}
+        onOutdent={() => onOutdent(nodeId)}
         onToggleCollapse={() => onToggleCollapse(nodeId)}
       />
       {!isCollapsed && children.map(c => (
@@ -79,11 +86,14 @@ function OutlineNode({
           depth={depth + 1}
           selectedId={selectedId}
           editingId={editingId}
+          editSeed={editSeed}
           onSelect={onSelect}
           onStartEdit={onStartEdit}
           onCommitEdit={onCommitEdit}
+          onCancelEdit={onCancelEdit}
           onAddChild={onAddChild}
           onAddSibling={onAddSibling}
+          onOutdent={onOutdent}
           onToggleCollapse={onToggleCollapse}
         />
       ))}
@@ -92,8 +102,8 @@ function OutlineNode({
 }
 
 function Row({
-  node, depth, childCount, isRoot, isCollapsed, selected, editing,
-  onSelect, onStartEdit, onCommitEdit, onAddChild, onAddSibling, onToggleCollapse,
+  node, depth, childCount, isRoot, isCollapsed, selected, editing, editSeed,
+  onSelect, onStartEdit, onCommitEdit, onCancelEdit, onAddChild, onAddSibling, onOutdent, onToggleCollapse,
 }: {
   node: MapaMentalData['nodes'][string];
   depth: number;
@@ -102,29 +112,53 @@ function Row({
   isCollapsed: boolean;
   selected: boolean;
   editing: boolean;
+  editSeed?: string;
   onSelect: () => void;
   onStartEdit: () => void;
   onCommitEdit: (text: string) => void;
+  onCancelEdit: () => void;
   onAddChild: () => void;
   onAddSibling: () => void;
+  onOutdent: () => void;
   onToggleCollapse: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [local, setLocal] = useState(node.text);
+  const [lastText, setLastText] = useState(node.text);
 
-  useEffect(() => { setLocal(node.text); }, [node.text]);
+  // texto mudou por fora (undo, outra view) → re-sincroniza o rascunho
+  if (node.text !== lastText) {
+    setLastText(node.text);
+    setLocal(node.text);
+  }
+
   useEffect(() => {
-    if (editing && inputRef.current) {
+    if (editing && inputRef.current && typeof editSeed !== 'string') {
       inputRef.current.focus();
       inputRef.current.select();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing]);
 
-  const commit = (then?: 'sibling' | 'child') => {
+  // Edição iniciada digitando: reflete o seed com o caret no fim
+  useEffect(() => {
+    if (editing && typeof editSeed === 'string' && inputRef.current) {
+      const el = inputRef.current;
+      setLocal(editSeed);
+      el.focus();
+      requestAnimationFrame(() => el.setSelectionRange(el.value.length, el.value.length));
+    }
+     
+  }, [editing, editSeed]);
+
+  const commit = (then?: 'sibling' | 'child' | 'outdent') => {
     const v = local.trim();
-    onCommitEdit(v === '' ? node.text : v);
+    onCommitEdit(v);
+    // nó esvaziado é descartado pelo editor — não encadeia ação
+    if (v === '') return;
     if (then === 'sibling') setTimeout(onAddSibling, 0);
     if (then === 'child') setTimeout(onAddChild, 0);
+    if (then === 'outdent') setTimeout(onOutdent, 0);
   };
 
   const indent = depth * 20;
@@ -176,12 +210,17 @@ function Row({
               e.preventDefault();
               if (isRoot) commit('child');
               else commit('sibling');
+            } else if (e.key === 'Tab' && e.shiftKey) {
+              e.preventDefault();
+              if (!isRoot) commit('outdent');
             } else if (e.key === 'Tab') {
               e.preventDefault();
               commit('child');
             } else if (e.key === 'Escape') {
+              e.preventDefault();
+              e.stopPropagation();
               setLocal(node.text);
-              onCommitEdit(node.text);
+              onCancelEdit();
             }
           }}
           className={`flex-1 bg-transparent outline-none text-[14px] ${

@@ -1,23 +1,24 @@
 'use client';
 
-import { BaseEdge, getSmoothStepPath, type EdgeProps } from '@xyflow/react';
+import { BaseEdge, getBezierPath, type EdgeProps } from '@xyflow/react';
 
-// Edge em L (smoothstep) entre nodes — estilo XMind/Whimsical clean.
-// Sai do handle do parent, faz um canto arredondado e chega no handle
-// do filho. Funciona simetricamente nos dois lados via positions.
+// Curva orgânica entre nodes — estilo MindMeister. Sai do handle do
+// parent e chega no handle do filho com uma curva bezier horizontal.
+// Funciona simetricamente nos dois lados via positions.
+// `faded` esmaece a conexão do nó sendo arrastado.
 export function MindEdge(props: EdgeProps) {
   const {
     sourceX, sourceY, targetX, targetY,
     sourcePosition, targetPosition, data,
   } = props;
 
-  const color = (data as { color?: string } | undefined)?.color || '#3B82F6';
+  const d = data as { color?: string; faded?: boolean } | undefined;
+  const color = d?.color || '#3B82F6';
 
-  const [edgePath] = getSmoothStepPath({
+  const [edgePath] = getBezierPath({
     sourceX, sourceY, targetX, targetY,
     sourcePosition, targetPosition,
-    borderRadius: 16,
-    offset: 20,
+    curvature: 0.35,
   });
 
   return (
@@ -29,7 +30,7 @@ export function MindEdge(props: EdgeProps) {
         fill: 'none',
         strokeLinecap: 'round',
         strokeLinejoin: 'round',
-        opacity: 0.85,
+        opacity: d?.faded ? 0.25 : 0.85,
       }}
     />
   );
