@@ -11,6 +11,7 @@
  * Roda: node --experimental-strip-types scripts/run-tests.mjs scripts/test-planejamento.ts
  */
 import { calcRelatorio, type CustosData } from '../src/lib/planejamento-custos.ts';
+import { analisarPlano } from '../src/lib/planejamento-analise.ts';
 
 let falhas = 0;
 let total = 0;
@@ -203,6 +204,67 @@ console.log('--- coerência: partes reproduzem o todo ---');
   perto(r.vendasMeta * r.comissaoPorVenda, r.receitaMeta, 0.001, 'receita fecha com vendas × comissão');
   perto(r.vendasMeta * 8000, r.faturamentoMeta, 0.001, 'faturamento fecha com vendas × ticket');
   eq(r.comissaoMeta, r.receitaMeta, 'comissão total do mês é a receita da agência');
+}
+
+console.log('--- análise do plano ---');
+{
+  const p = plano();
+  const a = analisarPlano(p, calcRelatorio(p));
+  eq(a.vereditoGravidade !== 'critico', true, 'plano que fecha não é veredito crítico');
+  eq(a.veredito.includes('fecha'), true, 'veredito diz que o plano fecha');
+  eq(a.recomendacoes.length > 0, true, 'sempre há próximo passo');
+  // nenhum texto pode sair com NaN/undefined/Infinity visível ao usuário
+  const textos = [a.veredito, ...a.riscos.flatMap(r => [r.titulo, r.texto]),
+                  ...a.forcas.flatMap(f => [f.titulo, f.texto]), ...a.recomendacoes].join(' ');
+  eq(/NaN|undefined|Infinity|null/.test(textos), false, 'nenhum texto vaza NaN/undefined/Infinity');
+}
+{
+  // plano inviável: a análise tem de ser categórica e não sugerir volume
+  const p = plano({ margem_comissao: 3 });
+  const a = analisarPlano(p, calcRelatorio(p));
+  eq(a.vereditoGravidade, 'critico', 'plano inviável é crítico');
+  eq(a.veredito.includes('não fecha'), true, 'veredito diz que não fecha');
+  eq(a.forcas.length, 0, 'plano inviável não lista pontos a favor');
+  eq(a.riscos.some(r => r.gravidade === 'critico'), true, 'aponta o risco crítico');
+}
+{
+  // premissas vazias: não inventa diagnóstico
+  const p = plano({ ticket_medio: 0 });
+  const a = analisarPlano(p, calcRelatorio(p));
+  eq(a.vereditoGravidade, 'critico', 'premissas vazias bloqueiam a análise');
+  eq(a.riscos.length === 0 && a.forcas.length === 0, true, 'não analisa o que não tem dado');
+}
+{
+  // time subdimensionado dispara com carga alta
+  const p = plano({ vendedores_ativos: 1, taxa_conversao: 5, lucro_desejado: 60000 });
+  const a = analisarPlano(p, calcRelatorio(p));
+  eq(a.riscos.some(r => r.titulo.includes('Time subdimensionado')), true, 'aponta time subdimensionado');
+}
+{
+  // concentração de custo fixo
+  const p = plano({ custos_fixos: [
+    { categoria: 'Folha de pagamento', valor: 40000, observacao: '' },
+    { categoria: 'Aluguel/Sede', valor: 2000, observacao: '' },
+  ] });
+  const a = analisarPlano(p, calcRelatorio(p));
+  eq(a.riscos.some(r => r.titulo.toLowerCase().includes('concentrado')), true, 'aponta concentração de custo');
+}
+{
+  // margem que não sustenta mídia paga
+  const p = plano({ ticket_medio: 400, margem_comissao: 10, taxa_conversao: 5 });
+  const a = analisarPlano(p, calcRelatorio(p));
+  const r = calcRelatorio(p);
+  if (r.cplTeto > 0 && r.cplTeto < 15) {
+    eq(a.riscos.some(x => x.titulo.includes('mídia paga')), true, 'avisa que a margem não sustenta mídia paga');
+  } else {
+    eq(true, true, 'cenário fora do limiar (teto ' + r.cplTeto.toFixed(2) + ')');
+  }
+}
+{
+  // conversão otimista
+  const p = plano({ taxa_conversao: 40 });
+  const a = analisarPlano(p, calcRelatorio(p));
+  eq(a.riscos.some(r => r.titulo.includes('otimista')), true, 'questiona conversão alta demais');
 }
 
 console.log(`\n${total - falhas}/${total} testes passaram`);

@@ -5,7 +5,7 @@ import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalP
 import { MoneyInput } from '@/components/MoneyInput';
 import { SkeletonTable } from '@/components/SkeletonTable';
 import { formatBRL, generateId } from '@/lib/utils';
-import { Copy, AlertTriangle, ArrowRight, Filter as FunilIcon, Download } from 'lucide-react';
+import { Copy, AlertTriangle, ArrowRight, Filter as FunilIcon, Download, FileDown, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import type { FunilPayload } from '@/lib/funil-types';
 import {
@@ -15,6 +15,7 @@ import {
   type CustosData,
   type CustoVariavel,
 } from '@/lib/planejamento-custos';
+import { analisarPlano } from '@/lib/planejamento-analise';
 
 const MESES_PT = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
                   'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
@@ -353,6 +354,22 @@ export default function CustosPage() {
   };
 
   const rel = useMemo(() => data ? calcRelatorio(data) : null, [data]);
+  const analise = useMemo(() => (data && rel ? analisarPlano(data, rel) : null), [data, rel]);
+
+  const [gerandoPdf, setGerandoPdf] = useState(false);
+  const exportarPdf = useCallback(async () => {
+    if (!data || !rel || !analise || gerandoPdf) return;
+    setGerandoPdf(true);
+    try {
+      const { gerarPdfPlanejamento } = await import('@/lib/planejamento-pdf');
+      await gerarPdfPlanejamento(data, rel, analise);
+    } catch (e) {
+      console.error('[planejamento] falha ao gerar PDF', e);
+      alert('Não foi possível gerar o PDF. Tente novamente.');
+    } finally {
+      setGerandoPdf(false);
+    }
+  }, [data, rel, analise, gerandoPdf]);
 
   const importarCustosFunis = () => {
     if (!data || resumoFunis.count === 0) return;
@@ -443,6 +460,18 @@ export default function CustosPage() {
               style={{ borderColor: 'var(--line)', color: 'var(--ink-2)' }}
             >
               <Copy className="w-3.5 h-3.5 inline mr-2 -mt-0.5" /> Copiar do anterior
+            </button>
+            <button
+              onClick={exportarPdf}
+              disabled={gerandoPdf}
+              className="h-[34px] px-3 text-[12px] rounded-[8px] font-medium inline-flex items-center gap-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              style={{ background: 'var(--lg-accent)', color: '#fff' }}
+              title="Baixar o relatório do mês em PDF"
+            >
+              {gerandoPdf
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <FileDown className="w-3.5 h-3.5" />}
+              {gerandoPdf ? 'Gerando…' : 'Baixar PDF'}
             </button>
           </>
         }
