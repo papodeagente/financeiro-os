@@ -539,8 +539,9 @@ export default function NovaVendaPage() {
           descricao: p.descricao,
           fornecedor_nome: p.fornecedor_nome,
           meio_pagamento: ((p as ProdutoVenda & { meio_pagamento?: MeioPagamento }).meio_pagamento || 'proprio') as MeioPagamento,
-          valor_custo: (p.valor_custo || 0) * (p.cambio || 1),
-          valor_venda: (p.valor_venda || 0) * (p.cambio || 1),
+          // Moeda ORIGINAL — gerarContasVenda converte p/ BRL uma única vez.
+          valor_custo: p.valor_custo || 0,
+          valor_venda: p.valor_venda || 0,
           comissao_percentual: p.comissao_fornecedor || 0,
           comissao_valor: 0,
           moeda: p.moeda,
@@ -590,8 +591,9 @@ export default function NovaVendaPage() {
             descricao: p.descricao,
             fornecedor_nome: p.fornecedor_nome,
             meio_pagamento: ((p as ProdutoVenda & { meio_pagamento?: MeioPagamento }).meio_pagamento || 'proprio') as MeioPagamento,
-            valor_custo: (p.valor_custo || 0) * (p.cambio || 1),
-            valor_venda: (p.valor_venda || 0) * (p.cambio || 1),
+            // Moeda ORIGINAL — gerarContasVenda converte p/ BRL uma única vez.
+            valor_custo: p.valor_custo || 0,
+            valor_venda: p.valor_venda || 0,
             comissao_percentual: p.comissao_fornecedor || 0,
             comissao_valor: 0,
             moeda: p.moeda,

@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { aplicarMovimentoCaixa } from '@/lib/caixa-helpers';
+import {
+  aplicarMovimentoCaixaAtomico,
+  atualizarContaComGuarda,
+  calcularMovimentos,
+  emTransacao,
+  estornarBaixaDaConta,
+  type ExecutorSQL,
+} from '@/lib/caixa-atomico';
 
 const TABLE = 'contas_receber';
 const INDEX_COLS = ['venda_id', 'cliente_id', 'status'];
@@ -22,9 +29,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 // PUT detecta transição de status para sincronizar saldo da conta bancária:
-//  PENDENTE→RECEBIDO  => credita o valor no Caixa Geral (ou conta escolhida)
-//  RECEBIDO→PENDENTE  => reverte (débito)
-//  RECEBIDO→RECEBIDO  => recalcula diferença se valor_recebido mudou
+//  PENDENTE→RECEBIDO  => credita o valor na conta escolhida (ou Caixa Geral)
+//  RECEBIDO→PENDENTE  => estorna (débito) na conta que RECEBEU o dinheiro,
+//                        que é prev.conta_bancaria_id — NUNCA a do payload novo
+//  RECEBIDO→RECEBIDO  => se trocou a conta, debita o valor antigo na conta
+//                        antiga e credita o novo na nova; se só mudou o valor,
+//                        ajusta a diferença na mesma conta
+// A baixa é idempotente: o UPDATE tem guarda (versão da linha + status ainda
+// diferente do alvo) e o movimento de caixa só acontece se ele afetou linha —
+// duplo clique / PUT concorrente credita o caixa uma vez só.
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     await initDB();
@@ -33,37 +46,62 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (!pool) return NextResponse.json(item);
     const tenantId = await getTenantId();
 
-    // Lê estado anterior
+    // Estado anterior + versão da linha (xmin) para a guarda otimista
     const { rows: prevRows } = await pool.query(
-      `SELECT data FROM ${TABLE} WHERE id = $1 AND tenant_id = $2`,
+      `SELECT data, xmin::text AS versao FROM ${TABLE} WHERE id = $1 AND tenant_id = $2`,
       [id, tenantId],
     );
     const prev = (prevRows[0]?.data ?? {}) as Record<string, unknown>;
+    const versaoAnterior = (prevRows[0]?.versao as string | undefined) ?? null;
     const prevStatus = String(prev.status ?? '');
-    const prevValor = Number(prev.valor_recebido) || Number(prev.valor_final) || 0;
-
-    // Persiste
-    const paramValues: unknown[] = [id, tenantId, JSON.stringify(item)];
-    const setClauses = ['data = $3', 'updated_at = NOW()'];
-    INDEX_COLS.forEach((col, i) => {
-      paramValues.push((item as Record<string, unknown>)[col] ?? '');
-      setClauses.push(`${col} = $${i + 4}`);
-    });
-    await pool.query(`UPDATE ${TABLE} SET ${setClauses.join(', ')} WHERE id = $1 AND tenant_id = $2`, paramValues);
-
-    // Sincroniza saldo
     const novoStatus = String(item.status ?? '');
-    const novoValor = Number(item.valor_recebido) || Number(item.valor_final) || 0;
-    const contaId = (item.conta_bancaria_id as string | null | undefined) || null;
-    if (prevStatus !== 'RECEBIDO' && novoStatus === 'RECEBIDO') {
-      // Entrou em RECEBIDO → credita
-      await aplicarMovimentoCaixa(tenantId, contaId, +novoValor);
-    } else if (prevStatus === 'RECEBIDO' && novoStatus !== 'RECEBIDO') {
-      // Saiu de RECEBIDO → reverte crédito
-      await aplicarMovimentoCaixa(tenantId, contaId, -prevValor);
-    } else if (prevStatus === 'RECEBIDO' && novoStatus === 'RECEBIDO' && prevValor !== novoValor) {
-      // Mantém RECEBIDO mas mudou o valor → ajusta a diferença
-      await aplicarMovimentoCaixa(tenantId, contaId, novoValor - prevValor);
+
+    // Movimentos derivados do VALOR BAIXADO (não do status): é isso que faz a
+    // baixa PARCIAL — e a evolução de uma parcial — creditar o caixa na medida
+    // certa. Aplicados só se a guarda otimista segurar.
+    const movimentos = calcularMovimentos(prev, item as Record<string, unknown>, 'valor_recebido', +1);
+
+    const params_ = {
+      tabela: TABLE,
+      colunasIndice: INDEX_COLS,
+      id,
+      tenantId,
+      item: item as Record<string, unknown>,
+    };
+
+    // Edição sem efeito no caixa (descrição, vencimento, etc.) → update direto
+    if (movimentos.length === 0) {
+      await atualizarContaComGuarda({
+        ...params_,
+        exec: pool as unknown as ExecutorSQL,
+        versaoAnterior: null,
+        statusAlvo: null,
+      });
+      return NextResponse.json(item);
+    }
+
+    const aplicado = await emTransacao(async exec => {
+      const ok = await atualizarContaComGuarda({
+        ...params_,
+        exec,
+        versaoAnterior,
+        statusAlvo: prevStatus !== novoStatus ? novoStatus : null,
+      });
+      if (!ok) return false;
+      // Ordem fixa por conta: duas trocas de conta simultâneas travariam uma
+      // na outra se cada transação bloqueasse as linhas em ordem diferente.
+      movimentos.sort((a, b) => String(a.conta).localeCompare(String(b.conta)));
+      for (const mov of movimentos) {
+        await aplicarMovimentoCaixaAtomico(tenantId, mov.conta, mov.delta, exec);
+      }
+      return true;
+    });
+
+    if (!aplicado) {
+      // Outra requisição já baixou/alterou esta conta: devolve o estado atual
+      // sem creditar de novo.
+      const { rows } = await pool.query(`SELECT data FROM ${TABLE} WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+      return NextResponse.json(rows[0]?.data ?? item);
     }
 
     return NextResponse.json(item);
@@ -73,7 +111,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   }
 }
 
-// Se deletar uma conta RECEBIDA, reverte o saldo.
+// Se deletar uma conta RECEBIDA, reverte o saldo na conta que recebeu.
+// O DELETE ... RETURNING garante que dois DELETEs concorrentes estornem
+// uma vez só (o segundo não devolve linha).
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     await initDB();
@@ -81,13 +121,15 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     if (!pool) return NextResponse.json({ ok: true });
     const tenantId = await getTenantId();
 
-    const { rows } = await pool.query(`SELECT data FROM ${TABLE} WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
-    const data = (rows[0]?.data ?? {}) as Record<string, unknown>;
-    if (String(data.status ?? '') === 'RECEBIDO') {
-      const valor = Number(data.valor_recebido) || Number(data.valor_final) || 0;
-      await aplicarMovimentoCaixa(tenantId, (data.conta_bancaria_id as string | null) || null, -valor);
-    }
-    await pool.query(`DELETE FROM ${TABLE} WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+    await emTransacao(async exec => {
+      const { rows } = await exec.query(
+        `DELETE FROM ${TABLE} WHERE id = $1 AND tenant_id = $2 RETURNING data`,
+        [id, tenantId],
+      );
+      const data = rows[0]?.data as Record<string, unknown> | undefined;
+      if (data) await estornarBaixaDaConta(tenantId, TABLE, data, exec);
+    });
+
     return NextResponse.json({ ok: true });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Erro';

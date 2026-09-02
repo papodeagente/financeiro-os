@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
+import { parseMoneyBR } from '@/lib/money';
 
 interface MoneyInputProps {
   value: number | null;
@@ -22,7 +23,9 @@ export function MoneyInput({ value, onChange, className = '', placeholder = 'R$ 
 
   const handleFocus = () => {
     setFocused(true);
-    setDisplayValue(value ? value.toString().replace('.', ',') : '');
+    // Mantém o mesmo texto pt-BR que estava visível (com milhar) — o parser
+    // aceita "1.234,56" de volta sem perder as casas.
+    setDisplayValue(formatForDisplay(value));
   };
 
   const handleBlur = () => {
@@ -33,9 +36,8 @@ export function MoneyInput({ value, onChange, className = '', placeholder = 'R$ 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
     setDisplayValue(raw);
-    const cleaned = raw.replace(/[^\d,.-]/g, '').replace(',', '.');
-    const num = parseFloat(cleaned);
-    onChange(isNaN(num) ? null : num);
+    // parseMoneyBR entende milhar e decimal ("1.500" = 1500, "1.234,56" = 1234.56)
+    onChange(parseMoneyBR(raw));
   };
 
   return (

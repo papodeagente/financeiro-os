@@ -14,8 +14,9 @@ import { MinimalFooter } from '@/components/financeiro/MinimalPageHead';
 import { formatBRL } from '@/lib/utils';
 import { calcLimiteUsado } from '@/lib/cartoes-utils';
 import { useModoIniciante } from '@/lib/modo-iniciante';
-import { calcularSaldoBancario } from '@/lib/saldo-bancario';
-import { calcularHistoricoKpis, calcDelta, type HistoricoKpis } from '@/lib/historico-kpis';
+import { calcularSaldoBancario, valorMovimentado } from '@/lib/saldo-bancario';
+import { calcularHistoricoKpis, type HistoricoKpis } from '@/lib/historico-kpis';
+import { round2, num, somaPor, divSegura, variacaoPct, hojeISO, mesDe } from '@/lib/money';
 import { toast } from '@/lib/toast';
 import type { CartaoCorporativo, ContaPagar, ContaReceber, ContaBancaria, VendaCRM, PlanoContas } from '@/lib/crm-types';
 import {
@@ -32,7 +33,10 @@ interface KPIs {
   a_pagar: number;             // PENDENTE total
   pago: number;                // PAGO total
   resultado_projetado: number; // a_receber - a_pagar
-  resultado_realizado: number; // recebido - pago
+  resultado_realizado: number; // recebido - pago (all-time)
+  recebido_mes: number;        // RECEBIDO com baixa no mês corrente
+  pago_mes: number;            // PAGO com baixa no mês corrente
+  lucro_mes: number;           // recebido_mes - pago_mes (é o "Lucro do mês")
   receita_gerada: number;      // Σ (valor_venda − custo) de TODAS vendas não canceladas
   faturamento_vendas: number;  // Σ valor_venda das vendas (base para margem %)
   margem_pct: number;          // receita_gerada / faturamento_vendas × 100
@@ -101,9 +105,9 @@ export default function FinanceiroAgHubPage() {
         const vendas: Array<Partial<VendaCRM> & Record<string, unknown>> = Array.isArray(vendasRes) ? vendasRes : [];
 
         if (cartoes.length > 0) {
-          const limite = cartoes.reduce((s, c) => s + (c.limite_total || 0), 0);
-          const usado = cartoes.reduce((s, c) => s + calcLimiteUsado(c.id, pagar), 0);
-          const pct = limite > 0 ? (usado / limite) * 100 : 0;
+          const limite = somaPor(cartoes, c => c.limite_total);
+          const usado = somaPor(cartoes, c => calcLimiteUsado(c.id, pagar));
+          const pct = round2(divSegura(usado, limite) * 100);
           setCartoesKpi({ limite, usado, pct, count: cartoes.filter(c => c.ativo).length });
         }
 
@@ -113,18 +117,34 @@ export default function FinanceiroAgHubPage() {
         // depende de saldo_atual persistido (que pode estar stale se o user
         // marcou baixas antes do override PUT entrar em produção).
         const saldoBancario = calcularSaldoBancario(contasBancarias, receber, pagar);
-        const aReceberTotal = receber
-          .filter(r => r.status === 'PENDENTE')
-          .reduce((s, r) => s + (r.valor_final || 0), 0);
-        const recebidoTotal = receber
-          .filter(r => r.status === 'RECEBIDO')
-          .reduce((s, r) => s + (r.valor_recebido || r.valor_final || 0), 0);
-        const aPagarTotal = pagar
-          .filter(p => p.status === 'PENDENTE')
-          .reduce((s, p) => s + (p.valor_final || 0), 0);
-        const pagoTotal = pagar
-          .filter(p => p.status === 'PAGO')
-          .reduce((s, p) => s + (p.valor_pago || p.valor_final || 0), 0);
+        // "Em aberto" = o que ainda falta entrar/sair, incluindo o saldo
+        // devedor das contas PARCIAIS e das vencidas. "Recebido/Pago" = o que
+        // já se moveu no caixa (valorMovimentado conta o acumulado da parcial).
+        const emAberto = (s: string | undefined) =>
+          ['PENDENTE', 'PARCIAL', 'ATRASADO'].includes(String(s ?? ''));
+        const aReceberTotal = somaPor(
+          receber.filter(r => emAberto(r.status)),
+          r => round2(num(r.valor_final) - valorMovimentado(r, 'valor_recebido')),
+        );
+        const recebidoTotal = somaPor(receber, r => valorMovimentado(r, 'valor_recebido'));
+        const aPagarTotal = somaPor(
+          pagar.filter(p => emAberto(p.status)),
+          p => round2(num(p.valor_final) - valorMovimentado(p, 'valor_pago')),
+        );
+        const pagoTotal = somaPor(pagar, p => valorMovimentado(p, 'valor_pago'));
+
+        // Lucro do MÊS: só as baixas cujo mês de recebimento/pagamento é o
+        // mês corrente — o card se chama "Lucro do mês" e a série do
+        // sparkline é mensal; usar o all-time aqui descasava rótulo e número.
+        const mesAtual = mesDe(hojeISO());
+        const recebidoMes = somaPor(
+          receber.filter(r => mesDe(r.data_recebimento || r.data_vencimento) === mesAtual),
+          r => valorMovimentado(r, 'valor_recebido'),
+        );
+        const pagoMes = somaPor(
+          pagar.filter(p => mesDe(p.data_pagamento || p.data_vencimento) === mesAtual),
+          p => valorMovimentado(p, 'valor_pago'),
+        );
 
         // Receita gerada (comissão) das vendas — independente de baixa.
         // É a margem bruta acumulada: faturamento_vendas − custo_vendas.
@@ -134,16 +154,12 @@ export default function FinanceiroAgHubPage() {
           const s = String(v.status ?? '').toUpperCase();
           return s !== 'CANCELADO';
         });
-        const faturamentoVendas = vendasAtivas.reduce((s, v) => {
-          const venda = Number(v.valor_final) || Number(v.valor_total_venda) || Number(v.valor_total) || 0;
-          return s + venda;
-        }, 0);
-        const custoVendas = vendasAtivas.reduce((s, v) => {
-          const custo = Number(v.valor_total_custo) || Number(v.custo_total) || 0;
-          return s + custo;
-        }, 0);
-        const receitaGerada = Math.max(faturamentoVendas - custoVendas, 0);
-        const margemPct = faturamentoVendas > 0 ? (receitaGerada / faturamentoVendas) * 100 : 0;
+        const faturamentoVendas = somaPor(vendasAtivas, v =>
+          num(v.valor_final) || num(v.valor_total_venda) || num(v.valor_total));
+        const custoVendas = somaPor(vendasAtivas, v =>
+          num(v.valor_total_custo) || num(v.custo_total));
+        const receitaGerada = Math.max(round2(faturamentoVendas - custoVendas), 0);
+        const margemPct = round2(divSegura(receitaGerada, faturamentoVendas) * 100);
 
         setKpis({
           saldo: saldoBancario,
@@ -151,8 +167,11 @@ export default function FinanceiroAgHubPage() {
           recebido: recebidoTotal,
           a_pagar: aPagarTotal,
           pago: pagoTotal,
-          resultado_projetado: aReceberTotal - aPagarTotal,
-          resultado_realizado: recebidoTotal - pagoTotal,
+          resultado_projetado: round2(aReceberTotal - aPagarTotal),
+          resultado_realizado: round2(recebidoTotal - pagoTotal),
+          recebido_mes: recebidoMes,
+          pago_mes: pagoMes,
+          lucro_mes: round2(recebidoMes - pagoMes),
           receita_gerada: receitaGerada,
           faturamento_vendas: faturamentoVendas,
           margem_pct: margemPct,
@@ -249,10 +268,17 @@ export default function FinanceiroAgHubPage() {
   const histReceber = historico?.aReceber || [];
   const histPagar = historico?.aPagar || [];
   const histLucro = historico?.lucro || [];
-  const dSaldo = calcDelta(histSaldo);
-  const dReceber = calcDelta(histReceber);
-  const dPagar = calcDelta(histPagar);
-  const dLucro = calcDelta(histLucro);
+  // Delta = variação da MESMA grandeza entre o mês corrente e o anterior da
+  // própria série. variacaoPct devolve null quando não há base (mês anterior
+  // zerado) — nesse caso o delta some da tela em vez de mentir "+100%".
+  const deltaSerie = (serie: number[]): number | null =>
+    serie.length < 2 ? null : variacaoPct(serie[serie.length - 1], serie[serie.length - 2]);
+  const direcao = (delta: number | null): 'up' | 'down' | 'flat' =>
+    delta === null || Math.abs(delta) < 0.05 ? 'flat' : delta > 0 ? 'up' : 'down';
+  const dSaldo = deltaSerie(histSaldo);
+  const dReceber = deltaSerie(histReceber);
+  const dPagar = deltaSerie(histPagar);
+  const dLucro = deltaSerie(histLucro);
   const kpiList = [
     {
       idx: '01',
@@ -261,41 +287,41 @@ export default function FinanceiroAgHubPage() {
       sub: 'Somatório das contas correntes.',
       explainer: 'Total acumulado nas suas contas bancárias. Atualiza automaticamente quando você confirma um recebimento ou pagamento.',
       tone: (kpis?.saldo || 0) >= 0 ? 'pos' : 'neg',
-      delta: dSaldo.delta,
-      deltaDir: dSaldo.dir,
+      delta: dSaldo,
+      deltaDir: direcao(dSaldo),
       spark: histSaldo,
     },
     {
       idx: '02',
       label: 'A receber (pendente)',
       value: kpis?.a_receber || 0,
-      sub: 'Total ainda não recebido neste mês.',
+      sub: 'Total em aberto, de qualquer vencimento.',
       explainer: 'Soma de todas as contas a receber com status PENDENTE, independente do mês de vencimento.',
       tone: 'neutral' as const,
-      delta: dReceber.delta,
-      deltaDir: dReceber.dir,
+      delta: dReceber,
+      deltaDir: direcao(dReceber),
       spark: histReceber,
     },
     {
       idx: '03',
       label: 'A pagar (pendente)',
       value: kpis?.a_pagar || 0,
-      sub: 'Total ainda não pago neste mês.',
+      sub: 'Total em aberto, de qualquer vencimento.',
       explainer: 'Soma de todas as contas a pagar com status PENDENTE, independente do mês de vencimento.',
       tone: 'neutral' as const,
-      delta: dPagar.delta,
-      deltaDir: dPagar.dir,
+      delta: dPagar,
+      deltaDir: direcao(dPagar),
       spark: histPagar,
     },
     {
       idx: '04',
       label: 'Lucro do mês',
-      value: kpis?.resultado_realizado || 0,
+      value: kpis?.lucro_mes || 0,
       sub: 'Recebido menos pago neste mês.',
-      explainer: 'Resultado realizado: tudo que entrou no caixa menos tudo que saiu. Não inclui valores pendentes.',
-      tone: (kpis?.resultado_realizado || 0) >= 0 ? 'pos' : 'neg',
-      delta: dLucro.delta,
-      deltaDir: dLucro.dir,
+      explainer: 'Resultado realizado do mês corrente: o que entrou no caixa menos o que saiu, pela data da baixa. Não inclui valores pendentes.',
+      tone: (kpis?.lucro_mes || 0) >= 0 ? 'pos' : 'neg',
+      delta: dLucro,
+      deltaDir: direcao(dLucro),
       spark: histLucro,
     },
   ];
@@ -402,14 +428,16 @@ export default function FinanceiroAgHubPage() {
               >
                 {formatBRL(kpi.value)}
               </div>
-              {/* Delta */}
-              <div className="mt-2.5 text-[12px] font-medium min-tabular inline-flex items-baseline gap-1.5" style={{ color: 'var(--ink-2)' }}>
-                <span style={{ fontSize: '9px', color: dirColor }}>{dirGlyph}</span>
-                <span>
-                  {kpi.deltaDir === 'flat' ? '0,0%' : `${kpi.delta > 0 ? '+' : ''}${kpi.delta.toFixed(1).replace('.', ',')}%`}
-                </span>
-                <span style={{ color: 'var(--ink-3)' }}>vs mês anterior</span>
-              </div>
+              {/* Delta — some quando não há mês anterior com base de comparação */}
+              {kpi.delta !== null && (
+                <div className="mt-2.5 text-[12px] font-medium min-tabular inline-flex items-baseline gap-1.5" style={{ color: 'var(--ink-2)' }}>
+                  <span style={{ fontSize: '9px', color: dirColor }}>{dirGlyph}</span>
+                  <span>
+                    {kpi.deltaDir === 'flat' ? '0,0%' : `${kpi.delta > 0 ? '+' : ''}${kpi.delta.toFixed(1).replace('.', ',')}%`}
+                  </span>
+                  <span style={{ color: 'var(--ink-3)' }}>vs mês anterior</span>
+                </div>
+              )}
               <p className="mt-3 text-[12px]" style={{ color: 'var(--ink-3)', lineHeight: 1.5 }}>{kpi.sub}</p>
               <div
                 className="mt-4"

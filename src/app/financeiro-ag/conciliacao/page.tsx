@@ -2,14 +2,16 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { ExtratoLinha, ContaBancaria, ContaReceber, ContaPagar, StatusConciliacao } from '@/lib/crm-types';
-import { loadEntities, saveEntity, updateEntity } from '@/lib/crm-storage';
+import { loadEntities } from '@/lib/crm-storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { parseMoneyBR, round2, divSegura, dataLocal, paraISO } from '@/lib/money';
+import { toast } from '@/lib/toast';
 import {
-  Upload, CheckCircle2, AlertTriangle, X, Link2, Eye, FileSpreadsheet,
+  Upload, CheckCircle2, AlertTriangle, X, Link2, FileSpreadsheet,
   ArrowUpCircle, ArrowDownCircle, Search,
 } from 'lucide-react';
 
@@ -23,11 +25,16 @@ const STATUS_BADGE: Record<StatusConciliacao, string> = {
   IGNORADO: 'bg-[var(--t-surface)] text-[var(--t-text-muted)]',
 };
 
-function generateId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
+// Linha crua vinda do arquivo. `fitid` só existe em OFX — é o identificador
+// da transação no banco e serve de chave de deduplicação na reimportação.
+interface LinhaArquivo {
+  data: string;
+  descricao: string;
+  valor: number;
+  fitid?: string;
 }
 
-function parseCSV(text: string): Array<{ data: string; descricao: string; valor: number }> {
+function parseCSV(text: string): LinhaArquivo[] {
   const lines = text.trim().split('\n');
   if (lines.length < 2) return [];
 
@@ -38,7 +45,7 @@ function parseCSV(text: string): Array<{ data: string; descricao: string; valor:
   const descIdx = cols.findIndex(c => c.includes('desc') || c.includes('hist') || c.includes('memo'));
   const valIdx = cols.findIndex(c => c.includes('valor') || c.includes('amount') || c.includes('value'));
 
-  const result: Array<{ data: string; descricao: string; valor: number }> = [];
+  const result: LinhaArquivo[] = [];
   const sep = header.includes(';') ? ';' : header.includes('\t') ? '\t' : ',';
 
   for (let i = 1; i < lines.length; i++) {
@@ -47,9 +54,10 @@ function parseCSV(text: string): Array<{ data: string; descricao: string; valor:
 
     const rawDate = parts[dateIdx >= 0 ? dateIdx : 0];
     const desc = parts[descIdx >= 0 ? descIdx : 1];
-    const rawVal = parts[valIdx >= 0 ? valIdx : 2].replace(/[R$\s.]/g, '').replace(',', '.');
-    const valor = parseFloat(rawVal);
-    if (isNaN(valor)) continue;
+    // parseMoneyBR decide qual separador é decimal. Limpar o ponto na mão
+    // transformava 1234.56 em 123456 (valor 100x maior).
+    const valor = parseMoneyBR(parts[valIdx >= 0 ? valIdx : 2]);
+    if (valor === null) continue;
 
     // Parse date (DD/MM/YYYY or YYYY-MM-DD)
     let isoDate = rawDate;
@@ -58,13 +66,13 @@ function parseCSV(text: string): Array<{ data: string; descricao: string; valor:
       isoDate = `${y.length === 2 ? '20' + y : y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
     }
 
-    result.push({ data: isoDate, descricao: desc, valor });
+    result.push({ data: paraISO(isoDate), descricao: desc, valor: round2(valor) });
   }
   return result;
 }
 
-function parseOFX(text: string): Array<{ data: string; descricao: string; valor: number }> {
-  const result: Array<{ data: string; descricao: string; valor: number }> = [];
+function parseOFX(text: string): LinhaArquivo[] {
+  const result: LinhaArquivo[] = [];
   const transactions = text.split('<STMTTRN>').slice(1);
 
   for (const tx of transactions) {
@@ -74,15 +82,35 @@ function parseOFX(text: string): Array<{ data: string; descricao: string; valor:
     };
 
     const rawDate = getTag('DTPOSTED');
-    const rawVal = getTag('TRNAMT').replace(',', '.');
-    const desc = getTag('MEMO') || getTag('NAME') || getTag('FITID');
-    const valor = parseFloat(rawVal);
-    if (isNaN(valor) || !rawDate) continue;
+    const fitid = getTag('FITID');
+    const desc = getTag('MEMO') || getTag('NAME') || fitid;
+    const valor = parseMoneyBR(getTag('TRNAMT'));
+    if (valor === null || !rawDate) continue;
 
     const isoDate = `${rawDate.substring(0, 4)}-${rawDate.substring(4, 6)}-${rawDate.substring(6, 8)}`;
-    result.push({ data: isoDate, descricao: desc, valor });
+    result.push({ data: isoDate, descricao: desc, valor: round2(valor), ...(fitid ? { fitid } : {}) });
   }
   return result;
+}
+
+// Leitura/gravação que ESTOURA em erro — conciliação precisa saber se a
+// segunda escrita falhou para desfazer a primeira.
+async function getJSON<T>(url: string): Promise<T> {
+  const res = await fetch(url);
+  const body = await res.json().catch(() => null);
+  if (!res.ok || !body) throw new Error(body?.error || 'Lançamento não encontrado no servidor.');
+  return body as T;
+}
+
+async function putJSON<T>(url: string, payload: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(body?.error || 'Falha ao gravar no servidor.');
+  return body as T;
 }
 
 export default function ConciliacaoPage() {
@@ -92,6 +120,7 @@ export default function ConciliacaoPage() {
   const [contasPagar, setContasPagar] = useState<ContaPagar[]>([]);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
+  const [conciliando, setConciliando] = useState(false);
   const [selectedConta, setSelectedConta] = useState('');
   const [filterStatus, setFilterStatus] = useState<StatusConciliacao | 'TODOS'>('TODOS');
   const [searchTerm, setSearchTerm] = useState('');
@@ -117,41 +146,66 @@ export default function ConciliacaoPage() {
 
   useEffect(() => { load(); }, []);
 
+  // A importação inteira roda no servidor (/api/conciliacao/importar): lá ela
+  // é deduplicada contra o que já existe na conta e gravada numa única
+  // transação, então reimportar o mesmo arquivo não duplica nem deixa
+  // importação pela metade se algo falhar no meio.
   async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const input = e.target;
+    const file = input.files?.[0];
     if (!file || !selectedConta) return;
     setImporting(true);
 
-    const text = await file.text();
-    const isOFX = file.name.toLowerCase().endsWith('.ofx') || file.name.toLowerCase().endsWith('.qfx');
-    const parsed = isOFX ? parseOFX(text) : parseCSV(text);
+    try {
+      const text = await file.text();
+      const isOFX = file.name.toLowerCase().endsWith('.ofx') || file.name.toLowerCase().endsWith('.qfx');
+      const parsed = isOFX ? parseOFX(text) : parseCSV(text);
 
-    let saldo = 0;
-    for (const line of parsed) {
-      saldo += line.valor;
-      const item: ExtratoLinha = {
-        id: generateId(),
-        conta_bancaria_id: selectedConta,
-        data: line.data,
-        descricao: line.descricao,
-        valor: line.valor,
-        tipo: line.valor >= 0 ? 'CREDITO' : 'DEBITO',
-        saldo,
-        status_conciliacao: 'PENDENTE',
-        lancamento_vinculado_id: null,
-        lancamento_vinculado_tipo: null,
-        observacao_conciliacao: '',
-        importado_em: new Date().toISOString(),
-        arquivo_origem: file.name,
-      };
-      await saveEntity('extrato-bancario', item);
+      if (parsed.length === 0) {
+        toast.warning('Nenhum lançamento reconhecido no arquivo.');
+        return;
+      }
+
+      const res = await fetch('/api/conciliacao/importar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conta_bancaria_id: selectedConta,
+          arquivo_origem: file.name,
+          linhas: parsed,
+        }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(body?.error || 'Falha ao importar o extrato.');
+
+      const inseridas = Number(body?.inseridas) || 0;
+      const duplicadas = Number(body?.duplicadas) || 0;
+      toast.success(
+        `${inseridas} lançamento(s) importado(s)`,
+        duplicadas > 0 ? `${duplicadas} já existiam na conta e foram ignorados` : undefined,
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Falha ao importar o extrato.');
+    } finally {
+      setImporting(false);
+      // Reset input
+      input.value = '';
+      load();
     }
-
-    setImporting(false);
-    // Reset input
-    e.target.value = '';
-    load();
   }
+
+  // Lançamentos já amarrados a alguma linha CONCILIADA do extrato (de qualquer
+  // conta): não podem ser oferecidos de novo, senão a mesma CR/CP é baixada
+  // duas vezes por duas linhas diferentes.
+  const idsJaConciliados = useMemo(() => {
+    const ids = new Set<string>();
+    for (const e of extrato) {
+      if (e.status_conciliacao === 'CONCILIADO' && e.lancamento_vinculado_id) {
+        ids.add(e.lancamento_vinculado_id);
+      }
+    }
+    return ids;
+  }, [extrato]);
 
   // Auto-match: find lancamentos that could match an extrato line
   function findMatches(line: ExtratoLinha) {
@@ -160,63 +214,93 @@ export default function ConciliacaoPage() {
 
     if (line.tipo === 'CREDITO') {
       return contasReceber
-        .filter(cr => Math.abs(cr.valor_final - absVal) <= tolerance && cr.status !== 'CANCELADO')
+        .filter(cr =>
+          Math.abs(cr.valor_final - absVal) <= tolerance &&
+          cr.status !== 'CANCELADO' &&
+          cr.status !== 'RECEBIDO' &&
+          !idsJaConciliados.has(cr.id))
         .map(cr => ({ id: cr.id, tipo: 'CONTA_RECEBER' as const, desc: `${cr.cliente_nome} — ${cr.descricao}`, valor: cr.valor_final, data: cr.data_vencimento }));
     } else {
       return contasPagar
-        .filter(cp => Math.abs(cp.valor_final - absVal) <= tolerance && cp.status !== 'CANCELADO')
+        .filter(cp =>
+          Math.abs(cp.valor_final - absVal) <= tolerance &&
+          cp.status !== 'CANCELADO' &&
+          cp.status !== 'PAGO' &&
+          !idsJaConciliados.has(cp.id))
         .map(cp => ({ id: cp.id, tipo: 'CONTA_PAGAR' as const, desc: `${cp.fornecedor_nome} — ${cp.descricao}`, valor: cp.valor_final, data: cp.data_vencimento }));
     }
   }
 
   async function handleConciliar(line: ExtratoLinha, lancId: string, lancTipo: 'CONTA_RECEBER' | 'CONTA_PAGAR' | 'TRANSFERENCIA') {
-    const updated: ExtratoLinha = {
-      ...line,
-      status_conciliacao: 'CONCILIADO',
-      lancamento_vinculado_id: lancId,
-      lancamento_vinculado_tipo: lancTipo,
-    };
-    await updateEntity('extrato-bancario', updated);
+    if (conciliando) return;
+    setConciliando(true);
+    const valorBaixa = round2(Math.abs(line.valor));
 
-    // Mark the lancamento as paid/received
-    if (lancTipo === 'CONTA_RECEBER') {
-      const cr = contasReceber.find(c => c.id === lancId);
-      if (cr) {
-        await updateEntity('contas-receber', {
-          ...cr,
-          status: 'RECEBIDO',
-          data_recebimento: line.data,
-          valor_recebido: Math.abs(line.valor),
-          conta_bancaria_id: line.conta_bancaria_id,
-        });
+    try {
+      await putJSON<ExtratoLinha>(`/api/extrato-bancario/${line.id}`, {
+        ...line,
+        status_conciliacao: 'CONCILIADO',
+        lancamento_vinculado_id: lancId,
+        lancamento_vinculado_tipo: lancTipo,
+      });
+
+      // Baixa da CR/CP: relê o registro do servidor e aplica SÓ os campos da
+      // baixa por cima. Usar o objeto que está no estado da tela reverteria
+      // qualquer edição feita por outro usuário desde o último load().
+      try {
+        if (lancTipo === 'CONTA_RECEBER') {
+          const atual = await getJSON<ContaReceber>(`/api/contas-receber/${lancId}`);
+          await putJSON<ContaReceber>(`/api/contas-receber/${lancId}`, {
+            ...atual,
+            status: 'RECEBIDO',
+            data_recebimento: line.data,
+            valor_recebido: valorBaixa,
+            conta_bancaria_id: line.conta_bancaria_id,
+          });
+        } else if (lancTipo === 'CONTA_PAGAR') {
+          const atual = await getJSON<ContaPagar>(`/api/contas-pagar/${lancId}`);
+          await putJSON<ContaPagar>(`/api/contas-pagar/${lancId}`, {
+            ...atual,
+            status: 'PAGO',
+            data_pagamento: line.data,
+            valor_pago: valorBaixa,
+            conta_bancaria_id: line.conta_bancaria_id,
+          });
+        }
+      } catch (err) {
+        // Baixa falhou: devolve a linha do extrato ao estado anterior para não
+        // deixar um "CONCILIADO" apontando para lançamento que não baixou.
+        await putJSON<ExtratoLinha>(`/api/extrato-bancario/${line.id}`, line).catch(() => {});
+        throw err;
       }
-    } else if (lancTipo === 'CONTA_PAGAR') {
-      const cp = contasPagar.find(c => c.id === lancId);
-      if (cp) {
-        await updateEntity('contas-pagar', {
-          ...cp,
-          status: 'PAGO',
-          data_pagamento: line.data,
-          valor_pago: Math.abs(line.valor),
-          conta_bancaria_id: line.conta_bancaria_id,
-        });
-      }
+
+      toast.success('Lançamento conciliado');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Não foi possível conciliar o lançamento.');
+    } finally {
+      setConciliando(false);
+      setConciliarItem(null);
+      load();
     }
+  }
 
-    setConciliarItem(null);
-    load();
+  async function marcarStatus(line: ExtratoLinha, status: StatusConciliacao) {
+    try {
+      await putJSON<ExtratoLinha>(`/api/extrato-bancario/${line.id}`, { ...line, status_conciliacao: status });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Não foi possível atualizar a linha do extrato.');
+    } finally {
+      setConciliarItem(null);
+      load();
+    }
   }
 
   async function handleIgnorar(line: ExtratoLinha) {
-    await updateEntity('extrato-bancario', { ...line, status_conciliacao: 'IGNORADO' });
-    setConciliarItem(null);
-    load();
+    await marcarStatus(line, 'IGNORADO');
   }
 
   async function handleDivergente(line: ExtratoLinha) {
-    await updateEntity('extrato-bancario', { ...line, status_conciliacao: 'DIVERGENTE' });
-    setConciliarItem(null);
-    load();
+    await marcarStatus(line, 'DIVERGENTE');
   }
 
   const contaExtrato = extrato.filter(e => e.conta_bancaria_id === selectedConta);
@@ -231,7 +315,7 @@ export default function ConciliacaoPage() {
     const conciliados = contaExtrato.filter(e => e.status_conciliacao === 'CONCILIADO').length;
     const pendentes = contaExtrato.filter(e => e.status_conciliacao === 'PENDENTE').length;
     const divergentes = contaExtrato.filter(e => e.status_conciliacao === 'DIVERGENTE').length;
-    return { total, conciliados, pendentes, divergentes, pct: total > 0 ? Math.round((conciliados / total) * 100) : 0 };
+    return { total, conciliados, pendentes, divergentes, pct: Math.round(divSegura(conciliados, total) * 100) };
   }, [contaExtrato]);
 
   return (
@@ -338,7 +422,7 @@ export default function ConciliacaoPage() {
                   <div>
                     <p className="text-sm text-[var(--t-text)]">{conciliarItem.descricao}</p>
                     <p className="text-xs text-[var(--t-text-muted)] mt-0.5">
-                      {new Date(conciliarItem.data + 'T00:00:00').toLocaleDateString('pt-BR')}
+                      {dataLocal(conciliarItem.data)?.toLocaleDateString('pt-BR') ?? '—'}
                     </p>
                   </div>
                   <p className={`font-mono font-bold text-lg ${conciliarItem.valor >= 0 ? 'text-[var(--t-green)]' : 'text-[var(--t-red)]'}`}>
@@ -362,7 +446,7 @@ export default function ConciliacaoPage() {
                         <div>
                           <p className="text-sm text-[var(--t-text)]">{m.desc}</p>
                           <p className="text-xs text-[var(--t-text-muted)]">
-                            {m.data ? new Date(m.data + 'T00:00:00').toLocaleDateString('pt-BR') : ''} · {m.tipo === 'CONTA_RECEBER' ? 'Conta a Receber' : 'Conta a Pagar'}
+                            {dataLocal(m.data)?.toLocaleDateString('pt-BR') ?? ''} · {m.tipo === 'CONTA_RECEBER' ? 'Conta a Receber' : 'Conta a Pagar'}
                           </p>
                         </div>
                         <div className="flex items-center gap-3">
@@ -376,11 +460,11 @@ export default function ConciliacaoPage() {
               })()}
 
               <div className="flex gap-2 mt-4">
-                <Button variant="outline" onClick={() => handleIgnorar(conciliarItem)}
+                <Button variant="outline" disabled={conciliando} onClick={() => handleIgnorar(conciliarItem)}
                   className="border-[var(--t-border)] text-[var(--t-text-secondary)]">
                   Ignorar
                 </Button>
-                <Button variant="outline" onClick={() => handleDivergente(conciliarItem)}
+                <Button variant="outline" disabled={conciliando} onClick={() => handleDivergente(conciliarItem)}
                   className="border-[var(--t-red)]/30 text-[var(--t-red)]">
                   <AlertTriangle className="w-3 h-3 mr-1" /> Marcar Divergente
                 </Button>
@@ -422,7 +506,7 @@ export default function ConciliacaoPage() {
                     {filtered.map(item => (
                       <tr key={item.id} className="border-b border-[var(--t-border)] hover:bg-[var(--t-surface-hover)] transition-colors">
                         <td className="px-4 py-3 text-[var(--t-text-secondary)]">
-                          {new Date(item.data + 'T00:00:00').toLocaleDateString('pt-BR')}
+                          {dataLocal(item.data)?.toLocaleDateString('pt-BR') ?? '—'}
                         </td>
                         <td className="px-4 py-3 text-[var(--t-text)] max-w-md">
                           <div className="flex items-center gap-2">

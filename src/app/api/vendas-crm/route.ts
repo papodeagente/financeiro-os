@@ -5,9 +5,24 @@ import { getTenantId } from '@/lib/tenant';
 import { getSession } from '@/lib/auth';
 import { podeVerTodasVendas } from '@/lib/permissoes';
 import { gerarContasVenda, type ItemVendaInput, type FornecedorInfo } from '@/lib/venda-financeiro';
+import { STATUS_BAIXADOS } from '@/lib/caixa-atomico';
 
 const TABLE = 'vendas_crm';
 const INDEX_COLS = ['cliente_id', 'vendedor_id', 'status'];
+
+// Status em que o dinheiro já se moveu — conta nesse estado nunca é apagada
+// na regeração (ver comentário do passo 5).
+const STATUS_BAIXADOS_SQL = [...STATUS_BAIXADOS];
+
+// Identidade lógica de uma conta gerada, usada para casar a conta preservada
+// (já baixada) com a que acabou de ser gerada e assim não duplicar o lançamento.
+// Contas de item (custo/comissão) são únicas por item; as parcelas do cliente,
+// pelo número da parcela.
+function chaveConta(conta: Record<string, unknown>): string {
+  const itemId = String(conta.origem_item_id ?? '');
+  if (itemId) return `item:${itemId}`;
+  return `parcela:${String(conta.parcela_numero ?? '')}`;
+}
 
 export async function GET() {
   try {
@@ -176,18 +191,46 @@ async function postComItens(body: PostComItensBody, tenantId: string) {
       cliente_nome: cliente_nome || '',
     });
 
-    // 5. Deletar contas auto_gerado=true anteriores (idempotência)
+    // 5. Regeneração idempotente das contas auto_gerado desta venda.
+    //
+    //    REGRA (não óbvia, custa dinheiro se quebrada): conta JÁ BAIXADA
+    //    (RECEBIDO/PARCIAL/PAGO) nunca é apagada aqui. O dinheiro dela já
+    //    entrou/saiu da conta bancária; um DELETE cego apagaria a baixa sem
+    //    estornar e deixaria crédito fantasma no saldo pra sempre. Regeramos
+    //    só as contas ainda em aberto (PENDENTE/CANCELADO/ATRASADO/VENCIDO).
+    //    Se um dia uma conta baixada precisar sumir, ela tem que ser excluída
+    //    pelo endpoint da própria conta (que estorna o caixa) — nunca daqui.
+    const { rows: crBaixadas } = await client.query(
+      `SELECT data FROM contas_receber
+        WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2 AND data->>'auto_gerado' = 'true'
+          AND COALESCE(data->>'status', '') = ANY($3::text[])`,
+      [tenantId, venda.id, STATUS_BAIXADOS_SQL],
+    );
+    const { rows: cpBaixadas } = await client.query(
+      `SELECT data FROM contas_pagar
+        WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2 AND data->>'auto_gerado' = 'true'
+          AND COALESCE(data->>'status', '') = ANY($3::text[])`,
+      [tenantId, venda.id, STATUS_BAIXADOS_SQL],
+    );
+    const crPreservadas = new Set<string>(crBaixadas.map(r => chaveConta(r.data)));
+    const cpPreservadas = new Set<string>(cpBaixadas.map(r => chaveConta(r.data)));
+
     await client.query(
-      `DELETE FROM contas_receber WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2 AND data->>'auto_gerado' = 'true'`,
-      [tenantId, venda.id],
+      `DELETE FROM contas_receber
+        WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2 AND data->>'auto_gerado' = 'true'
+          AND NOT (COALESCE(data->>'status', '') = ANY($3::text[]))`,
+      [tenantId, venda.id, STATUS_BAIXADOS_SQL],
     );
     await client.query(
-      `DELETE FROM contas_pagar WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2 AND data->>'auto_gerado' = 'true'`,
-      [tenantId, venda.id],
+      `DELETE FROM contas_pagar
+        WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2 AND data->>'auto_gerado' = 'true'
+          AND NOT (COALESCE(data->>'status', '') = ANY($3::text[]))`,
+      [tenantId, venda.id, STATUS_BAIXADOS_SQL],
     );
 
-    // 6. Insert contas a receber
+    // 6. Insert contas a receber (pulando as que já existem baixadas)
     for (const cr of resultado.contas_receber) {
+      if (crPreservadas.has(chaveConta(cr as unknown as Record<string, unknown>))) continue;
       await client.query(
         `INSERT INTO contas_receber (id, tenant_id, venda_id, cliente_id, status, data, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6::jsonb, NOW(), NOW())`,
@@ -195,8 +238,9 @@ async function postComItens(body: PostComItensBody, tenantId: string) {
       );
     }
 
-    // 7. Insert contas a pagar
+    // 7. Insert contas a pagar (pulando as que já existem baixadas)
     for (const cp of resultado.contas_pagar) {
+      if (cpPreservadas.has(chaveConta(cp as unknown as Record<string, unknown>))) continue;
       await client.query(
         `INSERT INTO contas_pagar (id, tenant_id, fornecedor_id, status, data, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5::jsonb, NOW(), NOW())`,

@@ -9,6 +9,7 @@ import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalP
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { formatBRL, generateId } from '@/lib/utils';
+import { somaPor, divSegura, round2 } from '@/lib/money';
 import {
   calcLimiteUsado,
   calcProximoFechamento,
@@ -135,9 +136,9 @@ export default function CartoesCorpPage() {
 
   // KPI consolidado
   const totals = useMemo(() => {
-    const limite = items.reduce((s, c) => s + (c.limite_total || 0), 0);
-    const usado = items.reduce((s, c) => s + calcLimiteUsado(c.id, contas), 0);
-    const pct = limite > 0 ? (usado / limite) * 100 : 0;
+    const limite = somaPor(items, c => c.limite_total);
+    const usado = somaPor(items, c => calcLimiteUsado(c.id, contas));
+    const pct = round2(divSegura(usado, limite) * 100);
     return { limite, usado, pct, ativos: items.filter(c => c.ativo).length };
   }, [items, contas]);
 

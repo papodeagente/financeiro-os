@@ -15,6 +15,8 @@ import {
   type TipoProdutoVenda,
 } from './crm-types';
 import { gerarContasVenda, type ItemVendaInput, type FornecedorInfo } from './venda-financeiro';
+import { round2, num, hojeISO } from './money';
+import { aplicarMovimentoCaixa } from './caixa-helpers';
 
 // ──────────────────────────────────────────
 // Types
@@ -925,27 +927,76 @@ export async function processarEventoCRM(
   idempotency_key: string,
   tenantId: string,
 ): Promise<{ processado: boolean; acao: string; erro?: string }> {
+  // Definido quando o lock consultivo é adquirido; liberado no finally.
+  let liberarLock: (() => Promise<void>) | null = null;
   try {
     if (!pool) return { processado: false, acao: 'sem banco de dados' };
     if (!tenantId) return { processado: false, acao: 'tenant ausente' };
     await initDB();
 
-    // Idempotency is scoped per-tenant: same idempotency_key from different
-    // tenants is treated as different events.
-    const { rows: existing } = await pool.query(
-      `SELECT id FROM crm_eventos_entrada WHERE idempotency_key = $1 AND tenant_id = $2`,
-      [idempotency_key, tenantId]
+    // Idempotência por tenant: a mesma idempotency_key de tenants diferentes
+    // são eventos diferentes.
+    //
+    // Duas regras convivem aqui:
+    //  1. Evento CONCLUÍDO (processado=true) é duplicata — ignora.
+    //  2. Evento que MORREU no meio (status ERRO) pode ser reprocessado: sem
+    //     isso, uma venda criada cujas contas falharam ficaria meio-gravada
+    //     para sempre. O reprocessamento é seguro porque o caminho é
+    //     idempotente (upsert por external_id + regeneração das contas).
+    //
+    // O lock consultivo serializa entregas CONCORRENTES do mesmo evento (o
+    // webhook do CRM reentrega em ~2s quando o timeout estoura). Sem ele, as
+    // duas entregas passariam pela checagem antes de qualquer uma marcar
+    // processado=true e a venda ganharia contas em dobro.
+    const lockKey = `${tenantId}:${idempotency_key}`;
+    const { rows: lockRows } = await pool.query(
+      `SELECT pg_try_advisory_lock(hashtext($1)) AS obtido`,
+      [lockKey]
     );
-    if (existing.length > 0) {
-      return { processado: true, acao: 'duplicata ignorada' };
+    if (lockRows[0]?.obtido !== true) {
+      return { processado: true, acao: 'evento já em processamento (entrega concorrente)' };
     }
 
-    const id = generateId();
-    await pool.query(
-      `INSERT INTO crm_eventos_entrada (id, idempotency_key, tipo, status, processado, data, tenant_id, created_at)
-       VALUES ($1, $2, $3, 'RECEBIDO', false, $4, $5, NOW())`,
-      [id, idempotency_key, tipo, JSON.stringify({ tipo, payload, received_at: new Date().toISOString() }), tenantId]
-    );
+    let id: string;
+    try {
+      const { rows: existing } = await pool.query(
+        `SELECT id, processado, status FROM crm_eventos_entrada WHERE idempotency_key = $1 AND tenant_id = $2`,
+        [idempotency_key, tenantId]
+      );
+      const anterior = existing[0];
+      if (anterior?.processado === true) {
+        return { processado: true, acao: 'duplicata ignorada' };
+      }
+      // Registro existente que NÃO falhou = outra entrega está processando
+      // agora (ou o processo caiu antes de registrar o erro). Não duplica.
+      if (anterior && String(anterior.status ?? '') !== 'ERRO') {
+        return { processado: true, acao: 'duplicata ignorada (em processamento)' };
+      }
+
+      if (anterior) {
+        // Retry de um evento que falhou: reaproveita o registro e limpa o erro.
+        id = anterior.id as string;
+        await pool.query(
+          `UPDATE crm_eventos_entrada SET status = 'REPROCESSANDO', erro = NULL, data = $2
+            WHERE id = $1 AND tenant_id = $3`,
+          [id, JSON.stringify({ tipo, payload, received_at: new Date().toISOString() }), tenantId]
+        );
+      } else {
+        id = generateId();
+        await pool.query(
+          `INSERT INTO crm_eventos_entrada (id, idempotency_key, tipo, status, processado, data, tenant_id, created_at)
+           VALUES ($1, $2, $3, 'RECEBIDO', false, $4, $5, NOW())`,
+          [id, idempotency_key, tipo, JSON.stringify({ tipo, payload, received_at: new Date().toISOString() }), tenantId]
+        );
+      }
+    } catch (e) {
+      await pool.query(`SELECT pg_advisory_unlock(hashtext($1))`, [lockKey]).catch(() => {});
+      throw e;
+    }
+    // A partir daqui o lock é liberado no finally do bloco externo.
+    liberarLock = async () => {
+      await pool!.query(`SELECT pg_advisory_unlock(hashtext($1))`, [lockKey]).catch(() => {});
+    };
 
     let acao = '';
 
@@ -1230,44 +1281,76 @@ export async function processarEventoCRM(
 
       case 'PAGAMENTO_CONFIRMADO': {
         const { entur_venda_id, parcela: numParcela, valor, data_pagamento } = payload;
+        // A parcela é OBRIGATÓRIA: sem ela, o casamento pegaria todas as
+        // contas da venda e marcaria tudo como recebido com um pagamento só.
+        const parcelaAlvo = Number(numParcela);
+        if (!entur_venda_id || !Number.isFinite(parcelaAlvo) || parcelaAlvo < 1) {
+          acao = 'PAGAMENTO_CONFIRMADO sem entur_venda_id/parcela válida';
+          break;
+        }
         const { rows: receber } = await pool.query(
-          `SELECT id, data FROM contas_receber WHERE venda_id = $1`,
-          [entur_venda_id]
+          `SELECT id, data FROM contas_receber WHERE venda_id = $1 AND tenant_id = $2`,
+          [entur_venda_id, tenantId]
         );
+        let baixadas = 0;
         for (const row of receber) {
           const d = row.data as Record<string, unknown>;
-          if (d.parcela === numParcela) {
-            d.status = 'RECEBIDO';
-            d.data_pagamento = data_pagamento;
-            d.valor_recebido = valor;
-            await pool.query(
-              `UPDATE contas_receber SET status = 'RECEBIDO', data = $2, updated_at = NOW() WHERE id = $1`,
-              [row.id, JSON.stringify(d)]
-            );
+          // O campo persistido é parcela_numero (ver gerarContasVenda);
+          // e a baixa vale só para a parcela do CLIENTE, não para a
+          // comissão a receber do fornecedor da mesma venda.
+          if (Number(d.parcela_numero) !== parcelaAlvo) continue;
+          if (d.origem && d.origem !== 'VENDA') continue;
+          if (String(d.status ?? '') === 'RECEBIDO') continue;  // idempotente
+
+          const valorRecebido = round2(num(valor) || num(d.valor_final));
+          d.status = 'RECEBIDO';
+          d.data_recebimento = data_pagamento || hojeISO();
+          d.valor_recebido = valorRecebido;
+          const upd = await pool.query(
+            `UPDATE contas_receber SET status = 'RECEBIDO', data = $2, updated_at = NOW()
+              WHERE id = $1 AND tenant_id = $3 AND (data->>'status') IS DISTINCT FROM 'RECEBIDO'`,
+            [row.id, JSON.stringify(d), tenantId]
+          );
+          if ((upd.rowCount ?? 0) > 0) {
+            baixadas++;
+            // Entrada de dinheiro precisa refletir no saldo, como faz o PUT da API.
+            await aplicarMovimentoCaixa(tenantId, (d.conta_bancaria_id as string) || null, +valorRecebido);
           }
         }
-        acao = `pagamento confirmado parcela ${numParcela}`;
+        acao = baixadas > 0
+          ? `pagamento confirmado parcela ${parcelaAlvo} (${baixadas} conta(s) baixada(s))`
+          : `parcela ${parcelaAlvo} da venda ${entur_venda_id} não encontrada ou já baixada`;
         break;
       }
 
       case 'PAGAMENTO_ATRASADO': {
         const { entur_venda_id: vendaIdAtr, parcela: parcAtr } = payload;
+        const parcelaAtraso = Number(parcAtr);
+        if (!vendaIdAtr || !Number.isFinite(parcelaAtraso) || parcelaAtraso < 1) {
+          acao = 'PAGAMENTO_ATRASADO sem entur_venda_id/parcela válida';
+          break;
+        }
         const { rows: receberAtr } = await pool.query(
-          `SELECT id, data FROM contas_receber WHERE venda_id = $1`,
-          [vendaIdAtr]
+          `SELECT id, data FROM contas_receber WHERE venda_id = $1 AND tenant_id = $2`,
+          [vendaIdAtr, tenantId]
         );
+        let marcadas = 0;
         for (const row of receberAtr) {
           const d = row.data as Record<string, unknown>;
-          if (d.parcela === parcAtr) {
-            d.status = 'ATRASADO';
-            d.dias_atraso = payload.dias_atraso;
-            await pool.query(
-              `UPDATE contas_receber SET status = 'ATRASADO', data = $2, updated_at = NOW() WHERE id = $1`,
-              [row.id, JSON.stringify(d)]
-            );
-          }
+          if (Number(d.parcela_numero) !== parcelaAtraso) continue;
+          if (d.origem && d.origem !== 'VENDA') continue;
+          if (String(d.status ?? '') === 'RECEBIDO') continue;  // já pago não atrasa
+
+          d.status = 'ATRASADO';
+          d.dias_atraso = payload.dias_atraso;
+          await pool.query(
+            `UPDATE contas_receber SET status = 'ATRASADO', data = $2, updated_at = NOW()
+              WHERE id = $1 AND tenant_id = $3`,
+            [row.id, JSON.stringify(d), tenantId]
+          );
+          marcadas++;
         }
-        acao = `parcela ${parcAtr} marcada como atrasada`;
+        acao = `parcela ${parcelaAtraso} marcada como atrasada (${marcadas})`;
         break;
       }
 
@@ -1277,14 +1360,14 @@ export async function processarEventoCRM(
         if (externalId && camposAlterados) {
           // CRM sends prefixed external_id ("crm_contact_<id>"), not internal id.
           const { rows: cliRows } = await pool.query(
-            `SELECT id, data FROM clientes WHERE external_id = $1 LIMIT 1`,
-            [externalId]
+            `SELECT id, data FROM clientes WHERE external_id = $1 AND tenant_id = $2 LIMIT 1`,
+            [externalId, tenantId]
           );
           if (cliRows.length > 0) {
             const merged = { ...cliRows[0].data, ...camposAlterados };
             await pool.query(
-              `UPDATE clientes SET data = $2, updated_at = NOW() WHERE id = $1`,
-              [cliRows[0].id, JSON.stringify(merged)]
+              `UPDATE clientes SET data = $2, updated_at = NOW() WHERE id = $1 AND tenant_id = $3`,
+              [cliRows[0].id, JSON.stringify(merged), tenantId]
             );
           }
         }
@@ -1327,8 +1410,8 @@ export async function processarEventoCRM(
         const { proposta_id, timestamp, duracao_segundos } = payload;
         if (proposta_id) {
           const { rows: propRows } = await pool.query(
-            `SELECT data FROM propostas WHERE id = $1`,
-            [proposta_id]
+            `SELECT data FROM propostas WHERE id = $1 AND tenant_id = $2`,
+            [proposta_id, tenantId]
           );
           if (propRows.length > 0) {
             const propData = propRows[0].data as Record<string, unknown>;
@@ -1336,8 +1419,8 @@ export async function processarEventoCRM(
             views.push({ timestamp, duracao_segundos, origem: 'crm' });
             propData.visualizacoes = views;
             await pool.query(
-              `UPDATE propostas SET data = $2, updated_at = NOW() WHERE id = $1`,
-              [proposta_id, JSON.stringify(propData)]
+              `UPDATE propostas SET data = $2, updated_at = NOW() WHERE id = $1 AND tenant_id = $3`,
+              [proposta_id, JSON.stringify(propData), tenantId]
             );
           }
         }
@@ -1358,16 +1441,19 @@ export async function processarEventoCRM(
     return { processado: true, acao };
   } catch (e) {
     const erro = e instanceof Error ? e.message : 'Erro desconhecido';
-    // Try to record the error
+    // Marca ERRO: é o que autoriza o reprocessamento na próxima entrega.
     try {
       if (pool) {
         await pool.query(
-          `UPDATE crm_eventos_entrada SET erro = $2 WHERE idempotency_key = $1`,
-          [idempotency_key, erro]
+          `UPDATE crm_eventos_entrada SET erro = $2, status = 'ERRO'
+            WHERE idempotency_key = $1 AND tenant_id = $3`,
+          [idempotency_key, erro, tenantId]
         );
       }
     } catch { /* ignore */ }
     return { processado: false, acao: 'erro no processamento', erro };
+  } finally {
+    if (liberarLock) await liberarLock();
   }
 }
 

@@ -12,6 +12,10 @@ import {
   Copy, Target, Calendar, Search,
 } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import {
+  round2, num, somaPor, paraBRL,
+  hojeISO, dataLocal, addDias, addMeses, dataSegura, estaVencido, mesDe, dentroDoPeriodo,
+} from '@/lib/money';
 import { MetricExplainer } from '@/components/financeiro/MetricExplainer';
 import { PageShell } from '@/components/PageShell';
 import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
@@ -82,15 +86,10 @@ const EMPTY_FORM: FormState = {
 };
 
 // Calcula próximo vencimento dado base e tipo de recorrência.
+// MENSAL usa addMeses, que CLAMPA o dia (31/01 + 1 mês = 28/02).
 function avancarData(baseISO: string, periodo: RecorrenciaPeriodo, count: number): string {
-  const [y, m, d] = baseISO.split('-').map(Number);
-  if (periodo === 'MENSAL') {
-    const nova = new Date(y, m - 1 + count, d);
-    return `${nova.getFullYear()}-${String(nova.getMonth() + 1).padStart(2, '0')}-${String(nova.getDate()).padStart(2, '0')}`;
-  }
-  const dias = periodo === 'SEMANAL' ? 7 : 14;
-  const nova = new Date(y, m - 1, d + dias * count);
-  return `${nova.getFullYear()}-${String(nova.getMonth() + 1).padStart(2, '0')}-${String(nova.getDate()).padStart(2, '0')}`;
+  if (periodo === 'MENSAL') return addMeses(baseISO, count);
+  return addDias(baseISO, (periodo === 'SEMANAL' ? 7 : 14) * count);
 }
 
 function getMonthLabel(ym: string): string {
@@ -100,9 +99,46 @@ function getMonthLabel(ym: string): string {
 }
 
 function addMonth(ym: string): string {
-  const [y, m] = ym.split('-').map(Number);
-  const d = new Date(y, m, 1); // month is already 0-indexed +1
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  return mesDe(addMeses(`${ym}-01`, 1));
+}
+
+/**
+ * Valor da conta em BRL.
+ *
+ * `valor_final` é BRL por contrato (ver venda-financeiro.ts) — tanto nas contas
+ * geradas por venda quanto nas lançadas à mão. Não se infere formato comparando
+ * valor_final com valor_original: contas antigas em moeda estrangeira têm os
+ * dois iguais e legitimamente em BRL, e converter de novo inflaria o valor pelo
+ * câmbio. `valor_brl` é usado só quando valor_final está ausente.
+ */
+function valorBRLDaConta(i: ContaPagar): number {
+  const final = num(i.valor_final);
+  if (final) return round2(final);
+  return round2(num(i.valor_brl));
+}
+
+/** Quanto ainda falta pagar (em BRL) — conta PARCIAL mantém o saldo visível. */
+function saldoDevedor(i: ContaPagar): number {
+  return round2(valorBRLDaConta(i) - num(i.valor_pago));
+}
+
+/** Está em aberto (PENDENTE/PARCIAL/VENCIDO) com vencimento anterior a hoje. */
+function ehVencidoEmAberto(i: ContaPagar, hoje: string): boolean {
+  if (i.status !== 'PENDENTE' && i.status !== 'PARCIAL' && i.status !== 'VENCIDO') return false;
+  return estaVencido(i.data_vencimento, hoje);
+}
+
+/**
+ * Só entra na cópia de mês o que é lançamento MANUAL recorrente:
+ * custo auto-gerado de venda/grupo é recriado pela própria venda (duplicaria),
+ * e conta CANCELADA não pode ser ressuscitada.
+ */
+function podeCopiarParaOutroMes(i: ContaPagar): boolean {
+  if (i.natureza_custo === 'COMPRA_UNICA') return false;
+  if (i.auto_gerado) return false;
+  if (i.origem === 'VENDA' || i.origem === 'GRUPO') return false;
+  if (i.status === 'CANCELADO') return false;
+  return true;
 }
 
 export default function ContasPagarPage() {
@@ -113,7 +149,9 @@ export default function ContasPagarPage() {
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [filterStatus, setFilterStatus] = useState<StatusContaPagar | 'TODOS'>('TODOS');
+  // 'ABERTO' é pseudo-status do card Pendente: PENDENTE + PARCIAL (tudo que
+  // ainda tem saldo devedor), pra o total do card bater com a lista.
+  const [filterStatus, setFilterStatus] = useState<StatusContaPagar | 'TODOS' | 'ABERTO'>('TODOS');
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
   const [filterCategoria, setFilterCategoria] = useState('TODAS');
@@ -123,6 +161,8 @@ export default function ContasPagarPage() {
   const [copySourceMonth, setCopySourceMonth] = useState('');
   const [copyTargetMonth, setCopyTargetMonth] = useState('');
   const [copying, setCopying] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [pagando, setPagando] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -180,69 +220,87 @@ export default function ContasPagarPage() {
   }
 
   async function handleSave() {
+    // Guarda de duplo-submit: sem isso, clique duplo cria a conta (ou a série
+    // inteira de parcelas) duas vezes.
+    if (saving) return;
     // Validações com feedback específico em vez de return silencioso
     if (!form.fornecedor_nome.trim()) { toast.error('Informe o fornecedor'); return; }
     if (!form.descricao.trim()) { toast.error('Informe uma descrição'); return; }
     if (!form.data_vencimento) { toast.error('Informe a data de vencimento'); return; }
     if (form.valor_original <= 0) { toast.error('Valor deve ser maior que zero'); return; }
-    const valorBrl = form.valor_original * form.cambio;
+    if (form.moeda !== 'BRL' && num(form.cambio) <= 0) { toast.error('Informe o câmbio da moeda estrangeira'); return; }
+
+    const valorOriginal = round2(num(form.valor_original));
+    const cambio = form.moeda === 'BRL' ? 1 : num(form.cambio);
+    // valor_final é SEMPRE em BRL — o resto do sistema soma esse campo como real.
+    // A moeda de origem fica preservada em valor_original + moeda + cambio.
+    const valorBrl = paraBRL(valorOriginal, form.moeda, cambio);
     const cartaoIdFinal = form.forma_pagamento === 'CARTAO_CORP' ? (form.cartao_id || null) : null;
 
-    // Edição NÃO suporta recorrência (só aplica em criação).
-    if (editId) {
-      const existing = items.find(i => i.id === editId)!;
-      const updated: ContaPagar = {
-        ...existing,
-        ...form,
-        cartao_id: cartaoIdFinal,
-        valor_final: form.valor_original,
-        valor_brl: valorBrl,
+    setSaving(true);
+    try {
+      // Edição NÃO suporta recorrência (só aplica em criação).
+      if (editId) {
+        const existing = items.find(i => i.id === editId)!;
+        const updated: ContaPagar = {
+          ...existing,
+          ...form,
+          cartao_id: cartaoIdFinal,
+          valor_original: valorOriginal,
+          cambio,
+          valor_final: valorBrl,
+          valor_brl: valorBrl,
+        };
+        await updateEntity('contas-pagar', updated);
+        setShowForm(false);
+        setEditId(null);
+        toast.success('Despesa atualizada');
+        load();
+        return;
+      }
+
+      // Quantas contas criar — 1 para única, N para recorrente.
+      const isDespesaFixa = form.origem === 'DESPESA_FIXA';
+      const recorrer = isDespesaFixa && form.recorrencia_ativa && form.recorrencia_repeticoes > 1;
+      const total = recorrer ? form.recorrencia_repeticoes : 1;
+      const periodoLabel: Record<RecorrenciaPeriodo, string> = {
+        MENSAL: 'mensal', SEMANAL: 'semanal', QUINZENAL: 'quinzenal',
       };
-      await updateEntity('contas-pagar', updated);
+
+      for (let i = 0; i < total; i++) {
+        const vencimento = i === 0 ? form.data_vencimento : avancarData(form.data_vencimento, form.recorrencia_periodo, i);
+        const desc = recorrer
+          ? `${form.descricao} (${i + 1}/${total} — ${periodoLabel[form.recorrencia_periodo]})`
+          : form.descricao;
+        const nova: ContaPagar = {
+          ...createContaPagar(),
+          ...form,
+          cartao_id: cartaoIdFinal,
+          descricao: desc,
+          data_vencimento: vencimento,
+          valor_original: valorOriginal,
+          cambio,
+          valor_final: valorBrl,
+          valor_brl: valorBrl,
+          parcela_numero: i + 1,
+          total_parcelas: total,
+        };
+        await saveEntity('contas-pagar', nova);
+      }
+
       setShowForm(false);
       setEditId(null);
-      toast.success('Despesa atualizada');
+      if (total > 1) {
+        const primeiroVenc = form.data_vencimento;
+        const ultimoVenc = avancarData(form.data_vencimento, form.recorrencia_periodo, total - 1);
+        toast.success(`${total} parcelas criadas`, `Vencimentos de ${primeiroVenc.split('-').reverse().join('/')} a ${ultimoVenc.split('-').reverse().join('/')}`);
+      } else {
+        toast.success('Despesa criada', `${form.fornecedor_nome} · ${BRL(valorBrl)}`);
+      }
       load();
-      return;
+    } finally {
+      setSaving(false);
     }
-
-    // Quantas contas criar — 1 para única, N para recorrente.
-    const isDespesaFixa = form.origem === 'DESPESA_FIXA';
-    const recorrer = isDespesaFixa && form.recorrencia_ativa && form.recorrencia_repeticoes > 1;
-    const total = recorrer ? form.recorrencia_repeticoes : 1;
-    const periodoLabel: Record<RecorrenciaPeriodo, string> = {
-      MENSAL: 'mensal', SEMANAL: 'semanal', QUINZENAL: 'quinzenal',
-    };
-
-    for (let i = 0; i < total; i++) {
-      const vencimento = i === 0 ? form.data_vencimento : avancarData(form.data_vencimento, form.recorrencia_periodo, i);
-      const desc = recorrer
-        ? `${form.descricao} (${i + 1}/${total} — ${periodoLabel[form.recorrencia_periodo]})`
-        : form.descricao;
-      const nova: ContaPagar = {
-        ...createContaPagar(),
-        ...form,
-        cartao_id: cartaoIdFinal,
-        descricao: desc,
-        data_vencimento: vencimento,
-        valor_final: form.valor_original,
-        valor_brl: valorBrl,
-        parcela_numero: i + 1,
-        total_parcelas: total,
-      };
-      await saveEntity('contas-pagar', nova);
-    }
-
-    setShowForm(false);
-    setEditId(null);
-    if (total > 1) {
-      const primeiroVenc = form.data_vencimento;
-      const ultimoVenc = avancarData(form.data_vencimento, form.recorrencia_periodo, total - 1);
-      toast.success(`${total} parcelas criadas`, `Vencimentos de ${primeiroVenc.split('-').reverse().join('/')} a ${ultimoVenc.split('-').reverse().join('/')}`);
-    } else {
-      toast.success('Despesa criada', `${form.fornecedor_nome} · ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(form.valor_original)}`);
-    }
-    load();
   }
 
   // Estado do modal de confirmação de pagamento
@@ -256,26 +314,46 @@ export default function ContasPagarPage() {
   function abrirModalPagar(item: ContaPagar) {
     setPagarModal({
       item,
-      dataPagamento: new Date().toISOString().split('T')[0],
-      valorPago: item.valor_final,
+      dataPagamento: hojeISO(),
+      // default = saldo ainda devido (não o valor cheio), pra baixa de conta PARCIAL
+      valorPago: saldoDevedor(item),
       observacao: '',
     });
   }
 
   async function confirmarPagamento() {
-    if (!pagarModal) return;
+    if (!pagarModal || pagando) return;
     const { item, dataPagamento, valorPago, observacao } = pagarModal;
-    const updated: ContaPagar = {
-      ...item,
-      status: 'PAGO',
-      data_pagamento: dataPagamento,
-      valor_pago: valorPago,
-      observacoes: observacao ? `${item.observacoes ? item.observacoes + ' · ' : ''}${observacao}` : item.observacoes,
-    };
-    await updateEntity('contas-pagar', updated);
-    setPagarModal(null);
-    toast.success('Pagamento confirmado', `${item.fornecedor_nome} · ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorPago)}`);
-    load();
+    const pagoAgora = round2(num(valorPago));
+    if (pagoAgora <= 0) { toast.error('Valor pago deve ser maior que zero'); return; }
+
+    const devido = valorBRLDaConta(item);
+    // Baixa parcial ACUMULA sobre o que já foi pago antes — nunca substitui,
+    // senão o restante da dívida some do sistema.
+    const acumulado = round2(num(item.valor_pago) + pagoAgora);
+    const restante = round2(devido - acumulado);
+    const quitado = restante <= 0.005;
+
+    setPagando(true);
+    try {
+      const updated: ContaPagar = {
+        ...item,
+        status: quitado ? 'PAGO' : 'PARCIAL',
+        data_pagamento: dataPagamento,
+        valor_pago: acumulado,
+        observacoes: observacao ? `${item.observacoes ? item.observacoes + ' · ' : ''}${observacao}` : item.observacoes,
+      };
+      await updateEntity('contas-pagar', updated);
+      setPagarModal(null);
+      if (quitado) {
+        toast.success('Pagamento confirmado', `${item.fornecedor_nome} · ${BRL(pagoAgora)}`);
+      } else {
+        toast.success('Baixa parcial registrada', `${item.fornecedor_nome} · pago ${BRL(pagoAgora)} · saldo ${BRL(restante)}`);
+      }
+      load();
+    } finally {
+      setPagando(false);
+    }
   }
 
   async function handleDelete(id: string) {
@@ -288,94 +366,105 @@ export default function ContasPagarPage() {
 
   // Monthly copy workflow
   function openCopyModal() {
-    const now = new Date();
-    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const currentMonth = mesDe(hojeISO());
     setCopySourceMonth(currentMonth);
     setCopyTargetMonth(addMonth(currentMonth));
     setShowCopyModal(true);
   }
 
+  // Contas elegíveis para cópia do mês origem (manuais, recorrentes, não canceladas).
+  const itensCopiaveis = items.filter(
+    i => mesDe(i.data_vencimento) === copySourceMonth && podeCopiarParaOutroMes(i)
+  );
+
   async function handleCopyMonth() {
-    if (!copySourceMonth || !copyTargetMonth) return;
+    if (!copySourceMonth || !copyTargetMonth || copying) return;
     setCopying(true);
+    try {
+      const [anoDestino, mesDestino] = copyTargetMonth.split('-').map(Number);
 
-    // Get items from the source month (only recurring: FIXO or VARIAVEL natureza, not COMPRA_UNICA)
-    const sourceItems = items.filter(i => {
-      const itemMonth = i.data_vencimento?.substring(0, 7);
-      return itemMonth === copySourceMonth && i.natureza_custo !== 'COMPRA_UNICA';
-    });
+      for (const item of itensCopiaveis) {
+        // Mesmo dia no mês destino, com clamp: dia 31 em fevereiro vira 28/29
+        // (antes fabricava 2026-02-31, data inexistente que sumia dos filtros).
+        const dia = Number(item.data_vencimento.slice(8, 10)) || 1;
+        const newDueDate = dataSegura(anoDestino, mesDestino, dia);
+        const valorBrl = valorBRLDaConta(item);
 
-    for (const item of sourceItems) {
-      // Calculate new due date: same day, new month
-      const day = item.data_vencimento.substring(8, 10);
-      const newDueDate = `${copyTargetMonth}-${day}`;
+        const nova: ContaPagar = {
+          ...createContaPagar(),
+          origem: item.origem,
+          fornecedor_id: item.fornecedor_id,
+          fornecedor_nome: item.fornecedor_nome,
+          descricao: item.descricao,
+          categoria_id: item.categoria_id,
+          centro_custo: item.centro_custo,
+          valor_original: round2(num(item.valor_original)),
+          valor_final: valorBrl,
+          moeda: item.moeda,
+          cambio: item.cambio,
+          valor_brl: valorBrl,
+          data_vencimento: newDueDate,
+          forma_pagamento: item.forma_pagamento,
+          natureza_custo: item.natureza_custo,
+          is_custo_comercial: item.is_custo_comercial,
+          observacoes: `Copiado de ${getMonthLabel(copySourceMonth)}`,
+        };
+        await saveEntity('contas-pagar', nova);
+      }
 
-      const nova: ContaPagar = {
-        ...createContaPagar(),
-        origem: item.origem,
-        fornecedor_id: item.fornecedor_id,
-        fornecedor_nome: item.fornecedor_nome,
-        descricao: item.descricao,
-        categoria_id: item.categoria_id,
-        centro_custo: item.centro_custo,
-        valor_original: item.valor_original,
-        valor_final: item.valor_final,
-        moeda: item.moeda,
-        cambio: item.cambio,
-        valor_brl: item.valor_brl,
-        data_vencimento: newDueDate,
-        forma_pagamento: item.forma_pagamento,
-        natureza_custo: item.natureza_custo,
-        is_custo_comercial: item.is_custo_comercial,
-        observacoes: `Copiado de ${getMonthLabel(copySourceMonth)}`,
-      };
-      await saveEntity('contas-pagar', nova);
+      setShowCopyModal(false);
+      toast.success(
+        `${itensCopiaveis.length} despesa(s) copiada(s)`,
+        `${getMonthLabel(copySourceMonth)} → ${getMonthLabel(copyTargetMonth)}`
+      );
+      load();
+    } finally {
+      setCopying(false);
     }
-
-    setCopying(false);
-    setShowCopyModal(false);
-    load();
   }
 
   // Get unique months from data for the copy modal
-  const availableMonths = [...new Set(items.map(i => i.data_vencimento?.substring(0, 7)).filter(Boolean))].sort();
+  const availableMonths = [...new Set(items.map(i => mesDe(i.data_vencimento)).filter(Boolean))].sort();
 
   // Resolve período pré-definido em range concreto de datas (sobrescreve
   // filterDateFrom/To quando o usuário usa um atalho).
-  const today = new Date().toISOString().split('T')[0];
+  const hoje = hojeISO();
   const periodoRange = (() => {
-    const d = new Date();
-    const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const [ano, mes] = hoje.split('-').map(Number);
     if (filterPeriodo === 'MES_ATUAL') {
-      const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-      return { de: `${ym}-01`, ate: last.toISOString().split('T')[0] };
+      return { de: dataSegura(ano, mes, 1), ate: dataSegura(ano, mes, 31) };
     }
     if (filterPeriodo === 'PROX_30D') {
-      const fim = new Date(d); fim.setDate(fim.getDate() + 30);
-      return { de: today, ate: fim.toISOString().split('T')[0] };
+      return { de: hoje, ate: addDias(hoje, 30) };
     }
     if (filterPeriodo === 'PROX_90D') {
-      const fim = new Date(d); fim.setDate(fim.getDate() + 90);
-      return { de: today, ate: fim.toISOString().split('T')[0] };
+      return { de: hoje, ate: addDias(hoje, 90) };
     }
     if (filterPeriodo === 'VENCIDOS') {
-      return { de: '', ate: today, somentePendente: true };
+      // Vencido é DATA (vencimento < hoje) em conta aberta, não o status literal.
+      return { de: '', ate: '', somenteVencidos: true };
     }
     if (filterPeriodo === 'MES_PASSADO') {
-      const ini = new Date(d.getFullYear(), d.getMonth() - 1, 1);
-      const fim = new Date(d.getFullYear(), d.getMonth(), 0);
-      return { de: ini.toISOString().split('T')[0], ate: fim.toISOString().split('T')[0] };
+      const ini = addMeses(dataSegura(ano, mes, 1), -1);
+      const [anoP, mesP] = ini.split('-').map(Number);
+      return { de: ini, ate: dataSegura(anoP, mesP, 31) };
     }
     if (filterPeriodo === 'CUSTOM') return { de: filterDateFrom, ate: filterDateTo };
     return { de: '', ate: '' };
-  })() as { de: string; ate: string; somentePendente?: boolean };
+  })() as { de: string; ate: string; somenteVencidos?: boolean };
 
   // Aplica TODOS os filtros menos status — usado pelos KPIs (que somam
   // por status). A tabela aplica também o filterStatus por cima.
   const filteredBase = items.filter(i => {
-    if (periodoRange.de && i.data_vencimento < periodoRange.de) return false;
-    if (periodoRange.ate && i.data_vencimento > periodoRange.ate) return false;
-    if (periodoRange.somentePendente && i.status !== 'PENDENTE' && i.status !== 'VENCIDO') return false;
+    if (periodoRange.de || periodoRange.ate) {
+      const dentro = dentroDoPeriodo(
+        i.data_vencimento,
+        periodoRange.de || '0000-01-01',
+        periodoRange.ate || '9999-12-31',
+      );
+      if (!dentro) return false;
+    }
+    if (periodoRange.somenteVencidos && !ehVencidoEmAberto(i, hoje)) return false;
     if (filterCategoria !== 'TODAS' && i.categoria_id !== filterCategoria) return false;
     if (filterBusca) {
       const q = filterBusca.toLowerCase();
@@ -386,16 +475,31 @@ export default function ContasPagarPage() {
     return true;
   });
 
-  const filtered = filteredBase.filter(i =>
-    filterStatus === 'TODOS' ? true : i.status === filterStatus
-  );
+  const filtered = filteredBase.filter(i => {
+    if (filterStatus === 'TODOS') return true;
+    if (filterStatus === 'ABERTO') return i.status === 'PENDENTE' || i.status === 'PARCIAL';
+    return i.status === filterStatus;
+  });
 
   // KPIs RESPEITAM o filtro do período/categoria/busca — só não filtram
-  // por status (cada KPI corresponde a um status).
-  const totalPendente = filteredBase.filter(i => i.status === 'PENDENTE').reduce((s, i) => s + i.valor_final, 0);
-  const totalPago = filteredBase.filter(i => i.status === 'PAGO').reduce((s, i) => s + (i.valor_pago ?? i.valor_final), 0);
-  const totalVencido = filteredBase.filter(i => i.status === 'VENCIDO' || (i.status === 'PENDENTE' && i.data_vencimento < today)).reduce((s, i) => s + i.valor_final, 0);
-  const totalComercial = filteredBase.filter(i => i.is_custo_comercial && (i.status === 'PAGO' || i.status === 'PENDENTE')).reduce((s, i) => s + i.valor_final, 0);
+  // por status (cada KPI corresponde a um status). Tudo em BRL e por somaPor.
+  // Conta PARCIAL entra na pendência pelo SALDO (valor devido - já pago).
+  const totalPendente = somaPor(
+    filteredBase.filter(i => i.status === 'PENDENTE' || i.status === 'PARCIAL'),
+    saldoDevedor,
+  );
+  // Pago = contas quitadas (o card filtra por esse mesmo status, então o total
+  // tem que bater com a lista). O que já foi pago numa conta PARCIAL aparece
+  // como abatimento no card Pendente.
+  const totalPago = somaPor(
+    filteredBase.filter(i => i.status === 'PAGO'),
+    i => (i.valor_pago !== null && i.valor_pago !== undefined ? num(i.valor_pago) : valorBRLDaConta(i)),
+  );
+  const totalVencido = somaPor(filteredBase.filter(i => ehVencidoEmAberto(i, hoje)), saldoDevedor);
+  const totalComercial = somaPor(
+    filteredBase.filter(i => i.is_custo_comercial && i.status !== 'CANCELADO'),
+    valorBRLDaConta,
+  );
 
   const filtrosAtivos =
     (filterPeriodo !== 'MES_ATUAL' ? 1 : 0) +
@@ -458,8 +562,22 @@ export default function ContasPagarPage() {
       header: 'Valor',
       align: 'right',
       sortable: true,
-      sortAccessor: i => i.valor_final,
-      cell: i => <span className="font-mono text-[var(--t-text)]">{BRL(i.valor_final)}</span>,
+      sortAccessor: i => valorBRLDaConta(i),
+      cell: i => (
+        <div className="flex flex-col items-end">
+          <span className="font-mono text-[var(--t-text)]">{BRL(valorBRLDaConta(i))}</span>
+          {i.moeda !== 'BRL' && (
+            <span className="text-[10px] text-[var(--t-text-muted)]">
+              {i.moeda} {num(i.valor_original).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </span>
+          )}
+          {i.status === 'PARCIAL' && (
+            <span className="text-[10px] text-[var(--t-blue)]">
+              pago {BRL(num(i.valor_pago))} · saldo {BRL(saldoDevedor(i))}
+            </span>
+          )}
+        </div>
+      ),
     },
     {
       key: 'natureza',
@@ -480,7 +598,7 @@ export default function ContasPagarPage() {
       sortAccessor: i => i.data_vencimento || '',
       cell: i => (
         <span className="text-[var(--t-text-secondary)]">
-          {i.data_vencimento ? new Date(i.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
+          {dataLocal(i.data_vencimento)?.toLocaleDateString('pt-BR') ?? '—'}
         </span>
       ),
     },
@@ -555,12 +673,18 @@ export default function ContasPagarPage() {
         {/* Summary Cards — clicáveis, refletem o período/filtros ativos */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
-            { key: 'PENDENTE' as const, label: 'Pendente', icon: Clock, color: 'text-[var(--t-amber)]', value: totalPendente, hint: 'Ainda não pago', explainer: 'Despesas cadastradas mas ainda não quitadas. Clique no card para filtrar a lista.' },
-            { key: 'PAGO' as const, label: 'Pago', icon: TrendingDown, color: 'text-[var(--t-green)]', value: totalPago, hint: 'Já quitado', explainer: 'Despesas já pagas neste período. Saídas reais do caixa.' },
-            { key: 'VENCIDO' as const, label: 'Vencido', icon: AlertCircle, color: 'text-[var(--t-red)]', value: totalVencido, hint: 'Pendente após o vencimento', explainer: 'Despesas pendentes com vencimento anterior a hoje. Resolva o quanto antes para evitar juros/multa.' },
+            { key: 'PENDENTE' as const, label: 'Pendente', icon: Clock, color: 'text-[var(--t-amber)]', value: totalPendente, hint: 'Saldo ainda em aberto', explainer: 'Saldo devedor das despesas ainda não quitadas — inclui o que falta das contas com baixa parcial. Clique no card para filtrar a lista.' },
+            { key: 'PAGO' as const, label: 'Pago', icon: TrendingDown, color: 'text-[var(--t-green)]', value: totalPago, hint: 'Já quitado', explainer: 'Despesas já quitadas neste período. Saídas reais do caixa.' },
+            { key: 'VENCIDO' as const, label: 'Vencido', icon: AlertCircle, color: 'text-[var(--t-red)]', value: totalVencido, hint: 'Em aberto após o vencimento', explainer: 'Despesas em aberto (pendentes ou parciais) com vencimento anterior a hoje. Clique para filtrar por data de vencimento.' },
             { key: 'COMERCIAL' as const, label: 'Custo Comercial', icon: Target, color: 'text-[var(--t-blue)]', value: totalComercial, hint: 'Marketing, CAC', explainer: 'Despesas relacionadas a marketing, anúncios e aquisição de clientes (CAC). Categoria 2.6 do plano de contas.' },
           ].map(card => {
-            const ativo = (card.key === 'PENDENTE' || card.key === 'PAGO' || card.key === 'VENCIDO') && filterStatus === card.key;
+            // O card Vencido não filtra por status literal (VENCIDO nunca é
+            // atribuído) — ele liga o filtro por DATA de vencimento.
+            const ativo =
+              card.key === 'PENDENTE' ? filterStatus === 'ABERTO'
+              : card.key === 'PAGO' ? filterStatus === 'PAGO'
+              : card.key === 'VENCIDO' ? filterPeriodo === 'VENCIDOS'
+              : false;
             const Icon = card.icon;
             return (
               <button
@@ -568,7 +692,13 @@ export default function ContasPagarPage() {
                 type="button"
                 onClick={() => {
                   if (card.key === 'COMERCIAL') return;
-                  setFilterStatus(filterStatus === card.key ? 'TODOS' : card.key);
+                  if (card.key === 'VENCIDO') {
+                    setFilterStatus('TODOS');
+                    setFilterPeriodo(filterPeriodo === 'VENCIDOS' ? 'MES_ATUAL' : 'VENCIDOS');
+                    return;
+                  }
+                  const alvo = card.key === 'PENDENTE' ? 'ABERTO' : 'PAGO';
+                  setFilterStatus(filterStatus === alvo ? 'TODOS' : alvo);
                 }}
                 disabled={card.key === 'COMERCIAL'}
                 className={`text-left rounded-[var(--t-card-radius)] bg-[var(--t-surface)] p-4 border transition-all ${
@@ -606,7 +736,9 @@ export default function ContasPagarPage() {
             </CardHeader>
             <CardContent>
               <p className="text-[var(--t-text-secondary)] text-sm mb-4">
-                Copia todas as despesas fixas e variáveis de um mês para o seguinte (ignora compras únicas). Os valores são mantidos e o status volta para PENDENTE.
+                Copia as despesas fixas e variáveis lançadas manualmente de um mês para o seguinte.
+                Ignora compras únicas, contas canceladas e custos gerados automaticamente por vendas/grupos
+                (esses nascem da própria venda). Os valores são mantidos e o status volta para PENDENTE.
               </p>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -636,7 +768,7 @@ export default function ContasPagarPage() {
               </div>
               {copySourceMonth && (
                 <p className="text-xs text-[var(--t-text-muted)] mt-2">
-                  {items.filter(i => i.data_vencimento?.substring(0, 7) === copySourceMonth && i.natureza_custo !== 'COMPRA_UNICA').length} despesas serão copiadas
+                  {itensCopiaveis.length} despesas serão copiadas · {BRL(somaPor(itensCopiaveis, valorBRLDaConta))}
                 </p>
               )}
               <div className="flex gap-2 mt-4">
@@ -890,15 +1022,17 @@ export default function ContasPagarPage() {
 
               {form.moeda !== 'BRL' && (
                 <p className="text-sm text-[var(--t-text-secondary)] mt-2">
-                  Valor BRL: <span className="text-[var(--t-text)] font-semibold">{BRL(form.valor_original * form.cambio)}</span>
+                  Valor BRL: <span className="text-[var(--t-text)] font-semibold">{BRL(paraBRL(form.valor_original, form.moeda, form.cambio))}</span>
+                  <span className="text-[var(--t-text-muted)]"> · a conta é registrada em reais, mantendo {form.moeda} {num(form.valor_original).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} como valor original</span>
                 </p>
               )}
               <div className="flex gap-2 mt-4">
                 <Button
                   onClick={handleSave}
-                  className="bg-[var(--t-green)] hover:brightness-110 text-white dark:text-[#0a0a14] font-semibold"
+                  disabled={saving}
+                  className="bg-[var(--t-green)] hover:brightness-110 text-white dark:text-[#0a0a14] font-semibold disabled:opacity-60"
                 >
-                  <Check className="w-4 h-4 mr-1" /> {editId ? 'Salvar' : 'Criar'}
+                  <Check className="w-4 h-4 mr-1" /> {saving ? 'Salvando...' : editId ? 'Salvar' : 'Criar'}
                 </Button>
                 <Button
                   variant="outline"
@@ -1059,6 +1193,19 @@ export default function ContasPagarPage() {
                 <p className="text-[10px] uppercase text-[var(--t-text-muted)] tracking-wide">Despesa</p>
                 <p className="text-sm font-medium text-[var(--t-text)]">{pagarModal.item.fornecedor_nome}</p>
                 <p className="text-xs text-[var(--t-text-muted)] mt-0.5">{pagarModal.item.descricao}</p>
+                <div className="mt-2 pt-2 border-t border-[var(--t-border)] flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                  <span className="text-[var(--t-text-secondary)]">
+                    Valor: <span className="font-mono text-[var(--t-text)]">{BRL(valorBRLDaConta(pagarModal.item))}</span>
+                  </span>
+                  {num(pagarModal.item.valor_pago) > 0 && (
+                    <span className="text-[var(--t-text-secondary)]">
+                      Já pago: <span className="font-mono text-[var(--t-green)]">{BRL(num(pagarModal.item.valor_pago))}</span>
+                    </span>
+                  )}
+                  <span className="text-[var(--t-text-secondary)]">
+                    Saldo devedor: <span className="font-mono text-[var(--t-amber)]">{BRL(saldoDevedor(pagarModal.item))}</span>
+                  </span>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1091,14 +1238,25 @@ export default function ContasPagarPage() {
                   className="bg-[var(--t-input-bg)]"
                 />
               </div>
+              {/* Baixa parcial: mostra o que continua devendo em vez de sumir com a dívida */}
+              {round2(num(pagarModal.valorPago)) > 0 && round2(saldoDevedor(pagarModal.item) - round2(num(pagarModal.valorPago))) > 0.005 && (
+                <p className="text-[11px] text-[var(--t-blue)] bg-[var(--t-blue-bg)] rounded px-2 py-1.5">
+                  Baixa parcial: a conta fica com status PARCIAL e saldo devedor de{' '}
+                  <strong>{BRL(round2(saldoDevedor(pagarModal.item) - round2(num(pagarModal.valorPago))))}</strong>.
+                </p>
+              )}
               <p className="text-[11px] text-[var(--t-text-muted)]">
                 O saldo da Caixa Geral será atualizado automaticamente após confirmar.
               </p>
             </div>
             <div className="px-5 py-3 border-t border-[var(--t-border)] flex justify-end gap-2">
               <Button variant="outline" onClick={() => setPagarModal(null)}>Cancelar</Button>
-              <Button onClick={confirmarPagamento} className="bg-[var(--t-green)] hover:brightness-110 text-white dark:text-[#0a0a14]">
-                <Check className="w-4 h-4 mr-1" /> Confirmar pagamento
+              <Button
+                onClick={confirmarPagamento}
+                disabled={pagando}
+                className="bg-[var(--t-green)] hover:brightness-110 text-white dark:text-[#0a0a14] disabled:opacity-60"
+              >
+                <Check className="w-4 h-4 mr-1" /> {pagando ? 'Confirmando...' : 'Confirmar pagamento'}
               </Button>
             </div>
           </div>

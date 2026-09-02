@@ -1,4 +1,10 @@
 import type { CartaoCorporativo, ContaPagar, BandeiraCartao } from './crm-types';
+import { addDias, dataLocal, dataSegura, dentroDoPeriodo, paraISO, somaPor } from './money';
+
+/** Data civil -> Date ancorado ao meio-dia. Entrada sempre válida aqui. */
+function comoDate(iso: string): Date {
+  return dataLocal(iso) ?? new Date();
+}
 
 /**
  * Soma das despesas vinculadas a um cartão — representa o limite consumido.
@@ -11,17 +17,26 @@ import type { CartaoCorporativo, ContaPagar, BandeiraCartao } from './crm-types'
  * consistente com como cartões funcionam na prática.
  */
 export function calcLimiteUsado(cartaoId: string, contas: ContaPagar[]): number {
-  return contas
-    .filter(c => c.cartao_id === cartaoId && c.status !== 'CANCELADO')
-    .reduce((sum, c) => sum + (c.valor_final || 0), 0);
+  return somaPor(
+    contas.filter(c => c.cartao_id === cartaoId && c.status !== 'CANCELADO'),
+    c => c.valor_final,
+  );
 }
 
 /**
- * Trata o caso "dia 31 em mês de 30 dias" → cap no último dia do mês.
+ * Próximo dia X a partir da data ref, comparando por DATA CIVIL — no próprio
+ * dia do fechamento a resposta é hoje, não o mês seguinte (comparar Date com
+ * hora contra meia-noite empurrava o dia corrente pro mês que vem).
+ * Dia inexistente no mês (31 em mês de 30) cai no último dia.
  */
-function clampDayToMonth(year: number, month: number, day: number): Date {
-  const lastDay = new Date(year, month + 1, 0).getDate();
-  return new Date(year, month, Math.min(day, lastDay));
+function proximoDiaDoMes(dia: number, ref: Date): Date {
+  const refISO = paraISO(ref);
+  const candidato = dataSegura(ref.getFullYear(), ref.getMonth() + 1, dia);
+  if (candidato >= refISO) return comoDate(candidato);
+  const proxMes = ref.getMonth() + 2;
+  const ano = proxMes > 12 ? ref.getFullYear() + 1 : ref.getFullYear();
+  const mes = proxMes > 12 ? proxMes - 12 : proxMes;
+  return comoDate(dataSegura(ano, mes, dia));
 }
 
 /**
@@ -30,11 +45,7 @@ function clampDayToMonth(year: number, month: number, day: number): Date {
  */
 export function calcProximoFechamento(diaFechamento: number, ref: Date = new Date()): Date {
   if (!diaFechamento || diaFechamento < 1) return ref;
-  const candidato = clampDayToMonth(ref.getFullYear(), ref.getMonth(), diaFechamento);
-  if (candidato.getTime() < ref.getTime()) {
-    return clampDayToMonth(ref.getFullYear(), ref.getMonth() + 1, diaFechamento);
-  }
-  return candidato;
+  return proximoDiaDoMes(diaFechamento, ref);
 }
 
 /**
@@ -42,11 +53,7 @@ export function calcProximoFechamento(diaFechamento: number, ref: Date = new Dat
  */
 export function calcProximoVencimento(diaVencimento: number, ref: Date = new Date()): Date {
   if (!diaVencimento || diaVencimento < 1) return ref;
-  const candidato = clampDayToMonth(ref.getFullYear(), ref.getMonth(), diaVencimento);
-  if (candidato.getTime() < ref.getTime()) {
-    return clampDayToMonth(ref.getFullYear(), ref.getMonth() + 1, diaVencimento);
-  }
-  return candidato;
+  return proximoDiaDoMes(diaVencimento, ref);
 }
 
 /**
@@ -60,24 +67,26 @@ export function calcFaturaPeriodo(
   mes: string
 ): { inicio: Date; fim: Date; total: number; lancamentos: ContaPagar[] } {
   const [ano, mesNum] = mes.split('-').map(Number);
-  const refMesAtual = new Date(ano, mesNum - 1, 1);
-  const refMesAnterior = new Date(ano, mesNum - 2, 1);
+  const diaFechamento = cartao.dia_fechamento || 31;
 
-  const fim = clampDayToMonth(refMesAtual.getFullYear(), refMesAtual.getMonth(), cartao.dia_fechamento || 31);
-  const inicioBruto = clampDayToMonth(refMesAnterior.getFullYear(), refMesAnterior.getMonth(), cartao.dia_fechamento || 31);
+  // Datas civis (string) o tempo todo: `new Date('YYYY-MM-DD')` parseia como UTC
+  // e no BRT volta um dia — o lançamento do dia seguinte ao fechamento sumia de
+  // TODAS as faturas.
+  const fimISO = dataSegura(ano, mesNum, diaFechamento);
+  const anteriorAno = mesNum === 1 ? ano - 1 : ano;
+  const anteriorMes = mesNum === 1 ? 12 : mesNum - 1;
   // inicio é o dia SEGUINTE ao fechamento anterior
-  const inicio = new Date(inicioBruto.getTime() + 24 * 60 * 60 * 1000);
+  const inicioISO = addDias(dataSegura(anteriorAno, anteriorMes, diaFechamento), 1);
 
   const lancamentos = contas.filter(c => {
     if (c.cartao_id !== cartao.id) return false;
     const ref = c.data_pagamento || c.data_vencimento;
-    if (!ref) return false;
-    const refDate = new Date(ref);
-    return refDate >= inicio && refDate <= fim;
+    return dentroDoPeriodo(ref, inicioISO, fimISO);
   });
 
-  const total = lancamentos.reduce((sum, c) => sum + (c.valor_final || 0), 0);
-  return { inicio, fim, total, lancamentos };
+  const total = somaPor(lancamentos, c => c.valor_final);
+  // inicio/fim seguem como Date para a UI que já formata assim
+  return { inicio: comoDate(inicioISO), fim: comoDate(fimISO), total, lancamentos };
 }
 
 /**

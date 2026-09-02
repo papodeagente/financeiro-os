@@ -1,14 +1,21 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { ComissaoVenda, VendaCRM, Membro, PlanoComissao, StatusComissao } from '@/lib/crm-types';
+import {
+  ComissaoVenda, VendaCRM, Membro, PlanoComissao, StatusComissao,
+  ContaReceber, ContaPagar, ItemVendaData, PlanoContas, ProdutoVenda,
+  createContaPagar,
+} from '@/lib/crm-types';
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
+import {
+  round2, num, somaPor, percentual, divSegura, paraBRL, hojeISO, dataLocal, mesDe,
+} from '@/lib/money';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   Calculator, Check, DollarSign, RefreshCw, Clock, CheckCircle2,
-  Banknote, Trash2,
+  Banknote, Trash2, AlertTriangle,
 } from 'lucide-react';
 
 const BRL = (v: number) =>
@@ -21,8 +28,27 @@ const STATUS_BADGE: Record<StatusComissao, string> = {
   CANCELADA: 'bg-[var(--t-surface)] text-[var(--t-text-muted)]',
 };
 
-function generateId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
+/** Id determinístico da comissão: 1 comissão por (venda, vendedor).
+ *  O POST do CRUD é upsert por id, então recalcular nunca duplica. */
+function comissaoId(vendaId: string, vendedorId: string): string {
+  return `comissao-${vendaId}-${vendedorId}`;
+}
+
+/** Id determinístico da conta a pagar gerada quando a comissão é paga. */
+function contaPagarComissaoId(comissao: ComissaoVenda): string {
+  return `pagar-${comissao.id}`;
+}
+
+/** Valor de venda do produto convertido para BRL (moeda estrangeira x câmbio). */
+function valorVendaBRL(p: ProdutoVenda): number {
+  return paraBRL(p.valor_venda, p.moeda, p.cambio);
+}
+
+/** Pendência de configuração/consistência que impede (ou invalida) o cálculo. */
+interface PendenciaComissao {
+  id: string;
+  venda: string;
+  motivo: string;
 }
 
 export default function ComissoesPage() {
@@ -30,97 +56,168 @@ export default function ComissoesPage() {
   const [vendas, setVendas] = useState<VendaCRM[]>([]);
   const [membros, setMembros] = useState<Membro[]>([]);
   const [planos, setPlanos] = useState<PlanoComissao[]>([]);
+  const [planoContas, setPlanoContas] = useState<PlanoContas[]>([]);
+  const [pendencias, setPendencias] = useState<PendenciaComissao[]>([]);
   const [loading, setLoading] = useState(true);
   const [calculating, setCalculating] = useState(false);
   const [filterStatus, setFilterStatus] = useState<StatusComissao | 'TODOS'>('TODOS');
   const [filterVendedor, setFilterVendedor] = useState('');
-  const [filterMonth, setFilterMonth] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  });
+  const [filterMonth, setFilterMonth] = useState(() => mesDe(hojeISO()));
 
   async function load() {
     setLoading(true);
-    const [c, v, m, p] = await Promise.all([
+    const [c, v, m, p, pc] = await Promise.all([
       loadEntities<ComissaoVenda>('comissoes'),
       loadEntities<VendaCRM>('vendas-crm'),
       loadEntities<Membro>('membros'),
       loadEntities<PlanoComissao>('planos-comissao'),
+      loadEntities<PlanoContas>('plano-contas'),
     ]);
     setComissoes(c);
     setVendas(v);
     setMembros(m);
     setPlanos(p);
+    setPlanoContas(pc);
     setLoading(false);
   }
 
   useEffect(() => { load(); }, []);
 
-  // Calculate commissions for all uncalculated sales
+  // ============================================================
+  // CÁLCULO DA COMISSÃO
+  // ============================================================
+  //
+  // Regras de negócio (todas quebradas antes desta versão):
+  //  • A comissão SEGUE a venda: venda cancelada/removida cancela a comissão
+  //    ainda não paga, e mudança de valor recalcula (ou sinaliza, se já
+  //    aprovada/paga).
+  //  • Vendedor sem plano de comissão NÃO gera comissão — vira pendência
+  //    visível, nunca cai num plano alheio.
+  //  • A base COMISSAO_FORNECEDOR é dinheiro, não percentual.
+  //  • Percentual por produto é PONDERADO pelo valor de cada produto.
+  //  • Id determinístico: recalcular é idempotente (upsert por id).
+
+  /** Base em R$ das comissões de fornecedor da venda.
+   *  Ordem: percentual por produto → contas a receber de comissão →
+   *  itens_venda (comissao_valor já apurado na geração financeira). */
+  async function baseComissaoFornecedor(
+    venda: VendaCRM,
+    comissoesPorVenda: Map<string, number>,
+    cacheItens: Map<string, ItemVendaData[]>,
+  ): Promise<number> {
+    const produtos = venda.produtos ?? [];
+    // comissao_fornecedor é PERCENTUAL do valor de venda do produto.
+    const porProduto = somaPor(produtos, p => percentual(valorVendaBRL(p), p.comissao_fornecedor));
+    if (porProduto > 0) return porProduto;
+
+    const porConta = comissoesPorVenda.get(venda.id) ?? 0;
+    if (porConta > 0) return porConta;
+
+    let itens = cacheItens.get(venda.id);
+    if (!itens) {
+      itens = await loadEntities<ItemVendaData>(`itens-venda?venda_id=${encodeURIComponent(venda.id)}`);
+      cacheItens.set(venda.id, itens);
+    }
+    return somaPor(itens, i => i.comissao_valor);
+  }
+
+  /** Valor base do plano para a venda, ou o motivo de não haver base confiável. */
+  async function calcularValorBase(
+    venda: VendaCRM,
+    plano: PlanoComissao,
+    comissoesPorVenda: Map<string, number>,
+    cacheItens: Map<string, ItemVendaData[]>,
+  ): Promise<{ valor: number } | { erro: string }> {
+    const valorFinal = num(venda.valor_final);
+    const custo = num(venda.valor_total_custo);
+
+    if (plano.base_calculo === 'VALOR_VENDA') return { valor: round2(valorFinal) };
+
+    if (plano.base_calculo === 'COMISSAO_FORNECEDOR') {
+      const base = await baseComissaoFornecedor(venda, comissoesPorVenda, cacheItens);
+      if (base <= 0) return { erro: 'venda sem comissão de fornecedor apurada (produtos, contas a receber e itens zerados)' };
+      return { valor: base };
+    }
+
+    // RECEITA_AGENCIA / MARKUP / LUCRO = o que sobra pra agência.
+    // Com custo preenchido, é valor final - custo. Sem custo (ex.: venda
+    // nascida de proposta pública), a única base confiável é a comissão de
+    // fornecedor — somar o bruto pagaria comissão sobre faturamento.
+    if (custo > 0) return { valor: Math.max(round2(valorFinal - custo), 0) };
+
+    const porComissao = await baseComissaoFornecedor(venda, comissoesPorVenda, cacheItens);
+    if (porComissao > 0) return { valor: porComissao };
+
+    return { erro: 'venda sem custo de fornecedor e sem comissão apurada — base viraria o faturamento bruto' };
+  }
+
+  /** Percentual do plano ponderado pelo valor de cada produto + faixas. */
+  function calcularPercentual(venda: VendaCRM, plano: PlanoComissao, valorBase: number): number {
+    let pct = num(plano.percentual_padrao);
+
+    const produtos = venda.produtos ?? [];
+    if (plano.regras_produto.length > 0 && produtos.length > 0) {
+      const totalProdutos = somaPor(produtos, valorVendaBRL);
+      if (totalProdutos > 0) {
+        // Ponderação pelo valor: produto sem regra usa o percentual padrão.
+        const comissaoPonderada = somaPor(produtos, p => {
+          const regra = plano.regras_produto.find(r => r.tipo_produto === p.tipo);
+          return percentual(valorVendaBRL(p), regra ? num(regra.percentual) : num(plano.percentual_padrao));
+        });
+        pct = round2(divSegura(comissaoPonderada, totalProdutos) * 100);
+      }
+    }
+
+    if (plano.faixas.length > 0) {
+      const faixa = plano.faixas.find(f => valorBase >= num(f.de) && (num(f.ate) === 0 || valorBase <= num(f.ate)));
+      if (faixa) pct = num(faixa.percentual);
+    }
+
+    return pct;
+  }
+
+  // Recalcula todas as comissões: reconcilia as existentes com a venda e
+  // gera as que faltam.
   async function handleCalcular() {
     setCalculating(true);
-    const existingVendaIds = new Set(comissoes.map(c => c.venda_id));
+    const pend: PendenciaComissao[] = [];
 
-    // Sales that are confirmed/completed and don't have commissions yet
-    const vendasPendentes = vendas.filter(v =>
-      !existingVendaIds.has(v.id) &&
-      (v.status === 'CONFIRMADO' || v.status === 'CONCLUIDO') &&
-      v.vendedor_id
-    );
+    // Contas a receber de comissão de fornecedor: fallback de base quando a
+    // venda não detalha percentual por produto.
+    const receber = await loadEntities<ContaReceber>('contas-receber');
+    const comissoesPorVenda = new Map<string, number>();
+    for (const r of receber) {
+      if (r.origem !== 'COMISSAO_FORNECEDOR' || !r.venda_id || r.status === 'CANCELADO') continue;
+      comissoesPorVenda.set(r.venda_id, round2((comissoesPorVenda.get(r.venda_id) ?? 0) + num(r.valor_final)));
+    }
+    const cacheItens = new Map<string, ItemVendaData[]>();
+    const vendasById = new Map(vendas.map(v => [v.id, v]));
+    const hoje = hojeISO();
 
-    for (const venda of vendasPendentes) {
+    /** Monta o registro da comissão, ou devolve o motivo da pendência. */
+    async function montar(venda: VendaCRM, anterior?: ComissaoVenda): Promise<ComissaoVenda | { erro: string }> {
       const vendedor = membros.find(m => m.id === venda.vendedor_id);
-      if (!vendedor) continue;
+      if (!vendedor) return { erro: 'vendedor da venda não encontrado no cadastro de membros' };
 
-      // Find the vendedor's commission plan
-      const plano = planos.find(p => p.id === vendedor.plano_comissao_id && p.ativo)
-        || planos.find(p => p.ativo); // fallback to first active plan
-      if (!plano) continue;
-
-      // Calculate base value
-      let valorBase = 0;
-      switch (plano.base_calculo) {
-        case 'RECEITA_AGENCIA':
-          // Receita da agencia = comissao = valor venda - custo fornecedores
-          // Esta e a receita real da agencia (intermediaria)
-          valorBase = venda.valor_final - venda.valor_total_custo;
-          break;
-        case 'MARKUP':
-          valorBase = venda.valor_final - venda.valor_total_custo;
-          break;
-        case 'VALOR_VENDA':
-          valorBase = venda.valor_final;
-          break;
-        case 'COMISSAO_FORNECEDOR':
-          valorBase = venda.produtos?.reduce((s, p) => s + p.comissao_fornecedor, 0) || 0;
-          break;
-        case 'LUCRO':
-          valorBase = venda.valor_final - venda.valor_total_custo;
-          break;
+      // Sem plano vinculado NÃO gera comissão — cair no "plano ativo mais
+      // recente" pagava percentual de outra regra sem ninguém perceber.
+      const plano = planos.find(p => p.id === vendedor.plano_comissao_id && p.ativo);
+      if (!plano) {
+        return {
+          erro: vendedor.plano_comissao_id
+            ? `plano de comissão do vendedor ${vendedor.nome} não existe ou está inativo`
+            : `vendedor ${vendedor.nome} está sem plano de comissão vinculado`,
+        };
       }
 
-      // Determine percentage
-      let percentual = plano.percentual_padrao;
+      const base = await calcularValorBase(venda, plano, comissoesPorVenda, cacheItens);
+      if ('erro' in base) return base;
 
-      // Check product-specific rules (average across products)
-      if (plano.regras_produto.length > 0 && venda.produtos?.length > 0) {
-        const prodPercentuais = venda.produtos.map(prod => {
-          const regra = plano.regras_produto.find(r => r.tipo_produto === prod.tipo);
-          return regra ? regra.percentual : plano.percentual_padrao;
-        });
-        percentual = prodPercentuais.reduce((s, p) => s + p, 0) / prodPercentuais.length;
-      }
+      const pct = calcularPercentual(venda, plano, base.valor);
 
-      // Check progressive tiers
-      if (plano.faixas.length > 0) {
-        const faixa = plano.faixas.find(f => valorBase >= f.de && (f.ate === 0 || valorBase <= f.ate));
-        if (faixa) percentual = faixa.percentual;
-      }
-
-      const valorComissao = valorBase * (percentual / 100);
-
-      const comissao: ComissaoVenda = {
-        id: generateId(),
+      return {
+        ...(anterior ?? {}),
+        id: anterior?.id ?? comissaoId(venda.id, venda.vendedor_id),
         venda_id: venda.id,
         venda_numero: venda.numero,
         vendedor_id: venda.vendedor_id,
@@ -128,29 +225,139 @@ export default function ComissoesPage() {
         plano_comissao_id: plano.id,
         plano_nome: plano.nome,
         data_venda: venda.data_venda,
-        valor_base: valorBase,
-        percentual_aplicado: percentual,
-        valor_comissao: valorComissao,
-        status: 'CALCULADA',
-        data_aprovacao: null,
-        data_pagamento: null,
-        observacoes: '',
+        valor_base: round2(base.valor),
+        percentual_aplicado: pct,
+        valor_comissao: percentual(base.valor, pct),
+        status: anterior?.status ?? 'CALCULADA',
+        data_aprovacao: anterior?.data_aprovacao ?? null,
+        data_pagamento: anterior?.data_pagamento ?? null,
+        observacoes: anterior?.observacoes ?? '',
       };
-
-      await saveEntity('comissoes', comissao);
     }
 
+    // ---- 1) Reconciliação das comissões existentes ----
+    for (const c of comissoes) {
+      if (c.status === 'CANCELADA') continue;  // cancelada não trava recálculo
+      const venda = vendasById.get(c.venda_id);
+
+      if (!venda || venda.status === 'CANCELADO') {
+        const motivo = venda ? 'venda cancelada' : 'venda removida';
+        if (c.status === 'PAGA') {
+          pend.push({ id: c.id, venda: c.venda_numero, motivo: `${motivo} com comissão JÁ PAGA — estornar manualmente` });
+        } else {
+          await updateEntity('comissoes', {
+            ...c, status: 'CANCELADA',
+            observacoes: `${c.observacoes ? c.observacoes + ' | ' : ''}Cancelada automaticamente em ${hoje}: ${motivo}.`,
+          });
+        }
+        continue;
+      }
+
+      const nova = await montar(venda, c);
+      if ('erro' in nova) {
+        pend.push({ id: c.id, venda: c.venda_numero, motivo: nova.erro });
+        continue;
+      }
+
+      const divergiu = nova.valor_base !== round2(num(c.valor_base))
+        || nova.valor_comissao !== round2(num(c.valor_comissao));
+      if (!divergiu) continue;
+
+      if (c.status === 'CALCULADA') {
+        // Ainda não aprovada: recalcula em cima da venda atual.
+        await updateEntity('comissoes', {
+          ...nova,
+          observacoes: `${c.observacoes ? c.observacoes + ' | ' : ''}Recalculada em ${hoje} (base ${BRL(num(c.valor_base))} → ${BRL(nova.valor_base)}).`,
+        });
+      } else {
+        // Já aprovada/paga: não altera valor sem decisão humana, só sinaliza.
+        pend.push({
+          id: c.id, venda: c.venda_numero,
+          motivo: `venda mudou de valor — base gravada ${BRL(num(c.valor_base))} × base atual ${BRL(nova.valor_base)} (comissão ${c.status} mantida)`,
+        });
+      }
+    }
+
+    // ---- 2) Vendas elegíveis ainda sem comissão viva ----
+    const jaTemComissao = new Set(
+      comissoes.filter(c => c.status !== 'CANCELADA').map(c => `${c.venda_id}::${c.vendedor_id}`)
+    );
+    const vendasPendentes = vendas.filter(v =>
+      (v.status === 'CONFIRMADO' || v.status === 'CONCLUIDO') &&
+      v.vendedor_id &&
+      !jaTemComissao.has(`${v.id}::${v.vendedor_id}`)
+    );
+
+    for (const venda of vendasPendentes) {
+      const nova = await montar(venda);
+      if ('erro' in nova) {
+        pend.push({ id: venda.id, venda: venda.numero, motivo: nova.erro });
+        continue;
+      }
+      await saveEntity('comissoes', nova);
+    }
+
+    setPendencias(pend);
     setCalculating(false);
     load();
   }
 
   async function handleAprovar(c: ComissaoVenda) {
-    await updateEntity('comissoes', { ...c, status: 'APROVADA', data_aprovacao: new Date().toISOString().split('T')[0] });
+    await updateEntity('comissoes', { ...c, status: 'APROVADA', data_aprovacao: hojeISO() });
     load();
   }
 
   async function handlePagar(c: ComissaoVenda) {
-    await updateEntity('comissoes', { ...c, status: 'PAGA', data_pagamento: new Date().toISOString().split('T')[0] });
+    const hoje = hojeISO();
+    const valor = round2(num(c.valor_comissao));
+    await updateEntity('comissoes', { ...c, status: 'PAGA', data_pagamento: hoje });
+
+    // Comissão paga é despesa comercial da agência: sem a conta a pagar
+    // correspondente ela não aparecia no caixa nem no DRE.
+    // origem 'OUTROS' (não 'VENDA') porque o DRE exclui CP auto-gerada de
+    // venda como repasse ao fornecedor — comissão não é repasse.
+    const categoriaComercial = planoContas.find(
+      p => p.tipo === 'DESPESA' && p.ativo && p.codigo.startsWith('2.6')
+    ) ?? planoContas.find(p => p.tipo === 'DESPESA' && p.ativo && p.is_custo_comercial);
+
+    const conta: ContaPagar = {
+      ...createContaPagar(),
+      // Id determinístico: pagar duas vezes atualiza a mesma conta.
+      id: contaPagarComissaoId(c),
+      origem: 'OUTROS',
+      venda_id: c.venda_id || null,
+      fornecedor_id: c.vendedor_id,
+      fornecedor_nome: c.vendedor_nome,
+      descricao: `Comissão ${c.vendedor_nome} — venda ${c.venda_numero}`,
+      categoria_id: categoriaComercial?.id ?? '',
+      valor_original: valor,
+      valor_final: valor,
+      valor_brl: valor,
+      data_emissao: hoje,
+      data_vencimento: hoje,
+      natureza_custo: 'VARIAVEL',
+      is_custo_comercial: true,
+      // Nasce PENDENTE de propósito: o POST do CRUD genérico grava o registro
+      // mas NÃO move o caixa. Gravar 'PAGO' aqui deixaria o saldo bancário sem
+      // o débito e — pior — a exclusão dessa conta chamaria o estorno, que
+      // CREDITARIA um dinheiro que nunca saiu. A baixa vem logo abaixo, pelo
+      // PUT, que é o único caminho que debita o saldo.
+      status: 'PENDENTE',
+      data_pagamento: null,
+      valor_pago: null,
+      origem_venda_id: c.venda_id,
+      auto_gerado: true,
+      // ContaPagar não tem campo origem_comissao_id — o vínculo fica aqui.
+      observacoes: `Gerada automaticamente pelo pagamento da comissão (origem_comissao_id=${c.id}).`,
+    };
+    await saveEntity('contas-pagar', conta);
+    // Baixa pelo PUT: debita o caixa uma única vez (guarda de idempotência na rota).
+    await updateEntity('contas-pagar', {
+      ...conta,
+      status: 'PAGO',
+      data_pagamento: hoje,
+      valor_pago: valor,
+    });
     load();
   }
 
@@ -168,15 +375,14 @@ export default function ComissoesPage() {
   const filtered = comissoes.filter(c => {
     if (filterStatus !== 'TODOS' && c.status !== filterStatus) return false;
     if (filterVendedor && c.vendedor_id !== filterVendedor) return false;
-    if (filterMonth && c.data_venda?.substring(0, 7) !== filterMonth) return false;
+    if (filterMonth && mesDe(c.data_venda) !== filterMonth) return false;
     return true;
-  }).sort((a, b) => b.data_venda.localeCompare(a.data_venda));
+  }).sort((a, b) => (b.data_venda ?? '').localeCompare(a.data_venda ?? ''));
 
   const stats = useMemo(() => {
-    const calculadas = comissoes.filter(c => c.status === 'CALCULADA').reduce((s, c) => s + c.valor_comissao, 0);
-    const aprovadas = comissoes.filter(c => c.status === 'APROVADA').reduce((s, c) => s + c.valor_comissao, 0);
-    const pagas = comissoes.filter(c => c.status === 'PAGA').reduce((s, c) => s + c.valor_comissao, 0);
-    return { calculadas, aprovadas, pagas };
+    const porStatus = (s: StatusComissao) =>
+      somaPor(comissoes.filter(c => c.status === s), c => c.valor_comissao);
+    return { calculadas: porStatus('CALCULADA'), aprovadas: porStatus('APROVADA'), pagas: porStatus('PAGA') };
   }, [comissoes]);
 
   const STATUSES: Array<StatusComissao | 'TODOS'> = ['TODOS', 'CALCULADA', 'APROVADA', 'PAGA', 'CANCELADA'];
@@ -205,6 +411,26 @@ export default function ComissoesPage() {
             <div className="flex-1">
               <p className="text-sm font-medium text-[var(--t-text)]">Nenhum Plano de Comissão configurado</p>
               <p className="text-xs text-[var(--t-text-secondary)] mt-0.5">Crie um plano com regras de comissão para que o botão &quot;Calcular Comissões&quot; funcione corretamente.</p>
+            </div>
+          </div>
+        )}
+
+        {/* Banner: vendas que NÃO geraram comissão (config faltando ou base
+            não confiável) e comissões divergentes da venda atual */}
+        {pendencias.length > 0 && (
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+            <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-[var(--t-text)]">
+                {pendencias.length} venda(s) sem comissão gerada ou com divergência
+              </p>
+              <ul className="mt-1 space-y-0.5">
+                {pendencias.map(p => (
+                  <li key={p.id} className="text-xs text-[var(--t-text-secondary)]">
+                    <span className="font-mono">{p.venda || '—'}</span>: {p.motivo}
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         )}
@@ -305,7 +531,7 @@ export default function ComissoesPage() {
                         <td className="px-4 py-3 font-medium text-[var(--t-text)]">{c.vendedor_nome}</td>
                         <td className="px-4 py-3 text-[var(--t-text-secondary)] font-mono text-xs">{c.venda_numero}</td>
                         <td className="px-4 py-3 text-[var(--t-text-secondary)]">
-                          {c.data_venda ? new Date(c.data_venda + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
+                          {dataLocal(c.data_venda)?.toLocaleDateString('pt-BR') ?? '—'}
                         </td>
                         <td className="px-4 py-3 text-right font-mono text-[var(--t-text-secondary)]">{BRL(c.valor_base)}</td>
                         <td className="px-4 py-3 text-center text-[var(--t-text-secondary)]">{c.percentual_aplicado}%</td>

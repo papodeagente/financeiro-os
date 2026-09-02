@@ -13,6 +13,9 @@ import {
 import { PageShell } from '@/components/PageShell';
 import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
 import { DataTable, DataTableColumn } from '@/components/ui/data-table';
+import {
+  round2, num, somaPor, parseMoneyBR, hojeISO, dataLocal, estaVencido, dentroDoPeriodo,
+} from '@/lib/money';
 
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -24,6 +27,23 @@ const STATUS_BADGE: Record<StatusContaReceber, string> = {
   CANCELADO: 'bg-[var(--t-border)] text-[var(--t-text-muted)]',
   PARCIAL: 'bg-blue-100 text-blue-800',
 };
+
+/**
+ * Status EFETIVO (derivado na leitura). Nenhum fluxo do sistema grava
+ * 'ATRASADO' no banco — o atraso é uma consequência da data de vencimento.
+ * Regra: PENDENTE/PARCIAL com vencimento anterior a hoje está ATRASADO.
+ */
+function statusEfetivo(i: ContaReceber): StatusContaReceber {
+  if ((i.status === 'PENDENTE' || i.status === 'PARCIAL') && estaVencido(i.data_vencimento)) {
+    return 'ATRASADO';
+  }
+  return i.status;
+}
+
+/** Quanto ainda falta receber (desconta baixas parciais já lançadas). */
+function valorEmAberto(i: ContaReceber): number {
+  return round2(num(i.valor_final) - num(i.valor_recebido));
+}
 
 type FormState = Omit<ContaReceber,
   'id' | 'juros' | 'multa' | 'desconto' | 'valor_final' | 'data_emissao' |
@@ -89,19 +109,22 @@ export default function ContasReceberPage() {
 
   async function handleSave() {
     if (!form.cliente_nome || !form.descricao || !form.data_vencimento || form.valor_original <= 0) return;
+    const valorOriginal = round2(form.valor_original);
     if (editId) {
       const existing = items.find(i => i.id === editId)!;
       const updated: ContaReceber = {
         ...existing,
         ...form,
-        valor_final: form.valor_original,
+        valor_original: valorOriginal,
+        valor_final: valorOriginal,
       };
       await updateEntity('contas-receber', updated);
     } else {
       const nova: ContaReceber = {
         ...createContaReceber(),
         ...form,
-        valor_final: form.valor_original,
+        valor_original: valorOriginal,
+        valor_final: valorOriginal,
       };
       await saveEntity('contas-receber', nova);
     }
@@ -110,12 +133,30 @@ export default function ContasReceberPage() {
     load();
   }
 
+  /**
+   * Baixa (total ou parcial). O usuário informa quanto entrou:
+   *  - valor >= saldo em aberto  → RECEBIDO, valor_recebido = valor_final
+   *  - valor < saldo em aberto   → PARCIAL, valor_recebido ACUMULA as baixas
+   * Nunca marca RECEBIDO integral quando entrou menos do que o devido.
+   */
   async function handleBaixar(item: ContaReceber) {
+    const emAberto = valorEmAberto(item);
+    const digitado = prompt(
+      `Valor recebido (em aberto: ${BRL(emAberto)}). Deixe como está para baixa total.`,
+      emAberto.toFixed(2),
+    );
+    if (digitado === null) return;
+    const informado = round2(parseMoneyBR(digitado) ?? emAberto);
+    if (informado <= 0) return;
+
+    const acumulado = round2(num(item.valor_recebido) + informado);
+    // tolerância de meio centavo pra não deixar conta aberta por arredondamento
+    const quitado = acumulado >= round2(num(item.valor_final)) - 0.005;
     const updated: ContaReceber = {
       ...item,
-      status: 'RECEBIDO',
-      data_recebimento: new Date().toISOString().split('T')[0],
-      valor_recebido: item.valor_final,
+      status: quitado ? 'RECEBIDO' : 'PARCIAL',
+      data_recebimento: hojeISO(),
+      valor_recebido: quitado ? round2(num(item.valor_final)) : acumulado,
     };
     await updateEntity('contas-receber', updated);
     load();
@@ -128,15 +169,27 @@ export default function ContasReceberPage() {
   }
 
   const filtered = items.filter(i => {
-    if (filterStatus !== 'TODOS' && i.status !== filterStatus) return false;
-    if (filterDateFrom && i.data_vencimento < filterDateFrom) return false;
-    if (filterDateTo && i.data_vencimento > filterDateTo) return false;
+    // filtra pelo status EFETIVO — senão "ATRASADO" nunca devolveria nada
+    if (filterStatus !== 'TODOS' && statusEfetivo(i) !== filterStatus) return false;
+    if ((filterDateFrom || filterDateTo) &&
+        !dentroDoPeriodo(i.data_vencimento, filterDateFrom || '0000-01-01', filterDateTo || '9999-12-31')) {
+      return false;
+    }
     return true;
   });
 
-  const totalPendente = items.filter(i => i.status === 'PENDENTE').reduce((s, i) => s + i.valor_final, 0);
-  const totalRecebido = items.filter(i => i.status === 'RECEBIDO').reduce((s, i) => s + (i.valor_recebido ?? i.valor_final), 0);
-  const totalAtrasado = items.filter(i => i.status === 'ATRASADO').reduce((s, i) => s + i.valor_final, 0);
+  // Cards somam o SALDO EM ABERTO por status efetivo (parciais entram pelo que falta).
+  // PARCIAL a vencer conta como pendente — senão o que falta receber sumiria dos cards.
+  const totalPendente = somaPor(
+    items.filter(i => statusEfetivo(i) === 'PENDENTE' || statusEfetivo(i) === 'PARCIAL'),
+    valorEmAberto,
+  );
+  const totalAtrasado = somaPor(items.filter(i => statusEfetivo(i) === 'ATRASADO'), valorEmAberto);
+  // Recebido inclui o que já entrou nas baixas parciais.
+  const totalRecebido = somaPor(
+    items.filter(i => i.status === 'RECEBIDO' || i.status === 'PARCIAL'),
+    i => (i.status === 'RECEBIDO' ? (i.valor_recebido ?? i.valor_final) : num(i.valor_recebido)),
+  );
 
   const STATUSES: Array<StatusContaReceber | 'TODOS'> = ['TODOS', 'PENDENTE', 'RECEBIDO', 'ATRASADO', 'CANCELADO', 'PARCIAL'];
 
@@ -183,16 +236,17 @@ export default function ContasReceberPage() {
       sortAccessor: i => i.data_vencimento || '',
       cell: i => (
         <span className="text-[var(--t-text-secondary)]">
-          {i.data_vencimento ? new Date(i.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
+          {dataLocal(i.data_vencimento)?.toLocaleDateString('pt-BR') ?? '—'}
         </span>
       ),
     },
     {
       key: 'status',
       header: 'Status',
-      cell: i => (
-        <Badge className={`${STATUS_BADGE[i.status]} border-0 text-xs`}>{i.status}</Badge>
-      ),
+      cell: i => {
+        const st = statusEfetivo(i);
+        return <Badge className={`${STATUS_BADGE[st]} border-0 text-xs`}>{st}</Badge>;
+      },
     },
     {
       key: 'acoes',

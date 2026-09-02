@@ -12,6 +12,7 @@ import {
 import { MetricExplainer } from '@/components/financeiro/MetricExplainer';
 import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
 import { toast } from '@/lib/toast';
+import { soma, somaPor, round2, num, divSegura, mesDe, hojeISO } from '@/lib/money';
 
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -86,8 +87,7 @@ export default function DREPage() {
     setVendas(v);
     setPlanoContas(pc);
 
-    const now = new Date();
-    setSelectedMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+    setSelectedMonth(mesDe(hojeISO()));
     setLoading(false);
   }
 
@@ -96,14 +96,39 @@ export default function DREPage() {
   // Available months from data
   const availableMonths = useMemo(() => {
     const months = new Set<string>();
-    contasReceber.forEach(c => { const m = c.data_vencimento?.substring(0, 7); if (m) months.add(m); });
-    contasPagar.forEach(c => { const m = c.data_vencimento?.substring(0, 7); if (m) months.add(m); });
-    vendas.forEach(v => { const m = v.data_venda?.substring(0, 7); if (m) months.add(m); });
+    contasReceber.forEach(c => { const m = mesDe(c.data_vencimento); if (m) months.add(m); });
+    contasPagar.forEach(c => { const m = mesDe(c.data_vencimento); if (m) months.add(m); });
+    vendas.forEach(v => { const m = mesDe(v.data_venda); if (m) months.add(m); });
     // Add current month
-    const now = new Date();
-    months.add(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+    months.add(mesDe(hojeISO()));
     return [...months].sort().reverse();
   }, [contasReceber, contasPagar, vendas]);
+
+  // Quanto de cada CR de comissão AINDA NÃO está representado na margem da
+  // sua venda. Calculado uma vez para todos os meses (a venda cai num mês e a
+  // comissão vence noutro): a margem de cada venda é consumida pelas suas
+  // comissões na ordem de vencimento, e o que sobrar da comissão é receita
+  // própria a reconhecer.
+  const comissaoNaoCapturada = useMemo(() => {
+    const restante = new Map<string, number>();
+    for (const v of vendas) {
+      if (v.status === 'CANCELADO') continue;
+      restante.set(v.id, Math.max(round2(num(v.valor_final) - num(v.valor_total_custo)), 0));
+    }
+    const fora = new Map<string, number>();
+    const comissoes = contasReceber
+      .filter(cr => cr.origem === 'COMISSAO_FORNECEDOR')
+      .sort((a, b) => String(a.data_vencimento).localeCompare(String(b.data_vencimento)));
+    for (const cr of comissoes) {
+      const vendaId = cr.origem_venda_id || cr.venda_id || '';
+      const valor = round2(num(cr.valor_final));
+      const margem = vendaId ? (restante.get(vendaId) ?? 0) : 0;
+      const capturado = Math.min(margem, valor);
+      if (vendaId && restante.has(vendaId)) restante.set(vendaId, round2(margem - capturado));
+      fora.set(cr.id, round2(valor - capturado));
+    }
+    return fora;
+  }, [contasReceber, vendas]);
 
   // DRE para AGÊNCIA DE VIAGENS — CNAE 7911-2/00
   // Regime de INTERMEDIAÇÃO: a agência recebe apenas a COMISSÃO sobre a
@@ -114,42 +139,56 @@ export default function DREPage() {
   function buildDRE(month: string): DRELine[] {
     if (!month) return [];
 
+    // Competência: entra tudo que não foi cancelado — inclusive ATRASADO e
+    // PARCIAL. Listar só RECEBIDO/PENDENTE fazia a conta parcialmente
+    // recebida (ou vencida) sumir INTEIRA do relatório.
+    const vivo = (s: string | undefined) => String(s ?? '') !== 'CANCELADO';
     const monthReceber = contasReceber.filter(cr =>
-      cr.data_vencimento?.substring(0, 7) === month && (cr.status === 'RECEBIDO' || cr.status === 'PENDENTE')
+      mesDe(cr.data_vencimento) === month && vivo(cr.status)
     );
     const monthPagar = contasPagar.filter(cp =>
-      cp.data_vencimento?.substring(0, 7) === month && (cp.status === 'PAGO' || cp.status === 'PENDENTE')
+      mesDe(cp.data_vencimento) === month && vivo(cp.status)
     );
     const monthVendas = vendas.filter(v =>
-      v.data_venda?.substring(0, 7) === month && v.status !== 'CANCELADO'
+      mesDe(v.data_venda) === month && v.status !== 'CANCELADO'
     );
 
     // VOLUME intermediado (informativo — não entra na DRE; é só
     // referência de quanto a agência movimentou)
-    const volumeIntermediado = monthVendas.reduce((s, v) => s + (v.valor_final || 0), 0);
+    const volumeIntermediado = somaPor(monthVendas, v => v.valor_final);
 
     // RECEITA BRUTA = margem (comissão) das vendas + comissões de
     // fornecedores recebidas explicitamente + fees + outras receitas.
     // É a base sobre a qual incidem impostos (ISS, PIS/COFINS).
-    const comissaoVendas = monthVendas.reduce((s, v) => {
-      const margem = (v.valor_final || 0) - (v.valor_total_custo || 0);
-      return s + Math.max(margem, 0);
-    }, 0);
-    const receitaComissoes = monthReceber
-      .filter(cr => cr.origem === 'COMISSAO_FORNECEDOR')
-      .reduce((s, cr) => s + cr.valor_final, 0);
-    const receitaFee = monthReceber
-      .filter(cr => cr.origem === 'FEE')
-      .reduce((s, cr) => s + cr.valor_final, 0);
-    const receitaOutras = monthReceber
-      .filter(cr => cr.origem === 'OUTROS')
-      .reduce((s, cr) => s + cr.valor_final, 0);
+    const comissaoVendas = somaPor(monthVendas, v =>
+      Math.max(round2(num(v.valor_final) - num(v.valor_total_custo)), 0)
+    );
 
-    const receitaBruta = comissaoVendas + receitaComissoes + receitaFee + receitaOutras;
+    // FONTE ÚNICA, por DEDUÇÃO (não por exclusão): a comissão de uma venda
+    // entra na Receita Bruta UMA vez. Quando a margem da venda já a contém
+    // (linha 1.1), a CR espelho não soma de novo. Mas no fluxo "cliente paga
+    // o fornecedor" a venda não tem margem própria (margem = 0) e a comissão
+    // É a receita — excluí-la simplesmente apagava esse dinheiro do DRE dos
+    // dois meses (o da venda e o do vencimento da comissão).
+    const receitaComissoes = somaPor(
+      monthReceber.filter(cr => cr.origem === 'COMISSAO_FORNECEDOR'),
+      cr => round2(num(comissaoNaoCapturada.get(cr.id) ?? num(cr.valor_final))),
+    );
+    const receitaFee = somaPor(monthReceber.filter(cr => cr.origem === 'FEE'), cr => cr.valor_final);
+    const receitaOutras = somaPor(monthReceber.filter(cr => cr.origem === 'OUTROS'), cr => cr.valor_final);
+
+    const receitaBruta = soma([comissaoVendas, receitaComissoes, receitaFee, receitaOutras]);
+
+    // CP auto-gerada pela venda = repasse ao fornecedor. Neste regime o
+    // cliente paga o fornecedor direto, então não é despesa da agência.
+    const ehRepasseDeVenda = (cp: ContaPagar) => !!cp.auto_gerado && cp.origem === 'VENDA';
+
+    const idsDoPrefixo = (prefixo: string) =>
+      planoContas.filter(p => p.codigo?.startsWith(prefixo)).map(p => p.id);
 
     function sumByCategory(prefix: string): number {
-      const catIds = planoContas.filter(p => p.codigo.startsWith(prefix)).map(p => p.id);
-      return monthPagar.filter(cp => catIds.includes(cp.categoria_id)).reduce((s, cp) => s + cp.valor_final, 0);
+      const catIds = new Set(idsDoPrefixo(prefix));
+      return somaPor(monthPagar.filter(cp => catIds.has(cp.categoria_id)), cp => cp.valor_final);
     }
 
     // CNAE 7911-2: não tem CMV. Custo do fornecedor é repasse direto
@@ -161,20 +200,33 @@ export default function DREPage() {
     const despFinanceiras = sumByCategory('2.4');
     const despOutras = sumByCategory('2.5');
 
-    const categorizedIds = new Set(planoContas.map(p => p.id));
-    const uncategorized = monthPagar
-      .filter(cp => !categorizedIds.has(cp.categoria_id) && !cp.categoria_id)
-      // Exclui CP auto-gerada de venda (custo de repasse ao fornecedor,
-      // que NÃO é despesa da agência neste regime).
-      .filter(cp => !(cp.auto_gerado && cp.origem === 'VENDA'))
-      .reduce((s, cp) => s + cp.valor_final, 0);
+    // 2.1 (CMV do plano padrão) não tem linha própria neste regime, mas o
+    // dinheiro precisa aparecer: o que sobra depois de tirar o repasse
+    // auto-gerado de venda é despesa real e vai para "Outras despesas".
+    const idsCMV = new Set(idsDoPrefixo('2.1'));
+    const despCMV = somaPor(
+      monthPagar.filter(cp => idsCMV.has(cp.categoria_id) && !ehRepasseDeVenda(cp)),
+      cp => cp.valor_final,
+    );
 
-    const totalDespesas = despOperacionais + despComerciais + despTaxas + despFinanceiras + despOutras + uncategorized;
-    const receitaLiquida = receitaBruta - despTaxas;
-    const resultadoOperacional = receitaLiquida - despOperacionais - despComerciais;
-    const lucroLiquido = receitaBruta - totalDespesas;
-    const margemLiquida = receitaBruta > 0 ? (lucroLiquido / receitaBruta) * 100 : 0;
-    const margemSobreVolume = volumeIntermediado > 0 ? (receitaBruta / volumeIntermediado) * 100 : 0;
+    // Condição de NEGAÇÃO sobre os ids conhecidos: qualquer conta cuja
+    // categoria não caia num bucket da DRE (categoria apagada, id órfão ou
+    // categoria vazia) vira "Não categorizadas". Antes o filtro exigia
+    // categoria_id vazio e o dinheiro das outras sumia do relatório inteiro.
+    const PREFIXOS_DRE = ['2.1', '2.2', '2.3', '2.4', '2.5', '2.6'];
+    const idsConhecidos = new Set(PREFIXOS_DRE.flatMap(idsDoPrefixo));
+    const uncategorized = somaPor(
+      monthPagar.filter(cp => !idsConhecidos.has(cp.categoria_id) && !ehRepasseDeVenda(cp)),
+      cp => cp.valor_final,
+    );
+
+    const totalDespesas = soma([despOperacionais, despComerciais, despTaxas, despFinanceiras, despOutras, despCMV, uncategorized]);
+    const outrasDespesas = soma([despOutras, despCMV, uncategorized]);
+    const receitaLiquida = round2(receitaBruta - despTaxas);
+    const resultadoOperacional = round2(receitaLiquida - despOperacionais - despComerciais);
+    const lucroLiquido = round2(receitaBruta - totalDespesas);
+    const margemLiquida = round2(divSegura(lucroLiquido, receitaBruta) * 100);
+    const margemSobreVolume = round2(divSegura(receitaBruta, volumeIntermediado) * 100);
 
     const lines: DRELine[] = [];
 
@@ -206,10 +258,11 @@ export default function DREPage() {
       { codigo: '2.4', nome: 'Juros, tarifas bancárias', valor: despFinanceiras, tipo: 'item', indent: 1 },
     );
 
-    if (despOutras > 0 || uncategorized > 0) {
-      lines.push({ codigo: '', nome: '(-) OUTRAS DESPESAS', valor: -(despOutras + uncategorized), tipo: 'header', indent: 0 });
-      if (despOutras > 0) lines.push({ codigo: '2.5', nome: 'Outras despesas', valor: despOutras, tipo: 'item', indent: 1 });
-      if (uncategorized > 0) lines.push({ codigo: '', nome: 'Não categorizadas', valor: uncategorized, tipo: 'item', indent: 1 });
+    if (outrasDespesas !== 0) {
+      lines.push({ codigo: '', nome: '(-) OUTRAS DESPESAS', valor: -outrasDespesas, tipo: 'header', indent: 0 });
+      if (despOutras !== 0) lines.push({ codigo: '2.5', nome: 'Outras despesas', valor: despOutras, tipo: 'item', indent: 1 });
+      if (despCMV !== 0) lines.push({ codigo: '2.1', nome: 'Custos diretos (CMV)', valor: despCMV, tipo: 'item', indent: 1 });
+      if (uncategorized !== 0) lines.push({ codigo: '', nome: 'Não categorizadas', valor: uncategorized, tipo: 'item', indent: 1 });
     }
 
     lines.push(
@@ -255,6 +308,12 @@ export default function DREPage() {
         return ehChave || ehMargem;
       })
     : dreCompare;
+
+  // Comparação casada pelo NOME da linha: dois meses podem ter conjuntos de
+  // linhas diferentes (volume intermediado, outras despesas), e casar por
+  // índice colocava lado a lado valores de contas distintas.
+  const compareByNome = new Map<string, DRELine>();
+  for (const l of dreCompareFiltrado) if (!compareByNome.has(l.nome)) compareByNome.set(l.nome, l);
 
   if (loading) {
     return (
@@ -408,8 +467,8 @@ export default function DREPage() {
                 </thead>
                 <tbody>
                   {dreFiltrado.map((line, idx) => {
-                    const compareLine = dreCompareFiltrado[idx];
-                    const variacao = compareLine ? line.valor - compareLine.valor : 0;
+                    const compareLine = compareByNome.get(line.nome);
+                    const variacao = compareLine ? round2(line.valor - compareLine.valor) : 0;
                     const isMargin = line.nome.startsWith('Margem');
 
                     if (isMargin) {

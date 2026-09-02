@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { dataLocal, parseMoneyBR } from "./money"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -24,15 +25,12 @@ export function formatBRL(value: number | null | undefined): string {
 }
 
 export function parseBRL(str: string): number | null {
-  if (!str || str === '\u2014') return null;
-  const cleaned = str.replace(/[R$\s.]/g, '').replace(',', '.');
-  const num = parseFloat(cleaned);
-  return isNaN(num) ? null : num;
+  return parseMoneyBR(str);
 }
 
 export function formatDate(date: string | null): string {
-  if (!date) return '\u2014';
-  const d = new Date(date + 'T00:00:00');
+  const d = dataLocal(date);
+  if (!d) return '\u2014';
   return d.toLocaleDateString('pt-BR');
 }
 

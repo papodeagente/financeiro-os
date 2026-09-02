@@ -12,6 +12,9 @@ import {
   Calendar, BarChart3,
 } from 'lucide-react';
 import type { FunilPayload } from '@/lib/funil-types';
+import {
+  round2, num, somaPor, divSegura, hojeISO, dataLocal, paraISO, mesDe, dentroDoPeriodo,
+} from '@/lib/money';
 
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -41,6 +44,14 @@ interface FluxoLine {
   saldoAcumulado: number;
   detalhesEntradas: Array<{ desc: string; valor: number; data: string }>;
   detalhesSaidas: Array<{ desc: string; valor: number; data: string }>;
+}
+
+/** Movimento unitário de caixa — realizado (baixado) ou previsto (em aberto). */
+interface Evento {
+  desc: string;
+  valor: number;
+  data: string;
+  realizado: boolean;
 }
 
 export default function FluxoCaixaPage() {
@@ -83,15 +94,15 @@ export default function FluxoCaixaPage() {
     for (const f of ativos) {
       const kpis = f.data?.cenarios?.[0]?.kpis;
       if (!kpis) continue;
-      receita += kpis.receita_liquida ?? kpis.receita_bruta ?? 0;
-      investimento += kpis.investimento_total ?? 0;
+      receita = round2(receita + num(kpis.receita_liquida ?? kpis.receita_bruta ?? 0));
+      investimento = round2(investimento + num(kpis.investimento_total ?? 0));
     }
     // Se for semanal, dividir por 4 (aproximação mês/semana)
     const divisor = periodo === 'MENSAL' ? 1 : 4;
     return {
       count: ativos.length,
-      receita: receita / divisor,
-      investimento: investimento / divisor,
+      receita: round2(divSegura(receita, divisor)),
+      investimento: round2(divSegura(investimento, divisor)),
     };
   }, [funis, periodo]);
 
@@ -102,117 +113,162 @@ export default function FluxoCaixaPage() {
     [contasBancarias, contasReceber, contasPagar]
   );
 
-  // Data EFETIVA do movimento: para RECEBIDO/PAGO usa data_recebimento/
-  // data_pagamento (quando houve de fato a entrada/saída). Para PENDENTE
-  // ou ATRASADO usa data_vencimento (quando deveria ocorrer).
-  const dataEfetivaCR = (cr: ContaReceber): string => {
-    if (cr.status === 'RECEBIDO' && cr.data_recebimento) return cr.data_recebimento;
-    return cr.data_vencimento || '';
-  };
-  const dataEfetivaCP = (cp: ContaPagar): string => {
-    if (cp.status === 'PAGO' && cp.data_pagamento) return cp.data_pagamento;
-    return cp.data_vencimento || '';
-  };
-  const valorCR = (cr: ContaReceber) =>
-    cr.status === 'RECEBIDO' ? (cr.valor_recebido || cr.valor_final || 0) : (cr.valor_final || 0);
-  const valorCP = (cp: ContaPagar) =>
-    cp.status === 'PAGO' ? (cp.valor_pago || cp.valor_final || 0) : (cp.valor_final || 0);
+  // Cada conta vira até DOIS eventos de caixa:
+  //  · REALIZADO — o que já foi baixado (RECEBIDO/PAGO, ou a parcela já
+  //    quitada de uma baixa PARCIAL), na data da baixa;
+  //  · PREVISTO  — o saldo ainda em aberto, na data de vencimento.
+  // Separar os dois é o que permite montar o saldo base com dinheiro REAL e
+  // tratar pendência vencida como projeção, nunca como caixa existente.
+  const eventosEntrada = useMemo<Evento[]>(() => {
+    const out: Evento[] = [];
+    for (const cr of contasReceber) {
+      if (cr.status === 'CANCELADO') continue;
+      const desc = `${cr.cliente_nome || '—'} — ${cr.descricao || ''}`;
+      const baixado = cr.status === 'RECEBIDO'
+        ? round2(num(cr.valor_recebido) || num(cr.valor_final))
+        : round2(num(cr.valor_recebido));
+      if (baixado > 0) {
+        out.push({ desc, valor: baixado, data: cr.data_recebimento || cr.data_vencimento || '', realizado: true });
+      }
+      const emAberto = cr.status === 'RECEBIDO'
+        ? 0
+        : round2(num(cr.valor_final) - num(cr.valor_recebido));
+      if (emAberto > 0) {
+        out.push({ desc, valor: emAberto, data: cr.data_vencimento || '', realizado: false });
+      }
+    }
+    return out;
+  }, [contasReceber]);
+
+  const eventosSaida = useMemo<Evento[]>(() => {
+    const out: Evento[] = [];
+    for (const cp of contasPagar) {
+      if (cp.status === 'CANCELADO') continue;
+      const desc = `${cp.fornecedor_nome || '—'} — ${cp.descricao || ''}`;
+      const baixado = cp.status === 'PAGO'
+        ? round2(num(cp.valor_pago) || num(cp.valor_final))
+        : round2(num(cp.valor_pago));
+      if (baixado > 0) {
+        out.push({ desc, valor: baixado, data: cp.data_pagamento || cp.data_vencimento || '', realizado: true });
+      }
+      const emAberto = cp.status === 'PAGO'
+        ? 0
+        : round2(num(cp.valor_final) - num(cp.valor_pago));
+      if (emAberto > 0) {
+        out.push({ desc, valor: emAberto, data: cp.data_vencimento || '', realizado: false });
+      }
+    }
+    return out;
+  }, [contasPagar]);
 
   const fluxo = useMemo(() => {
-    const today = new Date();
+    const hoje = hojeISO();
+    const today = dataLocal(hoje)!; // ancorado ao meio-dia — imune a fuso
     const lines: FluxoLine[] = [];
 
-    // Helper para construir uma linha do período [startStr, endStr] inclusive
-    // (formato 'YYYY-MM' para mensal e 'YYYY-MM-DD' para semanal).
-    const buildLine = (periodoId: string, label: string, isInPeriod: (date: string) => boolean): FluxoLine => {
-      const entradas = contasReceber.filter(cr =>
-        cr.status !== 'CANCELADO' && isInPeriod(dataEfetivaCR(cr))
-      );
-      const saidas = contasPagar.filter(cp =>
-        cp.status !== 'CANCELADO' && isInPeriod(dataEfetivaCP(cp))
-      );
-      const totalEntradas = entradas.reduce((s, cr) => s + valorCR(cr), 0);
-      const totalSaidas = saidas.reduce((s, cp) => s + valorCP(cp), 0);
+    // Constrói a linha do período. `extras` carrega os atrasados, que só
+    // entram na PRIMEIRA linha (projeção de cobrança/pagamento imediato).
+    const buildLine = (
+      periodoId: string,
+      label: string,
+      isInPeriod: (date: string) => boolean,
+      extras?: { entradas: Evento[]; saidas: Evento[] },
+    ): FluxoLine => {
+      const entradas = [
+        ...eventosEntrada.filter(e => e.data && isInPeriod(e.data)),
+        ...(extras?.entradas ?? []),
+      ];
+      const saidas = [
+        ...eventosSaida.filter(e => e.data && isInPeriod(e.data)),
+        ...(extras?.saidas ?? []),
+      ];
+      const totalEntradas = somaPor(entradas, e => e.valor);
+      const totalSaidas = somaPor(saidas, e => e.valor);
       return {
         periodo: periodoId,
         label,
         entradas: totalEntradas,
         saidas: totalSaidas,
-        saldo: totalEntradas - totalSaidas,
+        saldo: round2(totalEntradas - totalSaidas),
         saldoAcumulado: 0, // preenchido depois
-        detalhesEntradas: entradas.map(cr => ({
-          desc: `${cr.cliente_nome || '—'} — ${cr.descricao || ''}`,
-          valor: valorCR(cr),
-          data: dataEfetivaCR(cr),
-        })),
-        detalhesSaidas: saidas.map(cp => ({
-          desc: `${cp.fornecedor_nome || '—'} — ${cp.descricao || ''}`,
-          valor: valorCP(cp),
-          data: dataEfetivaCP(cp),
-        })),
+        detalhesEntradas: entradas.map(e => ({ desc: e.desc, valor: e.valor, data: e.data })),
+        detalhesSaidas: saidas.map(e => ({ desc: e.desc, valor: e.valor, data: e.data })),
       };
     };
 
-    // Linha base = saldo_inicial + movimentos ANTERIORES ao primeiro mês.
-    // Garante que acumulado fim do mês = saldo real naquele momento.
+    // Início do primeiro período (mês corrente ou semana corrente).
     let primeiroPeriodoStart: string;
     if (periodo === 'MENSAL') {
-      primeiroPeriodoStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+      primeiroPeriodoStart = `${mesDe(hoje)}-01`;
     } else {
-      const ws = new Date(today);
+      const ws = dataLocal(hoje)!;
       ws.setDate(ws.getDate() - ws.getDay());
-      primeiroPeriodoStart = ws.toISOString().split('T')[0];
+      primeiroPeriodoStart = paraISO(ws);
     }
-    let linhaBase = contasBancarias.reduce((s, c) => s + (c.saldo_inicial || 0), 0);
-    for (const cr of contasReceber) {
-      if (cr.status === 'CANCELADO') continue;
-      const d = dataEfetivaCR(cr);
-      if (d && d < primeiroPeriodoStart) linhaBase += valorCR(cr);
-    }
-    for (const cp of contasPagar) {
-      if (cp.status === 'CANCELADO') continue;
-      const d = dataEfetivaCP(cp);
-      if (d && d < primeiroPeriodoStart) linhaBase -= valorCP(cp);
-    }
+
+    // Linha base = saldo_inicial + APENAS movimento realizado anterior ao
+    // primeiro período. Somar pendência vencida aqui inflava o saldo inicial
+    // com dinheiro que nunca entrou.
+    const linhaBase = round2(
+      somaPor(contasBancarias, c => c.saldo_inicial)
+      + somaPor(eventosEntrada.filter(e => e.realizado && e.data && e.data < primeiroPeriodoStart), e => e.valor)
+      - somaPor(eventosSaida.filter(e => e.realizado && e.data && e.data < primeiroPeriodoStart), e => e.valor),
+    );
+
+    // Atrasados = em aberto com vencimento anterior ao primeiro período.
+    // Viram projeção do primeiro período (é quando se espera resolver).
+    const marcarAtraso = (e: Evento): Evento => ({ ...e, desc: `${e.desc} (em atraso)` });
+    const atrasadosEntrada = eventosEntrada
+      .filter(e => !e.realizado && e.data && e.data < primeiroPeriodoStart)
+      .map(marcarAtraso);
+    const atrasadosSaida = eventosSaida
+      .filter(e => !e.realizado && e.data && e.data < primeiroPeriodoStart)
+      .map(marcarAtraso);
 
     if (periodo === 'MENSAL') {
       for (let i = 0; i < meses; i++) {
-        const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
-        const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        const line = buildLine(ym, getMonthLabel(ym), (date) => date.substring(0, 7) === ym);
+        const d = new Date(today.getFullYear(), today.getMonth() + i, 1, 12, 0, 0, 0);
+        const ym = mesDe(paraISO(d));
+        const line = buildLine(
+          ym,
+          getMonthLabel(ym),
+          (date) => mesDe(date) === ym,
+          i === 0 ? { entradas: atrasadosEntrada, saidas: atrasadosSaida } : undefined,
+        );
         const prevAcum = lines.length > 0 ? lines[lines.length - 1].saldoAcumulado : linhaBase;
-        line.saldoAcumulado = prevAcum + line.saldo;
+        line.saldoAcumulado = round2(prevAcum + line.saldo);
         lines.push(line);
       }
     } else {
       const weeks = meses * 4;
       for (let i = 0; i < weeks; i++) {
-        const ws = new Date(today);
+        const ws = dataLocal(hoje)!;
         ws.setDate(ws.getDate() - ws.getDay() + i * 7);
         const we = new Date(ws);
         we.setDate(we.getDate() + 6);
-        const startStr = ws.toISOString().split('T')[0];
-        const endStr = we.toISOString().split('T')[0];
-        const line = buildLine(startStr, getWeekRange(ws), (date) => date >= startStr && date <= endStr);
+        const startStr = paraISO(ws);
+        const endStr = paraISO(we);
+        const line = buildLine(
+          startStr,
+          getWeekRange(ws),
+          (date) => dentroDoPeriodo(date, startStr, endStr),
+          i === 0 ? { entradas: atrasadosEntrada, saidas: atrasadosSaida } : undefined,
+        );
         const prevAcum = lines.length > 0 ? lines[lines.length - 1].saldoAcumulado : linhaBase;
-        line.saldoAcumulado = prevAcum + line.saldo;
+        line.saldoAcumulado = round2(prevAcum + line.saldo);
         lines.push(line);
       }
     }
 
     return lines;
-  }, [contasReceber, contasPagar, contasBancarias, periodo, meses]);
+  }, [eventosEntrada, eventosSaida, contasBancarias, periodo, meses]);
 
-  // KPIs "Previstas" = só PENDENTE (não realizado), ANY date. Diferente
-  // dos totais da tabela (que somam realizado + pendente).
+  // KPIs "Previstas" = tudo que ainda está em aberto (saldo devedor das
+  // parciais incluído), em qualquer data.
   const totals = useMemo(() => ({
-    entradas: contasReceber
-      .filter(cr => cr.status === 'PENDENTE' || cr.status === 'ATRASADO' || cr.status === 'PARCIAL')
-      .reduce((s, cr) => s + (cr.valor_final || 0), 0),
-    saidas: contasPagar
-      .filter(cp => cp.status === 'PENDENTE' || cp.status === 'VENCIDO' || cp.status === 'PARCIAL')
-      .reduce((s, cp) => s + (cp.valor_final || 0), 0),
-  }), [contasReceber, contasPagar]);
+    entradas: somaPor(eventosEntrada.filter(e => !e.realizado), e => e.valor),
+    saidas: somaPor(eventosSaida.filter(e => !e.realizado), e => e.valor),
+  }), [eventosEntrada, eventosSaida]);
 
   // Visual bar scale
   const maxVal = useMemo(() =>
@@ -349,11 +405,11 @@ export default function FluxoCaixaPage() {
                           <div className="space-y-1">
                             <div className="flex items-center gap-1">
                               <div className="w-full bg-[var(--t-bg)] rounded-full h-2 relative">
-                                <div className="bg-[var(--t-green)] h-2 rounded-full" style={{ width: `${(f.entradas / maxVal) * 100}%` }} />
+                                <div className="bg-[var(--t-green)] h-2 rounded-full" style={{ width: `${divSegura(f.entradas, maxVal) * 100}%` }} />
                                 {incluirFunis && projecaoFunis.receita > 0 && (
                                   <div
                                     className="absolute inset-y-0 left-0 h-2 rounded-full border border-dashed border-[var(--t-green)] pointer-events-none"
-                                    style={{ width: `${Math.min(100, ((f.entradas + projecaoFunis.receita) / maxVal) * 100)}%` }}
+                                    style={{ width: `${Math.min(100, divSegura(f.entradas + projecaoFunis.receita, maxVal) * 100)}%` }}
                                     title={`+ ${BRL(projecaoFunis.receita)} de projeção de funis`}
                                   />
                                 )}
@@ -361,11 +417,11 @@ export default function FluxoCaixaPage() {
                             </div>
                             <div className="flex items-center gap-1">
                               <div className="w-full bg-[var(--t-bg)] rounded-full h-2 relative">
-                                <div className="bg-[var(--t-red)] h-2 rounded-full" style={{ width: `${(f.saidas / maxVal) * 100}%` }} />
+                                <div className="bg-[var(--t-red)] h-2 rounded-full" style={{ width: `${divSegura(f.saidas, maxVal) * 100}%` }} />
                                 {incluirFunis && projecaoFunis.investimento > 0 && (
                                   <div
                                     className="absolute inset-y-0 left-0 h-2 rounded-full border border-dashed border-[var(--t-red)] pointer-events-none"
-                                    style={{ width: `${Math.min(100, ((f.saidas + projecaoFunis.investimento) / maxVal) * 100)}%` }}
+                                    style={{ width: `${Math.min(100, divSegura(f.saidas + projecaoFunis.investimento, maxVal) * 100)}%` }}
                                     title={`+ ${BRL(projecaoFunis.investimento)} de investimento projetado`}
                                   />
                                 )}

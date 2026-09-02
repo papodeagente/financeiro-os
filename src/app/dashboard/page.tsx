@@ -17,6 +17,10 @@ import {
   AlertCircle, CheckCircle2,
   Info, Zap,
 } from 'lucide-react';
+import {
+  round2, num, soma, somaPor, percentual, divSegura, variacaoPct, paraBRL,
+  hojeISO, dataLocal, mesDe,
+} from '@/lib/money';
 import { KPIGridSkeleton } from '@/components/skeletons';
 import { calcularSaldoBancario } from '@/lib/saldo-bancario';
 import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
@@ -26,20 +30,17 @@ const BRL = (v: number) =>
 
 const PCT = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
 
-const fmtDate = (s: string) => {
-  if (!s) return '-';
-  const d = new Date(s + 'T00:00:00');
-  return d.toLocaleDateString('pt-BR');
-};
+const fmtDate = (s: string) => dataLocal(s)?.toLocaleDateString('pt-BR') ?? '-';
 
-const today = () => new Date().toISOString().split('T')[0];
-const thisMonth = () => today().slice(0, 7);
+// Hoje no fuso do tenant — toISOString() virava o dia às 21h no BRT.
+const today = () => hojeISO();
+const thisMonth = () => mesDe(hojeISO());
 
 function daysUntil(dateStr: string): number {
-  const d = new Date(dateStr + 'T00:00:00');
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  return Math.ceil((d.getTime() - now.getTime()) / 86400000);
+  const d = dataLocal(dateStr);
+  const now = dataLocal(hojeISO());
+  if (!d || !now) return 0;
+  return Math.round((d.getTime() - now.getTime()) / 86400000);
 }
 
 function prevMonth(yyyymm: string): string {
@@ -77,7 +78,15 @@ function getMonthName(yyyymm: string): string {
 //
 // O dashboard espera (1). normalizeVenda mapeia (2) para o shape (1) para
 // que reduce/forEach em produtos não estourem.
-function normalizeVenda(v: Partial<VendaCRM> & Record<string, unknown>): VendaCRM {
+//
+// ATENÇÃO: `markup_realizado` tem DOIS significados no banco — percentual de
+// markup na venda digitada em /vendas/nova e valor absoluto de comissão nas
+// vendas vindas do CRM. Por isso ele NUNCA entra em somatório de dinheiro;
+// normalizeVenda deriva `receita_agencia` em R$ e é esse campo que o
+// dashboard soma.
+type VendaDash = VendaCRM & { receita_agencia: number };
+
+function normalizeVenda(v: Partial<VendaCRM> & Record<string, unknown>): VendaDash {
   const statusRaw = String(v.status ?? '').toLowerCase();
   const status: StatusVendaCRM =
     statusRaw === 'vendido' ? 'CONFIRMADO' :
@@ -103,7 +112,23 @@ function normalizeVenda(v: Partial<VendaCRM> & Record<string, unknown>): VendaCR
     ?? (v.comissao as number | undefined)
     ?? 0;
 
+  const produtos = (v.produtos as VendaCRM['produtos']) ?? [];
+  // Receita da agência EM R$, na ordem de confiabilidade:
+  //  1) comissão por produto (comissao_fornecedor é % do valor de venda);
+  //  2) comissão absoluta reportada pelo CRM (campo `comissao`);
+  //  3) valor final - custo, quando há custo de fornecedor registrado.
+  // Sem nenhuma das três a receita é 0 (KPI mostra "aguardando comissão").
+  const comissaoProdutos = somaPor(produtos, p =>
+    percentual(paraBRL(p.valor_venda, p.moeda, p.cambio), p.comissao_fornecedor));
+  const comissaoCRM = num(v.comissao);
+  const receita_agencia =
+    comissaoProdutos > 0 ? comissaoProdutos
+    : comissaoCRM > 0 ? round2(comissaoCRM)
+    : num(valor_total_custo) > 0 ? Math.max(round2(num(valor_total_venda) - num(valor_total_custo)), 0)
+    : 0;
+
   return {
+    receita_agencia,
     id: (v.id as string) ?? '',
     numero: (v.numero as string) ?? (v.crm_venda_id as string) ?? String(v.id ?? '').slice(0, 8) ?? '—',
     data_venda: (v.data_venda as string) ?? '',
@@ -113,7 +138,7 @@ function normalizeVenda(v: Partial<VendaCRM> & Record<string, unknown>): VendaCR
     vendedor_id: (v.vendedor_id as string) ?? '',
     passageiros: (v.passageiros as VendaCRM['passageiros']) ?? [],
     pagantes: (v.pagantes as VendaCRM['pagantes']) ?? [],
-    produtos: (v.produtos as VendaCRM['produtos']) ?? [],
+    produtos,
     valor_total_custo,
     valor_total_venda,
     markup_realizado,
@@ -170,7 +195,7 @@ interface KPI {
 
 export default function DashboardPage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [vendas, setVendas] = useState<VendaCRM[]>([]);
+  const [vendas, setVendas] = useState<VendaDash[]>([]);
   const [receber, setReceber] = useState<ContaReceber[]>([]);
   const [pagar, setPagar] = useState<ContaPagar[]>([]);
   const [contas, setContas] = useState<ContaBancaria[]>([]);
@@ -216,50 +241,55 @@ export default function DashboardPage() {
     const vendasMes = vendas.filter(v => v.data_venda?.startsWith(mesAtual) && v.status !== 'CANCELADO');
     const vendasMesAnt = vendas.filter(v => v.data_venda?.startsWith(mesAnterior) && v.status !== 'CANCELADO');
 
-    const faturamento = vendasMes.reduce((s, v) => s + (v.valor_final || 0), 0);
-    const faturamentoAnt = vendasMesAnt.reduce((s, v) => s + (v.valor_final || 0), 0);
+    const faturamento = somaPor(vendasMes, v => v.valor_final);
+    const faturamentoAnt = somaPor(vendasMesAnt, v => v.valor_final);
 
     const qtdVendas = vendasMes.length;
     const qtdVendasAnt = vendasMesAnt.length;
 
-    const ticketMedio = qtdVendas > 0 ? faturamento / qtdVendas : 0;
-    const ticketMedioAnt = qtdVendasAnt > 0 ? faturamentoAnt / qtdVendasAnt : 0;
+    const ticketMedio = round2(divSegura(faturamento, qtdVendas));
+    const ticketMedioAnt = round2(divSegura(faturamentoAnt, qtdVendasAnt));
 
-    // Receita da agência = comissão REAL apenas (markup_realizado já filtra
-    // só comissões explícitas via normalizeVenda). Soma com comissoes por
-    // produto quando existirem.
-    const calcReceita = (vs: VendaCRM[]) =>
-      vs.reduce((s, v) => s + (v.markup_realizado || 0) + v.produtos.reduce((ps, p) => ps + (p.comissao_fornecedor || 0), 0), 0);
+    // Receita da agência = comissão REAL em R$ por venda (receita_agencia,
+    // derivada em normalizeVenda). NUNCA somar markup_realizado nem
+    // comissao_fornecedor crus — os dois são PERCENTUAIS em parte da base.
+    const calcReceita = (vs: VendaDash[]) => somaPor(vs, v => v.receita_agencia);
     const receita = calcReceita(vendasMes);
     const receitaAnt = calcReceita(vendasMesAnt);
 
     // Margem Bruta = Faturamento - CMV. Representa quanto sobrou após
     // pagar fornecedores, ANTES das despesas operacionais.
-    const calcMargemBruta = (vs: VendaCRM[]) =>
-      vs.reduce((s, v) => s + Math.max((v.valor_final || 0) - (v.valor_total_custo || 0), 0), 0);
+    const calcMargemBruta = (vs: VendaDash[]) =>
+      somaPor(vs, v => Math.max(round2(num(v.valor_final) - num(v.valor_total_custo)), 0));
     const margemBruta = calcMargemBruta(vendasMes);
     const margemBrutaAnt = calcMargemBruta(vendasMesAnt);
-    const margemBrutaPct = faturamento > 0 ? (margemBruta / faturamento) * 100 : 0;
-    const margemBrutaPctAnt = faturamentoAnt > 0 ? (margemBrutaAnt / faturamentoAnt) * 100 : 0;
+    const margemBrutaPct = round2(divSegura(margemBruta, faturamento) * 100);
+    const margemBrutaPctAnt = round2(divSegura(margemBrutaAnt, faturamentoAnt) * 100);
 
     // Lucro e Margem — mesma lógica do DRE (receita bruta - total despesas)
     const calcDRELucro = (mes: string) => {
       const mVendas = vendas.filter(v => v.data_venda?.startsWith(mes) && v.status !== 'CANCELADO');
       const mReceber = receber.filter(r => r.data_vencimento?.startsWith(mes) && (r.status === 'RECEBIDO' || r.status === 'PENDENTE'));
-      const mPagar = pagar.filter(p => p.data_vencimento?.startsWith(mes) && (p.status === 'PAGO' || p.status === 'PENDENTE'));
+      // O custo do fornecedor já entra como CMV (valor_total_custo da venda).
+      // A conta a pagar auto-gerada da MESMA venda é o mesmo custo — contar as
+      // duas dobrava a despesa. Mesmo filtro usado na página de DRE.
+      const mPagar = pagar.filter(p =>
+        p.data_vencimento?.startsWith(mes)
+        && (p.status === 'PAGO' || p.status === 'PENDENTE')
+        && !(p.auto_gerado && p.origem === 'VENDA'));
 
-      const recBrutaVendas = mVendas.reduce((s, v) => s + v.valor_final, 0);
-      const recComissoes = mReceber.filter(cr => cr.origem === 'COMISSAO_FORNECEDOR').reduce((s, cr) => s + cr.valor_final, 0);
-      const recFee = mReceber.filter(cr => cr.origem === 'FEE').reduce((s, cr) => s + cr.valor_final, 0);
-      const recOutras = mReceber.filter(cr => cr.origem === 'OUTROS').reduce((s, cr) => s + cr.valor_final, 0);
-      const receitaBruta = recBrutaVendas + recComissoes + recFee + recOutras;
+      const recBrutaVendas = somaPor(mVendas, v => v.valor_final);
+      const recComissoes = somaPor(mReceber.filter(cr => cr.origem === 'COMISSAO_FORNECEDOR'), cr => cr.valor_final);
+      const recFee = somaPor(mReceber.filter(cr => cr.origem === 'FEE'), cr => cr.valor_final);
+      const recOutras = somaPor(mReceber.filter(cr => cr.origem === 'OUTROS'), cr => cr.valor_final);
+      const receitaBruta = soma([recBrutaVendas, recComissoes, recFee, recOutras]);
 
-      const cmv = mVendas.reduce((s, v) => s + (v.valor_total_custo || 0), 0);
-      const totalDesp = mPagar.reduce((s, p) => s + p.valor_final, 0);
-      const totalDespesas = cmv + totalDesp;
+      const cmv = somaPor(mVendas, v => v.valor_total_custo);
+      const totalDesp = somaPor(mPagar, p => p.valor_final);
+      const totalDespesas = soma([cmv, totalDesp]);
 
-      const lucroLiq = receitaBruta - totalDespesas;
-      const margemLiq = receitaBruta > 0 ? (lucroLiq / receitaBruta) * 100 : 0;
+      const lucroLiq = round2(receitaBruta - totalDespesas);
+      const margemLiq = round2(divSegura(lucroLiq, receitaBruta) * 100);
       return { receitaBruta, lucroLiq, margemLiq };
     };
 
@@ -284,7 +314,7 @@ export default function DashboardPage() {
 
     // Deltas
     const delta = (atual: number, anterior: number) =>
-      anterior > 0 ? ((atual - anterior) / anterior) * 100 : (atual > 0 ? 100 : 0);
+      variacaoPct(atual, anterior) ?? (num(atual) > 0 ? 100 : 0);
 
     return {
       faturamento, faturamentoAnt, qtdVendas, qtdVendasAnt,
@@ -304,7 +334,7 @@ export default function DashboardPage() {
       label: 'Faturamento', valor: BRL(calc.faturamento), valorNum: calc.faturamento,
       delta: calc.faturamentoAnt > 0 ? calc.delta(calc.faturamento, calc.faturamentoAnt) : null,
       deltaLabel: 'vs mes anterior',
-      meta: metas.reduce((s, m) => s + (m.meta_valor || 0), 0) || null,
+      meta: somaPor(metas, m => m.meta_valor) || null,
       metaLabel: 'Meta',
       icon: TrendingUp, color: 'text-[var(--t-green)]', bgColor: 'bg-[var(--t-green)]/10',
       link: '/financeiro-ag',
@@ -382,7 +412,7 @@ export default function DashboardPage() {
     // Parcelas vencidas (a receber)
     const parcelasAtrasadas = receber.filter(r => r.status === 'ATRASADO' || (r.status === 'PENDENTE' && r.data_vencimento < hj));
     if (parcelasAtrasadas.length > 0) {
-      const total = parcelasAtrasadas.reduce((s, r) => s + r.valor_final, 0);
+      const total = somaPor(parcelasAtrasadas, r => r.valor_final);
       list.push({
         id: 'parcelas_vencidas', tipo: 'PARCELA_VENCIDA', prioridade: 'CRITICO',
         titulo: `${parcelasAtrasadas.length} parcela(s) vencida(s) — ${BRL(total)} a receber`,
@@ -394,7 +424,7 @@ export default function DashboardPage() {
     // Pagamentos vencidos (a pagar)
     const pagamentosVencidos = pagar.filter(p => p.status === 'VENCIDO' || (p.status === 'PENDENTE' && p.data_vencimento < hj));
     if (pagamentosVencidos.length > 0) {
-      const total = pagamentosVencidos.reduce((s, p) => s + p.valor_final, 0);
+      const total = somaPor(pagamentosVencidos, p => p.valor_final);
       list.push({
         id: 'pagamentos_vencidos', tipo: 'PAGAMENTO_VENCIDO', prioridade: 'CRITICO',
         titulo: `${pagamentosVencidos.length} pagamento(s) vencido(s) — ${BRL(total)}`,
@@ -406,7 +436,7 @@ export default function DashboardPage() {
     // Pagamentos proximos (5 dias)
     const pagProximos = pagar.filter(p => p.status === 'PENDENTE' && daysUntil(p.data_vencimento) >= 0 && daysUntil(p.data_vencimento) <= 5);
     if (pagProximos.length > 0) {
-      const total = pagProximos.reduce((s, p) => s + p.valor_final, 0);
+      const total = somaPor(pagProximos, p => p.valor_final);
       list.push({
         id: 'pag_proximos', tipo: 'PAGAMENTO_PROXIMO', prioridade: 'ATENCAO',
         titulo: `${pagProximos.length} pagamento(s) nos proximos 5 dias — ${BRL(total)}`,
@@ -417,7 +447,7 @@ export default function DashboardPage() {
 
     // CAC subiu
     if (calc.cacValor > 0 && calc.cacValorAnt > 0 && calc.cacValor > calc.cacValorAnt * 1.05) {
-      const pctSubiu = ((calc.cacValor - calc.cacValorAnt) / calc.cacValorAnt * 100).toFixed(0);
+      const pctSubiu = (variacaoPct(calc.cacValor, calc.cacValorAnt) ?? 0).toFixed(0);
       list.push({
         id: 'cac_subiu', tipo: 'CAC_SUBIU', prioridade: 'ATENCAO',
         titulo: `CAC subiu ${pctSubiu}% vs mes anterior`,
@@ -453,7 +483,7 @@ export default function DashboardPage() {
     // Parcelas vencendo hoje
     const parcelasHoje = receber.filter(r => r.status === 'PENDENTE' && r.data_vencimento === hj);
     if (parcelasHoje.length > 0) {
-      const total = parcelasHoje.reduce((s, r) => s + r.valor_final, 0);
+      const total = somaPor(parcelasHoje, r => r.valor_final);
       list.push({
         id: 'parcelas_hoje', tipo: 'PARCELA_HOJE', prioridade: 'INFO',
         titulo: `${parcelasHoje.length} parcela(s) vencem hoje — ${BRL(total)}`,
@@ -477,8 +507,9 @@ export default function DashboardPage() {
     let m = mesAtual;
     for (let i = 0; i < 6; i++) {
       const vs = vendas.filter(v => v.data_venda?.startsWith(m) && v.status !== 'CANCELADO');
-      const fat = vs.reduce((s, v) => s + (v.valor_final || 0), 0);
-      const rec = vs.reduce((s, v) => s + (v.markup_realizado || 0) + v.produtos.reduce((ps, p) => ps + (p.comissao_fornecedor || 0), 0), 0);
+      const fat = somaPor(vs, v => v.valor_final);
+      // Mesma regra do KPI: receita da agência em R$, nunca percentual cru.
+      const rec = somaPor(vs, v => v.receita_agencia);
       months.unshift({ mes: m, label: getMesLabel(m), faturamento: fat, receita: rec });
       m = prevMonth(m);
     }
@@ -491,15 +522,17 @@ export default function DashboardPage() {
     let saldoAcum = 0;
     const raw: { mes: string; entradas: number; saidas: number }[] = [];
     for (let i = 0; i < 6; i++) {
-      const ent = receber.filter(r => r.status === 'RECEBIDO' && (r.data_recebimento || r.data_vencimento)?.startsWith(m))
-        .reduce((s, r) => s + r.valor_final, 0);
-      const sai = pagar.filter(p => p.status === 'PAGO' && (p.data_pagamento || p.data_vencimento)?.startsWith(m))
-        .reduce((s, p) => s + p.valor_final, 0);
+      const ent = somaPor(
+        receber.filter(r => r.status === 'RECEBIDO' && (r.data_recebimento || r.data_vencimento)?.startsWith(m)),
+        r => r.valor_final);
+      const sai = somaPor(
+        pagar.filter(p => p.status === 'PAGO' && (p.data_pagamento || p.data_vencimento)?.startsWith(m)),
+        p => p.valor_final);
       raw.unshift({ mes: m, entradas: ent, saidas: sai });
       m = prevMonth(m);
     }
     raw.forEach(r => {
-      saldoAcum += r.entradas - r.saidas;
+      saldoAcum = round2(saldoAcum + round2(r.entradas - r.saidas));
       months.push({ mes: r.mes, label: getMesLabel(r.mes), entradas: r.entradas, saidas: r.saidas, saldo: saldoAcum });
     });
     return months;
@@ -510,7 +543,7 @@ export default function DashboardPage() {
     calc.vendasMes.forEach(v => {
       v.produtos.forEach(p => {
         const tipo = p.tipo || 'OUTROS';
-        map[tipo] = (map[tipo] || 0) + p.valor_venda;
+        map[tipo] = round2((map[tipo] || 0) + paraBRL(p.valor_venda, p.moeda, p.cambio));
       });
     });
     const cores: Record<string, string> = {
@@ -518,9 +551,9 @@ export default function DashboardPage() {
       RECEPTIVO: '#22d3ee', CRUZEIRO: '#818cf8', CARRO: '#fb923c', INGRESSO: '#f472b6',
       GRUPO: '#2dd4bf', OUTROS: '#94a3b8',
     };
-    const total = Object.values(map).reduce((s, v) => s + v, 0);
+    const total = soma(Object.values(map));
     return Object.entries(map).map(([tipo, valor]) => ({
-      tipo, valor, pct: total > 0 ? (valor / total) * 100 : 0,
+      tipo, valor, pct: round2(divSegura(valor, total) * 100),
       cor: cores[tipo] || '#94a3b8',
     })).sort((a, b) => b.valor - a.valor);
   }, [calc.vendasMes]);
@@ -543,9 +576,7 @@ export default function DashboardPage() {
         const anoAtual = parseInt(hj.slice(0, 4));
         const idade = anoAtual - parseInt(ay);
         const diasAte = (() => {
-          const thisYear = new Date(`${anoAtual}-${dnMMDD}T00:00:00`);
-          const now = new Date(hj + 'T00:00:00');
-          const diff = Math.ceil((thisYear.getTime() - now.getTime()) / 86400000);
+          const diff = daysUntil(`${anoAtual}-${dnMMDD}`);
           return diff < 0 ? diff + 365 : diff;
         })();
         return {
@@ -598,7 +629,7 @@ export default function DashboardPage() {
       parts.push('Nenhuma venda registrada no mes.');
     }
     if (calc.receita > 0) {
-      const pctReceita = calc.faturamento > 0 ? ((calc.receita / calc.faturamento) * 100).toFixed(0) : '0';
+      const pctReceita = (divSegura(calc.receita, calc.faturamento) * 100).toFixed(0);
       parts.push(`A receita da agencia (comissoes + markup) foi de ${BRL(calc.receita)} (${pctReceita}%).`);
     }
     if (calc.cacValor > 0) {
@@ -712,7 +743,7 @@ export default function DashboardPage() {
             const Icon = kpi.icon;
             const deltaPositive = kpi.invertDelta ? (kpi.delta !== null && kpi.delta < 0) : (kpi.delta !== null && kpi.delta > 0);
             const deltaNeutral = kpi.delta === null || kpi.delta === 0;
-            const metaPct = kpi.meta && kpi.meta > 0 ? Math.min((kpi.valorNum / kpi.meta) * 100, 100) : null;
+            const metaPct = kpi.meta && kpi.meta > 0 ? Math.min(divSegura(kpi.valorNum, kpi.meta) * 100, 100) : null;
             const metaCor = metaPct !== null
               ? metaPct >= 80 ? 'bg-emerald-400' : metaPct >= 50 ? 'bg-amber-400' : 'bg-red-400'
               : '';

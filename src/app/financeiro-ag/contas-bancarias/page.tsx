@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { somaPor } from '@/lib/money';
 import {
   Plus, X, Check, Trash2, Pencil, Wallet, Building2, CreditCard,
   Banknote, PiggyBank, TrendingUp,
@@ -147,7 +148,7 @@ export default function ContasBancariasPage() {
     load();
   }
 
-  const totalSaldo = items.reduce((s, i) => s + i.saldo_atual, 0);
+  const totalSaldo = somaPor(items, i => i.saldo_atual);
 
   return (
     <div className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-6">

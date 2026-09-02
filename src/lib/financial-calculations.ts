@@ -2,6 +2,18 @@ import { GrupoViagem } from './types';
 import { FinanceiroGrupo, Venda, Parcela, PagamentoFornecedor, FormaPagamento, TipoApto, PAX_PER_APTO, DREAgenciaResult } from './financial-types';
 import { calcProposta, PropostaResult } from './calculations';
 import { generateId } from './utils';
+import {
+  addDias,
+  dataLocal,
+  dividirParcelas,
+  divSegura,
+  hojeISO,
+  num,
+  percentual,
+  round2,
+  soma,
+  somaPor,
+} from './money';
 
 // Bridge: read PROPOSTA data as ProdutoGrupo
 export function getProdutoGrupo(g: GrupoViagem) {
@@ -65,7 +77,7 @@ export function getPrecoSugerido(proposta: PropostaResult, tipoApto: TipoApto, f
 // Generate installments for a sale
 export function gerarParcelas(venda: Venda): Parcela[] {
   const parcelas: Parcela[] = [];
-  const dataVenda = new Date(venda.data_venda);
+  const dataVenda = venda.data_venda;
 
   if (venda.forma_pagamento === 'AVISTA_PIX') {
     parcelas.push({
@@ -75,7 +87,7 @@ export function gerarParcelas(venda: Venda): Parcela[] {
       numero_parcela: 1,
       total_parcelas: 1,
       data_vencimento: venda.data_venda,
-      valor: venda.valor_final,
+      valor: round2(num(venda.valor_final)),
       status: 'PENDENTE',
       data_recebimento: null,
       valor_recebido: null,
@@ -83,20 +95,14 @@ export function gerarParcelas(venda: Venda): Parcela[] {
       observacoes: '',
     });
   } else {
-    const n = venda.qtd_parcelas || 1;
-    const valorParcela = venda.valor_final / n;
+    const n = Math.max(1, Math.floor(num(venda.qtd_parcelas)) || 1);
+    // Resíduo dos centavos na última parcela — a soma tem que fechar o total.
+    const valoresParcela = dividirParcelas(num(venda.valor_final), n);
     const isBoleto = venda.forma_pagamento === 'BOLETO';
 
     for (let i = 0; i < n; i++) {
-      const dt = new Date(dataVenda);
-      if (isBoleto && i === 0) {
-        // First boleto: +5 business days (approximate with +7 calendar days)
-        dt.setDate(dt.getDate() + 7);
-      } else if (isBoleto) {
-        dt.setDate(dt.getDate() + 7 + (i * 30));
-      } else {
-        dt.setDate(dt.getDate() + (i * 30));
-      }
+      // First boleto: +5 business days (approximate with +7 calendar days)
+      const offset = isBoleto ? 7 + (i * 30) : i * 30;
 
       parcelas.push({
         id: generateId(),
@@ -104,8 +110,8 @@ export function gerarParcelas(venda: Venda): Parcela[] {
         cliente_nome: venda.cliente_nome,
         numero_parcela: i + 1,
         total_parcelas: n,
-        data_vencimento: dt.toISOString().split('T')[0],
-        valor: Math.round(valorParcela * 100) / 100,
+        data_vencimento: addDias(dataVenda, offset),
+        valor: valoresParcela[i],
         status: 'PENDENTE',
         data_recebimento: null,
         valor_recebido: null,
@@ -120,7 +126,7 @@ export function gerarParcelas(venda: Venda): Parcela[] {
 
 // Auto-update overdue installments
 export function atualizarParcelasAtrasadas(parcelas: Parcela[]): Parcela[] {
-  const hoje = new Date().toISOString().split('T')[0];
+  const hoje = hojeISO();
   return parcelas.map(p => {
     if (p.status === 'PENDENTE' && p.data_vencimento < hoje) {
       return { ...p, status: 'ATRASADO' as const };
@@ -135,9 +141,9 @@ export function calcVendasMetrics(fin: FinanceiroGrupo, maxPax: number) {
   const totalAptos = ativas.length;
   const totalPax = ativas.reduce((s, v) => s + v.passageiros.length, 0);
   const totalChdExtras = ativas.reduce((s, v) => s + v.chds_extras.length, 0);
-  const receitaBruta = ativas.reduce((s, v) => s + v.valor_total_apto, 0);
-  const descontos = ativas.reduce((s, v) => s + v.desconto_concedido, 0);
-  const receitaLiquida = ativas.reduce((s, v) => s + v.valor_final, 0);
+  const receitaBruta = somaPor(ativas, v => v.valor_total_apto);
+  const descontos = somaPor(ativas, v => v.desconto_concedido);
+  const receitaLiquida = somaPor(ativas, v => v.valor_final);
   const cortesiasUsadas = ativas.filter(v => v.is_cortesia).length;
 
   const vendasPorTipo: Record<string, number> = { SGL: 0, DBL: 0, TPL: 0, QDP: 0 };
@@ -154,9 +160,9 @@ export function calcVendasMetrics(fin: FinanceiroGrupo, maxPax: number) {
     receitaBruta,
     descontos,
     receitaLiquida,
-    ticketMedioApto: totalAptos > 0 ? receitaLiquida / totalAptos : 0,
-    ticketMedioPax: totalPax > 0 ? receitaLiquida / totalPax : 0,
-    taxaOcupacao: maxPax > 0 ? (totalPax / maxPax) * 100 : 0,
+    ticketMedioApto: divSegura(receitaLiquida, totalAptos),
+    ticketMedioPax: divSegura(receitaLiquida, totalPax),
+    taxaOcupacao: divSegura(totalPax, maxPax) * 100,
     cortesiasUsadas,
     vendasPorTipo,
     vendasPorForma,
@@ -170,24 +176,23 @@ export function calcRecebimentosMetrics(parcelas: Parcela[]) {
   const pendentes = ativas.filter(p => p.status === 'PENDENTE');
   const atrasadas = ativas.filter(p => p.status === 'ATRASADO');
 
-  const totalRecebido = recebidas.reduce((s, p) => s + (p.valor_recebido || 0), 0);
-  const totalPendente = pendentes.reduce((s, p) => s + p.valor, 0);
-  const totalAtrasado = atrasadas.reduce((s, p) => s + p.valor, 0);
-  const totalAReceber = totalPendente + totalAtrasado;
+  const totalRecebido = somaPor(recebidas, p => p.valor_recebido || 0);
+  const totalPendente = somaPor(pendentes, p => p.valor);
+  const totalAtrasado = somaPor(atrasadas, p => p.valor);
+  const totalAReceber = round2(totalPendente + totalAtrasado);
 
-  const hoje = new Date();
-  const em30d = new Date(hoje);
-  em30d.setDate(em30d.getDate() + 30);
-  const previsao30d = pendentes
-    .filter(p => p.data_vencimento <= em30d.toISOString().split('T')[0])
-    .reduce((s, p) => s + p.valor, 0);
+  const em30d = addDias(hojeISO(), 30);
+  const previsao30d = somaPor(
+    pendentes.filter(p => p.data_vencimento <= em30d),
+    p => p.valor,
+  );
 
   return {
     totalRecebido,
     totalPendente,
     totalAtrasado,
     totalAReceber,
-    taxaInadimplencia: (totalRecebido + totalAReceber) > 0 ? (totalAtrasado / (totalRecebido + totalAReceber)) * 100 : 0,
+    taxaInadimplencia: divSegura(totalAtrasado, totalRecebido + totalAReceber) * 100,
     previsao30d,
   };
 }
@@ -195,23 +200,26 @@ export function calcRecebimentosMetrics(parcelas: Parcela[]) {
 // Supplier payment metrics
 export function calcFornecedoresMetrics(pagamentos: PagamentoFornecedor[]) {
   const ativos = pagamentos.filter(p => p.status !== 'CANCELADO');
-  const custoCotado = ativos.reduce((s, p) => s + p.valor_brl_cotado, 0);
-  const custoNegociado = ativos.reduce((s, p) => s + (p.valor_negociado * (p.cambio_pagamento || p.cambio_cotacao)), 0);
-  const totalPago = ativos.reduce((s, p) => s + p.valor_brl_pago, 0);
-  const totalAPagar = custoNegociado - totalPago;
-  const totalVencido = ativos
-    .filter(p => p.status === 'VENCIDO')
-    .reduce((s, p) => s + ((p.valor_negociado * (p.cambio_pagamento || p.cambio_cotacao)) - p.valor_brl_pago), 0);
+  const emBRL = (p: PagamentoFornecedor) =>
+    round2(num(p.valor_negociado) * (num(p.cambio_pagamento) || num(p.cambio_cotacao) || 1));
+  const custoCotado = somaPor(ativos, p => p.valor_brl_cotado);
+  const custoNegociado = somaPor(ativos, emBRL);
+  const totalPago = somaPor(ativos, p => p.valor_brl_pago);
+  const totalAPagar = round2(custoNegociado - totalPago);
+  const totalVencido = somaPor(
+    ativos.filter(p => p.status === 'VENCIDO'),
+    p => round2(emBRL(p) - num(p.valor_brl_pago)),
+  );
 
   const porCategoria: Record<string, number> = {};
   for (const p of ativos) {
-    porCategoria[p.categoria] = (porCategoria[p.categoria] || 0) + (p.valor_negociado * (p.cambio_pagamento || p.cambio_cotacao));
+    porCategoria[p.categoria] = round2((porCategoria[p.categoria] || 0) + emBRL(p));
   }
 
   return {
     custoCotado,
     custoNegociado,
-    economiaNegociacao: custoCotado - custoNegociado,
+    economiaNegociacao: round2(custoCotado - custoNegociado),
     totalPago,
     totalAPagar,
     totalVencido,
@@ -252,15 +260,15 @@ export function calcFluxoCaixa(fin: FinanceiroGrupo, ratioComissao?: number): Fl
     const entry = ensureMonth(m);
     if (p.status === 'RECEBIDO' && p.data_recebimento) {
       const mr = getMonth(p.data_recebimento);
-      const val = p.valor_recebido || p.valor;
-      ensureMonth(mr).er += val;
-      ensureMonth(mr).ec += val * ratio;
+      const val = num(p.valor_recebido) || num(p.valor);
+      ensureMonth(mr).er = round2(ensureMonth(mr).er + val);
+      ensureMonth(mr).ec = round2(ensureMonth(mr).ec + val * ratio);
     }
     if (p.status === 'PENDENTE' || p.status === 'ATRASADO') {
-      entry.ep += p.valor;
-      entry.ec += p.valor * ratio;
+      entry.ep = round2(entry.ep + num(p.valor));
+      entry.ec = round2(entry.ec + num(p.valor) * ratio);
     } else if (p.status === 'RECEBIDO') {
-      entry.ep += p.valor;
+      entry.ep = round2(entry.ep + num(p.valor));
     }
   }
 
@@ -270,13 +278,13 @@ export function calcFluxoCaixa(fin: FinanceiroGrupo, ratioComissao?: number): Fl
     if (pg.data_vencimento) {
       const m = getMonth(pg.data_vencimento);
       const entry = ensureMonth(m);
-      const val = pg.valor_negociado * (pg.cambio_pagamento || pg.cambio_cotacao);
-      entry.sp += val;
-      entry.srp += val;
+      const val = round2(num(pg.valor_negociado) * (num(pg.cambio_pagamento) || num(pg.cambio_cotacao) || 1));
+      entry.sp = round2(entry.sp + val);
+      entry.srp = round2(entry.srp + val);
     }
     if (pg.data_pagamento) {
       const m = getMonth(pg.data_pagamento);
-      ensureMonth(m).sr += pg.valor_brl_pago;
+      ensureMonth(m).sr = round2(ensureMonth(m).sr + num(pg.valor_brl_pago));
     }
   }
 
@@ -285,10 +293,10 @@ export function calcFluxoCaixa(fin: FinanceiroGrupo, ratioComissao?: number): Fl
   let acum = 0;
   let acumAgencia = 0;
   return sorted.map(([mes, d]) => {
-    const saldo = d.ep - d.sp;
-    acum += saldo;
-    const saldoAg = d.ec - d.srp;
-    acumAgencia += saldoAg;
+    const saldo = round2(d.ep - d.sp);
+    acum = round2(acum + saldo);
+    const saldoAg = round2(d.ec - d.srp);
+    acumAgencia = round2(acumAgencia + saldoAg);
     return {
       mes,
       entradasPrevistas: d.ep,
@@ -317,71 +325,79 @@ export function calcDRE(g: GrupoViagem, fin: FinanceiroGrupo): DREAgenciaResult 
   // 1. FATURAMENTO BRUTO (total cobrado do cliente)
   const faturamentoBrutoPorTipo: Record<string, number> = { SGL: 0, DBL: 0, TPL: 0, QDP: 0 };
   for (const v of ativas) {
-    faturamentoBrutoPorTipo[v.tipo_apto] += v.valor_total_apto;
+    faturamentoBrutoPorTipo[v.tipo_apto] = round2(num(faturamentoBrutoPorTipo[v.tipo_apto]) + num(v.valor_total_apto));
   }
-  const faturamentoChdExtras = ativas.reduce((s, v) => s + v.chds_extras.reduce((ss, c) => ss + c.valor_final, 0), 0);
-  const faturamentoBruto = ativas.reduce((s, v) => s + v.valor_total_apto, 0) + faturamentoChdExtras;
+  const faturamentoChdExtras = somaPor(ativas, v => somaPor(v.chds_extras, c => c.valor_final));
+  const faturamentoBruto = round2(somaPor(ativas, v => v.valor_total_apto) + faturamentoChdExtras);
 
   // 2. DEDUÇÕES DO FATURAMENTO (cancelamentos e cortesias)
-  const cancelamentoVal = canceladas.reduce((s, v) => s + v.valor_final, 0);
-  const cortesiaVal = cortesiasVendas.reduce((s, v) => s + v.valor_total_apto, 0);
-  const faturamentoLiquido = faturamentoBruto - cancelamentoVal - cortesiaVal;
+  const cancelamentoVal = somaPor(canceladas, v => v.valor_final);
+  const cortesiaVal = somaPor(cortesiasVendas, v => v.valor_total_apto);
+  const faturamentoLiquido = round2(faturamentoBruto - cancelamentoVal - cortesiaVal);
 
   // 3. REPASSES A FORNECEDORES (pass-through — não é receita da agência)
   const categorias = ['TKT', 'HTL', 'REC', 'CAR', 'GUIA', 'SEG', 'NAVIO', 'ING', 'BRINDE'] as const;
   const repassesPorCategoria: Record<string, number> = {};
   for (const cat of categorias) {
     const fornecedores = fin.pagamentos_fornecedores.filter(p => p.categoria === cat && p.status !== 'CANCELADO');
-    repassesPorCategoria[cat] = fornecedores.reduce((s, p) => {
-      const val = p.valor_negociado > 0 ? p.valor_negociado : p.valor_cotado;
-      return s + val * (p.cambio_pagamento || p.cambio_cotacao);
-    }, 0);
+    repassesPorCategoria[cat] = somaPor(fornecedores, p => {
+      const val = num(p.valor_negociado) > 0 ? num(p.valor_negociado) : num(p.valor_cotado);
+      return round2(val * (num(p.cambio_pagamento) || num(p.cambio_cotacao) || 1));
+    });
   }
-  const repassesCustosExtras = fin.custos_extras.reduce((s, c) => s + c.valor, 0);
-  const repassesTotal = Object.values(repassesPorCategoria).reduce((a, b) => a + b, 0) + repassesCustosExtras;
+  const repassesCustosExtras = somaPor(fin.custos_extras, c => c.valor);
+  const repassesTotal = round2(soma(Object.values(repassesPorCategoria)) + repassesCustosExtras);
 
   // 4. RECEITA DA AGÊNCIA (comissão = faturamento - repasses)
-  const receitaBrutaAgencia = faturamentoLiquido - repassesTotal;
+  const receitaBrutaAgencia = round2(faturamentoLiquido - repassesTotal);
 
   // 5. DEDUÇÕES DA RECEITA (descontos saem da margem da agência)
-  const descontosConcedidos = ativas.reduce((s, v) => s + v.desconto_concedido, 0);
-  const receitaLiquidaAgencia = receitaBrutaAgencia - descontosConcedidos;
+  const descontosConcedidos = somaPor(ativas, v => v.desconto_concedido);
+  const receitaLiquidaAgencia = round2(receitaBrutaAgencia - descontosConcedidos);
 
   // 6. CUSTOS OPERACIONAIS (custos próprios da agência)
   const vendasCartao = ativas.filter(v => v.forma_pagamento === 'CARTAO');
-  const faturamentoCartao = vendasCartao.reduce((s, v) => s + v.valor_final, 0);
-  const taxaAdquirencia = faturamentoCartao > 0 ? faturamentoCartao - (faturamentoCartao * g.params.tx_ad_mp) : 0;
+  const faturamentoCartao = somaPor(vendasCartao, v => v.valor_final);
+  // tx_ad_mp é COEFICIENTE de recebimento do cartão (mesma semântica de
+  // calcProposta: totalCartao = avista / tx_ad_mp). O custo da adquirência é o
+  // que a maquininha retém: faturamento × (1 − coeficiente).
+  // tx_ad_mp = 0 é o modelo simples (cartão = à vista, taxa não repassada) —
+  // sem coeficiente NÃO existe custo de adquirência a lançar.
+  const coefCartao = num(g.params.tx_ad_mp);
+  const taxaAdquirencia = coefCartao > 0 && coefCartao < 1
+    ? round2(faturamentoCartao * (1 - coefCartao))
+    : 0;
 
   const vendasBoleto = ativas.filter(v => v.forma_pagamento === 'BOLETO');
-  const totalBoletos = vendasBoleto.reduce((s, v) => s + v.qtd_parcelas, 0);
-  const taxaBoleto = totalBoletos * g.params.tx_boleto;
+  const totalBoletos = vendasBoleto.reduce((s, v) => s + num(v.qtd_parcelas), 0);
+  const taxaBoleto = round2(totalBoletos * num(g.params.tx_boleto));
 
-  const contratoComissao = g.params.contrato * ativas.filter(v => !v.is_cortesia).length;
+  const contratoComissao = round2(num(g.params.contrato) * ativas.filter(v => !v.is_cortesia).length);
 
-  let variacaoCambial = 0;
-  for (const p of fin.pagamentos_fornecedores) {
-    if (p.status === 'CANCELADO' || p.moeda === 'BRL') continue;
-    if (p.cambio_pagamento && p.cambio_pagamento !== p.cambio_cotacao) {
-      variacaoCambial += (p.cambio_pagamento - p.cambio_cotacao) * p.valor_negociado;
-    }
-  }
+  const variacaoCambial = somaPor(
+    fin.pagamentos_fornecedores.filter(
+      p => p.status !== 'CANCELADO' && p.moeda !== 'BRL'
+        && p.cambio_pagamento && p.cambio_pagamento !== p.cambio_cotacao,
+    ),
+    p => round2((num(p.cambio_pagamento) - num(p.cambio_cotacao)) * num(p.valor_negociado)),
+  );
 
-  const custosAdmin = fin.config.custos_administrativos;
-  const custosOpTotal = taxaAdquirencia + taxaBoleto + contratoComissao + variacaoCambial + custosAdmin;
+  const custosAdmin = num(fin.config.custos_administrativos);
+  const custosOpTotal = soma([taxaAdquirencia, taxaBoleto, contratoComissao, variacaoCambial, custosAdmin]);
 
   // 7. LUCRO OPERACIONAL
-  const lucroOperacional = receitaLiquidaAgencia - custosOpTotal;
-  const margemOperacional = receitaLiquidaAgencia > 0 ? (lucroOperacional / receitaLiquidaAgencia) * 100 : 0;
+  const lucroOperacional = round2(receitaLiquidaAgencia - custosOpTotal);
+  const margemOperacional = receitaLiquidaAgencia > 0 ? round2(divSegura(lucroOperacional, receitaLiquidaAgencia) * 100) : 0;
 
   // 8. IMPOSTOS (sobre RECEITA da agência, não sobre faturamento!)
-  const aliquotaImposto = fin.config.aliquota_imposto;
-  const impostos = receitaLiquidaAgencia > 0 ? receitaLiquidaAgencia * (aliquotaImposto / 100) : 0;
+  const aliquotaImposto = num(fin.config.aliquota_imposto);
+  const impostos = receitaLiquidaAgencia > 0 ? percentual(receitaLiquidaAgencia, aliquotaImposto) : 0;
   const outrasTaxas = 0;
-  const totalImpostos = impostos + outrasTaxas;
+  const totalImpostos = round2(impostos + outrasTaxas);
 
   // 9. LUCRO LÍQUIDO
-  const lucroLiquido = lucroOperacional - totalImpostos;
-  const margemLiquida = receitaLiquidaAgencia > 0 ? (lucroLiquido / receitaLiquidaAgencia) * 100 : 0;
+  const lucroLiquido = round2(lucroOperacional - totalImpostos);
+  const margemLiquida = receitaLiquidaAgencia > 0 ? round2(divSegura(lucroLiquido, receitaLiquidaAgencia) * 100) : 0;
 
   return {
     faturamentoBrutoPorTipo, faturamentoChdExtras, faturamentoBruto,
@@ -393,8 +409,8 @@ export function calcDRE(g: GrupoViagem, fin: FinanceiroGrupo): DREAgenciaResult 
     lucroOperacional, margemOperacional,
     aliquotaImposto, impostos, outrasTaxas, totalImpostos,
     lucroLiquido, margemLiquida,
-    margemSobreFaturamento: faturamentoLiquido > 0 ? (lucroLiquido / faturamentoLiquido) * 100 : 0,
-    markupEfetivo: repassesTotal > 0 ? (receitaBrutaAgencia / repassesTotal) * 100 : 0,
+    margemSobreFaturamento: faturamentoLiquido > 0 ? round2(divSegura(lucroLiquido, faturamentoLiquido) * 100) : 0,
+    markupEfetivo: repassesTotal > 0 ? round2(divSegura(receitaBrutaAgencia, repassesTotal) * 100) : 0,
   };
 }
 
@@ -441,60 +457,54 @@ export function calcIndicadores(g: GrupoViagem, fin: FinanceiroGrupo): Indicador
   const custosOp = dre.custosOpTotal;
 
   // Break-even baseado na comissão por pax
-  const comissaoPorPax = paxVendidos > 0 ? receitaAgencia / paxVendidos : 0;
-  const custoOpPorPax = paxVendidos > 0 ? custosOp / paxVendidos : 0;
-  const custoFixo = fin.config.custos_administrativos;
-  const breakEvenPax = (comissaoPorPax - custoOpPorPax) > 0 ? custoFixo / (comissaoPorPax - custoOpPorPax) : 0;
+  const comissaoPorPax = divSegura(receitaAgencia, paxVendidos);
+  const custoOpPorPax = divSegura(custosOp, paxVendidos);
+  const custoFixo = num(fin.config.custos_administrativos);
+  const breakEvenPax = (comissaoPorPax - custoOpPorPax) > 0 ? divSegura(custoFixo, comissaoPorPax - custoOpPorPax) : 0;
 
   // Velocity
-  const datasVenda = ativas.map(v => v.data_venda).sort();
-  const hoje = new Date();
-  const primeiraVenda = datasVenda.length > 0 ? new Date(datasVenda[0]) : hoje;
+  const datasVenda = ativas.map(v => v.data_venda).filter(Boolean).sort();
+  const hoje = dataLocal(hojeISO())!;
+  const primeiraVenda = datasVenda.length > 0 ? (dataLocal(datasVenda[0]) ?? hoje) : hoje;
   const diasDesdeAbertura = Math.max(1, Math.floor((hoje.getTime() - primeiraVenda.getTime()) / 86400000));
-  const paxPorDia = paxVendidos / diasDesdeAbertura;
+  const paxPorDia = divSegura(paxVendidos, diasDesdeAbertura);
   const diasParaLotar = paxPorDia > 0 ? vagasDisponiveis / paxPorDia : Infinity;
 
   const produtoGrupo = getProdutoGrupo(g);
   const primeiraPartida = produtoGrupo.datas.primeira_partida;
-  const dataLotacao = new Date(hoje);
-  dataLotacao.setDate(dataLotacao.getDate() + diasParaLotar);
-  const diasAteViagem = primeiraPartida ? Math.floor((new Date(primeiraPartida).getTime() - hoje.getTime()) / 86400000) : Infinity;
+  const dataLotacao = diasParaLotar === Infinity ? null : addDias(hojeISO(), Math.ceil(diasParaLotar));
+  const partidaDate = primeiraPartida ? dataLocal(primeiraPartida) : null;
+  const diasAteViagem = partidaDate ? Math.floor((partidaDate.getTime() - hoje.getTime()) / 86400000) : Infinity;
 
   // Cenários baseados em comissão (receita da agência)
   const taxaConv = fin.config.taxa_conversao_estimada / 100;
   const paxAdicionaisRealista = Math.round(vagasDisponiveis * taxaConv);
 
-  const cenarioPessimista = {
-    pax: paxVendidos,
-    receita: receitaAgencia,
-    custo: custosOp,
-    lucro: receitaAgencia - custosOp,
-    margem: receitaAgencia > 0 ? ((receitaAgencia - custosOp) / receitaAgencia) * 100 : 0,
-  };
+  const cenario = (pax: number, receita: number, custo: number) => ({
+    pax,
+    receita: round2(receita),
+    custo: round2(custo),
+    lucro: round2(receita - custo),
+    margem: receita > 0 ? round2(divSegura(receita - custo, receita) * 100) : 0,
+  });
 
-  const receitaRealista = receitaAgencia + (paxAdicionaisRealista * comissaoPorPax);
-  const custoRealista = custosOp + (paxAdicionaisRealista * custoOpPorPax);
-  const cenarioRealista = {
-    pax: paxVendidos + paxAdicionaisRealista,
-    receita: receitaRealista,
-    custo: custoRealista,
-    lucro: receitaRealista - custoRealista,
-    margem: receitaRealista > 0 ? ((receitaRealista - custoRealista) / receitaRealista) * 100 : 0,
-  };
+  const cenarioPessimista = cenario(paxVendidos, receitaAgencia, custosOp);
 
-  const receitaOtimista = receitaAgencia + (vagasDisponiveis * comissaoPorPax);
-  const custoOtimista = custosOp + (vagasDisponiveis * custoOpPorPax);
-  const cenarioOtimista = {
-    pax: maxPax,
-    receita: receitaOtimista,
-    custo: custoOtimista,
-    lucro: receitaOtimista - custoOtimista,
-    margem: receitaOtimista > 0 ? ((receitaOtimista - custoOtimista) / receitaOtimista) * 100 : 0,
-  };
+  const cenarioRealista = cenario(
+    paxVendidos + paxAdicionaisRealista,
+    receitaAgencia + (paxAdicionaisRealista * comissaoPorPax),
+    custosOp + (paxAdicionaisRealista * custoOpPorPax),
+  );
+
+  const cenarioOtimista = cenario(
+    maxPax,
+    receitaAgencia + (vagasDisponiveis * comissaoPorPax),
+    custosOp + (vagasDisponiveis * custoOpPorPax),
+  );
 
   return {
     paxVendidos, paxConfirmados, paxReservados,
-    taxaOcupacao: maxPax > 0 ? (paxVendidos / maxPax) * 100 : 0,
+    taxaOcupacao: divSegura(paxVendidos, maxPax) * 100,
     vagasDisponiveis,
     breakEvenPax: Math.ceil(breakEvenPax),
     breakEvenAtingido: paxVendidos >= breakEvenPax,
@@ -506,7 +516,7 @@ export function calcIndicadores(g: GrupoViagem, fin: FinanceiroGrupo): Indicador
     diasDesdeAbertura,
     paxPorDia,
     diasParaLotar: diasParaLotar === Infinity ? 0 : Math.ceil(diasParaLotar),
-    dataEstimadaLotacao: diasParaLotar !== Infinity ? dataLotacao.toISOString().split('T')[0] : null,
+    dataEstimadaLotacao: dataLotacao,
     vaiLotarATempo: diasParaLotar < diasAteViagem,
     cenarioPessimista, cenarioRealista, cenarioOtimista,
   };

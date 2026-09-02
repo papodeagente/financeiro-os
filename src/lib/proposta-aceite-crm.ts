@@ -18,6 +18,7 @@
 
 import type { Pool, PoolClient } from 'pg';
 import { generateId } from './utils';
+import { round2, num, somaPor, percentual, divSegura, hojeISO } from './money';
 
 // ============================================================
 // Tipos
@@ -92,8 +93,19 @@ function calcValorProposta(proposta: PropostaJSON): number {
     const opcoes = c.opcoes || [];
     if (opcoes.length === 0) continue;
     const destaque = opcoes.find(o => o.destaque) || opcoes[0];
-    return Number(destaque.valor_total || 0);
+    return round2(num(destaque.valor_total));
   }
+  return 0;
+}
+
+/** Comissão de fornecedor declarada na seção (valor em R$ ou percentual).
+ *  Proposta pública não tem custo: a comissão é a única receita real da
+ *  agência que dá pra apurar aqui. */
+function comissaoDaSecao(conteudo: Record<string, unknown>, valorVenda: number): number {
+  const direto = num(conteudo.comissao_valor ?? conteudo.comissao);
+  if (direto > 0) return round2(direto);
+  const pct = num(conteudo.comissao_percentual);
+  if (pct > 0) return percentual(valorVenda, pct);
   return 0;
 }
 
@@ -104,6 +116,7 @@ interface ProdutoExtraido {
   data_inicio: string;
   data_fim: string;
   valor_venda: number;
+  comissao_valor: number;   // R$ — 0 quando a proposta não informa
 }
 
 function extrairProdutos(proposta: PropostaJSON): ProdutoExtraido[] {
@@ -115,26 +128,30 @@ function extrairProdutos(proposta: PropostaJSON): ProdutoExtraido[] {
         check_in?: string; check_out?: string;
         preco_total?: number;
       };
+      const valorVenda = round2(num(c.preco_total));
       produtos.push({
         tipo: 'HOTEL',
         descricao: `${c.hotel_nome || 'Hospedagem'}${c.destino_nome ? ` — ${c.destino_nome}` : ''}`,
         fornecedor_nome: '',
         data_inicio: c.check_in || '',
         data_fim: c.check_out || '',
-        valor_venda: Number(c.preco_total || 0),
+        valor_venda: valorVenda,
+        comissao_valor: comissaoDaSecao(secao.conteudo, valorVenda),
       });
     } else if (secao.tipo === 'VOO' || (secao.tipo === 'TRANSPORTE' && (secao.conteudo as { tipo?: string }).tipo === 'VOO')) {
       const c = secao.conteudo as {
         origem?: string; destino?: string; data?: string;
         companhia?: string; valor?: number;
       };
+      const valorVenda = round2(num(c.valor));
       produtos.push({
         tipo: 'AEREO',
         descricao: `${c.origem || ''} → ${c.destino || ''}${c.companhia ? ` (${c.companhia})` : ''}`,
         fornecedor_nome: c.companhia || '',
         data_inicio: c.data || '',
         data_fim: c.data || '',
-        valor_venda: Number(c.valor || 0),
+        valor_venda: valorVenda,
+        comissao_valor: comissaoDaSecao(secao.conteudo, valorVenda),
       });
     }
   }
@@ -145,6 +162,7 @@ function extrairProdutos(proposta: PropostaJSON): ProdutoExtraido[] {
       fornecedor_nome: '',
       data_inicio: '', data_fim: '',
       valor_venda: calcValorProposta(proposta),
+      comissao_valor: 0,
     });
   }
   return produtos;
@@ -570,11 +588,23 @@ export async function processarEventoPropostaPublica(
         const nomeNegociacao = `${nomeRoteiro} | ${input.nome}`.slice(0, 200);
         const dataAcao = new Date().toISOString();
 
+        // Proposta pública não traz custo de fornecedor. Se a proposta
+        // declarar comissão, ela vira a receita da agência (e o custo é o
+        // resto). Sem comissão declarada, o custo fica desconhecido — e a
+        // venda é marcada com base_comissao_confiavel=false para que o
+        // cálculo de comissão do vendedor NÃO use o faturamento bruto como
+        // base (comissão sobre bruto = comissão sobre dinheiro do fornecedor).
+        const comissaoFornecedorTotal = somaPor(produtos, p => p.comissao_valor);
+        const baseComissaoConfiavel = comissaoFornecedorTotal > 0;
+        const custoTotal = baseComissaoConfiavel
+          ? Math.max(round2(valorTotal - comissaoFornecedorTotal), 0)
+          : 0;
+
         const novaVenda = {
           id: vendaId,
           numero: vendaNumero,
           nome_negociacao: nomeNegociacao,
-          data_venda: new Date().toISOString().split('T')[0],
+          data_venda: hojeISO(),
           data_acao_cliente: dataAcao,
           tipo: 'AVULSA',
           grupo_id: null,
@@ -595,21 +625,34 @@ export async function processarEventoPropostaPublica(
             data_fim: p.data_fim,
             localizador: '', cia_aerea: '', trecho: '',
             hotel_nome: '', tipo_apto: '',
-            valor_custo: 0,
+            // Custo = venda - comissão declarada. Sem comissão declarada
+            // permanece 0 (desconhecido), nunca "custo zero" de verdade.
+            valor_custo: p.comissao_valor > 0 ? Math.max(round2(p.valor_venda - p.comissao_valor), 0) : 0,
             valor_venda: p.valor_venda,
+            // comissao_fornecedor é PERCENTUAL do valor de venda do produto.
+            comissao_fornecedor: p.comissao_valor > 0
+              ? round2(divSegura(p.comissao_valor, p.valor_venda) * 100)
+              : 0,
+            moeda: 'BRL',
+            cambio: 1,
             status: 'RESERVADO',
           })),
-          valor_total_custo: 0,
+          valor_total_custo: custoTotal,
           valor_total_venda: valorTotal,
           markup_realizado: 0, desconto: 0,
           valor_final: valorTotal,
+          // Extensões JSONB lidas pelo cálculo de comissão do vendedor.
+          receita_agencia_estimada: comissaoFornecedorTotal,
+          base_comissao_confiavel: baseComissaoConfiavel,
           forma_pagamento: 'AVISTA_PIX', parcelas: 1, pagamento_detalhado: [],
           status: 'ORCAMENTO',
           motivo_cancelamento: '', recibo_emitido: false,
           intermediario_id: null, comissao_intermediario: 0,
           centro_custo: '', numero_po: '',
           anexos: [{ nome: nomeRoteiro, url: propostaUrl }],
-          observacoes: '',
+          observacoes: baseComissaoConfiavel
+            ? ''
+            : 'Origem proposta pública: custo de fornecedor não informado. Preencher custo/comissão antes de calcular a comissão do vendedor.',
           campos_personalizados: {
             origem: 'proposta_publica',
             tipo_acao: input.tipo,
