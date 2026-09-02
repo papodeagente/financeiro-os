@@ -12,7 +12,7 @@ import {
   BookOpen, Landmark, ArrowRightLeft, Package,
   ShoppingCart, ListOrdered, UserPlus, Building2, Briefcase,
   DollarSign, TrendingUp as RentIcon, Link2,
-  Workflow, Filter as FunilIcon, GitBranch as MindIcon,
+  GitBranch as MindIcon,
   Sparkles, Users, ClipboardList,
   PanelLeftClose, PanelLeftOpen,
   Eraser, LifeBuoy,
@@ -37,8 +37,6 @@ const PLANEJAMENTO_MENU: SidebarSection[] = [
     title: 'Planejamento',
     items: [
       { key: 'custos-negocio', label: 'Custos do negócio', icon: Wallet, href: '/planejamento/custos' },
-      { key: 'fluxogramas', label: 'Fluxogramas', icon: Workflow, href: '/planejamento/fluxogramas' },
-      { key: 'funis-campanhas', label: 'Funis e campanhas', icon: FunilIcon, href: '/planejamento/funis' },
       { key: 'mapas-mentais', label: 'Mapa mental', icon: MindIcon, href: '/planejamento/mapas-mentais' },
     ],
   },
