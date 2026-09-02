@@ -8,45 +8,13 @@ import { formatBRL, generateId } from '@/lib/utils';
 import { Copy, AlertTriangle, ArrowRight, Filter as FunilIcon, Download } from 'lucide-react';
 import Link from 'next/link';
 import type { FunilPayload } from '@/lib/funil-types';
-
-// ============================================================
-// TYPES
-// ============================================================
-
-interface CustoFixo {
-  categoria: string;
-  valor: number;
-  observacao: string;
-}
-
-interface CustoVariavel {
-  nome: string;
-  percentual: number;
-  base?: 'VENDA' | 'COMISSAO';
-}
-
-interface CanalMarketing {
-  canal: string;
-  valor: number;
-}
-
-interface CustosData {
-  id: string;
-  mes: string;
-  custos_fixos: CustoFixo[];
-  custos_variaveis: CustoVariavel[];
-  marketing: CanalMarketing[];
-  // Indicadores de planejamento
-  ticket_medio: number;
-  margem_comissao: number;
-  taxa_conversao: number;
-  lucro_desejado: number;
-  dias_uteis: number;
-  vendedores_ativos: number;
-}
-
-const CATEGORIAS_FIXOS = ['Aluguel/Sede', 'Folha de pagamento', 'Ferramentas e software', 'Marketing fixo recorrente', 'Outros fixos'];
-const CANAIS_MARKETING = ['Instagram Ads', 'Google Ads', 'Influenciadores', 'Eventos', 'Afiliados', 'Outros'];
+import {
+  calcRelatorio,
+  CATEGORIAS_FIXOS,
+  CANAIS_MARKETING,
+  type CustosData,
+  type CustoVariavel,
+} from '@/lib/planejamento-custos';
 
 const MESES_PT = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
                   'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
@@ -72,6 +40,10 @@ function mesPorExtenso(mes: string): string {
   return `${nome} de ${ano}`;
 }
 
+// ============================================================
+// TYPES
+// ============================================================
+
 function createDefault(mes: string): CustosData {
   return {
     id: generateId(),
@@ -96,85 +68,6 @@ function createDefault(mes: string): CustosData {
 // ============================================================
 // CALCULATIONS
 // ============================================================
-
-interface Relatorio {
-  custoFixoTotal: number;
-  marketingTotal: number;
-  custoFixoMaisMarketing: number;
-  comissaoPorVenda: number;
-  custoVarPorVenda: number;
-  lucroPorVenda: number;
-  vendasBreakEven: number;
-  faturamentoBreakEven: number;
-  vendasMeta: number;
-  faturamentoMeta: number;
-  comissaoMeta: number;
-  atendimentosMeta: number;
-  atendimentosPorDia: number;
-  vendasPorVendedorMes: number;
-  atendimentosPorVendedorDia: number;
-  cplMaximo: number;
-  roiMarketing: number;
-  margemLiquidaPct: number;
-  comissaoMediaPorVenda: number;
-  faturamentoDiario: number;
-  vendasPorDia: number;
-}
-
-function calcRelatorio(data: CustosData): Relatorio {
-  const custoFixoTotal = data.custos_fixos.reduce((s, c) => s + (c.valor || 0), 0);
-  const marketingTotal = data.marketing.reduce((s, c) => s + (c.valor || 0), 0);
-  // Excluir "Marketing fixo recorrente" dos fixos para evitar dupla contagem
-  // (já que marketing é somado separadamente via array data.marketing)
-  const mktFixoRecorrente = data.custos_fixos
-    .filter(c => c.categoria === 'Marketing fixo recorrente')
-    .reduce((s, c) => s + (c.valor || 0), 0);
-  const custoFixoMaisMarketing = (custoFixoTotal - mktFixoRecorrente) + marketingTotal;
-
-  const ticket = data.ticket_medio || 1;
-  const margemPct = (data.margem_comissao || 0) / 100;
-  const comissaoPorVenda = ticket * margemPct;
-
-  let custoVarPorVenda = 0;
-  for (const cv of data.custos_variaveis) {
-    const base = cv.base === 'COMISSAO' ? comissaoPorVenda : ticket;
-    custoVarPorVenda += base * (cv.percentual || 0) / 100;
-  }
-
-  const lucroPorVenda = comissaoPorVenda - custoVarPorVenda;
-
-  const vendasBreakEven = lucroPorVenda > 0 ? Math.ceil(custoFixoMaisMarketing / lucroPorVenda) : 0;
-  const faturamentoBreakEven = vendasBreakEven * ticket;
-
-  const vendasMeta = lucroPorVenda > 0 ? Math.ceil((custoFixoMaisMarketing + (data.lucro_desejado || 0)) / lucroPorVenda) : 0;
-  const faturamentoMeta = vendasMeta * ticket;
-  const comissaoMeta = vendasMeta * comissaoPorVenda;
-
-  const taxaConv = (data.taxa_conversao || 1) / 100;
-  const atendimentosMeta = taxaConv > 0 ? Math.ceil(vendasMeta / taxaConv) : 0;
-  const diasUteis = data.dias_uteis || 22;
-  const vendedores = data.vendedores_ativos || 1;
-  const atendimentosPorDia = diasUteis > 0 ? Math.ceil(atendimentosMeta / diasUteis) : 0;
-  const vendasPorVendedorMes = vendedores > 0 ? Math.ceil(vendasMeta / vendedores) : 0;
-  const atendimentosPorVendedorDia = (diasUteis * vendedores) > 0 ? Math.ceil(atendimentosMeta / (diasUteis * vendedores)) : 0;
-
-  const cplMaximo = atendimentosMeta > 0 ? marketingTotal / atendimentosMeta : 0;
-  const roiMarketing = marketingTotal > 0 ? faturamentoMeta / marketingTotal : 0;
-
-  const margemLiquidaPct = faturamentoMeta > 0 ? ((data.lucro_desejado || 0) / faturamentoMeta) * 100 : 0;
-  const faturamentoDiario = diasUteis > 0 ? faturamentoMeta / diasUteis : 0;
-  const vendasPorDia = diasUteis > 0 ? vendasMeta / diasUteis : 0;
-
-  return {
-    custoFixoTotal, marketingTotal, custoFixoMaisMarketing,
-    comissaoPorVenda, custoVarPorVenda, lucroPorVenda,
-    vendasBreakEven, faturamentoBreakEven,
-    vendasMeta, faturamentoMeta, comissaoMeta,
-    atendimentosMeta, atendimentosPorDia, vendasPorVendedorMes, atendimentosPorVendedorDia,
-    cplMaximo, roiMarketing,
-    margemLiquidaPct, comissaoMediaPorVenda: comissaoPorVenda, faturamentoDiario, vendasPorDia,
-  };
-}
 
 // ============================================================
 // UI PRIMITIVES
@@ -218,6 +111,71 @@ const inputBase =
   'focus:border-[var(--lg-accent)] focus:ring-2 focus:ring-[var(--lg-accent)]/15';
 
 const inputStyle = { borderColor: 'var(--line)', background: 'var(--ink-surface-2)' } as const;
+
+/**
+ * Campo de dinheiro com o "R$" fixo dentro da moldura: o símbolo para de
+ * competir com o número (que fica sozinho à direita, tabular) e o campo
+ * inteiro vira alvo de clique.
+ */
+function CampoValor({ value, onChange, destaque }: {
+  value: number; onChange: (v: number) => void; destaque?: boolean;
+}) {
+  return (
+    <label
+      className="group relative flex items-center h-[36px] rounded-[9px] border cursor-text transition-colors
+                 focus-within:border-[var(--lg-accent)] focus-within:ring-2 focus-within:ring-[var(--lg-accent)]/15
+                 hover:border-[var(--line-strong)]"
+      style={{
+        borderColor: 'var(--line)',
+        background: 'var(--ink-surface-2)',
+      }}
+    >
+      <span
+        className="pl-2.5 pr-1 text-[12px] font-medium select-none pointer-events-none"
+        style={{ color: value > 0 ? 'var(--ink-3)' : 'var(--lg-text-4)' }}
+      >
+        R$
+      </span>
+      <div className="flex-1 min-w-0 [&_input]:h-[34px] [&_input]:border-0 [&_input]:bg-transparent [&_input]:shadow-none [&_input]:px-0 [&_input]:pr-2.5 [&_input]:text-[14px] [&_input]:tabular-nums [&_input]:text-right [&_input]:outline-none">
+        <MoneyInput
+          value={value}
+          onChange={v => onChange(v ?? 0)}
+          placeholder="0,00"
+          className={destaque ? 'font-semibold' : ''}
+        />
+      </div>
+    </label>
+  );
+}
+
+/** Barra fina de participação — mostra o peso de cada linha no total. */
+function Peso({ pct, cor }: { pct: number; cor: string }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className="flex-1 h-[5px] rounded-full overflow-hidden" style={{ background: 'var(--ink-surface-2)' }}>
+        <div
+          className="h-full rounded-full transition-[width] duration-300"
+          style={{ width: `${Math.min(100, Math.max(0, pct))}%`, background: cor }}
+        />
+      </div>
+      <span className="text-[11.5px] tabular-nums text-[var(--ink-3)] w-[38px] text-right">
+        {pct > 0 ? `${dec(pct, 0)}%` : '—'}
+      </span>
+    </div>
+  );
+}
+
+/** Linha de entrada: hover discreto pra dar alvo visual à edição. */
+function LinhaEntrada({ children, cols }: { children: React.ReactNode; cols: string }) {
+  return (
+    <div
+      className={`grid ${cols} items-center gap-3 px-4 py-[7px] border-b last:border-b-0 transition-colors hover:bg-[var(--ink-surface-2)]/60`}
+      style={{ borderColor: 'var(--line)' }}
+    >
+      {children}
+    </div>
+  );
+}
 
 /** Linha do relatório. Sem ícone por linha — a hierarquia vem do peso do texto. */
 function Linha({ label, value, forte, alerta }: {
@@ -419,13 +377,9 @@ export default function CustosPage() {
   const viavel = rel.lucroPorVenda > 0;
 
   // Composição do custo mensal — mostra pra onde o dinheiro vai antes de
-  // qualquer venda acontecer.
-  const mktFixo = data.custos_fixos
-    .filter(c => c.categoria === 'Marketing fixo recorrente')
-    .reduce((s, c) => s + (c.valor || 0), 0);
-  const fixoSemMkt = totalFixo - mktFixo;
+  // qualquer venda acontecer. Estrutura = tudo que não é verba de campanha.
   const baseComposicao = rel.custoFixoMaisMarketing || 1;
-  const pctFixo = (fixoSemMkt / baseComposicao) * 100;
+  const pctFixo = (totalFixo / baseComposicao) * 100;
   const pctMkt = (totalMarketing / baseComposicao) * 100;
 
   // Quanto do caminho até a meta já é consumido só para empatar.
@@ -437,11 +391,28 @@ export default function CustosPage() {
   if (!viavel) {
     alertas.push({ tom: 'erro', texto: 'A comissão por venda não cobre os custos variáveis. Revise a margem ou os custos antes de definir metas.' });
   }
-  if (rel.cplMaximo > 0 && rel.cplMaximo < 10) {
-    alertas.push({ tom: 'aviso', texto: `Custo por lead máximo muito baixo (${formatBRL(rel.cplMaximo)}). Aumente o investimento em marketing ou melhore a conversão.` });
+  // Aquisição: o que decide é o TETO que a margem suporta e o quanto dele já
+  // está comprometido. (Comparar custo atual > teto seria código morto: pela
+  // álgebra do modelo o custo por lead nunca cruza o teto — ver a nota em
+  // planejamento-custos.ts.)
+  if (rel.cplTeto > 0 && rel.cplTeto < 15) {
+    alertas.push({
+      tom: 'erro',
+      texto: `A margem só suporta ${formatBRL(rel.cplTeto)} por lead. Nesse patamar a mídia paga fica inviável — o crescimento teria de vir de indicação e carteira, ou é preciso subir o ticket, a comissão ou a conversão.`,
+    });
+  } else if (rel.usoDoTetoPct >= 85) {
+    alertas.push({
+      tom: 'aviso',
+      texto: `O marketing já consome ${dec(rel.usoDoTetoPct, 0)}% do que a margem suporta por lead. O plano fica dependente de mídia: uma queda na conversão derruba o lucro.`,
+    });
+  } else if (rel.usoDoTetoPct > 0 && rel.usoDoTetoPct < 40) {
+    alertas.push({
+      tom: 'aviso',
+      texto: `Cada lead custa ${formatBRL(rel.cplAtual)} e a margem suporta até ${formatBRL(rel.cplTeto)} — ${dec(rel.usoDoTetoPct, 0)}% do teto. Há espaço para investir mais em aquisição sem perder rentabilidade.`,
+    });
   }
-  if (rel.roiMarketing > 0 && rel.roiMarketing < 3) {
-    alertas.push({ tom: 'aviso', texto: 'Retorno do marketing abaixo de 3x. Otimize os canais ou reduza o investimento nos menos eficientes.' });
+  if (rel.retornoMarketing > 0 && rel.retornoMarketing < 2) {
+    alertas.push({ tom: 'aviso', texto: `Cada real em marketing devolve ${dec(rel.retornoMarketing)} de comissão. Abaixo de 2x sobra pouco para cobrir a estrutura.` });
   }
   if (rel.atendimentosPorVendedorDia > 8) {
     alertas.push({ tom: 'aviso', texto: `${rel.atendimentosPorVendedorDia} atendimentos por vendedor ao dia pode comprometer a qualidade. Considere ampliar o time.` });
@@ -551,8 +522,8 @@ export default function CustosPage() {
                   <i className="w-2 h-2 rounded-full inline-block" style={{ background: 'var(--lg-stat-green)' }} />
                   as outras <b className="tabular-nums font-semibold">{Math.max(0, rel.vendasMeta - rel.vendasBreakEven)}</b> viram lucro
                 </span>
-                <span className="text-[var(--ink-3)] ml-auto">
-                  Margem líquida <b className="tabular-nums text-[var(--ink-2)]">{dec(rel.margemLiquidaPct)}%</b>
+                <span className="text-[var(--ink-3)] ml-auto" title="Lucro sobre a receita de comissões da agência">
+                  Margem sobre a receita <b className="tabular-nums text-[var(--ink-2)]">{dec(rel.margemSobreReceitaPct)}%</b>
                 </span>
               </div>
             </div>
@@ -634,26 +605,26 @@ export default function CustosPage() {
               Custos fixos mensais
             </SectionTitle>
             <Bloco>
-              {data.custos_fixos.map((item, i) => (
-                <div
-                  key={i}
-                  className="grid grid-cols-[minmax(140px,1.1fr)_130px_minmax(120px,1.4fr)] items-center gap-3 px-4 py-2 border-b last:border-b-0"
-                  style={{ borderColor: 'var(--line)' }}
-                >
-                  <span className="text-[13.5px] text-[var(--ink)] truncate" title={item.categoria}>{item.categoria}</span>
-                  <MoneyInput
-                    value={item.valor}
-                    onChange={v => { const c = [...data.custos_fixos]; c[i] = { ...c[i], valor: v ?? 0 }; setData({ ...data, custos_fixos: c }); }}
-                  />
-                  <input
-                    value={item.observacao}
-                    onChange={e => { const c = [...data.custos_fixos]; c[i] = { ...c[i], observacao: e.target.value }; setData({ ...data, custos_fixos: c }); }}
-                    placeholder="Observação"
-                    className="w-full h-[34px] px-2.5 rounded-[8px] border text-[13px] text-[var(--ink)] outline-none transition-colors focus:border-[var(--lg-accent)]"
-                    style={inputStyle}
-                  />
-                </div>
-              ))}
+              {data.custos_fixos.map((item, i) => {
+                const peso = totalFixo > 0 ? (item.valor / totalFixo) * 100 : 0;
+                return (
+                  <LinhaEntrada key={i} cols="grid-cols-[minmax(150px,1.2fr)_136px_minmax(110px,0.9fr)_minmax(110px,1fr)]">
+                    <span className="text-[13.5px] text-[var(--ink)] truncate" title={item.categoria}>{item.categoria}</span>
+                    <CampoValor
+                      value={item.valor}
+                      onChange={v => { const c = [...data.custos_fixos]; c[i] = { ...c[i], valor: v }; setData({ ...data, custos_fixos: c }); }}
+                    />
+                    <Peso pct={peso} cor="var(--lg-stat-blue)" />
+                    <input
+                      value={item.observacao}
+                      onChange={e => { const c = [...data.custos_fixos]; c[i] = { ...c[i], observacao: e.target.value }; setData({ ...data, custos_fixos: c }); }}
+                      placeholder="Observação"
+                      className="w-full h-[36px] px-2.5 rounded-[9px] border text-[13px] text-[var(--ink)] outline-none transition-colors placeholder:text-[var(--lg-text-4)] focus:border-[var(--lg-accent)] focus:ring-2 focus:ring-[var(--lg-accent)]/15 hover:border-[var(--line-strong)]"
+                      style={inputStyle}
+                    />
+                  </LinhaEntrada>
+                );
+              })}
               <TotalLinha label="Total fixo" value={formatBRL(totalFixo)} />
             </Bloco>
           </section>
@@ -673,24 +644,20 @@ export default function CustosPage() {
               {data.custos_variaveis.map((item, i) => {
                 const valorLinha = (item.base === 'COMISSAO' ? rel.comissaoPorVenda : data.ticket_medio) * (item.percentual || 0) / 100;
                 return (
-                  <div
-                    key={i}
-                    className="grid grid-cols-[minmax(120px,1fr)_86px_150px_minmax(90px,0.8fr)] items-center gap-3 px-4 py-2 border-b last:border-b-0"
-                    style={{ borderColor: 'var(--line)' }}
-                  >
+                  <LinhaEntrada key={i} cols="grid-cols-[minmax(120px,1fr)_92px_158px_minmax(90px,0.8fr)]">
                     <span className="text-[13.5px] text-[var(--ink)] truncate" title={item.nome}>{item.nome}</span>
                     <div className="relative">
                       <input
                         type="number" min={0} step={0.5} value={item.percentual || ''}
                         onChange={e => { const c = [...data.custos_variaveis]; c[i] = { ...c[i], percentual: parseFloat(e.target.value) || 0 }; setData({ ...data, custos_variaveis: c }); }}
-                        className={`${inputBase} pr-6`} style={inputStyle}
+                        className={`${inputBase} h-[36px] rounded-[9px] pr-6 hover:border-[var(--line-strong)]`} style={inputStyle}
                       />
                       <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[12px] text-[var(--ink-3)] pointer-events-none">%</span>
                     </div>
                     <select
                       value={item.base || 'VENDA'}
                       onChange={e => { const c = [...data.custos_variaveis]; c[i] = { ...c[i], base: e.target.value as 'VENDA' | 'COMISSAO' }; setData({ ...data, custos_variaveis: c }); }}
-                      className="w-full h-[34px] px-2 rounded-[8px] border text-[12.5px] text-[var(--ink-2)] outline-none transition-colors focus:border-[var(--lg-accent)]"
+                      className="w-full h-[36px] px-2 rounded-[9px] border text-[12.5px] text-[var(--ink-2)] outline-none transition-colors focus:border-[var(--lg-accent)] focus:ring-2 focus:ring-[var(--lg-accent)]/15 hover:border-[var(--line-strong)]"
                       style={inputStyle}
                     >
                       <option value="VENDA">sobre a venda</option>
@@ -699,7 +666,7 @@ export default function CustosPage() {
                     <span className="text-[12.5px] tabular-nums text-right text-[var(--ink-2)] whitespace-nowrap">
                       {formatBRL(valorLinha)}
                     </span>
-                  </div>
+                  </LinhaEntrada>
                 );
               })}
               <TotalLinha
@@ -751,29 +718,15 @@ export default function CustosPage() {
               {data.marketing.map((item, i) => {
                 const share = totalMarketing > 0 ? (item.valor / totalMarketing) * 100 : 0;
                 return (
-                  <div
-                    key={i}
-                    className="grid grid-cols-[minmax(140px,1.1fr)_130px_minmax(120px,1.4fr)] items-center gap-3 px-4 py-2 border-b last:border-b-0"
-                    style={{ borderColor: 'var(--line)' }}
-                  >
+                  <LinhaEntrada key={i} cols="grid-cols-[minmax(150px,1.2fr)_136px_minmax(120px,1.9fr)]">
                     <span className="text-[13.5px] text-[var(--ink)] truncate">{item.canal}</span>
-                    <MoneyInput
+                    <CampoValor
                       value={item.valor}
-                      onChange={v => { const c = [...data.marketing]; c[i] = { ...c[i], valor: v ?? 0 }; setData({ ...data, marketing: c }); }}
+                      onChange={v => { const c = [...data.marketing]; c[i] = { ...c[i], valor: v }; setData({ ...data, marketing: c }); }}
                     />
                     {/* Participação do canal no total — leitura rápida de onde o dinheiro está */}
-                    <div className="flex items-center gap-2.5">
-                      <div className="flex-1 h-[5px] rounded-full overflow-hidden" style={{ background: 'var(--ink-surface-2)' }}>
-                        <div
-                          className="h-full rounded-full transition-[width] duration-300"
-                          style={{ width: `${share}%`, background: 'var(--lg-stat-violet)' }}
-                        />
-                      </div>
-                      <span className="text-[11.5px] tabular-nums text-[var(--ink-3)] w-[38px] text-right">
-                        {share > 0 ? `${dec(share, 0)}%` : '—'}
-                      </span>
-                    </div>
-                  </div>
+                    <Peso pct={share} cor="var(--lg-stat-violet)" />
+                  </LinhaEntrada>
                 );
               })}
               <TotalLinha label="Total marketing" value={formatBRL(totalMarketing)} />
@@ -802,7 +755,7 @@ export default function CustosPage() {
             <div className="flex items-center gap-4 mt-2.5 text-[11.5px] text-[var(--ink-2)]">
               <span className="inline-flex items-center gap-1.5">
                 <i className="w-2 h-2 rounded-full inline-block" style={{ background: 'var(--lg-stat-blue)' }} />
-                Fixos <b className="tabular-nums">{formatBRL(fixoSemMkt)}</b>
+                Fixos <b className="tabular-nums">{formatBRL(totalFixo)}</b>
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <i className="w-2 h-2 rounded-full inline-block" style={{ background: 'var(--lg-stat-violet)' }} />
@@ -851,18 +804,21 @@ export default function CustosPage() {
               <Linha label="Comissão recebida" value={formatBRL(rel.comissaoPorVenda)} />
               <Linha label="Custo variável" value={`− ${formatBRL(rel.custoVarPorVenda)}`} />
               <Linha label="Sobra por venda" value={formatBRL(rel.lucroPorVenda)} forte alerta={!viavel} />
+              <Linha label="Margem de contribuição" value={`${dec(rel.margemContribuicaoPct)}%`} />
             </GrupoLinhas>
 
             <GrupoLinhas titulo="Ponto de equilíbrio">
               <Linha label="Vendas para cobrir custos" value={`${rel.vendasBreakEven}`} forte />
-              <Linha label="Faturamento mínimo" value={formatBRL(rel.faturamentoBreakEven)} />
+              <Linha label="Volume a intermediar" value={formatBRL(rel.faturamentoBreakEven)} />
+              <Linha label="Receita de comissões" value={formatBRL(rel.receitaBreakEven)} />
             </GrupoLinhas>
 
             <GrupoLinhas titulo={`Meta de ${formatBRL(data.lucro_desejado)}`}>
               <Linha label="Vendas necessárias" value={`${rel.vendasMeta}`} forte />
               <Linha label="Faturamento necessário" value={formatBRL(rel.faturamentoMeta)} />
-              <Linha label="Comissão total do time" value={formatBRL(rel.comissaoMeta)} />
-              <Linha label="Margem líquida" value={`${dec(rel.margemLiquidaPct)}%`} />
+              <Linha label="Receita de comissões" value={formatBRL(rel.receitaMeta)} forte />
+              <Linha label="Lucro projetado" value={formatBRL(rel.lucroProjetado)} />
+              <Linha label="Margem sobre a receita" value={`${dec(rel.margemSobreReceitaPct)}%`} />
             </GrupoLinhas>
 
             <GrupoLinhas titulo={`Ritmo · ${data.dias_uteis} dias úteis`}>
@@ -883,8 +839,14 @@ export default function CustosPage() {
             <GrupoLinhas titulo={`Aquisição · conversão de ${data.taxa_conversao}%`}>
               <Linha label="Leads necessários" value={`${rel.atendimentosMeta}`} forte />
               <Linha label="Atendimentos por dia" value={`${rel.atendimentosPorDia}`} />
-              <Linha label="Custo máximo por lead" value={formatBRL(rel.cplMaximo)} alerta={rel.cplMaximo > 0 && rel.cplMaximo < 10} />
-              <Linha label="Retorno do marketing" value={`${dec(rel.roiMarketing)}x`} alerta={rel.roiMarketing > 0 && rel.roiMarketing < 3} />
+              <Linha label="Custo atual por lead" value={rel.cplAtual > 0 ? formatBRL(rel.cplAtual) : '—'} alerta={rel.cplTeto > 0 && rel.cplAtual > rel.cplTeto} />
+              <Linha label="Teto que a margem suporta" value={formatBRL(rel.cplTeto)} forte />
+              <Linha
+                label="Capacidade de aquisição usada"
+                value={rel.usoDoTetoPct > 0 ? `${dec(rel.usoDoTetoPct, 0)}%` : '—'}
+                alerta={rel.usoDoTetoPct >= 85}
+              />
+              <Linha label="Comissão por real em marketing" value={rel.retornoMarketing > 0 ? `${dec(rel.retornoMarketing)}x` : '—'} alerta={rel.retornoMarketing > 0 && rel.retornoMarketing < 2} />
             </GrupoLinhas>
           </div>
 
