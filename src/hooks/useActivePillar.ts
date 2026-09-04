@@ -1,9 +1,8 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import {
-  Calculator, Target, DollarSign, Settings,
-} from 'lucide-react';
+import { Settings } from 'lucide-react';
+import { PlanejamentoIcon, MetasIcon, FinanceiroIcon } from '@/components/icons/PillarIcons';
 import type { ComponentType } from 'react';
 
 export type Pillar = 'planejamento' | 'metas' | 'financeiro' | 'configuracoes';
@@ -15,9 +14,9 @@ export interface PillarConfig {
 }
 
 export const PILLARS: PillarConfig[] = [
-  { id: 'planejamento', label: 'Planejamento', icon: Calculator },
-  { id: 'metas', label: 'Metas', icon: Target },
-  { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
+  { id: 'planejamento', label: 'Planejamento', icon: PlanejamentoIcon },
+  { id: 'metas', label: 'Metas', icon: MetasIcon },
+  { id: 'financeiro', label: 'Financeiro', icon: FinanceiroIcon },
   { id: 'configuracoes', label: 'Configurações', icon: Settings },
 ];
 
