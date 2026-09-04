@@ -2,11 +2,11 @@
 
 import { usePathname } from 'next/navigation';
 import {
-  Calculator, Target, Package, DollarSign, Settings,
+  Calculator, Target, DollarSign, Settings,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 
-export type Pillar = 'planejamento' | 'metas' | 'produtos' | 'financeiro' | 'configuracoes';
+export type Pillar = 'planejamento' | 'metas' | 'financeiro' | 'configuracoes';
 
 export interface PillarConfig {
   id: Pillar;
@@ -17,7 +17,6 @@ export interface PillarConfig {
 export const PILLARS: PillarConfig[] = [
   { id: 'planejamento', label: 'Planejamento', icon: Calculator },
   { id: 'metas', label: 'Metas', icon: Target },
-  { id: 'produtos', label: 'Produtos', icon: Package },
   { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
   { id: 'configuracoes', label: 'Configurações', icon: Settings },
 ];
@@ -30,16 +29,18 @@ const ROUTE_MAP: [string, Pillar][] = [
   // Metas
   ['/dashboard', 'metas'],
   ['/equipe', 'metas'],
-  // Produtos (specific vendas routes before generic /vendas)
-  ['/grupos', 'produtos'],
-  ['/grupo/', 'produtos'],
-  ['/propostas', 'produtos'],
-  ['/vendas/orcamentos', 'produtos'],
-  ['/vendas/nova-orcamento', 'produtos'],
-  ['/vendas/nova', 'produtos'],
-  ['/voos', 'produtos'],
-  ['/hoteis', 'produtos'],
-  ['/destinos', 'produtos'],
+  // Catálogo e originação de venda saíram do menu (sistema focado no
+  // financeiro). As telas continuam existindo e acessíveis por link direto —
+  // apontam para o pilar Financeiro para a navegação seguir coerente.
+  ['/grupos', 'financeiro'],
+  ['/grupo/', 'financeiro'],
+  ['/propostas', 'financeiro'],
+  ['/vendas/orcamentos', 'financeiro'],
+  ['/vendas/nova-orcamento', 'financeiro'],
+  ['/vendas/nova', 'financeiro'],
+  ['/voos', 'financeiro'],
+  ['/hoteis', 'financeiro'],
+  ['/destinos', 'financeiro'],
   // Financeiro
   ['/financeiro', 'financeiro'],
   ['/vendas', 'financeiro'],

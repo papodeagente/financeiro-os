@@ -8,7 +8,7 @@ import { useActivePillar, PILLARS, type Pillar } from '@/hooks/useActivePillar';
 import { CrmStatusBadge } from './CrmStatusBadge';
 import { NotificacoesBell } from './NotificacoesBell';
 import { Logo } from './Logo';
-import { Sun, Moon, Search, LogOut, ChevronDown, Settings, Plus, User as UserIcon } from 'lucide-react';
+import { Sun, Moon, Search, LogOut, ChevronDown, Settings, User as UserIcon } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 
 interface Props {
@@ -22,7 +22,6 @@ function getPillarDefaultRoute(pillar: Pillar): string {
   switch (pillar) {
     case 'planejamento': return '/planejamento/custos';
     case 'metas': return '/dashboard';
-    case 'produtos': return '/grupos';
     case 'financeiro': return '/financeiro-ag';
     case 'configuracoes': return '/config/agencia';
   }
@@ -111,16 +110,6 @@ export function TopBar({ onCommandPalette }: Props) {
 
       {/* Right: Actions + Utilities — todos como icone unico */}
       <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
-        {/* Nova Venda — botao primario icon-only */}
-        <Link
-          href="/vendas/nova"
-          className="w-8 h-8 flex items-center justify-center rounded-xl text-white transition-all hover:brightness-110 shrink-0"
-          style={{ background: 'var(--t-accent-gradient)', boxShadow: '0 1px 3px var(--t-green-shadow)' }}
-          title="Nova venda"
-          aria-label="Nova venda"
-        >
-          <Plus className="w-4 h-4" />
-        </Link>
 
         {/* Search trigger — icon-only com tooltip; abre o cmd palette */}
         <button

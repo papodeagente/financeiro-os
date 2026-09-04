@@ -4,13 +4,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useActivePillar, type Pillar } from '@/hooks/useActivePillar';
 import {
-  Wallet, Gauge, TrendingUp,
+  Wallet, Gauge,
   LayoutDashboard, Medal, Percent, Settings,
-  FolderOpen, FileText, BarChart3,
-  Plane, Hotel, Globe,
+  BarChart3,
   BarChart3 as FluxoIcon, FileSpreadsheet, Receipt, CreditCard,
   BookOpen, Landmark, ArrowRightLeft, Package,
-  ShoppingCart, ListOrdered, UserPlus, Building2, Briefcase,
+  ListOrdered, UserPlus, Building2, Briefcase,
   DollarSign, TrendingUp as RentIcon, Link2,
   GitBranch as MindIcon,
   Sparkles, Users, ClipboardList,
@@ -55,24 +54,6 @@ const METAS_MENU: SidebarSection[] = [
     items: [
       { key: 'comissoes', label: 'Comissões', icon: Percent, href: '/equipe/comissoes' },
       { key: 'planos-comissao', label: 'Planos de comissão', icon: Settings, href: '/equipe/planos-comissao' },
-    ],
-  },
-];
-
-const PRODUTOS_MENU: SidebarSection[] = [
-  {
-    title: 'Catálogo',
-    items: [
-      { key: 'grupos', label: 'Produtos', icon: FolderOpen, href: '/grupos' },
-      { key: 'gestao-grupos', label: 'Gestão de grupos', icon: Users, href: '/grupos/gestao' },
-    ],
-  },
-  {
-    title: 'Vendas',
-    items: [
-      { key: 'minhas-propostas', label: 'Propostas', icon: FileText, href: '/propostas' },
-      { key: 'orcamentos', label: 'Orçamentos', icon: BarChart3, href: '/vendas/orcamentos' },
-      { key: 'nova-venda', label: 'Nova venda', icon: ShoppingCart, href: '/vendas/nova' },
     ],
   },
 ];
@@ -152,7 +133,6 @@ const CONFIGURACOES_MENU: SidebarSection[] = [
 export const PILLAR_MENUS: Record<Pillar, SidebarSection[]> = {
   planejamento: PLANEJAMENTO_MENU,
   metas: METAS_MENU,
-  produtos: PRODUTOS_MENU,
   financeiro: FINANCEIRO_MENU,
   configuracoes: CONFIGURACOES_MENU,
 };

@@ -11,7 +11,6 @@ import { X } from 'lucide-react';
 const PILLAR_DESCRIPTIONS: Record<Pillar, string> = {
   planejamento: 'Custos, funis e fluxogramas',
   metas: 'KPIs, metas e comissões',
-  produtos: 'Grupos, propostas e vendas',
   financeiro: 'Contas, relatórios e CRM',
   configuracoes: 'APIs, usuários e integrações',
 };

@@ -7,7 +7,6 @@ import { Check } from 'lucide-react';
 const SHORT_LABELS: Record<Pillar, string> = {
   planejamento: 'Planejar',
   metas: 'Metas',
-  produtos: 'Produtos',
   financeiro: 'Financ.',
   configuracoes: 'Config.',
 };
