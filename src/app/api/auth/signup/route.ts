@@ -220,12 +220,18 @@ export async function POST(req: Request) {
 
       // Bootstrap minimo: cria a agencia singleton dentro do tenant
       // (legacy compat: alguns componentes carregam /api/agencia).
+      // ON CONFLICT sem alvo: a clausula precisa casar exatamente com a chave
+      // unica existente, e a PK de agencia passou a ser (id, tenant_id). Com
+      // o alvo antigo `(id)` este INSERT falharia, e o `.catch` NAO salvaria o
+      // cadastro: um erro dentro da transacao a deixa abortada, entao o COMMIT
+      // seguinte viraria ROLLBACK e o signup inteiro sumiria em silencio.
+      // Sem alvo, o conflito e resolvido por qualquer restricao unica.
       await client.query(
         `INSERT INTO agencia (id, tenant_id, data)
          VALUES ('singleton-' || $1, $1, $2)
-         ON CONFLICT (id) DO NOTHING`,
+         ON CONFLICT DO NOTHING`,
         [tenantId, JSON.stringify({ nome: nomeAgencia, email_contato: email, telefone })],
-      ).catch(() => { /* agencia ja existe ou tabela diferente — segue */ });
+      );
 
       await client.query('COMMIT');
     } catch (e) {

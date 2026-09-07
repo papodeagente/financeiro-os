@@ -290,20 +290,32 @@ export default function DashboardPage() {
       //
       // Mesma fórmula da página de DRE: comissão da venda, clampada por
       // venda para que um prejuízo isolado não vire receita negativa.
-      const recBrutaVendas = somaPor(
-        mVendas,
-        v => Math.max(round2(num(v.valor_final) - num(v.valor_total_custo)), 0),
-      );
+      // Duas somas, de propósito, porque servem a perguntas diferentes.
+      //
+      // receitaBruta usa a margem CLAMPADA por venda: receita da empresa não
+      // é negativa, e é a base do percentual de margem.
+      //
+      // lucroLiq usa a margem SEM clamp. Uma viagem vendida abaixo do custo é
+      // prejuízo e precisa reduzir o resultado do mês. Clampar aqui apagaria
+      // a perda e o cartão "Lucro do Mês" mostraria um número melhor do que a
+      // realidade, justamente no mês em que o dono mais precisa enxergá-la.
+      const margemPorVenda = mVendas.map(v => round2(num(v.valor_final) - num(v.valor_total_custo)));
+      const recBrutaVendas = somaPor(margemPorVenda, m => Math.max(m, 0));
+      const margemVendas = soma(margemPorVenda);
+
       const recComissoes = somaPor(mReceber.filter(cr => cr.origem === 'COMISSAO_FORNECEDOR'), cr => cr.valor_final);
       const recFee = somaPor(mReceber.filter(cr => cr.origem === 'FEE'), cr => cr.valor_final);
       const recOutras = somaPor(mReceber.filter(cr => cr.origem === 'OUTROS'), cr => cr.valor_final);
-      const receitaBruta = soma([recBrutaVendas, recComissoes, recFee, recOutras]);
 
-      // O CMV já foi descontado dentro de recBrutaVendas (a comissão é
-      // venda menos custo). Somá-lo de novo cobraria o custo duas vezes.
+      const receitaBruta = soma([recBrutaVendas, recComissoes, recFee, recOutras]);
+      const resultadoVendas = soma([margemVendas, recComissoes, recFee, recOutras]);
+
+      // O custo do fornecedor já está dentro da margem (venda menos custo).
+      // Somá-lo de novo aqui cobraria o mesmo custo duas vezes — por isso o
+      // filtro acima já exclui a conta a pagar auto-gerada da própria venda.
       const totalDespesas = somaPor(mPagar, p => p.valor_final);
 
-      const lucroLiq = round2(receitaBruta - totalDespesas);
+      const lucroLiq = round2(resultadoVendas - totalDespesas);
       const margemLiq = round2(divSegura(lucroLiq, receitaBruta) * 100);
       return { receitaBruta, lucroLiq, margemLiq };
     };

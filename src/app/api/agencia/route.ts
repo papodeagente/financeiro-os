@@ -89,11 +89,21 @@ export async function POST(req: Request) {
       [tenantId],
     );
     const agenciaId = atual.length > 0 ? (atual[0].id as string) : `agencia-${tenantId}`;
-    await pool.query(
-      `INSERT INTO agencia (id, tenant_id, data, updated_at) VALUES ($1, $2, $3, NOW())
-       ON CONFLICT (id, tenant_id) DO UPDATE SET data = $3, updated_at = NOW()`,
+    // Atualiza e, se não existir, insere — em vez de ON CONFLICT. A cláusula
+    // de conflito precisa casar exatamente com a chave única existente, então
+    // ela amarraria esta rota ao sucesso da promoção de PK para (id, tenant_id).
+    // Assim a tela salva em qualquer um dos dois estados do schema.
+    const atualizado = await pool.query(
+      `UPDATE agencia SET data = $3, updated_at = NOW()
+        WHERE id = $1 AND tenant_id = $2`,
       [agenciaId, tenantId, JSON.stringify(data)]
     );
+    if ((atualizado.rowCount ?? 0) === 0) {
+      await pool.query(
+        `INSERT INTO agencia (id, tenant_id, data, updated_at) VALUES ($1, $2, $3, NOW())`,
+        [agenciaId, tenantId, JSON.stringify(data)]
+      );
+    }
     return NextResponse.json(data);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Unknown error';

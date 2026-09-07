@@ -932,8 +932,8 @@ export async function processarEventoCRM(
   idempotency_key: string,
   tenantId: string,
 ): Promise<{ processado: boolean; acao: string; erro?: string }> {
-  // Definido quando o lock consultivo é adquirido; liberado no finally.
-  let liberarLock: (() => Promise<void>) | null = null;
+  // O lock consultivo é adquirido e liberado dentro da seção crítica, no
+  // próprio finally dela. Não existe mais nada a soltar no finally externo.
   try {
     if (!pool) return { processado: false, acao: 'sem banco de dados' };
     if (!tenantId) return { processado: false, acao: 'tenant ausente' };
@@ -989,7 +989,22 @@ export async function processarEventoCRM(
       }
     };
 
+    // SEÇÃO CRÍTICA — curta de propósito.
+    //
+    // O lock existe só para serializar o "consulta e registra" do evento.
+    // Depois que a linha existe com status diferente de ERRO, é ela que
+    // barra as entregas concorrentes (o segundo bloco abaixo devolve
+    // "duplicata ignorada"), então segurar o lock durante todo o
+    // processamento não acrescenta proteção.
+    //
+    // O `finally` é obrigatório: os dois `return` de duplicata são o caminho
+    // MAIS COMUM do webhook e, sem ele, saíam sem devolver a conexão. Com o
+    // pool em max 5, cinco duplicatas bastavam para esgotar as conexões e
+    // derrubar a aplicação inteira. Segurar a conexão durante o
+    // processamento tinha o mesmo efeito sob concorrência: o handler pede
+    // outras conexões ao mesmo pool e trava esperando a si mesmo.
     let id: string;
+    let duplicata: { processado: boolean; acao: string } | null = null;
     try {
       const { rows: existing } = await pool.query(
         `SELECT id, processado, status FROM crm_eventos_entrada WHERE idempotency_key = $1 AND tenant_id = $2`,
@@ -997,15 +1012,14 @@ export async function processarEventoCRM(
       );
       const anterior = existing[0];
       if (anterior?.processado === true) {
-        return { processado: true, acao: 'duplicata ignorada' };
-      }
-      // Registro existente que NÃO falhou = outra entrega está processando
-      // agora (ou o processo caiu antes de registrar o erro). Não duplica.
-      if (anterior && String(anterior.status ?? '') !== 'ERRO') {
-        return { processado: true, acao: 'duplicata ignorada (em processamento)' };
-      }
-
-      if (anterior) {
+        duplicata = { processado: true, acao: 'duplicata ignorada' };
+        id = '';
+      } else if (anterior && String(anterior.status ?? '') !== 'ERRO') {
+        // Registro existente que NÃO falhou = outra entrega está processando
+        // agora (ou o processo caiu antes de registrar o erro). Não duplica.
+        duplicata = { processado: true, acao: 'duplicata ignorada (em processamento)' };
+        id = '';
+      } else if (anterior) {
         // Retry de um evento que falhou: reaproveita o registro e limpa o erro.
         id = anterior.id as string;
         await pool.query(
@@ -1021,12 +1035,12 @@ export async function processarEventoCRM(
           [id, idempotency_key, tipo, JSON.stringify({ tipo, payload, received_at: new Date().toISOString() }), tenantId]
         );
       }
-    } catch (e) {
+    } finally {
+      // Sai daqui por qualquer caminho — duplicata, sucesso ou exceção — e a
+      // conexão sempre volta para o pool com o lock liberado.
       await soltarLock();
-      throw e;
     }
-    // A partir daqui o lock é liberado no finally do bloco externo.
-    liberarLock = soltarLock;
+    if (duplicata) return duplicata;
 
     let acao = '';
 
@@ -1614,8 +1628,6 @@ export async function processarEventoCRM(
       }
     } catch { /* ignore */ }
     return { processado: false, acao: 'erro no processamento', erro };
-  } finally {
-    if (liberarLock) await liberarLock();
   }
 }
 

@@ -168,16 +168,20 @@ console.log('--- PK composta: uma linha de config por tenant ---');
   // Migração para PK composta (mesmo SQL de db.ts).
   await pg.exec(`
     DO $$
+    DECLARE nome_pk TEXT;
     BEGIN
-      IF EXISTS (
-        SELECT 1 FROM pg_constraint
-        WHERE conrelid = 'config_apis'::regclass
-          AND contype = 'p'
-          AND pg_get_constraintdef(oid) NOT LIKE '%tenant_id%'
-      ) THEN
-        ALTER TABLE config_apis DROP CONSTRAINT config_apis_pkey;
+      SELECT conname INTO nome_pk
+        FROM pg_constraint
+       WHERE conrelid = 'config_apis'::regclass
+         AND contype = 'p'
+         AND pg_get_constraintdef(oid) NOT LIKE '%tenant_id%'
+       LIMIT 1;
+      IF nome_pk IS NOT NULL THEN
+        EXECUTE format('ALTER TABLE config_apis DROP CONSTRAINT %I', nome_pk);
         ALTER TABLE config_apis ADD PRIMARY KEY (id, tenant_id);
       END IF;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'PK composta nao migrada: %', SQLERRM;
     END
     $$;
   `);
@@ -220,6 +224,200 @@ console.log('--- PK composta: uma linha de config por tenant ---');
     `);
   } catch (e) { erro2 = String(e.message || e); }
   eq(erro2, null, 'migração é idempotente (initDB roda a cada request)');
+}
+
+console.log('--- promocao de PK sobrevive a nome de constraint inesperado ---');
+{
+  // initDB roda a cada request. Se a promocao de PK lancar, a aplicacao INTEIRA
+  // sai do ar, em todas as agencias. O nome da constraint agora vem do catalogo
+  // (nao de um palpite '<tabela>_pkey') e ha EXCEPTION em volta.
+  const pg = new PGlite();
+  await pg.exec(`
+    CREATE TABLE config_apis (
+      id TEXT NOT NULL,
+      data JSONB NOT NULL,
+      tenant_id TEXT NOT NULL DEFAULT '',
+      CONSTRAINT pk_batizada_diferente PRIMARY KEY (id)
+    );
+  `);
+  await pg.query(`INSERT INTO config_apis (id, tenant_id, data) VALUES ($1,$2,$3)`,
+    ['apis-config-singleton', 't1', JSON.stringify({ chave: 'do tenant 1' })]);
+
+  const MIGRACAO = `
+    DO $$
+    DECLARE nome_pk TEXT;
+    BEGIN
+      SELECT conname INTO nome_pk
+        FROM pg_constraint
+       WHERE conrelid = 'config_apis'::regclass
+         AND contype = 'p'
+         AND pg_get_constraintdef(oid) NOT LIKE '%tenant_id%'
+       LIMIT 1;
+      IF nome_pk IS NOT NULL THEN
+        EXECUTE format('ALTER TABLE config_apis DROP CONSTRAINT %I', nome_pk);
+        ALTER TABLE config_apis ADD PRIMARY KEY (id, tenant_id);
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'PK composta nao migrada: %', SQLERRM;
+    END
+    $$;
+  `;
+
+  let erro = null;
+  try { await pg.exec(MIGRACAO); } catch (e) { erro = String(e.message || e); }
+  eq(erro, null, 'constraint com nome fora do padrao nao derruba a migracao');
+
+  // E de fato migrou, porque o nome veio do catalogo.
+  await pg.query(`INSERT INTO config_apis (id, tenant_id, data) VALUES ($1,$2,$3)`,
+    ['apis-config-singleton', 't2', JSON.stringify({ chave: 'do tenant 2' })]);
+  const { rows } = await pg.query(`SELECT COUNT(*)::int AS n FROM config_apis`);
+  eq(rows[0].n, 2, 'cada tenant tem a propria linha apos a promocao');
+
+  // Rodar de novo nao faz nada (initDB roda a cada request).
+  let erro2 = null;
+  try { await pg.exec(MIGRACAO); } catch (e) { erro2 = String(e.message || e); }
+  eq(erro2, null, 'segunda passagem e inofensiva');
+}
+
+console.log('--- salvar config funciona com PK antiga E com PK nova ---');
+{
+  // A rota nao pode depender do sucesso da promocao de PK. ON CONFLICT precisa
+  // casar exatamente com a chave unica existente, entao ele quebraria num dos
+  // dois estados. O padrao UPDATE-e-senao-INSERT funciona nos dois.
+  const salvar = async (pg, id, tenant, data) => {
+    const upd = await pg.query(
+      `UPDATE config_apis SET data = $3, updated_at = NOW() WHERE id = $1 AND tenant_id = $2`,
+      [id, tenant, JSON.stringify(data)]);
+    if ((upd.affectedRows ?? 0) === 0) {
+      await pg.query(
+        `INSERT INTO config_apis (id, tenant_id, data, updated_at) VALUES ($1,$2,$3,NOW())`,
+        [id, tenant, JSON.stringify(data)]);
+    }
+  };
+
+  // Estado A: PK NOVA (id, tenant_id) — promocao deu certo.
+  const novo = new PGlite();
+  await novo.exec(`
+    CREATE TABLE config_apis (
+      id TEXT NOT NULL, data JSONB NOT NULL, tenant_id TEXT NOT NULL DEFAULT '',
+      updated_at TIMESTAMPTZ DEFAULT NOW(), PRIMARY KEY (id, tenant_id)
+    );`);
+  await salvar(novo, 'apis-config-singleton', 't1', { chave: 'A1' });
+  await salvar(novo, 'apis-config-singleton', 't2', { chave: 'B1' });
+  await salvar(novo, 'apis-config-singleton', 't1', { chave: 'A2' });
+  const { rows: rn } = await novo.query(
+    `SELECT tenant_id, data->>'chave' AS c FROM config_apis ORDER BY tenant_id`);
+  eq(rn.map(r => [r.tenant_id, r.c]), [['t1', 'A2'], ['t2', 'B1']],
+    'com PK nova: cada tenant salva e atualiza a propria linha');
+
+  // Estado B: PK ANTIGA so em id — promocao foi pulada pelo EXCEPTION.
+  const antigo = new PGlite();
+  await antigo.exec(`
+    CREATE TABLE config_apis (
+      id TEXT PRIMARY KEY, data JSONB NOT NULL, tenant_id TEXT NOT NULL DEFAULT '',
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );`);
+  await salvar(antigo, 'apis-config-singleton', 't1', { chave: 'A1' });
+  let erro = null;
+  try {
+    await salvar(antigo, 'apis-config-singleton', 't1', { chave: 'A2' });
+  } catch (e) { erro = String(e.message || e); }
+  eq(erro, null, 'com PK antiga: o dono continua conseguindo salvar');
+  const { rows: ra } = await antigo.query(`SELECT data->>'chave' AS c FROM config_apis`);
+  eq(ra[0].c, 'A2', 'com PK antiga: a atualizacao do dono e aplicada');
+}
+
+console.log('--- idempotencia por tenant: sem bomba-relogio no proximo boot ---');
+{
+  // O initDB criava um indice UNICO GLOBAL em idempotency_key ANTES do bloco
+  // que o dropa. Cada boot recriava e dropava. Na primeira vez que duas
+  // agencias gravassem a mesma chave (o objetivo da mudanca), a recriacao
+  // passaria a falhar e derrubaria TODA a aplicacao no boot seguinte.
+  const pg = new PGlite();
+  await pg.exec(`
+    CREATE TABLE crm_eventos_entrada (
+      id TEXT PRIMARY KEY, idempotency_key TEXT NOT NULL DEFAULT '',
+      tipo TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'RECEBIDO',
+      processado BOOLEAN NOT NULL DEFAULT false, data JSONB NOT NULL,
+      tenant_id TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // O initDB de hoje: NAO cria mais indice unico global; cria o por tenant e
+  // dropa o antigo, em blocos SEPARADOS.
+  const BOOT = async () => {
+    await pg.exec(`CREATE INDEX IF NOT EXISTS idx_crm_eventos_entrada_tipo ON crm_eventos_entrada(tipo);`);
+    await pg.exec(`
+      DO $$
+      BEGIN
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_crm_eventos_entrada_idem_tenant
+          ON crm_eventos_entrada(tenant_id, idempotency_key);
+      EXCEPTION WHEN OTHERS THEN
+        RAISE NOTICE 'nao criada: %', SQLERRM;
+      END $$;`);
+    await pg.exec(`
+      DO $$
+      BEGIN
+        DROP INDEX IF EXISTS idx_crm_eventos_entrada_idem;
+      EXCEPTION WHEN OTHERS THEN
+        RAISE NOTICE 'nao removido: %', SQLERRM;
+      END $$;`);
+  };
+
+  await BOOT();
+  const evento = (id, tenant, chave) =>
+    pg.query(`INSERT INTO crm_eventos_entrada (id, idempotency_key, tenant_id, data) VALUES ($1,$2,$3,'{}'::jsonb)`,
+      [id, chave, tenant]);
+
+  // Duas agencias com a MESMA chave — cada CRM tem numeracao propria.
+  await evento('e1', 't1', 'crm_evt_1042');
+  await evento('e2', 't2', 'crm_evt_1042');
+  const { rows } = await pg.query(`SELECT COUNT(*)::int AS n FROM crm_eventos_entrada`);
+  eq(rows[0].n, 2, 'agencias diferentes convivem com a mesma chave de idempotencia');
+
+  // O BOOT SEGUINTE e o que derrubava tudo. Tem que passar limpo.
+  let erro = null;
+  try { await BOOT(); } catch (e) { erro = String(e.message || e); }
+  eq(erro, null, 'boot seguinte NAO falha com a colisao entre agencias gravada');
+
+  // E a mesma agencia continua protegida contra duplicata.
+  let erroDup = null;
+  try { await evento('e3', 't1', 'crm_evt_1042'); } catch (e) { erroDup = String(e.message || e); }
+  eq(erroDup !== null, true, 'a mesma agencia nao grava a chave duas vezes');
+}
+
+console.log('--- criar e dropar em blocos separados ---');
+{
+  // Num unico bloco, uma falha no DROP acionaria o EXCEPTION e desfaria
+  // tambem a criacao do indice novo, que tinha dado certo.
+  const pg = new PGlite();
+  await pg.exec(`
+    CREATE TABLE crm_eventos_entrada (
+      id TEXT PRIMARY KEY, idempotency_key TEXT NOT NULL DEFAULT '',
+      tenant_id TEXT NOT NULL DEFAULT '', data JSONB NOT NULL
+    );
+  `);
+  // Bloco 1: cria o indice novo.
+  await pg.exec(`
+    DO $$
+    BEGIN
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_crm_eventos_entrada_idem_tenant
+        ON crm_eventos_entrada(tenant_id, idempotency_key);
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'nao criada: %', SQLERRM;
+    END $$;`);
+  // Bloco 2: dropa o antigo (que aqui nem existe).
+  await pg.exec(`
+    DO $$
+    BEGIN
+      DROP INDEX IF EXISTS idx_crm_eventos_entrada_idem;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'nao removido: %', SQLERRM;
+    END $$;`);
+
+  const { rows } = await pg.query(
+    `SELECT COUNT(*)::int AS n FROM pg_indexes WHERE indexname = 'idx_crm_eventos_entrada_idem_tenant'`);
+  eq(rows[0].n, 1, 'o indice novo sobrevive independentemente do DROP');
 }
 
 console.log('--- guarda de tenant no upsert ---');

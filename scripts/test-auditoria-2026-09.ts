@@ -11,7 +11,7 @@ import { valorMovimentado, calcularSaldoBancario } from '../src/lib/saldo-bancar
 import { calcularHistoricoKpis } from '../src/lib/historico-kpis.ts';
 import { calcularResultado, calcularCaixaLivre } from '../src/lib/resultado-financeiro.ts';
 import { calcularMovimentos, valorNoCaixa } from '../src/lib/caixa-atomico.ts';
-import { hojeISO } from '../src/lib/money.ts';
+import { hojeISO, round2, soma, somaPor } from '../src/lib/money.ts';
 import { createVendaCRM, createContaReceber } from '../src/lib/crm-types.ts';
 import { recusaDoPost, CAMPOS_DERIVADOS, preservarCamposDerivados } from '../src/lib/guarda-baixa.ts';
 
@@ -283,6 +283,72 @@ console.log('--- saldo não é sobrescrito por tela desatualizada ---');
   // Linha nova (sem estado no banco) passa direto.
   const nova = preservarCamposDerivados({ nome: 'Nova', saldo_atual: 0 }, null);
   eq(nova.saldo_atual, 0, 'conta nova grava o saldo enviado');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+console.log('--- lucro do mês não apaga o prejuízo de uma venda ---');
+{
+  // A receita da agência é clampada por venda (receita não é negativa), mas
+  // o LUCRO precisa somar a margem sem clamp. Clampar nos dois lugares faria
+  // uma viagem vendida abaixo do custo desaparecer do resultado, e o cartão
+  // mostraria um mês melhor do que a realidade.
+  const vendas = [
+    { valor_final: 20000, valor_total_custo: 16500 },   // margem +3.500
+    { valor_final: 10000, valor_total_custo: 12000 },   // margem −2.000 (prejuízo)
+  ];
+  const margens = vendas.map(v => round2(v.valor_final - v.valor_total_custo));
+  const receitaBruta = somaPor(margens, m => Math.max(m, 0));
+  const resultadoVendas = soma(margens);
+
+  eq(receitaBruta, 3500, 'receita da agência ignora a venda no prejuízo');
+  eq(resultadoVendas, 1500, 'resultado soma o prejuízo da segunda venda');
+  eq(resultadoVendas < receitaBruta, true, 'o prejuízo reduz o lucro, não some');
+
+  const despesas = 1000;
+  eq(round2(resultadoVendas - despesas), 500, 'lucro do mês depois das despesas');
+  // Com o clamp errado, o lucro apareceria como 2.500 em vez de 500.
+  eq(round2(receitaBruta - despesas), 2500, 'o clamp indevido inflaria o lucro em R$ 2.000');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+console.log('--- seção crítica do webhook sempre devolve a conexão ---');
+{
+  // O pool tem max 5. Os dois retornos de duplicata são o caminho MAIS COMUM
+  // do webhook: sem finally, cinco duplicatas esgotavam as conexões e
+  // derrubavam a aplicação inteira.
+  let emprestadas = 0;
+  const poolFalso = {
+    connect: () => { emprestadas++; return { release: () => { emprestadas--; } }; },
+  };
+
+  // Reproduz a forma da seção crítica: qualquer saída passa pelo finally.
+  async function secaoCritica(caminho: 'duplicata' | 'novo' | 'excecao') {
+    const client = poolFalso.connect();
+    const soltar = async () => { client.release(); };
+    let duplicata: string | null = null;
+    try {
+      if (caminho === 'duplicata') { duplicata = 'duplicata ignorada'; }
+      else if (caminho === 'excecao') { throw new Error('falha no meio'); }
+    } finally {
+      await soltar();
+    }
+    return duplicata;
+  }
+
+  eq(await secaoCritica('duplicata'), 'duplicata ignorada', 'duplicata retorna normalmente');
+  eq(emprestadas, 0, 'conexão devolvida no caminho de duplicata');
+
+  await secaoCritica('novo');
+  eq(emprestadas, 0, 'conexão devolvida no caminho de evento novo');
+
+  let lancou = false;
+  try { await secaoCritica('excecao'); } catch { lancou = true; }
+  eq(lancou, true, 'exceção continua propagando');
+  eq(emprestadas, 0, 'conexão devolvida também quando lança');
+
+  // Seis duplicatas seguidas não podem acumular conexões.
+  for (let i = 0; i < 6; i++) await secaoCritica('duplicata');
+  eq(emprestadas, 0, 'seis duplicatas seguidas não esgotam o pool');
 }
 
 // ══════════════════════════════════════════════════════════════════════

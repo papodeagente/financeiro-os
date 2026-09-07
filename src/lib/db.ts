@@ -7,8 +7,23 @@ const pool = process.env.DATABASE_URL
 export default pool;
 
 let initialized = false;
+// Promessa em andamento da inicialização.
+//
+// `initialized` só vira true no fim, então duas requisições que cheguem
+// juntas no primeiro acesso após um deploy rodavam o initDB INTEIRO em
+// paralelo: dois CREATE INDEX IF NOT EXISTS sobre a mesma tabela ao mesmo
+// tempo podem colidir, e a exceção resultante deixa a inicialização sem
+// concluir. Memoizar a promessa faz a segunda requisição esperar a primeira.
+let emAndamento: Promise<void> | null = null;
 
 export async function initDB() {
+  if (!pool || initialized) return;
+  if (emAndamento) return emAndamento;
+  emAndamento = executarInitDB().finally(() => { emAndamento = null; });
+  return emAndamento;
+}
+
+async function executarInitDB() {
   if (!pool || initialized) return;
   await pool.query(`
     CREATE TABLE IF NOT EXISTS grupos (
@@ -543,7 +558,17 @@ export async function initDB() {
     CREATE INDEX IF NOT EXISTS idx_crm_eventos_saida_tipo ON crm_eventos_saida(tipo);
     CREATE INDEX IF NOT EXISTS idx_crm_eventos_saida_status ON crm_eventos_saida(status);
     CREATE INDEX IF NOT EXISTS idx_crm_eventos_saida_proxima ON crm_eventos_saida(proxima_tentativa);
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_crm_eventos_entrada_idem ON crm_eventos_entrada(idempotency_key);
+    -- A unicidade da idempotência é POR TENANT e é criada mais abaixo, no
+    -- bloco da auditoria (idx_crm_eventos_entrada_idem_tenant).
+    --
+    -- O índice ÚNICO GLOBAL que existia aqui foi removido de propósito. Ele
+    -- rodava antes do bloco que o dropa, então era recriado a cada boot; na
+    -- primeira vez que duas agências gravassem a mesma idempotency_key (que
+    -- é exatamente o que a mudança passou a permitir, porque cada CRM tem
+    -- numeração própria), esta linha passaria a falhar. Como está num
+    -- pool.query cru, sem DO/EXCEPTION, e initDB só marca a inicialização
+    -- como concluída no fim, a exceção deixaria TODA requisição quebrada,
+    -- em todas as agências, até um novo deploy.
     CREATE INDEX IF NOT EXISTS idx_crm_eventos_entrada_tipo ON crm_eventos_entrada(tipo);
     CREATE INDEX IF NOT EXISTS idx_crm_eventos_entrada_proc ON crm_eventos_entrada(processado);
     -- NOTE: o índice único em planejamento_custos é (tenant_id, mes) — criado mais abaixo
@@ -1002,19 +1027,37 @@ export async function initDB() {
   // todos os tenants: quem salvasse por último virava dono das chaves de
   // API e do cadastro da agência dos outros. crm_config já tinha sido
   // promovida; estas duas ficaram para trás.
+  //
+  // Duas defesas aqui, porque este bloco roda a cada request e uma exceção
+  // derrubaria a aplicação inteira em vez de sinalizar o problema:
+  //
+  //  1. O nome da constraint vem do catálogo, não de um palpite. Assumir
+  //     '<tabela>_pkey' funciona para PK declarada na criação da tabela, mas
+  //     um banco onde ela tenha nome diferente faria o DROP falhar.
+  //  2. EXCEPTION em volta, como nos índices únicos abaixo. Se a promoção
+  //     não puder acontecer, a linha continua compartilhada (o problema que
+  //     já existia hoje) e o sistema segue de pé, com o motivo no log.
+  //
+  // A promoção em si é segura quanto a dados: a PK antiga era só em `id`,
+  // então o par (id, tenant_id) já é único por construção, e tenant_id é
+  // NOT NULL DEFAULT '' desde o ALTER acima.
   for (const tabela of ['config_apis', 'agencia']) {
     await pool.query(`
       DO $$
+      DECLARE nome_pk TEXT;
       BEGIN
-        IF EXISTS (
-          SELECT 1 FROM pg_constraint
-          WHERE conrelid = '${tabela}'::regclass
-            AND contype = 'p'
-            AND pg_get_constraintdef(oid) NOT LIKE '%tenant_id%'
-        ) THEN
-          ALTER TABLE ${tabela} DROP CONSTRAINT ${tabela}_pkey;
+        SELECT conname INTO nome_pk
+          FROM pg_constraint
+         WHERE conrelid = '${tabela}'::regclass
+           AND contype = 'p'
+           AND pg_get_constraintdef(oid) NOT LIKE '%tenant_id%'
+         LIMIT 1;
+        IF nome_pk IS NOT NULL THEN
+          EXECUTE format('ALTER TABLE ${tabela} DROP CONSTRAINT %I', nome_pk);
           ALTER TABLE ${tabela} ADD PRIMARY KEY (id, tenant_id);
         END IF;
+      EXCEPTION WHEN OTHERS THEN
+        RAISE NOTICE 'PK composta de ${tabela} nao migrada: %', SQLERRM;
       END
       $$;
     `);
@@ -1025,14 +1068,27 @@ export async function initDB() {
   // por (idempotency_key, tenant_id). Dois tenants com a mesma chave (ids
   // sequenciais de CRM colidem sozinhos) faziam o segundo evento estourar
   // violação de unique e sumir sem registro — uma venda que nunca entra.
+  //
+  // CRIAR e DROPAR ficam em blocos SEPARADOS de propósito. Num único bloco,
+  // uma falha no DROP acionaria o EXCEPTION e desfaria também a criação do
+  // índice novo, que tinha dado certo — e o sistema ficaria sem nenhuma das
+  // duas garantias, silenciosamente, a cada boot.
   await pool.query(`
     DO $$
     BEGIN
       CREATE UNIQUE INDEX IF NOT EXISTS idx_crm_eventos_entrada_idem_tenant
         ON crm_eventos_entrada(tenant_id, idempotency_key);
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'idempotencia por tenant nao criada: %', SQLERRM;
+    END
+    $$;
+  `);
+  await pool.query(`
+    DO $$
+    BEGIN
       DROP INDEX IF EXISTS idx_crm_eventos_entrada_idem;
     EXCEPTION WHEN OTHERS THEN
-      RAISE NOTICE 'idempotencia por tenant nao migrada: %', SQLERRM;
+      RAISE NOTICE 'indice global de idempotencia nao removido: %', SQLERRM;
     END
     $$;
   `);
