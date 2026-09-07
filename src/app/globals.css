@@ -48,429 +48,310 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* Light theme — clean blue-tinted */
+/* ════════════════════════════════════════════════════════════════════
+   FUNDAÇÃO — camada canônica --fin-* (tema claro)
+   ════════════════════════════════════════════════════════════════════
+   Identidade Entur: azul #004aad, fundo #F7F8FC, texto #1A1A1A,
+   Inter, raio 0.75rem.
+
+   --fin-* é a ÚNICA camada que declara valor. Os dialetos antigos
+   (--t-*, --ink-*, --lg-* e os semânticos do shadcn) continuam
+   existindo como alias de uma linha: 147 arquivos os consomem, e
+   apagar um nome quebraria telas fora do financeiro em silêncio.
+   Código novo usa apenas --fin-*.
+   ════════════════════════════════════════════════════════════════════ */
+
 :root {
-  --background: #F7F8FC;
-  --foreground: #1A1A1A;
-  --card: #ffffff;
-  --card-foreground: #1A1A1A;
-  --popover: #ffffff;
-  --popover-foreground: #1A1A1A;
-  --primary: #004aad;
-  --primary-foreground: #ffffff;
-  --secondary: #EEF1F8;
-  --secondary-foreground: #1A1A1A;
-  --muted: #EEF1F8;
-  --muted-foreground: #64748B;
-  --accent: #004aad;
-  --accent-foreground: #ffffff;
-  --destructive: #ef4444;
-  --border: rgba(0, 0, 0, 0.06);
-  --input: rgba(0, 0, 0, 0.06);
-  --ring: #004aad;
-  --chart-1: #004aad;
-  --chart-2: #0891b2;
-  --chart-3: #7c3aed;
-  --chart-4: #d97706;
-  --chart-5: #dc2626;
-  --radius: 0.75rem;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #1A1A1A;
-  --sidebar-primary: #004aad;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #EEF1F8;
-  --sidebar-accent-foreground: #1A1A1A;
-  --sidebar-border: rgba(0, 0, 0, 0.04);
-  --sidebar-ring: #004aad;
+  /* ── Cor canônica ─────────────────────────────────────────────── */
+  --fin-bg:             #F7F8FC;
+  --fin-surface:        #FFFFFF;
+  --fin-surface-2:      #F1F3F9;
+  --fin-surface-sunken: #EDF0F7;
+  --fin-border:         #E4E7EF;
+  --fin-border-strong:  #CBD3E1;
+  --fin-text:           #1A1A1A;
+  --fin-text-2:         #475569;
+  --fin-text-3:         #5B6878;
+  --fin-text-on-fill:   #FFFFFF;
+  --fin-accent:         #004aad;
+  --fin-accent-hover:   #003B8A;
+  --fin-accent-soft:    #E8EFF9;
+  --fin-accent-ring:    rgba(0, 74, 173, 0.28);
+  --fin-positive:       #047857;
+  --fin-positive-soft:  #ECFDF5;
+  --fin-negative:       #dc2626;
+  --fin-negative-text:  #B42318;
+  --fin-negative-soft:  #FEF2F2;
+  --fin-warning:        #d97706;
+  --fin-warning-text:   #B45309;
+  --fin-warning-soft:   #FFFBEB;
+  --fin-info:           #2563eb;
+  --fin-info-soft:      #EFF6FF;
 
-  /* ============================================================
-   * MINIMAL DESIGN SYSTEM — slate/blue clean SaaS
-   * ============================================================
-   * Paleta sólida sem blur, tipografia profissional, espaço em
-   * branco generoso. Tokens legados (--t-*, --ink-*) são aliasados
-   * no final deste bloco pra herdar o visual via cascata. Os nomes
-   * --lg-* permanecem pra não quebrar referências; valores foram
-   * trocados pelo design system minimal. */
+  /* ── Raio: três níveis mais o ponto de estado ─────────────────── */
+  --fin-r-sm:  6px;    /* chip, badge, caixa de seleção */
+  --fin-r-md:  10px;   /* botão, input, select, item de menu */
+  --fin-r-lg:  12px;   /* card, painel, diálogo (0.75rem da identidade) */
+  --fin-r-dot: 999px;  /* apenas o ponto de estado de 6px */
 
-  /* Surfaces — sólidas, sem translucência */
-  --lg-material-thin:    #FFFFFF;
-  --lg-material-regular: #FFFFFF;
-  --lg-material-thick:   #FFFFFF;
-  --lg-blur-thin:    none;
-  --lg-blur-regular: none;
-  --lg-blur-thick:   none;
+  /* ── Sombra: card em repouso não tem sombra ───────────────────── */
+  --fin-e0:   none;
+  --fin-e1:   0 4px 12px rgba(16, 24, 40, 0.08);
+  --fin-e2:   0 16px 40px rgba(16, 24, 40, 0.14);
+  --fin-ring: 2px solid var(--fin-accent);
 
-  /* Backgrounds — neutro frio, estilo Notion/Linear */
-  --lg-bg:            #F5F5F7;
-  --lg-bg-deep:       #FFFFFF;
-  --lg-surface-solid: #FFFFFF;
+  /* ── Espaçamento: grade de 4px, seis degraus ──────────────────── */
+  --fin-s-1: 4px;
+  --fin-s-2: 8px;
+  --fin-s-3: 12px;
+  --fin-s-4: 16px;
+  --fin-s-5: 24px;
+  --fin-s-6: 40px;
 
-  /* Borders — quase invisíveis */
+  /* ── Página: uma largura só ───────────────────────────────────── */
+  --fin-page-max: 1280px;
+  --fin-page-pad: 24px;
+
+  /* ── Escala tipográfica: oito degraus fechados ────────────────── */
+  --fin-fs-metric:    30px;
+  --fin-fs-metric-sm: 20px;
+  --fin-fs-title:     20px;
+  --fin-fs-subhead:   16px;
+  --fin-fs-body:      14px;
+  --fin-fs-caption:   12px;
+  --fin-fs-overline:  11px;
+
+  /* ════════════════════════════════════════════════════════════════
+     ALIAS — shadcn. Nada aqui declara valor.
+     ════════════════════════════════════════════════════════════════ */
+  --background:                 var(--fin-bg);
+  --foreground:                 var(--fin-text);
+  --card:                       var(--fin-surface);
+  --card-foreground:            var(--fin-text);
+  --popover:                    var(--fin-surface);
+  --popover-foreground:         var(--fin-text);
+  --primary:                    var(--fin-accent);
+  --primary-foreground:         var(--fin-text-on-fill);
+  --secondary:                  var(--fin-surface-2);
+  --secondary-foreground:       var(--fin-text);
+  --muted:                      var(--fin-surface-2);
+  --muted-foreground:           var(--fin-text-3);
+  --accent:                     var(--fin-accent);
+  --accent-foreground:          var(--fin-text-on-fill);
+  --destructive:                var(--fin-negative);
+  --border:                     var(--fin-border);
+  --input:                      var(--fin-border);
+  --ring:                       var(--fin-accent);
+  --chart-1:                    var(--fin-accent);
+  --chart-2:                    #0891b2;
+  --chart-3:                    #7c3aed;
+  --chart-4:                    var(--fin-warning);
+  --chart-5:                    var(--fin-negative);
+  --radius:                     var(--fin-r-lg);
+  --sidebar:                    var(--fin-surface);
+  --sidebar-foreground:         var(--fin-text);
+  --sidebar-primary:            var(--fin-accent);
+  --sidebar-primary-foreground: var(--fin-text-on-fill);
+  --sidebar-accent:             var(--fin-surface-2);
+  --sidebar-accent-foreground:  var(--fin-text);
+  --sidebar-border:             var(--fin-border);
+  --sidebar-ring:               var(--fin-accent);
+
+  /* ════════════════════════════════════════════════════════════════
+     ALIAS — dialeto --lg-* ("liquid glass" / minimal).
+     ════════════════════════════════════════════════════════════════ */
+  --lg-material-thin:    var(--fin-surface);
+  --lg-material-regular: var(--fin-surface);
+  --lg-material-thick:   var(--fin-surface-2);
+  --lg-bg:               var(--fin-bg);
+  --lg-bg-deep:          var(--fin-surface);
+  --lg-surface-solid:    var(--fin-surface);
   --lg-border-highlight: transparent;
-  --lg-border-base:      #ECECEF;
-  --lg-border-strong:    #D9D9DC;
-  --lg-border-light:     #F2F2F4;
+  --lg-border-base:      var(--fin-border);
+  --lg-border-strong:    var(--fin-border-strong);
+  --lg-border-light:     var(--fin-border);
+  --lg-text:             var(--fin-text);
+  --lg-text-2:           var(--fin-text-2);
+  --lg-text-3:           var(--fin-text-3);
+  --lg-text-4:           var(--fin-text-3);
+  --lg-accent:           var(--fin-accent);
+  --lg-accent-fill:      var(--fin-accent-soft);
+  --lg-accent-hover:     var(--fin-accent-hover);
 
-  /* Text — slate ligeiramente frio */
-  --lg-text:    #0F172A;
-  --lg-text-2:  #475569;
-  --lg-text-3:  #64748B;
-  --lg-text-4:  #94A3B8;
+  /* Acentos de KPI. blue/green/red/amber passam a ser semânticos;
+     violet/cyan/pink não têm par canônico e seguem decorativos. */
+  --lg-stat-blue:   var(--fin-accent);
+  --lg-stat-green:  var(--fin-positive);
+  --lg-stat-red:    var(--fin-negative);
+  --lg-stat-amber:  var(--fin-warning);
+  --lg-stat-violet: #8B5CF6;
+  --lg-stat-cyan:   #06B6D4;
+  --lg-stat-pink:   #EC4899;
 
-  /* Accent — indigo/violet (CTA "Novo", botões primários) */
-  --lg-accent:        #4F46E5;
-  --lg-accent-fill:   #EEF2FF;
-  --lg-accent-hover:  #4338CA;
+  --lg-pos:  var(--fin-positive); --lg-pos-fill:  var(--fin-positive-soft);
+  --lg-neg:  var(--fin-negative); --lg-neg-fill:  var(--fin-negative-soft);
+  --lg-warn: var(--fin-warning);  --lg-warn-fill: var(--fin-warning-soft);
 
-  /* Accents secundários pros KPI cards (top-border) */
-  --lg-stat-blue:    #4F46E5;
-  --lg-stat-green:   #10B981;
-  --lg-stat-red:     #EF4444;
-  --lg-stat-violet:  #8B5CF6;
-  --lg-stat-amber:   #F59E0B;
-  --lg-stat-cyan:    #06B6D4;
-  --lg-stat-pink:    #EC4899;
+  --lg-shadow-card: var(--fin-e0);
+  --lg-shadow-pop:  var(--fin-e1);
 
-  /* Semantic — moderado, sem cores saturadas */
-  --lg-pos:  #10B981;  --lg-pos-fill:  #ECFDF5;
-  --lg-neg:  #EF4444;  --lg-neg-fill:  #FEF2F2;
-  --lg-warn: #F59E0B;  --lg-warn-fill: #FFFBEB;
+  --lg-radius-md: var(--fin-r-md);
+  --lg-radius-lg: var(--fin-r-lg);
+  --lg-radius-xl: var(--fin-r-lg);
 
-  /* Shadow — ultra sutil pra parecer "papel" sobre fundo */
-  --lg-shadow-card: 0 1px 2px rgba(15,23,42,0.04);
-  --lg-shadow-pop:  0 4px 16px rgba(15,23,42,0.08), 0 1px 3px rgba(15,23,42,0.04);
-
-  /* Radii — mais arredondado, estilo card moderno */
-  --lg-radius-sm: 8px;
-  --lg-radius-md: 10px;
-  --lg-radius-lg: 14px;
-  --lg-radius-xl: 18px;
-
-  /* Motion */
   --lg-ease:   cubic-bezier(0.4, 0.0, 0.2, 1);
   --lg-spring: cubic-bezier(0.32, 0.72, 0, 1);
   --lg-fast:   150ms var(--lg-ease);
   --lg-base:   200ms var(--lg-ease);
 
-  /* Semantic tokens for components */
-  --t-bg: #F7F8FC;
-  --t-surface: #ffffff;
-  --t-surface-hover: #F0F3FA;
-  --t-border: rgba(0, 0, 0, 0.06);
-  --t-border-hover: rgba(0, 0, 0, 0.12);
-  --t-text: #1A1A1A;
-  --t-text-secondary: #64748B;
-  --t-text-muted: #94A3B8;
-  --t-green: #004aad;
-  --t-green-bg: rgba(0, 74, 173, 0.08);
-  --t-green-shadow: rgba(0, 74, 173, 0.12);
-  --t-primary: #004aad;
-  --t-primary-bg: rgba(0, 74, 173, 0.08);
-  --t-red: #dc2626;
-  --t-red-bg: rgba(220, 38, 38, 0.08);
-  --t-blue: #2563eb;
-  --t-blue-bg: rgba(37, 99, 235, 0.08);
-  --t-amber: #d97706;
-  --t-amber-bg: rgba(217, 119, 6, 0.1);
-  --t-pillar-bg: #F0F4FF;
-  --t-sidebar-bg: #ffffff;
-  --t-sidebar-active-bg: #004aad;
-  --t-sidebar-active-text: #ffffff;
-  --t-sidebar-item: #64748B;
-  --t-sidebar-item-hover: #EEF2FA;
-  --t-sidebar-group: rgba(0, 74, 173, 0.05);
-  --t-sidebar-group-text: #004aad;
-  --t-input-bg: #ffffff;
-  --t-header-bg: #EBF0FA;
-  --t-header-text: #1e40af;
-  --t-accent: #004aad;
-  --t-accent-muted: rgba(0, 74, 173, 0.1);
-  --t-table-header-bg: #EBF0FA;
-  --t-table-header-text: #1e40af;
+  /* ════════════════════════════════════════════════════════════════
+     ALIAS — dialeto --t-*. Declarado UMA vez: o bloco duplicado que
+     redeclarava estes mesmos nomes logo abaixo foi eliminado. É por
+     isso que --t-green volta a ser o azul #004aad da identidade.
+     ════════════════════════════════════════════════════════════════ */
+  --t-bg:                var(--fin-bg);
+  --t-surface:           var(--fin-surface);
+  --t-surface-hover:     var(--fin-surface-2);
+  --t-border:            var(--fin-border);
+  --t-border-hover:      var(--fin-border-strong);
+  --t-text:              var(--fin-text);
+  --t-text-secondary:    var(--fin-text-2);
+  --t-text-muted:        var(--fin-text-3);
+  --t-green:             var(--fin-accent);
+  --t-green-bg:          var(--fin-accent-soft);
+  --t-green-shadow:      var(--fin-accent-ring);
+  --t-primary:           var(--fin-accent);
+  --t-primary-bg:        var(--fin-accent-soft);
+  --t-accent:            var(--fin-accent);
+  --t-accent-muted:      var(--fin-accent-soft);
+  --t-blue:              var(--fin-accent);
+  --t-blue-bg:           var(--fin-accent-soft);
+  --t-red:               var(--fin-negative);
+  --t-red-bg:            var(--fin-negative-soft);
+  --t-amber:             var(--fin-warning);
+  --t-amber-bg:          var(--fin-warning-soft);
+  --t-sidebar-bg:          var(--fin-surface);
+  --t-sidebar-active-bg:   var(--fin-accent-soft);
+  --t-sidebar-active-text: var(--fin-accent);
+  --t-sidebar-item:        var(--fin-text-2);
+  --t-sidebar-item-hover:  var(--fin-surface-2);
+  --t-sidebar-group:       var(--fin-surface-2);
+  --t-sidebar-group-text:  var(--fin-accent);
+  --t-input-bg:          var(--fin-surface);
+  --t-header-bg:         var(--fin-surface);
+  --t-header-text:       var(--fin-text);
+  --t-glass-bg:          var(--fin-surface);
+  --t-glass-border:      transparent;
+  --t-card-radius:       var(--fin-r-lg);
+  --t-card-shadow:       var(--fin-e0);
+  --t-card-shadow-hover: var(--fin-e1);
+  --t-nav-blur:          blur(12px);
 
-  /* Journey rail */
-  --t-pillar-rail-text: rgba(255, 255, 255, 0.7);
+  --t-status-success: var(--fin-positive); --t-status-success-bg: var(--fin-positive-soft);
+  --t-status-warning: var(--fin-warning);  --t-status-warning-bg: var(--fin-warning-soft);
+  --t-status-danger:  var(--fin-negative); --t-status-danger-bg:  var(--fin-negative-soft);
+  --t-status-info:    var(--fin-info);     --t-status-info-bg:    var(--fin-info-soft);
+  --t-status-neutral: var(--fin-text-3);   --t-status-neutral-bg: var(--fin-surface-2);
+
+  /* Trilho da jornada (fora do financeiro) */
+  --t-pillar-rail-text:        rgba(255, 255, 255, 0.7);
   --t-pillar-rail-text-active: #ffffff;
-  --t-pillar-connector: rgba(255, 255, 255, 0.18);
-  --t-hero-gradient: linear-gradient(135deg, #004aad 0%, #0062E6 50%, #3B82F6 100%);
-  --t-glass-bg: rgba(255, 255, 255, 0.7);
-  --t-glass-border: rgba(255, 255, 255, 0.3);
+  --t-pillar-connector:        rgba(255, 255, 255, 0.18);
+  --t-pillar-gradient:  linear-gradient(180deg, #0044A0 0%, #002D6B 100%);
+  --t-hero-gradient:    linear-gradient(135deg, var(--fin-accent-soft) 0%, transparent 100%);
+  --t-surface-gradient: linear-gradient(135deg, var(--fin-surface) 0%, var(--fin-surface-2) 100%);
+  --t-accent-gradient:  linear-gradient(135deg, var(--fin-accent) 0%, var(--fin-accent-hover) 100%);
 
-  /* Elevation system — 4 levels */
-  --elevation-1: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
-  --elevation-2: 0 4px 16px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
-  --elevation-3: 0 8px 30px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04);
-  --elevation-4: 0 16px 48px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06);
+  /* ════════════════════════════════════════════════════════════════
+     ALIAS — elevação legada. Colapsa nos três degraus da seção 5.3.
+     ════════════════════════════════════════════════════════════════ */
+  --elevation-1: var(--fin-e0);
+  --elevation-2: var(--fin-e1);
+  --elevation-3: var(--fin-e2);
+  --elevation-4: var(--fin-e2);
 
-  /* Surface gradients */
-  --t-surface-gradient: linear-gradient(135deg, #ffffff 0%, #FAFBFF 100%);
-  --t-pillar-gradient: linear-gradient(180deg, #0044A0 0%, #002D6B 100%);
-  --t-accent-gradient: linear-gradient(135deg, #004aad 0%, #0058CC 50%, #0066E0 100%);
-
-  /* Status tokens */
-  --t-status-success: #16a34a;     --t-status-success-bg: rgba(22,163,74,0.10);
-  --t-status-warning: #d97706;     --t-status-warning-bg: rgba(217,119,6,0.10);
-  --t-status-danger: #dc2626;      --t-status-danger-bg: rgba(220,38,38,0.08);
-  --t-status-info: #2563eb;        --t-status-info-bg: rgba(37,99,235,0.08);
-  --t-status-neutral: #6b7280;     --t-status-neutral-bg: rgba(107,114,128,0.08);
-
-  /* Card styling */
-  --t-card-shadow: var(--elevation-2);
-  --t-card-shadow-hover: var(--elevation-3);
-  --t-card-radius: 20px;
-  --t-nav-blur: blur(12px);
-
-  /* Design System — Escala tipográfica (Inter optimized) */
-  --text-micro: 10px;
-  --text-caption: 11px;
-  --text-body-sm: 13px;
-  --text-body: 14px;
-  --text-body-lg: 16px;
+  /* ════════════════════════════════════════════════════════════════
+     Escala tipográfica legada. Mantida com os valores atuais para não
+     mexer no layout das telas fora do financeiro; a escala canônica do
+     módulo são as classes .fin-t-* mais abaixo. --text-h2 era usado em
+     três arquivos e nunca havia sido declarado.
+     ════════════════════════════════════════════════════════════════ */
+  --text-micro:    var(--fin-fs-caption);
+  --text-caption:  11px;
+  --text-body-sm:  13px;
+  --text-body:     14px;
+  --text-body-lg:  16px;
   --text-title-sm: 18px;
-  --text-title: 20px;
-  --text-display: 28px;
-  --text-kpi: 48px;
-
-  /* Espaçamento 4pt */
-  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
-  --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
-  --space-12: 48px; --space-16: 64px;
-
-  /* Motion */
-  --motion-fast: 150ms ease-out;
-  --motion-base: 250ms ease-in-out;
-  --motion-slow: 400ms ease-in-out;
+  --text-title:    20px;
+  --text-h2:       var(--fin-fs-title);
+  --text-display:  28px;
+  --text-kpi:      48px;
 
   /* CRM status */
-  --crm-ok: #16a34a;
-  --crm-warn: #d97706;
-  --crm-err: #dc2626;
-  --crm-off: #9ca3af;
-
-  /* ============================================================
-   * LIQUID GLASS — aliases dos tokens legados
-   * ============================================================
-   * Sobrescreve os valores acima apontando pros tokens --lg-*.
-   * Resultado: páginas que usam var(--t-*) ou var(--ink-*) ganham
-   * o novo visual sem precisar de mexer no JSX. */
-  --t-bg: var(--lg-bg);
-  --t-surface: var(--lg-material-regular);
-  --t-surface-hover: var(--lg-material-thick);
-  --t-border: var(--lg-border-base);
-  --t-border-hover: var(--lg-border-strong);
-  --t-text: var(--lg-text);
-  --t-text-secondary: var(--lg-text-2);
-  --t-text-muted: var(--lg-text-3);
-  --t-green: var(--lg-accent);
-  --t-green-bg: var(--lg-accent-fill);
-  --t-green-shadow: rgba(10, 132, 255, 0.16);
-  --t-primary: var(--lg-accent);
-  --t-primary-bg: var(--lg-accent-fill);
-  --t-red: var(--lg-neg);
-  --t-red-bg: var(--lg-neg-fill);
-  --t-blue: var(--lg-accent);
-  --t-blue-bg: var(--lg-accent-fill);
-  --t-amber: var(--lg-warn);
-  --t-amber-bg: var(--lg-warn-fill);
-  --t-sidebar-bg: var(--lg-material-thin);
-  --t-sidebar-active-bg: var(--lg-accent-fill);
-  --t-sidebar-active-text: var(--lg-accent);
-  --t-sidebar-item: var(--lg-text-2);
-  --t-sidebar-item-hover: var(--lg-material-thick);
-  --t-sidebar-group: var(--lg-material-thick);
-  --t-sidebar-group-text: var(--lg-accent);
-  --t-input-bg: rgba(255, 255, 255, 0.6);
-  --t-header-bg: var(--lg-material-regular);
-  --t-header-text: var(--lg-text);
-  --t-accent: var(--lg-accent);
-  --t-accent-muted: var(--lg-accent-fill);
-  --t-table-header-bg: var(--lg-material-thick);
-  --t-table-header-text: var(--lg-text-2);
-  --t-hero-gradient: linear-gradient(135deg, var(--lg-accent-fill) 0%, transparent 100%);
-  --t-glass-bg: var(--lg-material-regular);
-  --t-glass-border: var(--lg-border-highlight);
-  --t-surface-gradient: linear-gradient(135deg, var(--lg-material-regular) 0%, var(--lg-material-thick) 100%);
-  --t-accent-gradient: linear-gradient(135deg, var(--lg-accent) 0%, var(--lg-accent-hover) 100%);
-  --t-card-radius: var(--lg-radius-lg);
-  --t-card-shadow: var(--lg-shadow-card);
-  --t-card-shadow-hover: var(--lg-shadow-pop);
-
-  /* Status alinhados aos --lg-* */
-  --t-status-success: var(--lg-pos);     --t-status-success-bg: var(--lg-pos-fill);
-  --t-status-warning: var(--lg-warn);    --t-status-warning-bg: var(--lg-warn-fill);
-  --t-status-danger:  var(--lg-neg);     --t-status-danger-bg:  var(--lg-neg-fill);
-  --t-status-info:    var(--lg-accent);  --t-status-info-bg:    var(--lg-accent-fill);
-  --t-status-neutral: var(--lg-text-3);  --t-status-neutral-bg: rgba(142,142,147,0.12);
+  --crm-ok:   var(--fin-positive);
+  --crm-warn: var(--fin-warning);
+  --crm-err:  var(--fin-negative);
+  --crm-off:  var(--fin-text-3);
 }
 
-/* Dark theme — cool blue-dark */
+@media (max-width: 1023px) {
+  :root { --fin-page-pad: 16px; }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   FUNDAÇÃO — par escuro obrigatório
+   ════════════════════════════════════════════════════════════════════
+   Todo token canônico tem contraparte aqui. Como os dialetos antigos
+   (--t-*, --ink-*, --lg-*, shadcn) são alias de --fin-*, eles seguem
+   o tema escuro sozinhos: não existe mais um segundo bloco de alias
+   para sair de sincronia com o claro.
+
+   Contraste medido sobre a superfície #172131:
+   text 14,76 · text-2 10,32 · text-3 6,31 · accent 5,84 ·
+   positive 8,41 · negative 5,85 · warning-text 9,69.
+
+   O escuro não é auditado tela a tela nesta rodada. Ele existe para
+   garantir que ninguém caia numa tela ilegível.
+   ════════════════════════════════════════════════════════════════════ */
+
 .dark {
-  --background: #0F1117;
-  --foreground: #f0f0f5;
-  --card: #171B26;
-  --card-foreground: #f0f0f5;
-  --popover: #171B26;
-  --popover-foreground: #f0f0f5;
-  --primary: #3b82f6;
-  --primary-foreground: #0F1117;
-  --secondary: #1E2235;
-  --secondary-foreground: #f0f0f5;
-  --muted: #1C2030;
-  --muted-foreground: #8B95A8;
-  --accent: #3b82f6;
-  --accent-foreground: #0F1117;
-  --destructive: #ef4444;
-  --border: rgba(255, 255, 255, 0.07);
-  --input: rgba(255, 255, 255, 0.07);
-  --ring: #3b82f6;
-  --chart-1: #3b82f6;
+  --fin-bg:             #0F1621;
+  --fin-surface:        #172131;
+  --fin-surface-2:      #1E2A3B;
+  --fin-surface-sunken: #131C29;
+  --fin-border:         #2A3648;
+  --fin-border-strong:  #3B4A61;
+  --fin-text:           #F1F5F9;
+  --fin-text-2:         #CBD5E1;
+  --fin-text-3:         #94A3B8;
+  /* Sobre o accent claro do escuro, branco daria 2,77:1. O texto de
+     preenchimento vira o fundo profundo: 6,66:1. */
+  --fin-text-on-fill:   #0F1621;
+  --fin-accent:         #5B9BFF;
+  --fin-accent-hover:   #7CAEFF;
+  --fin-accent-soft:    rgba(91, 155, 255, 0.16);
+  --fin-accent-ring:    rgba(91, 155, 255, 0.38);
+  --fin-positive:       #34D399;
+  --fin-positive-soft:  rgba(52, 211, 153, 0.16);
+  --fin-negative:       #F87171;
+  --fin-negative-text:  #F87171;
+  --fin-negative-soft:  rgba(248, 113, 113, 0.16);
+  --fin-warning:        #F59E0B;
+  --fin-warning-text:   #FBBF24;
+  --fin-warning-soft:   rgba(251, 191, 36, 0.16);
+  --fin-info:           #7DA9FF;
+  --fin-info-soft:      rgba(125, 169, 255, 0.16);
+
+  /* Sombra precisa de mais opacidade sobre fundo escuro */
+  --fin-e1: 0 4px 12px rgba(0, 0, 0, 0.40);
+  --fin-e2: 0 16px 40px rgba(0, 0, 0, 0.55);
+
+  /* Literais sem par canônico */
   --chart-2: #22d3ee;
   --chart-3: #a78bfa;
-  --chart-4: #f59e0b;
-  --chart-5: #ef4444;
-  --sidebar: #131620;
-  --sidebar-foreground: #f0f0f5;
-  --sidebar-primary: #3b82f6;
-  --sidebar-primary-foreground: #0F1117;
-  --sidebar-accent: #1E2235;
-  --sidebar-accent-foreground: #f0f0f5;
-  --sidebar-border: rgba(255, 255, 255, 0.05);
-  --sidebar-ring: #3b82f6;
-
-  --t-bg: #0F1117;
-  --t-surface: #171B26;
-  --t-surface-hover: rgba(59, 130, 246, 0.05);
-  --t-border: rgba(255, 255, 255, 0.07);
-  --t-border-hover: rgba(255, 255, 255, 0.14);
-  --t-text: #f0f0f5;
-  --t-text-secondary: #8B95A8;
-  --t-text-muted: #4B5568;
-  --t-green: #3b82f6;
-  --t-green-bg: rgba(59, 130, 246, 0.12);
-  --t-green-shadow: rgba(59, 130, 246, 0.2);
-  --t-primary: #3b82f6;
-  --t-primary-bg: rgba(59, 130, 246, 0.12);
-  --t-red: #ef4444;
-  --t-red-bg: rgba(239, 68, 68, 0.1);
-  --t-blue: #60a5fa;
-  --t-blue-bg: rgba(96, 165, 250, 0.1);
-  --t-amber: #fbbf24;
-  --t-amber-bg: rgba(251, 191, 36, 0.15);
-  --t-pillar-bg: #131620;
-  --t-sidebar-bg: #131620;
-  --t-sidebar-active-bg: #3b82f6;
-  --t-sidebar-active-text: #ffffff;
-  --t-sidebar-item: #8B95A8;
-  --t-sidebar-item-hover: rgba(59, 130, 246, 0.08);
-  --t-sidebar-group: rgba(59, 130, 246, 0.08);
-  --t-sidebar-group-text: #60a5fa;
-  --t-input-bg: #131620;
-  --t-header-bg: #1e293b;
-  --t-header-text: #93c5fd;
-  --t-accent: #60a5fa;
-  --t-accent-muted: rgba(96, 165, 250, 0.12);
-  --t-table-header-bg: #1e293b;
-  --t-table-header-text: #93c5fd;
-
-  /* Journey rail — dark */
-  --t-pillar-rail-text: rgba(255, 255, 255, 0.6);
-  --t-pillar-rail-text-active: #ffffff;
-  --t-pillar-connector: rgba(255, 255, 255, 0.12);
-  --t-hero-gradient: linear-gradient(135deg, #1e3a5f 0%, #1e40af 50%, #2563eb 100%);
-  --t-glass-bg: rgba(23, 27, 38, 0.75);
-  --t-glass-border: rgba(255, 255, 255, 0.08);
-
-  /* Elevation system — dark */
-  --elevation-1: 0 1px 3px rgba(0,0,0,0.20), 0 1px 2px rgba(0,0,0,0.12);
-  --elevation-2: 0 4px 16px rgba(0,0,0,0.30), 0 1px 3px rgba(0,0,0,0.16);
-  --elevation-3: 0 8px 30px rgba(0,0,0,0.35), 0 2px 6px rgba(0,0,0,0.20);
-  --elevation-4: 0 16px 48px rgba(0,0,0,0.45), 0 4px 12px rgba(0,0,0,0.25);
-
-  /* Surface gradients — dark */
-  --t-surface-gradient: linear-gradient(135deg, #171B26 0%, #1E2235 100%);
+  --t-pillar-rail-text:        rgba(255, 255, 255, 0.6);
+  --t-pillar-connector:        rgba(255, 255, 255, 0.12);
   --t-pillar-gradient: linear-gradient(180deg, #0A1628 0%, #071020 100%);
-  --t-accent-gradient: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #4F8FF7 100%);
-
-  --t-card-shadow: var(--elevation-2);
-  --t-card-shadow-hover: var(--elevation-3);
-
-  /* ============================================================
-   * MINIMAL — dark theme (slate-900 base, mesma estrutura)
-   * ============================================================ */
-  --lg-material-thin:    #1E293B;
-  --lg-material-regular: #1E293B;
-  --lg-material-thick:   #1E293B;
-
-  --lg-bg:            #0F172A;
-  --lg-bg-deep:       #020617;
-  --lg-surface-solid: #1E293B;
-
-  --lg-border-highlight: transparent;
-  --lg-border-base:      #334155;
-  --lg-border-strong:    #475569;
-  --lg-border-light:     #1E293B;
-
-  --lg-text:    #F1F5F9;
-  --lg-text-2:  #CBD5E1;
-  --lg-text-3:  #94A3B8;
-  --lg-text-4:  #64748B;
-
-  --lg-accent:        #3B82F6;
-  --lg-accent-fill:   rgba(59, 130, 246, 0.16);
-  --lg-accent-hover:  #60A5FA;
-
-  --lg-pos:  #34D399; --lg-pos-fill:  rgba(52, 211, 153, 0.14);
-  --lg-neg:  #F87171; --lg-neg-fill:  rgba(248, 113, 113, 0.14);
-  --lg-warn: #FBBF24; --lg-warn-fill: rgba(251, 191, 36, 0.14);
-
-  --lg-shadow-card: 0 1px 3px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.15);
-  --lg-shadow-pop:  0 8px 24px rgba(0,0,0,0.35), 0 2px 6px rgba(0,0,0,0.20);
-
-  /* Aliases dos tokens legados — dark */
-  --t-bg: var(--lg-bg);
-  --t-surface: var(--lg-material-regular);
-  --t-surface-hover: var(--lg-material-thick);
-  --t-border: var(--lg-border-base);
-  --t-border-hover: var(--lg-border-strong);
-  --t-text: var(--lg-text);
-  --t-text-secondary: var(--lg-text-2);
-  --t-text-muted: var(--lg-text-3);
-  --t-green: var(--lg-accent);
-  --t-green-bg: var(--lg-accent-fill);
-  --t-green-shadow: rgba(10, 132, 255, 0.32);
-  --t-primary: var(--lg-accent);
-  --t-primary-bg: var(--lg-accent-fill);
-  --t-red: var(--lg-neg);    --t-red-bg: var(--lg-neg-fill);
-  --t-blue: var(--lg-accent); --t-blue-bg: var(--lg-accent-fill);
-  --t-amber: var(--lg-warn); --t-amber-bg: var(--lg-warn-fill);
-  --t-sidebar-bg: var(--lg-material-thin);
-  --t-sidebar-active-bg: var(--lg-accent-fill);
-  --t-sidebar-active-text: var(--lg-accent);
-  --t-sidebar-item: var(--lg-text-2);
-  --t-sidebar-item-hover: var(--lg-material-thick);
-  --t-sidebar-group: var(--lg-material-thick);
-  --t-sidebar-group-text: var(--lg-accent);
-  --t-input-bg: rgba(255, 255, 255, 0.04);
-  --t-header-bg: var(--lg-material-regular);
-  --t-header-text: var(--lg-text);
-  --t-accent: var(--lg-accent);
-  --t-accent-muted: var(--lg-accent-fill);
-  --t-table-header-bg: var(--lg-material-thick);
-  --t-table-header-text: var(--lg-text-2);
-  --t-hero-gradient: linear-gradient(135deg, var(--lg-accent-fill) 0%, transparent 100%);
-  --t-glass-bg: var(--lg-material-regular);
-  --t-glass-border: var(--lg-border-highlight);
-  --t-surface-gradient: linear-gradient(135deg, var(--lg-material-regular) 0%, var(--lg-material-thick) 100%);
-  --t-accent-gradient: linear-gradient(135deg, var(--lg-accent) 0%, var(--lg-accent-hover) 100%);
-  --t-card-radius: var(--lg-radius-lg);
-  --t-card-shadow: var(--lg-shadow-card);
-  --t-card-shadow-hover: var(--lg-shadow-pop);
-
-  --t-status-success: var(--lg-pos);     --t-status-success-bg: var(--lg-pos-fill);
-  --t-status-warning: var(--lg-warn);    --t-status-warning-bg: var(--lg-warn-fill);
-  --t-status-danger:  var(--lg-neg);     --t-status-danger-bg:  var(--lg-neg-fill);
-  --t-status-info:    var(--lg-accent);  --t-status-info-bg:    var(--lg-accent-fill);
-  --t-status-neutral: var(--lg-text-3);  --t-status-neutral-bg: rgba(152,152,158,0.16);
 }
 
 @layer base {
@@ -522,7 +403,7 @@
 /* Bento grid system */
 .bento-grid {
   display: grid;
-  gap: var(--space-6);
+  gap: var(--fin-s-5);
   grid-template-columns: repeat(12, 1fr);
 }
 .bento-3  { grid-column: span 3; }
@@ -547,7 +428,7 @@
   border: 1px solid var(--lg-border-base);
   border-radius: var(--lg-radius-xl);
   box-shadow: var(--lg-shadow-card);
-  padding: var(--space-6);
+  padding: var(--fin-s-5);
   transition: box-shadow 200ms ease-out, border-color 200ms ease-out;
 }
 .bento-card:hover {
@@ -1088,10 +969,11 @@
   animation: dropdown-enter 150ms ease-out;
 }
 
-/* Focus ring — premium double-ring */
+/* Anel de foco — outline, deliberadamente, e nunca box-shadow: o anel
+   de box-shadow era anulado por .min-shell [data-slot="button"]. */
 *:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--t-surface), 0 0 0 4px var(--t-green);
+  outline: var(--fin-ring);
+  outline-offset: 2px;
 }
 
 /* Glassmorphism card */
@@ -1278,21 +1160,21 @@
    ════════════════════════════════════════════════════════════════════ */
 
 :root {
-  /* Minimal tokens — agora aliasados pros --lg-* (Liquid Glass) pra
-     ficar visualmente coerente com o resto do app. Páginas que
-     escrevem var(--ink-*) inline continuam funcionando. */
-  --ink-bg:        var(--lg-bg);
-  --ink-surface:   var(--lg-material-regular);
-  --ink-surface-2: var(--lg-material-thick);
-  --ink:           var(--lg-text);
-  --ink-2:         var(--lg-text-2);
-  --ink-3:         var(--lg-text-3);
-  --ink-4:         var(--lg-text-4);
-  --line:          var(--lg-border-base);
-  --line-strong:   var(--lg-border-strong);
-  --pos:           var(--lg-pos);
-  --neg:           var(--lg-neg);
-  --warn:          var(--lg-warn);
+  /* ALIAS — dialeto --ink-*. Aponta para a camada canônica --fin-*,
+     que já tem par escuro, então o escuro segue sozinho. --ink-4 era
+     #94A3B8, banido para texto por reprovar AA; passa a --fin-text-3. */
+  --ink-bg:        var(--fin-bg);
+  --ink-surface:   var(--fin-surface);
+  --ink-surface-2: var(--fin-surface-2);
+  --ink:           var(--fin-text);
+  --ink-2:         var(--fin-text-2);
+  --ink-3:         var(--fin-text-3);
+  --ink-4:         var(--fin-text-3);
+  --line:          var(--fin-border);
+  --line-strong:   var(--fin-border-strong);
+  --pos:           var(--fin-positive);
+  --neg:           var(--fin-negative);
+  --warn:          var(--fin-warning);
   /* Mono font */
   --font-mono-display: var(--font-jetbrains-mono);
 }
@@ -1495,8 +1377,6 @@
 /* Botões shadcn dentro do .min-shell — radius 0, sem sombra,
    border hairline. Variant primary fica preto puro (ink). */
 .min-shell [data-slot="button"] {
-  border-radius: 0;
-  box-shadow: none;
   font-family: var(--font-inter-tight), inherit;
   letter-spacing: -0.005em;
 }
@@ -1505,19 +1385,16 @@
 .min-shell input,
 .min-shell textarea,
 .min-shell select {
-  border-radius: 0;
   border-color: var(--line);
 }
 .min-shell input:focus,
 .min-shell textarea:focus,
 .min-shell select:focus {
   border-color: var(--line-strong);
-  outline: none;
 }
 
 /* Cards (shadcn Card) — hairline em vez de elevation */
 .min-shell [data-slot="card"] {
-  border-radius: 0;
   border-color: var(--line);
   box-shadow: none;
   background: var(--ink-surface);
@@ -1534,7 +1411,6 @@
 
 /* Badges com bordas hairline */
 .min-shell [data-slot="badge"] {
-  border-radius: 0;
   border-width: 1px;
 }
 
@@ -1574,9 +1450,9 @@
 }
 .lg-control:hover { background: var(--lg-bg); }
 .lg-control:focus-visible {
-  outline: none;
-  border-color: var(--lg-accent);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  outline: var(--fin-ring);
+  outline-offset: 2px;
+  border-color: var(--fin-accent);
 }
 
 /* Cards do bento layout — branco sólido com sombra sutil */
@@ -1785,4 +1661,129 @@
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   FUNDAÇÃO — escala tipográfica (seção 4)
+   ════════════════════════════════════════════════════════════════════
+   Oito degraus fechados. Inter em tudo; JetBrains Mono só em
+   identificador técnico, nunca em dinheiro. Abolidos 9, 9.5, 10, 12.5,
+   13, 14.5, 15, 18, 24, 26, 28, 34, 38 e 42px.
+
+   Cada regra é escrita duas vezes, a segunda escopada em .min-shell,
+   porque .min-shell h1/h2/h3 impõe Inter Tight e vence uma classe
+   solta. Quando .min-shell sair (uma tela por vez), a segunda cai.
+   ════════════════════════════════════════════════════════════════════ */
+
+.fin-t-metric,
+.min-shell .fin-t-metric {
+  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: var(--fin-fs-metric);
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.fin-t-metric-sm,
+.min-shell .fin-t-metric-sm {
+  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: var(--fin-fs-metric-sm);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.fin-t-title,
+.min-shell .fin-t-title {
+  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: var(--fin-fs-title);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.fin-t-subhead,
+.min-shell .fin-t-subhead {
+  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: var(--fin-fs-subhead);
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.005em;
+}
+
+.fin-t-body-strong,
+.min-shell .fin-t-body-strong {
+  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: var(--fin-fs-body);
+  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: 0;
+}
+
+.fin-t-body,
+.min-shell .fin-t-body {
+  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: var(--fin-fs-body);
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: 0;
+}
+
+.fin-t-caption,
+.min-shell .fin-t-caption {
+  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: var(--fin-fs-caption);
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.fin-t-overline,
+.min-shell .fin-t-overline {
+  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: var(--fin-fs-overline);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Identificador técnico: código do plano de contas, número de
+   documento, id de transação. Nunca dinheiro. */
+.fin-t-code,
+.min-shell .fin-t-code {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: var(--fin-fs-caption);
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   FUNDAÇÃO — impressão (seção 5.5)
+   ════════════════════════════════════════════════════════════════════
+   Um sistema construído sobre "sem sombra, borda 1px, fundo #F7F8FC"
+   imprime cinza sobre cinza. Isto garante legibilidade, não beleza.
+   ════════════════════════════════════════════════════════════════════ */
+
+@media print {
+  :root,
+  :root.dark {
+    --fin-bg: #FFFFFF;
+    --fin-surface: #FFFFFF;
+    --fin-surface-2: #FFFFFF;
+    --fin-surface-sunken: #FFFFFF;
+    --fin-border: #999999;
+    --fin-border-strong: #666666;
+    --fin-e0: none;
+    --fin-e1: none;
+    --fin-e2: none;
+  }
+  .fin-no-print, nav, aside, [data-slot="sheet"] { display: none !important; }
+  [data-fin-table] thead { display: table-header-group; }
+  [data-fin-table] tr { break-inside: avoid; }
+  a[href]::after { content: none; }
 }

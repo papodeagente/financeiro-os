@@ -4,27 +4,29 @@ import { useEffect, useState, useMemo } from 'react';
 import { ContaReceber, ContaPagar, ContaBancaria } from '@/lib/crm-types';
 import { loadEntities } from '@/lib/crm-storage';
 import { calcularSaldoBancario } from '@/lib/saldo-bancario';
-import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import {
-  TrendingUp, TrendingDown, ArrowUpCircle, ArrowDownCircle, Wallet,
-  Calendar, BarChart3,
-} from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { PageHeader } from '@/components/fin/PageHeader';
+import { FilterBar } from '@/components/fin/FilterBar';
+import { MetricCard } from '@/components/fin/MetricCard';
+import { DataState } from '@/components/fin/DataState';
+import { EmptyLesson } from '@/components/fin/EmptyLesson';
+import { FinTable, type FinColuna } from '@/components/fin/FinTable';
+import { RecordSheet } from '@/components/fin/RecordSheet';
+import { Money } from '@/components/fin/Money';
+import { statusChipVariants } from '@/components/fin/StatusChip';
+import { cn, formatDate } from '@/lib/utils';
 import type { FunilPayload } from '@/lib/funil-types';
 import {
   round2, num, somaPor, divSegura, hojeISO, dataLocal, paraISO, mesDe, dentroDoPeriodo,
 } from '@/lib/money';
-
-const BRL = (v: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+import { GraficoFluxo } from './GraficoFluxo';
 
 function getWeekRange(date: Date): string {
   const start = new Date(date);
   start.setDate(start.getDate() - start.getDay());
   const end = new Date(start);
   end.setDate(end.getDate() + 6);
-  return `${start.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} — ${end.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`;
+  return `${start.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} a ${end.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`;
 }
 
 function getMonthLabel(ym: string): string {
@@ -46,12 +48,41 @@ interface FluxoLine {
   detalhesSaidas: Array<{ desc: string; valor: number; data: string }>;
 }
 
-/** Movimento unitário de caixa — realizado (baixado) ou previsto (em aberto). */
+/** Movimento unitário de caixa: realizado (baixado) ou previsto (em aberto). */
 interface Evento {
   desc: string;
   valor: number;
   data: string;
   realizado: boolean;
+}
+
+/** Linha do painel lateral de detalhe. Só apresentação: nada é recalculado aqui. */
+type DetalheLinha = { id: string; desc: string; valor: number; data: string };
+
+const COLUNAS_DETALHE: FinColuna<DetalheLinha>[] = [
+  {
+    id: 'desc',
+    tipo: 'texto',
+    cabecalho: 'Lançamento',
+    render: (d) => <span className="fin-t-body text-[var(--fin-text)]">{d.desc}</span>,
+  },
+  { id: 'data', tipo: 'data', cabecalho: 'Data', valor: (d) => d.data || null },
+  { id: 'valor', tipo: 'dinheiro', cabecalho: 'Valor', valor: (d) => d.valor },
+];
+
+function paraDetalhe(
+  itens: Array<{ desc: string; valor: number; data: string }>,
+  prefixo: string,
+): DetalheLinha[] {
+  return itens.map((d, i) => ({ id: `${prefixo}-${i}`, desc: d.desc, valor: d.valor, data: d.data }));
+}
+
+/** Alturas do esqueleto do gráfico: forma do conteúdo real, sem valor pintado. */
+const ALTURAS_ESQUELETO = ['h-1/2', 'h-3/4', 'h-1/3', 'h-full', 'h-2/3', 'h-2/5'];
+
+function nomeDoLancamento(quem: string | null | undefined, descricao: string | null | undefined): string {
+  const partes = [quem, descricao].filter((p): p is string => Boolean(p && p.trim()));
+  return partes.length > 0 ? partes.join(', ') : 'Lançamento sem descrição';
 }
 
 export default function FluxoCaixaPage() {
@@ -61,23 +92,32 @@ export default function FluxoCaixaPage() {
   const [funis, setFunis] = useState<FunilPayload[]>([]);
   const [incluirFunis, setIncluirFunis] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
+  const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
   const [periodo, setPeriodo] = useState<Periodo>('MENSAL');
   const [meses, setMeses] = useState(6);
-  const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  const [detalhe, setDetalhe] = useState<FluxoLine | null>(null);
 
   async function load() {
     setLoading(true);
-    const [cr, cp, cb, fs] = await Promise.all([
-      loadEntities<ContaReceber>('contas-receber'),
-      loadEntities<ContaPagar>('contas-pagar'),
-      loadEntities<ContaBancaria>('contas-bancarias'),
-      loadEntities<FunilPayload>('funis'),
-    ]);
-    setContasReceber(cr);
-    setContasPagar(cp);
-    setContasBancarias(cb);
-    setFunis(fs);
-    setLoading(false);
+    try {
+      const [cr, cp, cb, fs] = await Promise.all([
+        loadEntities<ContaReceber>('contas-receber'),
+        loadEntities<ContaPagar>('contas-pagar'),
+        loadEntities<ContaBancaria>('contas-bancarias'),
+        loadEntities<FunilPayload>('funis'),
+      ]);
+      setContasReceber(cr);
+      setContasPagar(cp);
+      setContasBancarias(cb);
+      setFunis(fs);
+      setErro(null);
+      setAtualizadoEm(new Date());
+    } catch {
+      setErro('A consulta não respondeu. Nenhum valor é exibido enquanto os dados não chegarem.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => { load(); }, []);
@@ -85,7 +125,7 @@ export default function FluxoCaixaPage() {
   /**
    * Soma a receita/investimento projetado dos funis em execução.
    * A projeção é aplicada uniformemente sobre os períodos futuros (simplificação consciente:
-   * o funil não carrega calendário próprio — é uma estimativa mensal distribuída por período).
+   * o funil não carrega calendário próprio, é uma estimativa mensal distribuída por período).
    */
   const projecaoFunis = useMemo(() => {
     const ativos = funis.filter(f => f.status === 'em_execucao');
@@ -114,16 +154,16 @@ export default function FluxoCaixaPage() {
   );
 
   // Cada conta vira até DOIS eventos de caixa:
-  //  · REALIZADO — o que já foi baixado (RECEBIDO/PAGO, ou a parcela já
+  //  · REALIZADO: o que já foi baixado (RECEBIDO/PAGO, ou a parcela já
   //    quitada de uma baixa PARCIAL), na data da baixa;
-  //  · PREVISTO  — o saldo ainda em aberto, na data de vencimento.
+  //  · PREVISTO: o saldo ainda em aberto, na data de vencimento.
   // Separar os dois é o que permite montar o saldo base com dinheiro REAL e
   // tratar pendência vencida como projeção, nunca como caixa existente.
   const eventosEntrada = useMemo<Evento[]>(() => {
     const out: Evento[] = [];
     for (const cr of contasReceber) {
       if (cr.status === 'CANCELADO') continue;
-      const desc = `${cr.cliente_nome || '—'} — ${cr.descricao || ''}`;
+      const desc = nomeDoLancamento(cr.cliente_nome, cr.descricao);
       const baixado = cr.status === 'RECEBIDO'
         ? round2(num(cr.valor_recebido) || num(cr.valor_final))
         : round2(num(cr.valor_recebido));
@@ -144,7 +184,7 @@ export default function FluxoCaixaPage() {
     const out: Evento[] = [];
     for (const cp of contasPagar) {
       if (cp.status === 'CANCELADO') continue;
-      const desc = `${cp.fornecedor_nome || '—'} — ${cp.descricao || ''}`;
+      const desc = nomeDoLancamento(cp.fornecedor_nome, cp.descricao);
       const baixado = cp.status === 'PAGO'
         ? round2(num(cp.valor_pago) || num(cp.valor_final))
         : round2(num(cp.valor_pago));
@@ -163,7 +203,7 @@ export default function FluxoCaixaPage() {
 
   const fluxo = useMemo(() => {
     const hoje = hojeISO();
-    const today = dataLocal(hoje)!; // ancorado ao meio-dia — imune a fuso
+    const today = dataLocal(hoje)!; // ancorado ao meio-dia, imune a fuso
     const lines: FluxoLine[] = [];
 
     // Constrói a linha do período. `extras` carrega os atrasados, que só
@@ -276,222 +316,319 @@ export default function FluxoCaixaPage() {
     [fluxo]
   );
 
-  if (loading) {
-    return (
-      <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6 flex items-center justify-center">
-        <p className="text-[var(--t-text-secondary)]">Carregando...</p>
-      </div>
-    );
-  }
+  const estado: 'carregando' | 'erro' | 'ok' = loading ? 'carregando' : erro ? 'erro' : 'ok';
+  const estadoValor = loading ? 'carregando' : erro ? 'indisponivel' : 'ok';
+
+  const abertosEntrada = eventosEntrada.filter(e => !e.realizado).length;
+  const abertosSaida = eventosSaida.filter(e => !e.realizado).length;
+  const totalLancamentos = eventosEntrada.length + eventosSaida.length;
+
+  const saldoPrevisto = fluxo.length > 0 ? fluxo[fluxo.length - 1].saldoAcumulado : null;
+  const linhaNegativa = fluxo.find(f => f.saldoAcumulado < 0) ?? null;
+  const idNegativo = linhaNegativa ? linhaNegativa.periodo : null;
+  const quandoNegativo = linhaNegativa
+    ? (periodo === 'MENSAL' ? linhaNegativa.label : formatDate(linhaNegativa.periodo))
+    : null;
+
+  const horizonteTexto = periodo === 'MENSAL'
+    ? `${meses} meses`
+    : `${meses * 4} semanas`;
+
+  // Nenhuma contagem e nenhuma afirmação sobre o caixa enquanto o dado não
+  // chegou: durante carregamento e erro o contexto só descreve o recorte.
+  const dadosProntos = estado === 'ok';
+
+  const contextoSaldoPrevisto = !dadosProntos
+    ? `Projeção para o fim dos próximos ${horizonteTexto}`
+    : quandoNegativo
+      ? `Saldo negativo a partir de ${quandoNegativo}, dentro de ${horizonteTexto}`
+      : `Nenhum período negativo nos próximos ${horizonteTexto}`;
+
+  const contextoEntradas = dadosProntos
+    ? `${abertosEntrada} ${abertosEntrada === 1 ? 'recebimento em aberto' : 'recebimentos em aberto'}, em qualquer data`
+    : 'Recebimentos ainda em aberto, em qualquer data';
+
+  const contextoSaidas = dadosProntos
+    ? `${abertosSaida} ${abertosSaida === 1 ? 'pagamento em aberto' : 'pagamentos em aberto'}, em qualquer data`
+    : 'Pagamentos ainda em aberto, em qualquer data';
+
+  const totaisTabela = useMemo(() => ([
+    { colunaId: 'entradas', valor: somaPor(fluxo, f => f.entradas), rotulo: `Entradas somadas em ${horizonteTexto}` },
+    { colunaId: 'saidas', valor: somaPor(fluxo, f => f.saidas), rotulo: `Saídas somadas em ${horizonteTexto}` },
+  ]), [fluxo, horizonteTexto]);
+
+  const colunas = useMemo<FinColuna<FluxoLine>[]>(() => ([
+    {
+      id: 'periodo',
+      tipo: 'texto',
+      cabecalho: 'Período',
+      sortable: true,
+      minWidth: 180,
+      acessor: (f) => f.periodo,
+      render: (f) => (
+        <span className="flex flex-wrap items-center gap-[var(--fin-s-2)]">
+          <span className="fin-t-body-strong text-[var(--fin-text)]">{f.label}</span>
+          {f.periodo === idNegativo ? (
+            <span className={statusChipVariants({ tone: 'negativo' })}>Saldo negativo</span>
+          ) : null}
+        </span>
+      ),
+    },
+    {
+      id: 'entradas',
+      tipo: 'dinheiro',
+      cabecalho: 'Entradas',
+      sortable: true,
+      valor: (f) => f.entradas,
+      sub: (f) => (f.detalhesEntradas.length > 0
+        ? `${f.detalhesEntradas.length} ${f.detalhesEntradas.length === 1 ? 'lançamento' : 'lançamentos'}`
+        : null),
+    },
+    {
+      id: 'saidas',
+      tipo: 'dinheiro',
+      cabecalho: 'Saídas',
+      sortable: true,
+      valor: (f) => f.saidas,
+      sub: (f) => (f.detalhesSaidas.length > 0
+        ? `${f.detalhesSaidas.length} ${f.detalhesSaidas.length === 1 ? 'lançamento' : 'lançamentos'}`
+        : null),
+    },
+    {
+      id: 'saldo',
+      tipo: 'dinheiro',
+      cabecalho: 'Saldo do período',
+      sortable: true,
+      prioridade: 1,
+      valor: (f) => f.saldo,
+      tone: (f) => (f.saldo < 0 ? 'negativo' : 'neutro'),
+    },
+    {
+      id: 'acumulado',
+      tipo: 'dinheiro',
+      cabecalho: 'Saldo acumulado',
+      sortable: true,
+      valor: (f) => f.saldoAcumulado,
+      tone: (f) => (f.saldoAcumulado < 0 ? 'negativo' : 'neutro'),
+    },
+  ]), [idNegativo]);
+
+  const filtrosAtivos =
+    (periodo !== 'MENSAL' ? 1 : 0) + (meses !== 6 ? 1 : 0) + (incluirFunis ? 1 : 0);
+
+  const semDado =
+    estado === 'ok' &&
+    eventosEntrada.length === 0 &&
+    eventosSaida.length === 0 &&
+    contasBancarias.length === 0;
+
+  const projecaoVisivel = incluirFunis && projecaoFunis.count > 0 ? projecaoFunis : null;
+
+  const esqueletoGrafico = (
+    <div className="flex h-32 items-end gap-[var(--fin-s-2)]">
+      {ALTURAS_ESQUELETO.map((altura, i) => (
+        <span
+          key={i}
+          className={cn(
+            'flex-1 animate-pulse rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]',
+            altura,
+          )}
+        />
+      ))}
+    </div>
+  );
 
   return (
-    <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="bg-[var(--fin-bg)] text-[var(--fin-text)] py-[var(--fin-page-pad)]">
+      <div className="mx-auto flex w-full max-w-[var(--fin-page-max)] flex-col gap-[var(--fin-s-5)] px-[var(--fin-page-pad)]">
 
-        {/* Header padronizado MinimalPageHead */}
-        <MinimalPageHead
-          title="Fluxo de caixa projetado"
-          meta={<p className="mt-2.5 text-[12px]" style={{ color: 'var(--ink-3)' }}>Projeção de entradas e saídas com base nos lançamentos pendentes</p>}
-          actions={
-            <>
-              <select
-                value={periodo}
-                onChange={e => setPeriodo(e.target.value as Periodo)}
-                className="h-[34px] px-3 text-[12px] border"
-                style={{ borderColor: 'var(--line)', background: 'var(--ink-surface)', color: 'var(--ink)' }}
-              >
-                <option value="SEMANAL">Semanal</option>
-                <option value="MENSAL">Mensal</option>
-              </select>
-              <select
-                value={meses}
-                onChange={e => setMeses(parseInt(e.target.value))}
-                className="h-[34px] px-3 text-[12px] border"
-                style={{ borderColor: 'var(--line)', background: 'var(--ink-surface)', color: 'var(--ink)' }}
-              >
-                <option value={3}>3 meses</option>
-                <option value={6}>6 meses</option>
-                <option value={12}>12 meses</option>
-              </select>
-              {projecaoFunis.count > 0 && (
-                <label className="flex items-center gap-2 h-[34px] px-3 border border-dashed text-[12px] cursor-pointer" style={{ borderColor: 'var(--ink-3)', color: 'var(--ink)' }}>
-                  <input
-                    type="checkbox"
-                    checked={incluirFunis}
-                    onChange={e => setIncluirFunis(e.target.checked)}
-                  />
-                  Incluir projeção de funis ({projecaoFunis.count})
-                </label>
-              )}
-            </>
-          }
+        <PageHeader
+          titulo="Fluxo de caixa"
+          subtitulo="Projeção de entradas e saídas com base no que já foi baixado e no que continua em aberto"
+          atualizadoEm={atualizadoEm}
+          onRecarregar={load}
         />
 
-        {/* KPIs */}
-        <div className="grid grid-cols-4 gap-4">
-          <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-            <CardContent className="p-4 flex items-center gap-4">
-              <Wallet className="w-8 h-8 text-[var(--t-blue)] shrink-0" />
-              <div>
-                <p className="text-[var(--t-text-muted)] text-xs uppercase">Saldo Atual</p>
-                <p className="text-xl font-bold text-[var(--t-blue)]">{BRL(saldoAtual)}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-            <CardContent className="p-4 flex items-center gap-4">
-              <ArrowUpCircle className="w-8 h-8 text-[var(--t-green)] shrink-0" />
-              <div>
-                <p className="text-[var(--t-text-muted)] text-xs uppercase">Entradas Previstas</p>
-                <p className="text-xl font-bold text-[var(--t-green)]">{BRL(totals.entradas)}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-            <CardContent className="p-4 flex items-center gap-4">
-              <ArrowDownCircle className="w-8 h-8 text-[var(--t-red)] shrink-0" />
-              <div>
-                <p className="text-[var(--t-text-muted)] text-xs uppercase">Saídas Previstas</p>
-                <p className="text-xl font-bold text-[var(--t-red)]">{BRL(totals.saidas)}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-            <CardContent className="p-4 flex items-center gap-4">
-              <BarChart3 className="w-8 h-8 text-[var(--t-amber)] shrink-0" />
-              <div>
-                <p className="text-[var(--t-text-muted)] text-xs uppercase">Saldo Projetado</p>
-                <p className={`text-xl font-bold ${fluxo.length > 0 && fluxo[fluxo.length - 1].saldoAcumulado >= 0 ? 'text-[var(--t-green)]' : 'text-[var(--t-red)]'}`}>
-                  {fluxo.length > 0 ? BRL(fluxo[fluxo.length - 1].saldoAcumulado) : '—'}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+        <FilterBar
+          selects={[
+            {
+              id: 'granularidade',
+              rotulo: 'Ver por',
+              valor: periodo,
+              opcoes: [
+                { valor: 'SEMANAL', rotulo: 'Semana' },
+                { valor: 'MENSAL', rotulo: 'Mês' },
+              ],
+              onChange: (v) => setPeriodo(v as Periodo),
+            },
+            {
+              id: 'horizonte',
+              rotulo: 'Horizonte',
+              valor: String(meses),
+              opcoes: [
+                { valor: '3', rotulo: '3 meses' },
+                { valor: '6', rotulo: '6 meses' },
+                { valor: '12', rotulo: '12 meses' },
+              ],
+              onChange: (v) => setMeses(parseInt(v)),
+            },
+            ...(projecaoFunis.count > 0 ? [{
+              id: 'projecao-crm',
+              rotulo: 'Projeção do CRM',
+              valor: incluirFunis ? 'sim' : 'nao',
+              opcoes: [
+                { valor: 'nao', rotulo: 'Não incluir' },
+                { valor: 'sim', rotulo: `Incluir (${projecaoFunis.count})` },
+              ],
+              onChange: (v: string) => setIncluirFunis(v === 'sim'),
+            }] : []),
+          ]}
+          resumo={{
+            exibidos: fluxo.length,
+            total: periodo === 'MENSAL' ? 12 : 48,
+            substantivo: periodo === 'MENSAL' ? 'meses projetados' : 'semanas projetadas',
+            escopo: dadosProntos
+              ? `sobre ${totalLancamentos} ${totalLancamentos === 1 ? 'lançamento cadastrado' : 'lançamentos cadastrados'}`
+              : undefined,
+          }}
+          ativos={filtrosAtivos}
+          onLimpar={() => {
+            setPeriodo('MENSAL');
+            setMeses(6);
+            setIncluirFunis(false);
+          }}
+        />
+
+        <div className="grid gap-[var(--fin-s-4)] md:grid-cols-2 lg:grid-cols-4">
+          <MetricCard
+            rotulo="Saldo previsto"
+            valor={saldoPrevisto}
+            estado={estadoValor}
+            emphasis="destaque"
+            tone={saldoPrevisto !== null && saldoPrevisto < 0 ? 'negativo' : 'neutro'}
+            contexto={contextoSaldoPrevisto}
+            explicacao="Quanto sobra no caixa ao fim do horizonte escolhido, somando o que já entrou e saiu com o que ainda está em aberto."
+          />
+          <MetricCard
+            rotulo="Saldo atual"
+            valor={saldoAtual}
+            estado={estadoValor}
+            tone={saldoAtual < 0 ? 'negativo' : 'neutro'}
+            contexto="Saldo inicial mais recebido menos pago"
+          />
+          <MetricCard
+            rotulo="Entradas previstas"
+            valor={totals.entradas}
+            estado={estadoValor}
+            contexto={contextoEntradas}
+          />
+          <MetricCard
+            rotulo="Saídas previstas"
+            valor={totals.saidas}
+            estado={estadoValor}
+            contexto={contextoSaidas}
+          />
         </div>
 
-        {/* Flow Chart (table with inline bars) */}
-        <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-[var(--t-text)] text-base flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-[var(--t-green)]" />
-              Projeção por Período
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--t-border)] text-[var(--t-text-muted)] text-xs uppercase">
-                    <th className="text-left px-4 py-3">Período</th>
-                    <th className="text-right px-4 py-3">Entradas</th>
-                    <th className="text-right px-4 py-3">Saídas</th>
-                    <th className="px-4 py-3 w-64">Visual</th>
-                    <th className="text-right px-4 py-3">Saldo</th>
-                    <th className="text-right px-4 py-3">Acumulado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {fluxo.map((f, idx) => (
-                    <>
-                      <tr
-                        key={f.periodo}
-                        className="border-b border-[var(--t-border)] hover:bg-[var(--t-surface-hover)] transition-colors cursor-pointer"
-                        onClick={() => setExpandedRow(expandedRow === f.periodo ? null : f.periodo)}
-                      >
-                        <td className="px-4 py-3 font-medium text-[var(--t-text)]">{f.label}</td>
-                        <td className="px-4 py-3 text-right font-mono text-[var(--t-green)]">{BRL(f.entradas)}</td>
-                        <td className="px-4 py-3 text-right font-mono text-[var(--t-red)]">{BRL(f.saidas)}</td>
-                        <td className="px-4 py-3">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1">
-                              <div className="w-full bg-[var(--t-bg)] rounded-full h-2 relative">
-                                <div className="bg-[var(--t-green)] h-2 rounded-full" style={{ width: `${divSegura(f.entradas, maxVal) * 100}%` }} />
-                                {incluirFunis && projecaoFunis.receita > 0 && (
-                                  <div
-                                    className="absolute inset-y-0 left-0 h-2 rounded-full border border-dashed border-[var(--t-green)] pointer-events-none"
-                                    style={{ width: `${Math.min(100, divSegura(f.entradas + projecaoFunis.receita, maxVal) * 100)}%` }}
-                                    title={`+ ${BRL(projecaoFunis.receita)} de projeção de funis`}
-                                  />
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <div className="w-full bg-[var(--t-bg)] rounded-full h-2 relative">
-                                <div className="bg-[var(--t-red)] h-2 rounded-full" style={{ width: `${divSegura(f.saidas, maxVal) * 100}%` }} />
-                                {incluirFunis && projecaoFunis.investimento > 0 && (
-                                  <div
-                                    className="absolute inset-y-0 left-0 h-2 rounded-full border border-dashed border-[var(--t-red)] pointer-events-none"
-                                    style={{ width: `${Math.min(100, divSegura(f.saidas + projecaoFunis.investimento, maxVal) * 100)}%` }}
-                                    title={`+ ${BRL(projecaoFunis.investimento)} de investimento projetado`}
-                                  />
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className={`px-4 py-3 text-right font-mono font-medium ${f.saldo >= 0 ? 'text-[var(--t-green)]' : 'text-[var(--t-red)]'}`}>
-                          {BRL(f.saldo)}
-                        </td>
-                        <td className={`px-4 py-3 text-right font-mono font-bold ${f.saldoAcumulado >= 0 ? 'text-[var(--t-text)]' : 'text-[var(--t-red)]'}`}>
-                          {BRL(f.saldoAcumulado)}
-                          {f.saldoAcumulado < 0 && (
-                            <Badge className="bg-[var(--t-red-bg)] text-[var(--t-red)] border-0 text-[10px] ml-1">Negativo</Badge>
-                          )}
-                        </td>
-                      </tr>
+        {semDado ? (
+          <EmptyLesson
+            motivo="sem-dado"
+            titulo="Ainda não há nada para projetar"
+            oQueE="O fluxo de caixa mostra, período a período, quanto dinheiro entra e quanto sai, somando o que já foi baixado com o que continua em aberto."
+            comoComeca={[
+              'Cadastre as contas bancárias com o saldo inicial de cada uma.',
+              'Lance as contas a receber com a data de vencimento.',
+              'Lance as contas a pagar com a data de vencimento.',
+            ]}
+            acao={{ rotulo: 'Cadastrar conta bancária', href: '/financeiro-ag/contas-bancarias' }}
+          />
+        ) : (
+          <>
+            {estado === 'erro' ? null : (
+              <Card className="gap-[var(--fin-s-4)] p-[var(--fin-s-4)]">
+                <h2 className="fin-t-subhead text-[var(--fin-text)]">Entradas e saídas por período</h2>
+                <DataState estado={estado} esqueleto={esqueletoGrafico}>
+                  <GraficoFluxo barras={fluxo} maxVal={maxVal} projecao={projecaoVisivel} />
+                </DataState>
+              </Card>
+            )}
 
-                      {/* Expanded details */}
-                      {expandedRow === f.periodo && (f.detalhesEntradas.length > 0 || f.detalhesSaidas.length > 0) && (
-                        <tr key={`${f.periodo}-detail`}>
-                          <td colSpan={6} className="bg-[var(--t-bg)] px-8 py-4">
-                            <div className="grid grid-cols-2 gap-6">
-                              <div>
-                                <p className="text-xs text-[var(--t-green)] uppercase font-medium mb-2 flex items-center gap-1">
-                                  <TrendingUp className="w-3 h-3" /> Entradas ({f.detalhesEntradas.length})
-                                </p>
-                                {f.detalhesEntradas.length === 0 ? (
-                                  <p className="text-xs text-[var(--t-text-muted)]">Nenhuma entrada</p>
-                                ) : (
-                                  <div className="space-y-1">
-                                    {f.detalhesEntradas.map((d, i) => (
-                                      <div key={i} className="flex justify-between text-xs">
-                                        <span className="text-[var(--t-text-secondary)] truncate max-w-[250px]">{d.desc}</span>
-                                        <span className="font-mono text-[var(--t-green)]">{BRL(d.valor)}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                              <div>
-                                <p className="text-xs text-[var(--t-red)] uppercase font-medium mb-2 flex items-center gap-1">
-                                  <TrendingDown className="w-3 h-3" /> Saídas ({f.detalhesSaidas.length})
-                                </p>
-                                {f.detalhesSaidas.length === 0 ? (
-                                  <p className="text-xs text-[var(--t-text-muted)]">Nenhuma saída</p>
-                                ) : (
-                                  <div className="space-y-1">
-                                    {f.detalhesSaidas.map((d, i) => (
-                                      <div key={i} className="flex justify-between text-xs">
-                                        <span className="text-[var(--t-text-secondary)] truncate max-w-[250px]">{d.desc}</span>
-                                        <span className="font-mono text-[var(--t-red)]">{BRL(d.valor)}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </>
-                  ))}
-                </tbody>
-              </table>
+            <FinTable
+              linhas={fluxo}
+              colunas={colunas}
+              chave={(f) => f.periodo}
+              estado={estado}
+              erro={erro ? { mensagem: erro, onTentarDeNovo: load } : null}
+              totais={totaisTabela}
+              onLinhaClick={(f) => setDetalhe(f)}
+              vazio={{
+                motivo: 'sem-resultado',
+                titulo: 'Nenhum período para mostrar',
+                oQueE: 'Escolha um horizonte maior para ver a projeção dos próximos meses.',
+              }}
+            />
+          </>
+        )}
+
+        <RecordSheet
+          aberto={detalhe !== null}
+          onOpenChange={(aberto) => { if (!aberto) setDetalhe(null); }}
+          titulo={detalhe ? detalhe.label : 'Período'}
+          descricao="Lançamentos que compõem as entradas e as saídas deste período"
+          largura={640}
+          resumo={detalhe ? (
+            <span className="flex items-center justify-between gap-[var(--fin-s-3)]">
+              <span className="fin-t-body text-[var(--fin-text-2)]">Saldo do período</span>
+              <Money
+                valor={detalhe.saldo}
+                estado="ok"
+                size="metricSm"
+                tone={detalhe.saldo < 0 ? 'negativo' : 'neutro'}
+              />
+            </span>
+          ) : undefined}
+          acaoPrimaria={{ rotulo: 'Fechar', onClick: () => setDetalhe(null) }}
+        >
+          {detalhe ? (
+            <div className="flex flex-col gap-[var(--fin-s-5)]">
+              <section className="flex flex-col gap-[var(--fin-s-3)]">
+                <h3 className="fin-t-subhead text-[var(--fin-text)]">
+                  Entradas ({detalhe.detalhesEntradas.length})
+                </h3>
+                <FinTable
+                  linhas={paraDetalhe(detalhe.detalhesEntradas, 'entrada')}
+                  colunas={COLUNAS_DETALHE}
+                  chave={(d) => d.id}
+                  densidade="compacta"
+                  estado="ok"
+                  vazio={{
+                    motivo: 'sem-resultado',
+                    titulo: 'Nenhuma entrada neste período',
+                    oQueE: 'Não há recebimento baixado nem em aberto com data dentro deste período.',
+                  }}
+                />
+              </section>
+
+              <section className="flex flex-col gap-[var(--fin-s-3)]">
+                <h3 className="fin-t-subhead text-[var(--fin-text)]">
+                  Saídas ({detalhe.detalhesSaidas.length})
+                </h3>
+                <FinTable
+                  linhas={paraDetalhe(detalhe.detalhesSaidas, 'saida')}
+                  colunas={COLUNAS_DETALHE}
+                  chave={(d) => d.id}
+                  densidade="compacta"
+                  estado="ok"
+                  vazio={{
+                    motivo: 'sem-resultado',
+                    titulo: 'Nenhuma saída neste período',
+                    oQueE: 'Não há pagamento baixado nem em aberto com data dentro deste período.',
+                  }}
+                />
+              </section>
             </div>
-          </CardContent>
-        </Card>
-
-        <MinimalFooter pageId="fluxo de caixa" />
+          ) : null}
+        </RecordSheet>
       </div>
     </div>
   );

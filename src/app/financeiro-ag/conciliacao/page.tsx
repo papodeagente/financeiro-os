@@ -1,29 +1,25 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { CheckCircle2, FileSpreadsheet, Link2, Upload } from 'lucide-react';
+
 import { ExtratoLinha, ContaBancaria, ContaReceber, ContaPagar, StatusConciliacao } from '@/lib/crm-types';
 import { loadEntities } from '@/lib/crm-storage';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { parseMoneyBR, round2, divSegura, dataLocal, paraISO } from '@/lib/money';
+import { parseMoneyBR, round2, divSegura, paraISO, somaPor } from '@/lib/money';
+import { formatDate } from '@/lib/utils';
 import { toast } from '@/lib/toast';
-import {
-  Upload, CheckCircle2, AlertTriangle, X, Link2, FileSpreadsheet,
-  ArrowUpCircle, ArrowDownCircle, Search,
-} from 'lucide-react';
 
-const BRL = (v: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
-
-const STATUS_BADGE: Record<StatusConciliacao, string> = {
-  PENDENTE: 'bg-[var(--t-amber-bg)] text-[var(--t-amber)]',
-  CONCILIADO: 'bg-[var(--t-green-bg)] text-[var(--t-green)]',
-  DIVERGENTE: 'bg-[var(--t-red-bg)] text-[var(--t-red)]',
-  IGNORADO: 'bg-[var(--t-surface)] text-[var(--t-text-muted)]',
-};
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { ConfirmDialog } from '@/components/fin/ConfirmDialog';
+import { DataState } from '@/components/fin/DataState';
+import { EmptyLesson, type EmptyLessonProps } from '@/components/fin/EmptyLesson';
+import { FilterBar } from '@/components/fin/FilterBar';
+import { FinTable, type FinColuna } from '@/components/fin/FinTable';
+import { Jargao } from '@/components/fin/Jargao';
+import { Money } from '@/components/fin/Money';
+import { PageHeader } from '@/components/fin/PageHeader';
+import { rotuloStatus } from '@/components/fin/StatusChip';
 
 // Linha crua vinda do arquivo. `fitid` só existe em OFX — é o identificador
 // da transação no banco e serve de chave de deduplicação na reimportação.
@@ -113,6 +109,76 @@ async function putJSON<T>(url: string, payload: unknown): Promise<T> {
   return body as T;
 }
 
+const FOCO =
+  'focus-visible:outline-2 focus-visible:outline-[var(--fin-accent)] focus-visible:outline-offset-2 focus-visible:ring-0';
+
+const BOTAO_LINHA = [
+  'fin-t-body h-10 max-lg:h-11 gap-[var(--fin-s-1)] rounded-[var(--fin-r-md)] px-3 shadow-none',
+  'border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] text-[var(--fin-text)]',
+  'hover:bg-[var(--fin-surface-2)] hover:text-[var(--fin-text)]',
+  FOCO,
+].join(' ');
+
+const BOTAO_SECUNDARIO = [
+  'fin-t-body h-11 lg:h-10 gap-[var(--fin-s-1)] rounded-[var(--fin-r-md)] px-4 shadow-none',
+  'border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] text-[var(--fin-text-2)]',
+  'hover:bg-[var(--fin-surface-2)] hover:text-[var(--fin-text)]',
+  FOCO,
+].join(' ');
+
+const BOTAO_DISCRETO = [
+  'fin-t-body h-11 lg:h-10 gap-[var(--fin-s-1)] rounded-[var(--fin-r-md)] px-4 shadow-none',
+  'bg-transparent text-[var(--fin-text-3)] hover:bg-[var(--fin-surface-2)] hover:text-[var(--fin-text)]',
+  FOCO,
+].join(' ');
+
+const CARTAO = 'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]';
+
+const SITUACOES: readonly (StatusConciliacao | 'TODOS')[] = [
+  'TODOS',
+  'PENDENTE',
+  'CONCILIADO',
+  'DIVERGENTE',
+  'IGNORADO',
+];
+
+/**
+ * `findMatches` monta a descrição do lançamento com travessão. A string do
+ * servidor não muda; aqui ela só é partida em nome e complemento para caber
+ * nas duas linhas do cartão, sem travessão na tela.
+ */
+function partirDescricao(desc: string): { titulo: string; complemento: string | null } {
+  const partes = desc.split(' — ');
+  if (partes.length < 2) return { titulo: desc, complemento: null };
+  return { titulo: partes[0], complemento: partes.slice(1).join(', ') };
+}
+
+/** Custom property da barra, no mesmo mecanismo do primitivo Meter. */
+function estiloBarra(pct: number): CSSProperties {
+  return { ['--fin-meter' as string]: `${pct}%` } as CSSProperties;
+}
+
+function contarLinhas(n: number): string {
+  return n === 1 ? '1 linha' : `${n} linhas`;
+}
+
+function descricaoLegivel(desc: string): string {
+  const { titulo, complemento } = partirDescricao(desc);
+  return complemento ? `${titulo}, ${complemento}` : titulo;
+}
+
+type AcaoPendente =
+  | {
+      tipo: 'conciliar';
+      linha: ExtratoLinha;
+      lancId: string;
+      lancTipo: 'CONTA_RECEBER' | 'CONTA_PAGAR';
+      lancDesc: string;
+      lancValor: number;
+    }
+  | { tipo: 'ignorar'; linha: ExtratoLinha }
+  | { tipo: 'divergente'; linha: ExtratoLinha };
+
 export default function ConciliacaoPage() {
   const [extrato, setExtrato] = useState<ExtratoLinha[]>([]);
   const [contas, setContas] = useState<ContaBancaria[]>([]);
@@ -127,6 +193,13 @@ export default function ConciliacaoPage() {
 
   // Conciliation modal
   const [conciliarItem, setConciliarItem] = useState<ExtratoLinha | null>(null);
+
+  // Estado só de apresentação: linhas que o usuário mandou para o fim da fila
+  // e a confirmação aberta. Nada disso é gravado no servidor.
+  const [adiadas, setAdiadas] = useState<Set<string>>(new Set());
+  const [acaoPendente, setAcaoPendente] = useState<AcaoPendente | null>(null);
+  const [confirmando, setConfirmando] = useState(false);
+  const inputArquivoRef = useRef<HTMLInputElement>(null);
 
   async function load() {
     setLoading(true);
@@ -313,242 +386,591 @@ export default function ConciliacaoPage() {
   const stats = useMemo(() => {
     const total = contaExtrato.length;
     const conciliados = contaExtrato.filter(e => e.status_conciliacao === 'CONCILIADO').length;
-    const pendentes = contaExtrato.filter(e => e.status_conciliacao === 'PENDENTE').length;
+    const linhasPendentes = contaExtrato.filter(e => e.status_conciliacao === 'PENDENTE');
+    const pendentes = linhasPendentes.length;
     const divergentes = contaExtrato.filter(e => e.status_conciliacao === 'DIVERGENTE').length;
-    return { total, conciliados, pendentes, divergentes, pct: Math.round(divSegura(conciliados, total) * 100) };
+    return {
+      total,
+      conciliados,
+      pendentes,
+      divergentes,
+      pct: Math.round(divSegura(conciliados, total) * 100),
+      // Soma de apresentação: quanto do extrato ainda não tem par no sistema.
+      semPar: somaPor(linhasPendentes, e => Math.abs(e.valor)),
+    };
   }, [contaExtrato]);
 
-  return (
-    <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+  // Enquanto carrega, a tela inteira vira esqueleto: nenhuma contagem e nenhum
+  // valor são pintados antes de os dados chegarem.
+  const estadoDados: 'carregando' | 'erro' | 'ok' = loading ? 'carregando' : 'ok';
 
-        <MinimalPageHead
-          title="Conciliação bancária"
-          meta={<p className="mt-2.5 text-[12px]" style={{ color: 'var(--ink-3)' }}>Importe extratos e concilie com lançamentos do sistema</p>}
-          actions={
-            <>
-              <select
-                value={selectedConta}
-                onChange={e => setSelectedConta(e.target.value)}
-                className="h-[34px] px-3 text-[12px] border"
-                style={{ borderColor: 'var(--line)', background: 'var(--ink-surface)', color: 'var(--ink)' }}
-              >
-                {contas.map(c => (
-                  <option key={c.id} value={c.id}>{c.nome}</option>
-                ))}
-              </select>
-              <label className="cursor-pointer">
-                <input type="file" accept=".csv,.ofx,.qfx,.txt" onChange={handleImport} className="hidden" />
-                <div className="h-[34px] px-3 text-[12px] font-medium flex items-center gap-2 cursor-pointer" style={{ background: 'var(--ink)', color: 'var(--ink-bg)' }}>
-                  <Upload className="w-3.5 h-3.5" />
-                  {importing ? 'Importando…' : 'Importar extrato'}
-                </div>
-              </label>
-            </>
+  const contaSelecionada = contas.find(c => c.id === selectedConta) ?? null;
+  const filtrosAtivos = (filterStatus !== 'TODOS' ? 1 : 0) + (searchTerm.trim() ? 1 : 0);
+
+  function limparFiltros() {
+    setFilterStatus('TODOS');
+    setSearchTerm('');
+  }
+
+  function abrirSeletorDeArquivo() {
+    inputArquivoRef.current?.click();
+  }
+
+  function conferirAgora(linha: ExtratoLinha) {
+    setAdiadas(prev => {
+      if (!prev.has(linha.id)) return prev;
+      const proximo = new Set(prev);
+      proximo.delete(linha.id);
+      return proximo;
+    });
+    setConciliarItem(linha);
+  }
+
+  function adiarLinha(linha: ExtratoLinha) {
+    setAdiadas(prev => new Set(prev).add(linha.id));
+    setConciliarItem(null);
+  }
+
+  // Fila de decisão: a linha escolhida à mão, senão a primeira ainda não
+  // conferida do recorte visível que não foi deixada para depois.
+  const fila = filtered.filter(e => e.status_conciliacao === 'PENDENTE');
+  const filaAtiva = fila.filter(e => !adiadas.has(e.id));
+  const itemFila = conciliarItem
+    ? contaExtrato.find(e => e.id === conciliarItem.id) ?? null
+    : filaAtiva[0] ?? null;
+  const posicaoNaFila = itemFila ? filaAtiva.findIndex(e => e.id === itemFila.id) + 1 : 0;
+  const sugestoes = itemFila ? findMatches(itemFila) : [];
+
+  async function confirmarAcao() {
+    if (!acaoPendente || confirmando) return;
+    const pendente = acaoPendente;
+    setConfirmando(true);
+    try {
+      if (pendente.tipo === 'conciliar') {
+        await handleConciliar(pendente.linha, pendente.lancId, pendente.lancTipo);
+      } else if (pendente.tipo === 'ignorar') {
+        await handleIgnorar(pendente.linha);
+      } else {
+        await handleDivergente(pendente.linha);
+      }
+    } finally {
+      setConfirmando(false);
+      setAcaoPendente(null);
+    }
+  }
+
+  const colunas: FinColuna<ExtratoLinha>[] = [
+    {
+      id: 'data',
+      cabecalho: 'Data',
+      tipo: 'data',
+      sortable: true,
+      minWidth: 92,
+      valor: linha => linha.data,
+    },
+    {
+      id: 'descricao',
+      cabecalho: 'Descrição no banco',
+      tipo: 'texto',
+      sortable: true,
+      acessor: linha => linha.descricao,
+      render: linha => (
+        <span className="flex flex-col gap-[var(--fin-s-1)]">
+          <span className="fin-t-body-strong text-[var(--fin-text)]">{linha.descricao}</span>
+          <span className="fin-t-caption text-[var(--fin-text-3)]">
+            {linha.tipo === 'CREDITO' ? 'Entrada na conta' : 'Saída da conta'}
+          </span>
+        </span>
+      ),
+    },
+    {
+      id: 'valor',
+      cabecalho: 'Valor',
+      tipo: 'dinheiro',
+      sortable: true,
+      minWidth: 112,
+      valor: linha => linha.valor,
+    },
+    {
+      id: 'situacao',
+      cabecalho: 'Situação',
+      tipo: 'status',
+      sortable: true,
+      dominio: 'conciliacao',
+      valor: linha => linha.status_conciliacao,
+    },
+    {
+      id: 'acoes',
+      cabecalho: 'Ação',
+      tipo: 'acoes',
+      render: linha =>
+        linha.status_conciliacao === 'PENDENTE' ? (
+          <Button
+            type="button"
+            variant="ghost"
+            className={BOTAO_LINHA}
+            onClick={() => conferirAgora(linha)}
+          >
+            <Link2 aria-hidden="true" className="size-4" />
+            Conferir
+          </Button>
+        ) : linha.status_conciliacao === 'CONCILIADO' ? (
+          <span className="fin-t-caption inline-flex items-center gap-[var(--fin-s-1)] text-[var(--fin-positive)]">
+            <CheckCircle2 aria-hidden="true" className="size-4" />
+            Conferido
+          </span>
+        ) : null,
+    },
+  ];
+
+  const vazioTabela: EmptyLessonProps = filtrosAtivos > 0
+    ? {
+        motivo: 'sem-resultado',
+        titulo: 'Nenhuma linha com esses filtros',
+        oQueE: 'A conta tem lançamentos importados, mas nenhum deles atende à busca e à situação escolhidas.',
+        acaoSecundaria: { rotulo: 'Limpar filtros', onClick: limparFiltros },
+      }
+    : {
+        motivo: 'sem-dado',
+        titulo: 'Nenhum extrato importado nesta conta',
+        oQueE: 'Aqui aparecem as linhas do extrato do banco, para você conferir uma a uma com os lançamentos do sistema.',
+        comoComeca: [
+          'Baixe o extrato no site do banco em CSV ou OFX.',
+          'Confira se a conta escolhida na barra de filtros é a mesma do arquivo.',
+          'Clique em Importar extrato e escolha o arquivo baixado.',
+        ],
+        acao: { rotulo: 'Importar extrato', onClick: abrirSeletorDeArquivo },
+      };
+
+  // O esqueleto tem a forma do conteúdo real: barra de filtros, bloco de
+  // progresso, cartão da fila e tabela.
+  const esqueletoTela = (
+    <div className="flex flex-col gap-[var(--fin-s-5)]">
+      <div className={`${CARTAO} h-12 w-full`} />
+      <div className={`${CARTAO} flex flex-col gap-[var(--fin-s-3)] p-[var(--fin-s-4)]`}>
+        <span className="block h-[11px] w-40 rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />
+        <Money valor={null} size="metric" align="esquerda" estado="carregando" />
+        <span className="block h-1 w-full rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />
+        <span className="block h-[12px] w-72 rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />
+      </div>
+      <div className={`${CARTAO} flex flex-col gap-[var(--fin-s-3)] p-[var(--fin-s-4)]`}>
+        <span className="block h-[16px] w-64 rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />
+        <span className="block h-[44px] w-full rounded-[var(--fin-r-md)] bg-[var(--fin-surface-2)]" />
+        <span className="block h-[44px] w-full rounded-[var(--fin-r-md)] bg-[var(--fin-surface-2)]" />
+      </div>
+      <FinTable
+        linhas={[]}
+        colunas={colunas}
+        chave={linha => linha.id}
+        estado="carregando"
+        vazio={vazioTabela}
+      />
+    </div>
+  );
+
+  const detalhesDaLinha = (linha: ExtratoLinha) => [
+    { rotulo: 'Linha do extrato', valor: linha.descricao },
+    { rotulo: 'Data', valor: formatDate(linha.data) },
+    { rotulo: 'Valor no extrato', valor: <Money valor={linha.valor} size="strong" estado="ok" /> },
+  ];
+
+  return (
+    <div className="min-h-full bg-[var(--fin-bg)] px-[var(--fin-page-pad)] py-[var(--fin-s-5)] text-[var(--fin-text)]">
+      <div className="mx-auto flex w-full max-w-[var(--fin-page-max)] flex-col gap-[var(--fin-s-6)]">
+
+        <PageHeader
+          titulo="Conciliação bancária"
+          subtitulo="Confira as linhas do extrato do banco com os lançamentos do sistema, uma a uma."
+          acaoPrimaria={
+            selectedConta
+              ? {
+                  rotulo: importing ? 'Importando o arquivo' : 'Importar extrato',
+                  icone: Upload,
+                  onClick: abrirSeletorDeArquivo,
+                }
+              : undefined
           }
+          onRecarregar={load}
         />
 
-        {/* Stats */}
-        <div className="grid grid-cols-4 gap-4">
-          <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-            <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-[var(--t-text)]">{stats.total}</p>
-              <p className="text-[var(--t-text-muted)] text-xs uppercase mt-1">Total Linhas</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-            <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-[var(--t-green)]">{stats.conciliados}</p>
-              <p className="text-[var(--t-text-muted)] text-xs uppercase mt-1">Conciliados</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-            <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-[var(--t-amber)]">{stats.pendentes}</p>
-              <p className="text-[var(--t-text-muted)] text-xs uppercase mt-1">Pendentes</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-[var(--t-blue)]">{stats.pct}%</div>
-              <div className="w-full bg-[var(--t-bg)] rounded-full h-1.5 mt-2">
-                <div className="bg-[var(--t-green)] h-1.5 rounded-full transition-all" style={{ width: `${stats.pct}%` }} />
-              </div>
-              <p className="text-[var(--t-text-muted)] text-xs uppercase mt-1">Progresso</p>
-            </CardContent>
-          </Card>
-        </div>
+        {/* O seletor de arquivo fica fora de vista: quem abre é o botão. */}
+        <Input
+          ref={inputArquivoRef}
+          type="file"
+          accept=".csv,.ofx,.qfx,.txt"
+          onChange={handleImport}
+          className="hidden"
+          tabIndex={-1}
+          aria-hidden="true"
+        />
 
-        {/* Filters */}
-        <div className="flex gap-3 items-center">
-          <div className="relative flex-1 max-w-xs">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--t-text-muted)]" />
-            <Input
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Buscar no extrato..."
-              className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)] pl-9"
+        <DataState estado={estadoDados} erro={null} esqueleto={esqueletoTela}>
+          {contas.length === 0 ? (
+            <EmptyLesson
+              motivo="sem-dado"
+              titulo="Cadastre uma conta bancária primeiro"
+              oQueE="A conciliação compara o extrato de uma conta do banco com os lançamentos do sistema, então ela precisa saber de qual conta o arquivo veio."
+              comoComeca={[
+                'Abra Contas bancárias e cadastre a conta com saldo inicial.',
+                'Volte para esta tela e escolha a conta na barra de filtros.',
+                'Importe o extrato em CSV ou OFX.',
+              ]}
+              acao={{ rotulo: 'Ir para contas bancárias', href: '/financeiro-ag/contas-bancarias' }}
             />
-          </div>
-          {(['TODOS', 'PENDENTE', 'CONCILIADO', 'DIVERGENTE', 'IGNORADO'] as const).map(s => (
-            <button
-              key={s}
-              onClick={() => setFilterStatus(s)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                filterStatus === s
-                  ? 'bg-[var(--t-green)] text-white dark:text-[#0a0a14]'
-                  : 'bg-[var(--t-surface)] text-[var(--t-text-secondary)] shadow-[var(--t-card-shadow)]'
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
+          ) : (
+            <div className="flex flex-col gap-[var(--fin-s-5)]">
+              <FilterBar
+                busca={{
+                  valor: searchTerm,
+                  onChange: setSearchTerm,
+                  placeholder: 'Buscar na descrição do extrato',
+                }}
+                selects={[
+                  {
+                    id: 'conta-bancaria',
+                    rotulo: 'Conta',
+                    valor: selectedConta,
+                    opcoes: contas.map(c => ({ valor: c.id, rotulo: c.nome })),
+                    onChange: setSelectedConta,
+                  },
+                  {
+                    id: 'situacao-conciliacao',
+                    rotulo: 'Situação',
+                    valor: filterStatus,
+                    opcoes: SITUACOES.map(s => ({
+                      valor: s,
+                      rotulo: s === 'TODOS' ? 'Todas' : rotuloStatus('conciliacao', s),
+                    })),
+                    onChange: v => setFilterStatus(v as StatusConciliacao | 'TODOS'),
+                  },
+                ]}
+                resumo={{
+                  exibidos: filtered.length,
+                  total: contaExtrato.length,
+                  substantivo: 'linhas do extrato',
+                }}
+                ativos={filtrosAtivos}
+                onLimpar={limparFiltros}
+              />
 
-        {/* Conciliation Modal */}
-        {conciliarItem && (
-          <Card className="bg-[var(--t-surface)] border-[var(--t-green)]/40">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-[var(--t-green)] text-base flex items-center gap-2">
-                <Link2 className="w-4 h-4" /> Conciliar Lançamento
-              </CardTitle>
-              <button onClick={() => setConciliarItem(null)} className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)]">
-                <X className="w-4 h-4" />
-              </button>
-            </CardHeader>
-            <CardContent>
-              <div className="p-3 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] mb-4">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="text-sm text-[var(--t-text)]">{conciliarItem.descricao}</p>
-                    <p className="text-xs text-[var(--t-text-muted)] mt-0.5">
-                      {dataLocal(conciliarItem.data)?.toLocaleDateString('pt-BR') ?? '—'}
+              {/* Progresso da conta */}
+              <section className={`${CARTAO} flex flex-col gap-[var(--fin-s-3)] p-[var(--fin-s-4)]`}>
+                <h2 className="fin-t-overline text-[var(--fin-text-3)]">
+                  Ainda sem par no sistema
+                </h2>
+                <Money
+                  valor={stats.semPar}
+                  size="metric"
+                  align="esquerda"
+                  estado="ok"
+                  aria-label="Valor do extrato ainda sem lançamento correspondente"
+                />
+                <div
+                  role="progressbar"
+                  aria-label="Linhas do extrato já conferidas"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={stats.pct}
+                  aria-valuetext={`${stats.pct}% do extrato conferido`}
+                  className="h-1 w-full overflow-hidden rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]"
+                >
+                  <div
+                    className="h-full w-[var(--fin-meter)] rounded-[var(--fin-r-sm)] bg-[var(--fin-accent)]"
+                    style={estiloBarra(stats.pct)}
+                  />
+                </div>
+                <p className="fin-t-caption text-[var(--fin-text-2)]">
+                  {stats.conciliados} de {stats.total}{' '}
+                  {stats.total === 1 ? 'linha conferida' : 'linhas conferidas'}
+                  {contaSelecionada ? ` em ${contaSelecionada.nome}` : ''}
+                  {stats.divergentes > 0
+                    ? `. ${contarLinhas(stats.divergentes)} ${stats.divergentes === 1 ? 'está marcada' : 'estão marcadas'} como divergente.`
+                    : '.'}
+                </p>
+              </section>
+
+              {/* Fila de conferência */}
+              {itemFila ? (
+                <section
+                  className={`${CARTAO} flex flex-col`}
+                  aria-label="Próxima linha do extrato a conferir"
+                >
+                  <header className="flex flex-col gap-[var(--fin-s-3)] border-b border-[var(--fin-border)] p-[var(--fin-s-4)]">
+                    <div className="flex flex-wrap items-center justify-between gap-[var(--fin-s-2)]">
+                      <h2 className="fin-t-overline text-[var(--fin-text-3)]">A conferir agora</h2>
+                      <span className="fin-t-caption text-[var(--fin-text-3)]" aria-live="polite">
+                        {posicaoNaFila > 0
+                          ? `${posicaoNaFila} de ${filaAtiva.length} na fila`
+                          : 'Linha escolhida na lista'}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-end justify-between gap-[var(--fin-s-3)]">
+                      <div className="flex min-w-0 flex-col gap-[var(--fin-s-1)]">
+                        <p className="fin-t-subhead text-[var(--fin-text)]">{itemFila.descricao}</p>
+                        <p className="fin-t-caption text-[var(--fin-text-3)]">
+                          {formatDate(itemFila.data)}
+                          {', '}
+                          {itemFila.tipo === 'CREDITO' ? 'entrada na conta' : 'saída da conta'}
+                        </p>
+                      </div>
+                      <Money valor={itemFila.valor} size="metricSm" estado="ok" />
+                    </div>
+                  </header>
+
+                  <div className="flex flex-col gap-[var(--fin-s-3)] p-[var(--fin-s-4)]">
+                    <h3 className="fin-t-overline text-[var(--fin-text-3)]">
+                      Lançamentos com o mesmo valor
+                    </h3>
+
+                    {sugestoes.length === 0 ? (
+                      <div className="flex flex-col gap-[var(--fin-s-2)] rounded-[var(--fin-r-md)] border border-[var(--fin-border)] bg-[var(--fin-surface-sunken)] p-[var(--fin-s-3)]">
+                        <p className="fin-t-body-strong text-[var(--fin-text)]">
+                          Nenhum lançamento em aberto com este valor
+                        </p>
+                        <p className="fin-t-caption text-[var(--fin-text-2)]">
+                          Procure a conta a {itemFila.tipo === 'CREDITO' ? 'receber' : 'pagar'} na
+                          tela de origem e ajuste o valor, ou marque a linha como divergente para
+                          resolver depois. Lançamentos cancelados, já baixados e já usados em outra
+                          linha do extrato não são oferecidos aqui.
+                        </p>
+                      </div>
+                    ) : (
+                      <ul className="flex flex-col gap-[var(--fin-s-2)]">
+                        {sugestoes.map(m => {
+                          const { titulo, complemento } = partirDescricao(m.desc);
+                          return (
+                            <li
+                              key={m.id}
+                              className="flex flex-wrap items-center justify-between gap-[var(--fin-s-3)] rounded-[var(--fin-r-md)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-3)]"
+                            >
+                              <div className="flex min-w-0 flex-col gap-[var(--fin-s-1)]">
+                                <span className="fin-t-body-strong text-[var(--fin-text)]">{titulo}</span>
+                                <span className="fin-t-caption text-[var(--fin-text-3)]">
+                                  {complemento ? `${complemento}. ` : ''}
+                                  Vence em {formatDate(m.data)}
+                                  {', '}
+                                  {m.tipo === 'CONTA_RECEBER' ? 'conta a receber' : 'conta a pagar'}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-[var(--fin-s-3)]">
+                                <Money valor={m.valor} size="strong" estado="ok" />
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  className={BOTAO_LINHA}
+                                  disabled={conciliando}
+                                  onClick={() =>
+                                    setAcaoPendente({
+                                      tipo: 'conciliar',
+                                      linha: itemFila,
+                                      lancId: m.id,
+                                      lancTipo: m.tipo,
+                                      lancDesc: m.desc,
+                                      lancValor: m.valor,
+                                    })
+                                  }
+                                >
+                                  É esta
+                                </Button>
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+
+                    <div className="flex flex-wrap gap-[var(--fin-s-2)]">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className={BOTAO_SECUNDARIO}
+                        disabled={conciliando}
+                        onClick={() => setAcaoPendente({ tipo: 'divergente', linha: itemFila })}
+                      >
+                        Não é nenhuma delas
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className={BOTAO_DISCRETO}
+                        disabled={conciliando}
+                        onClick={() => setAcaoPendente({ tipo: 'ignorar', linha: itemFila })}
+                      >
+                        Ignorar esta linha
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className={BOTAO_DISCRETO}
+                        disabled={conciliando}
+                        onClick={() => adiarLinha(itemFila)}
+                      >
+                        Deixar para depois
+                      </Button>
+                    </div>
+                  </div>
+                </section>
+              ) : contaExtrato.length === 0 ? null : adiadas.size > 0 && fila.length > 0 ? (
+                <EmptyLesson
+                  motivo="sem-resultado"
+                  titulo="A fila está vazia por enquanto"
+                  oQueE={`${contarLinhas(fila.length)} do extrato ${fila.length === 1 ? 'foi deixada' : 'foram deixadas'} para depois. Retome a fila quando quiser continuar a conferência.`}
+                  acaoSecundaria={{ rotulo: 'Retomar linhas adiadas', onClick: () => setAdiadas(new Set()) }}
+                />
+              ) : stats.pendentes > 0 ? (
+                <EmptyLesson
+                  motivo="sem-resultado"
+                  titulo="As linhas a conferir estão fora do filtro"
+                  oQueE={`Esta conta ainda tem ${contarLinhas(stats.pendentes)} a conferir, mas o recorte escolhido na barra de filtros não mostra nenhuma delas.`}
+                  acaoSecundaria={{ rotulo: 'Limpar filtros', onClick: limparFiltros }}
+                />
+              ) : (
+                <section
+                  className={`${CARTAO} flex items-start gap-[var(--fin-s-3)] p-[var(--fin-s-4)]`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="grid size-10 shrink-0 place-items-center rounded-[var(--fin-r-md)] bg-[var(--fin-positive-soft)] text-[var(--fin-positive)]"
+                  >
+                    <CheckCircle2 className="size-5" />
+                  </span>
+                  <div className="flex flex-col gap-[var(--fin-s-1)]">
+                    <h2 className="fin-t-subhead text-[var(--fin-text)]">
+                      Nada para conferir nesta conta
+                    </h2>
+                    <p className="fin-t-caption text-[var(--fin-text-2)]">
+                      Todas as linhas importadas já foram conferidas, ignoradas ou marcadas como
+                      divergentes. Importe um extrato novo para continuar.
                     </p>
                   </div>
-                  <p className={`font-mono font-bold text-lg ${conciliarItem.valor >= 0 ? 'text-[var(--t-green)]' : 'text-[var(--t-red)]'}`}>
-                    {BRL(conciliarItem.valor)}
+                </section>
+              )}
+
+              {/* Extrato completo */}
+              <section className="flex flex-col gap-[var(--fin-s-3)]" aria-label="Linhas do extrato">
+                <h2 className="fin-t-subhead text-[var(--fin-text)]">Extrato importado</h2>
+                <FinTable
+                  linhas={filtered}
+                  colunas={colunas}
+                  chave={linha => linha.id}
+                  estado={estadoDados}
+                  vazio={vazioTabela}
+                />
+              </section>
+
+              {/* Importação */}
+              <section
+                className={`${CARTAO} flex flex-col items-start gap-[var(--fin-s-3)] p-[var(--fin-s-4)]`}
+                aria-label="Importar extrato"
+              >
+                <h2 className="fin-t-overline text-[var(--fin-text-3)]">Importar extrato</h2>
+                <div className="flex w-full flex-col items-center gap-[var(--fin-s-3)] rounded-[var(--fin-r-md)] border border-dashed border-[var(--fin-border-strong)] bg-[var(--fin-surface-sunken)] p-[var(--fin-s-5)] text-center">
+                  <span
+                    aria-hidden="true"
+                    className="grid size-10 place-items-center rounded-[var(--fin-r-md)] bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]"
+                  >
+                    <FileSpreadsheet className="size-5" />
+                  </span>
+                  <p className="fin-t-body-strong text-[var(--fin-text)]" aria-live="polite">
+                    {importing
+                      ? 'Lendo o arquivo e enviando para o servidor'
+                      : contaExtrato.length === 0
+                        ? 'Nenhum arquivo importado nesta conta ainda'
+                        : `${contarLinhas(stats.total)} no extrato desta conta, ${stats.pendentes} ainda a conferir`}
                   </p>
+                  <p className="fin-t-caption max-w-[60ch] text-[var(--fin-text-2)]">
+                    Aceita planilha em CSV ou o arquivo do banco no{' '}
+                    <Jargao
+                      comum="formato padrão de extrato"
+                      tecnico="OFX"
+                      explicacao="Formato que os bancos usam para exportar extrato. No site do banco, procure por exportar extrato e escolha OFX."
+                    />
+                    . Importar o mesmo arquivo duas vezes não duplica lançamentos: o servidor
+                    reconhece o que já existe na conta.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className={BOTAO_SECUNDARIO}
+                    disabled={importing || !selectedConta}
+                    onClick={abrirSeletorDeArquivo}
+                  >
+                    <Upload aria-hidden="true" className="size-4" />
+                    Escolher arquivo
+                  </Button>
                 </div>
-              </div>
-
-              <p className="text-xs text-[var(--t-text-muted)] uppercase mb-2">Lançamentos compatíveis</p>
-              {(() => {
-                const matches = findMatches(conciliarItem);
-                if (matches.length === 0) {
-                  return <p className="text-[var(--t-text-muted)] text-sm py-4 text-center">Nenhum lançamento encontrado com valor compatível.</p>;
-                }
-                return (
-                  <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {matches.map(m => (
-                      <div key={m.id} className="flex items-center justify-between p-3 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] hover:border-[var(--t-green)]/50 cursor-pointer transition-colors"
-                        onClick={() => handleConciliar(conciliarItem, m.id, m.tipo)}
-                      >
-                        <div>
-                          <p className="text-sm text-[var(--t-text)]">{m.desc}</p>
-                          <p className="text-xs text-[var(--t-text-muted)]">
-                            {dataLocal(m.data)?.toLocaleDateString('pt-BR') ?? ''} · {m.tipo === 'CONTA_RECEBER' ? 'Conta a Receber' : 'Conta a Pagar'}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="font-mono text-sm text-[var(--t-text)]">{BRL(m.valor)}</span>
-                          <CheckCircle2 className="w-4 h-4 text-[var(--t-green)]" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-
-              <div className="flex gap-2 mt-4">
-                <Button variant="outline" disabled={conciliando} onClick={() => handleIgnorar(conciliarItem)}
-                  className="border-[var(--t-border)] text-[var(--t-text-secondary)]">
-                  Ignorar
-                </Button>
-                <Button variant="outline" disabled={conciliando} onClick={() => handleDivergente(conciliarItem)}
-                  className="border-[var(--t-red)]/30 text-[var(--t-red)]">
-                  <AlertTriangle className="w-3 h-3 mr-1" /> Marcar Divergente
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Extrato Table */}
-        <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-[var(--t-text)] text-base flex items-center gap-2">
-              <FileSpreadsheet className="w-4 h-4 text-[var(--t-green)]" />
-              Extrato ({filtered.length} linhas)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {loading ? (
-              <p className="text-[var(--t-text-secondary)] text-sm p-6">Carregando...</p>
-            ) : filtered.length === 0 ? (
-              <div className="text-center py-8">
-                <FileSpreadsheet className="w-10 h-10 text-[var(--t-text-muted)] mx-auto mb-3" />
-                <p className="text-[var(--t-text-muted)] text-sm">Nenhum extrato importado para esta conta.</p>
-                <p className="text-[var(--t-text-muted)] text-xs mt-1">Importe um arquivo CSV ou OFX para iniciar a conciliação.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-[var(--t-border)] text-[var(--t-text-muted)] text-xs uppercase">
-                      <th className="text-left px-4 py-3">Data</th>
-                      <th className="text-left px-4 py-3">Descrição</th>
-                      <th className="text-right px-4 py-3">Valor</th>
-                      <th className="text-left px-4 py-3">Status</th>
-                      <th className="text-right px-4 py-3">Ação</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map(item => (
-                      <tr key={item.id} className="border-b border-[var(--t-border)] hover:bg-[var(--t-surface-hover)] transition-colors">
-                        <td className="px-4 py-3 text-[var(--t-text-secondary)]">
-                          {dataLocal(item.data)?.toLocaleDateString('pt-BR') ?? '—'}
-                        </td>
-                        <td className="px-4 py-3 text-[var(--t-text)] max-w-md">
-                          <div className="flex items-center gap-2">
-                            {item.tipo === 'CREDITO'
-                              ? <ArrowUpCircle className="w-4 h-4 text-[var(--t-green)] shrink-0" />
-                              : <ArrowDownCircle className="w-4 h-4 text-[var(--t-red)] shrink-0" />
-                            }
-                            <span className="truncate">{item.descricao}</span>
-                          </div>
-                        </td>
-                        <td className={`px-4 py-3 text-right font-mono font-medium ${item.valor >= 0 ? 'text-[var(--t-green)]' : 'text-[var(--t-red)]'}`}>
-                          {BRL(item.valor)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge className={`${STATUS_BADGE[item.status_conciliacao]} border-0 text-xs`}>
-                            {item.status_conciliacao}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          {item.status_conciliacao === 'PENDENTE' && (
-                            <Button size="sm" onClick={() => setConciliarItem(item)}
-                              className="bg-[var(--t-green)] hover:brightness-110 text-white dark:text-[#0a0a14] h-7 px-3 text-xs">
-                              <Link2 className="w-3 h-3 mr-1" /> Conciliar
-                            </Button>
-                          )}
-                          {item.status_conciliacao === 'CONCILIADO' && (
-                            <span className="text-xs text-[var(--t-green)] flex items-center gap-1 justify-end">
-                              <CheckCircle2 className="w-3 h-3" /> OK
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <MinimalFooter pageId="conciliação" />
+              </section>
+            </div>
+          )}
+        </DataState>
       </div>
+
+      <ConfirmDialog
+        aberto={acaoPendente !== null}
+        onOpenChange={aberto => {
+          if (!aberto) setAcaoPendente(null);
+        }}
+        titulo={
+          acaoPendente?.tipo === 'conciliar'
+            ? 'Conciliar esta linha do extrato'
+            : acaoPendente?.tipo === 'ignorar'
+              ? 'Ignorar esta linha do extrato'
+              : 'Marcar como divergente'
+        }
+        oQueVaiAcontecer={
+          acaoPendente?.tipo === 'conciliar'
+            ? acaoPendente.lancTipo === 'CONTA_RECEBER'
+              ? 'A linha do extrato fica conciliada e a conta a receber é marcada como recebida, com a data e o valor do extrato.'
+              : 'A linha do extrato fica conciliada e a conta a pagar é marcada como paga, com a data e o valor do extrato.'
+            : acaoPendente?.tipo === 'ignorar'
+              ? 'A linha sai da fila de conferência e passa a aparecer como ignorada. Nenhum lançamento é baixado.'
+              : 'A linha fica marcada como divergente para você resolver depois. Nenhum lançamento é baixado.'
+        }
+        detalhes={
+          acaoPendente
+            ? acaoPendente.tipo === 'conciliar'
+              ? [
+                  ...detalhesDaLinha(acaoPendente.linha),
+                  {
+                    rotulo:
+                      acaoPendente.lancTipo === 'CONTA_RECEBER' ? 'Conta a receber' : 'Conta a pagar',
+                    valor: descricaoLegivel(acaoPendente.lancDesc),
+                  },
+                  {
+                    rotulo: 'Valor do lançamento',
+                    valor: <Money valor={acaoPendente.lancValor} size="strong" estado="ok" />,
+                  },
+                ]
+              : detalhesDaLinha(acaoPendente.linha)
+            : undefined
+        }
+        previa={
+          acaoPendente?.tipo === 'conciliar' ? (
+            <>
+              {acaoPendente.lancTipo === 'CONTA_RECEBER' ? 'Recebimento' : 'Pagamento'} de{' '}
+              <Money
+                valor={round2(Math.abs(acaoPendente.linha.valor))}
+                size="body"
+                align="esquerda"
+                estado="ok"
+                className="min-w-0"
+              />{' '}
+              lançado em {formatDate(acaoPendente.linha.data)}
+              {contaSelecionada ? `, na conta ${contaSelecionada.nome}` : ''}.
+            </>
+          ) : undefined
+        }
+        confirmarRotulo={
+          acaoPendente?.tipo === 'conciliar'
+            ? 'Conciliar'
+            : acaoPendente?.tipo === 'ignorar'
+              ? 'Ignorar linha'
+              : 'Marcar divergente'
+        }
+        tone={acaoPendente?.tipo === 'ignorar' ? 'destrutivo' : 'padrao'}
+        processando={confirmando || conciliando}
+        onConfirmar={confirmarAcao}
+      />
     </div>
   );
 }

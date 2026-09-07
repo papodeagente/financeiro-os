@@ -1,23 +1,32 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
+import { Info, X } from 'lucide-react';
 import { ContaReceber, ContaPagar, VendaCRM, PlanoContas } from '@/lib/crm-types';
 import { loadEntities } from '@/lib/crm-storage';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import {
-  FileText, TrendingUp, TrendingDown, DollarSign, Minus, Equal,
-  Info, X,
-} from 'lucide-react';
-import { MetricExplainer } from '@/components/financeiro/MetricExplainer';
-import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
+import { Button } from '@/components/ui/button';
+import { DataState } from '@/components/fin/DataState';
+import { EmptyLesson } from '@/components/fin/EmptyLesson';
+import { FilterBar } from '@/components/fin/FilterBar';
+import { Jargao } from '@/components/fin/Jargao';
+import { MetricCard } from '@/components/fin/MetricCard';
+import { PageHeader } from '@/components/fin/PageHeader';
+import type { MoneyEstado } from '@/components/fin/Money';
 import { toast } from '@/lib/toast';
 import { soma, somaPor, round2, num, divSegura, mesDe, hojeISO } from '@/lib/money';
-
-const BRL = (v: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+import {
+  DemonstrativoTabela,
+  type LinhaDemonstrativo,
+  type NotaDemonstrativo,
+} from './DemonstrativoTabela';
 
 const PCT = (v: number) => `${v.toFixed(1)}%`;
+
+const pctBR = (v: number) =>
+  `${new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(v)}%`;
 
 function getMonthLabel(ym: string): string {
   const [y, m] = ym.split('-');
@@ -33,17 +42,46 @@ interface DRELine {
   indent: number;
 }
 
+/**
+ * Camada de apresentação: o `nome` continua sendo a chave que casa os dois
+ * meses e o filtro do modo resumido, e não muda. Só o rótulo visível muda,
+ * para caixa de frase e para o vocabulário do dono da agência.
+ */
+const ROTULO_LINHA: Record<string, string> = {
+  'VOLUME INTERMEDIADO (informativo)': 'Volume vendido (não é sua receita)',
+  'RECEITA BRUTA (comissão + serviços)': 'Receita bruta (comissão e serviços)',
+  '(-) IMPOSTOS SOBRE A RECEITA': '(-) Impostos sobre a receita',
+  'RECEITA LÍQUIDA': 'Receita líquida',
+  '(-) DESPESAS OPERACIONAIS': '(-) Despesas operacionais',
+  'RESULTADO OPERACIONAL': 'Resultado operacional',
+  '(-) DESPESAS FINANCEIRAS': '(-) Despesas financeiras',
+  '(-) OUTRAS DESPESAS': '(-) Outras despesas',
+  'LUCRO LÍQUIDO': 'Lucro líquido',
+};
+
+const EXPLICACAO_VOLUME =
+  'Total que passou pela agência no mês (passagens, hotéis, pacotes). No regime de intermediação (CNAE 7911-2/00) esse dinheiro é repasse ao fornecedor, não receita sua.';
+
+const NOTA_MARGEM_RECEITA = 'Margem sobre a receita';
+const NOTA_MARGEM_VOLUME = 'Margem sobre o volume vendido';
+
+function rotuloNota(nome: string): string {
+  return nome.startsWith('Margem líquida') ? NOTA_MARGEM_RECEITA : NOTA_MARGEM_VOLUME;
+}
+
 export default function DREPage() {
   const [contasReceber, setContasReceber] = useState<ContaReceber[]>([]);
   const [contasPagar, setContasPagar] = useState<ContaPagar[]>([]);
   const [vendas, setVendas] = useState<VendaCRM[]>([]);
   const [planoContas, setPlanoContas] = useState<PlanoContas[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState(false);
+  const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
   const [selectedMonth, setSelectedMonth] = useState('');
   const [compareMonth, setCompareMonth] = useState('');
-  // Modo Simplificado (default) vs Completo — persistido em localStorage
+  // Modo Simplificado (default) vs Completo, persistido em localStorage
   const [modoSimplificado, setModoSimplificado] = useState<boolean>(true);
-  // Banner "Como ler" — fechável, persiste em localStorage
+  // Banner "Como ler": fechável, persiste em localStorage
   const [bannerVisivel, setBannerVisivel] = useState<boolean>(true);
 
   useEffect(() => {
@@ -71,24 +109,31 @@ export default function DREPage() {
   // Toast quando troca de mês
   const trocarMes = (m: string) => {
     setSelectedMonth(m);
-    toast.info(`DRE carregada · ${getMonthLabel(m)}`);
+    toast.info(`Resultado de ${getMonthLabel(m)}`);
   };
 
   async function load() {
     setLoading(true);
-    const [cr, cp, v, pc] = await Promise.all([
-      loadEntities<ContaReceber>('contas-receber'),
-      loadEntities<ContaPagar>('contas-pagar'),
-      loadEntities<VendaCRM>('vendas-crm'),
-      loadEntities<PlanoContas>('plano-contas'),
-    ]);
-    setContasReceber(cr);
-    setContasPagar(cp);
-    setVendas(v);
-    setPlanoContas(pc);
+    setErro(false);
+    try {
+      const [cr, cp, v, pc] = await Promise.all([
+        loadEntities<ContaReceber>('contas-receber'),
+        loadEntities<ContaPagar>('contas-pagar'),
+        loadEntities<VendaCRM>('vendas-crm'),
+        loadEntities<PlanoContas>('plano-contas'),
+      ]);
+      setContasReceber(cr);
+      setContasPagar(cp);
+      setVendas(v);
+      setPlanoContas(pc);
 
-    setSelectedMonth(mesDe(hojeISO()));
-    setLoading(false);
+      setSelectedMonth(mesDe(hojeISO()));
+      setAtualizadoEm(new Date());
+    } catch {
+      setErro(true);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => { load(); }, []);
@@ -130,7 +175,7 @@ export default function DREPage() {
     return fora;
   }, [contasReceber, vendas]);
 
-  // DRE para AGÊNCIA DE VIAGENS — CNAE 7911-2/00
+  // DRE para AGÊNCIA DE VIAGENS, CNAE 7911-2/00
   // Regime de INTERMEDIAÇÃO: a agência recebe apenas a COMISSÃO sobre a
   // venda. O valor pago à companhia aérea/hotel/operadora é repasse, não
   // custo da agência (CMV = 0). Receita Bruta = comissão (valor_venda −
@@ -139,7 +184,7 @@ export default function DREPage() {
   function buildDRE(month: string): DRELine[] {
     if (!month) return [];
 
-    // Competência: entra tudo que não foi cancelado — inclusive ATRASADO e
+    // Competência: entra tudo que não foi cancelado, inclusive ATRASADO e
     // PARCIAL. Listar só RECEBIDO/PENDENTE fazia a conta parcialmente
     // recebida (ou vencida) sumir INTEIRA do relatório.
     const vivo = (s: string | undefined) => String(s ?? '') !== 'CANCELADO';
@@ -153,7 +198,7 @@ export default function DREPage() {
       mesDe(v.data_venda) === month && v.status !== 'CANCELADO'
     );
 
-    // VOLUME intermediado (informativo — não entra na DRE; é só
+    // VOLUME intermediado (informativo, não entra na DRE; é só
     // referência de quanto a agência movimentou)
     const volumeIntermediado = somaPor(monthVendas, v => v.valor_final);
 
@@ -168,7 +213,7 @@ export default function DREPage() {
     // entra na Receita Bruta UMA vez. Quando a margem da venda já a contém
     // (linha 1.1), a CR espelho não soma de novo. Mas no fluxo "cliente paga
     // o fornecedor" a venda não tem margem própria (margem = 0) e a comissão
-    // É a receita — excluí-la simplesmente apagava esse dinheiro do DRE dos
+    // É a receita, e excluí-la simplesmente apagava esse dinheiro do DRE dos
     // dois meses (o da venda e o do vencimento da comissão).
     const receitaComissoes = somaPor(
       monthReceber.filter(cr => cr.origem === 'COMISSAO_FORNECEDOR'),
@@ -281,6 +326,7 @@ export default function DREPage() {
   const receitaBruta = dreMain.find(l => l.nome.startsWith('RECEITA BRUTA'))?.valor || 0;
   const receitaLiquida = dreMain.find(l => l.nome === 'RECEITA LÍQUIDA')?.valor || 0;
   const lucroLiquido = dreMain.find(l => l.nome === 'LUCRO LÍQUIDO')?.valor || 0;
+  const margemLiquida = dreMain.find(l => l.nome.startsWith('Margem líquida'))?.valor ?? null;
 
   // Modo Simplificado: mostra só os totais principais. Modo Completo: tudo.
   // Iniciante consegue ler 4-6 linhas; contador prefere ver detalhe.
@@ -315,229 +361,253 @@ export default function DREPage() {
   const compareByNome = new Map<string, DRELine>();
   for (const l of dreCompareFiltrado) if (!compareByNome.has(l.nome)) compareByNome.set(l.nome, l);
 
-  if (loading) {
-    return (
-      <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6 flex items-center justify-center">
-        <p className="text-[var(--t-text-secondary)]">Carregando...</p>
+  const estadoDados: 'carregando' | 'erro' | 'ok' = loading ? 'carregando' : erro ? 'erro' : 'ok';
+  const estadoValor: MoneyEstado = loading ? 'carregando' : erro ? 'indisponivel' : 'ok';
+
+  const semLancamento =
+    contasReceber.length === 0 && contasPagar.length === 0 && vendas.length === 0;
+
+  const rotuloMes = selectedMonth ? getMonthLabel(selectedMonth) : 'Mês atual';
+  const rotuloComparativo = compareMonth ? getMonthLabel(compareMonth) : null;
+
+  // Linhas prontas para a tabela. Nenhuma conta nova: só rótulo, recuo e o
+  // comparativo já casado por nome.
+  const linhasTabela: LinhaDemonstrativo[] = dreFiltrado
+    .filter(l => !l.nome.startsWith('Margem'))
+    .map((l, idx) => {
+      const compareLine = compareByNome.get(l.nome);
+      const rotuloBase = ROTULO_LINHA[l.nome] ?? l.nome;
+      const rotulo =
+        l.nome === 'VOLUME INTERMEDIADO (informativo)' ? (
+          <Jargao
+            comum={rotuloBase}
+            tecnico="Volume intermediado"
+            explicacao={EXPLICACAO_VOLUME}
+          />
+        ) : (
+          rotuloBase
+        );
+      return {
+        chave: `${idx}-${l.nome}`,
+        rotulo,
+        codigo: l.codigo,
+        tipo: l.tipo,
+        indent: l.indent,
+        valor: l.valor,
+        comparativo: compareLine ? compareLine.valor : null,
+        variacao: compareLine ? round2(l.valor - compareLine.valor) : null,
+      };
+    });
+
+  const notasTabela: NotaDemonstrativo[] = dreFiltrado
+    .filter(l => l.nome.startsWith('Margem'))
+    .map((l, idx) => ({
+      chave: `nota-${idx}-${l.nome}`,
+      rotulo: rotuloNota(l.nome),
+      valor: pctBR(l.valor),
+    }));
+
+  // A contagem conta o que a tabela desenha: as margens saem no rodapé como
+  // nota, não como linha do demonstrativo, nos dois lados da razão.
+  const totalLinhas = dreMain.filter(l => !l.nome.startsWith('Margem')).length;
+
+  const filtrosAtivos = (compareMonth ? 1 : 0) + (modoSimplificado ? 0 : 1);
+
+  const limparFiltros = () => {
+    setCompareMonth('');
+    alternarModo(true);
+  };
+
+  const contextoLucro =
+    margemLiquida === null
+      ? `Receita menos impostos e despesas de ${rotuloMes}`
+      : `Margem de ${pctBR(margemLiquida)} sobre a receita bruta de ${rotuloMes}`;
+
+  const esqueleto = (
+    <div className="space-y-[var(--fin-s-5)]">
+      <div className="h-12 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]" />
+      <div className="grid gap-[var(--fin-s-4)] md:grid-cols-3">
+        {[0, 1, 2].map(i => (
+          <div
+            key={i}
+            className="h-28 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]"
+          />
+        ))}
       </div>
-    );
-  }
+      <div className="h-96 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]" />
+    </div>
+  );
 
   return (
-    <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
-      <div className="max-w-5xl mx-auto space-y-6">
-
-        {/* Header padronizado MinimalPageHead com toggle + dropdowns como actions */}
-        <MinimalPageHead
-          title="DRE — Demonstrativo de Resultado"
-          meta={
-            <p className="mt-2.5 text-[12px]" style={{ color: 'var(--ink-3)' }}>
-              Regime de intermediação <span className="font-medium" style={{ color: 'var(--ink-2)' }}>CNAE 7911-2/00</span> · Receita Bruta = comissão (margem), não o valor total
-            </p>
+    <div className="w-full bg-[var(--fin-bg)] px-[var(--fin-page-pad)] py-[var(--fin-page-pad)] text-[var(--fin-text)]">
+      <div className="mx-auto w-full max-w-[var(--fin-page-max)]">
+        <PageHeader
+          titulo="Resultado do mês"
+          subtitulo={
+            <Jargao
+              comum="Quanto a agência ganhou e gastou no período"
+              tecnico="DRE, demonstrativo de resultado do exercício"
+              explicacao="Parte da receita da agência (a comissão), tira os impostos e as despesas do mês e chega no lucro. É este relatório que o contador pede."
+              formato="subtitulo"
+            />
           }
-          actions={
-            <>
-              {/* Toggle Simplificado / Completo (segmented control) */}
-              <div className="inline-flex border" style={{ borderColor: 'var(--line)', height: '34px' }}>
-                {[
-                  { key: 'simpl', label: 'Simplificado', active: modoSimplificado },
-                  { key: 'comp', label: 'Completo', active: !modoSimplificado },
-                ].map((opt, i, arr) => (
-                  <button
-                    key={opt.key}
-                    onClick={() => alternarModo(opt.key === 'simpl')}
-                    className="px-3 text-[12px] transition-colors"
-                    style={{
-                      color: opt.active ? 'var(--ink)' : 'var(--ink-3)',
-                      fontWeight: opt.active ? 500 : 400,
-                      background: opt.active ? 'var(--ink-surface-2)' : 'transparent',
-                      borderRight: i < arr.length - 1 ? '1px solid var(--line)' : 'none',
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-              <select
-                value={selectedMonth}
-                onChange={e => trocarMes(e.target.value)}
-                className="h-[34px] px-3 text-[12px] border"
-                style={{ borderColor: 'var(--line)', background: 'var(--ink-surface)', color: 'var(--ink)' }}
-              >
-                {availableMonths.map(m => (
-                  <option key={m} value={m}>{getMonthLabel(m)}</option>
-                ))}
-              </select>
-              <span className="text-[11px]" style={{ color: 'var(--ink-3)' }}>vs</span>
-              <select
-                value={compareMonth}
-                onChange={e => setCompareMonth(e.target.value)}
-                className="h-[34px] px-3 text-[12px] border"
-                style={{ borderColor: 'var(--line)', background: 'var(--ink-surface)', color: 'var(--ink)' }}
-              >
-                <option value="">Sem comparação</option>
-                {availableMonths.filter(m => m !== selectedMonth).map(m => (
-                  <option key={m} value={m}>{getMonthLabel(m)}</option>
-                ))}
-              </select>
-            </>
-          }
+          atualizadoEm={atualizadoEm}
         />
 
-        {/* Banner explicativo — primeira visita */}
-        {bannerVisivel && (
-          <div className="rounded-xl border border-[var(--t-blue)]/30 bg-[var(--t-blue-bg)] p-4 flex items-start gap-3">
-            <Info className="w-5 h-5 text-[var(--t-blue)] shrink-0 mt-0.5" />
-            <div className="flex-1 text-sm text-[var(--t-text)]">
-              <p className="font-semibold mb-1">Como ler esta DRE</p>
-              <p className="text-[var(--t-text-secondary)]">
-                Sua agência opera no regime de intermediação <strong>CNAE 7911-2/00</strong>. Isso significa que o que você fatura para o cliente (passagens, hotéis) <strong>NÃO é sua receita</strong> — sua receita é só a comissão. Por isso o DRE mostra <strong>Volume Intermediado</strong> (informativo) separado da <strong>Receita Bruta</strong> (sua margem real, sobre a qual incidem impostos).
-              </p>
-            </div>
-            <button onClick={dispensarBanner} className="text-[var(--t-text-muted)] hover:text-[var(--t-text)] shrink-0" aria-label="Fechar">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        )}
+        <div className="mt-[var(--fin-s-6)] space-y-[var(--fin-s-5)]">
+          {bannerVisivel ? (
+            <aside
+              aria-label="Como ler este relatório"
+              className="flex items-start gap-[var(--fin-s-3)] rounded-[var(--fin-r-lg)] border border-[var(--fin-info)]/24 bg-[var(--fin-info-soft)] p-[var(--fin-s-4)]"
+            >
+              <Info aria-hidden="true" className="mt-[var(--fin-s-1)] size-5 shrink-0 text-[var(--fin-info)]" />
+              <div className="flex min-w-0 flex-col gap-[var(--fin-s-1)]">
+                <p className="fin-t-body-strong text-[var(--fin-text)]">Como ler este relatório</p>
+                <p className="fin-t-body text-[var(--fin-text-2)]">
+                  Sua agência opera no regime de intermediação (CNAE 7911-2/00). O que você fatura
+                  para o cliente, como passagens e hotéis, não é sua receita: sua receita é só a
+                  comissão. Por isso o volume vendido aparece separado da receita bruta, que é a sua
+                  margem real e a base sobre a qual incidem os impostos.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="Fechar o aviso sobre como ler este relatório"
+                onClick={dispensarBanner}
+                className="ml-auto size-11 shrink-0 rounded-[var(--fin-r-md)] text-[var(--fin-text-3)] shadow-none hover:bg-[var(--fin-surface)] hover:text-[var(--fin-text)] focus-visible:outline-2 focus-visible:outline-[var(--fin-accent)] focus-visible:outline-offset-2 focus-visible:ring-0 lg:size-10"
+              >
+                <X aria-hidden="true" className="size-4" />
+              </Button>
+            </aside>
+          ) : null}
 
-        {/* KPIs */}
-        <div className="grid grid-cols-3 gap-4">
-          <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-            <CardContent className="p-4 flex items-center gap-4">
-              <DollarSign className="w-8 h-8 text-[var(--t-blue)] shrink-0" />
-              <div>
-                <p className="text-[var(--t-text-muted)] text-xs uppercase flex items-center">
-                  Receita Bruta
-                  <MetricExplainer
-                    title="Receita Bruta (agência)"
-                    text={'Margem das vendas + comissões de fornecedores + fees + outras receitas próprias da agência.\n\nÉ sobre este valor que incidem impostos (ISS, PIS/COFINS, Simples).'}
-                  />
-                </p>
-                <p className="text-xl font-bold text-[var(--t-blue)]">{BRL(receitaBruta)}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-            <CardContent className="p-4 flex items-center gap-4">
-              <TrendingUp className="w-8 h-8 text-[var(--t-green)] shrink-0" />
-              <div>
-                <p className="text-[var(--t-text-muted)] text-xs uppercase flex items-center">
-                  Receita Líquida
-                  <MetricExplainer
-                    title="Receita Líquida"
-                    text="Receita Bruta menos os impostos sobre faturamento (ISS, PIS, COFINS). É a receita que efetivamente sobra para cobrir despesas operacionais."
-                  />
-                </p>
-                <p className={`text-xl font-bold ${receitaLiquida >= 0 ? 'text-[var(--t-green)]' : 'text-[var(--t-red)]'}`}>{BRL(receitaLiquida)}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-            <CardContent className="p-4 flex items-center gap-4">
-              {lucroLiquido >= 0
-                ? <TrendingUp className="w-8 h-8 text-[var(--t-green)] shrink-0" />
-                : <TrendingDown className="w-8 h-8 text-[var(--t-red)] shrink-0" />
-              }
-              <div>
-                <p className="text-[var(--t-text-muted)] text-xs uppercase">Lucro Líquido</p>
-                <p className={`text-xl font-bold ${lucroLiquido >= 0 ? 'text-[var(--t-green)]' : 'text-[var(--t-red)]'}`}>{BRL(lucroLiquido)}</p>
-              </div>
-            </CardContent>
-          </Card>
+          <DataState
+            estado={estadoDados}
+            erro={{
+              mensagem:
+                'Não deu para ler as vendas e as contas do período. Nada foi alterado no seu financeiro.',
+              onTentarDeNovo: load,
+            }}
+            esqueleto={esqueleto}
+          >
+            <div className="space-y-[var(--fin-s-5)]">
+              {semLancamento ? null : (
+                <FilterBar
+                  selects={[
+                    {
+                      id: 'dre-mes',
+                      rotulo: 'Mês',
+                      valor: selectedMonth,
+                      opcoes: availableMonths.map(m => ({ valor: m, rotulo: getMonthLabel(m) })),
+                      onChange: trocarMes,
+                    },
+                    {
+                      id: 'dre-comparar',
+                      rotulo: 'Comparar com',
+                      valor: compareMonth === '' ? 'nenhum' : compareMonth,
+                      opcoes: [
+                        { valor: 'nenhum', rotulo: 'Sem comparação' },
+                        ...availableMonths
+                          .filter(m => m !== selectedMonth)
+                          .map(m => ({ valor: m, rotulo: getMonthLabel(m) })),
+                      ],
+                      onChange: v => setCompareMonth(v === 'nenhum' ? '' : v),
+                    },
+                    {
+                      id: 'dre-detalhe',
+                      rotulo: 'Detalhe',
+                      valor: modoSimplificado ? 'resumido' : 'completo',
+                      opcoes: [
+                        { valor: 'resumido', rotulo: 'Resumido' },
+                        { valor: 'completo', rotulo: 'Completo' },
+                      ],
+                      onChange: v => alternarModo(v === 'resumido'),
+                    },
+                  ]}
+                  resumo={{
+                    exibidos: linhasTabela.length,
+                    total: totalLinhas,
+                    substantivo: 'linhas do demonstrativo',
+                    escopo: `em ${rotuloMes}`,
+                  }}
+                  ativos={filtrosAtivos}
+                  onLimpar={limparFiltros}
+                />
+              )}
+
+              {semLancamento ? (
+                <EmptyLesson
+                  motivo="sem-dado"
+                  titulo="Ainda não há lançamentos para montar o resultado"
+                  oQueE="Este relatório mostra quanto a agência ganhou de comissão no mês, quanto pagou de impostos e de despesas, e quanto sobrou de lucro."
+                  comoComeca={[
+                    'Lance as contas a pagar do mês, como aluguel, salários e impostos',
+                    'Confira as contas a receber vindas das vendas',
+                    'Volte aqui para ver a receita, as despesas e o lucro do período',
+                  ]}
+                  acao={{ rotulo: 'Lançar conta a pagar', href: '/financeiro-ag/pagar' }}
+                />
+              ) : linhasTabela.length === 0 ? (
+                <EmptyLesson
+                  motivo="sem-resultado"
+                  titulo="Nenhuma linha para este recorte"
+                  oQueE="O mês escolhido não tem lançamento nem venda que forme uma linha do demonstrativo."
+                  acaoSecundaria={{ rotulo: 'Limpar filtros', onClick: limparFiltros }}
+                />
+              ) : (
+                <>
+                  <div className="grid gap-[var(--fin-s-4)] md:grid-cols-3">
+                    <MetricCard
+                      rotulo="Receita bruta"
+                      valor={receitaBruta}
+                      estado={estadoValor}
+                      contexto={`Comissões, fees e outras receitas de ${rotuloMes}`}
+                      explicacao={'Margem das vendas + comissões de fornecedores + fees + outras receitas próprias da agência. É sobre este valor que incidem impostos (ISS, PIS/COFINS, Simples).'}
+                    />
+                    <MetricCard
+                      rotulo="Receita líquida"
+                      valor={receitaLiquida}
+                      estado={estadoValor}
+                      tone={receitaLiquida < 0 ? 'negativo' : 'neutro'}
+                      contexto="Receita bruta depois dos impostos sobre a receita"
+                      explicacao="Receita bruta menos os impostos sobre faturamento (ISS, PIS, COFINS). É a receita que efetivamente sobra para cobrir despesas operacionais."
+                    />
+                    <MetricCard
+                      rotulo="Lucro líquido"
+                      valor={lucroLiquido}
+                      estado={estadoValor}
+                      emphasis="destaque"
+                      tone={lucroLiquido < 0 ? 'negativo' : 'neutro'}
+                      contexto={contextoLucro}
+                      explicacao="O que sobra da receita bruta depois de todos os impostos e despesas do período. Negativo significa que o mês fechou no prejuízo."
+                    />
+                  </div>
+
+                  <section className="space-y-[var(--fin-s-3)]">
+                    <div className="flex flex-col gap-[var(--fin-s-1)]">
+                      <h2 className="fin-t-subhead text-[var(--fin-text)]">
+                        Como o resultado se forma
+                      </h2>
+                      <p className="fin-t-caption text-[var(--fin-text-3)]">
+                        Cada linha soma ou subtrai até chegar no lucro líquido do período.
+                      </p>
+                    </div>
+
+                    <DemonstrativoTabela
+                      linhas={linhasTabela}
+                      notas={notasTabela}
+                      rotuloPeriodo={rotuloMes}
+                      rotuloComparativo={rotuloComparativo}
+                      descricao={`Resultado de ${rotuloMes}${rotuloComparativo ? `, comparado com ${rotuloComparativo}` : ''}`}
+                    />
+                  </section>
+                </>
+              )}
+            </div>
+          </DataState>
         </div>
-
-        {/* DRE Table */}
-        <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-[var(--t-text)] text-base flex items-center gap-2">
-              <FileText className="w-4 h-4 text-[var(--t-green)]" />
-              {selectedMonth ? getMonthLabel(selectedMonth) : 'DRE'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--t-border)] text-[var(--t-text-muted)] text-xs uppercase">
-                    <th className="text-left px-6 py-3">Conta</th>
-                    <th className="text-right px-6 py-3">{selectedMonth ? getMonthLabel(selectedMonth) : 'Valor'}</th>
-                    {compareMonth && <th className="text-right px-6 py-3">{getMonthLabel(compareMonth)}</th>}
-                    {compareMonth && <th className="text-right px-6 py-3">Variação</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {dreFiltrado.map((line, idx) => {
-                    const compareLine = compareByNome.get(line.nome);
-                    const variacao = compareLine ? round2(line.valor - compareLine.valor) : 0;
-                    const isMargin = line.nome.startsWith('Margem');
-
-                    if (isMargin) {
-                      return (
-                        <tr key={idx} className="border-t border-[var(--t-border)]">
-                          <td colSpan={compareMonth ? 4 : 2} className="px-6 py-2 text-xs text-[var(--t-text-muted)]">
-                            {line.nome}
-                          </td>
-                        </tr>
-                      );
-                    }
-
-                    return (
-                      <tr
-                        key={idx}
-                        className={`border-b border-[var(--t-border)] transition-colors ${
-                          line.tipo === 'header' ? 'bg-[var(--t-bg)]' :
-                          line.tipo === 'total' ? 'bg-[var(--t-green)]/5' :
-                          line.tipo === 'subtotal' ? 'bg-[var(--t-bg)]' :
-                          'hover:bg-[var(--t-surface-hover)]'
-                        }`}
-                      >
-                        <td
-                          className={`px-6 py-3 ${
-                            line.tipo === 'header' ? 'font-semibold text-[var(--t-text-secondary)] text-xs uppercase' :
-                            line.tipo === 'total' ? 'font-bold text-[var(--t-text)] text-base' :
-                            line.tipo === 'subtotal' ? 'font-semibold text-[var(--t-text)]' :
-                            'text-[var(--t-text-secondary)]'
-                          }`}
-                          style={{ paddingLeft: `${24 + line.indent * 16}px` }}
-                        >
-                          {line.tipo === 'subtotal' && <Equal className="w-3 h-3 inline mr-1 text-[var(--t-text-muted)]" />}
-                          {line.tipo === 'total' && <Equal className="w-4 h-4 inline mr-1 text-[var(--t-green)]" />}
-                          {line.nome}
-                        </td>
-                        <td className={`px-6 py-3 text-right font-mono ${
-                          line.tipo === 'total' ? `text-base font-bold ${line.valor >= 0 ? 'text-[var(--t-green)]' : 'text-[var(--t-red)]'}` :
-                          line.tipo === 'subtotal' ? `font-semibold ${line.valor >= 0 ? 'text-[var(--t-green)]' : 'text-[var(--t-red)]'}` :
-                          line.tipo === 'header' ? `font-medium ${line.valor >= 0 ? 'text-[var(--t-text)]' : 'text-[var(--t-red)]'}` :
-                          'text-[var(--t-text-secondary)]'
-                        }`}>
-                          {line.tipo === 'item' ? BRL(line.valor) : BRL(line.valor)}
-                        </td>
-                        {compareMonth && (
-                          <>
-                            <td className="px-6 py-3 text-right font-mono text-[var(--t-text-secondary)]">
-                              {compareLine ? BRL(compareLine.valor) : '—'}
-                            </td>
-                            <td className="px-6 py-3 text-right">
-                              {compareLine && variacao !== 0 ? (
-                                <Badge className={`${variacao > 0 ? 'bg-[var(--t-green-bg)] text-[var(--t-green)]' : 'bg-[var(--t-red-bg)] text-[var(--t-red)]'} border-0 text-xs font-mono`}>
-                                  {variacao > 0 ? '+' : ''}{BRL(variacao)}
-                                </Badge>
-                              ) : (
-                                <span className="text-[var(--t-text-muted)]">—</span>
-                              )}
-                            </td>
-                          </>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        <MinimalFooter pageId="DRE" />
       </div>
     </div>
   );

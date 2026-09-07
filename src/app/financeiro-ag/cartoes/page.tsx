@@ -1,27 +1,45 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Pencil, Plus, Power, PowerOff, Trash2, TriangleAlert, X } from 'lucide-react';
+
 import type { CartaoCorporativo, ContaPagar, BandeiraCartao } from '@/lib/crm-types';
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { formatBRL, generateId } from '@/lib/utils';
-import { somaPor, divSegura, round2 } from '@/lib/money';
+import { cn, formatBRL, formatDate, generateId } from '@/lib/utils';
+import { somaPor, divSegura, round2, paraISO } from '@/lib/money';
 import {
   calcLimiteUsado,
   calcProximoFechamento,
   calcProximoVencimento,
   calcFaturaPeriodo,
-  bandeiraColor,
   BANDEIRA_LABEL,
 } from '@/lib/cartoes-utils';
+
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
-  Plus, X, Check, Trash2, Pencil, CreditCard, AlertTriangle,
-  ChevronDown, ChevronUp, FileText, Power, PowerOff,
-} from 'lucide-react';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
+import { PageHeader } from '@/components/fin/PageHeader';
+import { MetricCard } from '@/components/fin/MetricCard';
+import { Meter } from '@/components/fin/Meter';
+import { Money, type MoneyEstado } from '@/components/fin/Money';
+import { FilterBar } from '@/components/fin/FilterBar';
+import { FinTable, type FinColuna } from '@/components/fin/FinTable';
+import { DataState } from '@/components/fin/DataState';
+import { type EmptyLessonProps } from '@/components/fin/EmptyLesson';
+import { RecordSheet } from '@/components/fin/RecordSheet';
+import { Field } from '@/components/fin/Field';
+import { MoneyField } from '@/components/fin/MoneyField';
+import { ConfirmDialog } from '@/components/fin/ConfirmDialog';
+import { statusChipVariants } from '@/components/fin/StatusChip';
+
+import { faixaUtilizacaoCartao } from './faixa-utilizacao';
 
 const BANDEIRAS: BandeiraCartao[] = ['VISA', 'MASTERCARD', 'ELO', 'AMEX', 'HIPERCARD', 'OUTRA'];
 
@@ -62,17 +80,128 @@ const EMPTY_FORM: FormState = {
   observacoes: '',
 };
 
-const fmtDate = (d: Date) =>
-  d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+type Situacao = 'TODAS' | 'ATIVOS' | 'INATIVOS';
+
+const FOCO =
+  'focus-visible:outline-2 focus-visible:outline-[var(--fin-accent)] focus-visible:outline-offset-2 focus-visible:ring-0';
+
+const CAMPO = cn(
+  'fin-t-body h-11 w-full rounded-[var(--fin-r-md)] border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-3 text-[var(--fin-text)] lg:h-10',
+  FOCO,
+);
+
+const GATILHO_SELECT = cn(CAMPO, 'justify-between gap-[var(--fin-s-2)]');
+
+const ACAO_LINHA = cn(
+  'size-11 rounded-[var(--fin-r-md)] text-[var(--fin-text-3)] shadow-none hover:bg-[var(--fin-surface-2)] hover:text-[var(--fin-text)] lg:size-10',
+  FOCO,
+);
+
+function ChipSituacao({ ativo }: { ativo: boolean }) {
+  return (
+    <span className={statusChipVariants({ tone: ativo ? 'positivo' : 'neutro' })}>
+      <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-[var(--fin-r-dot)] bg-current" />
+      {ativo ? 'Ativo' : 'Inativo'}
+    </span>
+  );
+}
+
+function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
+  return (
+    <section className="flex flex-col gap-[var(--fin-s-3)]">
+      <h3 className="fin-t-overline text-[var(--fin-text-3)]">{titulo}</h3>
+      <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:grid-cols-2">{children}</div>
+    </section>
+  );
+}
+
+function FaixaIndicadores({
+  estado,
+  limite,
+  usado,
+  disponivel,
+  pct,
+  ativos,
+  cadastrados,
+}: {
+  estado: MoneyEstado;
+  limite: number;
+  usado: number;
+  disponivel: number;
+  pct: number;
+  ativos: number;
+  cadastrados: number;
+}) {
+  const pronto = estado === 'ok';
+  const plural = cadastrados === 1 ? 'cartão cadastrado' : 'cartões cadastrados';
+
+  // Enquanto carrega, nenhum número é escrito nem em texto: "0 ativos entre 0
+  // cartões" é dado inventado do mesmo jeito que um R$ 0,00 falso.
+  const contextoLimite = pronto
+    ? `${ativos} ativo${ativos === 1 ? '' : 's'} entre ${cadastrados} ${plural}`
+    : 'Soma do limite de todos os cartões cadastrados';
+
+  return (
+    <div className="grid grid-cols-1 gap-[var(--fin-s-4)] sm:grid-cols-2 xl:grid-cols-4">
+      <MetricCard rotulo="Limite total" valor={limite} estado={estado} contexto={contextoLimite} />
+      <MetricCard
+        rotulo="Limite usado"
+        valor={usado}
+        estado={estado}
+        contexto="Contas lançadas em todos os cartões, sem contar as canceladas"
+        // O gatilho da explicação é focável, e o esqueleto vive debaixo de
+        // aria-hidden: só existe com os dados prontos.
+        explicacao={
+          pronto
+            ? 'Pagar a conta a pagar não devolve limite. Quem devolve é o pagamento da fatura do cartão.'
+            : undefined
+        }
+      />
+      <MetricCard
+        rotulo="Disponível"
+        valor={disponivel}
+        estado={estado}
+        emphasis="destaque"
+        contexto="Em todos os cartões, o limite que ainda dá para usar hoje"
+      />
+      <div className="flex flex-col gap-[var(--fin-s-3)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-4">
+        <h3 className="fin-t-overline text-[var(--fin-text-3)]">Utilização</h3>
+        {pronto ? (
+          <Meter
+            pct={pct}
+            faixa={faixaUtilizacaoCartao(pct)}
+            descricao={`${formatBRL(usado)} de ${formatBRL(limite)}`}
+          />
+        ) : (
+          <div className="flex flex-col gap-[var(--fin-s-2)]">
+            <span
+              aria-hidden="true"
+              className="block h-2 w-full rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]"
+            />
+            <span className="fin-t-caption text-[var(--fin-text-3)]">
+              A faixa aparece quando os dados terminam de carregar.
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function CartoesCorpPage() {
   const [items, setItems] = useState<CartaoCorporativo[]>([]);
   const [contas, setContas] = useState<ContaPagar[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
+  const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [showTaxas, setShowTaxas] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [busca, setBusca] = useState('');
+  const [situacao, setSituacao] = useState<Situacao>('TODAS');
+  const [excluirId, setExcluirId] = useState<string | null>(null);
+  const [excluindo, setExcluindo] = useState(false);
   const [faturaCardId, setFaturaCardId] = useState<string | null>(null);
   const [faturaMes, setFaturaMes] = useState(() => {
     const d = new Date();
@@ -81,16 +210,22 @@ export default function CartoesCorpPage() {
 
   async function load() {
     setLoading(true);
-    const [cartoes, cps] = await Promise.all([
-      loadEntities<CartaoCorporativo>('cartoes-corp'),
-      loadEntities<ContaPagar>('contas-pagar'),
-    ]);
-    setItems(cartoes);
-    setContas(cps);
-    setLoading(false);
+    setErro(null);
+    try {
+      const [cartoes, cps] = await Promise.all([
+        loadEntities<CartaoCorporativo>('cartoes-corp'),
+        loadEntities<ContaPagar>('contas-pagar'),
+      ]);
+      setItems(cartoes);
+      setContas(cps);
+      setAtualizadoEm(new Date());
+    } catch {
+      setErro('A consulta aos cartões falhou antes de responder. Nada foi alterado.');
+    } finally {
+      setLoading(false);
+    }
   }
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, []);
 
   function openNew() {
@@ -124,7 +259,6 @@ export default function CartoesCorpPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Confirmar exclusão deste cartão? Lançamentos vinculados não serão afetados.')) return;
     await deleteEntity('cartoes-corp', id);
     load();
   }
@@ -149,415 +283,624 @@ export default function CartoesCorpPage() {
     return calcFaturaPeriodo(faturaCard, contas, faturaMes);
   }, [faturaCard, contas, faturaMes]);
 
-  return (
-    <div className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] p-6">
-      <div className="max-w-6xl mx-auto space-y-6">
+  const estado: 'carregando' | 'erro' | 'ok' = loading ? 'carregando' : erro ? 'erro' : 'ok';
+  const estadoMoney: MoneyEstado = loading ? 'carregando' : erro ? 'indisponivel' : 'ok';
 
-        <MinimalPageHead
-          title="Cartões corporativos"
-          meta={<p className="mt-2.5 text-[12px]" style={{ color: 'var(--ink-3)' }}>Gestão de limites, faturas e lançamentos por cartão</p>}
-          actions={
-            <button
-              onClick={openNew}
-              className="h-[34px] px-3 text-[12px] font-medium"
-              style={{ background: 'var(--ink)', color: 'var(--ink-bg)' }}
-            >
-              <Plus className="w-3.5 h-3.5 inline mr-2" /> Novo cartão
-            </button>
-          }
+  const termo = busca.trim().toLocaleLowerCase('pt-BR');
+
+  const exibidos = useMemo(() => {
+    return items.filter(c => {
+      if (situacao === 'ATIVOS' && !c.ativo) return false;
+      if (situacao === 'INATIVOS' && c.ativo) return false;
+      if (!termo) return true;
+      return [c.apelido, c.banco_emissor, c.titular, c.ultimos_digitos, BANDEIRA_LABEL[c.bandeira]]
+        .some(campo => (campo || '').toLocaleLowerCase('pt-BR').includes(termo));
+    });
+  }, [items, situacao, termo]);
+
+  const usadoExibido = useMemo(
+    () => somaPor(exibidos, c => calcLimiteUsado(c.id, contas)),
+    [exibidos, contas],
+  );
+
+  const filtrosAtivos = (termo ? 1 : 0) + (situacao !== 'TODAS' ? 1 : 0);
+
+  function limparFiltros() {
+    setBusca('');
+    setSituacao('TODAS');
+  }
+
+  const cartaoParaExcluir = items.find(c => c.id === excluirId) || null;
+
+  async function confirmarExclusao() {
+    if (!cartaoParaExcluir) return;
+    setExcluindo(true);
+    try {
+      await handleDelete(cartaoParaExcluir.id);
+      setExcluirId(null);
+    } finally {
+      setExcluindo(false);
+    }
+  }
+
+  const vazio: EmptyLessonProps =
+    filtrosAtivos > 0
+      ? {
+          motivo: 'sem-resultado',
+          titulo: 'Nenhum cartão com esses filtros',
+          oQueE: 'Os cartões continuam cadastrados, mas nenhum deles atende à busca ou à situação escolhida.',
+          acaoSecundaria: { rotulo: 'Limpar filtros', onClick: limparFiltros },
+        }
+      : {
+          motivo: 'sem-dado',
+          titulo: 'Nenhum cartão cadastrado',
+          oQueE:
+            'Aqui ficam os cartões corporativos da agência, com o limite de cada um, quanto já foi usado e a fatura do período.',
+          comoComeca: [
+            'Cadastre o cartão com apelido, limite e os dias de fechamento e de vencimento.',
+            'Ao lançar uma conta a pagar, escolha esse cartão como forma de pagamento.',
+            'A utilização e a fatura do período passam a ser calculadas sozinhas.',
+          ],
+          acao: { rotulo: 'Novo cartão', onClick: openNew },
+        };
+
+  const colunas: FinColuna<CartaoCorporativo>[] = [
+    {
+      id: 'cartao',
+      cabecalho: 'Cartão',
+      tipo: 'texto',
+      sortable: true,
+      minWidth: 240,
+      acessor: c => c.apelido,
+      render: c => (
+        <span className="flex flex-col gap-1">
+          <span className="flex flex-wrap items-center gap-[var(--fin-s-2)]">
+            <span className="fin-t-body-strong text-[var(--fin-text)]">{c.apelido}</span>
+            <ChipSituacao ativo={c.ativo} />
+          </span>
+          <span className="fin-t-caption text-[var(--fin-text-3)]">
+            {[
+              BANDEIRA_LABEL[c.bandeira],
+              c.ultimos_digitos ? `final ${c.ultimos_digitos}` : null,
+              c.banco_emissor || null,
+              c.titular || null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </span>
+        </span>
+      ),
+    },
+    {
+      id: 'fechamento',
+      cabecalho: 'Fecha em',
+      tipo: 'data',
+      prioridade: 1,
+      valor: c => (c.dia_fechamento ? paraISO(calcProximoFechamento(c.dia_fechamento)) : null),
+    },
+    {
+      id: 'vencimento',
+      cabecalho: 'Vence em',
+      tipo: 'data',
+      valor: c => (c.dia_vencimento ? paraISO(calcProximoVencimento(c.dia_vencimento)) : null),
+    },
+    {
+      id: 'limite',
+      cabecalho: 'Limite',
+      tipo: 'dinheiro',
+      prioridade: 2,
+      sortable: true,
+      valor: c => c.limite_total,
+    },
+    {
+      id: 'usado',
+      cabecalho: 'Usado',
+      tipo: 'dinheiro',
+      sortable: true,
+      valor: c => calcLimiteUsado(c.id, contas),
+      sub: c => `Disponível ${formatBRL(Math.max(0, c.limite_total - calcLimiteUsado(c.id, contas)))}`,
+    },
+    {
+      id: 'utilizacao',
+      cabecalho: 'Utilização',
+      tipo: 'texto',
+      minWidth: 184,
+      render: c => {
+        const usado = calcLimiteUsado(c.id, contas);
+        const pct = c.limite_total > 0 ? (usado / c.limite_total) * 100 : 0;
+        return (
+          <Meter
+            pct={pct}
+            faixa={faixaUtilizacaoCartao(pct)}
+            descricao={`${formatBRL(usado)} de ${formatBRL(c.limite_total)}`}
+            size="sm"
+          />
+        );
+      },
+    },
+    {
+      id: 'acoes',
+      cabecalho: 'Ações',
+      tipo: 'acoes',
+      minWidth: 156,
+      render: c => (
+        <>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={`Editar o cartão ${c.apelido}`}
+            className={ACAO_LINHA}
+            onClick={() => openEdit(c)}
+          >
+            <Pencil aria-hidden="true" className="size-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={c.ativo ? `Desativar o cartão ${c.apelido}` : `Ativar o cartão ${c.apelido}`}
+            className={ACAO_LINHA}
+            onClick={() => toggleAtivo(c)}
+          >
+            {c.ativo ? (
+              <Power aria-hidden="true" className="size-4" />
+            ) : (
+              <PowerOff aria-hidden="true" className="size-4" />
+            )}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={`Excluir o cartão ${c.apelido}`}
+            className={cn(
+              ACAO_LINHA,
+              'text-[var(--fin-negative)] hover:bg-[var(--fin-negative-soft)] hover:text-[var(--fin-negative-text)]',
+            )}
+            onClick={() => setExcluirId(c.id)}
+          >
+            <Trash2 aria-hidden="true" className="size-4" />
+          </Button>
+        </>
+      ),
+    },
+  ];
+
+  const colunasFatura: FinColuna<ContaPagar>[] = [
+    {
+      id: 'lancamento',
+      cabecalho: 'Lançamento',
+      tipo: 'texto',
+      minWidth: 240,
+      render: l => (
+        <span className="flex flex-col gap-1">
+          <span className="fin-t-body-strong text-[var(--fin-text)]">
+            {l.descricao || l.fornecedor_nome || 'Sem descrição'}
+          </span>
+          {l.total_parcelas > 1 ? (
+            <span className="fin-t-caption text-[var(--fin-text-3)]">
+              Parcela {l.parcela_numero} de {l.total_parcelas}
+            </span>
+          ) : null}
+        </span>
+      ),
+    },
+    {
+      id: 'data',
+      cabecalho: 'Data',
+      tipo: 'data',
+      valor: l => l.data_pagamento || l.data_vencimento,
+    },
+    {
+      id: 'status',
+      cabecalho: 'Situação',
+      tipo: 'status',
+      dominio: 'pagar',
+      valor: l => l.status,
+    },
+    {
+      id: 'valor',
+      cabecalho: 'Valor',
+      tipo: 'dinheiro',
+      valor: l => l.valor_final,
+    },
+  ];
+
+  return (
+    <div className="min-h-full bg-[var(--fin-bg)] px-[var(--fin-page-pad)] py-[var(--fin-s-5)] text-[var(--fin-text)]">
+      <div className="mx-auto w-full max-w-[var(--fin-page-max)]">
+        <PageHeader
+          titulo="Cartões corporativos"
+          subtitulo="Limite, fatura e lançamentos de cada cartão da agência"
+          acaoPrimaria={{ rotulo: 'Novo cartão', icone: Plus, onClick: openNew }}
+          atualizadoEm={atualizadoEm}
+          onRecarregar={load}
         />
 
-        {/* KPI consolidado */}
-        <Card className="bg-[var(--t-surface)] border-[var(--t-accent)]/30">
-          <CardContent className="p-5">
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-              <div>
-                <p className="text-[var(--t-text-secondary)] text-[11px] uppercase tracking-wide font-semibold">Limite total</p>
-                <p className="text-2xl font-bold text-[var(--t-text)] mt-1">{formatBRL(totals.limite)}</p>
-              </div>
-              <div>
-                <p className="text-[var(--t-text-secondary)] text-[11px] uppercase tracking-wide font-semibold">Limite usado</p>
-                <p className="text-2xl font-bold text-[var(--t-text)] mt-1">{formatBRL(totals.usado)}</p>
-              </div>
-              <div>
-                <p className="text-[var(--t-text-secondary)] text-[11px] uppercase tracking-wide font-semibold">Disponível</p>
-                <p className="text-2xl font-bold text-[var(--t-accent)] mt-1">{formatBRL(totals.limite - totals.usado)}</p>
-              </div>
-              <div>
-                <p className="text-[var(--t-text-secondary)] text-[11px] uppercase tracking-wide font-semibold">Utilização</p>
-                <p className={`text-2xl font-bold mt-1 ${totals.pct > 85 ? 'text-red-500' : totals.pct > 60 ? 'text-amber-500' : 'text-green-500'}`}>
-                  {totals.pct.toFixed(1)}%
-                </p>
-                <p className="text-[var(--t-text-muted)] text-xs mt-0.5">{totals.ativos} cartão{totals.ativos !== 1 ? 'es' : ''} ativo{totals.ativos !== 1 ? 's' : ''}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="mt-[var(--fin-s-6)] flex flex-col gap-[var(--fin-s-5)]">
+          <DataState
+            estado={estado}
+            erro={{ mensagem: erro ?? '', onTentarDeNovo: load }}
+            esqueleto={
+              <FaixaIndicadores
+                estado="carregando"
+                limite={0}
+                usado={0}
+                disponivel={0}
+                pct={0}
+                ativos={0}
+                cadastrados={0}
+              />
+            }
+          >
+            <FaixaIndicadores
+              estado={estadoMoney}
+              limite={totals.limite}
+              usado={totals.usado}
+              disponivel={totals.limite - totals.usado}
+              pct={totals.pct}
+              ativos={totals.ativos}
+              cadastrados={items.length}
+            />
+          </DataState>
 
-        {/* Form inline */}
-        {showForm && (
-          <Card className="bg-[var(--t-surface)] border-[var(--t-accent)]/40">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-[var(--t-accent)] text-base">
-                {editId ? 'Editar Cartão' : 'Novo Cartão'}
-              </CardTitle>
-              <button onClick={() => setShowForm(false)} className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)]">
-                <X className="w-4 h-4" />
-              </button>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div>
-                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Apelido *</label>
-                  <Input
-                    value={form.apelido}
-                    onChange={e => setForm(f => ({ ...f, apelido: e.target.value }))}
-                    placeholder="Ex: Itaú Black Marketing"
-                    className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)]"
-                  />
+          {estado === 'ok' && items.length > 0 ? (
+            <FilterBar
+              busca={{
+                valor: busca,
+                onChange: setBusca,
+                placeholder: 'Buscar por apelido, banco, titular ou final',
+              }}
+              selects={[
+                {
+                  id: 'situacao-cartao',
+                  rotulo: 'Situação',
+                  valor: situacao,
+                  opcoes: [
+                    { valor: 'TODAS', rotulo: 'Todos' },
+                    { valor: 'ATIVOS', rotulo: 'Ativos' },
+                    { valor: 'INATIVOS', rotulo: 'Inativos' },
+                  ],
+                  onChange: v => setSituacao(v as Situacao),
+                },
+              ]}
+              resumo={{
+                exibidos: exibidos.length,
+                total: items.length,
+                substantivo: exibidos.length === 1 ? 'cartão' : 'cartões',
+                soma: usadoExibido,
+                escopo: 'usado nos cartões exibidos',
+              }}
+              ativos={filtrosAtivos}
+              onLimpar={limparFiltros}
+            />
+          ) : null}
+
+          <section aria-label="Cartões cadastrados" className="flex flex-col gap-[var(--fin-s-3)]">
+            {estado === 'ok' && exibidos.length > 0 ? (
+              <p className="fin-t-caption text-[var(--fin-text-3)]">
+                Selecione um cartão para abrir a fatura do período.
+              </p>
+            ) : null}
+            <FinTable
+              linhas={exibidos}
+              colunas={colunas}
+              chave={c => c.id}
+              estado={estado}
+              erro={{ mensagem: erro ?? '', onTentarDeNovo: load }}
+              vazio={vazio}
+              totais={
+                exibidos.length > 0
+                  ? [{ colunaId: 'usado', valor: usadoExibido, rotulo: 'Usado nos cartões exibidos' }]
+                  : undefined
+              }
+              onLinhaClick={c => setFaturaCardId(faturaCardId === c.id ? null : c.id)}
+            />
+          </section>
+
+          {faturaCard && fatura ? (
+            <section
+              aria-label={`Fatura do cartão ${faturaCard.apelido}`}
+              className="flex flex-col gap-[var(--fin-s-4)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-4"
+            >
+              <div className="flex flex-col gap-[var(--fin-s-3)] lg:flex-row lg:items-end lg:justify-between">
+                <div className="flex min-w-0 flex-col gap-1">
+                  <h2 className="fin-t-subhead text-[var(--fin-text)]">
+                    Fatura de {faturaCard.apelido}
+                    {faturaCard.ultimos_digitos ? ` (final ${faturaCard.ultimos_digitos})` : ''}
+                  </h2>
+                  <p className="fin-t-caption text-[var(--fin-text-3)]">
+                    Período de {formatDate(paraISO(fatura.inicio))} a {formatDate(paraISO(fatura.fim))}
+                  </p>
                 </div>
-                <div>
-                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Bandeira</label>
-                  <select
-                    value={form.bandeira}
-                    onChange={e => setForm(f => ({ ...f, bandeira: e.target.value as BandeiraCartao }))}
-                    className="w-full bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text)]"
+                <div className="flex items-end gap-[var(--fin-s-2)]">
+                  <div className="w-44">
+                    <Field rotulo="Mês da fatura">
+                      {a => (
+                        <Input
+                          {...a}
+                          type="month"
+                          value={faturaMes}
+                          onChange={e => setFaturaMes(e.target.value)}
+                          className={CAMPO}
+                        />
+                      )}
+                    </Field>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Fechar a fatura"
+                    className={ACAO_LINHA}
+                    onClick={() => setFaturaCardId(null)}
                   >
-                    {BANDEIRAS.map(b => (
-                      <option key={b} value={b}>{BANDEIRA_LABEL[b]}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Banco Emissor</label>
-                  <Input
-                    value={form.banco_emissor}
-                    onChange={e => setForm(f => ({ ...f, banco_emissor: e.target.value }))}
-                    placeholder="Ex: Itaú, Bradesco, Nubank"
-                    className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)]"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">4 últimos dígitos</label>
-                  <Input
-                    value={form.ultimos_digitos}
-                    maxLength={4}
-                    onChange={e => setForm(f => ({ ...f, ultimos_digitos: e.target.value.replace(/\D/g, '').slice(0, 4) }))}
-                    placeholder="0000"
-                    className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)] font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Titular</label>
-                  <Input
-                    value={form.titular}
-                    onChange={e => setForm(f => ({ ...f, titular: e.target.value }))}
-                    placeholder="Nome impresso no plástico"
-                    className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)]"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Limite Total (R$)</label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={form.limite_total}
-                    onChange={e => setForm(f => ({ ...f, limite_total: parseFloat(e.target.value) || 0 }))}
-                    className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)]"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Dia de Fechamento</label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={31}
-                    value={form.dia_fechamento || ''}
-                    onChange={e => setForm(f => ({ ...f, dia_fechamento: parseInt(e.target.value) || 0 }))}
-                    placeholder="1-31"
-                    className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)]"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Dia de Vencimento</label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={31}
-                    value={form.dia_vencimento || ''}
-                    onChange={e => setForm(f => ({ ...f, dia_vencimento: parseInt(e.target.value) || 0 }))}
-                    placeholder="1-31"
-                    className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)]"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="ativo"
-                    checked={form.ativo}
-                    onChange={e => setForm(f => ({ ...f, ativo: e.target.checked }))}
-                    className="w-4 h-4"
-                  />
-                  <label htmlFor="ativo" className="text-sm text-[var(--t-text)]">Cartão ativo</label>
+                    <X aria-hidden="true" className="size-4" />
+                  </Button>
                 </div>
               </div>
 
-              {/* Taxas (collapsible) */}
-              <button
-                type="button"
-                onClick={() => setShowTaxas(s => !s)}
-                className="mt-4 flex items-center gap-1 text-xs font-semibold text-[var(--t-text-secondary)] hover:text-[var(--t-text)]"
-              >
-                {showTaxas ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                Taxas e custos (opcional)
-              </button>
-              {showTaxas && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-3 p-3 rounded-lg bg-[var(--t-bg)]">
-                  <div>
-                    <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Antecipação (% a.m.)</label>
+              <FinTable
+                linhas={fatura.lancamentos}
+                colunas={colunasFatura}
+                chave={l => l.id}
+                densidade="compacta"
+                estado={estado}
+                erro={{ mensagem: erro ?? '', onTentarDeNovo: load }}
+                vazio={{
+                  motivo: 'sem-resultado',
+                  titulo: 'Nenhum lançamento neste período',
+                  oQueE: `Nenhuma conta deste cartão caiu entre ${formatDate(paraISO(fatura.inicio))} e ${formatDate(paraISO(fatura.fim))}. Troque o mês para ver outro período.`,
+                }}
+                totais={
+                  fatura.lancamentos.length > 0
+                    ? [{ colunaId: 'valor', valor: fatura.total, rotulo: 'Total da fatura' }]
+                    : undefined
+                }
+              />
+
+              {fatura.total > faturaCard.limite_total ? (
+                <div
+                  role="status"
+                  className="flex items-start gap-[var(--fin-s-2)] rounded-[var(--fin-r-md)] border border-[var(--fin-negative)]/24 bg-[var(--fin-negative-soft)] p-3"
+                >
+                  <TriangleAlert aria-hidden="true" className="mt-1 size-4 shrink-0 text-[var(--fin-negative)]" />
+                  <p className="fin-t-body text-[var(--fin-negative-text)]">
+                    A fatura deste período passou do limite total do cartão.
+                  </p>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+        </div>
+      </div>
+
+      <RecordSheet
+        aberto={showForm}
+        onOpenChange={setShowForm}
+        titulo={editId ? 'Editar cartão' : 'Novo cartão'}
+        descricao="O limite e os dias de fechamento e de vencimento alimentam a utilização e a fatura do período."
+        largura={640}
+        resumo={`${form.ativo ? 'Cartão ativo' : 'Cartão inativo'}, com limite de ${formatBRL(form.limite_total)}. As contas lançadas nele seguem consumindo limite até a fatura ser paga.`}
+        acaoPrimaria={{
+          rotulo: editId ? 'Salvar cartão' : 'Criar cartão',
+          onClick: handleSave,
+          desabilitado: !form.apelido,
+        }}
+      >
+        <div className="flex flex-col gap-[var(--fin-s-5)]">
+          <Secao titulo="Essencial">
+            <Field rotulo="Apelido" obrigatorio ajuda="Como a equipe chama esse cartão no dia a dia.">
+              {a => (
+                <Input
+                  {...a}
+                  value={form.apelido}
+                  onChange={e => setForm(f => ({ ...f, apelido: e.target.value }))}
+                  placeholder="Itaú Black Marketing"
+                  className={CAMPO}
+                />
+              )}
+            </Field>
+
+            <Field rotulo="Bandeira">
+              {a => (
+                <Select
+                  value={form.bandeira}
+                  onValueChange={v => setForm(f => ({ ...f, bandeira: v as BandeiraCartao }))}
+                >
+                  <SelectTrigger
+                    id={a.id}
+                    aria-describedby={a['aria-describedby']}
+                    className={GATILHO_SELECT}
+                  >
+                    <SelectValue>{() => BANDEIRA_LABEL[form.bandeira]}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BANDEIRAS.map(b => (
+                      <SelectItem key={b} value={b} className="fin-t-body">
+                        {BANDEIRA_LABEL[b]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </Field>
+
+            <Field rotulo="Banco emissor">
+              {a => (
+                <Input
+                  {...a}
+                  value={form.banco_emissor}
+                  onChange={e => setForm(f => ({ ...f, banco_emissor: e.target.value }))}
+                  placeholder="Itaú, Bradesco, Nubank"
+                  className={CAMPO}
+                />
+              )}
+            </Field>
+
+            <Field rotulo="Quatro últimos dígitos">
+              {a => (
+                <Input
+                  {...a}
+                  value={form.ultimos_digitos}
+                  maxLength={4}
+                  inputMode="numeric"
+                  onChange={e => setForm(f => ({ ...f, ultimos_digitos: e.target.value.replace(/\D/g, '').slice(0, 4) }))}
+                  placeholder="0000"
+                  className={cn(CAMPO, 'tabular-nums')}
+                />
+              )}
+            </Field>
+
+            <Field rotulo="Titular" ajuda="Nome impresso no cartão.">
+              {a => (
+                <Input
+                  {...a}
+                  value={form.titular}
+                  onChange={e => setForm(f => ({ ...f, titular: e.target.value }))}
+                  className={CAMPO}
+                />
+              )}
+            </Field>
+
+            <MoneyField
+              rotulo="Limite total"
+              valor={form.limite_total}
+              onChange={v => setForm(f => ({ ...f, limite_total: v }))}
+            />
+          </Secao>
+
+          <Secao titulo="Calendário e situação">
+            <Field rotulo="Dia de fechamento" ajuda="Dia do mês, de 1 a 31.">
+              {a => (
+                <Input
+                  {...a}
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={form.dia_fechamento || ''}
+                  onChange={e => setForm(f => ({ ...f, dia_fechamento: parseInt(e.target.value) || 0 }))}
+                  placeholder="1 a 31"
+                  className={CAMPO}
+                />
+              )}
+            </Field>
+
+            <Field rotulo="Dia de vencimento" ajuda="Dia do mês, de 1 a 31.">
+              {a => (
+                <Input
+                  {...a}
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={form.dia_vencimento || ''}
+                  onChange={e => setForm(f => ({ ...f, dia_vencimento: parseInt(e.target.value) || 0 }))}
+                  placeholder="1 a 31"
+                  className={CAMPO}
+                />
+              )}
+            </Field>
+
+            <Field rotulo="Situação" ajuda="Cartão inativo continua na lista, mas fica marcado como fora de uso.">
+              {a => (
+                <Select
+                  value={form.ativo ? 'ATIVO' : 'INATIVO'}
+                  onValueChange={v => setForm(f => ({ ...f, ativo: v === 'ATIVO' }))}
+                >
+                  <SelectTrigger
+                    id={a.id}
+                    aria-describedby={a['aria-describedby']}
+                    className={GATILHO_SELECT}
+                  >
+                    <SelectValue>{() => (form.ativo ? 'Ativo' : 'Inativo')}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ATIVO" className="fin-t-body">Ativo</SelectItem>
+                    <SelectItem value="INATIVO" className="fin-t-body">Inativo</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            </Field>
+          </Secao>
+
+          <section className="flex flex-col gap-[var(--fin-s-3)]">
+            <Button
+              type="button"
+              variant="ghost"
+              aria-expanded={showTaxas}
+              aria-controls="cartao-taxas"
+              onClick={() => setShowTaxas(s => !s)}
+              className={cn(
+                'fin-t-body h-11 w-fit gap-[var(--fin-s-2)] rounded-[var(--fin-r-md)] px-3 text-[var(--fin-text-2)] shadow-none hover:bg-[var(--fin-surface-2)] hover:text-[var(--fin-text)] lg:h-10',
+                FOCO,
+              )}
+            >
+              {showTaxas ? 'Ocultar taxas e custos' : 'Mostrar taxas e custos'}
+            </Button>
+
+            <div id="cartao-taxas" hidden={!showTaxas}>
+              <div className="grid grid-cols-1 gap-[var(--fin-s-3)] rounded-[var(--fin-r-md)] border border-[var(--fin-border)] bg-[var(--fin-surface-sunken)] p-3 sm:grid-cols-2">
+                <Field rotulo="Antecipação" ajuda="Percentual ao mês.">
+                  {a => (
                     <Input
+                      {...a}
                       type="number"
                       step="0.01"
                       value={form.taxa_antecipacao}
                       onChange={e => setForm(f => ({ ...f, taxa_antecipacao: parseFloat(e.target.value) || 0 }))}
-                      className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)]"
+                      className={CAMPO}
                     />
-                  </div>
-                  <div>
-                    <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Parcelamento (%)</label>
+                  )}
+                </Field>
+
+                <Field rotulo="Parcelamento" ajuda="Percentual por parcelamento.">
+                  {a => (
                     <Input
+                      {...a}
                       type="number"
                       step="0.01"
                       value={form.taxa_parcelamento}
                       onChange={e => setForm(f => ({ ...f, taxa_parcelamento: parseFloat(e.target.value) || 0 }))}
-                      className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)]"
+                      className={CAMPO}
                     />
-                  </div>
-                  <div>
-                    <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Anuidade (R$/ano)</label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={form.taxa_anuidade}
-                      onChange={e => setForm(f => ({ ...f, taxa_anuidade: parseFloat(e.target.value) || 0 }))}
-                      className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)]"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className="flex gap-2 mt-4">
-                <Button
-                  onClick={handleSave}
-                  className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold"
-                >
-                  <Check className="w-4 h-4 mr-1" /> {editId ? 'Salvar' : 'Criar'}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowForm(false)}
-                  className="border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface)]"
-                >
-                  Cancelar
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Cards grid */}
-        {loading ? (
-          <p className="text-[var(--t-text-secondary)] text-sm">Carregando...</p>
-        ) : items.length === 0 ? (
-          <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-            <CardContent className="p-12 text-center">
-              <CreditCard className="w-12 h-12 text-[var(--t-text-muted)] mx-auto mb-3" />
-              <p className="text-[var(--t-text-secondary)] text-sm">Nenhum cartão cadastrado.</p>
-              <p className="text-[var(--t-text-muted)] text-xs mt-1">Clique em &quot;Novo Cartão&quot; para adicionar.</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {items.map(item => {
-              const usado = calcLimiteUsado(item.id, contas);
-              const pct = item.limite_total > 0 ? (usado / item.limite_total) * 100 : 0;
-              const disponivel = Math.max(0, item.limite_total - usado);
-              const proxFech = item.dia_fechamento ? calcProximoFechamento(item.dia_fechamento) : null;
-              const proxVenc = item.dia_vencimento ? calcProximoVencimento(item.dia_vencimento) : null;
-              const colors = bandeiraColor(item.bandeira);
-              const barColor = pct > 85 ? 'bg-red-500' : pct > 60 ? 'bg-amber-500' : 'bg-green-500';
-
-              return (
-                <Card
-                  key={item.id}
-                  className={`bg-[var(--t-surface)] border-[var(--t-border)] hover:border-[var(--t-accent)]/40 transition-colors group ${item.ativo ? '' : 'opacity-60'}`}
-                >
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <CardTitle className="text-[var(--t-text)] text-base leading-tight truncate">{item.apelido}</CardTitle>
-                        <p className="text-[var(--t-text-secondary)] text-xs mt-0.5">{item.banco_emissor || 'Banco não informado'}</p>
-                      </div>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => toggleAtivo(item)}
-                          title={item.ativo ? 'Desativar' : 'Ativar'}
-                          className="p-1.5 rounded text-[var(--t-text-secondary)] hover:text-[var(--t-text)] hover:bg-[var(--t-surface-hover)] transition-colors"
-                        >
-                          {item.ativo ? <Power className="w-3.5 h-3.5" /> : <PowerOff className="w-3.5 h-3.5" />}
-                        </button>
-                        <button
-                          onClick={() => openEdit(item)}
-                          className="p-1.5 rounded text-[var(--t-text-secondary)] hover:text-[var(--t-text)] hover:bg-[var(--t-surface-hover)] transition-colors"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          className="p-1.5 rounded text-red-500 hover:text-red-400 hover:bg-red-900/30 transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    {/* Visual cartão */}
-                    <div
-                      className="rounded-lg p-3 mb-3 relative overflow-hidden"
-                      style={{ background: `linear-gradient(135deg, ${colors.bg}, ${colors.bg}cc)` }}
-                    >
-                      <div className="flex items-center justify-between">
-                        <CreditCard className="w-5 h-5" style={{ color: colors.text }} />
-                        <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: colors.text }}>
-                          {BANDEIRA_LABEL[item.bandeira]}
-                        </span>
-                      </div>
-                      <p className="font-mono text-base mt-3 tracking-widest" style={{ color: colors.text }}>
-                        •••• •••• •••• {item.ultimos_digitos || '••••'}
-                      </p>
-                      <p className="text-[10px] mt-1 uppercase opacity-80" style={{ color: colors.text }}>
-                        {item.titular || 'Titular'}
-                      </p>
-                    </div>
-
-                    {/* Limite */}
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-[var(--t-text-secondary)]">Usado</span>
-                        <span className="text-[var(--t-text)] font-semibold">{formatBRL(usado)} / {formatBRL(item.limite_total)}</span>
-                      </div>
-                      <div className="w-full h-1.5 bg-[var(--t-bg)] rounded-full overflow-hidden">
-                        <div className={`h-full ${barColor} transition-all`} style={{ width: `${Math.min(100, pct)}%` }} />
-                      </div>
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="text-[var(--t-text-muted)]">Disponível: {formatBRL(disponivel)}</span>
-                        <span className={pct > 85 ? 'text-red-500 font-semibold' : 'text-[var(--t-text-muted)]'}>{pct.toFixed(0)}%</span>
-                      </div>
-                    </div>
-
-                    {/* Datas */}
-                    {(proxFech || proxVenc) && (
-                      <div className="mt-3 pt-3 border-t border-[var(--t-border)] flex items-center justify-between text-[11px] text-[var(--t-text-secondary)]">
-                        {proxFech && (
-                          <span>Fecha: <strong className="text-[var(--t-text)]">{fmtDate(proxFech)}</strong></span>
-                        )}
-                        {proxVenc && (
-                          <span>Vence: <strong className="text-[var(--t-text)]">{fmtDate(proxVenc)}</strong></span>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Status badge + ver fatura */}
-                    <div className="mt-3 flex items-center justify-between">
-                      <Badge className={`${item.ativo ? 'bg-green-500/15 text-green-500' : 'bg-[var(--t-surface-hover)] text-[var(--t-text-muted)]'} border-0 text-[10px]`}>
-                        {item.ativo ? 'Ativo' : 'Inativo'}
-                      </Badge>
-                      <button
-                        onClick={() => setFaturaCardId(faturaCardId === item.id ? null : item.id)}
-                        className="flex items-center gap-1 text-xs text-[var(--t-accent)] hover:underline"
-                      >
-                        <FileText className="w-3 h-3" />
-                        {faturaCardId === item.id ? 'Fechar' : 'Ver fatura'}
-                      </button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Painel de fatura */}
-        {faturaCard && fatura && (
-          <Card className="bg-[var(--t-surface)] border-[var(--t-accent)]/30">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <CardTitle className="text-[var(--t-text)] text-base">
-                    Fatura — {faturaCard.apelido} •••• {faturaCard.ultimos_digitos}
-                  </CardTitle>
-                  <p className="text-[var(--t-text-secondary)] text-xs mt-0.5">
-                    Período: {fmtDate(fatura.inicio)} → {fmtDate(fatura.fim)}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="month"
-                    value={faturaMes}
-                    onChange={e => setFaturaMes(e.target.value)}
-                    className="px-2 py-1 rounded bg-[var(--t-input-bg)] border border-[var(--t-border)] text-xs text-[var(--t-text)]"
-                  />
-                  <button
-                    onClick={() => setFaturaCardId(null)}
-                    className="p-1 text-[var(--t-text-secondary)] hover:text-[var(--t-text)]"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {fatura.lancamentos.length === 0 ? (
-                <p className="text-[var(--t-text-secondary)] text-sm py-6 text-center">
-                  Nenhum lançamento neste período.
-                </p>
-              ) : (
-                <>
-                  <div className="space-y-1.5 max-h-72 overflow-y-auto">
-                    {fatura.lancamentos.map(l => (
-                      <div key={l.id} className="flex items-center justify-between gap-3 px-3 py-2 rounded bg-[var(--t-bg)] text-sm">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[var(--t-text)] truncate">{l.descricao || l.fornecedor_nome || 'Sem descrição'}</p>
-                          <p className="text-[var(--t-text-muted)] text-[11px]">
-                            {l.data_pagamento || l.data_vencimento}
-                            {l.total_parcelas > 1 && ` · ${l.parcela_numero}/${l.total_parcelas}`}
-                          </p>
-                        </div>
-                        <span className="text-[var(--t-text)] font-mono tabular-nums whitespace-nowrap">
-                          {formatBRL(l.valor_final)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-3 pt-3 border-t border-[var(--t-border)] flex items-center justify-between">
-                    <span className="text-[var(--t-text-secondary)] text-sm">Total da fatura</span>
-                    <span className="text-[var(--t-accent)] text-xl font-bold">{formatBRL(fatura.total)}</span>
-                  </div>
-                  {fatura.total > faturaCard.limite_total && (
-                    <div className="mt-3 flex items-start gap-2 p-2 rounded-lg bg-red-500/10">
-                      <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
-                      <p className="text-[13px] text-red-500">Fatura ultrapassa o limite total deste cartão.</p>
-                    </div>
                   )}
-                </>
-              )}
-            </CardContent>
-          </Card>
-        )}
+                </Field>
 
-        <MinimalFooter pageId="cartões" />
-      </div>
+                <MoneyField
+                  rotulo="Anuidade"
+                  ajuda="Valor cobrado por ano."
+                  valor={form.taxa_anuidade}
+                  onChange={v => setForm(f => ({ ...f, taxa_anuidade: v }))}
+                />
+              </div>
+            </div>
+          </section>
+        </div>
+      </RecordSheet>
+
+      <ConfirmDialog
+        aberto={excluirId !== null}
+        onOpenChange={aberto => { if (!aberto) setExcluirId(null); }}
+        titulo="Excluir cartão"
+        oQueVaiAcontecer="O cartão sai da lista de cartões corporativos. As contas já lançadas nele continuam registradas e não são alteradas."
+        detalhes={
+          cartaoParaExcluir
+            ? [
+                { rotulo: 'Cartão', valor: cartaoParaExcluir.apelido },
+                { rotulo: 'Limite', valor: <Money valor={cartaoParaExcluir.limite_total} size="strong" estado="ok" /> },
+                {
+                  rotulo: 'Usado hoje',
+                  valor: <Money valor={calcLimiteUsado(cartaoParaExcluir.id, contas)} size="strong" estado="ok" />,
+                },
+              ]
+            : undefined
+        }
+        confirmarRotulo="Excluir cartão"
+        tone="destrutivo"
+        processando={excluindo}
+        onConfirmar={confirmarExclusao}
+      />
     </div>
   );
 }

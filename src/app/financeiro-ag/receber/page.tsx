@@ -1,36 +1,33 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
+
 import { ContaReceber, createContaReceber, StatusContaReceber } from '@/lib/crm-types';
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
+import { toast } from '@/lib/toast';
 import {
-  Plus, X, Check, Trash2, TrendingUp, Clock, AlertCircle, DollarSign,
-} from 'lucide-react';
-import { PageShell } from '@/components/PageShell';
-import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
-import { DataTable, DataTableColumn } from '@/components/ui/data-table';
-import {
-  round2, num, somaPor, parseMoneyBR, hojeISO, dataLocal, estaVencido, dentroDoPeriodo,
+  round2, num, somaPor, hojeISO, estaVencido, dentroDoPeriodo,
 } from '@/lib/money';
 
-const BRL = (v: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
-
-const STATUS_BADGE: Record<StatusContaReceber, string> = {
-  PENDENTE: 'bg-yellow-100 text-yellow-800',
-  RECEBIDO: 'bg-green-100 text-green-800',
-  ATRASADO: 'bg-red-100 text-red-800',
-  CANCELADO: 'bg-[var(--t-border)] text-[var(--t-text-muted)]',
-  PARCIAL: 'bg-blue-100 text-blue-800',
-};
+import { PageShell } from '@/components/PageShell';
+import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/fin/ConfirmDialog';
+import { DataState } from '@/components/fin/DataState';
+import { FilterBar } from '@/components/fin/FilterBar';
+import { FinTable, type FinColuna } from '@/components/fin/FinTable';
+import { MetricCard } from '@/components/fin/MetricCard';
+import { Money, type MoneyEstado } from '@/components/fin/Money';
+import { PageHeader } from '@/components/fin/PageHeader';
+import { type PeriodoChave } from '@/components/fin/PeriodPicker';
+import { RecordSheet } from '@/components/fin/RecordSheet';
+import { StatusChip, rotuloStatus } from '@/components/fin/StatusChip';
+import { DialogBaixa } from './DialogBaixa';
+import { EMPTY_FORM, FormularioConta, type ErrosForm, type FormState } from './FormularioConta';
 
 /**
  * Status EFETIVO (derivado na leitura). Nenhum fluxo do sistema grava
- * 'ATRASADO' no banco — o atraso é uma consequência da data de vencimento.
+ * 'ATRASADO' no banco, porque o atraso é uma consequência da data de vencimento.
  * Regra: PENDENTE/PARCIAL com vencimento anterior a hoje está ATRASADO.
  */
 function statusEfetivo(i: ContaReceber): StatusContaReceber {
@@ -45,41 +42,68 @@ function valorEmAberto(i: ContaReceber): number {
   return round2(num(i.valor_final) - num(i.valor_recebido));
 }
 
-type FormState = Omit<ContaReceber,
-  'id' | 'juros' | 'multa' | 'desconto' | 'valor_final' | 'data_emissao' |
-  'data_recebimento' | 'valor_recebido' | 'conta_bancaria_id' |
-  'boleto_emitido' | 'boleto_codigo' | 'boleto_url' | 'status' |
-  'rateio' | 'anexos' | 'venda_id' | 'grupo_id' | 'cliente_id' | 'centro_custo'
->;
+const STATUSES: Array<StatusContaReceber | 'TODOS'> = ['TODOS', 'PENDENTE', 'RECEBIDO', 'ATRASADO', 'CANCELADO', 'PARCIAL'];
 
-const EMPTY_FORM: FormState = {
-  origem: 'VENDA',
-  cliente_nome: '',
-  descricao: '',
-  categoria_id: '',
-  valor_original: 0,
-  data_vencimento: '',
-  forma_recebimento: '',
-  parcela_numero: 1,
-  total_parcelas: 1,
-  observacoes: '',
-};
+const PERIODOS: PeriodoChave[] = ['TUDO', 'MES_ATUAL', 'PROX_30', 'PROX_90', 'MES_PASSADO', 'PERSONALIZADO'];
+
+const FOCO =
+  'focus-visible:outline-2 focus-visible:outline-[var(--fin-accent)] focus-visible:outline-offset-2 focus-visible:ring-0';
+
+const ACAO_LINHA = [
+  'fin-t-body h-10 max-lg:h-11 shrink-0 rounded-[var(--fin-r-md)] px-3 shadow-none',
+  'border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] text-[var(--fin-text)]',
+  'hover:bg-[var(--fin-surface-2)] hover:text-[var(--fin-text)]',
+  FOCO,
+].join(' ');
+
+const ACAO_ICONE = [
+  'size-10 max-lg:size-11 shrink-0 rounded-[var(--fin-r-md)] shadow-none',
+  'text-[var(--fin-text-3)] hover:bg-[var(--fin-surface-2)] hover:text-[var(--fin-text)]',
+  FOCO,
+].join(' ');
+
+const ACAO_ICONE_DESTRUTIVA = [
+  'size-10 max-lg:size-11 shrink-0 rounded-[var(--fin-r-md)] shadow-none',
+  'text-[var(--fin-text-3)] hover:bg-[var(--fin-negative-soft)] hover:text-[var(--fin-negative-text)]',
+  FOCO,
+].join(' ');
+
+function contagem(n: number, singular: string, plural: string): string {
+  return `${n} ${n === 1 ? singular : plural}`;
+}
 
 export default function ContasReceberPage() {
   const [items, setItems] = useState<ContaReceber[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erroCarga, setErroCarga] = useState<string | null>(null);
+  const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [errosForm, setErrosForm] = useState<ErrosForm>({});
+  const [formTocado, setFormTocado] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [baixaAlvo, setBaixaAlvo] = useState<ContaReceber | null>(null);
+  const [baixando, setBaixando] = useState(false);
+  const [exclusaoAlvo, setExclusaoAlvo] = useState<ContaReceber | null>(null);
+  const [excluindo, setExcluindo] = useState(false);
   const [filterStatus, setFilterStatus] = useState<StatusContaReceber | 'TODOS'>('TODOS');
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
+  const [periodo, setPeriodo] = useState<PeriodoChave>('TUDO');
 
   async function load() {
     setLoading(true);
-    const data = await loadEntities<ContaReceber>('contas-receber');
-    setItems(data);
-    setLoading(false);
+    try {
+      const data = await loadEntities<ContaReceber>('contas-receber');
+      setItems(data);
+      setErroCarga(null);
+      setAtualizadoEm(new Date());
+    } catch {
+      setErroCarga('A consulta das contas a receber falhou. Nenhum lançamento foi alterado.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => { load(); }, []);
@@ -87,6 +111,8 @@ export default function ContasReceberPage() {
   function openNew() {
     setForm(EMPTY_FORM);
     setEditId(null);
+    setErrosForm({});
+    setFormTocado(false);
     setShowForm(true);
   }
 
@@ -104,33 +130,58 @@ export default function ContasReceberPage() {
       observacoes: item.observacoes,
     });
     setEditId(item.id);
+    setErrosForm({});
+    setFormTocado(false);
     setShowForm(true);
   }
 
+  function atualizarForm(patch: Partial<FormState>) {
+    setFormTocado(true);
+    setForm(f => ({ ...f, ...patch }));
+  }
+
   async function handleSave() {
-    if (!form.cliente_nome || !form.descricao || !form.data_vencimento || form.valor_original <= 0) return;
-    const valorOriginal = round2(form.valor_original);
-    if (editId) {
-      const existing = items.find(i => i.id === editId)!;
-      const updated: ContaReceber = {
-        ...existing,
-        ...form,
-        valor_original: valorOriginal,
-        valor_final: valorOriginal,
-      };
-      await updateEntity('contas-receber', updated);
-    } else {
-      const nova: ContaReceber = {
-        ...createContaReceber(),
-        ...form,
-        valor_original: valorOriginal,
-        valor_final: valorOriginal,
-      };
-      await saveEntity('contas-receber', nova);
+    if (!form.cliente_nome || !form.descricao || !form.data_vencimento || form.valor_original <= 0) {
+      setErrosForm({
+        cliente_nome: form.cliente_nome ? undefined : 'Informe o cliente.',
+        descricao: form.descricao ? undefined : 'Informe a descrição.',
+        data_vencimento: form.data_vencimento ? undefined : 'Informe a data de vencimento.',
+        valor_original: form.valor_original > 0 ? undefined : 'Informe um valor maior que zero.',
+      });
+      return;
     }
-    setShowForm(false);
-    setEditId(null);
-    load();
+    setErrosForm({});
+    setSalvando(true);
+    const valorOriginal = round2(form.valor_original);
+    try {
+      if (editId) {
+        const existing = items.find(i => i.id === editId)!;
+        const updated: ContaReceber = {
+          ...existing,
+          ...form,
+          valor_original: valorOriginal,
+          valor_final: valorOriginal,
+        };
+        await updateEntity('contas-receber', updated);
+      } else {
+        const nova: ContaReceber = {
+          ...createContaReceber(),
+          ...form,
+          valor_original: valorOriginal,
+          valor_final: valorOriginal,
+        };
+        await saveEntity('contas-receber', nova);
+      }
+      setShowForm(false);
+      setFormTocado(false);
+      toast.success(editId ? 'Conta a receber atualizada.' : 'Conta a receber lançada.');
+      setEditId(null);
+      load();
+    } catch {
+      toast.error('Não foi possível salvar a conta a receber.');
+    } finally {
+      setSalvando(false);
+    }
   }
 
   /**
@@ -139,14 +190,8 @@ export default function ContasReceberPage() {
    *  - valor < saldo em aberto   → PARCIAL, valor_recebido ACUMULA as baixas
    * Nunca marca RECEBIDO integral quando entrou menos do que o devido.
    */
-  async function handleBaixar(item: ContaReceber) {
-    const emAberto = valorEmAberto(item);
-    const digitado = prompt(
-      `Valor recebido (em aberto: ${BRL(emAberto)}). Deixe como está para baixa total.`,
-      emAberto.toFixed(2),
-    );
-    if (digitado === null) return;
-    const informado = round2(parseMoneyBR(digitado) ?? emAberto);
+  async function handleBaixar(item: ContaReceber, valorInformado: number) {
+    const informado = round2(valorInformado);
     if (informado <= 0) return;
 
     const acumulado = round2(num(item.valor_recebido) + informado);
@@ -158,18 +203,35 @@ export default function ContasReceberPage() {
       data_recebimento: hojeISO(),
       valor_recebido: quitado ? round2(num(item.valor_final)) : acumulado,
     };
-    await updateEntity('contas-receber', updated);
-    load();
+    setBaixando(true);
+    try {
+      await updateEntity('contas-receber', updated);
+      setBaixaAlvo(null);
+      toast.success(quitado ? 'Conta marcada como recebida.' : 'Recebimento em parte registrado.');
+      load();
+    } catch {
+      toast.error('Não foi possível registrar o recebimento.');
+    } finally {
+      setBaixando(false);
+    }
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Confirmar exclusão?')) return;
-    await deleteEntity('contas-receber', id);
-    load();
+    setExcluindo(true);
+    try {
+      await deleteEntity('contas-receber', id);
+      setExclusaoAlvo(null);
+      toast.success('Conta a receber excluída.');
+      load();
+    } catch {
+      toast.error('Não foi possível excluir a conta a receber.');
+    } finally {
+      setExcluindo(false);
+    }
   }
 
   const filtered = items.filter(i => {
-    // filtra pelo status EFETIVO — senão "ATRASADO" nunca devolveria nada
+    // filtra pelo status EFETIVO, senão "ATRASADO" nunca devolveria nada
     if (filterStatus !== 'TODOS' && statusEfetivo(i) !== filterStatus) return false;
     if ((filterDateFrom || filterDateTo) &&
         !dentroDoPeriodo(i.data_vencimento, filterDateFrom || '0000-01-01', filterDateTo || '9999-12-31')) {
@@ -179,366 +241,338 @@ export default function ContasReceberPage() {
   });
 
   // Cards somam o SALDO EM ABERTO por status efetivo (parciais entram pelo que falta).
-  // PARCIAL a vencer conta como pendente — senão o que falta receber sumiria dos cards.
-  const totalPendente = somaPor(
-    items.filter(i => statusEfetivo(i) === 'PENDENTE' || statusEfetivo(i) === 'PARCIAL'),
-    valorEmAberto,
-  );
-  const totalAtrasado = somaPor(items.filter(i => statusEfetivo(i) === 'ATRASADO'), valorEmAberto);
+  // PARCIAL a vencer conta como pendente, senão o que falta receber sumiria dos cards.
+  const emAberto = items.filter(i => statusEfetivo(i) === 'PENDENTE' || statusEfetivo(i) === 'PARCIAL');
+  const totalPendente = somaPor(emAberto, valorEmAberto);
+  const atrasadas = items.filter(i => statusEfetivo(i) === 'ATRASADO');
+  const totalAtrasado = somaPor(atrasadas, valorEmAberto);
   // Recebido inclui o que já entrou nas baixas parciais.
+  const recebidas = items.filter(i => i.status === 'RECEBIDO' || i.status === 'PARCIAL');
   const totalRecebido = somaPor(
-    items.filter(i => i.status === 'RECEBIDO' || i.status === 'PARCIAL'),
+    recebidas,
     i => (i.status === 'RECEBIDO' ? (i.valor_recebido ?? i.valor_final) : num(i.valor_recebido)),
   );
+  const somaDoRecorte = somaPor(filtered, i => num(i.valor_final));
 
-  const STATUSES: Array<StatusContaReceber | 'TODOS'> = ['TODOS', 'PENDENTE', 'RECEBIDO', 'ATRASADO', 'CANCELADO', 'PARCIAL'];
+  const estado: 'carregando' | 'erro' | 'ok' = loading ? 'carregando' : erroCarga ? 'erro' : 'ok';
+  const estadoDoValor: MoneyEstado = loading ? 'carregando' : erroCarga ? 'indisponivel' : 'ok';
+  // Enquanto carrega ou depois de falhar não existe contagem verdadeira,
+  // e um "0 contas" ao lado do número é dado inventado.
+  const numerosProntos = estadoDoValor === 'ok';
+  const filtrosAtivos = (filterStatus !== 'TODOS' ? 1 : 0) + (periodo !== 'TUDO' ? 1 : 0);
 
-  const columns: DataTableColumn<ContaReceber>[] = [
+  function limparFiltros() {
+    setFilterStatus('TODOS');
+    setFilterDateFrom('');
+    setFilterDateTo('');
+    setPeriodo('TUDO');
+  }
+
+  const colunas: FinColuna<ContaReceber>[] = [
     {
-      key: 'cliente',
-      header: 'Cliente',
+      id: 'cliente',
+      cabecalho: 'Cliente',
+      tipo: 'texto',
       sortable: true,
-      sortAccessor: i => i.cliente_nome || '',
-      cell: i => <span className="font-medium text-[var(--t-text)]">{i.cliente_nome || '—'}</span>,
-    },
-    {
-      key: 'descricao',
-      header: 'Descrição',
-      cell: i => (
-        <span className="text-[var(--t-text-secondary)] block max-w-xs truncate">{i.descricao}</span>
-      ),
-    },
-    {
-      key: 'origem_tipo',
-      header: 'Origem',
-      headerClassName: 'hidden md:table-cell',
-      className: 'hidden md:table-cell',
-      cell: i => {
-        const isAuto = (i as ContaReceber).auto_gerado;
-        if (i.origem === 'COMISSAO_FORNECEDOR') return <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/30 text-[10px]">Comissão</Badge>;
-        if (isAuto) return <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/30 text-[10px]">Venda (auto)</Badge>;
-        if (i.origem === 'VENDA') return <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/30 text-[10px]">Venda</Badge>;
-        return <Badge className="bg-[var(--t-surface-hover)] text-[var(--t-text-muted)] border-[var(--t-border)] text-[10px]">{i.origem || 'Manual'}</Badge>;
-      },
-    },
-    {
-      key: 'valor',
-      header: 'Valor',
-      align: 'right',
-      sortable: true,
-      sortAccessor: i => i.valor_final,
-      cell: i => <span className="font-mono text-[var(--t-text)]">{BRL(i.valor_final)}</span>,
-    },
-    {
-      key: 'vencimento',
-      header: 'Vencimento',
-      sortable: true,
-      sortAccessor: i => i.data_vencimento || '',
-      cell: i => (
-        <span className="text-[var(--t-text-secondary)]">
-          {dataLocal(i.data_vencimento)?.toLocaleDateString('pt-BR') ?? '—'}
+      minWidth: 220,
+      acessor: i => i.cliente_nome || '',
+      render: i => (
+        <span className="flex flex-col gap-[var(--fin-s-1)]">
+          <span className="fin-t-body-strong text-[var(--fin-text)]">
+            {i.cliente_nome || 'Cliente não informado'}
+          </span>
+          {i.descricao ? (
+            <span className="fin-t-caption block max-w-[42ch] truncate text-[var(--fin-text-3)]">
+              {i.descricao}
+            </span>
+          ) : null}
         </span>
       ),
     },
     {
-      key: 'status',
-      header: 'Status',
-      cell: i => {
-        const st = statusEfetivo(i);
-        return <Badge className={`${STATUS_BADGE[st]} border-0 text-xs`}>{st}</Badge>;
-      },
+      id: 'vencimento',
+      cabecalho: 'Vencimento',
+      tipo: 'data',
+      sortable: true,
+      minWidth: 108,
+      valor: i => i.data_vencimento || null,
     },
     {
-      key: 'acoes',
-      header: 'Ações',
-      align: 'right',
-      cell: i => (
-        <div className="flex items-center justify-end gap-2">
+      id: 'valor',
+      cabecalho: 'Valor',
+      tipo: 'dinheiro',
+      sortable: true,
+      minWidth: 132,
+      valor: i => i.valor_final,
+      tone: i => (statusEfetivo(i) === 'ATRASADO' ? 'negativo' : 'neutro'),
+      sub: i =>
+        num(i.valor_recebido) > 0 && i.status !== 'RECEBIDO' ? (
+          <span className="inline-flex items-center justify-end gap-[var(--fin-s-1)]">
+            Falta
+            <Money
+              valor={valorEmAberto(i)}
+              size="caption"
+              tone="suave"
+              align="direita"
+              className="inline-block min-w-0"
+              estado="ok"
+            />
+          </span>
+        ) : null,
+    },
+    {
+      id: 'situacao',
+      cabecalho: 'Situação',
+      tipo: 'status',
+      sortable: true,
+      valor: i => statusEfetivo(i),
+      dominio: 'receber',
+    },
+    {
+      id: 'origem',
+      cabecalho: 'Origem',
+      tipo: 'texto',
+      prioridade: 1,
+      minWidth: 150,
+      render: i => (
+        <span className="flex flex-col items-start gap-[var(--fin-s-1)]">
+          <StatusChip valor={i.origem || 'MANUAL'} dominio="origem" />
+          {i.auto_gerado ? (
+            <span className="fin-t-caption text-[var(--fin-text-3)]">Gerada pela venda</span>
+          ) : null}
+        </span>
+      ),
+    },
+    {
+      id: 'acoes',
+      cabecalho: 'Ações',
+      tipo: 'acoes',
+      minWidth: 196,
+      render: i => (
+        <>
           {(i.status === 'PENDENTE' || i.status === 'ATRASADO' || i.status === 'PARCIAL') && (
             <Button
-              size="sm"
-              onClick={() => handleBaixar(i)}
-              className="bg-green-600 hover:bg-green-700 text-white h-7 px-3 text-xs"
+              type="button"
+              variant="ghost"
+              onClick={() => setBaixaAlvo(i)}
+              className={ACAO_LINHA}
             >
-              <Check className="w-3 h-3 mr-1" /> Baixar
+              Receber
             </Button>
           )}
           <Button
-            size="sm"
-            variant="outline"
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={`Editar a conta de ${i.cliente_nome || 'cliente não informado'}`}
             onClick={() => openEdit(i)}
-            className="border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface)] h-7 px-3 text-xs"
+            className={ACAO_ICONE}
           >
-            Editar
+            <Pencil aria-hidden="true" className="size-4" />
           </Button>
           <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handleDelete(i.id)}
-            className="border-red-700 text-red-400 hover:bg-red-900/30 h-7 px-2"
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={`Excluir a conta de ${i.cliente_nome || 'cliente não informado'}`}
+            onClick={() => setExclusaoAlvo(i)}
+            className={ACAO_ICONE_DESTRUTIVA}
           >
-            <Trash2 className="w-3 h-3" />
+            <Trash2 aria-hidden="true" className="size-4" />
           </Button>
-        </div>
+        </>
       ),
     },
   ];
 
+  const vazio =
+    items.length === 0
+      ? {
+          motivo: 'sem-dado' as const,
+          titulo: 'Nenhuma conta a receber lançada',
+          oQueE: 'Aqui ficam as cobranças que os clientes ainda vão pagar para a agência.',
+          comoComeca: [
+            'Lance a primeira conta pelo botão Nova conta a receber.',
+            'Informe cliente, descrição, valor e data de vencimento.',
+            'Quando o dinheiro entrar, use Receber para registrar o valor, total ou em parte.',
+          ],
+          acao: { rotulo: 'Nova conta a receber', onClick: openNew },
+        }
+      : {
+          motivo: 'sem-resultado' as const,
+          titulo: 'Nenhuma conta com esses filtros',
+          oQueE: 'Os lançamentos continuam salvos. O recorte atual é que não encontrou nada.',
+          acaoSecundaria: { rotulo: 'Limpar filtros', onClick: limparFiltros },
+        };
+
   return (
-    <PageShell>
-        <MinimalPageHead
-          title="Contas a receber"
-          meta={<p className="mt-2.5 text-[12px]" style={{ color: 'var(--ink-3)' }}>Gestão de recebíveis da agência</p>}
-          actions={
-            <button
-              onClick={openNew}
-              className="h-[34px] px-3 text-[12px] font-medium"
-              style={{ background: 'var(--ink)', color: 'var(--ink-bg)' }}
-            >
-              <Plus className="w-3.5 h-3.5 inline mr-2" /> Nova conta
-            </button>
+    <PageShell
+      width="full"
+      className="max-w-[1280px]"
+      header={
+        <PageHeader
+          titulo="Contas a receber"
+          subtitulo="O que os clientes ainda devem para a agência."
+          acaoPrimaria={{ rotulo: 'Nova conta a receber', icone: Plus, onClick: openNew }}
+          atualizadoEm={atualizadoEm}
+          onRecarregar={load}
+        />
+      }
+    >
+      <div className="grid grid-cols-1 gap-[var(--fin-s-4)] sm:grid-cols-3">
+        <MetricCard
+          rotulo="Em aberto"
+          valor={totalPendente}
+          estado={estadoDoValor}
+          contexto={
+            numerosProntos
+              ? `O que falta receber em ${contagem(emAberto.length, 'conta', 'contas')}. Considera todas as contas, sem o filtro da lista.`
+              : 'O que falta receber. Considera todas as contas, sem o filtro da lista.'
           }
         />
+        <MetricCard
+          rotulo="Em atraso"
+          valor={totalAtrasado}
+          estado={estadoDoValor}
+          emphasis="destaque"
+          tone="negativo"
+          contexto={
+            numerosProntos
+              ? `${contagem(atrasadas.length, 'conta venceu', 'contas venceram')} e o dinheiro ainda não entrou.`
+              : 'Contas que já venceram e o dinheiro ainda não entrou.'
+          }
+        />
+        <MetricCard
+          rotulo="Recebido"
+          valor={totalRecebido}
+          estado={estadoDoValor}
+          tone="positivo"
+          contexto={
+            numerosProntos
+              ? `Já entrou em ${contagem(recebidas.length, 'conta', 'contas')}, somando os recebimentos em parte.`
+              : 'O que já entrou, somando os recebimentos em parte.'
+          }
+        />
+      </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card className="bg-[var(--t-surface)] border-yellow-500/30">
-            <CardContent className="p-4 flex items-center gap-4">
-              <Clock className="w-8 h-8 text-yellow-400 shrink-0" />
-              <div>
-                <p className="text-[var(--t-text-secondary)] text-xs uppercase">Pendente</p>
-                <p className="text-xl font-bold text-yellow-400">{BRL(totalPendente)}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-[var(--t-surface)] border-green-500/30">
-            <CardContent className="p-4 flex items-center gap-4">
-              <TrendingUp className="w-8 h-8 text-green-400 shrink-0" />
-              <div>
-                <p className="text-[var(--t-text-secondary)] text-xs uppercase">Recebido</p>
-                <p className="text-xl font-bold text-green-400">{BRL(totalRecebido)}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-[var(--t-surface)] border-red-500/30">
-            <CardContent className="p-4 flex items-center gap-4">
-              <AlertCircle className="w-8 h-8 text-red-400 shrink-0" />
-              <div>
-                <p className="text-[var(--t-text-secondary)] text-xs uppercase">Atrasado</p>
-                <p className="text-xl font-bold text-red-400">{BRL(totalAtrasado)}</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Inline Form */}
-        {showForm && (
-          <Card className="bg-[var(--t-surface)] border-[var(--t-accent)]/40">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-[var(--t-accent)] text-base">
-                {editId ? 'Editar Conta' : 'Nova Conta a Receber'}
-              </CardTitle>
-              <button onClick={() => setShowForm(false)} className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)]">
-                <X className="w-4 h-4" />
-              </button>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div>
-                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Origem</label>
-                  <select
-                    value={form.origem}
-                    onChange={e => setForm(f => ({ ...f, origem: e.target.value as ContaReceber['origem'] }))}
-                    className="w-full bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text)]"
-                  >
-                    <option value="VENDA">Venda</option>
-                    <option value="COMISSAO_FORNECEDOR">Comissão Fornecedor</option>
-                    <option value="FEE">Fee</option>
-                    <option value="OUTROS">Outros</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Cliente *</label>
-                  <Input
-                    value={form.cliente_nome}
-                    onChange={e => setForm(f => ({ ...f, cliente_nome: e.target.value }))}
-                    placeholder="Nome do cliente"
-                    className="bg-[var(--t-header-bg)] border-[var(--t-border)] text-[var(--t-text)]"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Descrição *</label>
-                  <Input
-                    value={form.descricao}
-                    onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
-                    placeholder="Descrição"
-                    className="bg-[var(--t-header-bg)] border-[var(--t-border)] text-[var(--t-text)]"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Categoria ID</label>
-                  <Input
-                    value={form.categoria_id}
-                    onChange={e => setForm(f => ({ ...f, categoria_id: e.target.value }))}
-                    placeholder="ID da categoria"
-                    className="bg-[var(--t-header-bg)] border-[var(--t-border)] text-[var(--t-text)]"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Valor (R$) *</label>
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={form.valor_original}
-                    onChange={e => setForm(f => ({ ...f, valor_original: parseFloat(e.target.value) || 0 }))}
-                    className="bg-[var(--t-header-bg)] border-[var(--t-border)] text-[var(--t-text)]"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Vencimento *</label>
-                  <Input
-                    type="date"
-                    value={form.data_vencimento}
-                    onChange={e => setForm(f => ({ ...f, data_vencimento: e.target.value }))}
-                    className="bg-[var(--t-header-bg)] border-[var(--t-border)] text-[var(--t-text)]"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Forma de Recebimento</label>
-                  <select
-                    value={form.forma_recebimento}
-                    onChange={e => setForm(f => ({ ...f, forma_recebimento: e.target.value as ContaReceber['forma_recebimento'] }))}
-                    className="w-full bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text)]"
-                  >
-                    <option value="">Selecione</option>
-                    <option value="PIX">PIX</option>
-                    <option value="TED">TED</option>
-                    <option value="CARTAO">Cartão</option>
-                    <option value="BOLETO">Boleto</option>
-                    <option value="DINHEIRO">Dinheiro</option>
-                    <option value="CHEQUE">Cheque</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Parcela nº</label>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={form.parcela_numero}
-                    onChange={e => setForm(f => ({ ...f, parcela_numero: parseInt(e.target.value) || 1 }))}
-                    className="bg-[var(--t-header-bg)] border-[var(--t-border)] text-[var(--t-text)]"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Total Parcelas</label>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={form.total_parcelas}
-                    onChange={e => setForm(f => ({ ...f, total_parcelas: parseInt(e.target.value) || 1 }))}
-                    className="bg-[var(--t-header-bg)] border-[var(--t-border)] text-[var(--t-text)]"
-                  />
-                </div>
-                <div className="sm:col-span-2 lg:col-span-3">
-                  <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Observações</label>
-                  <Input
-                    value={form.observacoes}
-                    onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
-                    placeholder="Observações"
-                    className="bg-[var(--t-header-bg)] border-[var(--t-border)] text-[var(--t-text)]"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2 mt-4">
-                <Button
-                  onClick={handleSave}
-                  className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold"
-                >
-                  <Check className="w-4 h-4 mr-1" /> {editId ? 'Salvar' : 'Criar'}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowForm(false)}
-                  className="border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface)]"
-                >
-                  Cancelar
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Filters */}
-        <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-          <CardContent className="p-4 flex flex-wrap gap-3 items-end">
-            <div>
-              <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Status</label>
-              <select
-                value={filterStatus}
-                onChange={e => setFilterStatus(e.target.value as StatusContaReceber | 'TODOS')}
-                className="bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text)]"
-              >
-                {STATUSES.map(s => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Vencimento De</label>
-              <Input
-                type="date"
-                value={filterDateFrom}
-                onChange={e => setFilterDateFrom(e.target.value)}
-                className="bg-[var(--t-header-bg)] border-[var(--t-border)] text-[var(--t-text)] w-40"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Vencimento Até</label>
-              <Input
-                type="date"
-                value={filterDateTo}
-                onChange={e => setFilterDateTo(e.target.value)}
-                className="bg-[var(--t-header-bg)] border-[var(--t-border)] text-[var(--t-text)] w-40"
-              />
-            </div>
-            {(filterStatus !== 'TODOS' || filterDateFrom || filterDateTo) && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => { setFilterStatus('TODOS'); setFilterDateFrom(''); setFilterDateTo(''); }}
-                className="border-[var(--t-border)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface)]"
-              >
-                <X className="w-3 h-3 mr-1" /> Limpar
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Table */}
-        <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-[var(--t-text)] text-base flex items-center gap-2">
-              <DollarSign className="w-4 h-4 text-[var(--t-accent)]" />
-              Lançamentos ({filtered.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <DataTable<ContaReceber>
-              columns={columns}
-              data={filtered}
-              loading={loading}
-              rowKey={i => i.id}
-              zebra
-              emptyState={{
-                icon: <DollarSign className="w-10 h-10 opacity-30" />,
-                title: 'Nenhum lançamento encontrado',
-                description: 'Ajuste os filtros ou cadastre uma nova conta a receber.',
-              }}
+      <DataState
+        estado={estado}
+        erro={erroCarga ? { mensagem: erroCarga, onTentarDeNovo: () => { load(); } } : null}
+        esqueleto={
+          <div className="flex flex-col gap-[var(--fin-s-5)]">
+            <div className="h-12 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]" />
+            <FinTable<ContaReceber>
+              linhas={[]}
+              colunas={colunas}
+              chave={i => i.id}
+              estado="carregando"
+              vazio={vazio}
             />
-          </CardContent>
-        </Card>
-        <MinimalFooter pageId="contas a receber" />
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-[var(--fin-s-5)]">
+          <FilterBar
+            periodo={{
+              valor: periodo,
+              de: filterDateFrom,
+              ate: filterDateTo,
+              opcoes: PERIODOS,
+              onChange: (chave, range) => {
+                setPeriodo(chave);
+                setFilterDateFrom(range.de);
+                setFilterDateTo(range.ate);
+              },
+            }}
+            selects={[
+              {
+                id: 'situacao',
+                rotulo: 'Situação',
+                valor: filterStatus,
+                opcoes: STATUSES.map(s => ({
+                  valor: s,
+                  rotulo: s === 'TODOS' ? 'Todas' : rotuloStatus('receber', s),
+                })),
+                onChange: v => setFilterStatus(v as StatusContaReceber | 'TODOS'),
+              },
+            ]}
+            resumo={{
+              exibidos: filtered.length,
+              total: items.length,
+              substantivo: filtered.length === 1 ? 'conta a receber' : 'contas a receber',
+              soma: somaDoRecorte,
+              escopo: 'em valor lançado',
+            }}
+            ativos={filtrosAtivos}
+            onLimpar={limparFiltros}
+          />
+
+          <FinTable<ContaReceber>
+            linhas={filtered}
+            colunas={colunas}
+            chave={i => i.id}
+            estado="ok"
+            vazio={vazio}
+            totais={
+              filtered.length > 0
+                ? [{ colunaId: 'valor', valor: somaDoRecorte, rotulo: 'Total do recorte' }]
+                : undefined
+            }
+          />
+        </div>
+      </DataState>
+
+      <RecordSheet
+        aberto={showForm}
+        onOpenChange={aberto => {
+          setShowForm(aberto);
+          if (!aberto) setFormTocado(false);
+        }}
+        titulo={editId ? 'Editar conta a receber' : 'Nova conta a receber'}
+        descricao="Os valores entram nos indicadores assim que a conta é salva."
+        sujo={formTocado}
+        largura={640}
+        acaoPrimaria={{
+          rotulo: editId ? 'Salvar alterações' : 'Lançar conta',
+          onClick: handleSave,
+          carregando: salvando,
+        }}
+      >
+        <FormularioConta form={form} erros={errosForm} onChange={atualizarForm} />
+      </RecordSheet>
+
+      <DialogBaixa
+        aberto={baixaAlvo !== null}
+        onOpenChange={aberto => { if (!aberto) setBaixaAlvo(null); }}
+        contaId={baixaAlvo?.id ?? null}
+        cliente={baixaAlvo?.cliente_nome ?? ''}
+        descricao={baixaAlvo?.descricao ?? ''}
+        valorDaConta={baixaAlvo ? num(baixaAlvo.valor_final) : 0}
+        jaRecebido={baixaAlvo ? num(baixaAlvo.valor_recebido) : 0}
+        emAberto={baixaAlvo ? valorEmAberto(baixaAlvo) : 0}
+        processando={baixando}
+        onConfirmar={valor => (baixaAlvo ? handleBaixar(baixaAlvo, valor) : undefined)}
+      />
+
+      <ConfirmDialog
+        aberto={exclusaoAlvo !== null}
+        onOpenChange={aberto => { if (!aberto) setExclusaoAlvo(null); }}
+        titulo="Excluir esta conta a receber?"
+        oQueVaiAcontecer="A conta sai da lista e deixa de contar nos indicadores. Não dá para desfazer."
+        detalhes={
+          exclusaoAlvo
+            ? [
+                { rotulo: 'Cliente', valor: exclusaoAlvo.cliente_nome || 'Cliente não informado' },
+                { rotulo: 'Descrição', valor: exclusaoAlvo.descricao || 'Sem descrição' },
+                { rotulo: 'Valor', valor: <Money valor={exclusaoAlvo.valor_final} size="body" estado="ok" /> },
+              ]
+            : undefined
+        }
+        confirmarRotulo="Excluir conta"
+        tone="destrutivo"
+        processando={excluindo}
+        onConfirmar={() => (exclusaoAlvo ? handleDelete(exclusaoAlvo.id) : undefined)}
+      />
     </PageShell>
   );
 }

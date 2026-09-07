@@ -32,17 +32,16 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className={`${inter.variable} ${interTight.variable} ${jetbrainsMono.variable} h-full antialiased dark`} suppressHydrationWarning>
+    <html lang="pt-BR" className={`${inter.variable} ${interTight.variable} ${jetbrainsMono.variable} h-full antialiased`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: `
           (function() {
-            var t = localStorage.getItem('entur-theme') || 'dark';
+            var t = localStorage.getItem('entur-theme-v2') || 'light';
             if (t === 'dark') document.documentElement.classList.add('dark');
-            else document.documentElement.classList.remove('dark');
           })();
         `}} />
       </head>
-      <body className="h-full bg-[var(--t-bg)] transition-colors duration-200">
+      <body className="h-full bg-[var(--fin-bg)] text-[var(--fin-text)] transition-colors duration-200">
         <ThemeProvider>
           <AuthProvider>
             <AppProvider>
