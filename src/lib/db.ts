@@ -986,6 +986,116 @@ export async function initDB() {
       AND data->>'custom_proposta_domain' <> ''
   `);
 
+  // ============================================================
+  // AUDITORIA 2026-09-06 — isolamento, chaves naturais e desempenho
+  // ============================================================
+  // Tudo aqui é ADITIVO. Nada apaga dado. Os índices únicos rodam dentro
+  // de um DO com EXCEPTION porque um banco que já tenha duplicatas faria
+  // o CREATE UNIQUE INDEX estourar — e como initDB roda a cada request,
+  // isso derrubaria a aplicação inteira em vez de sinalizar o problema.
+  // Quando o índice não puder ser criado, a duplicata aparece no
+  // scripts/auditoria-dados.sql e o app continua de pé.
+
+  // ---- PK composta: uma linha por tenant, não uma linha no banco ----
+  // config_apis e agencia nasceram com PRIMARY KEY (id) e id constante
+  // ('apis-config-singleton' e 'default'), então existia UMA linha para
+  // todos os tenants: quem salvasse por último virava dono das chaves de
+  // API e do cadastro da agência dos outros. crm_config já tinha sido
+  // promovida; estas duas ficaram para trás.
+  for (const tabela of ['config_apis', 'agencia']) {
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conrelid = '${tabela}'::regclass
+            AND contype = 'p'
+            AND pg_get_constraintdef(oid) NOT LIKE '%tenant_id%'
+        ) THEN
+          ALTER TABLE ${tabela} DROP CONSTRAINT ${tabela}_pkey;
+          ALTER TABLE ${tabela} ADD PRIMARY KEY (id, tenant_id);
+        END IF;
+      END
+      $$;
+    `);
+  }
+
+  // ---- Idempotência do webhook é POR TENANT ----
+  // O índice era global em idempotency_key, mas o código sempre consultou
+  // por (idempotency_key, tenant_id). Dois tenants com a mesma chave (ids
+  // sequenciais de CRM colidem sozinhos) faziam o segundo evento estourar
+  // violação de unique e sumir sem registro — uma venda que nunca entra.
+  await pool.query(`
+    DO $$
+    BEGIN
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_crm_eventos_entrada_idem_tenant
+        ON crm_eventos_entrada(tenant_id, idempotency_key);
+      DROP INDEX IF EXISTS idx_crm_eventos_entrada_idem;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'idempotencia por tenant nao migrada: %', SQLERRM;
+    END
+    $$;
+  `);
+
+  // ---- Chave natural das contas geradas automaticamente ----
+  // Sem isto, nada no banco impede que a mesma venda gere a mesma parcela
+  // duas vezes. Era a única defesa que faltava: toda a proteção contra
+  // duplicata vivia no código, e o caminho do webhook não a aplicava.
+  // Parcial (WHERE auto_gerado) para não engessar lançamento manual.
+  await pool.query(`
+    DO $$
+    BEGIN
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_contas_receber_venda_parcela
+        ON contas_receber (
+          tenant_id,
+          (data->>'origem_venda_id'),
+          (data->>'origem_item_id'),
+          (data->>'parcela_numero')
+        )
+        WHERE data->>'auto_gerado' = 'true'
+          AND COALESCE(data->>'origem_venda_id', '') <> ''
+          AND COALESCE(data->>'status', '') <> 'CANCELADO';
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'chave natural de contas_receber nao criada (ha duplicatas?): %', SQLERRM;
+    END
+    $$;
+  `);
+  await pool.query(`
+    DO $$
+    BEGIN
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_contas_pagar_venda_item
+        ON contas_pagar (
+          tenant_id,
+          (data->>'origem_venda_id'),
+          (data->>'origem_item_id'),
+          (data->>'parcela_numero')
+        )
+        WHERE data->>'auto_gerado' = 'true'
+          AND COALESCE(data->>'origem_venda_id', '') <> ''
+          AND COALESCE(data->>'status', '') <> 'CANCELADO';
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'chave natural de contas_pagar nao criada (ha duplicatas?): %', SQLERRM;
+    END
+    $$;
+  `);
+
+  // ---- Desempenho: vínculo conta -> venda e vencimento ----
+  // /api/vendas-crm/[id]/financeiro e toda regeneração de contas filtram
+  // por data->>'origem_venda_id'. Sem índice de expressão isso é varredura
+  // completa da tabela a cada abertura de venda.
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_contas_receber_origem_venda
+      ON contas_receber (tenant_id, (data->>'origem_venda_id'))
+      WHERE COALESCE(data->>'origem_venda_id', '') <> '';
+    CREATE INDEX IF NOT EXISTS idx_contas_pagar_origem_venda
+      ON contas_pagar (tenant_id, (data->>'origem_venda_id'))
+      WHERE COALESCE(data->>'origem_venda_id', '') <> '';
+    CREATE INDEX IF NOT EXISTS idx_contas_receber_venc
+      ON contas_receber (tenant_id, (data->>'data_vencimento'));
+    CREATE INDEX IF NOT EXISTS idx_contas_pagar_venc
+      ON contas_pagar (tenant_id, (data->>'data_vencimento'));
+  `);
+
   // Run multi-tenant migration (assign existing data to default tenant)
   const { migrateToMultiTenant } = await import('./migrate-multitenant');
   await migrateToMultiTenant();

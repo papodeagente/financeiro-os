@@ -49,22 +49,39 @@ export async function GET() {
           WHERE cr.grupo_id = g.id AND cr.tenant_id = g.tenant_id
             AND cr.status != 'CANCELADO'
        ) AS valor_previsto,
+       -- Recebido inclui a baixa PARCIAL pelo ACUMULADO. Contar só
+       -- RECEBIDO fazia o dinheiro de quem paga parcelado sumir do card.
        (
          SELECT COALESCE(SUM(
-           CASE WHEN cr.status = 'RECEBIDO'
-                THEN COALESCE((cr.data->>'valor_recebido')::numeric, (cr.data->>'valor_final')::numeric)
-                ELSE 0
+           CASE
+             WHEN cr.status = 'PARCIAL'
+               THEN COALESCE((cr.data->>'valor_recebido')::numeric, 0)
+             WHEN cr.status = 'RECEBIDO'
+               THEN COALESCE((cr.data->>'valor_recebido')::numeric, (cr.data->>'valor_final')::numeric, 0)
+             ELSE 0
            END
          ), 0)::numeric
            FROM contas_receber cr
           WHERE cr.grupo_id = g.id AND cr.tenant_id = g.tenant_id
        ) AS valor_recebido,
+       -- Vencido é o SALDO em aberto, não o valor cheio da parcela: quem
+       -- pagou R$ 6.000 de R$ 8.000 deve R$ 2.000, não R$ 8.000. A data de
+       -- corte usa o fuso do tenant; NOW() no servidor é UTC e, das 21h em
+       -- diante no Brasil, marcava como vencido o que vence hoje.
        (
-         SELECT COALESCE(SUM((cr.data->>'valor_final')::numeric), 0)::numeric
+         SELECT COALESCE(SUM(
+           GREATEST(
+             COALESCE((cr.data->>'valor_final')::numeric, 0)
+             - CASE WHEN cr.status = 'PARCIAL'
+                    THEN COALESCE((cr.data->>'valor_recebido')::numeric, 0)
+                    ELSE 0 END,
+             0)
+         ), 0)::numeric
            FROM contas_receber cr
           WHERE cr.grupo_id = g.id AND cr.tenant_id = g.tenant_id
             AND cr.status NOT IN ('RECEBIDO', 'CANCELADO')
-            AND (cr.data->>'data_vencimento') < to_char(NOW(), 'YYYY-MM-DD')
+            AND (cr.data->>'data_vencimento')
+                < to_char(NOW() AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD')
        ) AS valor_vencido
      FROM grupos g
      LEFT JOIN gestao_grupos gg ON gg.grupo_id = g.id AND gg.tenant_id = g.tenant_id

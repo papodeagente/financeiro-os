@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { generateId, minPositivo } from '@/lib/utils';
+import { hojeISO } from '@/lib/money';
 import { calcProposta } from '@/lib/calculations';
 import type { GrupoViagem } from '@/lib/types';
 import type { VendaCRM, ProdutoVenda } from '@/lib/crm-types';
@@ -217,7 +218,7 @@ export async function POST(req: Request) {
 
     const venda: VendaCRM = {
       id, numero: num,
-      data_venda: new Date().toISOString().split('T')[0],
+      data_venda: hojeISO(),
       tipo: 'GRUPO',
       grupo_id,
       cliente_id: '',

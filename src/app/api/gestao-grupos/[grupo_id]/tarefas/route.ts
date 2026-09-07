@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { generateId } from '@/lib/utils';
+import { hojeISO } from '@/lib/money';
 import { getTenantId } from '@/lib/tenant';
 import {
   createTarefaData, registrarEvento,
@@ -51,7 +52,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ grup
   }));
 
   // Stats por status
-  const hoje = new Date().toISOString().split('T')[0];
+  const hoje = hojeISO();
   const stats = {
     total: tarefas.length,
     pendente: tarefas.filter(t => t.status === 'pendente').length,

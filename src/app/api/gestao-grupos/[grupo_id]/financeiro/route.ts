@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
 import type { ContaReceber, ContaPagar } from '@/lib/crm-types';
+import { round2, divSegura, hojeISO } from '@/lib/money';
+import {
+  calcularResultado,
+  type ContaReceberMin,
+  type ContaPagarMin,
+} from '@/lib/resultado-financeiro';
 
 // GET /api/gestao-grupos/[grupo_id]/financeiro
 //
@@ -81,43 +87,42 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ gru
     qtdPaxConfirmados = cRows[0]?.n || 0;
   }
 
-  // Agregados — receita
-  const hoje = new Date().toISOString().split('T')[0];
-  let recPrevisto = 0, recRecebido = 0, recVencido = 0;
-  for (const r of receitas) {
-    if (r.status === 'CANCELADO') continue;
-    const valor = r.valor_final || 0;
-    recPrevisto += valor;
-    if (r.status === 'RECEBIDO' || (r.valor_recebido && r.valor_recebido >= valor)) {
-      recRecebido += r.valor_recebido || valor;
-    } else if (r.data_vencimento && r.data_vencimento < hoje) {
-      recVencido += valor;
-    }
-  }
-  const recEmAberto = Math.max(recPrevisto - recRecebido, 0);
+  // Agregados pela FONTE ÚNICA DA VERDADE.
+  //
+  // A versão anterior tinha três defeitos que se somavam num único número
+  // errado na tela do grupo:
+  //  1. `new Date().toISOString()` dá a data em UTC. Em produção (UTC), das
+  //     21h à meia-noite no Brasil o "hoje" era amanhã, e contas que vencem
+  //     hoje apareciam como vencidas.
+  //  2. Um `else if` mandava a conta PARCIAL para o ramo do vencido pelo
+  //     valor CHEIO: quem pagou R$ 6.000 de R$ 8.000 aparecia devendo
+  //     R$ 8.000 e o recebido ficava zero.
+  //  3. `+=` cru acumulava erro de centavo.
+  const hoje = hojeISO();
+  const resultado = calcularResultado({
+    contas_receber: receitas as ContaReceberMin[],
+    contas_pagar: despesas as ContaPagarMin[],
+    hoje,
+  });
 
-  // Agregados — despesa
-  let despPrevisto = 0, despPago = 0, despVencido = 0;
-  for (const d of despesas) {
-    if (d.status === 'CANCELADO') continue;
-    const valor = d.valor_final || 0;
-    despPrevisto += valor;
-    if (d.status === 'PAGO' || (d.valor_pago && d.valor_pago >= valor)) {
-      despPago += d.valor_pago || valor;
-    } else if (d.data_vencimento && d.data_vencimento < hoje) {
-      despVencido += valor;
-    }
-  }
-  const despEmAberto = Math.max(despPrevisto - despPago, 0);
+  const recPrevisto = round2(resultado.volume_liquido + resultado.comissoes_a_receber);
+  const recRecebido = resultado.recebido;
+  const recVencido = resultado.vencido_a_receber;
+  const recEmAberto = resultado.a_receber;
+
+  const despPrevisto = resultado.custo_previsto;
+  const despPago = resultado.custo_pago;
+  const despVencido = resultado.vencido_a_pagar;
+  const despEmAberto = resultado.custo_pendente;
 
   // Lucros + margens
-  const lucroPrevisto = recPrevisto - despPrevisto;
-  const lucroRealizado = recRecebido - despPago;
-  const margemPrevista = recPrevisto > 0 ? (lucroPrevisto / recPrevisto) * 100 : 0;
-  const margemRealizada = recRecebido > 0 ? (lucroRealizado / recRecebido) * 100 : 0;
+  const lucroPrevisto = resultado.margem_prevista;
+  const lucroRealizado = resultado.margem_realizada;
+  const margemPrevista = resultado.margem_percentual;
+  const margemRealizada = round2(divSegura(lucroRealizado, recRecebido) * 100);
 
   // Lucro por pax (com base em confirmados)
-  const lucroPorPax = qtdPaxConfirmados > 0 ? lucroPrevisto / qtdPaxConfirmados : 0;
+  const lucroPorPax = round2(divSegura(lucroPrevisto, qtdPaxConfirmados));
 
   // Ponto de equilíbrio em PAX — quantos pax mínimos pra pagar despesas
   // assumindo o ticket médio atual (receita_prevista / qtdPax). Quando

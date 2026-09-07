@@ -7,6 +7,10 @@ import type { ContaBancaria } from './crm-types';
 // para evitar bundling de 'pool'/'pg' em componentes client. Reexporta aqui
 // para compatibilidade com qualquer servidor que importava daqui.
 export { calcularSaldoBancario } from './saldo-bancario';
+// valorMovimentado é a regra única de "quanto esta conta já moveu no caixa"
+// (trata PARCIAL pelo acumulado). O recálculo em lote precisa usar a mesma
+// regra da leitura, senão os dois divergem.
+import { valorMovimentado } from './saldo-bancario';
 
 // ──────────────────────────────────────────────────────────────────────────
 // Modo iniciante: 1 conta "Caixa Geral" criada automaticamente. Toda baixa
@@ -99,13 +103,20 @@ export async function recalcularSaldosCaixa(tenantId: string): Promise<{
   }
   try {
     await initDB();
-    // Carrega CR RECEBIDO e CP PAGO
+    // Carrega tudo que JÁ movimentou caixa — quitado ou parcial.
+    //
+    // Antes desta correção a query pegava só RECEBIDO/PAGO. Como a função
+    // zera cada conta para o saldo_inicial antes de reconstruir, toda baixa
+    // PARCIAL era apagada do saldo: dinheiro real que entrou no banco
+    // sumia do sistema a cada clique em "recalcular saldos".
     const { rows: crRows } = await pool.query(
-      `SELECT data FROM contas_receber WHERE tenant_id = $1 AND (data->>'status') = 'RECEBIDO'`,
+      `SELECT data FROM contas_receber
+        WHERE tenant_id = $1 AND (data->>'status') IN ('RECEBIDO', 'PARCIAL')`,
       [tenantId],
     );
     const { rows: cpRows } = await pool.query(
-      `SELECT data FROM contas_pagar WHERE tenant_id = $1 AND (data->>'status') = 'PAGO'`,
+      `SELECT data FROM contas_pagar
+        WHERE tenant_id = $1 AND (data->>'status') IN ('PAGO', 'PARCIAL')`,
       [tenantId],
     );
     // Transferências efetivadas movem saldo entre contas — ignorá-las aqui
@@ -145,20 +156,22 @@ export async function recalcularSaldosCaixa(tenantId: string): Promise<{
       };
     }
 
-    // Soma recebidos
+    // Soma recebidos. Numa conta PARCIAL o campo de baixa guarda o
+    // ACUMULADO recebido até agora, então ele é a fonte da verdade; cair no
+    // valor_final ali creditaria a parcela inteira.
     for (const r of crRows) {
       const d = r.data as Record<string, unknown>;
-      const valor = num(d.valor_recebido) || num(d.valor_final);
+      const valor = valorMovimentado(d as Parameters<typeof valorMovimentado>[0], 'valor_recebido');
       const contaId = (d.conta_bancaria_id as string) || caixaGeralId || '';
       if (contaId && contasMap[contaId]) {
         contasMap[contaId].saldoNovo = round2(contasMap[contaId].saldoNovo + valor);
         result.total_recebido = round2(result.total_recebido + valor);
       }
     }
-    // Subtrai pagos
+    // Subtrai pagos, com a mesma regra do parcial.
     for (const r of cpRows) {
       const d = r.data as Record<string, unknown>;
-      const valor = num(d.valor_pago) || num(d.valor_final);
+      const valor = valorMovimentado(d as Parameters<typeof valorMovimentado>[0], 'valor_pago');
       const contaId = (d.conta_bancaria_id as string) || caixaGeralId || '';
       if (contaId && contasMap[contaId]) {
         contasMap[contaId].saldoNovo = round2(contasMap[contaId].saldoNovo - valor);

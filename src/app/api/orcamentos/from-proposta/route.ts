@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { generateId } from '@/lib/utils';
+import { hojeISO } from '@/lib/money';
 import type { Orcamento } from '@/lib/crm-types';
 import { getTenantId } from '@/lib/tenant';
 
@@ -62,7 +63,7 @@ export async function POST(req: Request) {
     const orcamento: Orcamento = {
       id,
       numero: num,
-      data_criacao: new Date().toISOString().split('T')[0],
+      data_criacao: hojeISO(),
       validade: proposta.cabecalho?.validade || '',
       cliente_id: proposta.cliente_id || '',
       vendedor_id: proposta.vendedor_id || '',

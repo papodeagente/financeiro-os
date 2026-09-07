@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { generateId } from '@/lib/utils';
+import { hojeISO } from '@/lib/money';
 import { getTenantId } from '@/lib/tenant';
 import { emitirEventoCRM } from '@/lib/crm-integration';
 import {
@@ -104,7 +105,7 @@ export async function POST(
     const gestaoData = gestaoRow?.data as GestaoGrupoData | undefined;
 
     // -------- 2. Monta venda
-    const dataVenda = new Date().toISOString().split('T')[0];
+    const dataVenda = hojeISO();
     const { rows: countRows } = await client.query(
       `SELECT COUNT(*) as c FROM vendas_crm WHERE tenant_id = $1`,
       [tenantId],

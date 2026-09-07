@@ -64,19 +64,29 @@ export async function migrateToMultiTenant() {
     }
   }
 
-  // 3. Create super admin if env vars are set
-  const saEmail = process.env.SUPER_ADMIN_EMAIL || 'super@entur.com.br';
-  const saPassword = process.env.SUPER_ADMIN_PASSWORD || 'super123';
-  const saId = 'sa_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
-  const senhaHash = await hashPassword(saPassword);
-  const saData = { id: saId, email: saEmail, nome: 'Super Admin', senha_hash: senhaHash, ativo: true };
+  // 3. Super admin — SOMENTE com credenciais vindas do ambiente.
+  //
+  // Antes havia fallback para 'super@entur.com.br' / 'super123'. Uma
+  // instalação que subisse sem as variáveis ganhava um super admin com senha
+  // pública, e o super admin pode impersonar qualquer agência (a sessão
+  // carrega impersonatingTenantId, que getTenantId prioriza) — ou seja,
+  // leitura e escrita do financeiro de todos os clientes. Sem as variáveis,
+  // nenhum super admin é criado e o seed fica para /api/admin/auth/seed.
+  const saEmail = process.env.SUPER_ADMIN_EMAIL;
+  const saPassword = process.env.SUPER_ADMIN_PASSWORD;
+  if (saEmail && saPassword) {
+    const saId = 'sa_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
+    const senhaHash = await hashPassword(saPassword);
+    const saData = { id: saId, email: saEmail, nome: 'Super Admin', senha_hash: senhaHash, ativo: true };
 
-  await pool.query(
-    `INSERT INTO super_admins (id, email, nome, data, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, NOW(), NOW())
-     ON CONFLICT (email) DO NOTHING`,
-    [saId, saEmail, 'Super Admin', JSON.stringify(saData)]
-  );
-
-  console.log(`[migrate] Multi-tenant migration complete. Tenant: ${tenantSlug} (${tenantId}), Super Admin: ${saEmail}`);
+    await pool.query(
+      `INSERT INTO super_admins (id, email, nome, data, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, NOW(), NOW())
+       ON CONFLICT (email) DO NOTHING`,
+      [saId, saEmail, 'Super Admin', JSON.stringify(saData)]
+    );
+    console.log(`[migrate] Multi-tenant migration complete. Tenant: ${tenantSlug} (${tenantId}), Super Admin: ${saEmail}`);
+  } else {
+    console.log(`[migrate] Multi-tenant migration complete. Tenant: ${tenantSlug} (${tenantId}). Super admin nao criado: defina SUPER_ADMIN_EMAIL e SUPER_ADMIN_PASSWORD.`);
+  }
 }

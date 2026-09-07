@@ -1,6 +1,11 @@
 // Grupos OS - CRM & Agency Management Types
 
 import { generateId } from './utils';
+// hojeISO devolve a data civil no fuso do tenant. Os factories usavam
+// new Date().toISOString(), que é UTC: em produção (servidor em UTC), das
+// 21h à meia-noite no Brasil toda venda, conta e comissão nascia com a data
+// do dia seguinte — e na virada do mês caía no mês errado do DRE.
+import { hojeISO } from './money';
 
 // ============================================================
 // PESSOAS
@@ -972,7 +977,7 @@ export function createProposta(numero: string): Proposta {
       duracao_dias: 0, duracao_noites: 0, destinos: [], alojamentos: [],
       transportes: [], interesses_tags: [],
     },
-    cabecalho: { titulo: '', subtitulo: '', mensagem_abertura: '', data_proposta: new Date().toISOString().split('T')[0], validade: '' },
+    cabecalho: { titulo: '', subtitulo: '', mensagem_abertura: '', data_proposta: hojeISO(), validade: '' },
     secoes: [],
     rodape: { mensagem: '', nome_vendedor: '', telefone_vendedor: '', whatsapp_vendedor: '', email_vendedor: '' },
     status: 'RASCUNHO', link_publico: '',
@@ -1294,7 +1299,7 @@ export function createFornecedorCRM(): FornecedorCRM {
 export function createMembro(): Membro {
   return {
     id: generateId(), nome: '', cpf: '', email: '', telefone: '', cargo: 'vendedor',
-    data_admissao: new Date().toISOString().split('T')[0],
+    data_admissao: hojeISO(),
     meta_mensal_vendas: 0, meta_mensal_quantidade: 0, plano_comissao_id: '',
     status: 'ATIVO',
   };
@@ -1313,7 +1318,7 @@ export function createProdutoVenda(): ProdutoVenda {
 
 export function createVendaCRM(numero: string): VendaCRM {
   return {
-    id: generateId(), numero, data_venda: new Date().toISOString().split('T')[0],
+    id: generateId(), numero, data_venda: hojeISO(),
     tipo: 'AVULSA', grupo_id: null, cliente_id: '', vendedor_id: '',
     passageiros: [], pagantes: [], produtos: [],
     valor_total_custo: 0, valor_total_venda: 0, markup_realizado: 0,
@@ -1331,7 +1336,7 @@ export function createContaReceber(): ContaReceber {
     id: generateId(), origem: 'VENDA', venda_id: null, grupo_id: null,
     cliente_id: '', cliente_nome: '', descricao: '', categoria_id: '', centro_custo: '',
     valor_original: 0, juros: 0, multa: 0, desconto: 0, valor_final: 0,
-    data_emissao: new Date().toISOString().split('T')[0], data_vencimento: '',
+    data_emissao: hojeISO(), data_vencimento: '',
     data_recebimento: null, valor_recebido: null,
     conta_bancaria_id: null, forma_recebimento: '',
     parcela_numero: 1, total_parcelas: 1,
@@ -1346,7 +1351,7 @@ export function createContaPagar(): ContaPagar {
     fornecedor_id: '', fornecedor_nome: '', descricao: '', categoria_id: '', centro_custo: '',
     valor_original: 0, juros: 0, multa: 0, desconto: 0, valor_final: 0,
     moeda: 'BRL', cambio: 1, valor_brl: 0,
-    data_emissao: new Date().toISOString().split('T')[0], data_vencimento: '',
+    data_emissao: hojeISO(), data_vencimento: '',
     data_pagamento: null, valor_pago: null,
     conta_bancaria_id: null, forma_pagamento: '', cartao_id: null, comprovante: '',
     parcela_numero: 1, total_parcelas: 1,
@@ -1363,7 +1368,7 @@ export function createTransferencia(): TransferenciaBancaria {
     conta_destino_id: '',
     conta_destino_nome: '',
     valor: 0,
-    data: new Date().toISOString().split('T')[0],
+    data: hojeISO(),
     data_efetivacao: null,
     descricao: '',
     status: 'PENDENTE',

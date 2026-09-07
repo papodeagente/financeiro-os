@@ -3,6 +3,8 @@
 import { useEffect, useState, useMemo } from 'react';
 import { ContaReceber, ContaPagar } from '@/lib/crm-types';
 import { loadEntities } from '@/lib/crm-storage';
+import { round2, divSegura, somaPor, variacaoPct } from '@/lib/money';
+import { valorMovimentado } from '@/lib/saldo-bancario';
 import { exportCSV } from '@/lib/export-utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -63,26 +65,37 @@ export default function ComparativoMensalPage() {
       }
     };
 
-    receber.filter(r => r.status === 'RECEBIDO').forEach(r => {
+    // Entradas e saídas pelo VALOR BAIXADO, incluindo baixas parciais.
+    //
+    // O filtro por status RECEBIDO/PAGO deixava as parciais de fora, e o
+    // valor somado era o previsto, não o que entrou. Um mês com R$ 150.000
+    // recebidos em parcelas parciais aparecia com R$ 0 desse dinheiro, e o
+    // resultado do mês saía R$ 150.000 abaixo do real. O += cru também
+    // acumulava erro de centavo ao longo de centenas de lançamentos.
+    receber.forEach(r => {
+      const valor = valorMovimentado(r, 'valor_recebido');
+      if (valor === 0) return;
       const dt = r.data_recebimento || r.data_vencimento;
       if (!dt) return;
       const mes = dt.substring(0, 7);
       ensure(mes);
-      mapMes[mes].receitas += r.valor_final;
+      mapMes[mes].receitas = round2(mapMes[mes].receitas + valor);
       mapMes[mes].qtdReceitas += 1;
     });
 
-    pagar.filter(p => p.status === 'PAGO').forEach(p => {
+    pagar.forEach(p => {
+      const valor = valorMovimentado(p, 'valor_pago');
+      if (valor === 0) return;
       const dt = p.data_pagamento || p.data_vencimento;
       if (!dt) return;
       const mes = dt.substring(0, 7);
       ensure(mes);
-      mapMes[mes].despesas += p.valor_final;
+      mapMes[mes].despesas = round2(mapMes[mes].despesas + valor);
       mapMes[mes].qtdDespesas += 1;
     });
 
     Object.values(mapMes).forEach(m => {
-      m.resultado = m.receitas - m.despesas;
+      m.resultado = round2(m.receitas - m.despesas);
     });
 
     return Object.values(mapMes)
@@ -95,14 +108,16 @@ export default function ComparativoMensalPage() {
   }, [dados]);
 
   const totais = useMemo(() => {
-    const totalReceitas = dados.reduce((s, d) => s + d.receitas, 0);
-    const totalDespesas = dados.reduce((s, d) => s + d.despesas, 0);
+    // somaPor no lugar do reduce: arredonda o acumulado a cada passo, que é
+    // a regra do módulo. divSegura protege a média quando não há meses.
+    const totalReceitas = somaPor(dados, d => d.receitas);
+    const totalDespesas = somaPor(dados, d => d.despesas);
     return {
       receitas: totalReceitas,
       despesas: totalDespesas,
-      resultado: totalReceitas - totalDespesas,
-      mediaReceitas: dados.length ? totalReceitas / dados.length : 0,
-      mediaDespesas: dados.length ? totalDespesas / dados.length : 0,
+      resultado: round2(totalReceitas - totalDespesas),
+      mediaReceitas: round2(divSegura(totalReceitas, dados.length)),
+      mediaDespesas: round2(divSegura(totalDespesas, dados.length)),
     };
   }, [dados]);
 
@@ -110,12 +125,12 @@ export default function ComparativoMensalPage() {
     if (dados.length < 2) return null;
     const atual = dados[dados.length - 1];
     const anterior = dados[dados.length - 2];
-    const varReceita = anterior.receitas > 0
-      ? ((atual.receitas - anterior.receitas) / anterior.receitas) * 100 : 0;
-    const varDespesa = anterior.despesas > 0
-      ? ((atual.despesas - anterior.despesas) / anterior.despesas) * 100 : 0;
-    const varResultado = anterior.resultado !== 0
-      ? ((atual.resultado - anterior.resultado) / Math.abs(anterior.resultado)) * 100 : 0;
+    // variacaoPct devolve null quando o mês anterior é zero. O fallback
+    // antigo devolvia 0, que a tela exibe como "estável" — afirmação
+    // diferente de "não há base de comparação".
+    const varReceita = variacaoPct(atual.receitas, anterior.receitas) ?? 0;
+    const varDespesa = variacaoPct(atual.despesas, anterior.despesas) ?? 0;
+    const varResultado = variacaoPct(atual.resultado, anterior.resultado) ?? 0;
     return { varReceita, varDespesa, varResultado, mesAtual: atual.label, mesAnterior: anterior.label };
   }, [dados]);
 

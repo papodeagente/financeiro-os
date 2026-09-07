@@ -16,7 +16,12 @@ import {
 } from './crm-types';
 import { gerarContasVenda, type ItemVendaInput, type FornecedorInfo } from './venda-financeiro';
 import { round2, num, hojeISO } from './money';
-import { aplicarMovimentoCaixa } from './caixa-helpers';
+// Caixa do webhook usa o caminho ATÔMICO (um único UPDATE em SQL), igual ao
+// PUT das rotas de conta. O helper antigo lia, somava e regravava fora de
+// transação, com o erro engolido: duas confirmações simultâneas na mesma
+// conta bancária perdiam uma das entradas.
+import { aplicarMovimentoCaixaAtomico, STATUS_BAIXADOS } from './caixa-atomico';
+import { valorMovimentado } from './saldo-bancario';
 
 // ──────────────────────────────────────────
 // Types
@@ -948,14 +953,41 @@ export async function processarEventoCRM(
     // webhook do CRM reentrega em ~2s quando o timeout estoura). Sem ele, as
     // duas entregas passariam pela checagem antes de qualquer uma marcar
     // processado=true e a venda ganharia contas em dobro.
-    const lockKey = `${tenantId}:${idempotency_key}`;
-    const { rows: lockRows } = await pool.query(
-      `SELECT pg_try_advisory_lock(hashtext($1)) AS obtido`,
-      [lockKey]
-    );
-    if (lockRows[0]?.obtido !== true) {
+    // O lock consultivo é de SESSÃO, não de pool. Adquirir por pool.query
+    // pegava uma conexão qualquer e liberava em outra: sob concorrência (que
+    // é exatamente quando o lock importa) o unlock falhava e o lock vazava
+    // até a conexão morrer. A partir daí toda reentrega legítima recebia
+    // "já em processamento" e a venda nunca entrava no financeiro.
+    //
+    // Agora um client dedicado é reservado, segura o lock e é devolvido ao
+    // pool no finally. hashtext devolve int4, então a chave é combinada com
+    // um segundo inteiro para reduzir colisão entre eventos diferentes.
+    const lockClient = await pool.connect();
+    let lockAdquirido = false;
+    try {
+      const { rows: lockRows } = await lockClient.query(
+        `SELECT pg_try_advisory_lock(hashtext($1), hashtext($2)) AS obtido`,
+        [tenantId, idempotency_key]
+      );
+      lockAdquirido = lockRows[0]?.obtido === true;
+    } catch {
+      lockAdquirido = false;
+    }
+    if (!lockAdquirido) {
+      lockClient.release();
       return { processado: true, acao: 'evento já em processamento (entrega concorrente)' };
     }
+    // Liberação do lock e devolução do client acontecem juntas, sempre na
+    // MESMA conexão que o adquiriu.
+    const soltarLock = async () => {
+      try {
+        await lockClient.query(`SELECT pg_advisory_unlock(hashtext($1), hashtext($2))`, [tenantId, idempotency_key]);
+      } catch {
+        /* conexão já perdida: o lock morre junto com a sessão */
+      } finally {
+        lockClient.release();
+      }
+    };
 
     let id: string;
     try {
@@ -990,13 +1022,11 @@ export async function processarEventoCRM(
         );
       }
     } catch (e) {
-      await pool.query(`SELECT pg_advisory_unlock(hashtext($1))`, [lockKey]).catch(() => {});
+      await soltarLock();
       throw e;
     }
     // A partir daqui o lock é liberado no finally do bloco externo.
-    liberarLock = async () => {
-      await pool!.query(`SELECT pg_advisory_unlock(hashtext($1))`, [lockKey]).catch(() => {});
-    };
+    liberarLock = soltarLock;
 
     let acao = '';
 
@@ -1065,17 +1095,58 @@ export async function processarEventoCRM(
         // commission flows back to the agency.
         const parcelasCliente = (payload.condicoes_pagamento as Array<Record<string, unknown>>) || [];
 
-        const vendaId = generateId();
+        // IDENTIDADE DA VENDA — a idempotência real do webhook.
+        //
+        // Antes, o id era sempre um generateId() novo. O upsert logo abaixo
+        // usa ON CONFLICT (id), então nunca casava: cada reentrega do mesmo
+        // VENDA_FECHADA criava uma venda inteira, com contas a receber e
+        // comissões próprias. Um timeout de rede no CRM bastava para dobrar
+        // o faturamento de um negócio.
+        //
+        // Agora o id deriva do identificador do negócio no CRM. Reentrega
+        // atualiza a mesma venda. Sem crm_venda_id (payload legado) cai no
+        // id aleatório, que é o comportamento antigo.
+        const crmVendaId = asStr(payload.crm_venda_id);
+        let vendaId: string;
+        let vendaJaExiste = false;
+        if (crmVendaId) {
+          const { rows: existente } = await pool.query(
+            `SELECT id FROM vendas_crm
+              WHERE tenant_id = $1 AND data->>'crm_venda_id' = $2
+              ORDER BY created_at ASC LIMIT 1`,
+            [tenantId, crmVendaId],
+          );
+          if (existente.length > 0) {
+            vendaId = existente[0].id as string;
+            vendaJaExiste = true;
+          } else {
+            vendaId = `crmv-${tenantId}-${crmVendaId}`.slice(0, 200);
+          }
+        } else {
+          vendaId = generateId();
+        }
         // Data da venda: prefere o que veio do CRM (data real do fechamento),
-        // senão usa hoje.
-        const dataVenda = asStr(payload.data_venda) || new Date().toISOString().slice(0, 10);
-        // Próximo número sequencial — usado pelas telas legadas (dashboard,
-        // /vendas). Formato VND-NNNN.
-        const { rows: countRows } = await pool.query(
-          `SELECT COUNT(*) AS c FROM vendas_crm WHERE tenant_id = $1`,
-          [tenantId],
-        );
-        const numeroVenda = `VND-${String(parseInt(countRows[0].c) + 1).padStart(4, '0')}`;
+        // senão usa hoje no fuso do tenant. new Date().toISOString() daria a
+        // data em UTC e, das 21h em diante no Brasil, jogaria a venda para o
+        // dia seguinte — e no virar do mês, para o mês seguinte no DRE.
+        const dataVenda = asStr(payload.data_venda) || hojeISO();
+        // Número sequencial usado pelas telas legadas (dashboard, /vendas).
+        // Venda que já existe mantém o número que já tinha; recontar geraria
+        // um número diferente a cada reprocessamento.
+        let numeroVenda: string;
+        if (vendaJaExiste) {
+          const { rows: numRows } = await pool.query(
+            `SELECT data->>'numero' AS numero FROM vendas_crm WHERE id = $1 AND tenant_id = $2`,
+            [vendaId, tenantId],
+          );
+          numeroVenda = asStr(numRows[0]?.numero) || `VND-${vendaId.slice(-4)}`;
+        } else {
+          const { rows: countRows } = await pool.query(
+            `SELECT COUNT(*) AS c FROM vendas_crm WHERE tenant_id = $1`,
+            [tenantId],
+          );
+          numeroVenda = `VND-${String(parseInt(countRows[0].c) + 1).padStart(4, '0')}`;
+        }
 
         // Build venda partindo de createVendaCRM (todos os campos da
         // interface VendaCRM preenchidos com defaults). Em cima disso,
@@ -1119,7 +1190,8 @@ export async function processarEventoCRM(
         await pool.query(
           `INSERT INTO vendas_crm (id, cliente_id, vendedor_id, status, data, tenant_id, created_at, updated_at)
            VALUES ($1, $2, $3, 'CONFIRMADO', $4, $5, NOW(), NOW())
-           ON CONFLICT (id) DO UPDATE SET data = $4, updated_at = NOW()`,
+           ON CONFLICT (id) DO UPDATE SET data = $4, updated_at = NOW()
+           WHERE vendas_crm.tenant_id = EXCLUDED.tenant_id`,
           [vendaId, clienteId, vendedorId, JSON.stringify(vendaData), tenantId]
         );
 
@@ -1247,17 +1319,61 @@ export async function processarEventoCRM(
           cliente_nome: asStr(payload.cliente_nome),
         });
 
-        // Idempotência: apaga CR/CP auto_gerado anteriores desta venda.
+        // Regeneração das contas desta venda.
+        //
+        // A versão anterior apagava TODAS as CR/CP auto_geradas sem olhar o
+        // status. Numa reentrega do evento (que acontece: evento com ERRO é
+        // reprocessável), isso apagava conta já RECEBIDA/PAGA/PARCIAL sem
+        // estornar o caixa — o crédito ficava órfão no saldo e a conta sumia
+        // do histórico. O caminho manual (POST /api/vendas-crm) sempre
+        // protegeu as baixadas; aqui a proteção faltava.
+        //
+        // Regra: conta que já movimentou dinheiro é preservada como está, e a
+        // conta equivalente da nova geração é descartada. As demais são
+        // regeneradas normalmente.
+        const statusBaixados = [...STATUS_BAIXADOS];
+        const { rows: preservadasCR } = await pool.query(
+          `SELECT data FROM contas_receber
+            WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2
+              AND data->>'auto_gerado' = 'true'
+              AND COALESCE(data->>'status', '') = ANY($3::text[])`,
+          [tenantId, vendaId, statusBaixados],
+        );
+        const { rows: preservadasCP } = await pool.query(
+          `SELECT data FROM contas_pagar
+            WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2
+              AND data->>'auto_gerado' = 'true'
+              AND COALESCE(data->>'status', '') = ANY($3::text[])`,
+          [tenantId, vendaId, statusBaixados],
+        );
+        // Chave natural: item de venda quando existe, senão o número da
+        // parcela. É como o caminho manual identifica "a mesma conta".
+        const chaveNatural = (c: Record<string, unknown>) =>
+          String(c.origem_item_id ?? '') || `parcela:${String(c.parcela_numero ?? '')}`;
+        const crPreservadas = new Set(
+          preservadasCR.map(r => chaveNatural(r.data as Record<string, unknown>)),
+        );
+        const cpPreservadas = new Set(
+          preservadasCP.map(r => chaveNatural(r.data as Record<string, unknown>)),
+        );
+
         await pool.query(
-          `DELETE FROM contas_receber WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2 AND data->>'auto_gerado' = 'true'`,
-          [tenantId, vendaId],
+          `DELETE FROM contas_receber
+            WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2
+              AND data->>'auto_gerado' = 'true'
+              AND NOT (COALESCE(data->>'status', '') = ANY($3::text[]))`,
+          [tenantId, vendaId, statusBaixados],
         );
         await pool.query(
-          `DELETE FROM contas_pagar WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2 AND data->>'auto_gerado' = 'true'`,
-          [tenantId, vendaId],
+          `DELETE FROM contas_pagar
+            WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2
+              AND data->>'auto_gerado' = 'true'
+              AND NOT (COALESCE(data->>'status', '') = ANY($3::text[]))`,
+          [tenantId, vendaId, statusBaixados],
         );
 
         for (const cr of contasGen.contas_receber) {
+          if (crPreservadas.has(chaveNatural(cr as unknown as Record<string, unknown>))) continue;
           await pool.query(
             `INSERT INTO contas_receber (id, tenant_id, venda_id, cliente_id, status, data, created_at, updated_at)
              VALUES ($1, $2, $3, $4, $5, $6::jsonb, NOW(), NOW())`,
@@ -1265,6 +1381,7 @@ export async function processarEventoCRM(
           );
         }
         for (const cp of contasGen.contas_pagar) {
+          if (cpPreservadas.has(chaveNatural(cp as unknown as Record<string, unknown>))) continue;
           await pool.query(
             `INSERT INTO contas_pagar (id, tenant_id, fornecedor_id, status, data, created_at, updated_at)
              VALUES ($1, $2, $3, $4, $5::jsonb, NOW(), NOW())`,
@@ -1299,22 +1416,52 @@ export async function processarEventoCRM(
           // e a baixa vale só para a parcela do CLIENTE, não para a
           // comissão a receber do fornecedor da mesma venda.
           if (Number(d.parcela_numero) !== parcelaAlvo) continue;
-          if (d.origem && d.origem !== 'VENDA') continue;
+          // Só conta de venda. Antes, `d.origem && ...` deixava passar conta
+          // sem origem (lançamento manual ligado à venda), que podia ser
+          // baixada por um pagamento que não era dela.
+          if (String(d.origem ?? 'VENDA') !== 'VENDA') continue;
           if (String(d.status ?? '') === 'RECEBIDO') continue;  // idempotente
 
-          const valorRecebido = round2(num(valor) || num(d.valor_final));
-          d.status = 'RECEBIDO';
+          // O que já entrou nesta conta. Uma conta PARCIAL guarda o
+          // acumulado; tratá-la como zerada creditava a parcela inteira de
+          // novo e inventava dinheiro no saldo.
+          const jaRecebido = valorMovimentado(
+            d as Parameters<typeof valorMovimentado>[0],
+            'valor_recebido',
+          );
+          const totalConta = round2(num(d.valor_final));
+          const informado = round2(num(valor));
+
+          // O valor do payload é um ACRÉSCIMO, e nunca pode ultrapassar o
+          // saldo da parcela. Sem teto, um erro de unidade no CRM (centavos
+          // enviados como reais) entrava direto no saldo bancário.
+          const saldo = round2(totalConta - jaRecebido);
+          if (saldo <= 0) continue;
+          const delta = informado > 0 ? Math.min(informado, saldo) : saldo;
+          const acumulado = round2(jaRecebido + delta);
+          const quitou = acumulado >= totalConta;
+
+          const statusAlvo = quitou ? 'RECEBIDO' : 'PARCIAL';
+          d.status = statusAlvo;
           d.data_recebimento = data_pagamento || hojeISO();
-          d.valor_recebido = valorRecebido;
+          d.valor_recebido = acumulado;
           const upd = await pool.query(
-            `UPDATE contas_receber SET status = 'RECEBIDO', data = $2, updated_at = NOW()
-              WHERE id = $1 AND tenant_id = $3 AND (data->>'status') IS DISTINCT FROM 'RECEBIDO'`,
-            [row.id, JSON.stringify(d), tenantId]
+            `UPDATE contas_receber SET status = $4, data = $2, updated_at = NOW()
+              WHERE id = $1 AND tenant_id = $3
+                AND COALESCE(data->>'valor_recebido', '0')::numeric = $5::numeric
+                AND COALESCE(data->>'status', '') IS DISTINCT FROM 'RECEBIDO'`,
+            [row.id, JSON.stringify(d), tenantId, statusAlvo, jaRecebido]
           );
           if ((upd.rowCount ?? 0) > 0) {
             baixadas++;
-            // Entrada de dinheiro precisa refletir no saldo, como faz o PUT da API.
-            await aplicarMovimentoCaixa(tenantId, (d.conta_bancaria_id as string) || null, +valorRecebido);
+            // Movimento ATÔMICO e só do que entrou agora. A versão antiga
+            // usava o helper de ler-modificar-gravar, que perde escritas
+            // concorrentes e engole o erro em silêncio.
+            await aplicarMovimentoCaixaAtomico(
+              tenantId,
+              (d.conta_bancaria_id as string) || null,
+              +delta,
+            );
           }
         }
         acao = baixadas > 0
@@ -1338,8 +1485,23 @@ export async function processarEventoCRM(
         for (const row of receberAtr) {
           const d = row.data as Record<string, unknown>;
           if (Number(d.parcela_numero) !== parcelaAtraso) continue;
-          if (d.origem && d.origem !== 'VENDA') continue;
+          if (String(d.origem ?? 'VENDA') !== 'VENDA') continue;
           if (String(d.status ?? '') === 'RECEBIDO') continue;  // já pago não atrasa
+          // PARCIAL não vira ATRASADO. O status é a memória de que aquele
+          // dinheiro já entrou no caixa: sobrescrevê-lo fazia a próxima baixa
+          // manual calcular o movimento a partir de zero e creditar duas
+          // vezes o valor já recebido. O atraso fica registrado no campo
+          // dias_atraso, que a tela já lê.
+          if (String(d.status ?? '') === 'PARCIAL') {
+            d.dias_atraso = payload.dias_atraso;
+            await pool.query(
+              `UPDATE contas_receber SET data = $2, updated_at = NOW()
+                WHERE id = $1 AND tenant_id = $3`,
+              [row.id, JSON.stringify(d), tenantId]
+            );
+            marcadas++;
+            continue;
+          }
 
           d.status = 'ATRASADO';
           d.dias_atraso = payload.dias_atraso;
@@ -1775,7 +1937,7 @@ export async function reprocessarVendasLegadas(tenantId: string): Promise<{
             if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
             const ca = (data as { created_at?: string }).created_at;
             if (typeof ca === 'string' && /^\d{4}-\d{2}-\d{2}/.test(ca)) return ca.slice(0, 10);
-            return new Date().toISOString().slice(0, 10);
+            return hojeISO();
           })(),
           numero: data.numero ?? numeroDefault,
         };
@@ -1828,7 +1990,7 @@ export async function reprocessarVencimentosAtrasados(tenantId: string): Promise
   try {
     if (!pool || !tenantId) return result;
     await initDB();
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = hojeISO();
     const hojeDate = new Date(hoje + 'T00:00:00');
 
     // Contas a receber pendentes com vencimento passado

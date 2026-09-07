@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { generateId } from '@/lib/utils';
+import { hojeISO } from '@/lib/money';
 import { calcProposta } from '@/lib/calculations';
 import { minPositivo, calcDiarias } from '@/lib/utils';
 import type { GrupoViagem } from '@/lib/types';
@@ -725,7 +726,7 @@ export async function POST(req: NextRequest) {
           titulo: destino ? `${destino}` : 'Sua próxima viagem',
           subtitulo: partes,
           mensagem_abertura: 'Preparamos esta proposta com cuidado, considerando cada detalhe da sua viagem. Os valores e itens descritos refletem fielmente o que combinamos.',
-          data_proposta: new Date().toISOString().split('T')[0],
+          data_proposta: hojeISO(),
           validade: '',
         };
       })(),

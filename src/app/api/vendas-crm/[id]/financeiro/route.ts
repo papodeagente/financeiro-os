@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
+import { round2 } from '@/lib/money';
+import {
+  calcularResultado,
+  type ContaReceberMin,
+  type ContaPagarMin,
+} from '@/lib/resultado-financeiro';
 
 export async function GET(
   _req: Request,
@@ -22,12 +28,20 @@ export async function GET(
         `SELECT data FROM itens_venda WHERE venda_id = $1 AND tenant_id = $2 ORDER BY sequencia ASC`,
         [id, tenantId],
       ),
+      // Todas as contas da venda, geradas automaticamente ou lançadas à mão.
+      // O filtro auto_gerado='true' escondia do resumo qualquer ajuste manual
+      // (taxa de emissão, custo extra do fornecedor), então a ficha da venda
+      // mostrava uma margem que nenhuma outra tela confirmava.
       pool.query(
-        `SELECT data FROM contas_receber WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2 AND data->>'auto_gerado' = 'true'`,
+        `SELECT data FROM contas_receber
+          WHERE tenant_id = $1
+            AND (data->>'origem_venda_id' = $2 OR venda_id = $2)`,
         [tenantId, id],
       ),
       pool.query(
-        `SELECT data FROM contas_pagar WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2 AND data->>'auto_gerado' = 'true'`,
+        `SELECT data FROM contas_pagar
+          WHERE tenant_id = $1
+            AND (data->>'origem_venda_id' = $2 OR data->>'venda_id' = $2)`,
         [tenantId, id],
       ),
     ]);
@@ -41,30 +55,41 @@ export async function GET(
     const contas_receber = crRes.rows.map(r => r.data);
     const contas_pagar = cpRes.rows.map(r => r.data);
 
-    // Resumo
-    const total_receber = contas_receber.reduce((s, c) => s + (c.valor_final || 0), 0);
-    const total_recebido = contas_receber
-      .filter(c => c.status === 'RECEBIDO')
-      .reduce((s, c) => s + (c.valor_recebido || c.valor_final || 0), 0);
-    const total_pagar = contas_pagar.reduce((s, c) => s + (c.valor_final || 0), 0);
-    const total_pago = contas_pagar
-      .filter(c => c.status === 'PAGO')
-      .reduce((s, c) => s + (c.valor_pago || c.valor_final || 0), 0);
+    // Resumo pela FONTE ÚNICA DA VERDADE (src/lib/resultado-financeiro.ts).
+    //
+    // A versão anterior filtrava status === 'RECEBIDO' e ignorava PARCIAL:
+    // uma venda com entrada paga mostrava recebido zero e lucro realizado
+    // negativo. Também somava com reduce, acumulando erro de centavo.
+    //
+    // A baseline vem da própria venda, gravada quando as contas foram
+    // geradas. É o que permite dizer que o custo estourou o orçado: as
+    // contas a pagar de hoje já foram reescritas com o valor novo.
+    const resultado = calcularResultado({
+      contas_receber: contas_receber as ContaReceberMin[],
+      contas_pagar: contas_pagar as ContaPagarMin[],
+      baseline: {
+        margem: venda?.margem_prevista_original ?? null,
+        custo: venda?.custo_previsto_original ?? null,
+      },
+    });
 
     return NextResponse.json({
       venda,
       itens,
       contas_receber,
       contas_pagar,
+      resultado,
+      // Campos antigos mantidos para não quebrar telas que já os consomem.
+      // Os valores agora respeitam baixa parcial e conta cancelada.
       resumo: {
-        total_receber,
-        total_recebido,
-        total_pendente_receber: total_receber - total_recebido,
-        total_pagar,
-        total_pago,
-        total_pendente_pagar: total_pagar - total_pago,
-        lucro_previsto: total_receber - total_pagar,
-        lucro_realizado: total_recebido - total_pago,
+        total_receber: round2(resultado.recebido + resultado.a_receber),
+        total_recebido: resultado.recebido,
+        total_pendente_receber: resultado.a_receber,
+        total_pagar: resultado.custo_previsto,
+        total_pago: resultado.custo_pago,
+        total_pendente_pagar: resultado.custo_pendente,
+        lucro_previsto: resultado.margem_prevista,
+        lucro_realizado: resultado.margem_realizada,
       },
     });
   } catch (e: unknown) {

@@ -7,7 +7,13 @@ export async function GET() {
     await initDB();
     if (!pool) return NextResponse.json(null);
     const tenantId = await getTenantId();
-    const { rows } = await pool.query('SELECT data FROM agencia WHERE tenant_id = $1 LIMIT 1', [tenantId]);
+    // ORDER BY explícito: sem ele, um tenant que herdou duas linhas (a
+    // 'default' antiga e a do signup) recebia ora uma ora outra entre
+    // requisições, e a tela de configurações piscava dados diferentes.
+    const { rows } = await pool.query(
+      'SELECT data FROM agencia WHERE tenant_id = $1 ORDER BY updated_at DESC NULLS LAST, id ASC LIMIT 1',
+      [tenantId],
+    );
     return NextResponse.json(rows.length > 0 ? rows[0].data : null);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Unknown error';
@@ -69,10 +75,24 @@ export async function POST(req: Request) {
       data.custom_proposta_domain = '';
     }
 
+    // O id era a constante 'default' com PK só em id: uma linha de agencia
+    // para o banco inteiro. Toda tela de Configurações escrevia nela, o
+    // tenant_id continuava do primeiro que salvou, e razão social, CNPJ,
+    // CADASTUR e domínio de proposta vazavam entre agências.
+    //
+    // Reaproveitamos o id que o tenant já tem ('default' herdado, ou o
+    // 'singleton-<tenant>' criado pelo signup). Gravar um id novo criaria
+    // uma segunda linha para o mesmo tenant e o GET passaria a escolher
+    // entre duas ao acaso.
+    const { rows: atual } = await pool.query(
+      `SELECT id FROM agencia WHERE tenant_id = $1 ORDER BY updated_at DESC NULLS LAST, id ASC LIMIT 1`,
+      [tenantId],
+    );
+    const agenciaId = atual.length > 0 ? (atual[0].id as string) : `agencia-${tenantId}`;
     await pool.query(
-      `INSERT INTO agencia (id, tenant_id, data, updated_at) VALUES ('default', $1, $2, NOW())
-       ON CONFLICT (id) DO UPDATE SET data = $2, updated_at = NOW()`,
-      [tenantId, JSON.stringify(data)]
+      `INSERT INTO agencia (id, tenant_id, data, updated_at) VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (id, tenant_id) DO UPDATE SET data = $3, updated_at = NOW()`,
+      [agenciaId, tenantId, JSON.stringify(data)]
     );
     return NextResponse.json(data);
   } catch (e: unknown) {

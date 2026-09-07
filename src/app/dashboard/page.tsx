@@ -22,7 +22,7 @@ import {
   hojeISO, dataLocal, mesDe,
 } from '@/lib/money';
 import { KPIGridSkeleton } from '@/components/skeletons';
-import { calcularSaldoBancario } from '@/lib/saldo-bancario';
+import { calcularSaldoBancario, valorMovimentado } from '@/lib/saldo-bancario';
 import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
 
 const BRL = (v: number) =>
@@ -278,15 +278,30 @@ export default function DashboardPage() {
         && (p.status === 'PAGO' || p.status === 'PENDENTE')
         && !(p.auto_gerado && p.origem === 'VENDA'));
 
-      const recBrutaVendas = somaPor(mVendas, v => v.valor_final);
+      // RECEITA DA AGÊNCIA, não volume vendido.
+      //
+      // Aqui estava o erro mais caro do dashboard: recBrutaVendas somava
+      // v.valor_final, ou seja, o pacote inteiro que o cliente contratou.
+      // Numa agência isso é 7 a 12 vezes maior que a receita real, porque
+      // hotel, aéreo e receptivo são repasse, não faturamento próprio. O
+      // lucro fechava (o CMV era subtraído depois), mas a margem saía
+      // dividida pelo volume, e os dois cartões desta tela levam para o DRE,
+      // que mostra o número certo. Duas telas, dois números.
+      //
+      // Mesma fórmula da página de DRE: comissão da venda, clampada por
+      // venda para que um prejuízo isolado não vire receita negativa.
+      const recBrutaVendas = somaPor(
+        mVendas,
+        v => Math.max(round2(num(v.valor_final) - num(v.valor_total_custo)), 0),
+      );
       const recComissoes = somaPor(mReceber.filter(cr => cr.origem === 'COMISSAO_FORNECEDOR'), cr => cr.valor_final);
       const recFee = somaPor(mReceber.filter(cr => cr.origem === 'FEE'), cr => cr.valor_final);
       const recOutras = somaPor(mReceber.filter(cr => cr.origem === 'OUTROS'), cr => cr.valor_final);
       const receitaBruta = soma([recBrutaVendas, recComissoes, recFee, recOutras]);
 
-      const cmv = somaPor(mVendas, v => v.valor_total_custo);
-      const totalDesp = somaPor(mPagar, p => p.valor_final);
-      const totalDespesas = soma([cmv, totalDesp]);
+      // O CMV já foi descontado dentro de recBrutaVendas (a comissão é
+      // venda menos custo). Somá-lo de novo cobraria o custo duas vezes.
+      const totalDespesas = somaPor(mPagar, p => p.valor_final);
 
       const lucroLiq = round2(receitaBruta - totalDespesas);
       const margemLiq = round2(divSegura(lucroLiq, receitaBruta) * 100);
@@ -312,9 +327,15 @@ export default function DashboardPage() {
     // saldo_atual persistido nas contas (pode ficar stale).
     const saldoCaixa = calcularSaldoBancario(contas, receber, pagar);
 
-    // Deltas
-    const delta = (atual: number, anterior: number) =>
-      variacaoPct(atual, anterior) ?? (num(atual) > 0 ? 100 : 0);
+    // Deltas.
+    //
+    // variacaoPct devolve null de propósito quando o mês anterior é zero:
+    // não existe variação percentual sobre base zero. O fallback antigo
+    // ("100" quando havia valor, "0" quando não) fabricava um número —
+    // "+100%" num mês que simplesmente não tinha com o que comparar, e
+    // "0%" lido na tela como "estável". Agora o delta some do cartão.
+    const delta = (atual: number, anterior: number): number | null =>
+      variacaoPct(atual, anterior);
 
     return {
       faturamento, faturamentoAnt, qtdVendas, qtdVendasAnt,
@@ -393,7 +414,11 @@ export default function DashboardPage() {
     },
     {
       label: 'Lucro do Mês', valor: BRL(calc.lucro), valorNum: calc.lucro,
-      delta: calc.lucroAnt !== 0 ? calc.delta(calc.lucro, Math.abs(calc.lucroAnt)) : null,
+      // Sem Math.abs no argumento: variacaoPct já usa o módulo no
+      // DENOMINADOR. Aplicá-lo aqui trocava o sinal do numerador e invertia
+      // a leitura em mês de prejuízo. Saindo de -1.000 para +500, a tela
+      // mostrava -50% onde a recuperação foi de +150%.
+      delta: calc.delta(calc.lucro, calc.lucroAnt),
       deltaLabel: 'vs mes anterior', meta: null, metaLabel: '',
       icon: Trophy, color: calc.lucro >= 0 ? 'text-emerald-400' : 'text-red-400',
       bgColor: calc.lucro >= 0 ? 'bg-emerald-400/10' : 'bg-red-400/10',
@@ -522,12 +547,16 @@ export default function DashboardPage() {
     let saldoAcum = 0;
     const raw: { mes: string; entradas: number; saidas: number }[] = [];
     for (let i = 0; i < 6; i++) {
+      // Dois erros na mesma linha antes: PARCIAL ficava de fora (dinheiro
+      // real que entrou some do gráfico) e o valor somado era o previsto,
+      // não o baixado (uma conta quitada com desconto aparecia pelo cheio).
+      // valorMovimentado resolve os dois: é a mesma regra do saldo.
       const ent = somaPor(
-        receber.filter(r => r.status === 'RECEBIDO' && (r.data_recebimento || r.data_vencimento)?.startsWith(m)),
-        r => r.valor_final);
+        receber.filter(r => (r.data_recebimento || r.data_vencimento)?.startsWith(m)),
+        r => valorMovimentado(r, 'valor_recebido'));
       const sai = somaPor(
-        pagar.filter(p => p.status === 'PAGO' && (p.data_pagamento || p.data_vencimento)?.startsWith(m)),
-        p => p.valor_final);
+        pagar.filter(p => (p.data_pagamento || p.data_vencimento)?.startsWith(m)),
+        p => valorMovimentado(p, 'valor_pago'));
       raw.unshift({ mes: m, entradas: ent, saidas: sai });
       m = prevMonth(m);
     }
@@ -697,20 +726,23 @@ export default function DashboardPage() {
               <span>
                 <b className="mono" style={{ fontSize: '11px', color: 'var(--ink-2)' }}>{BRL(calc.faturamento)}</b> faturados
               </span>
-              {calc.faturamentoAnt > 0 && (
-                <>
-                  <span style={{ color: 'var(--ink-4)' }}>·</span>
-                  <span
-                    className="mono"
-                    style={{
-                      fontSize: '11px',
-                      color: calc.delta(calc.faturamento, calc.faturamentoAnt) >= 0 ? 'var(--pos)' : 'var(--neg)',
-                    }}
-                  >
-                    {PCT(calc.delta(calc.faturamento, calc.faturamentoAnt))} vs mês anterior
-                  </span>
-                </>
-              )}
+              {(() => {
+                // Sem base de comparação o trecho inteiro não é renderizado,
+                // em vez de estampar um percentual inventado.
+                const d = calc.delta(calc.faturamento, calc.faturamentoAnt);
+                if (d === null) return null;
+                return (
+                  <>
+                    <span style={{ color: 'var(--ink-4)' }}>·</span>
+                    <span
+                      className="mono"
+                      style={{ fontSize: '11px', color: d >= 0 ? 'var(--pos)' : 'var(--neg)' }}
+                    >
+                      {PCT(d)} vs mês anterior
+                    </span>
+                  </>
+                );
+              })()}
               <span style={{ color: 'var(--ink-4)' }}>·</span>
               <span>
                 Atualizado às{' '}

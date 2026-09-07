@@ -12,6 +12,7 @@
 
 import type { Pool } from 'pg';
 import { generateId } from './utils';
+import { hojeISO } from './money';
 import type { GrupoViagem } from './types';
 
 export interface ConfigVagas {
@@ -180,7 +181,7 @@ export function calcReservaFinanceiro(
     };
   }
 
-  const hoje = new Date().toISOString().split('T')[0];
+  const hoje = hojeISO();
   let totalPrev = 0;
   let totalReceb = 0;
   let totalVenc = 0;

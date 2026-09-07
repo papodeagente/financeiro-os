@@ -6,6 +6,7 @@ import { getSession } from '@/lib/auth';
 import { podeVerTodasVendas } from '@/lib/permissoes';
 import { gerarContasVenda, type ItemVendaInput, type FornecedorInfo } from '@/lib/venda-financeiro';
 import { STATUS_BAIXADOS } from '@/lib/caixa-atomico';
+import { hojeISO } from '@/lib/money';
 
 const TABLE = 'vendas_crm';
 const INDEX_COLS = ['cliente_id', 'vendedor_id', 'status'];
@@ -89,10 +90,14 @@ async function postLegado(item: Record<string, unknown>, tenantId: string) {
     updateSets.push(`${col} = $${paramNum}`);
   });
 
+  // Guarda de tenant no conflito (mesma do crud-api.ts): o id vem do body,
+  // então sem esta cláusula qualquer usuário logado que descubra o id de uma
+  // venda de outro tenant a sobrescreve mantendo o tenant_id da vítima.
   await pool!.query(
     `INSERT INTO ${TABLE} (${insertCols.join(', ')}, created_at, updated_at)
      VALUES (${insertVals.join(', ')}, NOW(), NOW())
-     ON CONFLICT (id) DO UPDATE SET ${updateSets.join(', ')}`,
+     ON CONFLICT (id) DO UPDATE SET ${updateSets.join(', ')}
+     WHERE ${TABLE}.tenant_id = EXCLUDED.tenant_id`,
     paramValues,
   );
 
@@ -149,7 +154,8 @@ async function postComItens(body: PostComItensBody, tenantId: string) {
     await client.query(
       `INSERT INTO ${TABLE} (${vendaCols.join(', ')}, created_at, updated_at)
        VALUES (${vendaVals.join(', ')}, NOW(), NOW())
-       ON CONFLICT (id) DO UPDATE SET ${vendaUpdates.join(', ')}`,
+       ON CONFLICT (id) DO UPDATE SET ${vendaUpdates.join(', ')}
+       WHERE ${TABLE}.tenant_id = EXCLUDED.tenant_id`,
       vendaParams,
     );
 
@@ -159,7 +165,8 @@ async function postComItens(body: PostComItensBody, tenantId: string) {
         `INSERT INTO itens_venda (id, tenant_id, venda_id, fornecedor_id, sequencia, status, data, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, NOW(), NOW())
          ON CONFLICT (id) DO UPDATE SET
-           venda_id = $3, fornecedor_id = $4, sequencia = $5, status = $6, data = $7::jsonb, updated_at = NOW()`,
+           venda_id = $3, fornecedor_id = $4, sequencia = $5, status = $6, data = $7::jsonb, updated_at = NOW()
+         WHERE itens_venda.tenant_id = EXCLUDED.tenant_id`,
         [item.id, tenantId, item.venda_id, item.fornecedor_id, item.sequencia, item.status, JSON.stringify(item.data)],
       );
     }
@@ -190,6 +197,24 @@ async function postComItens(body: PostComItensBody, tenantId: string) {
       fornecedores,
       cliente_nome: cliente_nome || '',
     });
+
+    // 4b. Congela a margem e o custo previstos NA PRIMEIRA vez que a venda
+    //     gera contas. É a referência de "previsto x realizado": sem ela não
+    //     há como saber que o hotel veio R$ 800 mais caro, porque a conta a
+    //     pagar já foi reescrita com o valor novo e a margem calculada hoje
+    //     acompanha o custo de hoje. Regravar a cada edição destruiria a
+    //     referência, então só é gravada quando ainda não existe.
+    const vendaRegistro: Record<string, unknown> = vendaData;
+    if (vendaRegistro.margem_prevista_original === undefined || vendaRegistro.margem_prevista_original === null) {
+      vendaRegistro.margem_prevista_original = resultado.resumo.lucro_previsto;
+      vendaRegistro.custo_previsto_original = resultado.resumo.total_custos;
+      vendaRegistro.baseline_congelada_em = hojeISO();
+      await client.query(
+        `UPDATE ${TABLE} SET data = $3::jsonb, updated_at = NOW()
+          WHERE id = $1 AND tenant_id = $2`,
+        [String(venda.id ?? ''), tenantId, JSON.stringify(vendaData)],
+      );
+    }
 
     // 5. Regeneração idempotente das contas auto_gerado desta venda.
     //

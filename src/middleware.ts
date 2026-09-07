@@ -90,8 +90,16 @@ export async function middleware(request: NextRequest) {
     return addSecurityHeaders(NextResponse.next());
   }
 
-  // Allow public paths (prefixos + exatos)
-  if (PUBLIC_EXACT_PATHS.has(pathname) || PUBLIC_PATHS.some(p => pathname.startsWith(p))) {
+  // Allow public paths (prefixos + exatos).
+  //
+  // Um prefixo só libera a própria rota ou um SEGMENTO abaixo dela. Sem esta
+  // regra, '/api/planos' liberava '/api/planos-comissao' inteiro (GET, POST,
+  // PUT e DELETE de planos de comissão) por simples casamento de string. O
+  // isolamento sobrevivia só porque getTenantId lança sem sessão, ou seja,
+  // dependia de uma exceção em vez da autenticação.
+  const casaPrefixoPublico = (p: string) =>
+    pathname === p || pathname.startsWith(p.endsWith('/') ? p : `${p}/`);
+  if (PUBLIC_EXACT_PATHS.has(pathname) || PUBLIC_PATHS.some(casaPrefixoPublico)) {
     return addSecurityHeaders(NextResponse.next());
   }
 

@@ -120,15 +120,22 @@ export default function FinanceiroAgHubPage() {
         // "Em aberto" = o que ainda falta entrar/sair, incluindo o saldo
         // devedor das contas PARCIAIS e das vencidas. "Recebido/Pago" = o que
         // já se moveu no caixa (valorMovimentado conta o acumulado da parcial).
-        const emAberto = (s: string | undefined) =>
+        // Os dois lados usam vocabulário DIFERENTE para vencido: contas a
+        // receber usam ATRASADO, contas a pagar usam VENCIDO. Um predicado
+        // único com ATRASADO deixava TODA conta a pagar vencida fora do
+        // KPI "A pagar" e, por consequência, do resultado projetado — a
+        // tela subestimava justamente as dívidas mais urgentes.
+        const receberEmAberto = (s: string | undefined) =>
           ['PENDENTE', 'PARCIAL', 'ATRASADO'].includes(String(s ?? ''));
+        const pagarEmAberto = (s: string | undefined) =>
+          ['PENDENTE', 'PARCIAL', 'VENCIDO'].includes(String(s ?? ''));
         const aReceberTotal = somaPor(
-          receber.filter(r => emAberto(r.status)),
+          receber.filter(r => receberEmAberto(r.status)),
           r => round2(num(r.valor_final) - valorMovimentado(r, 'valor_recebido')),
         );
         const recebidoTotal = somaPor(receber, r => valorMovimentado(r, 'valor_recebido'));
         const aPagarTotal = somaPor(
-          pagar.filter(p => emAberto(p.status)),
+          pagar.filter(p => pagarEmAberto(p.status)),
           p => round2(num(p.valor_final) - valorMovimentado(p, 'valor_pago')),
         );
         const pagoTotal = somaPor(pagar, p => valorMovimentado(p, 'valor_pago'));

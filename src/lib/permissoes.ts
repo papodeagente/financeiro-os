@@ -150,3 +150,33 @@ export function podeVerVenda(session: SessionLike | null | undefined, vendaVende
   if (podeVerTodasVendas(session)) return true;
   return session.userId === vendaVendedorId;
 }
+
+// Acesso ao módulo financeiro. VENDEDOR não tem.
+export function podeVerFinanceiro(session: SessionLike | null | undefined): boolean {
+  if (!session) return false;
+  return perm(session, 'ver_financeiro');
+}
+
+export function podeEditarFinanceiro(session: SessionLike | null | undefined): boolean {
+  if (!session) return false;
+  return perm(session, 'editar_financeiro');
+}
+
+/**
+ * Guarda de rota financeira.
+ *
+ * O perfil já dizia que VENDEDOR não vê financeiro, mas isso só era aplicado
+ * na interface: a API respondia normalmente a quem chamasse direto. Só 5 das
+ * 170 rotas checavam permissão de qualquer tipo.
+ *
+ * Devolve null quando pode seguir, ou o motivo da recusa.
+ */
+export function bloqueioFinanceiro(
+  session: SessionLike | null | undefined,
+  modo: 'ler' | 'escrever' = 'ler',
+): { status: 401 | 403; erro: string } | null {
+  if (!session) return { status: 401, erro: 'Sessao necessaria' };
+  const liberado = modo === 'escrever' ? podeEditarFinanceiro(session) : podeVerFinanceiro(session);
+  if (liberado) return null;
+  return { status: 403, erro: 'Seu perfil nao tem acesso ao financeiro.' };
+}

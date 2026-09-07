@@ -29,41 +29,37 @@ export async function POST() {
       [email]
     );
 
-    let id: string;
-    let modo: 'criado' | 'atualizado';
-
+    // O super admin JÁ EXISTE: este endpoint não reescreve a senha dele.
+    //
+    // A rota é pública (está em PUBLIC_PATHS, e precisa ser, para permitir o
+    // primeiro seed numa instalação nova). Enquanto ela também atualizava a
+    // senha, qualquer pessoa na internet podia fazer POST aqui e reverter o
+    // super admin para a senha da variável de ambiente, anulando qualquer
+    // rotação de credencial feita fora dela. Criar o primeiro registro é
+    // seguro; regravar um existente não é.
     if (existing.length > 0) {
-      id = existing[0].id;
-      modo = 'atualizado';
-      await pool.query(
-        `UPDATE super_admins
-         SET data = jsonb_build_object(
-               'id', $2::text,
-               'nome', $3::text,
-               'email', $4::text,
-               'senha_hash', $5::text,
-               'ativo', true
-             ),
-             updated_at = NOW()
-         WHERE id = $1`,
-        [id, id, nome, email, senhaHash],
-      );
-    } else {
-      id = Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
-      modo = 'criado';
-      const admin = { id, nome, email, senha_hash: senhaHash, ativo: true };
-      await pool.query(
-        `INSERT INTO super_admins (id, email, nome, data, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, NOW(), NOW())`,
-        [id, email, nome, JSON.stringify(admin)],
+      return NextResponse.json(
+        {
+          error: 'Super admin já existe. Esta rota não troca a senha de um cadastro existente.',
+          modo: 'ignorado',
+        },
+        { status: 409 },
       );
     }
 
+    const id = Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
+    const admin = { id, nome, email, senha_hash: senhaHash, ativo: true };
+    await pool.query(
+      `INSERT INTO super_admins (id, email, nome, data, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, NOW(), NOW())`,
+      [id, email, nome, JSON.stringify(admin)],
+    );
+
     return NextResponse.json({
       ok: true,
-      message: `Super admin ${modo} com sucesso`,
+      message: 'Super admin criado com sucesso',
       email,
-      modo,
+      modo: 'criado',
     });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Erro desconhecido';

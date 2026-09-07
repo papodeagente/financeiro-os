@@ -41,10 +41,14 @@ export async function POST(req: Request) {
       insertVals.push(`$${paramNum}`);
       updateSets.push(`${col} = $${paramNum}`);
     });
+    // Guarda de tenant no conflito: fornecedor carrega regras_faturamento,
+    // que alimentam a geração de contas a pagar. Sobrescrever o fornecedor
+    // de outro tenant alteraria as contas geradas nas vendas dele.
     await pool.query(
       `INSERT INTO ${TABLE} (${insertCols.join(', ')}, created_at, updated_at)
        VALUES (${insertVals.join(', ')}, NOW(), NOW())
-       ON CONFLICT (id) DO UPDATE SET ${updateSets.join(', ')}`,
+       ON CONFLICT (id) DO UPDATE SET ${updateSets.join(', ')}
+       WHERE ${TABLE}.tenant_id = EXCLUDED.tenant_id`,
       paramValues,
     );
 

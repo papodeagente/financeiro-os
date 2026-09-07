@@ -1,4 +1,7 @@
 import type { ContaReceber, ContaPagar, ContaBancaria } from './crm-types';
+import { round2, soma } from './money';
+import { valorMovimentado } from './saldo-bancario';
+import { valorEmAberto as emAbertoDaConta } from './resultado-financeiro';
 
 // Computa série histórica dos KPIs principais para os últimos N meses,
 // usando os dados que o hub já tem em mãos (sem novo endpoint).
@@ -49,40 +52,48 @@ export function calcularHistoricoKpis(
   nMeses: number = 10,
 ): HistoricoKpis {
   const meses = ultimosMeses(nMeses);
-  const saldoInicial = (contas || []).reduce((s, c) => s + (Number(c.saldo_inicial) || 0), 0);
+  const saldoInicial = soma((contas || []).map(c => c.saldo_inicial));
 
-  // Recebido/pago efetivo agrupado por mês de data_recebimento/data_pagamento
-  const recebidoPorMes: Record<string, number> = {};
-  const pagoPorMes: Record<string, number> = {};
+  // Realizado por mês, pelo VALOR BAIXADO.
+  //
+  // Antes, a conta PARCIAL era contada errado nas duas pontas: excluída do
+  // realizado (o dinheiro que entrou não aparecia no saldo) e somada INTEIRA
+  // no pendente (cobrança do valor cheio de quem já pagou parte). Uma conta
+  // de R$ 100.000 com R$ 70.000 recebidos errava R$ 140.000 sozinha, e o
+  // erro se propagava por todos os meses seguintes pelo saldo acumulado.
+  const recebidoPorMes: Record<string, number[]> = {};
+  const pagoPorMes: Record<string, number[]> = {};
   for (const r of receber || []) {
-    if (r.status !== 'RECEBIDO') continue;
+    const valor = valorMovimentado(r, 'valor_recebido');
+    if (valor === 0) continue;
     const ym = ymFromISO(r.data_recebimento || r.data_vencimento);
     if (!ym) continue;
-    recebidoPorMes[ym] = (recebidoPorMes[ym] || 0) + (Number(r.valor_recebido) || Number(r.valor_final) || 0);
+    (recebidoPorMes[ym] ||= []).push(valor);
   }
   for (const p of pagar || []) {
-    if (p.status !== 'PAGO') continue;
+    const valor = valorMovimentado(p, 'valor_pago');
+    if (valor === 0) continue;
     const ym = ymFromISO(p.data_pagamento || p.data_vencimento);
     if (!ym) continue;
-    pagoPorMes[ym] = (pagoPorMes[ym] || 0) + (Number(p.valor_pago) || Number(p.valor_final) || 0);
+    (pagoPorMes[ym] ||= []).push(valor);
   }
 
-  // Pendentes que vencem no mês (proxy de "a receber/pagar naquele instante")
-  const pendReceberPorMes: Record<string, number> = {};
-  const pendPagarPorMes: Record<string, number> = {};
+  // Em aberto por mês de vencimento — o SALDO que falta, não o valor cheio.
+  const pendReceberPorMes: Record<string, number[]> = {};
+  const pendPagarPorMes: Record<string, number[]> = {};
   for (const r of receber || []) {
-    if (r.status === 'CANCELADO') continue;
-    if (r.status === 'RECEBIDO') continue; // só pendentes
+    const saldo = emAbertoDaConta(r, 'valor_recebido');
+    if (saldo <= 0) continue;
     const ym = ymFromISO(r.data_vencimento);
     if (!ym) continue;
-    pendReceberPorMes[ym] = (pendReceberPorMes[ym] || 0) + (Number(r.valor_final) || 0);
+    (pendReceberPorMes[ym] ||= []).push(saldo);
   }
   for (const p of pagar || []) {
-    if (p.status === 'CANCELADO') continue;
-    if (p.status === 'PAGO') continue;
+    const saldo = emAbertoDaConta(p, 'valor_pago');
+    if (saldo <= 0) continue;
     const ym = ymFromISO(p.data_vencimento);
     if (!ym) continue;
-    pendPagarPorMes[ym] = (pendPagarPorMes[ym] || 0) + (Number(p.valor_final) || 0);
+    (pendPagarPorMes[ym] ||= []).push(saldo);
   }
 
   // Cumulativo: saldo[i] = saldo[i-1] + recebido_i - pago_i
@@ -92,20 +103,22 @@ export function calcularHistoricoKpis(
   const aPagar: number[] = [];
   const lucro: number[] = [];
   for (const ym of meses) {
-    const rec = recebidoPorMes[ym] || 0;
-    const pag = pagoPorMes[ym] || 0;
-    saldoAcum += rec - pag;
-    saldo.push(Number(saldoAcum.toFixed(2)));
-    aReceber.push(Number((pendReceberPorMes[ym] || 0).toFixed(2)));
-    aPagar.push(Number((pendPagarPorMes[ym] || 0).toFixed(2)));
-    lucro.push(Number((rec - pag).toFixed(2)));
+    const rec = soma(recebidoPorMes[ym] || []);
+    const pag = soma(pagoPorMes[ym] || []);
+    saldoAcum = round2(saldoAcum + rec - pag);
+    saldo.push(saldoAcum);
+    aReceber.push(soma(pendReceberPorMes[ym] || []));
+    aPagar.push(soma(pendPagarPorMes[ym] || []));
+    lucro.push(round2(rec - pag));
   }
 
   return { saldo, aReceber, aPagar, lucro, meses };
 }
 
-/** Calcula delta percentual entre dois pontos consecutivos da série.
-    Retorna { delta, dir } onde dir é 'up' / 'down' / 'flat'. */
+/** OBSOLETA — não use. Em base zero ela inventa "+100%", enquanto
+    `variacaoPct` de money.ts devolve null para dizer "sem base de
+    comparação". O hub já usa variacaoPct; esta ficou sem chamadores e
+    permanece só para não quebrar importação externa. */
 export function calcDelta(series: number[]): { delta: number; dir: 'up' | 'down' | 'flat' } {
   if (!series || series.length < 2) return { delta: 0, dir: 'flat' };
   const cur = series[series.length - 1];

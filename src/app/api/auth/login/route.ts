@@ -35,8 +35,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Usuario inativo. Contate o administrador.' }, { status: 403 });
     }
 
-    // Check tenant status
-    if (row.tenant_status && row.tenant_status !== 'ativo') {
+    // Usuário sem agência não entra.
+    //
+    // Sessão com tenantId vazio fazia todo `WHERE tenant_id = $1` casar com
+    // as linhas órfãs (tenant_id = '') que sobraram da migração multi-tenant
+    // — em várias tabelas ela nunca rodou o backfill. Além de expor esses
+    // registros, /api/config/reset apagaria todos eles de uma vez.
+    if (!row.tenant_id) {
+      return NextResponse.json(
+        { error: 'Usuario sem agencia vinculada. Contate o suporte.' },
+        { status: 403 },
+      );
+    }
+
+    // Check tenant status.
+    // O JOIN é LEFT: agência removida devolve status nulo, e a checagem
+    // antiga (`row.tenant_status && ...`) era simplesmente pulada, deixando
+    // entrar quem pertence a uma agência que não existe mais.
+    if (row.tenant_status !== 'ativo') {
       return NextResponse.json({ error: 'Agencia suspensa. Contate o suporte.' }, { status: 403 });
     }
 
