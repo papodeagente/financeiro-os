@@ -1,7 +1,7 @@
 # Extrato bancário automático no Entur OS FIN, com custo variável zero
 
 Documento de planejamento. Nenhuma linha de código de produção foi escrita nesta etapa.
-Alvo confirmado com o Bruno: **Entur OS FIN**, aplicação `grupos-os-app` no Coolify `187.127.6.135:8000`, repositório `papodeagente/financeiro-os`.
+Alvo confirmado com o Bruno: **Entur OS FIN**, aplicação `grupos-os-app` (Coolify interno), repositório `papodeagente/financeiro-os`.
 
 ---
 

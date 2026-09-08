@@ -1,7 +1,7 @@
 # Conciliação bancária automática no Entur OS FIN
 
 Documento de planejamento. Nenhuma linha de código de produção foi escrita.
-Alvo: **Entur OS FIN**, aplicação `grupos-os-app` no Coolify `187.127.6.135:8000`, repositório `financeiro-os`.
+Alvo: **Entur OS FIN**, aplicação `grupos-os-app` (Coolify interno), repositório `financeiro-os`.
 
 Base de evidência desta rodada: 30 bancos pesquisados, cada um com um pesquisador e um verificador cético independente, 279 afirmações com fonte e 117 suposições declaradas, mais três varreduras do repositório com referência de arquivo e linha.
 
