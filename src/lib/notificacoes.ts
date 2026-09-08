@@ -5,7 +5,10 @@ export type TipoNotificacao =
   | 'PROPOSTA_ACEITA'
   | 'PROPOSTA_FEEDBACK'
   | 'PROPOSTA_VISUALIZADA'
-  | 'PROPOSTA_LEAD';
+  | 'PROPOSTA_LEAD'
+  /** Venda chegou do CRM com vendedor que ninguém cadastrou aqui. A venda
+   *  entra normalmente; o que não acontece é comissão e meta. */
+  | 'VENDA_VENDEDOR_NAO_CADASTRADO';
 
 export interface Notificacao {
   id: string;

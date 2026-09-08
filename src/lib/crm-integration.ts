@@ -16,6 +16,7 @@ import {
 } from './crm-types';
 import { gerarContasVenda, type ItemVendaInput, type FornecedorInfo } from './venda-financeiro';
 import { round2, num, hojeISO } from './money';
+import { criarNotificacao } from './notificacoes';
 // Caixa do webhook usa o caminho ATÔMICO (um único UPDATE em SQL), igual ao
 // PUT das rotas de conta. O helper antigo lia, somava e regravava fora de
 // transação, com o erro engolido: duas confirmações simultâneas na mesma
@@ -799,11 +800,19 @@ async function vincularMembroPorEmail(
 // Diferente da versao anterior, que so criava e nunca atualizava, aqui
 // nome e email sao refrescados a cada evento. E assim que a mudanca feita
 // no CRM chega ao financeiro sem ninguem digitar de novo.
+interface VendedorSincronizado {
+  id: string;
+  /** True quando a pessoa só existe porque uma venda a trouxe do CRM, e
+   *  ninguém a cadastrou de fato no financeiro. Ela não entra na equipe,
+   *  não recebe plano e não gera comissão até alguém cadastrar. */
+  cadastroPendente: boolean;
+}
+
 async function upsertVendedorByExternalId(
   externalId: string,
   dados: { nome?: unknown; email?: unknown },
   tenantId: string,
-): Promise<string> {
+): Promise<VendedorSincronizado> {
   if (!pool || !externalId) throw new Error('upsertVendedor: external_id obrigatorio');
 
   const nome = asStr(dados.nome);
@@ -838,7 +847,7 @@ async function upsertVendedorByExternalId(
       );
     }
     await vincularMembroPorEmail(id, email || normalizeEmail(atual.email), tenantId);
-    return id;
+    return { id, cadastroPendente: atual.cadastro_pendente === true };
   }
 
   // (2) match por email: o humano ja existe no financeiro, so nao tinha
@@ -864,13 +873,22 @@ async function upsertVendedorByExternalId(
         [data.nome, email, JSON.stringify(data), externalId, id, tenantId],
       );
       await vincularMembroPorEmail(id, email, tenantId);
-      return id;
+      // Quem já existia aqui foi cadastrado por alguém: não é pendente.
+      return { id, cadastroPendente: false };
     }
   }
 
   // (3) usuario novo
   const id = generateId();
-  const data = { id, nome, email, origem: 'crm', external_id: externalId, ativo: true };
+  // cadastro_pendente marca que este usuário nasceu de uma venda, e não de
+  // alguém cadastrando a pessoa. Ele não aparece na equipe nem recebe plano
+  // até ser cadastrado de fato em Configurações, Usuários.
+  const data = {
+    id, nome, email, origem: 'crm', external_id: externalId, ativo: true,
+    cadastro_pendente: true,
+    plano_comissao_id: '', meta_mensal_vendas: 0, meta_mensal_quantidade: 0,
+    membro_ids_legado: [] as string[],
+  };
   await pool.query(
     `INSERT INTO usuarios (id, nome, email, data, external_id, tenant_id, created_at, updated_at)
      VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
@@ -882,7 +900,7 @@ async function upsertVendedorByExternalId(
     [id, nome, email, JSON.stringify(data), externalId, tenantId],
   );
   await vincularMembroPorEmail(id, email, tenantId);
-  return id;
+  return { id, cadastroPendente: true };
 }
 
 // 3-stage upsert so the same supplier is never duplicated across systems.
@@ -1190,12 +1208,18 @@ export async function processarEventoCRM(
 
         const vendedorExternalId = asStr(payload.vendedor_id);
         let vendedorId = '';
+        // A venda NUNCA é recusada por causa do vendedor. Ela entra, e o
+        // que fica pendente é a comissão, com aviso explícito.
+        let vendedorPendente = false;
+        const vendedorNome = asStr(payload.vendedor_nome);
         if (vendedorExternalId) {
-          vendedorId = await upsertVendedorByExternalId(
+          const sincronizado = await upsertVendedorByExternalId(
             vendedorExternalId,
             { nome: payload.vendedor_nome, email: payload.vendedor_email },
             tenantId,
           );
+          vendedorId = sincronizado.id;
+          vendedorPendente = sincronizado.cadastroPendente;
         }
 
         // 2) Compute commercial metrics. The CRM may send `custo_total`,
@@ -1313,6 +1337,10 @@ export async function processarEventoCRM(
           // ---- Extensões JSONB (não na interface VendaCRM, lidas via data->> em queries) ----
           cliente_external_id: clienteExternalId,
           vendedor_external_id: vendedorExternalId,
+          // A tela da venda lê estes dois para mostrar o aviso de que a
+          // comissão não vai ser calculada enquanto ninguém cadastrar.
+          vendedor_cadastro_pendente: vendedorPendente,
+          vendedor_nome_crm: vendedorNome,
           proposta_id: asStr(payload.entur_proposta_id),
           crm_venda_id: asStr(payload.crm_venda_id),
           created_at: new Date().toISOString(),
@@ -1530,7 +1558,25 @@ export async function processarEventoCRM(
         const cpGerados = contasGen.contas_pagar.length;
         const crGerados = contasGen.contas_receber.length;
         const crValor = contasGen.resumo.total_comissoes + contasGen.resumo.total_cliente;
-        acao = `venda criada (${vendaId}): ${itensInput.length} itens, ${cpGerados} CP, ${crGerados} CR (R$ ${crValor.toFixed(2)})`;
+        // A venda entrou. Se o vendedor não está cadastrado, avisa em vez
+        // de deixar o valor sumir da meta e da comissão sem explicação.
+        if (vendedorPendente) {
+          await criarNotificacao({
+            tenantId,
+            tipo: 'VENDA_VENDEDOR_NAO_CADASTRADO',
+            titulo: `Venda ${numeroVenda} recebida com vendedor não cadastrado`,
+            descricao: `${vendedorNome || 'O vendedor'} fechou esta venda no CRM mas não está cadastrado no financeiro. A venda entrou normalmente. A comissão não vai ser calculada e a venda não conta para nenhuma meta enquanto a pessoa não for cadastrada em Configurações, Usuários.`,
+            link: `/vendas/${vendaId}`,
+            vendedorId,
+            data: {
+              venda_id: vendaId,
+              vendedor_external_id: vendedorExternalId,
+              vendedor_nome: vendedorNome,
+            },
+          });
+        }
+
+        acao = `venda criada (${vendaId}): ${itensInput.length} itens, ${cpGerados} CP, ${crGerados} CR (R$ ${crValor.toFixed(2)})${vendedorPendente ? ' [vendedor nao cadastrado]' : ''}`;
         break;
       }
 

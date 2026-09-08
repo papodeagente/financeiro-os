@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { num } from '@/lib/money';
+import { num, round2 } from '@/lib/money';
 import type { Membro, PerfilUsuario } from '@/lib/crm-types';
 
 /** Cargo exibido a partir do perfil de acesso. O perfil manda no que a
@@ -40,10 +40,15 @@ export async function GET() {
     if (!pool) return NextResponse.json({ error: 'No database' }, { status: 500 });
     const tenantId = await getTenantId();
 
-    const [usuariosRes, orfaosRes] = await Promise.all([
+    const [usuariosRes, orfaosRes, pendentesRes] = await Promise.all([
+      // A equipe é só quem foi cadastrado de fato. Usuário que nasceu de
+      // uma venda do CRM fica de fora até alguém confirmar o cadastro.
       pool.query(
         `SELECT id, nome, email, data, external_id
-           FROM usuarios WHERE tenant_id = $1 ORDER BY nome ASC`,
+           FROM usuarios
+          WHERE tenant_id = $1
+            AND COALESCE(data->>'cadastro_pendente', 'false') <> 'true'
+          ORDER BY nome ASC`,
         [tenantId],
       ),
       pool.query(
@@ -54,6 +59,24 @@ export async function GET() {
                WHERE u.tenant_id = m.tenant_id
                  AND u.data->'membro_ids_legado' ? m.id)
           ORDER BY nome ASC`,
+        [tenantId],
+      ),
+      // Vendeu pelo CRM e ninguém cadastrou: a venda entrou, a comissão não.
+      pool.query(
+        `SELECT u.id, u.nome, u.email, u.external_id,
+                COUNT(v.id)::int AS vendas,
+                COALESCE(SUM(
+                  CASE WHEN v.data->>'valor_final' ~ '^-?[0-9]+(\\.[0-9]+)?$'
+                       THEN (v.data->>'valor_final')::numeric ELSE 0 END
+                ), 0) AS valor,
+                MAX(v.data->>'data_venda') AS ultima
+           FROM usuarios u
+           LEFT JOIN vendas_crm v
+             ON v.vendedor_id = u.id AND v.tenant_id = u.tenant_id
+          WHERE u.tenant_id = $1
+            AND COALESCE(u.data->>'cadastro_pendente', 'false') = 'true'
+          GROUP BY u.id, u.nome, u.email, u.external_id
+          ORDER BY COUNT(v.id) DESC, u.nome ASC`,
         [tenantId],
       ),
     ]);
@@ -95,7 +118,17 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json({ equipe, orfaos });
+    const aguardandoCadastro = pendentesRes.rows.map(r => ({
+      id: r.id as string,
+      nome: (r.nome as string) || '',
+      email: (r.email as string) || '',
+      external_id: (r.external_id as string) || '',
+      vendas: Number(r.vendas) || 0,
+      valor_vendido: round2(num(r.valor)),
+      ultima_venda: (r.ultima as string) || null,
+    }));
+
+    return NextResponse.json({ equipe, orfaos, aguardandoCadastro });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Erro interno';
     return NextResponse.json({ error: msg }, { status: 500 });
@@ -132,6 +165,21 @@ export async function POST(req: Request) {
       if (upd.rowCount === 0) {
         return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 });
       }
+      return NextResponse.json({ ok: true });
+    }
+
+    // Confirma que a pessoa trazida por uma venda do CRM é mesmo do time.
+    // A partir daqui ela entra na equipe, pode receber plano e meta, e as
+    // vendas dela passam a contar no recálculo de comissões.
+    if (acao === 'confirmar_cadastro') {
+      const usuarioId = String(body.usuario_id || '');
+      const upd = await pool.query(
+        `UPDATE usuarios
+            SET data = data - 'cadastro_pendente', updated_at = NOW()
+          WHERE id = $1 AND tenant_id = $2`,
+        [usuarioId, tenantId],
+      );
+      if (upd.rowCount === 0) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 });
       return NextResponse.json({ ok: true });
     }
 

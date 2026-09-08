@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Archive, ExternalLink, TriangleAlert, UserPlus, Users } from 'lucide-react';
+import { Archive, ExternalLink, TriangleAlert, UserCheck, UserPlus, Users } from 'lucide-react';
 import type { Membro, PlanoComissao } from '@/lib/crm-types';
 import { loadEntities } from '@/lib/crm-storage';
 import { PageHeader } from '@/components/fin/PageHeader';
@@ -15,6 +15,18 @@ interface PessoaDaEquipe extends Membro {
   membro_ids_legado: string[];
   perfil: string;
   origem: string;
+}
+
+/** Vendeu pelo CRM e ninguém cadastrou no financeiro. A venda entrou, a
+ *  comissão não é calculada e a venda não conta para meta nenhuma. */
+interface AguardandoCadastro {
+  id: string;
+  nome: string;
+  email: string;
+  external_id: string;
+  vendas: number;
+  valor_vendido: number;
+  ultima_venda: string | null;
 }
 
 /** Ficha do cadastro antigo que não achou usuário de mesmo email. */
@@ -67,6 +79,7 @@ function EsqueletoEquipe() {
 export default function VendedoresPage() {
   const [equipe, setEquipe] = useState<PessoaDaEquipe[]>([]);
   const [orfaos, setOrfaos] = useState<Orfao[]>([]);
+  const [aguardando, setAguardando] = useState<AguardandoCadastro[]>([]);
   const [planos, setPlanos] = useState<PlanoComissao[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -86,6 +99,7 @@ export default function VendedoresPage() {
       ]);
       setEquipe(resp.equipe ?? []);
       setOrfaos(resp.orfaos ?? []);
+      setAguardando(resp.aguardandoCadastro ?? []);
       setPlanos(listaPlanos);
       setAtualizadoEm(new Date());
     } catch (e) {
@@ -138,6 +152,57 @@ export default function VendedoresPage() {
         erro={erro ? { mensagem: erro, onTentarDeNovo: () => { carregar(); } } : null}
         esqueleto={<EsqueletoEquipe />}
       >
+        {aguardando.length > 0 && (
+          <section className={`${CARTAO} overflow-hidden`}>
+            <header className="flex items-start gap-[var(--fin-s-2)] border-b border-[var(--fin-border)] bg-[var(--fin-warning-soft)] px-[var(--fin-s-4)] py-[var(--fin-s-3)]">
+              <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-[var(--fin-warning-text)]" aria-hidden />
+              <div>
+                <h2 className="fin-t-body-strong text-[var(--fin-text)]">
+                  {aguardando.length} {aguardando.length === 1 ? 'pessoa vendeu' : 'pessoas venderam'} pelo CRM sem estar cadastrada aqui
+                </h2>
+                <p className="fin-t-caption text-[var(--fin-text-2)]">
+                  As vendas entraram normalmente. O que não acontece é comissão e meta, porque a
+                  pessoa não está na equipe. Confirme quem é do time.
+                </p>
+              </div>
+            </header>
+
+            <ul className="divide-y divide-[var(--fin-border)]">
+              {aguardando.map(a => (
+                <li key={a.id} className="flex flex-wrap items-center gap-[var(--fin-s-3)] px-[var(--fin-s-4)] py-[var(--fin-s-3)]">
+                  <div className="min-w-[12rem] flex-1">
+                    <p className="fin-t-body-strong text-[var(--fin-text)]">{a.nome || 'Sem nome'}</p>
+                    <p className="fin-t-caption text-[var(--fin-text-3)]">
+                      {a.email || 'sem email no CRM'}
+                    </p>
+                  </div>
+
+                  <div className="text-right">
+                    <p className="fin-t-caption text-[var(--fin-text-3)]">
+                      {a.vendas} {a.vendas === 1 ? 'venda' : 'vendas'}
+                    </p>
+                    <Money valor={a.valor_vendido} size="body" />
+                  </div>
+
+                  <button
+                    className="inline-flex h-9 items-center gap-[var(--fin-s-1)] rounded-[var(--fin-r-md)] bg-[var(--fin-accent)] px-3 fin-t-body-strong text-[var(--fin-text-on-fill)] hover:bg-[var(--fin-accent-hover)] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)]"
+                    disabled={ocupado === `a-${a.id}`}
+                    onClick={() => acao(
+                      { acao: 'confirmar_cadastro', usuario_id: a.id },
+                      `a-${a.id}`,
+                      `${a.nome || 'Vendedor'} entrou na equipe. Defina o plano para gerar comissão.`,
+                    )}
+                    title="Coloca a pessoa na equipe. Depois atribua o plano e recalcule as comissões."
+                  >
+                    <UserCheck className="h-4 w-4" aria-hidden />
+                    É do time, cadastrar
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         <section className={`${CARTAO} overflow-hidden`}>
           <header className="flex flex-wrap items-baseline justify-between gap-[var(--fin-s-2)] border-b border-[var(--fin-border)] px-[var(--fin-s-4)] py-[var(--fin-s-3)]">
             <h2 className="fin-t-subhead text-[var(--fin-text)]">Equipe da agência</h2>
