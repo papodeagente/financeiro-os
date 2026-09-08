@@ -6,7 +6,7 @@
  * R$ 10.200 tem que cair em 13,5%, e o mês inteiro sobe para essa faixa.
  */
 import {
-  faixaDoValor, calcularComissaoDoMes, chaveAcumulado,
+  faixaDoValor, calcularComissaoDoMes, chaveAcumulado, posicaoNaEscala,
 } from '../src/lib/comissao-acumulada.ts';
 import { soma } from '../src/lib/money.ts';
 
@@ -104,6 +104,32 @@ eq(calcularComissaoDoMes([], PLANO).percentual, 0, 'e não divide por zero');
 
 console.log('\n--- chave de agrupamento ---');
 eq(chaveAcumulado('u1', '2026-09'), 'u1::2026-09', 'um acumulado por vendedor e mês');
+
+console.log('\n--- posição na escada de comissão ---');
+{
+  const p = posicaoNaEscala(FAIXAS, 10200);
+  eq([p.indice, p.total, p.atual?.percentual], [4, 6, 13.5], 'faixa 4 de 6, a 13,5%');
+  eq(p.proxima?.percentual, 16, 'a próxima é a de 16%');
+  eq(p.falta_para_proxima, 4800, 'faltam R$ 4.800 de base para chegar em R$ 15.000');
+  // Hoje: 10.200 x 13,5% = 1.377. Cruzando: 15.000 x 16% = 2.400.
+  eq(p.ganho_na_proxima, 1023, 'cruzar a faixa vale R$ 1.023 a mais no mês inteiro');
+}
+{
+  const p = posicaoNaEscala(FAIXAS, 200);
+  eq([p.indice, p.atual], [0, null], 'abaixo da tabela não está em faixa nenhuma');
+  eq([p.proxima?.percentual, p.falta_para_proxima], [5, 2800], 'e faltam R$ 2.800 para a primeira');
+}
+{
+  const p = posicaoNaEscala(FAIXAS, 50000);
+  eq([p.indice, p.atual?.percentual, p.proxima], [6, 20, null], 'no topo não há próxima faixa');
+  eq([p.falta_para_proxima, p.ganho_na_proxima], [null, null], 'e não há o que faltar');
+}
+{
+  const p = posicaoNaEscala(FAIXAS, 15000);
+  eq([p.indice, p.atual?.percentual, p.falta_para_proxima], [5, 16, 5000],
+     'exatamente no início da faixa já conta como dentro dela');
+}
+eq(posicaoNaEscala([], 9999).total, 0, 'plano sem faixa não quebra');
 
 console.log(`\n${total - falhas}/${total} testes da comissão acumulada passaram`);
 process.exit(falhas > 0 ? 1 : 0);

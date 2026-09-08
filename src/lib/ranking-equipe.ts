@@ -30,6 +30,10 @@ export interface LinhaRanking {
   origem_meta: OrigemMeta;
   /** 1 é o primeiro. Quem não tem meta nem venda não recebe posição. */
   posicao: number | null;
+  /** Falso quando a pessoa não tem meta. A tela precisa disso para não
+   *  pintar de vermelho quem vendeu bem e só não tem meta definida: sem
+   *  meta, 0% não é desempenho ruim, é ausência de referência. */
+  tem_meta: boolean;
 }
 
 export interface ResumoEquipe {
@@ -38,8 +42,12 @@ export interface ResumoEquipe {
   realizado_total: number;
   pct_equipe: number;
   comissoes_mes: number;
-  /** Quantas pessoas ativas ainda estão sem meta nenhuma. */
-  sem_meta: number;
+  /** Pessoas sem meta que ainda assim venderam: entram no ranking, mas
+   *  sem barra de progresso. */
+  sem_meta_com_venda: number;
+  /** Pessoas sem meta e sem venda: ficam fora do ranking. É esta lista que
+   *  a tela deve oferecer para definir meta. */
+  fora_do_ranking: string[];
   /** Vendas do mês cujo vendedor não está na equipe. */
   vendas_sem_vendedor: number;
 }
@@ -128,17 +136,26 @@ export function montarRanking(entrada: {
       comissao_mes: comissaoPorPessoa.get(p.id) ?? 0,
       origem_meta,
       posicao: null,
+      tem_meta: meta_valor > 0,
     };
   });
 
-  // Ordena por percentual, e desempata por valor realizado. Quem não tem
-  // meta nem venda fica no fim e sem posição, para não parecer último num
-  // ranking do qual não participa.
+  // Quem tem meta OU vendeu participa do ranking. Quem não tem nem uma
+  // coisa nem outra fica fora, para não aparecer como último de uma
+  // disputa da qual não faz parte.
   const participa = (l: LinhaRanking) => l.meta_valor > 0 || l.realizado_valor > 0;
+
+  // Com meta, o mérito é o percentual atingido. Sem meta, o único mérito
+  // observável é quanto vendeu. Ordenar os dois grupos pela mesma régua
+  // colocaria quem vendeu R$ 15.000 sem meta atrás de quem vendeu R$ 100
+  // e bateu a meta de R$ 90, o que ninguém aceitaria como ranking.
   linhas.sort((a, b) => {
     const pa = participa(a), pb = participa(b);
     if (pa !== pb) return pa ? -1 : 1;
-    if (b.pct_valor !== a.pct_valor) return b.pct_valor - a.pct_valor;
+    if (a.tem_meta !== b.tem_meta) return a.tem_meta ? -1 : 1;
+    if (a.tem_meta) {
+      if (b.pct_valor !== a.pct_valor) return b.pct_valor - a.pct_valor;
+    }
     if (b.realizado_valor !== a.realizado_valor) return b.realizado_valor - a.realizado_valor;
     return a.vendedor_nome.localeCompare(b.vendedor_nome, 'pt-BR');
   });
@@ -154,7 +171,8 @@ export function montarRanking(entrada: {
     realizado_total,
     pct_equipe: meta_total > 0 ? round2(divSegura(realizado_total, meta_total) * 100) : 0,
     comissoes_mes: soma(linhas.map(l => l.comissao_mes)),
-    sem_meta: linhas.filter(l => l.origem_meta === 'SEM_META').length,
+    sem_meta_com_venda: linhas.filter(l => !l.tem_meta && l.posicao !== null).length,
+    fora_do_ranking: linhas.filter(l => l.posicao === null).map(l => l.vendedor_nome),
     vendas_sem_vendedor: vendasSemVendedor,
   };
 }

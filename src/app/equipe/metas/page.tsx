@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Crown, Medal, Target, TriangleAlert, Trophy, UserPlus } from 'lucide-react';
-import type { Membro, MetaVendedor, VendaCRM, ComissaoVenda } from '@/lib/crm-types';
+import type { Membro, MetaVendedor, VendaCRM, ComissaoVenda, PlanoComissao } from '@/lib/crm-types';
 import { loadEntities, loadEquipe, saveEntity } from '@/lib/crm-storage';
 import { montarRanking, type LinhaRanking } from '@/lib/ranking-equipe';
+import { posicaoNaEscala, type PosicaoNaEscala } from '@/lib/comissao-acumulada';
 import { hojeISO, mesDe, num, round2 } from '@/lib/money';
 import { PageHeader } from '@/components/fin/PageHeader';
 import { DataState } from '@/components/fin/DataState';
@@ -69,6 +70,7 @@ export default function MetasPage() {
   const [metas, setMetas] = useState<MetaVendedor[]>([]);
   const [vendas, setVendas] = useState<VendaCRM[]>([]);
   const [comissoes, setComissoes] = useState<ComissaoVenda[]>([]);
+  const [planos, setPlanos] = useState<PlanoComissao[]>([]);
   const [mes, setMes] = useState(() => mesDe(hojeISO()));
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -83,13 +85,14 @@ export default function MetasPage() {
   const carregar = useCallback(async () => {
     setErro(null);
     try {
-      const [mt, eq, v, c] = await Promise.all([
+      const [mt, eq, v, c, pl] = await Promise.all([
         loadEntities<MetaVendedor>('metas'),
         loadEquipe<Membro>(),
         loadEntities<VendaCRM>('vendas-crm'),
         loadEntities<ComissaoVenda>('comissoes'),
+        loadEntities<PlanoComissao>('planos-comissao'),
       ]);
-      setMetas(mt); setEquipe(eq); setVendas(v); setComissoes(c);
+      setMetas(mt); setEquipe(eq); setVendas(v); setComissoes(c); setPlanos(pl);
       setAtualizadoEm(new Date());
 
       // Primeira carga só memoriza. Festa é para o que chegar depois.
@@ -131,6 +134,30 @@ export default function MetasPage() {
     [equipe, metas, vendas, comissoes, mes],
   );
 
+  /** Em que degrau da escada de comissão cada pessoa está neste mês, e o
+   *  que falta para subir. A base é a soma das bases de comissão do mês,
+   *  que é a mesma grandeza que o motor usa para escolher a faixa. */
+  const escalaPorVendedor = useMemo(() => {
+    const mapa = new Map<string, { base: number; pct: number; escala: PosicaoNaEscala; plano: string }>();
+    for (const p of equipe) {
+      const plano = planos.find(x => x.id === p.plano_comissao_id);
+      if (!plano) continue;
+      const doMes = comissoes.filter(
+        c => c.status !== 'CANCELADA' && mesDe(c.data_venda) === mes && (
+          c.vendedor_id === p.id || (p.membro_ids_legado ?? []).includes(c.vendedor_id)
+        ),
+      );
+      const base = round2(doMes.reduce((t, c) => t + num(c.valor_base), 0));
+      mapa.set(p.id, {
+        base,
+        pct: doMes.length > 0 ? round2(num(doMes[0].percentual_aplicado)) : 0,
+        escala: posicaoNaEscala(plano.faixas ?? [], base),
+        plano: plano.nome,
+      });
+    }
+    return mapa;
+  }, [equipe, planos, comissoes, mes]);
+
   /** Materializa no mês as metas que hoje são herdadas do cadastro, para
    *  poderem ser ajustadas mês a mês sem mexer no cadastro da pessoa. */
   async function fixarMetasDoMes() {
@@ -167,8 +194,11 @@ export default function MetasPage() {
   }
 
   const participantes = resumo.linhas.filter(l => l.posicao !== null);
-  const semMeta = resumo.linhas.filter(l => l.origem_meta === 'SEM_META');
   const herdadas = resumo.linhas.filter(l => l.origem_meta === 'CADASTRO').length;
+  // Meta menor que um décimo do realizado não é meta apertada, é meta que
+  // ninguém definiu. Mostrar 15.499% nesse caso não informa nada.
+  const metaIrreal =
+    resumo.meta_total > 0 && resumo.realizado_total > resumo.meta_total * 10;
 
   return (
     <div className="flex flex-col gap-[var(--fin-s-5)]">
@@ -216,6 +246,22 @@ export default function MetasPage() {
           )}
         </div>
 
+        {metaIrreal && (
+          <div className={`${CARTAO} flex items-start gap-[var(--fin-s-2)] border-[var(--fin-warning)] bg-[var(--fin-warning-soft)] p-[var(--fin-s-4)]`}>
+            <Target className="mt-0.5 h-4 w-4 shrink-0 text-[var(--fin-warning-text)]" aria-hidden />
+            <div>
+              <p className="fin-t-body-strong text-[var(--fin-text)]">
+                A meta da equipe está muito abaixo do que já foi vendido
+              </p>
+              <p className="fin-t-caption text-[var(--fin-text-2)]">
+                {BRL(resumo.realizado_total)} realizados contra {BRL(resumo.meta_total)} de meta.
+                O percentual fica sem sentido até as metas serem definidas em{' '}
+                <Link href="/equipe/vendedores" className="underline underline-offset-2">Vendedores e planos</Link>.
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="grid gap-[var(--fin-s-3)] sm:grid-cols-2 xl:grid-cols-4">
           <MetricCard
             rotulo="Realizado"
@@ -247,7 +293,7 @@ export default function MetasPage() {
           <div className={`${CARTAO} flex flex-col justify-between p-[var(--fin-s-4)]`}>
             <p className="fin-t-overline text-[var(--fin-text-3)]">Atingido</p>
             <p className={`fin-t-metric ${resumo.pct_equipe >= 80 ? 'text-[var(--fin-positive)]' : resumo.pct_equipe >= 50 ? 'text-[var(--fin-warning-text)]' : 'text-[var(--fin-text)]'}`}>
-              {resumo.meta_total > 0 ? `${resumo.pct_equipe.toFixed(1)}%` : '—'}
+              {resumo.meta_total > 0 ? pctCurto(resumo.pct_equipe) : '—'}
             </p>
             <p className="fin-t-caption text-[var(--fin-text-3)]">
               {resumo.meta_total > 0 ? 'da meta da equipe no mês' : 'defina metas para acompanhar'}
@@ -255,7 +301,7 @@ export default function MetasPage() {
           </div>
         </div>
 
-        {resumo.meta_total > 0 && (
+        {resumo.meta_total > 0 && !metaIrreal && (
           <section className={`${CARTAO} p-[var(--fin-s-4)]`}>
             <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="fin-t-subhead text-[var(--fin-text)]">Progresso da equipe</h2>
@@ -296,7 +342,7 @@ export default function MetasPage() {
             </h2>
             <p className="fin-t-caption text-[var(--fin-text-3)]">
               {participantes.length} {participantes.length === 1 ? 'participante' : 'participantes'}
-              {semMeta.length > 0 && ` · ${semMeta.length} sem meta`}
+              {resumo.sem_meta_com_venda > 0 && ` · ${resumo.sem_meta_com_venda} vendeu sem meta`}
             </p>
           </header>
 
@@ -321,15 +367,19 @@ export default function MetasPage() {
           ) : (
             <ul className="divide-y divide-[var(--fin-border)]">
               {participantes.map(l => (
-                <LinhaDoRanking key={l.vendedor_id} linha={l} />
+                <LinhaDoRanking
+                  key={l.vendedor_id}
+                  linha={l}
+                  escala={escalaPorVendedor.get(l.vendedor_id) ?? null}
+                />
               ))}
             </ul>
           )}
 
-          {semMeta.length > 0 && (
+          {resumo.fora_do_ranking.length > 0 && (
             <div className="border-t border-[var(--fin-border)] bg-[var(--fin-surface-2)] px-[var(--fin-s-4)] py-[var(--fin-s-3)]">
               <p className="fin-t-caption text-[var(--fin-text-2)]">
-                Sem meta e fora do ranking: {semMeta.map(l => l.vendedor_nome).join(', ')}.{' '}
+                Sem meta e sem venda no mês: {resumo.fora_do_ranking.join(', ')}.{' '}
                 <Link href="/equipe/vendedores" className="inline-flex items-center gap-1 text-[var(--fin-accent)] underline underline-offset-2">
                   <UserPlus className="h-3 w-3" aria-hidden />
                   Definir metas
@@ -343,41 +393,104 @@ export default function MetasPage() {
   );
 }
 
-function LinhaDoRanking({ linha: l }: { linha: LinhaRanking }) {
-  const faixa = faixaDoPct(l.pct_valor);
+interface EscalaDoVendedor {
+  base: number;
+  pct: number;
+  escala: PosicaoNaEscala;
+  plano: string;
+}
+
+const BRL = (v: number) =>
+  v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+/** Percentual acima de 999% vira "999+". Um número de cinco dígitos não
+ *  informa nada e ainda estoura a coluna no notebook. */
+function pctCurto(pct: number): string {
+  if (pct >= 1000) return '999+%';
+  return `${pct.toFixed(pct >= 100 ? 0 : 1)}%`;
+}
+
+function LinhaDoRanking({ linha: l, escala }: { linha: LinhaRanking; escala: EscalaDoVendedor | null }) {
   const podio = (l.posicao ?? 99) <= 3;
   return (
-    <li className="flex flex-wrap items-center gap-[var(--fin-s-3)] px-[var(--fin-s-4)] py-[var(--fin-s-3)]">
-      <div className="flex w-8 shrink-0 justify-center">
-        {podio ? (
-          l.posicao === 1
-            ? <Crown className={`h-5 w-5 ${MEDALHA[0]}`} aria-label="Primeiro lugar" />
-            : <Medal className={`h-5 w-5 ${MEDALHA[(l.posicao ?? 1) - 1]}`} aria-label={`${l.posicao}º lugar`} />
-        ) : (
-          <span className="fin-t-caption tabular-nums text-[var(--fin-text-3)]">{l.posicao}º</span>
-        )}
-      </div>
+    <li className="px-[var(--fin-s-4)] py-[var(--fin-s-3)]">
+      <div className="flex flex-wrap items-start gap-x-[var(--fin-s-3)] gap-y-[var(--fin-s-2)]">
+        <div className="flex w-7 shrink-0 justify-center pt-0.5">
+          {podio ? (
+            l.posicao === 1
+              ? <Crown className={`h-5 w-5 ${MEDALHA[0]}`} aria-label="Primeiro lugar" />
+              : <Medal className={`h-5 w-5 ${MEDALHA[(l.posicao ?? 1) - 1]}`} aria-label={`${l.posicao} lugar`} />
+          ) : (
+            <span className="fin-t-caption tabular-nums text-[var(--fin-text-3)]">{l.posicao}º</span>
+          )}
+        </div>
 
-      <div className="min-w-[10rem] flex-1">
-        <p className="fin-t-body-strong text-[var(--fin-text)]">{l.vendedor_nome}</p>
-        <p className="fin-t-caption text-[var(--fin-text-3)]">
-          {l.realizado_quantidade} {l.realizado_quantidade === 1 ? 'venda' : 'vendas'}
-          {l.origem_meta === 'CADASTRO' && ' · meta do cadastro'}
-        </p>
-      </div>
+        {/* Nome e contexto. min-w-0 é o que permite o texto encolher em vez
+            de empurrar as colunas para fora da tela. */}
+        <div className="min-w-0 flex-1 basis-[12rem]">
+          <p className="truncate fin-t-body-strong text-[var(--fin-text)]">{l.vendedor_nome}</p>
+          <p className="fin-t-caption text-[var(--fin-text-3)]">
+            {l.realizado_quantidade} {l.realizado_quantidade === 1 ? 'venda' : 'vendas'}
+            {' · '}{BRL(l.realizado_valor)}
+            {l.origem_meta === 'CADASTRO' && ' · meta do cadastro'}
+          </p>
+        </div>
 
-      <div className="w-full sm:w-56">
-        <Meter
-          pct={l.pct_valor}
-          faixa={faixa}
-          descricao={`${l.realizado_valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} de ${l.meta_valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`}
-          size="sm"
-        />
-      </div>
+        {/* Progresso: só existe quando há meta. Sem meta, 0% em vermelho
+            leria como desempenho ruim, quando é ausência de referência. */}
+        <div className="w-full sm:w-52 lg:w-56">
+          {l.tem_meta ? (
+            <Meter
+              pct={l.pct_valor}
+              faixa={faixaDoPct(l.pct_valor)}
+              descricao={`${BRL(l.realizado_valor)} de ${BRL(l.meta_valor)}`}
+              size="sm"
+            />
+          ) : (
+            <div className="rounded-[var(--fin-r-md)] border border-dashed border-[var(--fin-border-strong)] px-2 py-1.5">
+              <p className="fin-t-caption text-[var(--fin-text-3)]">
+                Sem meta definida. Vendeu {BRL(l.realizado_valor)} no mês.
+              </p>
+            </div>
+          )}
+        </div>
 
-      <div className="w-24 text-right">
-        <p className="fin-t-caption text-[var(--fin-text-3)]">Comissão</p>
-        <Money valor={l.comissao_mes} size="body" />
+        {/* Escada de comissão: responde em que faixa a pessoa está. */}
+        <div className="w-full sm:w-auto sm:min-w-[11rem] sm:flex-1">
+          {escala ? (
+            <div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="inline-flex items-center rounded-[var(--fin-r-dot)] bg-[var(--fin-accent-soft)] px-2 py-0.5 fin-t-caption font-medium text-[var(--fin-accent)]">
+                  {escala.escala.atual
+                    ? `Faixa ${escala.escala.indice} de ${escala.escala.total} · ${escala.escala.atual.percentual}%`
+                    : 'Ainda fora da tabela'}
+                </span>
+                <span className="fin-t-caption text-[var(--fin-text-3)]">
+                  base {BRL(escala.base)}
+                </span>
+              </div>
+              {escala.escala.proxima && escala.escala.falta_para_proxima !== null && (
+                <p className="mt-1 fin-t-caption text-[var(--fin-text-3)]">
+                  faltam <span className="font-medium text-[var(--fin-text-2)]">{BRL(escala.escala.falta_para_proxima)}</span>
+                  {' para '}{escala.escala.proxima.percentual}%
+                  {escala.escala.ganho_na_proxima !== null && escala.escala.ganho_na_proxima > 0 && (
+                    <> e <span className="font-medium text-[var(--fin-positive)]">+{BRL(escala.escala.ganho_na_proxima)}</span> no mês</>
+                  )}
+                </p>
+              )}
+              {!escala.escala.proxima && escala.escala.atual && (
+                <p className="mt-1 fin-t-caption text-[var(--fin-positive)]">no topo da tabela</p>
+              )}
+            </div>
+          ) : (
+            <p className="fin-t-caption text-[var(--fin-text-3)]">Sem plano de comissão</p>
+          )}
+        </div>
+
+        <div className="ml-auto shrink-0 text-right">
+          <p className="fin-t-caption text-[var(--fin-text-3)]">Comissão</p>
+          <Money valor={l.comissao_mes} size="body" />
+        </div>
       </div>
     </li>
   );

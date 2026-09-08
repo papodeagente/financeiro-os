@@ -119,5 +119,34 @@ console.log('\n--- equipe vazia ---');
   eq([r.linhas.length, r.meta_total, r.pct_equipe], [0, 0, 0], 'equipe vazia não divide por zero');
 }
 
+console.log('\n--- quem vendeu mas não tem meta ---');
+{
+  // Caso real da tela: Luan vendeu R$ 15.997 e não tem meta. Não pode
+  // aparecer como 0% crítico nem como "fora do ranking".
+  const equipe = [pessoa('u1', 'Bruno', 500), pessoa('u2', 'Luan', 0), pessoa('u3', 'Karen', 0)];
+  const vendas = [venda('v1', 'u1', 61500, '2026-09-01'), venda('v2', 'u2', 15997, '2026-09-02')];
+  const r = montarRanking({ ...base, equipe, vendas });
+
+  eq(r.linhas.find(l => l.vendedor_nome === 'Luan')!.tem_meta, false, 'Luan não tem meta');
+  eq(r.linhas.find(l => l.vendedor_nome === 'Luan')!.posicao, 2, 'mas participa do ranking porque vendeu');
+  eq(r.fora_do_ranking, ['Karen'], 'fora do ranking é só quem não tem meta NEM venda');
+  eq(r.sem_meta_com_venda, 1, 'conta quem vendeu sem ter meta');
+  eq(r.linhas.find(l => l.vendedor_nome === 'Karen')!.posicao, null, 'Karen fica sem posição');
+}
+{
+  // Quem tem meta vem antes de quem não tem, e entre os sem meta ordena
+  // por quanto vendeu. Ordenar todos pelo percentual colocaria quem vendeu
+  // R$ 15.000 sem meta atrás de quem vendeu R$ 100 batendo meta de R$ 90.
+  const equipe = [pessoa('u1', 'ComMeta', 90), pessoa('u2', 'SemMetaGrande', 0), pessoa('u3', 'SemMetaPequeno', 0)];
+  const vendas = [
+    venda('v1', 'u1', 100, '2026-09-01'),
+    venda('v2', 'u2', 15000, '2026-09-01'),
+    venda('v3', 'u3', 300, '2026-09-01'),
+  ];
+  const r = montarRanking({ ...base, equipe, vendas });
+  eq(r.linhas.map(l => l.vendedor_nome), ['ComMeta', 'SemMetaGrande', 'SemMetaPequeno'],
+     'com meta primeiro; sem meta ordena por quanto vendeu');
+}
+
 console.log(`\n${total - falhas}/${total} testes do ranking passaram`);
 process.exit(falhas > 0 ? 1 : 0);

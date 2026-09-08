@@ -135,3 +135,60 @@ export function calcularComissaoDoMes(
 export function chaveAcumulado(vendedorId: string, mes: string): string {
   return `${vendedorId}::${mes}`;
 }
+
+export interface PosicaoNaEscala {
+  /** 1 a N. Zero quando o acumulado ainda não alcançou faixa nenhuma. */
+  indice: number;
+  total: number;
+  atual: FaixaComissao | null;
+  proxima: FaixaComissao | null;
+  /** Quanto falta de base para entrar na próxima faixa. Null no topo. */
+  falta_para_proxima: number | null;
+  /** Quanto a mais o mês inteiro renderia ao cruzar a próxima faixa.
+   *  Como a escada é retroativa, o salto vale para todo o acumulado. */
+  ganho_na_proxima: number | null;
+}
+
+/**
+ * Onde o vendedor está na escada de comissão e o que falta para subir.
+ *
+ * Existe porque "13,5%" sozinho não diz nada: o que motiva é saber que
+ * faltam R$ 800 para o mês inteiro passar a valer 16%.
+ */
+export function posicaoNaEscala(
+  faixas: FaixaComissao[],
+  baseAcumulada: number,
+): PosicaoNaEscala {
+  const ordenadas = [...(faixas ?? [])].sort((a, b) => num(a.de) - num(b.de));
+  const total = ordenadas.length;
+  if (total === 0) {
+    return { indice: 0, total: 0, atual: null, proxima: null, falta_para_proxima: null, ganho_na_proxima: null };
+  }
+
+  const base = round2(baseAcumulada);
+  const atual = faixaDoValor(ordenadas, base);
+  const indice = atual ? ordenadas.findIndex(f => f === atual) + 1 : 0;
+
+  // A próxima é a primeira faixa que começa acima do acumulado de hoje.
+  const proxima = ordenadas.find(f => num(f.de) > base) ?? null;
+
+  if (!proxima) {
+    return { indice, total, atual, proxima: null, falta_para_proxima: null, ganho_na_proxima: null };
+  }
+
+  const falta = round2(num(proxima.de) - base);
+  const pctAtual = atual ? num(atual.percentual) : 0;
+  const baseNaProxima = round2(num(proxima.de));
+  const ganho = round2(
+    baseNaProxima * num(proxima.percentual) / 100 - base * pctAtual / 100,
+  );
+
+  return {
+    indice,
+    total,
+    atual,
+    proxima,
+    falta_para_proxima: falta > 0 ? falta : 0,
+    ganho_na_proxima: ganho,
+  };
+}
