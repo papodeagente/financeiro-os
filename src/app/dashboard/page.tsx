@@ -8,28 +8,30 @@ import type {
   ContaBancaria, CACMensal, MetaVendedor, Membro,
   StatusVendaCRM,
 } from '@/lib/crm-types';
-import { nomeDoCliente, nomeDoClienteOuTraco } from '@/lib/cliente-nome';
+import { nomeDoCliente } from '@/lib/cliente-nome';
 import {
-  TrendingUp, ShoppingCart, Users, DollarSign,
-  Target, Wallet, BarChart3, AlertTriangle, ChevronRight,
-  RefreshCw, FileText, Package, Receipt, CreditCard,
-  Cake, Calendar, MessageCircle, Mail, ArrowUpRight,
-  ArrowDownRight, Trophy, Gauge,
-  AlertCircle, CheckCircle2,
-  Info, Zap,
+  ShoppingCart, Users, AlertTriangle, ChevronRight,
+  FileText, Package, Receipt, CreditCard,
+  Cake, MessageCircle,
+  AlertCircle, CheckCircle2, Info,
 } from 'lucide-react';
 import {
   round2, num, soma, somaPor, percentual, divSegura, variacaoPct, paraBRL,
   hojeISO, dataLocal, mesDe,
 } from '@/lib/money';
-import { KPIGridSkeleton } from '@/components/skeletons';
 import { calcularSaldoBancario, valorMovimentado } from '@/lib/saldo-bancario';
-import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
+// Componentes canônicos do padrão financeiro (/financeiro-ag). O painel usa
+// os mesmos, para o sistema inteiro falar uma língua visual só.
+import { PageHeader } from '@/components/fin/PageHeader';
+import { MetricCard } from '@/components/fin/MetricCard';
+import { Money, type MoneyEstado } from '@/components/fin/Money';
+import { DeltaIndicator, type DeltaIndicatorProps } from '@/components/fin/DeltaIndicator';
+import { DataState } from '@/components/fin/DataState';
+import { ActionCard } from '@/components/fin/ActionCard';
+import { Meter } from '@/components/fin/Meter';
 
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
-
-const PCT = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
 
 const fmtDate = (s: string) => dataLocal(s)?.toLocaleDateString('pt-BR') ?? '-';
 
@@ -55,13 +57,6 @@ function getMesLabel(yyyymm: string): string {
   const [y, m] = yyyymm.split('-');
   const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
   return `${meses[parseInt(m) - 1]}/${y.slice(2)}`;
-}
-
-function getGreeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return 'Bom dia';
-  if (h < 18) return 'Boa tarde';
-  return 'Boa noite';
 }
 
 function getMonthName(yyyymm: string): string {
@@ -175,24 +170,51 @@ interface Alerta {
   linkLabel: string;
 }
 
-interface KPI {
-  label: string;
-  valor: string;
-  valorNum: number;
-  delta: number | null;
-  deltaLabel: string;
-  meta: number | null;
-  metaLabel: string;
-  icon: React.ComponentType<{ className?: string }>;
-  color: string;
-  bgColor: string;
-  invertDelta?: boolean; // true = menor e melhor (CAC)
-  link?: string;
-}
+// O tipo KPI foi removido junto com os cartões de borda colorida: cada número
+// do painel agora é montado no JSX com MetricCard, que exige contexto e cuida
+// de formatação, estado de carregamento e delta.
 
 // ============================================================
 // COMPONENTE PRINCIPAL
 // ============================================================
+
+// Casca de seção e de painel. Ficam FORA do componente de propósito: definidas
+// dentro, o React as trataria como um tipo novo a cada render e remontaria a
+// subárvore inteira, perdendo estado e piscando a tela.
+function Secao({ id, titulo, acao, children }: {
+  id: string;
+  titulo: string;
+  acao?: { rotulo: string; href: string };
+  children: React.ReactNode;
+}) {
+  return (
+    <section aria-labelledby={id} className="flex flex-col gap-[var(--fin-s-3)]">
+      <div className="flex flex-wrap items-baseline justify-between gap-[var(--fin-s-2)]">
+        <h2 id={id} className="fin-t-subhead text-[var(--fin-text)]">{titulo}</h2>
+        {acao ? (
+          <Link
+            href={acao.href}
+            className="fin-t-body inline-flex min-h-11 items-center rounded-[var(--fin-r-sm)] text-[var(--fin-accent)] underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)] lg:min-h-10"
+          >
+            {acao.rotulo}
+          </Link>
+        ) : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Painel({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]">
+      <div className="border-b border-[var(--fin-border)] px-[var(--fin-s-4)] py-[var(--fin-s-3)]">
+        <h3 className="fin-t-body-strong text-[var(--fin-text)]">{titulo}</h3>
+      </div>
+      <div className="p-[var(--fin-s-4)]">{children}</div>
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -206,9 +228,11 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
+  // Devolve a promessa: o PageHeader do padrão financeiro espera uma função
+  // assíncrona para saber quando o "Recarregar" terminou.
   const fetchAll = useCallback(() => {
     setLoading(true);
-    Promise.all([
+    return Promise.all([
       loadEntities<Cliente>('clientes'),
       loadEntities<VendaCRM>('vendas-crm'),
       loadEntities<ContaReceber>('contas-receber'),
@@ -363,81 +387,9 @@ export default function DashboardPage() {
   }, [vendas, receber, pagar, contas, cacData, mesAtual, mesAnterior]);
 
   // KPIs
-  const kpis: KPI[] = useMemo(() => [
-    {
-      label: 'Faturamento', valor: BRL(calc.faturamento), valorNum: calc.faturamento,
-      delta: calc.faturamentoAnt > 0 ? calc.delta(calc.faturamento, calc.faturamentoAnt) : null,
-      deltaLabel: 'vs mes anterior',
-      meta: somaPor(metas, m => m.meta_valor) || null,
-      metaLabel: 'Meta',
-      icon: TrendingUp, color: 'text-[var(--t-green)]', bgColor: 'bg-[var(--t-green)]/10',
-      link: '/financeiro-ag',
-    },
-    {
-      label: 'Vendas', valor: String(calc.qtdVendas), valorNum: calc.qtdVendas,
-      delta: calc.qtdVendasAnt > 0 ? calc.delta(calc.qtdVendas, calc.qtdVendasAnt) : null,
-      deltaLabel: 'vs mes anterior',
-      meta: metas.reduce((s, m) => s + (m.meta_quantidade || 0), 0) || null,
-      metaLabel: 'Meta',
-      icon: ShoppingCart, color: 'text-blue-400', bgColor: 'bg-blue-400/10',
-      link: '/vendas',
-    },
-    {
-      label: 'Ticket Médio', valor: BRL(calc.ticketMedio), valorNum: calc.ticketMedio,
-      delta: calc.ticketMedioAnt > 0 ? calc.delta(calc.ticketMedio, calc.ticketMedioAnt) : null,
-      deltaLabel: 'vs mes anterior', meta: null, metaLabel: '',
-      icon: BarChart3, color: 'text-purple-400', bgColor: 'bg-purple-400/10',
-    },
-    {
-      label: 'Margem Bruta', valor: `${BRL(calc.margemBruta)} (${calc.margemBrutaPct.toFixed(1)}%)`, valorNum: calc.margemBruta,
-      delta: calc.margemBrutaPctAnt > 0 ? calc.margemBrutaPct - calc.margemBrutaPctAnt : null,
-      deltaLabel: 'pp vs anterior', meta: null, metaLabel: '',
-      icon: DollarSign, color: 'text-emerald-400', bgColor: 'bg-emerald-400/10',
-      link: '/financeiro-ag/dre',
-    },
-    {
-      label: 'Receita (Agência)', valor: BRL(calc.receita), valorNum: calc.receita,
-      delta: calc.receitaAnt > 0 ? calc.delta(calc.receita, calc.receitaAnt) : null,
-      deltaLabel: calc.receita === 0 && calc.faturamento > 0 ? 'aguardando comissão do CRM' : 'vs mes anterior',
-      meta: null, metaLabel: '',
-      icon: DollarSign, color: 'text-emerald-400', bgColor: 'bg-emerald-400/10',
-      link: '/financeiro-ag/dre',
-    },
-    {
-      label: 'Margem Líquida', valor: `${calc.margem.toFixed(1)}%`, valorNum: calc.margem,
-      delta: calc.margemAnt > 0 ? calc.margem - calc.margemAnt : null,
-      deltaLabel: 'pp vs anterior', meta: null, metaLabel: '',
-      icon: Gauge, color: calc.margem >= 15 ? 'text-emerald-400' : calc.margem >= 10 ? 'text-[var(--t-amber)]' : 'text-red-400',
-      bgColor: calc.margem >= 15 ? 'bg-emerald-400/10' : calc.margem >= 10 ? 'bg-amber-400/10' : 'bg-red-400/10',
-      link: '/financeiro-ag/dre',
-    },
-    {
-      label: 'CAC', valor: BRL(calc.cacValor), valorNum: calc.cacValor,
-      delta: calc.cacValorAnt > 0 ? calc.delta(calc.cacValor, calc.cacValorAnt) : null,
-      deltaLabel: 'vs mes anterior', meta: null, metaLabel: '',
-      icon: Target, color: 'text-orange-400', bgColor: 'bg-orange-400/10',
-      invertDelta: true,
-      link: '/cac/dashboard',
-    },
-    {
-      label: 'Saldo em Caixa', valor: BRL(calc.saldoCaixa), valorNum: calc.saldoCaixa,
-      delta: null, deltaLabel: 'soma de todas as contas', meta: null, metaLabel: '',
-      icon: Wallet, color: 'text-cyan-400', bgColor: 'bg-cyan-400/10',
-      link: '/financeiro-ag/contas-bancarias',
-    },
-    {
-      label: 'Lucro do Mês', valor: BRL(calc.lucro), valorNum: calc.lucro,
-      // Sem Math.abs no argumento: variacaoPct já usa o módulo no
-      // DENOMINADOR. Aplicá-lo aqui trocava o sinal do numerador e invertia
-      // a leitura em mês de prejuízo. Saindo de -1.000 para +500, a tela
-      // mostrava -50% onde a recuperação foi de +150%.
-      delta: calc.delta(calc.lucro, calc.lucroAnt),
-      deltaLabel: 'vs mes anterior', meta: null, metaLabel: '',
-      icon: Trophy, color: calc.lucro >= 0 ? 'text-emerald-400' : 'text-red-400',
-      bgColor: calc.lucro >= 0 ? 'bg-emerald-400/10' : 'bg-red-400/10',
-      link: '/financeiro-ag/dre',
-    },
-  ], [calc, metas]);
+  // O array de KPIs antigo saiu junto com os cartões de borda colorida: o
+  // painel agora monta cada número no próprio JSX, com o contexto que o
+  // MetricCard exige. Ver a seção RENDER.
 
   // ============================================================
   // ALERTAS
@@ -685,572 +637,483 @@ export default function DashboardPage() {
   }, [calc, contas]);
 
   // ============================================================
-  // RENDER
+  // RENDER — padrão do módulo financeiro (/financeiro-ag)
   // ============================================================
+  // Mesma gramática visual da tela de Financeiro: cabeçalho canônico, uma
+  // faixa com o número principal e três de apoio, seções com subtítulo, e
+  // as ações no rodapé. Nada de cartão com borda colorida no topo, ícone
+  // colorido por métrica ou caixa em gradiente: cor aqui só entra quando o
+  // sinal muda a decisão.
 
-  if (loading) {
-    return (
-      <div className="flex flex-col h-full overflow-y-auto">
-        <div className="px-8 pt-6 pb-8 space-y-6">
-          <MinimalPageHead
-            title={getMonthName(mesAtual)}
-            meta={
-              <div className="mt-2.5 text-[12px]" style={{ color: 'var(--ink-3)' }}>
-                Carregando dados…
-              </div>
-            }
-          />
-          <KPIGridSkeleton count={4} columns={4} />
-          <KPIGridSkeleton count={6} columns={6} />
-        </div>
-      </div>
-    );
-  }
+  const estado: 'carregando' | 'erro' | 'ok' = loading ? 'carregando' : 'ok';
+  const estadoValor: MoneyEstado = loading ? 'carregando' : 'ok';
 
   const maxFat = Math.max(...chartFaturamento.map(m => m.faturamento), 1);
   const maxFluxo = Math.max(...chartFluxo.map(m => Math.max(m.entradas, m.saidas)), 1);
 
-  const prioIcon = {
-    CRITICO: <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />,
-    ATENCAO: <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />,
-    POSITIVO: <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />,
-    INFO: <Info className="w-4 h-4 text-blue-400 shrink-0" />,
+  // Delta só aparece quando existe base de comparação. variacaoPct devolve
+  // null no mês anterior zerado, e nesse caso o indicador some da tela em vez
+  // de estampar um "+100%" que não significa nada.
+  const deltaDe = (
+    atual: number,
+    anterior: number,
+    polaridade: 'subirBom' | 'subirRuim' = 'subirBom',
+  ): DeltaIndicatorProps | null => {
+    const pct = calc.delta(atual, anterior);
+    if (pct === null || Math.abs(pct) < 0.05) return null;
+    return { pct, direcao: pct > 0 ? 'up' : 'down', polaridade, base: 'vs. mês anterior' };
   };
 
-  const prioBorder = {
-    CRITICO: 'border-l-red-400',
-    ATENCAO: 'border-l-amber-400',
-    POSITIVO: 'border-l-emerald-400',
-    INFO: 'border-l-blue-400',
+  const tomDoValor = (v: number): 'neutro' | 'negativo' => (v < 0 ? 'negativo' : 'neutro');
+
+  // Faixa da margem: o mesmo semáforo que o resto do sistema usa.
+  const faixaMargem: 'saudavel' | 'atencao' | 'critico' =
+    calc.margemBrutaPct >= 15 ? 'saudavel' : calc.margemBrutaPct >= 10 ? 'atencao' : 'critico';
+
+  const despesasDoMes = round2(calc.receitaBrutaDRE - calc.lucro);
+
+  const prioTom: Record<string, string> = {
+    CRITICO: 'var(--fin-negative)',
+    ATENCAO: 'var(--fin-warning)',
+    POSITIVO: 'var(--fin-positive)',
+    INFO: 'var(--fin-accent)',
   };
+  const prioIcone: Record<string, React.ReactNode> = {
+    CRITICO: <AlertCircle className="h-4 w-4 shrink-0 text-[var(--fin-negative-text)]" />,
+    ATENCAO: <AlertTriangle className="h-4 w-4 shrink-0 text-[var(--fin-warning-text)]" />,
+    POSITIVO: <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--fin-positive)]" />,
+    INFO: <Info className="h-4 w-4 shrink-0 text-[var(--fin-accent)]" />,
+  };
+
+  const pendencias = [
+    { rotulo: 'Orçamentos aguardando', qtd: vendas.filter(v => v.status === 'ORCAMENTO').length, href: '/vendas/orcamentos' },
+    { rotulo: 'Contas a receber em aberto', qtd: receber.filter(r => r.status === 'PENDENTE' || r.status === 'ATRASADO').length, href: '/financeiro-ag/receber' },
+    { rotulo: 'Contas a pagar em aberto', qtd: pagar.filter(p => p.status === 'PENDENTE' || p.status === 'VENCIDO').length, href: '/financeiro-ag/pagar' },
+  ];
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto">
-      <div className="px-8 pt-6 pb-8 space-y-6">
-
-        <MinimalPageHead
-          title={getMonthName(mesAtual)}
-          meta={
-            <div className="mt-2.5 text-[12px] flex items-center gap-3 flex-wrap" style={{ color: 'var(--ink-3)' }}>
-              <span>
-                <b className="mono" style={{ fontSize: '11px', color: 'var(--ink-2)' }}>{calc.qtdVendas}</b> vendas fechadas
-              </span>
-              <span style={{ color: 'var(--ink-4)' }}>·</span>
-              <span>
-                <b className="mono" style={{ fontSize: '11px', color: 'var(--ink-2)' }}>{BRL(calc.faturamento)}</b> faturados
-              </span>
-              {(() => {
-                // Sem base de comparação o trecho inteiro não é renderizado,
-                // em vez de estampar um percentual inventado.
-                const d = calc.delta(calc.faturamento, calc.faturamentoAnt);
-                if (d === null) return null;
-                return (
-                  <>
-                    <span style={{ color: 'var(--ink-4)' }}>·</span>
-                    <span
-                      className="mono"
-                      style={{ fontSize: '11px', color: d >= 0 ? 'var(--pos)' : 'var(--neg)' }}
-                    >
-                      {PCT(d)} vs mês anterior
-                    </span>
-                  </>
-                );
-              })()}
-              <span style={{ color: 'var(--ink-4)' }}>·</span>
-              <span>
-                Atualizado às{' '}
-                <b className="mono" style={{ fontSize: '11px', color: 'var(--ink-2)' }}>
-                  {lastUpdate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                </b>
-              </span>
-              <span style={{ color: 'var(--ink-4)' }}>·</span>
-              <button
-                onClick={fetchAll}
-                disabled={loading}
-                className="inline-flex items-center gap-1 transition-colors disabled:opacity-50"
-                style={{
-                  color: 'var(--ink)',
-                  textDecoration: 'underline',
-                  textUnderlineOffset: '3px',
-                  textDecorationColor: 'var(--ink-4)',
-                }}
-              >
-                <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
-                <span>{loading ? 'Atualizando…' : 'Recarregar'}</span>
-              </button>
-            </div>
-          }
+    <div className="w-full px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
+      <div className="mx-auto flex w-full max-w-[var(--fin-page-max)] flex-col">
+        <PageHeader
+          titulo="Painel"
+          subtitulo={`${getMonthName(mesAtual)}. ${calc.qtdVendas} ${calc.qtdVendas === 1 ? 'venda fechada' : 'vendas fechadas'} até agora.`}
+          atualizadoEm={lastUpdate}
+          onRecarregar={fetchAll}
         />
 
-        {/* KPIs PRIMARIOS — com borda colorida no topo */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {kpis.slice(0, 4).map((kpi, i) => {
-            const Icon = kpi.icon;
-            const deltaPositive = kpi.invertDelta ? (kpi.delta !== null && kpi.delta < 0) : (kpi.delta !== null && kpi.delta > 0);
-            const deltaNeutral = kpi.delta === null || kpi.delta === 0;
-            const metaPct = kpi.meta && kpi.meta > 0 ? Math.min(divSegura(kpi.valorNum, kpi.meta) * 100, 100) : null;
-            const metaCor = metaPct !== null
-              ? metaPct >= 80 ? 'bg-emerald-400' : metaPct >= 50 ? 'bg-amber-400' : 'bg-red-400'
-              : '';
-            const metaAtingida = metaPct !== null && metaPct >= 100;
-            const borderColors = ['from-blue-500 to-blue-400', 'from-indigo-500 to-blue-400', 'from-violet-500 to-purple-400', 'from-emerald-500 to-teal-400'];
-
-            const Wrapper = kpi.link ? Link : 'div';
-            const wrapperProps = kpi.link ? { href: kpi.link } : {};
-
-            return (
-              <Wrapper key={i} {...wrapperProps as any} className="bento-card bento-card-glow relative overflow-hidden min-w-0 cursor-pointer">
-                {/* Colored top border */}
-                <div className={`absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r ${borderColors[i]}`} />
-                {metaAtingida && (
-                  <div className="absolute top-4 right-4" title="Meta atingida!">
-                    <Trophy className="w-5 h-5 text-amber-400" />
+        <div className="mt-[var(--fin-s-6)] flex flex-col gap-[var(--fin-s-5)]">
+          {/* ---------------------------------------------------------------
+              FAIXA PRINCIPAL
+              O número grande é o VOLUME vendido, e o rótulo diz isso. Em
+              agência de viagens o que o cliente paga não é receita: a maior
+              parte pertence ao fornecedor. Os três cartões de apoio trazem o
+              que de fato sobra, o ticket e o caixa.
+          ---------------------------------------------------------------- */}
+          <DataState
+            estado={estado}
+            erro={null}
+            esqueleto={
+              <div className="rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)]">
+                <div className="flex flex-col gap-[var(--fin-s-4)] lg:flex-row lg:items-center">
+                  <div className="flex flex-col gap-[var(--fin-s-2)] lg:w-[300px] lg:shrink-0 lg:pr-[var(--fin-s-5)]">
+                    <span className="block h-3 w-24 animate-pulse rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />
+                    <span className="block h-8 w-52 animate-pulse rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />
+                    <span className="block h-3 w-40 animate-pulse rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />
                   </div>
-                )}
-                <div className="flex items-center gap-2.5 mb-4">
-                  <div className={`w-10 h-10 rounded-xl ${kpi.bgColor} flex items-center justify-center`}>
-                    <Icon className={`w-5 h-5 ${kpi.color}`} />
-                  </div>
-                  <span className="text-[var(--text-caption)] text-[var(--t-text-secondary)] uppercase tracking-wide font-medium">{kpi.label}</span>
-                </div>
-                <div className="kpi-hero text-[var(--t-text)]" title={kpi.valor}>{kpi.valor}</div>
-                <div className="flex items-center gap-2 mt-3">
-                  {!deltaNeutral && (
-                    <span className={`text-xs font-medium flex items-center gap-0.5 px-2 py-0.5 rounded-full ${deltaPositive ? 'text-emerald-400 bg-emerald-400/10' : 'text-red-400 bg-red-400/10'}`}>
-                      {deltaPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                      {PCT(kpi.delta!)}
-                    </span>
-                  )}
-                  <span className="text-[10px] text-[var(--t-text-muted)]">{kpi.deltaLabel}</span>
-                </div>
-                {metaPct !== null && (
-                  <div className="mt-4">
-                    <div className="flex justify-between text-[10px] text-[var(--t-text-secondary)] mb-1.5">
-                      <span>{kpi.metaLabel}: {kpi.label === 'Vendas' ? kpi.meta : BRL(kpi.meta!)}</span>
-                      <span className="font-medium">{metaPct.toFixed(0)}%</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-[var(--t-border)] overflow-hidden">
-                      <div className={`h-full rounded-full ${metaCor} transition-all`} style={{ width: `${metaPct}%` }} />
-                    </div>
-                  </div>
-                )}
-              </Wrapper>
-            );
-          })}
-        </div>
-
-        {/* KPIs SECUNDARIOS — compactos com sparkline visual */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {kpis.slice(4).map((kpi, i) => {
-            const Icon = kpi.icon;
-            const deltaPositive = kpi.invertDelta ? (kpi.delta !== null && kpi.delta < 0) : (kpi.delta !== null && kpi.delta > 0);
-            const deltaNeutral = kpi.delta === null || kpi.delta === 0;
-            const Wrapper = kpi.link ? Link : 'div';
-            const wrapperProps = kpi.link ? { href: kpi.link } : {};
-            return (
-              <Wrapper key={i} {...wrapperProps as any} className="bg-[var(--t-surface)] rounded-[20px] p-5 shadow-[var(--t-card-shadow)] transition-all hover:shadow-[var(--t-card-shadow-hover)] hover-lift min-w-0 overflow-hidden cursor-pointer">
-                <div className="flex items-center justify-between mb-3">
-                  <div className={`w-9 h-9 rounded-xl ${kpi.bgColor} flex items-center justify-center`}>
-                    <Icon className={`w-4 h-4 ${kpi.color}`} />
-                  </div>
-                  {/* Mini sparkline bars */}
-                  <div className="flex items-end gap-[2px] h-5">
-                    {[0.3, 0.5, 0.4, 0.8, 0.6, 1].map((h, j) => (
-                      <div key={j} className="w-[3px] rounded-full bg-[var(--t-green)]/20" style={{ height: `${h * 100}%` }} />
+                  <div className="grid gap-[var(--fin-s-3)] border-t border-[var(--fin-border)] pt-[var(--fin-s-4)] sm:grid-cols-3 lg:grow lg:border-t-0 lg:border-l lg:pt-0 lg:pl-[var(--fin-s-5)]">
+                    {[0, 1, 2].map(i => (
+                      <div key={i} className="flex flex-col gap-[var(--fin-s-2)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] p-[var(--fin-s-4)]">
+                        <span className="block h-3 w-20 animate-pulse rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />
+                        <span className="block h-5 w-32 animate-pulse rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />
+                        <span className="block h-3 w-28 animate-pulse rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />
+                      </div>
                     ))}
                   </div>
                 </div>
-                <div className="text-[var(--text-caption)] text-[var(--t-text-secondary)] mb-1 truncate">{kpi.label}</div>
-                <div className="kpi-hero-sm text-[var(--t-text)]" title={kpi.valor}>{kpi.valor}</div>
-                {!deltaNeutral && (
-                  <span className={`text-[10px] font-medium flex items-center gap-0.5 mt-1.5 ${deltaPositive ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {deltaPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                    {PCT(kpi.delta!)} <span className="text-[var(--t-text-muted)] ml-1">{kpi.deltaLabel}</span>
-                  </span>
-                )}
-              </Wrapper>
-            );
-          })}
-        </div>
-
-        {/* ALERTAS + AÇÕES RÁPIDAS */}
-        <div className="bento-grid">
-          {/* Alertas */}
-          <div className="bento-8 bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] overflow-hidden">
-            <div className="px-6 py-4 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-[var(--t-text)] flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-400" />
-                Alertas Ativos
-                {alertas.length > 0 && (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 font-medium">{alertas.length}</span>
-                )}
-              </h2>
-            </div>
-            {alertas.length === 0 ? (
-              <div className="px-5 py-10 text-center">
-                <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
-                <div className="text-sm text-[var(--t-text-secondary)]">Tudo em ordem! Nenhum alerta ativo.</div>
               </div>
-            ) : (
-              <div className="divide-y divide-[var(--t-border)]">
-                {alertas.slice(0, 7).map(a => (
-                  <div key={a.id} className={`px-5 py-3 flex items-start gap-3 border-l-2 ${prioBorder[a.prioridade]} hover:bg-[var(--t-surface-hover)] transition-colors`}>
-                    {prioIcon[a.prioridade]}
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm text-[var(--t-text)]">{a.titulo}</div>
-                      {a.descricao && <div className="text-xs text-[var(--t-text-secondary)] mt-0.5">{a.descricao}</div>}
-                    </div>
-                    <Link href={a.link} className="shrink-0 text-xs text-[var(--t-green)] hover:underline flex items-center gap-1">
-                      {a.linkLabel} <ChevronRight className="w-3 h-3" />
-                    </Link>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+            }
+          >
+            <section
+              aria-labelledby="dash-faturamento"
+              className="rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)]"
+            >
+              <div className="flex flex-col gap-[var(--fin-s-4)] lg:flex-row lg:items-center">
+                <div className="flex flex-col gap-[var(--fin-s-1)] lg:w-[300px] lg:shrink-0 lg:pr-[var(--fin-s-5)]">
+                  <h2 id="dash-faturamento" className="fin-t-overline text-[var(--fin-text-3)]">
+                    Faturamento do mês
+                  </h2>
+                  <Money valor={calc.faturamento} estado={estadoValor} size="metric" align="esquerda" />
+                  {(() => {
+                    const d = deltaDe(calc.faturamento, calc.faturamentoAnt);
+                    return d ? <DeltaIndicator {...d} /> : null;
+                  })()}
+                  <p className="fin-t-caption text-[var(--fin-text-2)]">
+                    Volume vendido no mês. Boa parte pertence aos fornecedores, então não é a receita da agência.
+                  </p>
+                </div>
 
-          {/* Acoes Rapidas — blue gradient card */}
-          <div className="bento-4 rounded-[20px] shadow-[var(--t-card-shadow)] overflow-hidden" style={{ background: 'var(--t-accent-gradient)' }}>
-            <div className="px-5 py-4">
-              <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-                <Zap className="w-4 h-4 text-white/80" /> Ações Rápidas
-              </h2>
-            </div>
-            <div className="p-4 space-y-1.5">
-              {[
-                { href: '/vendas/nova', icon: ShoppingCart, label: 'Nova Venda', primary: true },
-                { href: '/vendas/orcamentos', icon: FileText, label: 'Novo Orçamento', primary: false },
-                { href: '/pessoas/clientes', icon: Users, label: 'Novo Cliente', primary: false },
-                { href: '/grupos', icon: Package, label: 'Novo Produto', primary: false },
-                { href: '/financeiro-ag/receber', icon: Receipt, label: 'Registrar Recebimento', primary: false },
-                { href: '/financeiro-ag/pagar', icon: CreditCard, label: 'Registrar Pagamento', primary: false },
-              ].map(a => (
-                <Link key={a.href} href={a.href}>
-                  <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${
-                    a.primary
-                      ? 'bg-white text-[#004aad] font-semibold shadow-lg hover:bg-white/90'
-                      : 'text-white/70 hover:bg-white/10 hover:text-white'
-                  }`}>
-                    <a.icon className="w-4 h-4" />
-                    {a.label}
-                  </div>
-                </Link>
-              ))}
-            </div>
-            <div className="px-4 pb-4 space-y-1.5 border-t border-white/15 pt-3 mx-4">
-              {[
-                { label: 'Orçamentos pendentes', count: vendas.filter(v => v.status === 'ORCAMENTO').length, href: '/vendas/orcamentos' },
-                { label: 'Contas a receber', count: receber.filter(r => r.status === 'PENDENTE' || r.status === 'ATRASADO').length, href: '/financeiro-ag/receber' },
-                { label: 'Contas a pagar', count: pagar.filter(p => p.status === 'PENDENTE' || p.status === 'VENCIDO').length, href: '/financeiro-ag/pagar' },
-              ].map(q => (
-                <Link key={q.href} href={q.href} className="flex items-center justify-between text-xs text-white/60 hover:text-white transition-colors">
-                  <span>{q.label}</span>
-                  <span className="bg-white/15 px-2 py-0.5 rounded-full text-[10px] font-medium text-white">{q.count}</span>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* GRAFICOS */}
-        <div className="bento-grid">
-          {/* Faturamento */}
-          <div className="bento-5 bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] overflow-hidden">
-            <div className="px-5 py-4 border-b border-[var(--t-border)]">
-              <h2 className="text-sm font-medium text-[var(--t-text)]">Faturamento (6 meses)</h2>
-            </div>
-            <div className="px-4 py-4">
-              <div className="flex items-end gap-2 justify-between" style={{ height: 160 }}>
-                {chartFaturamento.map((m, idx) => {
-                  const h = Math.max((m.faturamento / maxFat) * 140, 4);
-                  const isLast = idx === chartFaturamento.length - 1;
-                  return (
-                    <div key={m.mes} className="flex flex-col items-center flex-1 group" title={`${m.label}: ${BRL(m.faturamento)}`}>
-                      <div className="flex items-end" style={{ height: 140 }}>
-                        <div
-                          className="w-full max-w-[28px] rounded-lg transition-all mx-auto group-hover:opacity-90"
-                          style={{
-                            height: h,
-                            background: isLast
-                              ? 'linear-gradient(180deg, #3b82f6 0%, #004aad 100%)'
-                              : 'linear-gradient(180deg, rgba(0,74,173,0.4) 0%, rgba(0,74,173,0.2) 100%)',
-                          }}
-                        />
-                      </div>
-                      <span className={`text-[9px] mt-1.5 ${isLast ? 'text-[var(--t-green)] font-semibold' : 'text-[var(--t-text-muted)]'}`}>{m.label}</span>
-                    </div>
-                  );
-                })}
+                <div className="grid gap-[var(--fin-s-3)] border-t border-[var(--fin-border)] pt-[var(--fin-s-4)] sm:grid-cols-3 lg:grow lg:border-t-0 lg:border-l lg:pt-0 lg:pl-[var(--fin-s-5)]">
+                  <MetricCard
+                    rotulo="Receita da agência"
+                    valor={calc.receita}
+                    estado={estadoValor}
+                    contexto="O que sobra depois de repassar os fornecedores."
+                    explicacao="Comissão e markup que ficam com a agência. É este número, e não o faturamento, que paga as contas da empresa."
+                    tone={tomDoValor(calc.receita)}
+                    delta={deltaDe(calc.receita, calc.receitaAnt)}
+                  />
+                  <MetricCard
+                    rotulo="Ticket médio"
+                    valor={calc.ticketMedio}
+                    estado={estadoValor}
+                    contexto={`Média das ${calc.qtdVendas} ${calc.qtdVendas === 1 ? 'venda fechada' : 'vendas fechadas'} no mês.`}
+                    explicacao="Faturamento do mês dividido pelo número de vendas fechadas."
+                    delta={deltaDe(calc.ticketMedio, calc.ticketMedioAnt)}
+                  />
+                  <MetricCard
+                    rotulo="Em caixa hoje"
+                    valor={calc.saldoCaixa}
+                    estado={estadoValor}
+                    contexto={contas.length > 0 ? `Somatório de ${contas.length} ${contas.length === 1 ? 'conta bancária' : 'contas bancárias'}.` : 'Nenhuma conta bancária cadastrada ainda.'}
+                    explicacao="Saldo reconstruído a partir das baixas confirmadas. Não é lucro: parte já tem dono, como fornecedores e comissões a pagar."
+                    tone={tomDoValor(calc.saldoCaixa)}
+                  />
+                </div>
               </div>
-            </div>
-          </div>
+            </section>
+          </DataState>
 
-          {/* Entradas vs Saidas */}
-          <div className="bento-4 bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] overflow-hidden">
-            <div className="px-5 py-4 border-b border-[var(--t-border)]">
-              <h2 className="text-sm font-medium text-[var(--t-text)]">Entradas vs Saidas</h2>
-            </div>
-            <div className="px-4 py-4">
-              <div className="flex items-end gap-1 justify-between" style={{ height: 160 }}>
-                {chartFluxo.map(m => {
-                  const hEnt = Math.max((m.entradas / maxFluxo) * 130, 2);
-                  const hSai = Math.max((m.saidas / maxFluxo) * 130, 2);
-                  return (
-                    <div key={m.mes} className="flex flex-col items-center flex-1">
-                      <div className="flex items-end gap-0.5" style={{ height: 130 }}>
-                        <div className="w-3 rounded-lg bg-emerald-500/70" style={{ height: hEnt }} title={`Entradas: ${BRL(m.entradas)}`} />
-                        <div className="w-3 rounded-lg bg-red-400/60" style={{ height: hSai }} title={`Saidas: ${BRL(m.saidas)}`} />
-                      </div>
-                      <span className="text-[9px] text-[var(--t-text-muted)] mt-1">{m.label}</span>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="flex items-center gap-4 justify-center mt-2 pt-2 border-t border-[var(--t-border)]">
-                <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded bg-emerald-500/70" /><span className="text-[9px] text-[var(--t-text-muted)]">Entradas</span></div>
-                <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded bg-red-400/60" /><span className="text-[9px] text-[var(--t-text-muted)]">Saidas</span></div>
-              </div>
-            </div>
-          </div>
+          {/* ---------------------------------------------------------------
+              RESULTADO
+              Antes esta área repetia o mesmo valor em três cartões: margem
+              bruta, receita da agência e lucro do mês davam o mesmo número
+              sempre que não havia comissão de fornecedor nem despesa. Agora
+              a receita aparece uma vez, o lucro traz no contexto a despesa
+              que o separa dela, e o percentual vira medidor em vez de um
+              quarto cartão de dinheiro.
+          ---------------------------------------------------------------- */}
+          <Secao id="dash-resultado" titulo="Resultado do mês" acao={{ rotulo: 'Abrir o resultado completo', href: '/financeiro-ag/dre' }}>
+            <div className="grid gap-[var(--fin-s-3)] sm:grid-cols-2 lg:grid-cols-3">
+              <MetricCard
+                rotulo="Lucro do mês"
+                valor={calc.lucro}
+                estado={estadoValor}
+                contexto={
+                  despesasDoMes > 0
+                    ? `Receita da agência menos ${BRL(despesasDoMes)} de despesas lançadas.`
+                    : 'Nenhuma despesa lançada neste mês, então o lucro é igual à receita.'
+                }
+                explicacao="Receita da agência no mês menos as despesas operacionais lançadas com vencimento no mês. Não inclui o custo dos fornecedores, que já foi descontado na receita."
+                tone={tomDoValor(calc.lucro)}
+                delta={deltaDe(calc.lucro, calc.lucroAnt)}
+              />
 
-          {/* Composicao */}
-          <div className="bento-3 bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] overflow-hidden">
-            <div className="px-5 py-4 border-b border-[var(--t-border)]">
-              <h2 className="text-sm font-medium text-[var(--t-text)]">Composicao de Vendas</h2>
-            </div>
-            <div className="px-4 py-4">
-              {chartComposicao.length === 0 ? (
-                <div className="text-center py-8 text-sm text-[var(--t-text-muted)]">Sem dados no mes</div>
+              <div className="flex flex-col justify-center gap-[var(--fin-s-2)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)]">
+                <span className="fin-t-overline text-[var(--fin-text-3)]">Margem sobre o faturamento</span>
+                <Meter
+                  pct={Math.max(0, Math.min(100, calc.margemBrutaPct))}
+                  faixa={faixaMargem}
+                  descricao={`${BRL(calc.margemBruta)} de margem sobre ${BRL(calc.faturamento)} vendidos.`}
+                />
+              </div>
+
+              {calc.cacValor > 0 ? (
+                <MetricCard
+                  rotulo="Custo por cliente novo"
+                  valor={calc.cacValor}
+                  estado={estadoValor}
+                  contexto="Investimento comercial dividido pelos clientes conquistados."
+                  explicacao="Quanto custou trazer cada cliente novo no mês. Comparar com o ticket médio mostra se a aquisição se paga."
+                  delta={deltaDe(calc.cacValor, calc.cacValorAnt, 'subirRuim')}
+                />
               ) : (
-                <div className="space-y-2">
-                  {chartComposicao.slice(0, 6).map(c => (
-                    <div key={c.tipo} className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: c.cor }} />
-                      <span className="text-xs text-[var(--t-text-secondary)] flex-1">{c.tipo}</span>
-                      <span className="text-xs text-[var(--t-text)] font-medium">{BRL(c.valor)}</span>
-                      <span className="text-[10px] text-[var(--t-text-muted)] w-10 text-right">{c.pct.toFixed(0)}%</span>
-                    </div>
-                  ))}
-                  <div className="flex rounded-full overflow-hidden h-2.5 mt-3">
-                    {chartComposicao.map(c => (
-                      <div key={c.tipo} style={{ width: `${c.pct}%`, backgroundColor: c.cor }} className="transition-all" />
-                    ))}
-                  </div>
+                <div className="flex flex-col justify-center gap-[var(--fin-s-2)] rounded-[var(--fin-r-lg)] border border-dashed border-[var(--fin-border)] p-[var(--fin-s-4)]">
+                  <span className="fin-t-overline text-[var(--fin-text-3)]">Custo por cliente novo</span>
+                  <p className="fin-t-body text-[var(--fin-text-2)]">
+                    Sem investimento comercial registrado neste mês.
+                  </p>
+                  <Link
+                    href="/cac/dashboard"
+                    className="fin-t-caption text-[var(--fin-accent)] underline underline-offset-4"
+                  >
+                    Registrar investimento
+                  </Link>
                 </div>
               )}
             </div>
-          </div>
-        </div>
+          </Secao>
 
-        {/* JORNADA + RESUMO */}
-        <div className="bento-grid">
-          {/* Card de Jornada dos 4 Pilares */}
-          <div className="bento-4 bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] p-5">
-            <h2 className="text-sm font-semibold text-[var(--t-text)] flex items-center gap-2 mb-4">
-              <Target className="w-4 h-4 text-[var(--t-green)]" /> Jornada do Negocio
-            </h2>
-            <div className="space-y-3">
-              {[
-                { num: 1, label: 'Planejar', desc: 'Custos e cenarios', href: '/planejamento/custos', color: 'from-blue-500 to-cyan-500' },
-                { num: 2, label: 'Metas', desc: 'KPIs e comissoes', href: '/equipe/metas', color: 'from-violet-500 to-purple-500' },
-                { num: 3, label: 'Produtos', desc: 'Grupos e propostas', href: '/grupos', color: 'from-emerald-500 to-teal-500' },
-                { num: 4, label: 'Financeiro', desc: 'Contas e relatorios', href: '/financeiro-ag', color: 'from-amber-500 to-orange-500' },
-              ].map(step => (
-                <Link key={step.num} href={step.href} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-[var(--t-surface-hover)] transition-colors group">
-                  <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${step.color} flex items-center justify-center shrink-0`}>
-                    <span className="text-xs font-bold text-white">{step.num}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-[var(--t-text)]">{step.label}</div>
-                    <div className="text-[11px] text-[var(--t-text-muted)]">{step.desc}</div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-[var(--t-text-muted)] group-hover:text-[var(--t-text)] transition-colors" />
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          {/* Resumo */}
-          <div className="bento-8 bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] p-5">
-            <h2 className="text-sm font-medium text-[var(--t-text)] flex items-center gap-2 mb-3">
-              <BarChart3 className="w-4 h-4 text-[var(--t-green)]" />
-              Resumo — {getMonthName(mesAtual)}
-            </h2>
-            <div className="text-sm text-[var(--t-text-secondary)] space-y-1.5 leading-relaxed">
-              {resumo.map((p, i) => <p key={i}>{p}</p>)}
-            </div>
-          </div>
-        </div>
-
-        {/* ANIVERSARIANTES + DATAS */}
-        <div className="bento-grid">
-          {/* Aniversariantes */}
-          <div className="bento-6 bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] overflow-hidden">
-            <div className="px-5 py-4 flex items-center justify-between border-b border-[var(--t-border)]">
-              <h2 className="text-sm font-medium text-[var(--t-text)] flex items-center gap-2">
-                <Cake className="w-4 h-4 text-pink-400" /> Aniversariantes
-              </h2>
-            </div>
-            {aniversariantes.length === 0 ? (
-              <div className="px-5 py-8 text-center text-sm text-[var(--t-text-muted)]">
-                Nenhum aniversariante no periodo
-              </div>
-            ) : (
-              <div className="divide-y divide-[var(--t-border)]">
-                {aniversariantes.filter(a => a.isHoje).length > 0 && (
-                  <div className="px-5 py-2">
-                    <span className="text-[10px] text-pink-400 uppercase tracking-wider font-medium">Hoje</span>
-                  </div>
-                )}
-                {aniversariantes.filter(a => a.isHoje).map((a, i) => (
-                  <div key={`hoje-${i}`} className="px-5 py-3 flex items-center gap-3 bg-pink-500/5">
-                    <div className="w-8 h-8 rounded-full bg-pink-500/10 flex items-center justify-center">
-                      <Cake className="w-4 h-4 text-pink-400" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm text-[var(--t-text)] font-medium">{a.nome}</div>
-                      <div className="text-[11px] text-[var(--t-text-secondary)]">{a.idade} anos</div>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      {a.whatsapp && (
-                        <a href={`https://wa.me/55${a.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(`Feliz aniversario, ${a.nome?.split(' ')[0]}! A ENTUR Viagens deseja tudo de melhor!`)}`}
-                          target="_blank" rel="noreferrer"
-                          className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center hover:bg-emerald-500/20 transition-colors"
-                          title="WhatsApp">
-                          <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
-                        </a>
-                      )}
-                      {a.email && (
-                        <a href={`mailto:${a.email}?subject=Feliz Aniversario!&body=Ola ${a.nome?.split(' ')[0]}! A ENTUR Viagens deseja um feliz aniversario!`}
-                          className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center hover:bg-blue-500/20 transition-colors"
-                          title="E-mail">
-                          <Mail className="w-3.5 h-3.5 text-blue-400" />
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {aniversariantes.filter(a => a.isSemana).length > 0 && (
-                  <div className="px-5 py-2">
-                    <span className="text-[10px] text-[var(--t-text-secondary)] uppercase tracking-wider font-medium">Esta semana</span>
-                  </div>
-                )}
-                {aniversariantes.filter(a => a.isSemana).map((a, i) => (
-                  <div key={`semana-${i}`} className="px-5 py-3 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-[var(--t-bg)] flex items-center justify-center">
-                      <Cake className="w-4 h-4 text-[var(--t-text-muted)]" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm text-[var(--t-text)]">{a.nome}</div>
-                      <div className="text-[11px] text-[var(--t-text-secondary)]">{fmtDate(a.data)} — {a.idade} anos — em {a.diasAte} dia(s)</div>
-                    </div>
-                    {a.whatsapp && (
-                      <a href={`https://wa.me/55${a.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noreferrer"
-                        className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center hover:bg-emerald-500/20 transition-colors">
-                        <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
-                      </a>
-                    )}
-                  </div>
-                ))}
-                {aniversariantes.filter(a => !a.isHoje && !a.isSemana && a.diasAte <= 30).length > 0 && (
-                  <div className="px-5 py-2">
-                    <span className="text-[10px] text-[var(--t-text-secondary)] uppercase tracking-wider font-medium">Este mes (+{aniversariantes.filter(a => !a.isHoje && !a.isSemana).length})</span>
-                  </div>
-                )}
-                {aniversariantes.filter(a => !a.isHoje && !a.isSemana).slice(0, 3).map((a, i) => (
-                  <div key={`mes-${i}`} className="px-5 py-2.5 flex items-center gap-3 text-sm text-[var(--t-text-secondary)]">
-                    <Cake className="w-3.5 h-3.5 text-[var(--t-text-muted)]" />
-                    <span className="flex-1">{a.nome} — {fmtDate(a.data)}</span>
-                    <span className="text-[10px]">em {a.diasAte}d</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Datas Importantes */}
-          <div className="bento-6 bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] overflow-hidden">
-            <div className="px-5 py-4 flex items-center justify-between border-b border-[var(--t-border)]">
-              <h2 className="text-sm font-medium text-[var(--t-text)] flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-blue-400" /> Proximos 7 Dias
-              </h2>
-            </div>
-            {datasImportantes.length === 0 ? (
-              <div className="px-5 py-8 text-center text-sm text-[var(--t-text-muted)]">
-                Nenhum evento nos proximos 7 dias
-              </div>
-            ) : (
-              <div className="divide-y divide-[var(--t-border)]">
-                {datasImportantes.map((e, i) => {
-                  const dias = daysUntil(e.data);
-                  return (
-                    <Link key={i} href={e.link} className="px-5 py-3 flex items-start gap-3 hover:bg-[var(--t-surface-hover)] transition-colors">
-                      <div className="w-10 text-center shrink-0 mt-0.5">
-                        <div className="text-xs font-bold text-[var(--t-text)]">{e.data.slice(8, 10)}</div>
-                        <div className="text-[9px] text-[var(--t-text-muted)] uppercase">{getMesLabel(e.data.slice(0, 7)).split('/')[0]}</div>
+          {/* ---------------------------------------------------------------
+              ATENÇÃO
+          ---------------------------------------------------------------- */}
+          <Secao id="dash-alertas" titulo={alertas.length > 0 ? `Precisa de atenção (${alertas.length})` : 'Precisa de atenção'}>
+            <div className="rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]">
+              {alertas.length === 0 ? (
+                <div className="flex flex-col items-center gap-[var(--fin-s-2)] px-[var(--fin-s-4)] py-[var(--fin-s-6)] text-center">
+                  <CheckCircle2 className="h-6 w-6 text-[var(--fin-positive)]" />
+                  <p className="fin-t-body text-[var(--fin-text-2)]">
+                    Nada exigindo ação agora. Contas vencendo e margens fora do esperado aparecem aqui.
+                  </p>
+                </div>
+              ) : (
+                <ul className="divide-y divide-[var(--fin-border)]">
+                  {alertas.slice(0, 7).map(a => (
+                    <li
+                      key={a.id}
+                      className="flex items-start gap-[var(--fin-s-3)] border-l-2 px-[var(--fin-s-4)] py-[var(--fin-s-3)]"
+                      style={{ borderLeftColor: prioTom[a.prioridade] }}
+                    >
+                      {prioIcone[a.prioridade]}
+                      <div className="flex min-w-0 flex-1 flex-col gap-[var(--fin-s-1)]">
+                        <span className="fin-t-body-strong text-[var(--fin-text)]">{a.titulo}</span>
+                        {a.descricao ? (
+                          <span className="fin-t-caption text-[var(--fin-text-2)]">{a.descricao}</span>
+                        ) : null}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm text-[var(--t-text)]">{e.titulo}</div>
-                        <div className="text-xs text-[var(--t-text-secondary)]">{e.descricao}</div>
-                      </div>
-                      <span className={`text-[10px] shrink-0 px-2 py-0.5 rounded-full ${
-                        dias === 0 ? 'bg-amber-500/10 text-amber-400' :
-                        dias <= 2 ? 'bg-red-500/10 text-red-400' :
-                        'bg-[var(--t-bg)] text-[var(--t-text-muted)]'
-                      }`}>
-                        {dias === 0 ? 'Hoje' : dias === 1 ? 'Amanha' : `${dias}d`}
-                      </span>
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
+                      <Link
+                        href={a.link}
+                        className="fin-t-caption inline-flex min-h-11 shrink-0 items-center gap-1 text-[var(--fin-accent)] underline underline-offset-4 lg:min-h-10"
+                      >
+                        {a.linkLabel} <ChevronRight className="h-3 w-3" />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </Secao>
 
-        {/* Ultimas Vendas */}
-        <div className="bg-[var(--t-surface)] rounded-[20px] shadow-[var(--t-card-shadow)] overflow-hidden">
-          <div className="px-5 py-4 flex items-center justify-between border-b border-[var(--t-border)]">
-            <h2 className="text-sm font-medium text-[var(--t-text)]">Ultimas Vendas</h2>
-            <Link href="/vendas" className="text-xs text-[var(--t-green)] flex items-center gap-1 hover:underline">
-              Ver todas <ChevronRight className="w-3 h-3" />
-            </Link>
-          </div>
-          {vendas.length === 0 ? (
-            <div className="px-5 py-8 text-center text-sm text-[var(--t-text-muted)]">Nenhuma venda registrada</div>
-          ) : (
-            <div className="divide-y divide-[var(--t-border)]">
-              {[...vendas].sort((a, b) => (b.data_venda || '').localeCompare(a.data_venda || '')).slice(0, 6).map(v => {
-                const cliente = clientes.find(c => c.id === v.cliente_id);
-                const nome = nomeDoClienteOuTraco(cliente, 'Cliente');
-                const statusColor: Record<string, string> = {
-                  ORCAMENTO: 'bg-[var(--t-status-warning-bg)] text-[var(--t-status-warning)]',
-                  RESERVADO: 'bg-[var(--t-status-info-bg)] text-[var(--t-status-info)]',
-                  CONFIRMADO: 'bg-[var(--t-status-success-bg)] text-[var(--t-status-success)]',
-                  CANCELADO: 'bg-[var(--t-status-danger-bg)] text-[var(--t-status-danger)]',
-                  CONCLUIDO: 'bg-[var(--t-status-neutral-bg)] text-[var(--t-status-neutral)]',
-                };
-                return (
-                  <div key={v.id} className="px-5 py-3 flex items-center gap-4 hover:bg-[var(--t-surface-hover)] transition-colors">
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: 'var(--t-primary-bg)' }}>
-                      <DollarSign className="w-4 h-4 text-[var(--t-green)]" />
+          {/* ---------------------------------------------------------------
+              HISTÓRICO
+          ---------------------------------------------------------------- */}
+          <Secao id="dash-historico" titulo="Como o mês se formou">
+            <div className="grid gap-[var(--fin-s-4)] lg:grid-cols-3">
+              <Painel titulo="Faturamento dos últimos 6 meses">
+                <div className="flex h-[160px] items-end justify-between gap-[var(--fin-s-2)]">
+                  {chartFaturamento.map((m, idx) => {
+                    const h = Math.max((m.faturamento / maxFat) * 132, 3);
+                    const atual = idx === chartFaturamento.length - 1;
+                    return (
+                      <div key={m.mes} className="flex flex-1 flex-col items-center gap-[var(--fin-s-1)]" title={`${m.label}: ${BRL(m.faturamento)}`}>
+                        <div className="flex h-[132px] w-full items-end justify-center">
+                          <div
+                            className="w-full max-w-[28px] rounded-[var(--fin-r-sm)]"
+                            style={{
+                              height: h,
+                              background: atual ? 'var(--fin-accent)' : 'var(--fin-surface-sunken)',
+                            }}
+                          />
+                        </div>
+                        <span className={`fin-t-caption ${atual ? 'text-[var(--fin-text)]' : 'text-[var(--fin-text-3)]'}`}>
+                          {m.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Painel>
+
+              <Painel titulo="Entradas e saídas de caixa">
+                <div className="flex h-[132px] items-end justify-between gap-[var(--fin-s-1)]">
+                  {chartFluxo.map(m => (
+                    <div key={m.mes} className="flex flex-1 flex-col items-center gap-[var(--fin-s-1)]">
+                      <div className="flex h-[110px] items-end gap-[2px]">
+                        <div
+                          className="w-3 rounded-[var(--fin-r-sm)] bg-[var(--fin-positive)]"
+                          style={{ height: Math.max((m.entradas / maxFluxo) * 106, 2) }}
+                          title={`Entradas: ${BRL(m.entradas)}`}
+                        />
+                        <div
+                          className="w-3 rounded-[var(--fin-r-sm)] bg-[var(--fin-negative)]"
+                          style={{ height: Math.max((m.saidas / maxFluxo) * 106, 2) }}
+                          title={`Saídas: ${BRL(m.saidas)}`}
+                        />
+                      </div>
+                      <span className="fin-t-caption text-[var(--fin-text-3)]">{m.label}</span>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm text-[var(--t-text)] truncate">{nome}</div>
-                      <div className="text-[11px] text-[var(--t-text-secondary)]">#{v.numero} &middot; {fmtDate(v.data_venda)}</div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <div className="text-sm font-medium text-[var(--t-text)]">{BRL(v.valor_final || 0)}</div>
-                      <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full ${statusColor[v.status] || ''}`}>{v.status}</span>
+                  ))}
+                </div>
+                <div className="mt-[var(--fin-s-3)] flex items-center justify-center gap-[var(--fin-s-4)] border-t border-[var(--fin-border)] pt-[var(--fin-s-3)]">
+                  <span className="fin-t-caption flex items-center gap-1.5 text-[var(--fin-text-3)]">
+                    <span className="h-2 w-2 rounded-[2px] bg-[var(--fin-positive)]" /> Entradas
+                  </span>
+                  <span className="fin-t-caption flex items-center gap-1.5 text-[var(--fin-text-3)]">
+                    <span className="h-2 w-2 rounded-[2px] bg-[var(--fin-negative)]" /> Saídas
+                  </span>
+                </div>
+              </Painel>
+
+              <Painel titulo="Composição das vendas">
+                {chartComposicao.length === 0 ? (
+                  <p className="fin-t-body py-[var(--fin-s-5)] text-center text-[var(--fin-text-3)]">
+                    Nenhuma venda com produto detalhado neste mês.
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-[var(--fin-s-2)]">
+                    {chartComposicao.slice(0, 6).map(c => (
+                      <div key={c.tipo} className="flex items-center gap-[var(--fin-s-2)]">
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: c.cor }} />
+                        <span className="fin-t-caption flex-1 text-[var(--fin-text-2)]">{c.tipo}</span>
+                        <Money valor={c.valor} estado={estadoValor} size="caption" />
+                        <span className="fin-t-caption w-10 text-right text-[var(--fin-text-3)]">
+                          {c.pct.toFixed(0)}%
+                        </span>
+                      </div>
+                    ))}
+                    <div className="mt-[var(--fin-s-2)] flex h-2.5 overflow-hidden rounded-full">
+                      {chartComposicao.map(c => (
+                        <div key={c.tipo} style={{ width: `${c.pct}%`, backgroundColor: c.cor }} />
+                      ))}
                     </div>
                   </div>
-                );
-              })}
+                )}
+              </Painel>
             </div>
-          )}
-        </div>
+          </Secao>
 
-        <MinimalFooter pageId="visão geral" />
+          {/* ---------------------------------------------------------------
+              LEITURA DO MÊS
+          ---------------------------------------------------------------- */}
+          {resumo.length > 0 ? (
+            <Secao id="dash-resumo" titulo={`Leitura de ${getMonthName(mesAtual)}`}>
+              <div className="rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)]">
+                <div className="flex max-w-[68ch] flex-col gap-[var(--fin-s-2)]">
+                  {resumo.map((p, i) => (
+                    <p key={i} className="fin-t-body text-[var(--fin-text-2)]">{p}</p>
+                  ))}
+                </div>
+              </div>
+            </Secao>
+          ) : null}
+
+          {/* ---------------------------------------------------------------
+              AGENDA
+          ---------------------------------------------------------------- */}
+          <Secao id="dash-agenda" titulo="Próximos dias">
+            <div className="grid gap-[var(--fin-s-4)] lg:grid-cols-2">
+              <Painel titulo="Vencimentos dos próximos 7 dias">
+                {datasImportantes.length === 0 ? (
+                  <p className="fin-t-body py-[var(--fin-s-5)] text-center text-[var(--fin-text-3)]">
+                    Nenhuma conta vencendo nos próximos 7 dias.
+                  </p>
+                ) : (
+                  <ul className="flex flex-col divide-y divide-[var(--fin-border)]">
+                    {datasImportantes.map((e, i) => (
+                      <li key={`${e.data}-${i}`} className="flex items-center gap-[var(--fin-s-3)] py-[var(--fin-s-2)] first:pt-0 last:pb-0">
+                        <span className="fin-t-caption w-[68px] shrink-0 text-[var(--fin-text-3)] tabular-nums">
+                          {fmtDate(e.data)}
+                        </span>
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <span className="fin-t-body-strong truncate text-[var(--fin-text)]">{e.titulo}</span>
+                          <span className="fin-t-caption truncate text-[var(--fin-text-2)]">{e.descricao}</span>
+                        </span>
+                        <Link
+                          href={e.link}
+                          className="fin-t-caption inline-flex min-h-11 shrink-0 items-center text-[var(--fin-accent)] underline underline-offset-4 lg:min-h-10"
+                        >
+                          Abrir
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Painel>
+
+              <Painel titulo="Aniversários de clientes">
+                {aniversariantes.length === 0 ? (
+                  <p className="fin-t-body py-[var(--fin-s-5)] text-center text-[var(--fin-text-3)]">
+                    Nenhum aniversário nos próximos 30 dias.
+                  </p>
+                ) : (
+                  <ul className="flex flex-col divide-y divide-[var(--fin-border)]">
+                    {aniversariantes.slice(0, 8).map((a, i) => (
+                      <li key={`${a.nome}-${i}`} className="flex items-center gap-[var(--fin-s-3)] py-[var(--fin-s-2)] first:pt-0 last:pb-0">
+                        <Cake className={`h-4 w-4 shrink-0 ${a.isHoje ? 'text-[var(--fin-accent)]' : 'text-[var(--fin-text-3)]'}`} />
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <span className="fin-t-body-strong truncate text-[var(--fin-text)]">{a.nome}</span>
+                          <span className="fin-t-caption text-[var(--fin-text-2)]">
+                            {a.isHoje ? 'Hoje' : a.diasAte === 1 ? 'Amanhã' : `Em ${a.diasAte} dias`}
+                            {a.idade ? ` · faz ${a.idade} anos` : ''}
+                          </span>
+                        </span>
+                        {a.whatsapp ? (
+                          <a
+                            href={`https://wa.me/${a.whatsapp.replace(/\D/g, '')}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="fin-t-caption inline-flex min-h-11 shrink-0 items-center gap-1 text-[var(--fin-accent)] underline underline-offset-4 lg:min-h-10"
+                          >
+                            <MessageCircle className="h-3 w-3" /> Parabenizar
+                          </a>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Painel>
+            </div>
+          </Secao>
+
+          {/* ---------------------------------------------------------------
+              AÇÕES
+          ---------------------------------------------------------------- */}
+          <Secao id="dash-acoes" titulo="O que fazer agora">
+            <div className="flex flex-col gap-[var(--fin-s-4)]">
+              <div className="grid gap-[var(--fin-s-4)] sm:grid-cols-2 lg:grid-cols-3">
+                <ActionCard
+                  rotulo="Nova venda"
+                  descricao="Registrar uma venda fechada e gerar as parcelas"
+                  icone={ShoppingCart}
+                  variante="primaria"
+                  href="/vendas/nova"
+                />
+                <ActionCard
+                  rotulo="Novo orçamento"
+                  descricao="Montar uma proposta para o cliente avaliar"
+                  icone={FileText}
+                  href="/vendas/orcamentos"
+                />
+                <ActionCard
+                  rotulo="Novo cliente"
+                  descricao="Cadastrar quem vai viajar ou contratar"
+                  icone={Users}
+                  href="/pessoas/clientes"
+                />
+                <ActionCard
+                  rotulo="Novo produto"
+                  descricao="Montar um roteiro para vender"
+                  icone={Package}
+                  href="/grupos"
+                />
+                <ActionCard
+                  rotulo="Registrar recebimento"
+                  descricao="Dar baixa no que o cliente pagou"
+                  icone={Receipt}
+                  href="/financeiro-ag/receber"
+                />
+                <ActionCard
+                  rotulo="Registrar pagamento"
+                  descricao="Dar baixa no que foi pago ao fornecedor"
+                  icone={CreditCard}
+                  href="/financeiro-ag/pagar"
+                />
+              </div>
+
+              <div className="grid gap-[var(--fin-s-3)] sm:grid-cols-3">
+                {pendencias.map(p => (
+                  <Link
+                    key={p.href}
+                    href={p.href}
+                    className="flex items-center justify-between gap-[var(--fin-s-2)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] px-[var(--fin-s-4)] py-[var(--fin-s-3)] transition-colors hover:bg-[var(--fin-surface-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)]"
+                  >
+                    <span className="fin-t-body text-[var(--fin-text-2)]">{p.rotulo}</span>
+                    <span className="fin-t-body-strong tabular-nums text-[var(--fin-text)]">{p.qtd}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </Secao>
+        </div>
       </div>
     </div>
   );
