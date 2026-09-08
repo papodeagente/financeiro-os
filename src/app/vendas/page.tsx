@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Plus, Search, Trash2, Eye, ShoppingCart } from 'lucide-react';
 import { VendaCRM, Cliente } from '@/lib/crm-types';
+import { nomeDoClienteOuTraco } from '@/lib/cliente-nome';
 import { loadEntities, deleteEntity } from '@/lib/crm-storage';
 import { Button } from '@/components/ui/button';
 import { PageShell } from '@/components/PageShell';
@@ -56,11 +57,11 @@ export default function VendasPage() {
     });
   }, []);
 
-  const getClienteNome = (clienteId: string) => {
-    const c = clientes[clienteId];
-    if (!c) return '—';
-    return c.tipo === 'PF' ? c.nome_completo : (c.nome_fantasia || c.razao_social);
-  };
+  // nomeDoClienteOuTraco nunca devolve undefined. A versão anterior devolvia
+  // undefined para todo cliente vindo do CRM (que é gravado com tipo 'fisica'
+  // e só o campo `nome`), e o .toLowerCase() logo abaixo derrubava a página
+  // inteira com "Algo deu errado".
+  const getClienteNome = (clienteId: string) => nomeDoClienteOuTraco(clientes[clienteId]);
 
   const filtered = vendas.filter(v => {
     const nome = getClienteNome(v.cliente_id).toLowerCase();
@@ -68,10 +69,15 @@ export default function VendasPage() {
     const matchLocalizador = v.produtos?.some(p => p.localizador?.toLowerCase().includes(q)) || false;
     const matchDescProduto = v.produtos?.some(p => p.descricao?.toLowerCase().includes(q)) || false;
     const matchObs = v.observacoes?.toLowerCase().includes(q) || false;
-    const matchSearch = !search || v.numero.toLowerCase().includes(q) || nome.includes(q) || matchLocalizador || matchDescProduto || matchObs;
+    // Campos vindos do JSONB podem faltar em venda antiga ou criada pelo CRM.
+    // String(x ?? '') em vez de acesso direto: uma busca não pode derrubar a
+    // tela por causa de um registro sem número.
+    const numero = String(v.numero ?? '').toLowerCase();
+    const dataVenda = String(v.data_venda ?? '');
+    const matchSearch = !search || numero.includes(q) || nome.includes(q) || matchLocalizador || matchDescProduto || matchObs;
     const matchStatus = !statusFilter || v.status === statusFilter;
-    const matchInicio = !dataInicio || v.data_venda >= dataInicio;
-    const matchFim = !dataFim || v.data_venda <= dataFim;
+    const matchInicio = !dataInicio || dataVenda >= dataInicio;
+    const matchFim = !dataFim || dataVenda <= dataFim;
     return matchSearch && matchStatus && matchInicio && matchFim;
   });
 

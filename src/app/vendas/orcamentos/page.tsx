@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Search, FileText, ArrowRight } from 'lucide-react';
 import { VendaCRM, Cliente } from '@/lib/crm-types';
+import { nomeDoClienteOuTraco } from '@/lib/cliente-nome';
 import { loadEntities, updateEntity } from '@/lib/crm-storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,17 +35,16 @@ export default function OrcamentosPage() {
     });
   }, []);
 
-  const getClienteNome = (clienteId: string) => {
-    const c = clientes[clienteId];
-    if (!c) return '—';
-    return c.tipo === 'PF' ? c.nome_completo : (c.nome_fantasia || c.razao_social);
-  };
+  // Mesma correção da tela de vendas: cliente vindo do CRM tem tipo 'fisica'
+  // e só o campo `nome`, então a derivação antiga devolvia undefined e a
+  // busca quebrava a página.
+  const getClienteNome = (clienteId: string) => nomeDoClienteOuTraco(clientes[clienteId]);
 
   const filtered = vendas.filter(v => {
     const q = search.toLowerCase();
     if (!q) return true;
     return (
-      v.numero.toLowerCase().includes(q) ||
+      String(v.numero ?? '').toLowerCase().includes(q) ||
       getClienteNome(v.cliente_id).toLowerCase().includes(q)
     );
   });

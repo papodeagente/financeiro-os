@@ -9,6 +9,7 @@ import {
   DollarSign, Receipt, Wallet, Activity,
 } from 'lucide-react';
 import { VendaCRM, Cliente, FornecedorCRM, ContaReceber, ContaPagar } from '@/lib/crm-types';
+import { nomeDoClienteOuTraco, tipoPessoa, tipoPessoaLabel, documentoDoCliente } from '@/lib/cliente-nome';
 import { loadEntities } from '@/lib/crm-storage';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -115,11 +116,7 @@ export default function VendaDetalhe() {
     );
   }
 
-  const clienteNome = cliente
-    ? cliente.tipo === 'PF'
-      ? cliente.nome_completo
-      : cliente.nome_fantasia || cliente.razao_social
-    : '—';
+  const clienteNome = nomeDoClienteOuTraco(cliente);
 
   const lucro = (venda.valor_final || 0) - (venda.valor_total_custo || 0);
 
@@ -177,12 +174,14 @@ export default function VendaDetalhe() {
           {cliente ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Info label="Nome" value={clienteNome} />
-              <Info label="Tipo" value={cliente.tipo === 'PF' ? 'Pessoa Fisica' : 'Pessoa Juridica'} />
+              <Info label="Tipo" value={tipoPessoaLabel(cliente.tipo)} />
               <Info label="E-mail" value={cliente.email || '—'} />
               <Info label="Telefone" value={cliente.telefone_principal || '—'} />
               <Info label="WhatsApp" value={cliente.whatsapp || '—'} />
-              {cliente.tipo === 'PF' && <Info label="CPF" value={cliente.cpf || '—'} />}
-              {cliente.tipo === 'PJ' && <Info label="CNPJ" value={cliente.cnpj || '—'} />}
+              <Info
+                label={tipoPessoa(cliente.tipo) === 'PJ' ? 'CNPJ' : 'CPF'}
+                value={documentoDoCliente(cliente) || '—'}
+              />
             </div>
           ) : (
             <p className="text-sm text-[var(--t-text-secondary)]">Cliente nao vinculado</p>

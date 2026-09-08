@@ -8,6 +8,7 @@ import type {
   ContaBancaria, CACMensal, MetaVendedor, Membro,
   StatusVendaCRM,
 } from '@/lib/crm-types';
+import { nomeDoCliente, nomeDoClienteOuTraco } from '@/lib/cliente-nome';
 import {
   TrendingUp, ShoppingCart, Users, DollarSign,
   Target, Wallet, BarChart3, AlertTriangle, ChevronRight,
@@ -621,7 +622,7 @@ export default function DashboardPage() {
           return diff < 0 ? diff + 365 : diff;
         })();
         return {
-          nome: c.tipo === 'PF' ? c.nome_completo : c.nome_fantasia,
+          nome: nomeDoCliente(c),
           data: dn, idade, diasAte,
           whatsapp: c.whatsapp || c.telefone_principal,
           email: c.email,
@@ -1221,7 +1222,7 @@ export default function DashboardPage() {
             <div className="divide-y divide-[var(--t-border)]">
               {[...vendas].sort((a, b) => (b.data_venda || '').localeCompare(a.data_venda || '')).slice(0, 6).map(v => {
                 const cliente = clientes.find(c => c.id === v.cliente_id);
-                const nome = cliente ? (cliente.tipo === 'PF' ? cliente.nome_completo : cliente.nome_fantasia || cliente.razao_social) : 'Cliente';
+                const nome = nomeDoClienteOuTraco(cliente, 'Cliente');
                 const statusColor: Record<string, string> = {
                   ORCAMENTO: 'bg-[var(--t-status-warning-bg)] text-[var(--t-status-warning)]',
                   RESERVADO: 'bg-[var(--t-status-info-bg)] text-[var(--t-status-info)]',

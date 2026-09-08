@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Cliente, createCliente } from '@/lib/crm-types';
+import { nomeDoCliente, tipoPessoa, tipoPessoaLabel, documentoDoCliente } from '@/lib/cliente-nome';
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
 import { PageHeader } from '@/components/PageHeader';
 import { DataTable, DataTableColumn } from '@/components/ui/data-table';
@@ -72,7 +73,10 @@ export default function ClientesPage() {
   };
 
   const openEdit = (c: Cliente) => {
-    setForm({ ...c });
+    // Normaliza o tipo ao abrir para edição. Cliente vindo do CRM chega com
+    // tipo 'fisica'; sem isto o formulário o trataria como pessoa jurídica e
+    // gravaria o nome dele no campo de razão social.
+    setForm({ ...c, tipo: tipoPessoa(c.tipo) });
     setEditingId(c.id);
     setActiveTab('pessoais');
     setShowForm(true);
@@ -151,8 +155,7 @@ export default function ClientesPage() {
     { id: 'preferencias', label: 'Preferências', icon: <Star size={14} /> },
   ];
 
-  const clienteNome = (c: Cliente) =>
-    c.tipo === 'PF' ? c.nome_completo : (c.nome_fantasia || c.razao_social || '');
+  const clienteNome = (c: Cliente) => nomeDoCliente(c);
 
   const columns: DataTableColumn<Cliente>[] = [
     {
@@ -162,9 +165,9 @@ export default function ClientesPage() {
       sortAccessor: c => clienteNome(c).toLowerCase(),
       cell: c => (
         <div>
-          <div className="font-medium text-[var(--t-text)]">{c.nome_completo || c.razao_social}</div>
+          <div className="font-medium text-[var(--t-text)]">{clienteNome(c)}</div>
           <div className="text-xs text-[var(--t-text-secondary)]">
-            {c.tipo === 'PF' ? 'Pessoa Física' : 'Pessoa Jurídica'}
+            {tipoPessoaLabel(c.tipo)}
           </div>
         </div>
       ),
@@ -174,7 +177,7 @@ export default function ClientesPage() {
       header: 'CPF/CNPJ',
       headerClassName: 'hidden sm:table-cell',
       className: 'hidden sm:table-cell',
-      cell: c => <span className="text-[var(--t-text-secondary)]">{c.tipo === 'PF' ? c.cpf : c.cnpj}</span>,
+      cell: c => <span className="text-[var(--t-text-secondary)]">{documentoDoCliente(c)}</span>,
     },
     {
       key: 'telefone',

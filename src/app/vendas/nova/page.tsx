@@ -23,6 +23,7 @@ import {
   createCliente,
   createFornecedorCRM,
 } from '@/lib/crm-types';
+import { nomeDoCliente } from '@/lib/cliente-nome';
 import { gerarContasVenda, type ItemVendaInput, type FornecedorInfo } from '@/lib/venda-financeiro';
 import { GrupoViagem } from '@/lib/types';
 import { loadEntities, saveEntity } from '@/lib/crm-storage';
@@ -219,21 +220,17 @@ export default function NovaVendaPage() {
 
   // ---- Cliente helpers ----
   const selectedCliente = clientes.find(c => c.id === venda.cliente_id);
-  const clienteNome = selectedCliente
-    ? selectedCliente.tipo === 'PF'
-      ? selectedCliente.nome_completo
-      : selectedCliente.nome_fantasia || selectedCliente.razao_social
-    : '';
+  const clienteNome = nomeDoCliente(selectedCliente);
 
   const filteredClientes = clientes.filter(c => {
     const q = clienteSearch.toLowerCase();
-    const nome = (c.tipo === 'PF' ? c.nome_completo : c.nome_fantasia || c.razao_social) || '';
+    const nome = nomeDoCliente(c);
     const email = c.email || '';
     return nome.toLowerCase().includes(q) || email.toLowerCase().includes(q);
   });
 
   const selectCliente = (c: Cliente) => {
-    const nome = c.tipo === 'PF' ? c.nome_completo : c.nome_fantasia || c.razao_social;
+    const nome = nomeDoCliente(c);
     setVenda(prev => ({ ...prev, cliente_id: c.id }));
     setClienteSearch(nome);
     setShowClienteList(false);
