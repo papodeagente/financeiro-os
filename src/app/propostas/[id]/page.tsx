@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Proposta, Cliente, Membro } from '@/lib/crm-types';
-import { loadEntities } from '@/lib/crm-storage';
+import { loadEntities, loadEquipe } from '@/lib/crm-storage';
 import { PropostaEditor } from '@/components/propostas/PropostaEditor';
 
 export default function EditPropostaPage() {
@@ -16,7 +16,7 @@ export default function EditPropostaPage() {
     Promise.all([
       fetch(`/api/propostas/${id}`).then(r => r.json()),
       loadEntities<Cliente>('clientes'),
-      loadEntities<Membro>('membros'),
+      loadEquipe<Membro>(),
     ]).then(([proposta, cl, mb]) => {
       if (!proposta?.id) { setError(true); return; }
       setData({ proposta, clientes: cl, membros: mb });

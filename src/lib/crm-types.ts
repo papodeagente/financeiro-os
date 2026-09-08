@@ -143,11 +143,14 @@ export interface Membro {
   meta_mensal_quantidade: number;
   plano_comissao_id: string;
 
-  /** Usuario do financeiro (tabela `usuarios`) que representa esta pessoa.
-   *  E por aqui que a venda vinda do CRM, cujo vendedor_id aponta para
-   *  `usuarios`, encontra o membro que carrega o plano de comissao.
-   *  Vazio significa que a pessoa ainda nao foi vinculada. */
+  /** Id do usuário que ESTA pessoa é. A equipe passou a ser lida de
+   *  `usuarios`, então aqui vem o mesmo valor de `id`. Mantido porque
+   *  várias telas já liam este campo. */
   usuario_id: string;
+
+  /** Ids do cadastro antigo `membros` absorvidos por esta pessoa. Venda
+   *  histórica gravada com id de membro resolve o vendedor por aqui. */
+  membro_ids_legado?: string[];
 
   status: 'ATIVO' | 'INATIVO';
 }
@@ -1267,6 +1270,23 @@ export interface Usuario {
     ver_extrato_contas: string[];
   };
   ativo: boolean;
+
+  // ── Lado comercial ──────────────────────────────────────────────
+  // O usuário É o vendedor. Antes existia um cadastro paralelo em
+  // `membros`, que nunca se encontrava com o time real: a venda do CRM
+  // gravava vendedor_id apontando para `usuarios` e a comissão procurava
+  // em `membros`. Agora existe uma lista só.
+
+  /** Plano que define quanto esta pessoa ganha. Vazio não gera comissão. */
+  plano_comissao_id: string;
+  meta_mensal_vendas: number;
+  meta_mensal_quantidade: number;
+  /** Ids do cadastro antigo de `membros` absorvidos por este usuário.
+   *  Venda histórica gravada com id de membro continua resolvendo. */
+  membro_ids_legado: string[];
+  /** Identificador da pessoa no CRM, quando veio de lá. */
+  external_id?: string;
+  origem?: string;
 }
 
 // ============================================================

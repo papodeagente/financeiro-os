@@ -1135,6 +1135,61 @@ async function executarInitDB() {
     $$;
   `);
 
+  // ---- Equipe única: `usuarios` absorve o cadastro paralelo `membros` ----
+  // O time real do sistema sempre viveu em `usuarios`, mas comissão e metas
+  // liam `membros`, um cadastro paralelo que nunca se encontrava com ele: a
+  // venda do CRM gravava vendedor_id apontando para `usuarios` e o motor de
+  // comissão procurava esse id em `membros`. Resultado, nenhuma venda do CRM
+  // gerava comissão e a tela de comissões oferecia vendedor que não era do
+  // time. Esta migração funde os dois cadastros.
+  //
+  // Roda a cada initDB, então é idempotente por desenho e nunca sobrescreve
+  // escolha feita depois na tela. Coberta por scripts/test-sql-equipe-unica.mjs,
+  // que extrai este mesmo SQL daqui para não haver deriva entre código e teste.
+  // MIGRACAO_EQUIPE_UNICA_INICIO
+  await pool.query(`
+    -- Absorve o cadastro paralelo 'membros' dentro de 'usuarios', que passa a
+    -- ser a lista única do time. Casa por email (normalizado) dentro do mesmo
+    -- tenant. Só preenche campo comercial que ainda esteja vazio no usuário,
+    -- então rodar de novo não sobrescreve escolha feita depois na tela.
+    -- Guarda o id do membro absorvido em membro_ids_legado, para venda antiga
+    -- gravada com id de membro continuar resolvendo o vendedor.
+    DO $$
+    BEGIN
+      UPDATE usuarios u
+         SET data = u.data
+                  || jsonb_build_object(
+                       'plano_comissao_id',
+                         CASE WHEN COALESCE(u.data->>'plano_comissao_id','') = ''
+                              THEN COALESCE(m.data->>'plano_comissao_id','')
+                              ELSE u.data->>'plano_comissao_id' END,
+                       'meta_mensal_vendas',
+                         CASE WHEN COALESCE((u.data->>'meta_mensal_vendas')::numeric, 0) = 0
+                              THEN COALESCE((m.data->>'meta_mensal_vendas')::numeric, 0)
+                              ELSE (u.data->>'meta_mensal_vendas')::numeric END,
+                       'meta_mensal_quantidade',
+                         CASE WHEN COALESCE((u.data->>'meta_mensal_quantidade')::numeric, 0) = 0
+                              THEN COALESCE((m.data->>'meta_mensal_quantidade')::numeric, 0)
+                              ELSE (u.data->>'meta_mensal_quantidade')::numeric END,
+                       'membro_ids_legado',
+                         (SELECT jsonb_agg(DISTINCT x) FROM jsonb_array_elements_text(
+                            COALESCE(u.data->'membro_ids_legado','[]'::jsonb) || to_jsonb(ARRAY[m.id])
+                          ) x)
+                     ),
+             updated_at = NOW()
+        FROM membros m
+       WHERE m.tenant_id = u.tenant_id
+         AND LOWER(TRIM(m.email)) = LOWER(TRIM(u.email))
+         AND COALESCE(m.email,'') <> ''
+         -- idempotência: só entra quem ainda não foi absorvido
+         AND NOT (COALESCE(u.data->'membro_ids_legado','[]'::jsonb) ? m.id);
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'absorcao de membros nao aplicada: %', SQLERRM;
+    END
+    $$;
+  `);
+  // MIGRACAO_EQUIPE_UNICA_FIM
+
   // ---- Desempenho: vínculo conta -> venda e vencimento ----
   // /api/vendas-crm/[id]/financeiro e toda regeneração de contas filtram
   // por data->>'origem_venda_id'. Sem índice de expressão isso é varredura

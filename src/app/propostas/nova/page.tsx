@@ -7,7 +7,7 @@ import {
   createProposta, createCliente,
 } from '@/lib/crm-types';
 import { generateId } from '@/lib/utils';
-import { loadEntities, saveEntity } from '@/lib/crm-storage';
+import { loadEntities, saveEntity, loadEquipe } from '@/lib/crm-storage';
 import { toast } from '@/lib/toast';
 import { PropostaEditor } from '@/components/propostas/PropostaEditor';
 import { Button } from '@/components/ui/button';
@@ -105,7 +105,7 @@ export default function PropostaNovaPage() {
     Promise.all([
       loadEntities<TemplateProposta>('templates-proposta'),
       loadEntities<Cliente>('clientes'),
-      loadEntities<Membro>('membros'),
+      loadEquipe<Membro>(),
       loadEntities<Proposta>('propostas'),
     ]).then(([t, c, m, p]) => {
       setTemplates(t);

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { VendaCRM, Membro } from '@/lib/crm-types';
-import { loadEntities } from '@/lib/crm-storage';
+import { loadEntities, loadEquipe } from '@/lib/crm-storage';
 import { exportCSV } from '@/lib/export-utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -44,7 +44,7 @@ export default function RentabilidadePage() {
     setLoading(true);
     const [v, m] = await Promise.all([
       loadEntities<VendaCRM>('vendas-crm'),
-      loadEntities<Membro>('membros'),
+      loadEquipe<Membro>(),
     ]);
     setVendas(v);
     setMembros(m);

@@ -50,3 +50,24 @@ export async function saveAgencia<T>(data: T): Promise<T> {
   });
   return res.json();
 }
+
+/**
+ * Equipe da agência: a lista ÚNICA de quem trabalha e vende.
+ *
+ * Vem de `usuarios`, que é o time real cadastrado em Configurações. Antes
+ * existia um cadastro paralelo em `membros` que nunca se encontrava com
+ * ele: a tela de comissões oferecia vendedor que não era ninguém do time.
+ * A forma devolvida continua sendo `Membro` para as telas não precisarem
+ * mudar de modelo, mas o `id` agora é o id do usuário, que é exatamente o
+ * que `venda.vendedor_id` guarda quando a venda vem do CRM.
+ */
+export async function loadEquipe<T = unknown>(): Promise<T[]> {
+  try {
+    const res = await fetch('/api/equipe');
+    if (!res.ok) return [];
+    const json = await res.json();
+    return (json.equipe ?? []) as T[];
+  } catch {
+    return [];
+  }
+}

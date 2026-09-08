@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { ContaReceber, ContaPagar, PlanoContas, Membro } from '@/lib/crm-types';
-import { loadEntities } from '@/lib/crm-storage';
+import { loadEntities, loadEquipe } from '@/lib/crm-storage';
 import { exportCSV } from '@/lib/export-utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,7 +38,7 @@ export default function RelatorioFinanceiroPage() {
       loadEntities<ContaReceber>('contas-receber'),
       loadEntities<ContaPagar>('contas-pagar'),
       loadEntities<PlanoContas>('plano-contas'),
-      loadEntities<Membro>('membros'),
+      loadEquipe<Membro>(),
     ]);
     setContasReceber(cr);
     setContasPagar(cp);

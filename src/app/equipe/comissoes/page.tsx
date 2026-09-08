@@ -6,7 +6,7 @@ import {
   ContaReceber, ContaPagar, ItemVendaData, PlanoContas, ProdutoVenda,
   Agencia, createContaPagar,
 } from '@/lib/crm-types';
-import { loadEntities, saveEntity, updateEntity, deleteEntity, loadAgencia } from '@/lib/crm-storage';
+import { loadEntities, saveEntity, updateEntity, deleteEntity, loadAgencia, loadEquipe } from '@/lib/crm-storage';
 import { proximaDataPagamento, descreverAgenda } from '@/lib/comissao-agenda';
 import {
   round2, num, somaPor, percentual, divSegura, paraBRL, hojeISO, dataLocal, mesDe,
@@ -77,7 +77,7 @@ export default function ComissoesPage() {
     const [c, v, m, p, pc, ag, cps] = await Promise.all([
       loadEntities<ComissaoVenda>('comissoes'),
       loadEntities<VendaCRM>('vendas-crm'),
-      loadEntities<Membro>('membros'),
+      loadEquipe<Membro>(),
       loadEntities<PlanoComissao>('planos-comissao'),
       loadEntities<PlanoContas>('plano-contas'),
       loadAgencia<Agencia>(),
@@ -208,15 +208,16 @@ export default function ComissoesPage() {
 
     /** Monta o registro da comissão, ou devolve o motivo da pendência. */
     async function montar(venda: VendaCRM, anterior?: ComissaoVenda): Promise<ComissaoVenda | { erro: string }> {
-      // A venda vinda do CRM traz vendedor_id apontando para `usuarios`;
-      // a venda lancada aqui dentro aponta direto para o membro. Resolve
-      // os dois: primeiro o vinculo (usuario_id), depois o id do membro.
+      // A equipe é uma lista só, vinda de `usuarios`, e é exatamente para
+      // lá que venda.vendedor_id aponta quando a venda vem do CRM. Venda
+      // antiga, gravada quando existia o cadastro paralelo, resolve pelos
+      // ids absorvidos na migração.
       const vendedor =
-        membros.find(m => m.usuario_id && m.usuario_id === venda.vendedor_id) ??
-        membros.find(m => m.id === venda.vendedor_id);
+        membros.find(m => m.id === venda.vendedor_id) ??
+        membros.find(m => (m.membro_ids_legado ?? []).includes(venda.vendedor_id));
       if (!vendedor) {
         return {
-          erro: `vendedor da venda não está vinculado a nenhum membro da equipe (vendedor_id ${venda.vendedor_id}). Vincule em Equipe > Vendedores e planos.`,
+          erro: `o vendedor desta venda não está na equipe (vendedor_id ${venda.vendedor_id}). Cadastre a pessoa em Configurações, Usuários.`,
         };
       }
 
@@ -467,11 +468,15 @@ export default function ComissoesPage() {
               </p>
               <p className="text-xs text-[var(--t-text-secondary)] mt-0.5">
                 Enquanto não houver agenda, aprovar uma comissão não programa a conta a pagar, e o
-                valor só entra no caixa quando você clicar em Pagar. Defina os dias em{' '}
-                <a href="/config/agencia" className="underline underline-offset-2">
-                  Configurações, Agência
-                </a>.
+                valor só entra no caixa quando você clicar em Pagar.
               </p>
+              <a
+                href="/config/agencia#pagamento-comissao"
+                className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-[var(--t-green)] px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110"
+              >
+                <CalendarClock className="w-3.5 h-3.5" />
+                Definir datas de pagamento
+              </a>
             </div>
           </div>
         ) : (

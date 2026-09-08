@@ -87,7 +87,7 @@ const FINANCEIRO_MENU: SidebarSection[] = [
     items: [
       { key: 'clientes', label: 'Clientes', icon: UserPlus, href: '/pessoas/clientes' },
       { key: 'fornecedores', label: 'Fornecedores', icon: Building2, href: '/pessoas/fornecedores' },
-      { key: 'equipe', label: 'Equipe', icon: Briefcase, href: '/pessoas/equipe' },
+      { key: 'equipe', label: 'Equipe', icon: Briefcase, href: '/equipe/vendedores' },
     ],
   },
   {

@@ -373,7 +373,7 @@ export default function AgenciaPage() {
         </Card>
 
         {/* Section 4b: Agenda de pagamento de comissão */}
-        <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)]">
+        <Card id="pagamento-comissao" className="bg-[var(--t-header-bg)] border-[var(--t-border)] scroll-mt-24">
           <CardHeader className="pb-3">
             <CardTitle className="text-[var(--t-accent)] flex items-center gap-2 text-base">
               <CalendarClock className="w-4 h-4" />

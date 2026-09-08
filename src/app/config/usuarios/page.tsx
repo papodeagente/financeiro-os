@@ -38,6 +38,12 @@ function newUsuario(): Usuario {
     perfil: 'VENDEDOR',
     permissoes: permissoesParaPerfil('VENDEDOR'),
     ativo: true,
+    // Lado comercial: quem entra ainda não vende por regra nenhuma.
+    // Sem plano não gera comissão, que é a regra do motor de cálculo.
+    plano_comissao_id: '',
+    meta_mensal_vendas: 0,
+    meta_mensal_quantidade: 0,
+    membro_ids_legado: [],
   };
 }
 

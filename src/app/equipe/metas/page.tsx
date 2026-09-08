@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { MetaVendedor, Membro, VendaCRM, ComissaoVenda, PeriodoMeta } from '@/lib/crm-types';
-import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
+import { loadEntities, saveEntity, updateEntity, deleteEntity, loadEquipe } from '@/lib/crm-storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -47,7 +47,7 @@ export default function MetasPage() {
     setLoading(true);
     const [mt, mb, v, c] = await Promise.all([
       loadEntities<MetaVendedor>('metas'),
-      loadEntities<Membro>('membros'),
+      loadEquipe<Membro>(),
       loadEntities<VendaCRM>('vendas-crm'),
       loadEntities<ComissaoVenda>('comissoes'),
     ]);

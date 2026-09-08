@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { loadEntities } from '@/lib/crm-storage';
+import { loadEntities, loadEquipe } from '@/lib/crm-storage';
 import type {
   Cliente, VendaCRM, ContaReceber, ContaPagar,
   ContaBancaria, CACMensal, MetaVendedor, Membro,
@@ -216,7 +216,7 @@ export default function DashboardPage() {
       loadEntities<ContaBancaria>('contas-bancarias'),
       loadEntities<CACMensal>('cac-mensal'),
       loadEntities<MetaVendedor>('metas'),
-      loadEntities<Membro>('membros'),
+      loadEquipe<Membro>(),
     ]).then(([cl, vn, cr, cp, cb, cac, mt, mb]) => {
       setClientes(cl);
       // Normaliza vendas vindas de fontes diferentes (UI antiga + handler do
