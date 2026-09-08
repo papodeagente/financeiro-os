@@ -8,6 +8,7 @@ import {
 } from '@/lib/crm-types';
 import { loadEntities, saveEntity, updateEntity, deleteEntity, loadAgencia, loadEquipe } from '@/lib/crm-storage';
 import { proximaDataPagamento, descreverAgenda } from '@/lib/comissao-agenda';
+import { calcularComissaoDoMes, chaveAcumulado } from '@/lib/comissao-acumulada';
 import {
   round2, num, somaPor, percentual, divSegura, paraBRL, hojeISO, dataLocal, mesDe,
 } from '@/lib/money';
@@ -163,8 +164,10 @@ export default function ComissoesPage() {
     return { erro: 'venda sem custo de fornecedor e sem comissão apurada — base viraria o faturamento bruto' };
   }
 
-  /** Percentual do plano ponderado pelo valor de cada produto + faixas. */
-  function calcularPercentual(venda: VendaCRM, plano: PlanoComissao, valorBase: number): number {
+  /** Percentual de fallback: o padrão do plano, ponderado pelas regras de
+   *  produto quando existirem. NÃO aplica faixa: a faixa depende do
+   *  acumulado do mês do vendedor, resolvido em comissao-acumulada.ts. */
+  function calcularPercentual(venda: VendaCRM, plano: PlanoComissao): number {
     let pct = num(plano.percentual_padrao);
 
     const produtos = venda.produtos ?? [];
@@ -180,11 +183,11 @@ export default function ComissoesPage() {
       }
     }
 
-    if (plano.faixas.length > 0) {
-      const faixa = plano.faixas.find(f => valorBase >= num(f.de) && (num(f.ate) === 0 || valorBase <= num(f.ate)));
-      if (faixa) pct = num(faixa.percentual);
-    }
-
+    // A FAIXA NÃO É APLICADA AQUI. Ela depende do acumulado do mês do
+    // vendedor, não desta venda isolada, e é resolvida em
+    // src/lib/comissao-acumulada.ts depois que todas as bases do mês são
+    // apuradas. O que sai daqui é só o percentual de fallback, usado
+    // quando o acumulado do mês não casa com faixa nenhuma.
     return pct;
   }
 
@@ -206,8 +209,18 @@ export default function ComissoesPage() {
     const vendasById = new Map(vendas.map(v => [v.id, v]));
     const hoje = hojeISO();
 
-    /** Monta o registro da comissão, ou devolve o motivo da pendência. */
-    async function montar(venda: VendaCRM, anterior?: ComissaoVenda): Promise<ComissaoVenda | { erro: string }> {
+    /** Base apurada de uma venda, ainda SEM percentual e sem valor: os dois
+     *  dependem do acumulado do mês do vendedor. */
+    interface BaseApurada {
+      vendedor: Membro;
+      plano: PlanoComissao;
+      base: number;
+      pctFallback: number;
+      parcial: ComissaoVenda;
+    }
+
+    /** Apura a base da venda, ou devolve o motivo da pendência. */
+    async function montar(venda: VendaCRM, anterior?: ComissaoVenda): Promise<BaseApurada | { erro: string }> {
       // A equipe é uma lista só, vinda de `usuarios`, e é exatamente para
       // lá que venda.vendedor_id aponta quando a venda vem do CRM. Venda
       // antiga, gravada quando existia o cadastro paralelo, resolve pelos
@@ -235,88 +248,139 @@ export default function ComissoesPage() {
       const base = await calcularValorBase(venda, plano, comissoesPorVenda, cacheItens);
       if ('erro' in base) return base;
 
-      const pct = calcularPercentual(venda, plano, base.valor);
-
+      // Percentual e valor ficam em aberto de propósito: quem os fecha é a
+      // distribuição do acumulado do mês, mais abaixo.
       return {
-        ...(anterior ?? {}),
-        id: anterior?.id ?? comissaoId(venda.id, venda.vendedor_id),
-        venda_id: venda.id,
-        venda_numero: venda.numero,
-        vendedor_id: venda.vendedor_id,
-        vendedor_nome: vendedor.nome,
-        plano_comissao_id: plano.id,
-        plano_nome: plano.nome,
-        data_venda: venda.data_venda,
-        valor_base: round2(base.valor),
-        percentual_aplicado: pct,
-        valor_comissao: percentual(base.valor, pct),
-        status: anterior?.status ?? 'CALCULADA',
-        data_aprovacao: anterior?.data_aprovacao ?? null,
-        data_pagamento: anterior?.data_pagamento ?? null,
-        observacoes: anterior?.observacoes ?? '',
+        vendedor,
+        plano,
+        base: round2(base.valor),
+        pctFallback: calcularPercentual(venda, plano),
+        parcial: {
+          ...(anterior ?? {}),
+          id: anterior?.id ?? comissaoId(venda.id, venda.vendedor_id),
+          venda_id: venda.id,
+          venda_numero: venda.numero,
+          vendedor_id: venda.vendedor_id,
+          vendedor_nome: vendedor.nome,
+          plano_comissao_id: plano.id,
+          plano_nome: plano.nome,
+          data_venda: venda.data_venda,
+          valor_base: round2(base.valor),
+          percentual_aplicado: 0,
+          valor_comissao: 0,
+          status: anterior?.status ?? 'CALCULADA',
+          data_aprovacao: anterior?.data_aprovacao ?? null,
+          data_pagamento: anterior?.data_pagamento ?? null,
+          observacoes: anterior?.observacoes ?? '',
+        } as ComissaoVenda,
       };
     }
 
-    // ---- 1) Reconciliação das comissões existentes ----
+    // ---- 1) Comissão de venda que sumiu ou foi cancelada ----
+    // Feito antes de tudo: essas comissões saem do acumulado do mês.
     for (const c of comissoes) {
-      if (c.status === 'CANCELADA') continue;  // cancelada não trava recálculo
+      if (c.status === 'CANCELADA') continue;
       const venda = vendasById.get(c.venda_id);
+      if (venda && venda.status !== 'CANCELADO') continue;
 
-      if (!venda || venda.status === 'CANCELADO') {
-        const motivo = venda ? 'venda cancelada' : 'venda removida';
-        if (c.status === 'PAGA') {
-          pend.push({ id: c.id, venda: c.venda_numero, motivo: `${motivo} com comissão JÁ PAGA — estornar manualmente` });
-        } else {
-          await updateEntity('comissoes', {
-            ...c, status: 'CANCELADA',
-            observacoes: `${c.observacoes ? c.observacoes + ' | ' : ''}Cancelada automaticamente em ${hoje}: ${motivo}.`,
-          });
-        }
-        continue;
-      }
-
-      const nova = await montar(venda, c);
-      if ('erro' in nova) {
-        pend.push({ id: c.id, venda: c.venda_numero, motivo: nova.erro });
-        continue;
-      }
-
-      const divergiu = nova.valor_base !== round2(num(c.valor_base))
-        || nova.valor_comissao !== round2(num(c.valor_comissao));
-      if (!divergiu) continue;
-
-      if (c.status === 'CALCULADA') {
-        // Ainda não aprovada: recalcula em cima da venda atual.
-        await updateEntity('comissoes', {
-          ...nova,
-          observacoes: `${c.observacoes ? c.observacoes + ' | ' : ''}Recalculada em ${hoje} (base ${BRL(num(c.valor_base))} → ${BRL(nova.valor_base)}).`,
-        });
+      const motivo = venda ? 'venda cancelada' : 'venda removida';
+      if (c.status === 'PAGA') {
+        pend.push({ id: c.id, venda: c.venda_numero, motivo: `${motivo} com comissão JÁ PAGA — estornar manualmente` });
       } else {
-        // Já aprovada/paga: não altera valor sem decisão humana, só sinaliza.
-        pend.push({
-          id: c.id, venda: c.venda_numero,
-          motivo: `venda mudou de valor — base gravada ${BRL(num(c.valor_base))} × base atual ${BRL(nova.valor_base)} (comissão ${c.status} mantida)`,
+        await updateEntity('comissoes', {
+          ...c, status: 'CANCELADA',
+          observacoes: `${c.observacoes ? c.observacoes + ' | ' : ''}Cancelada automaticamente em ${hoje}: ${motivo}.`,
         });
       }
     }
 
-    // ---- 2) Vendas elegíveis ainda sem comissão viva ----
-    const jaTemComissao = new Set(
-      comissoes.filter(c => c.status !== 'CANCELADA').map(c => `${c.venda_id}::${c.vendedor_id}`)
-    );
-    const vendasPendentes = vendas.filter(v =>
-      (v.status === 'CONFIRMADO' || v.status === 'CONCLUIDO') &&
-      v.vendedor_id &&
-      !jaTemComissao.has(`${v.id}::${v.vendedor_id}`)
+    // ---- 2) Apura a base de TODAS as vendas elegíveis do período ----
+    // A faixa de comissão é escolhida pelo acumulado do mês do vendedor, e
+    // não pela venda isolada. Por isso é preciso ter todas as bases antes
+    // de fechar qualquer valor.
+    const comissaoPorVendaId = new Map(
+      comissoes.filter(c => c.status !== 'CANCELADA').map(c => [c.venda_id, c]),
     );
 
-    for (const venda of vendasPendentes) {
-      const nova = await montar(venda);
-      if ('erro' in nova) {
-        pend.push({ id: venda.id, venda: venda.numero, motivo: nova.erro });
+    const elegiveis = vendas.filter(v =>
+      (v.status === 'CONFIRMADO' || v.status === 'CONCLUIDO') && v.vendedor_id,
+    );
+
+    const apuradas: BaseApurada[] = [];
+    for (const venda of elegiveis) {
+      const anterior = comissaoPorVendaId.get(venda.id);
+      const r = await montar(venda, anterior);
+      if ('erro' in r) {
+        pend.push({ id: anterior?.id ?? venda.id, venda: venda.numero, motivo: r.erro });
         continue;
       }
-      await saveEntity('comissoes', nova);
+      apuradas.push(r);
+    }
+
+    // ---- 3) Fecha o valor pelo acumulado de cada vendedor em cada mês ----
+    const porVendedorMes = new Map<string, BaseApurada[]>();
+    for (const a of apuradas) {
+      // Agrupa pela pessoa da equipe, não pelo vendedor_id cru: venda antiga
+      // com id do cadastro anterior tem que somar no mesmo acumulado.
+      const chave = chaveAcumulado(a.vendedor.id, mesDe(a.parcial.data_venda));
+      const lista = porVendedorMes.get(chave) ?? [];
+      lista.push(a);
+      porVendedorMes.set(chave, lista);
+    }
+
+    for (const grupo of porVendedorMes.values()) {
+      // Todas as vendas do grupo têm o mesmo vendedor, logo o mesmo plano.
+      const plano = grupo[0].plano;
+      const resultado = calcularComissaoDoMes(
+        grupo.map(a => ({ venda_id: a.parcial.venda_id, base: a.base, pct_fallback: a.pctFallback })),
+        plano,
+      );
+      const porVenda = new Map(resultado.itens.map(i => [i.venda_id, i]));
+
+      for (const a of grupo) {
+        const item = porVenda.get(a.parcial.venda_id);
+        if (!item) continue;
+
+        const nova: ComissaoVenda = {
+          ...a.parcial,
+          percentual_aplicado: item.percentual,
+          valor_comissao: item.valor,
+        };
+
+        const anterior = comissaoPorVendaId.get(a.parcial.venda_id);
+        if (!anterior) {
+          await saveEntity('comissoes', nova);
+          continue;
+        }
+
+        const divergiu =
+          nova.valor_base !== round2(num(anterior.valor_base)) ||
+          nova.valor_comissao !== round2(num(anterior.valor_comissao)) ||
+          nova.percentual_aplicado !== round2(num(anterior.percentual_aplicado));
+        if (!divergiu) continue;
+
+        if (anterior.status === 'CALCULADA') {
+          const mudouFaixa = round2(num(anterior.percentual_aplicado)) !== nova.percentual_aplicado;
+          const nota = mudouFaixa
+            ? `Recalculada em ${hoje}: acumulado do mês ${BRL(resultado.base_acumulada)} coloca o vendedor na faixa de ${nova.percentual_aplicado}% (antes ${num(anterior.percentual_aplicado)}%).`
+            : `Recalculada em ${hoje} (base ${BRL(num(anterior.valor_base))} → ${BRL(nova.valor_base)}).`;
+          await updateEntity('comissoes', {
+            ...nova,
+            observacoes: `${anterior.observacoes ? anterior.observacoes + ' | ' : ''}${nota}`,
+          });
+        } else {
+          // Aprovada ou paga não muda de valor sem decisão humana. Mas o
+          // acumulado do mês pode ter subido a faixa DEPOIS da aprovação, e
+          // aí existe complemento devido: dizer o número é obrigação.
+          const diferenca = round2(nova.valor_comissao - round2(num(anterior.valor_comissao)));
+          const motivo = diferenca > 0
+            ? `acumulado do mês ${BRL(resultado.base_acumulada)} subiu a faixa para ${nova.percentual_aplicado}% — complemento de ${BRL(diferenca)} devido (comissão ${anterior.status} mantida em ${BRL(num(anterior.valor_comissao))})`
+            : diferenca < 0
+              ? `acumulado do mês caiu para ${BRL(resultado.base_acumulada)} (faixa ${nova.percentual_aplicado}%) — pago ${BRL(Math.abs(diferenca))} a mais (comissão ${anterior.status} mantida)`
+              : `venda mudou de valor — base gravada ${BRL(num(anterior.valor_base))} × base atual ${BRL(nova.valor_base)} (comissão ${anterior.status} mantida)`;
+          pend.push({ id: anterior.id, venda: anterior.venda_numero, motivo });
+        }
+      }
     }
 
     setPendencias(pend);
@@ -424,6 +488,23 @@ export default function ComissoesPage() {
     await deleteEntity('comissoes', id);
     load();
   }
+
+  /** Acumulado do mês por vendedor, com a faixa que ele alcançou. Existe
+   *  porque a alíquota da linha não se explica sozinha: ela vem da soma do
+   *  mês, e não daquela venda. */
+  const acumuladoPorVendedor = useMemo(() => {
+    const mapa = new Map<string, { nome: string; base: number; pct: number; vendas: number }>();
+    for (const c of comissoes) {
+      if (c.status === 'CANCELADA') continue;
+      if (filterMonth && mesDe(c.data_venda) !== filterMonth) continue;
+      const atual = mapa.get(c.vendedor_id) ?? { nome: c.vendedor_nome, base: 0, pct: 0, vendas: 0 };
+      atual.base = round2(atual.base + num(c.valor_base));
+      atual.pct = Math.max(atual.pct, round2(num(c.percentual_aplicado)));
+      atual.vendas += 1;
+      mapa.set(c.vendedor_id, atual);
+    }
+    return [...mapa.values()].sort((a, b) => b.base - a.base);
+  }, [comissoes, filterMonth]);
 
   const filtered = comissoes.filter(c => {
     if (filterStatus !== 'TODOS' && c.status !== filterStatus) return false;
@@ -596,6 +677,20 @@ export default function ComissoesPage() {
               <Calculator className="w-4 h-4 text-[var(--t-green)]" />
               Comissões ({filtered.length})
             </CardTitle>
+            {acumuladoPorVendedor.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1">
+                {acumuladoPorVendedor.map(a => (
+                  <p key={a.nome} className="text-xs text-[var(--t-text-secondary)]">
+                    <span className="font-medium text-[var(--t-text)]">{a.nome}</span>
+                    {' acumulou '}
+                    <span className="font-medium text-[var(--t-text)]">{BRL(a.base)}</span>
+                    {' em '}{a.vendas}{a.vendas === 1 ? ' venda' : ' vendas'}
+                    {' e está na faixa de '}
+                    <span className="font-medium text-[var(--t-green)]">{a.pct}%</span>
+                  </p>
+                ))}
+              </div>
+            )}
           </CardHeader>
           <CardContent className="p-0">
             {loading ? (
