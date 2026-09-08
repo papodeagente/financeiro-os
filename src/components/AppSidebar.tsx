@@ -131,7 +131,7 @@ const MENU: MenuItem[] = [
     children: [
       { key: 'agencia', label: 'Dados da Agência', icon: Building, href: '/config/agencia' },
       { key: 'usuarios', label: 'Usuários', icon: UserCog, href: '/config/usuarios' },
-      { key: 'integracoes', label: 'Integrações APIs', icon: Settings, href: '/config/integracoes' },
+      { key: 'integracoes', label: 'Integração com IA', icon: Settings, href: '/config/integracoes' },
       { key: 'auditoria', label: 'Log de Auditoria', icon: Search, href: '/config/auditoria' },
     ],
   },
