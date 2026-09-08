@@ -72,7 +72,12 @@ export default function PropostasPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Excluir esta proposta?')) return;
-    await deleteEntity('propostas', id);
+    try {
+      await deleteEntity('propostas', id);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Não foi possível excluir.');
+      return;
+    }
     setPropostas(prev => prev.filter(p => p.id !== id));
   };
 

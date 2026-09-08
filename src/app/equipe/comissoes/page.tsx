@@ -485,7 +485,12 @@ export default function ComissoesPage() {
 
   async function handleDelete(id: string) {
     if (!confirm('Excluir comissão?')) return;
-    await deleteEntity('comissoes', id);
+    try {
+      await deleteEntity('comissoes', id);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Não foi possível excluir.');
+      return;
+    }
     load();
   }
 

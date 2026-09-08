@@ -89,7 +89,12 @@ export default function PlanosComissaoPage() {
 
   async function handleDelete(id: string) {
     if (!confirm('Excluir plano de comissão?')) return;
-    await deleteEntity('planos-comissao', id);
+    try {
+      await deleteEntity('planos-comissao', id);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Não foi possível excluir.');
+      return;
+    }
     load();
   }
 

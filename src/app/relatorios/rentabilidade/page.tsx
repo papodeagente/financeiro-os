@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { VendaCRM, Membro } from '@/lib/crm-types';
 import { loadEntities, loadEquipe } from '@/lib/crm-storage';
+import { vendasComLancamento, apenasVendasComLastro, type LancamentoDeVenda } from '@/lib/venda-lancamentos';
 import { exportCSV } from '@/lib/export-utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -42,11 +43,16 @@ export default function RentabilidadePage() {
 
   async function load() {
     setLoading(true);
-    const [v, m] = await Promise.all([
+    // As contas entram aqui só para uma coisa: venda cujas contas a receber e
+    // a pagar foram apagadas não tem lastro financeiro e não pode continuar
+    // gerando rentabilidade. Mesma regra do DRE e do painel.
+    const [v, m, cr, cp] = await Promise.all([
       loadEntities<VendaCRM>('vendas-crm'),
       loadEquipe<Membro>(),
+      loadEntities<LancamentoDeVenda>('contas-receber'),
+      loadEntities<LancamentoDeVenda>('contas-pagar'),
     ]);
-    setVendas(v);
+    setVendas(apenasVendasComLastro(v, vendasComLancamento(cr, cp)));
     setMembros(m);
     const now = new Date();
     const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;

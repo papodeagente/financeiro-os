@@ -29,7 +29,20 @@ export async function updateEntity<T extends { id: string }>(endpoint: string, i
 }
 
 export async function deleteEntity(endpoint: string, id: string): Promise<void> {
-  await fetch(`/api/${endpoint}/${id}`, { method: 'DELETE' });
+  // A resposta era ignorada: um DELETE que falhava (sem permissão, erro de
+  // transação, sessão expirada) passava por sucesso. A tela dizia "removido",
+  // recarregava e o registro voltava — e quem apagou ficava achando que
+  // apagou. Agora o erro sobe e a tela mostra o motivo.
+  const res = await fetch(`/api/${endpoint}/${id}`, { method: 'DELETE' });
+  if (res.ok) return;
+  let motivo = '';
+  try {
+    const corpo = await res.json();
+    motivo = typeof corpo?.error === 'string' ? corpo.error : '';
+  } catch {
+    motivo = '';
+  }
+  throw new Error(motivo || `Não foi possível excluir (erro ${res.status}).`);
 }
 
 export async function loadAgencia<T>(): Promise<T | null> {

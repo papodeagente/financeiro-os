@@ -223,8 +223,11 @@ export default function ContasReceberPage() {
       setExclusaoAlvo(null);
       toast.success('Conta a receber excluída.');
       load();
-    } catch {
-      toast.error('Não foi possível excluir a conta a receber.');
+    } catch (e) {
+      toast.error(
+        'Não foi possível excluir a conta a receber.',
+        e instanceof Error ? e.message : '',
+      );
     } finally {
       setExcluindo(false);
     }

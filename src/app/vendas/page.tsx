@@ -87,7 +87,12 @@ export default function VendasPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Deseja excluir esta venda?')) return;
-    await deleteEntity('vendas-crm', id);
+    try {
+      await deleteEntity('vendas-crm', id);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Não foi possível excluir.');
+      return;
+    }
     setVendas(prev => prev.filter(v => v.id !== id));
   };
 

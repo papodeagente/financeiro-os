@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { Info, X } from 'lucide-react';
 import { ContaReceber, ContaPagar, VendaCRM, PlanoContas } from '@/lib/crm-types';
 import { loadEntities } from '@/lib/crm-storage';
+import { vendasComLancamento, apenasVendasComLastro } from '@/lib/venda-lancamentos';
 import { Button } from '@/components/ui/button';
 import { DataState } from '@/components/fin/DataState';
 import { EmptyLesson } from '@/components/fin/EmptyLesson';
@@ -14,6 +15,7 @@ import { PageHeader } from '@/components/fin/PageHeader';
 import type { MoneyEstado } from '@/components/fin/Money';
 import { toast } from '@/lib/toast';
 import { soma, somaPor, round2, num, divSegura, mesDe, hojeISO } from '@/lib/money';
+import { formatBRL } from '@/lib/utils';
 import {
   DemonstrativoTabela,
   type LinhaDemonstrativo,
@@ -149,6 +151,25 @@ export default function DREPage() {
     return [...months].sort().reverse();
   }, [contasReceber, contasPagar, vendas]);
 
+  // VENDA SÓ CONTA ENQUANTO TIVER LANÇAMENTO.
+  //
+  // A receita das linhas 0.1 e 1.1 saía direto de vendas_crm, sem olhar as
+  // contas. Quem apagava as contas a receber e a pagar de uma venda via o
+  // dinheiro sumir de Contas a pagar/receber e do fluxo de caixa, e continuava
+  // vendo volume e receita aqui — um número que nenhuma outra tela confirmava.
+  //
+  // A venda em si não some: ela continua em Vendas fechadas, e é lá que se
+  // exclui de vez (a exclusão da venda já leva as contas junto).
+  const comLancamento = useMemo(
+    () => vendasComLancamento(contasReceber, contasPagar),
+    [contasReceber, contasPagar],
+  );
+
+  const vendasComLastro = useMemo(
+    () => apenasVendasComLastro(vendas, comLancamento),
+    [vendas, comLancamento],
+  );
+
   // Quanto de cada CR de comissão AINDA NÃO está representado na margem da
   // sua venda. Calculado uma vez para todos os meses (a venda cai num mês e a
   // comissão vence noutro): a margem de cada venda é consumida pelas suas
@@ -156,7 +177,7 @@ export default function DREPage() {
   // própria a reconhecer.
   const comissaoNaoCapturada = useMemo(() => {
     const restante = new Map<string, number>();
-    for (const v of vendas) {
+    for (const v of vendasComLastro) {
       if (v.status === 'CANCELADO') continue;
       restante.set(v.id, Math.max(round2(num(v.valor_final) - num(v.valor_total_custo)), 0));
     }
@@ -173,7 +194,7 @@ export default function DREPage() {
       fora.set(cr.id, round2(valor - capturado));
     }
     return fora;
-  }, [contasReceber, vendas]);
+  }, [contasReceber, vendasComLastro]);
 
   // DRE para AGÊNCIA DE VIAGENS, CNAE 7911-2/00
   // Regime de INTERMEDIAÇÃO: a agência recebe apenas a COMISSÃO sobre a
@@ -194,7 +215,7 @@ export default function DREPage() {
     const monthPagar = contasPagar.filter(cp =>
       mesDe(cp.data_vencimento) === month && vivo(cp.status)
     );
-    const monthVendas = vendas.filter(v =>
+    const monthVendas = vendasComLastro.filter(v =>
       mesDe(v.data_venda) === month && v.status !== 'CANCELADO'
     );
 
@@ -319,8 +340,23 @@ export default function DREPage() {
     return lines;
   }
 
-  const dreMain = useMemo(() => buildDRE(selectedMonth), [selectedMonth, contasReceber, contasPagar, vendas, planoContas]);
-  const dreCompare = useMemo(() => compareMonth ? buildDRE(compareMonth) : [], [compareMonth, contasReceber, contasPagar, vendas, planoContas]);
+  // O que a regra do lastro tirou deste mês. Subtrair dinheiro em silêncio é
+  // pior do que mostrá-lo: aqui o DRE diz quantas vendas ficaram de fora e
+  // quanto elas somam, para ninguém procurar um número que sumiu sozinho.
+  const vendasSemLastro = useMemo(() => {
+    const doMes = vendas.filter(
+      v => mesDe(v.data_venda) === selectedMonth && v.status !== 'CANCELADO',
+    );
+    return doMes.filter(v => !comLancamento.has(v.id));
+  }, [vendas, comLancamento, selectedMonth]);
+
+  const volumeSemLastro = useMemo(
+    () => somaPor(vendasSemLastro, v => num(v.valor_final)),
+    [vendasSemLastro],
+  );
+
+  const dreMain = useMemo(() => buildDRE(selectedMonth), [selectedMonth, contasReceber, contasPagar, vendasComLastro, planoContas]);
+  const dreCompare = useMemo(() => compareMonth ? buildDRE(compareMonth) : [], [compareMonth, contasReceber, contasPagar, vendasComLastro, planoContas]);
 
   // Summary metrics from main DRE
   const receitaBruta = dreMain.find(l => l.nome.startsWith('RECEITA BRUTA'))?.valor || 0;
@@ -584,6 +620,22 @@ export default function DREPage() {
                       explicacao="O que sobra da receita bruta depois de todos os impostos e despesas do período. Negativo significa que o mês fechou no prejuízo."
                     />
                   </div>
+
+                  {vendasSemLastro.length > 0 ? (
+                    <div className="flex flex-col gap-[var(--fin-s-1)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface-2)] p-4">
+                      <span className="fin-t-body-strong text-[var(--fin-text)]">
+                        {vendasSemLastro.length === 1
+                          ? '1 venda deste mês está fora do resultado'
+                          : `${vendasSemLastro.length} vendas deste mês estão fora do resultado`}
+                      </span>
+                      <span className="fin-t-caption text-[var(--fin-text-3)]">
+                        Somam {formatBRL(volumeSemLastro)} de volume e não têm nenhuma conta a
+                        receber ou a pagar. Sem lançamento financeiro não há resultado para
+                        apurar. Elas continuam em Vendas fechadas: lance as contas para
+                        recuperá-las no DRE, ou exclua a venda de vez.
+                      </span>
+                    </div>
+                  ) : null}
 
                   <section className="space-y-[var(--fin-s-3)]">
                     <div className="flex flex-col gap-[var(--fin-s-1)]">

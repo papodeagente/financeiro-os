@@ -416,6 +416,10 @@ export default function ContasPagarPage() {
       setExcluindo(null);
       toast.success('Conta removida', item.fornecedor_nome || '');
       load();
+    } catch (e) {
+      // A conta continua na tela de propósito: dizer "removida" e recarregar
+      // com ela de volta é o que fazia parecer que a exclusão não pegava.
+      toast.error('Não foi possível excluir', e instanceof Error ? e.message : '');
     } finally {
       setRemovendo(false);
     }

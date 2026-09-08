@@ -259,7 +259,12 @@ export default function CartoesCorpPage() {
   }
 
   async function handleDelete(id: string) {
-    await deleteEntity('cartoes-corp', id);
+    try {
+      await deleteEntity('cartoes-corp', id);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Não foi possível excluir.');
+      return;
+    }
     load();
   }
 

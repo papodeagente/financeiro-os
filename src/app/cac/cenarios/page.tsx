@@ -184,7 +184,12 @@ export default function CACCenariosPage() {
 
   async function handleDelete(id: string) {
     if (!confirm('Excluir cenário?')) return;
-    await deleteEntity('cenarios-cac', id);
+    try {
+      await deleteEntity('cenarios-cac', id);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Não foi possível excluir.');
+      return;
+    }
     load();
   }
 

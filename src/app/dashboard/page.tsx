@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { loadEntities, loadEquipe } from '@/lib/crm-storage';
+import { vendasComLancamento, apenasVendasComLastro } from '@/lib/venda-lancamentos';
 import type {
   Cliente, VendaCRM, ContaReceber, ContaPagar,
   ContaBancaria, CACMensal, MetaVendedor, Membro,
@@ -263,8 +264,14 @@ export default function DashboardPage() {
   // ============================================================
 
   const calc = useMemo(() => {
-    const vendasMes = vendas.filter(v => v.data_venda?.startsWith(mesAtual) && v.status !== 'CANCELADO');
-    const vendasMesAnt = vendas.filter(v => v.data_venda?.startsWith(mesAnterior) && v.status !== 'CANCELADO');
+    // Venda sem lançamento financeiro não entra em número de resultado: quem
+    // apagou as contas a receber e a pagar dela apagou o dinheiro do sistema.
+    // Mesma regra do DRE, para as duas telas nunca discordarem.
+    const comLancamento = vendasComLancamento(receber, pagar);
+    const vendasVivas = apenasVendasComLastro(vendas, comLancamento);
+
+    const vendasMes = vendasVivas.filter(v => v.data_venda?.startsWith(mesAtual) && v.status !== 'CANCELADO');
+    const vendasMesAnt = vendasVivas.filter(v => v.data_venda?.startsWith(mesAnterior) && v.status !== 'CANCELADO');
 
     const faturamento = somaPor(vendasMes, v => v.valor_final);
     const faturamentoAnt = somaPor(vendasMesAnt, v => v.valor_final);
@@ -293,7 +300,7 @@ export default function DashboardPage() {
 
     // Lucro e Margem — mesma lógica do DRE (receita bruta - total despesas)
     const calcDRELucro = (mes: string) => {
-      const mVendas = vendas.filter(v => v.data_venda?.startsWith(mes) && v.status !== 'CANCELADO');
+      const mVendas = vendasVivas.filter(v => v.data_venda?.startsWith(mes) && v.status !== 'CANCELADO');
       const mReceber = receber.filter(r => r.data_vencimento?.startsWith(mes) && (r.status === 'RECEBIDO' || r.status === 'PENDENTE'));
       // O custo do fornecedor já entra como CMV (valor_total_custo da venda).
       // A conta a pagar auto-gerada da MESMA venda é o mesmo custo — contar as
@@ -493,10 +500,13 @@ export default function DashboardPage() {
   // ============================================================
 
   const chartFaturamento = useMemo(() => {
+    // Mesma regra do KPI e do DRE: venda sem lançamento não vira barra.
+    const comLancamento = vendasComLancamento(receber, pagar);
+    const vendasVivas = apenasVendasComLastro(vendas, comLancamento);
     const months: { mes: string; label: string; faturamento: number; receita: number }[] = [];
     let m = mesAtual;
     for (let i = 0; i < 6; i++) {
-      const vs = vendas.filter(v => v.data_venda?.startsWith(m) && v.status !== 'CANCELADO');
+      const vs = vendasVivas.filter(v => v.data_venda?.startsWith(m) && v.status !== 'CANCELADO');
       const fat = somaPor(vs, v => v.valor_final);
       // Mesma regra do KPI: receita da agência em R$, nunca percentual cru.
       const rec = somaPor(vs, v => v.receita_agencia);
@@ -504,7 +514,7 @@ export default function DashboardPage() {
       m = prevMonth(m);
     }
     return months;
-  }, [vendas, mesAtual]);
+  }, [vendas, receber, pagar, mesAtual]);
 
   const chartFluxo = useMemo(() => {
     const months: { mes: string; label: string; entradas: number; saidas: number; saldo: number }[] = [];
