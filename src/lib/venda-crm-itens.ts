@@ -83,7 +83,13 @@ export function montarLinhasDeCusto(entrada: {
       fornecedor_id: (f.fornecedor_id || '').trim(),
       fornecedor_nome: nome,
       tipo: tipoDoServico(f.servico),
-      descricao: (f.servico || '').trim() || (f.descricao || '').trim() || nome || 'Serviço',
+      // A descrição legível vem primeiro. O CRM passou a mandar `servico` como
+      // token fechado (AEREO, HOTEL, OUTROS...) só para tipar a conta, e o
+      // texto que a pessoa lê em `descricao`. Ler `servico` antes deixaria toda
+      // conta chamada "AEREO" ou "OUTROS", indistinguíveis na hora de pagar.
+      // A ordem antiga sobrevive como fallback: venda gravada antes dessa
+      // mudança não tem `descricao` e continua lendo o texto de `servico`.
+      descricao: (f.descricao || '').trim() || (f.servico || '').trim() || nome || 'Serviço',
       // Custo negativo não vira crédito: fornecedor não devolve dinheiro por
       // linha de venda. Zero é o piso.
       valor_custo: Math.max(0, round2(num(f.valor_custo))),

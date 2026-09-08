@@ -209,6 +209,34 @@ console.log('--- linhas de custo montadas a partir do payload do CRM ---');
   eq(linhas.map(l => l.valor_venda), [8400, 5600], 'rateio proporcional ao custo');
 }
 {
+  // O CRM manda `servico` como token fechado (só para tipar a conta) e o texto
+  // que a pessoa lê em `descricao`. A descrição legível tem que ganhar, senão
+  // toda conta a pagar se chama "AEREO" ou "OUTROS" e ninguém sabe a que se
+  // refere na hora de pagar.
+  const linhas = montarLinhasDeCusto({
+    fornecedores: [
+      { fornecedor_id: 'f1', fornecedor_nome: 'CVC', servico: 'AEREO', descricao: 'Aereo internacional (bilhete), Italia 2027', valor_custo: 6000 },
+      { fornecedor_id: 'f2', fornecedor_nome: 'Marco', servico: 'OUTROS', descricao: 'Guia local em Roma, Italia 2027', valor_custo: 4000 },
+    ],
+    custo_total: 10000,
+    valor_total: 14000,
+  });
+  eq(linhas.map(l => l.tipo), ['AEREO', 'OUTROS'], 'o token continua tipando a conta');
+  eq(linhas[0].descricao, 'Aereo internacional (bilhete), Italia 2027', 'a descricao legivel ganha do token');
+  eq(linhas[1].descricao, 'Guia local em Roma, Italia 2027', 'dois OUTROS deixam de ser indistinguiveis');
+}
+{
+  // Retrocompatibilidade: venda antiga não manda `descricao`, e o texto que o
+  // CRM colocava em `servico` continua sendo o que aparece.
+  const linhas = montarLinhasDeCusto({
+    fornecedores: [{ fornecedor_id: 'f1', fornecedor_nome: 'CVC', servico: 'Pacote Roma, Seguro', valor_custo: 6000 }],
+    custo_total: 6000,
+    valor_total: 9000,
+  });
+  eq(linhas[0].descricao, 'Pacote Roma, Seguro', 'payload antigo segue lendo servico');
+  eq(linhas[0].tipo, 'OUTROS', 'texto livre continua caindo em OUTROS');
+}
+{
   // O buraco do emissor do CRM: custo_total maior que a soma dos fornecedores.
   // O produto sem fornecedor entrou no total mas não no detalhamento.
   const linhas = montarLinhasDeCusto({
