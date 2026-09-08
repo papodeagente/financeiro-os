@@ -589,9 +589,14 @@ export function buildComissaoReceberFromFornecedor(
   };
 }
 
-// Aggregate fallback when the CRM doesn't itemize suppliers (fornecedores=[]).
-// Creates one "summary" ContaPagar with the total cost so the agency still
-// sees the liability — the user can later split per supplier manually.
+// OBSOLETA — não use, e não volte a ligar no fluxo.
+//
+// Criava uma conta a pagar genérica ("Custo da venda (a detalhar)") quando o
+// CRM não detalhava fornecedor. Desde 2026-09-08 a regra é: conta a pagar só
+// nasce com fornecedor real. O custo sem fornecedor continua valendo para a
+// margem, mas não vira dívida — ninguém receberia esse dinheiro, e ele poluía
+// contas a pagar, fluxo de caixa e caixa livre. Ver gerarContasVenda em
+// src/lib/venda-financeiro.ts. Mantida apenas porque o teste antigo a importa.
 export function buildContaPagarAgregada(
   ctx: VendaContext,
   custoTotal: number,

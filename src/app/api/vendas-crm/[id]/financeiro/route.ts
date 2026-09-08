@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { round2 } from '@/lib/money';
+import { round2, num, somaPor } from '@/lib/money';
 import {
   calcularResultado,
   type ContaReceberMin,
@@ -64,9 +64,20 @@ export async function GET(
     // A baseline vem da própria venda, gravada quando as contas foram
     // geradas. É o que permite dizer que o custo estourou o orçado: as
     // contas a pagar de hoje já foram reescritas com o valor novo.
+    // Custo da venda que não tem conta a pagar correspondente.
+    //
+    // Conta a pagar só nasce com fornecedor real. O custo de um item sem
+    // fornecedor identificado continua valendo para a margem (margem é venda
+    // menos custo), então entra aqui para não sumir do cálculo. Nas vendas
+    // com fornecedor detalhado a diferença é zero e nada muda.
+    const custoLancado = somaPor(contas_pagar as ContaPagarMin[], c => num(c.valor_final));
+    const custoDaVenda = round2(num(venda?.valor_total_custo));
+    const custoSemConta = Math.max(0, round2(custoDaVenda - custoLancado));
+
     const resultado = calcularResultado({
       contas_receber: contas_receber as ContaReceberMin[],
       contas_pagar: contas_pagar as ContaPagarMin[],
+      custo_sem_conta: custoSemConta,
       baseline: {
         margem: venda?.margem_prevista_original ?? null,
         custo: venda?.custo_previsto_original ?? null,

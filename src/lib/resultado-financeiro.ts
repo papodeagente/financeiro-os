@@ -198,6 +198,15 @@ export interface EntradaResultado {
     margem?: number | null;
     custo?: number | null;
   } | null;
+  /**
+   * Custo registrado na venda que NÃO tem conta a pagar correspondente.
+   *
+   * Conta a pagar só nasce quando existe fornecedor real a quem pagar. O
+   * custo de um item sem fornecedor identificado continua valendo para a
+   * margem (margem é venda menos custo), mas não vira dívida. Sem este
+   * campo o custo sumiria da conta e a margem apareceria inflada.
+   */
+  custo_sem_conta?: number | null;
 }
 
 /**
@@ -243,7 +252,12 @@ export function calcularResultado(entrada: EntradaResultado): ResultadoFinanceir
   );
 
   // ---- FORNECEDORES ----
-  const custo_previsto = somaPor(pagar, c => num(c.valor_final));
+  // O custo previsto é o que está lançado como conta a pagar MAIS o custo
+  // que a venda registrou sem fornecedor identificado. Os dois somam porque
+  // representam partes diferentes do mesmo custo: o que já tem dono e o que
+  // ainda não tem.
+  const custoSemConta = Math.max(0, round2(num(entrada.custo_sem_conta)));
+  const custo_previsto = round2(somaPor(pagar, c => num(c.valor_final)) + custoSemConta);
   const custo_pago = somaPor(pagar, c => valorRealizado(c, 'valor_pago'));
   const custo_pendente = somaPor(pagar, c => valorEmAberto(c, 'valor_pago'));
   const vencido_a_pagar = somaPor(

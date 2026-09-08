@@ -170,6 +170,28 @@ export function gerarContasVenda(input: VendaInput): ContasGeradas {
       vendasProprioBRL.push(vendaBRL);
       itens_proprio++;
 
+      // O custo SEMPRE entra na margem, tenha conta a pagar ou não.
+      // Margem = venda menos custo, e essa conta não depende de existir
+      // fornecedor identificado.
+      custosBRL.push(custoBRL);
+
+      // CONTA A PAGAR SÓ COM FORNECEDOR REAL (regra do Bruno, 2026-09-08).
+      //
+      // Conta a pagar é compromisso de pagar ALGUÉM. Sem fornecedor
+      // identificado não há a quem pagar, e a dívida genérica poluía o
+      // contas a pagar, o fluxo de caixa e o caixa livre com valor que
+      // ninguém ia receber. O caso real: venda importada do CRM sem
+      // detalhamento de fornecedor gerava "Custo OUTROS — fornecedor(es) a
+      // detalhar", com o custo de referência do cadastro do produto.
+      //
+      // Custo zero também não vira conta: uma dívida de R$ 0,00 é ruído.
+      const nomeFornecedor = (item.data.fornecedor_nome || fornecedor?.nome_fantasia || '').trim();
+      const temFornecedorReal = Boolean(item.fornecedor_id || nomeFornecedor);
+      if (!temFornecedorReal || custoBRL <= 0) {
+        itens_processados.push(item.id);
+        continue;
+      }
+
       // Conta a pagar ao fornecedor (valor_custo)
       const cp: ContaPagar = {
         id: generateId(),
@@ -212,7 +234,6 @@ export function gerarContasVenda(input: VendaInput): ContasGeradas {
         auto_gerado: true,
       };
       contas_pagar.push(cp);
-      custosBRL.push(custoBRL);
 
     } else {
       // ---- FLUXO FORNECEDOR ----
