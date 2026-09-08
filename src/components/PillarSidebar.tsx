@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useActivePillar, type Pillar } from '@/hooks/useActivePillar';
 import {
   Wallet, Gauge,
-  LayoutDashboard, Medal, Percent, Settings,
+  LayoutDashboard, Medal, Percent, Settings, UserCheck,
   BarChart3,
   BarChart3 as FluxoIcon, FileSpreadsheet, Receipt, CreditCard,
   BookOpen, Landmark, ArrowRightLeft, Package,
@@ -53,6 +53,7 @@ const METAS_MENU: SidebarSection[] = [
     title: 'Equipe',
     items: [
       { key: 'comissoes', label: 'Comissões', icon: Percent, href: '/equipe/comissoes' },
+      { key: 'vendedores', label: 'Vendedores e planos', icon: UserCheck, href: '/equipe/vendedores' },
       { key: 'planos-comissao', label: 'Planos de comissão', icon: Settings, href: '/equipe/planos-comissao' },
     ],
   },

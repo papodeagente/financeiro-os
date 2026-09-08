@@ -1,8 +1,18 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Save, Building2, MapPin, Phone, DollarSign, Palette, Loader2, CheckCircle2, Globe, ExternalLink } from 'lucide-react';
+import { Save, Building2, MapPin, Phone, DollarSign, Palette, Loader2, CheckCircle2, Globe, ExternalLink, CalendarClock } from 'lucide-react';
 import { Agencia } from '@/lib/crm-types';
+import { proximaDataPagamento, descreverAgenda } from '@/lib/comissao-agenda';
+import { hojeISO, dataLocal } from '@/lib/money';
+
+/** Dias oferecidos na agenda. 31 vale "último dia do mês". */
+const DIAS_DO_MES = Array.from({ length: 31 }, (_, i) => i + 1);
+
+function formatarData(iso: string | null): string {
+  const d = dataLocal(iso);
+  return d ? d.toLocaleDateString('pt-BR') : 'sem data';
+}
 import { loadAgencia, saveAgencia } from '@/lib/crm-storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,6 +34,7 @@ const defaultAgencia: Agencia = {
   cores_identidade: { primaria: '#1a1a2e', secundaria: '#d4a853' },
   regime_tributario: 'SIMPLES',
   aliquota_padrao: 6,
+  datas_pagamento_comissao: [],
   custom_proposta_domain: '',
 };
 
@@ -358,6 +369,75 @@ export default function AgenciaPage() {
                 />
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Section 4b: Agenda de pagamento de comissão */}
+        <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)]">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-[var(--t-accent)] flex items-center gap-2 text-base">
+              <CalendarClock className="w-4 h-4" />
+              Pagamento de comissão
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-[var(--t-text-secondary)]">
+              Em que dias do mês a agência paga comissão. Quando você aprova uma comissão,
+              ela vira conta a pagar vencendo na próxima data desta lista, e já aparece no
+              fluxo de caixa antes de o dinheiro sair. Você pode cadastrar mais de uma data.
+            </p>
+
+            <div className="flex flex-wrap gap-2">
+              {DIAS_DO_MES.map(dia => {
+                const marcado = (data.datas_pagamento_comissao ?? []).includes(dia);
+                return (
+                  <button
+                    key={dia}
+                    type="button"
+                    aria-pressed={marcado}
+                    onClick={() => {
+                      const atual = data.datas_pagamento_comissao ?? [];
+                      const proximo = marcado
+                        ? atual.filter(d => d !== dia)
+                        : [...atual, dia].sort((a, b) => a - b);
+                      setField('datas_pagamento_comissao', proximo);
+                    }}
+                    className={
+                      'h-9 w-9 rounded-md text-sm transition-colors focus:outline-none ' +
+                      'focus-visible:ring-2 focus-visible:ring-[var(--t-accent)] ' +
+                      (marcado
+                        ? 'bg-[var(--t-accent)] text-white font-semibold'
+                        : 'bg-[var(--t-bg)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]')
+                    }
+                    title={dia === 31 ? 'Dia 31 vale último dia do mês' : `Dia ${dia}`}
+                  >
+                    {dia}
+                  </button>
+                );
+              })}
+            </div>
+
+            <p className="text-sm text-[var(--t-text)]">
+              {(data.datas_pagamento_comissao ?? []).length === 0 ? (
+                <span className="text-[var(--t-amber)]">
+                  Nenhuma data escolhida. Sem agenda, a comissão aprovada não vira conta a pagar
+                  automaticamente e continua sendo paga na mão.
+                </span>
+              ) : (
+                <>
+                  Comissão aprovada hoje venceria em{' '}
+                  <strong>{formatarData(proximaDataPagamento(data.datas_pagamento_comissao, hojeISO()))}</strong>
+                  {'. '}
+                  <span className="text-[var(--t-text-secondary)]">
+                    Agenda: {descreverAgenda(data.datas_pagamento_comissao)}.
+                  </span>
+                </>
+              )}
+            </p>
+
+            <p className="text-xs text-[var(--t-text-muted)]">
+              Dia 31 vale último dia do mês: em fevereiro a conta vence em 28 ou 29, nunca em março.
+            </p>
           </CardContent>
         </Card>
 

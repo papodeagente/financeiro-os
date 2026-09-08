@@ -736,6 +736,64 @@ async function upsertClienteByExternalId(
   return id;
 }
 
+function normalizeEmail(v: unknown): string {
+  return asStr(v).trim().toLowerCase();
+}
+
+// Liga o usuario recem sincronizado do CRM ao membro da equipe de mesmo
+// email, que e quem carrega plano_comissao_id. Sem esse vinculo a venda
+// chega com vendedor_id apontando para `usuarios` e o motor de comissao,
+// que procura em `membros`, nunca acha ninguem.
+//
+// So preenche vinculo vazio: uma escolha manual feita na tela de equipe
+// jamais e sobrescrita por sincronizacao.
+async function vincularMembroPorEmail(
+  usuarioId: string,
+  email: string,
+  tenantId: string,
+): Promise<void> {
+  if (!pool || !email) return;
+
+  const { rows } = await pool.query(
+    `SELECT id, data FROM membros
+      WHERE tenant_id = $1
+        AND LOWER(TRIM(email)) = $2
+        AND COALESCE(data->>'usuario_id', '') = ''
+      ORDER BY created_at ASC
+      LIMIT 1`,
+    [tenantId, email],
+  );
+  if (rows.length === 0) return;
+
+  // Um usuario nao pode ser vinculado a dois membros: se ja existe membro
+  // apontando para este usuario, nao cria um segundo vinculo.
+  const jaVinculado = await pool.query(
+    `SELECT 1 FROM membros
+      WHERE tenant_id = $1 AND data->>'usuario_id' = $2 LIMIT 1`,
+    [tenantId, usuarioId],
+  );
+  if (jaVinculado.rows.length > 0) return;
+
+  await pool.query(
+    `UPDATE membros
+        SET data = jsonb_set(data, '{usuario_id}', to_jsonb($1::text), true),
+            updated_at = NOW()
+      WHERE id = $2 AND tenant_id = $3`,
+    [usuarioId, rows[0].id, tenantId],
+  );
+}
+
+// Sincroniza o usuario do CRM em tres etapas, na ordem de forca do sinal:
+//
+//   1) external_id  - o mesmo usuario do CRM, idempotente entre reenvios
+//   2) email        - o mesmo humano ja cadastrado no financeiro, que
+//                     passa a carregar o external_id para a etapa 1
+//                     vencer na proxima vez
+//   3) INSERT       - usuario novo
+//
+// Diferente da versao anterior, que so criava e nunca atualizava, aqui
+// nome e email sao refrescados a cada evento. E assim que a mudanca feita
+// no CRM chega ao financeiro sem ninguem digitar de novo.
 async function upsertVendedorByExternalId(
   externalId: string,
   dados: { nome?: unknown; email?: unknown },
@@ -743,21 +801,82 @@ async function upsertVendedorByExternalId(
 ): Promise<string> {
   if (!pool || !externalId) throw new Error('upsertVendedor: external_id obrigatorio');
 
-  const { rows } = await pool.query(
-    `SELECT id FROM usuarios WHERE external_id = $1 AND tenant_id = $2 LIMIT 1`,
+  const nome = asStr(dados.nome);
+  const email = normalizeEmail(dados.email);
+
+  // (1) match por external_id
+  const byExt = await pool.query(
+    `SELECT id, data FROM usuarios WHERE external_id = $1 AND tenant_id = $2 LIMIT 1`,
     [externalId, tenantId],
   );
-  if (rows.length > 0) return rows[0].id as string;
+  if (byExt.rows.length > 0) {
+    const id = byExt.rows[0].id as string;
+    const atual = (byExt.rows[0].data ?? {}) as Record<string, unknown>;
+    const mudou =
+      (nome && asStr(atual.nome) !== nome) ||
+      (email && normalizeEmail(atual.email) !== email);
 
+    if (mudou) {
+      const data = {
+        ...atual,
+        id,
+        nome: nome || asStr(atual.nome),
+        email: email || normalizeEmail(atual.email),
+        origem: 'crm',
+        external_id: externalId,
+      };
+      await pool.query(
+        `UPDATE usuarios
+            SET nome = $1, email = $2, data = $3, updated_at = NOW()
+          WHERE id = $4 AND tenant_id = $5`,
+        [data.nome, data.email, JSON.stringify(data), id, tenantId],
+      );
+    }
+    await vincularMembroPorEmail(id, email || normalizeEmail(atual.email), tenantId);
+    return id;
+  }
+
+  // (2) match por email: o humano ja existe no financeiro, so nao tinha
+  //     external_id. Adota o vinculo em vez de criar um usuario duplicado.
+  if (email) {
+    const byEmail = await pool.query(
+      `SELECT id, data FROM usuarios
+        WHERE tenant_id = $1
+          AND LOWER(TRIM(email)) = $2
+          AND COALESCE(external_id, '') = ''
+        ORDER BY created_at ASC
+        LIMIT 1`,
+      [tenantId, email],
+    );
+    if (byEmail.rows.length > 0) {
+      const id = byEmail.rows[0].id as string;
+      const atual = (byEmail.rows[0].data ?? {}) as Record<string, unknown>;
+      const data = { ...atual, id, nome: nome || asStr(atual.nome), email, external_id: externalId };
+      await pool.query(
+        `UPDATE usuarios
+            SET nome = $1, email = $2, data = $3, external_id = $4, updated_at = NOW()
+          WHERE id = $5 AND tenant_id = $6`,
+        [data.nome, email, JSON.stringify(data), externalId, id, tenantId],
+      );
+      await vincularMembroPorEmail(id, email, tenantId);
+      return id;
+    }
+  }
+
+  // (3) usuario novo
   const id = generateId();
-  const nome = asStr(dados.nome);
-  const email = asStr(dados.email);
-  const data = { id, nome, email, origem: 'crm', external_id: externalId };
+  const data = { id, nome, email, origem: 'crm', external_id: externalId, ativo: true };
   await pool.query(
     `INSERT INTO usuarios (id, nome, email, data, external_id, tenant_id, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
+     VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+     ON CONFLICT (id) DO UPDATE
+        SET nome = EXCLUDED.nome, email = EXCLUDED.email,
+            data = EXCLUDED.data, external_id = EXCLUDED.external_id,
+            updated_at = NOW()
+      WHERE usuarios.tenant_id = EXCLUDED.tenant_id`,
     [id, nome, email, JSON.stringify(data), externalId, tenantId],
   );
+  await vincularMembroPorEmail(id, email, tenantId);
   return id;
 }
 
@@ -1548,6 +1667,42 @@ export async function processarEventoCRM(
           }
         }
         acao = `cliente ${externalId} atualizado`;
+        break;
+      }
+
+      // O CRM empurra a mudanca do usuario assim que ela acontece, sem
+      // esperar uma venda. E o que faz a sincronizacao ser de tempo real
+      // para quem trocou de nome, de email ou foi desativado.
+      //
+      // Enquanto o CRM nao emitir este evento, a sincronizacao continua
+      // acontecendo a cada VENDA_FECHADA, que ja carrega os mesmos campos.
+      case 'USUARIO_ATUALIZADO': {
+        const externalId = asStr(payload.usuario_id) || asStr(payload.vendedor_id);
+        if (!externalId) {
+          acao = 'usuario ignorado: sem usuario_id';
+          break;
+        }
+
+        const usuarioId = await upsertVendedorByExternalId(
+          externalId,
+          { nome: payload.nome ?? payload.vendedor_nome, email: payload.email ?? payload.vendedor_email },
+          tenantId,
+        );
+
+        // Desativar no CRM nao apaga nada aqui: comissao ja calculada e
+        // historico continuam. So marca o usuario como inativo, o que tira
+        // ele da lista de quem pode receber vinculo novo.
+        if (payload.ativo === false) {
+          await pool.query(
+            `UPDATE usuarios
+                SET data = jsonb_set(data, '{ativo}', 'false'::jsonb, true),
+                    updated_at = NOW()
+              WHERE id = $1 AND tenant_id = $2`,
+            [usuarioId, tenantId],
+          );
+        }
+
+        acao = `usuario ${externalId} sincronizado`;
         break;
       }
 

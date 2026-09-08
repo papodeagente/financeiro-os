@@ -4,9 +4,10 @@ import { useEffect, useState, useMemo } from 'react';
 import {
   ComissaoVenda, VendaCRM, Membro, PlanoComissao, StatusComissao,
   ContaReceber, ContaPagar, ItemVendaData, PlanoContas, ProdutoVenda,
-  createContaPagar,
+  Agencia, createContaPagar,
 } from '@/lib/crm-types';
-import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
+import { loadEntities, saveEntity, updateEntity, deleteEntity, loadAgencia } from '@/lib/crm-storage';
+import { proximaDataPagamento, descreverAgenda } from '@/lib/comissao-agenda';
 import {
   round2, num, somaPor, percentual, divSegura, paraBRL, hojeISO, dataLocal, mesDe,
 } from '@/lib/money';
@@ -15,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   Calculator, Check, DollarSign, RefreshCw, Clock, CheckCircle2,
-  Banknote, Trash2, AlertTriangle,
+  Banknote, Trash2, AlertTriangle, CalendarClock,
 } from 'lucide-react';
 
 const BRL = (v: number) =>
@@ -34,7 +35,9 @@ function comissaoId(vendaId: string, vendedorId: string): string {
   return `comissao-${vendaId}-${vendedorId}`;
 }
 
-/** Id determinístico da conta a pagar gerada quando a comissão é paga. */
+/** Id determinístico da conta a pagar da comissão. Aprovar duas vezes
+ *  atualiza a MESMA conta em vez de criar uma segunda: é o que impede a
+ *  agência de programar o mesmo pagamento duas vezes. */
 function contaPagarComissaoId(comissao: ComissaoVenda): string {
   return `pagar-${comissao.id}`;
 }
@@ -63,21 +66,30 @@ export default function ComissoesPage() {
   const [filterStatus, setFilterStatus] = useState<StatusComissao | 'TODOS'>('TODOS');
   const [filterVendedor, setFilterVendedor] = useState('');
   const [filterMonth, setFilterMonth] = useState(() => mesDe(hojeISO()));
+  /** Dias do mês em que a agência paga comissão (Configurações > Agência). */
+  const [agendaPagamento, setAgendaPagamento] = useState<number[]>([]);
+  /** Contas a pagar já programadas pela aprovação, para o pagamento baixar
+   *  a existente em vez de criar uma segunda. */
+  const [contasPagar, setContasPagar] = useState<ContaPagar[]>([]);
 
   async function load() {
     setLoading(true);
-    const [c, v, m, p, pc] = await Promise.all([
+    const [c, v, m, p, pc, ag, cps] = await Promise.all([
       loadEntities<ComissaoVenda>('comissoes'),
       loadEntities<VendaCRM>('vendas-crm'),
       loadEntities<Membro>('membros'),
       loadEntities<PlanoComissao>('planos-comissao'),
       loadEntities<PlanoContas>('plano-contas'),
+      loadAgencia<Agencia>(),
+      loadEntities<ContaPagar>('contas-pagar'),
     ]);
     setComissoes(c);
     setVendas(v);
     setMembros(m);
     setPlanos(p);
     setPlanoContas(pc);
+    setAgendaPagamento(ag?.datas_pagamento_comissao ?? []);
+    setContasPagar(cps);
     setLoading(false);
   }
 
@@ -196,8 +208,17 @@ export default function ComissoesPage() {
 
     /** Monta o registro da comissão, ou devolve o motivo da pendência. */
     async function montar(venda: VendaCRM, anterior?: ComissaoVenda): Promise<ComissaoVenda | { erro: string }> {
-      const vendedor = membros.find(m => m.id === venda.vendedor_id);
-      if (!vendedor) return { erro: 'vendedor da venda não encontrado no cadastro de membros' };
+      // A venda vinda do CRM traz vendedor_id apontando para `usuarios`;
+      // a venda lancada aqui dentro aponta direto para o membro. Resolve
+      // os dois: primeiro o vinculo (usuario_id), depois o id do membro.
+      const vendedor =
+        membros.find(m => m.usuario_id && m.usuario_id === venda.vendedor_id) ??
+        membros.find(m => m.id === venda.vendedor_id);
+      if (!vendedor) {
+        return {
+          erro: `vendedor da venda não está vinculado a nenhum membro da equipe (vendedor_id ${venda.vendedor_id}). Vincule em Equipe > Vendedores e planos.`,
+        };
+      }
 
       // Sem plano vinculado NÃO gera comissão — cair no "plano ativo mais
       // recente" pagava percentual de outra regra sem ninguém perceber.
@@ -302,27 +323,20 @@ export default function ComissoesPage() {
     load();
   }
 
-  async function handleAprovar(c: ComissaoVenda) {
-    await updateEntity('comissoes', { ...c, status: 'APROVADA', data_aprovacao: hojeISO() });
-    load();
-  }
-
-  async function handlePagar(c: ComissaoVenda) {
-    const hoje = hojeISO();
+  /** Monta a conta a pagar da comissão. Uma função só, usada pela aprovação
+   *  (que programa) e pelo pagamento (que baixa), para as duas nunca
+   *  divergirem em categoria, natureza ou vínculo. */
+  function montarContaComissao(c: ComissaoVenda, vencimento: string): ContaPagar {
     const valor = round2(num(c.valor_comissao));
-    await updateEntity('comissoes', { ...c, status: 'PAGA', data_pagamento: hoje });
 
-    // Comissão paga é despesa comercial da agência: sem a conta a pagar
-    // correspondente ela não aparecia no caixa nem no DRE.
     // origem 'OUTROS' (não 'VENDA') porque o DRE exclui CP auto-gerada de
     // venda como repasse ao fornecedor — comissão não é repasse.
     const categoriaComercial = planoContas.find(
       p => p.tipo === 'DESPESA' && p.ativo && p.codigo.startsWith('2.6')
     ) ?? planoContas.find(p => p.tipo === 'DESPESA' && p.ativo && p.is_custo_comercial);
 
-    const conta: ContaPagar = {
+    return {
       ...createContaPagar(),
-      // Id determinístico: pagar duas vezes atualiza a mesma conta.
       id: contaPagarComissaoId(c),
       origem: 'OUTROS',
       venda_id: c.venda_id || null,
@@ -333,25 +347,63 @@ export default function ComissoesPage() {
       valor_original: valor,
       valor_final: valor,
       valor_brl: valor,
-      data_emissao: hoje,
-      data_vencimento: hoje,
+      data_emissao: hojeISO(),
+      data_vencimento: vencimento,
       natureza_custo: 'VARIAVEL',
       is_custo_comercial: true,
       // Nasce PENDENTE de propósito: o POST do CRUD genérico grava o registro
       // mas NÃO move o caixa. Gravar 'PAGO' aqui deixaria o saldo bancário sem
       // o débito e — pior — a exclusão dessa conta chamaria o estorno, que
-      // CREDITARIA um dinheiro que nunca saiu. A baixa vem logo abaixo, pelo
-      // PUT, que é o único caminho que debita o saldo.
+      // CREDITARIA um dinheiro que nunca saiu. A baixa vem só pelo PUT, que é
+      // o único caminho que debita o saldo.
       status: 'PENDENTE',
       data_pagamento: null,
       valor_pago: null,
       origem_venda_id: c.venda_id,
       auto_gerado: true,
       // ContaPagar não tem campo origem_comissao_id — o vínculo fica aqui.
-      observacoes: `Gerada automaticamente pelo pagamento da comissão (origem_comissao_id=${c.id}).`,
+      observacoes: `Gerada automaticamente pela aprovação da comissão (origem_comissao_id=${c.id}).`,
     };
-    await saveEntity('contas-pagar', conta);
-    // Baixa pelo PUT: debita o caixa uma única vez (guarda de idempotência na rota).
+  }
+
+  /** Aprovar a comissão PROGRAMA o pagamento: cria a conta a pagar pendente
+   *  vencendo na próxima data da agenda da agência. É o que faz a comissão
+   *  aparecer no fluxo de caixa antes de o dinheiro sair.
+   *
+   *  Sem agenda configurada nada é programado, e a tela diz isso. Inventar
+   *  uma data aqui colocaria uma saída de dinheiro no dia errado. */
+  async function handleAprovar(c: ComissaoVenda) {
+    const hoje = hojeISO();
+    const vencimento = proximaDataPagamento(agendaPagamento, hoje);
+
+    await updateEntity('comissoes', { ...c, status: 'APROVADA', data_aprovacao: hoje });
+
+    if (vencimento) {
+      // Upsert por id determinístico: aprovar de novo atualiza a mesma conta.
+      await saveEntity('contas-pagar', montarContaComissao(c, vencimento));
+    }
+    load();
+  }
+
+  /** Pagar NÃO cria conta: baixa a que a aprovação já programou. Se a
+   *  comissão foi aprovada sem agenda configurada, a conta não existe
+   *  ainda e é criada aqui vencendo hoje, para o caminho antigo continuar
+   *  funcionando. A baixa é sempre pelo PUT, único caminho que debita o
+   *  saldo, e a rota tem guarda de idempotência. */
+  async function handlePagar(c: ComissaoVenda) {
+    const hoje = hojeISO();
+    const valor = round2(num(c.valor_comissao));
+
+    await updateEntity('comissoes', { ...c, status: 'PAGA', data_pagamento: hoje });
+
+    const contaId = contaPagarComissaoId(c);
+    const jaProgramada = contasPagar.find(cp => cp.id === contaId);
+    const conta = jaProgramada ?? montarContaComissao(c, hoje);
+
+    if (!jaProgramada) {
+      await saveEntity('contas-pagar', conta);
+    }
+
     await updateEntity('contas-pagar', {
       ...conta,
       status: 'PAGO',
@@ -403,6 +455,46 @@ export default function ComissoesPage() {
             {calculating ? 'Calculando...' : 'Calcular Comissões'}
           </Button>
         </div>
+
+        {/* Banner: agenda de pagamento. Diz de antemão o que aprovar vai
+            fazer, porque aprovar passou a programar saída de dinheiro. */}
+        {agendaPagamento.length === 0 ? (
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+            <CalendarClock className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-[var(--t-text)]">
+                Nenhuma data de pagamento de comissão configurada
+              </p>
+              <p className="text-xs text-[var(--t-text-secondary)] mt-0.5">
+                Enquanto não houver agenda, aprovar uma comissão não programa a conta a pagar, e o
+                valor só entra no caixa quando você clicar em Pagar. Defina os dias em{' '}
+                <a href="/config/agencia" className="underline underline-offset-2">
+                  Configurações, Agência
+                </a>.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-[var(--t-blue-bg)] border border-[var(--t-blue)]/20">
+            <CalendarClock className="w-5 h-5 text-[var(--t-blue)] shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-[var(--t-text)]">
+                Comissão aprovada vira conta a pagar programada
+              </p>
+              <p className="text-xs text-[var(--t-text-secondary)] mt-0.5">
+                A agência paga comissão {descreverAgenda(agendaPagamento)}. Aprovada hoje, a conta
+                vence em{' '}
+                <strong>
+                  {(() => {
+                    const d = dataLocal(proximaDataPagamento(agendaPagamento, hojeISO()));
+                    return d ? d.toLocaleDateString('pt-BR') : 'sem data';
+                  })()}
+                </strong>{' '}
+                e já aparece no fluxo de caixa. Pagar apenas dá baixa nela.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Banner: sem plano de comissão */}
         {planos.length === 0 && (

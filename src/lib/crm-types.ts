@@ -143,6 +143,12 @@ export interface Membro {
   meta_mensal_quantidade: number;
   plano_comissao_id: string;
 
+  /** Usuario do financeiro (tabela `usuarios`) que representa esta pessoa.
+   *  E por aqui que a venda vinda do CRM, cujo vendedor_id aponta para
+   *  `usuarios`, encontra o membro que carrega o plano de comissao.
+   *  Vazio significa que a pessoa ainda nao foi vinculada. */
+  usuario_id: string;
+
   status: 'ATIVO' | 'INATIVO';
 }
 
@@ -1215,6 +1221,11 @@ export interface Agencia {
   cores_identidade: { primaria: string; secundaria: string };
   regime_tributario: 'SIMPLES' | 'LUCRO_PRESUMIDO' | 'LUCRO_REAL';
   aliquota_padrao: number;
+  /** Dias do mês em que a agência paga comissão, por exemplo [5, 20].
+   *  A comissão aprovada vira conta a pagar vencendo na próxima data
+   *  desta lista. Vazio significa que a agência ainda não definiu agenda,
+   *  e nesse caso nenhuma conta é programada automaticamente. */
+  datas_pagamento_comissao: number[];
   // Dominio customizado pra propostas publicas. Quando preenchido
   // (ex.: "proposta.minhaagencia.com.br"), o link enviado ao cliente
   // troca fin.enturos.com pelo dominio do tenant — preservando o path
@@ -1300,7 +1311,7 @@ export function createMembro(): Membro {
   return {
     id: generateId(), nome: '', cpf: '', email: '', telefone: '', cargo: 'vendedor',
     data_admissao: hojeISO(),
-    meta_mensal_vendas: 0, meta_mensal_quantidade: 0, plano_comissao_id: '',
+    meta_mensal_vendas: 0, meta_mensal_quantidade: 0, plano_comissao_id: '', usuario_id: '',
     status: 'ATIVO',
   };
 }
