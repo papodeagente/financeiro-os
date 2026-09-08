@@ -16,6 +16,7 @@ import {
 } from './crm-types';
 import { gerarContasVenda, type ItemVendaInput, type FornecedorInfo } from './venda-financeiro';
 import { round2, num, hojeISO } from './money';
+import { montarLinhasDeCusto, type FornecedorResolvido } from './venda-crm-itens';
 import { criarNotificacao } from './notificacoes';
 // Caixa do webhook usa o caminho ATÔMICO (um único UPDATE em SQL), igual ao
 // PUT das rotas de conta. O helper antigo lia, somava e regravava fora de
@@ -1362,105 +1363,99 @@ export async function processarEventoCRM(
         );
 
         // 3) Cria itens_venda + contas via fluxo UNIFICADO (mesma lógica
-        //    de venda manual /vendas/nova). Cada fornecedor vira um item
-        //    com meio_pagamento='fornecedor' (cliente paga direto ao
-        //    fornecedor, agência recebe comissão). Se CRM não detalhou
-        //    fornecedores, cria 1 item agregado 'OUTROS'.
+        //    de venda manual /vendas/nova).
+        //
+        //    CADA FORNECEDOR VIRA UM ITEM PRÓPRIO: a agência vende ao cliente
+        //    e paga o fornecedor. Conta a receber = valor da venda, conta a
+        //    pagar = custo de cada fornecedor, margem = a diferença.
+        //
+        //    O modelo anterior marcava esses itens como 'fornecedor' (cliente
+        //    pagaria direto ao fornecedor, agência só receberia comissão).
+        //    Como o CRM manda comissao=0, uma venda com fornecedores
+        //    detalhados não gerava conta NENHUMA — nem a pagar, nem a
+        //    receber. Era a origem de "o CRM não está enviando a conta do
+        //    custo a pagar em vendas".
+        //
+        //    O custo que o CRM soma em custo_total mas não atribui a nenhum
+        //    fornecedor (produto sem fornecedor preenchido na deal) vira uma
+        //    linha própria, marcada como sem fornecedor. A dívida existe: o
+        //    dinheiro sai do mesmo jeito, só falta dizer para quem.
         const fornecedoresValidos = fornecedoresPayload.filter(
           f => !!asStr(f.fornecedor_id),
         );
         const itensInput: ItemVendaInput[] = [];
         const fornecedoresInfo: FornecedorInfo[] = [];
 
-        if (fornecedoresValidos.length > 0) {
-          for (let i = 0; i < fornecedoresValidos.length; i++) {
-            const forn = fornecedoresValidos[i];
-            const fornExternalId = asStr(forn.fornecedor_id);
-            const fornecedorId = await upsertFornecedorByExternalId(
-              fornExternalId,
-              { nome: forn.fornecedor_nome, cnpj: forn.fornecedor_cnpj },
-              tenantId,
-            );
-            // Carrega regras_faturamento do fornecedor (para regra de
-            // vencimento de comissão e prazo de pagamento).
-            const { rows: fornRows } = await pool.query(
-              `SELECT data FROM fornecedores_crm WHERE id = $1 AND tenant_id = $2`,
-              [fornecedorId, tenantId],
-            );
-            const fornData = (fornRows[0]?.data ?? {}) as Record<string, unknown>;
-            fornecedoresInfo.push({
-              id: fornecedorId,
-              nome_fantasia: asStr(forn.fornecedor_nome) || asStr(fornData.nome_fantasia) || 'Fornecedor',
-              regras_faturamento: (fornData.regras_faturamento ?? null) as FornecedorInfo['regras_faturamento'],
-            });
+        /** Fornecedores do payload, já com cadastro resolvido no financeiro. */
+        const fornecedoresResolvidos: FornecedorResolvido[] = [];
 
-            const valorCustoForn = asNum(forn.valor_custo);
-            const valorVendaForn = asNum(forn.valor_venda) || valorCustoForn;
-            const comissaoFornValor = calcularComissaoFornecedor(forn, fornecedoresValidos, comissaoTotal);
-            const comissaoFornPct = valorVendaForn > 0
-              ? Number(((comissaoFornValor / valorVendaForn) * 100).toFixed(2))
-              : 0;
+        for (const forn of fornecedoresValidos) {
+          const fornExternalId = asStr(forn.fornecedor_id);
+          const fornecedorId = await upsertFornecedorByExternalId(
+            fornExternalId,
+            { nome: forn.fornecedor_nome, cnpj: forn.fornecedor_cnpj },
+            tenantId,
+          );
+          // Carrega regras_faturamento do fornecedor (prazo de pagamento).
+          const { rows: fornRows } = await pool.query(
+            `SELECT data FROM fornecedores_crm WHERE id = $1 AND tenant_id = $2`,
+            [fornecedorId, tenantId],
+          );
+          const fornData = (fornRows[0]?.data ?? {}) as Record<string, unknown>;
+          const nomeForn =
+            asStr(forn.fornecedor_nome) || asStr(fornData.nome_fantasia) || 'Fornecedor';
+          fornecedoresInfo.push({
+            id: fornecedorId,
+            nome_fantasia: nomeForn,
+            regras_faturamento: (fornData.regras_faturamento ?? null) as FornecedorInfo['regras_faturamento'],
+          });
+          fornecedoresResolvidos.push({
+            fornecedor_id: fornecedorId,
+            fornecedor_nome: nomeForn,
+            servico: asStr(forn.servico),
+            descricao: asStr(forn.descricao),
+            valor_custo: asNum(forn.valor_custo),
+            localizador: asStr(forn.localizador),
+            data_inicio: asDateYMD(forn.data_inicio),
+            data_fim: asDateYMD(forn.data_fim),
+          });
+        }
 
-            const tipoServico = (asStr(forn.servico).toUpperCase() as TipoProdutoVenda) || 'OUTROS';
-            const tiposValidos: TipoProdutoVenda[] = ['AEREO', 'HOTEL', 'PACOTE', 'SEGURO', 'RECEPTIVO', 'CRUZEIRO', 'CARRO', 'INGRESSO', 'GRUPO', 'OUTROS'];
-            const tipoFinal: TipoProdutoVenda = tiposValidos.includes(tipoServico) ? tipoServico : 'OUTROS';
+        const linhas = montarLinhasDeCusto({
+          fornecedores: fornecedoresResolvidos,
+          custo_total: custoTotal,
+          valor_total: valorTotal,
+          referencia: asStr(payload.crm_venda_id) || vendaId,
+        });
 
-            const item = createItemVenda();
-            const itemData: ItemVendaData = {
-              ...item.data,
-              tipo: tipoFinal,
-              descricao: asStr(forn.servico) || asStr(forn.descricao) || asStr(forn.fornecedor_nome),
-              fornecedor_nome: asStr(forn.fornecedor_nome),
-              meio_pagamento: 'fornecedor',
-              valor_custo: valorCustoForn,
-              valor_venda: valorVendaForn,
-              comissao_percentual: comissaoFornPct,
-              comissao_valor: comissaoFornValor,
-              moeda: 'BRL',
-              cambio: 1,
-              localizador: asStr(forn.localizador),
-              data_inicio: asDateYMD(forn.data_inicio),
-              data_fim: asDateYMD(forn.data_fim),
-              observacoes: '',
-              contas_geradas_ids: [],
-            };
-            itensInput.push({
-              id: item.id,
-              venda_id: vendaId,
-              fornecedor_id: fornecedorId,
-              sequencia: i + 1,
-              status: 'ativo',
-              data: itemData,
-            });
-          }
-        } else {
-          // Fallback agregado — CRM não detalhou fornecedores. Cria 1
-          // item OUTROS com o custo total e o valor da venda total.
+        for (let i = 0; i < linhas.length; i++) {
+          const l = linhas[i];
           const item = createItemVenda();
+          const itemData: ItemVendaData = {
+            ...item.data,
+            tipo: l.tipo,
+            descricao: l.descricao,
+            fornecedor_nome: l.fornecedor_nome,
+            meio_pagamento: 'proprio',
+            valor_custo: l.valor_custo,
+            valor_venda: l.valor_venda,
+            comissao_percentual: 0,
+            comissao_valor: 0,
+            moeda: 'BRL',
+            cambio: 1,
+            localizador: l.localizador,
+            data_inicio: l.data_inicio,
+            data_fim: l.data_fim,
+            observacoes: l.observacoes,
+            contas_geradas_ids: [],
+          };
           itensInput.push({
             id: item.id,
             venda_id: vendaId,
-            fornecedor_id: '',
-            sequencia: 1,
+            fornecedor_id: l.fornecedor_id,
+            sequencia: i + 1,
             status: 'ativo',
-            data: {
-              ...item.data,
-              tipo: 'OUTROS',
-              descricao: `Venda ${payload.crm_venda_id || vendaId} — fornecedor(es) a detalhar`,
-              fornecedor_nome: '',
-              meio_pagamento: 'proprio',
-              valor_custo: custoTotal,
-              valor_venda: valorTotal,
-              comissao_percentual: 0,
-              comissao_valor: 0,
-              moeda: 'BRL',
-              cambio: 1,
-              localizador: '',
-              data_inicio: '',
-              data_fim: '',
-              observacoes: 'Custo e venda agregados — editar para detalhar fornecedores',
-              contas_geradas_ids: [],
-            },
+            data: itemData,
           });
         }
 

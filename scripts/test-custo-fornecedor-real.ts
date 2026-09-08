@@ -3,23 +3,28 @@
  *
  *   "No CRM deve pegar os dados de: preço de venda e preço de custo.
  *    A margem é a diferença. Apenas essa regra."
- *   Conta a pagar só nasce quando existe fornecedor real a quem pagar.
  *
- * Estes testes travam as duas metades dessa regra:
- *  1. sem fornecedor identificado NÃO existe conta a pagar;
- *  2. o custo continua valendo para a margem mesmo assim.
+ *   "Preciso receber no financeiro o total a pagar e o fornecedor. Caso não
+ *    tenha colocado o fornecedor dentro do CRM, informar que está sem
+ *    fornecedor no CRM. Permitir inserir manualmente no financeiro."
  *
- * Contexto do incidente: uma venda importada do CRM sem detalhamento de
- * fornecedor gerava "Custo OUTROS — Venda crm_deal_X — fornecedor(es) a
- * detalhar", com o custo de referência do cadastro do produto. Era uma dívida
- * que ninguém iria receber, e ela entrava no contas a pagar, no fluxo de caixa
- * e no caixa livre.
+ * Estes testes travam as três metades dessa regra:
+ *  1. todo custo vira conta a pagar — a agência vai desembolsar o dinheiro;
+ *  2. sem fornecedor identificado a conta nasce MARCADA, não some;
+ *  3. a margem continua sendo venda menos custo, com ou sem fornecedor.
+ *
+ * Contexto: uma venda importada do CRM com fornecedores detalhados não gerava
+ * conta nenhuma (nem a pagar nem a receber), porque os itens entravam como
+ * meio_pagamento='fornecedor' e o CRM manda comissão zero. Sem detalhamento,
+ * o custo virava uma dívida genérica que ninguém sabia a quem pagar — e a
+ * correção anterior, de omitir a dívida, escondia uma saída de caixa real.
  *
  * Roda com: node --experimental-strip-types scripts/test-custo-fornecedor-real.ts
  */
 import { gerarContasVenda } from '../src/lib/venda-financeiro.ts';
 import { calcularResultado } from '../src/lib/resultado-financeiro.ts';
-import { round2 } from '../src/lib/money.ts';
+import { montarLinhasDeCusto, DESCRICAO_SEM_FORNECEDOR } from '../src/lib/venda-crm-itens.ts';
+import { soma } from '../src/lib/money.ts';
 
 let falhas = 0;
 let total = 0;
@@ -85,19 +90,21 @@ const gerar = (itens: Any[], fornecedores: Any[] = [{ id: 'f1', nome_fantasia: '
   });
 
 // ══════════════════════════════════════════════════════════════════════
-console.log('--- com fornecedor real: conta a pagar continua nascendo ---');
+console.log('--- com fornecedor: conta a pagar com nome de quem recebe ---');
 {
   const r = gerar([item({ data: { valor_venda: 1000, valor_custo: 800 } })]);
   eq(r.contas_pagar.length, 1, 'uma conta a pagar para o fornecedor');
   eq(r.contas_pagar[0].valor_final, 800, 'valor do custo');
   eq(r.contas_pagar[0].fornecedor_nome, 'CVC', 'fornecedor identificado');
+  eq(r.contas_pagar[0].fornecedor_pendente, false, 'não está pendente de fornecedor');
+  eq(r.contas_pagar[0].observacoes, '', 'sem aviso na observação');
   eq(r.contas_receber.length, 1, 'conta a receber do cliente');
   eq(r.resumo.total_custos, 800, 'custo entra no resumo');
   eq(r.resumo.lucro_previsto, 200, 'margem é venda menos custo');
 }
 
 // ══════════════════════════════════════════════════════════════════════
-console.log('--- o incidente: sem fornecedor, sem conta a pagar ---');
+console.log('--- sem fornecedor: a conta NASCE, marcada ---');
 {
   // Shape exato do item que o webhook cria quando o CRM não detalha
   // fornecedor: fornecedor_id vazio, fornecedor_nome vazio, tipo OUTROS.
@@ -106,7 +113,7 @@ console.log('--- o incidente: sem fornecedor, sem conta a pagar ---');
       fornecedor_id: '',
       data: {
         tipo: 'OUTROS',
-        descricao: 'Venda crm_deal_1106233 — fornecedor(es) a detalhar',
+        descricao: DESCRICAO_SEM_FORNECEDOR,
         fornecedor_nome: '',
         valor_venda: 15997,
         valor_custo: 1300,
@@ -114,11 +121,19 @@ console.log('--- o incidente: sem fornecedor, sem conta a pagar ---');
     })],
     [],
   );
-  eq(r.contas_pagar.length, 0, 'NENHUMA conta a pagar sem fornecedor');
+  eq(r.contas_pagar.length, 1, 'a dívida existe mesmo sem saber a quem pagar');
+  eq(r.contas_pagar[0].valor_final, 1300, 'valor a pagar preservado');
+  eq(r.contas_pagar[0].fornecedor_nome, '', 'fornecedor em branco');
+  eq(r.contas_pagar[0].fornecedor_pendente, true, 'marcada como sem fornecedor');
+  eq(
+    r.contas_pagar[0].observacoes,
+    'Sem fornecedor no CRM. Edite esta conta para informar a quem pagar.',
+    'a observação diz o que fazer',
+  );
+  eq(r.contas_pagar[0].status, 'PENDENTE', 'entra em aberto, como qualquer dívida');
   eq(r.contas_receber.length, 1, 'a conta a receber do cliente continua');
   eq(r.contas_receber[0].valor_final, 15997, 'cliente deve o valor da venda');
 
-  // A metade que não pode se perder: o custo continua na margem.
   eq(r.resumo.total_custos, 1300, 'custo continua contando');
   eq(r.resumo.total_cliente, 15997, 'venda registrada');
   eq(r.resumo.lucro_previsto, 14697, 'margem é venda menos custo');
@@ -134,89 +149,160 @@ console.log('--- custo zero não vira dívida de R$ 0,00 ---');
 }
 
 // ══════════════════════════════════════════════════════════════════════
-console.log('--- venda mista: só o item com fornecedor gera dívida ---');
+console.log('--- venda mista: duas dívidas, uma delas marcada ---');
 {
   const r = gerar([
     item({ sequencia: 1, data: { descricao: 'Hotel', fornecedor_nome: 'Ibis', valor_venda: 4000, valor_custo: 3000 } }),
-    item({ sequencia: 2, fornecedor_id: '', data: { tipo: 'OUTROS', descricao: 'a detalhar', fornecedor_nome: '', valor_venda: 2000, valor_custo: 900 } }),
+    item({ sequencia: 2, fornecedor_id: '', data: { tipo: 'OUTROS', descricao: DESCRICAO_SEM_FORNECEDOR, fornecedor_nome: '', valor_venda: 2000, valor_custo: 900 } }),
   ]);
-  eq(r.contas_pagar.length, 1, 'uma conta a pagar, do hotel');
-  eq(r.contas_pagar[0].valor_final, 3000, 'só o custo do hotel vira dívida');
+  eq(r.contas_pagar.length, 2, 'os dois custos viram dívida');
+  eq(soma(r.contas_pagar.map(c => c.valor_final)), 3900, 'total a pagar é a soma dos custos');
+  eq(r.contas_pagar.filter(c => c.fornecedor_pendente).length, 1, 'só uma está sem fornecedor');
+  eq(r.contas_pagar.find(c => c.fornecedor_pendente)?.valor_final, 900, 'a marcada é a de 900');
   eq(r.resumo.total_custos, 3900, 'a margem considera os dois custos');
   eq(r.resumo.total_cliente, 6000, 'cliente paga os dois itens');
   eq(r.resumo.lucro_previsto, 2100, 'margem = 6000 menos 3900');
 }
 
 // ══════════════════════════════════════════════════════════════════════
-console.log('--- fornecedor identificado só pelo nome também gera dívida ---');
+console.log('--- fornecedor identificado só pelo nome não fica marcado ---');
 {
-  // Sem cadastro no CRM (fornecedor_id vazio) mas com nome digitado: existe
-  // alguém a quem pagar, então a conta nasce.
+  // Sem cadastro no CRM (fornecedor_id vazio) mas com nome digitado: já se
+  // sabe a quem pagar, então nada fica pendente.
   const r = gerar(
     [item({ fornecedor_id: '', data: { fornecedor_nome: 'Pousada do Zé', valor_venda: 1000, valor_custo: 600 } })],
     [],
   );
-  eq(r.contas_pagar.length, 1, 'nome livre conta como fornecedor real');
+  eq(r.contas_pagar.length, 1, 'conta a pagar normal');
   eq(r.contas_pagar[0].fornecedor_nome, 'Pousada do Zé', 'nome preservado');
+  eq(r.contas_pagar[0].fornecedor_pendente, false, 'nome livre já resolve o pendente');
 }
 {
-  // Nome só com espaços não é fornecedor.
+  // Nome só com espaços não é fornecedor: a conta nasce marcada.
   const r = gerar(
     [item({ fornecedor_id: '', data: { fornecedor_nome: '   ', valor_venda: 1000, valor_custo: 600 } })],
     [],
   );
-  eq(r.contas_pagar.length, 0, 'nome em branco não é fornecedor');
-  eq(r.resumo.total_custos, 600, 'mas o custo continua na margem');
+  eq(r.contas_pagar.length, 1, 'a dívida existe');
+  eq(r.contas_pagar[0].fornecedor_nome, '', 'espaço em branco vira vazio');
+  eq(r.contas_pagar[0].fornecedor_pendente, true, 'nome em branco fica pendente');
+  eq(r.resumo.total_custos, 600, 'e o custo continua na margem');
 }
 
 // ══════════════════════════════════════════════════════════════════════
-console.log('--- a margem da venda não infla sem a conta a pagar ---');
+console.log('--- linhas de custo montadas a partir do payload do CRM ---');
 {
-  // É o risco da mudança: o resultado da venda soma custo das contas a pagar.
-  // Sem a dívida, o custo precisa entrar por custo_sem_conta, senão a tela
-  // mostraria margem cheia numa venda que teve custo.
-  const semCusto = calcularResultado({
-    hoje: '2026-09-08',
-    contas_receber: [{ origem: 'VENDA', status: 'PENDENTE', valor_final: 15997, data_vencimento: '2026-10-08' }],
-    contas_pagar: [],
+  // Caso normal: dois fornecedores detalhados, custo_total bate com a soma.
+  const linhas = montarLinhasDeCusto({
+    fornecedores: [
+      { fornecedor_id: 'f1', fornecedor_nome: 'CVC', servico: 'AEREO', valor_custo: 6000 },
+      { fornecedor_id: 'f2', fornecedor_nome: 'Ibis', servico: 'HOTEL', valor_custo: 4000 },
+    ],
+    custo_total: 10000,
+    valor_total: 14000,
   });
-  eq(semCusto.margem_prevista, 15997, 'sem informar o custo, a margem vem cheia');
-
-  const comCusto = calcularResultado({
-    hoje: '2026-09-08',
-    contas_receber: [{ origem: 'VENDA', status: 'PENDENTE', valor_final: 15997, data_vencimento: '2026-10-08' }],
-    contas_pagar: [],
-    custo_sem_conta: 1300,
-  });
-  eq(comCusto.custo_previsto, 1300, 'custo sem conta entra no custo previsto');
-  eq(comCusto.margem_prevista, 14697, 'margem = venda menos custo');
-  eq(comCusto.custo_pendente, 0, 'não há nada a pagar a ninguém');
-  eq(comCusto.custo_pago, 0, 'e nada foi pago');
-  eq(comCusto.vencido_a_pagar, 0, 'não entra em vencidos');
+  eq(linhas.length, 2, 'uma linha por fornecedor');
+  eq(linhas.map(l => l.sem_fornecedor), [false, false], 'nenhuma pendente');
+  eq(linhas.map(l => l.tipo), ['AEREO', 'HOTEL'], 'serviço vira tipo do item');
+  eq(soma(linhas.map(l => l.valor_custo)), 10000, 'custo total preservado');
+  eq(soma(linhas.map(l => l.valor_venda)), 14000, 'venda rateada fecha com o total');
+  eq(linhas.map(l => l.valor_venda), [8400, 5600], 'rateio proporcional ao custo');
 }
 {
-  // Venda com fornecedor detalhado: custo_sem_conta é zero e nada muda.
+  // O buraco do emissor do CRM: custo_total maior que a soma dos fornecedores.
+  // O produto sem fornecedor entrou no total mas não no detalhamento.
+  const linhas = montarLinhasDeCusto({
+    fornecedores: [{ fornecedor_id: 'f1', fornecedor_nome: 'CVC', servico: 'AEREO', valor_custo: 6000 }],
+    custo_total: 7300,
+    valor_total: 15997,
+  });
+  eq(linhas.length, 2, 'nasce a linha do custo sem dono');
+  eq(linhas[1].sem_fornecedor, true, 'marcada como sem fornecedor');
+  eq(linhas[1].fornecedor_nome, '', 'sem nome de fornecedor');
+  eq(linhas[1].valor_custo, 1300, 'o resíduo é exatamente o custo sem dono');
+  eq(linhas[1].descricao, DESCRICAO_SEM_FORNECEDOR, 'a descrição avisa');
+  eq(soma(linhas.map(l => l.valor_custo)), 7300, 'nada de custo se perde');
+  eq(soma(linhas.map(l => l.valor_venda)), 15997, 'venda fecha com o total');
+}
+{
+  // Nenhum fornecedor detalhado: todo o custo é sem dono.
+  const linhas = montarLinhasDeCusto({
+    fornecedores: [],
+    custo_total: 1300,
+    valor_total: 15997,
+    referencia: 'crm_deal_1106233',
+  });
+  eq(linhas.length, 1, 'uma linha só');
+  eq(linhas[0].sem_fornecedor, true, 'toda ela sem fornecedor');
+  eq(linhas[0].valor_custo, 1300, 'custo inteiro');
+  eq(linhas[0].valor_venda, 15997, 'venda inteira');
+}
+{
+  // Venda sem custo nenhum: ainda precisa carregar o valor do cliente.
+  const linhas = montarLinhasDeCusto({
+    fornecedores: [],
+    custo_total: 0,
+    valor_total: 2500,
+    referencia: 'crm_deal_9',
+  });
+  eq(linhas.length, 1, 'existe item para a conta a receber');
+  eq(linhas[0].valor_custo, 0, 'sem custo');
+  eq(linhas[0].valor_venda, 2500, 'o cliente paga o valor da venda');
+  eq(linhas[0].sem_fornecedor, false, 'não há custo pendente de fornecedor');
+  eq(linhas[0].descricao, 'Venda crm_deal_9', 'descrição referencia a venda');
+}
+{
+  // custo_total MENOR que a soma detalhada (payload inconsistente): manda o
+  // detalhamento, que é a informação com nome e CNPJ.
+  const linhas = montarLinhasDeCusto({
+    fornecedores: [{ fornecedor_id: 'f1', fornecedor_nome: 'CVC', servico: 'AEREO', valor_custo: 6000 }],
+    custo_total: 1000,
+    valor_total: 9000,
+  });
+  eq(linhas.length, 1, 'não inventa linha negativa');
+  eq(linhas[0].valor_custo, 6000, 'vale o custo detalhado');
+  eq(linhas[0].valor_venda, 9000, 'venda inteira na única linha');
+}
+{
+  // Centavos: o rateio não pode perder nem sobrar um centavo.
+  const linhas = montarLinhasDeCusto({
+    fornecedores: [
+      { fornecedor_id: 'f1', fornecedor_nome: 'A', servico: 'AEREO', valor_custo: 333.33 },
+      { fornecedor_id: 'f2', fornecedor_nome: 'B', servico: 'HOTEL', valor_custo: 333.33 },
+      { fornecedor_id: 'f3', fornecedor_nome: 'C', servico: 'CARRO', valor_custo: 333.34 },
+    ],
+    custo_total: 1000,
+    valor_total: 1000.01,
+  });
+  eq(soma(linhas.map(l => l.valor_venda)), 1000.01, 'a soma do rateio é exata');
+  eq(linhas.length, 3, 'sem linha de resíduo (custo bate)');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+console.log('--- o resultado da venda vê a dívida ---');
+{
+  // Agora o custo chega pelas contas a pagar, não mais por custo_sem_conta.
   const r = calcularResultado({
     hoje: '2026-09-08',
-    contas_receber: [{ origem: 'VENDA', status: 'PENDENTE', valor_final: 20000, data_vencimento: '2026-10-08' }],
-    contas_pagar: [{ status: 'PENDENTE', valor_final: 16500, data_vencimento: '2026-10-15' }],
-    custo_sem_conta: 0,
+    contas_receber: [{ origem: 'VENDA', status: 'PENDENTE', valor_final: 15997, data_vencimento: '2026-10-08' }],
+    contas_pagar: [{ status: 'PENDENTE', valor_final: 1300, data_vencimento: '2026-10-15' }],
   });
-  eq(r.custo_previsto, 16500, 'custo vem só das contas a pagar');
-  eq(r.margem_prevista, 3500, 'a viagem de 20 mil rende 3,5 mil');
-  eq(r.custo_pendente, 16500, 'e há de fato 16,5 mil a pagar');
+  eq(r.custo_previsto, 1300, 'custo vem da conta a pagar');
+  eq(r.margem_prevista, 14697, 'margem é a diferença');
+  eq(r.custo_pendente, 1300, 'e há de fato 1.300 a pagar');
 }
 {
-  // Venda mista: parte com dívida, parte só na margem.
+  // custo_sem_conta continua sendo a rede de proteção para vendas antigas,
+  // geradas quando a dívida sem fornecedor era omitida.
   const r = calcularResultado({
     hoje: '2026-09-08',
     contas_receber: [{ origem: 'VENDA', status: 'PENDENTE', valor_final: 6000, data_vencimento: '2026-10-08' }],
     contas_pagar: [{ status: 'PENDENTE', valor_final: 3000, data_vencimento: '2026-10-15' }],
     custo_sem_conta: 900,
   });
-  eq(r.custo_previsto, 3900, 'soma dívida e custo sem dono');
+  eq(r.custo_previsto, 3900, 'soma dívida e custo sem conta');
   eq(r.margem_prevista, 2100, 'margem = 6000 menos 3900');
-  eq(r.custo_pendente, 3000, 'só os 3000 são dívida com alguém');
+  eq(r.custo_pendente, 3000, 'só os 3000 são dívida lançada');
 }
 {
   // Valor negativo ou lixo não deve virar crédito de custo.
@@ -233,34 +319,43 @@ console.log('--- a margem da venda não infla sem a conta a pagar ---');
 // ══════════════════════════════════════════════════════════════════════
 console.log('--- o número do incidente, ponta a ponta ---');
 {
-  // Venda de R$ 15.997 (Vanessa) com custo de referência de R$ 1.300 vindo do
-  // cadastro do produto, sem fornecedor. Antes: 1 conta a pagar fantasma.
+  // Venda de R$ 15.997 com custo de R$ 1.300 vindo do cadastro do produto,
+  // sem fornecedor. O financeiro precisa ver a dívida E saber que falta o
+  // fornecedor.
+  const linhas = montarLinhasDeCusto({
+    fornecedores: [],
+    custo_total: 1300,
+    valor_total: 15997,
+    referencia: 'crm_deal_1106233',
+  });
   const gerado = gerar(
-    [item({
-      fornecedor_id: '',
+    linhas.map((l, i) => item({
+      fornecedor_id: l.fornecedor_id,
+      sequencia: i + 1,
       data: {
-        tipo: 'OUTROS',
-        descricao: 'Venda crm_deal_1106233 — fornecedor(es) a detalhar',
-        fornecedor_nome: '',
-        valor_venda: 15997,
-        valor_custo: 1300,
+        tipo: l.tipo,
+        descricao: l.descricao,
+        fornecedor_nome: l.fornecedor_nome,
+        valor_venda: l.valor_venda,
+        valor_custo: l.valor_custo,
       },
-    })],
+    })),
     [],
   );
-  eq(gerado.contas_pagar.length, 0, 'nenhuma saída fantasma no fluxo de caixa');
+  eq(gerado.contas_pagar.length, 1, 'a saída de caixa aparece no fluxo');
+  eq(gerado.contas_pagar[0].valor_final, 1300, 'total a pagar recebido do CRM');
+  eq(gerado.contas_pagar[0].fornecedor_pendente, true, 'avisando que falta o fornecedor');
+  eq(gerado.contas_receber[0].valor_final, 15997, 'e o cliente deve a venda inteira');
 
-  const custoSemConta = round2(gerado.resumo.total_custos - 0);
   const resultado = calcularResultado({
     hoje: '2026-09-08',
     contas_receber: gerado.contas_receber,
     contas_pagar: gerado.contas_pagar,
-    custo_sem_conta: custoSemConta,
   });
   eq(resultado.volume_liquido, 15997, 'venda registrada');
   eq(resultado.custo_previsto, 1300, 'custo registrado');
   eq(resultado.margem_prevista, 14697, 'margem é a diferença');
-  eq(resultado.custo_pendente, 0, 'e nada a pagar a ninguém');
+  eq(resultado.custo_pendente, 1300, 'com 1.300 ainda a pagar');
 }
 
 // ══════════════════════════════════════════════════════════════════════

@@ -10,7 +10,8 @@ import {
   round2, num, somaPor, paraBRL,
   hojeISO, addDias, addMeses, dataSegura, estaVencido, mesDe, dentroDoPeriodo,
 } from '@/lib/money';
-import { formatBRL } from '@/lib/utils';
+import { cn, formatBRL } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { PageShell } from '@/components/PageShell';
 
 import { ConfirmDialog } from '@/components/fin/ConfirmDialog';
@@ -24,7 +25,7 @@ import { PageHeader } from '@/components/fin/PageHeader';
 import type { PeriodoChave, PeriodoRange } from '@/components/fin/PeriodPicker';
 import { rotuloStatus } from '@/components/fin/StatusChip';
 
-import { criarColunas } from './colunas';
+import { criarColunas, semFornecedor } from './colunas';
 import { DialogBaixa } from './DialogBaixa';
 import { FormularioConta } from './FormularioConta';
 import { PainelCopiarMes } from './PainelCopiarMes';
@@ -184,6 +185,8 @@ export default function ContasPagarPage() {
   const [filterCategoria, setFilterCategoria] = useState('TODAS');
   const [filterBusca, setFilterBusca] = useState('');
   const [filterPeriodo, setFilterPeriodo] = useState<FiltroPeriodo>('MES_ATUAL');
+  // Recorte das contas que vieram do CRM sem dizer a quem pagar.
+  const [filterSemFornecedor, setFilterSemFornecedor] = useState(false);
   const [showCopyModal, setShowCopyModal] = useState(false);
   const [copySourceMonth, setCopySourceMonth] = useState('');
   const [copyTargetMonth, setCopyTargetMonth] = useState('');
@@ -291,6 +294,9 @@ export default function ContasPagarPage() {
         const updated: ContaPagar = {
           ...existing,
           ...form,
+          // Preencher o fornecedor à mão resolve a pendência que veio do CRM.
+          // A validação acima já garante que o nome não está em branco.
+          fornecedor_pendente: false,
           cartao_id: cartaoIdFinal,
           valor_original: valorOriginal,
           cambio,
@@ -528,10 +534,18 @@ export default function ContasPagarPage() {
   });
 
   const filtered = filteredBase.filter(i => {
+    if (filterSemFornecedor && !semFornecedor(i)) return false;
     if (filterStatus === 'TODOS') return true;
     if (filterStatus === 'ABERTO') return i.status === 'PENDENTE' || i.status === 'PARCIAL';
     return i.status === filterStatus;
   });
+
+  // Contas sem fornecedor: o custo veio do CRM, o nome de quem recebe não.
+  // Só as em aberto interessam — conta já paga teve o dono resolvido fora.
+  const semFornecedorLista = filteredBase.filter(
+    i => semFornecedor(i) && (i.status === 'PENDENTE' || i.status === 'PARCIAL'),
+  );
+  const totalSemFornecedor = somaPor(semFornecedorLista, saldoDevedor);
 
   // KPIs RESPEITAM o filtro do período/categoria/busca: só não filtram
   // por status (cada KPI corresponde a um status). Tudo em BRL e por somaPor.
@@ -567,9 +581,11 @@ export default function ContasPagarPage() {
     (filterPeriodo !== 'MES_ATUAL' ? 1 : 0) +
     (filterStatus !== 'TODOS' ? 1 : 0) +
     (filterCategoria !== 'TODAS' ? 1 : 0) +
-    (filterBusca ? 1 : 0);
+    (filterBusca ? 1 : 0) +
+    (filterSemFornecedor ? 1 : 0);
 
   const limparFiltros = () => {
+    setFilterSemFornecedor(false);
     setFilterStatus('TODOS');
     setFilterPeriodo('MES_ATUAL');
     setFilterCategoria('TODAS');
@@ -692,6 +708,38 @@ export default function ContasPagarPage() {
           />
         </div>
       </DataState>
+
+      {/* Custo que chegou do CRM sem fornecedor. A dívida é real e está nos
+          totais; o que falta é dizer a quem pagar, editando a conta. */}
+      {estadoDados === 'ok' && semFornecedorLista.length > 0 ? (
+        <div
+          className={cn(
+            'flex flex-col gap-3 rounded-[var(--fin-r-lg)] border border-[var(--fin-warning)]',
+            'bg-[var(--fin-warning-soft)] p-4 sm:flex-row sm:items-center sm:justify-between',
+          )}
+        >
+          <div className="flex min-w-0 flex-col gap-1">
+            <span className="fin-t-body-strong text-[var(--fin-warning-text)]">
+              {semFornecedorLista.length === 1
+                ? '1 conta sem fornecedor no CRM'
+                : `${semFornecedorLista.length} contas sem fornecedor no CRM`}
+            </span>
+            <span className="fin-t-caption text-[var(--fin-text-2)]">
+              O CRM enviou o custo da venda, mas não quem recebe. Some{' '}
+              <Money valor={totalSemFornecedor} size="caption" align="esquerda" estado="ok" /> a pagar. Abra a conta e
+              informe o fornecedor.
+            </span>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="shrink-0 border-[var(--fin-warning)] bg-[var(--fin-surface)] text-[var(--fin-warning-text)]"
+            onClick={() => setFilterSemFornecedor(v => !v)}
+          >
+            {filterSemFornecedor ? 'Ver todas as contas' : 'Ver só essas'}
+          </Button>
+        </div>
+      ) : null}
 
       {estadoDados === 'ok' ? (
         <FilterBar

@@ -175,19 +175,20 @@ export function gerarContasVenda(input: VendaInput): ContasGeradas {
       // fornecedor identificado.
       custosBRL.push(custoBRL);
 
-      // CONTA A PAGAR SÓ COM FORNECEDOR REAL (regra do Bruno, 2026-09-08).
+      // TODO CUSTO VIRA CONTA A PAGAR; SEM FORNECEDOR ELA NASCE MARCADA.
       //
-      // Conta a pagar é compromisso de pagar ALGUÉM. Sem fornecedor
-      // identificado não há a quem pagar, e a dívida genérica poluía o
-      // contas a pagar, o fluxo de caixa e o caixa livre com valor que
-      // ninguém ia receber. O caso real: venda importada do CRM sem
-      // detalhamento de fornecedor gerava "Custo OUTROS — fornecedor(es) a
-      // detalhar", com o custo de referência do cadastro do produto.
+      // O custo do fornecedor é dinheiro que vai sair do caixa da agência,
+      // e precisa aparecer no contas a pagar mesmo quando o CRM não disse a
+      // quem pagar. Omitir a dívida (regra anterior) escondia a saída do
+      // fluxo de caixa e mostrava caixa livre que não existe.
       //
-      // Custo zero também não vira conta: uma dívida de R$ 0,00 é ruído.
+      // Sem fornecedor identificado a conta sai com fornecedor_pendente, e a
+      // tela de contas a pagar pede para preencher à mão.
+      //
+      // Custo zero continua não virando conta: dívida de R$ 0,00 é ruído.
       const nomeFornecedor = (item.data.fornecedor_nome || fornecedor?.nome_fantasia || '').trim();
       const temFornecedorReal = Boolean(item.fornecedor_id || nomeFornecedor);
-      if (!temFornecedorReal || custoBRL <= 0) {
+      if (custoBRL <= 0) {
         itens_processados.push(item.id);
         continue;
       }
@@ -199,7 +200,7 @@ export function gerarContasVenda(input: VendaInput): ContasGeradas {
         venda_id: venda.id,
         grupo_id: venda.grupo_id,
         fornecedor_id: item.fornecedor_id,
-        fornecedor_nome: item.data.fornecedor_nome || fornecedor?.nome_fantasia || '',
+        fornecedor_nome: nomeFornecedor,
         descricao: `Custo ${item.data.tipo} — ${item.data.descricao || 'Item ' + item.sequencia}`,
         categoria_id: '',
         centro_custo: venda.centro_custo || '',
@@ -228,10 +229,14 @@ export function gerarContasVenda(input: VendaInput): ContasGeradas {
         natureza_custo: 'VARIAVEL',
         is_custo_comercial: false,
         status: 'PENDENTE',
-        rateio: [], anexos: [], observacoes: '',
+        rateio: [], anexos: [],
+        observacoes: temFornecedorReal
+          ? ''
+          : 'Sem fornecedor no CRM. Edite esta conta para informar a quem pagar.',
         origem_venda_id: venda.id,
         origem_item_id: item.id,
         auto_gerado: true,
+        fornecedor_pendente: !temFornecedorReal,
       };
       contas_pagar.push(cp);
 

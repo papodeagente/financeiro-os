@@ -46,9 +46,21 @@ const BOTAO_ICONE = cn(
   FOCO,
 );
 
+/**
+ * Conta cujo custo veio do CRM sem dizer a quem pagar. A dívida é real (o
+ * dinheiro vai sair), só falta o fornecedor — e quem resolve isso é o
+ * financeiro, editando a conta.
+ */
+export function semFornecedor(i: ContaPagar): boolean {
+  return !(i.fornecedor_nome || '').trim();
+}
+
 function nomeDoFornecedor(i: ContaPagar): string {
   const nome = (i.fornecedor_nome || '').trim();
-  return nome || 'Sem fornecedor';
+  if (nome) return nome;
+  return i.fornecedor_pendente || i.origem === 'VENDA'
+    ? 'Sem fornecedor no CRM'
+    : 'Sem fornecedor';
 }
 
 export function criarColunas(dep: DependenciasDasColunas): FinColuna<ContaPagar>[] {
@@ -62,7 +74,12 @@ export function criarColunas(dep: DependenciasDasColunas): FinColuna<ContaPagar>
       acessor: (i) => i.fornecedor_nome || '',
       render: (i) => (
         <span className="flex min-w-0 flex-col gap-1">
-          <span className="fin-t-body-strong truncate text-[var(--fin-text)]">
+          <span
+            className={cn(
+              'fin-t-body-strong truncate',
+              semFornecedor(i) ? 'text-[var(--fin-warning-text)]' : 'text-[var(--fin-text)]',
+            )}
+          >
             {nomeDoFornecedor(i)}
           </span>
           {i.descricao ? (
@@ -80,6 +97,19 @@ export function criarColunas(dep: DependenciasDasColunas): FinColuna<ContaPagar>
               <span className="fin-t-caption text-[var(--fin-text-3)]">
                 Custo para conseguir cliente
               </span>
+            ) : null}
+            {semFornecedor(i) ? (
+              <button
+                type="button"
+                onClick={() => dep.onEditar(i)}
+                className={cn(
+                  'fin-t-caption rounded-[var(--fin-r-sm)] border border-[var(--fin-warning)] px-2 py-0.5',
+                  'bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)] hover:opacity-80',
+                  FOCO,
+                )}
+              >
+                Informar fornecedor
+              </button>
             ) : null}
           </span>
         </span>

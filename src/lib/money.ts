@@ -99,6 +99,34 @@ export function ratearDesconto(valores: number[], desconto: number): number[] {
   return out;
 }
 
+/**
+ * Distribui um total proporcionalmente a pesos, garantindo que a soma do
+ * resultado seja exatamente `total`.
+ *
+ * Usado para repartir o valor de venda entre os itens de custo de uma venda
+ * importada do CRM: o CRM manda o valor total do negócio e o custo de cada
+ * fornecedor, nunca o preço de venda por fornecedor.
+ *
+ * Sem peso positivo o total inteiro vai para o primeiro elemento — o valor da
+ * venda tem que ficar em algum lugar, e uma venda de custo zero é venda.
+ */
+export function ratearTotal(total: number, pesos: number[]): number[] {
+  if (pesos.length === 0) return [];
+  const t = round2(total);
+  const positivos = pesos.map(p => Math.max(0, num(p)));
+  const somaPesos = soma(positivos);
+  if (somaPesos <= 0) return positivos.map((_, i) => (i === 0 ? t : 0));
+  const out = positivos.map(p => round2(p * divSegura(t, somaPesos)));
+  // resíduo no maior item, pra não distorcer os pequenos
+  const diff = round2(t - soma(out));
+  if (diff !== 0) {
+    let maiorIdx = 0;
+    for (let i = 1; i < out.length; i++) if (out[i] > out[maiorIdx]) maiorIdx = i;
+    out[maiorIdx] = round2(out[maiorIdx] + diff);
+  }
+  return out;
+}
+
 /** Converte um valor de moeda estrangeira para BRL. Câmbio ausente/0 = 1 (já BRL). */
 export function paraBRL(valor: number | null | undefined, moeda?: string | null, cambio?: number | null): number {
   const v = num(valor);

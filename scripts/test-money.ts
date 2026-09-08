@@ -4,7 +4,7 @@
  */
 import {
   round2, num, soma, somaPor, percentual, divSegura, variacaoPct,
-  dividirParcelas, ratearDesconto, paraBRL, parseMoneyBR,
+  dividirParcelas, ratearDesconto, ratearTotal, paraBRL, parseMoneyBR,
   dataLocal, paraISO, addDias, addMeses, dataSegura, estaVencido,
   mesDe, dentroDoPeriodo, ultimoDiaDoMes,
 } from '../src/lib/money.ts';
@@ -106,6 +106,18 @@ eq(mesDe('2026-12-01'), '2026-12', 'mês do dia 1 não escorrega');
 eq(dentroDoPeriodo('2026-01-01', '2026-01-01', '2026-01-31'), true, 'borda inicial inclusiva');
 eq(dentroDoPeriodo('2026-01-31', '2026-01-01', '2026-01-31'), true, 'borda final inclusiva');
 eq(dentroDoPeriodo('2026-02-01', '2026-01-01', '2026-01-31'), false, 'fora do período');
+
+console.log('--- ratearTotal ---');
+eq(ratearTotal(1000, [600, 400]), [600, 400], 'rateio proporcional simples');
+eq(soma(ratearTotal(14000, [6000, 4000])), 14000, 'a soma fecha com o total');
+eq(ratearTotal(14000, [6000, 4000]), [8400, 5600], 'pesos definem a proporção');
+eq(soma(ratearTotal(1000.01, [333.33, 333.33, 333.34])), 1000.01, 'centavo não se perde');
+eq(ratearTotal(100, [0, 0]), [100, 0], 'sem peso, tudo no primeiro');
+eq(ratearTotal(100, [0]), [100], 'peso zero único carrega o total');
+eq(ratearTotal(100, []), [], 'lista vazia devolve vazia');
+eq(soma(ratearTotal(0, [10, 20])), 0, 'total zero não inventa valor');
+eq(ratearTotal(100, [-50, 50]), [0, 100], 'peso negativo conta como zero');
+eq(soma(ratearTotal(999.99, [1, 1, 1])), 999.99, 'três iguais somam exato');
 
 console.log(`\n${total - falhas}/${total} testes passaram`);
 if (falhas > 0) {
