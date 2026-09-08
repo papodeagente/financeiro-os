@@ -1,159 +1,329 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { GrupoViagem } from '@/lib/types';
-import { loadGrupos } from '@/lib/storage';
-import { formatDate, formatBRL } from '@/lib/utils';
-import { getProdutoGrupo } from '@/lib/financial-calculations';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import {
-  Package, Search, LayoutDashboard, ShoppingCart, Receipt,
-  Factory, TrendingUp, FileText, Gauge,
-} from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { Package, Plane, Hotel, Ship, Car, Ticket, Shield, Users2, Boxes } from 'lucide-react';
+import {
+  montarPainelProdutos,
+  type EntradaItem,
+  type EntradaVenda,
+} from '@/lib/produtos-vendidos';
+import { hojeISO } from '@/lib/money';
+import { PageHeader } from '@/components/fin/PageHeader';
+import { DataState } from '@/components/fin/DataState';
+import { EmptyLesson } from '@/components/fin/EmptyLesson';
+import { MetricCard } from '@/components/fin/MetricCard';
+import { Money } from '@/components/fin/Money';
+import { Meter } from '@/components/fin/Meter';
 
-const FIN_TABS = [
-  { tab: 'painel', label: 'Painel', icon: LayoutDashboard },
-  { tab: 'vendas', label: 'Vendas', icon: ShoppingCart },
-  { tab: 'recebimentos', label: 'Recebim.', icon: Receipt },
-  { tab: 'fornecedores', label: 'Fornec.', icon: Factory },
-  { tab: 'fluxo_caixa', label: 'Fluxo Cx', icon: TrendingUp },
-  { tab: 'dre', label: 'DRE', icon: FileText },
-  { tab: 'indicadores', label: 'Indicad.', icon: Gauge },
-];
+const CARTAO =
+  'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]';
 
-export default function FinanceiroGruposPage() {
-  const [grupos, setGrupos] = useState<GrupoViagem[]>([]);
-  const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
+const CAMPO =
+  'h-9 rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] ' +
+  'px-2 fin-t-body text-[var(--fin-text)] ' +
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)]';
 
-  useEffect(() => {
-    loadGrupos().then(g => { setGrupos(g); setLoading(false); });
+const CABECALHO = 'px-[var(--fin-s-4)] py-[var(--fin-s-2)] fin-t-overline text-[var(--fin-text-3)]';
+
+const ICONE_TIPO: Record<string, typeof Package> = {
+  AEREO: Plane,
+  HOTEL: Hotel,
+  PACOTE: Boxes,
+  CRUZEIRO: Ship,
+  CARRO: Car,
+  INGRESSO: Ticket,
+  SEGURO: Shield,
+  RECEPTIVO: Users2,
+  GRUPO: Users2,
+  OUTROS: Package,
+};
+
+const ROTULO_TIPO: Record<string, string> = {
+  AEREO: 'Aéreo',
+  HOTEL: 'Hotel',
+  PACOTE: 'Pacote',
+  CRUZEIRO: 'Cruzeiro',
+  CARRO: 'Carro',
+  INGRESSO: 'Ingresso',
+  SEGURO: 'Seguro',
+  RECEPTIVO: 'Receptivo',
+  GRUPO: 'Grupo',
+  OUTROS: 'Outros',
+};
+
+const rotulo = (t: string) => ROTULO_TIPO[t] ?? t;
+
+function rotuloMes(ym: string): string {
+  const [a, m] = ym.split('-');
+  const d = new Date(Number(a), Number(m) - 1, 15);
+  return d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+}
+
+function ultimosMeses(qtd = 12): string[] {
+  const [a, m] = hojeISO().split('-').map(Number);
+  return Array.from({ length: qtd }, (_, i) => {
+    const t = a * 12 + (m - 1) - i;
+    return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, '0')}`;
+  });
+}
+
+/** Margem abaixo de 10% é sinal de produto que quase não paga o trabalho. */
+function faixaMargem(pct: number): 'saudavel' | 'atencao' | 'critico' {
+  if (pct >= 20) return 'saudavel';
+  if (pct >= 10) return 'atencao';
+  return 'critico';
+}
+
+function Esqueleto() {
+  return (
+    <div className="flex flex-col gap-[var(--fin-s-5)]" aria-hidden>
+      <div className="grid gap-[var(--fin-s-3)] sm:grid-cols-2 xl:grid-cols-4">
+        {[0, 1, 2, 3].map(i => (
+          <div key={i} className={`${CARTAO} h-[104px] p-[var(--fin-s-4)]`}>
+            <div className="h-3 w-24 rounded bg-[var(--fin-surface-2)]" />
+            <div className="mt-3 h-7 w-32 rounded bg-[var(--fin-surface-2)]" />
+          </div>
+        ))}
+      </div>
+      <div className={`${CARTAO} h-72`} />
+    </div>
+  );
+}
+
+export default function FinanceiroProdutosPage() {
+  const [itens, setItens] = useState<EntradaItem[]>([]);
+  const [vendas, setVendas] = useState<EntradaVenda[]>([]);
+  const [mes, setMes] = useState('');
+  const [tipo, setTipo] = useState('');
+  const [busca, setBusca] = useState('');
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
+  const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
+
+  const carregar = useCallback(async () => {
+    setErro(null);
+    try {
+      const r = await fetch('/api/produtos-vendidos');
+      if (!r.ok) throw new Error((await r.json()).error || `Erro ${r.status}`);
+      const json = await r.json();
+      setItens(json.itens ?? []);
+      setVendas(json.vendas ?? []);
+      setAtualizadoEm(new Date());
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível carregar');
+    } finally {
+      setCarregando(false);
+    }
   }, []);
 
-  const filtered = grupos.filter(g => {
-    const q = search.toLowerCase();
-    return !q || (g.grp_id || '').toLowerCase().includes(q) || (g.origem_destino || '').toLowerCase().includes(q);
-  });
+  useEffect(() => { carregar(); }, [carregar]);
 
-  // Calculate summary for each grupo
-  const getGrupoSummary = (g: GrupoViagem) => {
-    try {
-      const produto = getProdutoGrupo(g);
-      // custos_por_apto has lines like 'custo total' or similar
-      const custoEntries = Object.values(produto.custos_por_apto) as Array<Record<string, number>>;
-      const custoSgl = custoEntries.reduce((sum, entry) => sum + (entry.sgl || 0), 0);
-      return {
-        custoTotal: custoSgl,
-        precoVenda: produto.precos.avista.sgl || 0,
-        hasFinanceiro: !!g.financeiro,
-        vendas: g.financeiro?.vendas?.length || 0,
-        recebimentos: g.financeiro?.parcelas?.filter(p => p.status === 'RECEBIDO').length || 0,
-        totalParcelas: g.financeiro?.parcelas?.length || 0,
-      };
-    } catch {
-      return { custoTotal: 0, precoVenda: 0, hasFinanceiro: false, vendas: 0, recebimentos: 0, totalParcelas: 0 };
-    }
-  };
+  const painel = useMemo(
+    () => montarPainelProdutos(itens, vendas, { mes: mes || undefined, tipo: tipo || undefined, busca }),
+    [itens, vendas, mes, tipo, busca],
+  );
 
-  if (loading) {
-    return <div className="flex items-center justify-center h-full text-[var(--t-text-secondary)]">Carregando...</div>;
-  }
+  /** Tipos existentes na base inteira, para o filtro não sumir sozinho
+   *  quando o próprio filtro esvazia a lista. */
+  const tiposDisponiveis = useMemo(
+    () => montarPainelProdutos(itens, vendas).por_tipo.map(t => t.tipo),
+    [itens, vendas],
+  );
+
+  const filtrando = Boolean(mes || tipo || busca.trim());
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto">
-      <header className="bg-[var(--t-header-bg)] text-[var(--t-header-text)] shadow-lg shrink-0">
-        <div className="px-6 py-5 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Financeiro <span className="text-[var(--t-accent)]">de Produtos</span></h1>
-            <p className="text-sm text-[var(--t-text-secondary)] mt-1">Gestão financeira dos seus produtos</p>
-          </div>
-          <div className="relative w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--t-text-secondary)]" />
-            <Input
-              className="pl-9 bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)] placeholder:text-[var(--t-text-secondary)]"
-              placeholder="Buscar produto..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
+    <div className="flex flex-col gap-[var(--fin-s-5)]">
+      <PageHeader
+        titulo="Financeiro por produto"
+        subtitulo="Produtos vendidos no CRM que chegaram ao financeiro"
+        acoesSecundarias={[{ rotulo: 'Vendas fechadas', href: '/vendas' }]}
+        atualizadoEm={atualizadoEm}
+        onRecarregar={carregar}
+      />
+
+      <DataState
+        estado={carregando ? 'carregando' : erro ? 'erro' : 'ok'}
+        erro={erro ? { mensagem: erro, onTentarDeNovo: () => { carregar(); } } : null}
+        esqueleto={<Esqueleto />}
+      >
+        <div className="flex flex-wrap items-center gap-[var(--fin-s-2)]">
+          <select className={CAMPO} value={mes} onChange={e => setMes(e.target.value)} aria-label="Mês da venda">
+            <option value="">Todos os meses</option>
+            {ultimosMeses().map(m => <option key={m} value={m}>{rotuloMes(m)}</option>)}
+          </select>
+          <select className={CAMPO} value={tipo} onChange={e => setTipo(e.target.value)} aria-label="Tipo de produto">
+            <option value="">Todos os tipos</option>
+            {tiposDisponiveis.map(t => <option key={t} value={t}>{rotulo(t)}</option>)}
+          </select>
+          <input
+            className={`${CAMPO} min-w-[14rem] flex-1`}
+            placeholder="Buscar produto, fornecedor, cliente ou venda"
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
+            aria-label="Buscar"
+          />
+          {filtrando && (
+            <span className="fin-t-caption text-[var(--fin-text-3)]">
+              {painel.quantidade} {painel.quantidade === 1 ? 'produto' : 'produtos'} no filtro
+            </span>
+          )}
+        </div>
+
+        <div className="grid gap-[var(--fin-s-3)] sm:grid-cols-2 xl:grid-cols-4">
+          <MetricCard
+            rotulo="Vendido"
+            valor={painel.total_venda}
+            estado="ok"
+            emphasis="destaque"
+            contexto={`em ${painel.quantidade} ${painel.quantidade === 1 ? 'produto' : 'produtos'}${mes ? ` de ${rotuloMes(mes)}` : ''}`}
+          />
+          <MetricCard
+            rotulo="Custo dos fornecedores"
+            valor={painel.total_custo}
+            estado="ok"
+            contexto={`${painel.por_tipo.length} ${painel.por_tipo.length === 1 ? 'tipo de produto' : 'tipos de produto'}`}
+          />
+          <MetricCard
+            rotulo="Margem"
+            valor={painel.total_margem}
+            estado="ok"
+            tone={painel.total_margem >= 0 ? 'positivo' : 'negativo'}
+            contexto={`${painel.margem_pct.toFixed(1)}% do que foi vendido`}
+          />
+          <MetricCard
+            rotulo="Ticket médio"
+            valor={painel.ticket_medio}
+            estado="ok"
+            contexto="por produto vendido, não por venda"
+          />
+        </div>
+
+        {painel.quantidade === 0 ? (
+          <div className={`${CARTAO} p-[var(--fin-s-5)]`}>
+            <EmptyLesson
+              motivo={filtrando ? 'sem-resultado' : 'sem-dado'}
+              titulo={filtrando ? 'Nenhum produto com esse filtro' : 'Nenhum produto vendido ainda'}
+              oQueE="Aqui aparecem os produtos vendidos no CRM que já chegaram ao financeiro, com custo do fornecedor e margem."
+              comoComeca={filtrando ? undefined : [
+                'Feche uma venda no CRM com os produtos dentro',
+                'A venda chega aqui e gera as contas',
+                'Os produtos dela aparecem nesta tela',
+              ]}
+              acao={filtrando
+                ? { rotulo: 'Limpar filtros', onClick: () => { setMes(''); setTipo(''); setBusca(''); } }
+                : { rotulo: 'Ver vendas fechadas', href: '/vendas' }}
             />
           </div>
-        </div>
-      </header>
-
-      <main className="flex-1 overflow-y-auto p-6">
-        {filtered.length === 0 ? (
-          <div className="text-center py-20">
-            <Package className="w-16 h-16 mx-auto text-[var(--t-text-secondary)] mb-4" />
-            <h2 className="text-xl font-semibold text-[var(--t-text-muted)]">
-              {grupos.length === 0 ? 'Nenhum produto criado' : 'Nenhum produto encontrado'}
-            </h2>
-            <p className="text-[var(--t-text-secondary)] mt-2">
-              {grupos.length === 0
-                ? 'Crie um produto primeiro'
-                : 'Tente outro termo de busca'}
-            </p>
-            {grupos.length === 0 && (
-              <Link href="/grupos">
-                <Button className="mt-4 bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)]">
-                  Ir para Produtos
-                </Button>
-              </Link>
-            )}
-          </div>
         ) : (
-          <div className="space-y-4">
-            {filtered.map(g => {
-              const summary = getGrupoSummary(g);
-              return (
-                <Card key={g.id} className="hover:shadow-lg transition-shadow border-l-4 border-l-[#d4a853]">
-                  <CardContent className="p-5">
-                    <div className="flex items-start justify-between">
-                      {/* Info */}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="font-bold text-lg text-[var(--t-text)]">{g.grp_id || 'Sem ID'}</h3>
-                          <Badge variant="outline" className="text-xs">
-                            {g.origem_destino || 'Sem destino'}
-                          </Badge>
-                          {summary.hasFinanceiro && (
-                            <Badge className="bg-green-100 text-green-700 text-xs">Financeiro ativo</Badge>
-                          )}
+          <>
+            <section className={`${CARTAO} overflow-hidden`}>
+              <header className="border-b border-[var(--fin-border)] px-[var(--fin-s-4)] py-[var(--fin-s-3)]">
+                <h2 className="fin-t-subhead text-[var(--fin-text)]">Por tipo de produto</h2>
+                <p className="fin-t-caption text-[var(--fin-text-3)]">
+                  O que sustenta a receita e onde a margem é fina
+                </p>
+              </header>
+              <ul className="divide-y divide-[var(--fin-border)]">
+                {painel.por_tipo.map(t => {
+                  const Icone = ICONE_TIPO[t.tipo] ?? Package;
+                  return (
+                    <li key={t.tipo} className="flex flex-wrap items-center gap-x-[var(--fin-s-3)] gap-y-[var(--fin-s-2)] px-[var(--fin-s-4)] py-[var(--fin-s-3)]">
+                      <Icone className="h-4 w-4 shrink-0 text-[var(--fin-text-3)]" aria-hidden />
+                      <div className="min-w-0 flex-1 basis-[8rem]">
+                        <p className="truncate fin-t-body-strong text-[var(--fin-text)]">{rotulo(t.tipo)}</p>
+                        <p className="fin-t-caption text-[var(--fin-text-3)]">
+                          {t.quantidade} {t.quantidade === 1 ? 'produto' : 'produtos'} · {t.share_receita_pct.toFixed(1)}% da receita
+                        </p>
+                      </div>
+                      <div className="w-full sm:w-52">
+                        <Meter
+                          pct={Math.max(0, t.margem_pct)}
+                          faixa={faixaMargem(t.margem_pct)}
+                          descricao={`margem ${t.margem_pct.toFixed(1)}%`}
+                          size="sm"
+                        />
+                      </div>
+                      <div className="ml-auto flex shrink-0 gap-[var(--fin-s-4)] text-right">
+                        <div>
+                          <p className="fin-t-caption text-[var(--fin-text-3)]">Vendido</p>
+                          <Money valor={t.venda} size="body" />
                         </div>
-                        <div className="flex gap-6 text-sm text-[var(--t-text-secondary)]">
-                          <span>Custo/pax: <strong className="text-[var(--t-text)]">{formatBRL(summary.custoTotal)}</strong></span>
-                          <span>Venda/pax: <strong className="text-[var(--t-accent)]">{formatBRL(summary.precoVenda)}</strong></span>
-                          <span>Vendas: <strong>{summary.vendas}</strong></span>
-                          <span>Recebido: <strong>{summary.recebimentos}/{summary.totalParcelas}</strong></span>
-                          <span className="text-xs text-[var(--t-text-secondary)]">Atualizado: {formatDate(g.updated_at?.split('T')[0])}</span>
+                        <div>
+                          <p className="fin-t-caption text-[var(--fin-text-3)]">Margem</p>
+                          <Money valor={t.margem} size="body" />
                         </div>
                       </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
 
-                      {/* Quick access tabs */}
-                      <div className="flex gap-1 ml-4">
-                        {FIN_TABS.map(({ tab, label, icon: Icon }) => (
-                          <Link key={tab} href={`/financeiro/${g.id}/${tab}`}>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8 px-2 text-xs hover:bg-[var(--t-accent)] hover:text-[var(--t-text)] hover:border-[var(--t-accent)]"
-                              title={label}
-                            >
-                              <Icon className="w-3.5 h-3.5" />
-                            </Button>
+            <section className={`${CARTAO} overflow-hidden`}>
+              <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--fin-border)] px-[var(--fin-s-4)] py-[var(--fin-s-3)]">
+                <h2 className="fin-t-subhead text-[var(--fin-text)]">Produtos vendidos</h2>
+                <p className="fin-t-caption text-[var(--fin-text-3)]">{painel.quantidade}</p>
+              </header>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b border-[var(--fin-border)] text-left">
+                      <th scope="col" className={CABECALHO}>Produto</th>
+                      <th scope="col" className={CABECALHO}>Venda</th>
+                      <th scope="col" className={`${CABECALHO} text-right`}>Custo</th>
+                      <th scope="col" className={`${CABECALHO} text-right`}>Vendido</th>
+                      <th scope="col" className={`${CABECALHO} text-right`}>Margem</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {painel.itens.map(i => (
+                      <tr key={i.item_id} className="border-b border-[var(--fin-border)] last:border-0">
+                        <td className="px-[var(--fin-s-4)] py-[var(--fin-s-3)]">
+                          <p className="fin-t-body-strong text-[var(--fin-text)]">
+                            {i.descricao || rotulo(i.tipo)}
+                          </p>
+                          <p className="fin-t-caption text-[var(--fin-text-3)]">
+                            {rotulo(i.tipo)}
+                            {i.fornecedor_nome && ` · ${i.fornecedor_nome}`}
+                            {i.moeda_original !== 'BRL' && ` · em ${i.moeda_original}`}
+                            {i.localizador && ` · ${i.localizador}`}
+                          </p>
+                        </td>
+                        <td className="px-[var(--fin-s-4)] py-[var(--fin-s-3)]">
+                          <Link
+                            href={`/vendas/${i.venda_id}`}
+                            className="fin-t-body text-[var(--fin-accent)] underline underline-offset-2"
+                          >
+                            {i.venda_numero}
                           </Link>
-                        ))}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+                          <p className="fin-t-caption text-[var(--fin-text-3)]">
+                            {i.cliente_nome}
+                            {i.vendedor_nome && ` · ${i.vendedor_nome}`}
+                          </p>
+                        </td>
+                        <td className="px-[var(--fin-s-4)] py-[var(--fin-s-3)] text-right">
+                          <Money valor={i.custo} size="body" />
+                        </td>
+                        <td className="px-[var(--fin-s-4)] py-[var(--fin-s-3)] text-right">
+                          <Money valor={i.venda} size="body" />
+                        </td>
+                        <td className="px-[var(--fin-s-4)] py-[var(--fin-s-3)] text-right">
+                          <Money valor={i.margem} size="body" />
+                          <p className={`fin-t-caption ${i.margem >= 0 ? 'text-[var(--fin-text-3)]' : 'text-[var(--fin-negative-text)]'}`}>
+                            {i.margem_pct.toFixed(1)}%
+                          </p>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </>
         )}
-      </main>
+      </DataState>
     </div>
   );
 }

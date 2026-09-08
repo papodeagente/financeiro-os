@@ -12,7 +12,7 @@ import type {
 import { nomeDoCliente } from '@/lib/cliente-nome';
 import {
   ShoppingCart, Users, AlertTriangle, ChevronRight,
-  FileText, Package, Receipt, CreditCard,
+  FileText, Receipt, CreditCard,
   Cake, MessageCircle,
   AlertCircle, CheckCircle2, Info,
 } from 'lucide-react';
@@ -1088,12 +1088,6 @@ export default function DashboardPage() {
                   descricao="Cadastrar quem vai viajar ou contratar"
                   icone={Users}
                   href="/pessoas/clientes"
-                />
-                <ActionCard
-                  rotulo="Novo produto"
-                  descricao="Montar um roteiro para vender"
-                  icone={Package}
-                  href="/grupos"
                 />
                 <ActionCard
                   rotulo="Registrar recebimento"
