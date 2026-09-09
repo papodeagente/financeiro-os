@@ -27,6 +27,7 @@ import { rotuloStatus } from '@/components/fin/StatusChip';
 
 import { criarColunas, semFornecedor } from './colunas';
 import { DialogBaixa } from './DialogBaixa';
+import type { Anexo } from '@/components/fin/AnexoComprovante';
 import { FormularioConta } from './FormularioConta';
 import { PainelCopiarMes } from './PainelCopiarMes';
 import { EMPTY_FORM, SEM_ERRO, type ErrosDoFormulario, type FiltroPeriodo, type FormState, type RecorrenciaPeriodo } from './tipos';
@@ -201,7 +202,11 @@ export default function ContasPagarPage() {
     dataPagamento: string;
     valorPago: number;
     observacao: string;
+    anexos: Anexo[];
   } | null>(null);
+  /** Trava o confirmar enquanto o comprovante sobe, para a baixa não ser
+   *  gravada sem o anexo que o usuário acabou de escolher. */
+  const [enviandoAnexo, setEnviandoAnexo] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -369,12 +374,16 @@ export default function ContasPagarPage() {
       // default = saldo ainda devido (não o valor cheio), pra baixa de conta PARCIAL
       valorPago: saldoDevedor(item),
       observacao: '',
+      // Sempre vazio: o que já estava anexado na conta continua lá, e o
+      // que se anexa aqui é o comprovante DESTA baixa.
+      anexos: [],
     });
+    setEnviandoAnexo(false);
   }
 
   async function confirmarPagamento() {
     if (!pagarModal || pagando) return;
-    const { item, dataPagamento, valorPago, observacao } = pagarModal;
+    const { item, dataPagamento, valorPago, observacao, anexos } = pagarModal;
     const pagoAgora = round2(num(valorPago));
     if (pagoAgora <= 0) { toast.error('Valor pago deve ser maior que zero'); return; }
 
@@ -387,12 +396,18 @@ export default function ContasPagarPage() {
 
     setPagando(true);
     try {
+      // Acumula: baixa parcial pode ter comprovante em cada parcela, e o
+      // anexo de uma não pode apagar o da outra.
+      const anexosFinais = [...(item.anexos ?? []), ...anexos];
       const updated: ContaPagar = {
         ...item,
         status: quitado ? 'PAGO' : 'PARCIAL',
         data_pagamento: dataPagamento,
         valor_pago: acumulado,
         observacoes: observacao ? `${item.observacoes ? item.observacoes + ' · ' : ''}${observacao}` : item.observacoes,
+        anexos: anexosFinais,
+        // `comprovante` guarda o mais recente, para quem lê um campo só.
+        comprovante: anexos.length > 0 ? anexos[anexos.length - 1].url : item.comprovante,
       };
       await updateEntity('contas-pagar', updated);
       setPagarModal(null);
@@ -844,6 +859,10 @@ export default function ContasPagarPage() {
         onDataPagamento={v => setPagarModal(m => (m ? { ...m, dataPagamento: v } : m))}
         onValorPago={v => setPagarModal(m => (m ? { ...m, valorPago: v } : m))}
         onObservacao={v => setPagarModal(m => (m ? { ...m, observacao: v } : m))}
+        anexos={pagarModal?.anexos ?? []}
+        onAnexos={v => setPagarModal(m => (m ? { ...m, anexos: v } : m))}
+        onEnviandoAnexo={setEnviandoAnexo}
+        enviandoAnexo={enviandoAnexo}
         valorDaConta={pagarModal ? valorBRLDaConta(pagarModal.item) : 0}
         jaPago={pagarModal ? num(pagarModal.item.valor_pago) : 0}
         saldoDevedor={pagarModal ? saldoDevedor(pagarModal.item) : 0}

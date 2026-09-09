@@ -5,6 +5,7 @@ import { ConfirmDialog } from '@/components/fin/ConfirmDialog';
 import { Field } from '@/components/fin/Field';
 import { Money } from '@/components/fin/Money';
 import { MoneyField } from '@/components/fin/MoneyField';
+import { AnexoComprovante, type Anexo } from '@/components/fin/AnexoComprovante';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
@@ -15,9 +16,16 @@ export type DialogBaixaProps = {
   dataPagamento: string;
   valorPago: number;
   observacao: string;
+  /** Comprovantes já anexados nesta baixa. */
+  anexos: Anexo[];
   onDataPagamento: (v: string) => void;
   onValorPago: (v: number) => void;
   onObservacao: (v: string) => void;
+  onAnexos: (v: Anexo[]) => void;
+  /** Enquanto um comprovante está subindo, confirmar fica bloqueado, para
+   *  a baixa não ser gravada sem o anexo que o usuário acabou de escolher. */
+  onEnviandoAnexo: (v: boolean) => void;
+  enviandoAnexo: boolean;
   /** Números prontos, calculados pelas funções auditadas da página. */
   valorDaConta: number;
   jaPago: number;
@@ -34,9 +42,13 @@ export function DialogBaixa({
   dataPagamento,
   valorPago,
   observacao,
+  anexos,
   onDataPagamento,
   onValorPago,
   onObservacao,
+  onAnexos,
+  onEnviandoAnexo,
+  enviandoAnexo,
   valorDaConta,
   jaPago,
   saldoDevedor,
@@ -100,6 +112,13 @@ export function DialogBaixa({
         )}
       </Field>
 
+      <AnexoComprovante
+        anexos={anexos}
+        onChange={onAnexos}
+        onEnviandoChange={onEnviandoAnexo}
+        desabilitado={pagando}
+      />
+
       {parcial ? (
         <p className="fin-t-caption text-[var(--fin-warning-text)]">
           Pagamento em parte: a conta continua aberta com saldo devedor de{' '}
@@ -123,8 +142,8 @@ export function DialogBaixa({
       oQueVaiAcontecer="Registra a saída no caixa e atualiza a situação da conta. Se o valor pago cobrir o saldo, a conta fica paga."
       detalhes={detalhes}
       previa={previa}
-      confirmarRotulo="Confirmar pagamento"
-      processando={pagando}
+      confirmarRotulo={enviandoAnexo ? 'Anexando comprovante...' : 'Confirmar pagamento'}
+      processando={pagando || enviandoAnexo}
       onConfirmar={onConfirmar}
     />
   );

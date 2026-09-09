@@ -1,6 +1,6 @@
 'use client';
 
-import { Pencil, Trash2 } from 'lucide-react';
+import { Paperclip, Pencil, Trash2 } from 'lucide-react';
 
 import type { ContaPagar } from '@/lib/crm-types';
 import type { FinColuna } from '@/components/fin/FinTable';
@@ -92,6 +92,25 @@ export function criarColunas(dep: DependenciasDasColunas): FinColuna<ContaPagar>
             </span>
             {i.origem === 'VENDA' || i.origem === 'GRUPO' ? (
               <StatusChip valor={i.origem} dominio="origem" />
+            ) : null}
+            {/* Comprovante anexado na baixa. Sem isto, o arquivo seria
+                enviado e nunca mais visto. */}
+            {(i.anexos ?? []).length > 0 ? (
+              <a
+                href={i.anexos[i.anexos.length - 1].url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1 fin-t-caption text-[var(--fin-accent)] underline underline-offset-2"
+                title={
+                  i.anexos.length === 1
+                    ? `Comprovante: ${i.anexos[0].nome}`
+                    : `${i.anexos.length} comprovantes. Abre o mais recente.`
+                }
+              >
+                <Paperclip className="h-3 w-3" aria-hidden />
+                {i.anexos.length === 1 ? 'Comprovante' : `${i.anexos.length} comprovantes`}
+              </a>
             ) : null}
             {i.is_custo_comercial ? (
               <span className="fin-t-caption text-[var(--fin-text-3)]">
