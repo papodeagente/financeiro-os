@@ -666,6 +666,51 @@ async function executarInitDB() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    -- ============================================================
+    -- FISCAL (NFS-e)
+    -- ============================================================
+
+    -- Configuracao fiscal do tenant. Uma linha por agencia (id fixo), no
+    -- mesmo formato de config_apis. Guarda o token do gateway, que NUNCA
+    -- volta pro navegador: a API devolve so os ultimos digitos.
+    CREATE TABLE IF NOT EXISTS config_fiscal (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL DEFAULT '',
+      data JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    -- Notas fiscais de servico emitidas. O arquivo .pfx do certificado NAO
+    -- fica no banco: ele e repassado ao gateway no upload e so a referencia
+    -- devolvida por ele e guardada (em config_fiscal.data->certificado).
+    CREATE TABLE IF NOT EXISTS notas_fiscais (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL DEFAULT '',
+      conta_receber_id TEXT NOT NULL DEFAULT '',
+      venda_id TEXT NOT NULL DEFAULT '',
+      cliente_id TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'RASCUNHO',
+      -- Identificador da nota no gateway, pra consultar e cancelar depois.
+      referencia_gateway TEXT NOT NULL DEFAULT '',
+      data JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_notas_fiscais_tenant
+      ON notas_fiscais(tenant_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_notas_fiscais_conta
+      ON notas_fiscais(tenant_id, conta_receber_id);
+
+    -- Trava anti-nota-duplicada: uma conta a receber so pode ter UMA nota
+    -- viva. Nota rejeitada ou cancelada libera a conta pra nova tentativa.
+    -- Parcial (WHERE) porque e exatamente isso que precisa ser garantido.
+    CREATE UNIQUE INDEX IF NOT EXISTS uniq_nota_por_conta_receber
+      ON notas_fiscais(tenant_id, conta_receber_id)
+      WHERE status IN ('RASCUNHO', 'PROCESSANDO', 'AUTORIZADA')
+        AND conta_receber_id <> '';
+
     -- Convites: links rastreaveis criados pelo super admin pra dar
     -- acesso por tempo definido (ex: "Alunos Clube de IA" = 365 dias).
     -- Codigo gerado vai pra URL /signup?convite=CODIGO. Ao usar, o

@@ -23,6 +23,7 @@ import { type PeriodoChave } from '@/components/fin/PeriodPicker';
 import { RecordSheet } from '@/components/fin/RecordSheet';
 import { StatusChip, rotuloStatus } from '@/components/fin/StatusChip';
 import { DialogBaixa } from './DialogBaixa';
+import { PainelNota } from './PainelNota';
 import { EMPTY_FORM, FormularioConta, type ErrosForm, type FormState } from './FormularioConta';
 
 /**
@@ -271,6 +272,12 @@ export default function ContasReceberPage() {
     setPeriodo('TUDO');
   }
 
+  // Nota fiscal da parcela. Só faz sentido depois que o dinheiro entrou: a
+  // nota acompanha o recebimento, não a promessa de pagamento.
+  const [notaAlvo, setNotaAlvo] = useState<ContaReceber | null>(null);
+  const recebeuAlgo = (i: ContaReceber) =>
+    i.status === 'RECEBIDO' || (i.status === 'PARCIAL' && num(i.valor_recebido) > 0);
+
   const colunas: FinColuna<ContaReceber>[] = [
     {
       id: 'cliente',
@@ -350,7 +357,7 @@ export default function ContasReceberPage() {
       id: 'acoes',
       cabecalho: 'Ações',
       tipo: 'acoes',
-      minWidth: 196,
+      minWidth: 300,
       render: i => (
         <>
           {(i.status === 'PENDENTE' || i.status === 'ATRASADO' || i.status === 'PARCIAL') && (
@@ -361,6 +368,16 @@ export default function ContasReceberPage() {
               className={ACAO_LINHA}
             >
               Receber
+            </Button>
+          )}
+          {recebeuAlgo(i) && (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setNotaAlvo(i)}
+              className={ACAO_LINHA}
+            >
+              Emitir nota
             </Button>
           )}
           <Button
@@ -543,6 +560,13 @@ export default function ContasReceberPage() {
       >
         <FormularioConta form={form} erros={errosForm} onChange={atualizarForm} />
       </RecordSheet>
+
+      <PainelNota
+        conta={notaAlvo}
+        aberto={Boolean(notaAlvo)}
+        onFechar={() => setNotaAlvo(null)}
+        onEmitida={() => { load(); }}
+      />
 
       <DialogBaixa
         aberto={baixaAlvo !== null}

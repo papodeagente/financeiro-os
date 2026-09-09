@@ -14,7 +14,7 @@ import {
   GitBranch as MindIcon,
   Sparkles, Users, ClipboardList,
   PanelLeftClose, PanelLeftOpen,
-  Eraser, LifeBuoy,
+  Eraser, LifeBuoy, FileText,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -68,6 +68,7 @@ const FINANCEIRO_MENU: SidebarSection[] = [
       { key: 'dre', label: 'DRE', icon: FileSpreadsheet, href: '/financeiro-ag/dre' },
       { key: 'receber', label: 'Contas a receber', icon: Receipt, href: '/financeiro-ag/receber' },
       { key: 'pagar', label: 'Contas a pagar', icon: CreditCard, href: '/financeiro-ag/pagar' },
+      { key: 'notas-fiscais', label: 'Notas fiscais', icon: FileText, href: '/financeiro-ag/notas' },
       { key: 'conciliacao', label: 'Conciliação', icon: FileSpreadsheet, href: '/financeiro-ag/conciliacao' },
       { key: 'transferencias', label: 'Transferências', icon: ArrowRightLeft, href: '/financeiro-ag/transferencias' },
       { key: 'plano-contas', label: 'Plano de contas', icon: BookOpen, href: '/financeiro-ag/plano-contas' },
@@ -106,6 +107,7 @@ const CONFIGURACOES_MENU: SidebarSection[] = [
     title: 'Geral',
     items: [
       { key: 'cfg-agencia', label: 'Dados da agência', icon: Building2, href: '/config/agencia' },
+      { key: 'cfg-fiscal', label: 'Nota fiscal', icon: FileText, href: '/config/fiscal' },
       { key: 'cfg-usuarios', label: 'Usuários', icon: Users, href: '/config/usuarios' },
     ],
   },
