@@ -13,6 +13,7 @@
  * ganho nenhum: quem assina a nota é o gateway.
  */
 
+import { EmissorAceleraAPI } from './nfse-acelera';
 import type {
   AmbienteFiscal,
   CertificadoDigital,
@@ -53,8 +54,32 @@ export interface DadosEmitente {
   regime_tributario: string;
 }
 
+/**
+ * O que cada emissor aceita. Existe porque emissores diferentes recebem
+ * campos diferentes, e mandar um valor que o emissor ignora sairia como uma
+ * nota com número errado — sem ninguém perceber.
+ *
+ * O padrão nacional (DPS), por exemplo, não recebe dedução nem alíquota por
+ * nota: quem calcula o ISS é a prefeitura.
+ */
+export interface CapacidadesEmissor {
+  /** Aceita valor de dedução por nota. Sem isto, intermediação só sai como comissão. */
+  deducoes: boolean;
+  /** Aceita alíquota de ISS por nota. Quando false, o imposto é calculado na prefeitura. */
+  aliquota_por_nota: boolean;
+  /** Aceita o bloco de terceiro intermediador. */
+  intermediario: boolean;
+}
+
+/** O que o próprio emissor diz que ainda falta para a agência poder emitir. */
+export interface PendenciasDoEmissor {
+  pronto: boolean;
+  itens: string[];
+}
+
 export interface EmissorNFSe {
   readonly nome: string;
+  readonly capacidades: CapacidadesEmissor;
   /** Sobe o certificado A1 e devolve os metadados que o gateway reconheceu. */
   enviarCertificado(entrada: {
     arquivo: Uint8Array;
@@ -197,6 +222,11 @@ function dataISO(v: string): string {
 
 export class EmissorPlugNotas implements EmissorNFSe {
   readonly nome = 'PlugNotas';
+  readonly capacidades: CapacidadesEmissor = {
+    deducoes: true,
+    aliquota_por_nota: true,
+    intermediario: true,
+  };
 
   private base(config: ConfigFiscal): string {
     return PLUGNOTAS_URLS[config.ambiente] ?? PLUGNOTAS_URLS.HOMOLOGACAO;
@@ -421,6 +451,13 @@ export class EmissorPlugNotas implements EmissorNFSe {
  */
 export class EmissorSimulado implements EmissorNFSe {
   readonly nome = 'Simulado';
+  // O simulado aceita tudo de propósito: ele existe para a agência ver os
+  // números de qualquer combinação antes de escolher o emissor de verdade.
+  readonly capacidades: CapacidadesEmissor = {
+    deducoes: true,
+    aliquota_por_nota: true,
+    intermediario: true,
+  };
 
   async enviarCertificado(entrada: {
     arquivo: Uint8Array;
@@ -490,6 +527,7 @@ export function emissorDaConfig(config: ConfigFiscal): EmissorNFSe {
     }
     return new EmissorSimulado();
   }
+  if (config.provedor === 'aceleraapi') return new EmissorAceleraAPI();
   if (config.provedor === 'plugnotas') return new EmissorPlugNotas();
   throw new ErroFiscal('Nenhum emissor de nota configurado em Configurações › Fiscal.');
 }

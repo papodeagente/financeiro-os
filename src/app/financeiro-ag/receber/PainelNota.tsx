@@ -32,6 +32,8 @@ interface Previa {
   pendencias: string[];
   avisos: string[];
   erros: string[];
+  iss_e_estimativa: boolean;
+  emissor_aceita_deducoes: boolean;
   regime: RegimeNota;
   forma_base: FormaBaseIntermediacao;
   valor_recebido: number;
@@ -272,11 +274,16 @@ export function PainelNota({
                   onChange={e => setFormaBase(e.target.value as FormaBaseIntermediacao)}
                 >
                   <option value="VALOR_COMISSAO">Nota do valor da comissão</option>
-                  <option value="TOTAL_COM_DEDUCAO">Valor cheio com o repasse como dedução</option>
+                  {/* O padrão nacional não tem campo de dedução. Esconder a
+                      opção evita escolher um formato que o emissor recusa. */}
+                  {previa.emissor_aceita_deducoes ? (
+                    <option value="TOTAL_COM_DEDUCAO">Valor cheio com o repasse como dedução</option>
+                  ) : null}
                 </select>
                 <p className="fin-t-caption text-[var(--fin-text-3)]">
-                  Os dois caminhos dão o mesmo imposto. Municípios diferentes exigem formatos
-                  diferentes: confirme com a contabilidade qual o seu aceita.
+                  {previa.emissor_aceita_deducoes
+                    ? 'Os dois caminhos dão o mesmo imposto. Municípios diferentes exigem formatos diferentes: confirme com a contabilidade qual o seu aceita.'
+                    : 'Este emissor usa o padrão nacional, que não recebe dedução por nota: a nota sai com o valor da comissão.'}
                 </p>
               </div>
             ) : null}
@@ -288,7 +295,20 @@ export function PainelNota({
                 <Linha rotulo="Deduções (repasse a fornecedores)" valor={previa.valor_deducoes} />
               ) : null}
               <Linha rotulo="Base de cálculo do ISS" valor={previa.base_calculo} />
-              <Linha rotulo={`ISS (${previa.aliquota_iss}%)`} valor={previa.valor_iss} />
+              <Linha
+                rotulo={
+                  previa.iss_e_estimativa
+                    ? `ISS estimado (${previa.aliquota_iss}%)`
+                    : `ISS (${previa.aliquota_iss}%)`
+                }
+                valor={previa.valor_iss}
+              />
+              {previa.iss_e_estimativa ? (
+                <span className="fin-t-caption text-[var(--fin-text-3)]">
+                  Quem calcula o ISS é a prefeitura, a partir do código de tributação. O valor
+                  acima é estimativa para conferência.
+                </span>
+              ) : null}
               <div className="mt-1 border-t border-[var(--fin-border)] pt-1.5">
                 <Linha rotulo="A agência recebe" valor={previa.valor_liquido} forte />
               </div>

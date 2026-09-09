@@ -12,6 +12,8 @@ import { hojeISO, num, round2 } from './money';
 import { nomeDoCliente, documentoDoCliente } from './cliente-nome';
 import {
   calcularNota,
+  conflitosComEmissor,
+  issEhEstimativa,
   montarDiscriminacao,
   pendenciasParaEmitir,
   regimeSugerido,
@@ -52,6 +54,18 @@ export function configFiscalPadrao(): ConfigFiscal {
     forma_base_intermediacao: 'VALOR_COMISSAO',
     intermediario_padrao: null,
     serie_rps: '1',
+    // Padrão nacional. Município e código de tributação ficam vazios de
+    // propósito: chutar um código fiscal é pior do que exigir que a agência
+    // confirme o dela com a contabilidade.
+    cod_municipio_ibge: '',
+    cod_tributacao_nacional: '',
+    simples_nacional: 1,
+    regime_apuracao: '',
+    regime_especial: '0',
+    trib_issqn: '1',
+    tipo_retencao_issqn: '1',
+    ultimo_numero_dps: '',
+    info_complementar_padrao: '',
     discriminacao_padrao:
       'Agenciamento de viagem — {cliente} — venda {venda} {parcela}',
     emissao_automatica: false,
@@ -210,6 +224,10 @@ export interface PreviaDaNota {
   pendencias: string[];
   avisos: string[];
   erros: string[];
+  /** true quando quem calcula o ISS é a prefeitura, não a alíquota daqui. */
+  iss_e_estimativa: boolean;
+  /** Formatos que o emissor configurado não aceita. */
+  emissor_aceita_deducoes: boolean;
   regime: RegimeNota;
   forma_base: FormaBaseIntermediacao;
   valor_recebido: number;
@@ -282,6 +300,25 @@ export async function montarPrevia(
   });
 
   const tomador = tomadorDoCliente(ctx.cliente);
+
+  // As capacidades do emissor entram no cálculo como ERRO, não como aviso:
+  // uma nota emitida num formato que o emissor não recebe sai com valor
+  // diferente do que foi conferido na tela.
+  let capacidades = { deducoes: true, aliquota_por_nota: true, intermediario: true };
+  try {
+    capacidades = emissorDaConfig(config).capacidades;
+  } catch {
+    // Sem emissor configurado a pendência abaixo já explica o que falta.
+  }
+  const conflitos = conflitosComEmissor({
+    regime,
+    forma_base: formaBase,
+    tem_intermediario: Boolean(
+      (opcoes.intermediario ?? config.intermediario_padrao)?.cpf_cnpj,
+    ),
+    capacidades,
+  });
+
   const pendencias = pendenciasParaEmitir({
     provedor: config.provedor,
     temCertificado: Boolean(config.certificado?.referencia_gateway),
@@ -307,11 +344,21 @@ export async function montarPrevia(
       repasse: calculo.repasse_da_parcela.toFixed(2),
     });
 
+  // Conflito de formato impede; conflito de campo ignorado é só aviso.
+  const bloqueios = conflitos.filter(c => c.includes('Troque para'));
+  const ressalvas = conflitos.filter(c => !bloqueios.includes(c));
+
   return {
-    pode_emitir: pendencias.length === 0 && calculo.erros.length === 0 && !notaExistente,
+    pode_emitir:
+      pendencias.length === 0
+      && calculo.erros.length === 0
+      && bloqueios.length === 0
+      && !notaExistente,
     pendencias,
-    avisos: calculo.avisos,
-    erros: calculo.erros,
+    avisos: [...calculo.avisos, ...ressalvas],
+    erros: [...calculo.erros, ...bloqueios],
+    iss_e_estimativa: issEhEstimativa(capacidades),
+    emissor_aceita_deducoes: capacidades.deducoes,
     regime,
     forma_base: formaBase,
     valor_recebido: valorRecebido,

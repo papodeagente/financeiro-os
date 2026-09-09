@@ -54,6 +54,12 @@ export default function ConfigFiscalPage() {
   const [enviandoCert, setEnviandoCert] = useState(false);
   const [senhaCert, setSenhaCert] = useState('');
   const arquivoRef = useRef<HTMLInputElement>(null);
+  // O que o próprio emissor diz que falta. Vem de lá porque é lá que a
+  // emissão é recusada: repetir a validação aqui só criaria divergência.
+  const [pendencias, setPendencias] = useState<{ pronto: boolean; itens: string[] } | null>(null);
+  const [sincronizando, setSincronizando] = useState(false);
+  const [municipio, setMunicipio] = useState<{ emite: boolean; detalhe: string } | null>(null);
+  const [conferindoMunicipio, setConferindoMunicipio] = useState(false);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -117,6 +123,36 @@ export default function ConfigFiscalPage() {
     }
   }
 
+  /** Empurra o cadastro do prestador e lê as pendências que sobraram. */
+  async function sincronizarPrestador() {
+    if (sincronizando) return;
+    setSincronizando(true);
+    try {
+      const res = await fetch('/api/fiscal/prestador', { method: 'POST' });
+      const corpo = await res.json();
+      if (!res.ok) { toast.error('Não foi possível sincronizar', corpo?.error || ''); return; }
+      setPendencias(corpo as { pronto: boolean; itens: string[] });
+      if (corpo.pronto) toast.success('Prestador configurado no emissor');
+      else toast.error('O emissor ainda aponta pendências', '');
+    } finally {
+      setSincronizando(false);
+    }
+  }
+
+  async function conferirMunicipio() {
+    const ibge = (config?.cod_municipio_ibge ?? '').replace(/\D+/g, '');
+    if (ibge.length !== 7) { toast.error('Informe o código IBGE com 7 dígitos'); return; }
+    setConferindoMunicipio(true);
+    try {
+      const res = await fetch(`/api/fiscal/municipio/${ibge}`);
+      const corpo = await res.json();
+      if (!res.ok) { toast.error('Não foi possível consultar', corpo?.error || ''); return; }
+      setMunicipio(corpo as { emite: boolean; detalhe: string });
+    } finally {
+      setConferindoMunicipio(false);
+    }
+  }
+
   async function removerCertificado() {
     const res = await fetch('/api/fiscal/certificado', { method: 'DELETE' });
     const corpo = await res.json();
@@ -157,6 +193,7 @@ export default function ConfigFiscalPage() {
                     onChange={e => mudar('provedor', e.target.value as ConfigFiscal['provedor'])}
                   >
                     <option value="">Não configurado</option>
+                    <option value="aceleraapi">AceleraAPI (padrão nacional)</option>
                     <option value="plugnotas">PlugNotas</option>
                     <option value="simulado">Simulado (não emite de verdade)</option>
                   </select>
@@ -271,8 +308,9 @@ export default function ConfigFiscalPage() {
                 </div>
               </div>
               <p className="fin-t-caption text-[var(--fin-text-3)]">
-                Os dois formatos dão o mesmo imposto; o que muda é o que aparece no documento.
-                Confirme com a contabilidade qual o seu município aceita.
+                {config.provedor === 'aceleraapi'
+                  ? 'O padrão nacional não tem campo de dedução, então só o formato "nota do valor da comissão" é emitido. O outro fica bloqueado na hora de emitir, em vez de sair com valor diferente do configurado.'
+                  : 'Os dois formatos dão o mesmo imposto; o que muda é o que aparece no documento. Confirme com a contabilidade qual o seu município aceita.'}
               </p>
 
               <div className="flex flex-col gap-2">
@@ -316,6 +354,100 @@ export default function ConfigFiscalPage() {
               </div>
             </Secao>
 
+            {config.provedor === 'aceleraapi' ? (
+              <Secao
+                titulo="Prestador no padrão nacional"
+                descricao="A nota nacional não leva o prestador em cada emissão: ele é cadastrado uma vez no emissor. Preencha, salve e sincronize — as pendências abaixo vêm do próprio emissor, que é quem recusa a nota."
+              >
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="ibge">Código IBGE do município (7 dígitos)</Label>
+                    <div className="flex gap-2">
+                      <Input id="ibge" value={config.cod_municipio_ibge}
+                        onChange={e => mudar('cod_municipio_ibge', e.target.value)} />
+                      <Button type="button" variant="outline"
+                        onClick={() => { void conferirMunicipio(); }}
+                        disabled={conferindoMunicipio}
+                      >
+                        {conferindoMunicipio ? 'Conferindo…' : 'A cidade emite?'}
+                      </Button>
+                    </div>
+                    {municipio ? (
+                      <span className={`fin-t-caption ${municipio.emite ? 'text-[var(--fin-positive)]' : 'text-[var(--fin-negative)]'}`}>
+                        {municipio.emite
+                          ? `${municipio.detalhe || 'O município'} já emite pelo padrão nacional.`
+                          : `${municipio.detalhe || 'Este município'} ainda não emite pelo padrão nacional. A nota vai ser recusada.`}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="codtribnac">Código de tributação nacional (6 dígitos)</Label>
+                    <Input id="codtribnac" value={config.cod_tributacao_nacional}
+                      onChange={e => mudar('cod_tributacao_nacional', e.target.value)} />
+                    <span className="fin-t-caption text-[var(--fin-text-3)]">
+                      Derivado da LC 116. Para agência de viagens sai do item 9.02 — confirme o
+                      desdobramento exato com a contabilidade.
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="simples">Simples Nacional</Label>
+                    <select id="simples" className={SELECT} value={config.simples_nacional}
+                      onChange={e => mudar('simples_nacional', Number(e.target.value) as 1 | 2 | 3)}
+                    >
+                      <option value={1}>Não optante</option>
+                      <option value={2}>MEI</option>
+                      <option value={3}>ME / EPP</option>
+                    </select>
+                  </div>
+                  {config.simples_nacional >= 2 ? (
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="apuracao">Regime de apuração</Label>
+                      <Input id="apuracao" value={config.regime_apuracao}
+                        onChange={e => mudar('regime_apuracao', e.target.value)} />
+                    </div>
+                  ) : null}
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="ultdps">Último DPS emitido em outro sistema</Label>
+                    <Input id="ultdps" value={config.ultimo_numero_dps}
+                      onChange={e => mudar('ultimo_numero_dps', e.target.value)} />
+                    <span className="fin-t-caption text-[var(--fin-text-3)]">
+                      Só se a agência já emitia fora daqui, para a numeração continuar de onde parou.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button type="button" onClick={() => { void sincronizarPrestador(); }}
+                    disabled={sincronizando}
+                  >
+                    {sincronizando ? 'Sincronizando…' : 'Sincronizar prestador com o emissor'}
+                  </Button>
+                  <span className="fin-t-caption text-[var(--fin-text-3)]">
+                    Salve antes de sincronizar.
+                  </span>
+                </div>
+
+                {pendencias ? (
+                  pendencias.pronto ? (
+                    <p className="fin-t-body text-[var(--fin-positive)]">
+                      O emissor está pronto para emitir.
+                    </p>
+                  ) : (
+                    <div className="flex flex-col gap-1">
+                      <span className="fin-t-body-strong text-[var(--fin-negative)]">
+                        O emissor ainda não emite:
+                      </span>
+                      <ul className="list-disc pl-5">
+                        {pendencias.itens.map(i => (
+                          <li key={i} className="fin-t-caption text-[var(--fin-text-2)]">{i}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )
+                ) : null}
+              </Secao>
+            ) : null}
+
             <Secao
               titulo="Enquadramento do serviço"
               descricao="Os códigos que a prefeitura exige. Agência de viagens costuma usar item 9.02 da lista da LC 116 e CNAE 7911-2/00, mas confirme com a contabilidade."
@@ -337,10 +469,20 @@ export default function ConfigFiscalPage() {
                     onChange={e => mudar('codigo_tributacao_municipio', e.target.value)} />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="aliquota">Alíquota de ISS (%)</Label>
+                  <Label htmlFor="aliquota">
+                    {config.provedor === 'aceleraapi'
+                      ? 'Alíquota de ISS (%) — só para estimar'
+                      : 'Alíquota de ISS (%)'}
+                  </Label>
                   <Input id="aliquota" type="number" step="0.01" min="0" max="100"
                     value={config.aliquota_iss}
                     onChange={e => mudar('aliquota_iss', Number(e.target.value))} />
+                  {config.provedor === 'aceleraapi' ? (
+                    <span className="fin-t-caption text-[var(--fin-text-3)]">
+                      No padrão nacional quem calcula o ISS é a prefeitura, a partir do código de
+                      tributação. Este número só serve para mostrar a estimativa antes de emitir.
+                    </span>
+                  ) : null}
                 </div>
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="natureza">Natureza da operação</Label>

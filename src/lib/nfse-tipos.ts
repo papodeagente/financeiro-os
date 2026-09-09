@@ -72,8 +72,8 @@ export interface CertificadoDigital {
 
 export interface ConfigFiscal {
   id: string;
-  /** Gateway de emissão. Hoje só 'plugnotas'; 'simulado' não transmite nada. */
-  provedor: 'plugnotas' | 'simulado' | '';
+  /** Emissor de nota. 'simulado' percorre o fluxo sem transmitir nada. */
+  provedor: 'aceleraapi' | 'plugnotas' | 'simulado' | '';
   ambiente: AmbienteFiscal;
   /**
    * Token do gateway. NUNCA volta para o navegador: a API devolve só os
@@ -106,6 +106,29 @@ export interface ConfigFiscal {
 
   // ---- Documento ----
   serie_rps: string;
+
+  // ---- Padrão nacional (DPS/SEFIN Nacional) ----
+  // A nota nacional não leva o prestador em cada emissão: ele é configurado
+  // UMA vez no emissor, e é de lá que saem município, código de tributação e
+  // regime. Por isso estes campos vivem na configuração, não na nota.
+  /** Código IBGE do município do prestador, 7 dígitos. */
+  cod_municipio_ibge: string;
+  /** Código de tributação nacional, 6 dígitos (derivado da LC 116). */
+  cod_tributacao_nacional: string;
+  /** 1 = não optante, 2 = MEI, 3 = ME/EPP. */
+  simples_nacional: 1 | 2 | 3;
+  /** Exigido quando simples_nacional é 2 ou 3. */
+  regime_apuracao: string;
+  /** 0 = nenhum. */
+  regime_especial: string;
+  /** 1 = tributável. */
+  trib_issqn: string;
+  /** 1 = não retido. */
+  tipo_retencao_issqn: string;
+  /** Último DPS emitido em outro sistema, para a numeração continuar de lá. */
+  ultimo_numero_dps: string;
+  /** Texto fixo somado às informações complementares da nota. */
+  info_complementar_padrao: string;
   /**
    * Texto da discriminação. Aceita {cliente}, {venda}, {parcela},
    * {descricao} e {repasse}.

@@ -10,10 +10,13 @@
  */
 import {
   calcularNota,
+  conflitosComEmissor,
+  issEhEstimativa,
   regimeSugerido,
   montarDiscriminacao,
   pendenciasParaEmitir,
 } from '../src/lib/nfse-calculo.ts';
+import { codigoInterno, montarCorpoEmissao } from '../src/lib/nfse-acelera.ts';
 
 let falhas = 0;
 let total = 0;
@@ -258,6 +261,142 @@ const configOk = {
 {
   const p = pendenciasParaEmitir({ ...configOk, provedor: '', item_lista_servico: '', cnae: '' });
   eq(p.length, 3, 'as pendências se acumulam, não param na primeira');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+console.log('--- o que o emissor aceita ---');
+const NACIONAL = { deducoes: false, aliquota_por_nota: false, intermediario: false };
+const COMPLETO = { deducoes: true, aliquota_por_nota: true, intermediario: true };
+{
+  // O padrão nacional não tem campo de dedução: o formato de valor cheio
+  // precisa ser BLOQUEADO, nunca convertido em silêncio.
+  const c = conflitosComEmissor({
+    regime: 'INTERMEDIACAO',
+    forma_base: 'TOTAL_COM_DEDUCAO',
+    tem_intermediario: false,
+    capacidades: NACIONAL,
+  });
+  eq(c.length, 1, 'valor cheio com dedução é conflito no padrão nacional');
+  eq(c[0].includes('Troque para'), true, 'e a mensagem diz o que fazer');
+}
+{
+  const c = conflitosComEmissor({
+    regime: 'INTERMEDIACAO',
+    forma_base: 'VALOR_COMISSAO',
+    tem_intermediario: false,
+    capacidades: NACIONAL,
+  });
+  eq(c, [], 'nota da comissão passa no padrão nacional');
+}
+{
+  const c = conflitosComEmissor({
+    regime: 'PRESTACAO_DIRETA',
+    forma_base: 'TOTAL_COM_DEDUCAO',
+    tem_intermediario: false,
+    capacidades: NACIONAL,
+  });
+  eq(c, [], 'prestação direta não usa dedução, então não conflita');
+}
+{
+  const c = conflitosComEmissor({
+    regime: 'INTERMEDIACAO',
+    forma_base: 'TOTAL_COM_DEDUCAO',
+    tem_intermediario: false,
+    capacidades: COMPLETO,
+  });
+  eq(c, [], 'emissor com dedução aceita os dois formatos');
+}
+{
+  const c = conflitosComEmissor({
+    regime: 'INTERMEDIACAO',
+    forma_base: 'VALOR_COMISSAO',
+    tem_intermediario: true,
+    capacidades: NACIONAL,
+  });
+  eq(c.length, 1, 'intermediário sem suporte vira aviso');
+  eq(c[0].includes('Troque para'), false, 'mas não bloqueia a emissão');
+}
+{
+  eq(issEhEstimativa(NACIONAL), true, 'no padrão nacional o ISS da tela é estimativa');
+  eq(issEhEstimativa(COMPLETO), false, 'com alíquota por nota, o número é o que vai');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+console.log('--- corpo da emissão na AceleraAPI ---');
+const notaBase = {
+  id: 'nota-abc-123',
+  discriminacao: 'Agenciamento de viagem — Maria Silva',
+  valor_servicos: 3500,
+  valor_recebido: 20000,
+  regime: 'INTERMEDIACAO' as const,
+  emitida_em: '2026-09-09T12:00:00.000Z',
+  tomador: {
+    cpf_cnpj: '111.222.333-44',
+    razao_social: 'Maria Silva',
+    email: 'maria@exemplo.com',
+    inscricao_municipal: '',
+    endereco: {
+      cep: '01310-100', logradouro: 'Av. Paulista', numero: '1000',
+      complemento: '', bairro: 'Bela Vista', cidade: 'São Paulo', estado: 'SP',
+    },
+  },
+};
+const configBase = {
+  cod_tributacao_nacional: '090201',
+  cod_municipio_ibge: '3550308',
+  info_complementar_padrao: '',
+};
+{
+  const c = montarCorpoEmissao({
+    nota: notaBase as never,
+    config: configBase as never,
+  });
+  eq(c.valor_servico, 3500, 'o valor da nota é a comissão, não a venda');
+  eq(c.tomador_documento, '11122233344', 'documento vai só com dígitos');
+  eq(c.tomador_cep, '01310100', 'CEP também');
+  eq(c.cod_tributacao_nacional, '090201', 'código de tributação nacional');
+  eq(c.cod_municipio_prestacao, '3550308', 'município da prestação');
+  eq(c.data_competencia, '2026-09-09', 'competência sai da data de emissão');
+  eq(
+    typeof c.info_complementar === 'string' && (c.info_complementar as string).includes('20000.00'),
+    true,
+    'o valor intermediado fica registrado no complemento',
+  );
+  eq('aliquota' in c, false, 'não manda alíquota: quem calcula é a prefeitura');
+  eq('valor_deducoes' in c, false, 'não manda dedução: o padrão nacional não tem o campo');
+}
+{
+  // Campo vazio não pode virar string vazia no corpo: a API valida formato.
+  const semEndereco = {
+    ...notaBase,
+    tomador: { ...notaBase.tomador, email: '', endereco: {
+      cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', estado: '',
+    } },
+  };
+  const c = montarCorpoEmissao({ nota: semEndereco as never, config: configBase as never });
+  eq('tomador_email' in c, false, 'e-mail vazio não vai no corpo');
+  eq('tomador_cep' in c, false, 'CEP vazio também não');
+  eq('tomador_logradouro' in c, false, 'nem o logradouro');
+  eq(c.tomador_nome, 'Maria Silva', 'o obrigatório continua indo');
+}
+{
+  // cod_interno é a trava anti-duplicata: no máximo 20 alfanuméricos, e
+  // estável para a mesma nota.
+  eq(codigoInterno('nota-abc-123'), 'notaabc123', 'tira o que não é alfanumérico');
+  eq(codigoInterno('a'.repeat(40)).length, 20, 'corta em 20 caracteres');
+  eq(codigoInterno('a'.repeat(40)), codigoInterno('a'.repeat(40)), 'é estável');
+  eq(codigoInterno('---'), 'NOTA', 'id sem caractere válido ainda gera código');
+}
+{
+  // Prestação direta manda o valor recebido inteiro.
+  const direta = { ...notaBase, regime: 'PRESTACAO_DIRETA' as const, valor_servicos: 20000 };
+  const c = montarCorpoEmissao({ nota: direta as never, config: configBase as never });
+  eq(c.valor_servico, 20000, 'serviço próprio tributa o valor cheio');
+  eq(
+    typeof c.info_complementar === 'string' && (c.info_complementar as string).includes('Agenciamento'),
+    false,
+    'e não fala de agenciamento no complemento',
+  );
 }
 
 // ══════════════════════════════════════════════════════════════════════

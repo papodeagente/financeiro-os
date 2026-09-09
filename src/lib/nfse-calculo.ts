@@ -272,3 +272,53 @@ export function pendenciasParaEmitir(entrada: {
   }
   return faltas;
 }
+
+/**
+ * O que a combinação escolhida tem de incompatível com o emissor.
+ *
+ * Existe porque emissores recebem campos diferentes. O padrão nacional (DPS)
+ * não tem campo de dedução: pedir "valor cheio com o repasse como dedução" e
+ * deixar passar faria a nota sair com um número que ninguém escolheu — ou o
+ * valor cheio, tributando o repasse, ou a comissão, contrariando o formato
+ * configurado. Nos dois casos é dinheiro errado, então isto BLOQUEIA em vez
+ * de converter em silêncio.
+ */
+export function conflitosComEmissor(entrada: {
+  regime: RegimeNota;
+  forma_base: FormaBaseIntermediacao;
+  tem_intermediario: boolean;
+  capacidades: {
+    deducoes: boolean;
+    aliquota_por_nota: boolean;
+    intermediario: boolean;
+  };
+}): string[] {
+  const conflitos: string[] = [];
+  if (
+    entrada.regime === 'INTERMEDIACAO'
+    && entrada.forma_base === 'TOTAL_COM_DEDUCAO'
+    && !entrada.capacidades.deducoes
+  ) {
+    conflitos.push(
+      'Este emissor não aceita dedução por nota, então não dá para emitir no formato '
+      + '"valor cheio com o repasse como dedução". Troque para "nota do valor da comissão".',
+    );
+  }
+  if (entrada.tem_intermediario && !entrada.capacidades.intermediario) {
+    conflitos.push(
+      'Este emissor não envia o bloco de terceiro intermediador. Ele será ignorado na nota.',
+    );
+  }
+  return conflitos;
+}
+
+/**
+ * A alíquota informada vira imposto na nota, ou é só estimativa?
+ *
+ * No padrão nacional quem calcula o ISS é a prefeitura, a partir do código de
+ * tributação do prestador. Dizer isso na tela evita que alguém acredite que
+ * mudar a alíquota aqui muda o imposto pago.
+ */
+export function issEhEstimativa(capacidades: { aliquota_por_nota: boolean }): boolean {
+  return !capacidades.aliquota_por_nota;
+}
