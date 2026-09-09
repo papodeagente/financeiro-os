@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { PageHeader } from '@/components/PageHeader';
+import { PageShell } from '@/components/PageShell';
+import { PageHeader } from '@/components/fin/PageHeader';
 import { SkeletonTable } from '@/components/SkeletonTable';
 import { Link2, RefreshCw, Check, X, Copy, Eye, EyeOff, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 
@@ -67,6 +68,7 @@ export default function CrmConfigPage() {
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [direcao, setDirecao] = useState<'saida' | 'entrada'>('saida');
   const [expandedEvento, setExpandedEvento] = useState<string | null>(null);
+  const [mostrarDetalhes, setMostrarDetalhes] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [cleaning, setCleaning] = useState(false);
@@ -318,10 +320,13 @@ export default function CrmConfigPage() {
   };
 
   if (loading) return (
-    <div className="p-6">
-      <PageHeader title="Integracao CRM" crmBadge />
+    <PageShell width="full" padding="md" gap="md" className="max-w-[900px]">
+      <PageHeader
+        titulo="CRM Entur"
+        subtitulo="Venda fechada no CRM entra aqui como conta a receber do cliente e conta a pagar do fornecedor."
+      />
       <SkeletonTable rows={5} cols={4} />
-    </div>
+    </PageShell>
   );
 
   const circuitLabel: Record<string, string> = {
@@ -330,13 +335,22 @@ export default function CrmConfigPage() {
     'semi-aberto': 'Semi-aberto (testando)',
   };
 
+  // Status, diagnóstico, manutenção e log são ferramenta de suporte: quem
+  // vem aqui quer conectar o CRM, não auditar o circuit breaker. Ficam num
+  // bloco recolhido em vez de sumirem — a informação continua servindo.
+  const detalhesAbertos = mostrarDetalhes;
+
   const inboundUrl = config.suggested_webhook_url_entur || config.webhook_url_entur;
   const hasStoredSecret = !!config.api_key_crm && config.api_key_crm.startsWith('****');
   const conected = !!(status?.ativo && hasStoredSecret);
 
   return (
-    <div className="p-6 max-w-5xl">
-      <PageHeader title="Integracao CRM" crmBadge />
+    <PageShell width="full" padding="md" gap="md" className="max-w-[900px]">
+      <PageHeader
+        titulo="CRM Entur"
+        subtitulo="Venda fechada no CRM entra aqui como conta a receber do cliente e conta a pagar do fornecedor."
+        acoesSecundarias={[{ rotulo: 'Voltar às integrações', href: '/config/integracoes' }]}
+      />
 
       {/* Tenant + connection summary */}
       <section className="mb-6">
@@ -517,6 +531,22 @@ export default function CrmConfigPage() {
         </div>
       </section>
 
+      {/* Tudo daqui para baixo é ferramenta de suporte. Fica recolhido por
+          padrão para a tela responder a "como eu conecto?" antes de qualquer
+          outra coisa. */}
+      <button
+        type="button"
+        onClick={() => setMostrarDetalhes(v => !v)}
+        className="fin-t-body flex w-full items-center justify-between rounded-[var(--fin-r-md)] border border-[var(--fin-border)] bg-[var(--fin-surface)] px-4 py-3 text-left text-[var(--fin-text)] hover:bg-[var(--fin-surface-2)]"
+      >
+        <span>Detalhes técnicos: status, diagnóstico, manutenção e log de eventos</span>
+        {detalhesAbertos
+          ? <ChevronUp aria-hidden="true" className="size-4" />
+          : <ChevronDown aria-hidden="true" className="size-4" />}
+      </button>
+
+      {detalhesAbertos ? (
+      <>
       {/* Status */}
       {status && (
         <section className="mb-8">
@@ -794,6 +824,8 @@ export default function CrmConfigPage() {
           )}
         </div>
       </section>
-    </div>
+      </>
+      ) : null}
+    </PageShell>
   );
 }

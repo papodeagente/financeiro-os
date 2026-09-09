@@ -12,7 +12,7 @@ import {
   ListOrdered, UserPlus, Building2, Briefcase,
   DollarSign, TrendingUp as RentIcon, Link2,
   GitBranch as MindIcon,
-  Sparkles, Users, ClipboardList,
+  Users, ClipboardList,
   PanelLeftClose, PanelLeftOpen,
   Eraser, LifeBuoy, FileText,
 } from 'lucide-react';
@@ -107,20 +107,16 @@ const CONFIGURACOES_MENU: SidebarSection[] = [
     title: 'Geral',
     items: [
       { key: 'cfg-agencia', label: 'Dados da agência', icon: Building2, href: '/config/agencia' },
-      { key: 'cfg-fiscal', label: 'Nota fiscal', icon: FileText, href: '/config/fiscal' },
       { key: 'cfg-usuarios', label: 'Usuários', icon: Users, href: '/config/usuarios' },
-    ],
-  },
-  {
-    title: 'Inteligência Artificial',
-    items: [
-      { key: 'cfg-ia', label: 'Chaves de API (IA)', icon: Sparkles, href: '/config/integracoes' },
     ],
   },
   {
     title: 'Integrações',
     items: [
-      { key: 'cfg-crm', label: 'Integração CRM', icon: Link2, href: '/config/crm' },
+      // Uma entrada só. CRM, nota fiscal e IA estão dentro, cada um com a
+      // sua página — três linhas de menu para três telas parecidas era o
+      // que fazia ninguém achar nada.
+      { key: 'cfg-integracoes', label: 'Integrações', icon: Link2, href: '/config/integracoes' },
     ],
   },
   {
