@@ -367,6 +367,16 @@ export interface ContaReceber {
   observacoes: string;
   origem_venda_id?: string;
   origem_item_id?: string;
+  /**
+   * Identidade ESTÁVEL da conta a receber quebrada por fornecedor.
+   *
+   * `origem_item_id` não serve para isso: o webhook do CRM apaga e recria os
+   * itens da venda a cada reprocessamento, com ids novos. Uma conta já RECEBIDA
+   * é preservada na regeração; se a conta nova viesse com id de item diferente,
+   * ela não casaria com a preservada e a mesma receita entraria duas vezes.
+   * O fornecedor, esse, é resolvido pelo id externo e não muda.
+   */
+  origem_fornecedor_id?: string;
   auto_gerado?: boolean;
 }
 

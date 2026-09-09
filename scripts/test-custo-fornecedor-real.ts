@@ -23,8 +23,9 @@
  */
 import { gerarContasVenda } from '../src/lib/venda-financeiro.ts';
 import { calcularResultado } from '../src/lib/resultado-financeiro.ts';
-import { montarLinhasDeCusto, DESCRICAO_SEM_FORNECEDOR } from '../src/lib/venda-crm-itens.ts';
-import { soma } from '../src/lib/money.ts';
+import { montarLinhasDeCusto, DESCRICAO_SEM_FORNECEDOR, DESCRICAO_PROPRIO } from '../src/lib/venda-crm-itens.ts';
+import { soma, round2 } from '../src/lib/money.ts';
+import { readFileSync } from 'node:fs';
 
 let falhas = 0;
 let total = 0;
@@ -384,6 +385,233 @@ console.log('--- o número do incidente, ponta a ponta ---');
   eq(resultado.custo_previsto, 1300, 'custo registrado');
   eq(resultado.margem_prevista, 14697, 'margem é a diferença');
   eq(resultado.custo_pendente, 1300, 'com 1.300 ainda a pagar');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// A VENDA ATRIBUÍDA POR FORNECEDOR (Bruno, 2026-09-09)
+//
+//   "A ideia é gerar uma conta a pagar e uma a receber para cada fornecedor /
+//    item do produto. Caso tenha mais de um produto com o mesmo fornecedor,
+//    agrupe os itens por fornecedor."
+//
+// A escolha foi RECEITA CHEIA: a conta a receber de um fornecedor é a parte da
+// venda que entra por causa dele, e a conta a pagar é o custo dele. A margem é
+// a diferença entre as duas. Receber só a margem quebraria o caixa: o cliente
+// paga o total, não a margem.
+// ══════════════════════════════════════════════════════════════════════
+const fornecedorPayload = (over: Any = {}): Any => ({
+  fornecedor_id: 'f1',
+  fornecedor_nome: 'CVC',
+  servico: 'AEREO',
+  descricao: 'Aéreo GRU/LIS',
+  valor_custo: 3000,
+  localizador: '',
+  data_inicio: '',
+  data_fim: '',
+  ...over,
+});
+
+const gerarPF = (itens: Any[], fornecedores: Any[], overVenda: Any = {}) =>
+  gerarContasVenda({
+    receberPorFornecedor: true,
+    venda: venda(overVenda) as never,
+    itens: itens as never,
+    fornecedores: fornecedores as never,
+    cliente_nome: 'Cliente',
+  });
+
+const doisFornecedores = [
+  { id: 'f1', nome_fantasia: 'CVC', regras_faturamento: {} },
+  { id: 'f2', nome_fantasia: 'Passeios Roma', regras_faturamento: {} },
+];
+
+console.log('\n--- a venda que o CRM atribuiu manda sobre o rateio por custo ---');
+{
+  // Margens desiguais: o aéreo foi comprado quase a preço de custo e o passeio
+  // tem margem alta. Ratear por custo daria ao aéreo receita que ele não trouxe.
+  const linhas = montarLinhasDeCusto({
+    fornecedores: [
+      fornecedorPayload({ valor_custo: 3000, valor_venda: 3200 }),
+      fornecedorPayload({ fornecedor_id: 'f2', fornecedor_nome: 'Passeios Roma', servico: 'PASSEIO', descricao: 'Passeios', valor_custo: 1000, valor_venda: 4000 }),
+    ],
+    custo_total: 4000,
+    valor_total: 7200,
+  });
+  eq(linhas.length, 2, 'um fornecedor, uma linha');
+  eq(linhas[0].valor_venda, 3200, 'o aéreo recebe o que o CRM atribuiu, não os 5400 do rateio por custo');
+  eq(linhas[1].valor_venda, 4000, 'e o passeio fica com a margem que é dele');
+  eq(soma(linhas.map(l => l.valor_venda)), 7200, 'a soma continua fechando com a venda');
+}
+{
+  // Venda antiga, gravada antes de 09/09: o payload não traz valor_venda.
+  const linhas = montarLinhasDeCusto({
+    fornecedores: [
+      fornecedorPayload({ valor_custo: 3000 }),
+      fornecedorPayload({ fornecedor_id: 'f2', valor_custo: 1000 }),
+    ],
+    custo_total: 4000,
+    valor_total: 7200,
+  });
+  eq(linhas[0].valor_venda, 5400, 'sem atribuição, o rateio proporcional ao custo continua valendo');
+  eq(linhas[1].valor_venda, 1800, 'como sempre foi');
+}
+{
+  // Metade atribuída: o resto é rateado sobre quem ficou sem.
+  const linhas = montarLinhasDeCusto({
+    fornecedores: [
+      fornecedorPayload({ valor_custo: 3000, valor_venda: 3200 }),
+      fornecedorPayload({ fornecedor_id: 'f2', valor_custo: 1000 }),
+    ],
+    custo_total: 4000,
+    valor_total: 7200,
+  });
+  eq(linhas[0].valor_venda, 3200, 'quem foi atribuído fica com o que recebeu');
+  eq(linhas[1].valor_venda, 4000, 'quem não foi divide a sobra');
+  eq(soma(linhas.map(l => l.valor_venda)), 7200, 'e a soma fecha');
+}
+
+console.log('\n--- a receita que não é de fornecedor nenhum não pode evaporar ---');
+{
+  // Serviço próprio da agência com custo zero: não existe linha "sem
+  // fornecedor" para carregar a sobra, porque sobra é de RECEITA, não de custo.
+  const linhas = montarLinhasDeCusto({
+    fornecedores: [fornecedorPayload({ valor_custo: 3000, valor_venda: 3200 })],
+    custo_total: 3000,
+    valor_total: 5000,
+  });
+  eq(linhas.length, 2, 'a sobra ganhou uma linha própria');
+  eq(linhas[1].descricao, DESCRICAO_PROPRIO, 'e ela diz que é serviço da casa');
+  eq(linhas[1].valor_custo, 0, 'sem custo: não há a quem pagar');
+  eq(linhas[1].valor_venda, 1800, 'com os 1.800 que o fornecedor não trouxe');
+  eq(soma(linhas.map(l => l.valor_venda)), 5000, 'o cliente continua devendo a venda inteira');
+}
+{
+  // Venda editada no CRM depois de emitida: o atribuído ficou maior que o total.
+  const linhas = montarLinhasDeCusto({
+    fornecedores: [
+      fornecedorPayload({ valor_custo: 3000, valor_venda: 6000 }),
+      fornecedorPayload({ fornecedor_id: 'f2', valor_custo: 1000, valor_venda: 2000 }),
+    ],
+    custo_total: 4000,
+    valor_total: 5000,
+  });
+  eq(soma(linhas.map(l => l.valor_venda)), 5000, 'a soma é trazida de volta para o total, sem receita inventada');
+}
+
+console.log('\n--- uma conta a pagar e uma a receber por fornecedor ---');
+{
+  const itens = [
+    item({ fornecedor_id: 'f1', sequencia: 1, data: { fornecedor_nome: 'CVC', descricao: 'Aéreo', valor_venda: 3200, valor_custo: 3000 } }),
+    item({ fornecedor_id: 'f2', sequencia: 2, data: { fornecedor_nome: 'Passeios Roma', descricao: 'Passeios', valor_venda: 4000, valor_custo: 1000 } }),
+  ];
+  const r = gerarPF(itens, doisFornecedores);
+  eq(r.contas_receber.length, 2, 'duas contas a receber, uma por fornecedor');
+  eq(r.contas_pagar.length, 2, 'e duas a pagar');
+  eq(soma(r.contas_receber.map(c => c.valor_final)), 7200, 'o cliente deve o total da venda, nem mais nem menos');
+  const cvcR = r.contas_receber.find(c => c.descricao.includes('CVC'));
+  const cvcP = r.contas_pagar.find(c => c.fornecedor_id === 'f1');
+  eq(cvcR?.valor_final, 3200, 'a receita cheia do fornecedor entra a receber');
+  eq(cvcP?.valor_final, 3000, 'e o custo dele sai a pagar');
+  eq(round2((cvcR?.valor_final ?? 0) - (cvcP?.valor_final ?? 0)), 200, 'a margem do fornecedor é a diferença entre as duas');
+  eq(r.resumo.total_cliente, 7200, 'o resumo não muda de tamanho por quebrar a conta');
+}
+{
+  // Dois itens do mesmo fornecedor: uma conta a receber só, como pediu o Bruno.
+  const itens = [
+    item({ fornecedor_id: 'f1', sequencia: 1, data: { fornecedor_nome: 'CVC', descricao: 'Ida', valor_venda: 1200, valor_custo: 1000 } }),
+    item({ fornecedor_id: 'f1', sequencia: 2, data: { fornecedor_nome: 'CVC', descricao: 'Volta', valor_venda: 800, valor_custo: 700 } }),
+  ];
+  const r = gerarPF(itens, [doisFornecedores[0]]);
+  eq(r.contas_receber.length, 1, 'itens do mesmo fornecedor viram uma conta a receber');
+  eq(r.contas_receber[0].valor_final, 2000, 'somando os dois');
+  eq(r.contas_pagar.length, 2, 'o que se paga continua item a item, com localizador próprio');
+}
+{
+  // Desconto e parcelamento juntos: o desconto sai da margem da agência, e
+  // cada fornecedor parcela a parte dele.
+  const itens = [
+    item({ fornecedor_id: 'f1', sequencia: 1, data: { fornecedor_nome: 'CVC', valor_venda: 3200, valor_custo: 3000 } }),
+    item({ fornecedor_id: 'f2', sequencia: 2, data: { fornecedor_nome: 'Passeios Roma', valor_venda: 4000, valor_custo: 1000 } }),
+  ];
+  const r = gerarPF(itens, doisFornecedores, { desconto: 720, parcelas: 3 });
+  eq(r.contas_receber.length, 6, 'duas contas de três parcelas');
+  eq(soma(r.contas_receber.map(c => c.valor_final)), 6480, 'e o total recebido é a venda menos o desconto');
+  eq(r.resumo.total_cliente, 6480, 'igual ao resumo');
+}
+{
+  // Item sem fornecedor não tem a quem se juntar: fica por conta própria.
+  const itens = [
+    item({ fornecedor_id: '', sequencia: 1, data: { fornecedor_nome: '', descricao: 'Serviço da casa', valor_venda: 1800, valor_custo: 0 } }),
+    item({ fornecedor_id: '', sequencia: 2, data: { fornecedor_nome: '', descricao: 'Outro da casa', valor_venda: 900, valor_custo: 0 } }),
+  ];
+  const r = gerarPF(itens, []);
+  eq(r.contas_receber.length, 2, 'cada item sem fornecedor guarda a própria linha');
+  eq(soma(r.contas_receber.map(c => c.valor_final)), 2700, 'e a soma continua fechando');
+  eq(r.contas_pagar.length, 0, 'custo zero não vira dívida de R$ 0,00');
+}
+
+console.log('\n--- a conta a receber do fornecedor sobrevive ao reprocessamento ---');
+{
+  // O webhook apaga e recria os itens da venda a cada reentrega do evento, com
+  // ids NOVOS. Se a conta a receber fosse identificada pelo item, a conta já
+  // RECEBIDA (que é preservada, e com razão) não casaria com a recém-gerada e a
+  // mesma receita entraria duas vezes.
+  const linhasDe = () => [
+    item({ fornecedor_id: 'f1', sequencia: 1, data: { fornecedor_nome: 'CVC', valor_venda: 3200, valor_custo: 3000 } }),
+    item({ fornecedor_id: 'f2', sequencia: 2, data: { fornecedor_nome: 'Passeios Roma', valor_venda: 4000, valor_custo: 1000 } }),
+  ];
+  const primeira = gerarPF(linhasDe(), doisFornecedores);
+  const segunda = gerarPF(linhasDe(), doisFornecedores);
+  const idsItem = (r: typeof primeira) => r.contas_receber.map(c => c.origem_item_id).sort();
+  const idsForn = (r: typeof primeira) => r.contas_receber.map(c => c.origem_fornecedor_id).sort();
+  eq(JSON.stringify(idsItem(primeira)) === JSON.stringify(idsItem(segunda)), false, 'o id do item muda entre as duas gerações');
+  eq(idsForn(primeira), ['f1', 'f2'], 'mas o fornecedor identifica a conta');
+  eq(idsForn(segunda), ['f1', 'f2'], 'e é o mesmo na segunda vez');
+
+  // Item sem fornecedor cai na sequência, que também é estável.
+  const semForn = gerarPF([item({ fornecedor_id: '', sequencia: 3, data: { fornecedor_nome: '', valor_venda: 900, valor_custo: 0 } })], []);
+  eq(semForn.contas_receber[0].origem_fornecedor_id, 'seq:3', 'sem fornecedor, a sequência do item identifica');
+}
+{
+  // E os dois caminhos casam a conta preservada por essa identidade, com a
+  // parcela junto: sem ela, a parcela 2 seria confundida com a 1.
+  const chave = /origem_fornecedor_id[\s\S]{0,120}fornecedor:\$\{forn\}\|parcela:/;
+  for (const arquivo of ['src/lib/crm-integration.ts', 'src/app/api/vendas-crm/route.ts']) {
+    const src = readFileSync(new URL('../' + arquivo, import.meta.url), 'utf8');
+    eq(chave.test(src), true, `${arquivo}: a chave natural prefere o fornecedor e inclui a parcela`);
+  }
+}
+
+console.log('\n--- a venda criada no financeiro não muda de forma ---');
+{
+  // /vendas/nova não passa a opção: continua com a conta única do cliente.
+  const itens = [
+    item({ fornecedor_id: 'f1', sequencia: 1, data: { fornecedor_nome: 'CVC', valor_venda: 3200, valor_custo: 3000 } }),
+    item({ fornecedor_id: 'f2', sequencia: 2, data: { fornecedor_nome: 'Passeios Roma', valor_venda: 4000, valor_custo: 1000 } }),
+  ];
+  const r = gerar(itens, doisFornecedores);
+  eq(r.contas_receber.length, 1, 'uma conta a receber para o cliente, como sempre');
+  eq(r.contas_receber[0].valor_final, 7200, 'com o total da venda');
+}
+
+console.log('\n--- venda antiga que já recebeu não muda de forma ---');
+{
+  // Quebrar a conta a receber por fornecedor muda a CHAVE NATURAL dela (passa a
+  // ter item de origem). Numa reentrega do evento, a conta agrupada já baixada
+  // é preservada e as novas entrariam ao lado: a mesma receita, duas vezes.
+  // Os dois caminhos do CRM decidem a forma pelo que já existe baixado.
+  const guarda = /receberPorFornecedor = !\w+\.some\(\s*r => !String\(\(r\.data as Record<string, unknown>\)\?\.origem_item_id \?\? ''\),\s*\)/;
+  for (const arquivo of ['src/lib/crm-integration.ts', 'src/app/api/vendas-crm/route.ts']) {
+    const src = readFileSync(new URL('../' + arquivo, import.meta.url), 'utf8');
+    eq(guarda.test(src), true, `${arquivo}: a forma da conta olha o que já foi baixado`);
+    // e a leitura das baixadas acontece ANTES de gerar, senão a decisão chega tarde
+    const iBaixadas = src.indexOf("FROM contas_receber\n");
+    const iGerar = src.indexOf('gerarContasVenda({');
+    eq(iBaixadas > 0 && iBaixadas < iGerar, true, `${arquivo}: lê as baixadas antes de gerar`);
+  }
+  // /vendas/nova continua sem a opção: venda criada no financeiro é conta única.
+  const nova = readFileSync(new URL('../src/app/vendas/nova/page.tsx', import.meta.url), 'utf8');
+  eq(nova.includes('receberPorFornecedor'), false, 'a venda manual não passa a opção');
 }
 
 // ══════════════════════════════════════════════════════════════════════

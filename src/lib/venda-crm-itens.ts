@@ -30,6 +30,9 @@ export const DESCRICAO_SEM_FORNECEDOR = 'Serviços sem fornecedor informado no C
 export const OBSERVACAO_SEM_FORNECEDOR =
   'Sem fornecedor no CRM. Informe a quem pagar no financeiro.';
 
+/** Receita que não vem de fornecedor: serviço da própria agência, milhas, margem. */
+export const DESCRICAO_PROPRIO = 'Serviços da própria agência';
+
 /** Fornecedor do payload do CRM já resolvido para um cadastro do financeiro. */
 export interface FornecedorResolvido {
   /** Id interno no financeiro. Vazio quando não há cadastro. */
@@ -39,6 +42,15 @@ export interface FornecedorResolvido {
   servico?: string;
   descricao?: string;
   valor_custo: number;
+  /**
+   * O que entra por causa deste fornecedor.
+   *
+   * Desde 09/09/2026 o CRM manda a venda já atribuída: a venda de cada serviço
+   * pertence a quem o prestou. Quando vem, ela manda; quando não vem (venda
+   * antiga, ou outro emissor), continua valendo o rateio proporcional ao custo
+   * que sempre existiu aqui.
+   */
+  valor_venda?: number;
   localizador?: string;
   data_inicio?: string;
   data_fim?: string;
@@ -64,6 +76,13 @@ function tipoDoServico(servico: string | undefined): TipoProdutoVenda {
   return TIPOS_VALIDOS.includes(t) ? t : 'OUTROS';
 }
 
+/** Soma das vendas que o emissor atribuiu, quando ele atribuiu alguma. */
+function vendaInformada(fornecedores: FornecedorResolvido[]): number | null {
+  const comValor = fornecedores.filter((f) => num(f.valor_venda) > 0);
+  if (comValor.length === 0) return null;
+  return round2(somaPor(comValor, (f) => num(f.valor_venda)));
+}
+
 export function montarLinhasDeCusto(entrada: {
   fornecedores: FornecedorResolvido[];
   custo_total: number;
@@ -74,7 +93,7 @@ export function montarLinhasDeCusto(entrada: {
   const valorTotal = round2(num(entrada.valor_total));
   const custoTotal = round2(num(entrada.custo_total));
 
-  type Parcial = Omit<LinhaCusto, 'valor_venda'>;
+  type Parcial = Omit<LinhaCusto, 'valor_venda'> & { venda_informada?: number };
   const linhas: Parcial[] = [];
 
   for (const f of entrada.fornecedores) {
@@ -98,6 +117,7 @@ export function montarLinhasDeCusto(entrada: {
       data_fim: f.data_fim || '',
       observacoes: '',
       sem_fornecedor: false,
+      venda_informada: num(f.valor_venda) > 0 ? round2(num(f.valor_venda)) : undefined,
     });
   }
 
@@ -135,6 +155,62 @@ export function montarLinhasDeCusto(entrada: {
     });
   }
 
-  const valoresVenda = ratearTotal(valorTotal, linhas.map(l => l.valor_custo));
-  return linhas.map((l, i) => ({ ...l, valor_venda: valoresVenda[i] }));
+  // A VENDA ATRIBUÍDA PELO EMISSOR MANDA.
+  //
+  // Desde 09/09/2026 o CRM diz quanto entra por causa de cada fornecedor, em
+  // vez de deixar o rateio proporcional ao custo adivinhar. A diferença
+  // aparece quando as margens são desiguais: um aéreo comprado quase a preço de
+  // custo e um passeio com margem alta rateados pelo custo dariam ao aéreo uma
+  // receita que ele não trouxe.
+  //
+  // O que o emissor não atribuiu (linha sem fornecedor, ou venda antiga que não
+  // manda o campo) continua no rateio proporcional ao custo, sobre o que sobra
+  // do valor total. Assim a soma fecha com valor_total nos dois casos.
+  const informada = vendaInformada(entrada.fornecedores);
+  if (informada === null) {
+    const valoresVenda = ratearTotal(valorTotal, linhas.map(l => l.valor_custo));
+    return linhas.map((l, i) => ({ ...l, valor_venda: valoresVenda[i] }));
+  }
+
+  let semAtribuicao = linhas.filter(l => l.venda_informada === undefined);
+  const sobra = round2(Math.max(0, valorTotal - Math.min(informada, valorTotal)));
+  // A parte da venda que não pertence a fornecedor nenhum (serviço prestado
+  // pela própria agência, milhas do estoque, margem que o CRM não atribuiu)
+  // precisa de uma linha para carregar. Sem ela, a receita evaporava sempre que
+  // o serviço próprio não tinha custo, e a soma das contas a receber ficava
+  // menor que a venda: caixa a menos, em silêncio.
+  if (sobra > 0 && semAtribuicao.length === 0) {
+    linhas.push({
+      fornecedor_id: '',
+      fornecedor_nome: '',
+      tipo: 'OUTROS',
+      descricao: DESCRICAO_PROPRIO,
+      valor_custo: 0,
+      localizador: '',
+      data_inicio: '',
+      data_fim: '',
+      observacoes: '',
+      sem_fornecedor: false,
+    });
+    semAtribuicao = linhas.filter(l => l.venda_informada === undefined);
+  }
+  const valoresSobra = semAtribuicao.length > 0
+    ? ratearTotal(sobra, semAtribuicao.map(l => l.valor_custo))
+    : [];
+  let k = 0;
+  const comVenda = linhas.map((l) => {
+    const { venda_informada, ...resto } = l;
+    if (venda_informada !== undefined) return { ...resto, valor_venda: venda_informada };
+    return { ...resto, valor_venda: valoresSobra[k++] ?? 0 };
+  });
+
+  // Piso de segurança: se o emissor atribuiu MAIS que o valor total (venda
+  // editada no CRM depois de emitida, por exemplo), a soma é trazida de volta
+  // para o total. Receita inventada distorce caixa e DRE em silêncio.
+  const somaFinal = round2(somaPor(comVenda, l => l.valor_venda));
+  if (somaFinal > valorTotal) {
+    const ajustados = ratearTotal(valorTotal, comVenda.map(l => l.valor_venda));
+    return comVenda.map((l, i) => ({ ...l, valor_venda: ajustados[i] }));
+  }
+  return comVenda;
 }

@@ -1415,6 +1415,9 @@ export async function processarEventoCRM(
             servico: asStr(forn.servico),
             descricao: asStr(forn.descricao),
             valor_custo: asNum(forn.valor_custo),
+            // Parte da venda que entra por causa deste fornecedor. O CRM
+            // atribui; sem ela o rateio por custo antigo continua valendo.
+            valor_venda: asNum(forn.valor_venda),
             localizador: asStr(forn.localizador),
             data_inicio: asDateYMD(forn.data_inicio),
             data_fim: asDateYMD(forn.data_fim),
@@ -1472,8 +1475,37 @@ export async function processarEventoCRM(
           );
         }
 
+        // Contas já baixadas desta venda. Lidas ANTES de gerar porque decidem a
+        // FORMA da conta a receber, além de serem preservadas na regeneração.
+        const statusBaixados = [...STATUS_BAIXADOS];
+        const { rows: preservadasCR } = await pool.query(
+          `SELECT data FROM contas_receber
+            WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2
+              AND data->>'auto_gerado' = 'true'
+              AND COALESCE(data->>'status', '') = ANY($3::text[])`,
+          [tenantId, vendaId, statusBaixados],
+        );
+        const { rows: preservadasCP } = await pool.query(
+          `SELECT data FROM contas_pagar
+            WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2
+              AND data->>'auto_gerado' = 'true'
+              AND COALESCE(data->>'status', '') = ANY($3::text[])`,
+          [tenantId, vendaId, statusBaixados],
+        );
+        // A venda antiga cuja conta a receber AGRUPADA já foi baixada continua
+        // agrupada. Quebrá-la por fornecedor agora criaria contas com chave
+        // natural nova ao lado da conta baixada (que é preservada, e com
+        // razão): a mesma receita apareceria duas vezes. Conta agrupada é a que
+        // não tem item de origem; a de comissão tem, e por isso não confunde.
+        const receberPorFornecedor = !preservadasCR.some(
+          r => !String((r.data as Record<string, unknown>)?.origem_item_id ?? ''),
+        );
+
         // Gera CR/CP via lógica unificada (mesma usada por /vendas/nova).
         const contasGen = gerarContasVenda({
+          // Venda vinda do CRM: uma conta a receber por fornecedor, ao lado da
+          // conta a pagar dele. Venda criada aqui dentro segue com a conta única.
+          receberPorFornecedor,
           venda: vendaData as VendaCRM,
           itens: itensInput,
           fornecedores: fornecedoresInfo,
@@ -1492,25 +1524,19 @@ export async function processarEventoCRM(
         // Regra: conta que já movimentou dinheiro é preservada como está, e a
         // conta equivalente da nova geração é descartada. As demais são
         // regeneradas normalmente.
-        const statusBaixados = [...STATUS_BAIXADOS];
-        const { rows: preservadasCR } = await pool.query(
-          `SELECT data FROM contas_receber
-            WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2
-              AND data->>'auto_gerado' = 'true'
-              AND COALESCE(data->>'status', '') = ANY($3::text[])`,
-          [tenantId, vendaId, statusBaixados],
-        );
-        const { rows: preservadasCP } = await pool.query(
-          `SELECT data FROM contas_pagar
-            WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2
-              AND data->>'auto_gerado' = 'true'
-              AND COALESCE(data->>'status', '') = ANY($3::text[])`,
-          [tenantId, vendaId, statusBaixados],
-        );
-        // Chave natural: item de venda quando existe, senão o número da
-        // parcela. É como o caminho manual identifica "a mesma conta".
-        const chaveNatural = (c: Record<string, unknown>) =>
-          String(c.origem_item_id ?? '') || `parcela:${String(c.parcela_numero ?? '')}`;
+        // Chave natural: o fornecedor quando a conta é quebrada por ele, senão
+        // o item de venda, senão o número da parcela. É como o caminho manual
+        // identifica "a mesma conta".
+        //
+        // O fornecedor vem PRIMEIRO porque é a única identidade que sobrevive
+        // ao reprocessamento: os itens são apagados e recriados com ids novos
+        // logo acima, então casar por item deixaria a conta já baixada de fora
+        // e lançaria a mesma receita outra vez.
+        const chaveNatural = (c: Record<string, unknown>) => {
+          const forn = String(c.origem_fornecedor_id ?? '');
+          if (forn) return `fornecedor:${forn}|parcela:${String(c.parcela_numero ?? '')}`;
+          return String(c.origem_item_id ?? '') || `parcela:${String(c.parcela_numero ?? '')}`;
+        };
         const crPreservadas = new Set(
           preservadasCR.map(r => chaveNatural(r.data as Record<string, unknown>)),
         );

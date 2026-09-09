@@ -20,6 +20,13 @@ const STATUS_BAIXADOS_SQL = [...STATUS_BAIXADOS];
 // Contas de item (custo/comissão) são únicas por item; as parcelas do cliente,
 // pelo número da parcela.
 function chaveConta(conta: Record<string, unknown>): string {
+  // O fornecedor vem primeiro porque é a única identidade que sobrevive ao
+  // reprocessamento: os itens da venda são apagados e recriados com ids novos
+  // a cada reentrega, então casar por item deixaria a conta baixada de fora e
+  // lançaria a mesma receita outra vez. A parcela entra na chave porque a conta
+  // a receber por fornecedor pode ser parcelada.
+  const forn = String(conta.origem_fornecedor_id ?? '');
+  if (forn) return `fornecedor:${forn}|parcela:${String(conta.parcela_numero ?? '')}`;
   const itemId = String(conta.origem_item_id ?? '');
   if (itemId) return `item:${itemId}`;
   return `parcela:${String(conta.parcela_numero ?? '')}`;
@@ -190,8 +197,35 @@ async function postComItens(body: PostComItensBody, tenantId: string) {
       }
     }
 
+    // 3b. Contas já baixadas desta venda. Lidas ANTES de gerar porque decidem
+    //     a FORMA da conta a receber (ver logo abaixo), além de serem
+    //     preservadas na regeneração do passo 5.
+    const { rows: crBaixadas } = await client.query(
+      `SELECT data FROM contas_receber
+        WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2 AND data->>'auto_gerado' = 'true'
+          AND COALESCE(data->>'status', '') = ANY($3::text[])`,
+      [tenantId, venda.id, STATUS_BAIXADOS_SQL],
+    );
+    const { rows: cpBaixadas } = await client.query(
+      `SELECT data FROM contas_pagar
+        WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2 AND data->>'auto_gerado' = 'true'
+          AND COALESCE(data->>'status', '') = ANY($3::text[])`,
+      [tenantId, venda.id, STATUS_BAIXADOS_SQL],
+    );
+    // A venda antiga cuja conta a receber AGRUPADA já foi baixada continua
+    // agrupada. Quebrá-la por fornecedor agora criaria contas com chave natural
+    // nova ao lado da conta baixada (que é preservada, e com razão): a mesma
+    // receita apareceria duas vezes. Conta agrupada é a que não tem item de
+    // origem; a de comissão tem, e por isso não confunde.
+    const receberPorFornecedor = !crBaixadas.some(
+      r => !String((r.data as Record<string, unknown>)?.origem_item_id ?? ''),
+    );
+
     // 4. Gerar contas
     const resultado = gerarContasVenda({
+      // Venda vinda do CRM: uma conta a receber por fornecedor, ao lado da
+      // conta a pagar dele. Venda criada aqui dentro segue com a conta única.
+      receberPorFornecedor,
       venda: vendaData as never,
       itens,
       fornecedores,
@@ -225,18 +259,7 @@ async function postComItens(body: PostComItensBody, tenantId: string) {
     //    só as contas ainda em aberto (PENDENTE/CANCELADO/ATRASADO/VENCIDO).
     //    Se um dia uma conta baixada precisar sumir, ela tem que ser excluída
     //    pelo endpoint da própria conta (que estorna o caixa) — nunca daqui.
-    const { rows: crBaixadas } = await client.query(
-      `SELECT data FROM contas_receber
-        WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2 AND data->>'auto_gerado' = 'true'
-          AND COALESCE(data->>'status', '') = ANY($3::text[])`,
-      [tenantId, venda.id, STATUS_BAIXADOS_SQL],
-    );
-    const { rows: cpBaixadas } = await client.query(
-      `SELECT data FROM contas_pagar
-        WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2 AND data->>'auto_gerado' = 'true'
-          AND COALESCE(data->>'status', '') = ANY($3::text[])`,
-      [tenantId, venda.id, STATUS_BAIXADOS_SQL],
-    );
+    //    As contas baixadas foram lidas no passo 3b.
     const crPreservadas = new Set<string>(crBaixadas.map(r => chaveConta(r.data)));
     const cpPreservadas = new Set<string>(cpBaixadas.map(r => chaveConta(r.data)));
 

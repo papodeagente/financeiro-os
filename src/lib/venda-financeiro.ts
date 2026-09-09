@@ -52,6 +52,18 @@ export interface VendaInput {
   itens: ItemVendaInput[];
   fornecedores: FornecedorInfo[];
   cliente_nome: string;
+  /**
+   * Uma conta a RECEBER por fornecedor, em vez de uma só com a venda inteira.
+   *
+   * Pedido do Bruno em 09/09/2026: ao lado da conta a pagar de cada fornecedor,
+   * a receita que entra por causa dele, para a margem por fornecedor ficar
+   * visível no financeiro. O CRM já manda a venda atribuída item a item.
+   *
+   * Fica OPCIONAL e desligado por padrão porque este gerador também atende as
+   * vendas criadas dentro do próprio Financeiro (`/vendas/nova`), que não têm
+   * essa atribuição e não pediram para mudar de forma.
+   */
+  receberPorFornecedor?: boolean;
 }
 
 export interface ContasGeradas {
@@ -147,6 +159,8 @@ export function gerarContasVenda(input: VendaInput): ContasGeradas {
   // original do item (item.data.moeda). A conversão p/ BRL acontece só aqui,
   // uma única vez, via paraBRL — nunca pré-multiplicada por quem chama.
   const vendasProprioBRL: number[] = [];
+  /** Os itens próprios, na MESMA ordem de vendasProprioBRL: o rateio do desconto casa por índice. */
+  const itensProprios: ItemVendaInput[] = [];
   const comissoesBRL: number[] = [];
   const custosBRL: number[] = [];
   let itens_proprio = 0;
@@ -168,6 +182,7 @@ export function gerarContasVenda(input: VendaInput): ContasGeradas {
       // ---- FLUXO PRÓPRIO ----
       // Cliente paga à agência (valor_venda)
       vendasProprioBRL.push(vendaBRL);
+      itensProprios.push(item);
       itens_proprio++;
 
       // O custo SEMPRE entra na margem, tenha conta a pagar ou não.
@@ -295,8 +310,72 @@ export function gerarContasVenda(input: VendaInput): ContasGeradas {
   const total_comissoes = soma(comissoesBRL);
   const total_custos = soma(custosBRL);
 
+  // ---- CONTA A RECEBER POR FORNECEDOR ----
+  // Uma conta por item próprio, com a receita que entra por causa daquele
+  // fornecedor, ao lado da conta a pagar dele. O cliente continua devendo o
+  // mesmo total: a soma das contas é a mesma da conta única, só que quebrada.
+  // O desconto da venda já foi rateado sobre os itens acima.
+  if (input.receberPorFornecedor && total_cliente > 0) {
+    const parcelas = Math.max(1, Math.floor(num(venda.parcelas)) || 1);
+    // Dois itens do mesmo fornecedor viram UMA conta a receber, do jeito que
+    // a conta a pagar dele também é uma só. Item sem fornecedor identificado
+    // fica por conta própria: não há a quem juntar.
+    const grupos = new Map<string, { item: ItemVendaInput; valor: number }>();
+    itensProprios.forEach((item, idx) => {
+      const valorDoItem = vendasLiquidas[idx];
+      if (!(valorDoItem > 0)) return;
+      const chave = item.fornecedor_id ? `f:${item.fornecedor_id}` : `i:${item.id}`;
+      const jaVisto = grupos.get(chave);
+      if (jaVisto) jaVisto.valor = round2(jaVisto.valor + valorDoItem);
+      else grupos.set(chave, { item, valor: valorDoItem });
+    });
+    grupos.forEach(({ item, valor: valorDoItem }) => {
+      const valoresParcela = dividirParcelas(valorDoItem, parcelas);
+      const nomeFornecedor = (item.data.fornecedor_nome || fornecedorMap.get(item.fornecedor_id)?.nome_fantasia || '').trim();
+      // Identidade que sobrevive ao reprocessamento do evento: o fornecedor,
+      // que é resolvido por id externo, e não o id do item, que é sorteado de
+      // novo a cada reentrega. Item sem fornecedor cai na sequência dele.
+      const origemFornecedor = item.fornecedor_id || `seq:${item.sequencia}`;
+      for (let p = 1; p <= parcelas; p++) {
+        contas_receber.push({
+          id: generateId(),
+          origem: 'VENDA',
+          venda_id: venda.id,
+          grupo_id: venda.grupo_id,
+          cliente_id: venda.cliente_id,
+          cliente_nome: cliente_nome,
+          descricao: [
+            `Venda ${venda.numero}`,
+            nomeFornecedor || item.data.descricao || `Item ${item.sequencia}`,
+            parcelas > 1 ? `Parcela ${p}/${parcelas}` : '',
+          ].filter(Boolean).join(' - '),
+          categoria_id: '',
+          centro_custo: venda.centro_custo || '',
+          valor_original: valoresParcela[p - 1],
+          juros: 0, multa: 0, desconto: 0,
+          valor_final: valoresParcela[p - 1],
+          data_emissao: hoje,
+          data_vencimento: calcularVencimentoParcela(venda.data_venda, p, parcelas),
+          data_recebimento: null,
+          valor_recebido: null,
+          conta_bancaria_id: null,
+          forma_recebimento: '',
+          parcela_numero: p,
+          total_parcelas: parcelas,
+          boleto_emitido: false, boleto_codigo: '', boleto_url: '',
+          status: 'PENDENTE',
+          rateio: [], anexos: [], observacoes: '',
+          origem_venda_id: venda.id,
+          origem_item_id: item.id,
+          origem_fornecedor_id: origemFornecedor,
+          auto_gerado: true,
+        });
+      }
+    });
+  }
+
   // Conta a receber do cliente (agrupada — soma dos itens próprios)
-  if (total_cliente > 0) {
+  if (!input.receberPorFornecedor && total_cliente > 0) {
     const parcelas = Math.max(1, Math.floor(num(venda.parcelas)) || 1);
     const valoresParcela = dividirParcelas(total_cliente, parcelas);
 
