@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
+import { writeFile, mkdir, unlink } from 'fs/promises';
 import path from 'path';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
 import { generateId } from '@/lib/utils';
+import { registrarEventoAuditoria } from '@/lib/audit';
 
 const UPLOAD_DIR_PROD = '/app/data/uploads';
 
@@ -124,7 +125,21 @@ export async function POST(req: Request) {
         }
         if (!buf || buf.length === 0) continue;
         const fileName = `${generateId()}.png`;
-        await writeFile(path.join(dir, fileName), buf);
+        const filePath = path.join(dir, fileName);
+        await writeFile(filePath, buf, { flag: 'wx' });
+        try {
+          await registrarEventoAuditoria({
+            tenantId,
+            acao: 'ENVIAR',
+            modulo: 'Arquivos',
+            entidade: 'imagens',
+            entidadeId: fileName,
+            descricao: `Gerou e salvou uma imagem com inteligência artificial (${buf.length} bytes).`,
+          });
+        } catch (e) {
+          await unlink(filePath);
+          throw e;
+        }
         urls.push(`/api/uploads/${fileName}`);
       }
     }

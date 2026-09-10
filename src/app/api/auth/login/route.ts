@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
-import { verifyPassword, createSession, COOKIE_NAME } from '@/lib/auth';
+import { verifyPassword, createSession, COOKIE_NAME, type SessionPayload } from '@/lib/auth';
+import { registrarEventoAuditoria } from '@/lib/audit';
 
 export async function POST(req: Request) {
   try {
@@ -30,8 +31,22 @@ export async function POST(req: Request) {
 
     const row = rows[0];
     const user = row.data;
+    const registrarFalha = async (motivo: string) => {
+      if (!row.tenant_id) return;
+      await registrarEventoAuditoria({
+        tenantId: row.tenant_id,
+        session: null,
+        origem: 'PUBLICO',
+        acao: 'LOGIN_FALHOU',
+        modulo: 'Segurança',
+        entidade: 'usuarios',
+        entidadeId: user.id,
+        descricao: `Tentativa de acesso recusada: ${motivo}.`,
+      });
+    };
 
     if (!user.ativo) {
+      await registrarFalha('conta inativa');
       return NextResponse.json({ error: 'Usuario inativo. Contate o administrador.' }, { status: 403 });
     }
 
@@ -53,21 +68,24 @@ export async function POST(req: Request) {
     // antiga (`row.tenant_status && ...`) era simplesmente pulada, deixando
     // entrar quem pertence a uma agência que não existe mais.
     if (row.tenant_status !== 'ativo') {
+      await registrarFalha('agência indisponível');
       return NextResponse.json({ error: 'Agencia suspensa. Contate o suporte.' }, { status: 403 });
     }
 
     if (!user.senha_hash) {
+      await registrarFalha('conta sem senha configurada');
       return NextResponse.json({ error: 'Usuario sem senha configurada. Contate o administrador.' }, { status: 401 });
     }
 
     // Verify password
     const valid = await verifyPassword(senha, user.senha_hash);
     if (!valid) {
+      await registrarFalha('credenciais inválidas');
       return NextResponse.json({ error: 'Email ou senha incorretos' }, { status: 401 });
     }
 
     // Create JWT session with tenant context
-    const token = await createSession({
+    const session: SessionPayload = {
       userId: user.id,
       nome: user.nome,
       email: user.email,
@@ -75,6 +93,16 @@ export async function POST(req: Request) {
       permissoes: user.permissoes || {},
       tenantId: row.tenant_id || '',
       tenantSlug: row.tenant_slug || '',
+    };
+    const token = await createSession(session);
+    await registrarEventoAuditoria({
+      tenantId: row.tenant_id,
+      session,
+      acao: 'LOGIN',
+      modulo: 'Segurança',
+      entidade: 'usuarios',
+      entidadeId: user.id,
+      descricao: 'Entrou no sistema.',
     });
 
     const response = NextResponse.json({

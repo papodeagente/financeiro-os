@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
-import { writeFile } from 'fs/promises';
+import { writeFile, unlink } from 'fs/promises';
 import path from 'path';
 import { generateId } from '@/lib/utils';
 import { getTenantId } from '@/lib/tenant';
 import { pastaComprovantes, TIPOS_COMPROVANTE, MAX_COMPROVANTE } from '@/lib/comprovantes';
+import { registrarEventoAuditoria } from '@/lib/audit';
 
 /**
  * Comprovante de pagamento e de recebimento.
@@ -54,7 +55,21 @@ export async function POST(req: Request) {
       }
 
       const id = `${generateId()}.${ext}`;
-      await writeFile(path.join(dir, id), Buffer.from(await arquivo.arrayBuffer()));
+      const filePath = path.join(dir, id);
+      await writeFile(filePath, Buffer.from(await arquivo.arrayBuffer()), { flag: 'wx' });
+      try {
+        await registrarEventoAuditoria({
+          tenantId,
+          acao: 'ENVIAR',
+          modulo: 'Financeiro',
+          entidade: 'comprovantes',
+          entidadeId: id,
+          descricao: `Enviou o comprovante ${arquivo.name.slice(0, 120)} (${arquivo.size} bytes).`,
+        });
+      } catch (e) {
+        await unlink(filePath);
+        throw e;
+      }
       salvos.push({
         // O nome original é só rótulo. O caminho real é o id gerado, para
         // nome de arquivo do usuário nunca virar caminho.

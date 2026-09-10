@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession, createSession, COOKIE_NAME } from '@/lib/auth';
+import { registrarEventoAuditoria } from '@/lib/audit';
 
 export async function POST(
   _req: Request,
@@ -61,6 +62,15 @@ export async function POST(
       isSuperAdmin: true,
       impersonatingTenantId: tenantId,
       impersonatingTenantSlug: tenant.slug,
+    });
+    await registrarEventoAuditoria({
+      tenantId,
+      session,
+      acao: 'IMPERSONAR',
+      modulo: 'Segurança',
+      entidade: 'tenants',
+      entidadeId: tenantId,
+      descricao: 'Iniciou acesso de suporte à agência como super administrador.',
     });
 
     const response = NextResponse.json({

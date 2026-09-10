@@ -66,6 +66,13 @@ function addSecurityHeaders(response: NextResponse) {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  // Metadados gerados aqui, nunca aceitos dos headers enviados pelo cliente.
+  // A identidade continua vindo exclusivamente da sessão verificada no servidor.
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-audit-path', pathname);
+  requestHeaders.set('x-audit-method', request.method);
+  requestHeaders.set('x-audit-request-id', crypto.randomUUID());
+  const next = () => NextResponse.next({ request: { headers: requestHeaders } });
 
   // ============================================================
   // Custom proposal domain — só serve rotas de proposta pública
@@ -87,7 +94,7 @@ export async function middleware(request: NextRequest) {
     }
     // Rota permitida no domínio de proposta — segue sem checar auth
     // (propostas públicas não exigem login).
-    return addSecurityHeaders(NextResponse.next());
+    return addSecurityHeaders(next());
   }
 
   // Allow public paths (prefixos + exatos).
@@ -100,7 +107,7 @@ export async function middleware(request: NextRequest) {
   const casaPrefixoPublico = (p: string) =>
     pathname === p || pathname.startsWith(p.endsWith('/') ? p : `${p}/`);
   if (PUBLIC_EXACT_PATHS.has(pathname) || PUBLIC_PATHS.some(casaPrefixoPublico)) {
-    return addSecurityHeaders(NextResponse.next());
+    return addSecurityHeaders(next());
   }
 
   // Allow static assets and Next.js internals
@@ -112,7 +119,7 @@ export async function middleware(request: NextRequest) {
     pathname.endsWith('.jpg') ||
     pathname.endsWith('.svg')
   ) {
-    return NextResponse.next();
+    return next();
   }
 
   // Check for session cookie
@@ -142,10 +149,10 @@ export async function middleware(request: NextRequest) {
         }
         return NextResponse.redirect(new URL('/admin/login', request.url));
       }
-      return addSecurityHeaders(NextResponse.next());
+      return addSecurityHeaders(next());
     }
 
-    return addSecurityHeaders(NextResponse.next());
+    return addSecurityHeaders(next());
   } catch {
     // Invalid/expired token — clear cookie and redirect
     if (pathname.startsWith('/api/')) {

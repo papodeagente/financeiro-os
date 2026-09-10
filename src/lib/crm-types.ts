@@ -1016,7 +1016,7 @@ export function createProposta(numero: string): Proposta {
 // FASE 6 — LOG DE AUDITORIA
 // ============================================================
 
-export type AcaoAuditoria = 'CRIAR' | 'EDITAR' | 'EXCLUIR' | 'VISUALIZAR' | 'EXPORTAR' | 'ENVIAR' | 'CONVERTER' | 'CANCELAR' | 'CONFIRMAR';
+export type AcaoAuditoria = 'CRIAR' | 'EDITAR' | 'EXCLUIR' | 'VISUALIZAR' | 'EXPORTAR' | 'ENVIAR' | 'CONVERTER' | 'CANCELAR' | 'CONFIRMAR' | 'LOGIN' | 'LOGOUT' | 'LOGIN_FALHOU' | 'IMPERSONAR' | 'ENCERRAR_IMPERSONACAO';
 
 export interface LogAuditoria {
   id: string;
@@ -1029,6 +1029,11 @@ export interface LogAuditoria {
   entidade: string;
   entidade_id: string;
   descricao: string;
+  origem?: 'USUARIO' | 'SISTEMA' | 'INTEGRACAO' | 'PUBLICO';
+  rota?: string;
+  metodo?: string;
+  request_id?: string;
+  entidade_nome?: string;
   alteracoes: Array<{
     campo: string;
     valor_anterior: string;

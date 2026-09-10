@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
+import { registrarEventoAuditoria } from '@/lib/audit';
 
 // Returns the plaintext HMAC secret for this tenant. Separate endpoint
 // so the masked main GET is what the page renders by default and the
@@ -16,6 +17,14 @@ export async function GET() {
     );
     if (rows.length === 0) return NextResponse.json({ secret: '' });
     const data = rows[0].data;
+    await registrarEventoAuditoria({
+      tenantId,
+      acao: 'VISUALIZAR',
+      modulo: 'Integrações',
+      entidade: 'crm_config',
+      entidadeId: 'singleton',
+      descricao: 'Revelou a chave de integração com o CRM.',
+    });
     return NextResponse.json({
       secret: (data.api_key_crm || data.api_key_entur || '') as string,
     });

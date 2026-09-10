@@ -1,7 +1,9 @@
-import { Pool } from 'pg';
+import { AuditPool } from './audit-pool';
+import { getAuditContext, runWithAuditContext, SYSTEM_AUDIT_CONTEXT } from './audit-context';
+import { AUDIT_SCHEMA_SQL } from './audit-schema';
 
 const pool = process.env.DATABASE_URL
-  ? new Pool({ connectionString: process.env.DATABASE_URL, max: 5 })
+  ? new AuditPool({ connectionString: process.env.DATABASE_URL, max: 5 }, getAuditContext)
   : null;
 
 export default pool;
@@ -19,7 +21,8 @@ let emAndamento: Promise<void> | null = null;
 export async function initDB() {
   if (!pool || initialized) return;
   if (emAndamento) return emAndamento;
-  emAndamento = executarInitDB().finally(() => { emAndamento = null; });
+  emAndamento = runWithAuditContext(SYSTEM_AUDIT_CONTEXT, executarInitDB)
+    .finally(() => { emAndamento = null; });
   return emAndamento;
 }
 
@@ -37,6 +40,7 @@ async function executarInitDB() {
 
     CREATE TABLE IF NOT EXISTS clientes (
       id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL DEFAULT '',
       nome TEXT NOT NULL DEFAULT '',
       cpf_cnpj TEXT NOT NULL DEFAULT '',
       tipo TEXT NOT NULL DEFAULT 'fisica',
@@ -67,6 +71,7 @@ async function executarInitDB() {
 
     CREATE TABLE IF NOT EXISTS vendas_crm (
       id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL DEFAULT '',
       cliente_id TEXT NOT NULL DEFAULT '',
       vendedor_id TEXT NOT NULL DEFAULT '',
       status TEXT NOT NULL DEFAULT 'orcamento',
@@ -1268,5 +1273,7 @@ async function executarInitDB() {
     );
   }
 
+  // Instala a captura somente depois das migrações/seed, sem fabricar histórico.
+  await pool.query(AUDIT_SCHEMA_SQL);
   initialized = true;
 }

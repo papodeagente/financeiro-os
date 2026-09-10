@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
+import { writeFile, mkdir, unlink } from 'fs/promises';
 import path from 'path';
 import { generateId } from '@/lib/utils';
+import { getTenantId } from '@/lib/tenant';
+import { registrarEventoAuditoria } from '@/lib/audit';
 
 const MAX_SIZE = 15 * 1024 * 1024; // 15MB per image
 const MAX_BATCH = 24;
@@ -27,7 +29,7 @@ async function getUploadDir(): Promise<string> {
   return UPLOAD_DIR_PROD;
 }
 
-async function downloadOne(url: string, dir: string): Promise<string | null> {
+async function downloadOne(url: string, dir: string, tenantId: string): Promise<string | null> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -50,7 +52,21 @@ async function downloadOne(url: string, dir: string): Promise<string | null> {
     if (buf.length === 0 || buf.length > MAX_SIZE) return null;
 
     const fileName = `${generateId()}.${ext}`;
-    await writeFile(path.join(dir, fileName), buf);
+    const filePath = path.join(dir, fileName);
+    await writeFile(filePath, buf, { flag: 'wx' });
+    try {
+      await registrarEventoAuditoria({
+        tenantId,
+        acao: 'ENVIAR',
+        modulo: 'Arquivos',
+        entidade: 'imagens',
+        entidadeId: fileName,
+        descricao: `Importou uma imagem para o sistema (${buf.length} bytes).`,
+      });
+    } catch (e) {
+      await unlink(filePath);
+      throw e;
+    }
     return `/api/uploads/${fileName}`;
   } catch {
     return null;
@@ -68,6 +84,7 @@ async function downloadOne(url: string, dir: string): Promise<string | null> {
  */
 export async function POST(req: Request) {
   try {
+    const tenantId = await getTenantId();
     const body = await req.json();
     const inputUrls: unknown = body.urls;
     if (!Array.isArray(inputUrls) || inputUrls.length === 0) {
@@ -86,7 +103,7 @@ export async function POST(req: Request) {
     const results = await Promise.all(
       valid.map(async (u) => {
         if (u.startsWith('/api/uploads/') || u.startsWith('/uploads/')) return u;
-        return downloadOne(u, dir);
+        return downloadOne(u, dir, tenantId);
       })
     );
 

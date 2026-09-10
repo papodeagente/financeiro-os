@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
+import { writeFile, mkdir, unlink } from 'fs/promises';
 import path from 'path';
 import { generateId } from '@/lib/utils';
+import { getTenantId } from '@/lib/tenant';
+import { registrarEventoAuditoria } from '@/lib/audit';
 
 const MAX_SIZE = 25 * 1024 * 1024; // 25MB (PDFs/contratos costumam passar de 10MB)
 const ALLOWED_TYPES = [
@@ -36,6 +38,7 @@ async function getUploadDir(): Promise<string> {
 
 export async function POST(req: Request) {
   try {
+    const tenantId = await getTenantId();
     const formData = await req.formData();
     const files = formData.getAll('files') as File[];
 
@@ -59,7 +62,22 @@ export async function POST(req: Request) {
       const fileName = `${generateId()}.${ext}`;
       const filePath = path.join(UPLOAD_DIR, fileName);
       const buffer = Buffer.from(await file.arrayBuffer());
-      await writeFile(filePath, buffer);
+      await writeFile(filePath, buffer, { flag: 'wx' });
+      try {
+        await registrarEventoAuditoria({
+          tenantId,
+          acao: 'ENVIAR',
+          modulo: 'Arquivos',
+          entidade: 'arquivos',
+          entidadeId: fileName,
+          descricao: `Enviou o arquivo ${file.name.slice(0, 120)} (${file.size} bytes).`,
+        });
+      } catch (e) {
+        // A URL ainda não foi entregue. Compensa só o arquivo recém-criado
+        // quando não é possível persistir seu registro de auditoria.
+        await unlink(filePath);
+        throw e;
+      }
 
       results.push({
         url: `/api/uploads/${fileName}`,

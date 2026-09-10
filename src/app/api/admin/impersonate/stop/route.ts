@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSession, createSession, COOKIE_NAME } from '@/lib/auth';
+import { registrarEventoAuditoria } from '@/lib/audit';
 
 export async function POST() {
   try {
@@ -19,6 +20,17 @@ export async function POST() {
       tenantSlug: '__platform__',
       isSuperAdmin: true,
     });
+    if (session.impersonatingTenantId) {
+      await registrarEventoAuditoria({
+        tenantId: session.impersonatingTenantId,
+        session,
+        acao: 'ENCERRAR_IMPERSONACAO',
+        modulo: 'Segurança',
+        entidade: 'tenants',
+        entidadeId: session.impersonatingTenantId,
+        descricao: 'Encerrou o acesso de suporte à agência.',
+      });
+    }
 
     const response = NextResponse.json({
       ok: true,
