@@ -1,17 +1,39 @@
 import { NextResponse } from 'next/server';
 import { initDB } from '@/lib/db';
-import { getTenantId } from '@/lib/tenant';
+import { getSession } from '@/lib/auth';
 import { marcarComoLida } from '@/lib/notificacoes';
 
-export async function PUT(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+const HEADERS = { 'Cache-Control': 'private, no-store' };
+
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await initDB();
-    const tenantId = await getTenantId();
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: 'Sessão necessária.' }, { status: 401, headers: HEADERS });
     const { id } = await params;
-    if (!id) return NextResponse.json({ error: 'Bad request' }, { status: 400 });
-    await marcarComoLida(tenantId, id);
-    return NextResponse.json({ ok: true });
-  } catch (e: unknown) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erro' }, { status: 500 });
+    if (!id || id.length > 500) return NextResponse.json({ error: 'Notificação inválida.' }, { status: 400, headers: HEADERS });
+    const rawBody = await req.text();
+    let body: unknown = {};
+    if (rawBody.trim()) {
+      try {
+        body = JSON.parse(rawBody);
+      } catch {
+        return NextResponse.json({ error: 'Estado de leitura inválido.' }, { status: 400, headers: HEADERS });
+      }
+    }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: 'Estado de leitura inválido.' }, { status: 400, headers: HEADERS });
+    }
+    const input = body as Record<string, unknown>;
+    if (Object.keys(input).some(key => key !== 'lida')
+      || ('lida' in input && typeof input.lida !== 'boolean')) {
+      return NextResponse.json({ error: 'Estado de leitura inválido.' }, { status: 400, headers: HEADERS });
+    }
+    await initDB();
+    const visible = await marcarComoLida(session, id, (input.lida as boolean | undefined) ?? true);
+    if (!visible) return NextResponse.json({ error: 'Notificação não encontrada.' }, { status: 404, headers: HEADERS });
+    return NextResponse.json({ ok: true }, { headers: HEADERS });
+  } catch (error) {
+    console.error('[notificacoes] Falha ao alterar leitura:', error instanceof Error ? error.name : 'Erro');
+    return NextResponse.json({ error: 'Não foi possível atualizar a notificação.' }, { status: 500, headers: HEADERS });
   }
 }

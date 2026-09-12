@@ -96,29 +96,35 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       });
     }
 
-    if (tenantId && resultado && !resultado.duplicado && resultado.syncStatus === 'ok') {
+    if (tenantId && resultado && !resultado.duplicado) {
       const cliente = proposta.cliente_nome || nome;
       const numero = proposta.numero || rows[0].id;
-      const descricao = resultado.matchedExisting
-        ? `Alteração registrada na negociação ${resultado.vendaNumero}. Tarefa atribuída ao responsável.`
-        : `Nova negociação ${resultado.vendaNumero} criada para registrar a solicitação. Tarefa atribuída.`;
+      const sincronizado = resultado.syncStatus === 'ok';
+      const descricao = !sincronizado
+        ? 'Solicitação registrada com segurança. A sincronização com o CRM ficou pendente e precisa ser reprocessada.'
+        : resultado.matchedExisting
+          ? `Alteração registrada na negociação ${resultado.vendaNumero}. Tarefa atribuída ao responsável.`
+          : `Nova negociação ${resultado.vendaNumero} criada para registrar a solicitação. Tarefa atribuída.`;
       await criarNotificacao({
         tenantId,
         tipo: 'PROPOSTA_FEEDBACK',
         titulo: `${cliente} solicitou alterações na proposta ${numero}`,
         descricao,
-        link: resultado.vendaId ? `/vendas/${resultado.vendaId}` : `/propostas/${rows[0].id}`,
+        link: sincronizado && resultado.vendaId
+          ? `/vendas/${resultado.vendaId}`
+          : `/propostas/${rows[0].id}`,
         vendedorId: proposta.vendedor_id || '',
+        chaveDeduplicacao: `proposta:${rows[0].id}:alteracao:${resultado.eventoId}`,
         data: {
           proposta_id: rows[0].id,
           proposta_numero: numero,
-          cliente_nome: cliente,
-          nome, telefone, email,
-          anotacao,
           venda_id: resultado.vendaId,
           venda_numero: resultado.vendaNumero,
           tarefa_id: resultado.tarefaId,
           matched_existing: resultado.matchedExisting,
+          evento_id: resultado.eventoId,
+          sync_status: resultado.syncStatus,
+          sync_pendente: !sincronizado,
         },
       });
     }

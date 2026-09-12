@@ -1,6 +1,21 @@
+import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
+import { criarNotificacao } from '@/lib/notificacoes';
 import { isHostAuthorizedForProposta } from '@/lib/tenant-host';
+
+function normalizarTextoIdentidade(valor: string): string {
+  return valor.normalize('NFKC').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function fingerprintLead(nome: string, email: string, telefone: string): string {
+  const identidadeNormalizada = JSON.stringify({
+    nome: normalizarTextoIdentidade(nome),
+    email: normalizarTextoIdentidade(email),
+    telefone: telefone.replace(/\D/g, ''),
+  });
+  return createHash('sha256').update(identidadeNormalizada).digest('hex');
+}
 
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
@@ -27,20 +42,45 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     }
 
     const proposta = rows[0].data;
+    const tenantId = rows[0].tenant_id || '';
+    const nomeLead = nome.trim();
+    const emailLead = (email || '').trim();
+    const telefoneLead = (telefone || '').trim();
+    const mensagemLead = (mensagem || '').trim();
+    const dataLead = new Date().toISOString();
     if (!proposta.leads) proposta.leads = [];
     proposta.leads.push({
-      nome: nome.trim(),
-      email: (email || '').trim(),
-      telefone: (telefone || '').trim(),
-      mensagem: (mensagem || '').trim(),
-      data: new Date().toISOString(),
+      nome: nomeLead,
+      email: emailLead,
+      telefone: telefoneLead,
+      mensagem: mensagemLead,
+      data: dataLead,
     });
-    proposta.atualizado_em = new Date().toISOString();
+    proposta.atualizado_em = dataLead;
 
     await pool.query(
       `UPDATE propostas SET data = $1, updated_at = NOW() WHERE id = $2`,
       [JSON.stringify(proposta), rows[0].id]
     );
+
+    if (tenantId) {
+      const numero = proposta.numero || rows[0].id;
+      const leadFingerprint = fingerprintLead(nomeLead, emailLead, telefoneLead);
+      await criarNotificacao({
+        tenantId,
+        tipo: 'PROPOSTA_LEAD',
+        titulo: `${nomeLead} demonstrou interesse na proposta ${numero}`,
+        descricao: mensagemLead || 'Um novo contato foi enviado pela proposta pública.',
+        link: `/propostas/${rows[0].id}`,
+        vendedorId: proposta.vendedor_id || '',
+        chaveDeduplicacao: `proposta:${rows[0].id}:lead:${leadFingerprint}`,
+        data: {
+          proposta_id: rows[0].id,
+          proposta_numero: numero,
+          recebido_em: dataLead,
+        },
+      });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (e: unknown) {

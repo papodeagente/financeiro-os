@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { criarNotificacao } from '@/lib/notificacoes';
@@ -30,13 +31,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       return NextResponse.json({ error: 'Proposta nao encontrada' }, { status: 404 });
     }
 
+    const feedbackId = randomUUID();
+    const dataFeedback = new Date().toISOString();
     if (!proposta.feedbacks) proposta.feedbacks = [];
     proposta.feedbacks.push({
-      data: new Date().toISOString(),
+      id: feedbackId,
+      data: dataFeedback,
       mensagem: mensagem.trim(),
       nome: (nome || '').trim() || 'Cliente',
     });
-    proposta.atualizado_em = new Date().toISOString();
+    proposta.atualizado_em = dataFeedback;
 
     await pool.query(
       `UPDATE propostas SET data = $1, updated_at = NOW() WHERE id = $2`,
@@ -54,11 +58,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
         descricao: trecho,
         link: `/propostas/${rows[0].id}`,
         vendedorId: proposta.vendedor_id || '',
+        chaveDeduplicacao: `proposta:${rows[0].id}:feedback:${feedbackId}`,
         data: {
           proposta_id: rows[0].id,
           proposta_numero: numero,
-          autor: autorNome,
-          mensagem: mensagem.trim(),
+          feedback_id: feedbackId,
         },
       });
     }
