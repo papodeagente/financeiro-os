@@ -820,3 +820,83 @@ export async function consultarCnpj(
     telefone: digitos(primeiro(d, 'telefone', 'ddd_telefone_1', 'estabelecimento.telefone1')),
   };
 }
+
+// ============================================================
+// Download do documento
+// ============================================================
+
+export interface DocumentoDaNota {
+  bytes: Uint8Array;
+  tipo: string;
+  extensao: string;
+}
+
+/**
+ * Baixa o PDF (DANFSe) ou o XML autorizado da nota.
+ *
+ * PRECISA PASSAR PELO SERVIDOR. A URL que a AceleraAPI devolve exige o token
+ * da empresa no cabeçalho; um link direto no navegador não manda cabeçalho
+ * nenhum e volta 401. Colocar o token na URL para contornar isso seria
+ * entregar a credencial de emissão de notas no histórico do navegador.
+ *
+ * Aqui o corpo é lido como binário: o helper comum tenta interpretar como
+ * JSON e corromperia o PDF.
+ */
+export async function baixarDocumentoNota(
+  referencia: string,
+  tipo: 'pdf' | 'xml',
+  config: ConfigFiscal,
+): Promise<DocumentoDaNota> {
+  const token = String(config.token ?? '').trim();
+  if (!token) {
+    throw new ErroFiscal('A agência não está conectada à AceleraAPI.');
+  }
+  const id = String(referencia ?? '').trim();
+  if (!id) {
+    throw new ErroFiscal('Esta nota ainda não tem identificador no emissor.');
+  }
+
+  const caminho = tipo === 'pdf' ? 'danfse' : 'xml';
+  const controle = new AbortController();
+  const timer = setTimeout(() => controle.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(`${BASE}/nfse/${encodeURIComponent(id)}/${caminho}`, {
+      method: 'GET',
+      signal: controle.signal,
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      // Erro vem como JSON mesmo numa rota de arquivo.
+      let motivo = '';
+      try {
+        const corpo = JSON.parse(await res.text());
+        motivo = interpretar(res.status, corpo).mensagemErro;
+      } catch {
+        motivo = '';
+      }
+      throw new ErroFiscal(
+        motivo || `O emissor não devolveu o ${tipo.toUpperCase()} desta nota.`,
+      );
+    }
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.byteLength === 0) {
+      throw new ErroFiscal(`O emissor devolveu um ${tipo.toUpperCase()} vazio.`);
+    }
+    return {
+      bytes,
+      tipo: tipo === 'pdf' ? 'application/pdf' : 'application/xml; charset=utf-8',
+      extensao: tipo,
+    };
+  } catch (e) {
+    if (e instanceof ErroFiscal) throw e;
+    if (e instanceof Error && e.name === 'AbortError') {
+      throw new ErroFiscal('O emissor não respondeu a tempo. Tente de novo.');
+    }
+    throw new ErroFiscal(
+      'Não foi possível falar com a AceleraAPI.',
+      e instanceof Error ? e.message : '',
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}

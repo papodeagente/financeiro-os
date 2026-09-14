@@ -9,7 +9,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ExternalLink, RefreshCw } from 'lucide-react';
+import { Download, RefreshCw } from 'lucide-react';
 
 import { PageShell } from '@/components/PageShell';
 import { PageHeader } from '@/components/fin/PageHeader';
@@ -47,6 +47,7 @@ export default function NotasFiscaisPage() {
   const [cancelando, setCancelando] = useState<NotaFiscal | null>(null);
   const [motivo, setMotivo] = useState('');
   const [processando, setProcessando] = useState(false);
+  const [baixando, setBaixando] = useState('');
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -73,6 +74,44 @@ export default function NotasFiscaisPage() {
     const atualizada = corpo as NotaFiscal;
     setNotas(lista => lista.map(n => (n.id === atualizada.id ? atualizada : n)));
     toast.success(`Situação: ${ROTULO[atualizada.status]}`, atualizada.erro || '');
+  }
+
+  /**
+   * Baixa pelo servidor, que é quem tem a credencial do emissor.
+   *
+   * Um <a download> apontando para o emissor voltaria 401, e um link nosso
+   * abriria uma aba em branco quando o emissor recusasse. Aqui o erro chega
+   * como JSON e vira aviso na tela, em vez de sumir.
+   */
+  async function baixar(nota: NotaFiscal, tipo: 'pdf' | 'xml') {
+    const chave = `${nota.id}-${tipo}`;
+    if (baixando) return;
+    setBaixando(chave);
+    try {
+      const res = await fetch(`/api/fiscal/notas/${nota.id}/documento?tipo=${tipo}`);
+      if (!res.ok) {
+        const corpo = await res.json().catch(() => null);
+        toast.error(
+          `Não foi possível baixar o ${tipo.toUpperCase()}`,
+          corpo?.error || '',
+        );
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `NFSe-${nota.numero || nota.id}.${tipo}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Sem revogar, o blob fica na memória da aba até recarregar a página.
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error(`Não foi possível baixar o ${tipo.toUpperCase()}`);
+    } finally {
+      setBaixando('');
+    }
   }
 
   async function confirmarCancelamento() {
@@ -168,7 +207,7 @@ export default function NotasFiscaisPage() {
       id: 'acoes',
       cabecalho: 'Ações',
       tipo: 'acoes',
-      minWidth: 240,
+      minWidth: 340,
       render: n => (
         <>
           {n.status === 'PROCESSANDO' ? (
@@ -177,16 +216,26 @@ export default function NotasFiscaisPage() {
               Consultar
             </Button>
           ) : null}
-          {n.link_pdf ? (
-            <a
-              href={n.link_pdf}
-              target="_blank"
-              rel="noreferrer"
-              className="fin-t-body inline-flex items-center gap-2 px-3 text-[var(--fin-accent)]"
-            >
-              <ExternalLink aria-hidden="true" className="size-4" />
-              PDF
-            </a>
+          {n.status === 'AUTORIZADA' || n.status === 'CANCELADA' ? (
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => { void baixar(n, 'pdf'); }}
+                disabled={baixando === `${n.id}-pdf`}
+              >
+                <Download aria-hidden="true" className="mr-2 size-4" />
+                {baixando === `${n.id}-pdf` ? 'Baixando…' : 'PDF'}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => { void baixar(n, 'xml'); }}
+                disabled={baixando === `${n.id}-xml`}
+              >
+                {baixando === `${n.id}-xml` ? 'Baixando…' : 'XML'}
+              </Button>
+            </>
           ) : null}
           {n.status !== 'CANCELADA' ? (
             <Button
