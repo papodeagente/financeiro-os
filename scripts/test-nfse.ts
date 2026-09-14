@@ -511,6 +511,39 @@ console.log('--- busca de serviço no lugar do código decorado ---');
 }
 
 // ══════════════════════════════════════════════════════════════════════
+console.log('--- regime de apuração do Simples ---');
+{
+  // O caso real: empresa ME/EPP com "Simples" digitado no campo. A API
+  // espera 1, 2 ou 3; o texto derrubava o cadastro do prestador inteiro e o
+  // emissor devolvia queixa dos OUTROS campos — erro longe da causa.
+  const p = pendenciasParaEmitir({ ...nacionalOk, simples_nacional: 3, regime_apuracao: 'Simples' });
+  eq(p.length, 1, 'texto no lugar do código é pendência');
+  eq(p[0].includes('regime de apuração'), true, 'e aponta o campo certo');
+}
+{
+  const p = pendenciasParaEmitir({ ...nacionalOk, simples_nacional: 3, regime_apuracao: '1' });
+  eq(p, [], 'com o código válido, passa');
+}
+{
+  const p = pendenciasParaEmitir({ ...nacionalOk, simples_nacional: 3, regime_apuracao: '' });
+  eq(p.some(x => x.includes('regime de apuração')), true, 'vazio também é pendência');
+}
+{
+  const p = pendenciasParaEmitir({ ...nacionalOk, simples_nacional: 3, regime_apuracao: '9' });
+  eq(p.some(x => x.includes('regime de apuração')), true, 'código fora de 1..3 é pendência');
+}
+{
+  // Não optante não precisa do campo: cobrar seria inventar obrigação.
+  const p = pendenciasParaEmitir({ ...nacionalOk, simples_nacional: 1, regime_apuracao: '' });
+  eq(p, [], 'não optante não precisa de regime de apuração');
+}
+{
+  // MEI também precisa.
+  const p = pendenciasParaEmitir({ ...nacionalOk, simples_nacional: 2, regime_apuracao: '' });
+  eq(p.some(x => x.includes('regime de apuração')), true, 'MEI também precisa');
+}
+
+// ══════════════════════════════════════════════════════════════════════
 console.log('--- o código sai da atividade da empresa ---');
 {
   // O certificado só assina; quem diz o que a empresa faz é o CNAE.

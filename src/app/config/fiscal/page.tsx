@@ -786,10 +786,21 @@ export default function ConfigFiscalPage() {
                   {config.simples_nacional >= 2 ? (
                     <div className="flex flex-col gap-2">
                       <Label htmlFor="apuracao">Regime de apuração</Label>
-                      <Input id="apuracao" value={config.regime_apuracao}
-                        onChange={e => mudar('regime_apuracao', e.target.value)} />
+                      {/* Campo de texto livre aqui gerava valor inválido: a
+                          API espera 1, 2 ou 3, e quem digitava "Simples"
+                          derrubava o cadastro inteiro do prestador sem que
+                          nada na tela explicasse. */}
+                      <select id="apuracao" className={SELECT} value={config.regime_apuracao}
+                        onChange={e => mudar('regime_apuracao', e.target.value)}
+                      >
+                        <option value="">Escolha…</option>
+                        <option value="1">Tudo pelo Simples (federais e ISS)</option>
+                        <option value="2">Federais pelo Simples, ISS pela prefeitura</option>
+                        <option value="3">Federais e ISS fora do Simples</option>
+                      </select>
                       <span className="fin-t-caption text-[var(--fin-text-3)]">
-                        Exigido porque a empresa é do Simples.
+                        Exigido porque a empresa é do Simples. Na dúvida, a primeira opção é a
+                        mais comum — confirme com a contabilidade.
                       </span>
                     </div>
                   ) : null}

@@ -45,6 +45,24 @@ function codigoAmbiente(config: ConfigFiscal): number {
   return config.ambiente === 'PRODUCAO' ? 1 : 2;
 }
 
+/**
+ * Converte para número, ou devolve null quando o valor não é um número.
+ *
+ * Existe porque a configuração guarda estes campos como texto (é o que um
+ * <input> produz) e a API os valida como número. `permitidos` restringe ao
+ * conjunto que o campo aceita: fora dele, é melhor omitir do que enviar um
+ * código que não existe.
+ */
+function numeroValido(v: unknown, permitidos?: number[]): number | null {
+  const texto = String(v ?? '').trim();
+  if (!texto) return null;
+  if (!/^\d+$/.test(texto)) return null;
+  const n = Number(texto);
+  if (!Number.isFinite(n)) return null;
+  if (permitidos && !permitidos.includes(n)) return null;
+  return n;
+}
+
 function digitos(v: unknown): string {
   return String(v ?? '').replace(/\D+/g, '');
 }
@@ -281,17 +299,28 @@ export class EmissorAceleraAPI implements EmissorNFSe {
     if (digitos(emitente.inscricao_municipal)) {
       corpo.inscricao_municipal = digitos(emitente.inscricao_municipal);
     }
-    if (config.simples_nacional) corpo.simples_nacional = config.simples_nacional;
+    // ESTES CAMPOS SÃO NUMÉRICOS NA API. Mandar '0' e '1' como TEXTO, que era
+    // o que a configuração guardava, faz a validação recusar o cadastro
+    // inteiro — e aí o prestador nunca é gravado, o emissor continua
+    // reclamando de município e código de tributação, e nada na tela explica
+    // por quê. Qualquer valor que não vire número é omitido em vez de ir
+    // quebrado.
+    if (config.simples_nacional) corpo.simples_nacional = Number(config.simples_nacional);
     // regime_apuracao só é exigido para MEI e ME/EPP; mandar em não optante
-    // é ruído que a API rejeita.
-    if (config.simples_nacional >= 2 && config.regime_apuracao) {
-      corpo.regime_apuracao = config.regime_apuracao;
+    // é ruído que a API rejeita. E ele é 1, 2 ou 3 — nunca o nome do regime.
+    if (config.simples_nacional >= 2) {
+      const regime = numeroValido(config.regime_apuracao, [1, 2, 3]);
+      if (regime !== null) corpo.regime_apuracao = regime;
     }
-    if (config.regime_especial) corpo.regime_especial = config.regime_especial;
-    if (config.trib_issqn) corpo.trib_issqn = config.trib_issqn;
-    if (config.tipo_retencao_issqn) corpo.tipo_retencao_issqn = config.tipo_retencao_issqn;
-    if (config.serie_rps) corpo.serie_dps = config.serie_rps;
-    if (config.ultimo_numero_dps) corpo.ultimo_numero_dps = config.ultimo_numero_dps;
+    const especial = numeroValido(config.regime_especial);
+    if (especial !== null) corpo.regime_especial = especial;
+    const trib = numeroValido(config.trib_issqn);
+    if (trib !== null) corpo.trib_issqn = trib;
+    const retencao = numeroValido(config.tipo_retencao_issqn);
+    if (retencao !== null) corpo.tipo_retencao_issqn = retencao;
+    if (config.serie_rps) corpo.serie_dps = Number(config.serie_rps) || config.serie_rps;
+    const ultimo = numeroValido(config.ultimo_numero_dps);
+    if (ultimo !== null) corpo.ultimo_numero_dps = ultimo;
 
     const r = await chamar(
       '/nfse/configuracao',

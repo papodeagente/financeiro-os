@@ -249,6 +249,10 @@ export function pendenciasParaEmitir(entrada: {
   cod_municipio_ibge?: string;
   /** Só no padrão nacional: código de tributação de 6 dígitos. */
   cod_tributacao_nacional?: string;
+  /** 1 não optante, 2 MEI, 3 ME/EPP. */
+  simples_nacional?: number;
+  /** 1, 2 ou 3. Exigido quando a empresa é do Simples. */
+  regime_apuracao?: string;
 }): string[] {
   const faltas: string[] = [];
   if (!entrada.provedor) faltas.push('Escolha o emissor de nota em Configurações › Fiscal.');
@@ -275,6 +279,17 @@ export function pendenciasParaEmitir(entrada: {
     }
     if (!String(entrada.cod_tributacao_nacional || '').trim()) {
       faltas.push('Informe o código de tributação nacional (6 dígitos). Ele vem da contabilidade.');
+    }
+    // Empresa do Simples sem regime de apuração válido derruba o cadastro do
+    // prestador inteiro, e o emissor devolve a queixa dos OUTROS campos — o
+    // erro aparece longe da causa. Barrar aqui mostra o campo certo.
+    if (Number(entrada.simples_nacional ?? 0) >= 2) {
+      const regime = String(entrada.regime_apuracao || '').trim();
+      if (!['1', '2', '3'].includes(regime)) {
+        faltas.push(
+          'Escolha o regime de apuração: a empresa é do Simples e esse campo é obrigatório.',
+        );
+      }
     }
   } else if (!String(entrada.item_lista_servico || '').trim()) {
     faltas.push('Informe o item da lista de serviço (agência de viagens costuma ser 9.02).');

@@ -335,6 +335,8 @@ export async function montarPrevia(
     padrao_nacional: config.provedor === 'aceleraapi',
     cod_municipio_ibge: config.cod_municipio_ibge,
     cod_tributacao_nacional: config.cod_tributacao_nacional,
+    simples_nacional: config.simples_nacional,
+    regime_apuracao: config.regime_apuracao,
   });
 
   const totalParcelas = Math.max(1, Math.floor(num(ctx.conta.total_parcelas)) || 1);
