@@ -36,6 +36,7 @@ import {
   type ResultadoTransmissao,
 } from './nfse-emissor';
 import type { CertificadoDigital, ConfigFiscal, NotaFiscal } from './nfse-tipos';
+import { situacaoSimples } from './nfse-simples';
 
 const BASE = 'https://aceleraapi.com.br/api/v1';
 const TIMEOUT_MS = 45_000;
@@ -776,21 +777,17 @@ export async function consultarCnpj(
   ].filter(Boolean);
 
   // Simples/MEI vêm da Receita. Perguntar isso à agência era pedir um dado
-  // que o sistema já tem como olhar — e que ela costuma errar.
-  const mei = d.mei === true
-    || primeiro(d, 'mei.optante', 'opcao_pelo_mei').toLowerCase() === 'true';
-  const simplesTexto = primeiro(d, 'simples.optante', 'opcao_pelo_simples', 'simples_nacional');
-  const simplesOptante = d.simples === true
-    || simplesTexto.toLowerCase() === 'true'
-    || simplesTexto.toLowerCase() === 'sim';
-  // Zero quer dizer "a base não informou", e é diferente de "não optante":
-  // com zero a tela mantém o que estiver configurado em vez de rebaixar a
-  // empresa para não optante sem ter lido isso em lugar nenhum.
-  const houveResposta = Boolean(simplesTexto) || 'simples' in d || 'mei' in d;
-  let simples: 0 | 1 | 2 | 3 = 0;
-  if (mei) simples = 2;
-  else if (simplesOptante) simples = 3;
-  else if (houveResposta) simples = 1;
+  // que o sistema já tem como olhar, e que ela costuma errar.
+  //
+  // A leitura mora em nfse-simples.ts porque a versão anterior aqui só
+  // aceitava a string literal "true": booleano, objeto aninhado e "S", que
+  // são os formatos que as bases realmente devolvem, caíam todos em NÃO
+  // OPTANTE. Era essa divergência que a prefeitura recusava com o erro
+  // E0160. Zero continua querendo dizer "a base não informou", e é
+  // diferente de "não optante": com zero a tela mantém o que já está
+  // configurado em vez de rebaixar sem ter lido.
+  const situacao = situacaoSimples(d);
+  const simples: 0 | 1 | 2 | 3 = situacao.enquadramento;
 
   return {
     cnpj: doc,

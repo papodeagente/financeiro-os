@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dialog';
 import { Money } from '@/components/fin/Money';
 import { formatBRL } from '@/lib/utils';
+import { lerErroNota } from '@/lib/nfse-simples';
 import { toast } from '@/lib/toast';
 import type { ContaReceber } from '@/lib/crm-types';
 import type {
@@ -158,7 +159,13 @@ export function PainelNota({
       }
       const nota = corpo as NotaFiscal;
       if (nota.status === 'REJEITADA') {
-        toast.error('A prefeitura recusou a nota', nota.erro || '');
+        // A recusa chega como JSON da SefinNacional. Mostrar cru transfere
+        // para a agência o trabalho de decifrar o layout da prefeitura.
+        const legivel = lerErroNota(nota.erro);
+        toast.error(
+          'A prefeitura recusou a nota',
+          legivel.explicacao || nota.erro || 'A prefeitura não explicou o motivo.',
+        );
       } else if (nota.status === 'AUTORIZADA') {
         toast.success('Nota autorizada', nota.numero ? `Número ${nota.numero}` : '');
       } else {
