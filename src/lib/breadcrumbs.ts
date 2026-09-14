@@ -54,6 +54,7 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   '/financeiro-ag/transferencias': 'Transferências',
   '/financeiro-grupos': 'Financeiro por grupo',
   '/equipe/vendedores': 'Vendedores e planos',
+  '/equipe/folha': 'Folha de pagamento',
   '/pessoas': 'Pessoas',
   '/pessoas/clientes': 'Clientes',
   '/pessoas/fornecedores': 'Fornecedores',

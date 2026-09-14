@@ -97,7 +97,9 @@ export default function VendedoresPage() {
         }),
         loadEntities<PlanoComissao>('planos-comissao'),
       ]);
-      setEquipe(resp.equipe ?? []);
+      // Colaborador não vende: existe só para a folha de pagamento. Deixá-lo
+      // aqui ofereceria plano de comissão a quem nunca fecha venda.
+      setEquipe((resp.equipe ?? []).filter((p: PessoaDaEquipe) => p.perfil !== 'COLABORADOR'));
       setOrfaos(resp.orfaos ?? []);
       setAguardando(resp.aguardandoCadastro ?? []);
       setPlanos(listaPlanos);

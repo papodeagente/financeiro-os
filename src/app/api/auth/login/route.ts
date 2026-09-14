@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
+import { semAcessoAoSistema } from '@/lib/permissoes';
 import { verifyPassword, createSession, COOKIE_NAME, type SessionPayload } from '@/lib/auth';
 import { registrarEventoAuditoria } from '@/lib/audit';
 
@@ -48,6 +49,17 @@ export async function POST(req: Request) {
     if (!user.ativo) {
       await registrarFalha('conta inativa');
       return NextResponse.json({ error: 'Usuario inativo. Contate o administrador.' }, { status: 403 });
+    }
+
+    // Colaborador existe para entrar na folha de pagamento, não para usar o
+    // sistema. A recusa fica AQUI, no login, e não só nas permissões: quem
+    // nunca recebe sessão não depende de nenhuma checagem posterior estar
+    // correta em cada rota.
+    if (semAcessoAoSistema(user.perfil)) {
+      return NextResponse.json(
+        { error: 'Este cadastro e de colaborador e nao tem acesso ao sistema.' },
+        { status: 403 },
+      );
     }
 
     // Usuário sem agência não entra.

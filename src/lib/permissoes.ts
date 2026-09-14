@@ -17,6 +17,10 @@
 //     nome dele mesmo. Não acessa financeiro, relatórios gerais ou
 //     dados de outros vendedores. Não exclui nem exporta.
 //
+//   COLABORADOR
+//     NÃO acessa a plataforma. Existe para ser cadastrado na folha de
+//     pagamento. Login recusa e todas as permissões são falsas.
+//
 // Perfis legados (GERENTE, FINANCEIRO, VISUALIZADOR) mapeiam pra OPERADOR.
 
 import type { PerfilUsuario, Usuario } from './crm-types';
@@ -25,14 +29,26 @@ export type Permissoes = Usuario['permissoes'];
 
 // Normaliza perfil legado pro grupo de 3.
 // 'owner' (legado do signup antigo) é tratado como ADMIN — criador da conta.
-export function perfilCanonico(perfil: PerfilUsuario | string | undefined): 'ADMIN' | 'OPERADOR' | 'VENDEDOR' {
+export function perfilCanonico(
+  perfil: PerfilUsuario | string | undefined,
+): 'ADMIN' | 'OPERADOR' | 'VENDEDOR' | 'COLABORADOR' {
   if (perfil === 'ADMIN' || perfil === 'owner') return 'ADMIN';
   if (perfil === 'VENDEDOR') return 'VENDEDOR';
+  // COLABORADOR precisa vir ANTES do caso final. O padrão desta função é
+  // devolver OPERADOR para perfil desconhecido, e OPERADOR enxerga todo o
+  // financeiro: cair no padrão daria acesso total a quem foi cadastrado
+  // justamente para não ter acesso nenhum.
+  if (perfil === 'COLABORADOR') return 'COLABORADOR';
   // GERENTE / FINANCEIRO / VISUALIZADOR / OPERADOR
   return 'OPERADOR';
 }
 
-export const PERFIS: { id: 'ADMIN' | 'OPERADOR' | 'VENDEDOR'; label: string; descricao: string }[] = [
+/** Perfil que existe só para a folha e nunca entra na plataforma. */
+export function semAcessoAoSistema(perfil: PerfilUsuario | string | undefined): boolean {
+  return perfilCanonico(perfil) === 'COLABORADOR';
+}
+
+export const PERFIS: { id: 'ADMIN' | 'OPERADOR' | 'VENDEDOR' | 'COLABORADOR'; label: string; descricao: string }[] = [
   {
     id: 'ADMIN',
     label: 'Administrador',
@@ -47,6 +63,11 @@ export const PERFIS: { id: 'ADMIN' | 'OPERADOR' | 'VENDEDOR'; label: string; des
     id: 'VENDEDOR',
     label: 'Vendedor',
     descricao: 'Acessa apenas as próprias vendas e comissões. Pode lançar vendas em seu nome.',
+  },
+  {
+    id: 'COLABORADOR',
+    label: 'Colaborador',
+    descricao: 'Não acessa a plataforma. Existe para entrar na folha de pagamento da empresa.',
   },
 ];
 
@@ -85,6 +106,21 @@ export function permissoesParaPerfil(perfil: PerfilUsuario): Permissoes {
         ver_financeiro: false,
         editar_financeiro: false,
         ver_comissoes: true,
+        acessar_relatorios: false,
+        gerenciar_usuarios: false,
+        pode_excluir: false,
+        pode_exportar: false,
+        ver_extrato_contas: [],
+      };
+    case 'COLABORADOR':
+      // Nenhuma permissão, por desenho. O colaborador é cadastrado para
+      // entrar na folha de pagamento, não para usar o sistema. O login
+      // também o recusa, então isto é a segunda barreira e não a única.
+      return {
+        ver_vendas_todos: false,
+        ver_financeiro: false,
+        editar_financeiro: false,
+        ver_comissoes: false,
         acessar_relatorios: false,
         gerenciar_usuarios: false,
         pode_excluir: false,

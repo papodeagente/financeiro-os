@@ -12,6 +12,7 @@ const CARGO: Record<PerfilUsuario, string> = {
   OPERADOR: 'Operador',
   FINANCEIRO: 'Financeiro',
   VENDEDOR: 'Vendedor',
+  COLABORADOR: 'Colaborador',
   VISUALIZADOR: 'Visualizador',
 };
 

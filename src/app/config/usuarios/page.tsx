@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   Users, Plus, Pencil, Trash2, X, Save, Loader2, ShieldCheck, Eye, EyeOff,
+  IdCard,
   Crown, UserCircle, Briefcase, Check, X as XIcon, Shield,
 } from 'lucide-react';
 import { Usuario, PerfilUsuario } from '@/lib/crm-types';
@@ -17,16 +18,22 @@ import { toast } from '@/lib/toast';
 
 const ENDPOINT = 'usuarios';
 
-const PERFIL_ICONS: Record<'ADMIN' | 'OPERADOR' | 'VENDEDOR', React.ComponentType<{ className?: string }>> = {
+type PerfilCanonico = 'ADMIN' | 'OPERADOR' | 'VENDEDOR' | 'COLABORADOR';
+
+const PERFIL_ICONS: Record<PerfilCanonico, React.ComponentType<{ className?: string }>> = {
   ADMIN: Crown,
   OPERADOR: UserCircle,
   VENDEDOR: Briefcase,
+  COLABORADOR: IdCard,
 };
 
-const PERFIL_BADGE: Record<'ADMIN' | 'OPERADOR' | 'VENDEDOR', string> = {
+const PERFIL_BADGE: Record<PerfilCanonico, string> = {
   ADMIN: 'bg-red-500/10 text-red-600 border-red-500/30',
   OPERADOR: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
   VENDEDOR: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30',
+  // Cinza de propósito: colaborador não tem acesso, então não é um nível
+  // de permissão a mais e não deve competir de cor com os que são.
+  COLABORADOR: 'bg-slate-500/10 text-slate-600 border-slate-500/30',
 };
 
 function newUsuario(): Usuario {
@@ -472,7 +479,8 @@ function UsuariosTable({
     // ADMIN primeiro, depois alfabetico
     const ac = perfilCanonico(a.perfil); const bc = perfilCanonico(b.perfil);
     if (ac !== bc) {
-      const order = { ADMIN: 0, OPERADOR: 1, VENDEDOR: 2 };
+      // Colaborador por último: não é um nível de acesso, é quem não tem.
+      const order: Record<PerfilCanonico, number> = { ADMIN: 0, OPERADOR: 1, VENDEDOR: 2, COLABORADOR: 3 };
       return order[ac] - order[bc];
     }
     return (a.nome || '').localeCompare(b.nome || '');

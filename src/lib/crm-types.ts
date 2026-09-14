@@ -1267,9 +1267,40 @@ export type PerfilUsuario =
   | 'ADMIN'
   | 'OPERADOR'
   | 'VENDEDOR'
+  /** Pessoa da empresa que NÃO acessa a plataforma. Existe para entrar na
+   *  folha de pagamento. Nunca faz login e não tem permissão nenhuma. */
+  | 'COLABORADOR'
   | 'GERENTE'
   | 'FINANCEIRO'
   | 'VISUALIZADOR';
+
+export type TipoContrato = 'CLT' | 'PJ' | 'ESTAGIO' | 'AUTONOMO';
+
+export interface BeneficioFolha {
+  nome: string;
+  valor: number;
+}
+
+/** Dados de vínculo com a empresa, usados pela folha de pagamento.
+ *  Vive no usuário porque o colaborador É uma pessoa cadastrada; o perfil
+ *  decide se ela acessa o sistema, o vínculo decide quanto ela custa. */
+export interface VinculoEmpresa {
+  tipo_contrato: TipoContrato;
+  cargo: string;
+  data_admissao: string;
+  /** Vazio enquanto a pessoa está na empresa. */
+  data_desligamento: string;
+  salario_base: number;
+  beneficios: BeneficioFolha[];
+  /** Encargos sobre o salário, em percentual. Configurável porque varia
+   *  por regime e por contrato; não dá para cravar alíquota em código. */
+  encargos_pct: number;
+  /** CLT provisiona 13º e férias todo mês. PJ não. */
+  provisiona_13_ferias: boolean;
+  /** Fora da folha sem apagar o histórico do que já foi pago. */
+  na_folha: boolean;
+  observacoes: string;
+}
 
 export interface Usuario {
   id: string;
@@ -1308,6 +1339,9 @@ export interface Usuario {
   /** Identificador da pessoa no CRM, quando veio de lá. */
   external_id?: string;
   origem?: string;
+
+  /** Vínculo com a empresa. Ausente em quem não entra na folha. */
+  vinculo?: VinculoEmpresa;
 }
 
 // ============================================================
