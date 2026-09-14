@@ -400,5 +400,24 @@ const configBase = {
 }
 
 // ══════════════════════════════════════════════════════════════════════
+console.log('--- aderência do município (shape real da AceleraAPI) ---');
+{
+  // Respostas literais da API, capturadas em 13/09/2026. O que decide é
+  // emissor_nacional/atendido — NUNCA o convênio.
+  const RJ = { codigo_ibge: '3304557', nome: 'Rio de Janeiro', uf: 'RJ', atendido: true, emissor_nacional: true, convenio: 'Conveniado Ativo', situacao: 'Ativo' };
+  const SP = { codigo_ibge: '3550308', nome: 'São Paulo', uf: 'SP', atendido: false, emissor_nacional: false, convenio: 'Conveniado Ativo', situacao: 'Ativo' };
+
+  const emite = (d: Record<string, unknown>) => d.emissor_nacional === true || d.atendido === true;
+  eq(emite(RJ), true, 'Rio de Janeiro emite pelo Emissor Nacional');
+  eq(emite(SP), false, 'São Paulo NÃO emite, apesar de conveniado');
+  // A armadilha: ler o convênio como permissão aprovaria São Paulo.
+  eq(
+    String(SP.convenio).toLowerCase().includes('ativo') && !emite(SP),
+    true,
+    'convênio ativo não é permissão para emitir',
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════
 console.log(`\n${total - falhas}/${total} testes da nota fiscal passaram`);
 if (falhas > 0) process.exit(1);

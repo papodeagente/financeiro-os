@@ -57,6 +57,7 @@ export function configFiscalPadrao(): ConfigFiscal {
     // Padrão nacional. Município e código de tributação ficam vazios de
     // propósito: chutar um código fiscal é pior do que exigir que a agência
     // confirme o dela com a contabilidade.
+    empresa_id: null,
     cod_municipio_ibge: '',
     cod_tributacao_nacional: '',
     simples_nacional: 1,

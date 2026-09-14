@@ -220,16 +220,36 @@ export class EmissorAceleraAPI implements EmissorNFSe {
     return t;
   }
 
-  /** Consulta pública: a cidade emite pelo padrão nacional? */
-  async municipioEmite(ibge: string): Promise<{ emite: boolean; detalhe: string }> {
+  /**
+   * Consulta pública: a cidade emite pelo Emissor Nacional?
+   *
+   * `atendido` e `emissor_nacional` andam juntos e são a resposta. Não
+   * confundir com `convenio`/`ambiente_nacional`: São Paulo aparece como
+   * "Conveniado Ativo" no ambiente nacional e mesmo assim NÃO emite por ele,
+   * porque mantém sistema próprio. Ler o convênio como permissão faria a
+   * agência tentar emitir e tomar recusa sem entender o motivo.
+   */
+  async municipioEmite(ibge: string): Promise<{
+    emite: boolean;
+    nome: string;
+    uf: string;
+    convenio: string;
+    detalhe: string;
+  }> {
     const r = await chamar(`/nfse/municipios/${encodeURIComponent(digitos(ibge))}`, { method: 'GET' }, null);
-    if (!r.ok) return { emite: false, detalhe: r.mensagemErro };
+    if (!r.ok) {
+      return { emite: false, nome: '', uf: '', convenio: '', detalhe: r.mensagemErro };
+    }
     const d = r.dados ?? {};
-    const emite = d.emite === true || d.aderente === true || d.ativo === true
-      || String(d.status ?? '').toLowerCase().includes('aderente');
+    const emite = d.emissor_nacional === true || d.atendido === true;
+    const nome = texto(d, 'nome');
+    const uf = texto(d, 'uf');
     return {
       emite,
-      detalhe: texto(d, 'nome', 'municipio', 'descricao'),
+      nome,
+      uf,
+      convenio: texto(d, 'convenio'),
+      detalhe: [nome, uf].filter(Boolean).join(' / '),
     };
   }
 
@@ -412,4 +432,151 @@ export class EmissorAceleraAPI implements EmissorNFSe {
       erro: '',
     };
   }
+}
+
+// ============================================================
+// Conta de desenvolvedor: uma empresa por agência
+// ============================================================
+
+/**
+ * A AceleraAPI tem DOIS tipos de chave, e a diferença é a arquitetura inteira
+ * deste módulo:
+ *
+ *   aca_  chave de desenvolvedor. É a da operação do Entur OS, uma só para o
+ *         sistema todo. Serve para cadastrar empresas e nada mais: qualquer
+ *         chamada de produto com ela devolve `requer_chave_empresa`.
+ *
+ *   ace_  chave da empresa. Nasce quando a agência é cadastrada, é devolvida
+ *         UMA única vez e é com ela que a nota é emitida.
+ *
+ * Por isso a agência não cola token nenhum: ela clica em conectar, o sistema
+ * cadastra a empresa dela com a chave da operação e guarda o `ace_` que
+ * voltou. É o que faz "configuração única, cada um emite a sua".
+ *
+ * A chave de desenvolvedor mora em variável de ambiente, não no banco: ela
+ * vale para todos os tenants e um vazamento dela exporia todas as agências.
+ */
+export function chaveDesenvolvedor(): string {
+  const k = String(process.env.ACELERA_API_KEY ?? '').trim();
+  if (!k) {
+    throw new ErroFiscal(
+      'A chave de desenvolvedor da AceleraAPI não está configurada no servidor '
+      + '(ACELERA_API_KEY). Sem ela nenhuma agência consegue ser conectada.',
+    );
+  }
+  return k;
+}
+
+export interface EmpresaAcelera {
+  id: number;
+  /** Só existe na resposta da criação e na regeneração. Guardar na hora. */
+  token: string;
+  status: string;
+}
+
+/** Código do produto de nota fiscal de serviço na AceleraAPI. */
+export const PRODUTO_FISCAL = 'fiscal';
+
+/**
+ * Cadastra a agência como empresa e devolve o token dela.
+ *
+ * O token vem uma vez só. Se a gravação falhar depois disto, o caminho não é
+ * cadastrar de novo (viraria empresa duplicada): é
+ * `regenerarTokenEmpresa(id)`, que revoga o anterior.
+ */
+export async function criarEmpresaAcelera(dados: {
+  cnpj: string;
+  razao_social: string;
+  nome_fantasia?: string;
+  email?: string;
+  telefone?: string;
+  uf?: string;
+}): Promise<EmpresaAcelera> {
+  const cnpj = digitos(dados.cnpj);
+  if (cnpj.length !== 14) {
+    throw new ErroFiscal(
+      'A agência precisa de um CNPJ válido em Configurações › Agência antes de conectar.',
+    );
+  }
+  if (!String(dados.razao_social ?? '').trim()) {
+    throw new ErroFiscal('A agência precisa de razão social em Configurações › Agência.');
+  }
+
+  const corpo: Record<string, unknown> = {
+    cnpj,
+    razao_social: dados.razao_social.trim(),
+    produtos: [PRODUTO_FISCAL],
+  };
+  if (dados.nome_fantasia?.trim()) corpo.nome_fantasia = dados.nome_fantasia.trim();
+  if (dados.email?.trim()) corpo.email = dados.email.trim();
+  if (dados.telefone?.trim()) corpo.telefone = digitos(dados.telefone);
+  if (dados.uf?.trim()) corpo.uf = dados.uf.trim().toUpperCase().slice(0, 2);
+
+  const r = await chamar(
+    '/empresas',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corpo),
+    },
+    chaveDesenvolvedor(),
+  );
+  if (!r.ok) throw new ErroFiscal(r.mensagemErro);
+
+  const d = r.dados ?? {};
+  const token = texto(d, 'token');
+  const id = Number(texto(d, 'id'));
+  if (!token || !Number.isFinite(id)) {
+    throw new ErroFiscal(
+      'A AceleraAPI cadastrou a empresa mas não devolveu o token. '
+      + 'Gere um novo token pelo painel da AceleraAPI antes de tentar de novo.',
+    );
+  }
+  return { id, token, status: texto(d, 'status') || 'ativa' };
+}
+
+/** Empresas já cadastradas na conta de desenvolvedor. */
+export async function listarEmpresasAcelera(): Promise<Array<{
+  id: number;
+  cnpj: string;
+  razao_social: string;
+  status: string;
+}>> {
+  const r = await chamar('/empresas?pagina=1', { method: 'GET' }, chaveDesenvolvedor());
+  if (!r.ok) throw new ErroFiscal(r.mensagemErro);
+  const lista = (r.dados?.empresas ?? []) as Array<Record<string, unknown>>;
+  return lista.map(e => ({
+    id: Number(texto(e, 'id')),
+    cnpj: digitos(texto(e, 'cnpj')),
+    razao_social: texto(e, 'razao_social'),
+    status: texto(e, 'status'),
+  }));
+}
+
+/**
+ * Gera um token novo para a empresa, revogando o anterior.
+ *
+ * É a saída para o token que se perdeu: cadastrar a mesma agência de novo
+ * criaria empresa duplicada, e a nota sairia por um CNPJ com dois cadastros.
+ */
+export async function regenerarTokenEmpresa(empresaId: number): Promise<string> {
+  const r = await chamar(
+    `/empresas/${encodeURIComponent(String(empresaId))}/token`,
+    { method: 'POST' },
+    chaveDesenvolvedor(),
+  );
+  if (!r.ok) throw new ErroFiscal(r.mensagemErro);
+  const token = texto(r.dados ?? {}, 'token');
+  if (!token) throw new ErroFiscal('A AceleraAPI não devolveu o token novo.');
+  return token;
+}
+
+/** Liga o produto de nota fiscal na empresa. Já cadastrada, já vinculada. */
+export async function vincularProdutoFiscal(empresaId: number): Promise<void> {
+  const r = await chamar(
+    `/empresas/${encodeURIComponent(String(empresaId))}/produtos/${PRODUTO_FISCAL}`,
+    { method: 'POST' },
+    chaveDesenvolvedor(),
+  );
+  if (!r.ok) throw new ErroFiscal(r.mensagemErro);
 }

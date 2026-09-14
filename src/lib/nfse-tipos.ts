@@ -111,6 +111,11 @@ export interface ConfigFiscal {
   // A nota nacional não leva o prestador em cada emissão: ele é configurado
   // UMA vez no emissor, e é de lá que saem município, código de tributação e
   // regime. Por isso estes campos vivem na configuração, não na nota.
+  /**
+   * Id da agência como empresa na AceleraAPI. Vem do cadastro feito com a
+   * chave de desenvolvedor e é por ele que o token dela é regenerado.
+   */
+  empresa_id: number | null;
   /** Código IBGE do município do prestador, 7 dígitos. */
   cod_municipio_ibge: string;
   /** Código de tributação nacional, 6 dígitos (derivado da LC 116). */

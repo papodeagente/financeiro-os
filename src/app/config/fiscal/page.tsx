@@ -58,8 +58,9 @@ export default function ConfigFiscalPage() {
   // emissão é recusada: repetir a validação aqui só criaria divergência.
   const [pendencias, setPendencias] = useState<{ pronto: boolean; itens: string[] } | null>(null);
   const [sincronizando, setSincronizando] = useState(false);
-  const [municipio, setMunicipio] = useState<{ emite: boolean; detalhe: string } | null>(null);
+  const [municipio, setMunicipio] = useState<{ emite: boolean; detalhe: string; convenio: string } | null>(null);
   const [conferindoMunicipio, setConferindoMunicipio] = useState(false);
+  const [conectando, setConectando] = useState(false);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -123,6 +124,27 @@ export default function ConfigFiscalPage() {
     }
   }
 
+  /**
+   * Conecta a agência: o sistema cadastra a empresa na AceleraAPI com a chave
+   * da operação e guarda o token dela. A agência não digita token nenhum.
+   */
+  async function conectar() {
+    if (conectando) return;
+    setConectando(true);
+    try {
+      const res = await fetch('/api/fiscal/empresa', { method: 'POST' });
+      const corpo = await res.json();
+      if (!res.ok) { toast.error('Não foi possível conectar', corpo?.error || ''); return; }
+      setConfig(corpo.config as ConfigFiscal);
+      if (corpo.pendencias) setPendencias(corpo.pendencias);
+      toast.success(
+        corpo.ja_conectada ? 'Esta agência já está conectada' : 'Agência conectada à AceleraAPI',
+      );
+    } finally {
+      setConectando(false);
+    }
+  }
+
   /** Empurra o cadastro do prestador e lê as pendências que sobraram. */
   async function sincronizarPrestador() {
     if (sincronizando) return;
@@ -147,7 +169,7 @@ export default function ConfigFiscalPage() {
       const res = await fetch(`/api/fiscal/municipio/${ibge}`);
       const corpo = await res.json();
       if (!res.ok) { toast.error('Não foi possível consultar', corpo?.error || ''); return; }
-      setMunicipio(corpo as { emite: boolean; detalhe: string });
+      setMunicipio(corpo as { emite: boolean; detalhe: string; convenio: string });
     } finally {
       setConferindoMunicipio(false);
     }
@@ -208,18 +230,45 @@ export default function ConfigFiscalPage() {
                     <option value="PRODUCAO">Produção (nota valendo)</option>
                   </select>
                 </div>
-                <div className="flex flex-col gap-2 sm:col-span-2">
-                  <Label htmlFor="token">Token do emissor</Label>
-                  <Input
-                    id="token" type="password" autoComplete="off"
-                    placeholder={config.token_mascarado ? `Salvo (${config.token_mascarado}). Deixe em branco para manter.` : 'Cole o token'}
-                    value={config.token ?? ''}
-                    onChange={e => mudar('token', e.target.value)}
-                  />
-                  <p className="fin-t-caption text-[var(--fin-text-3)]">
-                    O token fica só no servidor. Esta tela nunca recebe o valor completo de volta.
-                  </p>
-                </div>
+                {config.provedor === 'aceleraapi' ? (
+                  <div className="flex flex-col gap-2 sm:col-span-2">
+                    <span className="fin-t-body-strong text-[var(--fin-text)]">
+                      {config.token_mascarado
+                        ? `Agência conectada (${config.token_mascarado})`
+                        : 'Agência ainda não conectada'}
+                    </span>
+                    <p className="fin-t-caption text-[var(--fin-text-3)]">
+                      Você não precisa de token. Ao conectar, o Entur OS cadastra a agência na
+                      AceleraAPI com o CNPJ e a razão social de Configurações › Agência, e guarda a
+                      credencial dela no servidor.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Button type="button" onClick={() => { void conectar(); }} disabled={conectando}>
+                        {conectando
+                          ? 'Conectando…'
+                          : config.token_mascarado ? 'Reconectar' : 'Conectar esta agência'}
+                      </Button>
+                      {config.empresa_id ? (
+                        <span className="fin-t-caption text-[var(--fin-text-3)]">
+                          Empresa #{config.empresa_id} na AceleraAPI.
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2 sm:col-span-2">
+                    <Label htmlFor="token">Token do emissor</Label>
+                    <Input
+                      id="token" type="password" autoComplete="off"
+                      placeholder={config.token_mascarado ? `Salvo (${config.token_mascarado}). Deixe em branco para manter.` : 'Cole o token'}
+                      value={config.token ?? ''}
+                      onChange={e => mudar('token', e.target.value)}
+                    />
+                    <p className="fin-t-caption text-[var(--fin-text-3)]">
+                      O token fica só no servidor. Esta tela nunca recebe o valor completo de volta.
+                    </p>
+                  </div>
+                )}
               </div>
             </Secao>
 
@@ -375,8 +424,10 @@ export default function ConfigFiscalPage() {
                     {municipio ? (
                       <span className={`fin-t-caption ${municipio.emite ? 'text-[var(--fin-positive)]' : 'text-[var(--fin-negative)]'}`}>
                         {municipio.emite
-                          ? `${municipio.detalhe || 'O município'} já emite pelo padrão nacional.`
-                          : `${municipio.detalhe || 'Este município'} ainda não emite pelo padrão nacional. A nota vai ser recusada.`}
+                          ? `${municipio.detalhe || 'O município'} emite pelo Emissor Nacional.`
+                          : `${municipio.detalhe || 'Este município'} não emite pelo Emissor Nacional`
+                            + (municipio.convenio ? ` (convênio: ${municipio.convenio.toLowerCase()})` : '')
+                            + '. A prefeitura mantém sistema próprio, então a nota seria recusada.'}
                       </span>
                     ) : null}
                   </div>
