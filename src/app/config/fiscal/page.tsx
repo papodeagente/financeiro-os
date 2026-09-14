@@ -67,7 +67,6 @@ export default function ConfigFiscalPage() {
   const [conectando, setConectando] = useState(false);
   const [desconectando, setDesconectando] = useState(false);
   const [confirmarDesconexao, setConfirmarDesconexao] = useState(false);
-  const [chaveOperacao, setChaveOperacao] = useState('');
   const [buscandoCnpj, setBuscandoCnpj] = useState(false);
   const [atividades, setAtividades] = useState<Array<{ item: string; codigo: string; titulo: string }>>([]);
   const [mostrarAvancado, setMostrarAvancado] = useState(false);
@@ -198,7 +197,6 @@ export default function ConfigFiscalPage() {
       if (!res.ok) { toast.error('Não foi possível conectar', corpo?.error || ''); return; }
       setConfig(corpo.config as ConfigFiscal);
       if (corpo.pendencias) setPendencias(corpo.pendencias);
-      if (corpo.chave_operacao) setChaveOperacao(corpo.chave_operacao as string);
       toast.success(
         corpo.ja_conectada ? 'Esta agência já está conectada' : 'Agência conectada à AceleraAPI',
       );
@@ -381,8 +379,7 @@ export default function ConfigFiscalPage() {
                 </Button>
                 {config.empresa_id ? (
                   <span className="fin-t-caption text-[var(--fin-text-3)]">
-                    Empresa #{config.empresa_id} na AceleraAPI
-                    {chaveOperacao ? ` · conta ${chaveOperacao}` : ''}.
+                    Empresa #{config.empresa_id} na AceleraAPI.
                   </span>
                 ) : null}
               </div>
@@ -544,8 +541,7 @@ export default function ConfigFiscalPage() {
                       ) : null}
                       {config.empresa_id ? (
                         <span className="fin-t-caption text-[var(--fin-text-3)]">
-                          Empresa #{config.empresa_id} na AceleraAPI
-                          {chaveOperacao ? ` · conta ${chaveOperacao}` : ''}.
+                          Empresa #{config.empresa_id} na AceleraAPI.
                         </span>
                       ) : null}
                     </div>

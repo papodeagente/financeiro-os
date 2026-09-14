@@ -52,16 +52,32 @@ export default function ClientesPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // CLIENTE VINDO DO CRM NÃO TEM OS MESMOS CAMPOS. O webhook grava `nome` e
+  // `tipo: 'fisica'`, sem nome_completo, cpf, cnpj nem nome_fantasia. Acessar
+  // .toLowerCase() nesses campos derrubava a tela inteira assim que alguém
+  // digitava a primeira letra na busca — com a busca vazia o `!q` protegia, e
+  // por isso o erro só aparecia ao usar o filtro.
+  //
+  // E `c.tipo === 'PF'` nunca casava com 'fisica': o filtro por tipo devolvia
+  // lista vazia em silêncio, que é pior do que o erro. Os dois problemas são o
+  // que src/lib/cliente-nome.ts existe para resolver.
+  const texto = (v: unknown) => String(v ?? '').toLowerCase();
+
   const filtered = clientes.filter((c) => {
-    const q = search.toLowerCase();
+    const q = search.trim().toLowerCase();
     const matchSearch =
       !q ||
-      c.nome_completo.toLowerCase().includes(q) ||
-      c.cpf.includes(q) ||
-      c.cnpj.includes(q) ||
-      c.nome_fantasia.toLowerCase().includes(q);
-    const matchTipo = !filterTipo || c.tipo === filterTipo;
-    const matchStatus = !filterStatus || c.status === filterStatus;
+      texto(nomeDoCliente(c)).includes(q) ||
+      texto(documentoDoCliente(c)).includes(q) ||
+      texto(c.nome_completo).includes(q) ||
+      texto(c.nome_fantasia).includes(q) ||
+      texto(c.cpf).includes(q) ||
+      texto(c.cnpj).includes(q) ||
+      texto(c.email).includes(q);
+    const matchTipo = !filterTipo || tipoPessoa(c.tipo) === filterTipo;
+    // Cliente do CRM chega sem status; tratar a ausência como ATIVO evita que
+    // ele desapareça de um filtro que ele nunca teve como responder.
+    const matchStatus = !filterStatus || (String(c.status ?? 'ATIVO')) === filterStatus;
     return matchSearch && matchTipo && matchStatus;
   });
 
@@ -73,10 +89,22 @@ export default function ClientesPage() {
   };
 
   const openEdit = (c: Cliente) => {
-    // Normaliza o tipo ao abrir para edição. Cliente vindo do CRM chega com
-    // tipo 'fisica'; sem isto o formulário o trataria como pessoa jurídica e
-    // gravaria o nome dele no campo de razão social.
-    setForm({ ...c, tipo: tipoPessoa(c.tipo) });
+    // O FORMULÁRIO PRECISA DO CLIENTE COMPLETO. Cliente gravado pelo webhook do
+    // CRM só tem os campos que o CRM conhece: não tem `marcadores` nem
+    // `preferencias`, e a aba de preferências lê form.preferencias.classe_voo
+    // direto. Abrir um desses para edição derrubava a tela.
+    //
+    // createCliente() dá a forma inteira com valores vazios, e o que o cliente
+    // tem entra por cima. Campo presente mas indefinido não pode sobrescrever
+    // o padrão, por isso a limpeza antes do spread.
+    const base = createCliente();
+    const salvos = Object.fromEntries(
+      Object.entries(c).filter(([, v]) => v !== undefined && v !== null),
+    ) as Partial<Cliente>;
+    // O tipo vem normalizado: o CRM grava 'fisica' e sem isto o formulário
+    // trataria o cliente como pessoa jurídica, gravando o nome dele no campo
+    // de razão social.
+    setForm({ ...base, ...salvos, id: c.id, tipo: tipoPessoa(c.tipo) });
     setEditingId(c.id);
     setActiveTab('pessoais');
     setShowForm(true);
@@ -139,14 +167,15 @@ export default function ClientesPage() {
 
   const addMarcador = () => {
     const tag = marcadorInput.trim();
-    if (tag && !form.marcadores.includes(tag)) {
-      setField('marcadores', [...form.marcadores, tag]);
+    const marcadores = form.marcadores ?? [];
+    if (tag && !marcadores.includes(tag)) {
+      setField('marcadores', [...marcadores, tag]);
     }
     setMarcadorInput('');
   };
 
   const removeMarcador = (tag: string) =>
-    setField('marcadores', form.marcadores.filter((m) => m !== tag));
+    setField('marcadores', (form.marcadores ?? []).filter((m) => m !== tag));
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'pessoais', label: 'Dados Pessoais', icon: <User size={14} /> },

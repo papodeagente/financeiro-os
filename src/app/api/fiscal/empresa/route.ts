@@ -13,7 +13,6 @@ import { ErroFiscal } from '@/lib/nfse-emissor';
 import {
   EmissorAceleraAPI,
   acharEmpresaPorCnpj,
-  chaveOperacaoMascarada,
   criarEmpresaAcelera,
   regenerarTokenEmpresa,
 } from '@/lib/nfse-acelera';
@@ -117,7 +116,8 @@ export async function POST(req: Request) {
     return NextResponse.json({
       config: configParaCliente(conectada),
       empresa_id: empresaId,
-      chave_operacao: chaveOperacaoMascarada(),
+      // A chave de operação é do SaaS, não da agência: não tem por que
+      // trafegar para o navegador de um tenant, nem mascarada.
       pendencias,
     });
   } catch (e) {
@@ -190,21 +190,27 @@ export async function DELETE() {
   }
 }
 
-/** Empresas da conta de operação, para escolher uma já existente. */
+/**
+ * A empresa DESTA agência, e só ela.
+ *
+ * Antes esta rota devolvia todas as empresas cadastradas na conta de operação
+ * — ou seja, o CNPJ e a razão social de TODAS as agências do SaaS para
+ * qualquer usuário com acesso ao financeiro de uma delas — mais os dígitos da
+ * chave de operação. Listar o vizinho nunca foi necessário para configurar a
+ * própria nota.
+ */
 export async function GET() {
   try {
     await initDB();
     const bloqueio = bloqueioFinanceiro(await getSession(), 'ler');
     if (bloqueio) return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
-    const { listarEmpresasAcelera } = await import('@/lib/nfse-acelera');
+    const config = await carregarConfigFiscal(await getTenantId());
     return NextResponse.json({
-      chave_operacao: chaveOperacaoMascarada(),
-      empresas: await listarEmpresasAcelera(),
+      empresa_id: config.empresa_id,
+      conectada: Boolean(config.empresa_id && config.token),
     });
   } catch (e) {
-    const msg = e instanceof ErroFiscal
-      ? e.message
-      : e instanceof Error ? e.message : 'Erro ao listar empresas.';
+    const msg = e instanceof Error ? e.message : 'Erro';
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 }

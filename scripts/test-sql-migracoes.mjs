@@ -53,6 +53,13 @@ const criarTabelas = `
   CREATE TABLE config_apis (
     id TEXT PRIMARY KEY, data JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT NOW()
   );
+  CREATE TABLE config_fiscal (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT '',
+    data JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
 `;
 
 const inserirCR = (pg, id, tenant, data) =>
@@ -147,6 +154,86 @@ console.log('--- banco com duplicata preexistente NÃO derruba o app ---');
   const { rows: idx } = await pg.query(
     `SELECT COUNT(*)::int AS n FROM pg_indexes WHERE indexname = 'idx_contas_receber_venda_parcela'`);
   eq(idx[0].n, 0, 'o índice não foi criado, e o app segue de pé');
+}
+
+console.log('--- PK composta: config_fiscal, a que faltava ---');
+{
+  // config_fiscal nasceu com PK só em `id` e id fixo 'config-fiscal-singleton',
+  // e ficou de fora do laço de promoção. Efeito: a PRIMEIRA agência a
+  // configurar nota fiscal trancava todas as outras — o segundo tenant tomava
+  // 23505 no INSERT e não conseguia salvar configuração nenhuma.
+  const pg = new PGlite();
+  await pg.exec(criarTabelas);
+
+  await pg.query(`INSERT INTO config_fiscal (id, tenant_id, data) VALUES ($1,$2,$3)`,
+    ['config-fiscal-singleton', 't1', JSON.stringify({ cnae: '7911200' })]);
+
+  let erro = null;
+  try {
+    await pg.query(`INSERT INTO config_fiscal (id, tenant_id, data) VALUES ($1,$2,$3)`,
+      ['config-fiscal-singleton', 't2', JSON.stringify({ cnae: '5510801' })]);
+  } catch (e) { erro = String(e.message || e); }
+  eq(erro !== null, true, 'antes da migracao, a segunda agencia nao conseguia configurar');
+
+  await pg.exec(`
+    DO $$
+    DECLARE nome_pk TEXT;
+    BEGIN
+      SELECT conname INTO nome_pk
+        FROM pg_constraint
+       WHERE conrelid = 'config_fiscal'::regclass
+         AND contype = 'p'
+         AND pg_get_constraintdef(oid) NOT LIKE '%tenant_id%'
+       LIMIT 1;
+      IF nome_pk IS NOT NULL THEN
+        EXECUTE format('ALTER TABLE config_fiscal DROP CONSTRAINT %I', nome_pk);
+        ALTER TABLE config_fiscal ADD PRIMARY KEY (id, tenant_id);
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'nao migrada: %', SQLERRM;
+    END
+    $$;
+  `);
+
+  await pg.query(`INSERT INTO config_fiscal (id, tenant_id, data) VALUES ($1,$2,$3)`,
+    ['config-fiscal-singleton', 't2', JSON.stringify({ cnae: '5510801' })]);
+
+  const { rows } = await pg.query(
+    `SELECT tenant_id, data->>'cnae' AS cnae FROM config_fiscal ORDER BY tenant_id`);
+  eq(rows.map(r => [r.tenant_id, r.cnae]),
+    [['t1', '7911200'], ['t2', '5510801']],
+    'cada agencia passa a ter a propria configuracao fiscal');
+
+  // O caminho real de salvarConfigFiscal: UPDATE e, se nao casar, INSERT.
+  await pg.query(
+    `UPDATE config_fiscal SET data = $3, updated_at = NOW() WHERE id = $1 AND tenant_id = $2`,
+    ['config-fiscal-singleton', 't2', JSON.stringify({ cnae: '9999999' })]);
+  const { rows: t1 } = await pg.query(
+    `SELECT data->>'cnae' AS cnae FROM config_fiscal WHERE tenant_id = 't1'`);
+  eq(t1[0].cnae, '7911200', 'salvar a de uma agencia nao encosta na da outra');
+
+  // initDB roda a cada request: a promocao precisa ser idempotente.
+  await pg.exec(`
+    DO $$
+    DECLARE nome_pk TEXT;
+    BEGIN
+      SELECT conname INTO nome_pk
+        FROM pg_constraint
+       WHERE conrelid = 'config_fiscal'::regclass
+         AND contype = 'p'
+         AND pg_get_constraintdef(oid) NOT LIKE '%tenant_id%'
+       LIMIT 1;
+      IF nome_pk IS NOT NULL THEN
+        EXECUTE format('ALTER TABLE config_fiscal DROP CONSTRAINT %I', nome_pk);
+        ALTER TABLE config_fiscal ADD PRIMARY KEY (id, tenant_id);
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'ignorado: %', SQLERRM;
+    END
+    $$;
+  `);
+  const { rows: ainda } = await pg.query(`SELECT COUNT(*)::int AS n FROM config_fiscal`);
+  eq(ainda[0].n, 2, 'rodar a migracao de novo nao perde linha');
 }
 
 console.log('--- PK composta: uma linha de config por tenant ---');

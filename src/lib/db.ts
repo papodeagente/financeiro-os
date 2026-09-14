@@ -1093,7 +1093,11 @@ async function executarInitDB() {
   // A promoção em si é segura quanto a dados: a PK antiga era só em `id`,
   // então o par (id, tenant_id) já é único por construção, e tenant_id é
   // NOT NULL DEFAULT '' desde o ALTER acima.
-  for (const tabela of ['config_apis', 'agencia']) {
+  // config_fiscal entra aqui porque usa id fixo ('config-fiscal-singleton'):
+  // com PK só em `id`, o UPDATE do segundo tenant não casa nenhuma linha e o
+  // INSERT seguinte bate em 23505. A primeira agência a configurar nota fiscal
+  // trancava todas as outras.
+  for (const tabela of ['config_apis', 'agencia', 'config_fiscal']) {
     await pool.query(`
       DO $$
       DECLARE nome_pk TEXT;
