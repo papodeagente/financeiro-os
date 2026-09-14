@@ -65,6 +65,7 @@ export default function ConfigFiscalPage() {
   const [desconectando, setDesconectando] = useState(false);
   const [confirmarDesconexao, setConfirmarDesconexao] = useState(false);
   const [chaveOperacao, setChaveOperacao] = useState('');
+  const [buscandoCnpj, setBuscandoCnpj] = useState(false);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -149,6 +150,34 @@ export default function ConfigFiscalPage() {
       toast.success('Agência desconectada', 'Conecte de novo para emitir notas.');
     } finally {
       setDesconectando(false);
+    }
+  }
+
+  /**
+   * Puxa da Receita o que dá para preencher sozinho: razão social, endereço,
+   * código IBGE do município e CNAE. Só preenche campo vazio.
+   */
+  async function buscarDadosDoCnpj() {
+    if (buscandoCnpj) return;
+    setBuscandoCnpj(true);
+    try {
+      const res = await fetch('/api/fiscal/autopreencher', { method: 'POST' });
+      const corpo = await res.json();
+      if (!res.ok) { toast.error('Não foi possível buscar o CNPJ', corpo?.error || ''); return; }
+      setConfig(corpo.config as ConfigFiscal);
+      if (corpo.pendencias) setPendencias(corpo.pendencias);
+      if (corpo.municipio) setMunicipio(corpo.municipio);
+      const lista = (corpo.preenchidos ?? []) as string[];
+      toast.success(
+        lista.length > 0 ? 'Dados preenchidos pela Receita' : 'Nada a preencher',
+        lista.length > 0
+          ? lista.join(', ')
+          : 'Os campos já estavam preenchidos e foram mantidos.',
+      );
+      // Recarrega para a tela refletir o que foi gravado no cadastro da agência.
+      void carregar();
+    } finally {
+      setBuscandoCnpj(false);
     }
   }
 
@@ -273,6 +302,16 @@ export default function ConfigFiscalPage() {
                           ? 'Conectando…'
                           : config.token_mascarado ? 'Reconectar' : 'Conectar esta agência'}
                       </Button>
+                      {config.empresa_id ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => { void buscarDadosDoCnpj(); }}
+                          disabled={buscandoCnpj}
+                        >
+                          {buscandoCnpj ? 'Buscando…' : 'Preencher pelo CNPJ'}
+                        </Button>
+                      ) : null}
                       {config.empresa_id ? (
                         <Button
                           type="button"
@@ -601,7 +640,7 @@ export default function ConfigFiscalPage() {
 
             <Secao
               titulo="Dados da agência na nota"
-              descricao="Vêm de Configurações › Agência. A prefeitura recusa a nota sem CNPJ e inscrição municipal do emitente."
+              descricao="Vêm de Configurações › Agência. O CNPJ é obrigatório. A inscrição municipal é opcional no padrão nacional e não existe na base da Receita, então é o único dado que precisa ser digitado se a sua prefeitura exigir."
             >
               <div className="fin-t-body text-[var(--fin-text-2)]">
                 <p>{emitente?.razao_social || 'Razão social não preenchida'}</p>

@@ -476,6 +476,10 @@ export interface EmpresaAcelera {
 
 /** Código do produto de nota fiscal de serviço na AceleraAPI. */
 export const PRODUTO_FISCAL = 'fiscal';
+/** Produto de emissão de NFS-e. É ele que a nota consome, não o 'fiscal'. */
+export const PRODUTO_NFSE = 'nfse';
+/** Consulta de dados cadastrais na Receita. */
+export const PRODUTO_CNPJ = 'cnpj';
 
 /**
  * Cadastra a agência como empresa e devolve o token dela.
@@ -505,7 +509,7 @@ export async function criarEmpresaAcelera(dados: {
   const corpo: Record<string, unknown> = {
     cnpj,
     razao_social: dados.razao_social.trim(),
-    produtos: [PRODUTO_FISCAL],
+    produtos: [PRODUTO_NFSE, PRODUTO_FISCAL],
   };
   if (dados.nome_fantasia?.trim()) corpo.nome_fantasia = dados.nome_fantasia.trim();
   if (dados.email?.trim()) corpo.email = dados.email.trim();
@@ -607,4 +611,118 @@ export async function vincularProdutoFiscal(empresaId: number): Promise<void> {
     chaveDesenvolvedor(),
   );
   if (!r.ok) throw new ErroFiscal(r.mensagemErro);
+}
+
+// ============================================================
+// Dados cadastrais da Receita
+// ============================================================
+
+/** O que a consulta de CNPJ consegue preencher sozinha. */
+export interface CadastroReceita {
+  cnpj: string;
+  razao_social: string;
+  nome_fantasia: string;
+  situacao: string;
+  cnae: string;
+  /** Código IBGE do município, 7 dígitos. Vazio quando a base não trouxe. */
+  cod_municipio_ibge: string;
+  endereco: {
+    cep: string;
+    logradouro: string;
+    numero: string;
+    complemento: string;
+    bairro: string;
+    cidade: string;
+    estado: string;
+  };
+  email: string;
+  telefone: string;
+}
+
+/**
+ * Lê um campo aceitando vários nomes e caminhos aninhados.
+ *
+ * A resposta da Receita chega com formatos diferentes conforme a origem
+ * (`endereco.cep`, `cep`, `logradouro` vs `descricao_logradouro`), e travar
+ * num único nome faria o preenchimento automático voltar vazio sem dizer
+ * por quê.
+ */
+function primeiro(o: unknown, ...caminhos: string[]): string {
+  for (const c of caminhos) {
+    const v = c.split('.').reduce<unknown>(
+      (acc, parte) => (acc && typeof acc === 'object'
+        ? (acc as Record<string, unknown>)[parte]
+        : undefined),
+      o,
+    );
+    if (typeof v === 'string' && v.trim()) return v.trim();
+    if (typeof v === 'number' && Number.isFinite(v)) return String(v);
+  }
+  return '';
+}
+
+/**
+ * Consulta os dados cadastrais do CNPJ na base da Receita.
+ *
+ * Usa a credencial da AGÊNCIA (ace_), porque é produto. Se o produto de
+ * consulta ainda não estiver vinculado, vincula com a chave de operação e
+ * tenta de novo: o objetivo é a agência não precisar saber que existe um
+ * produto a contratar.
+ */
+export async function consultarCnpj(
+  cnpj: string,
+  config: ConfigFiscal,
+): Promise<CadastroReceita> {
+  const doc = digitos(cnpj);
+  if (doc.length !== 14) {
+    throw new ErroFiscal('Informe um CNPJ com 14 dígitos em Configurações › Agência.');
+  }
+  const token = String(config.token ?? '').trim();
+  if (!token) {
+    throw new ErroFiscal('Conecte a agência à AceleraAPI antes de buscar os dados do CNPJ.');
+  }
+
+  let r = await chamar(`/cnpj/${doc}`, { method: 'GET' }, token);
+  if (!r.ok && r.codigoErro === 'produto_nao_vinculado' && config.empresa_id) {
+    await chamar(
+      `/empresas/${config.empresa_id}/produtos/${PRODUTO_CNPJ}`,
+      { method: 'POST' },
+      chaveDesenvolvedor(),
+    );
+    r = await chamar(`/cnpj/${doc}`, { method: 'GET' }, token);
+  }
+  if (!r.ok) throw new ErroFiscal(r.mensagemErro);
+
+  const d = (r.dados ?? {}) as Record<string, unknown>;
+  const end = (d.endereco ?? d.estabelecimento ?? {}) as Record<string, unknown>;
+  const cnae = primeiro(d, 'cnae_principal.codigo', 'cnae_principal', 'cnae_fiscal', 'cnae');
+
+  return {
+    cnpj: doc,
+    razao_social: primeiro(d, 'razao_social', 'nome', 'nome_empresarial'),
+    nome_fantasia: primeiro(d, 'nome_fantasia', 'fantasia', 'estabelecimento.nome_fantasia'),
+    situacao: primeiro(d, 'situacao', 'situacao_cadastral', 'descricao_situacao_cadastral'),
+    cnae: digitos(cnae),
+    cod_municipio_ibge: digitos(primeiro(
+      d,
+      'codigo_ibge', 'municipio_ibge', 'cod_municipio_ibge', 'codigo_municipio_ibge',
+      'endereco.codigo_ibge', 'endereco.municipio_ibge', 'endereco.cod_municipio_ibge',
+      'endereco.codigo_municipio_ibge', 'estabelecimento.cidade.ibge_id',
+    )),
+    endereco: {
+      cep: digitos(primeiro(d, 'endereco.cep', 'cep', 'estabelecimento.cep')),
+      logradouro: primeiro(
+        end, 'logradouro', 'descricao_logradouro', 'rua',
+      ) || primeiro(d, 'logradouro', 'descricao_logradouro'),
+      numero: primeiro(end, 'numero') || primeiro(d, 'numero'),
+      complemento: primeiro(end, 'complemento') || primeiro(d, 'complemento'),
+      bairro: primeiro(end, 'bairro') || primeiro(d, 'bairro'),
+      cidade: primeiro(end, 'municipio', 'cidade', 'cidade.nome')
+        || primeiro(d, 'municipio', 'cidade'),
+      estado: (primeiro(end, 'uf', 'estado', 'estado.sigla')
+        || primeiro(d, 'uf', 'estado')).toUpperCase().slice(0, 2),
+    },
+    email: primeiro(d, 'email', 'endereco.email', 'estabelecimento.email'),
+    telefone: digitos(primeiro(d, 'telefone', 'ddd_telefone_1', 'estabelecimento.telefone1')),
+  };
 }

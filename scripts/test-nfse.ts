@@ -262,6 +262,18 @@ const configOk = {
   const p = pendenciasParaEmitir({ ...configOk, provedor: '', item_lista_servico: '', cnae: '' });
   eq(p.length, 3, 'as pendências se acumulam, não param na primeira');
 }
+{
+  // A inscrição municipal é opcional no padrão nacional E não existe na base
+  // da Receita (é da prefeitura). Exigi-la prendia a agência numa tela
+  // pedindo um dado que o emissor não pede e nenhuma consulta traz.
+  const p = pendenciasParaEmitir({ ...configOk, emitente_inscricao_municipal: '' });
+  eq(p, [], 'sem inscrição municipal ainda dá para emitir');
+}
+{
+  // O CNPJ continua obrigatório: sem ele não há emitente.
+  const p = pendenciasParaEmitir({ ...configOk, emitente_cnpj: '' });
+  eq(p.some(x => x.includes('CNPJ da agência')), true, 'sem CNPJ não emite');
+}
 
 // ══════════════════════════════════════════════════════════════════════
 console.log('--- o que o emissor aceita ---');

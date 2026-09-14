@@ -250,9 +250,11 @@ export function pendenciasParaEmitir(entrada: {
   if (!String(entrada.emitente_cnpj || '').trim()) {
     faltas.push('Preencha o CNPJ da agência em Configurações › Agência.');
   }
-  if (!String(entrada.emitente_inscricao_municipal || '').trim()) {
-    faltas.push('Preencha a inscrição municipal da agência.');
-  }
+  // A INSCRIÇÃO MUNICIPAL NÃO BLOQUEIA. No padrão nacional ela é opcional, e
+  // exigi-la aqui deixava a agência presa numa tela que pedia um dado que o
+  // emissor não pede. Além disso ela não existe no cadastro da Receita: é
+  // municipal, então nenhuma consulta automática traz. Quem recusa a nota é a
+  // prefeitura, e as pendências de verdade vêm do próprio emissor.
   if (!String(entrada.item_lista_servico || '').trim()) {
     faltas.push('Informe o item da lista de serviço (agência de viagens costuma ser 9.02).');
   }
