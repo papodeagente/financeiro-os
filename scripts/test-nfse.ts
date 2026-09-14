@@ -276,6 +276,46 @@ const configOk = {
 }
 
 // ══════════════════════════════════════════════════════════════════════
+console.log('--- cada emissor pede os seus campos ---');
+const nacionalOk = {
+  ...configOk,
+  padrao_nacional: true,
+  cod_municipio_ibge: '3304557',
+  cod_tributacao_nacional: '090201',
+};
+{
+  eq(pendenciasParaEmitir(nacionalOk), [], 'padrão nacional completo não tem pendência');
+}
+{
+  // O caso real da recusa: item da lista preenchido, código nacional vazio.
+  // A tela ficava verde e a emissão morria em "pendências do prestador".
+  const p = pendenciasParaEmitir({ ...nacionalOk, cod_tributacao_nacional: '' });
+  eq(p.length, 1, 'código de tributação nacional vazio é pendência');
+  eq(p[0].includes('código de tributação nacional'), true, 'e diz qual campo é');
+}
+{
+  const p = pendenciasParaEmitir({ ...nacionalOk, cod_municipio_ibge: '' });
+  eq(p.some(x => x.includes('código IBGE')), true, 'sem município não emite');
+  eq(p.some(x => x.includes('Preencher pelo CNPJ')), true, 'e aponta o caminho de resolver');
+}
+{
+  const p = pendenciasParaEmitir({ ...nacionalOk, cod_municipio_ibge: '123' });
+  eq(p.some(x => x.includes('7 dígitos')), true, 'IBGE curto é pendência');
+}
+{
+  // No padrão nacional o item da LC 116 não é usado: exigi-lo era ruído.
+  const p = pendenciasParaEmitir({ ...nacionalOk, item_lista_servico: '' });
+  eq(p, [], 'item da lista de serviço não bloqueia no padrão nacional');
+}
+{
+  // E no emissor que usa ABRASF continua valendo o contrário.
+  const p = pendenciasParaEmitir({ ...configOk, item_lista_servico: '' });
+  eq(p.some(x => x.includes('item da lista de serviço')), true, 'fora do nacional, o item é exigido');
+  const q = pendenciasParaEmitir({ ...configOk, cod_tributacao_nacional: '' });
+  eq(q, [], 'e o código nacional não é cobrado de quem não usa o padrão nacional');
+}
+
+// ══════════════════════════════════════════════════════════════════════
 console.log('--- o que o emissor aceita ---');
 const NACIONAL = { deducoes: false, aliquota_por_nota: false, intermediario: false };
 const COMPLETO = { deducoes: true, aliquota_por_nota: true, intermediario: true };

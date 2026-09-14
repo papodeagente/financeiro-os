@@ -332,6 +332,9 @@ export async function montarPrevia(
     emitente_inscricao_municipal: emitente.inscricao_municipal,
     tomador_documento: tomador.cpf_cnpj,
     tomador_nome: tomador.razao_social,
+    padrao_nacional: config.provedor === 'aceleraapi',
+    cod_municipio_ibge: config.cod_municipio_ibge,
+    cod_tributacao_nacional: config.cod_tributacao_nacional,
   });
 
   const totalParcelas = Math.max(1, Math.floor(num(ctx.conta.total_parcelas)) || 1);
@@ -344,6 +347,32 @@ export async function montarPrevia(
       descricao: String(ctx.conta.descricao ?? ''),
       repasse: calculo.repasse_da_parcela.toFixed(2),
     });
+
+  // QUEM SABE O QUE FALTA É O EMISSOR. As checagens acima são as que dá para
+  // fazer sem rede; o emissor tem as dele, e era a diferença entre as duas
+  // que produzia tela verde com emissão recusada. Só pergunta quando o resto
+  // já passou: é o momento em que a resposta muda alguma coisa, e evita uma
+  // chamada de rede a cada tecla digitada no painel.
+  const pendenciasDoEmissor: string[] = [];
+  if (pendencias.length === 0 && config.provedor === 'aceleraapi' && config.token) {
+    try {
+      const emissor = emissorDaConfig(config);
+      const p = 'pendencias' in emissor
+        ? await (emissor as { pendencias: (c: ConfigFiscal) => Promise<{ pronto: boolean; itens: string[] }> }).pendencias(config)
+        : { pronto: true, itens: [] };
+      if (!p.pronto) {
+        pendenciasDoEmissor.push(
+          ...(p.itens.length > 0
+            ? p.itens
+            : ['O emissor ainda não está pronto para emitir. Abra Configurações › Nota fiscal e sincronize o prestador.']),
+        );
+      }
+    } catch {
+      // Emissor fora do ar não pode impedir a conferência dos números: a
+      // emissão em si devolve o motivo real se falhar.
+    }
+  }
+  pendencias.push(...pendenciasDoEmissor);
 
   // Conflito de formato impede; conflito de campo ignorado é só aviso.
   const bloqueios = conflitos.filter(c => c.includes('Troque para'));

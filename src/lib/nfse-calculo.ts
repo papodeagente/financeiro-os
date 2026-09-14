@@ -243,6 +243,12 @@ export function pendenciasParaEmitir(entrada: {
   emitente_inscricao_municipal: string;
   tomador_documento: string;
   tomador_nome: string;
+  /** true quando o emissor usa o padrão nacional (DPS). */
+  padrao_nacional?: boolean;
+  /** Só no padrão nacional: município do prestador, 7 dígitos. */
+  cod_municipio_ibge?: string;
+  /** Só no padrão nacional: código de tributação de 6 dígitos. */
+  cod_tributacao_nacional?: string;
 }): string[] {
   const faltas: string[] = [];
   if (!entrada.provedor) faltas.push('Escolha o emissor de nota em Configurações › Fiscal.');
@@ -255,7 +261,22 @@ export function pendenciasParaEmitir(entrada: {
   // emissor não pede. Além disso ela não existe no cadastro da Receita: é
   // municipal, então nenhuma consulta automática traz. Quem recusa a nota é a
   // prefeitura, e as pendências de verdade vêm do próprio emissor.
-  if (!String(entrada.item_lista_servico || '').trim()) {
+  // CADA EMISSOR PEDE UM CONJUNTO DE CAMPOS. Validar o item da lista de
+  // serviço num emissor que usa o padrão nacional dava tela verde com
+  // emissão recusada: o padrão nacional não usa esse campo, usa o código de
+  // tributação nacional e o município do prestador. Era exatamente o que
+  // fazia a nota morrer em "a configuração do prestador tem pendências".
+  if (entrada.padrao_nacional) {
+    const ibge = String(entrada.cod_municipio_ibge || '').replace(/\D+/g, '');
+    if (!ibge) {
+      faltas.push('Informe o código IBGE do município da agência. O botão "Preencher pelo CNPJ" busca para você.');
+    } else if (ibge.length !== 7) {
+      faltas.push('O código IBGE do município precisa ter 7 dígitos.');
+    }
+    if (!String(entrada.cod_tributacao_nacional || '').trim()) {
+      faltas.push('Informe o código de tributação nacional (6 dígitos). Ele vem da contabilidade.');
+    }
+  } else if (!String(entrada.item_lista_servico || '').trim()) {
     faltas.push('Informe o item da lista de serviço (agência de viagens costuma ser 9.02).');
   }
   if (!String(entrada.cnae || '').trim()) faltas.push('Informe o CNAE da agência.');

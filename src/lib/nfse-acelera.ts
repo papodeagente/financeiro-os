@@ -66,6 +66,16 @@ const MENSAGEM_POR_CODIGO: Record<string, string> = {
     'Sua conta na AceleraAPI não tem o serviço de NFS-e liberado.',
 };
 
+/** Junta o que a API disse com a explicação do código, sem repetir texto. */
+function montarMensagem(codigo: string, bruta: string, corpo: unknown): string {
+  const enlatada = MENSAGEM_POR_CODIGO[codigo] ?? '';
+  const partes: string[] = [];
+  if (bruta) partes.push(bruta);
+  if (enlatada && enlatada !== bruta) partes.push(enlatada);
+  const texto = partes.join(' ');
+  return texto || textoDoErro(corpo) || 'O emissor recusou a requisição.';
+}
+
 interface Resposta {
   ok: boolean;
   httpStatus: number;
@@ -87,10 +97,11 @@ function interpretar(httpStatus: number, corpo: unknown): Resposta {
     httpStatus,
     dados,
     codigoErro: codigo,
-    mensagemErro: ok
-      ? ''
-      : MENSAGEM_POR_CODIGO[codigo] || mensagemBruta || textoDoErro(corpo)
-        || 'O emissor recusou a requisição.',
+    // A MENSAGEM DA API VEM PRIMEIRO. Antes o texto enlatado daqui
+    // SUBSTITUÍA o que a AceleraAPI explicava, e o usuário recebia "a
+    // prefeitura recusou a nota" no lugar do motivo real. O enlatado agora
+    // complementa: serve quando a API só devolve o código.
+    mensagemErro: ok ? '' : montarMensagem(codigo, mensagemBruta, corpo),
   };
 }
 
@@ -359,11 +370,26 @@ export class EmissorAceleraAPI implements EmissorNFSe {
       this.token(entrada.config),
     );
     if (!r.ok) {
+      // `emissao_rejeitada` quer dizer "a SEFIN recusou OU falta configuração".
+      // Sem dizer qual das duas, a mensagem não ajuda ninguém: então pergunta
+      // ao emissor o que ele ainda considera pendente e mostra junto.
+      let erro = r.mensagemErro;
+      if (r.codigoErro === 'emissao_rejeitada') {
+        try {
+          const p = await this.pendencias(entrada.config);
+          if (!p.pronto && p.itens.length > 0) {
+            erro = `${erro} Pendências do emissor: ${p.itens.join('; ')}.`;
+          }
+        } catch {
+          // Mantém a mensagem que já temos: falhar a consulta não pode
+          // apagar o motivo da recusa.
+        }
+      }
       return {
         status: 'REJEITADA',
         referencia: '', numero: '', codigo_verificacao: '', protocolo: '',
         link_pdf: '', link_xml: '',
-        erro: r.mensagemErro,
+        erro,
       };
     }
     return this.daResposta(r.dados);
