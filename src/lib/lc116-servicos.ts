@@ -144,3 +144,90 @@ export function servicoDoCodigo(codigo: string): ServicoLC116 | null {
   const c = String(codigo ?? '').replace(/\D+/g, '');
   return SERVICOS_AGENCIA.find(s => s.codigo === c) ?? null;
 }
+
+/**
+ * O que a empresa faz, segundo o cadastro dela na Receita.
+ *
+ * O código de tributação não sai do certificado — o certificado só assina. Ele
+ * sai da ATIVIDADE da empresa, e a atividade está no CNAE, que a consulta de
+ * CNPJ devolve. Então em vez de pedir um número, o sistema lê o que a empresa
+ * declarou fazer e mostra o serviço correspondente em primeiro lugar.
+ */
+
+/** CNAE (só dígitos) para o item da LC 116 que costuma corresponder. */
+const CNAE_PARA_ITEM: Record<string, string> = {
+  // Turismo
+  '7911200': '9.02', // Agências de viagens
+  '7912100': '9.02', // Operadores turísticos
+  '7990200': '9.02', // Serviços de reservas e outros do turismo
+  '5011401': '9.02', // Transporte marítimo de passageiros (cruzeiro vendido)
+  // Hospedagem
+  '5510801': '9.01', // Hotéis
+  '5510802': '9.01', // Apart-hotéis
+  '5590601': '9.01', // Albergues
+  '5590602': '9.01', // Campings
+  '5590603': '9.01', // Pensões
+  '5590699': '9.01', // Outros alojamentos
+  // Guias
+  '7990201': '9.03', // Serviços de guia de turismo
+  // Seguros e câmbio
+  '6622300': '10.01', // Corretores e agentes de seguros
+  '6619301': '10.01', // Serviços de câmbio
+  // Consultoria
+  '7020400': '17.01', // Consultoria em gestão empresarial
+  '7490104': '17.01', // Atividades de intermediação e agenciamento
+  // Eventos
+  '8230001': '17.10', // Serviços de organização de feiras e congressos
+  '8230002': '17.10', // Casas de festas e eventos
+  '9001901': '12.13', // Produção teatral
+  '9001902': '12.13', // Produção musical
+  '9001999': '12.13', // Outras atividades de artes cênicas
+};
+
+/**
+ * Itens da LC 116 que correspondem às atividades da empresa, na ordem em que
+ * ela as declarou (principal primeiro).
+ *
+ * CNAE desconhecido não vira palpite: ele simplesmente não entra na lista. É
+ * melhor a agência escolher entre os serviços do que receber uma sugestão
+ * inventada a partir de uma atividade que ninguém mapeou.
+ */
+export function itensDaAtividade(cnaes: string[]): string[] {
+  const vistos = new Set<string>();
+  const itens: string[] = [];
+  for (const bruto of cnaes) {
+    const c = String(bruto ?? '').replace(/\D+/g, '');
+    const item = CNAE_PARA_ITEM[c];
+    if (item && !vistos.has(item)) {
+      vistos.add(item);
+      itens.push(item);
+    }
+  }
+  return itens;
+}
+
+/** O item que o sistema propõe como padrão: o da atividade principal. */
+export function itemSugerido(cnaePrincipal: string): string {
+  return itensDaAtividade([cnaePrincipal])[0] ?? '';
+}
+
+/**
+ * Os serviços que a empresa presta, segundo o CNAE dela, seguidos do resto.
+ *
+ * É o que faz a tela mostrar "exatamente aquilo que a empresa faz" em vez de
+ * uma lista genérica: a atividade declarada na Receita vem primeiro, marcada.
+ */
+export function servicosDaEmpresa(cnaes: string[]): {
+  daAtividade: ServicoLC116[];
+  demais: ServicoLC116[];
+} {
+  const itens = itensDaAtividade(cnaes);
+  const daAtividade = itens
+    .map(i => SERVICOS_AGENCIA.find(s => s.item === i))
+    .filter((s): s is ServicoLC116 => Boolean(s));
+  const marcados = new Set(daAtividade.map(s => s.item));
+  return {
+    daAtividade,
+    demais: SERVICOS_AGENCIA.filter(s => !marcados.has(s.item)),
+  };
+}

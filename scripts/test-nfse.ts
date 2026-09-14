@@ -17,7 +17,10 @@ import {
   pendenciasParaEmitir,
 } from '../src/lib/nfse-calculo.ts';
 import { codigoInterno, montarCorpoEmissao } from '../src/lib/nfse-acelera.ts';
-import { buscarServicos, codigoDoItem, servicoDoCodigo } from '../src/lib/lc116-servicos.ts';
+import {
+  buscarServicos, codigoDoItem, servicoDoCodigo,
+  itemSugerido, itensDaAtividade, servicosDaEmpresa,
+} from '../src/lib/lc116-servicos.ts';
 
 let falhas = 0;
 let total = 0;
@@ -505,6 +508,51 @@ console.log('--- busca de serviço no lugar do código decorado ---');
   const s = servicoDoCodigo('090201');
   eq(s?.item, '9.02', 'o código volta para o serviço de origem');
   eq(servicoDoCodigo('999999'), null, 'código desconhecido não inventa serviço');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+console.log('--- o código sai da atividade da empresa ---');
+{
+  // O certificado só assina; quem diz o que a empresa faz é o CNAE.
+  eq(itemSugerido('7911-2/00'), '9.02', 'agência de viagens presta o serviço 9.02');
+  eq(codigoDoItem(itemSugerido('7911-2/00')), '090201', 'e o código sai do item');
+  eq(itemSugerido('5510-8/01'), '9.01', 'hotel presta hospedagem');
+  eq(itemSugerido('6622-3/00'), '10.01', 'corretora de seguros presta o 10.01');
+}
+{
+  // CNAE que ninguém mapeou não pode virar palpite: melhor a agência
+  // escolher do que receber um código inventado.
+  eq(itemSugerido('9999-9/99'), '', 'CNAE desconhecido não sugere nada');
+  eq(itemSugerido(''), '', 'sem CNAE não sugere nada');
+}
+{
+  // A ordem segue a declaração: principal primeiro.
+  eq(
+    itensDaAtividade(['7911-2/00', '6622-3/00', '8230-0/01']),
+    ['9.02', '10.01', '17.10'],
+    'as atividades secundárias também entram, na ordem',
+  );
+  eq(
+    itensDaAtividade(['7911-2/00', '7912-1/00']),
+    ['9.02'],
+    'dois CNAEs que apontam para o mesmo item não duplicam',
+  );
+  eq(itensDaAtividade([]), [], 'lista vazia não inventa atividade');
+}
+{
+  const r = servicosDaEmpresa(['7911-2/00', '6622-3/00']);
+  eq(r.daAtividade.map(x => x.item), ['9.02', '10.01'], 'o que a empresa faz vem separado');
+  eq(r.demais.some(x => x.item === '9.02'), false, 'e não se repete no resto da lista');
+  eq(
+    r.daAtividade.length + r.demais.length,
+    buscarServicos('').length,
+    'somadas, as duas listas são a lista inteira',
+  );
+}
+{
+  const r = servicosDaEmpresa(['9999-9/99']);
+  eq(r.daAtividade, [], 'CNAE desconhecido não destaca nada');
+  eq(r.demais.length, buscarServicos('').length, 'e a lista completa continua disponível');
 }
 
 // ══════════════════════════════════════════════════════════════════════

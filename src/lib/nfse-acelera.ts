@@ -650,6 +650,13 @@ export interface CadastroReceita {
   nome_fantasia: string;
   situacao: string;
   cnae: string;
+  /** CNAEs declarados: principal primeiro, depois os secundários. */
+  cnaes: string[];
+  /**
+   * Enquadramento no Simples, no vocabulário da AceleraAPI:
+   * 1 não optante, 2 MEI, 3 ME/EPP. Zero quando a base não disse.
+   */
+  simples_nacional: 0 | 1 | 2 | 3;
   /** Código IBGE do município, 7 dígitos. Vazio quando a base não trouxe. */
   cod_municipio_ibge: string;
   endereco: {
@@ -723,12 +730,47 @@ export async function consultarCnpj(
   const end = (d.endereco ?? d.estabelecimento ?? {}) as Record<string, unknown>;
   const cnae = primeiro(d, 'cnae_principal.codigo', 'cnae_principal', 'cnae_fiscal', 'cnae');
 
+  // Atividades secundárias entram para a tela conseguir mostrar TODAS as
+  // coisas que a empresa declarou fazer, não só a principal.
+  const secundarios = Array.isArray(d.cnaes_secundarios)
+    ? (d.cnaes_secundarios as unknown[])
+    : Array.isArray(d.cnaes)
+      ? (d.cnaes as unknown[])
+      : [];
+  const listaCnaes = [
+    digitos(cnae),
+    ...secundarios.map(c => digitos(
+      typeof c === 'object' && c
+        ? primeiro(c, 'codigo', 'cnae', 'id')
+        : String(c ?? ''),
+    )),
+  ].filter(Boolean);
+
+  // Simples/MEI vêm da Receita. Perguntar isso à agência era pedir um dado
+  // que o sistema já tem como olhar — e que ela costuma errar.
+  const mei = d.mei === true
+    || primeiro(d, 'mei.optante', 'opcao_pelo_mei').toLowerCase() === 'true';
+  const simplesTexto = primeiro(d, 'simples.optante', 'opcao_pelo_simples', 'simples_nacional');
+  const simplesOptante = d.simples === true
+    || simplesTexto.toLowerCase() === 'true'
+    || simplesTexto.toLowerCase() === 'sim';
+  // Zero quer dizer "a base não informou", e é diferente de "não optante":
+  // com zero a tela mantém o que estiver configurado em vez de rebaixar a
+  // empresa para não optante sem ter lido isso em lugar nenhum.
+  const houveResposta = Boolean(simplesTexto) || 'simples' in d || 'mei' in d;
+  let simples: 0 | 1 | 2 | 3 = 0;
+  if (mei) simples = 2;
+  else if (simplesOptante) simples = 3;
+  else if (houveResposta) simples = 1;
+
   return {
     cnpj: doc,
     razao_social: primeiro(d, 'razao_social', 'nome', 'nome_empresarial'),
     nome_fantasia: primeiro(d, 'nome_fantasia', 'fantasia', 'estabelecimento.nome_fantasia'),
     situacao: primeiro(d, 'situacao', 'situacao_cadastral', 'descricao_situacao_cadastral'),
     cnae: digitos(cnae),
+    cnaes: listaCnaes,
+    simples_nacional: simples,
     cod_municipio_ibge: digitos(primeiro(
       d,
       'codigo_ibge', 'municipio_ibge', 'cod_municipio_ibge', 'codigo_municipio_ibge',

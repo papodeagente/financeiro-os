@@ -11,6 +11,7 @@ import {
 } from '@/lib/nfse-servico';
 import { ErroFiscal } from '@/lib/nfse-emissor';
 import { EmissorAceleraAPI, consultarCnpj } from '@/lib/nfse-acelera';
+import { codigoDoItem, itemSugerido, servicosDaEmpresa } from '@/lib/lc116-servicos';
 
 /**
  * Busca na Receita tudo o que dá para preencher sozinho.
@@ -93,6 +94,27 @@ export async function POST() {
       novaConfig.cnae = cadastro.cnae;
       preenchidos.push('CNAE');
     }
+
+    // SIMPLES NACIONAL VEM DA RECEITA. Perguntar isso à agência era pedir um
+    // dado que o sistema tem como olhar, e que ela costuma errar. Zero quer
+    // dizer "a base não informou": nesse caso o configurado é preservado.
+    if (cadastro.simples_nacional > 0 && cadastro.simples_nacional !== config.simples_nacional) {
+      novaConfig.simples_nacional = cadastro.simples_nacional as 1 | 2 | 3;
+      preenchidos.push('enquadramento no Simples');
+    }
+
+    // O CÓDIGO DE TRIBUTAÇÃO SAI DA ATIVIDADE, não do certificado. O CNAE diz
+    // o que a empresa declarou fazer; daí sai o item da LC 116 e o código.
+    // Só propõe quando o campo está vazio e o CNAE é um que conhecemos —
+    // CNAE não mapeado não vira palpite.
+    if (!String(config.cod_tributacao_nacional ?? '').trim()) {
+      const item = itemSugerido(cadastro.cnae);
+      const codigo = item ? codigoDoItem(item) : '';
+      if (codigo) {
+        novaConfig.cod_tributacao_nacional = codigo;
+        preenchidos.push('código de tributação (pela atividade da empresa)');
+      }
+    }
     await salvarConfigFiscal(tenantId, novaConfig);
 
     // Com município e código de tributação preenchidos, já dá para empurrar o
@@ -129,9 +151,18 @@ export async function POST() {
       }
     }
 
+    // A tela mostra as atividades da empresa para ela confirmar qual serviço
+    // está emitindo, em vez de escolher às cegas numa lista genérica.
+    const atividades = servicosDaEmpresa(cadastro.cnaes);
+
     return NextResponse.json({
       config: configParaCliente(novaConfig),
-      cadastro: { ...cadastro, situacao: cadastro.situacao },
+      cadastro,
+      atividades: atividades.daAtividade.map(a => ({
+        item: a.item,
+        codigo: a.codigo,
+        titulo: a.titulo,
+      })),
       preenchidos,
       pendencias,
       municipio,

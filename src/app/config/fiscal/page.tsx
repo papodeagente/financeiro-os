@@ -20,6 +20,7 @@ import { BuscaComLista, type OpcaoBusca } from './Busca';
 import { servicoDoCodigo } from '@/lib/lc116-servicos';
 import { toast } from '@/lib/toast';
 import { hojeISO } from '@/lib/money';
+import { cn } from '@/lib/utils';
 import type { ConfigFiscal } from '@/lib/nfse-tipos';
 
 interface Emitente {
@@ -68,6 +69,8 @@ export default function ConfigFiscalPage() {
   const [confirmarDesconexao, setConfirmarDesconexao] = useState(false);
   const [chaveOperacao, setChaveOperacao] = useState('');
   const [buscandoCnpj, setBuscandoCnpj] = useState(false);
+  const [atividades, setAtividades] = useState<Array<{ item: string; codigo: string; titulo: string }>>([]);
+  const [mostrarAvancado, setMostrarAvancado] = useState(false);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -169,6 +172,7 @@ export default function ConfigFiscalPage() {
       setConfig(corpo.config as ConfigFiscal);
       if (corpo.pendencias) setPendencias(corpo.pendencias);
       if (corpo.municipio) setMunicipio(corpo.municipio);
+      if (Array.isArray(corpo.atividades)) setAtividades(corpo.atividades);
       const lista = (corpo.preenchidos ?? []) as string[];
       toast.success(
         lista.length > 0 ? 'Dados preenchidos pela Receita' : 'Nada a preencher',
@@ -268,6 +272,19 @@ export default function ConfigFiscalPage() {
     }));
   }, []);
 
+  /** Tabela CNAE do IBGE, procurada pela descrição da atividade. */
+  const buscarCnaes = useCallback(async (termo: string): Promise<OpcaoBusca[]> => {
+    const res = await fetch(`/api/fiscal/cnaes?busca=${encodeURIComponent(termo)}`);
+    const corpo = await res.json();
+    return ((corpo.cnaes ?? []) as Array<{
+      codigo: string; formatado: string; descricao: string; grupo: string;
+    }>).map(c => ({
+      valor: c.codigo,
+      titulo: c.descricao,
+      detalhe: [c.formatado, c.grupo].filter(Boolean).join(' · '),
+    }));
+  }, []);
+
   /** Fornecedores já cadastrados, para o bloco de intermediador. */
   const buscarFornecedores = useCallback(async (termo: string): Promise<OpcaoBusca[]> => {
     const res = await fetch('/api/fornecedores-crm');
@@ -309,6 +326,48 @@ export default function ConfigFiscalPage() {
       >
         {config ? (
           <div className="flex flex-col gap-4">
+            {/* Datas conferidas em 14/09/2026 nas orientações da Receita
+                Federal e no Ato Conjunto RFB/CGIBS nº 4/2026. O painel existe
+                porque a agência está configurando a nota agora, a duas
+                semanas de a primeira data virar. */}
+            <section className={`${CAIXA} border-[var(--fin-warning)] bg-[var(--fin-warning-soft)]`}>
+              <div className="flex flex-col gap-1">
+                <h2 className="fin-t-subhead text-[var(--fin-warning-text)]">
+                  Reforma tributária: o que muda na sua nota
+                </h2>
+                <p className="fin-t-caption text-[var(--fin-text-2)]">
+                  2026 é ano de adaptação. O IBS e a CBS aparecem na nota como informação e
+                  não entram no total da operação, nem mudam o que você paga hoje.
+                </p>
+              </div>
+              <ul className="flex flex-col gap-2">
+                <li className="fin-t-body text-[var(--fin-text)]">
+                  <strong>1º de outubro de 2026</strong> — o destaque de IBS e CBS passa a ser
+                  obrigatório na NFS-e. Até 31 de dezembro de 2026 a falta dessas informações
+                  não faz a nota ser recusada.
+                </li>
+                <li className="fin-t-body text-[var(--fin-text)]">
+                  <strong>1º de janeiro de 2027</strong> — a obrigatoriedade alcança quem é do
+                  Simples Nacional.
+                </li>
+                <li className="fin-t-body text-[var(--fin-text)]">
+                  A alíquota de teste é de <strong>1%</strong> (0,9% de CBS e 0,1% de IBS), com
+                  caráter informativo.
+                </li>
+              </ul>
+              <p className="fin-t-caption text-[var(--fin-text-2)]">
+                O que isso significa para configurar aqui: o campo que mais importa continua
+                sendo a <strong>atividade da empresa</strong>. É o CNAE que define o serviço, o
+                serviço que define o código de tributação, e é esse conjunto que a reforma usa
+                para classificar a operação. Cadastrar a atividade certa hoje é o que evita
+                retrabalho quando o destaque virar obrigatório.
+              </p>
+              <p className="fin-t-caption text-[var(--fin-text-3)]">
+                Esta tela não calcula IBS nem CBS. Quando o emissor passar a aceitar esses
+                campos, eles entram aqui. Confirme o enquadramento com a sua contabilidade.
+              </p>
+            </section>
+
             <Secao
               titulo="Emissor"
               descricao="Quem transmite a nota para a prefeitura. O emissor simulado percorre o fluxo inteiro sem emitir documento fiscal, para conferir os valores antes de contratar."
@@ -597,6 +656,9 @@ export default function ConfigFiscalPage() {
                       antes de emitir.
                     </span>
                   </div>
+                  {/* O Simples vem da Receita pelo CNPJ. Vira campo editável
+                      só quando a consulta não respondeu — pedir à agência um
+                      dado que o sistema sabe olhar é pedir erro. */}
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="simples">Simples Nacional</Label>
                     <select id="simples" className={SELECT} value={config.simples_nacional}
@@ -606,23 +668,78 @@ export default function ConfigFiscalPage() {
                       <option value={2}>MEI</option>
                       <option value={3}>ME / EPP</option>
                     </select>
+                    <span className="fin-t-caption text-[var(--fin-text-3)]">
+                      Preenchido pela consulta do CNPJ. Só mude se a Receita estiver desatualizada.
+                    </span>
                   </div>
+                  {/* Só existe para quem é do Simples: fora daí a AceleraAPI
+                      nem aceita o campo. */}
                   {config.simples_nacional >= 2 ? (
                     <div className="flex flex-col gap-2">
                       <Label htmlFor="apuracao">Regime de apuração</Label>
                       <Input id="apuracao" value={config.regime_apuracao}
                         onChange={e => mudar('regime_apuracao', e.target.value)} />
+                      <span className="fin-t-caption text-[var(--fin-text-3)]">
+                        Exigido porque a empresa é do Simples.
+                      </span>
                     </div>
                   ) : null}
+                </div>
+
+                {/* O que a empresa declarou fazer na Receita. Confirmar aqui é
+                    mais seguro do que escolher às cegas numa lista genérica. */}
+                {atividades.length > 0 ? (
+                  <div className="flex flex-col gap-2 rounded-[var(--fin-r-md)] border border-[var(--fin-border)] bg-[var(--fin-surface-2)] p-3">
+                    <span className="fin-t-body-strong text-[var(--fin-text)]">
+                      O que a sua empresa faz, segundo a Receita
+                    </span>
+                    <div className="flex flex-col gap-1">
+                      {atividades.map(a => {
+                        const escolhido = config.cod_tributacao_nacional === a.codigo;
+                        return (
+                          <button
+                            key={a.codigo}
+                            type="button"
+                            onClick={() => mudar('cod_tributacao_nacional', a.codigo)}
+                            className={cn(
+                              'flex items-center justify-between gap-3 rounded-[var(--fin-r-sm)] px-2 py-1.5 text-left',
+                              escolhido
+                                ? 'bg-[var(--fin-surface)] ring-1 ring-[var(--fin-accent)]'
+                                : 'hover:bg-[var(--fin-surface)]',
+                            )}
+                          >
+                            <span className="fin-t-body text-[var(--fin-text)]">{a.titulo}</span>
+                            <span className="fin-t-caption text-[var(--fin-text-3)]">
+                              item {a.item} · {a.codigo}
+                              {escolhido ? ' · em uso' : ''}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Numeração vinda de outro sistema é caso de migração. Fora
+                    do caminho principal porque preenchida à toa pula número. */}
+                <button
+                  type="button"
+                  onClick={() => setMostrarAvancado(v => !v)}
+                  className="fin-t-caption self-start text-[var(--fin-accent)]"
+                >
+                  {mostrarAvancado ? 'Esconder' : 'Já emitia nota em outro sistema?'}
+                </button>
+                {mostrarAvancado ? (
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="ultdps">Último DPS emitido em outro sistema</Label>
                     <Input id="ultdps" value={config.ultimo_numero_dps}
                       onChange={e => mudar('ultimo_numero_dps', e.target.value)} />
                     <span className="fin-t-caption text-[var(--fin-text-3)]">
-                      Só se a agência já emitia fora daqui, para a numeração continuar de onde parou.
+                      Deixe vazio se a agência nunca emitiu NFS-e. Preencher sem necessidade pula
+                      números da sua numeração.
                     </span>
                   </div>
-                </div>
+                ) : null}
 
                 <div className="flex flex-wrap items-center gap-3">
                   <Button type="button" onClick={() => { void sincronizarPrestador(); }}
@@ -668,8 +785,14 @@ export default function ConfigFiscalPage() {
                 </div>
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="cnae">CNAE</Label>
-                  <Input id="cnae" value={config.cnae}
-                    onChange={e => mudar('cnae', e.target.value)} />
+                  <BuscaComLista
+                    id="cnae"
+                    valor={config.cnae}
+                    onValor={v => mudar('cnae', v)}
+                    onBuscar={buscarCnaes}
+                    placeholder="Digite a atividade ou o código"
+                    placeholderBusca="Procurar na tabela do IBGE"
+                  />
                 </div>
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="codtrib">Código de tributação do município</Label>
