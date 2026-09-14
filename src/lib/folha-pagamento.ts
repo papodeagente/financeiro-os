@@ -9,7 +9,7 @@
  * contrato, então vem do cadastro de cada pessoa e o sistema só sugere um
  * ponto de partida. Dinheiro sempre por round2/soma.
  */
-import { round2, num, soma, divSegura, mesDe } from './money';
+import { round2, num, soma, divSegura, mesDe, ultimoDiaDoMes } from './money';
 import type { TipoContrato, VinculoEmpresa } from './crm-types';
 
 /** Sugestão de encargo por contrato, em percentual sobre o salário.
@@ -208,4 +208,73 @@ export function montarEvolucao(
  *  atualizar a MESMA conta em vez de duplicar a despesa. */
 export function contaFolhaId(mes: string, colaboradorId: string): string {
   return `folha-${mes}-${colaboradorId}`;
+}
+
+/** Dia padrão de pagamento da folha. A CLT manda pagar até o 5º dia útil
+ *  do mês seguinte ao trabalhado. */
+export const DIA_PAGAMENTO_FOLHA_PADRAO = 5;
+
+export interface EventoFolha {
+  /** Mês trabalhado. */
+  competencia: string;
+  /** Data em que o dinheiro sai, no mês SEGUINTE ao da competência. */
+  data_pagamento: string;
+  valor: number;
+  pessoas: number;
+  descricao: string;
+}
+
+/**
+ * Folha prevista para o fluxo de caixa.
+ *
+ * Duas coisas que erram fácil e que aqui estão explícitas:
+ *
+ * 1. A folha de setembro sai em OUTUBRO. Jogar o custo no mês trabalhado
+ *    adianta a saída e faz o caixa parecer pior agora e melhor depois.
+ *
+ * 2. Se a folha daquele mês já virou conta a pagar de verdade, ela NÃO
+ *    entra como previsão: entraria duas vezes no mesmo fluxo. O reconhecimento
+ *    é pelo id determinístico `folha-<mes>-<pessoa>`, o mesmo que a geração
+ *    de contas usa, então os dois lados não podem divergir.
+ */
+export function eventosFolhaPrevistos(
+  pessoas: EntradaPessoa[],
+  competencias: string[],
+  diaPagamento: number,
+  idsDeContasExistentes: Iterable<string> = [],
+): EventoFolha[] {
+  const existentes = new Set(idsDeContasExistentes);
+  const dia = Math.min(Math.max(Math.trunc(num(diaPagamento)) || DIA_PAGAMENTO_FOLHA_PADRAO, 1), 31);
+
+  const saida: EventoFolha[] = [];
+  for (const competencia of competencias) {
+    if (!/^\d{4}-\d{2}$/.test(competencia)) continue;
+
+    const folha = montarFolha(pessoas, competencia);
+    if (folha.quantidade === 0 || folha.total <= 0) continue;
+
+    // Já lançada como conta a pagar: quem manda é a conta real.
+    const jaLancada = folha.pessoas.some(p => existentes.has(contaFolhaId(competencia, p.id)));
+    if (jaLancada) continue;
+
+    saida.push({
+      competencia,
+      data_pagamento: dataPagamentoDaFolha(competencia, dia),
+      valor: folha.total,
+      pessoas: folha.quantidade,
+      descricao: `Folha de ${competencia} · ${folha.quantidade} ${folha.quantidade === 1 ? 'pessoa' : 'pessoas'}`,
+    });
+  }
+  return saida;
+}
+
+/** Data de saída do dinheiro: mês seguinte ao trabalhado, encurtando o dia
+ *  quando o mês é mais curto (dia 31 em fevereiro vira 28 ou 29). */
+export function dataPagamentoDaFolha(competencia: string, dia: number): string {
+  const [ano, mes] = competencia.split('-').map(Number);
+  const proxAno = mes === 12 ? ano + 1 : ano;
+  const proxMes = mes === 12 ? 1 : mes + 1;
+  const teto = ultimoDiaDoMes(proxAno, proxMes);
+  const real = Math.min(Math.max(dia, 1), teto);
+  return `${proxAno}-${String(proxMes).padStart(2, '0')}-${String(real).padStart(2, '0')}`;
 }

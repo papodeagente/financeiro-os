@@ -7,7 +7,7 @@
  */
 import {
   custoMensal, montarFolha, montarEvolucao, estaNaFolhaNoMes,
-  contaFolhaId, ENCARGO_SUGERIDO,
+  contaFolhaId, ENCARGO_SUGERIDO, eventosFolhaPrevistos, dataPagamentoDaFolha,
 } from '../src/lib/folha-pagamento.ts';
 import { soma } from '../src/lib/money.ts';
 
@@ -113,6 +113,51 @@ console.log('\n--- folha contra faturamento ---');
 
 console.log('\n--- id da conta a pagar ---');
 eq(contaFolhaId('2026-09', 'u1'), 'folha-2026-09-u1', 'id determinístico por mês e pessoa');
+
+console.log('\n--- data em que o dinheiro sai ---');
+eq(dataPagamentoDaFolha('2026-09', 5), '2026-10-05', 'a folha de setembro sai em outubro');
+eq(dataPagamentoDaFolha('2026-12', 5), '2027-01-05', 'dezembro vira o ano');
+eq(dataPagamentoDaFolha('2026-01', 31), '2026-02-28', 'dia 31 encurta em fevereiro');
+eq(dataPagamentoDaFolha('2028-01', 31), '2028-02-29', 'e respeita o ano bissexto');
+eq(dataPagamentoDaFolha('2026-09', 1), '2026-10-01', 'dia 1');
+
+console.log('\n--- previsão da folha no fluxo de caixa ---');
+{
+  const pessoas = [pessoa('u1', 'Ana', { salario_base: 5000 }), pessoa('u2', 'Bia', { salario_base: 3000 })];
+  const ev = eventosFolhaPrevistos(pessoas, ['2026-09', '2026-10'], 5);
+  eq(ev.map(e => [e.competencia, e.data_pagamento, e.valor, e.pessoas]),
+     [['2026-09', '2026-10-05', 8000, 2], ['2026-10', '2026-11-05', 8000, 2]],
+     'um evento por competência, pagando no mês seguinte');
+  eq(ev[0].descricao, 'Folha de 2026-09 · 2 pessoas', 'descrição diz de que mês é');
+}
+{
+  // O ponto que evita contar duas vezes: se a folha do mês já virou conta
+  // a pagar, a previsão sai de cena e quem manda é a conta real.
+  const pessoas = [pessoa('u1', 'Ana', { salario_base: 5000 })];
+  const jaLancada = [contaFolhaId('2026-09', 'u1')];
+  const ev = eventosFolhaPrevistos(pessoas, ['2026-09', '2026-10'], 5, jaLancada);
+  eq(ev.map(e => e.competencia), ['2026-10'],
+     'mês já lançado como conta a pagar não entra de novo na previsão');
+}
+{
+  const pessoas = [pessoa('u1', 'Ana', { salario_base: 5000, na_folha: false })];
+  eq(eventosFolhaPrevistos(pessoas, ['2026-09'], 5).length, 0, 'ninguém na folha, nenhum evento');
+}
+{
+  const pessoas = [pessoa('u1', 'Novo', { salario_base: 4000, data_admissao: '2026-10-01' })];
+  eq(eventosFolhaPrevistos(pessoas, ['2026-09', '2026-10'], 5).map(e => e.competencia), ['2026-10'],
+     'quem entra em outubro não aparece na folha de setembro');
+}
+eq(eventosFolhaPrevistos([], ['2026-09'], 5), [], 'sem pessoas não gera previsão');
+eq(eventosFolhaPrevistos([pessoa('u1', 'Ana', { salario_base: 5000 })], ['setembro'], 5), [],
+   'competência com formato inválido é ignorada, não vira data estranha');
+{
+  const pessoas = [pessoa('u1', 'Ana', { salario_base: 5000 })];
+  eq(eventosFolhaPrevistos(pessoas, ['2026-09'], 0)[0].data_pagamento, '2026-10-05',
+     'dia zero cai no padrão em vez de virar data inválida');
+  eq(eventosFolhaPrevistos(pessoas, ['2026-09'], 99)[0].data_pagamento, '2026-10-31',
+     'dia acima de 31 é limitado ao fim do mês');
+}
 
 console.log(`\n${total - falhas}/${total} testes da folha passaram`);
 process.exit(falhas > 0 ? 1 : 0);

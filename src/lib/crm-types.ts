@@ -1250,6 +1250,11 @@ export interface Agencia {
    *  desta lista. Vazio significa que a agência ainda não definiu agenda,
    *  e nesse caso nenhuma conta é programada automaticamente. */
   datas_pagamento_comissao: number[];
+  /** Dia do mês em que a agência paga a folha. A CLT manda pagar até o 5º
+   *  dia útil do mês seguinte ao trabalhado, então o padrão é 5 e a data
+   *  cai no mês SEGUINTE ao da competência. Usado na previsão do fluxo de
+   *  caixa: sem isso a folha apareceria no mês errado. */
+  dia_pagamento_folha: number;
   // Dominio customizado pra propostas publicas. Quando preenchido
   // (ex.: "proposta.minhaagencia.com.br"), o link enviado ao cliente
   // troca fin.enturos.com pelo dominio do tenant — preservando o path

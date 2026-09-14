@@ -1,8 +1,11 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { ContaReceber, ContaPagar, ContaBancaria } from '@/lib/crm-types';
-import { loadEntities } from '@/lib/crm-storage';
+import { ContaReceber, ContaPagar, ContaBancaria, Agencia } from '@/lib/crm-types';
+import { loadEntities, loadAgencia } from '@/lib/crm-storage';
+import {
+  eventosFolhaPrevistos, DIA_PAGAMENTO_FOLHA_PADRAO, type EntradaPessoa,
+} from '@/lib/folha-pagamento';
 import { calcularSaldoBancario } from '@/lib/saldo-bancario';
 import { Card } from '@/components/ui/card';
 import { PageHeader } from '@/components/fin/PageHeader';
@@ -17,8 +20,7 @@ import { statusChipVariants } from '@/components/fin/StatusChip';
 import { cn, formatDate } from '@/lib/utils';
 import type { FunilPayload } from '@/lib/funil-types';
 import {
-  round2, num, somaPor, divSegura, hojeISO, dataLocal, paraISO, mesDe, dentroDoPeriodo,
-} from '@/lib/money';
+  round2, num, somaPor, divSegura, hojeISO, dataLocal, paraISO, mesDe, dentroDoPeriodo, addMeses } from '@/lib/money';
 import { GraficoFluxo } from './GraficoFluxo';
 
 function getWeekRange(date: Date): string {
@@ -91,6 +93,12 @@ export default function FluxoCaixaPage() {
   const [contasBancarias, setContasBancarias] = useState<ContaBancaria[]>([]);
   const [funis, setFunis] = useState<FunilPayload[]>([]);
   const [incluirFunis, setIncluirFunis] = useState(false);
+  const [pessoasFolha, setPessoasFolha] = useState<EntradaPessoa[]>([]);
+  const [diaPagamentoFolha, setDiaPagamentoFolha] = useState(DIA_PAGAMENTO_FOLHA_PADRAO);
+  // Ligada por padrão: folha não é aposta como a projeção de funil, é
+  // compromisso assumido. Esconder por padrão faria o caixa previsto
+  // parecer melhor do que é.
+  const [incluirFolha, setIncluirFolha] = useState(true);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
@@ -101,16 +109,23 @@ export default function FluxoCaixaPage() {
   async function load() {
     setLoading(true);
     try {
-      const [cr, cp, cb, fs] = await Promise.all([
+      const [cr, cp, cb, fs, folhaResp, ag] = await Promise.all([
         loadEntities<ContaReceber>('contas-receber'),
         loadEntities<ContaPagar>('contas-pagar'),
         loadEntities<ContaBancaria>('contas-bancarias'),
         loadEntities<FunilPayload>('funis'),
+        // A folha é um compromisso já assumido, então entra na previsão.
+        // Falha aqui não derruba o fluxo: sem permissão de folha, a tela
+        // continua mostrando contas a receber e a pagar.
+        fetch('/api/folha').then(r => (r.ok ? r.json() : null)).catch(() => null),
+        loadAgencia<Agencia>().catch(() => null),
       ]);
       setContasReceber(cr);
       setContasPagar(cp);
       setContasBancarias(cb);
       setFunis(fs);
+      setPessoasFolha(folhaResp?.pessoas ?? []);
+      setDiaPagamentoFolha(Number(ag?.dia_pagamento_folha) || DIA_PAGAMENTO_FOLHA_PADRAO);
       setErro(null);
       setAtualizadoEm(new Date());
     } catch {
@@ -198,8 +213,26 @@ export default function FluxoCaixaPage() {
         out.push({ desc, valor: emAberto, data: cp.data_vencimento || '', realizado: false });
       }
     }
+
+    // Folha: saída prevista, nunca realizada. A competência vai até um mês
+    // além da janela porque a folha do último mês exibido só sai no mês
+    // seguinte, e sem isso ela sumiria da ponta do gráfico.
+    if (incluirFolha && pessoasFolha.length > 0) {
+      const inicio = mesDe(hojeISO());
+      const competencias: string[] = [];
+      for (let i = -1; i <= meses; i++) {
+        competencias.push(mesDe(addMeses(`${inicio}-01`, i)));
+      }
+      // Os ids já existentes impedem a folha de ser contada duas vezes
+      // quando o mês virou conta a pagar de verdade.
+      const idsExistentes = contasPagar.map(c => c.id);
+      for (const ev of eventosFolhaPrevistos(pessoasFolha, competencias, diaPagamentoFolha, idsExistentes)) {
+        out.push({ desc: ev.descricao, valor: ev.valor, data: ev.data_pagamento, realizado: false });
+      }
+    }
+
     return out;
-  }, [contasPagar]);
+  }, [contasPagar, incluirFolha, pessoasFolha, diaPagamentoFolha, meses]);
 
   const fluxo = useMemo(() => {
     const hoje = hojeISO();
@@ -414,7 +447,8 @@ export default function FluxoCaixaPage() {
   ]), [idNegativo]);
 
   const filtrosAtivos =
-    (periodo !== 'MENSAL' ? 1 : 0) + (meses !== 6 ? 1 : 0) + (incluirFunis ? 1 : 0);
+    (periodo !== 'MENSAL' ? 1 : 0) + (meses !== 6 ? 1 : 0) + (incluirFunis ? 1 : 0)
+    + (incluirFolha ? 0 : 1);
 
   const semDado =
     estado === 'ok' &&
@@ -472,6 +506,16 @@ export default function FluxoCaixaPage() {
               ],
               onChange: (v) => setMeses(parseInt(v)),
             },
+            ...(pessoasFolha.some(p => p.vinculo?.na_folha) ? [{
+              id: 'folha',
+              rotulo: 'Folha de pagamento',
+              valor: incluirFolha ? 'sim' : 'nao',
+              opcoes: [
+                { valor: 'sim', rotulo: 'Incluir' },
+                { valor: 'nao', rotulo: 'Não incluir' },
+              ],
+              onChange: (v: string) => setIncluirFolha(v === 'sim'),
+            }] : []),
             ...(projecaoFunis.count > 0 ? [{
               id: 'projecao-crm',
               rotulo: 'Projeção do CRM',

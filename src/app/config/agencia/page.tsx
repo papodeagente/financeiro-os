@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Save, Building2, MapPin, Phone, DollarSign, Palette, Loader2, CheckCircle2, Globe, ExternalLink, CalendarClock } from 'lucide-react';
 import { Agencia } from '@/lib/crm-types';
 import { proximaDataPagamento, descreverAgenda } from '@/lib/comissao-agenda';
+import { DIA_PAGAMENTO_FOLHA_PADRAO } from '@/lib/folha-pagamento';
 import { hojeISO, dataLocal } from '@/lib/money';
 
 /** Dias oferecidos na agenda. 31 vale "último dia do mês". */
@@ -35,6 +36,7 @@ const defaultAgencia: Agencia = {
   regime_tributario: 'SIMPLES',
   aliquota_padrao: 6,
   datas_pagamento_comissao: [],
+  dia_pagamento_folha: DIA_PAGAMENTO_FOLHA_PADRAO,
   custom_proposta_domain: '',
 };
 
@@ -438,6 +440,31 @@ export default function AgenciaPage() {
             <p className="text-xs text-[var(--t-text-muted)]">
               Dia 31 vale último dia do mês: em fevereiro a conta vence em 28 ou 29, nunca em março.
             </p>
+
+            <div className="border-t border-[var(--t-border)] pt-4 space-y-2">
+              <label className="text-xs text-[var(--t-text-secondary)] uppercase tracking-wide block">
+                Dia de pagamento da folha
+              </label>
+              <div className="flex items-center gap-3">
+                <Input
+                  type="number"
+                  min={1}
+                  max={31}
+                  step={1}
+                  value={data.dia_pagamento_folha ?? DIA_PAGAMENTO_FOLHA_PADRAO}
+                  onChange={(e) => setField('dia_pagamento_folha', Math.min(31, Math.max(1, parseInt(e.target.value, 10) || 1)))}
+                  className="w-24 bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)] text-right"
+                />
+                <span className="text-sm text-[var(--t-text-secondary)]">
+                  do mês seguinte ao trabalhado
+                </span>
+              </div>
+              <p className="text-xs text-[var(--t-text-muted)]">
+                A folha de setembro sai em outubro. É essa data que a previsão do fluxo de caixa usa,
+                para a saída não aparecer um mês antes do que acontece. A CLT manda pagar até o 5º dia
+                útil do mês seguinte.
+              </p>
+            </div>
           </CardContent>
         </Card>
 
