@@ -12,6 +12,8 @@ import {
 import { ErroFiscal } from '@/lib/nfse-emissor';
 import {
   EmissorAceleraAPI,
+  acharEmpresaPorCnpj,
+  chaveOperacaoMascarada,
   criarEmpresaAcelera,
   regenerarTokenEmpresa,
 } from '@/lib/nfse-acelera';
@@ -29,7 +31,7 @@ import {
  * conectada e é só tentar de novo. Gravar por último arriscaria perder o
  * token e deixar uma empresa órfã no cadastro.
  */
-export async function POST() {
+export async function POST(req: Request) {
   try {
     await initDB();
     const bloqueio = bloqueioFinanceiro(await getSession(), 'escrever');
@@ -41,8 +43,19 @@ export async function POST() {
       carregarEmitente(tenantId),
     ]);
 
-    let empresaId = config.empresa_id;
-    let token = String(config.token ?? '');
+    // `empresa_id` no corpo liga a agência a uma empresa específica da conta,
+    // para o caso de já existir cadastro feito por fora.
+    let escolhida: number | null = null;
+    try {
+      const corpo = await req.json();
+      const n = Number(corpo?.empresa_id);
+      if (Number.isFinite(n) && n > 0) escolhida = n;
+    } catch {
+      escolhida = null;
+    }
+
+    let empresaId = escolhida ?? config.empresa_id;
+    let token = escolhida ? '' : String(config.token ?? '');
 
     if (empresaId && token) {
       return NextResponse.json({
@@ -52,18 +65,28 @@ export async function POST() {
     }
 
     if (empresaId && !token) {
-      // Empresa cadastrada mas sem token guardado: cadastrar de novo criaria
-      // um segundo cadastro para o mesmo CNPJ. O caminho é regenerar.
+      // Empresa já conhecida, token perdido: regenerar. Cadastrar de novo
+      // criaria um segundo cadastro para o mesmo CNPJ, e duas empresas no
+      // mesmo emitente significam duas numerações de nota.
       token = await regenerarTokenEmpresa(empresaId);
     } else {
-      const empresa = await criarEmpresaAcelera({
-        cnpj: emitente.cnpj,
-        razao_social: emitente.razao_social,
-        nome_fantasia: emitente.nome_fantasia,
-        uf: emitente.endereco.estado,
-      });
-      empresaId = empresa.id;
-      token = empresa.token;
+      // RECONECTAR NÃO PODE DUPLICAR. Depois de desconectar, o CNPJ da
+      // agência continua cadastrado na conta: reaproveita aquele registro em
+      // vez de criar outro.
+      const existente = await acharEmpresaPorCnpj(emitente.cnpj);
+      if (existente) {
+        empresaId = existente.id;
+        token = await regenerarTokenEmpresa(existente.id);
+      } else {
+        const empresa = await criarEmpresaAcelera({
+          cnpj: emitente.cnpj,
+          razao_social: emitente.razao_social,
+          nome_fantasia: emitente.nome_fantasia,
+          uf: emitente.endereco.estado,
+        });
+        empresaId = empresa.id;
+        token = empresa.token;
+      }
     }
 
     const conectada = {
@@ -94,6 +117,7 @@ export async function POST() {
     return NextResponse.json({
       config: configParaCliente(conectada),
       empresa_id: empresaId,
+      chave_operacao: chaveOperacaoMascarada(),
       pendencias,
     });
   } catch (e) {
@@ -126,6 +150,61 @@ export async function PUT() {
     const msg = e instanceof ErroFiscal
       ? e.message
       : e instanceof Error ? e.message : 'Erro ao gerar o token.';
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
+}
+
+/**
+ * Desconecta a agência da AceleraAPI.
+ *
+ * Limpa o vínculo DESTE sistema: id da empresa, credencial e o certificado.
+ * O certificado sai junto de propósito — ele foi enviado sob a credencial
+ * antiga e vive do lado da AceleraAPI, então mantê-lo aqui mostraria
+ * "certificado enviado" numa conexão que não tem certificado nenhum.
+ *
+ * O cadastro da empresa NÃO é apagado lá. Notas já emitidas continuam
+ * existindo, e reconectar com o mesmo CNPJ reaproveita o mesmo cadastro.
+ */
+export async function DELETE() {
+  try {
+    await initDB();
+    const bloqueio = bloqueioFinanceiro(await getSession(), 'escrever');
+    if (bloqueio) return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
+    const tenantId = await getTenantId();
+    const config = await carregarConfigFiscal(tenantId);
+
+    const desconectada = {
+      ...config,
+      empresa_id: null,
+      token: '',
+      certificado: null,
+    };
+    await salvarConfigFiscal(tenantId, desconectada);
+    return NextResponse.json({
+      config: configParaCliente(desconectada),
+      empresa_anterior: config.empresa_id,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Erro ao desconectar.';
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
+}
+
+/** Empresas da conta de operação, para escolher uma já existente. */
+export async function GET() {
+  try {
+    await initDB();
+    const bloqueio = bloqueioFinanceiro(await getSession(), 'ler');
+    if (bloqueio) return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
+    const { listarEmpresasAcelera } = await import('@/lib/nfse-acelera');
+    return NextResponse.json({
+      chave_operacao: chaveOperacaoMascarada(),
+      empresas: await listarEmpresasAcelera(),
+    });
+  } catch (e) {
+    const msg = e instanceof ErroFiscal
+      ? e.message
+      : e instanceof Error ? e.message : 'Erro ao listar empresas.';
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 }

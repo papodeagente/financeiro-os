@@ -547,10 +547,38 @@ export async function listarEmpresasAcelera(): Promise<Array<{
   const lista = (r.dados?.empresas ?? []) as Array<Record<string, unknown>>;
   return lista.map(e => ({
     id: Number(texto(e, 'id')),
-    cnpj: digitos(texto(e, 'cnpj')),
-    razao_social: texto(e, 'razao_social'),
+    // O nome do campo do documento varia conforme a empresa seja PJ ou PF.
+    cnpj: digitos(texto(e, 'cnpj', 'documento', 'cpf_cnpj', 'cpf')),
+    razao_social: texto(e, 'razao_social', 'nome', 'nome_fantasia'),
     status: texto(e, 'status'),
   }));
+}
+
+/**
+ * Procura a agência entre as empresas já cadastradas na conta.
+ *
+ * Existe para o reconectar não virar cadastro duplicado: depois de
+ * desconectar, clicar em conectar de novo com o mesmo CNPJ tem que reaproveitar
+ * a empresa que já existe, não criar uma segunda. Duas empresas para o mesmo
+ * CNPJ significam duas numerações de nota no mesmo emitente.
+ */
+export async function acharEmpresaPorCnpj(cnpj: string): Promise<{
+  id: number;
+  cnpj: string;
+  razao_social: string;
+  status: string;
+} | null> {
+  const alvo = digitos(cnpj);
+  if (alvo.length < 11) return null;
+  const empresas = await listarEmpresasAcelera();
+  return empresas.find(e => e.cnpj === alvo) ?? null;
+}
+
+/** Últimos dígitos da chave de operação, para conferir a conta em uso. */
+export function chaveOperacaoMascarada(): string {
+  const k = String(process.env.ACELERA_API_KEY ?? '').trim();
+  if (!k) return '';
+  return `${k.slice(0, 4)}••••${k.slice(-4)}`;
 }
 
 /**

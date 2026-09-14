@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { ConfirmDialog } from '@/components/fin/ConfirmDialog';
 import { toast } from '@/lib/toast';
 import { hojeISO } from '@/lib/money';
 import type { ConfigFiscal } from '@/lib/nfse-tipos';
@@ -61,6 +62,9 @@ export default function ConfigFiscalPage() {
   const [municipio, setMunicipio] = useState<{ emite: boolean; detalhe: string; convenio: string } | null>(null);
   const [conferindoMunicipio, setConferindoMunicipio] = useState(false);
   const [conectando, setConectando] = useState(false);
+  const [desconectando, setDesconectando] = useState(false);
+  const [confirmarDesconexao, setConfirmarDesconexao] = useState(false);
+  const [chaveOperacao, setChaveOperacao] = useState('');
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -128,6 +132,26 @@ export default function ConfigFiscalPage() {
    * Conecta a agência: o sistema cadastra a empresa na AceleraAPI com a chave
    * da operação e guarda o token dela. A agência não digita token nenhum.
    */
+  /**
+   * Desfaz o vínculo desta agência. O cadastro na AceleraAPI continua lá:
+   * reconectar com o mesmo CNPJ reaproveita a mesma empresa.
+   */
+  async function desconectar() {
+    if (desconectando) return;
+    setDesconectando(true);
+    try {
+      const res = await fetch('/api/fiscal/empresa', { method: 'DELETE' });
+      const corpo = await res.json();
+      if (!res.ok) { toast.error('Não foi possível desconectar', corpo?.error || ''); return; }
+      setConfig(corpo.config as ConfigFiscal);
+      setPendencias(null);
+      setConfirmarDesconexao(false);
+      toast.success('Agência desconectada', 'Conecte de novo para emitir notas.');
+    } finally {
+      setDesconectando(false);
+    }
+  }
+
   async function conectar() {
     if (conectando) return;
     setConectando(true);
@@ -137,6 +161,7 @@ export default function ConfigFiscalPage() {
       if (!res.ok) { toast.error('Não foi possível conectar', corpo?.error || ''); return; }
       setConfig(corpo.config as ConfigFiscal);
       if (corpo.pendencias) setPendencias(corpo.pendencias);
+      if (corpo.chave_operacao) setChaveOperacao(corpo.chave_operacao as string);
       toast.success(
         corpo.ja_conectada ? 'Esta agência já está conectada' : 'Agência conectada à AceleraAPI',
       );
@@ -249,8 +274,19 @@ export default function ConfigFiscalPage() {
                           : config.token_mascarado ? 'Reconectar' : 'Conectar esta agência'}
                       </Button>
                       {config.empresa_id ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setConfirmarDesconexao(true)}
+                          disabled={desconectando}
+                        >
+                          Desconectar
+                        </Button>
+                      ) : null}
+                      {config.empresa_id ? (
                         <span className="fin-t-caption text-[var(--fin-text-3)]">
-                          Empresa #{config.empresa_id} na AceleraAPI.
+                          Empresa #{config.empresa_id} na AceleraAPI
+                          {chaveOperacao ? ` · conta ${chaveOperacao}` : ''}.
                         </span>
                       ) : null}
                     </div>
@@ -581,6 +617,26 @@ export default function ConfigFiscalPage() {
           </div>
         ) : null}
       </DataState>
+      <ConfirmDialog
+        aberto={confirmarDesconexao}
+        onOpenChange={a => { if (!a) setConfirmarDesconexao(false); }}
+        titulo="Desconectar esta agência da AceleraAPI"
+        oQueVaiAcontecer="A agência para de emitir nota até você conectar de novo. O cadastro dela na AceleraAPI continua existindo e as notas já emitidas não mudam."
+        detalhes={[
+          {
+            rotulo: 'O que sai daqui',
+            valor: 'A credencial da agência e o certificado digital enviado.',
+          },
+          {
+            rotulo: 'Para reconectar',
+            valor: 'O mesmo CNPJ reaproveita a empresa que já existe, sem criar cadastro duplicado. O certificado precisa ser enviado de novo.',
+          },
+        ]}
+        confirmarRotulo="Desconectar"
+        tone="destrutivo"
+        processando={desconectando}
+        onConfirmar={() => { void desconectar(); }}
+      />
     </PageShell>
   );
 }
