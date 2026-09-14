@@ -408,7 +408,7 @@ export async function gerarPdfPlanejamento(
   // ── O que o plano exige ────────────────────────────────────────────────
   if (rel.premissasIncompletas) {
     tituloSecao(ctx, 'Plano incompleto');
-    paragrafo(ctx, 'Ticket médio e margem de comissão precisam estar preenchidos para o cálculo das metas.');
+    paragrafo(ctx, analise.veredito);
   } else if (rel.lucroPorVenda <= 0) {
     tituloSecao(ctx, 'O plano não fecha');
     paragrafo(ctx, analise.veredito);

@@ -34,6 +34,40 @@ const dec1 = (v: number) =>
   (Number.isFinite(v) ? v : 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const pct0 = (v: number) => `${Math.round(Number.isFinite(v) ? v : 0)}%`;
 
+function percentualSeguro(valor: unknown): number {
+  return typeof valor === 'number' && Number.isFinite(valor)
+    ? Math.min(100, Math.max(0, valor))
+    : 0;
+}
+
+function listarPremissas(nomes: string[]): string {
+  if (nomes.length <= 1) return nomes[0] ?? 'premissas básicas';
+  return `${nomes.slice(0, -1).join(', ')} e ${nomes.at(-1)}`;
+}
+
+/**
+ * Se C é o percentual dos custos que incidem sobre a comissão e V o dos
+ * custos que incidem sobre a venda, o empate exige margem * (1 - C) = V.
+ * Somar o custo variável observado à margem atual é incorreto porque a parte
+ * baseada na comissão também cresce quando a comissão aumenta.
+ */
+function margemMinimaParaEmpatar(data: CustosData): number | null {
+  const custos = Array.isArray(data.custos_variaveis) ? data.custos_variaveis : [];
+  let sobreComissao = 0;
+  let sobreVenda = 0;
+
+  for (const custo of custos) {
+    const percentual = percentualSeguro(custo?.percentual);
+    if (custo?.base === 'COMISSAO') sobreComissao += percentual;
+    else sobreVenda += percentual;
+  }
+
+  const fracaoDisponivel = 1 - (sobreComissao / 100);
+  if (fracaoDisponivel <= 0) return null;
+  const margemMinima = sobreVenda / fracaoDisponivel;
+  return margemMinima < 100 ? margemMinima : null;
+}
+
 // Limiares. Explicitados aqui para poderem ser discutidos e ajustados.
 const LIMIARES = {
   /** Acima disso o atendimento perde qualidade (agência consultiva). */
@@ -68,10 +102,18 @@ export function analisarPlano(data: CustosData, rel: Relatorio): Analise {
   let vereditoGravidade: Gravidade;
 
   if (rel.premissasIncompletas) {
+    const faltantes = [
+      [data.ticket_medio, 'ticket médio'],
+      [data.margem_comissao, 'margem de comissão'],
+      [data.taxa_conversao, 'taxa de conversão'],
+    ].filter(([valor]) => !(typeof valor === 'number' && Number.isFinite(valor) && valor > 0))
+      .map(([, nome]) => String(nome));
+    const lista = listarPremissas(faltantes);
     veredito =
-      'O plano ainda não pode ser avaliado: faltam ticket médio e margem de comissão, que são a base de todo o cálculo.';
+      `O plano ainda não pode ser avaliado: falta preencher ${lista}, que ${faltantes.length === 1 ? 'é' : 'são'} ` +
+      'a base do cálculo financeiro e comercial.';
     vereditoGravidade = 'critico';
-    recomendacoes.push('Preencha o ticket médio e a margem de comissão para que as metas façam sentido.');
+    recomendacoes.push(`Preencha ${lista} para que as metas façam sentido.`);
     return { veredito, vereditoGravidade, riscos, forcas, recomendacoes };
   }
 
@@ -88,11 +130,16 @@ export function analisarPlano(data: CustosData, rel: Relatorio): Analise {
         'Enquanto a comissão não cobrir os custos variáveis, o negócio perde dinheiro em cada operação. ' +
         'Isso é anterior a qualquer discussão de volume ou marketing.',
     });
-    recomendacoes.push(
-      `Renegocie a comissão com os fornecedores: ela precisa passar de ${dec1(
-        (rel.custoVarPorVenda / (data.ticket_medio || 1)) * 100,
-      )}% do ticket só para empatar.`,
-    );
+    const margemMinima = margemMinimaParaEmpatar(data);
+    if (margemMinima === null) {
+      recomendacoes.push(
+        'Reduza os custos variáveis: a combinação dos percentuais sobre comissão e venda não deixa margem positiva nem com comissão de 100% do ticket.',
+      );
+    } else {
+      recomendacoes.push(
+        `Renegocie a comissão com os fornecedores: ela precisa passar de ${dec1(margemMinima)}% do ticket só para empatar.`,
+      );
+    }
     recomendacoes.push('Revise os custos variáveis — taxa de cartão e impostos são os candidatos usuais.');
     return { veredito, vereditoGravidade, riscos, forcas, recomendacoes };
   }

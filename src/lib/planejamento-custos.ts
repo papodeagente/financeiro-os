@@ -11,6 +11,8 @@
  * Lib pura (sem React/DOM) para poder ser testada: scripts/test-planejamento.ts
  */
 
+import { percentual, round2, soma, somaPor } from './money';
+
 export interface CustoFixo {
   categoria: string;
   valor: number;
@@ -83,13 +85,54 @@ export interface Relatorio {
   comissaoMediaPorVenda: number;
   faturamentoDiario: number;
   vendasPorDia: number;
-  /** Não dá pra planejar sem ticket e margem: bloqueia números fantasiosos. */
+  /** Não dá pra planejar sem ticket, margem e conversão: bloqueia números fantasiosos. */
   premissasIncompletas: boolean;
 }
 
+/**
+ * O formulário entrega números, mas o cálculo também recebe dados persistidos
+ * e payloads de API. Estas proteções locais impedem NaN, Infinity e valores
+ * negativos de contaminarem todas as métricas caso um registro legado ou
+ * malformado chegue até aqui. A validação da API continua sendo a responsável
+ * por rejeitar o payload inválido e informar o erro ao usuário.
+ */
+function numeroNaoNegativo(valor: unknown): number {
+  return typeof valor === 'number' && Number.isFinite(valor) ? Math.max(0, valor) : 0;
+}
+
+function dinheiroNaoNegativo(valor: unknown): number {
+  return round2(numeroNaoNegativo(valor));
+}
+
+function percentualSeguro(valor: unknown): number {
+  return Math.min(100, numeroNaoNegativo(valor));
+}
+
+function inteiroPositivoOu(valor: unknown, fallback: number): number {
+  const numero = numeroNaoNegativo(valor);
+  return numero >= 1 ? Math.floor(numero) : fallback;
+}
+
+/**
+ * Divide valores monetários em centavos inteiros. Mesmo depois de round2,
+ * decimais como 0,09 não têm representação binária exata e Math.ceil(0.27 /
+ * 0.09) pode devolver 4. Em centavos, a mesma conta é exatamente 27 / 9.
+ */
+function unidadesParaCobrir(total: number, valorUnitario: number): number {
+  const totalCentavos = Math.round(round2(total) * 100);
+  const unitarioCentavos = Math.round(round2(valorUnitario) * 100);
+  return totalCentavos > 0 && unitarioCentavos > 0
+    ? Math.ceil(totalCentavos / unitarioCentavos)
+    : 0;
+}
+
 export function calcRelatorio(data: CustosData): Relatorio {
-  const custoFixoTotal = data.custos_fixos.reduce((s, c) => s + (c.valor || 0), 0);
-  const marketingTotal = data.marketing.reduce((s, c) => s + (c.valor || 0), 0);
+  const custosFixos = Array.isArray(data.custos_fixos) ? data.custos_fixos : [];
+  const custosVariaveis = Array.isArray(data.custos_variaveis) ? data.custos_variaveis : [];
+  const canaisMarketing = Array.isArray(data.marketing) ? data.marketing : [];
+
+  const custoFixoTotal = somaPor(custosFixos, c => dinheiroNaoNegativo(c?.valor));
+  const marketingTotal = somaPor(canaisMarketing, c => dinheiroNaoNegativo(c?.valor));
 
   // Custo mensal da operação = TUDO que sai antes de qualquer venda.
   // "Marketing fixo recorrente" (assinatura de ferramenta, retainer de
@@ -97,41 +140,44 @@ export function calcRelatorio(data: CustosData): Relatorio {
   // A versão anterior subtraía o fixo recorrente para "evitar dupla
   // contagem", e com isso ele sumia da conta quando o usuário não repetia o
   // mesmo valor no bloco de canais — as metas saíam subdimensionadas.
-  const custoFixoMaisMarketing = custoFixoTotal + marketingTotal;
+  const custoFixoMaisMarketing = soma([custoFixoTotal, marketingTotal]);
 
-  const ticket = data.ticket_medio || 0;
-  const margemPct = (data.margem_comissao || 0) / 100;
-  const comissaoPorVenda = ticket * margemPct;
-  const premissasIncompletas = ticket <= 0 || comissaoPorVenda <= 0;
+  const ticket = dinheiroNaoNegativo(data.ticket_medio);
+  const margemComissao = percentualSeguro(data.margem_comissao);
+  const taxaConversao = percentualSeguro(data.taxa_conversao);
+  const comissaoPorVenda = percentual(ticket, margemComissao);
+  const premissasIncompletas = ticket <= 0 || comissaoPorVenda <= 0 || taxaConversao <= 0;
 
-  let custoVarPorVenda = 0;
-  for (const cv of data.custos_variaveis) {
-    const base = cv.base === 'COMISSAO' ? comissaoPorVenda : ticket;
-    custoVarPorVenda += base * (cv.percentual || 0) / 100;
+  const custosVariaveisPorVenda: number[] = [];
+  for (const cv of custosVariaveis) {
+    const base = cv?.base === 'COMISSAO' ? comissaoPorVenda : ticket;
+    custosVariaveisPorVenda.push(percentual(base, percentualSeguro(cv?.percentual)));
   }
+  const custoVarPorVenda = soma(custosVariaveisPorVenda);
 
   // Margem de contribuição unitária: o que cada venda deixa para pagar os
   // custos fixos e virar lucro.
-  const lucroPorVenda = comissaoPorVenda - custoVarPorVenda;
+  const lucroPorVenda = round2(comissaoPorVenda - custoVarPorVenda);
   const viavel = lucroPorVenda > 0;
 
-  const vendasBreakEven = viavel ? Math.ceil(custoFixoMaisMarketing / lucroPorVenda) : 0;
-  const faturamentoBreakEven = vendasBreakEven * ticket;
-  const receitaBreakEven = vendasBreakEven * comissaoPorVenda;
+  const vendasBreakEven = viavel ? unidadesParaCobrir(custoFixoMaisMarketing, lucroPorVenda) : 0;
+  const faturamentoBreakEven = round2(vendasBreakEven * ticket);
+  const receitaBreakEven = round2(vendasBreakEven * comissaoPorVenda);
 
-  const vendasMeta = viavel ? Math.ceil((custoFixoMaisMarketing + (data.lucro_desejado || 0)) / lucroPorVenda) : 0;
-  const faturamentoMeta = vendasMeta * ticket;
+  const lucroDesejado = dinheiroNaoNegativo(data.lucro_desejado);
+  const vendasMeta = viavel ? unidadesParaCobrir(soma([custoFixoMaisMarketing, lucroDesejado]), lucroPorVenda) : 0;
+  const faturamentoMeta = round2(vendasMeta * ticket);
   // Receita da agência: no regime de intermediação o faturamento é volume
   // transacionado; o que entra no caixa é a comissão.
-  const receitaMeta = vendasMeta * comissaoPorVenda;
+  const receitaMeta = round2(vendasMeta * comissaoPorVenda);
   const comissaoMeta = receitaMeta;
   // Vendas são inteiras, então o lucro real fica igual ou acima do desejado.
-  const lucroProjetado = viavel ? (vendasMeta * lucroPorVenda) - custoFixoMaisMarketing : 0;
+  const lucroProjetado = viavel ? round2((vendasMeta * lucroPorVenda) - custoFixoMaisMarketing) : 0;
 
-  const taxaConv = (data.taxa_conversao || 0) / 100;
+  const taxaConv = taxaConversao / 100;
   const atendimentosMeta = taxaConv > 0 ? Math.ceil(vendasMeta / taxaConv) : 0;
-  const diasUteis = data.dias_uteis || 22;
-  const vendedores = data.vendedores_ativos || 1;
+  const diasUteis = inteiroPositivoOu(data.dias_uteis, 22);
+  const vendedores = inteiroPositivoOu(data.vendedores_ativos, 1);
   const atendimentosPorDia = diasUteis > 0 ? Math.ceil(atendimentosMeta / diasUteis) : 0;
   const vendasPorVendedorMes = vendedores > 0 ? Math.ceil(vendasMeta / vendedores) : 0;
   const atendimentosPorVendedorDia = (diasUteis * vendedores) > 0 ? Math.ceil(atendimentosMeta / (diasUteis * vendedores)) : 0;
@@ -140,8 +186,8 @@ export function calcRelatorio(data: CustosData): Relatorio {
   // pela chance de fechar. Pagar acima disso destrói a margem.
   // (o cálculo anterior devolvia marketing ÷ leads, que é o custo que o
   // orçamento ATUAL implica — não um teto, e induzia a limitar a verba)
-  const cplTeto = viavel ? lucroPorVenda * taxaConv : 0;
-  const cplAtual = atendimentosMeta > 0 ? marketingTotal / atendimentosMeta : 0;
+  const cplTeto = viavel ? percentual(lucroPorVenda, taxaConversao) : 0;
+  const cplAtual = atendimentosMeta > 0 ? round2(marketingTotal / atendimentosMeta) : 0;
   // Nota sobre o modelo: cplAtual = M·lpv·conv / (fixos + M + lucro), então
   // cplAtual/cplTeto = M / (fixos + M + lucro) < 1 sempre — a verba se paga
   // dentro da própria meta. Ou seja, o custo por lead NUNCA cruza o teto por
@@ -154,11 +200,11 @@ export function calcRelatorio(data: CustosData): Relatorio {
   // (volume intermediado) inflava o número em ~4x num negócio de comissão.
   const retornoMarketing = marketingTotal > 0 ? receitaMeta / marketingTotal : 0;
 
-  const margemSobreReceitaPct = receitaMeta > 0 ? ((data.lucro_desejado || 0) / receitaMeta) * 100 : 0;
-  const margemSobreVolumePct = faturamentoMeta > 0 ? ((data.lucro_desejado || 0) / faturamentoMeta) * 100 : 0;
+  const margemSobreReceitaPct = receitaMeta > 0 ? (lucroProjetado / receitaMeta) * 100 : 0;
+  const margemSobreVolumePct = faturamentoMeta > 0 ? (lucroProjetado / faturamentoMeta) * 100 : 0;
   const margemContribuicaoPct = comissaoPorVenda > 0 ? (lucroPorVenda / comissaoPorVenda) * 100 : 0;
 
-  const faturamentoDiario = diasUteis > 0 ? faturamentoMeta / diasUteis : 0;
+  const faturamentoDiario = diasUteis > 0 ? round2(faturamentoMeta / diasUteis) : 0;
   const vendasPorDia = diasUteis > 0 ? vendasMeta / diasUteis : 0;
 
   return {
@@ -173,4 +219,3 @@ export function calcRelatorio(data: CustosData): Relatorio {
     premissasIncompletas,
   };
 }
-

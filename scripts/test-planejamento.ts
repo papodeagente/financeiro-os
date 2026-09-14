@@ -121,10 +121,54 @@ console.log('--- volume intermediado NÃO é receita da agência ---');
   eq(r.faturamentoMeta, r.vendasMeta * 8000, 'faturamento = volume transacionado');
   eq(r.receitaMeta, r.vendasMeta * 2000, 'receita da agência = só as comissões');
   eq(r.receitaMeta < r.faturamentoMeta, true, 'receita é uma fração do volume');
-  // a margem tem de ser sobre o que entra no caixa da agência
-  perto(r.margemSobreReceitaPct, (10000 / r.receitaMeta) * 100, 0.01, 'margem sobre a receita de comissões');
+  // A margem projetada precisa fechar com o lucro efetivamente produzido
+  // pelas vendas inteiras, não com a meta mínima antes do arredondamento.
+  perto(r.margemSobreReceitaPct, (r.lucroProjetado / r.receitaMeta) * 100, 0.01, 'margem projetada sobre a receita de comissões');
+  perto(r.margemSobreVolumePct, (r.lucroProjetado / r.faturamentoMeta) * 100, 0.01, 'margem projetada sobre o volume intermediado');
   eq(r.margemSobreReceitaPct > r.margemSobreVolumePct, true, 'margem sobre receita é maior que sobre volume');
   perto(r.margemSobreReceitaPct / r.margemSobreVolumePct, 4, 0.01, 'a diferença entre as duas é o inverso da comissão (25% → 4x)');
+}
+
+console.log('--- dinheiro fecha em centavos antes de arredondar vendas ---');
+{
+  const r = calcRelatorio(plano({
+    custos_fixos: [{ categoria: 'Outros fixos', valor: 1900, observacao: '' }],
+    marketing: [],
+    ticket_medio: 9999.99,
+    lucro_desejado: 0,
+  }));
+  eq(r.comissaoPorVenda, 2500, 'comissão é arredondada para centavos');
+  eq(r.custoVarPorVenda, 600, 'cada custo variável é arredondado antes da soma');
+  eq(r.lucroPorVenda, 1900, 'margem unitária fecha em centavos');
+  eq(r.vendasBreakEven, 1, 'uma venda que cobre R$ 1.900 não vira duas por ruído binário');
+  eq(r.vendasMeta, 1, 'meta sem lucro adicional coincide com o break-even');
+  eq(r.lucroProjetado, 0, 'lucro projetado fecha exatamente após o break-even');
+}
+{
+  const r = calcRelatorio(plano({
+    custos_fixos: [{ categoria: 'Outros fixos', valor: 1100.10, observacao: '' }],
+    marketing: [],
+    custos_variaveis: [{ nome: 'Taxa', percentual: 1.5, base: 'VENDA' }],
+    ticket_medio: 1000.08,
+    margem_comissao: 12.5,
+    lucro_desejado: 0,
+  }));
+  eq(r.comissaoPorVenda, 125.01, 'comissão fracionária respeita os centavos');
+  eq(r.custoVarPorVenda, 15, 'custo percentual fracionário respeita os centavos');
+  eq(r.lucroPorVenda, 110.01, 'contribuição unitária é monetária');
+  eq(r.vendasBreakEven, 10, 'dez contribuições de R$ 110,01 cobrem R$ 1.100,10');
+}
+{
+  const r = calcRelatorio(plano({
+    custos_fixos: [{ categoria: 'Outros fixos', valor: 0.27, observacao: '' }],
+    marketing: [],
+    custos_variaveis: [],
+    ticket_medio: 0.09,
+    margem_comissao: 100,
+    lucro_desejado: 0,
+  }));
+  eq(r.lucroPorVenda, 0.09, 'contribuição de nove centavos é preservada');
+  eq(r.vendasBreakEven, 3, 'divisão em centavos evita que 0,27 ÷ 0,09 vire quatro vendas');
 }
 
 console.log('--- economia de aquisição: teto vs custo atual ---');
@@ -179,9 +223,15 @@ console.log('--- premissas em branco não inventam números ---');
   eq(r.premissasIncompletas, true, 'margem zerada marca as premissas como incompletas');
 }
 {
-  const r = calcRelatorio(plano({ taxa_conversao: 0 }));
+  const p = plano({ taxa_conversao: 0 });
+  const r = calcRelatorio(p);
   eq(r.atendimentosMeta, 0, 'sem taxa de conversão não estima leads (sem divisão por zero)');
   eq(Number.isFinite(r.cplAtual), true, 'custo por lead não vira Infinity');
+  eq(r.premissasIncompletas, true, 'conversão zerada bloqueia um plano comercial impossível');
+  const a = analisarPlano(p, r);
+  eq(a.vereditoGravidade, 'critico', 'diagnóstico bloqueia plano sem conversão');
+  eq(a.veredito.includes('taxa de conversão'), true, 'diagnóstico identifica exatamente a premissa ausente');
+  eq(a.veredito.includes('ticket médio e margem'), false, 'diagnóstico não acusa premissas que foram preenchidas');
 }
 {
   const r = calcRelatorio(plano({ dias_uteis: 0, vendedores_ativos: 0 }));
@@ -193,6 +243,54 @@ console.log('--- premissas em branco não inventam números ---');
   eq(r.retornoMarketing, 0, 'sem verba de marketing o retorno é 0, não Infinity');
   eq(r.cplAtual, 0, 'sem verba o custo por lead é 0');
   eq(r.cplTeto > 0, true, 'mas o teto continua existindo (depende da margem, não da verba)');
+}
+
+console.log('--- entradas inseguras não contaminam o relatório ---');
+{
+  const r = calcRelatorio(plano({
+    custos_fixos: [
+      { categoria: 'Válido', valor: 1000, observacao: '' },
+      { categoria: 'Negativo', valor: -500, observacao: '' },
+      { categoria: 'Não finito', valor: Number.NaN, observacao: '' },
+    ],
+    marketing: [
+      { canal: 'Negativo', valor: -100 },
+      { canal: 'Não finito', valor: Number.POSITIVE_INFINITY },
+    ],
+    custos_variaveis: [
+      { nome: 'Negativo', percentual: -10, base: 'VENDA' },
+      { nome: 'Não finito', percentual: Number.NaN, base: 'COMISSAO' },
+    ],
+    ticket_medio: 1000,
+    margem_comissao: 150,
+    taxa_conversao: 250,
+    lucro_desejado: -1000,
+    dias_uteis: -5,
+    vendedores_ativos: -2,
+  }));
+  eq(r.custoFixoTotal, 1000, 'custos negativos e não finitos não reduzem o total');
+  eq(r.marketingTotal, 0, 'marketing negativo e não finito é neutralizado');
+  eq(r.comissaoPorVenda, 1000, 'margem acima de 100% é limitada a 100%');
+  eq(r.custoVarPorVenda, 0, 'percentuais negativos e não finitos são neutralizados');
+  eq(r.vendasBreakEven, 1, 'break-even permanece não negativo');
+  eq(r.vendasMeta, 1, 'lucro desejado negativo não reduz a meta abaixo do break-even');
+  eq(r.atendimentosMeta, 1, 'conversão acima de 100% é limitada a 100%');
+  eq(r.faturamentoDiario, 45.45, 'dias úteis inválidos usam o fallback seguro de 22 dias');
+  eq(r.vendasPorVendedorMes, 1, 'quantidade inválida de vendedores usa o fallback seguro de um');
+  eq(Object.values(r).filter(v => typeof v === 'number').every(Number.isFinite), true, 'todas as métricas numéricas permanecem finitas');
+}
+{
+  const malformado = {
+    ...plano(),
+    custos_fixos: null,
+    custos_variaveis: [null],
+    marketing: null,
+  } as unknown as CustosData;
+  const r = calcRelatorio(malformado);
+  eq(r.custoFixoTotal, 0, 'lista de fixos malformada não quebra o cálculo');
+  eq(r.custoVarPorVenda, 0, 'item variável malformado não quebra o cálculo');
+  eq(r.marketingTotal, 0, 'lista de marketing malformada não quebra o cálculo');
+  eq(Object.values(r).filter(v => typeof v === 'number').every(Number.isFinite), true, 'payload malformado não produz NaN ou Infinity');
 }
 
 console.log('--- coerência: partes reproduzem o todo ---');
@@ -226,6 +324,42 @@ console.log('--- análise do plano ---');
   eq(a.veredito.includes('não fecha'), true, 'veredito diz que não fecha');
   eq(a.forcas.length, 0, 'plano inviável não lista pontos a favor');
   eq(a.riscos.some(r => r.gravidade === 'critico'), true, 'aponta o risco crítico');
+}
+{
+  const p = plano({
+    ticket_medio: 1000,
+    margem_comissao: 10,
+    custos_variaveis: [
+      { nome: 'Comissão do vendedor', percentual: 50, base: 'COMISSAO' },
+      { nome: 'Taxa sobre a venda', percentual: 6, base: 'VENDA' },
+    ],
+  });
+  const r = calcRelatorio(p);
+  const a = analisarPlano(p, r);
+  eq(r.lucroPorVenda, -10, 'cenário de comissão mínima começa inviável');
+  eq(a.recomendacoes.some(item => item.includes('12,0%')), true, 'comissão mínima resolve custos sobre comissão e venda');
+  eq(calcRelatorio({ ...p, margem_comissao: 11 }).lucroPorVenda < 0, true, '11% ainda não cobre os custos variáveis');
+  eq(calcRelatorio({ ...p, margem_comissao: 12 }).lucroPorVenda, 0, '12% é exatamente o empate');
+  eq(calcRelatorio({ ...p, margem_comissao: 12.1 }).lucroPorVenda > 0, true, 'acima de 12% a contribuição fica positiva');
+}
+{
+  const p = plano({
+    margem_comissao: 50,
+    custos_variaveis: [{ nome: 'Repasse integral', percentual: 100, base: 'COMISSAO' }],
+  });
+  const a = analisarPlano(p, calcRelatorio(p));
+  eq(a.recomendacoes.some(item => item.includes('nem com comissão de 100%')), true, 'diagnóstico reconhece quando custos sobre comissão tornam o plano insolúvel');
+}
+{
+  const p = plano({
+    margem_comissao: 50,
+    custos_variaveis: [
+      { nome: 'Repasse', percentual: 50, base: 'COMISSAO' },
+      { nome: 'Taxas', percentual: 60, base: 'VENDA' },
+    ],
+  });
+  const a = analisarPlano(p, calcRelatorio(p));
+  eq(a.recomendacoes.some(item => item.includes('nem com comissão de 100%')), true, 'diagnóstico não recomenda margem teórica acima de 100%');
 }
 {
   // premissas vazias: não inventa diagnóstico

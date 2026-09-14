@@ -1,21 +1,26 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
 import { MoneyInput } from '@/components/MoneyInput';
 import { SkeletonTable } from '@/components/SkeletonTable';
 import { formatBRL, generateId } from '@/lib/utils';
-import { Copy, AlertTriangle, ArrowRight, Filter as FunilIcon, Download, FileDown, Loader2 } from 'lucide-react';
+import { Copy, AlertTriangle, ArrowRight, Filter as FunilIcon, Download, FileDown, Loader2, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import type { FunilPayload } from '@/lib/funil-types';
 import {
   calcRelatorio,
-  CATEGORIAS_FIXOS,
-  CANAIS_MARKETING,
   type CustosData,
-  type CustoVariavel,
 } from '@/lib/planejamento-custos';
 import { analisarPlano } from '@/lib/planejamento-analise';
+import {
+  aplicarInvestimentoDosFunis,
+  resumirFunisAssociaveis,
+} from '@/lib/planejamento-custos-associacao';
+import {
+  hidratarPlanoCustos,
+  mesPlanejamentoValido,
+} from '@/lib/planejamento-custos-schema';
 
 const MESES_PT = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
                   'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
@@ -44,27 +49,6 @@ function mesPorExtenso(mes: string): string {
 // ============================================================
 // TYPES
 // ============================================================
-
-function createDefault(mes: string): CustosData {
-  return {
-    id: generateId(),
-    mes,
-    custos_fixos: CATEGORIAS_FIXOS.map(c => ({ categoria: c, valor: 0, observacao: '' })),
-    custos_variaveis: [
-      { nome: 'Comissão vendedor', percentual: 0, base: 'COMISSAO' },
-      { nome: 'Impostos', percentual: 6, base: 'COMISSAO' },
-      { nome: 'Taxa cartão/boleto', percentual: 4.5, base: 'VENDA' },
-      { nome: 'Outros variáveis', percentual: 0, base: 'VENDA' },
-    ],
-    marketing: CANAIS_MARKETING.map(c => ({ canal: c, valor: 0 })),
-    ticket_medio: 8000,
-    margem_comissao: 25,
-    taxa_conversao: 10,
-    lucro_desejado: 10000,
-    dias_uteis: 22,
-    vendedores_ativos: 1,
-  };
-}
 
 // ============================================================
 // CALCULATIONS
@@ -246,48 +230,31 @@ function Bloco({ children }: { children: React.ReactNode }) {
 // MAIN PAGE
 // ============================================================
 
-// ------------------------------------------------------------
-// Helpers para integração com funis em execução
-// ------------------------------------------------------------
+async function lerRespostaJson<T>(res: Response): Promise<T> {
+  const texto = await res.text();
+  let json: unknown = null;
 
-interface FunilResumoExec {
-  count: number;
-  investimentoTotal: number;
-  receitaProjetada: number;
-  /** Investimento agrupado por canal (chave casando com CANAIS_MARKETING quando possível) */
-  porCanal: Record<string, number>;
-}
-
-function resumirFunisExecucao(funis: FunilPayload[]): FunilResumoExec {
-  const ativos = funis.filter(f => f.status === 'em_execucao');
-  let investimentoTotal = 0;
-  let receitaProjetada = 0;
-  const porCanal: Record<string, number> = {};
-
-  for (const f of ativos) {
-    const nodes = f.data?.nodes ?? [];
-    for (const n of nodes) {
-      if (n.data?.categoria === 'trafego') {
-        const invest = n.data.config?.investimento ?? 0;
-        investimentoTotal += invest;
-        const canal = canalDoTipo(n.data.tipo);
-        porCanal[canal] = (porCanal[canal] ?? 0) + invest;
-      }
+  if (texto) {
+    try {
+      json = JSON.parse(texto);
+    } catch {
+      throw new Error('O servidor retornou uma resposta inválida.');
     }
-    receitaProjetada += f.data?.cenarios?.[0]?.kpis?.receita_bruta ?? 0;
   }
 
-  return { count: ativos.length, investimentoTotal, receitaProjetada, porCanal };
+  if (!res.ok) {
+    const mensagem = json && typeof json === 'object' && 'error' in json
+      && typeof (json as { error?: unknown }).error === 'string'
+      ? (json as { error: string }).error
+      : `Falha na requisição (${res.status}).`;
+    throw new Error(mensagem);
+  }
+
+  return json as T;
 }
 
-/** Mapeia os tipos de tráfego do funil para os canais usados em /custos. */
-function canalDoTipo(tipo: string): string {
-  if (tipo.includes('instagram')) return 'Instagram Ads';
-  if (tipo.includes('google') || tipo.includes('sem')) return 'Google Ads';
-  if (tipo.includes('influen')) return 'Influenciadores';
-  if (tipo.includes('evento')) return 'Eventos';
-  if (tipo.includes('afiliad')) return 'Afiliados';
-  return 'Outros';
+function planoComDefaults(mes: string, valor: unknown): CustosData {
+  return hidratarPlanoCustos(valor, mes, generateId());
 }
 
 export default function CustosPage() {
@@ -295,62 +262,173 @@ export default function CustosPage() {
   const [data, setData] = useState<CustosData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveRetry, setSaveRetry] = useState(0);
+  const [copying, setCopying] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [funis, setFunis] = useState<FunilPayload[]>([]);
+  const [funisLoading, setFunisLoading] = useState(true);
+  const [funisError, setFunisError] = useState<string | null>(null);
+  const loadAbortRef = useRef<AbortController | null>(null);
+  const funisAbortRef = useRef<AbortController | null>(null);
+  const lastPersistedRef = useRef<string | null>(null);
+  const currentSnapshotRef = useRef<string | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveTailRef = useRef<Promise<void>>(Promise.resolve());
 
   const load = useCallback(async (m: string) => {
+    loadAbortRef.current?.abort();
+    const controller = new AbortController();
+    loadAbortRef.current = controller;
     setLoading(true);
+    setLoadError(null);
+    setSaveError(null);
+    setSaving(false);
     try {
-      const res = await fetch(`/api/planejamento/custos?mes=${m}`);
-      const json = await res.json();
-      if (json) {
-        const merged = { ...createDefault(m), ...json, mes: m };
-        if (!merged.custos_variaveis?.some((c: CustoVariavel) => c.base)) {
-          merged.custos_variaveis = createDefault(m).custos_variaveis;
-        }
-        setData(merged);
-      } else {
-        setData(createDefault(m));
-      }
-    } catch { setData(createDefault(m)); }
-    setLoading(false);
+      const res = await fetch(`/api/planejamento/custos?mes=${encodeURIComponent(m)}`, {
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+      const json = await lerRespostaJson<unknown>(res);
+      const plano = planoComDefaults(m, json);
+      lastPersistedRef.current = JSON.stringify(plano);
+      setData(plano);
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setData(null);
+      setLoadError(error instanceof Error ? error.message : 'Não foi possível carregar o planejamento.');
+    } finally {
+      if (loadAbortRef.current === controller) setLoading(false);
+    }
   }, []);
-
-  useEffect(() => { load(mes); }, [mes, load]);
 
   useEffect(() => {
-    fetch('/api/funis').then(r => r.json()).then((list: FunilPayload[]) => {
-      setFunis(Array.isArray(list) ? list : []);
-    }).catch(() => setFunis([]));
+    void load(mes);
+    return () => loadAbortRef.current?.abort();
+  }, [mes, load]);
+
+  const loadFunis = useCallback(async () => {
+    funisAbortRef.current?.abort();
+    const controller = new AbortController();
+    funisAbortRef.current = controller;
+    setFunisLoading(true);
+    setFunisError(null);
+    try {
+      const res = await fetch('/api/funis', { cache: 'no-store', signal: controller.signal });
+      const json = await lerRespostaJson<unknown>(res);
+      if (!Array.isArray(json)) throw new Error('A lista de funis retornada é inválida.');
+      setFunis(json as FunilPayload[]);
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setFunis([]);
+      setFunisError(error instanceof Error ? error.message : 'Não foi possível carregar os funis.');
+    } finally {
+      if (funisAbortRef.current === controller) setFunisLoading(false);
+    }
   }, []);
 
-  const resumoFunis = useMemo(() => resumirFunisExecucao(funis), [funis]);
+  useEffect(() => {
+    void loadFunis();
+    return () => funisAbortRef.current?.abort();
+  }, [loadFunis]);
+
+  const resumoFunis = useMemo(() => resumirFunisAssociaveis(funis), [funis]);
+
+  /**
+   * Serializa as gravações. Abortar um fetch não garante que o Postgres tenha
+   * cancelado a query; duas gravações concorrentes podiam terminar invertidas
+   * e restaurar silenciosamente um valor antigo. A fila mantém a ordem em que
+   * o usuário editou e só apresenta o estado da versão que ainda está na tela.
+   */
+  const persistir = useCallback((snapshot: string): Promise<boolean> => {
+    setSaving(true);
+    setSaveError(null);
+
+    const executar = async (): Promise<boolean> => {
+      try {
+        const res = await fetch('/api/planejamento/custos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: snapshot,
+        });
+        await lerRespostaJson<unknown>(res);
+        lastPersistedRef.current = snapshot;
+        if (currentSnapshotRef.current === snapshot) {
+          setSaving(false);
+          setSaveError(null);
+        }
+        return true;
+      } catch (error) {
+        if (currentSnapshotRef.current === snapshot) {
+          setSaving(false);
+          setSaveError(error instanceof Error ? error.message : 'Não foi possível salvar o planejamento.');
+        }
+        return false;
+      }
+    };
+
+    const resultado = saveTailRef.current.then(executar, executar);
+    saveTailRef.current = resultado.then(() => undefined);
+    return resultado;
+  }, []);
 
   useEffect(() => {
     if (!data || loading) return;
-    setSaving(true);
-    const t = setTimeout(async () => {
-      try {
-        await fetch('/api/planejamento/custos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
-        });
-      } catch { /* silent */ }
+    const snapshot = JSON.stringify(data);
+    currentSnapshotRef.current = snapshot;
+    if (snapshot === lastPersistedRef.current) {
       setSaving(false);
+      return;
+    }
+
+    setSaving(true);
+    setSaveError(null);
+    saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
+      void persistir(snapshot);
     }, 1500);
-    return () => clearTimeout(t);
-  }, [data, loading]);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    };
+  }, [data, loading, persistir, saveRetry]);
+
+  const trocarMes = useCallback(async (proximoMes: string) => {
+    if (!mesPlanejamentoValido(proximoMes) || proximoMes === mes) return;
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+
+    const snapshot = data ? JSON.stringify(data) : null;
+    if (snapshot && snapshot !== lastPersistedRef.current) {
+      currentSnapshotRef.current = snapshot;
+      const salvo = await persistir(snapshot);
+      if (!salvo) return;
+    }
+    setMes(proximoMes);
+  }, [data, mes, persistir]);
 
   const copyFromPrev = async () => {
     const [y, m] = mes.split('-').map(Number);
     const prevM = m === 1 ? 12 : m - 1;
     const prevY = m === 1 ? y - 1 : y;
     const prevKey = `${prevY}-${String(prevM).padStart(2, '0')}`;
+    setCopying(true);
+    setActionError(null);
     try {
-      const res = await fetch(`/api/planejamento/custos?mes=${prevKey}`);
-      const json = await res.json();
-      if (json) setData({ ...json, id: generateId(), mes });
-    } catch { /* ignore */ }
+      const res = await fetch(`/api/planejamento/custos?mes=${encodeURIComponent(prevKey)}`, {
+        cache: 'no-store',
+      });
+      const json = await lerRespostaJson<unknown>(res);
+      if (json === null) throw new Error(`Não há planejamento salvo para ${mesPorExtenso(prevKey)}.`);
+      setData({ ...planoComDefaults(mes, json), id: generateId(), mes });
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Não foi possível copiar o mês anterior.');
+    } finally {
+      setCopying(false);
+    }
   };
 
   const rel = useMemo(() => data ? calcRelatorio(data) : null, [data]);
@@ -373,11 +451,8 @@ export default function CustosPage() {
 
   const importarCustosFunis = () => {
     if (!data || resumoFunis.count === 0) return;
-    const nova = data.marketing.map(item => ({
-      ...item,
-      valor: resumoFunis.porCanal[item.canal] ?? item.valor,
-    }));
-    setData({ ...data, marketing: nova });
+    setActionError(null);
+    setData({ ...data, marketing: aplicarInvestimentoDosFunis(data.marketing, resumoFunis) });
   };
 
   if (loading) return (
@@ -387,11 +462,38 @@ export default function CustosPage() {
     </div>
   );
 
-  if (!data || !rel) return null;
+  if (loadError || !data || !rel) return (
+    <div className="p-6 max-w-[1400px] mx-auto">
+      <MinimalPageHead title="Planejamento mensal" />
+      <div
+        role="alert"
+        className="mt-5 max-w-xl rounded-[14px] border p-5"
+        style={{ borderColor: 'var(--lg-neg)', background: 'var(--lg-neg-fill)' }}
+      >
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" style={{ color: 'var(--lg-neg)' }} />
+          <div>
+            <p className="text-[14px] font-semibold text-[var(--ink)]">Não foi possível carregar o planejamento</p>
+            <p className="mt-1 text-[12.5px] text-[var(--ink-2)]">{loadError ?? 'Resposta inválida do servidor.'}</p>
+            <button
+              type="button"
+              onClick={() => void load(mes)}
+              className="mt-3 inline-flex items-center gap-1.5 text-[12.5px] font-semibold"
+              style={{ color: 'var(--lg-neg)' }}
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   const totalFixo = rel.custoFixoTotal;
   const totalMarketing = rel.marketingTotal;
-  const viavel = rel.lucroPorVenda > 0;
+  const premissasCompletas = !rel.premissasIncompletas;
+  const contribuicaoPositiva = rel.lucroPorVenda > 0;
+  const viavel = premissasCompletas && contribuicaoPositiva;
 
   // Composição do custo mensal — mostra pra onde o dinheiro vai antes de
   // qualquer venda acontecer. Estrutura = tudo que não é verba de campanha.
@@ -405,7 +507,7 @@ export default function CustosPage() {
     : 0;
 
   const alertas: { tom: 'erro' | 'aviso'; texto: string }[] = [];
-  if (!viavel) {
+  if (premissasCompletas && !contribuicaoPositiva) {
     alertas.push({ tom: 'erro', texto: 'A comissão por venda não cobre os custos variáveis. Revise a margem ou os custos antes de definir metas.' });
   }
   // Aquisição: o que decide é o TETO que a margem suporta e o quanto dele já
@@ -442,7 +544,12 @@ export default function CustosPage() {
         meta={
           <p className="mt-2.5 text-[12px]" style={{ color: 'var(--ink-3)' }}>
             {mesPorExtenso(mes)} ·{' '}
-            <b style={{ color: 'var(--ink-2)', fontWeight: 500 }}>{saving ? 'Salvando…' : 'Salvo'}</b>
+            <b
+              style={{ color: saveError ? 'var(--lg-neg)' : 'var(--ink-2)', fontWeight: 500 }}
+              title={saveError ?? undefined}
+            >
+              {saving ? 'Salvando…' : saveError ? 'Falha ao salvar' : 'Salvo'}
+            </b>
           </p>
         }
         actions={
@@ -450,19 +557,26 @@ export default function CustosPage() {
             <input
               type="month"
               value={mes}
-              onChange={e => setMes(e.target.value)}
+              onChange={e => void trocarMes(e.target.value)}
+              disabled={saving}
               className="h-[34px] px-3 text-[12px] border rounded-[8px] outline-none focus:border-[var(--lg-accent)]"
               style={{ borderColor: 'var(--line)', background: 'var(--ink-surface)', color: 'var(--ink)' }}
             />
             <button
-              onClick={copyFromPrev}
-              className="h-[34px] px-3 text-[12px] border rounded-[8px] transition-colors hover:bg-[var(--ink-surface-2)]"
+              type="button"
+              onClick={() => void copyFromPrev()}
+              disabled={copying}
+              className="h-[34px] px-3 text-[12px] border rounded-[8px] transition-colors hover:bg-[var(--ink-surface-2)] disabled:opacity-60 disabled:cursor-not-allowed"
               style={{ borderColor: 'var(--line)', color: 'var(--ink-2)' }}
             >
-              <Copy className="w-3.5 h-3.5 inline mr-2 -mt-0.5" /> Copiar do anterior
+              {copying
+                ? <Loader2 className="w-3.5 h-3.5 inline mr-2 -mt-0.5 animate-spin" />
+                : <Copy className="w-3.5 h-3.5 inline mr-2 -mt-0.5" />}
+              {copying ? 'Copiando…' : 'Copiar do anterior'}
             </button>
             <button
-              onClick={exportarPdf}
+              type="button"
+              onClick={() => void exportarPdf()}
               disabled={gerandoPdf}
               className="h-[34px] px-3 text-[12px] rounded-[8px] font-medium inline-flex items-center gap-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               style={{ background: 'var(--lg-accent)', color: '#fff' }}
@@ -477,6 +591,37 @@ export default function CustosPage() {
         }
       />
 
+      {(saveError || actionError) && (
+        <div
+          role="alert"
+          className="mb-5 flex flex-wrap items-center gap-3 rounded-[12px] border px-3.5 py-3 text-[12.5px]"
+          style={{ borderColor: 'var(--lg-neg)', background: 'var(--lg-neg-fill)', color: 'var(--ink-2)' }}
+        >
+          <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: 'var(--lg-neg)' }} />
+          <span className="flex-1">{saveError ?? actionError}</span>
+          {saveError && (
+            <button
+              type="button"
+              onClick={() => setSaveRetry(value => value + 1)}
+              className="inline-flex items-center gap-1.5 font-semibold"
+              style={{ color: 'var(--lg-neg)' }}
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Tentar salvar novamente
+            </button>
+          )}
+          {actionError && !saveError && (
+            <button
+              type="button"
+              onClick={() => setActionError(null)}
+              className="font-semibold"
+              style={{ color: 'var(--lg-neg)' }}
+            >
+              Fechar
+            </button>
+          )}
+        </div>
+      )}
+
       {/* ============================================================ */}
       {/* A RESPOSTA — o que este plano exige do mês                    */}
       {/* ============================================================ */}
@@ -484,7 +629,19 @@ export default function CustosPage() {
         className="rounded-[16px] border overflow-hidden mb-7"
         style={{ borderColor: 'var(--line)', background: 'var(--ink-surface)' }}
       >
-        {viavel ? (
+        {!premissasCompletas ? (
+          <div className="px-6 py-6 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" style={{ color: 'var(--lg-warn)' }} />
+            <div>
+              <p className="text-[15px] font-semibold text-[var(--ink)]">
+                Complete as premissas do plano
+              </p>
+              <p className="text-[13px] text-[var(--ink-2)] mt-1 max-w-[70ch] leading-relaxed">
+                {analise?.veredito ?? 'Preencha ticket médio, margem de comissão e taxa de conversão para calcular metas confiáveis.'}
+              </p>
+            </div>
+          </div>
+        ) : viavel ? (
           <>
             <div className="px-6 pt-5 pb-4">
               <p className="text-[12.5px] text-[var(--ink-3)]">
@@ -712,7 +869,7 @@ export default function CustosPage() {
                 </span>
                 <span
                   className="text-[17px] font-bold tabular-nums"
-                  style={{ color: viavel ? 'var(--lg-stat-green)' : 'var(--lg-neg)' }}
+                  style={{ color: contribuicaoPositiva ? 'var(--lg-stat-green)' : 'var(--lg-neg)' }}
                 >
                   {formatBRL(rel.lucroPorVenda)}
                 </span>
@@ -724,15 +881,30 @@ export default function CustosPage() {
           <section>
             <SectionTitle
               right={
-                resumoFunis.count > 0 ? (
+                funisLoading ? (
+                  <span className="inline-flex items-center gap-1.5 text-[12px] text-[var(--ink-3)]">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Carregando funis…
+                  </span>
+                ) : funisError ? (
                   <button
+                    type="button"
+                    onClick={() => void loadFunis()}
+                    className="inline-flex items-center gap-1.5 text-[12px] font-semibold"
+                    style={{ color: 'var(--lg-neg)' }}
+                    title={funisError}
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> Recarregar funis
+                  </button>
+                ) : resumoFunis.count > 0 ? (
+                  <button
+                    type="button"
                     onClick={importarCustosFunis}
                     className="inline-flex items-center gap-1.5 h-[28px] px-2.5 rounded-[8px] border text-[12px] font-medium transition-colors hover:bg-[var(--t-green-bg)]"
                     style={{ borderColor: 'var(--t-green)', color: 'var(--t-green)' }}
-                    title={`Importa o investimento de ${resumoFunis.count} funil(is) em execução, agrupado por canal`}
+                    title={`Copia o investimento de ${resumoFunis.count} funil(is) simulado(s) ou em execução, agrupado por canal`}
                   >
                     <Download className="w-3.5 h-3.5" />
-                    Importar dos funis ativos
+                    Importar simulados/ativos
                   </button>
                 ) : (
                   <span className="text-[12px] tabular-nums text-[var(--ink-3)]">
@@ -744,6 +916,21 @@ export default function CustosPage() {
               Investimento em marketing
             </SectionTitle>
             <Bloco>
+              {!funisLoading && !funisError && resumoFunis.count === 0 && (
+                <div
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-2.5 text-[12px]"
+                  style={{ borderColor: 'var(--line)', background: 'var(--ink-surface-2)', color: 'var(--ink-3)' }}
+                >
+                  <span className="flex-1">Nenhum funil simulado ou em execução para importar. Rascunhos ficam de fora.</span>
+                  <Link
+                    href="/planejamento/funis"
+                    className="inline-flex items-center gap-1 font-semibold"
+                    style={{ color: 'var(--t-green)' }}
+                  >
+                    Simular um funil <ArrowRight className="w-3 h-3" />
+                  </Link>
+                </div>
+              )}
               {data.marketing.map((item, i) => {
                 const share = totalMarketing > 0 ? (item.valor / totalMarketing) * 100 : 0;
                 return (
@@ -793,7 +980,7 @@ export default function CustosPage() {
             </div>
           </div>
 
-          {/* Funis em execução */}
+          {/* Funis aptos para associação */}
           {resumoFunis.count > 0 && (
             <div
               className="rounded-[14px] border overflow-hidden"
@@ -801,14 +988,23 @@ export default function CustosPage() {
             >
               <div className="px-4 py-2.5 flex items-center gap-2" style={{ background: 'var(--t-green-bg)' }}>
                 <FunilIcon className="w-3.5 h-3.5" style={{ color: 'var(--t-green)' }} />
-                <span className="text-[12.5px] font-semibold text-[var(--ink)]">Funis em execução</span>
+                <span className="text-[12.5px] font-semibold text-[var(--ink)]">Funis prontos para importar</span>
                 <span className="ml-auto text-[12px] font-semibold tabular-nums" style={{ color: 'var(--t-green)' }}>
                   {resumoFunis.count}
                 </span>
               </div>
               <div className="px-4 py-2.5">
+                {resumoFunis.simulados > 0 && (
+                  <Linha label="Simulados" value={`${resumoFunis.simulados}`} />
+                )}
+                {resumoFunis.emExecucao > 0 && (
+                  <Linha label="Em execução" value={`${resumoFunis.emExecucao}`} />
+                )}
                 <Linha label="Investimento projetado" value={formatBRL(resumoFunis.investimentoTotal)} />
-                <Linha label="Receita projetada" value={formatBRL(resumoFunis.receitaProjetada)} forte />
+                <Linha label="Volume de vendas projetado" value={formatBRL(resumoFunis.volumeVendasProjetado)} forte />
+                <p className="px-4 pt-1 text-[11.5px] leading-relaxed text-[var(--ink-3)]">
+                  A importação copia os valores por canal para este mês. Funis em rascunho não entram.
+                </p>
                 <Link
                   href="/planejamento/funis"
                   className="flex items-center justify-center gap-1 mt-1.5 py-1.5 text-[12.5px] rounded-[8px] transition-colors hover:bg-[var(--ink-surface-2)]"
@@ -832,7 +1028,7 @@ export default function CustosPage() {
             <GrupoLinhas titulo="Por venda">
               <Linha label="Comissão recebida" value={formatBRL(rel.comissaoPorVenda)} />
               <Linha label="Custo variável" value={`− ${formatBRL(rel.custoVarPorVenda)}`} />
-              <Linha label="Sobra por venda" value={formatBRL(rel.lucroPorVenda)} forte alerta={!viavel} />
+              <Linha label="Sobra por venda" value={formatBRL(rel.lucroPorVenda)} forte alerta={!contribuicaoPositiva} />
               <Linha label="Margem de contribuição" value={`${dec(rel.margemContribuicaoPct)}%`} />
             </GrupoLinhas>
 
