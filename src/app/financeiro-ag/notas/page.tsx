@@ -9,7 +9,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Download, RefreshCw } from 'lucide-react';
+import { Ban, Download, FileCode, RefreshCw } from 'lucide-react';
 
 import { PageShell } from '@/components/PageShell';
 import { PageHeader } from '@/components/fin/PageHeader';
@@ -164,7 +164,10 @@ export default function NotasFiscaisPage() {
       id: 'regime',
       cabecalho: 'Regime',
       tipo: 'texto',
-      minWidth: 150,
+      minWidth: 140,
+      // Colapsa primeiro: saber se dá para baixar a nota importa mais do que
+      // o regime, que já está no detalhe da venda.
+      prioridade: 1,
       acessor: n => n.regime,
       render: n => (
         <span className="fin-t-body text-[var(--fin-text-2)]">
@@ -190,7 +193,8 @@ export default function NotasFiscaisPage() {
       id: 'iss',
       cabecalho: 'ISS',
       tipo: 'dinheiro',
-      minWidth: 110,
+      minWidth: 100,
+      prioridade: 2,
       valor: n => n.valor_iss,
     },
     {
@@ -207,7 +211,7 @@ export default function NotasFiscaisPage() {
       id: 'acoes',
       cabecalho: 'Ações',
       tipo: 'acoes',
-      minWidth: 340,
+      minWidth: 240,
       render: n => (
         <>
           {n.status === 'PROCESSANDO' ? (
@@ -225,15 +229,20 @@ export default function NotasFiscaisPage() {
                 disabled={baixando === `${n.id}-pdf`}
               >
                 <Download aria-hidden="true" className="mr-2 size-4" />
-                {baixando === `${n.id}-pdf` ? 'Baixando…' : 'PDF'}
+                {baixando === `${n.id}-pdf` ? 'Baixando…' : 'Baixar nota'}
               </Button>
+              {/* XML como ícone: é o arquivo que a contabilidade pede, não o
+                  que a agência abre no dia a dia. */}
               <Button
                 type="button"
                 variant="ghost"
+                size="icon"
+                aria-label={`Baixar o XML da nota ${n.numero || ''}`}
+                title="Baixar o XML"
                 onClick={() => { void baixar(n, 'xml'); }}
                 disabled={baixando === `${n.id}-xml`}
               >
-                {baixando === `${n.id}-xml` ? 'Baixando…' : 'XML'}
+                <FileCode aria-hidden="true" className="size-4" />
               </Button>
             </>
           ) : null}
@@ -241,9 +250,12 @@ export default function NotasFiscaisPage() {
             <Button
               type="button"
               variant="ghost"
+              size="icon"
+              aria-label={`Cancelar a nota ${n.numero || ''}`}
+              title="Cancelar a nota"
               onClick={() => { setCancelando(n); setMotivo(''); }}
             >
-              Cancelar
+              <Ban aria-hidden="true" className="size-4" />
             </Button>
           ) : null}
         </>

@@ -24,6 +24,7 @@ import { RecordSheet } from '@/components/fin/RecordSheet';
 import { StatusChip, rotuloStatus } from '@/components/fin/StatusChip';
 import { DialogBaixa } from './DialogBaixa';
 import { PainelNota } from './PainelNota';
+import type { NotaFiscal } from '@/lib/nfse-tipos';
 import { EMPTY_FORM, FormularioConta, type ErrosForm, type FormState } from './FormularioConta';
 
 /**
@@ -98,6 +99,24 @@ export default function ContasReceberPage() {
     try {
       const data = await loadEntities<ContaReceber>('contas-receber');
       setItems(data);
+      // As notas vêm junto para o botão da linha saber se já existe documento.
+      // Falhar aqui não pode derrubar a tela: sem as notas o botão volta a
+      // ser "Emitir nota", que é o comportamento antigo.
+      try {
+        const res = await fetch('/api/fiscal/notas');
+        if (res.ok) {
+          const notas = (await res.json()) as NotaFiscal[];
+          const porConta: Record<string, NotaFiscal> = {};
+          for (const n of Array.isArray(notas) ? notas : []) {
+            if (!n.conta_receber_id) continue;
+            if (n.status === 'REJEITADA' || n.status === 'CANCELADA') continue;
+            porConta[n.conta_receber_id] = n;
+          }
+          setNotaPorConta(porConta);
+        }
+      } catch {
+        setNotaPorConta({});
+      }
       setErroCarga(null);
       setAtualizadoEm(new Date());
     } catch {
@@ -275,6 +294,37 @@ export default function ContasReceberPage() {
   // Nota fiscal da parcela. Só faz sentido depois que o dinheiro entrou: a
   // nota acompanha o recebimento, não a promessa de pagamento.
   const [notaAlvo, setNotaAlvo] = useState<ContaReceber | null>(null);
+  // Nota viva de cada parcela, para o botão saber se é emitir ou baixar.
+  const [notaPorConta, setNotaPorConta] = useState<Record<string, NotaFiscal>>({});
+  const [baixandoNota, setBaixandoNota] = useState('');
+  /** Baixa o PDF da nota daquela parcela, pelo servidor. */
+  async function baixarNota(conta: ContaReceber) {
+    const nota = notaPorConta[conta.id];
+    if (!nota || baixandoNota) return;
+    setBaixandoNota(conta.id);
+    try {
+      const res = await fetch(`/api/fiscal/notas/${nota.id}/documento?tipo=pdf`);
+      if (!res.ok) {
+        const corpo = await res.json().catch(() => null);
+        toast.error('Não foi possível baixar a nota', corpo?.error || '');
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `NFSe-${nota.numero || nota.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Não foi possível baixar a nota');
+    } finally {
+      setBaixandoNota('');
+    }
+  }
+
   const recebeuAlgo = (i: ContaReceber) =>
     i.status === 'RECEBIDO' || (i.status === 'PARCIAL' && num(i.valor_recebido) > 0);
 
@@ -370,16 +420,46 @@ export default function ContasReceberPage() {
               Receber
             </Button>
           )}
-          {recebeuAlgo(i) && (
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setNotaAlvo(i)}
-              className={ACAO_LINHA}
-            >
-              Emitir nota
-            </Button>
-          )}
+          {recebeuAlgo(i) && (() => {
+            const nota = notaPorConta[i.id];
+            // Nota autorizada: o que a pessoa quer ali é o documento, não
+            // emitir de novo. Nota em processamento não tem arquivo ainda.
+            if (nota?.status === 'AUTORIZADA') {
+              return (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => { void baixarNota(i); }}
+                  disabled={baixandoNota === i.id}
+                  className={ACAO_LINHA}
+                >
+                  {baixandoNota === i.id ? 'Baixando…' : 'Baixar nota'}
+                </Button>
+              );
+            }
+            if (nota?.status === 'PROCESSANDO') {
+              return (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setNotaAlvo(i)}
+                  className={ACAO_LINHA}
+                >
+                  Nota na prefeitura
+                </Button>
+              );
+            }
+            return (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setNotaAlvo(i)}
+                className={ACAO_LINHA}
+              >
+                Emitir nota
+              </Button>
+            );
+          })()}
           <Button
             type="button"
             variant="ghost"
