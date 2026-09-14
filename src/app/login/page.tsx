@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Lock, Mail, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 import { Logo } from '@/components/Logo';
+import { redirectImportacaoMapaSeguro } from '@/lib/redirect-interno';
 
 interface CampanhaLogin {
   image_url: string;
@@ -55,7 +56,10 @@ export default function LoginPage() {
         return;
       }
 
-      router.push('/dashboard');
+      const retorno = typeof window === 'undefined'
+        ? '/dashboard'
+        : new URLSearchParams(window.location.search).get('next');
+      router.push(redirectImportacaoMapaSeguro(retorno));
       router.refresh();
     } catch {
       setError('Erro de conexao. Tente novamente.');

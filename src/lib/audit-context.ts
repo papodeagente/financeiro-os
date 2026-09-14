@@ -22,6 +22,15 @@ export function runWithAuditContext<T>(context: AuditContext, callback: () => T)
   return auditContext.run({ ...context }, callback);
 }
 
+/** Tokens de acesso nunca entram na trilha imutável de auditoria. */
+export function sanitizarCaminhoAuditoria(value: string): string {
+  return value.split('?')[0]
+    .replace(/(\/propostas\/public\/)[^/]+/g, '$1[slug]')
+    .replace(/(\/mapas-mentais\/(?:compartilhados|publico)\/)[^/]+/g, '$1[token]')
+    .replace(/(\/planejamento\/mapas-mentais\/importar\/)[^/]+/g, '$1[token]')
+    .slice(0, 500);
+}
+
 export async function getAuditContext(): Promise<AuditContext> {
   const explicit = auditContext.getStore();
   if (explicit) return { ...explicit };
@@ -36,8 +45,7 @@ export async function getAuditContext(): Promise<AuditContext> {
   }
   const { getSession } = await import('./auth');
   const session = await getSession();
-  const path = (requestHeaders.get('x-audit-path') || '').split('?')[0]
-    .replace(/(\/propostas\/public\/)[^/]+/g, '$1[slug]').slice(0, 500);
+  const path = sanitizarCaminhoAuditoria(requestHeaders.get('x-audit-path') || '');
   const source = session ? 'USUARIO'
     : path.startsWith('/api/v1/crm/') ? 'INTEGRACAO' : 'PUBLICO';
   return {

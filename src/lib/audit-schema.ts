@@ -156,7 +156,7 @@ export const AUDIT_SCHEMA_SQL = String.raw`
       WHEN table_name LIKE 'grupo%' OR table_name IN ('gestao_grupos','voos_monitorados') THEN 'Grupos'
       WHEN table_name LIKE 'crm_eventos_%' OR table_name IN ('crm_config','config_apis') THEN 'Integrações'
       WHEN table_name LIKE 'support_%' THEN 'Suporte'
-      WHEN table_name LIKE 'planejamento_%' OR table_name IN ('cac_mensal','cenarios_cac','fluxogramas','fluxograma_categorias','mapas_mentais') THEN 'Planejamento'
+      WHEN table_name LIKE 'planejamento_%' OR table_name IN ('cac_mensal','cenarios_cac','fluxogramas','fluxograma_categorias','mapas_mentais','mapas_mentais_compartilhamentos') THEN 'Planejamento'
       WHEN table_name LIKE 'funis%' THEN 'Funis'
       WHEN table_name = 'notificacoes' THEN 'Notificações'
       WHEN table_name IN ('tenants','super_admins','tenant_usage','assinaturas','convites','convite_usos','planos','saas_config') THEN 'Administração'

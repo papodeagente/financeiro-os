@@ -21,11 +21,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { markVisited } = usePillarProgress();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const isMindMapImport = /^\/planejamento\/mapas-mentais\/importar\/[^/]+$/.test(pathname);
 
   // Persist sidebar state
   useEffect(() => {
     try {
       const saved = localStorage.getItem('entur:sidebar-collapsed');
+      // Estado hidratado de uma preferência externa; efeito intencional.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (saved === 'true') setSidebarCollapsed(true);
     } catch { /* ignore */ }
   }, []);
@@ -77,7 +80,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   // Track recent pages
   useEffect(() => {
-    if (pathname && pathname !== '/login' && !pathname.startsWith('/p/')) {
+    if (
+      pathname
+      && pathname !== '/login'
+      && !pathname.startsWith('/p/')
+      && !pathname.startsWith('/mapas-mentais/publico/')
+      && !isMindMapImport
+    ) {
       try {
         const key = 'entur:recentes';
         const stored = JSON.parse(localStorage.getItem(key) || '[]') as string[];
@@ -86,7 +95,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         localStorage.setItem(key, JSON.stringify(filtered.slice(0, 5)));
       } catch { /* ignore */ }
     }
-  }, [pathname]);
+  }, [isMindMapImport, pathname]);
 
   // Login page, signup, landing page, public proposal preview, admin
   // e iframe de preview no editor — sem shell (sao paginas publicas
@@ -96,6 +105,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     pathname === '/login' ||
     pathname === '/signup' ||
     pathname.startsWith('/p/') ||
+    pathname.startsWith('/mapas-mentais/publico/') ||
     pathname.startsWith('/admin') ||
     pathname === '/preview-iframe'
   ) {
@@ -122,7 +132,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   // Build breadcrumb trail
-  const trail = buildTrail(pathname);
+  // O último segmento da importação é um bearer token: ele não deve aparecer
+  // no breadcrumb nem ser gravado no histórico local de páginas recentes.
+  const trail = buildTrail(
+    isMindMapImport ? '/planejamento/mapas-mentais/importar' : pathname,
+    isMindMapImport ? 'Importar mapa' : undefined,
+  );
   const breadcrumbNode = trail.length ? <Breadcrumbs trail={trail} /> : undefined;
 
   // Rotas que precisam de altura fixa (editor com layout flex de 3 colunas

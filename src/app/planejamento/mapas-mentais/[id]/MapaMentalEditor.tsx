@@ -41,11 +41,15 @@ import {
   ChevronRight as ChevR,
   Shapes, Link2, Paperclip, Image as ImageIcon,
   List, LayoutGrid, Upload, Undo2, Redo2,
-  MessageSquare, MoreHorizontal,
+  MessageSquare, MoreHorizontal, Share2,
 } from 'lucide-react';
 import { MindNode, type MindNodeData, type DropHint } from '@/components/mapa-mental/MindNode';
 import { MindEdge } from '@/components/mapa-mental/MindEdge';
 import { OutlineView } from '@/components/mapa-mental/OutlineView';
+import { ShareMapDialog } from '@/components/mapa-mental/ShareMapDialog';
+import { baixarMapaMentalPdf, exportarMapaMentalPdf } from '@/lib/mapa-mental-pdf';
+import { useAuth } from '@/contexts/AuthContext';
+import { podeExportar } from '@/lib/permissoes';
 import {
   type MapaMentalData, type Theme, type NodeSize, type LayoutNode,
   layoutMindMap, colorForNode, addChild, addSibling, updateNode, removeNode,
@@ -59,6 +63,71 @@ const edgeTypes: EdgeTypes = { mind: MindEdge };
 const ICONS = ['💡', '⭐', '🎯', '🚀', '⚡', '🔥', '✅', '❌', '❓', '📌', '🏆', '💰', '📊', '🧠', '🎨', '🛠️'];
 
 const HISTORY_LIMIT = 100;
+// O Fetch mantém no máximo ~64 KiB de requisições keepalive pendentes por
+// contexto. Reservamos margem para headers e para diferenças entre browsers.
+const MAX_KEEPALIVE_BODY_BYTES = 56 * 1024;
+
+function aguardarProximoFrame(): Promise<void> {
+  return new Promise(resolve => requestAnimationFrame(() => resolve()));
+}
+
+async function aguardarMapaExpandido(elemento: HTMLElement, expectedNodes: number): Promise<void> {
+  // React Flow primeiro monta os nós e só depois publica as dimensões reais.
+  // Esperamos o DOM completo, fontes e imagens antes de confirmar que o
+  // layout recalculado realmente estabilizou no canvas.
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await aguardarProximoFrame();
+    if (elemento.querySelectorAll('.react-flow__node').length >= expectedNodes) break;
+    await new Promise<void>(resolve => setTimeout(resolve, 25));
+  }
+
+  if (elemento.querySelectorAll('.react-flow__node').length < expectedNodes) {
+    throw new Error('Não foi possível preparar todos os tópicos para exportação.');
+  }
+
+  await document.fonts?.ready;
+  const pendingImages = Array.from(elemento.querySelectorAll('img'))
+    .filter(image => !image.complete)
+    .map(image => new Promise<void>(resolve => {
+      const done = () => resolve();
+      image.addEventListener('load', done, { once: true });
+      image.addEventListener('error', done, { once: true });
+      setTimeout(done, 4_000);
+    }));
+  await Promise.all(pendingImages);
+
+  // Contar os nós não basta: o ResizeObserver pode ter publicado todos eles
+  // enquanto o layout ainda está reposicionando os ramos. Só seguimos quando
+  // posições e dimensões permanecem iguais em três frames consecutivos.
+  let assinaturaAnterior = '';
+  let framesEstaveis = 0;
+  for (let attempt = 0; attempt < 40 && framesEstaveis < 3; attempt += 1) {
+    await aguardarProximoFrame();
+    const nodes = Array.from(elemento.querySelectorAll<HTMLElement>('.react-flow__node'));
+    const assinatura = nodes
+      .map(node => {
+        const rect = node.getBoundingClientRect();
+        return [
+          node.dataset.id || '',
+          Math.round(rect.left * 4),
+          Math.round(rect.top * 4),
+          Math.round(rect.width * 4),
+          Math.round(rect.height * 4),
+        ].join(':');
+      })
+      .sort()
+      .join('|');
+    framesEstaveis = assinatura && assinatura === assinaturaAnterior ? framesEstaveis + 1 : 0;
+    assinaturaAnterior = assinatura;
+    if (framesEstaveis < 3) {
+      await new Promise<void>(resolve => setTimeout(resolve, 25));
+    }
+  }
+
+  if (framesEstaveis < 3) {
+    throw new Error('O layout do mapa não terminou de preparar a exportação. Tente novamente.');
+  }
+}
 
 interface Props { id: string }
 
@@ -75,6 +144,8 @@ interface DropTarget { targetId: string; kind: DropHint }
 
 function EditorInner({ id }: Props) {
   const router = useRouter();
+  const { user } = useAuth();
+  const canExport = podeExportar(user);
   const { fitView, setViewport, getViewport } = useReactFlow();
   const updateNodeInternals = useUpdateNodeInternals();
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -86,8 +157,15 @@ function EditorInner({ id }: Props) {
   const [editSeed, setEditSeed] = useState<string | undefined>(undefined);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
-  const [showProperties, setShowProperties] = useState(true);
+  const [showShare, setShowShare] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [exportSnapshot, setExportSnapshot] = useState<MapaMentalData | null>(null);
+  // Fechado por padrão: em telas estreitas o painel é um drawer e não deve
+  // cobrir o mapa assim que a raiz é selecionada. A toolbar/floating sidebar
+  // continuam oferecendo acesso explícito às propriedades.
+  const [showProperties, setShowProperties] = useState(false);
   const [panelFocus, setPanelFocus] = useState<PanelSection | undefined>(undefined);
   const [viewMode, setViewMode] = useState<'map' | 'outline'>('map');
   const [sizes, setSizes] = useState<Record<string, NodeSize>>({});
@@ -116,43 +194,140 @@ function EditorInner({ id }: Props) {
   // ============ AUTO-SAVE ============
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dirtyRef = useRef(false);
+  const activeSaveRef = useRef<Promise<boolean> | null>(null);
+  const activeSaveKeepaliveRef = useRef(false);
+  const editorMountedRef = useRef(true);
 
-  // keepalive só no unload: fetch com keepalive limita o body a 64KiB e
-  // faria mapas grandes NUNCA salvarem no ciclo normal.
-  const flushSaveRef = useRef<(opts?: { keepalive?: boolean }) => Promise<void>>(async () => {});
-  const flushSave = useCallback(async (opts?: { keepalive?: boolean }) => {
-    if (!dataRef.current || !dirtyRef.current) return;
-    dirtyRef.current = false;
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/mapas-mentais/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dataRef.current),
-        keepalive: opts?.keepalive === true,
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setSavedAt(new Date());
-    } catch {
-      // save falhou → segue sujo e re-tenta; nada de perda silenciosa
-      dirtyRef.current = true;
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = setTimeout(() => { flushSaveRef.current(); }, 5000);
+  const flushSaveRef = useRef<() => Promise<boolean>>(async () => true);
+  const flushSave = useCallback((): Promise<boolean> => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
     }
-    setSaving(false);
+
+    // Uma única fila grava os snapshots em ordem. Sem isso, dois PUTs
+    // concorrentes poderiam terminar invertidos e o mais antigo apagaria a
+    // edição mais recente.
+    const active = activeSaveRef.current;
+    if (active) {
+      return active.then(async ok => {
+        if (!ok || !dirtyRef.current) return ok;
+        return flushSaveRef.current();
+      });
+    }
+
+    if (!dataRef.current || !dirtyRef.current) return Promise.resolve(true);
+
+    const saveTask = (async () => {
+      if (editorMountedRef.current) setSaving(true);
+      let ok = true;
+      try {
+        // Se o usuário editar durante um PUT, a flag volta a true e o loop
+        // envia o estado novo somente depois da confirmação do anterior.
+        while (dataRef.current && dirtyRef.current) {
+          const snapshot = dataRef.current;
+          dirtyRef.current = false;
+          try {
+            const body = JSON.stringify(snapshot);
+            const keepalive = new Blob([body]).size <= MAX_KEEPALIVE_BODY_BYTES;
+            activeSaveKeepaliveRef.current = keepalive;
+            const res = await fetch(`/api/mapas-mentais/${id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body,
+              // Salvamentos pequenos sobrevivem ao fechamento da aba. Para
+              // mapas maiores o browser proíbe keepalive; nesses casos o
+              // beforeunload abaixo impede uma saída silenciosa enquanto há
+              // escrita pendente.
+              keepalive,
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            if (editorMountedRef.current) {
+              setSavedAt(new Date());
+              setSaveFailed(false);
+            }
+          } catch {
+            // Falhou: mantém sujo e re-tenta, sem perda silenciosa.
+            dirtyRef.current = true;
+            if (editorMountedRef.current) setSaveFailed(true);
+            ok = false;
+            if (editorMountedRef.current) {
+              saveTimerRef.current = setTimeout(() => {
+                void flushSaveRef.current();
+              }, 5000);
+            }
+            break;
+          } finally {
+            activeSaveKeepaliveRef.current = false;
+          }
+        }
+        return ok && !dirtyRef.current;
+      } finally {
+        if (editorMountedRef.current) setSaving(false);
+      }
+    })();
+
+    const trackedTask: Promise<boolean> = saveTask.finally(() => {
+      activeSaveKeepaliveRef.current = false;
+      if (activeSaveRef.current === trackedTask) activeSaveRef.current = null;
+    });
+    activeSaveRef.current = trackedTask;
+    return trackedTask;
   }, [id]);
   useEffect(() => { flushSaveRef.current = flushSave; }, [flushSave]);
 
   const scheduleSave = useCallback(() => {
     dirtyRef.current = true;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => { flushSaveRef.current(); }, 1500);
+    saveTimerRef.current = setTimeout(() => { void flushSaveRef.current(); }, 1500);
   }, []);
 
   useEffect(() => {
-    const onBeforeUnload = () => { if (dirtyRef.current) flushSaveRef.current({ keepalive: true }); };
+    editorMountedRef.current = true;
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && dirtyRef.current) {
+        void flushSaveRef.current();
+      }
+    };
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      const active = activeSaveRef.current !== null;
+      const dirty = dirtyRef.current;
+      if (!active && !dirty) return;
+      let dirtyExcedeKeepalive = false;
+      if (dirty && dataRef.current) {
+        try {
+          dirtyExcedeKeepalive = new Blob([JSON.stringify(dataRef.current)]).size > MAX_KEEPALIVE_BODY_BYTES;
+        } catch {
+          dirtyExcedeKeepalive = true;
+        }
+      }
+
+      // Sem requisição ativa, inicia imediatamente o último snapshot. Se ele
+      // couber no limite, o próprio fetch keepalive conclui após a navegação.
+      if (dirty && !active) void flushSaveRef.current();
+
+      // Uma edição feita durante outro PUT depende da continuação da fila; e
+      // PUTs grandes não podem usar keepalive. Nesses dois casos, pede ao
+      // navegador que confirme a saída para não perder trabalho em silêncio.
+      if (
+        dirtyExcedeKeepalive
+        || (active && dirty)
+        || (active && !activeSaveKeepaliveRef.current)
+      ) {
+        event.preventDefault();
+        event.returnValue = '';
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
     window.addEventListener('beforeunload', onBeforeUnload);
-    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      editorMountedRef.current = false;
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      // Também cobre navegação SPA pelo histórico do navegador.
+      if (dirtyRef.current) void flushSaveRef.current();
+    };
   }, []);
 
   // ============ NÚCLEO DE MUTAÇÃO ============
@@ -583,7 +758,7 @@ function EditorInner({ id }: Props) {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-      if (showShortcuts) return;  // modal aberto: atalhos do mapa suspensos
+      if (showShortcuts || showShare) return;  // modal aberto: atalhos do mapa suspensos
       const d = dataRef.current;
       if (!d) return;
 
@@ -707,16 +882,21 @@ function EditorInner({ id }: Props) {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [selectedId, editingId, showShortcuts, undo, redo, handleAddChild, handleAddSibling, handleDelete, handleToggleCollapse, handleOutdent, handleReorder, handleCancelEdit]);
+  }, [selectedId, editingId, showShortcuts, showShare, undo, redo, handleAddChild, handleAddSibling, handleDelete, handleToggleCollapse, handleOutdent, handleReorder, handleCancelEdit]);
+
+  // A exportação usa uma cópia efêmera com todos os ramos expandidos.
+  // Ela nunca passa por dataRef/commitChange e, portanto, não entra no
+  // histórico nem dispara auto-save.
+  const renderedData = exportSnapshot ?? data;
 
   // ============ Conversão pro ReactFlow ============
   const { rfNodes, rfEdges, layoutIndex, selColor } = useMemo(() => {
-    if (!data) return { rfNodes: [] as Node[], rfEdges: [] as Edge[], layoutIndex: new Map<string, LayoutNode>(), selColor: '#3B82F6' };
-    const layout = layoutMindMap(data, sizes);
+    if (!renderedData) return { rfNodes: [] as Node[], rfEdges: [] as Edge[], layoutIndex: new Map<string, LayoutNode>(), selColor: '#3B82F6' };
+    const layout = layoutMindMap(renderedData, sizes);
     const index = new Map<string, LayoutNode>();
     for (const n of layout) index.set(n.id, n);
 
-    const theme = (data.theme || 'minimal') as Theme;
+    const theme = (renderedData.theme || 'minimal') as Theme;
     const colorOf = (n: LayoutNode): string => {
       if (n.color) return n.color;
       // cor herdada por RAMO: override do ancestral vale pra subarvore
@@ -731,14 +911,14 @@ function EditorInner({ id }: Props) {
     };
 
     const nodes: Node[] = layout.map(n => {
-      const childCount = getChildren(data, n.id).length;
+      const childCount = getChildren(renderedData, n.id).length;
       const color = colorOf(n);
       const isDragged = dragPos?.id === n.id;
       const nodeData: MindNodeData = {
         text: n.text,
         depth: n.depth,
         color,
-        isRoot: n.id === data.rootId,
+        isRoot: n.id === renderedData.rootId,
         collapsed: !!n.collapsed,
         childCount,
         editing: editingId === n.id,
@@ -768,7 +948,7 @@ function EditorInner({ id }: Props) {
         data: nodeData as unknown as Record<string, unknown>,
         selected: selectedId === n.id,
         // arrastar durante a edição engoliria o texto digitado
-        draggable: n.id !== data.rootId && editingId !== n.id,
+        draggable: !exportingPdf && n.id !== renderedData.rootId && editingId !== n.id,
         zIndex: isDragged ? 1000 : selectedId === n.id ? 10 : 0,
         // preserva as medições internas do React Flow entre re-renders —
         // sem isso cada sync desmonta edges e re-mede todos os nós
@@ -778,7 +958,7 @@ function EditorInner({ id }: Props) {
 
     const edges: Edge[] = [];
     for (const n of layout) {
-      if (n.parentId && data.nodes[n.parentId] && !data.nodes[n.parentId].collapsed) {
+      if (n.parentId && renderedData.nodes[n.parentId] && !renderedData.nodes[n.parentId].collapsed) {
         const color = colorOf(n);
         // Convenção uniforme: source sai do lado de crescimento do filho
         // (right→saida na direita do pai; left→saida na esquerda do pai).
@@ -800,7 +980,7 @@ function EditorInner({ id }: Props) {
     const selLayout = selectedId ? index.get(selectedId) : undefined;
     const selColor = selLayout ? colorOf(selLayout) : '#3B82F6';
     return { rfNodes: nodes, rfEdges: edges, layoutIndex: index, selColor };
-  }, [data, sizes, selectedId, editingId, editSeed, dragPos, dropTarget, handleAddChild, handleAddSibling, handleEditCommit, handleCancelEdit, handleToggleCollapse, handleOutdent]);
+  }, [renderedData, sizes, selectedId, editingId, editSeed, dragPos, dropTarget, exportingPdf, handleAddChild, handleAddSibling, handleEditCommit, handleCancelEdit, handleToggleCollapse, handleOutdent]);
 
   // Índice do layout disponível pros handlers de teclado/drag (fora do render)
   useEffect(() => { layoutIndexRef.current = layoutIndex; }, [layoutIndex]);
@@ -849,8 +1029,9 @@ function EditorInner({ id }: Props) {
 
   // Persiste zoom/pan (debounced) — restaurado na próxima abertura
   const viewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suppressViewSaveRef = useRef(false);
   const onMoveEnd = useCallback((_: unknown, vp: Viewport) => {
-    if (pendingFitRef.current) return;
+    if (pendingFitRef.current || suppressViewSaveRef.current) return;
     if (viewTimerRef.current) clearTimeout(viewTimerRef.current);
     viewTimerRef.current = setTimeout(() => commitView(vp), 600);
   }, [commitView]);
@@ -868,6 +1049,94 @@ function EditorInner({ id }: Props) {
     const d = dataRef.current;
     if (d) commitChange({ ...d, layout });
   };
+
+  const salvarAgora = useCallback(async () => {
+    const ok = await flushSave();
+    if (!ok) toast.error('Não foi possível salvar o mapa. Verifique sua conexão e tente novamente.');
+    return ok;
+  }, [flushSave]);
+
+  const voltarParaLista = useCallback(async () => {
+    if (await salvarAgora()) router.push('/planejamento/mapas-mentais');
+  }, [router, salvarAgora]);
+
+  const abrirCompartilhamento = useCallback(async () => {
+    if (!canExport) {
+      toast.error('Seu perfil não tem permissão para compartilhar ou exportar mapas.');
+      return;
+    }
+    // A visualização pública lê o snapshot persistido no servidor. Portanto,
+    // o modal só abre depois de confirmar a última edição.
+    if (await salvarAgora()) setShowShare(true);
+  }, [canExport, salvarAgora]);
+
+  const exportarPdf = useCallback(async () => {
+    if (!canExport) throw new Error('Seu perfil não tem permissão para exportar mapas.');
+    if (exportingPdf) return;
+    const source = dataRef.current;
+    if (!source) throw new Error('O mapa ainda não está pronto para exportação.');
+    const nome = source.nome || 'Mapa mental';
+    const expandedSnapshot: MapaMentalData = {
+      ...source,
+      nodes: Object.fromEntries(Object.entries(source.nodes).map(([nodeId, node]) => [
+        nodeId,
+        node.collapsed ? { ...node, collapsed: false } : node,
+      ])),
+    };
+    const previousMode = viewMode;
+    const previousSelection = selectedId;
+    const previousViewport = getViewport();
+    suppressViewSaveRef.current = true;
+    if (viewTimerRef.current) clearTimeout(viewTimerRef.current);
+    setExportingPdf(true);
+    setExportSnapshot(expandedSnapshot);
+
+    try {
+      if (previousMode !== 'map') setViewMode('map');
+      setSelectedId(null);
+      // No modo Esboço o React Flow ainda não existe no mesmo tick em que o
+      // estado muda. Dois frames dão tempo para montar o canvas de exportação.
+      await aguardarProximoFrame();
+      await aguardarProximoFrame();
+      const elemento = canvasRef.current?.querySelector<HTMLElement>('.react-flow');
+      if (!elemento) throw new Error('O mapa ainda não está pronto para exportação.');
+      await aguardarMapaExpandido(elemento, Object.keys(expandedSnapshot.nodes).length);
+      await fitView({ padding: 0.08, duration: 0, minZoom: 0.005, maxZoom: 1.15 });
+      await aguardarProximoFrame();
+      await aguardarProximoFrame();
+      const arquivo = await exportarMapaMentalPdf(elemento, nome);
+      // O arquivo já foi montado localmente, mas só é entregue depois de o
+      // servidor revalidar sessão, permissão e tenant e registrar a auditoria.
+      const autorizacao = await fetch(`/api/mapas-mentais/${encodeURIComponent(id)}/exportar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      if (!autorizacao.ok) {
+        const body = await autorizacao.json().catch(() => null) as { error?: unknown } | null;
+        throw new Error(
+          typeof body?.error === 'string'
+            ? body.error
+            : `Não foi possível autorizar a exportação (${autorizacao.status}).`,
+        );
+      }
+      baixarMapaMentalPdf(arquivo);
+      toast.success('PDF do mapa gerado.');
+    } finally {
+      setExportSnapshot(null);
+      setExportingPdf(false);
+      if (previousMode === 'outline') {
+        setViewMode('outline');
+        setSelectedId(previousSelection);
+      } else {
+        setSelectedId(previousSelection);
+        await aguardarProximoFrame();
+        await aguardarProximoFrame();
+        setViewport(previousViewport);
+      }
+      requestAnimationFrame(() => { suppressViewSaveRef.current = false; });
+    }
+  }, [canExport, exportingPdf, fitView, getViewport, id, selectedId, setViewport, viewMode]);
 
   const selNode = selectedId && data ? data.nodes[selectedId] : null;
   const selIsRoot = !!(selNode && data && selNode.id === data.rootId);
@@ -893,22 +1162,23 @@ function EditorInner({ id }: Props) {
   return (
     <div className="flex flex-col h-full bg-[#FAFBFC]">
       {/* ========= TOPBAR ========= */}
-      <header className="shrink-0 border-b border-slate-200 bg-white px-4 h-[52px] flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
+      <header className="flex h-[52px] shrink-0 items-center justify-between gap-1 border-b border-slate-200 bg-white px-2 sm:gap-3 sm:px-4">
+        <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2">
           <button
-            onClick={() => router.push('/planejamento/mapas-mentais')}
+            onClick={() => void voltarParaLista()}
             className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600"
             title="Voltar"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <div className="w-px h-5 bg-slate-200 mx-1" />
-          <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
+          <div className="mx-1 hidden h-5 w-px bg-slate-200 sm:block" />
+          <Sparkles className="hidden h-4 w-4 shrink-0 text-blue-600 sm:block" />
           <input
             value={data.nome}
             onChange={e => onRenameMapa(e.target.value)}
-            className="min-w-0 max-w-xs bg-transparent border-none outline-none text-[15px] font-semibold text-slate-900 focus:bg-slate-50 px-2 py-1 rounded"
+            className="w-full min-w-0 max-w-xs truncate rounded border-none bg-transparent px-1 py-1 text-[14px] font-semibold text-slate-900 outline-none focus:bg-slate-50 sm:px-2 sm:text-[15px]"
             placeholder="Nome do mapa"
+            aria-label="Nome do mapa"
           />
         </div>
 
@@ -918,7 +1188,7 @@ function EditorInner({ id }: Props) {
           <button
             onClick={undo}
             disabled={!canUndo}
-            className="p-1.5 rounded-md text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+            className="hidden rounded-md p-1.5 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30 lg:inline-flex"
             title="Desfazer (Ctrl+Z)"
           >
             <Undo2 className="w-3.5 h-3.5" />
@@ -926,19 +1196,19 @@ function EditorInner({ id }: Props) {
           <button
             onClick={redo}
             disabled={!canRedo}
-            className="p-1.5 rounded-md text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+            className="hidden rounded-md p-1.5 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30 lg:inline-flex"
             title="Refazer (Ctrl+Shift+Z)"
           >
             <Redo2 className="w-3.5 h-3.5" />
           </button>
 
-          <div className="w-px h-5 bg-slate-200 mx-1" />
+          <div className="mx-1 hidden h-5 w-px bg-slate-200 lg:block" />
 
           {/* Toggle Esboço/Mapa */}
           <div className="inline-flex rounded-md border border-slate-200 overflow-hidden text-xs">
             <button
               onClick={() => setViewMode('map')}
-              className={`px-2.5 py-1.5 inline-flex items-center gap-1 ${
+              className={`inline-flex items-center gap-1 px-2 py-1.5 sm:px-2.5 ${
                 viewMode === 'map' ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-slate-600 hover:bg-slate-50'
               }`}
               title="Modo Mapa mental"
@@ -948,7 +1218,7 @@ function EditorInner({ id }: Props) {
             </button>
             <button
               onClick={() => setViewMode('outline')}
-              className={`px-2.5 py-1.5 inline-flex items-center gap-1 border-l border-slate-200 ${
+              className={`inline-flex items-center gap-1 border-l border-slate-200 px-2 py-1.5 sm:px-2.5 ${
                 viewMode === 'outline' ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-slate-600 hover:bg-slate-50'
               }`}
               title="Modo Esboço (outline)"
@@ -961,7 +1231,7 @@ function EditorInner({ id }: Props) {
           <button
             onClick={() => onSetLayout(data.layout === 'logical' ? 'map' : 'logical')}
             disabled={viewMode === 'outline'}
-            className="px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-700 hover:bg-slate-100 inline-flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="hidden items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 md:inline-flex"
             title="Trocar layout"
           >
             <GitBranch className="w-3.5 h-3.5 rotate-90" />
@@ -970,31 +1240,53 @@ function EditorInner({ id }: Props) {
 
           <button
             onClick={() => setShowShortcuts(true)}
-            className="p-1.5 rounded-md text-slate-500 hover:bg-slate-100"
+            className="hidden rounded-md p-1.5 text-slate-500 hover:bg-slate-100 lg:inline-flex"
             title="Atalhos do teclado"
           >
             <Keyboard className="w-3.5 h-3.5" />
           </button>
 
-          <div className="w-px h-5 bg-slate-200 mx-1" />
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => void abrirCompartilhamento()}
+              className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+              title="Compartilhar ou exportar"
+              aria-haspopup="dialog"
+              aria-expanded={showShare}
+            >
+              <Share2 className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Compartilhar</span>
+            </button>
+          )}
+
+          <div className="mx-1 hidden h-5 w-px bg-slate-200 sm:block" />
 
           {/* Status save */}
           <div className="flex items-center gap-1.5">
             {saving ? (
-              <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+              <span className="hidden items-center gap-1 text-[11px] text-slate-500 xl:inline-flex">
                 <Loader2 className="w-3 h-3 animate-spin" /> salvando
               </span>
+            ) : saveFailed ? (
+              <span className="hidden items-center gap-1 text-[11px] text-red-600 xl:inline-flex">
+                <X className="w-3 h-3" /> não salvo
+              </span>
             ) : savedAt ? (
-              <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600">
+              <span className="hidden items-center gap-1 text-[11px] text-emerald-600 xl:inline-flex">
                 <Check className="w-3 h-3" /> {savedAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
               </span>
             ) : null}
             <button
-              onClick={() => flushSave()}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs text-slate-700 hover:bg-slate-100"
+              onClick={() => void salvarAgora()}
+              className={`inline-flex items-center gap-1 rounded-md p-1.5 text-xs hover:bg-slate-100 sm:px-2.5 ${
+                saveFailed ? 'text-red-600' : 'text-slate-700'
+              }`}
               title="Salvar agora"
+              aria-label={saveFailed ? 'Salvar agora — há alterações não salvas' : 'Salvar agora'}
             >
-              <Save className="w-3 h-3" /> Salvar
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+              <span className="hidden md:inline">Salvar</span>
             </button>
           </div>
         </div>
@@ -1041,7 +1333,7 @@ function EditorInner({ id }: Props) {
                 elementsSelectable
                 selectionOnDrag={false}
                 deleteKeyCode={null}
-                minZoom={0.2}
+                minZoom={exportingPdf ? 0.005 : 0.2}
                 maxZoom={3}
                 defaultEdgeOptions={{ type: 'mind' }}
               >
@@ -1134,6 +1426,15 @@ function EditorInner({ id }: Props) {
 
       {/* ========= MODAL ATALHOS ========= */}
       {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
+      {canExport && (
+        <ShareMapDialog
+          open={showShare}
+          mapId={id}
+          mapName={data.nome}
+          onClose={() => setShowShare(false)}
+          onExportPdf={exportarPdf}
+        />
+      )}
     </div>
   );
 }
@@ -1160,7 +1461,7 @@ function SelectionToolbar({
 }) {
   const [openPicker, setOpenPicker] = useState<null | 'color' | 'icon'>(null);
   return (
-    <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20">
+    <div className="absolute left-1/2 top-3 z-20 max-w-[calc(100vw-1rem)] -translate-x-1/2 overflow-x-auto">
       <div
         className="bg-white rounded-xl border border-slate-200 px-1.5 py-1.5 flex items-center gap-0.5"
         style={{ boxShadow: '0 6px 24px rgba(15,23,42,0.12), 0 2px 6px rgba(15,23,42,0.06)' }}
@@ -1407,7 +1708,7 @@ function PropertiesPanel({
   }, [focusSection, node.id]);
 
   return (
-    <aside className="w-[300px] shrink-0 border-l border-slate-200 bg-white flex flex-col overflow-hidden">
+    <aside className="absolute inset-y-0 right-0 z-30 flex w-[calc(100%-1rem)] max-w-[300px] shrink-0 flex-col overflow-hidden border-l border-slate-200 bg-white shadow-2xl md:static md:w-[300px] md:shadow-none">
       <div className="shrink-0 px-4 h-[42px] flex items-center justify-between border-b border-slate-100">
         <h3 className="text-[13px] font-semibold text-slate-900 truncate">
           {isRoot ? 'Mapa' : 'Tópico'}
@@ -1525,7 +1826,12 @@ function PropertiesPanel({
               {node.image?.url && (
                 <div>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={node.image.url} alt={node.image.alt || ''} className="w-full max-h-32 object-cover rounded border border-slate-200" />
+                  <img
+                    src={node.image.url}
+                    alt={node.image.alt || ''}
+                    referrerPolicy="no-referrer"
+                    className="w-full max-h-32 object-cover rounded border border-slate-200"
+                  />
                   <button
                     onClick={() => onSetImage(undefined)}
                     className="mt-1.5 text-[11px] text-red-500 hover:text-red-700"

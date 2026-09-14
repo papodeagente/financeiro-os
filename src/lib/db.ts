@@ -2,6 +2,7 @@ import { AuditPool } from './audit-pool';
 import { getAuditContext, runWithAuditContext, SYSTEM_AUDIT_CONTEXT } from './audit-context';
 import { AUDIT_SCHEMA_SQL } from './audit-schema';
 import { NOTIFICACOES_SCHEMA_SQL } from './notificacoes-schema';
+import { MAPAS_MENTAIS_COMPARTILHAMENTO_SCHEMA_SQL } from './mapas-mentais-compartilhamento';
 
 const pool = process.env.DATABASE_URL
   ? new AuditPool({ connectionString: process.env.DATABASE_URL, max: 5 }, getAuditContext)
@@ -1276,6 +1277,8 @@ async function executarInitDB() {
 
   // Preferências/leitura são por usuário; o histórico legado permanece intacto.
   await pool.query(NOTIFICACOES_SCHEMA_SQL);
+  // Links opacos e revogáveis de visualização/cópia de mapas mentais.
+  await pool.query(MAPAS_MENTAIS_COMPARTILHAMENTO_SCHEMA_SQL);
   // Instala a captura somente depois das migrações/seed, sem fabricar histórico.
   await pool.query(AUDIT_SCHEMA_SQL);
   initialized = true;

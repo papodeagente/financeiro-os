@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 import { isCanonicalHost, extractHost, getCanonicalBaseUrl } from './lib/canonical-hosts';
+import { isMindMapImportPath, isPublicMindMapShareRequest } from './lib/mapa-mental-public-path';
 
 let _jwtSecret: Uint8Array | null = null;
 function getJwtSecret() {
@@ -55,6 +56,16 @@ const PUBLIC_PATHS = [
 // tambem (o /page.tsx redireciona logged-in pro dashboard via client).
 const PUBLIC_EXACT_PATHS = new Set(['/']);
 
+function loginComRetorno(request: NextRequest): URL {
+  const target = new URL('/login', request.url);
+  // O link de cópia precisa sobreviver à autenticação. Limitamos o retorno a
+  // esta rota conhecida; a tela de login ainda revalida que o valor é local.
+  if (isMindMapImportPath(request.nextUrl.pathname)) {
+    target.searchParams.set('next', `${request.nextUrl.pathname}${request.nextUrl.search}`);
+  }
+  return target;
+}
+
 function addSecurityHeaders(response: NextResponse) {
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('X-Frame-Options', 'SAMEORIGIN');
@@ -106,8 +117,22 @@ export async function middleware(request: NextRequest) {
   // dependia de uma exceção em vez da autenticação.
   const casaPrefixoPublico = (p: string) =>
     pathname === p || pathname.startsWith(p.endsWith('/') ? p : `${p}/`);
-  if (PUBLIC_EXACT_PATHS.has(pathname) || PUBLIC_PATHS.some(casaPrefixoPublico)) {
-    return addSecurityHeaders(next());
+  if (
+    PUBLIC_EXACT_PATHS.has(pathname)
+    || PUBLIC_PATHS.some(casaPrefixoPublico)
+    || isPublicMindMapShareRequest(pathname, request.method)
+  ) {
+    const response = addSecurityHeaders(next());
+    if (isPublicMindMapShareRequest(pathname, request.method)) {
+      response.headers.set('Referrer-Policy', 'no-referrer');
+      response.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    }
+    // O `next` do login pode conter o token do link de cópia. Nenhuma
+    // subrequisição da tela deve recebê-lo pelo cabeçalho Referer.
+    if (pathname === '/login' && request.nextUrl.searchParams.has('next')) {
+      response.headers.set('Referrer-Policy', 'no-referrer');
+    }
+    return response;
   }
 
   // Allow static assets and Next.js internals
@@ -133,7 +158,9 @@ export async function middleware(request: NextRequest) {
     if (pathname.startsWith('/admin')) {
       return NextResponse.redirect(new URL('/admin/login', request.url));
     }
-    return NextResponse.redirect(new URL('/login', request.url));
+    const response = NextResponse.redirect(loginComRetorno(request));
+    if (isMindMapImportPath(pathname)) response.headers.set('Referrer-Policy', 'no-referrer');
+    return response;
   }
 
   // Verify JWT
@@ -152,7 +179,12 @@ export async function middleware(request: NextRequest) {
       return addSecurityHeaders(next());
     }
 
-    return addSecurityHeaders(next());
+    const response = addSecurityHeaders(next());
+    if (isMindMapImportPath(pathname)) {
+      response.headers.set('Referrer-Policy', 'no-referrer');
+      response.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    }
+    return response;
   } catch {
     // Invalid/expired token — clear cookie and redirect
     if (pathname.startsWith('/api/')) {
@@ -160,8 +192,10 @@ export async function middleware(request: NextRequest) {
       response.cookies.set(COOKIE_NAME, '', { maxAge: 0, path: '/' });
       return response;
     }
-    const loginPath = pathname.startsWith('/admin') ? '/admin/login' : '/login';
-    const response = NextResponse.redirect(new URL(loginPath, request.url));
+    const response = NextResponse.redirect(
+      pathname.startsWith('/admin') ? new URL('/admin/login', request.url) : loginComRetorno(request),
+    );
+    if (isMindMapImportPath(pathname)) response.headers.set('Referrer-Policy', 'no-referrer');
     response.cookies.set(COOKIE_NAME, '', { maxAge: 0, path: '/' });
     return response;
   }

@@ -4,7 +4,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import {
   ChevronRight, ChevronLeft, Plus, StickyNote,
-  Link2, Paperclip,
+  Image as ImageIcon, Link2, Paperclip,
 } from 'lucide-react';
 
 export type DropHint = 'child' | 'before' | 'after';
@@ -22,6 +22,8 @@ export interface MindNodeData extends Record<string, unknown> {
   side: 'left' | 'right';
   icon?: string;
   hasNotes?: boolean;
+  /** Renderiza o conteúdo sem ações de criação ou edição. */
+  readOnly?: boolean;
   /** indicador visual de alvo durante drag & drop */
   dropHint?: DropHint;
   /** este nó está sendo arrastado agora */
@@ -49,12 +51,18 @@ type MindNodeType = Node<MindNodeData, 'mindNode'>;
 function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
   const {
     text, color, isRoot, collapsed, childCount, editing, editSeed, side,
-    icon, hasNotes, image, links, attachments, shape, bold,
+    icon, hasNotes, image, links, attachments, shape, bold, readOnly,
     dropHint, dragging,
   } = data;
   const hasLinks = !!(links && links.length);
   const hasAttachments = !!(attachments && attachments.length);
   const hasImage = !!(image && image.url);
+  // No viewer público, URLs arbitrárias poderiam disparar pixels de rastreio
+  // ou GETs autenticados sem uma ação consciente do visitante. Uploads do
+  // próprio app são carregados; as demais imagens ficam atrás de um clique.
+  const deferPublicImage = !!(readOnly && hasImage && !image!.url.startsWith('/api/uploads/'));
+  const [publicImageAllowed, setPublicImageAllowed] = useState(false);
+  const showImage = hasImage && (!deferPublicImage || publicImageAllowed);
   const inputRef = useRef<HTMLInputElement>(null);
   const [local, setLocal] = useState(text);
 
@@ -148,7 +156,10 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
   if (isRoot) {
     const rootRadius = shape === 'pill' ? 9999 : shape === 'rect' ? 8 : 12;
     return (
-      <div className="relative group" onDoubleClick={() => data.onStartEdit()}>
+      <div
+        className="relative group"
+        onDoubleClick={readOnly ? undefined : () => data.onStartEdit()}
+      >
         <Handle type="source" position={Position.Right} id="r" style={bulletHandle(color)} />
         <Handle type="source" position={Position.Left}  id="l" style={bulletHandle(color)} />
         <div
@@ -164,18 +175,30 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
             minWidth: 180,
           }}
         >
-          {hasImage && (
+          {showImage && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={image!.url}
               alt={image!.alt || ''}
               className="w-full h-24 object-cover"
               draggable={false}
+              referrerPolicy="no-referrer"
             />
+          )}
+          {deferPublicImage && !publicImageAllowed && (
+            <button
+              type="button"
+              onClick={event => { event.stopPropagation(); setPublicImageAllowed(true); }}
+              onDoubleClick={event => event.stopPropagation()}
+              className="flex h-20 w-full items-center justify-center gap-2 bg-slate-50 px-3 text-xs font-medium text-slate-500 hover:bg-slate-100"
+              title="A imagem será carregada do endereço informado pelo autor"
+            >
+              <ImageIcon className="h-4 w-4" /> Carregar imagem vinculada
+            </button>
           )}
           <div className="flex items-center gap-2 px-5 py-3">
             {icon && <span className="text-lg leading-none shrink-0">{icon}</span>}
-            {editing ? (
+            {editing && !readOnly ? (
               <input
                 ref={inputRef}
                 value={local}
@@ -215,7 +238,7 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
           </button>
         )}
         {/* Botão "+" flutuante */}
-        {selected && !collapsed && !dragging && (
+        {selected && !collapsed && !dragging && !readOnly && (
           <button
             onClick={(e) => { e.stopPropagation(); data.onAddChild(); }}
           onDoubleClick={(e) => e.stopPropagation()}
@@ -271,16 +294,16 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
 
   // Badge de recolhido e botão "+" não podem se sobrepor: quando os
   // dois estão visíveis, o badge fica mais pra fora.
-  const badgeOffset = selected && !dragging ? -56 : -28;
+  const badgeOffset = selected && !dragging && !readOnly ? -56 : -28;
 
   return (
     <div
       className={`relative group ${isLeft ? 'text-right' : 'text-left'}`}
       style={dragging ? { opacity: 0.8, cursor: 'grabbing' } : undefined}
-      onDoubleClick={() => data.onStartEdit()}
+      onDoubleClick={readOnly ? undefined : () => data.onStartEdit()}
     >
       {dropBar}
-      {hasImage && (
+      {showImage && (
         <div className={`mb-1.5 ${isLeft ? 'flex justify-end' : ''}`}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -288,7 +311,21 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
             alt={image!.alt || ''}
             className="rounded-md border border-slate-200 max-w-[180px] max-h-[100px] object-cover"
             draggable={false}
+            referrerPolicy="no-referrer"
           />
+        </div>
+      )}
+      {deferPublicImage && !publicImageAllowed && (
+        <div className={`mb-1.5 ${isLeft ? 'flex justify-end' : ''}`}>
+          <button
+            type="button"
+            onClick={event => { event.stopPropagation(); setPublicImageAllowed(true); }}
+            onDoubleClick={event => event.stopPropagation()}
+            className="flex max-w-[180px] items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] font-medium text-slate-500 hover:bg-slate-100"
+            title="A imagem será carregada do endereço informado pelo autor"
+          >
+            <ImageIcon className="h-3.5 w-3.5 shrink-0" /> Carregar imagem vinculada
+          </button>
         </div>
       )}
       <div
@@ -321,7 +358,7 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
           </button>
         )}
         {icon && <span className="text-sm leading-none shrink-0">{icon}</span>}
-        {editing ? (
+        {editing && !readOnly ? (
           // Input cresce com o conteúdo via field-sizing (Chrome 123+/
           // Safari 18+/Firefox 124+); browsers antigos usam o atributo
           // HTML `size` (chars). max-width evita explodir o canvas.
@@ -372,7 +409,7 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
       )}
 
       {/* Botão "+" inline flutuante */}
-      {selected && !dragging && (
+      {selected && !dragging && !readOnly && (
         <button
           onClick={(e) => { e.stopPropagation(); data.onAddChild(); }}
           onDoubleClick={(e) => e.stopPropagation()}
