@@ -16,6 +16,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ConfirmDialog } from '@/components/fin/ConfirmDialog';
+import { BuscaComLista, type OpcaoBusca } from './Busca';
+import { servicoDoCodigo } from '@/lib/lc116-servicos';
 import { toast } from '@/lib/toast';
 import { hojeISO } from '@/lib/money';
 import type { ConfigFiscal } from '@/lib/nfse-tipos';
@@ -215,8 +217,13 @@ export default function ConfigFiscalPage() {
     }
   }
 
-  async function conferirMunicipio() {
-    const ibge = (config?.cod_municipio_ibge ?? '').replace(/\D+/g, '');
+  /**
+   * `codigo` explícito existe porque a escolha na lista precisa conferir o
+   * município que acabou de ser escolhido, e não o que ainda está no state:
+   * o React só aplica a mudança no próximo render.
+   */
+  async function conferirMunicipio(codigo?: string) {
+    const ibge = (codigo ?? config?.cod_municipio_ibge ?? '').replace(/\D+/g, '');
     if (ibge.length !== 7) { toast.error('Informe o código IBGE com 7 dígitos'); return; }
     setConferindoMunicipio(true);
     try {
@@ -236,6 +243,51 @@ export default function ConfigFiscalPage() {
     setConfig(corpo.config as ConfigFiscal);
     toast.success('Certificado removido');
   }
+
+  /** Municípios do IBGE, que é quem define o código. */
+  const buscarMunicipios = useCallback(async (termo: string): Promise<OpcaoBusca[]> => {
+    const res = await fetch(`/api/fiscal/municipios?busca=${encodeURIComponent(termo)}`);
+    const corpo = await res.json();
+    return ((corpo.municipios ?? []) as Array<{ ibge: string; nome: string; uf: string }>).map(m => ({
+      valor: m.ibge,
+      titulo: `${m.nome} / ${m.uf}`,
+      detalhe: `Código IBGE ${m.ibge}`,
+    }));
+  }, []);
+
+  /** Serviços da LC 116, procurados pelo que a agência faz. */
+  const buscarServicosFiscais = useCallback(async (termo: string): Promise<OpcaoBusca[]> => {
+    const res = await fetch(`/api/fiscal/servicos?busca=${encodeURIComponent(termo)}`);
+    const corpo = await res.json();
+    return ((corpo.servicos ?? []) as Array<{
+      codigo: string; item: string; titulo: string; descricao: string;
+    }>).map(sv => ({
+      valor: sv.codigo,
+      titulo: sv.titulo,
+      detalhe: `Item ${sv.item} da LC 116 · código ${sv.codigo}`,
+    }));
+  }, []);
+
+  /** Fornecedores já cadastrados, para o bloco de intermediador. */
+  const buscarFornecedores = useCallback(async (termo: string): Promise<OpcaoBusca[]> => {
+    const res = await fetch('/api/fornecedores-crm');
+    const lista = (await res.json()) as Array<{
+      id: string; razao_social?: string; nome_fantasia?: string; cnpj?: string;
+    }>;
+    const q = termo.trim().toLowerCase();
+    return (Array.isArray(lista) ? lista : [])
+      .filter(f => {
+        if (!q) return true;
+        return `${f.nome_fantasia ?? ''} ${f.razao_social ?? ''} ${f.cnpj ?? ''}`
+          .toLowerCase().includes(q);
+      })
+      .slice(0, 30)
+      .map(f => ({
+        valor: String(f.cnpj ?? ''),
+        titulo: f.nome_fantasia || f.razao_social || 'Fornecedor sem nome',
+        detalhe: [f.razao_social, f.cnpj].filter(Boolean).join(' · ') || 'Sem CNPJ cadastrado',
+      }));
+  }, []);
 
   const cert = config?.certificado ?? null;
   const vencido = Boolean(cert?.validade_fim && cert.validade_fim < hojeISO());
@@ -447,14 +499,22 @@ export default function ConfigFiscalPage() {
                   intermedeia: esse caso é o padrão acima, não este bloco.
                 </p>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                  <Input
-                    placeholder="CNPJ ou CPF"
-                    value={config.intermediario_padrao?.cpf_cnpj ?? ''}
-                    onChange={e => mudar('intermediario_padrao', {
-                      cpf_cnpj: e.target.value,
-                      razao_social: config.intermediario_padrao?.razao_social ?? '',
+                  <BuscaComLista
+                    id="intermediario-doc"
+                    valor={config.intermediario_padrao?.cpf_cnpj ?? ''}
+                    onValor={(v, opcao) => mudar('intermediario_padrao', {
+                      cpf_cnpj: v,
+                      // Escolher da lista traz a razão social junto: digitar
+                      // os dois à mão é onde nasce divergência de cadastro.
+                      razao_social: opcao
+                        ? opcao.titulo
+                        : (config.intermediario_padrao?.razao_social ?? ''),
                       inscricao_municipal: config.intermediario_padrao?.inscricao_municipal ?? '',
                     })}
+                    onBuscar={buscarFornecedores}
+                    placeholder="CNPJ ou CPF"
+                    placeholderBusca="Procurar nos fornecedores cadastrados"
+                    minimo={0}
                   />
                   <Input
                     placeholder="Razão social"
@@ -486,16 +546,25 @@ export default function ConfigFiscalPage() {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="ibge">Código IBGE do município (7 dígitos)</Label>
-                    <div className="flex gap-2">
-                      <Input id="ibge" value={config.cod_municipio_ibge}
-                        onChange={e => mudar('cod_municipio_ibge', e.target.value)} />
-                      <Button type="button" variant="outline"
-                        onClick={() => { void conferirMunicipio(); }}
-                        disabled={conferindoMunicipio}
-                      >
-                        {conferindoMunicipio ? 'Conferindo…' : 'A cidade emite?'}
-                      </Button>
-                    </div>
+                    <BuscaComLista
+                      id="ibge"
+                      valor={config.cod_municipio_ibge}
+                      onValor={(v, opcao) => {
+                        mudar('cod_municipio_ibge', v);
+                        // Escolher a cidade já responde a pergunta que vem
+                        // logo depois: ela emite pelo Emissor Nacional?
+                        if (opcao) setTimeout(() => { void conferirMunicipio(v); }, 0);
+                      }}
+                      onBuscar={buscarMunicipios}
+                      placeholder="Digite o nome da cidade ou o código"
+                      placeholderBusca="Procurar cidade pelo nome"
+                    />
+                    <Button type="button" variant="outline" className="self-start"
+                      onClick={() => { void conferirMunicipio(); }}
+                      disabled={conferindoMunicipio}
+                    >
+                      {conferindoMunicipio ? 'Conferindo…' : 'A cidade emite?'}
+                    </Button>
                     {municipio ? (
                       <span className={`fin-t-caption ${municipio.emite ? 'text-[var(--fin-positive)]' : 'text-[var(--fin-negative)]'}`}>
                         {municipio.emite
@@ -508,11 +577,24 @@ export default function ConfigFiscalPage() {
                   </div>
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="codtribnac">Código de tributação nacional (6 dígitos)</Label>
-                    <Input id="codtribnac" value={config.cod_tributacao_nacional}
-                      onChange={e => mudar('cod_tributacao_nacional', e.target.value)} />
+                    <BuscaComLista
+                      id="codtribnac"
+                      valor={config.cod_tributacao_nacional}
+                      onValor={v => mudar('cod_tributacao_nacional', v)}
+                      onBuscar={buscarServicosFiscais}
+                      placeholder="Escolha o serviço ou digite o código"
+                      placeholderBusca="Procurar pelo que a agência faz"
+                      minimo={0}
+                      rotuloEscolhido={
+                        servicoDoCodigo(config.cod_tributacao_nacional)
+                          ? `${servicoDoCodigo(config.cod_tributacao_nacional)?.titulo} (item ${servicoDoCodigo(config.cod_tributacao_nacional)?.item})`
+                          : undefined
+                      }
+                    />
                     <span className="fin-t-caption text-[var(--fin-text-3)]">
-                      Derivado da LC 116. Para agência de viagens sai do item 9.02 — confirme o
-                      desdobramento exato com a contabilidade.
+                      Procure pelo serviço que a agência presta. O código é uma proposta: ao
+                      sincronizar, o emissor confirma se ele vale — e é isso que garante a nota
+                      antes de emitir.
                     </span>
                   </div>
                   <div className="flex flex-col gap-2">

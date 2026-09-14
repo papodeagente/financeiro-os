@@ -17,6 +17,7 @@ import {
   pendenciasParaEmitir,
 } from '../src/lib/nfse-calculo.ts';
 import { codigoInterno, montarCorpoEmissao } from '../src/lib/nfse-acelera.ts';
+import { buscarServicos, codigoDoItem, servicoDoCodigo } from '../src/lib/lc116-servicos.ts';
 
 let falhas = 0;
 let total = 0;
@@ -468,6 +469,42 @@ console.log('--- aderência do município (shape real da AceleraAPI) ---');
     true,
     'convênio ativo não é permissão para emitir',
   );
+}
+
+// ══════════════════════════════════════════════════════════════════════
+console.log('--- busca de serviço no lugar do código decorado ---');
+{
+  // A formação do código bate com o exemplo da própria AceleraAPI (010701
+  // para o item 1.07), que é a única confirmação pública que temos da regra.
+  eq(codigoDoItem('1.07'), '010701', 'item 1.07 vira 010701, como na doc da AceleraAPI');
+  eq(codigoDoItem('9.02'), '090201', 'agenciamento de viagens vira 090201');
+  eq(codigoDoItem('17.10'), '171001', 'dois dígitos no grupo não quebram');
+  eq(codigoDoItem('9'), '', 'item sem subitem não vira código');
+  eq(codigoDoItem(''), '', 'vazio não vira código');
+}
+{
+  // Busca tem que funcionar do jeito que a pessoa digita, com ou sem acento.
+  const comAcento = buscarServicos('excursão').map(x => x.item);
+  const semAcento = buscarServicos('EXCURSAO').map(x => x.item);
+  eq(comAcento, semAcento, 'acento e caixa não mudam o resultado');
+  eq(comAcento.includes('9.02'), true, 'excursão acha o agenciamento');
+}
+{
+  eq(buscarServicos('turismo').map(x => x.item), ['9.02', '9.03'], 'turismo acha agenciamento e guia');
+  eq(buscarServicos('seguro').map(x => x.item), ['10.01'], 'seguro de viagem acha o item 10.01');
+  eq(buscarServicos('090201').map(x => x.item), ['9.02'], 'procurar pelo código também funciona');
+  eq(buscarServicos('9.02').map(x => x.item), ['9.02'], 'e pelo item da lei');
+}
+{
+  // Busca vazia mostra tudo: quem não sabe o que procurar precisa ver as
+  // opções, não uma tela em branco.
+  eq(buscarServicos('').length > 0, true, 'busca vazia devolve a lista inteira');
+  eq(buscarServicos('xyzabc'), [], 'termo sem correspondência devolve vazio');
+}
+{
+  const s = servicoDoCodigo('090201');
+  eq(s?.item, '9.02', 'o código volta para o serviço de origem');
+  eq(servicoDoCodigo('999999'), null, 'código desconhecido não inventa serviço');
 }
 
 // ══════════════════════════════════════════════════════════════════════
