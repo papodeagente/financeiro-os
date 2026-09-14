@@ -71,6 +71,8 @@ export default function ConfigFiscalPage() {
   const [buscandoCnpj, setBuscandoCnpj] = useState(false);
   const [atividades, setAtividades] = useState<Array<{ item: string; codigo: string; titulo: string }>>([]);
   const [mostrarAvancado, setMostrarAvancado] = useState(false);
+  const [configurando, setConfigurando] = useState(false);
+  const [passos, setPassos] = useState<Array<{ nome: string; ok: boolean; detalhe: string }>>([]);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -205,14 +207,49 @@ export default function ConfigFiscalPage() {
     }
   }
 
+  /**
+   * Faz a configuração inteira: conecta, busca na Receita, salva e sincroniza.
+   * Manda o que está na TELA — sincronizar o que estava gravado era o que
+   * fazia o emissor reclamar de campo que a pessoa acabara de preencher.
+   */
+  async function configurarTudo() {
+    if (!config || configurando) return;
+    setConfigurando(true);
+    try {
+      const res = await fetch('/api/fiscal/configurar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      });
+      const corpo = await res.json();
+      if (Array.isArray(corpo.passos)) setPassos(corpo.passos);
+      if (!res.ok) { toast.error('Não foi possível configurar', corpo?.error || ''); return; }
+      if (corpo.config) setConfig(corpo.config as ConfigFiscal);
+      if (corpo.pendencias) setPendencias(corpo.pendencias);
+      if (corpo.municipio) setMunicipio(corpo.municipio);
+      if (corpo.pendencias?.pronto) {
+        toast.success('Pronto para emitir', 'O emissor aceitou a configuração.');
+      } else {
+        toast.error('Ainda falta algo', 'Veja a lista abaixo do botão.');
+      }
+    } finally {
+      setConfigurando(false);
+    }
+  }
+
   /** Empurra o cadastro do prestador e lê as pendências que sobraram. */
   async function sincronizarPrestador() {
-    if (sincronizando) return;
+    if (!config || sincronizando) return;
     setSincronizando(true);
     try {
-      const res = await fetch('/api/fiscal/prestador', { method: 'POST' });
+      const res = await fetch('/api/fiscal/prestador', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      });
       const corpo = await res.json();
       if (!res.ok) { toast.error('Não foi possível sincronizar', corpo?.error || ''); return; }
+      if (corpo.config) setConfig(corpo.config as ConfigFiscal);
       setPendencias(corpo as { pronto: boolean; itens: string[] });
       if (corpo.pronto) toast.success('Prestador configurado no emissor');
       else toast.error('O emissor ainda aponta pendências', '');
@@ -326,6 +363,78 @@ export default function ConfigFiscalPage() {
       >
         {config ? (
           <div className="flex flex-col gap-4">
+            {/* O caminho curto. Quem quiser conferir campo a campo continua
+                podendo: as seções abaixo seguem inteiras. */}
+            <section className={CAIXA}>
+              <div className="flex flex-col gap-1">
+                <h2 className="fin-t-subhead text-[var(--fin-text)]">Configurar a nota fiscal</h2>
+                <p className="fin-t-caption text-[var(--fin-text-3)]">
+                  Um clique faz tudo: conecta a agência, busca os dados na Receita, salva e
+                  confere com o emissor. Só precisa do CNPJ preenchido em Configurações › Agência
+                  e do certificado digital enviado aqui embaixo.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <Button type="button" onClick={() => { void configurarTudo(); }} disabled={configurando}>
+                  {configurando ? 'Configurando…' : 'Configurar automaticamente'}
+                </Button>
+                {config.empresa_id ? (
+                  <span className="fin-t-caption text-[var(--fin-text-3)]">
+                    Empresa #{config.empresa_id} na AceleraAPI
+                    {chaveOperacao ? ` · conta ${chaveOperacao}` : ''}.
+                  </span>
+                ) : null}
+              </div>
+
+              {passos.length > 0 ? (
+                <ul className="flex flex-col gap-1.5">
+                  {passos.map(pa => (
+                    <li key={pa.nome} className="flex items-start gap-2">
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          'fin-t-caption mt-0.5',
+                          pa.ok ? 'text-[var(--fin-positive)]' : 'text-[var(--fin-negative)]',
+                        )}
+                      >
+                        {pa.ok ? '✓' : '✕'}
+                      </span>
+                      <span className="flex min-w-0 flex-col">
+                        <span className="fin-t-body text-[var(--fin-text)]">{pa.nome}</span>
+                        {pa.detalhe ? (
+                          <span className="fin-t-caption text-[var(--fin-text-3)]">{pa.detalhe}</span>
+                        ) : null}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+
+              {pendencias && !pendencias.pronto && pendencias.itens.length > 0 ? (
+                <div className="flex flex-col gap-1 rounded-[var(--fin-r-md)] border border-[var(--fin-warning)] bg-[var(--fin-warning-soft)] p-3">
+                  <span className="fin-t-body-strong text-[var(--fin-warning-text)]">
+                    Falta preencher
+                  </span>
+                  <ul className="list-disc pl-5">
+                    {pendencias.itens.map(i => (
+                      <li key={i} className="fin-t-caption text-[var(--fin-text-2)]">{i}</li>
+                    ))}
+                  </ul>
+                  <span className="fin-t-caption text-[var(--fin-text-3)]">
+                    Preencha nos campos abaixo e clique de novo em Configurar automaticamente.
+                  </span>
+                </div>
+              ) : null}
+
+              {pendencias?.pronto ? (
+                <p className="fin-t-body text-[var(--fin-positive)]">
+                  Tudo certo. A nota já pode ser emitida em Contas a receber, nas parcelas
+                  recebidas.
+                </p>
+              ) : null}
+            </section>
+
             {/* Datas conferidas em 14/09/2026 nas orientações da Receita
                 Federal e no Ato Conjunto RFB/CGIBS nº 4/2026. O painel existe
                 porque a agência está configurando a nota agora, a duas
@@ -748,7 +857,7 @@ export default function ConfigFiscalPage() {
                     {sincronizando ? 'Sincronizando…' : 'Sincronizar prestador com o emissor'}
                   </Button>
                   <span className="fin-t-caption text-[var(--fin-text-3)]">
-                    Salve antes de sincronizar.
+                    Salva o que está na tela e envia.
                   </span>
                 </div>
 
