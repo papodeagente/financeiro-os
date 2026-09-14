@@ -6,6 +6,10 @@ import { loadEntities, loadAgencia } from '@/lib/crm-storage';
 import {
   eventosFolhaPrevistos, DIA_PAGAMENTO_FOLHA_PADRAO, type EntradaPessoa,
 } from '@/lib/folha-pagamento';
+import {
+  mesesDaJanela, semanasDaJanela, inicioDaJanela, descreverJanela,
+  PRESETS, PRESET_PADRAO, type Horizonte,
+} from '@/lib/janela-fluxo';
 import { calcularSaldoBancario } from '@/lib/saldo-bancario';
 import { Card } from '@/components/ui/card';
 import { PageHeader } from '@/components/fin/PageHeader';
@@ -103,7 +107,19 @@ export default function FluxoCaixaPage() {
   const [erro, setErro] = useState<string | null>(null);
   const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
   const [periodo, setPeriodo] = useState<Periodo>('MENSAL');
-  const [meses, setMeses] = useState(6);
+  const [horizonteId, setHorizonteId] = useState<string>(PRESET_PADRAO);
+  const [deInicio, setDeInicio] = useState('');
+  const [deFim, setDeFim] = useState('');
+  /** Personalizado só vale quando as DUAS datas estão preenchidas; com uma
+   *  só a janela seria adivinhada, e a tela mostraria número sem o usuário
+   *  ter terminado de escolher. */
+  const horizonte: Horizonte = useMemo(
+    () => (horizonteId === 'personalizado' && deInicio && deFim
+      ? { tipo: 'personalizado', de: deInicio, ate: deFim }
+      : { tipo: 'preset', id: horizonteId === 'personalizado' ? PRESET_PADRAO : horizonteId }),
+    [horizonteId, deInicio, deFim],
+  );
+  const mesesDaTela = useMemo(() => mesesDaJanela(horizonte, hojeISO()), [horizonte]);
   const [detalhe, setDetalhe] = useState<FluxoLine | null>(null);
 
   async function load() {
@@ -218,11 +234,12 @@ export default function FluxoCaixaPage() {
     // além da janela porque a folha do último mês exibido só sai no mês
     // seguinte, e sem isso ela sumiria da ponta do gráfico.
     if (incluirFolha && pessoasFolha.length > 0) {
-      const inicio = mesDe(hojeISO());
-      const competencias: string[] = [];
-      for (let i = -1; i <= meses; i++) {
-        competencias.push(mesDe(addMeses(`${inicio}-01`, i)));
-      }
+      // Um mês ANTES da janela porque a folha daquele mês é paga dentro
+      // dela, e um DEPOIS não é preciso: a folha do último mês exibido só
+      // sai fora da janela e não deve aparecer.
+      const competencias = mesesDaTela.length > 0
+        ? [mesDe(addMeses(`${mesesDaTela[0]}-01`, -1)), ...mesesDaTela.slice(0, -1)]
+        : [];
       // Os ids já existentes impedem a folha de ser contada duas vezes
       // quando o mês virou conta a pagar de verdade.
       const idsExistentes = contasPagar.map(c => c.id);
@@ -232,11 +249,10 @@ export default function FluxoCaixaPage() {
     }
 
     return out;
-  }, [contasPagar, incluirFolha, pessoasFolha, diaPagamentoFolha, meses]);
+  }, [contasPagar, incluirFolha, pessoasFolha, diaPagamentoFolha, mesesDaTela]);
 
   const fluxo = useMemo(() => {
     const hoje = hojeISO();
-    const today = dataLocal(hoje)!; // ancorado ao meio-dia, imune a fuso
     const lines: FluxoLine[] = [];
 
     // Constrói a linha do período. `extras` carrega os atrasados, que só
@@ -270,13 +286,15 @@ export default function FluxoCaixaPage() {
     };
 
     // Início do primeiro período (mês corrente ou semana corrente).
+    // A janela pode começar depois do mês corrente (por exemplo em
+    // "próximo mês"), então o início vem dela, e não de hoje. Sem isso,
+    // tudo do mês atual seria contado como atrasado.
     let primeiroPeriodoStart: string;
     if (periodo === 'MENSAL') {
-      primeiroPeriodoStart = `${mesDe(hoje)}-01`;
+      primeiroPeriodoStart = inicioDaJanela(horizonte, hoje);
     } else {
-      const ws = dataLocal(hoje)!;
-      ws.setDate(ws.getDate() - ws.getDay());
-      primeiroPeriodoStart = paraISO(ws);
+      const semanas = semanasDaJanela(horizonte, hoje);
+      primeiroPeriodoStart = semanas[0]?.inicio ?? paraISO(dataLocal(hoje)!);
     }
 
     // Linha base = saldo_inicial + APENAS movimento realizado anterior ao
@@ -299,9 +317,7 @@ export default function FluxoCaixaPage() {
       .map(marcarAtraso);
 
     if (periodo === 'MENSAL') {
-      for (let i = 0; i < meses; i++) {
-        const d = new Date(today.getFullYear(), today.getMonth() + i, 1, 12, 0, 0, 0);
-        const ym = mesDe(paraISO(d));
+      mesesDaTela.forEach((ym, i) => {
         const line = buildLine(
           ym,
           getMonthLabel(ym),
@@ -311,30 +327,23 @@ export default function FluxoCaixaPage() {
         const prevAcum = lines.length > 0 ? lines[lines.length - 1].saldoAcumulado : linhaBase;
         line.saldoAcumulado = round2(prevAcum + line.saldo);
         lines.push(line);
-      }
+      });
     } else {
-      const weeks = meses * 4;
-      for (let i = 0; i < weeks; i++) {
-        const ws = dataLocal(hoje)!;
-        ws.setDate(ws.getDate() - ws.getDay() + i * 7);
-        const we = new Date(ws);
-        we.setDate(we.getDate() + 6);
-        const startStr = paraISO(ws);
-        const endStr = paraISO(we);
+      semanasDaJanela(horizonte, hoje).forEach((semana, i) => {
         const line = buildLine(
-          startStr,
-          getWeekRange(ws),
-          (date) => dentroDoPeriodo(date, startStr, endStr),
+          semana.inicio,
+          getWeekRange(dataLocal(semana.inicio)!),
+          (date) => dentroDoPeriodo(date, semana.inicio, semana.fim),
           i === 0 ? { entradas: atrasadosEntrada, saidas: atrasadosSaida } : undefined,
         );
         const prevAcum = lines.length > 0 ? lines[lines.length - 1].saldoAcumulado : linhaBase;
         line.saldoAcumulado = round2(prevAcum + line.saldo);
         lines.push(line);
-      }
+      });
     }
 
     return lines;
-  }, [eventosEntrada, eventosSaida, contasBancarias, periodo, meses]);
+  }, [eventosEntrada, eventosSaida, contasBancarias, periodo, mesesDaTela, horizonte]);
 
   // KPIs "Previstas" = tudo que ainda está em aberto (saldo devedor das
   // parciais incluído), em qualquer data.
@@ -363,19 +372,21 @@ export default function FluxoCaixaPage() {
     ? (periodo === 'MENSAL' ? linhaNegativa.label : formatDate(linhaNegativa.periodo))
     : null;
 
+  // Diz o recorte REAL, não um número fixo: com período personalizado
+  // "6 meses" seria mentira.
   const horizonteTexto = periodo === 'MENSAL'
-    ? `${meses} meses`
-    : `${meses * 4} semanas`;
+    ? descreverJanela(horizonte, hojeISO())
+    : `${fluxo.length} ${fluxo.length === 1 ? 'semana' : 'semanas'}`;
 
   // Nenhuma contagem e nenhuma afirmação sobre o caixa enquanto o dado não
   // chegou: durante carregamento e erro o contexto só descreve o recorte.
   const dadosProntos = estado === 'ok';
 
   const contextoSaldoPrevisto = !dadosProntos
-    ? `Projeção para o fim dos próximos ${horizonteTexto}`
+    ? `Projeção para o fim de ${horizonteTexto}`
     : quandoNegativo
       ? `Saldo negativo a partir de ${quandoNegativo}, dentro de ${horizonteTexto}`
-      : `Nenhum período negativo nos próximos ${horizonteTexto}`;
+      : `Nenhum período negativo em ${horizonteTexto}`;
 
   const contextoEntradas = dadosProntos
     ? `${abertosEntrada} ${abertosEntrada === 1 ? 'recebimento em aberto' : 'recebimentos em aberto'}, em qualquer data`
@@ -447,7 +458,7 @@ export default function FluxoCaixaPage() {
   ]), [idNegativo]);
 
   const filtrosAtivos =
-    (periodo !== 'MENSAL' ? 1 : 0) + (meses !== 6 ? 1 : 0) + (incluirFunis ? 1 : 0)
+    (periodo !== 'MENSAL' ? 1 : 0) + (horizonteId !== PRESET_PADRAO ? 1 : 0) + (incluirFunis ? 1 : 0)
     + (incluirFolha ? 0 : 1);
 
   const semDado =
@@ -498,13 +509,21 @@ export default function FluxoCaixaPage() {
             {
               id: 'horizonte',
               rotulo: 'Horizonte',
-              valor: String(meses),
+              valor: horizonteId,
               opcoes: [
-                { valor: '3', rotulo: '3 meses' },
-                { valor: '6', rotulo: '6 meses' },
-                { valor: '12', rotulo: '12 meses' },
+                ...PRESETS.map(p => ({ valor: p.id, rotulo: p.rotulo })),
+                { valor: 'personalizado', rotulo: 'Período personalizado' },
               ],
-              onChange: (v) => setMeses(parseInt(v)),
+              onChange: (v) => {
+                setHorizonteId(v);
+                // Ao entrar no personalizado sem datas, começa no mês
+                // corrente: a tela nunca fica em branco esperando escolha.
+                if (v === 'personalizado' && !deInicio && !deFim) {
+                  const base = mesDe(hojeISO());
+                  setDeInicio(`${base}-01`);
+                  setDeFim(paraISO(addMeses(`${base}-01`, 2)));
+                }
+              },
             },
             ...(pessoasFolha.some(p => p.vinculo?.na_folha) ? [{
               id: 'folha',
@@ -538,10 +557,46 @@ export default function FluxoCaixaPage() {
           ativos={filtrosAtivos}
           onLimpar={() => {
             setPeriodo('MENSAL');
-            setMeses(6);
+            setHorizonteId(PRESET_PADRAO);
+            setDeInicio('');
+            setDeFim('');
             setIncluirFunis(false);
+            setIncluirFolha(true);
           }}
         />
+
+        {/* Datas do período personalizado. Só aparecem quando a opção está
+            escolhida: campo de data sempre visível vira ruído para quem usa
+            os presets, que é o caso comum. */}
+        {horizonteId === 'personalizado' && (
+          <div className="flex flex-wrap items-end gap-[var(--fin-s-3)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] px-[var(--fin-s-4)] py-[var(--fin-s-3)]">
+            <div className="flex flex-col gap-1">
+              <label htmlFor="fluxo-de" className="fin-t-overline text-[var(--fin-text-3)]">De</label>
+              <input
+                id="fluxo-de"
+                type="date"
+                value={deInicio}
+                onChange={(e) => setDeInicio(e.target.value)}
+                className="h-9 rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-2 fin-t-body tabular-nums text-[var(--fin-text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)]"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="fluxo-ate" className="fin-t-overline text-[var(--fin-text-3)]">Até</label>
+              <input
+                id="fluxo-ate"
+                type="date"
+                value={deFim}
+                onChange={(e) => setDeFim(e.target.value)}
+                className="h-9 rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-2 fin-t-body tabular-nums text-[var(--fin-text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)]"
+              />
+            </div>
+            <p className="fin-t-caption text-[var(--fin-text-3)]">
+              {deInicio && deFim
+                ? `Mostrando ${descreverJanela(horizonte, hojeISO())}. O recorte é por mês inteiro: a data serve para escolher o mês.`
+                : 'Preencha as duas datas. Enquanto isso, a tela segue no horizonte padrão.'}
+            </p>
+          </div>
+        )}
 
         <div className="grid gap-[var(--fin-s-4)] md:grid-cols-2 lg:grid-cols-4">
           <MetricCard
