@@ -1,28 +1,49 @@
 import { NextResponse } from 'next/server';
-import { initDB } from '@/lib/db';
+import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
 import { getSession } from '@/lib/auth';
 import { bloqueioFinanceiro } from '@/lib/permissoes';
 import { generateId } from '@/lib/utils';
 import {
   carregarConfigFiscal,
+  carregarEmitente,
   configParaCliente,
   salvarConfigFiscal,
 } from '@/lib/nfse-servico';
 import { ErroFiscal, emissorDaConfig } from '@/lib/nfse-emissor';
+import {
+  acharEmpresaPorCnpj,
+  criarEmpresaAcelera,
+  regenerarTokenEmpresa,
+} from '@/lib/nfse-acelera';
+import { ErroCertificado, lerCertificadoA1 } from '@/lib/certificado-a1';
+import type { ConfigFiscal } from '@/lib/nfse-tipos';
 
 /** Certificado A1 costuma ter menos de 10 KB; 2 MB já é folga generosa. */
 const TAMANHO_MAXIMO = 2 * 1024 * 1024;
 
+function digitos(v: unknown): string {
+  return String(v ?? '').replace(/\D+/g, '');
+}
+
 /**
- * Recebe o certificado digital A1 e repassa ao gateway.
+ * Recebe o certificado digital A1. É a porta de entrada da configuração.
  *
- * O ARQUIVO NÃO É GRAVADO AQUI. Ele viaja para o gateway, que é quem assina
- * as notas, e o sistema guarda só a referência devolvida mais a validade,
- * para avisar antes de vencer. Uma cópia do .pfx no banco seria um segundo
- * lugar de onde o certificado pode vazar, sem nenhum ganho.
+ * O CERTIFICADO É LIDO AQUI ANTES DE IR PARA O EMISSOR, por três motivos:
+ *  1. Dele saem CNPJ, razão social, validade e responsável. Pedir isso digitado
+ *     é pedir erro num dado que está no arquivo.
+ *  2. Senha errada, arquivo que não é .pfx, e-CPF em vez de e-CNPJ e
+ *     certificado vencido são recusados na hora, com o motivo em português,
+ *     sem gastar uma chamada ao emissor.
+ *  3. Se a agência já tem CNPJ cadastrado e o certificado é de OUTRO CNPJ, a
+ *     recusa acontece antes de qualquer nota sair em nome errado.
  *
- * A senha também não é gravada: ela existe apenas durante esta requisição.
+ * Com o CNPJ em mãos, a agência é cadastrada no emissor (ou reaproveitada, se
+ * o CNPJ já existe lá) e só então o certificado é enviado. Um upload faz o
+ * caminho inteiro: não existe mais "conectar antes".
+ *
+ * O ARQUIVO E A SENHA NÃO SÃO GRAVADOS. Ficam só os metadados lidos do
+ * certificado e a referência devolvida pelo emissor.
  */
 export async function POST(req: Request) {
   try {
@@ -47,45 +68,118 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Informe a senha do certificado.' }, { status: 400 });
     }
     const nome = arquivo.name || 'certificado.pfx';
-    if (!/\.(pfx|p12)$/i.test(nome)) {
-      return NextResponse.json(
-        { error: 'O certificado A1 é um arquivo .pfx ou .p12. Certificado A3 (token ou cartão) não pode ser usado por um sistema que emite sozinho.' },
-        { status: 400 },
-      );
-    }
 
-    const config = await carregarConfigFiscal(tenantId);
-    if (!config.provedor) {
-      return NextResponse.json(
-        { error: 'Escolha e salve o emissor de nota antes de enviar o certificado.' },
-        { status: 400 },
-      );
-    }
-
-    const emissor = emissorDaConfig(config);
+    // ---- 1. Ler o certificado ----
     const bytes = new Uint8Array(await arquivo.arrayBuffer());
+    const lido = lerCertificadoA1(bytes, senha);
+    if (lido.vencido) {
+      return NextResponse.json(
+        {
+          error: `Este certificado venceu em ${lido.validade_fim.split('-').reverse().join('/')}. Peça um novo à sua certificadora antes de enviar.`,
+          certificado: lido,
+        },
+        { status: 400 },
+      );
+    }
+
+    // ---- 2. Casar com a agência ----
+    const emitente = await carregarEmitente(tenantId);
+    const cnpjAgencia = digitos(emitente.cnpj);
+    if (cnpjAgencia && cnpjAgencia !== lido.cnpj) {
+      return NextResponse.json(
+        {
+          error:
+            `O certificado é do CNPJ ${lido.cnpj} (${lido.razao_social}), mas a agência está `
+            + `cadastrada com o CNPJ ${cnpjAgencia}. Confira em Configurações › Agência qual está certo. `
+            + 'Nota emitida com certificado de outra empresa sai em nome errado.',
+          certificado: lido,
+        },
+        { status: 400 },
+      );
+    }
+
+    // Sem CNPJ na agência, o certificado preenche. Razão social também, se
+    // estiver vazia — a do certificado é a da Receita.
+    if (pool && (!cnpjAgencia || !String(emitente.razao_social ?? '').trim())) {
+      const { rows } = await pool.query(
+        `SELECT id, data FROM agencia WHERE tenant_id = $1 LIMIT 1`,
+        [tenantId],
+      );
+      if (rows.length > 0) {
+        const atual = (rows[0].data ?? {}) as Record<string, unknown>;
+        const nova = {
+          ...atual,
+          cnpj: cnpjAgencia || lido.cnpj,
+          razao_social: String(atual.razao_social ?? '').trim() || lido.razao_social,
+        };
+        await pool.query(
+          `UPDATE agencia SET data = $3, updated_at = NOW() WHERE id = $1 AND tenant_id = $2`,
+          [rows[0].id, tenantId, JSON.stringify(nova)],
+        );
+      }
+    }
+
+    // ---- 3. Garantir a empresa no emissor ----
+    let config: ConfigFiscal = await carregarConfigFiscal(tenantId);
+    config.provedor = config.provedor || 'aceleraapi';
+
+    if (config.provedor === 'aceleraapi' && !(config.empresa_id && config.token)) {
+      const existente = await acharEmpresaPorCnpj(lido.cnpj);
+      if (existente) {
+        config = { ...config, empresa_id: existente.id, token: await regenerarTokenEmpresa(existente.id) };
+      } else {
+        const nova = await criarEmpresaAcelera({
+          cnpj: lido.cnpj,
+          razao_social: emitente.razao_social || lido.razao_social,
+          nome_fantasia: emitente.nome_fantasia,
+          uf: emitente.endereco.estado,
+        });
+        config = { ...config, empresa_id: nova.id, token: nova.token };
+      }
+      // O token vem uma vez só: grava antes de seguir.
+      await salvarConfigFiscal(tenantId, config);
+    }
+
+    // ---- 4. Enviar ao emissor ----
+    const emissor = emissorDaConfig(config);
     const meta = await emissor.enviarCertificado({
       arquivo: bytes,
       nome_arquivo: nome,
       senha,
       email,
-      // O emissor precisa da config para saber ambiente e token.
       config,
     } as Parameters<typeof emissor.enviarCertificado>[0]);
 
-    const novo = {
+    // O que foi lido do arquivo é a fonte da validade e do titular: o emissor
+    // nem sempre devolve, e quando devolve é o mesmo certificado.
+    const novo: ConfigFiscal = {
       ...config,
       certificado: {
-        ...meta,
         id: generateId(),
+        referencia_gateway: meta.referencia_gateway,
+        nome_arquivo: nome,
+        cnpj: lido.cnpj,
+        titular: lido.razao_social || meta.titular,
+        validade_inicio: lido.validade_inicio,
+        validade_fim: lido.validade_fim,
+        responsavel_nome: lido.responsavel_nome,
+        responsavel_cpf: lido.responsavel_cpf,
+        emissor: lido.emissor,
+        impressao_digital: lido.impressao_digital,
         enviado_em: new Date().toISOString(),
         enviado_por: sessao?.nome || sessao?.email || '',
       },
     };
     await salvarConfigFiscal(tenantId, novo);
-    return NextResponse.json({ config: configParaCliente(novo) });
+
+    return NextResponse.json({
+      config: configParaCliente(novo),
+      certificado: lido,
+      // A tela usa isto para dizer "e a empresa já está conectada".
+      empresa_id: novo.empresa_id,
+    });
   } catch (e) {
-    const msg = e instanceof ErroFiscal
+    const msg = e instanceof ErroCertificado || e instanceof ErroFiscal
       ? e.message
       : e instanceof Error ? e.message : 'Erro ao enviar o certificado.';
     return NextResponse.json({ error: msg }, { status: 400 });

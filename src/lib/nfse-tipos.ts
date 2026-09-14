@@ -63,9 +63,16 @@ export interface CertificadoDigital {
   /** CNPJ do titular, como veio do gateway. */
   cnpj: string;
   titular: string;
-  /** ISO (YYYY-MM-DD). Vazio quando o gateway não informou. */
+  /** ISO (YYYY-MM-DD). Lido do próprio certificado no envio. */
   validade_inicio: string;
   validade_fim: string;
+  /** Quem responde pela empresa, segundo o certificado. */
+  responsavel_nome?: string;
+  responsavel_cpf?: string;
+  /** Autoridade certificadora que emitiu. */
+  emissor?: string;
+  /** SHA-1 do certificado, para conferir que o arquivo é o mesmo. */
+  impressao_digital?: string;
   enviado_em: string;
   enviado_por: string;
 }
