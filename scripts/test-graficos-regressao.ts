@@ -36,9 +36,13 @@ const DIR_FIN = 'src/components/fin';
 const GRAFICOS = [
   'BarraDeParte.tsx',
   'BarrasNomeadas.tsx',
+  'Cascata.tsx',
   'EscadaAcumulada.tsx',
   'EscadaDeFaixas.tsx',
+  'PainelDeSaude.tsx',
+  'ProjecaoDeCaixa.tsx',
   'ReguaDeRazao.tsx',
+  'SerieFinanceira.tsx',
   'Unidades.tsx',
 ];
 
@@ -125,12 +129,26 @@ console.log('--- cor sempre por token, nunca hexadecimal solto ---');
 // ══════════════════════════════════════════════════════════════════════
 console.log('--- cor de status nunca é série ---');
 {
-  // --fin-positive e --fin-negative significam ESTADO. Usá-los como série
-  // faz "atrasado" e "vendedor 4" terem a mesma cor na mesma tela.
+  // --fin-positive e --fin-negative significam ESTADO. Usá-los como SÉRIE faz
+  // "atrasado" e "vendedor 4" terem a mesma cor na mesma tela.
+  //
+  // Mas estado também se desenha: caixa projetado negativo é ALARME e o
+  // veredito de saúde é STATUS — nesses dois casos a cor de estado é a cor
+  // certa. A exceção precisa de `status-ok:` NA LINHA, com a razão escrita,
+  // pelo mesmo motivo do piso: exceção invisível vira regra em três meses.
   for (const arquivo of GRAFICOS) {
-    const fonte = fontes.get(arquivo)!;
-    const status = [...fonte.matchAll(/var\(--fin-(positive|negative|warning)[^)]*\)/g)].map(m => m[0]);
-    ok(status.length === 0, `${arquivo} não pinta marca com cor de status`, status.join(', '));
+    const cru = ler(join(DIR_FIN, arquivo));
+    const linhas = cru.split('\n');
+    const status = linhas
+      .map((linha, i) => ({ linha, anterior: linhas[i - 1] ?? '' }))
+      .filter(({ linha }) => /var\(--fin-(positive|negative|warning)[^)]*\)/.test(linha))
+      .filter(({ linha }) => !linha.trimStart().startsWith('*') && !linha.trimStart().startsWith('//'))
+      // A marca vale na própria linha ou na anterior: dentro de atributo JSX
+      // não existe comentário de fim de linha, e exigir na própria obrigaria a
+      // escrever código pior só para satisfazer o teste.
+      .filter(({ linha, anterior }) => !linha.includes('status-ok:') && !anterior.includes('status-ok:'))
+      .map(({ linha }) => linha.trim());
+    ok(status.length === 0, `${arquivo} não pinta série com cor de status`, status.join(' | '));
   }
 }
 
@@ -199,10 +217,18 @@ console.log('--- o mês é estado do pilar, não de cada tela ---');
 {
   // Cinco seletores independentes: trocar para agosto no Painel e clicar em
   // "Ver metas" devolvia setembro, sem aviso.
+  //
+  // O Dashboard Financeiro usa o seletor de PERÍODO, que é o mesmo princípio
+  // num recorte mais largo (doze janelas, não só mês). Vale qualquer um dos
+  // dois: o que a regra exige é que o recorte viva na URL, não na memória da
+  // tela.
   const COM_MES = TELAS.filter(t => !t.includes('vendedores'));
   for (const tela of COM_MES) {
     const fonte = fontes.get(tela)!;
-    ok(fonte.includes('useMesDaUrl'), `${tela} lê o mês da URL`);
+    ok(
+      fonte.includes('useMesDaUrl') || fonte.includes('usePeriodoDaUrl'),
+      `${tela} guarda o recorte de tempo na URL`,
+    );
   }
 }
 

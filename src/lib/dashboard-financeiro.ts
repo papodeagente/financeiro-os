@@ -20,7 +20,7 @@
  * venceram. A tela diz qual regime está usando em cada bloco.
  */
 
-import { divSegura, round2, soma, variacaoPct } from './money';
+import { divSegura, round2, variacaoPct } from './money';
 import {
   EH_REPASSE,
   NAO_CANCELADA,
@@ -696,7 +696,7 @@ async function vendasDoPeriodo(
 }
 
 /** As pendências que custam dinheiro, contadas numa consulta só por lado. */
-async function atencao(exec: ExecutorSQL, tenantId: string, hoje: string) {
+async function atencao(exec: ExecutorSQL, tenantId: string) {
   const abertoP = emAberto('pagar');
   const abertoR = emAberto('receber');
   const [p, r] = await Promise.all([
@@ -767,7 +767,7 @@ export async function carregarDashboard(
     agenda(exec, tenantId, hoje, ateAgenda),
     descasamento(exec, tenantId),
     vendasDoPeriodo(exec, tenantId, de, ate),
-    atencao(exec, tenantId, hoje),
+    atencao(exec, tenantId),
   ]);
 
   const proj = await projecao(exec, tenantId, hoje, saldo.saldo);
