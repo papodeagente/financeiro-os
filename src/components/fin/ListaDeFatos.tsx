@@ -30,7 +30,10 @@ export interface Fato {
   fonte?: FonteDoFato;
   /** Chip curto ao lado do valor: "Válido", "Vence em breve". */
   chip?: { texto: string; tom: 'positivo' | 'aviso' | 'negativo' | 'neutro' };
-  acao?: { rotulo: string; onClick: () => void };
+  /** O recorte do número: "em 2 contas, saldo de agora". Um número sozinho
+   *  não se lê — dá para conferir, mas não dá para decidir com ele. */
+  contexto?: string;
+  acao?: { rotulo: string; onClick?: () => void; href?: string };
 }
 
 const TOM_CHIP = {
@@ -71,13 +74,25 @@ export function ListaDeFatos({ itens }: { itens: Fato[] }) {
               </span>
             ) : null}
             {fato.acao ? (
-              <button
-                type="button"
-                onClick={fato.acao.onClick}
-                className="fin-t-caption ml-auto shrink-0 text-[var(--fin-accent)] underline"
-              >
-                {fato.acao.rotulo}
-              </button>
+              fato.acao.href ? (
+                <a
+                  href={fato.acao.href}
+                  className="fin-t-caption ml-auto shrink-0 text-[var(--fin-accent)] underline"
+                >
+                  {fato.acao.rotulo}
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={fato.acao.onClick}
+                  className="fin-t-caption ml-auto shrink-0 text-[var(--fin-accent)] underline"
+                >
+                  {fato.acao.rotulo}
+                </button>
+              )
+            ) : null}
+            {fato.contexto ? (
+              <span className="fin-t-caption w-full text-[var(--fin-text-3)]">{fato.contexto}</span>
             ) : null}
           </dd>
         </div>

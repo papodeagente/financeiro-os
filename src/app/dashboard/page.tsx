@@ -1,221 +1,65 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { loadEntities, loadEquipe } from '@/lib/crm-storage';
+import { AlertCircle, AlertTriangle, CheckCircle2 } from 'lucide-react';
+
+import { loadEntities, loadEquipe, carregarEntidades } from '@/lib/crm-storage';
 import { vendasComLancamento, apenasVendasComLastro } from '@/lib/venda-lancamentos';
+import { normalizeVenda, receitaDaAgencia, type VendaDash } from '@/lib/venda-dash';
 import type {
-  Cliente, VendaCRM, ContaReceber, ContaPagar,
-  ContaBancaria, CACMensal, MetaVendedor, Membro,
-  StatusVendaCRM,
+  CACMensal, Cliente, ContaBancaria, ContaPagar, ContaReceber, Membro, VendaCRM,
 } from '@/lib/crm-types';
 import { nomeDoCliente } from '@/lib/cliente-nome';
 import {
-  ShoppingCart, Users, AlertTriangle, ChevronRight,
-  FileText, Receipt, CreditCard,
-  Cake, MessageCircle,
-  AlertCircle, CheckCircle2, Info,
-} from 'lucide-react';
-import {
-  round2, num, soma, somaPor, percentual, divSegura, variacaoPct, paraBRL,
-  hojeISO, dataLocal, mesDe,
+  dataLocal, divSegura, hojeISO, mesDe, num, round2, soma, somaPor, ultimoDiaDoMes,
 } from '@/lib/money';
 import { calcularSaldoBancario, valorMovimentado } from '@/lib/saldo-bancario';
-// Componentes canônicos do padrão financeiro (/financeiro-ag). O painel usa
-// os mesmos, para o sistema inteiro falar uma língua visual só.
 import { PageHeader } from '@/components/fin/PageHeader';
-import { MetricCard } from '@/components/fin/MetricCard';
-import { Money, type MoneyEstado } from '@/components/fin/Money';
-import { DeltaIndicator, type DeltaIndicatorProps } from '@/components/fin/DeltaIndicator';
 import { DataState } from '@/components/fin/DataState';
-import { ActionCard } from '@/components/fin/ActionCard';
-import { Meter } from '@/components/fin/Meter';
+import { Money } from '@/components/fin/Money';
+import { Resposta } from '@/components/fin/Resposta';
+import { ListaDeFatos, type Fato } from '@/components/fin/ListaDeFatos';
+import { GraficoMoldura } from '@/components/fin/GraficoMoldura';
+import { BarraDeParte, type Parte } from '@/components/fin/BarraDeParte';
+import { BarrasNomeadas, type LinhaBarra } from '@/components/fin/BarrasNomeadas';
+import { EscadaAcumulada, type EventoAcum } from '@/components/fin/EscadaAcumulada';
+import { SeletorDeMes, rotuloDoMes, useMesDaUrl } from '@/components/fin/SeletorDeMes';
 
 const BRL = (v: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num(v));
+const PCT = (v: number) => `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(num(v))}%`;
+const dataCurta = (s: string) => dataLocal(s)?.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) ?? '—';
 
-const fmtDate = (s: string) => dataLocal(s)?.toLocaleDateString('pt-BR') ?? '-';
+/** A partir daqui a operação se sustenta. Limiar declarado, escrito na tela. */
+const MARGEM_SAUDAVEL_PCT = 15;
 
-// Hoje no fuso do tenant — toISOString() virava o dia às 21h no BRT.
-const today = () => hojeISO();
-const thisMonth = () => mesDe(hojeISO());
-
-function daysUntil(dateStr: string): number {
-  const d = dataLocal(dateStr);
-  const now = dataLocal(hojeISO());
-  if (!d || !now) return 0;
-  return Math.round((d.getTime() - now.getTime()) / 86400000);
+function diasAte(iso: string): number {
+  const d = dataLocal(iso);
+  const hoje = dataLocal(hojeISO());
+  if (!d || !hoje) return 0;
+  return Math.round((d.getTime() - hoje.getTime()) / 86_400_000);
 }
 
-function prevMonth(yyyymm: string): string {
-  const [y, m] = yyyymm.split('-').map(Number);
-  const pm = m === 1 ? 12 : m - 1;
-  const py = m === 1 ? y - 1 : y;
-  return `${py}-${String(pm).padStart(2, '0')}`;
-}
+/**
+ * As faixas de prazo. Ordinal, então rampa sequencial — e "vencido" é o
+ * primeiro degrau, não uma cor de status: status vermelho aqui competiria com
+ * o vermelho de "a pagar" na mesma tela.
+ */
+const PRAZOS = [
+  { id: 'vencido', rotulo: 'vencido', dentro: (d: number) => d < 0, seq: 4 as const },
+  { id: 'ate7', rotulo: 'até 7 dias', dentro: (d: number) => d >= 0 && d <= 7, seq: 3 as const },
+  { id: 'ate30', rotulo: '8 a 30 dias', dentro: (d: number) => d > 7 && d <= 30, seq: 2 as const },
+];
 
-function getMesLabel(yyyymm: string): string {
-  const [y, m] = yyyymm.split('-');
-  const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-  return `${meses[parseInt(m) - 1]}/${y.slice(2)}`;
-}
-
-function getMonthName(yyyymm: string): string {
-  const [y, m] = yyyymm.split('-');
-  const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-  return `${meses[parseInt(m) - 1]} ${y}`;
-}
-
-// VendaCRM tem 2 formas no banco:
-// 1) Legacy: campos completos (numero, produtos[], valor_final, valor_total_custo,
-//    markup_realizado, status='CONFIRMADO'|...) — vindo da UI /vendas/nova
-// 2) Nova (vinda do VENDA_FECHADA do CRM): valor_total/custo_total/comissao/
-//    rentabilidade, status='vendido', sem produtos[] (vendas fechadas pelo
-//    funil do CRM ainda não detalhadas por produto)
-//
-// O dashboard espera (1). normalizeVenda mapeia (2) para o shape (1) para
-// que reduce/forEach em produtos não estourem.
-//
-// ATENÇÃO: `markup_realizado` tem DOIS significados no banco — percentual de
-// markup na venda digitada em /vendas/nova e valor absoluto de comissão nas
-// vendas vindas do CRM. Por isso ele NUNCA entra em somatório de dinheiro;
-// normalizeVenda deriva `receita_agencia` em R$ e é esse campo que o
-// dashboard soma.
-type VendaDash = VendaCRM & { receita_agencia: number };
-
-function normalizeVenda(v: Partial<VendaCRM> & Record<string, unknown>): VendaDash {
-  const statusRaw = String(v.status ?? '').toLowerCase();
-  const status: StatusVendaCRM =
-    statusRaw === 'vendido' ? 'CONFIRMADO' :
-    (['ORCAMENTO', 'RESERVADO', 'CONFIRMADO', 'CANCELADO', 'CONCLUIDO'] as const).includes(v.status as StatusVendaCRM)
-      ? v.status as StatusVendaCRM
-      : 'CONFIRMADO';
-
-  const valor_total_venda =
-    (v.valor_final as number | undefined)
-    ?? (v.valor_total_venda as number | undefined)
-    ?? (v.valor_total as number | undefined)
-    ?? 0;
-  const valor_total_custo =
-    (v.valor_total_custo as number | undefined)
-    ?? (v.custo_total as number | undefined)
-    ?? 0;
-  // markup_realizado = receita real da agência (comissão efetiva).
-  // Só aceita campos que representem comissão de verdade. NÃO faz fallback
-  // para rentabilidade/(valor−custo) — isso é margem bruta, não receita.
-  // Se CRM não enviar comissão, fica 0 (KPI "Margem Bruta" mostra o resto).
-  const markup_realizado =
-    (v.markup_realizado as number | undefined)
-    ?? (v.comissao as number | undefined)
-    ?? 0;
-
-  const produtos = (v.produtos as VendaCRM['produtos']) ?? [];
-  // Receita da agência EM R$, na ordem de confiabilidade:
-  //  1) comissão por produto (comissao_fornecedor é % do valor de venda);
-  //  2) comissão absoluta reportada pelo CRM (campo `comissao`);
-  //  3) valor final - custo, quando há custo de fornecedor registrado.
-  // Sem nenhuma das três a receita é 0 (KPI mostra "aguardando comissão").
-  const comissaoProdutos = somaPor(produtos, p =>
-    percentual(paraBRL(p.valor_venda, p.moeda, p.cambio), p.comissao_fornecedor));
-  const comissaoCRM = num(v.comissao);
-  const receita_agencia =
-    comissaoProdutos > 0 ? comissaoProdutos
-    : comissaoCRM > 0 ? round2(comissaoCRM)
-    : num(valor_total_custo) > 0 ? Math.max(round2(num(valor_total_venda) - num(valor_total_custo)), 0)
-    : 0;
-
-  return {
-    receita_agencia,
-    id: (v.id as string) ?? '',
-    numero: (v.numero as string) ?? (v.crm_venda_id as string) ?? String(v.id ?? '').slice(0, 8) ?? '—',
-    data_venda: (v.data_venda as string) ?? '',
-    tipo: (v.tipo as 'AVULSA' | 'GRUPO') ?? (v.grupo_id ? 'GRUPO' : 'AVULSA'),
-    grupo_id: (v.grupo_id as string | null) ?? null,
-    cliente_id: (v.cliente_id as string) ?? '',
-    vendedor_id: (v.vendedor_id as string) ?? '',
-    passageiros: (v.passageiros as VendaCRM['passageiros']) ?? [],
-    pagantes: (v.pagantes as VendaCRM['pagantes']) ?? [],
-    produtos,
-    valor_total_custo,
-    valor_total_venda,
-    markup_realizado,
-    desconto: (v.desconto as number) ?? 0,
-    valor_final: valor_total_venda,
-    forma_pagamento: (v.forma_pagamento as VendaCRM['forma_pagamento']) ?? 'AVISTA_PIX',
-    parcelas: (v.parcelas as number) ?? 1,
-    pagamento_detalhado: (v.pagamento_detalhado as VendaCRM['pagamento_detalhado']) ?? [],
-    status,
-    motivo_cancelamento: (v.motivo_cancelamento as string) ?? '',
-    recibo_emitido: (v.recibo_emitido as boolean) ?? false,
-    intermediario_id: (v.intermediario_id as string | null) ?? null,
-    comissao_intermediario: (v.comissao_intermediario as number) ?? 0,
-    centro_custo: (v.centro_custo as string) ?? '',
-    numero_po: (v.numero_po as string) ?? '',
-    anexos: (v.anexos as VendaCRM['anexos']) ?? [],
-    observacoes: (v.observacoes as string) ?? '',
-    campos_personalizados: (v.campos_personalizados as Record<string, string>) ?? {},
-  };
-}
-
-// ============================================================
-// TIPOS INTERNOS
-// ============================================================
-
-interface Alerta {
+type Decisao = {
   id: string;
-  tipo: string;
-  prioridade: 'CRITICO' | 'ATENCAO' | 'POSITIVO' | 'INFO';
+  nivel: 'resolver' | 'acompanhar';
   titulo: string;
   descricao: string;
-  link: string;
-  linkLabel: string;
-}
-
-// O tipo KPI foi removido junto com os cartões de borda colorida: cada número
-// do painel agora é montado no JSX com MetricCard, que exige contexto e cuida
-// de formatação, estado de carregamento e delta.
-
-// ============================================================
-// COMPONENTE PRINCIPAL
-// ============================================================
-
-// Casca de seção e de painel. Ficam FORA do componente de propósito: definidas
-// dentro, o React as trataria como um tipo novo a cada render e remontaria a
-// subárvore inteira, perdendo estado e piscando a tela.
-function Secao({ id, titulo, acao, children }: {
-  id: string;
-  titulo: string;
-  acao?: { rotulo: string; href: string };
-  children: React.ReactNode;
-}) {
-  return (
-    <section aria-labelledby={id} className="flex flex-col gap-[var(--fin-s-3)]">
-      <div className="flex flex-wrap items-baseline justify-between gap-[var(--fin-s-2)]">
-        <h2 id={id} className="fin-t-subhead text-[var(--fin-text)]">{titulo}</h2>
-        {acao ? (
-          <Link
-            href={acao.href}
-            className="fin-t-body inline-flex min-h-11 items-center rounded-[var(--fin-r-sm)] text-[var(--fin-accent)] underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)] lg:min-h-10"
-          >
-            {acao.rotulo}
-          </Link>
-        ) : null}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function Painel({ titulo, children }: { titulo: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]">
-      <div className="border-b border-[var(--fin-border)] px-[var(--fin-s-4)] py-[var(--fin-s-3)]">
-        <h3 className="fin-t-body-strong text-[var(--fin-text)]">{titulo}</h3>
-      </div>
-      <div className="p-[var(--fin-s-4)]">{children}</div>
-    </div>
-  );
-}
+  href: string;
+  acao: string;
+};
 
 export default function DashboardPage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -224,900 +68,561 @@ export default function DashboardPage() {
   const [pagar, setPagar] = useState<ContaPagar[]>([]);
   const [contas, setContas] = useState<ContaBancaria[]>([]);
   const [cacData, setCacData] = useState<CACMensal[]>([]);
-  const [metas, setMetas] = useState<MetaVendedor[]>([]);
   const [membros, setMembros] = useState<Membro[]>([]);
   const [loading, setLoading] = useState(true);
-  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [erro, setErro] = useState<string | null>(null);
+  // Nasce NULO, não com new Date(): num componente cliente o valor do servidor
+  // difere do valor do cliente e o React reclama no hidrate. O carimbo só
+  // existe quando a carga termina — que é quando ele passa a ser verdade.
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [mes, setMes] = useMesDaUrl();
 
-  // Devolve a promessa: o PageHeader do padrão financeiro espera uma função
-  // assíncrona para saber quando o "Recarregar" terminou.
   const fetchAll = useCallback(() => {
     setLoading(true);
+    setErro(null);
     return Promise.all([
       loadEntities<Cliente>('clientes'),
-      loadEntities<VendaCRM>('vendas-crm'),
+      carregarEntidades<VendaCRM>('vendas-crm'),
       loadEntities<ContaReceber>('contas-receber'),
       loadEntities<ContaPagar>('contas-pagar'),
       loadEntities<ContaBancaria>('contas-bancarias'),
       loadEntities<CACMensal>('cac-mensal'),
-      loadEntities<MetaVendedor>('metas'),
       loadEquipe<Membro>(),
-    ]).then(([cl, vn, cr, cp, cb, cac, mt, mb]) => {
+    ]).then(([cl, vn, cr, cp, cb, cac, mb]) => {
       setClientes(cl);
-      // Normaliza vendas vindas de fontes diferentes (UI antiga + handler do
-      // VENDA_FECHADA do CRM). Garante produtos[]/valor_final/etc presentes.
-      setVendas(vn.map(v => normalizeVenda(v as Partial<VendaCRM> & Record<string, unknown>)));
-      setReceber(cr); setPagar(cp);
-      setContas(cb); setCacData(cac); setMetas(mt); setMembros(mb);
+      setVendas(vn.dados.map(v => normalizeVenda(v as Partial<VendaCRM> & Record<string, unknown>)));
+      setReceber(cr);
+      setPagar(cp);
+      setContas(cb);
+      setCacData(cac);
+      setMembros(mb);
+      // A falha da carga tem que CHEGAR à tela: com a manchete em 44px,
+      // anunciar "nenhuma venda" durante uma queda é pior do que não desenhar.
+      setErro(vn.erro);
       setLoading(false);
       setLastUpdate(new Date());
     });
   }, []);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => {
+    fetchAll();
+  }, [fetchAll]);
 
-  const mesAtual = thisMonth();
-  const mesAnterior = prevMonth(mesAtual);
+  const nomeDoMes = rotuloDoMes(mes);
+  const ehMesCorrente = mes === mesDe(hojeISO());
 
-  // ============================================================
-  // CALCULOS
-  // ============================================================
-
-  const calc = useMemo(() => {
+  const vendasDoMes = useMemo(() => {
     // Venda sem lançamento financeiro não entra em número de resultado: quem
-    // apagou as contas a receber e a pagar dela apagou o dinheiro do sistema.
-    // Mesma regra do DRE, para as duas telas nunca discordarem.
+    // apagou as contas dela apagou o dinheiro do sistema. Mesma regra do DRE.
     const comLancamento = vendasComLancamento(receber, pagar);
-    const vendasVivas = apenasVendasComLastro(vendas, comLancamento);
+    return apenasVendasComLastro(vendas, comLancamento).filter(
+      v => v.data_venda?.startsWith(mes) && v.status !== 'CANCELADO',
+    );
+  }, [vendas, receber, pagar, mes]);
 
-    const vendasMes = vendasVivas.filter(v => v.data_venda?.startsWith(mesAtual) && v.status !== 'CANCELADO');
-    const vendasMesAnt = vendasVivas.filter(v => v.data_venda?.startsWith(mesAnterior) && v.status !== 'CANCELADO');
+  const faturamento = useMemo(() => somaPor(vendasDoMes, v => v.valor_final), [vendasDoMes]);
+  const ficouComAgencia = useMemo(() => somaPor(vendasDoMes, receitaDaAgencia), [vendasDoMes]);
+  const repasse = round2(Math.max(0, faturamento - ficouComAgencia));
+  const margemPct = round2(divSegura(ficouComAgencia, faturamento) * 100);
+  const ticket = round2(divSegura(faturamento, vendasDoMes.length));
+  const saudavel = margemPct >= MARGEM_SAUDAVEL_PCT;
 
-    const faturamento = somaPor(vendasMes, v => v.valor_final);
-    const faturamentoAnt = somaPor(vendasMesAnt, v => v.valor_final);
+  const saldoCaixa = useMemo(
+    () => calcularSaldoBancario(contas, receber, pagar),
+    [contas, receber, pagar],
+  );
 
-    const qtdVendas = vendasMes.length;
-    const qtdVendasAnt = vendasMesAnt.length;
+  // O resultado do mês: margem SEM clamp (uma viagem abaixo do custo é
+  // prejuízo e precisa reduzir o mês) menos as despesas lançadas.
+  const resultadoDoMes = useMemo(() => {
+    const margemSemClamp = soma(
+      vendasDoMes.map(v => round2(num(v.valor_final) - num(v.valor_total_custo))),
+    );
+    // A conta a pagar auto-gerada da própria venda É o custo do fornecedor,
+    // que já saiu na margem. Contar as duas cobraria o custo duas vezes.
+    const despesas = somaPor(
+      pagar.filter(
+        p =>
+          p.data_vencimento?.startsWith(mes) &&
+          (p.status === 'PAGO' || p.status === 'PENDENTE') &&
+          !(p.auto_gerado && p.origem === 'VENDA'),
+      ),
+      p => p.valor_final,
+    );
+    return { valor: round2(margemSemClamp - despesas), despesas };
+  }, [vendasDoMes, pagar, mes]);
 
-    const ticketMedio = round2(divSegura(faturamento, qtdVendas));
-    const ticketMedioAnt = round2(divSegura(faturamentoAnt, qtdVendasAnt));
+  const cacDoMes = cacData.find(c => c.mes === mes)?.cac ?? 0;
 
-    // Receita da agência = comissão REAL em R$ por venda (receita_agencia,
-    // derivada em normalizeVenda). NUNCA somar markup_realizado nem
-    // comissao_fornecedor crus — os dois são PERCENTUAIS em parte da base.
-    const calcReceita = (vs: VendaDash[]) => somaPor(vs, v => v.receita_agencia);
-    const receita = calcReceita(vendasMes);
-    const receitaAnt = calcReceita(vendasMesAnt);
+  const eventosDoRitmo: EventoAcum[] = useMemo(
+    () =>
+      vendasDoMes
+        .filter(v => !!v.data_venda)
+        .map(v => {
+          const vendedor = membros.find(m => m.id === v.vendedor_id);
+          const cliente = clientes.find(c => c.id === v.cliente_id);
+          return {
+            data: v.data_venda,
+            rotulo: vendedor?.nome || (cliente ? nomeDoCliente(cliente) : `Venda ${v.numero}`),
+            valor: receitaDaAgencia(v),
+            detalhe: cliente ? nomeDoCliente(cliente) : undefined,
+          };
+        }),
+    [vendasDoMes, membros, clientes],
+  );
 
-    // Margem Bruta = Faturamento - CMV. Representa quanto sobrou após
-    // pagar fornecedores, ANTES das despesas operacionais.
-    const calcMargemBruta = (vs: VendaDash[]) =>
-      somaPor(vs, v => Math.max(round2(num(v.valor_final) - num(v.valor_total_custo)), 0));
-    const margemBruta = calcMargemBruta(vendasMes);
-    const margemBrutaAnt = calcMargemBruta(vendasMesAnt);
-    const margemBrutaPct = round2(divSegura(margemBruta, faturamento) * 100);
-    const margemBrutaPctAnt = round2(divSegura(margemBrutaAnt, faturamentoAnt) * 100);
+  // Quem vendeu. A tela pertence ao pilar Equipe, carrega vendedor_id e a
+  // lista de membros, e não citava uma pessoa sequer.
+  const quemVendeu: LinhaBarra[] = useMemo(() => {
+    const porPessoa = new Map<string, { valor: number; vendas: number }>();
+    for (const v of vendasDoMes) {
+      const chave = v.vendedor_id || '__sem_vendedor';
+      const atual = porPessoa.get(chave) ?? { valor: 0, vendas: 0 };
+      porPessoa.set(chave, {
+        valor: round2(atual.valor + receitaDaAgencia(v)),
+        vendas: atual.vendas + 1,
+      });
+    }
+    const linhas: LinhaBarra[] = [...porPessoa.entries()].map(([id, dados]) => ({
+      id,
+      nome: id === '__sem_vendedor' ? 'Sem vendedor definido' : (membros.find(m => m.id === id)?.nome ?? 'Pessoa removida'),
+      valor: dados.valor,
+      secundario: `${PCT(round2(divSegura(dados.valor, ficouComAgencia) * 100))} do mês · ${dados.vendas} ${dados.vendas === 1 ? 'venda' : 'vendas'} · ticket ${BRL(round2(divSegura(dados.valor, dados.vendas)))}`,
+    }));
 
-    // Lucro e Margem — mesma lógica do DRE (receita bruta - total despesas)
-    const calcDRELucro = (mes: string) => {
-      const mVendas = vendasVivas.filter(v => v.data_venda?.startsWith(mes) && v.status !== 'CANCELADO');
-      const mReceber = receber.filter(r => r.data_vencimento?.startsWith(mes) && (r.status === 'RECEBIDO' || r.status === 'PENDENTE'));
-      // O custo do fornecedor já entra como CMV (valor_total_custo da venda).
-      // A conta a pagar auto-gerada da MESMA venda é o mesmo custo — contar as
-      // duas dobrava a despesa. Mesmo filtro usado na página de DRE.
-      const mPagar = pagar.filter(p =>
-        p.data_vencimento?.startsWith(mes)
-        && (p.status === 'PAGO' || p.status === 'PENDENTE')
-        && !(p.auto_gerado && p.origem === 'VENDA'));
+    // Quem está na equipe e não vendeu entra como AUSÊNCIA declarada, não
+    // como barra de R$ 0: "sem meta" e "meta zero" são estados diferentes.
+    for (const membro of membros) {
+      if (porPessoa.has(membro.id)) continue;
+      linhas.push({
+        id: membro.id,
+        nome: membro.nome,
+        valor: null,
+        rotuloAusencia: `ainda sem venda em ${nomeDoMes}`,
+      });
+    }
+    return linhas;
+  }, [vendasDoMes, membros, ficouComAgencia, nomeDoMes]);
 
-      // RECEITA DA AGÊNCIA, não volume vendido.
-      //
-      // Aqui estava o erro mais caro do dashboard: recBrutaVendas somava
-      // v.valor_final, ou seja, o pacote inteiro que o cliente contratou.
-      // Numa agência isso é 7 a 12 vezes maior que a receita real, porque
-      // hotel, aéreo e receptivo são repasse, não faturamento próprio. O
-      // lucro fechava (o CMV era subtraído depois), mas a margem saía
-      // dividida pelo volume, e os dois cartões desta tela levam para o DRE,
-      // que mostra o número certo. Duas telas, dois números.
-      //
-      // Mesma fórmula da página de DRE: comissão da venda, clampada por
-      // venda para que um prejuízo isolado não vire receita negativa.
-      // Duas somas, de propósito, porque servem a perguntas diferentes.
-      //
-      // receitaBruta usa a margem CLAMPADA por venda: receita da empresa não
-      // é negativa, e é a base do percentual de margem.
-      //
-      // lucroLiq usa a margem SEM clamp. Uma viagem vendida abaixo do custo é
-      // prejuízo e precisa reduzir o resultado do mês. Clampar aqui apagaria
-      // a perda e o cartão "Lucro do Mês" mostraria um número melhor do que a
-      // realidade, justamente no mês em que o dono mais precisa enxergá-la.
-      const margemPorVenda = mVendas.map(v => round2(num(v.valor_final) - num(v.valor_total_custo)));
-      const recBrutaVendas = somaPor(margemPorVenda, m => Math.max(m, 0));
-      const margemVendas = soma(margemPorVenda);
+  // Entra e sai: as duas barras na MESMA escala de reais, que é o que permite
+  // ver de relance que sai mais do que entra.
+  const fluxo = useMemo(() => {
+    const aberto = <T extends { status: string; data_vencimento: string; valor_final: number }>(
+      linhas: T[],
+      pendentes: string[],
+    ) => linhas.filter(l => pendentes.includes(l.status) && diasAte(l.data_vencimento) <= 30);
 
-      const recComissoes = somaPor(mReceber.filter(cr => cr.origem === 'COMISSAO_FORNECEDOR'), cr => cr.valor_final);
-      const recFee = somaPor(mReceber.filter(cr => cr.origem === 'FEE'), cr => cr.valor_final);
-      const recOutras = somaPor(mReceber.filter(cr => cr.origem === 'OUTROS'), cr => cr.valor_final);
+    const receberAberto = aberto(receber, ['PENDENTE', 'ATRASADO']);
+    const pagarAberto = aberto(pagar, ['PENDENTE', 'VENCIDO']);
 
-      const receitaBruta = soma([recBrutaVendas, recComissoes, recFee, recOutras]);
-      const resultadoVendas = soma([margemVendas, recComissoes, recFee, recOutras]);
+    const fatiar = (linhas: Array<{ data_vencimento: string; valor_final: number }>): Parte[] =>
+      PRAZOS.map(prazo => ({
+        id: prazo.id,
+        rotulo: prazo.rotulo,
+        valor: somaPor(
+          linhas.filter(l => prazo.dentro(diasAte(l.data_vencimento))),
+          l => l.valor_final,
+        ),
+        papel: 'seq' as const,
+        indiceSeq: prazo.seq,
+      }));
 
-      // O custo do fornecedor já está dentro da margem (venda menos custo).
-      // Somá-lo de novo aqui cobraria o mesmo custo duas vezes — por isso o
-      // filtro acima já exclui a conta a pagar auto-gerada da própria venda.
-      const totalDespesas = somaPor(mPagar, p => p.valor_final);
+    const totalReceber = somaPor(receberAberto, r => r.valor_final);
+    const totalPagar = somaPor(pagarAberto, p => p.valor_final);
 
-      const lucroLiq = round2(resultadoVendas - totalDespesas);
-      const margemLiq = round2(divSegura(lucroLiq, receitaBruta) * 100);
-      return { receitaBruta, lucroLiq, margemLiq };
-    };
-
-    const dreMes = calcDRELucro(mesAtual);
-    const dreMesAnt = calcDRELucro(mesAnterior);
-
-    const lucro = dreMes.lucroLiq;
-    const lucroAnt = dreMesAnt.lucroLiq;
-    const margem = dreMes.margemLiq;
-    const margemAnt = dreMesAnt.margemLiq;
-
-    // CAC
-    const cacMes = cacData.find(c => c.mes === mesAtual);
-    const cacMesAnt = cacData.find(c => c.mes === mesAnterior);
-    const cacValor = cacMes?.cac || 0;
-    const cacValorAnt = cacMesAnt?.cac || 0;
-
-    // Saldo em caixa
-    // Saldo computado: saldo_inicial + recebido - pago. Não depende de
-    // saldo_atual persistido nas contas (pode ficar stale).
-    const saldoCaixa = calcularSaldoBancario(contas, receber, pagar);
-
-    // Deltas.
-    //
-    // variacaoPct devolve null de propósito quando o mês anterior é zero:
-    // não existe variação percentual sobre base zero. O fallback antigo
-    // ("100" quando havia valor, "0" quando não) fabricava um número —
-    // "+100%" num mês que simplesmente não tinha com o que comparar, e
-    // "0%" lido na tela como "estável". Agora o delta some do cartão.
-    const delta = (atual: number, anterior: number): number | null =>
-      variacaoPct(atual, anterior);
+    const daSemana = [
+      ...receberAberto
+        .filter(r => diasAte(r.data_vencimento) >= 0 && diasAte(r.data_vencimento) <= 7)
+        .map(r => ({
+          id: `r-${r.id}`,
+          sinal: '+' as const,
+          valor: r.valor_final,
+          descricao: r.cliente_nome || r.descricao || 'A receber',
+          data: r.data_vencimento,
+        })),
+      ...pagarAberto
+        .filter(p => diasAte(p.data_vencimento) >= 0 && diasAte(p.data_vencimento) <= 7)
+        .map(p => ({
+          id: `p-${p.id}`,
+          sinal: '−' as const,
+          valor: p.valor_final,
+          descricao: p.fornecedor_nome || p.descricao || 'A pagar',
+          data: p.data_vencimento,
+        })),
+    ].sort((a, b) => a.data.localeCompare(b.data));
 
     return {
-      faturamento, faturamentoAnt, qtdVendas, qtdVendasAnt,
-      ticketMedio, ticketMedioAnt, receita, receitaAnt,
-      margem, margemAnt, cacValor, cacValorAnt,
-      saldoCaixa, lucro, lucroAnt,
-      margemBruta, margemBrutaAnt, margemBrutaPct, margemBrutaPctAnt,
-      receitaBrutaDRE: dreMes.receitaBruta,
-      delta,
-      vendasMes,
+      receber: fatiar(receberAberto),
+      pagar: fatiar(pagarAberto),
+      totalReceber,
+      totalPagar,
+      // A escala comum é o `total` das duas barras: sem ele, cada uma usaria a
+      // própria largura e R$ 18.400 pareceria igual a R$ 9.120.
+      escala: round2(Math.max(totalReceber, totalPagar)),
+      daSemana,
+      entramNaSemana: somaPor(daSemana.filter(l => l.sinal === '+'), l => l.valor),
+      saemNaSemana: somaPor(daSemana.filter(l => l.sinal === '−'), l => l.valor),
     };
-  }, [vendas, receber, pagar, contas, cacData, mesAtual, mesAnterior]);
-
-  // KPIs
-  // O array de KPIs antigo saiu junto com os cartões de borda colorida: o
-  // painel agora monta cada número no próprio JSX, com o contexto que o
-  // MetricCard exige. Ver a seção RENDER.
-
-  // ============================================================
-  // ALERTAS
-  // ============================================================
-
-  const alertas: Alerta[] = useMemo(() => {
-    const list: Alerta[] = [];
-    const hj = today();
-
-    // Parcelas vencidas (a receber)
-    const parcelasAtrasadas = receber.filter(r => r.status === 'ATRASADO' || (r.status === 'PENDENTE' && r.data_vencimento < hj));
-    if (parcelasAtrasadas.length > 0) {
-      const total = somaPor(parcelasAtrasadas, r => r.valor_final);
-      list.push({
-        id: 'parcelas_vencidas', tipo: 'PARCELA_VENCIDA', prioridade: 'CRITICO',
-        titulo: `${parcelasAtrasadas.length} parcela(s) vencida(s) — ${BRL(total)} a receber`,
-        descricao: [...new Set(parcelasAtrasadas.map(r => r.cliente_nome).filter(Boolean))].slice(0, 3).join(', '),
-        link: '/financeiro-ag/receber', linkLabel: 'Cobrar',
-      });
-    }
-
-    // Pagamentos vencidos (a pagar)
-    const pagamentosVencidos = pagar.filter(p => p.status === 'VENCIDO' || (p.status === 'PENDENTE' && p.data_vencimento < hj));
-    if (pagamentosVencidos.length > 0) {
-      const total = somaPor(pagamentosVencidos, p => p.valor_final);
-      list.push({
-        id: 'pagamentos_vencidos', tipo: 'PAGAMENTO_VENCIDO', prioridade: 'CRITICO',
-        titulo: `${pagamentosVencidos.length} pagamento(s) vencido(s) — ${BRL(total)}`,
-        descricao: [...new Set(pagamentosVencidos.map(p => p.fornecedor_nome).filter(Boolean))].slice(0, 3).join(', '),
-        link: '/financeiro-ag/pagar', linkLabel: 'Pagar',
-      });
-    }
-
-    // Pagamentos proximos (5 dias)
-    const pagProximos = pagar.filter(p => p.status === 'PENDENTE' && daysUntil(p.data_vencimento) >= 0 && daysUntil(p.data_vencimento) <= 5);
-    if (pagProximos.length > 0) {
-      const total = somaPor(pagProximos, p => p.valor_final);
-      list.push({
-        id: 'pag_proximos', tipo: 'PAGAMENTO_PROXIMO', prioridade: 'ATENCAO',
-        titulo: `${pagProximos.length} pagamento(s) nos proximos 5 dias — ${BRL(total)}`,
-        descricao: pagProximos.slice(0, 2).map(p => `${p.fornecedor_nome} (${fmtDate(p.data_vencimento)})`).join(', '),
-        link: '/financeiro-ag/pagar', linkLabel: 'Ver',
-      });
-    }
-
-    // CAC subiu
-    if (calc.cacValor > 0 && calc.cacValorAnt > 0 && calc.cacValor > calc.cacValorAnt * 1.05) {
-      const pctSubiu = (variacaoPct(calc.cacValor, calc.cacValorAnt) ?? 0).toFixed(0);
-      list.push({
-        id: 'cac_subiu', tipo: 'CAC_SUBIU', prioridade: 'ATENCAO',
-        titulo: `CAC subiu ${pctSubiu}% vs mes anterior`,
-        descricao: `De ${BRL(calc.cacValorAnt)} para ${BRL(calc.cacValor)}`,
-        link: '/cac/dashboard', linkLabel: 'CAC',
-      });
-    }
-
-    // Orcamentos sem resposta > 7 dias
-    const orcamentosPendentes = vendas.filter(v => v.status === 'ORCAMENTO' && v.data_venda && daysUntil(v.data_venda) < -7);
-    if (orcamentosPendentes.length > 0) {
-      list.push({
-        id: 'orcamentos_antigos', tipo: 'ORCAMENTO_SEM_RESPOSTA', prioridade: 'ATENCAO',
-        titulo: `${orcamentosPendentes.length} orcamento(s) aguardando resposta ha +7 dias`,
-        descricao: 'Possivel follow-up necessario',
-        link: '/vendas/orcamentos', linkLabel: 'Orcamentos',
-      });
-    }
-
-    // Meta atingida
-    const metasMes = metas.filter(m => m.mes_referencia === mesAtual);
-    metasMes.forEach(m => {
-      if (m.meta_valor > 0 && m.realizado_valor >= m.meta_valor) {
-        list.push({
-          id: `meta_${m.id}`, tipo: 'META_ATINGIDA', prioridade: 'POSITIVO',
-          titulo: `Meta de vendas atingida! ${m.vendedor_nome}`,
-          descricao: `${BRL(m.realizado_valor)} / ${BRL(m.meta_valor)}`,
-          link: '/equipe/metas', linkLabel: 'Metas',
-        });
-      }
-    });
-
-    // Parcelas vencendo hoje
-    const parcelasHoje = receber.filter(r => r.status === 'PENDENTE' && r.data_vencimento === hj);
-    if (parcelasHoje.length > 0) {
-      const total = somaPor(parcelasHoje, r => r.valor_final);
-      list.push({
-        id: 'parcelas_hoje', tipo: 'PARCELA_HOJE', prioridade: 'INFO',
-        titulo: `${parcelasHoje.length} parcela(s) vencem hoje — ${BRL(total)}`,
-        descricao: parcelasHoje.slice(0, 2).map(r => r.cliente_nome).join(', '),
-        link: '/financeiro-ag/receber', linkLabel: 'Ver',
-      });
-    }
-
-    // Sort: CRITICO > ATENCAO > POSITIVO > INFO
-    const prioOrder = { CRITICO: 0, ATENCAO: 1, POSITIVO: 2, INFO: 3 };
-    list.sort((a, b) => prioOrder[a.prioridade] - prioOrder[b.prioridade]);
-    return list;
-  }, [receber, pagar, vendas, metas, calc, mesAtual]);
-
-  // ============================================================
-  // GRAFICOS (dados)
-  // ============================================================
-
-  const chartFaturamento = useMemo(() => {
-    // Mesma regra do KPI e do DRE: venda sem lançamento não vira barra.
-    const comLancamento = vendasComLancamento(receber, pagar);
-    const vendasVivas = apenasVendasComLastro(vendas, comLancamento);
-    const months: { mes: string; label: string; faturamento: number; receita: number }[] = [];
-    let m = mesAtual;
-    for (let i = 0; i < 6; i++) {
-      const vs = vendasVivas.filter(v => v.data_venda?.startsWith(m) && v.status !== 'CANCELADO');
-      const fat = somaPor(vs, v => v.valor_final);
-      // Mesma regra do KPI: receita da agência em R$, nunca percentual cru.
-      const rec = somaPor(vs, v => v.receita_agencia);
-      months.unshift({ mes: m, label: getMesLabel(m), faturamento: fat, receita: rec });
-      m = prevMonth(m);
-    }
-    return months;
-  }, [vendas, receber, pagar, mesAtual]);
-
-  const chartFluxo = useMemo(() => {
-    const months: { mes: string; label: string; entradas: number; saidas: number; saldo: number }[] = [];
-    let m = mesAtual;
-    let saldoAcum = 0;
-    const raw: { mes: string; entradas: number; saidas: number }[] = [];
-    for (let i = 0; i < 6; i++) {
-      // Dois erros na mesma linha antes: PARCIAL ficava de fora (dinheiro
-      // real que entrou some do gráfico) e o valor somado era o previsto,
-      // não o baixado (uma conta quitada com desconto aparecia pelo cheio).
-      // valorMovimentado resolve os dois: é a mesma regra do saldo.
-      const ent = somaPor(
-        receber.filter(r => (r.data_recebimento || r.data_vencimento)?.startsWith(m)),
-        r => valorMovimentado(r, 'valor_recebido'));
-      const sai = somaPor(
-        pagar.filter(p => (p.data_pagamento || p.data_vencimento)?.startsWith(m)),
-        p => valorMovimentado(p, 'valor_pago'));
-      raw.unshift({ mes: m, entradas: ent, saidas: sai });
-      m = prevMonth(m);
-    }
-    raw.forEach(r => {
-      saldoAcum = round2(saldoAcum + round2(r.entradas - r.saidas));
-      months.push({ mes: r.mes, label: getMesLabel(r.mes), entradas: r.entradas, saidas: r.saidas, saldo: saldoAcum });
-    });
-    return months;
-  }, [receber, pagar, mesAtual]);
-
-  const chartComposicao = useMemo(() => {
-    const map: Record<string, number> = {};
-    calc.vendasMes.forEach(v => {
-      v.produtos.forEach(p => {
-        const tipo = p.tipo || 'OUTROS';
-        map[tipo] = round2((map[tipo] || 0) + paraBRL(p.valor_venda, p.moeda, p.cambio));
-      });
-    });
-    const cores: Record<string, string> = {
-      AEREO: '#60a5fa', HOTEL: '#a78bfa', PACOTE: '#34d399', SEGURO: '#fbbf24',
-      RECEPTIVO: '#22d3ee', CRUZEIRO: '#818cf8', CARRO: '#fb923c', INGRESSO: '#f472b6',
-      GRUPO: '#2dd4bf', OUTROS: '#94a3b8',
-    };
-    const total = soma(Object.values(map));
-    return Object.entries(map).map(([tipo, valor]) => ({
-      tipo, valor, pct: round2(divSegura(valor, total) * 100),
-      cor: cores[tipo] || '#94a3b8',
-    })).sort((a, b) => b.valor - a.valor);
-  }, [calc.vendasMes]);
-
-  // ============================================================
-  // ANIVERSARIANTES E DATAS
-  // ============================================================
-
-  const aniversariantes = useMemo(() => {
-    const hj = today();
-    const [, mm, dd] = hj.split('-');
-    const hjMMDD = `${mm}-${dd}`;
-
-    return clientes
-      .filter(c => c.status === 'ATIVO' && c.data_nascimento)
-      .map(c => {
-        const dn = c.data_nascimento;
-        const [ay] = dn.split('-');
-        const dnMMDD = dn.slice(5);
-        const anoAtual = parseInt(hj.slice(0, 4));
-        const idade = anoAtual - parseInt(ay);
-        const diasAte = (() => {
-          const diff = daysUntil(`${anoAtual}-${dnMMDD}`);
-          return diff < 0 ? diff + 365 : diff;
-        })();
-        return {
-          nome: nomeDoCliente(c),
-          data: dn, idade, diasAte,
-          whatsapp: c.whatsapp || c.telefone_principal,
-          email: c.email,
-          isHoje: dnMMDD === hjMMDD,
-          isSemana: diasAte > 0 && diasAte <= 7,
-        };
-      })
-      .filter(a => a.diasAte <= 30)
-      .sort((a, b) => a.diasAte - b.diasAte);
-  }, [clientes]);
-
-  const datasImportantes = useMemo(() => {
-    const eventos: { data: string; titulo: string; descricao: string; link: string }[] = [];
-    const hj = today();
-
-    // Vencimentos a receber proximos 7 dias
-    receber.filter(r => r.status === 'PENDENTE' && daysUntil(r.data_vencimento) >= 0 && daysUntil(r.data_vencimento) <= 7)
-      .forEach(r => eventos.push({
-        data: r.data_vencimento,
-        titulo: `Vencimento parcela ${r.parcela_numero}/${r.total_parcelas}`,
-        descricao: `${r.cliente_nome} — ${BRL(r.valor_final)}`,
-        link: '/financeiro-ag/receber',
-      }));
-
-    // Vencimentos a pagar proximos 7 dias
-    pagar.filter(p => p.status === 'PENDENTE' && daysUntil(p.data_vencimento) >= 0 && daysUntil(p.data_vencimento) <= 7)
-      .forEach(p => eventos.push({
-        data: p.data_vencimento,
-        titulo: `Pagamento ${p.fornecedor_nome}`,
-        descricao: BRL(p.valor_final),
-        link: '/financeiro-ag/pagar',
-      }));
-
-    return eventos.sort((a, b) => a.data.localeCompare(b.data)).slice(0, 8);
   }, [receber, pagar]);
 
-  // ============================================================
-  // RESUMO TEXTUAL
-  // ============================================================
+  // Dois níveis, não quatro. Conquista não é alarme, e um alarme com quatro
+  // graus e trilho colorido vira paisagem.
+  const decisoes: Decisao[] = useMemo(() => {
+    const lista: Decisao[] = [];
+    const hj = hojeISO();
 
-  const resumo = useMemo(() => {
-    const parts: string[] = [];
-    if (calc.qtdVendas > 0) {
-      parts.push(`Foram fechadas ${calc.qtdVendas} vendas totalizando ${BRL(calc.faturamento)} em faturamento.`);
-    } else {
-      parts.push('Nenhuma venda registrada no mes.');
+    const receberVencido = receber.filter(r => r.status === 'ATRASADO' || (r.status === 'PENDENTE' && r.data_vencimento < hj));
+    if (receberVencido.length > 0) {
+      lista.push({
+        id: 'receber-vencido',
+        nivel: 'resolver',
+        titulo: `${receberVencido.length} ${receberVencido.length === 1 ? 'parcela vencida' : 'parcelas vencidas'} — ${BRL(somaPor(receberVencido, r => r.valor_final))} a receber`,
+        descricao: [...new Set(receberVencido.map(r => r.cliente_nome).filter(Boolean))].slice(0, 3).join(', '),
+        href: '/financeiro-ag/receber',
+        acao: 'Cobrar',
+      });
     }
-    if (calc.receita > 0) {
-      const pctReceita = (divSegura(calc.receita, calc.faturamento) * 100).toFixed(0);
-      parts.push(`A receita da agencia (comissoes + markup) foi de ${BRL(calc.receita)} (${pctReceita}%).`);
+
+    const pagarVencido = pagar.filter(p => p.status === 'VENCIDO' || (p.status === 'PENDENTE' && p.data_vencimento < hj));
+    if (pagarVencido.length > 0) {
+      lista.push({
+        id: 'pagar-vencido',
+        nivel: 'resolver',
+        titulo: `${pagarVencido.length} ${pagarVencido.length === 1 ? 'pagamento vencido' : 'pagamentos vencidos'} — ${BRL(somaPor(pagarVencido, p => p.valor_final))}`,
+        descricao: [...new Set(pagarVencido.map(p => p.fornecedor_nome).filter(Boolean))].slice(0, 3).join(', '),
+        href: '/financeiro-ag/pagar',
+        acao: 'Pagar',
+      });
     }
-    if (calc.cacValor > 0) {
-      parts.push(`O CAC ficou em ${BRL(calc.cacValor)} por cliente.`);
+
+    const pagarProximo = pagar.filter(p => p.status === 'PENDENTE' && diasAte(p.data_vencimento) >= 0 && diasAte(p.data_vencimento) <= 5);
+    if (pagarProximo.length > 0) {
+      lista.push({
+        id: 'pagar-proximo',
+        nivel: 'acompanhar',
+        titulo: `${pagarProximo.length} ${pagarProximo.length === 1 ? 'pagamento vence' : 'pagamentos vencem'} em até 5 dias — ${BRL(somaPor(pagarProximo, p => p.valor_final))}`,
+        descricao: pagarProximo.slice(0, 2).map(p => `${p.fornecedor_nome} em ${dataCurta(p.data_vencimento)}`).join(', '),
+        href: '/financeiro-ag/pagar',
+        acao: 'Ver',
+      });
     }
-    parts.push(`O lucro líquido ${calc.lucro >= 0 ? 'fechou positivo' : 'ficou negativo'} em ${BRL(calc.lucro)}.`);
-    if (contas.length > 0) {
-      parts.push(`Saldo total em caixa: ${BRL(calc.saldoCaixa)} (${contas.length} conta${contas.length > 1 ? 's' : ''}).`);
+
+    const orcamentosParados = vendas.filter(v => v.status === 'ORCAMENTO' && v.data_venda && diasAte(v.data_venda) < -7);
+    if (orcamentosParados.length > 0) {
+      lista.push({
+        id: 'orcamentos',
+        nivel: 'acompanhar',
+        titulo: `${orcamentosParados.length} ${orcamentosParados.length === 1 ? 'orçamento aguarda resposta' : 'orçamentos aguardam resposta'} há mais de 7 dias`,
+        descricao: 'Vale um retorno antes que esfriem.',
+        href: '/vendas/orcamentos',
+        acao: 'Ver',
+      });
     }
-    return parts;
-  }, [calc, contas]);
 
-  // ============================================================
-  // RENDER — padrão do módulo financeiro (/financeiro-ag)
-  // ============================================================
-  // Mesma gramática visual da tela de Financeiro: cabeçalho canônico, uma
-  // faixa com o número principal e três de apoio, seções com subtítulo, e
-  // as ações no rodapé. Nada de cartão com borda colorida no topo, ícone
-  // colorido por métrica ou caixa em gradiente: cor aqui só entra quando o
-  // sinal muda a decisão.
+    return lista;
+  }, [receber, pagar, vendas]);
 
-  const estado: 'carregando' | 'erro' | 'ok' = loading ? 'carregando' : 'ok';
-  const estadoValor: MoneyEstado = loading ? 'carregando' : 'ok';
+  // Para onde foi o dinheiro. Venda do CRM chega sem produtos detalhados — que
+  // é o estado NORMAL —, e aí a pergunta que dá para responder é a outra: para
+  // onde o dinheiro SAIU.
+  const composicao = useMemo(() => {
+    const porTipo = new Map<string, number>();
+    for (const v of vendasDoMes) {
+      for (const p of v.produtos ?? []) {
+        const tipo = p.tipo || 'OUTROS';
+        porTipo.set(tipo, round2((porTipo.get(tipo) ?? 0) + num(p.valor_venda)));
+      }
+    }
+    if (porTipo.size > 0) {
+      return {
+        origem: 'venda' as const,
+        linhas: [...porTipo.entries()].map(([tipo, valor]) => ({ id: tipo, nome: tipo, valor })),
+      };
+    }
 
-  const maxFat = Math.max(...chartFaturamento.map(m => m.faturamento), 1);
-  const maxFluxo = Math.max(...chartFluxo.map(m => Math.max(m.entradas, m.saidas)), 1);
+    const ROTULO_NATUREZA: Record<string, string> = {
+      FIXO: 'Custo fixo',
+      VARIAVEL: 'Custo variável',
+      COMPRA_UNICA: 'Compra única',
+    };
+    const porNatureza = new Map<string, number>();
+    for (const p of pagar) {
+      if (!p.data_vencimento?.startsWith(mes)) continue;
+      if (p.status !== 'PAGO' && p.status !== 'PENDENTE') continue;
+      const chave = ROTULO_NATUREZA[p.natureza_custo ?? ''] ?? 'Sem natureza definida';
+      porNatureza.set(chave, round2((porNatureza.get(chave) ?? 0) + num(p.valor_final)));
+    }
+    return {
+      origem: 'despesa' as const,
+      linhas: [...porNatureza.entries()].map(([nome, valor]) => ({ id: nome, nome, valor })),
+    };
+  }, [vendasDoMes, pagar, mes]);
 
-  // Delta só aparece quando existe base de comparação. variacaoPct devolve
-  // null no mês anterior zerado, e nesse caso o indicador some da tela em vez
-  // de estampar um "+100%" que não significa nada.
-  const deltaDe = (
-    atual: number,
-    anterior: number,
-    polaridade: 'subirBom' | 'subirRuim' = 'subirBom',
-  ): DeltaIndicatorProps | null => {
-    const pct = calc.delta(atual, anterior);
-    if (pct === null || Math.abs(pct) < 0.05) return null;
-    return { pct, direcao: pct > 0 ? 'up' : 'down', polaridade, base: 'vs. mês anterior' };
-  };
-
-  const tomDoValor = (v: number): 'neutro' | 'negativo' => (v < 0 ? 'negativo' : 'neutro');
-
-  // Faixa da margem: o mesmo semáforo que o resto do sistema usa.
-  const faixaMargem: 'saudavel' | 'atencao' | 'critico' =
-    calc.margemBrutaPct >= 15 ? 'saudavel' : calc.margemBrutaPct >= 10 ? 'atencao' : 'critico';
-
-  const despesasDoMes = round2(calc.receitaBrutaDRE - calc.lucro);
-
-  const prioTom: Record<string, string> = {
-    CRITICO: 'var(--fin-negative)',
-    ATENCAO: 'var(--fin-warning)',
-    POSITIVO: 'var(--fin-positive)',
-    INFO: 'var(--fin-accent)',
-  };
-  const prioIcone: Record<string, React.ReactNode> = {
-    CRITICO: <AlertCircle className="h-4 w-4 shrink-0 text-[var(--fin-negative-text)]" />,
-    ATENCAO: <AlertTriangle className="h-4 w-4 shrink-0 text-[var(--fin-warning-text)]" />,
-    POSITIVO: <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--fin-positive)]" />,
-    INFO: <Info className="h-4 w-4 shrink-0 text-[var(--fin-accent)]" />,
-  };
-
-  const pendencias = [
-    { rotulo: 'Orçamentos aguardando', qtd: vendas.filter(v => v.status === 'ORCAMENTO').length, href: '/vendas/orcamentos' },
-    { rotulo: 'Contas a receber em aberto', qtd: receber.filter(r => r.status === 'PENDENTE' || r.status === 'ATRASADO').length, href: '/financeiro-ag/receber' },
-    { rotulo: 'Contas a pagar em aberto', qtd: pagar.filter(p => p.status === 'PENDENTE' || p.status === 'VENCIDO').length, href: '/financeiro-ag/pagar' },
+  const fatos: Fato[] = [
+    {
+      rotulo: 'Em caixa hoje',
+      // Sem conta cadastrada o valor é um traço, nunca R$ 0,00: zero ali
+      // seria um fato, e o fato é que ninguém informou.
+      valor: <Money valor={saldoCaixa} size="strong" estado={contas.length === 0 ? 'indisponivel' : 'ok'} align="esquerda" />,
+      contexto:
+        contas.length === 0
+          ? 'nenhuma conta bancária cadastrada'
+          : `em ${contas.length} ${contas.length === 1 ? 'conta' : 'contas'}, saldo de agora`,
+      acao: contas.length === 0 ? { rotulo: 'Cadastrar conta', href: '/financeiro-ag/contas-bancarias' } : undefined,
+    },
+    {
+      rotulo: 'Sobrou no mês',
+      valor: <Money valor={resultadoDoMes.valor} size="strong" tone={resultadoDoMes.valor < 0 ? 'negativo' : 'neutro'} align="esquerda" />,
+      contexto:
+        resultadoDoMes.despesas > 0
+          ? `depois de ${BRL(resultadoDoMes.despesas)} em despesas lançadas`
+          : `igual ao que ficou com a agência, porque nenhuma despesa foi lançada em ${nomeDoMes}`,
+    },
+    {
+      rotulo: 'Custo por cliente novo',
+      valor:
+        cacDoMes > 0 ? (
+          <Money valor={cacDoMes} size="strong" align="esquerda" />
+        ) : (
+          <span className="fin-t-body-strong text-[var(--fin-text-3)]">sem investimento registrado</span>
+        ),
+      contexto: cacDoMes > 0 ? `investimento em marketing dividido pelos clientes novos de ${nomeDoMes}` : undefined,
+      acao: cacDoMes > 0 ? undefined : { rotulo: 'Registrar investimento', href: '/cac/dashboard' },
+    },
   ];
+
+  const [ano, mesNum] = mes.split('-').map(Number);
+  const diasDoMes = ultimoDiaDoMes(ano, mesNum);
+  const diaDeHoje = ehMesCorrente ? Number(hojeISO().slice(8, 10)) : diasDoMes;
 
   return (
     <div className="w-full px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
-      <div className="mx-auto flex w-full max-w-[var(--fin-page-max)] flex-col">
-        <PageHeader
-          titulo="Painel"
-          subtitulo={`${getMonthName(mesAtual)}. ${calc.qtdVendas} ${calc.qtdVendas === 1 ? 'venda fechada' : 'vendas fechadas'} até agora.`}
-          atualizadoEm={lastUpdate}
-          onRecarregar={fetchAll}
-        />
+      <div className="mx-auto flex w-full max-w-[var(--fin-page-max)] flex-col gap-[var(--fin-s-5)]">
+        <PageHeader titulo="Painel" atualizadoEm={lastUpdate} onRecarregar={fetchAll} />
 
-        <div className="mt-[var(--fin-s-6)] flex flex-col gap-[var(--fin-s-5)]">
-          {/* ---------------------------------------------------------------
-              FAIXA PRINCIPAL
-              O número grande é o VOLUME vendido, e o rótulo diz isso. Em
-              agência de viagens o que o cliente paga não é receita: a maior
-              parte pertence ao fornecedor. Os três cartões de apoio trazem o
-              que de fato sobra, o ticket e o caixa.
-          ---------------------------------------------------------------- */}
-          <DataState
-            estado={estado}
-            erro={null}
-            esqueleto={
-              <div className="rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)]">
-                <div className="flex flex-col gap-[var(--fin-s-4)] lg:flex-row lg:items-center">
-                  <div className="flex flex-col gap-[var(--fin-s-2)] lg:w-[300px] lg:shrink-0 lg:pr-[var(--fin-s-5)]">
-                    <span className="block h-3 w-24 animate-pulse rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />
-                    <span className="block h-8 w-52 animate-pulse rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />
-                    <span className="block h-3 w-40 animate-pulse rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />
-                  </div>
-                  <div className="grid gap-[var(--fin-s-3)] border-t border-[var(--fin-border)] pt-[var(--fin-s-4)] sm:grid-cols-3 lg:grow lg:border-t-0 lg:border-l lg:pt-0 lg:pl-[var(--fin-s-5)]">
-                    {[0, 1, 2].map(i => (
-                      <div key={i} className="flex flex-col gap-[var(--fin-s-2)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] p-[var(--fin-s-4)]">
-                        <span className="block h-3 w-20 animate-pulse rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />
-                        <span className="block h-5 w-32 animate-pulse rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />
-                        <span className="block h-3 w-28 animate-pulse rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+        <SeletorDeMes valor={mes} onChange={setMes} />
+
+        <DataState
+          estado={loading ? 'carregando' : erro ? 'erro' : 'ok'}
+          erro={
+            erro
+              ? { mensagem: `Não foi possível carregar os dados de ${nomeDoMes}. Nada foi alterado.`, onTentarDeNovo: () => { fetchAll(); } }
+              : null
+          }
+          esqueleto={
+            <div className="flex flex-col gap-[var(--fin-s-5)]" aria-hidden>
+              <div className="h-[190px] rounded-[var(--fin-r-lg)] bg-[var(--fin-surface-2)]" />
+              <div className="h-[168px] rounded-[var(--fin-r-lg)] bg-[var(--fin-surface-2)]" />
+            </div>
+          }
+        >
+          {/* ── A RESPOSTA ───────────────────────────────────────────────── */}
+          <Resposta
+            overline={`FICOU COM A AGÊNCIA EM ${nomeDoMes.toUpperCase()}`}
+            valor={<Money valor={ficouComAgencia} size="resposta" align="esquerda" estado={faturamento > 0 ? 'ok' : 'indisponivel'} />}
+            frase={
+              faturamento > 0
+                ? `De ${BRL(faturamento)} vendidos, ${BRL(repasse)} foram repasse a fornecedores. ${vendasDoMes.length === 1 ? 'Foi 1 venda' : `Foram ${vendasDoMes.length} vendas`}, ${BRL(ticket)} cada, em média.`
+                : `Nenhuma venda com lançamento financeiro em ${nomeDoMes}. Quando a primeira entrar, o número aparece aqui.`
             }
-          >
-            <section
-              aria-labelledby="dash-faturamento"
-              className="rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)]"
-            >
-              <div className="flex flex-col gap-[var(--fin-s-4)] lg:flex-row lg:items-center">
-                <div className="flex flex-col gap-[var(--fin-s-1)] lg:w-[300px] lg:shrink-0 lg:pr-[var(--fin-s-5)]">
-                  <h2 id="dash-faturamento" className="fin-t-overline text-[var(--fin-text-3)]">
-                    Faturamento do mês
-                  </h2>
-                  <Money valor={calc.faturamento} estado={estadoValor} size="metric" align="esquerda" />
-                  {(() => {
-                    const d = deltaDe(calc.faturamento, calc.faturamentoAnt);
-                    return d ? <DeltaIndicator {...d} /> : null;
-                  })()}
-                  <p className="fin-t-caption text-[var(--fin-text-2)]">
-                    Volume vendido no mês. Boa parte pertence aos fornecedores, então não é a receita da agência.
-                  </p>
-                </div>
-
-                <div className="grid gap-[var(--fin-s-3)] border-t border-[var(--fin-border)] pt-[var(--fin-s-4)] sm:grid-cols-3 lg:grow lg:border-t-0 lg:border-l lg:pt-0 lg:pl-[var(--fin-s-5)]">
-                  <MetricCard
-                    rotulo="Receita da agência"
-                    valor={calc.receita}
-                    estado={estadoValor}
-                    contexto="O que sobra depois de repassar os fornecedores."
-                    explicacao="Comissão e markup que ficam com a agência. É este número, e não o faturamento, que paga as contas da empresa."
-                    tone={tomDoValor(calc.receita)}
-                    delta={deltaDe(calc.receita, calc.receitaAnt)}
-                  />
-                  <MetricCard
-                    rotulo="Ticket médio"
-                    valor={calc.ticketMedio}
-                    estado={estadoValor}
-                    contexto={`Média das ${calc.qtdVendas} ${calc.qtdVendas === 1 ? 'venda fechada' : 'vendas fechadas'} no mês.`}
-                    explicacao="Faturamento do mês dividido pelo número de vendas fechadas."
-                    delta={deltaDe(calc.ticketMedio, calc.ticketMedioAnt)}
-                  />
-                  <MetricCard
-                    rotulo="Em caixa hoje"
-                    valor={calc.saldoCaixa}
-                    estado={estadoValor}
-                    contexto={contas.length > 0 ? `Somatório de ${contas.length} ${contas.length === 1 ? 'conta bancária' : 'contas bancárias'}.` : 'Nenhuma conta bancária cadastrada ainda.'}
-                    explicacao="Saldo reconstruído a partir das baixas confirmadas. Não é lucro: parte já tem dono, como fornecedores e comissões a pagar."
-                    tone={tomDoValor(calc.saldoCaixa)}
-                  />
-                </div>
-              </div>
-            </section>
-          </DataState>
-
-          {/* ---------------------------------------------------------------
-              RESULTADO
-              Antes esta área repetia o mesmo valor em três cartões: margem
-              bruta, receita da agência e lucro do mês davam o mesmo número
-              sempre que não havia comissão de fornecedor nem despesa. Agora
-              a receita aparece uma vez, o lucro traz no contexto a despesa
-              que o separa dela, e o percentual vira medidor em vez de um
-              quarto cartão de dinheiro.
-          ---------------------------------------------------------------- */}
-          <Secao id="dash-resultado" titulo="Resultado do mês" acao={{ rotulo: 'Abrir o resultado completo', href: '/financeiro-ag/dre' }}>
-            <div className="grid gap-[var(--fin-s-3)] sm:grid-cols-2 lg:grid-cols-3">
-              <MetricCard
-                rotulo="Lucro do mês"
-                valor={calc.lucro}
-                estado={estadoValor}
-                contexto={
-                  despesasDoMes > 0
-                    ? `Receita da agência menos ${BRL(despesasDoMes)} de despesas lançadas.`
-                    : 'Nenhuma despesa lançada neste mês, então o lucro é igual à receita.'
-                }
-                explicacao="Receita da agência no mês menos as despesas operacionais lançadas com vencimento no mês. Não inclui o custo dos fornecedores, que já foi descontado na receita."
-                tone={tomDoValor(calc.lucro)}
-                delta={deltaDe(calc.lucro, calc.lucroAnt)}
-              />
-
-              <div className="flex flex-col justify-center gap-[var(--fin-s-2)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)]">
-                <span className="fin-t-overline text-[var(--fin-text-3)]">Margem sobre o faturamento</span>
-                <Meter
-                  pct={Math.max(0, Math.min(100, calc.margemBrutaPct))}
-                  faixa={faixaMargem}
-                  descricao={`${BRL(calc.margemBruta)} de margem sobre ${BRL(calc.faturamento)} vendidos.`}
+            chip={
+              faturamento > 0
+                ? {
+                    icone: saudavel ? CheckCircle2 : AlertTriangle,
+                    rotulo: saudavel ? 'Saudável' : 'Margem apertada',
+                    tom: saudavel ? 'positivo' : 'aviso',
+                  }
+                : null
+            }
+            marca={
+              faturamento > 0 ? (
+                <BarraDeParte
+                  partes={[
+                    { id: 'agencia', rotulo: 'Ficou com a agência', valor: ficouComAgencia, papel: 'serie', indiceSerie: 1 },
+                    { id: 'repasse', rotulo: 'Repasse a fornecedores', valor: repasse, papel: 'resto' },
+                  ]}
+                  total={faturamento}
+                  formatar={BRL}
                 />
-              </div>
-
-              {calc.cacValor > 0 ? (
-                <MetricCard
-                  rotulo="Custo por cliente novo"
-                  valor={calc.cacValor}
-                  estado={estadoValor}
-                  contexto="Investimento comercial dividido pelos clientes conquistados."
-                  explicacao="Quanto custou trazer cada cliente novo no mês. Comparar com o ticket médio mostra se a aquisição se paga."
-                  delta={deltaDe(calc.cacValor, calc.cacValorAnt, 'subirRuim')}
-                />
-              ) : (
-                <div className="flex flex-col justify-center gap-[var(--fin-s-2)] rounded-[var(--fin-r-lg)] border border-dashed border-[var(--fin-border)] p-[var(--fin-s-4)]">
-                  <span className="fin-t-overline text-[var(--fin-text-3)]">Custo por cliente novo</span>
-                  <p className="fin-t-body text-[var(--fin-text-2)]">
-                    Sem investimento comercial registrado neste mês.
-                  </p>
-                  <Link
-                    href="/cac/dashboard"
-                    className="fin-t-caption text-[var(--fin-accent)] underline underline-offset-4"
-                  >
-                    Registrar investimento
-                  </Link>
-                </div>
-              )}
-            </div>
-          </Secao>
-
-          {/* ---------------------------------------------------------------
-              ATENÇÃO
-          ---------------------------------------------------------------- */}
-          <Secao id="dash-alertas" titulo={alertas.length > 0 ? `Precisa de atenção (${alertas.length})` : 'Precisa de atenção'}>
-            <div className="rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]">
-              {alertas.length === 0 ? (
-                <div className="flex flex-col items-center gap-[var(--fin-s-2)] px-[var(--fin-s-4)] py-[var(--fin-s-6)] text-center">
-                  <CheckCircle2 className="h-6 w-6 text-[var(--fin-positive)]" />
-                  <p className="fin-t-body text-[var(--fin-text-2)]">
-                    Nada exigindo ação agora. Contas vencendo e margens fora do esperado aparecem aqui.
-                  </p>
-                </div>
-              ) : (
-                <ul className="divide-y divide-[var(--fin-border)]">
-                  {alertas.slice(0, 7).map(a => (
-                    <li
-                      key={a.id}
-                      className="flex items-start gap-[var(--fin-s-3)] border-l-2 px-[var(--fin-s-4)] py-[var(--fin-s-3)]"
-                      style={{ borderLeftColor: prioTom[a.prioridade] }}
-                    >
-                      {prioIcone[a.prioridade]}
-                      <div className="flex min-w-0 flex-1 flex-col gap-[var(--fin-s-1)]">
-                        <span className="fin-t-body-strong text-[var(--fin-text)]">{a.titulo}</span>
-                        {a.descricao ? (
-                          <span className="fin-t-caption text-[var(--fin-text-2)]">{a.descricao}</span>
-                        ) : null}
-                      </div>
-                      <Link
-                        href={a.link}
-                        className="fin-t-caption inline-flex min-h-11 shrink-0 items-center gap-1 text-[var(--fin-accent)] underline underline-offset-4 lg:min-h-10"
-                      >
-                        {a.linkLabel} <ChevronRight className="h-3 w-3" />
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </Secao>
-
-          {/* ---------------------------------------------------------------
-              HISTÓRICO
-          ---------------------------------------------------------------- */}
-          <Secao id="dash-historico" titulo="Como o mês se formou">
-            <div className="grid gap-[var(--fin-s-4)] lg:grid-cols-3">
-              <Painel titulo="Faturamento dos últimos 6 meses">
-                <div className="flex h-[160px] items-end justify-between gap-[var(--fin-s-2)]">
-                  {chartFaturamento.map((m, idx) => {
-                    const h = Math.max((m.faturamento / maxFat) * 132, 3);
-                    const atual = idx === chartFaturamento.length - 1;
-                    return (
-                      <div key={m.mes} className="flex flex-1 flex-col items-center gap-[var(--fin-s-1)]" title={`${m.label}: ${BRL(m.faturamento)}`}>
-                        <div className="flex h-[132px] w-full items-end justify-center">
-                          <div
-                            className="w-full max-w-[28px] rounded-[var(--fin-r-sm)]"
-                            style={{
-                              height: h,
-                              background: atual ? 'var(--fin-accent)' : 'var(--fin-surface-sunken)',
-                            }}
-                          />
-                        </div>
-                        <span className={`fin-t-caption ${atual ? 'text-[var(--fin-text)]' : 'text-[var(--fin-text-3)]'}`}>
-                          {m.label}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </Painel>
-
-              <Painel titulo="Entradas e saídas de caixa">
-                <div className="flex h-[132px] items-end justify-between gap-[var(--fin-s-1)]">
-                  {chartFluxo.map(m => (
-                    <div key={m.mes} className="flex flex-1 flex-col items-center gap-[var(--fin-s-1)]">
-                      <div className="flex h-[110px] items-end gap-[2px]">
-                        <div
-                          className="w-3 rounded-[var(--fin-r-sm)] bg-[var(--fin-positive)]"
-                          style={{ height: Math.max((m.entradas / maxFluxo) * 106, 2) }}
-                          title={`Entradas: ${BRL(m.entradas)}`}
-                        />
-                        <div
-                          className="w-3 rounded-[var(--fin-r-sm)] bg-[var(--fin-negative)]"
-                          style={{ height: Math.max((m.saidas / maxFluxo) * 106, 2) }}
-                          title={`Saídas: ${BRL(m.saidas)}`}
-                        />
-                      </div>
-                      <span className="fin-t-caption text-[var(--fin-text-3)]">{m.label}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-[var(--fin-s-3)] flex items-center justify-center gap-[var(--fin-s-4)] border-t border-[var(--fin-border)] pt-[var(--fin-s-3)]">
-                  <span className="fin-t-caption flex items-center gap-1.5 text-[var(--fin-text-3)]">
-                    <span className="h-2 w-2 rounded-[2px] bg-[var(--fin-positive)]" /> Entradas
-                  </span>
-                  <span className="fin-t-caption flex items-center gap-1.5 text-[var(--fin-text-3)]">
-                    <span className="h-2 w-2 rounded-[2px] bg-[var(--fin-negative)]" /> Saídas
-                  </span>
-                </div>
-              </Painel>
-
-              <Painel titulo="Composição das vendas">
-                {chartComposicao.length === 0 ? (
-                  <p className="fin-t-body py-[var(--fin-s-5)] text-center text-[var(--fin-text-3)]">
-                    Nenhuma venda com produto detalhado neste mês.
-                  </p>
-                ) : (
-                  <div className="flex flex-col gap-[var(--fin-s-2)]">
-                    {chartComposicao.slice(0, 6).map(c => (
-                      <div key={c.tipo} className="flex items-center gap-[var(--fin-s-2)]">
-                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: c.cor }} />
-                        <span className="fin-t-caption flex-1 text-[var(--fin-text-2)]">{c.tipo}</span>
-                        <Money valor={c.valor} estado={estadoValor} size="caption" />
-                        <span className="fin-t-caption w-10 text-right text-[var(--fin-text-3)]">
-                          {c.pct.toFixed(0)}%
-                        </span>
-                      </div>
-                    ))}
-                    <div className="mt-[var(--fin-s-2)] flex h-2.5 overflow-hidden rounded-full">
-                      {chartComposicao.map(c => (
-                        <div key={c.tipo} style={{ width: `${c.pct}%`, backgroundColor: c.cor }} />
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </Painel>
-            </div>
-          </Secao>
-
-          {/* ---------------------------------------------------------------
-              LEITURA DO MÊS
-          ---------------------------------------------------------------- */}
-          {resumo.length > 0 ? (
-            <Secao id="dash-resumo" titulo={`Leitura de ${getMonthName(mesAtual)}`}>
-              <div className="rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)]">
-                <div className="flex max-w-[68ch] flex-col gap-[var(--fin-s-2)]">
-                  {resumo.map((p, i) => (
-                    <p key={i} className="fin-t-body text-[var(--fin-text-2)]">{p}</p>
-                  ))}
-                </div>
-              </div>
-            </Secao>
+              ) : undefined
+            }
+          />
+          {faturamento > 0 ? (
+            // O limiar escrito por extenso: "15%" sozinho não diz se é bom.
+            <p className="fin-t-caption text-[var(--fin-text-3)]">
+              {`De cada R$ 100 vendidos, R$ ${Math.round(margemPct)} ficam com a agência. Saudável a partir de R$ ${MARGEM_SAUDAVEL_PCT}.`}
+            </p>
           ) : null}
 
-          {/* ---------------------------------------------------------------
-              AGENDA
-          ---------------------------------------------------------------- */}
-          <Secao id="dash-agenda" titulo="Próximos dias">
-            <div className="grid gap-[var(--fin-s-4)] lg:grid-cols-2">
-              <Painel titulo="Vencimentos dos próximos 7 dias">
-                {datasImportantes.length === 0 ? (
-                  <p className="fin-t-body py-[var(--fin-s-5)] text-center text-[var(--fin-text-3)]">
-                    Nenhuma conta vencendo nos próximos 7 dias.
-                  </p>
-                ) : (
-                  <ul className="flex flex-col divide-y divide-[var(--fin-border)]">
-                    {datasImportantes.map((e, i) => (
-                      <li key={`${e.data}-${i}`} className="flex items-center gap-[var(--fin-s-3)] py-[var(--fin-s-2)] first:pt-0 last:pb-0">
-                        <span className="fin-t-caption w-[68px] shrink-0 text-[var(--fin-text-3)] tabular-nums">
-                          {fmtDate(e.data)}
-                        </span>
-                        <span className="flex min-w-0 flex-1 flex-col">
-                          <span className="fin-t-body-strong truncate text-[var(--fin-text)]">{e.titulo}</span>
-                          <span className="fin-t-caption truncate text-[var(--fin-text-2)]">{e.descricao}</span>
-                        </span>
-                        <Link
-                          href={e.link}
-                          className="fin-t-caption inline-flex min-h-11 shrink-0 items-center text-[var(--fin-accent)] underline underline-offset-4 lg:min-h-10"
-                        >
-                          Abrir
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Painel>
+          {/* ── TRÊS FATOS ───────────────────────────────────────────────── */}
+          <ListaDeFatos itens={fatos} />
 
-              <Painel titulo="Aniversários de clientes">
-                {aniversariantes.length === 0 ? (
-                  <p className="fin-t-body py-[var(--fin-s-5)] text-center text-[var(--fin-text-3)]">
-                    Nenhum aniversário nos próximos 30 dias.
-                  </p>
-                ) : (
-                  <ul className="flex flex-col divide-y divide-[var(--fin-border)]">
-                    {aniversariantes.slice(0, 8).map((a, i) => (
-                      <li key={`${a.nome}-${i}`} className="flex items-center gap-[var(--fin-s-3)] py-[var(--fin-s-2)] first:pt-0 last:pb-0">
-                        <Cake className={`h-4 w-4 shrink-0 ${a.isHoje ? 'text-[var(--fin-accent)]' : 'text-[var(--fin-text-3)]'}`} />
-                        <span className="flex min-w-0 flex-1 flex-col">
-                          <span className="fin-t-body-strong truncate text-[var(--fin-text)]">{a.nome}</span>
-                          <span className="fin-t-caption text-[var(--fin-text-2)]">
-                            {a.isHoje ? 'Hoje' : a.diasAte === 1 ? 'Amanhã' : `Em ${a.diasAte} dias`}
-                            {a.idade ? ` · faz ${a.idade} anos` : ''}
-                          </span>
-                        </span>
-                        {a.whatsapp ? (
-                          <a
-                            href={`https://wa.me/${a.whatsapp.replace(/\D/g, '')}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="fin-t-caption inline-flex min-h-11 shrink-0 items-center gap-1 text-[var(--fin-accent)] underline underline-offset-4 lg:min-h-10"
-                          >
-                            <MessageCircle className="h-3 w-3" /> Parabenizar
-                          </a>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Painel>
-            </div>
-          </Secao>
+          {/* ── RITMO DO MÊS ─────────────────────────────────────────────── */}
+          <GraficoMoldura
+            titulo={`Ritmo de ${nomeDoMes}`}
+            sublinha="Como a receita da agência foi se formando, dia a dia."
+            estado={eventosDoRitmo.length === 0 ? 'sem-dado' : 'ok'}
+            vazio={{
+              frase: `Nenhuma venda registrada em ${nomeDoMes}. Quando a primeira entrar, esta linha começa a subir.`,
+              acao: { rotulo: 'Registrar venda', href: '/vendas/nova' },
+            }}
+            descricao={`Receita da agência acumulada dia a dia em ${nomeDoMes}.`}
+            tabela={{
+              colunas: ['Dia', 'Quem vendeu', 'Valor'],
+              linhas: eventosDoRitmo.map(e => [dataCurta(e.data), e.rotulo, BRL(e.valor)]),
+            }}
+          >
+            <EscadaAcumulada
+              eventos={eventosDoRitmo}
+              diasDoMes={diasDoMes}
+              diaDeHoje={diaDeHoje}
+              // O topo vem do DADO: escalar pela meta colaria a linha no chão e
+              // desenharia fracasso num mês honesto. Meta é a pergunta da tela
+              // de Metas, não desta.
+              topoDoEixo="dado"
+              formatar={BRL}
+            />
+          </GraficoMoldura>
 
-          {/* ---------------------------------------------------------------
-              AÇÕES
-          ---------------------------------------------------------------- */}
-          <Secao id="dash-acoes" titulo="O que fazer agora">
-            <div className="flex flex-col gap-[var(--fin-s-4)]">
-              <div className="grid gap-[var(--fin-s-4)] sm:grid-cols-2 lg:grid-cols-3">
-                <ActionCard
-                  rotulo="Nova venda"
-                  descricao="Registrar uma venda fechada e gerar as parcelas"
-                  icone={ShoppingCart}
-                  variante="primaria"
-                  href="/vendas/nova"
-                />
-                <ActionCard
-                  rotulo="Novo orçamento"
-                  descricao="Montar uma proposta para o cliente avaliar"
-                  icone={FileText}
-                  href="/vendas/orcamentos"
-                />
-                <ActionCard
-                  rotulo="Novo cliente"
-                  descricao="Cadastrar quem vai viajar ou contratar"
-                  icone={Users}
-                  href="/pessoas/clientes"
-                />
-                <ActionCard
-                  rotulo="Registrar recebimento"
-                  descricao="Dar baixa no que o cliente pagou"
-                  icone={Receipt}
-                  href="/financeiro-ag/receber"
-                />
-                <ActionCard
-                  rotulo="Registrar pagamento"
-                  descricao="Dar baixa no que foi pago ao fornecedor"
-                  icone={CreditCard}
-                  href="/financeiro-ag/pagar"
-                />
+          {/* ── QUEM VENDEU ──────────────────────────────────────────────── */}
+          <GraficoMoldura
+            titulo={`Quem vendeu em ${nomeDoMes}`}
+            sublinha="Receita da agência por pessoa, na mesma escala."
+            estado={quemVendeu.length === 0 ? 'sem-dado' : 'ok'}
+            vazio={{ frase: `Nenhuma venda atribuída a um vendedor em ${nomeDoMes}.`, acao: { rotulo: 'Ver as vendas', href: '/vendas' } }}
+            descricao={`Receita da agência por pessoa em ${nomeDoMes}, na mesma escala.`}
+            tabela={{
+              colunas: ['Pessoa', 'Receita da agência'],
+              linhas: quemVendeu.map(l => [l.nome, l.valor === null ? '—' : BRL(l.valor)]),
+            }}
+          >
+            <BarrasNomeadas linhas={quemVendeu} formatar={BRL} alturaBarra={10} />
+          </GraficoMoldura>
+
+          {/* ── O QUE ENTRA E O QUE SAI ──────────────────────────────────── */}
+          <GraficoMoldura
+            titulo="O que entra e o que sai até 30 dias"
+            sublinha="As duas barras estão na mesma escala de reais, então dá para comparar de relance."
+            estado={fluxo.escala > 0 ? 'ok' : 'sem-dado'}
+            vazio={{ frase: 'Nada a receber e nada a pagar nos próximos 30 dias.' }}
+            descricao="A receber e a pagar nos próximos 30 dias, por prazo, na mesma escala."
+            tabela={{
+              colunas: ['Prazo', 'A receber', 'A pagar'],
+              linhas: PRAZOS.map(prazo => [
+                prazo.rotulo,
+                BRL(fluxo.receber.find(p => p.id === prazo.id)?.valor ?? 0),
+                BRL(fluxo.pagar.find(p => p.id === prazo.id)?.valor ?? 0),
+              ]),
+            }}
+          >
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <p className="fin-t-body-strong text-[var(--fin-text)]">A receber {BRL(fluxo.totalReceber)}</p>
+                <BarraDeParte partes={fluxo.receber} total={fluxo.escala} formatar={BRL} trilhoVazioRotulo="nada a receber nos próximos 30 dias" />
               </div>
+              <div className="flex flex-col gap-2">
+                <p className="fin-t-body-strong text-[var(--fin-text)]">A pagar {BRL(fluxo.totalPagar)}</p>
+                <BarraDeParte partes={fluxo.pagar} total={fluxo.escala} formatar={BRL} trilhoVazioRotulo="nada a pagar nos próximos 30 dias" />
+              </div>
+            </div>
+          </GraficoMoldura>
 
-              <div className="grid gap-[var(--fin-s-3)] sm:grid-cols-3">
-                {pendencias.map(p => (
-                  <Link
-                    key={p.href}
-                    href={p.href}
-                    className="flex items-center justify-between gap-[var(--fin-s-2)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] px-[var(--fin-s-4)] py-[var(--fin-s-3)] transition-colors hover:bg-[var(--fin-surface-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)]"
-                  >
-                    <span className="fin-t-body text-[var(--fin-text-2)]">{p.rotulo}</span>
-                    <span className="fin-t-body-strong tabular-nums text-[var(--fin-text)]">{p.qtd}</span>
-                  </Link>
+          {/* ── A SEMANA ─────────────────────────────────────────────────── */}
+          <section className="flex flex-col gap-2">
+            <h2 className="fin-t-subhead text-[var(--fin-text)]">
+              {fluxo.daSemana.length > 0
+                ? `Esta semana entram ${BRL(fluxo.entramNaSemana)} e saem ${BRL(fluxo.saemNaSemana)}`
+                : 'Nada vencido e nada a vencer nesta semana.'}
+            </h2>
+            {fluxo.daSemana.length > 0 ? (
+              <ul className="flex flex-col divide-y divide-[var(--fin-border)]">
+                {fluxo.daSemana.slice(0, 5).map(linha => (
+                  <li key={linha.id} className="flex min-h-[44px] items-center gap-3 py-2">
+                    <span className="fin-t-caption w-14 shrink-0 tabular-nums text-[var(--fin-text-3)]">
+                      {dataCurta(linha.data)}
+                    </span>
+                    {/* Sinal explícito à esquerda do valor: cor sozinha não diz
+                        se o dinheiro entra ou sai. */}
+                    <span
+                      className={`fin-t-body-strong w-28 shrink-0 tabular-nums ${linha.sinal === '+' ? 'text-[var(--fin-positive)]' : 'text-[var(--fin-text)]'}`}
+                    >
+                      {linha.sinal} {BRL(linha.valor)}
+                    </span>
+                    <span className="fin-t-body min-w-0 flex-1 text-[var(--fin-text-2)]">{linha.descricao}</span>
+                  </li>
                 ))}
-              </div>
-            </div>
-          </Secao>
-        </div>
+              </ul>
+            ) : null}
+            {fluxo.daSemana.length > 5 ? (
+              <Link href="/financeiro-ag/receber" className="fin-t-body text-[var(--fin-accent)] underline underline-offset-2">
+                {`mais ${fluxo.daSemana.length - 5} nesta semana · ver todos`}
+              </Link>
+            ) : null}
+          </section>
+
+          {/* ── PRECISA DE DECISÃO HOJE ──────────────────────────────────── */}
+          {decisoes.length > 0 ? (
+            <section className="flex flex-col gap-2">
+              <h2 className="fin-t-subhead text-[var(--fin-text)]">Precisa de decisão hoje</h2>
+              <ul className="flex flex-col divide-y divide-[var(--fin-border)]">
+                {decisoes.map(d => (
+                  <li key={d.id} className="flex min-h-[44px] flex-wrap items-center gap-3 py-3">
+                    {d.nivel === 'resolver' ? (
+                      <AlertCircle className="size-4 shrink-0 text-[var(--fin-negative-text)]" aria-hidden />
+                    ) : (
+                      <AlertTriangle className="size-4 shrink-0 text-[var(--fin-warning-text)]" aria-hidden />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="fin-t-body-strong text-[var(--fin-text)]">{d.titulo}</p>
+                      {d.descricao ? <p className="fin-t-caption text-[var(--fin-text-3)]">{d.descricao}</p> : null}
+                    </div>
+                    <Link
+                      href={d.href}
+                      className="fin-t-body inline-flex h-11 shrink-0 items-center rounded-[var(--fin-r-md)] border border-[var(--fin-border)] px-3 text-[var(--fin-text-2)] hover:bg-[var(--fin-surface-2)]"
+                    >
+                      {d.acao}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : (
+            <p className="fin-t-caption text-[var(--fin-text-3)]">Nada precisa de decisão hoje.</p>
+          )}
+
+          {/* ── PARA ONDE FOI O DINHEIRO ─────────────────────────────────── */}
+          {composicao.linhas.length > 0 ? (
+            <GraficoMoldura
+              titulo={composicao.origem === 'venda' ? 'Para onde foi o dinheiro da venda' : 'Para onde foi o dinheiro que saiu'}
+              sublinha={
+                composicao.origem === 'venda'
+                  ? 'Por tipo de produto vendido.'
+                  : `As vendas de ${nomeDoMes} vieram do CRM sem produto detalhado. Enquanto isso, veja para onde o dinheiro saiu.`
+              }
+              estado="ok"
+              descricao={composicao.origem === 'venda' ? 'Composição das vendas por tipo de produto.' : 'Composição da despesa por natureza de custo.'}
+              tabela={{
+                colunas: [composicao.origem === 'venda' ? 'Tipo' : 'Natureza', 'Valor'],
+                linhas: composicao.linhas.map(l => [l.nome, BRL(l.valor)]),
+              }}
+            >
+              <BarrasNomeadas
+                linhas={composicao.linhas.map(l => ({ id: l.id, nome: l.nome, valor: l.valor }))}
+                formatar={BRL}
+                alturaBarra={10}
+                fraseDeLinhaUnica={l => `Tudo em ${l.nome} — ${BRL(num(l.valor))}.`}
+              />
+            </GraficoMoldura>
+          ) : null}
+
+          <p className="fin-t-caption text-[var(--fin-text-3)]">
+            O mês fica no endereço da página: trocar aqui e ir para{' '}
+            <Link href={`/equipe/metas?mes=${mes}`} className="text-[var(--fin-accent)] underline underline-offset-2">
+              Metas e ranking
+            </Link>{' '}
+            leva {nomeDoMes} junto.
+          </p>
+        </DataState>
       </div>
     </div>
   );
