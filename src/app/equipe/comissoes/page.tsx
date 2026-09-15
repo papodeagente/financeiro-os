@@ -26,7 +26,7 @@ import { GraficoMoldura } from '@/components/fin/GraficoMoldura';
 import { BarraDeParte, type Parte } from '@/components/fin/BarraDeParte';
 import { EscadaDeFaixas } from '@/components/fin/EscadaDeFaixas';
 import { posicaoNaEscala } from '@/lib/comissao-acumulada';
-import { SeletorDeMes, rotuloDoMes } from '@/components/fin/SeletorDeMes';
+import { SeletorDeMes, rotuloDoMes, useMesDaUrl } from '@/components/fin/SeletorDeMes';
 
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -80,7 +80,9 @@ export default function ComissoesPage() {
   const [calculating, setCalculating] = useState(false);
   const [filterStatus, setFilterStatus] = useState<StatusComissao | 'TODOS'>('TODOS');
   const [filterVendedor, setFilterVendedor] = useState('');
-  const [filterMonth, setFilterMonth] = useState(() => mesDe(hojeISO()));
+  // O mês é estado do PILAR e vive na URL: trocar aqui e ir para Metas
+  // leva o mesmo mês junto.
+  const [filterMonth, setFilterMonth] = useMesDaUrl();
   /** A ação aguardando confirmação. Aprovar cria conta a pagar e Pagar debita
    *  o caixa: os dois eram botões de 28px sem confirmação nenhuma. */
   const [confirmando, setConfirmando] = useState<

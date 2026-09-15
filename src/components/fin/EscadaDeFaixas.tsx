@@ -226,7 +226,8 @@ function Degraus({
     id: `d-${faixa.de}`,
     x: x(faixa.de),
     y: 0,
-    w: Math.max(2, x(faixa.ate === null ? maxBase : faixa.ate) - x(faixa.de)),
+    // O alvo pode crescer porque não carrega valor; a marca, não.
+    w: Math.max(2, x(faixa.ate === null ? maxBase : faixa.ate) - x(faixa.de)), // piso-ok: alvo de toque, expandido a 44px pela CamadaDeToque
     h: altura,
     titulo: pctTexto(faixa.percentual),
     linhas: [

@@ -222,7 +222,7 @@ function Desenho({
       {ultimo ? (
         <text
           x={Math.min(x(diaDoISO(ultimo.dia)) + 8, largura - PADDING_DIR)}
-          y={Math.max(12, y(ultimo.acumulado) - 8)}
+          y={/* piso-ok: posição de RÓTULO, não tamanho de marca */ Math.max(12, y(ultimo.acumulado) - 8)}
           textAnchor={x(diaDoISO(ultimo.dia)) > largura * 0.7 ? 'end' : 'start'}
           className="fin-t-caption"
           fill="var(--fin-text-2)"
