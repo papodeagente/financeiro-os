@@ -267,5 +267,81 @@ console.log('\n--- a série mensal existe e fecha com o caixa ---');
   eq([set.entradas, set.saidas], [11200, 17900], 'o mês da série bate com o card de caixa');
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// DRILL-DOWN: do total até o lançamento.
+//
+// Um número agregado sem caminho de volta é um número em que a pessoa tem que
+// acreditar. Estes testes provam que o detalhe FECHA com o agregado — que é a
+// única coisa que torna o drill-down confiável.
+// ══════════════════════════════════════════════════════════════════════
+const { listarLancamentos, somarDetalhe } = await lib('dashboard-detalhe');
+const janela = { tenantId: T, de: '2026-09-01', ate: '2026-09-30', hoje: HOJE };
+
+console.log('\n--- o detalhe fecha com o agregado ---');
+{
+  const r = await listarLancamentos(exec, { ...janela, lado: 'receber', recorte: 'em-aberto' });
+  eq(somarDetalhe(r.linhas, 'valorEmAberto'), d.posicao.receber.emAberto,
+     'a soma das linhas bate com o card de "a receber em aberto"');
+  eq(r.total, r.linhas.length, 'a contagem bate com o que voltou');
+}
+{
+  const p = await listarLancamentos(exec, { ...janela, lado: 'pagar', recorte: 'em-aberto' });
+  eq(somarDetalhe(p.linhas, 'valorEmAberto'), d.posicao.pagar.emAberto,
+     'o mesmo do lado de pagar');
+}
+{
+  const v = await listarLancamentos(exec, { ...janela, lado: 'receber', recorte: 'vencido' });
+  eq(somarDetalhe(v.linhas, 'valorEmAberto'), d.posicao.receber.vencido, 'vencido fecha com o card');
+  eq(v.linhas.length, 1, 'uma parcela vencida');
+  eq(v.linhas[0].diasDeAtraso, 45, 'e o detalhe diz há quantos dias — que é o que faz ligar para o cliente');
+  eq(v.linhas[0].contraparte, 'João Atrasado', 'com nome de quem deve');
+}
+{
+  const r = await listarLancamentos(exec, { ...janela, lado: 'receber', recorte: 'realizado' });
+  eq(somarDetalhe(r.linhas, 'valorRealizado'), d.caixa.entradas.atual,
+     'o realizado do detalhe fecha com as entradas do período');
+}
+
+console.log('\n--- recortes por referência ---');
+{
+  const f = await listarLancamentos(exec, { ...janela, lado: 'pagar', recorte: 'contraparte', referencia: 'forn-azul' });
+  eq(f.linhas.map(l => l.id), ['p2'], 'o que está em aberto com um fornecedor');
+}
+{
+  const c = await listarLancamentos(exec, { ...janela, lado: 'pagar', recorte: 'categoria', referencia: 'cat-mkt' });
+  eq(somarDetalhe(c.linhas, 'valorRealizado'), 1800, 'a categoria fecha com a barra de marketing');
+}
+{
+  const sc = await listarLancamentos(exec, { ...janela, lado: 'pagar', recorte: 'categoria', referencia: 'sem-categoria' });
+  eq(somarDetalhe(sc.linhas, 'valorRealizado'), 900, 'o balde "não categorizadas" também abre');
+}
+{
+  const o = await listarLancamentos(exec, { ...janela, lado: 'receber', recorte: 'origem', referencia: 'COMISSAO_FORNECEDOR' });
+  eq(o.linhas.map(l => l.id), ['r4'], 'a comissão de operadora abre sozinha');
+}
+{
+  const v = await listarLancamentos(exec, { ...janela, lado: 'receber', recorte: 'venda', referencia: 'v1' });
+  eq(v.linhas.map(l => l.id).sort(), ['r1', 'r2', 'r3', 'r4'], 'tudo que a venda gerou, inclusive a comissão');
+}
+{
+  const h = await listarLancamentos(exec, { ...janela, lado: 'pagar', recorte: 'vence-hoje' });
+  eq(h.linhas.length, 0, 'nada vence exatamente hoje neste cenário');
+}
+
+console.log('\n--- o drill-down não vaza entre agências ---');
+{
+  const outra = await listarLancamentos(exec, { ...janela, tenantId: 'ag2', lado: 'receber', recorte: 'realizado' });
+  eq(outra.linhas.map(l => l.id), ['z1'], 'a outra agência só enxerga o que é dela');
+  const nossa = await listarLancamentos(exec, { ...janela, lado: 'receber', recorte: 'realizado' });
+  eq(nossa.linhas.some(l => l.id === 'z1'), false, 'e nós não enxergamos a dela');
+}
+
+console.log('\n--- recorte desconhecido não abre a base ---');
+{
+  // Nome fora da lista cai no recorte mais restrito, nunca em "tudo".
+  const x = await listarLancamentos(exec, { ...janela, lado: 'receber', recorte: 'OR 1=1' });
+  eq(x.linhas.every(l => l.valorEmAberto > 0), true, 'recorte inválido vira "em aberto", não uma lista solta');
+}
+
 console.log(`\n${total - falhas}/${total} testes do payload do dashboard passaram`);
 process.exit(falhas > 0 ? 1 : 0);
