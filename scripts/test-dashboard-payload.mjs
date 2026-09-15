@@ -226,7 +226,7 @@ console.log('\n--- descasamento cliente x fornecedor ---');
   // A 1045 descasa: a Latam vence 18/09 e o cliente só paga 10/10.
   eq(d.descasamento.length, 1, 'só a venda que de fato descasa aparece');
   const x = d.descasamento[0];
-  eq([x.numero, x.diasDeGap, x.valorAdiantado], ['1045', 22, 8000],
+  eq([x.numero, x.diasDeGap, x.exposicao], ['1045', 22, 8000],
      'a agência banca 8.000 por 22 dias nesta venda');
   eq([x.primeiroPagamento, x.primeiroRecebimento], ['2026-09-18', '2026-10-10'],
      'as duas datas que formam o aperto ficam explícitas');
@@ -241,12 +241,18 @@ eq(d.atencao.naoCategorizadas.valor, 900, 'despesa sem categoria');
 
 console.log('\n--- agenda dos próximos 30 dias ---');
 {
-  eq(d.agenda.length > 0, true, 'a agenda tem lançamentos');
-  eq(d.agenda.every(l => l.valor > 0), true, 'só entra o que ainda falta movimentar');
-  eq(d.agenda[0].data <= d.agenda[d.agenda.length - 1].data, true, 'em ordem de data');
-  eq(d.agenda.filter(l => l.vencido).length >= 1, true, 'o que já venceu aparece marcado');
-  eq(d.agenda.some(l => l.data === '2026-10-20'), false, 'nada além de 30 dias');
-  eq(d.agenda.some(l => l.data === '2026-10-10'), true, 'o que vence dentro de 30 dias entra');
+  eq(d.agenda.linhas.length > 0, true, 'a agenda tem lançamentos');
+  eq(d.agenda.total, d.agenda.linhas.length, 'a contagem é real, não o teto da consulta');
+  eq(d.agenda.linhas.every(l => l.valor > 0), true, 'só entra o que ainda falta movimentar');
+  eq(d.agenda.linhas[0].data <= d.agenda.linhas[d.agenda.linhas.length - 1].data, true, 'em ordem de data');
+  // A agenda começa HOJE. Sem esse piso, uma agência com quarenta parcelas
+  // atrasadas de 2024 enche as sessenta linhas com passado e "Próximos
+  // movimentos" não mostra um único movimento futuro — nem o pagamento grande
+  // de amanhã. O vencido tem bloco próprio, com total próprio.
+  eq(d.agenda.linhas.every(l => l.data >= HOJE), true, 'a agenda olha para a frente, não para trás');
+  eq(d.agenda.linhas.some(l => l.data === '2026-08-01'), false, 'a parcela vencida em agosto não ocupa a agenda');
+  eq(d.agenda.linhas.some(l => l.data === '2026-10-20'), false, 'nada além de 30 dias');
+  eq(d.agenda.linhas.some(l => l.data === '2026-10-10'), true, 'o que vence dentro de 30 dias entra');
 }
 
 console.log('\n--- cobertura de caixa ---');
@@ -328,6 +334,45 @@ console.log('\n--- recortes por referência ---');
   eq(h.linhas.length, 0, 'nada vence exatamente hoje neste cenário');
 }
 
+console.log('\n--- clicar numa faixa abre exatamente aquela faixa ---');
+{
+  // O defeito que isto trava: antes, clicar em "vencido há 8 a 30 dias" abria
+  // TODO o vencido, com um título prometendo a faixa. Detalhe que não fecha
+  // com o número que ele abre destrói a confiança no painel inteiro.
+  for (const lado of ['receber', 'pagar']) {
+    for (const faixa of d.aging[lado]) {
+      const r = await listarLancamentos(exec, { ...janela, lado, recorte: 'aging', referencia: faixa.id });
+      eq(r.somaEmAberto, faixa.valor, `${lado} · a faixa "${faixa.rotulo}" abre exatamente o que ela mostra`);
+      eq(r.total, faixa.contas, `${lado} · e a contagem também bate`);
+    }
+  }
+}
+{
+  const inexistente = await listarLancamentos(exec, { ...janela, lado: 'receber', recorte: 'aging', referencia: 'faixa_que_nao_existe' });
+  eq(inexistente.total, 0, 'faixa desconhecida não abre a base inteira');
+}
+
+console.log('\n--- a soma da gaveta é do recorte inteiro, não das linhas devolvidas ---');
+{
+  // Somar só as 200 linhas devolvidas e imprimir ao lado da contagem total faz
+  // o cabeçalho dizer "347 lançamentos · R$ 58.000" quando os 347 somam mais.
+  const r = await listarLancamentos(exec, { ...janela, lado: 'receber', recorte: 'em-aberto', limite: 2 });
+  eq(r.linhas.length, 2, 'o limite corta as linhas');
+  eq(r.truncado, true, 'e a resposta admite que cortou');
+  eq(r.somaEmAberto, d.posicao.receber.emAberto, 'mas a SOMA continua sendo a do recorte inteiro');
+  eq(r.total > r.linhas.length, true, 'e a contagem também');
+}
+
+console.log('\n--- conta sem vencimento não fura a fila ---');
+{
+  // COALESCE(x,'') nunca devolve NULL, então o NULLS LAST era decorativo e a
+  // string vazia ordenava ANTES de tudo: as contas sem data comiam o corte e
+  // empurravam para fora justamente o que vence amanhã.
+  const r = await listarLancamentos(exec, { ...janela, lado: 'pagar', recorte: 'em-aberto' });
+  const semData = r.linhas.findIndex(l => !l.vencimento);
+  eq(semData === -1 || semData === r.linhas.length - 1, true, 'a conta sem vencimento vai para o FIM da lista');
+}
+
 console.log('\n--- o drill-down não vaza entre agências ---');
 {
   const outra = await listarLancamentos(exec, { ...janela, tenantId: 'ag2', lado: 'receber', recorte: 'realizado' });
@@ -341,6 +386,110 @@ console.log('\n--- recorte desconhecido não abre a base ---');
   // Nome fora da lista cai no recorte mais restrito, nunca em "tudo".
   const x = await listarLancamentos(exec, { ...janela, lado: 'receber', recorte: 'OR 1=1' });
   eq(x.linhas.every(l => l.valorEmAberto > 0), true, 'recorte inválido vira "em aberto", não uma lista solta');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// O MODELO "O CLIENTE PAGA A OPERADORA DIRETO".
+//
+// É um modo de operar comum em agência de viagens, e o sistema tem um seletor
+// para ele em /vendas/nova ("Cliente paga fornecedor"). Nele a venda é gravada
+// com custo IGUAL ao valor (repasse integral) e a receita inteira da agência
+// mora numa conta a receber de COMISSAO_FORNECEDOR.
+//
+// Com `receita = max(valor − custo, 0)` isso dá ZERO: a tela estampava
+// "Receita da agência R$ 0,00", o painel de saúde marcava "margem 0% — risco",
+// e na MESMA tela outro bloco dizia "100% do que entrou é comissão de
+// operadora, que é receita da agência por inteiro". Enquanto isso o DRE do
+// mesmo mês mostrava a receita certa.
+// ══════════════════════════════════════════════════════════════════════
+console.log('\n--- comissão de operadora É receita da agência ---');
+{
+  const C = 'ag-comissao';
+  await ins('contas_bancarias', 'cb1', C, { nome: 'Conta', saldo_inicial: 0, ativo: true });
+  // Venda de 20.000 repassada integralmente; a operadora paga 10% de volta.
+  await ins('vendas_crm', 'cv1', C, {
+    numero: '2001', data_venda: '2026-09-05', status: 'CONFIRMADO',
+    valor_final: 20000, valor_total_custo: 20000, cliente_nome: 'Cliente Direto',
+  }, { status: 'CONFIRMADO' });
+  await ins('contas_receber', 'cr1', C, {
+    origem: 'COMISSAO_FORNECEDOR', status: 'RECEBIDO', valor_final: 2000, valor_recebido: 2000,
+    data_vencimento: '2026-09-20', data_recebimento: '2026-09-20',
+    cliente_nome: 'CVC Operadora', origem_venda_id: 'cv1',
+  }, { cliente_id: 'forn-cvc' });
+
+  const c = await carregarDashboard(exec, {
+    tenantId: C, de: '2026-09-01', ate: '2026-09-30', hoje: HOJE,
+    deAnterior: '2026-08-01', ateAnterior: '2026-08-31',
+  });
+
+  eq(c.vendas.volume, 20000, 'o volume é o que o cliente contratou');
+  eq(c.vendas.receitaAgencia, 2000, 'a RECEITA é a comissão — não zero');
+  eq(c.vendas.comissaoDeOperadora, 2000, 'e a comissão é nomeada à parte');
+  eq(c.vendas.margemPct, 10, 'a margem é 10%, que é o que a agência de fato ganha');
+
+  // A cascata precisa fechar com a receita nova.
+  const { montarCascataDoResultado } = await lib('dashboard-insights');
+  const passos = montarCascataDoResultado(c, v => String(v));
+  eq(Math.round((passos[0].valor - passos[1].valor) * 100) / 100, passos[2].valor,
+     'a cascata fecha: 20.000 − 18.000 = 2.000');
+}
+{
+  // E a comissão NÃO pode ser somada quando já está dentro da margem: a venda
+  // do CRM grava a comissão como rentabilidade, e somar as duas dobraria.
+  const C = 'ag-dupla';
+  await ins('vendas_crm', 'dv1', C, {
+    numero: '3001', data_venda: '2026-09-05', status: 'CONFIRMADO',
+    valor_final: 20000, valor_total_custo: 16500,
+  }, { status: 'CONFIRMADO' });
+  await ins('contas_receber', 'dr1', C, {
+    origem: 'COMISSAO_FORNECEDOR', status: 'PENDENTE', valor_final: 1200,
+    data_vencimento: '2026-09-20', origem_venda_id: 'dv1',
+  }, {});
+
+  const c = await carregarDashboard(exec, {
+    tenantId: C, de: '2026-09-01', ate: '2026-09-30', hoje: HOJE,
+    deAnterior: '2026-08-01', ateAnterior: '2026-08-31',
+  });
+  // A margem (3.500) já cobre a comissão (1.200): a receita é 3.500, não 4.700.
+  eq(c.vendas.receitaAgencia, 3500, 'comissão dentro da margem não é somada duas vezes');
+}
+{
+  // Comissão MAIOR que a margem: o excedente é receita própria, como o DRE faz.
+  const C = 'ag-excedente';
+  await ins('vendas_crm', 'ev1', C, {
+    numero: '4001', data_venda: '2026-09-05', status: 'CONFIRMADO',
+    valor_final: 10000, valor_total_custo: 9500,
+  }, { status: 'CONFIRMADO' });
+  await ins('contas_receber', 'er1', C, {
+    origem: 'COMISSAO_FORNECEDOR', status: 'PENDENTE', valor_final: 1500,
+    data_vencimento: '2026-09-20', origem_venda_id: 'ev1',
+  }, {});
+
+  const c = await carregarDashboard(exec, {
+    tenantId: C, de: '2026-09-01', ate: '2026-09-30', hoje: HOJE,
+    deAnterior: '2026-08-01', ateAnterior: '2026-08-31',
+  });
+  // margem 500, comissão 1.500 -> a receita é 1.500 (500 capturados + 1.000 de excedente)
+  eq(c.vendas.receitaAgencia, 1500, 'a comissão que a margem não cobre vira receita');
+}
+
+console.log('\n--- data fora do formato não derruba o painel ---');
+{
+  // Uma única conta gravada com '30/09/2026' fazia o ::date da faixa de aging
+  // estourar e derrubava a tela INTEIRA — não a faixa, a tela.
+  const C = 'ag-datasuja';
+  await ins('contas_receber', 'sr1', C, { origem: 'VENDA', status: 'PENDENTE', valor_final: 1000, data_vencimento: '30/09/2026', cliente_nome: 'Data BR' }, {});
+  await ins('contas_receber', 'sr2', C, { origem: 'VENDA', status: 'PENDENTE', valor_final: 500, data_vencimento: 'amanhã', cliente_nome: 'Data texto' }, {});
+  await ins('contas_receber', 'sr3', C, { origem: 'VENDA', status: 'PENDENTE', valor_final: 300, data_vencimento: '2026-09-20', cliente_nome: 'Data boa' }, {});
+
+  const c = await carregarDashboard(exec, {
+    tenantId: C, de: '2026-09-01', ate: '2026-09-30', hoje: HOJE,
+    deAnterior: '2026-08-01', ateAnterior: '2026-08-31',
+  });
+  eq(c.posicao.receber.emAberto, 1800, 'o painel carrega, com as três contas somadas');
+  const faixas = Object.fromEntries(c.aging.receber.map(f => [f.id, f.valor]));
+  eq(faixas.sem_data, 1500, 'as datas fora do formato caem em "sem data", não derrubam a query');
+  eq(faixas.ate_7, 300, 'e a data boa vai para a faixa certa');
 }
 
 console.log(`\n${total - falhas}/${total} testes do payload do dashboard passaram`);

@@ -147,7 +147,10 @@ console.log('\n--- o recorte do drill-down é fechado ---');
   ok(/const RECORTES/.test(fonte), 'a lista de recortes é fechada e exportada');
   const condicoes = fonte.slice(fonte.indexOf('const condicoes'), fonte.indexOf('const condicao'));
   ok(
-    !/\$\{(?!aberto|feito|venc|colunaDaContraparte|dataDoCaixa|origemReceber|vendaDeOrigem|ehRepasse|e\.lado)/.test(
+    // A lista é de EXPRESSÕES DO PRÓPRIO MÓDULO. Acrescentar um nome aqui é um
+    // ato deliberado: obriga quem escreve um recorte novo a declarar de onde
+    // vem cada pedaço de SQL, em vez de interpolar o que chegou do navegador.
+    !/\$\{(?!aberto|feito|venc|colunaDaContraparte|dataDoCaixa|origemReceber|vendaDeOrigem|ehRepasse|faixaDeAging|e\.lado)/.test(
       condicoes.replace(/\$\{e\.lado === 'receber' \? [^}]*\}/g, ''),
     ),
     'as condições só interpolam expressões do próprio módulo, nunca entrada do usuário',

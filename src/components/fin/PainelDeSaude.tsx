@@ -4,6 +4,7 @@ import * as React from 'react';
 import { CircleCheck, CircleDashed, OctagonAlert, TriangleAlert, type LucideIcon } from 'lucide-react';
 
 import { ALVO_MIN, RAIO_PONTA, RESPIRO, TRACEJADO_AUSENCIA, escalaLinear } from '@/lib/escala';
+import { ORDEM_DE_GRAVIDADE } from '@/lib/dashboard-insights';
 import { AreaDeGrafico } from '@/components/fin/GraficoMoldura';
 
 /**
@@ -93,7 +94,10 @@ const ZONAS: Array<{ faixa: Exclude<FaixaDeSaude, 'sem-base'>; cor: string }> = 
  * olhou tudo; mas um risco medido continua sendo a manchete, porque ele é fato e
  * o outro é ausência.
  */
-const GRAVIDADE: Record<FaixaDeSaude, number> = { bom: 0, 'sem-base': 1, atencao: 2, risco: 3 };
+// A ordem vem do módulo de insights, que é quem também alimenta o chip da
+// manchete. Duas tabelas iguais em dois arquivos divergem na primeira
+// manutenção, e a tela passa a dizer duas coisas sobre a mesma agência.
+const GRAVIDADE = ORDEM_DE_GRAVIDADE;
 
 const VEREDITO: Record<
   FaixaDeSaude,

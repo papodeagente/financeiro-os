@@ -65,6 +65,10 @@ export type ProjecaoDeCaixaProps = {
   dataDeHoje?: string;
   pontos: PontoDeProjecao[];
   formatar: (v: number) => string;
+  /** Abreviação do TICK DE EIXO. Recebida por prop para o modo "ocultar
+   *  valores" mascarar também a escala: sem isto o eixo entrega a ordem
+   *  de grandeza do caixa para quem olha por cima do ombro. */
+  formatarEixo?: (v: number) => string;
   altura?: 180 | 220;
   onAtivar?: (dias: number) => void;
 };
@@ -118,12 +122,14 @@ function Desenho({
   altura,
   nodos,
   formatar,
+  formatarEixo,
   onAtivar,
 }: {
   largura: number;
   altura: number;
   nodos: Nodo[];
   formatar: (v: number) => string;
+  formatarEixo: (v: number) => string;
   onAtivar?: (dias: number) => void;
 }) {
   // useId traz caracteres que não valem dentro de url(#…); só letras e dígitos
@@ -160,7 +166,7 @@ function Desenho({
   // "R$ -100 mil" estourar os 56px a 375px — o rótulo saía pela borda esquerda
   // do viewBox, onde ninguém o vê e nada avisa.
   const padEsquerda = Math.min(
-    Math.ceil(ticks.reduce((maior, t) => Math.max(maior, formatarEixoBRL(t).length * LARGURA_CARACTERE), 0)) +
+    Math.ceil(ticks.reduce((maior, t) => Math.max(maior, formatarEixo(t).length * LARGURA_CARACTERE), 0)) +
       RESPIRO_DO_EIXO,
     Math.round(largura * 0.4),
   );
@@ -283,7 +289,7 @@ function Desenho({
           >
             {/* Abreviação vive só no tick: no rótulo de valor a pessoa veio
                 conferir o número exato. */}
-            {formatarEixoBRL(t)}
+            {formatarEixo(t)}
           </text>
         </g>
       ))}
@@ -394,6 +400,7 @@ export function ProjecaoDeCaixa({
   dataDeHoje,
   pontos,
   formatar,
+  formatarEixo = formatarEixoBRL,
   altura = 180,
   onAtivar,
 }: ProjecaoDeCaixaProps) {
@@ -505,6 +512,7 @@ export function ProjecaoDeCaixa({
             altura={altura}
             nodos={nodos}
             formatar={formatar}
+            formatarEixo={formatarEixo}
             onAtivar={onAtivar}
           />
         )}

@@ -130,6 +130,60 @@ export function vendaDeOrigem(lado: 'receber' | 'pagar', alias?: string): string
   return `COALESCE(${doJson}, NULLIF(${alias ? `${alias}.` : ''}venda_id, ''))`;
 }
 
+/**
+ * A data de vencimento, SÓ quando ela é uma data ISO de verdade.
+ *
+ * Uma única conta gravada com '30/09/2026' faz qualquer `::date` estourar e
+ * derruba a consulta inteira — e, com ela, o painel. O que não casar vira NULL
+ * e cai na faixa 'sem data', que já existe e já aparece na tela.
+ */
+export function vencimentoValido(alias?: string): string {
+  const c = campo('data_vencimento', alias);
+  return `(CASE WHEN ${c} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN ${c} ELSE NULL END)`;
+}
+
+/**
+ * A faixa de prazo de uma conta em aberto.
+ *
+ * ESCRITA UMA VEZ SÓ, de propósito: o gráfico de aging e o drill-down que ele
+ * abre precisam usar a MESMA fronteira de dias. Duas cópias divergem na
+ * primeira manutenção, e aí clicar em "vencido há 8 a 30 dias" passa a abrir
+ * outro conjunto de contas — que é o jeito mais rápido de destruir a confiança
+ * no painel inteiro.
+ *
+ * `$hoje` é o nome do parâmetro que carrega a data civil de hoje na consulta.
+ */
+export function faixaDeAging(hoje: string, alias?: string): string {
+  const venc = vencimentoValido(alias);
+  const dias = `(${venc}::date - ${hoje}::date)`;
+  return `(CASE
+      WHEN ${venc} IS NULL THEN 'sem_data'
+      WHEN ${dias} < -30   THEN 'vencido_30'
+      WHEN ${dias} < -7    THEN 'vencido_8_30'
+      WHEN ${dias} < 0     THEN 'vencido_1_7'
+      WHEN ${dias} = 0     THEN 'hoje'
+      WHEN ${dias} <= 7    THEN 'ate_7'
+      WHEN ${dias} <= 15   THEN 'ate_15'
+      WHEN ${dias} <= 30   THEN 'ate_30'
+      ELSE                      'acima_30'
+    END)`;
+}
+
+/** Os rótulos humanos das faixas, na ordem em que a leitura acontece. */
+export const FAIXAS_DE_AGING: Array<{ id: string; rotulo: string }> = [
+  { id: 'vencido_30', rotulo: 'vencido há mais de 30 dias' },
+  { id: 'vencido_8_30', rotulo: 'vencido há 8 a 30 dias' },
+  { id: 'vencido_1_7', rotulo: 'vencido há até 7 dias' },
+  { id: 'hoje', rotulo: 'vence hoje' },
+  { id: 'ate_7', rotulo: 'até 7 dias' },
+  { id: 'ate_15', rotulo: '8 a 15 dias' },
+  { id: 'ate_30', rotulo: '16 a 30 dias' },
+  { id: 'acima_30', rotulo: 'mais de 30 dias' },
+  // Não descartar em silêncio: conta sem vencimento é dinheiro que ninguém
+  // sabe quando entra, e isso é problema a resolver, não linha a sumir.
+  { id: 'sem_data', rotulo: 'sem data de vencimento' },
+];
+
 /** Status de venda que conta como realizada, nos três vocabulários do banco. */
 export const VENDA_REALIZADA = `UPPER(COALESCE(v.data->>'status', '')) IN ('CONFIRMADO', 'CONCLUIDO', 'FECHADA', 'PAGA', 'CONCLUIDA', 'VENDIDO')`;
 

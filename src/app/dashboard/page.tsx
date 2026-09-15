@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowDownRight, ArrowUpRight, CircleCheck, OctagonAlert, TriangleAlert,
@@ -12,7 +12,6 @@ import {
   calcularFatoresDeSaude, classificarSaude, gerarInsights, montarCascataDoResultado, type Insight,
 } from '@/lib/dashboard-insights';
 import { janelaDeComparacao } from '@/lib/periodo-financeiro';
-import { round2 } from '@/lib/money';
 import { PageHeader } from '@/components/fin/PageHeader';
 import { DataState } from '@/components/fin/DataState';
 import { EmptyLesson } from '@/components/fin/EmptyLesson';
@@ -79,8 +78,13 @@ const ICONE_DO_INSIGHT = {
 
 /** Variação com base honesta: nulo é "sem base", nunca zero e nunca +100%. */
 function Variacao({ pct, base }: { pct: number | null; base: string }) {
-  if (pct === null || Math.abs(pct) < 0.05) {
-    return <span className="fin-t-caption text-[var(--fin-text-3)]">{`sem base para comparar com ${base}`}</span>;
+  // Sem base e estável são coisas diferentes: "não dá para comparar" e "não
+  // mudou" levam a decisões opostas.
+  if (pct === null) {
+    return <span className="fin-t-caption text-[var(--fin-text-3)]">sem base para comparar</span>;
+  }
+  if (Math.abs(pct) < 0.05) {
+    return <span className="fin-t-caption text-[var(--fin-text-3)]">{`estável ${base}`}</span>;
   }
   const sobe = pct > 0;
   const Glifo = sobe ? ArrowUpRight : ArrowDownRight;
@@ -96,37 +100,64 @@ function Variacao({ pct, base }: { pct: number | null; base: string }) {
 }
 
 function Painel() {
-  const { formatar } = usePrivacidade();
+  const { formatar, formatarEixo } = usePrivacidade();
   const [janela, estadoDoPeriodo, trocarPeriodo] = usePeriodoDaUrl();
   const [dados, setDados] = useState<DashboardFinanceiro | null>(null);
   const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState<string | null>(null);
+  // O status viaja junto da mensagem: 403 não é "tente de novo".
+  const [erro, setErro] = useState<{ status: number; texto: string } | null>(null);
   const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
   const [gaveta, setGaveta] = useState<PedidoDeDetalhe | null>(null);
 
+  /** A busca em voo. Trocar de período rápido dispara duas, e sem cancelar a
+   *  primeira a resposta lenta chega DEPOIS e sobrescreve a tela com números
+   *  de outro período — sem erro nenhum, só com o painel mentindo. */
+  const emVoo = useRef<AbortController | null>(null);
+
   const carregar = useCallback(async () => {
+    emVoo.current?.abort();
+    const controle = new AbortController();
+    emVoo.current = controle;
     setCarregando(true);
     setErro(null);
     try {
-      const busca = new URLSearchParams({ de: janela.de, ate: janela.ate });
-      const r = await fetch(`/api/dashboard?${busca}`);
-      if (!r.ok) throw new Error((await r.json()).error || `Erro ${r.status}`);
+      // A CHAVE viaja junto: é ela que diz ao servidor com o que comparar.
+      const busca = new URLSearchParams({
+        periodo: estadoDoPeriodo.chave,
+        de: janela.de,
+        ate: janela.ate,
+      });
+      const r = await fetch(`/api/dashboard?${busca}`, { signal: controle.signal });
+      if (!r.ok) {
+        const corpo = await r.json().catch(() => ({}));
+        throw Object.assign(new Error(corpo.error || `Erro ${r.status}`), { status: r.status });
+      }
       setDados(await r.json());
       setAtualizadoEm(new Date());
     } catch (e) {
+      // Busca cancelada não é falha: é a resposta velha sendo descartada.
+      if (e instanceof DOMException && e.name === 'AbortError') return;
       // A falha CHEGA à tela. Com a manchete em 44px, anunciar "R$ 0,00 em
       // caixa" durante uma queda é pior do que não desenhar nada.
-      setErro(e instanceof Error ? e.message : 'Não foi possível carregar');
+      const status = (e as { status?: number })?.status ?? 0;
+      setErro({ status, texto: e instanceof Error ? e.message : 'Não foi possível carregar' });
     } finally {
-      setCarregando(false);
+      if (emVoo.current === controle) setCarregando(false);
     }
-  }, [janela.de, janela.ate]);
+  }, [janela.de, janela.ate, estadoDoPeriodo.chave]);
 
   useEffect(() => {
     carregar();
+    return () => emVoo.current?.abort();
   }, [carregar]);
 
-  const comparacao = useMemo(() => janelaDeComparacao(janela), [janela]);
+  // A janela de comparação vem do PAYLOAD, não de um recálculo aqui: se a
+  // tela recalculasse, ela poderia rotular uma janela e o número vir de outra —
+  // que é exatamente o defeito que acabou de ser corrigido na rota.
+  const comparacao = useMemo(
+    () => (dados ? { de: dados.periodo.deAnterior, ate: dados.periodo.ateAnterior } : janelaDeComparacao(janela)),
+    [dados, janela],
+  );
   const rotuloDaComparacao = janela.comparacao === 'ano-anterior' ? 'vs. ano passado' : 'vs. período anterior';
 
   const fatores = useMemo(() => (dados ? calcularFatoresDeSaude(dados) : []), [dados]);
@@ -197,7 +228,19 @@ function Painel() {
           <BotaoDePrivacidade />
         </div>
 
+        {/* 403 é decisão de permissão, não falha de rede: oferecer "tentar de
+            novo" ali manda a pessoa bater na mesma porta para sempre. */}
+        {erro?.status === 403 ? (
+          <div className={`${CARTAO} flex flex-col gap-2 p-[var(--fin-s-5)]`} role="alert">
+            <h2 className="fin-t-subhead text-[var(--fin-text)]">Seu perfil não tem acesso ao financeiro</h2>
+            <p className="fin-t-body text-[var(--fin-text-2)]">
+              Este painel mostra saldo em caixa, margem e posição de fornecedor. Peça a quem administra a
+              conta para liberar o acesso ao financeiro do seu usuário.
+            </p>
+          </div>
+        ) : (
         <DataState
+          className="flex flex-col gap-[var(--fin-s-5)]"
           estado={carregando ? 'carregando' : erro ? 'erro' : 'ok'}
           erro={
             erro
@@ -244,7 +287,11 @@ function Painel() {
                   (dados.caixa.repasses > 0
                     ? `, dos quais ${formatar(dados.caixa.repasses)} foram repasse a fornecedores.`
                     : '.') +
-                  ` Sobraram ${formatar(dados.caixa.resultado.atual)} no caixa.`
+                  (dados.caixa.resultado.atual < 0
+                    ? ` Faltaram ${formatar(Math.abs(dados.caixa.resultado.atual))} no caixa.`
+                    : dados.caixa.resultado.atual === 0
+                      ? ' O período fechou empatado.'
+                      : ` Sobraram ${formatar(dados.caixa.resultado.atual)} no caixa.`)
                 }
                 chip={{
                   icone: VEREDITO[veredito].icone,
@@ -257,6 +304,7 @@ function Painel() {
                     dataDeHoje={dados.periodo.hoje}
                     pontos={dados.projecao}
                     formatar={formatar}
+                    formatarEixo={formatarEixo}
                     altura={180}
                     onAtivar={() => abrirRecorte('A pagar em aberto', 'Tudo que ainda falta sair', 'pagar', 'em-aberto', 'valorEmAberto')}
                   />
@@ -287,8 +335,19 @@ function Painel() {
                   <span className="fin-t-caption text-[var(--fin-text-3)]">
                     {dados.vendas.margemPct === null
                       ? 'nenhuma venda no período'
-                      : `${PCT(dados.vendas.margemPct)} de ${formatar(dados.vendas.volume)} vendidos`}
+                      : `${PCT(dados.vendas.margemPct)} de ${formatar(dados.vendas.volume)} vendidos` +
+                        (dados.vendas.comissaoDeOperadora > 0
+                          ? `, incluindo ${formatar(dados.vendas.comissaoDeOperadora)} de comissão de operadora`
+                          : '')}
                   </span>
+                  {/* Venda sem custo gravado entra como margem de 100% e puxa o
+                      percentual para cima sem que ninguém perceba. A tela avisa
+                      em vez de afirmar. */}
+                  {dados.vendas.semCusto > 0 && (
+                    <span className="fin-t-caption text-[var(--fin-warning-text)]">
+                      {`${dados.vendas.semCusto} ${dados.vendas.semCusto === 1 ? 'venda está' : 'vendas estão'} sem custo lançado, então a margem aparece maior do que é`}
+                    </span>
+                  )}
                 </li>
 
                 <li className={`${CARTAO} flex flex-col gap-1 p-[var(--fin-s-4)]`}>
@@ -383,6 +442,7 @@ function Painel() {
                     resultado: p.resultado,
                   }))}
                   formatar={formatar}
+                  formatarEixo={formatarEixo}
                   altura={240}
                   destaque={dados.serie.length - 1}
                 />
@@ -435,8 +495,11 @@ function Painel() {
                           'A receber',
                           dados.aging.receber.find(f => f.id === id)?.rotulo ?? '',
                           'receber',
-                          id.startsWith('vencido') ? 'vencido' : id === 'hoje' ? 'vence-hoje' : 'em-aberto',
+                          // A FAIXA, não o balde inteiro: o título promete a
+                          // faixa clicada e a lista tem que entregá-la.
+                          'aging',
                           'valorEmAberto',
+                          id,
                         )
                       }
                     />
@@ -455,8 +518,9 @@ function Painel() {
                           'A pagar',
                           dados.aging.pagar.find(f => f.id === id)?.rotulo ?? '',
                           'pagar',
-                          id.startsWith('vencido') ? 'vencido' : id === 'hoje' ? 'vence-hoje' : 'em-aberto',
+                          'aging',
                           'valorEmAberto',
+                          id,
                         )
                       }
                     />
@@ -571,7 +635,7 @@ function Painel() {
                           </p>
                         </div>
                         <span className="fin-t-body-strong shrink-0 tabular-nums text-[var(--fin-text)]">
-                          {formatar(v.valorAdiantado)}
+                          {formatar(v.exposicao)}
                         </span>
                         <button
                           type="button"
@@ -606,7 +670,7 @@ function Painel() {
               </GraficoMoldura>
 
               {/* ── Agenda ──────────────────────────────────────────────── */}
-              {dados.agenda.length > 0 && (
+              {dados.agenda.linhas.length > 0 && (
                 <section className={`${CARTAO} flex flex-col gap-2 p-[var(--fin-s-4)]`}>
                   <div>
                     <h2 className="fin-t-subhead text-[var(--fin-text)]">Próximos movimentos</h2>
@@ -615,7 +679,7 @@ function Painel() {
                     </p>
                   </div>
                   <ul className="flex flex-col divide-y divide-[var(--fin-border)]">
-                    {dados.agenda.slice(0, 12).map(l => (
+                    {dados.agenda.linhas.slice(0, 12).map(l => (
                       <li key={`${l.lado}-${l.id}`} className="flex min-h-[44px] items-center gap-3 py-2">
                         <span className="fin-t-caption w-14 shrink-0 tabular-nums text-[var(--fin-text-3)]">
                           {diaEMes(l.data)}
@@ -638,9 +702,9 @@ function Painel() {
                       </li>
                     ))}
                   </ul>
-                  {dados.agenda.length > 12 && (
+                  {dados.agenda.total > 12 && (
                     <p className="fin-t-caption text-[var(--fin-text-3)]">
-                      {`Mostrando 12 dos ${dados.agenda.length} lançamentos dos próximos 30 dias.`}
+                      {`Mostrando 12 dos ${dados.agenda.total} lançamentos dos próximos 30 dias.`}
                     </p>
                   )}
                 </section>
@@ -683,6 +747,7 @@ function Painel() {
             </>
           ) : null}
         </DataState>
+        )}
 
         <GavetaDeLancamentos pedido={gaveta} onFechar={() => setGaveta(null)} />
       </div>

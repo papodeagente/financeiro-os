@@ -44,6 +44,10 @@ export type PontoFinanceiro = { chave: string; rotulo: string; entradas: number;
 export type SerieFinanceiraProps = {
   pontos: PontoFinanceiro[];
   formatar: (v: number) => string;
+  /** Abreviação do TICK DE EIXO. Recebida por prop para o modo "ocultar
+   *  valores" mascarar também a escala: sem isto o eixo entrega a ordem
+   *  de grandeza do caixa para quem olha por cima do ombro. */
+  formatarEixo?: (v: number) => string;
   altura?: 180 | 240;
   /** Índice do ponto a destacar (o período atual), ou null. */
   destaque?: number | null;
@@ -162,6 +166,7 @@ function Desenho({
   pontos,
   destaque,
   formatar,
+  formatarEixo,
   onAtivar,
 }: {
   largura: number;
@@ -169,6 +174,7 @@ function Desenho({
   pontos: PontoFinanceiro[];
   destaque: number | null;
   formatar: (v: number) => string;
+  formatarEixo: (v: number) => string;
   onAtivar?: (chave: string) => void;
 }) {
   // num() no lugar de confiar na medida: largura NaN produziria viewBox e
@@ -206,7 +212,7 @@ function Desenho({
   // A faixa do eixo y é medida pelos rótulos que ela vai mesmo receber: um
   // padding fixo cabe 'R$ 30 mil' e corta 'R$ -100 mil' pela borda.
   const paddingEsq = Math.min(
-    Math.round(RESPIRO_DO_ROTULO + Math.max(0, ...fios.map(t => larguraAproximada(formatarEixoBRL(t))))),
+    Math.round(RESPIRO_DO_ROTULO + Math.max(0, ...fios.map(t => larguraAproximada(formatarEixo(t))))),
     Math.round(larguraSvg * 0.4),
   );
   const larguraPlot = Math.max(1, larguraSvg - paddingEsq - PADDING_DIR);
@@ -373,7 +379,7 @@ function Desenho({
           className="fin-t-caption tabular-nums"
           fill="var(--fin-text-3)"
         >
-          {formatarEixoBRL(t)}
+          {formatarEixo(t)}
         </text>
       ))}
 
@@ -543,6 +549,7 @@ function Legenda({
 export function SerieFinanceira({
   pontos,
   formatar,
+  formatarEixo = formatarEixoBRL,
   altura = 180,
   destaque = null,
   onAtivar,
@@ -588,6 +595,7 @@ export function SerieFinanceira({
             pontos={validos}
             destaque={destaqueValido}
             formatar={formatar}
+            formatarEixo={formatarEixo}
             onAtivar={onAtivar}
           />
         )}

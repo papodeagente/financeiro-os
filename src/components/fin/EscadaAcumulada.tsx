@@ -46,6 +46,10 @@ export type EscadaAcumuladaProps = {
   referencia?: { rotulo: string; ate: number } | null;
   topoDoEixo: 'dado' | 'referencia';
   formatar: (v: number) => string;
+  /** Abreviação do TICK DE EIXO. Recebida por prop para o modo "ocultar
+   *  valores" mascarar também a escala: sem isto o eixo entrega a ordem
+   *  de grandeza do caixa para quem olha por cima do ombro. */
+  formatarEixo?: (v: number) => string;
   altura?: 160 | 220;
   /** Frase do vazio, quando não houve um único evento no mês. */
   vazio?: React.ReactNode;
@@ -74,6 +78,7 @@ function Desenho({
   referencia,
   topoDoEixo,
   formatar,
+  formatarEixo,
 }: {
   largura: number;
   altura: number;
@@ -83,6 +88,7 @@ function Desenho({
   referencia: { rotulo: string; ate: number } | null;
   topoDoEixo: 'dado' | 'referencia';
   formatar: (v: number) => string;
+  formatarEixo: (v: number) => string;
 }) {
   const larguraPlot = Math.max(1, largura - PADDING_ESQ - PADDING_DIR);
   const alturaPlot = Math.max(1, altura - PADDING_TOPO - PADDING_BAIXO);
@@ -178,7 +184,7 @@ function Desenho({
             className="fin-t-caption"
             fill="var(--fin-text-3)"
           >
-            {formatarEixoBRL(t)}
+            {formatarEixo(t)}
           </text>
         </g>
       ))}
@@ -275,6 +281,7 @@ export function EscadaAcumulada({
   referencia = null,
   topoDoEixo,
   formatar,
+  formatarEixo = formatarEixoBRL,
   altura = 160,
   vazio,
   className,
@@ -303,6 +310,7 @@ export function EscadaAcumulada({
             referencia={referencia}
             topoDoEixo={topoDoEixo}
             formatar={formatar}
+            formatarEixo={formatarEixo}
           />
         )}
       </AreaDeGrafico>

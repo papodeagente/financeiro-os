@@ -59,6 +59,58 @@ export const MARGEM_SAUDAVEL_PCT = 15;
 /** Acima disto a carteira em atraso deixa de ser exceção. */
 export const INADIMPLENCIA_GRAVE_PCT = 15;
 
+/**
+ * A ordem de gravidade, escrita UMA vez.
+ *
+ * 'sem-base' é PIOR que 'bom' de propósito: uma agência em que quase nada pôde
+ * ser medido não está saudável, está inconclusiva — e anunciar "Saudável" ali
+ * é a afirmação mais perigosa que este painel poderia fazer, porque é a
+ * tranquilizadora.
+ *
+ * O painel de saúde e o chip da manchete consomem esta mesma tabela: eram duas
+ * regras diferentes, e a tela chegava a dizer "Saudável" no alto enquanto o
+ * painel logo abaixo dizia "Sem base suficiente".
+ */
+export const ORDEM_DE_GRAVIDADE: Record<FaixaDeSaude, number> = {
+  bom: 0,
+  'sem-base': 1,
+  atencao: 2,
+  risco: 3,
+};
+
+/**
+ * Onde a marca cai na régua de três zonas (risco | atenção | bom).
+ *
+ * POR QUE NÃO É UMA ESCALA LINEAR SIMPLES. A régua é dividida em terços, e a
+ * palavra ao lado nomeia a zona. Uma escala linear sobre o valor bruto põe a
+ * marca na zona ERRADA: com margem saudável a partir de 15% e a régua saturando
+ * em 30%, uma margem de 15% cai em 0,5 — no meio da zona "atenção" — enquanto o
+ * texto ao lado diz "bom". O olho acredita na posição, não na palavra.
+ *
+ * Então a posição é calculada DENTRO da zona: o valor é normalizado entre as
+ * fronteiras daquela faixa e mapeado para o terço correspondente.
+ */
+export function posicaoEmZonas(
+  valor: number,
+  limiteRisco: number,
+  limiteAtencao: number,
+  teto: number,
+  sentido: 'maior-melhor' | 'menor-melhor' = 'maior-melhor',
+): number {
+  const dentro = (v: number, de: number, ate: number) =>
+    ate <= de ? 0 : Math.min(1, Math.max(0, (v - de) / (ate - de)));
+
+  if (sentido === 'menor-melhor') {
+    // Espelha o eixo: 0 é o melhor e `teto` é o pior.
+    if (valor > limiteAtencao) return dentro(Math.min(valor, teto), teto, limiteAtencao) / 3;
+    if (valor > limiteRisco) return 1 / 3 + dentro(valor, limiteAtencao, limiteRisco) / 3;
+    return 2 / 3 + dentro(valor, limiteRisco, 0) / 3;
+  }
+  if (valor < limiteRisco) return dentro(valor, 0, limiteRisco) / 3;
+  if (valor < limiteAtencao) return 1 / 3 + dentro(valor, limiteRisco, limiteAtencao) / 3;
+  return 2 / 3 + dentro(valor, limiteAtencao, teto) / 3;
+}
+
 const pct = (v: number) => `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(v)}%`;
 const dias = (n: number) => `${n} ${n === 1 ? 'dia' : 'dias'}`;
 const dataBR = (iso: string) => (iso && iso.length >= 10 ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : iso);
@@ -101,7 +153,7 @@ export function calcularFatoresDeSaude(d: DashboardFinanceiro): FatorDeSaude[] {
                 ? 'O caixa cobre a operação por pouco tempo: um mês fraco aperta.'
                 : 'O caixa cobre a operação com folga no ritmo atual de despesa.',
           // A régua satura em 6 meses: acima disso a diferença não muda decisão.
-          posicao: Math.min(1, Math.max(0, meses / 6)),
+          posicao: posicaoEmZonas(meses, FOLEGO_MINIMO_MESES, FOLEGO_CONFORTAVEL_MESES, 6),
         },
   );
 
@@ -146,8 +198,9 @@ export function calcularFatoresDeSaude(d: DashboardFinanceiro): FatorDeSaude[] {
               : taxa > 0
                 ? `${d.posicao.receber.contasVencidas} ${d.posicao.receber.contasVencidas === 1 ? 'parcela venceu' : 'parcelas venceram'} e ainda não ${d.posicao.receber.contasVencidas === 1 ? 'entrou' : 'entraram'}.`
                 : 'Nada vencido na carteira de recebimento.',
-          // Régua invertida: quanto MENOS atraso, mais à direita.
-          posicao: Math.min(1, Math.max(0, 1 - taxa / 30)),
+          // Régua invertida: quanto MENOS atraso, mais à direita. O limiar de
+          // "atenção" é qualquer atraso, então a fronteira de baixo é zero.
+          posicao: posicaoEmZonas(taxa, 0.0001, INADIMPLENCIA_GRAVE_PCT, 30, 'menor-melhor'),
         },
   );
 
@@ -170,7 +223,7 @@ export function calcularFatoresDeSaude(d: DashboardFinanceiro): FatorDeSaude[] {
           faixa: margem < MARGEM_SAUDAVEL_PCT * (2 / 3) ? 'risco' : margem < MARGEM_SAUDAVEL_PCT ? 'atencao' : 'bom',
           leitura: `De cada R$ 100 vendidos, R$ ${Math.round(margem)} ficam com a agência. O resto é repasse a fornecedor.`,
           // Satura em 30%: acima disso já é excelente em intermediação.
-          posicao: Math.min(1, Math.max(0, margem / 30)),
+          posicao: posicaoEmZonas(margem, MARGEM_SAUDAVEL_PCT * (2 / 3), MARGEM_SAUDAVEL_PCT, 30),
         },
   );
 
@@ -193,13 +246,19 @@ export function calcularFatoresDeSaude(d: DashboardFinanceiro): FatorDeSaude[] {
   return fatores;
 }
 
-/** O veredito geral: a faixa do PIOR fator. Regra visível, não peso escondido. */
+/**
+ * O veredito geral: a faixa do PIOR fator, pela ordem única de gravidade.
+ *
+ * Regra visível, não peso escondido — e é a MESMA que o painel de saúde
+ * desenha, para a tela nunca dizer "Saudável" no alto e "Sem base suficiente"
+ * três centímetros abaixo.
+ */
 export function classificarSaude(fatores: FatorDeSaude[]): FaixaDeSaude {
-  const comBase = fatores.filter(f => f.faixa !== 'sem-base');
-  if (comBase.length === 0) return 'sem-base';
-  if (comBase.some(f => f.faixa === 'risco')) return 'risco';
-  if (comBase.some(f => f.faixa === 'atencao')) return 'atencao';
-  return 'bom';
+  if (fatores.length === 0) return 'sem-base';
+  return fatores.reduce<FaixaDeSaude>(
+    (pior, f) => (ORDEM_DE_GRAVIDADE[f.faixa] > ORDEM_DE_GRAVIDADE[pior] ? f.faixa : pior),
+    'bom',
+  );
 }
 
 export interface PassoDoResultado {
@@ -347,7 +406,7 @@ export function gerarInsights(
 
   // ── O aperto que só existe em agência de viagens ─────────────────────
   if (d.descasamento.length > 0) {
-    const total = round2(d.descasamento.reduce((s, x) => s + x.valorAdiantado, 0));
+    const total = round2(d.descasamento.reduce((s, x) => s + x.exposicao, 0));
     const pior = d.descasamento[0];
     add({
       id: 'descasamento',
@@ -359,17 +418,23 @@ export function gerarInsights(
   }
 
   // ── Concentração de fornecedor ───────────────────────────────────────
-  const totalFornecedores = round2(d.fornecedores.reduce((s, f) => s + f.valor, 0));
+  // O denominador é TUDO que saiu no período, não a soma do top 12 da lista.
+  // Dividir pelo top 12 infla o percentual: com uma cauda longa de pequenos
+  // fornecedores, o maior aparece com 45% quando ele é 18% do que a agência
+  // pagou — e o alarme dispara sobre um risco que não existe.
   const maior = d.fornecedores[0];
-  if (maior && totalFornecedores > 0) {
-    const share = round2(divSegura(maior.valor, totalFornecedores) * 100);
+  const totalPago = d.caixa.saidas.atual;
+  // 'pendente' é o balde de quem não foi identificado: ali a conversa é sobre
+  // cadastro incompleto, não sobre dependência de um parceiro.
+  if (maior && maior.id !== 'pendente' && totalPago > 0) {
+    const share = round2(divSegura(maior.valor, totalPago) * 100);
     if (share >= CONCENTRACAO_DE_RISCO_PCT) {
       add({
         id: 'concentracao',
         tom: 'atencao',
         peso: 55,
         texto: `${maior.nome} concentra ${pct(share)} de tudo que a agência pagou no período.`,
-        evidencia: `${formatar(maior.valor)} de ${formatar(totalFornecedores)}`,
+        evidencia: `${formatar(maior.valor)} de ${formatar(totalPago)}`,
       });
     }
   }

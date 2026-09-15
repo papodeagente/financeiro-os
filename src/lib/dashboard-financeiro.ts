@@ -23,9 +23,11 @@
 import { divSegura, round2, variacaoPct } from './money';
 import {
   EH_REPASSE,
+  FAIXAS_DE_AGING,
   NAO_CANCELADA,
   ORIGEM_RECEBER,
   ehRepasse,
+  faixaDeAging,
   naoCancelada,
   vendaDeOrigem,
   VENDA_REALIZADA,
@@ -121,7 +123,12 @@ export interface VendaDescasada {
   primeiroPagamento: string;
   primeiroRecebimento: string;
   diasDeGap: number;
-  valorAdiantado: number;
+  /**
+   * Quanto a agência banca de fato: o que falta pagar ao fornecedor menos o
+   * que o cliente JÁ pagou desta venda. Chamar o saldo bruto de "adiantado"
+   * inflaria a exposição de toda venda com entrada paga.
+   */
+  exposicao: number;
 }
 
 export interface DashboardFinanceiro {
@@ -148,13 +155,18 @@ export interface DashboardFinanceiro {
   fornecedores: LinhaNomeada[];
   margemPorFornecedor: LinhaDeMargem[];
   clientes: LinhaNomeada[];
-  agenda: LancamentoDaAgenda[];
+  agenda: { linhas: LancamentoDaAgenda[]; total: number };
   descasamento: VendaDescasada[];
   vendas: {
     volume: number;
+    /** Margem das vendas MAIS a comissão de operadora que a margem não cobriu. */
     receitaAgencia: number;
+    /** Quanto da receita veio de comissão paga pela operadora. */
+    comissaoDeOperadora: number;
     custo: number;
     quantidade: number;
+    /** Vendas sem custo gravado: a margem delas é desconhecida, não 100%. */
+    semCusto: number;
     margemPct: number | null;
     ticketVolume: number;
     ticketReceita: number;
@@ -289,22 +301,11 @@ async function aging(
   tenantId: string, hoje: string,
 ): Promise<FaixaDeAging[]> {
   const aberto = emAberto(lado);
-  const venc = `NULLIF(data->>'data_vencimento', '')`;
-  // Dias de distância até o vencimento: negativo = já venceu.
-  const dias = `(${venc}::date - $2::date)`;
+  // A fronteira das faixas vive em dashboard-sql.ts e é a MESMA que o
+  // drill-down usa. Duas cópias divergem na primeira manutenção, e aí clicar
+  // em "vencido há 8 a 30 dias" passa a abrir outro conjunto de contas.
   const { rows } = await exec.query(
-    `SELECT
-       CASE
-         WHEN ${venc} IS NULL                 THEN 'sem_data'
-         WHEN ${dias} < -30                   THEN 'vencido_30'
-         WHEN ${dias} < -7                    THEN 'vencido_8_30'
-         WHEN ${dias} < 0                     THEN 'vencido_1_7'
-         WHEN ${dias} = 0                     THEN 'hoje'
-         WHEN ${dias} <= 7                    THEN 'ate_7'
-         WHEN ${dias} <= 15                   THEN 'ate_15'
-         WHEN ${dias} <= 30                   THEN 'ate_30'
-         ELSE                                      'acima_30'
-       END AS faixa,
+    `SELECT ${faixaDeAging('$2')} AS faixa,
        COALESCE(ROUND(SUM(${aberto}), 2), 0) AS valor,
        COUNT(*) AS contas
        FROM ${tabela}
@@ -312,26 +313,12 @@ async function aging(
       GROUP BY 1`,
     [tenantId, hoje],
   );
-  const ROTULOS: Record<string, string> = {
-    vencido_30: 'vencido há mais de 30 dias',
-    vencido_8_30: 'vencido há 8 a 30 dias',
-    vencido_1_7: 'vencido há até 7 dias',
-    hoje: 'vence hoje',
-    ate_7: 'até 7 dias',
-    ate_15: '8 a 15 dias',
-    ate_30: '16 a 30 dias',
-    acima_30: 'mais de 30 dias',
-    // Não descartar em silêncio: conta sem vencimento é dinheiro que ninguém
-    // sabe quando entra, e isso é um problema a resolver, não uma linha a sumir.
-    sem_data: 'sem data de vencimento',
-  };
-  const ORDEM = ['vencido_30', 'vencido_8_30', 'vencido_1_7', 'hoje', 'ate_7', 'ate_15', 'ate_30', 'acima_30', 'sem_data'];
   const mapa = new Map(rows.map(r => [String(r.faixa), r]));
-  return ORDEM.filter(id => mapa.has(id)).map(id => ({
-    id,
-    rotulo: ROTULOS[id],
-    valor: numeroDoBanco(mapa.get(id)!.valor),
-    contas: inteiroDoBanco(mapa.get(id)!.contas),
+  return FAIXAS_DE_AGING.filter(f => mapa.has(f.id)).map(f => ({
+    id: f.id,
+    rotulo: f.rotulo,
+    valor: numeroDoBanco(mapa.get(f.id)!.valor),
+    contas: inteiroDoBanco(mapa.get(f.id)!.contas),
   }));
 }
 
@@ -460,7 +447,12 @@ async function despesaPorCategoria(
 ): Promise<LinhaNomeada[]> {
   const { rows } = await exec.query(
     `SELECT COALESCE(NULLIF(pc.data->>'descricao', ''), 'Não categorizadas') AS nome,
-            COALESCE(NULLIF(cp.data->>'categoria_id', ''), 'sem-categoria') AS id,
+            -- Categoria APAGADA não casa no JOIN e cairia num id próprio: o
+            -- gráfico desenharia três barras diferentes chamadas "Não
+            -- categorizadas", e o drill-down de cada uma abriria um pedaço.
+            -- Quem não casou vira um balde só.
+            CASE WHEN pc.id IS NULL THEN 'sem-categoria'
+                 ELSE cp.data->>'categoria_id' END AS id,
             COALESCE(ROUND(SUM(${realizado('pagar', 'cp')}), 2), 0) AS valor,
             COUNT(*) AS contas
        FROM contas_pagar cp
@@ -568,7 +560,7 @@ async function clientes(
 /** Os próximos movimentos, dia a dia, incluindo o que já venceu e não entrou. */
 async function agenda(
   exec: ExecutorSQL, tenantId: string, hoje: string, ate: string,
-): Promise<LancamentoDaAgenda[]> {
+): Promise<{ linhas: LancamentoDaAgenda[]; total: number }> {
   const consulta = (tabela: string, lado: 'receber' | 'pagar', nome: string) =>
     `SELECT id, data->>'data_vencimento' AS venc, '${lado}' AS lado,
             ${emAberto(lado)} AS valor,
@@ -578,18 +570,30 @@ async function agenda(
       WHERE tenant_id = $1 AND ${NAO_CANCELADA}
         AND ${emAberto(lado)} > 0
         AND COALESCE(data->>'data_vencimento', '') <> ''
-        AND data->>'data_vencimento' <= $2`;
-  // `hoje` não entra como parâmetro: ele só marca o que já venceu, e isso é
-  // decidido em JS. Parâmetro declarado e não usado faz o Postgres recusar a
-  // query inteira com "could not determine data type".
+        AND data->>'data_vencimento' BETWEEN $2 AND $3`;
+  // PISO EM HOJE, e não é detalhe. Sem ele, uma agência com quarenta parcelas
+  // atrasadas de 2024 enche as sessenta linhas com passado e a agenda de
+  // "Próximos movimentos" não mostra um único movimento futuro — inclusive o
+  // pagamento grande de amanhã. O vencido tem bloco próprio, com total próprio.
   const { rows } = await exec.query(
     `${consulta('contas_receber', 'receber', 'cliente_nome')}
      UNION ALL
      ${consulta('contas_pagar', 'pagar', 'fornecedor_nome')}
      ORDER BY venc ASC, valor DESC LIMIT 60`,
-    [tenantId, ate],
+    [tenantId, hoje, ate],
   );
-  return rows.map(r => ({
+  // A contagem REAL, sem o teto. Sem ela a tela diz "mostrando 12 dos 60"
+  // quando existem duzentos — e "60" passaria por total.
+  const contagem = await exec.query(
+    `SELECT (SELECT COUNT(*) FROM contas_receber
+              WHERE tenant_id = $1 AND ${NAO_CANCELADA} AND ${emAberto('receber')} > 0
+                AND COALESCE(data->>'data_vencimento', '') BETWEEN $2 AND $3)
+          + (SELECT COUNT(*) FROM contas_pagar
+              WHERE tenant_id = $1 AND ${NAO_CANCELADA} AND ${emAberto('pagar')} > 0
+                AND COALESCE(data->>'data_vencimento', '') BETWEEN $2 AND $3) AS n`,
+    [tenantId, hoje, ate],
+  );
+  const linhas: LancamentoDaAgenda[] = rows.map(r => ({
     id: String(r.id),
     data: String(r.venc),
     lado: r.lado === 'receber' ? 'receber' : 'pagar',
@@ -598,6 +602,7 @@ async function agenda(
     contraparte: String(r.contraparte),
     vencido: String(r.venc) < hoje,
   }));
+  return { linhas, total: inteiroDoBanco(contagem.rows[0]?.n) };
 }
 
 /**
@@ -619,9 +624,14 @@ async function descasamento(
           AND COALESCE(data->>'data_vencimento', '') <> ''
         GROUP BY 1
      ), receber AS (
-       SELECT ${vendaDeOrigem('receber')} AS venda, MIN(data->>'data_vencimento') AS primeiro
+       SELECT ${vendaDeOrigem('receber')} AS venda,
+              MIN(CASE WHEN ${emAberto('receber')} > 0 THEN data->>'data_vencimento' END) AS primeiro,
+              -- O que o cliente JÁ pagou desta venda abate a exposição: sem
+              -- isto, uma venda com entrada de 50% aparece com o dobro do
+              -- risco que ela tem.
+              COALESCE(ROUND(SUM(${realizado('receber')}), 2), 0) AS ja_recebido
          FROM contas_receber
-        WHERE tenant_id = $1 AND ${NAO_CANCELADA} AND ${emAberto('receber')} > 0
+        WHERE tenant_id = $1 AND ${NAO_CANCELADA}
           AND ${ORIGEM_RECEBER} <> 'COMISSAO_FORNECEDOR'
           AND COALESCE(data->>'data_vencimento', '') <> ''
         GROUP BY 1
@@ -629,16 +639,25 @@ async function descasamento(
      -- tenant-ok: as duas CTEs acima já filtram tenant_id = $1, então cada
      -- lado deste JOIN é de uma agência só e casar por venda basta. O LEFT
      -- JOIN em vendas_crm, esse sim, repete a cláusula: ele toca a tabela.
-     SELECT p.venda, p.primeiro AS primeiro_pagamento, r.primeiro AS primeiro_recebimento, p.aberto,
+     SELECT p.venda, p.primeiro AS primeiro_pagamento, r.primeiro AS primeiro_recebimento,
+            GREATEST(ROUND(p.aberto - r.ja_recebido, 2), 0) AS exposicao,
             COALESCE(NULLIF(v.data->>'numero', ''), '') AS numero,
             COALESCE(NULLIF(v.data->>'cliente_nome', ''), '') AS cliente,
-            (r.primeiro::date - p.primeiro::date) AS gap
+            -- Mesma guarda de formato da aging: uma data fora do ISO aqui
+            -- derrubaria a consulta inteira e, com ela, o painel.
+            (CASE WHEN r.primeiro ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+                   AND p.primeiro ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+                  THEN (r.primeiro::date - p.primeiro::date) ELSE 0 END) AS gap
        FROM pagar p
        JOIN receber r ON r.venda = p.venda
        LEFT JOIN vendas_crm v ON v.id = p.venda AND v.tenant_id = $1
       WHERE p.venda IS NOT NULL AND p.venda <> ''
+        AND r.primeiro IS NOT NULL
         AND r.primeiro > p.primeiro
-      ORDER BY gap DESC, p.aberto DESC LIMIT 8`,
+        -- Venda cujo cliente já pagou o suficiente não descasa mais: manter
+        -- aqui seria alarme sobre um problema que deixou de existir.
+        AND GREATEST(ROUND(p.aberto - r.ja_recebido, 2), 0) > 0
+      ORDER BY gap DESC, exposicao DESC LIMIT 8`,
     [tenantId],
   );
   return rows.map(r => ({
@@ -648,7 +667,7 @@ async function descasamento(
     primeiroPagamento: String(r.primeiro_pagamento),
     primeiroRecebimento: String(r.primeiro_recebimento),
     diasDeGap: inteiroDoBanco(r.gap),
-    valorAdiantado: numeroDoBanco(r.aberto),
+    exposicao: numeroDoBanco(r.exposicao),
   }));
 }
 
@@ -664,6 +683,27 @@ async function vendasDoPeriodo(
 ) {
   const valor = numerico(`COALESCE(v.data->>'valor_final', v.data->>'valor_total_venda', v.data->>'valor_total')`);
   const custo = numerico(`COALESCE(v.data->>'valor_total_custo', v.data->>'custo_total')`);
+  // A comissão que a OPERADORA paga à agência, por venda.
+  //
+  // Sem ela, o modelo em que o cliente paga o fornecedor direto aparece como
+  // receita ZERO: a venda tem custo igual ao valor (repasse integral) e toda a
+  // receita da agência mora na conta a receber de COMISSAO_FORNECEDOR. O DRE
+  // desta mesma casa já reconhece esse dinheiro (dre/page.tsx:178-197) — o
+  // dashboard estava contradizendo o DRE pelo valor inteiro da receita.
+  const comissaoDaVenda = `(
+    SELECT COALESCE(SUM(${numerico(`cr.data->>'valor_final'`)}), 0)
+      FROM contas_receber cr
+     WHERE cr.tenant_id = v.tenant_id
+       AND COALESCE(cr.data->>'status', '') <> 'CANCELADO'
+       AND COALESCE(NULLIF(cr.data->>'origem', ''), 'VENDA') = 'COMISSAO_FORNECEDOR'
+       AND COALESCE(NULLIF(cr.data->>'origem_venda_id', ''), NULLIF(cr.venda_id, '')) = v.id
+  )`;
+  // A comissão pode já estar DENTRO da margem (venda do CRM que gravou a
+  // comissão como rentabilidade). Somar as duas dobraria a receita. A regra do
+  // DRE é consumir a margem primeiro e reconhecer só o excedente — e
+  // margem + max(0, comissão − margem) é, por identidade, max(margem, comissão).
+  const margem = `GREATEST(${valor} - ${custo}, 0)`;
+  const receitaDaVenda = `GREATEST(${margem}, ${comissaoDaVenda})`;
   const temLastro = (lado: 'receber' | 'pagar') =>
     `EXISTS (SELECT 1 FROM contas_${lado} c
               WHERE c.tenant_id = v.tenant_id
@@ -674,7 +714,11 @@ async function vendasDoPeriodo(
        COUNT(*) AS quantidade,
        COALESCE(ROUND(SUM(${valor}), 2), 0) AS volume,
        COALESCE(ROUND(SUM(${custo}), 2), 0) AS custo,
-       COALESCE(ROUND(SUM(GREATEST(${valor} - ${custo}, 0)), 2), 0) AS receita,
+       COALESCE(ROUND(SUM(${receitaDaVenda}), 2), 0) AS receita,
+       COALESCE(ROUND(SUM(${comissaoDaVenda}), 2), 0) AS comissao,
+       -- Venda sem custo gravado não tem margem de 100%: tem margem
+       -- DESCONHECIDA. Contar aqui permite a tela avisar em vez de afirmar.
+       COUNT(*) FILTER (WHERE ${custo} <= 0 AND ${valor} > 0) AS sem_custo,
        COUNT(*) FILTER (WHERE NOT (${temLastro('receber')} OR ${temLastro('pagar')})) AS sem_lastro,
        COALESCE(ROUND(SUM(CASE WHEN NOT (${temLastro('receber')} OR ${temLastro('pagar')}) THEN ${valor} ELSE 0 END), 2), 0) AS volume_sem_lastro
        FROM vendas_crm v
@@ -686,11 +730,17 @@ async function vendasDoPeriodo(
   const quantidade = inteiroDoBanco(l.quantidade);
   const volume = numeroDoBanco(l.volume);
   const receitaAgencia = numeroDoBanco(l.receita);
+  const semCusto = inteiroDoBanco(l.sem_custo);
   return {
     volume,
     receitaAgencia,
+    comissaoDeOperadora: numeroDoBanco(l.comissao),
     custo: numeroDoBanco(l.custo),
     quantidade,
+    // Com venda sem custo gravado a margem agregada fica otimista de um jeito
+    // que ninguém percebe: aquela venda entra como 100%. A tela precisa saber
+    // disso para dizer, então o contador viaja junto do percentual.
+    semCusto,
     margemPct: volume > 0 ? round2(divSegura(receitaAgencia, volume) * 100) : null,
     ticketVolume: round2(divSegura(volume, quantidade)),
     ticketReceita: round2(divSegura(receitaAgencia, quantidade)),
@@ -699,7 +749,7 @@ async function vendasDoPeriodo(
 }
 
 /** As pendências que custam dinheiro, contadas numa consulta só por lado. */
-async function atencao(exec: ExecutorSQL, tenantId: string) {
+async function atencao(exec: ExecutorSQL, tenantId: string, de: string, ate: string) {
   const abertoP = emAberto('pagar');
   const abertoR = emAberto('receber');
   const [p, r] = await Promise.all([
@@ -707,16 +757,25 @@ async function atencao(exec: ExecutorSQL, tenantId: string) {
       `SELECT
          COUNT(*) FILTER (WHERE COALESCE(data->>'fornecedor_pendente', '') = 'true' AND ${abertoP} > 0) AS sem_fornecedor,
          COUNT(*) FILTER (WHERE COALESCE(data->>'data_vencimento', '') = '' AND ${abertoP} > 0) AS sem_vencimento,
+         -- CORTADO PELO PERÍODO, igual a despesaPorCategoria. Somar a história
+         -- inteira no numerador e dividir pela despesa do mês no denominador
+         -- imprime percentual de quatro dígitos: "3.480% da despesa não tem
+         -- categoria".
          COALESCE(ROUND(SUM(CASE WHEN COALESCE(NULLIF(data->>'categoria_id', ''), '') = ''
-                                  AND NOT ${EH_REPASSE} THEN ${realizado('pagar')} ELSE 0 END), 2), 0) AS nao_categorizadas,
-         COUNT(*) FILTER (WHERE COALESCE(NULLIF(data->>'categoria_id', ''), '') = '' AND NOT ${EH_REPASSE}) AS nao_categorizadas_contas
+                                  AND NOT ${EH_REPASSE}
+                                  AND ${dataDoCaixa('pagar')} BETWEEN $2 AND $3
+                                 THEN ${realizado('pagar')} ELSE 0 END), 2), 0) AS nao_categorizadas,
+         COUNT(*) FILTER (WHERE COALESCE(NULLIF(data->>'categoria_id', ''), '') = ''
+                            AND NOT ${EH_REPASSE}
+                            AND ${realizado('pagar')} <> 0
+                            AND ${dataDoCaixa('pagar')} BETWEEN $2 AND $3) AS nao_categorizadas_contas
          FROM contas_pagar WHERE tenant_id = $1 AND ${NAO_CANCELADA}`,
-      [tenantId],
+      [tenantId, de, ate],
     ),
     exec.query(
       `SELECT COUNT(*) FILTER (WHERE ${abertoR} > 0 AND COALESCE(data->>'data_vencimento', '') = '') AS sem_vencimento
-         FROM contas_receber WHERE tenant_id = $1 AND ${NAO_CANCELADA}`,
-      [tenantId],
+         FROM contas_receber WHERE tenant_id = $1 AND ${NAO_CANCELADA} AND ($2 <= $3)`,
+      [tenantId, de, ate],
     ),
   ]);
   return {
@@ -770,7 +829,7 @@ export async function carregarDashboard(
     agenda(exec, tenantId, hoje, ateAgenda),
     descasamento(exec, tenantId),
     vendasDoPeriodo(exec, tenantId, de, ate),
-    atencao(exec, tenantId),
+    atencao(exec, tenantId, de, ate),
   ]);
 
   const proj = await projecao(exec, tenantId, hoje, saldo.saldo);

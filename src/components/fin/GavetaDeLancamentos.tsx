@@ -54,7 +54,13 @@ export function GavetaDeLancamentos({
 }) {
   const { formatar } = usePrivacidade();
   const [estado, setEstado] = React.useState<'carregando' | 'ok' | 'erro'>('carregando');
-  const [dados, setDados] = React.useState<{ linhas: LancamentoDetalhado[]; total: number; truncado: boolean } | null>(null);
+  const [dados, setDados] = React.useState<{
+    linhas: LancamentoDetalhado[];
+    total: number;
+    truncado: boolean;
+    somaEmAberto: number;
+    somaRealizado: number;
+  } | null>(null);
 
   React.useEffect(() => {
     if (!pedido) return;
@@ -90,9 +96,11 @@ export function GavetaDeLancamentos({
 
   if (!pedido) return null;
 
-  const soma = dados
-    ? Math.round(dados.linhas.reduce((t, l) => t + l[pedido.campo], 0) * 100) / 100
-    : 0;
+  // A soma vem do SERVIDOR, sobre o recorte inteiro. Somar só as linhas
+  // devolvidas e imprimir ao lado da contagem total faria o cabeçalho dizer
+  // "347 lançamentos · R$ 58.000" quando os 347 somam R$ 190.000 — e o detalhe
+  // nunca fecharia com o card que ele abriu.
+  const soma = dados ? (pedido.campo === 'valorEmAberto' ? dados.somaEmAberto : dados.somaRealizado) : 0;
 
   return (
     <RecordSheet

@@ -8,7 +8,7 @@
  * base não sustenta.
  */
 import {
-  calcularFatoresDeSaude, classificarSaude, gerarInsights, montarCascataDoResultado,
+  calcularFatoresDeSaude, classificarSaude, gerarInsights, montarCascataDoResultado, ORDEM_DE_GRAVIDADE,
   CONCENTRACAO_DE_RISCO_PCT, INADIMPLENCIA_GRAVE_PCT, MARGEM_SAUDAVEL_PCT,
 } from '../src/lib/dashboard-insights.ts';
 import type { DashboardFinanceiro } from '../src/lib/dashboard-financeiro.ts';
@@ -183,8 +183,8 @@ console.log('--- o aperto de turismo ---');
 {
   const d = base();
   d.descasamento = [
-    { vendaId: 'v1', numero: '1045', cliente: 'X', primeiroPagamento: '2026-09-18', primeiroRecebimento: '2026-10-10', diasDeGap: 22, valorAdiantado: 8000 },
-    { vendaId: 'v2', numero: '1046', cliente: 'Y', primeiroPagamento: '2026-09-19', primeiroRecebimento: '2026-10-01', diasDeGap: 12, valorAdiantado: 3000 },
+    { vendaId: 'v1', numero: '1045', cliente: 'X', primeiroPagamento: '2026-09-18', primeiroRecebimento: '2026-10-10', diasDeGap: 22, exposicao: 8000 },
+    { vendaId: 'v2', numero: '1046', cliente: 'Y', primeiroPagamento: '2026-09-19', primeiroRecebimento: '2026-10-01', diasDeGap: 12, exposicao: 3000 },
   ];
   const i = acha(d, 'descasamento');
   eq(i?.evidencia?.includes('11.000'), true, 'soma o que a agência está bancando');
@@ -238,7 +238,13 @@ console.log('--- fatores de saúde ---');
   // porque zero na régua lê como "o pior possível".
   eq(semBase.every(f => f.posicao === null), true, 'fator sem base não desenha marca');
   eq(fatores.find(f => f.id === 'compromissos')?.faixa, 'bom', 'nenhuma conta vencida continua sendo bom');
-  eq(classificarSaude(fatores), 'bom', 'com um fator com base e ele bom, a classificação é boa');
+  // 'sem-base' é PIOR que 'bom' de propósito. Uma agência em que quatro dos
+  // cinco fatores não puderam ser medidos não está saudável: está
+  // inconclusiva. Anunciar "Saudável" ali seria a afirmação mais perigosa que
+  // este painel poderia fazer, porque é a tranquilizadora — e era isso que
+  // fazia o chip da manchete dizer "Saudável" enquanto o painel logo abaixo
+  // dizia "Sem base suficiente".
+  eq(classificarSaude(fatores), 'sem-base', 'quase nada medido é inconclusivo, não saudável');
   eq(classificarSaude([]), 'sem-base', 'sem fator nenhum, a classificação se declara sem base');
 }
 {
@@ -325,6 +331,61 @@ console.log('--- a cascata do resultado SEMPRE fecha ---');
   // caixa, este é competência de venda. O rótulo precisa dizer qual é qual.
   eq(passos[4].rotulo, 'Resultado das vendas', 'o rótulo diz de que resultado se trata');
   eq(passos[4].detalhe.includes('não caixa'), true, 'e o detalhe avisa que pode diferir do caixa');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+console.log('--- o chip e o painel de saúde nunca se contradizem ---');
+{
+  // Os dois liam a MESMA lista de fatores por regras diferentes. A tela chegava
+  // a dizer "Saudável" no alto e "Sem base suficiente" três centímetros abaixo.
+  const pior = (fs: ReturnType<typeof calcularFatoresDeSaude>) =>
+    fs.reduce((p, f) => (ORDEM_DE_GRAVIDADE[f.faixa] > ORDEM_DE_GRAVIDADE[p.faixa] ? f : p), fs[0]);
+
+  const cenarios: Array<[string, () => DashboardFinanceiro]> = [
+    ['agência saudável', base],
+    ['fôlego curto', () => { const d = base(); d.cobertura = { meses: 0.4, despesaMensal: 10000 }; return d; }],
+    ['margem apertada', () => { const d = base(); d.vendas = { ...d.vendas, margemPct: 12 }; return d; }],
+    ['tudo sem base', () => {
+      const d = base();
+      d.cobertura = { meses: null, despesaMensal: 0 };
+      d.projecao = [];
+      d.posicao.receber = { emAberto: 0, vencido: 0, venceHoje: 0, aVencer: 0, contas: 0, contasVencidas: 0 };
+      d.vendas = { ...d.vendas, margemPct: null, quantidade: 0 };
+      return d;
+    }],
+  ];
+  for (const [nome, monta] of cenarios) {
+    const fs = calcularFatoresDeSaude(monta());
+    eq(classificarSaude(fs), pior(fs).faixa, `${nome}: o chip diz o mesmo que o pior fator do painel`);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+console.log('--- a marca da régua cai na zona que a palavra nomeia ---');
+{
+  // A régua tem três zonas (risco | atenção | bom) em terços, e a palavra ao
+  // lado nomeia a zona. Uma escala linear sobre o valor bruto punha a marca na
+  // zona ERRADA em três dos cinco fatores: margem de 15% (que é "bom") caía em
+  // 0,5, no meio da zona "atenção". O olho acredita na posição, não na palavra.
+  const zonaDa = (p: number) => (p < 1 / 3 ? 'risco' : p < 2 / 3 ? 'atencao' : 'bom');
+  const cenarios: Array<[string, () => DashboardFinanceiro]> = [
+    ['fôlego 0,4 mês', () => { const d = base(); d.cobertura = { meses: 0.4, despesaMensal: 1000 }; return d; }],
+    ['fôlego 2 meses', () => { const d = base(); d.cobertura = { meses: 2, despesaMensal: 1000 }; return d; }],
+    ['fôlego 9 meses', base],
+    ['margem 8%', () => { const d = base(); d.vendas = { ...d.vendas, margemPct: 8 }; return d; }],
+    ['margem 12%', () => { const d = base(); d.vendas = { ...d.vendas, margemPct: 12 }; return d; }],
+    ['margem 15%', () => { const d = base(); d.vendas = { ...d.vendas, margemPct: 15 }; return d; }],
+    ['margem 40%', () => { const d = base(); d.vendas = { ...d.vendas, margemPct: 40 }; return d; }],
+    ['sem atraso', base],
+    ['5% de atraso', () => { const d = base(); d.posicao.receber = { emAberto: 40000, vencido: 2000, venceHoje: 0, aVencer: 38000, contas: 8, contasVencidas: 1 }; return d; }],
+    ['30% de atraso', () => { const d = base(); d.posicao.receber = { emAberto: 40000, vencido: 12000, venceHoje: 0, aVencer: 28000, contas: 8, contasVencidas: 5 }; return d; }],
+  ];
+  for (const [nome, monta] of cenarios) {
+    for (const f of calcularFatoresDeSaude(monta())) {
+      if (f.posicao === null || f.faixa === 'sem-base') continue;
+      eq(zonaDa(f.posicao), f.faixa, `${nome} · ${f.nome} (${f.valor}): a marca cai na zona "${f.faixa}"`);
+    }
+  }
 }
 
 console.log(`\n${total - falhas}/${total} testes dos insights passaram`);

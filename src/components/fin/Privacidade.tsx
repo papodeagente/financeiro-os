@@ -4,6 +4,7 @@ import * as React from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import { formatarEixoBRL } from '@/lib/escala';
 import { Money, type MoneyProps } from '@/components/fin/Money';
 
 /**
@@ -24,18 +25,29 @@ import { Money, type MoneyProps } from '@/components/fin/Money';
  */
 
 const MASCARA = 'R$ ••••••';
+/** Máscara curta, para o tick de eixo, onde 'R$ ••••••' não caberia. */
+const MASCARA_CURTA = 'R$ •••';
 
 type Contexto = {
   oculto: boolean;
   alternar: () => void;
   /** A função de formatação que TODO gráfico e todo número da tela deve usar. */
   formatar: (v: number) => string;
+  /**
+   * A abreviação do TICK DE EIXO.
+   *
+   * Sem ela o modo oculto mascara as barras e deixa a escala em reais na tela:
+   * quem olha por cima do ombro lê a ordem de grandeza do caixa no eixo, que é
+   * exatamente o que o botão prometeu esconder.
+   */
+  formatarEixo: (v: number) => string;
 };
 
 const PrivacidadeCtx = React.createContext<Contexto>({
   oculto: false,
   alternar: () => {},
   formatar: v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+  formatarEixo: formatarEixoBRL,
 });
 
 const CHAVE = 'fin:valores-ocultos';
@@ -73,6 +85,7 @@ export function PrivacidadeProvider({ children }: { children: React.ReactNode })
       alternar,
       formatar: (v: number) =>
         oculto ? MASCARA : Number(v ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+      formatarEixo: (v: number) => (oculto ? MASCARA_CURTA : formatarEixoBRL(v)),
     }),
     [oculto, alternar],
   );

@@ -19,8 +19,8 @@ import {
   type ExecutorSQL,
 } from './dashboard-financeiro';
 import {
-  dataDoCaixa, ehRepasse, emAberto, inteiroDoBanco, naoCancelada, numeroDoBanco,
-  origemReceber, realizado, vendaDeOrigem,
+  dataDoCaixa, ehRepasse, emAberto, faixaDeAging, inteiroDoBanco, naoCancelada, numeroDoBanco,
+  origemReceber, realizado, vendaDeOrigem, vencimentoValido,
 } from './dashboard-sql';
 
 export type LadoDoLancamento = 'receber' | 'pagar';
@@ -41,10 +41,12 @@ export type RecorteDoDetalhe =
   /** Realizado de uma origem de receita. */
   | 'origem'
   /** Tudo ligado a uma venda. */
-  | 'venda';
+  | 'venda'
+  /** Em aberto numa faixa de prazo específica. A referência é o id da faixa. */
+  | 'aging';
 
 export const RECORTES: RecorteDoDetalhe[] = [
-  'em-aberto', 'vencido', 'vence-hoje', 'realizado', 'contraparte', 'categoria', 'origem', 'venda',
+  'em-aberto', 'vencido', 'vence-hoje', 'realizado', 'contraparte', 'categoria', 'origem', 'venda', 'aging',
 ];
 
 export interface LancamentoDetalhado {
@@ -83,7 +85,14 @@ const LIMITE_MAXIMO = 500;
 export async function listarLancamentos(
   exec: ExecutorSQL,
   e: EntradaDoDetalhe,
-): Promise<{ linhas: LancamentoDetalhado[]; total: number; truncado: boolean }> {
+): Promise<{
+  linhas: LancamentoDetalhado[];
+  total: number;
+  truncado: boolean;
+  /** Somas do recorte INTEIRO, não das linhas devolvidas. */
+  somaEmAberto: number;
+  somaRealizado: number;
+}> {
   const tabela = e.lado === 'receber' ? 'contas_receber' : 'contas_pagar';
   const nomeDaContraparte = e.lado === 'receber' ? 'cliente_nome' : 'fornecedor_nome';
   const colunaDaContraparte = e.lado === 'receber' ? 'cliente_id' : 'fornecedor_id';
@@ -114,6 +123,11 @@ export async function listarLancamentos(
         ? `${feito} <> 0 AND ${origemReceber()} = $5 AND ${dataDoCaixa('receber')} BETWEEN $2 AND $3 AND ($4 = $4)`
         : `${feito} <> 0 AND COALESCE(NULLIF(data->>'origem', ''), 'OUTROS') = $5 AND ${dataDoCaixa('pagar')} BETWEEN $2 AND $3 AND ($4 = $4)`,
     venda: `${vendaDeOrigem(e.lado)} = $5 AND ($2 <= $3) AND ($4 = $4)`,
+    // A MESMA expressão de faixa que o gráfico de aging usa. Se as duas
+    // divergirem, clicar na barra "vencido há 8 a 30 dias" abre outro
+    // conjunto de contas — e um detalhe que não fecha com o número que ele
+    // abre destrói a confiança no painel inteiro, não só naquele bloco.
+    aging: `${aberto} > 0 AND ${faixaDeAging('$4')} = $5 AND ($2 <= $3)`,
   };
 
   const condicao = condicoes[e.recorte] ?? condicoes['em-aberto'];
@@ -134,12 +148,23 @@ export async function listarLancamentos(
               ${vendaDeOrigem(e.lado)} AS venda
          FROM ${tabela}
         WHERE tenant_id = $1 AND ${naoCancelada()} AND ${condicao}
-        ORDER BY ${venc} ASC NULLS LAST, id ASC
+        -- NULLIF e não COALESCE: COALESCE(x,'') NUNCA devolve NULL, então o
+        -- NULLS LAST era decorativo e as contas sem vencimento subiam para o
+        -- TOPO (string vazia ordena antes de tudo), comendo o corte de 200 e
+        -- empurrando para fora justamente o que vence amanhã.
+        ORDER BY ${vencimentoValido()} ASC NULLS LAST, id ASC
         LIMIT ${limite}`,
       parametros,
     ),
     exec.query(
-      `SELECT COUNT(*) AS n FROM ${tabela}
+      // A soma sai daqui, SEM o LIMIT. Somar só as linhas devolvidas e exibir
+      // o número ao lado da contagem total faz o cabeçalho da gaveta dizer
+      // "347 lançamentos · R$ 58.000" quando os 347 somam R$ 190.000 — o
+      // detalhe nunca fecharia com o card que ele abriu.
+      `SELECT COUNT(*) AS n,
+              COALESCE(ROUND(SUM(${aberto}), 2), 0) AS soma_aberto,
+              COALESCE(ROUND(SUM(${feito}), 2), 0) AS soma_realizado
+         FROM ${tabela}
         WHERE tenant_id = $1 AND ${naoCancelada()} AND ${condicao}`,
       parametros,
     ),
@@ -151,6 +176,8 @@ export async function listarLancamentos(
   return {
     total,
     truncado: total > limite,
+    somaEmAberto: numeroDoBanco(contagem.rows[0]?.soma_aberto),
+    somaRealizado: numeroDoBanco(contagem.rows[0]?.soma_realizado),
     linhas: linhas.rows.map(r => {
       const vencimento = String(r.vencimento ?? '');
       return {
