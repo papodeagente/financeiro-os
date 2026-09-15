@@ -8,7 +8,9 @@ import {
 
 import type { DashboardFinanceiro } from '@/lib/dashboard-financeiro';
 import type { LadoDoLancamento, RecorteDoDetalhe } from '@/lib/dashboard-detalhe';
-import { calcularFatoresDeSaude, classificarSaude, gerarInsights, type Insight } from '@/lib/dashboard-insights';
+import {
+  calcularFatoresDeSaude, classificarSaude, gerarInsights, montarCascataDoResultado, type Insight,
+} from '@/lib/dashboard-insights';
 import { janelaDeComparacao } from '@/lib/periodo-financeiro';
 import { round2 } from '@/lib/money';
 import { PageHeader } from '@/components/fin/PageHeader';
@@ -152,7 +154,11 @@ function Painel() {
       id: f.id,
       rotulo: f.rotulo,
       valor: f.valor,
-      papel: 'seq' as const,
+      // "Sem data" não é o prazo mais longo: é AUSÊNCIA de prazo. Tratá-lo
+      // como o último degrau da rampa afirmaria que esse dinheiro entra depois
+      // de tudo, quando a verdade é que ninguém sabe quando ele entra. Vai como
+      // resto, que é o papel de "isto não é um par comparável".
+      papel: (f.id === 'sem_data' ? 'resto' : 'seq') as 'resto' | 'seq',
       // O prazo é ORDINAL: os quatro degraus da rampa, do mais urgente ao mais
       // distante. Vencido NÃO ganha vermelho aqui — o vermelho da tela já é o
       // alarme de caixa negativo, e duas coisas vermelhas competem.
@@ -162,17 +168,10 @@ function Painel() {
   const linhas = (itens: Array<{ id: string; nome: string; valor: number }>): LinhaBarra[] =>
     itens.map(i => ({ id: i.id, nome: i.nome, valor: i.valor }));
 
-  const passosDoResultado: PassoDaCascata[] = useMemo(() => {
-    if (!dados) return [];
-    const d = dados;
-    return [
-      { id: 'volume', rotulo: 'Volume vendido', valor: d.vendas.volume, papel: 'inicio', detalhe: `${d.vendas.quantidade} ${d.vendas.quantidade === 1 ? 'venda' : 'vendas'} no período` },
-      { id: 'repasse', rotulo: 'Repasse a fornecedores', valor: d.vendas.custo, papel: 'subtrai', detalhe: 'O que pertence à operadora, ao hotel e à cia aérea' },
-      { id: 'receita', rotulo: 'Receita da agência', valor: d.vendas.receitaAgencia, papel: 'total', detalhe: 'A margem: o que de fato fica com a empresa' },
-      { id: 'despesa', rotulo: 'Despesa própria', valor: d.caixa.despesasProprias.atual, papel: 'subtrai', detalhe: 'Paga no período, já sem o repasse' },
-      { id: 'resultado', rotulo: 'Resultado', valor: round2(d.vendas.receitaAgencia - d.caixa.despesasProprias.atual), papel: 'total', detalhe: 'Receita da agência menos despesa própria' },
-    ];
-  }, [dados]);
+  const passosDoResultado: PassoDaCascata[] = useMemo(
+    () => (dados ? montarCascataDoResultado(dados, formatar) : []),
+    [dados, formatar],
+  );
 
   const temMovimento = Boolean(
     dados &&
@@ -245,7 +244,7 @@ function Painel() {
                   (dados.caixa.repasses > 0
                     ? `, dos quais ${formatar(dados.caixa.repasses)} foram repasse a fornecedores.`
                     : '.') +
-                  ` Sobraram ${formatar(dados.caixa.resultado.atual)}.`
+                  ` Sobraram ${formatar(dados.caixa.resultado.atual)} no caixa.`
                 }
                 chip={{
                   icone: VEREDITO[veredito].icone,
@@ -271,13 +270,14 @@ function Painel() {
               {/* ── Os quatro números de apoio ───────────────────────────── */}
               <ul className="grid gap-[var(--fin-s-3)] sm:grid-cols-2 xl:grid-cols-4">
                 <li className={`${CARTAO} flex flex-col gap-1 p-[var(--fin-s-4)]`}>
-                  <span className="fin-t-overline text-[var(--fin-text-3)]">Resultado do período</span>
+                  <span className="fin-t-overline text-[var(--fin-text-3)]">Sobrou em caixa</span>
                   <ValorProtegido
                     valor={dados.caixa.resultado.atual}
                     size="metricSm"
                     align="esquerda"
                     tone={dados.caixa.resultado.atual < 0 ? 'negativo' : 'neutro'}
                   />
+                  <span className="fin-t-caption text-[var(--fin-text-3)]">entrou menos saiu, no período</span>
                   <Variacao pct={dados.caixa.resultado.variacao} base={rotuloDaComparacao} />
                 </li>
 

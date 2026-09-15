@@ -202,6 +202,76 @@ export function classificarSaude(fatores: FatorDeSaude[]): FaixaDeSaude {
   return 'bom';
 }
 
+export interface PassoDoResultado {
+  id: string;
+  rotulo: string;
+  valor: number;
+  papel: 'inicio' | 'soma' | 'subtrai' | 'total';
+  detalhe: string;
+}
+
+/**
+ * A cascata do resultado: do que o cliente pagou até o que sobrou.
+ *
+ * POR QUE A SUBTRAÇÃO NÃO É A SOMA DOS CUSTOS. `receitaAgencia` é a margem
+ * CLAMPADA POR VENDA: uma viagem vendida abaixo do custo conta zero, não
+ * negativo, porque empresa não tem receita negativa. Logo
+ * `volume − Σcusto ≠ Σmargem` sempre que houver uma venda no prejuízo, e uma
+ * cascata montada com a soma dos custos desenharia um total que não bate com
+ * os próprios degraus — o defeito mais corrosivo possível num gráfico que
+ * existe justamente para mostrar uma conta.
+ *
+ * Subtrair `volume − receitaAgencia` fecha por construção, em qualquer cenário.
+ * O custo registrado nas vendas continua visível, no detalhe do passo.
+ */
+export function montarCascataDoResultado(
+  d: DashboardFinanceiro,
+  formatar: (v: number) => string,
+): PassoDoResultado[] {
+  const naoFicou = round2(d.vendas.volume - d.vendas.receitaAgencia);
+  return [
+    {
+      id: 'volume',
+      rotulo: 'Volume vendido',
+      valor: d.vendas.volume,
+      papel: 'inicio',
+      detalhe: `${d.vendas.quantidade} ${d.vendas.quantidade === 1 ? 'venda' : 'vendas'} no período`,
+    },
+    {
+      id: 'repasse',
+      rotulo: 'Não ficou com a agência',
+      valor: naoFicou,
+      papel: 'subtrai',
+      detalhe:
+        `Repasse à operadora, ao hotel e à cia aérea` +
+        (d.vendas.custo > 0 ? ` · custo registrado nas vendas: ${formatar(d.vendas.custo)}` : ''),
+    },
+    {
+      id: 'receita',
+      rotulo: 'Receita da agência',
+      valor: d.vendas.receitaAgencia,
+      papel: 'total',
+      detalhe: 'A margem: o que de fato fica com a empresa',
+    },
+    {
+      id: 'despesa',
+      rotulo: 'Despesa própria',
+      valor: d.caixa.despesasProprias.atual,
+      papel: 'subtrai',
+      detalhe: 'Paga no período, já sem o repasse ao fornecedor',
+    },
+    {
+      id: 'resultado',
+      rotulo: 'Resultado das vendas',
+      valor: round2(d.vendas.receitaAgencia - d.caixa.despesasProprias.atual),
+      papel: 'total',
+      detalhe:
+        'Margem das vendas do período menos a despesa própria paga. É competência de venda, não caixa: ' +
+        'pode diferir do que sobrou na conta bancária.',
+    },
+  ];
+}
+
 /**
  * As observações.
  *

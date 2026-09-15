@@ -8,7 +8,7 @@
  * base não sustenta.
  */
 import {
-  calcularFatoresDeSaude, classificarSaude, gerarInsights,
+  calcularFatoresDeSaude, classificarSaude, gerarInsights, montarCascataDoResultado,
   CONCENTRACAO_DE_RISCO_PCT, INADIMPLENCIA_GRAVE_PCT, MARGEM_SAUDAVEL_PCT,
 } from '../src/lib/dashboard-insights.ts';
 import type { DashboardFinanceiro } from '../src/lib/dashboard-financeiro.ts';
@@ -261,6 +261,70 @@ console.log('--- fatores de saúde ---');
   d.vendas = { ...d.vendas, margemPct: 300 };
   const fatores = calcularFatoresDeSaude(d);
   eq(fatores.every(f => f.posicao === null || (f.posicao >= 0 && f.posicao <= 1)), true, 'a posição na régua fica entre 0 e 1');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+console.log('--- a cascata do resultado SEMPRE fecha ---');
+{
+  // A invariante: o passo "total" tem que ser exatamente o que os degraus
+  // anteriores produzem. Uma cascata cujo total não bate com os próprios
+  // degraus é o defeito mais corrosivo possível num gráfico que existe para
+  // mostrar uma conta — e ele nasce sozinho quando a receita é clampada.
+  const fecha = (d: DashboardFinanceiro, rotulo: string) => {
+    const passos = montarCascataDoResultado(d, brl);
+    const volume = passos[0].valor;
+    const naoFicou = passos[1].valor;
+    const receita = passos[2].valor;
+    const despesa = passos[3].valor;
+    const resultado = passos[4].valor;
+    eq(Math.round((volume - naoFicou) * 100) / 100, receita, `${rotulo}: volume − repasse = receita`);
+    eq(Math.round((receita - despesa) * 100) / 100, resultado, `${rotulo}: receita − despesa = resultado`);
+    eq(naoFicou >= 0, true, `${rotulo}: o repasse nunca é negativo`);
+  };
+
+  fecha(base(), 'agência saudável');
+}
+{
+  // O caso que quebra a cascata ingênua: uma viagem vendida ABAIXO do custo.
+  // A receita é clampada em zero por venda, então volume − Σcusto (150.000)
+  // daria 50.000, mas a soma das margens é 60.000. Montar a cascata com a soma
+  // dos custos desenharia um total 10.000 acima dos degraus.
+  const d = base();
+  d.vendas = { ...d.vendas, volume: 200000, custo: 150000, receitaAgencia: 60000, margemPct: 30 };
+  const passos = montarCascataDoResultado(d, brl);
+  eq(passos[1].valor, 140000, 'o degrau é volume − receita, não a soma dos custos');
+  eq(Math.round((passos[0].valor - passos[1].valor) * 100) / 100, passos[2].valor, 'e a cascata fecha mesmo assim');
+  // O custo registrado não some: ele vira contexto, onde não distorce a conta.
+  eq(passos[1].detalhe.includes('150.000'), true, 'o custo registrado continua visível no detalhe');
+}
+{
+  // Prejuízo: a despesa própria come toda a margem.
+  const d = base();
+  d.vendas = { ...d.vendas, volume: 100000, custo: 95000, receitaAgencia: 5000, margemPct: 5 };
+  d.caixa.despesasProprias = { atual: 18000, anterior: 9800, variacao: 83.67 };
+  const passos = montarCascataDoResultado(d, brl);
+  eq(passos[4].valor, -13000, 'o resultado negativo aparece como negativo, não clampado em zero');
+  eq(passos[4].papel, 'total', 'e continua sendo um total, que nasce da linha de base');
+}
+{
+  // Agência sem venda nenhuma no período.
+  const d = base();
+  d.vendas = { ...d.vendas, volume: 0, custo: 0, receitaAgencia: 0, quantidade: 0, margemPct: null };
+  d.caixa.despesasProprias = { atual: 4000, anterior: 4000, variacao: 0 };
+  const passos = montarCascataDoResultado(d, brl);
+  eq(passos[1].valor, 0, 'sem venda, não há repasse');
+  eq(passos[4].valor, -4000, 'mas a despesa própria continua derrubando o resultado');
+  eq(passos[1].detalhe.includes('custo registrado'), false, 'sem custo, o detalhe não inventa um');
+}
+{
+  // Os papéis importam para o desenho: "total" nasce da base, "subtrai" desce.
+  const passos = montarCascataDoResultado(base(), brl);
+  eq(passos.map(p => p.papel), ['inicio', 'subtrai', 'total', 'subtrai', 'total'], 'os papéis da cascata');
+  eq(passos.every(p => p.detalhe.length > 0), true, 'todo passo explica o que é');
+  // "Resultado" aparece duas vezes na tela com regimes diferentes: o card é
+  // caixa, este é competência de venda. O rótulo precisa dizer qual é qual.
+  eq(passos[4].rotulo, 'Resultado das vendas', 'o rótulo diz de que resultado se trata');
+  eq(passos[4].detalhe.includes('não caixa'), true, 'e o detalhe avisa que pode diferir do caixa');
 }
 
 console.log(`\n${total - falhas}/${total} testes dos insights passaram`);
