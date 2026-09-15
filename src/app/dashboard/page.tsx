@@ -733,6 +733,12 @@ function Painel() {
                     a data de hoje, não a data em que o cliente pagou, então a média mediria o dia do lançamento.
                   </li>
                   <li className="fin-t-caption text-[var(--fin-text-2)]">
+                    <strong className="text-[var(--fin-text)]">Um número pode diferir do DRE.</strong> Este painel
+                    conta só a venda CONFIRMADA ou concluída; o DRE conta toda venda que não foi cancelada,
+                    inclusive orçamento e reserva que já geraram contas. Quando os dois divergirem, o número
+                    daqui é o do que foi de fato vendido.
+                  </li>
+                  <li className="fin-t-caption text-[var(--fin-text-2)]">
                     <strong className="text-[var(--fin-text)]">Comparação mês a mês fiel.</strong> A série é
                     reconstruída com o estado atual das contas: uma baixa lançada hoje com data retroativa muda o
                     passado do gráfico. Para um histórico fiel seria preciso guardar um retrato por mês.

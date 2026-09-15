@@ -112,6 +112,12 @@ await ins('vendas_crm', 'v4', T, {
 await ins('contas_pagar', 'p8', T, { origem: 'VENDA', auto_gerado: true, status: 'PENDENTE', valor_final: 8000, data_vencimento: '2026-09-18', fornecedor_nome: 'Latam', origem_venda_id: 'v4' }, { fornecedor_id: 'forn-latam' });
 await ins('contas_receber', 'r7', T, { origem: 'VENDA', status: 'PENDENTE', valor_final: 10000, data_vencimento: '2026-10-10', cliente_nome: 'Empresa Descasada', descricao: 'Parcela única', origem_venda_id: 'v4' }, { cliente_id: 'cli4', venda_id: 'v4' });
 
+// VENCE HOJE. Conta que vence hoje NÃO é vencida — as duas definições que
+// convivem no sistema divergem exatamente em um dia, e sem um caso no fixture
+// o caminho inteiro ficava sem prova.
+await ins('contas_receber', 'r8', T, { origem: 'VENDA', status: 'PENDENTE', valor_final: 1500, data_vencimento: HOJE, cliente_nome: 'Vence Hoje', descricao: 'Parcela do dia' }, { cliente_id: 'cli5' });
+await ins('contas_pagar', 'p9', T, { origem: 'OUTROS', status: 'PENDENTE', valor_final: 600, data_vencimento: HOJE, fornecedor_nome: 'Cobra Hoje' }, { fornecedor_id: 'forn-hoje' });
+
 // Itens da venda: é daqui que sai margem POR FORNECEDOR.
 await ins('itens_venda', 'i1', T, { fornecedor_nome: 'CVC Operadora', valor_venda: 14000, valor_custo: 12000, cambio: 1 }, { venda_id: 'v1', fornecedor_id: 'forn-cvc', status: 'ativo' });
 await ins('itens_venda', 'i2', T, { fornecedor_nome: 'Azul Viagens', valor_venda: 6000, valor_custo: 4500, cambio: 1 }, { venda_id: 'v1', fornecedor_id: 'forn-azul', status: 'ativo' });
@@ -145,11 +151,15 @@ eq(d.caixa.saldoInicialDasContas, 10500, 'conta encerrada não entra no saldo in
 eq(d.caixa.saldo, 3800, 'saldo computado pelo histórico de baixas, não pelo campo persistido');
 
 console.log('\n--- posição: quanto falta entrar e sair ---');
-eq(d.posicao.receber.emAberto, 22400, 'a receber em aberto: 4.000 + 6.000 + 2.400 + 10.000');
+eq(d.posicao.receber.emAberto, 23900, 'a receber em aberto: 4.000 + 6.000 + 2.400 + 10.000 + 1.500');
 eq(d.posicao.receber.vencido, 2400, 'vencido é estritamente antes de hoje');
 eq(d.posicao.receber.contasVencidas, 1, 'uma parcela em atraso');
-eq(d.posicao.pagar.emAberto, 13540, 'a pagar em aberto: 4.500 + 700 + 340 + 8.000');
+// A conta que vence HOJE tem coluna própria: ela não é vencida nem futura, e
+// misturá-la em qualquer um dos dois lados faz o card não fechar com o aging.
+eq(d.posicao.receber.venceHoje, 1500, 'o que vence hoje é contado à parte');
+eq(d.posicao.pagar.emAberto, 14140, 'a pagar em aberto: 4.500 + 700 + 340 + 8.000 + 600');
 eq(d.posicao.pagar.vencido, 700, 'a conta de 01/09 está vencida');
+eq(d.posicao.pagar.venceHoje, 600, 'e o que vence hoje do outro lado também');
 
 console.log('\n--- aging soma o SALDO, nunca o valor cheio da parcela ---');
 {
@@ -158,7 +168,8 @@ console.log('\n--- aging soma o SALDO, nunca o valor cheio da parcela ---');
   eq(r.vencido_30, 2400, 'parcela vencida há 45 dias cai na faixa mais grave');
   // r2 vence 20/09 (5 dias) com 4.000 em aberto, não com os 7.000 cheios.
   eq(r.ate_7, 4000, 'parcial entra pelo saldo de 4.000, não pelos 7.000 da parcela');
-  eq(d.aging.receber.reduce((s, f) => s + f.valor, 0), 22400, 'as faixas somam o total em aberto');
+  eq(r.hoje, 1500, 'a faixa "vence hoje" existe e tem o valor certo');
+  eq(d.aging.receber.reduce((s, f) => s + f.valor, 0), 23900, 'as faixas somam o total em aberto');
   const p = Object.fromEntries(d.aging.pagar.map(f => [f.id, f.valor]));
   eq(p.sem_data, 340, 'conta sem vencimento aparece numa faixa própria, não some');
 }
@@ -169,9 +180,9 @@ console.log('\n--- projeção de caixa ---');
   // Até 22/09 entram 2.400 (já vencido) + 4.000 (20/09) = 6.400.
   // Saem 700 (vencido) + 8.000 da Latam (18/09) = 8.700. A Azul vence 25/09,
   // fora da janela — e é isso que uma projeção por janela precisa acertar.
-  eq(j[7].entradas, 6400, 'o que já venceu e não entrou conta na primeira janela');
-  eq(j[7].saidas, 8700, 'saídas até 22/09, sem puxar o que vence depois');
-  eq(j[7].saldoProjetado, 1500, 'saldo projetado em 7 dias: 3.800 + 6.400 − 8.700');
+  eq(j[7].entradas, 7900, 'o que já venceu e o que vence hoje contam na primeira janela');
+  eq(j[7].saidas, 9300, 'saídas até 22/09, sem puxar o que vence depois');
+  eq(j[7].saldoProjetado, 2400, 'saldo projetado em 7 dias: 3.800 + 7.900 − 9.300');
   eq(j[90].saldoProjetado > j[7].saldoProjetado, true, 'a parcela de outubro melhora a janela longa');
   eq(d.projecao.map(p => p.dias), [7, 15, 30, 60, 90], 'cinco janelas');
 }
@@ -331,7 +342,10 @@ console.log('\n--- recortes por referência ---');
 }
 {
   const h = await listarLancamentos(exec, { ...janela, lado: 'pagar', recorte: 'vence-hoje' });
-  eq(h.linhas.length, 0, 'nada vence exatamente hoje neste cenário');
+  eq(h.linhas.map(l => l.id), ['p9'], 'o recorte "vence hoje" abre exatamente a conta do dia');
+  eq(h.somaEmAberto, d.posicao.pagar.venceHoje, 'e fecha com o card');
+  const hr = await listarLancamentos(exec, { ...janela, lado: 'receber', recorte: 'vence-hoje' });
+  eq(hr.linhas[0].diasDeAtraso, 0, 'conta que vence hoje tem zero dia de atraso, não um');
 }
 
 console.log('\n--- clicar numa faixa abre exatamente aquela faixa ---');
