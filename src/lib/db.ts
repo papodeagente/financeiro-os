@@ -1263,6 +1263,29 @@ async function executarInitDB() {
       ON contas_pagar (tenant_id, (data->>'data_vencimento'));
   `);
 
+  // ---- Desempenho: o corte por REGIME DE CAIXA ----
+  //
+  // O Dashboard Financeiro corta entradas e saídas pela data em que o dinheiro
+  // se MOVEU, com o vencimento como retaguarda para lançamento antigo sem data
+  // de baixa. Essa expressão não aproveita o índice de vencimento acima, e sem
+  // um índice próprio cada abertura do painel varre as contas do tenant seis
+  // vezes — de graça hoje, caro em três anos de operação.
+  //
+  // DENTRO DE TRY/CATCH DE PROPÓSITO: initDB roda em TODA requisição, e uma
+  // exceção aqui derruba o sistema inteiro. Índice é otimização; a ausência
+  // dele deixa o painel lento, nunca fora do ar. Este é o tipo de linha que já
+  // causou indisponibilidade total neste projeto.
+  try {
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_contas_receber_caixa
+        ON contas_receber (tenant_id, (COALESCE(NULLIF(data->>'data_recebimento', ''), data->>'data_vencimento')));
+      CREATE INDEX IF NOT EXISTS idx_contas_pagar_caixa
+        ON contas_pagar (tenant_id, (COALESCE(NULLIF(data->>'data_pagamento', ''), data->>'data_vencimento')));
+    `);
+  } catch (e) {
+    console.warn('[db] índice do regime de caixa não criado; o painel segue correto, só mais lento:', e);
+  }
+
   // Run multi-tenant migration (assign existing data to default tenant)
   const { migrateToMultiTenant } = await import('./migrate-multitenant');
   await migrateToMultiTenant();

@@ -156,5 +156,33 @@ console.log('\n--- o recorte do drill-down é fechado ---');
   ok(rota.includes('RECORTES.includes'), 'a rota valida o recorte contra a lista fechada');
 }
 
+// ══════════════════════════════════════════════════════════════════════
+console.log('\n--- o índice casa com a consulta ---');
+{
+  // Índice de expressão só é usado quando a expressão do SELECT é IDÊNTICA à
+  // do CREATE INDEX. Uma diferença de COALESCE/NULLIF e o Postgres ignora o
+  // índice sem avisar: a consulta continua correta e fica lenta para sempre.
+  const db = readFileSync('src/lib/db.ts', 'utf8');
+  const sql = readFileSync('src/lib/dashboard-sql.ts', 'utf8');
+
+  const expressaoNoIndice = (campo: string) =>
+    `COALESCE(NULLIF(data->>'${campo}', ''), data->>'data_vencimento')`;
+
+  for (const [campo, indice] of [
+    ['data_recebimento', 'idx_contas_receber_caixa'],
+    ['data_pagamento', 'idx_contas_pagar_caixa'],
+  ]) {
+    ok(db.includes(indice), `${indice} existe em db.ts`);
+    ok(db.includes(expressaoNoIndice(campo)), `${indice} indexa a expressão do regime de caixa`);
+  }
+
+  // E a mesma expressão é a que dataDoCaixa() monta.
+  ok(
+    sql.includes("COALESCE(NULLIF(${campo(nome, alias)}, ''), ${campo('data_vencimento', alias)})"),
+    'dataDoCaixa monta exatamente a expressão indexada',
+    'se as duas divergirem, o índice vira peso morto',
+  );
+}
+
 console.log(`\n${total - falhas}/${total} testes de isolamento passaram`);
 if (falhas > 0) process.exit(1);
