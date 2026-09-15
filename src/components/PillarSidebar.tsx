@@ -6,6 +6,7 @@ import { useActivePillar, type Pillar } from '@/hooks/useActivePillar';
 import {
   Wallet, Gauge,
   Wallet2,
+  ShoppingBag,
   LayoutDashboard, Medal, Percent, Settings, UserCheck,
   BarChart3,
   BarChart3 as FluxoIcon, FileSpreadsheet, Receipt, CreditCard,
@@ -118,6 +119,7 @@ const CONFIGURACOES_MENU: SidebarSection[] = [
       // Uma entrada só. CRM, nota fiscal e IA estão dentro, cada um com a
       // sua página — três linhas de menu para três telas parecidas era o
       // que fazia ninguém achar nada.
+      { key: 'cfg-plataformas', label: 'Plataformas de venda', icon: ShoppingBag, href: '/config/plataformas' },
       { key: 'cfg-integracoes', label: 'Integrações', icon: Link2, href: '/config/integracoes' },
     ],
   },

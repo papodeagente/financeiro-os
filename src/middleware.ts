@@ -45,6 +45,10 @@ const PUBLIC_PATHS = [
   '/signup',
   '/p/', '/api/propostas/public/', '/api/uploads/',
   '/api/v1/crm/webhook', '/api/v1/crm/health',
+  // Webhook das plataformas de venda: quem chama é a Hotmart, o Asaas ou
+  // o Pagar.me, que não têm sessão. A autenticação é por token ou
+  // assinatura dentro da própria rota, por agência.
+  '/api/v1/plataformas/',
   '/admin/login', '/api/admin/auth/login', '/api/admin/auth/seed',
   '/api/planos',
   '/api/marketing/',
