@@ -42,9 +42,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ slug: st
     const proposta = rows[0].data;
     const tenantId = rows[0].tenant_id || '';
 
-    // Se a request veio por dominio customizado, esse dominio precisa
-    // pertencer ao mesmo tenant da proposta. Senao, 404 (nao vaza nada).
-    if (!(await isHostAuthorizedForProposta(req, tenantId))) {
+    // Só o host canônico serve proposta pública. Qualquer outro recebe 404,
+    // que não vaza sequer a existência da proposta.
+    if (!isHostAuthorizedForProposta(req)) {
       return NextResponse.json({ error: 'Proposta nao encontrada' }, { status: 404 });
     }
 

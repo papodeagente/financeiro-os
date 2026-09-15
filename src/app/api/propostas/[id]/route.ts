@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
+import { buildPropostaLink } from '@/lib/proposta-link';
 import { emitirEventoCRM } from '@/lib/crm-integration';
 import { getTenantId } from '@/lib/tenant';
 
@@ -53,25 +54,15 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     const newStatus = item.status;
     if (newStatus && newStatus !== prevStatus) {
       if (newStatus === 'ENVIADO') {
-        // Le agencia pra montar link com dominio customizado quando
-        // configurado pelo tenant.
-        const agenciaRow = await pool.query(
-          'SELECT data FROM agencia WHERE tenant_id = $1 LIMIT 1',
-          [tenantId],
-        );
-        const agencia = agenciaRow.rows[0]?.data as { custom_proposta_domain?: string } | undefined;
-        const customDomain = agencia?.custom_proposta_domain?.trim();
-        const linkBase = customDomain
-          ? (/^https?:\/\//i.test(customDomain)
-              ? customDomain.replace(/\/+$/, '')
-              : `https://${customDomain.replace(/\/+$/, '')}`)
-          : (process.env.PUBLIC_APP_URL || 'https://fin.enturos.com').replace(/\/+$/, '');
         emitirEventoCRM('PROPOSTA_ENVIADA', {
           proposta_id: id,
           numero: item.numero,
           cliente_id: item.cliente_id,
           valor_total: item.valor_total,
-          link_publico: `${linkBase}/p/${id.substring(0, 8)}`,
+          // Id INTEIRO: resolvePropostaForHost recusa slug com menos de 10
+          // caracteres, e generateId produz ~15. Truncado em 8, este link
+          // nunca abriu — ia para o card do contato no CRM e dava 404.
+          link_publico: buildPropostaLink(id),
         }, { tenantId });
       } else if (newStatus === 'ACEITO') {
         emitirEventoCRM('PROPOSTA_ACEITA', {

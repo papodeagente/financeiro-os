@@ -18,7 +18,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     );
     if (rows.length === 0) return NextResponse.json({ ok: false });
 
-    if (!(await isHostAuthorizedForProposta(req, rows[0].tenant_id))) {
+    if (!isHostAuthorizedForProposta(req)) {
       return NextResponse.json({ ok: false });
     }
 

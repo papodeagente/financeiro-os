@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Proposta, Cliente } from '@/lib/crm-types';
+import { normalizarPropostaLink } from '@/lib/proposta-link';
 import { loadEntities, deleteEntity } from '@/lib/crm-storage';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -302,7 +303,15 @@ export default function PropostasPage() {
                       </Link>
                       {p.link_publico && (
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-[var(--t-text-secondary)] hover:text-[var(--t-text)]"
-                          onClick={() => { navigator.clipboard.writeText(p.link_publico); }}
+                          onClick={() => {
+                            // Normaliza na hora de copiar: proposta antiga tem
+                            // o link gravado no domínio personalizado que foi
+                            // removido, e copiar o campo cru entregaria ao
+                            // cliente um endereço prestes a morrer.
+                            navigator.clipboard.writeText(
+                              normalizarPropostaLink(p.link_publico, p.id, window.location.origin),
+                            );
+                          }}
                           title="Copiar link">
                           <Copy className="w-4 h-4" />
                         </Button>

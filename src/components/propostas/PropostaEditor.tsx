@@ -35,15 +35,13 @@ import { RodapeSection } from './preview/RodapeSection';
 import { DiscoveryRenderer } from './preview/discovery/DiscoveryRenderer';
 import { PreviewEditorProvider, type PreviewEditorBlockType } from './PreviewEditorContext';
 import { PreviewIframeCanvas } from './PreviewIframeCanvas';
-import { buildPropostaLink } from '@/lib/proposta-link';
+import { buildPropostaLink, normalizarPropostaLink } from '@/lib/proposta-link';
 import { groupIntoRows } from '@/lib/proposta-layout';
 import type { IdiomaProposal } from '@/lib/i18n-proposta';
-import { loadAgencia } from '@/lib/crm-storage';
 import { aplicarExemploNaProposta } from '@/lib/proposta-exemplo';
 import { getDatasViagemDefaults } from '@/lib/proposta-datas';
 import { PropostaOnboarding } from './PropostaOnboarding';
 import { toast } from '@/lib/toast';
-import type { Agencia } from '@/lib/crm-types';
 
 const TIPO_LABELS_GLOBAL: Record<string, string> = {
   TEXTO: 'Texto', SERVICO: 'Serviço', VOO: 'Voo', ROTEIRO_DIA: 'Roteiro',
@@ -146,13 +144,6 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
   // pelos atalhos de teclado (D/H/Del/Arrows).
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
-  // Agencia do tenant — usada pra resolver o dominio customizado das
-  // propostas publicas. Carregada uma vez no mount.
-  const [agencia, setAgencia] = useState<Agencia | null>(null);
-  useEffect(() => {
-    loadAgencia<Agencia>().then(a => { if (a) setAgencia(a); });
-  }, []);
-
   // Onboarding guiado — aparece na 1a vez que o usuario abre uma proposta
   // vazia. Mostra modal com 3 opcoes: aplicar exemplo, gerar com IA, ou
   // comecar do zero. Flag persistida em localStorage pra nao mostrar de
@@ -534,9 +525,12 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
       setAutoSaveStatus('saving');
       try {
         const p = { ...proposta, atualizado_em: new Date().toISOString() };
-        if (!p.link_publico) {
-          p.link_publico = buildPropostaLink(p.id, agencia, window.location.origin);
-        }
+        // Normaliza SEMPRE, não só quando está vazio: link gravado em outro
+        // host (o domínio personalizado que foi removido) precisa ser
+        // reescrito, senão o produto segue entregando ao cliente um endereço
+        // que vai morrer junto com o certificado. Link já correto passa
+        // intacto, então isto é inócuo no caso normal.
+        p.link_publico = normalizarPropostaLink(p.link_publico, p.id, window.location.origin);
         await fetch(`/api/propostas${isEdit ? `/${p.id}` : ''}`, {
           method: isEdit ? 'PUT' : 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -902,7 +896,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
       atualizado_em: new Date().toISOString(),
       secoes: current.secoes.map(s => ({ ...s, id: generateId() })),
     };
-    nova.link_publico = buildPropostaLink(nova.id, agencia, window.location.origin);
+    nova.link_publico = buildPropostaLink(nova.id, window.location.origin);
     const res = await fetch('/api/propostas', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

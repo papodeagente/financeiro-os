@@ -822,7 +822,7 @@ async function executarInitDB() {
       ('plano-founder-pro', 'founder-pro', 'Founder Pro', 'Para agências consolidadas com alto volume e necessidade de white-label.',
         397, 3970, 'BRL', FALSE, 3, TRUE,
         '{"usuarios": -1, "propostas_mes": -1, "grupos": -1, "ai_enabled": true, "white_label": true}'::jsonb,
-        '["Usuários ilimitados", "Propostas ilimitadas", "Geração com IA (Claude)", "CRM completo + automações", "Domínio personalizado nas propostas", "White-label completo", "Suporte dedicado", "Onboarding 1-a-1"]'::jsonb
+        '["Usuários ilimitados", "Propostas ilimitadas", "Geração com IA (Claude)", "CRM completo + automações", "White-label completo", "Suporte dedicado", "Onboarding 1-a-1"]'::jsonb
       )
     ON CONFLICT (id) DO NOTHING;
   `);
@@ -1088,16 +1088,20 @@ async function executarInitDB() {
   `);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_planejamento_custos_tenant_mes ON planejamento_custos(tenant_id, mes)`);
 
-  // Unicidade do domínio personalizado de propostas — um domínio pode
-  // pertencer a UM tenant só. Normaliza removendo protocolo + trailing
-  // slash + lowercase no índice expressional pra casar com a query de
-  // resolução por hostname.
-  await pool.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS uq_agencia_custom_proposta_domain
-    ON agencia (LOWER(TRIM(BOTH '/' FROM REGEXP_REPLACE(data->>'custom_proposta_domain', '^https?://', '', 'i'))))
-    WHERE data->>'custom_proposta_domain' IS NOT NULL
-      AND data->>'custom_proposta_domain' <> ''
-  `);
+  // O domínio personalizado de propostas foi removido do produto, e com ele o
+  // índice único que garantia um domínio por agência. O POST de /api/agencia
+  // descarta o campo na gravação, então o valor órfão some do documento no
+  // próximo salvamento de cada agência — sem UPDATE em massa, que apagaria
+  // dado de cliente como efeito colateral de remover um recurso.
+  //
+  // DENTRO DE TRY/CATCH: initDB roda em TODA requisição, e uma exceção aqui
+  // derruba o sistema inteiro. Se o DROP falhar, o índice fica — vazio e
+  // inofensivo, já que ninguém preenche mais o campo.
+  try {
+    await pool.query(`DROP INDEX IF EXISTS uq_agencia_custom_proposta_domain`);
+  } catch (e) {
+    console.warn('[db] índice do domínio personalizado não removido:', e);
+  }
 
   // ============================================================
   // AUDITORIA 2026-09-06 — isolamento, chaves naturais e desempenho

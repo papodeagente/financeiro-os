@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Sparkles, Check, ArrowRight, Zap, FileText, Users, BarChart3,
-  Plane, Hotel, Bot, Shield, Globe, Loader2,
+  Plane, Hotel, Bot, Shield, Loader2,
 } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 
@@ -29,7 +29,6 @@ const FEATURES_GRID = [
   { icon: Bot, title: 'Geração com IA', desc: 'Claude monta roteiros completos e textos comerciais baseados no destino e cliente.' },
   { icon: Users, title: 'CRM integrado', desc: 'Negociações, clientes, tarefas e anotações sincronizadas com cada proposta.' },
   { icon: BarChart3, title: 'Funis & campanhas', desc: 'Simulador de funil com fluxo visual e cenários comparativos.' },
-  { icon: Globe, title: 'Domínio próprio', desc: 'Propostas publicadas em proposta.suaagencia.com.br (plano Founder Pro).' },
 ];
 
 export function LandingClient() {

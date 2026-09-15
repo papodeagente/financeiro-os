@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
+import { buildPropostaLink } from '@/lib/proposta-link';
 import { generateId } from '@/lib/utils';
 import { hojeISO } from '@/lib/money';
 import { calcProposta } from '@/lib/calculations';
@@ -758,28 +759,15 @@ export async function POST(req: NextRequest) {
     const host = req.headers.get('host') || 'fin.enturos.com';
     const baseUrl = `${proto}://${host}`;
 
-    // Le agencia pra resolver dominio customizado das propostas
-    // (custom_proposta_domain). Quando configurado, o link_publico usa
-    // esse dominio em vez do baseUrl interno.
-    const agenciaRow = await pool.query(
-      'SELECT data FROM agencia WHERE tenant_id = $1 LIMIT 1',
-      [tenantId],
-    );
-    const agencia = agenciaRow.rows[0]?.data as { custom_proposta_domain?: string } | undefined;
-    const customDomain = agencia?.custom_proposta_domain?.trim();
-    const propostaLinkBase = customDomain
-      ? (/^https?:\/\//i.test(customDomain)
-          ? customDomain.replace(/\/+$/, '')
-          : `https://${customDomain.replace(/\/+$/, '')}`)
-      : baseUrl;
-
     const valorTotalRef = (pricing.totalAvista['dbl'] || pricing.totalAvista['sgl'] || 0);
     emitirEventoCRM('PROPOSTA_GERADA', {
       grupo_id,
       proposta_id: id,
       numero: num,
       titulo: `Viagem — ${destino}`,
-      link_publico: `${propostaLinkBase}/p/${id.slice(0, 8)}`,
+      // Mesmo defeito do outro produtor: slug de 8 caracteres é recusado pela
+      // guarda de resolução, então este link nunca abriu.
+      link_publico: buildPropostaLink(id, baseUrl),
       link_editor:  `${baseUrl}/propostas/${id}`,
       valor_total_referencia: valorTotalRef,
       moeda: 'BRL',

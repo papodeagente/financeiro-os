@@ -27,7 +27,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     const proposta = rows[0].data;
     const tenantId = rows[0].tenant_id || '';
 
-    if (!(await isHostAuthorizedForProposta(req, tenantId))) {
+    if (!isHostAuthorizedForProposta(req)) {
       return NextResponse.json({ error: 'Proposta nao encontrada' }, { status: 404 });
     }
 

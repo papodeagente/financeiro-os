@@ -53,7 +53,9 @@ function ambiente(opcoes = {}) {
         notificacoes.push(input);
       },
     },
-    '@/lib/tenant-host': { isHostAuthorizedForProposta: async () => true },
+    // Síncrona, como a real: um mock async passaria pelo `if (!...)` porque
+    // Promise é sempre verdadeiro, escondendo uma quebra de contrato.
+    '@/lib/tenant-host': { isHostAuthorizedForProposta: () => true },
     '@/lib/proposta-aceite-crm': {
       processarEventoPropostaPublica: async () => {
         ordem.push('evento-local');

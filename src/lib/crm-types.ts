@@ -1254,14 +1254,6 @@ export interface Agencia {
    *  cai no mês SEGUINTE ao da competência. Usado na previsão do fluxo de
    *  caixa: sem isso a folha apareceria no mês errado. */
   dia_pagamento_folha: number;
-  // Dominio customizado pra propostas publicas. Quando preenchido
-  // (ex.: "proposta.minhaagencia.com.br"), o link enviado ao cliente
-  // troca fin.enturos.com pelo dominio do tenant — preservando o path
-  // /p/{slug}. O DNS do dominio precisa apontar via CNAME pra
-  // fin.enturos.com e a infraestrutura precisa estar configurada
-  // pra aceitar esse host. So o LINK externo muda; o sistema
-  // continua identificando a proposta pelo slug.
-  custom_proposta_domain?: string;
 }
 
 // Perfis suportados. Os 3 principais: ADMIN/OPERADOR/VENDEDOR.

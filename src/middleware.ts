@@ -17,27 +17,6 @@ function getJwtSecret() {
 
 const COOKIE_NAME = 'entur-session';
 
-// Rotas permitidas em domínio personalizado de proposta. Tudo fora
-// desta whitelist é redirecionado pro domínio canônico. O middleware
-// NÃO valida tenant aqui (sem acesso a DB no edge runtime) — quem
-// valida é a rota /api/propostas/public/[slug] via tenant-host.ts.
-function isProposalAllowedPath(pathname: string): boolean {
-  return (
-    pathname === '/p' ||
-    pathname.startsWith('/p/') ||
-    pathname.startsWith('/api/propostas/public/') ||
-    pathname.startsWith('/api/uploads/') ||
-    pathname.startsWith('/_next/') ||
-    pathname.startsWith('/favicon') ||
-    pathname.endsWith('.ico') ||
-    pathname.endsWith('.png') ||
-    pathname.endsWith('.jpg') ||
-    pathname.endsWith('.svg') ||
-    pathname === '/robots.txt' ||
-    pathname === '/sitemap.xml'
-  );
-}
-
 // Public routes that don't require authentication
 const PUBLIC_PATHS = [
   '/login', '/api/auth/login', '/api/auth/seed', '/api/auth/session',
@@ -90,26 +69,25 @@ export async function middleware(request: NextRequest) {
   const next = () => NextResponse.next({ request: { headers: requestHeaders } });
 
   // ============================================================
-  // Custom proposal domain — só serve rotas de proposta pública
+  // Só o domínio canônico serve a aplicação
   // ============================================================
-  // Se o host não é canônico (configurado por algum tenant em
-  // Agencia.custom_proposta_domain), bloqueia qualquer rota fora do
-  // whitelist redirecionando pro domínio canônico. A validação de
-  // "esse hostname pertence ao tenant da proposta X" acontece no
-  // server-side da rota (tenant-host.ts), porque o middleware roda
-  // em edge runtime e não pode tocar no Postgres.
+  // Havia aqui uma exceção: um host de terceiro configurado por uma agência
+  // em Agencia.custom_proposta_domain podia servir a proposta pública sem
+  // passar por autenticação. O domínio personalizado foi removido do produto
+  // (a ativação dependia de emitir certificado SSL por domínio, etapa que
+  // deixou de existir), e com ele a exceção — que era o único caminho da
+  // aplicação em que um host desconhecido chegava a servir conteúdo.
+  //
+  // Agora qualquer host fora da lista canônica é redirecionado, sem exceção
+  // de rota. A lista canônica inclui COOLIFY_FQDN e CANONICAL_HOSTS, então o
+  // próprio domínio de produção e os ambientes continuam passando.
   const host = extractHost(request);
   if (host && !isCanonicalHost(host)) {
-    if (!isProposalAllowedPath(pathname)) {
-      const target = new URL(
-        `${pathname}${request.nextUrl.search}`,
-        getCanonicalBaseUrl(),
-      );
-      return NextResponse.redirect(target, 302);
-    }
-    // Rota permitida no domínio de proposta — segue sem checar auth
-    // (propostas públicas não exigem login).
-    return addSecurityHeaders(next());
+    const target = new URL(
+      `${pathname}${request.nextUrl.search}`,
+      getCanonicalBaseUrl(),
+    );
+    return NextResponse.redirect(target, 302);
   }
 
   // Allow public paths (prefixos + exatos).

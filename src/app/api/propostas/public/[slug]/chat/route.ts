@@ -39,7 +39,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       return NextResponse.json({ error: 'Proposta nao encontrada' }, { status: 404 });
     }
 
-    if (!(await isHostAuthorizedForProposta(req, rows[0].tenant_id))) {
+    if (!isHostAuthorizedForProposta(req)) {
       return NextResponse.json({ error: 'Proposta nao encontrada' }, { status: 404 });
     }
 
