@@ -626,6 +626,9 @@ async function descasamento(
           AND COALESCE(data->>'data_vencimento', '') <> ''
         GROUP BY 1
      )
+     -- tenant-ok: as duas CTEs acima já filtram tenant_id = $1, então cada
+     -- lado deste JOIN é de uma agência só e casar por venda basta. O LEFT
+     -- JOIN em vendas_crm, esse sim, repete a cláusula: ele toca a tabela.
      SELECT p.venda, p.primeiro AS primeiro_pagamento, r.primeiro AS primeiro_recebimento, p.aberto,
             COALESCE(NULLIF(v.data->>'numero', ''), '') AS numero,
             COALESCE(NULLIF(v.data->>'cliente_nome', ''), '') AS cliente,
