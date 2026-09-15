@@ -1242,7 +1242,6 @@ export interface Agencia {
   site: string;
   redes_sociais: Record<string, string>;
   logo: string;
-  cores_identidade: { primaria: string; secundaria: string };
   regime_tributario: 'SIMPLES' | 'LUCRO_PRESUMIDO' | 'LUCRO_REAL';
   aliquota_padrao: number;
   /** Dias do mês em que a agência paga comissão, por exemplo [5, 20].

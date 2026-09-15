@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Save, Building2, MapPin, Phone, DollarSign, Palette, Loader2, CheckCircle2, Globe, ExternalLink, CalendarClock } from 'lucide-react';
+import { Save, Building2, MapPin, Phone, DollarSign, Loader2, CheckCircle2, Globe, ExternalLink, CalendarClock } from 'lucide-react';
 import { Agencia } from '@/lib/crm-types';
 import { proximaDataPagamento, descreverAgenda } from '@/lib/comissao-agenda';
 import { DIA_PAGAMENTO_FOLHA_PADRAO } from '@/lib/folha-pagamento';
@@ -32,7 +32,6 @@ const defaultAgencia: Agencia = {
   site: '',
   redes_sociais: {},
   logo: '',
-  cores_identidade: { primaria: '#1a1a2e', secundaria: '#d4a853' },
   regime_tributario: 'SIMPLES',
   aliquota_padrao: 6,
   datas_pagamento_comissao: [],
@@ -51,15 +50,13 @@ export default function AgenciaPage() {
     loadAgencia<Agencia>().then((result) => {
       if (result) {
         // Merge raso preservando defaults dos subobjects. Sem isso, se
-        // o registro salvo não tiver `endereco`/`cores_identidade`/
-        // `redes_sociais` (dados antigos ou tenants novos), o spread
-        // sumiria com esses objetos e a UI quebrava em
-        // data.endereco.cep.replace(...).
+        // o registro salvo não tiver `endereco`/`redes_sociais` (dados
+        // antigos ou tenants novos), o spread sumiria com esses objetos e a
+        // UI quebrava em data.endereco.cep.replace(...).
         setData((prev) => ({
           ...prev,
           ...result,
           endereco: { ...prev.endereco, ...((result as Agencia).endereco || {}) },
-          cores_identidade: { ...prev.cores_identidade, ...((result as Agencia).cores_identidade || {}) },
           redes_sociais: { ...prev.redes_sociais, ...((result as Agencia).redes_sociais || {}) },
         }));
       }
@@ -73,10 +70,6 @@ export default function AgenciaPage() {
 
   function setEndereco(key: keyof Agencia['endereco'], value: string) {
     setData((prev) => ({ ...prev, endereco: { ...prev.endereco, [key]: value } }));
-  }
-
-  function setCores(key: keyof Agencia['cores_identidade'], value: string) {
-    setData((prev) => ({ ...prev, cores_identidade: { ...prev.cores_identidade, [key]: value } }));
   }
 
   async function handleCepBlur() {
@@ -468,63 +461,7 @@ export default function AgenciaPage() {
           </CardContent>
         </Card>
 
-        {/* Section 5: Identidade Visual */}
-        <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)]">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-[var(--t-accent)] flex items-center gap-2 text-base">
-              <Palette className="w-4 h-4" />
-              Identidade Visual
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-xs text-[var(--t-text-secondary)] uppercase tracking-wide">Cor Primária</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="color"
-                    value={data.cores_identidade.primaria}
-                    onChange={(e) => setCores('primaria', e.target.value)}
-                    className="w-10 h-10 rounded cursor-pointer shadow-[var(--t-card-shadow)] bg-transparent p-0.5"
-                  />
-                  <Input
-                    value={data.cores_identidade.primaria}
-                    onChange={(e) => setCores('primaria', e.target.value)}
-                    placeholder="#1a1a2e"
-                    className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)] placeholder:text-[var(--t-text-muted)] focus:border-[var(--t-accent)] font-mono"
-                  />
-                </div>
-                <div
-                  className="h-8 rounded-md shadow-[var(--t-card-shadow)]"
-                  style={{ backgroundColor: data.cores_identidade.primaria }}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs text-[var(--t-text-secondary)] uppercase tracking-wide">Cor Secundária</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="color"
-                    value={data.cores_identidade.secundaria}
-                    onChange={(e) => setCores('secundaria', e.target.value)}
-                    className="w-10 h-10 rounded cursor-pointer shadow-[var(--t-card-shadow)] bg-transparent p-0.5"
-                  />
-                  <Input
-                    value={data.cores_identidade.secundaria}
-                    onChange={(e) => setCores('secundaria', e.target.value)}
-                    placeholder="#d4a853"
-                    className="bg-[var(--t-bg)] border-[var(--t-border)] text-[var(--t-text)] placeholder:text-[var(--t-text-muted)] focus:border-[var(--t-accent)] font-mono"
-                  />
-                </div>
-                <div
-                  className="h-8 rounded-md shadow-[var(--t-card-shadow)]"
-                  style={{ backgroundColor: data.cores_identidade.secundaria }}
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Section 6: Domínio personalizado para propostas */}
+        {/* Domínio personalizado para propostas */}
         <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)]">
           <CardHeader className="pb-3">
             <CardTitle className="text-[var(--t-accent)] flex items-center gap-2 text-base">
