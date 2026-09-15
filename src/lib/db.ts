@@ -334,6 +334,42 @@ async function executarInitDB() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    -- Integração com plataformas de venda e recebimento (Hotmart, Asaas,
+    -- Pagar.me e as que vierem). Uma linha por tenant e plataforma.
+    -- A credencial NAO fica aqui em texto: data.credencial guarda o
+    -- envelope cifrado do cofre (src/lib/cofre.ts).
+    CREATE TABLE IF NOT EXISTS plataformas_config (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL DEFAULT '',
+      plataforma TEXT NOT NULL DEFAULT '',
+      ativo BOOLEAN NOT NULL DEFAULT false,
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    -- Uma configuração por plataforma por agência.
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_plataformas_config
+      ON plataformas_config(tenant_id, plataforma);
+
+    -- Eventos recebidos das plataformas. A chave única é o que impede
+    -- reenvio de webhook de virar segunda venda: a plataforma reenvia por
+    -- desenho quando não recebe 200 a tempo.
+    CREATE TABLE IF NOT EXISTS plataformas_eventos (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL DEFAULT '',
+      plataforma TEXT NOT NULL DEFAULT '',
+      id_externo TEXT NOT NULL DEFAULT '',
+      tipo TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'RECEBIDO',
+      erro TEXT,
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_plataformas_eventos
+      ON plataformas_eventos(tenant_id, plataforma, id_externo);
+    CREATE INDEX IF NOT EXISTS idx_plataformas_eventos_lista
+      ON plataformas_eventos(tenant_id, created_at DESC);
+
     CREATE TABLE IF NOT EXISTS crm_eventos_entrada (
       id TEXT PRIMARY KEY,
       idempotency_key TEXT NOT NULL DEFAULT '',
