@@ -3,14 +3,19 @@ import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn, formatBRL } from '@/lib/utils';
 
-export const moneyVariants = cva('fin-money tabular-nums', {
+export const moneyVariants = cva('fin-money', {
   variants: {
+    // Os algarismos vêm POR DEGRAU, não na base: coluna de tabela precisa de
+    // tabular (dígitos alinham entre linhas) e a manchete precisa de
+    // proporcional (tabular deixa o "1" boiando na caixa e desalinha o início
+    // do número num corpo grande).
     size: {
-      caption: 'fin-t-caption',
-      body: 'fin-t-body',
-      strong: 'fin-t-body-strong',
-      metricSm: 'fin-t-metric-sm',
-      metric: 'fin-t-metric',
+      caption: 'fin-t-caption tabular-nums',
+      body: 'fin-t-body tabular-nums',
+      strong: 'fin-t-body-strong tabular-nums',
+      metricSm: 'fin-t-metric-sm tabular-nums',
+      metric: 'fin-t-metric tabular-nums',
+      resposta: 'fin-t-resposta proportional-nums',
     },
     tone: {
       neutro: 'text-[var(--fin-text)]',
@@ -48,6 +53,9 @@ const LARGURA_MINIMA: Record<Degrau, string> = {
   strong: 'min-w-[112px]',
   metricSm: 'min-w-[140px]',
   metric: 'min-w-[200px]',
+  // A resposta não reserva largura: ela é a manchete e ocupa a linha dela.
+  // Um piso de 200px em 343px úteis empurraria "R$ 1.234.567,89" para fora.
+  resposta: 'min-w-0',
 };
 
 const ALTURA_ESQUELETO: Record<Degrau, string> = {
@@ -56,6 +64,7 @@ const ALTURA_ESQUELETO: Record<Degrau, string> = {
   strong: 'h-[16px]',
   metricSm: 'h-[22px]',
   metric: 'h-[32px]',
+  resposta: 'h-[44px]',
 };
 
 function formatarMoeda(valor: number, moeda: string): string {

@@ -8,6 +8,7 @@
 import {
   custoMensal, montarFolha, montarEvolucao, estaNaFolhaNoMes,
   contaFolhaId, ENCARGO_SUGERIDO, eventosFolhaPrevistos, dataPagamentoDaFolha,
+  LIMITE_FOLHA_SOBRE_FATURAMENTO, faixaDaRelacao, faixaDeCusto,
 } from '../src/lib/folha-pagamento.ts';
 import { soma } from '../src/lib/money.ts';
 
@@ -157,6 +158,66 @@ eq(eventosFolhaPrevistos([pessoa('u1', 'Ana', { salario_base: 5000 })], ['setemb
      'dia zero cai no padrão em vez de virar data inválida');
   eq(eventosFolhaPrevistos(pessoas, ['2026-09'], 99)[0].data_pagamento, '2026-10-31',
      'dia acima de 31 é limitado ao fim do mês');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+console.log('--- o limiar tem dono único e o número tem faixa ---');
+{
+  // Estava cravado em quatro lugares independentes que podiam divergir.
+  eq(LIMITE_FOLHA_SOBRE_FATURAMENTO, 40, 'o limiar é 40% e mora num lugar só');
+  eq(faixaDaRelacao(0), 'sem-base', 'sem faturamento não há faixa, e zero não é "ótimo"');
+  eq(faixaDaRelacao(-10), 'sem-base', 'percentual negativo também não vira julgamento');
+  eq(faixaDaRelacao(25), 'dentro', 'bem abaixo do limite');
+  eq(faixaDaRelacao(30), 'dentro', 'no topo do confortável');
+  eq(faixaDaRelacao(38), 'no-limite', 'encostando no limite ainda não é "acima"');
+  eq(faixaDaRelacao(40), 'no-limite', 'exatamente 40% ainda está no limite, não acima dele');
+  eq(faixaDaRelacao(40.1), 'acima', 'um décimo acima já mudou de faixa');
+  eq(faixaDaRelacao(80), 'acima', 'o dobro do limite ainda é "acima"');
+  eq(faixaDaRelacao(220.4), 'muito-acima', 'o caso real: a folha é mais que o dobro do faturamento');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+console.log('--- a média sozinha mente por omissão ---');
+{
+  const folha = montarFolha([
+    pessoa('u1', 'Ana', { salario_base: 4200 }),
+    pessoa('u2', 'Bruno', { salario_base: 19800 }),
+  ], '2026-09');
+  eq(faixaDeCusto(folha), { minimo: 4200, maximo: 19800 }, 'a dispersão acompanha a média');
+}
+{
+  // Com uma pessoa só, a média É o próprio valor: publicar "média" ali seria
+  // repetir o mesmo número com outro nome.
+  const folha = montarFolha([pessoa('u1', 'Ana', { salario_base: 4200 })], '2026-09');
+  eq(faixaDeCusto(folha), null, 'uma pessoa na folha não tem dispersão');
+  eq(faixaDeCusto(montarFolha([], '2026-09')), null, 'folha vazia não tem dispersão');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+console.log('--- o passado reconstruído se declara ---');
+{
+  // Sem data de admissão, a pessoa conta em TODOS os meses da série: o
+  // gráfico de 12 meses afirmava que a agência já tinha essa folha um ano
+  // atrás. O dado não existe — o que dá para fazer é marcar o ponto.
+  const semData = [pessoa('u1', 'Ana', { salario_base: 5000, data_admissao: '' })];
+  const serie = montarEvolucao(semData, new Map(), ['2020-01', '2020-02']);
+  eq(serie.every(p => p.retroativo_incerto), true,
+     'mês passado com vínculo sem data de admissão é reconstrução, não fato');
+}
+{
+  const comData = [pessoa('u1', 'Ana', { salario_base: 5000, data_admissao: '2026-01-10' })];
+  const serie = montarEvolucao(comData, new Map(), ['2026-02', '2026-03']);
+  eq(serie.every(p => p.retroativo_incerto === false), true,
+     'com data de admissão o corte por mês é confiável');
+}
+{
+  // Mês anterior à admissão: a pessoa nem entra, então não há incerteza.
+  const serie = montarEvolucao(
+    [pessoa('u1', 'Ana', { salario_base: 5000, data_admissao: '' })],
+    new Map(),
+    ['2099-01'],
+  );
+  eq(serie[0].retroativo_incerto, false, 'mês futuro não é passado reconstruído');
 }
 
 console.log(`\n${total - falhas}/${total} testes da folha passaram`);

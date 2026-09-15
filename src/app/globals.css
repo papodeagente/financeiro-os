@@ -85,8 +85,67 @@
   --fin-warning:        #d97706;
   --fin-warning-text:   #B45309;
   --fin-warning-soft:   #FFFBEB;
+
+  /* ---- Séries de gráfico ----
+     Ordem FIXA: a série 1 é sempre --fin-serie-1, mesmo quando um filtro tira
+     séries do meio. Cor segue a entidade, nunca a posição no ranking — senão
+     filtrar repinta quem sobrou e a leitura entre telas se perde.
+
+     Estes seis degraus passaram no validador contra o fundo claro: banda de
+     luminosidade, piso de croma, separação para daltonismo (deutan, protan,
+     tritan), piso de visão normal e contraste com a superfície. Trocar um
+     valor sem rodar o validador de novo quebra a garantia.
+
+     As cores de status (--fin-positive/warning/negative) NÃO entram aqui: elas
+     significam estado, e reusá-las como série faz "atrasado" e "vendedor 4"
+     terem a mesma cor na mesma tela. */
+  --fin-serie-1: #004aad;
+  --fin-serie-2: #BE123C;
+  --fin-serie-3: #0891B2;
+  --fin-serie-4: #C2410C;
+  --fin-serie-5: #7C3AED;
+  --fin-serie-6: #65A30D;
+  /* Grade e eixo recuam: a marca do dado é que tem contraste. */
+  --fin-grade:   #E4E7EF;
+  --fin-eixo:    #CBD3E1;
+
+  /* ---- Rampa sequencial: um matiz só, claro -> escuro ----
+     Só onde a categoria é ORDINAL: faixas de prazo, etapas de comissão,
+     degraus de escada. Composição por rubrica e por tipo de produto é
+     NOMINAL e usa cor única — rampa ali sugere uma ordem que não existe.
+
+     Nunca gerar estes degraus por opacidade sobre o fundo: o mesmo alfa
+     rende contrastes diferentes sobre --fin-surface e --fin-surface-2, e
+     o tema escuro quebra primeiro.
+
+     Validados como rampa ordinal (matiz único, luminosidade monótona,
+     vãos visíveis entre degraus): degrau mais claro a 3,31:1 contra o
+     branco e 2,91:1 contra --fin-surface-sunken, que é o trilho por
+     baixo do preenchimento. */
+  --fin-seq-1: #5E8FD2;
+  --fin-seq-2: #3C6FBC;
+  --fin-seq-3: #26559C;
+  --fin-seq-4: #0B3A7A;
+
+  /* ---- Dicionário do traço ----
+     TRACEJADO (stroke-dasharray 3 2) significa AUSÊNCIA DE DADO. Em
+     qualquer gráfico, sempre. Referência, meta, eixo e grade são linhas
+     SÓLIDAS de 1px. Sem esta regra, no mesmo painel o tracejado diria
+     "planejado" num gráfico e "não sei" no outro, e quem lê os dois
+     perde a chave. A constante espelho vive em src/lib/escala.ts como
+     TRACEJADO_AUSENCIA — as duas mudam juntas ou nenhuma muda. */
   --fin-info:           #2563eb;
   --fin-info-soft:      #EFF6FF;
+
+  /* ── Movimento dos gráficos ───────────────────────────────────────
+     Entrada UMA vez por dado, crescendo da linha de base: a direção do
+     movimento ensina onde está o zero. Troca de período INTERPOLA o
+     comprimento da marca em vez de trocar o DOM. Hover é 0ms — atraso em
+     resposta a toque lê como travamento. Nada de contar dígitos: atrasa a
+     leitura do valor exato, que é justamente o que a pessoa veio ver. */
+  --fin-anim-marca:  240ms;
+  --fin-anim-troca:  200ms;
+  --fin-anim-escada: 400ms;
 
   /* ── Raio: três níveis mais o ponto de estado ─────────────────── */
   --fin-r-sm:  6px;    /* chip, badge, caixa de seleção */
@@ -113,6 +172,12 @@
   --fin-page-pad: 24px;
 
   /* ── Escala tipográfica: oito degraus fechados ────────────────── */
+  /* A RESPOSTA: o número que a tela existe para dar. Fica acima de
+     --fin-fs-metric de propósito — 30px é o tamanho do cartão de métrica
+     que estas telas aposentam, e reusá-lo deixaria a manchete do mesmo
+     tamanho dos coadjuvantes. Em clamp porque no celular ela precisa
+     caber em 343px úteis sem quebrar linha. */
+  --fin-fs-resposta:  clamp(32px, 7vw, 44px);
   --fin-fs-metric:    30px;
   --fin-fs-metric-sm: 20px;
   --fin-fs-title:     20px;
@@ -339,6 +404,30 @@
   --fin-warning:        #F59E0B;
   --fin-warning-text:   #FBBF24;
   --fin-warning-soft:   rgba(251, 191, 36, 0.16);
+
+  /* Degraus ESCOLHIDOS para o fundo escuro, não um espelho do claro: os
+     mesmos matizes em luminosidade maior, validados contra #172131. A ordem
+     das entidades é a mesma, então a série 1 continua sendo a série 1. */
+  --fin-serie-1: #4C8DF6;
+  --fin-serie-2: #E11D48;
+  --fin-serie-3: #0EA5A4;
+  --fin-serie-4: #D97008;
+  --fin-serie-5: #9333EA;
+  --fin-serie-6: #5B9E13;
+  --fin-grade:   #2A3647;
+  --fin-eixo:    #3B4A60;
+
+  /* Rampa sequencial ESCOLHIDA para #172131, não espelhada: no escuro ela
+     vai do apagado ao luminoso, porque é o sentido em que a luz cresce
+     sobre fundo escuro. Validada contra a superfície escura; o degrau mais
+     apagado fica a 2,61:1 contra --fin-surface e 2,76:1 contra o trilho.
+     Empurrar esse degrau até 3:1 comprimiria o topo da rampa até o quase
+     branco, que perde o matiz — preenchimento de área tolera menos
+     contraste que um traço fino, e os quatro degraus continuam separados. */
+  --fin-seq-1: #33629F;
+  --fin-seq-2: #4C87D8;
+  --fin-seq-3: #74A8F2;
+  --fin-seq-4: #ABCCFB;
   --fin-info:           #7DA9FF;
   --fin-info-soft:      rgba(125, 169, 255, 0.16);
 
@@ -1661,6 +1750,13 @@
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+  /* Os tokens também vão a zero: gráfico que lê a duração em JS para
+     agendar um passo continuaria esperando 240ms sem isto. */
+  :root, :root.dark {
+    --fin-anim-marca:  0ms;
+    --fin-anim-troca:  0ms;
+    --fin-anim-escada: 0ms;
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -1674,6 +1770,21 @@
    porque .min-shell h1/h2/h3 impõe Inter Tight e vence uma classe
    solta. Quando .min-shell sair (uma tela por vez), a segunda cai.
    ════════════════════════════════════════════════════════════════════ */
+
+/* A resposta da tela: um número por tela, o maior da página.
+   ALGARISMOS PROPORCIONAIS, e é desvio deliberado do "tabular em tudo":
+   em corpo de display o tabular deixa o "1" boiando na própria caixa e
+   desalinha opticamente o começo do número. Em COLUNA de tabela o tabular
+   continua obrigatório — lá os dígitos precisam alinhar entre linhas. */
+.fin-t-resposta,
+.min-shell .fin-t-resposta {
+  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: var(--fin-fs-resposta);
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  font-variant-numeric: proportional-nums lining-nums;
+}
 
 .fin-t-metric,
 .min-shell .fin-t-metric {
@@ -1783,6 +1894,11 @@
     --fin-e2: none;
   }
   .fin-no-print, nav, aside, [data-slot="sheet"] { display: none !important; }
+  /* No papel o gráfico não sobrevive: a rampa de um matiz só colapsa em
+     cinzas iguais quando o fundo é forçado a branco. Quem imprime é a
+     tabela — é assim que folha e comissão chegam ao contador. */
+  .fin-grafico-svg { display: none !important; }
+  .fin-grafico-tabela { display: block !important; }
   [data-fin-table] thead { display: table-header-group; }
   [data-fin-table] tr { break-inside: avoid; }
   a[href]::after { content: none; }

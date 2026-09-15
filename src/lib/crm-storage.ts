@@ -1,13 +1,36 @@
 // Generic CRUD storage for CRM entities (API-first, no localStorage fallback needed for new entities)
 
-export async function loadEntities<T>(endpoint: string): Promise<T[]> {
+/**
+ * Carrega uma lista e DIZ se falhou.
+ *
+ * POR QUE EXISTE. `loadEntities` devolve [] tanto quando a agência não tem
+ * nada quanto quando a API caiu, e as telas não têm como distinguir os dois.
+ * O resultado é um gráfico anunciando "nenhuma venda em setembro" durante uma
+ * queda — que, com a manchete em 44px, é pior do que não desenhar nada.
+ *
+ * Quem precisa da diferença (todo gráfico e todo estado vazio com motivo) usa
+ * esta função. `loadEntities` continua existindo com a assinatura antiga para
+ * as telas que ainda só listam.
+ */
+export async function carregarEntidades<T>(
+  endpoint: string,
+): Promise<{ dados: T[]; erro: string | null }> {
   try {
     const res = await fetch(`/api/${endpoint}`);
-    if (!res.ok) return [];
-    return await res.json();
+    if (!res.ok) return { dados: [], erro: `Falha ao carregar (${res.status})` };
+    const corpo = await res.json();
+    // Uma resposta fora de forma é falha, não lista vazia: devolver [] aqui
+    // reintroduziria exatamente a ambiguidade que esta função existe para tirar.
+    if (!Array.isArray(corpo)) return { dados: [], erro: 'Resposta em formato inesperado' };
+    return { dados: corpo as T[], erro: null };
   } catch {
-    return [];
+    return { dados: [], erro: 'Sem conexão com o servidor' };
   }
+}
+
+export async function loadEntities<T>(endpoint: string): Promise<T[]> {
+  const { dados } = await carregarEntidades<T>(endpoint);
+  return dados;
 }
 
 export async function saveEntity<T extends { id: string }>(endpoint: string, item: T): Promise<T> {

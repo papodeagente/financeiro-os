@@ -9,7 +9,7 @@
  * contrato, então vem do cadastro de cada pessoa e o sistema só sugere um
  * ponto de partida. Dinheiro sempre por round2/soma.
  */
-import { round2, num, soma, divSegura, mesDe, ultimoDiaDoMes } from './money';
+import { round2, num, soma, divSegura, hojeISO, mesDe, ultimoDiaDoMes } from './money';
 import type { TipoContrato, VinculoEmpresa } from './crm-types';
 
 /** Sugestão de encargo por contrato, em percentual sobre o salário.
@@ -169,6 +169,39 @@ export function montarFolha(pessoas: EntradaPessoa[], mes: string): ResumoFolha 
   };
 }
 
+/**
+ * Acima disto a folha aperta a operação: sobra pouco para custo fixo,
+ * marketing e lucro. Não é lei, é limiar declarado — e tem dono único, porque
+ * estava cravado em quatro lugares independentes que podiam divergir.
+ *
+ * A base é o FATURAMENTO, que inclui o repasse a fornecedores. A referência
+ * mais honesta seria a receita que fica de fato com a agência; enquanto a tela
+ * usa faturamento, ela precisa dizer isso em texto.
+ */
+export const LIMITE_FOLHA_SOBRE_FATURAMENTO = 40;
+
+export type FaixaDaRelacao = 'sem-base' | 'dentro' | 'no-limite' | 'acima' | 'muito-acima';
+
+/**
+ * A leitura do percentual, para o número ter faixa e não só cor. Cor sozinha
+ * nunca é sinal: a faixa vira ícone MAIS rótulo na tela.
+ */
+export function faixaDaRelacao(pct: number): FaixaDaRelacao {
+  const p = num(pct);
+  if (!(p > 0)) return 'sem-base';
+  if (p <= LIMITE_FOLHA_SOBRE_FATURAMENTO * 0.75) return 'dentro';
+  if (p <= LIMITE_FOLHA_SOBRE_FATURAMENTO) return 'no-limite';
+  if (p <= LIMITE_FOLHA_SOBRE_FATURAMENTO * 2) return 'acima';
+  return 'muito-acima';
+}
+
+/** Menor e maior custo individual. A média sozinha esconde a dispersão. */
+export function faixaDeCusto(resumo: ResumoFolha): { minimo: number; maximo: number } | null {
+  if (resumo.pessoas.length < 2) return null;
+  const totais = resumo.pessoas.map(p => num(p.custo.total));
+  return { minimo: round2(Math.min(...totais)), maximo: round2(Math.max(...totais)) };
+}
+
 export interface PontoEvolucao {
   mes: string;
   folha: number;
@@ -176,6 +209,13 @@ export interface PontoEvolucao {
   /** Quanto da receita do mês foi para pessoas. */
   folha_sobre_faturamento_pct: number;
   pessoas: number;
+  /**
+   * O custo deste mês foi RECONSTRUÍDO com o vínculo de hoje e existe pelo
+   * menos uma pessoa sem data de admissão — ou seja, não dá para saber se ela
+   * já estava na equipe. Quem consome precisa dizer isso, ou estará afirmando
+   * um passado que o sistema não registrou.
+   */
+  retroativo_incerto: boolean;
 }
 
 /**
@@ -193,6 +233,15 @@ export function montarEvolucao(
   return meses.map(mes => {
     const folha = montarFolha(pessoas, mes);
     const faturamento = round2(num(faturamentoPorMes.get(mes)));
+    // Sem data de admissão, `estaNaFolhaNoMes` não tem por onde cortar e a
+    // pessoa conta em TODOS os meses da série. Isso não se conserta calculando
+    // diferente — o dado não existe. O que dá para fazer é marcar o ponto como
+    // incerto, para nenhuma tela desenhar como fato o que é reconstrução.
+    const incerto =
+      mes < mesDe(hojeISO()) &&
+      (pessoas ?? []).some(
+        p => estaNaFolhaNoMes(p.vinculo, mes) && !mesDe(p.vinculo?.data_admissao ?? ''),
+      );
     return {
       mes,
       folha: folha.total,
@@ -200,6 +249,7 @@ export function montarEvolucao(
       folha_sobre_faturamento_pct:
         faturamento > 0 ? round2(divSegura(folha.total, faturamento) * 100) : 0,
       pessoas: folha.quantidade,
+      retroativo_incerto: incerto,
     };
   });
 }
