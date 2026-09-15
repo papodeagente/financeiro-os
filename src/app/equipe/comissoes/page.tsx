@@ -12,23 +12,37 @@ import { calcularComissaoDoMes, chaveAcumulado } from '@/lib/comissao-acumulada'
 import {
   round2, num, somaPor, percentual, divSegura, paraBRL, hojeISO, dataLocal, mesDe,
 } from '@/lib/money';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import {
-  Calculator, Check, DollarSign, RefreshCw, Clock, CheckCircle2,
-  Banknote, Trash2, AlertTriangle, CalendarClock,
-} from 'lucide-react';
+import Link from 'next/link';
+import { RefreshCw } from 'lucide-react';
+import { PageHeader } from '@/components/fin/PageHeader';
+import { DataState } from '@/components/fin/DataState';
+import { EmptyLesson } from '@/components/fin/EmptyLesson';
+import { FinTable, type FinColuna } from '@/components/fin/FinTable';
+import { Money } from '@/components/fin/Money';
+import { StatusChip } from '@/components/fin/StatusChip';
+import { ConfirmDialog } from '@/components/fin/ConfirmDialog';
+import { Resposta } from '@/components/fin/Resposta';
+import { GraficoMoldura } from '@/components/fin/GraficoMoldura';
+import { BarraDeParte, type Parte } from '@/components/fin/BarraDeParte';
+import { EscadaDeFaixas } from '@/components/fin/EscadaDeFaixas';
+import { posicaoNaEscala } from '@/lib/comissao-acumulada';
+import { SeletorDeMes, rotuloDoMes } from '@/components/fin/SeletorDeMes';
 
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
-const STATUS_BADGE: Record<StatusComissao, string> = {
-  CALCULADA: 'bg-[var(--t-amber-bg)] text-[var(--t-amber)]',
-  APROVADA: 'bg-[var(--t-blue-bg)] text-[var(--t-blue)]',
-  PAGA: 'bg-[var(--t-green-bg)] text-[var(--t-green)]',
-  CANCELADA: 'bg-[var(--t-surface)] text-[var(--t-text-muted)]',
-};
+const dataBR = (iso: string) => (iso ? iso.split('-').reverse().join('/') : '');
+
+const CARTAO = 'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]';
+const CAMPO =
+  'h-11 rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] ' +
+  'px-2 fin-t-body text-[var(--fin-text)] ' +
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)]';
+const BOTAO =
+  'inline-flex h-11 items-center gap-1.5 rounded-[var(--fin-r-md)] border border-[var(--fin-border)] ' +
+  'bg-[var(--fin-surface)] px-3 fin-t-body text-[var(--fin-text-2)] hover:bg-[var(--fin-surface-2)] ' +
+  'hover:text-[var(--fin-text)] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)]';
+
 
 /** Id determinístico da comissão: 1 comissão por (venda, vendedor).
  *  O POST do CRUD é upsert por id, então recalcular nunca duplica. */
@@ -67,6 +81,18 @@ export default function ComissoesPage() {
   const [filterStatus, setFilterStatus] = useState<StatusComissao | 'TODOS'>('TODOS');
   const [filterVendedor, setFilterVendedor] = useState('');
   const [filterMonth, setFilterMonth] = useState(() => mesDe(hojeISO()));
+  /** A ação aguardando confirmação. Aprovar cria conta a pagar e Pagar debita
+   *  o caixa: os dois eram botões de 28px sem confirmação nenhuma. */
+  const [confirmando, setConfirmando] = useState<
+    | { tipo: 'aprovar' | 'pagar' | 'cancelar' | 'excluir'; comissao: ComissaoVenda }
+    | { tipo: 'recalcular' }
+    | null
+  >(null);
+  const [processando, setProcessando] = useState(false);
+  /** Quando a última varredura rodou. A tela não guardava isso em lugar
+   *  nenhum, então não dava para saber se os números eram de hoje. */
+  const [ultimoCalculo, setUltimoCalculo] = useState<Date | null>(null);
+  const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
   /** Dias do mês em que a agência paga comissão (Configurações > Agência). */
   const [agendaPagamento, setAgendaPagamento] = useState<number[]>([]);
   /** Contas a pagar já programadas pela aprovação, para o pagamento baixar
@@ -92,6 +118,7 @@ export default function ComissoesPage() {
     setAgendaPagamento(ag?.datas_pagamento_comissao ?? []);
     setContasPagar(cps);
     setLoading(false);
+    setAtualizadoEm(new Date());
   }
 
   useEffect(() => { load(); }, []);
@@ -384,6 +411,7 @@ export default function ComissoesPage() {
     }
 
     setPendencias(pend);
+    setUltimoCalculo(new Date());
     setCalculating(false);
     load();
   }
@@ -484,13 +512,7 @@ export default function ComissoesPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Excluir comissão?')) return;
-    try {
-      await deleteEntity('comissoes', id);
-    } catch (e) {
-      alert(e instanceof Error ? e.message : 'Não foi possível excluir.');
-      return;
-    }
+    await deleteEntity('comissoes', id);
     load();
   }
 
@@ -518,260 +540,484 @@ export default function ComissoesPage() {
     return true;
   }).sort((a, b) => (b.data_venda ?? '').localeCompare(a.data_venda ?? ''));
 
+  // O MESMO recorte da tabela. Antes isto somava o array inteiro enquanto a
+  // tabela aplicava mês, pessoa e situação — dois números contraditórios na
+  // mesma tela, e nenhum aviso de que eram escopos diferentes.
+  const doEscopo = useMemo(
+    () =>
+      comissoes.filter(c => {
+        if (filterVendedor && c.vendedor_id !== filterVendedor) return false;
+        if (filterMonth && mesDe(c.data_venda) !== filterMonth) return false;
+        return true;
+      }),
+    [comissoes, filterVendedor, filterMonth],
+  );
+
   const stats = useMemo(() => {
     const porStatus = (s: StatusComissao) =>
-      somaPor(comissoes.filter(c => c.status === s), c => c.valor_comissao);
+      somaPor(doEscopo.filter(c => c.status === s), c => c.valor_comissao);
     return { calculadas: porStatus('CALCULADA'), aprovadas: porStatus('APROVADA'), pagas: porStatus('PAGA') };
-  }, [comissoes]);
+  }, [doEscopo]);
 
-  const STATUSES: Array<StatusComissao | 'TODOS'> = ['TODOS', 'CALCULADA', 'APROVADA', 'PAGA', 'CANCELADA'];
+  const aAprovar = useMemo(() => doEscopo.filter(c => c.status === 'CALCULADA'), [doEscopo]);
+  const proximaSaida = proximaDataPagamento(agendaPagamento, hojeISO());
+  const nomeDoMes = rotuloDoMes(filterMonth);
+
+  /**
+   * As vendas travadas são calculadas NA CARGA, não só depois de clicar em
+   * Calcular. Antes a fila só existia em memória após handleCalcular e sumia
+   * ao recarregar: a agência podia ter cinco vendas travadas e abrir a tela
+   * limpa, sem nenhum sinal.
+   */
+  const travadas = useMemo(() => {
+    const lista: PendenciaComissao[] = [];
+    for (const v of vendas) {
+      if (v.status !== 'CONFIRMADO' && v.status !== 'CONCLUIDO') continue;
+      if (mesDe(v.data_venda ?? '') !== filterMonth) continue;
+      if (comissoes.some(c => c.venda_id === v.id && c.status !== 'CANCELADA')) continue;
+
+      const pessoa = membros.find(m => m.id === v.vendedor_id);
+      if (!pessoa) {
+        lista.push({ id: v.id, venda: v.numero, motivo: 'a venda não tem vendedor da equipe vinculado' });
+        continue;
+      }
+      const plano = planos.find(p => p.id === pessoa.plano_comissao_id && p.ativo);
+      if (!plano) {
+        lista.push({ id: v.id, venda: v.numero, motivo: `${pessoa.nome} não tem plano de comissão vinculado` });
+        continue;
+      }
+      lista.push({ id: v.id, venda: v.numero, motivo: 'esta venda ainda não teve comissão apurada' });
+    }
+    return lista;
+  }, [vendas, comissoes, membros, planos, filterMonth]);
+
+  /** Quem aparece no filtro de pessoa: quem TEM comissão no escopo mais a
+   *  equipe inteira. Antes o filtro listava só quem já tinha comissão, então
+   *  não dava para perguntar "e a Karen, não recebeu nada?". */
+  const pessoasDoFiltro = useMemo(() => {
+    const mapa = new Map<string, string>();
+    for (const m of membros) mapa.set(m.id, m.nome);
+    for (const c of comissoes) if (!mapa.has(c.vendedor_id)) mapa.set(c.vendedor_id, c.vendedor_nome);
+    return [...mapa.entries()].map(([valor, rotulo]) => ({ valor, rotulo }));
+  }, [membros, comissoes]);
+
+  const colunas: FinColuna<ComissaoVenda>[] = [
+    {
+      id: 'pessoa',
+      cabecalho: 'Pessoa',
+      tipo: 'texto',
+      prioridade: 3,
+      sortable: true,
+      acessor: c => c.vendedor_nome,
+      render: c => (
+        <div className="min-w-0">
+          <p className="fin-t-body-strong truncate text-[var(--fin-text)]">{c.vendedor_nome}</p>
+          <p className="fin-t-caption text-[var(--fin-text-3)]">
+            {`venda ${c.venda_numero}${c.data_venda ? ` · ${dataBR(c.data_venda)}` : ''}`}
+          </p>
+        </div>
+      ),
+    },
+    {
+      id: 'base',
+      cabecalho: 'Base da comissão',
+      tipo: 'dinheiro',
+      prioridade: 1,
+      valor: c => num(c.valor_base),
+      // A base NOMEADA: "R$ 1.815,55" sozinho não diz sobre o que a comissão
+      // incidiu, e a coluna "%" repetia a mesma alíquota em todas as linhas
+      // da mesma pessoa, sugerindo variação onde não há.
+      sub: c => <span>{`${num(c.percentual_aplicado)}% sobre a receita da agência`}</span>,
+    },
+    { id: 'valor', cabecalho: 'Comissão', tipo: 'dinheiro', prioridade: 3, sortable: true, valor: c => num(c.valor_comissao) },
+    { id: 'situacao', cabecalho: 'Situação', tipo: 'status', prioridade: 2, valor: c => c.status, dominio: 'comissao' },
+    {
+      id: 'acoes',
+      cabecalho: '',
+      tipo: 'acoes',
+      prioridade: 3,
+      render: c => (
+        <div className="flex flex-wrap justify-end gap-1">
+          {c.status === 'CALCULADA' && (
+            <button className={BOTAO} onClick={() => setConfirmando({ tipo: 'aprovar', comissao: c })}>
+              Aprovar
+            </button>
+          )}
+          {c.status === 'APROVADA' && (
+            <button className={BOTAO} onClick={() => setConfirmando({ tipo: 'pagar', comissao: c })}>
+              Pagar
+            </button>
+          )}
+          {c.status !== 'PAGA' && c.status !== 'CANCELADA' && (
+            <button className={BOTAO} onClick={() => setConfirmando({ tipo: 'cancelar', comissao: c })}>
+              Cancelar
+            </button>
+          )}
+          {c.status === 'CANCELADA' && (
+            <button className={BOTAO} onClick={() => setConfirmando({ tipo: 'excluir', comissao: c })}>
+              Excluir
+            </button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  // As três etapas do dinheiro. É rampa SEQUENCIAL porque etapa é ordinal —
+  // e porque --t-green e --t-blue apontavam ambos para --fin-accent, deixando
+  // "Aprovadas" e "Pagas" exatamente da mesma cor nos dois temas.
+  const etapas: Parte[] = [
+    { id: 'aprovar', rotulo: 'A aprovar', valor: stats.calculadas, papel: 'seq', indiceSeq: 2 },
+    { id: 'aprovadas', rotulo: 'Aprovadas, a pagar', valor: stats.aprovadas, papel: 'seq', indiceSeq: 3 },
+    { id: 'pagas', rotulo: 'Pagas', valor: stats.pagas, papel: 'seq', indiceSeq: 4 },
+  ];
+  const etapasComValor = etapas.filter(e => num(e.valor) > 0).length;
+
+  const acumulados = acumuladoPorVendedor.map(a => {
+    const pessoa = membros.find(m => m.nome === a.nome);
+    const plano = pessoa ? planos.find(p => p.id === pessoa.plano_comissao_id) : undefined;
+    const faixas = (plano?.faixas ?? []).map(f => ({
+      de: num(f.de),
+      ate: num(f.ate) === 0 ? null : num(f.ate),
+      percentual: num(f.percentual),
+    }));
+    return { ...a, id: pessoa?.id ?? a.nome, plano, faixas, posicao: posicaoNaEscala(plano?.faixas ?? [], a.base) };
+  });
+
+  const filtrosAtivos = (filterStatus !== 'TODOS' ? 1 : 0) + (filterVendedor ? 1 : 0);
+
+  const alvoDaConfirmacao = confirmando && 'comissao' in confirmando ? confirmando.comissao : null;
+
+  async function executarConfirmacao() {
+    if (!confirmando) return;
+    setProcessando(true);
+    try {
+      if (confirmando.tipo === 'recalcular') await handleCalcular();
+      else if (confirmando.tipo === 'aprovar') await handleAprovar(confirmando.comissao);
+      else if (confirmando.tipo === 'pagar') await handlePagar(confirmando.comissao);
+      else if (confirmando.tipo === 'cancelar') await handleCancelar(confirmando.comissao);
+      else if (confirmando.tipo === 'excluir') await handleDelete(confirmando.comissao.id);
+      setConfirmando(null);
+    } finally {
+      setProcessando(false);
+    }
+  }
+
+  const textoDaConfirmacao = (): { titulo: string; oQue: string; rotulo: string; tone: 'padrao' | 'destrutivo' } => {
+    if (!confirmando) return { titulo: '', oQue: '', rotulo: '', tone: 'padrao' };
+    if (confirmando.tipo === 'recalcular') {
+      return {
+        titulo: `Recalcular comissões de ${nomeDoMes}`,
+        oQue: `Vamos reler as vendas confirmadas de ${nomeDoMes}, recalcular as faixas e cancelar as comissões que perderam base. Comissões já pagas não mudam.`,
+        rotulo: 'Recalcular',
+        tone: 'padrao',
+      };
+    }
+    const c = confirmando.comissao;
+    if (confirmando.tipo === 'aprovar') {
+      return {
+        titulo: `Aprovar ${BRL(num(c.valor_comissao))}`,
+        oQue: proximaSaida
+          ? `Aprovar cria uma conta a pagar de ${BRL(num(c.valor_comissao))} com vencimento em ${dataBR(proximaSaida)}, no nome de ${c.vendedor_nome}. Dá para cancelar depois, mas a conta a pagar não some sozinha.`
+          : `Aprovar marca a comissão como aprovada. Como a agência não tem dias de pagamento definidos, nenhuma conta a pagar é programada — sem agenda não dá para dizer quando a comissão sai.`,
+        rotulo: 'Aprovar',
+        tone: 'padrao',
+      };
+    }
+    if (confirmando.tipo === 'pagar') {
+      return {
+        titulo: `Pagar ${BRL(num(c.valor_comissao))}`,
+        oQue: `Pagar dá baixa na conta a pagar de ${c.vendedor_nome} e DEBITA ${BRL(num(c.valor_comissao))} do saldo em caixa, com data de hoje.`,
+        rotulo: 'Pagar',
+        tone: 'padrao',
+      };
+    }
+    if (confirmando.tipo === 'cancelar') {
+      return {
+        titulo: 'Cancelar esta comissão',
+        oQue: `A comissão de ${c.vendedor_nome} sai das contas do mês. Se ela já tinha sido aprovada, a conta a pagar criada continua existindo e precisa ser cancelada em Contas a pagar.`,
+        rotulo: 'Cancelar a comissão',
+        tone: 'destrutivo',
+      };
+    }
+    return {
+      titulo: 'Excluir esta comissão',
+      oQue: `Excluir apaga o registro da comissão de ${c.vendedor_nome}. Isto NÃO remove a conta a pagar de ${BRL(num(c.valor_comissao))} que já foi criada — ela continua no fluxo de caixa.`,
+      rotulo: 'Excluir',
+      tone: 'destrutivo',
+    };
+  };
+
+  const confirmacao = textoDaConfirmacao();
 
   return (
-    <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="flex flex-col gap-[var(--fin-s-5)]">
+      <PageHeader
+        titulo="Comissões"
+        subtitulo={`O que a agência deve à equipe em ${nomeDoMes} e o que depende da sua aprovação`}
+        acoesSecundarias={[{ rotulo: 'Vendedores e planos', href: '/equipe/vendedores' }]}
+        atualizadoEm={atualizadoEm}
+        onRecarregar={load}
+      />
 
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-[var(--t-text)]">Comissões</h1>
-            <p className="text-[var(--t-text-secondary)] text-sm mt-1">Cálculo e gestão de comissões por venda</p>
+      <DataState
+        estado={loading ? 'carregando' : 'ok'}
+        esqueleto={
+          <div className="flex flex-col gap-[var(--fin-s-5)]" aria-hidden>
+            <div className="h-[44px] w-60 rounded bg-[var(--fin-surface-2)]" />
+            <div className="h-[126px] rounded-[var(--fin-r-lg)] bg-[var(--fin-surface-2)]" />
+            <div className="h-[220px] rounded-[var(--fin-r-lg)] bg-[var(--fin-surface-2)]" />
           </div>
-          <Button onClick={handleCalcular} disabled={calculating}
-            className="bg-[var(--t-green)] hover:brightness-110 text-white dark:text-[#0a0a14] font-semibold">
-            <RefreshCw className={`w-4 h-4 mr-2 ${calculating ? 'animate-spin' : ''}`} />
-            {calculating ? 'Calculando...' : 'Calcular Comissões'}
-          </Button>
+        }
+      >
+        {/* ── FILTROS ─────────────────────────────────────────────────────
+            Manchete, faixa e tabela derivam do MESMO recorte, e o recorte
+            aparece escrito: sem isso, a tela mostra dois números diferentes
+            para a mesma pergunta. */}
+        <div className="flex flex-wrap items-end gap-3">
+          <SeletorDeMes valor={filterMonth} onChange={setFilterMonth} />
+
+          <label className="flex flex-col gap-1">
+            <span className="fin-t-caption text-[var(--fin-text-3)]">Pessoa</span>
+            <select className={CAMPO} value={filterVendedor} onChange={e => setFilterVendedor(e.target.value)}>
+              <option value="">Todas</option>
+              {pessoasDoFiltro.map(p => (
+                <option key={p.valor} value={p.valor}>{p.rotulo}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flex flex-col gap-1">
+            <span className="fin-t-caption text-[var(--fin-text-3)]">Situação</span>
+            <select
+              className={CAMPO}
+              value={filterStatus}
+              onChange={e => setFilterStatus(e.target.value as StatusComissao | 'TODOS')}
+            >
+              <option value="TODOS">Todas</option>
+              <option value="CALCULADA">A aprovar</option>
+              <option value="APROVADA">Aprovada, a pagar</option>
+              <option value="PAGA">Paga</option>
+              <option value="CANCELADA">Cancelada</option>
+            </select>
+          </label>
+
+          {filtrosAtivos > 0 && (
+            <button
+              type="button"
+              className={BOTAO}
+              onClick={() => { setFilterStatus('TODOS'); setFilterVendedor(''); }}
+            >
+              Limpar filtros
+            </button>
+          )}
+
+          <p className="fin-t-caption w-full text-[var(--fin-text-3)]">
+            {`${filtered.length} de ${doEscopo.length} ${doEscopo.length === 1 ? 'comissão' : 'comissões'} de ${nomeDoMes}${filterVendedor ? `, de ${pessoasDoFiltro.find(p => p.valor === filterVendedor)?.rotulo ?? 'uma pessoa'}` : ''}`}
+          </p>
         </div>
 
-        {/* Banner: agenda de pagamento. Diz de antemão o que aprovar vai
-            fazer, porque aprovar passou a programar saída de dinheiro. */}
-        {agendaPagamento.length === 0 ? (
-          <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
-            <CalendarClock className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-[var(--t-text)]">
-                Nenhuma data de pagamento de comissão configurada
-              </p>
-              <p className="text-xs text-[var(--t-text-secondary)] mt-0.5">
-                Enquanto não houver agenda, aprovar uma comissão não programa a conta a pagar, e o
-                valor só entra no caixa quando você clicar em Pagar.
-              </p>
-              <a
-                href="/config/agencia#pagamento-comissao"
-                className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-[var(--t-green)] px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110"
-              >
-                <CalendarClock className="w-3.5 h-3.5" />
-                Definir datas de pagamento
-              </a>
-            </div>
-          </div>
+        {/* ── A RESPOSTA E A AÇÃO ─────────────────────────────────────────
+            Sem chip de veredito: aqui o julgamento é do dono, e a peça que o
+            representa é o botão. */}
+        <Resposta
+          overline="ESPERANDO SUA APROVAÇÃO"
+          valor={<Money valor={stats.calculadas} size="resposta" align="esquerda" />}
+          frase={
+            aAprovar.length === 0
+              ? `Nada esperando aprovação em ${nomeDoMes}.`
+              : `${aAprovar.length} ${aAprovar.length === 1 ? 'comissão' : 'comissões'}, ${
+                  new Set(aAprovar.map(c => c.vendedor_nome)).size === 1
+                    ? `de ${aAprovar[0].vendedor_nome}`
+                    : `de ${new Set(aAprovar.map(c => c.vendedor_nome)).size} pessoas`
+                }. ${
+                  proximaSaida
+                    ? `Aprovando hoje, ${aAprovar.length === 1 ? 'sai' : 'saem'} no pagamento de ${dataBR(proximaSaida)}.`
+                    : 'A agência ainda não tem dias de pagamento definidos, então não dá para dizer quando sai.'
+                }`
+          }
+          acao={
+            aAprovar.length === 1
+              ? {
+                  rotulo: `Aprovar ${BRL(num(aAprovar[0].valor_comissao))}`,
+                  onClick: () => setConfirmando({ tipo: 'aprovar', comissao: aAprovar[0] }),
+                }
+              : null
+          }
+        />
+
+        {!proximaSaida && (
+          <p className="fin-t-caption text-[var(--fin-text-3)]">
+            Nenhuma agenda de pagamento definida — sem ela, não dá para dizer quando a comissão sai.{' '}
+            <Link href="/config/agencia" className="text-[var(--fin-accent)] underline underline-offset-2">
+              Definir os dias de pagamento
+            </Link>
+          </p>
+        )}
+        {proximaSaida && (
+          <p className="fin-t-caption text-[var(--fin-text-3)]">
+            {`${descreverAgenda(agendaPagamento)} A próxima saída é ${dataBR(proximaSaida)}.`}
+          </p>
+        )}
+
+        {/* ── ONDE ESTÁ O DINHEIRO ────────────────────────────────────────
+            Com uma etapa só, a barra é um número com tinta em volta: viram
+            três fatos em linha. */}
+        {etapasComValor >= 2 ? (
+          <GraficoMoldura
+            titulo={`Onde está o dinheiro das comissões de ${nomeDoMes}`}
+            estado="ok"
+            descricao={`Comissões de ${nomeDoMes} por etapa: a aprovar, aprovadas e pagas.`}
+            tabela={{
+              colunas: ['Etapa', 'Valor'],
+              linhas: etapas.map(e => [e.rotulo, BRL(num(e.valor))]),
+            }}
+          >
+            <BarraDeParte partes={etapas} formatar={v => BRL(num(v))} />
+          </GraficoMoldura>
         ) : (
-          <div className="flex items-start gap-3 p-4 rounded-xl bg-[var(--t-blue-bg)] border border-[var(--t-blue)]/20">
-            <CalendarClock className="w-5 h-5 text-[var(--t-blue)] shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-[var(--t-text)]">
-                Comissão aprovada vira conta a pagar programada
-              </p>
-              <p className="text-xs text-[var(--t-text-secondary)] mt-0.5">
-                A agência paga comissão {descreverAgenda(agendaPagamento)}. Aprovada hoje, a conta
-                vence em{' '}
-                <strong>
-                  {(() => {
-                    const d = dataLocal(proximaDataPagamento(agendaPagamento, hojeISO()));
-                    return d ? d.toLocaleDateString('pt-BR') : 'sem data';
-                  })()}
-                </strong>{' '}
-                e já aparece no fluxo de caixa. Pagar apenas dá baixa nela.
-              </p>
-            </div>
-          </div>
+          <ul className="flex flex-wrap gap-x-6 gap-y-1">
+            {etapas.map(e => (
+              <li key={e.id} className="fin-t-body text-[var(--fin-text-2)]">
+                {`${e.rotulo}: `}
+                <span className={num(e.valor) > 0 ? 'text-[var(--fin-text)]' : 'text-[var(--fin-text-3)]'}>
+                  {num(e.valor) > 0 ? BRL(num(e.valor)) : e.id === 'aprovar' ? 'nada ainda' : e.id === 'aprovadas' ? 'nada aprovado ainda' : 'nada pago ainda'}
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
 
-        {/* Banner: sem plano de comissão */}
-        {planos.length === 0 && (
-          <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
-            <Calculator className="w-5 h-5 text-amber-500 shrink-0" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-[var(--t-text)]">Nenhum Plano de Comissão configurado</p>
-              <p className="text-xs text-[var(--t-text-secondary)] mt-0.5">Crie um plano com regras de comissão para que o botão &quot;Calcular Comissões&quot; funcione corretamente.</p>
-            </div>
-          </div>
-        )}
-
-        {/* Banner: vendas que NÃO geraram comissão (config faltando ou base
-            não confiável) e comissões divergentes da venda atual */}
-        {pendencias.length > 0 && (
-          <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
-            <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-[var(--t-text)]">
-                {pendencias.length} venda(s) sem comissão gerada ou com divergência
+        {/* ── POR VENDEDOR ────────────────────────────────────────────────
+            O percentual vive AQUI, uma vez só, com a razão dele ao lado. */}
+        {acumulados.length > 0 && (
+          <section className="flex flex-col gap-3">
+            <div>
+              <h2 className="fin-t-subhead text-[var(--fin-text)]">Por que a comissão de cada um é o que é</h2>
+              <p className="fin-t-caption text-[var(--fin-text-3)]">
+                A faixa vem do acumulado do mês, não da venda. Subir de faixa revaloriza o mês inteiro.
               </p>
-              <ul className="mt-1 space-y-0.5">
-                {pendencias.map(p => (
-                  <li key={p.id} className="text-xs text-[var(--t-text-secondary)]">
-                    <span className="font-mono">{p.venda || '—'}</span>: {p.motivo}
-                  </li>
-                ))}
-              </ul>
             </div>
-          </div>
-        )}
-
-        {/* KPIs */}
-        <div className="grid grid-cols-3 gap-4">
-          <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-            <CardContent className="p-4 flex items-center gap-4">
-              <Clock className="w-8 h-8 text-[var(--t-amber)] shrink-0" />
-              <div>
-                <p className="text-[var(--t-text-muted)] text-xs uppercase">A Aprovar</p>
-                <p className="text-xl font-bold text-[var(--t-amber)]">{BRL(stats.calculadas)}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-            <CardContent className="p-4 flex items-center gap-4">
-              <CheckCircle2 className="w-8 h-8 text-[var(--t-blue)] shrink-0" />
-              <div>
-                <p className="text-[var(--t-text-muted)] text-xs uppercase">Aprovadas</p>
-                <p className="text-xl font-bold text-[var(--t-blue)]">{BRL(stats.aprovadas)}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-            <CardContent className="p-4 flex items-center gap-4">
-              <Banknote className="w-8 h-8 text-[var(--t-green)] shrink-0" />
-              <div>
-                <p className="text-[var(--t-text-muted)] text-xs uppercase">Pagas</p>
-                <p className="text-xl font-bold text-[var(--t-green)]">{BRL(stats.pagas)}</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Filters */}
-        <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-          <CardContent className="p-4 flex flex-wrap gap-3 items-end">
-            <div>
-              <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Status</label>
-              <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as StatusComissao | 'TODOS')}
-                className="bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text)]">
-                {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Vendedor</label>
-              <select value={filterVendedor} onChange={e => setFilterVendedor(e.target.value)}
-                className="bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text)]">
-                <option value="">Todos</option>
-                {membros.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Mês</label>
-              <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)}
-                className="bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text)]" />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Table */}
-        <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-[var(--t-text)] text-base flex items-center gap-2">
-              <Calculator className="w-4 h-4 text-[var(--t-green)]" />
-              Comissões ({filtered.length})
-            </CardTitle>
-            {acumuladoPorVendedor.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1">
-                {acumuladoPorVendedor.map(a => (
-                  <p key={a.nome} className="text-xs text-[var(--t-text-secondary)]">
-                    <span className="font-medium text-[var(--t-text)]">{a.nome}</span>
-                    {' acumulou '}
-                    <span className="font-medium text-[var(--t-text)]">{BRL(a.base)}</span>
-                    {' em '}{a.vendas}{a.vendas === 1 ? ' venda' : ' vendas'}
-                    {' e está na faixa de '}
-                    <span className="font-medium text-[var(--t-green)]">{a.pct}%</span>
+            <div className="grid gap-[var(--fin-s-4)] lg:grid-cols-2">
+              {acumulados.map(a => (
+                <div key={a.id} className={`${CARTAO} flex flex-col gap-2 p-[var(--fin-s-4)]`}>
+                  <p className="fin-t-body-strong text-[var(--fin-text)]">{a.nome}</p>
+                  <p className="fin-t-caption text-[var(--fin-text-2)]">
+                    {`${BRL(round2(a.base * (a.pct / 100)))} são ${a.pct}% de ${BRL(a.base)} de receita da agência.`}
                   </p>
-                ))}
-              </div>
-            )}
-          </CardHeader>
-          <CardContent className="p-0">
-            {loading ? (
-              <p className="text-[var(--t-text-secondary)] text-sm p-6">Carregando...</p>
-            ) : filtered.length === 0 ? (
-              <div className="text-center py-8">
-                <DollarSign className="w-10 h-10 text-[var(--t-text-muted)] mx-auto mb-3" />
-                <p className="text-[var(--t-text-muted)] text-sm">Nenhuma comissão encontrada.</p>
-                <p className="text-[var(--t-text-muted)] text-xs mt-1">Clique em &quot;Calcular Comissões&quot; para gerar a partir das vendas confirmadas.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-[var(--t-border)] text-[var(--t-text-muted)] text-xs uppercase">
-                      <th className="text-left px-4 py-3">Vendedor</th>
-                      <th className="text-left px-4 py-3">Venda</th>
-                      <th className="text-left px-4 py-3">Data</th>
-                      <th className="text-right px-4 py-3">Base</th>
-                      <th className="text-center px-4 py-3">%</th>
-                      <th className="text-right px-4 py-3">Comissão</th>
-                      <th className="text-left px-4 py-3">Plano</th>
-                      <th className="text-left px-4 py-3">Status</th>
-                      <th className="text-right px-4 py-3">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map(c => (
-                      <tr key={c.id} className="border-b border-[var(--t-border)] hover:bg-[var(--t-surface-hover)] transition-colors">
-                        <td className="px-4 py-3 font-medium text-[var(--t-text)]">{c.vendedor_nome}</td>
-                        <td className="px-4 py-3 text-[var(--t-text-secondary)] font-mono text-xs">{c.venda_numero}</td>
-                        <td className="px-4 py-3 text-[var(--t-text-secondary)]">
-                          {dataLocal(c.data_venda)?.toLocaleDateString('pt-BR') ?? '—'}
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono text-[var(--t-text-secondary)]">{BRL(c.valor_base)}</td>
-                        <td className="px-4 py-3 text-center text-[var(--t-text-secondary)]">{c.percentual_aplicado}%</td>
-                        <td className="px-4 py-3 text-right font-mono font-bold text-[var(--t-green)]">{BRL(c.valor_comissao)}</td>
-                        <td className="px-4 py-3">
-                          <span className="text-xs text-[var(--t-text-muted)]">{c.plano_nome}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge className={`${STATUS_BADGE[c.status]} border-0 text-xs`}>{c.status}</Badge>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-1">
-                            {c.status === 'CALCULADA' && (
-                              <Button size="sm" onClick={() => handleAprovar(c)}
-                                className="bg-[var(--t-blue)] hover:brightness-110 text-white h-7 px-2 text-xs">
-                                <Check className="w-3 h-3 mr-1" /> Aprovar
-                              </Button>
-                            )}
-                            {c.status === 'APROVADA' && (
-                              <Button size="sm" onClick={() => handlePagar(c)}
-                                className="bg-[var(--t-green)] hover:brightness-110 text-white dark:text-[#0a0a14] h-7 px-2 text-xs">
-                                <Banknote className="w-3 h-3 mr-1" /> Pagar
-                              </Button>
-                            )}
-                            {(c.status === 'CALCULADA' || c.status === 'APROVADA') && (
-                              <Button size="sm" variant="outline" onClick={() => handleCancelar(c)}
-                                className="border-[var(--t-border)] text-[var(--t-text-secondary)] h-7 px-2 text-xs">Cancelar</Button>
-                            )}
-                            <Button size="sm" variant="outline" onClick={() => handleDelete(c.id)}
-                              className="border-[var(--t-red)]/30 text-[var(--t-red)] h-7 px-2">
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                  {a.faixas.length > 0 ? (
+                    <EscadaDeFaixas
+                      modo="trilho"
+                      faixas={a.faixas}
+                      baseAcumulada={a.base}
+                      posicao={a.posicao}
+                      formatar={v => BRL(num(v))}
+                      nome={a.nome}
+                    />
+                  ) : a.plano ? (
+                    <p className="fin-t-caption text-[var(--fin-text-3)]">
+                      {`Este plano paga ${num(a.plano.percentual_padrao)}% fixo sobre a base da venda, sem faixas.`}
+                    </p>
+                  ) : (
+                    <p className="fin-t-caption text-[var(--fin-text-3)]">
+                      Sem plano de comissão — as vendas desta pessoa não geram comissão.
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── A TABELA ────────────────────────────────────────────────────
+            Cinco colunas, não nove, e a coluna de Ações — a razão de a tela
+            existir — nunca sai da viewport no celular. */}
+        <section className={`${CARTAO} overflow-hidden`}>
+          <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--fin-border)] px-[var(--fin-s-4)] py-[var(--fin-s-3)]">
+            <h2 className="fin-t-subhead text-[var(--fin-text)]">{`Comissões de ${nomeDoMes}`}</h2>
+          </header>
+          <FinTable
+            linhas={filtered}
+            colunas={colunas}
+            chave={c => c.id}
+            estado="ok"
+            vazio={{
+              motivo: filtrosAtivos > 0 ? 'sem-resultado' : 'sem-dado',
+              titulo: filtrosAtivos > 0 ? 'O filtro não encontrou nenhuma comissão' : `Nenhuma comissão apurada em ${nomeDoMes}`,
+              oQueE: 'A comissão nasce da venda confirmada, do plano da pessoa e da faixa que o acumulado do mês alcançou.',
+              comoComeca: [
+                'Confirme as vendas do mês',
+                'Vincule cada pessoa a um plano de comissão',
+                'Use "Recalcular" aqui embaixo',
+              ],
+              acao: { rotulo: 'Vendedores e planos', href: '/equipe/vendedores' },
+            }}
+            totais={[{ colunaId: 'valor', valor: somaPor(filtered, c => num(c.valor_comissao)), rotulo: 'Total do recorte' }]}
+          />
+        </section>
+
+        {/* ── VENDAS TRAVADAS ─────────────────────────────────────────────
+            Calculada na carga: antes esta fila só existia depois de clicar em
+            Calcular, e sumia ao recarregar a página. */}
+        {(travadas.length > 0 || pendencias.length > 0) && (
+          <section className="flex flex-col gap-2">
+            <h2 className="fin-t-subhead text-[var(--fin-text)]">
+              {`Vendas confirmadas de ${nomeDoMes} que não geraram comissão`}
+            </h2>
+            <ul className="flex flex-col divide-y divide-[var(--fin-border)]">
+              {[...travadas, ...pendencias].map(p => (
+                <li key={`${p.id}-${p.motivo}`} className="flex min-h-[44px] flex-wrap items-center gap-3 py-3">
+                  <p className="fin-t-body min-w-0 flex-1 text-[var(--fin-text-2)]">
+                    {`Venda ${p.venda} — ${p.motivo}`}
+                  </p>
+                  <Link href="/equipe/vendedores" className="fin-t-body shrink-0 text-[var(--fin-accent)] underline underline-offset-2">
+                    Vincular plano
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* ── RECALCULAR ──────────────────────────────────────────────────
+            Ação secundária no rodapé, com o carimbo do último cálculo. */}
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            className={BOTAO}
+            disabled={calculating}
+            onClick={() => setConfirmando({ tipo: 'recalcular' })}
+          >
+            <RefreshCw className={`h-4 w-4 ${calculating ? 'animate-spin' : ''}`} aria-hidden />
+            {`Recalcular comissões de ${nomeDoMes}`}
+          </button>
+          <span className="fin-t-caption text-[var(--fin-text-3)]">
+            {ultimoCalculo
+              ? `Último cálculo em ${ultimoCalculo.toLocaleDateString('pt-BR')} às ${ultimoCalculo.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+              : `As comissões de ${nomeDoMes} ainda não foram recalculadas nesta sessão.`}
+          </span>
+        </div>
+      </DataState>
+
+      <ConfirmDialog
+        aberto={confirmando !== null}
+        onOpenChange={aberto => { if (!aberto) setConfirmando(null); }}
+        titulo={confirmacao.titulo}
+        oQueVaiAcontecer={confirmacao.oQue}
+        detalhes={
+          alvoDaConfirmacao
+            ? [
+                { rotulo: 'Pessoa', valor: alvoDaConfirmacao.vendedor_nome },
+                { rotulo: 'Venda', valor: alvoDaConfirmacao.venda_numero },
+                { rotulo: 'Valor', valor: <Money valor={num(alvoDaConfirmacao.valor_comissao)} size="body" /> },
+              ]
+            : undefined
+        }
+        confirmarRotulo={confirmacao.rotulo}
+        tone={confirmacao.tone}
+        processando={processando}
+        onConfirmar={executarConfirmacao}
+      />
     </div>
   );
 }

@@ -91,12 +91,14 @@ function Desenho({
   // Duas vendas no mesmo dia são UM degrau, UM alvo e um balão que lista as
   // duas. Colisão de dia é comum com poucas vendas no mês.
   const porDia = React.useMemo(() => {
-    let acumulado = 0;
-    return agruparPorDia(eventos).map(({ dia, itens }) => {
+    return agruparPorDia(eventos).reduce<
+      Array<{ dia: string; itens: EventoAcum[]; doDia: number; acumulado: number }>
+    >((acc, { dia, itens }) => {
       const doDia = round2(itens.reduce((s, i) => s + num(i.valor), 0));
-      acumulado = round2(acumulado + doDia);
-      return { dia, itens, doDia, acumulado };
-    });
+      const anterior = acc[acc.length - 1]?.acumulado ?? 0;
+      acc.push({ dia, itens, doDia, acumulado: round2(anterior + doDia) });
+      return acc;
+    }, []);
   }, [eventos]);
 
   const totalAcumulado = porDia.length > 0 ? porDia[porDia.length - 1].acumulado : 0;

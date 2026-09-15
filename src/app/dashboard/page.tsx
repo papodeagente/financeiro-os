@@ -14,7 +14,7 @@ import { nomeDoCliente } from '@/lib/cliente-nome';
 import {
   dataLocal, divSegura, hojeISO, mesDe, num, round2, soma, somaPor, ultimoDiaDoMes,
 } from '@/lib/money';
-import { calcularSaldoBancario, valorMovimentado } from '@/lib/saldo-bancario';
+import { calcularSaldoBancario } from '@/lib/saldo-bancario';
 import { PageHeader } from '@/components/fin/PageHeader';
 import { DataState } from '@/components/fin/DataState';
 import { Money } from '@/components/fin/Money';

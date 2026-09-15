@@ -107,16 +107,18 @@ function Desenho({
 }) {
   const alturaSvg = altura + 12; // espaço para a linha-guia da fatia minúscula
 
-  let x = 0;
-  const segmentos = partes.map((parte, i) => {
+  const segmentos = partes.reduce<
+    Array<{ parte: Parte; inicio: number; w: number; px: number; minuscula: boolean; primeiro: boolean; ultimo: boolean }>
+  >((acc, parte, i) => {
+    const anterior = acc[acc.length - 1];
+    const inicio = anterior ? anterior.inicio + anterior.px : 0;
     const { px, minuscula } = larguraDaMarca(num(parte.valor), total, largura);
-    const inicio = x;
     // O respiro sai da largura do segmento, nunca do valor: a última fatia não
     // desconta, senão a barra inteira encolheria a cada parte adicionada.
     const w = i === partes.length - 1 ? px : Math.max(0, px - RESPIRO);
-    x += px;
-    return { parte, inicio, w, px, minuscula, primeiro: i === 0, ultimo: i === partes.length - 1 };
-  });
+    acc.push({ parte, inicio, w, px, minuscula, primeiro: i === 0, ultimo: i === partes.length - 1 });
+    return acc;
+  }, []);
 
   const alvos: AlvoDeToque[] = segmentos
     .filter(s => s.px > 0)

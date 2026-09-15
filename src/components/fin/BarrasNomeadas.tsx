@@ -62,13 +62,11 @@ function Barra({
   largura,
   maximo,
   altura,
-  formatar,
 }: {
   linha: LinhaBarra;
   largura: number;
   maximo: number;
   altura: number;
-  formatar: (v: number) => string;
 }) {
   const alturaSvg = altura + 8; // o entalhe do alvo passa 4px acima e abaixo
   const y = 4;
@@ -223,13 +221,7 @@ function Lista({
                   </span>
                 </div>
 
-                <Barra
-                  linha={linha}
-                  largura={largura}
-                  maximo={maximo}
-                  altura={alturaBarra}
-                  formatar={formatar}
-                />
+                <Barra linha={linha} largura={largura} maximo={maximo} altura={alturaBarra} />
 
                 {linha.valor === null && linha.rotuloAusencia ? (
                   <span className="fin-t-caption text-[var(--fin-text-3)]">{linha.rotuloAusencia}</span>

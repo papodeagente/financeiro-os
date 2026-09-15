@@ -21,7 +21,7 @@ export const statusChipVariants = cva(
 
 export type StatusTone = NonNullable<VariantProps<typeof statusChipVariants>['tone']>;
 
-export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza';
+export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza' | 'comissao';
 
 export type StatusChipProps = {
   /** Valor cru do banco. NUNCA é renderizado como veio. */
@@ -75,6 +75,14 @@ export const STATUS_LABELS: Record<StatusDominio, Record<string, { rotulo: strin
     FEE:                 { rotulo: 'Taxa de serviço',        tone: 'neutro' },
     MANUAL:              { rotulo: 'Lançado à mão',          tone: 'neutro' },
     OUTROS:              { rotulo: 'Outros',                 tone: 'neutro' },
+  },
+  comissao: {
+    // "CALCULADA" no filtro e "A Aprovar" no cartão eram dois nomes para o
+    // mesmo estado, na mesma tela. Aqui o nome é um só.
+    CALCULADA: { rotulo: 'A aprovar',        tone: 'aviso'    },
+    APROVADA:  { rotulo: 'Aprovada, a pagar', tone: 'info'    },
+    PAGA:      { rotulo: 'Paga',             tone: 'positivo' },
+    CANCELADA: { rotulo: 'Cancelada',        tone: 'neutro'   },
   },
   natureza: {
     FIXO:         { rotulo: 'Fixo',          tone: 'neutro' },
