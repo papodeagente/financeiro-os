@@ -10,6 +10,7 @@ import pool from './db';
 import { generateId } from './utils';
 import { hojeISO, num, round2 } from './money';
 import { nomeDoCliente, documentoDoCliente } from './cliente-nome';
+import { enderecoDoCliente } from './cliente-documento';
 import {
   calcularNota,
   conflitosComEmissor,
@@ -149,19 +150,24 @@ export async function carregarEmitente(tenantId: string): Promise<DadosEmitente>
   };
 }
 
+/**
+ * O tomador da nota, a partir do cadastro do cliente.
+ *
+ * O ENDEREÇO SAÍA SEMPRE EM BRANCO. Esta função lia `cliente.endereco.cep`,
+ * mas o cadastro guarda o endereço PLANO (`cliente.cep`, `cliente.logradouro`,
+ * …) — a chave aninhada não existe em cliente nenhum. Como os campos de
+ * endereço são opcionais no envio, nada reclamava: a nota simplesmente ia sem
+ * logradouro, sem CEP e sem UF do tomador, em todas as emissões.
+ *
+ * `enderecoDoCliente` lê as duas formas, com a plana tendo precedência.
+ */
 function tomadorDoCliente(cliente: Record<string, unknown> | null): TomadorNota {
-  const end = ((cliente?.endereco ?? {}) as Record<string, string>) || {};
   return {
     cpf_cnpj: documentoDoCliente(cliente ?? undefined),
     razao_social: nomeDoCliente(cliente ?? undefined),
     email: String(cliente?.email ?? ''),
     inscricao_municipal: String(cliente?.inscricao_municipal ?? ''),
-    endereco: {
-      cep: String(end.cep ?? ''), logradouro: String(end.logradouro ?? ''),
-      numero: String(end.numero ?? ''), complemento: String(end.complemento ?? ''),
-      bairro: String(end.bairro ?? ''), cidade: String(end.cidade ?? ''),
-      estado: String(end.estado ?? ''),
-    },
+    endereco: enderecoDoCliente(cliente),
   };
 }
 

@@ -139,6 +139,9 @@ export default function ContasReceberPage() {
   function openEdit(item: ContaReceber) {
     setForm({
       origem: item.origem,
+      // Conta antiga não tem vínculo: o campo vem vazio e o seletor avisa que
+      // a nota não sai enquanto ninguém escolher um cadastro.
+      cliente_id: item.cliente_id ?? '',
       cliente_nome: item.cliente_nome,
       descricao: item.descricao,
       categoria_id: item.categoria_id,

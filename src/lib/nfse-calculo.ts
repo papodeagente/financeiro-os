@@ -297,7 +297,9 @@ export function pendenciasParaEmitir(entrada: {
   if (!String(entrada.cnae || '').trim()) faltas.push('Informe o CNAE da agência.');
   if (num(entrada.aliquota_iss) < 0) faltas.push('Informe a alíquota de ISS do município.');
   if (!String(entrada.tomador_documento || '').trim()) {
-    faltas.push('O cliente desta venda está sem CPF ou CNPJ. A prefeitura exige o documento do tomador.');
+    // A pendência diz ONDE consertar. Sem isso a frase é um beco sem saída:
+    // a pessoa sabe o que falta e não sabe em que tela resolver.
+    faltas.push('O cliente desta conta está sem CPF ou CNPJ, e a prefeitura exige o documento do tomador. Edite a conta e complete o cadastro do cliente pelo seletor.');
   }
   if (!String(entrada.tomador_nome || '').trim()) {
     faltas.push('O cliente desta venda está sem nome.');

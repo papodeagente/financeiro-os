@@ -5,6 +5,7 @@ import { Field } from '@/components/fin/Field';
 import { MoneyField } from '@/components/fin/MoneyField';
 import { FormSection } from '@/components/financeiro/FormSection';
 import { Input } from '@/components/ui/input';
+import { ClientePicker } from '@/components/ClientePicker';
 import {
   Select,
   SelectContent,
@@ -22,11 +23,16 @@ export type FormState = Omit<ContaReceber,
   'id' | 'juros' | 'multa' | 'desconto' | 'valor_final' | 'data_emissao' |
   'data_recebimento' | 'valor_recebido' | 'conta_bancaria_id' |
   'boleto_emitido' | 'boleto_codigo' | 'boleto_url' | 'status' |
-  'rateio' | 'anexos' | 'venda_id' | 'grupo_id' | 'cliente_id' | 'centro_custo'
+  'rateio' | 'anexos' | 'venda_id' | 'grupo_id' | 'centro_custo'
 >;
 
 export const EMPTY_FORM: FormState = {
   origem: 'VENDA',
+  // O VÍNCULO com o cadastro, que o formulário não tinha. Sem ele a emissão
+  // de nota não acha o cliente (nfse-servico.ts:197 resolve por cliente_id) e
+  // a prefeitura recusa por falta do documento do tomador. O nome em texto
+  // livre continua sendo gravado, para a lista e para o histórico antigo.
+  cliente_id: '',
   cliente_nome: '',
   descricao: '',
   categoria_id: '',
@@ -79,14 +85,21 @@ export function FormularioConta({ form, erros, onChange }: FormularioContaProps)
       <FormSection title="Essencial" alwaysOpen>
         <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <Field rotulo="Cliente" obrigatorio erro={erros.cliente_nome ?? null}>
+            <Field
+              rotulo="Cliente"
+              obrigatorio
+              ajuda="Escolha um cadastro. É dele que sai o CPF ou CNPJ da nota fiscal."
+              erro={erros.cliente_nome ?? null}
+            >
               {a => (
-                <Input
-                  {...a}
-                  value={form.cliente_nome}
-                  onChange={e => onChange({ cliente_nome: e.target.value })}
-                  placeholder="Nome de quem vai pagar"
-                  className={CONTROLE}
+                <ClientePicker
+                  id={a.id}
+                  value={form.cliente_id}
+                  nome={form.cliente_nome}
+                  placeholder="Buscar quem vai pagar"
+                  onChange={c =>
+                    onChange({ cliente_id: c?.id ?? '', cliente_nome: c?.nome ?? '' })
+                  }
                 />
               )}
             </Field>

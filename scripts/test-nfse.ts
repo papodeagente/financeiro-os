@@ -16,6 +16,7 @@ import {
   montarDiscriminacao,
   pendenciasParaEmitir,
 } from '../src/lib/nfse-calculo.ts';
+import { enderecoDoCliente } from '../src/lib/cliente-documento.ts';
 import { codigoInterno, montarCorpoEmissao } from '../src/lib/nfse-acelera.ts';
 import {
   buscarServicos, codigoDoItem, servicoDoCodigo,
@@ -589,5 +590,25 @@ console.log('--- o código sai da atividade da empresa ---');
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════
+console.log('--- o endereço do tomador chega na nota ---');
+{
+  // O cadastro guarda o endereço PLANO. O montador do tomador lia
+  // `cliente.endereco.cep` — chave que não existe em cliente nenhum — e como
+  // os campos de endereço são opcionais no envio, nada reclamava: TODA nota
+  // saía sem logradouro, sem CEP e sem UF do tomador.
+  const plano = {
+    tipo: 'PF', nome_completo: 'Renata Souza', cpf: '52998224725',
+    email: 'renata@exemplo.com',
+    cep: '01310-100', logradouro: 'Av. Paulista', numero: '1000',
+    bairro: 'Bela Vista', cidade: 'São Paulo', estado: 'SP',
+  };
+  const e = enderecoDoCliente(plano);
+  eq([e.logradouro, e.numero, e.cep, e.estado], ['Av. Paulista', '1000', '01310-100', 'SP'],
+     'o endereço plano do cadastro é lido');
+  eq(enderecoDoCliente({ endereco: { cep: '20040-020', estado: 'RJ' } }).estado, 'RJ',
+     'o aninhado ainda entra como retaguarda');
+}
+
 console.log(`\n${total - falhas}/${total} testes da nota fiscal passaram`);
 if (falhas > 0) process.exit(1);

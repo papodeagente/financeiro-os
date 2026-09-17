@@ -20,10 +20,11 @@ import {
   createVendaCRM,
   createProdutoVenda,
   createItemVenda,
-  createCliente,
+  
   createFornecedorCRM,
 } from '@/lib/crm-types';
 import { nomeDoCliente } from '@/lib/cliente-nome';
+import { ClientePicker } from '@/components/ClientePicker';
 import { gerarContasVenda, type ItemVendaInput, type FornecedorInfo } from '@/lib/venda-financeiro';
 import { GrupoViagem } from '@/lib/types';
 import { loadEntities, saveEntity } from '@/lib/crm-storage';
@@ -93,19 +94,11 @@ export default function NovaVendaPage() {
   const [fornecedores, setFornecedores] = useState<FornecedorCRM[]>([]);
   const [grupos, setGrupos] = useState<GrupoViagem[]>([]);
   const [propostas, setPropostas] = useState<Proposta[]>([]);
-  const [clienteSearch, setClienteSearch] = useState('');
-  const [showClienteList, setShowClienteList] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showPropostaModal, setShowPropostaModal] = useState(false);
   const [propostaSearch, setPropostaSearch] = useState('');
 
   // Inline quick-create states
-  const [showNovoCliente, setShowNovoCliente] = useState(false);
-  const [novoClienteTipo, setNovoClienteTipo] = useState<'PF' | 'PJ'>('PF');
-  const [novoClienteNome, setNovoClienteNome] = useState('');
-  const [novoClienteEmail, setNovoClienteEmail] = useState('');
-  const [novoClienteTelefone, setNovoClienteTelefone] = useState('');
-  const [savingCliente, setSavingCliente] = useState(false);
 
   const [showNovoFornecedor, setShowNovoFornecedor] = useState(false);
   const [novoFornecedorTipo, setNovoFornecedorTipo] = useState<TipoFornecedor>('OUTROS');
@@ -222,45 +215,6 @@ export default function NovaVendaPage() {
   const selectedCliente = clientes.find(c => c.id === venda.cliente_id);
   const clienteNome = nomeDoCliente(selectedCliente);
 
-  const filteredClientes = clientes.filter(c => {
-    const q = clienteSearch.toLowerCase();
-    const nome = nomeDoCliente(c);
-    const email = c.email || '';
-    return nome.toLowerCase().includes(q) || email.toLowerCase().includes(q);
-  });
-
-  const selectCliente = (c: Cliente) => {
-    const nome = nomeDoCliente(c);
-    setVenda(prev => ({ ...prev, cliente_id: c.id }));
-    setClienteSearch(nome);
-    setShowClienteList(false);
-  };
-
-  const handleCriarCliente = async () => {
-    if (!novoClienteNome.trim()) { toast.error('Informe o nome do cliente'); return; }
-    setSavingCliente(true);
-    try {
-      const novo = createCliente();
-      novo.tipo = novoClienteTipo;
-      if (novoClienteTipo === 'PF') {
-        novo.nome_completo = novoClienteNome.trim();
-      } else {
-        novo.nome_fantasia = novoClienteNome.trim();
-      }
-      novo.email = novoClienteEmail.trim();
-      novo.telefone_principal = novoClienteTelefone.trim();
-      await saveEntity('clientes', novo);
-      setClientes(prev => [...prev, novo]);
-      selectCliente(novo);
-      setShowNovoCliente(false);
-      setNovoClienteNome(''); setNovoClienteEmail(''); setNovoClienteTelefone('');
-      toast.success('Cliente cadastrado!');
-    } catch {
-      toast.error('Erro ao cadastrar cliente');
-    } finally {
-      setSavingCliente(false);
-    }
-  };
 
   const selectFornecedor = (f: FornecedorCRM, idx: number) => {
     setVenda(prev => {
@@ -493,12 +447,9 @@ export default function NovaVendaPage() {
       };
       // Pre-fill client if not set
       if (!prev.cliente_id && proposta.cliente_id) {
+        // Basta o vínculo: o seletor resolve o nome pelo cadastro, em vez de
+        // manter uma segunda cópia do nome num estado de busca.
         updated.cliente_id = proposta.cliente_id;
-        const c = clientes.find(cl => cl.id === proposta.cliente_id);
-        if (c) {
-          const nome = c.tipo === 'PF' ? c.nome_completo : c.nome_fantasia || c.razao_social;
-          setClienteSearch(nome);
-        }
       }
       return recalcTotais(updated);
     });
@@ -666,87 +617,20 @@ export default function NovaVendaPage() {
         />
         {openSections.cliente && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="relative">
+            <div>
               <label className={labelClass}>Cliente *</label>
-              <Input
-                value={clienteSearch}
-                onChange={e => {
-                  setClienteSearch(e.target.value);
-                  setShowClienteList(true);
-                  setShowNovoCliente(false);
-                  if (!e.target.value) setVenda(prev => ({ ...prev, cliente_id: '' }));
-                }}
-                onFocus={() => setShowClienteList(true)}
-                placeholder="Buscar cliente..."
-                className={inputClass}
+              {/* O cadastro rápido que havia aqui pedia nome, e-mail e telefone
+                  e NUNCA o CPF ou CNPJ. Como a prefeitura recusa nota sem o
+                  documento do tomador, toda pessoa cadastrada por este caminho
+                  nascia impossibilitada de gerar nota — e isso só aparecia
+                  semanas depois, na emissão. O seletor pede o documento e diz
+                  na hora se a nota vai sair. */}
+              <ClientePicker
+                value={venda.cliente_id}
+                nome={clienteNome}
+                placeholder="Buscar ou cadastrar cliente"
+                onChange={(c) => setVenda(prev => ({ ...prev, cliente_id: c?.id ?? '' }))}
               />
-              {showClienteList && clienteSearch && !showNovoCliente && (
-                <div className="absolute z-10 left-0 right-0 top-full mt-1 bg-[var(--t-header-bg)] shadow-[var(--t-card-shadow)] rounded-md shadow-xl max-h-56 overflow-y-auto">
-                  {filteredClientes.map(c => {
-                    const nome =
-                      c.tipo === 'PF' ? c.nome_completo : c.nome_fantasia || c.razao_social;
-                    return (
-                      <button
-                        key={c.id}
-                        type="button"
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--t-surface-hover)] text-[var(--t-text)]"
-                        onMouseDown={() => selectCliente(c)}
-                      >
-                        <span className="font-medium">{nome}</span>
-                        {c.email && (
-                          <span className="text-[var(--t-text-secondary)] ml-2 text-xs">{c.email}</span>
-                        )}
-                      </button>
-                    );
-                  })}
-                  {filteredClientes.length === 0 && (
-                    <p className="px-3 py-1.5 text-xs text-[var(--t-text-secondary)]">Nenhum cliente encontrado</p>
-                  )}
-                  <button
-                    type="button"
-                    className="w-full text-left px-3 py-2 text-sm font-medium text-[var(--t-green)] hover:bg-[var(--t-green-bg)]/30 border-t border-[var(--t-border)] flex items-center gap-1.5"
-                    onMouseDown={() => {
-                      setShowNovoCliente(true);
-                      setShowClienteList(false);
-                      setNovoClienteNome(clienteSearch);
-                    }}
-                  >
-                    <UserPlus className="w-3.5 h-3.5" /> Cadastrar novo cliente
-                  </button>
-                </div>
-              )}
-              {showNovoCliente && (
-                <div className="mt-2 p-3 rounded-lg border border-[var(--t-green)]/30 bg-[var(--t-surface)] space-y-2">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-semibold text-[var(--t-green)]">Novo cliente</span>
-                    <button type="button" onClick={() => setShowNovoCliente(false)} className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)]">
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => setNovoClienteTipo('PF')}
-                      className={`flex-1 text-xs py-1.5 rounded-md border transition-colors ${novoClienteTipo === 'PF' ? 'border-[var(--t-green)] bg-[var(--t-green-bg)]/30 text-[var(--t-green)] font-semibold' : 'border-[var(--t-border)] text-[var(--t-text-secondary)]'}`}>
-                      Pessoa Física
-                    </button>
-                    <button type="button" onClick={() => setNovoClienteTipo('PJ')}
-                      className={`flex-1 text-xs py-1.5 rounded-md border transition-colors ${novoClienteTipo === 'PJ' ? 'border-[var(--t-green)] bg-[var(--t-green-bg)]/30 text-[var(--t-green)] font-semibold' : 'border-[var(--t-border)] text-[var(--t-text-secondary)]'}`}>
-                      Pessoa Jurídica
-                    </button>
-                  </div>
-                  <Input value={novoClienteNome} onChange={e => setNovoClienteNome(e.target.value)}
-                    placeholder={novoClienteTipo === 'PF' ? 'Nome completo' : 'Nome fantasia'} className={inputClass} />
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input value={novoClienteEmail} onChange={e => setNovoClienteEmail(e.target.value)}
-                      placeholder="E-mail" type="email" className={inputClass} />
-                    <Input value={novoClienteTelefone} onChange={e => setNovoClienteTelefone(e.target.value)}
-                      placeholder="Telefone" className={inputClass} />
-                  </div>
-                  <Button type="button" onClick={handleCriarCliente} disabled={savingCliente}
-                    className="w-full bg-[var(--t-green)] hover:opacity-90 text-white dark:text-[#0a0a14] text-xs h-8">
-                    {savingCliente ? 'Salvando...' : 'Cadastrar e selecionar'}
-                  </Button>
-                </div>
-              )}
             </div>
             <div>
               <label className={labelClass}>Data da Venda</label>
