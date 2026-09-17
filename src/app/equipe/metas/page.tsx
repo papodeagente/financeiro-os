@@ -11,6 +11,7 @@ import { posicaoNaEscala, type PosicaoNaEscala } from '@/lib/comissao-acumulada'
 import { ritmoEsperadoPct, ritmoNecessario } from '@/lib/escala';
 import { hojeISO, mesDe, num, round2, ultimoDiaDoMes } from '@/lib/money';
 import { PageHeader } from '@/components/fin/PageHeader';
+import { PageShell, RITMO_DA_PAGINA } from '@/components/fin/PageShell';
 import { DataState } from '@/components/fin/DataState';
 import { EmptyLesson } from '@/components/fin/EmptyLesson';
 import { Money } from '@/components/fin/Money';
@@ -159,6 +160,9 @@ export default function MetasPage() {
   const metaIrreal = resumo.meta_total > 0 && resumo.realizado_total > resumo.meta_total * 10;
 
   const faltam = round2(Math.max(0, resumo.meta_total - resumo.realizado_total));
+  /** Quem de fato fechou alguma venda no mês. Sem meta definida, é o único
+   *  recorte honesto que a resposta tem para oferecer. */
+  const quantosVenderam = resumo.linhas.filter(l => l.realizado_valor > 0).length;
   const porDia = ritmoNecessario(faltam, diasRestantes);
   const ritmoEsperado = ritmoEsperadoPct(diaDeHoje, diasDoMes);
   const noRitmo = resumo.meta_total <= 0 || resumo.pct_equipe >= ritmoEsperado;
@@ -291,7 +295,7 @@ export default function MetasPage() {
   }
 
   return (
-    <div className="flex flex-col gap-[var(--fin-s-5)]">
+    <PageShell>
       <Comemoracao chave={festa?.chave ?? null} detalhe={festa?.detalhe} onFim={() => setFesta(null)} />
 
       <PageHeader
@@ -303,6 +307,7 @@ export default function MetasPage() {
       />
 
       <DataState
+        className={RITMO_DA_PAGINA}
         estado={carregando ? 'carregando' : erro ? 'erro' : 'ok'}
         erro={erro ? { mensagem: erro, onTentarDeNovo: () => { carregar(); } } : null}
         esqueleto={
@@ -347,7 +352,9 @@ export default function MetasPage() {
                       ? `faltaram ${BRL(faltam)} e o mês acabou.`
                       : `para bater, faltam ${BRL(faltam)} em ${diasRestantes} ${diasRestantes === 1 ? 'dia' : 'dias'} — ${BRL(porDia)} por dia.`
                 }`
-              : `Sem meta definida para ${nomeDoMes} — o realizado não tem contra o que ser comparado.`
+              : quantosVenderam === 0
+                ? `Ninguém vendeu até o dia ${diaDeHoje} de ${diasDoMes}.`
+                : `${quantosVenderam} ${quantosVenderam === 1 ? 'pessoa vendeu' : 'pessoas venderam'} até o dia ${diaDeHoje} de ${diasDoMes}.`
           }
           chip={
             resumo.meta_total <= 0
@@ -548,6 +555,6 @@ export default function MetasPage() {
           </div>
         </RecordSheet>
       )}
-    </div>
+    </PageShell>
   );
 }

@@ -108,7 +108,7 @@ export function EmptyLesson({
       {(acao || acaoSecundaria) && (
         <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-center">
           {acao?.href ? (
-            <Button className={BOTAO_PRIMARIO} render={<Link href={acao.href} />}>
+            <Button className={BOTAO_PRIMARIO} nativeButton={false} render={<Link href={acao.href} />}>
               {acao.rotulo}
             </Button>
           ) : acao?.onClick ? (

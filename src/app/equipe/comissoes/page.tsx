@@ -15,8 +15,8 @@ import {
 import Link from 'next/link';
 import { RefreshCw } from 'lucide-react';
 import { PageHeader } from '@/components/fin/PageHeader';
+import { PageShell, RITMO_DA_PAGINA } from '@/components/fin/PageShell';
 import { DataState } from '@/components/fin/DataState';
-import { EmptyLesson } from '@/components/fin/EmptyLesson';
 import { FinTable, type FinColuna } from '@/components/fin/FinTable';
 import { Money } from '@/components/fin/Money';
 import { StatusChip } from '@/components/fin/StatusChip';
@@ -753,7 +753,7 @@ export default function ComissoesPage() {
   const confirmacao = textoDaConfirmacao();
 
   return (
-    <div className="flex flex-col gap-[var(--fin-s-5)]">
+    <PageShell>
       <PageHeader
         titulo="Comissões"
         subtitulo={`O que a agência deve à equipe em ${nomeDoMes} e o que depende da sua aprovação`}
@@ -763,6 +763,7 @@ export default function ComissoesPage() {
       />
 
       <DataState
+        className={RITMO_DA_PAGINA}
         estado={loading ? 'carregando' : 'ok'}
         esqueleto={
           <div className="flex flex-col gap-[var(--fin-s-5)]" aria-hidden>
@@ -822,45 +823,48 @@ export default function ComissoesPage() {
         {/* ── A RESPOSTA E A AÇÃO ─────────────────────────────────────────
             Sem chip de veredito: aqui o julgamento é do dono, e a peça que o
             representa é o botão. */}
-        <Resposta
-          overline="ESPERANDO SUA APROVAÇÃO"
-          valor={<Money valor={stats.calculadas} size="resposta" align="esquerda" />}
-          frase={
-            aAprovar.length === 0
-              ? `Nada esperando aprovação em ${nomeDoMes}.`
-              : `${aAprovar.length} ${aAprovar.length === 1 ? 'comissão' : 'comissões'}, ${
-                  new Set(aAprovar.map(c => c.vendedor_nome)).size === 1
-                    ? `de ${aAprovar[0].vendedor_nome}`
-                    : `de ${new Set(aAprovar.map(c => c.vendedor_nome)).size} pessoas`
-                }. ${
-                  proximaSaida
-                    ? `Aprovando hoje, ${aAprovar.length === 1 ? 'sai' : 'saem'} no pagamento de ${dataBR(proximaSaida)}.`
-                    : 'A agência ainda não tem dias de pagamento definidos, então não dá para dizer quando sai.'
-                }`
-          }
-          acao={
-            aAprovar.length === 1
-              ? {
-                  rotulo: `Aprovar ${BRL(num(aAprovar[0].valor_comissao))}`,
-                  onClick: () => setConfirmando({ tipo: 'aprovar', comissao: aAprovar[0] }),
-                }
-              : null
-          }
-        />
+        <div className="flex flex-col gap-2">
+          <Resposta
+            overline="ESPERANDO SUA APROVAÇÃO"
+            valor={<Money valor={stats.calculadas} size="resposta" align="esquerda" />}
+            frase={
+              aAprovar.length === 0
+                ? `Nada esperando aprovação em ${nomeDoMes}.`
+                : `${aAprovar.length} ${aAprovar.length === 1 ? 'comissão' : 'comissões'}, ${
+                    new Set(aAprovar.map(c => c.vendedor_nome)).size === 1
+                      ? `de ${aAprovar[0].vendedor_nome}`
+                      : `de ${new Set(aAprovar.map(c => c.vendedor_nome)).size} pessoas`
+                  }. ${
+                    proximaSaida
+                      ? `Aprovando hoje, ${aAprovar.length === 1 ? 'sai' : 'saem'} no pagamento de ${dataBR(proximaSaida)}.`
+                      : 'A agência ainda não tem dias de pagamento definidos, então não dá para dizer quando sai.'
+                  }`
+            }
+            acao={
+              aAprovar.length === 1
+                ? {
+                    rotulo: `Aprovar ${BRL(num(aAprovar[0].valor_comissao))}`,
+                    onClick: () => setConfirmando({ tipo: 'aprovar', comissao: aAprovar[0] }),
+                  }
+                : null
+            }
+          />
 
-        {!proximaSaida && (
-          <p className="fin-t-caption text-[var(--fin-text-3)]">
-            Nenhuma agenda de pagamento definida — sem ela, não dá para dizer quando a comissão sai.{' '}
-            <Link href="/config/agencia" className="text-[var(--fin-accent)] underline underline-offset-2">
-              Definir os dias de pagamento
-            </Link>
-          </p>
-        )}
-        {proximaSaida && (
-          <p className="fin-t-caption text-[var(--fin-text-3)]">
-            {`${descreverAgenda(agendaPagamento)} A próxima saída é ${dataBR(proximaSaida)}.`}
-          </p>
-        )}
+          {/* descreverAgenda devolve um FRAGMENTO ("dia 10"), não uma frase:
+              emendar um ponto final nele produzia "dia 10 A próxima saída é…". */}
+          {proximaSaida ? (
+            <p className="fin-t-caption text-[var(--fin-text-3)]">
+              {`A agência paga comissão ${descreverAgenda(agendaPagamento)} de cada mês. A próxima saída é ${dataBR(proximaSaida)}.`}
+            </p>
+          ) : (
+            <p className="fin-t-caption text-[var(--fin-text-3)]">
+              Nenhuma agenda de pagamento definida — sem ela, não dá para dizer quando a comissão sai.{' '}
+              <Link href="/config/agencia" className="text-[var(--fin-accent)] underline underline-offset-2">
+                Definir os dias de pagamento
+              </Link>
+            </p>
+          )}
+        </div>
 
         {/* ── ONDE ESTÁ O DINHEIRO ────────────────────────────────────────
             Com uma etapa só, a barra é um número com tinta em volta: viram
@@ -878,12 +882,22 @@ export default function ComissoesPage() {
             <BarraDeParte partes={etapas} formatar={v => BRL(num(v))} />
           </GraficoMoldura>
         ) : (
-          <ul className="flex flex-wrap gap-x-6 gap-y-1">
+          // Com uma etapa só a barra seria um número com tinta em volta. Vira
+          // o mesmo trio de fatos que a Folha e o Painel usam, para a tela
+          // continuar parecendo a mesma casa.
+          <ul className="grid gap-[var(--fin-s-3)] sm:grid-cols-3">
             {etapas.map(e => (
-              <li key={e.id} className="fin-t-body text-[var(--fin-text-2)]">
-                {`${e.rotulo}: `}
-                <span className={num(e.valor) > 0 ? 'text-[var(--fin-text)]' : 'text-[var(--fin-text-3)]'}>
-                  {num(e.valor) > 0 ? BRL(num(e.valor)) : e.id === 'aprovar' ? 'nada ainda' : e.id === 'aprovadas' ? 'nada aprovado ainda' : 'nada pago ainda'}
+              <li key={e.id} className={`${CARTAO} flex flex-col gap-1 p-[var(--fin-s-4)]`}>
+                <span className="fin-t-overline text-[var(--fin-text-3)]">{e.rotulo}</span>
+                {num(e.valor) > 0 ? (
+                  <Money valor={num(e.valor)} size="metricSm" align="esquerda" />
+                ) : (
+                  <span className="fin-t-metric-sm text-[var(--fin-text-3)]">—</span>
+                )}
+                <span className="fin-t-caption text-[var(--fin-text-3)]">
+                  {num(e.valor) > 0
+                    ? `${e.id === 'aprovar' ? 'esperando você' : e.id === 'aprovadas' ? 'programadas para pagamento' : 'já saíram do caixa'}`
+                    : e.id === 'aprovar' ? 'nada esperando aprovação' : e.id === 'aprovadas' ? 'nada aprovado ainda' : 'nada pago ainda'}
                 </span>
               </li>
             ))}
@@ -1020,6 +1034,6 @@ export default function ComissoesPage() {
         processando={processando}
         onConfirmar={executarConfirmacao}
       />
-    </div>
+    </PageShell>
   );
 }

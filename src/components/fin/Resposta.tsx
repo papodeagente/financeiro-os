@@ -81,9 +81,24 @@ export function Resposta({
     <section
       data-fin-resposta=""
       aria-labelledby={id}
-      className={cn('flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-8', className)}
+      className={cn(
+        'flex flex-col gap-2',
+        // As duas colunas só existem quando há marca. Sem ela, a linha de flex
+        // mantinha a coluna de texto presa em 380px e deixava o resto do quadro
+        // VAZIO — uma frase quebrando em três linhas com meia tela em branco ao
+        // lado. Sem marca, a resposta é um bloco só.
+        marca && 'lg:flex-row lg:items-center lg:gap-8',
+        className,
+      )}
     >
-      <div className="flex min-w-0 flex-col gap-2 lg:w-[380px] lg:shrink-0">
+      <div
+        className={cn(
+          'flex min-w-0 flex-col gap-2',
+          // Com marca, largura fixa para a marca ter o resto. Sem marca, um
+          // limite de LEITURA: a frase não deve atravessar 1280px de monitor.
+          marca ? 'lg:w-[380px] lg:shrink-0' : 'max-w-[62ch]',
+        )}
+      >
         <h2 id={id} className="fin-t-overline text-[var(--fin-text-3)]">
           {overline}
         </h2>

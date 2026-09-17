@@ -21,6 +21,7 @@ import {
 import { divSegura, hojeISO, mesDe, num, round2 } from '@/lib/money';
 import { carregarEntidades } from '@/lib/crm-storage';
 import { PageHeader } from '@/components/fin/PageHeader';
+import { PageShell, RITMO_DA_PAGINA } from '@/components/fin/PageShell';
 import { DataState } from '@/components/fin/DataState';
 import { EmptyLesson } from '@/components/fin/EmptyLesson';
 import { FinTable, type FinColuna } from '@/components/fin/FinTable';
@@ -238,7 +239,7 @@ export default function FolhaPage() {
   const temFolha = folha.quantidade > 0;
 
   return (
-    <div className="flex flex-col gap-[var(--fin-s-5)]">
+    <PageShell>
       <PageHeader
         titulo="Folha de pagamento"
         subtitulo="Quanto a equipe custa por mês e quanto isso pesa no faturamento"
@@ -248,6 +249,7 @@ export default function FolhaPage() {
       />
 
       <DataState
+        className={RITMO_DA_PAGINA}
         estado={carregando ? 'carregando' : erro ? 'erro' : 'ok'}
         erro={erro ? { mensagem: erro, onTentarDeNovo: () => { carregar(); } } : null}
         esqueleto={<Esqueleto />}
@@ -293,7 +295,7 @@ export default function FolhaPage() {
                       (folha.total > faturamentoMes
                         ? ` Faltaram ${BRL(round2(folha.total - faturamentoMes))} só para empatar.`
                         : ` Sobraram ${BRL(round2(faturamentoMes - folha.total))} depois de pagar a equipe.`)
-                    : `A folha de ${nomeDoMes} custou ${BRL(folha.total)}. Não houve venda registrada nesse mês, então não há com o que comparar.`
+                    : `${folha.quantidade} ${folha.quantidade === 1 ? 'pessoa' : 'pessoas'} na folha de ${nomeDoMes}.`
                 }
                 chip={faixa === 'sem-base' ? null : CHIP_DA_FAIXA[faixa]}
                 marca={
@@ -549,6 +551,6 @@ export default function FolhaPage() {
           onConfirmar={() => salvarVinculo(editando.vinculo, editando.id, editando.nome)}
         />
       )}
-    </div>
+    </PageShell>
   );
 }

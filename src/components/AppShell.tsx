@@ -21,6 +21,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { markVisited } = usePillarProgress();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  /**
+   * Tela estreita.
+   *
+   * A barra lateral tem 220px FIXOS e `shrink-0`, sem nenhum ponto de quebra:
+   * num celular de 375px ela comia 220 e sobravam 155 para a aplicação
+   * inteira, com o conteúdo cortado à direita em todas as telas. Abaixo de
+   * 768px ela passa a mostrar só a trilha de ícones (56px), o que devolve
+   * 319px ao conteúdo sem tirar a navegação do alcance do polegar.
+   */
+  const [telaEstreita, setTelaEstreita] = useState(false);
   const isMindMapImport = /^\/planejamento\/mapas-mentais\/importar\/[^/]+$/.test(pathname);
 
   // Persist sidebar state
@@ -31,6 +41,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       if (saved === 'true') setSidebarCollapsed(true);
     } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    const consulta = window.matchMedia('(max-width: 767px)');
+    const aplicar = () => setTelaEstreita(consulta.matches);
+    aplicar();
+    consulta.addEventListener('change', aplicar);
+    return () => consulta.removeEventListener('change', aplicar);
   }, []);
 
   const toggleSidebar = useCallback(() => {
@@ -156,11 +174,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <TopBar
         onCommandPalette={() => setCommandPaletteOpen(true)}
         breadcrumb={breadcrumbNode}
-        sidebarCollapsed={sidebarCollapsed}
+        sidebarCollapsed={sidebarCollapsed || telaEstreita}
         onToggleSidebar={toggleSidebar}
       />
       <div className="flex flex-1 overflow-hidden min-w-0">
-        <PillarSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+        <PillarSidebar collapsed={sidebarCollapsed || telaEstreita} onToggle={toggleSidebar} />
         <main
           className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 min-shell"
           style={{ background: 'var(--lg-bg)' }}
