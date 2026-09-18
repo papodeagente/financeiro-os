@@ -370,6 +370,35 @@ async function executarInitDB() {
     CREATE INDEX IF NOT EXISTS idx_plataformas_eventos_lista
       ON plataformas_eventos(tenant_id, created_at DESC);
 
+    -- Razão das transações das plataformas: uma linha por VENDA na
+    -- plataforma (não por aviso). É o retrato atual, com todas as
+    -- parcelas, e é dela que saem as contas a receber.
+    --
+    -- venda_id é o vínculo com a venda do CRM quando a conciliação
+    -- encontrou dono; vazio com status DIRETA significa venda direta, que
+    -- é resposta e não pendência.
+    CREATE TABLE IF NOT EXISTS plataformas_transacoes (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL DEFAULT '',
+      plataforma TEXT NOT NULL DEFAULT '',
+      id_transacao TEXT NOT NULL DEFAULT '',
+      cliente_id TEXT NOT NULL DEFAULT '',
+      venda_id TEXT NOT NULL DEFAULT '',
+      status_conciliacao TEXT NOT NULL DEFAULT 'PENDENTE',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    -- A chave natural. Reprocessar a mesma transação atualiza a linha em
+    -- vez de criar a segunda venda.
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_plataformas_transacoes
+      ON plataformas_transacoes(tenant_id, plataforma, id_transacao);
+    -- A fila de conciliação lê por status, dentro da agência.
+    CREATE INDEX IF NOT EXISTS idx_plataformas_transacoes_fila
+      ON plataformas_transacoes(tenant_id, status_conciliacao, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_plataformas_transacoes_venda
+      ON plataformas_transacoes(tenant_id, venda_id);
+
     CREATE TABLE IF NOT EXISTS crm_eventos_entrada (
       id TEXT PRIMARY KEY,
       idempotency_key TEXT NOT NULL DEFAULT '',

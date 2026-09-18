@@ -5,7 +5,7 @@ import { getSession } from '@/lib/auth';
 import { podeEditarFinanceiro } from '@/lib/permissoes';
 import { cofreDisponivel } from '@/lib/cofre';
 import { PLATAFORMAS, acharAdapter } from '@/lib/plataformas';
-import { listarConfigs, salvarConfig, carregarCredenciais, ErroPlataforma } from '@/lib/plataformas/servico';
+import { listarConfigs, salvarConfig, carregarCredenciais, importarPeriodo, ErroPlataforma } from '@/lib/plataformas/servico';
 
 /** Configuração das plataformas. Exige permissão de financeiro: quem
  *  configura pode mudar para onde o dinheiro é lançado. */
@@ -23,8 +23,9 @@ export async function GET() {
       listarConfigs(tenantId),
       pool.query(
         `SELECT plataforma, id_externo, tipo, status, erro, created_at,
-                data->>'descricao' AS descricao,
-                data->>'valor_bruto' AS valor
+                data->'transacao'->>'descricao' AS descricao,
+                data->'transacao'->>'valor_bruto' AS valor,
+                data->'transacao'->>'id_transacao' AS id_transacao
            FROM plataformas_eventos
           WHERE tenant_id = $1
           ORDER BY created_at DESC LIMIT 40`,
@@ -74,10 +75,24 @@ export async function POST(req: Request) {
       }
     }
 
+    if (String(body.acao ?? '') === 'importar') {
+      const de = String(body.de ?? '');
+      const ate = String(body.ate ?? '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(de) || !/^\d{4}-\d{2}-\d{2}$/.test(ate)) {
+        return NextResponse.json({ error: 'Informe o período no formato AAAA-MM-DD.' }, { status: 400 });
+      }
+      if (de > ate) {
+        return NextResponse.json({ error: 'O início do período vem depois do fim.' }, { status: 400 });
+      }
+      const r = await importarPeriodo(tenantId, plataforma, { de, ate });
+      return NextResponse.json({ ok: true, importacao: r });
+    }
+
     await salvarConfig(tenantId, plataforma, {
       ativo: body.ativo === true,
       conta_bancaria_id: String(body.conta_bancaria_id ?? ''),
       emitir_nota: body.emitir_nota === true,
+      conciliacao_automatica: body.conciliacao_automatica === true,
       credencial: {
         api_key: String(body.api_key ?? ''),
         segredo_webhook: String(body.segredo_webhook ?? ''),

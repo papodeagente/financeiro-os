@@ -47,6 +47,7 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   '/financeiro-ag/fluxo-caixa': 'Fluxo de caixa',
   '/financeiro-ag/dre': 'DRE',
   '/financeiro-ag/conciliacao': 'Conciliação',
+  '/financeiro-ag/recebimentos': 'Recebimentos das plataformas',
   '/financeiro-ag/receber': 'Contas a receber',
   '/financeiro-ag/pagar': 'Contas a pagar',
   '/financeiro-ag/plano-contas': 'Plano de contas',

@@ -13,19 +13,42 @@
  *   id da transação é guardado à parte para casar o estorno com a venda.
  * - A conta vende muitos produtos além do que interessa. O filtro por
  *   produto é opcional e fica na configuração, não em código.
+ * - APPROVED e COMPLETE não são a mesma coisa: aprovado é o comprador
+ *   tendo pago; completo é o fim da garantia, quando o dinheiro fica
+ *   liberado. Tratar aprovado como caixa antecipa dinheiro que a Hotmart
+ *   ainda pode devolver ao comprador.
  */
 import { round2 } from '../money';
 import type {
-  AdapterPlataforma, EventoNormalizado, ResultadoVerificacao,
+  AdapterPlataforma, EventoNormalizado, ResultadoVerificacao, StatusParcelaPlataforma,
+  TransacaoNormalizada,
 } from './tipos';
-import { data, digitos, iguaisEmTempoConstante, numero, texto, em } from './comum';
+import { data, digitos, iguaisEmTempoConstante, montarParcelas, numero, texto, em } from './comum';
 
 const MAPA: Record<string, EventoNormalizado['tipo']> = {
   PURCHASE_APPROVED: 'PAGAMENTO_CONFIRMADO',
-  PURCHASE_COMPLETE: 'PAGAMENTO_CONFIRMADO',
+  // Fim da garantia: é aqui que o dinheiro fica realmente disponível.
+  PURCHASE_COMPLETE: 'PAGAMENTO_RECEBIDO',
+  PURCHASE_BILLET_PRINTED: 'PAGAMENTO_CRIADO',
+  PURCHASE_DELAYED: 'PAGAMENTO_ATRASADO',
+  PURCHASE_CANCELED: 'PAGAMENTO_CANCELADO',
+  PURCHASE_EXPIRED: 'PAGAMENTO_CANCELADO',
   PURCHASE_REFUNDED: 'REEMBOLSO',
   PURCHASE_CHARGEBACK: 'CHARGEBACK',
   PURCHASE_PROTEST: 'CHARGEBACK',
+};
+
+/** O estado em que cada evento deixa as parcelas da venda. */
+const STATUS: Record<string, StatusParcelaPlataforma> = {
+  PAGAMENTO_CRIADO: 'PENDENTE',
+  PAGAMENTO_CONFIRMADO: 'CONFIRMADO',
+  PAGAMENTO_RECEBIDO: 'RECEBIDO',
+  PAGAMENTO_ATRASADO: 'ATRASADO',
+  PAGAMENTO_CANCELADO: 'CANCELADO',
+  REEMBOLSO: 'ESTORNADO',
+  CHARGEBACK: 'CHARGEBACK',
+  ANTECIPACAO: 'CONFIRMADO',
+  IGNORADO: 'PENDENTE',
 };
 
 export const adapterHotmart: AdapterPlataforma = {
@@ -36,6 +59,7 @@ export const adapterHotmart: AdapterPlataforma = {
     exigeConsultaExtra: false,
     informaTaxa: true,
     informaPrevisaoDeRepasse: false,
+    permiteImportacao: false,
   },
 
   camposCredencial: () => [
@@ -74,43 +98,80 @@ export const adapterHotmart: AdapterPlataforma = {
     const compra = em(dados, 'purchase') ?? {};
     const produto = em(dados, 'product') ?? {};
     const comprador = em(dados, 'buyer') ?? {};
+    const assinatura = em(dados, 'subscription') ?? {};
 
     // Filtro opcional por produto: a conta costuma vender mais coisas do
     // que as que devem virar venda aqui.
+    const idProduto = texto(produto, 'id', 'ucode');
     const filtro = String(cred.extras?.produto_id ?? '').trim();
-    if (filtro && texto(produto, 'id', 'ucode') !== filtro) tipo = 'IGNORADO';
+    if (filtro && idProduto !== filtro) tipo = 'IGNORADO';
 
     const moeda = texto(compra, 'price.currency_value', 'price.currency_code', 'original_offer_price.currency_value') || 'BRL';
     const bruto = round2(numero(compra, 'price.value', 'full_price.value', 'original_offer_price.value'));
-    const comissaoPlataforma = round2(numero(compra, 'commission_fee', 'price.fee'));
+
+    // A taxa aparece em nomes diferentes conforme a versão do payload.
+    // Nenhum deles é obrigatório: quando falta, taxa zero é honesto, e a
+    // estimativa de 8,2% que já existiu no billing não entra aqui — ela
+    // não é fato e não pode virar despesa lançada.
+    const taxa = round2(numero(
+      compra,
+      'commission_fee', 'price.fee', 'fee.value', 'hotmart_fee.total', 'hotmart_fee.value',
+    ));
+
+    const parcelasQtd = Math.max(1, numero(compra, 'payment.installments_number', 'payment.installments') || 1);
+    const dataVenda = data(compra, 'order_date', 'date', 'approved_date');
+    const dataAprovacao = data(compra, 'approved_date') || dataVenda;
+
+    const status = STATUS[tipo] ?? 'PENDENTE';
+    const pago = tipo === 'PAGAMENTO_CONFIRMADO' || tipo === 'PAGAMENTO_RECEBIDO';
 
     const descricao = texto(produto, 'name') || 'Venda pela Hotmart';
 
-    return {
-      tipo,
-      // Reembolso reusa o id da transação com outro status: sem o status na
-      // chave, o estorno seria confundido com reenvio da venda e ignorado.
-      id_externo: `${texto(compra, 'transaction')}:${evento}`,
+    const transacao: TransacaoNormalizada = {
       id_transacao: texto(compra, 'transaction'),
+      id_assinatura: texto(assinatura, 'subscriber_code', 'subscriber.code', 'plan.name'),
       comprador: {
         nome: texto(comprador, 'name'),
         email: texto(comprador, 'email'),
         documento: digitos(texto(comprador, 'document', 'checkout_phone.document')),
         telefone: digitos(texto(comprador, 'checkout_phone.number', 'phone')),
       },
-      itens: [{ descricao, quantidade: 1, valor_unitario: bruto }],
+      itens: [{ descricao, quantidade: 1, valor_unitario: bruto, id_externo: idProduto }],
       valor_bruto: bruto,
-      valor_taxa: comissaoPlataforma,
-      valor_liquido: comissaoPlataforma > 0 ? round2(bruto - comissaoPlataforma) : bruto,
+      valor_taxa: taxa,
+      valor_liquido: taxa > 0 ? round2(bruto - taxa) : bruto,
+      desconto: round2(numero(compra, 'price.discount', 'offer.coupon_value')),
+      juros: 0,
       // Preservada de propósito: conversão implícita já inflou receita em
       // produção. Quem consome decide o câmbio, com o valor à vista.
       moeda,
-      data_pagamento: data(compra, 'approved_date', 'order_date', 'date'),
-      data_prevista_recebimento: '',
       forma_pagamento: texto(compra, 'payment.type', 'payment_type'),
-      parcelas: Math.max(1, numero(compra, 'payment.installments_number') || 1),
+      detalhe_pagamento: texto(compra, 'payment.method', 'payment.billet_barcode') ? 'boleto' : '',
+      parcelas: montarParcelas({
+        total: bruto,
+        taxaTotal: taxa,
+        quantidade: parcelasQtd,
+        status,
+        primeiroVencimento: dataVenda || dataAprovacao,
+        dataPagamento: pago ? dataAprovacao : '',
+        // A Hotmart não informa data de liberação no webhook. Dizer que
+        // recebeu hoje porque aprovou hoje é o erro que transforma venda
+        // com garantia de 7 dias em caixa que não existe.
+        dataRecebimento: tipo === 'PAGAMENTO_RECEBIDO' ? dataAprovacao : '',
+        idBase: texto(compra, 'transaction'),
+      }),
+      data_venda: dataVenda,
       descricao,
       bruto: corpo,
+    };
+
+    return {
+      tipo,
+      // Reembolso reusa o id da transação com outro status: sem o status na
+      // chave, o estorno seria confundido com reenvio da venda e ignorado.
+      id_externo: `${texto(compra, 'transaction')}:${evento}`,
+      transacao,
+      parcela_afetada: 0,
     };
   },
 

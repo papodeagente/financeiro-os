@@ -73,6 +73,7 @@ const MENU: MenuItem[] = [
       { key: 'contas-bancarias', label: 'Contas Bancárias', icon: Landmark, href: '/financeiro-ag/contas-bancarias' },
       { key: 'transferencias', label: 'Transferências', icon: ArrowRightLeft, href: '/financeiro-ag/transferencias' },
       { key: 'conciliacao', label: 'Conciliação Bancária', icon: FileSpreadsheet, href: '/financeiro-ag/conciliacao' },
+      { key: 'recebimentos-plataformas', label: 'Recebimentos das Plataformas', icon: Receipt, href: '/financeiro-ag/recebimentos' },
       { key: 'fluxo-caixa', label: 'Fluxo de Caixa', icon: BarChart3, href: '/financeiro-ag/fluxo-caixa' },
       { key: 'dre', label: 'DRE', icon: FileTextIcon, href: '/financeiro-ag/dre' },
     ],

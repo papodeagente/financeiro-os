@@ -12,7 +12,8 @@ interface CampoCred { chave: string; rotulo: string; tipo: string; obrigatorio: 
 interface Plataforma { id: string; nome: string; campos: CampoCred[] }
 interface Config {
   plataforma: string; ativo: boolean; conta_bancaria_id: string;
-  emitir_nota: boolean; mascaras: Record<string, string>; atualizado_em: string;
+  emitir_nota: boolean; conciliacao_automatica: boolean;
+  mascaras: Record<string, string>; atualizado_em: string;
 }
 interface EventoLinha {
   plataforma: string; id_externo: string; tipo: string; status: string;
@@ -106,7 +107,12 @@ export default function PlataformasPage() {
           plataforma: id,
           ativo: dadosForm.ativo === 'nao' ? false : (dadosForm.ativo === 'sim' || c?.ativo || false),
           conta_bancaria_id: dadosForm.conta_bancaria_id ?? c?.conta_bancaria_id ?? '',
-          emitir_nota: dadosForm.emitir_nota === 'sim',
+          // Campo não tocado mantém o que já estava gravado. Sem este
+          // fallback, salvar a credencial desligava a opção em silêncio.
+          emitir_nota: dadosForm.emitir_nota === 'nao' ? false
+            : (dadosForm.emitir_nota === 'sim' || c?.emitir_nota || false),
+          conciliacao_automatica: dadosForm.conciliacao_automatica === 'nao' ? false
+            : (dadosForm.conciliacao_automatica === 'sim' || c?.conciliacao_automatica || false),
           api_key: dadosForm.api_key ?? '',
           segredo_webhook: dadosForm.segredo_webhook ?? '',
           extras,
@@ -227,6 +233,26 @@ export default function PlataformasPage() {
                     </select>
                     <span className="fin-t-caption text-[var(--fin-text-3)]">
                       Onde o valor da venda entra no fluxo de caixa.
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="fin-t-label" htmlFor={`${p.id}-conciliacao`}>
+                      Conciliação com o CRM
+                    </label>
+                    <select
+                      id={`${p.id}-conciliacao`}
+                      className={CAMPO}
+                      value={campo(p.id, 'conciliacao_automatica')
+                        || (c?.conciliacao_automatica ? 'sim' : 'nao')}
+                      onChange={e => setCampo(p.id, 'conciliacao_automatica', e.target.value)}
+                    >
+                      <option value="nao">Sugerir e esperar confirmação</option>
+                      <option value="sim">Vincular sozinho quando a confiança for alta</option>
+                    </select>
+                    <span className="fin-t-caption text-[var(--fin-text-3)]">
+                      Mesmo no automático, nada é vinculado sem CPF, e-mail ou id da transação em
+                      comum, e empate entre duas vendas sempre volta para alguém decidir.
                     </span>
                   </div>
                 </div>
