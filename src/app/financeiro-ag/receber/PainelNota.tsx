@@ -22,7 +22,8 @@ import {
 import { Money } from '@/components/fin/Money';
 import { CamposDaNota } from './CamposDaNota';
 import {
-  camposQueNaoViajam, formularioVazio, temErro, validarFormulario, valoresDaNota,
+  blocosDisponiveis, camposQueNaoViajam, formularioVazio, limparIndisponiveis,
+  temErro, validarFormulario, valoresDaNota,
   type FormularioNota, type ServicoCadastrado,
 } from '@/lib/nfse-formulario';
 import { formatBRL } from '@/lib/utils';
@@ -40,6 +41,10 @@ interface Previa {
   erros: string[];
   iss_e_estimativa: boolean;
   emissor_aceita_deducoes: boolean;
+  capacidades: {
+    deducoes: boolean; aliquota_por_nota: boolean; intermediario: boolean;
+    retencao_fonte: boolean; reforma_tributaria: boolean; nbs: boolean;
+  };
   regime: RegimeNota;
   forma_base: FormaBaseIntermediacao;
   valor_recebido: number;
@@ -186,6 +191,13 @@ export function PainelNota({
 
   async function emitir() {
     if (!contaId || emitindo) return;
+    // O que vai para a API é o formulário JÁ limpo do que este emissor não
+    // transmite. É a última porta antes da gravação: campo que não viaja não
+    // pode ser gravado como se tivesse sido declarado na nota.
+    const enviado = limparIndisponiveis(form, previa?.capacidades ?? {
+      deducoes: false, aliquota_por_nota: false, intermediario: false,
+      retencao_fonte: false, reforma_tributaria: false, nbs: false,
+    });
     setEmitindo(true);
     try {
       const res = await fetch('/api/fiscal/notas', {
@@ -197,19 +209,19 @@ export function PainelNota({
           forma_base: formaBase || undefined,
           // O formulário é a fonte: a descrição e o ISS retido saem dele, e
           // os estados antigos ficam só como valor de partida.
-          discriminacao: form.descricao || discriminacao || undefined,
-          iss_retido: form.tipo_recolhimento_iss === 'TOMADOR',
-          aliquota_iss: form.aliquota_iss || undefined,
-          deducao_manual: form.deducoes > 0 ? form.deducoes : null,
-          codigo_tributacao: form.codigo_tributacao || undefined,
-          cnae: form.cnae || undefined,
-          codigo_nbs: form.nbs || undefined,
-          cst: form.cst || undefined,
-          classificacao_tributaria: form.classificacao_tributaria || undefined,
-          indicador_operacao: form.indicador_operacao || undefined,
-          aliquota_inss: form.aliquota_inss || undefined,
-          aliquota_ir: form.aliquota_ir || undefined,
-          observacoes: form.observacoes || undefined,
+          discriminacao: enviado.descricao || discriminacao || undefined,
+          iss_retido: enviado.tipo_recolhimento_iss === 'TOMADOR',
+          aliquota_iss: enviado.aliquota_iss || undefined,
+          deducao_manual: enviado.deducoes > 0 ? enviado.deducoes : null,
+          codigo_tributacao: enviado.codigo_tributacao || undefined,
+          cnae: enviado.cnae || undefined,
+          codigo_nbs: enviado.nbs || undefined,
+          cst: enviado.cst || undefined,
+          classificacao_tributaria: enviado.classificacao_tributaria || undefined,
+          indicador_operacao: enviado.indicador_operacao || undefined,
+          aliquota_inss: enviado.aliquota_inss || undefined,
+          aliquota_ir: enviado.aliquota_ir || undefined,
+          observacoes: enviado.observacoes || undefined,
         }),
       });
       const corpo = await res.json();
@@ -240,25 +252,29 @@ export function PainelNota({
 
   const intermediando = (regime || previa?.regime) === 'INTERMEDIACAO';
 
+  /**
+   * O que este emissor transmite. Sem prévia ainda, o pressuposto é o mais
+   * restritivo: liberar campo por otimismo é exatamente o risco a evitar.
+   */
+  const capacidades = previa?.capacidades ?? {
+    deducoes: false, aliquota_por_nota: false, intermediario: false,
+    retencao_fonte: false, reforma_tributaria: false, nbs: false,
+  };
+  const disponibilidade = blocosDisponiveis(capacidades);
+  // Rede de segurança: se o emissor mudou com o diálogo aberto, o que ele não
+  // envia é zerado antes de calcular e antes de gravar.
+  const naoViajam = camposQueNaoViajam({ form: limparIndisponiveis(form, capacidades), capacidades });
+
   // Os números saem do formulário, não da prévia: é o formulário que a pessoa
   // está mexendo agora. A prévia dá o valor de partida do serviço.
   const valores = valoresDaNota({
     valor_servicos: previa?.valor_servicos ?? 0,
-    form,
+    form: limparIndisponiveis(form, capacidades),
   });
   const problemas = validarFormulario({
     form,
     valores,
     iss_e_estimativa: previa?.iss_e_estimativa ?? false,
-  });
-  const naoViajam = camposQueNaoViajam({
-    form,
-    capacidades: {
-      deducoes: previa?.emissor_aceita_deducoes ?? false,
-      // O padrão nacional calcula o ISS sozinho: a alíquota digitada aqui não
-      // viaja, e `iss_e_estimativa` é exatamente esse aviso vindo do servidor.
-      aliquota_por_nota: !(previa?.iss_e_estimativa ?? false),
-    },
   });
   const impedido = temErro(problemas) || !previa?.pode_emitir;
 
@@ -396,6 +412,7 @@ export function PainelNota({
                   listaNacional={listaNacional}
                   issEhEstimativa={previa.iss_e_estimativa}
                   naoViajam={naoViajam}
+                  disponibilidade={disponibilidade}
                 />
               </>
             ) : (

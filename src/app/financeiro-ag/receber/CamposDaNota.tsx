@@ -24,6 +24,8 @@ import { formatBRL } from '@/lib/utils';
 import { num } from '@/lib/money';
 import {
   problemaDoCampo,
+  type BlocoDoFormulario,
+  type Disponibilidade,
   type FormularioNota,
   type ProblemaDoCampo,
   type ServicoCadastrado,
@@ -105,8 +107,26 @@ function ParDeRetencao({
   );
 }
 
+/**
+ * O que aparece no lugar de um bloco que o emissor não transmite.
+ *
+ * Não é um aviso ao lado de campos editáveis: é o conteúdo do bloco. Campo
+ * aberto que não viaja transfere para o usuário um risco que ele não enxerga.
+ */
+function BlocoFechado({ motivo }: { motivo: string }) {
+  return (
+    <div className="rounded-[var(--fin-r-md)] border border-dashed border-[var(--fin-border-strong)] bg-[var(--fin-surface-2)] p-3">
+      <p className="fin-t-caption text-[var(--fin-text-2)]">{motivo}</p>
+      <a href="/config/fiscal" className="fin-t-caption text-[var(--fin-accent)] underline">
+        Ver configuração de notas fiscais
+      </a>
+    </div>
+  );
+}
+
 export function CamposDaNota({
   form, onForm, valores, problemas, servicos, listaNacional, issEhEstimativa, naoViajam,
+  disponibilidade,
 }: {
   form: FormularioNota;
   onForm: (f: FormularioNota) => void;
@@ -118,6 +138,7 @@ export function CamposDaNota({
   listaNacional: Array<{ codigo: string; cnae: string; titulo: string }>;
   issEhEstimativa: boolean;
   naoViajam: string[];
+  disponibilidade: Record<BlocoDoFormulario, Disponibilidade>;
 }) {
   const set = <K extends keyof FormularioNota>(k: K, v: FormularioNota[K]) =>
     onForm({ ...form, [k]: v });
@@ -191,27 +212,29 @@ export function CamposDaNota({
         </div>
 
         {/* ── NBS ─────────────────────────────────────────────────────── */}
-        <div className="flex flex-col gap-1.5">
-          <Rotulo
-            htmlFor="nf-nbs"
-            ajuda="Nomenclatura Brasileira de Serviços. Exigida em serviço prestado para o exterior."
-          >
-            Código NBS <span className="fin-t-body font-normal text-[var(--fin-text-3)]">(Opcional)</span>
-          </Rotulo>
-          <div className="relative">
-            <Input
-              id="nf-nbs"
-              value={form.nbs}
-              placeholder="Selecione um código NBS"
-              onChange={e => set('nbs', e.target.value)}
-              className="pr-10"
-            />
-            <Search
-              aria-hidden="true"
-              className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[var(--fin-text-3)]"
-            />
+        {disponibilidade.nbs.liberado ? (
+          <div className="flex flex-col gap-1.5">
+            <Rotulo
+              htmlFor="nf-nbs"
+              ajuda="Nomenclatura Brasileira de Serviços. Exigida em serviço prestado para o exterior."
+            >
+              Código NBS <span className="fin-t-body font-normal text-[var(--fin-text-3)]">(Opcional)</span>
+            </Rotulo>
+            <div className="relative">
+              <Input
+                id="nf-nbs"
+                value={form.nbs}
+                placeholder="Selecione um código NBS"
+                onChange={e => set('nbs', e.target.value)}
+                className="pr-10"
+              />
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[var(--fin-text-3)]"
+              />
+            </div>
           </div>
-        </div>
+        ) : null}
 
         {/* ── Descrição ───────────────────────────────────────────────── */}
         <div className="flex flex-col gap-1.5">
@@ -258,9 +281,9 @@ export function CamposDaNota({
           <Rotulo
             htmlFor="nf-aliquota"
             ajuda={
-              issEhEstimativa
-                ? 'Neste emissor quem calcula o ISS é a prefeitura, a partir do código de tributação. O valor aqui é estimativa para conferência.'
-                : 'Percentual do ISS do município sobre a base de cálculo.'
+              disponibilidade.aliquota_iss.liberado
+                ? 'Percentual do ISS do município sobre a base de cálculo.'
+                : 'Quem calcula o ISS é a prefeitura, a partir do código de tributação.'
             }
           >
             Alíquota ISS
@@ -269,19 +292,30 @@ export function CamposDaNota({
             <span className="flex items-center rounded-l-[var(--fin-r-md)] border border-r-0 border-[var(--fin-border-strong)] bg-[var(--fin-surface-2)] px-3 fin-t-body text-[var(--fin-text-3)]">
               %
             </span>
+            {/* Somente leitura quando quem calcula é a prefeitura: campo
+                editável faria acreditar que mudar o número muda o imposto. */}
             <input
               id="nf-aliquota"
               type="number"
               min={0}
               step="0.00001"
               inputMode="decimal"
-              className={`${CAMPO} rounded-l-none`}
+              className={`${CAMPO} rounded-l-none ${disponibilidade.aliquota_iss.liberado ? '' : 'bg-[var(--fin-surface-2)] text-[var(--fin-text-2)]'}`}
               value={form.aliquota_iss || ''}
               placeholder="0,00000"
-              onChange={e => set('aliquota_iss', num(e.target.value))}
+              readOnly={!disponibilidade.aliquota_iss.liberado}
+              aria-readonly={!disponibilidade.aliquota_iss.liberado}
+              onChange={e => {
+                if (!disponibilidade.aliquota_iss.liberado) return;
+                set('aliquota_iss', num(e.target.value));
+              }}
             />
           </div>
-          <Erro p={problemaDoCampo(problemas, 'aliquota_iss')} />
+          {disponibilidade.aliquota_iss.liberado ? (
+            <Erro p={problemaDoCampo(problemas, 'aliquota_iss')} />
+          ) : (
+            <p className="fin-t-caption text-[var(--fin-text-3)]">{disponibilidade.aliquota_iss.motivo}</p>
+          )}
         </div>
       </div>
 
@@ -297,55 +331,57 @@ export function CamposDaNota({
           </>
         }
       >
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="flex flex-col gap-1.5">
-            <Rotulo htmlFor="nf-cst" ajuda="Situação tributária do IBS/CBS, três dígitos.">
-              Situação tributária (CST)
-            </Rotulo>
-            <Input
-              id="nf-cst"
-              value={form.cst}
-              inputMode="numeric"
-              maxLength={3}
-              placeholder="000"
-              onChange={e => set('cst', e.target.value.replace(/\D+/g, '').slice(0, 3))}
-            />
-            <Erro p={problemaDoCampo(problemas, 'cst')} />
+        {disponibilidade.reforma.liberado ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Rotulo htmlFor="nf-cst" ajuda="Situação tributária do IBS/CBS, três dígitos.">
+                Situação tributária (CST)
+              </Rotulo>
+              <Input
+                id="nf-cst"
+                value={form.cst}
+                inputMode="numeric"
+                maxLength={3}
+                placeholder="000"
+                onChange={e => set('cst', e.target.value.replace(/\D+/g, '').slice(0, 3))}
+              />
+              <Erro p={problemaDoCampo(problemas, 'cst')} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Rotulo
+                htmlFor="nf-classtrib"
+                ajuda="Classificação tributária (cClassTrib), seis dígitos. Existe dentro de uma situação tributária."
+              >
+                Classificação tributária (cClassTrib)
+              </Rotulo>
+              <Input
+                id="nf-classtrib"
+                value={form.classificacao_tributaria}
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="000000"
+                disabled={!form.cst}
+                onChange={e => set('classificacao_tributaria', e.target.value.replace(/\D+/g, '').slice(0, 6))}
+              />
+              <Erro p={problemaDoCampo(problemas, 'classificacao_tributaria')} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Rotulo htmlFor="nf-indicador" ajuda="Indicador da operação, um dígito.">
+                Indicador da operação
+              </Rotulo>
+              <Input
+                id="nf-indicador"
+                value={form.indicador_operacao}
+                inputMode="numeric"
+                maxLength={1}
+                placeholder="0"
+                onChange={e => set('indicador_operacao', e.target.value.replace(/\D+/g, '').slice(0, 1))}
+              />
+            </div>
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Rotulo
-              htmlFor="nf-classtrib"
-              ajuda="Classificação tributária (cClassTrib), seis dígitos. Existe dentro de uma situação tributária."
-            >
-              Classificação tributária (cClassTrib)
-            </Rotulo>
-            <Input
-              id="nf-classtrib"
-              value={form.classificacao_tributaria}
-              inputMode="numeric"
-              maxLength={6}
-              placeholder="000000"
-              /* Espelha o modelo: sem situação tributária não há classificação
-                 a escolher, então o campo nasce desabilitado. */
-              disabled={!form.cst}
-              onChange={e => set('classificacao_tributaria', e.target.value.replace(/\D+/g, '').slice(0, 6))}
-            />
-            <Erro p={problemaDoCampo(problemas, 'classificacao_tributaria')} />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Rotulo htmlFor="nf-indicador" ajuda="Indicador da operação, um dígito.">
-              Indicador da operação
-            </Rotulo>
-            <Input
-              id="nf-indicador"
-              value={form.indicador_operacao}
-              inputMode="numeric"
-              maxLength={1}
-              placeholder="0"
-              onChange={e => set('indicador_operacao', e.target.value.replace(/\D+/g, '').slice(0, 1))}
-            />
-          </div>
-        </div>
+        ) : (
+          <BlocoFechado motivo={disponibilidade.reforma.motivo} />
+        )}
       </BlocoRecolhivel>
 
       {/* ── Retenção na fonte ─────────────────────────────────────────── */}
@@ -360,23 +396,29 @@ export function CamposDaNota({
           </>
         }
       >
-        <ParDeRetencao
-          rotulo="INSS retido"
-          ajuda="Contribuição previdenciária retida pelo tomador sobre o serviço."
-          id="nf-inss"
-          aliquota={form.aliquota_inss}
-          onAliquota={v => set('aliquota_inss', v)}
-          valor={valores.retencao_inss}
-        />
-        <ParDeRetencao
-          rotulo="IR retido"
-          ajuda="Imposto de renda retido na fonte pelo tomador."
-          id="nf-ir"
-          aliquota={form.aliquota_ir}
-          onAliquota={v => set('aliquota_ir', v)}
-          valor={valores.retencao_ir}
-        />
-        <Erro p={problemaDoCampo(problemas, 'retencoes')} />
+        {disponibilidade.retencao.liberado ? (
+          <>
+            <ParDeRetencao
+              rotulo="INSS retido"
+              ajuda="Contribuição previdenciária retida pelo tomador sobre o serviço."
+              id="nf-inss"
+              aliquota={form.aliquota_inss}
+              onAliquota={v => set('aliquota_inss', v)}
+              valor={valores.retencao_inss}
+            />
+            <ParDeRetencao
+              rotulo="IR retido"
+              ajuda="Imposto de renda retido na fonte pelo tomador."
+              id="nf-ir"
+              aliquota={form.aliquota_ir}
+              onAliquota={v => set('aliquota_ir', v)}
+              valor={valores.retencao_ir}
+            />
+            <Erro p={problemaDoCampo(problemas, 'retencoes')} />
+          </>
+        ) : (
+          <BlocoFechado motivo={disponibilidade.retencao.motivo} />
+        )}
       </BlocoRecolhivel>
 
       {/* ── Outras deduções e observações ─────────────────────────────── */}
@@ -384,26 +426,30 @@ export function CamposDaNota({
         titulo="Outras deduções e observações"
         preenchido={form.deducoes > 0 || !!form.observacoes}
       >
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="nf-deducoes">Deduções</Label>
-          <div className="flex items-stretch">
-            <span className="flex items-center rounded-l-[var(--fin-r-md)] border border-r-0 border-[var(--fin-border-strong)] bg-[var(--fin-surface-2)] px-3 fin-t-body text-[var(--fin-text-3)]">
-              R$
-            </span>
-            <input
-              id="nf-deducoes"
-              type="number"
-              min={0}
-              step="0.01"
-              inputMode="decimal"
-              className={`${CAMPO} rounded-l-none`}
-              value={form.deducoes || ''}
-              placeholder="0,00"
-              onChange={e => set('deducoes', num(e.target.value))}
-            />
+        {disponibilidade.deducoes.liberado ? (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="nf-deducoes">Deduções</Label>
+            <div className="flex items-stretch">
+              <span className="flex items-center rounded-l-[var(--fin-r-md)] border border-r-0 border-[var(--fin-border-strong)] bg-[var(--fin-surface-2)] px-3 fin-t-body text-[var(--fin-text-3)]">
+                R$
+              </span>
+              <input
+                id="nf-deducoes"
+                type="number"
+                min={0}
+                step="0.01"
+                inputMode="decimal"
+                className={`${CAMPO} rounded-l-none`}
+                value={form.deducoes || ''}
+                placeholder="0,00"
+                onChange={e => set('deducoes', num(e.target.value))}
+              />
+            </div>
+            <Erro p={problemaDoCampo(problemas, 'deducoes')} />
           </div>
-          <Erro p={problemaDoCampo(problemas, 'deducoes')} />
-        </div>
+        ) : (
+          <BlocoFechado motivo={disponibilidade.deducoes.motivo} />
+        )}
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="nf-obs">Observações adicionais desta cobrança</Label>
           <Textarea

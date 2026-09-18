@@ -255,6 +255,96 @@ export function problemaDoCampo(
 export interface CapacidadesDoEmissor {
   deducoes: boolean;
   aliquota_por_nota: boolean;
+  retencao_fonte: boolean;
+  reforma_tributaria: boolean;
+  nbs: boolean;
+}
+
+export type BlocoDoFormulario = 'aliquota_iss' | 'nbs' | 'reforma' | 'retencao' | 'deducoes';
+
+export interface Disponibilidade {
+  liberado: boolean;
+  /** Por que está fechado. Texto que a tela mostra no lugar dos campos. */
+  motivo: string;
+}
+
+/**
+ * O QUE O FORMULÁRIO PODE OFERECER, dado o emissor configurado.
+ *
+ * Esta é a regra que torna a tela segura, e ela é o contrário da intuição:
+ * campo que o emissor NÃO transmite não fica editável com um aviso, fica
+ * FECHADO.
+ *
+ * O motivo é jurídico, não estético. Retenção na fonte declarada no
+ * formulário e ausente da nota não é um aviso ignorado: é o tomador retendo
+ * tributo sobre um documento que não registra retenção, e os dois lados
+ * divergindo na apuração. Dedução preenchida e não enviada reduz a base do
+ * ISS só na tela, e a nota sai com imposto maior do que o usuário viu.
+ * Código da reforma tributária digitado à mão, sem tabela oficial para
+ * validar e sem transmissão, é informação fiscal inventada guardada como se
+ * fosse declarada.
+ *
+ * Em todos esses casos, deixar preencher transfere para o usuário um risco
+ * que ele não tem como enxergar. Fechar o bloco e dizer o porquê devolve a
+ * decisão para onde ela pertence: a escolha do emissor, em Configurações.
+ */
+export function blocosDisponiveis(c: CapacidadesDoEmissor): Record<BlocoDoFormulario, Disponibilidade> {
+  const semEmissor = (o_que: string) =>
+    `O emissor configurado não transmite ${o_que}. O campo fica fechado para a nota não sair diferente do que você vê aqui. Troque o emissor em Configurações, Notas fiscais.`;
+
+  return {
+    aliquota_iss: c.aliquota_por_nota
+      ? { liberado: true, motivo: '' }
+      : {
+        liberado: false,
+        motivo:
+          'Neste emissor quem calcula o ISS é a prefeitura, a partir do código de tributação do serviço. O valor ao lado é a alíquota cadastrada no serviço, mostrada para conferência.',
+      },
+    nbs: c.nbs ? { liberado: true, motivo: '' } : { liberado: false, motivo: semEmissor('o código NBS') },
+    reforma: c.reforma_tributaria
+      ? { liberado: true, motivo: '' }
+      : {
+        liberado: false,
+        motivo:
+          'Os campos da reforma tributária ainda não são transmitidos por este emissor, e os códigos oficiais de CST e cClassTrib não estão publicados no sistema. Preencher aqui guardaria informação fiscal sem validação e sem envio, então o bloco fica fechado até as duas coisas existirem.',
+      },
+    retencao: c.retencao_fonte
+      ? { liberado: true, motivo: '' }
+      : {
+        liberado: false,
+        motivo:
+          'Este emissor não declara retenção na fonte na nota. Preencher aqui faria o tomador reter tributo sobre um documento que não registra a retenção, e os dois lados divergiriam na apuração. Para reter, use um emissor que transmita o campo.',
+      },
+    deducoes: c.deducoes
+      ? { liberado: true, motivo: '' }
+      : {
+        liberado: false,
+        motivo:
+          'Este emissor não aceita dedução por nota. O valor digitado reduziria a base do ISS só na tela, e a nota sairia com imposto maior do que você viu.',
+      },
+  };
+}
+
+/**
+ * Zera o que o emissor não transmite, ANTES de calcular e de gravar.
+ *
+ * É a rede de segurança para o caminho que a tela não cobre: formulário que
+ * ficou aberto enquanto alguém trocou o emissor noutra aba, valor que veio da
+ * prévia, chamada direta da API. Sem ela, um número preenchido num emissor
+ * capaz sobreviveria à troca para um emissor que não envia aquele campo.
+ */
+export function limparIndisponiveis(form: FormularioNota, c: CapacidadesDoEmissor): FormularioNota {
+  const d = blocosDisponiveis(c);
+  return {
+    ...form,
+    nbs: d.nbs.liberado ? form.nbs : '',
+    cst: d.reforma.liberado ? form.cst : '',
+    classificacao_tributaria: d.reforma.liberado ? form.classificacao_tributaria : '',
+    indicador_operacao: d.reforma.liberado ? form.indicador_operacao : '',
+    aliquota_inss: d.retencao.liberado ? form.aliquota_inss : 0,
+    aliquota_ir: d.retencao.liberado ? form.aliquota_ir : 0,
+    deducoes: d.deducoes.liberado ? form.deducoes : 0,
+  };
 }
 
 /**
@@ -282,7 +372,52 @@ export function camposQueNaoViajam(entrada: {
   if (num(form.aliquota_inss) > 0) fora.push('Retenção de INSS');
   if (num(form.aliquota_ir) > 0) fora.push('Retenção de IR');
   if (num(form.deducoes) > 0 && !capacidades.deducoes) fora.push('Deduções');
-  if (num(form.aliquota_iss) > 0 && !capacidades.aliquota_por_nota) fora.push('Alíquota do ISS');
+
+  // A ALÍQUOTA DO ISS NÃO ENTRA NESTA LISTA, de propósito.
+  //
+  // Ela não é dado coletado em silêncio: quando a prefeitura é quem calcula, o
+  // campo fica somente leitura e diz isso ali mesmo, como estimativa vinda do
+  // serviço cadastrado. Repetir aqui, na tarja do que não é transmitido,
+  // mandaria a mensagem contrária à do próprio campo — e faria o invariante
+  // "depois de limpar, nada sobra" ser impossível de cumprir.
 
   return fora;
+}
+
+/** O recorte de opções de emissão que esta trava conhece. */
+export interface OpcoesTransmissiveis {
+  codigo_nbs?: string;
+  cst?: string;
+  classificacao_tributaria?: string;
+  indicador_operacao?: string;
+  aliquota_inss?: number;
+  aliquota_ir?: number;
+  deducao_manual?: number | null;
+}
+
+/**
+ * A MESMA REGRA DE `limparIndisponiveis`, do lado do servidor.
+ *
+ * Existe separada porque o formulário é da tela e as opções são da API, e a
+ * API é chamada por quem quiser: integração, script, curl. Fechar o bloco no
+ * navegador protege o usuário distraído; esta função protege o sistema.
+ *
+ * Vive no módulo puro, e não dentro do serviço que fala com o banco, para
+ * poder ser testada sem Postgres — a regra é de conformidade fiscal, e regra
+ * assim não pode depender de um teste de integração para ser verificada.
+ */
+export function opcoesTransmissiveis<T extends OpcoesTransmissiveis>(
+  opcoes: T,
+  c: Pick<CapacidadesDoEmissor, 'deducoes' | 'retencao_fonte' | 'reforma_tributaria' | 'nbs'>,
+): T {
+  return {
+    ...opcoes,
+    codigo_nbs: c.nbs ? opcoes.codigo_nbs : undefined,
+    cst: c.reforma_tributaria ? opcoes.cst : undefined,
+    classificacao_tributaria: c.reforma_tributaria ? opcoes.classificacao_tributaria : undefined,
+    indicador_operacao: c.reforma_tributaria ? opcoes.indicador_operacao : undefined,
+    aliquota_inss: c.retencao_fonte ? opcoes.aliquota_inss : 0,
+    aliquota_ir: c.retencao_fonte ? opcoes.aliquota_ir : 0,
+    deducao_manual: c.deducoes ? opcoes.deducao_manual : null,
+  };
 }

@@ -69,6 +69,18 @@ export interface CapacidadesEmissor {
   aliquota_por_nota: boolean;
   /** Aceita o bloco de terceiro intermediador. */
   intermediario: boolean;
+  /**
+   * Aceita retenção na fonte (INSS, IRRF) declarada na nota.
+   *
+   * Existe porque coletar retenção que a nota não declara CRIA a
+   * irregularidade em vez de evitá-la: o tomador retém, o documento não
+   * registra, e a diferença aparece na apuração dos dois lados.
+   */
+  retencao_fonte: boolean;
+  /** Aceita os campos da reforma tributária (CST, cClassTrib, indicador). */
+  reforma_tributaria: boolean;
+  /** Aceita o código NBS (serviço exportado). */
+  nbs: boolean;
 }
 
 /** O que o próprio emissor diz que ainda falta para a agência poder emitir. */
@@ -225,6 +237,11 @@ export class EmissorPlugNotas implements EmissorNFSe {
   readonly capacidades: CapacidadesEmissor = {
     deducoes: true,
     aliquota_por_nota: true,
+    // Não implementados no payload deste emissor. Declarar false é o que
+    // impede a tela de oferecer o campo. Ver src/lib/nfse-formulario.ts.
+    retencao_fonte: false,
+    reforma_tributaria: false,
+    nbs: false,
     intermediario: true,
   };
 
@@ -457,6 +474,9 @@ export class EmissorSimulado implements EmissorNFSe {
     deducoes: true,
     aliquota_por_nota: true,
     intermediario: true,
+    retencao_fonte: true,
+    reforma_tributaria: true,
+    nbs: true,
   };
 
   async enviarCertificado(entrada: {

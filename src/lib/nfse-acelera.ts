@@ -251,6 +251,9 @@ export class EmissorAceleraAPI implements EmissorNFSe {
     deducoes: false,
     aliquota_por_nota: false,
     intermediario: false,
+    retencao_fonte: false,
+    reforma_tributaria: false,
+    nbs: false,
   };
 
   private token(config: ConfigFiscal): string {

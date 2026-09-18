@@ -11,6 +11,9 @@ import {
   valoresDaNota,
   validarFormulario,
   camposQueNaoViajam,
+  blocosDisponiveis,
+  limparIndisponiveis,
+  opcoesTransmissiveis,
   problemaDoCampo,
   temErro,
   ISS_MAXIMO,
@@ -30,6 +33,16 @@ function eq(atual: unknown, esperado: unknown, label: string) {
     console.log(`PASS  ${label}`);
   }
 }
+
+/** O emissor mais restritivo: é o pressuposto quando nada foi configurado. */
+const TUDO_FECHADO = {
+  deducoes: false, aliquota_por_nota: false,
+  retencao_fonte: false, reforma_tributaria: false, nbs: false,
+};
+const TUDO_ABERTO = {
+  deducoes: true, aliquota_por_nota: true,
+  retencao_fonte: true, reforma_tributaria: true, nbs: true,
+};
 
 const servico: ServicoCadastrado = {
   id: 'sv1',
@@ -158,21 +171,89 @@ const servico: ServicoCadastrado = {
       ...aplicarServico(formularioVazio(), servico),
       cst: '00', classificacao_tributaria: '000001', aliquota_ir: 1.5, deducoes: 100,
     };
-    const nacional = camposQueNaoViajam({ form, capacidades: { deducoes: false, aliquota_por_nota: false } });
+    const nacional = camposQueNaoViajam({ form, capacidades: TUDO_FECHADO });
     eq(nacional.includes('Código NBS'), true, 'NBS');
     eq(nacional.includes('Reforma tributária (CST, classificação e indicador)'), true, 'reforma');
     eq(nacional.includes('Retenção de IR'), true, 'IR');
     eq(nacional.includes('Deduções'), true, 'dedução no padrão nacional');
-    eq(nacional.includes('Alíquota do ISS'), true, 'alíquota no padrão nacional');
+    // A alíquota NÃO entra nesta lista: ela vira campo somente leitura com a
+    // própria explicação. Ver o comentário em camposQueNaoViajam.
+    eq(nacional.includes('Alíquota do ISS'), false, 'alíquota não é "coletada em silêncio"');
 
-    const plugnotas = camposQueNaoViajam({ form, capacidades: { deducoes: true, aliquota_por_nota: true } });
+    const plugnotas = camposQueNaoViajam({ form, capacidades: { ...TUDO_FECHADO, deducoes: true, aliquota_por_nota: true } });
     eq(plugnotas.includes('Deduções'), false, 'PlugNotas aceita dedução');
     eq(plugnotas.includes('Alíquota do ISS'), false, 'PlugNotas aceita alíquota');
+    eq(plugnotas.includes('Retenção de IR'), true, 'PlugNotas ainda não transmite retenção');
 }
 
 { // formulário limpo não acusa nada que não foi preenchido
     const vazio = formularioVazio();
-    eq(camposQueNaoViajam({ form: vazio, capacidades: { deducoes: false, aliquota_por_nota: false } }), [], 'nada a declarar');
+    eq(camposQueNaoViajam({ form: vazio, capacidades: TUDO_FECHADO }), [], 'nada a declarar');
+}
+
+{ // CAMPO QUE NÃO VIAJA FICA FECHADO, não aberto com aviso
+  // É a regra que tira o risco do usuário: bloco aberto que não é transmitido
+  // faz o tomador reter tributo sobre nota que não registra retenção, e reduz
+  // a base do ISS só na tela.
+  const d = blocosDisponiveis(TUDO_FECHADO);
+  eq([d.nbs.liberado, d.reforma.liberado, d.retencao.liberado, d.deducoes.liberado, d.aliquota_iss.liberado],
+     [false, false, false, false, false], 'emissor restritivo fecha todos os blocos');
+  for (const bloco of ['nbs', 'reforma', 'retencao', 'deducoes', 'aliquota_iss'] as const) {
+    eq(d[bloco].motivo.length > 40, true, `${bloco} explica o motivo, não só some`);
+  }
+  const a = blocosDisponiveis(TUDO_ABERTO);
+  eq([a.nbs.liberado, a.reforma.liberado, a.retencao.liberado, a.deducoes.liberado, a.aliquota_iss.liberado],
+     [true, true, true, true, true], 'emissor completo abre todos');
+}
+
+{ // O INVARIANTE: depois de limpar, NADA fica preenchido sem ser transmitido
+  const cheio = {
+    ...aplicarServico(formularioVazio(), servico),
+    cst: '000', classificacao_tributaria: '000001', indicador_operacao: '1',
+    aliquota_inss: 11, aliquota_ir: 1.5, deducoes: 300, nbs: '1.1503.10.00',
+  };
+  const limpo = limparIndisponiveis(cheio, TUDO_FECHADO);
+  eq(camposQueNaoViajam({ form: limpo, capacidades: TUDO_FECHADO }), [],
+     'nada sobra preenchido que o emissor não transmite');
+  eq([limpo.cst, limpo.classificacao_tributaria, limpo.indicador_operacao, limpo.nbs], ['', '', '', ''],
+     'reforma e NBS zerados');
+  eq([limpo.aliquota_inss, limpo.aliquota_ir, limpo.deducoes], [0, 0, 0], 'retenções e dedução zeradas');
+  // A alíquota do ISS NÃO é zerada: ela continua sendo a estimativa exibida.
+  eq(limpo.aliquota_iss, 3, 'a alíquota segue visível como estimativa');
+}
+
+{ // Trocar de emissor com o formulário aberto não deixa resíduo
+  const cheio = { ...aplicarServico(formularioVazio(), servico), aliquota_ir: 1.5, deducoes: 300 };
+  const noAberto = limparIndisponiveis(cheio, TUDO_ABERTO);
+  eq([noAberto.aliquota_ir, noAberto.deducoes], [1.5, 300], 'emissor completo preserva');
+  const depoisDaTroca = limparIndisponiveis(noAberto, TUDO_FECHADO);
+  eq([depoisDaTroca.aliquota_ir, depoisDaTroca.deducoes], [0, 0], 'a troca zera o que não viaja mais');
+}
+
+{ // O que é do serviço permanece: fechar bloco não pode apagar a nota
+  const f = aplicarServico(formularioVazio(), servico);
+  const limpo = limparIndisponiveis(f, TUDO_FECHADO);
+  eq([limpo.codigo_tributacao, limpo.cnae, limpo.descricao],
+     [f.codigo_tributacao, f.cnae, f.descricao], 'serviço, CNAE e descrição intactos');
+}
+
+{ // A MESMA TRAVA DO LADO DA API: a tela não é a garantia
+  // A API é chamada por integração, script e curl. Fechar o bloco no
+  // navegador protege o distraído; isto protege o sistema.
+  const pedido = {
+    codigo_nbs: '1.1503.10.00', cst: '000', classificacao_tributaria: '000001',
+    indicador_operacao: '1', aliquota_inss: 11, aliquota_ir: 1.5, deducao_manual: 300,
+  };
+  const seguro = opcoesTransmissiveis(pedido, TUDO_FECHADO);
+  eq(seguro.codigo_nbs, undefined, 'NBS descartado');
+  eq([seguro.cst, seguro.classificacao_tributaria, seguro.indicador_operacao],
+     [undefined, undefined, undefined], 'reforma descartada');
+  eq([seguro.aliquota_inss, seguro.aliquota_ir], [0, 0], 'retenções zeradas');
+  eq(seguro.deducao_manual, null, 'dedução descartada');
+
+  const completo = opcoesTransmissiveis(pedido, TUDO_ABERTO);
+  eq(completo.deducao_manual, 300, 'emissor completo preserva a dedução');
+  eq(completo.aliquota_inss, 11, 'emissor completo preserva a retenção');
 }
 
 console.log(`\n${total - falhas}/${total} testes do formulário da nota passaram`);

@@ -9,6 +9,7 @@
 import pool from './db';
 import { generateId } from './utils';
 import { hojeISO, num, percentual, round2 } from './money';
+import { opcoesTransmissiveis } from './nfse-formulario';
 import { nomeDoCliente, documentoDoCliente } from './cliente-nome';
 import { enderecoDoCliente } from './cliente-documento';
 import {
@@ -235,6 +236,21 @@ export interface PreviaDaNota {
   iss_e_estimativa: boolean;
   /** Formatos que o emissor configurado não aceita. */
   emissor_aceita_deducoes: boolean;
+  /**
+   * O que este emissor transmite de verdade.
+   *
+   * Vai inteiro para a tela porque é ela que decide quais blocos do
+   * formulário podem ser preenchidos. Sem isso o cliente adivinharia a partir
+   * de dois booleanos soltos, e adivinhar errado libera campo que não viaja.
+   */
+  capacidades: {
+    deducoes: boolean;
+    aliquota_por_nota: boolean;
+    intermediario: boolean;
+    retencao_fonte: boolean;
+    reforma_tributaria: boolean;
+    nbs: boolean;
+  };
   regime: RegimeNota;
   forma_base: FormaBaseIntermediacao;
   valor_recebido: number;
@@ -321,7 +337,14 @@ export async function montarPrevia(
   // As capacidades do emissor entram no cálculo como ERRO, não como aviso:
   // uma nota emitida num formato que o emissor não recebe sai com valor
   // diferente do que foi conferido na tela.
-  let capacidades = { deducoes: true, aliquota_por_nota: true, intermediario: true };
+  // Sem emissor configurado, os três campos antigos seguem otimistas (é o
+  // comportamento que os conflitos já assumiam) e os três novos nascem
+  // FECHADOS: liberar por falta de informação é o erro que esta mudança veio
+  // corrigir.
+  let capacidades = {
+    deducoes: true, aliquota_por_nota: true, intermediario: true,
+    retencao_fonte: false, reforma_tributaria: false, nbs: false,
+  };
   try {
     capacidades = emissorDaConfig(config).capacidades;
   } catch {
@@ -407,6 +430,14 @@ export async function montarPrevia(
     erros: [...calculo.erros, ...bloqueios],
     iss_e_estimativa: issEhEstimativa(capacidades),
     emissor_aceita_deducoes: capacidades.deducoes,
+    capacidades: {
+      deducoes: capacidades.deducoes,
+      aliquota_por_nota: capacidades.aliquota_por_nota,
+      intermediario: capacidades.intermediario,
+      retencao_fonte: capacidades.retencao_fonte,
+      reforma_tributaria: capacidades.reforma_tributaria,
+      nbs: capacidades.nbs,
+    },
     regime,
     forma_base: formaBase,
     valor_recebido: valorRecebido,
@@ -483,6 +514,34 @@ export async function emitirNota(
   opcoes: OpcoesDaNota,
   autor: { id: string; nome: string },
 ): Promise<NotaFiscal> {
+  /**
+   * O QUE O EMISSOR NÃO TRANSMITE NÃO É SEQUER CALCULADO, ponto.
+   *
+   * A tela já fecha esses blocos, mas a tela não é a garantia: esta função é
+   * chamada pela API, e a API é chamada por quem quiser. Gravar uma retenção
+   * que a nota não declara criaria exatamente a irregularidade que o
+   * fechamento na tela evita — o tomador retendo tributo sobre um documento
+   * silencioso —, e o campo ficaria no banco parecendo declaração feita.
+   *
+   * A limpeza vem ANTES da prévia porque a dedução muda a base de cálculo:
+   * sanear só na hora de gravar deixaria a nota sair com o ISS da base
+   * reduzida e o campo da dedução vazio, que é pior que qualquer um dos dois.
+   *
+   * A alíquota do ISS é a única que fica: ela já é tratada como estimativa em
+   * todo o sistema, e `issEhEstimativa` é o que diz isso na tela.
+   */
+  const configParaLimite = await carregarConfigFiscal(tenantId);
+  let transmite = {
+    deducoes: true, aliquota_por_nota: true, intermediario: true,
+    retencao_fonte: false, reforma_tributaria: false, nbs: false,
+  };
+  try {
+    transmite = emissorDaConfig(configParaLimite).capacidades;
+  } catch {
+    // Sem emissor configurado a pendência da prévia já explica o que falta.
+  }
+  opcoes = opcoesTransmissiveis(opcoes, transmite);
+
   const previa = await montarPrevia(tenantId, contaReceberId, opcoes);
   if (!previa) throw new ErroFiscal('Conta a receber não encontrada.');
   if (previa.nota_existente) {
@@ -496,6 +555,7 @@ export async function emitirNota(
   if (previa.erros.length > 0) {
     throw new ErroFiscal(previa.erros.join(' '));
   }
+
 
   const config = await carregarConfigFiscal(tenantId);
   const emitente = await carregarEmitente(tenantId);
