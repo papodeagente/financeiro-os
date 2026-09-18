@@ -70,6 +70,7 @@ const FINANCEIRO_MENU: SidebarSection[] = [
       { key: 'fluxo-caixa', label: 'Fluxo de caixa', icon: FluxoIcon, href: '/financeiro-ag/fluxo-caixa' },
       { key: 'dre', label: 'DRE', icon: FileSpreadsheet, href: '/financeiro-ag/dre' },
       { key: 'receber', label: 'Contas a receber', icon: Receipt, href: '/financeiro-ag/receber' },
+      { key: 'recebimentos-plataformas', label: 'Recebimentos das plataformas', icon: Receipt, href: '/financeiro-ag/recebimentos' },
       { key: 'pagar', label: 'Contas a pagar', icon: CreditCard, href: '/financeiro-ag/pagar' },
       { key: 'notas-fiscais', label: 'Notas fiscais', icon: FileText, href: '/financeiro-ag/notas' },
       { key: 'conciliacao', label: 'Conciliação', icon: FileSpreadsheet, href: '/financeiro-ag/conciliacao' },

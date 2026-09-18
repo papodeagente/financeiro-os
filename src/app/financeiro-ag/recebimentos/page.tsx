@@ -20,7 +20,7 @@ import { FinTable, type FinColuna } from '@/components/fin/FinTable';
 import { MetricCard } from '@/components/fin/MetricCard';
 import { Money } from '@/components/fin/Money';
 import { PageHeader } from '@/components/fin/PageHeader';
-import { PageShell } from '@/components/fin/PageShell';
+import { MolduraDaPagina } from '@/components/fin/MolduraDaPagina';
 import { toast } from '@/lib/toast';
 import { formatDate } from '@/lib/utils';
 import { hojeISO } from '@/lib/money';
@@ -224,7 +224,7 @@ export default function RecebimentosPlataformasPage() {
   ], []);
 
   return (
-    <PageShell>
+    <MolduraDaPagina>
       <PageHeader
         titulo="Recebimentos das plataformas"
         subtitulo="Hotmart, Asaas e Pagar.me: o que foi vendido, o que já entrou e o que ainda falta entrar."
@@ -377,6 +377,6 @@ export default function RecebimentosPlataformasPage() {
           </div>
         </div>
       )}
-    </PageShell>
+    </MolduraDaPagina>
   );
 }
