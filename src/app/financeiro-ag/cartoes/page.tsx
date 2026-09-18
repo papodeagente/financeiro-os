@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Pencil, Plus, Power, PowerOff, Trash2, TriangleAlert, X } from 'lucide-react';
 
-import type { CartaoCorporativo, ContaPagar, BandeiraCartao } from '@/lib/crm-types';
+import type { CartaoCorporativo, ContaPagar, BandeiraCartao, PlanoContas } from '@/lib/crm-types';
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
 import { cn, formatBRL, formatDate, generateId } from '@/lib/utils';
 import { somaPor, divSegura, round2, paraISO } from '@/lib/money';
@@ -25,7 +25,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
+import { toast } from '@/lib/toast';
 import { PageHeader } from '@/components/fin/PageHeader';
+import { DialogDespesa, formDespesaVazio, type FormDespesa } from './DialogDespesa';
+import { ImportarFatura } from './ImportarFatura';
+import { InteligenciaCartao } from './InteligenciaCartao';
 import { MetricCard } from '@/components/fin/MetricCard';
 import { Meter } from '@/components/fin/Meter';
 import { Money, type MoneyEstado } from '@/components/fin/Money';
@@ -202,22 +206,54 @@ export default function CartoesCorpPage() {
   const [situacao, setSituacao] = useState<Situacao>('TODAS');
   const [excluirId, setExcluirId] = useState<string | null>(null);
   const [excluindo, setExcluindo] = useState(false);
+  const [categorias, setCategorias] = useState<PlanoContas[]>([]);
+  const [despesa, setDespesa] = useState<FormDespesa | null>(null);
+  const [salvandoDespesa, setSalvandoDespesa] = useState(false);
+  const [cartaoFatura, setCartaoFatura] = useState('');
   const [faturaCardId, setFaturaCardId] = useState<string | null>(null);
   const [faturaMes, setFaturaMes] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
 
+  async function salvarDespesa() {
+    if (!despesa) return;
+    if (!despesa.descricao.trim()) { toast.error('Descreva a despesa'); return; }
+    if (despesa.valor_total <= 0) { toast.error('Informe o valor da compra'); return; }
+    setSalvandoDespesa(true);
+    try {
+      const r = await fetch('/api/cartoes/lancamentos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(despesa),
+      });
+      const json = await r.json();
+      if (!r.ok) throw new Error(json.error || 'Não foi possível lançar');
+      toast.success(
+        json.criadas === 1 ? 'Despesa lançada' : `${json.criadas} parcelas lançadas`,
+        json.jaExistiam > 0 ? `${json.jaExistiam} já existiam e foram mantidas.` : '',
+      );
+      setDespesa(null);
+      void load();
+    } catch (e) {
+      toast.error('Não foi possível lançar', e instanceof Error ? e.message : '');
+    } finally {
+      setSalvandoDespesa(false);
+    }
+  }
+
   async function load() {
     setLoading(true);
     setErro(null);
     try {
-      const [cartoes, cps] = await Promise.all([
+      const [cartoes, cps, cats] = await Promise.all([
         loadEntities<CartaoCorporativo>('cartoes-corp'),
         loadEntities<ContaPagar>('contas-pagar'),
+        loadEntities<PlanoContas>('plano-contas').catch(() => []),
       ]);
       setItems(cartoes);
       setContas(cps);
+      setCategorias(cats);
       setAtualizadoEm(new Date());
     } catch {
       setErro('A consulta aos cartões falhou antes de responder. Nada foi alterado.');
@@ -518,7 +554,15 @@ export default function CartoesCorpPage() {
         <PageHeader
           titulo="Cartões corporativos"
           subtitulo="Limite, fatura e lançamentos de cada cartão da agência"
-          acaoPrimaria={{ rotulo: 'Novo cartão', icone: Plus, onClick: openNew }}
+          acaoPrimaria={{
+            rotulo: 'Lançar despesa',
+            icone: Plus,
+            onClick: () => {
+              if (items.length === 0) { toast.error('Cadastre um cartão antes de lançar despesa'); return; }
+              setDespesa(formDespesaVazio(faturaCardId || items[0].id));
+            },
+          }}
+          acoesSecundarias={[{ rotulo: 'Novo cartão', onClick: openNew }]}
           atualizadoEm={atualizadoEm}
           onRecarregar={load}
         />
@@ -603,6 +647,23 @@ export default function CartoesCorpPage() {
               onLinhaClick={c => setFaturaCardId(faturaCardId === c.id ? null : c.id)}
             />
           </section>
+
+          {items.length > 0 ? (
+            <ImportarFatura
+              cartoes={items}
+              cartaoId={cartaoFatura || faturaCardId || ''}
+              onCartaoId={setCartaoFatura}
+              onLancado={() => { void load(); }}
+            />
+          ) : null}
+
+          <InteligenciaCartao
+            lancamentos={
+              faturaCardId
+                ? contas.filter(c => c.cartao_id === faturaCardId)
+                : contas.filter(c => Boolean(c.cartao_id))
+            }
+          />
 
           {faturaCard && fatura ? (
             <section
@@ -883,6 +944,19 @@ export default function CartoesCorpPage() {
           </section>
         </div>
       </RecordSheet>
+
+      {despesa ? (
+        <DialogDespesa
+          aberto
+          form={despesa}
+          cartoes={items}
+          categorias={categorias}
+          salvando={salvandoDespesa}
+          onChange={setDespesa}
+          onFechar={() => setDespesa(null)}
+          onConfirmar={() => { void salvarDespesa(); }}
+        />
+      ) : null}
 
       <ConfirmDialog
         aberto={excluirId !== null}
