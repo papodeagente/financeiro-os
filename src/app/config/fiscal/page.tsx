@@ -631,6 +631,17 @@ export default function NotaFiscalPage() {
               </>
             ) : null}
 
+            {/* O catálogo que alimenta o seletor de serviço na emissão. Sem
+                caminho daqui, a tela só existiria pelo link dentro do diálogo
+                de emitir — que é onde ninguém procura por cadastro. */}
+            <p className="fin-t-caption flex items-center gap-2 text-[var(--fin-text-3)]">
+              <ShieldCheck aria-hidden="true" className="size-4 shrink-0" />
+              O que a empresa presta?{' '}
+              <Link href="/config/fiscal/servicos" className="text-[var(--fin-accent)] underline">
+                Serviços da nota fiscal
+              </Link>
+            </p>
+
             {/* Quem já sabe o que quer não precisa passar pelo caminho guiado. */}
             <p className="fin-t-caption flex items-center gap-2 text-[var(--fin-text-3)]">
               <ShieldCheck aria-hidden="true" className="size-4 shrink-0" />
