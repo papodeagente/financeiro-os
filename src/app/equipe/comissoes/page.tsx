@@ -15,7 +15,7 @@ import {
 import Link from 'next/link';
 import { RefreshCw } from 'lucide-react';
 import { PageHeader } from '@/components/fin/PageHeader';
-import { PageShell, RITMO_DA_PAGINA } from '@/components/fin/PageShell';
+import { MolduraDaPagina, RITMO_DA_PAGINA } from '@/components/fin/MolduraDaPagina';
 import { DataState } from '@/components/fin/DataState';
 import { FinTable, type FinColuna } from '@/components/fin/FinTable';
 import { Money } from '@/components/fin/Money';
@@ -753,7 +753,7 @@ export default function ComissoesPage() {
   const confirmacao = textoDaConfirmacao();
 
   return (
-    <PageShell>
+    <MolduraDaPagina>
       <PageHeader
         titulo="Comissões"
         subtitulo={`O que a agência deve à equipe em ${nomeDoMes} e o que depende da sua aprovação`}
@@ -1034,6 +1034,6 @@ export default function ComissoesPage() {
         processando={processando}
         onConfirmar={executarConfirmacao}
       />
-    </PageShell>
+    </MolduraDaPagina>
   );
 }

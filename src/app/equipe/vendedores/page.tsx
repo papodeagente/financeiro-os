@@ -9,7 +9,7 @@ import { loadEntities } from '@/lib/crm-storage';
 import { escalaComumDeFaixas } from '@/lib/escala';
 import { hojeISO, num, round2, soma } from '@/lib/money';
 import { PageHeader } from '@/components/fin/PageHeader';
-import { PageShell, RITMO_DA_PAGINA } from '@/components/fin/PageShell';
+import { MolduraDaPagina, RITMO_DA_PAGINA } from '@/components/fin/MolduraDaPagina';
 import { EmptyLesson } from '@/components/fin/EmptyLesson';
 import { DataState } from '@/components/fin/DataState';
 import { Money } from '@/components/fin/Money';
@@ -251,7 +251,7 @@ export default function VendedoresPage() {
         : `${nomesSemPlano.slice(0, -1).join(', ')} e ${nomesSemPlano[nomesSemPlano.length - 1]}`;
 
   return (
-    <PageShell>
+    <MolduraDaPagina>
       <PageHeader
         titulo="Vendedores e planos"
         subtitulo="A mesma equipe cadastrada em Configurações. Quem tem plano recebe comissão"
@@ -606,6 +606,6 @@ export default function VendedoresPage() {
           </div>
         </RecordSheet>
       )}
-    </PageShell>
+    </MolduraDaPagina>
   );
 }

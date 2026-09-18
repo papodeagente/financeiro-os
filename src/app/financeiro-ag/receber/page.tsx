@@ -1,11 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 
 import { ContaReceber, createContaReceber, StatusContaReceber } from '@/lib/crm-types';
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
 import { toast } from '@/lib/toast';
+import {
+  mensagemDaTaxaInvalida, normalizarPlataforma, validarTaxa,
+} from '@/lib/taxa-plataforma';
 import {
   round2, num, somaPor, hojeISO, estaVencido, dentroDoPeriodo,
 } from '@/lib/money';
@@ -76,6 +79,12 @@ function contagem(n: number, singular: string, plural: string): string {
 
 export default function ContasReceberPage() {
   const [items, setItems] = useState<ContaReceber[]>([]);
+  // A lista de plataformas aprende com o que a agência já usou, para não
+  // exigir uma tela de cadastro antes do primeiro lançamento.
+  const plataformasUsadas = useMemo(
+    () => items.map(i => i.taxa_plataforma ?? '').filter(Boolean),
+    [items],
+  );
   const [loading, setLoading] = useState(true);
   const [erroCarga, setErroCarga] = useState<string | null>(null);
   const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
@@ -148,6 +157,10 @@ export default function ContasReceberPage() {
       valor_original: item.valor_original,
       data_vencimento: item.data_vencimento,
       forma_recebimento: item.forma_recebimento,
+      // Conta antiga não tem os campos de taxa: entram zerados em vez de
+      // undefined, senão o formulário vira não-controlado no meio da edição.
+      taxa: num(item.taxa),
+      taxa_plataforma: item.taxa_plataforma ?? '',
       parcela_numero: item.parcela_numero,
       total_parcelas: item.total_parcelas,
       observacoes: item.observacoes,
@@ -164,24 +177,37 @@ export default function ContasReceberPage() {
   }
 
   async function handleSave() {
-    if (!form.cliente_nome || !form.descricao || !form.data_vencimento || form.valor_original <= 0) {
+    const taxaInvalida = validarTaxa(form.taxa, form.valor_original);
+    if (
+      !form.cliente_nome || !form.descricao || !form.data_vencimento
+      || form.valor_original <= 0 || taxaInvalida
+    ) {
       setErrosForm({
         cliente_nome: form.cliente_nome ? undefined : 'Informe o cliente.',
         descricao: form.descricao ? undefined : 'Informe a descrição.',
         data_vencimento: form.data_vencimento ? undefined : 'Informe a data de vencimento.',
         valor_original: form.valor_original > 0 ? undefined : 'Informe um valor maior que zero.',
+        taxa: taxaInvalida ? mensagemDaTaxaInvalida(taxaInvalida) : undefined,
       });
       return;
     }
     setErrosForm({});
     setSalvando(true);
     const valorOriginal = round2(form.valor_original);
+    // A normalização acontece AQUI, na entrada do dado. Deixar para o
+    // relatório normalizar na leitura resolveria a tela de hoje e deixaria o
+    // banco com três grafias da mesma plataforma para a próxima consulta.
+    const campos = {
+      ...form,
+      taxa: round2(num(form.taxa)),
+      taxa_plataforma: normalizarPlataforma(form.taxa_plataforma),
+    };
     try {
       if (editId) {
         const existing = items.find(i => i.id === editId)!;
         const updated: ContaReceber = {
           ...existing,
-          ...form,
+          ...campos,
           valor_original: valorOriginal,
           valor_final: valorOriginal,
         };
@@ -189,7 +215,7 @@ export default function ContasReceberPage() {
       } else {
         const nova: ContaReceber = {
           ...createContaReceber(),
-          ...form,
+          ...campos,
           valor_original: valorOriginal,
           valor_final: valorOriginal,
         };
@@ -213,18 +239,28 @@ export default function ContasReceberPage() {
    *  - valor < saldo em aberto   → PARCIAL, valor_recebido ACUMULA as baixas
    * Nunca marca RECEBIDO integral quando entrou menos do que o devido.
    */
-  async function handleBaixar(item: ContaReceber, valorInformado: number) {
-    const informado = round2(valorInformado);
+  async function handleBaixar(
+    item: ContaReceber,
+    dados: { valorInformado: number; taxaInformada: number; plataforma: string },
+  ) {
+    const informado = round2(dados.valorInformado);
     if (informado <= 0) return;
 
     const acumulado = round2(num(item.valor_recebido) + informado);
     // tolerância de meio centavo pra não deixar conta aberta por arredondamento
     const quitado = acumulado >= round2(num(item.valor_final)) - 0.005;
+    // A taxa ACUMULA, como o valor recebido: cada baixa parcial passa pela
+    // adquirente e é retida uma vez. Substituir o total pela retenção desta
+    // baixa apagaria as anteriores.
+    const taxaAcumulada = round2(num(item.taxa) + Math.max(0, round2(dados.taxaInformada)));
+    const plataforma = normalizarPlataforma(dados.plataforma) || (item.taxa_plataforma ?? '');
     const updated: ContaReceber = {
       ...item,
       status: quitado ? 'RECEBIDO' : 'PARCIAL',
       data_recebimento: hojeISO(),
       valor_recebido: quitado ? round2(num(item.valor_final)) : acumulado,
+      taxa: taxaAcumulada,
+      taxa_plataforma: taxaAcumulada > 0 ? plataforma : (item.taxa_plataforma ?? ''),
     };
     setBaixando(true);
     try {
@@ -641,7 +677,12 @@ export default function ContasReceberPage() {
           carregando: salvando,
         }}
       >
-        <FormularioConta form={form} erros={errosForm} onChange={atualizarForm} />
+        <FormularioConta
+          form={form}
+          erros={errosForm}
+          onChange={atualizarForm}
+          plataformasUsadas={plataformasUsadas}
+        />
       </RecordSheet>
 
       <PainelNota
@@ -660,8 +701,11 @@ export default function ContasReceberPage() {
         valorDaConta={baixaAlvo ? num(baixaAlvo.valor_final) : 0}
         jaRecebido={baixaAlvo ? num(baixaAlvo.valor_recebido) : 0}
         emAberto={baixaAlvo ? valorEmAberto(baixaAlvo) : 0}
+        taxaJaRetida={baixaAlvo ? num(baixaAlvo.taxa) : 0}
+        plataformaAtual={baixaAlvo?.taxa_plataforma ?? ''}
+        plataformasUsadas={plataformasUsadas}
         processando={baixando}
-        onConfirmar={valor => (baixaAlvo ? handleBaixar(baixaAlvo, valor) : undefined)}
+        onConfirmar={dados => (baixaAlvo ? handleBaixar(baixaAlvo, dados) : undefined)}
       />
 
       <ConfirmDialog

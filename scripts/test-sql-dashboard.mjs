@@ -24,7 +24,9 @@ register('./ts-resolve-hook.mjs', import.meta.url);
 const lib = async n => import(pathToFileURL(path.resolve(import.meta.dirname, `../src/lib/${n}.ts`)).href);
 
 const { valorRealizado, valorEmAberto, estaCancelada } = await lib('resultado-financeiro');
-const { realizado, emAberto, numerico, numeroDoBanco, EH_REPASSE, ORIGEM_RECEBER } = await lib('dashboard-sql');
+const { realizado, emAberto, entradaLiquida, taxaRetida, numerico, numeroDoBanco, EH_REPASSE, ORIGEM_RECEBER } = await lib('dashboard-sql');
+const { taxaRealizada } = await lib('taxa-plataforma');
+const { entradaLiquidaNoBanco } = await lib('saldo-bancario');
 
 let falhas = 0, total = 0;
 function eq(a, b, label) {
@@ -114,6 +116,53 @@ console.log('\n--- o total agregado bate com a soma linha a linha ---');
 
   const cancel = todas.filter(r => estaCancelada(r.data)).length;
   eq(cancel > 0, true, 'a matriz inclui cancelada, senão o teste não provaria nada');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// A TAXA DA PLATAFORMA. Duas implementações do MESMO saldo existem: a TS em
+// saldo-bancario.ts, que /financeiro-ag usa, e esta em SQL, que o dashboard
+// usa. Se só uma descontar a taxa, as duas telas mostram saldos diferentes
+// para os mesmos dados e ninguém sabe qual acreditar.
+console.log('\n--- a taxa retida: o SQL diz o mesmo que taxaRealizada() ---');
+{
+  const CASOS_DE_TAXA = [
+    { nome: 'recebida com taxa',                 status: 'RECEBIDO', valor_final: 10000, baixa: 10000, taxa: 300 },
+    { nome: 'recebida sem taxa',                 status: 'RECEBIDO', valor_final: 10000, baixa: 10000, taxa: 0 },
+    { nome: 'conta antiga, campo ausente',       status: 'RECEBIDO', valor_final: 10000, baixa: 10000, taxa: undefined },
+    { nome: 'campo nulo',                        status: 'RECEBIDO', valor_final: 10000, baixa: 10000, taxa: null },
+    { nome: 'parcial com taxa',                  status: 'PARCIAL',  valor_final: 10000, baixa: 4000,  taxa: 120 },
+    { nome: 'pendente com taxa prevista',        status: 'PENDENTE', valor_final: 10000, baixa: null,  taxa: 300 },
+    { nome: 'atrasada com taxa prevista',        status: 'ATRASADO', valor_final: 10000, baixa: null,  taxa: 300 },
+    { nome: 'cancelada com taxa',                status: 'CANCELADO',valor_final: 10000, baixa: 10000, taxa: 300 },
+    { nome: 'taxa negativa não vira crédito',    status: 'RECEBIDO', valor_final: 10000, baixa: 10000, taxa: -50 },
+    { nome: 'taxa em texto não derruba a query', status: 'RECEBIDO', valor_final: 10000, baixa: 10000, taxa: 'trezentos' },
+    { nome: 'taxa com centavos quebrados',       status: 'PARCIAL',  valor_final: 333.33, baixa: 111.11, taxa: 3.37 },
+    { nome: 'taxa igual ao valor',               status: 'RECEBIDO', valor_final: 100,   baixa: 100,   taxa: 100 },
+  ];
+
+  for (const [i, caso] of CASOS_DE_TAXA.entries()) {
+    const doc = { status: caso.status, valor_final: caso.valor_final, valor_recebido: caso.baixa };
+    if (caso.taxa !== undefined) doc.taxa = caso.taxa;
+    const id = `taxa-${i}`;
+    await pg.query(`INSERT INTO contas_receber (id, tenant_id, status, data) VALUES ($1,$2,$3,$4)`,
+      [id, 't-taxa', caso.status, JSON.stringify(doc)]);
+
+    const { rows } = await pg.query(
+      `SELECT ${taxaRetida()} AS retida, ${entradaLiquida()} AS liquida
+         FROM contas_receber WHERE id = $1`, [id]);
+
+    eq(numeroDoBanco(rows[0].retida), taxaRealizada(doc), `taxa retida — ${caso.nome}`);
+    eq(numeroDoBanco(rows[0].liquida), entradaLiquidaNoBanco(doc), `entrada líquida — ${caso.nome}`);
+  }
+
+  // E o agregado, que é o que o dashboard realmente roda.
+  const { soma: somaTS } = await lib('money');
+  const { rows: todas } = await pg.query(`SELECT data FROM contas_receber WHERE tenant_id = 't-taxa'`);
+  const porTS = somaTS(todas.map(r => entradaLiquidaNoBanco(r.data)));
+  const { rows: agregado } = await pg.query(
+    `SELECT COALESCE(ROUND(SUM(${entradaLiquida()}), 2), 0) AS total
+       FROM contas_receber WHERE tenant_id = 't-taxa'`);
+  eq(numeroDoBanco(agregado[0].total), porTS, 'soma da entrada líquida: SQL = a do saldo bancário');
 }
 
 // ══════════════════════════════════════════════════════════════════════

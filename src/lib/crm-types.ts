@@ -356,6 +356,18 @@ export interface ContaReceber {
   valor_recebido: number | null;
   conta_bancaria_id: string | null;
   forma_recebimento: 'PIX' | 'TED' | 'CARTAO' | 'BOLETO' | 'DINHEIRO' | 'CHEQUE' | '';
+  /**
+   * O que a plataforma de pagamento reteve desta conta, em reais.
+   *
+   * O cliente paga o valor cheio e a adquirente fica com um pedaço: só a
+   * diferença cai no banco. resultado-financeiro.ts já somava este campo em
+   * `taxas` e descontava em `resultado_final` — o que faltava era alguém
+   * gravá-lo. O PERCENTUAL não mora aqui: é taxa ÷ valor_final, derivado na
+   * hora (src/lib/taxa-plataforma.ts).
+   */
+  taxa: number;
+  /** Quem reteve. Nome canônico — ver normalizarPlataforma(). */
+  taxa_plataforma: string;
   parcela_numero: number;
   total_parcelas: number;
   boleto_emitido: boolean;
@@ -1421,6 +1433,7 @@ export function createContaReceber(): ContaReceber {
     data_emissao: hojeISO(), data_vencimento: '',
     data_recebimento: null, valor_recebido: null,
     conta_bancaria_id: null, forma_recebimento: '',
+    taxa: 0, taxa_plataforma: '',
     parcela_numero: 1, total_parcelas: 1,
     boleto_emitido: false, boleto_codigo: '', boleto_url: '',
     status: 'PENDENTE', rateio: [], anexos: [], observacoes: '',

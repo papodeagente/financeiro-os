@@ -33,6 +33,7 @@ import {
   VENDA_REALIZADA,
   dataDoCaixa,
   emAberto,
+  entradaLiquida,
   inteiroDoBanco,
   numerico,
   numeroDoBanco,
@@ -240,7 +241,7 @@ async function saldoEmCaixa(exec: ExecutorSQL, tenantId: string): Promise<{ sald
       [tenantId],
     ),
     exec.query(
-      `SELECT COALESCE(ROUND(SUM(${realizado('receber')}), 2), 0) AS total
+      `SELECT COALESCE(ROUND(SUM(${entradaLiquida()}), 2), 0) AS total
          FROM contas_receber WHERE tenant_id = $1 AND ${NAO_CANCELADA}`,
       [tenantId],
     ),

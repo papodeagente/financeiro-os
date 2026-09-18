@@ -11,7 +11,7 @@ import { posicaoNaEscala, type PosicaoNaEscala } from '@/lib/comissao-acumulada'
 import { ritmoEsperadoPct, ritmoNecessario } from '@/lib/escala';
 import { hojeISO, mesDe, num, round2, ultimoDiaDoMes } from '@/lib/money';
 import { PageHeader } from '@/components/fin/PageHeader';
-import { PageShell, RITMO_DA_PAGINA } from '@/components/fin/PageShell';
+import { MolduraDaPagina, RITMO_DA_PAGINA } from '@/components/fin/MolduraDaPagina';
 import { DataState } from '@/components/fin/DataState';
 import { EmptyLesson } from '@/components/fin/EmptyLesson';
 import { Money } from '@/components/fin/Money';
@@ -295,7 +295,7 @@ export default function MetasPage() {
   }
 
   return (
-    <PageShell>
+    <MolduraDaPagina>
       <Comemoracao chave={festa?.chave ?? null} detalhe={festa?.detalhe} onFim={() => setFesta(null)} />
 
       <PageHeader
@@ -555,6 +555,6 @@ export default function MetasPage() {
           </div>
         </RecordSheet>
       )}
-    </PageShell>
+    </MolduraDaPagina>
   );
 }

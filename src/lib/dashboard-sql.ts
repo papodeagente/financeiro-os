@@ -63,6 +63,35 @@ export function realizado(lado: 'receber' | 'pagar', alias?: string): string {
     END)`;
 }
 
+/**
+ * Taxa que a plataforma de pagamento JÁ reteve. Espelho de taxaRealizada().
+ *
+ * Só conta quando o dinheiro passou pela adquirente: pendente vale zero por
+ * mais que tenha taxa prevista. Negativo gravado vira zero — taxa não é
+ * crédito.
+ */
+export function taxaRetida(alias?: string): string {
+  const valor = numerico(campo('taxa', alias));
+  const status = campo('status', alias);
+  return `(CASE
+      WHEN ${status} IN ('RECEBIDO', 'PARCIAL') THEN GREATEST(ROUND(${valor}, 2), 0)
+      ELSE 0
+    END)`;
+}
+
+/**
+ * O que a conta a receber REALMENTE colocou no banco: o valor baixado menos
+ * a taxa retida. Espelho de entradaLiquidaNoBanco().
+ *
+ * A baixa registra o valor cheio porque é ele que quita a conta, mas o
+ * extrato mostra a diferença. Sem este desconto o saldo do dashboard fica
+ * acima do saldo de /financeiro-ag pelo valor das taxas, e as duas telas se
+ * contradizem.
+ */
+export function entradaLiquida(alias?: string): string {
+  return `ROUND(${realizado('receber', alias)} - ${taxaRetida(alias)}, 2)`;
+}
+
 /** Quanto ainda falta entrar ou sair. Nunca negativo. Espelho de valorEmAberto. */
 export function emAberto(lado: 'receber' | 'pagar', alias?: string): string {
   const total = numerico(campo('valor_final', alias));

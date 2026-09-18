@@ -263,7 +263,18 @@ export default function DREPage() {
     const despOperacionais = sumByCategory('2.2');
     const despComerciais = sumByCategory('2.6');
     const despTaxas = sumByCategory('2.3');
-    const despFinanceiras = sumByCategory('2.4');
+    // A taxa da plataforma de pagamento é despesa financeira, mas NÃO vive
+    // numa conta a pagar: ela é retida da conta a receber antes do repasse,
+    // então nenhuma categoria do plano de contas a alcança. Sem esta linha o
+    // dinheiro sairia do saldo bancário (saldo-bancario.ts desconta a taxa) e
+    // continuaria invisível no resultado — o DRE e o extrato deixariam de
+    // bater exatamente pelo valor das taxas.
+    //
+    // Competência, como todo o resto deste relatório: conta viva com
+    // vencimento no mês, tenha sido baixada ou não. É a mesma base que
+    // resultado-financeiro.ts usa em `taxas`.
+    const taxasDePlataforma = somaPor(monthReceber, cr => Math.max(0, num(cr.taxa)));
+    const despFinanceiras = round2(sumByCategory('2.4') + taxasDePlataforma);
     const despOutras = sumByCategory('2.5');
 
     // 2.1 (CMV do plano padrão) não tem linha própria neste regime, mas o
@@ -321,7 +332,10 @@ export default function DREPage() {
       { codigo: '', nome: 'RESULTADO OPERACIONAL', valor: resultadoOperacional, tipo: 'subtotal', indent: 0 },
 
       { codigo: '', nome: '(-) DESPESAS FINANCEIRAS', valor: -despFinanceiras, tipo: 'header', indent: 0 },
-      { codigo: '2.4', nome: 'Juros, tarifas bancárias', valor: despFinanceiras, tipo: 'item', indent: 1 },
+      { codigo: '2.4', nome: 'Juros, tarifas bancárias', valor: round2(despFinanceiras - taxasDePlataforma), tipo: 'item', indent: 1 },
+      ...(taxasDePlataforma > 0
+        ? [{ codigo: '2.4', nome: 'Taxas de plataformas de pagamento', valor: taxasDePlataforma, tipo: 'item' as const, indent: 1 }]
+        : []),
     );
 
     if (outrasDespesas !== 0) {

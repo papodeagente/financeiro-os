@@ -21,7 +21,7 @@ import {
 import { divSegura, hojeISO, mesDe, num, round2 } from '@/lib/money';
 import { carregarEntidades } from '@/lib/crm-storage';
 import { PageHeader } from '@/components/fin/PageHeader';
-import { PageShell, RITMO_DA_PAGINA } from '@/components/fin/PageShell';
+import { MolduraDaPagina, RITMO_DA_PAGINA } from '@/components/fin/MolduraDaPagina';
 import { DataState } from '@/components/fin/DataState';
 import { EmptyLesson } from '@/components/fin/EmptyLesson';
 import { FinTable, type FinColuna } from '@/components/fin/FinTable';
@@ -239,7 +239,7 @@ export default function FolhaPage() {
   const temFolha = folha.quantidade > 0;
 
   return (
-    <PageShell>
+    <MolduraDaPagina>
       <PageHeader
         titulo="Folha de pagamento"
         subtitulo="Quanto a equipe custa por mês e quanto isso pesa no faturamento"
@@ -551,6 +551,6 @@ export default function FolhaPage() {
           onConfirmar={() => salvarVinculo(editando.vinculo, editando.id, editando.nome)}
         />
       )}
-    </PageShell>
+    </MolduraDaPagina>
   );
 }

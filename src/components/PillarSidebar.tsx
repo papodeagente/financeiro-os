@@ -100,6 +100,7 @@ const FINANCEIRO_MENU: SidebarSection[] = [
       { key: 'rel-financeiro', label: 'Relatórios', icon: DollarSign, href: '/relatorios/financeiro' },
       { key: 'rel-rentabilidade', label: 'Rentabilidade', icon: RentIcon, href: '/relatorios/rentabilidade' },
       { key: 'rel-comparativo', label: 'Comparativo mensal', icon: BarChart3, href: '/relatorios/comparativo' },
+      { key: 'rel-taxas', label: 'Taxas de pagamento', icon: Percent, href: '/relatorios/taxas' },
       { key: 'cac-dashboard', label: 'Dashboard CAC', icon: Gauge, href: '/cac/dashboard' },
     ],
   },

@@ -1,11 +1,13 @@
 'use client';
 
 import { ContaReceber } from '@/lib/crm-types';
+import { percentualDaTaxa } from '@/lib/taxa-plataforma';
 import { Field } from '@/components/fin/Field';
 import { MoneyField } from '@/components/fin/MoneyField';
 import { FormSection } from '@/components/financeiro/FormSection';
 import { Input } from '@/components/ui/input';
 import { ClientePicker } from '@/components/ClientePicker';
+import { SeletorDePlataforma } from './SeletorDePlataforma';
 import {
   Select,
   SelectContent,
@@ -28,6 +30,10 @@ export type FormState = Omit<ContaReceber,
 
 export const EMPTY_FORM: FormState = {
   origem: 'VENDA',
+  // A taxa da plataforma nasce zerada: ela só é conhecida quando o dinheiro
+  // passa pela adquirente, não no lançamento.
+  taxa: 0,
+  taxa_plataforma: '',
   // O VÍNCULO com o cadastro, que o formulário não tinha. Sem ele a emissão
   // de nota não acha o cliente (nfse-servico.ts:197 resolve por cliente_id) e
   // a prefeitura recusa por falta do documento do tomador. O nome em texto
@@ -44,7 +50,8 @@ export const EMPTY_FORM: FormState = {
   observacoes: '',
 };
 
-export type CampoObrigatorio = 'cliente_nome' | 'descricao' | 'valor_original' | 'data_vencimento';
+export type CampoObrigatorio =
+  | 'cliente_nome' | 'descricao' | 'valor_original' | 'data_vencimento' | 'taxa';
 export type ErrosForm = Partial<Record<CampoObrigatorio, string>>;
 
 const CONTROLE = [
@@ -74,11 +81,28 @@ export type FormularioContaProps = {
   form: FormState;
   erros: ErrosForm;
   onChange: (patch: Partial<FormState>) => void;
+  /** Plataformas que a agência já usou, para o seletor aprender. */
+  plataformasUsadas?: string[];
 };
 
-export function FormularioConta({ form, erros, onChange }: FormularioContaProps) {
+export function FormularioConta({
+  form,
+  erros,
+  onChange,
+  plataformasUsadas = [],
+}: FormularioContaProps) {
   const rotuloOrigem = ORIGENS.find(o => o.valor === form.origem)?.rotulo ?? ORIGENS[0].rotulo;
   const rotuloForma = FORMAS.find(f => f.valor === form.forma_recebimento)?.rotulo ?? FORMAS[0].rotulo;
+
+  // O percentual NUNCA é gravado: é derivado do que está na tela. Sem base
+  // ele é null, e a ajuda diz o que falta em vez de mostrar "0%" — que se
+  // leria como "não teve taxa".
+  const pctDaTaxa = percentualDaTaxa(form.taxa, form.valor_original);
+  const ajudaDaTaxa = form.valor_original > 0
+    ? (pctDaTaxa === null
+        ? 'Quanto a plataforma reteve desta conta.'
+        : `${pctDaTaxa.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% do valor da conta. Entra no resultado e sai do saldo do banco.`)
+    : 'Informe o valor da conta para ver o percentual.';
 
   return (
     <div className="flex flex-col gap-[var(--fin-s-3)]">
@@ -201,6 +225,37 @@ export function FormularioConta({ form, erros, onChange }: FormularioContaProps)
         </div>
       </FormSection>
 
+      <FormSection
+        title="Taxa da plataforma de pagamento"
+        description="O que a adquirente retém. O cliente paga o valor cheio; só a diferença cai no banco."
+        defaultOpen
+      >
+        <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:grid-cols-2">
+          <MoneyField
+            rotulo="Taxa da plataforma"
+            valor={form.taxa}
+            onChange={v => onChange({ taxa: v })}
+            maximo={form.valor_original > 0 ? form.valor_original : undefined}
+            ajuda={ajudaDaTaxa}
+            erro={erros.taxa ?? null}
+          />
+
+          <Field
+            rotulo="Plataforma que reteve"
+            ajuda="Agrupa o relatório de taxas. Não achou na lista? Escolha Outra."
+          >
+            {a => (
+              <SeletorDePlataforma
+                id={a.id}
+                valor={form.taxa_plataforma}
+                usadas={plataformasUsadas}
+                onChange={v => onChange({ taxa_plataforma: v })}
+              />
+            )}
+          </Field>
+        </div>
+      </FormSection>
+
       <FormSection title="Recebimento e parcelas" description="Como e em quantas vezes o dinheiro entra.">
         <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:grid-cols-2">
           <div className="sm:col-span-2">
@@ -255,6 +310,7 @@ export function FormularioConta({ form, erros, onChange }: FormularioContaProps)
               />
             )}
           </Field>
+
         </div>
       </FormSection>
     </div>

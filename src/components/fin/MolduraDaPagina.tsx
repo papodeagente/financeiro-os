@@ -16,8 +16,14 @@ import { cn } from '@/lib/utils';
  * (24px no desktop, 16px no celular), a leitura para em `--fin-page-max`, e
  * blocos irmãos ficam a `--fin-s-5` de distância. Quem escreve uma página nova
  * não escolhe nada disso, e por isso não erra.
+ *
+ * O NOME não é "PageShell" de propósito: já existe um
+ * `@/components/PageShell`, do dialeto legado (tokens `--t-*`, largura
+ * 1400px), usado por doze telas. Dois componentes de mesmo nome e mesmo
+ * papel fazem o autocomplete importar o errado sem erro de compilação, e a
+ * tela sai com o respiro e a largura de outro sistema.
  */
-export function PageShell({
+export function MolduraDaPagina({
   children,
   /** Desliga o ritmo vertical quando a página controla o próprio espaçamento. */
   semRitmo = false,
@@ -51,4 +57,4 @@ export function PageShell({
  */
 export const RITMO_DA_PAGINA = 'flex flex-col gap-[var(--fin-s-5)]';
 
-export default PageShell;
+export default MolduraDaPagina;
