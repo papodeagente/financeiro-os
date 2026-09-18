@@ -8,7 +8,7 @@
 
 import pool from './db';
 import { generateId } from './utils';
-import { hojeISO, num, round2 } from './money';
+import { hojeISO, num, percentual, round2 } from './money';
 import { nomeDoCliente, documentoDoCliente } from './cliente-nome';
 import { enderecoDoCliente } from './cliente-documento';
 import {
@@ -263,6 +263,16 @@ export interface OpcoesDaNota {
   deducao_manual?: number | null;
   desconto_incondicionado?: number;
   intermediario?: IntermediarioNota | null;
+  // ── Campos do formulário completo (18/09/2026) ──
+  codigo_tributacao?: string;
+  cnae?: string;
+  codigo_nbs?: string;
+  cst?: string;
+  classificacao_tributaria?: string;
+  indicador_operacao?: string;
+  aliquota_inss?: number;
+  aliquota_ir?: number;
+  observacoes?: string;
 }
 
 /**
@@ -512,9 +522,25 @@ export async function emitirNota(
     valor_liquido: previa.valor_liquido,
     discriminacao: previa.discriminacao,
     item_lista_servico: config.item_lista_servico,
-    codigo_tributacao_municipio: config.codigo_tributacao_municipio,
-    cnae: config.cnae,
+    // O serviço ESCOLHIDO na emissão vence o padrão da configuração: uma
+    // empresa que presta dois serviços não pode emitir tudo com um código só.
+    codigo_tributacao_municipio: opcoes.codigo_tributacao || config.codigo_tributacao_municipio,
+    cnae: opcoes.cnae || config.cnae,
     serie_rps: config.serie_rps,
+    codigo_nbs: opcoes.codigo_nbs || '',
+    cst: opcoes.cst || '',
+    classificacao_tributaria: opcoes.classificacao_tributaria || '',
+    indicador_operacao: opcoes.indicador_operacao || '',
+    aliquota_inss: round2(num(opcoes.aliquota_inss)),
+    valor_inss_retido: percentual(previa.valor_servicos, num(opcoes.aliquota_inss)),
+    aliquota_ir: round2(num(opcoes.aliquota_ir)),
+    valor_ir_retido: percentual(previa.valor_servicos, num(opcoes.aliquota_ir)),
+    total_retido: round2(
+      percentual(previa.valor_servicos, num(opcoes.aliquota_inss))
+      + percentual(previa.valor_servicos, num(opcoes.aliquota_ir))
+      + ((opcoes.iss_retido ?? config.iss_retido_padrao) ? previa.valor_iss : 0),
+    ),
+    observacoes: opcoes.observacoes || '',
     status: 'PROCESSANDO',
     ambiente: config.ambiente,
     numero: '', codigo_verificacao: '', protocolo: '',

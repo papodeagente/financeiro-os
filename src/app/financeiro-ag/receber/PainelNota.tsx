@@ -20,6 +20,11 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Money } from '@/components/fin/Money';
+import { CamposDaNota } from './CamposDaNota';
+import {
+  camposQueNaoViajam, formularioVazio, temErro, validarFormulario, valoresDaNota,
+  type FormularioNota, type ServicoCadastrado,
+} from '@/lib/nfse-formulario';
 import { formatBRL } from '@/lib/utils';
 import { lerErroNota } from '@/lib/nfse-simples';
 import { toast } from '@/lib/toast';
@@ -89,6 +94,19 @@ export function PainelNota({
   const [discriminacao, setDiscriminacao] = useState('');
   const [issRetido, setIssRetido] = useState<boolean | null>(null);
 
+  /**
+   * O formulário completo, no desenho do Asaas (18/09/2026).
+   *
+   * `discriminacao` e `issRetido` continuam existindo porque são o que a API
+   * de emissão já entende; eles são derivados deste formulário na hora de
+   * enviar. Manter dois estados para a mesma pergunta seria pedir divergência,
+   * então a fonte é o formulário e os dois antigos são projeção dele.
+   */
+  const [form, setForm] = useState<FormularioNota>(formularioVazio);
+  const [servicos, setServicos] = useState<ServicoCadastrado[]>([]);
+  const [listaNacional, setListaNacional] = useState<Array<{ codigo: string; cnae: string; titulo: string }>>([]);
+  const [etapa, setEtapa] = useState<'form' | 'conferencia'>('form');
+
   const contaId = conta?.id ?? '';
 
   const carregar = useCallback(async () => {
@@ -119,6 +137,15 @@ export function PainelNota({
       if (!regime) setRegime((corpo as Previa).regime);
       if (!formaBase) setFormaBase((corpo as Previa).forma_base);
       if (!discriminacao) setDiscriminacao((corpo as Previa).discriminacao);
+      // O formulário nasce com o que o sistema já sabe: descrição sugerida,
+      // alíquota e quem recolhe o ISS vindos da configuração fiscal. Campo
+      // que a pessoa já mexeu não é sobrescrito.
+      setForm(f => ({
+        ...f,
+        descricao: f.descricao || (corpo as Previa).discriminacao || '',
+        aliquota_iss: f.aliquota_iss || (corpo as Previa).aliquota_iss || 0,
+        deducoes: f.deducoes || (corpo as Previa).valor_deducoes || 0,
+      }));
     } catch {
       setErroCarga('Não foi possível calcular a nota.');
       setPrevia(null);
@@ -134,8 +161,28 @@ export function PainelNota({
     if (!aberto) {
       setPrevia(null); setRegime(''); setFormaBase('');
       setDiscriminacao(''); setIssRetido(null); setErroCarga('');
+      setForm(formularioVazio()); setEtapa('form');
     }
   }, [aberto, contaId, carregar]);
+
+  /** Catálogos do seletor de serviço: os da empresa e os da lista nacional. */
+  useEffect(() => {
+    if (!aberto) return;
+    let vivo = true;
+    void (async () => {
+      const [nac, cad] = await Promise.all([
+        fetch('/api/fiscal/servicos?busca=').then(r => r.json()).catch(() => ({})),
+        fetch('/api/fiscal/servicos-empresa').then(r => r.json()).catch(() => ({})),
+      ]);
+      if (!vivo) return;
+      setListaNacional(
+        ((nac?.servicos ?? []) as Array<{ codigo: string; item: string; titulo: string }>)
+          .map(sv => ({ codigo: sv.codigo, cnae: '', titulo: `${sv.item} ${sv.titulo}` })),
+      );
+      setServicos((cad?.servicos ?? []) as ServicoCadastrado[]);
+    })();
+    return () => { vivo = false; };
+  }, [aberto]);
 
   async function emitir() {
     if (!contaId || emitindo) return;
@@ -148,8 +195,21 @@ export function PainelNota({
           conta_receber_id: contaId,
           regime: regime || undefined,
           forma_base: formaBase || undefined,
-          discriminacao: discriminacao || undefined,
-          iss_retido: issRetido ?? undefined,
+          // O formulário é a fonte: a descrição e o ISS retido saem dele, e
+          // os estados antigos ficam só como valor de partida.
+          discriminacao: form.descricao || discriminacao || undefined,
+          iss_retido: form.tipo_recolhimento_iss === 'TOMADOR',
+          aliquota_iss: form.aliquota_iss || undefined,
+          deducao_manual: form.deducoes > 0 ? form.deducoes : null,
+          codigo_tributacao: form.codigo_tributacao || undefined,
+          cnae: form.cnae || undefined,
+          codigo_nbs: form.nbs || undefined,
+          cst: form.cst || undefined,
+          classificacao_tributaria: form.classificacao_tributaria || undefined,
+          indicador_operacao: form.indicador_operacao || undefined,
+          aliquota_inss: form.aliquota_inss || undefined,
+          aliquota_ir: form.aliquota_ir || undefined,
+          observacoes: form.observacoes || undefined,
         }),
       });
       const corpo = await res.json();
@@ -180,16 +240,35 @@ export function PainelNota({
 
   const intermediando = (regime || previa?.regime) === 'INTERMEDIACAO';
 
+  // Os números saem do formulário, não da prévia: é o formulário que a pessoa
+  // está mexendo agora. A prévia dá o valor de partida do serviço.
+  const valores = valoresDaNota({
+    valor_servicos: previa?.valor_servicos ?? 0,
+    form,
+  });
+  const problemas = validarFormulario({
+    form,
+    valores,
+    iss_e_estimativa: previa?.iss_e_estimativa ?? false,
+  });
+  const naoViajam = camposQueNaoViajam({
+    form,
+    capacidades: {
+      deducoes: previa?.emissor_aceita_deducoes ?? false,
+      // O padrão nacional calcula o ISS sozinho: a alíquota digitada aqui não
+      // viaja, e `iss_e_estimativa` é exatamente esse aviso vindo do servidor.
+      aliquota_por_nota: !(previa?.iss_e_estimativa ?? false),
+    },
+  });
+  const impedido = temErro(problemas) || !previa?.pode_emitir;
+
   return (
     <Dialog open={aberto} onOpenChange={a => { if (!a) onFechar(); }}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-[640px]">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-[680px]">
         <DialogHeader>
-          <DialogTitle>Emitir nota fiscal de serviço</DialogTitle>
-          <DialogDescription>
-            {conta?.cliente_nome
-              ? `Parcela recebida de ${conta.cliente_nome}.`
-              : 'Parcela recebida.'}{' '}
-            A nota sai do valor que entrou, não do valor prometido.
+          <DialogTitle>Emitir Nota Fiscal</DialogTitle>
+          <DialogDescription className="sr-only">
+            Dados da nota fiscal de serviço desta cobrança.
           </DialogDescription>
         </DialogHeader>
 
@@ -199,6 +278,32 @@ export function PainelNota({
           <p className="fin-t-body text-[var(--fin-negative)]">{erroCarga}</p>
         ) : previa ? (
           <div className="flex flex-col gap-4">
+            {/* ── Informações da cobrança ─────────────────────────────── */}
+            <section className="flex flex-col gap-2">
+              <h3 className="fin-t-subhead text-[var(--fin-text)]">Informações da cobrança</h3>
+              <div>
+                <span className="fin-t-caption text-[var(--fin-text-3)]">Cliente</span>
+                <p className="fin-t-body text-[var(--fin-text)]">
+                  {previa.tomador.razao_social || conta?.cliente_nome || 'Cliente sem nome'}
+                  {previa.tomador.cpf_cnpj ? (
+                    <span className="text-[var(--fin-text-3)]">{` · ${previa.tomador.cpf_cnpj}`}</span>
+                  ) : null}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <span className="fin-t-caption text-[var(--fin-text-3)]">Valor da cobrança</span>
+                  <p className="fin-t-body text-[var(--fin-text)]">{formatBRL(previa.valor_recebido)}</p>
+                </div>
+                <div>
+                  <span className="fin-t-caption text-[var(--fin-text-3)]">Vencimento</span>
+                  <p className="fin-t-body text-[var(--fin-text)]">
+                    {(conta?.data_vencimento ?? '').slice(0, 10).split('-').reverse().join('/') || '—'}
+                  </p>
+                </div>
+              </div>
+            </section>
+
             {previa.nota_existente ? (
               <div className={`${CARTAO} border-[var(--fin-warning)] bg-[var(--fin-warning-soft)]`}>
                 <span className="fin-t-body-strong text-[var(--fin-warning-text)]">
@@ -227,128 +332,105 @@ export function PainelNota({
               </div>
             ) : null}
 
-            {/* A escolha que muda o imposto. */}
-            <fieldset className="flex flex-col gap-2">
-              <legend className="fin-t-body-strong text-[var(--fin-text)]">
-                Como a agência entra nesta venda
-              </legend>
-              <label className={`${CARTAO} flex cursor-pointer gap-3 ${intermediando ? 'border-[var(--fin-accent)]' : ''}`}>
-                <input
-                  type="radio"
-                  name="regime-nota"
-                  className="mt-1"
-                  checked={intermediando}
-                  onChange={() => setRegime('INTERMEDIACAO')}
-                />
-                <span className="flex flex-col gap-0.5">
-                  <span className="fin-t-body-strong text-[var(--fin-text)]">
-                    Intermediando (agenciamento)
-                  </span>
-                  <span className="fin-t-caption text-[var(--fin-text-3)]">
-                    A agência aproxima o cliente do fornecedor e ganha comissão. A nota é da
-                    comissão: {formatBRL(previa.comissao_da_parcela)} desta parcela. O repasse de{' '}
-                    {formatBRL(previa.repasse_da_parcela)} não é receita da agência.
-                  </span>
-                </span>
-              </label>
-              <label className={`${CARTAO} flex cursor-pointer gap-3 ${!intermediando ? 'border-[var(--fin-accent)]' : ''}`}>
-                <input
-                  type="radio"
-                  name="regime-nota"
-                  className="mt-1"
-                  checked={!intermediando}
-                  onChange={() => setRegime('PRESTACAO_DIRETA')}
-                />
-                <span className="flex flex-col gap-0.5">
-                  <span className="fin-t-body-strong text-[var(--fin-text)]">
-                    Serviço próprio (prestação direta)
-                  </span>
-                  <span className="fin-t-caption text-[var(--fin-text-3)]">
-                    Pacote montado pela agência, consultoria ou taxa de serviço. A nota é do valor
-                    inteiro recebido: {formatBRL(previa.valor_recebido)}.
-                  </span>
-                </span>
-              </label>
-            </fieldset>
-
-            {intermediando ? (
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="forma-base">Como a intermediação aparece na nota</Label>
-                <select
-                  id="forma-base"
-                  className="h-11 rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-3 fin-t-body text-[var(--fin-text)]"
-                  value={formaBase || previa.forma_base}
-                  onChange={e => setFormaBase(e.target.value as FormaBaseIntermediacao)}
-                >
-                  <option value="VALOR_COMISSAO">Nota do valor da comissão</option>
-                  {/* O padrão nacional não tem campo de dedução. Esconder a
-                      opção evita escolher um formato que o emissor recusa. */}
-                  {previa.emissor_aceita_deducoes ? (
-                    <option value="TOTAL_COM_DEDUCAO">Valor cheio com o repasse como dedução</option>
+            {etapa === 'form' ? (
+              <>
+                {/* ── A pergunta que nenhum formulário genérico faz ─────── */}
+                <fieldset className="flex flex-col gap-2">
+                  <legend className="fin-t-subhead text-[var(--fin-text)]">
+                    Como a agência entra nesta venda
+                  </legend>
+                  <label className={`${CARTAO} flex cursor-pointer gap-3 ${intermediando ? 'border-[var(--fin-accent)]' : ''}`}>
+                    <input
+                      type="radio"
+                      name="regime-nota"
+                      className="mt-1"
+                      checked={intermediando}
+                      onChange={() => setRegime('INTERMEDIACAO')}
+                    />
+                    <span className="flex flex-col gap-0.5">
+                      <span className="fin-t-body-strong text-[var(--fin-text)]">
+                        Intermediando (agenciamento)
+                      </span>
+                      <span className="fin-t-caption text-[var(--fin-text-3)]">
+                        A nota é da comissão: {formatBRL(previa.comissao_da_parcela)}. O repasse de{' '}
+                        {formatBRL(previa.repasse_da_parcela)} não é receita da agência.
+                      </span>
+                    </span>
+                  </label>
+                  <label className={`${CARTAO} flex cursor-pointer gap-3 ${!intermediando ? 'border-[var(--fin-accent)]' : ''}`}>
+                    <input
+                      type="radio"
+                      name="regime-nota"
+                      className="mt-1"
+                      checked={!intermediando}
+                      onChange={() => setRegime('PRESTACAO_DIRETA')}
+                    />
+                    <span className="flex flex-col gap-0.5">
+                      <span className="fin-t-body-strong text-[var(--fin-text)]">
+                        Serviço próprio (prestação direta)
+                      </span>
+                      <span className="fin-t-caption text-[var(--fin-text-3)]">
+                        A nota é do valor inteiro recebido: {formatBRL(previa.valor_recebido)}.
+                      </span>
+                    </span>
+                  </label>
+                  {intermediando && previa.emissor_aceita_deducoes ? (
+                    <select
+                      aria-label="Como a intermediação aparece na nota"
+                      className="h-11 rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-3 fin-t-body text-[var(--fin-text)]"
+                      value={formaBase || previa.forma_base}
+                      onChange={e => setFormaBase(e.target.value as FormaBaseIntermediacao)}
+                    >
+                      <option value="VALOR_COMISSAO">Nota do valor da comissão</option>
+                      <option value="TOTAL_COM_DEDUCAO">Valor cheio com o repasse como dedução</option>
+                    </select>
                   ) : null}
-                </select>
-                <p className="fin-t-caption text-[var(--fin-text-3)]">
-                  {previa.emissor_aceita_deducoes
-                    ? 'Os dois caminhos dão o mesmo imposto. Municípios diferentes exigem formatos diferentes: confirme com a contabilidade qual o seu aceita.'
-                    : 'Este emissor usa o padrão nacional, que não recebe dedução por nota: a nota sai com o valor da comissão.'}
+                </fieldset>
+
+                <CamposDaNota
+                  form={form}
+                  onForm={setForm}
+                  valores={valores}
+                  problemas={problemas}
+                  servicos={servicos}
+                  listaNacional={listaNacional}
+                  issEhEstimativa={previa.iss_e_estimativa}
+                  naoViajam={naoViajam}
+                />
+              </>
+            ) : (
+              /* ── Conferência: o passo que o modelo abre com "Avançar" ──
+                 Emitir nota é ato fiscal, e desfazer custa burocracia. A
+                 conferência mostra o que vai sair antes de sair. */
+              <section className={`${CARTAO} flex flex-col gap-1.5`}>
+                <span className="fin-t-body-strong text-[var(--fin-text)]">Confira antes de emitir</span>
+                <Linha rotulo="Valor da nota" valor={valores.valor_servicos} forte />
+                {valores.deducoes > 0 ? <Linha rotulo="Deduções" valor={valores.deducoes} /> : null}
+                <Linha rotulo="Base de cálculo do ISS" valor={valores.base_calculo} />
+                <Linha
+                  rotulo={previa.iss_e_estimativa ? `ISS estimado (${form.aliquota_iss}%)` : `ISS (${form.aliquota_iss}%)`}
+                  valor={valores.valor_iss}
+                />
+                {valores.retencao_inss > 0 ? <Linha rotulo="INSS retido" valor={valores.retencao_inss} /> : null}
+                {valores.retencao_ir > 0 ? <Linha rotulo="IR retido" valor={valores.retencao_ir} /> : null}
+                <div className="mt-1 border-t border-[var(--fin-border)] pt-1.5">
+                  <Linha rotulo="A empresa recebe" valor={valores.valor_liquido} forte />
+                </div>
+                <p className="fin-t-caption mt-1 text-[var(--fin-text-2)]">
+                  {form.descricao || 'Sem descrição.'}
                 </p>
-              </div>
-            ) : null}
-
-            {/* Os números da nota. */}
-            <div className={`${CARTAO} flex flex-col gap-1.5`}>
-              <Linha rotulo="Valor do serviço na nota" valor={previa.valor_servicos} forte />
-              {previa.valor_deducoes > 0 ? (
-                <Linha rotulo="Deduções (repasse a fornecedores)" valor={previa.valor_deducoes} />
-              ) : null}
-              <Linha rotulo="Base de cálculo do ISS" valor={previa.base_calculo} />
-              <Linha
-                rotulo={
-                  previa.iss_e_estimativa
-                    ? `ISS estimado (${previa.aliquota_iss}%)`
-                    : `ISS (${previa.aliquota_iss}%)`
-                }
-                valor={previa.valor_iss}
-              />
-              {previa.iss_e_estimativa ? (
-                <span className="fin-t-caption text-[var(--fin-text-3)]">
-                  Quem calcula o ISS é a prefeitura, a partir do código de tributação. O valor
-                  acima é estimativa para conferência.
-                </span>
-              ) : null}
-              <div className="mt-1 border-t border-[var(--fin-border)] pt-1.5">
-                <Linha rotulo="A agência recebe" valor={previa.valor_liquido} forte />
-              </div>
-            </div>
-
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={issRetido ?? false}
-                onChange={e => setIssRetido(e.target.checked)}
-              />
-              <span className="fin-t-body text-[var(--fin-text)]">
-                ISS retido pelo tomador
-              </span>
-            </label>
-
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="discriminacao">Descrição do serviço na nota</Label>
-              <Textarea
-                id="discriminacao"
-                rows={3}
-                value={discriminacao}
-                onChange={e => setDiscriminacao(e.target.value)}
-              />
-            </div>
-
-            <div className={`${CARTAO} flex flex-col gap-0.5`}>
-              <span className="fin-t-caption text-[var(--fin-text-3)]">Tomador</span>
-              <span className="fin-t-body text-[var(--fin-text)]">
-                {previa.tomador.razao_social || 'Cliente sem nome'}
-                {previa.tomador.cpf_cnpj ? ` · ${previa.tomador.cpf_cnpj}` : ''}
-              </span>
-            </div>
+                <p className="fin-t-caption text-[var(--fin-text-3)]">
+                  Tomador: {previa.tomador.razao_social || 'sem nome'}
+                  {previa.tomador.cpf_cnpj ? ` · ${previa.tomador.cpf_cnpj}` : ''}
+                </p>
+                {previa.iss_e_estimativa ? (
+                  <p className="fin-t-caption text-[var(--fin-text-3)]">
+                    Quem calcula o ISS é a prefeitura, a partir do código de tributação. O valor
+                    acima é estimativa para conferência.
+                  </p>
+                ) : null}
+              </section>
+            )}
 
             {previa.erros.map(e => (
               <p key={e} className="fin-t-caption flex items-start gap-2 text-[var(--fin-negative)]">
@@ -366,15 +448,29 @@ export function PainelNota({
         ) : null}
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onFechar}>Fechar</Button>
-          <Button
-            type="button"
-            onClick={() => { void emitir(); }}
-            disabled={!previa?.pode_emitir || emitindo || carregando}
-          >
-            <FileText aria-hidden="true" className="mr-2 size-4" />
-            {emitindo ? 'Emitindo…' : 'Emitir nota'}
-          </Button>
+          {etapa === 'conferencia' ? (
+            <Button type="button" variant="outline" onClick={() => setEtapa('form')}>Voltar</Button>
+          ) : (
+            <Button type="button" variant="outline" onClick={onFechar}>Fechar</Button>
+          )}
+          {etapa === 'form' ? (
+            <Button
+              type="button"
+              onClick={() => setEtapa('conferencia')}
+              disabled={impedido || carregando}
+            >
+              Avançar
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              onClick={() => { void emitir(); }}
+              disabled={impedido || emitindo}
+            >
+              <FileText aria-hidden="true" className="mr-2 size-4" />
+              {emitindo ? 'Emitindo…' : 'Emitir nota'}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

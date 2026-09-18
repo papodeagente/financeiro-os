@@ -148,9 +148,31 @@ export interface ConfigFiscal {
   discriminacao_padrao: string;
   /** Emitir automaticamente ao confirmar o recebimento, sem passar pelo painel. */
   emissao_automatica: boolean;
+  /**
+   * Os serviços que a empresa presta, cadastrados em Configurações.
+   *
+   * Vive dentro da config, e não em tabela própria, porque é uma lista curta
+   * por empresa (uma agência presta dois ou três serviços) e porque assim ela
+   * nasce com o mesmo isolamento por tenant e o mesmo caminho de gravação da
+   * configuração fiscal, sem migração nem CRUD paralelo.
+   */
+  servicos?: ServicoFiscalCadastrado[];
 }
 
 /** Snapshot do tomador no momento da emissão. A nota não pode mudar depois. */
+/** Um serviço do catálogo da empresa. Espelha ServicoCadastrado do formulário. */
+export interface ServicoFiscalCadastrado {
+  id: string;
+  /** Código de tributação nacional (item da LC 116 desdobrado). */
+  codigo_tributacao: string;
+  cnae: string;
+  descricao: string;
+  /** Em %, por exemplo 2 para 2%. */
+  aliquota_iss: number;
+  nbs?: string;
+  descricao_padrao?: string;
+}
+
 export interface TomadorNota {
   cpf_cnpj: string;
   razao_social: string;
@@ -207,6 +229,28 @@ export interface NotaFiscal {
   link_xml: string;
   /** Motivo da rejeição, em texto que o usuário entenda. */
   erro: string;
+
+  /**
+   * O que o formulário de emissão coletou além do essencial (18/09/2026).
+   *
+   * Fica gravado MESMO quando o emissor atual não transmite: é o que permite
+   * reemitir noutro emissor, responder a uma fiscalização e alimentar
+   * relatório de retenção sem pedir o dado de novo ao usuário. A tela avisa
+   * quais desses campos não viajaram, em vez de fingir que foram.
+   */
+  codigo_nbs?: string;
+  /** Reforma tributária (LC 214/2025). Códigos informados pela contabilidade. */
+  cst?: string;
+  classificacao_tributaria?: string;
+  indicador_operacao?: string;
+  /** Retenção na fonte, em % e em valor. Zero quando não há retenção. */
+  aliquota_inss?: number;
+  valor_inss_retido?: number;
+  aliquota_ir?: number;
+  valor_ir_retido?: number;
+  /** Soma do que o tomador retém, ISS retido incluso. */
+  total_retido?: number;
+  observacoes?: string;
 
   emitida_em: string;
   autorizada_em: string;

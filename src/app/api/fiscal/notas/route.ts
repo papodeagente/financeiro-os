@@ -43,6 +43,16 @@ export async function POST(req: Request) {
       deducao_manual: corpo?.deducao_manual ?? null,
       desconto_incondicionado: corpo?.desconto_incondicionado ?? 0,
       intermediario: corpo?.intermediario ?? undefined,
+      codigo_tributacao: typeof corpo?.codigo_tributacao === 'string' ? corpo.codigo_tributacao : undefined,
+      cnae: typeof corpo?.cnae === 'string' ? corpo.cnae : undefined,
+      codigo_nbs: typeof corpo?.codigo_nbs === 'string' ? corpo.codigo_nbs : undefined,
+      cst: typeof corpo?.cst === 'string' ? corpo.cst : undefined,
+      classificacao_tributaria:
+        typeof corpo?.classificacao_tributaria === 'string' ? corpo.classificacao_tributaria : undefined,
+      indicador_operacao: typeof corpo?.indicador_operacao === 'string' ? corpo.indicador_operacao : undefined,
+      aliquota_inss: corpo?.aliquota_inss,
+      aliquota_ir: corpo?.aliquota_ir,
+      observacoes: typeof corpo?.observacoes === 'string' ? corpo.observacoes : undefined,
     };
 
     const nota = await emitirNota(tenantId, contaId, opcoes, {

@@ -212,8 +212,13 @@ export function montarCorpoEmissao(entrada: {
   if (end.bairro) corpo.tomador_bairro = end.bairro;
   if (digitos(end.cep)) corpo.tomador_cep = digitos(end.cep);
   if (end.estado) corpo.tomador_uf = end.estado;
-  if (config.cod_tributacao_nacional) {
-    corpo.cod_tributacao_nacional = config.cod_tributacao_nacional;
+  // O serviço ESCOLHIDO na emissão manda; o da configuração é a retaguarda.
+  // Sem isto, escolher um serviço no formulário não mudaria nada na nota: a
+  // empresa com dois serviços emitiria tudo com o código do primeiro.
+  const codServico = String(nota.codigo_tributacao_municipio ?? '').trim()
+    || config.cod_tributacao_nacional;
+  if (codServico) {
+    corpo.cod_tributacao_nacional = codServico;
   }
   if (config.cod_municipio_ibge) {
     corpo.cod_municipio_prestacao = digitos(config.cod_municipio_ibge);
@@ -224,6 +229,10 @@ export function montarCorpoEmissao(entrada: {
     nota.regime === 'INTERMEDIACAO'
       ? `Agenciamento. Valor intermediado: R$ ${nota.valor_recebido.toFixed(2)}.`
       : '',
+    // As observações desta cobrança entram na nota. Coletar o texto e
+    // descartá-lo seria o pior dos mundos: o usuário confia que o cliente vai
+    // ler algo que nunca foi enviado.
+    String(nota.observacoes ?? '').trim(),
     config.info_complementar_padrao || '',
   ].filter(Boolean).join(' ');
   if (complemento) corpo.info_complementar = complemento.slice(0, 500);
