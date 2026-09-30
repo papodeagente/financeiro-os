@@ -12,6 +12,8 @@ import { RouteProgress } from './RouteProgress';
 import { ReportBugButton } from './ReportBugButton';
 import { buildTrail } from '@/lib/breadcrumbs';
 import { usePillarProgress } from '@/hooks/usePillarProgress';
+import { X } from 'lucide-react';
+import { Logo } from './Logo';
 import { useState, useEffect, useCallback } from 'react';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -24,13 +26,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   /**
    * Tela estreita.
    *
-   * A barra lateral tem 220px FIXOS e `shrink-0`, sem nenhum ponto de quebra:
-   * num celular de 375px ela comia 220 e sobravam 155 para a aplicação
-   * inteira, com o conteúdo cortado à direita em todas as telas. Abaixo de
-   * 768px ela passa a mostrar só a trilha de ícones (56px), o que devolve
-   * 319px ao conteúdo sem tirar a navegação do alcance do polegar.
+   * Abaixo de 768px a barra lateral vira GAVETA, não trilho de ícones.
+   *
+   * O trilho resolvia a largura — devolvia 319px ao conteúdo — mas ao custo de
+   * 22 ícones sem rótulo ocupando 56px permanentes. Ícone sem nome só se lê
+   * por tooltip, e tooltip não existe no toque: no celular a navegação ficava
+   * literalmente adivinhável. A gaveta devolve os 56px E os nomes, e some
+   * quando não está em uso, que é o padrão de telefone.
    */
   const [telaEstreita, setTelaEstreita] = useState(false);
+  const [gavetaAberta, setGavetaAberta] = useState(false);
   const isMindMapImport = /^\/planejamento\/mapas-mentais\/importar\/[^/]+$/.test(pathname);
 
   // Persist sidebar state
@@ -45,11 +50,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const consulta = window.matchMedia('(max-width: 767px)');
-    const aplicar = () => setTelaEstreita(consulta.matches);
+    const aplicar = () => {
+      setTelaEstreita(consulta.matches);
+      // Alargou: o trilho volta e a gaveta não tem mais razão de existir.
+      // Deixá-la "aberta" em segundo plano faria ela ressurgir sozinha na
+      // próxima vez que a janela encolhesse.
+      if (!consulta.matches) setGavetaAberta(false);
+    };
     aplicar();
     consulta.addEventListener('change', aplicar);
     return () => consulta.removeEventListener('change', aplicar);
   }, []);
+
+  useEffect(() => {
+    if (!gavetaAberta) return;
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setGavetaAberta(false); };
+    document.addEventListener('keydown', esc);
+    return () => document.removeEventListener('keydown', esc);
+  }, [gavetaAberta]);
 
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed(prev => {
@@ -144,7 +162,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (loading || !user) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="w-8 h-8 border-2 border-[var(--t-green)] border-t-transparent rounded-full animate-spin" />
+        <div className="size-8 animate-spin rounded-full border-2 border-[var(--fin-accent)] border-t-transparent" />
       </div>
     );
   }
@@ -174,20 +192,51 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <TopBar
         onCommandPalette={() => setCommandPaletteOpen(true)}
         breadcrumb={breadcrumbNode}
-        sidebarCollapsed={sidebarCollapsed || telaEstreita}
+        sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={toggleSidebar}
+        onAbrirMenu={() => setGavetaAberta(true)}
       />
       <div className="flex flex-1 overflow-hidden min-w-0">
-        <PillarSidebar collapsed={sidebarCollapsed || telaEstreita} onToggle={toggleSidebar} />
-        <main
-          className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 min-shell"
-          style={{ background: 'var(--lg-bg)' }}
-        >
+        {/* Largo: trilho fixo, recolhível. Estreito: nada aqui — a navegação
+            mora na gaveta, sobreposta, e o conteúdo usa a largura inteira. */}
+        {!telaEstreita && (
+          <PillarSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+        )}
+        <main className="min-shell min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-[var(--fin-bg)]">
           <div className={`content-enter ${needsFixedHeight ? 'h-full' : ''}`}>
             {children}
           </div>
         </main>
       </div>
+      {telaEstreita && gavetaAberta && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div
+            aria-hidden="true"
+            onClick={() => setGavetaAberta(false)}
+            className="absolute inset-0 bg-[rgba(16,24,40,0.32)] motion-safe:animate-[fadeIn_140ms_ease-out]"
+          />
+          <div
+            onClick={e => {
+              if ((e.target as HTMLElement).closest('a')) setGavetaAberta(false);
+            }}
+            className="absolute inset-y-0 left-0 flex w-[276px] max-w-[86vw] flex-col bg-[var(--fin-surface-2)] motion-safe:animate-[slideInLeft_180ms_ease-out]"
+          >
+            <div className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--fin-border)] pl-3 pr-2">
+              <Logo variant="sidebar" href="/dashboard" />
+              <button
+                type="button"
+                onClick={() => setGavetaAberta(false)}
+                aria-label="Fechar menu"
+                className="inline-flex size-9 items-center justify-center rounded-[var(--fin-r-md)] text-[var(--fin-text-3)] transition-colors hover:bg-[var(--fin-surface)] hover:text-[var(--fin-text)] focus-visible:outline-2 focus-visible:outline-[var(--fin-accent)] focus-visible:outline-offset-[-2px]"
+              >
+                <X className="size-[18px]" />
+              </button>
+            </div>
+            <PillarSidebar collapsed={false} comSeletorDePilar />
+          </div>
+        </div>
+      )}
+
       <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} />
       <ReportBugButton />
     </div>

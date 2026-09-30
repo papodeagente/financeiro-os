@@ -2,7 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useActivePillar, type Pillar } from '@/hooks/useActivePillar';
+import { useActivePillar, PILLARS as PILARES_DO_MENU, type Pillar } from '@/hooks/useActivePillar';
+
+/** Mesma tabela da barra de cima: a gaveta e o topo abrem a mesma porta. */
+const ROTA_DO_PILAR: Record<Pillar, string> = {
+  planejamento: '/planejamento/custos',
+  metas: '/dashboard',
+  financeiro: '/financeiro-ag',
+  configuracoes: '/config/agencia',
+};
 import {
   Wallet, Gauge,
   Wallet2,
@@ -70,7 +78,7 @@ const FINANCEIRO_MENU: SidebarSection[] = [
       { key: 'fluxo-caixa', label: 'Fluxo de caixa', icon: FluxoIcon, href: '/financeiro-ag/fluxo-caixa' },
       { key: 'dre', label: 'DRE', icon: FileSpreadsheet, href: '/financeiro-ag/dre' },
       { key: 'receber', label: 'Contas a receber', icon: Receipt, href: '/financeiro-ag/receber' },
-      { key: 'recebimentos-plataformas', label: 'Recebimentos das plataformas', icon: Receipt, href: '/financeiro-ag/recebimentos' },
+      { key: 'recebimentos-plataformas', label: 'Recebimentos', icon: Receipt, href: '/financeiro-ag/recebimentos' },
       { key: 'pagar', label: 'Contas a pagar', icon: CreditCard, href: '/financeiro-ag/pagar' },
       { key: 'notas-fiscais', label: 'Notas fiscais', icon: FileText, href: '/financeiro-ag/notas' },
       { key: 'conciliacao', label: 'Conciliação', icon: FileSpreadsheet, href: '/financeiro-ag/conciliacao' },
@@ -145,9 +153,15 @@ export const PILLAR_MENUS: Record<Pillar, SidebarSection[]> = {
 interface PillarSidebarProps {
   collapsed?: boolean;
   onToggle?: () => void;
+  /**
+   * Na gaveta do celular o trilho também carrega a troca de pilar, que no
+   * desktop mora na barra de cima. Sem isto a gaveta mostraria as páginas de
+   * um pilar sem oferecer caminho para os outros três.
+   */
+  comSeletorDePilar?: boolean;
 }
 
-export function PillarSidebar({ collapsed = false, onToggle }: PillarSidebarProps) {
+export function PillarSidebar({ collapsed = false, onToggle, comSeletorDePilar = false }: PillarSidebarProps) {
   const pathname = usePathname();
   const activePillar = useActivePillar();
 
@@ -165,32 +179,56 @@ export function PillarSidebar({ collapsed = false, onToggle }: PillarSidebarProp
 
   return (
     <TooltipProvider delay={collapsed ? 100 : 600}>
+      {/* O trilho é RECUADO, não uma folha branca: fica um degrau abaixo da
+          tela (--fin-surface-2), a tela fica em --fin-bg e os cartões em
+          branco. Três níveis de elevação numa ordem só, em vez de duas folhas
+          brancas disputando a atenção com uma borda entre elas. */}
       <aside
-        className={`flex flex-col shrink-0 overflow-hidden transition-[width] duration-200 ease-in-out ${
-          collapsed ? 'w-[56px]' : 'w-[220px]'
+        className={`flex shrink-0 flex-col overflow-hidden border-r border-[var(--fin-border)] bg-[var(--fin-surface-2)] transition-[width] duration-200 ease-out ${
+          collapsed ? 'w-[56px]' : 'w-[232px]'
         }`}
-        style={{
-          fontFamily: 'var(--font-inter), system-ui, sans-serif',
-          background: 'var(--lg-surface-solid)',
-          borderRight: '1px solid #F1F5F9',
-        }}
       >
-        <nav className="flex-1 overflow-y-auto sidebar-scroll px-2 py-3">
+        {/* min-h-0 é o que faz o scroll acontecer AQUI e não empurrar o rodapé
+            para fora: sem ele o botão de recolher subia por cima do último
+            item da lista. */}
+        {comSeletorDePilar && (
+          <div className="shrink-0 border-b border-[var(--fin-border)] p-2">
+            {PILARES_DO_MENU.map(pilar => {
+              const Icone = pilar.icon;
+              const selecionado = activePillar === pilar.id;
+              return (
+                <Link
+                  key={pilar.id}
+                  href={ROTA_DO_PILAR[pilar.id]}
+                  aria-current={selecionado ? 'page' : undefined}
+                  className={[
+                    'flex h-9 items-center gap-2.5 rounded-[var(--fin-r-md)] px-3 fin-t-body transition-colors',
+                    selecionado
+                      ? 'bg-[var(--fin-accent-soft)] font-medium text-[var(--fin-accent)]'
+                      : 'text-[var(--fin-text-2)] hover:bg-[var(--fin-surface)]',
+                  ].join(' ')}
+                >
+                  <Icone className="size-[18px] shrink-0" />
+                  <span className="truncate">{pilar.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+
+        <nav className="sidebar-scroll min-h-0 flex-1 overflow-y-auto px-2 py-2">
           <div className="sidebar-content" key={activePillar}>
             {sections.map((section, sIdx) => (
               <div key={sIdx} className={sIdx > 0 ? 'mt-4' : ''}>
                 {section.title && !collapsed && (
-                  <div
-                    className="px-3 pt-3 pb-2 text-[11px] font-semibold uppercase"
-                    style={{ letterSpacing: '0.05em', color: 'var(--lg-text-4)' }}
-                  >
+                  <div className="fin-t-overline px-3 pb-1.5 pt-4 text-[var(--fin-text-3)]">
                     {section.title}
                   </div>
                 )}
                 {section.title && collapsed && (
-                  <div className="mx-2 mb-1.5 border-t border-[var(--lg-border-light,#F1F5F9)]" />
+                  <div className="mx-2 mb-1.5 mt-1.5 h-px bg-[var(--fin-border)]" />
                 )}
-                <div className="space-y-0.5">
+                <div className="space-y-px">
                   {section.items.map(item => {
                     const Icon = item.icon;
                     const active = isActive(item.href);
@@ -199,23 +237,18 @@ export function PillarSidebar({ collapsed = false, onToggle }: PillarSidebarProp
                       <Link
                         key={item.key}
                         href={item.href}
-                        className={`sidebar-item flex items-center transition-colors duration-150 ${
-                          collapsed
-                            ? 'justify-center w-10 h-10 mx-auto rounded-lg'
-                            : 'gap-2.5 px-3 py-2 rounded-lg'
-                        } ${
+                        aria-current={active ? 'page' : undefined}
+                        className={[
+                          'sidebar-item flex h-9 items-center gap-2.5 rounded-[var(--fin-r-md)] px-3',
+                          'fin-t-body transition-colors duration-150',
+                          'focus-visible:outline-2 focus-visible:outline-[var(--fin-accent)] focus-visible:outline-offset-[-2px]',
                           active
-                            ? 'font-semibold'
-                            : 'hover:bg-[#F1F5F9]'
-                        }`}
-                        style={{
-                          fontSize: '14px',
-                          color: active ? 'var(--lg-accent)' : 'var(--lg-text-2)',
-                          background: active ? 'var(--lg-accent-fill)' : undefined,
-                        }}
+                            ? 'bg-[var(--fin-accent-soft)] font-medium text-[var(--fin-accent)]'
+                            : 'text-[var(--fin-text-2)] hover:bg-[var(--fin-surface)] hover:text-[var(--fin-text)]',
+                        ].join(' ')}
                       >
-                        <Icon className="shrink-0 w-[18px] h-[18px]" />
-                        {!collapsed && <span className="truncate flex-1">{item.label}</span>}
+                        <Icon className="size-[18px] shrink-0" />
+                        <span className="min-w-0 flex-1 truncate">{item.label}</span>
                       </Link>
                     );
 
@@ -226,18 +259,19 @@ export function PillarSidebar({ collapsed = false, onToggle }: PillarSidebarProp
                             render={
                               <Link
                                 href={item.href}
-                                className={`sidebar-item flex items-center rounded-lg transition-colors duration-150 relative justify-center w-10 h-10 mx-auto ${
+                                aria-current={active ? 'page' : undefined}
+                                className={[
+                                  'sidebar-item relative mx-auto flex size-9 items-center justify-center rounded-[var(--fin-r-md)]',
+                                  'transition-colors duration-150',
+                                  'focus-visible:outline-2 focus-visible:outline-[var(--fin-accent)] focus-visible:outline-offset-[-2px]',
                                   active
-                                    ? 'bg-[var(--t-green)]/8 text-[var(--t-green)] font-medium'
-                                    : 'text-[var(--t-sidebar-item)] hover:bg-[var(--t-sidebar-item-hover)] hover:text-[var(--t-text)]'
-                                }`}
+                                    ? 'bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]'
+                                    : 'text-[var(--fin-text-3)] hover:bg-[var(--fin-surface)] hover:text-[var(--fin-text)]',
+                                ].join(' ')}
                               />
                             }
                           >
-                            {active && (
-                              <span className="absolute left-0 top-1 bottom-1 w-[2px] rounded-r-full bg-[var(--t-green)]" />
-                            )}
-                            <Icon className="w-5 h-5 shrink-0" />
+                            <Icon className="size-[18px] shrink-0" />
                           </TooltipTrigger>
                           <TooltipContent side="right" sideOffset={8}>
                             {item.label}
@@ -254,23 +288,31 @@ export function PillarSidebar({ collapsed = false, onToggle }: PillarSidebarProp
           </div>
         </nav>
 
-        {/* Toggle collapse button */}
-        <div className="px-2 py-2 border-t border-[var(--t-border)]">
+        {/* Na gaveta não há o que recolher: ela já some ao fechar. */}
+        {onToggle && (
+        <>
+        {/* shrink-0 mantém o rodapé fora da rolagem: com a lista mais alta que
+            a janela ele era empurrado e cobria o último item do menu. */}
+        <div className="shrink-0 border-t border-[var(--fin-border)] px-2 py-2">
           <button
             onClick={onToggle}
-            className={`sidebar-item flex items-center rounded-lg text-[var(--t-text-muted)] hover:text-[var(--t-text)] hover:bg-[var(--t-sidebar-item-hover)] transition-colors ${
-              collapsed
-                ? 'justify-center w-10 h-10 mx-auto'
-                : 'gap-3 px-3 py-2 w-full'
-            }`}
+            className={[
+              'sidebar-item flex h-9 items-center rounded-[var(--fin-r-md)] transition-colors duration-150',
+              'text-[var(--fin-text-3)] hover:bg-[var(--fin-surface)] hover:text-[var(--fin-text)]',
+              'focus-visible:outline-2 focus-visible:outline-[var(--fin-accent)] focus-visible:outline-offset-[-2px]',
+              collapsed ? 'mx-auto w-9 justify-center' : 'w-full gap-2.5 px-3',
+            ].join(' ')}
             title={collapsed ? 'Expandir menu (Ctrl+B)' : 'Recolher menu (Ctrl+B)'}
+            aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
           >
             {collapsed
-              ? <PanelLeftOpen className="w-4 h-4" />
-              : <><PanelLeftClose className="w-4 h-4" /><span className="text-[12px]">Recolher</span></>
+              ? <PanelLeftOpen className="size-[18px]" />
+              : <><PanelLeftClose className="size-[18px] shrink-0" /><span className="fin-t-caption">Recolher</span></>
             }
           </button>
         </div>
+        </>
+        )}
       </aside>
     </TooltipProvider>
   );

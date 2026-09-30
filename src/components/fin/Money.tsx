@@ -2,6 +2,7 @@ import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn, formatBRL } from '@/lib/utils';
+import { tomDoValor } from '@/lib/tom-do-valor';
 
 export const moneyVariants = cva('fin-money', {
   variants: {
@@ -29,6 +30,7 @@ export const moneyVariants = cva('fin-money', {
 });
 
 export type MoneyEstado = 'ok' | 'carregando' | 'indisponivel';
+
 
 export type MoneyProps = VariantProps<typeof moneyVariants> & {
   /** Valor já calculado pelos helpers auditados. O componente nunca faz aritmética. */
@@ -151,12 +153,14 @@ export function Money({
       ? formatBRL(valor)
       : aplicarSinal(formatarMoeda(valor, moeda), valor, sinal);
 
+  const tomPintado = tomDoValor(valor, tone);
+
   const numero = (
     <span
       data-fin-money="ok"
       aria-label={ariaLabel}
       className={cn(
-        moneyVariants({ size: degrau, tone, align: alinhamento }),
+        moneyVariants({ size: degrau, tone: tomPintado, align: alinhamento }),
         'inline-block',
         LARGURA_MINIMA[degrau],
         className,

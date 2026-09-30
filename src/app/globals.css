@@ -2062,3 +2062,19 @@
   }
   .lp-cartao:hover { transform: none; }
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Gaveta de navegação do celular.
+
+   Só entram sob `motion-safe:`, então quem pede menos movimento no sistema
+   recebe a gaveta já posicionada, sem deslizar.
+   ────────────────────────────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
