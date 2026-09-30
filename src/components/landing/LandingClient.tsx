@@ -144,7 +144,10 @@ export function LandingClient() {
       .catch(() => setCarregandoPlanos(false));
   }, [router]);
 
-  useRevelacaoNoScroll();
+  // A lista de planos chega por fetch, DEPOIS da primeira renderização. O
+  // observador precisa ser refeito quando ela chega, senão os cartões nascem
+  // escondidos e nunca são revelados — ninguém os observa.
+  useRevelacaoNoScroll(planos.length);
 
   return (
     <div className="lp min-h-screen">
@@ -384,7 +387,7 @@ export function LandingClient() {
  * uma vez — bloco que reaparece não anima de novo, porque repetir a
  * animação a cada subida e descida cansa.
  */
-function useRevelacaoNoScroll() {
+function useRevelacaoNoScroll(conteudoMudou: number) {
   const observador = useRef<IntersectionObserver | null>(null);
 
   useEffect(() => {
@@ -413,12 +416,14 @@ function useRevelacaoNoScroll() {
       { rootMargin: '0px 0px -12% 0px', threshold: 0.1 },
     );
 
+    // Quem já apareceu continua aparecendo: `data-visivel` fica no elemento,
+    // então refazer o observador não faz a página piscar.
     alvos.forEach(el => observador.current?.observe(el));
     return () => {
       observador.current?.disconnect();
       raiz.removeAttribute('data-anima');
     };
-  }, []);
+  }, [conteudoMudou]);
 }
 
 function PlanoCard({ plano, atraso }: { plano: Plano; atraso: number }) {
