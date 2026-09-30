@@ -59,9 +59,14 @@ const MES = [
  */
 const RESPOSTAS = [
   {
-    pergunta: 'Essa viagem deu lucro?',
-    resposta: 'Rentabilidade por venda',
-    desc: 'A margem de cada venda depois do repasse ao fornecedor, da comissão do vendedor e da taxa da plataforma. Não é o valor do pacote.',
+    pergunta: 'Quanto dessa venda foi meu?',
+    resposta: 'Faturamento, comissão e lucro',
+    desc: 'Os três números aparecem separados em cada venda. O repasse ao fornecedor sai da conta antes de qualquer conclusão sobre resultado.',
+  },
+  {
+    pergunta: 'A comissão do mês pagou a empresa?',
+    resposta: 'DRE da agência',
+    desc: 'A soma das comissões contra folha, aluguel, sistema e imposto. É a conta que diz se o mês fechou no azul, não o volume vendido.',
   },
   {
     pergunta: 'Vou ter dinheiro em novembro?',
@@ -182,24 +187,24 @@ export function LandingClient() {
         <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
           <div>
             <p className="lp-eyebrow">Financeiro para agência de viagem</p>
-            {/* Duas linhas declaradas, não quebra de sorte: deixar o
-                navegador escolher onde parte punha "é" sozinho numa linha. */}
+            {/* Linhas declaradas, não quebra de sorte. */}
             <h1 className="lp-display mt-5 text-[2.5rem] sm:text-[3.25rem] lg:text-[3.5rem]">
-              <span className="block">Vender R$ 20.000</span>
-              <span className="block">não é faturar R$ 20.000.</span>
+              <span className="block">Comissão</span>
+              <span className="block">não é lucro.</span>
             </h1>
             <div className="mt-6 h-[3px] w-14 bg-[#004aad]" />
             <p className="mt-6 max-w-lg text-[15px] leading-relaxed text-[#475569]">
-              Na venda agenciada, o repasse ao fornecedor passa pela sua conta e não é
-              sua receita. O Entur OS Fin separa o que é repasse do que é seu, emite a
-              nota sobre a comissão e fecha o mês em cima do que sobrou.
+              A agência vive da comissão do que vende. Mas entre a comissão e o lucro
+              ainda estão o vendedor, a plataforma, o imposto e a folha. O Entur OS Fin
+              separa os três números que quase toda agência trata como um só, e mostra
+              qual deles é dinheiro da empresa.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Link
                 href="/signup"
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#004aad] px-6 py-3.5 font-semibold text-white transition-colors hover:bg-[#003B8A] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#004aad]"
               >
-                Começar grátis por 14 dias <ArrowRight aria-hidden="true" className="size-4" />
+                Ver o lucro da minha agência <ArrowRight aria-hidden="true" className="size-4" />
               </Link>
               <Link
                 href="#planos"
@@ -223,11 +228,12 @@ export function LandingClient() {
           <div className="lp-reveal">
             <p className="lp-eyebrow">O mês inteiro</p>
             <h2 className="lp-display mt-4 max-w-2xl text-[1.875rem] sm:text-[2.25rem]">
-              Do dinheiro que entra ao mês que fecha.
+              O caminho do faturamento até o lucro.
             </h2>
             <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-[#475569]">
-              Seis telas, na ordem em que o mês acontece. Nenhuma delas pede que você
-              redigite o que já está em outra.
+              Seis telas, na ordem em que o mês acontece. Cada uma tira do faturamento
+              uma coisa que não é sua, e nenhuma pede que você redigite o que já está
+              em outra.
             </p>
           </div>
 
@@ -258,7 +264,7 @@ export function LandingClient() {
           <div className="lp-reveal">
             <p className="lp-eyebrow">O que ele responde</p>
             <h2 className="lp-display mt-4 max-w-2xl text-[1.875rem] sm:text-[2.25rem]">
-              As perguntas que a planilha não responde sozinha.
+              As perguntas que separam vender bem de ganhar dinheiro.
             </h2>
           </div>
 
@@ -289,11 +295,12 @@ export function LandingClient() {
             <div className="lp-reveal">
               <p className="lp-eyebrow">Por que não serve um financeiro genérico</p>
               <h2 className="lp-display mt-4 text-[1.875rem] sm:text-[2.25rem]">
-                Quatro coisas que só existem aqui.
+                Todo sistema comum para no primeiro número.
               </h2>
               <p className="mt-4 text-[15px] leading-relaxed text-[#475569]">
-                Um sistema financeiro comum trata a venda como receita. Numa agência,
-                isso infla o faturamento, infla o imposto e esconde a margem.
+                Ele trata a venda como receita e chama isso de faturamento. Numa
+                agência, isso infla o resultado, infla o imposto e esconde o único
+                número que paga as contas.
               </p>
             </div>
 
@@ -351,12 +358,17 @@ export function LandingClient() {
       {/* ── Fechamento ───────────────────────────────────────────────── */}
       <section className="border-t border-[#E3E8F0]" style={{ background: '#0F1621' }}>
         <div className="mx-auto max-w-6xl px-5 py-20 text-center">
-          <h2 className="lp-display mx-auto max-w-2xl text-[1.875rem] text-white sm:text-[2.25rem]">
-            Descubra quanto a sua agência ganhou de verdade no mês passado.
+          <p className="lp-eyebrow" style={{ color: 'rgba(230,237,247,0.5)' }}>
+            Segurança financeira
+          </p>
+          <h2 className="lp-display mx-auto mt-4 max-w-2xl text-[1.875rem] text-white sm:text-[2.25rem]">
+            Saber qual dos três números você está olhando.
           </h2>
-          <p className="mx-auto mt-5 max-w-lg text-[15px] leading-relaxed" style={{ color: 'rgba(230,237,247,0.7)' }}>
-            Importe as vendas, conecte o banco e feche um mês. Se o número não te
-            surpreender, cancele.
+          <p className="mx-auto mt-5 max-w-xl text-[15px] leading-relaxed" style={{ color: 'rgba(230,237,247,0.7)' }}>
+            Agência quebra vendendo bem. Quando faturamento, comissão e lucro viram um
+            número só, a decisão de contratar, de dar desconto e de retirar pró-labore é
+            tomada em cima do número errado. Importe as vendas, conecte o banco e feche
+            um mês: o seu lucro real aparece na primeira semana.
           </p>
           <Link
             href="/signup"
@@ -371,7 +383,7 @@ export function LandingClient() {
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-5 py-8 sm:flex-row sm:items-center sm:justify-between">
           <Logo variant="sidebar" href="/" />
           <p className="text-xs text-[#5B6878]">
-            Entur OS Fin · Sistema financeiro para agências de viagem
+            Entur OS Fin · Faturamento, comissão e lucro separados
           </p>
         </div>
       </footer>
