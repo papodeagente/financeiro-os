@@ -1903,3 +1903,162 @@
   [data-fin-table] tr { break-inside: avoid; }
   a[href]::after { content: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   LANDING PAGE — "A Razão"
+   ═══════════════════════════════════════════════════════════════════════
+
+   A página pública usa as MESMAS fontes e as MESMAS cores do produto
+   (Inter Tight no display, Inter no texto, JetBrains Mono nos números,
+   --fin-accent no azul). Não é economia de esforço: é o que faz o site e o
+   sistema parecerem a mesma coisa quando a pessoa entra depois de assinar.
+
+   O elemento de assinatura é a RAZÃO: uma venda agenciada se decompondo,
+   linha a linha, até o que de fato fica com a agência. Ele carrega a tese
+   do produto sem precisar de adjetivo, e é a única peça com movimento
+   orquestrado na página. Todo o resto é quieto de propósito.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.lp {
+  --lp-ink: #1A1A1A;
+  --lp-ink-2: #5B6878;
+  --lp-ground: #F7F8FC;
+  --lp-panel: #0F1621;
+  --lp-panel-2: #172131;
+  --lp-line: #E3E8F0;
+  background: var(--lp-ground);
+  color: var(--lp-ink);
+}
+
+/* Os números vivem numa fonte de número. Tabular para as colunas
+   alinharem na vírgula, que é o que faz uma coluna de dinheiro ser lida
+   como conta e não como texto. */
+.lp-num {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.02em;
+}
+
+.lp-display {
+  font-family: var(--font-inter-tight), var(--font-inter), system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.02;
+}
+
+.lp-eyebrow {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--lp-ink-2);
+}
+
+/* ── A Razão ─────────────────────────────────────────────────────────── */
+
+.lp-razao {
+  background: var(--lp-panel);
+  color: #E6EDF7;
+  border-radius: 14px;
+  box-shadow: 0 24px 60px -28px rgba(15, 22, 33, 0.55);
+}
+
+.lp-razao-linha {
+  opacity: 0;
+  transform: translateY(6px);
+  animation: lp-linha 520ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+
+@keyframes lp-linha {
+  to { opacity: 1; transform: none; }
+}
+
+/* A régua que fecha a conta cresce da esquerda, como quem risca o total. */
+.lp-razao-regua {
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: lp-regua 420ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+
+@keyframes lp-regua {
+  to { transform: scaleX(1); }
+}
+
+/* ── Revelação no scroll ─────────────────────────────────────────────── */
+
+/* O CONTEÚDO NASCE VISÍVEL.
+   O estado escondido só entra depois que o JavaScript assume a animação
+   (`data-anima="1"` no container). Sem isso, um erro de script, um
+   bloqueador ou um navegador sem IntersectionObserver deixariam a página
+   inteira em branco abaixo do herói — e uma landing invisível é pior que
+   uma landing sem animação. */
+.lp[data-anima='1'] .lp-reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 620ms cubic-bezier(0.2, 0.7, 0.3, 1),
+              transform 620ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.lp[data-anima='1'] .lp-reveal[data-visivel='1'] {
+  opacity: 1;
+  transform: none;
+}
+
+/* ── O trilho do mês ─────────────────────────────────────────────────── */
+
+.lp-trilho {
+  scrollbar-width: none;
+}
+.lp-trilho::-webkit-scrollbar { display: none; }
+
+.lp-etapa {
+  position: relative;
+}
+
+/* O traço entre as etapas é a continuidade do mês, não enfeite.
+   Ele só existe onde as seis etapas cabem numa linha só (lg): em duas
+   linhas, o traço da terceira ficaria pendurado apontando para o nada.
+   A medida vai do fim de um círculo ao começo do próximo — o círculo tem
+   2.125rem e o vão da grade, 1.5rem —, senão a linha atravessa o número
+   seguinte e sobra do outro lado. */
+@media (min-width: 1024px) {
+  .lp-etapa:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 1.0625rem;
+    left: 2.5rem;
+    width: calc(100% - 1.375rem);
+    height: 1px;
+    background: var(--lp-line);
+  }
+}
+
+.lp-cartao {
+  background: #FFFFFF;
+  border: 1px solid var(--lp-line);
+  border-radius: 12px;
+  transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+}
+
+.lp-cartao:hover {
+  border-color: rgba(0, 74, 173, 0.35);
+  box-shadow: 0 10px 30px -18px rgba(15, 22, 33, 0.35);
+  transform: translateY(-2px);
+}
+
+/* Quem pediu menos movimento recebe o estado final, não uma versão pior:
+   a razão aparece somada, a régua inteira, os blocos no lugar. */
+@media (prefers-reduced-motion: reduce) {
+  .lp-razao-linha,
+  .lp-razao-regua {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .lp[data-anima='1'] .lp-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .lp-cartao:hover { transform: none; }
+}
