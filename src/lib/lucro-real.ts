@@ -154,7 +154,7 @@ export function custoFixoDoMes(
   const doMes = contasPagar.filter(cp => mesDe(cp.data_vencimento) === mes && vivo(cp.status));
   const ehRepasse = (cp: ContaPagar) => !!cp.auto_gerado && cp.origem === 'VENDA';
   const ehComissaoDeVendedor = (cp: ContaPagar) =>
-    /comiss[aã]o/i.test(String((cp as any).descricao ?? '')) && !ehRepasse(cp);
+    (!!cp.origem_comissao_id || /comiss[aã]o/i.test(String(cp.descricao ?? ''))) && !ehRepasse(cp);
 
   const idsDoPrefixo = (prefixo: string) =>
     new Set(planoContas.filter(p => String(p.codigo ?? '').startsWith(prefixo)).map(p => p.id));

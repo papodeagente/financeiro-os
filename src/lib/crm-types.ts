@@ -432,6 +432,12 @@ export interface ContaPagar {
   origem_item_id?: string;
   auto_gerado?: boolean;
   /**
+   * A comissão de vendedor que gerou esta conta (ver comissao-conta.ts).
+   * É o que permite ao Lucro real tirá-la do custo fixo: ela já entra na
+   * venda, na linha do vendedor, e contaria duas vezes.
+   */
+  origem_comissao_id?: string;
+  /**
    * Custo que virou dívida sem ninguém a quem pagar: o CRM mandou o valor,
    * mas não o fornecedor. A conta existe (o dinheiro vai sair), só falta
    * dizer para quem. A tela de contas a pagar mostra isso e deixa preencher.

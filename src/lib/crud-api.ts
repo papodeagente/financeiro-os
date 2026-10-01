@@ -15,6 +15,16 @@ export interface CrudOpcoes {
    */
   somenteFinanceiro?: boolean;
   /**
+   * Efeito colateral depois de gravar (POST ou PUT), com o item já salvo.
+   *
+   * Existe porque algumas tabelas carregam consequência financeira que não
+   * pode depender da tela lembrar de chamar outra rota: a comissão de
+   * vendedor vira conta a pagar aqui, qualquer que seja o caminho de
+   * gravação. Falha no gancho NÃO desfaz a gravação (ela já aconteceu) e
+   * volta como `aviso` na resposta, para a tela mostrar.
+   */
+  aposGravar?: (tenantId: string, item: Record<string, unknown>) => Promise<void>;
+  /**
    * Impede que o POST crie ou rebaixe uma conta em estado de baixa.
    *
    * O POST é um upsert cego que NÃO move caixa; só o PUT move. Duas coisas
@@ -40,6 +50,19 @@ async function guardaFinanceira(opcoes: CrudOpcoes, modo: 'ler' | 'escrever') {
   const bloqueio = bloqueioFinanceiro(await getSession(), modo);
   if (!bloqueio) return null;
   return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
+}
+
+/** Roda o efeito colateral da tabela. Erro vira aviso, nunca desfaz a gravação. */
+async function rodarGancho(opcoes: CrudOpcoes, tenantId: string, item: Record<string, unknown>): Promise<string | null> {
+  if (!opcoes.aposGravar) return null;
+  try {
+    await opcoes.aposGravar(tenantId, item);
+    return null;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'efeito colateral falhou';
+    console.error('[crud] aposGravar falhou:', msg);
+    return msg;
+  }
 }
 
 export function createCrudHandlers(tableName: string, indexColumns: string[] = [], opcoes: CrudOpcoes = {}) {
@@ -111,7 +134,8 @@ export function createCrudHandlers(tableName: string, indexColumns: string[] = [
         paramValues
       );
 
-      return NextResponse.json(item);
+      const aviso = await rodarGancho(opcoes, tenantId, item as Record<string, unknown>);
+      return NextResponse.json(aviso ? { ...item, aviso } : item);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
       return NextResponse.json({ error: msg }, { status: 500 });
@@ -189,7 +213,8 @@ export function createCrudItemHandlers(tableName: string, indexColumns: string[]
         paramValues
       );
 
-      return NextResponse.json(item);
+      const aviso = await rodarGancho(opcoes, tenantId, { ...(item as Record<string, unknown>), id });
+      return NextResponse.json(aviso ? { ...item, aviso } : item);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
       return NextResponse.json({ error: msg }, { status: 500 });
