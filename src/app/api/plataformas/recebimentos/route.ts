@@ -55,7 +55,30 @@ export async function GET(req: Request) {
         .map(c => ({ ...c, pontuacao: pontuar(pagamento, c) }))
         .sort((a, b) => b.pontuacao.pontos - a.pontuacao.pontos)
         .slice(0, 30);
-      return NextResponse.json({ candidatos: lista });
+      // As contas pendentes de cada candidata: é o que a unificação vai
+      // substituir, e a tela mostra isso ANTES de o operador confirmar.
+      const ids = lista.map(c => c.venda_id);
+      const pendentes = new Map<string, Array<{ id: string; status: string; valor_final: number; data_vencimento: string }>>();
+      if (ids.length > 0) {
+        const { rows: crs } = await pool.query(
+          `SELECT id, COALESCE(venda_id, data->>'origem_venda_id', data->>'venda_id') AS venda, data
+             FROM contas_receber
+            WHERE tenant_id = $1
+              AND (venda_id = ANY($2::text[]) OR data->>'origem_venda_id' = ANY($2::text[]) OR data->>'venda_id' = ANY($2::text[]))
+              AND COALESCE(data->>'plataforma_transacao', '') = ''`,
+          [tenantId, ids],
+        );
+        for (const r of crs) {
+          const d = (r.data ?? {}) as Record<string, unknown>;
+          const v = String(r.venda ?? '');
+          if (!pendentes.has(v)) pendentes.set(v, []);
+          pendentes.get(v)!.push({ id: String(r.id), status: String(d.status ?? ''), valor_final: Number(d.valor_final ?? 0), data_vencimento: String(d.data_vencimento ?? '') });
+        }
+      }
+      return NextResponse.json({
+        total_plataforma: Number(t.valor_bruto ?? 0),
+        candidatos: lista.map(c => ({ ...c, contas_da_venda: pendentes.get(c.venda_id) ?? [] })),
+      });
     }
 
     const hoje = hojeISO();
@@ -96,12 +119,12 @@ export async function POST(req: Request) {
 
     const acao = String(body.acao ?? '');
     if (acao === 'vincular') {
-      await vincularVenda(tenantId, plataforma, idTransacao, String(body.venda_id ?? ''));
-      return NextResponse.json({ ok: true });
+      const unificacao = await vincularVenda(tenantId, plataforma, idTransacao, String(body.venda_id ?? ''));
+      return NextResponse.json({ ok: true, unificacao });
     }
     if (acao === 'direta') {
-      await marcarVendaDireta(tenantId, plataforma, idTransacao);
-      return NextResponse.json({ ok: true });
+      const desfeito = await marcarVendaDireta(tenantId, plataforma, idTransacao);
+      return NextResponse.json({ ok: true, ...desfeito });
     }
     return NextResponse.json({ error: 'Ação desconhecida.' }, { status: 400 });
   } catch (e) {

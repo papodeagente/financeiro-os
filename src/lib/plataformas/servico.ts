@@ -25,6 +25,7 @@ import { round2, num, hojeISO, addDias } from '../money';
 import { emTransacao, aplicarMovimentoCaixaAtomico, type ExecutorSQL } from '../caixa-atomico';
 import { cifrar, decifrar, mascarar } from '../cofre';
 import { acharAdapter } from './index';
+import { unificarRecebimento, type ResultadoUnificacao } from './unificar-db';
 import {
   decidir, type CandidatoVenda, type Decisao, type PagamentoParaConciliar,
 } from './conciliacao';
@@ -332,6 +333,8 @@ export interface ResultadoSincronizacao {
   status_conciliacao: string;
   venda_id: string;
   conciliacao: Decisao | null;
+  /** O que o vínculo substituiu nas contas da venda; null quando não há vínculo. */
+  unificacao: ResultadoUnificacao | null;
 }
 
 /**
@@ -447,6 +450,15 @@ export async function sincronizarTransacao(
     [generateId(), tenantId, plataforma, idTransacao, clienteId, vendaId, statusConciliacao, JSON.stringify(dados)],
   );
 
+  // Vínculo (decidido agora ou antes) UNIFICA: o que a plataforma recebeu
+  // consome as contas pendentes da venda no CRM, em vez de ficar ao lado
+  // delas. É idempotente, então roda a cada aviso de status: parcela nova
+  // consome mais, aviso repetido não consome nada.
+  let unificacao: ResultadoUnificacao | null = null;
+  if (statusConciliacao === 'VINCULADA' && vendaId) {
+    unificacao = await unificarRecebimento(exec, tenantId, { vendaId, plataforma, idTransacao });
+  }
+
   return {
     id_transacao: idTransacao,
     criada: anterior === null,
@@ -455,6 +467,7 @@ export async function sincronizarTransacao(
     status_conciliacao: statusConciliacao,
     venda_id: vendaId,
     conciliacao: decisao,
+    unificacao,
   };
 }
 

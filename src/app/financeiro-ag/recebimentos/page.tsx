@@ -22,7 +22,8 @@ import { Money } from '@/components/fin/Money';
 import { PageHeader } from '@/components/fin/PageHeader';
 import { MolduraDaPagina } from '@/components/fin/MolduraDaPagina';
 import { toast } from '@/lib/toast';
-import { formatDate } from '@/lib/utils';
+import { formatBRL, formatDate } from '@/lib/utils';
+import { descreverPlano, planoDeUnificacao, type PlanoDeUnificacao } from '@/lib/plataformas/unificacao';
 import { hojeISO } from '@/lib/money';
 
 interface Item {
@@ -60,6 +61,23 @@ interface Candidato {
   valor_total: number;
   data_venda: string;
   pontuacao: { pontos: number; confianca: string; motivos: string[] };
+  /** As contas a receber da própria venda: é o que a unificação substitui. */
+  contas_da_venda?: Array<{ id: string; status: string; valor_final: number; data_vencimento: string }>;
+}
+
+const ROTULO_CONFIANCA: Record<string, string> = { ALTA: 'alta', MEDIA: 'média', BAIXA: 'baixa' };
+
+/** O que dizer depois de unificar: números, não "sucesso". */
+function resumoDaUnificacao(u: PlanoDeUnificacao | null | undefined): string {
+  if (!u) return 'Recebimento unificado com a venda.';
+  const canceladas = u.acoes.filter(a => a.acao === 'CANCELAR').length;
+  const reduzidas = u.acoes.filter(a => a.acao === 'REDUZIR').length;
+  const partes: string[] = [];
+  if (canceladas > 0) partes.push(`${canceladas} ${canceladas === 1 ? 'conta substituída' : 'contas substituídas'}`);
+  if (reduzidas > 0) partes.push(`${reduzidas} ${reduzidas === 1 ? 'reduzida' : 'reduzidas'}`);
+  if (u.restante > 0) partes.push(`${formatBRL(u.restante)} ainda a receber`);
+  if (u.excedente > 0) partes.push(`${formatBRL(u.excedente)} além do previsto na venda`);
+  return partes.length > 0 ? `Recebimento unificado: ${partes.join(', ')}.` : 'Recebimento unificado: a venda não tinha conta pendente.';
 }
 
 const FILTROS: Array<{ id: string; rotulo: string }> = [
@@ -89,6 +107,7 @@ export default function RecebimentosPlataformasPage() {
 
   const [escolhendo, setEscolhendo] = useState<Item | null>(null);
   const [candidatos, setCandidatos] = useState<Candidato[]>([]);
+  const [totalPlataforma, setTotalPlataforma] = useState(0);
   const [carregandoCandidatos, setCarregandoCandidatos] = useState(false);
   const [importando, setImportando] = useState('');
 
@@ -121,7 +140,11 @@ export default function RecebimentosPlataformasPage() {
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error ?? 'Não foi possível concluir.');
-      toast.success(acao === 'vincular' ? 'Recebimento vinculado à venda.' : 'Registrado como venda direta.');
+      toast.success(acao === 'vincular'
+        ? resumoDaUnificacao(j.unificacao)
+        : j.restauradas > 0
+          ? `Registrado como venda direta. ${j.restauradas} ${j.restauradas === 1 ? 'conta da venda voltou' : 'contas da venda voltaram'} ao que era.`
+          : 'Registrado como venda direta.');
       setEscolhendo(null);
       await carregar();
     } catch (e) {
@@ -139,6 +162,7 @@ export default function RecebimentosPlataformasPage() {
       const j = await r.json();
       if (!r.ok) throw new Error(j.error ?? 'Não foi possível buscar as vendas.');
       setCandidatos(j.candidatos ?? []);
+      setTotalPlataforma(Number(j.total_plataforma ?? item.bruto ?? 0));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Erro');
     } finally {
@@ -210,11 +234,11 @@ export default function RecebimentosPlataformasPage() {
       id: 'acoes', cabecalho: '', tipo: 'acoes',
       render: r => (
         <div className="flex gap-1 justify-end">
-          <Button size="sm" variant="ghost" onClick={() => void abrirEscolha(r)} title="Vincular a uma venda do CRM">
+          <Button size="sm" variant="ghost" onClick={() => void abrirEscolha(r)} title="Unificar com uma venda do CRM">
             <Link2 className="h-4 w-4" />
           </Button>
           {r.status_conciliacao !== 'DIRETA' && (
-            <Button size="sm" variant="ghost" onClick={() => void agir(r, 'direta')} title="Registrar como venda direta">
+            <Button size="sm" variant="ghost" onClick={() => void agir(r, 'direta')} title="Registrar como venda direta (desfaz a unificação, se houver)">
               <ExternalLink className="h-4 w-4" />
             </Button>
           )}
@@ -324,10 +348,15 @@ export default function RecebimentosPlataformasPage() {
       {escolhendo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setEscolhendo(null)}>
           <div className="w-full max-w-2xl rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-5" onClick={e => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold">Vincular a uma venda do CRM</h2>
+            <h2 className="text-lg font-semibold">Unificar com uma venda do CRM</h2>
             <p className="text-sm text-[var(--fin-text-muted)] mt-1">
               {escolhendo.comprador || escolhendo.email} · <Money valor={escolhendo.bruto} estado="ok" /> ·{' '}
               {escolhendo.data_venda ? formatDate(escolhendo.data_venda) : 'sem data'}
+            </p>
+            <p className="text-sm text-[var(--fin-text-muted)] mt-2">
+              Este recebimento passa a ser o recebimento da venda: as contas pendentes que ele cobre
+              são substituídas e o que faltar continua a receber. Nada que já foi recebido muda, e
+              &ldquo;É venda direta&rdquo; desfaz.
             </p>
 
             <div className="mt-4 max-h-[50vh] overflow-auto">
@@ -348,21 +377,27 @@ export default function RecebimentosPlataformasPage() {
                   </p>
                 ) : (
                   <ul className="space-y-2">
-                    {candidatos.map(c => (
-                      <li key={c.venda_id} className="flex items-center justify-between gap-3 rounded-[var(--fin-r-md)] border border-[var(--fin-border)] p-3">
-                        <div className="min-w-0">
-                          <div className="font-medium truncate">{c.cliente_nome || 'Sem cliente'}</div>
-                          <div className="text-xs text-[var(--fin-text-muted)]">
-                            {c.data_venda ? formatDate(c.data_venda) : 'sem data'} · confiança {c.pontuacao.confianca.toLowerCase()}
-                            {c.pontuacao.motivos.length > 0 && ` · ${c.pontuacao.motivos.join(', ')}`}
+                    {candidatos.map(c => {
+                      const plano = planoDeUnificacao(c.contas_da_venda ?? [], totalPlataforma);
+                      return (
+                        <li key={c.venda_id} className="flex items-center justify-between gap-3 rounded-[var(--fin-r-md)] border border-[var(--fin-border)] p-3">
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">{c.cliente_nome || 'Sem cliente'}</div>
+                            <div className="text-xs text-[var(--fin-text-muted)]">
+                              {c.data_venda ? formatDate(c.data_venda) : 'sem data'} · confiança {ROTULO_CONFIANCA[c.pontuacao.confianca] ?? c.pontuacao.confianca.toLowerCase()}
+                              {c.pontuacao.motivos.length > 0 && ` · ${c.pontuacao.motivos.join(', ')}`}
+                            </div>
+                            <div className="text-xs mt-1 text-[var(--fin-text-2)]">
+                              {descreverPlano(plano, totalPlataforma, formatBRL)}
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <Money valor={c.valor_total} estado="ok" />
-                          <Button size="sm" onClick={() => void agir(escolhendo, 'vincular', c.venda_id)}>Vincular</Button>
-                        </div>
-                      </li>
-                    ))}
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Money valor={c.valor_total} estado="ok" />
+                            <Button size="sm" onClick={() => void agir(escolhendo, 'vincular', c.venda_id)}>Unificar</Button>
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </DataState>

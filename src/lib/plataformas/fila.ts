@@ -14,6 +14,7 @@ import pool from '../db';
 import { round2, num } from '../money';
 import { emTransacao, type ExecutorSQL } from '../caixa-atomico';
 import { ErroPlataforma } from './servico';
+import { desfazerUnificacao, unificarRecebimento, type ResultadoUnificacao } from './unificar-db';
 import type { TransacaoNormalizada } from './tipos';
 import type { Decisao } from './conciliacao';
 
@@ -215,11 +216,11 @@ export async function listarRecebimentos(
  */
 export async function vincularVenda(
   tenantId: string, plataforma: string, idTransacao: string, vendaId: string,
-): Promise<void> {
+): Promise<ResultadoUnificacao> {
   if (!pool) throw new ErroPlataforma('Banco indisponível.');
   if (!vendaId) throw new ErroPlataforma('Informe a venda.');
 
-  await emTransacao(async (exec: ExecutorSQL) => {
+  return emTransacao(async (exec: ExecutorSQL) => {
     const venda = await exec.query(
       `SELECT id FROM vendas_crm WHERE id = $1 AND tenant_id = $2 LIMIT 1`,
       [vendaId, tenantId],
@@ -255,15 +256,23 @@ export async function vincularVenda(
         WHERE id = $1 AND tenant_id = $2`,
       [vendaId, tenantId, plataforma, idTransacao],
     );
+
+    // UNIFICAR, não só apontar. Até 01/10/2026 vincular deixava as contas
+    // da venda no CRM de pé ao lado das da plataforma: a mesma viagem duas
+    // vezes no contas a receber, na receita e no caixa projetado.
+    return unificarRecebimento(exec, tenantId, { vendaId, plataforma, idTransacao });
   });
 }
 
 /** Marca como venda direta: não veio de negociação do CRM, e está certo assim. */
 export async function marcarVendaDireta(
   tenantId: string, plataforma: string, idTransacao: string,
-): Promise<void> {
+): Promise<{ restauradas: number }> {
   if (!pool) throw new ErroPlataforma('Banco indisponível.');
-  await emTransacao(async (exec: ExecutorSQL) => {
+  return emTransacao(async (exec: ExecutorSQL) => {
+    // Se esta transação tinha consumido contas de uma venda, elas voltam
+    // ao que eram: venda direta não substitui nada.
+    const desfeito = await desfazerUnificacao(exec, tenantId, plataforma, idTransacao);
     const r = await exec.query(
       `UPDATE plataformas_transacoes
           SET venda_id = '', status_conciliacao = 'DIRETA', updated_at = NOW()
@@ -283,5 +292,6 @@ export async function marcarVendaDireta(
           AND data->>'plataforma_transacao' = $3`,
       [tenantId, plataforma, idTransacao],
     );
+    return desfeito;
   });
 }
