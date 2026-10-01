@@ -118,7 +118,12 @@ export default function VendaDetalhe() {
 
   const clienteNome = nomeDoClienteOuTraco(cliente);
 
-  const lucro = (venda.valor_final || 0) - (venda.valor_total_custo || 0);
+  // COMISSÃO, não lucro. É valor final menos o repasse ao fornecedor: o que
+  // ficou da agência nesta venda. Ainda vão sair daqui o vendedor, a taxa da
+  // plataforma, o imposto e a fatia do custo fixo — isso é o relatório Lucro
+  // real. O card se chamava "Lucro", e era a confusão que a página pública
+  // diz combater, dentro do próprio produto.
+  const comissaoDaAgencia = (venda.valor_final || 0) - (venda.valor_total_custo || 0);
 
   return (
     <div className="bg-[var(--t-bg)] text-[var(--t-text)] min-h-full">
@@ -164,7 +169,7 @@ export default function VendaDetalhe() {
           <SummaryCard label="Valor Venda" value={fmt(venda.valor_total_venda || 0)} color="text-blue-400" />
           <SummaryCard label="Desconto" value={fmt(venda.desconto || 0)} color="text-red-400" />
           <SummaryCard label="Valor Final" value={fmt(venda.valor_final || 0)} color="text-green-400" />
-          <SummaryCard label="Lucro" value={fmt(lucro)} color={lucro >= 0 ? 'text-green-400' : 'text-red-400'} extra={
+          <SummaryCard label="Comissão da agência" value={fmt(comissaoDaAgencia)} color={comissaoDaAgencia >= 0 ? 'text-green-400' : 'text-red-400'} extra={
             venda.markup_realizado ? `Markup: ${venda.markup_realizado.toFixed(1)}%` : undefined
           } />
         </div>

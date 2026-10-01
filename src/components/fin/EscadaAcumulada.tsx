@@ -44,6 +44,14 @@ export type EscadaAcumuladaProps = {
   diaDeHoje: number;
   /** A reta de ritmo. Só existe em Metas. */
   referencia?: { rotulo: string; ate: number } | null;
+  /**
+   * Um LIMIAR horizontal: o valor que o acumulado precisa cruzar. Nasceu no
+   * Lucro real, onde a pergunta é "em que dia a contribuição das vendas
+   * cobriu o custo fixo?" — e a resposta é o ponto em que a escada passa por
+   * cima desta linha. Não é a reta de ritmo (que parte do zero e inclina):
+   * limiar é reto, porque o fixo é o mesmo no dia 1 e no dia 30.
+   */
+  limiar?: { rotulo: string; valor: number } | null;
   topoDoEixo: 'dado' | 'referencia';
   formatar: (v: number) => string;
   /** Abreviação do TICK DE EIXO. Recebida por prop para o modo "ocultar
@@ -76,6 +84,7 @@ function Desenho({
   diasDoMes,
   diaDeHoje,
   referencia,
+  limiar,
   topoDoEixo,
   formatar,
   formatarEixo,
@@ -86,6 +95,7 @@ function Desenho({
   diasDoMes: number;
   diaDeHoje: number;
   referencia: { rotulo: string; ate: number } | null;
+  limiar: { rotulo: string; valor: number } | null;
   topoDoEixo: 'dado' | 'referencia';
   formatar: (v: number) => string;
   formatarEixo: (v: number) => string;
@@ -109,8 +119,8 @@ function Desenho({
 
   const totalAcumulado = porDia.length > 0 ? porDia[porDia.length - 1].acumulado : 0;
   const teto =
-    topoDoEixo === 'referencia' && referencia
-      ? Math.max(num(referencia.ate), totalAcumulado)
+    topoDoEixo === 'referencia'
+      ? Math.max(num(referencia?.ate), num(limiar?.valor), totalAcumulado)
       : totalAcumulado;
 
   const ticks = ticksArredondados(teto, 3);
@@ -201,6 +211,33 @@ function Desenho({
         />
       ) : null}
 
+      {/* O limiar é sólido pelo mesmo motivo da reta de ritmo: tracejado
+          significa ausência de dado, e o custo fixo é o dado mais certo do
+          mês. É REFERÊNCIA, não veredito, então vai na cor do eixo e nunca em
+          cor de status — a leitura "cobriu ou não cobriu" é do cruzamento,
+          não da tinta. O rótulo fica colado à linha, à esquerda, para o olho
+          ler "custo fixo" no mesmo lugar em que a escada o cruza. */}
+      {limiar && num(limiar.valor) > 0 ? (
+        <g>
+          <line
+            x1={x(1)}
+            x2={x(dias)}
+            y1={y(limiar.valor)}
+            y2={y(limiar.valor)}
+            stroke="var(--fin-eixo)"
+            strokeWidth={1}
+          />
+          <text
+            x={x(1) + 4}
+            y={/* piso-ok: posição de RÓTULO, não tamanho de marca */ Math.max(10, y(limiar.valor) - 5)}
+            fill="var(--fin-text-3)"
+            fontSize={11}
+          >
+            {`${limiar.rotulo} ${formatar(limiar.valor)}`}
+          </text>
+        </g>
+      ) : null}
+
       <path d={areaFechada} fill="var(--fin-serie-1)" fillOpacity={0.1} />
       <path
         d={caminho}
@@ -279,6 +316,7 @@ export function EscadaAcumulada({
   diasDoMes,
   diaDeHoje,
   referencia = null,
+  limiar = null,
   topoDoEixo,
   formatar,
   formatarEixo = formatarEixoBRL,
@@ -293,7 +331,7 @@ export function EscadaAcumulada({
 
   // Zero eventos não desenha. UM evento DESENHA: um degrau e um ponto é
   // verdade, não ruído.
-  if (comData.length === 0 && !referencia) {
+  if (comData.length === 0 && !referencia && !limiar) {
     return <div className={className}>{vazio ?? null}</div>;
   }
 
@@ -308,6 +346,7 @@ export function EscadaAcumulada({
             diasDoMes={diasDoMes}
             diaDeHoje={diaDeHoje}
             referencia={referencia}
+            limiar={limiar}
             topoDoEixo={topoDoEixo}
             formatar={formatar}
             formatarEixo={formatarEixo}

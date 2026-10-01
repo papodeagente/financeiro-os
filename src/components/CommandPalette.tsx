@@ -29,6 +29,7 @@ const NAVIGATION_ITEMS: CommandItem[] = [
   { id: 'destinos', label: 'Destinos', href: '/destinos', icon: <Globe className="w-4 h-4" />, section: 'navegacao' },
   { id: 'fluxo', label: 'Fluxo de caixa', href: '/financeiro-ag/fluxo-caixa', icon: <DollarSign className="w-4 h-4" />, section: 'navegacao' },
   { id: 'dre', label: 'DRE', href: '/financeiro-ag/dre', icon: <FileSpreadsheet className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'lucro-real', label: 'Lucro real', href: '/relatorios/lucro-real', icon: <TrendingUp className="w-4 h-4" />, section: 'navegacao' },
   { id: 'receber', label: 'Contas a receber', href: '/financeiro-ag/receber', icon: <Receipt className="w-4 h-4" />, section: 'navegacao' },
   { id: 'pagar', label: 'Contas a pagar', href: '/financeiro-ag/pagar', icon: <CreditCard className="w-4 h-4" />, section: 'navegacao' },
   { id: 'conciliacao', label: 'Conciliação', href: '/financeiro-ag/conciliacao', icon: <FileSpreadsheet className="w-4 h-4" />, section: 'navegacao' },

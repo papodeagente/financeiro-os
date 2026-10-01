@@ -107,6 +107,7 @@ const FINANCEIRO_MENU: SidebarSection[] = [
     title: 'Relatórios',
     items: [
       { key: 'rel-financeiro', label: 'Relatórios', icon: DollarSign, href: '/relatorios/financeiro' },
+      { key: 'rel-lucro-real', label: 'Lucro real', icon: Wallet, href: '/relatorios/lucro-real' },
       { key: 'rel-rentabilidade', label: 'Rentabilidade', icon: RentIcon, href: '/relatorios/rentabilidade' },
       { key: 'rel-comparativo', label: 'Comparativo mensal', icon: BarChart3, href: '/relatorios/comparativo' },
       { key: 'rel-taxas', label: 'Taxas de pagamento', icon: Percent, href: '/relatorios/taxas' },

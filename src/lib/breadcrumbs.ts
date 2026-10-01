@@ -72,6 +72,7 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   '/relatorios': 'Relatórios',
   '/relatorios/financeiro': 'Relatórios financeiros',
   '/relatorios/rentabilidade': 'Rentabilidade',
+  '/relatorios/lucro-real': 'Lucro real',
   '/relatorios/comparativo': 'Comparativo mensal',
   '/config/agencia': 'Configurações',
   '/config/usuarios': 'Usuários',
