@@ -123,6 +123,17 @@ export default function NovaVendaPage() {
 
   const numero = `V${Date.now().toString(36).toUpperCase()}`;
   const [venda, setVenda] = useState<VendaCRM>(() => createVendaCRM(numero));
+  // Venda aberta pela conciliação bancária: um recebimento do extrato sem
+  // venda. Ao salvar, a tela volta para a conciliação com esta venda escolhida.
+  const doExtrato = searchParams.get('extrato')
+    ? {
+        id: searchParams.get('extrato') as string,
+        valor: Number(searchParams.get('valor') ?? 0),
+        data: searchParams.get('data') ?? '',
+        descricao: searchParams.get('descricao') ?? '',
+      }
+    : null;
+  const voltarPara = doExtrato ? `/financeiro-ag/conciliacao?linha=${encodeURIComponent(doExtrato.id)}` : '/vendas';
   const [flightModalIdx, setFlightModalIdx] = useState<number | null>(null);
   const [hotelModalIdx, setHotelModalIdx] = useState<number | null>(null);
 
@@ -130,6 +141,17 @@ export default function NovaVendaPage() {
     loadEntities<Cliente>('clientes').then(setClientes);
     loadEntities<FornecedorCRM>('fornecedores-crm').then(setFornecedores);
     loadEntities<Proposta>('propostas').then(setPropostas);
+    const extratoId = searchParams.get('extrato');
+    if (extratoId) {
+      const data = searchParams.get('data') ?? '';
+      const descricao = searchParams.get('descricao') ?? '';
+      const valor = Number(searchParams.get('valor') ?? 0);
+      setVenda(prev => ({
+        ...prev,
+        data_venda: /^\d{4}-\d{2}-\d{2}$/.test(data) ? data : prev.data_venda,
+        observacoes: prev.observacoes || `Recebimento no extrato bancário: ${descricao}, ${valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.`,
+      }));
+    }
     loadGrupos().then(gs => {
       setGrupos(gs);
       // Pre-fill from grupo_id query param
@@ -575,7 +597,7 @@ export default function NovaVendaPage() {
         // Legacy flow (no itens)
         await saveEntity('vendas-crm', venda);
       }
-      router.push('/vendas');
+      router.push(doExtrato ? `${voltarPara}&venda=${encodeURIComponent(venda.id)}` : '/vendas');
     } catch {
       toast.error('Erro ao salvar venda');
       setSaving(false);
@@ -588,7 +610,7 @@ export default function NovaVendaPage() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => router.push('/vendas')}
+            onClick={() => router.push(voltarPara)}
             className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)] transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -607,6 +629,21 @@ export default function NovaVendaPage() {
           {saving ? 'Salvando...' : 'Salvar Venda'}
         </Button>
       </div>
+
+      {doExtrato && (
+        <div className="mb-6 flex items-start gap-3 rounded-[var(--fin-r-lg)] border border-[var(--fin-accent)]/30 bg-[var(--fin-accent-soft)] p-4">
+          <DollarSign className="mt-0.5 h-5 w-5 shrink-0 text-[var(--fin-accent)]" aria-hidden="true" />
+          <div className="flex flex-col gap-1">
+            <p className="fin-t-body-strong text-[var(--fin-text)]">
+              Venda para o recebimento de {doExtrato.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} no extrato
+            </p>
+            <p className="fin-t-caption text-[var(--fin-text-2)]">
+              {doExtrato.descricao ? `${doExtrato.descricao}. ` : ''}Ao salvar, você volta para a conciliação com esta venda escolhida
+              para dar baixa no recebimento.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* 1. Cliente */}
       <div className={sectionClass}>
@@ -1279,7 +1316,7 @@ export default function NovaVendaPage() {
       <div className="flex justify-end gap-3 mt-2">
         <Button
           variant="ghost"
-          onClick={() => router.push('/vendas')}
+          onClick={() => router.push(voltarPara)}
           className="text-[var(--t-text-secondary)] hover:text-[var(--t-text)] border border-[var(--t-border)]"
         >
           Cancelar

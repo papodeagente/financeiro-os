@@ -575,6 +575,13 @@ export interface ExtratoLinha {
   observacao_conciliacao: string;
   importado_em: string;
   arquivo_origem: string;
+  /**
+   * Todas as contas que esta linha concilia (ver conciliacao-servidor.ts).
+   * Uma linha pode quitar várias parcelas; lancamento_vinculado_id guarda só
+   * a primeira, para quem lê o formato antigo.
+   */
+  vinculos?: Array<{ id: string; tipo: 'CONTA_RECEBER' | 'CONTA_PAGAR'; acao: string; aplicado: number }>;
+  fitid?: string;
 }
 
 // ============================================================

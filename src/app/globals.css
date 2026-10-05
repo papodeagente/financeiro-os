@@ -2078,3 +2078,46 @@
   from { transform: translateX(-100%); }
   to   { transform: translateX(0); }
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Espera da importação de extrato (ImportacaoDeExtrato.tsx).
+
+   O brilho corre só sobre o segmento da etapa em andamento; as linhas do
+   extrato deslizam para cima conforme o servidor confirma cada uma. Quem
+   pede menos movimento recebe tudo parado e no lugar.
+   ────────────────────────────────────────────────────────────────────────── */
+@keyframes fin-importacao-brilho {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
+.fin-importacao-brilho {
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.55) 50%, transparent 100%);
+  animation: fin-importacao-brilho 1.4s ease-in-out infinite;
+}
+.dark .fin-importacao-brilho {
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.18) 50%, transparent 100%);
+}
+.fin-importacao-linha {
+  transition: transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1), background-color 220ms ease;
+}
+.fin-importacao-janela {
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 18%, #000 78%, transparent 100%);
+          mask-image: linear-gradient(180deg, transparent 0, #000 18%, #000 78%, transparent 100%);
+}
+@keyframes fin-importacao-esboco {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+.fin-importacao-esboco { animation: fin-importacao-esboco 1.2s ease-in-out infinite; }
+@keyframes fin-importacao-traco { to { stroke-dashoffset: 0; } }
+.fin-importacao-check {
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+  animation: fin-importacao-traco 420ms 80ms cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fin-importacao-brilho, .fin-importacao-esboco { animation: none; opacity: 0; }
+  .fin-importacao-esboco { opacity: 1; }
+  .fin-importacao-linha { transition: none; }
+  .fin-importacao-check { animation: none; stroke-dashoffset: 0; }
+}
