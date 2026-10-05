@@ -250,6 +250,7 @@ export interface PreviaDaNota {
     retencao_fonte: boolean;
     reforma_tributaria: boolean;
     nbs: boolean;
+    email_ao_tomador: boolean;
   };
   regime: RegimeNota;
   forma_base: FormaBaseIntermediacao;
@@ -289,6 +290,8 @@ export interface OpcoesDaNota {
   aliquota_inss?: number;
   aliquota_ir?: number;
   observacoes?: string;
+  /** Pedir ao emissor que mande a nota por e-mail ao tomador. */
+  enviar_email?: boolean;
 }
 
 /**
@@ -344,6 +347,7 @@ export async function montarPrevia(
   let capacidades = {
     deducoes: true, aliquota_por_nota: true, intermediario: true,
     retencao_fonte: false, reforma_tributaria: false, nbs: false,
+    email_ao_tomador: false,
   };
   try {
     capacidades = emissorDaConfig(config).capacidades;
@@ -434,6 +438,7 @@ export async function montarPrevia(
       deducoes: capacidades.deducoes,
       aliquota_por_nota: capacidades.aliquota_por_nota,
       intermediario: capacidades.intermediario,
+      email_ao_tomador: capacidades.email_ao_tomador,
       retencao_fonte: capacidades.retencao_fonte,
       reforma_tributaria: capacidades.reforma_tributaria,
       nbs: capacidades.nbs,
@@ -534,6 +539,7 @@ export async function emitirNota(
   let transmite = {
     deducoes: true, aliquota_por_nota: true, intermediario: true,
     retencao_fonte: false, reforma_tributaria: false, nbs: false,
+    email_ao_tomador: false,
   };
   try {
     transmite = emissorDaConfig(configParaLimite).capacidades;
@@ -587,6 +593,7 @@ export async function emitirNota(
     codigo_tributacao_municipio: opcoes.codigo_tributacao || config.codigo_tributacao_municipio,
     cnae: opcoes.cnae || config.cnae,
     serie_rps: config.serie_rps,
+    enviar_email: opcoes.enviar_email === true,
     codigo_nbs: opcoes.codigo_nbs || '',
     cst: opcoes.cst || '',
     classificacao_tributaria: opcoes.classificacao_tributaria || '',

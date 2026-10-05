@@ -69,6 +69,16 @@ export interface FormularioNota {
   // ── Outras deduções e observações. ──
   deducoes: number;
   observacoes: string;
+
+  /**
+   * Pedir ao emissor que mande a nota por e-mail ao cliente.
+   *
+   * Nasce DESMARCADO. É a única opção deste formulário que produz efeito fora
+   * do sistema — uma mensagem na caixa de entrada de um cliente real — e
+   * ligar isso sozinha mandaria e-mail para todo mundo na próxima emissão sem
+   * ninguém ter pedido.
+   */
+  enviar_email: boolean;
 }
 
 export function formularioVazio(): FormularioNota {
@@ -87,6 +97,7 @@ export function formularioVazio(): FormularioNota {
     aliquota_ir: 0,
     deducoes: 0,
     observacoes: '',
+      enviar_email: false,
   };
 }
 
@@ -258,6 +269,8 @@ export interface CapacidadesDoEmissor {
   retencao_fonte: boolean;
   reforma_tributaria: boolean;
   nbs: boolean;
+  /** O emissor despacha a nota por e-mail ao tomador depois da autorização. */
+  email_ao_tomador: boolean;
 }
 
 export type BlocoDoFormulario = 'aliquota_iss' | 'nbs' | 'reforma' | 'retencao' | 'deducoes';
@@ -344,6 +357,7 @@ export function limparIndisponiveis(form: FormularioNota, c: CapacidadesDoEmisso
     aliquota_inss: d.retencao.liberado ? form.aliquota_inss : 0,
     aliquota_ir: d.retencao.liberado ? form.aliquota_ir : 0,
     deducoes: d.deducoes.liberado ? form.deducoes : 0,
+    enviar_email: c.email_ao_tomador ? form.enviar_email : false,
   };
 }
 
@@ -393,6 +407,7 @@ export interface OpcoesTransmissiveis {
   aliquota_inss?: number;
   aliquota_ir?: number;
   deducao_manual?: number | null;
+  enviar_email?: boolean;
 }
 
 /**
@@ -408,7 +423,7 @@ export interface OpcoesTransmissiveis {
  */
 export function opcoesTransmissiveis<T extends OpcoesTransmissiveis>(
   opcoes: T,
-  c: Pick<CapacidadesDoEmissor, 'deducoes' | 'retencao_fonte' | 'reforma_tributaria' | 'nbs'>,
+  c: Pick<CapacidadesDoEmissor, 'deducoes' | 'retencao_fonte' | 'reforma_tributaria' | 'nbs' | 'email_ao_tomador'>,
 ): T {
   return {
     ...opcoes,
@@ -419,5 +434,8 @@ export function opcoesTransmissiveis<T extends OpcoesTransmissiveis>(
     aliquota_inss: c.retencao_fonte ? opcoes.aliquota_inss : 0,
     aliquota_ir: c.retencao_fonte ? opcoes.aliquota_ir : 0,
     deducao_manual: c.deducoes ? opcoes.deducao_manual : null,
+    // Emissor que não despacha e-mail não recebe o pedido: a API é chamada
+    // por integração e por curl também, não só pela tela.
+    enviar_email: c.email_ao_tomador ? opcoes.enviar_email : false,
   };
 }

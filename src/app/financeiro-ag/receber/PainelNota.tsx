@@ -26,6 +26,7 @@ import {
   temErro, validarFormulario, valoresDaNota,
   type FormularioNota, type ServicoCadastrado,
 } from '@/lib/nfse-formulario';
+import { disponibilidadeDoEnvio } from '@/lib/nfse-email';
 import { formatBRL } from '@/lib/utils';
 import { lerErroNota } from '@/lib/nfse-simples';
 import { toast } from '@/lib/toast';
@@ -44,6 +45,7 @@ interface Previa {
   capacidades: {
     deducoes: boolean; aliquota_por_nota: boolean; intermediario: boolean;
     retencao_fonte: boolean; reforma_tributaria: boolean; nbs: boolean;
+    email_ao_tomador: boolean;
   };
   regime: RegimeNota;
   forma_base: FormaBaseIntermediacao;
@@ -59,7 +61,7 @@ interface Previa {
   comissao_da_parcela: number;
   repasse_da_parcela: number;
   discriminacao: string;
-  tomador: { cpf_cnpj: string; razao_social: string };
+  tomador: { cpf_cnpj: string; razao_social: string; email: string };
   nota_existente: NotaFiscal | null;
 }
 
@@ -197,6 +199,7 @@ export function PainelNota({
     const enviado = limparIndisponiveis(form, previa?.capacidades ?? {
       deducoes: false, aliquota_por_nota: false, intermediario: false,
       retencao_fonte: false, reforma_tributaria: false, nbs: false,
+      email_ao_tomador: false,
     });
     setEmitindo(true);
     try {
@@ -222,6 +225,9 @@ export function PainelNota({
           aliquota_inss: enviado.aliquota_inss || undefined,
           aliquota_ir: enviado.aliquota_ir || undefined,
           observacoes: enviado.observacoes || undefined,
+          // Só pede o envio quando a opção estava de fato aberta: emissor que
+          // transmite e cliente com e-mail no cadastro.
+          enviar_email: envioDeEmail.liberado && enviado.enviar_email,
         }),
       });
       const corpo = await res.json();
@@ -259,8 +265,16 @@ export function PainelNota({
   const capacidades = previa?.capacidades ?? {
     deducoes: false, aliquota_por_nota: false, intermediario: false,
     retencao_fonte: false, reforma_tributaria: false, nbs: false,
+    email_ao_tomador: false,
   };
   const disponibilidade = blocosDisponiveis(capacidades);
+  // O envio depende de DUAS coisas que moram em lugares diferentes: o emissor
+  // transmitir o pedido, e o cliente ter e-mail no cadastro. Por isso não
+  // entra em blocosDisponiveis, que só conhece o emissor.
+  const envioDeEmail = disponibilidadeDoEnvio({
+    emissorEnvia: capacidades.email_ao_tomador,
+    emailDoTomador: previa?.tomador.email,
+  });
   // Rede de segurança: se o emissor mudou com o diálogo aberto, o que ele não
   // envia é zerado antes de calcular e antes de gravar.
   const naoViajam = camposQueNaoViajam({ form: limparIndisponiveis(form, capacidades), capacidades });
@@ -413,6 +427,8 @@ export function PainelNota({
                   issEhEstimativa={previa.iss_e_estimativa}
                   naoViajam={naoViajam}
                   disponibilidade={disponibilidade}
+                  envioDeEmail={envioDeEmail}
+                  emailDoTomador={previa?.tomador.email ?? ''}
                 />
               </>
             ) : (

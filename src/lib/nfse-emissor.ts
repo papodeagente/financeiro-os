@@ -81,6 +81,14 @@ export interface CapacidadesEmissor {
   reforma_tributaria: boolean;
   /** Aceita o código NBS (serviço exportado). */
   nbs: boolean;
+  /**
+   * Despacha a nota por e-mail ao tomador depois da autorização.
+   *
+   * Quem envia é o emissor: este sistema não tem servidor de e-mail, e o PDF
+   * e o XML já estão do lado dele. Sem esta capacidade a opção some da tela,
+   * em vez de virar uma caixa que não faz nada.
+   */
+  email_ao_tomador: boolean;
 }
 
 /** O que o próprio emissor diz que ainda falta para a agência poder emitir. */
@@ -243,6 +251,7 @@ export class EmissorPlugNotas implements EmissorNFSe {
     reforma_tributaria: false,
     nbs: false,
     intermediario: true,
+    email_ao_tomador: true,
   };
 
   private base(config: ConfigFiscal): string {
@@ -307,6 +316,11 @@ export class EmissorPlugNotas implements EmissorNFSe {
       // idIntegracao é a trava anti-duplicata do lado do gateway: reenviar o
       // mesmo id não gera uma segunda nota.
       idIntegracao: nota.id,
+      // Raiz do payload, como o SDK oficial do PlugNotas monta
+      // (`$nfse->setEnviarEmail(true)`). O emissor só despacha depois que a
+      // prefeitura autoriza — nota em processamento ou rejeitada não gera
+      // e-mail nenhum.
+      enviarEmail: nota.enviar_email === true,
       prestador: {
         cpfCnpj: somenteDigitos(emitente.cnpj),
         inscricaoMunicipal: somenteDigitos(emitente.inscricao_municipal),
@@ -477,6 +491,7 @@ export class EmissorSimulado implements EmissorNFSe {
     retencao_fonte: true,
     reforma_tributaria: true,
     nbs: true,
+    email_ao_tomador: true,
   };
 
   async enviarCertificado(entrada: {

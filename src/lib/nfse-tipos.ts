@@ -227,6 +227,14 @@ export interface NotaFiscal {
   protocolo: string;
   link_pdf: string;
   link_xml: string;
+  /**
+   * Pediram para o emissor mandar a nota por e-mail ao tomador.
+   *
+   * Fica GRAVADO na nota, e não só no formulário, porque é a única resposta
+   * possível a "mandaram para o cliente?" depois do fato. O envio em si
+   * acontece do lado do emissor, na autorização.
+   */
+  enviar_email: boolean;
   /** Motivo da rejeição, em texto que o usuário entenda. */
   erro: string;
 

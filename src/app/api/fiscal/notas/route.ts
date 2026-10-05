@@ -53,6 +53,10 @@ export async function POST(req: Request) {
       aliquota_inss: corpo?.aliquota_inss,
       aliquota_ir: corpo?.aliquota_ir,
       observacoes: typeof corpo?.observacoes === 'string' ? corpo.observacoes : undefined,
+      // Só `true` liga: qualquer outro valor (string, 1, ausente) é tratado
+      // como "não pediram". Mandar e-mail para o cliente de alguém por causa
+      // de um campo mal tipado é erro que sai do sistema e não volta.
+      enviar_email: corpo?.enviar_email === true,
     };
 
     const nota = await emitirNota(tenantId, contaId, opcoes, {

@@ -31,6 +31,7 @@ import {
   type ServicoCadastrado,
   type ValoresDaNota,
 } from '@/lib/nfse-formulario';
+import { resumoDoEnvio, type DisponibilidadeDoEnvio } from '@/lib/nfse-email';
 
 const CAMPO =
   'h-11 w-full rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-3 fin-t-body text-[var(--fin-text)]';
@@ -113,12 +114,22 @@ function ParDeRetencao({
  * Não é um aviso ao lado de campos editáveis: é o conteúdo do bloco. Campo
  * aberto que não viaja transfere para o usuário um risco que ele não enxerga.
  */
-function BlocoFechado({ motivo }: { motivo: string }) {
+/**
+ * `saida` tem default porque quase todo bloco fechado aqui se resolve no
+ * mesmo lugar: a escolha do emissor. O bloco do e-mail é a exceção — quando
+ * falta o e-mail, quem resolve é o cadastro do cliente, e mandar essa pessoa
+ * para a configuração fiscal seria mandá-la para a tela errada.
+ */
+function BlocoFechado({ motivo, saida }: {
+  motivo: string;
+  saida?: { rotulo: string; href: string };
+}) {
+  const destino = saida ?? { rotulo: 'Ver configuração de notas fiscais', href: '/config/fiscal' };
   return (
     <div className="rounded-[var(--fin-r-md)] border border-dashed border-[var(--fin-border-strong)] bg-[var(--fin-surface-2)] p-3">
       <p className="fin-t-caption text-[var(--fin-text-2)]">{motivo}</p>
-      <a href="/config/fiscal" className="fin-t-caption text-[var(--fin-accent)] underline">
-        Ver configuração de notas fiscais
+      <a href={destino.href} className="fin-t-caption text-[var(--fin-accent)] underline">
+        {destino.rotulo}
       </a>
     </div>
   );
@@ -126,7 +137,7 @@ function BlocoFechado({ motivo }: { motivo: string }) {
 
 export function CamposDaNota({
   form, onForm, valores, problemas, servicos, listaNacional, issEhEstimativa, naoViajam,
-  disponibilidade,
+  disponibilidade, envioDeEmail, emailDoTomador,
 }: {
   form: FormularioNota;
   onForm: (f: FormularioNota) => void;
@@ -139,6 +150,9 @@ export function CamposDaNota({
   issEhEstimativa: boolean;
   naoViajam: string[];
   disponibilidade: Record<BlocoDoFormulario, Disponibilidade>;
+  /** Se dá para pedir o envio da nota por e-mail, e por que não dá. */
+  envioDeEmail: DisponibilidadeDoEnvio;
+  emailDoTomador: string;
 }) {
   const set = <K extends keyof FormularioNota>(k: K, v: FormularioNota[K]) =>
     onForm({ ...form, [k]: v });
@@ -460,6 +474,36 @@ export function CamposDaNota({
             onChange={e => set('observacoes', e.target.value)}
           />
         </div>
+      </BlocoRecolhivel>
+
+      {/* ── Enviar a nota para o cliente ─────────────────────────────── */}
+      <BlocoRecolhivel titulo="Enviar a nota para o cliente" preenchido={form.enviar_email}>
+        {envioDeEmail.liberado ? (
+          <div className="flex flex-col gap-2">
+            <label className="flex cursor-pointer items-start gap-2.5">
+              <input
+                type="checkbox"
+                checked={form.enviar_email}
+                onChange={e => set('enviar_email', e.target.checked)}
+                className="mt-0.5 size-4 shrink-0 accent-[var(--fin-accent)]"
+              />
+              <span className="fin-t-body text-[var(--fin-text)]">
+                Mandar o PDF e o XML por e-mail para{' '}
+                <span className="font-medium">{emailDoTomador}</span>
+              </span>
+            </label>
+            <p className="fin-t-caption text-[var(--fin-text-3)]">
+              {resumoDoEnvio({ pedido: form.enviar_email, emailDoTomador })}
+            </p>
+          </div>
+        ) : (
+          <BlocoFechado
+            motivo={envioDeEmail.motivo}
+            saida={envioDeEmail.causa === 'emissor'
+              ? undefined
+              : { rotulo: 'Abrir o cadastro de clientes', href: '/pessoas/clientes' }}
+          />
+        )}
       </BlocoRecolhivel>
 
       {/* ── O que não chega na prefeitura ─────────────────────────────── */}

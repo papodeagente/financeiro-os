@@ -254,6 +254,13 @@ export class EmissorAceleraAPI implements EmissorNFSe {
     retencao_fonte: false,
     reforma_tributaria: false,
     nbs: false,
+    // DESCONHECIDO, não negado: a documentação consultada não mostra campo de
+    // envio ao tomador, e o padrão nacional não despacha e-mail por conta
+    // própria. Fica `false` porque o custo dos dois erros é assimétrico —
+    // declarar `true` sem o campo certo entrega uma caixa de seleção que não
+    // faz nada, e o usuário só descobre quando o cliente diz que não recebeu.
+    // Confirmando que a AceleraAPI envia, isto vira `true` e mais nada muda.
+    email_ao_tomador: false,
   };
 
   private token(config: ConfigFiscal): string {
