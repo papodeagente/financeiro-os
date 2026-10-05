@@ -25,6 +25,8 @@ import { PageHeader } from '@/components/fin/PageHeader';
 import { type PeriodoChave } from '@/components/fin/PeriodPicker';
 import { RecordSheet } from '@/components/fin/RecordSheet';
 import { StatusChip, rotuloStatus } from '@/components/fin/StatusChip';
+import { EtiquetaDaPlataforma } from '@/components/fin/EtiquetaDaPlataforma';
+import { descricaoSemPlataforma, nomeDaPlataforma, plataformaDaConta } from '@/lib/plataformas/rotulo';
 import { DialogBaixa } from './DialogBaixa';
 import { PainelNota } from './PainelNota';
 import type { NotaFiscal } from '@/lib/nfse-tipos';
@@ -375,18 +377,26 @@ export default function ContasReceberPage() {
       sortable: true,
       minWidth: 220,
       acessor: i => i.cliente_nome || '',
-      render: i => (
-        <span className="flex flex-col gap-[var(--fin-s-1)]">
-          <span className="fin-t-body-strong text-[var(--fin-text)]">
-            {i.cliente_nome || 'Cliente não informado'}
-          </span>
-          {i.descricao ? (
-            <span className="fin-t-caption block max-w-[42ch] truncate text-[var(--fin-text-3)]">
-              {i.descricao}
+      render: i => {
+        // A etiqueta fica na coluna que nunca some, inclusive no celular.
+        const plataforma = plataformaDaConta(i);
+        const descricao = descricaoSemPlataforma(i.descricao || '', plataforma);
+        return (
+          <span className="flex flex-col gap-[var(--fin-s-1)]">
+            <span className="fin-t-body-strong text-[var(--fin-text)]">
+              {i.cliente_nome || 'Cliente não informado'}
             </span>
-          ) : null}
-        </span>
-      ),
+            {plataforma || descricao ? (
+              <span className="flex min-w-0 max-w-[48ch] items-center gap-[var(--fin-s-2)]">
+                {plataforma && <EtiquetaDaPlataforma plataforma={plataforma} />}
+                {descricao ? (
+                  <span className="fin-t-caption min-w-0 truncate text-[var(--fin-text-3)]">{descricao}</span>
+                ) : null}
+              </span>
+            ) : null}
+          </span>
+        );
+      },
     },
     {
       id: 'vencimento',
@@ -677,6 +687,20 @@ export default function ContasReceberPage() {
           carregando: salvando,
         }}
       >
+        {(() => {
+          const editada = editId ? items.find(i => i.id === editId) : null;
+          const plataforma = plataformaDaConta(editada);
+          if (!editada || !plataforma) return null;
+          return (
+            <div className="mb-[var(--fin-s-4)] flex items-start gap-[var(--fin-s-2)] rounded-[var(--fin-r-md)] bg-[var(--fin-surface-sunken)] p-[var(--fin-s-3)]">
+              <EtiquetaDaPlataforma plataforma={plataforma} />
+              <p className="fin-t-caption text-[var(--fin-text-2)]">
+                Criada pela integração{editada.plataforma_transacao ? `, transação ${editada.plataforma_transacao}` : ''}. Valor,
+                vencimento e baixa são atualizados pela {nomeDaPlataforma(plataforma)} a cada aviso.
+              </p>
+            </div>
+          );
+        })()}
         <FormularioConta
           form={form}
           erros={errosForm}

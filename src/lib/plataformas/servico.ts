@@ -25,6 +25,7 @@ import { round2, num, hojeISO, addDias } from '../money';
 import { emTransacao, aplicarMovimentoCaixaAtomico, type ExecutorSQL } from '../caixa-atomico';
 import { cifrar, decifrar, mascarar } from '../cofre';
 import { acharAdapter } from './index';
+import { nomeDaPlataforma } from './rotulo';
 import { unificarRecebimento, type ResultadoUnificacao } from './unificar-db';
 import {
   decidir, type CandidatoVenda, type Decisao, type PagamentoParaConciliar,
@@ -577,7 +578,7 @@ async function sincronizarContas(
       grupo_id: null,
       cliente_id: ctx.clienteId,
       cliente_nome: transacao.comprador.nome || transacao.comprador.email || 'Comprador',
-      descricao: `${transacao.descricao} · ${plataforma}${sufixo}`,
+      descricao: `${transacao.descricao}${sufixo} · ${nomeDaPlataforma(plataforma)}`,
       categoria_id: '',
       centro_custo: '',
       valor_original: parcela.valor_bruto,

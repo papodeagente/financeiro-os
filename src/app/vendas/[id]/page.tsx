@@ -12,6 +12,8 @@ import { VendaCRM, Cliente, FornecedorCRM, ContaReceber, ContaPagar } from '@/li
 import { nomeDoClienteOuTraco, tipoPessoa, tipoPessoaLabel, documentoDoCliente } from '@/lib/cliente-nome';
 import { loadEntities } from '@/lib/crm-storage';
 import { Badge } from '@/components/ui/badge';
+import { EtiquetaDaPlataforma } from '@/components/fin/EtiquetaDaPlataforma';
+import { descricaoSemPlataforma, plataformaDaConta } from '@/lib/plataformas/rotulo';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/lib/toast';
 import { NegociacaoAtividade } from '@/components/vendas/NegociacaoAtividade';
@@ -318,11 +320,14 @@ export default function VendaDetalhe() {
                     <tbody className="divide-y divide-[var(--t-border)]">
                       {contasReceber.map(cr => (
                         <tr key={cr.id}>
-                          <td className="py-2 pr-3 text-[var(--t-text)]">{cr.descricao}</td>
+                          <td className="py-2 pr-3 text-[var(--t-text)]">{descricaoSemPlataforma(cr.descricao, plataformaDaConta(cr))}</td>
                           <td className="py-2 pr-3">
-                            <Badge className={`text-[10px] ${cr.origem === 'COMISSAO_FORNECEDOR' ? 'bg-purple-500/10 text-purple-400 border-purple-500/30' : 'bg-blue-500/10 text-blue-400 border-blue-500/30'}`}>
-                              {cr.origem === 'COMISSAO_FORNECEDOR' ? 'Comissao' : 'Venda'}
-                            </Badge>
+                            <span className="inline-flex flex-wrap items-center gap-1">
+                              <Badge className={`text-[10px] ${cr.origem === 'COMISSAO_FORNECEDOR' ? 'bg-purple-500/10 text-purple-400 border-purple-500/30' : 'bg-blue-500/10 text-blue-400 border-blue-500/30'}`}>
+                                {cr.origem === 'COMISSAO_FORNECEDOR' ? 'Comissao' : 'Venda'}
+                              </Badge>
+                              {plataformaDaConta(cr) && <EtiquetaDaPlataforma plataforma={plataformaDaConta(cr)!} />}
+                            </span>
                           </td>
                           <td className="py-2 pr-3 text-right font-medium text-blue-400">{fmt(cr.valor_final)}</td>
                           <td className="py-2 pr-3 text-[var(--t-text-secondary)]">{fmtDate(cr.data_vencimento)}</td>

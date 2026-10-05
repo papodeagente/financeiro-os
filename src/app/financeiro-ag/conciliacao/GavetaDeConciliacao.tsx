@@ -40,6 +40,8 @@ import { Input } from '@/components/ui/input';
 import { Field } from '@/components/fin/Field';
 import { Money } from '@/components/fin/Money';
 import { RecordSheet } from '@/components/fin/RecordSheet';
+import { EtiquetaDaPlataforma } from '@/components/fin/EtiquetaDaPlataforma';
+import { descricaoSemPlataforma, nomeDaPlataforma, plataformaDaConta } from '@/lib/plataformas/rotulo';
 
 export interface GavetaDeConciliacaoProps {
   linha: ExtratoLinha | null;
@@ -71,6 +73,8 @@ interface Grupo {
   contas: ContaConciliavel[];
   /** Detalhe de cada conta, para a lista de parcelas. */
   detalhe: Record<string, { rotulo: string; data: string }>;
+  /** Integração de onde veio o recebimento (conta solta de plataforma). */
+  plataforma: string | null;
   valor: number;
   data: string;
   nomes: string[];
@@ -161,22 +165,25 @@ export function GavetaDeConciliacao(p: GavetaDeConciliacaoProps) {
         const detalhe: Grupo['detalhe'] = {};
         for (const c of crs) {
           const parcela = c.total_parcelas > 1 ? `Parcela ${c.parcela_numero} de ${c.total_parcelas}. ` : '';
-          detalhe[c.id] = { rotulo: rotuloDaConta(conciliavelCR(c), true, parcela), data: c.data_vencimento };
+          const via = plataformaDaConta(c) ? `Via ${nomeDaPlataforma(plataformaDaConta(c)!)}. ` : '';
+          detalhe[c.id] = { rotulo: rotuloDaConta(conciliavelCR(c), true, `${via}${parcela}`), data: c.data_vencimento };
         }
         lista.push({
           chave: `venda:${v.id}`, tipo: 'venda', vendaId: v.id, clienteId: v.cliente_id || null,
           titulo: nomeCliente, sub: `Venda ${v.numero}, de ${formatDate(v.data_venda)}`,
-          contas, detalhe,
+          contas, detalhe, plataforma: null,
           valor: contas.length > 0 ? valorDeReferencia(contas, valor) : round2(v.valor_final || v.valor_total_venda || 0),
           data: v.data_venda, nomes: [nomeCliente, v.numero],
         });
       }
       for (const c of soltas) {
         const k = conciliavelCR(c);
+        const plataforma = plataformaDaConta(c);
+        const desc = descricaoSemPlataforma(c.descricao || '', plataforma);
         lista.push({
           chave: `cr:${c.id}`, tipo: 'conta', vendaId: null, clienteId: c.cliente_id || null,
-          titulo: c.cliente_nome || c.descricao || 'Conta a receber', sub: c.descricao || 'Conta a receber',
-          contas: [k], detalhe: { [c.id]: { rotulo: rotuloDaConta(k, true, ''), data: c.data_vencimento } },
+          titulo: c.cliente_nome || desc || 'Conta a receber', sub: desc || 'Conta a receber',
+          contas: [k], detalhe: { [c.id]: { rotulo: rotuloDaConta(k, true, ''), data: c.data_vencimento } }, plataforma,
           valor: emAberto(k) || jaBaixado(k), data: c.data_recebimento || c.data_vencimento, nomes: [c.cliente_nome, c.descricao],
         });
       }
@@ -189,7 +196,7 @@ export function GavetaDeConciliacao(p: GavetaDeConciliacaoProps) {
         return {
           chave: `cp:${c.id}`, tipo: 'conta' as const, vendaId: null, clienteId: null,
           titulo: c.fornecedor_nome || 'Sem fornecedor', sub: c.descricao || 'Conta a pagar',
-          contas: [k], detalhe: { [c.id]: { rotulo: rotuloDaConta(k, false, ''), data: c.data_vencimento } },
+          contas: [k], detalhe: { [c.id]: { rotulo: rotuloDaConta(k, false, ''), data: c.data_vencimento } }, plataforma: null,
           valor: emAberto(k) || jaBaixado(k), data: c.data_pagamento || c.data_vencimento, nomes: [c.fornecedor_nome, c.descricao],
         };
       });
@@ -465,7 +472,10 @@ export function GavetaDeConciliacao(p: GavetaDeConciliacaoProps) {
                           </span>
                           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                             <span className="fin-t-body-strong truncate text-[var(--fin-text)]">{g.titulo}</span>
-                            <span className="fin-t-caption truncate text-[var(--fin-text-3)]">{g.sub}</span>
+                            <span className="flex min-w-0 items-center gap-[var(--fin-s-2)]">
+                              {g.plataforma && <EtiquetaDaPlataforma plataforma={g.plataforma} />}
+                              <span className="fin-t-caption min-w-0 truncate text-[var(--fin-text-3)]">{g.sub}</span>
+                            </span>
                           </span>
                           <span className="flex shrink-0 flex-col items-end gap-0.5">
                             <Money valor={g.valor} size="strong" estado="ok" className="min-w-0" />

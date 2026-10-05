@@ -68,6 +68,7 @@ export const STATUS_LABELS: Record<StatusDominio, Record<string, { rotulo: strin
   },
   origem: {
     VENDA:               { rotulo: 'Venda',                  tone: 'info'   },
+    VENDA_DIRETA:        { rotulo: 'Venda direta',           tone: 'info'   },
     GRUPO:               { rotulo: 'Grupo',                  tone: 'info'   },
     CRM:                 { rotulo: 'Importado do CRM',       tone: 'info'   },
     COMISSAO_FORNECEDOR: { rotulo: 'Comissão de fornecedor', tone: 'neutro' },

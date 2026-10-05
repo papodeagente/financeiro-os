@@ -26,6 +26,7 @@ import type { FunilPayload } from '@/lib/funil-types';
 import {
   round2, num, somaPor, divSegura, hojeISO, dataLocal, paraISO, mesDe, dentroDoPeriodo, addMeses } from '@/lib/money';
 import { GraficoFluxo } from './GraficoFluxo';
+import { descricaoComPlataforma, plataformaDaConta } from '@/lib/plataformas/rotulo';
 
 function getWeekRange(date: Date): string {
   const start = new Date(date);
@@ -194,7 +195,7 @@ export default function FluxoCaixaPage() {
     const out: Evento[] = [];
     for (const cr of contasReceber) {
       if (cr.status === 'CANCELADO') continue;
-      const desc = nomeDoLancamento(cr.cliente_nome, cr.descricao);
+      const desc = nomeDoLancamento(cr.cliente_nome, descricaoComPlataforma(cr.descricao || '', plataformaDaConta(cr)));
       const baixado = cr.status === 'RECEBIDO'
         ? round2(num(cr.valor_recebido) || num(cr.valor_final))
         : round2(num(cr.valor_recebido));

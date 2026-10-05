@@ -390,6 +390,9 @@ export interface ContaReceber {
    */
   origem_fornecedor_id?: string;
   auto_gerado?: boolean;
+  /** De qual integração de pagamento veio (hotmart, asaas, pagarme). Ver plataformas/rotulo.ts. */
+  plataforma_origem?: string;
+  plataforma_transacao?: string;
 }
 
 export type StatusContaPagar = 'PENDENTE' | 'PAGO' | 'VENCIDO' | 'CANCELADO' | 'PARCIAL';

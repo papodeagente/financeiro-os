@@ -14,6 +14,9 @@ import { FinTable, type FinColuna } from '@/components/fin/FinTable';
 import { MetricCard } from '@/components/fin/MetricCard';
 import { Money, type MoneyEstado } from '@/components/fin/Money';
 import { PageHeader } from '@/components/fin/PageHeader';
+import { EtiquetaDaPlataforma } from '@/components/fin/EtiquetaDaPlataforma';
+import { StatusChip } from '@/components/fin/StatusChip';
+import { descricaoSemPlataforma, plataformaDaConta } from '@/lib/plataformas/rotulo';
 import { Button } from '@/components/ui/button';
 import { calcLimiteUsado } from '@/lib/cartoes-utils';
 import { calcularSaldoBancario, valorMovimentado } from '@/lib/saldo-bancario';
@@ -54,6 +57,7 @@ type LinhaLancamento = {
   tipo: string;
   data: string;
   origem: string;
+  plataforma?: string | null;
 };
 
 const CHAVE_ONBOARDING = 'onboarding-financeiro-dismissed';
@@ -100,7 +104,7 @@ export default function FinanceiroAgHubPage() {
   const [, setCartoesKpi] = useState<CartoesKpi | null>(null);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState(false);
-  const [ultimos, setUltimos] = useState<Array<{ descricao: string; valor: number; tipo: string; data: string; origem: string }>>([]);
+  const [ultimos, setUltimos] = useState<Array<{ descricao: string; valor: number; tipo: string; data: string; origem: string; plataforma?: string | null }>>([]);
   // Estado para onboarding checklist
   const [onboardingSteps, setOnboardingSteps] = useState<OnboardingStep[]>([]);
   const [onboardingDispensado, setOnboardingDispensado] = useState(false);
@@ -211,15 +215,16 @@ export default function FinanceiroAgHubPage() {
         });
 
         // Últimas movimentações: ordena por data_emissao desc, junta receber + pagar
-        type Mov = { descricao: string; valor: number; tipo: 'receber' | 'pagar'; data: string; origem: string };
+        type Mov = { descricao: string; valor: number; tipo: 'receber' | 'pagar'; data: string; origem: string; plataforma?: string | null };
         const items: Mov[] = [];
         receber.slice().sort((a, b) => (b.data_emissao || '').localeCompare(a.data_emissao || '')).slice(0, 3).forEach(r => {
           items.push({
-            descricao: r.descricao || r.cliente_nome || 'Conta a receber',
+            descricao: descricaoSemPlataforma(r.descricao || '', plataformaDaConta(r)) || r.cliente_nome || 'Conta a receber',
             valor: r.valor_final || 0,
             tipo: 'receber',
             data: r.data_vencimento || '',
             origem: (r.auto_gerado ? 'crm' : 'Manual'),
+            plataforma: plataformaDaConta(r),
           });
         });
         pagar.slice().sort((a, b) => (b.data_emissao || '').localeCompare(a.data_emissao || '')).slice(0, 2).forEach(p => {
@@ -415,9 +420,12 @@ export default function FinanceiroAgHubPage() {
     {
       id: 'origem',
       cabecalho: 'Origem',
-      tipo: 'status',
-      dominio: 'origem',
-      valor: (r) => (r.origem === 'crm' ? 'CRM' : 'MANUAL'),
+      tipo: 'texto',
+      acessor: (r) => r.plataforma || r.origem,
+      render: (r) =>
+        r.plataforma
+          ? <EtiquetaDaPlataforma plataforma={r.plataforma} />
+          : <StatusChip valor={r.origem === 'crm' ? 'CRM' : 'MANUAL'} dominio="origem" />,
       prioridade: 1,
     },
     {

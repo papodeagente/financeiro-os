@@ -23,6 +23,7 @@ import { PageHeader } from '@/components/fin/PageHeader';
 import { MolduraDaPagina } from '@/components/fin/MolduraDaPagina';
 import { toast } from '@/lib/toast';
 import { formatBRL, formatDate } from '@/lib/utils';
+import { EtiquetaDaPlataforma } from '@/components/fin/EtiquetaDaPlataforma';
 import { descreverPlano, planoDeUnificacao, type PlanoDeUnificacao } from '@/lib/plataformas/unificacao';
 import { hojeISO } from '@/lib/money';
 
@@ -197,8 +198,9 @@ export default function RecebimentosPlataformasPage() {
       render: r => (
         <div>
           <div className="font-medium">{r.comprador || r.email || 'Sem nome'}</div>
-          <div className="text-xs text-[var(--fin-text-muted)]">
-            {r.descricao} · {r.plataforma}
+          <div className="mt-1 flex min-w-0 items-center gap-2 text-xs text-[var(--fin-text-muted)]">
+            <EtiquetaDaPlataforma plataforma={r.plataforma} />
+            <span className="min-w-0 truncate">{r.descricao}</span>
           </div>
         </div>
       ),
