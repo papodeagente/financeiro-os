@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowDownLeft, Clock, Pencil, Plus, Trash2, TriangleAlert } from 'lucide-react';
 
@@ -383,9 +385,18 @@ export default function ContasReceberPage() {
         const descricao = descricaoSemPlataforma(i.descricao || '', plataforma);
         return (
           <span className="flex flex-col gap-[var(--fin-s-1)]">
-            <span className="fin-t-body-strong text-[var(--fin-text)]">
-              {i.cliente_nome || 'Cliente não informado'}
-            </span>
+            {i.cliente_id ? (
+              <Link
+                href={`/pessoas/clientes/${i.cliente_id}`}
+                className="fin-t-body-strong text-[var(--fin-text)] underline-offset-2 hover:text-[var(--fin-accent)] hover:underline focus-visible:outline-2 focus-visible:outline-[var(--fin-accent)] focus-visible:outline-offset-2"
+              >
+                {i.cliente_nome || 'Cliente não informado'}
+              </Link>
+            ) : (
+              <span className="fin-t-body-strong text-[var(--fin-text)]">
+                {i.cliente_nome || 'Cliente não informado'}
+              </span>
+            )}
             {plataforma || descricao ? (
               <span className="flex min-w-0 max-w-[48ch] items-center gap-[var(--fin-s-2)]">
                 {plataforma && <EtiquetaDaPlataforma plataforma={plataforma} />}

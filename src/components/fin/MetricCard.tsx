@@ -38,6 +38,17 @@ export type MetricCardProps = {
   contexto: string;
   /** 'destaque' renderiza em fin-t-metric (30px). NO MÁXIMO UM POR TELA. */
   emphasis?: 'destaque' | 'padrao';
+  /**
+   * O que o número É.
+   *
+   * O padrão é dinheiro porque era a única coisa que este cartão media, e
+   * mudar o default reescreveria todas as telas que já existem. Mas cartão de
+   * CONTAGEM é necessidade real — "7 negociações" saía como "R$ 7,00", que é
+   * errado de um jeito que ninguém defende — e passar a unidade é mais honesto
+   * do que pedir ao chamador que formate por fora e perca o tratamento de
+   * carregando/indisponível que o <Money> dá.
+   */
+  formato?: 'dinheiro' | 'contagem';
   tone?: 'neutro' | 'positivo' | 'negativo';
   delta?: DeltaIndicatorProps | null;
   explicacao?: string;
@@ -75,12 +86,34 @@ export function IconeDeIndicador({ icone: Icone, tom = 'acento' }: { icone: Luci
   );
 }
 
+/**
+ * Contagem no mesmo degrau tipográfico do dinheiro, para a linha de cartões
+ * alinhar. Carregando e indisponível NÃO pintam número, pela mesma razão que
+ * no <Money>: um "0" de placeholder é uma afirmação falsa.
+ */
+function Contagem({ valor, estado, emphasis }: {
+  valor: number | null;
+  estado: MoneyEstado;
+  emphasis: 'destaque' | 'padrao';
+}) {
+  const degrau = emphasis === 'destaque' ? 'fin-t-metric' : 'fin-t-metric-sm';
+  if (estado !== 'ok' || valor === null || valor === undefined) {
+    return <span className={`${degrau} tabular-nums text-[var(--fin-text-3)]`}>{'—'}</span>;
+  }
+  return (
+    <span className={`${degrau} tabular-nums text-[var(--fin-text)]`}>
+      {valor.toLocaleString('pt-BR')}
+    </span>
+  );
+}
+
 export function MetricCard({
   rotulo,
   valor,
   estado,
   contexto,
   emphasis = 'padrao',
+  formato = 'dinheiro',
   tone = 'neutro',
   delta = null,
   explicacao,
@@ -135,13 +168,17 @@ export function MetricCard({
           )}
         </div>
 
-        <Money
-          valor={valor}
-          estado={estado}
-          size={emphasis === 'destaque' ? 'metric' : 'metricSm'}
-          tone={tone}
-          align="esquerda"
-        />
+        {formato === 'contagem' ? (
+          <Contagem valor={valor} estado={estado} emphasis={emphasis} />
+        ) : (
+          <Money
+            valor={valor}
+            estado={estado}
+            size={emphasis === 'destaque' ? 'metric' : 'metricSm'}
+            tone={tone}
+            align="esquerda"
+          />
+        )}
 
         {delta && estado === 'ok' && <DeltaIndicator {...delta} />}
 

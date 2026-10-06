@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { useState, useEffect, useCallback } from 'react';
 import { Search, Plus, Pencil, Trash2, X, ChevronDown, User, Phone, MapPin, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -194,7 +196,14 @@ export default function ClientesPage() {
       sortAccessor: c => clienteNome(c).toLowerCase(),
       cell: c => (
         <div>
-          <div className="font-medium text-[var(--t-text)]">{clienteNome(c)}</div>
+          {/* O nome é o caminho para o perfil. Link de verdade, não onClick:
+              abre em nova aba com o meio do mouse e aparece no histórico. */}
+          <Link
+            href={`/pessoas/clientes/${c.id}`}
+            className="font-medium text-[var(--fin-text)] underline-offset-2 hover:text-[var(--fin-accent)] hover:underline focus-visible:outline-2 focus-visible:outline-[var(--fin-accent)] focus-visible:outline-offset-2"
+          >
+            {clienteNome(c)}
+          </Link>
           <div className="text-xs text-[var(--t-text-secondary)]">
             {tipoPessoaLabel(c.tipo)}
           </div>
