@@ -40,6 +40,12 @@ export type TipoEventoPlataforma =
 
 /** Estado de uma parcela. É o que a tela e o DRE leem. */
 export type StatusParcelaPlataforma =
+  /**
+   * Cobrança gerada (boleto ou Pix emitido, renovação que falhou) e AINDA
+   * NÃO PAGA. Não é dinheiro a receber: numa plataforma de checkout a
+   * maioria dessas cobranças nunca é paga. Não vira conta a receber.
+   */
+  | 'AGUARDANDO'
   | 'PENDENTE'
   | 'CONFIRMADO'
   | 'RECEBIDO'
@@ -130,6 +136,11 @@ export interface TransacaoNormalizada {
   /** Data civil da venda (criação do pedido), não do pagamento. */
   data_venda: string;
   descricao: string;
+  /**
+   * Em quantas vezes o COMPRADOR parcelou, quando isso não muda o que o
+   * vendedor recebe (Hotmart repassa a venda inteira). Só informativo.
+   */
+  parcelas_do_comprador?: number;
   /** Payload cru, para auditoria e reprocessamento. */
   bruto: unknown;
 }

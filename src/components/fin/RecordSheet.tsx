@@ -29,7 +29,8 @@ export type RecordSheetProps = {
   };
   /** Fluxo de alto volume: mantém o painel aberto e limpa os campos. */
   acaoSalvarEOutro?: { rotulo: string; onClick: () => Promise<void> };
-  acaoSecundaria?: { rotulo: string; onClick: () => void };
+  /** null esconde o botão: gaveta só informativa tem uma saída, a primária. */
+  acaoSecundaria?: { rotulo: string; onClick: () => void } | null;
   /** Avisa antes de fechar com alteração pendente. */
   sujo?: boolean;
   largura?: 480 | 640;
@@ -187,6 +188,7 @@ export function RecordSheet({
                   </Button>
                 )}
 
+                {acaoSecundaria !== null && (
                 <Button
                   variant="ghost"
                   className={cn(ALTURA_ACAO, 'w-full px-4 sm:w-auto')}
@@ -201,6 +203,7 @@ export function RecordSheet({
                 >
                   {acaoSecundaria ? acaoSecundaria.rotulo : 'Cancelar'}
                 </Button>
+                )}
               </div>
             </>
           )}

@@ -141,8 +141,11 @@ console.log('\n--- Hotmart: hottok, garantia e moeda estrangeira ---');
   }, cred());
   const t = e.transacao;
   eq([e.tipo, t.valor_bruto, t.valor_taxa, t.moeda], ['PAGAMENTO_CONFIRMADO', 497, 40.75, 'BRL'], 'venda em real');
-  eq(t.parcelas.length, 12, '12 parcelas, uma conta a receber cada');
-  eq(somaBruto(t.parcelas), 497, 'e a soma das parcelas fecha exatamente com o bruto');
+  // Até 06/10/2026 isto eram 12 parcelas mensais, e a "2/12" aparecia como
+  // recebida com vencimento no mês seguinte. A Hotmart repassa a venda
+  // INTEIRA ao produtor no fim da garantia: é um recebimento só.
+  eq([t.parcelas.length, t.parcelas_do_comprador], [1, 12], 'parcelado em 12x pelo comprador: UM recebimento, com o parcelamento só informado');
+  eq(somaBruto(t.parcelas), 497, 'e o recebimento é o bruto inteiro');
   eq(t.comprador.documento, '12345678900', 'documento vem só com dígitos');
   eq(t.parcelas[0].data_pagamento, '2026-09-10', 'epoch em ms vira data civil');
   eq(t.parcelas.every(p => p.status === 'CONFIRMADO'), true,
@@ -156,6 +159,30 @@ console.log('\n--- Hotmart: hottok, garantia e moeda estrangeira ---');
   }, cred());
   eq([e.tipo, e.transacao.parcelas[0].status], ['PAGAMENTO_RECEBIDO', 'RECEBIDO'],
      'COMPLETE é o fim da garantia: aí sim o dinheiro está liberado');
+}
+{
+  // O caso da Latitude Sul (06/10/2026): boleto ou Pix GERADO não é pagamento.
+  const e = await adapterHotmart.normalizar({
+    event: 'PURCHASE_BILLET_PRINTED',
+    data: { product: { id: '7343064', name: 'EnturOS CRM' }, buyer: { name: 'Latitude Sul Viagens e Turismo' }, purchase: { transaction: 'HPL', order_date: 1791259200000, price: { value: 247 }, payment: { type: 'PIX' } } },
+  }, cred());
+  eq([e.tipo, e.transacao.parcelas.length, e.transacao.parcelas[0].status, e.transacao.parcelas[0].data_pagamento],
+     ['PAGAMENTO_CRIADO', 1, 'AGUARDANDO', ''], 'boleto/Pix gerado fica AGUARDANDO, sem data de pagamento: não é conta a receber');
+  const atrasada = await adapterHotmart.normalizar({ event: 'PURCHASE_DELAYED', data: { purchase: { transaction: 'HPD', price: { value: 247 } } } }, cred());
+  eq(atrasada.transacao.parcelas[0].status, 'AGUARDANDO', 'renovação de assinatura não paga também não é dinheiro a receber');
+}
+{
+  // Garantia: a previsão de liberação é o fim dela; o recebido é o dia do aviso de conclusão.
+  const aprov = await adapterHotmart.normalizar({
+    event: 'PURCHASE_APPROVED',
+    data: { purchase: { transaction: 'HPG', approved_date: 1789000000000, warranty_expire_date: 1789604800000, price: { value: 300 } } },
+  }, cred());
+  eq([aprov.transacao.parcelas[0].data_pagamento, aprov.transacao.parcelas[0].data_prevista_recebimento], ['2026-09-10', '2026-09-17'], 'aprovada: pago em 10/09, liberação prevista no fim da garantia');
+  const concl = await adapterHotmart.normalizar({
+    creation_date: 1789700000000, event: 'PURCHASE_COMPLETE',
+    data: { purchase: { transaction: 'HPG', approved_date: 1789000000000, warranty_expire_date: 1789604800000, price: { value: 300 } } },
+  }, cred());
+  eq(concl.transacao.parcelas[0].data_recebimento, '2026-09-18', 'concluída: recebida no dia do aviso, não no da aprovação');
 }
 {
   // Venda em dólar já foi somada como real em produção e inflou a receita.

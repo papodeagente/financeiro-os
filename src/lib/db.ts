@@ -354,6 +354,17 @@ async function executarInitDB() {
     -- Eventos recebidos das plataformas. A chave única é o que impede
     -- reenvio de webhook de virar segunda venda: a plataforma reenvia por
     -- desenho quando não recebe 200 a tempo.
+    -- Revisões únicas de dados das plataformas (ex.: Hotmart 06/10/2026).
+    -- A linha é o marcador de "já rodou" e guarda o que foi corrigido.
+    CREATE TABLE IF NOT EXISTS plataformas_revisoes (
+      tenant_id TEXT NOT NULL,
+      chave TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'RODANDO',
+      resultado JSONB NOT NULL DEFAULT '{}'::jsonb,
+      executado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (tenant_id, chave)
+    );
+
     CREATE TABLE IF NOT EXISTS plataformas_eventos (
       id TEXT PRIMARY KEY,
       tenant_id TEXT NOT NULL DEFAULT '',
@@ -1378,4 +1389,11 @@ async function executarInitDB() {
   // Instala a captura somente depois das migrações/seed, sem fabricar histórico.
   await pool.query(AUDIT_SCHEMA_SQL);
   initialized = true;
+  // Revisão única dos recebimentos da Hotmart gravados pela versão anterior
+  // (cobrança não paga como conta aberta, venda parcelada em N contas, conta
+  // duplicada). Em segundo plano: não atrasa a primeira requisição. Roda uma
+  // vez por agência (marcador em plataformas_revisoes) e não quebra o boot.
+  void import('./plataformas/revisao-hotmart')
+    .then(m => m.revisarHotmartUmaVez())
+    .catch(e => console.error('[revisao-hotmart]', e instanceof Error ? e.message : e));
 }

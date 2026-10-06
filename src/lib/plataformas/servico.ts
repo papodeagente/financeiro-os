@@ -26,6 +26,9 @@ import { emTransacao, aplicarMovimentoCaixaAtomico, type ExecutorSQL } from '../
 import { cifrar, decifrar, mascarar } from '../cofre';
 import { acharAdapter } from './index';
 import { nomeDaPlataforma } from './rotulo';
+import { data as dataDe } from './comum';
+import { planoHotmart, proximoStatusHotmart, type ContaDaTransacao } from './hotmart-regras';
+import { contasJaUsadas } from '../conciliacao-servidor';
 import { unificarRecebimento, type ResultadoUnificacao } from './unificar-db';
 import {
   decidir, type CandidatoVenda, type Decisao, type PagamentoParaConciliar,
@@ -52,7 +55,11 @@ export interface ConfigPlataforma {
 export class ErroPlataforma extends Error {}
 
 /** Como cada estado da plataforma aparece na conta a receber. */
-const STATUS_CONTA: Record<StatusParcelaPlataforma, string> = {
+const STATUS_CONTA: Record<StatusParcelaPlataforma, string | null> = {
+  // Cobrança gerada e não paga (boleto/Pix emitido na Hotmart, renovação que
+  // falhou): NÃO é conta a receber. Conta já criada por versão anterior é
+  // cancelada com o motivo escrito.
+  AGUARDANDO: null,
   PENDENTE: 'PENDENTE',
   // Pago pelo comprador, ainda não liberado: continua sendo "a receber",
   // e é isso que faz a pergunta "quanto ainda temos a receber" fechar.
@@ -195,6 +202,8 @@ export async function salvarConfig(
 export function mesclarParcelas(
   atuais: readonly ParcelaNormalizada[],
   novas: readonly ParcelaNormalizada[],
+  /** Regra de transição de status (Hotmart: o ciclo só anda para a frente). */
+  proximoStatus?: (atual: StatusParcelaPlataforma, novo: StatusParcelaPlataforma) => StatusParcelaPlataforma,
 ): ParcelaNormalizada[] {
   const porNumero = new Map<number, ParcelaNormalizada>();
   for (const p of atuais) porNumero.set(p.numero, p);
@@ -206,6 +215,7 @@ export function mesclarParcelas(
     porNumero.set(p.numero, anterior ? {
       ...anterior,
       ...p,
+      status: proximoStatus ? proximoStatus(anterior.status, p.status) : p.status,
       data_vencimento: p.data_vencimento || anterior.data_vencimento,
       data_prevista_recebimento: p.data_prevista_recebimento || anterior.data_prevista_recebimento,
       data_pagamento: p.data_pagamento || anterior.data_pagamento,
@@ -223,7 +233,8 @@ export function mesclarParcelas(
 export function totaisDaTransacao(parcelas: readonly ParcelaNormalizada[]) {
   const vivo = parcelas.filter(p => p.status !== 'CANCELADO' && p.status !== 'ESTORNADO' && p.status !== 'CHARGEBACK');
   const recebido = parcelas.filter(p => p.status === 'RECEBIDO');
-  const aReceber = vivo.filter(p => p.status !== 'RECEBIDO');
+  // Cobrança que ninguém pagou ainda não é "a receber".
+  const aReceber = vivo.filter(p => p.status !== 'RECEBIDO' && p.status !== 'AGUARDANDO');
   const estornado = parcelas.filter(p => p.status === 'ESTORNADO' || p.status === 'CHARGEBACK');
   const somar = (l: readonly ParcelaNormalizada[], f: (p: ParcelaNormalizada) => number) =>
     round2(l.reduce((a, p) => a + num(f(p)), 0));
@@ -355,8 +366,31 @@ export async function sincronizarTransacao(
   const idTransacao = String(entrada.id_transacao ?? '').trim();
   if (!idTransacao) throw new ErroPlataforma('Transação sem identificador na plataforma.');
 
-  const anterior = await lerTransacao(exec, tenantId, plataforma, idTransacao);
-  const parcelas = mesclarParcelas(anterior?.transacao?.parcelas ?? [], entrada.parcelas ?? []);
+  let anterior = await lerTransacao(exec, tenantId, plataforma, idTransacao);
+  let novas = entrada.parcelas ?? [];
+  if (plataforma === 'hotmart' && anterior) {
+    // Transação gravada pela versão anterior (N parcelas, cobrança não paga
+    // como aberta, conta duplicada): corrige antes de aplicar o aviso novo.
+    await sanearTransacaoHotmart(exec, tenantId, idTransacao, opcoes.contaBancariaId);
+    anterior = await lerTransacao(exec, tenantId, plataforma, idTransacao);
+    const antigas = anterior?.transacao?.parcelas ?? [];
+    if (antigas.length > 1 && novas.length === 1) {
+      // A revisão não pôde unificar (alguém mexeu numa das contas): o aviso
+      // novo só anda o status de todas, sem mudar valores nem datas.
+      const n = novas[0];
+      novas = antigas.map(p => ({
+        ...p,
+        status: n.status,
+        data_pagamento: n.data_pagamento || p.data_pagamento,
+        data_recebimento: p.numero === 1 ? (n.data_recebimento || p.data_recebimento) : p.data_recebimento,
+      }));
+    }
+  }
+  const parcelas = mesclarParcelas(
+    anterior?.transacao?.parcelas ?? [],
+    novas,
+    plataforma === 'hotmart' ? proximoStatusHotmart : undefined,
+  );
   const totais = totaisDaTransacao(parcelas);
 
   const transacao: TransacaoNormalizada = {
@@ -563,66 +597,98 @@ async function sincronizarContas(
   const creditado: Record<string, number> = { ...ctx.creditadoAntes };
   let movido = 0;
 
+  // A conta da parcela 1 pode ser a da versão antiga (id sem número). Ela é
+  // resolvida A CADA aviso: antes só o primeiro aviso adotava a conta
+  // antiga, e o seguinte criava uma segunda conta para a mesma venda.
+  const idNovo1 = `plat-${plataforma}-${transacao.id_transacao}-1`;
+  const idAntigo = `plat-${plataforma}-${transacao.id_transacao}`;
+  const { rows: jaExistem } = await exec.query(
+    `SELECT id FROM contas_receber WHERE tenant_id = $1 AND id = ANY($2::text[])`,
+    [tenantId, [idNovo1, idAntigo]],
+  );
+  const existentes = new Set(jaExistem.map(r => String(r.id)));
+  const idParcela1 = ctx.idLegadoParcela1
+    || (existentes.has(idNovo1) ? idNovo1 : existentes.has(idAntigo) ? idAntigo : idNovo1);
+
   for (const parcela of transacao.parcelas) {
-    const contaId = parcela.numero === 1 && ctx.idLegadoParcela1
-      ? ctx.idLegadoParcela1
+    const contaId = parcela.numero === 1
+      ? idParcela1
       : `plat-${plataforma}-${transacao.id_transacao}-${parcela.numero}`;
-    const statusConta = STATUS_CONTA[parcela.status] ?? 'PENDENTE';
+    const statusConta = parcela.status in STATUS_CONTA ? STATUS_CONTA[parcela.status] : 'PENDENTE';
     const chave = String(parcela.numero);
 
-    const sufixo = parcela.total > 1 ? ` (${parcela.numero}/${parcela.total})` : '';
-    const conta = {
-      id: contaId,
-      origem: ctx.vendaId ? 'VENDA' : 'VENDA_DIRETA',
-      venda_id: ctx.vendaId || null,
-      grupo_id: null,
-      cliente_id: ctx.clienteId,
-      cliente_nome: transacao.comprador.nome || transacao.comprador.email || 'Comprador',
-      descricao: `${transacao.descricao}${sufixo} · ${nomeDaPlataforma(plataforma)}`,
-      categoria_id: '',
-      centro_custo: '',
-      valor_original: parcela.valor_bruto,
-      juros: parcela.juros,
-      multa: 0,
-      desconto: parcela.desconto,
-      valor_final: parcela.valor_bruto,
-      data_emissao: transacao.data_venda || parcela.data_vencimento,
-      data_vencimento: parcela.data_vencimento || transacao.data_venda,
-      data_prevista_recebimento: parcela.data_prevista_recebimento,
-      data_recebimento: parcela.data_recebimento || '',
-      // O que entrou de verdade é o líquido. O bruto fica em valor_final
-      // para o DRE ver receita cheia, e a taxa fica declarada ao lado.
-      valor_recebido: parcela.status === 'RECEBIDO' ? parcela.valor_liquido : 0,
-      conta_bancaria_id: ctx.contaBancariaId,
-      forma_recebimento: transacao.forma_pagamento || plataforma,
-      parcela_numero: parcela.numero,
-      total_parcelas: parcela.total,
-      boleto_emitido: false, boleto_codigo: '', boleto_url: '',
-      status: statusConta,
-      rateio: [], anexos: [],
-      observacoes: `Gerada pela integração com ${plataforma}. Transação ${transacao.id_transacao}.`,
-      plataforma_origem: plataforma,
-      plataforma_transacao: transacao.id_transacao,
-      plataforma_parcela_id: parcela.id_externo,
-      plataforma_taxa: parcela.valor_taxa,
-      plataforma_liquido: parcela.valor_liquido,
-      plataforma_status: parcela.status,
-      plataforma_antecipada: parcela.antecipada,
-      plataforma_assinatura: transacao.id_assinatura,
-      moeda: transacao.moeda,
-    };
+    if (statusConta === null) {
+      // Ninguém pagou: não nasce conta. A que já existir (versão anterior)
+      // é cancelada, com o motivo escrito, desde que ninguém tenha dado
+      // baixa nela à mão.
+      await exec.query(
+        `UPDATE contas_receber
+            SET status = 'CANCELADO',
+                data = data || jsonb_build_object(
+                  'status', 'CANCELADO',
+                  'plataforma_status', $3::text,
+                  'observacoes', TRIM(BOTH ' |' FROM COALESCE(data->>'observacoes', '') || ' | ' || $4::text)),
+                updated_at = NOW()
+          WHERE id = $1 AND tenant_id = $2
+            AND COALESCE(data->>'status', '') NOT IN ('CANCELADO', 'RECEBIDO', 'PARCIAL')`,
+        [contaId, tenantId, parcela.status,
+         `Cobrança gerada na ${nomeDaPlataforma(plataforma)} e não paga: não é dinheiro a receber.`],
+      );
+    } else {
+      const sufixo = parcela.total > 1 ? ` (${parcela.numero}/${parcela.total})` : '';
+      const conta = {
+        id: contaId,
+        origem: ctx.vendaId ? 'VENDA' : 'VENDA_DIRETA',
+        venda_id: ctx.vendaId || null,
+        grupo_id: null,
+        cliente_id: ctx.clienteId,
+        cliente_nome: transacao.comprador.nome || transacao.comprador.email || 'Comprador',
+        descricao: `${transacao.descricao}${sufixo} · ${nomeDaPlataforma(plataforma)}`,
+        categoria_id: '',
+        centro_custo: '',
+        valor_original: parcela.valor_bruto,
+        juros: parcela.juros,
+        multa: 0,
+        desconto: parcela.desconto,
+        valor_final: parcela.valor_bruto,
+        data_emissao: transacao.data_venda || parcela.data_vencimento,
+        data_vencimento: parcela.data_vencimento || transacao.data_venda,
+        data_prevista_recebimento: parcela.data_prevista_recebimento,
+        data_recebimento: parcela.data_recebimento || '',
+        // O que entrou de verdade é o líquido. O bruto fica em valor_final
+        // para o DRE ver receita cheia, e a taxa fica declarada ao lado.
+        valor_recebido: parcela.status === 'RECEBIDO' ? parcela.valor_liquido : 0,
+        conta_bancaria_id: ctx.contaBancariaId,
+        forma_recebimento: transacao.forma_pagamento || plataforma,
+        parcela_numero: parcela.numero,
+        total_parcelas: parcela.total,
+        boleto_emitido: false, boleto_codigo: '', boleto_url: '',
+        status: statusConta,
+        rateio: [], anexos: [],
+        observacoes: `Gerada pela integração com ${plataforma}. Transação ${transacao.id_transacao}.`,
+        plataforma_origem: plataforma,
+        plataforma_transacao: transacao.id_transacao,
+        plataforma_parcela_id: parcela.id_externo,
+        plataforma_taxa: parcela.valor_taxa,
+        plataforma_liquido: parcela.valor_liquido,
+        plataforma_status: parcela.status,
+        plataforma_antecipada: parcela.antecipada,
+        plataforma_assinatura: transacao.id_assinatura,
+        moeda: transacao.moeda,
+      };
 
-    await exec.query(
-      `INSERT INTO contas_receber (id, venda_id, cliente_id, status, data, tenant_id, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5::jsonb, $6, NOW(), NOW())
-       ON CONFLICT (id) DO UPDATE
-          SET venda_id = EXCLUDED.venda_id,
-              cliente_id = EXCLUDED.cliente_id,
-              status = EXCLUDED.status,
-              data = EXCLUDED.data,
-              updated_at = NOW()`,
-      [contaId, ctx.vendaId || '', ctx.clienteId, statusConta, JSON.stringify(conta), tenantId],
-    );
+      await exec.query(
+        `INSERT INTO contas_receber (id, venda_id, cliente_id, status, data, tenant_id, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6, NOW(), NOW())
+         ON CONFLICT (id) DO UPDATE
+            SET venda_id = EXCLUDED.venda_id,
+                cliente_id = EXCLUDED.cliente_id,
+                status = EXCLUDED.status,
+                data = EXCLUDED.data,
+                updated_at = NOW()`,
+        [contaId, ctx.vendaId || '', ctx.clienteId, statusConta, JSON.stringify(conta), tenantId],
+      );
+    }
 
     // O caixa persegue um alvo, e não um evento: alvo é o líquido quando
     // a parcela está recebida, e zero em qualquer outro estado. A
@@ -781,4 +847,134 @@ export async function importarPeriodo(
   }
 
   return saida;
+}
+
+export interface ResultadoRevisaoHotmart {
+  estado: 'sem-transacao' | 'em-dia' | 'pulada' | 'corrigida';
+  motivos: string[];
+  pulada?: string;
+  canceladas: number;
+  caixa_movido: number;
+  comprador?: string;
+  valor?: number;
+}
+
+/**
+ * Corrige uma transação da Hotmart gravada pela versão anterior: cobrança
+ * não paga como conta aberta, venda parcelada em N contas, conta antiga
+ * duplicada. Idempotente: rodar de novo numa transação já corrigida não
+ * muda nada. Conta que uma pessoa tocou (conciliada, com nota, baixada à
+ * mão) faz a transação ser pulada e listada, nunca alterada.
+ *
+ * O caixa se move pela mesma regra do aviso normal: o alvo é o líquido
+ * quando recebido, e o que já foi creditado (somando TODAS as parcelas
+ * antigas) passa a ser da parcela única. Venda que já creditou tudo move
+ * zero.
+ */
+export async function sanearTransacaoHotmart(
+  exec: ExecutorSQL,
+  tenantId: string,
+  idTransacao: string,
+  contaBancariaPadrao: string | null,
+): Promise<ResultadoRevisaoHotmart> {
+  const vazio: ResultadoRevisaoHotmart = { estado: 'sem-transacao', motivos: [], canceladas: 0, caixa_movido: 0 };
+  const { rows: tx } = await exec.query(
+    `SELECT venda_id, cliente_id, status_conciliacao, data FROM plataformas_transacoes
+      WHERE tenant_id = $1 AND plataforma = 'hotmart' AND id_transacao = $2 LIMIT 1 FOR UPDATE`,
+    [tenantId, idTransacao],
+  );
+  if (tx.length === 0) return vazio;
+  const d = (tx[0].data ?? {}) as Record<string, unknown>;
+  const transacao = d.transacao as TransacaoNormalizada | undefined;
+  if (!transacao || !Array.isArray(transacao.parcelas) || transacao.parcelas.length === 0) return vazio;
+  const creditado = (d.caixa_creditado ?? {}) as Record<string, number>;
+
+  // As contas desta transação: as da integração (com e sem número) e
+  // qualquer outra que aponte para ela.
+  const prefixo = `plat-hotmart-${idTransacao}`;
+  const ids = [prefixo, ...Array.from({ length: Math.max(12, transacao.parcelas.length) }, (_, i) => `${prefixo}-${i + 1}`)];
+  const { rows: crs } = await exec.query(
+    `SELECT id, data FROM contas_receber
+      WHERE tenant_id = $1
+        AND (id = ANY($2::text[])
+             OR (data->>'plataforma_transacao' = $3 AND COALESCE(data->>'plataforma_origem', 'hotmart') = 'hotmart'))`,
+    [tenantId, ids, idTransacao],
+  );
+  const idsCr = crs.map(r => String(r.id));
+  const conciliadas = await contasJaUsadas(exec, tenantId, idsCr, '');
+  const { rows: notas } = idsCr.length
+    ? await exec.query(
+        `SELECT DISTINCT conta_receber_id FROM notas_fiscais
+          WHERE tenant_id = $1 AND conta_receber_id = ANY($2::text[])
+            AND COALESCE(status, '') NOT IN ('CANCELADA', 'ERRO', 'REJEITADA')`,
+        [tenantId, idsCr],
+      )
+    : { rows: [] as Record<string, unknown>[] };
+  const comNota = new Set(notas.map(r => String(r.conta_receber_id)));
+  const statusDaParcela = new Map(transacao.parcelas.map(p => [p.numero, p.status]));
+
+  const contas: ContaDaTransacao[] = crs.map(r => {
+    const c = (r.data ?? {}) as Record<string, unknown>;
+    const id = String(r.id);
+    const m = id.startsWith(`${prefixo}-`) ? id.slice(prefixo.length + 1).match(/^(\d+)$/) : null;
+    const numero = m ? Number(m[1]) : (Number(c.parcela_numero) || 1);
+    const status = String(c.status ?? '');
+    let tocada: string | null = null;
+    if (conciliadas.has(id) || c.extrato_conciliado_id) tocada = 'conciliada com o extrato';
+    else if (comNota.has(id)) tocada = 'tem nota fiscal emitida';
+    else if ((status === 'RECEBIDO' || status === 'PARCIAL') && statusDaParcela.get(numero) !== 'RECEBIDO') tocada = 'baixada à mão';
+    return { id, numero, status, valor_recebido: num(c.valor_recebido), tocada_por_humano: tocada };
+  });
+
+  const previsao = dataDe(transacao.bruto, 'data.purchase.warranty_expire_date');
+  const plano = planoHotmart(transacao.parcelas, contas, creditado, previsao);
+  const base = { motivos: plano.motivos, comprador: transacao.comprador?.nome || transacao.comprador?.email || '', valor: round2(num(transacao.valor_bruto)) };
+  if (plano.em_dia) return { ...base, estado: 'em-dia', canceladas: 0, caixa_movido: 0 };
+  if (plano.pulada || !plano.parcela) return { ...base, estado: 'pulada', pulada: plano.pulada ?? 'sem parcela', canceladas: 0, caixa_movido: 0 };
+
+  // Contas que sobram: parcelas 2..N e a duplicata da conta antiga. O
+  // dinheiro que elas creditaram já está em `plano.creditado` e passa a
+  // ser da parcela única, então aqui nenhum caixa se move.
+  for (const id of plano.cancelar) {
+    const motivo = id === prefixo
+      ? 'Duplicata da conta da versão antiga: a venda fica numa conta só.'
+      : 'Parcela unificada: a Hotmart repassa a venda inteira ao produtor, numa conta só.';
+    await exec.query(
+      `UPDATE contas_receber
+          SET status = 'CANCELADO',
+              data = data || jsonb_build_object(
+                'status', 'CANCELADO',
+                'valor_recebido', 0,
+                'observacoes', TRIM(BOTH ' |' FROM COALESCE(data->>'observacoes', '') || ' | ' || $3::text)),
+              updated_at = NOW()
+        WHERE id = $1 AND tenant_id = $2`,
+      [id, tenantId, motivo],
+    );
+  }
+
+  const nova: TransacaoNormalizada = {
+    ...transacao,
+    parcelas: [plano.parcela],
+    parcelas_do_comprador: transacao.parcelas_do_comprador ?? transacao.parcelas.length,
+  };
+  const totais = totaisDaTransacao(nova.parcelas);
+  nova.valor_bruto = totais.bruto; nova.valor_taxa = totais.taxa; nova.valor_liquido = totais.liquido;
+
+  const contasR = await sincronizarContas(exec, tenantId, 'hotmart', nova, {
+    clienteId: String(tx[0].cliente_id ?? ''),
+    vendaId: String(tx[0].venda_id ?? ''),
+    contaBancariaId: contaBancariaPadrao,
+    creditadoAntes: { '1': plano.creditado },
+    idLegadoParcela1: plano.conta_principal && plano.conta_principal === prefixo ? prefixo : '',
+  });
+
+  await exec.query(
+    `UPDATE plataformas_transacoes
+        SET data = data || jsonb_build_object('transacao', $3::jsonb, 'totais', $4::jsonb, 'caixa_creditado', $5::jsonb,
+                                              'revisado_em', to_jsonb(NOW()::text)),
+            updated_at = NOW()
+      WHERE tenant_id = $1 AND plataforma = 'hotmart' AND id_transacao = $2`,
+    [tenantId, idTransacao, JSON.stringify(nova), JSON.stringify(totais), JSON.stringify(contasR.creditado)],
+  );
+  return { ...base, estado: 'corrigida', canceladas: plano.cancelar.length, caixa_movido: contasR.movido };
 }

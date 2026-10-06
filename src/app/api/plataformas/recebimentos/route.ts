@@ -10,6 +10,7 @@ import {
 } from '@/lib/plataformas/fila';
 import { candidatosDoCrm, ErroPlataforma } from '@/lib/plataformas/servico';
 import { pontuar } from '@/lib/plataformas/conciliacao';
+import { revisarHotmartDoTenant, ultimaRevisaoHotmart } from '@/lib/plataformas/revisao-hotmart';
 
 /**
  * Recebimentos das plataformas: painel e fila de conciliação.
@@ -94,7 +95,8 @@ export async function GET(req: Request) {
       }),
     ]);
 
-    return NextResponse.json({ periodo: { de, ate }, resumo, itens });
+    const revisao = await ultimaRevisaoHotmart(tenantId);
+    return NextResponse.json({ periodo: { de, ate }, resumo, itens, revisao });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Erro interno';
     return NextResponse.json({ error: msg }, { status: 500 });
@@ -110,6 +112,13 @@ export async function POST(req: Request) {
     }
     const tenantId = await getTenantId();
     const body = await req.json();
+
+    if (String(body.acao ?? '') === 'revisar_hotmart') {
+      // Idempotente: transação já corrigida não muda; a revisão só corrige
+      // o que ainda está no formato antigo.
+      const revisao = await revisarHotmartDoTenant(tenantId);
+      return NextResponse.json({ ok: true, revisao });
+    }
 
     const plataforma = String(body.plataforma ?? '');
     const idTransacao = String(body.id_transacao ?? '');

@@ -21,6 +21,7 @@ import { MetricCard } from '@/components/fin/MetricCard';
 import { Money } from '@/components/fin/Money';
 import { PageHeader } from '@/components/fin/PageHeader';
 import { MolduraDaPagina } from '@/components/fin/MolduraDaPagina';
+import { RecordSheet } from '@/components/fin/RecordSheet';
 import { toast } from '@/lib/toast';
 import { formatBRL, formatDate } from '@/lib/utils';
 import { EtiquetaDaPlataforma } from '@/components/fin/EtiquetaDaPlataforma';
@@ -47,7 +48,31 @@ interface Item {
   parcelas_recebidas: number;
   proxima_previsao: string;
   conciliacao: { motivo?: string; candidatas?: Array<{ venda_id: string; pontos: number; confianca: string; motivos: string[] }> } | null;
+  situacao?: { codigo: string; rotulo: string; conta_a_receber: boolean };
+  parcelas_do_comprador?: number;
+  avisos?: Array<{ quando: string; aviso: string; rotulo: string }>;
 }
+
+interface Revisao {
+  executado_em: string;
+  transacoes: number;
+  corrigidas: number;
+  nao_pagas: number;
+  unificadas: number;
+  duplicatas: number;
+  contas_canceladas: number;
+  puladas: Array<{ id_transacao: string; comprador: string; valor: number; motivo: string }>;
+  erros: string[];
+}
+
+/** Tom da situação na plataforma: só "liberada" é verde; não pago é aviso. */
+const TOM_SITUACAO: Record<string, string> = {
+  liberada: 'bg-[var(--fin-positive-soft)] text-[var(--fin-positive)]',
+  garantia: 'bg-[var(--fin-info-soft)] text-[var(--fin-info)]',
+  aguardando: 'bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)]',
+  'nao-paga': 'bg-[var(--fin-surface-2)] text-[var(--fin-text-2)]',
+  reembolsada: 'bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)]',
+};
 
 interface Resumo {
   vendido: number; recebido: number; a_receber: number; taxas: number;
@@ -111,6 +136,9 @@ export default function RecebimentosPlataformasPage() {
   const [totalPlataforma, setTotalPlataforma] = useState(0);
   const [carregandoCandidatos, setCarregandoCandidatos] = useState(false);
   const [importando, setImportando] = useState('');
+  const [revisao, setRevisao] = useState<Revisao | null>(null);
+  const [revisando, setRevisando] = useState(false);
+  const [detalhe, setDetalhe] = useState<Item | null>(null);
 
   const carregar = useCallback(async () => {
     setEstado('carregando');
@@ -123,6 +151,7 @@ export default function RecebimentosPlataformasPage() {
       if (!r.ok) throw new Error(j.error ?? 'Não foi possível carregar.');
       setItens(j.itens ?? []);
       setResumo(j.resumo ?? null);
+      setRevisao(j.revisao ?? null);
       setEstado('ok');
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Erro ao carregar');
@@ -131,6 +160,27 @@ export default function RecebimentosPlataformasPage() {
   }, [de, ate, filtro, busca]);
 
   useEffect(() => { void carregar(); }, [carregar]);
+
+  async function revisarHotmart() {
+    if (revisando) return;
+    setRevisando(true);
+    try {
+      const r = await fetch('/api/plataformas/recebimentos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acao: 'revisar_hotmart' }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? 'Não foi possível revisar.');
+      const v = j.revisao as Revisao;
+      toast.success(v.corrigidas > 0 ? `${v.corrigidas} recebimento(s) da Hotmart corrigido(s)` : 'Nada a corrigir nos recebimentos da Hotmart');
+      await carregar();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Erro');
+    } finally {
+      setRevisando(false);
+    }
+  }
 
   async function agir(item: Item, acao: 'vincular' | 'direta', vendaId = '') {
     try {
@@ -207,6 +257,15 @@ export default function RecebimentosPlataformasPage() {
       acessor: r => r.comprador,
     },
     {
+      id: 'situacao', cabecalho: 'Na plataforma', tipo: 'texto', minWidth: 200,
+      acessor: r => r.situacao?.rotulo ?? '',
+      render: r => r.situacao ? (
+        <span className={`inline-flex rounded-[var(--fin-r-sm)] px-2 py-0.5 text-xs font-medium ${TOM_SITUACAO[r.situacao.codigo] ?? 'bg-[var(--fin-surface-2)] text-[var(--fin-text-2)]'}`}>
+          {r.situacao.rotulo}
+        </span>
+      ) : null,
+    },
+    {
       id: 'status', cabecalho: 'Conciliação', tipo: 'texto', minWidth: 170, prioridade: 2,
       render: r => (
         <div>
@@ -221,7 +280,9 @@ export default function RecebimentosPlataformasPage() {
     },
     {
       id: 'bruto', cabecalho: 'Venda', tipo: 'dinheiro', valor: r => r.bruto,
-      sub: r => (r.parcelas > 1 ? `${r.parcelas_recebidas}/${r.parcelas} parcelas` : null),
+      sub: r => (r.parcelas > 1
+        ? `${r.parcelas_recebidas}/${r.parcelas} parcelas`
+        : (r.parcelas_do_comprador ?? 1) > 1 ? `${r.parcelas_do_comprador}x no cartão do comprador` : null),
     },
     {
       id: 'taxa', cabecalho: 'Taxa', tipo: 'dinheiro', valor: r => r.taxa, prioridade: 1,
@@ -329,9 +390,49 @@ export default function RecebimentosPlataformasPage() {
         ))}
       </div>
 
+      {revisao && (revisao.corrigidas > 0 || revisao.puladas.length > 0) && (
+        <section className="flex flex-col gap-2 rounded-[var(--fin-r-lg)] border border-[var(--fin-info)]/30 bg-[var(--fin-info-soft)] p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex min-w-0 flex-col gap-1">
+              <h2 className="fin-t-body-strong text-[var(--fin-text)]">
+                Revisão dos recebimentos da Hotmart ({formatDate(revisao.executado_em.slice(0, 10))})
+              </h2>
+              <p className="fin-t-caption text-[var(--fin-text-2)]">
+                {(() => {
+                  const n = (q: number, um: string, varios: string) => `${q} ${q === 1 ? um : varios}`;
+                  const partes = [
+                    revisao.nao_pagas > 0 && `${n(revisao.nao_pagas, 'cobrança gerada e não paga saiu', 'cobranças geradas e não pagas saíram')} de Contas a receber`,
+                    revisao.unificadas > 0 && `${n(revisao.unificadas, 'venda parcelada virou um recebimento', 'vendas parceladas viraram um recebimento cada')} (a Hotmart repassa a venda inteira)`,
+                    revisao.duplicatas > 0 && `${n(revisao.duplicatas, 'conta duplicada da versão antiga foi cancelada', 'contas duplicadas da versão antiga foram canceladas')}`,
+                  ].filter(Boolean) as string[];
+                  const frase = partes.length > 0 ? `${partes.join('; ')}.` : 'Nenhuma correção foi necessária.';
+                  const pulo = revisao.puladas.length > 0
+                    ? ` ${n(revisao.puladas.length, 'venda não foi alterada', 'vendas não foram alteradas')} porque alguém já tinha mexido; confira abaixo.`
+                    : '';
+                  return frase + pulo;
+                })()}
+              </p>
+            </div>
+            <Button variant="outline" size="sm" disabled={revisando} onClick={() => void revisarHotmart()}>
+              {revisando ? 'Revisando…' : 'Revisar de novo'}
+            </Button>
+          </div>
+          {revisao.puladas.length > 0 && (
+            <ul className="flex flex-col gap-1">
+              {revisao.puladas.slice(0, 8).map(p => (
+                <li key={p.id_transacao} className="fin-t-caption text-[var(--fin-text-2)]">
+                  {p.comprador || p.id_transacao} ({formatBRL(p.valor)}): {p.motivo.split(': ').pop()}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
       <FinTable
         linhas={itens}
         colunas={colunas}
+        onLinhaClick={r => setDetalhe(r)}
         chave={r => `${r.plataforma}:${r.id_transacao}`}
         estado={estado}
         erro={estado === 'erro' ? { mensagem: erro, onTentarDeNovo: () => void carregar() } : null}
@@ -414,6 +515,57 @@ export default function RecebimentosPlataformasPage() {
           </div>
         </div>
       )}
+      <RecordSheet
+        aberto={detalhe !== null}
+        onOpenChange={aberto => { if (!aberto) setDetalhe(null); }}
+        titulo={detalhe ? (detalhe.comprador || detalhe.email || 'Recebimento') : 'Recebimento'}
+        descricao={detalhe ? `${detalhe.descricao} · transação ${detalhe.id_transacao}` : undefined}
+        acaoPrimaria={detalhe && detalhe.situacao?.conta_a_receber
+          ? { rotulo: 'Unificar com uma venda do CRM', onClick: () => { const d = detalhe; setDetalhe(null); void abrirEscolha(d); } }
+          : { rotulo: 'Fechar', onClick: () => setDetalhe(null) }}
+        acaoSecundaria={detalhe && detalhe.situacao?.conta_a_receber ? undefined : null}
+      >
+        {detalhe && (
+          <div className="flex flex-col gap-[var(--fin-s-4)]">
+            <div className="flex flex-wrap items-center gap-2">
+              <EtiquetaDaPlataforma plataforma={detalhe.plataforma} />
+              {detalhe.situacao && (
+                <span className={`inline-flex rounded-[var(--fin-r-sm)] px-2 py-0.5 text-xs font-medium ${TOM_SITUACAO[detalhe.situacao.codigo] ?? 'bg-[var(--fin-surface-2)] text-[var(--fin-text-2)]'}`}>
+                  {detalhe.situacao.rotulo}
+                </span>
+              )}
+            </div>
+            <dl className="grid grid-cols-2 gap-3 rounded-[var(--fin-r-md)] bg-[var(--fin-surface-sunken)] p-3 sm:grid-cols-4">
+              <div><dt className="fin-t-overline text-[var(--fin-text-3)]">Valor</dt><dd><Money valor={detalhe.bruto} size="strong" estado="ok" align="esquerda" className="min-w-0" /></dd></div>
+              <div><dt className="fin-t-overline text-[var(--fin-text-3)]">Taxa</dt><dd><Money valor={detalhe.taxa} size="strong" estado="ok" align="esquerda" className="min-w-0" /></dd></div>
+              <div><dt className="fin-t-overline text-[var(--fin-text-3)]">Recebido</dt><dd><Money valor={detalhe.recebido} size="strong" estado="ok" align="esquerda" className="min-w-0" /></dd></div>
+              <div><dt className="fin-t-overline text-[var(--fin-text-3)]">A receber</dt><dd><Money valor={detalhe.a_receber} size="strong" estado="ok" align="esquerda" className="min-w-0" /></dd></div>
+            </dl>
+            <p className="fin-t-caption text-[var(--fin-text-2)]">
+              {detalhe.data_venda ? `Compra em ${formatDate(detalhe.data_venda)}. ` : ''}
+              {(detalhe.parcelas_do_comprador ?? 1) > 1 ? `O comprador parcelou em ${detalhe.parcelas_do_comprador}x no cartão; a Hotmart repassa a venda inteira. ` : ''}
+              {detalhe.proxima_previsao && detalhe.a_receber > 0 ? `Liberação prevista em ${formatDate(detalhe.proxima_previsao)}.` : ''}
+            </p>
+            <section className="flex flex-col gap-2">
+              <h3 className="fin-t-overline text-[var(--fin-text-3)]">Avisos recebidos da plataforma</h3>
+              {(detalhe.avisos ?? []).length === 0 ? (
+                <p className="fin-t-caption text-[var(--fin-text-3)]">Nenhum aviso registrado para esta transação (pode ter vindo pela importação).</p>
+              ) : (
+                <ol className="flex flex-col gap-1">
+                  {(detalhe.avisos ?? []).map((a, i) => (
+                    <li key={i} className="flex items-start gap-3 rounded-[var(--fin-r-sm)] px-2 py-1.5 odd:bg-[var(--fin-surface-2)]">
+                      <span className="fin-t-caption w-[116px] shrink-0 tabular-nums text-[var(--fin-text-3)]">
+                        {a.quando ? new Date(a.quando).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
+                      </span>
+                      <span className="fin-t-body min-w-0 text-[var(--fin-text)]">{a.rotulo}</span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </section>
+          </div>
+        )}
+      </RecordSheet>
     </MolduraDaPagina>
   );
 }

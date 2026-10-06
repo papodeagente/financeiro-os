@@ -17,6 +17,11 @@
  *   tendo pago; completo é o fim da garantia, quando o dinheiro fica
  *   liberado. Tratar aprovado como caixa antecipa dinheiro que a Hotmart
  *   ainda pode devolver ao comprador.
+ * - Boleto/Pix GERADO e renovação que FALHOU não são dinheiro a receber
+ *   (06/10/2026): ficam AGUARDANDO e não viram conta. Ver hotmart-regras.ts.
+ * - Venda parcelada no cartão do comprador é UM recebimento: a Hotmart
+ *   repassa a venda inteira depois da garantia. O parcelamento fica só como
+ *   informação (parcelas_do_comprador).
  */
 import { round2 } from '../money';
 import type {
@@ -40,10 +45,12 @@ const MAPA: Record<string, EventoNormalizado['tipo']> = {
 
 /** O estado em que cada evento deixa as parcelas da venda. */
 const STATUS: Record<string, StatusParcelaPlataforma> = {
-  PAGAMENTO_CRIADO: 'PENDENTE',
+  // Boleto/Pix gerado e renovação de assinatura que não foi paga: ninguém
+  // pagou nada ainda. Não é conta a receber.
+  PAGAMENTO_CRIADO: 'AGUARDANDO',
   PAGAMENTO_CONFIRMADO: 'CONFIRMADO',
   PAGAMENTO_RECEBIDO: 'RECEBIDO',
-  PAGAMENTO_ATRASADO: 'ATRASADO',
+  PAGAMENTO_ATRASADO: 'AGUARDANDO',
   PAGAMENTO_CANCELADO: 'CANCELADO',
   REEMBOLSO: 'ESTORNADO',
   CHARGEBACK: 'CHARGEBACK',
@@ -122,8 +129,12 @@ export const adapterHotmart: AdapterPlataforma = {
     const dataVenda = data(compra, 'order_date', 'date', 'approved_date');
     const dataAprovacao = data(compra, 'approved_date') || dataVenda;
 
-    const status = STATUS[tipo] ?? 'PENDENTE';
+    const status = STATUS[tipo] ?? 'AGUARDANDO';
     const pago = tipo === 'PAGAMENTO_CONFIRMADO' || tipo === 'PAGAMENTO_RECEBIDO';
+    // Fim da garantia: é quando a Hotmart libera o dinheiro ao produtor.
+    const fimDaGarantia = data(compra, 'warranty_expire_date');
+    // Data do AVISO: no COMPLETE é o dia em que o dinheiro foi liberado.
+    const dataDoAviso = data(corpo, 'creation_date');
 
     const descricao = texto(produto, 'name') || 'Venda pela Hotmart';
 
@@ -147,19 +158,25 @@ export const adapterHotmart: AdapterPlataforma = {
       moeda,
       forma_pagamento: texto(compra, 'payment.type', 'payment_type'),
       detalhe_pagamento: texto(compra, 'payment.method', 'payment.billet_barcode') ? 'boleto' : '',
+      // UMA parcela, qualquer que seja o parcelamento do comprador: a Hotmart
+      // repassa a venda inteira ao produtor no fim da garantia. Antes eram N
+      // contas mensais com o status da transação, e a "2/6" aparecia como
+      // recebida com vencimento no mês seguinte.
       parcelas: montarParcelas({
         total: bruto,
         taxaTotal: taxa,
-        quantidade: parcelasQtd,
+        quantidade: 1,
         status,
-        primeiroVencimento: dataVenda || dataAprovacao,
+        primeiroVencimento: dataAprovacao || dataVenda,
+        primeiraPrevisao: pago ? fimDaGarantia : '',
         dataPagamento: pago ? dataAprovacao : '',
-        // A Hotmart não informa data de liberação no webhook. Dizer que
-        // recebeu hoje porque aprovou hoje é o erro que transforma venda
-        // com garantia de 7 dias em caixa que não existe.
-        dataRecebimento: tipo === 'PAGAMENTO_RECEBIDO' ? dataAprovacao : '',
+        // Recebido é quando a Hotmart liberou: o dia do aviso de conclusão
+        // (ou o fim da garantia). Usar a data da aprovação antecipava em
+        // 7 a 30 dias um dinheiro que ainda estava na garantia.
+        dataRecebimento: tipo === 'PAGAMENTO_RECEBIDO' ? (dataDoAviso || fimDaGarantia || dataAprovacao) : '',
         idBase: texto(compra, 'transaction'),
       }),
+      parcelas_do_comprador: parcelasQtd,
       data_venda: dataVenda,
       descricao,
       bruto: corpo,

@@ -17,6 +17,7 @@ import { ErroPlataforma } from './servico';
 import { desfazerUnificacao, unificarRecebimento, type ResultadoUnificacao } from './unificar-db';
 import type { TransacaoNormalizada } from './tipos';
 import type { Decisao } from './conciliacao';
+import { AVISO_HOTMART, situacaoDaTransacao, type SituacaoDaTransacao } from './hotmart-regras';
 
 /** Cast defensivo: JSONB legado pode guardar número como texto. */
 const N = (campo: string) =>
@@ -67,10 +68,10 @@ export async function resumoRecebimentos(
   const { rows } = await pool.query(
     `SELECT t.plataforma,
             t.status_conciliacao,
-            COALESCE(SUM(${N('valor_bruto')})   FILTER (WHERE NOT ${morta} AND ${noPeriodoVenda}), 0) AS vendido,
+            COALESCE(SUM(${N('valor_bruto')})   FILTER (WHERE NOT ${morta} AND par->>'status' <> 'AGUARDANDO' AND ${noPeriodoVenda}), 0) AS vendido,
             COALESCE(SUM(${N('valor_liquido')}) FILTER (WHERE par->>'status' = 'RECEBIDO' AND ${noPeriodoCaixa}), 0) AS recebido,
             COALESCE(SUM(${N('valor_liquido')}) FILTER (WHERE par->>'status' IN ('PENDENTE','CONFIRMADO','ATRASADO')), 0) AS a_receber,
-            COALESCE(SUM(${N('valor_taxa')})    FILTER (WHERE NOT ${morta} AND ${noPeriodoVenda}), 0) AS taxas,
+            COALESCE(SUM(${N('valor_taxa')})    FILTER (WHERE NOT ${morta} AND par->>'status' <> 'AGUARDANDO' AND ${noPeriodoVenda}), 0) AS taxas,
             COALESCE(SUM(${N('valor_bruto')})   FILTER (WHERE par->>'status' IN ('ESTORNADO','CHARGEBACK') AND ${noPeriodoVenda}), 0) AS estornado
        ${PARCELAS}
       GROUP BY t.plataforma, t.status_conciliacao`,
@@ -138,6 +139,12 @@ export interface ItemRecebimento {
   proxima_previsao: string;
   conciliacao: Decisao | null;
   atualizado_em: string;
+  /** A situação na plataforma, em uma frase ("aguardando o cliente pagar"...). */
+  situacao: SituacaoDaTransacao;
+  /** Em quantas vezes o comprador parcelou, quando só é informativo. */
+  parcelas_do_comprador: number;
+  /** Os avisos recebidos da plataforma, do mais antigo ao mais novo. */
+  avisos: Array<{ quando: string; aviso: string; rotulo: string }>;
 }
 
 export async function listarRecebimentos(
@@ -169,6 +176,34 @@ export async function listarRecebimentos(
       LIMIT $${args.length}`,
     args,
   );
+
+  // Os avisos de cada transação listada, numa consulta só: é o histórico
+  // que responde "de onde saiu esse recebimento".
+  const chaves = rows.map(r => `${r.plataforma}|${r.id_transacao}`);
+  const avisosPor = new Map<string, ItemRecebimento['avisos']>();
+  if (rows.length > 0) {
+    const { rows: evs } = await pool.query(
+      `SELECT plataforma, data->'transacao'->>'id_transacao' AS tx, id_externo, tipo, created_at
+         FROM plataformas_eventos
+        WHERE tenant_id = $1
+          AND (plataforma || '|' || (data->'transacao'->>'id_transacao')) = ANY($2::text[])
+        ORDER BY created_at ASC`,
+      [tenantId, chaves],
+    );
+    for (const e of evs) {
+      const k = `${e.plataforma}|${e.tx}`;
+      const bruto = String(e.id_externo ?? '').split(':').pop() ?? '';
+      const lista = avisosPor.get(k) ?? [];
+      lista.push({
+        quando: e.created_at ? new Date(e.created_at).toISOString() : '',
+        aviso: bruto || String(e.tipo ?? ''),
+        rotulo: AVISO_HOTMART[bruto] ?? String(e.tipo ?? '').toLowerCase().replace(/_/g, ' '),
+      });
+      avisosPor.set(k, lista);
+    }
+  }
+
+  const fmtData = (iso: string) => (/^\d{4}-\d{2}-\d{2}/.test(iso) ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : iso);
 
   return rows.map(r => {
     const d = (r.data ?? {}) as Record<string, unknown>;
@@ -203,6 +238,9 @@ export async function listarRecebimentos(
       proxima_previsao: proxima,
       conciliacao: (d.conciliacao ?? null) as Decisao | null,
       atualizado_em: r.updated_at ? new Date(r.updated_at).toISOString() : '',
+      situacao: situacaoDaTransacao(parcelas, fmtData),
+      parcelas_do_comprador: Number(transacao.parcelas_do_comprador ?? parcelas.length) || 1,
+      avisos: avisosPor.get(`${r.plataforma}|${r.id_transacao}`) ?? [],
     };
   });
 }
