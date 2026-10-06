@@ -28,6 +28,7 @@ As cores cruas que restam no repositório (745) e os hex (314) ficam todos nas e
 | Moldura | `MolduraDaPagina`, `PageShell` (adaptador) | larguras e respiros diferentes | tokens `--fin-page-pad` e `--fin-page-max` | varredura |
 | Botão | `ui/button` | 32px, raio 14, sombra azul de outro sistema, `text-white` | 44/40px, raio 8, texto sobre preenchimento | fotos e tema escuro |
 | Campo, área de texto, select | `ui/input`, `ui/textarea`, `ui/select` | 32px, raio 10, anel próprio somado ao global | 44/40px, raio 8, foco pelo anel global | fotos |
+| Raio | escala do Tailwind (`rounded-*`) | múltiplos do raio de cartão: `rounded-lg` de controle saía com 14px e `rounded-2xl` com 25px | presa aos três níveis (6, 8 e 14px) | medição em produção do login e foto de controle |
 | Badge e chip | `ui/badge`, `fin/StatusChip` | pílula versus retângulo | retângulo de raio pequeno nos dois | fotos |
 | Cartão | `ui/card`, `.kpi-card`, `.bento-card`, `.section-card`, `lg-glass-*` | sem sombra, fundo `#ffffff` fixo (quebrava no escuro), faixa colorida no topo | branco por token, sopro de sombra, raio 14 | tema escuro |
 | Indicador | `fin/MetricCard`, `IconeDeIndicador` | rótulo em maiúsculas, sem ícone | ícone opcional (40 cartões), rótulo legível, padding 20 | fotos com dados |

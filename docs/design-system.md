@@ -57,7 +57,7 @@ O corpo da página é 14px. Pesos usados: 400, 500 e 600.
 ### Espaço, raio, sombra, altura, movimento e camada
 
 - **Espaço:** `--fin-s-1..6` = 4, 8, 12, 16, 24 e 40px. O respiro da página é `--fin-page-pad`: 16px até 1023px, 24px no desktop e 32px a partir de 1280px. A largura de leitura é `--fin-page-max` (1440px).
-- **Raio:** `--fin-r-sm` 6px (chip, badge), `--fin-r-md` 8px (botão, campo, item de menu), `--fin-r-lg` 14px (cartão, painel, diálogo).
+- **Raio:** `--fin-r-sm` 6px (chip, badge), `--fin-r-md` 8px (botão, campo, item de menu), `--fin-r-lg` 14px (cartão, painel, diálogo). A escala do Tailwind está presa a esses três níveis: `rounded-sm` = 6, `rounded-md` e `rounded-lg` = 8 (controle), `rounded-xl` e `rounded-2xl` = 14 (cartão).
 - **Sombra:**
   - `--fin-e-card`: um sopro, para cartão em repouso;
   - `--fin-e1`: o que flutua (menu, popover);

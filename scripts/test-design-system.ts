@@ -93,6 +93,9 @@ const css = readFileSync(new URL('../src/app/globals.css', import.meta.url), 'ut
 const dialetoComValor = [...css.matchAll(/^\s*--(t|lg|ink)-[a-z0-9-]+:\s*(#[0-9a-fA-F]{3,8}|rgba?\()/gm)].map(m => m[0].trim());
 eq(dialetoComValor, [], 'os dialetos --t-*, --lg-* e --ink-* não declaram cor: são apelidos de --fin-*');
 
+// Escala de raio do Tailwind presa aos três níveis: controle 8, cartão 14.
+eq(['--radius-md: var(--fin-r-md)', '--radius-lg: var(--fin-r-md)', '--radius-xl: var(--fin-r-lg)', '--radius-2xl: var(--fin-r-lg)'].every(t => css.includes(t)), true, 'rounded-lg é raio de controle e rounded-xl/2xl é raio de cartão');
+
 for (const v of ['--fin-violet', '--fin-e-card', '--fin-z-modal', '--fin-z-popover', '--fin-h-padrao', '--fin-dur-base']) {
   eq(css.includes(`${v}:`), true, `token ${v} declarado`);
 }

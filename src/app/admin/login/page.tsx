@@ -62,7 +62,7 @@ export default function AdminLoginPage() {
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
-              className="w-full bg-[var(--fin-surface)] border border-[var(--fin-border)] text-[var(--fin-text)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--fin-accent)]/50 focus:border-[var(--fin-accent)] placeholder-[var(--fin-text-3)]"
+              className="w-full bg-[var(--fin-surface)] border border-[var(--fin-border)] text-[var(--fin-text)] h-11 rounded-lg px-3 py-2 text-base lg:h-10 md:text-sm focus:outline-none focus:ring-2 focus:ring-[var(--fin-accent)]/50 focus:border-[var(--fin-accent)] placeholder-[var(--fin-text-3)]"
               placeholder="admin@entur.com"
             />
           </div>
@@ -74,7 +74,7 @@ export default function AdminLoginPage() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               required
-              className="w-full bg-[var(--fin-surface)] border border-[var(--fin-border)] text-[var(--fin-text)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--fin-accent)]/50 focus:border-[var(--fin-accent)] placeholder-[var(--fin-text-3)]"
+              className="w-full bg-[var(--fin-surface)] border border-[var(--fin-border)] text-[var(--fin-text)] h-11 rounded-lg px-3 py-2 text-base lg:h-10 md:text-sm focus:outline-none focus:ring-2 focus:ring-[var(--fin-accent)]/50 focus:border-[var(--fin-accent)] placeholder-[var(--fin-text-3)]"
               placeholder="••••••••"
             />
           </div>
@@ -82,7 +82,7 @@ export default function AdminLoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] font-medium rounded-lg px-4 py-2.5 text-sm hover:bg-[var(--fin-accent-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] font-medium h-11 rounded-lg px-4 text-sm lg:h-10 hover:bg-[var(--fin-accent-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {loading ? (
               <>
