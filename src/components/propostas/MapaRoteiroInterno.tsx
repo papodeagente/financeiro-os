@@ -72,7 +72,7 @@ export default function MapaRoteiroInterno({ pontos, height = '300px' }: Props) 
     // Draw route line
     if (markers.length > 1) {
       L.polyline(markers, {
-        color: '#004aad',
+        color: 'var(--fin-accent)',
         weight: 3,
         opacity: 0.7,
         dashArray: '8, 8',

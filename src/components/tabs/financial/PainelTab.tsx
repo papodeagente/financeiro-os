@@ -118,10 +118,10 @@ export default function PainelTab({ grupo, onChange }: PainelTabProps) {
   const mixAptos = vendas.vendasPorTipo;
   const maxMix = Math.max(...Object.values(mixAptos), 1);
   const mixColors: Record<string, string> = {
-    SGL: '#3b82f6',
-    DBL: '#8b5cf6',
-    TPL: '#f59e0b',
-    QDP: '#22c55e',
+    SGL: 'var(--fin-accent)',
+    DBL: 'var(--fin-violet)',
+    TPL: 'var(--fin-warning)',
+    QDP: 'var(--fin-positive)',
   };
 
   // Repasses por categoria
@@ -129,9 +129,10 @@ export default function PainelTab({ grupo, onChange }: PainelTabProps) {
   const maxRepasse = repassesPorCategoriaEntries.length > 0
     ? Math.max(...repassesPorCategoriaEntries.map(([, v]) => Math.abs(v)), 1)
     : 1;
+  // Cor por CATEGORIA (nominal): séries do sistema, nunca cor de status.
   const catColors = [
-    '#ef4444', '#f59e0b', '#3b82f6', '#8b5cf6', '#22c55e',
-    '#ec4899', '#14b8a6', '#f97316', '#6366f1',
+    'var(--fin-serie-1)', 'var(--fin-serie-2)', 'var(--fin-serie-3)',
+    'var(--fin-serie-4)', 'var(--fin-serie-5)', 'var(--fin-serie-6)',
   ];
 
   // Alertas
@@ -185,71 +186,71 @@ export default function PainelTab({ grupo, onChange }: PainelTabProps) {
           label="PAX Vendidos"
           value={String(paxVendidos)}
           icon={Users}
-          color={'#3b82f6'}
-          bgColor={'#dbeafe'}
+          color={'var(--fin-accent)'}
+          bgColor={'var(--fin-accent-soft)'}
         />
         <BigNumberCard
           label="PAX Restantes"
           value={String(paxRestantes)}
           icon={Users}
-          color="#6b7280"
-          bgColor="#f3f4f6"
+          color="var(--fin-text-3)"
+          bgColor="var(--fin-surface-2)"
         />
         <BigNumberCard
           label="Faturamento"
           value={formatBRL(faturamento)}
           icon={TrendingUp}
-          color="#3b82f6"
-          bgColor="#dbeafe"
+          color="var(--fin-accent)"
+          bgColor="var(--fin-accent-soft)"
         />
         <BigNumberCard
           label="Receita (Comissao)"
           value={formatBRL(receita)}
           icon={DollarSign}
-          color="#22c55e"
-          bgColor="#dcfce7"
+          color="var(--fin-positive)"
+          bgColor="var(--fin-positive-soft)"
         />
         <BigNumberCard
           label="Recebido"
           value={formatBRL(receitaRecebida)}
           icon={Wallet}
-          color="#22c55e"
-          bgColor="#dcfce7"
+          color="var(--fin-positive)"
+          bgColor="var(--fin-positive-soft)"
         />
         <BigNumberCard
           label="A Receber"
           value={formatBRL(aReceber)}
           icon={Clock}
-          color="#f59e0b"
-          bgColor="#fef3c7"
+          color="var(--fin-warning)"
+          bgColor="var(--fin-warning-soft)"
         />
         <BigNumberCard
           label="Repasses Fornecedores"
           value={formatBRL(repassesTotal)}
           icon={Receipt}
-          color="#ef4444"
-          bgColor="#fee2e2"
+          color="var(--fin-negative)"
+          bgColor="var(--fin-negative-soft)"
         />
         <BigNumberCard
           label="A Pagar"
           value={formatBRL(aPagar)}
           icon={CreditCard}
-          color="#f97316"
-          bgColor="#ffedd5"
+          color="var(--fin-warning)"
+          bgColor="var(--fin-warning-soft)"
         />
         <BigNumberCard
           label="Lucro Projetado"
           value={formatBRL(lucroProjetado)}
           icon={lucroProjetado >= 0 ? TrendingUp : TrendingDown}
-          color={lucroProjetado >= 0 ? '#22c55e' : '#ef4444'}
-          bgColor={lucroProjetado >= 0 ? '#dcfce7' : '#fee2e2'}
+          color={lucroProjetado >= 0 ? 'var(--fin-positive)' : 'var(--fin-negative)'}
+          bgColor={lucroProjetado >= 0 ? 'var(--fin-positive-soft)' : 'var(--fin-negative-soft)'}
         />
         <BigNumberCard
           label="Margem %"
           value={`${margemPct.toFixed(1)}%`}
           icon={Percent}
-          color={margemPct > 0 ? '#22c55e' : '#ef4444'}
-          bgColor={margemPct > 0 ? '#dcfce7' : '#fee2e2'}
+          color={margemPct > 0 ? 'var(--fin-positive)' : 'var(--fin-negative)'}
+          bgColor={margemPct > 0 ? 'var(--fin-positive-soft)' : 'var(--fin-negative-soft)'}
         />
       </div>
 
@@ -257,9 +258,9 @@ export default function PainelTab({ grupo, onChange }: PainelTabProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Mix */}
         <Card className="border-0 shadow-md">
-          <CardHeader style={{ backgroundColor: '#1a1a2e' }}>
+          <CardHeader style={{ backgroundColor: 'var(--fin-surface)' }}>
             <CardTitle className="text-[var(--t-text)] text-sm flex items-center gap-2">
-              <Users className="h-4 w-4" style={{ color: '#d4a853' }} />
+              <Users className="h-4 w-4" style={{ color: 'var(--fin-accent)' }} />
               Mix de Apartamentos
             </CardTitle>
           </CardHeader>
@@ -270,7 +271,7 @@ export default function PainelTab({ grupo, onChange }: PainelTabProps) {
                 label={tipo}
                 value={qtd as number}
                 maxValue={maxMix}
-                color={mixColors[tipo] ?? '#6b7280'}
+                color={mixColors[tipo] ?? 'var(--fin-text-3)'}
                 displayValue={`${qtd} PAX`}
               />
             ))}
@@ -284,9 +285,9 @@ export default function PainelTab({ grupo, onChange }: PainelTabProps) {
 
         {/* Repasses por categoria */}
         <Card className="border-0 shadow-md">
-          <CardHeader style={{ backgroundColor: '#1a1a2e' }}>
+          <CardHeader style={{ backgroundColor: 'var(--fin-surface)' }}>
             <CardTitle className="text-[var(--t-text)] text-sm flex items-center gap-2">
-              <Receipt className="h-4 w-4" style={{ color: '#d4a853' }} />
+              <Receipt className="h-4 w-4" style={{ color: 'var(--fin-accent)' }} />
               Repasses por Categoria
             </CardTitle>
           </CardHeader>
@@ -315,9 +316,9 @@ export default function PainelTab({ grupo, onChange }: PainelTabProps) {
       {/* Alertas */}
       {alertas.length > 0 && (
         <Card className="border-0 shadow-md">
-          <CardHeader style={{ backgroundColor: '#1a1a2e' }}>
+          <CardHeader style={{ backgroundColor: 'var(--fin-surface)' }}>
             <CardTitle className="text-[var(--t-text)] text-sm flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4" style={{ color: '#d4a853' }} />
+              <AlertTriangle className="h-4 w-4" style={{ color: 'var(--fin-accent)' }} />
               Alertas
             </CardTitle>
           </CardHeader>
@@ -328,18 +329,18 @@ export default function PainelTab({ grupo, onChange }: PainelTabProps) {
                 variant={alerta.tipo === 'error' ? 'destructive' : 'default'}
                 className={
                   alerta.tipo === 'error'
-                    ? 'border-red-300 bg-red-50'
-                    : 'border-yellow-300 bg-yellow-50'
+                    ? 'border-[var(--fin-negative)]/30 bg-[var(--fin-negative-soft)]'
+                    : 'border-[var(--fin-warning)]/30 bg-[var(--fin-warning-soft)]'
                 }
               >
                 <AlertTriangle
                   className={`h-4 w-4 ${
-                    alerta.tipo === 'error' ? 'text-red-600' : 'text-yellow-600'
-                  }`}
+ alerta.tipo === 'error' ? 'text-[var(--fin-negative-text)]' : 'text-[var(--fin-warning-text)]'
+ }`}
                 />
                 <AlertDescription
                   className={
-                    alerta.tipo === 'error' ? 'text-red-800' : 'text-yellow-800'
+                    alerta.tipo === 'error' ? 'text-[var(--fin-negative-text)]' : 'text-[var(--fin-warning-text)]'
                   }
                 >
                   {alerta.msg}
@@ -353,7 +354,7 @@ export default function PainelTab({ grupo, onChange }: PainelTabProps) {
       {alertas.length === 0 && (
         <div
           className="rounded-lg p-4 text-center"
-          style={{ backgroundColor: '#1a1a2e' }}
+          style={{ backgroundColor: 'var(--fin-surface)' }}
         >
           <p className="text-[var(--t-text-secondary)] text-sm">
             Nenhum alerta no momento. Tudo em dia!

@@ -63,7 +63,7 @@ interface Municipio {
 }
 
 const CARTAO =
-  'flex flex-col gap-4 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-4 lg:p-5';
+  'flex flex-col gap-4 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-4 lg:p-5 shadow-[var(--fin-e-card)]';
 
 function dataBR(iso: string): string {
   const t = String(iso ?? '').slice(0, 10);
@@ -605,7 +605,7 @@ export default function NotaFiscalPage() {
                         direto, mantendo altura de toque de 48px no celular. */}
                     <Link
                       href="/financeiro-ag/receber"
-                      className="fin-t-body inline-flex h-12 w-full items-center justify-center rounded-[var(--fin-r-md)] bg-[var(--fin-accent)] px-4 text-white hover:opacity-90 lg:h-11 lg:w-auto"
+                      className="fin-t-body inline-flex h-12 w-full items-center justify-center rounded-[var(--fin-r-md)] bg-[var(--fin-accent)] px-4 text-[var(--fin-text-on-fill)] hover:opacity-90 lg:h-11 lg:w-auto"
                     >
                       <FileText aria-hidden="true" className="mr-2 size-4" />
                       Ir para Contas a receber

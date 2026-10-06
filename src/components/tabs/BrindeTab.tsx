@@ -53,7 +53,7 @@ export function BrindeTab({ grupo, onChange }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-3" style={{ boxShadow: 'var(--elevation-1)' }}>
+      <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-3 shadow-[var(--fin-e-card)]" style={{ boxShadow: 'var(--elevation-1)' }}>
         <span className="text-[11px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide">Melhor Preço Unitário</span>
         <div className="text-lg font-bold text-[var(--t-text)] mt-0.5">{formatBRL(totals.melhorPreco)}</div>
       </div>
@@ -64,7 +64,7 @@ export function BrindeTab({ grupo, onChange }: Props) {
           const isMin = f.valor_unidade !== null && f.valor_unidade > 0 && f.valor_unidade === totals.melhorPreco;
 
           return (
-            <div key={fIdx} className={`rounded-xl border p-4 ${isMin ? 'border-[var(--t-status-success)]/30 bg-[var(--t-status-success-bg)]/30' : 'border-[var(--t-border)] bg-[var(--t-surface)]'}`} style={{ boxShadow: 'var(--elevation-1)' }}>
+            <div key={fIdx} className={`rounded-xl border p-4 ${isMin ? 'border-[var(--t-status-success)]/30 bg-[var(--t-status-success-bg)]/30' : 'border-[var(--t-border)] bg-[var(--t-surface)]'} shadow-[var(--fin-e-card)]`} style={{ boxShadow: 'var(--elevation-1)' }}>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg bg-[var(--t-green)]/10 flex items-center justify-center">

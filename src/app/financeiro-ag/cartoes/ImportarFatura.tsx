@@ -7,7 +7,7 @@ import type { ItemConciliado, ResumoImportacao } from '@/lib/cartao-lancamentos'
 import { Money } from '@/components/fin/Money';
 import { toast } from '@/lib/toast';
 
-const CARTAO = 'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]';
+const CARTAO = 'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]';
 const BOTAO =
   'inline-flex h-9 items-center gap-1.5 rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] ' +
   'bg-[var(--fin-surface)] px-3 fin-t-body text-[var(--fin-text-2)] hover:bg-[var(--fin-surface-2)] ' +

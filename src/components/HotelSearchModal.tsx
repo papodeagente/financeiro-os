@@ -20,7 +20,7 @@ function StarRating({ rating }: { rating: number }) {
   return (
     <div className="flex items-center gap-0.5">
       {[1, 2, 3, 4, 5].map(i => (
-        <Star key={i} className={`w-3 h-3 ${i <= Math.round(rating) ? 'text-amber-400 fill-amber-400' : 'text-[var(--t-text-muted)]'}`} />
+        <Star key={i} className={`w-3 h-3 ${i <= Math.round(rating) ? 'text-[var(--fin-warning-text)] fill-[var(--fin-warning)]' : 'text-[var(--t-text-muted)]'}`} />
       ))}
     </div>
   );
@@ -29,7 +29,7 @@ function StarRating({ rating }: { rating: number }) {
 function HotelClassBadge({ stars }: { stars?: number }) {
   if (!stars) return null;
   return (
-    <span className="text-[10px] bg-amber-400/15 text-amber-400 px-1.5 py-0.5 rounded font-medium">
+    <span className="text-[10px] bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)] px-1.5 py-0.5 rounded font-medium">
       {'★'.repeat(stars)} {stars} estrelas
     </span>
   );
@@ -164,13 +164,13 @@ export function HotelSearchModal({
             </div>
             <div className="flex items-end">
               <button onClick={buscar} disabled={searching}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[var(--t-green)] text-white rounded-lg hover:opacity-90 disabled:opacity-50 text-sm font-medium">
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[var(--t-green)] text-[var(--fin-text-on-fill)] rounded-lg hover:opacity-90 disabled:opacity-50 text-sm font-medium">
                 {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                 Buscar
               </button>
             </div>
           </div>
-          {error && <div className="text-red-400 text-xs mt-2">{error}</div>}
+          {error && <div className="text-[var(--fin-negative-text)] text-xs mt-2">{error}</div>}
         </div>
 
         {/* Results */}
@@ -232,7 +232,7 @@ export function HotelSearchModal({
                             </div>
                           )}
                           {hotel.eco_certified && (
-                            <span className="text-[9px] bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 rounded">Eco</span>
+                            <span className="text-[9px] bg-[var(--fin-positive-soft)] text-[var(--fin-positive)] px-1.5 py-0.5 rounded">Eco</span>
                           )}
                         </div>
                       </div>
@@ -347,13 +347,13 @@ export function HotelSearchModal({
                               <div key={rb.name} className="bg-[var(--t-surface)] rounded-lg px-2 py-1.5">
                                 <div className="flex items-center justify-between">
                                   <span className="text-[10px] text-[var(--t-text)]">{rb.name}</span>
-                                  <span className={`text-[10px] font-medium ${pct >= 60 ? 'text-emerald-400' : pct >= 40 ? 'text-amber-400' : 'text-red-400'}`}>
+                                  <span className={`text-[10px] font-medium ${pct >= 60 ? 'text-[var(--fin-positive)]' : pct >= 40 ? 'text-[var(--fin-warning-text)]' : 'text-[var(--fin-negative-text)]'}`}>
                                     {pct}%
                                   </span>
                                 </div>
                                 <div className="w-full h-1 bg-[var(--t-border)] rounded-full mt-1">
                                   <div
-                                    className={`h-full rounded-full ${pct >= 60 ? 'bg-emerald-400' : pct >= 40 ? 'bg-amber-400' : 'bg-red-400'}`}
+                                    className={`h-full rounded-full ${pct >= 60 ? 'bg-[var(--fin-positive)]' : pct >= 40 ? 'bg-[var(--fin-warning)]' : 'bg-[var(--fin-negative)]'}`}
                                     style={{ width: `${pct}%` }}
                                   />
                                 </div>
@@ -377,7 +377,7 @@ export function HotelSearchModal({
                               <div key={n} className="flex items-center gap-2">
                                 <span className="text-[10px] text-[var(--t-text-muted)] w-3">{n}</span>
                                 <div className="flex-1 h-1.5 bg-[var(--t-border)] rounded-full">
-                                  <div className="h-full bg-amber-400 rounded-full" style={{ width: `${pct}%` }} />
+                                  <div className="h-full bg-[var(--fin-warning)] rounded-full" style={{ width: `${pct}%` }} />
                                 </div>
                                 <span className="text-[9px] text-[var(--t-text-muted)] w-10 text-right">{count}</span>
                               </div>
@@ -407,7 +407,7 @@ export function HotelSearchModal({
 
                     {/* Excluded amenities */}
                     {hotel.excluded_amenities && hotel.excluded_amenities.length > 0 && (
-                      <div className="text-[10px] text-red-400/70">
+                      <div className="text-[10px] text-[var(--fin-negative-text)]/70">
                         {hotel.excluded_amenities.join(' · ')}
                       </div>
                     )}
@@ -418,7 +418,7 @@ export function HotelSearchModal({
                         href={`https://www.google.com/maps?q=${hotel.gps_coordinates.latitude},${hotel.gps_coordinates.longitude}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-[10px] text-blue-400 hover:underline"
+                        className="inline-flex items-center gap-1 text-[10px] text-[var(--fin-accent)] hover:underline"
                       >
                         <MapPin className="w-3 h-3" /> Ver no Google Maps
                       </a>

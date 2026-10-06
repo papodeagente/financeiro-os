@@ -118,7 +118,7 @@ export default function AgenciaPage() {
   }
 
   return (
-    <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
+    <div className="w-full bg-[var(--fin-bg)] px-[var(--fin-page-pad)] py-[var(--fin-page-pad)] text-[var(--fin-text)]">
       <div className="max-w-3xl mx-auto space-y-6">
 
         {/* Header */}
@@ -130,7 +130,7 @@ export default function AgenciaPage() {
           <Button
             onClick={handleSave}
             disabled={saving}
-            className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold gap-2"
+            className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--fin-text-on-fill)] font-semibold gap-2"
           >
             {saving ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -400,7 +400,7 @@ export default function AgenciaPage() {
                       'h-9 w-9 rounded-md text-sm transition-colors focus:outline-none ' +
                       'focus-visible:ring-2 focus-visible:ring-[var(--t-accent)] ' +
                       (marcado
-                        ? 'bg-[var(--t-accent)] text-white font-semibold'
+                        ? 'bg-[var(--t-accent)] text-[var(--fin-text-on-fill)] font-semibold'
                         : 'bg-[var(--t-bg)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]')
                     }
                     title={dia === 31 ? 'Dia 31 vale último dia do mês' : `Dia ${dia}`}
@@ -465,7 +465,7 @@ export default function AgenciaPage() {
           <Button
             onClick={handleSave}
             disabled={saving}
-            className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold gap-2 px-8"
+            className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--fin-text-on-fill)] font-semibold gap-2 px-8"
           >
             {saving ? (
               <Loader2 className="w-4 h-4 animate-spin" />

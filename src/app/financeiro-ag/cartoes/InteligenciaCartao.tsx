@@ -7,7 +7,7 @@ import { gastosPorEstabelecimento, comprometidoFuturo } from '@/lib/cartao-lanca
 import { hojeISO, mesDe, num, round2, soma } from '@/lib/money';
 import { Money } from '@/components/fin/Money';
 
-const CARTAO = 'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]';
+const CARTAO = 'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]';
 const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 function rotuloMes(ym: string): string {

@@ -9,7 +9,7 @@ export function ListSkeleton({ items = 6, showAvatar = false }: ListSkeletonProp
       {Array.from({ length: items }).map((_, i) => (
         <div
           key={i}
-          className="flex items-center gap-3 p-3 rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)]"
+          className="flex items-center gap-3 p-3 rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] shadow-[var(--fin-e-card)]"
         >
           {showAvatar && <div className="skeleton w-9 h-9 rounded-full shrink-0" />}
           <div className="flex-1 space-y-2">

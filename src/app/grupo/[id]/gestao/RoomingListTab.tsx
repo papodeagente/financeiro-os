@@ -220,7 +220,7 @@ export function RoomingListTab({ grupoId, onChange }: Props) {
           <div className="kpi-card__value tabular-nums">
             {stats?.ocupacao_total ?? 0}<span className="text-[16px] font-normal" style={{ color: 'var(--lg-text-3)' }}>/{stats?.capacidade_total ?? 0}</span>
           </div>
-          <div className="mt-2 h-1.5 bg-[#F1F5F9] rounded-full overflow-hidden">
+          <div className="mt-2 h-1.5 bg-[var(--fin-surface-2)] rounded-full overflow-hidden">
             <div className="h-full transition-all" style={{ width: `${Math.min(alocacaoPct, 100)}%`, background: 'var(--lg-accent)' }} />
           </div>
         </div>
@@ -252,11 +252,11 @@ export function RoomingListTab({ grupoId, onChange }: Props) {
           {data.sem_quarto.length > 0 ? (
             <div
               className="rounded-[12px] p-3 border"
-              style={{ background: '#FFFBEB', borderColor: '#FDE68A' }}
+              style={{ background: 'var(--fin-warning-soft)', borderColor: 'color-mix(in srgb, var(--fin-warning) 40%, transparent)' }}
             >
               <div className="flex items-center gap-2 mb-2">
-                <AlertCircle className="w-4 h-4" style={{ color: '#92400E' }} />
-                <span className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: '#92400E' }}>
+                <AlertCircle className="w-4 h-4" style={{ color: 'var(--fin-warning-text)' }} />
+                <span className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: 'var(--fin-warning-text)' }}>
                   Aguardando alocação ({data.sem_quarto.length})
                 </span>
               </div>
@@ -274,10 +274,10 @@ export function RoomingListTab({ grupoId, onChange }: Props) {
           ) : data.quartos.length > 0 ? (
             <div
               className="rounded-[12px] p-3 border flex items-center gap-2"
-              style={{ background: '#ECFDF5', borderColor: '#A7F3D0' }}
+              style={{ background: 'var(--fin-positive-soft)', borderColor: 'color-mix(in srgb, var(--fin-positive) 40%, transparent)' }}
             >
-              <Check className="w-4 h-4" style={{ color: '#065F46' }} />
-              <span className="text-[13px]" style={{ color: '#065F46' }}>
+              <Check className="w-4 h-4" style={{ color: 'var(--fin-positive)' }} />
+              <span className="text-[13px]" style={{ color: 'var(--fin-positive)' }}>
                 Todos os passageiros estão alocados.
               </span>
             </div>
@@ -437,18 +437,18 @@ function QuartoCard({
   const Icon = q.capacidade === 1 ? BedSingle : BedDouble;
 
   const corBorda = q.bloqueado
-    ? '#94A3B8'
+    ? 'var(--fin-text-3)'
     : q.excesso
-      ? '#EF4444'
+      ? 'var(--fin-negative)'
       : q.completo
-        ? '#10B981'
+        ? 'var(--fin-positive)'
         : 'var(--lg-border-base)';
 
   return (
     <div
       className="rounded-[12px] p-4 relative"
       style={{
-        background: q.bloqueado ? '#F8FAFC' : 'var(--lg-surface-solid)',
+        background: q.bloqueado ? 'var(--fin-surface-2)' : 'var(--lg-surface-solid)',
         border: `1px solid ${corBorda}`,
         boxShadow: 'var(--lg-shadow-card)',
         opacity: q.bloqueado ? 0.65 : 1,
@@ -457,7 +457,7 @@ function QuartoCard({
       <div className="flex items-start gap-3">
         <div
           className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0"
-          style={{ background: q.bloqueado ? '#F1F5F9' : 'var(--lg-accent-fill)', color: q.bloqueado ? '#94A3B8' : 'var(--lg-accent)' }}
+          style={{ background: q.bloqueado ? 'var(--fin-surface-2)' : 'var(--lg-accent-fill)', color: q.bloqueado ? 'var(--fin-text-3)' : 'var(--lg-accent)' }}
         >
           <Icon className="w-4 h-4" />
         </div>
@@ -494,7 +494,7 @@ function QuartoCard({
       </div>
 
       {q.bloqueado && q.motivo_bloqueio && (
-        <p className="text-[11px] italic mt-2 px-2 py-1 rounded" style={{ background: '#F1F5F9', color: 'var(--lg-text-3)' }}>
+        <p className="text-[11px] italic mt-2 px-2 py-1 rounded" style={{ background: 'var(--fin-surface-2)', color: 'var(--lg-text-3)' }}>
           Motivo: {q.motivo_bloqueio}
         </p>
       )}
@@ -518,7 +518,7 @@ function QuartoCard({
               <li
                 key={o.id}
                 className="flex items-center justify-between px-2 py-1.5 rounded-[6px] text-[12px] group"
-                style={{ background: '#F8FAFC' }}
+                style={{ background: 'var(--fin-surface-2)' }}
               >
                 <div className="flex items-center gap-1.5 min-w-0">
                   <Users className="w-3 h-3 shrink-0" style={{ color: 'var(--lg-text-4)' }} />
@@ -557,7 +557,7 @@ function QuartoCard({
                   <button
                     key={p.id}
                     onClick={() => { setPickerOpen(false); onAlocar(p.id); }}
-                    className="w-full text-left px-2 py-1.5 rounded-[6px] text-[12px] hover:bg-[#EFF6FF]"
+                    className="w-full text-left px-2 py-1.5 rounded-[6px] text-[12px] hover:bg-[var(--fin-accent-soft)]"
                     style={{ border: '1px solid var(--lg-border-base)' }}
                   >
                     {p.nome_completo}
@@ -594,7 +594,7 @@ function PassageiroChip({
       <button
         onClick={() => setOpen(o => !o)}
         className="inline-flex items-center gap-1 px-2 py-1 rounded-[6px] text-[12px] hover:opacity-80"
-        style={{ background: 'white', border: '1px solid #FDE68A', color: '#92400E' }}
+        style={{ background: 'white', border: '1px solid #FDE68A', color: 'var(--fin-warning-text)' }}
       >
         <Users className="w-3 h-3" />
         {pax.nome_completo}
@@ -605,7 +605,7 @@ function PassageiroChip({
           className="absolute z-30 mt-1 left-0 min-w-[200px] rounded-[8px] shadow-lg overflow-hidden"
           style={{ background: 'white', border: '1px solid var(--lg-border-base)' }}
         >
-          <div className="px-2 py-1.5 text-[10px] uppercase tracking-wide" style={{ color: 'var(--lg-text-3)', background: '#F8FAFC', borderBottom: '1px solid var(--lg-border-base)' }}>
+          <div className="px-2 py-1.5 text-[10px] uppercase tracking-wide" style={{ color: 'var(--lg-text-3)', background: 'var(--fin-surface-2)', borderBottom: '1px solid var(--lg-border-base)' }}>
             Alocar em…
           </div>
           {quartosDisponiveis.length === 0 ? (
@@ -617,7 +617,7 @@ function PassageiroChip({
               <button
                 key={q.id}
                 onClick={() => { setOpen(false); onAlocar(q.id); }}
-                className="w-full text-left px-3 py-2 text-[12px] hover:bg-[#EFF6FF]"
+                className="w-full text-left px-3 py-2 text-[12px] hover:bg-[var(--fin-accent-soft)]"
               >
                 <div style={{ color: 'var(--lg-text)' }}>{q.numero}</div>
                 <div className="text-[10px] mono" style={{ color: 'var(--lg-text-3)' }}>
@@ -626,7 +626,7 @@ function PassageiroChip({
               </button>
             ))
           )}
-          <button onClick={() => setOpen(false)} className="w-full text-center text-[11px] py-1.5" style={{ color: 'var(--lg-text-3)', background: '#F8FAFC' }}>
+          <button onClick={() => setOpen(false)} className="w-full text-center text-[11px] py-1.5" style={{ color: 'var(--lg-text-3)', background: 'var(--fin-surface-2)' }}>
             fechar
           </button>
         </div>

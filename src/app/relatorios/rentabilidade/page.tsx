@@ -21,15 +21,15 @@ const PCT = (v: number) => `${v.toFixed(1)}%`;
 type Agrupamento = 'TIPO_PRODUTO' | 'VENDEDOR' | 'GRUPO' | 'MES';
 
 const TIPO_COLORS: Record<string, string> = {
-  AEREO: 'text-blue-400',
-  HOTEL: 'text-purple-400',
+  AEREO: 'text-[var(--fin-accent)]',
+  HOTEL: 'text-[var(--fin-violet)]',
   PACOTE: 'text-[var(--t-green)]',
   SEGURO: 'text-[var(--t-amber)]',
-  RECEPTIVO: 'text-cyan-400',
-  CRUZEIRO: 'text-indigo-400',
-  CARRO: 'text-orange-400',
-  INGRESSO: 'text-pink-400',
-  GRUPO: 'text-emerald-400',
+  RECEPTIVO: 'text-[var(--fin-info)]',
+  CRUZEIRO: 'text-[var(--fin-accent)]',
+  CARRO: 'text-[var(--fin-warning-text)]',
+  INGRESSO: 'text-[var(--fin-violet)]',
+  GRUPO: 'text-[var(--fin-positive)]',
   OUTROS: 'text-[var(--t-text-muted)]',
 };
 
@@ -165,7 +165,7 @@ export default function RentabilidadePage() {
   }
 
   return (
-    <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
+    <div className="w-full bg-[var(--fin-bg)] px-[var(--fin-page-pad)] py-[var(--fin-page-pad)] text-[var(--fin-text)]">
       <div className="max-w-7xl mx-auto space-y-6">
 
         <div className="flex items-center justify-between">
@@ -173,7 +173,7 @@ export default function RentabilidadePage() {
             <h1 className="text-2xl font-bold text-[var(--t-text)]">Rentabilidade</h1>
             <p className="text-[var(--t-text-secondary)] text-sm mt-1">Análise de margem e lucro por produto, vendedor e período</p>
           </div>
-          <Button onClick={handleExport} className="bg-[var(--t-green)] hover:brightness-110 text-white dark:text-[#0a0a14] font-semibold">
+          <Button onClick={handleExport} className="bg-[var(--t-green)] hover:brightness-110 text-[var(--fin-text-on-fill)]  font-semibold">
             <Download className="w-4 h-4 mr-2" /> Exportar CSV
           </Button>
         </div>
@@ -203,7 +203,7 @@ export default function RentabilidadePage() {
         </Card>
 
         {/* KPIs */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
             <CardContent className="p-4 flex items-center gap-4">
               <DollarSign className="w-8 h-8 text-[var(--t-blue)] shrink-0" />
@@ -233,10 +233,10 @@ export default function RentabilidadePage() {
           </Card>
           <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
             <CardContent className="p-4 flex items-center gap-4">
-              <BarChart3 className="w-8 h-8 text-purple-400 shrink-0" />
+              <BarChart3 className="w-8 h-8 text-[var(--fin-violet)] shrink-0" />
               <div>
                 <p className="text-[var(--t-text-muted)] text-xs uppercase">Vendas</p>
-                <p className="text-xl font-bold text-purple-400">{totals.qtd}</p>
+                <p className="text-xl font-bold text-[var(--fin-violet)]">{totals.qtd}</p>
               </div>
             </CardContent>
           </Card>

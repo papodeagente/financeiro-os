@@ -1,5 +1,6 @@
 'use client';
 
+import { ArrowDownLeft, ArrowUpRight, Landmark } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
 import { ContaReceber, ContaPagar, ContaBancaria, Agencia } from '@/lib/crm-types';
 import { loadEntities, loadAgencia } from '@/lib/crm-storage';
@@ -570,7 +571,7 @@ export default function FluxoCaixaPage() {
             escolhida: campo de data sempre visível vira ruído para quem usa
             os presets, que é o caso comum. */}
         {horizonteId === 'personalizado' && (
-          <div className="flex flex-wrap items-end gap-[var(--fin-s-3)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] px-[var(--fin-s-4)] py-[var(--fin-s-3)]">
+          <div className="flex flex-wrap items-end gap-[var(--fin-s-3)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] px-[var(--fin-s-4)] py-[var(--fin-s-3)] shadow-[var(--fin-e-card)]">
             <div className="flex flex-col gap-1">
               <label htmlFor="fluxo-de" className="fin-t-overline text-[var(--fin-text-3)]">De</label>
               <input
@@ -601,7 +602,7 @@ export default function FluxoCaixaPage() {
 
         <div className="grid gap-[var(--fin-s-4)] md:grid-cols-2 lg:grid-cols-4">
           <MetricCard
-            rotulo="Saldo previsto"
+            rotulo="Saldo previsto" icone={Landmark}
             valor={saldoPrevisto}
             estado={estadoValor}
             emphasis="destaque"
@@ -610,20 +611,20 @@ export default function FluxoCaixaPage() {
             explicacao="Quanto sobra no caixa ao fim do horizonte escolhido, somando o que já entrou e saiu com o que ainda está em aberto."
           />
           <MetricCard
-            rotulo="Saldo atual"
+            rotulo="Saldo atual" icone={Landmark}
             valor={saldoAtual}
             estado={estadoValor}
             tone={saldoAtual < 0 ? 'negativo' : 'neutro'}
             contexto="Saldo inicial mais recebido menos pago"
           />
           <MetricCard
-            rotulo="Entradas previstas"
+            rotulo="Entradas previstas" icone={ArrowDownLeft}
             valor={totals.entradas}
             estado={estadoValor}
             contexto={contextoEntradas}
           />
           <MetricCard
-            rotulo="Saídas previstas"
+            rotulo="Saídas previstas" icone={ArrowUpRight}
             valor={totals.saidas}
             estado={estadoValor}
             contexto={contextoSaidas}

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Package, Plane, Hotel, Ship, Car, Ticket, Shield, Users2, Boxes } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Boxes, Car, Hotel, Package, Plane, Receipt, Shield, Ship, Ticket, TrendingUp, Users2 } from 'lucide-react';
 import {
   montarPainelProdutos,
   type EntradaItem,
@@ -17,7 +17,7 @@ import { Money } from '@/components/fin/Money';
 import { Meter } from '@/components/fin/Meter';
 
 const CARTAO =
-  'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]';
+  'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]';
 
 const BLOCO =
   `${CARTAO} shadow-[0_1px_2px_rgba(15,23,42,0.04)]`;
@@ -179,27 +179,27 @@ export default function FinanceiroProdutosPage() {
 
           <div className="grid gap-[var(--fin-s-4)] sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard
-              rotulo="Vendido"
+              rotulo="Vendido" icone={ArrowDownLeft}
               valor={painel.total_venda}
               estado="ok"
               emphasis="destaque"
               contexto={`em ${painel.quantidade} ${painel.quantidade === 1 ? 'produto' : 'produtos'}${mes ? ` de ${rotuloMes(mes)}` : ''}`}
             />
             <MetricCard
-              rotulo="Custo dos fornecedores"
+              rotulo="Custo dos fornecedores" icone={ArrowUpRight}
               valor={painel.total_custo}
               estado="ok"
               contexto={`${painel.por_tipo.length} ${painel.por_tipo.length === 1 ? 'tipo de produto' : 'tipos de produto'}`}
             />
             <MetricCard
-              rotulo="Margem"
+              rotulo="Margem" icone={TrendingUp}
               valor={painel.total_margem}
               estado="ok"
               tone={painel.total_margem >= 0 ? 'positivo' : 'negativo'}
               contexto={`${painel.margem_pct.toFixed(1)}% do que foi vendido`}
             />
             <MetricCard
-              rotulo="Ticket médio"
+              rotulo="Ticket médio" icone={Receipt}
               valor={painel.ticket_medio}
               estado="ok"
               contexto="por produto vendido, não por venda"

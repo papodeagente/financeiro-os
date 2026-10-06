@@ -44,30 +44,30 @@ export default function TicketPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>;
+  if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-[var(--fin-text-3)]" /></div>;
   if (error || !ticket) {
     return (
-      <div className="max-w-2xl mx-auto p-6">
-        <button onClick={() => router.push('/suporte')} className="text-sm text-slate-500 hover:text-slate-900 mb-3">
+      <div className="mx-auto w-full max-w-2xl px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
+        <button onClick={() => router.push('/suporte')} className="text-sm text-[var(--fin-text-3)] hover:text-[var(--fin-text)] mb-3">
           ← Voltar
         </button>
-        <p className="text-slate-600">{error || 'Não encontrado'}</p>
+        <p className="text-[var(--fin-text-2)]">{error || 'Não encontrado'}</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-3xl mx-auto p-6">
-      <Link href="/suporte" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900 mb-4">
+    <div className="mx-auto w-full max-w-3xl px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
+      <Link href="/suporte" className="inline-flex items-center gap-1 text-sm text-[var(--fin-text-3)] hover:text-[var(--fin-text)] mb-4">
         <ArrowLeft className="w-3.5 h-3.5" /> Voltar pra lista
       </Link>
 
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-4">
+      <div className="bg-[var(--fin-surface)] rounded-2xl border border-[var(--fin-border)] p-5 mb-4 shadow-[var(--fin-e-card)]">
         <div className="flex items-start gap-3 mb-2">
           <CategoriaIcon categoria={ticket.categoria} />
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-bold text-slate-900">{ticket.titulo}</h1>
-            <div className="flex items-center gap-2 mt-1 flex-wrap text-[12px] text-slate-500">
+            <h1 className="text-xl font-bold text-[var(--fin-text)]">{ticket.titulo}</h1>
+            <div className="flex items-center gap-2 mt-1 flex-wrap text-[12px] text-[var(--fin-text-3)]">
               <span className="font-mono">{ticket.numero}</span>
               <span>•</span>
               <span>Aberto por {ticket.created_by_nome}</span>
@@ -77,7 +77,7 @@ export default function TicketPage() {
           </div>
           <StatusBadge status={ticket.status} />
         </div>
-        <p className="text-sm text-slate-700 whitespace-pre-wrap mt-3">{ticket.descricao}</p>
+        <p className="text-sm text-[var(--fin-text-2)] whitespace-pre-wrap mt-3">{ticket.descricao}</p>
         {Array.isArray(ticket.anexos) && ticket.anexos.length > 0 && (
           <AnexosList anexos={ticket.anexos} />
         )}
@@ -89,7 +89,7 @@ export default function TicketPage() {
           <MessageBubble key={m.id} m={m} />
         ))}
         {msgs.length === 0 && (
-          <div className="text-center text-sm text-slate-400 py-6">Sem respostas ainda</div>
+          <div className="text-center text-sm text-[var(--fin-text-3)] py-6">Sem respostas ainda</div>
         )}
       </div>
 
@@ -98,7 +98,7 @@ export default function TicketPage() {
         <ReplyBox ticketId={ticket.id} onSent={load} />
       )}
       {ticket.status === 'fechado' && (
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center text-sm text-slate-500">
+        <div className="bg-[var(--fin-surface-2)] border border-[var(--fin-border)] rounded-xl p-4 text-center text-sm text-[var(--fin-text-3)]">
           Este ticket foi fechado. Abra um novo se precisar de mais ajuda.
         </div>
       )}
@@ -151,7 +151,7 @@ function ReplyBox({ ticketId, onSent }: { ticketId: string; onSent: () => void }
   };
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-3">
+    <div className="bg-[var(--fin-surface)] rounded-xl border border-[var(--fin-border)] p-3 shadow-[var(--fin-e-card)]">
       <textarea
         value={texto}
         onChange={e => setTexto(e.target.value)}
@@ -162,20 +162,20 @@ function ReplyBox({ ticketId, onSent }: { ticketId: string; onSent: () => void }
       {anexos.length > 0 && (
         <ul className="space-y-1 mt-2">
           {anexos.map((a, i) => (
-            <li key={i} className="flex items-center gap-2 text-xs bg-slate-50 rounded px-2 py-1">
-              <Paperclip className="w-3 h-3 text-slate-500" />
+            <li key={i} className="flex items-center gap-2 text-xs bg-[var(--fin-surface-2)] rounded px-2 py-1">
+              <Paperclip className="w-3 h-3 text-[var(--fin-text-3)]" />
               <span className="flex-1 truncate">{a.nome}</span>
-              <button onClick={() => setAnexos(anexos.filter((_, j) => j !== i))} className="text-red-500 hover:text-red-700">
+              <button onClick={() => setAnexos(anexos.filter((_, j) => j !== i))} className="text-[var(--fin-negative-text)] hover:text-[var(--fin-negative-text)]">
                 <X className="w-3 h-3" />
               </button>
             </li>
           ))}
         </ul>
       )}
-      <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
+      <div className="flex items-center justify-between mt-2 pt-2 border-t border-[var(--fin-border)]">
         <button
           onClick={() => inputRef.current?.click()}
-          className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900"
+          className="inline-flex items-center gap-1 text-xs text-[var(--fin-text-2)] hover:text-[var(--fin-text)]"
         >
           {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Paperclip className="w-3.5 h-3.5" />}
           Anexar
@@ -191,7 +191,7 @@ function ReplyBox({ ticketId, onSent }: { ticketId: string; onSent: () => void }
         <button
           onClick={send}
           disabled={sending || (!texto.trim() && anexos.length === 0)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] text-xs font-semibold hover:bg-[var(--fin-accent-hover)] disabled:opacity-60"
         >
           {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
           Enviar
@@ -206,20 +206,20 @@ function MessageBubble({ m }: { m: Mensagem }) {
   return (
     <div className={`flex gap-2 ${isAdmin ? 'flex-row' : 'flex-row-reverse'}`}>
       <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-        isAdmin ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
-      }`}>
+ isAdmin ? 'bg-[var(--fin-positive-soft)] text-[var(--fin-positive)]' : 'bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]'
+ }`}>
         {isAdmin ? <Shield className="w-4 h-4" /> : <UserIcon className="w-4 h-4" />}
       </div>
       <div className={`max-w-[80%] flex-1`}>
-        <div className={`flex items-center gap-2 mb-1 text-[11px] text-slate-500 ${isAdmin ? '' : 'justify-end'}`}>
+        <div className={`flex items-center gap-2 mb-1 text-[11px] text-[var(--fin-text-3)] ${isAdmin ? '' : 'justify-end'}`}>
           <span className="font-semibold">{m.from_nome}</span>
-          {isAdmin && <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-semibold">SUPORTE</span>}
+          {isAdmin && <span className="px-1.5 py-0.5 rounded bg-[var(--fin-positive-soft)] text-[var(--fin-positive)] text-[10px] font-semibold">SUPORTE</span>}
           <span>•</span>
           <span>{new Date(m.created_at).toLocaleString('pt-BR')}</span>
         </div>
         <div className={`rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap ${
-          isAdmin ? 'bg-emerald-50 text-slate-800' : 'bg-blue-50 text-slate-800'
-        }`}>
+ isAdmin ? 'bg-[var(--fin-positive-soft)] text-[var(--fin-text)]' : 'bg-[var(--fin-accent-soft)] text-[var(--fin-text)]'
+ }`}>
           {m.mensagem}
           {Array.isArray(m.anexos) && m.anexos.length > 0 && (
             <AnexosList anexos={m.anexos} />
@@ -241,14 +241,14 @@ function AnexosList({ anexos }: { anexos: { url: string; nome: string }[] }) {
             href={a.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2 p-2 rounded-md bg-white/60 border border-slate-200 hover:border-blue-300 hover:bg-white transition-colors"
+            className="flex items-center gap-2 p-2 rounded-md bg-[var(--fin-surface)]/60 border border-[var(--fin-border)] hover:border-[var(--fin-accent)]/30 hover:bg-[var(--fin-surface)] transition-colors"
           >
             {isImg ? (
-              <ImageIcon className="w-4 h-4 text-blue-500 shrink-0" />
+              <ImageIcon className="w-4 h-4 text-[var(--fin-accent)] shrink-0" />
             ) : (
-              <Paperclip className="w-4 h-4 text-slate-500 shrink-0" />
+              <Paperclip className="w-4 h-4 text-[var(--fin-text-3)] shrink-0" />
             )}
-            <span className="text-xs truncate text-slate-700">{a.nome}</span>
+            <span className="text-xs truncate text-[var(--fin-text-2)]">{a.nome}</span>
           </a>
         );
       })}
@@ -258,10 +258,10 @@ function AnexosList({ anexos }: { anexos: { url: string; nome: string }[] }) {
 
 function CategoriaIcon({ categoria }: { categoria: string }) {
   const cfg: Record<string, { Icon: React.ComponentType<{ className?: string }>; bg: string }> = {
-    bug: { Icon: Bug, bg: 'bg-red-50 text-red-600' },
-    duvida: { Icon: HelpCircle, bg: 'bg-blue-50 text-blue-600' },
-    sugestao: { Icon: Lightbulb, bg: 'bg-amber-50 text-amber-600' },
-    outro: { Icon: Circle, bg: 'bg-slate-100 text-slate-500' },
+    bug: { Icon: Bug, bg: 'bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)]' },
+    duvida: { Icon: HelpCircle, bg: 'bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]' },
+    sugestao: { Icon: Lightbulb, bg: 'bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)]' },
+    outro: { Icon: Circle, bg: 'bg-[var(--fin-surface-2)] text-[var(--fin-text-3)]' },
   };
   const c = cfg[categoria] || cfg.outro;
   return (
@@ -273,11 +273,11 @@ function CategoriaIcon({ categoria }: { categoria: string }) {
 
 function StatusBadge({ status }: { status: string }) {
   const cfg: Record<string, { Icon: React.ComponentType<{ className?: string }>; bg: string; text: string; label: string }> = {
-    aberto: { Icon: Circle, bg: 'bg-blue-50', text: 'text-blue-700', label: 'Aberto' },
-    em_andamento: { Icon: Clock, bg: 'bg-amber-50', text: 'text-amber-700', label: 'Em andamento' },
-    aguardando_usuario: { Icon: AlertCircle, bg: 'bg-purple-50', text: 'text-purple-700', label: 'Aguardando você' },
-    resolvido: { Icon: CheckCircle2, bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Resolvido' },
-    fechado: { Icon: CheckCircle2, bg: 'bg-slate-100', text: 'text-slate-600', label: 'Fechado' },
+    aberto: { Icon: Circle, bg: 'bg-[var(--fin-accent-soft)]', text: 'text-[var(--fin-accent)]', label: 'Aberto' },
+    em_andamento: { Icon: Clock, bg: 'bg-[var(--fin-warning-soft)]', text: 'text-[var(--fin-warning-text)]', label: 'Em andamento' },
+    aguardando_usuario: { Icon: AlertCircle, bg: 'bg-[var(--fin-violet-soft)]', text: 'text-[var(--fin-violet)]', label: 'Aguardando você' },
+    resolvido: { Icon: CheckCircle2, bg: 'bg-[var(--fin-positive-soft)]', text: 'text-[var(--fin-positive)]', label: 'Resolvido' },
+    fechado: { Icon: CheckCircle2, bg: 'bg-[var(--fin-surface-2)]', text: 'text-[var(--fin-text-2)]', label: 'Fechado' },
   };
   const c = cfg[status] || cfg.aberto;
   return (

@@ -36,7 +36,7 @@ interface Props {
  */
 export function OutlineView(props: Props) {
   return (
-    <div className="h-full overflow-y-auto bg-white">
+    <div className="h-full overflow-y-auto bg-[var(--fin-surface)]">
       <div className="max-w-3xl mx-auto px-6 py-6">
         <OutlineNode {...props} nodeId={props.data.rootId} depth={0} />
       </div>
@@ -172,25 +172,25 @@ function Row({
       onClick={onSelect}
       onDoubleClick={onStartEdit}
       className={`group flex items-center gap-2 py-1.5 px-2 rounded-md cursor-pointer transition-colors ${
-        selected ? 'bg-blue-50' : 'hover:bg-slate-50'
-      }`}
+ selected ? 'bg-[var(--fin-accent-soft)]' : 'hover:bg-[var(--fin-surface-2)]'
+ }`}
       style={{ paddingLeft: 8 + indent }}
     >
       {/* Chevron / placeholder */}
       {childCount > 0 ? (
         <button
           onClick={(e) => { e.stopPropagation(); onToggleCollapse(); }}
-          className="shrink-0 w-4 h-4 rounded hover:bg-slate-200 flex items-center justify-center"
+          className="shrink-0 w-4 h-4 rounded hover:bg-[var(--fin-surface-sunken)] flex items-center justify-center"
           title={isCollapsed ? 'Expandir' : 'Recolher'}
         >
           <ChevronRight
-            className="w-3 h-3 text-slate-500 transition-transform"
+            className="w-3 h-3 text-[var(--fin-text-3)] transition-transform"
             style={{ transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)' }}
           />
         </button>
       ) : (
         <span className="shrink-0 w-4 h-4 inline-flex items-center justify-center">
-          <span className="w-1 h-1 rounded-full bg-slate-300" />
+          <span className="w-1 h-1 rounded-full bg-[var(--fin-border-strong)]" />
         </span>
       )}
 
@@ -224,32 +224,32 @@ function Row({
             }
           }}
           className={`flex-1 bg-transparent outline-none text-[14px] ${
-            isRoot ? 'font-bold text-slate-900' : 'font-normal text-slate-800'
-          }`}
+ isRoot ? 'font-bold text-[var(--fin-text)]' : 'font-normal text-[var(--fin-text)]'
+ }`}
           placeholder={isRoot ? 'Ideia central' : 'Novo tópico'}
         />
       ) : (
         <span
           className={`flex-1 text-[14px] leading-snug ${
-            isRoot ? 'font-bold text-slate-900' : node.style?.bold ? 'font-semibold text-slate-800' : 'font-normal text-slate-800'
-          }`}
+ isRoot ? 'font-bold text-[var(--fin-text)]' : node.style?.bold ? 'font-semibold text-[var(--fin-text)]' : 'font-normal text-[var(--fin-text)]'
+ }`}
         >
           {node.text || (isRoot ? 'Ideia central' : 'Novo tópico')}
         </span>
       )}
 
       {/* Indicadores */}
-      <div className="inline-flex items-center gap-1 shrink-0 text-slate-400">
+      <div className="inline-flex items-center gap-1 shrink-0 text-[var(--fin-text-3)]">
         {hasImage && <ImageIcon className="w-3 h-3" />}
-        {hasLinks && <Link2 className="w-3 h-3 text-blue-500" />}
+        {hasLinks && <Link2 className="w-3 h-3 text-[var(--fin-accent)]" />}
         {hasAttachments && <Paperclip className="w-3 h-3" />}
-        {hasNotes && <StickyNote className="w-3 h-3 text-amber-500" />}
+        {hasNotes && <StickyNote className="w-3 h-3 text-[var(--fin-warning-text)]" />}
       </div>
 
       {/* Ação inline: add child no hover */}
       <button
         onClick={(e) => { e.stopPropagation(); onAddChild(); }}
-        className="shrink-0 w-5 h-5 rounded text-slate-400 hover:bg-blue-100 hover:text-blue-600 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
+        className="shrink-0 w-5 h-5 rounded text-[var(--fin-text-3)] hover:bg-[var(--fin-accent-soft)] hover:text-[var(--fin-accent)] opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
         title="Adicionar filho (Tab)"
       >
         <Plus className="w-3 h-3" />

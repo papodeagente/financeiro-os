@@ -60,7 +60,7 @@ export function PhoneFrame({ children, time }: Props) {
         >
           {/* Screen content area */}
           <div
-            className="relative w-full h-full overflow-hidden bg-white"
+            className="relative w-full h-full overflow-hidden bg-[var(--fin-surface)]"
             style={{ borderRadius: '40px' }}
           >
             {/* Status bar (hora + indicadores) */}

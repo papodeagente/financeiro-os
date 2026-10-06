@@ -355,7 +355,7 @@ export default function CrmConfigPage() {
       {/* Tenant + connection summary */}
       <section className="mb-6">
         <div className="rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)] p-4 flex items-center gap-4">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${conected ? 'bg-green-500/10' : 'bg-amber-500/10'}`}>
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${conected ? 'bg-[var(--fin-positive-soft)]' : 'bg-[var(--fin-warning-soft)]'}`}>
             <Link2 className={`w-5 h-5 ${conected ? 'text-[var(--crm-ok)]' : 'text-[var(--crm-warn)]'}`} />
           </div>
           <div className="flex-1">
@@ -505,7 +505,7 @@ export default function CrmConfigPage() {
                 onClick={() => setConfig({ ...config, ativo: !config.ativo })}
                 className={`w-11 h-6 rounded-full transition-colors relative ${config.ativo ? 'bg-[var(--t-green)]' : 'bg-[var(--t-border)]'}`}
               >
-                <span className={`block w-5 h-5 rounded-full bg-white shadow absolute top-0.5 transition-transform ${config.ativo ? 'translate-x-5.5' : 'translate-x-0.5'}`} />
+                <span className={`block w-5 h-5 rounded-full bg-[var(--fin-surface)] shadow absolute top-0.5 transition-transform ${config.ativo ? 'translate-x-5.5' : 'translate-x-0.5'}`} />
               </button>
               <span className="text-[var(--text-body-sm)] text-[var(--t-text)]">
                 {config.ativo ? 'Integracao ativa' : 'Integracao pausada'}
@@ -523,7 +523,7 @@ export default function CrmConfigPage() {
                 </span>
               )}
               <button onClick={saveConfig} disabled={saving}
-                className="px-4 py-2 text-[var(--text-body-sm)] font-medium text-white bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50">
+                className="px-4 py-2 text-[var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50">
                 {saving ? 'Salvando...' : 'Salvar configuracao'}
               </button>
             </div>
@@ -551,7 +551,7 @@ export default function CrmConfigPage() {
       {status && (
         <section className="mb-8">
           <h2 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)] mb-4">Status em tempo real</h2>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="p-4 rounded-xl shadow-[var(--t-card-shadow)] bg-[var(--t-surface)]">
               <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">Circuit breaker</p>
               <p className={`text-[var(--text-body-sm)] font-medium mt-1 ${
@@ -585,7 +585,7 @@ export default function CrmConfigPage() {
               {diagLoading ? 'Carregando...' : 'Recarregar diagnostico'}
             </button>
             <button onClick={simularVenda} disabled={simulating}
-              className="px-3 py-1.5 text-[var(--text-body-sm)] text-white bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50">
+              className="px-3 py-1.5 text-[var(--text-body-sm)] text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50">
               {simulating ? 'Simulando...' : 'Simular venda do CRM'}
             </button>
           </div>
@@ -634,22 +634,22 @@ export default function CrmConfigPage() {
               </p>
             </div>
             <button onClick={reprocessarVendas} disabled={cleaning}
-              className="px-4 py-2 text-[var(--text-body-sm)] text-white bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50 shrink-0">
+              className="px-4 py-2 text-[var(--text-body-sm)] text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50 shrink-0">
               {cleaning ? 'Processando...' : 'Reprocessar vendas'}
             </button>
           </div>
         </div>
 
         {/* Reset completo de vendas (zerar para testar) */}
-        <div className="rounded-xl border-2 border-red-500/30 bg-red-500/5 p-5 mb-4">
+        <div className="rounded-xl border-2 border-[var(--fin-negative)]/30 bg-[var(--fin-negative-soft)] p-5 mb-4">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-[var(--text-body-sm)] font-medium text-red-500">⚠️ Reset completo de vendas</p>
+              <p className="text-[var(--text-body-sm)] font-medium text-[var(--fin-negative-text)]">⚠️ Reset completo de vendas</p>
               <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mt-1 max-w-2xl">
                 Apaga TODAS as vendas, contas a receber, contas a pagar, itens
                 de venda e eventos CRM deste tenant. Útil para começar testes
                 do zero quando dados antigos e novos da integração estão
-                misturados. <strong className="text-red-500">NÃO REVERSÍVEL.</strong>
+                misturados. <strong className="text-[var(--fin-negative-text)]">NÃO REVERSÍVEL.</strong>
                 <br /><br />
                 <strong>Preserva:</strong> configuração da integração CRM
                 (chaves, URLs), contas bancárias, cartões, plano de contas,
@@ -658,7 +658,7 @@ export default function CrmConfigPage() {
               </p>
             </div>
             <button onClick={resetVendas} disabled={cleaning}
-              className="px-4 py-2 text-[var(--text-body-sm)] text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 shrink-0 font-semibold">
+              className="px-4 py-2 text-[var(--text-body-sm)] text-[var(--fin-text-on-fill)] bg-[var(--fin-negative)] rounded-lg hover:bg-[var(--fin-negative)] disabled:opacity-50 shrink-0 font-semibold">
               {cleaning ? 'Processando...' : 'Resetar tudo'}
             </button>
           </div>
@@ -678,7 +678,7 @@ export default function CrmConfigPage() {
               </p>
             </div>
             <button onClick={recalcularSaldos} disabled={cleaning}
-              className="px-4 py-2 text-[var(--text-body-sm)] text-white bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50 shrink-0">
+              className="px-4 py-2 text-[var(--text-body-sm)] text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50 shrink-0">
               {cleaning ? 'Processando...' : 'Recalcular saldos'}
             </button>
           </div>
@@ -698,7 +698,7 @@ export default function CrmConfigPage() {
               </p>
             </div>
             <button onClick={reprocessarVencimentos} disabled={cleaning}
-              className="px-4 py-2 text-[var(--text-body-sm)] text-white bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50 shrink-0">
+              className="px-4 py-2 text-[var(--text-body-sm)] text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50 shrink-0">
               {cleaning ? 'Processando...' : 'Reprocessar vencimentos'}
             </button>
           </div>
@@ -749,7 +749,7 @@ export default function CrmConfigPage() {
             {direcao === 'saida' && (
               <>
                 <button onClick={dispararPendentes} disabled={retrying}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] text-white bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50">
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50">
                   <RefreshCw className={`w-3.5 h-3.5 ${retrying ? 'animate-spin' : ''}`} /> Disparar pendentes
                 </button>
                 <button onClick={retryAll} disabled={retrying}
@@ -788,10 +788,10 @@ export default function CrmConfigPage() {
                       <td className="px-4 py-2.5 text-[var(--text-body-sm)] text-[var(--t-text)]">{evt.tipo}</td>
                       <td className="px-4 py-2.5">
                         <span className={`text-[var(--text-caption)] px-2 py-0.5 rounded-full ${
-                          evt.status === 'ENVIADO' || evt.status === 'PROCESSADO' ? 'bg-green-500/10 text-[var(--crm-ok)]' :
-                          evt.status === 'FALHA' ? 'bg-red-500/10 text-[var(--crm-err)]' :
-                          'bg-amber-500/10 text-[var(--crm-warn)]'
-                        }`}>{evt.status}</span>
+ evt.status === 'ENVIADO' || evt.status === 'PROCESSADO' ? 'bg-[var(--fin-positive-soft)] text-[var(--crm-ok)]' :
+ evt.status === 'FALHA' ? 'bg-[var(--fin-negative-soft)] text-[var(--crm-err)]' :
+ 'bg-[var(--fin-warning-soft)] text-[var(--crm-warn)]'
+ }`}>{evt.status}</span>
                       </td>
                       {direcao === 'saida' && <td className="px-4 py-2.5 text-[var(--text-body-sm)] text-[var(--t-text-secondary)]">{evt.tentativas || 0}</td>}
                       {direcao === 'saida' && <td className="px-4 py-2.5 text-[var(--text-body-sm)] text-[var(--t-text-secondary)]">{evt.latencia_ms ? `${evt.latencia_ms}ms` : '—'}</td>}

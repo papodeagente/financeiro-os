@@ -26,30 +26,30 @@ import { toast } from '@/lib/toast';
 // 4 estagios: PRODUTO/PROPOSTA (Entur OS) -> ORCAMENTO/VENDA (CRM).
 // RESERVA mantido como alias visual de ORCAMENTO para grupos legados.
 const PIPELINE_COLORS: Record<string, string> = {
-  PRODUTO: 'bg-green-100 text-green-700',
-  PROPOSTA: 'bg-blue-100 text-blue-700',
-  ORCAMENTO: 'bg-amber-100 text-amber-700',
-  RESERVA: 'bg-amber-100 text-amber-700',
-  VENDA: 'bg-emerald-100 text-emerald-700',
-  INCOMPLETO: 'bg-red-100 text-red-600',
+  PRODUTO: 'bg-[var(--fin-positive-soft)] text-[var(--fin-positive)]',
+  PROPOSTA: 'bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]',
+  ORCAMENTO: 'bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)]',
+  RESERVA: 'bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)]',
+  VENDA: 'bg-[var(--fin-positive-soft)] text-[var(--fin-positive)]',
+  INCOMPLETO: 'bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)]',
 };
 
 const PIPELINE_BORDER: Record<string, string> = {
-  PRODUTO: 'border-t-green-500',
-  PROPOSTA: 'border-t-blue-500',
-  ORCAMENTO: 'border-t-amber-500',
-  RESERVA: 'border-t-amber-500',
-  VENDA: 'border-t-emerald-500',
-  INCOMPLETO: 'border-t-red-400',
+  PRODUTO: 'border-t-[var(--fin-positive)]',
+  PROPOSTA: 'border-t-[var(--fin-accent)]',
+  ORCAMENTO: 'border-t-[var(--fin-warning)]',
+  RESERVA: 'border-t-[var(--fin-warning)]',
+  VENDA: 'border-t-[var(--fin-positive)]',
+  INCOMPLETO: 'border-t-[var(--fin-negative)]',
 };
 
 const PIPELINE_DOT: Record<string, string> = {
-  PRODUTO: 'bg-green-500',
-  PROPOSTA: 'bg-blue-500',
-  ORCAMENTO: 'bg-amber-500',
-  RESERVA: 'bg-amber-500',
-  VENDA: 'bg-emerald-500',
-  INCOMPLETO: 'bg-red-400',
+  PRODUTO: 'bg-[var(--fin-positive)]',
+  PROPOSTA: 'bg-[var(--fin-accent)]',
+  ORCAMENTO: 'bg-[var(--fin-warning)]',
+  RESERVA: 'bg-[var(--fin-warning)]',
+  VENDA: 'bg-[var(--fin-positive)]',
+  INCOMPLETO: 'bg-[var(--fin-negative)]',
 };
 
 const PIPELINE_OPTIONS = ['TODOS', 'PRODUTO', 'PROPOSTA', 'ORCAMENTO', 'VENDA', 'INCOMPLETOS'] as const;
@@ -180,15 +180,15 @@ function getCompletionPercent(g: GrupoViagem): number {
 
 /** Semantic color for completion bar */
 function getCompletionColor(pct: number): string {
-  if (pct >= 80) return 'bg-green-500';
-  if (pct >= 40) return 'bg-amber-500';
-  return 'bg-red-400';
+  if (pct >= 80) return 'bg-[var(--fin-positive)]';
+  if (pct >= 40) return 'bg-[var(--fin-warning)]';
+  return 'bg-[var(--fin-negative)]';
 }
 
 function getCompletionLabel(pct: number): string {
-  if (pct >= 80) return 'text-green-600';
-  if (pct >= 40) return 'text-amber-600';
-  return 'text-red-500';
+  if (pct >= 80) return 'text-[var(--fin-positive)]';
+  if (pct >= 40) return 'text-[var(--fin-warning-text)]';
+  return 'text-[var(--fin-negative-text)]';
 }
 
 /* ─── Component ─── */
@@ -412,7 +412,7 @@ export default function GruposPage() {
             subtitle="Crie e configure roteiros de viagem para vender"
             actions={
               <>
-                <Button onClick={() => setShowNewModal(true)} className="bg-[var(--t-green)] hover:opacity-90 text-white font-semibold">
+                <Button onClick={() => setShowNewModal(true)} className="bg-[var(--t-green)] hover:opacity-90 text-[var(--fin-text-on-fill)] font-semibold">
                   <Plus className="w-4 h-4 mr-2" /> Novo Produto
                 </Button>
                 <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
@@ -434,7 +434,7 @@ export default function GruposPage() {
                 filtroStatus === 'TODOS'
                   ? 'border-[var(--t-green)] bg-[var(--t-green)]/8 text-[var(--t-green)] font-semibold ring-1 ring-[var(--t-green)]/20'
                   : 'border-[var(--t-border)] bg-[var(--t-surface)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]'
-              }`}
+              } shadow-[var(--fin-e-card)]`}
             >
               <span className="font-bold text-base">{grupos.length}</span>
               <span className="text-xs">Todos</span>
@@ -449,7 +449,7 @@ export default function GruposPage() {
                   filtroStatus === status
                     ? 'border-[var(--t-green)] bg-[var(--t-green)]/8 text-[var(--t-text)] font-semibold ring-1 ring-[var(--t-green)]/20'
                     : 'border-[var(--t-border)] bg-[var(--t-surface)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]'
-                }`}
+                } shadow-[var(--fin-e-card)]`}
               >
                 <span className={`w-2.5 h-2.5 rounded-full ${PIPELINE_DOT[status]}`} />
                 <span className="font-semibold">{statusCounts[status] || 0}</span>
@@ -462,10 +462,10 @@ export default function GruposPage() {
               <button
                 onClick={() => setFiltroStatus(filtroStatus === 'INCOMPLETOS' ? 'TODOS' : 'INCOMPLETOS')}
                 className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm transition-all ${
-                  filtroStatus === 'INCOMPLETOS'
-                    ? 'border-red-400 bg-red-50 text-red-600 font-semibold ring-1 ring-red-200'
-                    : 'border-[var(--t-border)] bg-[var(--t-surface)] text-red-400 hover:bg-red-50/50'
-                }`}
+ filtroStatus === 'INCOMPLETOS'
+ ? 'border-[var(--fin-negative)] bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)] font-semibold ring-1 ring-[var(--fin-negative)]/30'
+ : 'border-[var(--t-border)] bg-[var(--t-surface)] text-[var(--fin-negative-text)] hover:bg-[var(--fin-negative-soft)]'
+ } shadow-[var(--fin-e-card)]`}
               >
                 <AlertTriangle className="w-3.5 h-3.5" />
                 <span className="font-semibold">{statusCounts.INCOMPLETOS}</span>
@@ -483,7 +483,7 @@ export default function GruposPage() {
                 filtroTipo === 'TODOS'
                   ? 'border-[var(--t-blue)] bg-[var(--t-blue)]/8 text-[var(--t-blue)] font-semibold ring-1 ring-[var(--t-blue)]/20'
                   : 'border-[var(--t-border)] bg-[var(--t-surface)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]'
-              }`}
+              } shadow-[var(--fin-e-card)]`}
             >
               <span className="text-xs">Todos os tipos</span>
             </button>
@@ -495,7 +495,7 @@ export default function GruposPage() {
                   filtroTipo === tipo
                     ? 'border-[var(--t-blue)] bg-[var(--t-blue)]/8 text-[var(--t-text)] font-semibold ring-1 ring-[var(--t-blue)]/20'
                     : 'border-[var(--t-border)] bg-[var(--t-surface)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]'
-                }`}
+                } shadow-[var(--fin-e-card)]`}
               >
                 <span className="text-xs">{TIPO_PRODUTO_LABEL[tipo]}</span>
               </button>
@@ -558,7 +558,7 @@ export default function GruposPage() {
                 onClick={() => setAndPersistView('grid')}
                 className={`p-1.5 transition-colors ${
                   viewMode === 'grid'
-                    ? 'bg-[var(--t-green)] text-white'
+                    ? 'bg-[var(--t-green)] text-[var(--fin-text-on-fill)]'
                     : 'bg-[var(--t-surface)] text-[var(--t-text-muted)] hover:text-[var(--t-text)]'
                 }`}
                 title="Visualização em grade"
@@ -569,7 +569,7 @@ export default function GruposPage() {
                 onClick={() => setAndPersistView('list')}
                 className={`p-1.5 transition-colors ${
                   viewMode === 'list'
-                    ? 'bg-[var(--t-green)] text-white'
+                    ? 'bg-[var(--t-green)] text-[var(--fin-text-on-fill)]'
                     : 'bg-[var(--t-surface)] text-[var(--t-text-muted)] hover:text-[var(--t-text)]'
                 }`}
                 title="Visualização em lista"
@@ -688,7 +688,7 @@ export default function GruposPage() {
       {/* New Product Modal */}
       {showNewModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-[var(--t-surface)] border border-[var(--t-border)] rounded-2xl w-full max-w-md p-6" style={{ boxShadow: 'var(--elevation-4)' }}>
+          <div className="bg-[var(--t-surface)] border border-[var(--t-border)] rounded-2xl w-full max-w-md p-6 shadow-[var(--fin-e-card)]" style={{ boxShadow: 'var(--elevation-4)' }}>
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-semibold text-[var(--t-text)]">Novo Produto</h2>
               <button onClick={() => setShowNewModal(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:bg-[var(--t-surface-hover)]">
@@ -721,7 +721,7 @@ export default function GruposPage() {
                             ? 'border-[var(--t-green)] bg-[var(--t-green)]'
                             : 'border-[var(--t-border)]'
                         }`}>
-                          {newTipo === opt.key && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                          {newTipo === opt.key && <div className="w-1.5 h-1.5 rounded-full bg-[var(--fin-surface)]" />}
                         </div>
                         <span className="text-sm font-semibold text-[var(--t-text)]">{opt.titulo}</span>
                       </div>
@@ -759,7 +759,7 @@ export default function GruposPage() {
                       >
                         <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center text-xs font-bold ${
                           newTarifas.has(t.key)
-                            ? 'border-[var(--t-green)] bg-[var(--t-green)] text-white'
+                            ? 'border-[var(--t-green)] bg-[var(--t-green)] text-[var(--fin-text-on-fill)]'
                             : 'border-[var(--t-border)]'
                         }`}>
                           {newTarifas.has(t.key) && '✓'}
@@ -778,7 +778,7 @@ export default function GruposPage() {
 
             <div className="flex gap-3 mt-6">
               <Button variant="outline" onClick={() => setShowNewModal(false)} className="flex-1">Cancelar</Button>
-              <Button onClick={criarGrupo} className="flex-1 bg-[var(--t-green)] hover:opacity-90 text-white font-semibold">
+              <Button onClick={criarGrupo} className="flex-1 bg-[var(--t-green)] hover:opacity-90 text-[var(--fin-text-on-fill)] font-semibold">
                 <Plus className="w-4 h-4 mr-1" /> Criar Produto
               </Button>
             </div>
@@ -833,9 +833,9 @@ function GridCard({ g, onOpen, onDuplicate, onExport, onDelete }: CardProps) {
 
         {/* Alerta inline para incompletos */}
         {incomplete && (
-          <div className="mt-2 flex items-start gap-2 px-2.5 py-2 rounded-lg bg-red-50 border border-red-100">
-            <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
-            <span className="text-[11px] text-red-600 leading-snug">
+          <div className="mt-2 flex items-start gap-2 px-2.5 py-2 rounded-lg bg-[var(--fin-negative-soft)] border border-[var(--fin-negative)]/30">
+            <AlertTriangle className="w-3.5 h-3.5 text-[var(--fin-negative-text)] shrink-0 mt-0.5" />
+            <span className="text-[11px] text-[var(--fin-negative-text)] leading-snug">
               Falta preencher: {missing.join(', ')}
             </span>
           </div>
@@ -900,18 +900,18 @@ function GridCard({ g, onOpen, onDuplicate, onExport, onDelete }: CardProps) {
             onClick={onOpen}
           >
             {incomplete ? (
-              <Button className="w-full bg-amber-500 hover:bg-amber-600 text-white" size="sm">
+              <Button className="w-full bg-[var(--fin-warning)] hover:bg-[var(--fin-warning)] text-[var(--fin-text-on-fill)]" size="sm">
                 <AlertTriangle className="w-4 h-4 mr-1.5" /> Completar grupo
               </Button>
             ) : (
-              <Button className="w-full bg-blue-500/15 hover:bg-blue-500/25 text-blue-600 border border-blue-200" size="sm" variant="outline">
+              <Button className="w-full bg-[var(--fin-accent-soft)] hover:bg-[var(--fin-accent)]/25 text-[var(--fin-accent)] border border-[var(--fin-accent)]/30" size="sm" variant="outline">
                 <FolderOpen className="w-4 h-4 mr-1.5" /> Abrir
               </Button>
             )}
           </Link>
           <Button variant="outline" size="sm" onClick={onDuplicate} title="Duplicar"><Copy className="w-4 h-4" /></Button>
           <Button variant="outline" size="sm" onClick={onExport} title="Exportar JSON"><Download className="w-4 h-4" /></Button>
-          <Button variant="outline" size="sm" onClick={onDelete} title="Excluir" className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4" /></Button>
+          <Button variant="outline" size="sm" onClick={onDelete} title="Excluir" className="text-[var(--fin-negative-text)] hover:text-[var(--fin-negative-text)]"><Trash2 className="w-4 h-4" /></Button>
         </div>
       </CardContent>
     </Card>
@@ -929,8 +929,8 @@ function ListRow({ g, onOpen, onDuplicate, onExport, onDelete }: CardProps) {
 
   return (
     <div className={`flex items-center gap-4 px-4 py-3 bg-[var(--t-surface)] border rounded-xl hover:shadow-md transition-all group ${
-      incomplete ? 'border-red-200' : 'border-[var(--t-border)]'
-    }`}>
+ incomplete ? 'border-[var(--fin-negative)]/30' : 'border-[var(--t-border)]'
+ }`}>
       {/* Color indicator */}
       <div className={`w-1 h-10 rounded-full shrink-0 ${PIPELINE_DOT[effectiveStatus]}`} />
 
@@ -987,7 +987,7 @@ function ListRow({ g, onOpen, onDuplicate, onExport, onDelete }: CardProps) {
         <button onClick={onExport} title="Exportar" className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--t-text-muted)] hover:bg-[var(--t-surface-hover)] hover:text-[var(--t-text)]">
           <Download className="w-3.5 h-3.5" />
         </button>
-        <button onClick={onDelete} title="Excluir" className="w-7 h-7 rounded-lg flex items-center justify-center text-red-400 hover:bg-red-400/10 hover:text-red-500">
+        <button onClick={onDelete} title="Excluir" className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--fin-negative-text)] hover:bg-[var(--fin-negative-soft)] hover:text-[var(--fin-negative-text)]">
           <Trash2 className="w-3.5 h-3.5" />
         </button>
       </div>

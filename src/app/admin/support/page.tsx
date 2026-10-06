@@ -48,8 +48,8 @@ export default function AdminSupportPage() {
 
   return (
     <div className="max-w-6xl">
-      <h1 className="text-2xl font-bold text-gray-100 mb-1">Tickets de suporte</h1>
-      <p className="text-sm text-gray-400 mb-6">Todos os tickets de todas as agências.</p>
+      <h1 className="text-2xl font-bold text-[var(--fin-text)] mb-1">Tickets de suporte</h1>
+      <p className="text-sm text-[var(--fin-text-3)] mb-6">Todos os tickets de todas as agências.</p>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
@@ -64,19 +64,19 @@ export default function AdminSupportPage() {
       {/* Filtros */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         <div className="relative flex-1 min-w-[240px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--fin-text-3)]" />
           <input
             type="text"
             value={q}
             onChange={e => setQ(e.target.value)}
             placeholder="Buscar por título, número ou email..."
-            className="w-full pl-9 pr-3 py-2 rounded-lg bg-gray-900 border border-gray-800 text-sm text-gray-100 outline-none focus:border-[#d4a853]"
+            className="w-full pl-9 pr-3 py-2 rounded-lg bg-[var(--fin-surface)] border border-[var(--fin-border)] text-sm text-[var(--fin-text)] outline-none focus:border-[var(--fin-accent)]"
           />
         </div>
         <select
           value={prioFilter}
           onChange={e => setPrioFilter(e.target.value)}
-          className="px-3 py-2 rounded-lg bg-gray-900 border border-gray-800 text-sm text-gray-100 outline-none"
+          className="px-3 py-2 rounded-lg bg-[var(--fin-surface)] border border-[var(--fin-border)] text-sm text-[var(--fin-text)] outline-none"
         >
           <option value="">Todas prioridades</option>
           <option value="urgente">Urgente</option>
@@ -87,7 +87,7 @@ export default function AdminSupportPage() {
         {(statusFilter || prioFilter || q) && (
           <button
             onClick={() => { setStatusFilter(''); setPrioFilter(''); setQ(''); }}
-            className="px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-gray-100 inline-flex items-center gap-1"
+            className="px-3 py-2 rounded-lg text-sm text-[var(--fin-text-3)] hover:text-[var(--fin-text)] inline-flex items-center gap-1"
           >
             <Filter className="w-3.5 h-3.5" /> Limpar
           </button>
@@ -95,34 +95,34 @@ export default function AdminSupportPage() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-gray-500" /></div>
+        <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-[var(--fin-text-3)]" /></div>
       ) : tickets.length === 0 ? (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-10 text-center">
-          <MessageSquare className="w-8 h-8 text-gray-600 mx-auto mb-2" />
-          <p className="text-sm text-gray-400">Nenhum ticket encontrado com esses filtros.</p>
+        <div className="bg-[var(--fin-surface)] border border-[var(--fin-border)] rounded-xl p-10 text-center">
+          <MessageSquare className="w-8 h-8 text-[var(--fin-text-2)] mx-auto mb-2" />
+          <p className="text-sm text-[var(--fin-text-3)]">Nenhum ticket encontrado com esses filtros.</p>
         </div>
       ) : (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-          <ul className="divide-y divide-gray-800">
+        <div className="bg-[var(--fin-surface)] border border-[var(--fin-border)] rounded-xl overflow-hidden">
+          <ul className="divide-y divide-[var(--fin-border-strong)]">
             {tickets.map(t => (
               <li key={t.id}>
                 <Link
                   href={`/admin/support/${t.id}`}
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-gray-800/50 transition-colors"
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-[var(--fin-text)]/50 transition-colors"
                 >
                   <StatusIcon status={t.status} />
                   <CategoriaIcon categoria={t.categoria} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-gray-100 truncate">{t.titulo}</span>
-                      <span className="text-[10px] font-mono text-gray-500">{t.numero}</span>
+                      <span className="font-medium text-[var(--fin-text)] truncate">{t.titulo}</span>
+                      <span className="text-[10px] font-mono text-[var(--fin-text-3)]">{t.numero}</span>
                       {t.tem_nao_lida_admin && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-500/20 text-red-300">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)]">
                           NÃO LIDA
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] text-gray-500 mt-0.5">
+                    <p className="text-[11px] text-[var(--fin-text-3)] mt-0.5">
                       {t.tenant_nome || t.tenant_slug || t.tenant_id} ·{' '}
                       {t.created_by_nome} ({t.created_by_email}) ·{' '}
                       {t.mensagens_count} msg ·{' '}
@@ -130,7 +130,7 @@ export default function AdminSupportPage() {
                     </p>
                   </div>
                   <PrioridadeBadge prioridade={t.prioridade} />
-                  <ArrowRight className="w-4 h-4 text-gray-600" />
+                  <ArrowRight className="w-4 h-4 text-[var(--fin-text-2)]" />
                 </Link>
               </li>
             ))}
@@ -148,12 +148,12 @@ function StatCard({
   onClick?: () => void; active?: boolean;
 }) {
   const palette: Record<string, string> = {
-    blue: 'text-blue-400',
-    amber: 'text-amber-400',
-    purple: 'text-purple-400',
-    emerald: 'text-emerald-400',
-    gray: 'text-gray-400',
-    red: 'text-red-400',
+    blue: 'text-[var(--fin-accent)]',
+    amber: 'text-[var(--fin-warning-text)]',
+    purple: 'text-[var(--fin-violet)]',
+    emerald: 'text-[var(--fin-positive)]',
+    gray: 'text-[var(--fin-text-3)]',
+    red: 'text-[var(--fin-negative-text)]',
   };
   const interactive = !!onClick;
   return (
@@ -161,23 +161,23 @@ function StatCard({
       type="button"
       onClick={onClick}
       disabled={!interactive}
-      className={`text-left p-3 rounded-lg border bg-gray-900 transition-colors ${
-        active ? 'border-[#d4a853]' : 'border-gray-800 hover:border-gray-700'
-      } ${interactive ? 'cursor-pointer' : 'cursor-default'}`}
+      className={`text-left p-3 rounded-lg border bg-[var(--fin-surface)] transition-colors ${
+ active ? 'border-[var(--fin-accent)]' : 'border-[var(--fin-border)] hover:border-[var(--fin-border)]'
+ } ${interactive ? 'cursor-pointer' : 'cursor-default'}`}
     >
-      <p className="text-[10px] uppercase text-gray-500 tracking-wide">{label}</p>
-      <p className={`text-2xl font-bold ${palette[color] || 'text-gray-100'}`}>{value}</p>
+      <p className="text-[10px] uppercase text-[var(--fin-text-3)] tracking-wide">{label}</p>
+      <p className={`text-2xl font-bold ${palette[color] || 'text-[var(--fin-text)]'}`}>{value}</p>
     </button>
   );
 }
 
 function StatusIcon({ status }: { status: string }) {
   const cfg: Record<string, { Icon: React.ComponentType<{ className?: string }>; color: string }> = {
-    aberto: { Icon: Circle, color: 'text-blue-400' },
-    em_andamento: { Icon: Clock, color: 'text-amber-400' },
-    aguardando_usuario: { Icon: AlertCircle, color: 'text-purple-400' },
-    resolvido: { Icon: CheckCircle2, color: 'text-emerald-400' },
-    fechado: { Icon: CheckCircle2, color: 'text-gray-500' },
+    aberto: { Icon: Circle, color: 'text-[var(--fin-accent)]' },
+    em_andamento: { Icon: Clock, color: 'text-[var(--fin-warning-text)]' },
+    aguardando_usuario: { Icon: AlertCircle, color: 'text-[var(--fin-violet)]' },
+    resolvido: { Icon: CheckCircle2, color: 'text-[var(--fin-positive)]' },
+    fechado: { Icon: CheckCircle2, color: 'text-[var(--fin-text-3)]' },
   };
   const c = cfg[status] || cfg.aberto;
   return <c.Icon className={`w-4 h-4 ${c.color}`} />;
@@ -185,10 +185,10 @@ function StatusIcon({ status }: { status: string }) {
 
 function CategoriaIcon({ categoria }: { categoria: string }) {
   const cfg: Record<string, { Icon: React.ComponentType<{ className?: string }>; bg: string }> = {
-    bug: { Icon: Bug, bg: 'bg-red-500/15 text-red-400' },
-    duvida: { Icon: HelpCircle, bg: 'bg-blue-500/15 text-blue-400' },
-    sugestao: { Icon: Lightbulb, bg: 'bg-amber-500/15 text-amber-400' },
-    outro: { Icon: Circle, bg: 'bg-gray-800 text-gray-500' },
+    bug: { Icon: Bug, bg: 'bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)]' },
+    duvida: { Icon: HelpCircle, bg: 'bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]' },
+    sugestao: { Icon: Lightbulb, bg: 'bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)]' },
+    outro: { Icon: Circle, bg: 'bg-[var(--fin-surface)] text-[var(--fin-text-3)]' },
   };
   const c = cfg[categoria] || cfg.outro;
   return (
@@ -200,10 +200,10 @@ function CategoriaIcon({ categoria }: { categoria: string }) {
 
 function PrioridadeBadge({ prioridade }: { prioridade: string }) {
   const cfg: Record<string, { bg: string; label: string }> = {
-    baixa: { bg: 'bg-gray-800 text-gray-400', label: 'Baixa' },
-    normal: { bg: 'bg-gray-700 text-gray-300', label: 'Normal' },
-    alta: { bg: 'bg-amber-500/20 text-amber-300', label: 'Alta' },
-    urgente: { bg: 'bg-red-500/20 text-red-300', label: 'Urgente' },
+    baixa: { bg: 'bg-[var(--fin-surface)] text-[var(--fin-text-3)]', label: 'Baixa' },
+    normal: { bg: 'bg-[var(--fin-surface)] text-[var(--fin-text-3)]', label: 'Normal' },
+    alta: { bg: 'bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)]', label: 'Alta' },
+    urgente: { bg: 'bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)]', label: 'Urgente' },
   };
   const c = cfg[prioridade] || cfg.normal;
   return (

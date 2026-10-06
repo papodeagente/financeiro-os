@@ -1,5 +1,6 @@
 'use client';
 
+import { comAlfa } from '@/lib/cor';
 import { useEffect, useState, useCallback } from 'react';
 import {
   Loader2, History, FileText, UserCircle2, Bed, FileCheck2, DollarSign,
@@ -28,14 +29,14 @@ interface Props {
 
 // Cores e ícones agrupados por categoria de evento.
 const CATEGORIA: Array<{ key: string; label: string; tipos: EventoTipo[]; cor: string; Icon: React.ComponentType<{ className?: string }> }> = [
-  { key: 'reservas', label: 'Reservas / Vendas', tipos: ['reserva_criada', 'reserva_confirmada', 'reserva_cancelada', 'reserva_status_alterado', 'venda_gerada'], cor: '#2563EB', Icon: FileText },
-  { key: 'passageiros', label: 'Passageiros', tipos: ['passageiro_adicionado', 'passageiro_alterado', 'passageiro_removido'], cor: '#7C3AED', Icon: UserCircle2 },
-  { key: 'rooming', label: 'Rooming list', tipos: ['quarto_criado', 'quarto_alterado', 'quarto_removido', 'quarto_bloqueado', 'quarto_desbloqueado', 'passageiro_alocado', 'passageiro_desalocado'], cor: '#0891B2', Icon: Bed },
-  { key: 'documentos', label: 'Documentos', tipos: ['documento_criado', 'documento_aprovado', 'documento_reprovado', 'documento_atualizado', 'documento_removido'], cor: '#0EA5E9', Icon: FileCheck2 },
-  { key: 'financeiro', label: 'Financeiro', tipos: ['despesa_vinculada', 'despesa_desvinculada'], cor: '#10B981', Icon: DollarSign },
-  { key: 'materiais', label: 'Materiais', tipos: ['material_anexado', 'material_removido'], cor: '#F59E0B', Icon: Folder },
-  { key: 'tarefas', label: 'Tarefas', tipos: ['tarefa_criada', 'tarefa_concluida', 'tarefa_cancelada'], cor: '#EC4899', Icon: ListChecks },
-  { key: 'pipeline', label: 'Pipeline / Kanban', tipos: ['kanban_stage_alterado', 'grupo_criado', 'grupo_alterado'], cor: '#64748B', Icon: ArrowRightLeft },
+  { key: 'reservas', label: 'Reservas / Vendas', tipos: ['reserva_criada', 'reserva_confirmada', 'reserva_cancelada', 'reserva_status_alterado', 'venda_gerada'], cor: 'var(--fin-serie-1)', Icon: FileText },
+  { key: 'passageiros', label: 'Passageiros', tipos: ['passageiro_adicionado', 'passageiro_alterado', 'passageiro_removido'], cor: 'var(--fin-serie-5)', Icon: UserCircle2 },
+  { key: 'rooming', label: 'Rooming list', tipos: ['quarto_criado', 'quarto_alterado', 'quarto_removido', 'quarto_bloqueado', 'quarto_desbloqueado', 'passageiro_alocado', 'passageiro_desalocado'], cor: 'var(--fin-serie-3)', Icon: Bed },
+  { key: 'documentos', label: 'Documentos', tipos: ['documento_criado', 'documento_aprovado', 'documento_reprovado', 'documento_atualizado', 'documento_removido'], cor: 'var(--fin-serie-6)', Icon: FileCheck2 },
+  { key: 'financeiro', label: 'Financeiro', tipos: ['despesa_vinculada', 'despesa_desvinculada'], cor: 'var(--fin-serie-4)', Icon: DollarSign },
+  { key: 'materiais', label: 'Materiais', tipos: ['material_anexado', 'material_removido'], cor: 'var(--fin-serie-2)', Icon: Folder },
+  { key: 'tarefas', label: 'Tarefas', tipos: ['tarefa_criada', 'tarefa_concluida', 'tarefa_cancelada'], cor: 'var(--fin-text-2)', Icon: ListChecks },
+  { key: 'pipeline', label: 'Pipeline / Kanban', tipos: ['kanban_stage_alterado', 'grupo_criado', 'grupo_alterado'], cor: 'var(--fin-text-3)', Icon: ArrowRightLeft },
 ];
 
 function categoriaDoEvento(tipo: EventoTipo) {
@@ -128,7 +129,7 @@ export function HistoricoTab({ grupoId }: Props) {
               className="inline-flex items-center gap-1.5 h-[34px] px-3 rounded-[8px] text-[12px] font-semibold border transition-colors"
               style={{
                 borderColor: ativo ? c.cor : 'var(--lg-border-base)',
-                background: ativo ? `${c.cor}1A` : 'white',
+                background: ativo ? comAlfa(c.cor, 10) : 'var(--fin-surface)',
                 color: ativo ? c.cor : 'var(--lg-text-2)',
               }}
             >
@@ -196,7 +197,7 @@ export function HistoricoTab({ grupoId }: Props) {
                     >
                       <div
                         className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5"
-                        style={{ background: `${cat.cor}1A`, color: cat.cor }}
+                        style={{ background: comAlfa(cat.cor, 10), color: cat.cor }}
                       >
                         <Icon className="w-4 h-4" />
                       </div>

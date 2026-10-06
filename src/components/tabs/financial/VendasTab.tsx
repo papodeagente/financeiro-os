@@ -34,9 +34,9 @@ const FORMA_PAGAMENTO_OPTIONS: { value: FormaPagamento; label: string }[] = [
   { value: 'BOLETO', label: 'Boleto' },
 ];
 const STATUS_COLORS: Record<StatusVenda, string> = {
-  RESERVADO: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-  CONFIRMADO: 'bg-green-100 text-green-800 border-green-300',
-  CANCELADO: 'bg-red-100 text-red-800 border-red-300',
+  RESERVADO: 'bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)] border-[var(--fin-warning)]/30',
+  CONFIRMADO: 'bg-[var(--fin-positive-soft)] text-[var(--fin-positive)] border-[var(--fin-positive)]/30',
+  CANCELADO: 'bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)] border-[var(--fin-negative)]/30',
 };
 
 function emptyPassageiro(): Passageiro {
@@ -242,7 +242,7 @@ export function VendasTab({ grupo, onChange }: Props) {
         </div>
         <div className="text-center">
           <div className="text-xs text-[var(--t-accent)] uppercase tracking-wide">Descontos</div>
-          <div className="text-2xl font-bold text-red-400">{formatBRL(metrics.descontos)}</div>
+          <div className="text-2xl font-bold text-[var(--fin-negative-text)]">{formatBRL(metrics.descontos)}</div>
         </div>
         <div className="text-center">
           <div className="text-xs text-[var(--t-accent)] uppercase tracking-wide">Ticket Medio</div>
@@ -254,7 +254,7 @@ export function VendasTab({ grupo, onChange }: Props) {
       <div className="flex justify-end">
         <Button
           onClick={handleOpenDialog}
-          className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-bold"
+          className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--fin-text-on-fill)] font-bold"
         >
           + Nova Venda
         </Button>
@@ -291,14 +291,14 @@ export function VendasTab({ grupo, onChange }: Props) {
                 <td className="p-2 border">
                   <div className="font-medium">{v.cliente_nome}</div>
                   {v.is_cortesia && (
-                    <span className="text-xs text-purple-600 font-semibold">CORTESIA</span>
+                    <span className="text-xs text-[var(--fin-violet)] font-semibold">CORTESIA</span>
                   )}
                 </td>
                 <td className="p-2 border text-center font-mono">{v.tipo_apto}</td>
                 <td className="p-2 border text-center">{v.passageiros.length}</td>
                 <td className="p-2 border text-center text-xs">{formaLabel(v.forma_pagamento)}</td>
                 <td className="p-2 border text-right">{formatBRL(v.valor_total_apto)}</td>
-                <td className="p-2 border text-right text-red-600">
+                <td className="p-2 border text-right text-[var(--fin-negative-text)]">
                   {v.desconto_concedido > 0 ? formatBRL(v.desconto_concedido) : '--'}
                 </td>
                 <td className="p-2 border text-right font-bold">{formatBRL(v.valor_final)}</td>
@@ -313,7 +313,7 @@ export function VendasTab({ grupo, onChange }: Props) {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="text-xs h-7 border-green-400 text-green-700 hover:bg-green-50"
+                        className="text-xs h-7 border-[var(--fin-positive)] text-[var(--fin-positive)] hover:bg-[var(--fin-positive-soft)]"
                         onClick={() => handleChangeStatus(v.id, 'CONFIRMADO')}
                       >
                         Confirmar
@@ -323,7 +323,7 @@ export function VendasTab({ grupo, onChange }: Props) {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="text-xs h-7 border-red-400 text-red-700 hover:bg-red-50"
+                        className="text-xs h-7 border-[var(--fin-negative)] text-[var(--fin-negative-text)] hover:bg-[var(--fin-negative-soft)]"
                         onClick={() => handleChangeStatus(v.id, 'CANCELADO')}
                       >
                         Cancelar
@@ -333,7 +333,7 @@ export function VendasTab({ grupo, onChange }: Props) {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="text-xs h-7 border-yellow-400 text-yellow-700 hover:bg-yellow-50"
+                        className="text-xs h-7 border-[var(--fin-warning)] text-[var(--fin-warning-text)] hover:bg-[var(--fin-warning-soft)]"
                         onClick={() => handleChangeStatus(v.id, 'RESERVADO')}
                       >
                         Reservar
@@ -342,7 +342,7 @@ export function VendasTab({ grupo, onChange }: Props) {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="text-xs h-7 border-gray-400 text-[var(--t-text-muted)] hover:bg-[var(--t-surface-hover)]"
+                      className="text-xs h-7 border-[var(--fin-border-strong)] text-[var(--t-text-muted)] hover:bg-[var(--t-surface-hover)]"
                       onClick={() => handleDelete(v.id)}
                     >
                       Excluir
@@ -496,7 +496,7 @@ export function VendasTab({ grupo, onChange }: Props) {
                 </div>
                 <div>
                   <Label className="text-xs">Valor Final</Label>
-                  <div className="h-8 flex items-center px-3 bg-[var(--t-surface-hover)] border rounded text-sm font-bold text-green-700">
+                  <div className="h-8 flex items-center px-3 bg-[var(--t-surface-hover)] border rounded text-sm font-bold text-[var(--fin-positive)]">
                     {formatBRL(form.valor_final)}
                   </div>
                 </div>
@@ -527,9 +527,9 @@ export function VendasTab({ grupo, onChange }: Props) {
                       type="checkbox"
                       checked={form.is_cortesia}
                       onChange={e => updateForm({ is_cortesia: e.target.checked })}
-                      className="w-4 h-4 accent-[#d4a853]"
+                      className="w-4 h-4 accent-[var(--fin-accent)]"
                     />
-                    <span className="text-sm font-medium text-purple-700">Cortesia</span>
+                    <span className="text-sm font-medium text-[var(--fin-violet)]">Cortesia</span>
                   </label>
                 </div>
               </div>
@@ -611,7 +611,7 @@ export function VendasTab({ grupo, onChange }: Props) {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="text-red-500 hover:text-red-700 h-8 w-8 p-0"
+                        className="text-[var(--fin-negative-text)] hover:text-[var(--fin-negative-text)] h-8 w-8 p-0"
                         onClick={() => removePassageiro(idx)}
                       >
                         X
@@ -630,7 +630,7 @@ export function VendasTab({ grupo, onChange }: Props) {
             <Button
               onClick={handleSave}
               disabled={!form.cliente_nome || !form.tipo_apto || !form.forma_pagamento}
-              className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-bold"
+              className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--fin-text-on-fill)] font-bold"
             >
               Salvar Venda
             </Button>

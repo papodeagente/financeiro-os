@@ -444,7 +444,7 @@ export default function MetasPage() {
         </GraficoMoldura>
 
         {participantes.length === 0 && resumo.linhas.length === 0 && (
-          <div className="rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-5)]">
+          <div className="rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-5)] shadow-[var(--fin-e-card)]">
             <EmptyLesson
               motivo="sem-dado"
               titulo="Nenhuma pessoa na equipe"

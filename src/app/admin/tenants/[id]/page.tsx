@@ -125,30 +125,30 @@ export default function AdminTenantDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+        <Loader2 className="w-6 h-6 text-[var(--fin-text-3)] animate-spin" />
       </div>
     )
   }
 
   if (error || !tenant) {
     return (
-      <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl p-4">
+      <div className="bg-[var(--fin-negative-soft)] border border-[var(--fin-negative)]/30 text-[var(--fin-negative-text)] rounded-xl p-4">
         {error || 'Agencia nao encontrada'}
       </div>
     )
   }
 
   const statCards = [
-    { label: 'Usuarios', value: tenant.stats.usuarios, icon: Users, color: 'text-blue-400' },
-    { label: 'Grupos', value: tenant.stats.grupos, icon: Layers, color: 'text-purple-400' },
-    { label: 'Vendas', value: tenant.stats.vendas, icon: DollarSign, color: 'text-green-400' },
+    { label: 'Usuarios', value: tenant.stats.usuarios, icon: Users, color: 'text-[var(--fin-accent)]' },
+    { label: 'Grupos', value: tenant.stats.grupos, icon: Layers, color: 'text-[var(--fin-violet)]' },
+    { label: 'Vendas', value: tenant.stats.vendas, icon: DollarSign, color: 'text-[var(--fin-positive)]' },
   ]
 
   return (
     <div className="max-w-4xl">
       <Link
         href="/admin/tenants"
-        className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-100 transition-colors mb-6"
+        className="inline-flex items-center gap-1.5 text-sm text-[var(--fin-text-3)] hover:text-[var(--fin-text)] transition-colors mb-6"
       >
         <ArrowLeft className="w-4 h-4" />
         Voltar para Agencias
@@ -157,16 +157,16 @@ export default function AdminTenantDetailPage() {
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-100">{tenant.nome}</h1>
+          <h1 className="text-2xl font-bold text-[var(--fin-text)]">{tenant.nome}</h1>
           <div className="flex items-center gap-3 mt-2">
-            <span className="text-sm text-gray-400 font-mono">{tenant.slug}</span>
+            <span className="text-sm text-[var(--fin-text-3)] font-mono">{tenant.slug}</span>
             <StatusBadge status={tenant.status} />
             <PlanBadge plano={tenant.plano} />
           </div>
           {tenant.cnpj && (
-            <p className="text-sm text-gray-500 mt-1">CNPJ: {tenant.cnpj}</p>
+            <p className="text-sm text-[var(--fin-text-3)] mt-1">CNPJ: {tenant.cnpj}</p>
           )}
-          <p className="text-sm text-gray-500 mt-0.5">
+          <p className="text-sm text-[var(--fin-text-3)] mt-0.5">
             Criado em {new Date(tenant.created_at).toLocaleDateString('pt-BR')}
           </p>
         </div>
@@ -175,24 +175,24 @@ export default function AdminTenantDetailPage() {
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         {statCards.map(card => (
-          <div key={card.label} className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <div key={card.label} className="bg-[var(--fin-surface)] border border-[var(--fin-border)] rounded-xl p-5">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-sm text-gray-400">{card.label}</span>
+              <span className="text-sm text-[var(--fin-text-3)]">{card.label}</span>
               <card.icon className={`w-5 h-5 ${card.color}`} />
             </div>
-            <p className="text-3xl font-bold text-gray-100">{card.value}</p>
+            <p className="text-3xl font-bold text-[var(--fin-text)]">{card.value}</p>
           </div>
         ))}
       </div>
 
       {/* Actions */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-6">
-        <h2 className="text-lg font-semibold text-gray-100 mb-4">Ações</h2>
+      <div className="bg-[var(--fin-surface)] border border-[var(--fin-border)] rounded-xl p-6 mb-6">
+        <h2 className="text-lg font-semibold text-[var(--fin-text)] mb-4">Ações</h2>
         <div className="flex flex-wrap gap-3">
           <button
             onClick={handleImpersonate}
             disabled={!!actionLoading}
-            className="bg-[#d4a853] text-gray-950 font-medium rounded-lg px-4 py-2 text-sm hover:bg-[#c49a48] transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+            className="bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] font-medium rounded-lg px-4 py-2 text-sm hover:bg-[var(--fin-accent-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
           >
             {actionLoading === 'impersonate' ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -206,7 +206,7 @@ export default function AdminTenantDetailPage() {
             <button
               onClick={handleSuspend}
               disabled={!!actionLoading}
-              className="bg-red-500/15 text-red-400 border border-red-500/30 font-medium rounded-lg px-4 py-2 text-sm hover:bg-red-500/25 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+              className="bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)] border border-[var(--fin-negative)]/30 font-medium rounded-lg px-4 py-2 text-sm hover:bg-[var(--fin-negative)]/25 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
             >
               {actionLoading === 'suspend' ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -219,7 +219,7 @@ export default function AdminTenantDetailPage() {
             <button
               onClick={handleReactivate}
               disabled={!!actionLoading}
-              className="bg-green-500/15 text-green-400 border border-green-500/30 font-medium rounded-lg px-4 py-2 text-sm hover:bg-green-500/25 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+              className="bg-[var(--fin-positive-soft)] text-[var(--fin-positive)] border border-[var(--fin-positive)]/30 font-medium rounded-lg px-4 py-2 text-sm hover:bg-[var(--fin-positive)]/25 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
             >
               {actionLoading === 'reactivate' ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -233,28 +233,28 @@ export default function AdminTenantDetailPage() {
       </div>
 
       {/* Edit Form */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-gray-100 mb-4">Editar Agencia</h2>
+      <div className="bg-[var(--fin-surface)] border border-[var(--fin-border)] rounded-xl p-6">
+        <h2 className="text-lg font-semibold text-[var(--fin-text)] mb-4">Editar Agencia</h2>
 
         <form onSubmit={handleSave} className="space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">Nome</label>
+              <label className="block text-sm font-medium text-[var(--fin-text-3)] mb-1.5">Nome</label>
               <input
                 type="text"
                 value={editNome}
                 onChange={e => setEditNome(e.target.value)}
                 required
-                className="w-full bg-gray-800 border border-gray-700 text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d4a853]/50 focus:border-[#d4a853]"
+                className="w-full bg-[var(--fin-surface)] border border-[var(--fin-border)] text-[var(--fin-text)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--fin-accent)]/50 focus:border-[var(--fin-accent)]"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">Plano</label>
+              <label className="block text-sm font-medium text-[var(--fin-text-3)] mb-1.5">Plano</label>
               <select
                 value={editPlano}
                 onChange={e => setEditPlano(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d4a853]/50 focus:border-[#d4a853]"
+                className="w-full bg-[var(--fin-surface)] border border-[var(--fin-border)] text-[var(--fin-text)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--fin-accent)]/50 focus:border-[var(--fin-accent)]"
               >
                 <option value="free">Free</option>
                 <option value="pro">Pro</option>
@@ -267,7 +267,7 @@ export default function AdminTenantDetailPage() {
             <button
               type="submit"
               disabled={saving}
-              className="bg-[#d4a853] text-gray-950 font-medium rounded-lg px-5 py-2.5 text-sm hover:bg-[#c49a48] transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+              className="bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] font-medium rounded-lg px-5 py-2.5 text-sm hover:bg-[var(--fin-accent-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
             >
               {saving ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -278,7 +278,7 @@ export default function AdminTenantDetailPage() {
             </button>
 
             {saveMessage && (
-              <span className={`text-sm ${saveMessage.includes('Erro') ? 'text-red-400' : 'text-green-400'}`}>
+              <span className={`text-sm ${saveMessage.includes('Erro') ? 'text-[var(--fin-negative-text)]' : 'text-[var(--fin-positive)]'}`}>
                 {saveMessage}
               </span>
             )}
@@ -291,13 +291,13 @@ export default function AdminTenantDetailPage() {
 
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    ativo: 'bg-green-500/15 text-green-400',
-    suspenso: 'bg-red-500/15 text-red-400',
-    trial: 'bg-yellow-500/15 text-yellow-400',
+    ativo: 'bg-[var(--fin-positive-soft)] text-[var(--fin-positive)]',
+    suspenso: 'bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)]',
+    trial: 'bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)]',
   }
 
   return (
-    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${styles[status] || 'bg-gray-700 text-gray-300'}`}>
+    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${styles[status] || 'bg-[var(--fin-surface)] text-[var(--fin-text-3)]'}`}>
       {status}
     </span>
   )
@@ -305,13 +305,13 @@ function StatusBadge({ status }: { status: string }) {
 
 function PlanBadge({ plano }: { plano: string }) {
   const styles: Record<string, string> = {
-    free: 'bg-gray-700/50 text-gray-300',
-    pro: 'bg-blue-500/15 text-blue-400',
-    enterprise: 'bg-[#d4a853]/15 text-[#d4a853]',
+    free: 'bg-[var(--fin-text)]/50 text-[var(--fin-text-3)]',
+    pro: 'bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]',
+    enterprise: 'bg-[var(--fin-accent)]/15 text-[var(--fin-accent)]',
   }
 
   return (
-    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${styles[plano] || 'bg-gray-700 text-gray-300'}`}>
+    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${styles[plano] || 'bg-[var(--fin-surface)] text-[var(--fin-text-3)]'}`}>
       {plano}
     </span>
   )

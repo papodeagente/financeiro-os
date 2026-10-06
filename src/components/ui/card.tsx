@@ -12,7 +12,7 @@ function Card({
       data-slot="card"
       data-size={size}
       className={cn(
-        "group/card flex flex-col gap-4 overflow-hidden border border-[var(--fin-border)] bg-[var(--fin-surface)] py-5 text-[var(--fin-text)] shadow-[var(--fin-e0)] transition-colors duration-200 has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 rounded-[var(--fin-r-lg)] *:[img:first-child]:rounded-t-[var(--fin-r-lg)] *:[img:last-child]:rounded-b-[var(--fin-r-lg)]",
+        "group/card flex flex-col gap-4 overflow-hidden border border-[var(--fin-border)] bg-[var(--fin-surface)] py-5 text-[var(--fin-text)] shadow-[var(--fin-e-card)] transition-colors duration-[var(--fin-dur-base)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 rounded-[var(--fin-r-lg)] *:[img:first-child]:rounded-t-[var(--fin-r-lg)] *:[img:last-child]:rounded-b-[var(--fin-r-lg)]",
         className
       )}
       {...props}
@@ -38,7 +38,7 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card-title"
       className={cn(
-        "font-heading text-base leading-snug font-medium group-data-[size=sm]/card:text-sm",
+        "font-heading text-base leading-snug font-semibold text-[var(--fin-text)] group-data-[size=sm]/card:text-sm",
         className
       )}
       {...props}

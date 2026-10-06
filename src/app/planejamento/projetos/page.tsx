@@ -81,18 +81,18 @@ export default function ProjetosPage() {
   };
 
   if (loading) return (
-    <div className="p-6">
+    <div className="w-full px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
       <PageHeader title="Projetos comerciais" />
       <SkeletonCardGrid count={6} />
     </div>
   );
 
   return (
-    <div className="p-6">
+    <div className="w-full px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
       <PageHeader
         title="Projetos comerciais"
         actions={
-          <button onClick={openNew} className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] font-medium text-white bg-[var(--t-green)] rounded-lg hover:opacity-90 transition-opacity">
+          <button onClick={openNew} className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90 transition-opacity">
             <Plus className="w-4 h-4" /> Novo projeto
           </button>
         }
@@ -106,7 +106,7 @@ export default function ProjetosPage() {
           action={{ label: 'Criar projeto', onClick: openNew }}
         />
       ) : (
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {COLUMNS.map(status => (
             <div
               key={status}
@@ -213,13 +213,13 @@ export default function ProjetosPage() {
               <div className="flex gap-2 pt-4">
                 <button
                   onClick={async () => { await save(editing); setSheetOpen(false); }}
-                  className="flex-1 px-4 py-2 text-[var(--text-body-sm)] font-medium text-white bg-[var(--t-green)] rounded-lg hover:opacity-90"
+                  className="flex-1 px-4 py-2 text-[var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90"
                 >
                   Salvar
                 </button>
                 <button
                   onClick={async () => { await remove(editing.id); setSheetOpen(false); }}
-                  className="px-4 py-2 text-[var(--text-body-sm)] text-red-400 border border-red-400/30 rounded-lg hover:bg-red-400/10"
+                  className="px-4 py-2 text-[var(--text-body-sm)] text-[var(--fin-negative-text)] border border-[var(--fin-negative)]/30 rounded-lg hover:bg-[var(--fin-negative-soft)]"
                 >
                   Excluir
                 </button>

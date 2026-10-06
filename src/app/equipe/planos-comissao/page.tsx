@@ -115,7 +115,7 @@ export default function PlanosComissaoPage() {
   }
 
   return (
-    <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
+    <div className="w-full bg-[var(--fin-bg)] px-[var(--fin-page-pad)] py-[var(--fin-page-pad)] text-[var(--fin-text)]">
       <div className="max-w-5xl mx-auto space-y-6">
 
         {/* Header */}
@@ -124,7 +124,7 @@ export default function PlanosComissaoPage() {
             <h1 className="text-2xl font-bold text-[var(--t-text)]">Planos de Comissão</h1>
             <p className="text-[var(--t-text-secondary)] text-sm mt-1">Configure regras de comissionamento por vendedor</p>
           </div>
-          <Button onClick={openNew} className="bg-[var(--t-green)] hover:brightness-110 text-white dark:text-[#0a0a14] font-semibold">
+          <Button onClick={openNew} className="bg-[var(--t-green)] hover:brightness-110 text-[var(--fin-text-on-fill)]  font-semibold">
             <Plus className="w-4 h-4 mr-2" /> Novo Plano
           </Button>
         </div>
@@ -178,7 +178,7 @@ export default function PlanosComissaoPage() {
                 ) : (
                   <div className="space-y-2">
                     {faixas.map((f, i) => (
-                      <div key={i} className="grid grid-cols-4 gap-2 items-end">
+                      <div key={i} className="grid grid-cols-2 gap-2 items-end lg:grid-cols-4">
                         <div>
                           <label className="text-[10px] text-[var(--t-text-muted)]">De (R$)</label>
                           <Input type="number" min={0} value={f.de} onChange={e => { const u = [...faixas]; u[i] = { ...u[i], de: parseFloat(e.target.value) || 0 }; setFaixas(u); }}
@@ -217,7 +217,7 @@ export default function PlanosComissaoPage() {
                 ) : (
                   <div className="space-y-2">
                     {regrasProduto.map((r, i) => (
-                      <div key={i} className="grid grid-cols-3 gap-2 items-end">
+                      <div key={i} className="grid grid-cols-1 gap-2 items-end sm:grid-cols-3">
                         <div>
                           <label className="text-[10px] text-[var(--t-text-muted)]">Produto</label>
                           <select value={r.tipo_produto} onChange={e => { const u = [...regrasProduto]; u[i] = { ...u[i], tipo_produto: e.target.value }; setRegrasProduto(u); }}
@@ -241,7 +241,7 @@ export default function PlanosComissaoPage() {
               </div>
 
               <div className="flex gap-2">
-                <Button onClick={handleSave} className="bg-[var(--t-green)] hover:brightness-110 text-white dark:text-[#0a0a14] font-semibold">
+                <Button onClick={handleSave} className="bg-[var(--t-green)] hover:brightness-110 text-[var(--fin-text-on-fill)]  font-semibold">
                   <Check className="w-4 h-4 mr-1" /> {editId ? 'Salvar' : 'Criar'}
                 </Button>
                 <Button variant="outline" onClick={() => setShowForm(false)} className="border-[var(--t-border)] text-[var(--t-text-secondary)]">Cancelar</Button>

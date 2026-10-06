@@ -373,7 +373,7 @@ function EditorInner({ id }: EditorProps) {
   return (
     <div className="flex flex-col h-screen bg-[var(--t-bg)]">
       {/* Topbar */}
-      <header className="flex items-center gap-3 px-4 py-2 border-b border-[var(--t-border)] bg-[var(--t-surface)] shrink-0">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2 border-b border-[var(--t-border)] bg-[var(--t-surface)] shrink-0">
         <button
           onClick={() => router.push('/planejamento/fluxogramas')}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md hover:bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] hover:text-[var(--t-text)] text-[var(--text-body-sm)] font-medium"
@@ -409,15 +409,15 @@ function EditorInner({ id }: EditorProps) {
         <button
           onClick={save}
           disabled={saving}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] font-medium text-white bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50"
         >
           <Save className="w-3.5 h-3.5" /> Salvar
         </button>
       </header>
 
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0 flex-col lg:flex-row">
         {/* Palette à esquerda (Miro-style) */}
-        <aside className="w-[220px] shrink-0 border-r border-[var(--t-border)] bg-[var(--t-surface)] overflow-y-auto p-3">
+        <aside className="max-h-[28vh] w-full shrink-0 overflow-y-auto border-b border-[var(--t-border)] bg-[var(--t-surface)] p-3 lg:max-h-none lg:w-[220px] lg:border-b-0 lg:border-r">
           <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wider mb-2">
             Arraste para o canvas
           </p>
@@ -448,7 +448,7 @@ function EditorInner({ id }: EditorProps) {
         </aside>
 
         {/* Canvas */}
-        <div ref={wrapperRef} className="flex-1 relative bg-[var(--t-bg)]">
+        <div ref={wrapperRef} className="relative min-h-[55vh] flex-1 bg-[var(--t-bg)] lg:min-h-0">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -491,7 +491,7 @@ function EditorInner({ id }: EditorProps) {
         </div>
 
         {/* Inspetor à direita */}
-        <aside className="w-[320px] shrink-0 border-l border-[var(--t-border)] bg-[var(--t-surface)] overflow-y-auto p-4">
+        <aside className="max-h-[45vh] w-full shrink-0 overflow-y-auto border-t border-[var(--t-border)] bg-[var(--t-surface)] p-4 lg:max-h-none lg:w-[320px] lg:border-t-0 lg:border-l">
           <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wider mb-3">Inspetor</p>
 
           {!selectedNode && !selectedEdge && (

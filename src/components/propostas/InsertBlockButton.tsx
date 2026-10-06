@@ -116,8 +116,8 @@ export function InsertBlockButton({
       {/* Linha guia central, visivel no hover do gap */}
       <div
         className={`absolute left-0 right-0 h-px transition-opacity ${
-          open ? 'opacity-100 bg-[#2563EB]' : 'opacity-0 group-hover/insert:opacity-100 bg-blue-300'
-        }`}
+ open ? 'opacity-100 bg-[var(--fin-accent)]' : 'opacity-0 group-hover/insert:opacity-100 bg-[var(--fin-accent)]'
+ }`}
         style={{ pointerEvents: 'none' }}
       />
 
@@ -128,10 +128,10 @@ export function InsertBlockButton({
           setOpen(o => !o);
         }}
         className={`relative z-10 w-6 h-6 flex items-center justify-center rounded-full transition-all shadow-sm ${
-          open
-            ? 'bg-[#2563EB] text-white scale-110'
-            : 'bg-white border border-blue-300 text-[#2563EB] opacity-0 group-hover/insert:opacity-100 hover:scale-110'
-        }`}
+ open
+ ? 'bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] scale-110'
+ : 'bg-[var(--fin-surface)] border border-[var(--fin-accent)]/30 text-[var(--fin-accent)] opacity-0 group-hover/insert:opacity-100 hover:scale-110'
+ }`}
         title="Adicionar bloco aqui"
         aria-label="Adicionar bloco"
         aria-expanded={open}
@@ -142,29 +142,29 @@ export function InsertBlockButton({
       {/* Popover com a biblioteca rapida */}
       {open && (
         <div
-          className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-30 w-80 rounded-xl bg-white border border-gray-200 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150"
+          className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-30 w-80 rounded-xl bg-[var(--fin-surface)] border border-[var(--fin-border)] shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150"
           onClick={e => e.stopPropagation()}
         >
           {/* Atalhos especiais no topo */}
           {(onSearchHotel || onSearchFlight) && (
-            <div className="px-3 py-2.5 border-b border-gray-100 bg-gray-50/50 flex items-center gap-1.5">
+            <div className="px-3 py-2.5 border-b border-[var(--fin-border)] bg-[var(--fin-surface-2)]/50 flex items-center gap-1.5">
               {onSearchHotel && (
                 <button
                   onClick={() => { onSearchHotel(); setOpen(false); }}
-                  className="flex-1 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium text-gray-700 bg-white border border-gray-200 hover:border-emerald-400 hover:bg-emerald-50/50 transition-colors"
+                  className="flex-1 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium text-[var(--fin-text-2)] bg-[var(--fin-surface)] border border-[var(--fin-border)] hover:border-[var(--fin-positive)] hover:bg-[var(--fin-positive-soft)] transition-colors"
                   title="Buscar hotel na API"
                 >
-                  <Hotel className="w-3 h-3 text-emerald-600" />
+                  <Hotel className="w-3 h-3 text-[var(--fin-positive)]" />
                   Hotel API
                 </button>
               )}
               {onSearchFlight && (
                 <button
                   onClick={() => { onSearchFlight(); setOpen(false); }}
-                  className="flex-1 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium text-gray-700 bg-white border border-gray-200 hover:border-emerald-400 hover:bg-emerald-50/50 transition-colors"
+                  className="flex-1 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium text-[var(--fin-text-2)] bg-[var(--fin-surface)] border border-[var(--fin-border)] hover:border-[var(--fin-positive)] hover:bg-[var(--fin-positive-soft)] transition-colors"
                   title="Buscar voo na API"
                 >
-                  <Plane className="w-3 h-3 text-emerald-600" />
+                  <Plane className="w-3 h-3 text-[var(--fin-positive)]" />
                   Voo API
                 </button>
               )}
@@ -175,7 +175,7 @@ export function InsertBlockButton({
           <div className="max-h-[60vh] overflow-y-auto py-1">
             {QUICK_CATEGORIES.map(cat => (
               <div key={cat.label} className="px-2 py-1.5">
-                <h4 className="text-[9px] uppercase tracking-wider font-semibold text-gray-400 px-1.5 mb-1">
+                <h4 className="text-[9px] uppercase tracking-wider font-semibold text-[var(--fin-text-3)] px-1.5 mb-1">
                   {cat.label}
                 </h4>
                 <div className="grid grid-cols-2 gap-1">
@@ -185,12 +185,12 @@ export function InsertBlockButton({
                       <button
                         key={item.tipo}
                         onClick={() => handlePick(item.tipo)}
-                        className="flex items-center gap-1.5 px-2 py-1.5 rounded-md hover:bg-blue-50 transition-colors group/item text-left"
+                        className="flex items-center gap-1.5 px-2 py-1.5 rounded-md hover:bg-[var(--fin-accent-soft)] transition-colors group/item text-left"
                       >
-                        <div className="w-6 h-6 shrink-0 flex items-center justify-center rounded bg-gray-100 group-hover/item:bg-blue-100 transition-colors">
-                          <Icon className="w-3.5 h-3.5 text-gray-600 group-hover/item:text-blue-600" />
+                        <div className="w-6 h-6 shrink-0 flex items-center justify-center rounded bg-[var(--fin-surface-2)] group-hover/item:bg-[var(--fin-accent-soft)] transition-colors">
+                          <Icon className="w-3.5 h-3.5 text-[var(--fin-text-2)] group-hover/item:text-[var(--fin-accent)]" />
                         </div>
-                        <span className="text-[11px] font-medium text-gray-700 group-hover/item:text-blue-700 truncate">
+                        <span className="text-[11px] font-medium text-[var(--fin-text-2)] group-hover/item:text-[var(--fin-accent)] truncate">
                           {item.label}
                         </span>
                       </button>

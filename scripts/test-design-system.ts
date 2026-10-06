@@ -1,0 +1,101 @@
+/**
+ * Porteiro do Design System: cor só por token.
+ *
+ * Em 05/10/2026 o sistema tinha 3.205 classes de cor crua do Tailwind
+ * (bg-blue-500, text-gray-600...) e 612 hex espalhados em 217 arquivos, ao
+ * lado de uma camada de tokens que já existia. A modernização trocou tudo
+ * por --fin-*. Este teste impede a volta: cor nova entra como token, e a
+ * exceção (conteúdo do usuário, documento da proposta, landing) é uma lista
+ * explícita, não um esquecimento.
+ *
+ * Roda com: node --experimental-strip-types scripts/run-tests.mjs scripts/test-design-system.ts
+ */
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join, relative } from 'node:path';
+
+let falhas = 0, total = 0;
+function eq(a: unknown, b: unknown, label: string) {
+  total++; const ok = JSON.stringify(a) === JSON.stringify(b);
+  if (!ok) { falhas++; console.log(`FAIL  ${label}\n        esperado: ${JSON.stringify(b)}\n        obtido:   ${JSON.stringify(a)}`); } else console.log(`PASS  ${label}`);
+}
+
+/** Conteúdo que NÃO é interface: as cores ali são do usuário, do modelo ou da marca. */
+const EXCECOES = [
+  'components/landing/',            // landing pública, identidade própria
+  'components/propostas/preview/',  // documento da proposta (cores do modelo)
+  'components/propostas/blocks/',   // blocos do documento dentro do editor
+  'components/propostas/PdfExportModal.tsx',
+  'app/p/',                         // proposta pública
+  'app/preview-iframe/',
+  'app/mapas-mentais/',             // mapa público
+  'app/planejamento/mapas-mentais/[id]/MapaMentalEditor.tsx',
+  'app/planejamento/fluxogramas/[id]/',
+  'components/funis/FunilNode.tsx',
+  'components/funis/BibliotecaNodes.tsx', // miniatura de janela: os três pontos coloridos são ilustração
+  'components/icons/',
+  'components/Logo.tsx',
+];
+
+const CORES = 'slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose';
+const PALETA = new RegExp(`(?<![\\w\\-\\[/])(?:[a-z\\-]+:)*(?:bg|text|border(?:-[trblxy])?|ring|outline|from|via|to|fill|stroke|divide|placeholder|decoration|accent|caret)-(?:${CORES})-\\d{2,3}(?:/\\d{1,3})?(?![\\w\\-\\[])`, 'g');
+const HEX_EM_CLASSE = /(?<![\w&])[a-z\-]+-\[#[0-9a-fA-F]{3,8}\]/g;
+
+function arquivos(dir: string): string[] {
+  const out: string[] = [];
+  for (const nome of readdirSync(dir)) {
+    const p = join(dir, nome);
+    if (statSync(p).isDirectory()) out.push(...arquivos(p));
+    else if (p.endsWith('.tsx')) out.push(p);
+  }
+  return out;
+}
+
+const raiz = new URL('../src/', import.meta.url).pathname;
+const violacoes: string[] = [];
+const hexes: string[] = [];
+let verificados = 0;
+for (const p of arquivos(raiz)) {
+  const rel = relative(raiz, p);
+  if (EXCECOES.some(e => rel === e || rel.startsWith(e))) continue;
+  verificados++;
+  const fonte = readFileSync(p, 'utf8');
+  for (const m of fonte.matchAll(PALETA)) violacoes.push(`${rel}: ${m[0]}`);
+  for (const m of fonte.matchAll(HEX_EM_CLASSE)) hexes.push(`${rel}: ${m[0]}`);
+}
+
+eq(verificados > 200, true, `varre as telas de verdade (${verificados} arquivos fora das exceções)`);
+eq(violacoes.slice(0, 10), [], 'nenhuma classe de cor crua do Tailwind fora das exceções: use --fin-*');
+eq(hexes.slice(0, 10), [], 'nenhum hex dentro de classe fora das exceções: use --fin-*');
+
+// Texto sobre preenchimento de destaque: só --fin-text-on-fill. Branco fixo
+// some no tema escuro (o azul clareia) e o texto escuro do acento dourado
+// antigo ficava ilegível sobre o azul.
+const FILL = /(?<![\w:\[-])bg-\[var\(--(?:t-green|t-accent|t-primary|t-blue|lg-accent|fin-accent|fin-positive|fin-negative|fin-violet|fin-info)\)\](?!\/)/;
+const TEXTO_FIXO = /(?<![\w:\[-])text-(?:white|\[var\(--(?:t-text|fin-text|lg-text)\)\])(?![\w\-\[])/;
+const LIT = /"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`/g;
+const textoFixoNoPreenchimento: string[] = [];
+for (const p of arquivos(raiz)) {
+  const rel = relative(raiz, p);
+  if (EXCECOES.some(e => rel === e || rel.startsWith(e))) continue;
+  for (const m of readFileSync(p, 'utf8').matchAll(LIT)) {
+    if (FILL.test(m[0]) && TEXTO_FIXO.test(m[0])) textoFixoNoPreenchimento.push(`${rel}: ${m[0].slice(0, 90)}`);
+  }
+}
+eq(textoFixoNoPreenchimento.slice(0, 5), [], 'texto sobre preenchimento de destaque usa --fin-text-on-fill');
+eq([FILL.test('"bg-[var(--fin-accent)] text-white"') && TEXTO_FIXO.test('"bg-[var(--fin-accent)] text-white"'), TEXTO_FIXO.test('"text-[var(--fin-text-on-fill)]"'), FILL.test('"bg-[var(--fin-accent)]/10"')], [true, false, false], 'e reconhece o defeito sem confundir o par certo nem o fundo translúcido');
+
+// O próprio porteiro precisa enxergar o que proíbe.
+eq(['bg-blue-500', 'hover:text-gray-600', 'border-red-500/30', 'dark:bg-slate-900'].map(c => (c.match(PALETA) ?? []).length), [1, 1, 1, 1], 'o porteiro reconhece cor crua, com variante e com alfa');
+eq(['bg-[var(--fin-accent)]', 'text-[var(--fin-text-2)]', 'bg-black/40', 'text-white'].map(c => (c.match(PALETA) ?? []).length), [0, 0, 0, 0], 'e não confunde token, véu e branco com cor crua');
+
+// Camada única: os dialetos antigos só apontam para --fin-*.
+const css = readFileSync(new URL('../src/app/globals.css', import.meta.url), 'utf8');
+const dialetoComValor = [...css.matchAll(/^\s*--(t|lg|ink)-[a-z0-9-]+:\s*(#[0-9a-fA-F]{3,8}|rgba?\()/gm)].map(m => m[0].trim());
+eq(dialetoComValor, [], 'os dialetos --t-*, --lg-* e --ink-* não declaram cor: são apelidos de --fin-*');
+
+for (const v of ['--fin-violet', '--fin-e-card', '--fin-z-modal', '--fin-z-popover', '--fin-h-padrao', '--fin-dur-base']) {
+  eq(css.includes(`${v}:`), true, `token ${v} declarado`);
+}
+
+console.log(`\n${total - falhas}/${total} testes do design system passaram`);
+if (falhas > 0) process.exit(1);

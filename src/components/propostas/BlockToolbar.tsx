@@ -74,13 +74,13 @@ export function BlockToolbar({ onAddBlock, onSearchFlight, onSearchHotel, onGene
         <div className="flex gap-2 mt-3 pt-3 border-t border-[var(--t-border)]">
           <button
             onClick={() => { onSearchFlight(); setOpen(false); }}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--t-blue-bg)] border border-blue-500/20 hover:border-blue-400 text-blue-400 text-xs font-medium transition-all"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--t-blue-bg)] border border-[var(--fin-accent)]/20 hover:border-[var(--fin-accent)] text-[var(--fin-accent)] text-xs font-medium transition-all"
           >
             <Plane className="w-4 h-4" /> Buscar Voo (API)
           </button>
           <button
             onClick={() => { onSearchHotel(); setOpen(false); }}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 hover:border-emerald-400 text-emerald-400 text-xs font-medium transition-all"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--fin-positive-soft)] border border-[var(--fin-positive)]/20 hover:border-[var(--fin-positive)] text-[var(--fin-positive)] text-xs font-medium transition-all"
           >
             <Hotel className="w-4 h-4" /> Buscar Hotel (API)
           </button>
@@ -88,7 +88,7 @@ export function BlockToolbar({ onAddBlock, onSearchFlight, onSearchHotel, onGene
             <button
               onClick={() => { onGenerateFullAI(); setOpen(false); }}
               disabled={generatingFull}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-purple-500/10 border border-purple-500/20 hover:border-purple-400 text-purple-400 text-xs font-medium transition-all disabled:opacity-50"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--fin-violet-soft)] border border-[var(--fin-violet)]/20 hover:border-[var(--fin-violet)] text-[var(--fin-violet)] text-xs font-medium transition-all disabled:opacity-50"
             >
               {generatingFull ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
               {generatingFull ? 'Gerando...' : 'Gerar Roteiro Completo (IA)'}

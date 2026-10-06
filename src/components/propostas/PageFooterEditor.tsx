@@ -24,8 +24,8 @@ export function PageFooterEditor({ proposta, onUpdate, onClose }: Props) {
       {/* Header */}
       <div className="shrink-0 px-4 py-3 border-b border-[var(--t-border)] flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="w-7 h-7 rounded-md flex items-center justify-center bg-purple-500/10">
-            <MessageSquare className="w-4 h-4 text-purple-500" />
+          <div className="w-7 h-7 rounded-md flex items-center justify-center bg-[var(--fin-violet-soft)]">
+            <MessageSquare className="w-4 h-4 text-[var(--fin-violet)]" />
           </div>
           <div className="min-w-0">
             <div className="text-[10px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)]">Editando</div>

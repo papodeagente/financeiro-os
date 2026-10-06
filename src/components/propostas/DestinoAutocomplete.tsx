@@ -83,7 +83,7 @@ export function DestinoAutocomplete({ onSelect }: Props) {
                 {d.pais && <div className="text-[10px] text-[var(--t-text-muted)]">{d.pais}</div>}
               </div>
               {d.enriquecido && (
-                <Sparkles className="w-3 h-3 text-purple-400 shrink-0" />
+                <Sparkles className="w-3 h-3 text-[var(--fin-violet)] shrink-0" />
               )}
             </button>
           ))}

@@ -40,7 +40,7 @@ export function TemplatePickerModal({ open, onClose, onSelect }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-[var(--t-surface)] border border-[var(--t-border)] rounded-2xl w-full max-w-3xl max-h-[80vh] flex flex-col" style={{ boxShadow: 'var(--elevation-4)' }}>
+      <div className="bg-[var(--t-surface)] border border-[var(--t-border)] rounded-2xl w-full max-w-3xl max-h-[80vh] flex flex-col shadow-[var(--fin-e-card)]" style={{ boxShadow: 'var(--elevation-4)' }}>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--t-border)]">
           <div>
@@ -104,7 +104,7 @@ export function TemplatePickerModal({ open, onClose, onSelect }: Props) {
                       <span className="text-xl">{t.icone}</span>
                     </div>
                     <div className="absolute bottom-2 right-2 flex items-center gap-1.5">
-                      <span className="text-[9px] bg-white/20 backdrop-blur-sm text-white px-1.5 py-0.5 rounded-full">
+                      <span className="text-[9px] bg-[var(--fin-surface)]/20 backdrop-blur-sm text-white px-1.5 py-0.5 rounded-full">
                         {t.visual.layout}
                       </span>
                     </div>

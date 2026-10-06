@@ -118,7 +118,7 @@ export default function LoginPage() {
             <form onSubmit={handleSubmit} className="space-y-5">
               {/* Error */}
               {error && (
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-[var(--fin-negative-soft)] border border-[var(--fin-negative)]/20 text-[var(--fin-negative-text)] text-sm">
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   {error}
                 </div>
@@ -174,7 +174,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full h-11 rounded-lg bg-[var(--t-green)] text-white dark:text-[#0a0a14] font-medium text-sm flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 transition-all"
+                className="w-full h-11 rounded-lg bg-[var(--t-green)] text-[var(--fin-text-on-fill)]  font-medium text-sm flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 transition-all"
                 style={{ boxShadow: '0 4px 15px var(--t-green-shadow)' }}
               >
                 {loading ? (

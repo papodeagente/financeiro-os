@@ -194,7 +194,7 @@ export default function CACCenariosPage() {
   }
 
   return (
-    <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
+    <div className="w-full bg-[var(--fin-bg)] px-[var(--fin-page-pad)] py-[var(--fin-page-pad)] text-[var(--fin-text)]">
       <div className="max-w-7xl mx-auto space-y-6">
 
         {/* Header */}
@@ -205,7 +205,7 @@ export default function CACCenariosPage() {
           </div>
           <Button
             onClick={openNew}
-            className="bg-[var(--t-green)] hover:brightness-110 text-white dark:text-[#0a0a14] font-semibold"
+            className="bg-[var(--t-green)] hover:brightness-110 text-[var(--fin-text-on-fill)]  font-semibold"
           >
             <Plus className="w-4 h-4 mr-2" /> Novo Cenário
           </Button>
@@ -304,7 +304,7 @@ export default function CACCenariosPage() {
                     {adsLines.map((line, idx) => {
                       const calc = calcAdsLine(line);
                       return (
-                        <div key={idx} className="grid grid-cols-6 gap-2 items-end p-3 rounded bg-[var(--t-surface)] shadow-[var(--t-card-shadow)]">
+                        <div key={idx} className="grid grid-cols-2 gap-2 items-end p-3 sm:grid-cols-3 lg:grid-cols-6 rounded bg-[var(--t-surface)] shadow-[var(--t-card-shadow)]">
                           <div>
                             <label className="text-[10px] text-[var(--t-text-muted)] mb-0.5 block">Plataforma</label>
                             <select
@@ -376,7 +376,7 @@ export default function CACCenariosPage() {
                     </Button>
                   </div>
                   {outrosInv.map((inv, idx) => (
-                    <div key={idx} className="grid grid-cols-4 gap-2 items-end mb-2">
+                    <div key={idx} className="grid grid-cols-2 gap-2 items-end mb-2 lg:grid-cols-4">
                       <div className="col-span-2">
                         <Input
                           value={inv.descricao}
@@ -470,7 +470,7 @@ export default function CACCenariosPage() {
                       <p className="text-xs text-[var(--t-text-muted)]">Payback (meses)</p>
                     </div>
                   </div>
-                  <div className="mt-3 pt-3 border-t border-[var(--t-green)]/20 grid grid-cols-3 gap-4 text-sm">
+                  <div className="mt-3 pt-3 border-t border-[var(--t-green)]/20 grid grid-cols-1 gap-4 text-sm sm:grid-cols-3">
                     <div>
                       <span className="text-[var(--t-text-muted)]">Investimento Total: </span>
                       <span className="text-[var(--t-text)] font-mono">{BRL(totalCustoComercial)}</span>
@@ -493,7 +493,7 @@ export default function CACCenariosPage() {
                   <Button
                     onClick={handleSave}
                     disabled={saving || !nome}
-                    className="bg-[var(--t-green)] hover:brightness-110 text-white dark:text-[#0a0a14] font-semibold"
+                    className="bg-[var(--t-green)] hover:brightness-110 text-[var(--fin-text-on-fill)]  font-semibold"
                   >
                     <Save className="w-4 h-4 mr-1" /> {saving ? 'Salvando...' : 'Salvar Cenário'}
                   </Button>
@@ -548,7 +548,7 @@ export default function CACCenariosPage() {
                         <Trash2 className="w-3 h-3" />
                       </Button>
                     </div>
-                    <div className="grid grid-cols-3 gap-3 text-center">
+                    <div className="grid grid-cols-1 gap-3 text-center sm:grid-cols-3">
                       <div>
                         <p className="text-lg font-bold text-[var(--t-green)]">{BRL(c.cac_projetado)}</p>
                         <p className="text-[10px] text-[var(--t-text-muted)]">CAC</p>

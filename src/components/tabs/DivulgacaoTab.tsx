@@ -71,11 +71,11 @@ export function DivulgacaoTab({ grupo, onChange }: Props) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-3" style={{ boxShadow: 'var(--elevation-1)' }}>
+        <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-3 shadow-[var(--fin-e-card)]" style={{ boxShadow: 'var(--elevation-1)' }}>
           <span className="text-[11px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide">Investimento Total em Divulgação</span>
           <div className="text-lg font-bold text-[var(--t-text)] mt-0.5">{formatBRL(totals.totalGeral)}</div>
         </div>
-        <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-3" style={{ boxShadow: 'var(--elevation-1)' }}>
+        <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-3 shadow-[var(--fin-e-card)]" style={{ boxShadow: 'var(--elevation-1)' }}>
           <span className="text-[11px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide">Custo por Pax (rateado em {minPax})</span>
           <div className="text-lg font-bold text-[var(--t-text)] mt-0.5">{formatBRL(totals.totalPorPax)}</div>
         </div>
@@ -86,7 +86,7 @@ export function DivulgacaoTab({ grupo, onChange }: Props) {
           const f = grupo.divulgacao.fornecedores[fIdx];
 
           return (
-            <div key={fIdx} className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-4" style={{ boxShadow: 'var(--elevation-1)' }}>
+            <div key={fIdx} className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-4 shadow-[var(--fin-e-card)]" style={{ boxShadow: 'var(--elevation-1)' }}>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg bg-[var(--t-green)]/10 flex items-center justify-center">

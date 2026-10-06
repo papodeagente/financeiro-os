@@ -85,7 +85,7 @@ function SelectableBlockInner({
     }
   }, [selected]);
   // Tons azuis estilo Elementor — selected mais saturado que hover.
-  const colorBg = selected ? '#2563EB' : '#60A5FA';
+  const colorBg = selected ? 'var(--fin-accent)' : 'color-mix(in srgb, var(--fin-accent) 40%, transparent)';
 
   // Cada acao precisa stopPropagation pra nao re-disparar onSelect ao
   // clicar num botao da toolbar.
@@ -118,10 +118,10 @@ function SelectableBlockInner({
           Posicionado absoluto pra nao mexer no layout do conteudo. */}
       <div
         className={`absolute -inset-0.5 pointer-events-none rounded-lg transition-all ${
-          selected
-            ? 'ring-2 ring-[#2563EB] shadow-lg shadow-blue-500/15'
-            : 'ring-0 group-hover:ring-2 group-hover:ring-blue-300'
-        }`}
+ selected
+ ? 'ring-2 ring-[var(--fin-accent)] shadow-lg '
+ : 'ring-0 group-hover:ring-2 group-hover:ring-[var(--fin-accent)]/30'
+ }`}
         style={{ zIndex: 5 }}
       />
 
@@ -157,7 +157,7 @@ function SelectableBlockInner({
           >
             <GripVertical className="w-3.5 h-3.5" />
           </button>
-          <span className="w-px h-3.5 bg-white/30" />
+          <span className="w-px h-3.5 bg-[var(--fin-surface)]/30" />
 
           {/* Mover pra cima */}
           {onMoveUp && (
@@ -171,7 +171,7 @@ function SelectableBlockInner({
               >
                 <ChevronUp className="w-3.5 h-3.5" />
               </button>
-              <span className="w-px h-3.5 bg-white/30" />
+              <span className="w-px h-3.5 bg-[var(--fin-surface)]/30" />
             </>
           )}
 
@@ -187,7 +187,7 @@ function SelectableBlockInner({
               >
                 <ChevronDown className="w-3.5 h-3.5" />
               </button>
-              <span className="w-px h-3.5 bg-white/30" />
+              <span className="w-px h-3.5 bg-[var(--fin-surface)]/30" />
             </>
           )}
 
@@ -200,7 +200,7 @@ function SelectableBlockInner({
           >
             <Pencil className="w-3.5 h-3.5" />
           </button>
-          <span className="w-px h-3.5 bg-white/30" />
+          <span className="w-px h-3.5 bg-[var(--fin-surface)]/30" />
 
           {/* Duplicar */}
           <button
@@ -211,7 +211,7 @@ function SelectableBlockInner({
           >
             <CopyPlus className="w-3.5 h-3.5" />
           </button>
-          <span className="w-px h-3.5 bg-white/30" />
+          <span className="w-px h-3.5 bg-[var(--fin-surface)]/30" />
 
           {/* Ocultar / mostrar */}
           <button
@@ -222,12 +222,12 @@ function SelectableBlockInner({
           >
             {hidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
           </button>
-          <span className="w-px h-3.5 bg-white/30" />
+          <span className="w-px h-3.5 bg-[var(--fin-surface)]/30" />
 
           {/* Deletar */}
           <button
             onClick={action(onRemove)}
-            className="w-7 h-6 flex items-center justify-center text-white hover:bg-red-500 transition-colors"
+            className="w-7 h-6 flex items-center justify-center text-[var(--fin-text-on-fill)] hover:bg-[var(--fin-negative)] transition-colors"
             title="Deletar bloco"
             aria-label="Deletar"
           >
@@ -238,8 +238,8 @@ function SelectableBlockInner({
 
       {/* Overlay de bloco oculto */}
       {hidden && (
-        <div className="absolute inset-0 z-10 bg-white/60 backdrop-blur-[2px] flex items-center justify-center pointer-events-none rounded-lg">
-          <span className="inline-flex items-center gap-1.5 text-xs uppercase font-semibold text-gray-700 bg-white border border-gray-300 px-3 py-1.5 rounded-full shadow-sm">
+        <div className="absolute inset-0 z-10 bg-[var(--fin-surface)]/60 backdrop-blur-[2px] flex items-center justify-center pointer-events-none rounded-lg">
+          <span className="inline-flex items-center gap-1.5 text-xs uppercase font-semibold text-[var(--fin-text-2)] bg-[var(--fin-surface)] border border-[var(--fin-border-strong)] px-3 py-1.5 rounded-full shadow-sm">
             <EyeOff className="w-3.5 h-3.5" />
             Oculto na proposta
           </span>
@@ -257,12 +257,12 @@ function SelectableBlockInner({
         <div className="pointer-events-none cursor-pointer py-3 px-2">
           <div
             className={`rounded-xl px-3 py-8 text-center transition-all min-h-[160px] flex flex-col items-center justify-center ${
-              isOver && paletteDragging
-                ? 'bg-blue-600 border-4 border-blue-700 text-white shadow-2xl scale-[1.02]'
-                : showDropHint
-                  ? 'bg-blue-100 border-2 border-dashed border-blue-500 text-blue-700 animate-pulse'
-                  : 'bg-blue-50/60 border-2 border-dashed border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400'
-            }`}
+ isOver && paletteDragging
+ ? 'bg-[var(--fin-accent)] border-4 border-[var(--fin-accent)] text-[var(--fin-text-on-fill)] shadow-2xl scale-[1.02]'
+ : showDropHint
+ ? 'bg-[var(--fin-accent-soft)] border-2 border-dashed border-[var(--fin-accent)] text-[var(--fin-accent)] animate-pulse'
+ : 'bg-[var(--fin-accent-soft)] border-2 border-dashed border-[var(--fin-accent)]/30 text-[var(--fin-accent)] hover:bg-[var(--fin-accent-soft)] hover:border-[var(--fin-accent)]'
+ }`}
           >
             {isOver && paletteDragging ? (
               <>
@@ -293,7 +293,7 @@ function SelectableBlockInner({
                 <div className="text-[11px] opacity-80 leading-relaxed mb-3 max-w-[220px]">
                   Arraste um bloco da paleta ou clique pra escolher
                 </div>
-                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-blue-600 text-white text-[10px] uppercase tracking-wider font-semibold">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] text-[10px] uppercase tracking-wider font-semibold">
                   <Pencil className="w-3 h-3" /> Escolher tipo
                 </div>
               </>
@@ -302,7 +302,7 @@ function SelectableBlockInner({
         </div>
       ) : emptyHint && !hidden ? (
         <div className="pointer-events-none cursor-pointer py-12 px-4">
-          <div className="mx-auto bg-white border-2 border-dashed border-[var(--t-green)]/40 rounded-xl px-5 py-6 max-w-md text-center shadow-sm">
+          <div className="mx-auto bg-[var(--fin-surface)] border-2 border-dashed border-[var(--t-green)]/40 rounded-xl px-5 py-6 max-w-md text-center shadow-sm">
             <div className="text-4xl mb-2" aria-hidden>{emptyHint.icon}</div>
             <div className="text-base font-semibold text-[var(--t-text)] mb-1">
               {emptyHint.title}

@@ -1,5 +1,7 @@
 'use client';
 
+import { comAlfa } from '@/lib/cor';
+
 type Size = 'sm' | 'md' | 'lg';
 type Variant = 'default' | 'error' | 'search';
 
@@ -51,8 +53,8 @@ export function EmptyState({
         className="relative w-16 h-16 rounded-[20px] flex items-center justify-center mb-5"
         style={{
           color: halo.color,
-          background: `linear-gradient(135deg, ${halo.bg}, rgba(0,0,0,0.02))`,
-          boxShadow: `inset 0 0 0 1px ${halo.color}33`,
+          background: halo.bg,
+          boxShadow: `inset 0 0 0 1px ${comAlfa(halo.color, 20)}`,
         }}
       >
         <span

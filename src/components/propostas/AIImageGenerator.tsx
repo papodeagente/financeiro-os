@@ -130,8 +130,8 @@ export function AIImageGenerator({
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-[var(--t-border)]">
           <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-emerald-500" />
+            <div className="w-9 h-9 rounded-lg bg-[var(--fin-positive-soft)] flex items-center justify-center">
+              <Sparkles className="w-5 h-5 text-[var(--fin-positive)]" />
             </div>
             <div>
               <h3 className="text-[var(--text-body-lg)] font-semibold text-[var(--t-text)]">Gerar imagem com IA</h3>
@@ -212,14 +212,14 @@ export function AIImageGenerator({
           <button
             onClick={generate}
             disabled={generating || !prompt.trim()}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-[var(--text-body-sm)] font-medium text-white bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-[var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
             {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
             {generating ? 'Gerando...' : 'Gerar imagens'}
           </button>
 
           {error && (
-            <div className="p-2 rounded-md bg-red-500/10 text-red-500 text-[var(--text-caption)]">{error}</div>
+            <div className="p-2 rounded-md bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)] text-[var(--text-caption)]">{error}</div>
           )}
 
           {/* Resultados */}
@@ -272,7 +272,7 @@ export function AIImageGenerator({
             <button
               onClick={insert}
               disabled={picked.size === 0}
-              className="px-4 py-1.5 text-[var(--text-body-sm)] font-medium text-white bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50"
+              className="px-4 py-1.5 text-[var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50"
             >
               {insertLabel}
             </button>

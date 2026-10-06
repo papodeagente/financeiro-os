@@ -29,7 +29,7 @@ const fmtDate = (s: string) => {
 const statusConfig: Record<string, { label: string; color: string; icon: React.ComponentType<{ className?: string }> }> = {
   RASCUNHO: { label: 'Rascunho', color: 'bg-[var(--t-status-neutral-bg)] text-[var(--t-status-neutral)]', icon: Clock },
   ENVIADO: { label: 'Enviado', color: 'bg-[var(--t-status-info-bg)] text-[var(--t-status-info)]', icon: Send },
-  VISUALIZADO: { label: 'Visualizado', color: 'bg-purple-500/10 text-purple-400', icon: Eye },
+  VISUALIZADO: { label: 'Visualizado', color: 'bg-[var(--fin-violet-soft)] text-[var(--fin-violet)]', icon: Eye },
   ACEITO: { label: 'Aceito', color: 'bg-[var(--t-status-success-bg)] text-[var(--t-status-success)]', icon: CheckCircle },
   RECUSADO: { label: 'Recusado', color: 'bg-[var(--t-status-danger-bg)] text-[var(--t-status-danger)]', icon: XCircle },
   EXPIRADO: { label: 'Expirado', color: 'bg-[var(--t-status-warning-bg)] text-[var(--t-status-warning)]', icon: Clock },
@@ -107,12 +107,12 @@ export default function PropostasPage() {
           actions={
             <>
               <Link href="/propostas/analytics">
-                <Button variant="outline" className="gap-2 border-[var(--t-border)] text-purple-400">
+                <Button variant="outline" className="gap-2 border-[var(--t-border)] text-[var(--fin-violet)]">
                   <Eye className="w-4 h-4" /> Analytics
                 </Button>
               </Link>
               <Link href="/propostas/nova">
-                <Button className="bg-[var(--t-green)] hover:bg-[var(--t-green)]/90 text-white dark:text-[#0a0a14] gap-2">
+                <Button className="bg-[var(--t-green)] hover:bg-[var(--t-green)]/90 text-[var(--fin-text-on-fill)]  gap-2">
                   <Plus className="w-4 h-4" /> Nova Proposta
                 </Button>
               </Link>
@@ -127,8 +127,8 @@ export default function PropostasPage() {
         {[
           { label: 'Total', value: stats.total, color: 'text-[var(--t-text)]' },
           { label: 'Rascunhos', value: stats.rascunho, color: 'text-[var(--t-text-secondary)]' },
-          { label: 'Enviados', value: stats.enviados, color: 'text-blue-400' },
-          { label: 'Aceitos', value: stats.aceitos, color: 'text-emerald-400' },
+          { label: 'Enviados', value: stats.enviados, color: 'text-[var(--fin-accent)]' },
+          { label: 'Aceitos', value: stats.aceitos, color: 'text-[var(--fin-positive)]' },
         ].map(s => (
           <Card key={s.label} className="bg-[var(--t-bg-secondary)] border-[var(--t-border)]">
             <CardContent className="p-4 text-center">
@@ -153,13 +153,13 @@ export default function PropostasPage() {
             {recentes.map(p => {
               if (p.status === 'ACEITO' && p.aceite?.data_aceite) {
                 return (
-                  <div key={`aceite-${p.id}`} className="flex items-center gap-3 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                    <Bell className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span className="text-sm text-emerald-300 flex-1">
+                  <div key={`aceite-${p.id}`} className="flex items-center gap-3 p-3 rounded-lg bg-[var(--fin-positive-soft)] border border-[var(--fin-positive)]/20">
+                    <Bell className="w-4 h-4 text-[var(--fin-positive)] shrink-0" />
+                    <span className="text-sm text-[var(--fin-positive)] flex-1">
                       <strong>{p.cliente_nome || p.numero}</strong> aceitou a proposta &quot;{p.cabecalho?.titulo || p.numero}&quot;
                       {p.aceite.nome_aceite && <> (por {p.aceite.nome_aceite})</>}
                     </span>
-                    <span className="text-xs text-emerald-400/60">
+                    <span className="text-xs text-[var(--fin-positive)]/60">
                       {new Date(p.aceite.data_aceite).toLocaleDateString('pt-BR')}
                     </span>
                   </div>
@@ -168,12 +168,12 @@ export default function PropostasPage() {
               const lastFeedback = p.feedbacks?.[p.feedbacks.length - 1];
               if (lastFeedback) {
                 return (
-                  <div key={`fb-${p.id}`} className="flex items-center gap-3 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                    <MessageCircle className="w-4 h-4 text-blue-400 shrink-0" />
-                    <span className="text-sm text-blue-300 flex-1">
+                  <div key={`fb-${p.id}`} className="flex items-center gap-3 p-3 rounded-lg bg-[var(--fin-accent-soft)] border border-[var(--fin-accent)]/20">
+                    <MessageCircle className="w-4 h-4 text-[var(--fin-accent)] shrink-0" />
+                    <span className="text-sm text-[var(--fin-accent)] flex-1">
                       <strong>{lastFeedback.nome || 'Cliente'}</strong> solicitou alteracoes em &quot;{p.cabecalho?.titulo || p.numero}&quot;
                     </span>
-                    <span className="text-xs text-blue-400/60">
+                    <span className="text-xs text-[var(--fin-accent)]/60">
                       {new Date(lastFeedback.data).toLocaleDateString('pt-BR')}
                     </span>
                   </div>
@@ -217,7 +217,7 @@ export default function PropostasPage() {
           action={
             propostas.length === 0 ? (
               <Link href="/propostas/nova">
-                <Button className="bg-[var(--t-green)] text-white dark:text-[#0a0a14]">
+                <Button className="bg-[var(--t-green)] text-[var(--fin-text-on-fill)] ">
                   Criar primeira proposta
                 </Button>
               </Link>
@@ -252,7 +252,7 @@ export default function PropostasPage() {
                           <Icon className="w-3 h-3" /> {sc.label}
                         </Badge>
                         {p.versao > 1 && (
-                          <span className="text-[10px] px-1.5 py-0 rounded-full bg-purple-500/10 text-purple-400">
+                          <span className="text-[10px] px-1.5 py-0 rounded-full bg-[var(--fin-violet-soft)] text-[var(--fin-violet)]">
                             v{p.versao}
                           </span>
                         )}
@@ -272,7 +272,7 @@ export default function PropostasPage() {
                         {p.feedbacks?.length > 0 && (
                           <>
                             <span>&middot;</span>
-                            <span className="flex items-center gap-1 text-blue-400">
+                            <span className="flex items-center gap-1 text-[var(--fin-accent)]">
                               <MessageCircle className="w-3 h-3" /> {p.feedbacks.length}
                             </span>
                           </>
@@ -280,7 +280,7 @@ export default function PropostasPage() {
                         {p.leads?.length > 0 && (
                           <>
                             <span>&middot;</span>
-                            <span className="flex items-center gap-1 text-amber-400">
+                            <span className="flex items-center gap-1 text-[var(--fin-warning-text)]">
                               <UserPlus className="w-3 h-3" /> {p.leads.length} lead{p.leads.length > 1 ? 's' : ''}
                             </span>
                           </>
@@ -288,7 +288,7 @@ export default function PropostasPage() {
                         {p.aceite && (
                           <>
                             <span>&middot;</span>
-                            <span className="text-emerald-400 text-[10px]">
+                            <span className="text-[var(--fin-positive)] text-[10px]">
                               Aceito por {p.aceite.nome_aceite}
                             </span>
                           </>
@@ -316,7 +316,7 @@ export default function PropostasPage() {
                           <Copy className="w-4 h-4" />
                         </Button>
                       )}
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-400 hover:text-red-300"
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-[var(--fin-negative-text)] hover:text-[var(--fin-negative-text)]"
                         onClick={() => handleDelete(p.id)}>
                         <Trash2 className="w-4 h-4" />
                       </Button>

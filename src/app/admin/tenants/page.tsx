@@ -41,14 +41,14 @@ export default function AdminTenantsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+        <Loader2 className="w-6 h-6 text-[var(--fin-text-3)] animate-spin" />
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl p-4">
+      <div className="bg-[var(--fin-negative-soft)] border border-[var(--fin-negative)]/30 text-[var(--fin-negative-text)] rounded-xl p-4">
         {error}
       </div>
     )
@@ -57,50 +57,50 @@ export default function AdminTenantsPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-100">Agencias</h1>
+        <h1 className="text-2xl font-bold text-[var(--fin-text)]">Agencias</h1>
         <Link
           href="/admin/tenants/novo"
-          className="bg-[#d4a853] text-gray-950 font-medium rounded-lg px-4 py-2 text-sm hover:bg-[#c49a48] transition-colors inline-flex items-center gap-2"
+          className="bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] font-medium rounded-lg px-4 py-2 text-sm hover:bg-[var(--fin-accent-hover)] transition-colors inline-flex items-center gap-2"
         >
           <Plus className="w-4 h-4" />
           Nova Agencia
         </Link>
       </div>
 
-      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+      <div className="bg-[var(--fin-surface)] border border-[var(--fin-border)] rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-gray-800">
-                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-5 py-3">Nome</th>
-                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-5 py-3">Slug</th>
-                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-5 py-3">Plano</th>
-                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-5 py-3">Status</th>
-                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-5 py-3">Usuarios</th>
-                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-5 py-3">Criado em</th>
-                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-5 py-3">Ações</th>
+              <tr className="border-b border-[var(--fin-border)]">
+                <th className="text-left text-xs font-medium text-[var(--fin-text-3)] uppercase tracking-wider px-5 py-3">Nome</th>
+                <th className="text-left text-xs font-medium text-[var(--fin-text-3)] uppercase tracking-wider px-5 py-3">Slug</th>
+                <th className="text-left text-xs font-medium text-[var(--fin-text-3)] uppercase tracking-wider px-5 py-3">Plano</th>
+                <th className="text-left text-xs font-medium text-[var(--fin-text-3)] uppercase tracking-wider px-5 py-3">Status</th>
+                <th className="text-left text-xs font-medium text-[var(--fin-text-3)] uppercase tracking-wider px-5 py-3">Usuarios</th>
+                <th className="text-left text-xs font-medium text-[var(--fin-text-3)] uppercase tracking-wider px-5 py-3">Criado em</th>
+                <th className="text-left text-xs font-medium text-[var(--fin-text-3)] uppercase tracking-wider px-5 py-3">Ações</th>
               </tr>
             </thead>
             <tbody>
               {tenants.length > 0 ? (
                 tenants.map(tenant => (
-                  <tr key={tenant.id} className="border-b border-gray-800 last:border-0 hover:bg-gray-800/50 transition-colors">
-                    <td className="px-5 py-3 text-sm text-gray-100 font-medium">{tenant.nome}</td>
-                    <td className="px-5 py-3 text-sm text-gray-400 font-mono">{tenant.slug}</td>
+                  <tr key={tenant.id} className="border-b border-[var(--fin-border)] last:border-0 hover:bg-[var(--fin-text)]/50 transition-colors">
+                    <td className="px-5 py-3 text-sm text-[var(--fin-text)] font-medium">{tenant.nome}</td>
+                    <td className="px-5 py-3 text-sm text-[var(--fin-text-3)] font-mono">{tenant.slug}</td>
                     <td className="px-5 py-3">
                       <PlanBadge plano={tenant.plano} />
                     </td>
                     <td className="px-5 py-3">
                       <StatusBadge status={tenant.status} />
                     </td>
-                    <td className="px-5 py-3 text-sm text-gray-400">{tenant.user_count}</td>
-                    <td className="px-5 py-3 text-sm text-gray-400">
+                    <td className="px-5 py-3 text-sm text-[var(--fin-text-3)]">{tenant.user_count}</td>
+                    <td className="px-5 py-3 text-sm text-[var(--fin-text-3)]">
                       {new Date(tenant.created_at).toLocaleDateString('pt-BR')}
                     </td>
                     <td className="px-5 py-3">
                       <Link
                         href={`/admin/tenants/${tenant.id}`}
-                        className="text-[#d4a853] hover:text-[#e0b864] text-sm inline-flex items-center gap-1 transition-colors"
+                        className="text-[var(--fin-accent)] hover:text-[var(--fin-accent)] text-sm inline-flex items-center gap-1 transition-colors"
                       >
                         Ver <ExternalLink className="w-3.5 h-3.5" />
                       </Link>
@@ -109,7 +109,7 @@ export default function AdminTenantsPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="px-5 py-12 text-center text-sm text-gray-500">
+                  <td colSpan={7} className="px-5 py-12 text-center text-sm text-[var(--fin-text-3)]">
                     Nenhuma agencia cadastrada
                   </td>
                 </tr>
@@ -124,13 +124,13 @@ export default function AdminTenantsPage() {
 
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    ativo: 'bg-green-500/15 text-green-400',
-    suspenso: 'bg-red-500/15 text-red-400',
-    trial: 'bg-yellow-500/15 text-yellow-400',
+    ativo: 'bg-[var(--fin-positive-soft)] text-[var(--fin-positive)]',
+    suspenso: 'bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)]',
+    trial: 'bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)]',
   }
 
   return (
-    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${styles[status] || 'bg-gray-700 text-gray-300'}`}>
+    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${styles[status] || 'bg-[var(--fin-surface)] text-[var(--fin-text-3)]'}`}>
       {status}
     </span>
   )
@@ -138,13 +138,13 @@ function StatusBadge({ status }: { status: string }) {
 
 function PlanBadge({ plano }: { plano: string }) {
   const styles: Record<string, string> = {
-    free: 'bg-gray-700/50 text-gray-300',
-    pro: 'bg-blue-500/15 text-blue-400',
-    enterprise: 'bg-[#d4a853]/15 text-[#d4a853]',
+    free: 'bg-[var(--fin-text)]/50 text-[var(--fin-text-3)]',
+    pro: 'bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]',
+    enterprise: 'bg-[var(--fin-accent)]/15 text-[var(--fin-accent)]',
   }
 
   return (
-    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${styles[plano] || 'bg-gray-700 text-gray-300'}`}>
+    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${styles[plano] || 'bg-[var(--fin-surface)] text-[var(--fin-text-3)]'}`}>
       {plano}
     </span>
   )

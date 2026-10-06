@@ -344,7 +344,7 @@ function EditorInner({ id }: { id: string }) {
       >
         <ArrowLeft className="w-4 h-4" /> Voltar
       </button>
-      <p className="mt-6 text-red-500">{error}</p>
+      <p className="mt-6 text-[var(--fin-negative-text)]">{error}</p>
     </div>
   );
 
@@ -482,7 +482,7 @@ function EditorInner({ id }: { id: string }) {
               />
               <button
                 onClick={deleteSelected}
-                className="mt-4 w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[var(--text-body-sm)] font-medium text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                className="mt-4 w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[var(--text-body-sm)] font-medium text-[var(--fin-negative-text)] border border-[var(--fin-negative)]/30 rounded-lg hover:bg-[var(--fin-negative-soft)] transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" /> Excluir elemento
               </button>

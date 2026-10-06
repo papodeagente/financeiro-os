@@ -456,14 +456,14 @@ export default function CustosPage() {
   };
 
   if (loading) return (
-    <div className="p-6">
+    <div className="w-full px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
       <MinimalPageHead title="Planejamento mensal" meta={<p className="mt-2.5 text-[12px]" style={{ color: 'var(--ink-3)' }}>Carregando…</p>} />
       <SkeletonTable rows={5} cols={3} />
     </div>
   );
 
   if (loadError || !data || !rel) return (
-    <div className="p-6 max-w-[1400px] mx-auto">
+    <div className="mx-auto w-full max-w-[var(--fin-page-max)] px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
       <MinimalPageHead title="Planejamento mensal" />
       <div
         role="alert"
@@ -538,7 +538,7 @@ export default function CustosPage() {
   }
 
   return (
-    <div className="p-6 max-w-[1400px] mx-auto">
+    <div className="mx-auto w-full max-w-[var(--fin-page-max)] px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
       <MinimalPageHead
         title="Planejamento mensal"
         meta={
@@ -579,7 +579,7 @@ export default function CustosPage() {
               onClick={() => void exportarPdf()}
               disabled={gerandoPdf}
               className="h-[34px] px-3 text-[12px] rounded-[8px] font-medium inline-flex items-center gap-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-              style={{ background: 'var(--lg-accent)', color: '#fff' }}
+              style={{ background: 'var(--lg-accent)', color: 'var(--fin-surface)' }}
               title="Baixar o relatório do mês em PDF"
             >
               {gerandoPdf

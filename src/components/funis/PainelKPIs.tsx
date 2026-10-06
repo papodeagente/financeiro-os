@@ -23,14 +23,14 @@ export function PainelKPIs({ kpis, loading, onSimular, onComparar, onExportar }:
 
   return (
     <div
-      className={`border-t bg-[var(--t-surface)] ${alert ? 'border-red-500' : 'border-[var(--t-border)]'}`}
+      className={`border-t bg-[var(--t-surface)] ${alert ? 'border-[var(--fin-negative)]' : 'border-[var(--t-border)]'}`}
       style={{ minHeight: 170 }}
     >
       <div className="flex items-center justify-between px-4 pt-3">
         <div>
           <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wider">Resultado da simulação</p>
           {alert && (
-            <p className="text-[11px] text-red-500 font-medium mt-0.5">
+            <p className="text-[11px] text-[var(--fin-negative-text)] font-medium mt-0.5">
               ⚠️ Margem abaixo do mínimo configurado
             </p>
           )}
@@ -39,7 +39,7 @@ export function PainelKPIs({ kpis, loading, onSimular, onComparar, onExportar }:
           <button
             onClick={onSimular}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] font-semibold text-white bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] font-semibold text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50"
           >
             <Play className="w-3.5 h-3.5" /> Simular
           </button>
@@ -110,10 +110,10 @@ function LtvCacCard({ ltv, cac }: { ltv: number; cac: number }) {
   :             { label: 'excelente', tone: 'great' as const };
 
   const colors = {
-    bad:   { bg: 'bg-red-500/10',     text: 'text-red-500',     dot: 'bg-red-500' },
-    warn:  { bg: 'bg-amber-500/10',   text: 'text-amber-600',   dot: 'bg-amber-500' },
-    good:  { bg: 'bg-emerald-500/10', text: 'text-emerald-600', dot: 'bg-emerald-500' },
-    great: { bg: 'bg-emerald-500/15', text: 'text-emerald-600', dot: 'bg-emerald-600' },
+    bad:   { bg: 'bg-[var(--fin-negative-soft)]',     text: 'text-[var(--fin-negative-text)]',     dot: 'bg-[var(--fin-negative)]' },
+    warn:  { bg: 'bg-[var(--fin-warning-soft)]',   text: 'text-[var(--fin-warning-text)]',   dot: 'bg-[var(--fin-warning)]' },
+    good:  { bg: 'bg-[var(--fin-positive-soft)]', text: 'text-[var(--fin-positive)]', dot: 'bg-[var(--fin-positive)]' },
+    great: { bg: 'bg-[var(--fin-positive-soft)]', text: 'text-[var(--fin-positive)]', dot: 'bg-[var(--fin-positive)]' },
   }[health.tone];
 
   // Formato da proporção: ratio≥1 mostra "X:1"; ratio<1 mostra "1:X"
@@ -168,10 +168,10 @@ function LtvCacCard({ ltv, cac }: { ltv: number; cac: number }) {
           </p>
           <div className="my-2 h-px bg-[var(--t-border)]" />
           <ul className="space-y-1 text-[11px] text-[var(--t-text-secondary)]">
-            <li><span className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1.5 align-middle" />menos que 1:1 → prejuízo</li>
-            <li><span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1.5 align-middle" />1:1 a 3:1 → no limite</li>
-            <li><span className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1.5 align-middle" />3:1 a 5:1 → saudável</li>
-            <li><span className="inline-block w-2 h-2 rounded-full bg-emerald-600 mr-1.5 align-middle" />acima de 5:1 → excelente</li>
+            <li><span className="inline-block w-2 h-2 rounded-full bg-[var(--fin-negative)] mr-1.5 align-middle" />menos que 1:1 → prejuízo</li>
+            <li><span className="inline-block w-2 h-2 rounded-full bg-[var(--fin-warning)] mr-1.5 align-middle" />1:1 a 3:1 → no limite</li>
+            <li><span className="inline-block w-2 h-2 rounded-full bg-[var(--fin-positive)] mr-1.5 align-middle" />3:1 a 5:1 → saudável</li>
+            <li><span className="inline-block w-2 h-2 rounded-full bg-[var(--fin-positive)] mr-1.5 align-middle" />acima de 5:1 → excelente</li>
           </ul>
         </div>
       )}
@@ -187,7 +187,7 @@ function KpiCard({
   return (
     <div className={`min-w-[110px] p-2.5 rounded-lg ${highlight ? 'bg-[var(--t-green-bg)]' : 'bg-[var(--t-bg)]'}`}>
       <p className="text-[10px] text-[var(--t-text-muted)] uppercase tracking-wide truncate">{label}</p>
-      <p className={`text-[16px] font-bold ${negative ? 'text-red-500' : highlight ? 'text-[var(--t-green)]' : 'text-[var(--t-text)]'}`}>
+      <p className={`text-[16px] font-bold ${negative ? 'text-[var(--fin-negative-text)]' : highlight ? 'text-[var(--t-green)]' : 'text-[var(--t-text)]'}`}>
         {typeof value === 'number' ? value.toLocaleString('pt-BR') : value}
       </p>
     </div>

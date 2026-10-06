@@ -199,8 +199,8 @@ export default function RelatorioDeTaxasPage() {
         erro={erro ? { mensagem: erro, onTentarDeNovo: () => { load(); } } : null}
         esqueleto={
           <div className="flex flex-col gap-[var(--fin-s-5)]">
-            <div className="h-12 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]" />
-            <div className="h-64 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]" />
+            <div className="h-12 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]" />
+            <div className="h-64 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]" />
           </div>
         }
       >

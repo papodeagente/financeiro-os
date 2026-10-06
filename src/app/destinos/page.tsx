@@ -106,7 +106,7 @@ export default function DestinosPage() {
           </div>
           <button
             onClick={novo}
-            className="flex items-center gap-2 px-4 py-2 bg-[var(--t-green)] text-white rounded-lg hover:opacity-90 transition-opacity"
+            className="flex items-center gap-2 px-4 py-2 bg-[var(--t-green)] text-[var(--fin-text-on-fill)] rounded-lg hover:opacity-90 transition-opacity"
           >
             <Plus className="w-4 h-4" /> Novo Destino
           </button>
@@ -144,7 +144,7 @@ export default function DestinosPage() {
                   {d.pais && <span className="text-sm text-[var(--t-text-secondary)]">— {d.pais}</span>}
                   <div className="ml-auto flex items-center gap-2">
                     {d.enriquecido && (
-                      <span className="text-[10px] bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <span className="text-[10px] bg-[var(--fin-violet-soft)] text-[var(--fin-violet)] px-2 py-0.5 rounded-full flex items-center gap-1">
                         <Sparkles className="w-2.5 h-2.5" /> IA
                       </span>
                     )}
@@ -183,7 +183,7 @@ export default function DestinosPage() {
                       </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); excluir(d.id); }}
-                        className="px-3 py-1.5 text-sm text-red-400 hover:bg-red-400/10 rounded-lg flex items-center gap-1"
+                        className="px-3 py-1.5 text-sm text-[var(--fin-negative-text)] hover:bg-[var(--fin-negative-soft)] rounded-lg flex items-center gap-1"
                       >
                         <Trash2 className="w-3.5 h-3.5" /> Excluir
                       </button>
@@ -213,7 +213,7 @@ export default function DestinosPage() {
                   <button
                     onClick={enriquecer}
                     disabled={enriching || !editando.nome}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/10 text-purple-400 text-sm rounded-lg hover:bg-purple-500/20 disabled:opacity-40"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--fin-violet-soft)] text-[var(--fin-violet)] text-sm rounded-lg hover:bg-[var(--fin-violet-soft)] disabled:opacity-40"
                   >
                     {enriching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                     Enriquecer via IA
@@ -360,7 +360,7 @@ export default function DestinosPage() {
                         />
                         <button
                           onClick={() => setEditando({ ...editando, fast_facts: editando.fast_facts.filter((_, j) => j !== i) })}
-                          className="text-red-400 hover:text-red-300"
+                          className="text-[var(--fin-negative-text)] hover:text-[var(--fin-negative-text)]"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -381,7 +381,7 @@ export default function DestinosPage() {
                 <button
                   onClick={() => salvar(editando)}
                   disabled={saving || !editando.nome}
-                  className="flex items-center gap-2 px-4 py-2 bg-[var(--t-green)] text-white rounded-lg hover:opacity-90 disabled:opacity-50 text-sm"
+                  className="flex items-center gap-2 px-4 py-2 bg-[var(--t-green)] text-[var(--fin-text-on-fill)] rounded-lg hover:opacity-90 disabled:opacity-50 text-sm"
                 >
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   Salvar

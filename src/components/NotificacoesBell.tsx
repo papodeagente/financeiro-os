@@ -98,11 +98,11 @@ const ICON_FOR_TIPO: Record<string, typeof Bell> = {
 };
 
 const COLOR_FOR_TIPO: Record<string, string> = {
-  PROPOSTA_ACEITA: 'text-emerald-500 bg-emerald-500/10',
-  PROPOSTA_FEEDBACK: 'text-blue-500 bg-blue-500/10',
-  PROPOSTA_VISUALIZADA: 'text-violet-500 bg-violet-500/10',
-  PROPOSTA_LEAD: 'text-amber-500 bg-amber-500/10',
-  VENDA_VENDEDOR_NAO_CADASTRADO: 'text-red-500 bg-red-500/10',
+  PROPOSTA_ACEITA: 'text-[var(--fin-positive)] bg-[var(--fin-positive-soft)]',
+  PROPOSTA_FEEDBACK: 'text-[var(--fin-accent)] bg-[var(--fin-accent-soft)]',
+  PROPOSTA_VISUALIZADA: 'text-[var(--fin-violet)] bg-[var(--fin-violet-soft)]',
+  PROPOSTA_LEAD: 'text-[var(--fin-warning-text)] bg-[var(--fin-warning-soft)]',
+  VENDA_VENDEDOR_NAO_CADASTRADO: 'text-[var(--fin-negative-text)] bg-[var(--fin-negative-soft)]',
 };
 
 function createDefaultPreferences(): PreferenciasNotificacoes {
@@ -1011,7 +1011,7 @@ export function NotificacoesBell() {
         >
           <Settings2 className="h-3 w-3" aria-hidden="true" />
           Preferências
-          {preferencesDirty && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-label="Alterações não salvas" />}
+          {preferencesDirty && <span className="h-1.5 w-1.5 rounded-full bg-[var(--fin-warning)]" aria-label="Alterações não salvas" />}
         </button>
       </div>
 
@@ -1081,18 +1081,18 @@ export function NotificacoesBell() {
           </div>
 
           {markAllError && (
-            <div className="mx-3 mt-3 flex shrink-0 items-start gap-2 rounded-lg bg-red-500/10 px-3 py-2" role="alert">
-              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-500" aria-hidden="true" />
-              <p className="flex-1 text-[11px] text-red-600 dark:text-red-400">{markAllError}</p>
-              <button type="button" onClick={() => void markAllAsRead()} className="text-[11px] font-semibold text-red-600 underline dark:text-red-400">
+            <div className="mx-3 mt-3 flex shrink-0 items-start gap-2 rounded-lg bg-[var(--fin-negative-soft)] px-3 py-2" role="alert">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--fin-negative-text)]" aria-hidden="true" />
+              <p className="flex-1 text-[11px] text-[var(--fin-negative-text)]">{markAllError}</p>
+              <button type="button" onClick={() => void markAllAsRead()} className="text-[11px] font-semibold text-[var(--fin-negative-text)] underline">
                 Tentar novamente
               </button>
             </div>
           )}
 
           {listError && items.length > 0 && (
-            <div className="mx-3 mt-3 flex shrink-0 items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-2" role="alert">
-              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden="true" />
+            <div className="mx-3 mt-3 flex shrink-0 items-start gap-2 rounded-lg bg-[var(--fin-warning-soft)] px-3 py-2" role="alert">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--fin-warning-text)]" aria-hidden="true" />
               <p className="flex-1 text-[11px] text-[var(--t-text-secondary)]">{listError}</p>
               <button type="button" onClick={retryList} className="text-[11px] font-semibold text-[var(--t-text)] underline">
                 Tentar novamente
@@ -1115,13 +1115,13 @@ export function NotificacoesBell() {
               </div>
             ) : listError && items.length === 0 ? (
               <div className="flex min-h-52 flex-col items-center justify-center px-7 py-10 text-center" role="alert">
-                <AlertCircle className="mb-2 h-8 w-8 text-red-500/70" aria-hidden="true" />
+                <AlertCircle className="mb-2 h-8 w-8 text-[var(--fin-negative-text)]/70" aria-hidden="true" />
                 <p className="text-sm font-medium text-[var(--t-text)]">Não foi possível carregar</p>
                 <p className="mt-1 text-[11px] text-[var(--t-text-muted)]">{listError}</p>
                 <button
                   type="button"
                   onClick={retryList}
-                  className="mt-4 rounded-lg bg-[var(--t-green)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+                  className="mt-4 rounded-lg bg-[var(--t-green)] px-3 py-1.5 text-xs font-semibold text-[var(--fin-text-on-fill)] hover:opacity-90"
                 >
                   Tentar novamente
                 </button>
@@ -1142,7 +1142,7 @@ export function NotificacoesBell() {
               <div role="list" aria-label="Notificações">
                 {items.map(notification => {
                   const Icon = ICON_FOR_TIPO[notification.tipo] ?? Bell;
-                  const colorClass = COLOR_FOR_TIPO[notification.tipo] ?? 'text-slate-500 bg-slate-500/10';
+                  const colorClass = COLOR_FOR_TIPO[notification.tipo] ?? 'text-[var(--fin-text-3)] bg-[var(--fin-text-3)]/10';
                   const destination = safeLocalLink(notification.link);
                   const pending = pendingIds.has(notification.id);
                   const itemError = itemErrors[notification.id];
@@ -1217,7 +1217,7 @@ export function NotificacoesBell() {
                         </button>
                       </div>
                       {itemError && (
-                        <div className="flex items-center gap-2 px-4 pb-2 text-[10px] text-red-600 dark:text-red-400" role="alert">
+                        <div className="flex items-center gap-2 px-4 pb-2 text-[10px] text-[var(--fin-negative-text)]" role="alert">
                           <AlertCircle className="h-3 w-3 shrink-0" aria-hidden="true" />
                           <span className="min-w-0 flex-1">{itemError.message}</span>
                           <button
@@ -1271,13 +1271,13 @@ export function NotificacoesBell() {
             </div>
           ) : preferencesErrorKind === 'load' && !preferencesLoaded ? (
             <div className="flex min-h-52 flex-col items-center justify-center px-5 text-center" role="alert">
-              <AlertCircle className="mb-2 h-8 w-8 text-red-500/70" aria-hidden="true" />
+              <AlertCircle className="mb-2 h-8 w-8 text-[var(--fin-negative-text)]/70" aria-hidden="true" />
               <p className="text-sm font-medium text-[var(--t-text)]">Preferências indisponíveis</p>
               <p className="mt-1 text-[11px] text-[var(--t-text-muted)]">{preferencesError}</p>
               <button
                 type="button"
                 onClick={() => void fetchPreferences()}
-                className="mt-4 rounded-lg bg-[var(--t-green)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+                className="mt-4 rounded-lg bg-[var(--t-green)] px-3 py-1.5 text-xs font-semibold text-[var(--fin-text-on-fill)] hover:opacity-90"
               >
                 Tentar novamente
               </button>
@@ -1285,14 +1285,14 @@ export function NotificacoesBell() {
           ) : (
             <div className="space-y-5">
               {preferencesError && (
-                <div className="flex items-start gap-2 rounded-lg bg-red-500/10 px-3 py-2" role="alert">
-                  <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-500" aria-hidden="true" />
+                <div className="flex items-start gap-2 rounded-lg bg-[var(--fin-negative-soft)] px-3 py-2" role="alert">
+                  <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--fin-negative-text)]" aria-hidden="true" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-[11px] text-red-600 dark:text-red-400">{preferencesError}</p>
+                    <p className="text-[11px] text-[var(--fin-negative-text)]">{preferencesError}</p>
                     <button
                       type="button"
                       onClick={() => preferencesErrorKind === 'load' ? void fetchPreferences() : void savePreferences()}
-                      className="mt-1 text-[11px] font-semibold text-red-600 underline dark:text-red-400"
+                      className="mt-1 text-[11px] font-semibold text-[var(--fin-negative-text)] underline"
                     >
                       Tentar novamente
                     </button>
@@ -1309,7 +1309,7 @@ export function NotificacoesBell() {
                     const enabled = preferenceDraft.tipos[tipo] !== false;
                     return (
                       <label key={tipo} className="flex cursor-pointer items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-[var(--t-surface-hover)]">
-                        <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${COLOR_FOR_TIPO[tipo] ?? 'text-slate-500 bg-slate-500/10'}`}>
+                        <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${COLOR_FOR_TIPO[tipo] ?? 'text-[var(--fin-text-3)] bg-[var(--fin-text-3)]/10'}`}>
                           <Icon className="h-3.5 w-3.5" aria-hidden="true" />
                         </span>
                         <span className="min-w-0 flex-1">
@@ -1332,7 +1332,7 @@ export function NotificacoesBell() {
                           className="peer sr-only"
                         />
                         <span className={`relative h-5 w-9 rounded-full transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--t-green)] peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-[var(--t-surface)] peer-disabled:opacity-50 ${enabled ? 'bg-[var(--t-green)]' : 'bg-[var(--t-border)]'}`}>
-                          <span className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${enabled ? 'translate-x-4' : ''}`} />
+                          <span className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-[var(--fin-surface)] shadow-sm transition-transform ${enabled ? 'translate-x-4' : ''}`} />
                         </span>
                       </label>
                     );
@@ -1344,7 +1344,7 @@ export function NotificacoesBell() {
                 <legend className="sr-only">Comportamento</legend>
                 <div className="space-y-1">
                   <label className="flex cursor-pointer items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-[var(--t-surface-hover)]">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10 text-blue-500">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]">
                       <Bell className="h-3.5 w-3.5" aria-hidden="true" />
                     </span>
                     <span className="min-w-0 flex-1">
@@ -1359,12 +1359,12 @@ export function NotificacoesBell() {
                       className="peer sr-only"
                     />
                     <span className={`relative h-5 w-9 rounded-full transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--t-green)] peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-[var(--t-surface)] peer-disabled:opacity-50 ${preferenceDraft.mostrar_contador ? 'bg-[var(--t-green)]' : 'bg-[var(--t-border)]'}`}>
-                      <span className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${preferenceDraft.mostrar_contador ? 'translate-x-4' : ''}`} />
+                      <span className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-[var(--fin-surface)] shadow-sm transition-transform ${preferenceDraft.mostrar_contador ? 'translate-x-4' : ''}`} />
                     </span>
                   </label>
 
                   <label className="flex cursor-pointer items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-[var(--t-surface-hover)]">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--fin-positive-soft)] text-[var(--fin-positive)]">
                       <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
                     </span>
                     <span className="min-w-0 flex-1">
@@ -1379,7 +1379,7 @@ export function NotificacoesBell() {
                       className="peer sr-only"
                     />
                     <span className={`relative h-5 w-9 rounded-full transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--t-green)] peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-[var(--t-surface)] peer-disabled:opacity-50 ${preferenceDraft.atualizacao_automatica ? 'bg-[var(--t-green)]' : 'bg-[var(--t-border)]'}`}>
-                      <span className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${preferenceDraft.atualizacao_automatica ? 'translate-x-4' : ''}`} />
+                      <span className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-[var(--fin-surface)] shadow-sm transition-transform ${preferenceDraft.atualizacao_automatica ? 'translate-x-4' : ''}`} />
                     </span>
                   </label>
                 </div>
@@ -1400,7 +1400,7 @@ export function NotificacoesBell() {
                   type="button"
                   onClick={() => void savePreferences()}
                   disabled={!preferencesDirty || preferencesSaving}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--t-green)] px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--t-green)] px-3 py-1.5 text-xs font-semibold text-[var(--fin-text-on-fill)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {preferencesSaving
                     ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
@@ -1442,7 +1442,7 @@ export function NotificacoesBell() {
         <Bell className="h-4 w-4" aria-hidden="true" />
         {preferencesLoaded && preferences.mostrar_contador && unread > 0 && (
           <span
-            className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"
+            className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--fin-negative)] px-1 text-[10px] font-bold text-[var(--fin-text-on-fill)]"
             style={{ boxShadow: '0 0 0 2px var(--t-surface)' }}
             aria-hidden="true"
           >

@@ -76,42 +76,42 @@ export default function AdminNewTenantPage() {
     <div className="max-w-2xl">
       <Link
         href="/admin/tenants"
-        className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-100 transition-colors mb-6"
+        className="inline-flex items-center gap-1.5 text-sm text-[var(--fin-text-3)] hover:text-[var(--fin-text)] transition-colors mb-6"
       >
         <ArrowLeft className="w-4 h-4" />
         Voltar para Agencias
       </Link>
 
-      <h1 className="text-2xl font-bold text-gray-100 mb-6">Nova Agencia</h1>
+      <h1 className="text-2xl font-bold text-[var(--fin-text)] mb-6">Nova Agencia</h1>
 
-      <form onSubmit={handleSubmit} className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-5">
+      <form onSubmit={handleSubmit} className="bg-[var(--fin-surface)] border border-[var(--fin-border)] rounded-xl p-6 space-y-5">
         {error && (
-          <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-lg px-3 py-2">
+          <div className="bg-[var(--fin-negative-soft)] border border-[var(--fin-negative)]/30 text-[var(--fin-negative-text)] text-sm rounded-lg px-3 py-2">
             {error}
           </div>
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">Nome da Agencia</label>
+            <label className="block text-sm font-medium text-[var(--fin-text-3)] mb-1.5">Nome da Agencia</label>
             <input
               type="text"
               value={nome}
               onChange={e => handleNomeChange(e.target.value)}
               required
-              className="w-full bg-gray-800 border border-gray-700 text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d4a853]/50 focus:border-[#d4a853] placeholder-gray-500"
+              className="w-full bg-[var(--fin-surface)] border border-[var(--fin-border)] text-[var(--fin-text)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--fin-accent)]/50 focus:border-[var(--fin-accent)] placeholder-[var(--fin-text-3)]"
               placeholder="Agencia Exemplo"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">Slug</label>
+            <label className="block text-sm font-medium text-[var(--fin-text-3)] mb-1.5">Slug</label>
             <input
               type="text"
               value={slug}
               onChange={e => handleSlugChange(e.target.value)}
               required
-              className="w-full bg-gray-800 border border-gray-700 text-gray-100 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#d4a853]/50 focus:border-[#d4a853] placeholder-gray-500"
+              className="w-full bg-[var(--fin-surface)] border border-[var(--fin-border)] text-[var(--fin-text)] rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[var(--fin-accent)]/50 focus:border-[var(--fin-accent)] placeholder-[var(--fin-text-3)]"
               placeholder="agencia-exemplo"
             />
           </div>
@@ -119,22 +119,22 @@ export default function AdminNewTenantPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">CNPJ</label>
+            <label className="block text-sm font-medium text-[var(--fin-text-3)] mb-1.5">CNPJ</label>
             <input
               type="text"
               value={cnpj}
               onChange={e => setCnpj(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d4a853]/50 focus:border-[#d4a853] placeholder-gray-500"
+              className="w-full bg-[var(--fin-surface)] border border-[var(--fin-border)] text-[var(--fin-text)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--fin-accent)]/50 focus:border-[var(--fin-accent)] placeholder-[var(--fin-text-3)]"
               placeholder="00.000.000/0001-00"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">Plano</label>
+            <label className="block text-sm font-medium text-[var(--fin-text-3)] mb-1.5">Plano</label>
             <select
               value={plano}
               onChange={e => setPlano(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d4a853]/50 focus:border-[#d4a853]"
+              className="w-full bg-[var(--fin-surface)] border border-[var(--fin-border)] text-[var(--fin-text)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--fin-accent)]/50 focus:border-[var(--fin-accent)]"
             >
               <option value="free">Free</option>
               <option value="pro">Pro</option>
@@ -143,30 +143,30 @@ export default function AdminNewTenantPage() {
           </div>
         </div>
 
-        <div className="border-t border-gray-800 pt-5">
-          <h3 className="text-sm font-semibold text-gray-300 mb-4">Administrador da Agencia</h3>
+        <div className="border-t border-[var(--fin-border)] pt-5">
+          <h3 className="text-sm font-semibold text-[var(--fin-text-3)] mb-4">Administrador da Agencia</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">Email do Admin</label>
+              <label className="block text-sm font-medium text-[var(--fin-text-3)] mb-1.5">Email do Admin</label>
               <input
                 type="email"
                 value={emailAdmin}
                 onChange={e => setEmailAdmin(e.target.value)}
                 required
-                className="w-full bg-gray-800 border border-gray-700 text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d4a853]/50 focus:border-[#d4a853] placeholder-gray-500"
+                className="w-full bg-[var(--fin-surface)] border border-[var(--fin-border)] text-[var(--fin-text)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--fin-accent)]/50 focus:border-[var(--fin-accent)] placeholder-[var(--fin-text-3)]"
                 placeholder="admin@agencia.com"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">Senha do Admin</label>
+              <label className="block text-sm font-medium text-[var(--fin-text-3)] mb-1.5">Senha do Admin</label>
               <input
                 type="password"
                 value={senhaAdmin}
                 onChange={e => setSenhaAdmin(e.target.value)}
                 required
                 minLength={6}
-                className="w-full bg-gray-800 border border-gray-700 text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d4a853]/50 focus:border-[#d4a853] placeholder-gray-500"
+                className="w-full bg-[var(--fin-surface)] border border-[var(--fin-border)] text-[var(--fin-text)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--fin-accent)]/50 focus:border-[var(--fin-accent)] placeholder-[var(--fin-text-3)]"
                 placeholder="Min. 6 caracteres"
               />
             </div>
@@ -177,7 +177,7 @@ export default function AdminNewTenantPage() {
           <button
             type="submit"
             disabled={loading}
-            className="bg-[#d4a853] text-gray-950 font-medium rounded-lg px-5 py-2.5 text-sm hover:bg-[#c49a48] transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+            className="bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] font-medium rounded-lg px-5 py-2.5 text-sm hover:bg-[var(--fin-accent-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
           >
             {loading ? (
               <>
@@ -191,7 +191,7 @@ export default function AdminNewTenantPage() {
 
           <Link
             href="/admin/tenants"
-            className="text-sm text-gray-400 hover:text-gray-100 transition-colors px-3 py-2"
+            className="text-sm text-[var(--fin-text-3)] hover:text-[var(--fin-text)] transition-colors px-3 py-2"
           >
             Cancelar
           </Link>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { ArrowUpRight, Plus, Target, TriangleAlert } from 'lucide-react';
 
 import { ContaPagar, PlanoContas, createContaPagar, StatusContaPagar, CartaoCorporativo } from '@/lib/crm-types';
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
@@ -144,7 +144,7 @@ function EsqueletoIndicadores() {
       {[0, 1, 2, 3].map((i) => (
         <div
           key={i}
-          className="flex flex-col gap-3 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-4"
+          className="flex flex-col gap-3 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-4 shadow-[var(--fin-e-card)]"
         >
           <span className="block h-3 w-24 rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />
           <span className="block h-6 w-32 rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />
@@ -159,7 +159,7 @@ function EsqueletoFiltros() {
   return (
     <div
       aria-hidden="true"
-      className="flex min-h-12 flex-wrap items-center gap-2 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-3"
+      className="flex min-h-12 flex-wrap items-center gap-2 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-3 shadow-[var(--fin-e-card)]"
     >
       <span className="block h-10 w-72 rounded-[var(--fin-r-md)] bg-[var(--fin-surface-2)]" />
       <span className="block h-10 w-48 rounded-[var(--fin-r-md)] bg-[var(--fin-surface-2)]" />
@@ -685,7 +685,7 @@ export default function ContasPagarPage() {
       >
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <MetricCard
-            rotulo="Saldo a pagar"
+            rotulo="Saldo a pagar" icone={ArrowUpRight}
             valor={totalPendente}
             estado={estadoValor}
             contexto={`Falta pagar em ${contasTexto(qtdPendente)} ${escopo}.`}
@@ -694,7 +694,7 @@ export default function ContasPagarPage() {
             onClick={() => setFilterStatus(filterStatus === 'ABERTO' ? 'TODOS' : 'ABERTO')}
           />
           <MetricCard
-            rotulo="Pago"
+            rotulo="Pago" icone={ArrowUpRight}
             valor={totalPago}
             estado={estadoValor}
             contexto={`Já quitado em ${contasTexto(qtdPago)} ${escopo}.`}
@@ -703,7 +703,7 @@ export default function ContasPagarPage() {
             onClick={() => setFilterStatus(filterStatus === 'PAGO' ? 'TODOS' : 'PAGO')}
           />
           <MetricCard
-            rotulo="Vencido"
+            rotulo="Vencido" icone={TriangleAlert}
             valor={totalVencido}
             estado={estadoValor}
             emphasis="destaque"
@@ -719,7 +719,7 @@ export default function ContasPagarPage() {
             }}
           />
           <MetricCard
-            rotulo="Custo para conseguir cliente"
+            rotulo="Custo para conseguir cliente" icone={Target}
             valor={totalComercial}
             estado={estadoValor}
             contexto={`Marketing e aquisição, em ${contasTexto(qtdComercial)} ${escopo}.`}

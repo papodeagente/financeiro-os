@@ -27,11 +27,11 @@ const fmtDate = (d: string) => {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  ORCAMENTO: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
-  RESERVADO: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
-  CONFIRMADO: 'bg-green-500/10 text-green-400 border-green-500/30',
-  CANCELADO: 'bg-red-500/10 text-red-400 border-red-500/30',
-  CONCLUIDO: 'bg-gray-500/10 text-gray-400 border-gray-500/30',
+  ORCAMENTO: 'bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)] border-[var(--fin-warning)]/30',
+  RESERVADO: 'bg-[var(--fin-accent-soft)] text-[var(--fin-accent)] border-[var(--fin-accent)]/30',
+  CONFIRMADO: 'bg-[var(--fin-positive-soft)] text-[var(--fin-positive)] border-[var(--fin-positive)]/30',
+  CANCELADO: 'bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)] border-[var(--fin-negative)]/30',
+  CONCLUIDO: 'bg-[var(--fin-text-3)]/10 text-[var(--fin-text-3)] border-[var(--fin-border-strong)]/30',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -167,11 +167,11 @@ export default function VendaDetalhe() {
       <div className="max-w-5xl mx-auto px-6 py-6 space-y-6">
         {/* Resumo financeiro */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <SummaryCard label="Custo Total" value={fmt(venda.valor_total_custo || 0)} color="text-orange-400" />
-          <SummaryCard label="Valor Venda" value={fmt(venda.valor_total_venda || 0)} color="text-blue-400" />
-          <SummaryCard label="Desconto" value={fmt(venda.desconto || 0)} color="text-red-400" />
-          <SummaryCard label="Valor Final" value={fmt(venda.valor_final || 0)} color="text-green-400" />
-          <SummaryCard label="Comissão da agência" value={fmt(comissaoDaAgencia)} color={comissaoDaAgencia >= 0 ? 'text-green-400' : 'text-red-400'} extra={
+          <SummaryCard label="Custo Total" value={fmt(venda.valor_total_custo || 0)} color="text-[var(--fin-warning-text)]" />
+          <SummaryCard label="Valor Venda" value={fmt(venda.valor_total_venda || 0)} color="text-[var(--fin-accent)]" />
+          <SummaryCard label="Desconto" value={fmt(venda.desconto || 0)} color="text-[var(--fin-negative-text)]" />
+          <SummaryCard label="Valor Final" value={fmt(venda.valor_final || 0)} color="text-[var(--fin-positive)]" />
+          <SummaryCard label="Comissão da agência" value={fmt(comissaoDaAgencia)} color={comissaoDaAgencia >= 0 ? 'text-[var(--fin-positive)]' : 'text-[var(--fin-negative-text)]'} extra={
             venda.markup_realizado ? `Markup: ${venda.markup_realizado.toFixed(1)}%` : undefined
           } />
         </div>
@@ -260,11 +260,11 @@ export default function VendaDetalhe() {
                     <div className="flex items-center gap-6 mt-3 pt-3 border-t border-[var(--t-border)] text-sm">
                       <div>
                         <span className="text-[var(--t-text-muted)] text-xs">Custo</span>
-                        <p className="text-orange-400 font-medium">{fmt(custoFinal)}</p>
+                        <p className="text-[var(--fin-warning-text)] font-medium">{fmt(custoFinal)}</p>
                       </div>
                       <div>
                         <span className="text-[var(--t-text-muted)] text-xs">Venda</span>
-                        <p className="text-blue-400 font-medium">{fmt(vendaFinal)}</p>
+                        <p className="text-[var(--fin-accent)] font-medium">{fmt(vendaFinal)}</p>
                       </div>
                       {prod.moeda !== 'BRL' && (
                         <div>
@@ -296,10 +296,10 @@ export default function VendaDetalhe() {
             {/* Resumo financeiro detalhado */}
             {resumoFin && (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <SummaryCard label="Total a receber" value={fmt(resumoFin.total_receber || 0)} color="text-blue-400" />
-                <SummaryCard label="Recebido" value={fmt(resumoFin.total_recebido || 0)} color="text-green-400" />
-                <SummaryCard label="Total a pagar" value={fmt(resumoFin.total_pagar || 0)} color="text-orange-400" />
-                <SummaryCard label="Pago" value={fmt(resumoFin.total_pago || 0)} color="text-emerald-400" />
+                <SummaryCard label="Total a receber" value={fmt(resumoFin.total_receber || 0)} color="text-[var(--fin-accent)]" />
+                <SummaryCard label="Recebido" value={fmt(resumoFin.total_recebido || 0)} color="text-[var(--fin-positive)]" />
+                <SummaryCard label="Total a pagar" value={fmt(resumoFin.total_pagar || 0)} color="text-[var(--fin-warning-text)]" />
+                <SummaryCard label="Pago" value={fmt(resumoFin.total_pago || 0)} color="text-[var(--fin-positive)]" />
               </div>
             )}
 
@@ -323,16 +323,16 @@ export default function VendaDetalhe() {
                           <td className="py-2 pr-3 text-[var(--t-text)]">{descricaoSemPlataforma(cr.descricao, plataformaDaConta(cr))}</td>
                           <td className="py-2 pr-3">
                             <span className="inline-flex flex-wrap items-center gap-1">
-                              <Badge className={`text-[10px] ${cr.origem === 'COMISSAO_FORNECEDOR' ? 'bg-purple-500/10 text-purple-400 border-purple-500/30' : 'bg-blue-500/10 text-blue-400 border-blue-500/30'}`}>
+                              <Badge className={`text-[10px] ${cr.origem === 'COMISSAO_FORNECEDOR' ? 'bg-[var(--fin-violet-soft)] text-[var(--fin-violet)] border-[var(--fin-violet)]/30' : 'bg-[var(--fin-accent-soft)] text-[var(--fin-accent)] border-[var(--fin-accent)]/30'}`}>
                                 {cr.origem === 'COMISSAO_FORNECEDOR' ? 'Comissao' : 'Venda'}
                               </Badge>
                               {plataformaDaConta(cr) && <EtiquetaDaPlataforma plataforma={plataformaDaConta(cr)!} />}
                             </span>
                           </td>
-                          <td className="py-2 pr-3 text-right font-medium text-blue-400">{fmt(cr.valor_final)}</td>
+                          <td className="py-2 pr-3 text-right font-medium text-[var(--fin-accent)]">{fmt(cr.valor_final)}</td>
                           <td className="py-2 pr-3 text-[var(--t-text-secondary)]">{fmtDate(cr.data_vencimento)}</td>
                           <td className="py-2">
-                            <Badge className={`text-[10px] border ${cr.status === 'RECEBIDO' ? 'bg-green-500/10 text-green-400 border-green-500/30' : cr.status === 'ATRASADO' ? 'bg-red-500/10 text-red-400 border-red-500/30' : 'bg-amber-500/10 text-amber-400 border-amber-500/30'}`}>
+                            <Badge className={`text-[10px] border ${cr.status === 'RECEBIDO' ? 'bg-[var(--fin-positive-soft)] text-[var(--fin-positive)] border-[var(--fin-positive)]/30' : cr.status === 'ATRASADO' ? 'bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)] border-[var(--fin-negative)]/30' : 'bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)] border-[var(--fin-warning)]/30'}`}>
                               {cr.status}
                             </Badge>
                           </td>
@@ -363,10 +363,10 @@ export default function VendaDetalhe() {
                         <tr key={cp.id}>
                           <td className="py-2 pr-3 text-[var(--t-text)]">{cp.descricao}</td>
                           <td className="py-2 pr-3 text-[var(--t-text-secondary)]">{cp.fornecedor_nome || '—'}</td>
-                          <td className="py-2 pr-3 text-right font-medium text-orange-400">{fmt(cp.valor_final)}</td>
+                          <td className="py-2 pr-3 text-right font-medium text-[var(--fin-warning-text)]">{fmt(cp.valor_final)}</td>
                           <td className="py-2 pr-3 text-[var(--t-text-secondary)]">{fmtDate(cp.data_vencimento)}</td>
                           <td className="py-2">
-                            <Badge className={`text-[10px] border ${cp.status === 'PAGO' ? 'bg-green-500/10 text-green-400 border-green-500/30' : cp.status === 'VENCIDO' ? 'bg-red-500/10 text-red-400 border-red-500/30' : 'bg-amber-500/10 text-amber-400 border-amber-500/30'}`}>
+                            <Badge className={`text-[10px] border ${cp.status === 'PAGO' ? 'bg-[var(--fin-positive-soft)] text-[var(--fin-positive)] border-[var(--fin-positive)]/30' : cp.status === 'VENCIDO' ? 'bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)] border-[var(--fin-negative)]/30' : 'bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)] border-[var(--fin-warning)]/30'}`}>
                               {cp.status}
                             </Badge>
                           </td>
@@ -428,7 +428,7 @@ function Info({ label, value, highlight }: { label: string; value: string; highl
   return (
     <div>
       <p className="text-[10px] text-[var(--t-text-muted)] uppercase tracking-wider">{label}</p>
-      <p className={`text-sm ${highlight ? 'font-bold text-green-400' : 'text-[var(--t-text)]'}`}>{value}</p>
+      <p className={`text-sm ${highlight ? 'font-bold text-[var(--fin-positive)]' : 'text-[var(--t-text)]'}`}>{value}</p>
     </div>
   );
 }

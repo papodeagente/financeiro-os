@@ -25,8 +25,8 @@ export function PageHeaderEditor({ proposta, onUpdate, onClose }: Props) {
       {/* Header */}
       <div className="shrink-0 px-4 py-3 border-b border-[var(--t-border)] flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="w-7 h-7 rounded-md flex items-center justify-center bg-purple-500/10">
-            <FileImage className="w-4 h-4 text-purple-500" />
+          <div className="w-7 h-7 rounded-md flex items-center justify-center bg-[var(--fin-violet-soft)]">
+            <FileImage className="w-4 h-4 text-[var(--fin-violet)]" />
           </div>
           <div className="min-w-0">
             <div className="text-[10px] uppercase tracking-wider font-semibold text-[var(--t-text-muted)]">Editando</div>
@@ -55,10 +55,10 @@ export function PageHeaderEditor({ proposta, onUpdate, onClose }: Props) {
                 key={estilo}
                 onClick={() => onUpdate(p => { p.visual.estilo_capa = estilo; return p; })}
                 className={`px-2 py-2 rounded-md border text-[10px] uppercase tracking-wider font-medium transition-all ${
-                  proposta.visual.estilo_capa === estilo
-                    ? 'border-purple-500 bg-purple-500/10 text-purple-700 dark:text-purple-400'
-                    : 'border-[var(--t-border)] text-[var(--t-text-secondary)] hover:border-purple-300'
-                }`}
+ proposta.visual.estilo_capa === estilo
+ ? 'border-[var(--fin-violet)] bg-[var(--fin-violet-soft)] text-[var(--fin-violet)] '
+ : 'border-[var(--t-border)] text-[var(--t-text-secondary)] hover:border-[var(--fin-violet)]/30'
+ }`}
               >
                 {estilo}
               </button>

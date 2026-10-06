@@ -134,7 +134,7 @@ export function AnimatedFlowEdge(props: EdgeProps) {
               transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
               pointerEvents: 'all',
             }}
-            className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white border border-blue-200 text-blue-700 shadow-sm tabular-nums"
+            className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[var(--fin-surface)] border border-[var(--fin-accent)]/30 text-[var(--fin-accent)] shadow-sm tabular-nums"
             title="Taxa de conversão definida manualmente nesta conexão"
           >
             {(taxa! * 100).toFixed(1)}%

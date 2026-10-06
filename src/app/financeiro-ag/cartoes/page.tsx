@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Pencil, Plus, Power, PowerOff, Trash2, TriangleAlert, X } from 'lucide-react';
+import { CreditCard, Pencil, Plus, Power, PowerOff, Trash2, TriangleAlert, Wallet, X } from 'lucide-react';
 
 import type { CartaoCorporativo, ContaPagar, BandeiraCartao, PlanoContas } from '@/lib/crm-types';
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
@@ -147,9 +147,9 @@ function FaixaIndicadores({
 
   return (
     <div className="grid grid-cols-1 gap-[var(--fin-s-4)] sm:grid-cols-2 xl:grid-cols-4">
-      <MetricCard rotulo="Limite total" valor={limite} estado={estado} contexto={contextoLimite} />
+      <MetricCard rotulo="Limite total" icone={CreditCard} valor={limite} estado={estado} contexto={contextoLimite} />
       <MetricCard
-        rotulo="Limite usado"
+        rotulo="Limite usado" icone={CreditCard}
         valor={usado}
         estado={estado}
         contexto="Contas lançadas em todos os cartões, sem contar as canceladas"
@@ -162,13 +162,13 @@ function FaixaIndicadores({
         }
       />
       <MetricCard
-        rotulo="Disponível"
+        rotulo="Disponível" icone={Wallet}
         valor={disponivel}
         estado={estado}
         emphasis="destaque"
         contexto="Em todos os cartões, o limite que ainda dá para usar hoje"
       />
-      <div className="flex flex-col gap-[var(--fin-s-3)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-4">
+      <div className="flex flex-col gap-[var(--fin-s-3)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-4 shadow-[var(--fin-e-card)]">
         <h3 className="fin-t-overline text-[var(--fin-text-3)]">Utilização</h3>
         {pronto ? (
           <Meter
@@ -668,7 +668,7 @@ export default function CartoesCorpPage() {
           {faturaCard && fatura ? (
             <section
               aria-label={`Fatura do cartão ${faturaCard.apelido}`}
-              className="flex flex-col gap-[var(--fin-s-4)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-4"
+              className="flex flex-col gap-[var(--fin-s-4)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-4 shadow-[var(--fin-e-card)]"
             >
               <div className="flex flex-col gap-[var(--fin-s-3)] lg:flex-row lg:items-end lg:justify-between">
                 <div className="flex min-w-0 flex-col gap-1">

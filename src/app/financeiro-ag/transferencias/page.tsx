@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Plus, Trash2, Undo2 } from 'lucide-react';
+import { ArrowLeftRight, ArrowRight, Clock, Plus, Trash2, Undo2 } from 'lucide-react';
 
 import { TransferenciaBancaria, ContaBancaria, createTransferencia, StatusTransferencia } from '@/lib/crm-types';
 import { loadEntities, saveEntity } from '@/lib/crm-storage';
@@ -499,7 +499,7 @@ export default function TransferenciasPage() {
                 {[0, 1].map(i => (
                   <div
                     key={i}
-                    className="flex flex-col gap-[var(--fin-s-2)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)]"
+                    className="flex flex-col gap-[var(--fin-s-2)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)] shadow-[var(--fin-e-card)]"
                   >
                     <span className="block h-3 w-32 rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />
                     <span className="block h-8 w-52 rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />
@@ -521,7 +521,7 @@ export default function TransferenciasPage() {
             <div className="flex flex-col gap-[var(--fin-s-4)]">
               <div className="grid grid-cols-1 gap-[var(--fin-s-4)] sm:grid-cols-2">
                 <MetricCard
-                  rotulo="Em aberto"
+                  rotulo="Em aberto" icone={Clock}
                   valor={totalPendente}
                   estado="ok"
                   emphasis="destaque"
@@ -533,7 +533,7 @@ export default function TransferenciasPage() {
                   explicacao="Soma das transferências que ainda não foram efetivadas. Enquanto estão em aberto, nenhum saldo muda."
                 />
                 <MetricCard
-                  rotulo="Efetivadas"
+                  rotulo="Efetivadas" icone={ArrowLeftRight}
                   valor={totalEfetivada}
                   estado="ok"
                   contexto={
@@ -548,7 +548,7 @@ export default function TransferenciasPage() {
               {contas.length > 0 ? (
                 <section
                   aria-labelledby={TITULO_SALDOS_ID}
-                  className="flex flex-col gap-[var(--fin-s-3)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)]"
+                  className="flex flex-col gap-[var(--fin-s-3)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)] shadow-[var(--fin-e-card)]"
                 >
                   <h2 id={TITULO_SALDOS_ID} className="fin-t-overline text-[var(--fin-text-3)]">
                     Saldo das contas hoje

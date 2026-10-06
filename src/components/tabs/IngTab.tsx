@@ -69,7 +69,7 @@ export function IngTab({ grupo, onChange }: Props) {
     <div className="space-y-6">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {TIPOS.map(t => (
-          <div key={t} className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-3" style={{ boxShadow: 'var(--elevation-1)' }}>
+          <div key={t} className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-3 shadow-[var(--fin-e-card)]" style={{ boxShadow: 'var(--elevation-1)' }}>
             <span className="text-[11px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide">Total {TIPO_LABELS[t]}</span>
             <div className="text-lg font-bold text-[var(--t-text)] mt-0.5">{formatBRL(totals[`total${t.charAt(0).toUpperCase() + t.slice(1)}` as keyof typeof totals] as number)}</div>
           </div>
@@ -87,7 +87,7 @@ export function IngTab({ grupo, onChange }: Props) {
         const filledCount = atr.fontes.filter(f => fonteHasData(f as unknown as Record<string, unknown>)).length;
 
         return (
-          <div key={aIdx} className="rounded-[var(--t-card-radius)] border border-[var(--t-border)] bg-[var(--t-surface)] overflow-hidden" style={{ boxShadow: 'var(--elevation-2)' }}>
+          <div key={aIdx} className="rounded-[var(--t-card-radius)] border border-[var(--t-border)] bg-[var(--t-surface)] overflow-hidden shadow-[var(--fin-e-card)]" style={{ boxShadow: 'var(--elevation-2)' }}>
             <div className="p-4 flex items-center justify-between border-b border-[var(--t-border)]">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-[var(--t-green)]/10 flex items-center justify-center"><Ticket className="w-5 h-5 text-[var(--t-green)]" /></div>

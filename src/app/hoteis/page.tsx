@@ -14,7 +14,7 @@ function StarRating({ rating }: { rating: number }) {
   return (
     <div className="flex items-center gap-0.5">
       {[1, 2, 3, 4, 5].map(i => (
-        <Star key={i} className={`w-3.5 h-3.5 ${i <= Math.round(rating) ? 'text-amber-400 fill-amber-400' : 'text-[var(--t-text-muted)]'}`} />
+        <Star key={i} className={`w-3.5 h-3.5 ${i <= Math.round(rating) ? 'text-[var(--fin-warning-text)] fill-[var(--fin-warning)]' : 'text-[var(--t-text-muted)]'}`} />
       ))}
     </div>
   );
@@ -168,7 +168,7 @@ export default function HoteisPage() {
             </div>
             <div className="flex items-end">
               <button onClick={buscar} disabled={searching}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[var(--t-green)] text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 font-medium">
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[var(--t-green)] text-[var(--fin-text-on-fill)] rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 font-medium">
                 {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                 Buscar
               </button>
@@ -185,7 +185,7 @@ export default function HoteisPage() {
         </div>
 
         {error && (
-          <div className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 px-4 py-3 rounded-lg">
+          <div className="flex items-center gap-2 text-[var(--fin-negative-text)] text-sm bg-[var(--fin-negative-soft)] px-4 py-3 rounded-lg">
             <AlertCircle className="w-4 h-4 shrink-0" /> {error}
           </div>
         )}
@@ -195,7 +195,7 @@ export default function HoteisPage() {
           <div className="space-y-4">
             <div className="text-sm text-[var(--t-text-secondary)]">
               {results.length} hotel{results.length !== 1 ? 'is' : ''} encontrado{results.length !== 1 ? 's' : ''}
-              {cached && <span className="ml-2 text-xs text-amber-400">(cache)</span>}
+              {cached && <span className="ml-2 text-xs text-[var(--fin-warning-text)]">(cache)</span>}
             </div>
 
             {results.map(hotel => {
@@ -230,7 +230,7 @@ export default function HoteisPage() {
                           <h3 className="text-lg font-semibold text-[var(--t-text)] truncate">{hotel.name}</h3>
                           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                             {hotel.extracted_hotel_class && (
-                              <span className="text-[10px] bg-amber-400/15 text-amber-400 px-1.5 py-0.5 rounded font-medium">
+                              <span className="text-[10px] bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)] px-1.5 py-0.5 rounded font-medium">
                                 {'★'.repeat(hotel.extracted_hotel_class)} {hotel.extracted_hotel_class} estrelas
                               </span>
                             )}
@@ -244,7 +244,7 @@ export default function HoteisPage() {
                               </div>
                             )}
                             {hotel.eco_certified && (
-                              <span className="text-[9px] bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 rounded">Eco-certificado</span>
+                              <span className="text-[9px] bg-[var(--fin-positive-soft)] text-[var(--fin-positive)] px-1.5 py-0.5 rounded">Eco-certificado</span>
                             )}
                           </div>
                         </div>
@@ -298,7 +298,7 @@ export default function HoteisPage() {
                           {hotel.gps_coordinates && (
                             <a href={`https://www.google.com/maps?q=${hotel.gps_coordinates.latitude},${hotel.gps_coordinates.longitude}`}
                               target="_blank" rel="noopener noreferrer"
-                              className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300">
+                              className="flex items-center gap-1 text-xs text-[var(--fin-accent)] hover:text-[var(--fin-accent)]">
                               <MapPin className="w-3 h-3" /> Google Maps
                             </a>
                           )}
@@ -314,7 +314,7 @@ export default function HoteisPage() {
                             <button
                               onClick={() => selecionarHotel(hotel)}
                               disabled={selecting !== null}
-                              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-[var(--t-green)] text-white rounded-lg hover:opacity-90 disabled:opacity-50"
+                              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-[var(--t-green)] text-[var(--fin-text-on-fill)] rounded-lg hover:opacity-90 disabled:opacity-50"
                             >
                               {selecting === hotel.property_token ? (
                                 <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Selecionando...</>
@@ -360,12 +360,12 @@ export default function HoteisPage() {
                                 <div key={rb.name} className="bg-[var(--t-bg)] rounded-lg px-3 py-2">
                                   <div className="flex items-center justify-between">
                                     <span className="text-xs text-[var(--t-text)]">{rb.name}</span>
-                                    <span className={`text-xs font-medium ${pct >= 60 ? 'text-emerald-400' : pct >= 40 ? 'text-amber-400' : 'text-red-400'}`}>
+                                    <span className={`text-xs font-medium ${pct >= 60 ? 'text-[var(--fin-positive)]' : pct >= 40 ? 'text-[var(--fin-warning-text)]' : 'text-[var(--fin-negative-text)]'}`}>
                                       {pct}%
                                     </span>
                                   </div>
                                   <div className="w-full h-1.5 bg-[var(--t-border)] rounded-full mt-1.5">
-                                    <div className={`h-full rounded-full ${pct >= 60 ? 'bg-emerald-400' : pct >= 40 ? 'bg-amber-400' : 'bg-red-400'}`}
+                                    <div className={`h-full rounded-full ${pct >= 60 ? 'bg-[var(--fin-positive)]' : pct >= 40 ? 'bg-[var(--fin-warning)]' : 'bg-[var(--fin-negative)]'}`}
                                       style={{ width: `${pct}%` }} />
                                   </div>
                                   <div className="text-[9px] text-[var(--t-text-muted)] mt-0.5">{rb.total} menções</div>
@@ -388,9 +388,9 @@ export default function HoteisPage() {
                               return (
                                 <div key={n} className="flex items-center gap-2">
                                   <span className="text-xs text-[var(--t-text-muted)] w-3">{n}</span>
-                                  <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                                  <Star className="w-3 h-3 text-[var(--fin-warning-text)] fill-[var(--fin-warning)]" />
                                   <div className="flex-1 h-2 bg-[var(--t-border)] rounded-full">
-                                    <div className="h-full bg-amber-400 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                                    <div className="h-full bg-[var(--fin-warning)] rounded-full transition-all" style={{ width: `${pct}%` }} />
                                   </div>
                                   <span className="text-[10px] text-[var(--t-text-muted)] w-12 text-right">{count.toLocaleString('pt-BR')}</span>
                                 </div>
@@ -422,7 +422,7 @@ export default function HoteisPage() {
 
                       {/* Excluded amenities */}
                       {hotel.excluded_amenities && hotel.excluded_amenities.length > 0 && (
-                        <div className="text-xs text-red-400/70">
+                        <div className="text-xs text-[var(--fin-negative-text)]/70">
                           <span className="font-medium">Não inclui: </span>{hotel.excluded_amenities.join(' · ')}
                         </div>
                       )}

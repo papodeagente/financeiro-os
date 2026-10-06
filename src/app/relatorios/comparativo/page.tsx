@@ -164,9 +164,9 @@ export default function ComparativoMensalPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
+    <div className="mx-auto w-full max-w-[var(--fin-page-max)] space-y-[var(--fin-s-5)] px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-[var(--fin-s-3)] lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[var(--t-text)] flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-[var(--t-green)]/10 flex items-center justify-center">
@@ -178,7 +178,7 @@ export default function ComparativoMensalPage() {
             Evolucao de receitas e despesas mes a mes
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <select
             value={mesesExibir}
             onChange={(e) => setMesesExibir(Number(e.target.value))}
@@ -201,9 +201,9 @@ export default function ComparativoMensalPage() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs text-[var(--t-text-secondary)]">Total Receitas</span>
-              <ArrowUpCircle className="w-4 h-4 text-emerald-400" />
+              <ArrowUpCircle className="w-4 h-4 text-[var(--fin-positive)]" />
             </div>
-            <div className="text-xl font-bold text-emerald-400">{BRL(totais.receitas)}</div>
+            <div className="text-xl font-bold text-[var(--fin-positive)]">{BRL(totais.receitas)}</div>
             <div className="text-xs text-[var(--t-text-muted)] mt-1">Media: {BRL(totais.mediaReceitas)}/mes</div>
           </CardContent>
         </Card>
@@ -211,9 +211,9 @@ export default function ComparativoMensalPage() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs text-[var(--t-text-secondary)]">Total Despesas</span>
-              <ArrowDownCircle className="w-4 h-4 text-red-400" />
+              <ArrowDownCircle className="w-4 h-4 text-[var(--fin-negative-text)]" />
             </div>
-            <div className="text-xl font-bold text-red-400">{BRL(totais.despesas)}</div>
+            <div className="text-xl font-bold text-[var(--fin-negative-text)]">{BRL(totais.despesas)}</div>
             <div className="text-xs text-[var(--t-text-muted)] mt-1">Media: {BRL(totais.mediaDespesas)}/mes</div>
           </CardContent>
         </Card>
@@ -223,7 +223,7 @@ export default function ComparativoMensalPage() {
               <span className="text-xs text-[var(--t-text-secondary)]">Resultado</span>
               <DollarSign className="w-4 h-4 text-[var(--t-green)]" />
             </div>
-            <div className={`text-xl font-bold ${totais.resultado >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            <div className={`text-xl font-bold ${totais.resultado >= 0 ? 'text-[var(--fin-positive)]' : 'text-[var(--fin-negative-text)]'}`}>
               {BRL(totais.resultado)}
             </div>
             <div className="text-xs text-[var(--t-text-muted)] mt-1">
@@ -237,26 +237,26 @@ export default function ComparativoMensalPage() {
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs text-[var(--t-text-secondary)]">Variacao ({variacoes.mesAnterior} → {variacoes.mesAtual})</span>
                 {variacoes.varResultado >= 0
-                  ? <TrendingUp className="w-4 h-4 text-emerald-400" />
-                  : <TrendingDown className="w-4 h-4 text-red-400" />
+                  ? <TrendingUp className="w-4 h-4 text-[var(--fin-positive)]" />
+                  : <TrendingDown className="w-4 h-4 text-[var(--fin-negative-text)]" />
                 }
               </div>
               <div className="space-y-1">
                 <div className="flex justify-between text-xs">
                   <span className="text-[var(--t-text-secondary)]">Receitas</span>
-                  <span className={variacoes.varReceita >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                  <span className={variacoes.varReceita >= 0 ? 'text-[var(--fin-positive)]' : 'text-[var(--fin-negative-text)]'}>
                     {PCT(variacoes.varReceita)}
                   </span>
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-[var(--t-text-secondary)]">Despesas</span>
-                  <span className={variacoes.varDespesa <= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                  <span className={variacoes.varDespesa <= 0 ? 'text-[var(--fin-positive)]' : 'text-[var(--fin-negative-text)]'}>
                     {PCT(variacoes.varDespesa)}
                   </span>
                 </div>
                 <div className="flex justify-between text-xs font-medium">
                   <span className="text-[var(--t-text-secondary)]">Resultado</span>
-                  <span className={variacoes.varResultado >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                  <span className={variacoes.varResultado >= 0 ? 'text-[var(--fin-positive)]' : 'text-[var(--fin-negative-text)]'}>
                     {PCT(variacoes.varResultado)}
                   </span>
                 </div>
@@ -284,21 +284,21 @@ export default function ComparativoMensalPage() {
                     <div className="flex items-end gap-1" style={{ height: 200 }}>
                       {/* Receita bar */}
                       <div className="flex flex-col items-center justify-end" style={{ height: '100%' }}>
-                        <span className="text-[9px] text-emerald-400 mb-1 whitespace-nowrap">
+                        <span className="text-[9px] text-[var(--fin-positive)] mb-1 whitespace-nowrap">
                           {d.receitas > 0 ? BRL(d.receitas) : ''}
                         </span>
                         <div
-                          className="w-8 rounded-t bg-emerald-500/80 transition-all"
+                          className="w-8 rounded-t bg-[var(--fin-positive)]/80 transition-all"
                           style={{ height: getBarHeight(d.receitas, maxValor) }}
                         />
                       </div>
                       {/* Despesa bar */}
                       <div className="flex flex-col items-center justify-end" style={{ height: '100%' }}>
-                        <span className="text-[9px] text-red-400 mb-1 whitespace-nowrap">
+                        <span className="text-[9px] text-[var(--fin-negative-text)] mb-1 whitespace-nowrap">
                           {d.despesas > 0 ? BRL(d.despesas) : ''}
                         </span>
                         <div
-                          className="w-8 rounded-t bg-red-500/80 transition-all"
+                          className="w-8 rounded-t bg-[var(--fin-negative)]/80 transition-all"
                           style={{ height: getBarHeight(d.despesas, maxValor) }}
                         />
                       </div>
@@ -310,11 +310,11 @@ export default function ComparativoMensalPage() {
               {/* Legend */}
               <div className="flex items-center gap-6 justify-center mt-3 pt-3 border-t border-[var(--t-border)]">
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded bg-emerald-500/80" />
+                  <div className="w-3 h-3 rounded bg-[var(--fin-positive)]/80" />
                   <span className="text-xs text-[var(--t-text-secondary)]">Receitas</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded bg-red-500/80" />
+                  <div className="w-3 h-3 rounded bg-[var(--fin-negative)]/80" />
                   <span className="text-xs text-[var(--t-text-secondary)]">Despesas</span>
                 </div>
               </div>
@@ -349,16 +349,16 @@ export default function ComparativoMensalPage() {
                       <span className="text-xs text-[var(--t-text-secondary)] w-16 shrink-0">{d.label}</span>
                       <div className="flex-1 h-7 relative">
                         <div
-                          className={`h-full rounded ${d.resultado >= 0 ? 'bg-emerald-500/30' : 'bg-red-500/30'}`}
+                          className={`h-full rounded ${d.resultado >= 0 ? 'bg-[var(--fin-positive)]/30' : 'bg-[var(--fin-negative)]/30'}`}
                           style={{ width: `${Math.max(pct, 3)}%` }}
                         />
-                        <span className={`absolute inset-y-0 flex items-center pl-2 text-xs font-medium ${d.resultado >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        <span className={`absolute inset-y-0 flex items-center pl-2 text-xs font-medium ${d.resultado >= 0 ? 'text-[var(--fin-positive)]' : 'text-[var(--fin-negative-text)]'}`}>
                           {BRL(d.resultado)}
                         </span>
                       </div>
                       <div className="w-16 text-right shrink-0">
                         {variacao !== null ? (
-                          <span className={`text-[10px] font-medium ${variacao >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          <span className={`text-[10px] font-medium ${variacao >= 0 ? 'text-[var(--fin-positive)]' : 'text-[var(--fin-negative-text)]'}`}>
                             {PCT(variacao)}
                           </span>
                         ) : (
@@ -403,17 +403,17 @@ export default function ComparativoMensalPage() {
                   return (
                     <tr key={d.mes} className="border-b border-[var(--t-border)]/50 hover:bg-[var(--t-bg)]/50">
                       <td className="py-2 px-3 text-[var(--t-text)] font-medium">{d.label}</td>
-                      <td className="py-2 px-3 text-right text-emerald-400">{BRL(d.receitas)}</td>
-                      <td className="py-2 px-3 text-right text-red-400">{BRL(d.despesas)}</td>
-                      <td className={`py-2 px-3 text-right font-medium ${d.resultado >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      <td className="py-2 px-3 text-right text-[var(--fin-positive)]">{BRL(d.receitas)}</td>
+                      <td className="py-2 px-3 text-right text-[var(--fin-negative-text)]">{BRL(d.despesas)}</td>
+                      <td className={`py-2 px-3 text-right font-medium ${d.resultado >= 0 ? 'text-[var(--fin-positive)]' : 'text-[var(--fin-negative-text)]'}`}>
                         {BRL(d.resultado)}
                       </td>
-                      <td className={`py-2 px-3 text-right ${margem >= 0 ? 'text-[var(--t-text)]' : 'text-red-400'}`}>
+                      <td className={`py-2 px-3 text-right ${margem >= 0 ? 'text-[var(--t-text)]' : 'text-[var(--fin-negative-text)]'}`}>
                         {margem.toFixed(1)}%
                       </td>
                       <td className="py-2 px-3 text-right">
                         {variacao !== null ? (
-                          <span className={variacao >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                          <span className={variacao >= 0 ? 'text-[var(--fin-positive)]' : 'text-[var(--fin-negative-text)]'}>
                             {PCT(variacao)}
                           </span>
                         ) : (
@@ -427,9 +427,9 @@ export default function ComparativoMensalPage() {
               <tfoot>
                 <tr className="border-t-2 border-[var(--t-border)]">
                   <td className="py-2 px-3 text-[var(--t-text)] font-bold">Total</td>
-                  <td className="py-2 px-3 text-right text-emerald-400 font-bold">{BRL(totais.receitas)}</td>
-                  <td className="py-2 px-3 text-right text-red-400 font-bold">{BRL(totais.despesas)}</td>
-                  <td className={`py-2 px-3 text-right font-bold ${totais.resultado >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  <td className="py-2 px-3 text-right text-[var(--fin-positive)] font-bold">{BRL(totais.receitas)}</td>
+                  <td className="py-2 px-3 text-right text-[var(--fin-negative-text)] font-bold">{BRL(totais.despesas)}</td>
+                  <td className={`py-2 px-3 text-right font-bold ${totais.resultado >= 0 ? 'text-[var(--fin-positive)]' : 'text-[var(--fin-negative-text)]'}`}>
                     {BRL(totais.resultado)}
                   </td>
                   <td className="py-2 px-3 text-right text-[var(--t-text)] font-bold">

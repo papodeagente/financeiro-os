@@ -16,7 +16,7 @@ import {
 const STATUS_COLORS: Record<StatusFunil, { bg: string; text: string; label: string }> = {
   rascunho: { bg: 'bg-[var(--t-sidebar-item-hover)]', text: 'text-[var(--t-text-muted)]', label: 'Rascunho' },
   simulado: { bg: 'bg-[var(--t-green-bg)]', text: 'text-[var(--t-green)]', label: 'Simulado' },
-  em_execucao: { bg: 'bg-amber-500/10', text: 'text-amber-600', label: 'Em execução' },
+  em_execucao: { bg: 'bg-[var(--fin-warning-soft)]', text: 'text-[var(--fin-warning-text)]', label: 'Em execução' },
 };
 
 export default function FunisPage() {
@@ -109,21 +109,21 @@ export default function FunisPage() {
   };
 
   if (loading) return (
-    <div className="p-6">
+    <div className="w-full px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
       <PageHeader title="Funis e campanhas" subtitle="Simule resultado antes de investir" />
       <SkeletonCardGrid count={6} />
     </div>
   );
 
   return (
-    <div className="p-6">
+    <div className="w-full px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
       <PageHeader
         title="Funis e campanhas"
         subtitle="Desenhe o funil, simule o ROI e compare cenários antes de investir"
         actions={
           <button
             onClick={() => setModalTemplateOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] font-medium text-white bg-[var(--t-green)] rounded-lg hover:opacity-90"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90"
           >
             <Plus className="w-4 h-4" /> Novo funil
           </button>
@@ -141,7 +141,7 @@ export default function FunisPage() {
             className="w-full pl-9 pr-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
           />
         </div>
-        <div className="flex items-center gap-1 text-[var(--text-body-sm)]">
+        <div className="flex flex-wrap items-center gap-1 text-[var(--text-body-sm)]">
           {(['todos', 'rascunho', 'simulado', 'em_execucao'] as const).map(s => (
             <button
               key={s}
@@ -200,7 +200,7 @@ export default function FunisPage() {
                     <div className="grid grid-cols-2 gap-2 mb-3 p-2 rounded-lg bg-[var(--t-bg)]">
                       <div>
                         <p className="text-[10px] text-[var(--t-text-muted)] uppercase">Lucro</p>
-                        <p className={`text-[var(--text-body-sm)] font-semibold ${kpis.lucro >= 0 ? 'text-[var(--t-green)]' : 'text-red-500'}`}>
+                        <p className={`text-[var(--text-body-sm)] font-semibold ${kpis.lucro >= 0 ? 'text-[var(--t-green)]' : 'text-[var(--fin-negative-text)]'}`}>
                           {formatBRL(kpis.lucro)}
                         </p>
                       </div>
@@ -238,7 +238,7 @@ export default function FunisPage() {
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); excluir(f.id); }}
-                    className="w-7 h-7 rounded-md flex items-center justify-center text-red-500 hover:bg-red-500/10"
+                    className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--fin-negative-text)] hover:bg-[var(--fin-negative-soft)]"
                     title="Excluir"
                   >
                     <Trash2 className="w-3.5 h-3.5" />

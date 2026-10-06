@@ -42,14 +42,14 @@ function MiniPreview({ t, catColor }: { t: TipoInfo; catColor: string }) {
 
   if (visual === 'page' || visual === 'page-success' || visual === 'video') {
     return (
-      <div className="w-7 h-6 rounded-[3px] overflow-hidden bg-white border border-[#e5e7eb] shrink-0">
-        <div className="h-[4px] bg-[#f1f3f5] flex items-center gap-[1px] px-[2px]">
+      <div className="w-7 h-6 rounded-[3px] overflow-hidden bg-[var(--fin-surface)] border border-[var(--fin-border)] shrink-0">
+        <div className="h-[4px] bg-[var(--fin-surface-2)] flex items-center gap-[1px] px-[2px]">
           <span className="w-[2px] h-[2px] rounded-full bg-[#ff6b6b]" />
           <span className="w-[2px] h-[2px] rounded-full bg-[#ffd43b]" />
           <span className="w-[2px] h-[2px] rounded-full bg-[#51cf66]" />
         </div>
         <div className="px-1 py-0.5 flex flex-col gap-[1px]">
-          <div className="h-[1.5px] w-[60%] bg-[#dee2e6] rounded-sm" />
+          <div className="h-[1.5px] w-[60%] bg-[var(--fin-border-strong)] rounded-sm" />
           <div className="h-[3px] rounded-[1px]" style={{ background: catColor }} />
         </div>
       </div>

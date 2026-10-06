@@ -72,7 +72,7 @@ export function ImageUpload({ onUpload, multiple, currentUrl, onRemove, compact,
           type="button"
           onClick={() => setAiOpen(true)}
           disabled={uploading}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border border-dashed border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10 transition-colors"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border border-dashed border-[var(--fin-positive)]/40 text-[var(--fin-positive)] hover:bg-[var(--fin-positive-soft)] transition-colors"
           title="Gerar imagem com IA"
         >
           <Sparkles className="w-3 h-3" /> IA
@@ -139,7 +139,7 @@ export function ImageUpload({ onUpload, multiple, currentUrl, onRemove, compact,
         type="button"
         onClick={() => setAiOpen(true)}
         disabled={uploading}
-        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs rounded-lg border border-dashed border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10 transition-colors"
+        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs rounded-lg border border-dashed border-[var(--fin-positive)]/40 text-[var(--fin-positive)] hover:bg-[var(--fin-positive-soft)] transition-colors"
       >
         <Sparkles className="w-3.5 h-3.5" /> Gerar com IA
       </button>

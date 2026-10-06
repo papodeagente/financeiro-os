@@ -333,7 +333,7 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
           )}
         </div>
         <div className="flex items-center gap-3">
-          <span className={`text-xs ${saved ? 'text-green-600' : 'text-orange-500'}`}>
+          <span className={`text-xs ${saved ? 'text-[var(--fin-positive)]' : 'text-[var(--fin-warning-text)]'}`}>
             {saved ? '● Salvo' : '○ Não salvo'}
           </span>
           <Link href={`/grupo/${id}/gestao`}>
@@ -342,11 +342,11 @@ export default function GrupoPage({ params }: { params: Promise<{ id: string }> 
             </Button>
           </Link>
           <Button onClick={handleGerarProposta} size="sm" disabled={gerandoProposta}
-            className="bg-[var(--t-green)] hover:bg-[var(--t-green)]/90 text-white dark:text-[#0a0a14] gap-1">
+            className="bg-[var(--t-green)] hover:bg-[var(--t-green)]/90 text-[var(--fin-text-on-fill)]  gap-1">
             {gerandoProposta ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
             {gerandoProposta ? 'Gerando...' : 'Gerar Proposta'}
           </Button>
-          <Button onClick={handleSave} size="sm" className="bg-[var(--t-green)] hover:bg-[var(--t-green)]/90 text-white gap-1">
+          <Button onClick={handleSave} size="sm" className="bg-[var(--t-green)] hover:bg-[var(--t-green)]/90 text-[var(--fin-text-on-fill)] gap-1">
             <Save className="w-4 h-4" /> Salvar
           </Button>
         </div>

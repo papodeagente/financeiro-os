@@ -9,7 +9,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Ban, Download, FileCode, RefreshCw, Pencil } from 'lucide-react';
+import { Ban, Clock, Download, FileCheck2, FileCode, Pencil, Percent, RefreshCw } from 'lucide-react';
 
 import { PageShell } from '@/components/PageShell';
 import { PageHeader } from '@/components/fin/PageHeader';
@@ -432,21 +432,21 @@ export default function NotasFiscaisPage() {
       >
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <MetricCard
-            rotulo="Serviço autorizado"
+            rotulo="Serviço autorizado" icone={FileCheck2}
             valor={somaPor(autorizadas, n => n.valor_servicos)}
             estado="ok"
             contexto={`${autorizadas.length} nota(s) autorizada(s).`}
             explicacao="Soma do valor de serviço das notas que a prefeitura autorizou. Não é o valor das vendas: é o que a agência declarou como receita própria."
           />
           <MetricCard
-            rotulo="ISS das notas"
+            rotulo="ISS das notas" icone={Percent}
             valor={somaPor(autorizadas, n => n.valor_iss)}
             estado="ok"
             contexto="Imposto sobre serviço destacado nas notas autorizadas."
             explicacao="Total de ISS das notas autorizadas no período carregado."
           />
           <MetricCard
-            rotulo="Aguardando prefeitura"
+            rotulo="Aguardando prefeitura" icone={Clock}
             valor={somaPor(pendentes, n => n.valor_servicos)}
             estado="ok"
             tone={recusadas.length > 0 ? 'negativo' : 'neutro'}
@@ -462,7 +462,7 @@ export default function NotasFiscaisPage() {
 
       {/* Busca. Envolve em flex-wrap para nunca empurrar a largura: é
           justamente o que criava rolagem lateral nesta tela. */}
-      <div className="flex flex-wrap items-end gap-[var(--fin-s-3)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] px-[var(--fin-s-4)] py-[var(--fin-s-3)]">
+      <div className="flex flex-wrap items-end gap-[var(--fin-s-3)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] px-[var(--fin-s-4)] py-[var(--fin-s-3)] shadow-[var(--fin-e-card)]">
         <div className="flex min-w-[12rem] flex-1 flex-col gap-1">
           <label htmlFor="nf-cliente" className="fin-t-overline text-[var(--fin-text-3)]">Cliente</label>
           <input

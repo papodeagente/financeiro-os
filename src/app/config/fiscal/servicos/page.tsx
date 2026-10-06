@@ -22,7 +22,7 @@ import { num, round2 } from '@/lib/money';
 import { ISS_MAXIMO, ISS_MINIMO } from '@/lib/nfse-formulario';
 import type { ServicoFiscalCadastrado } from '@/lib/nfse-tipos';
 
-const CARTAO = 'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-4';
+const CARTAO = 'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-4 shadow-[var(--fin-e-card)]';
 const CAMPO =
   'h-10 w-full rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] ' +
   'px-3 fin-t-body text-[var(--fin-text)] focus-visible:outline-2 focus-visible:outline-offset-2 ' +

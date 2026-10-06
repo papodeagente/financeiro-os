@@ -284,11 +284,11 @@ export default function FornecedoresTab({ grupo, onChange }: Props) {
     {
       label: 'Economia',
       value: formatBRL(metrics.economiaNegociacao),
-      color: metrics.economiaNegociacao >= 0 ? 'text-green-400' : 'text-red-400',
+      color: metrics.economiaNegociacao >= 0 ? 'text-[var(--fin-positive)]' : 'text-[var(--fin-negative-text)]',
     },
     { label: 'Total Pago', value: formatBRL(metrics.totalPago), color: 'text-[var(--t-accent)]' },
-    { label: 'A Pagar', value: formatBRL(metrics.totalAPagar), color: 'text-orange-400' },
-    { label: 'Vencido', value: formatBRL(metrics.totalVencido), color: 'text-red-400' },
+    { label: 'A Pagar', value: formatBRL(metrics.totalAPagar), color: 'text-[var(--fin-warning-text)]' },
+    { label: 'Vencido', value: formatBRL(metrics.totalVencido), color: 'text-[var(--fin-negative-text)]' },
   ];
 
   return (
@@ -318,7 +318,7 @@ export default function FornecedoresTab({ grupo, onChange }: Props) {
         </Button>
         <Button
           size="sm"
-          className="bg-[var(--t-accent)] text-[var(--t-text)] hover:bg-[var(--t-accent)]/80 font-semibold"
+          className="bg-[var(--t-accent)] text-[var(--fin-text-on-fill)] hover:bg-[var(--t-accent)]/80 font-semibold"
           onClick={() => {
             setForm(emptyPagamento());
             setShowNew(true);
@@ -365,7 +365,7 @@ export default function FornecedoresTab({ grupo, onChange }: Props) {
                     return (
                       <tr
                         key={p.id}
-                        className="border-b border-[var(--t-border)] hover:bg-white/5 transition-colors"
+                        className="border-b border-[var(--t-border)] hover:bg-[var(--fin-surface)]/5 transition-colors"
                       >
                         <td className="py-2 px-2 text-[var(--t-text)] font-medium max-w-[160px] truncate">
                           {p.fornecedor_nome || '\u2014'}
@@ -381,8 +381,8 @@ export default function FornecedoresTab({ grupo, onChange }: Props) {
                         </td>
                         <td
                           className={`py-2 px-2 text-right font-medium ${
-                            delta > 0 ? 'text-green-400' : delta < 0 ? 'text-red-400' : 'text-[var(--t-text-secondary)]'
-                          }`}
+ delta > 0 ? 'text-[var(--fin-positive)]' : delta < 0 ? 'text-[var(--fin-negative-text)]' : 'text-[var(--t-text-secondary)]'
+ }`}
                         >
                           {formatBRL(delta)}
                         </td>
@@ -397,7 +397,7 @@ export default function FornecedoresTab({ grupo, onChange }: Props) {
                         <td className="py-2 px-2 text-right text-[var(--t-accent)]">
                           {formatBRL(p.valor_brl_pago)}
                         </td>
-                        <td className="py-2 px-2 text-right text-orange-400">
+                        <td className="py-2 px-2 text-right text-[var(--fin-warning-text)]">
                           {formatBRL(saldo > 0 ? saldo : 0)}
                         </td>
                         <td className="py-2 px-2 text-center">
@@ -429,7 +429,7 @@ export default function FornecedoresTab({ grupo, onChange }: Props) {
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-7 px-2 text-[11px] text-red-400 hover:bg-red-500/10"
+                              className="h-7 px-2 text-[11px] text-[var(--fin-negative-text)] hover:bg-[var(--fin-negative-soft)]"
                               onClick={() => removePagamento(p.id)}
                             >
                               ✕
@@ -728,7 +728,7 @@ export default function FornecedoresTab({ grupo, onChange }: Props) {
             <Button
               onClick={handleNovoSave}
               disabled={!form.fornecedor_nome}
-              className="bg-[var(--t-accent)] text-[var(--t-text)] hover:bg-[var(--t-accent)]/80 font-semibold"
+              className="bg-[var(--t-accent)] text-[var(--fin-text-on-fill)] hover:bg-[var(--t-accent)]/80 font-semibold"
             >
               Salvar Fornecedor
             </Button>
@@ -800,7 +800,7 @@ export default function FornecedoresTab({ grupo, onChange }: Props) {
             <Button
               onClick={handleRegistrarPagamento}
               disabled={pgForm.valor <= 0}
-              className="bg-[var(--t-accent)] text-[var(--t-text)] hover:bg-[var(--t-accent)]/80 font-semibold"
+              className="bg-[var(--t-accent)] text-[var(--fin-text-on-fill)] hover:bg-[var(--t-accent)]/80 font-semibold"
             >
               Confirmar Pagamento
             </Button>

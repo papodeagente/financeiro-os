@@ -44,7 +44,7 @@ export function MoneyInput({ value, onChange, className = '', placeholder = 'R$ 
     <Input
       type="text"
       inputMode="decimal"
-      className={`text-right h-8 text-sm ${highlight ? 'bg-green-50 font-bold border-green-400' : ''} ${className}`}
+      className={`text-right h-8 text-sm ${highlight ? 'bg-[var(--fin-positive-soft)] font-bold border-[var(--fin-positive)]' : ''} ${className}`}
       placeholder={placeholder}
       value={focused ? displayValue : formatForDisplay(value)}
       onFocus={handleFocus}

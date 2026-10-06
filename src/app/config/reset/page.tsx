@@ -124,31 +124,31 @@ export default function ResetPage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto p-6">
+    <div className="mx-auto w-full max-w-3xl px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
       <div className="mb-6">
         <button
           onClick={() => router.push('/config/agencia')}
-          className="text-sm text-slate-500 hover:text-slate-900 mb-3 inline-flex items-center gap-1"
+          className="text-sm text-[var(--fin-text-3)] hover:text-[var(--fin-text)] mb-3 inline-flex items-center gap-1"
         >
           ← Voltar pra configurações
         </button>
-        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-          <Eraser className="w-5 h-5 text-red-500" />
+        <h1 className="text-2xl font-bold text-[var(--fin-text)] flex items-center gap-2">
+          <Eraser className="w-5 h-5 text-[var(--fin-negative-text)]" />
           Resetar conta
         </h1>
-        <p className="text-sm text-slate-600 mt-1">
+        <p className="text-sm text-[var(--fin-text-2)] mt-1">
           Apague dados operacionais da sua conta de forma seletiva. Esta ação é{' '}
           <strong>irreversível</strong> e não pode ser desfeita.
         </p>
       </div>
 
       {/* Banner de alerta */}
-      <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+      <div className="bg-[var(--fin-negative-soft)] border border-[var(--fin-negative)]/30 rounded-xl p-4 mb-6">
         <div className="flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-          <div className="text-sm text-red-900">
+          <AlertTriangle className="w-5 h-5 text-[var(--fin-negative-text)] shrink-0 mt-0.5" />
+          <div className="text-sm text-[var(--fin-negative-text)]">
             <p className="font-semibold mb-1">Atenção — ação destrutiva</p>
-            <ul className="list-disc list-inside text-red-800 text-[13px] space-y-0.5">
+            <ul className="list-disc list-inside text-[var(--fin-negative-text)] text-[13px] space-y-0.5">
               <li>Cadastros de pessoas (clientes, fornecedores, equipe) <strong>não</strong> serão removidos.</li>
               <li>Configurações da agência, usuários, integrações e plano também ficam intactos.</li>
               <li>Recomendado: exportar relatórios financeiros antes de zerar essa categoria.</li>
@@ -159,10 +159,10 @@ export default function ResetPage() {
 
       {/* Resultado do último reset */}
       {result && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-6">
+        <div className="bg-[var(--fin-positive-soft)] border border-[var(--fin-positive)]/30 rounded-xl p-4 mb-6">
           <div className="flex items-start gap-3">
-            <Check className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-            <div className="text-sm text-emerald-900">
+            <Check className="w-5 h-5 text-[var(--fin-positive)] shrink-0 mt-0.5" />
+            <div className="text-sm text-[var(--fin-positive)]">
               <p className="font-semibold mb-1">Reset concluído</p>
               <p>
                 {result.total.toLocaleString('pt-BR')} registros removidos em{' '}
@@ -175,25 +175,25 @@ export default function ResetPage() {
       )}
 
       {error && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-6 text-sm text-amber-900">
+        <div className="bg-[var(--fin-warning-soft)] border border-[var(--fin-warning)]/30 rounded-xl p-3 mb-6 text-sm text-[var(--fin-warning-text)]">
           {error}
         </div>
       )}
 
       {/* Lista de categorias */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-6">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+      <div className="bg-[var(--fin-surface)] rounded-xl border border-[var(--fin-border)] overflow-hidden mb-6 shadow-[var(--fin-e-card)]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--fin-border)] bg-[var(--fin-surface-2)]">
+          <span className="text-xs font-semibold uppercase tracking-wide text-[var(--fin-text-2)]">
             O que apagar
           </span>
           <button
             onClick={toggleAll}
-            className="text-xs font-medium text-blue-600 hover:text-blue-700"
+            className="text-xs font-medium text-[var(--fin-accent)] hover:text-[var(--fin-accent)]"
           >
             {selected.size === CATEGORIES.length ? 'Desmarcar todos' : 'Selecionar todos'}
           </button>
         </div>
-        <ul className="divide-y divide-slate-100">
+        <ul className="divide-y divide-[var(--fin-border)]">
           {CATEGORIES.map(cat => {
             const Icon = cat.icon;
             const isSelected = selected.has(cat.id);
@@ -203,31 +203,31 @@ export default function ResetPage() {
               <li key={cat.id}>
                 <label
                   className={`flex items-start gap-3 p-4 cursor-pointer transition-colors ${
-                    isSelected ? 'bg-red-50' : 'hover:bg-slate-50'
-                  } ${empty ? 'opacity-60' : ''}`}
+ isSelected ? 'bg-[var(--fin-negative-soft)]' : 'hover:bg-[var(--fin-surface-2)]'
+ } ${empty ? 'opacity-60' : ''}`}
                 >
                   <input
                     type="checkbox"
                     checked={isSelected}
                     onChange={() => toggle(cat.id)}
                     disabled={empty}
-                    className="mt-1 w-4 h-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
+                    className="mt-1 w-4 h-4 rounded border-[var(--fin-border-strong)] text-[var(--fin-negative-text)] focus:ring-[var(--fin-negative)]"
                   />
-                  <Icon className={`w-5 h-5 mt-0.5 shrink-0 ${isSelected ? 'text-red-600' : 'text-slate-400'}`} />
+                  <Icon className={`w-5 h-5 mt-0.5 shrink-0 ${isSelected ? 'text-[var(--fin-negative-text)]' : 'text-[var(--fin-text-3)]'}`} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-slate-900 text-[14px]">{cat.label}</span>
+                      <span className="font-medium text-[var(--fin-text)] text-[14px]">{cat.label}</span>
                       {count !== null && (
                         <span
                           className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium ${
-                            empty ? 'bg-slate-100 text-slate-500' : 'bg-slate-100 text-slate-700'
-                          }`}
+ empty ? 'bg-[var(--fin-surface-2)] text-[var(--fin-text-3)]' : 'bg-[var(--fin-surface-2)] text-[var(--fin-text-2)]'
+ }`}
                         >
                           {count.toLocaleString('pt-BR')} {count === 1 ? 'registro' : 'registros'}
                         </span>
                       )}
                     </div>
-                    <p className="text-[12.5px] text-slate-500 mt-0.5">{cat.description}</p>
+                    <p className="text-[12.5px] text-[var(--fin-text-3)] mt-0.5">{cat.description}</p>
                   </div>
                 </label>
               </li>
@@ -238,20 +238,20 @@ export default function ResetPage() {
 
       {/* Confirmação */}
       {selected.size > 0 && (
-        <div className="bg-white rounded-xl border border-red-200 p-4 mb-4">
-          <p className="text-sm text-slate-900 mb-2">
+        <div className="bg-[var(--fin-surface)] rounded-xl border border-[var(--fin-negative)]/30 p-4 mb-4 shadow-[var(--fin-e-card)]">
+          <p className="text-sm text-[var(--fin-text)] mb-2">
             Você vai apagar <strong>{totalSelected.toLocaleString('pt-BR')}</strong> registros em{' '}
             <strong>{selected.size}</strong> categoria{selected.size === 1 ? '' : 's'}.
           </p>
-          <p className="text-xs text-slate-600 mb-3">
-            Digite <code className="bg-slate-100 px-1.5 py-0.5 rounded font-mono">RESETAR</code> abaixo pra confirmar.
+          <p className="text-xs text-[var(--fin-text-2)] mb-3">
+            Digite <code className="bg-[var(--fin-surface-2)] px-1.5 py-0.5 rounded font-mono">RESETAR</code> abaixo pra confirmar.
           </p>
           <input
             type="text"
             value={confirmText}
             onChange={e => setConfirmText(e.target.value)}
             placeholder="Digite RESETAR"
-            className="w-full px-3 py-2 rounded-md border border-slate-300 outline-none focus:border-red-500 text-sm font-mono"
+            className="w-full px-3 py-2 rounded-md border border-[var(--fin-border-strong)] outline-none focus:border-[var(--fin-negative)] text-sm font-mono"
             autoComplete="off"
           />
         </div>
@@ -260,14 +260,14 @@ export default function ResetPage() {
       <div className="flex items-center justify-end gap-2">
         <button
           onClick={() => router.push('/config/agencia')}
-          className="px-4 py-2 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-100"
+          className="px-4 py-2 rounded-md text-sm font-medium text-[var(--fin-text-2)] hover:bg-[var(--fin-surface-2)]"
         >
           Cancelar
         </button>
         <button
           onClick={submit}
           disabled={!canSubmit}
-          className="px-4 py-2 rounded-md text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+          className="px-4 py-2 rounded-md text-sm font-semibold text-[var(--fin-text-on-fill)] bg-[var(--fin-negative)] hover:bg-[var(--fin-negative)] disabled:bg-[var(--fin-surface-sunken)] disabled:text-[var(--fin-text-3)] disabled:cursor-not-allowed inline-flex items-center gap-1.5"
         >
           {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eraser className="w-4 h-4" />}
           {submitting ? 'Apagando...' : 'Apagar dados selecionados'}

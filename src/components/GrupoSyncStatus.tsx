@@ -91,8 +91,8 @@ export function GrupoSyncStatus({ grupoId }: Props) {
   if (data.circuit_open) {
     return (
       <div className="text-[11px] flex items-center gap-2">
-        <AlertCircle className="w-3.5 h-3.5 text-red-500" />
-        <span className="text-red-500">Integração pausada (circuit breaker aberto)</span>
+        <AlertCircle className="w-3.5 h-3.5 text-[var(--fin-negative-text)]" />
+        <span className="text-[var(--fin-negative-text)]">Integração pausada (circuit breaker aberto)</span>
         <a href="/config/crm" className="text-[var(--t-green)] hover:underline">Ver</a>
       </div>
     );
@@ -121,8 +121,8 @@ export function GrupoSyncStatus({ grupoId }: Props) {
   if (evt.status === 'ENVIADO') {
     return (
       <div className="flex items-center gap-2 text-[11px]">
-        <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
-        <span className="text-green-700 dark:text-green-400">
+        <CheckCircle2 className="w-3.5 h-3.5 text-[var(--fin-positive)]" />
+        <span className="text-[var(--fin-positive)]">
           Sincronizado com o CRM {timeAgo(evt.updated_at)}
         </span>
         {evt.latencia_ms != null && (
@@ -144,14 +144,14 @@ export function GrupoSyncStatus({ grupoId }: Props) {
   if (evt.status === 'FALHA') {
     return (
       <div className="flex items-center gap-2 text-[11px]">
-        <AlertCircle className="w-3.5 h-3.5 text-red-500" />
-        <span className="text-red-500">
+        <AlertCircle className="w-3.5 h-3.5 text-[var(--fin-negative-text)]" />
+        <span className="text-[var(--fin-negative-text)]">
           Falha ao sincronizar {timeAgo(evt.created_at)} ({evt.tentativas} tentativas)
         </span>
         <button
           onClick={reSync}
           disabled={syncing}
-          className="ml-1 px-2 py-0.5 text-[10px] rounded-md bg-red-500/10 text-red-500 hover:bg-red-500/20 flex items-center gap-1 disabled:opacity-50"
+          className="ml-1 px-2 py-0.5 text-[10px] rounded-md bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)] hover:bg-[var(--fin-negative-soft)] flex items-center gap-1 disabled:opacity-50"
         >
           {syncing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
           Tentar de novo
@@ -163,14 +163,14 @@ export function GrupoSyncStatus({ grupoId }: Props) {
   // 6. Pendente
   return (
     <div className="flex items-center gap-2 text-[11px]">
-      <Clock className="w-3.5 h-3.5 text-amber-500" />
-      <span className="text-amber-600 dark:text-amber-400">
+      <Clock className="w-3.5 h-3.5 text-[var(--fin-warning-text)]" />
+      <span className="text-[var(--fin-warning-text)]">
         Aguardando envio… {timeAgo(evt.created_at)}
       </span>
       <button
         onClick={reSync}
         disabled={syncing}
-        className="ml-1 px-2 py-0.5 text-[10px] rounded-md bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 flex items-center gap-1 disabled:opacity-50"
+        className="ml-1 px-2 py-0.5 text-[10px] rounded-md bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)] hover:bg-[var(--fin-warning-soft)] flex items-center gap-1 disabled:opacity-50"
       >
         {syncing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
         Forçar envio

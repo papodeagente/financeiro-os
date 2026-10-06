@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { Info } from 'lucide-react';
+import { Info, type LucideIcon } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -10,7 +10,7 @@ import { Money, type MoneyEstado } from '@/components/fin/Money';
 import { DeltaIndicator, type DeltaIndicatorProps } from '@/components/fin/DeltaIndicator';
 
 export const metricCardVariants = cva(
-  'relative flex flex-col gap-1 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-4 text-left',
+  'relative flex flex-col gap-1 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-5 text-left shadow-[var(--fin-e-card)]',
   {
     variants: {
       emphasis: { destaque: '', padrao: '' },
@@ -43,7 +43,37 @@ export type MetricCardProps = {
   explicacao?: string;
   onClick?: () => void;
   ativo?: boolean;
+  /**
+   * Ícone do indicador, num quadrado de cor suave à esquerda (direção do
+   * painel de referência). A cor segue o PAPEL do número: tone positivo
+   * pinta de verde, negativo de vermelho, o resto do azul de destaque.
+   * `tomDoIcone` só existe para o caso em que o número é neutro mas o
+   * assunto tem cor própria (ex.: violeta para comissão).
+   */
+  icone?: LucideIcon;
+  tomDoIcone?: 'acento' | 'positivo' | 'negativo' | 'aviso' | 'violeta' | 'info';
 };
+
+export type TomDoIcone = NonNullable<MetricCardProps['tomDoIcone']>;
+
+const TOM_DO_ICONE: Record<TomDoIcone, string> = {
+  acento: 'bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]',
+  positivo: 'bg-[var(--fin-positive-soft)] text-[var(--fin-positive)]',
+  negativo: 'bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)]',
+  aviso: 'bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)]',
+  violeta: 'bg-[var(--fin-violet-soft)] text-[var(--fin-violet)]',
+  info: 'bg-[var(--fin-info-soft)] text-[var(--fin-info)]',
+};
+
+/** O quadrado de ícone dos indicadores. Compartilhado com cartões que não
+ *  podem ser MetricCard (ex.: os do painel, que escondem o valor). */
+export function IconeDeIndicador({ icone: Icone, tom = 'acento' }: { icone: LucideIcon; tom?: TomDoIcone }) {
+  return (
+    <span aria-hidden="true" className={cn('grid size-10 shrink-0 place-items-center rounded-[var(--fin-r-md)]', TOM_DO_ICONE[tom])}>
+      <Icone className="size-5" />
+    </span>
+  );
+}
 
 export function MetricCard({
   rotulo,
@@ -56,7 +86,10 @@ export function MetricCard({
   explicacao,
   onClick,
   ativo = false,
+  icone: Icone,
+  tomDoIcone,
 }: MetricCardProps) {
+  const tomIcone = tomDoIcone ?? (tone === 'positivo' ? 'positivo' : tone === 'negativo' ? 'negativo' : 'acento');
   const interativo = typeof onClick === 'function';
 
   return (
@@ -79,9 +112,11 @@ export function MetricCard({
         </button>
       )}
 
-      <div className={cn('relative flex flex-col gap-1', interativo && 'pointer-events-none')}>
+      <div className={cn('relative flex items-start gap-[var(--fin-s-3)]', interativo && 'pointer-events-none')}>
+        {Icone && <IconeDeIndicador icone={Icone} tom={tomIcone} />}
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-center gap-1">
-          <h3 className="fin-t-overline text-[var(--fin-text-3)]">{rotulo}</h3>
+          <h3 className="fin-t-body font-medium text-[var(--fin-text-2)]">{rotulo}</h3>
           {explicacao && (
             <Tooltip>
               <TooltipTrigger
@@ -110,7 +145,8 @@ export function MetricCard({
 
         {delta && estado === 'ok' && <DeltaIndicator {...delta} />}
 
-        <p className="fin-t-caption text-[var(--fin-text-2)]">{contexto}</p>
+        <p className="fin-t-caption text-[var(--fin-text-3)]">{contexto}</p>
+      </div>
       </div>
     </div>
   );

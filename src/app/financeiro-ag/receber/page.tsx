@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowDownLeft, Clock, Pencil, Plus, Trash2, TriangleAlert } from 'lucide-react';
 
 import { ContaReceber, createContaReceber, StatusContaReceber } from '@/lib/crm-types';
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
@@ -570,7 +570,7 @@ export default function ContasReceberPage() {
     >
       <div className="grid grid-cols-1 gap-[var(--fin-s-4)] sm:grid-cols-3">
         <MetricCard
-          rotulo="Em aberto"
+          rotulo="Em aberto" icone={Clock}
           valor={totalPendente}
           estado={estadoDoValor}
           contexto={
@@ -580,7 +580,7 @@ export default function ContasReceberPage() {
           }
         />
         <MetricCard
-          rotulo="Em atraso"
+          rotulo="Em atraso" icone={TriangleAlert}
           valor={totalAtrasado}
           estado={estadoDoValor}
           emphasis="destaque"
@@ -592,7 +592,7 @@ export default function ContasReceberPage() {
           }
         />
         <MetricCard
-          rotulo="Recebido"
+          rotulo="Recebido" icone={ArrowDownLeft}
           valor={totalRecebido}
           estado={estadoDoValor}
           tone="positivo"
@@ -609,7 +609,7 @@ export default function ContasReceberPage() {
         erro={erroCarga ? { mensagem: erroCarga, onTentarDeNovo: () => { load(); } } : null}
         esqueleto={
           <div className="flex flex-col gap-[var(--fin-s-5)]">
-            <div className="h-12 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]" />
+            <div className="h-12 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]" />
             <FinTable<ContaReceber>
               linhas={[]}
               colunas={colunas}

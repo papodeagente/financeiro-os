@@ -157,20 +157,20 @@ export default function RelatorioFinanceiroPage() {
   }
 
   return (
-    <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
+    <div className="w-full bg-[var(--fin-bg)] px-[var(--fin-page-pad)] py-[var(--fin-page-pad)] text-[var(--fin-text)]">
       <div className="max-w-7xl mx-auto space-y-6">
 
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-[var(--fin-s-3)] lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[var(--t-text)]">Relatório Financeiro</h1>
+            <h1 className="fin-t-title text-[var(--fin-text)]">Relatório Financeiro</h1>
             <p className="text-[var(--t-text-secondary)] text-sm mt-1">Análise de receitas e despesas por período</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button onClick={handleExport} variant="outline" className="border-[var(--t-border)] text-[var(--t-text-secondary)]">
               <Download className="w-4 h-4 mr-2" /> Exportar Resumo
             </Button>
-            <Button onClick={handleExportDetalhado} className="bg-[var(--t-green)] hover:brightness-110 text-white dark:text-[#0a0a14] font-semibold">
+            <Button onClick={handleExportDetalhado} className="bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] hover:bg-[var(--fin-accent-hover)] font-semibold">
               <Download className="w-4 h-4 mr-2" /> Exportar Detalhado
             </Button>
           </div>
@@ -221,7 +221,7 @@ export default function RelatorioFinanceiroPage() {
         </Card>
 
         {/* KPIs */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Card className="bg-[var(--t-surface)] border-[var(--t-border)]">
             <CardContent className="p-4 flex items-center gap-4">
               <ArrowUpCircle className="w-8 h-8 text-[var(--t-green)] shrink-0" />

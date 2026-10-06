@@ -216,7 +216,7 @@ export function BlockPalette({
         <button
           onClick={onGenerateFullAI}
           disabled={generatingFull}
-          className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded text-[11px] font-medium text-purple-500 hover:bg-purple-500/5 transition-colors disabled:opacity-50"
+          className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded text-[11px] font-medium text-[var(--fin-violet)] hover:bg-[var(--fin-violet-soft)] transition-colors disabled:opacity-50"
           title="Gerar proposta completa com IA"
         >
           {generatingFull ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}

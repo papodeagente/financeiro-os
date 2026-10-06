@@ -11,7 +11,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, FileSpreadsheet, Link2, RotateCcw, Undo2, Upload } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, CheckCircle2, FileSpreadsheet, Link2, ListChecks, RotateCcw, TrendingUp, Undo2, Upload } from 'lucide-react';
 
 import type { Cliente, ContaBancaria, ContaPagar, ContaReceber, ExtratoLinha, PlanoContas, StatusConciliacao, VendaCRM } from '@/lib/crm-types';
 import { loadEntities } from '@/lib/crm-storage';
@@ -163,7 +163,7 @@ const BOTAO_DISCRETO = [
   FOCO,
 ].join(' ');
 
-const CARTAO = 'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]';
+const CARTAO = 'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]';
 
 const SITUACOES: readonly (StatusConciliacao | 'TODOS')[] = [
   'TODOS',
@@ -671,27 +671,27 @@ export default function ConciliacaoPage() {
                   </h2>
                   <div className="grid gap-[var(--fin-s-3)] sm:grid-cols-2 lg:grid-cols-4">
                     <MetricCard
-                      rotulo="Entrou na conta"
+                      rotulo="Entrou na conta" icone={ArrowDownLeft}
                       valor={painel.entrou}
                       estado="ok"
                       tone="positivo"
                       contexto={`${painel.creditos.toLocaleString('pt-BR')} ${painel.creditos === 1 ? 'crédito' : 'créditos'} no extrato`}
                     />
                     <MetricCard
-                      rotulo="Saiu da conta"
+                      rotulo="Saiu da conta" icone={ArrowUpRight}
                       valor={painel.saiu}
                       estado="ok"
                       contexto={`${painel.debitos.toLocaleString('pt-BR')} ${painel.debitos === 1 ? 'débito' : 'débitos'} no extrato`}
                     />
                     <MetricCard
-                      rotulo="Resultado do período"
+                      rotulo="Resultado do período" icone={TrendingUp}
                       valor={painel.resultado}
                       estado="ok"
                       tone={painel.resultado >= 0 ? 'positivo' : 'negativo'}
                       contexto={painel.resultado >= 0 ? 'entrou mais do que saiu' : 'saiu mais do que entrou'}
                     />
                     <MetricCard
-                      rotulo="Ainda a conferir"
+                      rotulo="Ainda a conferir" icone={ListChecks}
                       valor={painel.a_conferir_valor}
                       estado="ok"
                       contexto={`${contarLinhas(painel.a_conferir)} de ${painel.linhas.toLocaleString('pt-BR')}, somando entradas e saídas`}

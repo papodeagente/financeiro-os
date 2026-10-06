@@ -87,17 +87,17 @@ export default function PropostasAnalyticsPage() {
 
   const stats = [
     { label: 'Total Propostas', value: total, icon: BarChart3, color: 'text-[var(--t-text)]' },
-    { label: 'Visualizadas', value: visualizados, icon: Eye, color: 'text-purple-400' },
-    { label: 'Taxa de Aceite', value: `${taxaAceite}%`, icon: TrendingUp, color: 'text-emerald-400' },
-    { label: 'Aceitas', value: aceitos, icon: CheckCircle, color: 'text-emerald-400' },
-    { label: 'Recusadas', value: recusados, icon: XCircle, color: 'text-red-400' },
-    { label: 'Tempo Medio', value: fmtTempo(tempoMedio), icon: Clock, color: 'text-blue-400' },
-    { label: 'Leads', value: totalLeads, icon: UserPlus, color: 'text-amber-400' },
-    { label: 'Feedbacks', value: totalFeedbacks, icon: MessageCircle, color: 'text-blue-400' },
+    { label: 'Visualizadas', value: visualizados, icon: Eye, color: 'text-[var(--fin-violet)]' },
+    { label: 'Taxa de Aceite', value: `${taxaAceite}%`, icon: TrendingUp, color: 'text-[var(--fin-positive)]' },
+    { label: 'Aceitas', value: aceitos, icon: CheckCircle, color: 'text-[var(--fin-positive)]' },
+    { label: 'Recusadas', value: recusados, icon: XCircle, color: 'text-[var(--fin-negative-text)]' },
+    { label: 'Tempo Medio', value: fmtTempo(tempoMedio), icon: Clock, color: 'text-[var(--fin-accent)]' },
+    { label: 'Leads', value: totalLeads, icon: UserPlus, color: 'text-[var(--fin-warning-text)]' },
+    { label: 'Feedbacks', value: totalFeedbacks, icon: MessageCircle, color: 'text-[var(--fin-accent)]' },
   ];
 
   return (
-    <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
+    <div className="mx-auto w-full max-w-[var(--fin-page-max)] space-y-[var(--fin-s-5)] px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Link href="/propostas" className="text-[var(--t-text-muted)] hover:text-[var(--t-text)]">
@@ -105,8 +105,8 @@ export default function PropostasAnalyticsPage() {
         </Link>
         <div>
           <h1 className="text-2xl font-bold text-[var(--t-text)] flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
-              <BarChart3 className="w-5 h-5 text-purple-400" />
+            <div className="w-10 h-10 rounded-xl bg-[var(--fin-violet-soft)] flex items-center justify-center">
+              <BarChart3 className="w-5 h-5 text-[var(--fin-violet)]" />
             </div>
             Analytics de Propostas
           </h1>
@@ -133,10 +133,10 @@ export default function PropostasAnalyticsPage() {
 
       {/* Value card */}
       {valorAceito > 0 && (
-        <Card className="bg-emerald-500/5 border-emerald-500/20">
+        <Card className="bg-[var(--fin-positive-soft)] border-[var(--fin-positive)]/20">
           <CardContent className="p-6 text-center">
-            <div className="text-sm text-emerald-400 font-medium">Valor Total Aceito</div>
-            <div className="text-3xl font-bold text-emerald-400 mt-1">{BRL(valorAceito)}</div>
+            <div className="text-sm text-[var(--fin-positive)] font-medium">Valor Total Aceito</div>
+            <div className="text-3xl font-bold text-[var(--fin-positive)] mt-1">{BRL(valorAceito)}</div>
           </CardContent>
         </Card>
       )}
@@ -146,7 +146,7 @@ export default function PropostasAnalyticsPage() {
         <Card className="bg-[var(--t-bg-secondary)] border-[var(--t-border)]">
           <CardContent className="p-5">
             <h3 className="text-sm font-semibold text-[var(--t-text)] mb-4 flex items-center gap-2">
-              <Eye className="w-4 h-4 text-purple-400" /> Mais Visualizadas
+              <Eye className="w-4 h-4 text-[var(--fin-violet)]" /> Mais Visualizadas
             </h3>
             <div className="space-y-3">
               {topViews.length === 0 && (
@@ -167,7 +167,7 @@ export default function PropostasAnalyticsPage() {
                       <span className="text-[10px] text-[var(--t-text-muted)]">{p.cliente_nome || 'Sem cliente'}</span>
                     </div>
                     <div className="text-right shrink-0 ml-3">
-                      <div className="text-sm font-medium text-purple-400">{views}x</div>
+                      <div className="text-sm font-medium text-[var(--fin-violet)]">{views}x</div>
                       {avg > 0 && <div className="text-[10px] text-[var(--t-text-muted)]">{fmtTempo(avg)} medio</div>}
                     </div>
                   </div>
@@ -181,7 +181,7 @@ export default function PropostasAnalyticsPage() {
         <Card className="bg-[var(--t-bg-secondary)] border-[var(--t-border)]">
           <CardContent className="p-5">
             <h3 className="text-sm font-semibold text-[var(--t-text)] mb-4 flex items-center gap-2">
-              <Clock className="w-4 h-4 text-blue-400" /> Atividade Recente
+              <Clock className="w-4 h-4 text-[var(--fin-accent)]" /> Atividade Recente
             </h3>
             <div className="space-y-3">
               {recentes.map(p => (

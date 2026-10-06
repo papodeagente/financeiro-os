@@ -75,7 +75,7 @@ export function ModalComparacao({
               >
                 <p className="text-[var(--text-body-sm)] font-semibold text-[var(--t-text)] mb-3">
                   {c.nome}
-                  {isVencedor && <span className="ml-2 text-[10px] bg-[var(--t-green)] text-white px-1.5 py-0.5 rounded-full">MELHOR</span>}
+                  {isVencedor && <span className="ml-2 text-[10px] bg-[var(--t-green)] text-[var(--fin-text-on-fill)] px-1.5 py-0.5 rounded-full">MELHOR</span>}
                 </p>
 
                 <div className="space-y-3 mb-4">
@@ -150,7 +150,7 @@ export function ModalComparacao({
           </button>
           <button
             onClick={() => { onSalvar(cenarios); onClose(); }}
-            className="px-4 py-2 text-[var(--text-body-sm)] font-semibold text-white bg-[var(--t-green)] rounded-lg hover:opacity-90"
+            className="px-4 py-2 text-[var(--text-body-sm)] font-semibold text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90"
           >
             Salvar cenários
           </button>
@@ -186,7 +186,7 @@ function Kpi({ label, value, emphasize, negative }: { label: string; value: stri
   return (
     <div className="flex items-center justify-between text-[11px]">
       <span className="text-[var(--t-text-muted)]">{label}</span>
-      <span className={`${emphasize ? 'font-bold text-[13px]' : 'font-medium'} ${negative ? 'text-red-500' : 'text-[var(--t-text)]'}`}>
+      <span className={`${emphasize ? 'font-bold text-[13px]' : 'font-medium'} ${negative ? 'text-[var(--fin-negative-text)]' : 'text-[var(--t-text)]'}`}>
         {value}
       </span>
     </div>

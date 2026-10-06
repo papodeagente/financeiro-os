@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link2, Download, ExternalLink, Search } from 'lucide-react';
+import { ArrowDownLeft, Download, ExternalLink, Landmark, Link2, ListChecks, Percent, RotateCcw, Search } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -290,27 +290,27 @@ export default function RecebimentosPlataformasPage() {
       {resumo && (
         <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           <MetricCard
-            rotulo="Vendemos" valor={resumo.vendido} estado="ok" emphasis="destaque"
+            rotulo="Vendemos" icone={ArrowDownLeft} valor={resumo.vendido} estado="ok" emphasis="destaque"
             contexto={`no período de ${formatDate(de)} a ${formatDate(ate)}, sem o que foi estornado`}
           />
           <MetricCard
-            rotulo="Entrou no caixa" valor={resumo.caixa} estado="ok" tone="positivo"
+            rotulo="Entrou no caixa" icone={Landmark} valor={resumo.caixa} estado="ok" tone="positivo"
             contexto="líquido das parcelas que a plataforma já liberou"
           />
           <MetricCard
-            rotulo="Ainda a receber" valor={resumo.a_receber} estado="ok"
+            rotulo="Ainda a receber" icone={ArrowDownLeft} valor={resumo.a_receber} estado="ok"
             contexto="parcelas pagas e não liberadas, mais as que ainda vão vencer"
           />
           <MetricCard
-            rotulo="Taxas das plataformas" valor={resumo.taxas} estado="ok" tone="negativo"
+            rotulo="Taxas das plataformas" icone={Percent} valor={resumo.taxas} estado="ok" tone="negativo"
             contexto="o que a plataforma reteve sobre as vendas do período"
           />
           <MetricCard
-            rotulo="Estornado e chargeback" valor={resumo.estornado} estado="ok" tone="negativo"
+            rotulo="Estornado e chargeback" icone={RotateCcw} valor={resumo.estornado} estado="ok" tone="negativo"
             contexto="dinheiro que voltou e saiu da receita"
           />
           <MetricCard
-            rotulo="Sem resposta de conciliação" valor={resumo.aguardando_conciliacao} estado="ok"
+            rotulo="Sem resposta de conciliação" icone={ListChecks} valor={resumo.aguardando_conciliacao} estado="ok"
             contexto={`${resumo.de_venda_crm > 0 ? 'de venda do CRM: ' : ''}${resumo.de_venda_crm.toFixed(2)} · venda direta: ${resumo.de_venda_direta.toFixed(2)}`}
           />
         </div>
@@ -349,7 +349,7 @@ export default function RecebimentosPlataformasPage() {
 
       {escolhendo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setEscolhendo(null)}>
-          <div className="w-full max-w-2xl rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-5" onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-2xl rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-5 shadow-[var(--fin-e-card)]" onClick={e => e.stopPropagation()}>
             <h2 className="text-lg font-semibold">Unificar com uma venda do CRM</h2>
             <p className="text-sm text-[var(--fin-text-muted)] mt-1">
               {escolhendo.comprador || escolhendo.email} · <Money valor={escolhendo.bruto} estado="ok" /> ·{' '}

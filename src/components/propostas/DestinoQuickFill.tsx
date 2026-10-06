@@ -145,7 +145,7 @@ export function DestinoQuickFill({ destino, onAddTextoBlock, onAddGaleriaBlock, 
 
         <button
           onClick={() => onUseAsAIContext(destino)}
-          className="w-full flex items-center gap-2 px-2.5 py-2 text-left rounded-lg hover:bg-purple-500/10 transition-colors text-xs text-purple-400"
+          className="w-full flex items-center gap-2 px-2.5 py-2 text-left rounded-lg hover:bg-[var(--fin-violet-soft)] transition-colors text-xs text-[var(--fin-violet)]"
         >
           <Sparkles className="w-3 h-3" />
           Usar como contexto para IA

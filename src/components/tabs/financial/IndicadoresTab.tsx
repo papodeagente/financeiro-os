@@ -1,5 +1,6 @@
 'use client';
 
+import { comAlfa } from '@/lib/cor';
 import { useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -55,14 +56,14 @@ function StatCard({
       {Icon && (
         <div
           className="p-2 rounded-lg"
-          style={{ backgroundColor: (color ?? '#d4a853') + '20' }}
+          style={{ backgroundColor: comAlfa(color ?? 'var(--fin-accent)', 12) }}
         >
-          <Icon className="h-4 w-4" style={{ color: color ?? '#d4a853' }} />
+          <Icon className="h-4 w-4" style={{ color: color ?? 'var(--fin-accent)' }} />
         </div>
       )}
       <div>
         <p className="text-xs text-[var(--t-text-secondary)]">{label}</p>
-        <p className="text-lg font-bold" style={{ color: color ?? '#1a1a2e' }}>
+        <p className="text-lg font-bold" style={{ color: color ?? 'var(--fin-surface)' }}>
           {value}
         </p>
         {subtitle && <p className="text-xs text-[var(--t-text-secondary)]">{subtitle}</p>}
@@ -131,10 +132,10 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
   return (
     <div className="space-y-6">
       {/* Config */}
-      <Card className="border-0 shadow-md" style={{ backgroundColor: '#1a1a2e' }}>
+      <Card className="border-0 shadow-md" style={{ backgroundColor: 'var(--fin-surface)' }}>
         <CardHeader className="pb-3">
           <CardTitle className="text-[var(--t-text)] flex items-center gap-2 text-base">
-            <Settings2 className="h-4 w-4" style={{ color: '#d4a853' }} />
+            <Settings2 className="h-4 w-4" style={{ color: 'var(--fin-accent)' }} />
             Parametros
           </CardTitle>
         </CardHeader>
@@ -160,7 +161,7 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
       <Card className="border-0 shadow-md">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Users className="h-5 w-5" style={{ color: '#d4a853' }} />
+            <Users className="h-5 w-5" style={{ color: 'var(--fin-accent)' }} />
             Ocupacao
           </CardTitle>
         </CardHeader>
@@ -170,31 +171,31 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
               label="PAX Vendidos"
               value={ocp.paxVendidos ?? 0}
               icon={Users}
-              color="#3b82f6"
+              color="var(--fin-accent)"
             />
             <StatCard
               label="PAX Confirmados"
               value={ocp.paxConfirmados ?? 0}
               icon={CheckCircle2}
-              color="#22c55e"
+              color="var(--fin-positive)"
             />
             <StatCard
               label="Taxa de Ocupacao"
               value={`${(ocp.taxaOcupacao ?? 0).toFixed(1)}%`}
               icon={BarChart3}
-              color="#d4a853"
+              color="var(--fin-accent)"
             />
             <StatCard
               label="Vagas Disponiveis"
               value={ocp.vagasDisponiveis ?? 0}
               icon={Target}
-              color="#8b5cf6"
+              color="var(--fin-violet)"
             />
           </div>
           <ProgressBar
             value={ocp.paxVendidos ?? 0}
             max={(ocp.paxVendidos ?? 0) + (ocp.vagasDisponiveis ?? 0)}
-            color="#d4a853"
+            color="var(--fin-accent)"
           />
           <div className="flex justify-between text-xs text-[var(--t-text-secondary)] mt-1">
             <span>0 PAX</span>
@@ -207,7 +208,7 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
       <Card className="border-0 shadow-md">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Target className="h-5 w-5" style={{ color: '#d4a853' }} />
+            <Target className="h-5 w-5" style={{ color: 'var(--fin-accent)' }} />
             Break-even (Ponto de Equilibrio)
           </CardTitle>
         </CardHeader>
@@ -218,17 +219,17 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
               value={be.breakEvenPax ?? 0}
               subtitle="Minimo de passageiros para cobrir custos"
               icon={Target}
-              color="#f59e0b"
+              color="var(--fin-warning)"
             />
             <div className="flex items-center gap-3">
               <span className="text-sm text-[var(--t-text-muted)]">Break-even Atingido:</span>
               {be.breakEvenAtingido ? (
-                <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+                <Badge className="bg-[var(--fin-positive-soft)] text-[var(--fin-positive)] hover:bg-[var(--fin-positive-soft)]">
                   <CheckCircle2 className="h-3 w-3 mr-1" />
                   SIM
                 </Badge>
               ) : (
-                <Badge className="bg-red-100 text-red-800 hover:bg-red-100">
+                <Badge className="bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)] hover:bg-[var(--fin-negative-soft)]">
                   <XCircle className="h-3 w-3 mr-1" />
                   NAO
                 </Badge>
@@ -240,7 +241,7 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
               subtitle="Quanto acima do break-even"
               icon={TrendingUp}
               color={
-                (be.margemSeguranca ?? 0) > 0 ? '#22c55e' : '#ef4444'
+                (be.margemSeguranca ?? 0) > 0 ? 'var(--fin-positive)' : 'var(--fin-negative)'
               }
             />
           </div>
@@ -253,11 +254,11 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
                   be.breakEvenPax ?? 0,
                   (ocp.paxVendidos ?? 0) + (ocp.vagasDisponiveis ?? 0)
                 )}
-                color={be.breakEvenAtingido ? '#22c55e' : '#ef4444'}
+                color={be.breakEvenAtingido ? 'var(--fin-positive)' : 'var(--fin-negative)'}
               />
               {(be.breakEvenPax ?? 0) > 0 && (
                 <div
-                  className="absolute top-0 h-3 w-0.5 bg-yellow-500"
+                  className="absolute top-0 h-3 w-0.5 bg-[var(--fin-warning)]"
                   style={{
                     left: `${Math.min(
                       ((be.breakEvenPax ?? 0) /
@@ -274,7 +275,7 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
             </div>
             <div className="flex justify-between text-xs text-[var(--t-text-secondary)] mt-1">
               <span>{ocp.paxVendidos ?? 0} vendidos</span>
-              <span className="text-yellow-600 font-medium">
+              <span className="text-[var(--fin-warning-text)] font-medium">
                 BE: {be.breakEvenPax ?? 0}
               </span>
             </div>
@@ -286,7 +287,7 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
       <Card className="border-0 shadow-md">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <TrendingUp className="h-5 w-5" style={{ color: '#d4a853' }} />
+            <TrendingUp className="h-5 w-5" style={{ color: 'var(--fin-accent)' }} />
             Margens
           </CardTitle>
         </CardHeader>
@@ -302,8 +303,8 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
                 <p className="text-xs text-[var(--t-text-secondary)] mb-1">{m.label}</p>
                 <p
                   className={`text-2xl font-bold ${
-                    m.value >= 0 ? 'text-green-600' : 'text-red-600'
-                  }`}
+ m.value >= 0 ? 'text-[var(--fin-positive)]' : 'text-[var(--fin-negative-text)]'
+ }`}
                 >
                   {'isCurrency' in m && m.isCurrency ? formatBRL(m.value) : `${m.value.toFixed(1)}%`}
                 </p>
@@ -312,7 +313,7 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
                     <ProgressBar
                       value={Math.max(m.value, 0)}
                       max={100}
-                      color={m.value >= 20 ? '#22c55e' : m.value >= 0 ? '#f59e0b' : '#ef4444'}
+                      color={m.value >= 20 ? 'var(--fin-positive)' : m.value >= 0 ? 'var(--fin-warning)' : 'var(--fin-negative)'}
                     />
                   </div>
                 )}
@@ -326,7 +327,7 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
       <Card className="border-0 shadow-md">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Zap className="h-5 w-5" style={{ color: '#d4a853' }} />
+            <Zap className="h-5 w-5" style={{ color: 'var(--fin-accent)' }} />
             Velocidade de Vendas
           </CardTitle>
         </CardHeader>
@@ -336,7 +337,7 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
               label="PAX por Dia"
               value={(vel.paxPorDia ?? 0).toFixed(2)}
               icon={Zap}
-              color="#3b82f6"
+              color="var(--fin-accent)"
             />
             <StatCard
               label="Dias para Lotar"
@@ -346,23 +347,23 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
                   : '---'
               }
               icon={Target}
-              color="#8b5cf6"
+              color="var(--fin-violet)"
             />
             <StatCard
               label="Data Est. Lotacao"
               value={vel.dataEstimadaLotacao ?? '---'}
               icon={BarChart3}
-              color="#f59e0b"
+              color="var(--fin-warning)"
             />
             <div className="flex items-center gap-3">
               <span className="text-sm text-[var(--t-text-muted)]">Vai lotar a tempo:</span>
               {vel.vaiLotarATempo ? (
-                <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+                <Badge className="bg-[var(--fin-positive-soft)] text-[var(--fin-positive)] hover:bg-[var(--fin-positive-soft)]">
                   <CheckCircle2 className="h-3 w-3 mr-1" />
                   SIM
                 </Badge>
               ) : (
-                <Badge className="bg-red-100 text-red-800 hover:bg-red-100">
+                <Badge className="bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)] hover:bg-[var(--fin-negative-soft)]">
                   <XCircle className="h-3 w-3 mr-1" />
                   NAO
                 </Badge>
@@ -376,16 +377,16 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
       <div>
         <h3
           className="text-base font-bold mb-4 flex items-center gap-2"
-          style={{ color: '#1a1a2e' }}
+          style={{ color: 'var(--fin-surface)' }}
         >
-          <BarChart3 className="h-5 w-5" style={{ color: '#d4a853' }} />
+          <BarChart3 className="h-5 w-5" style={{ color: 'var(--fin-accent)' }} />
           Analise de Cenarios
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Pessimista */}
-          <Card className="border-0 shadow-md border-l-4 border-l-red-500 bg-red-50/50">
+          <Card className="border-0 shadow-md border-l-4 border-l-[var(--fin-negative)] bg-[var(--fin-negative-soft)]">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-red-700">Pessimista</CardTitle>
+              <CardTitle className="text-sm text-[var(--fin-negative-text)]">Pessimista</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="flex justify-between text-sm">
@@ -408,10 +409,10 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
                 <span className="text-[var(--t-text)] font-medium">Lucro</span>
                 <span
                   className={`font-bold ${
-                    (cenarios.pessimista?.lucro ?? 0) >= 0
-                      ? 'text-green-700'
-                      : 'text-red-700'
-                  }`}
+ (cenarios.pessimista?.lucro ?? 0) >= 0
+ ? 'text-[var(--fin-positive)]'
+ : 'text-[var(--fin-negative-text)]'
+ }`}
                 >
                   {formatBRL(cenarios.pessimista?.lucro ?? 0)}
                 </span>
@@ -420,10 +421,10 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
                 <span className="text-[var(--t-text-muted)]">Margem</span>
                 <span
                   className={`font-semibold ${
-                    (cenarios.pessimista?.margem ?? 0) >= 0
-                      ? 'text-green-600'
-                      : 'text-red-600'
-                  }`}
+ (cenarios.pessimista?.margem ?? 0) >= 0
+ ? 'text-[var(--fin-positive)]'
+ : 'text-[var(--fin-negative-text)]'
+ }`}
                 >
                   {(cenarios.pessimista?.margem ?? 0).toFixed(1)}%
                 </span>
@@ -432,9 +433,9 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
           </Card>
 
           {/* Realista */}
-          <Card className="border-0 shadow-md border-l-4 border-l-yellow-500 bg-yellow-50/50">
+          <Card className="border-0 shadow-md border-l-4 border-l-[var(--fin-warning)] bg-[var(--fin-warning-soft)]">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-yellow-700">Realista</CardTitle>
+              <CardTitle className="text-sm text-[var(--fin-warning-text)]">Realista</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="flex justify-between text-sm">
@@ -457,10 +458,10 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
                 <span className="text-[var(--t-text)] font-medium">Lucro</span>
                 <span
                   className={`font-bold ${
-                    (cenarios.realista?.lucro ?? 0) >= 0
-                      ? 'text-green-700'
-                      : 'text-red-700'
-                  }`}
+ (cenarios.realista?.lucro ?? 0) >= 0
+ ? 'text-[var(--fin-positive)]'
+ : 'text-[var(--fin-negative-text)]'
+ }`}
                 >
                   {formatBRL(cenarios.realista?.lucro ?? 0)}
                 </span>
@@ -469,10 +470,10 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
                 <span className="text-[var(--t-text-muted)]">Margem</span>
                 <span
                   className={`font-semibold ${
-                    (cenarios.realista?.margem ?? 0) >= 0
-                      ? 'text-green-600'
-                      : 'text-red-600'
-                  }`}
+ (cenarios.realista?.margem ?? 0) >= 0
+ ? 'text-[var(--fin-positive)]'
+ : 'text-[var(--fin-negative-text)]'
+ }`}
                 >
                   {(cenarios.realista?.margem ?? 0).toFixed(1)}%
                 </span>
@@ -481,9 +482,9 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
           </Card>
 
           {/* Otimista */}
-          <Card className="border-0 shadow-md border-l-4 border-l-green-500 bg-green-50/50">
+          <Card className="border-0 shadow-md border-l-4 border-l-[var(--fin-positive)] bg-[var(--fin-positive-soft)]">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-green-700">Otimista</CardTitle>
+              <CardTitle className="text-sm text-[var(--fin-positive)]">Otimista</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="flex justify-between text-sm">
@@ -506,10 +507,10 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
                 <span className="text-[var(--t-text)] font-medium">Lucro</span>
                 <span
                   className={`font-bold ${
-                    (cenarios.otimista?.lucro ?? 0) >= 0
-                      ? 'text-green-700'
-                      : 'text-red-700'
-                  }`}
+ (cenarios.otimista?.lucro ?? 0) >= 0
+ ? 'text-[var(--fin-positive)]'
+ : 'text-[var(--fin-negative-text)]'
+ }`}
                 >
                   {formatBRL(cenarios.otimista?.lucro ?? 0)}
                 </span>
@@ -518,10 +519,10 @@ export default function IndicadoresTab({ grupo, onChange }: IndicadoresTabProps)
                 <span className="text-[var(--t-text-muted)]">Margem</span>
                 <span
                   className={`font-semibold ${
-                    (cenarios.otimista?.margem ?? 0) >= 0
-                      ? 'text-green-600'
-                      : 'text-red-600'
-                  }`}
+ (cenarios.otimista?.margem ?? 0) >= 0
+ ? 'text-[var(--fin-positive)]'
+ : 'text-[var(--fin-negative-text)]'
+ }`}
                 >
                   {(cenarios.otimista?.margem ?? 0).toFixed(1)}%
                 </span>

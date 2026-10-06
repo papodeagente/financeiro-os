@@ -347,7 +347,7 @@ export default function VoosPage() {
             </div>
             <div className="flex items-end">
               <button onClick={buscar} disabled={searching}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[var(--t-green)] text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 font-medium">
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[var(--t-green)] text-[var(--fin-text-on-fill)] rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 font-medium">
                 {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                 Buscar voos
               </button>
@@ -375,7 +375,7 @@ export default function VoosPage() {
         </div>
 
         {error && (
-          <div className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 px-4 py-3 rounded-lg">
+          <div className="flex items-center gap-2 text-[var(--fin-negative-text)] text-sm bg-[var(--fin-negative-soft)] px-4 py-3 rounded-lg">
             <AlertCircle className="w-4 h-4 shrink-0" /> {error}
           </div>
         )}
@@ -391,7 +391,7 @@ export default function VoosPage() {
                     filtrado{sorted.length !== 1 ? 's' : ''} por <b className="text-[var(--t-text)]">{numeroVooNorm}</b> (de {results.length})
                   </span>
                 )}
-                {cached && <span className="ml-2 text-xs text-amber-400">(cache)</span>}
+                {cached && <span className="ml-2 text-xs text-[var(--fin-warning-text)]">(cache)</span>}
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-[var(--t-text-muted)]">Ordenar:</span>
@@ -413,7 +413,7 @@ export default function VoosPage() {
 
               return (
                 <div key={offer.id}
-                  className={`bg-[var(--t-surface)] rounded-xl border ${isBest ? 'border-[var(--t-green)]/50' : 'border-[var(--t-border)]'} overflow-hidden`}>
+                  className={`bg-[var(--t-surface)] rounded-xl border ${isBest ? 'border-[var(--t-green)]/50' : 'border-[var(--t-border)]'} overflow-hidden shadow-[var(--fin-e-card)]`}>
                   {isBest && (
                     <div className="bg-[var(--t-green)]/10 px-4 py-1.5 flex items-center gap-1.5 text-[var(--t-green)] text-xs font-medium">
                       <Trophy className="w-3.5 h-3.5" /> MELHOR PREÇO
@@ -500,7 +500,7 @@ export default function VoosPage() {
                           <button
                             onClick={() => selecionarVoo(offer)}
                             disabled={selecting !== null || loadingVolta}
-                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-[var(--t-green)] text-white rounded-lg hover:opacity-90 disabled:opacity-50"
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-[var(--t-green)] text-[var(--fin-text-on-fill)] rounded-lg hover:opacity-90 disabled:opacity-50"
                           >
                             {(selecting === offer.id || (loadingVolta && step === 'ida')) ? (
                               <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {step === 'ida' && isRoundTrip ? 'Buscando voltas...' : 'Selecionando...'}</>

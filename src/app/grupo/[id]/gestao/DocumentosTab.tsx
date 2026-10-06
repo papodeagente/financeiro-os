@@ -359,7 +359,7 @@ export function DocumentosTab({ grupoId, onChange }: Props) {
           }}
         >
           <table className="w-full text-[13px]">
-            <thead style={{ background: '#F8FAFC' }}>
+            <thead style={{ background: 'var(--fin-surface-2)' }}>
               <tr style={{ borderBottom: '1px solid var(--lg-border-base)' }}>
                 <th className="text-left px-3 py-2.5 text-[11px] uppercase tracking-[0.05em] font-semibold" style={{ color: 'var(--lg-text-3)' }}>Passageiro</th>
                 <th className="text-left px-3 py-2.5 text-[11px] uppercase tracking-[0.05em] font-semibold" style={{ color: 'var(--lg-text-3)' }}>Documento</th>
@@ -371,7 +371,7 @@ export function DocumentosTab({ grupoId, onChange }: Props) {
             </thead>
             <tbody>
               {filtered.map(d => (
-                <tr key={d.id} style={{ borderTop: '1px solid #F1F5F9' }} className="hover:bg-[#F8FAFC]">
+                <tr key={d.id} style={{ borderTop: '1px solid #F1F5F9' }} className="hover:bg-[var(--fin-surface-2)]">
                   <td className="px-3 py-2.5">
                     <div className="font-semibold" style={{ color: 'var(--lg-text)' }}>{d.passageiro_nome}</div>
                   </td>
@@ -533,7 +533,7 @@ export function DocumentosTab({ grupoId, onChange }: Props) {
                 onClick={() => fileRef.current?.click()}
                 disabled={uploading}
                 className="w-full inline-flex items-center justify-center gap-2 h-[60px] border-2 border-dashed rounded-[10px] text-[12px] disabled:opacity-50"
-                style={{ borderColor: 'var(--lg-border-strong)', color: 'var(--lg-text-2)', background: '#F8FAFC' }}
+                style={{ borderColor: 'var(--lg-border-strong)', color: 'var(--lg-text-2)', background: 'var(--fin-surface-2)' }}
               >
                 {uploading ? (
                   <><Loader2 className="w-4 h-4 animate-spin" /> Enviando…</>

@@ -68,7 +68,7 @@ export function FilterBar({ busca, periodo, selects, resumo, ativos, onLimpar }:
     <section
       data-slot="fin-filter-bar"
       aria-label="Filtros"
-      className="flex flex-col gap-[var(--fin-s-3)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-3)] lg:min-h-12 lg:flex-row lg:flex-wrap lg:items-center lg:gap-[var(--fin-s-2)]"
+      className="flex flex-col gap-[var(--fin-s-3)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-3)] lg:min-h-12 lg:flex-row lg:flex-wrap lg:items-center lg:gap-[var(--fin-s-2)] shadow-[var(--fin-e-card)]"
     >
       {busca ? (
         <div className="relative flex min-w-0 grow items-center lg:max-w-80">

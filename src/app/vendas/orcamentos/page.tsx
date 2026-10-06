@@ -66,7 +66,7 @@ export default function OrcamentosPage() {
   };
 
   return (
-    <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
+    <div className="w-full bg-[var(--fin-bg)] px-[var(--fin-page-pad)] py-[var(--fin-page-pad)] text-[var(--fin-text)]">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -74,7 +74,7 @@ export default function OrcamentosPage() {
           <p className="text-[var(--t-text-secondary)] text-sm mt-1">Vendas com status de orçamento pendente</p>
         </div>
         <Link href="/vendas/nova">
-          <Button className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold">
+          <Button className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--fin-text-on-fill)] font-semibold">
             <FileText className="w-4 h-4 mr-2" />
             Novo Orçamento
           </Button>
@@ -85,8 +85,8 @@ export default function OrcamentosPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)]">
           <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-3 bg-yellow-500/10 rounded-lg">
-              <FileText className="w-5 h-5 text-yellow-400" />
+            <div className="p-3 bg-[var(--fin-warning-soft)] rounded-lg">
+              <FileText className="w-5 h-5 text-[var(--fin-warning-text)]" />
             </div>
             <div>
               <p className="text-[var(--t-text-secondary)] text-sm">Orçamentos Abertos</p>
@@ -178,11 +178,11 @@ export default function OrcamentosPage() {
                       <td className="px-4 py-3 text-center text-[var(--t-text-secondary)]">
                         {venda.produtos.length}
                       </td>
-                      <td className="px-4 py-3 text-right text-green-400 font-medium">
+                      <td className="px-4 py-3 text-right text-[var(--fin-positive)] font-medium">
                         {fmt(venda.valor_final || 0)}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <Badge className="bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 text-xs">
+                        <Badge className="bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)] border border-[var(--fin-warning)]/30 text-xs">
                           Orçamento
                         </Badge>
                       </td>
@@ -192,7 +192,7 @@ export default function OrcamentosPage() {
                             size="sm"
                             onClick={() => handleConverter(venda)}
                             disabled={converting === venda.id}
-                            className="h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white font-medium"
+                            className="h-7 text-xs bg-[var(--fin-accent)] hover:bg-[var(--fin-accent-hover)] text-[var(--fin-text-on-fill)] font-medium"
                           >
                             {converting === venda.id ? (
                               'Convertendo...'

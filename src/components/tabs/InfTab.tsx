@@ -90,7 +90,7 @@ export function InfTab({ grupo, onChange }: Props) {
       {/* Passageiros — apenas para Personalizado e Operadora. Em GRUPO,
           os passageiros ainda não são nomeados (controlamos vagas). */}
       {!isGrupo && (
-        <div className="border border-[var(--t-border)] bg-[var(--t-surface)] rounded-xl overflow-hidden">
+        <div className="border border-[var(--t-border)] bg-[var(--t-surface)] rounded-xl overflow-hidden shadow-[var(--fin-e-card)]">
           <div className="px-4 py-3 flex items-center justify-between border-b border-[var(--t-border)]">
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-[var(--t-text-secondary)]" />
@@ -163,7 +163,7 @@ export function InfTab({ grupo, onChange }: Props) {
                       placeholder="Nome (opcional)"
                       className="h-8"
                     />
-                    <Button variant="ghost" size="sm" onClick={() => removePassageiro(p.id)} className="h-8 w-8 p-0 text-red-500" title="Remover passageiro">
+                    <Button variant="ghost" size="sm" onClick={() => removePassageiro(p.id)} className="h-8 w-8 p-0 text-[var(--fin-negative-text)]" title="Remover passageiro">
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
@@ -307,7 +307,7 @@ export function InfTab({ grupo, onChange }: Props) {
             </div>
 
             {cortesia > 0 && (
-              <div className="mt-3 p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5">
+              <div className="mt-3 p-3 rounded-lg border border-[var(--fin-positive)]/30 bg-[var(--fin-positive-soft)]">
                 <p className="text-[12px] text-[var(--t-text)] leading-relaxed">
                   <b>{cortesia}</b> cortesia{cortesia !== 1 ? 's' : ''} ({aptoLabel[grupo.params.cortesia_apto || 'dbl']})
                   {' '}para acompanhantes do grupo. O custo dessas vagas é{' '}

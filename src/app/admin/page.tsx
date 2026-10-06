@@ -11,8 +11,8 @@ export default function AdminPage() {
   }, [router])
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-      <p className="text-gray-400">Redirecionando...</p>
+    <div className="min-h-screen bg-[var(--fin-surface)] flex items-center justify-center">
+      <p className="text-[var(--fin-text-3)]">Redirecionando...</p>
     </div>
   )
 }

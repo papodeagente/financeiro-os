@@ -75,7 +75,7 @@ function lerDispensa(): boolean {
 
 function EsqueletoFaixa() {
   return (
-    <div className="rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)]">
+    <div className="rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)] shadow-[var(--fin-e-card)]">
       <div className="flex flex-col gap-[var(--fin-s-4)] lg:flex-row lg:items-center">
         <div className="flex flex-col gap-[var(--fin-s-2)] lg:w-[300px] lg:shrink-0 lg:pr-[var(--fin-s-5)]">
           <span className="block h-3 w-24 animate-pulse rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />
@@ -512,7 +512,7 @@ export default function FinanceiroAgHubPage() {
               >
                 <section
                   aria-labelledby="fin-em-caixa"
-                  className="rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)]"
+                  className="rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)] shadow-[var(--fin-e-card)]"
                 >
                   <div className="flex flex-col gap-[var(--fin-s-4)] lg:flex-row lg:items-center">
                     <div className="flex flex-col gap-[var(--fin-s-1)] lg:w-[300px] lg:shrink-0 lg:pr-[var(--fin-s-5)]">

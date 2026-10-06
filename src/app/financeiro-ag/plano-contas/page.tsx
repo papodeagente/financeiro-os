@@ -96,7 +96,7 @@ function CartaoContagem({
   destaque?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-[var(--fin-s-1)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)]">
+    <div className="flex flex-col gap-[var(--fin-s-1)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)] shadow-[var(--fin-e-card)]">
       <h3 className="fin-t-overline flex items-center gap-[var(--fin-s-1)] text-[var(--fin-text-3)]">{rotulo}</h3>
       <p
         className={cn(
@@ -117,7 +117,7 @@ function EsqueletoResumo() {
       {[0, 1].map((i) => (
         <div
           key={i}
-          className="flex flex-col gap-[var(--fin-s-2)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)]"
+          className="flex flex-col gap-[var(--fin-s-2)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)] shadow-[var(--fin-e-card)]"
         >
           <span className="block h-3 w-24 animate-pulse rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />
           <span className="block h-7 w-16 animate-pulse rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />

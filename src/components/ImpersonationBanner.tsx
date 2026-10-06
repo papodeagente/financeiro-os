@@ -22,12 +22,12 @@ export function ImpersonationBanner() {
   };
 
   return (
-    <div className="sticky top-0 z-50 flex items-center justify-center gap-3 px-4 py-2 bg-amber-500 text-gray-950 text-sm font-medium">
+    <div className="sticky top-0 z-50 flex items-center justify-center gap-3 px-4 py-2 bg-[var(--fin-warning)] text-[var(--fin-text)] text-sm font-medium">
       <Eye className="w-4 h-4" />
       <span>Impersonando: {user.impersonatingTenantSlug || user.impersonatingTenantId}</span>
       <button
         onClick={stopImpersonating}
-        className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-700 text-white text-xs hover:bg-amber-800 transition-colors"
+        className="flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--fin-warning)] text-[var(--fin-text-on-fill)] text-xs hover:bg-[var(--fin-warning)] transition-colors"
       >
         <X className="w-3 h-3" />
         Sair

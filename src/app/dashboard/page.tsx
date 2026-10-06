@@ -2,10 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import {
-  ArrowDownRight, ArrowUpRight, CircleCheck, OctagonAlert, TriangleAlert,
-} from 'lucide-react';
+import { ArrowDownLeft, ArrowDownRight, ArrowUpRight, CircleCheck, OctagonAlert, TrendingUp, TriangleAlert, Wallet } from 'lucide-react';
 
+import { IconeDeIndicador } from '@/components/fin/MetricCard';
 import type { DashboardFinanceiro } from '@/lib/dashboard-financeiro';
 import type { LadoDoLancamento, RecorteDoDetalhe } from '@/lib/dashboard-detalhe';
 import {
@@ -53,7 +52,7 @@ const PCT = (v: number) => `${new Intl.NumberFormat('pt-BR', { maximumFractionDi
 const dataBR = (iso: string) => (iso && iso.length >= 10 ? iso.split('-').reverse().join('/') : '—');
 const diaEMes = (iso: string) => (iso && iso.length >= 10 ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—');
 
-const CARTAO = 'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]';
+const CARTAO = 'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]';
 
 const VEREDITO = {
   bom: { rotulo: 'Saudável', icone: CircleCheck, tom: 'positivo' as const },
@@ -317,8 +316,10 @@ function Painel() {
 
               {/* ── Os quatro números de apoio ───────────────────────────── */}
               <ul className="grid gap-[var(--fin-s-3)] sm:grid-cols-2 xl:grid-cols-4">
-                <li className={`${CARTAO} flex flex-col gap-1 p-[var(--fin-s-4)]`}>
-                  <span className="fin-t-overline text-[var(--fin-text-3)]">Sobrou em caixa</span>
+                <li className={`${CARTAO} flex items-start gap-[var(--fin-s-3)] p-5`}>
+                  <IconeDeIndicador icone={Wallet} tom={dados.caixa.resultado.atual < 0 ? 'negativo' : 'acento'} />
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <span className="fin-t-body font-medium text-[var(--fin-text-2)]">Sobrou em caixa</span>
                   <ValorProtegido
                     valor={dados.caixa.resultado.atual}
                     size="metricSm"
@@ -327,10 +328,13 @@ function Painel() {
                   />
                   <span className="fin-t-caption text-[var(--fin-text-3)]">entrou menos saiu, no período</span>
                   <Variacao pct={dados.caixa.resultado.variacao} base={rotuloDaComparacao} />
+                  </div>
                 </li>
 
-                <li className={`${CARTAO} flex flex-col gap-1 p-[var(--fin-s-4)]`}>
-                  <span className="fin-t-overline text-[var(--fin-text-3)]">Receita da agência</span>
+                <li className={`${CARTAO} flex items-start gap-[var(--fin-s-3)] p-5`}>
+                  <IconeDeIndicador icone={TrendingUp} tom={'positivo'} />
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <span className="fin-t-body font-medium text-[var(--fin-text-2)]">Receita da agência</span>
                   <ValorProtegido valor={dados.vendas.receitaAgencia} size="metricSm" align="esquerda" />
                   <span className="fin-t-caption text-[var(--fin-text-3)]">
                     {dados.vendas.margemPct === null
@@ -348,15 +352,18 @@ function Painel() {
                       {`${dados.vendas.semCusto} ${dados.vendas.semCusto === 1 ? 'venda está' : 'vendas estão'} sem custo lançado, então a margem aparece maior do que é`}
                     </span>
                   )}
+                  </div>
                 </li>
 
-                <li className={`${CARTAO} flex flex-col gap-1 p-[var(--fin-s-4)]`}>
+                <li className={`${CARTAO} flex items-start gap-[var(--fin-s-3)] p-5`}>
+                  <IconeDeIndicador icone={ArrowDownLeft} tom={'acento'} />
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <button
                     type="button"
                     className="flex flex-col items-start gap-1 text-left"
                     onClick={() => abrirRecorte('A receber em aberto', 'Tudo que ainda falta entrar', 'receber', 'em-aberto', 'valorEmAberto')}
                   >
-                    <span className="fin-t-overline text-[var(--fin-text-3)]">A receber</span>
+                    <span className="fin-t-body font-medium text-[var(--fin-text-2)]">A receber</span>
                     <ValorProtegido valor={dados.posicao.receber.emAberto} size="metricSm" align="esquerda" />
                   </button>
                   <span className="fin-t-caption text-[var(--fin-text-3)]">
@@ -364,15 +371,18 @@ function Painel() {
                       ? `${formatar(dados.posicao.receber.vencido)} vencidos em ${dados.posicao.receber.contasVencidas} ${dados.posicao.receber.contasVencidas === 1 ? 'parcela' : 'parcelas'}`
                       : `nada vencido, em ${dados.posicao.receber.contas} ${dados.posicao.receber.contas === 1 ? 'parcela' : 'parcelas'}`}
                   </span>
+                  </div>
                 </li>
 
-                <li className={`${CARTAO} flex flex-col gap-1 p-[var(--fin-s-4)]`}>
+                <li className={`${CARTAO} flex items-start gap-[var(--fin-s-3)] p-5`}>
+                  <IconeDeIndicador icone={ArrowUpRight} tom={'aviso'} />
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <button
                     type="button"
                     className="flex flex-col items-start gap-1 text-left"
                     onClick={() => abrirRecorte('A pagar em aberto', 'Tudo que ainda falta sair', 'pagar', 'em-aberto', 'valorEmAberto')}
                   >
-                    <span className="fin-t-overline text-[var(--fin-text-3)]">A pagar</span>
+                    <span className="fin-t-body font-medium text-[var(--fin-text-2)]">A pagar</span>
                     <ValorProtegido valor={dados.posicao.pagar.emAberto} size="metricSm" align="esquerda" />
                   </button>
                   <span className="fin-t-caption text-[var(--fin-text-3)]">
@@ -380,6 +390,7 @@ function Painel() {
                       ? `${formatar(dados.posicao.pagar.vencido)} vencidos em ${dados.posicao.pagar.contasVencidas} ${dados.posicao.pagar.contasVencidas === 1 ? 'conta' : 'contas'}`
                       : `nada vencido, em ${dados.posicao.pagar.contas} ${dados.posicao.pagar.contas === 1 ? 'conta' : 'contas'}`}
                   </span>
+                  </div>
                 </li>
               </ul>
 

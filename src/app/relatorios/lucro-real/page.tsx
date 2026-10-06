@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Clock, TrendingDown, TrendingUp } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Clock, ShoppingBag, TrendingDown, TrendingUp } from 'lucide-react';
 
 import type { Cliente, ComissaoVenda, ContaPagar, ContaReceber, PlanoContas, VendaCRM } from '@/lib/crm-types';
 import { loadEntities } from '@/lib/crm-storage';
@@ -206,9 +206,9 @@ export default function LucroRealPage() {
         erro={estado === 'erro' ? { mensagem: erro, onTentarDeNovo: () => { void load(); } } : null}
         esqueleto={
           <div className="flex flex-col gap-[var(--fin-s-5)]">
-            <div className="h-12 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]" />
-            <div className="h-40 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]" />
-            <div className="h-64 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]" />
+            <div className="h-12 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]" />
+            <div className="h-40 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]" />
+            <div className="h-64 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]" />
           </div>
         }
       >
@@ -227,21 +227,21 @@ export default function LucroRealPage() {
 
         <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:grid-cols-3">
           <MetricCard
-            rotulo="Faturamento"
+            rotulo="Faturamento" icone={ShoppingBag}
             valor={escada.faturamento}
             estado="ok"
             contexto={`${escada.n_vendas} ${escada.n_vendas === 1 ? 'venda' : 'vendas'} com lançamento`}
             explicacao="O que os clientes pagaram. Não é receita da agência: a maior parte vai para o fornecedor."
           />
           <MetricCard
-            rotulo="Comissão"
+            rotulo="Comissão" icone={ArrowDownLeft}
             valor={escada.comissao}
             estado="ok"
             contexto={`${PCT(escada.comissao_pct)} do faturamento`}
             explicacao="Faturamento menos o repasse ao fornecedor. É sobre isto que incidem o vendedor, a plataforma e o imposto."
           />
           <MetricCard
-            rotulo="Custo fixo"
+            rotulo="Custo fixo" icone={ArrowUpRight}
             valor={escada.custo_fixo}
             estado="ok"
             contexto={escada.n_vendas > 0 ? `${formatBRL(escada.custo_fixo_por_venda)} por venda` : 'sem venda para dividir'}

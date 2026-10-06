@@ -62,27 +62,27 @@ export default function ListaMapasMentaisPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+        <Loader2 className="w-6 h-6 animate-spin text-[var(--fin-text-3)]" />
       </div>
     );
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="mx-auto w-full max-w-6xl px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
       <div className="mb-6 flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-blue-600" />
+          <h1 className="text-2xl font-bold text-[var(--fin-text)] flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-[var(--fin-accent)]" />
             Mapas mentais
           </h1>
-          <p className="text-sm text-slate-600 mt-1">
+          <p className="text-sm text-[var(--fin-text-2)] mt-1">
             Crie e organize ideias visualmente. Tab/Enter adiciona nós; arraste pra reorganizar.
           </p>
         </div>
         <button
           onClick={() => criar('Novo mapa mental')}
           disabled={creating}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] text-sm font-semibold hover:bg-[var(--fin-accent-hover)] disabled:opacity-60"
         >
           {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
           Novo mapa
@@ -90,18 +90,18 @@ export default function ListaMapasMentaisPage() {
       </div>
 
       {mapas.length === 0 ? (
-        <div className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-12 text-center">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-emerald-500 flex items-center justify-center mx-auto mb-3">
+        <div className="bg-[var(--fin-surface)] rounded-2xl border-2 border-dashed border-[var(--fin-border)] p-12 text-center shadow-[var(--fin-e-card)]">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[var(--fin-accent)] to-[var(--fin-positive)] flex items-center justify-center mx-auto mb-3">
             <GitBranch className="w-6 h-6 text-white" />
           </div>
-          <h3 className="font-semibold text-slate-900 mb-1">Comece seu primeiro mapa</h3>
-          <p className="text-sm text-slate-500 max-w-sm mx-auto mb-5">
+          <h3 className="font-semibold text-[var(--fin-text)] mb-1">Comece seu primeiro mapa</h3>
+          <p className="text-sm text-[var(--fin-text-3)] max-w-sm mx-auto mb-5">
             Organize ideias em uma estrutura radial. Brainstorms, planejamento estratégico, decomposição de projetos — tudo no mesmo formato.
           </p>
           <button
             onClick={() => criar('Meu primeiro mapa')}
             disabled={creating}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[var(--fin-text)] text-[var(--fin-text-on-fill)] text-sm font-semibold hover:bg-[var(--fin-text)] disabled:opacity-60"
           >
             {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             Criar mapa
@@ -124,32 +124,32 @@ function CardMapa({ mapa, onRemove }: { mapa: MapaMentalData; onRemove: () => vo
   const firstChildren = mapa.rootId && mapa.nodes ? getChildren(mapa, mapa.rootId).slice(0, 4) : [];
 
   return (
-    <div className="group relative bg-white rounded-2xl border border-slate-200 p-5 hover:border-blue-300 hover:shadow-lg transition-all">
+    <div className="group relative bg-[var(--fin-surface)] rounded-2xl border border-[var(--fin-border)] p-5 hover:border-[var(--fin-accent)]/30 hover:shadow-lg transition-all">
       <Link href={`/planejamento/mapas-mentais/${mapa.id}`} className="block">
         <div className="flex items-start justify-between gap-2 mb-3">
           <div className="flex-1 min-w-0">
-            <h3 className="font-bold text-slate-900 truncate">{mapa.nome || 'Sem título'}</h3>
-            <p className="text-[11px] text-slate-500 mt-0.5">
+            <h3 className="font-bold text-[var(--fin-text)] truncate">{mapa.nome || 'Sem título'}</h3>
+            <p className="text-[11px] text-[var(--fin-text-3)] mt-0.5">
               {totalNodes} {totalNodes === 1 ? 'nó' : 'nós'}
             </p>
           </div>
-          <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-blue-600 transition-colors shrink-0 mt-1" />
+          <ArrowRight className="w-4 h-4 text-[var(--fin-text-3)] group-hover:text-[var(--fin-accent)] transition-colors shrink-0 mt-1" />
         </div>
 
         {/* Mini-preview da arvore */}
-        <div className="bg-slate-50 rounded-lg p-3 mb-3 border border-slate-100">
-          <div className="text-xs font-bold text-slate-700 mb-1 truncate">
+        <div className="bg-[var(--fin-surface-2)] rounded-lg p-3 mb-3 border border-[var(--fin-border)]">
+          <div className="text-xs font-bold text-[var(--fin-text-2)] mb-1 truncate">
             {rootNode?.text || 'Ideia central'}
           </div>
           <div className="space-y-0.5">
             {firstChildren.map(c => (
-              <div key={c.id} className="text-[11px] text-slate-500 truncate pl-3 relative">
-                <span className="absolute left-0 top-1.5 w-1.5 h-px bg-slate-300" />
+              <div key={c.id} className="text-[11px] text-[var(--fin-text-3)] truncate pl-3 relative">
+                <span className="absolute left-0 top-1.5 w-1.5 h-px bg-[var(--fin-border-strong)]" />
                 {c.text || '...'}
               </div>
             ))}
             {firstChildren.length === 0 && (
-              <div className="text-[11px] text-slate-400 italic">sem ramos ainda</div>
+              <div className="text-[11px] text-[var(--fin-text-3)] italic">sem ramos ainda</div>
             )}
           </div>
         </div>
@@ -157,7 +157,7 @@ function CardMapa({ mapa, onRemove }: { mapa: MapaMentalData; onRemove: () => vo
 
       <button
         onClick={(e) => { e.preventDefault(); onRemove(); }}
-        className="absolute top-2 right-2 p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+        className="absolute top-2 right-2 p-1.5 rounded-lg text-[var(--fin-text-3)] hover:text-[var(--fin-negative-text)] hover:bg-[var(--fin-negative-soft)] opacity-0 group-hover:opacity-100 transition-opacity"
         title="Remover mapa"
       >
         <Trash2 className="w-3.5 h-3.5" />

@@ -183,14 +183,14 @@ export default function CACDashboardPage() {
 
   if (loading) {
     return (
-      <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6 flex items-center justify-center">
+      <div className="flex w-full items-center justify-center bg-[var(--fin-bg)] px-[var(--fin-page-pad)] py-[var(--fin-page-pad)] text-[var(--fin-text)]">
         <p className="text-[var(--t-text-secondary)]">Carregando dados...</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
+    <div className="w-full bg-[var(--fin-bg)] px-[var(--fin-page-pad)] py-[var(--fin-page-pad)] text-[var(--fin-text)]">
       <div className="max-w-7xl mx-auto space-y-6">
 
         {/* Header */}
@@ -212,7 +212,7 @@ export default function CACDashboardPage() {
             <Button
               onClick={handleSaveCAC}
               disabled={calculating}
-              className="bg-[var(--t-green)] hover:brightness-110 text-white dark:text-[#0a0a14] font-semibold"
+              className="bg-[var(--t-green)] hover:brightness-110 text-[var(--fin-text-on-fill)]  font-semibold"
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${calculating ? 'animate-spin' : ''}`} />
               {calculating ? 'Calculando...' : 'Salvar Cálculo'}
@@ -258,7 +258,7 @@ export default function CACDashboardPage() {
 
               <div className="bento-card">
                 <div className="flex items-center justify-between mb-3">
-                  <Users className="w-5 h-5 text-purple-400" />
+                  <Users className="w-5 h-5 text-[var(--fin-violet)]" />
                 </div>
                 <p className="text-2xl font-bold text-[var(--t-text)]">{monthData.qtdClientesNovos}</p>
                 <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mt-2 uppercase tracking-wide">Clientes Novos</p>
@@ -375,7 +375,7 @@ export default function CACDashboardPage() {
                         <span className="text-[var(--t-text-secondary)]">CAC = </span>
                         <span className="text-[var(--t-amber)]">{BRL(monthData.totalComercial)}</span>
                         <span className="text-[var(--t-text-muted)]"> ÷ </span>
-                        <span className="text-purple-400">{monthData.qtdClientesNovos} clientes</span>
+                        <span className="text-[var(--fin-violet)]">{monthData.qtdClientesNovos} clientes</span>
                         <span className="text-[var(--t-text-muted)]"> = </span>
                         <span className="text-[var(--t-green)] font-bold">{BRL(monthData.cac)}</span>
                       </div>

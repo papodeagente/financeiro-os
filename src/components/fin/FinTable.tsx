@@ -112,7 +112,7 @@ function classesColuna<T>(coluna: FinColuna<T>): string {
 
 function Moldura({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]">
+    <div className="rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]">
       {children}
     </div>
   );

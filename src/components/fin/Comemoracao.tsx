@@ -122,7 +122,7 @@ export function Comemoracao({
       <div className="absolute inset-x-0 top-[12vh] flex justify-center px-4">
         <div
           className={cn(
-            'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]',
+            'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]',
             'px-5 py-4 text-center shadow-[var(--fin-e2)]',
           )}
           style={semMovimento ? undefined : { animation: `fin-selo ${duracaoMs}ms ease-out forwards` }}

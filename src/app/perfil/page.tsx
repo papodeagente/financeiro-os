@@ -94,31 +94,31 @@ export default function PerfilPage() {
   };
 
   if (loading) {
-    return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>;
+    return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-[var(--fin-text-3)]" /></div>;
   }
 
   const inicial = (nome || user?.nome || 'U').charAt(0).toUpperCase();
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
+    <div className="mx-auto w-full max-w-2xl px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
       <button
         onClick={() => router.back()}
-        className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900 mb-4"
+        className="inline-flex items-center gap-1 text-sm text-[var(--fin-text-3)] hover:text-[var(--fin-text)] mb-4"
       >
         <ArrowLeft className="w-3.5 h-3.5" /> Voltar
       </button>
 
-      <h1 className="text-2xl font-bold text-slate-900 mb-1">Meu perfil</h1>
-      <p className="text-sm text-slate-600 mb-6">Atualize seu nome, foto e telefone de contato.</p>
+      <h1 className="text-2xl font-bold text-[var(--fin-text)] mb-1">Meu perfil</h1>
+      <p className="text-sm text-[var(--fin-text-2)] mb-6">Atualize seu nome, foto e telefone de contato.</p>
 
       {error && (
-        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-900 flex items-start gap-2">
-          <X className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+        <div className="mb-4 p-3 bg-[var(--fin-warning-soft)] border border-[var(--fin-warning)]/30 rounded-md text-sm text-[var(--fin-warning-text)] flex items-start gap-2">
+          <X className="w-4 h-4 text-[var(--fin-warning-text)] mt-0.5 shrink-0" />
           <span className="flex-1">{error}</span>
         </div>
       )}
 
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-5">
+      <div className="bg-[var(--fin-surface)] rounded-2xl border border-[var(--fin-border)] p-6 space-y-5 shadow-[var(--fin-e-card)]">
         {/* Avatar */}
         <div className="flex items-center gap-4">
           {foto ? (
@@ -126,10 +126,10 @@ export default function PerfilPage() {
             <img
               src={foto}
               alt={nome}
-              className="w-20 h-20 rounded-full object-cover border-2 border-white shadow"
+              className="w-20 h-20 rounded-full object-cover border-2 border-[var(--fin-surface)] shadow"
             />
           ) : (
-            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-emerald-500 flex items-center justify-center text-white text-2xl font-bold border-2 border-white shadow">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[var(--fin-accent)] to-[var(--fin-positive)] flex items-center justify-center text-white text-2xl font-bold border-2 border-[var(--fin-surface)] shadow">
               {inicial}
             </div>
           )}
@@ -137,7 +137,7 @@ export default function PerfilPage() {
             <button
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-300 bg-white hover:bg-slate-50 text-sm font-medium disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] hover:bg-[var(--fin-surface-2)] text-sm font-medium disabled:opacity-60"
             >
               {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
               {uploading ? 'Enviando...' : 'Trocar foto'}
@@ -145,7 +145,7 @@ export default function PerfilPage() {
             {foto && (
               <button
                 onClick={() => setFoto('')}
-                className="ml-2 text-xs text-red-500 hover:text-red-700"
+                className="ml-2 text-xs text-[var(--fin-negative-text)] hover:text-[var(--fin-negative-text)]"
               >
                 Remover
               </button>
@@ -157,15 +157,15 @@ export default function PerfilPage() {
               className="hidden"
               onChange={e => handleUpload(e.target.files)}
             />
-            <p className="text-[11px] text-slate-500 mt-1">JPG, PNG ou WebP até 25MB</p>
+            <p className="text-[11px] text-[var(--fin-text-3)] mt-1">JPG, PNG ou WebP até 25MB</p>
           </div>
         </div>
 
-        <hr className="border-slate-100" />
+        <hr className="border-[var(--fin-border)]" />
 
         {/* Nome */}
         <label className="block">
-          <span className="text-[11px] font-semibold uppercase text-slate-500 inline-flex items-center gap-1">
+          <span className="text-[11px] font-semibold uppercase text-[var(--fin-text-3)] inline-flex items-center gap-1">
             <UserIcon className="w-3 h-3" /> Nome completo
           </span>
           <input
@@ -173,29 +173,29 @@ export default function PerfilPage() {
             value={nome}
             onChange={e => setNome(e.target.value)}
             placeholder="Seu nome"
-            className="mt-1.5 w-full px-3 py-2 rounded-md border border-slate-200 text-sm outline-none focus:border-blue-400"
+            className="mt-1.5 w-full px-3 py-2 rounded-md border border-[var(--fin-border)] text-sm outline-none focus:border-[var(--fin-accent)]"
           />
         </label>
 
         {/* E-mail (somente leitura) */}
         <label className="block">
-          <span className="text-[11px] font-semibold uppercase text-slate-500 inline-flex items-center gap-1">
+          <span className="text-[11px] font-semibold uppercase text-[var(--fin-text-3)] inline-flex items-center gap-1">
             <Mail className="w-3 h-3" /> E-mail
           </span>
           <input
             type="email"
             value={email}
             disabled
-            className="mt-1.5 w-full px-3 py-2 rounded-md border border-slate-200 bg-slate-50 text-sm text-slate-500"
+            className="mt-1.5 w-full px-3 py-2 rounded-md border border-[var(--fin-border)] bg-[var(--fin-surface-2)] text-sm text-[var(--fin-text-3)]"
           />
-          <p className="text-[11px] text-slate-400 mt-1">
+          <p className="text-[11px] text-[var(--fin-text-3)] mt-1">
             Pra alterar o e-mail, peça ao administrador da agência.
           </p>
         </label>
 
         {/* Telefone */}
         <label className="block">
-          <span className="text-[11px] font-semibold uppercase text-slate-500 inline-flex items-center gap-1">
+          <span className="text-[11px] font-semibold uppercase text-[var(--fin-text-3)] inline-flex items-center gap-1">
             <Phone className="w-3 h-3" /> Telefone
           </span>
           <input
@@ -203,20 +203,20 @@ export default function PerfilPage() {
             value={telefone}
             onChange={e => setTelefone(e.target.value)}
             placeholder="(11) 99999-9999"
-            className="mt-1.5 w-full px-3 py-2 rounded-md border border-slate-200 text-sm outline-none focus:border-blue-400"
+            className="mt-1.5 w-full px-3 py-2 rounded-md border border-[var(--fin-border)] text-sm outline-none focus:border-[var(--fin-accent)]"
           />
         </label>
 
         <div className="flex items-center justify-end gap-2 pt-2">
           {saved && (
-            <span className="inline-flex items-center gap-1 text-sm text-emerald-600">
+            <span className="inline-flex items-center gap-1 text-sm text-[var(--fin-positive)]">
               <Check className="w-4 h-4" /> Salvo
             </span>
           )}
           <button
             onClick={save}
             disabled={saving}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] text-sm font-semibold hover:bg-[var(--fin-accent-hover)] disabled:opacity-60"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             Salvar alterações

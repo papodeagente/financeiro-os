@@ -54,7 +54,7 @@ const CARTOES: Cartao[] = [
 ];
 
 const CAIXA =
-  'flex flex-col gap-4 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-5';
+  'flex flex-col gap-4 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-5 shadow-[var(--fin-e-card)]';
 
 interface EstadoTeste {
   ok: boolean;

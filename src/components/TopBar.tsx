@@ -45,7 +45,7 @@ const ITEM_DE_MENU = [
 ].join(' ');
 
 const SUPERFICIE_FLUTUANTE = [
-  'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]',
+  'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]',
   'shadow-[0_8px_28px_rgba(16,24,40,0.10),0_2px_6px_rgba(16,24,40,0.05)]',
 ].join(' ');
 
@@ -152,7 +152,7 @@ function SeletorDePilar({ ativo }: { ativo: Pillar | null }) {
         <div
           role="menu"
           aria-label="Áreas do sistema"
-          className={`fixed z-[100] w-56 py-1.5 ${SUPERFICIE_FLUTUANTE}`}
+          className={`fixed z-[var(--fin-z-menu)] w-56 py-1.5 ${SUPERFICIE_FLUTUANTE}`}
           style={{ top: pos.top, left: pos.left }}
         >
           {PILLARS.map(pilar => {
@@ -298,7 +298,7 @@ export function TopBar({ onCommandPalette, onAbrirMenu }: Props) {
       {mounted && user && dropdownOpen && dropdownPos && createPortal(
         <div
           role="menu"
-          className={`fixed z-[100] w-64 py-1.5 ${SUPERFICIE_FLUTUANTE}`}
+          className={`fixed z-[var(--fin-z-menu)] w-64 py-1.5 ${SUPERFICIE_FLUTUANTE}`}
           style={{ top: dropdownPos.top, right: dropdownPos.right }}
         >
           <div className="flex items-center gap-2.5 px-3.5 pb-2.5 pt-1.5">

@@ -1132,7 +1132,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
               onClick={() => setViewportMode(mode)}
               className={`w-9 h-8 flex items-center justify-center transition-colors ${
                 viewportMode === mode
-                  ? 'bg-[var(--t-green)] text-white dark:text-[#0a0a14]'
+                  ? 'bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] hover:bg-[var(--fin-accent-hover)]'
                   : 'text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]'
               }`}
               title={label}
@@ -1151,7 +1151,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
           <span className="text-sm font-medium text-[var(--t-text)] truncate min-w-0">
             {isEdit ? `Editar ${proposta.numero}` : 'Nova Proposta'}
             {proposta.versao > 1 && (
-              <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-400">
+              <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--fin-violet-soft)] text-[var(--fin-violet)]">
                 v{proposta.versao}
               </span>
             )}
@@ -1210,7 +1210,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
             </Button>
           )}
           {isEdit && (
-            <Button variant="outline" size="sm" className="gap-1 text-xs border-[var(--t-border)] text-purple-400"
+            <Button variant="outline" size="sm" className="gap-1 text-xs border-[var(--t-border)] text-[var(--fin-violet)]"
               onClick={handleNovaVersao}
               title={`Criar versão ${proposta.versao + 1}`}>
               <GitBranch className="w-3 h-3" />
@@ -1224,14 +1224,14 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
             <span className="hidden xl:inline">PDF</span>
           </Button>
           {proposta.cliente_id && (
-            <Button variant="outline" size="sm" className="gap-1 text-xs border-[var(--t-border)] text-emerald-400"
+            <Button variant="outline" size="sm" className="gap-1 text-xs border-[var(--t-border)] text-[var(--fin-positive)]"
               onClick={handleEnviarWhatsApp}
               title="Enviar via WhatsApp">
               <MessageCircle className="w-3 h-3" />
               <span className="hidden xl:inline">WhatsApp</span>
             </Button>
           )}
-          <Button onClick={handleSave} disabled={saving} className="bg-[var(--t-green)] text-white dark:text-[#0a0a14] gap-1 text-sm shrink-0">
+          <Button onClick={handleSave} disabled={saving} className="bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] hover:bg-[var(--fin-accent-hover)] gap-1 text-sm shrink-0">
             <Save className="w-4 h-4" />
             <span className="hidden sm:inline">{saving ? 'Salvando...' : 'Salvar'}</span>
             <span className="hidden xl:inline">e Fechar</span>
@@ -1346,16 +1346,16 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                     paleta — o usuario continua editando sem sair do
                     preview real. */}
                 <div className="sticky bottom-4 z-30 flex justify-center px-6 pb-6 -mt-4">
-                  <div className="bg-white rounded-full shadow-2xl border border-[var(--t-border)] flex items-center gap-1 p-1">
+                  <div className="bg-[var(--fin-surface)] rounded-full shadow-2xl border border-[var(--t-border)] flex items-center gap-1 p-1">
                     <button
                       onClick={() => setHotelModalOpen(true)}
-                      className="px-3 py-1.5 rounded-full text-xs font-medium text-emerald-700 hover:bg-emerald-50 transition-colors"
+                      className="px-3 py-1.5 rounded-full text-xs font-medium text-[var(--fin-positive)] hover:bg-[var(--fin-positive-soft)] transition-colors"
                     >
                       🏨 Hotel
                     </button>
                     <button
                       onClick={() => setFlightModalOpen(true)}
-                      className="px-3 py-1.5 rounded-full text-xs font-medium text-blue-700 hover:bg-blue-50 transition-colors"
+                      className="px-3 py-1.5 rounded-full text-xs font-medium text-[var(--fin-accent)] hover:bg-[var(--fin-accent-soft)] transition-colors"
                     >
                       ✈️ Voo
                     </button>
@@ -1427,7 +1427,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                         Linha 1/2/3/4 cols → preenche slots arrastando da paleta. */}
                     {!paletteDragging && (
                       <div className="text-center max-w-md mx-auto">
-                        <div className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-blue-100 to-emerald-100 flex items-center justify-center">
+                        <div className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-[var(--fin-accent-soft)] to-[var(--fin-positive-soft)] flex items-center justify-center">
                           <svg className="w-8 h-8 text-[var(--t-green)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M3 12h18M3 20h18" />
                           </svg>
@@ -1449,10 +1449,10 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                                 const id = addEmptyRow(n);
                                 setSelectedBlockId(id);
                               }}
-                              className="flex flex-col items-center justify-center py-3 rounded-lg border-2 border-[var(--t-border)] bg-white hover:border-blue-500 hover:bg-blue-50 transition-colors"
+                              className="flex flex-col items-center justify-center py-3 rounded-lg border-2 border-[var(--t-border)] bg-[var(--fin-surface)] hover:border-[var(--fin-accent)] hover:bg-[var(--fin-accent-soft)] transition-colors"
                               title={`Linha de ${n} ${n === 1 ? 'coluna' : 'colunas'}`}
                             >
-                              <span className="text-lg font-bold text-blue-600">{n}</span>
+                              <span className="text-lg font-bold text-[var(--fin-accent)]">{n}</span>
                               <span className="text-[10px] text-[var(--t-text-muted)]">
                                 {n === 1 ? '100%' : n === 2 ? '50%' : n === 3 ? '33%' : '25%'}
                               </span>
@@ -1465,20 +1465,20 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
                         <div className="space-y-2">
                           <button
                             onClick={() => setHotelModalOpen(true)}
-                            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-[var(--t-text)] bg-white border border-[var(--t-border)] hover:border-[var(--t-green)] hover:bg-[var(--t-green)]/5 transition-colors"
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-[var(--t-text)] bg-[var(--fin-surface)] border border-[var(--t-border)] hover:border-[var(--t-green)] hover:bg-[var(--t-green)]/5 transition-colors"
                           >
                             🏨 Buscar hotel via API
                           </button>
                           <button
                             onClick={() => setFlightModalOpen(true)}
-                            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-[var(--t-text)] bg-white border border-[var(--t-border)] hover:border-[var(--t-green)] hover:bg-[var(--t-green)]/5 transition-colors"
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-[var(--t-text)] bg-[var(--fin-surface)] border border-[var(--t-border)] hover:border-[var(--t-green)] hover:bg-[var(--t-green)]/5 transition-colors"
                           >
                             ✈️ Buscar voo via API
                           </button>
                           <button
                             onClick={handleGenerateFullProposal}
                             disabled={generatingFull}
-                            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-purple-700 bg-purple-50 border border-purple-200 hover:bg-purple-100 transition-colors disabled:opacity-50"
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-[var(--fin-violet)] bg-[var(--fin-violet-soft)] border border-[var(--fin-violet)]/30 hover:bg-[var(--fin-violet-soft)] transition-colors disabled:opacity-50"
                           >
                             {generatingFull ? '⏳ Gerando...' : '✨ Gerar proposta completa com IA'}
                           </button>
@@ -1698,7 +1698,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
         {/* DragOverlay mostra preview do bloco sendo arrastado da paleta */}
         <DragOverlay dropAnimation={null}>
           {paletteDragging && (
-            <div className="px-4 py-2 rounded-lg bg-blue-500 text-white text-sm font-bold shadow-2xl pointer-events-none border-2 border-white/30">
+            <div className="px-4 py-2 rounded-lg bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] text-sm font-bold shadow-2xl pointer-events-none border-2 border-[var(--fin-surface)]/30">
               📦 Arrastando: {paletteDragging}
             </div>
           )}
@@ -1708,7 +1708,7 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
             visualmente que o drag iniciou e mostra onde soltar. */}
         {paletteDragging && (
           <div
-            className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full bg-blue-600 text-white text-sm font-semibold shadow-2xl border-2 border-white/30 pointer-events-none animate-pulse"
+            className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] text-sm font-semibold shadow-2xl border-2 border-[var(--fin-surface)]/30 pointer-events-none animate-pulse"
           >
             🎯 Solte em uma área azul para adicionar o bloco
           </div>

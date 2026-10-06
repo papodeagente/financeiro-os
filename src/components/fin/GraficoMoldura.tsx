@@ -239,7 +239,7 @@ export function GraficoMoldura({
   return (
     <section
       data-fin-grafico={estado}
-      className={cn('flex flex-col rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-4', className)}
+      className={cn('flex flex-col rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-4 shadow-[var(--fin-e-card)]', className)}
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">

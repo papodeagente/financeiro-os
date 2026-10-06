@@ -19,7 +19,7 @@ interface Props {
 const MapaInterno = dynamic(() => import('./MapaRoteiroInterno'), {
   ssr: false,
   loading: () => (
-    <div className="w-full bg-gray-100 rounded-xl flex items-center justify-center text-gray-400 text-sm" style={{ height: 300 }}>
+    <div className="w-full bg-[var(--fin-surface-2)] rounded-xl flex items-center justify-center text-[var(--fin-text-3)] text-sm" style={{ height: 300 }}>
       Carregando mapa...
     </div>
   ),

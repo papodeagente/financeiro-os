@@ -111,7 +111,7 @@ export default function GestaoGrupoPage({ params }: { params: Promise<{ id: stri
 
   if (loading || !data) {
     return (
-      <div className="px-8 pt-6 pb-8">
+      <div className="w-full px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
         <MinimalPageHead
           title="Gestão do grupo"
           meta={<div className="mt-2.5 text-[12px]" style={{ color: 'var(--ink-3)' }}>Carregando…</div>}
@@ -265,7 +265,7 @@ export default function GestaoGrupoPage({ params }: { params: Promise<{ id: stri
                     <div className="h-2 w-full overflow-hidden" style={{ background: 'var(--ink-surface-2)' }}>
                       <div className="h-full transition-all" style={{ width: `${pctOcupacao}%`, background: corBarra }} />
                     </div>
-                    <div className="grid grid-cols-4 gap-3 text-[11px]">
+                    <div className="grid grid-cols-2 gap-3 text-[11px] sm:grid-cols-4">
                       <div>
                         <p className="uppercase tracking-wide text-[10px]" style={{ color: 'var(--ink-3)' }}>Total</p>
                         <p className="mono text-[14px] font-medium" style={{ color: 'var(--ink)' }}>{p.vagas_total}</p>

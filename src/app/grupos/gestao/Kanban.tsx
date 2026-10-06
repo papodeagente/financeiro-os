@@ -94,7 +94,7 @@ function GroupCard({ g, isDragging = false }: { g: ResumoGrupo; isDragging?: boo
   const pct = g.vagas.total > 0 ? Math.min((g.vagas.ocupadas / g.vagas.total) * 100, 100) : 0;
   const lotado = g.vagas.total > 0 && g.vagas.disponiveis === 0;
   const emAlerta = !lotado && g.vagas.total > 0 && g.vagas.disponiveis <= g.alerta_vagas_restantes;
-  const corBarra = lotado ? '#EF4444' : emAlerta ? '#F59E0B' : '#10B981';
+  const corBarra = lotado ? 'var(--fin-negative)' : emAlerta ? 'var(--fin-warning)' : 'var(--fin-positive)';
 
   const dias = diasAte(g.data_inicio);
   const urgenteData = dias !== null && dias >= 0 && dias <= 30;
@@ -103,7 +103,7 @@ function GroupCard({ g, isDragging = false }: { g: ResumoGrupo; isDragging?: boo
     <div
       ref={setNodeRef}
       style={style}
-      className={`group/card relative bg-white border border-[#E2E8F0] rounded-[12px] p-4 cursor-grab active:cursor-grabbing transition-all duration-150 hover:border-[#CBD5E1] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)] ${isDragging ? 'shadow-[0_8px_24px_rgba(0,0,0,0.12)] rotate-[1deg]' : ''}`}
+      className={`group/card relative bg-[var(--fin-surface)] border border-[var(--fin-border)] rounded-[12px] p-4 cursor-grab active:cursor-grabbing transition-all duration-150 hover:border-[var(--fin-border-strong)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)] ${isDragging ? 'shadow-[0_8px_24px_rgba(0,0,0,0.12)] rotate-[1deg]' : ''}`}
       {...attributes}
       {...listeners}
     >
@@ -117,25 +117,25 @@ function GroupCard({ g, isDragging = false }: { g: ResumoGrupo; isDragging?: boo
 
       {/* Drag handle indicator (visível em hover) */}
       <GripVertical
-        className="absolute right-2 top-2 w-3.5 h-3.5 text-[#CBD5E1] opacity-0 group-hover/card:opacity-100 transition-opacity"
+        className="absolute right-2 top-2 w-3.5 h-3.5 text-[var(--fin-border-strong)] opacity-0 group-hover/card:opacity-100 transition-opacity"
       />
 
       {/* Header — destino + grp_id */}
       <div className="pl-2 pr-4">
         <div className="flex items-start gap-1.5 mb-1">
-          <MapPin className="w-3.5 h-3.5 text-[#94A3B8] mt-0.5 shrink-0" />
-          <h3 className="text-[14px] font-semibold text-[#0F172A] leading-tight truncate flex-1">
+          <MapPin className="w-3.5 h-3.5 text-[var(--fin-text-3)] mt-0.5 shrink-0" />
+          <h3 className="text-[14px] font-semibold text-[var(--fin-text)] leading-tight truncate flex-1">
             {g.origem_destino || 'Sem destino'}
           </h3>
         </div>
-        <p className="text-[10px] font-mono text-[#94A3B8] uppercase tracking-wider pl-5">
+        <p className="text-[10px] font-mono text-[var(--fin-text-3)] uppercase tracking-wider pl-5">
           {g.grp_id || '—'}
         </p>
       </div>
 
       {/* Período */}
       {(g.data_inicio || g.data_fim) && (
-        <div className="pl-2 pr-4 mt-3 flex items-center gap-1.5 text-[11px] text-[#64748B]">
+        <div className="pl-2 pr-4 mt-3 flex items-center gap-1.5 text-[11px] text-[var(--fin-text-3)]">
           <Calendar className="w-3 h-3 shrink-0" />
           <span className="font-mono tabular-nums">
             {fmtData(g.data_inicio)} → {fmtData(g.data_fim)}
@@ -144,8 +144,8 @@ function GroupCard({ g, isDragging = false }: { g: ResumoGrupo; isDragging?: boo
             <span
               className="ml-auto px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide"
               style={{
-                background: dias <= 7 ? '#FEF2F2' : '#FFFBEB',
-                color: dias <= 7 ? '#991B1B' : '#92400E',
+                background: dias <= 7 ? 'var(--fin-negative-soft)' : 'var(--fin-warning-soft)',
+                color: dias <= 7 ? 'var(--fin-negative-text)' : 'var(--fin-warning-text)',
               }}
             >
               {dias === 0 ? 'Hoje' : dias < 0 ? 'Atrasado' : `${dias}d`}
@@ -161,13 +161,13 @@ function GroupCard({ g, isDragging = false }: { g: ResumoGrupo; isDragging?: boo
             <span className="flex items-center gap-1" style={{ color: corBarra }}>
               {lotado && <AlertTriangle className="w-2.5 h-2.5" />}
               <span className="font-semibold tabular-nums">{g.vagas.disponiveis}</span>
-              <span className="text-[#94A3B8]">livres</span>
+              <span className="text-[var(--fin-text-3)]">livres</span>
             </span>
-            <span className="text-[#94A3B8] tabular-nums">
+            <span className="text-[var(--fin-text-3)] tabular-nums">
               {g.vagas.ocupadas}/{g.vagas.total}
             </span>
           </div>
-          <div className="h-1 bg-[#F1F5F9] rounded-full overflow-hidden">
+          <div className="h-1 bg-[var(--fin-surface-2)] rounded-full overflow-hidden">
             <div
               className="h-full transition-all duration-300"
               style={{ width: `${pct}%`, background: corBarra }}
@@ -178,11 +178,11 @@ function GroupCard({ g, isDragging = false }: { g: ResumoGrupo; isDragging?: boo
 
       {/* Linha financeira — só quando há receita prevista (alguma reserva confirmada) */}
       {g.financeiro && g.financeiro.previsto > 0 && (
-        <div className="pl-2 pr-4 mt-3 pt-3 border-t border-[#F1F5F9]">
+        <div className="pl-2 pr-4 mt-3 pt-3 border-t border-[var(--fin-surface-2)]">
           <div className="flex items-center justify-between text-[10px] mb-1">
-            <span className="font-semibold text-[#0F172A] tabular-nums">
+            <span className="font-semibold text-[var(--fin-text)] tabular-nums">
               {fmtBRLCompact(g.financeiro.recebido)}
-              <span className="text-[#94A3B8] font-normal"> de {fmtBRLCompact(g.financeiro.previsto)}</span>
+              <span className="text-[var(--fin-text-3)] font-normal"> de {fmtBRLCompact(g.financeiro.previsto)}</span>
             </span>
             {g.financeiro.vencido > 0 && (
               <span className="badge badge--danger" style={{ fontSize: '9px', padding: '1px 6px' }}>
@@ -190,12 +190,12 @@ function GroupCard({ g, isDragging = false }: { g: ResumoGrupo; isDragging?: boo
               </span>
             )}
           </div>
-          <div className="h-1 bg-[#F1F5F9] rounded-full overflow-hidden">
+          <div className="h-1 bg-[var(--fin-surface-2)] rounded-full overflow-hidden">
             <div
               className="h-full transition-all duration-300"
               style={{
                 width: `${Math.min((g.financeiro.recebido / g.financeiro.previsto) * 100, 100)}%`,
-                background: g.financeiro.vencido > 0 ? '#F59E0B' : '#10B981',
+                background: g.financeiro.vencido > 0 ? 'var(--fin-warning)' : 'var(--fin-positive)',
               }}
             />
           </div>
@@ -203,23 +203,23 @@ function GroupCard({ g, isDragging = false }: { g: ResumoGrupo; isDragging?: boo
       )}
 
       {/* Stats inferiores: reservas + confirmadas + materiais */}
-      <div className="pl-2 pr-4 mt-3 pt-3 border-t border-[#F1F5F9] flex items-center gap-3 text-[11px]">
+      <div className="pl-2 pr-4 mt-3 pt-3 border-t border-[var(--fin-surface-2)] flex items-center gap-3 text-[11px]">
         <div className="flex items-center gap-1">
-          <Users className="w-3 h-3 text-[#94A3B8]" />
-          <span className="font-semibold text-[#475569] tabular-nums">{g.reservas}</span>
-          <span className="text-[#94A3B8]">reserv.</span>
+          <Users className="w-3 h-3 text-[var(--fin-text-3)]" />
+          <span className="font-semibold text-[var(--fin-text-2)] tabular-nums">{g.reservas}</span>
+          <span className="text-[var(--fin-text-3)]">reserv.</span>
         </div>
         {g.confirmadas > 0 && (
           <div className="flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
-            <span className="font-semibold text-[#10B981] tabular-nums">{g.confirmadas}</span>
-            <span className="text-[#94A3B8]">conf.</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--fin-positive)]" />
+            <span className="font-semibold text-[var(--fin-positive)] tabular-nums">{g.confirmadas}</span>
+            <span className="text-[var(--fin-text-3)]">conf.</span>
           </div>
         )}
         {g.materiais > 0 && (
           <div className="flex items-center gap-1 ml-auto">
-            <Package className="w-3 h-3 text-[#94A3B8]" />
-            <span className="font-semibold text-[#64748B] tabular-nums">{g.materiais}</span>
+            <Package className="w-3 h-3 text-[var(--fin-text-3)]" />
+            <span className="font-semibold text-[var(--fin-text-3)] tabular-nums">{g.materiais}</span>
           </div>
         )}
       </div>
@@ -228,7 +228,7 @@ function GroupCard({ g, isDragging = false }: { g: ResumoGrupo; isDragging?: boo
       <a
         href={`/grupo/${g.id}/gestao`}
         onClick={e => e.stopPropagation()}
-        className="absolute inset-x-0 bottom-0 h-6 text-[10px] flex items-center justify-center text-[#94A3B8] hover:text-[#2563EB] opacity-0 group-hover/card:opacity-100 transition-opacity z-10"
+        className="absolute inset-x-0 bottom-0 h-6 text-[10px] flex items-center justify-center text-[var(--fin-text-3)] hover:text-[var(--fin-accent)] opacity-0 group-hover/card:opacity-100 transition-opacity z-10"
         style={{ background: 'linear-gradient(to top, white 60%, transparent)' }}
         onPointerDown={e => e.stopPropagation()}
       >
@@ -279,13 +279,13 @@ function Column({ stage, grupos }: { stage: typeof KANBAN_STAGES[number]; grupos
       {/* Cards stack */}
       <div
         className={`flex-1 overflow-y-auto space-y-2 p-1 rounded-[10px] transition-all ${
-          isOver ? 'bg-[#EFF6FF] outline-2 outline-dashed outline-[#BFDBFE]' : ''
+          isOver ? 'bg-[var(--fin-accent-soft)] outline-2 outline-dashed outline-[var(--fin-accent)]/40' : ''
         }`}
         style={{ minHeight: '60vh' }}
       >
         {grupos.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <p className="text-[11px] text-[#CBD5E1]">Arraste cards aqui</p>
+            <p className="text-[11px] text-[var(--fin-border-strong)]">Arraste cards aqui</p>
           </div>
         ) : (
           grupos.map(g => <GroupCard key={g.id} g={g} />)

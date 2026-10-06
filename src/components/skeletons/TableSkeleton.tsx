@@ -12,7 +12,7 @@ export function TableSkeleton({
   showFooter = false,
 }: TableSkeletonProps) {
   return (
-    <div className="w-full rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] overflow-hidden">
+    <div className="w-full rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] overflow-hidden shadow-[var(--fin-e-card)]">
       {showHeader && (
         <div className="flex items-center gap-3 border-b border-[var(--t-border)] px-4 py-3 bg-[var(--t-surface-muted,var(--t-surface))]">
           {Array.from({ length: cols }).map((_, i) => (

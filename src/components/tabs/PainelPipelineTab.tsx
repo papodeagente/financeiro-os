@@ -28,10 +28,10 @@ const PIPELINE_STEPS: { key: Exclude<StatusPipeline, 'RESERVA'>; label: string; 
 ];
 
 const STATUS_COLORS: Record<Exclude<StatusPipeline, 'RESERVA'>, string> = {
-  PRODUTO: 'bg-gray-500',
-  PROPOSTA: 'bg-blue-500',
-  ORCAMENTO: 'bg-amber-500',
-  VENDA: 'bg-green-500',
+  PRODUTO: 'bg-[var(--fin-text-3)]',
+  PROPOSTA: 'bg-[var(--fin-accent)]',
+  ORCAMENTO: 'bg-[var(--fin-warning)]',
+  VENDA: 'bg-[var(--fin-positive)]',
 };
 
 // Normaliza status legado RESERVA para ORCAMENTO (mesmo nó visual).
@@ -81,7 +81,7 @@ export function PainelPipelineTab({ grupo, onGerarProposta, onGerarOrcamento, on
   return (
     <div className="space-y-8">
       {/* Pipeline Visual — 4 estagios */}
-      <div className="bg-[var(--t-surface)] rounded-xl border border-[var(--t-border)] p-6">
+      <div className="bg-[var(--t-surface)] rounded-xl border border-[var(--t-border)] p-6 shadow-[var(--fin-e-card)]">
         <h3 className="text-sm font-semibold text-[var(--t-text-muted)] uppercase tracking-wider mb-6">
           Fluxo de venda
         </h3>
@@ -94,20 +94,20 @@ export function PainelPipelineTab({ grupo, onGerarProposta, onGerarOrcamento, on
               <div key={step.key} className="flex items-center flex-1">
                 <div className="flex flex-col items-center gap-2 flex-1">
                   <div className={`
-                    w-12 h-12 rounded-full flex items-center justify-center transition-all
-                    ${state === 'completed' ? 'bg-[var(--t-status-success-bg)] border-2 border-green-500' : ''}
-                    ${state === 'active' ? `${STATUS_COLORS[step.key]} text-white shadow-lg scale-110` : ''}
+ w-12 h-12 rounded-full flex items-center justify-center transition-all
+ ${state === 'completed' ? 'bg-[var(--t-status-success-bg)] border-2 border-[var(--fin-positive)]' : ''}
+ ${state === 'active' ? `${STATUS_COLORS[step.key]} text-white shadow-lg scale-110` : ''}
                     ${state === 'pending' ? 'bg-[var(--t-bg)] border-2 border-[var(--t-border)]' : ''}
                   `}>
                     {state === 'completed' ? (
-                      <CheckCircle2 className="w-6 h-6 text-green-600" />
+                      <CheckCircle2 className="w-6 h-6 text-[var(--fin-positive)]" />
                     ) : state === 'active' ? (
                       <Icon className="w-6 h-6" />
                     ) : (
                       <Circle className="w-6 h-6 text-[var(--t-text-muted)] opacity-40" />
                     )}
                   </div>
-                  <span className={`text-xs font-medium ${state === 'active' ? 'text-[var(--t-accent)]' : state === 'completed' ? 'text-green-600' : 'text-[var(--t-text-muted)]'}`}>
+                  <span className={`text-xs font-medium ${state === 'active' ? 'text-[var(--t-accent)]' : state === 'completed' ? 'text-[var(--fin-positive)]' : 'text-[var(--t-text-muted)]'}`}>
                     {step.label}
                   </span>
                   <span className="text-[10px] text-[var(--t-text-muted)] text-center max-w-[120px] leading-tight">
@@ -116,10 +116,10 @@ export function PainelPipelineTab({ grupo, onGerarProposta, onGerarOrcamento, on
                 </div>
                 {i < PIPELINE_STEPS.length - 1 && (
                   <div className={`h-[2px] flex-1 mx-1 transition-colors -translate-y-6 ${
-                    getStepState(PIPELINE_STEPS[i + 1].key, status) !== 'pending'
-                      ? 'bg-green-400'
-                      : 'bg-[var(--t-border)]'
-                  }`} />
+ getStepState(PIPELINE_STEPS[i + 1].key, status) !== 'pending'
+ ? 'bg-[var(--fin-positive)]'
+ : 'bg-[var(--t-border)]'
+ }`} />
                 )}
               </div>
             );
@@ -130,12 +130,12 @@ export function PainelPipelineTab({ grupo, onGerarProposta, onGerarOrcamento, on
       {/* Cards de cada etapa */}
       <div className="grid gap-4">
         {/* PRODUTO */}
-        <div className="bg-[var(--t-surface)] rounded-xl border border-[var(--t-border)] p-5">
+        <div className="bg-[var(--t-surface)] rounded-xl border border-[var(--t-border)] p-5 shadow-[var(--fin-e-card)]">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Package className="w-5 h-5 text-[var(--t-text-muted)]" />
               <h4 className="font-semibold text-[var(--t-text)]">Produto</h4>
-              {getStepState('PRODUTO', status) !== 'pending' && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+              {getStepState('PRODUTO', status) !== 'pending' && <CheckCircle2 className="w-4 h-4 text-[var(--fin-positive)]" />}
               <span className="text-[10px] uppercase tracking-wide text-[var(--t-text-muted)] ml-2">Entur OS</span>
             </div>
             {dblAvista > 0 && (
@@ -163,12 +163,12 @@ export function PainelPipelineTab({ grupo, onGerarProposta, onGerarOrcamento, on
         </div>
 
         {/* PROPOSTA */}
-        <div className="bg-[var(--t-surface)] rounded-xl border border-[var(--t-border)] p-5">
+        <div className="bg-[var(--t-surface)] rounded-xl border border-[var(--t-border)] p-5 shadow-[var(--fin-e-card)]">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-blue-500" />
+              <FileText className="w-5 h-5 text-[var(--fin-accent)]" />
               <h4 className="font-semibold text-[var(--t-text)]">Proposta Visual</h4>
-              {getStepState('PROPOSTA', status) === 'completed' && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+              {getStepState('PROPOSTA', status) === 'completed' && <CheckCircle2 className="w-4 h-4 text-[var(--fin-positive)]" />}
               <span className="text-[10px] uppercase tracking-wide text-[var(--t-text-muted)] ml-2">Entur OS</span>
             </div>
           </div>
@@ -184,7 +184,7 @@ export function PainelPipelineTab({ grupo, onGerarProposta, onGerarOrcamento, on
             </div>
           ) : (
             <Button onClick={onGerarProposta} size="sm" disabled={gerandoProposta || services.length === 0}
-              className="bg-blue-600 hover:bg-blue-700 text-white gap-1">
+              className="bg-[var(--fin-accent)] hover:bg-[var(--fin-accent-hover)] text-[var(--fin-text-on-fill)] gap-1">
               {gerandoProposta ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
               Gerar Proposta
             </Button>
@@ -192,12 +192,12 @@ export function PainelPipelineTab({ grupo, onGerarProposta, onGerarOrcamento, on
         </div>
 
         {/* ORCAMENTO */}
-        <div className="bg-[var(--t-surface)] rounded-xl border border-[var(--t-border)] p-5">
+        <div className="bg-[var(--t-surface)] rounded-xl border border-[var(--t-border)] p-5 shadow-[var(--fin-e-card)]">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <ClipboardList className="w-5 h-5 text-amber-500" />
+              <ClipboardList className="w-5 h-5 text-[var(--fin-warning-text)]" />
               <h4 className="font-semibold text-[var(--t-text)]">Orçamento</h4>
-              {getStepState('ORCAMENTO', status) === 'completed' && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+              {getStepState('ORCAMENTO', status) === 'completed' && <CheckCircle2 className="w-4 h-4 text-[var(--fin-positive)]" />}
               <span className="text-[10px] uppercase tracking-wide text-[var(--t-text-muted)] ml-2">CRM</span>
             </div>
           </div>
@@ -214,7 +214,7 @@ export function PainelPipelineTab({ grupo, onGerarProposta, onGerarOrcamento, on
                 Este estágio acontece no CRM — quando o vendedor anexa o produto a um card de negociação. Sem efeito financeiro.
               </p>
               <Button onClick={onGerarOrcamento} size="sm" disabled={!grupo.proposta_id}
-                className="bg-amber-600 hover:bg-amber-700 text-white gap-1">
+                className="bg-[var(--fin-warning)] hover:bg-[var(--fin-warning)] text-[var(--fin-text-on-fill)] gap-1">
                 <ClipboardList className="w-4 h-4" /> Marcar como orçamento
               </Button>
               {!grupo.proposta_id && (
@@ -225,12 +225,12 @@ export function PainelPipelineTab({ grupo, onGerarProposta, onGerarOrcamento, on
         </div>
 
         {/* VENDA */}
-        <div className="bg-[var(--t-surface)] rounded-xl border border-[var(--t-border)] p-5">
+        <div className="bg-[var(--t-surface)] rounded-xl border border-[var(--t-border)] p-5 shadow-[var(--fin-e-card)]">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <BadgeDollarSign className="w-5 h-5 text-green-500" />
+              <BadgeDollarSign className="w-5 h-5 text-[var(--fin-positive)]" />
               <h4 className="font-semibold text-[var(--t-text)]">Venda</h4>
-              {status === 'VENDA' && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+              {status === 'VENDA' && <CheckCircle2 className="w-4 h-4 text-[var(--fin-positive)]" />}
               <span className="text-[10px] uppercase tracking-wide text-[var(--t-text-muted)] ml-2">CRM → Financeiro</span>
             </div>
           </div>
@@ -244,7 +244,7 @@ export function PainelPipelineTab({ grupo, onGerarProposta, onGerarOrcamento, on
                 A venda é fechada no CRM. Ao marcar como ganha, o Financeiro recebe automaticamente e gera as contas a pagar/receber.
               </p>
               <Button onClick={onFecharVenda} size="sm" disabled={status !== 'ORCAMENTO'}
-                className="bg-green-600 hover:bg-green-700 text-white gap-1">
+                className="bg-[var(--fin-positive)] hover:bg-[var(--fin-positive)] text-[var(--fin-text-on-fill)] gap-1">
                 <BadgeDollarSign className="w-4 h-4" /> Marcar venda manualmente
               </Button>
               {status !== 'ORCAMENTO' && status !== 'VENDA' && (

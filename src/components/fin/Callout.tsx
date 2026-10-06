@@ -100,7 +100,7 @@ export function Callout({
               type="button"
               onClick={acao.onClick}
               disabled={acao.carregando}
-              className="fin-t-body h-11 rounded-[var(--fin-r-md)] bg-[var(--fin-accent)] px-4 text-white hover:opacity-90 disabled:opacity-60 lg:h-10"
+              className="fin-t-body h-11 rounded-[var(--fin-r-md)] bg-[var(--fin-accent)] px-4 text-[var(--fin-text-on-fill)] hover:opacity-90 disabled:opacity-60 lg:h-10"
             >
               {acao.rotulo}
             </button>

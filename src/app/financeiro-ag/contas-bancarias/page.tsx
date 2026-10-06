@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Banknote, Building2, CreditCard, PiggyBank, Plus, Pencil, TrendingUp, Trash2 } from 'lucide-react';
+import { Banknote, Building2, CreditCard, Landmark, Pencil, PiggyBank, Plus, Trash2, TrendingUp } from 'lucide-react';
 
 import { ContaBancaria } from '@/lib/crm-types';
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
@@ -432,7 +432,7 @@ export default function ContasBancariasPage() {
           esqueleto={
             <div className="flex flex-col gap-[var(--fin-s-5)]">
               <div className="grid grid-cols-1 gap-[var(--fin-s-4)] sm:grid-cols-2">
-                <div className="flex flex-col gap-[var(--fin-s-2)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)]">
+                <div className="flex flex-col gap-[var(--fin-s-2)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)] shadow-[var(--fin-e-card)]">
                   <span className="block h-3 w-32 rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />
                   <span className="block h-8 w-52 rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />
                   <span className="block h-3 w-40 rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]" />
@@ -453,7 +453,7 @@ export default function ContasBancariasPage() {
               <div className="flex flex-col gap-[var(--fin-s-2)]">
                 <div className="grid grid-cols-1 gap-[var(--fin-s-4)] sm:grid-cols-2">
                   <MetricCard
-                    rotulo="Saldo total em caixa"
+                    rotulo="Saldo total em caixa" icone={Landmark}
                     valor={totalSaldo}
                     estado="ok"
                     emphasis="destaque"

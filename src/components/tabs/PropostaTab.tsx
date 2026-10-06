@@ -146,23 +146,23 @@ export function PropostaTab({ grupo }: Props) {
           )}
         </h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-4">
+          <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-4 shadow-[var(--fin-e-card)]">
             <p className="text-[10px] uppercase tracking-wide text-[var(--t-text-muted)]">Preço de custo</p>
             <p className="text-xl font-bold text-[var(--t-text)] mt-1 tabular-nums">{formatBRL(custoApto)}</p>
           </div>
-          <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-4">
+          <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-4 shadow-[var(--fin-e-card)]">
             <p className="text-[10px] uppercase tracking-wide text-[var(--t-text-muted)]">Preço de venda</p>
             <p className="text-xl font-bold text-[var(--t-text)] mt-1 tabular-nums">{formatBRL(vendaApto)}</p>
           </div>
-          <div className="rounded-xl border border-green-500/30 bg-green-500/5 p-4">
+          <div className="rounded-xl border border-[var(--fin-positive)]/30 bg-[var(--fin-positive-soft)] p-4">
             <p className="text-[10px] uppercase tracking-wide text-[var(--t-text-muted)]">Margem</p>
-            <p className="text-xl font-bold text-green-600 dark:text-green-400 mt-1 tabular-nums">{formatBRL(margemApto)}</p>
+            <p className="text-xl font-bold text-[var(--fin-positive)] mt-1 tabular-nums">{formatBRL(margemApto)}</p>
           </div>
-          <div className="rounded-xl border border-green-500/30 bg-green-500/5 p-4">
+          <div className="rounded-xl border border-[var(--fin-positive)]/30 bg-[var(--fin-positive-soft)] p-4">
             <p className="text-[10px] uppercase tracking-wide text-[var(--t-text-muted)]">
               {tipo === 'GRUPO' ? 'Margem média do grupo' : 'Margem %'}
             </p>
-            <p className="text-xl font-bold text-green-600 dark:text-green-400 mt-1 tabular-nums">{margemMediaPct.toFixed(1)}%</p>
+            <p className="text-xl font-bold text-[var(--fin-positive)] mt-1 tabular-nums">{margemMediaPct.toFixed(1)}%</p>
           </div>
         </div>
       </div>
@@ -189,13 +189,13 @@ export function PropostaTab({ grupo }: Props) {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {itens.map(item => (
-              <div key={item.servico} className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-4 flex flex-col gap-3" style={{ boxShadow: 'var(--elevation-1)' }}>
+              <div key={item.servico} className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-4 flex flex-col gap-3 shadow-[var(--fin-e-card)]" style={{ boxShadow: 'var(--elevation-1)' }}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold text-[var(--t-text)]">{item.label}</p>
                       {item.vendaManual && (
-                        <span className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-700 dark:text-green-400">venda manual</span>
+                        <span className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded-full bg-[var(--fin-positive-soft)] text-[var(--fin-positive)]">venda manual</span>
                       )}
                     </div>
                     {item.fornecedores.length > 0 && (
@@ -207,7 +207,7 @@ export function PropostaTab({ grupo }: Props) {
                       <p className="text-[10px] text-[var(--t-text-muted)] mt-0.5">{item.detalhes}</p>
                     )}
                   </div>
-                  <div className={`text-right shrink-0 ${item.margem > 0 ? 'text-green-600 dark:text-green-400' : 'text-[var(--t-text-muted)]'}`}>
+                  <div className={`text-right shrink-0 ${item.margem > 0 ? 'text-[var(--fin-positive)] ' : 'text-[var(--t-text-muted)]'}`}>
                     <p className="text-xs font-semibold uppercase tracking-wide">Margem</p>
                     <p className="text-sm font-bold tabular-nums">{formatBRL(item.margem)}</p>
                     {item.venda > 0 && (
@@ -242,7 +242,7 @@ export function PropostaTab({ grupo }: Props) {
               <span className="text-xs text-[var(--t-text-muted)] font-normal">({fornecedores.length})</span>
             </h3>
           </div>
-          <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] overflow-hidden">
+          <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] overflow-hidden shadow-[var(--fin-e-card)]">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-[var(--t-header-bg)] text-[var(--t-header-text)]">
@@ -261,7 +261,7 @@ export function PropostaTab({ grupo }: Props) {
                         {f.fornecedor_id && <Building2 className="w-3.5 h-3.5 text-[var(--t-green)] shrink-0" />}
                         <span className="text-[var(--t-text)]">{f.nome}</span>
                         {!f.fornecedor_id && (
-                          <span className="text-[9px] text-amber-600 dark:text-amber-400 ml-1 italic">não cadastrado</span>
+                          <span className="text-[9px] text-[var(--fin-warning-text)] ml-1 italic">não cadastrado</span>
                         )}
                       </div>
                     </td>
@@ -275,7 +275,7 @@ export function PropostaTab({ grupo }: Props) {
                     <td className="px-3 py-2 text-right tabular-nums text-[var(--t-text-secondary)]">{formatBRL(f.custo)}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-[var(--t-text)]">{formatBRL(f.venda)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">
-                      <span className={f.margem > 0 ? 'text-green-600 dark:text-green-400 font-medium' : 'text-[var(--t-text-muted)]'}>
+                      <span className={f.margem > 0 ? 'text-[var(--fin-positive)] font-medium' : 'text-[var(--t-text-muted)]'}>
                         {formatBRL(f.margem)}
                         {f.venda > 0 && (
                           <span className="text-[10px] ml-1 opacity-70">{f.margemPct.toFixed(1)}%</span>
@@ -288,7 +288,7 @@ export function PropostaTab({ grupo }: Props) {
                   <td colSpan={2} className="px-3 py-2 text-[var(--t-text)]">Total</td>
                   <td className="px-3 py-2 text-right tabular-nums">{formatBRL(totalForn.custo)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{formatBRL(totalForn.venda)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-green-600 dark:text-green-400">{formatBRL(totalForn.margem)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-[var(--fin-positive)]">{formatBRL(totalForn.margem)}</td>
                 </tr>
               </tbody>
             </table>
@@ -327,9 +327,9 @@ export function PropostaTab({ grupo }: Props) {
                   {TIPOS_PRECO.map(t => <th key={t} className="p-2 shadow-[var(--t-card-shadow)] w-32">{LABELS[t]}</th>)}
                 </tr></thead>
                 <tbody>
-                  <Row label={modoSimples ? 'Preço de venda' : 'À Vista / PIX'} values={p.totalPaxAvista} className="bg-green-50 dark:bg-green-950/20 font-bold" />
-                  {!modoSimples && <Row label="Cartão de Crédito" values={p.totalPaxCartao} className="bg-blue-50 dark:bg-blue-950/20" />}
-                  {!modoSimples && <Row label="Boleto" values={p.totalPaxBoleto} className="bg-orange-50 dark:bg-orange-950/20" />}
+                  <Row label={modoSimples ? 'Preço de venda' : 'À Vista / PIX'} values={p.totalPaxAvista} className="bg-[var(--fin-positive-soft)] font-bold" />
+                  {!modoSimples && <Row label="Cartão de Crédito" values={p.totalPaxCartao} className="bg-[var(--fin-accent-soft)]" />}
+                  {!modoSimples && <Row label="Boleto" values={p.totalPaxBoleto} className="bg-[var(--fin-warning-soft)]" />}
                 </tbody>
               </table>
             </div>
@@ -348,11 +348,11 @@ export function PropostaTab({ grupo }: Props) {
                   </tr></thead>
                   <tbody>
                     {modoSimples ? (
-                      <Row label="Valor da parcela" values={p.parcelaPaxCC} className="bg-blue-50 dark:bg-blue-950/20" />
+                      <Row label="Valor da parcela" values={p.parcelaPaxCC} className="bg-[var(--fin-accent-soft)]" />
                     ) : (
                       <>
-                        <Row label="Parcela Cartão" values={p.parcelaPaxCC} className="bg-blue-50 dark:bg-blue-950/20" />
-                        <Row label="Parcela Boleto" values={p.parcelaPaxBoleto} className="bg-orange-50 dark:bg-orange-950/20" />
+                        <Row label="Parcela Cartão" values={p.parcelaPaxCC} className="bg-[var(--fin-accent-soft)]" />
+                        <Row label="Parcela Boleto" values={p.parcelaPaxBoleto} className="bg-[var(--fin-warning-soft)]" />
                       </>
                     )}
                   </tbody>
@@ -378,7 +378,7 @@ export function PropostaTab({ grupo }: Props) {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {/* Adulto */}
                 {qtdAdt > 0 && (
-                  <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-4">
+                  <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-4 shadow-[var(--fin-e-card)]">
                     <div className="flex items-center gap-2 mb-2">
                       <User2 className="w-4 h-4 text-[var(--t-text-secondary)]" />
                       <span className="text-[11px] uppercase tracking-wide text-[var(--t-text-muted)] font-medium">
@@ -397,7 +397,7 @@ export function PropostaTab({ grupo }: Props) {
 
                 {/* Criança */}
                 {qtdChd > 0 && (
-                  <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-4">
+                  <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-4 shadow-[var(--fin-e-card)]">
                     <div className="flex items-center gap-2 mb-2">
                       <Baby className="w-4 h-4 text-[var(--t-text-secondary)]" />
                       <span className="text-[11px] uppercase tracking-wide text-[var(--t-text-muted)] font-medium">
@@ -417,22 +417,22 @@ export function PropostaTab({ grupo }: Props) {
                 )}
 
                 {/* Total geral */}
-                <div className="rounded-xl border-2 border-green-500/40 bg-green-500/5 p-4">
+                <div className="rounded-xl border-2 border-[var(--fin-positive)]/40 bg-[var(--fin-positive-soft)] p-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <Sparkles className="w-4 h-4 text-green-600 dark:text-green-400" />
+                    <Sparkles className="w-4 h-4 text-[var(--fin-positive)]" />
                     <span className="text-[11px] uppercase tracking-wide text-[var(--t-text-muted)] font-medium">
                       Total da proposta
                     </span>
                   </div>
-                  <p className="text-xl font-bold text-green-700 dark:text-green-400 tabular-nums">{formatBRL(totalGeral)}</p>
+                  <p className="text-xl font-bold text-[var(--fin-positive)] tabular-nums">{formatBRL(totalGeral)}</p>
                   <p className="text-[11px] text-[var(--t-text-muted)] mt-0.5">
                     {qtdAdt > 0 && <>{qtdAdt}× {formatBRL(precoAdt)}</>}
                     {qtdAdt > 0 && qtdChd > 0 && <> + </>}
                     {qtdChd > 0 && <>{qtdChd}× {formatBRL(precoChd)}</>}
                   </p>
                   {grupo.params.parcelas > 1 && (parcelaAdt > 0 || parcelaChd > 0) && (
-                    <p className="text-[11px] text-[var(--t-text-secondary)] mt-2 pt-2 border-t border-green-500/30">
-                      ou <b className="text-green-700 dark:text-green-400 tabular-nums">
+                    <p className="text-[11px] text-[var(--t-text-secondary)] mt-2 pt-2 border-t border-[var(--fin-positive)]/30">
+                      ou <b className="text-[var(--fin-positive)] tabular-nums">
                         {grupo.params.parcelas}x {formatBRL(qtdAdt * parcelaAdt + qtdChd * parcelaChd)}
                       </b> no cartão
                     </p>

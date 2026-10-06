@@ -206,7 +206,7 @@ export function PacoteTab({ grupo, onChange }: Props) {
             className="border rounded-[12px] p-10 text-center"
             style={{ borderStyle: 'dashed', borderColor: 'var(--t-border)' }}
           >
-            <Package className="w-8 h-8 mx-auto mb-2" style={{ color: '#CBD5E1' }} />
+            <Package className="w-8 h-8 mx-auto mb-2" style={{ color: 'var(--fin-border-strong)' }} />
             <p className="text-[14px] font-medium text-[var(--t-text-secondary)]">
               Nenhum item adicionado ainda
             </p>
@@ -281,7 +281,7 @@ export function PacoteTab({ grupo, onChange }: Props) {
                           </button>
                           <button
                             onClick={() => remover(i)}
-                            className="w-8 h-8 rounded-md inline-flex items-center justify-center text-[var(--t-text-muted)] hover:bg-red-50 hover:text-red-600"
+                            className="w-8 h-8 rounded-md inline-flex items-center justify-center text-[var(--t-text-muted)] hover:bg-[var(--fin-negative-soft)] hover:text-[var(--fin-negative-text)]"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -359,7 +359,7 @@ export function PacoteTab({ grupo, onChange }: Props) {
 
         {/* Totais do pacote — derivados de valor por pessoa × qtd */}
         <div
-          className="mt-4 rounded-md p-3 grid grid-cols-3 gap-4"
+          className="mt-4 rounded-md p-3 grid grid-cols-1 gap-4 sm:grid-cols-3"
           style={{ background: 'var(--t-bg)', border: '1px solid var(--t-border)' }}
         >
           <div>

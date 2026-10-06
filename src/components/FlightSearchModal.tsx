@@ -52,25 +52,25 @@ function FlightCard({ offer, selected, onSelect, label }: {
     <button
       onClick={onSelect}
       className={`w-full text-left rounded-xl border-2 transition-all duration-200 overflow-hidden
-        ${selected
-          ? 'border-blue-500 bg-[var(--t-surface)] shadow-lg ring-1 ring-blue-500/30'
-          : 'border-[var(--t-border)] bg-[var(--t-surface)] hover:border-blue-400/50 hover:shadow-md'
-        }`}
+ ${selected
+ ? 'border-[var(--fin-accent)] bg-[var(--t-surface)] shadow-lg ring-1 ring-[var(--fin-accent)]/30'
+ : 'border-[var(--t-border)] bg-[var(--t-surface)] hover:border-[var(--fin-accent)]/50 hover:shadow-md'
+ }`}
     >
       {/* Header */}
-      <div className={`px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 border-b ${selected ? 'bg-blue-600 text-white border-blue-600' : 'bg-[var(--t-bg-secondary)] text-[var(--t-text)] border-[var(--t-border)]'}`}>
+      <div className={`px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 border-b ${selected ? 'bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] border-[var(--fin-accent)]' : 'bg-[var(--t-bg-secondary)] text-[var(--fin-text-on-fill)] border-[var(--t-border)]'}`}>
         <div className="flex items-center gap-2 min-w-0">
           {first.airline_logo && (
-            <img src={first.airline_logo} alt="" className="w-5 h-5 rounded bg-white p-0.5 shrink-0" />
+            <img src={first.airline_logo} alt="" className="w-5 h-5 rounded bg-[var(--fin-surface)] p-0.5 shrink-0" />
           )}
           <span className="font-bold text-sm truncate">{first.airline}</span>
-          <span className={`font-mono text-xs ${selected ? 'text-blue-200' : 'text-[var(--t-text-muted)]'}`}>{first.flight_number}</span>
+          <span className={`font-mono text-xs ${selected ? 'text-[var(--fin-text-on-fill)]' : 'text-[var(--t-text-muted)]'}`}>{first.flight_number}</span>
           {label && (
-            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${selected ? 'bg-white/20' : 'bg-blue-500/10 text-blue-400'}`}>{label}</span>
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${selected ? 'bg-[var(--fin-surface)]/20' : 'bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]'}`}>{label}</span>
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <span className={`text-[11px] capitalize ${selected ? 'text-blue-200' : 'text-[var(--t-text-muted)]'}`}>
+          <span className={`text-[11px] capitalize ${selected ? 'text-[var(--fin-text-on-fill)]' : 'text-[var(--t-text-muted)]'}`}>
             {fmtDateShort(extDate(first.departure_airport.time || ''))}
           </span>
           <span className="font-bold text-base">R$ {offer.price.toLocaleString('pt-BR')}</span>
@@ -89,28 +89,28 @@ function FlightCard({ offer, selected, onSelect, label }: {
 
           {/* Route line */}
           <div className="flex-1 flex flex-col items-center gap-1 min-w-0">
-            <div className={`flex items-center gap-1 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${selected ? 'bg-blue-500/10 text-blue-400' : 'bg-[var(--t-hover)] text-[var(--t-text-secondary)]'}`}>
+            <div className={`flex items-center gap-1 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${selected ? 'bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]' : 'bg-[var(--t-hover)] text-[var(--t-text-secondary)]'}`}>
               <Clock className="w-3 h-3 shrink-0" />
               {fmtMin(offer.totalDuration)}
             </div>
             <div className="flex items-center w-full">
-              <div className={`w-2 h-2 rounded-full shrink-0 ${selected ? 'bg-blue-500' : 'bg-[var(--t-accent)]'}`} />
+              <div className={`w-2 h-2 rounded-full shrink-0 ${selected ? 'bg-[var(--fin-accent)]' : 'bg-[var(--t-accent)]'}`} />
               <div className="flex-1 relative h-[2px] mx-0.5">
-                <div className={`absolute inset-0 border-t-2 border-dashed ${selected ? 'border-blue-400/50' : 'border-[var(--t-border)]'}`} />
+                <div className={`absolute inset-0 border-t-2 border-dashed ${selected ? 'border-[var(--fin-accent)]/50' : 'border-[var(--t-border)]'}`} />
                 {offer.layovers?.map((lay, idx) => (
                   <div key={idx}
-                    className="absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-amber-400 border-2 border-[var(--t-surface)]"
+                    className="absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-[var(--fin-warning)] border-2 border-[var(--t-surface)]"
                     style={{ left: `${((idx + 1) / (stops + 1)) * 100}%` }}
                     title={`${lay.name} (${fmtMin(lay.duration)})`}
                   />
                 ))}
-                <Plane className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3.5 h-3.5 ${selected ? 'text-blue-500' : 'text-[var(--t-accent)]'}`} />
+                <Plane className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3.5 h-3.5 ${selected ? 'text-[var(--fin-accent)]' : 'text-[var(--t-accent)]'}`} />
               </div>
-              <div className={`w-2 h-2 rounded-full shrink-0 ${selected ? 'bg-blue-500' : 'bg-[var(--t-accent)]'}`} />
+              <div className={`w-2 h-2 rounded-full shrink-0 ${selected ? 'bg-[var(--fin-accent)]' : 'bg-[var(--t-accent)]'}`} />
             </div>
             <div className="text-[9px] sm:text-[10px] text-[var(--t-text-muted)]">
               {stops === 0
-                ? <span className="text-emerald-500 font-semibold">Direto</span>
+                ? <span className="text-[var(--fin-positive)] font-semibold">Direto</span>
                 : <span>{stops} escala{stops > 1 ? 's' : ''}{layoverNames ? `: ${layoverNames}` : ''}</span>
               }
             </div>
@@ -128,12 +128,12 @@ function FlightCard({ offer, selected, onSelect, label }: {
         <div className="flex items-center gap-1.5 mt-2.5 text-[10px] text-[var(--t-text-muted)] flex-wrap">
           {first.airplane && <span className="bg-[var(--t-hover)] px-1.5 py-0.5 rounded">{first.airplane}</span>}
           {first.travel_class && <span className="bg-[var(--t-hover)] px-1.5 py-0.5 rounded capitalize">{first.travel_class}</span>}
-          {baggage && <span className="bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded">{baggage}</span>}
+          {baggage && <span className="bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)] px-1.5 py-0.5 rounded">{baggage}</span>}
           {first.legroom && <span className="bg-[var(--t-hover)] px-1.5 py-0.5 rounded">{first.legroom}</span>}
-          {carbonExt && <span className="bg-emerald-500/10 text-emerald-500 px-1.5 py-0.5 rounded">{carbonExt}</span>}
-          {first.often_delayed_by_over_30_min && <span className="bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded">Atrasos frequentes</span>}
+          {carbonExt && <span className="bg-[var(--fin-positive-soft)] text-[var(--fin-positive)] px-1.5 py-0.5 rounded">{carbonExt}</span>}
+          {first.often_delayed_by_over_30_min && <span className="bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)] px-1.5 py-0.5 rounded">Atrasos frequentes</span>}
           {stops > 0 && offer.layovers && (
-            <span className="text-amber-500">
+            <span className="text-[var(--fin-warning-text)]">
               {offer.layovers.map(l => `${l.id} (${fmtMin(l.duration)})`).join(' → ')}
             </span>
           )}
@@ -141,7 +141,7 @@ function FlightCard({ offer, selected, onSelect, label }: {
       </div>
 
       {selected && (
-        <div className="bg-blue-600 text-white text-center py-1.5 text-xs font-semibold flex items-center justify-center gap-1.5">
+        <div className="bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] text-center py-1.5 text-xs font-semibold flex items-center justify-center gap-1.5">
           <Check className="w-3.5 h-3.5" /> Selecionado
         </div>
       )}
@@ -154,9 +154,9 @@ function SelectedSummary({ offer, label }: { offer: FlightOffer; label: string }
   const first = offer.flights[0];
   const last = offer.flights[offer.flights.length - 1];
   return (
-    <div className="flex flex-wrap items-center gap-2 bg-blue-600 text-white rounded-lg px-3 py-2 text-sm">
-      <span className="text-[10px] font-bold bg-white/20 px-1.5 py-0.5 rounded">{label}</span>
-      {first.airline_logo && <img src={first.airline_logo} alt="" className="w-4 h-4 rounded bg-white p-0.5" />}
+    <div className="flex flex-wrap items-center gap-2 bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] rounded-lg px-3 py-2 text-sm">
+      <span className="text-[10px] font-bold bg-[var(--fin-surface)]/20 px-1.5 py-0.5 rounded">{label}</span>
+      {first.airline_logo && <img src={first.airline_logo} alt="" className="w-4 h-4 rounded bg-[var(--fin-surface)] p-0.5" />}
       <span className="font-medium">{first.airline} {first.flight_number}</span>
       <span>{first.departure_airport.id} {extTime(first.departure_airport.time || '')}</span>
       <ArrowRight className="w-3 h-3 opacity-60 shrink-0" />
@@ -345,8 +345,8 @@ export function FlightSearchModal({
         {/* ─── TOP BAR ─── */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-[var(--t-border)] shrink-0">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0">
-              <Plane className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[var(--fin-accent-soft)] flex items-center justify-center shrink-0">
+              <Plane className="w-4 h-4 sm:w-5 sm:h-5 text-[var(--fin-accent)]" />
             </div>
             <div className="min-w-0">
               <h2 className="text-base sm:text-lg font-bold text-[var(--t-text)] truncate">Buscar Voos</h2>
@@ -384,10 +384,10 @@ export function FlightSearchModal({
                 type="button"
                 onClick={() => setRoundTrip(true)}
                 className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${
-                  roundTrip
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-[var(--t-text-secondary)] hover:text-[var(--t-text)]'
-                }`}
+ roundTrip
+ ? 'bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] shadow-sm'
+ : 'text-[var(--t-text-secondary)] hover:text-[var(--t-text)]'
+ }`}
                 aria-pressed={roundTrip}
               >
                 <ArrowLeftRight className="w-3.5 h-3.5" />
@@ -397,10 +397,10 @@ export function FlightSearchModal({
                 type="button"
                 onClick={() => setRoundTrip(false)}
                 className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${
-                  !roundTrip
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-[var(--t-text-secondary)] hover:text-[var(--t-text)]'
-                }`}
+ !roundTrip
+ ? 'bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] shadow-sm'
+ : 'text-[var(--t-text-secondary)] hover:text-[var(--t-text)]'
+ }`}
                 aria-pressed={!roundTrip}
               >
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -446,12 +446,12 @@ export function FlightSearchModal({
                 <option value="premium_economy">Premium</option>
               </select>
               <button onClick={buscarIda} disabled={searching}
-                className="ml-auto flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-semibold transition-colors">
+                className="ml-auto flex items-center gap-2 px-5 py-2 bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] rounded-lg hover:bg-[var(--fin-accent-hover)] disabled:opacity-50 text-sm font-semibold transition-colors">
                 {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                 Buscar
               </button>
             </div>
-            {error && <div className="text-red-400 text-sm mt-2 bg-red-500/10 px-3 py-2 rounded-lg">{error}</div>}
+            {error && <div className="text-[var(--fin-negative-text)] text-sm mt-2 bg-[var(--fin-negative-soft)] px-3 py-2 rounded-lg">{error}</div>}
           </div>
         )}
 
@@ -472,7 +472,7 @@ export function FlightSearchModal({
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 min-h-0">
           {searching && (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <Loader2 className="w-7 h-7 animate-spin text-blue-500" />
+              <Loader2 className="w-7 h-7 animate-spin text-[var(--fin-accent)]" />
               <span className="text-sm text-[var(--t-text-muted)]">
                 {step === 'select-volta' ? 'Buscando voos de volta...' : 'Buscando voos...'}
               </span>
@@ -491,7 +491,7 @@ export function FlightSearchModal({
             <div className="space-y-2.5">
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2 text-sm font-semibold text-[var(--t-text)]">
-                  <span className="w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] flex items-center justify-center font-bold shrink-0">1</span>
+                  <span className="w-5 h-5 rounded-full bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] text-[10px] flex items-center justify-center font-bold shrink-0">1</span>
                   Voo de ida
                   <span className="text-[var(--t-text-muted)] font-normal text-xs">({idaResults.length})</span>
                 </div>
@@ -499,7 +499,7 @@ export function FlightSearchModal({
                   <Search className="w-3 h-3" /> Alterar
                 </button>
               </div>
-              {error && <div className="text-red-400 text-sm bg-red-500/10 px-3 py-2 rounded-lg">{error}</div>}
+              {error && <div className="text-[var(--fin-negative-text)] text-sm bg-[var(--fin-negative-soft)] px-3 py-2 rounded-lg">{error}</div>}
               {idaResults.map(offer => (
                 <FlightCard key={offer.id} offer={offer} selected={selectedIda?.id === offer.id}
                   onSelect={() => handleSelectIda(offer)} />
@@ -512,7 +512,7 @@ export function FlightSearchModal({
             <div className="space-y-2.5">
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2 text-sm font-semibold text-[var(--t-text)]">
-                  <span className="w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] flex items-center justify-center font-bold shrink-0">2</span>
+                  <span className="w-5 h-5 rounded-full bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] text-[10px] flex items-center justify-center font-bold shrink-0">2</span>
                   Voo de volta
                   <span className="text-[var(--t-text-muted)] font-normal text-xs">({voltaResults.length})</span>
                 </div>
@@ -521,7 +521,7 @@ export function FlightSearchModal({
                   <RotateCcw className="w-3 h-3" /> Trocar ida
                 </button>
               </div>
-              {error && <div className="text-red-400 text-sm bg-red-500/10 px-3 py-2 rounded-lg">{error}</div>}
+              {error && <div className="text-[var(--fin-negative-text)] text-sm bg-[var(--fin-negative-soft)] px-3 py-2 rounded-lg">{error}</div>}
               {voltaResults.map(offer => (
                 <FlightCard key={offer.id} offer={offer} selected={selectedVolta?.id === offer.id}
                   onSelect={() => handleSelectVolta(offer)} />
@@ -560,7 +560,7 @@ export function FlightSearchModal({
                   Voltar
                 </button>
                 <button onClick={handleConfirm}
-                  className="px-6 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-md flex items-center gap-2">
+                  className="px-6 py-2.5 bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] text-sm font-bold rounded-lg hover:bg-[var(--fin-accent-hover)] transition-colors shadow-md flex items-center gap-2">
                   <Check className="w-4 h-4" />
                   Confirmar e importar
                   <ChevronRight className="w-4 h-4" />

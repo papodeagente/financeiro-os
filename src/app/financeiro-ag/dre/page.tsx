@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { Info, X } from 'lucide-react';
+import { ArrowDownLeft, Info, TrendingUp, X } from 'lucide-react';
 import { ContaReceber, ContaPagar, VendaCRM, PlanoContas } from '@/lib/crm-types';
 import { loadEntities } from '@/lib/crm-storage';
 import { vendasComLancamento, apenasVendasComLastro } from '@/lib/venda-lancamentos';
@@ -475,16 +475,16 @@ export default function DREPage() {
 
   const esqueleto = (
     <div className="space-y-[var(--fin-s-5)]">
-      <div className="h-12 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]" />
+      <div className="h-12 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]" />
       <div className="grid gap-[var(--fin-s-4)] md:grid-cols-3">
         {[0, 1, 2].map(i => (
           <div
             key={i}
-            className="h-28 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]"
+            className="h-28 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]"
           />
         ))}
       </div>
-      <div className="h-96 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]" />
+      <div className="h-96 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]" />
     </div>
   );
 
@@ -610,14 +610,14 @@ export default function DREPage() {
                 <>
                   <div className="grid gap-[var(--fin-s-4)] md:grid-cols-3">
                     <MetricCard
-                      rotulo="Receita bruta"
+                      rotulo="Receita bruta" icone={ArrowDownLeft}
                       valor={receitaBruta}
                       estado={estadoValor}
                       contexto={`Comissões, fees e outras receitas de ${rotuloMes}`}
                       explicacao={'Margem das vendas + comissões de fornecedores + fees + outras receitas próprias da agência. É sobre este valor que incidem impostos (ISS, PIS/COFINS, Simples).'}
                     />
                     <MetricCard
-                      rotulo="Receita líquida"
+                      rotulo="Receita líquida" icone={ArrowDownLeft}
                       valor={receitaLiquida}
                       estado={estadoValor}
                       tone={receitaLiquida < 0 ? 'negativo' : 'neutro'}
@@ -625,7 +625,7 @@ export default function DREPage() {
                       explicacao="Receita bruta menos os impostos sobre faturamento (ISS, PIS, COFINS). É a receita que efetivamente sobra para cobrir despesas operacionais."
                     />
                     <MetricCard
-                      rotulo="Lucro líquido"
+                      rotulo="Lucro líquido" icone={TrendingUp}
                       valor={lucroLiquido}
                       estado={estadoValor}
                       emphasis="destaque"

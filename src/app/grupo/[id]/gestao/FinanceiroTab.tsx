@@ -279,7 +279,7 @@ export function FinanceiroTab({ grupoId, origemDestino }: Props) {
           <EmptyMini icone={DollarSign} texto="Sem receitas — confirme reservas para gerar parcelas." />
         ) : (
           <table className="w-full text-[13px]">
-            <thead style={{ background: '#F8FAFC' }}>
+            <thead style={{ background: 'var(--fin-surface-2)' }}>
               <tr style={{ borderBottom: '1px solid var(--lg-border-base)' }}>
                 <ThMini>Descrição</ThMini>
                 <ThMini>Cliente</ThMini>
@@ -361,7 +361,7 @@ export function FinanceiroTab({ grupoId, origemDestino }: Props) {
           />
         ) : (
           <table className="w-full text-[13px]">
-            <thead style={{ background: '#F8FAFC' }}>
+            <thead style={{ background: 'var(--fin-surface-2)' }}>
               <tr style={{ borderBottom: '1px solid var(--lg-border-base)' }}>
                 <ThMini>Descrição</ThMini>
                 <ThMini>Fornecedor</ThMini>
@@ -506,7 +506,7 @@ function ThMini({ children, align }: { children: React.ReactNode; align?: 'right
 function EmptyMini({ icone: Icon, texto }: { icone: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; texto: string }) {
   return (
     <div className="py-10 px-6 text-center">
-      <Icon className="w-8 h-8 mx-auto mb-2" style={{ color: '#CBD5E1' }} />
+      <Icon className="w-8 h-8 mx-auto mb-2" style={{ color: 'var(--fin-border-strong)' }} />
       <p className="text-[13px]" style={{ color: 'var(--lg-text-3)' }}>{texto}</p>
     </div>
   );
@@ -629,7 +629,7 @@ function VincularDespesaModal({
           </div>
         ) : filtradas.length === 0 ? (
           <div className="py-10 text-center">
-            <DollarSign className="w-8 h-8 mx-auto mb-2" style={{ color: '#CBD5E1' }} />
+            <DollarSign className="w-8 h-8 mx-auto mb-2" style={{ color: 'var(--fin-border-strong)' }} />
             <p className="text-[13px]" style={{ color: 'var(--lg-text-3)' }}>
               {candidatas.length === 0
                 ? 'Nenhuma despesa sem grupo. Cadastre primeiro em Contas a Pagar.'
@@ -643,7 +643,7 @@ function VincularDespesaModal({
               return (
                 <div
                   key={c.id}
-                  className="px-3 py-2.5 flex items-center justify-between rounded-[8px] hover:bg-[#F8FAFC] cursor-pointer"
+                  className="px-3 py-2.5 flex items-center justify-between rounded-[8px] hover:bg-[var(--fin-surface-2)] cursor-pointer"
                   style={{ border: '1px solid var(--lg-border-base)' }}
                   onClick={() => vincular(c.id)}
                 >

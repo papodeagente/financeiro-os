@@ -240,8 +240,8 @@ export default function ClientesPage() {
         <Badge
           className={
             c.status === 'ATIVO'
-              ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
-              : 'bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/20'
+              ? 'bg-[var(--fin-positive-soft)] text-[var(--fin-positive)] border-[var(--fin-positive)]/30 hover:bg-[var(--fin-positive-soft)]'
+              : 'bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)] border-[var(--fin-negative)]/30 hover:bg-[var(--fin-negative-soft)]'
           }
         >
           {c.status}
@@ -257,7 +257,8 @@ export default function ClientesPage() {
       sortable: true,
       sortAccessor: c => c.valor_total_historico,
       cell: c => (
-        <span className="text-[var(--t-accent)] font-medium">{BRL(c.valor_total_historico)}</span>
+        // Cliente que veio do CRM pode não ter o histórico: traço, nunca "R$ NaN" nem um R$ 0,00 inventado.
+        <span className="text-[var(--t-accent)] font-medium">{typeof c.valor_total_historico === 'number' && Number.isFinite(c.valor_total_historico) ? BRL(c.valor_total_historico) : '—'}</span>
       ),
     },
     {
@@ -276,7 +277,7 @@ export default function ClientesPage() {
             <div className="flex items-center gap-1">
               <button
                 onClick={() => handleDelete(c.id)}
-                className="px-2 py-1 rounded bg-red-500/20 text-red-400 text-xs hover:bg-red-500/30"
+                className="px-2 py-1 rounded bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)] text-xs hover:bg-[var(--fin-negative)]/30"
               >
                 Confirmar
               </button>
@@ -290,7 +291,7 @@ export default function ClientesPage() {
           ) : (
             <button
               onClick={() => setConfirmDelete(c.id)}
-              className="p-1.5 rounded hover:bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] hover:text-red-400 transition-colors"
+              className="p-1.5 rounded hover:bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] hover:text-[var(--fin-negative-text)] transition-colors"
             >
               <Trash2 size={14} />
             </button>
@@ -301,14 +302,14 @@ export default function ClientesPage() {
   ];
 
   return (
-    <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
+    <div className="w-full bg-[var(--fin-bg)] px-[var(--fin-page-pad)] py-[var(--fin-page-pad)] text-[var(--fin-text)]">
       <PageHeader
         title="Clientes"
         subtitle={`${clientes.length} cliente${clientes.length !== 1 ? 's' : ''} cadastrado${clientes.length !== 1 ? 's' : ''}`}
         actions={
           <Button
             onClick={openNew}
-            className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold gap-2"
+            className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--fin-text-on-fill)] font-semibold gap-2"
           >
             <Plus size={16} /> Novo Cliente
           </Button>
@@ -329,7 +330,7 @@ export default function ClientesPage() {
           </div>
           <div className="relative">
             <select
-              className="appearance-none bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+              className="appearance-none bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--fin-accent)]"
               value={filterTipo}
               onChange={(e) => setFilterTipo(e.target.value as '' | 'PF' | 'PJ')}
             >
@@ -341,7 +342,7 @@ export default function ClientesPage() {
           </div>
           <div className="relative">
             <select
-              className="appearance-none bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+              className="appearance-none bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--fin-accent)]"
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as '' | 'ATIVO' | 'INATIVO')}
             >
@@ -375,7 +376,7 @@ export default function ClientesPage() {
                   onClick={() => setField('tipo', t)}
                   className={`px-4 py-1.5 rounded text-sm font-medium transition-colors ${
                     form.tipo === t
-                      ? 'bg-[var(--t-accent)] text-[var(--t-text)]'
+                      ? 'bg-[var(--t-accent)] text-[var(--fin-text-on-fill)]'
                       : 'bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] hover:text-[var(--t-text)]'
                   }`}
                 >
@@ -460,7 +461,7 @@ export default function ClientesPage() {
                     <div>
                       <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Gênero</label>
                       <select
-                        className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+                        className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--fin-accent)]"
                         value={form.genero}
                         onChange={(e) => setField('genero', e.target.value as Cliente['genero'])}
                       >
@@ -472,7 +473,7 @@ export default function ClientesPage() {
                     <div>
                       <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Estado Civil</label>
                       <select
-                        className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+                        className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--fin-accent)]"
                         value={form.estado_civil}
                         onChange={(e) => setField('estado_civil', e.target.value)}
                       >
@@ -503,7 +504,7 @@ export default function ClientesPage() {
                 <div>
                   <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Status</label>
                   <select
-                    className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+                    className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--fin-accent)]"
                     value={form.status}
                     onChange={(e) => setField('status', e.target.value as 'ATIVO' | 'INATIVO')}
                   >
@@ -514,7 +515,7 @@ export default function ClientesPage() {
                 <div className="sm:col-span-2 lg:col-span-3">
                   <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Observações</label>
                   <textarea
-                    className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853] resize-none"
+                    className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--fin-accent)] resize-none"
                     rows={3}
                     value={form.observacoes}
                     onChange={(e) => setField('observacoes', e.target.value)}
@@ -626,7 +627,7 @@ export default function ClientesPage() {
                 <div>
                   <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Classe de Voo Preferida</label>
                   <select
-                    className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+                    className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--fin-accent)]"
                     value={form.preferencias.classe_voo}
                     onChange={(e) =>
                       setField('preferencias', { ...form.preferencias, classe_voo: e.target.value })
@@ -640,7 +641,7 @@ export default function ClientesPage() {
                 <div>
                   <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Tipo de Hotel</label>
                   <select
-                    className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+                    className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--fin-accent)]"
                     value={form.preferencias.tipo_hotel}
                     onChange={(e) =>
                       setField('preferencias', { ...form.preferencias, tipo_hotel: e.target.value })
@@ -705,7 +706,7 @@ export default function ClientesPage() {
                           }}
                           className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                             selected
-                              ? 'bg-[var(--t-accent)] text-[var(--t-text)]'
+                              ? 'bg-[var(--t-accent)] text-[var(--fin-text-on-fill)]'
                               : 'bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] hover:border-[var(--t-accent)]'
                           }`}
                         >
@@ -741,7 +742,7 @@ export default function ClientesPage() {
                         className="inline-flex items-center gap-1 px-2 py-1 bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] rounded text-xs"
                       >
                         {tag}
-                        <button onClick={() => removeMarcador(tag)} className="hover:text-red-400">
+                        <button onClick={() => removeMarcador(tag)} className="hover:text-[var(--fin-negative-text)]">
                           <X size={10} />
                         </button>
                       </span>
@@ -761,7 +762,7 @@ export default function ClientesPage() {
                 Cancelar
               </Button>
               <Button
-                className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold min-w-[100px]"
+                className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--fin-text-on-fill)] font-semibold min-w-[100px]"
                 onClick={handleSave}
                 disabled={saving || !form.nome_completo.trim()}
               >

@@ -96,7 +96,7 @@ export default function FinanceiroPage({ params }: { params: Promise<{ id: strin
           </Badge>
         </div>
         <div className="flex items-center gap-3">
-          <span className={`text-xs ${saved ? 'text-green-600' : 'text-orange-500'}`}>
+          <span className={`text-xs ${saved ? 'text-[var(--fin-positive)]' : 'text-[var(--fin-warning-text)]'}`}>
             {saved ? '● Salvo' : '○ Não salvo'}
           </span>
           <Button onClick={handleSave} size="sm" className="bg-[var(--t-header-bg)] hover:bg-[var(--t-surface-hover)]">

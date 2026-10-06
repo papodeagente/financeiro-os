@@ -163,7 +163,7 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
         <Handle type="source" position={Position.Right} id="r" style={bulletHandle(color)} />
         <Handle type="source" position={Position.Left}  id="l" style={bulletHandle(color)} />
         <div
-          className="bg-white transition-all overflow-hidden"
+          className="bg-[var(--fin-surface)] transition-all overflow-hidden"
           style={{
             border: `2px solid ${color}`,
             borderRadius: rootRadius,
@@ -190,7 +190,7 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
               type="button"
               onClick={event => { event.stopPropagation(); setPublicImageAllowed(true); }}
               onDoubleClick={event => event.stopPropagation()}
-              className="flex h-20 w-full items-center justify-center gap-2 bg-slate-50 px-3 text-xs font-medium text-slate-500 hover:bg-slate-100"
+              className="flex h-20 w-full items-center justify-center gap-2 bg-[var(--fin-surface-2)] px-3 text-xs font-medium text-[var(--fin-text-3)] hover:bg-[var(--fin-surface-2)]"
               title="A imagem será carregada do endereço informado pelo autor"
             >
               <ImageIcon className="h-4 w-4" /> Carregar imagem vinculada
@@ -205,23 +205,23 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
                 onChange={e => setLocal(e.target.value)}
                 onBlur={commit}
                 onKeyDown={onInputKeyDown}
-                className={`nodrag nopan flex-1 bg-transparent outline-none text-slate-900 text-center text-[15px] ${textBold ? 'font-bold' : 'font-normal'}`}
+                className={`nodrag nopan flex-1 bg-transparent outline-none text-[var(--fin-text)] text-center text-[15px] ${textBold ? 'font-bold' : 'font-normal'}`}
                 placeholder="Ideia central"
                 size={Math.max(local.length, 12)}
                 style={{ fieldSizing: 'content', maxWidth: 600 } as React.CSSProperties}
               />
             ) : (
               <span
-                className={`flex-1 text-center text-slate-900 text-[15px] leading-snug break-words ${textBold ? 'font-bold' : 'font-normal'}`}
+                className={`flex-1 text-center text-[var(--fin-text)] text-[15px] leading-snug break-words ${textBold ? 'font-bold' : 'font-normal'}`}
                 style={{ whiteSpace: 'pre-wrap', maxWidth: 600 }}
               >
                 {text || 'Ideia central'}
               </span>
             )}
             <div className="flex items-center gap-1 shrink-0">
-              {hasNotes && <StickyNote className="w-3.5 h-3.5 text-amber-500" />}
-              {hasLinks && <Link2 className="w-3.5 h-3.5 text-blue-500" />}
-              {hasAttachments && <Paperclip className="w-3.5 h-3.5 text-slate-500" />}
+              {hasNotes && <StickyNote className="w-3.5 h-3.5 text-[var(--fin-warning-text)]" />}
+              {hasLinks && <Link2 className="w-3.5 h-3.5 text-[var(--fin-accent)]" />}
+              {hasAttachments && <Paperclip className="w-3.5 h-3.5 text-[var(--fin-text-3)]" />}
             </div>
           </div>
         </div>
@@ -272,7 +272,7 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
   const childBoxStyle: React.CSSProperties = hasShape
     ? {
         position: 'relative',
-        background: '#ffffff',
+        background: 'var(--fin-surface)',
         border: `1.5px solid ${color}`,
         borderRadius: shapeRadius,
         boxShadow: dropAsChild
@@ -309,7 +309,7 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
           <img
             src={image!.url}
             alt={image!.alt || ''}
-            className="rounded-md border border-slate-200 max-w-[180px] max-h-[100px] object-cover"
+            className="rounded-md border border-[var(--fin-border)] max-w-[180px] max-h-[100px] object-cover"
             draggable={false}
             referrerPolicy="no-referrer"
           />
@@ -321,7 +321,7 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
             type="button"
             onClick={event => { event.stopPropagation(); setPublicImageAllowed(true); }}
             onDoubleClick={event => event.stopPropagation()}
-            className="flex max-w-[180px] items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] font-medium text-slate-500 hover:bg-slate-100"
+            className="flex max-w-[180px] items-center gap-1.5 rounded-md border border-[var(--fin-border)] bg-[var(--fin-surface-2)] px-2.5 py-2 text-[11px] font-medium text-[var(--fin-text-3)] hover:bg-[var(--fin-surface-2)]"
             title="A imagem será carregada do endereço informado pelo autor"
           >
             <ImageIcon className="h-3.5 w-3.5 shrink-0" /> Carregar imagem vinculada
@@ -341,17 +341,17 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
           <button
             onClick={(e) => { e.stopPropagation(); data.onToggleCollapse(); }}
             onDoubleClick={(e) => e.stopPropagation()}
-            className="shrink-0 w-4 h-4 rounded-full flex items-center justify-center hover:bg-slate-200 transition-colors"
+            className="shrink-0 w-4 h-4 rounded-full flex items-center justify-center hover:bg-[var(--fin-surface-sunken)] transition-colors"
             title={collapsed ? 'Expandir' : 'Recolher'}
           >
             {isLeft ? (
               <ChevronLeft
-                className="w-3 h-3 text-slate-500 transition-transform"
+                className="w-3 h-3 text-[var(--fin-text-3)] transition-transform"
                 style={{ transform: collapsed ? 'rotate(0deg)' : 'rotate(-90deg)' }}
               />
             ) : (
               <ChevronRight
-                className="w-3 h-3 text-slate-500 transition-transform"
+                className="w-3 h-3 text-[var(--fin-text-3)] transition-transform"
                 style={{ transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)' }}
               />
             )}
@@ -368,7 +368,7 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
             onChange={e => setLocal(e.target.value)}
             onBlur={commit}
             onKeyDown={onInputKeyDown}
-            className={`nodrag nopan bg-transparent text-slate-800 placeholder-slate-400 outline-none text-[13.5px] ${bold ? 'font-semibold' : 'font-normal'}`}
+            className={`nodrag nopan bg-transparent text-[var(--fin-text)] placeholder-[var(--fin-text-3)] outline-none text-[13.5px] ${bold ? 'font-semibold' : 'font-normal'}`}
             placeholder="Novo tópico"
             size={Math.max(local.length, 6)}
             style={{
@@ -379,16 +379,16 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
           />
         ) : (
           <span
-            className={`text-[13.5px] text-slate-800 leading-snug break-words ${bold ? 'font-semibold' : 'font-normal'}`}
+            className={`text-[13.5px] text-[var(--fin-text)] leading-snug break-words ${bold ? 'font-semibold' : 'font-normal'}`}
             style={{ maxWidth: 420, display: 'inline-block', whiteSpace: 'pre-wrap' }}
           >
             {text || 'Novo tópico'}
           </span>
         )}
         <div className="inline-flex items-center gap-0.5 shrink-0">
-          {hasNotes && <StickyNote className="w-3 h-3 text-amber-500" />}
-          {hasLinks && <Link2 className="w-3 h-3 text-blue-500" />}
-          {hasAttachments && <Paperclip className="w-3 h-3 text-slate-500" />}
+          {hasNotes && <StickyNote className="w-3 h-3 text-[var(--fin-warning-text)]" />}
+          {hasLinks && <Link2 className="w-3 h-3 text-[var(--fin-accent)]" />}
+          {hasAttachments && <Paperclip className="w-3 h-3 text-[var(--fin-text-3)]" />}
         </div>
       </div>
 
@@ -433,7 +433,7 @@ function bulletHandle(color: string): React.CSSProperties {
   return {
     width: 9,
     height: 9,
-    background: '#fff',
+    background: 'var(--fin-surface)',
     border: `2px solid ${color}`,
     opacity: 1,
   };

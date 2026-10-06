@@ -16,7 +16,7 @@ export function KPIGridSkeleton({ count = 4, columns = 4 }: KPIGridSkeletonProps
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
-          className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-4"
+          className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-4 shadow-[var(--fin-e-card)]"
           style={{ boxShadow: 'var(--elevation-1)' }}
         >
           <div className="skeleton h-3 w-24 rounded mb-3" />

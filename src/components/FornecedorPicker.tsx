@@ -168,7 +168,7 @@ export function FornecedorPicker({ value, nome, onChange, tipoSugerido, placehol
                 </select>
               </div>
               <div className="flex gap-2 pt-1">
-                <button onClick={handleCriar} className="flex-1 px-3 py-1.5 text-xs font-medium text-white bg-[var(--t-green)] rounded-md hover:opacity-90">
+                <button onClick={handleCriar} className="flex-1 px-3 py-1.5 text-xs font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-md hover:opacity-90">
                   Cadastrar
                 </button>
                 <button onClick={() => setCreating(false)} className="px-3 py-1.5 text-xs text-[var(--t-text-secondary)] rounded-md hover:bg-[var(--t-surface-hover)]">

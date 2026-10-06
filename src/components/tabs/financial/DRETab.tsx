@@ -40,10 +40,10 @@ function DRELine({
   const isPositive = value >= 0;
   const colorClass = isTotal
     ? isPositive
-      ? 'text-green-700'
-      : 'text-red-700'
+      ? 'text-[var(--fin-positive)]'
+      : 'text-[var(--fin-negative-text)]'
     : '';
-  const bgClass = isTotal ? (isPositive ? 'bg-green-50' : 'bg-red-50') : '';
+  const bgClass = isTotal ? (isPositive ? 'bg-[var(--fin-positive-soft)]' : 'bg-[var(--fin-negative-soft)]') : '';
   const fontClass = bold || isTotal ? 'font-bold' : 'font-normal';
 
   return (
@@ -61,10 +61,10 @@ function DRELine({
         {showPercent && percentValue !== undefined && (
           <span
             className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-              percentValue >= 0
-                ? 'bg-green-100 text-green-800'
-                : 'bg-red-100 text-red-800'
-            }`}
+ percentValue >= 0
+ ? 'bg-[var(--fin-positive-soft)] text-[var(--fin-positive)]'
+ : 'bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)]'
+ }`}
           >
             {percentLabel ?? 'Margem'}: {percentValue.toFixed(1)}%
           </span>
@@ -95,15 +95,15 @@ function DREHighlight({
         <div>
           <span className="font-bold text-sm">{label}</span>
           {note && (
-            <span className="ml-2 text-[10px] text-gray-500 font-normal">{note}</span>
+            <span className="ml-2 text-[10px] text-[var(--fin-text-3)] font-normal">{note}</span>
           )}
         </div>
         <div className="flex items-center gap-3">
-          <span className={`font-bold text-sm tabular-nums ${value >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+          <span className={`font-bold text-sm tabular-nums ${value >= 0 ? 'text-[var(--fin-positive)]' : 'text-[var(--fin-negative-text)]'}`}>
             {formatBRL(value)}
           </span>
           {percentValue !== undefined && (
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${percentValue >= 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${percentValue >= 0 ? 'bg-[var(--fin-positive-soft)] text-[var(--fin-positive)]' : 'bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)]'}`}>
               {percentLabel}: {percentValue.toFixed(1)}%
             </span>
           )}
@@ -152,9 +152,9 @@ export default function DRETab({ grupo, onChange }: DRETabProps) {
   return (
     <div className="space-y-6">
       {/* Nota explicativa */}
-      <div className="flex items-start gap-3 p-4 rounded-lg bg-blue-50 border border-blue-200">
-        <Info className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
-        <div className="text-sm text-blue-800">
+      <div className="flex items-start gap-3 p-4 rounded-lg bg-[var(--fin-accent-soft)] border border-[var(--fin-accent)]/30">
+        <Info className="h-5 w-5 text-[var(--fin-accent)] mt-0.5 shrink-0" />
+        <div className="text-sm text-[var(--fin-accent)]">
           <strong>Contabilidade de Agencia de Viagens</strong>: A receita da agencia e a comissao (markup),
           nao o valor total do pacote. Os repasses a fornecedores sao valores de passagem (pass-through).
           Impostos incidem sobre a receita da agencia, nao sobre o faturamento total.
@@ -162,10 +162,10 @@ export default function DRETab({ grupo, onChange }: DRETabProps) {
       </div>
 
       {/* Configuracoes editaveis */}
-      <Card className="border-0 shadow-md" style={{ backgroundColor: '#1a1a2e' }}>
+      <Card className="border-0 shadow-md" style={{ backgroundColor: 'var(--fin-surface)' }}>
         <CardHeader className="pb-3">
           <CardTitle className="text-[var(--t-text)] flex items-center gap-2 text-base">
-            <Settings2 className="h-4 w-4" style={{ color: '#d4a853' }} />
+            <Settings2 className="h-4 w-4" style={{ color: 'var(--fin-accent)' }} />
             Parametros da DRE
           </CardTitle>
         </CardHeader>
@@ -212,9 +212,9 @@ export default function DRETab({ grupo, onChange }: DRETabProps) {
 
       {/* DRE */}
       <Card className="border-0 shadow-md overflow-hidden">
-        <CardHeader style={{ backgroundColor: '#1a1a2e' }}>
+        <CardHeader style={{ backgroundColor: 'var(--fin-surface)' }}>
           <CardTitle className="text-[var(--t-text)]">
-            <span style={{ color: '#d4a853' }}>DRE</span> - Demonstrativo de
+            <span style={{ color: 'var(--fin-accent)' }}>DRE</span> - Demonstrativo de
             Resultado do Exercicio
           </CardTitle>
         </CardHeader>
@@ -356,19 +356,19 @@ export default function DRETab({ grupo, onChange }: DRETabProps) {
           {/* 9. LUCRO LIQUIDO */}
           <div
             className="px-4 py-4 flex justify-between items-center rounded-b-lg"
-            style={{ backgroundColor: dre.lucroLiquido >= 0 ? '#dcfce7' : '#fef2f2' }}
+            style={{ backgroundColor: dre.lucroLiquido >= 0 ? 'var(--fin-positive-soft)' : 'var(--fin-negative-soft)' }}
           >
             <div>
               <span className="font-bold text-lg">= LUCRO LIQUIDO</span>
-              <span className="ml-2 text-[10px] text-gray-500">
+              <span className="ml-2 text-[10px] text-[var(--fin-text-3)]">
                 ({dre.margemSobreFaturamento.toFixed(1)}% s/ faturamento)
               </span>
             </div>
             <div className="flex items-center gap-3">
-              <span className={`font-bold text-lg tabular-nums ${dre.lucroLiquido >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+              <span className={`font-bold text-lg tabular-nums ${dre.lucroLiquido >= 0 ? 'text-[var(--fin-positive)]' : 'text-[var(--fin-negative-text)]'}`}>
                 {formatBRL(dre.lucroLiquido)}
               </span>
-              <span className={`text-sm px-3 py-1 rounded-full font-bold ${dre.margemLiquida >= 0 ? 'bg-green-200 text-green-900' : 'bg-red-200 text-red-900'}`}>
+              <span className={`text-sm px-3 py-1 rounded-full font-bold ${dre.margemLiquida >= 0 ? 'bg-[var(--fin-positive-soft)] text-[var(--fin-positive)]' : 'bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)]'}`}>
                 Margem: {dre.margemLiquida.toFixed(1)}%
               </span>
             </div>

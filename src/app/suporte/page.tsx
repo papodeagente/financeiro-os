@@ -40,20 +40,20 @@ export default function SuportePage() {
   useEffect(() => { load(); }, [load]);
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
+    <div className="mx-auto w-full max-w-4xl px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <MessageSquare className="w-5 h-5 text-blue-600" />
+          <h1 className="text-2xl font-bold text-[var(--fin-text)] flex items-center gap-2">
+            <MessageSquare className="w-5 h-5 text-[var(--fin-accent)]" />
             Suporte
           </h1>
-          <p className="text-sm text-slate-600 mt-1">
+          <p className="text-sm text-[var(--fin-text-2)] mt-1">
             Reporte bugs, tire dúvidas ou envie sugestões. Acompanhe as respostas aqui.
           </p>
         </div>
         <button
           onClick={() => setShowForm(s => !s)}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] text-sm font-semibold hover:bg-[var(--fin-accent-hover)]"
         >
           {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
           {showForm ? 'Cancelar' : 'Novo ticket'}
@@ -71,52 +71,52 @@ export default function SuportePage() {
       )}
 
       {loading ? (
-        <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
+        <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-[var(--fin-text-3)]" /></div>
       ) : tickets.length === 0 ? (
-        <div className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-12 text-center">
-          <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center mx-auto mb-3">
-            <MessageSquare className="w-6 h-6 text-blue-600" />
+        <div className="bg-[var(--fin-surface)] rounded-2xl border-2 border-dashed border-[var(--fin-border)] p-12 text-center shadow-[var(--fin-e-card)]">
+          <div className="w-12 h-12 rounded-2xl bg-[var(--fin-accent-soft)] flex items-center justify-center mx-auto mb-3">
+            <MessageSquare className="w-6 h-6 text-[var(--fin-accent)]" />
           </div>
-          <h3 className="font-semibold text-slate-900 mb-1">Nenhum ticket ainda</h3>
-          <p className="text-sm text-slate-500 max-w-sm mx-auto mb-5">
+          <h3 className="font-semibold text-[var(--fin-text)] mb-1">Nenhum ticket ainda</h3>
+          <p className="text-sm text-[var(--fin-text-3)] max-w-sm mx-auto mb-5">
             Encontrou um bug? Tem uma dúvida? Abra um ticket e nosso time responde aqui.
           </p>
           <button
             onClick={() => setShowForm(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800"
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[var(--fin-text)] text-[var(--fin-text-on-fill)] text-sm font-semibold hover:bg-[var(--fin-text)]"
           >
             <Plus className="w-4 h-4" /> Abrir primeiro ticket
           </button>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <ul className="divide-y divide-slate-100">
+        <div className="bg-[var(--fin-surface)] rounded-xl border border-[var(--fin-border)] overflow-hidden shadow-[var(--fin-e-card)]">
+          <ul className="divide-y divide-[var(--fin-border)]">
             {tickets.map(t => (
               <li key={t.id}>
                 <Link
                   href={`/suporte/${t.id}`}
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors"
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-[var(--fin-surface-2)] transition-colors"
                 >
                   <StatusIcon status={t.status} />
                   <CategoriaIcon categoria={t.categoria} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-slate-900 truncate">{t.titulo}</span>
-                      <span className="text-[10px] font-mono text-slate-400">{t.numero}</span>
+                      <span className="font-medium text-[var(--fin-text)] truncate">{t.titulo}</span>
+                      <span className="text-[10px] font-mono text-[var(--fin-text-3)]">{t.numero}</span>
                       {t.tem_nao_lida_usuario && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]">
                           NOVA RESPOSTA
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
+                    <p className="text-[11px] text-[var(--fin-text-3)] mt-0.5">
                       {t.mensagens_count} {t.mensagens_count === 1 ? 'mensagem' : 'mensagens'} ·{' '}
                       Atualizado em {new Date(t.ultima_msg_at || t.updated_at).toLocaleDateString('pt-BR')}{' '}
                       {new Date(t.ultima_msg_at || t.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
                   <PrioridadeBadge prioridade={t.prioridade} />
-                  <ArrowRight className="w-4 h-4 text-slate-300" />
+                  <ArrowRight className="w-4 h-4 text-[var(--fin-text-3)]" />
                 </Link>
               </li>
             ))}
@@ -169,11 +169,11 @@ function FormNovoTicket({ onCreated }: { onCreated: (id: string) => void }) {
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-6">
-      <h2 className="font-bold text-slate-900 mb-4">Novo ticket</h2>
+    <div className="bg-[var(--fin-surface)] rounded-2xl border border-[var(--fin-border)] p-5 mb-6 shadow-[var(--fin-e-card)]">
+      <h2 className="font-bold text-[var(--fin-text)] mb-4">Novo ticket</h2>
 
       {error && (
-        <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-900">
+        <div className="mb-3 p-3 bg-[var(--fin-warning-soft)] border border-[var(--fin-warning)]/30 rounded-md text-sm text-[var(--fin-warning-text)]">
           {error}
         </div>
       )}
@@ -181,7 +181,7 @@ function FormNovoTicket({ onCreated }: { onCreated: (id: string) => void }) {
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
-            <span className="text-[11px] font-semibold uppercase text-slate-500">Categoria</span>
+            <span className="text-[11px] font-semibold uppercase text-[var(--fin-text-3)]">Categoria</span>
             <div className="mt-1.5 grid grid-cols-4 gap-1">
               {([
                 { id: 'bug', label: 'Bug', Icon: Bug },
@@ -194,10 +194,10 @@ function FormNovoTicket({ onCreated }: { onCreated: (id: string) => void }) {
                   type="button"
                   onClick={() => setCategoria(c.id)}
                   className={`flex flex-col items-center gap-1 py-2 rounded-md border text-[11px] transition-colors ${
-                    categoria === c.id
-                      ? 'border-blue-300 bg-blue-50 text-blue-700'
-                      : 'border-slate-200 hover:bg-slate-50 text-slate-700'
-                  }`}
+ categoria === c.id
+ ? 'border-[var(--fin-accent)]/30 bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]'
+ : 'border-[var(--fin-border)] hover:bg-[var(--fin-surface-2)] text-[var(--fin-text-2)]'
+ }`}
                 >
                   <c.Icon className="w-3.5 h-3.5" />
                   {c.label}
@@ -207,11 +207,11 @@ function FormNovoTicket({ onCreated }: { onCreated: (id: string) => void }) {
           </label>
 
           <label className="block">
-            <span className="text-[11px] font-semibold uppercase text-slate-500">Prioridade</span>
+            <span className="text-[11px] font-semibold uppercase text-[var(--fin-text-3)]">Prioridade</span>
             <select
               value={prioridade}
               onChange={e => setPrioridade(e.target.value as typeof prioridade)}
-              className="mt-1.5 w-full px-3 py-2 rounded-md border border-slate-200 text-sm outline-none focus:border-blue-400"
+              className="mt-1.5 w-full px-3 py-2 rounded-md border border-[var(--fin-border)] text-sm outline-none focus:border-[var(--fin-accent)]"
             >
               <option value="baixa">Baixa</option>
               <option value="normal">Normal</option>
@@ -222,30 +222,30 @@ function FormNovoTicket({ onCreated }: { onCreated: (id: string) => void }) {
         </div>
 
         <label className="block">
-          <span className="text-[11px] font-semibold uppercase text-slate-500">Título</span>
+          <span className="text-[11px] font-semibold uppercase text-[var(--fin-text-3)]">Título</span>
           <input
             type="text"
             value={titulo}
             onChange={e => setTitulo(e.target.value)}
             placeholder="Ex.: Botão de salvar não funciona em /grupos"
             maxLength={200}
-            className="mt-1.5 w-full px-3 py-2 rounded-md border border-slate-200 text-sm outline-none focus:border-blue-400"
+            className="mt-1.5 w-full px-3 py-2 rounded-md border border-[var(--fin-border)] text-sm outline-none focus:border-[var(--fin-accent)]"
           />
         </label>
 
         <label className="block">
-          <span className="text-[11px] font-semibold uppercase text-slate-500">Descrição</span>
+          <span className="text-[11px] font-semibold uppercase text-[var(--fin-text-3)]">Descrição</span>
           <textarea
             value={descricao}
             onChange={e => setDescricao(e.target.value)}
             placeholder="Descreva o problema. Inclua passos pra reproduzir, o que esperava, e o que aconteceu."
             rows={5}
-            className="mt-1.5 w-full px-3 py-2 rounded-md border border-slate-200 text-sm outline-none focus:border-blue-400 resize-y"
+            className="mt-1.5 w-full px-3 py-2 rounded-md border border-[var(--fin-border)] text-sm outline-none focus:border-[var(--fin-accent)] resize-y"
           />
         </label>
 
         <div>
-          <span className="text-[11px] font-semibold uppercase text-slate-500">Anexos (prints, arquivos)</span>
+          <span className="text-[11px] font-semibold uppercase text-[var(--fin-text-3)]">Anexos (prints, arquivos)</span>
           <div className="mt-1.5">
             <UploadField anexos={anexos} onChange={setAnexos} />
           </div>
@@ -255,7 +255,7 @@ function FormNovoTicket({ onCreated }: { onCreated: (id: string) => void }) {
           <button
             onClick={submit}
             disabled={submitting}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] text-sm font-semibold hover:bg-[var(--fin-accent-hover)] disabled:opacity-60"
           >
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             Abrir ticket
@@ -296,7 +296,7 @@ export function UploadField({
 
   return (
     <div>
-      <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-300 bg-white hover:bg-slate-50 text-xs font-medium cursor-pointer">
+      <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] hover:bg-[var(--fin-surface-2)] text-xs font-medium cursor-pointer">
         {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
         {uploading ? 'Enviando...' : 'Enviar arquivo'}
         <input
@@ -310,13 +310,13 @@ export function UploadField({
       {anexos.length > 0 && (
         <ul className="mt-2 space-y-1">
           {anexos.map((a, i) => (
-            <li key={i} className="flex items-center gap-2 text-xs text-slate-700 bg-slate-50 rounded px-2 py-1">
-              <a href={a.url} target="_blank" rel="noopener noreferrer" className="flex-1 truncate hover:text-blue-700">
+            <li key={i} className="flex items-center gap-2 text-xs text-[var(--fin-text-2)] bg-[var(--fin-surface-2)] rounded px-2 py-1">
+              <a href={a.url} target="_blank" rel="noopener noreferrer" className="flex-1 truncate hover:text-[var(--fin-accent)]">
                 {a.nome}
               </a>
               <button
                 onClick={() => onChange(anexos.filter((_, j) => j !== i))}
-                className="text-red-500 hover:text-red-700"
+                className="text-[var(--fin-negative-text)] hover:text-[var(--fin-negative-text)]"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -331,11 +331,11 @@ export function UploadField({
 // ============ Helpers visuais ============
 function StatusIcon({ status }: { status: string }) {
   const cfg: Record<string, { Icon: React.ComponentType<{ className?: string }>; color: string; label: string }> = {
-    aberto: { Icon: Circle, color: 'text-blue-500', label: 'Aberto' },
-    em_andamento: { Icon: Clock, color: 'text-amber-500', label: 'Em andamento' },
-    aguardando_usuario: { Icon: AlertCircle, color: 'text-purple-500', label: 'Aguardando você' },
-    resolvido: { Icon: CheckCircle2, color: 'text-emerald-500', label: 'Resolvido' },
-    fechado: { Icon: CheckCircle2, color: 'text-slate-400', label: 'Fechado' },
+    aberto: { Icon: Circle, color: 'text-[var(--fin-accent)]', label: 'Aberto' },
+    em_andamento: { Icon: Clock, color: 'text-[var(--fin-warning-text)]', label: 'Em andamento' },
+    aguardando_usuario: { Icon: AlertCircle, color: 'text-[var(--fin-violet)]', label: 'Aguardando você' },
+    resolvido: { Icon: CheckCircle2, color: 'text-[var(--fin-positive)]', label: 'Resolvido' },
+    fechado: { Icon: CheckCircle2, color: 'text-[var(--fin-text-3)]', label: 'Fechado' },
   };
   const c = cfg[status] || cfg.aberto;
   return <c.Icon className={`w-4 h-4 ${c.color}`} aria-label={c.label} />;
@@ -343,10 +343,10 @@ function StatusIcon({ status }: { status: string }) {
 
 function CategoriaIcon({ categoria }: { categoria: string }) {
   const cfg: Record<string, { Icon: React.ComponentType<{ className?: string }>; bg: string }> = {
-    bug: { Icon: Bug, bg: 'bg-red-50 text-red-600' },
-    duvida: { Icon: HelpCircle, bg: 'bg-blue-50 text-blue-600' },
-    sugestao: { Icon: Lightbulb, bg: 'bg-amber-50 text-amber-600' },
-    outro: { Icon: Circle, bg: 'bg-slate-100 text-slate-500' },
+    bug: { Icon: Bug, bg: 'bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)]' },
+    duvida: { Icon: HelpCircle, bg: 'bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]' },
+    sugestao: { Icon: Lightbulb, bg: 'bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)]' },
+    outro: { Icon: Circle, bg: 'bg-[var(--fin-surface-2)] text-[var(--fin-text-3)]' },
   };
   const c = cfg[categoria] || cfg.outro;
   return (
@@ -359,9 +359,9 @@ function CategoriaIcon({ categoria }: { categoria: string }) {
 function PrioridadeBadge({ prioridade }: { prioridade: string }) {
   if (prioridade === 'normal' || !prioridade) return null;
   const cfg: Record<string, { bg: string; text: string; label: string }> = {
-    baixa: { bg: 'bg-slate-100', text: 'text-slate-600', label: 'Baixa' },
-    alta: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Alta' },
-    urgente: { bg: 'bg-red-100', text: 'text-red-700', label: 'Urgente' },
+    baixa: { bg: 'bg-[var(--fin-surface-2)]', text: 'text-[var(--fin-text-2)]', label: 'Baixa' },
+    alta: { bg: 'bg-[var(--fin-warning-soft)]', text: 'text-[var(--fin-warning-text)]', label: 'Alta' },
+    urgente: { bg: 'bg-[var(--fin-negative-soft)]', text: 'text-[var(--fin-negative-text)]', label: 'Urgente' },
   };
   const c = cfg[prioridade];
   if (!c) return null;

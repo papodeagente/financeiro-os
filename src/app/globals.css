@@ -51,8 +51,10 @@
 /* ════════════════════════════════════════════════════════════════════
    FUNDAÇÃO — camada canônica --fin-* (tema claro)
    ════════════════════════════════════════════════════════════════════
-   Identidade Entur: azul #004aad, fundo #F7F8FC, texto #1A1A1A,
-   Inter, raio 0.75rem.
+   Identidade Entur: azul #004aad e Inter. Revisão de 05/10/2026 (direção
+   visual do painel claro de referência): fundo #F7F9FC, texto #0F172A,
+   borda #E2E8F0, card com raio 14px e sombra sutil, controle com raio 8px.
+   O azul da marca continua sendo a cor de interação.
 
    --fin-* é a ÚNICA camada que declara valor. Os dialetos antigos
    (--t-*, --ink-*, --lg-* e os semânticos do shadcn) continuam
@@ -63,13 +65,13 @@
 
 :root {
   /* ── Cor canônica ─────────────────────────────────────────────── */
-  --fin-bg:             #F7F8FC;
+  --fin-bg:             #F7F9FC;
   --fin-surface:        #FFFFFF;
-  --fin-surface-2:      #F1F3F9;
-  --fin-surface-sunken: #EDF0F7;
-  --fin-border:         #E4E7EF;
-  --fin-border-strong:  #CBD3E1;
-  --fin-text:           #1A1A1A;
+  --fin-surface-2:      #F1F5F9;
+  --fin-surface-sunken: #EDF1F7;
+  --fin-border:         #E2E8F0;
+  --fin-border-strong:  #CBD5E1;
+  --fin-text:           #0F172A;
   --fin-text-2:         #475569;
   --fin-text-3:         #5B6878;
   --fin-text-on-fill:   #FFFFFF;
@@ -85,6 +87,10 @@
   --fin-warning:        #d97706;
   --fin-warning-text:   #B45309;
   --fin-warning-soft:   #FFFBEB;
+  /* Destaque complementar (o violeta da referência): etiqueta de categoria,
+     novidade, recurso de IA. Não é estado: não significa bom nem ruim. */
+  --fin-violet:         #6D28D9;
+  --fin-violet-soft:    #F5F3FF;
 
   /* ---- Séries de gráfico ----
      Ordem FIXA: a série 1 é sempre --fin-serie-1, mesmo quando um filtro tira
@@ -106,8 +112,8 @@
   --fin-serie-5: #7C3AED;
   --fin-serie-6: #65A30D;
   /* Grade e eixo recuam: a marca do dado é que tem contraste. */
-  --fin-grade:   #E4E7EF;
-  --fin-eixo:    #CBD3E1;
+  --fin-grade:   #E2E8F0;
+  --fin-eixo:    #CBD5E1;
 
   /* ---- Rampa sequencial: um matiz só, claro -> escuro ----
      Só onde a categoria é ORDINAL: faixas de prazo, etapas de comissão,
@@ -149,15 +155,41 @@
 
   /* ── Raio: três níveis mais o ponto de estado ─────────────────── */
   --fin-r-sm:  6px;    /* chip, badge, caixa de seleção */
-  --fin-r-md:  10px;   /* botão, input, select, item de menu */
-  --fin-r-lg:  12px;   /* card, painel, diálogo (0.75rem da identidade) */
+  --fin-r-md:  8px;    /* botão, input, select, item de menu */
+  --fin-r-lg:  14px;   /* card, painel, diálogo */
   --fin-r-dot: 999px;  /* apenas o ponto de estado de 6px */
 
-  /* ── Sombra: card em repouso não tem sombra ───────────────────── */
-  --fin-e0:   none;
-  --fin-e1:   0 4px 12px rgba(16, 24, 40, 0.08);
-  --fin-e2:   0 16px 40px rgba(16, 24, 40, 0.14);
-  --fin-ring: 2px solid var(--fin-accent);
+  /* ── Sombra ───────────────────────────────────────────────────────
+     Card em repouso tem só um sopro de sombra (a borda faz o contorno);
+     e1 é o que flutua sobre a página (menu, popover); e2, o que a cobre
+     (diálogo, gaveta). Nada além disso: sombra forte disputa com o dado. */
+  --fin-e0:     none;
+  --fin-e-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.03);
+  --fin-e1:     0 4px 12px rgba(15, 23, 42, 0.08);
+  --fin-e2:     0 16px 40px rgba(15, 23, 42, 0.14);
+  --fin-ring:   2px solid var(--fin-accent);
+
+  /* ── Controle: três alturas ───────────────────────────────────────
+     Padrão 40px no desktop; 44px é o alvo de toque e vale abaixo de lg. */
+  --fin-h-compacto:   32px;
+  --fin-h-padrao:     40px;
+  --fin-h-confortavel: 44px;
+
+  /* ── Movimento de interface (os gráficos têm o seu, acima) ───────── */
+  --fin-dur-rapida: 120ms;
+  --fin-dur-base:   180ms;
+  --fin-curva:      cubic-bezier(0.2, 0, 0, 1);
+
+  /* ── Camadas ──────────────────────────────────────────────────────
+     Uma escala só. Valor solto de z-index espalhado é como um menu
+     acaba atrás de um cabeçalho fixo. */
+  --fin-z-conteudo:  10;
+  --fin-z-cabecalho: 30;
+  --fin-z-menu:      40;
+  --fin-z-gaveta:    50;
+  --fin-z-modal:     50;
+  --fin-z-popover:   60;
+  --fin-z-toast:     100;
 
   /* ── Espaçamento: grade de 4px, seis degraus ──────────────────── */
   --fin-s-1: 4px;
@@ -167,9 +199,11 @@
   --fin-s-5: 24px;
   --fin-s-6: 40px;
 
-  /* ── Página: uma largura só ───────────────────────────────────── */
-  --fin-page-max: 1280px;
-  --fin-page-pad: 24px;
+  /* ── Página: uma largura só ─────────────────────────────────────
+     O respiro lateral cresce com a tela: 16px no celular, 24px no
+     tablet, 32px no desktop largo (media queries logo abaixo do :root). */
+  --fin-page-max: 1440px;
+  --fin-page-pad: 16px;
 
   /* ── Escala tipográfica: oito degraus fechados ────────────────── */
   /* A RESPOSTA: o número que a tela existe para dar. Fica acima de
@@ -180,7 +214,7 @@
   --fin-fs-resposta:  clamp(32px, 7vw, 44px);
   --fin-fs-metric:    30px;
   --fin-fs-metric-sm: 20px;
-  --fin-fs-title:     20px;
+  --fin-fs-title:     24px;
   --fin-fs-subhead:   16px;
   --fin-fs-body:      14px;
   --fin-fs-caption:   12px;
@@ -208,8 +242,8 @@
   --input:                      var(--fin-border);
   --ring:                       var(--fin-accent);
   --chart-1:                    var(--fin-accent);
-  --chart-2:                    #0891b2;
-  --chart-3:                    #7c3aed;
+  --chart-2:                    var(--fin-serie-3);
+  --chart-3:                    var(--fin-serie-5);
   --chart-4:                    var(--fin-warning);
   --chart-5:                    var(--fin-negative);
   --radius:                     var(--fin-r-lg);
@@ -249,15 +283,15 @@
   --lg-stat-green:  var(--fin-positive);
   --lg-stat-red:    var(--fin-negative);
   --lg-stat-amber:  var(--fin-warning);
-  --lg-stat-violet: #8B5CF6;
-  --lg-stat-cyan:   #06B6D4;
-  --lg-stat-pink:   #EC4899;
+  --lg-stat-violet: var(--fin-violet);
+  --lg-stat-cyan:   var(--fin-info);
+  --lg-stat-pink:   var(--fin-violet);
 
   --lg-pos:  var(--fin-positive); --lg-pos-fill:  var(--fin-positive-soft);
   --lg-neg:  var(--fin-negative); --lg-neg-fill:  var(--fin-negative-soft);
   --lg-warn: var(--fin-warning);  --lg-warn-fill: var(--fin-warning-soft);
 
-  --lg-shadow-card: var(--fin-e0);
+  --lg-shadow-card: var(--fin-e-card);
   --lg-shadow-pop:  var(--fin-e1);
 
   --lg-radius-md: var(--fin-r-md);
@@ -308,7 +342,7 @@
   --t-glass-bg:          var(--fin-surface);
   --t-glass-border:      transparent;
   --t-card-radius:       var(--fin-r-lg);
-  --t-card-shadow:       var(--fin-e0);
+  --t-card-shadow:       var(--fin-e-card);
   --t-card-shadow-hover: var(--fin-e1);
   --t-nav-blur:          blur(12px);
 
@@ -319,10 +353,6 @@
   --t-status-neutral: var(--fin-text-3);   --t-status-neutral-bg: var(--fin-surface-2);
 
   /* Trilho da jornada (fora do financeiro) */
-  --t-pillar-rail-text:        rgba(255, 255, 255, 0.7);
-  --t-pillar-rail-text-active: #ffffff;
-  --t-pillar-connector:        rgba(255, 255, 255, 0.18);
-  --t-pillar-gradient:  linear-gradient(180deg, #0044A0 0%, #002D6B 100%);
   --t-hero-gradient:    linear-gradient(135deg, var(--fin-accent-soft) 0%, transparent 100%);
   --t-surface-gradient: linear-gradient(135deg, var(--fin-surface) 0%, var(--fin-surface-2) 100%);
   --t-accent-gradient:  linear-gradient(135deg, var(--fin-accent) 0%, var(--fin-accent-hover) 100%);
@@ -330,27 +360,27 @@
   /* ════════════════════════════════════════════════════════════════
      ALIAS — elevação legada. Colapsa nos três degraus da seção 5.3.
      ════════════════════════════════════════════════════════════════ */
-  --elevation-1: var(--fin-e0);
+  --elevation-1: var(--fin-e-card);
   --elevation-2: var(--fin-e1);
   --elevation-3: var(--fin-e2);
   --elevation-4: var(--fin-e2);
 
   /* ════════════════════════════════════════════════════════════════
-     Escala tipográfica legada. Mantida com os valores atuais para não
-     mexer no layout das telas fora do financeiro; a escala canônica do
-     módulo são as classes .fin-t-* mais abaixo. --text-h2 era usado em
-     três arquivos e nunca havia sido declarado.
+     ALIAS — escala tipográfica legada (--text-*, 249 usos). Desde
+     05/10/2026 aponta para a escala fechada --fin-fs-*: legenda em 12px
+     e corpo em 14px, o piso de leitura. Antes era uma escala paralela
+     com 11px e 13px.
      ════════════════════════════════════════════════════════════════ */
   --text-micro:    var(--fin-fs-caption);
-  --text-caption:  11px;
-  --text-body-sm:  13px;
-  --text-body:     14px;
-  --text-body-lg:  16px;
-  --text-title-sm: 18px;
-  --text-title:    20px;
+  --text-caption:  var(--fin-fs-caption);
+  --text-body-sm:  var(--fin-fs-body);
+  --text-body:     var(--fin-fs-body);
+  --text-body-lg:  var(--fin-fs-subhead);
+  --text-title-sm: var(--fin-fs-subhead);
+  --text-title:    var(--fin-fs-metric-sm);
   --text-h2:       var(--fin-fs-title);
-  --text-display:  28px;
-  --text-kpi:      48px;
+  --text-display:  var(--fin-fs-title);
+  --text-kpi:      var(--fin-fs-resposta);
 
   /* CRM status */
   --crm-ok:   var(--fin-positive);
@@ -358,10 +388,9 @@
   --crm-err:  var(--fin-negative);
   --crm-off:  var(--fin-text-3);
 }
-
-@media (max-width: 1023px) {
-  :root { --fin-page-pad: 16px; }
-}
+/* Respiro lateral: 16px até 1023px, 24px no desktop, 32px no largo. */
+@media (min-width: 1024px) { :root { --fin-page-pad: 24px; } }
+@media (min-width: 1280px) { :root { --fin-page-pad: 32px; } }
 
 /* ════════════════════════════════════════════════════════════════════
    FUNDAÇÃO — par escuro obrigatório
@@ -404,6 +433,8 @@
   --fin-warning:        #F59E0B;
   --fin-warning-text:   #FBBF24;
   --fin-warning-soft:   rgba(251, 191, 36, 0.16);
+  --fin-violet:         #A78BFA;
+  --fin-violet-soft:    rgba(167, 139, 250, 0.16);
 
   /* Degraus ESCOLHIDOS para o fundo escuro, não um espelho do claro: os
      mesmos matizes em luminosidade maior, validados contra #172131. A ordem
@@ -432,15 +463,9 @@
   --fin-info-soft:      rgba(125, 169, 255, 0.16);
 
   /* Sombra precisa de mais opacidade sobre fundo escuro */
+  --fin-e-card: none;
   --fin-e1: 0 4px 12px rgba(0, 0, 0, 0.40);
   --fin-e2: 0 16px 40px rgba(0, 0, 0, 0.55);
-
-  /* Literais sem par canônico */
-  --chart-2: #22d3ee;
-  --chart-3: #a78bfa;
-  --t-pillar-rail-text:        rgba(255, 255, 255, 0.6);
-  --t-pillar-connector:        rgba(255, 255, 255, 0.12);
-  --t-pillar-gradient: linear-gradient(180deg, #0A1628 0%, #071020 100%);
 }
 
 @layer base {
@@ -449,7 +474,9 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-size: 13px;
+    /* 14px: o piso de leitura do corpo. Em 13px toda tela que não declara
+       tamanho herdava texto pequeno. */
+    font-size: 14px;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -513,7 +540,7 @@
 
 /* Bento card style — bg branco puro, shadow ultra sutil, sem hover-lift */
 .bento-card {
-  background: #ffffff;
+  background: var(--fin-surface);
   border: 1px solid var(--lg-border-base);
   border-radius: var(--lg-radius-xl);
   box-shadow: var(--lg-shadow-card);
@@ -526,39 +553,42 @@
 }
 
 /* ============================================================
-   KPI Card — card com top-border colorida pros indicadores
-   principais (Saldo, A receber, A pagar, Lucro, etc.). Variantes
-   via data-accent: blue (default) | green | red | violet | amber.
+   KPI Card (legado, 7 telas): desenhado como o MetricCard do sistema.
+   Branco com borda e sopro de sombra, rótulo em texto normal, valor na
+   escala metric-sm. A faixa colorida no topo saiu em 05/10/2026: cor
+   no indicador é para o PAPEL do número, não enfeite de cartão.
+   data-accent continua aceito e pinta só o valor.
 ============================================================ */
 .kpi-card {
   position: relative;
-  background: #ffffff;
-  border: 1px solid var(--lg-border-base);
-  border-radius: var(--lg-radius-xl);
-  box-shadow: var(--lg-shadow-card);
-  padding: 18px 20px;
-  overflow: hidden;
-  transition: box-shadow 200ms ease-out, transform 200ms ease-out;
+  background: var(--fin-surface);
+  border: 1px solid var(--fin-border);
+  border-radius: var(--fin-r-lg);
+  box-shadow: var(--fin-e-card);
+  padding: 20px;
+  transition: box-shadow var(--fin-dur-base) var(--fin-curva), border-color var(--fin-dur-base) var(--fin-curva);
 }
-.kpi-card::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 3px;
-  background: var(--kpi-accent, var(--lg-stat-blue));
-  border-radius: var(--lg-radius-xl) var(--lg-radius-xl) 0 0;
+.kpi-card:hover { border-color: var(--fin-border-strong); }
+.kpi-card__label {
+  font-size: var(--fin-fs-body);
+  font-weight: 500;
+  color: var(--fin-text-2);
+  letter-spacing: 0;
+  text-transform: none;
 }
-.kpi-card:hover {
-  box-shadow: var(--lg-shadow-pop);
-  transform: translateY(-1px);
+.kpi-card__value {
+  margin-top: 4px;
+  font-size: var(--fin-fs-metric-sm);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--kpi-accent, var(--fin-text));
+  font-variant-numeric: tabular-nums lining-nums;
 }
-.kpi-card[data-accent="blue"]   { --kpi-accent: var(--lg-stat-blue); }
-.kpi-card[data-accent="green"]  { --kpi-accent: var(--lg-stat-green); }
-.kpi-card[data-accent="red"]    { --kpi-accent: var(--lg-stat-red); }
-.kpi-card[data-accent="violet"] { --kpi-accent: var(--lg-stat-violet); }
-.kpi-card[data-accent="amber"]  { --kpi-accent: var(--lg-stat-amber); }
-.kpi-card[data-accent="cyan"]   { --kpi-accent: var(--lg-stat-cyan); }
-.kpi-card[data-accent="pink"]   { --kpi-accent: var(--lg-stat-pink); }
+.kpi-card__meta { margin-top: 2px; font-size: var(--fin-fs-caption); color: var(--fin-text-3); }
+.kpi-card[data-accent="green"]  { --kpi-accent: var(--fin-positive); }
+.kpi-card[data-accent="red"]    { --kpi-accent: var(--fin-negative-text); }
+.kpi-card[data-accent="amber"]  { --kpi-accent: var(--fin-warning-text); }
+.kpi-card[data-accent="violet"] { --kpi-accent: var(--fin-violet); }
 
 /* ============================================================
    Quick action card — botões grandes tipo "Nova despesa",
@@ -566,7 +596,7 @@
    (ícone + texto + chevron). Acionável.
 ============================================================ */
 .quick-action {
-  background: #ffffff;
+  background: var(--fin-surface);
   border: 1px solid var(--lg-border-base);
   border-radius: var(--lg-radius-xl);
   box-shadow: var(--lg-shadow-card);
@@ -590,15 +620,15 @@
 .quick-action[data-primary="true"] {
   background: var(--lg-accent);
   border-color: var(--lg-accent);
-  color: #ffffff;
+  color: var(--fin-text-on-fill);
 }
 .quick-action[data-primary="true"]:hover {
   background: var(--lg-accent-hover);
   border-color: var(--lg-accent-hover);
 }
 .quick-action[data-primary="true"] .qa-icon {
-  background: rgba(255,255,255,0.18);
-  color: #ffffff;
+  background: color-mix(in srgb, var(--fin-text-on-fill) 18%, transparent);
+  color: var(--fin-text-on-fill);
 }
 .qa-icon {
   width: 36px;
@@ -618,7 +648,7 @@
    header com título + opcional link "Ver tudo".
 ============================================================ */
 .section-card {
-  background: #ffffff;
+  background: var(--fin-surface);
   border: 1px solid var(--lg-border-base);
   border-radius: var(--lg-radius-xl);
   box-shadow: var(--lg-shadow-card);
@@ -713,23 +743,6 @@
 /* Logo PillarRail: sempre branco (fundo azul) */
 .logo-white {
   filter: brightness(0) invert(1);
-}
-
-/* Panel animations */
-@keyframes subnav-slide {
-  from { opacity: 0; transform: translateY(-8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.subnav-content {
-  animation: subnav-slide 150ms ease-out;
-}
-
-@keyframes panel-fade {
-  from { opacity: 0; transform: translateX(-8px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-.feature-panel-content {
-  animation: panel-fade 180ms ease-out;
 }
 
 /* Skeleton shimmer */
@@ -912,7 +925,7 @@
 .stepper-step[data-active="true"] .stepper-icon-box svg {
   width: 26px;
   height: 26px;
-  color: #fff;
+  color: var(--fin-text-on-fill);
   filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));
 }
 /* Active hover — no extra lift, just slight grow */
@@ -937,7 +950,7 @@
 }
 .stepper-step[data-filled="true"]:not([data-active="true"]):hover .stepper-icon-box {
   border-color: var(--t-status-success);
-  background: rgba(22, 163, 74, 0.15);
+  background: var(--fin-positive-soft);
 }
 .stepper-step[data-filled="true"]:not([data-active="true"]):hover .stepper-icon-box svg {
   color: var(--t-status-success);
@@ -1020,7 +1033,7 @@
   height: 16px;
   border-radius: 999px;
   background: var(--t-accent);
-  color: #fff;
+  color: var(--fin-text-on-fill);
   font-size: 10px;
   font-weight: 700;
   display: flex;
@@ -1063,6 +1076,17 @@
 *:focus-visible {
   outline: var(--fin-ring);
   outline-offset: 2px;
+}
+
+/* Diálogo, gaveta e menu recebem foco só para prender a navegação por
+   teclado lá dentro: não são alvo de clique, e o anel em volta deles
+   inteiros lê como erro. O foco visível continua nos controles internos. */
+[data-slot="dialog-content"]:focus-visible,
+[data-slot="sheet-content"]:focus-visible,
+[role="dialog"]:focus-visible,
+[role="menu"]:focus-visible,
+[role="listbox"]:focus-visible {
+  outline: none;
 }
 
 /* Glassmorphism card */
@@ -1135,24 +1159,22 @@
 /* MiniMap e Controls com glass effect */
 .react-flow__minimap,
 .react-flow__controls {
-  background: rgba(255, 255, 255, 0.85) !important;
+  background: var(--fin-surface) !important;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  border: 1px solid var(--fin-border) !important;
   border-radius: 12px !important;
-  box-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.04),
-    0 8px 24px -4px rgba(0, 0, 0, 0.08) !important;
+  box-shadow: var(--fin-e1) !important;
 }
 .react-flow__controls button {
   background: transparent !important;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
-  color: #475569;
+  border-bottom: 1px solid var(--fin-border) !important;
+  color: var(--fin-text-2);
   transition: background 150ms ease;
 }
 .react-flow__controls button:hover {
-  background: rgba(59, 130, 246, 0.08) !important;
-  color: #1d4ed8;
+  background: var(--fin-accent-soft) !important;
+  color: var(--fin-accent);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1312,7 +1334,7 @@
 .min-shell .min-kpi {
   position: relative;
   padding: 18px 20px 20px;
-  background: #ffffff;
+  background: var(--fin-surface);
   border: 1px solid var(--lg-border-base);
   border-radius: var(--lg-radius-xl);
   box-shadow: var(--lg-shadow-card);
@@ -1350,7 +1372,7 @@
 }
 .min-shell .min-action {
   padding: 16px 18px;
-  background: #ffffff;
+  background: var(--fin-surface);
   border: 1px solid var(--lg-border-base);
   border-radius: var(--lg-radius-xl);
   box-shadow: var(--lg-shadow-card);
@@ -1372,7 +1394,7 @@
 .min-shell .min-action.accent {
   background: var(--lg-accent);
   border-color: var(--lg-accent);
-  color: #ffffff;
+  color: var(--fin-text-on-fill);
 }
 .min-shell .min-action.accent:hover {
   background: var(--lg-accent-hover);
@@ -1387,7 +1409,7 @@
 }
 .min-shell .min-qcard {
   padding: 20px;
-  background: #ffffff;
+  background: var(--fin-surface);
   border: 1px solid var(--lg-border-base);
   border-radius: var(--lg-radius-xl);
   box-shadow: var(--lg-shadow-card);
@@ -1521,17 +1543,18 @@
 
 /* Cards / painéis principais */
 .lg-glass-regular {
-  background: var(--lg-material-regular);
-  border: 1px solid var(--lg-border-base);
-  border-radius: var(--lg-radius-lg);
+  background: var(--fin-surface);
+  border: 1px solid var(--fin-border);
+  border-radius: var(--fin-r-lg);
+  box-shadow: var(--fin-e-card);
 }
 
-/* Modais / sheets / popovers */
+/* Modais / sheets / popovers: superfície BRANCA sobre o véu. */
 .lg-glass-thick {
-  background: var(--lg-material-thick);
-  border: 1px solid var(--lg-border-base);
-  border-radius: var(--lg-radius-lg);
-  box-shadow: var(--lg-shadow-pop);
+  background: var(--fin-surface);
+  border: 1px solid var(--fin-border);
+  border-radius: var(--fin-r-lg);
+  box-shadow: var(--fin-e2);
 }
 
 .lg-control {
@@ -1598,33 +1621,7 @@
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 16px;
 }
-.kpi-card {
-  background: var(--lg-surface-solid);
-  border: 1px solid var(--lg-border-base);
-  border-radius: var(--lg-radius-lg);
-  padding: 20px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  box-shadow: var(--lg-shadow-card);
-}
-.kpi-card__label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--lg-text-3);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.kpi-card__value {
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--lg-text);
-  line-height: 1.15;
-}
-.kpi-card__meta {
-  font-size: 12px;
-  color: var(--lg-text-4);
-}
+/* .kpi-card: definição única lá em cima, no bloco "KPI Card (legado)". */
 
 /* Empty state */
 .empty-state {
@@ -1638,7 +1635,7 @@
 .empty-state__icon {
   width: 48px;
   height: 48px;
-  color: #CBD5E1;
+  color: var(--fin-border-strong);
   margin-bottom: 16px;
   stroke-width: 1.5;
 }
@@ -1657,27 +1654,27 @@
 
 /* Banners */
 .banner-info {
-  background: #EFF6FF;
-  border: 1px solid #BFDBFE;
+  background: var(--fin-info-soft);
+  border: 1px solid color-mix(in srgb, var(--fin-info) 30%, transparent);
   border-radius: 10px;
   padding: 16px 20px;
   display: flex;
   align-items: flex-start;
   gap: 12px;
   font-size: 13px;
-  color: #1E40AF;
+  color: var(--fin-info);
   line-height: 1.5;
 }
 .banner-warning {
-  background: #FFFBEB;
-  border: 1px solid #FDE68A;
+  background: var(--fin-warning-soft);
+  border: 1px solid color-mix(in srgb, var(--fin-warning) 35%, transparent);
   border-radius: 10px;
   padding: 16px 20px;
   display: flex;
   align-items: flex-start;
   gap: 12px;
   font-size: 13px;
-  color: #92400E;
+  color: var(--fin-warning-text);
   line-height: 1.5;
 }
 
@@ -1691,11 +1688,11 @@
   font-weight: 500;
   line-height: 1.4;
 }
-.badge--success  { background: #ECFDF5; color: #065F46; }
-.badge--warning  { background: #FFFBEB; color: #92400E; }
-.badge--danger   { background: #FEF2F2; color: #991B1B; }
-.badge--info     { background: #EFF6FF; color: #1E40AF; }
-.badge--neutral  { background: #F1F5F9; color: #475569; }
+.badge--success  { background: var(--fin-positive-soft); color: var(--fin-positive); }
+.badge--warning  { background: var(--fin-warning-soft); color: var(--fin-warning-text); }
+.badge--danger   { background: var(--fin-negative-soft); color: var(--fin-negative-text); }
+.badge--info     { background: var(--fin-info-soft); color: var(--fin-info); }
+.badge--neutral  { background: var(--fin-surface-2); color: var(--fin-text-2); }
 
 /* Filtros padronizados */
 .filters-bar {
@@ -1718,7 +1715,7 @@
 }
 .filter-input:focus, .filter-select:focus {
   border-color: var(--lg-accent);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 3px var(--fin-accent-ring);
 }
 
 /* Table actions */
@@ -1736,11 +1733,11 @@
   transition: background var(--lg-fast), color var(--lg-fast);
 }
 .table-action-btn:hover {
-  background: #F1F5F9;
+  background: var(--fin-surface-2);
   color: var(--lg-text-2);
 }
 .table-action-btn--danger:hover {
-  background: #FEF2F2;
+  background: var(--fin-negative-soft);
   color: var(--lg-neg);
 }
 
@@ -1756,6 +1753,8 @@
     --fin-anim-marca:  0ms;
     --fin-anim-troca:  0ms;
     --fin-anim-escada: 0ms;
+    --fin-dur-rapida:  0ms;
+    --fin-dur-base:    0ms;
   }
 }
 

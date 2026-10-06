@@ -64,17 +64,17 @@ export default function AdminPlanosPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+        <Loader2 className="w-6 h-6 animate-spin text-[var(--fin-text-3)]" />
       </div>
     );
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="mx-auto w-full max-w-6xl px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Planos do SaaS</h1>
-          <p className="text-sm text-slate-600 mt-1">
+          <h1 className="text-2xl font-bold text-[var(--fin-text)]">Planos do SaaS</h1>
+          <p className="text-sm text-[var(--fin-text-2)] mt-1">
             Edite preço, descrição, limites e features. As mudanças refletem imediatamente na landing e no signup.
           </p>
         </div>
@@ -98,7 +98,7 @@ export default function AdminPlanosPage() {
             });
             carregar();
           }}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800"
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--fin-surface)] text-[var(--fin-text)] text-sm font-semibold hover:bg-[var(--fin-surface-2)]"
         >
           <Plus className="w-4 h-4" /> Novo plano
         </button>
@@ -106,40 +106,40 @@ export default function AdminPlanosPage() {
 
       <div className="space-y-6">
         {planos.map(p => (
-          <div key={p.id} className="bg-white rounded-2xl border border-slate-200 p-6">
+          <div key={p.id} className="bg-[var(--fin-surface)] rounded-2xl border border-[var(--fin-border)] p-6 shadow-[var(--fin-e-card)]">
             {/* Header */}
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-3">
                 <input
-                  className="text-xl font-bold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-200 focus:border-blue-500 focus:outline-none px-1"
+                  className="text-xl font-bold text-[var(--fin-text)] bg-transparent border-b border-transparent hover:border-[var(--fin-border)] focus:border-[var(--fin-accent)] focus:outline-none px-1"
                   value={p.nome}
                   onChange={e => updateLocal(p.id, { nome: e.target.value })}
                 />
-                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-mono">{p.slug}</span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--fin-surface-2)] text-[var(--fin-text-2)] font-mono">{p.slug}</span>
                 {p.destaque && (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold uppercase">Destaque</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--fin-accent-soft)] text-[var(--fin-accent)] font-bold uppercase">Destaque</span>
                 )}
                 {!p.ativo && (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-bold uppercase">Inativo</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)] font-bold uppercase">Inativo</span>
                 )}
               </div>
               <div className="flex items-center gap-2">
                 {savedAt === p.id && (
-                  <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
+                  <span className="inline-flex items-center gap-1 text-xs text-[var(--fin-positive)]">
                     <Check className="w-3 h-3" /> Salvo
                   </span>
                 )}
                 <button
                   onClick={() => salvar(p)}
                   disabled={saving === p.id}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] text-xs font-semibold hover:bg-[var(--fin-accent-hover)] disabled:opacity-50"
                 >
                   {saving === p.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
                   Salvar
                 </button>
                 <button
                   onClick={() => desativar(p)}
-                  className="p-1.5 rounded-lg text-red-500 hover:bg-red-50"
+                  className="p-1.5 rounded-lg text-[var(--fin-negative-text)] hover:bg-[var(--fin-negative-soft)]"
                   title="Desativar plano"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -155,7 +155,7 @@ export default function AdminPlanosPage() {
                   rows={2}
                   value={p.descricao}
                   onChange={e => updateLocal(p.id, { descricao: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm resize-none"
+                  className="w-full px-3 py-2 border border-[var(--fin-border)] rounded-lg text-sm resize-none"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -165,7 +165,7 @@ export default function AdminPlanosPage() {
                     type="number" step="0.01"
                     value={p.preco_mensal}
                     onChange={e => updateLocal(p.id, { preco_mensal: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                    className="w-full px-3 py-2 border border-[var(--fin-border)] rounded-lg text-sm"
                   />
                 </div>
                 <div>
@@ -174,18 +174,18 @@ export default function AdminPlanosPage() {
                     type="number" step="0.01"
                     value={p.preco_anual}
                     onChange={e => updateLocal(p.id, { preco_anual: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                    className="w-full px-3 py-2 border border-[var(--fin-border)] rounded-lg text-sm"
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div>
                   <Label>Ordem</Label>
                   <input
                     type="number"
                     value={p.ordem}
                     onChange={e => updateLocal(p.id, { ordem: Number(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                    className="w-full px-3 py-2 border border-[var(--fin-border)] rounded-lg text-sm"
                   />
                 </div>
                 <div className="flex items-end">
@@ -221,7 +221,7 @@ export default function AdminPlanosPage() {
                       updateLocal(p.id, { limites: JSON.parse(e.target.value) });
                     } catch { /* ignore — usuario ainda editando */ }
                   }}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-mono resize-none"
+                  className="w-full px-3 py-2 border border-[var(--fin-border)] rounded-lg text-xs font-mono resize-none"
                 />
               </div>
 
@@ -232,7 +232,7 @@ export default function AdminPlanosPage() {
                   rows={Math.max(3, (p.features || []).length + 1)}
                   value={(p.features || []).join('\n')}
                   onChange={e => updateLocal(p.id, { features: e.target.value.split('\n').filter(Boolean) })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm resize-none"
+                  className="w-full px-3 py-2 border border-[var(--fin-border)] rounded-lg text-sm resize-none"
                 />
               </div>
             </div>
@@ -245,6 +245,6 @@ export default function AdminPlanosPage() {
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-xs font-semibold text-slate-700 mb-1">{children}</div>
+    <div className="text-xs font-semibold text-[var(--fin-text-2)] mb-1">{children}</div>
   );
 }

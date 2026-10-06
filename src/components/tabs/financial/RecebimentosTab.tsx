@@ -32,9 +32,9 @@ interface RecebimentosTabProps {
 type FiltroStatus = StatusParcela | 'TODOS';
 
 const STATUS_BADGE: Record<StatusParcela, { label: string; className: string }> = {
-  PENDENTE: { label: 'Pendente', className: 'bg-yellow-600 text-yellow-100 hover:bg-yellow-600' },
-  RECEBIDO: { label: 'Recebido', className: 'bg-green-700 text-green-100 hover:bg-green-700' },
-  ATRASADO: { label: 'Atrasado', className: 'bg-red-700 text-red-100 hover:bg-red-700' },
+  PENDENTE: { label: 'Pendente', className: 'bg-[var(--fin-warning)] text-[var(--fin-text-on-fill)] hover:bg-[var(--fin-warning)]' },
+  RECEBIDO: { label: 'Recebido', className: 'bg-[var(--fin-positive)] text-[var(--fin-text-on-fill)] hover:bg-[var(--fin-positive)]' },
+  ATRASADO: { label: 'Atrasado', className: 'bg-[var(--fin-negative)] text-[var(--fin-text-on-fill)] hover:bg-[var(--fin-negative)]' },
   CANCELADO: { label: 'Cancelado', className: 'bg-[var(--t-surface)] text-[var(--t-text)] hover:bg-[var(--t-surface)]' },
 };
 
@@ -157,11 +157,11 @@ export default function RecebimentosTab({ grupo, onChange }: RecebimentosTabProp
       {/* Summary bar */}
       <div
         className="rounded-lg p-4"
-        style={{ backgroundColor: '#1a1a2e' }}
+        style={{ backgroundColor: 'var(--fin-surface)' }}
       >
         <h3
           className="text-sm font-bold mb-3 uppercase tracking-wider"
-          style={{ color: '#d4a853' }}
+          style={{ color: 'var(--fin-accent)' }}
         >
           Resumo de Recebimentos
         </h3>
@@ -174,25 +174,25 @@ export default function RecebimentosTab({ grupo, onChange }: RecebimentosTabProp
           </div>
           <div>
             <p className="text-xs text-[var(--t-text-secondary)]">Total Recebido</p>
-            <p className="text-lg font-bold text-green-400">
+            <p className="text-lg font-bold text-[var(--fin-positive)]">
               {formatBRL(metrics.totalRecebido)}
             </p>
           </div>
           <div>
             <p className="text-xs text-[var(--t-text-secondary)]">Total Atrasado</p>
-            <p className="text-lg font-bold text-red-400">
+            <p className="text-lg font-bold text-[var(--fin-negative-text)]">
               {formatBRL(metrics.totalAtrasado)}
             </p>
           </div>
           <div>
             <p className="text-xs text-[var(--t-text-secondary)]">Taxa Inadimplencia</p>
-            <p className="text-lg font-bold text-yellow-400">
+            <p className="text-lg font-bold text-[var(--fin-warning-text)]">
               {metrics.taxaInadimplencia.toFixed(1)}%
             </p>
           </div>
           <div>
             <p className="text-xs text-[var(--t-text-secondary)]">Previsao 30d</p>
-            <p className="text-lg font-bold text-blue-400">
+            <p className="text-lg font-bold text-[var(--fin-accent)]">
               {formatBRL(metrics.previsao30d)}
             </p>
           </div>
@@ -268,7 +268,7 @@ export default function RecebimentosTab({ grupo, onChange }: RecebimentosTabProp
       <div className="rounded-lg border overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr style={{ backgroundColor: '#1a1a2e' }}>
+            <tr style={{ backgroundColor: 'var(--fin-surface)' }}>
               {[
                 'Vencimento',
                 'Cliente',
@@ -282,14 +282,14 @@ export default function RecebimentosTab({ grupo, onChange }: RecebimentosTabProp
                 <th
                   key={col}
                   className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider border-b border-[var(--t-border)]"
-                  style={{ color: '#d4a853' }}
+                  style={{ color: 'var(--fin-accent)' }}
                 >
                   {col}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+          <tbody className="divide-y divide-[var(--fin-border)]">
             {parcelasFiltradas.length === 0 ? (
               <tr>
                 <td
@@ -305,27 +305,27 @@ export default function RecebimentosTab({ grupo, onChange }: RecebimentosTabProp
                   key={p.id}
                   className="hover:bg-[var(--t-surface-hover)] dark:hover:bg-[var(--t-surface)]/50"
                 >
-                  <td className="px-3 py-2 border-r border-gray-100 dark:border-[var(--t-border)] whitespace-nowrap">
+                  <td className="px-3 py-2 border-r border-[var(--fin-border)] dark:border-[var(--t-border)] whitespace-nowrap">
                     {formatDate(p.data_vencimento)}
                   </td>
-                  <td className="px-3 py-2 border-r border-gray-100 dark:border-[var(--t-border)]">
+                  <td className="px-3 py-2 border-r border-[var(--fin-border)] dark:border-[var(--t-border)]">
                     {p.cliente_nome}
                   </td>
-                  <td className="px-3 py-2 border-r border-gray-100 dark:border-[var(--t-border)] text-center whitespace-nowrap">
+                  <td className="px-3 py-2 border-r border-[var(--fin-border)] dark:border-[var(--t-border)] text-center whitespace-nowrap">
                     {p.numero_parcela}/{p.total_parcelas}
                   </td>
-                  <td className="px-3 py-2 border-r border-gray-100 dark:border-[var(--t-border)] text-right whitespace-nowrap font-mono">
+                  <td className="px-3 py-2 border-r border-[var(--fin-border)] dark:border-[var(--t-border)] text-right whitespace-nowrap font-mono">
                     {formatBRL(p.valor)}
                   </td>
-                  <td className="px-3 py-2 border-r border-gray-100 dark:border-[var(--t-border)]">
+                  <td className="px-3 py-2 border-r border-[var(--fin-border)] dark:border-[var(--t-border)]">
                     <Badge className={STATUS_BADGE[p.status].className}>
                       {STATUS_BADGE[p.status].label}
                     </Badge>
                   </td>
-                  <td className="px-3 py-2 border-r border-gray-100 dark:border-[var(--t-border)] whitespace-nowrap">
+                  <td className="px-3 py-2 border-r border-[var(--fin-border)] dark:border-[var(--t-border)] whitespace-nowrap">
                     {formatDate(p.data_recebimento)}
                   </td>
-                  <td className="px-3 py-2 border-r border-gray-100 dark:border-[var(--t-border)] text-right whitespace-nowrap font-mono">
+                  <td className="px-3 py-2 border-r border-[var(--fin-border)] dark:border-[var(--t-border)] text-right whitespace-nowrap font-mono">
                     {formatBRL(p.valor_recebido)}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
@@ -334,7 +334,7 @@ export default function RecebimentosTab({ grupo, onChange }: RecebimentosTabProp
                         <Button
                           size="sm"
                           variant="outline"
-                          className="text-xs h-7 border-green-600 text-green-600 hover:bg-green-600 hover:text-[var(--t-text)]"
+                          className="text-xs h-7 border-[var(--fin-positive)] text-[var(--fin-positive)] hover:bg-[var(--fin-positive)] hover:text-[var(--fin-text-on-fill)]"
                           onClick={() => abrirConfirmacao(p)}
                         >
                           Confirmar
@@ -342,7 +342,7 @@ export default function RecebimentosTab({ grupo, onChange }: RecebimentosTabProp
                         <Button
                           size="sm"
                           variant="outline"
-                          className="text-xs h-7 border-gray-400 text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]0 hover:text-[var(--t-text)]"
+                          className="text-xs h-7 border-[var(--fin-border-strong)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]0 hover:text-[var(--t-text)]"
                           onClick={() => cancelarParcela(p.id)}
                         >
                           Cancelar
@@ -446,7 +446,7 @@ export default function RecebimentosTab({ grupo, onChange }: RecebimentosTabProp
             <Button
               onClick={confirmarRecebimento}
               className="text-[var(--t-text)]"
-              style={{ backgroundColor: '#d4a853' }}
+              style={{ backgroundColor: 'var(--fin-accent)' }}
             >
               Confirmar Recebimento
             </Button>

@@ -28,14 +28,14 @@ const TIPO_LABEL: Record<TipoFornecedor, string> = Object.fromEntries(
 ) as Record<TipoFornecedor, string>;
 
 const TIPO_COLOR: Record<TipoFornecedor, string> = {
-  OPERADORA: 'bg-[var(--t-blue-bg)]0/20 text-blue-400 border-blue-500/30',
-  CONSOLIDADORA: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  CIA_AEREA: 'bg-sky-500/20 text-sky-400 border-sky-500/30',
-  HOTEL: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-  RECEPTIVO: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-  SEGURADORA: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
-  LOCADORA: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-  CRUZEIRO: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
+  OPERADORA: 'bg-[var(--t-blue-bg)]0/20 text-[var(--fin-accent)] border-[var(--fin-accent)]/30',
+  CONSOLIDADORA: 'bg-[var(--fin-violet-soft)] text-[var(--fin-violet)] border-[var(--fin-violet)]/30',
+  CIA_AEREA: 'bg-[var(--fin-accent-soft)] text-[var(--fin-accent)] border-[var(--fin-accent)]/30',
+  HOTEL: 'bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)] border-[var(--fin-warning)]/30',
+  RECEPTIVO: 'bg-[var(--fin-positive-soft)] text-[var(--fin-positive)] border-[var(--fin-positive)]/30',
+  SEGURADORA: 'bg-[var(--fin-accent-soft)] text-[var(--fin-accent)] border-[var(--fin-accent)]/30',
+  LOCADORA: 'bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)] border-[var(--fin-warning)]/30',
+  CRUZEIRO: 'bg-[var(--fin-positive-soft)] text-[var(--fin-positive)] border-[var(--fin-positive)]/30',
   OUTROS: 'bg-[var(--t-surface-hover)]0/20 text-[var(--t-text-secondary)] border-[var(--t-border)]/30',
 };
 
@@ -195,8 +195,8 @@ export default function FornecedoresPage() {
         <Badge
           className={
             f.status === 'ATIVO'
-              ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
-              : 'bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/20'
+              ? 'bg-[var(--fin-positive-soft)] text-[var(--fin-positive)] border-[var(--fin-positive)]/30 hover:bg-[var(--fin-positive-soft)]'
+              : 'bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)] border-[var(--fin-negative)]/30 hover:bg-[var(--fin-negative-soft)]'
           }
         >
           {f.status}
@@ -219,7 +219,7 @@ export default function FornecedoresPage() {
             <div className="flex items-center gap-1">
               <button
                 onClick={() => handleDelete(f.id)}
-                className="px-2 py-1 rounded bg-red-500/20 text-red-400 text-xs hover:bg-red-500/30"
+                className="px-2 py-1 rounded bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)] text-xs hover:bg-[var(--fin-negative)]/30"
               >
                 Confirmar
               </button>
@@ -233,7 +233,7 @@ export default function FornecedoresPage() {
           ) : (
             <button
               onClick={() => setConfirmDelete(f.id)}
-              className="p-1.5 rounded hover:bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] hover:text-red-400 transition-colors"
+              className="p-1.5 rounded hover:bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] hover:text-[var(--fin-negative-text)] transition-colors"
             >
               <Trash2 size={14} />
             </button>
@@ -244,14 +244,14 @@ export default function FornecedoresPage() {
   ];
 
   return (
-    <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6">
+    <div className="w-full bg-[var(--fin-bg)] px-[var(--fin-page-pad)] py-[var(--fin-page-pad)] text-[var(--fin-text)]">
       <PageHeader
         title="Fornecedores"
         subtitle={`${fornecedores.length} fornecedor${fornecedores.length !== 1 ? 'es' : ''} cadastrado${fornecedores.length !== 1 ? 's' : ''}`}
         actions={
           <Button
             onClick={openNew}
-            className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold gap-2"
+            className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--fin-text-on-fill)] font-semibold gap-2"
           >
             <Plus size={16} /> Novo Fornecedor
           </Button>
@@ -272,7 +272,7 @@ export default function FornecedoresPage() {
           </div>
           <div className="relative">
             <select
-              className="appearance-none bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+              className="appearance-none bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--fin-accent)]"
               value={filterTipo}
               onChange={(e) => setFilterTipo(e.target.value as TipoFornecedor | '')}
             >
@@ -285,7 +285,7 @@ export default function FornecedoresPage() {
           </div>
           <div className="relative">
             <select
-              className="appearance-none bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+              className="appearance-none bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--fin-accent)]"
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as '' | 'ATIVO' | 'INATIVO')}
             >
@@ -316,7 +316,7 @@ export default function FornecedoresPage() {
               <div>
                 <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Tipo *</label>
                 <select
-                  className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+                  className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--fin-accent)]"
                   value={form.tipo}
                   onChange={(e) => setField('tipo', e.target.value as TipoFornecedor)}
                 >
@@ -443,7 +443,7 @@ export default function FornecedoresPage() {
               <div>
                 <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Status</label>
                 <select
-                  className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+                  className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--fin-accent)]"
                   value={form.status}
                   onChange={(e) => setField('status', e.target.value as 'ATIVO' | 'INATIVO')}
                 >
@@ -456,7 +456,7 @@ export default function FornecedoresPage() {
               <div className="sm:col-span-2 lg:col-span-3">
                 <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Observações</label>
                 <textarea
-                  className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853] resize-none"
+                  className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--fin-accent)] resize-none"
                   rows={3}
                   value={form.observacoes}
                   onChange={(e) => setField('observacoes', e.target.value)}
@@ -489,7 +489,7 @@ export default function FornecedoresPage() {
                 <div>
                   <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Regra de vencimento</label>
                   <select
-                    className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#d4a853]"
+                    className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--fin-accent)]"
                     value={form.regras_faturamento.regra_vencimento_comissao?.tipo || ''}
                     onChange={(e) => {
                       const tipo = e.target.value as 'dia_fixo_mes' | 'dias_apos_venda' | '';
@@ -576,7 +576,7 @@ export default function FornecedoresPage() {
                 Cancelar
               </Button>
               <Button
-                className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--t-text)] font-semibold min-w-[100px]"
+                className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--fin-text-on-fill)] font-semibold min-w-[100px]"
                 onClick={handleSave}
                 disabled={saving || !canSave}
               >

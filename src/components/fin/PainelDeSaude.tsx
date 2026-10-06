@@ -481,7 +481,7 @@ export function PainelDeSaude({ fatores, onAtivar }: PainelDeSaudeProps) {
   return (
     <section
       data-fin-saude={pior.faixa}
-      className="flex flex-col rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-4"
+      className="flex flex-col rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-4 shadow-[var(--fin-e-card)]"
     >
       <header className="flex flex-col gap-2">
         <div className="flex items-center gap-3">

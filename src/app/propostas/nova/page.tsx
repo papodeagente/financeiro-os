@@ -253,11 +253,11 @@ export default function PropostaNovaPage() {
           {/* Steps indicator */}
           <div className="flex items-center gap-2">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ${
-              step === 'template' ? 'bg-[var(--t-green)] text-white dark:text-[#0a0a14]' : 'bg-[var(--t-green)]/20 text-[var(--t-green)]'
+              step === 'template' ? 'bg-[var(--t-green)] text-[var(--fin-text-on-fill)] ' : 'bg-[var(--t-green)]/20 text-[var(--t-green)]'
             }`}>1</div>
             <div className="w-8 h-0.5 bg-[var(--t-border)]" />
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ${
-              step === 'dados' ? 'bg-[var(--t-green)] text-white dark:text-[#0a0a14]' : 'bg-[var(--t-bg)] text-[var(--t-text-muted)] shadow-[var(--t-card-shadow)]'
+              step === 'dados' ? 'bg-[var(--t-green)] text-[var(--fin-text-on-fill)] ' : 'bg-[var(--t-bg)] text-[var(--t-text-muted)] shadow-[var(--t-card-shadow)]'
             }`}>2</div>
           </div>
         </div>
@@ -321,7 +321,7 @@ export default function PropostaNovaPage() {
                         <span className="text-2xl">{t.icone}</span>
                       </div>
                       <div className="absolute bottom-3 right-3">
-                        <span className="text-[10px] bg-white/20 backdrop-blur-sm text-white px-2 py-0.5 rounded-full">
+                        <span className="text-[10px] bg-[var(--fin-surface)]/20 backdrop-blur-sm text-white px-2 py-0.5 rounded-full">
                           {t.secoes_padrao.length} blocos
                         </span>
                       </div>
@@ -435,14 +435,14 @@ export default function PropostaNovaPage() {
                         placeholder="Telefone" className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)]" />
                     </div>
                     <Button type="button" onClick={handleCriarCliente} disabled={savingCliente}
-                      className="w-full bg-[var(--t-green)] hover:bg-[var(--t-green)]/90 text-white dark:text-[#0a0a14] text-xs h-8">
+                      className="w-full bg-[var(--t-green)] hover:bg-[var(--t-green)]/90 text-[var(--fin-text-on-fill)]  text-xs h-8">
                       {savingCliente ? 'Salvando...' : 'Cadastrar e selecionar'}
                     </Button>
                   </div>
                 )}
                 {!wizard.cliente_id && !showNovoCliente && (
-                  <p className="mt-1.5 text-xs text-amber-500 flex items-center gap-1">
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  <p className="mt-1.5 text-xs text-[var(--fin-warning-text)] flex items-center gap-1">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--fin-warning)]" />
                     Nenhum cliente vinculado — a proposta será criada sem cliente
                   </p>
                 )}
@@ -506,16 +506,16 @@ export default function PropostaNovaPage() {
               </div>
 
               {/* AI toggle */}
-              <div className="p-4 rounded-lg border border-purple-500/30 bg-purple-500/5">
+              <div className="p-4 rounded-lg border border-[var(--fin-violet)]/30 bg-[var(--fin-violet-soft)]">
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={wizard.gerar_ia}
                     onChange={e => setWizard(prev => ({ ...prev, gerar_ia: e.target.checked }))}
-                    className="w-4 h-4 rounded border-[var(--t-border)] text-purple-500 focus:ring-purple-500"
+                    className="w-4 h-4 rounded border-[var(--t-border)] text-[var(--fin-violet)] focus:ring-[var(--fin-violet)]"
                   />
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 text-sm font-medium text-purple-400">
+                    <div className="flex items-center gap-2 text-sm font-medium text-[var(--fin-violet)]">
                       <Wand2 className="w-4 h-4" />
                       Gerar conteudo com IA
                     </div>
@@ -539,7 +539,7 @@ export default function PropostaNovaPage() {
               <Button
                 onClick={handleFinish}
                 disabled={generating}
-                className="bg-[var(--t-green)] hover:bg-[var(--t-green)]/90 text-white dark:text-[#0a0a14] gap-2 px-6"
+                className="bg-[var(--t-green)] hover:bg-[var(--t-green)]/90 text-[var(--fin-text-on-fill)]  gap-2 px-6"
               >
                 {generating ? (
                   <>

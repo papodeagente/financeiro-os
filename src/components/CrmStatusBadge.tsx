@@ -56,7 +56,7 @@ export function CrmStatusBadge({ variant = 'compacto' }: CrmStatusBadgeProps) {
           className={`block w-2 h-2 rounded-full ${needsAction ? 'cursor-pointer' : ''}`}
           style={{ backgroundColor: color }}
         />
-        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-[10px] text-white bg-gray-900 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-[10px] text-[var(--fin-text-on-fill)] bg-[var(--fin-text)] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
           {label}{needsAction ? ' — Clique para configurar' : ''}
         </span>
       </div>

@@ -1,5 +1,6 @@
 'use client';
 
+import { comAlfa } from '@/lib/cor';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Plus, Loader2, ListChecks, Check, X, Edit2, Trash2, Clock,
@@ -242,7 +243,7 @@ export function TarefasTab({ grupoId }: Props) {
             titulo="Pendentes"
             status="pendente"
             tarefas={porStatus.pendente}
-            cor="#F59E0B"
+            cor="var(--fin-warning)"
             onAdd={() => abrirNovo('pendente')}
             onMudarStatus={mudarStatus}
             onEditar={abrirEditar}
@@ -252,7 +253,7 @@ export function TarefasTab({ grupoId }: Props) {
             titulo="Em andamento"
             status="em_andamento"
             tarefas={porStatus.em_andamento}
-            cor="#2563EB"
+            cor="var(--fin-accent)"
             onAdd={() => abrirNovo('em_andamento')}
             onMudarStatus={mudarStatus}
             onEditar={abrirEditar}
@@ -262,7 +263,7 @@ export function TarefasTab({ grupoId }: Props) {
             titulo="Concluídas"
             status="concluida"
             tarefas={porStatus.concluida}
-            cor="#10B981"
+            cor="var(--fin-positive)"
             onAdd={() => abrirNovo('concluida')}
             onMudarStatus={mudarStatus}
             onEditar={abrirEditar}
@@ -415,7 +416,7 @@ function ColunaStatus({
   compact?: boolean;
 }) {
   return (
-    <div className="flex flex-col rounded-[12px]" style={{ background: '#F8FAFC', border: '1px solid var(--lg-border-base)' }}>
+    <div className="flex flex-col rounded-[12px]" style={{ background: 'var(--fin-surface-2)', border: '1px solid var(--lg-border-base)' }}>
       <div className="px-3 py-2.5 flex items-center justify-between" style={{ borderBottom: '1px solid var(--lg-border-base)' }}>
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full" style={{ background: cor }} />
@@ -477,7 +478,7 @@ function CardTarefa({
       className="rounded-[8px] p-2.5 group/card"
       style={{
         background: 'white',
-        border: `1px solid ${atrasada ? '#FCA5A5' : 'var(--lg-border-base)'}`,
+        border: `1px solid ${atrasada ? 'color-mix(in srgb, var(--fin-negative) 40%, transparent)' : 'var(--lg-border-base)'}`,
         borderLeft: `3px solid ${prioInfo.cor}`,
         opacity: cancelada ? 0.5 : 1,
       }}
@@ -522,7 +523,7 @@ function CardTarefa({
         )}
         <span
           className="inline-block px-1.5 rounded text-[9px] uppercase tracking-wide font-semibold"
-          style={{ background: `${prioInfo.cor}1A`, color: prioInfo.cor }}
+          style={{ background: comAlfa(prioInfo.cor, 10), color: prioInfo.cor }}
         >
           {prioInfo.label}
         </span>
@@ -532,11 +533,11 @@ function CardTarefa({
       {!cancelada && !concluida && (
         <div className="flex items-center gap-1 mt-2 pt-2 text-[10px]" style={{ borderTop: '1px solid #F1F5F9' }}>
           {t.status === 'pendente' && (
-            <button onClick={onIniciar} className="px-2 py-0.5 rounded" style={{ background: '#EFF6FF', color: '#2563EB' }}>
+            <button onClick={onIniciar} className="px-2 py-0.5 rounded" style={{ background: 'var(--fin-accent-soft)', color: 'var(--fin-accent)' }}>
               <Clock className="w-2.5 h-2.5 inline mr-0.5" /> Iniciar
             </button>
           )}
-          <button onClick={onConcluir} className="px-2 py-0.5 rounded" style={{ background: '#ECFDF5', color: '#065F46' }}>
+          <button onClick={onConcluir} className="px-2 py-0.5 rounded" style={{ background: 'var(--fin-positive-soft)', color: 'var(--fin-positive)' }}>
             <Check className="w-2.5 h-2.5 inline mr-0.5" /> Concluir
           </button>
           <button onClick={onCancelar} className="px-2 py-0.5 rounded ml-auto" style={{ color: 'var(--lg-text-3)' }}>

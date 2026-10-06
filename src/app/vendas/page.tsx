@@ -285,7 +285,7 @@ export default function VendasPage() {
           onRowClick={v => router.push(`/vendas/${v.id}`)}
           zebra={false}
           emptyState={{
-            icon: <ShoppingCart className="w-12 h-12" style={{ color: '#CBD5E1' }} strokeWidth={1.5} />,
+            icon: <ShoppingCart className="w-12 h-12" style={{ color: 'var(--fin-border-strong)' }} strokeWidth={1.5} />,
             title: 'Nenhuma venda encontrada',
             description: filtrosAtivos
               ? 'Ajuste os filtros para ver mais resultados.'

@@ -38,43 +38,43 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-[var(--fin-bg)] flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-gray-900 border border-gray-800 mb-4">
-            <Shield className="w-7 h-7 text-[#d4a853]" />
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-[var(--fin-surface)] border border-[var(--fin-border)] mb-4">
+            <Shield className="w-7 h-7 text-[var(--fin-accent)]" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-100">Entur OS Admin</h1>
-          <p className="text-gray-400 text-sm mt-1">Painel de administracao</p>
+          <h1 className="text-2xl font-bold text-[var(--fin-text)]">Entur OS Admin</h1>
+          <p className="text-[var(--fin-text-3)] text-sm mt-1">Painel de administracao</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="bg-[var(--fin-surface)] border border-[var(--fin-border)] rounded-xl p-6 space-y-4">
           {error && (
-            <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-lg px-3 py-2">
+            <div className="bg-[var(--fin-negative-soft)] border border-[var(--fin-negative)]/30 text-[var(--fin-negative-text)] text-sm rounded-lg px-3 py-2">
               {error}
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">Email</label>
+            <label className="block text-sm font-medium text-[var(--fin-text-3)] mb-1.5">Email</label>
             <input
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
-              className="w-full bg-gray-800 border border-gray-700 text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d4a853]/50 focus:border-[#d4a853] placeholder-gray-500"
+              className="w-full bg-[var(--fin-surface)] border border-[var(--fin-border)] text-[var(--fin-text)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--fin-accent)]/50 focus:border-[var(--fin-accent)] placeholder-[var(--fin-text-3)]"
               placeholder="admin@entur.com"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">Senha</label>
+            <label className="block text-sm font-medium text-[var(--fin-text-3)] mb-1.5">Senha</label>
             <input
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
               required
-              className="w-full bg-gray-800 border border-gray-700 text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d4a853]/50 focus:border-[#d4a853] placeholder-gray-500"
+              className="w-full bg-[var(--fin-surface)] border border-[var(--fin-border)] text-[var(--fin-text)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--fin-accent)]/50 focus:border-[var(--fin-accent)] placeholder-[var(--fin-text-3)]"
               placeholder="••••••••"
             />
           </div>
@@ -82,7 +82,7 @@ export default function AdminLoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-[#d4a853] text-gray-950 font-medium rounded-lg px-4 py-2.5 text-sm hover:bg-[#c49a48] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] font-medium rounded-lg px-4 py-2.5 text-sm hover:bg-[var(--fin-accent-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {loading ? (
               <>

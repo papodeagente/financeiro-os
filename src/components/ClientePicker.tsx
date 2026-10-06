@@ -485,7 +485,7 @@ export function ClientePicker({
                   Endereço (alguns municípios exigem na nota)
                 </summary>
                 <div className="flex flex-col gap-2 p-2">
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                     <label className="flex flex-col gap-1">
                       <span className="fin-t-caption text-[var(--fin-text-3)]">CEP</span>
                       <div className="relative">
@@ -507,7 +507,7 @@ export function ClientePicker({
                       <Input value={rascunho.logradouro} onChange={e => setRascunho(p => ({ ...p, logradouro: e.target.value }))} className="h-10" />
                     </label>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                     <label className="flex flex-col gap-1">
                       <span className="fin-t-caption text-[var(--fin-text-3)]">Número</span>
                       <Input value={rascunho.numero} onChange={e => setRascunho(p => ({ ...p, numero: e.target.value }))} className="h-10" />
@@ -521,7 +521,7 @@ export function ClientePicker({
                       <Input value={rascunho.bairro} onChange={e => setRascunho(p => ({ ...p, bairro: e.target.value }))} className="h-10" />
                     </label>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                     <label className="col-span-2 flex flex-col gap-1">
                       <span className="fin-t-caption text-[var(--fin-text-3)]">Cidade</span>
                       <Input value={rascunho.cidade} onChange={e => setRascunho(p => ({ ...p, cidade: e.target.value }))} className="h-10" />

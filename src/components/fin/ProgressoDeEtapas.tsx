@@ -47,7 +47,7 @@ export function ProgressoDeEtapas({ etapas, atual }: ProgressoDeEtapasProps) {
                 aria-hidden="true"
                 className={cn(
                   'flex size-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold',
-                  feita && 'border-[var(--fin-accent)] bg-[var(--fin-accent)] text-white',
+                  feita && 'border-[var(--fin-accent)] bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)]',
                   agora && 'border-[var(--fin-accent)] text-[var(--fin-accent)]',
                   !feita && !agora && 'border-[var(--fin-border-strong)] text-[var(--fin-text-3)]',
                 )}

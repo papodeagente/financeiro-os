@@ -1,5 +1,6 @@
 'use client';
 
+import { comAlfa } from '@/lib/cor';
 import { Pencil } from 'lucide-react';
 import type { ReactNode } from 'react';
 
@@ -27,9 +28,9 @@ interface Props {
 // Click no wrapper seleciona a secao e abre seu editor especifico no
 // painel direito (PageHeaderEditor / PageFooterEditor).
 export function SelectablePageSection({
-  label, selected, onSelect, children, accentColor = '#8B5CF6',
+  label, selected, onSelect, children, accentColor = 'var(--fin-violet)',
 }: Props) {
-  const hoverColor = '#A78BFA';
+  const hoverColor = 'var(--fin-violet)';
 
   return (
     <div
@@ -46,8 +47,8 @@ export function SelectablePageSection({
         }`}
         style={
           selected
-            ? { boxShadow: `0 10px 25px -8px ${accentColor}40`, ['--tw-ring-color' as never]: accentColor }
-            : { ['--tw-ring-color' as never]: hoverColor + '80' }
+            ? { boxShadow: `0 10px 25px -8px ${comAlfa(accentColor, 25)}`, ['--tw-ring-color' as never]: accentColor }
+            : { ['--tw-ring-color' as never]: comAlfa(hoverColor, 50) }
         }
       />
 

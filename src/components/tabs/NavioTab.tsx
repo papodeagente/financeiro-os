@@ -67,7 +67,7 @@ export function NavioTab({ grupo, onChange }: Props) {
   return (
     <div className="space-y-6">
       {/* Cruise info card */}
-      <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-4" style={{ boxShadow: 'var(--elevation-1)' }}>
+      <div className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-4 shadow-[var(--fin-e-card)]" style={{ boxShadow: 'var(--elevation-1)' }}>
         <div className="flex items-center gap-3 mb-3">
           <div className="w-10 h-10 rounded-xl bg-[var(--t-green)]/10 flex items-center justify-center">
             <Ship className="w-5 h-5 text-[var(--t-green)]" />
@@ -108,7 +108,7 @@ export function NavioTab({ grupo, onChange }: Props) {
           });
 
           return (
-            <div key={fIdx} className={`rounded-xl border p-4 ${isBest ? 'border-[var(--t-status-success)]/30 bg-[var(--t-status-success-bg)]/30' : 'border-[var(--t-border)] bg-[var(--t-surface)]'}`} style={{ boxShadow: 'var(--elevation-1)' }}>
+            <div key={fIdx} className={`rounded-xl border p-4 ${isBest ? 'border-[var(--t-status-success)]/30 bg-[var(--t-status-success-bg)]/30' : 'border-[var(--t-border)] bg-[var(--t-surface)]'} shadow-[var(--fin-e-card)]`} style={{ boxShadow: 'var(--elevation-1)' }}>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-[var(--t-text-muted)] w-6">{fIdx + 1}.</span>

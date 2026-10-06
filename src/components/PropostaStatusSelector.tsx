@@ -26,28 +26,28 @@ const OPTIONS: Array<{
     label: 'Rascunho',
     icon: FileEdit,
     descricao: 'Editando — ainda não enviada ao cliente',
-    classes: { badge: 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300', dot: 'bg-gray-500', hover: 'hover:bg-gray-50 dark:hover:bg-gray-500/10' },
+    classes: { badge: 'bg-[var(--fin-surface-2)] text-[var(--fin-text-2)]', dot: 'bg-[var(--fin-text-3)]', hover: 'hover:bg-[var(--fin-surface-2)]' },
   },
   {
     key: 'ENVIADO',
     label: 'Enviada',
     icon: Send,
     descricao: 'Link compartilhado com o cliente',
-    classes: { badge: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300', dot: 'bg-blue-500', hover: 'hover:bg-blue-50 dark:hover:bg-blue-500/10' },
+    classes: { badge: 'bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]', dot: 'bg-[var(--fin-accent)]', hover: 'hover:bg-[var(--fin-accent-soft)]' },
   },
   {
     key: 'ACEITO',
     label: 'Aceita',
     icon: CheckCircle2,
     descricao: 'Cliente aceitou — pronta para virar venda',
-    classes: { badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300', dot: 'bg-emerald-500', hover: 'hover:bg-emerald-50 dark:hover:bg-emerald-500/10' },
+    classes: { badge: 'bg-[var(--fin-positive-soft)] text-[var(--fin-positive)]', dot: 'bg-[var(--fin-positive)]', hover: 'hover:bg-[var(--fin-positive-soft)]' },
   },
   {
     key: 'REJEITADO',
     label: 'Rejeitada',
     icon: XCircle,
     descricao: 'Cliente não aceitou',
-    classes: { badge: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300', dot: 'bg-red-500', hover: 'hover:bg-red-50 dark:hover:bg-red-500/10' },
+    classes: { badge: 'bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)]', dot: 'bg-[var(--fin-negative)]', hover: 'hover:bg-[var(--fin-negative-soft)]' },
   },
 ];
 

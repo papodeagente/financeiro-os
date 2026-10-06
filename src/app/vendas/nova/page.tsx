@@ -605,7 +605,7 @@ export default function NovaVendaPage() {
   };
 
   return (
-    <div className="bg-[var(--t-bg)] text-[var(--t-text)] p-6 max-w-4xl mx-auto">
+    <div className="mx-auto w-full max-w-4xl bg-[var(--fin-bg)] px-[var(--fin-page-pad)] py-[var(--fin-page-pad)] text-[var(--fin-text)]">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -623,7 +623,7 @@ export default function NovaVendaPage() {
         <Button
           onClick={handleSave}
           disabled={saving}
-          className="bg-[var(--t-green)] hover:opacity-90 text-white dark:text-[#0a0a14] font-semibold"
+          className="bg-[var(--t-green)] hover:opacity-90 text-[var(--fin-text-on-fill)]  font-semibold"
         >
           <Save className="w-4 h-4 mr-2" />
           {saving ? 'Salvando...' : 'Salvar Venda'}
@@ -744,7 +744,7 @@ export default function NovaVendaPage() {
                   <button
                     type="button"
                     onClick={() => removePassageiro(idx)}
-                    className="text-red-400 hover:text-red-300"
+                    className="text-[var(--fin-negative-text)] hover:text-[var(--fin-negative-text)]"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -808,7 +808,7 @@ export default function NovaVendaPage() {
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="text-blue-400 hover:bg-blue-500/10 border border-blue-500/30 h-7 text-xs font-medium"
+                className="text-[var(--fin-accent)] hover:bg-[var(--fin-accent-soft)] border border-[var(--fin-accent)]/30 h-7 text-xs font-medium"
                 onClick={() => setShowPropostaModal(true)}
               >
                 <FileText className="w-3 h-3 mr-1" /> Importar de Proposta
@@ -839,17 +839,17 @@ export default function NovaVendaPage() {
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <Badge className="bg-blue-500/15 text-blue-400 border-blue-500/30 text-xs font-medium">
+                    <Badge className="bg-[var(--fin-accent-soft)] text-[var(--fin-accent)] border-[var(--fin-accent)]/30 text-xs font-medium">
                       Produto {idx + 1}
                     </Badge>
-                    <Badge className="bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] border-[#3a3a5e] text-xs">
+                    <Badge className="bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] border-[var(--fin-border)] text-xs">
                       {prod.tipo}
                     </Badge>
                   </div>
                   <button
                     type="button"
                     onClick={() => removeProduto(idx)}
-                    className="text-red-400 hover:text-red-300"
+                    className="text-[var(--fin-negative-text)] hover:text-[var(--fin-negative-text)]"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -968,7 +968,7 @@ export default function NovaVendaPage() {
                       ))}
                     </select>
                     {prod.projeto && (
-                      <p className="text-xs text-green-400 mt-1">
+                      <p className="text-xs text-[var(--fin-positive)] mt-1">
                         Valores preenchidos automaticamente a partir do produto do grupo
                       </p>
                     )}
@@ -982,7 +982,7 @@ export default function NovaVendaPage() {
                       <span className="text-xs text-[var(--t-text-secondary)]">Dados do voo</span>
                       <button
                         onClick={() => setFlightModalIdx(idx)}
-                        className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-500/10 text-blue-400 text-xs font-medium rounded-lg border border-blue-500/30 hover:bg-blue-500/20 transition-colors"
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-[var(--fin-accent-soft)] text-[var(--fin-accent)] text-xs font-medium rounded-lg border border-[var(--fin-accent)]/30 hover:bg-[var(--fin-accent-soft)] transition-colors"
                       >
                         <Search className="w-3 h-3" /> Buscar voo via API
                       </button>
@@ -1017,12 +1017,12 @@ export default function NovaVendaPage() {
                       <span className="text-xs text-[var(--t-text-secondary)]">Dados do hotel</span>
                       <button
                         onClick={() => setHotelModalIdx(idx)}
-                        className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-500/10 text-emerald-400 text-xs font-medium rounded-lg border border-emerald-500/30 hover:bg-emerald-500/20 transition-colors"
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-[var(--fin-positive-soft)] text-[var(--fin-positive)] text-xs font-medium rounded-lg border border-[var(--fin-positive)]/30 hover:bg-[var(--fin-positive-soft)] transition-colors"
                       >
                         <Search className="w-3 h-3" /> Buscar hotel via API
                       </button>
                     </div>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <div>
                       <label className={labelClass}>Hotel</label>
                       <Input
@@ -1106,11 +1106,11 @@ export default function NovaVendaPage() {
                 {prod.moeda !== 'BRL' && (
                   <div className="mt-2 text-xs text-[var(--t-text-secondary)]">
                     Custo em BRL:{' '}
-                    <span className="text-orange-400">
+                    <span className="text-[var(--fin-warning-text)]">
                       {fmt((prod.valor_custo || 0) * (prod.cambio || 1))}
                     </span>{' '}
                     · Venda em BRL:{' '}
-                    <span className="text-green-400">
+                    <span className="text-[var(--fin-positive)]">
                       {fmt((prod.valor_venda || 0) * (prod.cambio || 1))}
                     </span>
                   </div>
@@ -1173,13 +1173,13 @@ export default function NovaVendaPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-[var(--t-bg)] rounded-lg p-3 text-center">
               <p className="text-xs text-[var(--t-text-secondary)] mb-1">Custo Total</p>
-              <p className="text-lg font-bold text-orange-400">
+              <p className="text-lg font-bold text-[var(--fin-warning-text)]">
                 {fmt(venda.valor_total_custo)}
               </p>
             </div>
             <div className="bg-[var(--t-bg)] rounded-lg p-3 text-center">
               <p className="text-xs text-[var(--t-text-secondary)] mb-1">Venda Total</p>
-              <p className="text-lg font-bold text-blue-400">
+              <p className="text-lg font-bold text-[var(--fin-accent)]">
                 {fmt(venda.valor_total_venda)}
               </p>
             </div>
@@ -1191,7 +1191,7 @@ export default function NovaVendaPage() {
             </div>
             <div className="bg-[var(--t-bg)] rounded-lg p-3 text-center">
               <p className="text-xs text-[var(--t-text-secondary)] mb-1">Valor Final</p>
-              <p className="text-lg font-bold text-green-400">
+              <p className="text-lg font-bold text-[var(--fin-positive)]">
                 {fmt(venda.valor_final)}
               </p>
             </div>
@@ -1251,7 +1251,7 @@ export default function NovaVendaPage() {
             </div>
             <div className="col-span-2 md:col-span-3 bg-[var(--t-bg)] rounded-lg p-3 flex items-center justify-between">
               <span className="text-[var(--t-text-secondary)] text-sm">Valor Final a Pagar</span>
-              <span className="text-xl font-bold text-green-400">{fmt(venda.valor_final)}</span>
+              <span className="text-xl font-bold text-[var(--fin-positive)]">{fmt(venda.valor_final)}</span>
             </div>
           </div>
         )}
@@ -1286,22 +1286,22 @@ export default function NovaVendaPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="bg-[var(--t-bg)] rounded-lg p-3 text-center">
               <p className="text-[10px] text-[var(--t-text-secondary)] mb-1 uppercase tracking-wide">Receber do cliente</p>
-              <p className="text-lg font-bold text-blue-400">{fmt(financialPreview.resumo.total_cliente)}</p>
+              <p className="text-lg font-bold text-[var(--fin-accent)]">{fmt(financialPreview.resumo.total_cliente)}</p>
               <p className="text-[10px] text-[var(--t-text-muted)]">{financialPreview.resumo.itens_proprio} item(ns) próprio(s)</p>
             </div>
             <div className="bg-[var(--t-bg)] rounded-lg p-3 text-center">
               <p className="text-[10px] text-[var(--t-text-secondary)] mb-1 uppercase tracking-wide">Comissões a receber</p>
-              <p className="text-lg font-bold text-emerald-400">{fmt(financialPreview.resumo.total_comissoes)}</p>
+              <p className="text-lg font-bold text-[var(--fin-positive)]">{fmt(financialPreview.resumo.total_comissoes)}</p>
               <p className="text-[10px] text-[var(--t-text-muted)]">{financialPreview.resumo.itens_fornecedor} item(ns) fornecedor</p>
             </div>
             <div className="bg-[var(--t-bg)] rounded-lg p-3 text-center">
               <p className="text-[10px] text-[var(--t-text-secondary)] mb-1 uppercase tracking-wide">Custos a pagar</p>
-              <p className="text-lg font-bold text-orange-400">{fmt(financialPreview.resumo.total_custos)}</p>
+              <p className="text-lg font-bold text-[var(--fin-warning-text)]">{fmt(financialPreview.resumo.total_custos)}</p>
               <p className="text-[10px] text-[var(--t-text-muted)]">{financialPreview.contas_pagar.length} conta(s)</p>
             </div>
             <div className="bg-[var(--t-bg)] rounded-lg p-3 text-center">
               <p className="text-[10px] text-[var(--t-text-secondary)] mb-1 uppercase tracking-wide">Lucro previsto</p>
-              <p className={`text-lg font-bold ${financialPreview.resumo.lucro_previsto >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              <p className={`text-lg font-bold ${financialPreview.resumo.lucro_previsto >= 0 ? 'text-[var(--fin-positive)]' : 'text-[var(--fin-negative-text)]'}`}>
                 {fmt(financialPreview.resumo.lucro_previsto)}
               </p>
             </div>
@@ -1324,7 +1324,7 @@ export default function NovaVendaPage() {
         <Button
           onClick={handleSave}
           disabled={saving}
-          className="bg-[var(--t-green)] hover:opacity-90 text-white dark:text-[#0a0a14] font-semibold"
+          className="bg-[var(--t-green)] hover:opacity-90 text-[var(--fin-text-on-fill)]  font-semibold"
         >
           <Save className="w-4 h-4 mr-2" />
           {saving ? 'Salvando...' : 'Salvar Venda'}
@@ -1366,7 +1366,7 @@ export default function NovaVendaPage() {
               </div>
             </div>
             <Button type="button" onClick={handleCriarFornecedor} disabled={savingFornecedor}
-              className="w-full bg-[var(--t-green)] hover:opacity-90 text-white dark:text-[#0a0a14] font-semibold">
+              className="w-full bg-[var(--t-green)] hover:opacity-90 text-[var(--fin-text-on-fill)]  font-semibold">
               {savingFornecedor ? 'Salvando...' : 'Cadastrar e selecionar'}
             </Button>
           </div>
@@ -1465,7 +1465,7 @@ export default function NovaVendaPage() {
                           <div className="flex items-center gap-2">
                             <span className="font-mono text-xs text-[var(--t-text-secondary)]">{p.numero}</span>
                             {p.visual.layout === 'DISCOVERY' && (
-                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">DISCOVERY</span>
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]">DISCOVERY</span>
                             )}
                           </div>
                           <h4 className="font-semibold text-[var(--t-text)] mt-0.5 truncate">
@@ -1476,17 +1476,17 @@ export default function NovaVendaPage() {
                           )}
                           <div className="flex flex-wrap items-center gap-2 mt-2">
                             {servicoCount > 0 && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400">
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--fin-violet-soft)] text-[var(--fin-violet)]">
                                 {servicoCount} serviço{servicoCount > 1 ? 's' : ''}
                               </span>
                             )}
                             {transportes > 0 && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400">
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]">
                                 {transportes} transporte{transportes > 1 ? 's' : ''}
                               </span>
                             )}
                             {alojamentos > 0 && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400">
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--fin-positive-soft)] text-[var(--fin-positive)]">
                                 {alojamentos} hospedagem{alojamentos > 1 ? 'ns' : ''}
                               </span>
                             )}

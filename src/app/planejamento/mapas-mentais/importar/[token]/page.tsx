@@ -87,8 +87,8 @@ export default function ImportarMapaMentalPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[420px] items-center justify-center p-6 text-sm text-slate-500">
-        <Loader2 className="mr-2 h-5 w-5 animate-spin text-blue-600" /> Consultando mapa…
+      <div className="flex min-h-[420px] items-center justify-center p-6 text-sm text-[var(--fin-text-3)]">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin text-[var(--fin-accent)]" /> Consultando mapa…
       </div>
     );
   }
@@ -97,25 +97,25 @@ export default function ImportarMapaMentalPage() {
     const retryable = !error || ![403, 404, 410].includes(error.status);
     return (
       <div className="mx-auto flex min-h-[480px] max-w-xl items-center px-6 py-10">
-        <div className="w-full rounded-2xl border border-slate-200 bg-white p-7 text-center shadow-sm">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-500">
+        <div className="w-full rounded-2xl border border-[var(--fin-border)] bg-[var(--fin-surface)] p-7 text-center shadow-sm">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)]">
             <AlertCircle className="h-6 w-6" />
           </div>
-          <h1 className="mt-4 text-xl font-bold text-slate-900">Não foi possível copiar este mapa</h1>
-          <p className="mt-2 text-sm leading-relaxed text-slate-500">{error?.message ?? 'O compartilhamento está indisponível.'}</p>
+          <h1 className="mt-4 text-xl font-bold text-[var(--fin-text)]">Não foi possível copiar este mapa</h1>
+          <p className="mt-2 text-sm leading-relaxed text-[var(--fin-text-3)]">{error?.message ?? 'O compartilhamento está indisponível.'}</p>
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
             {retryable && (
               <button
                 type="button"
                 onClick={() => void carregar()}
-                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+                className="inline-flex items-center gap-2 rounded-xl bg-[var(--fin-accent)] px-4 py-2.5 text-sm font-semibold text-[var(--fin-text-on-fill)] hover:bg-[var(--fin-accent-hover)]"
               >
                 <RefreshCw className="h-4 w-4" /> Tentar novamente
               </button>
             )}
             <Link
               href="/planejamento/mapas-mentais"
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              className="inline-flex items-center gap-2 rounded-xl border border-[var(--fin-border)] px-4 py-2.5 text-sm font-semibold text-[var(--fin-text-2)] hover:bg-[var(--fin-surface-2)]"
             >
               <ArrowLeft className="h-4 w-4" /> Meus mapas
             </Link>
@@ -128,25 +128,25 @@ export default function ImportarMapaMentalPage() {
   const totalNodes = Object.keys(payload.mapa.nodes).length;
   return (
     <div className="mx-auto max-w-2xl px-6 py-10">
-      <Link href="/planejamento/mapas-mentais" className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-900">
+      <Link href="/planejamento/mapas-mentais" className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--fin-text-3)] hover:text-[var(--fin-text)]">
         <ArrowLeft className="h-4 w-4" /> Voltar para meus mapas
       </Link>
-      <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 bg-gradient-to-br from-blue-50 to-emerald-50 px-7 py-8 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm">
+      <div className="mt-6 overflow-hidden rounded-2xl border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-sm">
+        <div className="border-b border-[var(--fin-border)] bg-gradient-to-br from-[var(--fin-accent-soft)] to-[var(--fin-positive-soft)] px-7 py-8 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--fin-surface)] text-[var(--fin-accent)] shadow-sm">
             <GitBranch className="h-6 w-6" />
           </div>
-          <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-blue-600">Mapa compartilhado</p>
-          <h1 className="mt-1 text-2xl font-bold text-slate-900">{payload.mapa.nome || 'Mapa mental'}</h1>
-          <p className="mt-2 text-sm text-slate-500">{totalNodes} {totalNodes === 1 ? 'tópico' : 'tópicos'}</p>
+          <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-[var(--fin-accent)]">Mapa compartilhado</p>
+          <h1 className="mt-1 text-2xl font-bold text-[var(--fin-text)]">{payload.mapa.nome || 'Mapa mental'}</h1>
+          <p className="mt-2 text-sm text-[var(--fin-text-3)]">{totalNodes} {totalNodes === 1 ? 'tópico' : 'tópicos'}</p>
         </div>
         <div className="px-7 py-6">
-          <h2 className="text-sm font-semibold text-slate-900">Criar uma cópia na sua conta?</h2>
-          <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
+          <h2 className="text-sm font-semibold text-[var(--fin-text)]">Criar uma cópia na sua conta?</h2>
+          <p className="mt-1.5 text-sm leading-relaxed text-[var(--fin-text-3)]">
             Um novo mapa editável será criado. Alterações na sua cópia não afetam o mapa original.
           </p>
           {copyError && (
-            <div role="alert" className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-700">
+            <div role="alert" className="mt-4 flex items-start gap-2 rounded-xl border border-[var(--fin-negative)]/30 bg-[var(--fin-negative-soft)] px-3 py-2.5 text-xs text-[var(--fin-negative-text)]">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> {copyError}
             </div>
           )}
@@ -154,7 +154,7 @@ export default function ImportarMapaMentalPage() {
             type="button"
             onClick={() => void copiar()}
             disabled={copying}
-            className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--fin-accent)] px-4 py-3 text-sm font-semibold text-[var(--fin-text-on-fill)] hover:bg-[var(--fin-accent-hover)] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {copying ? <Loader2 className="h-4 w-4 animate-spin" /> : <CopyPlus className="h-4 w-4" />}
             {copying ? 'Criando sua cópia…' : 'Criar cópia e abrir no editor'}

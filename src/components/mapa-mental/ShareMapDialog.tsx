@@ -235,7 +235,7 @@ export function ShareMapDialog({ open, mapId, mapName, onClose, onExportPdf }: P
   const permissionChanged = !!share && allowCopy !== share.allowCopy;
   const content = (
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-[2px]"
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-[var(--fin-text)]/45 p-4 backdrop-blur-[2px]"
       onMouseDown={event => { if (event.target === event.currentTarget) fechar(); }}
     >
       <div
@@ -243,22 +243,22 @@ export function ShareMapDialog({ open, mapId, mapName, onClose, onExportPdf }: P
         role="dialog"
         aria-modal="true"
         aria-labelledby="share-map-title"
-        className="flex max-h-[min(760px,calc(100dvh-32px))] w-full max-w-[620px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+        className="flex max-h-[min(760px,calc(100dvh-32px))] w-full max-w-[620px] flex-col overflow-hidden rounded-2xl border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-2xl"
       >
-        <div className="flex items-start gap-3 border-b border-slate-100 px-5 py-4">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+        <div className="flex items-start gap-3 border-b border-[var(--fin-border)] px-5 py-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]">
             <Link2 className="h-4.5 w-4.5" />
           </div>
           <div className="min-w-0 flex-1">
-            <h2 id="share-map-title" className="text-base font-bold text-slate-900">Compartilhar e exportar</h2>
-            <p className="mt-0.5 truncate text-xs text-slate-500">{mapName || 'Mapa mental'}</p>
+            <h2 id="share-map-title" className="text-base font-bold text-[var(--fin-text)]">Compartilhar e exportar</h2>
+            <p className="mt-0.5 truncate text-xs text-[var(--fin-text-3)]">{mapName || 'Mapa mental'}</p>
           </div>
           <button
             ref={closeRef}
             type="button"
             onClick={fechar}
             disabled={action !== null}
-            className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-lg p-2 text-[var(--fin-text-3)] hover:bg-[var(--fin-surface-2)] hover:text-[var(--fin-text-2)] disabled:cursor-not-allowed disabled:opacity-40"
             aria-label="Fechar"
           >
             <X className="h-4 w-4" />
@@ -267,7 +267,7 @@ export function ShareMapDialog({ open, mapId, mapName, onClose, onExportPdf }: P
 
         <div className="overflow-y-auto px-5 py-5">
           {error && (
-            <div role="alert" className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-700">
+            <div role="alert" className="mb-4 flex items-start gap-2 rounded-xl border border-[var(--fin-negative)]/30 bg-[var(--fin-negative-soft)] px-3 py-2.5 text-xs text-[var(--fin-negative-text)]">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <span className="flex-1">{error}</span>
               {loadFailed && !loading && (
@@ -279,18 +279,18 @@ export function ShareMapDialog({ open, mapId, mapName, onClose, onExportPdf }: P
           <section aria-labelledby="share-links-title">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h3 id="share-links-title" className="text-sm font-semibold text-slate-900">Links do mapa</h3>
-                <p className="mt-0.5 text-xs text-slate-500">Quem receber o link público verá uma versão somente leitura.</p>
+                <h3 id="share-links-title" className="text-sm font-semibold text-[var(--fin-text)]">Links do mapa</h3>
+                <p className="mt-0.5 text-xs text-[var(--fin-text-3)]">Quem receber o link público verá uma versão somente leitura.</p>
               </div>
               {share && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">
+                <span className="inline-flex items-center gap-1 rounded-full bg-[var(--fin-positive-soft)] px-2 py-1 text-[11px] font-semibold text-[var(--fin-positive)]">
                   <ShieldCheck className="h-3 w-3" /> Ativo
                 </span>
               )}
             </div>
 
             {loading ? (
-              <div className="mt-4 flex items-center justify-center rounded-xl border border-slate-200 py-10 text-sm text-slate-500">
+              <div className="mt-4 flex items-center justify-center rounded-xl border border-[var(--fin-border)] py-10 text-sm text-[var(--fin-text-3)]">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Carregando links…
               </div>
             ) : share ? (
@@ -311,40 +311,40 @@ export function ShareMapDialog({ open, mapId, mapName, onClose, onExportPdf }: P
                   />
                 )}
 
-                <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3">
+                <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[var(--fin-border)] bg-[var(--fin-surface-2)] px-3.5 py-3">
                   <input
                     type="checkbox"
                     checked={allowCopy}
                     onChange={event => setAllowCopy(event.target.checked)}
                     disabled={action !== null}
-                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
+                    className="mt-0.5 h-4 w-4 rounded border-[var(--fin-border-strong)] text-[var(--fin-accent)]"
                   />
                   <span>
-                    <span className="block text-xs font-semibold text-slate-800">Disponibilizar link para criar uma cópia</span>
-                    <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-500">O link cria um novo mapa na conta autenticada. Como o conteúdo é público, ele ainda pode ser reproduzido manualmente.</span>
+                    <span className="block text-xs font-semibold text-[var(--fin-text)]">Disponibilizar link para criar uma cópia</span>
+                    <span className="mt-0.5 block text-[11px] leading-relaxed text-[var(--fin-text-3)]">O link cria um novo mapa na conta autenticada. Como o conteúdo é público, ele ainda pode ser reproduzido manualmente.</span>
                   </span>
                 </label>
 
-                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--fin-border)] pt-3">
                   {confirmRevoke ? (
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-red-700">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--fin-negative-text)]">
                       <span>Os links atuais deixarão de funcionar.</span>
                       <button
                         type="button"
                         onClick={() => void revogar()}
                         disabled={action !== null}
-                        className="rounded-lg bg-red-600 px-2.5 py-1.5 font-semibold text-white disabled:opacity-60"
+                        className="rounded-lg bg-[var(--fin-negative)] px-2.5 py-1.5 font-semibold text-[var(--fin-text-on-fill)] disabled:opacity-60"
                       >
                         {action === 'revoke' ? 'Revogando…' : 'Confirmar revogação'}
                       </button>
-                      <button type="button" onClick={() => setConfirmRevoke(false)} className="font-semibold text-slate-600">Cancelar</button>
+                      <button type="button" onClick={() => setConfirmRevoke(false)} className="font-semibold text-[var(--fin-text-2)]">Cancelar</button>
                     </div>
                   ) : (
                     <button
                       type="button"
                       onClick={() => setConfirmRevoke(true)}
                       disabled={action !== null}
-                      className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
+                      className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-[var(--fin-negative-text)] hover:bg-[var(--fin-negative-soft)] disabled:opacity-60"
                     >
                       <Trash2 className="h-3.5 w-3.5" /> Revogar links
                     </button>
@@ -354,7 +354,7 @@ export function ShareMapDialog({ open, mapId, mapName, onClose, onExportPdf }: P
                       type="button"
                       onClick={() => void salvarCompartilhamento('permission')}
                       disabled={action !== null}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--fin-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--fin-text-on-fill)] hover:bg-[var(--fin-accent-hover)] disabled:opacity-60"
                     >
                       {action === 'permission' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                       Salvar permissão
@@ -363,25 +363,25 @@ export function ShareMapDialog({ open, mapId, mapName, onClose, onExportPdf }: P
                 </div>
               </div>
             ) : (
-              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="mt-4 rounded-xl border border-[var(--fin-border)] bg-[var(--fin-surface-2)] p-4">
                 <label className="flex cursor-pointer items-start gap-3">
                   <input
                     type="checkbox"
                     checked={allowCopy}
                     onChange={event => setAllowCopy(event.target.checked)}
                     disabled={action !== null}
-                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
+                    className="mt-0.5 h-4 w-4 rounded border-[var(--fin-border-strong)] text-[var(--fin-accent)]"
                   />
                   <span>
-                    <span className="block text-xs font-semibold text-slate-800">Gerar também um link para criar cópia</span>
-                    <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-500">O visitante precisará entrar no Entur OS FIN. Ocultar esse link não impede uma reprodução manual do conteúdo público.</span>
+                    <span className="block text-xs font-semibold text-[var(--fin-text)]">Gerar também um link para criar cópia</span>
+                    <span className="mt-0.5 block text-[11px] leading-relaxed text-[var(--fin-text-3)]">O visitante precisará entrar no Entur OS FIN. Ocultar esse link não impede uma reprodução manual do conteúdo público.</span>
                   </span>
                 </label>
                 <button
                   type="button"
                   onClick={() => void salvarCompartilhamento('create')}
                   disabled={action !== null}
-                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--fin-accent)] px-4 py-2.5 text-sm font-semibold text-[var(--fin-text-on-fill)] hover:bg-[var(--fin-accent-hover)] disabled:opacity-60"
                 >
                   {action === 'create' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
                   {action === 'create' ? 'Gerando links…' : 'Gerar links de compartilhamento'}
@@ -390,14 +390,14 @@ export function ShareMapDialog({ open, mapId, mapName, onClose, onExportPdf }: P
             )}
           </section>
 
-          <section className="mt-6 border-t border-slate-100 pt-5" aria-labelledby="export-map-title">
-            <div className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 px-4 py-3.5">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+          <section className="mt-6 border-t border-[var(--fin-border)] pt-5" aria-labelledby="export-map-title">
+            <div className="flex flex-wrap items-center gap-4 rounded-xl border border-[var(--fin-border)] px-4 py-3.5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--fin-surface-2)] text-[var(--fin-text-2)]">
                 <FileDown className="h-4 w-4" />
               </div>
               <div className="min-w-[180px] flex-1">
-                <h3 id="export-map-title" className="text-sm font-semibold text-slate-900">Exportar mapa inteiro</h3>
-                <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
+                <h3 id="export-map-title" className="text-sm font-semibold text-[var(--fin-text)]">Exportar mapa inteiro</h3>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-[var(--fin-text-3)]">
                   Expande todos os tópicos e cria páginas de detalhe. Imagens enviadas ao Entur são incluídas; sites externos podem bloquear suas imagens no PDF.
                 </p>
               </div>
@@ -405,7 +405,7 @@ export function ShareMapDialog({ open, mapId, mapName, onClose, onExportPdf }: P
                 type="button"
                 onClick={() => void exportar()}
                 disabled={action !== null}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--fin-border)] bg-[var(--fin-surface)] px-3 py-2 text-xs font-semibold text-[var(--fin-text-2)] hover:bg-[var(--fin-surface-2)] disabled:opacity-60"
               >
                 {action === 'pdf' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
                 {action === 'pdf' ? 'Gerando…' : 'Baixar PDF'}
@@ -433,19 +433,19 @@ function LinkField({
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</label>
-      <div className="flex min-w-0 items-center rounded-xl border border-slate-200 bg-white p-1">
+      <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-[var(--fin-text-3)]">{label}</label>
+      <div className="flex min-w-0 items-center rounded-xl border border-[var(--fin-border)] bg-[var(--fin-surface)] p-1 shadow-[var(--fin-e-card)]">
         <input
           value={value}
           readOnly
           onFocus={event => event.currentTarget.select()}
-          className="min-w-0 flex-1 bg-transparent px-2 text-xs text-slate-600 outline-none"
+          className="min-w-0 flex-1 bg-transparent px-2 text-xs text-[var(--fin-text-2)] outline-none"
           aria-label={label}
         />
         <button
           type="button"
           onClick={onCopy}
-          className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-50"
+          className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[var(--fin-accent)] hover:bg-[var(--fin-accent-soft)]"
         >
           {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
           {copied ? 'Copiado' : 'Copiar'}
@@ -454,7 +454,7 @@ function LinkField({
           href={value}
           target="_blank"
           rel="noreferrer"
-          className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+          className="rounded-lg p-1.5 text-[var(--fin-text-3)] hover:bg-[var(--fin-surface-2)] hover:text-[var(--fin-text-2)]"
           aria-label={`Abrir ${label.toLowerCase()}`}
         >
           <ExternalLink className="h-3.5 w-3.5" />

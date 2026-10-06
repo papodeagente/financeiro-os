@@ -373,7 +373,7 @@ export function PassageirosTab({ grupoId, onChange }: Props) {
           boxShadow: 'var(--lg-shadow-card)',
         }}>
           <table className="w-full text-[13px]">
-            <thead style={{ background: '#F8FAFC' }}>
+            <thead style={{ background: 'var(--fin-surface-2)' }}>
               <tr style={{ borderBottom: '1px solid var(--lg-border-base)' }}>
                 <th className="text-left px-3 py-2.5 text-[11px] uppercase tracking-[0.05em] font-semibold" style={{ color: 'var(--lg-text-3)' }}>Passageiro</th>
                 <th className="text-left px-3 py-2.5 text-[11px] uppercase tracking-[0.05em] font-semibold" style={{ color: 'var(--lg-text-3)' }}>Documentos</th>
@@ -390,7 +390,7 @@ export function PassageirosTab({ grupoId, onChange }: Props) {
                 return (
                   <tr
                     key={p.id}
-                    className="transition-colors hover:bg-[#F8FAFC]"
+                    className="transition-colors hover:bg-[var(--fin-surface-2)]"
                     style={{
                       borderTop: '1px solid #F1F5F9',
                       opacity: ehLegado ? 0.7 : 1,

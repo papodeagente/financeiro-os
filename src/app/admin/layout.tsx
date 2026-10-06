@@ -49,67 +49,99 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return <>{children}</>
   }
 
-  if (authenticated === null) {
+  if (authenticated === null || !authenticated) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <p className="text-gray-400">Carregando...</p>
+      <div className="flex min-h-screen items-center justify-center bg-[var(--fin-bg)]">
+        <p className="fin-t-body text-[var(--fin-text-3)]">{authenticated === null ? 'Carregando...' : 'Redirecionando...'}</p>
       </div>
     )
   }
 
-  if (!authenticated) {
-    return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <p className="text-gray-400">Redirecionando...</p>
+  // Super Admin usa a MESMA base do app (barra branca, item ativo em azul
+  // suave, tokens --fin-*). O contexto administrativo fica marcado pelo selo
+  // violeta no topo: é ali que a pessoa sabe que está fora da própria agência.
+  const marca = (
+    <div className="flex items-center gap-2">
+      <span aria-hidden="true" className="grid size-8 place-items-center rounded-[var(--fin-r-md)] bg-[var(--fin-violet-soft)] text-[var(--fin-violet)]">
+        <Shield className="size-4" />
+      </span>
+      <div className="flex min-w-0 flex-col">
+        <span className="fin-t-body-strong truncate text-[var(--fin-text)]">Entur OS</span>
+        <span className="fin-t-caption font-medium text-[var(--fin-violet)]">Super Admin</span>
       </div>
-    )
-  }
+    </div>
+  )
 
   return (
-    <div className="min-h-screen bg-gray-950 flex">
-      {/* Sidebar */}
-      <aside className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col shrink-0">
-        <div className="p-5 border-b border-gray-800">
-          <div className="flex items-center gap-2">
-            <Shield className="w-6 h-6 text-[#d4a853]" />
-            <span className="text-lg font-bold text-gray-100">Entur OS Admin</span>
-          </div>
+    <div className="flex min-h-screen flex-col bg-[var(--fin-bg)] text-[var(--fin-text)] md:flex-row">
+      {/* Celular: barra superior com a navegação rolável no lugar da lateral fixa */}
+      <header className="sticky top-0 z-[var(--fin-z-cabecalho)] border-b border-[var(--fin-border)] bg-[var(--fin-surface)] md:hidden">
+        <div className="flex items-center justify-between px-4 py-3">
+          {marca}
+          <button
+            onClick={handleLogout}
+            aria-label="Sair do Super Admin"
+            className="grid size-11 place-items-center rounded-[var(--fin-r-md)] text-[var(--fin-text-3)] hover:bg-[var(--fin-surface-2)] hover:text-[var(--fin-negative-text)]"
+          >
+            <LogOut className="size-5" />
+          </button>
         </div>
-
-        <nav className="flex-1 p-3 space-y-1">
+        <nav aria-label="Super Admin" className="flex gap-1 overflow-x-auto px-3 pb-2">
           {navItems.map(item => {
-            const isActive = pathname.startsWith(item.href)
+            const ativo = pathname.startsWith(item.href)
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-[#d4a853]/15 text-[#d4a853]'
-                    : 'text-gray-400 hover:text-gray-100 hover:bg-gray-800'
+                aria-current={ativo ? 'page' : undefined}
+                className={`fin-t-body inline-flex h-10 shrink-0 items-center gap-2 rounded-[var(--fin-r-md)] px-3 ${
+                  ativo ? 'bg-[var(--fin-accent-soft)] font-medium text-[var(--fin-accent)]' : 'text-[var(--fin-text-2)] hover:bg-[var(--fin-surface-2)]'
                 }`}
               >
-                <item.icon className="w-5 h-5" />
+                <item.icon className="size-4" />
                 {item.label}
               </Link>
             )
           })}
         </nav>
+      </header>
 
-        <div className="p-3 border-t border-gray-800">
+      {/* Desktop: barra lateral branca, igual à do app */}
+      <aside className="hidden w-[240px] shrink-0 flex-col border-r border-[var(--fin-border)] bg-[var(--fin-surface)] md:flex">
+        <div className="border-b border-[var(--fin-border)] px-4 py-4">{marca}</div>
+        <nav aria-label="Super Admin" className="flex-1 space-y-px px-3 py-3">
+          {navItems.map(item => {
+            const ativo = pathname.startsWith(item.href)
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={ativo ? 'page' : undefined}
+                className={`fin-t-body flex h-10 items-center gap-3 rounded-[var(--fin-r-md)] px-3 transition-colors duration-[var(--fin-dur-rapida)] ${
+                  ativo
+                    ? 'bg-[var(--fin-accent-soft)] font-medium text-[var(--fin-accent)]'
+                    : 'text-[var(--fin-text-2)] hover:bg-[var(--fin-surface-2)] hover:text-[var(--fin-text)]'
+                }`}
+              >
+                <item.icon className="size-[18px] shrink-0" />
+                {item.label}
+              </Link>
+            )
+          })}
+        </nav>
+        <div className="border-t border-[var(--fin-border)] px-3 py-2">
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:text-red-400 hover:bg-gray-800 transition-colors w-full"
+            className="fin-t-body flex h-10 w-full items-center gap-3 rounded-[var(--fin-r-md)] px-3 text-[var(--fin-text-3)] transition-colors hover:bg-[var(--fin-surface-2)] hover:text-[var(--fin-negative-text)]"
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="size-[18px]" />
             Sair
           </button>
         </div>
       </aside>
 
-      {/* Main content */}
-      <main className="flex-1 overflow-auto">
-        <div className="p-8">{children}</div>
+      <main className="min-w-0 flex-1 px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
+        <div className="mx-auto w-full max-w-[var(--fin-page-max)]">{children}</div>
       </main>
     </div>
   )

@@ -88,7 +88,7 @@ export function DemonstrativoTabela({
   const totalColunas = comComparativo ? 4 : 2;
 
   return (
-    <div className="rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]">
+    <div className="rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]">
       <div
         tabIndex={0}
         role="region"

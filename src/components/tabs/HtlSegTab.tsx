@@ -40,7 +40,7 @@ export function HtlSegTab({ grupo }: Props) {
 
   return (
     <div className="space-y-8">
-      <div className="bg-amber-50 border border-amber-400 text-amber-800 p-3 rounded-lg text-sm font-medium">
+      <div className="bg-[var(--fin-warning-soft)] border border-[var(--fin-warning)] text-[var(--fin-warning-text)] p-3 rounded-lg text-sm font-medium">
         Tabela auxiliar HTL + SEG (somente leitura)
       </div>
 
@@ -70,7 +70,7 @@ export function HtlSegTab({ grupo }: Props) {
                 <td className="p-2 border text-right">{formatBRL(r.entrada)}</td>
                 <td className="p-2 border text-center">{parcelas}</td>
                 <td className="p-2 border text-right">{formatBRL(r.parcelaPorAdt)}</td>
-                <td className={`p-2 border text-right font-bold ${Math.abs(r.provaDo9) < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
+                <td className={`p-2 border text-right font-bold ${Math.abs(r.provaDo9) < 0.01 ? 'text-[var(--fin-positive)]' : 'text-[var(--fin-negative-text)]'}`}>
                   {r.provaDo9.toFixed(2)}
                 </td>
               </tr>

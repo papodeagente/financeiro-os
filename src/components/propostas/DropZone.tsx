@@ -44,10 +44,10 @@ export function DropZone({ index, locationKey, draggingType, label, forceVisible
     <div
       ref={setNodeRef}
       className={`${baseHeight} my-2 transition-all rounded-xl border-2 border-dashed flex items-center justify-center text-sm font-semibold uppercase tracking-wider ${
-        isOver
-          ? 'bg-blue-500 border-blue-600 text-white shadow-xl scale-[1.02]'
-          : 'bg-blue-50 border-blue-300 text-blue-700'
-      }`}
+ isOver
+ ? 'bg-[var(--fin-accent)] border-[var(--fin-accent)] text-[var(--fin-text-on-fill)] shadow-xl scale-[1.02]'
+ : 'bg-[var(--fin-accent-soft)] border-[var(--fin-accent)]/30 text-[var(--fin-accent)]'
+ }`}
       aria-label={`Soltar bloco na posição ${index}`}
       data-drop-zone-key={locationKey}
     >

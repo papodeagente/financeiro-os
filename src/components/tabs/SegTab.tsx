@@ -73,18 +73,18 @@ export function SegTab({ grupo, onChange }: Props) {
     <div className="space-y-6">
       {/* Travel period reference */}
       {primeiraData && ultimaData && (
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
-          <CalendarDays className="w-5 h-5 text-blue-500 shrink-0" />
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-[var(--fin-accent-soft)] border border-[var(--fin-accent)]/30">
+          <CalendarDays className="w-5 h-5 text-[var(--fin-accent)] shrink-0" />
           <div>
-            <span className="text-xs font-medium text-blue-700 dark:text-blue-300">Periodo da viagem: </span>
-            <span className="text-sm font-semibold text-blue-900 dark:text-blue-100">{formatDateBR(primeiraData)} a {formatDateBR(ultimaData)}</span>
+            <span className="text-xs font-medium text-[var(--fin-accent)]">Periodo da viagem: </span>
+            <span className="text-sm font-semibold text-[var(--fin-accent)]">{formatDateBR(primeiraData)} a {formatDateBR(ultimaData)}</span>
           </div>
         </div>
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {TIPOS.map(t => (
-          <div key={t} className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-3" style={{ boxShadow: 'var(--elevation-1)' }}>
+          <div key={t} className="rounded-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-3 shadow-[var(--fin-e-card)]" style={{ boxShadow: 'var(--elevation-1)' }}>
             <span className="text-[11px] font-medium text-[var(--t-text-muted)] uppercase tracking-wide">Melhor {LABELS[t]}</span>
             <div className="text-lg font-bold text-[var(--t-text)] mt-0.5">{formatBRL(totals[t])}</div>
           </div>
@@ -101,7 +101,7 @@ export function SegTab({ grupo, onChange }: Props) {
           });
 
           return (
-            <div key={sIdx} className={`rounded-xl border p-4 ${isBest ? 'border-[var(--t-status-success)]/30 bg-[var(--t-status-success-bg)]/30' : 'border-[var(--t-border)] bg-[var(--t-surface)]'}`} style={{ boxShadow: 'var(--elevation-1)' }}>
+            <div key={sIdx} className={`rounded-xl border p-4 ${isBest ? 'border-[var(--t-status-success)]/30 bg-[var(--t-status-success-bg)]/30' : 'border-[var(--t-border)] bg-[var(--t-surface)]'} shadow-[var(--fin-e-card)]`} style={{ boxShadow: 'var(--elevation-1)' }}>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg bg-[var(--t-green)]/10 flex items-center justify-center">

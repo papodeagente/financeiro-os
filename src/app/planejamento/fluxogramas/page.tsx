@@ -164,14 +164,14 @@ export default function FluxogramasPage() {
   };
 
   if (loading) return (
-    <div className="p-6">
+    <div className="w-full px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
       <PageHeader title="Fluxogramas" subtitle="Construtor BPMN para mapear seus processos" />
       <SkeletonCardGrid count={6} />
     </div>
   );
 
   return (
-    <div className="p-6">
+    <div className="w-full px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
       <PageHeader
         title="Fluxogramas"
         subtitle="Construtor BPMN para mapear vendas, suporte e operações"
@@ -186,7 +186,7 @@ export default function FluxogramasPage() {
             <button
               onClick={createFluxograma}
               disabled={categorias.length === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] font-medium text-white bg-[var(--t-green)] rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
             >
               <Plus className="w-4 h-4" /> Novo fluxograma
             </button>
@@ -194,7 +194,7 @@ export default function FluxogramasPage() {
         }
       />
 
-      <div className="grid grid-cols-[260px_1fr] gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_1fr]">
         {/* Sidebar de categorias */}
         <aside className="space-y-1">
           <button
@@ -299,7 +299,7 @@ export default function FluxogramasPage() {
                       tabIndex={0}
                       onClick={(e) => { e.stopPropagation(); removeFluxograma(f.id); }}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); removeFluxograma(f.id); } }}
-                      className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 w-7 h-7 rounded-md flex items-center justify-center text-red-500 hover:bg-red-500/10 cursor-pointer"
+                      className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 w-7 h-7 rounded-md flex items-center justify-center text-[var(--fin-negative-text)] hover:bg-[var(--fin-negative-soft)] cursor-pointer"
                       title="Excluir"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -352,7 +352,7 @@ export default function FluxogramasPage() {
                     await saveCategoria(editingCategoria);
                     setCategoriaSheetOpen(false);
                   }}
-                  className="flex-1 px-4 py-2 text-[var(--text-body-sm)] font-medium text-white bg-[var(--t-green)] rounded-lg hover:opacity-90"
+                  className="flex-1 px-4 py-2 text-[var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90"
                 >
                   Salvar
                 </button>
@@ -362,7 +362,7 @@ export default function FluxogramasPage() {
                       await removeCategoria(editingCategoria.id);
                       setCategoriaSheetOpen(false);
                     }}
-                    className="px-4 py-2 text-[var(--text-body-sm)] text-red-500 border border-red-500/30 rounded-lg hover:bg-red-500/10"
+                    className="px-4 py-2 text-[var(--text-body-sm)] text-[var(--fin-negative-text)] border border-[var(--fin-negative)]/30 rounded-lg hover:bg-[var(--fin-negative-soft)]"
                   >
                     Excluir
                   </button>

@@ -43,83 +43,83 @@ export default function AdminDashboardPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+        <Loader2 className="w-6 h-6 text-[var(--fin-text-3)] animate-spin" />
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl p-4">
+      <div className="bg-[var(--fin-negative-soft)] border border-[var(--fin-negative)]/30 text-[var(--fin-negative-text)] rounded-xl p-4">
         {error}
       </div>
     )
   }
 
   const cards = [
-    { label: 'Total Agencias', value: metrics?.totalTenants ?? 0, icon: Building2, color: 'text-blue-400' },
-    { label: 'Agencias Ativas', value: metrics?.activeTenants ?? 0, icon: Activity, color: 'text-green-400' },
-    { label: 'Total Usuarios', value: metrics?.totalUsers ?? 0, icon: Users, color: 'text-purple-400' },
-    { label: 'Planos', value: metrics?.totalPlans ?? 0, icon: CreditCard, color: 'text-[#d4a853]' },
+    { label: 'Total Agencias', value: metrics?.totalTenants ?? 0, icon: Building2, color: 'text-[var(--fin-accent)]' },
+    { label: 'Agencias Ativas', value: metrics?.activeTenants ?? 0, icon: Activity, color: 'text-[var(--fin-positive)]' },
+    { label: 'Total Usuarios', value: metrics?.totalUsers ?? 0, icon: Users, color: 'text-[var(--fin-violet)]' },
+    { label: 'Planos', value: metrics?.totalPlans ?? 0, icon: CreditCard, color: 'text-[var(--fin-accent)]' },
   ]
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-100 mb-6">Dashboard</h1>
+      <h1 className="text-2xl font-bold text-[var(--fin-text)] mb-6">Dashboard</h1>
 
       {/* Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {cards.map(card => (
           <div
             key={card.label}
-            className="bg-gray-900 border border-gray-800 rounded-xl p-5"
+            className="bg-[var(--fin-surface)] border border-[var(--fin-border)] rounded-xl p-5"
           >
             <div className="flex items-center justify-between mb-3">
-              <span className="text-sm text-gray-400">{card.label}</span>
+              <span className="text-sm text-[var(--fin-text-3)]">{card.label}</span>
               <card.icon className={`w-5 h-5 ${card.color}`} />
             </div>
-            <p className="text-3xl font-bold text-gray-100">{card.value}</p>
+            <p className="text-3xl font-bold text-[var(--fin-text)]">{card.value}</p>
           </div>
         ))}
       </div>
 
       {/* Recent Tenants */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl">
-        <div className="px-5 py-4 border-b border-gray-800">
-          <h2 className="text-lg font-semibold text-gray-100">Agencias Recentes</h2>
+      <div className="bg-[var(--fin-surface)] border border-[var(--fin-border)] rounded-xl">
+        <div className="px-5 py-4 border-b border-[var(--fin-border)]">
+          <h2 className="text-lg font-semibold text-[var(--fin-text)]">Agencias Recentes</h2>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-gray-800">
-                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-5 py-3">Nome</th>
-                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-5 py-3">Slug</th>
-                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-5 py-3">Plano</th>
-                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-5 py-3">Status</th>
-                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-5 py-3">Criado em</th>
+              <tr className="border-b border-[var(--fin-border)]">
+                <th className="text-left text-xs font-medium text-[var(--fin-text-3)] uppercase tracking-wider px-5 py-3">Nome</th>
+                <th className="text-left text-xs font-medium text-[var(--fin-text-3)] uppercase tracking-wider px-5 py-3">Slug</th>
+                <th className="text-left text-xs font-medium text-[var(--fin-text-3)] uppercase tracking-wider px-5 py-3">Plano</th>
+                <th className="text-left text-xs font-medium text-[var(--fin-text-3)] uppercase tracking-wider px-5 py-3">Status</th>
+                <th className="text-left text-xs font-medium text-[var(--fin-text-3)] uppercase tracking-wider px-5 py-3">Criado em</th>
               </tr>
             </thead>
             <tbody>
               {metrics?.recentTenants && metrics.recentTenants.length > 0 ? (
                 metrics.recentTenants.map(tenant => (
-                  <tr key={tenant.id} className="border-b border-gray-800 last:border-0">
-                    <td className="px-5 py-3 text-sm text-gray-100">{tenant.nome}</td>
-                    <td className="px-5 py-3 text-sm text-gray-400 font-mono">{tenant.slug}</td>
+                  <tr key={tenant.id} className="border-b border-[var(--fin-border)] last:border-0">
+                    <td className="px-5 py-3 text-sm text-[var(--fin-text)]">{tenant.nome}</td>
+                    <td className="px-5 py-3 text-sm text-[var(--fin-text-3)] font-mono">{tenant.slug}</td>
                     <td className="px-5 py-3">
                       <PlanBadge plano={tenant.plano} />
                     </td>
                     <td className="px-5 py-3">
                       <StatusBadge status={tenant.status} />
                     </td>
-                    <td className="px-5 py-3 text-sm text-gray-400">
+                    <td className="px-5 py-3 text-sm text-[var(--fin-text-3)]">
                       {new Date(tenant.created_at).toLocaleDateString('pt-BR')}
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="px-5 py-8 text-center text-sm text-gray-500">
+                  <td colSpan={5} className="px-5 py-8 text-center text-sm text-[var(--fin-text-3)]">
                     Nenhuma agencia encontrada
                   </td>
                 </tr>
@@ -134,13 +134,13 @@ export default function AdminDashboardPage() {
 
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    ativo: 'bg-green-500/15 text-green-400',
-    suspenso: 'bg-red-500/15 text-red-400',
-    trial: 'bg-yellow-500/15 text-yellow-400',
+    ativo: 'bg-[var(--fin-positive-soft)] text-[var(--fin-positive)]',
+    suspenso: 'bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)]',
+    trial: 'bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)]',
   }
 
   return (
-    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${styles[status] || 'bg-gray-700 text-gray-300'}`}>
+    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${styles[status] || 'bg-[var(--fin-surface)] text-[var(--fin-text-3)]'}`}>
       {status}
     </span>
   )
@@ -148,13 +148,13 @@ function StatusBadge({ status }: { status: string }) {
 
 function PlanBadge({ plano }: { plano: string }) {
   const styles: Record<string, string> = {
-    free: 'bg-gray-700/50 text-gray-300',
-    pro: 'bg-blue-500/15 text-blue-400',
-    enterprise: 'bg-[#d4a853]/15 text-[#d4a853]',
+    free: 'bg-[var(--fin-text)]/50 text-[var(--fin-text-3)]',
+    pro: 'bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]',
+    enterprise: 'bg-[var(--fin-accent)]/15 text-[var(--fin-accent)]',
   }
 
   return (
-    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${styles[plano] || 'bg-gray-700 text-gray-300'}`}>
+    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${styles[plano] || 'bg-[var(--fin-surface)] text-[var(--fin-text-3)]'}`}>
       {plano}
     </span>
   )

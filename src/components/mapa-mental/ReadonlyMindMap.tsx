@@ -233,27 +233,27 @@ function ReadonlyMindMapInner({ mapa }: { mapa: MapaMentalData }) {
         <Controls
           showInteractive={false}
           position="bottom-left"
-          className="!rounded-xl !border !border-slate-200 !bg-white !shadow-sm"
+          className="!rounded-xl !border !border-[var(--fin-border)] !bg-[var(--fin-surface)] !shadow-sm"
         />
       </ReactFlow>
 
       {selectedNode && (
         <aside
           aria-label={`Detalhes de ${selectedNode.text || 'tópico'}`}
-          className="nodrag nopan nowheel absolute inset-x-3 bottom-3 z-20 max-h-[46%] overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur-sm sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-4 sm:max-h-[calc(100%-2rem)] sm:w-80"
+          className="nodrag nopan nowheel absolute inset-x-3 bottom-3 z-20 max-h-[46%] overflow-y-auto rounded-2xl border border-[var(--fin-border)] bg-[var(--fin-surface)]/95 p-4 shadow-xl backdrop-blur-sm sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-4 sm:max-h-[calc(100%-2rem)] sm:w-80"
           onDoubleClick={event => event.stopPropagation()}
         >
           <div className="flex items-start gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">Detalhes do tópico</p>
-              <h2 className="mt-1 break-words text-sm font-semibold text-slate-900">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fin-text-3)]">Detalhes do tópico</p>
+              <h2 className="mt-1 break-words text-sm font-semibold text-[var(--fin-text)]">
                 {selectedNode.text || 'Tópico sem título'}
               </h2>
             </div>
             <button
               type="button"
               onClick={closeDetails}
-              className="-mr-1 -mt-1 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              className="-mr-1 -mt-1 rounded-lg p-1.5 text-[var(--fin-text-3)] hover:bg-[var(--fin-surface-2)] hover:text-[var(--fin-text-2)]"
               aria-label="Fechar detalhes"
             >
               <X className="h-4 w-4" />
@@ -262,10 +262,10 @@ function ReadonlyMindMapInner({ mapa }: { mapa: MapaMentalData }) {
 
           {selectedNode.notes?.trim() && (
             <section className="mt-4" aria-labelledby="readonly-node-notes">
-              <h3 id="readonly-node-notes" className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-                <StickyNote className="h-3.5 w-3.5 text-amber-500" /> Notas
+              <h3 id="readonly-node-notes" className="flex items-center gap-1.5 text-xs font-semibold text-[var(--fin-text-2)]">
+                <StickyNote className="h-3.5 w-3.5 text-[var(--fin-warning-text)]" /> Notas
               </h3>
-              <p className="mt-1.5 whitespace-pre-wrap break-words text-xs leading-relaxed text-slate-600">
+              <p className="mt-1.5 whitespace-pre-wrap break-words text-xs leading-relaxed text-[var(--fin-text-2)]">
                 {selectedNode.notes.trim()}
               </p>
             </section>
@@ -274,7 +274,7 @@ function ReadonlyMindMapInner({ mapa }: { mapa: MapaMentalData }) {
           {safeLinks.length > 0 && (
             <ResourceLinks
               title="Links"
-              icon={<Link2 className="h-3.5 w-3.5 text-blue-500" />}
+              icon={<Link2 className="h-3.5 w-3.5 text-[var(--fin-accent)]" />}
               items={safeLinks.map(link => ({ label: link.label || link.url, url: link.url }))}
             />
           )}
@@ -282,13 +282,13 @@ function ReadonlyMindMapInner({ mapa }: { mapa: MapaMentalData }) {
           {safeAttachments.length > 0 && (
             <ResourceLinks
               title="Anexos"
-              icon={<Paperclip className="h-3.5 w-3.5 text-slate-500" />}
+              icon={<Paperclip className="h-3.5 w-3.5 text-[var(--fin-text-3)]" />}
               items={safeAttachments.map(attachment => ({ label: attachment.name || 'Abrir anexo', url: attachment.url }))}
             />
           )}
 
           {!selectedNode.notes?.trim() && safeLinks.length === 0 && safeAttachments.length === 0 && (
-            <p className="mt-3 text-xs leading-relaxed text-slate-500">Este tópico não possui notas, links ou anexos.</p>
+            <p className="mt-3 text-xs leading-relaxed text-[var(--fin-text-3)]">Este tópico não possui notas, links ou anexos.</p>
           )}
         </aside>
       )}
@@ -307,7 +307,7 @@ function ResourceLinks({
 }) {
   return (
     <section className="mt-4">
-      <h3 className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+      <h3 className="flex items-center gap-1.5 text-xs font-semibold text-[var(--fin-text-2)]">
         {icon} {title}
       </h3>
       <ul className="mt-1.5 space-y-1.5">
@@ -317,7 +317,7 @@ function ResourceLinks({
               href={item.url}
               target="_blank"
               rel="noreferrer"
-              className="flex items-start gap-2 rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-2 text-xs font-medium text-blue-700 hover:border-blue-200 hover:bg-blue-50"
+              className="flex items-start gap-2 rounded-lg border border-[var(--fin-border)] bg-[var(--fin-surface-2)] px-2.5 py-2 text-xs font-medium text-[var(--fin-accent)] hover:border-[var(--fin-accent)]/30 hover:bg-[var(--fin-accent-soft)]"
             >
               <span className="min-w-0 flex-1 break-words">{item.label}</span>
               <ExternalLink className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />

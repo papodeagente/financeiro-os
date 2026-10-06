@@ -257,7 +257,7 @@ export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAI
                         placeholder="Telefone"
                         className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)] text-xs h-8" />
                       <Button type="button" onClick={handleCriarClienteSidebar} disabled={savingCliente}
-                        className="w-full bg-[var(--t-green)] hover:bg-[var(--t-green)]/90 text-white dark:text-[#0a0a14] text-[10px] h-7">
+                        className="w-full bg-[var(--t-green)] hover:bg-[var(--t-green)]/90 text-[var(--fin-text-on-fill)]  text-[10px] h-7">
                         {savingCliente ? 'Salvando...' : 'Cadastrar e selecionar'}
                       </Button>
                     </div>
@@ -555,7 +555,7 @@ export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAI
                     <div className="flex gap-2 mt-1">
                       <input
                         type="color"
-                        value={proposta.visual.cor_primaria || '#004aad'}
+                        value={proposta.visual.cor_primaria || 'var(--fin-accent)'}
                         onChange={e => onUpdate(p => { p.visual.cor_primaria = e.target.value; return p; })}
                         className="w-8 h-8 rounded cursor-pointer shadow-[var(--t-card-shadow)]"
                       />
@@ -571,7 +571,7 @@ export function PropostaSidebar({ proposta, clientes, membros, onUpdate, onSetAI
                     <div className="flex gap-2 mt-1">
                       <input
                         type="color"
-                        value={proposta.visual.cor_fundo || '#ffffff'}
+                        value={proposta.visual.cor_fundo || 'var(--fin-surface)'}
                         onChange={e => onUpdate(p => { p.visual.cor_fundo = e.target.value; return p; })}
                         className="w-8 h-8 rounded cursor-pointer shadow-[var(--t-card-shadow)]"
                       />
@@ -748,7 +748,7 @@ function ViagemTab({
               {tag}
               <button
                 onClick={() => updateViagem({ interesses_tags: tags.filter((_, j) => j !== i) })}
-                className="hover:text-red-400"
+                className="hover:text-[var(--fin-negative-text)]"
               >
                 ×
               </button>
@@ -791,7 +791,7 @@ function ViagemTab({
                 />
                 <button
                   onClick={() => removeDestino(i)}
-                  className="text-red-400 hover:text-red-300 text-xs px-1"
+                  className="text-[var(--fin-negative-text)] hover:text-[var(--fin-negative-text)] text-xs px-1"
                 >
                   ×
                 </button>

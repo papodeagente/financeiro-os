@@ -13,7 +13,7 @@ export function MindEdge(props: EdgeProps) {
   } = props;
 
   const d = data as { color?: string; faded?: boolean } | undefined;
-  const color = d?.color || '#3B82F6';
+  const color = d?.color || 'var(--fin-accent)';
 
   const [edgePath] = getBezierPath({
     sourceX, sourceY, targetX, targetY,

@@ -50,7 +50,7 @@ export default function FluxoCaixaTab({ grupo, onChange }: FluxoCaixaTabProps) {
           onClick={() => setVisao('agencia')}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
             visao === 'agencia'
-              ? 'bg-[#d4a853] text-[#0a0a14]'
+              ? 'bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)]'
               : 'bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] hover:text-[var(--t-text)]'
           }`}
         >
@@ -60,7 +60,7 @@ export default function FluxoCaixaTab({ grupo, onChange }: FluxoCaixaTabProps) {
           onClick={() => setVisao('total')}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
             visao === 'total'
-              ? 'bg-[#d4a853] text-[#0a0a14]'
+              ? 'bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)]'
               : 'bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] hover:text-[var(--t-text)]'
           }`}
         >
@@ -69,9 +69,9 @@ export default function FluxoCaixaTab({ grupo, onChange }: FluxoCaixaTabProps) {
       </div>
 
       {isAgencia && (
-        <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 border border-blue-200">
-          <AlertTriangle className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
-          <p className="text-xs text-blue-800">
+        <div className="flex items-start gap-3 p-3 rounded-lg bg-[var(--fin-accent-soft)] border border-[var(--fin-accent)]/30">
+          <AlertTriangle className="h-4 w-4 text-[var(--fin-accent)] mt-0.5 shrink-0" />
+          <p className="text-xs text-[var(--fin-accent)]">
             Visao da agencia: mostra apenas a comissao nas entradas e os repasses a fornecedores nas saidas.
             O dinheiro do cliente que e repassado ao fornecedor nao aparece como receita da agencia.
           </p>
@@ -80,33 +80,33 @@ export default function FluxoCaixaTab({ grupo, onChange }: FluxoCaixaTabProps) {
 
       {/* Cards resumo */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="border-0 shadow-md" style={{ backgroundColor: '#1a1a2e' }}>
+        <Card className="border-0 shadow-md" style={{ backgroundColor: 'var(--fin-surface)' }}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-[var(--t-text-secondary)]">
               {isAgencia ? 'Comissao Recebida' : 'Total Entradas'}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-green-400">
+            <p className="text-2xl font-bold text-[var(--fin-positive)]">
               {formatBRL(totalEntradas)}
             </p>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-md" style={{ backgroundColor: '#1a1a2e' }}>
+        <Card className="border-0 shadow-md" style={{ backgroundColor: 'var(--fin-surface)' }}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-[var(--t-text-secondary)]">
               {isAgencia ? 'Repasses Fornecedores' : 'Total Saidas'}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-red-400">
+            <p className="text-2xl font-bold text-[var(--fin-negative-text)]">
               {formatBRL(isAgencia ? fluxo.reduce((s, m) => s + m.saidasRepasses, 0) : totalSaidas)}
             </p>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-md" style={{ backgroundColor: '#1a1a2e' }}>
+        <Card className="border-0 shadow-md" style={{ backgroundColor: 'var(--fin-surface)' }}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-[var(--t-text-secondary)]">
               {isAgencia ? 'Saldo Agencia' : 'Saldo Final'}
@@ -115,8 +115,8 @@ export default function FluxoCaixaTab({ grupo, onChange }: FluxoCaixaTabProps) {
           <CardContent>
             <p
               className={`text-2xl font-bold ${
-                saldoFinal >= 0 ? 'text-green-400' : 'text-red-400'
-              }`}
+ saldoFinal >= 0 ? 'text-[var(--fin-positive)]' : 'text-[var(--fin-negative-text)]'
+ }`}
             >
               {formatBRL(saldoFinal)}
             </p>
@@ -126,7 +126,7 @@ export default function FluxoCaixaTab({ grupo, onChange }: FluxoCaixaTabProps) {
 
       {/* Alerta de meses negativos */}
       {mesesNegativos.length > 0 && (
-        <Alert variant="destructive" className="border-red-500 bg-red-950/40">
+        <Alert variant="destructive" className="border-[var(--fin-negative)] bg-[var(--fin-negative)]/40">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
             Atencao: {mesesNegativos.length} mes(es) com saldo acumulado negativo.
@@ -137,9 +137,9 @@ export default function FluxoCaixaTab({ grupo, onChange }: FluxoCaixaTabProps) {
 
       {/* Tabela de fluxo de caixa */}
       <Card className="border-0 shadow-md">
-        <CardHeader style={{ backgroundColor: '#1a1a2e' }}>
+        <CardHeader style={{ backgroundColor: 'var(--fin-surface)' }}>
           <CardTitle className="text-[var(--t-text)] flex items-center gap-2">
-            <span style={{ color: '#d4a853' }}>$</span>
+            <span style={{ color: 'var(--fin-accent)' }}>$</span>
             {isAgencia ? 'Fluxo de Caixa da Agencia' : 'Fluxo de Caixa Total'}
           </CardTitle>
         </CardHeader>
@@ -147,7 +147,7 @@ export default function FluxoCaixaTab({ grupo, onChange }: FluxoCaixaTabProps) {
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow style={{ backgroundColor: '#1a1a2e' }}>
+                <TableRow style={{ backgroundColor: 'var(--fin-surface)' }}>
                   <TableHead className="text-[var(--t-text-secondary)] font-semibold">Mes</TableHead>
                   {isAgencia ? (
                     <>
@@ -177,23 +177,23 @@ export default function FluxoCaixaTab({ grupo, onChange }: FluxoCaixaTabProps) {
                     <TableCell className="font-medium">{mes.mes}</TableCell>
                     {isAgencia ? (
                       <>
-                        <TableCell className="text-right text-green-700 font-medium">
+                        <TableCell className="text-right text-[var(--fin-positive)] font-medium">
                           {formatBRL(mes.entradasComissao)}
                         </TableCell>
-                        <TableCell className="text-right text-red-700 font-medium">
+                        <TableCell className="text-right text-[var(--fin-negative-text)] font-medium">
                           {formatBRL(mes.saidasRepasses)}
                         </TableCell>
                         <TableCell
                           className={`text-right font-semibold ${
-                            mes.saldoAgencia >= 0 ? 'text-green-700 bg-green-50' : 'text-red-700 bg-red-50'
-                          }`}
+ mes.saldoAgencia >= 0 ? 'text-[var(--fin-positive)] bg-[var(--fin-positive-soft)]' : 'text-[var(--fin-negative-text)] bg-[var(--fin-negative-soft)]'
+ }`}
                         >
                           {formatBRL(mes.saldoAgencia)}
                         </TableCell>
                         <TableCell
                           className={`text-right font-bold ${
-                            mes.saldoAgenciaAcumulado >= 0 ? 'text-green-700 bg-green-100' : 'text-red-700 bg-red-100'
-                          }`}
+ mes.saldoAgenciaAcumulado >= 0 ? 'text-[var(--fin-positive)] bg-[var(--fin-positive-soft)]' : 'text-[var(--fin-negative-text)] bg-[var(--fin-negative-soft)]'
+ }`}
                         >
                           {formatBRL(mes.saldoAgenciaAcumulado)}
                         </TableCell>
@@ -201,20 +201,20 @@ export default function FluxoCaixaTab({ grupo, onChange }: FluxoCaixaTabProps) {
                     ) : (
                       <>
                         <TableCell className="text-right">{formatBRL(mes.entradasPrevistas)}</TableCell>
-                        <TableCell className="text-right text-green-700 font-medium">{formatBRL(mes.entradasRealizadas)}</TableCell>
+                        <TableCell className="text-right text-[var(--fin-positive)] font-medium">{formatBRL(mes.entradasRealizadas)}</TableCell>
                         <TableCell className="text-right">{formatBRL(mes.saidasPrevistas)}</TableCell>
-                        <TableCell className="text-right text-red-700 font-medium">{formatBRL(mes.saidasRealizadas)}</TableCell>
+                        <TableCell className="text-right text-[var(--fin-negative-text)] font-medium">{formatBRL(mes.saidasRealizadas)}</TableCell>
                         <TableCell
                           className={`text-right font-semibold ${
-                            mes.saldoMensal >= 0 ? 'text-green-700 bg-green-50' : 'text-red-700 bg-red-50'
-                          }`}
+ mes.saldoMensal >= 0 ? 'text-[var(--fin-positive)] bg-[var(--fin-positive-soft)]' : 'text-[var(--fin-negative-text)] bg-[var(--fin-negative-soft)]'
+ }`}
                         >
                           {formatBRL(mes.saldoMensal)}
                         </TableCell>
                         <TableCell
                           className={`text-right font-bold ${
-                            mes.saldoAcumulado >= 0 ? 'text-green-700 bg-green-100' : 'text-red-700 bg-red-100'
-                          }`}
+ mes.saldoAcumulado >= 0 ? 'text-[var(--fin-positive)] bg-[var(--fin-positive-soft)]' : 'text-[var(--fin-negative-text)] bg-[var(--fin-negative-soft)]'
+ }`}
                         >
                           {formatBRL(mes.saldoAcumulado)}
                         </TableCell>

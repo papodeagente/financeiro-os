@@ -30,8 +30,8 @@ export function MoneyCustoVenda({
     margem === null
       ? 'text-[var(--t-text-muted)]'
       : margem >= 0
-        ? 'text-green-600 dark:text-green-400'
-        : 'text-red-500';
+        ? 'text-[var(--fin-positive)]'
+        : 'text-[var(--fin-negative-text)]';
 
   return (
     <div>

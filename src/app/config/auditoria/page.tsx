@@ -56,7 +56,7 @@ interface Result {
 const INITIAL_FILTERS: Filters = {
   q: '', modulo: '', acao: '', usuario: '', origem: '', inicio: '', fim: '', page: 1,
 };
-const PANEL = 'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]';
+const PANEL = 'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]';
 const FIELD = 'h-11 w-full min-w-0 rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-3 text-sm text-[var(--fin-text)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--fin-accent-ring)] focus-visible:border-[var(--fin-accent)]';
 const BUTTON = 'h-11 gap-2 rounded-[var(--fin-r-md)] border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-4 text-[var(--fin-text-2)] shadow-none hover:bg-[var(--fin-surface-2)]';
 const MUTED = 'text-[var(--fin-text-3)]';

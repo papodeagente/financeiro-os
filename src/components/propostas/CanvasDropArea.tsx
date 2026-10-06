@@ -37,15 +37,15 @@ export function CanvasDropArea({ draggingType, children, className, style, onCli
       {draggingType && (
         <div
           className={`absolute inset-0 pointer-events-none rounded-lg transition-all ${
-            isOver
-              ? 'ring-4 ring-blue-500 bg-blue-500/10 shadow-2xl shadow-blue-500/20'
-              : 'ring-2 ring-blue-300/60 bg-blue-50/30'
-          }`}
+ isOver
+ ? 'ring-4 ring-[var(--fin-accent)] bg-[var(--fin-accent-soft)] shadow-2xl '
+ : 'ring-2 ring-[var(--fin-accent)]/60 bg-[var(--fin-accent-soft)]'
+ }`}
           style={{ zIndex: 50 }}
           aria-hidden
         >
           {isOver && (
-            <div className="sticky top-3 mx-auto w-fit px-4 py-2 rounded-full bg-blue-600 text-white text-xs font-bold shadow-xl uppercase tracking-wider flex items-center gap-2 animate-pulse">
+            <div className="sticky top-3 mx-auto w-fit px-4 py-2 rounded-full bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] text-xs font-bold shadow-xl uppercase tracking-wider flex items-center gap-2 animate-pulse">
               <span className="text-lg">↓</span>
               Solte em qualquer lugar
               <span className="text-lg">↓</span>
