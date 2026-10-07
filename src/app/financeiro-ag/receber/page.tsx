@@ -9,7 +9,7 @@ import { ContaReceber, createContaReceber, StatusContaReceber } from '@/lib/crm-
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
 import { toast } from '@/lib/toast';
 import {
-  mensagemDaTaxaInvalida, normalizarPlataforma, validarTaxa,
+  mensagemDaTaxaInvalida, normalizarPlataforma, validarTaxa, type DescontoPadrao,
 } from '@/lib/taxa-plataforma';
 import {
   round2, num, somaPor, hojeISO, estaVencido, dentroDoPeriodo,
@@ -83,11 +83,16 @@ function contagem(n: number, singular: string, plural: string): string {
 
 export default function ContasReceberPage() {
   const [items, setItems] = useState<ContaReceber[]>([]);
+  const [descontosPadrao, setDescontosPadrao] = useState<DescontoPadrao[]>([]);
   // A lista de plataformas aprende com o que a agência já usou, para não
-  // exigir uma tela de cadastro antes do primeiro lançamento.
+  // exigir uma tela de cadastro antes do primeiro lançamento. As que têm
+  // desconto padrão entram mesmo sem nenhuma conta ainda.
   const plataformasUsadas = useMemo(
-    () => items.map(i => i.taxa_plataforma ?? '').filter(Boolean),
-    [items],
+    () => [
+      ...items.map(i => i.taxa_plataforma ?? ''),
+      ...descontosPadrao.map(p => p.plataforma),
+    ].filter(Boolean),
+    [items, descontosPadrao],
   );
   const [loading, setLoading] = useState(true);
   const [erroCarga, setErroCarga] = useState<string | null>(null);
@@ -129,6 +134,16 @@ export default function ContasReceberPage() {
         }
       } catch {
         setNotaPorConta({});
+      }
+      // Mesmo princípio: sem os padrões a baixa só não vem pré-calculada.
+      try {
+        const res = await fetch('/api/plataformas/descontos');
+        if (res.ok) {
+          const corpo = (await res.json()) as { padroes?: DescontoPadrao[] };
+          setDescontosPadrao(Array.isArray(corpo.padroes) ? corpo.padroes : []);
+        }
+      } catch {
+        setDescontosPadrao([]);
       }
       setErroCarga(null);
       setAtualizadoEm(new Date());
@@ -245,7 +260,12 @@ export default function ContasReceberPage() {
    */
   async function handleBaixar(
     item: ContaReceber,
-    dados: { valorInformado: number; taxaInformada: number; plataforma: string },
+    dados: {
+      valorInformado: number;
+      taxaInformada: number;
+      plataforma: string;
+      novoPadrao: DescontoPadrao | null;
+    },
   ) {
     const informado = round2(dados.valorInformado);
     if (informado <= 0) return;
@@ -271,11 +291,33 @@ export default function ContasReceberPage() {
       await updateEntity('contas-receber', updated);
       setBaixaAlvo(null);
       toast.success(quitado ? 'Conta marcada como recebida.' : 'Recebimento em parte registrado.');
+      // O padrão é guardado DEPOIS da baixa e à parte dela: falhar aqui não
+      // pode desfazer nem esconder um recebimento que já foi registrado.
+      if (dados.novoPadrao) await guardarDescontoPadrao(dados.novoPadrao);
       load();
     } catch {
       toast.error('Não foi possível registrar o recebimento.');
     } finally {
       setBaixando(false);
+    }
+  }
+
+  async function guardarDescontoPadrao(padrao: DescontoPadrao) {
+    try {
+      const res = await fetch('/api/plataformas/descontos', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(padrao),
+      });
+      const corpo = (await res.json().catch(() => ({}))) as { padroes?: DescontoPadrao[]; error?: string };
+      if (!res.ok) throw new Error(corpo.error || `Erro ${res.status}`);
+      if (Array.isArray(corpo.padroes)) setDescontosPadrao(corpo.padroes);
+      toast.success('Desconto padrão guardado.');
+    } catch (e) {
+      toast.error(
+        'O recebimento foi registrado, mas o desconto padrão não foi guardado.',
+        e instanceof Error ? e.message : '',
+      );
     }
   }
 
@@ -737,8 +779,16 @@ export default function ContasReceberPage() {
         jaRecebido={baixaAlvo ? num(baixaAlvo.valor_recebido) : 0}
         emAberto={baixaAlvo ? valorEmAberto(baixaAlvo) : 0}
         taxaJaRetida={baixaAlvo ? num(baixaAlvo.taxa) : 0}
-        plataformaAtual={baixaAlvo?.taxa_plataforma ?? ''}
+        // Conta que veio de integração já sabe a plataforma: o padrão dela
+        // entra sozinho, sem a pessoa precisar escolher.
+        plataformaAtual={
+          baixaAlvo
+            ? normalizarPlataforma(baixaAlvo.taxa_plataforma)
+              || nomeDaPlataforma(plataformaDaConta(baixaAlvo) ?? '')
+            : ''
+        }
         plataformasUsadas={plataformasUsadas}
+        descontosPadrao={descontosPadrao}
         processando={baixando}
         onConfirmar={dados => (baixaAlvo ? handleBaixar(baixaAlvo, dados) : undefined)}
       />

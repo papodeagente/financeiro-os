@@ -7,6 +7,7 @@ import { loadEntities } from '@/lib/crm-storage';
 import { PageHeader } from '@/components/fin/PageHeader';
 import { DataState } from '@/components/fin/DataState';
 import { toast } from '@/lib/toast';
+import { DescontosPadrao } from './DescontosPadrao';
 
 interface CampoCred { chave: string; rotulo: string; tipo: string; obrigatorio: boolean; ajuda: string }
 interface Plataforma { id: string; nome: string; campos: CampoCred[] }
@@ -289,6 +290,8 @@ export default function PlataformasPage() {
             </section>
           );
         })}
+
+        <DescontosPadrao />
 
         {dados && dados.eventos.length > 0 && (
           <section className={`${CARTAO} overflow-hidden`}>

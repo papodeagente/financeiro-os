@@ -19,7 +19,11 @@ import {
   PLATAFORMAS_CONHECIDAS, SEM_PLATAFORMA, agruparTaxasPorPlataforma, brutoQuePassou,
   chaveDaPlataforma, mensagemDaTaxaInvalida, normalizarPlataforma, opcoesDePlataforma,
   percentualDaTaxa, taxaRealizada, totalDeTaxas, validarTaxa,
+  descontoPeloLiquido, validarLiquido, mensagemDoLiquidoInvalido, liquidoPeloPercentual,
+  validarPercentualPadrao, mensagemDoPercentualInvalido, descontoPadraoDa, formatarPercentual,
+  lerPercentual,
 } from '../src/lib/taxa-plataforma.ts';
+import { percentual as aplicarPercentual, round2 } from '../src/lib/money.ts';
 import { calcularSaldoBancario, entradaLiquidaNoBanco } from '../src/lib/saldo-bancario.ts';
 
 let falhas = 0, total = 0;
@@ -266,6 +270,79 @@ for (const status of [
   const entrada = entradaLiquidaNoBanco(conta as never);
   eq(entrada >= 0, true, `entrada não negativa com status "${status}" (deu ${entrada})`);
 }
+
+// ── Baixa pelo valor que caiu no banco (07/10/2026) ───────────────────────
+// A pessoa digita o LÍQUIDO; o desconto e o percentual saem da diferença.
+console.log('--- o desconto sai do que caiu no banco ---');
+eq(descontoPeloLiquido(247, 222.55), 24.45, 'R$ 247 pagos, R$ 222,55 no banco: R$ 24,45 de desconto');
+eq(percentualDaTaxa(descontoPeloLiquido(247, 222.55), 247), 9.9, '... que são 9,9%');
+eq(descontoPeloLiquido(1000, 1000), 0, 'caiu tudo: desconto zero');
+eq(descontoPeloLiquido(0.3, 0.1), 0.2, 'sem erro de float (0,3 - 0,1)');
+eq(descontoPeloLiquido(100, 150), 0, 'líquido maior que o pago nunca vira desconto negativo');
+eq(descontoPeloLiquido(null, undefined), 0, 'campos vazios não viram NaN');
+
+console.log('--- o líquido digitado é validado ---');
+eq(validarLiquido(247, 222.55), null, 'líquido dentro do pago é válido');
+eq(validarLiquido(247, 247), null, 'líquido igual ao pago é válido (sem desconto)');
+eq(validarLiquido(247, 0), 'vazio', 'zero é campo vazio, não 100% de desconto');
+eq(validarLiquido(247, -5), 'vazio', 'negativo é recusado');
+eq(validarLiquido(247, 247.01), 'maior-que-o-pago', 'um centavo acima do pago é recusado');
+eq(validarLiquido(0.1 + 0.2, 0.3), null, 'arredonda antes de comparar (0,1 + 0,2 = 0,3)');
+eq(mensagemDoLiquidoInvalido('vazio'), 'Informe quanto caiu no banco.', 'mensagem do vazio');
+eq(mensagemDoLiquidoInvalido('maior-que-o-pago'), 'O que caiu no banco não pode ser maior do que o cliente pagou.', 'mensagem do maior');
+
+console.log('--- o padrão calcula o líquido ---');
+eq(liquidoPeloPercentual(247, 9.9), 222.55, 'Hotmart 9,9% de R$ 247: caem R$ 222,55');
+eq(liquidoPeloPercentual(1000, 0), 1000, 'sem percentual cai tudo');
+eq(liquidoPeloPercentual(99.99, 4.99), 95.0, 'R$ 99,99 com 4,99%: desconto R$ 4,99, caem R$ 95,00');
+// O INVARIANTE da baixa: líquido + desconto = bruto, centavo por centavo, e
+// o desconto que volta pelo líquido é exatamente o do percentual. Se não
+// fechar, a conta grava uma taxa diferente da que a pessoa viu na tela.
+let fecha = 0, casos = 0;
+for (const bruto of [0.01, 0.99, 1, 9.99, 33.33, 99.99, 247, 1234.56, 99999.99]) {
+  for (const pct of [0.01, 1, 2.5, 3.49, 4.99, 9.9, 12.5, 33.33, 99.99]) {
+    casos++;
+    const liquido = liquidoPeloPercentual(bruto, pct);
+    const desconto = descontoPeloLiquido(bruto, liquido);
+    if (round2(liquido + desconto) === round2(bruto) && desconto === aplicarPercentual(bruto, pct)) fecha++;
+    else console.log(`        não fechou: bruto ${bruto}, ${pct}% → líquido ${liquido}, desconto ${desconto}`);
+  }
+}
+eq(fecha, casos, `líquido + desconto = bruto nos ${casos} casos`);
+
+console.log('--- o percentual padrão é validado ---');
+eq(validarPercentualPadrao(9.9), null, '9,9% é válido');
+eq(validarPercentualPadrao(0.01), null, '0,01% é válido');
+eq(validarPercentualPadrao(99.99), null, '99,99% é válido');
+eq(validarPercentualPadrao(0), 'vazio', 'zero é "sem padrão", não um padrão');
+eq(validarPercentualPadrao(null), 'vazio', 'nulo é vazio');
+eq(validarPercentualPadrao(Number.NaN), 'vazio', 'NaN é vazio');
+eq(validarPercentualPadrao(100), 'fora-da-faixa', '100% é a venda inteira');
+eq(validarPercentualPadrao(-1), 'fora-da-faixa', 'negativo é recusado');
+eq(validarPercentualPadrao(Number.POSITIVE_INFINITY), 'vazio', 'infinito é recusado');
+eq(mensagemDoPercentualInvalido('fora-da-faixa'), 'O percentual precisa ficar entre 0% e 100%.', 'mensagem da faixa');
+
+console.log('--- o padrão é achado pela chave da plataforma ---');
+const padroes = [{ plataforma: 'Hotmart', percentual: 9.9 }, { plataforma: 'Pagar.me', percentual: 3.99 }];
+eq(descontoPadraoDa('Hotmart', padroes)?.percentual, 9.9, 'nome igual acha');
+eq(descontoPadraoDa('HOTMART', padroes)?.percentual, 9.9, 'caixa não importa');
+eq(descontoPadraoDa('pagarme', padroes)?.percentual, 3.99, '"pagarme" acha "Pagar.me"');
+eq(descontoPadraoDa('Stone', padroes), null, 'plataforma sem padrão devolve null');
+eq(descontoPadraoDa('', padroes), null, 'sem plataforma não acha nada');
+eq(descontoPadraoDa('Hotmart', null), null, 'lista ausente não quebra');
+
+console.log('--- percentual na tela e na digitação ---');
+eq(formatarPercentual(9.9), '9,9%', '9,9 sem zero à direita');
+eq(formatarPercentual(4.99), '4,99%', 'duas casas');
+eq(formatarPercentual(10), '10%', 'inteiro sem vírgula');
+eq(formatarPercentual(null), '—', 'nulo vira travessão');
+eq(lerPercentual('9,9'), 9.9, 'vírgula decimal');
+eq(lerPercentual('9.9'), 9.9, 'ponto decimal');
+eq(lerPercentual(' 4,99 % '), 4.99, 'símbolo e espaços');
+eq(lerPercentual('10'), 10, 'inteiro');
+eq(lerPercentual(''), null, 'vazio é null');
+eq(lerPercentual('abc'), null, 'texto é null');
+eq(lerPercentual('1,2,3'), null, 'duas vírgulas é null');
 
 console.log(`\n${total - falhas}/${total} testes da taxa de plataforma passaram`);
 if (falhas > 0) process.exit(1);

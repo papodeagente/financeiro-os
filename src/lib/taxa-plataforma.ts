@@ -17,7 +17,7 @@
  *
  * Módulo puro: depende só de money.ts, sem banco e sem React.
  */
-import { divSegura, num, round2, somaPor } from './money';
+import { divSegura, num, percentual as aplicarPercentual, round2, somaPor } from './money';
 
 /**
  * Adquirentes e plataformas de pagamento comuns no Brasil.
@@ -269,4 +269,116 @@ export function agruparTaxasPorPlataforma(
       percentual: percentualDaTaxa(taxa, bruto),
     },
   };
+}
+
+// ─── Baixa pelo valor que caiu no banco ─────────────────────────────────────
+//
+// Pedido do Bruno (07/10/2026): "ao invés de colocar o valor do desconto, me
+// permita colocar o valor total recebido já com desconto e o sistema calcula
+// o valor descontado e percentual".
+//
+// Quem dá baixa está olhando o extrato, e no extrato aparece o LÍQUIDO. A
+// taxa continua sendo o fato gravado na conta (é ela que o saldo, o DRE e o
+// relatório de taxas leem); o líquido é só a forma de chegar nela sem conta
+// de cabeça.
+
+/** Quanto a plataforma descontou, dado o que o cliente pagou e o que caiu no banco. */
+export function descontoPeloLiquido(
+  bruto: number | null | undefined,
+  liquido: number | null | undefined,
+): number {
+  return round2(Math.max(0, num(bruto) - num(liquido)));
+}
+
+export type LiquidoInvalido = 'vazio' | 'maior-que-o-pago';
+
+/**
+ * O que caiu no banco não pode passar do que o cliente pagou (a diferença
+ * seria um desconto negativo) e não pode ser zero: uma plataforma que retém
+ * 100% não fez um recebimento, e zero quase sempre é o campo ainda vazio.
+ */
+export function validarLiquido(
+  bruto: number | null | undefined,
+  liquido: number | null | undefined,
+): LiquidoInvalido | null {
+  const l = round2(num(liquido));
+  if (l <= 0) return 'vazio';
+  if (l > round2(num(bruto))) return 'maior-que-o-pago';
+  return null;
+}
+
+export function mensagemDoLiquidoInvalido(motivo: LiquidoInvalido): string {
+  return motivo === 'vazio'
+    ? 'Informe quanto caiu no banco.'
+    : 'O que caiu no banco não pode ser maior do que o cliente pagou.';
+}
+
+/**
+ * O líquido que um desconto percentual deixa. O desconto é arredondado em
+ * centavos primeiro e o líquido sai da subtração, para que líquido + desconto
+ * dê exatamente o bruto (é assim que o extrato da plataforma fecha).
+ */
+export function liquidoPeloPercentual(
+  bruto: number | null | undefined,
+  percentual: number | null | undefined,
+): number {
+  const b = round2(num(bruto));
+  return round2(b - aplicarPercentual(b, num(percentual)));
+}
+
+// ─── Desconto padrão por plataforma ─────────────────────────────────────────
+//
+// Uma CONFIGURAÇÃO da agência ("a Hotmart fica com 9,9%"), não o percentual
+// de uma conta. A regra do topo continua valendo: a conta grava a taxa em
+// reais e o percentual dela é sempre derivado. O padrão só serve para
+// sugerir o líquido na baixa, e a pessoa pode corrigir antes de confirmar.
+
+export interface DescontoPadrao {
+  /** Nome canônico (normalizarPlataforma). */
+  plataforma: string;
+  /** Em pontos percentuais: 9.9 = 9,9%. */
+  percentual: number;
+}
+
+export type PercentualInvalido = 'vazio' | 'fora-da-faixa';
+
+/** Maior que zero e menor que cem. Zero é "sem padrão"; cem é a venda inteira. */
+export function validarPercentualPadrao(percentual: number | null | undefined): PercentualInvalido | null {
+  const p = Number(percentual);
+  if (percentual === null || percentual === undefined || !Number.isFinite(p) || p === 0) return 'vazio';
+  if (p < 0 || p >= 100) return 'fora-da-faixa';
+  return null;
+}
+
+export function mensagemDoPercentualInvalido(motivo: PercentualInvalido): string {
+  return motivo === 'vazio'
+    ? 'Informe o percentual do desconto.'
+    : 'O percentual precisa ficar entre 0% e 100%.';
+}
+
+/** O padrão cadastrado para a plataforma, comparando pela chave (caixa, acento e pontuação não importam). */
+export function descontoPadraoDa(
+  plataforma: string | null | undefined,
+  padroes: readonly DescontoPadrao[] | null | undefined,
+): DescontoPadrao | null {
+  const chave = chaveDaPlataforma(plataforma);
+  if (!chave) return null;
+  return (padroes ?? []).find(p => chaveDaPlataforma(p.plataforma) === chave) ?? null;
+}
+
+/**
+ * "9,9%", "4,99%", "10%". Percentual de configuração, sem zeros à direita:
+ * a pessoa cadastrou 9,9 e é isso que ela espera ler.
+ */
+export function formatarPercentual(percentual: number | null | undefined): string {
+  if (percentual === null || percentual === undefined || !Number.isFinite(Number(percentual))) return '—';
+  return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(round2(Number(percentual)))}%`;
+}
+
+/** "9,9", "9.9", "9,9 %" → 9.9. Vazio ou ilegível → null (a tela diz o que falta). */
+export function lerPercentual(texto: string | null | undefined): number | null {
+  const limpo = String(texto ?? '').replace(/%/g, '').replace(/\s+/g, '').replace(',', '.');
+  if (!/^-?(\d+\.?\d*|\.\d+)$/.test(limpo)) return null;
+  const n = Number(limpo);
+  return Number.isFinite(n) ? n : null;
 }

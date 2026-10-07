@@ -365,6 +365,19 @@ async function executarInitDB() {
       PRIMARY KEY (tenant_id, chave)
     );
 
+    -- Desconto padrão de cada plataforma de pagamento ("a Hotmart fica com
+    -- 9,9%"). Configuração da agência que só sugere o líquido na baixa: a
+    -- conta continua gravando a taxa em reais (src/lib/desconto-padrao.ts).
+    CREATE TABLE IF NOT EXISTS plataformas_desconto_padrao (
+      tenant_id TEXT NOT NULL,
+      chave TEXT NOT NULL,
+      plataforma TEXT NOT NULL,
+      percentual NUMERIC(5,2) NOT NULL CHECK (percentual > 0 AND percentual < 100),
+      atualizado_por TEXT NOT NULL DEFAULT '',
+      atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (tenant_id, chave)
+    );
+
     CREATE TABLE IF NOT EXISTS plataformas_eventos (
       id TEXT PRIMARY KEY,
       tenant_id TEXT NOT NULL DEFAULT '',

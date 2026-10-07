@@ -27,6 +27,8 @@ export type SeletorDePlataformaProps = {
   usadas?: string[];
   onChange: (v: string) => void;
   id?: string;
+  /** Texto da opção vazia. Na baixa, "nenhuma" diz mais que "não informada". */
+  rotuloVazio?: string;
 };
 
 /**
@@ -43,6 +45,7 @@ export function SeletorDePlataforma({
   usadas = [],
   onChange,
   id,
+  rotuloVazio = SEM_PLATAFORMA,
 }: SeletorDePlataformaProps) {
   const opcoes = useMemo(() => opcoesDePlataforma([], usadas), [usadas]);
   const naLista = valor !== '' && opcoes.includes(valor);
@@ -83,10 +86,10 @@ export function SeletorDePlataforma({
       }}
     >
       <SelectTrigger id={id} className={CONTROLE}>
-        <SelectValue>{() => (valor === '' ? SEM_PLATAFORMA : valor)}</SelectValue>
+        <SelectValue>{() => (valor === '' ? rotuloVazio : valor)}</SelectValue>
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="" className="fin-t-body">{SEM_PLATAFORMA}</SelectItem>
+        <SelectItem value="" className="fin-t-body">{rotuloVazio}</SelectItem>
         {opcoes.map(o => (
           <SelectItem key={o} value={o} className="fin-t-body">{o}</SelectItem>
         ))}
