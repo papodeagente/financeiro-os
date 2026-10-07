@@ -1,96 +1,116 @@
 'use client';
 
-import { ArrowDownLeft, ArrowUpRight, Landmark } from 'lucide-react';
-import { useEffect, useState, useMemo } from 'react';
+import { ChevronLeft, ChevronRight, CircleAlert, Info } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+
 import { ContaReceber, ContaPagar, ContaBancaria, Agencia } from '@/lib/crm-types';
 import { loadEntities, loadAgencia } from '@/lib/crm-storage';
 import {
   eventosFolhaPrevistos, DIA_PAGAMENTO_FOLHA_PADRAO, type EntradaPessoa,
 } from '@/lib/folha-pagamento';
 import {
-  mesesDaJanela, semanasDaJanela, inicioDaJanela, descreverJanela,
-  PRESETS, PRESET_PADRAO, type Horizonte,
-} from '@/lib/janela-fluxo';
+  TIPOS_DE_PERIODO, agrupamentoPadrao, agrupamentosDoPeriodo, competenciasDaFolha,
+  lancamentosDoCaixa, montarCaderno, periodoContem, periodoQueContem, periodoVizinho, rotuloDoDia,
+  type Agrupamento, type LinhaDoCaderno, type TipoDePeriodo,
+} from '@/lib/caderno-caixa';
 import { calcularSaldoBancario } from '@/lib/saldo-bancario';
-import { Card } from '@/components/ui/card';
+import { hojeISO, num, round2 } from '@/lib/money';
+import { cn, formatBRL } from '@/lib/utils';
+import type { FunilPayload } from '@/lib/funil-types';
+
+import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/fin/PageHeader';
-import { FilterBar } from '@/components/fin/FilterBar';
-import { MetricCard } from '@/components/fin/MetricCard';
 import { DataState } from '@/components/fin/DataState';
 import { EmptyLesson } from '@/components/fin/EmptyLesson';
-import { FinTable, type FinColuna } from '@/components/fin/FinTable';
-import { RecordSheet } from '@/components/fin/RecordSheet';
 import { Money } from '@/components/fin/Money';
-import { statusChipVariants } from '@/components/fin/StatusChip';
-import { cn, formatDate } from '@/lib/utils';
-import type { FunilPayload } from '@/lib/funil-types';
-import {
-  round2, num, somaPor, divSegura, hojeISO, dataLocal, paraISO, mesDe, dentroDoPeriodo, addMeses } from '@/lib/money';
-import { GraficoFluxo } from './GraficoFluxo';
-import { descricaoComPlataforma, plataformaDaConta } from '@/lib/plataformas/rotulo';
+import { Segmentado } from '@/components/fin/Segmentado';
+import { CurvaDoSaldo } from './CurvaDoSaldo';
+import { Caderno } from './Caderno';
+import { DetalheDaLinha } from './DetalheDaLinha';
 
-function getWeekRange(date: Date): string {
-  const start = new Date(date);
-  start.setDate(start.getDate() - start.getDay());
-  const end = new Date(start);
-  end.setDate(end.getDate() + 6);
-  return `${start.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} a ${end.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`;
+const CARTAO =
+  'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]';
+
+const ROTULO_AGRUPAMENTO: Record<Agrupamento, string> = { dia: 'Dia a dia', semana: 'Por semana', mes: 'Por mês' };
+
+/** "1 out", "31 dez": a ponta do período no rótulo do saldo. */
+function diaEMes(iso: string): string {
+  return rotuloDoDia(iso).split(', ')[1] ?? iso;
 }
 
-function getMonthLabel(ym: string): string {
-  const [y, m] = ym.split('-');
-  const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-  return `${months[parseInt(m) - 1]}/${y}`;
+function Interruptor({ ligado, onChange, children }: { ligado: boolean; onChange: (v: boolean) => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={ligado}
+      onClick={() => onChange(!ligado)}
+      className="inline-flex min-h-11 items-center gap-[var(--fin-s-2)] rounded-[var(--fin-r-md)] px-1 fin-t-body text-[var(--fin-text-2)] lg:min-h-9"
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          'relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-[var(--fin-dur-rapida)]',
+          ligado ? 'bg-[var(--fin-accent)]' : 'bg-[var(--fin-border-strong)]',
+        )}
+      >
+        <span
+          className={cn(
+            'absolute top-0.5 size-4 rounded-full bg-[var(--fin-surface)] shadow-[var(--fin-e-card)] transition-transform duration-[var(--fin-dur-rapida)]',
+            ligado ? 'translate-x-[18px]' : 'translate-x-0.5',
+          )}
+        />
+      </span>
+      {children}
+    </button>
+  );
 }
 
-type Periodo = 'SEMANAL' | 'MENSAL';
-
-interface FluxoLine {
-  periodo: string;
-  label: string;
-  entradas: number;
-  saidas: number;
-  saldo: number;
-  saldoAcumulado: number;
-  detalhesEntradas: Array<{ desc: string; valor: number; data: string }>;
-  detalhesSaidas: Array<{ desc: string; valor: number; data: string }>;
-}
-
-/** Movimento unitário de caixa: realizado (baixado) ou previsto (em aberto). */
-interface Evento {
-  desc: string;
+/** Um termo da conta do período: "Saldo em 1 out", "+ Entrou", "− Saiu", "= Saldo em 31 out". */
+function Termo({
+  sinal, rotulo, valor, tom = 'neutro', nota, destaque = false, largoNoCelular = false,
+}: {
+  sinal?: '+' | '−' | '=';
+  rotulo: string;
   valor: number;
-  data: string;
-  realizado: boolean;
-}
-
-/** Linha do painel lateral de detalhe. Só apresentação: nada é recalculado aqui. */
-type DetalheLinha = { id: string; desc: string; valor: number; data: string };
-
-const COLUNAS_DETALHE: FinColuna<DetalheLinha>[] = [
-  {
-    id: 'desc',
-    tipo: 'texto',
-    cabecalho: 'Lançamento',
-    render: (d) => <span className="fin-t-body text-[var(--fin-text)]">{d.desc}</span>,
-  },
-  { id: 'data', tipo: 'data', cabecalho: 'Data', valor: (d) => d.data || null },
-  { id: 'valor', tipo: 'dinheiro', cabecalho: 'Valor', valor: (d) => d.valor },
-];
-
-function paraDetalhe(
-  itens: Array<{ desc: string; valor: number; data: string }>,
-  prefixo: string,
-): DetalheLinha[] {
-  return itens.map((d, i) => ({ id: `${prefixo}-${i}`, desc: d.desc, valor: d.valor, data: d.data }));
-}
-
-/** Alturas do esqueleto do gráfico: forma do conteúdo real, sem valor pintado. */
-const ALTURAS_ESQUELETO = ['h-1/2', 'h-3/4', 'h-1/3', 'h-full', 'h-2/3', 'h-2/5'];
-
-function nomeDoLancamento(quem: string | null | undefined, descricao: string | null | undefined): string {
-  const partes = [quem, descricao].filter((p): p is string => Boolean(p && p.trim()));
-  return partes.length > 0 ? partes.join(', ') : 'Lançamento sem descrição';
+  tom?: 'neutro' | 'positivo' | 'negativo';
+  nota?: string;
+  destaque?: boolean;
+  /** Ocupa as duas colunas no celular. */
+  largoNoCelular?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        'flex min-w-0 flex-col gap-1',
+        // No celular o saldo final ganha a linha toda: em meia coluna o
+        // número grande não cabe.
+        largoNoCelular && 'col-span-2 lg:col-span-1',
+        destaque && 'col-span-2 border-t border-[var(--fin-border)] pt-[var(--fin-s-4)] lg:col-span-1 lg:border-t-0 lg:pt-0',
+      )}
+    >
+      <span className="flex items-center gap-1.5 fin-t-caption text-[var(--fin-text-3)]">
+        {sinal ? (
+          <span
+            aria-hidden="true"
+            className="inline-flex size-4 items-center justify-center rounded-full bg-[var(--fin-surface-2)] fin-t-caption font-semibold leading-none text-[var(--fin-text-2)]"
+          >
+            {sinal}
+          </span>
+        ) : null}
+        {rotulo}
+      </span>
+      <Money
+        valor={valor}
+        estado="ok"
+        size={destaque ? 'metric' : 'metricSm'}
+        tone={tom}
+        align="esquerda"
+        className="min-w-0"
+      />
+      {nota ? <span className="fin-t-caption text-[var(--fin-text-3)]">{nota}</span> : null}
+    </div>
+  );
 }
 
 export default function FluxoCaixaPage() {
@@ -102,27 +122,20 @@ export default function FluxoCaixaPage() {
   const [pessoasFolha, setPessoasFolha] = useState<EntradaPessoa[]>([]);
   const [diaPagamentoFolha, setDiaPagamentoFolha] = useState(DIA_PAGAMENTO_FOLHA_PADRAO);
   // Ligada por padrão: folha não é aposta como a projeção de funil, é
-  // compromisso assumido. Esconder por padrão faria o caixa previsto
-  // parecer melhor do que é.
+  // compromisso assumido. Esconder por padrão faria o caixa parecer melhor.
   const [incluirFolha, setIncluirFolha] = useState(true);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
-  const [periodo, setPeriodo] = useState<Periodo>('MENSAL');
-  const [horizonteId, setHorizonteId] = useState<string>(PRESET_PADRAO);
-  const [deInicio, setDeInicio] = useState('');
-  const [deFim, setDeFim] = useState('');
-  /** Personalizado só vale quando as DUAS datas estão preenchidas; com uma
-   *  só a janela seria adivinhada, e a tela mostraria número sem o usuário
-   *  ter terminado de escolher. */
-  const horizonte: Horizonte = useMemo(
-    () => (horizonteId === 'personalizado' && deInicio && deFim
-      ? { tipo: 'personalizado', de: deInicio, ate: deFim }
-      : { tipo: 'preset', id: horizonteId === 'personalizado' ? PRESET_PADRAO : horizonteId }),
-    [horizonteId, deInicio, deFim],
-  );
-  const mesesDaTela = useMemo(() => mesesDaJanela(horizonte, hojeISO()), [horizonte]);
-  const [detalhe, setDetalhe] = useState<FluxoLine | null>(null);
+
+  const hoje = hojeISO();
+  const [tipo, setTipo] = useState<TipoDePeriodo>('mes');
+  const [ancora, setAncora] = useState(hoje);
+  const [agrupamento, setAgrupamento] = useState<Agrupamento>(agrupamentoPadrao('mes'));
+  const [linhaAberta, setLinhaAberta] = useState<LinhaDoCaderno | null>(null);
+
+  const periodo = useMemo(() => periodoQueContem(tipo, ancora), [tipo, ancora]);
+  const estaNoPeriodoDeHoje = periodoContem(periodo, hoje);
 
   async function load() {
     setLoading(true);
@@ -132,9 +145,7 @@ export default function FluxoCaixaPage() {
         loadEntities<ContaPagar>('contas-pagar'),
         loadEntities<ContaBancaria>('contas-bancarias'),
         loadEntities<FunilPayload>('funis'),
-        // A folha é um compromisso já assumido, então entra na previsão.
-        // Falha aqui não derruba o fluxo: sem permissão de folha, a tela
-        // continua mostrando contas a receber e a pagar.
+        // Sem permissão de folha a tela continua com receber e pagar.
         fetch('/api/folha').then(r => (r.ok ? r.json() : null)).catch(() => null),
         loadAgencia<Agencia>().catch(() => null),
       ]);
@@ -155,11 +166,38 @@ export default function FluxoCaixaPage() {
 
   useEffect(() => { load(); }, []);
 
-  /**
-   * Soma a receita/investimento projetado dos funis em execução.
-   * A projeção é aplicada uniformemente sobre os períodos futuros (simplificação consciente:
-   * o funil não carrega calendário próprio, é uma estimativa mensal distribuída por período).
-   */
+  function trocarTipo(novo: TipoDePeriodo) {
+    setTipo(novo);
+    setAgrupamento(agrupamentoPadrao(novo));
+  }
+
+  const eventosFolha = useMemo(() => {
+    if (!incluirFolha || pessoasFolha.length === 0) return [];
+    // Os ids já existentes impedem a folha de contar duas vezes quando o mês
+    // virou conta a pagar de verdade.
+    return eventosFolhaPrevistos(
+      pessoasFolha, competenciasDaFolha(periodo, hoje), diaPagamentoFolha, contasPagar.map(c => c.id),
+    );
+  }, [incluirFolha, pessoasFolha, periodo, hoje, diaPagamentoFolha, contasPagar]);
+
+  const lancamentos = useMemo(
+    () => lancamentosDoCaixa({ receber: contasReceber, pagar: contasPagar, folha: eventosFolha, hoje }),
+    [contasReceber, contasPagar, eventosFolha, hoje],
+  );
+
+  const caderno = useMemo(
+    () => montarCaderno({ lancamentos, contas: contasBancarias, periodo, agrupamento, hoje }),
+    [lancamentos, contasBancarias, periodo, agrupamento, hoje],
+  );
+
+  // O mesmo número do "Saldo atual" de sempre: o caderno fecha com ele.
+  const noBancoAgora = useMemo(
+    () => calcularSaldoBancario(contasBancarias, contasReceber, contasPagar),
+    [contasBancarias, contasReceber, contasPagar],
+  );
+
+  // Estimativa mensal dos funis em execução. Não é dinheiro contratado:
+  // aparece escrita, fora do saldo, multiplicada pelos meses do período.
   const projecaoFunis = useMemo(() => {
     const ativos = funis.filter(f => f.status === 'em_execucao');
     let receita = 0;
@@ -170,472 +208,94 @@ export default function FluxoCaixaPage() {
       receita = round2(receita + num(kpis.receita_liquida ?? kpis.receita_bruta ?? 0));
       investimento = round2(investimento + num(kpis.investimento_total ?? 0));
     }
-    // Se for semanal, dividir por 4 (aproximação mês/semana)
-    const divisor = periodo === 'MENSAL' ? 1 : 4;
-    return {
-      count: ativos.length,
-      receita: round2(divSegura(receita, divisor)),
-      investimento: round2(divSegura(investimento, divisor)),
-    };
-  }, [funis, periodo]);
-
-  // Saldo computado: saldo_inicial + recebido - pago. Sempre bate com
-  // o histórico de baixas, independente de saldo_atual persistido.
-  const saldoAtual = useMemo(() =>
-    calcularSaldoBancario(contasBancarias, contasReceber, contasPagar),
-    [contasBancarias, contasReceber, contasPagar]
-  );
-
-  // Cada conta vira até DOIS eventos de caixa:
-  //  · REALIZADO: o que já foi baixado (RECEBIDO/PAGO, ou a parcela já
-  //    quitada de uma baixa PARCIAL), na data da baixa;
-  //  · PREVISTO: o saldo ainda em aberto, na data de vencimento.
-  // Separar os dois é o que permite montar o saldo base com dinheiro REAL e
-  // tratar pendência vencida como projeção, nunca como caixa existente.
-  const eventosEntrada = useMemo<Evento[]>(() => {
-    const out: Evento[] = [];
-    for (const cr of contasReceber) {
-      if (cr.status === 'CANCELADO') continue;
-      const desc = nomeDoLancamento(cr.cliente_nome, descricaoComPlataforma(cr.descricao || '', plataformaDaConta(cr)));
-      const baixado = cr.status === 'RECEBIDO'
-        ? round2(num(cr.valor_recebido) || num(cr.valor_final))
-        : round2(num(cr.valor_recebido));
-      if (baixado > 0) {
-        out.push({ desc, valor: baixado, data: cr.data_recebimento || cr.data_vencimento || '', realizado: true });
-      }
-      const emAberto = cr.status === 'RECEBIDO'
-        ? 0
-        : round2(num(cr.valor_final) - num(cr.valor_recebido));
-      if (emAberto > 0) {
-        out.push({ desc, valor: emAberto, data: cr.data_vencimento || '', realizado: false });
-      }
-    }
-    return out;
-  }, [contasReceber]);
-
-  const eventosSaida = useMemo<Evento[]>(() => {
-    const out: Evento[] = [];
-    for (const cp of contasPagar) {
-      if (cp.status === 'CANCELADO') continue;
-      const desc = nomeDoLancamento(cp.fornecedor_nome, cp.descricao);
-      const baixado = cp.status === 'PAGO'
-        ? round2(num(cp.valor_pago) || num(cp.valor_final))
-        : round2(num(cp.valor_pago));
-      if (baixado > 0) {
-        out.push({ desc, valor: baixado, data: cp.data_pagamento || cp.data_vencimento || '', realizado: true });
-      }
-      const emAberto = cp.status === 'PAGO'
-        ? 0
-        : round2(num(cp.valor_final) - num(cp.valor_pago));
-      if (emAberto > 0) {
-        out.push({ desc, valor: emAberto, data: cp.data_vencimento || '', realizado: false });
-      }
-    }
-
-    // Folha: saída prevista, nunca realizada. A competência vai até um mês
-    // além da janela porque a folha do último mês exibido só sai no mês
-    // seguinte, e sem isso ela sumiria da ponta do gráfico.
-    if (incluirFolha && pessoasFolha.length > 0) {
-      // Um mês ANTES da janela porque a folha daquele mês é paga dentro
-      // dela, e um DEPOIS não é preciso: a folha do último mês exibido só
-      // sai fora da janela e não deve aparecer.
-      const competencias = mesesDaTela.length > 0
-        ? [mesDe(addMeses(`${mesesDaTela[0]}-01`, -1)), ...mesesDaTela.slice(0, -1)]
-        : [];
-      // Os ids já existentes impedem a folha de ser contada duas vezes
-      // quando o mês virou conta a pagar de verdade.
-      const idsExistentes = contasPagar.map(c => c.id);
-      for (const ev of eventosFolhaPrevistos(pessoasFolha, competencias, diaPagamentoFolha, idsExistentes)) {
-        out.push({ desc: ev.descricao, valor: ev.valor, data: ev.data_pagamento, realizado: false });
-      }
-    }
-
-    return out;
-  }, [contasPagar, incluirFolha, pessoasFolha, diaPagamentoFolha, mesesDaTela]);
-
-  const fluxo = useMemo(() => {
-    const hoje = hojeISO();
-    const lines: FluxoLine[] = [];
-
-    // Constrói a linha do período. `extras` carrega os atrasados, que só
-    // entram na PRIMEIRA linha (projeção de cobrança/pagamento imediato).
-    const buildLine = (
-      periodoId: string,
-      label: string,
-      isInPeriod: (date: string) => boolean,
-      extras?: { entradas: Evento[]; saidas: Evento[] },
-    ): FluxoLine => {
-      const entradas = [
-        ...eventosEntrada.filter(e => e.data && isInPeriod(e.data)),
-        ...(extras?.entradas ?? []),
-      ];
-      const saidas = [
-        ...eventosSaida.filter(e => e.data && isInPeriod(e.data)),
-        ...(extras?.saidas ?? []),
-      ];
-      const totalEntradas = somaPor(entradas, e => e.valor);
-      const totalSaidas = somaPor(saidas, e => e.valor);
-      return {
-        periodo: periodoId,
-        label,
-        entradas: totalEntradas,
-        saidas: totalSaidas,
-        saldo: round2(totalEntradas - totalSaidas),
-        saldoAcumulado: 0, // preenchido depois
-        detalhesEntradas: entradas.map(e => ({ desc: e.desc, valor: e.valor, data: e.data })),
-        detalhesSaidas: saidas.map(e => ({ desc: e.desc, valor: e.valor, data: e.data })),
-      };
-    };
-
-    // Início do primeiro período (mês corrente ou semana corrente).
-    // A janela pode começar depois do mês corrente (por exemplo em
-    // "próximo mês"), então o início vem dela, e não de hoje. Sem isso,
-    // tudo do mês atual seria contado como atrasado.
-    let primeiroPeriodoStart: string;
-    if (periodo === 'MENSAL') {
-      primeiroPeriodoStart = inicioDaJanela(horizonte, hoje);
-    } else {
-      const semanas = semanasDaJanela(horizonte, hoje);
-      primeiroPeriodoStart = semanas[0]?.inicio ?? paraISO(dataLocal(hoje)!);
-    }
-
-    // Linha base = saldo_inicial + APENAS movimento realizado anterior ao
-    // primeiro período. Somar pendência vencida aqui inflava o saldo inicial
-    // com dinheiro que nunca entrou.
-    const linhaBase = round2(
-      somaPor(contasBancarias, c => c.saldo_inicial)
-      + somaPor(eventosEntrada.filter(e => e.realizado && e.data && e.data < primeiroPeriodoStart), e => e.valor)
-      - somaPor(eventosSaida.filter(e => e.realizado && e.data && e.data < primeiroPeriodoStart), e => e.valor),
-    );
-
-    // Atrasados = em aberto com vencimento anterior ao primeiro período.
-    // Viram projeção do primeiro período (é quando se espera resolver).
-    const marcarAtraso = (e: Evento): Evento => ({ ...e, desc: `${e.desc} (em atraso)` });
-    const atrasadosEntrada = eventosEntrada
-      .filter(e => !e.realizado && e.data && e.data < primeiroPeriodoStart)
-      .map(marcarAtraso);
-    const atrasadosSaida = eventosSaida
-      .filter(e => !e.realizado && e.data && e.data < primeiroPeriodoStart)
-      .map(marcarAtraso);
-
-    if (periodo === 'MENSAL') {
-      mesesDaTela.forEach((ym, i) => {
-        const line = buildLine(
-          ym,
-          getMonthLabel(ym),
-          (date) => mesDe(date) === ym,
-          i === 0 ? { entradas: atrasadosEntrada, saidas: atrasadosSaida } : undefined,
-        );
-        const prevAcum = lines.length > 0 ? lines[lines.length - 1].saldoAcumulado : linhaBase;
-        line.saldoAcumulado = round2(prevAcum + line.saldo);
-        lines.push(line);
-      });
-    } else {
-      semanasDaJanela(horizonte, hoje).forEach((semana, i) => {
-        const line = buildLine(
-          semana.inicio,
-          getWeekRange(dataLocal(semana.inicio)!),
-          (date) => dentroDoPeriodo(date, semana.inicio, semana.fim),
-          i === 0 ? { entradas: atrasadosEntrada, saidas: atrasadosSaida } : undefined,
-        );
-        const prevAcum = lines.length > 0 ? lines[lines.length - 1].saldoAcumulado : linhaBase;
-        line.saldoAcumulado = round2(prevAcum + line.saldo);
-        lines.push(line);
-      });
-    }
-
-    return lines;
-  }, [eventosEntrada, eventosSaida, contasBancarias, periodo, mesesDaTela, horizonte]);
-
-  // KPIs "Previstas" = tudo que ainda está em aberto (saldo devedor das
-  // parciais incluído), em qualquer data.
-  const totals = useMemo(() => ({
-    entradas: somaPor(eventosEntrada.filter(e => !e.realizado), e => e.valor),
-    saidas: somaPor(eventosSaida.filter(e => !e.realizado), e => e.valor),
-  }), [eventosEntrada, eventosSaida]);
-
-  // Visual bar scale
-  const maxVal = useMemo(() =>
-    Math.max(...fluxo.map(f => Math.max(f.entradas, f.saidas)), 1),
-    [fluxo]
-  );
+    const meses = TIPOS_DE_PERIODO.find(t => t.id === tipo)?.meses ?? 1;
+    return { count: ativos.length, receita: round2(receita * meses), investimento: round2(investimento * meses) };
+  }, [funis, tipo]);
 
   const estado: 'carregando' | 'erro' | 'ok' = loading ? 'carregando' : erro ? 'erro' : 'ok';
-  const estadoValor = loading ? 'carregando' : erro ? 'indisponivel' : 'ok';
-
-  const abertosEntrada = eventosEntrada.filter(e => !e.realizado).length;
-  const abertosSaida = eventosSaida.filter(e => !e.realizado).length;
-  const totalLancamentos = eventosEntrada.length + eventosSaida.length;
-
-  const saldoPrevisto = fluxo.length > 0 ? fluxo[fluxo.length - 1].saldoAcumulado : null;
-  const linhaNegativa = fluxo.find(f => f.saldoAcumulado < 0) ?? null;
-  const idNegativo = linhaNegativa ? linhaNegativa.periodo : null;
-  const quandoNegativo = linhaNegativa
-    ? (periodo === 'MENSAL' ? linhaNegativa.label : formatDate(linhaNegativa.periodo))
-    : null;
-
-  // Diz o recorte REAL, não um número fixo: com período personalizado
-  // "6 meses" seria mentira.
-  const horizonteTexto = periodo === 'MENSAL'
-    ? descreverJanela(horizonte, hojeISO())
-    : `${fluxo.length} ${fluxo.length === 1 ? 'semana' : 'semanas'}`;
-
-  // Nenhuma contagem e nenhuma afirmação sobre o caixa enquanto o dado não
-  // chegou: durante carregamento e erro o contexto só descreve o recorte.
-  const dadosProntos = estado === 'ok';
-
-  const contextoSaldoPrevisto = !dadosProntos
-    ? `Projeção para o fim de ${horizonteTexto}`
-    : quandoNegativo
-      ? `Saldo negativo a partir de ${quandoNegativo}, dentro de ${horizonteTexto}`
-      : `Nenhum período negativo em ${horizonteTexto}`;
-
-  const contextoEntradas = dadosProntos
-    ? `${abertosEntrada} ${abertosEntrada === 1 ? 'recebimento em aberto' : 'recebimentos em aberto'}, em qualquer data`
-    : 'Recebimentos ainda em aberto, em qualquer data';
-
-  const contextoSaidas = dadosProntos
-    ? `${abertosSaida} ${abertosSaida === 1 ? 'pagamento em aberto' : 'pagamentos em aberto'}, em qualquer data`
-    : 'Pagamentos ainda em aberto, em qualquer data';
-
-  const totaisTabela = useMemo(() => ([
-    { colunaId: 'entradas', valor: somaPor(fluxo, f => f.entradas), rotulo: `Entradas somadas em ${horizonteTexto}` },
-    { colunaId: 'saidas', valor: somaPor(fluxo, f => f.saidas), rotulo: `Saídas somadas em ${horizonteTexto}` },
-  ]), [fluxo, horizonteTexto]);
-
-  const colunas = useMemo<FinColuna<FluxoLine>[]>(() => ([
-    {
-      id: 'periodo',
-      tipo: 'texto',
-      cabecalho: 'Período',
-      sortable: true,
-      minWidth: 180,
-      acessor: (f) => f.periodo,
-      render: (f) => (
-        <span className="flex flex-wrap items-center gap-[var(--fin-s-2)]">
-          <span className="fin-t-body-strong text-[var(--fin-text)]">{f.label}</span>
-          {f.periodo === idNegativo ? (
-            <span className={statusChipVariants({ tone: 'negativo' })}>Saldo negativo</span>
-          ) : null}
-        </span>
-      ),
-    },
-    {
-      id: 'entradas',
-      tipo: 'dinheiro',
-      cabecalho: 'Entradas',
-      sortable: true,
-      valor: (f) => f.entradas,
-      sub: (f) => (f.detalhesEntradas.length > 0
-        ? `${f.detalhesEntradas.length} ${f.detalhesEntradas.length === 1 ? 'lançamento' : 'lançamentos'}`
-        : null),
-    },
-    {
-      id: 'saidas',
-      tipo: 'dinheiro',
-      cabecalho: 'Saídas',
-      sortable: true,
-      valor: (f) => f.saidas,
-      sub: (f) => (f.detalhesSaidas.length > 0
-        ? `${f.detalhesSaidas.length} ${f.detalhesSaidas.length === 1 ? 'lançamento' : 'lançamentos'}`
-        : null),
-    },
-    {
-      id: 'saldo',
-      tipo: 'dinheiro',
-      cabecalho: 'Saldo do período',
-      sortable: true,
-      prioridade: 1,
-      valor: (f) => f.saldo,
-      tone: (f) => (f.saldo < 0 ? 'negativo' : 'neutro'),
-    },
-    {
-      id: 'acumulado',
-      tipo: 'dinheiro',
-      cabecalho: 'Saldo acumulado',
-      sortable: true,
-      valor: (f) => f.saldoAcumulado,
-      tone: (f) => (f.saldoAcumulado < 0 ? 'negativo' : 'neutro'),
-    },
-  ]), [idNegativo]);
-
-  const filtrosAtivos =
-    (periodo !== 'MENSAL' ? 1 : 0) + (horizonteId !== PRESET_PADRAO ? 1 : 0) + (incluirFunis ? 1 : 0)
-    + (incluirFolha ? 0 : 1);
-
   const semDado =
-    estado === 'ok' &&
-    eventosEntrada.length === 0 &&
-    eventosSaida.length === 0 &&
-    contasBancarias.length === 0;
+    estado === 'ok' && contasReceber.length === 0 && contasPagar.length === 0 && contasBancarias.length === 0;
 
-  const projecaoVisivel = incluirFunis && projecaoFunis.count > 0 ? projecaoFunis : null;
+  const temFolha = pessoasFolha.some(p => p.vinculo?.na_folha);
+  const periodoFechado = periodo.fim < hoje;
+  const periodoFuturo = periodo.inicio > hoje;
 
-  const esqueletoGrafico = (
-    <div className="flex h-32 items-end gap-[var(--fin-s-2)]">
-      {ALTURAS_ESQUELETO.map((altura, i) => (
-        <span
-          key={i}
-          className={cn(
-            'flex-1 animate-pulse rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)]',
-            altura,
-          )}
-        />
-      ))}
+  const notaEntrou = periodoFuturo ? 'previsto'
+    : caderno.jaEntrou === caderno.entradas ? (caderno.entradas > 0 ? 'tudo já entrou' : undefined)
+      : `${formatBRL(caderno.jaEntrou)} já entrou`;
+  const notaSaiu = periodoFuturo ? 'previsto'
+    : caderno.jaSaiu === caderno.saidas ? (caderno.saidas > 0 ? 'tudo já saiu' : undefined)
+      : `${formatBRL(caderno.jaSaiu)} já saiu`;
+
+  const esqueleto = (
+    <div className="flex flex-col gap-[var(--fin-s-4)]">
+      <div className={cn(CARTAO, 'h-80 animate-pulse')} />
+      <div className={cn(CARTAO, 'h-96 animate-pulse')} />
     </div>
   );
 
   return (
-    <div className="bg-[var(--fin-bg)] text-[var(--fin-text)] py-[var(--fin-page-pad)]">
+    <div className="bg-[var(--fin-bg)] py-[var(--fin-page-pad)] text-[var(--fin-text)]">
       <div className="mx-auto flex w-full max-w-[var(--fin-page-max)] flex-col gap-[var(--fin-s-5)] px-[var(--fin-page-pad)]">
-
         <PageHeader
           titulo="Fluxo de caixa"
-          subtitulo="Projeção de entradas e saídas com base no que já foi baixado e no que continua em aberto"
+          subtitulo="O que entra e o que sai, como num caderno: saldo anterior, mais as entradas, menos as saídas"
           atualizadoEm={atualizadoEm}
           onRecarregar={load}
         />
 
-        <FilterBar
-          selects={[
-            {
-              id: 'granularidade',
-              rotulo: 'Ver por',
-              valor: periodo,
-              opcoes: [
-                { valor: 'SEMANAL', rotulo: 'Semana' },
-                { valor: 'MENSAL', rotulo: 'Mês' },
-              ],
-              onChange: (v) => setPeriodo(v as Periodo),
-            },
-            {
-              id: 'horizonte',
-              rotulo: 'Horizonte',
-              valor: horizonteId,
-              opcoes: [
-                ...PRESETS.map(p => ({ valor: p.id, rotulo: p.rotulo })),
-                { valor: 'personalizado', rotulo: 'Período personalizado' },
-              ],
-              onChange: (v) => {
-                setHorizonteId(v);
-                // Ao entrar no personalizado sem datas, começa no mês
-                // corrente: a tela nunca fica em branco esperando escolha.
-                if (v === 'personalizado' && !deInicio && !deFim) {
-                  const base = mesDe(hojeISO());
-                  setDeInicio(`${base}-01`);
-                  setDeFim(paraISO(addMeses(`${base}-01`, 2)));
-                }
-              },
-            },
-            ...(pessoasFolha.some(p => p.vinculo?.na_folha) ? [{
-              id: 'folha',
-              rotulo: 'Folha de pagamento',
-              valor: incluirFolha ? 'sim' : 'nao',
-              opcoes: [
-                { valor: 'sim', rotulo: 'Incluir' },
-                { valor: 'nao', rotulo: 'Não incluir' },
-              ],
-              onChange: (v: string) => setIncluirFolha(v === 'sim'),
-            }] : []),
-            ...(projecaoFunis.count > 0 ? [{
-              id: 'projecao-crm',
-              rotulo: 'Projeção do CRM',
-              valor: incluirFunis ? 'sim' : 'nao',
-              opcoes: [
-                { valor: 'nao', rotulo: 'Não incluir' },
-                { valor: 'sim', rotulo: `Incluir (${projecaoFunis.count})` },
-              ],
-              onChange: (v: string) => setIncluirFunis(v === 'sim'),
-            }] : []),
-          ]}
-          resumo={{
-            exibidos: fluxo.length,
-            total: periodo === 'MENSAL' ? 12 : 48,
-            substantivo: periodo === 'MENSAL' ? 'meses projetados' : 'semanas projetadas',
-            escopo: dadosProntos
-              ? `sobre ${totalLancamentos} ${totalLancamentos === 1 ? 'lançamento cadastrado' : 'lançamentos cadastrados'}`
-              : undefined,
-          }}
-          ativos={filtrosAtivos}
-          onLimpar={() => {
-            setPeriodo('MENSAL');
-            setHorizonteId(PRESET_PADRAO);
-            setDeInicio('');
-            setDeFim('');
-            setIncluirFunis(false);
-            setIncluirFolha(true);
-          }}
-        />
+        {/* Escolha do período: o tipo à esquerda, a página do caderno à direita. */}
+        <div className="flex flex-col gap-[var(--fin-s-3)] md:flex-row md:items-center md:justify-between">
+          <Segmentado<TipoDePeriodo>
+            rotulo="Período"
+            valor={tipo}
+            onChange={trocarTipo}
+            opcoes={TIPOS_DE_PERIODO.map(t => ({ valor: t.id, rotulo: t.rotulo }))}
+            cheio="celular"
+          />
 
-        {/* Datas do período personalizado. Só aparecem quando a opção está
-            escolhida: campo de data sempre visível vira ruído para quem usa
-            os presets, que é o caso comum. */}
-        {horizonteId === 'personalizado' && (
-          <div className="flex flex-wrap items-end gap-[var(--fin-s-3)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] px-[var(--fin-s-4)] py-[var(--fin-s-3)] shadow-[var(--fin-e-card)]">
-            <div className="flex flex-col gap-1">
-              <label htmlFor="fluxo-de" className="fin-t-overline text-[var(--fin-text-3)]">De</label>
-              <input
-                id="fluxo-de"
-                type="date"
-                value={deInicio}
-                onChange={(e) => setDeInicio(e.target.value)}
-                className="h-9 rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-2 fin-t-body tabular-nums text-[var(--fin-text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)]"
-              />
+          <div className="flex items-center justify-between gap-[var(--fin-s-2)] md:justify-end">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Período anterior"
+              onClick={() => setAncora(periodoVizinho(periodo, -1).inicio)}
+            >
+              <ChevronLeft aria-hidden="true" />
+            </Button>
+            <div className="flex min-w-0 flex-1 flex-col items-center md:min-w-[12.5rem] md:flex-none" aria-live="polite">
+              <span className="fin-t-subhead text-[var(--fin-text)]">{periodo.rotulo}</span>
+              <span className="fin-t-caption text-[var(--fin-text-3)]">
+                {periodo.meses || (estaNoPeriodoDeHoje ? 'este mês' : periodoFechado ? 'já fechado' : 'ainda vem')}
+              </span>
             </div>
-            <div className="flex flex-col gap-1">
-              <label htmlFor="fluxo-ate" className="fin-t-overline text-[var(--fin-text-3)]">Até</label>
-              <input
-                id="fluxo-ate"
-                type="date"
-                value={deFim}
-                onChange={(e) => setDeFim(e.target.value)}
-                className="h-9 rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-2 fin-t-body tabular-nums text-[var(--fin-text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)]"
-              />
-            </div>
-            <p className="fin-t-caption text-[var(--fin-text-3)]">
-              {deInicio && deFim
-                ? `Mostrando ${descreverJanela(horizonte, hojeISO())}. O recorte é por mês inteiro: a data serve para escolher o mês.`
-                : 'Preencha as duas datas. Enquanto isso, a tela segue no horizonte padrão.'}
-            </p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Próximo período"
+              onClick={() => setAncora(periodoVizinho(periodo, 1).inicio)}
+            >
+              <ChevronRight aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={estaNoPeriodoDeHoje}
+              onClick={() => setAncora(hoje)}
+              className="h-11 lg:h-9"
+            >
+              Hoje
+            </Button>
           </div>
-        )}
-
-        <div className="grid gap-[var(--fin-s-4)] md:grid-cols-2 lg:grid-cols-4">
-          <MetricCard
-            rotulo="Saldo previsto" icone={Landmark}
-            valor={saldoPrevisto}
-            estado={estadoValor}
-            emphasis="destaque"
-            tone={saldoPrevisto !== null && saldoPrevisto < 0 ? 'negativo' : 'neutro'}
-            contexto={contextoSaldoPrevisto}
-            explicacao="Quanto sobra no caixa ao fim do horizonte escolhido, somando o que já entrou e saiu com o que ainda está em aberto."
-          />
-          <MetricCard
-            rotulo="Saldo atual" icone={Landmark}
-            valor={saldoAtual}
-            estado={estadoValor}
-            tone={saldoAtual < 0 ? 'negativo' : 'neutro'}
-            contexto="Saldo inicial mais recebido menos pago"
-          />
-          <MetricCard
-            rotulo="Entradas previstas" icone={ArrowDownLeft}
-            valor={totals.entradas}
-            estado={estadoValor}
-            contexto={contextoEntradas}
-          />
-          <MetricCard
-            rotulo="Saídas previstas" icone={ArrowUpRight}
-            valor={totals.saidas}
-            estado={estadoValor}
-            contexto={contextoSaidas}
-          />
         </div>
 
         {semDado ? (
           <EmptyLesson
             motivo="sem-dado"
-            titulo="Ainda não há nada para projetar"
-            oQueE="O fluxo de caixa mostra, período a período, quanto dinheiro entra e quanto sai, somando o que já foi baixado com o que continua em aberto."
+            titulo="Ainda não há nada no caderno"
+            oQueE="O fluxo de caixa mostra, dia a dia, quanto dinheiro entra e quanto sai, somando o que já foi baixado com o que continua em aberto."
             comoComeca={[
               'Cadastre as contas bancárias com o saldo inicial de cada uma.',
               'Lance as contas a receber com a data de vencimento.',
@@ -644,92 +304,108 @@ export default function FluxoCaixaPage() {
             acao={{ rotulo: 'Cadastrar conta bancária', href: '/financeiro-ag/contas-bancarias' }}
           />
         ) : (
-          <>
-            {estado === 'erro' ? null : (
-              <Card className="gap-[var(--fin-s-4)] p-[var(--fin-s-4)]">
-                <h2 className="fin-t-subhead text-[var(--fin-text)]">Entradas e saídas por período</h2>
-                <DataState estado={estado} esqueleto={esqueletoGrafico}>
-                  <GraficoFluxo barras={fluxo} maxVal={maxVal} projecao={projecaoVisivel} />
-                </DataState>
-              </Card>
-            )}
-
-            <FinTable
-              linhas={fluxo}
-              colunas={colunas}
-              chave={(f) => f.periodo}
-              estado={estado}
-              erro={erro ? { mensagem: erro, onTentarDeNovo: load } : null}
-              totais={totaisTabela}
-              onLinhaClick={(f) => setDetalhe(f)}
-              vazio={{
-                motivo: 'sem-resultado',
-                titulo: 'Nenhum período para mostrar',
-                oQueE: 'Escolha um horizonte maior para ver a projeção dos próximos meses.',
-              }}
-            />
-          </>
-        )}
-
-        <RecordSheet
-          aberto={detalhe !== null}
-          onOpenChange={(aberto) => { if (!aberto) setDetalhe(null); }}
-          titulo={detalhe ? detalhe.label : 'Período'}
-          descricao="Lançamentos que compõem as entradas e as saídas deste período"
-          largura={640}
-          resumo={detalhe ? (
-            <span className="flex items-center justify-between gap-[var(--fin-s-3)]">
-              <span className="fin-t-body text-[var(--fin-text-2)]">Saldo do período</span>
-              <Money
-                valor={detalhe.saldo}
-                estado="ok"
-                size="metricSm"
-                tone={detalhe.saldo < 0 ? 'negativo' : 'neutro'}
-              />
-            </span>
-          ) : undefined}
-          acaoPrimaria={{ rotulo: 'Fechar', onClick: () => setDetalhe(null) }}
-        >
-          {detalhe ? (
+          <DataState
+            estado={estado}
+            erro={erro ? { mensagem: erro, onTentarDeNovo: load } : null}
+            esqueleto={esqueleto}
+          >
             <div className="flex flex-col gap-[var(--fin-s-5)]">
-              <section className="flex flex-col gap-[var(--fin-s-3)]">
-                <h3 className="fin-t-subhead text-[var(--fin-text)]">
-                  Entradas ({detalhe.detalhesEntradas.length})
-                </h3>
-                <FinTable
-                  linhas={paraDetalhe(detalhe.detalhesEntradas, 'entrada')}
-                  colunas={COLUNAS_DETALHE}
-                  chave={(d) => d.id}
-                  densidade="compacta"
-                  estado="ok"
-                  vazio={{
-                    motivo: 'sem-resultado',
-                    titulo: 'Nenhuma entrada neste período',
-                    oQueE: 'Não há recebimento baixado nem em aberto com data dentro deste período.',
-                  }}
-                />
+              {/* A conta do período, de ponta a ponta. */}
+              <section aria-label={`Resumo de ${periodo.rotulo}`} className={cn(CARTAO, 'flex flex-col gap-[var(--fin-s-5)] p-[var(--fin-s-5)] sm:p-[var(--fin-s-6)]')}>
+                <div className="grid grid-cols-2 gap-x-[var(--fin-s-4)] gap-y-[var(--fin-s-5)] lg:grid-cols-4">
+                  <Termo
+                    largoNoCelular
+                    rotulo={`Saldo em ${diaEMes(periodo.inicio)}`}
+                    valor={caderno.saldoInicial}
+                    tom={caderno.saldoInicial < 0 ? 'negativo' : 'neutro'}
+                  />
+                  <Termo sinal="+" rotulo="Entrou" valor={caderno.entradas} tom="positivo" nota={notaEntrou} />
+                  <Termo sinal="−" rotulo="Saiu" valor={caderno.saidas} nota={notaSaiu} />
+                  <Termo
+                    sinal="="
+                    rotulo={`Saldo em ${diaEMes(periodo.fim)}`}
+                    valor={caderno.saldoFinal}
+                    tom={caderno.saldoFinal < 0 ? 'negativo' : 'neutro'}
+                    nota={periodoFechado ? 'fechado' : 'previsto'}
+                    destaque
+                  />
+                </div>
+
+                <CurvaDoSaldo curva={caderno.curva} hoje={hoje} />
+
+                <div className="flex flex-col gap-[var(--fin-s-2)]">
+                  <p className="flex flex-wrap items-baseline gap-x-[var(--fin-s-2)] fin-t-body text-[var(--fin-text-2)]">
+                    No banco agora:
+                    <span className={cn('fin-t-body-strong tabular-nums', noBancoAgora < 0 ? 'text-[var(--fin-negative-text)]' : 'text-[var(--fin-text)]')}>
+                      {formatBRL(noBancoAgora)}
+                    </span>
+                  </p>
+                  {caderno.primeiroDiaNegativo ? (
+                    <p className="flex items-start gap-[var(--fin-s-2)] fin-t-body text-[var(--fin-negative-text)]">
+                      <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+                      O saldo fica negativo em {rotuloDoDia(caderno.primeiroDiaNegativo)}.
+                    </p>
+                  ) : null}
+                  {caderno.vencidasForaDoPeriodo.quantidade > 0 ? (
+                    <p className="flex items-start gap-[var(--fin-s-2)] fin-t-body text-[var(--fin-text-2)]">
+                      <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-[var(--fin-text-3)]" />
+                      {caderno.vencidasForaDoPeriodo.quantidade === 1
+                        ? `1 conta venceu neste período e segue em aberto (${formatBRL(caderno.vencidasForaDoPeriodo.valor)}). Ela está prevista para hoje.`
+                        : `${caderno.vencidasForaDoPeriodo.quantidade} contas venceram neste período e seguem em aberto (${formatBRL(caderno.vencidasForaDoPeriodo.valor)}). Elas estão previstas para hoje.`}
+                    </p>
+                  ) : null}
+                  {incluirFunis && projecaoFunis.count > 0 ? (
+                    <p className="flex items-start gap-[var(--fin-s-2)] fin-t-body text-[var(--fin-text-2)]">
+                      <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-[var(--fin-text-3)]" />
+                      Projeção do CRM para o período: +{formatBRL(projecaoFunis.receita)} e −{formatBRL(projecaoFunis.investimento)}.
+                      É estimativa de {projecaoFunis.count === 1 ? '1 funil' : `${projecaoFunis.count} funis`} e não entra no saldo.
+                    </p>
+                  ) : null}
+                </div>
               </section>
 
-              <section className="flex flex-col gap-[var(--fin-s-3)]">
-                <h3 className="fin-t-subhead text-[var(--fin-text)]">
-                  Saídas ({detalhe.detalhesSaidas.length})
-                </h3>
-                <FinTable
-                  linhas={paraDetalhe(detalhe.detalhesSaidas, 'saida')}
-                  colunas={COLUNAS_DETALHE}
-                  chave={(d) => d.id}
-                  densidade="compacta"
-                  estado="ok"
-                  vazio={{
-                    motivo: 'sem-resultado',
-                    titulo: 'Nenhuma saída neste período',
-                    oQueE: 'Não há pagamento baixado nem em aberto com data dentro deste período.',
-                  }}
-                />
+              {/* O caderno. */}
+              <section aria-label="Caderno" className={cn(CARTAO, 'flex flex-col gap-[var(--fin-s-3)] py-[var(--fin-s-4)]')}>
+                <div className="flex flex-col gap-[var(--fin-s-3)] px-[var(--fin-s-4)] sm:flex-row sm:items-center sm:justify-between sm:px-[var(--fin-s-5)]">
+                  <div className="flex flex-col">
+                    <h2 className="fin-t-subhead text-[var(--fin-text)]">Caderno</h2>
+                    <p className="fin-t-caption text-[var(--fin-text-3)]">Toque numa linha para ver o que entrou e o que saiu.</p>
+                  </div>
+                  <Segmentado<Agrupamento>
+                    rotulo="Mostrar o caderno"
+                    valor={agrupamento}
+                    onChange={setAgrupamento}
+                    opcoes={agrupamentosDoPeriodo(tipo).map(a => ({ valor: a, rotulo: ROTULO_AGRUPAMENTO[a] }))}
+                  />
+                </div>
+
+                <div className="px-[var(--fin-s-1)] sm:px-[var(--fin-s-2)]">
+                  <Caderno caderno={caderno} onAbrir={setLinhaAberta} />
+                </div>
+
+                {temFolha || projecaoFunis.count > 0 ? (
+                  <div className="flex flex-wrap items-center gap-x-[var(--fin-s-5)] gap-y-1 border-t border-[var(--fin-border)] px-[var(--fin-s-4)] pt-[var(--fin-s-3)] sm:px-[var(--fin-s-5)]">
+                    <span className="fin-t-caption text-[var(--fin-text-3)]">Na previsão:</span>
+                    {temFolha ? (
+                      <Interruptor ligado={incluirFolha} onChange={setIncluirFolha}>Folha de pagamento</Interruptor>
+                    ) : null}
+                    {projecaoFunis.count > 0 ? (
+                      <Interruptor ligado={incluirFunis} onChange={setIncluirFunis}>Projeção do CRM</Interruptor>
+                    ) : null}
+                  </div>
+                ) : null}
               </section>
             </div>
-          ) : null}
-        </RecordSheet>
+          </DataState>
+        )}
+
+        <DetalheDaLinha
+          linha={linhaAberta}
+          agrupamento={agrupamento}
+          ano={periodo.inicio.slice(0, 4)}
+          hoje={hoje}
+          onFechar={() => setLinhaAberta(null)}
+        />
       </div>
     </div>
   );
