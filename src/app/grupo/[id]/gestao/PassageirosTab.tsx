@@ -481,13 +481,13 @@ export function PassageirosTab({ grupoId, onChange }: Props) {
       {/* Sheet — Novo/Editar passageiro */}
       {sheetOpen && (
         <div
-          className="fixed inset-0 z-50 flex justify-end"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: 'rgba(15, 23, 42, 0.45)' }}
           onClick={() => setSheetOpen(false)}
         >
           <div
-            className="w-full max-w-2xl h-full overflow-y-auto p-6 space-y-5 shadow-2xl"
-            style={{ background: 'white' }}
+            className="w-full max-w-2xl max-h-[calc(100dvh-2rem)] rounded-[var(--fin-r-lg)] shadow-[var(--fin-e2)] overflow-y-auto p-6 space-y-5"
+            style={{ background: 'var(--fin-surface)' }}
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-3" style={{ borderBottom: '1px solid var(--lg-border-base)' }}>

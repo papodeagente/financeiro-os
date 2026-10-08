@@ -92,7 +92,7 @@ export default function ProjetosPage() {
       <PageHeader
         title="Projetos comerciais"
         actions={
-          <button onClick={openNew} className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90 transition-opacity">
+          <button onClick={openNew} className="flex items-center gap-1.5 px-3 py-1.5 text-[length:var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90 transition-opacity">
             <Plus className="w-4 h-4" /> Novo projeto
           </button>
         }
@@ -114,7 +114,7 @@ export default function ProjetosPage() {
               onDragOver={e => e.preventDefault()}
               onDrop={e => handleDrop(status, e)}
             >
-              <h3 className="text-[var(--text-body-sm)] font-semibold text-[var(--t-text-muted)] uppercase tracking-wider mb-3">
+              <h3 className="text-[length:var(--text-body-sm)] font-semibold text-[var(--t-text-muted)] uppercase tracking-wider mb-3">
                 {STATUS_LABELS[status]} ({projetos.filter(p => p.status === status).length})
               </h3>
               <div className="space-y-3">
@@ -129,12 +129,12 @@ export default function ProjetosPage() {
                     <div className="flex items-start gap-2">
                       <GripVertical className="w-4 h-4 text-[var(--t-text-muted)] mt-0.5 shrink-0 cursor-grab" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)] truncate">{proj.nome || 'Sem nome'}</p>
-                        <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">{proj.canal}</p>
+                        <p className="text-[length:var(--text-body-sm)] font-medium text-[var(--t-text)] truncate">{proj.nome || 'Sem nome'}</p>
+                        <p className="text-[length:var(--text-caption)] text-[var(--t-text-muted)]">{proj.canal}</p>
                         <div className="mt-2 flex items-center justify-between">
-                          <span className="text-[var(--text-caption)] text-[var(--t-text-secondary)]">Budget: {formatBRL(proj.budget)}</span>
+                          <span className="text-[length:var(--text-caption)] text-[var(--t-text-secondary)]">Budget: {formatBRL(proj.budget)}</span>
                           {proj.status === 'concluido' && proj.budget > 0 && (
-                            <span className={`text-[var(--text-caption)] font-medium ${proj.gasto <= proj.budget ? 'text-[var(--crm-ok)]' : 'text-[var(--crm-err)]'}`}>
+                            <span className={`text-[length:var(--text-caption)] font-medium ${proj.gasto <= proj.budget ? 'text-[var(--crm-ok)]' : 'text-[var(--crm-err)]'}`}>
                               {((proj.gasto / proj.budget) * 100).toFixed(0)}% gasto
                             </span>
                           )}
@@ -151,11 +151,11 @@ export default function ProjetosPage() {
 
       {/* Sheet for editing */}
       {sheetOpen && editing && (
-        <div className="fixed inset-0 z-50 flex justify-end" onClick={() => setSheetOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setSheetOpen(false)}>
           <div className="absolute inset-0 bg-black/30" />
-          <div className="relative w-[400px] h-full bg-[var(--t-surface)] border-l border-[var(--t-border)] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="relative w-full max-w-[440px] max-h-[calc(100dvh-2rem)] rounded-[var(--fin-r-lg)] shadow-[var(--fin-e2)] bg-[var(--t-surface)] border border-[var(--t-border)] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-[var(--t-border)]">
-              <h3 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)]">
+              <h3 className="text-[length:var(--text-body-lg)] font-medium text-[var(--t-text)]">
                 {editing.nome ? 'Editar projeto' : 'Novo projeto'}
               </h3>
               <button onClick={() => setSheetOpen(false)} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[var(--t-sidebar-item-hover)]">
@@ -164,62 +164,62 @@ export default function ProjetosPage() {
             </div>
             <div className="p-4 space-y-4">
               <div>
-                <label htmlFor="proj-nome" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Nome</label>
+                <label htmlFor="proj-nome" className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Nome</label>
                 <input id="proj-nome" value={editing.nome} onChange={e => setEditing({ ...editing, nome: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
+                  className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)]" />
               </div>
               <div>
-                <label htmlFor="proj-canal" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Canal</label>
+                <label htmlFor="proj-canal" className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Canal</label>
                 <select id="proj-canal" value={editing.canal} onChange={e => setEditing({ ...editing, canal: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]">
+                  className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)]">
                   {CANAIS.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
-                <label htmlFor="proj-budget" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Budget</label>
+                <label htmlFor="proj-budget" className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Budget</label>
                 <MoneyInput value={editing.budget} onChange={v => setEditing({ ...editing, budget: v ?? 0 })} />
               </div>
               <div>
-                <label htmlFor="proj-gasto" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Gasto ate agora</label>
+                <label htmlFor="proj-gasto" className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Gasto ate agora</label>
                 <MoneyInput value={editing.gasto} onChange={v => setEditing({ ...editing, gasto: v ?? 0 })} />
               </div>
               <div>
-                <label htmlFor="proj-resp" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Responsavel</label>
+                <label htmlFor="proj-resp" className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Responsavel</label>
                 <select id="proj-resp" value={editing.responsavel} onChange={e => setEditing({ ...editing, responsavel: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]">
+                  className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)]">
                   <option value="">Selecionar...</option>
                   {membros.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label htmlFor="proj-inicio" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Inicio</label>
+                  <label htmlFor="proj-inicio" className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Inicio</label>
                   <input id="proj-inicio" type="date" value={editing.data_inicio} onChange={e => setEditing({ ...editing, data_inicio: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
+                    className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)]" />
                 </div>
                 <div>
-                  <label htmlFor="proj-fim" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Fim</label>
+                  <label htmlFor="proj-fim" className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Fim</label>
                   <input id="proj-fim" type="date" value={editing.data_fim} onChange={e => setEditing({ ...editing, data_fim: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]" />
+                    className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)]" />
                 </div>
               </div>
               <div>
-                <label htmlFor="proj-status" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Status</label>
+                <label htmlFor="proj-status" className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Status</label>
                 <select id="proj-status" value={editing.status} onChange={e => setEditing({ ...editing, status: e.target.value as Projeto['status'] })}
-                  className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]">
+                  className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)]">
                   {COLUMNS.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
                 </select>
               </div>
               <div className="flex gap-2 pt-4">
                 <button
                   onClick={async () => { await save(editing); setSheetOpen(false); }}
-                  className="flex-1 px-4 py-2 text-[var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90"
+                  className="flex-1 px-4 py-2 text-[length:var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90"
                 >
                   Salvar
                 </button>
                 <button
                   onClick={async () => { await remove(editing.id); setSheetOpen(false); }}
-                  className="px-4 py-2 text-[var(--text-body-sm)] text-[var(--fin-negative-text)] border border-[var(--fin-negative)]/30 rounded-lg hover:bg-[var(--fin-negative-soft)]"
+                  className="px-4 py-2 text-[length:var(--text-body-sm)] text-[var(--fin-negative-text)] border border-[var(--fin-negative)]/30 rounded-lg hover:bg-[var(--fin-negative-soft)]"
                 >
                   Excluir
                 </button>

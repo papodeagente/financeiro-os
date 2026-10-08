@@ -67,9 +67,9 @@ export function EmptyState({
         />
         {icon}
       </div>
-      <h3 className="text-[var(--text-body-lg)] font-semibold text-[var(--t-text)] mb-1">{title}</h3>
+      <h3 className="text-[length:var(--text-body-lg)] font-semibold text-[var(--t-text)] mb-1">{title}</h3>
       {description && (
-        <p className="text-[var(--text-body-sm)] text-[var(--t-text-muted)] text-center max-w-sm">
+        <p className="text-[length:var(--text-body-sm)] text-[var(--t-text-muted)] text-center max-w-sm">
           {description}
         </p>
       )}
@@ -78,7 +78,7 @@ export function EmptyState({
           {isActionObject(action) ? (
             <button
               onClick={action.onClick}
-              className="px-5 py-2.5 text-[var(--text-body-sm)] font-medium text-white rounded-xl hover:opacity-90 transition-all"
+              className="px-5 py-2.5 text-[length:var(--text-body-sm)] font-medium text-white rounded-xl hover:opacity-90 transition-all"
               style={{
                 background: 'var(--t-accent-gradient)',
                 boxShadow: '0 2px 8px var(--t-green-shadow)',

@@ -235,7 +235,7 @@ export default function CACDashboardPage() {
                   )}
                 </div>
                 <p className="text-2xl font-bold text-[var(--t-text)]">{BRL(monthData.cac)}</p>
-                <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mt-2 uppercase tracking-wide">CAC do Mês</p>
+                <p className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] mt-2 uppercase tracking-wide">CAC do Mês</p>
               </div>
 
               <div className="bento-card">
@@ -243,7 +243,7 @@ export default function CACDashboardPage() {
                   <DollarSign className="w-5 h-5 text-[var(--t-blue)]" />
                 </div>
                 <p className="text-2xl font-bold text-[var(--t-text)]">{BRL(monthData.ticketMedio)}</p>
-                <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mt-2 uppercase tracking-wide">Ticket Médio</p>
+                <p className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] mt-2 uppercase tracking-wide">Ticket Médio</p>
               </div>
 
               <div className="bento-card">
@@ -253,7 +253,7 @@ export default function CACDashboardPage() {
                 <p className={`text-2xl font-bold ${monthData.roi >= 0 ? 'text-[var(--t-green)]' : 'text-[var(--t-red)]'}`}>
                   {PCT(monthData.roi)}
                 </p>
-                <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mt-2 uppercase tracking-wide">ROI Comercial</p>
+                <p className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] mt-2 uppercase tracking-wide">ROI Comercial</p>
               </div>
 
               <div className="bento-card">
@@ -261,7 +261,7 @@ export default function CACDashboardPage() {
                   <Users className="w-5 h-5 text-[var(--fin-violet)]" />
                 </div>
                 <p className="text-2xl font-bold text-[var(--t-text)]">{monthData.qtdClientesNovos}</p>
-                <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mt-2 uppercase tracking-wide">Clientes Novos</p>
+                <p className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] mt-2 uppercase tracking-wide">Clientes Novos</p>
               </div>
             </div>
 

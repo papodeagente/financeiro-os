@@ -428,12 +428,12 @@ export function ReservasTab({ grupoId, periodos, tarifasAtivas, permiteListaEspe
       {/* Sheet lateral — Nova/Editar reserva */}
       {sheetOpen && (
         <div
-          className="fixed inset-0 z-40 flex justify-end"
+          className="fixed inset-0 z-40 flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.4)' }}
           onClick={() => setSheetOpen(false)}
         >
           <div
-            className="w-full max-w-md h-full overflow-y-auto p-6 space-y-4 shadow-2xl"
+            className="w-full max-w-md max-h-[calc(100dvh-2rem)] rounded-[var(--fin-r-lg)] shadow-[var(--fin-e2)] overflow-y-auto p-6 space-y-4"
             style={{ background: 'var(--ink-bg)' }}
             onClick={e => e.stopPropagation()}
           >

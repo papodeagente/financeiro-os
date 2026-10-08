@@ -6,12 +6,12 @@ import { LoaderCircle, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
-  Sheet,
-  SheetClose,
-  SheetContent,
-  SheetDescription,
-  SheetTitle,
-} from '@/components/ui/sheet';
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 export type RecordSheetProps = {
   aberto: boolean;
@@ -36,13 +36,23 @@ export type RecordSheetProps = {
   largura?: 480 | 640;
 };
 
+// No centro a janela tem mais respiro que a gaveta tinha: os formulários de
+// duas colunas deixam de ficar espremidos.
 const LARGURA: Record<480 | 640, string> = {
-  480: 'data-[side=right]:w-full data-[side=right]:sm:max-w-[480px]',
-  640: 'data-[side=right]:w-full data-[side=right]:sm:max-w-[640px]',
+  480: 'sm:max-w-[560px]',
+  640: 'sm:max-w-[720px]',
 };
 
 const ALTURA_ACAO = 'h-11 lg:h-10';
 
+/**
+ * Janela de registro: formulário ou detalhe com cabeçalho, corpo rolável e
+ * ações no rodapé.
+ *
+ * Abre no CENTRO da tela (pedido do Bruno, 08/10/2026: "todo popup deve abrir
+ * no centro"). O nome ficou do tempo em que era gaveta lateral, para as telas
+ * não precisarem mudar. Fechar com alteração pendente pede confirmação.
+ */
 export function RecordSheet({
   aberto,
   onOpenChange,
@@ -91,27 +101,26 @@ export function RecordSheet({
   }
 
   return (
-    <Sheet open={aberto} onOpenChange={pedirFechamento}>
-      <SheetContent
-        side="right"
+    <Dialog open={aberto} onOpenChange={pedirFechamento}>
+      <DialogContent
         showCloseButton={false}
         className={cn(
-          'gap-0 border-l border-[var(--fin-border)] bg-[var(--fin-surface)] p-0 text-[var(--fin-text)] shadow-[var(--fin-e2)]',
+          'flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 text-[var(--fin-text)]',
           LARGURA[largura]
         )}
       >
-        <header className="flex flex-col gap-1 border-b border-[var(--fin-border)] px-4 py-4 pr-14">
-          <SheetTitle className="fin-t-subhead text-[var(--fin-text)]">{titulo}</SheetTitle>
+        <header className="flex flex-col gap-1 border-b border-[var(--fin-border)] px-5 py-4 pr-14">
+          <DialogTitle className="fin-t-subhead text-[var(--fin-text)]">{titulo}</DialogTitle>
           {descricao && (
-            <SheetDescription className="fin-t-caption text-[var(--fin-text-2)]">
+            <DialogDescription className="fin-t-caption text-[var(--fin-text-2)]">
               {descricao}
-            </SheetDescription>
+            </DialogDescription>
           )}
         </header>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
 
-        <footer className="flex flex-col gap-3 border-t border-[var(--fin-border)] bg-[var(--fin-surface)] px-4 py-4">
+        <footer className="flex flex-col gap-3 border-t border-[var(--fin-border)] bg-[var(--fin-surface)] px-5 py-4">
           {confirmandoDescarte ? (
             <div
               role="alertdialog"
@@ -209,20 +218,20 @@ export function RecordSheet({
           )}
         </footer>
 
-        <SheetClose
+        <DialogClose
           render={
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label="Fechar painel"
+              aria-label="Fechar"
               className="absolute top-3 right-3 size-11 lg:size-9"
             />
           }
         >
           <X className="size-4" aria-hidden="true" />
-        </SheetClose>
-      </SheetContent>
-    </Sheet>
+        </DialogClose>
+      </DialogContent>
+    </Dialog>
   );
 }
 

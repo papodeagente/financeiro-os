@@ -942,10 +942,10 @@ export function NotificacoesBell() {
     >
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--t-border)] px-4 py-3">
         <div className="min-w-0">
-          <p id={titleId} className="text-[var(--text-body-sm)] font-semibold text-[var(--t-text)]">
+          <p id={titleId} className="text-[length:var(--text-body-sm)] font-semibold text-[var(--t-text)]">
             Notificações
           </p>
-          <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]" aria-live="polite">
+          <p className="text-[length:var(--text-caption)] text-[var(--t-text-muted)]" aria-live="polite">
             {unread > 0 ? `${unread} não lida${unread === 1 ? '' : 's'}` : 'Tudo em dia'}
           </p>
         </div>
@@ -1157,7 +1157,7 @@ export function NotificacoesBell() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start gap-2">
-                          <p className={`min-w-0 flex-1 text-left text-[var(--text-body-sm)] leading-tight ${
+                          <p className={`min-w-0 flex-1 text-left text-[length:var(--text-body-sm)] leading-tight ${
                             notification.lida
                               ? 'text-[var(--t-text-secondary)]'
                               : 'font-semibold text-[var(--t-text)]'

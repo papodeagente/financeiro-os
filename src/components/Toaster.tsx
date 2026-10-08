@@ -15,8 +15,8 @@ export function Toaster() {
         classNames: {
           toast:
             'rounded-[var(--t-card-radius)] shadow-[var(--elevation-2)] border border-[var(--t-border)] bg-[var(--t-surface)] text-[var(--t-text)]',
-          title: 'text-[var(--text-body)] font-semibold',
-          description: 'text-[var(--text-body-sm)] text-[var(--t-text-muted)]',
+          title: 'text-[length:var(--text-body)] font-semibold',
+          description: 'text-[length:var(--text-body-sm)] text-[var(--t-text-muted)]',
           success: 'border-[var(--t-status-success)]',
           error: 'border-[var(--t-status-danger)]',
           warning: 'border-[var(--t-status-warning)]',

@@ -99,12 +99,15 @@ export function Interruptor({ rotulo, descricao, ligado, onChange }: Interruptor
         aria-labelledby={idRotulo}
         aria-describedby={descricao ? idDescricao : undefined}
         onClick={() => onChange(!ligado)}
-        className={cn('size-11 rounded-[var(--fin-r-md)] shadow-none lg:size-10', FOCO)}
+        // p-0: o botão tem 44px e o px-4 padrão deixava 12px para uma
+        // trilha de 36px. Ela encolhia até virar um risco, com a bolinha
+        // sobrando ao lado.
+        className={cn('size-11 shrink-0 rounded-[var(--fin-r-md)] p-0 shadow-none lg:size-10', FOCO)}
       >
         <span
           aria-hidden="true"
           className={cn(
-            'relative block h-5 w-9 rounded-[var(--fin-r-dot)] transition-colors',
+            'relative block h-5 w-9 shrink-0 rounded-[var(--fin-r-dot)] transition-colors',
             ligado ? 'bg-[var(--fin-accent)]' : 'bg-[var(--fin-text-3)]',
           )}
         >

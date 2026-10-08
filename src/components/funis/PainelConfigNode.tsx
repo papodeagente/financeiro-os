@@ -49,7 +49,7 @@ export function PainelConfigNode({ node, onChange, dadosReais, usarDadosReais }:
         })()}
         <div className="min-w-0">
           <p className="text-[10px] text-[var(--t-text-muted)] uppercase tracking-wider">{info.label}</p>
-          <p className="text-[var(--text-body-sm)] font-semibold text-[var(--t-text)] truncate">
+          <p className="text-[length:var(--text-body-sm)] font-semibold text-[var(--t-text)] truncate">
             {info.tipos.find(t => t.tipo === node.data.tipo)?.label ?? node.data.tipo}
           </p>
         </div>
@@ -57,11 +57,11 @@ export function PainelConfigNode({ node, onChange, dadosReais, usarDadosReais }:
 
       {/* Nome */}
       <div>
-        <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Nome</label>
+        <label className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Nome</label>
         <input
           value={node.data.label}
           onChange={e => onChange({ label: e.target.value })}
-          className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
+          className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)]"
         />
       </div>
 
@@ -74,7 +74,7 @@ export function PainelConfigNode({ node, onChange, dadosReais, usarDadosReais }:
               min={0}
               value={config.visitantes ?? ''}
               onChange={e => updateConfig({ visitantes: parseFloat(e.target.value) || 0 })}
-              className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
+              className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)]"
             />
           </Field>
           <Field label="Investimento (R$)">
@@ -189,7 +189,7 @@ export function PainelConfigNode({ node, onChange, dadosReais, usarDadosReais }:
           value={config.observacoes ?? ''}
           onChange={e => updateConfig({ observacoes: e.target.value })}
           rows={3}
-          className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)] resize-none"
+          className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)] resize-none"
         />
       </Field>
     </div>
@@ -199,7 +199,7 @@ export function PainelConfigNode({ node, onChange, dadosReais, usarDadosReais }:
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">{label}</label>
+      <label className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">{label}</label>
       {children}
     </div>
   );
@@ -214,8 +214,8 @@ function SliderField({
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <label className="text-[var(--text-caption)] text-[var(--t-text-muted)]">{label}</label>
-        <span className="text-[var(--text-caption)] font-semibold text-[var(--t-text)]">
+        <label className="text-[length:var(--text-caption)] text-[var(--t-text-muted)]">{label}</label>
+        <span className="text-[length:var(--text-caption)] font-semibold text-[var(--t-text)]">
           {value.toFixed(0)}{suffix}
         </span>
       </div>

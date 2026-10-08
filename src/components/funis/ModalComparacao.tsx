@@ -52,8 +52,8 @@ export function ModalComparacao({
       >
         <div className="sticky top-0 z-10 flex items-center justify-between p-5 border-b border-[var(--t-border)] bg-[var(--t-surface)]">
           <div>
-            <h2 className="text-[var(--text-h2)] font-semibold text-[var(--t-text)]">Comparar cenários</h2>
-            <p className="text-[var(--text-body-sm)] text-[var(--t-text-muted)]">
+            <h2 className="text-[length:var(--text-h2)] font-semibold text-[var(--t-text)]">Comparar cenários</h2>
+            <p className="text-[length:var(--text-body-sm)] text-[var(--t-text-muted)]">
               Ajuste os multiplicadores e compare lucro, ROI e CAC entre os 4 cenários.
             </p>
           </div>
@@ -73,7 +73,7 @@ export function ModalComparacao({
                 key={c.id}
                 className={`p-4 rounded-xl border ${isVencedor ? 'border-[var(--t-green)] bg-[var(--t-green-bg)]/20 shadow-md' : 'border-[var(--t-border)] bg-[var(--t-bg)]'}`}
               >
-                <p className="text-[var(--text-body-sm)] font-semibold text-[var(--t-text)] mb-3">
+                <p className="text-[length:var(--text-body-sm)] font-semibold text-[var(--t-text)] mb-3">
                   {c.nome}
                   {isVencedor && <span className="ml-2 text-[10px] bg-[var(--t-green)] text-[var(--fin-text-on-fill)] px-1.5 py-0.5 rounded-full">MELHOR</span>}
                 </p>
@@ -117,7 +117,7 @@ export function ModalComparacao({
 
         {/* Gráfico SVG manual de lucro comparativo */}
         <div className="px-5 pb-5">
-          <p className="text-[var(--text-body-sm)] font-semibold text-[var(--t-text)] mb-3">Lucro projetado</p>
+          <p className="text-[length:var(--text-body-sm)] font-semibold text-[var(--t-text)] mb-3">Lucro projetado</p>
           <div className="space-y-2">
             {cenariosSimulados.map(c => {
               const lucro = c.kpis?.lucro ?? 0;
@@ -125,7 +125,7 @@ export function ModalComparacao({
               const cor = lucro === maiorLucro && lucro > 0 ? '#10b981' : lucro < 0 ? '#ef4444' : '#94a3b8';
               return (
                 <div key={c.id} className="flex items-center gap-3">
-                  <p className="w-24 text-[var(--text-caption)] text-[var(--t-text-muted)] truncate">{c.nome}</p>
+                  <p className="w-24 text-[length:var(--text-caption)] text-[var(--t-text-muted)] truncate">{c.nome}</p>
                   <div className="flex-1 h-6 bg-[var(--t-bg)] rounded-md overflow-hidden relative">
                     <div
                       className="absolute inset-y-0 left-0 rounded-md transition-all"
@@ -144,13 +144,13 @@ export function ModalComparacao({
         <div className="sticky bottom-0 flex justify-end gap-2 p-4 border-t border-[var(--t-border)] bg-[var(--t-surface)]">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-[var(--text-body-sm)] text-[var(--t-text-muted)] hover:text-[var(--t-text)]"
+            className="px-4 py-2 text-[length:var(--text-body-sm)] text-[var(--t-text-muted)] hover:text-[var(--t-text)]"
           >
             Fechar
           </button>
           <button
             onClick={() => { onSalvar(cenarios); onClose(); }}
-            className="px-4 py-2 text-[var(--text-body-sm)] font-semibold text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90"
+            className="px-4 py-2 text-[length:var(--text-body-sm)] font-semibold text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90"
           >
             Salvar cenários
           </button>

@@ -361,11 +361,11 @@ function EditorInner({ id }: EditorProps) {
       <div className="h-screen bg-[var(--t-bg)] p-6">
         <button
           onClick={() => router.push('/planejamento/fluxogramas')}
-          className="flex items-center gap-1.5 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] hover:text-[var(--t-text)]"
+          className="flex items-center gap-1.5 text-[length:var(--text-body-sm)] text-[var(--t-text-secondary)] hover:text-[var(--t-text)]"
         >
           <ArrowLeft className="w-4 h-4" /> Voltar ao sistema
         </button>
-        <p className="mt-6 text-[var(--text-body)] text-red-500">{error || 'Não encontrado'}</p>
+        <p className="mt-6 text-[length:var(--text-body)] text-red-500">{error || 'Não encontrado'}</p>
       </div>
     );
   }
@@ -376,7 +376,7 @@ function EditorInner({ id }: EditorProps) {
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2 border-b border-[var(--t-border)] bg-[var(--t-surface)] shrink-0">
         <button
           onClick={() => router.push('/planejamento/fluxogramas')}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md hover:bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] hover:text-[var(--t-text)] text-[var(--text-body-sm)] font-medium"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md hover:bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] hover:text-[var(--t-text)] text-[length:var(--text-body-sm)] font-medium"
           title="Voltar ao sistema"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -387,29 +387,29 @@ function EditorInner({ id }: EditorProps) {
           value={meta.nome}
           onChange={e => updateMeta({ nome: e.target.value })}
           placeholder="Nome do fluxograma"
-          className="flex-1 max-w-[360px] px-2 py-1 text-[var(--text-body)] font-medium text-[var(--t-text)] bg-transparent focus:bg-[var(--t-input-bg)] rounded outline-none"
+          className="flex-1 max-w-[360px] px-2 py-1 text-[length:var(--text-body)] font-medium text-[var(--t-text)] bg-transparent focus:bg-[var(--t-input-bg)] rounded outline-none"
         />
         <select
           value={meta.categoria_id}
           onChange={e => updateMeta({ categoria_id: e.target.value })}
-          className="px-2 py-1 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] bg-[var(--t-input-bg)] rounded shadow-[var(--t-card-shadow)]"
+          className="px-2 py-1 text-[length:var(--text-body-sm)] text-[var(--t-text-secondary)] bg-[var(--t-input-bg)] rounded shadow-[var(--t-card-shadow)]"
         >
           {categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
         </select>
-        <span className="text-[var(--text-caption)] text-[var(--t-text-muted)] ml-auto flex items-center gap-1">
+        <span className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] ml-auto flex items-center gap-1">
           {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : savedAt ? <Check className="w-3 h-3 text-[var(--t-green)]" /> : null}
           {savedLabel}
         </span>
         <button
           onClick={exportJson}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] font-medium text-[var(--t-text)] border border-[var(--t-border)] rounded-lg hover:bg-[var(--t-surface-hover)]"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-[length:var(--text-body-sm)] font-medium text-[var(--t-text)] border border-[var(--t-border)] rounded-lg hover:bg-[var(--t-surface-hover)]"
         >
           <Download className="w-3.5 h-3.5" /> Exportar
         </button>
         <button
           onClick={save}
           disabled={saving}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-[length:var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50"
         >
           <Save className="w-3.5 h-3.5" /> Salvar
         </button>
@@ -418,12 +418,12 @@ function EditorInner({ id }: EditorProps) {
       <div className="flex flex-1 min-h-0 flex-col lg:flex-row">
         {/* Palette à esquerda (Miro-style) */}
         <aside className="max-h-[28vh] w-full shrink-0 overflow-y-auto border-b border-[var(--t-border)] bg-[var(--t-surface)] p-3 lg:max-h-none lg:w-[220px] lg:border-b-0 lg:border-r">
-          <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wider mb-2">
+          <p className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wider mb-2">
             Arraste para o canvas
           </p>
           {PALETTE_SECTIONS.map(section => (
             <div key={section.title} className="mb-4">
-              <p className="text-[var(--text-caption)] font-semibold text-[var(--t-text-secondary)] mb-1.5">
+              <p className="text-[length:var(--text-caption)] font-semibold text-[var(--t-text-secondary)] mb-1.5">
                 {section.title}
               </p>
               <div className="grid grid-cols-2 gap-2">
@@ -484,7 +484,7 @@ function EditorInner({ id }: EditorProps) {
           {nodes.length === 0 && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <div className="text-center px-6 py-4 rounded-xl bg-[var(--t-surface)]/80 border border-dashed border-[var(--t-border)]">
-                <p className="text-[var(--text-body-sm)] text-[var(--t-text-secondary)]">Arraste blocos da paleta à esquerda para começar.</p>
+                <p className="text-[length:var(--text-body-sm)] text-[var(--t-text-secondary)]">Arraste blocos da paleta à esquerda para começar.</p>
               </div>
             </div>
           )}
@@ -492,26 +492,26 @@ function EditorInner({ id }: EditorProps) {
 
         {/* Inspetor à direita */}
         <aside className="max-h-[45vh] w-full shrink-0 overflow-y-auto border-t border-[var(--t-border)] bg-[var(--t-surface)] p-4 lg:max-h-none lg:w-[320px] lg:border-t-0 lg:border-l">
-          <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wider mb-3">Inspetor</p>
+          <p className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wider mb-3">Inspetor</p>
 
           {!selectedNode && !selectedEdge && (
             <>
               <div className="space-y-3">
                 <div>
-                  <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Descrição do fluxograma</label>
+                  <label className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Descrição do fluxograma</label>
                   <textarea
                     value={meta.descricao || ''}
                     onChange={e => updateMeta({ descricao: e.target.value })}
                     rows={4}
                     placeholder="Para quê serve este fluxograma?"
-                    className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)] resize-none"
+                    className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)] resize-none"
                   />
                 </div>
-                <div className="text-[var(--text-caption)] text-[var(--t-text-muted)] pt-3 border-t border-[var(--t-border)]">
+                <div className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] pt-3 border-t border-[var(--t-border)]">
                   <p className="mb-1">{nodes.length} blocos · {edges.length} conexões</p>
                   <p className="opacity-70">Selecione um bloco para editar suas propriedades.</p>
                 </div>
-                <div className="text-[var(--text-caption)] text-[var(--t-text-muted)] space-y-1 pt-3 border-t border-[var(--t-border)]">
+                <div className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] space-y-1 pt-3 border-t border-[var(--t-border)]">
                   <p className="font-semibold text-[var(--t-text-secondary)]">Atalhos</p>
                   <p>⌫ excluir seleção · ⌘S salvar</p>
                   <p>arrastar para conectar · scroll para zoom</p>
@@ -522,29 +522,29 @@ function EditorInner({ id }: EditorProps) {
 
           {selectedNode && (
             <div className="space-y-3">
-              <p className="text-[var(--text-body-sm)] font-semibold text-[var(--t-text)]">
+              <p className="text-[length:var(--text-body-sm)] font-semibold text-[var(--t-text)]">
                 {SHAPE_INDEX[selectedNode.type ?? '']?.label ?? selectedNode.type}
               </p>
               <div>
-                <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Rótulo</label>
+                <label className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Rótulo</label>
                 <input
                   value={(selectedNode.data as { label?: string }).label ?? ''}
                   onChange={e => updateSelectedNodeData({ label: e.target.value })}
-                  className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
+                  className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)]"
                 />
               </div>
               <div>
-                <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Descrição</label>
+                <label className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Descrição</label>
                 <textarea
                   value={(selectedNode.data as { description?: string }).description ?? ''}
                   onChange={e => updateSelectedNodeData({ description: e.target.value })}
                   rows={3}
-                  className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)] resize-none"
+                  className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)] resize-none"
                 />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Cor de fundo</label>
+                  <label className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Cor de fundo</label>
                   <input
                     type="color"
                     value={(selectedNode.data as { bgColor?: string }).bgColor ?? '#dbeafe'}
@@ -553,7 +553,7 @@ function EditorInner({ id }: EditorProps) {
                   />
                 </div>
                 <div>
-                  <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Cor do texto</label>
+                  <label className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Cor do texto</label>
                   <input
                     type="color"
                     value={(selectedNode.data as { textColor?: string }).textColor ?? '#1e3a8a'}
@@ -566,15 +566,15 @@ function EditorInner({ id }: EditorProps) {
               {/* Configuração específica: Decisão (gateway) */}
               {selectedNode.type === 'gateway' && (
                 <div className="pt-3 mt-1 border-t border-[var(--t-border)] space-y-2">
-                  <div className="flex items-center gap-1.5 text-[var(--text-caption)] font-semibold text-[var(--t-text-secondary)] uppercase tracking-wider">
+                  <div className="flex items-center gap-1.5 text-[length:var(--text-caption)] font-semibold text-[var(--t-text-secondary)] uppercase tracking-wider">
                     <DiamondIcon className="w-3 h-3" /> Decisão
                   </div>
                   <div>
-                    <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Posição do rótulo</label>
+                    <label className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Posição do rótulo</label>
                     <select
                       value={(selectedNode.data as { labelPosition?: LabelPosition }).labelPosition ?? 'bottom'}
                       onChange={e => updateSelectedNodeData({ labelPosition: e.target.value as LabelPosition })}
-                      className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
+                      className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)]"
                     >
                       <option value="top">Acima</option>
                       <option value="bottom">Abaixo</option>
@@ -588,26 +588,26 @@ function EditorInner({ id }: EditorProps) {
               {/* Configuração específica: Aguardar (delay) */}
               {selectedNode.type === 'delay' && (
                 <div className="pt-3 mt-1 border-t border-[var(--t-border)] space-y-3">
-                  <div className="flex items-center gap-1.5 text-[var(--text-caption)] font-semibold text-[var(--t-text-secondary)] uppercase tracking-wider">
+                  <div className="flex items-center gap-1.5 text-[length:var(--text-caption)] font-semibold text-[var(--t-text-secondary)] uppercase tracking-wider">
                     <Clock className="w-3 h-3" /> Tempo de espera
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Quantidade</label>
+                      <label className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Quantidade</label>
                       <input
                         type="number"
                         min={0}
                         value={(selectedNode.data as { delayValue?: number }).delayValue ?? 1}
                         onChange={e => updateSelectedNodeData({ delayValue: Number(e.target.value) })}
-                        className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
+                        className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)]"
                       />
                     </div>
                     <div>
-                      <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Unidade</label>
+                      <label className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Unidade</label>
                       <select
                         value={(selectedNode.data as { delayUnit?: DelayUnit }).delayUnit ?? 'horas'}
                         onChange={e => updateSelectedNodeData({ delayUnit: e.target.value as DelayUnit })}
-                        className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
+                        className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)]"
                       >
                         <option value="minutos">minutos</option>
                         <option value="horas">horas</option>
@@ -622,28 +622,28 @@ function EditorInner({ id }: EditorProps) {
               {/* Configuração específica: E-mail */}
               {selectedNode.type === 'email' && (
                 <div className="pt-3 mt-1 border-t border-[var(--t-border)] space-y-3">
-                  <div className="flex items-center gap-1.5 text-[var(--text-caption)] font-semibold text-[var(--t-text-secondary)] uppercase tracking-wider">
+                  <div className="flex items-center gap-1.5 text-[length:var(--text-caption)] font-semibold text-[var(--t-text-secondary)] uppercase tracking-wider">
                     <Mail className="w-3 h-3" /> Mensagem de e-mail
                   </div>
                   <div>
-                    <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Assunto</label>
+                    <label className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Assunto</label>
                     <input
                       value={(selectedNode.data as { subject?: string }).subject ?? ''}
                       onChange={e => updateSelectedNodeData({ subject: e.target.value })}
                       placeholder="Ex.: Confirmação da sua reserva"
-                      className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
+                      className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)]"
                     />
                   </div>
                   <div>
-                    <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Template do e-mail</label>
+                    <label className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Template do e-mail</label>
                     <textarea
                       value={(selectedNode.data as { template?: string }).template ?? ''}
                       onChange={e => updateSelectedNodeData({ template: e.target.value })}
                       rows={8}
                       placeholder="Olá {{cliente}}, sua viagem está confirmada..."
-                      className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)] resize-y leading-snug font-mono"
+                      className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)] resize-y leading-snug font-mono"
                     />
-                    <p className="mt-1 text-[var(--text-caption)] text-[var(--t-text-muted)]">
+                    <p className="mt-1 text-[length:var(--text-caption)] text-[var(--t-text-muted)]">
                       Use variáveis como <code>{'{{cliente}}'}</code> ou <code>{'{{grupo}}'}</code>.
                     </p>
                   </div>
@@ -653,19 +653,19 @@ function EditorInner({ id }: EditorProps) {
               {/* Configuração específica: WhatsApp */}
               {selectedNode.type === 'whatsapp' && (
                 <div className="pt-3 mt-1 border-t border-[var(--t-border)] space-y-3">
-                  <div className="flex items-center gap-1.5 text-[var(--text-caption)] font-semibold text-[var(--t-text-secondary)] uppercase tracking-wider">
+                  <div className="flex items-center gap-1.5 text-[length:var(--text-caption)] font-semibold text-[var(--t-text-secondary)] uppercase tracking-wider">
                     <MessageCircle className="w-3 h-3" /> Mensagem de WhatsApp
                   </div>
                   <div>
-                    <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Template da mensagem</label>
+                    <label className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Template da mensagem</label>
                     <textarea
                       value={(selectedNode.data as { template?: string }).template ?? ''}
                       onChange={e => updateSelectedNodeData({ template: e.target.value })}
                       rows={8}
                       placeholder="Olá {{cliente}}! 👋 Tudo certo para sua viagem..."
-                      className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)] resize-y leading-snug font-mono"
+                      className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)] resize-y leading-snug font-mono"
                     />
-                    <p className="mt-1 text-[var(--text-caption)] text-[var(--t-text-muted)]">
+                    <p className="mt-1 text-[length:var(--text-caption)] text-[var(--t-text-muted)]">
                       Use variáveis como <code>{'{{cliente}}'}</code> ou <code>{'{{grupo}}'}</code>.
                     </p>
                   </div>
@@ -674,24 +674,24 @@ function EditorInner({ id }: EditorProps) {
 
               {/* Cartão da tarefa: instruções + checklist */}
               <div className="pt-3 mt-1 border-t border-[var(--t-border)] space-y-3">
-                <div className="flex items-center gap-1.5 text-[var(--text-caption)] font-semibold text-[var(--t-text-secondary)] uppercase tracking-wider">
+                <div className="flex items-center gap-1.5 text-[length:var(--text-caption)] font-semibold text-[var(--t-text-secondary)] uppercase tracking-wider">
                   <FileText className="w-3 h-3" /> Cartão da tarefa
                 </div>
 
                 <div>
-                  <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Instruções de execução</label>
+                  <label className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Instruções de execução</label>
                   <textarea
                     value={(selectedNode.data as { instructions?: string }).instructions ?? ''}
                     onChange={e => updateSelectedNodeData({ instructions: e.target.value })}
                     rows={6}
                     placeholder="Como executar esta tarefa? Quem é responsável, quais ferramentas usar, qual o resultado esperado..."
-                    className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)] resize-y leading-snug"
+                    className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)] resize-y leading-snug"
                   />
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="flex items-center gap-1.5 text-[var(--text-caption)] text-[var(--t-text-muted)]">
+                    <span className="flex items-center gap-1.5 text-[length:var(--text-caption)] text-[var(--t-text-muted)]">
                       <ListChecks className="w-3 h-3" /> Checklist
                       {getChecklist().length > 0 && (
                         <span className="text-[var(--t-text-secondary)]">
@@ -701,14 +701,14 @@ function EditorInner({ id }: EditorProps) {
                     </span>
                     <button
                       onClick={addChecklistItem}
-                      className="flex items-center gap-1 text-[var(--text-caption)] text-[var(--t-green)] hover:underline"
+                      className="flex items-center gap-1 text-[length:var(--text-caption)] text-[var(--t-green)] hover:underline"
                     >
                       <Plus className="w-3 h-3" /> Adicionar
                     </button>
                   </div>
 
                   {getChecklist().length === 0 ? (
-                    <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] italic px-1">
+                    <p className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] italic px-1">
                       Nenhum item ainda. Adicione passos verificáveis para esta tarefa.
                     </p>
                   ) : (
@@ -728,7 +728,7 @@ function EditorInner({ id }: EditorProps) {
                             value={item.text}
                             onChange={e => updateChecklistItem(item.id, { text: e.target.value })}
                             placeholder="Descreva o passo..."
-                            className={`flex-1 min-w-0 bg-transparent text-[var(--text-body-sm)] outline-none border-b border-transparent focus:border-[var(--t-border)] ${
+                            className={`flex-1 min-w-0 bg-transparent text-[length:var(--text-body-sm)] outline-none border-b border-transparent focus:border-[var(--t-border)] ${
                               item.done ? 'line-through text-[var(--t-text-muted)]' : 'text-[var(--t-text)]'
                             }`}
                           />
@@ -748,7 +748,7 @@ function EditorInner({ id }: EditorProps) {
 
               <button
                 onClick={deleteSelected}
-                className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] text-red-500 border border-red-500/30 rounded-lg hover:bg-red-500/10"
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-[length:var(--text-body-sm)] text-red-500 border border-red-500/30 rounded-lg hover:bg-red-500/10"
               >
                 <Trash2 className="w-3.5 h-3.5" /> Excluir bloco
               </button>
@@ -757,9 +757,9 @@ function EditorInner({ id }: EditorProps) {
 
           {selectedEdge && !selectedNode && (
             <div className="space-y-3">
-              <p className="text-[var(--text-body-sm)] font-semibold text-[var(--t-text)]">Conexão</p>
+              <p className="text-[length:var(--text-body-sm)] font-semibold text-[var(--t-text)]">Conexão</p>
               <div>
-                <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Rótulo</label>
+                <label className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Rótulo</label>
                 <input
                   value={(selectedEdge.label as string) ?? ''}
                   onChange={e => {
@@ -767,11 +767,11 @@ function EditorInner({ id }: EditorProps) {
                     setEdges(eds => eds.map(ed => ed.id === selectedEdge.id ? { ...ed, label: v } : ed));
                     setSelectedEdge(prev => prev ? { ...prev, label: v } : prev);
                   }}
-                  className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
+                  className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)]"
                 />
               </div>
               <div>
-                <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Estilo</label>
+                <label className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Estilo</label>
                 <select
                   value={(selectedEdge.type as string) ?? 'smoothstep'}
                   onChange={e => {
@@ -779,7 +779,7 @@ function EditorInner({ id }: EditorProps) {
                     setEdges(eds => eds.map(ed => ed.id === selectedEdge.id ? { ...ed, type: v } : ed));
                     setSelectedEdge(prev => prev ? { ...prev, type: v } : prev);
                   }}
-                  className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
+                  className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)]"
                 >
                   <option value="smoothstep">Curvado (smoothstep)</option>
                   <option value="step">Ortogonal (step)</option>
@@ -789,7 +789,7 @@ function EditorInner({ id }: EditorProps) {
               </div>
               <button
                 onClick={deleteSelected}
-                className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] text-red-500 border border-red-500/30 rounded-lg hover:bg-red-500/10"
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-[length:var(--text-body-sm)] text-red-500 border border-red-500/30 rounded-lg hover:bg-red-500/10"
               >
                 <Trash2 className="w-3.5 h-3.5" /> Excluir conexão
               </button>

@@ -179,14 +179,14 @@ export default function FluxogramasPage() {
           <>
             <button
               onClick={openNewCategoria}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] font-medium text-[var(--t-text)] border border-[var(--t-border)] rounded-lg hover:bg-[var(--t-surface-hover)] transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[length:var(--text-body-sm)] font-medium text-[var(--t-text)] border border-[var(--t-border)] rounded-lg hover:bg-[var(--t-surface-hover)] transition-colors"
             >
               <FolderPlus className="w-4 h-4" /> Nova categoria
             </button>
             <button
               onClick={createFluxograma}
               disabled={categorias.length === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[length:var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
             >
               <Plus className="w-4 h-4" /> Novo fluxograma
             </button>
@@ -199,27 +199,27 @@ export default function FluxogramasPage() {
         <aside className="space-y-1">
           <button
             onClick={() => setActiveCategoria('todos')}
-            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[var(--text-body-sm)] transition-colors ${
+            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[length:var(--text-body-sm)] transition-colors ${
               activeCategoria === 'todos'
                 ? 'bg-[var(--t-green-bg)] text-[var(--t-green)] font-medium'
                 : 'text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]'
             }`}
           >
             <span>Todos</span>
-            <span className="text-[var(--text-caption)] opacity-70">{counts.todos ?? 0}</span>
+            <span className="text-[length:var(--text-caption)] opacity-70">{counts.todos ?? 0}</span>
           </button>
           {categorias.map(c => (
             <div key={c.id} className="group flex items-center gap-1">
               <button
                 onClick={() => setActiveCategoria(c.id)}
-                className={`flex-1 flex items-center justify-between px-3 py-2 rounded-lg text-[var(--text-body-sm)] transition-colors ${
+                className={`flex-1 flex items-center justify-between px-3 py-2 rounded-lg text-[length:var(--text-body-sm)] transition-colors ${
                   activeCategoria === c.id
                     ? 'bg-[var(--t-green-bg)] text-[var(--t-green)] font-medium'
                     : 'text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)]'
                 }`}
               >
                 <span className="truncate">{c.nome}</span>
-                <span className="text-[var(--text-caption)] opacity-70">{counts[c.id] ?? 0}</span>
+                <span className="text-[length:var(--text-caption)] opacity-70">{counts[c.id] ?? 0}</span>
               </button>
               <button
                 onClick={() => openEditCategoria(c)}
@@ -241,7 +241,7 @@ export default function FluxogramasPage() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Buscar fluxograma..."
-              className="w-full pl-9 pr-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
+              className="w-full pl-9 pr-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)]"
             />
           </div>
 
@@ -267,22 +267,22 @@ export default function FluxogramasPage() {
                         <Workflow className="w-5 h-5 text-[var(--t-green)]" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[var(--text-body-sm)] font-medium text-[var(--t-text)] truncate">
+                        <p className="text-[length:var(--text-body-sm)] font-medium text-[var(--t-text)] truncate">
                           {f.nome || 'Sem nome'}
                         </p>
                         {cat && (
-                          <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] truncate">
+                          <p className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] truncate">
                             {cat.nome}
                           </p>
                         )}
                         {f.descricao && (
-                          <p className="mt-1 text-[var(--text-caption)] text-[var(--t-text-secondary)] line-clamp-2">
+                          <p className="mt-1 text-[length:var(--text-caption)] text-[var(--t-text-secondary)] line-clamp-2">
                             {f.descricao}
                           </p>
                         )}
                       </div>
                     </div>
-                    <div className="mt-3 flex items-center justify-between text-[var(--text-caption)] text-[var(--t-text-muted)]">
+                    <div className="mt-3 flex items-center justify-between text-[length:var(--text-caption)] text-[var(--t-text-muted)]">
                       <span className="flex items-center gap-1">
                         <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--t-green)]" />
                         {(f.nodes?.length ?? 0)} blocos · {(f.edges?.length ?? 0)} ligações
@@ -314,11 +314,11 @@ export default function FluxogramasPage() {
 
       {/* Sheet de categoria */}
       {categoriaSheetOpen && editingCategoria && (
-        <div className="fixed inset-0 z-50 flex justify-end" onClick={() => setCategoriaSheetOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setCategoriaSheetOpen(false)}>
           <div className="absolute inset-0 bg-black/30" />
-          <div className="relative w-[400px] h-full bg-[var(--t-surface)] border-l border-[var(--t-border)] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="relative w-full max-w-[440px] max-h-[calc(100dvh-2rem)] rounded-[var(--fin-r-lg)] shadow-[var(--fin-e2)] bg-[var(--t-surface)] border border-[var(--t-border)] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-[var(--t-border)]">
-              <h3 className="text-[var(--text-body-lg)] font-medium text-[var(--t-text)]">
+              <h3 className="text-[length:var(--text-body-lg)] font-medium text-[var(--t-text)]">
                 {categorias.some(c => c.id === editingCategoria.id) ? 'Editar categoria' : 'Nova categoria'}
               </h3>
               <button onClick={() => setCategoriaSheetOpen(false)} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[var(--t-surface-hover)]">
@@ -327,22 +327,22 @@ export default function FluxogramasPage() {
             </div>
             <div className="p-4 space-y-4">
               <div>
-                <label htmlFor="cat-nome" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Nome</label>
+                <label htmlFor="cat-nome" className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Nome</label>
                 <input
                   id="cat-nome"
                   value={editingCategoria.nome}
                   onChange={e => setEditingCategoria({ ...editingCategoria, nome: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
+                  className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)]"
                 />
               </div>
               <div>
-                <label htmlFor="cat-ordem" className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Ordem</label>
+                <label htmlFor="cat-ordem" className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1">Ordem</label>
                 <input
                   id="cat-ordem"
                   type="number"
                   value={editingCategoria.ordem}
                   onChange={e => setEditingCategoria({ ...editingCategoria, ordem: parseInt(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
+                  className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)]"
                 />
               </div>
               <div className="flex gap-2 pt-4">
@@ -352,7 +352,7 @@ export default function FluxogramasPage() {
                     await saveCategoria(editingCategoria);
                     setCategoriaSheetOpen(false);
                   }}
-                  className="flex-1 px-4 py-2 text-[var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90"
+                  className="flex-1 px-4 py-2 text-[length:var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90"
                 >
                   Salvar
                 </button>
@@ -362,7 +362,7 @@ export default function FluxogramasPage() {
                       await removeCategoria(editingCategoria.id);
                       setCategoriaSheetOpen(false);
                     }}
-                    className="px-4 py-2 text-[var(--text-body-sm)] text-[var(--fin-negative-text)] border border-[var(--fin-negative)]/30 rounded-lg hover:bg-[var(--fin-negative-soft)]"
+                    className="px-4 py-2 text-[length:var(--text-body-sm)] text-[var(--fin-negative-text)] border border-[var(--fin-negative)]/30 rounded-lg hover:bg-[var(--fin-negative-soft)]"
                   >
                     Excluir
                   </button>

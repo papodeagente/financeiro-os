@@ -28,7 +28,7 @@ export function PainelKPIs({ kpis, loading, onSimular, onComparar, onExportar }:
     >
       <div className="flex items-center justify-between px-4 pt-3">
         <div>
-          <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wider">Resultado da simulação</p>
+          <p className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wider">Resultado da simulação</p>
           {alert && (
             <p className="text-[11px] text-[var(--fin-negative-text)] font-medium mt-0.5">
               ⚠️ Margem abaixo do mínimo configurado
@@ -39,19 +39,19 @@ export function PainelKPIs({ kpis, loading, onSimular, onComparar, onExportar }:
           <button
             onClick={onSimular}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] font-semibold text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[length:var(--text-body-sm)] font-semibold text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50"
           >
             <Play className="w-3.5 h-3.5" /> Simular
           </button>
           <button
             onClick={onComparar}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] font-medium text-[var(--t-text)] border border-[var(--t-border)] rounded-lg hover:bg-[var(--t-surface-hover)]"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[length:var(--text-body-sm)] font-medium text-[var(--t-text)] border border-[var(--t-border)] rounded-lg hover:bg-[var(--t-surface-hover)]"
           >
             <GitCompare className="w-3.5 h-3.5" /> Comparar cenários
           </button>
           <button
             onClick={onExportar}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] text-[var(--t-text-muted)] border border-[var(--t-border)] rounded-lg hover:bg-[var(--t-surface-hover)]"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[length:var(--text-body-sm)] text-[var(--t-text-muted)] border border-[var(--t-border)] rounded-lg hover:bg-[var(--t-surface-hover)]"
           >
             <Download className="w-3.5 h-3.5" /> PDF
           </button>

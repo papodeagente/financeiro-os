@@ -123,7 +123,7 @@ export default function FunisPage() {
         actions={
           <button
             onClick={() => setModalTemplateOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[length:var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90"
           >
             <Plus className="w-4 h-4" /> Novo funil
           </button>
@@ -138,10 +138,10 @@ export default function FunisPage() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Buscar funil..."
-            className="w-full pl-9 pr-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
+            className="w-full pl-9 pr-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)]"
           />
         </div>
-        <div className="flex flex-wrap items-center gap-1 text-[var(--text-body-sm)]">
+        <div className="flex flex-wrap items-center gap-1 text-[length:var(--text-body-sm)]">
           {(['todos', 'rascunho', 'simulado', 'em_execucao'] as const).map(s => (
             <button
               key={s}
@@ -153,7 +153,7 @@ export default function FunisPage() {
               }`}
             >
               {s === 'todos' ? 'Todos' : STATUS_COLORS[s].label}
-              <span className="ml-1.5 text-[var(--text-caption)] opacity-70">{counts[s]}</span>
+              <span className="ml-1.5 text-[length:var(--text-caption)] opacity-70">{counts[s]}</span>
             </button>
           ))}
         </div>
@@ -187,10 +187,10 @@ export default function FunisPage() {
                       <TrendingUp className="w-5 h-5 text-[var(--t-green)]" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[var(--text-body-sm)] font-semibold text-[var(--t-text)] truncate">
+                      <p className="text-[length:var(--text-body-sm)] font-semibold text-[var(--t-text)] truncate">
                         {f.nome || 'Sem nome'}
                       </p>
-                      <span className={`inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[var(--text-caption)] ${cor.bg} ${cor.text}`}>
+                      <span className={`inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[length:var(--text-caption)] ${cor.bg} ${cor.text}`}>
                         <CircleDot className="w-2.5 h-2.5" /> {cor.label}
                       </span>
                     </div>
@@ -200,24 +200,24 @@ export default function FunisPage() {
                     <div className="grid grid-cols-2 gap-2 mb-3 p-2 rounded-lg bg-[var(--t-bg)]">
                       <div>
                         <p className="text-[10px] text-[var(--t-text-muted)] uppercase">Lucro</p>
-                        <p className={`text-[var(--text-body-sm)] font-semibold ${kpis.lucro >= 0 ? 'text-[var(--t-green)]' : 'text-[var(--fin-negative-text)]'}`}>
+                        <p className={`text-[length:var(--text-body-sm)] font-semibold ${kpis.lucro >= 0 ? 'text-[var(--t-green)]' : 'text-[var(--fin-negative-text)]'}`}>
                           {formatBRL(kpis.lucro)}
                         </p>
                       </div>
                       <div>
                         <p className="text-[10px] text-[var(--t-text-muted)] uppercase">ROI</p>
-                        <p className="text-[var(--text-body-sm)] font-semibold text-[var(--t-text)]">
+                        <p className="text-[length:var(--text-body-sm)] font-semibold text-[var(--t-text)]">
                           {(kpis.roi * 100).toFixed(0)}%
                         </p>
                       </div>
                     </div>
                   ) : (
-                    <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] mb-3">
+                    <p className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] mb-3">
                       {nodeCount} etapa{nodeCount !== 1 ? 's' : ''} · ainda não simulado
                     </p>
                   )}
 
-                  <div className="flex items-center justify-between text-[var(--text-caption)] text-[var(--t-text-muted)]">
+                  <div className="flex items-center justify-between text-[length:var(--text-caption)] text-[var(--t-text-muted)]">
                     <span>{nodeCount} nodes · {f.data?.edges?.length ?? 0} ligações</span>
                     {f.updated_at && (
                       <span className="flex items-center gap-1">
@@ -285,8 +285,8 @@ function ModalTemplate({
         className="relative w-full max-w-4xl max-h-[85vh] overflow-y-auto bg-[var(--t-surface)] rounded-2xl shadow-2xl p-6"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-[var(--text-h2)] font-semibold text-[var(--t-text)] mb-1">Escolha um template</h2>
-        <p className="text-[var(--text-body-sm)] text-[var(--t-text-muted)] mb-5">
+        <h2 className="text-[length:var(--text-h2)] font-semibold text-[var(--t-text)] mb-1">Escolha um template</h2>
+        <p className="text-[length:var(--text-body-sm)] text-[var(--t-text-muted)] mb-5">
           Comece com um funil pronto ou crie do zero. Você pode editar tudo depois.
         </p>
 
@@ -302,14 +302,14 @@ function ModalTemplate({
                   <TrendingUp className="w-4 h-4 text-[var(--t-green)]" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[var(--text-body-sm)] font-semibold text-[var(--t-text)] truncate">{tpl.nome}</p>
+                  <p className="text-[length:var(--text-body-sm)] font-semibold text-[var(--t-text)] truncate">{tpl.nome}</p>
                   <p className="text-[10px] text-[var(--t-text-muted)] uppercase tracking-wide">{tpl.categoria}</p>
                 </div>
               </div>
-              <p className="text-[var(--text-caption)] text-[var(--t-text-secondary)] line-clamp-3">
+              <p className="text-[length:var(--text-caption)] text-[var(--t-text-secondary)] line-clamp-3">
                 {tpl.data.descricao}
               </p>
-              <p className="mt-2 text-[var(--text-caption)] text-[var(--t-text-muted)]">
+              <p className="mt-2 text-[length:var(--text-caption)] text-[var(--t-text-muted)]">
                 {tpl.data.nodes.length} etapas
               </p>
             </button>
@@ -325,11 +325,11 @@ function ModalTemplate({
                 <Plus className="w-4 h-4 text-[var(--t-text-muted)]" />
               </div>
               <div>
-                <p className="text-[var(--text-body-sm)] font-semibold text-[var(--t-text)]">Funil em branco</p>
+                <p className="text-[length:var(--text-body-sm)] font-semibold text-[var(--t-text)]">Funil em branco</p>
                 <p className="text-[10px] text-[var(--t-text-muted)] uppercase tracking-wide">Do zero</p>
               </div>
             </div>
-            <p className="text-[var(--text-caption)] text-[var(--t-text-secondary)]">
+            <p className="text-[length:var(--text-caption)] text-[var(--t-text-secondary)]">
               Comece com um canvas vazio e arraste os blocos que precisar.
             </p>
           </button>

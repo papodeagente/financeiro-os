@@ -140,13 +140,13 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             onChange={e => { setQuery(e.target.value); setSelectedIdx(0); }}
             onKeyDown={handleKeyDown}
             placeholder="Buscar paginas, criar..."
-            className="flex-1 bg-transparent text-[var(--text-body)] text-[var(--t-text)] outline-none placeholder:text-[var(--t-text-muted)]"
+            className="flex-1 bg-transparent text-[length:var(--text-body)] text-[var(--t-text)] outline-none placeholder:text-[var(--t-text-muted)]"
           />
           <kbd className="text-[10px] text-[var(--t-text-muted)] bg-[var(--t-sidebar-item-hover)] px-1.5 py-0.5 rounded">ESC</kbd>
         </div>
         <div className="max-h-[300px] overflow-y-auto py-2">
           {filtered.length === 0 && (
-            <p className="px-4 py-6 text-center text-[var(--text-body-sm)] text-[var(--t-text-muted)]">Nenhum resultado</p>
+            <p className="px-4 py-6 text-center text-[length:var(--text-body-sm)] text-[var(--t-text-muted)]">Nenhum resultado</p>
           )}
           {filtered.map((item) => {
             globalIdx++;
@@ -162,7 +162,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                   </div>
                 )}
                 <button
-                  className={`w-full flex items-center gap-3 px-4 py-2 text-[var(--text-body-sm)] transition-colors ${
+                  className={`w-full flex items-center gap-3 px-4 py-2 text-[length:var(--text-body-sm)] transition-colors ${
                     idx === selectedIdx
                       ? 'bg-[var(--t-green)]/8 text-[var(--t-green)]'
                       : 'text-[var(--t-text-secondary)] hover:bg-[var(--t-sidebar-item-hover)]'

@@ -70,7 +70,7 @@ function MiniPreview({ t, catColor }: { t: TipoInfo; catColor: string }) {
 export function BibliotecaNodes({ onDragStart }: BibliotecaNodesProps) {
   return (
     <aside className="w-[250px] shrink-0 border-r border-[var(--t-border)] bg-[var(--t-surface)] overflow-y-auto p-3">
-      <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wider mb-3 font-semibold">
+      <p className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wider mb-3 font-semibold">
         Arraste para o canvas
       </p>
       {CATEGORIAS_ORDEM.map(cat => {
@@ -85,7 +85,7 @@ export function BibliotecaNodes({ onDragStart }: BibliotecaNodesProps) {
               >
                 <Icon className="w-2.5 h-2.5 text-white" />
               </div>
-              <p className="text-[var(--text-caption)] font-semibold text-[var(--t-text-secondary)] uppercase tracking-wider">
+              <p className="text-[length:var(--text-caption)] font-semibold text-[var(--t-text-secondary)] uppercase tracking-wider">
                 {info.label}
               </p>
               <span className="text-[9px] text-[var(--t-text-muted)] ml-auto">{info.tipos.length}</span>

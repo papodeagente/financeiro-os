@@ -340,7 +340,7 @@ function EditorInner({ id }: { id: string }) {
     <div className="h-screen bg-[var(--t-bg)] p-6">
       <button
         onClick={() => router.push('/planejamento/funis')}
-        className="flex items-center gap-1.5 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] hover:text-[var(--t-text)]"
+        className="flex items-center gap-1.5 text-[length:var(--text-body-sm)] text-[var(--t-text-secondary)] hover:text-[var(--t-text)]"
       >
         <ArrowLeft className="w-4 h-4" /> Voltar
       </button>
@@ -354,7 +354,7 @@ function EditorInner({ id }: { id: string }) {
       <header className="flex items-center gap-3 px-4 py-2 border-b border-[var(--t-border)] bg-[var(--t-surface)] shrink-0">
         <button
           onClick={() => router.push('/planejamento/funis')}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md hover:bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] hover:text-[var(--t-text)] text-[var(--text-body-sm)] font-medium"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md hover:bg-[var(--t-surface-hover)] text-[var(--t-text-secondary)] hover:text-[var(--t-text)] text-[length:var(--text-body-sm)] font-medium"
         >
           <ArrowLeft className="w-4 h-4" /> <span>Voltar</span>
         </button>
@@ -363,10 +363,10 @@ function EditorInner({ id }: { id: string }) {
           value={meta.nome}
           onChange={e => { setMeta({ ...meta, nome: e.target.value }); scheduleSave(); }}
           placeholder="Nome do funil"
-          className="flex-1 max-w-[360px] px-2 py-1 text-[var(--text-body)] font-medium text-[var(--t-text)] bg-transparent focus:bg-[var(--t-input-bg)] rounded outline-none"
+          className="flex-1 max-w-[360px] px-2 py-1 text-[length:var(--text-body)] font-medium text-[var(--t-text)] bg-transparent focus:bg-[var(--t-input-bg)] rounded outline-none"
         />
 
-        <label className="flex items-center gap-1.5 text-[var(--text-caption)] text-[var(--t-text-muted)] ml-auto">
+        <label className="flex items-center gap-1.5 text-[length:var(--text-caption)] text-[var(--t-text-muted)] ml-auto">
           <input
             type="checkbox"
             checked={usarDadosReais}
@@ -380,12 +380,12 @@ function EditorInner({ id }: { id: string }) {
         <select
           value={cenarioAtivo}
           onChange={e => setCenarioAtivo(e.target.value as CenarioComparativo['id'])}
-          className="px-2 py-1 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] bg-[var(--t-input-bg)] rounded shadow-[var(--t-card-shadow)]"
+          className="px-2 py-1 text-[length:var(--text-body-sm)] text-[var(--t-text-secondary)] bg-[var(--t-input-bg)] rounded shadow-[var(--t-card-shadow)]"
         >
           {cenarios.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
         </select>
 
-        <span className="text-[var(--text-caption)] text-[var(--t-text-muted)] flex items-center gap-1 min-w-[110px] justify-end">
+        <span className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] flex items-center gap-1 min-w-[110px] justify-end">
           {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : savedAt ? <Check className="w-3 h-3 text-[var(--t-green)]" /> : null}
           {savedLabel}
         </span>
@@ -440,7 +440,7 @@ function EditorInner({ id }: { id: string }) {
           {nodes.length === 0 && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <div className="text-center px-6 py-4 rounded-xl bg-[var(--t-surface)]/80 border border-dashed border-[var(--t-border)]">
-                <p className="text-[var(--text-body-sm)] text-[var(--t-text-secondary)]">
+                <p className="text-[length:var(--text-body-sm)] text-[var(--t-text-secondary)]">
                   Arraste blocos da biblioteca para desenhar seu funil.
                 </p>
               </div>
@@ -450,11 +450,11 @@ function EditorInner({ id }: { id: string }) {
 
         {/* Painel direito */}
         <aside className="w-[320px] shrink-0 border-l border-[var(--t-border)] bg-[var(--t-surface)] overflow-y-auto p-4">
-          <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wider mb-3">Inspetor</p>
+          <p className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wider mb-3">Inspetor</p>
           {!selectedNode ? (
             <div className="space-y-4">
               <div className="space-y-1">
-                <p className="text-[var(--text-body-sm)] font-semibold text-[var(--t-text)]">Como começar</p>
+                <p className="text-[length:var(--text-body-sm)] font-semibold text-[var(--t-text)]">Como começar</p>
                 <ol className="text-[11px] text-[var(--t-text-muted)] space-y-1 list-decimal list-inside">
                   <li>Arraste blocos da biblioteca à esquerda</li>
                   <li>Conecte os blocos nas setas</li>
@@ -464,7 +464,7 @@ function EditorInner({ id }: { id: string }) {
 
               {dadosReais && (
                 <div className="pt-3 border-t border-[var(--t-border)] space-y-2">
-                  <p className="text-[var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wider">Dados reais da agência</p>
+                  <p className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] uppercase tracking-wider">Dados reais da agência</p>
                   <DadoReal label="Ticket médio" value={dadosReais.ticket_medio > 0 ? `R$ ${dadosReais.ticket_medio.toFixed(0)}` : '—'} />
                   <DadoReal label="Taxa proposta" value={dadosReais.taxa_proposta_aceita > 0 ? `${dadosReais.taxa_proposta_aceita.toFixed(1)}%` : '—'} />
                   <DadoReal label="CAC médio" value={dadosReais.cac_medio > 0 ? `R$ ${dadosReais.cac_medio.toFixed(0)}` : '—'} />
@@ -482,7 +482,7 @@ function EditorInner({ id }: { id: string }) {
               />
               <button
                 onClick={deleteSelected}
-                className="mt-4 w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[var(--text-body-sm)] font-medium text-[var(--fin-negative-text)] border border-[var(--fin-negative)]/30 rounded-lg hover:bg-[var(--fin-negative-soft)] transition-colors"
+                className="mt-4 w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[length:var(--text-body-sm)] font-medium text-[var(--fin-negative-text)] border border-[var(--fin-negative)]/30 rounded-lg hover:bg-[var(--fin-negative-soft)] transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" /> Excluir elemento
               </button>

@@ -275,10 +275,10 @@ export function TarefasTab({ grupoId }: Props) {
 
       {/* Sheet */}
       {sheetOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end" style={{ background: 'rgba(15, 23, 42, 0.45)' }} onClick={() => setSheetOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(15, 23, 42, 0.45)' }} onClick={() => setSheetOpen(false)}>
           <div
-            className="w-full max-w-lg h-full overflow-y-auto p-6 space-y-4 shadow-2xl"
-            style={{ background: 'white' }}
+            className="w-full max-w-lg max-h-[calc(100dvh-2rem)] rounded-[var(--fin-r-lg)] shadow-[var(--fin-e2)] overflow-y-auto p-6 space-y-4"
+            style={{ background: 'var(--fin-surface)' }}
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-3" style={{ borderBottom: '1px solid var(--lg-border-base)' }}>

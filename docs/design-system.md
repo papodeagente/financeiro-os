@@ -61,7 +61,7 @@ O corpo da página é 14px. Pesos usados: 400, 500 e 600.
 - **Sombra:**
   - `--fin-e-card`: um sopro, para cartão em repouso;
   - `--fin-e1`: o que flutua (menu, popover);
-  - `--fin-e2`: o que cobre (diálogo, gaveta).
+  - `--fin-e2`: o que cobre (diálogo).
 - **Altura de controle:** `--fin-h-compacto` 32px, `--fin-h-padrao` 40px e `--fin-h-confortavel` 44px. Abaixo de `lg`, botão e campo usam 44px (alvo de toque).
 - **Movimento:** `--fin-dur-rapida` 120ms, `--fin-dur-base` 180ms, `--fin-curva`. Tudo vai a 0ms com `prefers-reduced-motion`.
 - **Camada (z-index):** `--fin-z-conteudo` 10, `-cabecalho` 30, `-menu` 40, `-gaveta` e `-modal` 50, `-popover` 60 e `-toast` 100. Na classe: `z-[var(--fin-z-modal)]`.
@@ -85,11 +85,13 @@ O tema escuro é o mesmo conjunto de tokens com outros valores (`.dark`). Para e
 | `PageHeader` | `fin/PageHeader` | Um H1 de 24px, no máximo uma ação primária, recarregar como ícone. O `components/PageHeader` é adaptador da API antiga e desenha igual |
 | `MolduraDaPagina` | `fin/` | Respiro e largura por token. O `PageShell` é adaptador e desenha igual |
 | `FilterBar`, `FinTable` | `fin/` | Busca, selects e resumo "N de M". Tabela com ordenação, total e `onLinhaClick` |
-| `RecordSheet` | `fin/` | Gaveta lateral (480/640px) com resumo e ação primária fixos no rodapé |
+| `RecordSheet` | `fin/` | Janela central (560/720px) com resumo e ação primária fixos no rodapé. O nome ficou da época da gaveta |
 | `ConfirmDialog` | `fin/` | Confirmação com "o que vai acontecer" por extenso, detalhes e variante destrutiva |
-| `Dialog`, `Sheet`, `Tooltip` | `ui/` | Superfície branca, véu `rgb(15 23 42 / 0.4)` e camada por token |
+| `Dialog`, `Tooltip` | `ui/` | Superfície branca, véu `rgb(15 23 42 / 0.4)` e camada por token |
 | `DataState`, `EmptyLesson`, `EmptyState` | `fin/`, `components/` | Carregando (esqueleto com a forma do conteúdo), vazio (o que é e como começar) e erro |
 | Gráficos | `fin/GraficoMoldura`, `Cascata`, `EscadaAcumulada`... | Regras próprias em `scripts/test-graficos-regressao.ts` |
+
+**Toda janela abre no centro** (08/10/2026). Formulário e detalhe usam `RecordSheet` ou `Dialog`; não existe gaveta lateral, e o porteiro `test-design-system` recusa véu de tela inteira com painel encostado num lado. Só o menu de navegação do celular continua como gaveta, porque é menu, não janela.
 
 ## Padrões por tipo de tela
 
@@ -112,11 +114,11 @@ A ordem é `PageHeader` com a ação primária, depois os indicadores do recorte
 
 ### Formulário
 
-Campos agrupados por assunto em cartões, cada um com `Field` (rótulo, ajuda e erro associados). A ação principal fica no topo ou no rodapé da gaveta. No celular as grades viram uma coluna (`grid-cols-1 sm:grid-cols-3`). Sucesso só depois da resposta do servidor. Exemplo: `/config/agencia`.
+Campos agrupados por assunto em cartões, cada um com `Field` (rótulo, ajuda e erro associados). A ação principal fica no topo ou no rodapé da janela. No celular as grades viram uma coluna (`grid-cols-1 sm:grid-cols-3`). Sucesso só depois da resposta do servidor. Exemplo: `/config/agencia`.
 
 ### Tela operacional
 
-A conferência acontece numa gaveta ao lado da linha, e não longe dela. A fila avança sozinha e tudo pode ser desfeito. Exemplo: `/financeiro-ag/conciliacao`. Editores de canvas (fluxograma, funil, mapa mental) ocupam a tela inteira. No celular os painéis laterais empilham abaixo do canvas, em vez de espremê-lo.
+A conferência abre numa janela no centro, sobre a própria fila. A fila avança sozinha e tudo pode ser desfeito. Exemplo: `/financeiro-ag/conciliacao`. Editores de canvas (fluxograma, funil, mapa mental) ocupam a tela inteira. No celular os painéis laterais empilham abaixo do canvas, em vez de espremê-lo.
 
 ### Super Admin
 

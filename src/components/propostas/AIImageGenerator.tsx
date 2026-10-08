@@ -134,8 +134,8 @@ export function AIImageGenerator({
               <Sparkles className="w-5 h-5 text-[var(--fin-positive)]" />
             </div>
             <div>
-              <h3 className="text-[var(--text-body-lg)] font-semibold text-[var(--t-text)]">Gerar imagem com IA</h3>
-              <p className="text-[var(--text-caption)] text-[var(--t-text-muted)]">
+              <h3 className="text-[length:var(--text-body-lg)] font-semibold text-[var(--t-text)]">Gerar imagem com IA</h3>
+              <p className="text-[length:var(--text-caption)] text-[var(--t-text-muted)]">
                 Descreva a cena e a IA gera imagens em segundos
               </p>
             </div>
@@ -149,7 +149,7 @@ export function AIImageGenerator({
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           {/* Prompt */}
           <div>
-            <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1.5">
+            <label className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1.5">
               Descrição da imagem
             </label>
             <textarea
@@ -157,7 +157,7 @@ export function AIImageGenerator({
               onChange={e => setPrompt(e.target.value)}
               rows={3}
               placeholder="Ex: Vista panorâmica de Jerusalém ao pôr do sol com a Cúpula da Rocha em destaque"
-              className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)] resize-none"
+              className="w-full px-3 py-2 rounded-lg shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)] resize-none"
             />
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {PROMPT_HINTS.map(h => (
@@ -176,32 +176,32 @@ export function AIImageGenerator({
           {/* Opções */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1.5">Estilo</label>
+              <label className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1.5">Estilo</label>
               <select
                 value={estilo}
                 onChange={e => setEstilo(e.target.value)}
-                className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
+                className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)]"
               >
                 {STYLE_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1.5">Formato</label>
+              <label className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1.5">Formato</label>
               <select
                 value={size}
                 onChange={e => setSize(e.target.value)}
-                className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
+                className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)]"
               >
                 {SIZE_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label} ({s.hint})</option>)}
               </select>
             </div>
             {!singleSelect && (
               <div>
-                <label className="text-[var(--text-caption)] text-[var(--t-text-muted)] block mb-1.5">Quantidade</label>
+                <label className="text-[length:var(--text-caption)] text-[var(--t-text-muted)] block mb-1.5">Quantidade</label>
                 <select
                   value={n}
                   onChange={e => setN(parseInt(e.target.value))}
-                  className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[var(--text-body-sm)] text-[var(--t-text)]"
+                  className="w-full px-2 py-1.5 rounded-md shadow-[var(--t-card-shadow)] bg-[var(--t-input-bg)] text-[length:var(--text-body-sm)] text-[var(--t-text)]"
                 >
                   {[1, 2, 3, 4].map(v => <option key={v} value={v}>{v} variação{v > 1 ? 'ões' : ''}</option>)}
                 </select>
@@ -212,20 +212,20 @@ export function AIImageGenerator({
           <button
             onClick={generate}
             disabled={generating || !prompt.trim()}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-[var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-[length:var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
             {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
             {generating ? 'Gerando...' : 'Gerar imagens'}
           </button>
 
           {error && (
-            <div className="p-2 rounded-md bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)] text-[var(--text-caption)]">{error}</div>
+            <div className="p-2 rounded-md bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)] text-[length:var(--text-caption)]">{error}</div>
           )}
 
           {/* Resultados */}
           {results.length > 0 && (
             <div>
-              <p className="text-[var(--text-caption)] font-semibold text-[var(--t-text-secondary)] uppercase tracking-wider mb-2">
+              <p className="text-[length:var(--text-caption)] font-semibold text-[var(--t-text-secondary)] uppercase tracking-wider mb-2">
                 Resultados — clique para selecionar
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -257,7 +257,7 @@ export function AIImageGenerator({
 
         {/* Footer */}
         <div className="flex items-center justify-between p-4 border-t border-[var(--t-border)]">
-          <span className="text-[var(--text-caption)] text-[var(--t-text-muted)]">
+          <span className="text-[length:var(--text-caption)] text-[var(--t-text-muted)]">
             {picked.size > 0
               ? `${picked.size} imagem${picked.size > 1 ? 'ns' : ''} selecionada${picked.size > 1 ? 's' : ''}`
               : 'Nenhuma selecionada'}
@@ -265,14 +265,14 @@ export function AIImageGenerator({
           <div className="flex gap-2">
             <button
               onClick={close}
-              className="px-3 py-1.5 text-[var(--text-body-sm)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)] rounded-lg"
+              className="px-3 py-1.5 text-[length:var(--text-body-sm)] text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-hover)] rounded-lg"
             >
               Cancelar
             </button>
             <button
               onClick={insert}
               disabled={picked.size === 0}
-              className="px-4 py-1.5 text-[var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50"
+              className="px-4 py-1.5 text-[length:var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90 disabled:opacity-50"
             >
               {insertLabel}
             </button>

@@ -10,7 +10,7 @@
  *
  * Roda com: node --experimental-strip-types scripts/run-tests.mjs scripts/test-design-system.ts
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 let falhas = 0, total = 0;
@@ -99,6 +99,33 @@ eq(['--radius-md: var(--fin-r-md)', '--radius-lg: var(--fin-r-md)', '--radius-xl
 for (const v of ['--fin-violet', '--fin-e-card', '--fin-z-modal', '--fin-z-popover', '--fin-h-padrao', '--fin-dur-base']) {
   eq(css.includes(`${v}:`), true, `token ${v} declarado`);
 }
+
+// Toda janela abre no CENTRO (pedido do Bruno, 08/10/2026). A gaveta lateral
+// sobre a tela (véu de ponta a ponta com o painel encostado num lado) não
+// volta: formulário e detalhe usam RecordSheet ou Dialog, que são centrais.
+// Menu de navegação no celular não é janela e não entra nesta regra.
+const GAVETA = /fixed inset-0[^"'`]*\bjustify-(?:end|start)\b/;
+const gavetas: string[] = [];
+for (const p of arquivos(raiz)) {
+  const rel = relative(raiz, p);
+  const fonte = readFileSync(p, 'utf8');
+  for (const linha of fonte.split('\n')) if (GAVETA.test(linha)) gavetas.push(`${rel}: ${linha.trim().slice(0, 90)}`);
+}
+eq(gavetas, [], 'nenhuma janela abre encostada num lado: popup é no centro');
+eq(existsSync(new URL('../src/components/ui/sheet.tsx', import.meta.url)), false, 'a gaveta lateral (ui/sheet) não existe mais');
+eq([GAVETA.test('className="fixed inset-0 z-50 flex justify-end"'), GAVETA.test('className="fixed inset-0 z-50 flex items-center justify-center p-4"')], [true, false], 'o porteiro reconhece a gaveta e deixa passar a janela central');
+
+// `text-[var(--text-body-sm)]` NÃO é tamanho de fonte: o Tailwind não sabe o
+// que há dentro do var() e gera `color: var(--text-body-sm)`, uma "cor" de
+// 14px. Ela anula a cor de verdade (botão verde com texto escuro, 08/10/2026)
+// e o tamanho nunca é aplicado. Tamanho por variável se escreve com o tipo:
+// text-[length:var(--text-body-sm)].
+const TAMANHO_SEM_TIPO = /text-\[var\(--(?:text|fin-fs)-[a-z0-9-]+\)\]/g;
+const tamanhosSemTipo: string[] = [];
+for (const p of arquivos(raiz)) {
+  for (const m of readFileSync(p, 'utf8').matchAll(TAMANHO_SEM_TIPO)) tamanhosSemTipo.push(`${relative(raiz, p)}: ${m[0]}`);
+}
+eq(tamanhosSemTipo.slice(0, 5), [], 'tamanho de fonte por variável declara o tipo: text-[length:var(--text-*)]');
 
 console.log(`\n${total - falhas}/${total} testes do design system passaram`);
 if (falhas > 0) process.exit(1);

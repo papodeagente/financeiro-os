@@ -65,7 +65,7 @@ export function CrmStatusBadge({ variant = 'compacto' }: CrmStatusBadgeProps) {
   }
 
   return (
-    <div className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[var(--text-caption)]" role="status">
+    <div className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[length:var(--text-caption)]" role="status">
       <span
         className="block w-1.5 h-1.5 rounded-full shrink-0"
         style={{ backgroundColor: color }}
