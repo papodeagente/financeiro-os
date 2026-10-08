@@ -27,8 +27,10 @@
 
 import {
   ErroFiscal,
+  buscarArquivo,
   statusDoGateway,
   textoDoErro,
+  type ArquivoBaixado,
   type CapacidadesEmissor,
   type DadosEmitente,
   type EmissorNFSe,
@@ -490,6 +492,16 @@ export class EmissorAceleraAPI implements EmissorNFSe {
       referencia, numero: '', codigo_verificacao: '', protocolo: '',
       link_pdf: '', link_xml: '', erro: '',
     };
+  }
+
+  async baixarArquivo(
+    url: string,
+    tipo_padrao: string,
+    config: ConfigFiscal,
+  ): Promise<ArquivoBaixado> {
+    // A AceleraAPI autentica por Bearer, não por x-api-key: é por isso que
+    // baixar o arquivo é responsabilidade do emissor e não da rota.
+    return buscarArquivo(url, { Authorization: `Bearer ${this.token(config)}` }, tipo_padrao);
   }
 
   /** Traduz o corpo da AceleraAPI para o formato do sistema. */

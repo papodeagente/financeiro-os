@@ -114,6 +114,15 @@ export interface EmissorNFSe {
   }): Promise<ResultadoTransmissao>;
   consultar(referencia: string, config: ConfigFiscal): Promise<ResultadoTransmissao>;
   cancelar(referencia: string, motivo: string, config: ConfigFiscal): Promise<ResultadoTransmissao>;
+  /**
+   * Busca o PDF/XML da nota no emissor.
+   *
+   * Existe porque o link que o emissor devolve não abre no navegador: ele
+   * exige a chave da agência num cabeçalho. Cada emissor autentica do seu
+   * jeito, então cada um sabe baixar o seu arquivo — a tela nunca fala
+   * direto com o emissor.
+   */
+  baixarArquivo(url: string, tipo_padrao: string, config: ConfigFiscal): Promise<ArquivoBaixado>;
 }
 
 /** Erro que já vem com texto para o usuário final. */
@@ -188,6 +197,62 @@ async function requisicao(
     }
     throw new ErroFiscal(
       'Não foi possível falar com o emissor de nota.',
+      e instanceof Error ? e.message : '',
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Os bytes do PDF ou do XML da nota, como vieram do emissor. */
+export interface ArquivoBaixado {
+  bytes: Uint8Array;
+  tipo_conteudo: string;
+}
+
+/**
+ * Busca o arquivo da nota no emissor, autenticado.
+ *
+ * Separado de requisicao() porque aquela lê texto e tenta JSON: um PDF que
+ * passasse por ali chegaria corrompido. Aqui os bytes são preservados.
+ */
+export async function buscarArquivo(
+  url: string,
+  cabecalhos: Record<string, string>,
+  tipo_padrao: string,
+): Promise<ArquivoBaixado> {
+  const controle = new AbortController();
+  const timer = setTimeout(() => controle.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { headers: cabecalhos, signal: controle.signal });
+    const tipo = String(res.headers.get('content-type') ?? '');
+    if (!res.ok) {
+      throw new ErroFiscal(
+        `O emissor recusou entregar o arquivo da nota (HTTP ${res.status}).`,
+        (await res.text()).slice(0, 300),
+      );
+    }
+    // Resposta JSON onde se esperava documento é erro disfarçado de sucesso:
+    // alguns emissores devolvem 200 com {"error": ...}. Entregar isso como PDF
+    // salvaria um arquivo quebrado na máquina do cliente.
+    if (/json/i.test(tipo)) {
+      throw new ErroFiscal(
+        'O emissor respondeu com uma mensagem em vez do arquivo da nota.',
+        (await res.text()).slice(0, 300),
+      );
+    }
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.length === 0) {
+      throw new ErroFiscal('O emissor devolveu um arquivo vazio.');
+    }
+    return { bytes, tipo_conteudo: tipo || tipo_padrao };
+  } catch (e) {
+    if (e instanceof ErroFiscal) throw e;
+    if (e instanceof Error && e.name === 'AbortError') {
+      throw new ErroFiscal('O emissor não entregou o arquivo da nota a tempo.');
+    }
+    throw new ErroFiscal(
+      'Não foi possível buscar o arquivo da nota no emissor.',
       e instanceof Error ? e.message : '',
     );
   } finally {
@@ -415,6 +480,10 @@ export class EmissorPlugNotas implements EmissorNFSe {
     };
   }
 
+  async baixarArquivo(url: string, tipo_padrao: string, config: ConfigFiscal): Promise<ArquivoBaixado> {
+    return buscarArquivo(url, { 'x-api-key': this.token(config) }, tipo_padrao);
+  }
+
   async consultar(referencia: string, config: ConfigFiscal): Promise<ResultadoTransmissao> {
     const { ok, corpo } = await requisicao(
       `${this.base(config)}/nfse/consulta/status/${encodeURIComponent(referencia)}`,
@@ -543,6 +612,12 @@ export class EmissorSimulado implements EmissorNFSe {
       numero: '', codigo_verificacao: '', protocolo: 'SIMULADA',
       link_pdf: '', link_xml: '', erro: '',
     };
+  }
+
+  async baixarArquivo(): Promise<ArquivoBaixado> {
+    // O simulado nunca devolve link, então esta chamada só acontece se alguém
+    // a fizer à mão. Dizer o motivo é melhor do que entregar um PDF de faz-de-conta.
+    throw new ErroFiscal('O emissor simulado não gera documento: não há nota para baixar.');
   }
 }
 

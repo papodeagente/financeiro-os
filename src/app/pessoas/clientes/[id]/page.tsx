@@ -7,6 +7,7 @@ import { ArrowLeft } from 'lucide-react';
 
 import { formatBRL, formatDate as dataBR } from '@/lib/utils';
 import { num } from '@/lib/money';
+import { decidirArquivo, enderecoDoArquivo, type NotaParaArquivo } from '@/lib/nota-arquivo';
 import {
   nomeDoCliente, tipoPessoaLabel, documentoDoCliente, type ClienteNomeavel,
 } from '@/lib/cliente-nome';
@@ -57,6 +58,38 @@ function Secao({ titulo, sublinha, children }: {
     </section>
   );
 }
+
+/**
+ * Baixar o PDF e o XML da nota.
+ *
+ * Os links apontam para a rota do sistema, NUNCA para o link do emissor: o
+ * link do emissor exige a chave da agência num cabeçalho e, num <a>, devolve
+ * erro de autenticação em vez do documento.
+ */
+function ArquivosDaNota({ nota }: { nota: Record<string, unknown> }) {
+  const id = String(nota.id ?? '');
+  const pdf = decidirArquivo(nota as NotaParaArquivo, 'pdf');
+  const xml = decidirArquivo(nota as NotaParaArquivo, 'xml');
+  if (!id || (!pdf.pode && !xml.pode)) {
+    return (
+      <span className="fin-t-caption text-[var(--fin-text-3)]" title={pdf.pode ? '' : pdf.mensagem}>
+        —
+      </span>
+    );
+  }
+  return (
+    <span className="flex items-center gap-2">
+      {pdf.pode ? (
+        <a href={enderecoDoArquivo(id, 'pdf')} download className={LINK_DE_ARQUIVO}>PDF</a>
+      ) : null}
+      {xml.pode ? (
+        <a href={enderecoDoArquivo(id, 'xml')} download className={LINK_DE_ARQUIVO}>XML</a>
+      ) : null}
+    </span>
+  );
+}
+
+const LINK_DE_ARQUIVO = 'fin-t-caption text-[var(--fin-accent)] underline hover:no-underline';
 
 export default function PerfilDoClientePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -127,17 +160,8 @@ export default function PerfilDoClientePage({ params }: { params: Promise<{ id: 
       ),
     },
     {
-      id: 'pdf', cabecalho: '', tipo: 'acoes',
-      render: l => (l.link_pdf ? (
-        <a
-          href={String(l.link_pdf)}
-          target="_blank"
-          rel="noreferrer"
-          className="fin-t-caption text-[var(--fin-accent)] underline"
-        >
-          PDF
-        </a>
-      ) : null),
+      id: 'arquivos', cabecalho: '', tipo: 'acoes',
+      render: l => <ArquivosDaNota nota={l} />,
     },
   ], []);
 

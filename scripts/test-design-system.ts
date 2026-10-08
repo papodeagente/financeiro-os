@@ -13,6 +13,20 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
+/** O Tailwind varre o projeto inteiro, não só src/: estes também viram CSS. */
+function testesEDocs(): string[] {
+  const fora: string[] = [];
+  for (const dir of ['../scripts/', '../docs/']) {
+    const base = new URL(dir, import.meta.url).pathname;
+    let nomes: string[] = [];
+    try { nomes = readdirSync(base); } catch { continue; }
+    for (const n of nomes) {
+      if (n.endsWith('.ts') || n.endsWith('.mjs') || n.endsWith('.md')) fora.push(join(base, n));
+    }
+  }
+  return fora;
+}
+
 let falhas = 0, total = 0;
 function eq(a: unknown, b: unknown, label: string) {
   total++; const ok = JSON.stringify(a) === JSON.stringify(b);
@@ -125,7 +139,37 @@ const tamanhosSemTipo: string[] = [];
 for (const p of arquivos(raiz)) {
   for (const m of readFileSync(p, 'utf8').matchAll(TAMANHO_SEM_TIPO)) tamanhosSemTipo.push(`${relative(raiz, p)}: ${m[0]}`);
 }
-eq(tamanhosSemTipo.slice(0, 5), [], 'tamanho de fonte por variável declara o tipo: text-[length:var(--text-*)]');
+eq(tamanhosSemTipo.slice(0, 5), [], 'tamanho de fonte por variável declara o tipo: text-[length:var(--text-NOME)]');
+
+// O Tailwind v4 varre TODO arquivo do projeto, inclusive os testes e a
+// documentação, e transforma em CSS qualquer coisa com cara de classe. Um
+// `*` dentro de var() — escrito como curinga, para o humano ler — sai como
+// `font-size: var(--text-*)`: regra inválida que o navegador recusa e que,
+// em desenvolvimento, derruba a página com erro na globals.css (08/10/2026).
+// Curinga se escreve com NOME, nunca com `*`.
+const CURINGA_EM_VAR = /-\[(?:[a-z]+:)?var\(--[a-z0-9-]*\*/gi;
+const curingas: string[] = [];
+for (const arq of [...arquivos(raiz), ...testesEDocs()]) {
+  for (const m of readFileSync(arq, 'utf8').matchAll(CURINGA_EM_VAR)) {
+    curingas.push(`${arq.split('/').slice(-2).join('/')}: ${m[0]}`);
+  }
+}
+eq(curingas, [], 'nenhum curinga `*` dentro de var() num valor entre colchetes: o Tailwind geraria CSS inválido');
+// O exemplo do defeito é montado por PEDAÇOS de propósito: escrito inteiro,
+// o varredor do Tailwind o leria como classe de verdade e geraria a mesma
+// regra inválida que este teste proíbe — foi assim que o rótulo acima virou
+// CSS quebrado.
+const CURINGA = '*)]';
+eq(
+  [`text-[length:var(--text-${CURINGA}`, `bg-[var(--fin-${CURINGA}`].map(c => (c.match(CURINGA_EM_VAR) ?? []).length),
+  [1, 1],
+  'e o porteiro reconhece o curinga que proíbe',
+);
+eq(
+  ['text-[length:var(--text-body-sm)]', 'bg-[var(--fin-accent)]', 'w-[var(--fin-page-max)]'].map(c => (c.match(CURINGA_EM_VAR) ?? []).length),
+  [0, 0, 0],
+  'sem confundir valor de verdade com curinga',
+);
 
 console.log(`\n${total - falhas}/${total} testes do design system passaram`);
 if (falhas > 0) process.exit(1);
