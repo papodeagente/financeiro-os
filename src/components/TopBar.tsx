@@ -8,7 +8,10 @@ import { useActivePillar, PILLARS, type Pillar } from '@/hooks/useActivePillar';
 import { CrmStatusBadge } from './CrmStatusBadge';
 import { NotificacoesBell } from './NotificacoesBell';
 import { Logo } from './Logo';
-import { Sun, Moon, Search, LogOut, ChevronDown, Settings, User as UserIcon, Check, Menu } from 'lucide-react';
+import {
+  Sun, Moon, Search, LogOut, ChevronDown, Settings, User as UserIcon, Check, Menu, LifeBuoy, Bug,
+} from 'lucide-react';
+import { useTicketsNaoLidos } from '@/hooks/useTicketsNaoLidos';
 import { useState, useRef, useEffect } from 'react';
 
 interface Props {
@@ -189,6 +192,7 @@ export function TopBar({ onCommandPalette, onAbrirMenu }: Props) {
   const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [mounted, setMounted] = useState(false);
+  const ticketsNaoLidos = useTicketsNaoLidos();
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -280,14 +284,27 @@ export function TopBar({ onCommandPalette, onAbrirMenu }: Props) {
             ].join(' ')}
             aria-haspopup="menu"
             aria-expanded={dropdownOpen}
-            aria-label="Conta"
+            aria-label={ticketsNaoLidos > 0
+              ? `Conta (${ticketsNaoLidos} ${ticketsNaoLidos === 1 ? 'resposta' : 'respostas'} do suporte sem ler)`
+              : 'Conta'}
           >
-            {user.foto ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={user.foto} alt="" className="size-7 rounded-full object-cover" />
-            ) : (
-              <Inicial nome={user.nome} tamanho={28} />
-            )}
+            <span className="relative inline-flex">
+              {user.foto ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={user.foto} alt="" className="size-7 rounded-full object-cover" />
+              ) : (
+                <Inicial nome={user.nome} tamanho={28} />
+              )}
+              {/* O contador de respostas vivia num botão flutuante sempre à
+                  vista. Mudando para dentro do menu, o aviso morreria fechado:
+                  este ponto é o que sobrevive da notificação. */}
+              {ticketsNaoLidos > 0 ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full border-2 border-[var(--fin-surface)] bg-[var(--fin-negative)]"
+                />
+              ) : null}
+            </span>
             <ChevronDown
               className={`size-3.5 text-[var(--fin-text-3)] transition-transform ${dropdownOpen ? 'rotate-180' : ''}`}
             />
@@ -323,6 +340,22 @@ export function TopBar({ onCommandPalette, onAbrirMenu }: Props) {
           <Link href="/config/agencia" className={ITEM_DE_MENU} onClick={() => setDropdownOpen(false)} role="menuitem">
             <Settings className="size-4 shrink-0" />
             <span>Configurações</span>
+          </Link>
+
+          <div className="my-1 h-px bg-[var(--fin-border)]" />
+
+          <Link href="/suporte" className={ITEM_DE_MENU} onClick={() => setDropdownOpen(false)} role="menuitem">
+            <LifeBuoy className="size-4 shrink-0" />
+            <span className="flex-1">Suporte</span>
+            {ticketsNaoLidos > 0 ? (
+              <span className="fin-t-caption rounded-[var(--fin-r-sm)] bg-[var(--fin-negative-soft)] px-1.5 font-medium text-[var(--fin-negative-text)]">
+                {ticketsNaoLidos > 9 ? '9+' : ticketsNaoLidos}
+              </span>
+            ) : null}
+          </Link>
+          <Link href="/suporte?novo=1" className={ITEM_DE_MENU} onClick={() => setDropdownOpen(false)} role="menuitem">
+            <Bug className="size-4 shrink-0" />
+            <span>Reportar um problema</span>
           </Link>
 
           <div className="my-1 h-px bg-[var(--fin-border)]" />

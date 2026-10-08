@@ -9,7 +9,6 @@ import { CommandPalette } from './CommandPalette';
 import { ImpersonationBanner } from './ImpersonationBanner';
 import { Breadcrumbs } from './Breadcrumbs';
 import { RouteProgress } from './RouteProgress';
-import { ReportBugButton } from './ReportBugButton';
 import { buildTrail } from '@/lib/breadcrumbs';
 import { usePillarProgress } from '@/hooks/usePillarProgress';
 import { X } from 'lucide-react';
@@ -238,7 +237,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       )}
 
       <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} />
-      <ReportBugButton />
     </div>
   );
 }
