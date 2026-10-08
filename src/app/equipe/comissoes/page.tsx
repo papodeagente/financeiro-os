@@ -27,6 +27,14 @@ import { BarraDeParte, type Parte } from '@/components/fin/BarraDeParte';
 import { EscadaDeFaixas } from '@/components/fin/EscadaDeFaixas';
 import { posicaoNaEscala } from '@/lib/comissao-acumulada';
 import { SeletorDeMes, rotuloDoMes, useMesDaUrl } from '@/components/fin/SeletorDeMes';
+import { RecordSheet } from '@/components/fin/RecordSheet';
+import { Callout } from '@/components/fin/Callout';
+import { toast } from '@/lib/toast';
+import {
+  aprovarComissao, cancelarComissao, idDaContaDaComissao, pagarComissao, type PortasDaComissao,
+} from '@/lib/comissao-conta-unica';
+import { ehComissaoDoCrm, nomeDaCompetencia, recorteDoMotor } from '@/lib/comissao-do-crm';
+import type { ContaDuplicada, ResumoDuplicadas } from '@/lib/comissao-duplicadas';
 
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -50,12 +58,51 @@ function comissaoId(vendaId: string, vendedorId: string): string {
   return `comissao-${vendaId}-${vendedorId}`;
 }
 
-/** Id determinístico da conta a pagar da comissão. Aprovar duas vezes
- *  atualiza a MESMA conta em vez de criar uma segunda: é o que impede a
- *  agência de programar o mesmo pagamento duas vezes. */
-function contaPagarComissaoId(comissao: ComissaoVenda): string {
-  return `pagar-${comissao.id}`;
+// A conta a pagar da comissão é UMA, `cp-comissao-<id>`, e quem a cria é o
+// servidor, a cada gravação da comissão (src/lib/comissao-conta.ts). Esta
+// tela criava uma segunda, `pagar-<id>`, ao aprovar e ao pagar: pagar
+// baixava a dela e a do servidor ficava pendente para sempre, e o fluxo de
+// caixa contava a comissão duas vezes. Ver src/lib/comissao-conta-unica.ts.
+
+/** A conta a pagar como está no banco AGORA: o gancho do servidor acabou de gravá-la. */
+async function lerContaPagar(id: string): Promise<ContaPagar | null> {
+  const res = await fetch(`/api/contas-pagar/${encodeURIComponent(id)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Não foi possível ler a conta a pagar da comissão (erro ${res.status}).`);
+  return (await res.json()) as ContaPagar;
 }
+
+/** Envia e DIZ se falhou: o pagamento não pode parecer feito sem ter sido. */
+async function enviar(metodo: 'POST' | 'PUT', url: string, corpo: unknown): Promise<Record<string, unknown>> {
+  const res = await fetch(url, {
+    method: metodo,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(corpo),
+  });
+  let dados: Record<string, unknown> = {};
+  try {
+    dados = (await res.json()) as Record<string, unknown>;
+  } catch {
+    dados = {};
+  }
+  if (!res.ok) throw new Error(typeof dados.error === 'string' && dados.error ? dados.error : `A gravação falhou (erro ${res.status}).`);
+  return dados;
+}
+
+/** As rotas que aprovar, pagar e cancelar usam (src/lib/comissao-conta-unica.ts).
+ *  Gravar a comissão roda o gancho do servidor, que programa a conta a
+ *  pagar; se ele falhar, a comissão fica gravada e o motivo volta como aviso. */
+const PORTAS: PortasDaComissao<ComissaoVenda, ContaPagar> = {
+  gravarComissao: async c => {
+    const r = await enviar('PUT', `/api/comissoes/${encodeURIComponent(c.id)}`, c);
+    if (typeof r.aviso === 'string' && r.aviso) {
+      toast.warning('A comissão foi gravada, mas a conta a pagar dela não', r.aviso);
+    }
+  },
+  lerConta: lerContaPagar,
+  criarConta: async conta => { await enviar('POST', '/api/contas-pagar', conta); },
+  atualizarConta: async conta => { await enviar('PUT', `/api/contas-pagar/${encodeURIComponent(conta.id)}`, conta); },
+};
 
 /** Valor de venda do produto convertido para BRL (moeda estrangeira x câmbio). */
 function valorVendaBRL(p: ProdutoVenda): number {
@@ -88,6 +135,7 @@ export default function ComissoesPage() {
   const [confirmando, setConfirmando] = useState<
     | { tipo: 'aprovar' | 'pagar' | 'cancelar' | 'excluir'; comissao: ComissaoVenda }
     | { tipo: 'recalcular' }
+    | { tipo: 'duplicadas' }
     | null
   >(null);
   const [processando, setProcessando] = useState(false);
@@ -97,20 +145,27 @@ export default function ComissoesPage() {
   const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
   /** Dias do mês em que a agência paga comissão (Configurações > Agência). */
   const [agendaPagamento, setAgendaPagamento] = useState<number[]>([]);
-  /** Contas a pagar já programadas pela aprovação, para o pagamento baixar
-   *  a existente em vez de criar uma segunda. */
-  const [contasPagar, setContasPagar] = useState<ContaPagar[]>([]);
+  /** A integração marcou a agência como "a comissão vem do CRM"
+   *  (crm_config.data.comissao_pelo_crm, gravada pelo primeiro evento
+   *  COMISSAO_APURADA). */
+  const [crmMarcouComissao, setCrmMarcouComissao] = useState(false);
+  /** As contas de comissão que ficaram em dobro antes da correção. Null
+   *  quando o perfil não vê o financeiro. */
+  const [duplicadas, setDuplicadas] = useState<ResumoDuplicadas | null>(null);
+  /** A comissão do CRM aberta no detalhe das contas recebidas. */
+  const [detalhe, setDetalhe] = useState<ComissaoVenda | null>(null);
 
   async function load() {
     setLoading(true);
-    const [c, v, m, p, pc, ag, cps] = await Promise.all([
+    const [c, v, m, p, pc, ag, cfg, dup] = await Promise.all([
       loadEntities<ComissaoVenda>('comissoes'),
       loadEntities<VendaCRM>('vendas-crm'),
       loadEquipe<Membro>(),
       loadEntities<PlanoComissao>('planos-comissao'),
       loadEntities<PlanoContas>('plano-contas'),
       loadAgencia<Agencia>(),
-      loadEntities<ContaPagar>('contas-pagar'),
+      fetch('/api/v1/crm/config').then(r => (r.ok ? r.json() : null)).catch(() => null),
+      fetch('/api/comissoes/duplicadas').then(r => (r.ok ? r.json() : null)).catch(() => null),
     ]);
     setComissoes(c);
     setVendas(v);
@@ -118,12 +173,24 @@ export default function ComissoesPage() {
     setPlanos(p);
     setPlanoContas(pc);
     setAgendaPagamento(ag?.datas_pagamento_comissao ?? []);
-    setContasPagar(cps);
+    setCrmMarcouComissao((cfg as { comissao_pelo_crm?: unknown } | null)?.comissao_pelo_crm === true);
+    setDuplicadas(dup && typeof (dup as ResumoDuplicadas).quantidade === 'number' ? (dup as ResumoDuplicadas) : null);
     setLoading(false);
     setAtualizadoEm(new Date());
   }
 
   useEffect(() => { load(); }, []);
+
+  /** A comissão vem do CRM: a marca da integração ou, sem ela, a existência
+   *  de comissão do CRM (a marca pode ter falhado; a linha não mente). */
+  const comissaoPeloCrm = crmMarcouComissao || comissoes.some(ehComissaoDoCrm);
+
+  /** O que o motor de comissão desta tela pode tocar: nunca a comissão do
+   *  CRM e, com a comissão pelo CRM, nunca as vendas do CRM. */
+  const recorte = useMemo(
+    () => recorteDoMotor(comissoes, vendas, comissaoPeloCrm),
+    [comissoes, vendas, comissaoPeloCrm],
+  );
 
   // ============================================================
   // CÁLCULO DA COMISSÃO
@@ -190,7 +257,7 @@ export default function ComissoesPage() {
     const porComissao = await baseComissaoFornecedor(venda, comissoesPorVenda, cacheItens);
     if (porComissao > 0) return { valor: porComissao };
 
-    return { erro: 'venda sem custo de fornecedor e sem comissão apurada — base viraria o faturamento bruto' };
+    return { erro: 'venda sem custo de fornecedor e sem comissão apurada: a base viraria o faturamento bruto' };
   }
 
   /** Percentual de fallback: o padrão do plano, ponderado pelas regras de
@@ -306,15 +373,17 @@ export default function ComissoesPage() {
     }
 
     // ---- 1) Comissão de venda que sumiu ou foi cancelada ----
-    // Feito antes de tudo: essas comissões saem do acumulado do mês.
-    for (const c of comissoes) {
+    // Feito antes de tudo: essas comissões saem do acumulado do mês. A
+    // comissão do CRM fica de fora: a "venda" dela é o mês, não existe em
+    // vendas, e ela seria cancelada como "venda removida".
+    for (const c of recorte.paraConciliar) {
       if (c.status === 'CANCELADA') continue;
       const venda = vendasById.get(c.venda_id);
       if (venda && venda.status !== 'CANCELADO') continue;
 
       const motivo = venda ? 'venda cancelada' : 'venda removida';
       if (c.status === 'PAGA') {
-        pend.push({ id: c.id, venda: c.venda_numero, motivo: `${motivo} com comissão JÁ PAGA — estornar manualmente` });
+        pend.push({ id: c.id, venda: c.venda_numero, motivo: `${motivo} com comissão JÁ PAGA: estornar manualmente` });
       } else {
         await updateEntity('comissoes', {
           ...c, status: 'CANCELADA',
@@ -328,10 +397,12 @@ export default function ComissoesPage() {
     // não pela venda isolada. Por isso é preciso ter todas as bases antes
     // de fechar qualquer valor.
     const comissaoPorVendaId = new Map(
-      comissoes.filter(c => c.status !== 'CANCELADA').map(c => [c.venda_id, c]),
+      recorte.comissoesDoMotor.filter(c => c.status !== 'CANCELADA').map(c => [c.venda_id, c]),
     );
 
-    const elegiveis = vendas.filter(v =>
+    // Com a comissão pelo CRM, as vendas do CRM não entram: o CRM já pagou
+    // sobre o dinheiro delas.
+    const elegiveis = recorte.vendasParaCalcular.filter(v =>
       (v.status === 'CONFIRMADO' || v.status === 'CONCLUIDO') && v.vendedor_id,
     );
 
@@ -403,10 +474,10 @@ export default function ComissoesPage() {
           // aí existe complemento devido: dizer o número é obrigação.
           const diferenca = round2(nova.valor_comissao - round2(num(anterior.valor_comissao)));
           const motivo = diferenca > 0
-            ? `acumulado do mês ${BRL(resultado.base_acumulada)} subiu a faixa para ${nova.percentual_aplicado}% — complemento de ${BRL(diferenca)} devido (comissão ${anterior.status} mantida em ${BRL(num(anterior.valor_comissao))})`
+            ? `acumulado do mês ${BRL(resultado.base_acumulada)} subiu a faixa para ${nova.percentual_aplicado}%: complemento de ${BRL(diferenca)} devido (comissão ${anterior.status} mantida em ${BRL(num(anterior.valor_comissao))})`
             : diferenca < 0
-              ? `acumulado do mês caiu para ${BRL(resultado.base_acumulada)} (faixa ${nova.percentual_aplicado}%) — pago ${BRL(Math.abs(diferenca))} a mais (comissão ${anterior.status} mantida)`
-              : `venda mudou de valor — base gravada ${BRL(num(anterior.valor_base))} × base atual ${BRL(nova.valor_base)} (comissão ${anterior.status} mantida)`;
+              ? `acumulado do mês caiu para ${BRL(resultado.base_acumulada)} (faixa ${nova.percentual_aplicado}%): pago ${BRL(Math.abs(diferenca))} a mais (comissão ${anterior.status} mantida)`
+              : `venda mudou de valor: base gravada ${BRL(num(anterior.valor_base))} × base atual ${BRL(nova.valor_base)} (comissão ${anterior.status} mantida)`;
           pend.push({ id: anterior.id, venda: anterior.venda_numero, motivo });
         }
       }
@@ -418,26 +489,30 @@ export default function ComissoesPage() {
     load();
   }
 
-  /** Monta a conta a pagar da comissão. Uma função só, usada pela aprovação
-   *  (que programa) e pelo pagamento (que baixa), para as duas nunca
-   *  divergirem em categoria, natureza ou vínculo. */
+  /** A conta a pagar da comissão montada AQUI. Só para o caso em que o
+   *  gancho do servidor não a criou (ele falhou e voltou como aviso): o
+   *  pagamento cria a conta com o mesmo id da conta única e a baixa. */
   function montarContaComissao(c: ComissaoVenda, vencimento: string): ContaPagar {
     const valor = round2(num(c.valor_comissao));
+    const doCrm = ehComissaoDoCrm(c);
 
     // origem 'OUTROS' (não 'VENDA') porque o DRE exclui CP auto-gerada de
-    // venda como repasse ao fornecedor — comissão não é repasse.
+    // venda como repasse ao fornecedor: comissão não é repasse.
     const categoriaComercial = planoContas.find(
       p => p.tipo === 'DESPESA' && p.ativo && p.codigo.startsWith('2.6')
     ) ?? planoContas.find(p => p.tipo === 'DESPESA' && p.ativo && p.is_custo_comercial);
 
     return {
       ...createContaPagar(),
-      id: contaPagarComissaoId(c),
+      id: idDaContaDaComissao(c.id),
       origem: 'OUTROS',
-      venda_id: c.venda_id || null,
-      fornecedor_id: c.vendedor_id,
+      // A comissão do CRM é do mês, não de uma venda.
+      venda_id: doCrm ? null : (c.venda_id || null),
+      fornecedor_id: '',
       fornecedor_nome: c.vendedor_nome,
-      descricao: `Comissão ${c.vendedor_nome} — venda ${c.venda_numero}`,
+      descricao: doCrm
+        ? `Comissão · ${c.vendedor_nome} · ${c.descricao || 'calculada pelo CRM'}`
+        : `Comissão · ${c.vendedor_nome} · venda ${c.venda_numero}`,
       categoria_id: categoriaComercial?.id ?? '',
       valor_original: valor,
       valor_final: valor,
@@ -447,70 +522,51 @@ export default function ComissoesPage() {
       natureza_custo: 'VARIAVEL',
       is_custo_comercial: true,
       // Nasce PENDENTE de propósito: o POST do CRUD genérico grava o registro
-      // mas NÃO move o caixa. Gravar 'PAGO' aqui deixaria o saldo bancário sem
-      // o débito e — pior — a exclusão dessa conta chamaria o estorno, que
-      // CREDITARIA um dinheiro que nunca saiu. A baixa vem só pelo PUT, que é
-      // o único caminho que debita o saldo.
+      // mas NÃO move o caixa. A baixa vem só pelo PUT, que é o único caminho
+      // que debita o saldo.
       status: 'PENDENTE',
       data_pagamento: null,
       valor_pago: null,
-      origem_venda_id: c.venda_id,
+      origem_venda_id: doCrm ? undefined : c.venda_id,
       auto_gerado: true,
-      // ContaPagar não tem campo origem_comissao_id — o vínculo fica aqui.
-      observacoes: `Gerada automaticamente pela aprovação da comissão (origem_comissao_id=${c.id}).`,
+      origem_comissao_id: c.id,
+      observacoes: `Criada pelo pagamento da comissão ${c.id}: a conta programada não foi encontrada.`,
     };
   }
 
-  /** Aprovar a comissão PROGRAMA o pagamento: cria a conta a pagar pendente
-   *  vencendo na próxima data da agenda da agência. É o que faz a comissão
-   *  aparecer no fluxo de caixa antes de o dinheiro sair.
-   *
-   *  Sem agenda configurada nada é programado, e a tela diz isso. Inventar
-   *  uma data aqui colocaria uma saída de dinheiro no dia errado. */
+  /** Aprovar só aprova. A conta a pagar já existe: o servidor a programa a
+   *  cada gravação da comissão, na próxima data da agenda (ou no fim do mês,
+   *  sem agenda). Criar outra aqui era a origem da conta em dobro. */
   async function handleAprovar(c: ComissaoVenda) {
-    const hoje = hojeISO();
-    const vencimento = proximaDataPagamento(agendaPagamento, hoje);
-
-    await updateEntity('comissoes', { ...c, status: 'APROVADA', data_aprovacao: hoje });
-
-    if (vencimento) {
-      // Upsert por id determinístico: aprovar de novo atualiza a mesma conta.
-      await saveEntity('contas-pagar', montarContaComissao(c, vencimento));
-    }
+    await aprovarComissao(c, hojeISO(), PORTAS);
     load();
   }
 
-  /** Pagar NÃO cria conta: baixa a que a aprovação já programou. Se a
-   *  comissão foi aprovada sem agenda configurada, a conta não existe
-   *  ainda e é criada aqui vencendo hoje, para o caminho antigo continuar
-   *  funcionando. A baixa é sempre pelo PUT, único caminho que debita o
-   *  saldo, e a rota tem guarda de idempotência. */
+  /** Pagar baixa UMA conta pelo PUT de contas a pagar, o único caminho que
+   *  debita o saldo: a antiga `pagar-<id>` se ainda viva, senão a
+   *  `cp-comissao-<id>` do servidor. Sem nenhuma (o gancho falhou), cria a
+   *  conta aqui com o id da conta única e a baixa. */
   async function handlePagar(c: ComissaoVenda) {
     const hoje = hojeISO();
-    const valor = round2(num(c.valor_comissao));
-
-    await updateEntity('comissoes', { ...c, status: 'PAGA', data_pagamento: hoje });
-
-    const contaId = contaPagarComissaoId(c);
-    const jaProgramada = contasPagar.find(cp => cp.id === contaId);
-    const conta = jaProgramada ?? montarContaComissao(c, hoje);
-
-    if (!jaProgramada) {
-      await saveEntity('contas-pagar', conta);
-    }
-
-    await updateEntity('contas-pagar', {
-      ...conta,
-      status: 'PAGO',
-      data_pagamento: hoje,
-      valor_pago: valor,
-    });
+    await pagarComissao(c, hoje, PORTAS, () => montarContaComissao(c, hoje));
     load();
   }
 
+  /** Cancelar passa pelo gancho, que cancela a conta da comissão ainda não
+   *  paga; a antiga pendente que tenha sobrado é cancelada aqui. */
   async function handleCancelar(c: ComissaoVenda) {
-    await updateEntity('comissoes', { ...c, status: 'CANCELADA' });
+    await cancelarComissao(c, PORTAS);
     load();
+  }
+
+  /** Cancela as contas em dobro. O servidor refaz a lista: não há como
+   *  mandar cancelar uma conta que não é duplicada. */
+  async function handleCancelarDuplicadas() {
+    const r = await enviar('POST', '/api/comissoes/duplicadas', {});
+    const n = Number(r.canceladas) || 0;
+    if (n === 0) toast.info('Nenhuma conta em dobro para cancelar', 'Alguém já tinha cancelado, ou a conta foi paga nesse meio tempo.');
+    else toast.success(`${n} ${n === 1 ? 'conta em dobro cancelada' : 'contas em dobro canceladas'}`, `${BRL(num(r.valor_total))} saíram do a pagar. Nenhum dinheiro se moveu.`);
+    await load();
   }
 
   async function handleDelete(id: string) {
@@ -525,6 +581,9 @@ export default function ComissoesPage() {
     const mapa = new Map<string, { nome: string; base: number; pct: number; vendas: number }>();
     for (const c of comissoes) {
       if (c.status === 'CANCELADA') continue;
+      // A comissão do CRM não vem da faixa de um plano daqui: somá-la no
+      // acumulado explicaria um número com a régua errada.
+      if (ehComissaoDoCrm(c)) continue;
       if (filterMonth && mesDe(c.data_venda) !== filterMonth) continue;
       const atual = mapa.get(c.vendedor_id) ?? { nome: c.vendedor_nome, base: 0, pct: 0, vendas: 0 };
       atual.base = round2(atual.base + num(c.valor_base));
@@ -573,7 +632,8 @@ export default function ComissoesPage() {
    */
   const travadas = useMemo(() => {
     const lista: PendenciaComissao[] = [];
-    for (const v of vendas) {
+    // Com a comissão pelo CRM, venda do CRM sem comissão aqui é o certo.
+    for (const v of recorte.vendasParaCalcular) {
       if (v.status !== 'CONFIRMADO' && v.status !== 'CONCLUIDO') continue;
       if (mesDe(v.data_venda ?? '') !== filterMonth) continue;
       if (comissoes.some(c => c.venda_id === v.id && c.status !== 'CANCELADA')) continue;
@@ -591,7 +651,7 @@ export default function ComissoesPage() {
       lista.push({ id: v.id, venda: v.numero, motivo: 'esta venda ainda não teve comissão apurada' });
     }
     return lista;
-  }, [vendas, comissoes, membros, planos, filterMonth]);
+  }, [recorte, comissoes, membros, planos, filterMonth]);
 
   /** Quem aparece no filtro de pessoa: quem TEM comissão no escopo mais a
    *  equipe inteira. Antes o filtro listava só quem já tinha comissão, então
@@ -615,7 +675,9 @@ export default function ComissoesPage() {
         <div className="min-w-0">
           <p className="fin-t-body-strong truncate text-[var(--fin-text)]">{c.vendedor_nome}</p>
           <p className="fin-t-caption text-[var(--fin-text-3)]">
-            {`venda ${c.venda_numero}${c.data_venda ? ` · ${dataBR(c.data_venda)}` : ''}`}
+            {ehComissaoDoCrm(c)
+              ? `${nomeDaCompetencia(c.competencia ?? '')} · calculada pelo CRM`
+              : `venda ${c.venda_numero}${c.data_venda ? ` · ${dataBR(c.data_venda)}` : ''}`}
           </p>
         </div>
       ),
@@ -629,7 +691,13 @@ export default function ComissoesPage() {
       // A base NOMEADA: "R$ 1.815,55" sozinho não diz sobre o que a comissão
       // incidiu, e a coluna "%" repetia a mesma alíquota em todas as linhas
       // da mesma pessoa, sugerindo variação onde não há.
-      sub: c => <span>{`${num(c.percentual_aplicado)}% sobre a receita da agência`}</span>,
+      sub: c => (
+        <span>
+          {ehComissaoDoCrm(c)
+            ? `${num(c.percentual_aplicado)}% sobre o dinheiro recebido`
+            : `${num(c.percentual_aplicado)}% sobre a receita da agência`}
+        </span>
+      ),
     },
     { id: 'valor', cabecalho: 'Comissão', tipo: 'dinheiro', prioridade: 3, sortable: true, valor: c => num(c.valor_comissao) },
     { id: 'situacao', cabecalho: 'Situação', tipo: 'status', prioridade: 2, valor: c => c.status, dominio: 'comissao' },
@@ -640,6 +708,15 @@ export default function ComissoesPage() {
       prioridade: 3,
       render: c => (
         <div className="flex flex-wrap justify-end gap-1">
+          {ehComissaoDoCrm(c) && (
+            <button
+              className={BOTAO}
+              onClick={() => setDetalhe(c)}
+              aria-label={`Ver as contas recebidas da comissão de ${c.vendedor_nome}`}
+            >
+              Contas
+            </button>
+          )}
           {c.status === 'CALCULADA' && (
             <button className={BOTAO} onClick={() => setConfirmando({ tipo: 'aprovar', comissao: c })}>
               Aprovar
@@ -695,11 +772,14 @@ export default function ComissoesPage() {
     setProcessando(true);
     try {
       if (confirmando.tipo === 'recalcular') await handleCalcular();
+      else if (confirmando.tipo === 'duplicadas') await handleCancelarDuplicadas();
       else if (confirmando.tipo === 'aprovar') await handleAprovar(confirmando.comissao);
       else if (confirmando.tipo === 'pagar') await handlePagar(confirmando.comissao);
       else if (confirmando.tipo === 'cancelar') await handleCancelar(confirmando.comissao);
       else if (confirmando.tipo === 'excluir') await handleDelete(confirmando.comissao.id);
       setConfirmando(null);
+    } catch (e) {
+      toast.error('Não foi possível concluir', e instanceof Error ? e.message : undefined);
     } finally {
       setProcessando(false);
     }
@@ -710,9 +790,18 @@ export default function ComissoesPage() {
     if (confirmando.tipo === 'recalcular') {
       return {
         titulo: `Recalcular comissões de ${nomeDoMes}`,
-        oQue: `Vamos reler as vendas confirmadas de ${nomeDoMes}, recalcular as faixas e cancelar as comissões que perderam base. Comissões já pagas não mudam.`,
+        oQue: `Vamos reler as vendas confirmadas de ${nomeDoMes}, recalcular as faixas e cancelar as comissões que perderam base. Comissões já pagas não mudam.${comissaoPeloCrm ? ' As comissões calculadas pelo CRM e as vendas do CRM ficam de fora.' : ''}`,
         rotulo: 'Recalcular',
         tone: 'padrao',
+      };
+    }
+    if (confirmando.tipo === 'duplicadas') {
+      const q = duplicadas?.quantidade ?? 0;
+      return {
+        titulo: `Cancelar ${q} ${q === 1 ? 'conta em dobro' : 'contas em dobro'}`,
+        oQue: `Vamos cancelar ${q === 1 ? 'a conta a pagar de comissão que duplica' : `as ${q} contas a pagar de comissão que duplicam`} outra (${BRL(duplicadas?.valor_total ?? 0)}). Fica a conta que a aprovação criou, que é a que o pagamento baixa. Nada é excluído e nenhum dinheiro se move.`,
+        rotulo: 'Cancelar as duplicadas',
+        tone: 'destrutivo',
       };
     }
     const c = confirmando.comissao;
@@ -720,8 +809,8 @@ export default function ComissoesPage() {
       return {
         titulo: `Aprovar ${BRL(num(c.valor_comissao))}`,
         oQue: proximaSaida
-          ? `Aprovar cria uma conta a pagar de ${BRL(num(c.valor_comissao))} com vencimento em ${dataBR(proximaSaida)}, no nome de ${c.vendedor_nome}. Dá para cancelar depois, mas a conta a pagar não some sozinha.`
-          : `Aprovar marca a comissão como aprovada. Como a agência não tem dias de pagamento definidos, nenhuma conta a pagar é programada — sem agenda não dá para dizer quando a comissão sai.`,
+          ? `Aprovar confirma a comissão de ${c.vendedor_nome}. A conta a pagar dela, de ${BRL(num(c.valor_comissao))}, fica programada para ${dataBR(proximaSaida)}. Cancelar depois cancela a conta junto, se ainda não foi paga.`
+          : `Aprovar confirma a comissão de ${c.vendedor_nome}. Como a agência não tem dias de pagamento definidos, a conta a pagar de ${BRL(num(c.valor_comissao))} vence no fim do mês.`,
         rotulo: 'Aprovar',
         tone: 'padrao',
       };
@@ -737,14 +826,14 @@ export default function ComissoesPage() {
     if (confirmando.tipo === 'cancelar') {
       return {
         titulo: 'Cancelar esta comissão',
-        oQue: `A comissão de ${c.vendedor_nome} sai das contas do mês. Se ela já tinha sido aprovada, a conta a pagar criada continua existindo e precisa ser cancelada em Contas a pagar.`,
+        oQue: `A comissão de ${c.vendedor_nome} sai das contas do mês, e a conta a pagar dela é cancelada junto. Conta já paga não muda: o dinheiro que saiu continua lançado.`,
         rotulo: 'Cancelar a comissão',
         tone: 'destrutivo',
       };
     }
     return {
       titulo: 'Excluir esta comissão',
-      oQue: `Excluir apaga o registro da comissão de ${c.vendedor_nome}. Isto NÃO remove a conta a pagar de ${BRL(num(c.valor_comissao))} que já foi criada — ela continua no fluxo de caixa.`,
+      oQue: `Excluir apaga o registro da comissão de ${c.vendedor_nome}. A conta a pagar dela, cancelada junto com a comissão, continua no histórico de Contas a pagar.`,
       rotulo: 'Excluir',
       tone: 'destrutivo',
     };
@@ -820,6 +909,54 @@ export default function ComissoesPage() {
           </p>
         </div>
 
+        {/* ── CONTAS EM DOBRO ─────────────────────────────────────────────
+            Antes de 08/10/2026 a aprovação criava uma segunda conta a pagar
+            para a mesma comissão. A lista aparece antes de qualquer mudança;
+            cancelar é uma decisão, com confirmação. */}
+        {duplicadas && duplicadas.quantidade > 0 && (
+          <Callout
+            tom="aviso"
+            titulo={`${duplicadas.quantidade} ${duplicadas.quantidade === 1 ? 'conta a pagar de comissão está' : 'contas a pagar de comissão estão'} em dobro (${BRL(duplicadas.valor_total)})`}
+            acao={{ rotulo: 'Cancelar as duplicadas', onClick: () => setConfirmando({ tipo: 'duplicadas' }) }}
+          >
+            <p>
+              Cada comissão abaixo tem duas contas a pagar, e o fluxo de caixa conta as duas. Cancelar mantém a conta
+              que a aprovação criou e cancela a outra. Nada é excluído e nenhum dinheiro se move.
+            </p>
+            <ListaDeDuplicadas itens={duplicadas.itens} rotulo="Ver as contas em dobro" />
+          </Callout>
+        )}
+        {duplicadas && duplicadas.pagas_em_dobro.length > 0 && (
+          <Callout
+            tom="negativo"
+            titulo={`${duplicadas.pagas_em_dobro.length} ${duplicadas.pagas_em_dobro.length === 1 ? 'comissão foi paga' : 'comissões foram pagas'} duas vezes (${BRL(somaPor(duplicadas.pagas_em_dobro, d => d.valor))})`}
+          >
+            <p>
+              As duas contas a pagar destas comissões já foram baixadas: o dinheiro saiu duas vezes. Cancelar não
+              devolve dinheiro. Acerte com o vendedor e desfaça a baixa de uma das contas em Contas a pagar.
+            </p>
+            <ListaDeDuplicadas itens={duplicadas.pagas_em_dobro} rotulo="Ver as comissões pagas duas vezes" />
+          </Callout>
+        )}
+
+        {/* ── COMISSÃO PELO CRM ───────────────────────────────────────────
+            O motor desta tela não calcula as vendas do CRM: o CRM paga o
+            time sobre o dinheiro recebido e manda a comissão pronta. */}
+        {comissaoPeloCrm && (
+          <Callout tom="info" titulo="As comissões das vendas do CRM vêm calculadas do CRM">
+            <p>
+              O CRM calcula a comissão de cada vendedor sobre o dinheiro recebido no mês e manda pronta. Aqui ela é
+              aprovada e paga como as outras, e o recálculo desta tela não a muda. Vendas lançadas no financeiro
+              continuam nos planos daqui.
+            </p>
+            {recorte.anterioresEmVendaDoCrm.length > 0 && (
+              <p className="mt-1">
+                {`${recorte.anterioresEmVendaDoCrm.length} ${recorte.anterioresEmVendaDoCrm.length === 1 ? 'comissão calculada aqui' : 'comissões calculadas aqui'} sobre vendas do CRM, antes desta mudança, ainda não ${recorte.anterioresEmVendaDoCrm.length === 1 ? 'foi paga' : 'foram pagas'} (${BRL(somaPor(recorte.anterioresEmVendaDoCrm, c => num(c.valor_comissao)))}). Confira se o CRM não pagou o mesmo dinheiro antes de aprovar.`}
+              </p>
+            )}
+          </Callout>
+        )}
+
         {/* ── A RESPOSTA E A AÇÃO ─────────────────────────────────────────
             Sem chip de veredito: aqui o julgamento é do dono, e a peça que o
             representa é o botão. */}
@@ -858,7 +995,7 @@ export default function ComissoesPage() {
             </p>
           ) : (
             <p className="fin-t-caption text-[var(--fin-text-3)]">
-              Nenhuma agenda de pagamento definida — sem ela, não dá para dizer quando a comissão sai.{' '}
+              Nenhuma agenda de pagamento definida: sem ela, não dá para dizer quando a comissão sai.{' '}
               <Link href="/config/agencia" className="text-[var(--fin-accent)] underline underline-offset-2">
                 Definir os dias de pagamento
               </Link>
@@ -936,7 +1073,7 @@ export default function ComissoesPage() {
                     </p>
                   ) : (
                     <p className="fin-t-caption text-[var(--fin-text-3)]">
-                      Sem plano de comissão — as vendas desta pessoa não geram comissão.
+                      Sem plano de comissão: as vendas desta pessoa não geram comissão.
                     </p>
                   )}
                 </div>
@@ -984,7 +1121,7 @@ export default function ComissoesPage() {
               {[...travadas, ...pendencias].map(p => (
                 <li key={`${p.id}-${p.motivo}`} className="flex min-h-[44px] flex-wrap items-center gap-3 py-3">
                   <p className="fin-t-body min-w-0 flex-1 text-[var(--fin-text-2)]">
-                    {`Venda ${p.venda} — ${p.motivo}`}
+                    {`Venda ${p.venda}: ${p.motivo}`}
                   </p>
                   <Link href="/equipe/vendedores" className="fin-t-body shrink-0 text-[var(--fin-accent)] underline underline-offset-2">
                     Vincular plano
@@ -1024,7 +1161,9 @@ export default function ComissoesPage() {
           alvoDaConfirmacao
             ? [
                 { rotulo: 'Pessoa', valor: alvoDaConfirmacao.vendedor_nome },
-                { rotulo: 'Venda', valor: alvoDaConfirmacao.venda_numero },
+                ehComissaoDoCrm(alvoDaConfirmacao)
+                  ? { rotulo: 'Mês', valor: `${nomeDaCompetencia(alvoDaConfirmacao.competencia ?? '')} (calculada pelo CRM)` }
+                  : { rotulo: 'Venda', valor: alvoDaConfirmacao.venda_numero },
                 { rotulo: 'Valor', valor: <Money valor={num(alvoDaConfirmacao.valor_comissao)} size="body" /> },
               ]
             : undefined
@@ -1034,6 +1173,84 @@ export default function ComissoesPage() {
         processando={processando}
         onConfirmar={executarConfirmacao}
       />
+
+      {/* O detalhe da comissão do CRM: o dinheiro recebido, conta a conta. */}
+      <RecordSheet
+        aberto={detalhe !== null}
+        onOpenChange={aberto => { if (!aberto) setDetalhe(null); }}
+        titulo={detalhe ? `${detalhe.vendedor_nome}, ${nomeDaCompetencia(detalhe.competencia ?? '')}` : ''}
+        descricao="O dinheiro recebido no mês sobre o qual o CRM calculou a comissão."
+        acaoPrimaria={{ rotulo: 'Fechar', onClick: () => setDetalhe(null) }}
+        acaoSecundaria={null}
+        largura={640}
+      >
+        {detalhe && <DetalheDaComissaoDoCrm comissao={detalhe} />}
+      </RecordSheet>
     </MolduraDaPagina>
+  );
+}
+
+/** A lista recolhível das contas em dobro: aparece antes de qualquer mudança. */
+function ListaDeDuplicadas({ itens, rotulo }: { itens: ContaDuplicada[]; rotulo: string }) {
+  return (
+    <details className="mt-2">
+      <summary className="fin-t-body cursor-pointer text-[var(--fin-accent)] underline underline-offset-2">
+        {rotulo}
+      </summary>
+      <ul className="mt-2 flex flex-col divide-y divide-[var(--fin-border)]">
+        {itens.map(d => (
+          <li key={d.conta_duplicada_id} className="flex min-h-[44px] flex-wrap items-center justify-between gap-2 py-2">
+            <span className="min-w-0 flex-1">
+              <span className="fin-t-body text-[var(--fin-text)]">{d.vendedor || 'Vendedor sem nome'}</span>
+              <span className="fin-t-caption block text-[var(--fin-text-3)]">
+                {`Fica ${d.conta_mantida_id} (${d.status_da_mantida.toLowerCase()}); sai ${d.conta_duplicada_id}`}
+              </span>
+            </span>
+            <Money valor={d.valor} size="body" />
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+/** As contas recebidas que formaram a comissão do CRM. */
+function DetalheDaComissaoDoCrm({ comissao }: { comissao: ComissaoVenda }) {
+  const linhas = comissao.linhas ?? [];
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="fin-t-body text-[var(--fin-text-2)]">
+        {`${BRL(num(comissao.valor_comissao))} de comissão sobre ${BRL(num(comissao.valor_base))} recebidos (${num(comissao.percentual_aplicado)}% no total do mês).`}
+      </p>
+      {linhas.length === 0 ? (
+        <p className="fin-t-caption text-[var(--fin-text-3)]">O CRM não mandou as contas deste mês.</p>
+      ) : (
+        <ul className="flex flex-col divide-y divide-[var(--fin-border)]">
+          {linhas.map((l, i) => (
+            <li key={`${l.conta_id}-${l.dia}-${i}`} className="flex flex-wrap items-start justify-between gap-2 py-2">
+              <span className="min-w-0 flex-1">
+                <span className="fin-t-body text-[var(--fin-text)]">{l.conta_nome || `Conta ${l.conta_id}`}</span>
+                <span className="fin-t-caption block text-[var(--fin-text-3)]">
+                  {[
+                    `recebido em ${dataBR(l.dia)}`,
+                    `${BRL(l.valor)} a ${num(l.percentual)}%`,
+                    l.plano ? `plano ${l.plano}` : '',
+                    l.provedor ? `via ${l.provedor}` : '',
+                  ].filter(Boolean).join(' · ')}
+                </span>
+              </span>
+              <Money valor={l.comissao} size="body" />
+            </li>
+          ))}
+        </ul>
+      )}
+      {comissao.apurado_em && (
+        <p className="fin-t-caption text-[var(--fin-text-3)]">
+          {`Apurada pelo CRM em ${Number.isNaN(new Date(comissao.apurado_em).getTime())
+            ? comissao.apurado_em
+            : new Date(comissao.apurado_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.`}
+        </p>
+      )}
+    </div>
   );
 }

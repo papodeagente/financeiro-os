@@ -76,6 +76,15 @@ export async function POST(req: NextRequest) {
       body.api_key_entur = prev.api_key_entur ?? '';
     }
 
+    // A marca "a comissão vem do CRM" é gravada pelo webhook, não pela tela
+    // (ver src/lib/comissao-do-crm-gravar.ts). Uma tela aberta antes do
+    // primeiro evento salvaria a configuração sem ela e a apagaria: quem não
+    // manda o campo mantém o que está gravado.
+    if (prev.comissao_pelo_crm === true && body.comissao_pelo_crm === undefined) {
+      body.comissao_pelo_crm = true;
+      body.comissao_pelo_crm_desde = prev.comissao_pelo_crm_desde;
+    }
+
     // The CRM uses a single hmacSecret for both directions; keep the two
     // local fields in sync. If only one was provided, mirror it. If neither
     // was provided and nothing exists yet, generate a fresh secret.

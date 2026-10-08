@@ -33,19 +33,23 @@
  * A conta nasce em Custos Comerciais (2.6), que é onde o DRE já esperava a
  * comissão de vendedor, e carrega `origem_comissao_id` para o Lucro real a
  * excluir do custo fixo (ela já entra na venda, na linha do vendedor).
+ *
+ * A CONTA ANTIGA (`pagar-<id>`). Até 08/10/2026 a tela de comissões criava
+ * uma segunda conta ao aprovar e ao pagar, e cada comissão aprovada ficou com
+ * duas. A que a tela criou e não foi cancelada é a conta da comissão: este
+ * gancho não cria a `cp-comissao-<id>` ao lado dela e cancela a que já
+ * existir em aberto. Ver `comissao-conta-unica.ts`.
  */
 import pool from './db';
 import type { ExecutorSQL } from './caixa-atomico';
 import { DIA_ULTIMO, diaNoMes, proximaDataPagamento } from './comissao-agenda';
+import {
+  PREFIXO_CONTA_COMISSAO, contaBaixada, contaViva, idDaContaDaComissao, idDaContaLegada,
+} from './comissao-conta-unica';
 import type { ComissaoVenda, ContaPagar } from './crm-types';
 import { hojeISO, num, round2 } from './money';
 
-export const PREFIXO_CONTA_COMISSAO = 'cp-comissao-';
-
-/** Id da conta a pagar de uma comissão. Determinístico: recalcular não duplica. */
-export function idDaContaDaComissao(comissaoId: string): string {
-  return `${PREFIXO_CONTA_COMISSAO}${comissaoId}`;
-}
+export { PREFIXO_CONTA_COMISSAO, idDaContaDaComissao };
 
 export interface ContextoDaConta {
   /** `datas_pagamento_comissao` da agência (dias do mês). */
@@ -88,8 +92,15 @@ export function contaDaComissao(
   const hoje = ctx.hoje ?? hojeISO();
   const venc = vencimentoDaComissao(ctx.datasPagamento, c.data_venda, hoje);
 
+  // A comissão que veio calculada do CRM não é de uma venda: é o mês do
+  // vendedor sobre o dinheiro recebido. A conta não aponta para venda
+  // nenhuma (o id `crm-competencia-…` não existe em vendas) e diz de onde veio.
+  const doCrm = c.origem === 'crm';
+  const vendaReal = doCrm ? '' : c.venda_id;
   const observacoes = [
-    `Comissão da venda ${c.venda_numero || c.venda_id} (${c.plano_nome || 'plano de comissão'}, ${num(c.percentual_aplicado)}% sobre ${round2(num(c.valor_base)).toFixed(2)}).`,
+    doCrm
+      ? `${c.descricao || 'Comissão calculada pelo CRM'}: ${num(c.percentual_aplicado)}% sobre ${round2(num(c.valor_base)).toFixed(2)} recebidos.`
+      : `Comissão da venda ${c.venda_numero || c.venda_id} (${c.plano_nome || 'plano de comissão'}, ${num(c.percentual_aplicado)}% sobre ${round2(num(c.valor_base)).toFixed(2)}).`,
     venc.semAgenda ? 'Agenda de pagamento de comissão não configurada: vencimento no fim do mês. Defina os dias em Configurações, Agência.' : '',
     c.status === 'PAGA' ? `Comissão consta como paga em ${String(c.data_pagamento ?? '').slice(0, 10) || 'data não informada'}: confirme a baixa com a conta bancária de onde o dinheiro saiu.` : '',
   ].filter(Boolean).join(' ');
@@ -97,11 +108,13 @@ export function contaDaComissao(
   return {
     id: idDaContaDaComissao(c.id),
     origem: 'OUTROS',
-    venda_id: c.venda_id || null,
+    venda_id: vendaReal || null,
     grupo_id: null,
     fornecedor_id: '',
     fornecedor_nome: c.vendedor_nome || 'Vendedor',
-    descricao: `Comissão · ${c.vendedor_nome || 'vendedor'} · venda ${c.venda_numero || c.venda_id}`,
+    descricao: doCrm
+      ? `Comissão · ${c.vendedor_nome || 'vendedor'} · ${c.descricao || 'calculada pelo CRM'}`
+      : `Comissão · ${c.vendedor_nome || 'vendedor'} · venda ${c.venda_numero || c.venda_id}`,
     categoria_id: ctx.categoriaId,
     centro_custo: '',
     valor_original: valor,
@@ -128,18 +141,54 @@ export function contaDaComissao(
     rateio: [],
     anexos: [],
     observacoes,
-    origem_venda_id: c.venda_id || undefined,
+    origem_venda_id: vendaReal || undefined,
     auto_gerado: true,
     origem_comissao_id: c.id,
   };
 }
 
-/** Estados em que a conta já moveu caixa e NÃO pode ser regravada. */
-const BAIXADA = new Set(['PAGO', 'PARCIAL']);
+/** Uma linha de contas_pagar: o JSON, com o status da coluna como reserva. */
+function lerConta(rows: Record<string, unknown>[]): ContaPagar | null {
+  const r = rows[0];
+  if (!r) return null;
+  const data = (r.data ?? {}) as ContaPagar;
+  // Baixada em qualquer um dos dois lugares conta como baixada: nunca tocar
+  // uma conta que moveu caixa é a regra que não pode falhar.
+  const coluna = String(r.status ?? '').toUpperCase();
+  if ((coluna === 'PAGO' || coluna === 'PARCIAL') && !contaBaixada(data)) {
+    return { ...data, status: coluna as ContaPagar['status'] };
+  }
+  return data;
+}
+
+/** Cancela a conta (nunca exclui: o histórico de que ela existiu fica). */
+async function cancelarConta(
+  exec: ExecutorSQL,
+  tenantId: string,
+  conta: ContaPagar,
+  id: string,
+  nota: string,
+): Promise<void> {
+  const observacoes = [String(conta.observacoes ?? '').trim(), nota].filter(Boolean).join(' ');
+  await exec.query(
+    `UPDATE contas_pagar SET data = $3::jsonb, status = 'CANCELADO', updated_at = NOW()
+      WHERE id = $1 AND tenant_id = $2 AND UPPER(COALESCE(data->>'status', '')) NOT IN ('PAGO', 'PARCIAL')
+        AND UPPER(status) NOT IN ('PAGO', 'PARCIAL')`,
+    [id, tenantId, JSON.stringify({ ...conta, status: 'CANCELADO', observacoes })],
+  );
+}
+
+export type AcaoDaConta = 'criada' | 'atualizada' | 'cancelada' | 'preservada' | 'nenhuma' | 'legada';
 
 /**
  * Sincroniza a conta a pagar com a comissão gravada. Chamada depois de todo
- * POST/PUT em `comissoes`, pelo gancho `aposGravar` do CRUD.
+ * POST/PUT em `comissoes`, pelo gancho `aposGravar` do CRUD, e pela comissão
+ * que chega calculada do CRM.
+ *
+ * `id` é a conta que É da comissão: a `cp-comissao-<id>`, ou a antiga
+ * `pagar-<id>` quando ela existe viva (`acao: 'legada'`). `duplicataCancelada`
+ * diz quando a `cp-comissao-<id>` foi cancelada por duplicar a antiga.
+ * Nada aqui move caixa: baixa é só pelo PUT de contas a pagar.
  */
 export async function sincronizarContaDaComissao(
   tenantId: string,
@@ -147,11 +196,12 @@ export async function sincronizarContaDaComissao(
   /** Injetável para o teste rodar contra Postgres real (PGlite), como caixa-atomico. */
   exec: ExecutorSQL | null = pool,
   hoje?: string,
-): Promise<{ acao: 'criada' | 'atualizada' | 'cancelada' | 'preservada' | 'nenhuma'; id: string }> {
+): Promise<{ acao: AcaoDaConta; id: string; duplicataCancelada?: string }> {
   const id = idDaContaDaComissao(comissao.id);
+  const idLegada = idDaContaLegada(comissao.id);
   if (!exec) return { acao: 'nenhuma', id };
 
-  const [{ rows: ag }, { rows: cat }, { rows: existente }] = await Promise.all([
+  const [{ rows: ag }, { rows: cat }, { rows: existente }, { rows: antiga }] = await Promise.all([
     exec.query(
       `SELECT data FROM agencia WHERE tenant_id = $1 ORDER BY updated_at DESC NULLS LAST, id ASC LIMIT 1`,
       [tenantId],
@@ -160,11 +210,33 @@ export async function sincronizarContaDaComissao(
       `SELECT id FROM plano_contas WHERE tenant_id = $1 AND (codigo = '2.6' OR data->>'codigo' = '2.6') ORDER BY id ASC LIMIT 1`,
       [tenantId],
     ),
-    exec.query(`SELECT data FROM contas_pagar WHERE id = $1 AND tenant_id = $2`, [id, tenantId]),
+    exec.query(`SELECT data, status FROM contas_pagar WHERE id = $1 AND tenant_id = $2`, [id, tenantId]),
+    exec.query(`SELECT data, status FROM contas_pagar WHERE id = $1 AND tenant_id = $2`, [idLegada, tenantId]),
   ]);
 
-  const atual = (existente[0]?.data ?? null) as ContaPagar | null;
-  if (atual && BAIXADA.has(String(atual.status))) {
+  const atual = lerConta(existente);
+  const legada = lerConta(antiga);
+  const dia = hoje ?? hojeISO();
+
+  // A conta antiga viva É a conta da comissão. Nada de criar outra ao lado.
+  if (contaViva(legada)) {
+    let duplicataCancelada: string | undefined;
+    if (atual && contaViva(atual) && !contaBaixada(atual)) {
+      await cancelarConta(exec, tenantId, atual, id,
+        `Cancelada em ${dia}: duplicava a conta ${idLegada}, que é a conta a pagar desta comissão.`);
+      duplicataCancelada = id;
+    }
+    // Comissão cancelada (ou zerada) cancela a conta dela, se ainda não paga.
+    const semDivida = comissao.status === 'CANCELADA' || round2(num(comissao.valor_comissao)) <= 0;
+    if (semDivida && !contaBaixada(legada)) {
+      await cancelarConta(exec, tenantId, legada as ContaPagar, idLegada,
+        `Cancelada em ${dia}: a comissão ${comissao.id} foi cancelada.`);
+      return { acao: 'cancelada', id: idLegada, duplicataCancelada };
+    }
+    return { acao: 'legada', id: idLegada, duplicataCancelada };
+  }
+
+  if (atual && contaBaixada(atual)) {
     return { acao: 'preservada', id };
   }
 
@@ -177,11 +249,8 @@ export async function sincronizarContaDaComissao(
   // Sem valor (ou comissão apagada do cálculo): a conta pendente é cancelada,
   // nunca excluída — o histórico de que ela existiu fica.
   if (!conta) {
-    if (atual && atual.status !== 'CANCELADO') {
-      await exec.query(
-        `UPDATE contas_pagar SET data = $3::jsonb, status = 'CANCELADO', updated_at = NOW() WHERE id = $1 AND tenant_id = $2`,
-        [id, tenantId, JSON.stringify({ ...atual, status: 'CANCELADO' })],
-      );
+    if (atual && contaViva(atual)) {
+      await cancelarConta(exec, tenantId, atual, id, '');
       return { acao: 'cancelada', id };
     }
     return { acao: 'nenhuma', id };
