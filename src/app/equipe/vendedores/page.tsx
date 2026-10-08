@@ -22,6 +22,7 @@ import { EscadaDeFaixas } from '@/components/fin/EscadaDeFaixas';
 import { Unidades, type Unidade } from '@/components/fin/Unidades';
 import { RecordSheet } from '@/components/fin/RecordSheet';
 import { toast } from '@/lib/toast';
+import { perfilCanonico } from '@/lib/permissoes';
 
 interface PessoaDaEquipe extends Membro {
   membro_ids_legado: string[];
@@ -83,6 +84,8 @@ function primeiroNome(nome: string): string {
 
 export default function VendedoresPage() {
   const [equipe, setEquipe] = useState<PessoaDaEquipe[]>([]);
+  /** Ativos com outro perfil: não aparecem, mas contam para o aviso de plano. */
+  const [foraDoPerfil, setForaDoPerfil] = useState<PessoaDaEquipe[]>([]);
   const [orfaos, setOrfaos] = useState<Orfao[]>([]);
   const [aguardando, setAguardando] = useState<AguardandoCadastro[]>([]);
   const [planos, setPlanos] = useState<PlanoComissao[]>([]);
@@ -106,8 +109,13 @@ export default function VendedoresPage() {
         }),
         loadEntities<PlanoComissao>('planos-comissao'),
       ]);
-      // Colaborador não vende: existe só para a folha de pagamento.
-      setEquipe((resp.equipe ?? []).filter((p: PessoaDaEquipe) => p.perfil !== 'COLABORADOR'));
+      // Só quem está marcado como Vendedor (Configurações, Usuários) aparece
+      // aqui: é quem recebe comissão (pedido do Bruno, 08/10/2026).
+      // Administrador, operador e colaborador ficam fora. Perfil ausente
+      // conta como Vendedor, como no resto do sistema.
+      const todos: PessoaDaEquipe[] = resp.equipe ?? [];
+      setEquipe(todos.filter(p => perfilCanonico(p.perfil) === 'VENDEDOR'));
+      setForaDoPerfil(todos.filter(p => perfilCanonico(p.perfil) !== 'VENDEDOR' && p.status === 'ATIVO'));
       setOrfaos(resp.orfaos ?? []);
       setAguardando(resp.aguardandoCadastro ?? []);
       setPlanos(listaPlanos);
@@ -160,6 +168,12 @@ export default function VendedoresPage() {
   );
 
   const semPlano = useMemo(() => ativos.filter(p => !recebeComissao(p)), [ativos, recebeComissao]);
+  // Fora da tela mas ainda com plano: a venda dessa pessoa continua gerando
+  // comissão. Esconder isso faria a tela mentir sobre quem recebe.
+  const planoSemSerVendedor = useMemo(
+    () => foraDoPerfil.filter(p => recebeComissao(p)),
+    [foraDoPerfil, recebeComissao],
+  );
   const comPlano = ativos.length - semPlano.length;
   const valorForaDaConta = round2(soma(aguardando.map(a => num(a.valor_vendido))));
   const vendasForaDaConta = aguardando.reduce((t, a) => t + num(a.vendas), 0);
@@ -254,7 +268,7 @@ export default function VendedoresPage() {
     <MolduraDaPagina>
       <PageHeader
         titulo="Vendedores e planos"
-        subtitulo="A mesma equipe cadastrada em Configurações. Quem tem plano recebe comissão"
+        subtitulo="Quem está marcado como Vendedor em Configurações, Usuários. Quem tem plano recebe comissão"
         badge={
           semPlano.length > 0 ? (
             <span className="fin-t-caption rounded-[var(--fin-r-sm)] bg-[var(--fin-warning-soft)] px-2 py-1 font-semibold text-[var(--fin-warning-text)]">
@@ -294,10 +308,10 @@ export default function VendedoresPage() {
           <div className={`${CARTAO} p-[var(--fin-s-5)]`}>
             <EmptyLesson
               motivo="sem-dado"
-              titulo="Nenhuma pessoa na equipe"
-              oQueE="Aqui você diz quem vende, com qual plano de comissão e com qual meta mensal."
+              titulo="Nenhum vendedor na equipe"
+              oQueE="Aqui aparecem só as pessoas marcadas como Vendedor: é quem recebe comissão. Para cada uma você define o plano de comissão e a meta mensal."
               comoComeca={[
-                'Cadastre a pessoa em Configurações, Usuários',
+                'Em Configurações, Usuários, marque a pessoa com o perfil Vendedor',
                 'Escolha o plano de comissão dela',
                 'Defina a meta mensal de vendas',
               ]}
@@ -348,8 +362,33 @@ export default function VendedoresPage() {
               }
             />
             <p className="fin-t-caption text-[var(--fin-text-3)]">
-              {`${ativos.length} ${ativos.length === 1 ? 'pessoa ativa' : 'pessoas ativas'} com acesso ao sistema. A Folha pode contar mais, porque inclui quem não usa o sistema.`}
+              {`${ativos.length} ${ativos.length === 1 ? 'vendedor ativo' : 'vendedores ativos'}.`}
+              {foraDoPerfil.length > 0
+                ? ` ${foraDoPerfil.length} ${foraDoPerfil.length === 1 ? 'pessoa com outro perfil não aparece' : 'pessoas com outro perfil não aparecem'} aqui: administrador, operador e colaborador não recebem comissão.`
+                : ''}
             </p>
+
+            {/* ── PLANO EM QUEM NÃO É VENDEDOR ───────────────────────────── */}
+            {planoSemSerVendedor.length > 0 && (
+              <section className="flex flex-col gap-2 rounded-[var(--fin-r-lg)] border border-[var(--fin-warning)]/30 bg-[var(--fin-warning-soft)] p-[var(--fin-s-4)]">
+                <h2 className="fin-t-body-strong text-[var(--fin-warning-text)]">
+                  {planoSemSerVendedor.length === 1
+                    ? `${planoSemSerVendedor[0].nome} tem plano de comissão, mas o perfil não é Vendedor`
+                    : `${planoSemSerVendedor.length} pessoas têm plano de comissão, mas o perfil delas não é Vendedor`}
+                </h2>
+                <p className="fin-t-body text-[var(--fin-text-2)]">
+                  {planoSemSerVendedor.length === 1 ? 'As vendas dessa pessoa' : `As vendas de ${planoSemSerVendedor.map(p => primeiroNome(p.nome)).join(', ')}`}{' '}
+                  continuam gerando comissão. Se a pessoa vende, mude o perfil para Vendedor em Usuários; se não vende, tire o plano.
+                </p>
+                <Link
+                  href="/config/usuarios"
+                  className="inline-flex h-11 w-fit items-center gap-[var(--fin-s-1)] rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-4 fin-t-body text-[var(--fin-text)] hover:bg-[var(--fin-surface-2)] lg:h-10"
+                >
+                  Abrir Usuários
+                  <ExternalLink className="size-4" aria-hidden />
+                </Link>
+              </section>
+            )}
 
             {/* ── FORA DA CONTA ──────────────────────────────────────────── */}
             {aguardando.length > 0 && (
