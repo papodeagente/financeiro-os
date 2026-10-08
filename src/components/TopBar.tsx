@@ -80,11 +80,18 @@ function SeletorDePilar({ ativo }: { ativo: Pillar | null }) {
   const [aberto, setAberto] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const gatilho = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!aberto) return;
     const fechar = (e: MouseEvent) => {
-      if (gatilho.current && !gatilho.current.contains(e.target as Node)) setAberto(false);
+      const alvo = e.target as Node;
+      // O MENU TAMBÉM CONTA COMO "DENTRO". Ele vive num portal no <body>, fora
+      // da árvore do gatilho: sem esta checagem, clicar num item fecha o menu
+      // no mousedown, o React desmonta o <Link> e o clique termina no vazio —
+      // o item parece simplesmente não funcionar.
+      if (menu.current?.contains(alvo)) return;
+      if (gatilho.current && !gatilho.current.contains(alvo)) setAberto(false);
     };
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setAberto(false); };
     document.addEventListener('mousedown', fechar);
@@ -153,6 +160,7 @@ function SeletorDePilar({ ativo }: { ativo: Pillar | null }) {
 
       {aberto && pos && createPortal(
         <div
+          ref={menu}
           role="menu"
           aria-label="Áreas do sistema"
           className={`fixed z-[var(--fin-z-menu)] w-56 py-1.5 ${SUPERFICIE_FLUTUANTE}`}
@@ -191,25 +199,16 @@ export function TopBar({ onCommandPalette, onAbrirMenu }: Props) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const [mounted, setMounted] = useState(false);
+  const menuDaConta = useRef<HTMLDivElement>(null);
   const ticketsNaoLidos = useTicketsNaoLidos();
-
-  useEffect(() => { setMounted(true); }, []);
-
-  // Posição calculada a partir do botão: o <header> tem overflow-hidden e
-  // clipava o menu. Render por portal no body escapa disso.
-  useEffect(() => {
-    if (!dropdownOpen) return;
-    const rect = triggerRef.current?.getBoundingClientRect();
-    if (rect) {
-      setDropdownPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
-    }
-  }, [dropdownOpen]);
 
   useEffect(() => {
     if (!dropdownOpen) return;
     const handler = (e: MouseEvent) => {
       const t = e.target as Node;
+      // Mesma regra do seletor de pilar: o menu está num portal, e clicar
+      // dentro dele não é "clicar fora".
+      if (menuDaConta.current?.contains(t)) return;
       if (triggerRef.current && !triggerRef.current.contains(t)) setDropdownOpen(false);
     };
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setDropdownOpen(false); };
@@ -276,7 +275,15 @@ export function TopBar({ onCommandPalette, onAbrirMenu }: Props) {
         {user && (
           <button
             ref={triggerRef}
-            onClick={() => setDropdownOpen(s => !s)}
+            onClick={() => {
+              if (dropdownOpen) { setDropdownOpen(false); return; }
+              // Posição medida na hora do clique, igual ao seletor de pilar: o
+              // <header> tem overflow-hidden e clipava o menu, então ele vai
+              // num portal no body — e aí precisa de coordenada absoluta.
+              const r = triggerRef.current?.getBoundingClientRect();
+              if (r) setDropdownPos({ top: r.bottom + 6, right: window.innerWidth - r.right });
+              setDropdownOpen(true);
+            }}
             className={[
               'ml-0.5 flex shrink-0 items-center gap-1 rounded-[var(--fin-r-md)] p-1 transition-colors',
               'hover:bg-[var(--fin-surface-2)]',
@@ -312,8 +319,9 @@ export function TopBar({ onCommandPalette, onAbrirMenu }: Props) {
         )}
       </div>
 
-      {mounted && user && dropdownOpen && dropdownPos && createPortal(
+      {user && dropdownOpen && dropdownPos && createPortal(
         <div
+          ref={menuDaConta}
           role="menu"
           className={`fixed z-[var(--fin-z-menu)] w-64 py-1.5 ${SUPERFICIE_FLUTUANTE}`}
           style={{ top: dropdownPos.top, right: dropdownPos.right }}
