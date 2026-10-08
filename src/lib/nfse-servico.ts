@@ -12,6 +12,9 @@ import { hojeISO, num, percentual, round2 } from './money';
 import { opcoesTransmissiveis } from './nfse-formulario';
 import { nomeDoCliente, documentoDoCliente } from './cliente-nome';
 import { enderecoDoCliente } from './cliente-documento';
+import { emitirEventoCRM } from './crm-integration';
+import { chaveDoAviso, decidirAviso, montarAviso } from './nota-para-o-crm';
+import { decidirArquivo } from './nota-arquivo';
 import {
   calcularNota,
   conflitosComEmissor,
@@ -684,7 +687,68 @@ export async function atualizarStatus(
         : nota.autorizada_em,
   };
   await gravarNota(tenantId, atualizada);
+  // SÓ NA VIRADA. `autorizada_em` nasce vazio e é preenchido uma única vez;
+  // usar essa transição como gatilho é o que impede o laço de consulta de
+  // publicar o mesmo documento várias vezes na área do cliente.
+  if (!nota.autorizada_em && atualizada.autorizada_em) {
+    await publicarNotaNoPortal(tenantId, atualizada, config);
+  }
   return atualizada;
+}
+
+/**
+ * Publica a nota na área do cliente do CRM.
+ *
+ * O PDF VAI INTEIRO. O link do emissor exige a chave da agência e não abre no
+ * navegador: mandar o link publicaria um documento que ninguém consegue
+ * baixar. Então os bytes são buscados aqui, com a chave, e seguem no evento.
+ *
+ * Fire-and-forget DE PROPÓSITO: a nota já está autorizada na prefeitura, e
+ * falhar em publicar no CRM não pode desfazer nem mascarar isso. O evento fica
+ * na fila de saída, com retentativa e disjuntor, como todos os outros.
+ */
+async function publicarNotaNoPortal(
+  tenantId: string,
+  nota: NotaFiscal,
+  config: ConfigFiscal,
+): Promise<void> {
+  try {
+    if (!pool) return;
+    // O id da venda NO CRM mora no documento da venda, gravado pelo webhook de
+    // entrada. Venda lançada aqui dentro não tem, e aí não existe negociação
+    // do outro lado para pendurar o documento.
+    const { rows } = await pool.query(
+      `SELECT data->>'crm_venda_id' AS crm_venda_id
+         FROM vendas_crm WHERE id = $1 AND tenant_id = $2 LIMIT 1`,
+      [nota.venda_id || '', tenantId],
+    );
+    const crmVendaId = (rows[0]?.crm_venda_id ?? '') as string;
+
+    const decisao = decidirAviso({ nota, crmVendaId });
+    if (!decisao.avisar) {
+      console.info('[nota->crm] nao enviado:', decisao.motivo, 'nota', nota.id);
+      return;
+    }
+
+    const arquivo = decidirArquivo(nota, 'pdf');
+    if (!arquivo.pode) {
+      console.info('[nota->crm] sem PDF para publicar:', arquivo.motivo, 'nota', nota.id);
+      return;
+    }
+    const baixado = await emissorDaConfig(config).baixarArquivo(
+      arquivo.url,
+      arquivo.tipo_conteudo,
+      config,
+    );
+
+    await emitirEventoCRM(
+      'NOTA_FISCAL_EMITIDA',
+      montarAviso({ nota, crmVendaId, pdf: baixado.bytes }) as unknown as Record<string, unknown>,
+      { tenantId, idempotency_key: chaveDoAviso(nota.id) },
+    );
+  } catch (e) {
+    console.error('[nota->crm] falha ao publicar', e);
+  }
 }
 
 /**
