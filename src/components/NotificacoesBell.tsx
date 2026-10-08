@@ -95,6 +95,7 @@ const ICON_FOR_TIPO: Record<string, typeof Bell> = {
   PROPOSTA_VISUALIZADA: Eye,
   PROPOSTA_LEAD: UserPlus,
   VENDA_VENDEDOR_NAO_CADASTRADO: UserX,
+  VENDA_CANCELADA_CRM: AlertCircle,
 };
 
 const COLOR_FOR_TIPO: Record<string, string> = {
@@ -103,6 +104,7 @@ const COLOR_FOR_TIPO: Record<string, string> = {
   PROPOSTA_VISUALIZADA: 'text-[var(--fin-violet)] bg-[var(--fin-violet-soft)]',
   PROPOSTA_LEAD: 'text-[var(--fin-warning-text)] bg-[var(--fin-warning-soft)]',
   VENDA_VENDEDOR_NAO_CADASTRADO: 'text-[var(--fin-negative-text)] bg-[var(--fin-negative-soft)]',
+  VENDA_CANCELADA_CRM: 'text-[var(--fin-warning-text)] bg-[var(--fin-warning-soft)]',
 };
 
 function createDefaultPreferences(): PreferenciasNotificacoes {

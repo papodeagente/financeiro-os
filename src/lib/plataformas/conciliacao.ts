@@ -47,6 +47,8 @@ export interface Pontuacao {
   motivos: string[];
   /** Houve prova de identidade (documento, e-mail ou id da transação). */
   tem_identidade: boolean;
+  /** A venda aponta para esta transação: gravada pelo CRM ou por um vínculo feito à mão. */
+  prova_transacao: boolean;
 }
 
 export const PESOS = {
@@ -112,12 +114,14 @@ export function pontuar(pagamento: PagamentoParaConciliar, venda: CandidatoVenda
   const motivos: string[] = [];
   let pontos = 0;
   let identidade = false;
+  let provaTransacao = false;
 
   const idPag = String(pagamento.id_transacao ?? '').trim();
   const idVenda = String(venda.id_transacao_externa ?? '').trim();
   if (idPag && idVenda && idPag === idVenda) {
     pontos += PESOS.ID_TRANSACAO;
     identidade = true;
+    provaTransacao = true;
     motivos.push('a venda já aponta para esta transação');
   }
 
@@ -169,7 +173,7 @@ export function pontuar(pagamento: PagamentoParaConciliar, venda: CandidatoVenda
       : pontos >= CORTE_MEDIA ? 'MEDIA'
         : 'BAIXA';
 
-  return { venda_id: venda.venda_id, pontos, confianca, motivos, tem_identidade: identidade };
+  return { venda_id: venda.venda_id, pontos, confianca, motivos, tem_identidade: identidade, prova_transacao: provaTransacao };
 }
 
 export type AcaoConciliacao = 'VINCULAR' | 'SUGERIR' | 'VENDA_DIRETA';
@@ -209,6 +213,29 @@ export function decidir(
       escolhida: null,
       candidatas: [],
       motivo: 'Nenhuma venda do CRM se parece com este recebimento.',
+    };
+  }
+
+  // O id da transação gravado na venda é PROVA, não palpite: o CRM gerou o
+  // link de pagamento dentro da negociação e informou a transação, ou alguém
+  // já vinculou à mão. Vincula mesmo com a opção automática desligada, que
+  // existe para conter adivinhação. Só não vincula se duas vendas disserem
+  // ter a mesma transação: aí é conflito para uma pessoa resolver.
+  const comProva = relevantes.filter(p => p.prova_transacao);
+  if (comProva.length === 1) {
+    return {
+      acao: 'VINCULAR',
+      escolhida: comProva[0],
+      candidatas: relevantes,
+      motivo: comProva[0].motivos.join('; '),
+    };
+  }
+  if (comProva.length > 1) {
+    return {
+      acao: 'SUGERIR',
+      escolhida: comProva[0],
+      candidatas: relevantes,
+      motivo: 'Mais de uma venda diz ter esta mesma transação. Escolher sozinho seria chute.',
     };
   }
 
