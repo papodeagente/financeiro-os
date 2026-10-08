@@ -30,6 +30,7 @@ import { StatusChip, rotuloStatus } from '@/components/fin/StatusChip';
 import { EtiquetaDaPlataforma } from '@/components/fin/EtiquetaDaPlataforma';
 import { descricaoSemPlataforma, nomeDaPlataforma, plataformaDaConta } from '@/lib/plataformas/rotulo';
 import { DialogBaixa } from './DialogBaixa';
+import { DetalheDaPlataforma } from './DetalheDaPlataforma';
 import { PainelNota } from './PainelNota';
 import type { NotaFiscal } from '@/lib/nfse-tipos';
 import { EMPTY_FORM, FormularioConta, type ErrosForm, type FormState } from './FormularioConta';
@@ -104,6 +105,7 @@ export default function ContasReceberPage() {
   const [formTocado, setFormTocado] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [baixaAlvo, setBaixaAlvo] = useState<ContaReceber | null>(null);
+  const [detalheAlvo, setDetalheAlvo] = useState<ContaReceber | null>(null);
   const [baixando, setBaixando] = useState(false);
   const [exclusaoAlvo, setExclusaoAlvo] = useState<ContaReceber | null>(null);
   const [excluindo, setExcluindo] = useState(false);
@@ -439,12 +441,23 @@ export default function ContasReceberPage() {
                 {i.cliente_nome || 'Cliente não informado'}
               </span>
             )}
-            {plataforma || descricao ? (
-              <span className="flex min-w-0 max-w-[48ch] items-center gap-[var(--fin-s-2)]">
-                {plataforma && <EtiquetaDaPlataforma plataforma={plataforma} />}
+            {plataforma ? (
+              // Veio de plataforma: a etiqueta e a descrição abrem como o
+              // cliente pagou (parcelamento, cartão, antecipação).
+              <button
+                type="button"
+                onClick={() => setDetalheAlvo(i)}
+                aria-label={`Ver como ${i.cliente_nome || 'o cliente'} pagou`}
+                className="flex min-w-0 max-w-[48ch] items-center gap-[var(--fin-s-2)] rounded-[var(--fin-r-sm)] text-left hover:[&>span:last-child]:text-[var(--fin-accent)] hover:[&>span:last-child]:underline"
+              >
+                <EtiquetaDaPlataforma plataforma={plataforma} />
                 {descricao ? (
-                  <span className="fin-t-caption min-w-0 truncate text-[var(--fin-text-3)]">{descricao}</span>
+                  <span className="fin-t-caption min-w-0 truncate text-[var(--fin-text-3)] underline-offset-2">{descricao}</span>
                 ) : null}
+              </button>
+            ) : descricao ? (
+              <span className="flex min-w-0 max-w-[48ch] items-center gap-[var(--fin-s-2)]">
+                <span className="fin-t-caption min-w-0 truncate text-[var(--fin-text-3)]">{descricao}</span>
               </span>
             ) : null}
           </span>
@@ -761,6 +774,8 @@ export default function ContasReceberPage() {
           plataformasUsadas={plataformasUsadas}
         />
       </RecordSheet>
+
+      <DetalheDaPlataforma conta={detalheAlvo} onFechar={() => setDetalheAlvo(null)} />
 
       <PainelNota
         conta={notaAlvo}

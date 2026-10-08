@@ -30,6 +30,7 @@ import {
 } from './crm-cliente';
 import {
   lerPlataformaDoPayload, decidirCarimbo, vincularPagamentosDaVendaCRM, descreverPagamentos,
+  reconciliarPagamentosSemDono, descreverReconciliacao,
 } from './crm-venda-plataforma';
 import { lerPedidoDeCancelamento, aplicarCancelamentoDoCrm } from './crm-venda-cancelada';
 
@@ -1636,7 +1637,18 @@ export async function processarEventoCRM(
           plataforma: carimbo.crm_plataforma_origem,
           transacoes: carimbo.vincular,
         }));
-        const sobrePagamento = descreverPagamentos(pagamentos, carimbo.conflito);
+        // 5) O pagamento que chegou ANTES da venda sem o CRM dizer qual é:
+        //    procura pelos mesmos critérios da conciliação. Falhar aqui não
+        //    desfaz a venda: ela entrou, e a fila de recebimentos continua
+        //    oferecendo o vínculo à mão.
+        let sobreProcura = '';
+        try {
+          const procura = await emTransacao(exec => reconciliarPagamentosSemDono(exec, tenantId, vendaId));
+          sobreProcura = descreverReconciliacao(procura);
+        } catch (e) {
+          sobreProcura = `procura de pagamento sem dono falhou: ${e instanceof Error ? e.message : String(e)}`;
+        }
+        const sobrePagamento = [descreverPagamentos(pagamentos, carimbo.conflito), sobreProcura].filter(Boolean).join('; ');
 
         acao = `venda ${vendaJaExiste ? 'atualizada' : 'criada'} (${vendaId}): ${itensInput.length} itens, ${cpGerados} CP, ${crGerados} CR (R$ ${crValor.toFixed(2)})${vendedorPendente ? ' [vendedor nao cadastrado]' : ''}`
           + `; ${descreverCliente(cliente)}`

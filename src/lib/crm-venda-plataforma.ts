@@ -23,6 +23,10 @@ import type { ExecutorSQL } from './caixa-atomico';
 import { vincularNaTransacao } from './plataformas/fila';
 import { unificarRecebimento } from './plataformas/unificar-db';
 import { acharAdapter } from './plataformas';
+import { candidatosDoCrm } from './plataformas/servico';
+import { decidir, type PagamentoParaConciliar } from './plataformas/conciliacao';
+import type { TransacaoNormalizada } from './plataformas/tipos';
+import { addDias, num, round2 } from './money';
 
 const txt = (v: unknown): string =>
   (typeof v === 'string' ? v : v == null ? '' : String(v)).trim();
@@ -154,31 +158,44 @@ export async function vincularPagamentosDaVendaCRM(
   const plataforma = acharAdapter(pedido.plataforma) ? pedido.plataforma : '';
 
   if (ids.length > 0) {
+    // O CRM pode guardar qualquer um dos ids da venda: o link de pagamento
+    // (pl_...), o pedido (or_...) ou a cobrança (ch_...). A transação daqui
+    // é achada por qualquer um deles.
     const { rows } = await exec.query(
-      `SELECT plataforma, id_transacao, venda_id, status_conciliacao
+      `SELECT plataforma, id_transacao, venda_id, status_conciliacao,
+              COALESCE(data->'transacao'->'ids_alternativos', '[]'::jsonb) AS ids
          FROM plataformas_transacoes
-        WHERE tenant_id = $1 AND id_transacao = ANY($2::text[])
+        WHERE tenant_id = $1 AND status_conciliacao <> 'ABSORVIDA'
+          AND (id_transacao = ANY($2::text[])
+               OR COALESCE(data->'transacao'->'ids_alternativos', '[]'::jsonb) ?| $2::text[])
           AND ($3::text = '' OR plataforma = $3::text)
         ORDER BY id_transacao, plataforma
         FOR UPDATE`,
       [tenantId, ids, plataforma],
     );
+    const tratadas = new Set<string>();
     for (const id of ids) {
-      const linhas = rows.filter(r => String(r.id_transacao) === id);
+      const linhas = rows.filter(r => String(r.id_transacao) === id
+        || (Array.isArray(r.ids) && r.ids.map(String).includes(id)));
       if (linhas.length === 0) { saida.aguardando.push(id); continue; }
       if (linhas.length > 1) {
         saida.conflitos.push(`a transação ${id} existe em mais de uma plataforma (${linhas.map(r => r.plataforma).join(', ')}): informe a plataforma`);
         continue;
       }
       const t = linhas[0];
+      const chave = `${t.plataforma}|${t.id_transacao}`;
+      // Dois ids da mesma venda (link e pedido) apontam para a mesma linha.
+      if (tratadas.has(chave)) continue;
+      tratadas.add(chave);
       const dono = String(t.venda_id ?? '');
-      if (dono === vendaId) { saida.ja_vinculadas.push(id); continue; }
+      const idAqui = String(t.id_transacao);
+      if (dono === vendaId) { saida.ja_vinculadas.push(idAqui); continue; }
       if (dono) {
-        saida.conflitos.push(`a transação ${id} já está vinculada à venda ${dono}: nada mudou`);
+        saida.conflitos.push(`a transação ${idAqui} já está vinculada à venda ${dono}: nada mudou`);
         continue;
       }
-      await vincularNaTransacao(exec, tenantId, String(t.plataforma), id, vendaId, { manterCarimbo: true });
-      saida.vinculadas.push(id);
+      await vincularNaTransacao(exec, tenantId, String(t.plataforma), idAqui, vendaId, { manterCarimbo: true });
+      saida.vinculadas.push(idAqui);
     }
   }
 
@@ -206,5 +223,112 @@ export function descreverPagamentos(r: ResultadoPagamentosDaVenda, conflitoDoCar
   if (r.reunificadas > 0) partes.push(`${r.reunificadas} vínculo(s) refeito(s) sobre as contas regeradas`);
   if (conflitoDoCarimbo) partes.push(`conflito: ${conflitoDoCarimbo}`);
   for (const c of r.conflitos) partes.push(`conflito: ${c}`);
+  return partes.join('; ');
+}
+
+export interface ResultadoReconciliacao {
+  vinculadas: string[];
+  sugeridas: string[];
+}
+
+/** Janela, em dias, em volta da data da venda. A mesma da conciliação. */
+const JANELA_DIAS = 45;
+
+/**
+ * A venda do CRM que chegou DEPOIS do pagamento procura o pagamento.
+ *
+ * Sem o id da transação no payload, o pagamento que chegou antes caía em
+ * "venda direta" e ninguém o reabria (Bruna Moura, Pagar.me, 08/10/2026: o
+ * pagamento às 12h05 e a venda ganha no CRM logo depois, cada um de um
+ * lado). Aqui a venda nova repassa os pagamentos sem dono da janela pela
+ * MESMA decisão da conciliação (`decidir`):
+ *
+ *   - prova (o id da venda é um dos ids da transação): vincula;
+ *   - confiança alta (exige CPF/CNPJ ou e-mail em comum, e na prática o
+ *     documento) com a opção automática ligada: vincula;
+ *   - parecido, sem prova suficiente: vira sugestão na fila de recebimentos.
+ *
+ * "Venda direta" marcada por uma pessoa não é reaberta. A que o robô marcou
+ * só quer dizer "ninguém parecido na hora": é exatamente o caso de quem
+ * chega depois, e segue a mesma régua.
+ */
+export async function reconciliarPagamentosSemDono(
+  exec: ExecutorSQL,
+  tenantId: string,
+  vendaId: string,
+): Promise<ResultadoReconciliacao> {
+  const saida: ResultadoReconciliacao = { vinculadas: [], sugeridas: [] };
+  const { rows: vr } = await exec.query(
+    `SELECT COALESCE(NULLIF(data->>'data_venda', ''), to_char(created_at, 'YYYY-MM-DD')) AS data_venda, status
+       FROM vendas_crm WHERE id = $1 AND tenant_id = $2 LIMIT 1`,
+    [vendaId, tenantId],
+  );
+  if (vr.length === 0 || String(vr[0].status ?? '') === 'CANCELADO') return saida;
+  const dataVenda = String(vr[0].data_venda ?? '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dataVenda)) return saida;
+
+  const { rows: txs } = await exec.query(
+    `SELECT t.plataforma, t.id_transacao, t.status_conciliacao, t.data,
+            COALESCE(c.data->>'conciliacao_automatica', 'false') = 'true' AS automatica
+       FROM plataformas_transacoes t
+       LEFT JOIN plataformas_config c ON c.tenant_id = t.tenant_id AND c.plataforma = t.plataforma
+      WHERE t.tenant_id = $1
+        AND COALESCE(t.venda_id, '') = ''
+        AND t.status_conciliacao IN ('PENDENTE', 'SUGERIDA', 'DIRETA')
+        AND COALESCE(t.data->>'direta_por_pessoa', 'false') <> 'true'
+        AND COALESCE(NULLIF(t.data->'transacao'->>'data_venda', ''), to_char(t.created_at, 'YYYY-MM-DD'))
+            BETWEEN $2 AND $3
+      ORDER BY t.created_at DESC
+      LIMIT 200
+      FOR UPDATE OF t`,
+    [tenantId, addDias(dataVenda, -JANELA_DIAS), addDias(dataVenda, JANELA_DIAS)],
+  );
+
+  for (const t of txs) {
+    const transacao = ((t.data ?? {}) as Record<string, unknown>).transacao as TransacaoNormalizada | undefined;
+    if (!transacao) continue;
+    const idTransacao = String(t.id_transacao);
+    const dataPagamento = transacao.parcelas?.find(p => p.data_pagamento)?.data_pagamento
+      || transacao.data_venda || dataVenda;
+    const pagamento: PagamentoParaConciliar = {
+      id_transacao: idTransacao,
+      ids: transacao.ids_alternativos,
+      documento: transacao.comprador?.documento ?? '',
+      email: transacao.comprador?.email ?? '',
+      telefone: transacao.comprador?.telefone ?? '',
+      valor: round2(num(transacao.valor_bruto)),
+      data: dataPagamento,
+    };
+    const candidatos = await candidatosDoCrm(exec, tenantId, { ...transacao, id_transacao: idTransacao }, dataPagamento);
+    const decisao = decidir(pagamento, candidatos, { vincularAutomatico: t.automatica === true });
+    // Só mexe se ESTA venda é uma candidata de verdade: o pagamento pode
+    // ser de outra venda, e aí a conversa é dela.
+    if (!decisao.candidatas.some(c => c.venda_id === vendaId)) continue;
+
+    if (decisao.acao === 'VINCULAR' && decisao.escolhida?.venda_id === vendaId) {
+      await vincularNaTransacao(exec, tenantId, String(t.plataforma), idTransacao, vendaId, { manterCarimbo: true });
+      saida.vinculadas.push(idTransacao);
+      continue;
+    }
+    if (decisao.acao !== 'VENDA_DIRETA') {
+      await exec.query(
+        `UPDATE plataformas_transacoes
+            SET status_conciliacao = 'SUGERIDA',
+                data = data || jsonb_build_object('conciliacao', $4::jsonb),
+                updated_at = NOW()
+          WHERE tenant_id = $1 AND plataforma = $2 AND id_transacao = $3`,
+        [tenantId, String(t.plataforma), idTransacao, JSON.stringify(decisao)],
+      );
+      saida.sugeridas.push(idTransacao);
+    }
+  }
+  return saida;
+}
+
+/** A frase do evento sobre a procura. Vazia quando não achou nada. */
+export function descreverReconciliacao(r: ResultadoReconciliacao): string {
+  const partes: string[] = [];
+  if (r.vinculadas.length > 0) partes.push(`pagamento que tinha chegado antes vinculado (${r.vinculadas.join(', ')})`);
+  if (r.sugeridas.length > 0) partes.push(`pagamento parecido sugerido na fila de recebimentos (${r.sugeridas.join(', ')})`);
   return partes.join('; ');
 }

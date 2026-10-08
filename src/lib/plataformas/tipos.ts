@@ -141,6 +141,16 @@ export interface TransacaoNormalizada {
    * vendedor recebe (Hotmart repassa a venda inteira). Só informativo.
    */
   parcelas_do_comprador?: number;
+  /** Valor de cada parcela no cartão do comprador. Só informativo. */
+  valor_parcela_do_comprador?: number;
+  /** Últimos 4 dígitos do cartão, quando a plataforma informa. */
+  final_do_cartao?: string;
+  /**
+   * Outros ids pelos quais a plataforma conhece a MESMA venda. O Pagar.me
+   * avisa o pedido (or_), a cobrança (ch_) e o link de pagamento (pl_) em
+   * avisos separados: sem esta lista cada um virava uma venda.
+   */
+  ids_alternativos?: string[];
   /** Payload cru, para auditoria e reprocessamento. */
   bruto: unknown;
 }

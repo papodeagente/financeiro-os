@@ -393,6 +393,18 @@ export interface ContaReceber {
   /** De qual integração de pagamento veio (hotmart, asaas, pagarme). Ver plataformas/rotulo.ts. */
   plataforma_origem?: string;
   plataforma_transacao?: string;
+  /** Como o comprador pagou, gravado pela integração para o detalhe do lançamento. */
+  plataforma_status?: string;
+  plataforma_taxa?: number;
+  plataforma_liquido?: number;
+  plataforma_antecipada?: boolean;
+  plataforma_parcelas_comprador?: number;
+  plataforma_valor_parcela_comprador?: number | null;
+  plataforma_forma?: string;
+  plataforma_cartao?: string;
+  plataforma_cartao_final?: string;
+  plataforma_ids?: string[];
+  plataforma_data_repasse?: string;
 }
 
 export type StatusContaPagar = 'PENDENTE' | 'PAGO' | 'VENCIDO' | 'CANCELADO' | 'PARCIAL';

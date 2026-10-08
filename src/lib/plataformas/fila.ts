@@ -23,10 +23,12 @@ import { AVISO_HOTMART, situacaoDaTransacao, type SituacaoDaTransacao } from './
 const N = (campo: string) =>
   `CASE WHEN jsonb_typeof(par->'${campo}') = 'number' THEN (par->>'${campo}')::numeric ELSE 0 END`;
 
+// A transação ABSORVIDA é a duplicata de outra (o mesmo pagamento chegou
+// por dois ids): não conta em nada e não aparece na fila.
 const PARCELAS = `
   FROM plataformas_transacoes t,
        LATERAL jsonb_array_elements(COALESCE(t.data->'transacao'->'parcelas', '[]'::jsonb)) par
- WHERE t.tenant_id = $1`;
+ WHERE t.tenant_id = $1 AND t.status_conciliacao <> 'ABSORVIDA'`;
 
 export interface ResumoRecebimentos {
   vendido: number;
@@ -153,7 +155,7 @@ export async function listarRecebimentos(
 ): Promise<ItemRecebimento[]> {
   if (!pool) return [];
 
-  const cond: string[] = ['t.tenant_id = $1'];
+  const cond: string[] = ['t.tenant_id = $1', "t.status_conciliacao <> 'ABSORVIDA'"];
   const args: unknown[] = [tenantId];
   if (filtro.status) { args.push(filtro.status); cond.push(`t.status_conciliacao = $${args.length}`); }
   if (filtro.plataforma) { args.push(filtro.plataforma); cond.push(`t.plataforma = $${args.length}`); }
@@ -337,7 +339,11 @@ export async function marcarVendaDireta(
     const desfeito = await desfazerUnificacao(exec, tenantId, plataforma, idTransacao);
     const r = await exec.query(
       `UPDATE plataformas_transacoes
-          SET venda_id = '', status_conciliacao = 'DIRETA', updated_at = NOW()
+          SET venda_id = '', status_conciliacao = 'DIRETA',
+              -- Decisão de uma pessoa: a venda do CRM que chegar depois
+              -- não reabre esta conversa.
+              data = data || '{"direta_por_pessoa": true}'::jsonb,
+              updated_at = NOW()
         WHERE tenant_id = $1 AND plataforma = $2 AND id_transacao = $3`,
       [tenantId, plataforma, idTransacao],
     );

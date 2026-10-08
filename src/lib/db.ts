@@ -1409,4 +1409,9 @@ async function executarInitDB() {
   void import('./plataformas/revisao-hotmart')
     .then(m => m.revisarHotmartUmaVez())
     .catch(e => console.error('[revisao-hotmart]', e instanceof Error ? e.message : e));
+  // Mesma ideia para o Pagar.me (08/10/2026): pedido e cobrança duplicados,
+  // venda antecipada em 12 contas e venda do CRM que não se ligou.
+  void import('./plataformas/revisao-pagarme')
+    .then(m => m.revisarPagarmeUmaVez())
+    .catch(e => console.error('[revisao-pagarme]', e instanceof Error ? e.message : e));
 }

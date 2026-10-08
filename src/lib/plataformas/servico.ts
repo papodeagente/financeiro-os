@@ -29,7 +29,9 @@ import { nomeDaPlataforma } from './rotulo';
 import { data as dataDe } from './comum';
 import { planoHotmart, proximoStatusHotmart, type ContaDaTransacao } from './hotmart-regras';
 import { contasJaUsadas } from '../conciliacao-servidor';
-import { unificarRecebimento, type ResultadoUnificacao } from './unificar-db';
+import { desfazerUnificacao, unificarRecebimento, type ResultadoUnificacao } from './unificar-db';
+import { parcelaUnicaAntecipada, planoDeParcelaUnica } from './antecipacao';
+import { valorDaParcela } from './pagarme';
 import {
   decidir, type CandidatoVenda, type Decisao, type PagamentoParaConciliar,
 } from './conciliacao';
@@ -47,6 +49,12 @@ export interface ConfigPlataforma {
   emitir_nota: boolean;
   /** Vincular à venda do CRM sozinho quando a confiança for alta. */
   conciliacao_automatica: boolean;
+  /**
+   * A plataforma antecipa as vendas parceladas: cada venda entra como UM
+   * lançamento, na data do repasse. Ligado por padrão no Pagar.me (pedido
+   * do Bruno, 08/10/2026); nas outras, desligado.
+   */
+  recebimento_antecipado: boolean;
   /** Só para exibição. O segredo real fica cifrado. */
   mascaras: Record<string, string>;
   atualizado_em: string;
@@ -79,9 +87,16 @@ function lerConfig(linha: { plataforma: string; ativo: unknown; data: unknown })
     conta_bancaria_id: String(d.conta_bancaria_id ?? ''),
     emitir_nota: d.emitir_nota === true,
     conciliacao_automatica: d.conciliacao_automatica === true,
+    recebimento_antecipado: antecipadoPorPadrao(linha.plataforma, d.recebimento_antecipado),
     mascaras: (d.mascaras ?? {}) as Record<string, string>,
     atualizado_em: String(d.atualizado_em ?? ''),
   };
+}
+
+/** Sem escolha gravada: o Pagar.me antecipa, as outras não. */
+export function antecipadoPorPadrao(plataforma: string, gravado: unknown): boolean {
+  if (gravado === true || gravado === false) return gravado;
+  return plataforma === 'pagarme';
 }
 
 /** Configuração da agência, sem segredo nenhum: serve para a tela. */
@@ -132,6 +147,7 @@ export async function salvarConfig(
     conta_bancaria_id: string;
     emitir_nota: boolean;
     conciliacao_automatica?: boolean;
+    recebimento_antecipado?: boolean;
     /** Só os campos que o usuário digitou agora. Campo em branco mantém o
      *  que já estava: a tela nunca recebe o segredo de volta, então enviar
      *  vazio significa "não mexi nele", e não "apague". */
@@ -175,6 +191,8 @@ export async function salvarConfig(
     conta_bancaria_id: entrada.conta_bancaria_id ?? '',
     emitir_nota: entrada.emitir_nota === true,
     conciliacao_automatica: entrada.conciliacao_automatica === true,
+    recebimento_antecipado: entrada.recebimento_antecipado ?? atual?.config.recebimento_antecipado
+      ?? antecipadoPorPadrao(plataforma, undefined),
     mascaras,
     atualizado_em: new Date().toISOString(),
   };
@@ -307,16 +325,18 @@ export async function candidatosDoCrm(
   // de datas, e na frente da fila: o id é prova, e uma venda de três meses
   // atrás paga agora (ou mais de 300 vendas no período) não pode sumir dela.
   // Vale a transação principal e a lista das conhecidas da venda.
-  const idTx = String(transacao.id_transacao ?? '').trim();
-  const temProva = `(v.data->>'plataforma_transacao' = NULLIF($4::text, '')
-                     OR COALESCE(v.data->'plataforma_transacoes', '[]'::jsonb) @> jsonb_build_array(NULLIF($4::text, '')))`;
+  // Prova vale por QUALQUER id desta venda: o CRM pode guardar o link de
+  // pagamento (pl_...) e a transação aqui ser o pedido (or_...).
+  const ids = [...new Set([transacao.id_transacao, ...(transacao.ids_alternativos ?? [])]
+    .map(i => String(i ?? '').trim()).filter(Boolean))];
+  const temProva = `(v.data->>'plataforma_transacao' = ANY($4::text[])
+                     OR COALESCE(v.data->'plataforma_transacoes', '[]'::jsonb) ?| $4::text[])`;
   const { rows } = await exec.query(
     `SELECT v.id,
             v.data->>'valor_total'   AS valor_total,
             v.data->>'data_venda'    AS data_venda,
-            CASE WHEN COALESCE(v.data->'plataforma_transacoes', '[]'::jsonb) @> jsonb_build_array(NULLIF($4::text, ''))
-                 THEN $4::text
-                 ELSE v.data->>'plataforma_transacao' END AS id_transacao_externa,
+            v.data->>'plataforma_transacao' AS plataforma_transacao,
+            COALESCE(v.data->'plataforma_transacoes', '[]'::jsonb) AS plataforma_transacoes,
             v.data->>'plataforma_origem'    AS plataforma_origem,
             c.nome     AS cliente_nome,
             c.cpf_cnpj AS documento,
@@ -331,20 +351,27 @@ export async function candidatosDoCrm(
              OR ${temProva})
       ORDER BY (${temProva}) IS TRUE DESC, v.created_at DESC
       LIMIT 300`,
-    [tenantId, de, ate, idTx],
+    [tenantId, de, ate, ids],
   );
 
-  return rows.map(r => ({
-    venda_id: String(r.id),
-    cliente_nome: String(r.cliente_nome ?? ''),
-    documento: String(r.documento ?? ''),
-    email: String(r.email ?? ''),
-    telefone: String(r.telefone ?? ''),
-    valor_total: round2(num(r.valor_total)),
-    data_venda: String(r.data_venda ?? ''),
-    id_transacao_externa: String(r.id_transacao_externa ?? ''),
-    ja_conciliada: Boolean(r.plataforma_origem) && String(r.id_transacao_externa ?? '') !== transacao.id_transacao,
-  }));
+  const nossos = new Set(ids);
+  return rows.map(r => {
+    const daVenda = [String(r.plataforma_transacao ?? ''),
+      ...(Array.isArray(r.plataforma_transacoes) ? r.plataforma_transacoes.map(String) : [])].filter(Boolean);
+    const casada = daVenda.find(i => nossos.has(i));
+    const externa = casada ?? String(r.plataforma_transacao ?? '');
+    return {
+      venda_id: String(r.id),
+      cliente_nome: String(r.cliente_nome ?? ''),
+      documento: String(r.documento ?? ''),
+      email: String(r.email ?? ''),
+      telefone: String(r.telefone ?? ''),
+      valor_total: round2(num(r.valor_total)),
+      data_venda: String(r.data_venda ?? ''),
+      id_transacao_externa: externa,
+      ja_conciliada: Boolean(r.plataforma_origem) && !nossos.has(externa),
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -375,13 +402,38 @@ export async function sincronizarTransacao(
   tenantId: string,
   plataforma: string,
   entrada: TransacaoNormalizada,
-  opcoes: { contaBancariaId: string | null; conciliacaoAutomatica: boolean },
+  opcoes: { contaBancariaId: string | null; conciliacaoAutomatica: boolean; recebimentoAntecipado?: boolean },
 ): Promise<ResultadoSincronizacao> {
-  const idTransacao = String(entrada.id_transacao ?? '').trim();
-  if (!idTransacao) throw new ErroPlataforma('Transação sem identificador na plataforma.');
+  if (!String(entrada.id_transacao ?? '').trim()) throw new ErroPlataforma('Transação sem identificador na plataforma.');
+
+  // A mesma venda pode chegar por outro id (pedido, cobrança, link de
+  // pagamento). Ela é achada por qualquer um deles, e a duplicata gravada
+  // pela versão anterior é absorvida aqui mesmo.
+  const resolvida = await resolverTransacao(exec, tenantId, plataforma, entrada, opcoes.contaBancariaId);
+  const idTransacao = resolvida.id;
+  entrada = { ...entrada, id_transacao: idTransacao, ids_alternativos: resolvida.ids };
 
   let anterior = await lerTransacao(exec, tenantId, plataforma, idTransacao);
   let novas = entrada.parcelas ?? [];
+  if (opcoes.recebimentoAntecipado && plataforma !== 'hotmart') {
+    // Venda antecipada: um lançamento só. A gravada em N contas por versão
+    // anterior é corrigida antes de aplicar o aviso novo.
+    if ((anterior?.transacao?.parcelas?.length ?? 0) > 1) {
+      await sanearParcelasAntecipadas(exec, tenantId, plataforma, idTransacao, opcoes.contaBancariaId);
+      anterior = await lerTransacao(exec, tenantId, plataforma, idTransacao);
+    }
+    if (novas.length > 1) {
+      const unica = parcelaUnicaAntecipada(novas);
+      if (unica) novas = [unica];
+    }
+    const antigas = anterior?.transacao?.parcelas ?? [];
+    if (antigas.length > 1 && novas.length === 1) {
+      // A correção não pôde juntar (alguém mexeu numa das contas): o aviso
+      // novo só anda o status de todas, sem mudar valores nem datas.
+      const n = novas[0];
+      novas = antigas.map(p => ({ ...p, status: n.status, data_pagamento: n.data_pagamento || p.data_pagamento }));
+    }
+  }
   if (plataforma === 'hotmart' && anterior) {
     // Transação gravada pela versão anterior (N parcelas, cobrança não paga
     // como aberta, conta duplicada): corrige antes de aplicar o aviso novo.
@@ -407,9 +459,21 @@ export async function sincronizarTransacao(
   );
   const totais = totaisDaTransacao(parcelas);
 
+  const antes = anterior?.transacao;
   const transacao: TransacaoNormalizada = {
-    ...(anterior?.transacao ?? entrada),
+    ...(antes ?? entrada),
     ...entrada,
+    // Aviso que não traz itens (cobrança do Pagar.me) não apaga a
+    // descrição do pedido: antes ela virava o código do link.
+    descricao: entrada.descricao || antes?.descricao || `Venda pela ${nomeDaPlataforma(plataforma)}`,
+    itens: (entrada.itens?.length ?? 0) > 0 ? entrada.itens : (antes?.itens ?? []),
+    ids_alternativos: [...new Set([...(antes?.ids_alternativos ?? []), ...(entrada.ids_alternativos ?? [])])],
+    parcelas_do_comprador: entrada.parcelas_do_comprador ?? antes?.parcelas_do_comprador,
+    valor_parcela_do_comprador: entrada.valor_parcela_do_comprador || antes?.valor_parcela_do_comprador
+      || ((entrada.parcelas?.length ?? 0) > 1 ? valorDaParcela(entrada.parcelas) : undefined),
+    final_do_cartao: entrada.final_do_cartao || antes?.final_do_cartao,
+    detalhe_pagamento: entrada.detalhe_pagamento || antes?.detalhe_pagamento || '',
+    forma_pagamento: entrada.forma_pagamento || antes?.forma_pagamento || '',
     // O comprador do retrato novo pode vir incompleto (consulta de cliente
     // que falhou). Campo vazio nunca apaga o que já se sabia.
     comprador: {
@@ -437,6 +501,7 @@ export async function sincronizarTransacao(
       || transacao.data_venda || hojeISO();
     const pagamento: PagamentoParaConciliar = {
       id_transacao: idTransacao,
+      ids: transacao.ids_alternativos,
       documento: transacao.comprador.documento,
       email: transacao.comprador.email,
       telefone: transacao.comprador.telefone,
@@ -624,6 +689,18 @@ async function sincronizarContas(
   const idParcela1 = ctx.idLegadoParcela1
     || (existentes.has(idNovo1) ? idNovo1 : existentes.has(idAntigo) ? idAntigo : idNovo1);
 
+  // O que já está gravado em cada conta desta transação: uma baixa feita
+  // por uma PESSOA (ou a conciliação com o extrato) não pode ser desfeita
+  // pelo próximo aviso da plataforma. Antes o aviso regravava a conta
+  // inteira: ela voltava a "em aberto" com o dinheiro já no caixa.
+  const idsDasContas = transacao.parcelas.map(p => (p.numero === 1
+    ? idParcela1 : `plat-${plataforma}-${transacao.id_transacao}-${p.numero}`));
+  const { rows: gravadas } = await exec.query(
+    `SELECT id, data FROM contas_receber WHERE tenant_id = $1 AND id = ANY($2::text[])`,
+    [tenantId, idsDasContas],
+  );
+  const gravada = new Map(gravadas.map(r => [String(r.id), (r.data ?? {}) as Record<string, unknown>]));
+
   for (const parcela of transacao.parcelas) {
     const contaId = parcela.numero === 1
       ? idParcela1
@@ -688,8 +765,30 @@ async function sincronizarContas(
         plataforma_status: parcela.status,
         plataforma_antecipada: parcela.antecipada,
         plataforma_assinatura: transacao.id_assinatura,
+        // Para o detalhe do lançamento: como o comprador pagou.
+        plataforma_parcelas_comprador: transacao.parcelas_do_comprador ?? parcela.total,
+        plataforma_valor_parcela_comprador: transacao.valor_parcela_do_comprador ?? null,
+        plataforma_forma: transacao.forma_pagamento || '',
+        plataforma_cartao: transacao.detalhe_pagamento || '',
+        plataforma_cartao_final: transacao.final_do_cartao || '',
+        plataforma_ids: transacao.ids_alternativos ?? [],
+        plataforma_data_repasse: parcela.data_prevista_recebimento || '',
         moeda: transacao.moeda,
       };
+
+      const antes = gravada.get(contaId);
+      const statusAntes = String(antes?.status ?? '');
+      const baixaDePessoa = Boolean(antes) && (
+        Boolean(antes?.extrato_conciliado_id)
+        || ((statusAntes === 'RECEBIDO' || statusAntes === 'PARCIAL') && round2(num(creditado[chave])) === 0)
+      );
+      if (antes && baixaDePessoa) {
+        for (const campo of ['status', 'valor_recebido', 'data_recebimento', 'taxa', 'taxa_plataforma',
+          'extrato_conciliado_id', 'conta_bancaria_id', 'observacoes'] as const) {
+          if (campo in antes) (conta as Record<string, unknown>)[campo] = antes[campo];
+        }
+      }
+      const statusGravado = antes && baixaDePessoa ? statusAntes : statusConta;
 
       await exec.query(
         `INSERT INTO contas_receber (id, venda_id, cliente_id, status, data, tenant_id, created_at, updated_at)
@@ -700,8 +799,11 @@ async function sincronizarContas(
                 status = EXCLUDED.status,
                 data = EXCLUDED.data,
                 updated_at = NOW()`,
-        [contaId, ctx.vendaId || '', ctx.clienteId, statusConta, JSON.stringify(conta), tenantId],
+        [contaId, ctx.vendaId || '', ctx.clienteId, statusGravado, JSON.stringify(conta), tenantId],
       );
+      // Baixa de pessoa: o dinheiro já entrou pelo caminho dela. A
+      // integração não credita de novo.
+      if (baixaDePessoa) continue;
     }
 
     // O caixa persegue um alvo, e não um evento: alvo é o líquido quando
@@ -748,6 +850,7 @@ export async function processarEvento(
   const conf = await carregarCredenciais(tenantId, plataforma);
   const contaBancaria = conf?.config.conta_bancaria_id || null;
   const conciliacaoAutomatica = conf?.config.conciliacao_automatica === true;
+  const recebimentoAntecipado = conf?.config.recebimento_antecipado ?? antecipadoPorPadrao(plataforma, undefined);
 
   return emTransacao(async (exec: ExecutorSQL) => {
     const ins = await exec.query(
@@ -791,6 +894,7 @@ export async function processarEvento(
     const r = await sincronizarTransacao(exec, tenantId, plataforma, transacao, {
       contaBancariaId: contaBancaria,
       conciliacaoAutomatica,
+      recebimentoAntecipado,
     });
 
     await marcar('PROCESSADO');
@@ -852,6 +956,7 @@ export async function importarPeriodo(
       const r = await emTransacao(exec => sincronizarTransacao(exec, tenantId, plataforma, t, {
         contaBancariaId: conf.config.conta_bancaria_id || null,
         conciliacaoAutomatica: conf.config.conciliacao_automatica === true,
+        recebimentoAntecipado: conf.config.recebimento_antecipado,
       }));
       if (r.criada) saida.novas++; else saida.atualizadas++;
       saida.caixa_movido = round2(saida.caixa_movido + r.caixa_movido);
@@ -861,6 +966,63 @@ export async function importarPeriodo(
   }
 
   return saida;
+}
+
+
+/** Conta a receber de uma transação, com o que a revisão precisa saber dela. */
+export type ContaDaTransacaoComBanco = ContaDaTransacao & { conta_bancaria_id: string };
+
+/**
+ * As contas desta transação: as da integração (com e sem número) e qualquer
+ * outra que aponte para ela, cada uma dizendo se uma PESSOA já mexeu
+ * (conciliada no extrato, com nota fiscal, baixada à mão). Correção
+ * automática nunca passa por cima disso.
+ */
+export async function contasDaTransacao(
+  exec: ExecutorSQL,
+  tenantId: string,
+  plataforma: string,
+  idTransacao: string,
+  transacao: TransacaoNormalizada | undefined,
+): Promise<ContaDaTransacaoComBanco[]> {
+  const parcelas = transacao?.parcelas ?? [];
+  const prefixo = `plat-${plataforma}-${idTransacao}`;
+  const ids = [prefixo, ...Array.from({ length: Math.max(24, parcelas.length) }, (_, i) => `${prefixo}-${i + 1}`)];
+  const { rows: crs } = await exec.query(
+    `SELECT id, data FROM contas_receber
+      WHERE tenant_id = $1
+        AND (id = ANY($2::text[])
+             OR (data->>'plataforma_transacao' = $3 AND COALESCE(data->>'plataforma_origem', $4) = $4))`,
+    [tenantId, ids, idTransacao, plataforma],
+  );
+  const idsCr = crs.map(r => String(r.id));
+  const conciliadas = await contasJaUsadas(exec, tenantId, idsCr, '');
+  const { rows: notas } = idsCr.length
+    ? await exec.query(
+        `SELECT DISTINCT conta_receber_id FROM notas_fiscais
+          WHERE tenant_id = $1 AND conta_receber_id = ANY($2::text[])
+            AND COALESCE(status, '') NOT IN ('CANCELADA', 'ERRO', 'REJEITADA')`,
+        [tenantId, idsCr],
+      )
+    : { rows: [] as Record<string, unknown>[] };
+  const comNota = new Set(notas.map(r => String(r.conta_receber_id)));
+  const statusDaParcela = new Map(parcelas.map(p => [p.numero, p.status]));
+
+  return crs.map(r => {
+    const c = (r.data ?? {}) as Record<string, unknown>;
+    const id = String(r.id);
+    const m = id.startsWith(`${prefixo}-`) ? id.slice(prefixo.length + 1).match(/^(\d+)$/) : null;
+    const numero = m ? Number(m[1]) : (Number(c.parcela_numero) || 1);
+    const status = String(c.status ?? '');
+    let tocada: string | null = null;
+    if (conciliadas.has(id) || c.extrato_conciliado_id) tocada = 'conciliada com o extrato';
+    else if (comNota.has(id)) tocada = 'tem nota fiscal emitida';
+    else if ((status === 'RECEBIDO' || status === 'PARCIAL') && statusDaParcela.get(numero) !== 'RECEBIDO') tocada = 'baixada à mão';
+    return {
+      id, numero, status, valor_recebido: num(c.valor_recebido), tocada_por_humano: tocada,
+      conta_bancaria_id: String(c.conta_bancaria_id ?? ''),
+    };
+  });
 }
 
 export interface ResultadoRevisaoHotmart {
@@ -903,42 +1065,8 @@ export async function sanearTransacaoHotmart(
   if (!transacao || !Array.isArray(transacao.parcelas) || transacao.parcelas.length === 0) return vazio;
   const creditado = (d.caixa_creditado ?? {}) as Record<string, number>;
 
-  // As contas desta transação: as da integração (com e sem número) e
-  // qualquer outra que aponte para ela.
   const prefixo = `plat-hotmart-${idTransacao}`;
-  const ids = [prefixo, ...Array.from({ length: Math.max(12, transacao.parcelas.length) }, (_, i) => `${prefixo}-${i + 1}`)];
-  const { rows: crs } = await exec.query(
-    `SELECT id, data FROM contas_receber
-      WHERE tenant_id = $1
-        AND (id = ANY($2::text[])
-             OR (data->>'plataforma_transacao' = $3 AND COALESCE(data->>'plataforma_origem', 'hotmart') = 'hotmart'))`,
-    [tenantId, ids, idTransacao],
-  );
-  const idsCr = crs.map(r => String(r.id));
-  const conciliadas = await contasJaUsadas(exec, tenantId, idsCr, '');
-  const { rows: notas } = idsCr.length
-    ? await exec.query(
-        `SELECT DISTINCT conta_receber_id FROM notas_fiscais
-          WHERE tenant_id = $1 AND conta_receber_id = ANY($2::text[])
-            AND COALESCE(status, '') NOT IN ('CANCELADA', 'ERRO', 'REJEITADA')`,
-        [tenantId, idsCr],
-      )
-    : { rows: [] as Record<string, unknown>[] };
-  const comNota = new Set(notas.map(r => String(r.conta_receber_id)));
-  const statusDaParcela = new Map(transacao.parcelas.map(p => [p.numero, p.status]));
-
-  const contas: ContaDaTransacao[] = crs.map(r => {
-    const c = (r.data ?? {}) as Record<string, unknown>;
-    const id = String(r.id);
-    const m = id.startsWith(`${prefixo}-`) ? id.slice(prefixo.length + 1).match(/^(\d+)$/) : null;
-    const numero = m ? Number(m[1]) : (Number(c.parcela_numero) || 1);
-    const status = String(c.status ?? '');
-    let tocada: string | null = null;
-    if (conciliadas.has(id) || c.extrato_conciliado_id) tocada = 'conciliada com o extrato';
-    else if (comNota.has(id)) tocada = 'tem nota fiscal emitida';
-    else if ((status === 'RECEBIDO' || status === 'PARCIAL') && statusDaParcela.get(numero) !== 'RECEBIDO') tocada = 'baixada à mão';
-    return { id, numero, status, valor_recebido: num(c.valor_recebido), tocada_por_humano: tocada };
-  });
+  const contas = await contasDaTransacao(exec, tenantId, 'hotmart', idTransacao, transacao);
 
   const previsao = dataDe(transacao.bruto, 'data.purchase.warranty_expire_date');
   const plano = planoHotmart(transacao.parcelas, contas, creditado, previsao);
@@ -989,6 +1117,216 @@ export async function sanearTransacaoHotmart(
             updated_at = NOW()
       WHERE tenant_id = $1 AND plataforma = 'hotmart' AND id_transacao = $2`,
     [tenantId, idTransacao, JSON.stringify(nova), JSON.stringify(totais), JSON.stringify(contasR.creditado)],
+  );
+  return { ...base, estado: 'corrigida', canceladas: plano.cancelar.length, caixa_movido: contasR.movido };
+}
+
+// ---------------------------------------------------------------------------
+// A mesma venda por mais de um id (Pagar.me: pedido, cobrança e link)
+// ---------------------------------------------------------------------------
+
+/**
+ * A transação já gravada que é esta mesma venda, por qualquer um dos ids.
+ *
+ * Achar mais de uma é a duplicata deixada pela versão anterior (o pedido
+ * or_ e a cobrança ch_ do Pagar.me como duas vendas): a principal, a do id
+ * deste aviso ou a mais antiga, absorve as outras.
+ */
+export async function resolverTransacao(
+  exec: ExecutorSQL,
+  tenantId: string,
+  plataforma: string,
+  entrada: TransacaoNormalizada,
+  contaBancariaPadrao: string | null,
+): Promise<{ id: string; ids: string[]; absorvidas: string[] }> {
+  const proprio = String(entrada.id_transacao ?? '').trim();
+  const ids = [...new Set([proprio, ...(entrada.ids_alternativos ?? [])].map(i => String(i ?? '').trim()).filter(Boolean))];
+  if (ids.length <= 1) return { id: proprio, ids, absorvidas: [] };
+
+  const { rows } = await exec.query(
+    `SELECT id_transacao, data->'transacao'->'ids_alternativos' AS ids
+       FROM plataformas_transacoes
+      WHERE tenant_id = $1 AND plataforma = $2 AND status_conciliacao <> 'ABSORVIDA'
+        AND (id_transacao = ANY($3::text[])
+             OR COALESCE(data->'transacao'->'ids_alternativos', '[]'::jsonb) ?| $3::text[])
+      ORDER BY (id_transacao = $4) DESC, created_at ASC, id ASC
+      FOR UPDATE`,
+    [tenantId, plataforma, ids, proprio],
+  );
+  if (rows.length === 0) return { id: proprio, ids, absorvidas: [] };
+
+  const principal = String(rows[0].id_transacao);
+  const todos = new Set(ids);
+  for (const r of rows) {
+    todos.add(String(r.id_transacao));
+    for (const i of Array.isArray(r.ids) ? r.ids : []) if (i) todos.add(String(i));
+  }
+  const absorvidas: string[] = [];
+  for (const r of rows.slice(1)) {
+    const res = await absorverDuplicata(exec, tenantId, plataforma, String(r.id_transacao), principal, contaBancariaPadrao);
+    if (res.absorvida) absorvidas.push(String(r.id_transacao));
+  }
+  return { id: principal, ids: [...todos], absorvidas };
+}
+
+export interface ResultadoAbsorcao {
+  absorvida: boolean;
+  /** Por que não absorveu (conta tocada por uma pessoa). */
+  motivo: string;
+  canceladas: number;
+  caixa_movido: number;
+}
+
+/**
+ * A duplicata deixa de existir no financeiro.
+ *
+ * As contas dela são canceladas com o motivo escrito, o caixa que ela
+ * creditou volta (a principal credita o mesmo dinheiro) e o vínculo com a
+ * venda do CRM passa para a principal. Conta que uma pessoa tocou trava a
+ * absorção: a duplicata fica de pé e listada, para quem olhou decidir.
+ */
+export async function absorverDuplicata(
+  exec: ExecutorSQL,
+  tenantId: string,
+  plataforma: string,
+  secundaria: string,
+  principal: string,
+  contaBancariaPadrao: string | null,
+): Promise<ResultadoAbsorcao> {
+  const sec = await lerTransacao(exec, tenantId, plataforma, secundaria);
+  if (!sec || secundaria === principal) return { absorvida: false, motivo: 'nada a absorver', canceladas: 0, caixa_movido: 0 };
+
+  const contas = await contasDaTransacao(exec, tenantId, plataforma, secundaria, sec.transacao);
+  const tocada = contas.find(c => c.tocada_por_humano && c.status !== 'CANCELADO');
+  if (tocada) return { absorvida: false, motivo: `${tocada.id}: ${tocada.tocada_por_humano}`, canceladas: 0, caixa_movido: 0 };
+
+  // O vínculo dela com uma venda: desfeito aqui (as contas da venda voltam)
+  // e refeito na principal, se a principal ainda não tem dono.
+  const vendaDela = sec.status_conciliacao === 'VINCULADA' ? sec.venda_id : '';
+  if (vendaDela) await desfazerUnificacao(exec, tenantId, plataforma, secundaria);
+
+  const creditado = round2(Object.values(sec.caixa_creditado ?? {}).reduce((s, v) => s + num(v), 0));
+  let movido = 0;
+  if (creditado !== 0) {
+    const banco = contas.find(c => c.conta_bancaria_id)?.conta_bancaria_id || contaBancariaPadrao;
+    await aplicarMovimentoCaixaAtomico(tenantId, banco, -creditado, exec);
+    movido = -creditado;
+  }
+
+  const vivas = contas.filter(c => c.status !== 'CANCELADO').map(c => c.id);
+  for (const id of vivas) {
+    await exec.query(
+      `UPDATE contas_receber
+          SET status = 'CANCELADO',
+              data = data || jsonb_build_object(
+                'status', 'CANCELADO',
+                'valor_recebido', 0,
+                'observacoes', TRIM(BOTH ' |' FROM COALESCE(data->>'observacoes', '') || ' | ' || $3::text)),
+              updated_at = NOW()
+        WHERE id = $1 AND tenant_id = $2`,
+      [id, tenantId, `Duplicata: o mesmo pagamento já está no pedido ${principal} da ${nomeDaPlataforma(plataforma)}.`],
+    );
+  }
+
+  await exec.query(
+    `UPDATE plataformas_transacoes
+        SET status_conciliacao = 'ABSORVIDA', venda_id = '',
+            data = data || jsonb_build_object('absorvida_por', $4::text, 'caixa_creditado', '{}'::jsonb,
+                                              'absorvida_em', to_jsonb(NOW()::text)),
+            updated_at = NOW()
+      WHERE tenant_id = $1 AND plataforma = $2 AND id_transacao = $3`,
+    [tenantId, plataforma, secundaria, principal],
+  );
+
+  if (vendaDela) {
+    await exec.query(
+      `UPDATE plataformas_transacoes
+          SET venda_id = $4, status_conciliacao = 'VINCULADA', updated_at = NOW()
+        WHERE tenant_id = $1 AND plataforma = $2 AND id_transacao = $3 AND COALESCE(venda_id, '') = ''`,
+      [tenantId, plataforma, principal, vendaDela],
+    );
+  }
+  return { absorvida: true, motivo: '', canceladas: vivas.length, caixa_movido: movido };
+}
+
+export interface ResultadoParcelaUnica {
+  estado: 'sem-transacao' | 'em-dia' | 'pulada' | 'corrigida';
+  pulada?: string;
+  canceladas: number;
+  caixa_movido: number;
+  comprador?: string;
+  valor?: number;
+}
+
+/**
+ * Venda antecipada gravada em N contas (uma por parcela do cartão) vira um
+ * lançamento só. As contas 2..N são canceladas com o motivo escrito; o que
+ * elas já creditaram passa a ser da conta única, então o caixa só se move
+ * pela diferença. Conta tocada por uma pessoa faz a venda ser pulada.
+ */
+export async function sanearParcelasAntecipadas(
+  exec: ExecutorSQL,
+  tenantId: string,
+  plataforma: string,
+  idTransacao: string,
+  contaBancariaPadrao: string | null,
+): Promise<ResultadoParcelaUnica> {
+  const { rows: tx } = await exec.query(
+    `SELECT venda_id, cliente_id, data FROM plataformas_transacoes
+      WHERE tenant_id = $1 AND plataforma = $2 AND id_transacao = $3 LIMIT 1 FOR UPDATE`,
+    [tenantId, plataforma, idTransacao],
+  );
+  if (tx.length === 0) return { estado: 'sem-transacao', canceladas: 0, caixa_movido: 0 };
+  const d = (tx[0].data ?? {}) as Record<string, unknown>;
+  const transacao = d.transacao as TransacaoNormalizada | undefined;
+  if (!transacao || !Array.isArray(transacao.parcelas) || transacao.parcelas.length === 0) {
+    return { estado: 'sem-transacao', canceladas: 0, caixa_movido: 0 };
+  }
+  const creditado = (d.caixa_creditado ?? {}) as Record<string, number>;
+  const contas = await contasDaTransacao(exec, tenantId, plataforma, idTransacao, transacao);
+  const plano = planoDeParcelaUnica(transacao.parcelas, contas, creditado);
+  const base = { comprador: transacao.comprador?.nome || transacao.comprador?.email || '', valor: round2(num(transacao.valor_bruto)) };
+  if (plano.em_dia) return { ...base, estado: 'em-dia', canceladas: 0, caixa_movido: 0 };
+  if (plano.pulada || !plano.parcela) return { ...base, estado: 'pulada', pulada: plano.pulada ?? 'sem parcela', canceladas: 0, caixa_movido: 0 };
+
+  for (const id of plano.cancelar) {
+    await exec.query(
+      `UPDATE contas_receber
+          SET status = 'CANCELADO',
+              data = data || jsonb_build_object(
+                'status', 'CANCELADO',
+                'valor_recebido', 0,
+                'observacoes', TRIM(BOTH ' |' FROM COALESCE(data->>'observacoes', '') || ' | ' || $3::text)),
+              updated_at = NOW()
+        WHERE id = $1 AND tenant_id = $2`,
+      [id, tenantId, `Parcela unificada: a ${nomeDaPlataforma(plataforma)} antecipa a venda e ela entra num lançamento só.`],
+    );
+  }
+
+  const nova: TransacaoNormalizada = {
+    ...transacao,
+    parcelas: [plano.parcela],
+    parcelas_do_comprador: transacao.parcelas_do_comprador ?? transacao.parcelas.length,
+    valor_parcela_do_comprador: transacao.valor_parcela_do_comprador || valorDaParcela(transacao.parcelas),
+  };
+  const totais = totaisDaTransacao(nova.parcelas);
+  nova.valor_bruto = totais.bruto; nova.valor_taxa = totais.taxa; nova.valor_liquido = totais.liquido;
+
+  const contasR = await sincronizarContas(exec, tenantId, plataforma, nova, {
+    clienteId: String(tx[0].cliente_id ?? ''),
+    vendaId: String(tx[0].venda_id ?? ''),
+    contaBancariaId: contaBancariaPadrao,
+    creditadoAntes: { '1': plano.creditado },
+    idLegadoParcela1: plano.conta_principal && !/-\d+$/.test(plano.conta_principal) ? plano.conta_principal : '',
+  });
+
+  await exec.query(
+    `UPDATE plataformas_transacoes
+        SET data = data || jsonb_build_object('transacao', $4::jsonb, 'totais', $5::jsonb, 'caixa_creditado', $6::jsonb,
+                                              'revisado_em', to_jsonb(NOW()::text)),
+            updated_at = NOW()
+      WHERE tenant_id = $1 AND plataforma = $2 AND id_transacao = $3`,
+    [tenantId, plataforma, idTransacao, JSON.stringify(nova), JSON.stringify(totais), JSON.stringify(contasR.creditado)],
   );
   return { ...base, estado: 'corrigida', canceladas: plano.cancelar.length, caixa_movido: contasR.movido };
 }

@@ -17,6 +17,8 @@ export type Confianca = 'ALTA' | 'MEDIA' | 'BAIXA';
 
 export interface PagamentoParaConciliar {
   id_transacao: string;
+  /** Outros ids da mesma venda na plataforma (pedido, cobrança, link). */
+  ids?: string[];
   documento: string;
   email: string;
   telefone: string;
@@ -118,7 +120,8 @@ export function pontuar(pagamento: PagamentoParaConciliar, venda: CandidatoVenda
 
   const idPag = String(pagamento.id_transacao ?? '').trim();
   const idVenda = String(venda.id_transacao_externa ?? '').trim();
-  if (idPag && idVenda && idPag === idVenda) {
+  const idsPag = new Set([idPag, ...(pagamento.ids ?? []).map(i => String(i ?? '').trim())].filter(Boolean));
+  if (idVenda && idsPag.has(idVenda)) {
     pontos += PESOS.ID_TRANSACAO;
     identidade = true;
     provaTransacao = true;

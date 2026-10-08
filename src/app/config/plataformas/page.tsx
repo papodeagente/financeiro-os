@@ -13,7 +13,7 @@ interface CampoCred { chave: string; rotulo: string; tipo: string; obrigatorio: 
 interface Plataforma { id: string; nome: string; campos: CampoCred[] }
 interface Config {
   plataforma: string; ativo: boolean; conta_bancaria_id: string;
-  emitir_nota: boolean; conciliacao_automatica: boolean;
+  emitir_nota: boolean; conciliacao_automatica: boolean; recebimento_antecipado?: boolean;
   mascaras: Record<string, string>; atualizado_em: string;
 }
 interface EventoLinha {
@@ -114,6 +114,10 @@ export default function PlataformasPage() {
             : (dadosForm.emitir_nota === 'sim' || c?.emitir_nota || false),
           conciliacao_automatica: dadosForm.conciliacao_automatica === 'nao' ? false
             : (dadosForm.conciliacao_automatica === 'sim' || c?.conciliacao_automatica || false),
+          // Só vai no corpo quando a pessoa mexeu: ausente, o servidor mantém.
+          ...(dadosForm.recebimento_antecipado
+            ? { recebimento_antecipado: dadosForm.recebimento_antecipado === 'sim' }
+            : {}),
           api_key: dadosForm.api_key ?? '',
           segredo_webhook: dadosForm.segredo_webhook ?? '',
           extras,
@@ -256,6 +260,28 @@ export default function PlataformasPage() {
                       comum, e empate entre duas vendas sempre volta para alguém decidir.
                     </span>
                   </div>
+
+                  {p.id === 'pagarme' ? (
+                    <div className="flex flex-col gap-1">
+                      <label className="fin-t-label" htmlFor={`${p.id}-antecipado`}>
+                        Venda parcelada no cartão
+                      </label>
+                      <select
+                        id={`${p.id}-antecipado`}
+                        className={CAMPO}
+                        value={campo(p.id, 'recebimento_antecipado')
+                          || (c?.recebimento_antecipado === false ? 'nao' : 'sim')}
+                        onChange={e => setCampo(p.id, 'recebimento_antecipado', e.target.value)}
+                      >
+                        <option value="sim">Antecipo: entra um lançamento só, na data do repasse</option>
+                        <option value="nao">Não antecipo: uma conta por parcela, mês a mês</option>
+                      </select>
+                      <span className="fin-t-caption text-[var(--fin-text-3)]">
+                        Antecipando, a venda em 12x cai de uma vez, já sem as taxas. O parcelamento do
+                        cliente fica no detalhe do lançamento.
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
 
                 {/* O segredo nunca volta do servidor: campo em branco quer

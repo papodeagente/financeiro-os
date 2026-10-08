@@ -161,6 +161,38 @@ export function aplicarRecebiveis(
   });
 }
 
+/**
+ * A identidade da venda é o PEDIDO.
+ *
+ * O Pagar.me avisa o mesmo pagamento duas vezes: `order.paid`, com o
+ * pedido (or_...), e `charge.paid`, com a cobrança (ch_...). Usar o id de
+ * cada aviso fazia a mesma compra virar duas transações, cada uma com as
+ * suas 12 contas a receber (caso da Bruna Moura, 08/10/2026). O aviso de
+ * cobrança traz o pedido em `order.id`.
+ */
+export function idDoPedido(tipoEvento: string, dados: unknown): string {
+  if (tipoEvento.startsWith('charge.')) return texto(dados, 'order.id', 'order_id') || texto(dados, 'id');
+  return texto(dados, 'id');
+}
+
+/** Todos os ids desta venda: pedido, cobranças e o link de pagamento (code). */
+export function idsDaVenda(dados: unknown, cobrancas: readonly unknown[]): string[] {
+  const ids = [
+    texto(dados, 'id'), texto(dados, 'code'), texto(dados, 'order.id'), texto(dados, 'order_id'), texto(dados, 'order.code'),
+    ...cobrancas.flatMap(c => [texto(c, 'id'), texto(c, 'code')]),
+  ];
+  return [...new Set(ids.map(i => i.trim()).filter(Boolean))];
+}
+
+/** O valor que mais se repete entre as parcelas: "12x de R$ 321,67". */
+export function valorDaParcela(parcelas: readonly ParcelaNormalizada[]): number {
+  const contagem = new Map<number, number>();
+  for (const p of parcelas) contagem.set(round2(p.valor_bruto), (contagem.get(round2(p.valor_bruto)) ?? 0) + 1);
+  let melhor = 0, vezes = 0;
+  for (const [v, n] of contagem) if (n > vezes || (n === vezes && v > melhor)) { melhor = v; vezes = n; }
+  return melhor;
+}
+
 export const adapterPagarme: AdapterPlataforma = {
   id: 'pagarme',
   nome: 'Pagar.me',
@@ -237,14 +269,12 @@ export const adapterPagarme: AdapterPlataforma = {
           valor_unitario: deCentavos(numero(i, 'amount')),
           id_externo: texto(i, 'id', 'code'),
         }))
-      : [{
-          descricao: texto(dados, 'code') || 'Venda pelo Pagar.me',
-          quantidade: 1,
-          valor_unitario: bruto,
-          id_externo: texto(dados, 'code'),
-        }];
+      : [];
 
-    const descricao = itens[0]?.descricao ?? 'Venda pelo Pagar.me';
+    // Aviso de cobrança não traz os itens: a descrição fica vazia e o
+    // serviço mantém a do pedido. Antes ela virava o código do link
+    // ("pl_P2ly...") e a venda aparecia com esse nome.
+    const descricao = itensBrutos.length > 0 ? (itens[0]?.descricao ?? '') : '';
     const parcelasQtd = Math.max(1, numero(transacaoCartao, 'installments') || 1);
     const pago = tipo === 'PAGAMENTO_CONFIRMADO';
     const quandoPagou = data(primeira, 'paid_at', 'created_at') || data(dados, 'created_at');
@@ -270,7 +300,7 @@ export const adapterPagarme: AdapterPlataforma = {
     const taxaTotal = round2(parcelas.reduce((a, p) => a + p.valor_taxa, 0));
 
     const transacao: TransacaoNormalizada = {
-      id_transacao: texto(dados, 'id'),
+      id_transacao: idDoPedido(tipoEvento, dados),
       id_assinatura: texto(dados, 'subscription_id', 'subscription.id'),
       comprador: {
         nome: texto(cliente, 'name'),
@@ -287,6 +317,10 @@ export const adapterPagarme: AdapterPlataforma = {
       moeda: texto(dados, 'currency') || 'BRL',
       forma_pagamento: texto(primeira, 'payment_method') || texto(transacaoCartao, 'transaction_type'),
       detalhe_pagamento: texto(transacaoCartao, 'card.brand', 'card.first_six_digits'),
+      final_do_cartao: texto(transacaoCartao, 'card.last_four_digits'),
+      parcelas_do_comprador: parcelasQtd,
+      valor_parcela_do_comprador: valorDaParcela(parcelas),
+      ids_alternativos: idsDaVenda(dados, cobrancas),
       parcelas,
       data_venda: data(dados, 'created_at') || quandoPagou,
       descricao,

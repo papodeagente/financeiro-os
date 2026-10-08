@@ -93,6 +93,8 @@ export async function POST(req: Request) {
       conta_bancaria_id: String(body.conta_bancaria_id ?? ''),
       emitir_nota: body.emitir_nota === true,
       conciliacao_automatica: body.conciliacao_automatica === true,
+      // Ausente no corpo = mantém o que estava (tela antiga, outra aba).
+      recebimento_antecipado: typeof body.recebimento_antecipado === 'boolean' ? body.recebimento_antecipado : undefined,
       credencial: {
         api_key: String(body.api_key ?? ''),
         segredo_webhook: String(body.segredo_webhook ?? ''),
