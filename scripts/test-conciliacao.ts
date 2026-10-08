@@ -104,6 +104,26 @@ console.log('\n--- decisão: o freio que impede vincular no chute ---');
   eq(d.candidatas.length, 2, 'e as duas candidatas são mostradas para alguém decidir');
 }
 {
+  // O id da transação gravado na venda (o CRM informou, ou alguém vinculou à
+  // mão) é prova: vincula mesmo com a opção automática desligada, e mesmo
+  // quando quem pagou não é o cliente da venda.
+  const d = decidir(
+    pagamento({ documento: '99988877766', email: 'pagador@x.com' }),
+    [venda({ id_transacao_externa: 'tx_1' }), venda({ venda_id: 'v2' })],
+    { vincularAutomatico: false },
+  );
+  eq([d.acao, d.escolhida?.venda_id, d.escolhida?.prova_transacao], ['VINCULAR', 'v1', true],
+     'a venda que aponta para a transação é vinculada mesmo com a opção automática desligada');
+}
+{
+  const d = decidir(
+    pagamento(),
+    [venda({ id_transacao_externa: 'tx_1' }), venda({ venda_id: 'v2', id_transacao_externa: 'tx_1' })],
+    { vincularAutomatico: true },
+  );
+  eq(d.acao, 'SUGERIR', 'duas vendas dizendo ter a mesma transação viram sugestão: é conflito, não prova');
+}
+{
   const d = decidir(pagamento(), [], { vincularAutomatico: true });
   eq([d.acao, d.escolhida], ['VENDA_DIRETA', null], 'sem candidato, é venda direta: resposta, não pendência');
 }

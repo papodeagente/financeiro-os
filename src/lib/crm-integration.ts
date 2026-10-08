@@ -22,8 +22,16 @@ import { criarNotificacao } from './notificacoes';
 // PUT das rotas de conta. O helper antigo lia, somava e regravava fora de
 // transação, com o erro engolido: duas confirmações simultâneas na mesma
 // conta bancária perdiam uma das entradas.
-import { aplicarMovimentoCaixaAtomico, STATUS_BAIXADOS } from './caixa-atomico';
+import { aplicarMovimentoCaixaAtomico, emTransacao, STATUS_BAIXADOS, type ExecutorSQL } from './caixa-atomico';
 import { valorMovimentado } from './saldo-bancario';
+import {
+  resolverClienteCRM, dadosClienteDaVenda, lerDadosCliente, lerAlteracoesCliente, lerIdsAnteriores,
+  descreverCliente,
+} from './crm-cliente';
+import {
+  lerPlataformaDoPayload, decidirCarimbo, vincularPagamentosDaVendaCRM, descreverPagamentos,
+} from './crm-venda-plataforma';
+import { lerPedidoDeCancelamento, aplicarCancelamentoDoCrm } from './crm-venda-cancelada';
 
 // ──────────────────────────────────────────
 // Types
@@ -707,42 +715,6 @@ export function buildContaPagarFromFornecedor(
   } as ContaPagar;
 }
 
-async function upsertClienteByExternalId(
-  externalId: string,
-  dados: { nome?: unknown; cpf?: unknown; email?: unknown; telefone?: unknown },
-  tenantId: string,
-): Promise<string> {
-  if (!pool || !externalId) throw new Error('upsertCliente: external_id obrigatorio');
-
-  const { rows } = await pool.query(
-    `SELECT id FROM clientes WHERE external_id = $1 AND tenant_id = $2 LIMIT 1`,
-    [externalId, tenantId],
-  );
-  if (rows.length > 0) return rows[0].id as string;
-
-  const id = generateId();
-  const nome = asStr(dados.nome);
-  const cpf = asStr(dados.cpf);
-  const email = asStr(dados.email);
-  const telefone = asStr(dados.telefone);
-  const data = {
-    id,
-    nome,
-    cpf_cnpj: cpf,
-    tipo: 'fisica',
-    email,
-    telefone,
-    origem: 'crm',
-    external_id: externalId,
-  };
-  await pool.query(
-    `INSERT INTO clientes (id, nome, cpf_cnpj, tipo, data, external_id, tenant_id, created_at, updated_at)
-     VALUES ($1, $2, $3, 'fisica', $4, $5, $6, NOW(), NOW())`,
-    [id, nome, cpf, JSON.stringify(data), externalId, tenantId],
-  );
-  return id;
-}
-
 function normalizeEmail(v: unknown): string {
   return asStr(v).trim().toLowerCase();
 }
@@ -1196,16 +1168,61 @@ export async function processarEventoCRM(
         if (!clienteExternalId) {
           throw new Error('VENDA_FECHADA sem cliente_id');
         }
-        const clienteId = await upsertClienteByExternalId(
-          clienteExternalId,
-          {
-            nome: payload.cliente_nome,
-            cpf: payload.cliente_cpf,
-            email: payload.cliente_email,
-            telefone: payload.cliente_telefone,
-          },
-          tenantId,
-        );
+
+        // A venda que já existe, lida antes de tudo: decide a identidade, o
+        // número e o carimbo da plataforma, que um reenvio não pode perder.
+        const crmVendaId = asStr(payload.crm_venda_id);
+        const historico = payload.historico === true;
+        let vendaAnterior: {
+          id: string; status: string; data: Record<string, unknown>;
+          /** Este evento chegou antes da última mudança da venda. */
+          eventoAnterior: boolean;
+        } | null = null;
+        if (crmVendaId) {
+          const { rows: existente } = await pool.query(
+            `SELECT v.id, v.status, v.data, COALESCE(e.created_at < v.updated_at, false) AS evento_anterior
+               FROM vendas_crm v
+               LEFT JOIN crm_eventos_entrada e ON e.id = $3
+              WHERE v.tenant_id = $1 AND v.data->>'crm_venda_id' = $2
+              ORDER BY v.created_at ASC LIMIT 1`,
+            [tenantId, crmVendaId, id],
+          );
+          if (existente.length > 0) {
+            vendaAnterior = {
+              id: existente[0].id as string,
+              status: asStr(existente[0].status),
+              data: (existente[0].data ?? {}) as Record<string, unknown>,
+              eventoAnterior: existente[0].evento_anterior === true,
+            };
+          }
+        }
+
+        // Venda CANCELADA só reabre com o negócio ganho de novo no CRM. Não
+        // reabre com:
+        //  - reenvio HISTÓRICO (o CRM repassando vendas antigas): reabrir
+        //    regeraria as contas de uma viagem que alguém já desfez;
+        //  - nova tentativa de um evento que chegou ANTES do cancelamento (o
+        //    evento falhou, o CRM tenta de novo com backoff, e no meio tempo
+        //    a venda foi perdida): o estado mais novo é o cancelamento.
+        const vendaCancelada = !!vendaAnterior
+          && (vendaAnterior.status.toUpperCase() === 'CANCELADO'
+              || asStr(vendaAnterior.data.status).toUpperCase() === 'CANCELADO');
+        if (vendaAnterior && vendaCancelada && (historico || vendaAnterior.eventoAnterior)) {
+          acao = historico
+            ? `venda ${vendaAnterior.id} está cancelada no financeiro: o reenvio histórico não a reabre`
+            : `venda ${vendaAnterior.id} foi cancelada depois que este evento chegou: a nova tentativa não a reabre`;
+          break;
+        }
+
+        // Cliente: o caminho único de identidade (crm-cliente.ts). Venda só
+        // preenche o que está vazio no cadastro.
+        const cliente = await resolverClienteCRM(pool as unknown as ExecutorSQL, tenantId, {
+          externalId: clienteExternalId,
+          anteriores: lerIdsAnteriores(payload.cliente_ids_anteriores, clienteExternalId),
+          dados: dadosClienteDaVenda(payload),
+          alteracoes: null,
+        });
+        const clienteId = cliente.id;
 
         const vendedorExternalId = asStr(payload.vendedor_id);
         let vendedorId = '';
@@ -1269,18 +1286,11 @@ export async function processarEventoCRM(
         // Agora o id deriva do identificador do negócio no CRM. Reentrega
         // atualiza a mesma venda. Sem crm_venda_id (payload legado) cai no
         // id aleatório, que é o comportamento antigo.
-        const crmVendaId = asStr(payload.crm_venda_id);
         let vendaId: string;
         let vendaJaExiste = false;
         if (crmVendaId) {
-          const { rows: existente } = await pool.query(
-            `SELECT id FROM vendas_crm
-              WHERE tenant_id = $1 AND data->>'crm_venda_id' = $2
-              ORDER BY created_at ASC LIMIT 1`,
-            [tenantId, crmVendaId],
-          );
-          if (existente.length > 0) {
-            vendaId = existente[0].id as string;
+          if (vendaAnterior) {
+            vendaId = vendaAnterior.id;
             vendaJaExiste = true;
           } else {
             vendaId = `crmv-${tenantId}-${crmVendaId}`.slice(0, 200);
@@ -1288,11 +1298,13 @@ export async function processarEventoCRM(
         } else {
           vendaId = generateId();
         }
-        // Data da venda: prefere o que veio do CRM (data real do fechamento),
-        // senão usa hoje no fuso do tenant. new Date().toISOString() daria a
-        // data em UTC e, das 21h em diante no Brasil, jogaria a venda para o
-        // dia seguinte — e no virar do mês, para o mês seguinte no DRE.
-        const dataVenda = asStr(payload.data_venda) || hojeISO();
+        // Data da venda: prefere o que veio do CRM (o dia do fechamento, no
+        // fuso de São Paulo), depois a que a venda já tinha, e só então hoje
+        // no fuso do tenant. new Date().toISOString() daria a data em UTC e,
+        // das 21h em diante no Brasil, jogaria a venda para o dia seguinte, e
+        // no virar do mês, para o mês seguinte no DRE. Os vencimentos das
+        // contas saem desta data.
+        const dataVenda = asDateYMD(payload.data_venda) || asDateYMD(vendaAnterior?.data.data_venda) || hojeISO();
         // Número sequencial usado pelas telas legadas (dashboard, /vendas).
         // Venda que já existe mantém o número que já tinha; recontar geraria
         // um número diferente a cada reprocessamento.
@@ -1315,6 +1327,13 @@ export async function processarEventoCRM(
         // interface VendaCRM preenchidos com defaults). Em cima disso,
         // sobrescreve com os campos vindos do CRM. Previne erro de
         // renderização em /vendas/[id] por campos undefined.
+        //
+        // O pagamento da plataforma que o CRM diz ser desta venda entra no
+        // JSON também. O carimbo feito à mão no financeiro vence, e o reenvio
+        // sem plataforma não apaga o que a venda já tinha (antes, todo
+        // reenvio regravava o JSON inteiro e perdia o carimbo do vínculo).
+        const carimbo = decidirCarimbo(vendaAnterior?.data ?? null, lerPlataformaDoPayload(payload));
+        const versaoContrato = Number(payload.versao_contrato);
         const baseVenda = createVendaCRM(numeroVenda);
         const vendaData: VendaCRM & Record<string, unknown> = {
           ...baseVenda,
@@ -1353,11 +1372,23 @@ export async function processarEventoCRM(
           moeda: asStr(payload.moeda) || 'BRL',
           origem: 'crm',
           parcelas_cliente: parcelasCliente,
+          plataforma_origem: carimbo.plataforma_origem,
+          plataforma_transacao: carimbo.plataforma_transacao,
+          plataforma_transacoes: carimbo.plataforma_transacoes,
+          crm_plataforma_origem: carimbo.crm_plataforma_origem,
+          crm_plataforma_transacao: carimbo.crm_plataforma_transacao,
+          historico,
+          versao_contrato: Number.isFinite(versaoContrato) && versaoContrato > 0 ? versaoContrato : 1,
         };
+        // A reentrega atualiza também as colunas: o cliente pode ter mudado
+        // no CRM, e a venda fechada de novo volta a ser CONFIRMADO na coluna,
+        // que é o que a conciliação e as listas leem (o JSON já voltava).
         await pool.query(
           `INSERT INTO vendas_crm (id, cliente_id, vendedor_id, status, data, tenant_id, created_at, updated_at)
            VALUES ($1, $2, $3, 'CONFIRMADO', $4, $5, NOW(), NOW())
-           ON CONFLICT (id) DO UPDATE SET data = $4, updated_at = NOW()
+           ON CONFLICT (id) DO UPDATE
+              SET data = $4, cliente_id = EXCLUDED.cliente_id, vendedor_id = EXCLUDED.vendedor_id,
+                  status = EXCLUDED.status, updated_at = NOW()
            WHERE vendas_crm.tenant_id = EXCLUDED.tenant_id`,
           [vendaId, clienteId, vendedorId, JSON.stringify(vendaData), tenantId]
         );
@@ -1597,7 +1628,20 @@ export async function processarEventoCRM(
           });
         }
 
-        acao = `venda criada (${vendaId}): ${itensInput.length} itens, ${cpGerados} CP, ${crGerados} CR (R$ ${crValor.toFixed(2)})${vendedorPendente ? ' [vendedor nao cadastrado]' : ''}`;
+        // 4) O pagamento da plataforma: vincula o que o CRM informou e já
+        //    está aqui sem dono, e refaz os vínculos antigos sobre as contas
+        //    que acabaram de ser regeradas. Sem isso, a reentrega da venda
+        //    traria de volta as contas que o pagamento já tinha consumido.
+        const pagamentos = await emTransacao(exec => vincularPagamentosDaVendaCRM(exec, tenantId, vendaId, {
+          plataforma: carimbo.crm_plataforma_origem,
+          transacoes: carimbo.vincular,
+        }));
+        const sobrePagamento = descreverPagamentos(pagamentos, carimbo.conflito);
+
+        acao = `venda ${vendaJaExiste ? 'atualizada' : 'criada'} (${vendaId}): ${itensInput.length} itens, ${cpGerados} CP, ${crGerados} CR (R$ ${crValor.toFixed(2)})${vendedorPendente ? ' [vendedor nao cadastrado]' : ''}`
+          + `; ${descreverCliente(cliente)}`
+          + (sobrePagamento ? `; ${sobrePagamento}` : '')
+          + (historico ? '; reenvio histórico do CRM' : '');
         break;
       }
 
@@ -1722,23 +1766,57 @@ export async function processarEventoCRM(
       }
 
       case 'CLIENTE_ATUALIZADO': {
+        // Mudança de cadastro feita no CRM. É explícita, então o campo
+        // alterado com valor SOBRESCREVE as colunas (nome, cpf_cnpj, tipo) e o
+        // JSON; vazio ou null nunca apaga. O retrato completo (`cliente`) só
+        // preenche o que está vazio. Cliente que ainda não existe aqui nasce
+        // pela mesma regra de identidade da venda (crm-cliente.ts).
         const externalId = asStr(payload.cliente_id);
-        const camposAlterados = payload.campos_alterados as Record<string, unknown> | undefined;
-        if (externalId && camposAlterados) {
-          // CRM sends prefixed external_id ("crm_contact_<id>"), not internal id.
-          const { rows: cliRows } = await pool.query(
-            `SELECT id, data FROM clientes WHERE external_id = $1 AND tenant_id = $2 LIMIT 1`,
-            [externalId, tenantId]
-          );
-          if (cliRows.length > 0) {
-            const merged = { ...cliRows[0].data, ...camposAlterados };
-            await pool.query(
-              `UPDATE clientes SET data = $2, updated_at = NOW() WHERE id = $1 AND tenant_id = $3`,
-              [cliRows[0].id, JSON.stringify(merged), tenantId]
-            );
-          }
+        if (!externalId) {
+          acao = 'cliente ignorado: sem cliente_id';
+          break;
         }
-        acao = `cliente ${externalId} atualizado`;
+        const resolvido = await resolverClienteCRM(pool as unknown as ExecutorSQL, tenantId, {
+          externalId,
+          anteriores: lerIdsAnteriores(payload.cliente_ids_anteriores, externalId),
+          dados: lerDadosCliente(payload.cliente),
+          alteracoes: lerAlteracoesCliente(payload.campos_alterados),
+        });
+        acao = `cliente ${externalId} ${resolvido.como === 'novo' ? 'criado' : 'atualizado'}: ${descreverCliente(resolvido)}`;
+        break;
+      }
+
+      // O CRM perdeu (ou deixou de ganhar) um negócio que já tinha virado
+      // venda aqui. Até 07/10/2026 o evento caía em "tipo desconhecido" e a
+      // venda seguia confirmada, com as contas em aberto inflando o a receber.
+      case 'VENDA_CANCELADA': {
+        const pedido = lerPedidoDeCancelamento(payload);
+        if (!pedido.crmVendaId) {
+          acao = 'VENDA_CANCELADA sem crm_venda_id: nada a cancelar';
+          break;
+        }
+        const r = await emTransacao(exec => aplicarCancelamentoDoCrm(exec, tenantId, pedido, idempotency_key));
+        if (r.notificacao) {
+          await criarNotificacao({
+            tenantId,
+            tipo: 'VENDA_CANCELADA_CRM',
+            titulo: r.notificacao.titulo,
+            descricao: r.notificacao.descricao,
+            link: `/vendas/${r.vendaId}`,
+            vendedorId: r.vendedorId,
+            chaveDeduplicacao: r.notificacao.chave,
+            data: {
+              venda_id: r.vendaId,
+              crm_venda_id: pedido.crmVendaId,
+              motivo: pedido.motivo,
+              acao_solicitada: pedido.acao,
+              recebido: r.recebido,
+              pago: r.pago,
+              a_cair_da_plataforma: r.aCairDaPlataforma,
+            },
+          });
+        }
+        acao = r.acao;
         break;
       }
 
@@ -1835,10 +1913,15 @@ export async function processarEventoCRM(
         acao = `tipo desconhecido: ${tipo}`;
     }
 
-    // Mark as processed
+    // Marca como processado e guarda o que foi feito: é o registro que
+    // responde "o que o financeiro fez com este evento" (inclusive conflito
+    // de pagamento e cancelamento que ficou para aprovação).
     await pool.query(
-      `UPDATE crm_eventos_entrada SET processado = true, status = 'PROCESSADO' WHERE id = $1`,
-      [id]
+      `UPDATE crm_eventos_entrada
+          SET processado = true, status = 'PROCESSADO',
+              data = COALESCE(data, '{}'::jsonb) || jsonb_build_object('acao', $2::text)
+        WHERE id = $1`,
+      [id, acao]
     );
 
     return { processado: true, acao };

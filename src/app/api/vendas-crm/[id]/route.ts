@@ -4,34 +4,13 @@ import { emitirEventoCRM } from '@/lib/crm-integration';
 import { getTenantId } from '@/lib/tenant';
 import { getSession } from '@/lib/auth';
 import { podeVerVenda, podeExcluir } from '@/lib/permissoes';
-import { emTransacao, estornarBaixaDaConta, STATUS_BAIXADOS } from '@/lib/caixa-atomico';
+import { emTransacao, estornarBaixaDaConta, type ExecutorSQL } from '@/lib/caixa-atomico';
+import { cancelarContasDaVenda } from '@/lib/venda-cancelamento';
 
 const TABLE = 'vendas_crm';
 const INDEX_COLS = ['cliente_id', 'vendedor_id', 'status'];
 
 const TABELAS_CONTAS = ['contas_receber', 'contas_pagar'] as const;
-const STATUS_BAIXADOS_SQL = [...STATUS_BAIXADOS];
-
-// Cancela as contas auto_geradas da venda que ainda estão em aberto.
-// Contas já baixadas (RECEBIDO/PARCIAL/PAGO) NÃO são tocadas: o dinheiro já
-// se moveu e cancelar sem estorno deixaria o saldo bancário mentindo — para
-// desfazer uma baixa, o caminho é o endpoint da própria conta.
-async function cancelarContasDaVenda(vendaId: string, tenantId: string): Promise<void> {
-  for (const tabela of TABELAS_CONTAS) {
-    await pool!.query(
-      `UPDATE ${tabela}
-          SET data = jsonb_set(data, '{status}', '"CANCELADO"'::jsonb, true),
-              status = 'CANCELADO',
-              updated_at = NOW()
-        WHERE tenant_id = $1
-          AND data->>'origem_venda_id' = $2
-          AND data->>'auto_gerado' = 'true'
-          AND NOT (COALESCE(data->>'status', '') = ANY($3::text[]))
-          AND COALESCE(data->>'status', '') <> 'CANCELADO'`,
-      [tenantId, vendaId, STATUS_BAIXADOS_SQL],
-    );
-  }
-}
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -90,7 +69,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (statusNovo === 'cancelado' && statusAnterior !== 'cancelado') {
       // Contas geradas por esta venda que ainda estão em aberto morrem junto,
       // senão continuam inflando "a receber/a pagar" pra sempre.
-      await cancelarContasDaVenda(id, tenantId);
+      // Mesma regra do cancelamento que chega do CRM (venda-cancelamento.ts).
+      await cancelarContasDaVenda(pool as unknown as ExecutorSQL, id, tenantId);
       emitirEventoCRM('VENDA_CANCELADA', {
         venda_id: id,
         motivo: item.motivo ?? 'nao informado',

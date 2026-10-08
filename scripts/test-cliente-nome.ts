@@ -32,7 +32,7 @@ function eq(atual: unknown, esperado: unknown, label: string) {
 // ══════════════════════════════════════════════════════════════════════
 console.log('--- o incidente: cliente vindo do CRM ---');
 {
-  // Shape exato gravado por upsertClienteByExternalId em crm-integration.ts:
+  // Shape exato gravado por resolverClienteCRM em crm-cliente.ts:
   // tipo 'fisica' e SÓ o campo `nome`. Sem nome_completo, sem nome_fantasia,
   // sem razao_social.
   const doCrm = {

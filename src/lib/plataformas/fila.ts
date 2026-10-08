@@ -258,48 +258,72 @@ export async function vincularVenda(
   if (!pool) throw new ErroPlataforma('Banco indisponível.');
   if (!vendaId) throw new ErroPlataforma('Informe a venda.');
 
-  return emTransacao(async (exec: ExecutorSQL) => {
-    const venda = await exec.query(
-      `SELECT id FROM vendas_crm WHERE id = $1 AND tenant_id = $2 LIMIT 1`,
-      [vendaId, tenantId],
-    );
-    if (venda.rows.length === 0) throw new ErroPlataforma('Venda não encontrada nesta agência.');
+  return emTransacao((exec: ExecutorSQL) => vincularNaTransacao(exec, tenantId, plataforma, idTransacao, vendaId));
+}
 
-    const r = await exec.query(
-      `UPDATE plataformas_transacoes
-          SET venda_id = $4, status_conciliacao = 'VINCULADA', updated_at = NOW()
-        WHERE tenant_id = $1 AND plataforma = $2 AND id_transacao = $3`,
-      [tenantId, plataforma, idTransacao, vendaId],
-    );
-    if ((r.rowCount ?? 0) === 0) throw new ErroPlataforma('Recebimento não encontrado.');
+/**
+ * O vínculo em si, dentro da transação de quem chama. É o MESMO caminho do
+ * vínculo feito na tela e do vínculo que a venda do CRM pede quando informa a
+ * transação: apontar as contas da plataforma para a venda, carimbar a venda e
+ * unificar. Dois caminhos para o mesmo vínculo divergiriam no primeiro
+ * conserto feito em só um deles.
+ *
+ * `manterCarimbo`: a venda que já aponta para uma transação continua
+ * apontando para ela. É o que o CRM pede: o carimbo feito à mão no financeiro
+ * vence o que o CRM informar depois.
+ */
+export async function vincularNaTransacao(
+  exec: ExecutorSQL,
+  tenantId: string,
+  plataforma: string,
+  idTransacao: string,
+  vendaId: string,
+  opcoes: { manterCarimbo?: boolean } = {},
+): Promise<ResultadoUnificacao> {
+  if (!vendaId) throw new ErroPlataforma('Informe a venda.');
+  const venda = await exec.query(
+    `SELECT id FROM vendas_crm WHERE id = $1 AND tenant_id = $2 LIMIT 1`,
+    [vendaId, tenantId],
+  );
+  if (venda.rows.length === 0) throw new ErroPlataforma('Venda não encontrada nesta agência.');
 
-    // As contas a receber já criadas passam a apontar para a venda.
-    await exec.query(
-      `UPDATE contas_receber
-          SET venda_id = $4,
-              data = jsonb_set(jsonb_set(data, '{venda_id}', to_jsonb($4::text), true),
-                               '{origem}', '"VENDA"'::jsonb, true),
-              updated_at = NOW()
-        WHERE tenant_id = $1
-          AND data->>'plataforma_origem' = $2
-          AND data->>'plataforma_transacao' = $3`,
-      [tenantId, plataforma, idTransacao, vendaId],
-    );
+  const r = await exec.query(
+    `UPDATE plataformas_transacoes
+        SET venda_id = $4, status_conciliacao = 'VINCULADA', updated_at = NOW()
+      WHERE tenant_id = $1 AND plataforma = $2 AND id_transacao = $3`,
+    [tenantId, plataforma, idTransacao, vendaId],
+  );
+  if ((r.rowCount ?? 0) === 0) throw new ErroPlataforma('Recebimento não encontrado.');
 
-    await exec.query(
-      `UPDATE vendas_crm
-          SET data = jsonb_set(jsonb_set(data, '{plataforma_origem}', to_jsonb($3::text), true),
-                               '{plataforma_transacao}', to_jsonb($4::text), true),
-              updated_at = NOW()
-        WHERE id = $1 AND tenant_id = $2`,
-      [vendaId, tenantId, plataforma, idTransacao],
-    );
+  // As contas a receber já criadas passam a apontar para a venda.
+  await exec.query(
+    `UPDATE contas_receber
+        SET venda_id = $4,
+            data = jsonb_set(jsonb_set(data, '{venda_id}', to_jsonb($4::text), true),
+                             '{origem}', '"VENDA"'::jsonb, true),
+            updated_at = NOW()
+      WHERE tenant_id = $1
+        AND data->>'plataforma_origem' = $2
+        AND data->>'plataforma_transacao' = $3`,
+    [tenantId, plataforma, idTransacao, vendaId],
+  );
 
-    // UNIFICAR, não só apontar. Até 01/10/2026 vincular deixava as contas
-    // da venda no CRM de pé ao lado das da plataforma: a mesma viagem duas
-    // vezes no contas a receber, na receita e no caixa projetado.
-    return unificarRecebimento(exec, tenantId, { vendaId, plataforma, idTransacao });
-  });
+  await exec.query(
+    `UPDATE vendas_crm
+        SET data = CASE
+              WHEN $5::boolean AND COALESCE(data->>'plataforma_transacao', '') <> '' THEN data
+              ELSE jsonb_set(jsonb_set(data, '{plataforma_origem}', to_jsonb($3::text), true),
+                             '{plataforma_transacao}', to_jsonb($4::text), true)
+            END,
+            updated_at = NOW()
+      WHERE id = $1 AND tenant_id = $2`,
+    [vendaId, tenantId, plataforma, idTransacao, opcoes.manterCarimbo === true],
+  );
+
+  // UNIFICAR, não só apontar. Até 01/10/2026 vincular deixava as contas
+  // da venda no CRM de pé ao lado das da plataforma: a mesma viagem duas
+  // vezes no contas a receber, na receita e no caixa projetado.
+  return unificarRecebimento(exec, tenantId, { vendaId, plataforma, idTransacao });
 }
 
 /** Marca como venda direta: não veio de negociação do CRM, e está certo assim. */

@@ -4,6 +4,7 @@ export const TIPOS_NOTIFICACAO = [
   { tipo: 'PROPOSTA_VISUALIZADA', label: 'Propostas visualizadas', descricao: 'Na primeira visualização de cada proposta por dia.' },
   { tipo: 'PROPOSTA_LEAD', label: 'Novos interessados', descricao: 'Quando alguém deixa seus dados em uma proposta.' },
   { tipo: 'VENDA_VENDEDOR_NAO_CADASTRADO', label: 'Pendências de vendedores', descricao: 'Vendas recebidas do CRM sem vendedor cadastrado.' },
+  { tipo: 'VENDA_CANCELADA_CRM', label: 'Vendas perdidas no CRM', descricao: 'Quando o CRM perde uma venda que já movimentou dinheiro, ou pede aprovação para cancelar.' },
 ] as const;
 
 export type TipoNotificacao = (typeof TIPOS_NOTIFICACAO)[number]['tipo'];

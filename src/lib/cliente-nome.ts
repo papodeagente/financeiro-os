@@ -8,7 +8,7 @@
  *
  *  1. Que `tipo` vale exatamente 'PF' ou 'PJ'. A coluna escalar `clientes.tipo`
  *     tem DEFAULT 'fisica', e o webhook do CRM grava literalmente 'fisica'
- *     (ver upsertClienteByExternalId em crm-integration.ts). Nenhum desses
+ *     (ver resolverClienteCRM em crm-cliente.ts). Nenhum desses
  *     valores é 'PF', então todo cliente vindo do CRM caía no ramo de pessoa
  *     jurídica.
  *  2. Que os campos de nome existem. O cliente criado pelo CRM tem apenas

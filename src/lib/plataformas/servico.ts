@@ -259,9 +259,13 @@ interface LinhaTransacao {
 async function lerTransacao(
   exec: ExecutorSQL, tenantId: string, plataforma: string, idTransacao: string,
 ): Promise<LinhaTransacao | null> {
+  // FOR UPDATE: o vínculo pedido pela venda do CRM (ou feito na tela) pode
+  // chegar no meio deste aviso. Sem a trava, o aviso regravaria o vínculo
+  // lido antes dele e desfaria a ligação que acabou de ser feita.
   const { rows } = await exec.query(
     `SELECT venda_id, status_conciliacao, data FROM plataformas_transacoes
-      WHERE tenant_id = $1 AND plataforma = $2 AND id_transacao = $3 LIMIT 1`,
+      WHERE tenant_id = $1 AND plataforma = $2 AND id_transacao = $3 LIMIT 1
+      FOR UPDATE`,
     [tenantId, plataforma, idTransacao],
   );
   if (rows.length === 0) return null;
@@ -299,11 +303,20 @@ export async function candidatosDoCrm(
   const de = addDias(referencia, -JANELA_DIAS);
   const ate = addDias(referencia, JANELA_DIAS);
 
+  // A venda que o CRM disse ser desta transação entra mesmo fora da janela
+  // de datas, e na frente da fila: o id é prova, e uma venda de três meses
+  // atrás paga agora (ou mais de 300 vendas no período) não pode sumir dela.
+  // Vale a transação principal e a lista das conhecidas da venda.
+  const idTx = String(transacao.id_transacao ?? '').trim();
+  const temProva = `(v.data->>'plataforma_transacao' = NULLIF($4::text, '')
+                     OR COALESCE(v.data->'plataforma_transacoes', '[]'::jsonb) @> jsonb_build_array(NULLIF($4::text, '')))`;
   const { rows } = await exec.query(
     `SELECT v.id,
             v.data->>'valor_total'   AS valor_total,
             v.data->>'data_venda'    AS data_venda,
-            v.data->>'plataforma_transacao' AS id_transacao_externa,
+            CASE WHEN COALESCE(v.data->'plataforma_transacoes', '[]'::jsonb) @> jsonb_build_array(NULLIF($4::text, ''))
+                 THEN $4::text
+                 ELSE v.data->>'plataforma_transacao' END AS id_transacao_externa,
             v.data->>'plataforma_origem'    AS plataforma_origem,
             c.nome     AS cliente_nome,
             c.cpf_cnpj AS documento,
@@ -313,11 +326,12 @@ export async function candidatosDoCrm(
        LEFT JOIN clientes c ON c.id = v.cliente_id AND c.tenant_id = v.tenant_id
       WHERE v.tenant_id = $1
         AND COALESCE(v.status, '') <> 'CANCELADO'
-        AND COALESCE(NULLIF(v.data->>'data_venda', ''), to_char(v.created_at, 'YYYY-MM-DD'))
-            BETWEEN $2 AND $3
-      ORDER BY v.created_at DESC
+        AND (COALESCE(NULLIF(v.data->>'data_venda', ''), to_char(v.created_at, 'YYYY-MM-DD'))
+             BETWEEN $2 AND $3
+             OR ${temProva})
+      ORDER BY (${temProva}) IS TRUE DESC, v.created_at DESC
       LIMIT 300`,
-    [tenantId, de, ate],
+    [tenantId, de, ate, idTx],
   );
 
   return rows.map(r => ({
