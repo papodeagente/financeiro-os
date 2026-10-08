@@ -380,13 +380,34 @@ export default function VendedoresPage() {
                   {planoSemSerVendedor.length === 1 ? 'As vendas dessa pessoa' : `As vendas de ${planoSemSerVendedor.map(p => primeiroNome(p.nome)).join(', ')}`}{' '}
                   continuam gerando comissão. Se a pessoa vende, mude o perfil para Vendedor em Usuários; se não vende, tire o plano.
                 </p>
-                <Link
-                  href="/config/usuarios"
-                  className="inline-flex h-11 w-fit items-center gap-[var(--fin-s-1)] rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-4 fin-t-body text-[var(--fin-text)] hover:bg-[var(--fin-surface-2)] lg:h-10"
-                >
-                  Abrir Usuários
-                  <ExternalLink className="size-4" aria-hidden />
-                </Link>
+                <div className="flex flex-wrap gap-[var(--fin-s-2)]">
+                  {/* A ficha só abre para quem aparece na tela: sem este
+                      botão, tirar o plano exigiria virar Vendedor antes. */}
+                  {planoSemSerVendedor.map(p => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      disabled={ocupado === `tirar-${p.id}`}
+                      onClick={() =>
+                        acao(
+                          { acao: 'definir_comercial', usuario_id: p.id, plano_comissao_id: '' },
+                          `tirar-${p.id}`,
+                          `${primeiroNome(p.nome)} não tem mais plano de comissão. Recalcule as comissões do mês em Comissões.`,
+                        )
+                      }
+                      className="inline-flex h-11 items-center rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-4 fin-t-body text-[var(--fin-text)] hover:bg-[var(--fin-surface-2)] disabled:opacity-50 lg:h-10"
+                    >
+                      {planoSemSerVendedor.length === 1 ? 'Tirar o plano' : `Tirar o plano de ${primeiroNome(p.nome)}`}
+                    </button>
+                  ))}
+                  <Link
+                    href="/config/usuarios"
+                    className="inline-flex h-11 items-center gap-[var(--fin-s-1)] rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-4 fin-t-body text-[var(--fin-text)] hover:bg-[var(--fin-surface-2)] lg:h-10"
+                  >
+                    Mudar o perfil em Usuários
+                    <ExternalLink className="size-4" aria-hidden />
+                  </Link>
+                </div>
               </section>
             )}
 
