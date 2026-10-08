@@ -33,6 +33,8 @@ import {
   reconciliarPagamentosSemDono, descreverReconciliacao,
 } from './crm-venda-plataforma';
 import { lerPedidoDeCancelamento, aplicarCancelamentoDoCrm } from './crm-venda-cancelada';
+import { lerApuracaoDoCrm } from './comissao-do-crm';
+import { aplicarComissaoApurada } from './comissao-do-crm-gravar';
 
 // ──────────────────────────────────────────
 // Types
@@ -1918,6 +1920,41 @@ export async function processarEventoCRM(
           }
         }
         acao = `visualizacao registrada para proposta ${proposta_id}`;
+        break;
+      }
+
+      // A comissão do mês do vendedor, já calculada pelo CRM sobre o dinheiro
+      // recebido (agência que paga o time pelo recebido). Ver
+      // src/lib/comissao-do-crm.ts: contrato, regras e o porquê de cada uma.
+      case 'COMISSAO_APURADA': {
+        const apuracao = lerApuracaoDoCrm(payload);
+        // O mesmo caminho de identidade das vendas: external_id, e-mail, ou
+        // cadastro pendente. A comissão nunca é recusada por causa disso.
+        const vendedor = await upsertVendedorByExternalId(
+          apuracao.vendedor_id,
+          { nome: apuracao.vendedor_nome, email: apuracao.vendedor_email },
+          tenantId,
+        );
+        const r = await emTransacao(exec => aplicarComissaoApurada(
+          exec, tenantId, apuracao,
+          { id: vendedor.id, nome: apuracao.vendedor_nome, cadastroPendente: vendedor.cadastroPendente },
+          idempotency_key,
+        ));
+        // O aviso sai depois da transação: notificação falhando não pode
+        // desfazer a comissão. Sem vendedorId: quem vê é quem vê o
+        // financeiro inteiro, e não o próprio vendedor.
+        if (r.aviso) {
+          await criarNotificacao({
+            tenantId,
+            tipo: 'COMISSAO_CRM_ALTERADA',
+            titulo: r.aviso.titulo,
+            descricao: r.aviso.descricao,
+            link: `/equipe/comissoes?mes=${r.competencia}`,
+            chaveDeduplicacao: r.aviso.chave,
+            data: { comissao_id: r.comissaoId, competencia: r.competencia, crm_vendedor_id: apuracao.vendedor_id, evento: idempotency_key },
+          });
+        }
+        acao = r.acao;
         break;
       }
 

@@ -644,6 +644,42 @@ export interface ComissaoVenda {
   data_aprovacao: string | null;
   data_pagamento: string | null;
   observacoes: string;
+  // ---- Comissão calculada pelo CRM (evento COMISSAO_APURADA) ----
+  // Ver src/lib/comissao-do-crm.ts. A linha não nasce de uma venda daqui:
+  // é o mês do vendedor, pago sobre o dinheiro recebido, e o motor de
+  // comissão desta tela nunca a recalcula.
+  /** 'crm' quando a comissão veio calculada do CRM. */
+  origem?: 'crm';
+  /** AAAA-MM: o mês em que o dinheiro foi recebido (São Paulo). */
+  competencia?: string;
+  /** Frase que a tela mostra no lugar do número da venda. */
+  descricao?: string;
+  /** O dinheiro recebido que formou a base, conta a conta. */
+  linhas?: LinhaComissaoCrm[];
+  /** Quando o CRM apurou (ISO). Apuração mais antiga nunca regrava a nova. */
+  apurado_em?: string;
+  /** Id do vendedor no CRM ("crm_user_<id>"). */
+  crm_vendedor_id?: string;
+  vendedor_email?: string;
+  /** Evento que gravou a versão atual. */
+  crm_evento_id?: string;
+  /** Cancelada porque o CRM zerou o mês (e não por alguém aqui). */
+  cancelada_pelo_crm?: boolean;
+}
+
+/** Uma conta paga ao vendedor no mês, como o CRM a apurou. */
+export interface LinhaComissaoCrm {
+  conta_id: number;
+  conta_nome: string;
+  /** AAAA-MM-DD do recebimento. */
+  dia: string;
+  valor: number;
+  plano: string;
+  percentual: number;
+  comissao: number;
+  negociacao_id: string;
+  provedor: string | null;
+  transacao: string | null;
 }
 
 export type PeriodoMeta = 'MENSAL' | 'TRIMESTRAL' | 'ANUAL';
