@@ -27,6 +27,8 @@
  *     SOBRESCREVE (colunas e JSON). Vazio nunca apaga, em nenhum dos dois.
  */
 import type { ExecutorSQL } from './caixa-atomico';
+import type { FichaClienteCRM } from './crm-types';
+import { aplicarFichaDoCrm } from './ficha-do-cliente';
 import { generateId } from './utils';
 import { nomeDoCliente, tipoPessoa, type ClienteNomeavel } from './cliente-nome';
 import { documentoComparavel, emailComparavel, soDigitos, telefoneComparavel } from './plataformas/conciliacao';
@@ -270,6 +272,8 @@ export interface EntradaClienteCRM {
   dados: DadosClienteCRM;
   /** null na venda fechada; os campos alterados no CLIENTE_ATUALIZADO. */
   alteracoes: AlteracoesClienteCRM | null;
+  /** O cadastro padrão do contato (cliente_ficha). Ausente em CRM anterior a 09/10/2026. */
+  ficha?: FichaClienteCRM | null;
 }
 
 export type ComoAchouCliente = 'external_id' | 'id_anterior' | 'documento' | 'email' | 'novo';
@@ -393,6 +397,10 @@ export async function resolverClienteCRM(
     const vinculoMudou = achado.external_id !== e.externalId || txt(achado.data.external_id) !== e.externalId;
     const anterioresMudaram = anteriores.length !== anterioresGravados.length;
 
+    // A ficha do CRM: venda preenche, mudança de cadastro sobrescreve.
+    const f = aplicarFichaDoCrm(m.linha.data, e.ficha ?? null, e.alteracoes !== null);
+    for (const c of f.campos) if (!m.campos.includes(c)) m.campos.push(c);
+    m.linha.data = f.data;
     if (m.campos.length > 0 || vinculoMudou || anterioresMudaram) {
       const data: Record<string, unknown> = { ...m.linha.data, external_id: e.externalId };
       if (anteriores.length > 0) data.external_ids_anteriores = anteriores;
@@ -422,6 +430,7 @@ export async function resolverClienteCRM(
   };
   if (v.empresa) data.empresa = v.empresa;
   if (e.anteriores.length > 0) data.external_ids_anteriores = e.anteriores;
+  Object.assign(data, aplicarFichaDoCrm(data, e.ficha ?? null, true).data);
   await exec.query(
     `INSERT INTO clientes (id, nome, cpf_cnpj, tipo, data, external_id, tenant_id, created_at, updated_at)
      VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, NOW(), NOW())`,

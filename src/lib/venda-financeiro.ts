@@ -284,14 +284,20 @@ export function gerarContasVenda(input: VendaInput): ContasGeradas {
       itens_fornecedor++;
 
       if (comissaoBRL > 0) {
+        // Quem deve a comissão é o fornecedor; a venda é do cliente, que pagou
+        // o fornecedor direto. As duas pontas ficam na conta, para a comissão
+        // ser conferida contra o que o cliente pagou (Bruno, 09/10/2026).
+        const nomeDoFornecedor = (item.data.fornecedor_nome || fornecedor?.nome_fantasia || '').trim();
+        const semFornecedor = !item.fornecedor_id && !nomeDoFornecedor;
+        const pctTexto = comissao_percentual.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
         const cr: ContaReceber = {
           id: generateId(),
           origem: 'COMISSAO_FORNECEDOR',
           venda_id: venda.id,
           grupo_id: venda.grupo_id,
           cliente_id: item.fornecedor_id,
-          cliente_nome: item.data.fornecedor_nome || fornecedor?.nome_fantasia || '',
-          descricao: `Comissão ${comissao_percentual.toFixed(1)}% — ${item.data.descricao || 'Item ' + item.sequencia}`,
+          cliente_nome: nomeDoFornecedor || 'Fornecedor não informado',
+          descricao: `Comissão ${pctTexto}% — ${item.data.descricao || 'Item ' + item.sequencia}`,
           categoria_id: '',
           centro_custo: venda.centro_custo || '',
           valor_original: comissaoBRL,
@@ -312,10 +318,20 @@ export function gerarContasVenda(input: VendaInput): ContasGeradas {
           total_parcelas: 1,
           boleto_emitido: false, boleto_codigo: '', boleto_url: '',
           status: 'PENDENTE',
-          rateio: [], anexos: [], observacoes: '',
+          rateio: [], anexos: [],
+          observacoes: semFornecedor
+            ? 'A venda não disse qual fornecedor paga esta comissão. Edite a conta para informar.'
+            : '',
           origem_venda_id: venda.id,
           origem_item_id: item.id,
           auto_gerado: true,
+          fornecedor_id: item.fornecedor_id,
+          fornecedor_nome: nomeDoFornecedor,
+          cliente_da_venda_id: venda.cliente_id || '',
+          cliente_da_venda_nome: cliente_nome || '',
+          valor_pago_direto: vendaBRL,
+          custo_do_fornecedor: custoBRL,
+          ...(semFornecedor ? { fornecedor_pendente: true } : {}),
         };
         contas_receber.push(cr);
         comissoesBRL.push(comissaoBRL);

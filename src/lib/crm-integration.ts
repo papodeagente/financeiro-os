@@ -17,7 +17,7 @@ import {
 } from './crm-types';
 import { gerarContasVenda, receberPorFornecedorDe, type ItemVendaInput, type FornecedorInfo } from './venda-financeiro';
 import { round2, num, hojeISO } from './money';
-import { montarLinhasDeCusto, type FornecedorResolvido } from './venda-crm-itens';
+import { montarLinhasDeCusto, comoALinhaNasce, type FornecedorResolvido } from './venda-crm-itens';
 import { criarNotificacao } from './notificacoes';
 // Caixa do webhook usa o caminho ATÔMICO (um único UPDATE em SQL), igual ao
 // PUT das rotas de conta. O helper antigo lia, somava e regravava fora de
@@ -38,6 +38,7 @@ import {
   receberFornecedorDoCrm, lerFornecedorDoCrm, lerFornecedorDaVenda, descreverFornecedor,
   cadastroCompleto, payloadParaOCrm,
 } from './fornecedor-sync';
+import { lerFichaDoCrm } from './ficha-do-cliente';
 
 // ──────────────────────────────────────────
 // Types
@@ -1222,6 +1223,7 @@ export async function processarEventoCRM(
           anteriores: lerIdsAnteriores(payload.cliente_ids_anteriores, clienteExternalId),
           dados: dadosClienteDaVenda(payload),
           alteracoes: null,
+          ficha: lerFichaDoCrm(payload.cliente_ficha),
         });
         const clienteId = cliente.id;
 
@@ -1397,16 +1399,17 @@ export async function processarEventoCRM(
         // 3) Cria itens_venda + contas via fluxo UNIFICADO (mesma lógica
         //    de venda manual /vendas/nova).
         //
-        //    CADA FORNECEDOR VIRA UM ITEM PRÓPRIO: a agência vende ao cliente
-        //    e paga o fornecedor. Conta a receber = valor da venda, conta a
-        //    pagar = custo de cada fornecedor, margem = a diferença.
+        //    CADA FORNECEDOR VIRA UM ITEM PRÓPRIO, com venda e custo dele.
         //
-        //    O modelo anterior marcava esses itens como 'fornecedor' (cliente
-        //    pagaria direto ao fornecedor, agência só receberia comissão).
-        //    Como o CRM manda comissao=0, uma venda com fornecedores
-        //    detalhados não gerava conta NENHUMA — nem a pagar, nem a
-        //    receber. Era a origem de "o CRM não está enviando a conta do
-        //    custo a pagar em vendas".
+        //    Desde 09/10/2026 o padrão é o cliente pagar o fornecedor direto:
+        //    o item é 'fornecedor' e a agência recebe dele a comissão, igual à
+        //    margem (venda menos custo), sem conta do cliente nem conta a
+        //    pagar. Até 2026-09 o item era 'fornecedor' com comissao=0 vinda do
+        //    CRM, e a venda não gerava conta NENHUMA; por isso a comissão agora
+        //    sai da margem, e não do campo do CRM. A agência recebe do cliente
+        //    e paga o fornecedor (item 'proprio') quando o pagamento passou por
+        //    plataforma dela ou o cadastro do fornecedor diz que é assim
+        //    (comoALinhaNasce, em venda-crm-itens.ts).
         //
         //    O custo que o CRM soma em custo_total mas não atribui a nenhum
         //    fornecedor (produto sem fornecedor preenchido na deal) vira uma
@@ -1420,6 +1423,8 @@ export async function processarEventoCRM(
 
         /** Fornecedores do payload, já com cadastro resolvido no financeiro. */
         const fornecedoresResolvidos: FornecedorResolvido[] = [];
+        /** Fornecedores cujo cadastro diz que a agência recebe do cliente. */
+        const agenciaRecebeDe = new Set<string>();
 
         for (const forn of fornecedoresValidos) {
           // Mesmo caminho da mudança de cadastro: acha pelo vínculo, pelo id
@@ -1435,6 +1440,7 @@ export async function processarEventoCRM(
             [fornecedorId, tenantId],
           );
           const fornData = (fornRows[0]?.data ?? {}) as Record<string, unknown>;
+          if (fornData.quem_recebe_do_cliente === 'AGENCIA') agenciaRecebeDe.add(fornecedorId);
           const nomeForn =
             asStr(forn.fornecedor_nome) || asStr(fornData.nome_fantasia) || 'Fornecedor';
           fornecedoresInfo.push({
@@ -1464,19 +1470,24 @@ export async function processarEventoCRM(
           referencia: asStr(payload.crm_venda_id) || vendaId,
         });
 
+        // Quem recebe do cliente (venda-crm-itens.ts, comoALinhaNasce): por
+        // padrão o fornecedor, direto, e a agência recebe dele a comissão. O
+        // pagamento por plataforma da agência prova o contrário.
+        const pagoAAgencia = !!(carimbo.plataforma_transacao || carimbo.plataforma_transacoes.length > 0);
         for (let i = 0; i < linhas.length; i++) {
           const l = linhas[i];
           const item = createItemVenda();
+          const nasce = comoALinhaNasce(l, { pagoAAgencia, agenciaRecebeDe });
           const itemData: ItemVendaData = {
             ...item.data,
             tipo: l.tipo,
             descricao: l.descricao,
             fornecedor_nome: l.fornecedor_nome,
-            meio_pagamento: 'proprio',
+            meio_pagamento: nasce.meio_pagamento,
             valor_custo: l.valor_custo,
             valor_venda: l.valor_venda,
-            comissao_percentual: 0,
-            comissao_valor: 0,
+            comissao_percentual: nasce.comissao_percentual,
+            comissao_valor: nasce.comissao_valor,
             moeda: 'BRL',
             cambio: 1,
             localizador: l.localizador,
@@ -1564,6 +1575,11 @@ export async function processarEventoCRM(
         // logo acima, então casar por item deixaria a conta já baixada de fora
         // e lançaria a mesma receita outra vez.
         const chaveNatural = (c: Record<string, unknown>) => {
+          // Comissão: uma por fornecedor da venda (o item muda de id a cada
+          // reprocessamento, o fornecedor não).
+          if (String(c.origem ?? '') === 'COMISSAO_FORNECEDOR') {
+            return `comissao:${String(c.fornecedor_id ?? '') || String(c.descricao ?? '')}`;
+          }
           const forn = String(c.origem_fornecedor_id ?? '');
           if (forn) return `fornecedor:${forn}|parcela:${String(c.parcela_numero ?? '')}`;
           return String(c.origem_item_id ?? '') || `parcela:${String(c.parcela_numero ?? '')}`;
@@ -1595,7 +1611,9 @@ export async function processarEventoCRM(
           await pool.query(
             `INSERT INTO contas_receber (id, tenant_id, venda_id, cliente_id, status, data, created_at, updated_at)
              VALUES ($1, $2, $3, $4, $5, $6::jsonb, NOW(), NOW())`,
-            [cr.id, tenantId, cr.venda_id || vendaId, cr.cliente_id || clienteId, cr.status, JSON.stringify(cr)],
+            // Comissão é do fornecedor (vazio quando a venda não disse qual):
+            // nunca cai na conta do cliente.
+            [cr.id, tenantId, cr.venda_id || vendaId, cr.origem === 'COMISSAO_FORNECEDOR' ? cr.cliente_id : (cr.cliente_id || clienteId), cr.status, JSON.stringify(cr)],
           );
         }
         for (const cp of contasGen.contas_pagar) {
@@ -1649,7 +1667,9 @@ export async function processarEventoCRM(
         }
         const sobrePagamento = [descreverPagamentos(pagamentos, carimbo.conflito), sobreProcura].filter(Boolean).join('; ');
 
+        const pagosDireto = contasGen.resumo.itens_fornecedor;
         acao = `venda ${vendaJaExiste ? 'atualizada' : 'criada'} (${vendaId}): ${itensInput.length} itens, ${cpGerados} CP, ${crGerados} CR (R$ ${crValor.toFixed(2)})${vendedorPendente ? ' [vendedor nao cadastrado]' : ''}`
+          + (pagosDireto > 0 ? `; ${pagosDireto} pago(s) direto ao fornecedor, comissão de R$ ${contasGen.resumo.total_comissoes.toFixed(2)} a receber` : '')
           + `; ${descreverCliente(cliente)}`
           + (sobrePagamento ? `; ${sobrePagamento}` : '')
           + (historico ? '; reenvio histórico do CRM' : '');
@@ -1792,6 +1812,7 @@ export async function processarEventoCRM(
           anteriores: lerIdsAnteriores(payload.cliente_ids_anteriores, externalId),
           dados: lerDadosCliente(payload.cliente),
           alteracoes: lerAlteracoesCliente(payload.campos_alterados),
+          ficha: lerFichaDoCrm(payload.cliente_ficha),
         });
         acao = `cliente ${externalId} ${resolvido.como === 'novo' ? 'criado' : 'atualizado'}: ${descreverCliente(resolvido)}`;
         break;

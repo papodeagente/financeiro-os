@@ -210,10 +210,11 @@ console.log('\n--- (e) a venda do CRM acha o mesmo cadastro ---');
     versao_contrato: 2, crm_venda_id: `crm_deal_${++seq}`, cliente_id: 'crm_contact_1', cliente_nome: 'Ana Souza',
     valor_total: 1000, custo_total: 600, data_venda: '2026-10-09', fornecedores: fornecedoresDaVenda, ...o,
   });
-  const cps = async () => (await todos(`SELECT fornecedor_id FROM contas_pagar WHERE tenant_id = $1 ORDER BY created_at DESC, id`, [T1])).map(r => r.fornecedor_id);
+  // Pago direto ao fornecedor (o padrão): a venda gera a comissão a receber DELE.
+  const cps = async () => (await todos(`SELECT data->>'fornecedor_id' AS f FROM contas_receber WHERE tenant_id = $1 AND data->>'origem' = 'COMISSAO_FORNECEDOR' ORDER BY created_at DESC, id`, [T1])).map(r => r.f);
 
   await evento('VENDA_FECHADA', venda([{ fornecedor_id: 'crm_cnpj_10760260000119', crm_supplier_id: '20', financeiro_id: 'f-cvc', fornecedor_nome: 'Outro nome', fornecedor_email: 'outro@cvc.com', valor_custo: 600, valor_venda: 1000 }]));
-  eq((await cps())[0], 'f-cvc', 'a conta a pagar sai no cadastro ligado ao fornecedor do CRM');
+  eq((await cps())[0], 'f-cvc', 'a comissão sai do cadastro ligado ao fornecedor do CRM');
   const cvc = await fornecedor('f-cvc');
   eq([cvc.nome_fantasia, cvc.data.email, cvc.external_id], ['CVC', 'fin@cvc.com', 'crm_cnpj_10760260000119'], 'a venda não troca nome nem e-mail; a chave da venda fica guardada');
 

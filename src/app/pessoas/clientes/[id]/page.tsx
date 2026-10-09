@@ -21,12 +21,15 @@ import { FinTable, type FinColuna } from '@/components/fin/FinTable';
 import { MetricCard } from '@/components/fin/MetricCard';
 import { Money } from '@/components/fin/Money';
 import { Resposta } from '@/components/fin/Resposta';
+import { secoesDaFicha, type SecaoDaFicha } from '@/lib/ficha-do-cliente';
 
 interface Linha { id: string; status: string; [k: string]: unknown }
 
 interface Payload {
   cliente: ClienteNomeavel & Record<string, unknown> & { id: string; cliente_desde?: string };
   perfil: PerfilDoCliente;
+  /** O que ele pagou direto aos fornecedores (vendas em que a agência só recebe comissão). */
+  pago_direto?: { total: number; comissoes: number };
   vendas: Linha[];
   contas: Linha[];
   notas: Linha[];
@@ -56,6 +59,34 @@ function Secao({ titulo, sublinha, children }: {
       </div>
       {children}
     </section>
+  );
+}
+
+/** O cadastro do cliente, em cartões: o que ele é, como falar com ele, onde mora, quem viaja com ele. */
+function Cadastro({ secoes }: { secoes: SecaoDaFicha[] }) {
+  if (secoes.length === 0) {
+    return (
+      <p className={`${CARTAO} fin-t-body px-[var(--fin-s-4)] py-[var(--fin-s-3)] text-[var(--fin-text-3)]`}>
+        Nenhum dado de cadastro além do nome. O que for preenchido no CRM aparece aqui na próxima venda ou alteração do contato.
+      </p>
+    );
+  }
+  return (
+    <div className="grid grid-cols-1 items-start gap-[var(--fin-s-3)] md:grid-cols-2 xl:grid-cols-3">
+      {secoes.map(s => (
+        <div key={s.titulo} className={`${CARTAO} flex flex-col gap-[var(--fin-s-2)] p-[var(--fin-s-4)]`}>
+          <h3 className="fin-t-overline text-[var(--fin-text-3)]">{s.titulo}</h3>
+          <dl className="flex flex-col gap-[var(--fin-s-2)]">
+            {s.itens.map((i, n) => (
+              <div key={`${i.rotulo}-${n}`} className="flex min-w-0 flex-col gap-0.5">
+                <dt className="fin-t-caption text-[var(--fin-text-3)]">{i.rotulo}</dt>
+                <dd className="fin-t-body break-words text-[var(--fin-text)]">{i.valor}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -265,12 +296,20 @@ export default function PerfilDoClientePage({ params }: { params: Promise<{ id: 
               />
             </div>
 
+            {/* O CADASTRO: o que veio do CRM e o que foi preenchido aqui. */}
+            <Secao
+              titulo="Cadastro"
+              sublinha="Os dados do cliente, como estão no CRM e aqui."
+            >
+              <Cadastro secoes={dados ? secoesDaFicha(dados.cliente) : []} />
+            </Secao>
+
             {/* O DINHEIRO */}
             <Secao
               titulo="O dinheiro deste cliente"
               sublinha="Os mesmos números do contas a receber, filtrados por ele."
             >
-              <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:grid-cols-3">
+              <div className={`grid grid-cols-1 gap-[var(--fin-s-3)] ${num(dados?.pago_direto?.total) > 0 ? 'sm:grid-cols-2 xl:grid-cols-4' : 'sm:grid-cols-3'}`}>
                 <MetricCard
                   rotulo="Já pagou"
                   valor={p.pago}
@@ -295,6 +334,14 @@ export default function PerfilDoClientePage({ params }: { params: Promise<{ id: 
                       : 'Parte do em aberto cujo prazo já passou.'
                   }
                 />
+                {num(dados?.pago_direto?.total) > 0 ? (
+                  <MetricCard
+                    rotulo="Pago direto aos fornecedores"
+                    valor={num(dados?.pago_direto?.total)}
+                    estado="ok"
+                    contexto="Não passou pelo caixa da agência: ela recebe a comissão de cada fornecedor."
+                  />
+                ) : null}
               </div>
             </Secao>
 

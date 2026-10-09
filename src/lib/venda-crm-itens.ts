@@ -6,8 +6,10 @@
  *
  * As três regras que este módulo garante:
  *
- *  1. CADA FORNECEDOR É UMA LINHA DE CUSTO. A agência vende ao cliente e paga
- *     o fornecedor. Conta a receber = valor da venda, conta a pagar = custo.
+ *  1. CADA FORNECEDOR É UMA LINHA. Como ela vira conta é `comoALinhaNasce`
+ *     (fim do arquivo): por padrão o cliente paga o fornecedor direto e a
+ *     agência recebe dele a comissão; quando a agência recebe do cliente,
+ *     conta a receber = valor da venda e conta a pagar = custo.
  *  2. CUSTO SEM DONO VIRA LINHA PRÓPRIA, MARCADA. O CRM soma em custo_total o
  *     custo de produto sem fornecedor preenchido, mas não o detalha em
  *     `fornecedores`. Esse dinheiro sai do caixa do mesmo jeito: a dívida
@@ -213,4 +215,52 @@ export function montarLinhasDeCusto(entrada: {
     return comVenda.map((l, i) => ({ ...l, valor_venda: ajustados[i] }));
   }
   return comVenda;
+}
+
+/**
+ * COMO A LINHA VIRA CONTA (Bruno, 09/10/2026).
+ *
+ * "Contas a pagar (o valor total da venda) na maioria das vezes é pago direto
+ * ao fornecedor. Contas a receber: a comissão gerada com a venda, a margem de
+ * dentro do produto. Toda venda gera uma comissão a receber."
+ *
+ * Então, por padrão, a linha de fornecedor é PAGA DIRETO: o cliente paga o
+ * fornecedor, nada passa pelo caixa da agência, e o que a agência tem a
+ * receber é a comissão, cobrada DO FORNECEDOR, igual à margem (venda menos
+ * custo). Não nasce conta do cliente nem conta a pagar.
+ *
+ * A agência recebe do cliente e paga o fornecedor (o modelo de antes) quando:
+ *  - o pagamento passou por uma plataforma da agência (Pagar.me, Asaas...):
+ *    o dinheiro do cliente entrou aqui;
+ *  - o cadastro do fornecedor diz que é a agência quem recebe do cliente;
+ *  - a linha não tem fornecedor nem custo (serviço da própria agência).
+ *
+ * Margem zero, negativa ou sem custo informado não inventa comissão a partir
+ * da venda: fica a do cadastro do fornecedor (comissão padrão), se houver.
+ */
+export interface ModoDaVenda {
+  /** O cliente pagou a agência por uma plataforma ligada a esta venda. */
+  pagoAAgencia: boolean;
+  /** Fornecedores cujo cadastro diz que a agência recebe do cliente. */
+  agenciaRecebeDe: ReadonlySet<string>;
+}
+
+export interface ComoNasce {
+  meio_pagamento: 'proprio' | 'fornecedor';
+  comissao_valor: number;
+  comissao_percentual: number;
+}
+
+export function comoALinhaNasce(l: Pick<LinhaCusto, 'fornecedor_id' | 'valor_custo' | 'valor_venda' | 'sem_fornecedor'>, modo: ModoDaVenda): ComoNasce {
+  const proprio: ComoNasce = { meio_pagamento: 'proprio', comissao_valor: 0, comissao_percentual: 0 };
+  if (modo.pagoAAgencia) return proprio;
+  if (!l.fornecedor_id && !l.sem_fornecedor && num(l.valor_custo) <= 0) return proprio;
+  if (l.fornecedor_id && modo.agenciaRecebeDe.has(l.fornecedor_id)) return proprio;
+  const venda = round2(num(l.valor_venda));
+  const custo = round2(num(l.valor_custo));
+  const margem = round2(venda - custo);
+  if (custo <= 0 || margem <= 0 || venda <= 0) {
+    return { meio_pagamento: 'fornecedor', comissao_valor: 0, comissao_percentual: 0 };
+  }
+  return { meio_pagamento: 'fornecedor', comissao_valor: margem, comissao_percentual: round2((margem / venda) * 100) };
 }
