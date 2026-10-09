@@ -235,8 +235,9 @@ export default function FinanceiroVisaoGeralPage() {
           rotulo: 'Lançar conta',
           icone: Plus,
           menu: [
+            { rotulo: 'Venda', descricao: 'Serviços, fornecedores e a margem de cada um', icone: ArrowDownLeft, href: '/financeiro-ag/receber?nova=1' },
             { rotulo: 'Conta a pagar', descricao: 'Despesa ou acerto de fornecedor', icone: ArrowUpRight, href: '/financeiro-ag/pagar?nova=1' },
-            { rotulo: 'Conta a receber', descricao: 'Parcela que o cliente ainda vai pagar', icone: ArrowDownLeft, href: '/financeiro-ag/receber?nova=1' },
+            { rotulo: 'Outro recebimento', descricao: 'Reembolso, acerto, o que não é venda', icone: Plus, href: '/financeiro-ag/receber?nova=outro' },
             { rotulo: 'Transferência', descricao: 'Entre duas contas da agência', icone: ArrowLeftRight, href: '/financeiro-ag/transferencias?nova=1' },
           ],
         }}

@@ -4,7 +4,7 @@ import { emitirEventoCRM } from '@/lib/crm-integration';
 import { getTenantId } from '@/lib/tenant';
 import { getSession } from '@/lib/auth';
 import { podeVerTodasVendas } from '@/lib/permissoes';
-import { gerarContasVenda, type ItemVendaInput, type FornecedorInfo } from '@/lib/venda-financeiro';
+import { gerarContasVenda, receberPorFornecedorDe, type ItemVendaInput, type FornecedorInfo } from '@/lib/venda-financeiro';
 import { STATUS_BAIXADOS } from '@/lib/caixa-atomico';
 import { hojeISO } from '@/lib/money';
 
@@ -212,19 +212,20 @@ async function postComItens(body: PostComItensBody, tenantId: string) {
           AND COALESCE(data->>'status', '') = ANY($3::text[])`,
       [tenantId, venda.id, STATUS_BAIXADOS_SQL],
     );
-    // A venda antiga cuja conta a receber AGRUPADA já foi baixada continua
-    // agrupada. Quebrá-la por fornecedor agora criaria contas com chave natural
-    // nova ao lado da conta baixada (que é preservada, e com razão): a mesma
-    // receita apareceria duas vezes. Conta agrupada é a que não tem item de
-    // origem; a de comissão tem, e por isso não confunde.
-    const receberPorFornecedor = !crBaixadas.some(
-      r => !String((r.data as Record<string, unknown>)?.origem_item_id ?? ''),
-    );
+    // Venda lançada AQUI (este é o caminho manual; o CRM tem o dele): o
+    // cliente paga o total em parcelas, então a conta a receber é UMA por
+    // parcela. A margem de cada fornecedor fica nos itens, e cada fornecedor
+    // tem a sua conta a pagar. O comentário antigo já dizia isso, mas o código
+    // quebrava por fornecedor (3 fornecedores em 3x viravam 9 contas, e a
+    // prévia da tela mostrava 3).
+    //
+    // Exceção: venda que já tem conta a receber POR FORNECEDOR baixada
+    // continua quebrada. Juntar agora criaria a conta agrupada ao lado da
+    // baixada (que é preservada) e a mesma receita apareceria duas vezes.
+    const receberPorFornecedor = receberPorFornecedorDe(crBaixadas, 'manual');
 
     // 4. Gerar contas
     const resultado = gerarContasVenda({
-      // Venda vinda do CRM: uma conta a receber por fornecedor, ao lado da
-      // conta a pagar dele. Venda criada aqui dentro segue com a conta única.
       receberPorFornecedor,
       venda: vendaData as never,
       itens,

@@ -14,7 +14,7 @@ import {
   type ItemVendaData,
   type TipoProdutoVenda,
 } from './crm-types';
-import { gerarContasVenda, type ItemVendaInput, type FornecedorInfo } from './venda-financeiro';
+import { gerarContasVenda, receberPorFornecedorDe, type ItemVendaInput, type FornecedorInfo } from './venda-financeiro';
 import { round2, num, hojeISO } from './money';
 import { montarLinhasDeCusto, type FornecedorResolvido } from './venda-crm-itens';
 import { criarNotificacao } from './notificacoes';
@@ -1529,9 +1529,7 @@ export async function processarEventoCRM(
         // natural nova ao lado da conta baixada (que é preservada, e com
         // razão): a mesma receita apareceria duas vezes. Conta agrupada é a que
         // não tem item de origem; a de comissão tem, e por isso não confunde.
-        const receberPorFornecedor = !preservadasCR.some(
-          r => !String((r.data as Record<string, unknown>)?.origem_item_id ?? ''),
-        );
+        const receberPorFornecedor = receberPorFornecedorDe(preservadasCR, 'crm');
 
         // Gera CR/CP via lógica unificada (mesma usada por /vendas/nova).
         const contasGen = gerarContasVenda({

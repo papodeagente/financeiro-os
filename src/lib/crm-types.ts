@@ -187,6 +187,8 @@ export interface ItemVendaData {
   data_fim: string;
   observacoes: string;
   contas_geradas_ids: string[];
+  /** Quando pagar o fornecedor deste item. Vazio usa o prazo do cadastro dele. */
+  data_pagamento_fornecedor?: string;
 }
 
 export interface ProdutoVenda {
@@ -268,6 +270,8 @@ export interface VendaCRM {
   itens_count?: number;
   contas_geradas?: boolean;
   contas_geradas_em?: string;
+  /** Vencimento da 1ª parcela do cliente. Vazio: um mês depois da venda (regra antiga). */
+  primeiro_vencimento?: string;
 }
 
 export interface Orcamento {

@@ -66,6 +66,27 @@ export interface VendaInput {
   receberPorFornecedor?: boolean;
 }
 
+/**
+ * A conta a receber do cliente sai agrupada (uma por parcela) ou quebrada por
+ * fornecedor? Decide pelo caminho de onde a venda veio e pelo que já foi
+ * baixado, porque conta baixada é preservada e mudar a forma ao lado dela
+ * contaria a mesma receita duas vezes.
+ *
+ *  - CRM: quebrada por fornecedor (decisão de 09/09/2026), a não ser que a
+ *    venda já tenha conta AGRUPADA baixada (sem item de origem).
+ *  - Manual (lançada no Financeiro): agrupada, porque o cliente paga o total em
+ *    parcelas. A não ser que já tenha conta POR FORNECEDOR baixada.
+ */
+export function receberPorFornecedorDe(
+  baixadas: ReadonlyArray<{ data?: unknown }>,
+  caminho: 'crm' | 'manual',
+): boolean {
+  const dados = baixadas.map(r => (r.data ?? {}) as Record<string, unknown>);
+  if (caminho === 'crm') return !dados.some(d => !String(d.origem_item_id ?? ''));
+  return dados.some(d => String(d.origem ?? '') === 'VENDA'
+    && Boolean(String(d.origem_item_id ?? '') || String(d.origem_fornecedor_id ?? '')));
+}
+
 export interface ContasGeradas {
   contas_receber: ContaReceber[];
   contas_pagar: ContaPagar[];
@@ -232,7 +253,9 @@ export function gerarContasVenda(input: VendaInput): ContasGeradas {
         cambio,
         valor_brl: custoBRL,
         data_emissao: hoje,
-        data_vencimento: calcularVencimentoPagamento(venda.data_venda, fornecedor),
+        // A data escolhida no lançamento manda; sem ela, o prazo do cadastro.
+        data_vencimento: dataValida(item.data.data_pagamento_fornecedor)
+          || calcularVencimentoPagamento(venda.data_venda, fornecedor),
         data_pagamento: null,
         valor_pago: null,
         conta_bancaria_id: null,
@@ -357,11 +380,11 @@ export function gerarContasVenda(input: VendaInput): ContasGeradas {
           juros: 0, multa: 0, desconto: 0,
           valor_final: valoresParcela[p - 1],
           data_emissao: hoje,
-          data_vencimento: calcularVencimentoParcela(venda.data_venda, p, parcelas),
+          data_vencimento: calcularVencimentoParcela(venda.data_venda, p, parcelas, venda.primeiro_vencimento),
           data_recebimento: null,
           valor_recebido: null,
           conta_bancaria_id: null,
-          forma_recebimento: '',
+          forma_recebimento: formaDeRecebimento(venda.forma_pagamento),
           taxa: 0,
           taxa_plataforma: '',
           parcela_numero: p,
@@ -384,7 +407,7 @@ export function gerarContasVenda(input: VendaInput): ContasGeradas {
     const valoresParcela = dividirParcelas(total_cliente, parcelas);
 
     for (let p = 1; p <= parcelas; p++) {
-      const venc = calcularVencimentoParcela(venda.data_venda, p, parcelas);
+      const venc = calcularVencimentoParcela(venda.data_venda, p, parcelas, venda.primeiro_vencimento);
       const valorEsta = valoresParcela[p - 1];
 
       const cr: ContaReceber = {
@@ -407,7 +430,7 @@ export function gerarContasVenda(input: VendaInput): ContasGeradas {
         data_recebimento: null,
         valor_recebido: null,
         conta_bancaria_id: null,
-        forma_recebimento: '',
+        forma_recebimento: formaDeRecebimento(venda.forma_pagamento),
         taxa: 0,
         taxa_plataforma: '',
         parcela_numero: p,
@@ -456,6 +479,26 @@ function calcularVencimentoParcela(
   dataVenda: string,
   parcela: number,
   _totalParcelas: number,
+  primeiroVencimento?: string,
 ): string {
+  // Com o 1º vencimento escolhido no lançamento, as parcelas seguem dele de
+  // mês em mês. Sem ele, a regra antiga: a 1ª vence um mês depois da venda
+  // (é o que as vendas do CRM e as já lançadas esperam).
+  const primeiro = dataValida(primeiroVencimento);
+  if (primeiro) return addMeses(primeiro, parcela - 1);
   return addMeses(dataVenda, parcela);
+}
+
+function dataValida(d: unknown): string {
+  const s = String(d ?? '').slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : '';
+}
+
+/** Forma de pagamento da venda → forma de recebimento da conta do cliente. */
+function formaDeRecebimento(forma: unknown): ContaReceber['forma_recebimento'] {
+  const f = String(forma ?? '');
+  if (f === 'AVISTA_PIX') return 'PIX';
+  if (f === 'CARTAO') return 'CARTAO';
+  if (f === 'BOLETO') return 'BOLETO';
+  return '';
 }

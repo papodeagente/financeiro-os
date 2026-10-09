@@ -33,14 +33,16 @@ export type RecordSheetProps = {
   acaoSecundaria?: { rotulo: string; onClick: () => void } | null;
   /** Avisa antes de fechar com alteração pendente. */
   sujo?: boolean;
-  largura?: 480 | 640;
+  largura?: 480 | 640 | 960;
 };
 
 // No centro a janela tem mais respiro que a gaveta tinha: os formulários de
 // duas colunas deixam de ficar espremidos.
-const LARGURA: Record<480 | 640, string> = {
+const LARGURA: Record<480 | 640 | 960, string> = {
   480: 'sm:max-w-[560px]',
   640: 'sm:max-w-[720px]',
+  // Para formulário com linhas lado a lado (a venda com os fornecedores).
+  960: 'sm:max-w-[960px]',
 };
 
 const ALTURA_ACAO = 'h-11 lg:h-10';

@@ -31,6 +31,7 @@ import { StatusChip, rotuloStatus } from '@/components/fin/StatusChip';
 import { EtiquetaDaPlataforma } from '@/components/fin/EtiquetaDaPlataforma';
 import { descricaoSemPlataforma, nomeDaPlataforma, plataformaDaConta } from '@/lib/plataformas/rotulo';
 import { BaixaDeReceber, valorEmAberto } from './BaixaDeReceber';
+import { NovaVenda } from './NovaVenda';
 import { DetalheDaPlataforma } from './DetalheDaPlataforma';
 import { PainelNota } from './PainelNota';
 import type { NotaFiscal } from '@/lib/nfse-tipos';
@@ -97,6 +98,8 @@ export default function ContasReceberPage() {
   const [formTocado, setFormTocado] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [baixaAlvo, setBaixaAlvo] = useState<ContaReceber | null>(null);
+  // A venda de turismo (serviços, fornecedores e margem) é o lançamento comum.
+  const [vendaAberta, setVendaAberta] = useState(false);
   const [detalheAlvo, setDetalheAlvo] = useState<ContaReceber | null>(null);
   const [exclusaoAlvo, setExclusaoAlvo] = useState<ContaReceber | null>(null);
   const [excluindo, setExcluindo] = useState(false);
@@ -141,7 +144,10 @@ export default function ContasReceberPage() {
   function aplicarAtalhos() {
     const a = lerAtalhos();
     if (a.get('status') === 'ATRASADO') setFilterStatus('ATRASADO');
-    if (a.get('nova') === '1') { consumirAtalho('nova'); openNew(); }
+    // ?nova=1 é venda (o lançamento comum de uma agência); ?nova=outro é a
+    // conta a receber simples (reembolso, acerto, aluguel).
+    if (a.get('nova') === '1') { consumirAtalho('nova'); setVendaAberta(true); }
+    if (a.get('nova') === 'outro') { consumirAtalho('nova'); openNew(); }
   }
 
   // Uma vez, ao abrir a tela: o atalho do endereço não é um estado a seguir.
@@ -528,11 +534,11 @@ export default function ContasReceberPage() {
           titulo: 'Nenhuma conta a receber lançada',
           oQueE: 'Aqui ficam as cobranças que os clientes ainda vão pagar para a agência.',
           comoComeca: [
-            'Lance a primeira conta pelo botão Nova conta a receber.',
-            'Informe cliente, descrição, valor e data de vencimento.',
+            'Lance a primeira venda pelo botão Nova venda: cliente, serviços e fornecedores.',
+            'Cada serviço tem o net e o preço de venda; a margem sai da diferença.',
             'Quando o dinheiro entrar, use Receber para registrar o valor, total ou em parte.',
           ],
-          acao: { rotulo: 'Nova conta a receber', onClick: openNew },
+          acao: { rotulo: 'Nova venda', onClick: () => setVendaAberta(true) },
         }
       : {
           motivo: 'sem-resultado' as const,
@@ -549,7 +555,8 @@ export default function ContasReceberPage() {
         <PageHeader
           titulo="Contas a receber"
           subtitulo="O que os clientes ainda devem para a agência."
-          acaoPrimaria={{ rotulo: 'Nova conta a receber', icone: Plus, onClick: openNew }}
+          acaoPrimaria={{ rotulo: 'Nova venda', icone: Plus, onClick: () => setVendaAberta(true) }}
+          acoesSecundarias={[{ rotulo: 'Outro recebimento', onClick: openNew }]}
           atualizadoEm={atualizadoEm}
           onRecarregar={load}
         />
@@ -664,7 +671,7 @@ export default function ContasReceberPage() {
           setShowForm(aberto);
           if (!aberto) setFormTocado(false);
         }}
-        titulo={editId ? 'Editar conta a receber' : 'Nova conta a receber'}
+        titulo={editId ? 'Editar conta a receber' : 'Outro recebimento'}
         descricao="Os valores entram nos indicadores assim que a conta é salva."
         sujo={formTocado}
         largura={640}
@@ -703,6 +710,13 @@ export default function ContasReceberPage() {
         aberto={Boolean(notaAlvo)}
         onFechar={() => setNotaAlvo(null)}
         onEmitida={() => { load(); }}
+      />
+
+      <NovaVenda
+        aberto={vendaAberta}
+        onFechar={() => setVendaAberta(false)}
+        onGravada={() => { load(); }}
+        onOutroRecebimento={() => { setVendaAberta(false); openNew(); }}
       />
 
       <BaixaDeReceber

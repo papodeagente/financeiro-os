@@ -21,7 +21,7 @@
  *
  * Roda com: node --experimental-strip-types scripts/test-custo-fornecedor-real.ts
  */
-import { gerarContasVenda } from '../src/lib/venda-financeiro.ts';
+import { gerarContasVenda, receberPorFornecedorDe } from '../src/lib/venda-financeiro.ts';
 import { calcularResultado } from '../src/lib/resultado-financeiro.ts';
 import { montarLinhasDeCusto, DESCRICAO_SEM_FORNECEDOR, DESCRICAO_PROPRIO } from '../src/lib/venda-crm-itens.ts';
 import { soma, round2 } from '../src/lib/money.ts';
@@ -600,15 +600,24 @@ console.log('\n--- venda antiga que já recebeu não muda de forma ---');
   // ter item de origem). Numa reentrega do evento, a conta agrupada já baixada
   // é preservada e as novas entrariam ao lado: a mesma receita, duas vezes.
   // Os dois caminhos do CRM decidem a forma pelo que já existe baixado.
-  const guarda = /receberPorFornecedor = !\w+\.some\(\s*r => !String\(\(r\.data as Record<string, unknown>\)\?\.origem_item_id \?\? ''\),\s*\)/;
-  for (const arquivo of ['src/lib/crm-integration.ts', 'src/app/api/vendas-crm/route.ts']) {
+  // A decisão é uma função só (receberPorFornecedorDe), chamada pelos dois
+  // caminhos ANTES de gerar. Antes este teste conferia o TEXTO da regra nos
+  // dois arquivos, e assim travava o defeito: a venda manual também saía
+  // quebrada por fornecedor, embora o comentário dissesse o contrário.
+  for (const [arquivo, caminho] of [['src/lib/crm-integration.ts', 'crm'], ['src/app/api/vendas-crm/route.ts', 'manual']] as const) {
     const src = readFileSync(new URL('../' + arquivo, import.meta.url), 'utf8');
-    eq(guarda.test(src), true, `${arquivo}: a forma da conta olha o que já foi baixado`);
-    // e a leitura das baixadas acontece ANTES de gerar, senão a decisão chega tarde
+    eq(src.includes(`receberPorFornecedorDe(`) && src.includes(`'${caminho}')`), true, `${arquivo}: decide pela função, caminho ${caminho}`);
     const iBaixadas = src.indexOf("FROM contas_receber\n");
     const iGerar = src.indexOf('gerarContasVenda({');
     eq(iBaixadas > 0 && iBaixadas < iGerar, true, `${arquivo}: lê as baixadas antes de gerar`);
   }
+  const agrupadaBaixada = [{ data: { origem: 'VENDA', status: 'RECEBIDO' } }];
+  const quebradaBaixada = [{ data: { origem: 'VENDA', status: 'RECEBIDO', origem_item_id: 'i1', origem_fornecedor_id: 'f1' } }];
+  const comissaoBaixada = [{ data: { origem: 'COMISSAO_FORNECEDOR', status: 'RECEBIDO', origem_item_id: 'i2' } }];
+  eq([receberPorFornecedorDe([], 'crm'), receberPorFornecedorDe(agrupadaBaixada, 'crm'), receberPorFornecedorDe(quebradaBaixada, 'crm')],
+    [true, false, true], 'CRM: quebrada por fornecedor, a não ser que já tenha a agrupada baixada');
+  eq([receberPorFornecedorDe([], 'manual'), receberPorFornecedorDe(agrupadaBaixada, 'manual'), receberPorFornecedorDe(quebradaBaixada, 'manual'), receberPorFornecedorDe(comissaoBaixada, 'manual')],
+    [false, false, true, false], 'manual: agrupada, a não ser que já tenha conta por fornecedor baixada (comissão não conta)');
   // /vendas/nova continua sem a opção: venda criada no financeiro é conta única.
   const nova = readFileSync(new URL('../src/app/vendas/nova/page.tsx', import.meta.url), 'utf8');
   eq(nova.includes('receberPorFornecedor'), false, 'a venda manual não passa a opção');
