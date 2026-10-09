@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { lerAtalhos } from '@/lib/atalho-da-url';
 import { ArrowDownLeft, Download, ExternalLink, Landmark, Link2, ListChecks, Percent, RotateCcw, Search } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -160,6 +161,14 @@ export default function RecebimentosPlataformasPage() {
   }, [de, ate, filtro, busca]);
 
   useEffect(() => { void carregar(); }, [carregar]);
+
+  // A visão geral chega aqui com ?status=SUGERIDA ("pagamentos para ligar a uma venda").
+  function aplicarAtalhos() {
+    const status = lerAtalhos().get('status');
+    if (status) setFiltro(status);
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { aplicarAtalhos(); }, []);
 
   async function revisarHotmart() {
     if (revisando) return;

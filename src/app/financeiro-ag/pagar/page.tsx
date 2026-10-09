@@ -6,6 +6,7 @@ import { ArrowUpRight, Plus, Target, TriangleAlert } from 'lucide-react';
 import { ContaPagar, PlanoContas, createContaPagar, StatusContaPagar, CartaoCorporativo } from '@/lib/crm-types';
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
 import { toast } from '@/lib/toast';
+import { consumirAtalho, lerAtalhos } from '@/lib/atalho-da-url';
 import {
   round2, num, somaPor, paraBRL,
   hojeISO, addDias, addMeses, dataSegura, estaVencido, mesDe, dentroDoPeriodo,
@@ -26,8 +27,8 @@ import type { PeriodoChave, PeriodoRange } from '@/components/fin/PeriodPicker';
 import { rotuloStatus } from '@/components/fin/StatusChip';
 
 import { criarColunas, semFornecedor } from './colunas';
-import { DialogBaixa } from './DialogBaixa';
-import type { Anexo } from '@/components/fin/AnexoComprovante';
+import { BaixaDePagar } from './BaixaDePagar';
+import { saldoDevedor, valorBRLDaConta } from './valores';
 import { FormularioConta } from './FormularioConta';
 import { PainelCopiarMes } from './PainelCopiarMes';
 import { EMPTY_FORM, SEM_ERRO, type ErrosDoFormulario, type FiltroPeriodo, type FormState, type RecorrenciaPeriodo } from './tipos';
@@ -47,26 +48,6 @@ function getMonthLabel(ym: string): string {
 
 function addMonth(ym: string): string {
   return mesDe(addMeses(`${ym}-01`, 1));
-}
-
-/**
- * Valor da conta em BRL.
- *
- * `valor_final` é BRL por contrato (ver venda-financeiro.ts), tanto nas contas
- * geradas por venda quanto nas lançadas à mão. Não se infere formato comparando
- * valor_final com valor_original: contas antigas em moeda estrangeira têm os
- * dois iguais e legitimamente em BRL, e converter de novo inflaria o valor pelo
- * câmbio. `valor_brl` é usado só quando valor_final está ausente.
- */
-function valorBRLDaConta(i: ContaPagar): number {
-  const final = num(i.valor_final);
-  if (final) return round2(final);
-  return round2(num(i.valor_brl));
-}
-
-/** Quanto ainda falta pagar (em BRL). Conta PARCIAL mantém o saldo visível. */
-function saldoDevedor(i: ContaPagar): number {
-  return round2(valorBRLDaConta(i) - num(i.valor_pago));
 }
 
 /** Está em aberto (PENDENTE/PARCIAL/VENCIDO) com vencimento anterior a hoje. */
@@ -193,20 +174,11 @@ export default function ContasPagarPage() {
   const [copyTargetMonth, setCopyTargetMonth] = useState('');
   const [copying, setCopying] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [pagando, setPagando] = useState(false);
   const [excluindo, setExcluindo] = useState<ContaPagar | null>(null);
   const [removendo, setRemovendo] = useState(false);
-  // Estado do diálogo de confirmação de pagamento
-  const [pagarModal, setPagarModal] = useState<{
-    item: ContaPagar;
-    dataPagamento: string;
-    valorPago: number;
-    observacao: string;
-    anexos: Anexo[];
-  } | null>(null);
-  /** Trava o confirmar enquanto o comprovante sobe, para a baixa não ser
-   *  gravada sem o anexo que o usuário acabou de escolher. */
-  const [enviandoAnexo, setEnviandoAnexo] = useState(false);
+  // A conta cuja baixa está aberta. O diálogo e a regra vivem em BaixaDePagar,
+  // o mesmo componente que a visão geral abre.
+  const [contaAPagar, setContaAPagar] = useState<ContaPagar | null>(null);
 
   async function load() {
     setLoading(true);
@@ -227,7 +199,19 @@ export default function ContasPagarPage() {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  // A visão geral chega aqui com ?nova=1 (lançar), ?status=VENCIDO ou
+  // ?sem_fornecedor=1. Os dois filtros abrem em todo o período: o vencido de
+  // um mês passado não pode ficar escondido atrás de "Este mês".
+  function aplicarAtalhos() {
+    const a = lerAtalhos();
+    if (a.get('status') === 'VENCIDO') setFilterPeriodo('VENCIDOS');
+    if (a.get('sem_fornecedor') === '1') { setFilterPeriodo('TODOS'); setFilterSemFornecedor(true); }
+    if (a.get('nova') === '1') { consumirAtalho('nova'); openNew(); }
+  }
+
+  // Uma vez, ao abrir a tela: o atalho do endereço não é um estado a seguir.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); aplicarAtalhos(); }, []);
 
   // When a categoria is selected, auto-fill natureza/comercial from plano de contas
   function onCategoriaChange(catId: string) {
@@ -368,58 +352,7 @@ export default function ContasPagarPage() {
   function abrirModalPagar(item: ContaPagar) {
     setShowForm(false);
     setShowCopyModal(false);
-    setPagarModal({
-      item,
-      dataPagamento: hojeISO(),
-      // default = saldo ainda devido (não o valor cheio), pra baixa de conta PARCIAL
-      valorPago: saldoDevedor(item),
-      observacao: '',
-      // Sempre vazio: o que já estava anexado na conta continua lá, e o
-      // que se anexa aqui é o comprovante DESTA baixa.
-      anexos: [],
-    });
-    setEnviandoAnexo(false);
-  }
-
-  async function confirmarPagamento() {
-    if (!pagarModal || pagando) return;
-    const { item, dataPagamento, valorPago, observacao, anexos } = pagarModal;
-    const pagoAgora = round2(num(valorPago));
-    if (pagoAgora <= 0) { toast.error('Valor pago deve ser maior que zero'); return; }
-
-    const devido = valorBRLDaConta(item);
-    // Baixa parcial ACUMULA sobre o que já foi pago antes, nunca substitui,
-    // senão o restante da dívida some do sistema.
-    const acumulado = round2(num(item.valor_pago) + pagoAgora);
-    const restante = round2(devido - acumulado);
-    const quitado = restante <= 0.005;
-
-    setPagando(true);
-    try {
-      // Acumula: baixa parcial pode ter comprovante em cada parcela, e o
-      // anexo de uma não pode apagar o da outra.
-      const anexosFinais = [...(item.anexos ?? []), ...anexos];
-      const updated: ContaPagar = {
-        ...item,
-        status: quitado ? 'PAGO' : 'PARCIAL',
-        data_pagamento: dataPagamento,
-        valor_pago: acumulado,
-        observacoes: observacao ? `${item.observacoes ? item.observacoes + ' · ' : ''}${observacao}` : item.observacoes,
-        anexos: anexosFinais,
-        // `comprovante` guarda o mais recente, para quem lê um campo só.
-        comprovante: anexos.length > 0 ? anexos[anexos.length - 1].url : item.comprovante,
-      };
-      await updateEntity('contas-pagar', updated);
-      setPagarModal(null);
-      if (quitado) {
-        toast.success('Pagamento confirmado', `${item.fornecedor_nome} · ${formatBRL(pagoAgora)}`);
-      } else {
-        toast.success('Pagamento em parte registrado', `${item.fornecedor_nome} · pago ${formatBRL(pagoAgora)} · saldo ${formatBRL(restante)}`);
-      }
-      load();
-    } finally {
-      setPagando(false);
-    }
+    setContaAPagar(item);
   }
 
   async function confirmarExclusao() {
@@ -851,29 +784,10 @@ export default function ContasPagarPage() {
         onCopiar={() => { void handleCopyMonth(); }}
       />
 
-      <DialogBaixa
-        item={pagarModal?.item ?? null}
-        dataPagamento={pagarModal?.dataPagamento ?? ''}
-        valorPago={pagarModal?.valorPago ?? 0}
-        observacao={pagarModal?.observacao ?? ''}
-        onDataPagamento={v => setPagarModal(m => (m ? { ...m, dataPagamento: v } : m))}
-        onValorPago={v => setPagarModal(m => (m ? { ...m, valorPago: v } : m))}
-        onObservacao={v => setPagarModal(m => (m ? { ...m, observacao: v } : m))}
-        anexos={pagarModal?.anexos ?? []}
-        onAnexos={v => setPagarModal(m => (m ? { ...m, anexos: v } : m))}
-        onEnviandoAnexo={setEnviandoAnexo}
-        enviandoAnexo={enviandoAnexo}
-        valorDaConta={pagarModal ? valorBRLDaConta(pagarModal.item) : 0}
-        jaPago={pagarModal ? num(pagarModal.item.valor_pago) : 0}
-        saldoDevedor={pagarModal ? saldoDevedor(pagarModal.item) : 0}
-        restanteDepois={
-          pagarModal
-            ? round2(saldoDevedor(pagarModal.item) - round2(num(pagarModal.valorPago)))
-            : 0
-        }
-        pagando={pagando}
-        onFechar={() => setPagarModal(null)}
-        onConfirmar={() => { void confirmarPagamento(); }}
+      <BaixaDePagar
+        conta={contaAPagar}
+        onFechar={() => setContaAPagar(null)}
+        onRegistrada={() => { load(); }}
       />
 
       <ConfirmDialog

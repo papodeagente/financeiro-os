@@ -12,19 +12,18 @@ const ROTA_DO_PILAR: Record<Pillar, string> = {
   configuracoes: '/config/agencia',
 };
 import {
-  Wallet, Gauge,
+  Wallet,
   Wallet2,
   ShoppingBag,
   LayoutDashboard, Medal, Percent, Settings, UserCheck,
-  BarChart3,
-  BarChart3 as FluxoIcon, FileSpreadsheet, Receipt, CreditCard,
-  BookOpen, Landmark, ArrowRightLeft, Package,
-  ListOrdered, UserPlus, Building2, Briefcase,
-  DollarSign, TrendingUp as RentIcon, Link2,
+  Receipt, CreditCard,
+  Landmark, ArrowRightLeft,
+  Building2, Link2,
   GitBranch as MindIcon,
   Users, ClipboardList,
   PanelLeftClose, PanelLeftOpen,
   Eraser, LifeBuoy, FileText,
+  LayoutGrid, ChartColumn, ArrowDownLeft, ArrowUpRight, GitCompareArrows, ListTree,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -70,48 +69,36 @@ const METAS_MENU: SidebarSection[] = [
   },
 ];
 
+// Menu do Financeiro simplificado (protótipo aprovado pelo Bruno, 08/10/2026):
+// o que se olha, o que se faz no dia a dia e o que se cadastra uma vez.
+// Recebimentos das plataformas, vendas, pessoas e relatórios saíram do menu e
+// continuam na busca (⌘K) e nos atalhos de cada tela: a visão geral leva aos
+// recebimentos para conferir, a conta a receber leva ao cliente e à venda.
 const FINANCEIRO_MENU: SidebarSection[] = [
   {
     title: 'Visão geral',
     items: [
-      { key: 'fin-hub', label: 'Visão geral', icon: FluxoIcon, href: '/financeiro-ag' },
-      { key: 'fluxo-caixa', label: 'Fluxo de caixa', icon: FluxoIcon, href: '/financeiro-ag/fluxo-caixa' },
-      { key: 'dre', label: 'DRE', icon: FileSpreadsheet, href: '/financeiro-ag/dre' },
-      { key: 'receber', label: 'Contas a receber', icon: Receipt, href: '/financeiro-ag/receber' },
-      { key: 'recebimentos-plataformas', label: 'Recebimentos', icon: Receipt, href: '/financeiro-ag/recebimentos' },
-      { key: 'pagar', label: 'Contas a pagar', icon: CreditCard, href: '/financeiro-ag/pagar' },
-      { key: 'notas-fiscais', label: 'Notas fiscais', icon: FileText, href: '/financeiro-ag/notas' },
-      { key: 'conciliacao', label: 'Conciliação', icon: FileSpreadsheet, href: '/financeiro-ag/conciliacao' },
+      { key: 'fin-hub', label: 'Visão geral', icon: LayoutGrid, href: '/financeiro-ag' },
+      { key: 'fluxo-caixa', label: 'Fluxo de caixa', icon: ChartColumn, href: '/financeiro-ag/fluxo-caixa' },
+      { key: 'dre', label: 'Resultado do mês', icon: FileText, href: '/financeiro-ag/dre' },
+    ],
+  },
+  {
+    title: 'Dia a dia',
+    items: [
+      { key: 'receber', label: 'Contas a receber', icon: ArrowDownLeft, href: '/financeiro-ag/receber' },
+      { key: 'pagar', label: 'Contas a pagar', icon: ArrowUpRight, href: '/financeiro-ag/pagar' },
+      { key: 'conciliacao', label: 'Conciliação', icon: GitCompareArrows, href: '/financeiro-ag/conciliacao' },
+      { key: 'notas-fiscais', label: 'Notas fiscais', icon: Receipt, href: '/financeiro-ag/notas' },
       { key: 'transferencias', label: 'Transferências', icon: ArrowRightLeft, href: '/financeiro-ag/transferencias' },
-      { key: 'plano-contas', label: 'Plano de contas', icon: BookOpen, href: '/financeiro-ag/plano-contas' },
+    ],
+  },
+  {
+    title: 'Cadastros',
+    items: [
       { key: 'contas-bancarias', label: 'Contas bancárias', icon: Landmark, href: '/financeiro-ag/contas-bancarias' },
       { key: 'cartoes-corp', label: 'Cartões', icon: CreditCard, href: '/financeiro-ag/cartoes' },
-    ],
-  },
-  {
-    title: 'Produtos e vendas',
-    items: [
-      { key: 'fin-grupos', label: 'Por produto', icon: Package, href: '/financeiro-grupos' },
-      { key: 'lista-vendas', label: 'Vendas fechadas', icon: ListOrdered, href: '/vendas' },
-    ],
-  },
-  {
-    title: 'Pessoas',
-    items: [
-      { key: 'clientes', label: 'Clientes', icon: UserPlus, href: '/pessoas/clientes' },
-      { key: 'fornecedores', label: 'Fornecedores', icon: Building2, href: '/pessoas/fornecedores' },
-      { key: 'equipe', label: 'Equipe', icon: Briefcase, href: '/equipe/vendedores' },
-    ],
-  },
-  {
-    title: 'Relatórios',
-    items: [
-      { key: 'rel-financeiro', label: 'Relatórios', icon: DollarSign, href: '/relatorios/financeiro' },
-      { key: 'rel-lucro-real', label: 'Lucro real', icon: Wallet, href: '/relatorios/lucro-real' },
-      { key: 'rel-rentabilidade', label: 'Rentabilidade', icon: RentIcon, href: '/relatorios/rentabilidade' },
-      { key: 'rel-comparativo', label: 'Comparativo mensal', icon: BarChart3, href: '/relatorios/comparativo' },
-      { key: 'rel-taxas', label: 'Taxas de pagamento', icon: Percent, href: '/relatorios/taxas' },
-      { key: 'cac-dashboard', label: 'Dashboard CAC', icon: Gauge, href: '/cac/dashboard' },
+      { key: 'plano-contas', label: 'Categorias', icon: ListTree, href: '/financeiro-ag/plano-contas' },
     ],
   },
 ];
@@ -162,6 +149,18 @@ interface PillarSidebarProps {
   comSeletorDePilar?: boolean;
 }
 
+/** Itens que só acendem na página exata, nunca nas de baixo. */
+const SO_EXATO = new Set(['/financeiro-ag']);
+
+/** Páginas fora do menu e o item que acende quando a pessoa está nelas. */
+const PAI_NO_MENU: Array<[string, string]> = [
+  ['/financeiro-ag/recebimentos', '/financeiro-ag/receber'],
+  ['/pessoas/clientes', '/financeiro-ag/receber'],
+  ['/pessoas/fornecedores', '/financeiro-ag/pagar'],
+  ['/relatorios', '/financeiro-ag/dre'],
+  ['/cac', '/financeiro-ag/dre'],
+];
+
 export function PillarSidebar({ collapsed = false, onToggle, comSeletorDePilar = false }: PillarSidebarProps) {
   const pathname = usePathname();
   const activePillar = useActivePillar();
@@ -173,12 +172,19 @@ export function PillarSidebar({ collapsed = false, onToggle, comSeletorDePilar =
   // Um item ativo só: o MAIS ESPECÍFICO que casa com a rota. Antes era
   // "casa por prefixo", e em /financeiro-ag/receber acendiam juntos
   // "Visão geral" (/financeiro-ag) e "Contas a receber".
+  //
+  // "Visão geral" do Financeiro só acende nela mesma: as páginas fora do menu
+  // (Recebimentos das plataformas, por exemplo) também moram em /financeiro-ag,
+  // e acendê-la ali dizia que a pessoa estava onde não estava. Essas páginas
+  // acendem o item mais próximo do que fazem (PAI_NO_MENU).
   const casa = (href: string) =>
-    pathname === href || (href !== '/' && pathname.startsWith(href + '/')) || (href === '/grupos' && pathname === '/');
-  const hrefAtivo = sections
-    .flatMap(sec => sec.items.map(it => it.href))
-    .filter(casa)
-    .sort((a, b) => b.length - a.length)[0] ?? null;
+    pathname === href
+    || (href !== '/' && !SO_EXATO.has(href) && pathname.startsWith(href + '/'))
+    || (href === '/grupos' && pathname === '/');
+  const hrefs = sections.flatMap(sec => sec.items.map(it => it.href));
+  const pai = PAI_NO_MENU.find(([prefixo]) => pathname === prefixo || pathname.startsWith(prefixo + '/'));
+  const hrefAtivo = hrefs.filter(casa).sort((a, b) => b.length - a.length)[0]
+    ?? (pai && hrefs.includes(pai[1]) ? pai[1] : null);
   const isActive = (href: string) => href === hrefAtivo;
 
   return (

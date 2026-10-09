@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { cn } from '@/lib/utils';
 
-export type OpcaoSegmentada<T extends string> = { valor: T; rotulo: string };
+export type OpcaoSegmentada<T extends string> = { valor: T; rotulo: string; /** Contagem em cinza depois do rótulo: "Tudo 17". */ contagem?: number };
 
 export type SegmentadoProps<T extends string> = {
   /** Nome do grupo para leitor de tela: "Período", "Agrupar por". */
@@ -72,6 +72,9 @@ export function Segmentado<T extends string>({
             )}
           >
             {o.rotulo}
+            {o.contagem !== undefined ? (
+              <span className="ml-1 font-normal tabular-nums text-[var(--fin-text-3)]">{o.contagem}</span>
+            ) : null}
           </button>
         );
       })}

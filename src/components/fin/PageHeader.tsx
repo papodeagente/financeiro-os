@@ -2,7 +2,8 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { RefreshCw, type LucideIcon } from 'lucide-react';
+import { ChevronDown, RefreshCw, type LucideIcon } from 'lucide-react';
+import { Menu } from '@base-ui/react/menu';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -11,7 +12,14 @@ export type PageHeaderProps = {
   titulo: string;
   /** Uma linha em caption. Opcional e curta. Aceita <Jargao>. */
   subtitulo?: React.ReactNode;
-  acaoPrimaria?: { rotulo: string; icone?: LucideIcon; href?: string; onClick?: () => void };
+  acaoPrimaria?: {
+    rotulo: string;
+    icone?: LucideIcon;
+    href?: string;
+    onClick?: () => void;
+    /** Vira um menu: "Lançar conta ▾" com conta a pagar, a receber, transferência. */
+    menu?: { rotulo: string; descricao?: string; icone?: LucideIcon; href: string }[];
+  };
   acoesSecundarias?: { rotulo: string; href?: string; onClick?: () => void }[];
   badge?: React.ReactNode;
   /** Carimbo honesto: só é escrito quando load() TERMINOU com sucesso. */
@@ -146,7 +154,47 @@ export function PageHeader({
             ),
           )}
 
-          {acaoPrimaria ? (
+          {acaoPrimaria?.menu ? (
+            <Menu.Root>
+              {/* Aberto, o botão fantasma pintaria o fundo de cinza claro e o
+                  texto branco sumiria: fica no azul de quando se passa o mouse. */}
+              <Menu.Trigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className={cn(BOTAO_PRIMARIA, 'aria-expanded:bg-[var(--fin-accent-hover)] aria-expanded:text-[var(--fin-text-on-fill)]')}
+                  />
+                }
+              >
+                {IconePrimaria ? <IconePrimaria aria-hidden="true" className="size-4" /> : null}
+                {acaoPrimaria.rotulo}
+                <ChevronDown aria-hidden="true" className="size-4" />
+              </Menu.Trigger>
+              <Menu.Portal>
+                <Menu.Positioner align="end" sideOffset={6} className="z-[var(--fin-z-popover)]">
+                  <Menu.Popup className="w-[min(18rem,calc(100vw-2rem))] rounded-[var(--fin-r-md)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-1.5 shadow-[var(--fin-e2)] outline-none">
+                    {acaoPrimaria.menu.map(item => {
+                      const Icone = item.icone;
+                      return (
+                        <Menu.LinkItem
+                          key={item.href}
+                          render={<Link href={item.href} />}
+                          className="flex items-start gap-[var(--fin-s-2)] rounded-[var(--fin-r-sm)] px-2.5 py-2 text-[var(--fin-text)] outline-none data-[highlighted]:bg-[var(--fin-surface-2)]"
+                        >
+                          {Icone ? <Icone aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-[var(--fin-text-2)]" /> : null}
+                          <span className="flex flex-col">
+                            <span className="fin-t-body">{item.rotulo}</span>
+                            {item.descricao ? <span className="fin-t-caption text-[var(--fin-text-3)]">{item.descricao}</span> : null}
+                          </span>
+                        </Menu.LinkItem>
+                      );
+                    })}
+                  </Menu.Popup>
+                </Menu.Positioner>
+              </Menu.Portal>
+            </Menu.Root>
+          ) : acaoPrimaria ? (
             acaoPrimaria.href ? (
               <Button
                 variant="ghost"

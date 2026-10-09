@@ -8,11 +8,12 @@ import { ArrowDownLeft, Clock, Pencil, Plus, Trash2, TriangleAlert } from 'lucid
 import { ContaReceber, createContaReceber, StatusContaReceber } from '@/lib/crm-types';
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
 import { toast } from '@/lib/toast';
+import { consumirAtalho, lerAtalhos } from '@/lib/atalho-da-url';
 import {
-  mensagemDaTaxaInvalida, normalizarPlataforma, validarTaxa, type DescontoPadrao,
+  mensagemDaTaxaInvalida, normalizarPlataforma, validarTaxa,
 } from '@/lib/taxa-plataforma';
 import {
-  round2, num, somaPor, hojeISO, estaVencido, dentroDoPeriodo,
+  round2, num, somaPor, estaVencido, dentroDoPeriodo,
 } from '@/lib/money';
 
 import { PageShell } from '@/components/PageShell';
@@ -29,7 +30,7 @@ import { RecordSheet } from '@/components/fin/RecordSheet';
 import { StatusChip, rotuloStatus } from '@/components/fin/StatusChip';
 import { EtiquetaDaPlataforma } from '@/components/fin/EtiquetaDaPlataforma';
 import { descricaoSemPlataforma, nomeDaPlataforma, plataformaDaConta } from '@/lib/plataformas/rotulo';
-import { DialogBaixa } from './DialogBaixa';
+import { BaixaDeReceber, valorEmAberto } from './BaixaDeReceber';
 import { DetalheDaPlataforma } from './DetalheDaPlataforma';
 import { PainelNota } from './PainelNota';
 import type { NotaFiscal } from '@/lib/nfse-tipos';
@@ -47,10 +48,6 @@ function statusEfetivo(i: ContaReceber): StatusContaReceber {
   return i.status;
 }
 
-/** Quanto ainda falta receber (desconta baixas parciais já lançadas). */
-function valorEmAberto(i: ContaReceber): number {
-  return round2(num(i.valor_final) - num(i.valor_recebido));
-}
 
 const STATUSES: Array<StatusContaReceber | 'TODOS'> = ['TODOS', 'PENDENTE', 'RECEBIDO', 'ATRASADO', 'CANCELADO', 'PARCIAL'];
 
@@ -84,16 +81,11 @@ function contagem(n: number, singular: string, plural: string): string {
 
 export default function ContasReceberPage() {
   const [items, setItems] = useState<ContaReceber[]>([]);
-  const [descontosPadrao, setDescontosPadrao] = useState<DescontoPadrao[]>([]);
   // A lista de plataformas aprende com o que a agência já usou, para não
-  // exigir uma tela de cadastro antes do primeiro lançamento. As que têm
-  // desconto padrão entram mesmo sem nenhuma conta ainda.
+  // exigir uma tela de cadastro antes do primeiro lançamento.
   const plataformasUsadas = useMemo(
-    () => [
-      ...items.map(i => i.taxa_plataforma ?? ''),
-      ...descontosPadrao.map(p => p.plataforma),
-    ].filter(Boolean),
-    [items, descontosPadrao],
+    () => items.map(i => i.taxa_plataforma ?? '').filter(Boolean),
+    [items],
   );
   const [loading, setLoading] = useState(true);
   const [erroCarga, setErroCarga] = useState<string | null>(null);
@@ -106,7 +98,6 @@ export default function ContasReceberPage() {
   const [salvando, setSalvando] = useState(false);
   const [baixaAlvo, setBaixaAlvo] = useState<ContaReceber | null>(null);
   const [detalheAlvo, setDetalheAlvo] = useState<ContaReceber | null>(null);
-  const [baixando, setBaixando] = useState(false);
   const [exclusaoAlvo, setExclusaoAlvo] = useState<ContaReceber | null>(null);
   const [excluindo, setExcluindo] = useState(false);
   const [filterStatus, setFilterStatus] = useState<StatusContaReceber | 'TODOS'>('TODOS');
@@ -137,16 +128,6 @@ export default function ContasReceberPage() {
       } catch {
         setNotaPorConta({});
       }
-      // Mesmo princípio: sem os padrões a baixa só não vem pré-calculada.
-      try {
-        const res = await fetch('/api/plataformas/descontos');
-        if (res.ok) {
-          const corpo = (await res.json()) as { padroes?: DescontoPadrao[] };
-          setDescontosPadrao(Array.isArray(corpo.padroes) ? corpo.padroes : []);
-        }
-      } catch {
-        setDescontosPadrao([]);
-      }
       setErroCarga(null);
       setAtualizadoEm(new Date());
     } catch {
@@ -156,7 +137,16 @@ export default function ContasReceberPage() {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  // A visão geral chega aqui com ?nova=1 (lançar) ou ?status=ATRASADO (cobrar).
+  function aplicarAtalhos() {
+    const a = lerAtalhos();
+    if (a.get('status') === 'ATRASADO') setFilterStatus('ATRASADO');
+    if (a.get('nova') === '1') { consumirAtalho('nova'); openNew(); }
+  }
+
+  // Uma vez, ao abrir a tela: o atalho do endereço não é um estado a seguir.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); aplicarAtalhos(); }, []);
 
   function openNew() {
     setForm(EMPTY_FORM);
@@ -251,75 +241,6 @@ export default function ContasReceberPage() {
       toast.error('Não foi possível salvar a conta a receber.');
     } finally {
       setSalvando(false);
-    }
-  }
-
-  /**
-   * Baixa (total ou parcial). O usuário informa quanto entrou:
-   *  - valor >= saldo em aberto  → RECEBIDO, valor_recebido = valor_final
-   *  - valor < saldo em aberto   → PARCIAL, valor_recebido ACUMULA as baixas
-   * Nunca marca RECEBIDO integral quando entrou menos do que o devido.
-   */
-  async function handleBaixar(
-    item: ContaReceber,
-    dados: {
-      valorInformado: number;
-      taxaInformada: number;
-      plataforma: string;
-      novoPadrao: DescontoPadrao | null;
-    },
-  ) {
-    const informado = round2(dados.valorInformado);
-    if (informado <= 0) return;
-
-    const acumulado = round2(num(item.valor_recebido) + informado);
-    // tolerância de meio centavo pra não deixar conta aberta por arredondamento
-    const quitado = acumulado >= round2(num(item.valor_final)) - 0.005;
-    // A taxa ACUMULA, como o valor recebido: cada baixa parcial passa pela
-    // adquirente e é retida uma vez. Substituir o total pela retenção desta
-    // baixa apagaria as anteriores.
-    const taxaAcumulada = round2(num(item.taxa) + Math.max(0, round2(dados.taxaInformada)));
-    const plataforma = normalizarPlataforma(dados.plataforma) || (item.taxa_plataforma ?? '');
-    const updated: ContaReceber = {
-      ...item,
-      status: quitado ? 'RECEBIDO' : 'PARCIAL',
-      data_recebimento: hojeISO(),
-      valor_recebido: quitado ? round2(num(item.valor_final)) : acumulado,
-      taxa: taxaAcumulada,
-      taxa_plataforma: taxaAcumulada > 0 ? plataforma : (item.taxa_plataforma ?? ''),
-    };
-    setBaixando(true);
-    try {
-      await updateEntity('contas-receber', updated);
-      setBaixaAlvo(null);
-      toast.success(quitado ? 'Conta marcada como recebida.' : 'Recebimento em parte registrado.');
-      // O padrão é guardado DEPOIS da baixa e à parte dela: falhar aqui não
-      // pode desfazer nem esconder um recebimento que já foi registrado.
-      if (dados.novoPadrao) await guardarDescontoPadrao(dados.novoPadrao);
-      load();
-    } catch {
-      toast.error('Não foi possível registrar o recebimento.');
-    } finally {
-      setBaixando(false);
-    }
-  }
-
-  async function guardarDescontoPadrao(padrao: DescontoPadrao) {
-    try {
-      const res = await fetch('/api/plataformas/descontos', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(padrao),
-      });
-      const corpo = (await res.json().catch(() => ({}))) as { padroes?: DescontoPadrao[]; error?: string };
-      if (!res.ok) throw new Error(corpo.error || `Erro ${res.status}`);
-      if (Array.isArray(corpo.padroes)) setDescontosPadrao(corpo.padroes);
-      toast.success('Desconto padrão guardado.');
-    } catch (e) {
-      toast.error(
-        'O recebimento foi registrado, mas o desconto padrão não foi guardado.',
-        e instanceof Error ? e.message : '',
-      );
     }
   }
 
@@ -784,28 +705,11 @@ export default function ContasReceberPage() {
         onEmitida={() => { load(); }}
       />
 
-      <DialogBaixa
-        aberto={baixaAlvo !== null}
-        onOpenChange={aberto => { if (!aberto) setBaixaAlvo(null); }}
-        contaId={baixaAlvo?.id ?? null}
-        cliente={baixaAlvo?.cliente_nome ?? ''}
-        descricao={baixaAlvo?.descricao ?? ''}
-        valorDaConta={baixaAlvo ? num(baixaAlvo.valor_final) : 0}
-        jaRecebido={baixaAlvo ? num(baixaAlvo.valor_recebido) : 0}
-        emAberto={baixaAlvo ? valorEmAberto(baixaAlvo) : 0}
-        taxaJaRetida={baixaAlvo ? num(baixaAlvo.taxa) : 0}
-        // Conta que veio de integração já sabe a plataforma: o padrão dela
-        // entra sozinho, sem a pessoa precisar escolher.
-        plataformaAtual={
-          baixaAlvo
-            ? normalizarPlataforma(baixaAlvo.taxa_plataforma)
-              || nomeDaPlataforma(plataformaDaConta(baixaAlvo) ?? '')
-            : ''
-        }
+      <BaixaDeReceber
+        conta={baixaAlvo}
+        onFechar={() => setBaixaAlvo(null)}
+        onRegistrada={() => { load(); }}
         plataformasUsadas={plataformasUsadas}
-        descontosPadrao={descontosPadrao}
-        processando={baixando}
-        onConfirmar={dados => (baixaAlvo ? handleBaixar(baixaAlvo, dados) : undefined)}
       />
 
       <ConfirmDialog

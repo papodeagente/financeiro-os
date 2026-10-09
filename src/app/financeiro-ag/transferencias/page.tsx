@@ -7,6 +7,7 @@ import { TransferenciaBancaria, ContaBancaria, createTransferencia, StatusTransf
 import { loadEntities, saveEntity } from '@/lib/crm-storage';
 import { somaPor, round2, hojeISO } from '@/lib/money';
 import { toast } from '@/lib/toast';
+import { consumirAtalho, lerAtalhos } from '@/lib/atalho-da-url';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -178,7 +179,14 @@ export default function TransferenciasPage() {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  // A visão geral chega aqui com ?nova=1 ("Lançar conta" → Transferência).
+  function aplicarAtalhos() {
+    if (lerAtalhos().get('nova') === '1') { consumirAtalho('nova'); openNew(); }
+  }
+
+  // Uma vez, ao abrir a tela: o atalho do endereço não é um estado a seguir.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); aplicarAtalhos(); }, []);
 
   function openNew() {
     setContaOrigemId('');
