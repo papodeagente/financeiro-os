@@ -1150,6 +1150,17 @@ async function executarInitDB() {
       ON fornecedores_crm(tenant_id, cnpj) WHERE cnpj IS NOT NULL AND cnpj <> '';
   `);
 
+  // Fornecedor sincronizado com o CRM (09/10/2026): o id do fornecedor lá é o
+  // vínculo, e um fornecedor do CRM é um cadastro só aqui. crm_atualizado_em
+  // guarda quando o CRM gravou a última alteração aplicada, para um aviso
+  // atrasado não desfazer um mais novo.
+  await pool.query(`
+    ALTER TABLE fornecedores_crm ADD COLUMN IF NOT EXISTS crm_supplier_id TEXT;
+    ALTER TABLE fornecedores_crm ADD COLUMN IF NOT EXISTS crm_atualizado_em TIMESTAMPTZ;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_fornecedores_crm_crm_supplier
+      ON fornecedores_crm(tenant_id, crm_supplier_id) WHERE crm_supplier_id IS NOT NULL AND crm_supplier_id <> '';
+  `);
+
   // ============================================================
   // crm_config — composite PK (id, tenant_id)
   // ============================================================
