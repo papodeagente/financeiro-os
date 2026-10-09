@@ -955,7 +955,12 @@ export default function ConfigFiscalPage() {
                 <Textarea id="discriminacao" rows={2} value={config.discriminacao_padrao}
                   onChange={e => mudar('discriminacao_padrao', e.target.value)} />
                 <p className="fin-t-caption text-[var(--fin-text-3)]">
-                  Aceita {'{cliente}'}, {'{venda}'}, {'{parcela}'}, {'{descricao}'} e {'{repasse}'}.
+                  Aceita {'{produto}'}, {'{cliente}'}, {'{venda}'}, {'{parcela}'}, {'{descricao}'} e {'{repasse}'}.
+                </p>
+                <p className="fin-t-caption text-[var(--fin-text-3)]">
+                  {'{produto}'} é o que foi vendido, pelo nome. Quando a venda não nomeia
+                  o produto, ele usa a descrição da cobrança e, por último, “Agenciamento
+                  de viagem”. A descrição nunca sai em branco.
                 </p>
               </div>
             </Secao>
