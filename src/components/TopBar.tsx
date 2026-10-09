@@ -336,6 +336,19 @@ export function TopBar({ onCommandPalette, onAbrirMenu }: Props) {
             <div className="min-w-0 flex-1">
               <p className="fin-t-body-strong truncate text-[var(--fin-text)]">{user.nome}</p>
               <p className="fin-t-caption truncate text-[var(--fin-text-3)]">{user.email}</p>
+              {/* O número da conta é o que a pessoa lê no telefone com o
+                  suporte. `select-all` faz um clique selecionar o número
+                  inteiro, sem precisar mirar nas pontas. Sem número (banco
+                  ainda não migrado), a linha não aparece em vez de mostrar
+                  "Conta nº —". */}
+              {typeof user.tenantNumero === 'number' && user.tenantNumero > 0 ? (
+                <p className="fin-t-caption truncate text-[var(--fin-text-3)]">
+                  Conta nº{' '}
+                  <span className="select-all font-medium tabular-nums text-[var(--fin-text-2)]">
+                    {user.tenantNumero}
+                  </span>
+                </p>
+              ) : null}
             </div>
           </div>
 

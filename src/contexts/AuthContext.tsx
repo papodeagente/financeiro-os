@@ -12,6 +12,8 @@ interface AuthUser {
   permissoes: Record<string, boolean | string[]>;
   tenantId?: string;
   tenantSlug?: string;
+  /** Número curto da conta, para a pessoa ler no telefone com o suporte. */
+  tenantNumero?: number | null;
   isSuperAdmin?: boolean;
   impersonatingTenantId?: string | null;
   impersonatingTenantSlug?: string | null;

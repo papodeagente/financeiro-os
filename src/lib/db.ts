@@ -700,6 +700,49 @@ async function executarInitDB() {
     CREATE INDEX IF NOT EXISTS idx_tenants_slug ON tenants(slug);
     CREATE INDEX IF NOT EXISTS idx_tenants_status ON tenants(status);
 
+    -- NÚMERO DA CONTA. O id da agência é um texto gerado ("m2x9k3abc1234"):
+    -- serve para o banco, não para uma pessoa ler no telefone com o suporte.
+    -- O número é curto, sequencial e estável — a conta mais antiga é a 1.
+    --
+    -- Tudo abaixo roda UMA vez. A guarda é o DEFAULT da coluna: enquanto ele
+    -- não existe, o bloco numera quem falta, cria a sequência e a aponta
+    -- para o maior número já usado. Depois disso o IF é falso e o initDB,
+    -- que roda a cada requisição, não toca em mais nada.
+    ALTER TABLE tenants ADD COLUMN IF NOT EXISTS numero INTEGER;
+
+    DO $numero_da_conta$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+         WHERE table_name = 'tenants'
+           AND column_name = 'numero'
+           AND column_default IS NOT NULL
+      ) THEN
+        -- Ordem de criação, com o id como desempate para a numeração ser a
+        -- mesma se isto rodar duas vezes em bancos iguais.
+        WITH ordenadas AS (
+          SELECT id, ROW_NUMBER() OVER (ORDER BY created_at, id) AS n
+            FROM tenants WHERE numero IS NULL
+        )
+        UPDATE tenants t SET numero = o.n FROM ordenadas o WHERE t.id = o.id;
+
+        CREATE SEQUENCE IF NOT EXISTS tenants_numero_seq;
+        -- Com contas existentes, a sequência continua de onde elas pararam.
+        -- Sem nenhuma, o próximo nextval tem que ser 1 e não 2: é o que o
+        -- terceiro argumento, o false, faz.
+        PERFORM setval(
+          'tenants_numero_seq',
+          GREATEST((SELECT COALESCE(MAX(numero), 0) FROM tenants), 1),
+          (SELECT COALESCE(MAX(numero), 0) FROM tenants) > 0
+        );
+        ALTER TABLE tenants ALTER COLUMN numero SET DEFAULT nextval('tenants_numero_seq');
+      END IF;
+    END
+    $numero_da_conta$;
+
+    -- Dois números iguais fariam o suporte abrir a conta errada.
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_tenants_numero ON tenants(numero);
+
     CREATE TABLE IF NOT EXISTS super_admins (
       id TEXT PRIMARY KEY,
       email TEXT NOT NULL DEFAULT '',
