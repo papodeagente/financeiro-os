@@ -11,6 +11,9 @@ export async function GET() {
   // Enriquece com foto do usuario (campo nao esta no JWT pra evitar
   // resetar sessao quando o user atualiza o avatar).
   let foto = '';
+  // O número da conta segue o mesmo caminho da foto, e pela mesma razão:
+  // fora do JWT, ninguém precisa sair e entrar de novo para vê-lo.
+  let tenantNumero: number | null = null;
   try {
     await initDB();
     if (pool && session.userId) {
@@ -19,6 +22,17 @@ export async function GET() {
         [session.userId, session.tenantId || ''],
       );
       if (rows.length > 0) foto = rows[0].foto || '';
+    }
+    // Impersonando, o número é o da conta que está sendo vista — é dela que
+    // a tela inteira está falando.
+    const tenantDaVez = session.impersonatingTenantId || session.tenantId || '';
+    if (pool && tenantDaVez) {
+      const { rows } = await pool.query(
+        `SELECT numero FROM tenants WHERE id = $1 LIMIT 1`,
+        [tenantDaVez],
+      );
+      const n = Number(rows[0]?.numero);
+      if (Number.isFinite(n) && n > 0) tenantNumero = n;
     }
   } catch { /* ignore */ }
 
@@ -33,6 +47,7 @@ export async function GET() {
       permissoes: session.permissoes,
       tenantId: session.tenantId,
       tenantSlug: session.tenantSlug,
+      tenantNumero,
       isSuperAdmin: session.isSuperAdmin || false,
       impersonatingTenantId: session.impersonatingTenantId || null,
       impersonatingTenantSlug: session.impersonatingTenantSlug || null,
