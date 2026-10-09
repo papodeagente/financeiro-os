@@ -17,6 +17,7 @@ import {
   conflitosComEmissor,
   issEhEstimativa,
   montarDiscriminacao,
+  produtosDaDiscriminacao,
   pendenciasParaEmitir,
   regimeSugerido,
 } from './nfse-calculo';
@@ -69,11 +70,23 @@ export function configFiscalPadrao(): ConfigFiscal {
     tipo_retencao_issqn: '1',
     ultimo_numero_dps: '',
     info_complementar_padrao: '',
+    // O {produto} vem primeiro porque é o que descreve o serviço prestado.
+    // Sem produto nomeado na venda ele cai na descrição da conta e, por
+    // fim, no texto de reserva — a discriminação nunca sai vazia.
     discriminacao_padrao:
-      'Agenciamento de viagem — {cliente} — venda {venda} {parcela}',
+      '{produto} — {cliente} — venda {venda} {parcela}',
     emissao_automatica: false,
   };
 }
+
+/**
+ * O que a nota diz quando a venda não nomeia nada.
+ *
+ * É o antigo texto fixo, rebaixado a último recurso: ele descreve o ramo da
+ * agência, que é melhor do que campo em branco num documento fiscal, mas
+ * pior do que o nome do que foi vendido.
+ */
+export const RESERVA_DA_DISCRIMINACAO = 'Agenciamento de viagem';
 
 /** Mostra só os últimos dígitos do token. O resto nunca sai do servidor. */
 export function mascararToken(token: string): string {
@@ -384,14 +397,27 @@ export async function montarPrevia(
 
   const totalParcelas = Math.max(1, Math.floor(num(ctx.conta.total_parcelas)) || 1);
   const numeroParcela = Math.max(1, Math.floor(num(ctx.conta.parcela_numero)) || 1);
+  // O que foi vendido, pelo nome. É isto que diferencia a nota de uma
+  // viagem da nota de outra — o texto fixo descrevia o ramo, não o serviço.
+  const produtoDaNota = produtosDaDiscriminacao({
+    produtos: (ctx.venda?.produtos ?? []) as Array<{ descricao?: string; quantidade?: number }>,
+    descricaoDaConta: String(ctx.conta.descricao ?? ''),
+    padrao: RESERVA_DA_DISCRIMINACAO,
+  });
+
   const discriminacao = opcoes.discriminacao
-    ?? montarDiscriminacao(config.discriminacao_padrao, {
-      cliente: tomador.razao_social,
-      venda: String(ctx.venda?.numero ?? ctx.venda?.id ?? ''),
-      parcela: totalParcelas > 1 ? `(parcela ${numeroParcela}/${totalParcelas})` : '',
-      descricao: String(ctx.conta.descricao ?? ''),
-      repasse: calculo.repasse_da_parcela.toFixed(2),
-    });
+    ?? montarDiscriminacao(
+      config.discriminacao_padrao,
+      {
+        cliente: tomador.razao_social,
+        venda: String(ctx.venda?.numero ?? ctx.venda?.id ?? ''),
+        parcela: totalParcelas > 1 ? `(parcela ${numeroParcela}/${totalParcelas})` : '',
+        descricao: String(ctx.conta.descricao ?? ''),
+        repasse: calculo.repasse_da_parcela.toFixed(2),
+        produto: produtoDaNota,
+      },
+      produtoDaNota,
+    );
 
   // QUEM SABE O QUE FALTA É O EMISSOR. As checagens acima são as que dá para
   // fazer sem rede; o emissor tem as dele, e era a diferença entre as duas

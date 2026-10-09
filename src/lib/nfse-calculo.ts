@@ -203,7 +203,86 @@ export function regimeSugerido(valorTotalVenda: number, custoFornecedores: numbe
   return 'INTERMEDIACAO';
 }
 
-/** Preenche a discriminação do serviço. Placeholder desconhecido some. */
+/**
+ * O que a agência VENDEU, para a discriminação da nota.
+ *
+ * A discriminação é o que o cliente lê na nota e o que a prefeitura guarda.
+ * Um texto fixo ("Agenciamento de viagem") descreve o ramo, não o serviço
+ * prestado: três notas de três viagens diferentes saíam iguais. O nome do
+ * produto é o que diz o que foi vendido.
+ *
+ * A ordem de preferência existe porque nem toda venda tem produto nomeado:
+ *  1. os produtos da venda, pelo nome;
+ *  2. a descrição da conta a receber;
+ *  3. o texto que a agência configurou.
+ *
+ * Nunca devolve vazio: a discriminação é campo de documento fiscal.
+ */
+export function produtosDaDiscriminacao(entrada: {
+  produtos?: Array<{ descricao?: string | null; quantidade?: number | null }> | null;
+  descricaoDaConta?: string | null;
+  padrao?: string | null;
+  /** Teto do texto. A prefeitura tem limite de campo e ninguém lê 2 mil caracteres. */
+  limite?: number;
+}): string {
+  const limite = Math.max(entrada.limite ?? 180, 20);
+
+  // Nomes na ordem em que aparecem, sem repetir. Repetir acontece quando a
+  // venda tem o mesmo produto em dois fornecedores.
+  const vistos = new Set<string>();
+  const nomes: string[] = [];
+  for (const p of entrada.produtos ?? []) {
+    const nome = limpar(p?.descricao);
+    if (!nome) continue;
+    const chave = nome.toLowerCase();
+    if (vistos.has(chave)) continue;
+    vistos.add(chave);
+    const q = Math.floor(Number(p?.quantidade ?? 0) || 0);
+    nomes.push(q > 1 ? `${q}x ${nome}` : nome);
+  }
+
+  if (nomes.length > 0) return encurtarLista(nomes, limite);
+  return limpar(entrada.descricaoDaConta) || limpar(entrada.padrao);
+}
+
+function limpar(v: unknown): string {
+  return typeof v === 'string' ? v.replace(/\s+/g, ' ').trim() : '';
+}
+
+/**
+ * Junta os nomes até o limite e resume o resto em "e mais N".
+ *
+ * Cortar no meio de um nome deixaria a nota dizendo "Grupo Natal 20" —
+ * pior do que dizer que há mais itens.
+ */
+function encurtarLista(nomes: string[], limite: number): string {
+  let texto = '';
+  for (let i = 0; i < nomes.length; i++) {
+    const candidato = texto ? `${texto}, ${nomes[i]}` : nomes[i];
+    const restantes = nomes.length - i - 1;
+    const sufixo = restantes > 0 ? ` e mais ${restantes}` : '';
+    if (candidato.length + sufixo.length > limite && texto) {
+      const faltam = nomes.length - i;
+      return `${texto} e mais ${faltam}`;
+    }
+    texto = candidato;
+  }
+  // Um único nome maior que o limite: corta na palavra, não na letra.
+  if (texto.length > limite) {
+    const corte = texto.slice(0, limite);
+    const espaco = corte.lastIndexOf(' ');
+    return `${(espaco > limite / 2 ? corte.slice(0, espaco) : corte).trim()}…`;
+  }
+  return texto;
+}
+
+/**
+ * Preenche a discriminação do serviço. Placeholder desconhecido some.
+ *
+ * Nunca devolve vazio: um modelo que só tinha {produto} numa venda sem
+ * produto deixaria o campo fiscal em branco. Sem nada para pôr, vale o
+ * texto de reserva.
+ */
 export function montarDiscriminacao(
   modelo: string,
   valores: {
@@ -212,7 +291,10 @@ export function montarDiscriminacao(
     parcela?: string;
     descricao?: string;
     repasse?: string;
+    /** O que foi vendido. Ver produtosDaDiscriminacao. */
+    produto?: string;
   },
+  reserva = '',
 ): string {
   const mapa: Record<string, string> = {
     cliente: valores.cliente ?? '',
@@ -220,11 +302,16 @@ export function montarDiscriminacao(
     parcela: valores.parcela ?? '',
     descricao: valores.descricao ?? '',
     repasse: valores.repasse ?? '',
+    produto: valores.produto ?? '',
   };
-  return modelo
+  const texto = modelo
     .replace(/\{(\w+)\}/g, (_todo, chave: string) => mapa[chave] ?? '')
+    // Separador que ficou órfão porque o placeholder ao lado veio vazio.
+    .replace(/\s*(—|-|·|\|)\s*(?=(—|-|·|\|)|$)/g, '')
+    .replace(/^\s*(—|-|·|\|)\s*/, '')
     .replace(/[ \t]{2,}/g, ' ')
     .trim();
+  return texto || limpar(reserva);
 }
 
 /**
