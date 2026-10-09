@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { PlanoComissao, FaixaComissao, TipoBaseComissao, TipoProdutoVenda, createPlanoComissao } from '@/lib/crm-types';
+import { normalizarRegras, type RegraDeProduto } from '@/lib/comissao-regras';
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,31 @@ const BASES: Record<TipoBaseComissao, string> = {
 
 const TIPOS_PRODUTO: TipoProdutoVenda[] = ['AEREO', 'HOTEL', 'PACOTE', 'SEGURO', 'RECEPTIVO', 'CRUZEIRO', 'CARRO', 'INGRESSO', 'GRUPO', 'OUTROS'];
 
+interface ProdutoEscolhivel { id: string; nome: string; origem: string; }
+
+/** O alvo da regra, como um valor só, para caber num <select>. */
+const ALVO_TIPO = 'tipo:';
+const ALVO_PRODUTO = 'produto:';
+
+function valorDoAlvo(r: RegraDeProduto): string {
+  return r.produto_id ? `${ALVO_PRODUTO}${r.produto_id}` : `${ALVO_TIPO}${r.tipo_produto ?? ''}`;
+}
+
+function BRL(n: number): string {
+  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+/** Como a regra se lê em uma linha, na lista de planos. */
+function descreverRegra(r: RegraDeProduto, produtos: ProdutoEscolhivel[]): string {
+  const alvo = r.produto_id
+    ? (produtos.find(p => p.id === r.produto_id)?.nome || r.produto_nome || r.produto_id)
+    : (r.tipo_produto ?? '');
+  if (r.pagamento.forma === 'VALOR_FIXO') {
+    return `${alvo}: ${BRL(r.pagamento.valor)} por ${r.pagamento.por === 'UNIDADE' ? 'unidade' : 'venda'}`;
+  }
+  return `${alvo}: ${r.pagamento.percentual}%`;
+}
+
 export default function PlanosComissaoPage() {
   const [planos, setPlanos] = useState<PlanoComissao[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,13 +60,21 @@ export default function PlanosComissaoPage() {
   const [baseCalculo, setBaseCalculo] = useState<TipoBaseComissao>('MARKUP');
   const [percentualPadrao, setPercentualPadrao] = useState(10);
   const [faixas, setFaixas] = useState<FaixaComissao[]>([]);
-  const [regrasProduto, setRegrasProduto] = useState<Array<{ tipo_produto: string; percentual: number }>>([]);
+  const [regrasProduto, setRegrasProduto] = useState<RegraDeProduto[]>([]);
+  const [produtos, setProdutos] = useState<ProdutoEscolhivel[]>([]);
 
   async function load() {
     setLoading(true);
     const data = await loadEntities<PlanoComissao>('planos-comissao');
     setPlanos(data);
     setLoading(false);
+    // A lista de produtos é um extra: se ela falhar, o plano continua
+    // editável com as regras por categoria.
+    try {
+      setProdutos(await loadEntities<ProdutoEscolhivel>('produtos-comissao'));
+    } catch {
+      setProdutos([]);
+    }
   }
 
   useEffect(() => { load(); }, []);
@@ -62,7 +96,7 @@ export default function PlanosComissaoPage() {
     setBaseCalculo(p.base_calculo);
     setPercentualPadrao(p.percentual_padrao);
     setFaixas([...p.faixas]);
-    setRegrasProduto([...p.regras_produto]);
+    setRegrasProduto(normalizarRegras(p.regras_produto));
     setEditId(p.id);
     setShowForm(true);
   }
@@ -109,9 +143,39 @@ export default function PlanosComissaoPage() {
   }
 
   function addRegraProduto() {
-    const usados = regrasProduto.map(r => r.tipo_produto);
-    const proximo = TIPOS_PRODUTO.find(t => !usados.includes(t)) || 'AEREO';
-    setRegrasProduto([...regrasProduto, { tipo_produto: proximo, percentual: percentualPadrao }]);
+    // Nasce no produto mais recente que ainda não tem regra; sem produto
+    // nenhum, cai na primeira categoria livre.
+    const idsUsados = new Set(regrasProduto.map(r => r.produto_id).filter(Boolean));
+    const produtoLivre = produtos.find(p => !idsUsados.has(p.id));
+    if (produtoLivre) {
+      setRegrasProduto([...regrasProduto, {
+        produto_id: produtoLivre.id, produto_nome: produtoLivre.nome,
+        pagamento: { forma: 'PERCENTUAL', percentual: percentualPadrao },
+      }]);
+      return;
+    }
+    const tiposUsados = regrasProduto.map(r => r.tipo_produto);
+    const proximo = TIPOS_PRODUTO.find(t => !tiposUsados.includes(t)) || 'AEREO';
+    setRegrasProduto([...regrasProduto, {
+      tipo_produto: proximo, pagamento: { forma: 'PERCENTUAL', percentual: percentualPadrao },
+    }]);
+  }
+
+  function trocarRegra(i: number, muda: Partial<RegraDeProduto>) {
+    const u = [...regrasProduto];
+    u[i] = { ...u[i], ...muda };
+    setRegrasProduto(u);
+  }
+
+  /** Troca o alvo. Produto e categoria são excludentes: um limpa o outro. */
+  function trocarAlvo(i: number, valor: string) {
+    if (valor.startsWith(ALVO_PRODUTO)) {
+      const id = valor.slice(ALVO_PRODUTO.length);
+      const p = produtos.find(x => x.id === id);
+      trocarRegra(i, { produto_id: id, produto_nome: p?.nome ?? '', tipo_produto: undefined });
+      return;
+    }
+    trocarRegra(i, { produto_id: undefined, produto_nome: undefined, tipo_produto: valor.slice(ALVO_TIPO.length) });
   }
 
   return (
@@ -207,33 +271,117 @@ export default function PlanosComissaoPage() {
               {/* Regras por produto */}
               <div className="p-4 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)]">
                 <div className="flex items-center justify-between mb-3">
-                  <p className="text-sm font-medium text-[var(--t-text)]">% por Tipo de Produto (opcional)</p>
+                  <p className="text-sm font-medium text-[var(--t-text)]">Regras por produto (opcional)</p>
                   <Button size="sm" variant="outline" onClick={addRegraProduto} className="border-[var(--t-border)] text-[var(--t-text-secondary)] h-7 text-xs">
                     <Plus className="w-3 h-3 mr-1" /> Regra
                   </Button>
                 </div>
                 {regrasProduto.length === 0 ? (
-                  <p className="text-xs text-[var(--t-text-muted)]">Sem regras específicas — todos os produtos usam o % padrão.</p>
+                  <p className="text-xs text-[var(--t-text-muted)]">
+                    Sem regras — todos os produtos usam o % padrão. Use uma regra para pagar
+                    diferente num produto específico: outro percentual, ou um valor fixo em reais.
+                  </p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {regrasProduto.map((r, i) => (
-                      <div key={i} className="grid grid-cols-1 gap-2 items-end sm:grid-cols-3">
-                        <div>
-                          <label className="text-[10px] text-[var(--t-text-muted)]">Produto</label>
-                          <select value={r.tipo_produto} onChange={e => { const u = [...regrasProduto]; u[i] = { ...u[i], tipo_produto: e.target.value }; setRegrasProduto(u); }}
-                            className="w-full bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-2 py-1.5 text-xs text-[var(--t-text)]">
-                            {TIPOS_PRODUTO.map(t => <option key={t} value={t}>{t}</option>)}
-                          </select>
+                      <div key={i} className="rounded-lg border border-[var(--t-border)] p-3">
+                        <div className="grid grid-cols-1 gap-2 items-end sm:grid-cols-[1fr_auto_auto]">
+                          <div className="min-w-0">
+                            <label className="text-[10px] text-[var(--t-text-muted)]">Quando a venda tiver</label>
+                            <select
+                              value={valorDoAlvo(r)}
+                              onChange={e => trocarAlvo(i, e.target.value)}
+                              className="w-full bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-2 py-1.5 text-xs text-[var(--t-text)]"
+                            >
+                              {produtos.length > 0 && (
+                                <optgroup label="Produto específico">
+                                  {produtos.map(p => (
+                                    <option key={p.id} value={`${ALVO_PRODUTO}${p.id}`}>{p.nome}</option>
+                                  ))}
+                                </optgroup>
+                              )}
+                              <optgroup label="Categoria inteira">
+                                {TIPOS_PRODUTO.map(t => <option key={t} value={`${ALVO_TIPO}${t}`}>{t}</option>)}
+                              </optgroup>
+                              {/* Produto que saiu da lista (venda antiga) não some da regra. */}
+                              {r.produto_id && !produtos.some(p => p.id === r.produto_id) && (
+                                <option value={`${ALVO_PRODUTO}${r.produto_id}`}>
+                                  {r.produto_nome || r.produto_id}
+                                </option>
+                              )}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-[var(--t-text-muted)]">Pagar</label>
+                            <select
+                              value={r.pagamento.forma}
+                              onChange={e => trocarRegra(i, {
+                                pagamento: e.target.value === 'VALOR_FIXO'
+                                  ? { forma: 'VALOR_FIXO', valor: 0, por: 'VENDA' }
+                                  : { forma: 'PERCENTUAL', percentual: percentualPadrao },
+                              })}
+                              className="w-full bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-2 py-1.5 text-xs text-[var(--t-text)]"
+                            >
+                              <option value="PERCENTUAL">Percentual</option>
+                              <option value="VALOR_FIXO">Valor fixo</option>
+                            </select>
+                          </div>
+                          <Button size="sm" variant="outline" onClick={() => setRegrasProduto(regrasProduto.filter((_, j) => j !== i))}
+                            className="border-[var(--t-red)]/30 text-[var(--t-red)] h-8 px-2">
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
                         </div>
-                        <div>
-                          <label className="text-[10px] text-[var(--t-text-muted)]">%</label>
-                          <Input type="number" min={0} max={100} step={0.5} value={r.percentual} onChange={e => { const u = [...regrasProduto]; u[i] = { ...u[i], percentual: parseFloat(e.target.value) || 0 }; setRegrasProduto(u); }}
-                            className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)] h-8 text-xs" />
+
+                        <div className="mt-2 grid grid-cols-1 gap-2 items-end sm:grid-cols-2">
+                          {r.pagamento.forma === 'PERCENTUAL' ? (
+                            <div>
+                              <label className="text-[10px] text-[var(--t-text-muted)]">% sobre a parte deste produto</label>
+                              <Input type="number" min={0} max={100} step={0.5}
+                                value={r.pagamento.percentual}
+                                onChange={e => trocarRegra(i, { pagamento: { forma: 'PERCENTUAL', percentual: parseFloat(e.target.value) || 0 } })}
+                                className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)] h-8 text-xs" />
+                            </div>
+                          ) : (
+                            <>
+                              <div>
+                                <label className="text-[10px] text-[var(--t-text-muted)]">Valor em R$</label>
+                                <Input type="number" min={0} step={10}
+                                  value={r.pagamento.valor}
+                                  onChange={e => trocarRegra(i, {
+                                    pagamento: {
+                                      forma: 'VALOR_FIXO',
+                                      valor: parseFloat(e.target.value) || 0,
+                                      por: r.pagamento.forma === 'VALOR_FIXO' ? r.pagamento.por : 'VENDA',
+                                    },
+                                  })}
+                                  className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)] h-8 text-xs" />
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-[var(--t-text-muted)]">Pago</label>
+                                <select
+                                  value={r.pagamento.por}
+                                  onChange={e => trocarRegra(i, {
+                                    pagamento: {
+                                      forma: 'VALOR_FIXO',
+                                      valor: r.pagamento.forma === 'VALOR_FIXO' ? r.pagamento.valor : 0,
+                                      por: e.target.value === 'UNIDADE' ? 'UNIDADE' : 'VENDA',
+                                    },
+                                  })}
+                                  className="w-full bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-2 py-1.5 text-xs text-[var(--t-text)]"
+                                >
+                                  <option value="VENDA">uma vez por venda</option>
+                                  <option value="UNIDADE">por unidade vendida</option>
+                                </select>
+                              </div>
+                            </>
+                          )}
                         </div>
-                        <Button size="sm" variant="outline" onClick={() => setRegrasProduto(regrasProduto.filter((_, j) => j !== i))}
-                          className="border-[var(--t-red)]/30 text-[var(--t-red)] h-8 px-2">
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
+
+                        <p className="mt-2 text-[10px] text-[var(--t-text-muted)]">
+                          {r.pagamento.forma === 'VALOR_FIXO'
+                            ? `O resto da venda continua pagando o % do plano. O valor fixo é pago por cima, e não conta para subir de faixa.`
+                            : `Vale só para a parte deste produto; o resto da venda segue o % padrão.`}
+                        </p>
                       </div>
                     ))}
                   </div>
@@ -313,13 +461,13 @@ export default function PlanosComissaoPage() {
                           </div>
                         )}
                       </div>
-                      {p.regras_produto.length > 0 && (
+                      {normalizarRegras(p.regras_produto).length > 0 && (
                         <div className="col-span-2">
                           <p className="text-xs text-[var(--t-text-muted)] uppercase mb-2">Regras por Produto</p>
                           <div className="flex flex-wrap gap-2">
-                            {p.regras_produto.map((r, i) => (
+                            {normalizarRegras(p.regras_produto).map((r, i) => (
                               <Badge key={i} className="bg-[var(--t-surface)] text-[var(--t-text-secondary)] shadow-[var(--t-card-shadow)] text-xs">
-                                {r.tipo_produto}: {r.percentual}%
+                                {descreverRegra(r, produtos)}
                               </Badge>
                             ))}
                           </div>

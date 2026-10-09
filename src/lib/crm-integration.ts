@@ -16,6 +16,7 @@ import {
 } from './crm-types';
 import { gerarContasVenda, type ItemVendaInput, type FornecedorInfo } from './venda-financeiro';
 import { round2, num, hojeISO } from './money';
+import { produtosDoPayload } from './venda-crm-produtos';
 import { montarLinhasDeCusto, type FornecedorResolvido } from './venda-crm-itens';
 import { criarNotificacao } from './notificacoes';
 // Caixa do webhook usa o caminho ATÔMICO (um único UPDATE em SQL), igual ao
@@ -1336,9 +1337,14 @@ export async function processarEventoCRM(
         const carimbo = decidirCarimbo(vendaAnterior?.data ?? null, lerPlataformaDoPayload(payload));
         const versaoContrato = Number(payload.versao_contrato);
         const baseVenda = createVendaCRM(numeroVenda);
+        // Os produtos vendidos, quando o CRM os manda. É o que faz a regra
+        // de comissão por produto casar — sem eles a regra é ignorada e a
+        // comissão sai no percentual padrão. Ver src/lib/venda-crm-produtos.ts.
+        const produtosDaVenda = produtosDoPayload(payload);
         const vendaData: VendaCRM & Record<string, unknown> = {
           ...baseVenda,
           id: vendaId,
+          produtos: produtosDaVenda,
           numero: numeroVenda,
           cliente_id: clienteId,
           vendedor_id: vendedorId,
