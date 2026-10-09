@@ -334,6 +334,11 @@ console.log('\n--- (c) o pagamento chegou depois da venda ---');
 console.log('\n--- (d) VENDA_CANCELADA: cancelar ---');
 let vendaPerdida;
 {
+  // Estes dois fornecedores cobram a agência (ela recebe do cliente e paga o
+  // custo): é o caso com conta a pagar, que o cancelamento também fecha. O
+  // padrão, pago direto ao fornecedor, está em test-sql-fornecedores-crm.mjs.
+  await query(`INSERT INTO fornecedores_crm (id, nome_fantasia, data, crm_supplier_id, tenant_id) VALUES ('f-hotel', 'Hotel', '{"id":"f-hotel","nome_fantasia":"Hotel"}', '2', $1) ON CONFLICT DO NOTHING`, [T1]);
+  await query(`UPDATE fornecedores_crm SET data = data || '{"quem_recebe_do_cliente":"AGENCIA"}' WHERE tenant_id = $1 AND crm_supplier_id IN ('1', '2')`, [T1]);
   await evento('VENDA_FECHADA', venda({
     crm_venda_id: 'crm_deal_600', cliente_id: 'crm_contact_600', cliente_nome: 'Davi', valor_total: 3000, custo_total: 2000,
     fornecedores: [

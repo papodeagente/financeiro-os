@@ -24,6 +24,7 @@ import {
   PanelLeftClose, PanelLeftOpen,
   Eraser, LifeBuoy, FileText,
   LayoutGrid, ChartColumn, ArrowDownLeft, ArrowUpRight, GitCompareArrows, ListTree,
+  Contact, Truck,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -71,9 +72,11 @@ const METAS_MENU: SidebarSection[] = [
 
 // Menu do Financeiro simplificado (protótipo aprovado pelo Bruno, 08/10/2026):
 // o que se olha, o que se faz no dia a dia e o que se cadastra uma vez.
-// Recebimentos das plataformas, vendas, pessoas e relatórios saíram do menu e
+// Recebimentos das plataformas, vendas e relatórios saíram do menu e
 // continuam na busca (⌘K) e nos atalhos de cada tela: a visão geral leva aos
 // recebimentos para conferir, a conta a receber leva ao cliente e à venda.
+// Clientes e fornecedores voltaram em Cadastros (Bruno, 09/10/2026): é onde se
+// confere o que veio do CRM.
 const FINANCEIRO_MENU: SidebarSection[] = [
   {
     title: 'Visão geral',
@@ -96,6 +99,8 @@ const FINANCEIRO_MENU: SidebarSection[] = [
   {
     title: 'Cadastros',
     items: [
+      { key: 'clientes', label: 'Clientes', icon: Contact, href: '/pessoas/clientes' },
+      { key: 'fornecedores', label: 'Fornecedores', icon: Truck, href: '/pessoas/fornecedores' },
       { key: 'contas-bancarias', label: 'Contas bancárias', icon: Landmark, href: '/financeiro-ag/contas-bancarias' },
       { key: 'cartoes-corp', label: 'Cartões', icon: CreditCard, href: '/financeiro-ag/cartoes' },
       { key: 'plano-contas', label: 'Categorias', icon: ListTree, href: '/financeiro-ag/plano-contas' },
@@ -155,8 +160,6 @@ const SO_EXATO = new Set(['/financeiro-ag']);
 /** Páginas fora do menu e o item que acende quando a pessoa está nelas. */
 const PAI_NO_MENU: Array<[string, string]> = [
   ['/financeiro-ag/recebimentos', '/financeiro-ag/receber'],
-  ['/pessoas/clientes', '/financeiro-ag/receber'],
-  ['/pessoas/fornecedores', '/financeiro-ag/pagar'],
   ['/relatorios', '/financeiro-ag/dre'],
   ['/cac', '/financeiro-ag/dre'],
 ];

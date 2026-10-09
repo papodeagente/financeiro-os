@@ -81,6 +81,34 @@ export interface Cliente {
 
   status: 'ATIVO' | 'INATIVO';
   observacoes: string;
+
+  /** O cadastro padrão do contato no CRM, como chegou (ver FichaClienteCRM). */
+  crm_ficha?: FichaClienteCRM;
+}
+
+/**
+ * O cadastro do contato no CRM (contrato de 09/10/2026, `cliente_ficha`). Os
+ * campos que existem no cadastro daqui (endereço, passaporte, estado civil,
+ * nascimento) também são copiados para eles; esta é a cópia inteira, para a
+ * ficha mostrar o que o cadastro daqui não tem campo para guardar.
+ */
+export interface FichaClienteCRM {
+  /** YYYY-MM-DD, ou MM-DD quando o CRM não sabe o ano. */
+  data_nascimento: string;
+  /** MM-DD. */
+  data_casamento: string;
+  telefones_adicionais: Array<{ numero: string; rotulo: string }>;
+  endereco: { cep: string; logradouro: string; numero: string; complemento: string; bairro: string; cidade: string; estado: string; pais: string };
+  passaporte: { numero: string; validade: string; pais_emissor: string };
+  estado_civil: string;
+  conjuge: { nome: string; cpf: string; data_nascimento: string; passaporte: { numero: string; validade: string; pais_emissor: string } } | null;
+  filhos: Array<{ nome: string; cpf: string; data_nascimento: string; passaporte_numero: string; passaporte_validade: string }>;
+  profissao: string;
+  site: string;
+  mes_de_ferias: string;
+  origem: string;
+  etiquetas: string[];
+  responsavel: string;
 }
 
 export type TipoFornecedor = 'OPERADORA' | 'CONSOLIDADORA' | 'CIA_AEREA' | 'HOTEL' | 'RECEPTIVO' | 'SEGURADORA' | 'LOCADORA' | 'CRUZEIRO' | 'OUTROS';
@@ -128,6 +156,13 @@ export interface FornecedorCRM {
   campos_personalizados: Record<string, string>;
   observacoes: string;
   status: 'ATIVO' | 'INATIVO';
+  /**
+   * Quem recebe o pagamento do cliente nas vendas que vêm do CRM.
+   *  - FORNECEDOR (padrão): o cliente paga o fornecedor direto e a agência
+   *    recebe dele a comissão (a margem).
+   *  - AGENCIA: a agência recebe do cliente e paga o custo ao fornecedor.
+   */
+  quem_recebe_do_cliente?: 'FORNECEDOR' | 'AGENCIA';
 }
 
 export interface Membro {
@@ -401,6 +436,21 @@ export interface ContaReceber {
    */
   origem_fornecedor_id?: string;
   auto_gerado?: boolean;
+  /**
+   * Comissão de fornecedor (origem COMISSAO_FORNECEDOR): quem deve é o
+   * fornecedor (também em cliente_id/cliente_nome, por compatibilidade), e a
+   * venda que a gerou é do cliente abaixo, que pagou o fornecedor direto.
+   */
+  fornecedor_id?: string;
+  fornecedor_nome?: string;
+  cliente_da_venda_id?: string;
+  cliente_da_venda_nome?: string;
+  /** O que o cliente pagou direto ao fornecedor (em BRL). */
+  valor_pago_direto?: number;
+  /** O custo do fornecedor nesta venda (em BRL): pago direto, menos a comissão. */
+  custo_do_fornecedor?: number;
+  /** A venda não disse de qual fornecedor cobrar a comissão. */
+  fornecedor_pendente?: boolean;
   /** De qual integração de pagamento veio (hotmart, asaas, pagarme). Ver plataformas/rotulo.ts. */
   plataforma_origem?: string;
   plataforma_transacao?: string;

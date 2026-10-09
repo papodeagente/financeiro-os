@@ -35,7 +35,7 @@ export async function GET(
     const { id } = await ctx.params;
     if (!id) return NextResponse.json({ error: 'Cliente não informado' }, { status: 400 });
 
-    const [cli, vendas, contas, notas] = await Promise.all([
+    const [cli, vendas, contas, notas, diretas] = await Promise.all([
       pool.query(
         `SELECT id, nome, cpf_cnpj, tipo, data, created_at
            FROM clientes WHERE id = $1 AND tenant_id = $2 LIMIT 1`,
@@ -48,8 +48,10 @@ export async function GET(
         [id, tenantId],
       ),
       pool.query(
+        // Comissão é dívida do FORNECEDOR com a agência, não do cliente.
         `SELECT id, status, venda_id, data FROM contas_receber
           WHERE cliente_id = $1 AND tenant_id = $2
+            AND COALESCE(data->>'origem', '') <> 'COMISSAO_FORNECEDOR'
           ORDER BY created_at DESC LIMIT 300`,
         [id, tenantId],
       ),
@@ -57,6 +59,17 @@ export async function GET(
         `SELECT id, status, conta_receber_id, data FROM notas_fiscais
           WHERE cliente_id = $1 AND tenant_id = $2
           ORDER BY created_at DESC LIMIT 200`,
+        [id, tenantId],
+      ),
+      // O que o cliente pagou direto aos fornecedores nas vendas dele: está
+      // nas comissões que essas vendas geraram (não passou pelo caixa daqui).
+      pool.query(
+        `SELECT COALESCE(SUM((data->>'valor_pago_direto')::numeric), 0) AS total, COUNT(*)::int AS n
+           FROM contas_receber
+          WHERE tenant_id = $2 AND COALESCE(data->>'origem', '') = 'COMISSAO_FORNECEDOR'
+            AND data->>'cliente_da_venda_id' = $1
+            AND COALESCE(status, '') <> 'CANCELADO'
+            AND COALESCE(data->>'valor_pago_direto', '') ~ '^-?[0-9]+(\\.[0-9]+)?$'`,
         [id, tenantId],
       ),
     ]);
@@ -95,6 +108,7 @@ export async function GET(
     return NextResponse.json({
       cliente: { ...(c.data as Record<string, unknown>), id: c.id, nome: c.nome, cpf_cnpj: c.cpf_cnpj, tipo: c.tipo, cliente_desde: c.created_at },
       perfil,
+      pago_direto: { total: Number(diretas.rows[0]?.total ?? 0), comissoes: Number(diretas.rows[0]?.n ?? 0) },
       vendas: linhasVendas,
       contas: linhasContas,
       notas: linhasNotas,

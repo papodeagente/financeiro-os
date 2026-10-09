@@ -31,6 +31,7 @@ import { StatusChip, rotuloStatus } from '@/components/fin/StatusChip';
 import { EtiquetaDaPlataforma } from '@/components/fin/EtiquetaDaPlataforma';
 import { descricaoSemPlataforma, nomeDaPlataforma, plataformaDaConta } from '@/lib/plataformas/rotulo';
 import { BaixaDeReceber, valorEmAberto } from './BaixaDeReceber';
+import { ehComissaoDeFornecedor, fraseDaComissao } from '@/lib/comissao-da-venda';
 import { NovaVenda } from './NovaVenda';
 import { DetalheDaPlataforma } from './DetalheDaPlataforma';
 import { PainelNota } from './PainelNota';
@@ -354,9 +355,13 @@ export default function ContasReceberPage() {
         // A etiqueta fica na coluna que nunca some, inclusive no celular.
         const plataforma = plataformaDaConta(i);
         const descricao = descricaoSemPlataforma(i.descricao || '', plataforma);
+        // Comissão: quem deve é o fornecedor (não há ficha de cliente para
+        // abrir), e a linha diz de qual venda ela é.
+        const comissao = ehComissaoDeFornecedor(i);
+        const fraseComissao = fraseDaComissao(i);
         return (
           <span className="flex flex-col gap-[var(--fin-s-1)]">
-            {i.cliente_id ? (
+            {i.cliente_id && !comissao ? (
               <Link
                 href={`/pessoas/clientes/${i.cliente_id}`}
                 className="fin-t-body-strong text-[var(--fin-text)] underline-offset-2 hover:text-[var(--fin-accent)] hover:underline focus-visible:outline-2 focus-visible:outline-[var(--fin-accent)] focus-visible:outline-offset-2"
@@ -385,6 +390,15 @@ export default function ContasReceberPage() {
             ) : descricao ? (
               <span className="flex min-w-0 max-w-[48ch] items-center gap-[var(--fin-s-2)]">
                 <span className="fin-t-caption min-w-0 truncate text-[var(--fin-text-3)]">{descricao}</span>
+              </span>
+            ) : null}
+            {fraseComissao ? (
+              <span className="fin-t-caption max-w-[48ch] text-[var(--fin-text-3)]">{fraseComissao}</span>
+            ) : null}
+            {comissao && i.fornecedor_pendente ? (
+              <span className="fin-t-caption inline-flex items-center gap-1 text-[var(--fin-warning-text)]">
+                <TriangleAlert aria-hidden="true" className="size-3.5" />
+                Informe qual fornecedor paga esta comissão
               </span>
             ) : null}
           </span>

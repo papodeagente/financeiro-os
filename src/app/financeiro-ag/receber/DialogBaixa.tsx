@@ -25,6 +25,8 @@ export type DialogBaixaProps = {
   /** Identifica a conta só para reiniciar o campo quando o diálogo troca de alvo. */
   contaId: string | null;
   cliente: string;
+  /** Comissão de fornecedor: quem paga a conta é o fornecedor, não o cliente. */
+  quemPaga?: 'cliente' | 'fornecedor';
   descricao: string;
   /** Todos os três números vêm calculados de fora, pelos helpers auditados. */
   valorDaConta: number;
@@ -62,6 +64,7 @@ export function DialogBaixa({
   onOpenChange,
   contaId,
   cliente,
+  quemPaga = 'cliente',
   descricao,
   valorDaConta,
   jaRecebido,
@@ -73,6 +76,8 @@ export function DialogBaixa({
   processando = false,
   onConfirmar,
 }: DialogBaixaProps) {
+  const pagaFornecedor = quemPaga === 'fornecedor';
+  const quem = pagaFornecedor ? 'o fornecedor' : 'o cliente';
   const [valor, setValor] = useState(emAberto);
   const [plataforma, setPlataforma] = useState(plataformaAtual);
   // NULL = segue a sugestão (padrão da plataforma, ou sem desconto). Vira
@@ -119,9 +124,9 @@ export function DialogBaixa({
       aberto={aberto}
       onOpenChange={onOpenChange}
       titulo="Registrar recebimento"
-      oQueVaiAcontecer="Informe o que o cliente pagou e quanto caiu no banco. O desconto da plataforma é calculado pela diferença."
+      oQueVaiAcontecer={`Informe o que ${quem} pagou e quanto caiu no banco. O desconto da plataforma é calculado pela diferença.`}
       detalhes={[
-        { rotulo: 'Cliente', valor: cliente || 'Cliente não informado' },
+        { rotulo: pagaFornecedor ? 'Fornecedor' : 'Cliente', valor: cliente || (pagaFornecedor ? 'Fornecedor não informado' : 'Cliente não informado') },
         { rotulo: 'Descrição', valor: descricao || 'Sem descrição' },
         { rotulo: 'Valor da conta', valor: <Money valor={valorDaConta} size="body" estado="ok" /> },
         ...(jaRecebido > 0
@@ -138,7 +143,7 @@ export function DialogBaixa({
       previa={
         <div className="flex flex-col gap-[var(--fin-s-3)]">
           <MoneyField
-            rotulo="Quanto o cliente pagou"
+            rotulo={`Quanto ${quem} pagou`}
             obrigatorio
             autoFocus
             valor={valor}

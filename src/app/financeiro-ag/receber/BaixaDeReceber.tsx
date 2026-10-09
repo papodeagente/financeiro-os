@@ -9,6 +9,7 @@ import { normalizarPlataforma, type DescontoPadrao } from '@/lib/taxa-plataforma
 import { nomeDaPlataforma, plataformaDaConta } from '@/lib/plataformas/rotulo';
 import { toast } from '@/lib/toast';
 import { DialogBaixa } from './DialogBaixa';
+import { ehComissaoDeFornecedor } from '@/lib/comissao-da-venda';
 
 export type BaixaDeReceberProps = {
   /** A conta a receber; null fecha o diálogo. */
@@ -114,6 +115,7 @@ export function BaixaDeReceber({ conta, onFechar, onRegistrada, plataformasUsada
       onOpenChange={aberto => { if (!aberto) onFechar(); }}
       contaId={conta?.id ?? null}
       cliente={conta?.cliente_nome ?? ''}
+      quemPaga={conta && ehComissaoDeFornecedor(conta) ? 'fornecedor' : 'cliente'}
       descricao={conta?.descricao ?? ''}
       valorDaConta={conta ? num(conta.valor_final) : 0}
       jaRecebido={conta ? num(conta.valor_recebido) : 0}

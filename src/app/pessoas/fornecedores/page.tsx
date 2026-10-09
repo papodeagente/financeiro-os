@@ -508,6 +508,26 @@ export default function FornecedoresPage() {
             {/* Condições de comissão */}
             <div className="mt-6 pt-4 border-t border-[var(--t-border)]">
               <h3 className="text-sm font-semibold text-[var(--t-text)] mb-3">Condições de comissão</h3>
+              {/* Vendas do CRM: quem recebe do cliente decide se nasce comissão
+                  a receber deste fornecedor ou conta a receber do cliente e a
+                  pagar a ele. */}
+              <div className="mb-4 max-w-xl">
+                <label htmlFor="quem-recebe" className="block text-xs text-[var(--t-text-secondary)] mb-1">Quem recebe o pagamento do cliente</label>
+                <select
+                  id="quem-recebe"
+                  className="w-full bg-[var(--t-bg)] shadow-[var(--t-card-shadow)] text-[var(--t-text-secondary)] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--fin-accent)]"
+                  value={form.quem_recebe_do_cliente === 'AGENCIA' ? 'AGENCIA' : 'FORNECEDOR'}
+                  onChange={(e) => setField('quem_recebe_do_cliente', e.target.value === 'AGENCIA' ? 'AGENCIA' : 'FORNECEDOR')}
+                >
+                  <option value="FORNECEDOR">Este fornecedor, direto (a agência recebe a comissão dele)</option>
+                  <option value="AGENCIA">A agência (e paga o custo a este fornecedor)</option>
+                </select>
+                <p className="mt-1 text-xs text-[var(--t-text-secondary)]">
+                  {form.quem_recebe_do_cliente === 'AGENCIA'
+                    ? 'Nas vendas do CRM nasce a conta a receber do cliente e a conta a pagar deste fornecedor.'
+                    : 'Nas vendas do CRM nasce só a comissão a receber deste fornecedor: a margem da venda.'}
+                </p>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-xs text-[var(--t-text-secondary)] mb-1">Comissão padrão (%)</label>
