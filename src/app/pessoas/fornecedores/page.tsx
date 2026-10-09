@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Plus, Pencil, Trash2, X, ChevronDown, Building2 } from 'lucide-react';
+import { Search, Plus, Pencil, Trash2, X, ChevronDown, Building2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +10,7 @@ import { FornecedorCRM, TipoFornecedor, createFornecedorCRM } from '@/lib/crm-ty
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
 import { PageHeader } from '@/components/PageHeader';
 import { DataTable, DataTableColumn } from '@/components/ui/data-table';
+import { toast } from '@/lib/toast';
 
 const TIPO_OPTIONS: { value: TipoFornecedor; label: string }[] = [
   { value: 'OPERADORA', label: 'Operadora' },
@@ -54,11 +55,42 @@ export default function FornecedoresPage() {
   const load = useCallback(async () => {
     setLoading(true);
     const data = await loadEntities<FornecedorCRM>('fornecedores-crm');
-    setFornecedores(data);
+    // Cadastro que veio do CRM antes de 09/10/2026 tinha só nome e CNPJ: sem
+    // os outros campos, a busca e o formulário quebravam ao ler o e-mail.
+    setFornecedores(data.map(f => ({ ...createFornecedorCRM(), ...f })));
     setLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Integração com o CRM ligada: os cadastros vão e vêm sozinhos, e o botão
+  // de sincronizar acerta tudo de uma vez (primeira vez, ou aviso perdido).
+  const [crmAtivo, setCrmAtivo] = useState(false);
+  const [sincronizando, setSincronizando] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    fetch('/api/v1/crm/status')
+      .then(r => (r.ok ? r.json() : null))
+      .then(s => { if (vivo) setCrmAtivo(s?.ativo === true); })
+      .catch(() => {});
+    return () => { vivo = false; };
+  }, []);
+
+  const sincronizar = async () => {
+    setSincronizando(true);
+    try {
+      const r = await fetch('/api/fornecedores-crm/sincronizar', { method: 'POST' });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        toast.error('Não foi possível sincronizar com o CRM.', j.error ?? '');
+        return;
+      }
+      toast.success(`${j.enviados} fornecedores enviados ao CRM. Os de lá chegam em instantes.`);
+      setTimeout(() => { void load(); }, 6000);
+    } finally {
+      setSincronizando(false);
+    }
+  };
 
   const filtered = fornecedores.filter((f) => {
     const q = search.toLowerCase();
@@ -128,7 +160,8 @@ export default function FornecedoresPage() {
       cell: f => (
         <div>
           <div className="font-medium text-[var(--t-text)]">{f.nome_fantasia || f.razao_social}</div>
-          {f.nome_fantasia && f.razao_social && (
+          {/* Cadastro vindo do CRM tem a razão social igual ao nome: não repete. */}
+          {f.nome_fantasia && f.razao_social && f.razao_social.trim() !== f.nome_fantasia.trim() && (
             <div className="text-xs text-[var(--t-text-secondary)]">{f.razao_social}</div>
           )}
         </div>
@@ -249,12 +282,20 @@ export default function FornecedoresPage() {
         title="Fornecedores"
         subtitle={`${fornecedores.length} fornecedor${fornecedores.length !== 1 ? 'es' : ''} cadastrado${fornecedores.length !== 1 ? 's' : ''}`}
         actions={
-          <Button
-            onClick={openNew}
-            className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--fin-text-on-fill)] font-semibold gap-2"
-          >
-            <Plus size={16} /> Novo Fornecedor
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {crmAtivo && (
+              <Button variant="outline" onClick={sincronizar} disabled={sincronizando} className="gap-2">
+                <RefreshCw size={16} aria-hidden="true" className={sincronizando ? 'animate-spin' : undefined} />
+                {sincronizando ? 'Sincronizando...' : 'Sincronizar com o CRM'}
+              </Button>
+            )}
+            <Button
+              onClick={openNew}
+              className="bg-[var(--t-accent)] hover:opacity-90 text-[var(--fin-text-on-fill)] font-semibold gap-2"
+            >
+              <Plus size={16} /> Novo Fornecedor
+            </Button>
+          </div>
         }
       />
 

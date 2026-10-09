@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { emitirEventoCRM, normalizeCnpj } from '@/lib/crm-integration';
+import { enviarFornecedorAoCrm } from '@/lib/crm-integration';
 
 const TABLE = 'fornecedores_crm';
 const INDEX_COLS = ['nome_fantasia', 'cnpj', 'categoria'];
@@ -52,28 +52,8 @@ export async function POST(req: Request) {
       paramValues,
     );
 
-    // CRM: notify supplier cadastro so the CRM can upsert in their catalog.
-    // The CRM-side dedup is por (tenant_id, external_id) ou cnpj.
-    try {
-      emitirEventoCRM('FORNECEDOR_CADASTRADO', {
-        fornecedor_id: item.id,
-        external_id: `entur_fornecedor_${item.id}`,
-        nome_fantasia: item.nome_fantasia ?? '',
-        razao_social: item.razao_social ?? '',
-        cnpj: normalizeCnpj(item.cnpj),
-        tipo: item.tipo ?? 'OUTROS',
-        telefone: item.telefone ?? '',
-        email: item.email ?? '',
-        whatsapp: item.whatsapp ?? '',
-        contato_principal: item.contato_principal ?? '',
-        endereco_completo: item.endereco_completo ?? '',
-        cidade: item.cidade ?? '',
-        estado: item.estado ?? '',
-        regras_faturamento: item.regras_faturamento ?? null,
-      }, { tenantId });
-    } catch (e) {
-      console.error('[FORNECEDOR_CADASTRADO] falha ao emitir', e);
-    }
+    // O CRM recebe o cadastro como ficou, com o vínculo (se já houver).
+    void enviarFornecedorAoCrm(tenantId, String(item.id));
 
     return NextResponse.json(item);
   } catch (e) {

@@ -13,6 +13,7 @@ import {
   type VendaCRM,
   type ItemVendaData,
   type TipoProdutoVenda,
+  type FornecedorCRM,
 } from './crm-types';
 import { gerarContasVenda, receberPorFornecedorDe, type ItemVendaInput, type FornecedorInfo } from './venda-financeiro';
 import { round2, num, hojeISO } from './money';
@@ -33,6 +34,10 @@ import {
   reconciliarPagamentosSemDono, descreverReconciliacao,
 } from './crm-venda-plataforma';
 import { lerPedidoDeCancelamento, aplicarCancelamentoDoCrm } from './crm-venda-cancelada';
+import {
+  receberFornecedorDoCrm, lerFornecedorDoCrm, lerFornecedorDaVenda, descreverFornecedor,
+  cadastroCompleto, payloadParaOCrm,
+} from './fornecedor-sync';
 
 // ──────────────────────────────────────────
 // Types
@@ -877,74 +882,67 @@ async function upsertVendedorByExternalId(
   return { id, cadastroPendente: true };
 }
 
-// 3-stage upsert so the same supplier is never duplicated across systems.
+// ──────────────────────────────────────────
+// Fornecedor: o cadastro daqui indo para o CRM
+// ──────────────────────────────────────────
 //
-//   1) match by (tenant_id, external_id) — strongest signal, idempotent
-//      across replays of the same CRM event
-//   2) match by (tenant_id, cnpj)        — survives CRM id changes
-//      (resync/merge) and recognizes the same supplier between systems.
-//      When matched here we also store the latest external_id on the row
-//      so step 1 wins on the next call.
-//   3) INSERT — new supplier
-async function upsertFornecedorByExternalId(
-  externalId: string,
-  dados: { nome?: unknown; cnpj?: unknown },
-  tenantId: string,
-): Promise<string> {
-  if (!pool || !externalId) throw new Error('upsertFornecedor: external_id obrigatorio');
+// Quem chega do CRM passa por receberFornecedorDoCrm (fornecedor-sync.ts).
+// Daqui para lá, o formato é um só: o cadastro completo e o vínculo.
 
-  // (1) match by external_id
-  const byExt = await pool.query(
-    `SELECT id, data FROM fornecedores_crm
-      WHERE external_id = $1 AND tenant_id = $2 LIMIT 1`,
-    [externalId, tenantId],
-  );
-  if (byExt.rows.length > 0) {
-    return byExt.rows[0].id as string;
-  }
-
-  const cnpj = normalizeCnpj(dados.cnpj);
-  const nome = asStr(dados.nome);
-
-  // (2) match by cnpj
-  if (cnpj) {
-    const byCnpj = await pool.query(
-      `SELECT id, data FROM fornecedores_crm
-        WHERE cnpj = $1 AND tenant_id = $2 LIMIT 1`,
-      [cnpj, tenantId],
+/** Manda ao CRM o cadastro do fornecedor como está agora, com o vínculo. */
+export async function enviarFornecedorAoCrm(tenantId: string, fornecedorId: string): Promise<boolean> {
+  try {
+    if (!pool || !tenantId || !fornecedorId) return false;
+    const { rows } = await pool.query(
+      `SELECT id, data, crm_supplier_id FROM fornecedores_crm WHERE id = $1 AND tenant_id = $2`,
+      [fornecedorId, tenantId],
     );
-    if (byCnpj.rows.length > 0) {
-      const existingId = byCnpj.rows[0].id as string;
-      const prevData = (byCnpj.rows[0].data as Record<string, unknown>) || {};
-      // Stamp the latest external_id on the row so future calls hit (1).
-      const mergedData = { ...prevData, external_id: externalId };
-      await pool.query(
-        `UPDATE fornecedores_crm
-            SET external_id = $1, data = $2, updated_at = NOW()
-          WHERE id = $3 AND tenant_id = $4`,
-        [externalId, JSON.stringify(mergedData), existingId, tenantId],
-      );
-      return existingId;
-    }
+    if (rows.length === 0) return false;
+    const f = cadastroCompleto({ ...((rows[0].data ?? {}) as Partial<FornecedorCRM>), id: String(rows[0].id) });
+    const crmId = rows[0].crm_supplier_id == null ? null : String(rows[0].crm_supplier_id);
+    await emitirEventoCRM('FORNECEDOR_CADASTRADO', payloadParaOCrm(f, crmId, normalizeCnpj(f.cnpj)), { tenantId });
+    return true;
+  } catch (e) {
+    console.error('[FORNECEDOR_CADASTRADO] falha ao enviar', e);
+    return false;
   }
+}
 
-  // (3) new row
-  const id = generateId();
-  const data = {
-    id,
-    nome_fantasia: nome,
-    razao_social: nome,
-    cnpj,
-    categoria: '',
-    origem: 'crm',
-    external_id: externalId,
-  };
-  await pool.query(
-    `INSERT INTO fornecedores_crm (id, nome_fantasia, cnpj, categoria, data, external_id, tenant_id, created_at, updated_at)
-     VALUES ($1, $2, $3, '', $4, $5, $6, NOW(), NOW())`,
-    [id, nome, cnpj, JSON.stringify(data), externalId, tenantId],
+/** O fornecedor foi apagado aqui: o CRM o desativa (vendas antigas o citam). */
+export async function enviarRemocaoDeFornecedorAoCrm(
+  tenantId: string,
+  fornecedor: { id: string; crmSupplierId: string | null },
+): Promise<void> {
+  await emitirEventoCRM('FORNECEDOR_REMOVIDO', {
+    fornecedor_id: fornecedor.id,
+    financeiro_id: fornecedor.id,
+    crm_supplier_id: fornecedor.crmSupplierId || null,
+  }, { tenantId });
+}
+
+/** A integração está ligada e sabe para onde mandar. */
+export async function integracaoCrmAtiva(tenantId: string): Promise<boolean> {
+  const config = await getCrmConfig(tenantId);
+  return !!(config?.ativo && config.webhook_url_crm);
+}
+
+/**
+ * Manda todos os fornecedores daqui, um por vez, e pede ao CRM os dele. É a
+ * conciliação completa: serve para o primeiro acerto e para recuperar avisos
+ * que não chegaram (o aviso que falha daqui só é reenviado quando alguém pede).
+ */
+export async function sincronizarTodosOsFornecedores(
+  tenantId: string,
+  opcoes: { pedirOsDoCrm: boolean },
+): Promise<number> {
+  if (!pool || !tenantId) return 0;
+  const { rows } = await pool.query(
+    `SELECT id FROM fornecedores_crm WHERE tenant_id = $1 ORDER BY created_at, id`,
+    [tenantId],
   );
-  return id;
+  for (const r of rows) await enviarFornecedorAoCrm(tenantId, String(r.id));
+  if (opcoes.pedirOsDoCrm) await emitirEventoCRM('FORNECEDORES_SINCRONIZAR', {}, { tenantId });
+  return rows.length;
 }
 
 // ──────────────────────────────────────────
@@ -1159,6 +1157,8 @@ export async function processarEventoCRM(
     if (duplicata) return duplicata;
 
     let acao = '';
+    /** Fornecedores cujo cadastro o CRM precisa receber de volta (o vínculo). */
+    const ecosDeFornecedor: string[] = [];
 
     switch (tipo) {
       case 'VENDA_FECHADA': {
@@ -1422,12 +1422,13 @@ export async function processarEventoCRM(
         const fornecedoresResolvidos: FornecedorResolvido[] = [];
 
         for (const forn of fornecedoresValidos) {
-          const fornExternalId = asStr(forn.fornecedor_id);
-          const fornecedorId = await upsertFornecedorByExternalId(
-            fornExternalId,
-            { nome: forn.fornecedor_nome, cnpj: forn.fornecedor_cnpj },
-            tenantId,
-          );
+          // Mesmo caminho da mudança de cadastro: acha pelo vínculo, pelo id
+          // daqui, pela chave da venda, pelo CNPJ ou pelo nome. A venda só
+          // preenche o que está vazio.
+          const doCrm = await emTransacao(exec => receberFornecedorDoCrm(exec, tenantId, lerFornecedorDaVenda(forn), 'preencher'));
+          if (!doCrm) throw new Error(`fornecedor da venda sem identificação: ${asStr(forn.fornecedor_id)}`);
+          const fornecedorId = doCrm.id;
+          if (doCrm.ecoar) ecosDeFornecedor.push(fornecedorId);
           // Carrega regras_faturamento do fornecedor (prazo de pagamento).
           const { rows: fornRows } = await pool.query(
             `SELECT data FROM fornecedores_crm WHERE id = $1 AND tenant_id = $2`,
@@ -1919,6 +1920,61 @@ export async function processarEventoCRM(
         break;
       }
 
+      case 'FORNECEDOR_ATUALIZADO': {
+        // Fornecedor criado ou alterado no CRM. Sobrescreve o que veio com
+        // valor; vazio nunca apaga. Nunca reenvia o mesmo dado ao CRM: o
+        // único retorno é o eco do vínculo, quando o CRM ainda não o tem.
+        const vindo = lerFornecedorDoCrm(payload);
+        if (!vindo.crmId) throw new Error('FORNECEDOR_ATUALIZADO sem crm_supplier_id');
+        const r = await emTransacao(exec => receberFornecedorDoCrm(exec, tenantId, vindo, 'sobrescrever'));
+        if (!r) throw new Error('FORNECEDOR_ATUALIZADO sem nome nem documento');
+        if (r.ecoar) ecosDeFornecedor.push(r.id);
+        acao = descreverFornecedor(r);
+        break;
+      }
+
+      case 'FORNECEDOR_REMOVIDO': {
+        // Apagado no CRM: aqui ele fica INATIVO, porque contas e vendas
+        // antigas continuam apontando para ele. O vínculo se desfaz.
+        const crmId = asStr(payload.crm_supplier_id).replace(/^crm_supplier_/, '');
+        const financeiroId = asStr(payload.financeiro_id);
+        const { rows } = await pool.query(
+          `SELECT id, nome_fantasia, crm_supplier_id FROM fornecedores_crm
+            WHERE tenant_id = $1 AND (($2 <> '' AND crm_supplier_id = $2) OR ($3 <> '' AND id = $3))
+            ORDER BY (crm_supplier_id = $2) DESC NULLS LAST LIMIT 1`,
+          [tenantId, crmId, financeiroId],
+        );
+        const alvo = rows[0];
+        const ligadoAOutro = alvo && alvo.crm_supplier_id != null && asStr(alvo.crm_supplier_id) !== crmId;
+        if (!alvo) {
+          acao = 'fornecedor apagado no CRM não existe aqui';
+        } else if (ligadoAOutro) {
+          // Era um duplicado no CRM: o fornecedor ligado a este cadastro continua lá.
+          acao = `fornecedor "${asStr(alvo.nome_fantasia)}" segue ativo: está ligado a outro cadastro do CRM`;
+        } else {
+          await pool.query(
+            `UPDATE fornecedores_crm
+                SET data = jsonb_set(data, '{status}', '"INATIVO"'), crm_supplier_id = NULL, updated_at = NOW()
+              WHERE id = $1 AND tenant_id = $2`,
+            [alvo.id, tenantId],
+          );
+          acao = `fornecedor "${asStr(alvo.nome_fantasia)}" desativado: foi apagado no CRM`;
+        }
+        break;
+      }
+
+      case 'FORNECEDORES_SINCRONIZAR': {
+        // O CRM pediu a lista completa. Vai em segundo plano: a resposta ao
+        // CRM não pode esperar um envio por fornecedor.
+        const { rows } = await pool.query(
+          `SELECT COUNT(*)::int AS n FROM fornecedores_crm WHERE tenant_id = $1`,
+          [tenantId],
+        );
+        void sincronizarTodosOsFornecedores(tenantId, { pedirOsDoCrm: false });
+        acao = `${rows[0]?.n ?? 0} fornecedores enviados ao CRM`;
+        break;
+      }
+
       default:
         acao = `tipo desconhecido: ${tipo}`;
     }
@@ -1933,6 +1989,9 @@ export async function processarEventoCRM(
         WHERE id = $1`,
       [id, acao]
     );
+
+    // Depois de gravar: o eco é um evento novo, e o CRM o processa sozinho.
+    for (const fornecedorId of ecosDeFornecedor) void enviarFornecedorAoCrm(tenantId, fornecedorId);
 
     return { processado: true, acao };
   } catch (e) {
