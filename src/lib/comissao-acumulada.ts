@@ -24,6 +24,15 @@ export interface VendaParaComissao {
   /** Percentual que as regras de produto e o padrão do plano dariam.
    *  Só é usado quando NENHUMA faixa casa com o acumulado. */
   pct_fallback: number;
+  /**
+   * Valor fixo das regras por produto, pago POR CIMA da escada.
+   *
+   * Fica fora de `base` de propósito: a faixa é uma tabela de percentuais
+   * sobre a base acumulada, e um valor fixo não é percentual de nada.
+   * Deixá-lo empurrar o vendedor de faixa faria o mesmo produto valer
+   * diferente conforme o mês que a pessoa fez. Ver src/lib/comissao-regras.ts.
+   */
+  bonus_fixo?: number;
 }
 
 export interface ComissaoDistribuida {
@@ -31,13 +40,23 @@ export interface ComissaoDistribuida {
   base: number;
   /** Alíquota do mês. Igual para todas as vendas do mesmo vendedor no mês. */
   percentual: number;
+  /** A parte que veio da escada: base × percentual. */
+  valor_percentual: number;
+  /** O fixo das regras por produto desta venda. */
+  bonus: number;
+  /** O que o vendedor recebe por esta venda: percentual + bônus. */
   valor: number;
 }
 
 export interface ResultadoMes {
   base_acumulada: number;
   percentual: number;
+  /** Percentual + bônus. É o que a agência paga no mês. */
   total: number;
+  /** Só a parte da escada. */
+  total_percentual: number;
+  /** Só o fixo das regras por produto. */
+  total_bonus: number;
   /** De onde veio a alíquota, para a tela poder explicar o número. */
   origem: 'FAIXA' | 'PADRAO';
   faixa: FaixaComissao | null;
@@ -87,18 +106,25 @@ export function calcularComissaoDoMes(
   if (!faixa) {
     const itens = itensValidos.map((v, i) => {
       const pct = round2(num(v.pct_fallback));
+      const valor_percentual = round2(bases[i] * pct / 100);
+      const bonus = bonusDe(v);
       return {
         venda_id: v.venda_id,
         base: bases[i],
         percentual: pct,
-        valor: round2(bases[i] * pct / 100),
+        valor_percentual,
+        bonus,
+        valor: round2(valor_percentual + bonus),
       };
     });
-    const total = soma(itens.map(i => i.valor));
+    const total_percentual = soma(itens.map(i => i.valor_percentual));
+    const total_bonus = soma(itens.map(i => i.bonus));
     return {
       base_acumulada,
-      percentual: base_acumulada > 0 ? round2(divSegura(total, base_acumulada) * 100) : 0,
-      total,
+      percentual: base_acumulada > 0 ? round2(divSegura(total_percentual, base_acumulada) * 100) : 0,
+      total: round2(total_percentual + total_bonus),
+      total_percentual,
+      total_bonus,
       origem: 'PADRAO',
       faixa: null,
       itens,
@@ -106,29 +132,47 @@ export function calcularComissaoDoMes(
   }
 
   const percentual = round2(num(faixa.percentual));
-  const total = round2(base_acumulada * percentual / 100);
+  const total_percentual = round2(base_acumulada * percentual / 100);
 
   // Distribui o total proporcionalmente à base. ratearDesconto devolve
   // valores cuja soma é exatamente (soma - desconto); passando o desconto
   // como (soma das bases - total) o resultado soma exatamente `total`,
   // com o resíduo de centavo no maior item.
   const valores = bases.length > 0
-    ? ratearDesconto(bases, round2(base_acumulada - total))
+    ? ratearDesconto(bases, round2(base_acumulada - total_percentual))
     : [];
+
+  // O bônus é somado DEPOIS do rateio: ele não é parte do total que precisa
+  // fechar com a base, e arredondá-lo junto moveria centavos do percentual.
+  const itens = itensValidos.map((v, i) => {
+    const valor_percentual = valores[i] ?? 0;
+    const bonus = bonusDe(v);
+    return {
+      venda_id: v.venda_id,
+      base: bases[i],
+      percentual,
+      valor_percentual,
+      bonus,
+      valor: round2(valor_percentual + bonus),
+    };
+  });
+  const total_bonus = soma(itens.map(i => i.bonus));
 
   return {
     base_acumulada,
     percentual,
-    total,
+    total: round2(total_percentual + total_bonus),
+    total_percentual,
+    total_bonus,
     origem: 'FAIXA',
     faixa,
-    itens: itensValidos.map((v, i) => ({
-      venda_id: v.venda_id,
-      base: bases[i],
-      percentual,
-      valor: valores[i] ?? 0,
-    })),
+    itens,
   };
+}
+
+/** Bônus nunca é negativo: regra de produto só acrescenta. */
+function bonusDe(v: VendaParaComissao): number {
+  return Math.max(round2(num(v.bonus_fixo)), 0);
 }
 
 /** Chave de agrupamento: um acumulado por vendedor e por mês. */

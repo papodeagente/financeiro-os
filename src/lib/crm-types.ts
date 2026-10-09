@@ -205,6 +205,13 @@ export interface ProdutoVenda {
   hotel_nome: string;
   tipo_apto: string;
   regime: string;
+  /**
+   * O produto no catálogo do CRM. É o que identifica "o Produto X" para a
+   * regra de comissão. Vazio em venda manual e em produto sem cadastro.
+   */
+  produto_id?: string;
+  /** Quantas unidades. Ausente ou zero valem 1. */
+  quantidade?: number;
   valor_custo: number;
   valor_venda: number;
   comissao_fornecedor: number;
@@ -607,6 +614,8 @@ export interface ExtratoLinha {
 // FASE 4 — COMISSOES E METAS
 // ============================================================
 
+import type { RegraDeProduto } from './comissao-regras';
+
 export type TipoBaseComissao = 'MARKUP' | 'VALOR_VENDA' | 'COMISSAO_FORNECEDOR' | 'LUCRO' | 'RECEITA_AGENCIA';
 
 export interface FaixaComissao {
@@ -622,10 +631,15 @@ export interface PlanoComissao {
   base_calculo: TipoBaseComissao;
   percentual_padrao: number;
   faixas: FaixaComissao[];
-  regras_produto: Array<{
-    tipo_produto: string;
-    percentual: number;
-  }>;
+  /**
+   * Exceções por produto: outro percentual, ou um valor fixo em reais, para
+   * estimular a venda de produtos escolhidos.
+   *
+   * O formato ANTIGO (`{ tipo_produto, percentual }`) continua no banco e
+   * continua valendo — `normalizarRegras` o converte na leitura. Nunca ler
+   * este campo direto: passe por `normalizarRegras` em comissao-regras.ts.
+   */
+  regras_produto: RegraDeProduto[];
   ativo: boolean;
   criado_em: string;
 }
@@ -1436,6 +1450,7 @@ export function createProdutoVenda(): ProdutoVenda {
     id: generateId(), tipo: 'AEREO', descricao: '', fornecedor_id: '', fornecedor_nome: '',
     data_inicio: '', data_fim: '', localizador: '', cia_aerea: '', trecho: '',
     hotel_nome: '', tipo_apto: '', regime: '',
+    produto_id: '', quantidade: 1,
     valor_custo: 0, valor_venda: 0, comissao_fornecedor: 0,
     moeda: 'BRL', cambio: 1, status: 'RESERVADO',
     aprovador: '', solicitante: '', centro_custo: '', projeto: '',

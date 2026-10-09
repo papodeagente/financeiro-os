@@ -9,8 +9,9 @@ import {
 import { loadEntities, saveEntity, updateEntity, deleteEntity, loadAgencia, loadEquipe } from '@/lib/crm-storage';
 import { proximaDataPagamento, descreverAgenda } from '@/lib/comissao-agenda';
 import { calcularComissaoDoMes, chaveAcumulado } from '@/lib/comissao-acumulada';
+import { normalizarRegras, repartirVenda, type ParteDaVenda } from '@/lib/comissao-regras';
 import {
-  round2, num, somaPor, percentual, divSegura, paraBRL, hojeISO, dataLocal, mesDe,
+  round2, num, somaPor, percentual, paraBRL, hojeISO, dataLocal, mesDe,
 } from '@/lib/money';
 import Link from 'next/link';
 import { RefreshCw } from 'lucide-react';
@@ -193,31 +194,28 @@ export default function ComissoesPage() {
     return { erro: 'venda sem custo de fornecedor e sem comissão apurada — base viraria o faturamento bruto' };
   }
 
-  /** Percentual de fallback: o padrão do plano, ponderado pelas regras de
-   *  produto quando existirem. NÃO aplica faixa: a faixa depende do
-   *  acumulado do mês do vendedor, resolvido em comissao-acumulada.ts. */
-  function calcularPercentual(venda: VendaCRM, plano: PlanoComissao): number {
-    let pct = num(plano.percentual_padrao);
-
-    const produtos = venda.produtos ?? [];
-    if (plano.regras_produto.length > 0 && produtos.length > 0) {
-      const totalProdutos = somaPor(produtos, valorVendaBRL);
-      if (totalProdutos > 0) {
-        // Ponderação pelo valor: produto sem regra usa o percentual padrão.
-        const comissaoPonderada = somaPor(produtos, p => {
-          const regra = plano.regras_produto.find(r => r.tipo_produto === p.tipo);
-          return percentual(valorVendaBRL(p), regra ? num(regra.percentual) : num(plano.percentual_padrao));
-        });
-        pct = round2(divSegura(comissaoPonderada, totalProdutos) * 100);
-      }
-    }
-
-    // A FAIXA NÃO É APLICADA AQUI. Ela depende do acumulado do mês do
-    // vendedor, não desta venda isolada, e é resolvida em
-    // src/lib/comissao-acumulada.ts depois que todas as bases do mês são
-    // apuradas. O que sai daqui é só o percentual de fallback, usado
-    // quando o acumulado do mês não casa com faixa nenhuma.
-    return pct;
+  /**
+   * Reparte a venda entre a parte que segue o plano e a parte que paga valor
+   * fixo por produto. As regras vivem em src/lib/comissao-regras.ts, que é
+   * onde elas podem ser testadas.
+   *
+   * A FAIXA NÃO É APLICADA AQUI. Ela depende do acumulado do mês do
+   * vendedor, não desta venda isolada, e é resolvida em
+   * src/lib/comissao-acumulada.ts depois que todas as bases do mês são
+   * apuradas.
+   */
+  function repartir(venda: VendaCRM, plano: PlanoComissao, base: number): ParteDaVenda {
+    return repartirVenda({
+      base,
+      produtos: (venda.produtos ?? []).map(p => ({
+        produto_id: p.produto_id,
+        tipo: p.tipo,
+        quantidade: p.quantidade,
+        valor_venda: valorVendaBRL(p),
+      })),
+      regras: normalizarRegras(plano.regras_produto),
+      percentual_padrao: num(plano.percentual_padrao),
+    });
   }
 
   // Recalcula todas as comissões: reconcilia as existentes com a venda e
@@ -245,6 +243,8 @@ export default function ComissoesPage() {
       plano: PlanoComissao;
       base: number;
       pctFallback: number;
+      /** Valor fixo das regras por produto, pago por cima da escada. */
+      bonusFixo: number;
       parcial: ComissaoVenda;
     }
 
@@ -277,13 +277,29 @@ export default function ComissoesPage() {
       const base = await calcularValorBase(venda, plano, comissoesPorVenda, cacheItens);
       if ('erro' in base) return base;
 
+      const parte = repartir(venda, plano, round2(base.valor));
+
+      // O plano tem regra por produto mas a venda não diz quais produtos
+      // foram vendidos. Antes isto passava em SILÊNCIO e a comissão saía no
+      // percentual padrão — a regra que a agência cadastrou simplesmente não
+      // valia, e ninguém ficava sabendo. Hoje a venda ainda é comissionada
+      // (não travar o pagamento por falta de detalhe), mas o aviso aparece.
+      if (normalizarRegras(plano.regras_produto).length > 0 && (venda.produtos ?? []).length === 0) {
+        pend.push({
+          id: anterior?.id ?? venda.id,
+          venda: venda.numero,
+          motivo: `o plano ${plano.nome} tem regra por produto, mas esta venda não registra os produtos vendidos — a comissão saiu no percentual padrão de ${num(plano.percentual_padrao)}%`,
+        });
+      }
+
       // Percentual e valor ficam em aberto de propósito: quem os fecha é a
       // distribuição do acumulado do mês, mais abaixo.
       return {
         vendedor,
         plano,
-        base: round2(base.valor),
-        pctFallback: calcularPercentual(venda, plano),
+        base: parte.base_percentual,
+        pctFallback: parte.pct_fallback,
+        bonusFixo: parte.bonus_fixo,
         parcial: {
           ...(anterior ?? {}),
           id: anterior?.id ?? comissaoId(venda.id, venda.vendedor_id),
@@ -361,7 +377,10 @@ export default function ComissoesPage() {
       // Todas as vendas do grupo têm o mesmo vendedor, logo o mesmo plano.
       const plano = grupo[0].plano;
       const resultado = calcularComissaoDoMes(
-        grupo.map(a => ({ venda_id: a.parcial.venda_id, base: a.base, pct_fallback: a.pctFallback })),
+        grupo.map(a => ({
+          venda_id: a.parcial.venda_id, base: a.base,
+          pct_fallback: a.pctFallback, bonus_fixo: a.bonusFixo,
+        })),
         plano,
       );
       const porVenda = new Map(resultado.itens.map(i => [i.venda_id, i]));
