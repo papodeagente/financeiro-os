@@ -1,20 +1,23 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { ArrowDownLeft, Info, TrendingUp, X } from 'lucide-react';
+import { ArrowDownLeft, Info, ShoppingBag, TrendingUp, X } from 'lucide-react';
 import { ContaReceber, ContaPagar, VendaCRM, PlanoContas } from '@/lib/crm-types';
 import { loadEntities } from '@/lib/crm-storage';
 import { vendasComLancamento, apenasVendasComLastro } from '@/lib/venda-lancamentos';
+import { calcularResultadoDoMes, despesasPagasPorCategoria } from '@/lib/resultado-do-mes';
 import { Button } from '@/components/ui/button';
 import { DataState } from '@/components/fin/DataState';
 import { EmptyLesson } from '@/components/fin/EmptyLesson';
 import { FilterBar } from '@/components/fin/FilterBar';
+import { Cascata, type PassoDaCascata } from '@/components/fin/Cascata';
+import { GraficoMoldura } from '@/components/fin/GraficoMoldura';
 import { Jargao } from '@/components/fin/Jargao';
 import { MetricCard } from '@/components/fin/MetricCard';
 import { PageHeader } from '@/components/fin/PageHeader';
 import type { MoneyEstado } from '@/components/fin/Money';
 import { toast } from '@/lib/toast';
-import { soma, somaPor, round2, num, divSegura, mesDe, hojeISO } from '@/lib/money';
+import { somaPor, round2, num, mesDe, hojeISO } from '@/lib/money';
 import { formatBRL } from '@/lib/utils';
 import {
   DemonstrativoTabela,
@@ -50,22 +53,19 @@ interface DRELine {
  * para caixa de frase e para o vocabulário do dono da agência.
  */
 const ROTULO_LINHA: Record<string, string> = {
-  'VOLUME INTERMEDIADO (informativo)': 'Volume vendido (não é sua receita)',
-  'RECEITA BRUTA (comissão + serviços)': 'Receita bruta (comissão e serviços)',
-  '(-) IMPOSTOS SOBRE A RECEITA': '(-) Impostos sobre a receita',
-  'RECEITA LÍQUIDA': 'Receita líquida',
-  '(-) DESPESAS OPERACIONAIS': '(-) Despesas operacionais',
-  'RESULTADO OPERACIONAL': 'Resultado operacional',
-  '(-) DESPESAS FINANCEIRAS': '(-) Despesas financeiras',
-  '(-) OUTRAS DESPESAS': '(-) Outras despesas',
-  'LUCRO LÍQUIDO': 'Lucro líquido',
+  'FATURAMENTO': 'Faturamento (entrou de clientes)',
+  '(-) PARTE DO FORNECEDOR': '(-) Parte do fornecedor',
+  'COMISSAO DE FORNECEDOR': '(+) Comissão recebida de fornecedor',
+  'RECEITA': 'Receita (a sua comissão)',
+  '(-) DESPESAS PAGAS': '(-) Contas pagas no mês',
+  'LUCRO': 'Lucro (o que sobrou)',
 };
 
 const EXPLICACAO_VOLUME =
-  'Total que passou pela agência no mês (passagens, hotéis, pacotes). No regime de intermediação (CNAE 7911-2/00) esse dinheiro é repasse ao fornecedor, não receita sua.';
+  'Dinheiro de cliente que entrou no mês. A maior parte pertence ao fornecedor: no regime de intermediação (CNAE 7911-2/00) o faturamento não é sua receita.';
 
-const NOTA_MARGEM_RECEITA = 'Margem sobre a receita';
-const NOTA_MARGEM_VOLUME = 'Margem sobre o volume vendido';
+const NOTA_MARGEM_RECEITA = 'Quanto da receita virou lucro';
+const NOTA_MARGEM_VOLUME = 'Quanto do faturamento é receita';
 
 function rotuloNota(nome: string): string {
   return nome.startsWith('Margem líquida') ? NOTA_MARGEM_RECEITA : NOTA_MARGEM_VOLUME;
@@ -170,31 +170,6 @@ export default function DREPage() {
     [vendas, comLancamento],
   );
 
-  // Quanto de cada CR de comissão AINDA NÃO está representado na margem da
-  // sua venda. Calculado uma vez para todos os meses (a venda cai num mês e a
-  // comissão vence noutro): a margem de cada venda é consumida pelas suas
-  // comissões na ordem de vencimento, e o que sobrar da comissão é receita
-  // própria a reconhecer.
-  const comissaoNaoCapturada = useMemo(() => {
-    const restante = new Map<string, number>();
-    for (const v of vendasComLastro) {
-      if (v.status === 'CANCELADO') continue;
-      restante.set(v.id, Math.max(round2(num(v.valor_final) - num(v.valor_total_custo)), 0));
-    }
-    const fora = new Map<string, number>();
-    const comissoes = contasReceber
-      .filter(cr => cr.origem === 'COMISSAO_FORNECEDOR')
-      .sort((a, b) => String(a.data_vencimento).localeCompare(String(b.data_vencimento)));
-    for (const cr of comissoes) {
-      const vendaId = cr.origem_venda_id || cr.venda_id || '';
-      const valor = round2(num(cr.valor_final));
-      const margem = vendaId ? (restante.get(vendaId) ?? 0) : 0;
-      const capturado = Math.min(margem, valor);
-      if (vendaId && restante.has(vendaId)) restante.set(vendaId, round2(margem - capturado));
-      fora.set(cr.id, round2(valor - capturado));
-    }
-    return fora;
-  }, [contasReceber, vendasComLastro]);
 
   // DRE para AGÊNCIA DE VIAGENS, CNAE 7911-2/00
   // Regime de INTERMEDIAÇÃO: a agência recebe apenas a COMISSÃO sobre a
@@ -202,156 +177,53 @@ export default function DREPage() {
   // custo da agência (CMV = 0). Receita Bruta = comissão (valor_venda −
   // custo_pago_ao_fornecedor) + comissões diretas + fees + outras receitas
   // próprias. Sem 'Vendas de Serviços' inflando a receita.
+  /**
+   * O demonstrativo, PELO CAIXA.
+   *
+   * Até 09/10/2026 esta função cortava contas por data de VENCIMENTO e somava
+   * o valor DEVIDO: conta vencida e não paga já derrubava o lucro, conta de
+   * outro mês paga neste não aparecia. Agora o corte é a data da baixa e o
+   * valor é o que de fato se movimentou — as três linhas do topo e estas aqui
+   * saem do mesmo módulo (src/lib/resultado-do-mes.ts), então não há dois
+   * números para a mesma pergunta.
+   */
   function buildDRE(month: string): DRELine[] {
     if (!month) return [];
 
-    // Competência: entra tudo que não foi cancelado, inclusive ATRASADO e
-    // PARCIAL. Listar só RECEBIDO/PENDENTE fazia a conta parcialmente
-    // recebida (ou vencida) sumir INTEIRA do relatório.
-    const vivo = (s: string | undefined) => String(s ?? '') !== 'CANCELADO';
-    const monthReceber = contasReceber.filter(cr =>
-      mesDe(cr.data_vencimento) === month && vivo(cr.status)
-    );
-    const monthPagar = contasPagar.filter(cp =>
-      mesDe(cp.data_vencimento) === month && vivo(cp.status)
-    );
-    const monthVendas = vendasComLastro.filter(v =>
-      mesDe(v.data_venda) === month && v.status !== 'CANCELADO'
-    );
+    const r = calcularResultadoDoMes({
+      mes: month,
+      receber: contasReceber,
+      pagar: contasPagar,
+      vendas: vendasComLastro,
+    });
 
-    // VOLUME intermediado (informativo, não entra na DRE; é só
-    // referência de quanto a agência movimentou)
-    const volumeIntermediado = somaPor(monthVendas, v => v.valor_final);
+    const nomeDaCategoria = new Map(planoContas.map(p => [p.id, `${p.codigo} ${p.nome}`.trim()]));
+    const despesas = despesasPagasPorCategoria({ mes: month, pagar: contasPagar });
 
-    // RECEITA BRUTA = margem (comissão) das vendas + comissões de
-    // fornecedores recebidas explicitamente + fees + outras receitas.
-    // É a base sobre a qual incidem impostos (ISS, PIS/COFINS).
-    const comissaoVendas = somaPor(monthVendas, v =>
-      Math.max(round2(num(v.valor_final) - num(v.valor_total_custo)), 0)
-    );
-
-    // FONTE ÚNICA, por DEDUÇÃO (não por exclusão): a comissão de uma venda
-    // entra na Receita Bruta UMA vez. Quando a margem da venda já a contém
-    // (linha 1.1), a CR espelho não soma de novo. Mas no fluxo "cliente paga
-    // o fornecedor" a venda não tem margem própria (margem = 0) e a comissão
-    // É a receita, e excluí-la simplesmente apagava esse dinheiro do DRE dos
-    // dois meses (o da venda e o do vencimento da comissão).
-    const receitaComissoes = somaPor(
-      monthReceber.filter(cr => cr.origem === 'COMISSAO_FORNECEDOR'),
-      cr => round2(num(comissaoNaoCapturada.get(cr.id) ?? num(cr.valor_final))),
-    );
-    const receitaFee = somaPor(monthReceber.filter(cr => cr.origem === 'FEE'), cr => cr.valor_final);
-    const receitaOutras = somaPor(monthReceber.filter(cr => cr.origem === 'OUTROS'), cr => cr.valor_final);
-
-    const receitaBruta = soma([comissaoVendas, receitaComissoes, receitaFee, receitaOutras]);
-
-    // CP auto-gerada pela venda = repasse ao fornecedor. Neste regime o
-    // cliente paga o fornecedor direto, então não é despesa da agência.
-    const ehRepasseDeVenda = (cp: ContaPagar) => !!cp.auto_gerado && cp.origem === 'VENDA';
-
-    const idsDoPrefixo = (prefixo: string) =>
-      planoContas.filter(p => p.codigo?.startsWith(prefixo)).map(p => p.id);
-
-    function sumByCategory(prefix: string): number {
-      const catIds = new Set(idsDoPrefixo(prefix));
-      return somaPor(monthPagar.filter(cp => catIds.has(cp.categoria_id)), cp => cp.valor_final);
+    const linhas: DRELine[] = [
+      { codigo: '', nome: 'FATURAMENTO', valor: r.faturamento, tipo: 'header', indent: 0 },
+      { codigo: '', nome: '(-) PARTE DO FORNECEDOR', valor: -r.parte_do_fornecedor, tipo: 'item', indent: 1 },
+    ];
+    if (r.comissao_de_fornecedor > 0) {
+      linhas.push({ codigo: '', nome: 'COMISSAO DE FORNECEDOR', valor: r.comissao_de_fornecedor, tipo: 'item', indent: 1 });
     }
-
-    // CNAE 7911-2: não tem CMV. Custo do fornecedor é repasse direto
-    // do cliente, não despesa da agência. Categorias 2.2..2.6 cobrem
-    // as despesas operacionais reais.
-    const despOperacionais = sumByCategory('2.2');
-    const despComerciais = sumByCategory('2.6');
-    const despTaxas = sumByCategory('2.3');
-    // A taxa da plataforma de pagamento é despesa financeira, mas NÃO vive
-    // numa conta a pagar: ela é retida da conta a receber antes do repasse,
-    // então nenhuma categoria do plano de contas a alcança. Sem esta linha o
-    // dinheiro sairia do saldo bancário (saldo-bancario.ts desconta a taxa) e
-    // continuaria invisível no resultado — o DRE e o extrato deixariam de
-    // bater exatamente pelo valor das taxas.
-    //
-    // Competência, como todo o resto deste relatório: conta viva com
-    // vencimento no mês, tenha sido baixada ou não. É a mesma base que
-    // resultado-financeiro.ts usa em `taxas`.
-    const taxasDePlataforma = somaPor(monthReceber, cr => Math.max(0, num(cr.taxa)));
-    const despFinanceiras = round2(sumByCategory('2.4') + taxasDePlataforma);
-    const despOutras = sumByCategory('2.5');
-
-    // 2.1 (CMV do plano padrão) não tem linha própria neste regime, mas o
-    // dinheiro precisa aparecer: o que sobra depois de tirar o repasse
-    // auto-gerado de venda é despesa real e vai para "Outras despesas".
-    const idsCMV = new Set(idsDoPrefixo('2.1'));
-    const despCMV = somaPor(
-      monthPagar.filter(cp => idsCMV.has(cp.categoria_id) && !ehRepasseDeVenda(cp)),
-      cp => cp.valor_final,
-    );
-
-    // Condição de NEGAÇÃO sobre os ids conhecidos: qualquer conta cuja
-    // categoria não caia num bucket da DRE (categoria apagada, id órfão ou
-    // categoria vazia) vira "Não categorizadas". Antes o filtro exigia
-    // categoria_id vazio e o dinheiro das outras sumia do relatório inteiro.
-    const PREFIXOS_DRE = ['2.1', '2.2', '2.3', '2.4', '2.5', '2.6'];
-    const idsConhecidos = new Set(PREFIXOS_DRE.flatMap(idsDoPrefixo));
-    const uncategorized = somaPor(
-      monthPagar.filter(cp => !idsConhecidos.has(cp.categoria_id) && !ehRepasseDeVenda(cp)),
-      cp => cp.valor_final,
-    );
-
-    const totalDespesas = soma([despOperacionais, despComerciais, despTaxas, despFinanceiras, despOutras, despCMV, uncategorized]);
-    const outrasDespesas = soma([despOutras, despCMV, uncategorized]);
-    const receitaLiquida = round2(receitaBruta - despTaxas);
-    const resultadoOperacional = round2(receitaLiquida - despOperacionais - despComerciais);
-    const lucroLiquido = round2(receitaBruta - totalDespesas);
-    const margemLiquida = round2(divSegura(lucroLiquido, receitaBruta) * 100);
-    const margemSobreVolume = round2(divSegura(receitaBruta, volumeIntermediado) * 100);
-
-    const lines: DRELine[] = [];
-
-    // Informativo no topo: volume intermediado (não entra na conta)
-    if (volumeIntermediado > 0) {
-      lines.push({ codigo: '', nome: 'VOLUME INTERMEDIADO (informativo)', valor: volumeIntermediado, tipo: 'header', indent: 0 });
-      lines.push({ codigo: '0.1', nome: 'Total transacionado (passagens, hotéis, etc.)', valor: volumeIntermediado, tipo: 'item', indent: 1 });
+    linhas.push({ codigo: '', nome: 'RECEITA', valor: r.receita, tipo: 'subtotal', indent: 0 });
+    linhas.push({ codigo: '', nome: '(-) DESPESAS PAGAS', valor: -r.despesas_pagas, tipo: 'header', indent: 0 });
+    for (const d of despesas) {
+      linhas.push({
+        codigo: '',
+        // Conta paga sem categoria aparece nomeada, em vez de sumir: dinheiro
+        // que saiu e não está em lugar nenhum é pior do que mal classificado.
+        nome: nomeDaCategoria.get(d.categoria_id) ?? (d.categoria_id ? d.categoria_id : 'Sem categoria'),
+        valor: -d.valor,
+        tipo: 'item',
+        indent: 1,
+      });
     }
-
-    lines.push(
-      { codigo: '', nome: 'RECEITA BRUTA (comissão + serviços)', valor: receitaBruta, tipo: 'header', indent: 0 },
-      { codigo: '1.1', nome: 'Comissão sobre vendas', valor: comissaoVendas, tipo: 'item', indent: 1 },
-      { codigo: '1.2', nome: 'Comissões de fornecedores', valor: receitaComissoes, tipo: 'item', indent: 1 },
-      { codigo: '1.3', nome: 'Fee de serviço', valor: receitaFee, tipo: 'item', indent: 1 },
-      { codigo: '1.5', nome: 'Outras receitas', valor: receitaOutras, tipo: 'item', indent: 1 },
-
-      { codigo: '', nome: '(-) IMPOSTOS SOBRE A RECEITA', valor: -despTaxas, tipo: 'header', indent: 0 },
-      { codigo: '2.3', nome: 'ISS, PIS, COFINS e outros', valor: despTaxas, tipo: 'item', indent: 1 },
-
-      { codigo: '', nome: 'RECEITA LÍQUIDA', valor: receitaLiquida, tipo: 'subtotal', indent: 0 },
-
-      { codigo: '', nome: '(-) DESPESAS OPERACIONAIS', valor: -(despOperacionais + despComerciais), tipo: 'header', indent: 0 },
-      { codigo: '2.2', nome: 'Despesas operacionais (aluguel, salários, etc.)', valor: despOperacionais, tipo: 'item', indent: 1 },
-      { codigo: '2.6', nome: 'Despesas comerciais (marketing, comissão vendedor)', valor: despComerciais, tipo: 'item', indent: 1 },
-
-      { codigo: '', nome: 'RESULTADO OPERACIONAL', valor: resultadoOperacional, tipo: 'subtotal', indent: 0 },
-
-      { codigo: '', nome: '(-) DESPESAS FINANCEIRAS', valor: -despFinanceiras, tipo: 'header', indent: 0 },
-      { codigo: '2.4', nome: 'Juros, tarifas bancárias', valor: round2(despFinanceiras - taxasDePlataforma), tipo: 'item', indent: 1 },
-      ...(taxasDePlataforma > 0
-        ? [{ codigo: '2.4', nome: 'Taxas de plataformas de pagamento', valor: taxasDePlataforma, tipo: 'item' as const, indent: 1 }]
-        : []),
-    );
-
-    if (outrasDespesas !== 0) {
-      lines.push({ codigo: '', nome: '(-) OUTRAS DESPESAS', valor: -outrasDespesas, tipo: 'header', indent: 0 });
-      if (despOutras !== 0) lines.push({ codigo: '2.5', nome: 'Outras despesas', valor: despOutras, tipo: 'item', indent: 1 });
-      if (despCMV !== 0) lines.push({ codigo: '2.1', nome: 'Custos diretos (CMV)', valor: despCMV, tipo: 'item', indent: 1 });
-      if (uncategorized !== 0) lines.push({ codigo: '', nome: 'Não categorizadas', valor: uncategorized, tipo: 'item', indent: 1 });
-    }
-
-    lines.push(
-      { codigo: '', nome: 'LUCRO LÍQUIDO', valor: lucroLiquido, tipo: 'total', indent: 0 },
-      { codigo: '', nome: `Margem líquida (sobre receita): ${PCT(margemLiquida)}`, valor: margemLiquida, tipo: 'item', indent: 0 },
-      { codigo: '', nome: `Margem sobre volume intermediado: ${PCT(margemSobreVolume)}`, valor: margemSobreVolume, tipo: 'item', indent: 0 },
-    );
-
-    return lines;
+    linhas.push({ codigo: '', nome: 'LUCRO', valor: r.lucro, tipo: 'total', indent: 0 });
+    linhas.push({ codigo: '', nome: `Margem líquida ${r.margem_sobre_receita === null ? '—' : PCT(r.margem_sobre_receita)}`, valor: r.margem_sobre_receita ?? 0, tipo: 'item', indent: 0 });
+    linhas.push({ codigo: '', nome: `Margem volume ${r.margem_sobre_faturamento === null ? '—' : PCT(r.margem_sobre_faturamento)}`, valor: r.margem_sobre_faturamento ?? 0, tipo: 'item', indent: 0 });
+    return linhas;
   }
 
   // O que a regra do lastro tirou deste mês. Subtrair dinheiro em silêncio é
@@ -369,25 +241,65 @@ export default function DREPage() {
     [vendasSemLastro],
   );
 
+
+  // Os três números do topo saem do MESMO módulo que monta o demonstrativo:
+  // duas contas para a mesma pergunta é como nascem dois números diferentes
+  // para o mesmo mês.
+  const resultado = useMemo(
+    () => calcularResultadoDoMes({
+      mes: selectedMonth, receber: contasReceber, pagar: contasPagar, vendas: vendasComLastro,
+    }),
+    [selectedMonth, contasReceber, contasPagar, vendasComLastro],
+  );
+
+  const passosDaCascata = useMemo<PassoDaCascata[]>(() => {
+    const passos: PassoDaCascata[] = [
+      {
+        id: 'faturamento', rotulo: 'Faturamento', valor: resultado.faturamento, papel: 'inicio',
+        detalhe: 'Dinheiro de cliente que entrou no mês.',
+      },
+      {
+        id: 'fornecedor', rotulo: 'Fornecedor', valor: -resultado.parte_do_fornecedor, papel: 'subtrai',
+        detalhe: 'A fatia do que entrou que pertence ao fornecedor. É a parte proporcional de cada venda, não o repasse que saiu do banco.',
+      },
+    ];
+    if (resultado.comissao_de_fornecedor > 0) {
+      passos.push({
+        id: 'comissao-fornecedor', rotulo: 'Comissão recebida', valor: resultado.comissao_de_fornecedor, papel: 'soma',
+        detalhe: 'Comissão que o fornecedor pagou à agência. É receita sem faturamento: não passa pelo bolso do cliente.',
+      });
+    }
+    passos.push({
+      id: 'receita', rotulo: 'Receita', valor: resultado.receita, papel: 'total',
+      detalhe: 'A comissão: o que a agência de fato ganhou no mês.',
+    });
+    passos.push({
+      id: 'despesas', rotulo: 'Contas pagas', valor: -resultado.despesas_pagas, papel: 'subtrai',
+      detalhe: 'As contas da agência efetivamente pagas no mês. O repasse ao fornecedor não entra aqui: ele já saiu na fatia do fornecedor.',
+    });
+    passos.push({
+      id: 'lucro', rotulo: 'Lucro', valor: resultado.lucro, papel: 'total',
+      detalhe: 'O que sobrou.',
+    });
+    return passos;
+  }, [resultado]);
+
   const dreMain = useMemo(() => buildDRE(selectedMonth), [selectedMonth, contasReceber, contasPagar, vendasComLastro, planoContas]);
   const dreCompare = useMemo(() => compareMonth ? buildDRE(compareMonth) : [], [compareMonth, contasReceber, contasPagar, vendasComLastro, planoContas]);
 
-  // Summary metrics from main DRE
-  const receitaBruta = dreMain.find(l => l.nome.startsWith('RECEITA BRUTA'))?.valor || 0;
-  const receitaLiquida = dreMain.find(l => l.nome === 'RECEITA LÍQUIDA')?.valor || 0;
-  const lucroLiquido = dreMain.find(l => l.nome === 'LUCRO LÍQUIDO')?.valor || 0;
-  const margemLiquida = dreMain.find(l => l.nome.startsWith('Margem líquida'))?.valor ?? null;
 
   // Modo Simplificado: mostra só os totais principais. Modo Completo: tudo.
   // Iniciante consegue ler 4-6 linhas; contador prefere ver detalhe.
+  // Resumido: a escada e os totais. Detalhado acrescenta as categorias das
+  // contas pagas. Os nomes têm de ser os mesmos que buildDRE emite — quando
+  // divergiram, a tela mostrou "0 de 8 linhas" sem erro nenhum.
   const SIMPL_KEEP = [
-    'RECEITA BRUTA',
-    '(-) IMPOSTOS SOBRE A RECEITA',
-    'RECEITA LÍQUIDA',
-    '(-) DESPESAS OPERACIONAIS',
-    '(-) DESPESAS FINANCEIRAS',
-    '(-) OUTRAS DESPESAS',
-    'LUCRO LÍQUIDO',
+    'FATURAMENTO',
+    '(-) PARTE DO FORNECEDOR',
+    'COMISSAO DE FORNECEDOR',
+    'RECEITA',
+    '(-) DESPESAS PAGAS',
+    'LUCRO',
   ];
   const dreFiltrado = modoSimplificado
     ? dreMain.filter(l => {
@@ -468,11 +380,6 @@ export default function DREPage() {
     alternarModo(true);
   };
 
-  const contextoLucro =
-    margemLiquida === null
-      ? `Receita menos impostos e despesas de ${rotuloMes}`
-      : `Margem de ${pctBR(margemLiquida)} sobre a receita bruta de ${rotuloMes}`;
-
   const esqueleto = (
     <div className="space-y-[var(--fin-s-5)]">
       <div className="h-12 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]" />
@@ -495,9 +402,9 @@ export default function DREPage() {
           titulo="Resultado do mês"
           subtitulo={
             <Jargao
-              comum="Quanto a agência ganhou e gastou no período"
-              tecnico="DRE, demonstrativo de resultado do exercício"
-              explicacao="Parte da receita da agência (a comissão), tira os impostos e as despesas do mês e chega no lucro. É este relatório que o contador pede."
+              comum="Faturamento, receita e lucro do mês, pelo que entrou e saiu de verdade"
+              tecnico="regime de caixa"
+              explicacao="O mês conta pelo dinheiro que se moveu: a venda entra quando o cliente paga, a conta entra quando é paga. Conta que venceu e não foi paga ainda não está aqui — ela está no fluxo de caixa."
               formato="subtitulo"
             />
           }
@@ -514,10 +421,11 @@ export default function DREPage() {
               <div className="flex min-w-0 flex-col gap-[var(--fin-s-1)]">
                 <p className="fin-t-body-strong text-[var(--fin-text)]">Como ler este relatório</p>
                 <p className="fin-t-body text-[var(--fin-text-2)]">
-                  Sua agência opera no regime de intermediação (CNAE 7911-2/00). O que você fatura
-                  para o cliente, como passagens e hotéis, não é sua receita: sua receita é só a
-                  comissão. Por isso o volume vendido aparece separado da receita bruta, que é a sua
-                  margem real e a base sobre a qual incidem os impostos.
+                  Três palavras, uma definição cada. <strong>Faturamento</strong> é o dinheiro de
+                  cliente que entrou. <strong>Receita</strong> é a sua comissão, o que sobra depois
+                  da parte do fornecedor. <strong>Lucro</strong> é o que restou da receita depois
+                  das contas que você pagou no mês. Os três se subtraem nesta ordem, sem ninguém
+                  refazer a conta de cabeça.
                 </p>
               </div>
               <Button
@@ -595,7 +503,7 @@ export default function DREPage() {
                   comoComeca={[
                     'Lance as contas a pagar do mês, como aluguel, salários e impostos',
                     'Confira as contas a receber vindas das vendas',
-                    'Volte aqui para ver a receita, as despesas e o lucro do período',
+                    'Volte aqui para ver o faturamento, a receita e o lucro do mês',
                   ]}
                   acao={{ rotulo: 'Lançar conta a pagar', href: '/financeiro-ag/pagar' }}
                 />
@@ -610,30 +518,47 @@ export default function DREPage() {
                 <>
                   <div className="grid gap-[var(--fin-s-4)] md:grid-cols-3">
                     <MetricCard
-                      rotulo="Receita bruta" icone={ArrowDownLeft}
-                      valor={receitaBruta}
+                      rotulo="Faturamento" icone={ShoppingBag}
+                      valor={resultado.faturamento}
                       estado={estadoValor}
-                      contexto={`Comissões, fees e outras receitas de ${rotuloMes}`}
-                      explicacao={'Margem das vendas + comissões de fornecedores + fees + outras receitas próprias da agência. É sobre este valor que incidem impostos (ISS, PIS/COFINS, Simples).'}
+                      contexto={`Dinheiro de clientes que entrou em ${rotuloMes}`}
+                      explicacao="O total de vendas que o cliente pagou no mês. A maior parte pertence ao fornecedor: faturamento não é o que a agência ganha."
                     />
                     <MetricCard
-                      rotulo="Receita líquida" icone={ArrowDownLeft}
-                      valor={receitaLiquida}
+                      rotulo="Receita" icone={ArrowDownLeft}
+                      valor={resultado.receita}
                       estado={estadoValor}
-                      tone={receitaLiquida < 0 ? 'negativo' : 'neutro'}
-                      contexto="Receita bruta depois dos impostos sobre a receita"
-                      explicacao="Receita bruta menos os impostos sobre faturamento (ISS, PIS, COFINS). É a receita que efetivamente sobra para cobrir despesas operacionais."
+                      tone={resultado.receita < 0 ? 'negativo' : 'neutro'}
+                      contexto={
+                        resultado.margem_sobre_faturamento === null
+                          ? 'A comissão que ficou com a agência'
+                          : `${pctBR(resultado.margem_sobre_faturamento)} do faturamento ficou com a agência`
+                      }
+                      explicacao="A comissão: o que sobrou do faturamento depois da parte do fornecedor, mais as comissões recebidas direto de fornecedores. É o que a agência de fato ganha."
                     />
                     <MetricCard
-                      rotulo="Lucro líquido" icone={TrendingUp}
-                      valor={lucroLiquido}
+                      rotulo="Lucro" icone={TrendingUp}
+                      valor={resultado.lucro}
                       estado={estadoValor}
                       emphasis="destaque"
-                      tone={lucroLiquido < 0 ? 'negativo' : 'neutro'}
-                      contexto={contextoLucro}
-                      explicacao="O que sobra da receita bruta depois de todos os impostos e despesas do período. Negativo significa que o mês fechou no prejuízo."
+                      tone={resultado.lucro < 0 ? 'negativo' : 'neutro'}
+                      contexto={`Receita menos as contas pagas em ${rotuloMes}`}
+                      explicacao="O que sobrou da receita depois de todas as contas que a agência pagou no mês. Conta a pagar que ainda não foi paga não entra aqui: ela aparece no fluxo de caixa. Negativo significa que o mês fechou no prejuízo."
                     />
                   </div>
+
+                  <GraficoMoldura
+                    titulo="Por onde o dinheiro passou"
+                    sublinha="Cada passo começa onde o anterior parou, na mesma régua: o tamanho do que sai e o do que sobra ficam comparáveis sem ninguém refazer a conta."
+                    estado="ok"
+                    descricao={`Cascata de ${rotuloMes}: faturamento de ${formatBRL(resultado.faturamento)} chega a ${formatBRL(resultado.lucro)} de lucro.`}
+                    tabela={{
+                      colunas: ['Passo', 'Valor'],
+                      linhas: passosDaCascata.map(passo => [passo.rotulo, formatBRL(passo.valor)]),
+                    }}
+                  >
+                    <Cascata passos={passosDaCascata} formatar={formatBRL} altura={260} />
+                  </GraficoMoldura>
 
                   {vendasSemLastro.length > 0 ? (
                     <div className="flex flex-col gap-[var(--fin-s-1)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface-2)] p-4">
@@ -657,7 +582,8 @@ export default function DREPage() {
                         Como o resultado se forma
                       </h2>
                       <p className="fin-t-caption text-[var(--fin-text-3)]">
-                        Cada linha soma ou subtrai até chegar no lucro líquido do período.
+                        Cada linha soma ou subtrai até chegar no lucro do mês. Os mesmos números
+                        dos cartões acima, abertos por categoria.
                       </p>
                     </div>
 
