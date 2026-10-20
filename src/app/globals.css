@@ -7,7 +7,12 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-sans: var(--font-aeonik), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  /* A AEONIK NÃO TEM PESO 600. Sem este mapa, todo `font-semibold` do
+     sistema seria sintetizado pelo navegador ou subiria para 700, e a
+     interface inteira engordaria. A hierarquia passa a ter três níveis:
+     400 (corpo), 500 (ênfase) e 700 (título). É o mesmo acordo do CRM. */
+  --font-weight-semibold: 500;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, 'Cascadia Code', monospace;
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -161,6 +166,7 @@
   --fin-r-sm:  6px;    /* chip, badge, caixa de seleção */
   --fin-r-md:  8px;    /* botão, input, select, item de menu */
   --fin-r-lg:  14px;   /* card, painel, diálogo */
+  --fin-r-tile: 10px;  /* casquinha de ícone: nem botão (8) nem bolha (14) */
   --fin-r-dot: 999px;  /* apenas o ponto de estado de 6px */
 
   /* ── Sombra ───────────────────────────────────────────────────────
@@ -484,7 +490,10 @@
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    /* O aperto global da letra, igual ao do CRM. É sutil e é metade da
+       semelhança entre os dois sistemas: sem ele a Aeonik fica solta e a
+       interface parece outra. */
+    letter-spacing: -0.011em;
   }
   html {
     @apply font-sans;
@@ -507,7 +516,7 @@
   /* Headings: tighter tracking */
   h1, h2, h3 {
     letter-spacing: -0.02em;
-    font-weight: 600;
+    font-weight: 500;
   }
 
   /* KPI display numbers */
@@ -583,7 +592,7 @@
 .kpi-card__value {
   margin-top: 4px;
   font-size: var(--fin-fs-metric-sm);
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: -0.02em;
   color: var(--kpi-accent, var(--fin-text));
   font-variant-numeric: tabular-nums lining-nums;
@@ -666,7 +675,7 @@
   gap: 12px;
 }
 .section-card-title {
-  font-weight: 600;
+  font-weight: 500;
   color: var(--lg-text);
   font-size: 15px;
   letter-spacing: -0.01em;
@@ -979,7 +988,7 @@
   letter-spacing: 0.01em;
 }
 .stepper-step[data-filled="true"]:not([data-active="true"]) .stepper-label {
-  font-weight: 600;
+  font-weight: 500;
   color: var(--t-text);
 }
 
@@ -1300,7 +1309,7 @@
 /* Helpers minimal — escopados no root .min-shell pra não vazar
    pra outras telas. */
 .min-shell {
-  font-family: var(--font-inter-tight), var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: var(--font-aeonik), ui-sans-serif, system-ui, -apple-system, sans-serif;
   letter-spacing: -0.011em;
   color: var(--ink);
   background: var(--ink-bg);
@@ -1321,7 +1330,7 @@
 }
 .min-shell .min-section-title b {
   color: var(--ink);
-  font-weight: 600;
+  font-weight: 500;
   margin-right: 10px;
 }
 
@@ -1492,7 +1501,7 @@
 /* Botões shadcn dentro do .min-shell — radius 0, sem sombra,
    border hairline. Variant primary fica preto puro (ink). */
 .min-shell [data-slot="button"] {
-  font-family: var(--font-inter-tight), inherit;
+  font-family: var(--font-aeonik), inherit;
   letter-spacing: -0.005em;
 }
 
@@ -1519,7 +1528,7 @@
 .min-shell h1,
 .min-shell h2,
 .min-shell h3 {
-  font-family: var(--font-inter-tight), var(--font-inter), system-ui, sans-serif;
+  font-family: var(--font-aeonik), system-ui, sans-serif;
   letter-spacing: -0.02em;
 }
 .min-shell h1 { letter-spacing: -0.03em; }
@@ -1645,7 +1654,7 @@
 }
 .empty-state__title {
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--lg-text-2);
   margin-bottom: 4px;
 }
@@ -1781,9 +1790,9 @@
    continua obrigatório — lá os dígitos precisam alinhar entre linhas. */
 .fin-t-resposta,
 .min-shell .fin-t-resposta {
-  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: var(--font-aeonik), ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: var(--fin-fs-resposta);
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.02;
   letter-spacing: -0.03em;
   font-variant-numeric: proportional-nums lining-nums;
@@ -1791,9 +1800,9 @@
 
 .fin-t-metric,
 .min-shell .fin-t-metric {
-  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: var(--font-aeonik), ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: var(--fin-fs-metric);
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.05;
   letter-spacing: -0.025em;
   font-variant-numeric: tabular-nums lining-nums;
@@ -1801,9 +1810,9 @@
 
 .fin-t-metric-sm,
 .min-shell .fin-t-metric-sm {
-  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: var(--font-aeonik), ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: var(--fin-fs-metric-sm);
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.2;
   letter-spacing: -0.015em;
   font-variant-numeric: tabular-nums lining-nums;
@@ -1811,34 +1820,34 @@
 
 .fin-t-title,
 .min-shell .fin-t-title {
-  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: var(--font-aeonik), ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: var(--fin-fs-title);
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.25;
   letter-spacing: -0.01em;
 }
 
 .fin-t-subhead,
 .min-shell .fin-t-subhead {
-  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: var(--font-aeonik), ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: var(--fin-fs-subhead);
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.35;
   letter-spacing: -0.005em;
 }
 
 .fin-t-body-strong,
 .min-shell .fin-t-body-strong {
-  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: var(--font-aeonik), ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: var(--fin-fs-body);
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.45;
   letter-spacing: 0;
 }
 
 .fin-t-body,
 .min-shell .fin-t-body {
-  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: var(--font-aeonik), ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: var(--fin-fs-body);
   font-weight: 400;
   line-height: 1.45;
@@ -1847,7 +1856,7 @@
 
 .fin-t-caption,
 .min-shell .fin-t-caption {
-  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: var(--font-aeonik), ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: var(--fin-fs-caption);
   font-weight: 400;
   line-height: 1.4;
@@ -1856,9 +1865,9 @@
 
 .fin-t-overline,
 .min-shell .fin-t-overline {
-  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: var(--font-aeonik), ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: var(--fin-fs-overline);
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.2;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1943,8 +1952,8 @@
 }
 
 .lp-display {
-  font-family: var(--font-inter-tight), var(--font-inter), system-ui, sans-serif;
-  font-weight: 600;
+  font-family: var(--font-aeonik), system-ui, sans-serif;
+  font-weight: 500;
   letter-spacing: -0.035em;
   line-height: 1.02;
 }

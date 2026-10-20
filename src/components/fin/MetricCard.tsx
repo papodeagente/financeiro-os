@@ -5,6 +5,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { Info, type LucideIcon } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import { comAlfa } from '@/lib/cor';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Money, type MoneyEstado } from '@/components/fin/Money';
 import { DeltaIndicator, type DeltaIndicatorProps } from '@/components/fin/DeltaIndicator';
@@ -67,21 +68,46 @@ export type MetricCardProps = {
 
 export type TomDoIcone = NonNullable<MetricCardProps['tomDoIcone']>;
 
-const TOM_DO_ICONE: Record<TomDoIcone, string> = {
-  acento: 'bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]',
-  positivo: 'bg-[var(--fin-positive-soft)] text-[var(--fin-positive)]',
-  negativo: 'bg-[var(--fin-negative-soft)] text-[var(--fin-negative-text)]',
-  aviso: 'bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)]',
-  violeta: 'bg-[var(--fin-violet-soft)] text-[var(--fin-violet)]',
-  info: 'bg-[var(--fin-info-soft)] text-[var(--fin-info)]',
+/** A cor CHEIA de cada tom. A casquinha deriva o degradê dela. */
+const COR_DO_TOM: Record<TomDoIcone, string> = {
+  acento: 'var(--fin-accent)',
+  positivo: 'var(--fin-positive)',
+  negativo: 'var(--fin-negative-text)',
+  aviso: 'var(--fin-warning-text)',
+  violeta: 'var(--fin-violet)',
+  info: 'var(--fin-info)',
 };
 
-/** O quadrado de ícone dos indicadores. Compartilhado com cartões que não
- *  podem ser MetricCard (ex.: os do painel, que escondem o valor). */
-export function IconeDeIndicador({ icone: Icone, tom = 'acento' }: { icone: LucideIcon; tom?: TomDoIcone }) {
+/**
+ * A casquinha do ícone: quadrado arredondado com tinta suave em degradê.
+ *
+ * O degradê é a assinatura visual do Entur OS. Fundo chapado lê como selo;
+ * degradê lê como superfície. O raio tem token próprio (--fin-r-tile, 10px):
+ * em 8px o quadrado parece um botão, acima de 14px vira bolha.
+ *
+ * A cor vem do TOM, nunca de uma paleta decorativa. Cor de estado continua
+ * querendo dizer estado — um ícone verde escolhido por gosto ensina a
+ * ignorar o verde que quer dizer recebido.
+ */
+export function IconeDeIndicador({ icone: Icone, tom = 'acento', tamanho = 'md' }: {
+  icone: LucideIcon;
+  tom?: TomDoIcone;
+  /** sm 36px · md 40px · lg 48px */
+  tamanho?: 'sm' | 'md' | 'lg';
+}) {
+  const cor = COR_DO_TOM[tom];
+  const medida = tamanho === 'sm' ? 'size-9' : tamanho === 'lg' ? 'size-12' : 'size-10';
+  const corpo = tamanho === 'lg' ? 'size-5' : 'size-4';
   return (
-    <span aria-hidden="true" className={cn('grid size-10 shrink-0 place-items-center rounded-[var(--fin-r-md)]', TOM_DO_ICONE[tom])}>
-      <Icone className="size-5" />
+    <span
+      aria-hidden="true"
+      className={cn('grid shrink-0 place-items-center rounded-[var(--fin-r-tile)]', medida)}
+      style={{
+        backgroundImage: `linear-gradient(to bottom right, ${comAlfa(cor, 15)}, ${comAlfa(cor, 5)})`,
+        color: cor,
+      }}
+    >
+      <Icone className={corpo} />
     </span>
   );
 }
@@ -145,11 +171,18 @@ export function MetricCard({
         </button>
       )}
 
-      <div className={cn('relative flex items-start gap-[var(--fin-s-3)]', interativo && 'pointer-events-none')}>
-        {Icone && <IconeDeIndicador icone={Icone} tom={tomIcone} />}
+      {/* A pilha do Entur OS: casquinha em cima, rótulo em maiúsculas, número
+          grande, legenda. O ícone ao LADO do texto empurrava o número para
+          fora do eixo e encolhia o rótulo numa coluna estreita. */}
+      <div className={cn('relative flex flex-col', interativo && 'pointer-events-none')}>
+        {Icone && (
+          <div className="mb-[var(--fin-s-4)]">
+            <IconeDeIndicador icone={Icone} tom={tomIcone} />
+          </div>
+        )}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-center gap-1">
-          <h3 className="fin-t-body font-medium text-[var(--fin-text-2)]">{rotulo}</h3>
+          <h3 className="fin-t-overline text-[var(--fin-text-2)]">{rotulo}</h3>
           {explicacao && (
             <Tooltip>
               <TooltipTrigger
