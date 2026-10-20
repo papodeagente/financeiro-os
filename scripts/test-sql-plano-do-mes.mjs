@@ -95,6 +95,7 @@ const r = await carregarRealizadoDoMes(exec, T1, '2026-10', '2026-10-20', null);
 eq([r.vendas, r.faturamento, r.comissao], [2, 10390.63, 2078.13], 'duas vendas com lançamento em outubro; comissão = venda menos custo (78,13 + 2.000)');
 eq([r.mes, r.hoje], ['2026-10', '2026-10-20'], 'o mês e o dia de referência');
 eq(r.impostos, 120, 'imposto lançado no mês (2.3) entra como imposto, não como custo fixo');
+eq([r.diario.vendas[8], r.diario.comissao[8], r.diario.vendas[13], r.diario.comissao[13], r.diario.vendas.length], [1, 78.13, 1, 2000, 31], 'a série do mês: a venda de 09/10 e a de 14/10, nos dias certos');
 
 console.log('\n--- (b) as contas do custo do mês ---');
 const porId = Object.fromEntries(r.contas.map(c => [c.id, c]));

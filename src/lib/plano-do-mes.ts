@@ -82,6 +82,34 @@ export interface RealizadoDoMes {
   equilibrio: { atingido: boolean; na_venda: number | null; data: string | null; faltam: number };
   contas: ContaDoMes[];
   registros: RegistroDeProgresso[];
+  /** Por dia do mês (posição 0 = dia 1): vendas e comissão. Para os gráficos. */
+  diario?: { vendas: number[]; comissao: number[] };
+}
+
+/** Vendas e comissão de cada dia do mês, sem buraco: dia sem venda é zero. */
+export function serieDoMes(mes: string, vendas: ReadonlyArray<{ data: string; comissao: number }>): { vendas: number[]; comissao: number[] } {
+  const [ano, m] = mes.split('-').map(Number);
+  const dias = diasNoMes(ano, m);
+  const out = { vendas: Array.from({ length: dias }, () => 0), comissao: Array.from({ length: dias }, () => 0) };
+  for (const v of vendas) {
+    if (String(v.data).slice(0, 7) !== mes) continue;
+    const i = Number(String(v.data).slice(8, 10)) - 1;
+    if (!(i >= 0 && i < dias)) continue;
+    out.vendas[i] += 1;
+    out.comissao[i] = round2(out.comissao[i] + (Number(v.comissao) || 0));
+  }
+  return out;
+}
+
+/**
+ * O ritmo do plano dia a dia: quanto da meta o plano pedia acumulado até cada
+ * dia, pelos dias úteis (fim de semana não anda).
+ */
+export function ritmoDoPlano(mes: string, meta: number): number[] {
+  const [ano, m] = mes.split('-').map(Number);
+  const dias = diasNoMes(ano, m);
+  const total = diasUteisAte(mes, dias);
+  return Array.from({ length: dias }, (_, i) => (total > 0 ? round2((meta * diasUteisAte(mes, i + 1)) / total) : 0));
 }
 
 // ============================================================

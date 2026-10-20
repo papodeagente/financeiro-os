@@ -23,7 +23,7 @@
  */
 import { calcRelatorio, type CustosData } from '../src/lib/planejamento-custos.ts';
 import {
-  calendarioDoMes, diasUteisAte, montarAcompanhamento, situacaoDaMeta,
+  calendarioDoMes, diasUteisAte, montarAcompanhamento, situacaoDaMeta, serieDoMes, ritmoDoPlano,
   type RealizadoDoMes, type ContaDoMes, type ItemDoPlano,
 } from '../src/lib/plano-do-mes.ts';
 
@@ -71,6 +71,11 @@ const c20 = calendarioDoMes('2026-10', '2026-10-20');
 eq([c20.diasUteisPassados, c20.diasUteisRestantes, Math.round(c20.fracao * 100), c20.aberto], [14, 8, 64, true], 'dia 20: 14 passados, 8 restantes, 64% do mês');
 eq([calendarioDoMes('2026-10', '2026-11-03').fracao, calendarioDoMes('2026-10', '2026-11-03').aberto], [1, false], 'mês que já passou: inteiro');
 eq([calendarioDoMes('2026-10', '2026-09-28').futuro, calendarioDoMes('2026-10', '2026-09-28').fracao], [true, 0], 'mês que ainda não começou: nada esperado');
+
+const serie = serieDoMes('2026-10', [{ data: '2026-10-09', comissao: 78.13 }, { data: '2026-10-09', comissao: 2000 }, { data: '2026-10-31', comissao: 10 }, { data: '2026-11-01', comissao: 999 }]);
+eq([serie.vendas.length, serie.vendas[8], serie.comissao[8], serie.vendas[30], serie.vendas.reduce((a, b) => a + b, 0)], [31, 2, 2078.13, 1, 3], 'série do mês: um valor por dia, dia sem venda é zero, outro mês fica fora');
+const ritmo = ritmoDoPlano('2026-10', 22000);
+eq([ritmo[0], ritmo[3], ritmo[4], ritmo[19], ritmo[30]], [1000, 2000, 3000, 14000, 22000], 'ritmo do plano: anda R$ 1.000 por dia útil e para no fim de semana');
 
 console.log('\n--- (b) metas ---');
 eq(situacaoDaMeta({ planejado: 7, realizado: 2, formato: 'contagem', cal: c20 }).situacao, 'atrasado', '2 de 7 vendas no dia 20: o ritmo pedia 4, atrasado');
