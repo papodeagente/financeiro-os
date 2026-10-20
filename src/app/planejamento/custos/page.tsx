@@ -21,6 +21,19 @@ import {
   hidratarPlanoCustos,
   mesPlanejamentoValido,
 } from '@/lib/planejamento-custos-schema';
+import { Segmentado } from '@/components/fin/Segmentado';
+import { useAuth } from '@/contexts/AuthContext';
+import { podeEditarFinanceiro } from '@/lib/permissoes';
+import { Acompanhamento } from './Acompanhamento';
+
+/** Acompanhamento (o mês contra o plano) ou o próprio plano, para editar. */
+type Aba = 'acompanhamento' | 'plano';
+
+function abaDaUrl(): Aba | null {
+  if (typeof window === 'undefined') return null;
+  const a = new URLSearchParams(window.location.search).get('aba');
+  return a === 'plano' || a === 'acompanhamento' ? a : null;
+}
 
 const MESES_PT = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
                   'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
@@ -276,6 +289,26 @@ export default function CustosPage() {
   const currentSnapshotRef = useRef<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveTailRef = useRef<Promise<void>>(Promise.resolve());
+  // O plano do mês já foi gravado alguma vez? Sem ele, o acompanhamento mostra
+  // só o realizado e convida a preencher.
+  const [existePlano, setExistePlano] = useState(false);
+  const [aba, setAba] = useState<Aba | null>(null);
+  const { user } = useAuth();
+  const podeEditar = podeEditarFinanceiro(user);
+
+  useEffect(() => {
+    const daUrl = abaDaUrl();
+    if (daUrl) setAba(daUrl);
+  }, []);
+
+  const trocarAba = useCallback((proxima: Aba) => {
+    setAba(proxima);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('aba', proxima);
+      window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    }
+  }, []);
 
   const load = useCallback(async (m: string) => {
     loadAbortRef.current?.abort();
@@ -294,6 +327,9 @@ export default function CustosPage() {
       const plano = planoComDefaults(m, json);
       lastPersistedRef.current = JSON.stringify(plano);
       setData(plano);
+      setExistePlano(json !== null);
+      // Primeira abertura: com plano, o acompanhamento; sem plano, o plano.
+      setAba(a => a ?? (json !== null ? 'acompanhamento' : 'plano'));
     } catch (error) {
       if (controller.signal.aborted) return;
       setData(null);
@@ -354,6 +390,7 @@ export default function CustosPage() {
         });
         await lerRespostaJson<unknown>(res);
         lastPersistedRef.current = snapshot;
+        setExistePlano(true);
         if (currentSnapshotRef.current === snapshot) {
           setSaving(false);
           setSaveError(null);
@@ -622,6 +659,30 @@ export default function CustosPage() {
         </div>
       )}
 
+      <div className="mb-5">
+        <Segmentado<Aba>
+          rotulo="O que ver"
+          opcoes={[
+            { valor: 'acompanhamento', rotulo: 'Acompanhamento' },
+            { valor: 'plano', rotulo: 'Plano do mês' },
+          ]}
+          valor={aba ?? 'acompanhamento'}
+          onChange={trocarAba}
+        />
+      </div>
+
+      {(aba ?? 'acompanhamento') === 'acompanhamento' ? (
+        <Acompanhamento
+          mes={mes}
+          mesPorExtenso={mesPorExtenso(mes)}
+          plano={data}
+          rel={rel}
+          temPlano={existePlano}
+          podeEditar={podeEditar}
+          onEditarPlano={() => trocarAba('plano')}
+        />
+      ) : (
+      <>
       {/* ============================================================ */}
       {/* A RESPOSTA — o que este plano exige do mês                    */}
       {/* ============================================================ */}
@@ -1100,6 +1161,9 @@ export default function CustosPage() {
           )}
         </div>
       </div>
+
+      </>
+      )}
 
       <MinimalFooter pageId="planejamento mensal" />
     </div>

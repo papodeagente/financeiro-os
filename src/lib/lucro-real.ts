@@ -151,6 +151,23 @@ export function custoFixoDoMes(
   planoContas: PlanoContas[],
   mes: string,
 ): { total: number; impostos: number } {
+  const { fixas, impostos } = contasDoCustoFixo(contasPagar, planoContas, mes);
+  return {
+    total: round2(somaPor(fixas, cp => cp.valor_final)),
+    impostos: round2(somaPor(impostos, cp => cp.valor_final)),
+  };
+}
+
+/**
+ * As contas que compõem o custo fixo do mês (e as de imposto, à parte). É a
+ * régua de custoFixoDoMes, em lista: o acompanhamento do plano do mês mostra
+ * conta a conta o que foi pago, o que vence e o que venceu.
+ */
+export function contasDoCustoFixo(
+  contasPagar: ContaPagar[],
+  planoContas: PlanoContas[],
+  mes: string,
+): { fixas: ContaPagar[]; impostos: ContaPagar[] } {
   const doMes = contasPagar.filter(cp => mesDe(cp.data_vencimento) === mes && vivo(cp.status));
   const ehRepasse = (cp: ContaPagar) => !!cp.auto_gerado && cp.origem === 'VENDA';
   const ehComissaoDeVendedor = (cp: ContaPagar) =>
@@ -160,12 +177,10 @@ export function custoFixoDoMes(
     new Set(planoContas.filter(p => String(p.codigo ?? '').startsWith(prefixo)).map(p => p.id));
   const idsImposto = idsDoPrefixo('2.3');
 
-  const impostos = somaPor(doMes.filter(cp => idsImposto.has(cp.categoria_id)), cp => cp.valor_final);
-  const total = somaPor(
-    doMes.filter(cp => !idsImposto.has(cp.categoria_id) && !ehRepasse(cp) && !ehComissaoDeVendedor(cp)),
-    cp => cp.valor_final,
-  );
-  return { total: round2(total), impostos: round2(impostos) };
+  return {
+    impostos: doMes.filter(cp => idsImposto.has(cp.categoria_id)),
+    fixas: doMes.filter(cp => !idsImposto.has(cp.categoria_id) && !ehRepasse(cp) && !ehComissaoDeVendedor(cp)),
+  };
 }
 
 /** A taxa que a plataforma reteve nas parcelas desta venda. */
@@ -178,7 +193,7 @@ function taxaDaVenda(vendaId: string, contasReceber: ContaReceber[]): number {
 }
 
 function descricaoDaVenda(v: VendaCRM): string {
-  const p = (v.produtos ?? [])[0] as any;
+  const p = (v.produtos ?? [])[0] as unknown as Record<string, unknown> | undefined;
   const texto = String(p?.descricao ?? p?.hotel_nome ?? '').trim();
   return texto || `Venda ${v.numero ?? ''}`.trim();
 }

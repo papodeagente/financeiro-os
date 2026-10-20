@@ -1195,6 +1195,22 @@ async function executarInitDB() {
   `);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_planejamento_custos_tenant_mes ON planejamento_custos(tenant_id, mes)`);
 
+  // Acompanhamento do plano do mês (20/10/2026): o que a pessoa registra à mão
+  // porque o sistema não mede sozinho (atendimentos). Tabela própria, e não o
+  // documento do plano: salvar o plano substitui o documento inteiro, e um
+  // registro de progresso não pode sumir porque alguém mexeu numa meta.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS planejamento_progresso (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      mes TEXT NOT NULL,
+      chave TEXT NOT NULL,
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_planejamento_progresso_tenant_mes ON planejamento_progresso(tenant_id, mes);
+  `);
+
   // O domínio personalizado de propostas foi removido do produto, e com ele o
   // índice único que garantia um domínio por agência. O POST de /api/agencia
   // descarta o campo na gravação, então o valor órfão some do documento no
