@@ -1,11 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { MinimalPageHead, MinimalFooter } from '@/components/financeiro/MinimalPageHead';
 import { MoneyInput } from '@/components/MoneyInput';
-import { SkeletonTable } from '@/components/SkeletonTable';
 import { formatBRL, generateId } from '@/lib/utils';
-import { Copy, AlertTriangle, ArrowRight, Filter as FunilIcon, Download, FileDown, Loader2, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Filter as FunilIcon, Download, Loader2, RefreshCw, Save } from 'lucide-react';
 import Link from 'next/link';
 import type { FunilPayload } from '@/lib/funil-types';
 import {
@@ -22,6 +20,12 @@ import {
   mesPlanejamentoValido,
 } from '@/lib/planejamento-custos-schema';
 import { Segmentado } from '@/components/fin/Segmentado';
+import { MolduraDaPagina } from '@/components/fin/MolduraDaPagina';
+import { PageHeader } from '@/components/fin/PageHeader';
+import { SeletorDeMes } from '@/components/fin/SeletorDeMes';
+import { DataState } from '@/components/fin/DataState';
+import { Callout } from '@/components/fin/Callout';
+import { hojeISO } from '@/lib/money';
 import { useAuth } from '@/contexts/AuthContext';
 import { podeEditarFinanceiro } from '@/lib/permissoes';
 import { Acompanhamento } from './Acompanhamento';
@@ -492,38 +496,22 @@ export default function CustosPage() {
     setData({ ...data, marketing: aplicarInvestimentoDosFunis(data.marketing, resumoFunis) });
   };
 
-  if (loading) return (
-    <div className="w-full px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
-      <MinimalPageHead title="Planejamento mensal" meta={<p className="mt-2.5 text-[12px]" style={{ color: 'var(--ink-3)' }}>Carregando…</p>} />
-      <SkeletonTable rows={5} cols={3} />
-    </div>
-  );
-
-  if (loadError || !data || !rel) return (
-    <div className="mx-auto w-full max-w-[var(--fin-page-max)] px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
-      <MinimalPageHead title="Planejamento mensal" />
-      <div
-        role="alert"
-        className="mt-5 max-w-xl rounded-[14px] border p-5"
-        style={{ borderColor: 'var(--lg-neg)', background: 'var(--lg-neg-fill)' }}
-      >
-        <div className="flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" style={{ color: 'var(--lg-neg)' }} />
-          <div>
-            <p className="text-[14px] font-semibold text-[var(--ink)]">Não foi possível carregar o planejamento</p>
-            <p className="mt-1 text-[12.5px] text-[var(--ink-2)]">{loadError ?? 'Resposta inválida do servidor.'}</p>
-            <button
-              type="button"
-              onClick={() => void load(mes)}
-              className="mt-3 inline-flex items-center gap-1.5 text-[12.5px] font-semibold"
-              style={{ color: 'var(--lg-neg)' }}
-            >
-              <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
-            </button>
+  if (loading || loadError || !data || !rel) return (
+    <MolduraDaPagina>
+      <PageHeader titulo="Planejamento mensal" subtitulo={loading ? 'Carregando o plano do mês…' : mesPorExtenso(mes)} />
+      <DataState
+        estado={loading ? 'carregando' : 'erro'}
+        erro={loading ? null : { mensagem: loadError ?? 'Resposta inválida do servidor.', onTentarDeNovo: () => { void load(mes); } }}
+        esqueleto={
+          <div className="flex flex-col gap-[var(--fin-s-5)]">
+            <div className="h-[160px] animate-pulse rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]" />
+            <div className="h-[320px] animate-pulse rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]" />
           </div>
-        </div>
-      </div>
-    </div>
+        }
+      >
+        {null}
+      </DataState>
+    </MolduraDaPagina>
   );
 
   const totalFixo = rel.custoFixoTotal;
@@ -574,92 +562,35 @@ export default function CustosPage() {
     alertas.push({ tom: 'aviso', texto: `${rel.atendimentosPorVendedorDia} atendimentos por vendedor ao dia pode comprometer a qualidade. Considere ampliar o time.` });
   }
 
+  // O que a pessoa vê sobre o plano é o que está gravado: "salvo" só quando
+  // foi salvo. O plano sugerido (valores que a tela preenche sozinha) é dito
+  // como sugerido nas duas abas.
+  const situacaoDoPlano = saving
+    ? 'salvando…'
+    : saveError
+      ? 'falha ao salvar'
+      : existePlano ? 'plano salvo' : 'plano sugerido, ainda não salvo';
+  const salvarPlano = () => { void persistir(JSON.stringify(data)); };
+  // Dá para planejar até doze meses à frente.
+  const tetoDoSeletor = (() => {
+    const [a, m] = hojeISO().slice(0, 7).split('-').map(Number);
+    return `${a + 1}-${String(m).padStart(2, '0')}`;
+  })();
+
   return (
-    <div className="mx-auto w-full max-w-[var(--fin-page-max)] px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
-      <MinimalPageHead
-        title="Planejamento mensal"
-        meta={
-          <p className="mt-2.5 text-[12px]" style={{ color: 'var(--ink-3)' }}>
-            {mesPorExtenso(mes)} ·{' '}
-            <b
-              style={{ color: saveError ? 'var(--lg-neg)' : 'var(--ink-2)', fontWeight: 500 }}
-              title={saveError ?? undefined}
-            >
-              {saving ? 'Salvando…' : saveError ? 'Falha ao salvar' : 'Salvo'}
-            </b>
-          </p>
-        }
-        actions={
-          <>
-            <input
-              type="month"
-              value={mes}
-              onChange={e => void trocarMes(e.target.value)}
-              disabled={saving}
-              className="h-[34px] px-3 text-[12px] border rounded-[8px] outline-none focus:border-[var(--lg-accent)]"
-              style={{ borderColor: 'var(--line)', background: 'var(--ink-surface)', color: 'var(--ink)' }}
-            />
-            <button
-              type="button"
-              onClick={() => void copyFromPrev()}
-              disabled={copying}
-              className="h-[34px] px-3 text-[12px] border rounded-[8px] transition-colors hover:bg-[var(--ink-surface-2)] disabled:opacity-60 disabled:cursor-not-allowed"
-              style={{ borderColor: 'var(--line)', color: 'var(--ink-2)' }}
-            >
-              {copying
-                ? <Loader2 className="w-3.5 h-3.5 inline mr-2 -mt-0.5 animate-spin" />
-                : <Copy className="w-3.5 h-3.5 inline mr-2 -mt-0.5" />}
-              {copying ? 'Copiando…' : 'Copiar do anterior'}
-            </button>
-            <button
-              type="button"
-              onClick={() => void exportarPdf()}
-              disabled={gerandoPdf}
-              className="h-[34px] px-3 text-[12px] rounded-[8px] font-medium inline-flex items-center gap-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-              style={{ background: 'var(--lg-accent)', color: 'var(--fin-surface)' }}
-              title="Baixar o relatório do mês em PDF"
-            >
-              {gerandoPdf
-                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                : <FileDown className="w-3.5 h-3.5" />}
-              {gerandoPdf ? 'Gerando…' : 'Baixar PDF'}
-            </button>
-          </>
-        }
+    <MolduraDaPagina>
+      <PageHeader
+        titulo="Planejamento mensal"
+        subtitulo={`${mesPorExtenso(mes).charAt(0).toUpperCase()}${mesPorExtenso(mes).slice(1)}: ${situacaoDoPlano}.`}
+        acaoPrimaria={!existePlano && podeEditar ? { rotulo: 'Salvar plano do mês', icone: Save, onClick: salvarPlano } : undefined}
+        acoesSecundarias={[
+          ...(podeEditar ? [{ rotulo: copying ? 'Copiando…' : 'Copiar do mês anterior', onClick: () => { void copyFromPrev(); } }] : []),
+          { rotulo: gerandoPdf ? 'Gerando PDF…' : 'Baixar PDF', onClick: () => { void exportarPdf(); } },
+        ]}
       />
 
-      {(saveError || actionError) && (
-        <div
-          role="alert"
-          className="mb-5 flex flex-wrap items-center gap-3 rounded-[12px] border px-3.5 py-3 text-[12.5px]"
-          style={{ borderColor: 'var(--lg-neg)', background: 'var(--lg-neg-fill)', color: 'var(--ink-2)' }}
-        >
-          <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: 'var(--lg-neg)' }} />
-          <span className="flex-1">{saveError ?? actionError}</span>
-          {saveError && (
-            <button
-              type="button"
-              onClick={() => setSaveRetry(value => value + 1)}
-              className="inline-flex items-center gap-1.5 font-semibold"
-              style={{ color: 'var(--lg-neg)' }}
-            >
-              <RefreshCw className="w-3.5 h-3.5" /> Tentar salvar novamente
-            </button>
-          )}
-          {actionError && !saveError && (
-            <button
-              type="button"
-              onClick={() => setActionError(null)}
-              className="font-semibold"
-              style={{ color: 'var(--lg-neg)' }}
-            >
-              Fechar
-            </button>
-          )}
-        </div>
-      )}
-
-      <div className="mb-5">
+      <div className="flex flex-col gap-[var(--fin-s-3)] sm:flex-row sm:items-center sm:justify-between">
+        <SeletorDeMes valor={mes} onChange={m => { void trocarMes(m); }} maximo={tetoDoSeletor} />
         <Segmentado<Aba>
           rotulo="O que ver"
           opcoes={[
@@ -671,18 +602,30 @@ export default function CustosPage() {
         />
       </div>
 
+      {saveError ? (
+        <Callout tom="negativo" titulo="O plano não foi salvo" acao={{ rotulo: 'Tentar salvar de novo', onClick: () => setSaveRetry(v => v + 1) }}>
+          {saveError}
+        </Callout>
+      ) : actionError ? (
+        <Callout tom="negativo" acaoSecundaria={{ rotulo: 'Fechar', onClick: () => setActionError(null) }}>
+          {actionError}
+        </Callout>
+      ) : null}
+
       {(aba ?? 'acompanhamento') === 'acompanhamento' ? (
         <Acompanhamento
           mes={mes}
           mesPorExtenso={mesPorExtenso(mes)}
           plano={data}
           rel={rel}
-          temPlano={existePlano}
+          planoSalvo={existePlano}
+          salvandoPlano={saving}
           podeEditar={podeEditar}
           onEditarPlano={() => trocarAba('plano')}
+          onSalvarPlano={salvarPlano}
         />
       ) : (
-      <>
+      <div>
       {/* ============================================================ */}
       {/* A RESPOSTA — o que este plano exige do mês                    */}
       {/* ============================================================ */}
@@ -1162,10 +1105,8 @@ export default function CustosPage() {
         </div>
       </div>
 
-      </>
+      </div>
       )}
-
-      <MinimalFooter pageId="planejamento mensal" />
-    </div>
+    </MolduraDaPagina>
   );
 }

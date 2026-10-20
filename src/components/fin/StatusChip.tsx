@@ -21,7 +21,7 @@ export const statusChipVariants = cva(
 
 export type StatusTone = NonNullable<VariantProps<typeof statusChipVariants>['tone']>;
 
-export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza' | 'comissao';
+export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza' | 'comissao' | 'plano';
 
 export type StatusChipProps = {
   /** Valor cru do banco. NUNCA é renderizado como veio. */
@@ -84,6 +84,17 @@ export const STATUS_LABELS: Record<StatusDominio, Record<string, { rotulo: strin
     APROVADA:  { rotulo: 'Aprovada, a pagar', tone: 'info'    },
     PAGA:      { rotulo: 'Paga',             tone: 'positivo' },
     CANCELADA: { rotulo: 'Cancelada',        tone: 'neutro'   },
+  },
+  // Acompanhamento do plano do mês (src/lib/plano-do-mes.ts).
+  plano: {
+    concluido: { rotulo: 'Concluído',       tone: 'positivo' },
+    pendente:  { rotulo: 'Pendente',        tone: 'info'     },
+    atrasado:  { rotulo: 'Atrasado',        tone: 'negativo' },
+    acima:     { rotulo: 'Acima do plano',  tone: 'aviso'    },
+    sem_dados: { rotulo: 'Sem dados',       tone: 'neutro'   },
+    sem_meta:  { rotulo: 'Sem meta',        tone: 'neutro'   },
+    em_linha:  { rotulo: 'Dentro do plano', tone: 'positivo' },
+    abaixo:    { rotulo: 'Abaixo do plano', tone: 'aviso'    },
   },
   natureza: {
     FIXO:         { rotulo: 'Fixo',          tone: 'neutro' },
