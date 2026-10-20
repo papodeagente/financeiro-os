@@ -135,6 +135,23 @@ eq(item(montarAcompanhamento({ plano, rel, realizado: realizado({ hoje: '2026-11
 const pago = montarAcompanhamento({ plano, rel, realizado: realizado({ equilibrio: { atingido: true, na_venda: 2, data: '2026-10-15', faltam: 0 } }) });
 eq([item(pago, 'equilibrio').situacao, item(pago, 'equilibrio').porque], ['concluido', 'Os custos do mês foram pagos pela 2ª venda, em 15/10.'], 'equilíbrio: vem do que de fato aconteceu');
 
+// O caso da tela do Bruno (20/10): 6 vendas, nenhum custo lançado no mês. O
+// motor do Lucro real marca "equilíbrio atingido" sem venda (não há o que
+// cobrir) e a tela dizia "pagos pela nullª venda", concluído.
+const semCusto = montarAcompanhamento({ plano, rel, realizado: realizado({ vendas: 6, custo_fixo: 0, lucro: 27565.57, equilibrio: { atingido: true, na_venda: null, data: null, faltam: 0 } }) });
+const eqSemCusto = item(semCusto, 'equilibrio');
+eq([eqSemCusto.situacao, /null/.test(eqSemCusto.porque)], ['sem_dados', false], 'nenhum custo lançado: cobrir os custos fica SEM DADOS, nunca "concluído" nem "nullª venda"');
+eq([item(semCusto, 'lucro').situacao, /falta descontar a estrutura/.test(item(semCusto, 'lucro').porque)], ['pendente', true], 'e o lucro de R$ 27.565 não vira "concluído": avisa que a estrutura ainda não foi descontada');
+eq(item(montarAcompanhamento({ plano, rel, realizado: realizado({ hoje: '2026-11-03', custo_fixo: 0, lucro: 27565.57 }) }), 'lucro').situacao, 'sem_dados', 'mês fechado sem custo lançado: lucro SEM DADOS');
+const semNada = { ...plano, custos_fixos: [], marketing: [] };
+const semNadaA = montarAcompanhamento({ plano: semNada, rel: calcRelatorio(semNada), realizado: realizado({ custo_fixo: 0, lucro: 27565.57, equilibrio: { atingido: true, na_venda: null, data: null, faltam: 0 } }) });
+eq(item(semNadaA, 'equilibrio').situacao, 'sem_meta', 'nada planejado e nada lançado: sem meta');
+eq(item(semNadaA, 'lucro').situacao, 'pendente', 'mesmo com o plano sem custo: lucro sem nenhuma conta do mês lançada não vira "concluído"');
+eq(/^\d+ de \d+\. [A-ZÁÉÍÓÚ]/.test(a.atencao.find(p => p.chave === 'vendas')!.detalhe), true, 'o detalhe começa a frase com maiúscula depois do número');
+eq(item(montarAcompanhamento({ plano, rel, realizado: realizado({ equilibrio: { atingido: true, na_venda: null, data: null, faltam: 0 } }) }), 'equilibrio').porque, 'As vendas do mês já cobriram os custos lançados.', 'coberto sem saber em qual venda: a frase não inventa ordinal');
+const vendasAtrasadas = a.atencao.find(p => p.chave === 'vendas')!;
+eq([vendasAtrasadas.titulo, vendasAtrasadas.texto.startsWith(`${vendasAtrasadas.titulo}: `)], ['Vendas fechadas abaixo do ritmo', true], 'ponto de atenção tem título e detalhe, como o "Precisa de você"');
+
 console.log('\n--- (f) sem plano, e plano editado ---');
 const semPlano = montarAcompanhamento({ plano: null, rel: null, realizado: realizado() });
 eq([item(semPlano, 'vendas').situacao, item(semPlano, 'vendas').realizado, item(semPlano, 'comissao').realizado], ['sem_meta', 2, 3600], 'sem plano: nada é meta, e o realizado aparece');

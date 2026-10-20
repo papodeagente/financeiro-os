@@ -90,14 +90,6 @@ export interface RealizadoDoMes {
 
 export type Situacao = 'concluido' | 'pendente' | 'atrasado' | 'acima' | 'sem_dados' | 'sem_meta';
 
-export const ROTULO_SITUACAO: Record<Situacao, string> = {
-  concluido: 'Concluído',
-  pendente: 'Pendente',
-  atrasado: 'Atrasado',
-  acima: 'Acima do plano',
-  sem_dados: 'Sem dados',
-  sem_meta: 'Sem meta',
-};
 
 export type Formato = 'contagem' | 'dinheiro';
 
@@ -145,6 +137,11 @@ export interface IndicadorDoPlano {
 export interface PontoDeAtencao {
   tom: 'negativo' | 'aviso';
   chave: ItemDoPlano['chave'] | 'indicador';
+  /** O que é, curto: "Vendas abaixo do ritmo". */
+  titulo: string;
+  /** Os números e o que fazer. */
+  detalhe: string;
+  /** Título e detalhe numa frase só (exportação, leitor de tela). */
   texto: string;
   /** Para onde a ação leva (contas a pagar filtradas) ou 'registrar'. */
   acao?: { rotulo: string; href?: string; registrar?: string };
@@ -484,12 +481,26 @@ export function montarAcompanhamento(e: {
   // ── Resultado ───────────────────────────────────────────────────────────
   let equilibrio: ItemDoPlano;
   const vendasParaCobrir = temPlano && !semMetasDeVenda ? rel!.vendasBreakEven : 0;
-  if (r.equilibrio.atingido) {
+  const custoPlanejado = temPlano ? rel!.custoFixoMaisMarketing : 0;
+  if (!(r.custo_fixo > 0)) {
+    // Sem custo lançado não há o que cobrir: dizer "coberto" seria presumir.
+    equilibrio = {
+      chave: 'equilibrio', titulo: 'Cobrir os custos do mês', formato: 'contagem', sentido: 'atingir',
+      planejado: vendasParaCobrir > 0 ? vendasParaCobrir : null, realizado: null, falta: null, progresso: null, esperadoPct: null,
+      situacao: custoPlanejado > 0 || vendasParaCobrir > 0 ? 'sem_dados' : 'sem_meta',
+      porque: custoPlanejado > 0
+        ? 'Nenhum custo do mês lançado nas contas a pagar: não dá para dizer se as vendas já os cobriram.'
+        : 'Nenhum custo planejado nem lançado para o mês.',
+      fonte: 'Contribuição das vendas contra o custo fixo lançado',
+    };
+  } else if (r.equilibrio.atingido) {
     equilibrio = {
       chave: 'equilibrio', titulo: 'Cobrir os custos do mês', formato: 'contagem', sentido: 'atingir',
       planejado: vendasParaCobrir > 0 ? vendasParaCobrir : null, realizado: r.equilibrio.na_venda,
       falta: 0, progresso: 100, esperadoPct: null, situacao: 'concluido',
-      porque: `Os custos do mês foram pagos pela ${r.equilibrio.na_venda}ª venda${r.equilibrio.data ? `, em ${dataBR(r.equilibrio.data)}` : ''}.`,
+      porque: r.equilibrio.na_venda
+        ? `Os custos do mês foram pagos pela ${r.equilibrio.na_venda}ª venda${r.equilibrio.data ? `, em ${dataBR(r.equilibrio.data)}` : ''}.`
+        : 'As vendas do mês já cobriram os custos lançados.',
       fonte: 'Contribuição das vendas contra o custo fixo lançado',
     };
   } else if (!(vendasParaCobrir > 0)) {
@@ -521,7 +532,12 @@ export function montarAcompanhamento(e: {
       fonte: 'Comissão menos vendedor, plataforma, impostos e custo fixo',
     };
   } else {
-    const batido = r.lucro >= lucroPlanejado;
+    // Sem custo lançado o lucro é a comissão inteira: bater a meta assim é
+    // presumir que a estrutura não custou nada.
+    // Vale também quando o plano não tem custo: agência sem estrutura nenhuma
+    // não existe, e o mais provável é a conta ainda não ter sido lançada.
+    const semEstrutura = !(r.custo_fixo > 0);
+    const batido = r.lucro >= lucroPlanejado && !semEstrutura;
     lucro = {
       chave: 'lucro', titulo: 'Lucro do mês', formato: 'dinheiro', sentido: 'atingir',
       planejado: lucroPlanejado, realizado: r.lucro,
@@ -529,12 +545,14 @@ export function montarAcompanhamento(e: {
       progresso: r.lucro > 0 ? pct(r.lucro, lucroPlanejado) : 0,
       esperadoPct: null,
       // O lucro só fecha no fim: o custo fixo é do mês inteiro e pesa desde o dia 1.
-      situacao: batido ? 'concluido' : cal.aberto || cal.futuro ? 'pendente' : 'atrasado',
+      situacao: batido ? 'concluido' : cal.aberto || cal.futuro ? 'pendente' : semEstrutura ? 'sem_dados' : 'atrasado',
       porque: batido
         ? 'Lucro desejado alcançado.'
-        : cal.aberto || cal.futuro
-          ? 'O lucro só fecha no último dia: o custo fixo é do mês inteiro e pesa desde o dia 1.'
-          : `O mês fechou com ${formatBRL(r.lucro)} de lucro.`,
+        : semEstrutura
+          ? 'Nenhum custo do mês lançado nas contas a pagar: o lucro está alto porque falta descontar a estrutura.'
+          : cal.aberto || cal.futuro
+            ? 'O lucro só fecha no último dia: o custo fixo é do mês inteiro e pesa desde o dia 1.'
+            : `O mês fechou com ${formatBRL(r.lucro)} de lucro.`,
       fonte: 'Comissão menos vendedor, plataforma, impostos e custo fixo',
     };
   }
@@ -580,43 +598,47 @@ export function montarAcompanhamento(e: {
 
   // ── Pontos de atenção ───────────────────────────────────────────────────
   const atencao: PontoDeAtencao[] = [];
+  const ponto = (p: Omit<PontoDeAtencao, 'texto'>) => atencao.push({ ...p, texto: `${p.titulo}: ${p.detalhe}` });
   const restantes = cal.diasUteisRestantes;
   for (const it of [vendas, comissao, faturamento, atendimentos, equilibrio]) {
     if (it.situacao !== 'atrasado' || it.planejado === null || it.realizado === null) continue;
     const ritmo = cal.aberto && restantes > 0 && it.falta
       ? ` Para fechar o mês: ${it.formato === 'dinheiro' ? formatBRL(round2(it.falta / restantes)) : (it.falta / restantes).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} por dia útil nos ${restantes} que restam.`
       : '';
-    atencao.push({
+    ponto({
       tom: 'negativo', chave: it.chave,
-      texto: `${it.titulo}: ${fmt(it.realizado, it.formato)} de ${fmt(it.planejado, it.formato)}. ${it.porque}${ritmo}`,
-      ...(it.chave === 'atendimentos' ? { acao: { rotulo: 'Registrar atendimentos', registrar: 'atendimentos' } } : {}),
+      titulo: cal.aberto ? `${it.titulo} abaixo do ritmo` : `${it.titulo} abaixo da meta`,
+      detalhe: `${fmt(it.realizado, it.formato)} de ${fmt(it.planejado, it.formato)}. ${maiuscula(it.porque.replace(/^Abaixo do ritmo: /, ''))}${ritmo}`,
+      ...(it.chave === 'atendimentos' ? { acao: { rotulo: 'Registrar', registrar: 'atendimentos' } } : {}),
     });
   }
   for (const it of [fixos, marketing]) {
     if (it.situacao === 'atrasado') {
-      atencao.push({ tom: 'negativo', chave: it.chave, texto: `${it.titulo}: ${it.porque}`, acao: { rotulo: 'Ver contas vencidas', href: '/financeiro-ag/pagar?status=VENCIDO' } });
+      ponto({ tom: 'negativo', chave: it.chave, titulo: `${it.titulo}: conta vencida`, detalhe: it.porque, acao: { rotulo: 'Ver vencidas', href: '/financeiro-ag/pagar?status=VENCIDO' } });
     } else if (it.situacao === 'acima') {
-      atencao.push({ tom: 'aviso', chave: it.chave, texto: `${it.titulo} acima do plano: ${it.porque}` });
+      ponto({ tom: 'aviso', chave: it.chave, titulo: `${it.titulo} acima do plano`, detalhe: it.porque });
     }
   }
-  if (variaveis.situacao === 'acima') atencao.push({ tom: 'aviso', chave: 'custos_variaveis', texto: variaveis.porque });
+  if (variaveis.situacao === 'acima') ponto({ tom: 'aviso', chave: 'custos_variaveis', titulo: 'Custo por venda acima do plano', detalhe: variaveis.porque });
   if (atendimentos.situacao === 'sem_dados') {
-    atencao.push({
+    ponto({
       tom: 'aviso', chave: 'atendimentos',
-      texto: 'Atendimentos sem registro: o financeiro não recebe os leads do CRM. Anote quantos foram atendidos para acompanhar a conversão.',
-      acao: { rotulo: 'Registrar atendimentos', registrar: 'atendimentos' },
+      titulo: 'Atendimentos sem registro',
+      detalhe: 'O financeiro não recebe os leads do CRM. Anote quantos foram atendidos para acompanhar a conversão.',
+      acao: { rotulo: 'Registrar', registrar: 'atendimentos' },
     });
   } else if (registro && cal.aberto && diasEntre(registro.data, hoje) > 7) {
-    atencao.push({
+    ponto({
       tom: 'aviso', chave: 'atendimentos',
-      texto: `O último registro de atendimentos é de ${dataBR(registro.data)}. Atualize para o ritmo refletir hoje.`,
+      titulo: 'Registro de atendimentos antigo',
+      detalhe: `O último registro de atendimentos é de ${dataBR(registro.data)}. Atualize para o ritmo refletir hoje.`,
       acao: { rotulo: 'Atualizar', registrar: 'atendimentos' },
     });
   }
   for (const ind of indicadores) {
     if (ind.desvio) {
       const v = (x: number) => (ind.formato === 'percentual' ? `${x.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : formatBRL(x));
-      atencao.push({ tom: 'aviso', chave: 'indicador', texto: `${ind.titulo} abaixo do plano: ${v(ind.realizado!)} contra ${v(ind.planejado!)}. As metas do plano partem desse número.` });
+      ponto({ tom: 'aviso', chave: 'indicador', titulo: `${ind.titulo} abaixo do plano`, detalhe: `${v(ind.realizado!)} contra ${v(ind.planejado!)}. As metas do plano partem desse número.` });
     }
   }
   atencao.sort((a, b) => (a.tom === b.tom ? 0 : a.tom === 'negativo' ? -1 : 1));
@@ -648,6 +670,10 @@ export function montarAcompanhamento(e: {
     mes: r.mes, hoje, calendario: cal, temPlano, semMetasDeVenda,
     areas, indicadores, atencao, contagem, frase,
   };
+}
+
+function maiuscula(t: string): string {
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
 }
 
 function diasEntre(de: string, ate: string): number {
