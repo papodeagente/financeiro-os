@@ -104,7 +104,7 @@ export default function PropostasAnalyticsPage() {
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-[var(--t-text)] flex items-center gap-3">
+          <h1 className="fin-t-title text-[var(--fin-text)]">
             <div className="w-10 h-10 rounded-xl bg-[var(--fin-violet-soft)] flex items-center justify-center">
               <BarChart3 className="w-5 h-5 text-[var(--fin-violet)]" />
             </div>

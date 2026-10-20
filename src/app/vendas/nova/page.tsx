@@ -616,7 +616,7 @@ export default function NovaVendaPage() {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-[var(--t-text)]">Nova Venda</h1>
+            <h1 className="fin-t-title text-[var(--fin-text)]">Nova Venda</h1>
             <p className="text-[var(--t-text-secondary)] text-sm font-mono">{venda.numero}</p>
           </div>
         </div>

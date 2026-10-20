@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { IconeDeIndicador } from '@/components/fin/MetricCard';
 import { useSearchParams } from 'next/navigation';
 import {
   Plane, Search, Loader2, ArrowRight, Clock,
@@ -224,10 +225,10 @@ export default function VoosPage() {
       <div className="max-w-5xl mx-auto p-6 space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold text-[var(--t-text)] flex items-center gap-2">
-            <Plane className="w-6 h-6 text-[var(--t-green)]" />
-            Buscar Voos
-          </h1>
+          <div className="flex items-center gap-[var(--fin-s-3)]">
+            <IconeDeIndicador icone={Plane} tamanho="lg" />
+            <h1 className="fin-t-title text-[var(--fin-text)]">Buscar Voos</h1>
+          </div>
           <p className="text-sm text-[var(--t-text-secondary)] mt-1">
             Busque voos reais com preços via Google Flights
           </p>

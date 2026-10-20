@@ -70,7 +70,7 @@ export default function OrcamentosPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--t-text)]">Orçamentos</h1>
+          <h1 className="fin-t-title text-[var(--fin-text)]">Orçamentos</h1>
           <p className="text-[var(--t-text-secondary)] text-sm mt-1">Vendas com status de orçamento pendente</p>
         </div>
         <Link href="/vendas/nova">

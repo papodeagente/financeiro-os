@@ -200,7 +200,7 @@ export default function CACCenariosPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[var(--t-text)]">CAC — Cenários</h1>
+            <h1 className="fin-t-title text-[var(--fin-text)]">CAC — Cenários</h1>
             <p className="text-[var(--t-text-secondary)] text-sm mt-1">Simule investimentos e projete o impacto no CAC</p>
           </div>
           <Button

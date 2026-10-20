@@ -185,7 +185,7 @@ export default function PlanosComissaoPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[var(--t-text)]">Planos de Comissão</h1>
+            <h1 className="fin-t-title text-[var(--fin-text)]">Planos de Comissão</h1>
             <p className="text-[var(--t-text-secondary)] text-sm mt-1">Configure regras de comissionamento por vendedor</p>
           </div>
           <Button onClick={openNew} className="bg-[var(--t-green)] hover:brightness-110 text-[var(--fin-text-on-fill)]  font-semibold">

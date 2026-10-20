@@ -124,7 +124,7 @@ export default function AgenciaPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[var(--t-text)]">Dados da Agência</h1>
+            <h1 className="fin-t-title text-[var(--fin-text)]">Dados da Agência</h1>
             <p className="text-[var(--t-text-secondary)] text-sm mt-1">Configurações gerais e identidade da empresa</p>
           </div>
           <Button

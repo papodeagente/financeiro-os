@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { IconeDeIndicador } from '@/components/fin/MetricCard';
 import {
   Users, Plus, Pencil, Trash2, X, Save, Loader2, ShieldCheck, Eye, EyeOff,
   IdCard,
@@ -209,10 +210,10 @@ export default function UsuariosPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[var(--t-text)] flex items-center gap-2">
-              <Users className="w-5 h-5 text-[var(--fin-accent)]" />
-              Usuários
-            </h1>
+            <div className="flex items-center gap-[var(--fin-s-3)]">
+              <IconeDeIndicador icone={Users} tamanho="lg" />
+              <h1 className="fin-t-title text-[var(--fin-text)]">Usuários</h1>
+            </div>
             <p className="text-[var(--t-text-secondary)] text-sm mt-1">
               Adicione operadores e vendedores. Todo usuário começa como Vendedor — promova a Operador ou Administrador quando precisar.
             </p>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { IconeDeIndicador } from '@/components/fin/MetricCard';
 import { useSearchParams } from 'next/navigation';
 import {
   Hotel, Search, Loader2, Star, MapPin, Phone, Globe,
@@ -104,10 +105,10 @@ export default function HoteisPage() {
       <div className="max-w-5xl mx-auto p-6 space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold text-[var(--t-text)] flex items-center gap-2">
-            <Hotel className="w-6 h-6 text-[var(--t-green)]" />
-            Buscar Hotéis
-          </h1>
+          <div className="flex items-center gap-[var(--fin-s-3)]">
+            <IconeDeIndicador icone={Hotel} tamanho="lg" />
+            <h1 className="fin-t-title text-[var(--fin-text)]">Buscar Hotéis</h1>
+          </div>
           <p className="text-sm text-[var(--t-text-secondary)] mt-1">
             Busque hotéis com fotos, preços e avaliações via Google Hotels
           </p>

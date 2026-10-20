@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { IconeDeIndicador } from '@/components/fin/MetricCard';
 import { Destino, createDestino } from '@/lib/crm-types';
 import {
   MapPin, Plus, Search, Trash2, Sparkles, Loader2, Save,
@@ -96,10 +97,10 @@ export default function DestinosPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[var(--t-text)] flex items-center gap-2">
-              <Globe className="w-6 h-6 text-[var(--t-green)]" />
-              Banco de Destinos
-            </h1>
+            <div className="flex items-center gap-[var(--fin-s-3)]">
+              <IconeDeIndicador icone={Globe} tamanho="lg" />
+              <h1 className="fin-t-title text-[var(--fin-text)]">Banco de Destinos</h1>
+            </div>
             <p className="text-sm text-[var(--t-text-secondary)] mt-1">
               Conteúdo rico sobre destinos para auto-preenchimento de propostas
             </p>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { IconeDeIndicador } from '@/components/fin/MetricCard';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -43,10 +44,10 @@ export default function SuportePage() {
     <div className="mx-auto w-full max-w-4xl px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--fin-text)] flex items-center gap-2">
-            <MessageSquare className="w-5 h-5 text-[var(--fin-accent)]" />
-            Suporte
-          </h1>
+          <div className="flex items-center gap-[var(--fin-s-3)]">
+            <IconeDeIndicador icone={MessageSquare} tamanho="lg" />
+            <h1 className="fin-t-title text-[var(--fin-text)]">Suporte</h1>
+          </div>
           <p className="text-sm text-[var(--fin-text-2)] mt-1">
             Reporte bugs, tire dúvidas ou envie sugestões. Acompanhe as respostas aqui.
           </p>

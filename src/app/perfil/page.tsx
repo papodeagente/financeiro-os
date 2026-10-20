@@ -108,7 +108,7 @@ export default function PerfilPage() {
         <ArrowLeft className="w-3.5 h-3.5" /> Voltar
       </button>
 
-      <h1 className="text-2xl font-bold text-[var(--fin-text)] mb-1">Meu perfil</h1>
+      <h1 className="fin-t-title text-[var(--fin-text)]">Meu perfil</h1>
       <p className="text-sm text-[var(--fin-text-2)] mb-6">Atualize seu nome, foto e telefone de contato.</p>
 
       {error && (

@@ -170,7 +170,7 @@ export default function RentabilidadePage() {
 
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[var(--t-text)]">Rentabilidade</h1>
+            <h1 className="fin-t-title text-[var(--fin-text)]">Rentabilidade</h1>
             <p className="text-[var(--t-text-secondary)] text-sm mt-1">Análise de margem e lucro por produto, vendedor e período</p>
           </div>
           <Button onClick={handleExport} className="bg-[var(--t-green)] hover:brightness-110 text-[var(--fin-text-on-fill)]  font-semibold">

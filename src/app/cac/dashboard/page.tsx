@@ -196,7 +196,7 @@ export default function CACDashboardPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[var(--t-text)]">CAC — Dashboard</h1>
+            <h1 className="fin-t-title text-[var(--fin-text)]">CAC — Dashboard</h1>
             <p className="text-[var(--t-text-secondary)] text-sm mt-1">Custo de Aquisição do Cliente calculado automaticamente</p>
           </div>
           <div className="flex gap-2 items-center">

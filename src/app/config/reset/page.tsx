@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { IconeDeIndicador } from '@/components/fin/MetricCard';
 import { useRouter } from 'next/navigation';
 import {
   AlertTriangle, Loader2, Eraser, Check,
@@ -132,10 +133,10 @@ export default function ResetPage() {
         >
           ← Voltar pra configurações
         </button>
-        <h1 className="text-2xl font-bold text-[var(--fin-text)] flex items-center gap-2">
-          <Eraser className="w-5 h-5 text-[var(--fin-negative-text)]" />
-          Resetar conta
-        </h1>
+        <div className="flex items-center gap-[var(--fin-s-3)]">
+          <IconeDeIndicador icone={Eraser} tamanho="lg" />
+          <h1 className="fin-t-title text-[var(--fin-text)]">Resetar conta</h1>
+        </div>
         <p className="text-sm text-[var(--fin-text-2)] mt-1">
           Apague dados operacionais da sua conta de forma seletiva. Esta ação é{' '}
           <strong>irreversível</strong> e não pode ser desfeita.

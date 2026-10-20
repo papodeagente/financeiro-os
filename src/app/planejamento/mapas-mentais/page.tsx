@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { IconeDeIndicador } from '@/components/fin/MetricCard';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Loader2, Plus, Sparkles, Trash2, ArrowRight, GitBranch } from 'lucide-react';
@@ -71,10 +72,10 @@ export default function ListaMapasMentaisPage() {
     <div className="mx-auto w-full max-w-6xl px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
       <div className="mb-6 flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--fin-text)] flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-[var(--fin-accent)]" />
-            Mapas mentais
-          </h1>
+          <div className="flex items-center gap-[var(--fin-s-3)]">
+            <IconeDeIndicador icone={Sparkles} tamanho="lg" />
+            <h1 className="fin-t-title text-[var(--fin-text)]">Mapas mentais</h1>
+          </div>
           <p className="text-sm text-[var(--fin-text-2)] mt-1">
             Crie e organize ideias visualmente. Tab/Enter adiciona nós; arraste pra reorganizar.
           </p>
