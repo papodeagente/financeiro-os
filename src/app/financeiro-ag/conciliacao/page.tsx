@@ -11,7 +11,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowDownLeft, ArrowUpRight, CheckCircle2, FileSpreadsheet, Link2, ListChecks, RotateCcw, TrendingUp, Undo2, Upload } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, CheckCircle2, FileSpreadsheet, Landmark, Link2, ListChecks, RotateCcw, TrendingUp, Undo2, Upload } from 'lucide-react';
 
 import type { Cliente, ContaBancaria, ContaPagar, ContaReceber, ExtratoLinha, PlanoContas, StatusConciliacao, VendaCRM } from '@/lib/crm-types';
 import { loadEntities } from '@/lib/crm-storage';
@@ -594,6 +594,7 @@ export default function ConciliacaoPage() {
       <div className="mx-auto flex w-full max-w-[var(--fin-page-max)] flex-col gap-[var(--fin-s-6)]">
 
         <PageHeader
+          icone={Landmark}
           titulo="Conciliação bancária"
           subtitulo="O extrato do banco é o fato. Ligue cada linha à venda ou à conta que ela quita, ou lance o que faltava."
           acaoPrimaria={

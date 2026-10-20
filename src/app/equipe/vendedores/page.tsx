@@ -267,6 +267,7 @@ export default function VendedoresPage() {
   return (
     <MolduraDaPagina>
       <PageHeader
+        icone={UserCheck}
         titulo="Vendedores e planos"
         subtitulo="Quem está marcado como Vendedor em Configurações, Usuários. Quem tem plano recebe comissão"
         badge={

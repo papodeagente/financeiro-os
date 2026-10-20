@@ -14,7 +14,7 @@ import {
   round2, num, somaPor, percentual, paraBRL, hojeISO, dataLocal, mesDe,
 } from '@/lib/money';
 import Link from 'next/link';
-import { RefreshCw } from 'lucide-react';
+import { Percent, RefreshCw } from 'lucide-react';
 import { PageHeader } from '@/components/fin/PageHeader';
 import { MolduraDaPagina, RITMO_DA_PAGINA } from '@/components/fin/MolduraDaPagina';
 import { DataState } from '@/components/fin/DataState';
@@ -774,6 +774,7 @@ export default function ComissoesPage() {
   return (
     <MolduraDaPagina>
       <PageHeader
+        icone={Percent}
         titulo="Comissões"
         subtitulo={`O que a agência deve à equipe em ${nomeDoMes} e o que depende da sua aprovação`}
         acoesSecundarias={[{ rotulo: 'Vendedores e planos', href: '/equipe/vendedores' }]}

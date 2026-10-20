@@ -7,9 +7,18 @@ import { Menu } from '@base-ui/react/menu';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { IconeDeIndicador, type TomDoIcone } from '@/components/fin/MetricCard';
 
 export type PageHeaderProps = {
   titulo: string;
+  /**
+   * A casquinha de ícone ao lado do título — a assinatura visual do Entur OS.
+   * Sem ícone o cabeçalho continua como era: a casquinha é um ganho, não um
+   * requisito, e tela sem ícone escolhido não ganha um genérico.
+   */
+  icone?: LucideIcon;
+  /** O tom da casquinha. Padrão: o acento. */
+  tomDoIcone?: TomDoIcone;
   /** Uma linha em caption. Opcional e curta. Aceita <Jargao>. */
   subtitulo?: React.ReactNode;
   acaoPrimaria?: {
@@ -71,6 +80,8 @@ function horaDoCarimbo(quando: Date): string {
 export function PageHeader({
   titulo,
   subtitulo,
+  icone: Icone,
+  tomDoIcone = 'acento',
   acaoPrimaria,
   acoesSecundarias,
   badge,
@@ -99,14 +110,17 @@ export function PageHeader({
         'lg:flex lg:min-h-14 lg:flex-row lg:items-start lg:gap-[var(--fin-s-3)]',
       )}
     >
-      <div className="flex min-w-0 flex-col gap-[var(--fin-s-1)] lg:flex-1">
-        <div className="flex min-w-0 flex-wrap items-center gap-[var(--fin-s-2)]">
-          <h1 className="fin-t-title min-w-0 truncate text-[var(--fin-text)]">{titulo}</h1>
-          {badge}
+      <div className="flex min-w-0 items-start gap-[var(--fin-s-3)] lg:flex-1">
+        {Icone ? <IconeDeIndicador icone={Icone} tom={tomDoIcone} tamanho="lg" /> : null}
+        <div className="flex min-w-0 flex-col gap-[var(--fin-s-1)]">
+          <div className="flex min-w-0 flex-wrap items-center gap-[var(--fin-s-2)]">
+            <h1 className="fin-t-title min-w-0 truncate text-[var(--fin-text)]">{titulo}</h1>
+            {badge}
+          </div>
+          {subtitulo ? (
+            <p className="fin-t-caption text-[var(--fin-text-3)]">{subtitulo}</p>
+          ) : null}
         </div>
-        {subtitulo ? (
-          <p className="fin-t-caption text-[var(--fin-text-3)]">{subtitulo}</p>
-        ) : null}
       </div>
 
       {/* Recarregar é utilitário, não ação: no celular fica ao lado do título

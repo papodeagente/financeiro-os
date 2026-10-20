@@ -299,6 +299,7 @@ export default function MetasPage() {
       <Comemoracao chave={festa?.chave ?? null} detalhe={festa?.detalhe} onFim={() => setFesta(null)} />
 
       <PageHeader
+        icone={Trophy}
         titulo="Metas e ranking"
         subtitulo="Quanto cada pessoa vendeu no mês e quanto falta para a meta"
         acoesSecundarias={[{ rotulo: 'Vendedores e planos', href: `/equipe/vendedores?mes=${mes}` }]}

@@ -118,6 +118,7 @@ export default function FunisPage() {
   return (
     <div className="w-full px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
       <PageHeader
+        icon={<Filter />}
         title="Funis e campanhas"
         subtitle="Desenhe o funil, simule o ROI e compare cenários antes de investir"
         actions={

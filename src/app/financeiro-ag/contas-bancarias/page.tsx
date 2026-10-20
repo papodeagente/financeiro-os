@@ -418,6 +418,7 @@ export default function ContasBancariasPage() {
       <div className="mx-auto flex w-full max-w-[var(--fin-page-max)] flex-col gap-[var(--fin-s-5)]">
         <div className="pb-[var(--fin-s-4)]">
           <PageHeader
+            icone={Landmark}
             titulo="Contas bancárias"
             subtitulo="Contas, caixas e cartões por onde o dinheiro da agência passa."
             acaoPrimaria={{ rotulo: 'Nova conta', icone: Plus, onClick: openNew }}

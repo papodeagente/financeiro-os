@@ -567,6 +567,7 @@ export default function ContasReceberPage() {
       className="max-w-[1280px]"
       header={
         <PageHeader
+          icone={ArrowDownLeft}
           titulo="Contas a receber"
           subtitulo="O que os clientes ainda devem para a agência."
           acaoPrimaria={{ rotulo: 'Nova venda', icone: Plus, onClick: () => setVendaAberta(true) }}

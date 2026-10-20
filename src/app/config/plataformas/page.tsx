@@ -139,6 +139,7 @@ export default function PlataformasPage() {
   return (
     <div className="flex flex-col gap-[var(--fin-s-5)]">
       <PageHeader
+        icone={Link2}
         titulo="Plataformas de venda"
         subtitulo="Venda fechada na plataforma entra sozinha no financeiro"
       />

@@ -177,6 +177,7 @@ export default function VendasPage() {
     <PageShell
       header={
         <PageHeader
+          icon={<ShoppingCart />}
           title="Vendas"
           subtitle="Gerencie todas as vendas fechadas, com filtros por período, status e cliente"
           actions={

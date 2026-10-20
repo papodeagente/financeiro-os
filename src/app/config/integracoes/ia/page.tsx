@@ -14,7 +14,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, Eye, EyeOff, XCircle } from 'lucide-react';
+import { BrainCircuit, CheckCircle2, Eye, EyeOff, XCircle } from 'lucide-react';
 
 import { PageShell } from '@/components/PageShell';
 import { PageHeader } from '@/components/fin/PageHeader';
@@ -139,6 +139,7 @@ export default function ChavesIAPage() {
   return (
     <PageShell width="full" padding="md" gap="md" className="max-w-[760px]">
       <PageHeader
+        icone={BrainCircuit}
         titulo="Inteligência artificial"
         subtitulo="Suas chaves da Anthropic e da OpenAI. O consumo é cobrado direto pelo fornecedor."
         acaoPrimaria={{

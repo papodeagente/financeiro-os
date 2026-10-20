@@ -322,6 +322,7 @@ export default function CrmConfigPage() {
   if (loading) return (
     <PageShell width="full" padding="md" gap="md" className="max-w-[900px]">
       <PageHeader
+        icone={Link2}
         titulo="CRM Entur"
         subtitulo="Venda fechada no CRM entra aqui como conta a receber do cliente e conta a pagar do fornecedor."
       />

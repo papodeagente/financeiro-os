@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowDownLeft, ArrowDownRight, ArrowUpRight, CircleCheck, OctagonAlert, TrendingUp, TriangleAlert, Wallet } from 'lucide-react';
+import { ArrowDownLeft, ArrowDownRight, ArrowUpRight, CircleCheck, LayoutDashboard, OctagonAlert, TrendingUp, TriangleAlert, Wallet } from 'lucide-react';
 
 import { IconeDeIndicador } from '@/components/fin/MetricCard';
 import type { DashboardFinanceiro } from '@/lib/dashboard-financeiro';
@@ -216,6 +216,7 @@ function Painel() {
     <div className="w-full px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
       <div className="mx-auto flex w-full max-w-[var(--fin-page-max)] flex-col gap-[var(--fin-s-5)]">
         <PageHeader
+          icone={LayoutDashboard}
           titulo="Dashboard Financeiro"
           subtitulo="Visão geral da saúde financeira da sua agência"
           atualizadoEm={atualizadoEm}

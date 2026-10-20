@@ -139,6 +139,7 @@ export default function FinanceiroProdutosPage() {
   return (
     <div className="flex flex-col gap-[var(--fin-s-6)]">
       <PageHeader
+        icone={Boxes}
         titulo="Financeiro por produto"
         subtitulo="Produtos vendidos no CRM que chegaram ao financeiro"
         acoesSecundarias={[{ rotulo: 'Vendas fechadas', href: '/vendas' }]}

@@ -421,6 +421,7 @@ export default function NotasFiscaisPage() {
   return (
     <PageShell width="full" padding="md" gap="md" className="max-w-[1280px]">
       <PageHeader
+        icone={FileCheck2}
         titulo="Notas fiscais"
         subtitulo="As notas de serviço emitidas a partir dos recebimentos confirmados."
       />

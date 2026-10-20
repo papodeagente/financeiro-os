@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { ListTree, Pencil, Plus, Trash2 } from 'lucide-react';
 
 import { PlanoContas, NaturezaCusto, getPlanoContasPadrao } from '@/lib/crm-types';
 import { loadEntities, saveEntity, deleteEntity } from '@/lib/crm-storage';
@@ -352,6 +352,7 @@ export default function PlanoContasPage() {
       <div className="mx-auto w-full max-w-[var(--fin-page-max)] px-[var(--fin-page-pad)] py-[var(--fin-s-5)]">
 
         <PageHeader
+          icone={ListTree}
           titulo="Categorias de entrada e saída"
           subtitulo={
             <Jargao

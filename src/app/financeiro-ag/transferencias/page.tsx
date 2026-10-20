@@ -490,6 +490,7 @@ export default function TransferenciasPage() {
       <div className="mx-auto flex w-full max-w-[var(--fin-page-max)] flex-col gap-[var(--fin-s-5)]">
         <div className="pb-[var(--fin-s-4)]">
           <PageHeader
+            icone={ArrowLeftRight}
             titulo="Transferências entre contas"
             subtitulo="Dinheiro que sai de uma conta da agência e entra em outra. Não é receita nem despesa."
             acaoPrimaria={{ rotulo: 'Nova transferência', icone: Plus, onClick: openNew }}

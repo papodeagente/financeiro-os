@@ -173,6 +173,7 @@ export default function FluxogramasPage() {
   return (
     <div className="w-full px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
       <PageHeader
+        icon={<Workflow />}
         title="Fluxogramas"
         subtitle="Construtor BPMN para mapear vendas, suporte e operações"
         actions={

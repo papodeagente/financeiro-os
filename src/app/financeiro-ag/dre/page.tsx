@@ -492,6 +492,7 @@ export default function DREPage() {
     <div className="w-full bg-[var(--fin-bg)] px-[var(--fin-page-pad)] py-[var(--fin-page-pad)] text-[var(--fin-text)]">
       <div className="mx-auto w-full max-w-[var(--fin-page-max)]">
         <PageHeader
+          icone={TrendingUp}
           titulo="Resultado do mês"
           subtitulo={
             <Jargao

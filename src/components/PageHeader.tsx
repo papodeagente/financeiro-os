@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
+import { comAlfa } from '@/lib/cor';
 import { CrmStatusBadge } from './CrmStatusBadge';
 
 type Size = 'sm' | 'md' | 'lg';
@@ -57,7 +58,14 @@ export function PageHeader({
     >
       <div className="flex min-w-0 items-start gap-[var(--fin-s-3)]">
         {icon && (
-          <div aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-[var(--fin-r-md)] bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]">
+          <div
+            aria-hidden="true"
+            className="grid size-12 shrink-0 place-items-center rounded-[var(--fin-r-tile)] [&_svg]:size-5"
+            style={{
+              backgroundImage: `linear-gradient(to bottom right, ${comAlfa('var(--fin-accent)', 15)}, ${comAlfa('var(--fin-accent)', 5)})`,
+              color: 'var(--fin-accent)',
+            }}
+          >
             {icon}
           </div>
         )}

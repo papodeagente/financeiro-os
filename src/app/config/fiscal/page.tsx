@@ -287,6 +287,7 @@ export default function NotaFiscalPage() {
   return (
     <PageShell width="full" padding="md" gap="md" className="max-w-[760px]">
       <PageHeader
+        icone={FileText}
         titulo="Nota fiscal"
         subtitulo="Envie o certificado digital e a agência fica pronta para emitir."
         acoesSecundarias={[{ rotulo: 'Ajuste manual', href: '/config/fiscal/avancado' }]}

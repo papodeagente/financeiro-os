@@ -322,6 +322,7 @@ export default function RecebimentosPlataformasPage() {
   return (
     <MolduraDaPagina>
       <PageHeader
+        icone={Landmark}
         titulo="Recebimentos das plataformas"
         subtitulo="Hotmart, Asaas e Pagar.me: o que foi vendido, o que já entrou e o que ainda falta entrar."
         onRecarregar={carregar}

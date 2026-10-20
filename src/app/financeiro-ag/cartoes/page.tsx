@@ -552,6 +552,7 @@ export default function CartoesCorpPage() {
     <div className="min-h-full bg-[var(--fin-bg)] px-[var(--fin-page-pad)] py-[var(--fin-s-5)] text-[var(--fin-text)]">
       <div className="mx-auto w-full max-w-[var(--fin-page-max)]">
         <PageHeader
+          icone={CreditCard}
           titulo="Cartões corporativos"
           subtitulo="Limite, fatura e lançamentos de cada cartão da agência"
           acaoPrimaria={{

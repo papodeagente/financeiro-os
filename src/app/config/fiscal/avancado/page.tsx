@@ -347,6 +347,7 @@ export default function ConfigFiscalPage() {
   return (
     <PageShell width="full" padding="md" gap="md" className="max-w-[900px]">
       <PageHeader
+        icone={ShieldCheck}
         titulo="Ajuste manual da nota fiscal"
         subtitulo="Cada campo da configuração fiscal, um a um. A tela guiada resolve a maioria dos casos sozinha."
         acaoPrimaria={{ rotulo: salvando ? 'Salvando…' : 'Salvar', onClick: () => { void salvar(); } }}

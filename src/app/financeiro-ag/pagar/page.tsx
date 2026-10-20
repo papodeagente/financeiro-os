@@ -605,6 +605,7 @@ export default function ContasPagarPage() {
   return (
     <PageShell width="full" padding="md" gap="md" className="max-w-[1280px]">
       <PageHeader
+        icone={ArrowUpRight}
         titulo="Contas a pagar"
         subtitulo="O que a agência precisa pagar, com vencimento, saldo devedor e situação."
         acaoPrimaria={{ rotulo: 'Nova conta', icone: Plus, onClick: openNew }}

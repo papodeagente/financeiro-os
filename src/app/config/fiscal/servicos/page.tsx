@@ -13,7 +13,7 @@
  * do seletor, antes da lista nacional.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { FileText, Plus, Trash2 } from 'lucide-react';
 
 import { PageHeader } from '@/components/fin/PageHeader';
 import { DataState } from '@/components/fin/DataState';
@@ -100,6 +100,7 @@ export default function ServicosFiscaisPage() {
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
+        icone={FileText}
         titulo="Serviços da nota fiscal"
         subtitulo="O que a empresa presta. Cada serviço leva o código de tributação e a alíquota que vão na nota."
       />

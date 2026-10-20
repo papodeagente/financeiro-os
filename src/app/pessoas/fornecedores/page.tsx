@@ -279,6 +279,7 @@ export default function FornecedoresPage() {
   return (
     <div className="w-full bg-[var(--fin-bg)] px-[var(--fin-page-pad)] py-[var(--fin-page-pad)] text-[var(--fin-text)]">
       <PageHeader
+        icon={<Building2 />}
         title="Fornecedores"
         subtitle={`${fornecedores.length} fornecedor${fornecedores.length !== 1 ? 'es' : ''} cadastrado${fornecedores.length !== 1 ? 's' : ''}`}
         actions={

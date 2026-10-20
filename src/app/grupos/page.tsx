@@ -9,11 +9,7 @@ import { useApp } from '@/contexts/AppContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import {
-  Plus, Copy, Download, Upload, Trash2, FolderOpen, X,
-  Search, Calendar, MapPin, Users, ArrowUpDown, LayoutGrid, List,
-  ChevronDown, ChevronRight, AlertTriangle,
-} from 'lucide-react';
+import { AlertTriangle, ArrowUpDown, Boxes, Calendar, ChevronDown, ChevronRight, Copy, Download, FolderOpen, LayoutGrid, List, MapPin, Plus, Search, Trash2, Upload, Users, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 import { PageShell } from '@/components/PageShell';
@@ -408,6 +404,7 @@ export default function GruposPage() {
         width="wide"
         header={
           <PageHeader
+            icon={<Boxes />}
             title="Produtos"
             subtitle="Crie e configure roteiros de viagem para vender"
             actions={

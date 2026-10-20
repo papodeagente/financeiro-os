@@ -2,10 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ArrowDownLeft, ArrowLeftRight, ArrowRight, ArrowUpRight, CircleCheck, ClockAlert, GitCompareArrows, Plus,
-  TrendingDown, TrendingUp, TriangleAlert, UserRoundX, Plug,
-} from 'lucide-react';
+import { ArrowDownLeft, ArrowLeftRight, ArrowRight, ArrowUpRight, CircleCheck, ClockAlert, GitCompareArrows, Plug, Plus, TrendingDown, TrendingUp, TriangleAlert, UserRoundX, Wallet } from 'lucide-react';
 
 import type { ContaBancaria, ContaPagar, ContaReceber } from '@/lib/crm-types';
 import { hojeISO, round2 } from '@/lib/money';
@@ -226,6 +223,7 @@ export default function FinanceiroVisaoGeralPage() {
   return (
     <MolduraDaPagina>
       <PageHeader
+        icone={Wallet}
         titulo="Financeiro"
         subtitulo={`${hojePorExtenso(hoje)}. O que entra, o que sai e o que precisa de você.`}
         atualizadoEm={atualizadoEm}

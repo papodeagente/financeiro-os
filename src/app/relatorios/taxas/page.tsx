@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { TrendingDown } from 'lucide-react';
+import { Percent, TrendingDown } from 'lucide-react';
 
 import type { ContaReceber } from '@/lib/crm-types';
 import { loadEntities } from '@/lib/crm-storage';
@@ -186,6 +186,7 @@ export default function RelatorioDeTaxasPage() {
   return (
     <MolduraDaPagina>
       <PageHeader
+        icone={Percent}
         titulo="Taxas de pagamento"
         subtitulo="Quanto as plataformas ficaram do dinheiro que passou por elas"
         atualizadoEm={atualizadoEm}

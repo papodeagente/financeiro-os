@@ -193,6 +193,7 @@ export default function LucroRealPage() {
   return (
     <MolduraDaPagina>
       <PageHeader
+        icone={TrendingUp}
         titulo="Lucro real"
         subtitulo="Faturamento, comissão e lucro separados. Por mês, e por venda."
         atualizadoEm={atualizadoEm}

@@ -90,6 +90,7 @@ export default function ProjetosPage() {
   return (
     <div className="w-full px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
       <PageHeader
+        icon={<FolderKanban />}
         title="Projetos comerciais"
         actions={
           <button onClick={openNew} className="flex items-center gap-1.5 px-3 py-1.5 text-[length:var(--text-body-sm)] font-medium text-[var(--fin-text-on-fill)] bg-[var(--t-green)] rounded-lg hover:opacity-90 transition-opacity">

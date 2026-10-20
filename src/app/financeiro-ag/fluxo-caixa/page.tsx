@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, CircleAlert, Info } from 'lucide-react';
+import { BarChart3, ChevronLeft, ChevronRight, CircleAlert, Info } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { ContaReceber, ContaPagar, ContaBancaria, Agencia } from '@/lib/crm-types';
@@ -238,6 +238,7 @@ export default function FluxoCaixaPage() {
     <div className="bg-[var(--fin-bg)] py-[var(--fin-page-pad)] text-[var(--fin-text)]">
       <div className="mx-auto flex w-full max-w-[var(--fin-page-max)] flex-col gap-[var(--fin-s-5)] px-[var(--fin-page-pad)]">
         <PageHeader
+          icone={BarChart3}
           titulo="Fluxo de caixa"
           subtitulo="O que entra e o que sai, como num caderno: saldo anterior, mais as entradas, menos as saídas"
           atualizadoEm={atualizadoEm}

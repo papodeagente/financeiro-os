@@ -194,6 +194,7 @@ export default function IntegracoesPage() {
   return (
     <PageShell width="full" padding="md" gap="md" className="max-w-[760px]">
       <PageHeader
+        icone={Link2}
         titulo="Integrações"
         subtitulo="Conecte o Entur OS às ferramentas que a agência já usa."
       />

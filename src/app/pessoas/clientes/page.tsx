@@ -3,7 +3,7 @@
 import Link from 'next/link';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Plus, Pencil, Trash2, X, ChevronDown, User, Phone, MapPin, Star } from 'lucide-react';
+import { ChevronDown, MapPin, Pencil, Phone, Plus, Search, Star, Trash2, User, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -313,6 +313,7 @@ export default function ClientesPage() {
   return (
     <div className="w-full bg-[var(--fin-bg)] px-[var(--fin-page-pad)] py-[var(--fin-page-pad)] text-[var(--fin-text)]">
       <PageHeader
+        icon={<Users />}
         title="Clientes"
         subtitle={`${clientes.length} cliente${clientes.length !== 1 ? 's' : ''} cadastrado${clientes.length !== 1 ? 's' : ''}`}
         actions={

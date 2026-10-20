@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, Pencil, TriangleAlert, UserPlus } from 'lucide-react';
+import { CheckCircle2, Pencil, TriangleAlert, UserPlus, Users } from 'lucide-react';
 
 import type { VinculoEmpresa } from '@/lib/crm-types';
 import {
@@ -241,6 +241,7 @@ export default function FolhaPage() {
   return (
     <MolduraDaPagina>
       <PageHeader
+        icone={Users}
         titulo="Folha de pagamento"
         subtitulo="Quanto a equipe custa por mês e quanto isso pesa no faturamento"
         acoesSecundarias={[{ rotulo: 'Cadastrar pessoa', href: '/config/usuarios' }]}
