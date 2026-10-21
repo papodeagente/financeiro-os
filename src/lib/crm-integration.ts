@@ -1,6 +1,6 @@
 import pool, { initDB } from './db';
 import { generateId } from './utils';
-import { createHmac } from 'crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
 import { getProdutoGrupo } from './financial-calculations';
 import type { GrupoViagem } from './types';
 import {
@@ -40,6 +40,7 @@ import {
   cadastroCompleto, payloadParaOCrm,
 } from './fornecedor-sync';
 import { lerFichaDoCrm } from './ficha-do-cliente';
+import { lerMetricasDoCrm, TIPO_METRICAS_COMERCIAIS, type ComercialDoCrm } from './metricas-comerciais';
 
 // ──────────────────────────────────────────
 // Types
@@ -2574,4 +2575,92 @@ export async function resolverTenantPorAssinaturaCRM(
   } catch {
     return null;
   }
+}
+
+// ──────────────────────────────────────────
+// Consulta: métricas comerciais do mês (acompanhamento do plano)
+// ──────────────────────────────────────────
+
+/**
+ * Pergunta ao CRM as negociações e as vendas ganhas do mês, pelo mesmo
+ * webhook assinado dos eventos. É CONSULTA, não evento: não entra em
+ * crm_eventos_saida, não tem retentativa e não mexe no disjuntor. Se o CRM
+ * não responder, o acompanhamento mostra por quê e segue com o que o
+ * Financeiro tem.
+ *
+ * A resposta vem assinada com o mesmo segredo (x-crm-signature): número que
+ * não dá para provar que veio do CRM não entra no painel.
+ *
+ * Cache curto por empresa e mês: o painel pergunta a cada abertura e a cada
+ * troca de mês; o CRM não precisa responder a mesma pergunta dez vezes por
+ * minuto.
+ */
+const CACHE_METRICAS = new Map<string, { ate: number; valor: ComercialDoCrm }>();
+const VALIDADE_METRICAS_MS: Record<ComercialDoCrm['situacao'], number> = {
+  ok: 60_000,
+  crm_sem_suporte: 10 * 60_000,
+  indisponivel: 30_000,
+  sem_integracao: 0,
+};
+
+function assinaturaConfere(corpo: string, assinatura: string, segredo: string): boolean {
+  if (!assinatura || !segredo) return false;
+  const esperada = Buffer.from(hmacSign(corpo, segredo), 'utf8');
+  const recebida = Buffer.from(assinatura, 'utf8');
+  return esperada.length === recebida.length && timingSafeEqual(esperada, recebida);
+}
+
+export async function consultarMetricasComerciais(tenantId: string, mes: string): Promise<ComercialDoCrm> {
+  const chave = `${tenantId}:${mes}`;
+  const guardado = CACHE_METRICAS.get(chave);
+  if (guardado && guardado.ate > Date.now()) return guardado.valor;
+
+  const resultado = await (async (): Promise<ComercialDoCrm> => {
+    let config: CrmConfig | null = null;
+    try { config = await getCrmConfig(tenantId); } catch { config = null; }
+    if (!config || !config.ativo || !config.webhook_url_crm || !config.api_key_crm) {
+      return { situacao: 'sem_integracao', detalhe: 'A integração com o CRM não está ligada nesta empresa (Configurações, CRM Entur).' };
+    }
+    const corpo = JSON.stringify({
+      id: randomUUID(), tipo: TIPO_METRICAS_COMERCIAIS, timestamp: new Date().toISOString(),
+      versao: 'v1', origem: 'entur-os', payload: { mes },
+    });
+    try {
+      const res = await fetch(config.webhook_url_crm, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-entur-event': TIPO_METRICAS_COMERCIAIS,
+          'x-entur-signature': hmacSign(corpo, config.api_key_crm),
+        },
+        body: corpo,
+        signal: AbortSignal.timeout(6000),
+      });
+      const texto = await res.text();
+      if (res.status === 401) return { situacao: 'indisponivel', detalhe: 'O CRM recusou a assinatura: confira o segredo da integração.' };
+      if (res.status === 404 || res.status === 409 || res.status === 410) {
+        return { situacao: 'sem_integracao', detalhe: 'A integração está desligada ou incompleta no CRM.' };
+      }
+      if (!res.ok) return { situacao: 'indisponivel', detalhe: `O CRM respondeu com erro (HTTP ${res.status}).` };
+      let json: Record<string, unknown> | null = null;
+      try { json = JSON.parse(texto); } catch { json = null; }
+      // CRM que ainda não conhece a consulta responde 200 sem `metricas`.
+      if (!json || !('metricas' in json)) {
+        return { situacao: 'crm_sem_suporte', detalhe: 'O CRM ainda não envia os números comerciais: falta atualizar o CRM.' };
+      }
+      if (!assinaturaConfere(texto, res.headers.get('x-crm-signature') ?? '', config.api_key_crm)) {
+        return { situacao: 'indisponivel', detalhe: 'A resposta do CRM veio sem assinatura válida e foi descartada.' };
+      }
+      const metricas = lerMetricasDoCrm(json.metricas, mes);
+      if (!metricas) return { situacao: 'indisponivel', detalhe: 'A resposta do CRM não trouxe os números do mês pedido.' };
+      return { situacao: 'ok', metricas, consultado_em: new Date().toISOString() };
+    } catch (e) {
+      const tempo = e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError');
+      return { situacao: 'indisponivel', detalhe: tempo ? 'O CRM demorou mais de 6 segundos para responder.' : 'Não foi possível falar com o CRM agora.' };
+    }
+  })();
+
+  const validade = VALIDADE_METRICAS_MS[resultado.situacao];
+  if (validade > 0) CACHE_METRICAS.set(chave, { ate: Date.now() + validade, valor: resultado });
+  return resultado;
 }

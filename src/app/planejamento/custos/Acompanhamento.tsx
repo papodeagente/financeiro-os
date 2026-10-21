@@ -9,7 +9,7 @@ import {
 
 import type { CustosData, Relatorio } from '@/lib/planejamento-custos';
 import {
-  montarAcompanhamento, ritmoDoPlano, ultimoRegistro,
+  metricasDoCrm, montarAcompanhamento, ritmoDoPlano, ultimoRegistro,
   type AreaDoPlano, type Calendario, type ContaDoMes, type IndicadorDoPlano, type ItemDoPlano, type PontoDeAtencao, type RealizadoDoMes, type Situacao,
 } from '@/lib/plano-do-mes';
 import { cn, formatBRL } from '@/lib/utils';
@@ -125,7 +125,8 @@ function LinhaDoItem({ item, registros, podeEditar, onRegistrar, onApagarRegistr
   const porVenda = item.chave === 'custos_variaveis';
   const temContas = !!item.contas && (item.contas.vencidas.length > 0 || item.contas.aVencer.length > 0);
 
-  const numeros = item.situacao === 'sem_dados'
+  // Sem dados com número (o lucro sem custos lançados): o número aparece, como no cartão do topo.
+  const numeros = item.situacao === 'sem_dados' && item.realizado === null
     ? 'sem dados'
     : porVenda
       ? `${valor(item.realizado, item.formato)} por venda · plano ${valor(item.planejado, item.formato)}`
@@ -136,6 +137,7 @@ function LinhaDoItem({ item, registros, podeEditar, onRegistrar, onApagarRegistr
   const sub = (
     <>
       <span className="text-[var(--fin-text-2)]">{item.porque}</span>
+      {item.chave === 'vendas' || item.chave === 'atendimentos' ? <span>· {item.fonte}</span> : null}
       {!porVenda && item.falta !== null && item.falta > 0 ? (
         <span>· {limitar ? 'falta pagar' : 'faltam'} <b className="font-medium tabular-nums text-[var(--fin-text-2)]">{valor(item.falta, item.formato)}</b></span>
       ) : null}
@@ -217,9 +219,13 @@ function RodapeDoRitmo({ item, cal }: { item: ItemDoPlano; cal: Calendario }) {
   const numeros: Array<{ rotulo: string; valor: string; tom?: TomDoPainel }> = [
     { rotulo: cal.aberto ? 'O plano pedia até hoje' : 'O plano do mês', valor: formatBRL(pedia) },
     { rotulo: diferenca >= 0 ? 'À frente do ritmo' : 'Atrás do ritmo', valor: formatBRL(Math.abs(diferenca)), tom: diferenca >= 0 ? 'positivo' : 'negativo' },
-    cal.aberto
-      ? { rotulo: falta > 0 && restam > 0 ? `Por dia útil, nos ${restam} que restam` : 'Falta para a meta', valor: formatBRL(falta > 0 && restam > 0 ? falta / restam : falta) }
-      : { rotulo: 'Realizado no mês', valor: formatBRL(realizado) },
+    !cal.aberto
+      ? { rotulo: 'Realizado no mês', valor: formatBRL(realizado) }
+      : falta <= 0
+        ? { rotulo: 'Meta do mês', valor: 'Atingida', tom: 'positivo' }
+        : restam > 0
+          ? { rotulo: `Por dia útil, nos ${restam} que restam`, valor: formatBRL(falta / restam) }
+          : { rotulo: 'Falta para a meta', valor: formatBRL(falta) },
   ];
   return (
     <dl className="grid grid-cols-1 gap-[var(--fin-s-2)] rounded-[16px] bg-[var(--fin-surface-sunken)] px-4 py-3 sm:grid-cols-3">
@@ -328,6 +334,10 @@ export function Acompanhamento({
     ? Object.fromEntries(painel.areas.flatMap(a => a.itens).map(i => [i.chave, i])) as Record<ItemDoPlano['chave'], ItemDoPlano>
     : null;
   const cal = painel?.calendario ?? null;
+  const crm = realizado ? metricasDoCrm(realizado) : null;
+  // As mini barras param em hoje no mês aberto: dia que não chegou não é zero.
+  const ateHoje = (serie: number[]) =>
+    serie.slice(0, Math.max(1, cal?.aberto && realizado ? Number(realizado.hoje.slice(8, 10)) : serie.length));
 
   // ── Os quatro números do topo (o "Volume e resultado" das Análises) ──────
   const numeros: NumeroDoPainel[] = porChave && realizado && cal ? [
@@ -336,7 +346,7 @@ export function Acompanhamento({
       valor: reais(realizado.comissao), valorCompleto: formatBRL(realizado.comissao),
       sub: porChave.comissao.planejado !== null ? `de ${reais(porChave.comissao.planejado)} planejados` : 'sem meta no plano',
       selo: seloDoPlano(porChave.comissao),
-      barras: realizado.diario ? { valores: baldes(realizado.diario.comissao.slice(0, Math.max(1, cal.aberto ? Number(realizado.hoje.slice(8, 10)) : realizado.diario.comissao.length))), rotulo: 'Comissão ao longo do mês' } : null,
+      barras: realizado.diario ? { valores: baldes(ateHoje(realizado.diario.comissao)), rotulo: 'Comissão ao longo do mês' } : null,
       href: '/financeiro-ag/receber',
     },
     {
@@ -344,24 +354,31 @@ export function Acompanhamento({
       valor: String(porChave.vendas.realizado ?? 0),
       sub: porChave.vendas.planejado !== null ? `de ${porChave.vendas.planejado} planejadas` : 'sem meta no plano',
       selo: seloDoPlano(porChave.vendas),
-      barras: realizado.diario ? { valores: baldes(realizado.diario.vendas.slice(0, Math.max(1, cal.aberto ? Number(realizado.hoje.slice(8, 10)) : realizado.diario.vendas.length))), rotulo: 'Vendas ao longo do mês' } : null,
+      // As barras contam o mesmo que o número: as ganhas no CRM, ou as vendas do financeiro sem ele.
+      barras: crm
+        ? { valores: baldes(ateHoje(crm.por_dia.ganhas)), rotulo: 'Vendas ganhas no CRM ao longo do mês' }
+        : realizado.diario ? { valores: baldes(ateHoje(realizado.diario.vendas)), rotulo: 'Vendas ao longo do mês' } : null,
       href: '/vendas',
     },
     {
       rotulo: 'Leads atendidos', icone: Users, tom: 'info',
       valor: porChave.atendimentos.realizado === null ? '—' : String(porChave.atendimentos.realizado),
       sub: porChave.atendimentos.realizado === null
-        ? 'sem registro neste mês'
-        : `de ${valor(porChave.atendimentos.planejado, 'contagem')} planejados`,
+        ? 'sem dados neste mês'
+        : porChave.atendimentos.planejado !== null
+          ? `de ${valor(porChave.atendimentos.planejado, 'contagem')} planejados${crm ? ', no CRM' : ''}`
+          : crm ? 'negociações do mês no CRM' : 'registrados à mão',
       selo: seloDoPlano(porChave.atendimentos),
       anel: porChave.atendimentos.progresso !== null ? { pct: porChave.atendimentos.progresso, rotulo: `${Math.round(porChave.atendimentos.progresso)}% dos atendimentos planejados` } : null,
-      aviso: porChave.atendimentos.realizado === null ? 'O financeiro não recebe os leads do CRM: registre quantos foram atendidos.' : undefined,
+      aviso: !crm && porChave.atendimentos.realizado === null ? porChave.atendimentos.fonte : undefined,
     },
     {
       rotulo: cal.aberto ? 'Lucro até agora' : 'Lucro do mês', icone: realizado.lucro < 0 ? TrendingDown : Wallet,
       tom: realizado.lucro < 0 ? 'negativo' : 'acento',
       valor: reais(realizado.lucro), valorCompleto: formatBRL(realizado.lucro),
-      sub: porChave.lucro.planejado !== null ? `de ${reais(porChave.lucro.planejado)} desejados${cal.aberto ? ', provisório' : ''}` : 'comissão menos os custos do mês',
+      sub: porChave.lucro.situacao === 'sem_dados'
+        ? 'sem custos do mês lançados: ainda não desconta a estrutura'
+        : porChave.lucro.planejado !== null ? `de ${reais(porChave.lucro.planejado)} desejados${cal.aberto ? ', provisório' : ''}` : 'comissão menos os custos do mês',
       selo: { tom: tomDaSituacao(porChave.lucro.situacao), texto: rotuloStatus('plano', porChave.lucro.situacao), dica: porChave.lucro.porque },
       anel: porChave.lucro.progresso !== null && porChave.lucro.progresso > 0 ? { pct: porChave.lucro.progresso, rotulo: `${Math.round(porChave.lucro.progresso)}% do lucro desejado` } : null,
       href: '/relatorios/lucro-real',
@@ -400,9 +417,19 @@ export function Acompanhamento({
           <div className="flex flex-col">
             {/* ── O mês contra o plano ─────────────────────────────────── */}
             <TituloDeSecao
-              extra={cal.aberto
-                ? `dia útil ${cal.diasUteisPassados} de ${cal.diasUteis} · ${Math.round(cal.fracao * 100)}% do mês`
-                : cal.futuro ? 'o mês ainda não começou' : 'mês encerrado'}
+              extra={
+                <span className="inline-flex flex-wrap items-center gap-[var(--fin-s-2)]">
+                  {cal.aberto
+                    ? `dia útil ${cal.diasUteisPassados} de ${cal.diasUteis} · ${Math.round(cal.fracao * 100)}% do mês`
+                    : cal.futuro ? 'o mês ainda não começou' : 'mês encerrado'}
+                  {/* De onde vêm leads e vendas: o CRM, ou por que não. */}
+                  {crm
+                    ? <SeloDoTom tom="positivo" title="Leads e vendas fechadas com as contas das Análises do CRM (funis de vendas)">Leads e vendas do CRM</SeloDoTom>
+                    : realizado.crm
+                      ? <SeloDoTom tom="aviso" title={realizado.crm.situacao !== 'ok' ? realizado.crm.detalhe : undefined}>Sem os números do CRM</SeloDoTom>
+                      : null}
+                </span>
+              }
             >
               O mês contra o plano
             </TituloDeSecao>
@@ -487,7 +514,7 @@ export function Acompanhamento({
                         item={item}
                         podeEditar={podeEditar}
                         onRegistrar={item.registravel ? abrirRegistro : undefined}
-                        registros={item.chave === 'atendimentos' ? realizado.registros.filter(r => r.chave === 'atendimentos') : undefined}
+                        registros={item.chave === 'atendimentos' && !crm ? realizado.registros.filter(r => r.chave === 'atendimentos') : undefined}
                         onApagarRegistro={item.chave === 'atendimentos' ? (id => void apagar(id)) : undefined}
                       />
                     ))}
