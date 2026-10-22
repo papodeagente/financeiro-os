@@ -112,12 +112,21 @@ console.log('--- linha do tempo: eventos em ordem, alternando o lado do eixo ---
   const nos = porId(layoutMindMap(m)); const raiz = nos[m.rootId];
   const ev = filhosDaRaiz(m).map(id => nos[id]);
   eq(ev.every(n => n.x > raiz.x + raiz.width), true, 'todos os eventos ficam à direita do título');
-  eq(ev.every((n, i) => i === 0 || n.x > ev[i - 1].x + ev[i - 1].width), true, 'em ordem, da esquerda para a direita, sem sobrepor');
+  eq(ev.every((n, i) => i === 0 || n.x >= ev[i - 1].x + 64), true, 'em ordem, da esquerda para a direita, pelo menos 64px um do outro no eixo');
   const centroY = raiz.y + raiz.height / 2;
   const lados = ev.map(n => (n.y + n.height / 2) < centroY ? 'acima' : 'abaixo');
   eq(lados, ['acima', 'abaixo', 'acima', 'abaixo', 'acima'], 'alternam acima e abaixo do eixo');
+  // Cada evento é um bloco: o título e, embaixo, a lista recuada com trilho.
   const netos = getChildren(m, ev[2].id).map(n => nos[n.id]);
-  eq(netos.every(n => (n.y + n.height) <= ev[2].y + 1), true, 'o que está dentro de um evento acima do eixo cresce para cima');
+  eq(netos.every(n => n.y > ev[2].y + ev[2].height && Math.abs(n.x - (ev[2].x + 22)) < 1), true, 'o que está dentro do evento vem embaixo do título, recuado 22px');
+  eq(netos.every(n => n.trilho === ev[2].x + 9), true, 'ligado pelo trilho da lista, como na matriz');
+  eq(netos.every(n => n.y + n.height < centroY - 20), true, 'o bloco inteiro de um evento acima do eixo fica acima do eixo');
+  eq(ev.every(n => n.trilho === n.x - 14), true, 'a ligação do eixo sobe 14px à esquerda do título do evento');
+  // Do mesmo lado, um bloco não encosta no seguinte; de lados opostos podem
+  // se emparelhar — o eixo não fica comprido à toa.
+  const fimDoBloco = (e: typeof ev[number]) => Math.max(e.x + e.width, ...getChildren(m, e.id).map(f => nos[f.id].x + nos[f.id].width));
+  eq(ev.every((n, i) => i < 2 || n.trilho! > fimDoBloco(ev[i - 2])), true, 'do mesmo lado, cada bloco começa depois do anterior');
+  eq(estiloDaLigacao('timeline'), 'trilho', 'a linha do tempo liga por trilho');
 }
 
 console.log('--- espinha de peixe: o efeito à direita, causas em espinhas alternadas ---');
@@ -169,16 +178,22 @@ console.log('--- matriz: cada ramo vira uma coluna ---');
   eq(cab.every(n => n.y > raiz.y + raiz.height), true, 'abaixo do título');
   eq(cab.every((n, i) => i === 0 || n.x >= cab[i - 1].x + cab[i - 1].width), true, 'colunas lado a lado, sem sobrepor');
   const cel = getChildren(m, cab[2].id).map(n => nos[n.id]);
-  eq(cel.every(c => c.y > cab[2].y + cab[2].height && Math.abs(c.x - cab[2].x) < 1), true, 'as células empilham abaixo do cabeçalho, na mesma coluna');
+  eq(cel.every(c => c.y > cab[2].y + cab[2].height && Math.abs(c.x - (cab[2].x + 22)) < 1), true, 'as células empilham abaixo do cabeçalho, na mesma coluna, recuadas 22px');
   eq(cel[1].y > cel[0].y + cel[0].height, true, 'uma célula abaixo da outra');
+  // A ligação desce por um trilho à esquerda das células, não pelo meio delas.
+  eq(cel.every(c => c.trilho === cab[2].x + 9 && c.trilho! < c.x), true, 'o trilho das células passa à esquerda delas, a 9px da borda do cabeçalho');
+  eq(handlesDaLigacao('matrix', 'right', cab[2], cel[0]), { sourceHandle: 'bs', targetHandle: 'l' }, 'e entra na célula pelo lado esquerdo');
+  eq(handlesDaLigacao('matrix', 'right', raiz, cab[2]), { sourceHandle: 'bs', targetHandle: 't' }, 'do título para o cabeçalho, por cima');
   eq(direcaoDoLayout('matrix'), 'vertical', 'a matriz liga por cima e por baixo, como o organograma');
 }
 
 console.log('--- as decisões por layout ---');
 eq(['radial', 'timeline', 'fishbone'].map(l => direcaoDoLayout(l as never)), ['livre', 'livre', 'livre'], 'radial, linha do tempo e espinha ligam pelo lado que encara o pai');
-eq(['org', 'timeline', 'fishbone', 'radial'].map(l => eixoDeIrmaos(l as never)), ['x', 'x', 'x', 'x'], 'onde os irmãos ficam lado a lado, antes/depois é pela horizontal');
-eq(['map', 'logical', 'matrix', 'org-right'].map(l => eixoDeIrmaos(l as never)), ['y', 'y', 'y', 'y'], 'onde empilham, é pela vertical');
-eq(['org', 'org-right', 'matrix', 'timeline'].map(l => estiloDaLigacao(l as never)), ['cotovelo', 'cotovelo', 'cotovelo', 'cotovelo'], 'hierarquia e sequência ligam em cotovelo');
+eq(['org', 'timeline', 'fishbone', 'radial', 'matrix'].map(l => eixoDeIrmaos(l as never)), ['x', 'x', 'x', 'x', 'x'], 'onde os ramos ficam lado a lado, antes/depois é pela horizontal');
+eq(['timeline', 'fishbone', 'matrix'].map(l => eixoDeIrmaos(l as never, 2)), ['y', 'y', 'y'], 'dentro do ramo, em lista: antes/depois é pela vertical');
+eq(['map', 'logical', 'org-right'].map(l => eixoDeIrmaos(l as never)), ['y', 'y', 'y'], 'onde empilham, é pela vertical');
+eq(['org', 'org-right'].map(l => estiloDaLigacao(l as never)), ['cotovelo', 'cotovelo'], 'hierarquia liga em cotovelo');
+eq(estiloDaLigacao('matrix'), 'trilho', 'a matriz liga por um trilho ao lado das células');
 eq(['map', 'logical', 'radial'].map(l => estiloDaLigacao(l as never)), ['curva', 'curva', 'curva'], 'associação liga em curva');
 {
   // Livre: o lado é o que encara o pai, medido pelas caixas.
@@ -191,13 +206,12 @@ eq(['map', 'logical', 'radial'].map(l => estiloDaLigacao(l as never)), ['curva',
   eq(handlesDaLigacao('radial', 'right', pai, esquerda), { sourceHandle: 'ls', targetHandle: 'r' }, 'filho à esquerda: o espelho');
   eq(handlesDaLigacao('radial', 'right', pai, acima), { sourceHandle: 'ts', targetHandle: 'b' }, 'filho acima: sai por cima, entra por baixo');
   eq(handlesDaLigacao('radial', 'right', pai, abaixo), { sourceHandle: 'bs', targetHandle: 't' }, 'filho abaixo: sai por baixo, entra por cima');
-  // Linha do tempo: do título para o evento sai pela direita e entra pelo lado
-  // que encara o eixo — os trechos horizontais dos cotovelos somam o eixo.
-  const eventoAcima = { x: 300, y: -120, width: 80, height: 30 };
-  const eventoAbaixo = { x: 300, y: 120, width: 80, height: 30 };
-  eq(handlesDaLigacao('timeline', 'right', pai, eventoAcima), { sourceHandle: 'rs', targetHandle: 'b' }, 'linha do tempo: evento acima do eixo entra por baixo');
-  eq(handlesDaLigacao('timeline', 'right', pai, eventoAbaixo), { sourceHandle: 'rs', targetHandle: 't' }, 'linha do tempo: evento abaixo do eixo entra por cima');
-  eq(handlesDaLigacao('timeline', 'right', pai, acima), { sourceHandle: 'ts', targetHandle: 'b' }, 'linha do tempo: dentro do evento empilha em pé');
+  // Linha do tempo: do título sai pela direita (o eixo) e entra no evento
+  // pela esquerda (o trilho); dentro do evento, desce pelo trilho da lista.
+  const eventoAcima = { x: 300, y: -120, width: 80, height: 30, depth: 1 };
+  const itemDoEvento = { x: 322, y: -80, width: 80, height: 30, depth: 2 };
+  eq(handlesDaLigacao('timeline', 'right', pai, eventoAcima), { sourceHandle: 'rs', targetHandle: 'l' }, 'linha do tempo: do eixo para o evento, entra pela esquerda');
+  eq(handlesDaLigacao('timeline', 'right', eventoAcima, itemDoEvento), { sourceHandle: 'bs', targetHandle: 'l' }, 'linha do tempo: dentro do evento, pelo trilho da lista');
   eq(handlesDaLigacao('org', 'right'), { sourceHandle: 'bs', targetHandle: 't' }, 'vertical ignora o lado: sempre por baixo');
   eq(handlesDaLigacao('map', 'left'), { sourceHandle: 'ls', targetHandle: 'r' }, 'horizontal segue o lado do ramo');
 }

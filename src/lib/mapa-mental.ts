@@ -48,9 +48,18 @@ export function direcaoDoLayout(layout: MapaLayout | undefined): 'vertical' | 'h
 }
 
 /** Em que eixo os irmãos se espalham: decide se "antes/depois" ao soltar é
- *  pela horizontal ou pela vertical. */
-export function eixoDeIrmaos(layout: MapaLayout | undefined): 'x' | 'y' {
-  return layout === 'org' || layout === 'timeline' || layout === 'fishbone' || layout === 'radial' ? 'x' : 'y';
+ *  pela horizontal ou pela vertical. Na linha do tempo, na matriz e na
+ *  espinha, os ramos ficam lado a lado e o que está dentro deles, em lista. */
+export function eixoDeIrmaos(layout: MapaLayout | undefined, depth = 1): 'x' | 'y' {
+  if (layout === 'org' || layout === 'radial') return 'x';
+  if (layout === 'timeline' || layout === 'matrix' || layout === 'fishbone') return depth <= 1 ? 'x' : 'y';
+  return 'y';
+}
+
+/** Layouts em que a ligação é desenhada por geometria própria (trilho,
+ *  costela) ou chega por qualquer lado: neles o nó não mostra bolinha. */
+export function semBolinhas(layout: MapaLayout | undefined): boolean {
+  return layout === 'radial' || layout === 'timeline' || layout === 'fishbone' || layout === 'matrix';
 }
 
 /**
@@ -58,9 +67,10 @@ export function eixoDeIrmaos(layout: MapaLayout | undefined): 'x' | 'y' {
  * layout parecer o que é: cotovelo diz hierarquia, reta diz causa, curva
  * diz associação.
  */
-export function estiloDaLigacao(layout: MapaLayout | undefined): 'curva' | 'cotovelo' | 'espinha' {
+export function estiloDaLigacao(layout: MapaLayout | undefined): 'curva' | 'cotovelo' | 'espinha' | 'trilho' {
   if (layout === 'fishbone') return 'espinha';
-  if (layout === 'org' || layout === 'org-right' || layout === 'matrix' || layout === 'timeline') return 'cotovelo';
+  if (layout === 'matrix' || layout === 'timeline') return 'trilho';
+  if (layout === 'org' || layout === 'org-right') return 'cotovelo';
   return 'curva';
 }
 
@@ -95,20 +105,16 @@ export function handlesDaLigacao(
   filho?: CaixaDoNo,
 ): { sourceHandle: 'ls' | 'rs' | 'ts' | 'bs'; targetHandle: 'l' | 'r' | 't' | 'b' } {
   const direcao = direcaoDoLayout(layout);
+  // Matriz: do título para a coluna, por cima; dentro da coluna a linha desce
+  // pelo trilho à esquerda e entra na célula pelo lado esquerdo.
+  if (layout === 'matrix' && filho?.depth !== undefined && filho.depth >= 2) return { sourceHandle: 'bs', targetHandle: 'l' };
   if (direcao === 'vertical') return { sourceHandle: 'bs', targetHandle: 't' };
-  if (layout === 'timeline' && pai && filho) {
-    // O EIXO É FEITO DAS PRÓPRIAS LIGAÇÕES. Do título para cada evento a
-    // ligação sai pela direita e entra por baixo (evento acima do eixo) ou
-    // por cima (abaixo): o cotovelo corre na horizontal pela altura do
-    // título e sobe no x do evento — e como todos os trechos horizontais
-    // ficam na mesma altura, eles se somam num eixo só. Sair pela direita
-    // e entrar pela ESQUERDA, como a regra livre faria, cruzava os cinco
-    // cotovelos uns sobre os outros.
-    const dx = (filho.x + filho.width / 2) - (pai.x + pai.width / 2);
-    const dy = (filho.y + filho.height / 2) - (pai.y + pai.height / 2);
-    if (Math.abs(dx) > Math.abs(dy)) return dy < 0 ? { sourceHandle: 'rs', targetHandle: 'b' } : { sourceHandle: 'rs', targetHandle: 't' };
-    // Dentro de um evento as coisas empilham para longe do eixo: ligação em pé.
-    return dy < 0 ? { sourceHandle: 'ts', targetHandle: 'b' } : { sourceHandle: 'bs', targetHandle: 't' };
+  if (layout === 'timeline') {
+    // Do título, a ligação corre pelo eixo (sai pela direita dele), sobe ou
+    // desce pelo trilho do evento e entra no título do evento pela esquerda.
+    // Dentro do evento, desce pelo trilho da lista, como na matriz.
+    if (filho?.depth !== undefined && filho.depth >= 2) return { sourceHandle: 'bs', targetHandle: 'l' };
+    return { sourceHandle: 'rs', targetHandle: 'l' };
   }
   if (layout === 'fishbone' && pai && filho && filho.depth !== undefined) {
     // A costela sai da espinha dorsal (não do rótulo do efeito) e toca o
@@ -120,6 +126,8 @@ export function handlesDaLigacao(
       return { sourceHandle: 'ls', targetHandle: acima ? 'b' : 't' };
     }
     if (filho.depth === 2) return { sourceHandle: 'bs', targetHandle: 'r' };
+    // Mais fundo: a subcausa abre para trás, à esquerda da causa.
+    return { sourceHandle: 'ls', targetHandle: 'r' };
   }
   if (direcao === 'livre' && pai && filho) {
     const dx = (filho.x + filho.width / 2) - (pai.x + pai.width / 2);
@@ -522,6 +530,7 @@ export interface LayoutNode extends MindNode {
   side: 'left' | 'right';   // de que lado da raiz o nó está
   branchIndex: number;      // indice do ramo (filho da raiz) — define a cor
   costela?: Costela;        // só na espinha de peixe: a costela deste ramo
+  trilho?: number;          // só na matriz: x da linha que desce do pai até este nó
 }
 
 const H_GAP = 70;      // espaco horizontal entre niveis
@@ -530,18 +539,27 @@ const V_GAP = 18;      // espaco vertical entre siblings
 // e irmãos colados viram uma faixa contínua em vez de caixas.
 const ORG_NIVEL_GAP = 56;   // espaco vertical entre fileiras
 const ORG_IRMAO_GAP = 24;   // espaco horizontal entre irmaos
-const RADIAL_RAIO_1 = 150;  // distancia da ideia central ao primeiro anel
-const RADIAL_ANEL = 150;    // distancia entre aneis
-const TL_GAP = 48;          // vao entre eventos na linha do tempo
-const TL_AFASTA = 44;       // distancia do evento ate o eixo
-const FB_BONE_DX = 110;     // quanto a costela inclina para trás (na altura mínima)
-const FB_BONE_DY = 150;     // altura mínima da costela
+const RADIAL_RAIO_1 = 150;  // raio mínimo do primeiro anel
+const RADIAL_ANEL = 120;    // distância mínima entre anéis
+const RADIAL_VAO = 16;      // vão entre vizinhos no mesmo anel
+const RADIAL_VAO_ANEL = 44; // vão entre um anel e o seguinte (é por onde passa a linha)
+const RADIAL_LEQUE_MAX = (2 * Math.PI) / 3; // os filhos de um ramo abrem no máximo 120°
+const TL_GAP = 32;          // vão entre blocos do mesmo lado do eixo
+const TL_AFASTA = 28;       // do eixo até o bloco do evento
+const TL_PASSO = 64;        // distância mínima, no eixo, entre um evento e o seguinte
+const TL_TRILHO = 14;       // a linha sobe do eixo 14px à esquerda do título do evento
+const TL_INICIO = 48;       // do título até o primeiro evento (passa o botão "+")
+const FB_INCLINACAO = 0.6;   // quanto a costela recua por pixel de altura
 const FB_LINHA = 36;        // a linha deitada entre a causa e a costela
-const FB_CAUSA_GAP = 44;    // distância vertical entre causas na mesma costela
-const FB_PASSO_MIN = 220;   // distância mínima entre costelas do mesmo lado
-const FB_CABECA = 72;       // folga entre a última costela e a cabeça
-const MX_COL_GAP = 24;      // vao entre colunas da matriz
+const FB_FOLGA = 16;        // vão entre causas, e entre uma família e a vizinha
+const FB_LIVRE = 20;        // nada encosta na espinha dorsal
+const FB_ROTULO = 16;       // vão entre a causa mais afastada e o rótulo da família
+const FB_ALTURA_MIN = 120;  // costela mínima, mesmo sem causa nenhuma
+const FB_CABECA = 72;       // folga entre a última família e a cabeça
+const MX_COL_GAP = 32;      // vao entre colunas da matriz
 const MX_CEL_GAP = 10;      // vao entre celulas
+const MX_RECUO = 22;        // cada nível entra 22px na coluna
+const MX_TRILHO = 9;        // a linha desce a 9px da borda esquerda do pai
 
 // Estimativa pro primeiro paint, antes do React Flow medir. Curta o
 // suficiente pra nao "pular" demais quando a medida real chega.
@@ -673,147 +691,345 @@ function contarFolhas(ctx: LayoutCtx, nodeId: string): number {
   return n;
 }
 
+/** Alguma caixa encosta em outra (a menos de `folga` px)? */
+function haSobreposicao(nos: LayoutNode[], folga: number): boolean {
+  for (let i = 0; i < nos.length; i++) {
+    const a = nos[i];
+    for (let j = i + 1; j < nos.length; j++) {
+      const b = nos[j];
+      if (a.x < b.x + b.width + folga && a.x + a.width + folga > b.x && a.y < b.y + b.height + folga && a.y + a.height + folga > b.y) return true;
+    }
+  }
+  return false;
+}
+
+type Ponto = [number, number];
+
+function pontoDoHandle(n: CaixaDoNo, h: string): Ponto {
+  if (h[0] === 'l') return [n.x, n.y + n.height / 2];
+  if (h[0] === 'r') return [n.x + n.width, n.y + n.height / 2];
+  if (h[0] === 't') return [n.x + n.width / 2, n.y];
+  return [n.x + n.width / 2, n.y + n.height];
+}
+
+/** A curva que o MindEdge desenha (getBezierPath do React Flow, curvature 0.35), em pontos. */
+function pontosDaCurva(p: Ponto, ph: string, q: Ponto, qh: string, passos = 16): Ponto[] {
+  const desloc = (dist: number) => (dist >= 0 ? 0.5 * dist : 0.35 * 25 * Math.sqrt(-dist));
+  const controle = (a: Ponto, h: string, b: Ponto): Ponto => {
+    if (h[0] === 'l') return [a[0] - desloc(a[0] - b[0]), a[1]];
+    if (h[0] === 'r') return [a[0] + desloc(b[0] - a[0]), a[1]];
+    if (h[0] === 't') return [a[0], a[1] - desloc(a[1] - b[1])];
+    return [a[0], a[1] + desloc(b[1] - a[1])];
+  };
+  const c1 = controle(p, ph, q), c2 = controle(q, qh, p);
+  const pts: Ponto[] = [];
+  for (let i = 0; i <= passos; i++) {
+    const t = i / passos, u = 1 - t;
+    pts.push([u * u * u * p[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t * t * t * q[0],
+              u * u * u * p[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t * t * t * q[1]]);
+  }
+  return pts;
+}
+
+/** O segmento a→b entra na caixa (aumentada de `folga`)? Recorte de Liang–Barsky. */
+function segmentoEntra(a: Ponto, b: Ponto, c: CaixaDoNo, folga: number): boolean {
+  const x0 = c.x - folga, x1 = c.x + c.width + folga, y0 = c.y - folga, y1 = c.y + c.height + folga;
+  let t0 = 0, t1 = 1;
+  const dx = b[0] - a[0], dy = b[1] - a[1];
+  for (const [pp, qq] of [[-dx, a[0] - x0], [dx, x1 - a[0]], [-dy, a[1] - y0], [dy, y1 - a[1]]]) {
+    if (pp === 0) { if (qq < 0) return false; continue; }
+    const t = qq / pp;
+    if (pp < 0) { if (t > t1) return false; if (t > t0) t0 = t; } else { if (t < t0) return false; if (t < t1) t1 = t; }
+  }
+  return t0 <= t1;
+}
+
+/** Alguma ligação do radial passa por cima de uma caixa que não é das pontas dela? */
+function radialLinhaSobreCaixa(nos: LayoutNode[]): boolean {
+  const porId = new Map(nos.map(n => [n.id, n]));
+  for (const n of nos) {
+    const pai = n.parentId ? porId.get(n.parentId) : undefined;
+    if (!pai) continue;
+    const { sourceHandle, targetHandle } = handlesDaLigacao('radial', n.side, pai, n);
+    const pts = pontosDaCurva(pontoDoHandle(pai, sourceHandle), sourceHandle, pontoDoHandle(n, targetHandle), targetHandle);
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const [x, y] of pts) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
+    for (const m of nos) {
+      if (m.id === n.id || m.id === pai.id) continue;
+      if (m.x - 4 > maxX || m.x + m.width + 4 < minX || m.y - 4 > maxY || m.y + m.height + 4 < minY) continue;
+      for (let k = 1; k < pts.length; k++) if (segmentoEntra(pts[k - 1], pts[k], m, 4)) return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Radial: cada ramo ocupa uma fatia do círculo proporcional às folhas que
  * tem, e a subárvore cresce para fora dentro dessa fatia. É o mapa mental
  * "de livro", o que o XMind chama de map e o MindMeister de radial.
+ *
+ * O raio de cada anel NÃO é fixo: é o menor em que todo nó daquele nível cabe
+ * na sua fatia (a largura que a caixa ocupa ao longo do círculo, naquele
+ * ângulo) e fica afastado do anel de dentro. Um nó comprido no alto do
+ * círculo, onde a largura dele corre ao longo do anel, empurra o anel para
+ * fora. Se ainda assim alguma caixa encostar — a conta usa a corda da fatia,
+ * que é aproximada perto das bordas — ou alguma ligação passar por cima de
+ * uma caixa (num leque largo, a curva até o filho da ponta raspa no irmão do
+ * meio), o desenho todo abre 10% e tenta de novo: com as caixas do mesmo
+ * tamanho e as distâncias maiores, tudo se solta.
  */
-function placeRadial(ctx: LayoutCtx, nodeId: string, angulo: number, abertura: number, depth: number, branchIndex: number, raio1: number): void {
-  const node = ctx.data.nodes[nodeId];
-  if (!node) return;
-  const { width, height } = ctx.sizeOf(nodeId);
-  const r = raio1 + (depth - 1) * RADIAL_ANEL;
-  const cx = Math.cos(angulo) * r;
-  const cy = Math.sin(angulo) * r;
-  ctx.out.push({
-    ...node, x: cx - width / 2, y: cy - height / 2, width, height, depth,
-    side: Math.cos(angulo) < 0 ? 'left' : 'right', branchIndex,
-  });
-  if (node.collapsed) return;
-  const children = getChildren(ctx.data, nodeId);
-  if (children.length === 0) return;
-  const pesos = children.map(c => contarFolhas(ctx, c.id));
-  const total = pesos.reduce((a, b) => a + b, 0);
-  let inicio = angulo - abertura / 2;
-  for (let i = 0; i < children.length; i++) {
-    const fatia = abertura * (pesos[i] / total);
-    placeRadial(ctx, children[i].id, inicio + fatia / 2, fatia, depth + 1, branchIndex, raio1);
-    inicio += fatia;
+function placeRadialMap(ctx: LayoutCtx, children: MindNode[], rootSize: NodeSize): void {
+  interface Fatia { node: MindNode; angulo: number; abertura: number; depth: number; branchIndex: number }
+  let fatias: Fatia[] = [];
+  // Quanto do anel um nó ocupa naquele ângulo: no alto e embaixo do círculo
+  // a largura corre ao longo do anel; nas laterais, só a altura.
+  const ocupa = (id: string, angulo: number) => {
+    const { width, height } = ctx.sizeOf(id);
+    return width * Math.abs(Math.sin(angulo)) + height * Math.abs(Math.cos(angulo)) + RADIAL_VAO;
+  };
+  // Peso de cada subárvore na divisão do ângulo. A primeira passada divide
+  // por folhas (ainda não se sabe onde cada nó vai cair); as seguintes, pelo
+  // que cada nó ocupa no ângulo em que caiu na passada anterior — um tópico
+  // comprido no alto do círculo ganha mais ângulo, um na lateral, menos, e o
+  // anel fica do tamanho que o conteúdo pede, não do pior caso.
+  let anguloAnterior: Map<string, number> | null = null;
+  const peso = (c: MindNode): number => {
+    if (!anguloAnterior) return contarFolhas(ctx, c.id);
+    const proprio = ocupa(c.id, anguloAnterior.get(c.id) ?? 0);
+    const filhos = c.collapsed ? [] : getChildren(ctx.data, c.id);
+    if (filhos.length === 0) return proprio;
+    return Math.max(proprio, filhos.reduce((a, f) => a + peso(f), 0));
+  };
+  const repartir = (filhos: MindNode[], inicio: number, abertura: number, depth: number, branch: number | null) => {
+    const pesos = filhos.map(peso);
+    const total = pesos.reduce((a, b) => a + b, 0) || 1;
+    let a = inicio;
+    filhos.forEach((c, i) => {
+      const fatia = abertura * (pesos[i] / total);
+      const b = branch ?? i;
+      const angulo = a + fatia / 2;
+      fatias.push({ node: c, angulo, abertura: fatia, depth, branchIndex: b });
+      // Os filhos abrem num leque de no máximo 120° em volta do pai. Um ramo
+      // sozinho ganhava o círculo inteiro e os filhos dele davam a volta por
+      // trás da ideia central, com a linha atravessando-a.
+      const leque = Math.min(fatia, RADIAL_LEQUE_MAX);
+      if (!c.collapsed) repartir(getChildren(ctx.data, c.id), angulo - leque / 2, leque, depth + 1, b);
+      a += fatia;
+    });
+  };
+  for (let passada = 0; passada < 4; passada++) {
+    fatias = [];
+    repartir(children, -Math.PI / 2, 2 * Math.PI, 1, null);
+    anguloAnterior = new Map(fatias.map(f => [f.node.id, f.angulo]));
   }
+
+  const medida = (f: Fatia) => {
+    const { width, height } = ctx.sizeOf(f.node.id);
+    const sin = Math.abs(Math.sin(f.angulo)), cos = Math.abs(Math.cos(f.angulo));
+    // Quanto a caixa ocupa ao longo do anel e na direção do centro.
+    return { width, height, aoLongo: width * sin + height * cos, paraFora: width * cos + height * sin };
+  };
+  const profundidade = Math.max(...fatias.map(f => f.depth));
+  const raios: number[] = [0];
+  let maiorParaFora = 0;
+  for (let d = 1; d <= profundidade; d++) {
+    let r = d === 1 ? RADIAL_RAIO_1 : raios[d - 1] + RADIAL_ANEL;
+    let maiorAqui = 0;
+    for (const f of fatias) {
+      if (f.depth !== d) continue;
+      const m = medida(f);
+      maiorAqui = Math.max(maiorAqui, m.paraFora);
+      if (f.abertura < Math.PI) r = Math.max(r, (m.aoLongo + RADIAL_VAO) / (2 * Math.sin(f.abertura / 2)) + m.paraFora / 2);
+      if (d === 1) {
+        // Fora da raiz e do botão "+" que fica ao lado dela.
+        const raiz = ((rootSize.width + 80) * Math.abs(Math.cos(f.angulo)) + rootSize.height * Math.abs(Math.sin(f.angulo))) / 2;
+        r = Math.max(r, raiz + m.paraFora / 2 + RADIAL_VAO_ANEL);
+      }
+    }
+    if (d > 1) r = Math.max(r, raios[d - 1] + maiorParaFora / 2 + maiorAqui / 2 + RADIAL_VAO_ANEL);
+    raios.push(r);
+    maiorParaFora = maiorAqui;
+  }
+
+  let escala = 1;
+  let colocados: LayoutNode[] = [];
+  for (let tentativa = 0; tentativa < 16; tentativa++) {
+    colocados = fatias.map(f => {
+      const { width, height } = ctx.sizeOf(f.node.id);
+      const r = raios[f.depth] * escala;
+      const cx = Math.cos(f.angulo) * r, cy = Math.sin(f.angulo) * r;
+      return {
+        ...f.node, x: cx - width / 2, y: cy - height / 2, width, height, depth: f.depth,
+        side: Math.cos(f.angulo) < 0 ? 'left' as const : 'right' as const, branchIndex: f.branchIndex,
+      };
+    });
+    const todos = [ctx.out[0], ...colocados];
+    if (!haSobreposicao(todos, 6) && !radialLinhaSobreCaixa(todos)) break;
+    escala *= 1.1;
+  }
+  ctx.out.push(...colocados);
 }
 
 /**
- * Linha do tempo: a raiz é o título à esquerda, os ramos são os eventos em
- * ordem, da esquerda para a direita, alternando acima e abaixo de um eixo.
- * O que está dentro de cada evento se afasta do eixo em coluna.
+ * Linha do tempo: o título à esquerda, um eixo saindo dele para a direita, e
+ * os eventos em ordem ao longo do eixo, alternando acima e abaixo. Cada
+ * evento é um bloco — o título do evento e, embaixo dele, a lista do que tem
+ * dentro, recuada e ligada por um trilho, como na matriz. A ligação do eixo
+ * sobe (ou desce) por um trilho à esquerda do bloco e entra no título.
+ *
+ * O desenho se adapta ao conteúdo: cada bloco mede a largura e a altura que
+ * tem; acima e abaixo do eixo nunca se encostam, então o evento seguinte
+ * pode começar logo depois do anterior (o eixo não fica comprido à toa), e
+ * só precisa passar do último bloco do MESMO lado.
  */
 function placeTimeline(ctx: LayoutCtx, children: MindNode[], rootRightX: number): void {
-  let cursor = rootRightX + 90;
-  for (let i = 0; i < children.length; i++) {
-    const colW = measureSubtreeWidth(ctx, children[i].id);
-    const acima = i % 2 === 0;
-    placeColuna(ctx, children[i].id, cursor + colW / 2, acima ? -TL_AFASTA : TL_AFASTA, acima ? -1 : 1, 1, i);
-    cursor += colW + TL_GAP;
-  }
-}
-
-/** Uma coluna que cresce num sentido vertical (−1 sobe, +1 desce). */
-function placeColuna(ctx: LayoutCtx, nodeId: string, centerX: number, bordaY: number, sentido: -1 | 1, depth: number, branchIndex: number): void {
-  const node = ctx.data.nodes[nodeId];
-  if (!node) return;
-  const { width, height } = ctx.sizeOf(nodeId);
-  const y = sentido < 0 ? bordaY - height : bordaY;
-  ctx.out.push({ ...node, x: centerX - width / 2, y, width, height, depth, side: 'right', branchIndex });
-  if (node.collapsed) return;
-  const children = getChildren(ctx.data, nodeId);
-  if (children.length === 0) return;
-  const widths = children.map(c => measureSubtreeWidth(ctx, c.id));
-  const total = widths.reduce((a, w) => a + w, 0) + (children.length - 1) * ORG_IRMAO_GAP;
-  let cursor = centerX - total / 2;
-  const proximaBorda = sentido < 0 ? y - 28 : y + height + 28;
-  for (let i = 0; i < children.length; i++) {
-    placeColuna(ctx, children[i].id, cursor + widths[i] / 2, proximaBorda, sentido, depth + 1, branchIndex);
-    cursor += widths[i] + ORG_IRMAO_GAP;
-  }
+  const blocos = children.map((c, i) => {
+    const pecas: LayoutNode[] = [];
+    let y = 0, largura = 0;
+    const empilhar = (id: string, recuo: number, depth: number, trilho: number) => {
+      const n = ctx.data.nodes[id]; if (!n) return;
+      const { width, height } = ctx.sizeOf(id);
+      pecas.push({ ...n, x: recuo, y, width, height, depth, side: 'right', branchIndex: i, trilho });
+      largura = Math.max(largura, recuo + width);
+      y += height + MX_CEL_GAP;
+      if (!n.collapsed) for (const f of getChildren(ctx.data, id)) empilhar(f.id, recuo + MX_RECUO, depth + 1, recuo + MX_TRILHO);
+    };
+    empilhar(c.id, 0, 1, -TL_TRILHO);
+    return { pecas, largura, altura: y - MX_CEL_GAP };
+  });
+  const fimDoLado: Record<-1 | 1, number> = { [-1]: -Infinity, [1]: -Infinity };
+  let anterior = -Infinity;
+  blocos.forEach((b, i) => {
+    const s: -1 | 1 = i % 2 === 0 ? -1 : 1;
+    const esquerda = Math.max(rootRightX + TL_INICIO + TL_TRILHO, fimDoLado[s] + TL_GAP + TL_TRILHO, anterior + TL_PASSO);
+    const topo = s < 0 ? -TL_AFASTA - b.altura : TL_AFASTA;
+    for (const p of b.pecas) { p.x += esquerda; p.y += topo; if (p.trilho !== undefined) p.trilho += esquerda; }
+    fimDoLado[s] = esquerda + b.largura;
+    anterior = esquerda;
+    ctx.out.push(...b.pecas);
+  });
 }
 
 /**
  * Espinha de peixe (Ishikawa): o efeito é a cabeça, à direita; uma espinha
  * dorsal sai dela para a esquerda; as famílias de causa são costelas que
  * saem da dorsal inclinadas para trás, alternando em cima e embaixo; cada
- * causa pendura ao longo da sua costela, ligada a ela por uma linha deitada.
+ * causa pendura ao longo da sua costela, ligada a ela por uma linha deitada,
+ * e o que estiver dentro da causa abre para trás, à esquerda dela.
+ *
+ * Nada aqui tem medida fixa — o desenho se adapta ao que tem dentro:
+ * - a costela tem a altura que as causas da família mais cheia daquele lado
+ *   pedem (as famílias do mesmo lado ficam com o rótulo na mesma linha);
+ * - cada família é montada inteira com o encaixe em x = 0, e só depois é
+ *   encaixada: a família seguinte vai para a direita até nenhuma caixa dela
+ *   encostar na costela ou nas caixas da anterior, e vice-versa;
+ * - em cima e embaixo não se encostam (a dorsal separa), então o par de
+ *   famílias divide o mesmo encaixe, como no diagrama clássico.
  * A geometria fica em `costela` nos nós, e o MindEdge desenha a partir dela.
  */
 function placeFishbone(ctx: LayoutCtx, children: MindNode[], rootLeftX: number): void {
-  const pares = Math.ceil(children.length / 2);
-  // Cada costela precisa de espaço para as causas que penduram à esquerda
-  // dela (largura mais a linha deitada), e o rótulo da família também não
-  // pode invadir a costela vizinha do mesmo lado.
-  let passo = FB_PASSO_MIN;
-  let maisCausas = 0;
-  for (const c of children) {
-    passo = Math.max(passo, ctx.sizeOf(c.id).width + 24);
-    const causas = c.collapsed ? [] : getChildren(ctx.data, c.id);
-    maisCausas = Math.max(maisCausas, causas.length);
-    for (const f of causas) passo = Math.max(passo, ctx.sizeOf(f.id).width + FB_LINHA + 32);
-  }
-  // A costela cresce com o número de causas, para elas não se empilharem.
-  const altura = Math.max(FB_BONE_DY, (maisCausas + 1) * FB_CAUSA_GAP + 40);
-  const inclinacao = Math.round(altura * FB_BONE_DX / FB_BONE_DY);
-  const costelas: Costela[] = [];
-  for (let i = 0; i < children.length; i++) {
-    const k = Math.floor(i / 2);
-    const sinal: -1 | 1 = i % 2 === 0 ? -1 : 1;
-    // A primeira família fica mais atrás; as seguintes avançam para a cabeça.
-    const encaixeX = rootLeftX - FB_CABECA - passo * (pares - 1 - k);
-    const { height } = ctx.sizeOf(children[i].id);
-    const centroX = encaixeX - inclinacao;
-    const centroY = sinal * altura;
-    const costela: Costela = { encaixeX, encaixeY: 0, pontaX: centroX, pontaY: centroY - sinal * height / 2, caudaX: 0 };
-    costelas.push(costela);
-    placeEspinha(ctx, children[i].id, centroX, centroY, costela, 1, i);
-  }
-  // A espinha dorsal vai da cabeça até um pouco depois do que estiver mais atrás.
-  const xs = ctx.out.filter(n => n.depth > 0).map(n => n.x);
-  const caudaX = xs.length ? Math.round(Math.min(...xs) - 24) : rootLeftX - FB_CABECA;
-  for (const c of costelas) c.caudaX = caudaX;
-}
+  const sinalDe = (i: number): -1 | 1 => (i % 2 === 0 ? -1 : 1);
+  const causasDe = children.map(c => (c.collapsed ? [] : getChildren(ctx.data, c.id)).map(f => ({ node: f, altura: measureSubtree(ctx, f.id) })));
+  const usado = causasDe.map(l => l.reduce((a, x) => a + x.altura, 0) + Math.max(0, l.length - 1) * FB_FOLGA);
+  const alturaDoLado: Record<-1 | 1, number> = { [-1]: FB_ALTURA_MIN, [1]: FB_ALTURA_MIN };
+  children.forEach((_, i) => {
+    const s = sinalDe(i);
+    alturaDoLado[s] = Math.max(alturaDoLado[s], FB_LIVRE + usado[i] + FB_ROTULO);
+  });
+  const costelaX = (d: number) => -FB_INCLINACAO * d;
 
-function placeEspinha(ctx: LayoutCtx, nodeId: string, centroX: number, centroY: number, costela: Costela, depth: number, branchIndex: number): void {
-  const node = ctx.data.nodes[nodeId];
-  if (!node) return;
-  const { width, height } = ctx.sizeOf(nodeId);
-  ctx.out.push({ ...node, x: centroX - width / 2, y: centroY - height / 2, width, height, depth, side: 'left', branchIndex, costela });
-  if (node.collapsed) return;
-  const children = getChildren(ctx.data, nodeId);
-  if (children.length === 0) return;
-  if (depth === 1) {
-    // As causas penduram ao longo da costela, da ponta (junto ao rótulo) ao
-    // encaixe na dorsal, cada uma com a borda direita a FB_LINHA da costela.
-    for (let j = 0; j < children.length; j++) {
-      const t = (j + 1) / (children.length + 1);
-      const px = costela.pontaX + (costela.encaixeX - costela.pontaX) * t;
-      const py = costela.pontaY + (costela.encaixeY - costela.pontaY) * t;
-      const w = ctx.sizeOf(children[j].id).width;
-      placeEspinha(ctx, children[j].id, px - FB_LINHA - w / 2, py, costela, depth + 1, branchIndex);
+  // 1. Cada família montada sozinha, com o encaixe na dorsal em x = 0.
+  const familias = children.map((c, i) => {
+    const s = sinalDe(i);
+    const r = alturaDoLado[s];
+    const pecas: LayoutNode[] = [];
+    const sub: LayoutCtx = { data: ctx.data, sizeOf: ctx.sizeOf, out: pecas };
+    const costela: Costela = { encaixeX: 0, encaixeY: 0, pontaX: costelaX(r), pontaY: s * r, caudaX: 0 };
+    const rotulo = ctx.sizeOf(c.id);
+    pecas.push({ ...c, x: costela.pontaX - rotulo.width / 2, y: s < 0 ? -r - rotulo.height : r, width: rotulo.width, height: rotulo.height, depth: 1, side: 'left', branchIndex: i, costela });
+    // As causas se espalham pela costela: a primeira junto do rótulo, a
+    // última junto da dorsal, e a sobra de altura dividida entre elas.
+    const lista = causasDe[i];
+    const sobra = lista.length ? (r - FB_ROTULO - FB_LIVRE - usado[i]) / (lista.length + 1) : 0;
+    let d = FB_LIVRE + sobra;
+    for (let j = lista.length - 1; j >= 0; j--) {
+      const centro = d + lista[j].altura / 2;
+      const inicio = pecas.length;
+      placeSubtree(sub, lista[j].node.id, costelaX(centro) - FB_LINHA + H_GAP, s * centro, 2, 'left', i);
+      // Se alguma caixa da causa (ou do que está dentro dela) passar da
+      // costela — a costela recua conforme se afasta da dorsal —, o bloco
+      // inteiro vai para a esquerda.
+      let empurra = 0;
+      for (let k = inicio; k < pecas.length; k++) {
+        const p = pecas[k];
+        const longe = s < 0 ? -p.y : p.y + p.height;
+        empurra = Math.max(empurra, p.x + p.width + 8 - costelaX(Math.min(longe, r)));
+      }
+      for (let k = inicio; k < pecas.length; k++) { pecas[k].x -= empurra; pecas[k].costela = costela; }
+      d += lista[j].altura + FB_FOLGA + sobra;
     }
-    return;
+    return { pecas, costela, s, r };
+  });
+
+  // 2. Quanto a família B precisa ficar à direita da família A (mesmo lado).
+  const faixa = (p: LayoutNode, s: -1 | 1): [number, number] => (s < 0 ? [-(p.y + p.height), -p.y] : [p.y, p.y + p.height]);
+  const distancia = (A: typeof familias[number], B: typeof familias[number]): number => {
+    const { s, r } = A;
+    let minimo = 60;
+    for (const n of A.pecas) {
+      const [n0, n1] = faixa(n, s);
+      // n à esquerda da costela de B.
+      if (n0 <= r) minimo = Math.max(minimo, n.x + n.width + FB_FOLGA - costelaX(Math.min(n1, r)));
+      for (const m of B.pecas) {
+        const [m0, m1] = faixa(m, s);
+        // n e m na mesma altura: m à direita de n.
+        if (m0 < n1 + FB_FOLGA && n0 < m1 + FB_FOLGA) minimo = Math.max(minimo, n.x + n.width + FB_FOLGA - m.x);
+      }
+    }
+    // m à direita da costela de A.
+    for (const m of B.pecas) {
+      const [m0] = faixa(m, s);
+      if (m0 <= r) minimo = Math.max(minimo, costelaX(Math.max(0, m0)) + FB_FOLGA - m.x);
+    }
+    return minimo;
+  };
+
+  // 3. Pares (em cima, embaixo) dividem o encaixe; da cauda para a cabeça.
+  //    O par anda o que a família mais exigente dele pedir.
+  const encaixes = children.map(() => 0);
+  for (let k = 1; 2 * k < children.length; k++) {
+    const cima = 2 * k, baixo = 2 * k + 1;
+    let x = encaixes[cima - 2] + distancia(familias[cima - 2], familias[cima]);
+    if (baixo < children.length) x = Math.max(x, encaixes[baixo - 2] + distancia(familias[baixo - 2], familias[baixo]));
+    encaixes[cima] = x;
+    if (baixo < children.length) encaixes[baixo] = x;
   }
-  // Mais fundo que a causa: abre para trás, como um mapa deitado para a esquerda.
-  const x = centroX - width / 2;
-  const heights = children.map(c => measureSubtree(ctx, c.id));
-  const totalH = heights.reduce((a, h) => a + h, 0) + (children.length - 1) * V_GAP;
-  let cursor = centroY - totalH / 2;
-  for (let i = 0; i < children.length; i++) {
-    placeSubtree(ctx, children[i].id, x, cursor + heights[i] / 2, depth + 1, 'left', branchIndex);
-    cursor += heights[i] + V_GAP;
-  }
+
+  // 4. Tudo para o lugar: o que estiver mais à direita fica a FB_CABECA da cabeça.
+  let maisADireita = -Infinity;
+  familias.forEach((f, i) => {
+    maisADireita = Math.max(maisADireita, encaixes[i]);
+    for (const p of f.pecas) maisADireita = Math.max(maisADireita, encaixes[i] + p.x + p.width);
+  });
+  const desloca = rootLeftX - FB_CABECA - maisADireita;
+  let maisAEsquerda = Infinity;
+  familias.forEach((f, i) => {
+    const dx = encaixes[i] + desloca;
+    f.costela.encaixeX += dx; f.costela.pontaX += dx;
+    for (const p of f.pecas) { p.x += dx; maisAEsquerda = Math.min(maisAEsquerda, p.x); }
+    maisAEsquerda = Math.min(maisAEsquerda, f.costela.pontaX);
+    ctx.out.push(...f.pecas);
+  });
+  // A dorsal vai da cabeça até um pouco depois do que estiver mais atrás.
+  const caudaX = Math.round(maisAEsquerda - 28);
+  for (const f of familias) f.costela.caudaX = caudaX;
 }
 
 /**
  * Matriz: a raiz é o título; cada ramo é uma coluna com o cabeçalho em cima
- * e o que ele contém empilhado embaixo. O que está mais fundo entra na
- * mesma coluna, recuado — uma SWOT, por exemplo, vira quatro colunas.
+ * e o que ele contém empilhado embaixo, cada nível recuado. A ligação desce
+ * por um trilho à esquerda e entra na célula pelo lado — passar pelo meio
+ * da coluna, como o cotovelo fazia, riscava o texto das células de cima.
  */
 function placeMatrix(ctx: LayoutCtx, children: MindNode[], topoY: number): void {
   const larguras = children.map(c => {
@@ -821,7 +1037,7 @@ function placeMatrix(ctx: LayoutCtx, children: MindNode[], topoY: number): void 
     const visitar = (id: string, recuo: number) => {
       const n = ctx.data.nodes[id]; if (!n) return;
       w = Math.max(w, ctx.sizeOf(id).width + recuo);
-      if (!n.collapsed) for (const f of getChildren(ctx.data, id)) visitar(f.id, recuo + (id === c.id ? 0 : 16));
+      if (!n.collapsed) for (const f of getChildren(ctx.data, id)) visitar(f.id, recuo + MX_RECUO);
     };
     visitar(c.id, 0);
     return w;
@@ -831,14 +1047,14 @@ function placeMatrix(ctx: LayoutCtx, children: MindNode[], topoY: number): void 
   for (let i = 0; i < children.length; i++) {
     const esquerda = cursor;
     let y = topoY;
-    const empilhar = (id: string, recuo: number, depth: number) => {
+    const empilhar = (id: string, recuo: number, depth: number, trilho: number | undefined) => {
       const n = ctx.data.nodes[id]; if (!n) return;
       const { width, height } = ctx.sizeOf(id);
-      ctx.out.push({ ...n, x: esquerda + recuo, y, width, height, depth, side: 'right', branchIndex: i });
+      ctx.out.push({ ...n, x: esquerda + recuo, y, width, height, depth, side: 'right', branchIndex: i, ...(trilho !== undefined ? { trilho } : {}) });
       y += height + MX_CEL_GAP;
-      if (!n.collapsed) for (const f of getChildren(ctx.data, id)) empilhar(f.id, recuo + (depth === 1 ? 0 : 16), depth + 1);
+      if (!n.collapsed) for (const f of getChildren(ctx.data, id)) empilhar(f.id, recuo + MX_RECUO, depth + 1, esquerda + recuo + MX_TRILHO);
     };
-    empilhar(children[i].id, 0, 1);
+    empilhar(children[i].id, 0, 1, undefined);
     cursor += larguras[i] + MX_COL_GAP;
   }
 }
@@ -880,21 +1096,7 @@ export function layoutMindMap(
   const layoutMode = data.layout || 'map';
 
   if (layoutMode === 'radial') {
-    const pesos = children.map(c => contarFolhas(ctx, c.id));
-    const total = pesos.reduce((a, b) => a + b, 0);
-    // O primeiro anel começa fora da raiz E fora do botão "+" que fica ao lado
-    // dela — com raio fixo, uma ideia central comprida engolia o primeiro ramo.
-    // Cada nó fica CENTRADO no seu ponto do anel, então o ramo que cai na
-    // horizontal precisa de meia largura dele própria, mais meia da raiz, mais
-    // o botão, para não encostar.
-    const maisLargo = Math.max(...children.map(c => ctx.sizeOf(c.id).width));
-    const raio1 = Math.max(RADIAL_RAIO_1, rootSize.width / 2 + maisLargo / 2 + 56);
-    let inicio = -Math.PI / 2;
-    for (let i = 0; i < children.length; i++) {
-      const fatia = (2 * Math.PI) * (pesos[i] / total);
-      placeRadial(ctx, children[i].id, inicio + fatia / 2, fatia, 1, i, raio1);
-      inicio += fatia;
-    }
+    placeRadialMap(ctx, children, rootSize);
     return out;
   }
 

@@ -18,7 +18,7 @@ import '@xyflow/react/dist/style.css';
 import { ExternalLink, Link2, Paperclip, StickyNote, X } from 'lucide-react';
 import { MindNode, type MindNodeData } from './MindNode';
 import { MindEdge } from './MindEdge';
-import { colorForNode, getChildren, layoutMindMap, sanitizeMap, type LayoutNode, type MapaMentalData, type NodeSize, type Theme, handlesDaLigacao, ehOrganograma, direcaoDoLayout, estiloDaLigacao } from '@/lib/mapa-mental';
+import { colorForNode, getChildren, layoutMindMap, sanitizeMap, type LayoutNode, type MapaMentalData, type NodeSize, type Theme, handlesDaLigacao, ehOrganograma, direcaoDoLayout, estiloDaLigacao, semBolinhas } from '@/lib/mapa-mental';
 
 const nodeTypes: NodeTypes = { mindNode: MindNode };
 const edgeTypes: EdgeTypes = { mind: MindEdge };
@@ -110,7 +110,7 @@ function ReadonlyMindMapInner({ mapa }: { mapa: MapaMentalData }) {
         shape: node.style?.shape ?? (ehOrganograma(visibleData.layout) ? 'rounded' : undefined),
         bold: node.style?.bold,
         vertical: direcaoDoLayout(visibleData.layout) === 'vertical',
-        livre: direcaoDoLayout(visibleData.layout) === 'livre',
+        semBolinhas: semBolinhas(visibleData.layout),
         onCommitEdit: noop,
         onCancelEdit: noop,
         onStartEdit: noop,
@@ -146,7 +146,7 @@ function ReadonlyMindMapInner({ mapa }: { mapa: MapaMentalData }) {
         sourceHandle,
         targetHandle,
         type: 'mind',
-        data: { color: colorOf(node), estilo: estiloDaLigacao(visibleData.layout), nivel: node.depth, costela: node.costela },
+        data: { color: colorOf(node), estilo: estiloDaLigacao(visibleData.layout), nivel: node.depth, costela: node.costela, trilho: node.trilho },
       });
     }
     return { nodes: flowNodes, edges: flowEdges };

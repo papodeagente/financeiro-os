@@ -13,7 +13,7 @@ export function MindEdge(props: EdgeProps) {
     sourcePosition, targetPosition, data,
   } = props;
 
-  const d = data as { color?: string; faded?: boolean; estilo?: 'curva' | 'cotovelo' | 'espinha'; nivel?: number; costela?: Costela } | undefined;
+  const d = data as { color?: string; faded?: boolean; estilo?: 'curva' | 'cotovelo' | 'espinha' | 'trilho'; nivel?: number; costela?: Costela; trilho?: number } | undefined;
   const color = d?.color || 'var(--fin-accent)';
   const traco = {
     stroke: color,
@@ -53,10 +53,33 @@ export function MindEdge(props: EdgeProps) {
     return <BaseEdge path={reta} style={traco} />;
   }
 
+  // Matriz e linha do tempo: a linha corre por um trilho à esquerda da
+  // lista (no x que o layout deu) e dobra para entrar no nó pelo lado. As
+  // irmãs dividem o mesmo trilho; opaca, a parte comum não escurece onde se
+  // sobrepõe. Na linha do tempo, a ligação do título para o evento leva
+  // junto o trecho do eixo, em cinza — todos os eventos desenham o mesmo eixo.
+  if (d?.estilo === 'trilho' && d.trilho !== undefined) {
+    const x = d.trilho;
+    const sentido = targetY >= sourceY ? 1 : -1;
+    const raio = Math.max(0, Math.min(8, Math.abs(targetY - sourceY) / 2, (targetX - x) / 2));
+    const path = `M ${x} ${sourceY} V ${targetY - sentido * raio} Q ${x} ${targetY} ${x + raio} ${targetY} H ${targetX}`;
+    const linha = <BaseEdge path={path} style={{ ...traco, opacity: d.faded ? 0.25 : 1 }} />;
+    if (d.nivel !== 1) return linha;
+    return (
+      <>
+        <BaseEdge
+          path={`M ${sourceX} ${sourceY} H ${x}`}
+          style={{ stroke: 'var(--fin-border-strong)', strokeWidth: 2.5, fill: 'none', strokeLinecap: 'round', opacity: 1 }}
+        />
+        {linha}
+      </>
+    );
+  }
+
   // Dois traços, dois significados. Cotovelo (dobra de 90°) diz hierarquia:
   // organograma, matriz, linha do tempo. Curva diz associação: o mapa mental.
   // Quem escolhe é estiloDaLigacao, no modelo.
-  const [edgePath] = d?.estilo === 'cotovelo'
+  const [edgePath] = d?.estilo === 'cotovelo' || d?.estilo === 'trilho'
     ? getSmoothStepPath({ ...geom, borderRadius: 8 })
     : getBezierPath({ ...geom, curvature: 0.35 });
 

@@ -23,7 +23,7 @@ export interface MindNodeData extends Record<string, unknown> {
   /** Organograma de cima para baixo: handles em cima/embaixo, "+" embaixo. */
   vertical?: boolean;
   /** Radial, linha do tempo e espinha: a ligação sai do lado que encara o pai. */
-  livre?: boolean;
+  semBolinhas?: boolean;
   icon?: string;
   hasNotes?: boolean;
   /** Renderiza o conteúdo sem ações de criação ou edição. */
@@ -139,15 +139,15 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
   };
 
   const vertical = !!data.vertical;
-  const livre = !!data.livre;
+  const semBolinhas = !!data.semBolinhas;
   // Todo nó tem saída e entrada nos QUATRO lados, para qualquer layout poder
   // ligar por qualquer lado. Só os lados que o layout usa mostram a bolinha;
   // os outros ficam invisíveis mas funcionais — saída e entrada do mesmo lado
-  // ocupam o mesmo ponto, então nunca aparece bolinha a mais. Nos layouts
-  // livres (radial, linha do tempo, espinha) a ligação chega por qualquer
-  // lado, e quatro bolinhas por nó viravam ruído: lá não aparece nenhuma.
+  // ocupam o mesmo ponto, então nunca aparece bolinha a mais. No radial, na
+  // linha do tempo, na espinha e na matriz a ligação chega por qualquer lado
+  // ou corre por trilho/costela, e as bolinhas viravam ruído: lá não há nenhuma.
   const ladoVisivel = (lado: 'l' | 'r' | 't' | 'b'): boolean =>
-    livre ? false : vertical ? (lado === 't' || lado === 'b') : (lado === 'l' || lado === 'r');
+    semBolinhas ? false : vertical ? (lado === 't' || lado === 'b') : (lado === 'l' || lado === 'r');
   const estiloHandle = (lado: 'l' | 'r' | 't' | 'b') =>
     ladoVisivel(lado) ? bulletHandle(color) : { ...bulletHandle(color), opacity: 0 };
 

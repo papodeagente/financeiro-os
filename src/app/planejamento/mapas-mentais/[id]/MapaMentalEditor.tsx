@@ -43,7 +43,7 @@ import { ShareMapDialog } from '@/components/mapa-mental/ShareMapDialog';
 import { baixarMapaMentalPdf, exportarMapaMentalPdf } from '@/lib/mapa-mental-pdf';
 import { useAuth } from '@/contexts/AuthContext';
 import { podeExportar } from '@/lib/permissoes';
-import { type MapaMentalData, type Theme, type NodeSize, type LayoutNode, layoutMindMap, colorForNode, addChild, addSibling, updateNode, removeNode, moveNode, reorderNode, outdentNode, sanitizeMap, getChildren, getDescendantIds, createMindMap, newId, THEMES, NODE_COLORS, handlesDaLigacao, ehOrganograma, direcaoDoLayout, type MapaLayout, estiloDaLigacao, eixoDeIrmaos } from '@/lib/mapa-mental';
+import { type MapaMentalData, type Theme, type NodeSize, type LayoutNode, layoutMindMap, colorForNode, addChild, addSibling, updateNode, removeNode, moveNode, reorderNode, outdentNode, sanitizeMap, getChildren, getDescendantIds, createMindMap, newId, THEMES, NODE_COLORS, handlesDaLigacao, ehOrganograma, direcaoDoLayout, type MapaLayout, estiloDaLigacao, eixoDeIrmaos, semBolinhas } from '@/lib/mapa-mental';
 
 const nodeTypes: NodeTypes = { mindNode: MindNode };
 const edgeTypes: EdgeTypes = { mind: MindEdge };
@@ -663,7 +663,6 @@ function EditorInner({ id }: Props) {
     if (!drag) return null;
     const cx = x + drag.width / 2;
     const cy = y + drag.height / 2;
-    const vertical = eixoDeIrmaos(d.layout) === 'x';
     let best: { cand: LayoutNode; dx: number; dy: number } | null = null;
     let bestDist = Infinity;
     for (const cand of li.values()) {
@@ -673,7 +672,9 @@ function EditorInner({ id }: Props) {
       const dx = cx - ccx;
       const dy = cy - ccy;
       // No organograma os irmãos ficam lado a lado: a tolerância larga é
-      // a vertical, não a horizontal.
+      // a vertical, não a horizontal. Na matriz e na linha do tempo depende
+      // do nível: os ramos lado a lado, o que está dentro deles em lista.
+      const vertical = eixoDeIrmaos(d.layout, cand.depth) === 'x';
       const folgaX = vertical ? cand.width / 2 + 48 : cand.width / 2 + 150;
       const folgaY = vertical ? cand.height / 2 + 120 : cand.height / 2 + 48;
       if (Math.abs(dx) > folgaX || Math.abs(dy) > folgaY) continue;
@@ -683,6 +684,7 @@ function EditorInner({ id }: Props) {
     if (!best) return null;
     const { cand, dx, dy } = best;
     if (cand.id === d.rootId) return { targetId: cand.id, kind: 'child' };
+    const vertical = eixoDeIrmaos(d.layout, cand.depth) === 'x';
     // Em pé: "antes" é à esquerda e "depois" à direita. Deitado: acima e abaixo.
     const eixo = vertical ? dx : dy;
     const third = Math.max(10, (vertical ? cand.width : cand.height) / 3);
@@ -952,7 +954,7 @@ function EditorInner({ id }: Props) {
         shape: n.style?.shape ?? (ehOrganograma(renderedData.layout) ? 'rounded' : undefined),
         bold: n.style?.bold,
         vertical: direcaoDoLayout(renderedData.layout) === 'vertical',
-        livre: direcaoDoLayout(renderedData.layout) === 'livre',
+        semBolinhas: semBolinhas(renderedData.layout),
       };
       return {
         id: n.id,
@@ -985,7 +987,7 @@ function EditorInner({ id }: Props) {
           sourceHandle,
           targetHandle,
           type: 'mind',
-          data: { color, faded: dragPos?.id === n.id, estilo: estiloDaLigacao(renderedData.layout), nivel: n.depth, costela: n.costela },
+          data: { color, faded: dragPos?.id === n.id, estilo: estiloDaLigacao(renderedData.layout), nivel: n.depth, costela: n.costela, trilho: n.trilho },
         });
       }
     }
