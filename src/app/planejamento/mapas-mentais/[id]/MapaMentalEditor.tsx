@@ -35,14 +35,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { toast } from 'sonner';
-import {
-  ArrowLeft, Check, Loader2, Sparkles, Save, Trash2,
-  Plus, GitBranch, Palette, StickyNote, Smile, Keyboard, X,
-  ChevronRight as ChevR,
-  Shapes, Link2, Paperclip, Image as ImageIcon,
-  List, LayoutGrid, Upload, Undo2, Redo2,
-  MessageSquare, MoreHorizontal, Share2,
-} from 'lucide-react';
+import { ArrowLeft, Check, Loader2, Sparkles, Save, Trash2, Plus, GitBranch, Palette, StickyNote, Smile, Keyboard, X, ChevronRight as ChevR, Shapes, Link2, Paperclip, Image as ImageIcon, List, LayoutGrid, Upload, Undo2, Redo2, MessageSquare, MoreHorizontal, Share2, Network, ChevronDown } from 'lucide-react';
 import { MindNode, type MindNodeData, type DropHint } from '@/components/mapa-mental/MindNode';
 import { MindEdge } from '@/components/mapa-mental/MindEdge';
 import { OutlineView } from '@/components/mapa-mental/OutlineView';
@@ -50,12 +43,7 @@ import { ShareMapDialog } from '@/components/mapa-mental/ShareMapDialog';
 import { baixarMapaMentalPdf, exportarMapaMentalPdf } from '@/lib/mapa-mental-pdf';
 import { useAuth } from '@/contexts/AuthContext';
 import { podeExportar } from '@/lib/permissoes';
-import {
-  type MapaMentalData, type Theme, type NodeSize, type LayoutNode,
-  layoutMindMap, colorForNode, addChild, addSibling, updateNode, removeNode,
-  moveNode, reorderNode, outdentNode, sanitizeMap,
-  getChildren, getDescendantIds, createMindMap, newId, THEMES, NODE_COLORS,
-} from '@/lib/mapa-mental';
+import { type MapaMentalData, type Theme, type NodeSize, type LayoutNode, layoutMindMap, colorForNode, addChild, addSibling, updateNode, removeNode, moveNode, reorderNode, outdentNode, sanitizeMap, getChildren, getDescendantIds, createMindMap, newId, THEMES, NODE_COLORS, handlesDaLigacao, ehOrganograma, direcaoDoLayout, type MapaLayout } from '@/lib/mapa-mental';
 
 const nodeTypes: NodeTypes = { mindNode: MindNode };
 const edgeTypes: EdgeTypes = { mind: MindEdge };
@@ -675,7 +663,8 @@ function EditorInner({ id }: Props) {
     if (!drag) return null;
     const cx = x + drag.width / 2;
     const cy = y + drag.height / 2;
-    let best: { cand: LayoutNode; dy: number } | null = null;
+    const vertical = direcaoDoLayout(d.layout) === 'vertical';
+    let best: { cand: LayoutNode; dx: number; dy: number } | null = null;
     let bestDist = Infinity;
     for (const cand of li.values()) {
       if (cand.id === dragId || meta.subtree.has(cand.id)) continue;
@@ -683,15 +672,21 @@ function EditorInner({ id }: Props) {
       const ccy = cand.y + cand.height / 2;
       const dx = cx - ccx;
       const dy = cy - ccy;
-      if (Math.abs(dx) > cand.width / 2 + 150 || Math.abs(dy) > cand.height / 2 + 48) continue;
+      // No organograma os irmãos ficam lado a lado: a tolerância larga é
+      // a vertical, não a horizontal.
+      const folgaX = vertical ? cand.width / 2 + 48 : cand.width / 2 + 150;
+      const folgaY = vertical ? cand.height / 2 + 120 : cand.height / 2 + 48;
+      if (Math.abs(dx) > folgaX || Math.abs(dy) > folgaY) continue;
       const dist = Math.hypot(dx, dy);
-      if (dist < bestDist) { bestDist = dist; best = { cand, dy }; }
+      if (dist < bestDist) { bestDist = dist; best = { cand, dx, dy }; }
     }
     if (!best) return null;
-    const { cand, dy } = best;
+    const { cand, dx, dy } = best;
     if (cand.id === d.rootId) return { targetId: cand.id, kind: 'child' };
-    const third = Math.max(10, cand.height / 3);
-    const kind: DropHint = dy < -third ? 'before' : dy > third ? 'after' : 'child';
+    // Em pé: "antes" é à esquerda e "depois" à direita. Deitado: acima e abaixo.
+    const eixo = vertical ? dx : dy;
+    const third = Math.max(10, (vertical ? cand.width : cand.height) / 3);
+    const kind: DropHint = eixo < -third ? 'before' : eixo > third ? 'after' : 'child';
     return { targetId: cand.id, kind };
   }, []);
 
@@ -834,6 +829,20 @@ function EditorInner({ id }: Props) {
           e.preventDefault();
           handleToggleCollapse(selectedId);
         }
+      } else if (direcaoDoLayout(d.layout) === 'vertical' && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        // Organograma em pé: as setas seguem o desenho. Cima é o pai, baixo
+        // é o primeiro filho, e os lados andam entre irmãos.
+        e.preventDefault();
+        if (e.key === 'ArrowUp') {
+          if (sel.parentId) setSelectedId(sel.parentId);
+        } else if (e.key === 'ArrowDown') {
+          goToFirstChild();
+        } else if (sel.parentId) {
+          const siblings = getChildren(d, sel.parentId);
+          const idx = siblings.findIndex(x => x.id === selectedId);
+          const alvo = e.key === 'ArrowLeft' ? idx - 1 : idx + 1;
+          if (alvo >= 0 && alvo < siblings.length) setSelectedId(siblings[alvo].id);
+        }
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
         if (isRoot) {
@@ -938,8 +947,11 @@ function EditorInner({ id }: Props) {
         image: n.image,
         links: n.links,
         attachments: n.attachments,
-        shape: n.style?.shape,
+        // Organograma é feito de caixas: sem forma escolhida, o nó ganha a
+        // arredondada. Texto solto no ar lê como mapa mental, não como cargo.
+        shape: n.style?.shape ?? (ehOrganograma(renderedData.layout) ? 'rounded' : undefined),
         bold: n.style?.bold,
+        vertical: direcaoDoLayout(renderedData.layout) === 'vertical',
       };
       return {
         id: n.id,
@@ -964,8 +976,7 @@ function EditorInner({ id }: Props) {
         // (right→saida na direita do pai; left→saida na esquerda do pai).
         // Target entra no lado oposto do filho. IDs dos handles são
         // 'l' ou 'r' em TODOS os nós (incluindo raiz e intermediários).
-        const sourceHandle = n.side === 'left' ? 'l' : 'r';
-        const targetHandle = n.side === 'left' ? 'r' : 'l';
+        const { sourceHandle, targetHandle } = handlesDaLigacao(renderedData.layout, n.side);
         edges.push({
           id: `e-${n.parentId}-${n.id}`,
           source: n.parentId,
@@ -973,7 +984,7 @@ function EditorInner({ id }: Props) {
           sourceHandle,
           targetHandle,
           type: 'mind',
-          data: { color, faded: dragPos?.id === n.id },
+          data: { color, faded: dragPos?.id === n.id, ortogonal: ehOrganograma(renderedData.layout) },
         });
       }
     }
@@ -997,6 +1008,17 @@ function EditorInner({ id }: Props) {
     prevSidesRef.current = new Map([...layoutIndex].map(([nid, n]) => [nid, n.side]));
     if (changed.length) updateNodeInternals(changed);
   }, [layoutIndex, updateNodeInternals]);
+
+  // Trocar de layout move os handles de todos os nós de uma vez (lateral
+  // para cima/embaixo e volta) sem mudar tamanho nenhum: re-mede todos.
+  const prevLayoutRef = useRef<MapaLayout | undefined>(undefined);
+  useEffect(() => {
+    const atual = renderedData?.layout;
+    if (prevLayoutRef.current !== undefined && prevLayoutRef.current !== atual) {
+      updateNodeInternals([...layoutIndex.keys()]);
+    }
+    prevLayoutRef.current = atual;
+  }, [renderedData?.layout, layoutIndex, updateNodeInternals]);
 
   // Auto-pan: nó selecionado/criado sempre visível (MindMeister). Pana o
   // mínimo necessário, sem mexer no zoom. Não interfere durante drag.
@@ -1045,7 +1067,7 @@ function EditorInner({ id }: Props) {
     const d = dataRef.current;
     if (d) commitChange({ ...d, theme });
   };
-  const onSetLayout = (layout: 'map' | 'logical') => {
+  const onSetLayout = (layout: MapaLayout) => {
     const d = dataRef.current;
     if (d) commitChange({ ...d, layout });
   };
@@ -1228,15 +1250,11 @@ function EditorInner({ id }: Props) {
             </button>
           </div>
 
-          <button
-            onClick={() => onSetLayout(data.layout === 'logical' ? 'map' : 'logical')}
-            disabled={viewMode === 'outline'}
-            className="hidden items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 md:inline-flex"
-            title="Trocar layout"
-          >
-            <GitBranch className="w-3.5 h-3.5 rotate-90" />
-            <span className="hidden md:inline">{data.layout === 'logical' ? 'Árvore' : 'Mapa'}</span>
-          </button>
+          <SeletorDeLayout
+            atual={data.layout || 'map'}
+            desabilitado={viewMode === 'outline'}
+            onEscolher={onSetLayout}
+          />
 
           <button
             onClick={() => setShowShortcuts(true)}
@@ -2167,3 +2185,87 @@ function ShortcutsModal({ onClose }: { onClose: () => void }) {
 // Helpers re-exportados (usados pela /lista)
 export function _createMindMap(nome: string) { return createMindMap(nome); }
 export function _newId() { return newId(); }
+
+// ============================================================
+// Seletor de layout
+// ============================================================
+const LAYOUTS_DO_SELETOR: { id: MapaLayout; rotulo: string; descricao: string; icone: typeof GitBranch; girar?: boolean }[] = [
+  { id: 'map', rotulo: 'Mapa', descricao: 'Ramos dos dois lados da ideia central', icone: GitBranch, girar: true },
+  { id: 'logical', rotulo: 'Árvore', descricao: 'Tudo cresce para a direita', icone: GitBranch },
+  { id: 'org', rotulo: 'Organograma', descricao: 'Raiz no topo, cresce para baixo', icone: Network },
+  { id: 'org-right', rotulo: 'Organograma deitado', descricao: 'Raiz à esquerda, cresce para o lado', icone: Network, girar: true },
+];
+
+/**
+ * Menu de layout. Era um botão que alternava entre dois; com quatro opções
+ * um toggle vira adivinhação. O menu fica DENTRO do contêiner do botão, não
+ * num portal: assim o "clicar fora" do documento enxerga o menu como
+ * dentro, e clicar num item não fecha o menu antes do clique terminar — o
+ * defeito que já derrubou o menu da conta neste sistema.
+ */
+function SeletorDeLayout({ atual, desabilitado, onEscolher }: {
+  atual: MapaLayout;
+  desabilitado: boolean;
+  onEscolher: (layout: MapaLayout) => void;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const caixa = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!aberto) return;
+    const fechar = (e: MouseEvent) => {
+      if (caixa.current && !caixa.current.contains(e.target as globalThis.Node)) setAberto(false);
+    };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setAberto(false); };
+    document.addEventListener('mousedown', fechar);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', fechar); document.removeEventListener('keydown', esc); };
+  }, [aberto]);
+
+  const corrente = LAYOUTS_DO_SELETOR.find(l => l.id === atual || (atual === 'right' && l.id === 'logical')) ?? LAYOUTS_DO_SELETOR[0];
+  const Icone = corrente.icone;
+  return (
+    <div ref={caixa} className="relative hidden md:block">
+      <button
+        type="button"
+        onClick={() => setAberto(a => !a)}
+        disabled={desabilitado}
+        aria-haspopup="menu"
+        aria-expanded={aberto}
+        className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-[var(--fin-text-2)] hover:bg-[var(--fin-surface-2)] disabled:cursor-not-allowed disabled:opacity-40"
+        title="Trocar layout"
+      >
+        <Icone className={`w-3.5 h-3.5 ${corrente.girar ? 'rotate-90' : ''}`} />
+        <span>{corrente.rotulo}</span>
+        <ChevronDown className="w-3 h-3 text-[var(--fin-text-3)]" />
+      </button>
+      {aberto && (
+        <div
+          role="menu"
+          aria-label="Layout do mapa"
+          className="absolute right-0 top-full z-[var(--fin-z-menu)] mt-1 w-64 overflow-hidden rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] py-1 shadow-[var(--fin-e-popover,0_8px_24px_rgba(15,23,42,0.12))]"
+        >
+          {LAYOUTS_DO_SELETOR.map(l => {
+            const I = l.icone;
+            const ativo = l.id === corrente.id;
+            return (
+              <button
+                key={l.id}
+                type="button"
+                role="menuitemradio"
+                aria-checked={ativo}
+                onClick={() => { onEscolher(l.id); setAberto(false); }}
+                className={`flex w-full items-start gap-2.5 px-3 py-2 text-left hover:bg-[var(--fin-surface-2)] ${ativo ? 'bg-[var(--fin-accent-soft)]' : ''}`}
+              >
+                <I className={`mt-0.5 w-4 h-4 shrink-0 ${l.girar ? 'rotate-90' : ''} ${ativo ? 'text-[var(--fin-accent)]' : 'text-[var(--fin-text-3)]'}`} />
+                <span className="min-w-0">
+                  <span className={`block text-xs font-medium ${ativo ? 'text-[var(--fin-accent)]' : 'text-[var(--fin-text)]'}`}>{l.rotulo}</span>
+                  <span className="block text-[11px] text-[var(--fin-text-3)]">{l.descricao}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

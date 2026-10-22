@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react';
 import { IconeDeIndicador } from '@/components/fin/MetricCard';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Loader2, Plus, Sparkles, Trash2, ArrowRight, GitBranch } from 'lucide-react';
+import { Loader2, Plus, Sparkles, Trash2, ArrowRight, GitBranch, X, FilePlus2 } from 'lucide-react';
 import { createMindMap, type MapaMentalData, getChildren } from '@/lib/mapa-mental';
+import { MODELOS_DE_MAPA, CATEGORIAS, construirDoModelo, type ModeloDeMapa } from '@/lib/mapa-mental-templates';
 
 export default function ListaMapasMentaisPage() {
   const router = useRouter();
@@ -23,10 +24,15 @@ export default function ListaMapasMentaisPage() {
   };
   useEffect(carregar, []);
 
-  const criar = async (nome: string) => {
+  const [escolhendo, setEscolhendo] = useState(false);
+
+  const criar = async (nome: string, modelo?: ModeloDeMapa) => {
     if (creating) return;
     setCreating(true);
-    const mapa = createMindMap(nome);
+    setEscolhendo(false);
+    // Modelo é uma pergunta já feita: SWOT vem com as quatro palavras,
+    // roteiro vem com os dias. Em branco continua sendo uma opção.
+    const mapa = modelo ? construirDoModelo(modelo, nome) : createMindMap(nome);
     try {
       const res = await fetch('/api/mapas-mentais', {
         method: 'POST',
@@ -81,7 +87,7 @@ export default function ListaMapasMentaisPage() {
           </p>
         </div>
         <button
-          onClick={() => criar('Novo mapa mental')}
+          onClick={() => setEscolhendo(true)}
           disabled={creating}
           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] text-sm font-semibold hover:bg-[var(--fin-accent-hover)] disabled:opacity-60"
         >
@@ -100,7 +106,7 @@ export default function ListaMapasMentaisPage() {
             Organize ideias em uma estrutura radial. Brainstorms, planejamento estratégico, decomposição de projetos — tudo no mesmo formato.
           </p>
           <button
-            onClick={() => criar('Meu primeiro mapa')}
+            onClick={() => setEscolhendo(true)}
             disabled={creating}
             className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[var(--fin-text)] text-[var(--fin-text-on-fill)] text-sm font-semibold hover:bg-[var(--fin-text)] disabled:opacity-60"
           >
@@ -114,6 +120,13 @@ export default function ListaMapasMentaisPage() {
             <CardMapa key={m.id} mapa={m} onRemove={() => remover(m.id, m.nome)} />
           ))}
         </div>
+      )}
+      {escolhendo && (
+        <EscolhedorDeModelo
+          criando={creating}
+          onFechar={() => setEscolhendo(false)}
+          onEscolher={(modelo) => criar(modelo ? modelo.nome : 'Novo mapa mental', modelo ?? undefined)}
+        />
       )}
     </div>
   );
@@ -163,6 +176,77 @@ function CardMapa({ mapa, onRemove }: { mapa: MapaMentalData; onRemove: () => vo
       >
         <Trash2 className="w-3.5 h-3.5" />
       </button>
+    </div>
+  );
+}
+
+// ============================================================
+// Escolhedor de modelo
+// ============================================================
+/**
+ * Janela central com os modelos em cartões: ícone, nome, uma frase e a
+ * categoria. Em branco vem primeiro, porque é o que a pessoa já esperava
+ * encontrar — o modelo é um ganho, não um pedágio.
+ */
+function EscolhedorDeModelo({ criando, onFechar, onEscolher }: {
+  criando: boolean;
+  onFechar: () => void;
+  onEscolher: (modelo: ModeloDeMapa | null) => void;
+}) {
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onFechar(); };
+    document.addEventListener('keydown', esc);
+    return () => document.removeEventListener('keydown', esc);
+  }, [onFechar]);
+
+  const CARTAO = 'group flex flex-col items-start gap-3 rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-4 text-left transition-colors hover:border-[var(--fin-accent)] hover:bg-[var(--fin-accent-soft)] focus-visible:outline-2 focus-visible:outline-[var(--fin-accent)] focus-visible:outline-offset-2 disabled:opacity-60';
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="escolher-modelo-titulo"
+    >
+      <div aria-hidden="true" className="absolute inset-0 bg-black/40" onClick={onFechar} />
+      <div className="relative flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-[var(--fin-r-lg)] bg-[var(--fin-bg)] shadow-[var(--fin-e-card)]">
+        <div className="flex items-start justify-between gap-4 border-b border-[var(--fin-border)] bg-[var(--fin-surface)] px-6 py-5">
+          <div>
+            <h2 id="escolher-modelo-titulo" className="fin-t-subhead text-[var(--fin-text)]">Como você quer começar?</h2>
+            <p className="fin-t-caption mt-1 text-[var(--fin-text-3)]">Um modelo já vem com a pergunta feita. Dá para mudar tudo depois.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onFechar}
+            aria-label="Fechar"
+            className="grid size-9 shrink-0 place-items-center rounded-[var(--fin-r-md)] text-[var(--fin-text-3)] hover:bg-[var(--fin-surface-2)] hover:text-[var(--fin-text)]"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+
+        <div className="grid gap-3 overflow-y-auto p-6 sm:grid-cols-2 lg:grid-cols-3">
+          <button type="button" disabled={criando} onClick={() => onEscolher(null)} className={CARTAO}>
+            <IconeDeIndicador icone={FilePlus2} tom="acento" />
+            <span>
+              <span className="block fin-t-body-strong text-[var(--fin-text)]">Em branco</span>
+              <span className="block fin-t-caption text-[var(--fin-text-3)]">Só a ideia central. Você monta o resto.</span>
+            </span>
+          </button>
+          {MODELOS_DE_MAPA.map(modelo => (
+            <button key={modelo.id} type="button" disabled={criando} onClick={() => onEscolher(modelo)} className={CARTAO}>
+              <div className="flex w-full items-start justify-between gap-2">
+                <IconeDeIndicador icone={modelo.icone} tom={modelo.categoria === 'viagens' ? 'info' : modelo.categoria === 'estrategia' ? 'violeta' : 'acento'} />
+                <span className="fin-t-overline rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)] px-1.5 py-0.5 text-[var(--fin-text-3)]">{CATEGORIAS[modelo.categoria]}</span>
+              </div>
+              <span>
+                <span className="block fin-t-body-strong text-[var(--fin-text)]">{modelo.nome}</span>
+                <span className="block fin-t-caption text-[var(--fin-text-3)]">{modelo.descricao}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

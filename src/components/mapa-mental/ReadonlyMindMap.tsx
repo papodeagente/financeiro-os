@@ -18,16 +18,7 @@ import '@xyflow/react/dist/style.css';
 import { ExternalLink, Link2, Paperclip, StickyNote, X } from 'lucide-react';
 import { MindNode, type MindNodeData } from './MindNode';
 import { MindEdge } from './MindEdge';
-import {
-  colorForNode,
-  getChildren,
-  layoutMindMap,
-  sanitizeMap,
-  type LayoutNode,
-  type MapaMentalData,
-  type NodeSize,
-  type Theme,
-} from '@/lib/mapa-mental';
+import { colorForNode, getChildren, layoutMindMap, sanitizeMap, type LayoutNode, type MapaMentalData, type NodeSize, type Theme, handlesDaLigacao, ehOrganograma, direcaoDoLayout } from '@/lib/mapa-mental';
 
 const nodeTypes: NodeTypes = { mindNode: MindNode };
 const edgeTypes: EdgeTypes = { mind: MindEdge };
@@ -115,8 +106,10 @@ function ReadonlyMindMapInner({ mapa }: { mapa: MapaMentalData }) {
         image: node.image,
         links: node.links,
         attachments: node.attachments,
-        shape: node.style?.shape,
+        // Mesma regra do editor: organograma é feito de caixas.
+        shape: node.style?.shape ?? (ehOrganograma(visibleData.layout) ? 'rounded' : undefined),
         bold: node.style?.bold,
+        vertical: direcaoDoLayout(visibleData.layout) === 'vertical',
         onCommitEdit: noop,
         onCancelEdit: noop,
         onStartEdit: noop,
@@ -144,8 +137,7 @@ function ReadonlyMindMapInner({ mapa }: { mapa: MapaMentalData }) {
     const flowEdges: Edge[] = [];
     for (const node of layout) {
       if (!node.parentId || !visibleData.nodes[node.parentId]) continue;
-      const sourceHandle = node.side === 'left' ? 'l' : 'r';
-      const targetHandle = node.side === 'left' ? 'r' : 'l';
+      const { sourceHandle, targetHandle } = handlesDaLigacao(visibleData.layout, node.side);
       flowEdges.push({
         id: `e-${node.parentId}-${node.id}`,
         source: node.parentId,
@@ -153,7 +145,7 @@ function ReadonlyMindMapInner({ mapa }: { mapa: MapaMentalData }) {
         sourceHandle,
         targetHandle,
         type: 'mind',
-        data: { color: colorOf(node) },
+        data: { color: colorOf(node), ortogonal: ehOrganograma(visibleData.layout) },
       });
     }
     return { nodes: flowNodes, edges: flowEdges };

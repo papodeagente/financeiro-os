@@ -20,6 +20,8 @@ export interface MindNodeData extends Record<string, unknown> {
   /** texto inicial do input ao entrar em edição (digitar-pra-substituir) */
   editSeed?: string;
   side: 'left' | 'right';
+  /** Organograma de cima para baixo: handles em cima/embaixo, "+" embaixo. */
+  vertical?: boolean;
   icon?: string;
   hasNotes?: boolean;
   /** Renderiza o conteúdo sem ações de criação ou edição. */
@@ -134,18 +136,32 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
     }
   };
 
+  const vertical = !!data.vertical;
+
   // Indicadores de drop (drag & drop de reorganização)
   const dropAsChild = dropHint === 'child';
   const dropBar = dropHint === 'before' || dropHint === 'after' ? (
-    <div
-      className="absolute left-0 right-0 rounded-full pointer-events-none"
-      style={{
-        height: 3,
-        background: color,
-        [dropHint === 'before' ? 'top' : 'bottom']: -9,
-        boxShadow: `0 0 0 1px ${color}55`,
-      }}
-    />
+    vertical ? (
+      <div
+        className="absolute top-0 bottom-0 rounded-full pointer-events-none"
+        style={{
+          width: 3,
+          background: color,
+          [dropHint === 'before' ? 'left' : 'right']: -9,
+          boxShadow: `0 0 0 1px ${color}55`,
+        }}
+      />
+    ) : (
+      <div
+        className="absolute left-0 right-0 rounded-full pointer-events-none"
+        style={{
+          height: 3,
+          background: color,
+          [dropHint === 'before' ? 'top' : 'bottom']: -9,
+          boxShadow: `0 0 0 1px ${color}55`,
+        }}
+      />
+    )
   ) : null;
 
   // Mapeia shape → border-radius
@@ -162,6 +178,7 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
       >
         <Handle type="source" position={Position.Right} id="r" style={bulletHandle(color)} />
         <Handle type="source" position={Position.Left}  id="l" style={bulletHandle(color)} />
+        <Handle type="source" position={Position.Bottom} id="b" style={bulletHandle(color)} />
         <div
           className="bg-[var(--fin-surface)] transition-all overflow-hidden"
           style={{
@@ -230,8 +247,10 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
           <button
             onClick={(e) => { e.stopPropagation(); data.onToggleCollapse(); }}
             onDoubleClick={(e) => e.stopPropagation()}
-            className="absolute top-1/2 -translate-y-1/2 text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white"
-            style={{ background: color, right: -30 }}
+            className={vertical
+              ? 'absolute left-1/2 -translate-x-1/2 text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white'
+              : 'absolute top-1/2 -translate-y-1/2 text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white'}
+            style={vertical ? { background: color, bottom: -26 } : { background: color, right: -30 }}
             title={`Expandir ${childCount} ${childCount === 1 ? 'ramo' : 'ramos'}`}
           >
             {childCount}
@@ -242,10 +261,12 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
           <button
             onClick={(e) => { e.stopPropagation(); data.onAddChild(); }}
           onDoubleClick={(e) => e.stopPropagation()}
-            className="absolute top-1/2 -translate-y-1/2 w-7 h-7 rounded-full text-white flex items-center justify-center transition-all"
+            className={vertical
+              ? 'absolute left-1/2 -translate-x-1/2 w-7 h-7 rounded-full text-white flex items-center justify-center transition-all'
+              : 'absolute top-1/2 -translate-y-1/2 w-7 h-7 rounded-full text-white flex items-center justify-center transition-all'}
             style={{
               background: color,
-              right: -38,
+              ...(vertical ? { bottom: -38 } : { right: -38 }),
               boxShadow: `0 4px 12px ${color}55`,
             }}
             title="Adicionar filho (Tab)"
@@ -336,6 +357,8 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
             imagem acima, a conexão continua chegando no texto. */}
         <Handle type="target" position={handleTarget} id={targetSide} style={bulletHandle(color)} />
         <Handle type="source" position={handleSource} id={sourceSide} style={bulletHandle(color)} />
+        <Handle type="target" position={Position.Top} id="t" style={bulletHandle(color)} />
+        <Handle type="source" position={Position.Bottom} id="b" style={bulletHandle(color)} />
         {/* Toggle collapse */}
         {childCount > 0 && (
           <button
@@ -397,10 +420,12 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
         <button
           onClick={(e) => { e.stopPropagation(); data.onToggleCollapse(); }}
             onDoubleClick={(e) => e.stopPropagation()}
-          className="absolute top-1/2 -translate-y-1/2 text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white"
+          className={vertical
+            ? 'absolute left-1/2 -translate-x-1/2 text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white'
+            : 'absolute top-1/2 -translate-y-1/2 text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white'}
           style={{
             background: color,
-            [isLeft ? 'left' : 'right']: badgeOffset,
+            ...(vertical ? { bottom: -22 } : { [isLeft ? 'left' : 'right']: badgeOffset }),
           }}
           title={`Expandir ${childCount} ${childCount === 1 ? 'filho' : 'filhos'}`}
         >
@@ -413,10 +438,12 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
         <button
           onClick={(e) => { e.stopPropagation(); data.onAddChild(); }}
           onDoubleClick={(e) => e.stopPropagation()}
-          className="absolute top-1/2 -translate-y-1/2 w-6 h-6 rounded-full text-white flex items-center justify-center transition-all z-10"
+          className={vertical
+            ? 'absolute left-1/2 -translate-x-1/2 w-6 h-6 rounded-full text-white flex items-center justify-center transition-all z-10'
+            : 'absolute top-1/2 -translate-y-1/2 w-6 h-6 rounded-full text-white flex items-center justify-center transition-all z-10'}
           style={{
             background: color,
-            [isLeft ? 'left' : 'right']: -30,
+            ...(vertical ? { bottom: -30 } : { [isLeft ? 'left' : 'right']: -30 }),
             boxShadow: `0 3px 10px ${color}55`,
           }}
           title="Adicionar filho (Tab)"

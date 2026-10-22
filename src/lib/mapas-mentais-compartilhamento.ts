@@ -73,7 +73,7 @@ const THEMES = new Set<Theme>([
   'minimal', 'classic', 'rainbow', 'mono', 'ocean', 'sunset', 'forest',
   'pastel', 'vibrante', 'escuro', 'sepia',
 ]);
-const LAYOUTS = new Set<MapaMentalData['layout']>(['map', 'logical', 'right']);
+const LAYOUTS = new Set<MapaMentalData['layout']>(['map', 'logical', 'right', 'org', 'org-right']);
 const MAX_MAP_BYTES = 5_000_000;
 const MAX_NODES = 5_000;
 export const MAPA_MENTAL_SHARE_SECRET_VERSION = 1;

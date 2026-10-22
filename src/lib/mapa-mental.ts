@@ -25,13 +25,52 @@ export interface MindNode {
   };
 }
 
+export type MapaLayout = 'map' | 'logical' | 'right' | 'org' | 'org-right';
+
+/** Os dois organogramas: conector em cotovelo, nó em caixa. */
+export function ehOrganograma(layout: MapaLayout | undefined): boolean {
+  return layout === 'org' || layout === 'org-right';
+}
+
+/** De cima para baixo (org) ou da esquerda para a direita (todos os outros). */
+export function direcaoDoLayout(layout: MapaLayout | undefined): 'vertical' | 'horizontal' {
+  return layout === 'org' ? 'vertical' : 'horizontal';
+}
+
+/**
+ * Por que handles uma ligação sai do pai e entra no filho.
+ *
+ * Uma função só, usada pelo editor e pelo viewer público: a lógica vivia
+ * duplicada nos dois, e duplicada é como um deles fica para trás quando o
+ * outro muda. Ids: 'l'/'r' nas laterais, 't' em cima, 'b' embaixo.
+ */
+export function handlesDaLigacao(
+  layout: MapaLayout | undefined,
+  side: 'left' | 'right',
+): { sourceHandle: 'l' | 'r' | 'b'; targetHandle: 'l' | 'r' | 't' } {
+  if (direcaoDoLayout(layout) === 'vertical') return { sourceHandle: 'b', targetHandle: 't' };
+  return side === 'left'
+    ? { sourceHandle: 'l', targetHandle: 'r' }
+    : { sourceHandle: 'r', targetHandle: 'l' };
+}
+
 export interface MapaMentalData {
   id: string;
   nome: string;
   rootId: string;
   nodes: Record<string, MindNode>;
   theme?: Theme;
-  layout?: 'map' | 'logical' | 'right';  // map=balanced L/R, logical=tree right, right=alias
+  /**
+   * map       ramos dos dois lados da raiz (mapa mental clássico)
+   * logical   tudo cresce para a direita, em árvore
+   * right     apelido legado de logical
+   * org       organograma: raiz no topo, filhos em fileiras abaixo
+   * org-right organograma deitado: raiz à esquerda, cresce para o lado
+   *
+   * Os dois organogramas usam conector em cotovelo e nó em caixa — é isso
+   * que faz um org chart parecer org chart, não só a direção.
+   */
+  layout?: MapaLayout;
   view?: { zoom?: number; x?: number; y?: number };
 }
 
@@ -406,6 +445,10 @@ export interface LayoutNode extends MindNode {
 
 const H_GAP = 70;      // espaco horizontal entre niveis
 const V_GAP = 18;      // espaco vertical entre siblings
+// Organograma respira mais: a hierarquia se lê pela distância entre fileiras,
+// e irmãos colados viram uma faixa contínua em vez de caixas.
+const ORG_NIVEL_GAP = 56;   // espaco vertical entre fileiras
+const ORG_IRMAO_GAP = 24;   // espaco horizontal entre irmaos
 
 // Estimativa pro primeiro paint, antes do React Flow medir. Curta o
 // suficiente pra nao "pular" demais quando a medida real chega.
@@ -475,6 +518,57 @@ function placeSubtree(
   }
 }
 
+/** Largura que a subárvore ocupa numa fileira: o maior entre o próprio nó e
+ *  a soma dos filhos com os vãos. É o espelho de measureSubtree, que mede
+ *  altura para o layout deitado. */
+function measureSubtreeWidth(ctx: LayoutCtx, nodeId: string): number {
+  const node = ctx.data.nodes[nodeId];
+  if (!node) return 0;
+  const own = ctx.sizeOf(nodeId).width;
+  const children = node.collapsed ? [] : getChildren(ctx.data, nodeId);
+  if (children.length === 0) return own;
+  let total = 0;
+  for (const c of children) total += measureSubtreeWidth(ctx, c.id);
+  total += (children.length - 1) * ORG_IRMAO_GAP;
+  return Math.max(own, total);
+}
+
+/**
+ * Organograma de cima para baixo. O nó fica centrado na faixa que a sua
+ * subárvore ocupa, e os filhos dividem essa faixa na fileira de baixo.
+ *
+ * `side` é sempre 'right' aqui: ele existe no LayoutNode para os layouts
+ * deitados decidirem lado da raiz, e o organograma não tem lado. Quem
+ * precisa saber a direção pergunta a direcaoDoLayout, não ao side.
+ */
+function placeSubtreeDown(
+  ctx: LayoutCtx,
+  nodeId: string,
+  centerX: number,
+  topY: number,
+  depth: number,
+  branchIndex: number,
+): void {
+  const node = ctx.data.nodes[nodeId];
+  if (!node) return;
+
+  const { width, height } = ctx.sizeOf(nodeId);
+  ctx.out.push({ ...node, x: centerX - width / 2, y: topY, width, height, depth, side: 'right', branchIndex });
+
+  if (node.collapsed) return;
+  const children = getChildren(ctx.data, nodeId);
+  if (children.length === 0) return;
+
+  const widths = children.map(c => measureSubtreeWidth(ctx, c.id));
+  const total = widths.reduce((a, w) => a + w, 0) + (children.length - 1) * ORG_IRMAO_GAP;
+  let cursor = centerX - total / 2;
+  const childTop = topY + height + ORG_NIVEL_GAP;
+  for (let i = 0; i < children.length; i++) {
+    placeSubtreeDown(ctx, children[i].id, cursor + widths[i] / 2, childTop, depth + 1, branchIndex);
+    cursor += widths[i] + ORG_IRMAO_GAP;
+  }
+}
+
 export function layoutMindMap(
   data: MapaMentalData,
   sizes?: Record<string, NodeSize>,
@@ -511,7 +605,23 @@ export function layoutMindMap(
 
   const layoutMode = data.layout || 'map';
 
-  if (layoutMode === 'logical' || layoutMode === 'right') {
+  if (layoutMode === 'org') {
+    // Raiz no topo, cada ramo é uma coluna da primeira fileira.
+    const widths = children.map(c => measureSubtreeWidth(ctx, c.id));
+    const total = widths.reduce((a, w) => a + w, 0) + (children.length - 1) * ORG_IRMAO_GAP;
+    let cursor = -total / 2;
+    const childTop = out[0].y + rootSize.height + ORG_NIVEL_GAP;
+    for (let i = 0; i < children.length; i++) {
+      placeSubtreeDown(ctx, children[i].id, cursor + widths[i] / 2, childTop, 1, i);
+      cursor += widths[i] + ORG_IRMAO_GAP;
+    }
+    return out;
+  }
+
+  // O organograma deitado tem a mesma geometria da árvore para a direita;
+  // o que o distingue é o conector em cotovelo e o nó em caixa, decididos
+  // por quem desenha. Uma geometria só, duas aparências.
+  if (layoutMode === 'logical' || layoutMode === 'right' || layoutMode === 'org-right') {
     // Tudo cresce pra direita
     const heights = children.map(c => measureSubtree(ctx, c.id));
     const totalH = heights.reduce((s, h) => s + h, 0) + (children.length - 1) * V_GAP;
