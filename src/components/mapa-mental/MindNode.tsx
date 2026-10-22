@@ -22,6 +22,8 @@ export interface MindNodeData extends Record<string, unknown> {
   side: 'left' | 'right';
   /** Organograma de cima para baixo: handles em cima/embaixo, "+" embaixo. */
   vertical?: boolean;
+  /** Radial, linha do tempo e espinha: a ligação sai do lado que encara o pai. */
+  livre?: boolean;
   icon?: string;
   hasNotes?: boolean;
   /** Renderiza o conteúdo sem ações de criação ou edição. */
@@ -137,6 +139,17 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
   };
 
   const vertical = !!data.vertical;
+  const livre = !!data.livre;
+  // Todo nó tem saída e entrada nos QUATRO lados, para qualquer layout poder
+  // ligar por qualquer lado. Só os lados que o layout usa mostram a bolinha;
+  // os outros ficam invisíveis mas funcionais — saída e entrada do mesmo lado
+  // ocupam o mesmo ponto, então nunca aparece bolinha a mais. Nos layouts
+  // livres (radial, linha do tempo, espinha) a ligação chega por qualquer
+  // lado, e quatro bolinhas por nó viravam ruído: lá não aparece nenhuma.
+  const ladoVisivel = (lado: 'l' | 'r' | 't' | 'b'): boolean =>
+    livre ? false : vertical ? (lado === 't' || lado === 'b') : (lado === 'l' || lado === 'r');
+  const estiloHandle = (lado: 'l' | 'r' | 't' | 'b') =>
+    ladoVisivel(lado) ? bulletHandle(color) : { ...bulletHandle(color), opacity: 0 };
 
   // Indicadores de drop (drag & drop de reorganização)
   const dropAsChild = dropHint === 'child';
@@ -176,9 +189,10 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
         className="relative group"
         onDoubleClick={readOnly ? undefined : () => data.onStartEdit()}
       >
-        <Handle type="source" position={Position.Right} id="r" style={bulletHandle(color)} />
-        <Handle type="source" position={Position.Left}  id="l" style={bulletHandle(color)} />
-        <Handle type="source" position={Position.Bottom} id="b" style={bulletHandle(color)} />
+        <Handle type="source" position={Position.Right}  id="rs" style={estiloHandle('r')} />
+        <Handle type="source" position={Position.Left}   id="ls" style={estiloHandle('l')} />
+        <Handle type="source" position={Position.Bottom} id="bs" style={estiloHandle('b')} />
+        <Handle type="source" position={Position.Top}    id="ts" style={estiloHandle('t')} />
         <div
           className="bg-[var(--fin-surface)] transition-all overflow-hidden"
           style={{
@@ -280,12 +294,6 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
 
   // ============ FILHO — apenas texto, sem caixa ============
   const isLeft = side === 'left';
-  // Convenção: handle id corresponde à posição lateral ('l' ou 'r').
-  // Source fica no lado de crescimento, target no lado oposto.
-  const sourceSide: 'l' | 'r' = isLeft ? 'l' : 'r';
-  const targetSide: 'l' | 'r' = isLeft ? 'r' : 'l';
-  const handleSource = isLeft ? Position.Left : Position.Right;
-  const handleTarget = isLeft ? Position.Right : Position.Left;
 
   // Se shape definida → caixa branca com borda colorida. Caso contrário,
   // texto puro (estilo XMind/Whimsical default).
@@ -355,10 +363,14 @@ function MindNodeInner({ data, selected }: NodeProps<MindNodeType>) {
       >
         {/* Handles ancorados na LINHA DE TEXTO (não no bloco todo) — com
             imagem acima, a conexão continua chegando no texto. */}
-        <Handle type="target" position={handleTarget} id={targetSide} style={bulletHandle(color)} />
-        <Handle type="source" position={handleSource} id={sourceSide} style={bulletHandle(color)} />
-        <Handle type="target" position={Position.Top} id="t" style={bulletHandle(color)} />
-        <Handle type="source" position={Position.Bottom} id="b" style={bulletHandle(color)} />
+        <Handle type="target" position={Position.Left}   id="l"  style={estiloHandle('l')} />
+        <Handle type="target" position={Position.Right}  id="r"  style={estiloHandle('r')} />
+        <Handle type="target" position={Position.Top}    id="t"  style={estiloHandle('t')} />
+        <Handle type="target" position={Position.Bottom} id="b"  style={estiloHandle('b')} />
+        <Handle type="source" position={Position.Left}   id="ls" style={{ ...bulletHandle(color), opacity: 0 }} />
+        <Handle type="source" position={Position.Right}  id="rs" style={{ ...bulletHandle(color), opacity: 0 }} />
+        <Handle type="source" position={Position.Top}    id="ts" style={{ ...bulletHandle(color), opacity: 0 }} />
+        <Handle type="source" position={Position.Bottom} id="bs" style={{ ...bulletHandle(color), opacity: 0 }} />
         {/* Toggle collapse */}
         {childCount > 0 && (
           <button

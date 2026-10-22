@@ -15,8 +15,9 @@
  * lugar, porque são os que as pessoas de fato usam.
  *
  * Cada modelo traz o LAYOUT e o TEMA que o servem melhor. O organograma vem
- * no layout de organograma; o roteiro, que se lê em sequência, vem em
- * árvore para a direita; o brainstorm, que irradia, vem em mapa.
+ * no layout de organograma; o roteiro e a jornada, que se leem em sequência,
+ * vêm em linha do tempo; a SWOT em matriz de quatro colunas; causa e efeito
+ * em espinha de peixe; o brainstorm, que irradia, vem em mapa.
  */
 
 import type { LucideIcon } from 'lucide-react';
@@ -100,7 +101,7 @@ export const MODELOS_DE_MAPA: ModeloDeMapa[] = [
     descricao: 'Dia a dia do destino, com manhã, tarde e noite para preencher.',
     categoria: 'viagens',
     icone: MapIcon,
-    layout: 'logical',
+    layout: 'timeline',
     theme: 'ocean',
     raiz: 'Destino',
     galhos: [
@@ -151,7 +152,7 @@ export const MODELOS_DE_MAPA: ModeloDeMapa[] = [
     descricao: 'Forças, fraquezas, oportunidades e ameaças, lado a lado.',
     categoria: 'estrategia',
     icone: Scale,
-    layout: 'map',
+    layout: 'matrix',
     theme: 'vibrante',
     raiz: 'Nosso negócio',
     galhos: [
@@ -202,7 +203,7 @@ export const MODELOS_DE_MAPA: ModeloDeMapa[] = [
     descricao: 'Da descoberta ao pós-viagem: o que o cliente vive e o que a agência faz em cada passo.',
     categoria: 'viagens',
     icone: Route,
-    layout: 'org-right',
+    layout: 'timeline',
     theme: 'sunset',
     raiz: 'Cliente',
     galhos: [
@@ -235,7 +236,7 @@ export const MODELOS_DE_MAPA: ModeloDeMapa[] = [
     descricao: 'Espinha de peixe: um problema no centro e as causas em seis famílias.',
     categoria: 'estrategia',
     icone: Fish,
-    layout: 'map',
+    layout: 'fishbone',
     theme: 'sepia',
     raiz: 'Problema',
     galhos: [

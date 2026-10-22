@@ -35,7 +35,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { toast } from 'sonner';
-import { ArrowLeft, Check, Loader2, Sparkles, Save, Trash2, Plus, GitBranch, Palette, StickyNote, Smile, Keyboard, X, ChevronRight as ChevR, Shapes, Link2, Paperclip, Image as ImageIcon, List, LayoutGrid, Upload, Undo2, Redo2, MessageSquare, MoreHorizontal, Share2, Network, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Check, Loader2, Sparkles, Save, Trash2, Plus, GitBranch, Palette, StickyNote, Smile, Keyboard, X, ChevronRight as ChevR, Shapes, Link2, Paperclip, Image as ImageIcon, List, LayoutGrid, Upload, Undo2, Redo2, MessageSquare, MoreHorizontal, Share2, Network, ChevronDown, Orbit, Milestone, Fish, Grid3x3 } from 'lucide-react';
 import { MindNode, type MindNodeData, type DropHint } from '@/components/mapa-mental/MindNode';
 import { MindEdge } from '@/components/mapa-mental/MindEdge';
 import { OutlineView } from '@/components/mapa-mental/OutlineView';
@@ -43,7 +43,7 @@ import { ShareMapDialog } from '@/components/mapa-mental/ShareMapDialog';
 import { baixarMapaMentalPdf, exportarMapaMentalPdf } from '@/lib/mapa-mental-pdf';
 import { useAuth } from '@/contexts/AuthContext';
 import { podeExportar } from '@/lib/permissoes';
-import { type MapaMentalData, type Theme, type NodeSize, type LayoutNode, layoutMindMap, colorForNode, addChild, addSibling, updateNode, removeNode, moveNode, reorderNode, outdentNode, sanitizeMap, getChildren, getDescendantIds, createMindMap, newId, THEMES, NODE_COLORS, handlesDaLigacao, ehOrganograma, direcaoDoLayout, type MapaLayout } from '@/lib/mapa-mental';
+import { type MapaMentalData, type Theme, type NodeSize, type LayoutNode, layoutMindMap, colorForNode, addChild, addSibling, updateNode, removeNode, moveNode, reorderNode, outdentNode, sanitizeMap, getChildren, getDescendantIds, createMindMap, newId, THEMES, NODE_COLORS, handlesDaLigacao, ehOrganograma, direcaoDoLayout, type MapaLayout, estiloDaLigacao, eixoDeIrmaos } from '@/lib/mapa-mental';
 
 const nodeTypes: NodeTypes = { mindNode: MindNode };
 const edgeTypes: EdgeTypes = { mind: MindEdge };
@@ -663,7 +663,7 @@ function EditorInner({ id }: Props) {
     if (!drag) return null;
     const cx = x + drag.width / 2;
     const cy = y + drag.height / 2;
-    const vertical = direcaoDoLayout(d.layout) === 'vertical';
+    const vertical = eixoDeIrmaos(d.layout) === 'x';
     let best: { cand: LayoutNode; dx: number; dy: number } | null = null;
     let bestDist = Infinity;
     for (const cand of li.values()) {
@@ -952,6 +952,7 @@ function EditorInner({ id }: Props) {
         shape: n.style?.shape ?? (ehOrganograma(renderedData.layout) ? 'rounded' : undefined),
         bold: n.style?.bold,
         vertical: direcaoDoLayout(renderedData.layout) === 'vertical',
+        livre: direcaoDoLayout(renderedData.layout) === 'livre',
       };
       return {
         id: n.id,
@@ -976,7 +977,7 @@ function EditorInner({ id }: Props) {
         // (right→saida na direita do pai; left→saida na esquerda do pai).
         // Target entra no lado oposto do filho. IDs dos handles são
         // 'l' ou 'r' em TODOS os nós (incluindo raiz e intermediários).
-        const { sourceHandle, targetHandle } = handlesDaLigacao(renderedData.layout, n.side);
+        const { sourceHandle, targetHandle } = handlesDaLigacao(renderedData.layout, n.side, index.get(n.parentId), n);
         edges.push({
           id: `e-${n.parentId}-${n.id}`,
           source: n.parentId,
@@ -984,7 +985,7 @@ function EditorInner({ id }: Props) {
           sourceHandle,
           targetHandle,
           type: 'mind',
-          data: { color, faded: dragPos?.id === n.id, ortogonal: ehOrganograma(renderedData.layout) },
+          data: { color, faded: dragPos?.id === n.id, estilo: estiloDaLigacao(renderedData.layout), nivel: n.depth, costela: n.costela },
         });
       }
     }
@@ -2194,6 +2195,10 @@ const LAYOUTS_DO_SELETOR: { id: MapaLayout; rotulo: string; descricao: string; i
   { id: 'logical', rotulo: 'Árvore', descricao: 'Tudo cresce para a direita', icone: GitBranch },
   { id: 'org', rotulo: 'Organograma', descricao: 'Raiz no topo, cresce para baixo', icone: Network },
   { id: 'org-right', rotulo: 'Organograma deitado', descricao: 'Raiz à esquerda, cresce para o lado', icone: Network, girar: true },
+  { id: 'radial', rotulo: 'Radial', descricao: 'Ramos em círculo em volta da ideia central', icone: Orbit },
+  { id: 'timeline', rotulo: 'Linha do tempo', descricao: 'Eventos em ordem, acima e abaixo de um eixo', icone: Milestone },
+  { id: 'fishbone', rotulo: 'Espinha de peixe', descricao: 'Causas em espinhas que apontam para o efeito', icone: Fish },
+  { id: 'matrix', rotulo: 'Matriz', descricao: 'Cada ramo vira uma coluna', icone: Grid3x3 },
 ];
 
 /**
@@ -2242,7 +2247,7 @@ function SeletorDeLayout({ atual, desabilitado, onEscolher }: {
         <div
           role="menu"
           aria-label="Layout do mapa"
-          className="absolute right-0 top-full z-[var(--fin-z-menu)] mt-1 w-64 overflow-hidden rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] py-1 shadow-[var(--fin-e-popover,0_8px_24px_rgba(15,23,42,0.12))]"
+          className="absolute right-0 top-full z-[var(--fin-z-menu)] mt-1 w-72 max-h-[70vh] overflow-y-auto rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] py-1 shadow-[var(--fin-e-popover,0_8px_24px_rgba(15,23,42,0.12))]"
         >
           {LAYOUTS_DO_SELETOR.map(l => {
             const I = l.icone;
