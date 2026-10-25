@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { configSites, lerEnvelopeSites, receberEventoSites, verificarAssinaturaSites } from '@/lib/sites-integration';
+import { decifrar } from '@/lib/cofre';
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ tenantId: string }> }) {
   const { tenantId } = await ctx.params;
@@ -8,7 +9,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ tenantId: 
   if (Buffer.byteLength(corpo, 'utf8') > 131_072) return NextResponse.json({ erro: 'Evento grande demais' }, { status: 413 });
   try {
     const cfg = await configSites(tenantId);
-    if (!cfg?.ativo || !verificarAssinaturaSites(corpo, req.headers.get('x-enturos-signature') ?? '', cfg.segredo)) {
+    if (!cfg?.ativo || !verificarAssinaturaSites(corpo, req.headers.get('x-enturos-signature') ?? '', decifrar(cfg.segredo))) {
       return NextResponse.json({ erro: 'Assinatura inválida' }, { status: 401 });
     }
     let valor: unknown;

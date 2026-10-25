@@ -4,8 +4,8 @@ import { SITES_SCHEMA_SQL } from '../src/lib/sites-schema.ts';
 
 const db = new PGlite();
 await db.exec(SITES_SCHEMA_SQL);
-await db.query(`INSERT INTO sites_config (tenant_id, company_id, segredo) VALUES ($1, $2, $3)`, ['agencia-a', 42, 'segredo']);
-await db.query(`INSERT INTO sites_config (tenant_id, company_id, segredo) VALUES ($1, $2, $3)`, ['agencia-b', 42, 'outro']);
+await db.query(`INSERT INTO sites_config (tenant_id, company_id, segredo) VALUES ($1, $2, $3::jsonb)`, ['agencia-a', 42, JSON.stringify({ v: 1, iv: 'a', tag: 'b', ct: 'c' })]);
+await db.query(`INSERT INTO sites_config (tenant_id, company_id, segredo) VALUES ($1, $2, $3::jsonb)`, ['agencia-b', 42, JSON.stringify({ v: 1, iv: 'd', tag: 'e', ct: 'f' })]);
 const id = 'd0d9a84c-ccdf-48aa-9c1a-4a2cd933954c';
 const insert = `INSERT INTO sites_eventos
   (tenant_id, id, company_id, tipo, pedido_codigo, agregado_tipo, agregado_id, agregado_versao, criado_em, corpo_sha256, dados)

@@ -3,7 +3,7 @@ export const SITES_SCHEMA_SQL = `
   CREATE TABLE IF NOT EXISTS sites_config (
     tenant_id TEXT PRIMARY KEY,
     company_id INTEGER NOT NULL,
-    segredo TEXT NOT NULL,
+    segredo JSONB NOT NULL,
     ativo BOOLEAN NOT NULL DEFAULT true,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );

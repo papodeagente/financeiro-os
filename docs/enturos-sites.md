@@ -7,6 +7,7 @@ esse endereço e selecione **Reservas**, **Pagamentos** e **Acertos com parceiro
 O Sites mostra o segredo apenas na criação. Copie também o ID da empresa
 mostrado nessa tela, informe ambos no Financeiro e salve. Envie o teste pelo
 Sites e confirme que `teste.ping` aparece em **Eventos recentes**.
+O segredo é cifrado pelo cofre do Financeiro (`INTEGRACOES_MASTER_KEY`).
 
 O corpo é o envelope da versão 1 do Sites. A assinatura é
 `X-EnturOS-Signature: t=<segundos>,v1=<HMAC-SHA256(t.corpo)>`. O Financeiro

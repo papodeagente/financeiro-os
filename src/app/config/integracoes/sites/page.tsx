@@ -6,7 +6,7 @@ import { Link2, RefreshCw } from 'lucide-react';
 import { PageShell } from '@/components/PageShell';
 import { PageHeader } from '@/components/fin/PageHeader';
 
-interface Config { ativo: boolean; companyId: number | null; temSegredo: boolean; webhookUrl: string }
+interface Config { ativo: boolean; companyId: number | null; temSegredo: boolean; cofreDisponivel: boolean; webhookUrl: string }
 interface Evento { id: string; tipo: string; pedidoCodigo: string | null; criadoEm: string; dados: Record<string, unknown> }
 const moedaDo = (valor: unknown) => typeof valor === 'string' && /^[A-Z]{3}$/.test(valor) ? valor : 'BRL';
 
@@ -60,6 +60,7 @@ export default function IntegracaoSitesPage() {
 
       <section className="rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-5">
         <h2 className="fin-t-body-strong">Conectar o Sites</h2>
+        {cfg && !cfg.cofreDisponivel && <p role="alert" className="mt-3 rounded-lg border border-[var(--fin-warning)] p-3 fin-t-caption">O cofre de credenciais do Financeiro ainda não está configurado. Configure INTEGRACOES_MASTER_KEY no servidor antes de salvar a conexão.</p>}
         <ol className="mt-3 list-decimal space-y-2 pl-5 fin-t-body text-[var(--fin-text-2)]">
           <li>No Sites, abra Integrações → Webhooks e crie um webhook para os eventos de reserva, dinheiro e acerto.</li>
           <li>Use o endereço abaixo como destino e copie o segredo mostrado pelo Sites uma única vez.</li>
@@ -78,7 +79,7 @@ export default function IntegracaoSitesPage() {
               className="rounded-lg border border-[var(--fin-border)] bg-[var(--fin-surface)] p-3" />
           </label>
           <label className="flex items-center gap-2 fin-t-caption"><input type="checkbox" checked={ativo} onChange={e => setAtivo(e.target.checked)} /> Receber eventos</label>
-          <button type="submit" disabled={salvando} className="w-fit rounded-lg bg-[var(--fin-accent)] px-5 py-3 font-semibold text-[var(--fin-text-on-fill)] disabled:opacity-50">
+          <button type="submit" disabled={salvando || !cfg?.cofreDisponivel} className="w-fit rounded-lg bg-[var(--fin-accent)] px-5 py-3 font-semibold text-[var(--fin-text-on-fill)] disabled:opacity-50">
             {salvando ? 'Salvando…' : 'Salvar conexão'}
           </button>
         </form>

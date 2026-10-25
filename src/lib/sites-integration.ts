@@ -1,5 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import pool, { initDB } from './db';
+import { cifrar, type Envelope } from './cofre';
 
 export const TIPOS_SITES = new Set([
   'reserva.criada', 'reserva.pendente', 'reserva.confirmada', 'reserva.recusada',
@@ -45,7 +46,7 @@ export function lerEnvelopeSites(valor: unknown, empresaId: number): EnvelopeSit
 export async function configSites(tenantId: string) {
   if (!pool) throw new Error('Banco de dados indisponível');
   await initDB();
-  const { rows } = await pool.query<{ company_id: number; segredo: string; ativo: boolean }>(
+  const { rows } = await pool.query<{ company_id: number; segredo: Envelope; ativo: boolean }>(
     'SELECT company_id, segredo, ativo FROM sites_config WHERE tenant_id = $1', [tenantId],
   );
   return rows[0] ?? null;
@@ -56,14 +57,16 @@ export async function salvarConfigSites(tenantId: string, companyId: number, seg
   await initDB();
   if (!Number.isSafeInteger(companyId) || companyId < 1) throw new Error('ID da empresa no Sites inválido');
   const atual = await configSites(tenantId);
-  const chave = segredo?.trim() || atual?.segredo || '';
-  if (!/^whsec_[A-Za-z0-9_-]{40,}$/.test(chave) && chave.length < 32) throw new Error('Informe o segredo do webhook do Sites');
+  const chave = segredo?.trim() || '';
+  if (!chave && !atual?.segredo) throw new Error('Informe o segredo do webhook do Sites');
+  if (chave && !/^whsec_[A-Za-z0-9_-]{40,}$/.test(chave)) throw new Error('Segredo do webhook do Sites inválido');
+  const cifrado = chave ? cifrar(chave) : atual!.segredo;
   await pool.query(
     `INSERT INTO sites_config (tenant_id, company_id, segredo, ativo)
-     VALUES ($1, $2, $3, $4)
+     VALUES ($1, $2, $3::jsonb, $4)
      ON CONFLICT (tenant_id) DO UPDATE SET company_id = EXCLUDED.company_id,
        segredo = EXCLUDED.segredo, ativo = EXCLUDED.ativo, updated_at = NOW()`,
-    [tenantId, companyId, chave, ativo],
+    [tenantId, companyId, JSON.stringify(cifrado), ativo],
   );
 }
 

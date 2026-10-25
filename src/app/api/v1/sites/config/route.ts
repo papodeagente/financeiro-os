@@ -4,6 +4,7 @@ import { getTenantId } from '@/lib/tenant';
 import { bloqueioFinanceiro } from '@/lib/permissoes';
 import { configSites, salvarConfigSites } from '@/lib/sites-integration';
 import { registrarEventoAuditoria } from '@/lib/audit';
+import { cofreDisponivel, ErroCofre } from '@/lib/cofre';
 
 export async function GET(req: NextRequest) {
   const bloqueio = bloqueioFinanceiro(await getSession(), 'ler');
@@ -16,6 +17,7 @@ export async function GET(req: NextRequest) {
       ativo: cfg?.ativo ?? false,
       companyId: cfg?.company_id ?? null,
       temSegredo: Boolean(cfg?.segredo),
+      cofreDisponivel: cofreDisponivel(),
       webhookUrl: `${origem}/api/v1/sites/webhook/${encodeURIComponent(tenantId)}`,
     });
   } catch { return NextResponse.json({ erro: 'Falha ao carregar integração' }, { status: 500 }); }
@@ -38,6 +40,6 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Erro';
     const invalido = /inválido|Informe/.test(msg);
-    return NextResponse.json({ erro: invalido ? msg : 'Falha ao salvar integração' }, { status: invalido ? 400 : 500 });
+    return NextResponse.json({ erro: invalido || e instanceof ErroCofre ? msg : 'Falha ao salvar integração' }, { status: invalido ? 400 : 500 });
   }
 }
