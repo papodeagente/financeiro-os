@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/fin/PageHeader';
 
 interface Config { ativo: boolean; companyId: number | null; temSegredo: boolean; webhookUrl: string }
 interface Evento { id: string; tipo: string; pedidoCodigo: string | null; criadoEm: string; dados: Record<string, unknown> }
+const moedaDo = (valor: unknown) => typeof valor === 'string' && /^[A-Z]{3}$/.test(valor) ? valor : 'BRL';
 
 export default function IntegracaoSitesPage() {
   const [cfg, setCfg] = useState<Config | null>(null);
@@ -91,7 +92,7 @@ export default function IntegracaoSitesPage() {
           <ul className="mt-3 divide-y divide-[var(--fin-border)]">{eventos.map(ev => <li key={ev.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-3 fin-t-caption">
             <strong className="text-[var(--fin-text)]">{ev.tipo}</strong>{ev.pedidoCodigo ? <Link href={`/config/integracoes/sites/pedido/${encodeURIComponent(ev.pedidoCodigo)}`} className="text-[var(--fin-accent)] underline">{ev.pedidoCodigo}</Link> : <span>Sem pedido</span>}
             <time dateTime={ev.criadoEm}>{new Date(ev.criadoEm).toLocaleString('pt-BR')}</time>
-            <span className="text-[var(--fin-text-3)]">{ev.dados.valorCentavos != null ? `${(Number(ev.dados.valorCentavos) / 100).toLocaleString('pt-BR', { style: 'currency', currency: String(ev.dados.moeda || 'BRL') })}` : ''}</span>
+            <span className="text-[var(--fin-text-3)]">{typeof ev.dados.valorCentavos === 'number' ? (ev.dados.valorCentavos / 100).toLocaleString('pt-BR', { style: 'currency', currency: moedaDo(ev.dados.moeda) }) : ''}</span>
           </li>)}</ul>}
       </section>
     </PageShell>

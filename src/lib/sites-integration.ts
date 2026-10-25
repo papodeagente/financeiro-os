@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import pool, { initDB } from './db';
 
 export const TIPOS_SITES = new Set([
@@ -92,4 +92,3 @@ export async function receberEventoSites(tenantId: string, envelope: EnvelopeSit
   return { duplicado: true };
 }
 
-export function novoSegredoSites() { return `whsec_${randomBytes(32).toString('base64url')}`; }
