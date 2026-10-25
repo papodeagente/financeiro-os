@@ -14,7 +14,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { BrainCircuit, FileText, Link2, type LucideIcon } from 'lucide-react';
+import { BrainCircuit, FileText, Link2, Globe2, type LucideIcon } from 'lucide-react';
 
 import { PageShell } from '@/components/PageShell';
 import { PageHeader } from '@/components/fin/PageHeader';
@@ -118,10 +118,11 @@ export default function IntegracoesPage() {
     };
 
     try {
-    const [ia, crm, fiscal] = await Promise.all([
+    const [ia, crm, fiscal, sites] = await Promise.all([
       pegar('/api/apis-config'),
       pegar('/api/v1/crm/status'),
       pegar('/api/fiscal/config'),
+      pegar('/api/v1/sites/config'),
     ]);
 
     const iaCfg = (ia.corpo ?? {}) as Record<string, { api_key?: string; ativo?: boolean }>;
@@ -140,6 +141,13 @@ export default function IntegracoesPage() {
     );
 
     setItens([
+      {
+        chave: 'sites', nome: 'EnturOS Sites',
+        oQueFaz: 'Recebe os eventos de reserva e dinheiro do site para conferência, sem duplicar a venda do CRM.',
+        icone: Globe2, href: '/config/integracoes/sites',
+        situacao: !sites.ok ? 'sem-acesso' : (sites.corpo as { ativo?: boolean; temSegredo?: boolean })?.ativo && (sites.corpo as { temSegredo?: boolean })?.temSegredo ? 'conectado' : 'desligado',
+        detalhe: 'Conecte pela URL e pelo segredo do webhook do Sites.',
+      },
       {
         chave: 'crm',
         nome: 'CRM Entur',
