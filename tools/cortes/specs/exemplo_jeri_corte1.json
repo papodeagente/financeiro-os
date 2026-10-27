@@ -1,0 +1,29 @@
+{
+ "fonte": "/tmp/claude-0/-home-user-financeiro-os/94d821bb-3abb-5d3b-a22e-99158480652e/scratchpad/src/video.mp4",
+ "selo": "ECLIPSE EXPERIENCE",
+ "direita": "Jericoacoara · #003",
+ "mentor": "B",
+ "convidado": "N",
+ "pessoas": {
+  "B": {"nome": "Bruno Barbosa", "papel": "Mentor de agências · Entur", "mentor": true, "solo_x": 674, "dupla_xy": [650, 40]},
+  "N": {"nome": "Nara", "papel": "Sócia-fundadora · Fly World Perdizes", "solo_x": 14, "dupla_xy": [10, 70]}
+ },
+ "clips": [
+  {"quem": "B", "a": 317.55, "b": 336.95, "layout": "solo",
+   "palavras": [[317.66,"Eu"],[318.02,"citei"],[318.26,"várias"],[318.52,"vezes"],[318.80,"vocês"],[319.08,"como"],[319.22,"exemplo"],[319.66,"para"],[319.90,"inspirar"],[320.38,"outras"],[320.66,"agências"],[321.18,"porque"],[321.90,"vocês"],[322.14,"construíram"],[322.94,"um"],[323.12,"produto"],[323.46,"de"],[323.66,"experiência"],[324.32,"fora"],[324.68,"do"],[324.84,"convencional."],[326.24,"Com"],[326.70,"muito"],[326.96,"valor"],[327.16,"agregado,"],[327.98,"o"],[328.40,"que"],[328.48,"possibilitava"],[329.22,"para"],[329.44,"vocês,"],[329.90,"até"],[330.10,"hoje,"],[330.76,"uma"],[330.98,"margem"],[331.44,"diferente"],[331.84,"daquela"],[332.38,"padrão"],[332.86,"do"],[333.08,"mercado"],[333.46,"justamente"],[333.86,"porque"],[334.38,"vocês"],[334.68,"tinham"],[335.06,"um"],[335.24,"produto"],[335.64,"diferente."]]},
+  {"quem": "N", "a": 440.75, "b": 445.0, "layout": "dupla"},
+  {"quem": "B", "a": 288.95, "b": 297.7, "layout": "dupla"},
+  {"quem": "N", "a": 488.3, "b": 500.3, "layout": "solo"},
+  {"quem": "B", "a": 632.2, "b": 637.1, "layout": "solo",
+   "palavras": [[632.28,"É"],[632.38,"um"],[632.56,"atendimento"],[633.00,"online"],[633.66,"e,"],[634.24,"mesmo"],[634.50,"assim,"],[634.80,"ter"],[635.00,"tanto"],[635.18,"sucesso"],[635.66,"em"],[635.86,"vendas"],[636.08,"como"],[636.28,"vocês"],[636.58,"tiveram!"]]}
+ ],
+ "graficos": [
+  {"t0": 0, "t1": 4.6, "tipo": "manchete", "dados": {"tag": "Prova social", "linhas": ["Virou *exemplo*", "para outras", "agências"]}},
+  {"t0": 4.6, "t1": 13.2, "tipo": "lista", "dados": {"titulo": "Produto de *experiência*", "itens": [{"texto": "Fora do convencional", "t": 1.6}, {"texto": "Muito valor agregado", "t": 4.4}, {"texto": "Curadoria testada", "t": 5.8}]}},
+  {"t0": 13.2, "t1": 19.4, "tipo": "barras", "dados": {"titulo": "*Margem*", "sub": "produto diferente, margem diferente", "itens": [{"rotulo": "Padrão do mercado", "valor": 0.35}, {"rotulo": "Produto diferente", "valor": 0.92, "destaque": true, "tag": "ACIMA"}], "nota": "*gráfico ilustrativo"}},
+  {"t0": 32.4, "t1": 44.4, "tipo": "linha", "dados": {"titulo": "O *lançamento*", "sub": "aceitação muito grande", "pontos": [0.03, 0.06, 0.1, 0.2, 0.33, 0.5, 0.7, 0.95], "eixo": ["Ideia", "", "Lançamento", "", "", "", "", "Hoje"], "selo": "Demanda reprimida", "selo_t": 8.0, "nota": "*gráfico ilustrativo"}},
+  {"t0": 44.4, "t1": 49.3, "tipo": "numero", "dados": {"titulo": "Atendimento", "valor": 100, "sufixo": "%", "rotulo": "online", "conta": 1.2}}
+ ],
+ "final": {"linhas": ["Produto diferente.", "*Margem diferente.*"], "cta": "Mentoria Entur", "assinatura": "@papodeagente · ENTUR"},
+ "musica": {"arquivo": "/tmp/claude-0/-home-user-financeiro-os/94d821bb-3abb-5d3b-a22e-99158480652e/scratchpad/music/Five_Armies.mp3", "inicio": 78}
+}
