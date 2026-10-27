@@ -65,11 +65,17 @@ O campo `t` dos itens é o segundo (dentro do bloco) em que o item aparece: sinc
 5. **Número só se foi dito** na entrevista. Gráfico de tendência sem número leva `*gráfico ilustrativo`.
 6. Cartão final: frase-resumo em 2 linhas + pílula "Mentoria Entur" + `@papodeagente · ENTUR`.
 
-## Áudio
+## Áudio (regra definitiva, pedida pelo Bruno)
 
-- Trilha épica de fundo (padrão: Kevin MacLeod, CC BY 4.0: "Five Armies", "Volatile Reaction"). **Creditar na legenda do post.**
-- A música abaixa sozinha durante as falas (cerca de -12 dB) e sobe nas pausas e no cartão final.
-- Whoosh em cada troca de layout ou de gráfico, impacto grave na abertura e no cartão final.
+Foco em vídeo viral: **a voz manda, a música acompanha.**
+
+- **Tom épico/viral se mantém**, mas a música **nunca disputa com a voz**: bem mais baixa durante as falas
+  (mais funda que -12 dB, e mais "escondida" nas frequências da voz), subindo só em respiros e no cartão final.
+  Harmonia entre música e voz vem antes de impacto.
+- **Efeito sonoro sincronizado com o movimento**: cada som nasce junto com uma animação na tela
+  (entrada de número, barra subindo, check da lista, troca de layout). Nada de som sem movimento.
+- **Sem exagero**: efeitos discretos e curtos, poucos por corte; nada de impacto grave em toda troca.
+- Créditos da trilha (Kevin MacLeod, CC BY 4.0: "Five Armies", "Volatile Reaction", "Heroic Age") **na legenda do post.**
 
 ## Como gerar um corte
 
