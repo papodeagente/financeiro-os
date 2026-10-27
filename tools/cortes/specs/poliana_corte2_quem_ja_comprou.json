@@ -1,0 +1,310 @@
+{
+ "fonte": "/tmp/claude-0/-home-user-financeiro-os/94d821bb-3abb-5d3b-a22e-99158480652e/scratchpad/src_poli/video.mp4",
+ "selo": "ECLIPSE EXPERIENCE",
+ "direita": "Canoa Quebrada · #001",
+ "mentor": "B",
+ "convidado": "P",
+ "pessoas": {
+  "B": {
+   "nome": "Bruno Barbosa",
+   "papel": "Mentor de agências · Entur",
+   "mentor": true,
+   "solo_x": 708,
+   "dupla_xy": [
+    680,
+    10
+   ]
+  },
+  "P": {
+   "nome": "Poliana Mello",
+   "papel": "Central Tur · Recife",
+   "solo_x": 0,
+   "dupla_xy": [
+    0,
+    20
+   ]
+  }
+ },
+ "corrigir": {
+  "Entu": "Entur",
+  "Entu,": "Entur,",
+  "Entura,": "Entur,",
+  "Intu": "Entur",
+  "Pauli,": "Poli,",
+  "Paule,": "Poli,",
+  "Apólio": "Poli",
+  "Lead,": "lead,",
+  "-lo": "-lo"
+ },
+ "clips": [
+  {
+   "quem": "B",
+   "a": 405.5,
+   "b": 413.25,
+   "layout": "solo"
+  },
+  {
+   "quem": "B",
+   "a": 478.85,
+   "b": 483.3,
+   "layout": "solo"
+  },
+  {
+   "quem": "P",
+   "a": 483.6,
+   "b": 487.95,
+   "layout": "dupla"
+  },
+  {
+   "quem": "P",
+   "a": 663.95,
+   "b": 686.55,
+   "layout": "solo"
+  },
+  {
+   "quem": "P",
+   "a": 693.35,
+   "b": 706.05,
+   "layout": "solo",
+   "palavras": [
+    [
+     693.42,
+     "Eu"
+    ],
+    [
+     693.5,
+     "entendo"
+    ],
+    [
+     693.76,
+     "que"
+    ],
+    [
+     693.9,
+     "eu"
+    ],
+    [
+     694.0,
+     "tenho"
+    ],
+    [
+     694.1,
+     "um"
+    ],
+    [
+     694.24,
+     "público"
+    ],
+    [
+     694.48,
+     "desconhecido,"
+    ],
+    [
+     695.58,
+     "que"
+    ],
+    [
+     695.66,
+     "eu"
+    ],
+    [
+     695.76,
+     "transformo"
+    ],
+    [
+     696.42,
+     "em"
+    ],
+    [
+     696.76,
+     "lead,"
+    ],
+    [
+     697.38,
+     "depois"
+    ],
+    [
+     698.02,
+     "transformo"
+    ],
+    [
+     698.8,
+     "em"
+    ],
+    [
+     699.0,
+     "cliente"
+    ],
+    [
+     699.62,
+     "de"
+    ],
+    [
+     699.7,
+     "primeira"
+    ],
+    [
+     699.98,
+     "compra,"
+    ],
+    [
+     700.78,
+     "depois"
+    ],
+    [
+     701.38,
+     "em"
+    ],
+    [
+     701.7,
+     "cliente"
+    ],
+    [
+     702.58,
+     "recorrente."
+    ],
+    [
+     703.38,
+     "Depois"
+    ],
+    [
+     703.78,
+     "dessa"
+    ],
+    [
+     704.08,
+     "recorrência,"
+    ],
+    [
+     705.26,
+     "eu"
+    ],
+    [
+     705.3,
+     "aumento"
+    ],
+    [
+     705.56,
+     "o"
+    ],
+    [
+     705.78,
+     "ticket."
+    ]
+   ]
+  }
+ ],
+ "graficos": [
+  {
+   "t0": 0,
+   "t1": 7.75,
+   "tipo": "manchete",
+   "dados": {
+    "tag": "O que dá lucro",
+    "linhas": [
+     "Vender para quem",
+     "*já comprou*",
+     "de você"
+    ]
+   }
+  },
+  {
+   "t0": 7.75,
+   "t1": 12.199999999999989,
+   "tipo": "lista",
+   "dados": {
+    "titulo": "Os 3 *pilares*",
+    "itens": [
+     {
+      "texto": "Recorrência",
+      "t": 2.4
+     },
+     {
+      "texto": "Indicação",
+      "t": 3.15
+     },
+     {
+      "texto": "Recuperação",
+      "t": 3.95
+     }
+    ]
+   }
+  },
+  {
+   "t0": 16.549999999999955,
+   "t1": 23.749999999999954,
+   "tipo": "manchete",
+   "dados": {
+    "linhas": [
+     "O anúncio",
+     "paga *o dado*"
+    ]
+   }
+  },
+  {
+   "t0": 23.749999999999954,
+   "t1": 27.749999999999954,
+   "tipo": "manchete",
+   "dados": {
+    "linhas": [
+     "Depois disso,",
+     "tudo vira *lucro*"
+    ]
+   }
+  },
+  {
+   "t0": 27.749999999999954,
+   "t1": 39.149999999999864,
+   "tipo": "numero",
+   "dados": {
+    "titulo": "Pacote de *R$ 2 mil*",
+    "valor": 240,
+    "prefixo": "R$ ",
+    "rotulo": "de lucro, dado já pago",
+    "conta": 2.0
+   }
+  },
+  {
+   "t0": 39.149999999999864,
+   "t1": 51.849999999999866,
+   "tipo": "etapas",
+   "dados": {
+    "titulo": "A *jornada* do cliente",
+    "etapas": [
+     {
+      "texto": "Desconhecido",
+      "t": 0.9
+     },
+     {
+      "texto": "Lead",
+      "t": 3.3
+     },
+     {
+      "texto": "1ª compra",
+      "t": 6.3
+     },
+     {
+      "texto": "Recorrente",
+      "t": 9.2
+     },
+     {
+      "texto": "Ticket maior",
+      "t": 11.9
+     }
+    ]
+   }
+  }
+ ],
+ "final": {
+  "linhas": [
+   "O lucro está em",
+   "*quem já comprou*"
+  ],
+  "cta": "Mentoria Entur",
+  "assinatura": "@papodeagente · ENTUR"
+ },
+ "musica": {
+  "arquivo": "/tmp/claude-0/-home-user-financeiro-os/94d821bb-3abb-5d3b-a22e-99158480652e/scratchpad/music/Volatile_Reaction.mp3",
+  "inicio": 0
+ }
+}

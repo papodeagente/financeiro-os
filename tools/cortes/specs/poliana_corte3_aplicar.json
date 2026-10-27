@@ -1,0 +1,387 @@
+{
+ "fonte": "/tmp/claude-0/-home-user-financeiro-os/94d821bb-3abb-5d3b-a22e-99158480652e/scratchpad/src_poli/video.mp4",
+ "selo": "ECLIPSE EXPERIENCE",
+ "direita": "Canoa Quebrada · #001",
+ "mentor": "B",
+ "convidado": "P",
+ "pessoas": {
+  "B": {
+   "nome": "Bruno Barbosa",
+   "papel": "Mentor de agências · Entur",
+   "mentor": true,
+   "solo_x": 708,
+   "dupla_xy": [
+    680,
+    10
+   ]
+  },
+  "P": {
+   "nome": "Poliana Mello",
+   "papel": "Central Tur · Recife",
+   "solo_x": 0,
+   "dupla_xy": [
+    0,
+    20
+   ]
+  }
+ },
+ "corrigir": {
+  "Entu": "Entur",
+  "Entu,": "Entur,",
+  "Entura,": "Entur,",
+  "Intu": "Entur",
+  "Pauli,": "Poli,",
+  "Paule,": "Poli,",
+  "Apólio": "Poli",
+  "Lead,": "lead,",
+  "-lo": "-lo"
+ },
+ "clips": [
+  {
+   "quem": "B",
+   "a": 79.7,
+   "b": 87.65,
+   "layout": "solo",
+   "solo_x": 470
+  },
+  {
+   "quem": "P",
+   "a": 88.65,
+   "b": 97.95,
+   "layout": "solo"
+  },
+  {
+   "quem": "B",
+   "a": 1153.2,
+   "b": 1164.0,
+   "layout": "solo"
+  },
+  {
+   "quem": "P",
+   "a": 1342.1,
+   "b": 1351.0,
+   "layout": "solo",
+   "palavras": [
+    [
+     1342.16,
+     "O"
+    ],
+    [
+     1343.14,
+     "segredo"
+    ],
+    [
+     1343.4,
+     "tá"
+    ],
+    [
+     1343.52,
+     "na"
+    ],
+    [
+     1343.62,
+     "delegação."
+    ],
+    [
+     1344.32,
+     "Eu"
+    ],
+    [
+     1344.66,
+     "entendi"
+    ],
+    [
+     1345.06,
+     "que"
+    ],
+    [
+     1345.26,
+     "o"
+    ],
+    [
+     1345.34,
+     "processo"
+    ],
+    [
+     1346.24,
+     "precisa"
+    ],
+    [
+     1346.6,
+     "ser"
+    ],
+    [
+     1347.0,
+     "muito"
+    ],
+    [
+     1347.26,
+     "bem"
+    ],
+    [
+     1347.46,
+     "estruturado"
+    ],
+    [
+     1348.58,
+     "pra"
+    ],
+    [
+     1349.1,
+     "que"
+    ],
+    [
+     1349.32,
+     "outras"
+    ],
+    [
+     1349.7,
+     "pessoas"
+    ],
+    [
+     1350.18,
+     "possam"
+    ],
+    [
+     1350.58,
+     "fazer."
+    ]
+   ]
+  },
+  {
+   "quem": "P",
+   "a": 1380.25,
+   "b": 1383.5,
+   "layout": "solo"
+  },
+  {
+   "quem": "P",
+   "a": 1388.82,
+   "b": 1390.55,
+   "layout": "solo"
+  },
+  {
+   "quem": "P",
+   "a": 1402.38,
+   "b": 1404.85,
+   "layout": "solo"
+  },
+  {
+   "quem": "B",
+   "a": 1301.0,
+   "b": 1308.2,
+   "layout": "dupla",
+   "palavras": [
+    [
+     1301.06,
+     "Aqui"
+    ],
+    [
+     1301.22,
+     "na"
+    ],
+    [
+     1301.34,
+     "Entur,"
+    ],
+    [
+     1302.24,
+     "a"
+    ],
+    [
+     1302.94,
+     "gente"
+    ],
+    [
+     1303.08,
+     "entrega"
+    ],
+    [
+     1303.68,
+     "não"
+    ],
+    [
+     1303.92,
+     "pra"
+    ],
+    [
+     1304.1,
+     "você"
+    ],
+    [
+     1304.36,
+     "ter"
+    ],
+    [
+     1304.54,
+     "lucro,"
+    ],
+    [
+     1304.96,
+     "mas"
+    ],
+    [
+     1305.34,
+     "pra"
+    ],
+    [
+     1305.5,
+     "você"
+    ],
+    [
+     1305.78,
+     "ter"
+    ],
+    [
+     1306.06,
+     "tempo"
+    ],
+    [
+     1306.46,
+     "e"
+    ],
+    [
+     1306.56,
+     "liberdade"
+    ],
+    [
+     1307.06,
+     "junto"
+    ],
+    [
+     1307.34,
+     "com"
+    ],
+    [
+     1307.52,
+     "a"
+    ],
+    [
+     1307.56,
+     "sua"
+    ],
+    [
+     1307.7,
+     "família."
+    ]
+   ]
+  }
+ ],
+ "graficos": [
+  {
+   "t0": 0,
+   "t1": 7.950000000000003,
+   "tipo": "manchete",
+   "dados": {
+    "tag": "Na Entur",
+    "linhas": [
+     "Campo de batalha,",
+     "*não teoria*"
+    ]
+   }
+  },
+  {
+   "t0": 7.950000000000003,
+   "t1": 11.350000000000003,
+   "tipo": "selo",
+   "dados": {
+    "grande": "1º",
+    "linha1": "Aplicar",
+    "linha2": "o segredo da Poliana"
+   }
+  },
+  {
+   "t0": 11.350000000000003,
+   "t1": 17.25,
+   "tipo": "lista",
+   "dados": {
+    "titulo": "Sem *fórmula mágica*",
+    "itens": [
+     {
+      "texto": "Buscar o que é aplicável",
+      "t": 0.6
+     },
+     {
+      "texto": "Aplicar de verdade",
+      "t": 2.6
+     },
+     {
+      "texto": "Aprendido na Entur",
+      "t": 4.6
+     }
+    ]
+   }
+  },
+  {
+   "t0": 17.25,
+   "t1": 28.049999999999955,
+   "tipo": "etapas",
+   "dados": {
+    "titulo": "A *receita* do bolo",
+    "etapas": [
+     {
+      "texto": "Implementar",
+      "t": 3.0
+     },
+     {
+      "texto": "Seguir o caminho",
+      "t": 6.9
+     },
+     {
+      "texto": "Fazer",
+      "t": 9.4
+     },
+     {
+      "texto": "Funcionou",
+      "t": 10.3
+     }
+    ]
+   }
+  },
+  {
+   "t0": 28.049999999999955,
+   "t1": 36.950000000000045,
+   "tipo": "manchete",
+   "dados": {
+    "linhas": [
+     "O segredo",
+     "está na *delegação*"
+    ]
+   }
+  },
+  {
+   "t0": 36.950000000000045,
+   "t1": 44.399999999999864,
+   "tipo": "lista",
+   "dados": {
+    "titulo": "Hoje, com *tempo*",
+    "itens": [
+     {
+      "texto": "Busca as filhas na escola",
+      "t": 0.9
+     },
+     {
+      "texto": "Leva as filhas no inglês",
+      "t": 3.4
+     },
+     {
+      "texto": "Tempo de qualidade",
+      "t": 5.1
+     }
+    ]
+   }
+  }
+ ],
+ "final": {
+  "linhas": [
+   "Lucro com",
+   "*tempo para a família*"
+  ],
+  "cta": "Mentoria Entur",
+  "assinatura": "@papodeagente · ENTUR"
+ },
+ "musica": {
+  "arquivo": "/tmp/claude-0/-home-user-financeiro-os/94d821bb-3abb-5d3b-a22e-99158480652e/scratchpad/music/Heroic_Age.mp3",
+  "inicio": 40
+ }
+}

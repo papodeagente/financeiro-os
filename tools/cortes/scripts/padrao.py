@@ -153,11 +153,12 @@ def b_numero(g, t, dur, d):
     s, al = pop(t, .2, .5)
     size = d.get("size", 150)
     # brilho atrás do número
-    g.circle(W / 2, 400, 230 * eo(prog(t, .2, .8)), rgba(PURPLE, .35 * al))
-    g.text(W / 2, 400, txt, "Black", size * max(s, .3), rgba(WHITE, al), "mm")
+    alerta = d.get("alerta")
+    g.circle(W / 2, 400, 230 * eo(prog(t, .2, .8)), rgba(PINK if alerta else PURPLE, .35 * al))
+    g.text(W / 2, 400, txt, "Black", size * max(s, .3), rgba(PINK if alerta else WHITE, al), "mm")
     if d.get("rotulo"):
         q = eo(prog(t, .9, .45))
-        g.pill(W / 2, 560 + (1 - q) * 20, d["rotulo"].upper(), WHITE, PURPLE, 32, q)
+        g.pill(W / 2, 560 + (1 - q) * 20, d["rotulo"].upper(), WHITE, PINK if alerta else PURPLE, 32, q)
 
 def b_barras(g, t, dur, d):
     """Comparativo em barras. data: titulo, sub, itens[{rotulo, valor(0-1), destaque, tag}], nota"""
@@ -239,17 +240,17 @@ def b_citacao(g, t, dur, d):
 def b_etapas(g, t, dur, d):
     """Fluxo vertical de etapas. data: titulo, etapas[{texto, t}]"""
     _title(g, t, d)
-    st = d["etapas"]; n = len(st); gap = min(120, 420 / max(1, n - 1))
+    st = d["etapas"]; n = len(st); gap = min(120, 360 / max(1, n - 1)); bh = 40 if n <= 4 else 34
     for i, e in enumerate(st):
         a = e.get("t", .4 + i * .7); y = 280 + i * gap
         if i > 0:
             q = eo(prog(t, a - .25, .25))
-            if q > 0: g.line([(540, y - gap + 42), (540, y - gap + 42 + (gap - 84) * q)], rgba(LILAC, q), 5)
+            if q > 0: g.line([(540, y - gap + bh + 2), (540, y - gap + bh + 2 + (gap - 2 * bh - 4) * q)], rgba(LILAC, q), 5)
         s, al = pop(t, a, .45)
         if al <= 0: continue
         last = i == n - 1
         w2 = 280 * s
-        g.rect(540 - w2, y - 40 * s, 540 + w2, y + 40 * s, rgba(PURPLE if last else BG_MID, al), r=40,
+        g.rect(540 - w2, y - bh * s, 540 + w2, y + bh * s, rgba(PURPLE if last else BG_MID, al), r=bh,
                outline=rgba(LILAC if last else PURPLE, al), width=3)
         g.text(540, y + 2, e["texto"], "ExtraBold", 36, rgba(WHITE, al), "mm")
 

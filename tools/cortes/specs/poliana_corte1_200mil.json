@@ -1,0 +1,259 @@
+{
+ "fonte": "/tmp/claude-0/-home-user-financeiro-os/94d821bb-3abb-5d3b-a22e-99158480652e/scratchpad/src_poli/video.mp4",
+ "selo": "ECLIPSE EXPERIENCE",
+ "direita": "Canoa Quebrada · #001",
+ "mentor": "B",
+ "convidado": "P",
+ "pessoas": {
+  "B": {
+   "nome": "Bruno Barbosa",
+   "papel": "Mentor de agências · Entur",
+   "mentor": true,
+   "solo_x": 708,
+   "dupla_xy": [
+    680,
+    10
+   ]
+  },
+  "P": {
+   "nome": "Poliana Mello",
+   "papel": "Central Tur · Recife",
+   "solo_x": 0,
+   "dupla_xy": [
+    0,
+    20
+   ]
+  }
+ },
+ "corrigir": {
+  "Entu": "Entur",
+  "Entu,": "Entur,",
+  "Entura,": "Entur,",
+  "Intu": "Entur",
+  "Pauli,": "Poli,",
+  "Paule,": "Poli,",
+  "Apólio": "Poli",
+  "Lead,": "lead,",
+  "-lo": "-lo"
+ },
+ "clips": [
+  {
+   "quem": "B",
+   "a": 782.85,
+   "b": 790.95,
+   "layout": "solo"
+  },
+  {
+   "quem": "P",
+   "a": 130.8,
+   "b": 139.35,
+   "layout": "solo"
+  },
+  {
+   "quem": "P",
+   "a": 153.3,
+   "b": 157.15,
+   "layout": "solo"
+  },
+  {
+   "quem": "P",
+   "a": 1044.9,
+   "b": 1059.95,
+   "layout": "solo",
+   "remover": [
+    "não"
+   ]
+  },
+  {
+   "quem": "B",
+   "a": 1213.7,
+   "b": 1225.4,
+   "layout": "solo"
+  },
+  {
+   "quem": "P",
+   "a": 1225.45,
+   "b": 1230.35,
+   "layout": "dupla",
+   "palavras": [
+    [
+     1225.52,
+     "E"
+    ],
+    [
+     1225.64,
+     "não"
+    ],
+    [
+     1225.8,
+     "foi"
+    ],
+    [
+     1226.04,
+     "cumulativo."
+    ],
+    [
+     1227.62,
+     "Eu"
+    ],
+    [
+     1228.02,
+     "fiz"
+    ],
+    [
+     1228.42,
+     "100"
+    ],
+    [
+     1228.64,
+     "mil"
+    ],
+    [
+     1228.94,
+     "e"
+    ],
+    [
+     1229.08,
+     "depois"
+    ],
+    [
+     1229.42,
+     "eu"
+    ],
+    [
+     1229.6,
+     "fiz"
+    ],
+    [
+     1229.76,
+     "mais"
+    ],
+    [
+     1229.98,
+     "200."
+    ]
+   ]
+  },
+  {
+   "quem": "B",
+   "a": 1237.9,
+   "b": 1241.65,
+   "layout": "dupla"
+  }
+ ],
+ "graficos": [
+  {
+   "t0": 0,
+   "t1": 8.100000000000023,
+   "tipo": "numero",
+   "dados": {
+    "titulo": "Placa no *palco*",
+    "valor": 200,
+    "prefixo": "R$ ",
+    "sufixo": " mil",
+    "rotulo": "de lucro por mês",
+    "conta": 5.2,
+    "size": 132
+   }
+  },
+  {
+   "t0": 8.100000000000023,
+   "t1": 16.650000000000006,
+   "tipo": "manchete",
+   "dados": {
+    "tag": "Antes da Entur",
+    "linhas": [
+     "Tinha negócio.",
+     "*Não tinha lucro.*"
+    ]
+   }
+  },
+  {
+   "t0": 16.650000000000006,
+   "t1": 20.5,
+   "tipo": "numero",
+   "dados": {
+    "titulo": "A dívida",
+    "valor": 300,
+    "prefixo": "- R$ ",
+    "sufixo": " mil",
+    "rotulo": "parou de contar aqui",
+    "alerta": true,
+    "conta": 2.6,
+    "size": 120
+   }
+  },
+  {
+   "t0": 20.5,
+   "t1": 35.549999999999955,
+   "tipo": "linha",
+   "dados": {
+    "titulo": "Descobrir o *caminho*",
+    "sub": "e depois só repetir",
+    "pontos": [
+     0.05,
+     0.08,
+     0.12,
+     0.25,
+     0.45,
+     0.5,
+     0.7,
+     0.95
+    ],
+    "eixo": [
+     "Dívida",
+     "",
+     "",
+     "1º R$ 100 mil",
+     "",
+     "",
+     "",
+     "Replicar"
+    ],
+    "selo": "Primeiros 100 mil",
+    "selo_t": 5.6,
+    "dur": 9.0,
+    "nota": "*gráfico ilustrativo"
+   }
+  },
+  {
+   "t0": 35.549999999999955,
+   "t1": 47.25,
+   "tipo": "barras",
+   "dados": {
+    "titulo": "Lucro *por mês*",
+    "sub": "placas Entur",
+    "itens": [
+     {
+      "rotulo": "Maior placa",
+      "valor": 0.45,
+      "tag": "100 mil"
+     },
+     {
+      "rotulo": "Poli, antes",
+      "valor": 0.68,
+      "tag": "150 mil"
+     },
+     {
+      "rotulo": "Poli, hoje",
+      "valor": 0.92,
+      "destaque": true,
+      "tag": "200 mil"
+     }
+    ]
+   }
+  }
+ ],
+ "final": {
+  "linhas": [
+   "De R$ 300 mil de dívida",
+   "a *R$ 200 mil de lucro/mês*"
+  ],
+  "cta": "Mentoria Entur",
+  "assinatura": "@papodeagente · ENTUR"
+ },
+ "musica": {
+  "arquivo": "/tmp/claude-0/-home-user-financeiro-os/94d821bb-3abb-5d3b-a22e-99158480652e/scratchpad/music/Five_Armies.mp3",
+  "inicio": 78
+ }
+}
