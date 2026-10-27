@@ -75,6 +75,11 @@ Foco em vídeo viral: **a voz manda, a música acompanha.**
 - **Efeito sonoro sincronizado com o movimento**: cada som nasce junto com uma animação na tela
   (entrada de número, barra subindo, check da lista, troca de layout). Nada de som sem movimento.
 - **Sem exagero**: efeitos discretos e curtos, poucos por corte; nada de impacto grave em toda troca.
+- Implementação (`scripts/cortar.py`): música com equalização que abre espaço na faixa da voz (1 a 4 kHz),
+  cerca de 17 a 20 dB abaixo da voz durante a fala, ganho suavizado (sem efeito "bombeando").
+  Efeitos: whoosh curto na entrada de cada gráfico e troca de layout; "pop" em cada item de lista/etapa;
+  subida sutil em cada barra; "ding" quando o contador do número termina; batida grave suave só no cartão final.
+- Ajustar só o áudio de um corte já renderizado: `AUDIO_ONLY=1 python3 scripts/cortar.py ...`
 - Créditos da trilha (Kevin MacLeod, CC BY 4.0: "Five Armies", "Volatile Reaction", "Heroic Age") **na legenda do post.**
 
 ## Como gerar um corte

@@ -1,0 +1,161 @@
+{
+ "fonte": "/tmp/claude-0/-home-user-financeiro-os/94d821bb-3abb-5d3b-a22e-99158480652e/scratchpad/src_004/video.mp4",
+ "selo": "ECLIPSE EXPERIENCE",
+ "direita": "Canoa Quebrada · #004",
+ "mentor": "B",
+ "convidado": "M",
+ "pessoas": {
+  "B": {
+   "nome": "Bruno Barbosa",
+   "papel": "Mentor de agências · Entur",
+   "mentor": true,
+   "solo_x": 708,
+   "dupla_xy": [
+    680,
+    140
+   ]
+  },
+  "M": {
+   "nome": "Mayara Medeiros",
+   "papel": "Medeiros Tour",
+   "solo_x": 0,
+   "dupla_xy": [
+    0,
+    100
+   ]
+  }
+ },
+ "corrigir": {
+  "Maiara": "Mayara",
+  "Maiara,": "Mayara,",
+  "cabiu": "cabia",
+  "farei": "fiz",
+  "Intur": "Entur",
+  "sozinho": "sozinha",
+  "22k": "22 mil",
+  "rede": "neve"
+ },
+ "clips": [
+  {
+   "quem": "M",
+   "a": 1510.1,
+   "b": 1515.95,
+   "layout": "solo"
+  },
+  {
+   "quem": "M",
+   "a": 1515.95,
+   "b": 1531.6,
+   "layout": "solo"
+  },
+  {
+   "quem": "M",
+   "a": 1563.65,
+   "b": 1580.4,
+   "layout": "solo"
+  },
+  {
+   "quem": "B",
+   "a": 1754.65,
+   "b": 1765.55,
+   "layout": "solo"
+  },
+  {
+   "quem": "M",
+   "a": 1828.0,
+   "b": 1832.15,
+   "layout": "dupla"
+  }
+ ],
+ "graficos": [
+  {
+   "t0": 0,
+   "t1": 5.850000000000136,
+   "tipo": "manchete",
+   "dados": {
+    "tag": "Ela quase parou",
+    "linhas": [
+     "Esqueci de",
+     "*quem eu era*"
+    ]
+   }
+  },
+  {
+   "t0": 5.850000000000136,
+   "t1": 21.5,
+   "tipo": "etapas",
+   "dados": {
+    "titulo": "Entur Summit · *Maceió*",
+    "etapas": [
+     {
+      "texto": "Sozinha no hotel",
+      "t": 2.4
+     },
+     {
+      "texto": "Mulheres no palco",
+      "t": 6.6
+     },
+     {
+      "texto": "Eu posso ser isso",
+      "t": 11.2
+     },
+     {
+      "texto": "Eu me achei",
+      "t": 12.5
+     }
+    ]
+   }
+  },
+  {
+   "t0": 21.5,
+   "t1": 38.25,
+   "tipo": "lista",
+   "dados": {
+    "titulo": "Por quem *ela tenta*",
+    "itens": [
+     {
+      "texto": "1ª viagem da família",
+      "t": 1.9
+     },
+     {
+      "texto": "1º voo de avião",
+      "t": 3.4
+     },
+     {
+      "texto": "O filho conhecendo a praia",
+      "t": 4.6
+     },
+     {
+      "texto": "Memórias em família",
+      "t": 14.0
+     }
+    ]
+   }
+  },
+  {
+   "t0": 38.25,
+   "t1": 49.149999999999864,
+   "tipo": "manchete",
+   "dados": {
+    "tag": "O propósito",
+    "linhas": [
+     "Não é sobre o *CRM*.",
+     "É sobre *tempo*",
+     "com a família"
+    ]
+   }
+  }
+ ],
+ "final": {
+  "linhas": [
+   "Não desista",
+   "*do seu propósito*"
+  ],
+  "cta": "Mentoria Entur",
+  "assinatura": "@papodeagente · ENTUR"
+ },
+ "musica": {
+  "arquivo": "/tmp/claude-0/-home-user-financeiro-os/94d821bb-3abb-5d3b-a22e-99158480652e/scratchpad/music/Heroic_Age.mp3",
+  "inicio": 40
+ }
+}

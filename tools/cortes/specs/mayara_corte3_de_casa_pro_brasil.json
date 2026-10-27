@@ -1,0 +1,142 @@
+{
+ "fonte": "/tmp/claude-0/-home-user-financeiro-os/94d821bb-3abb-5d3b-a22e-99158480652e/scratchpad/src_004/video.mp4",
+ "selo": "ECLIPSE EXPERIENCE",
+ "direita": "Canoa Quebrada · #004",
+ "mentor": "B",
+ "convidado": "M",
+ "pessoas": {
+  "B": {
+   "nome": "Bruno Barbosa",
+   "papel": "Mentor de agências · Entur",
+   "mentor": true,
+   "solo_x": 708,
+   "dupla_xy": [
+    680,
+    140
+   ]
+  },
+  "M": {
+   "nome": "Mayara Medeiros",
+   "papel": "Medeiros Tour",
+   "solo_x": 0,
+   "dupla_xy": [
+    0,
+    100
+   ]
+  }
+ },
+ "corrigir": {
+  "Maiara": "Mayara",
+  "Maiara,": "Mayara,",
+  "cabiu": "cabia",
+  "farei": "fiz",
+  "Intur": "Entur",
+  "sozinho": "sozinha",
+  "22k": "22 mil",
+  "rede": "neve"
+ },
+ "clips": [
+  {
+   "quem": "B",
+   "a": 1065.25,
+   "b": 1081.95,
+   "layout": "solo"
+  },
+  {
+   "quem": "M",
+   "a": 985.5,
+   "b": 997.45,
+   "layout": "solo"
+  },
+  {
+   "quem": "M",
+   "a": 875.1,
+   "b": 893.0,
+   "layout": "solo"
+  },
+  {
+   "quem": "M",
+   "a": 1415.1,
+   "b": 1418.5,
+   "layout": "dupla"
+  }
+ ],
+ "graficos": [
+  {
+   "t0": 0,
+   "t1": 16.700000000000045,
+   "tipo": "manchete",
+   "dados": {
+    "tag": "Crença limitante",
+    "linhas": [
+     "\"Sem loja física",
+     "*eu não vendo*\""
+    ]
+   }
+  },
+  {
+   "t0": 16.700000000000045,
+   "t1": 28.65000000000009,
+   "tipo": "etapas",
+   "dados": {
+    "titulo": "A *evolução*",
+    "etapas": [
+     {
+      "texto": "Mesinha do notebook",
+      "t": 0.7
+     },
+     {
+      "texto": "Mesa do fundo de casa",
+      "t": 4.0
+     },
+     {
+      "texto": "Mesa pequena",
+      "t": 8.4
+     },
+     {
+      "texto": "Mesa maior",
+      "t": 9.9
+     }
+    ]
+   }
+  },
+  {
+   "t0": 28.65000000000009,
+   "t1": 46.55000000000007,
+   "tipo": "lista",
+   "dados": {
+    "titulo": "Famílias de *todo lugar*",
+    "itens": [
+     {
+      "texto": "Ceará",
+      "t": 5.3
+     },
+     {
+      "texto": "Atlanta",
+      "t": 7.9
+     },
+     {
+      "texto": "Sul do Brasil",
+      "t": 10.2
+     },
+     {
+      "texto": "O Brasil todo",
+      "t": 16.8
+     }
+    ]
+   }
+  }
+ ],
+ "final": {
+  "linhas": [
+   "De casa",
+   "*para o Brasil inteiro*"
+  ],
+  "cta": "Mentoria Entur",
+  "assinatura": "@papodeagente · ENTUR"
+ },
+ "musica": {
+  "arquivo": "/tmp/claude-0/-home-user-financeiro-os/94d821bb-3abb-5d3b-a22e-99158480652e/scratchpad/music/Volatile_Reaction.mp3",
+  "inicio": 0
+ }
+}

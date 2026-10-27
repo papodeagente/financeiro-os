@@ -107,10 +107,11 @@ def grab_frame(path, t, w, h):
 
 streams = {"solo": (f"{WORK}/{NAME}_solo.mp4", W, SOLO_H), "cima": (f"{WORK}/{NAME}_cima.mp4", W, SPLIT_Y),
            "baixo": (f"{WORK}/{NAME}_baixo.mp4", W, H - SPLIT_Y)}
-decs = {} if PREV else {k: open_dec(*v) for k, v in streams.items()}
+decs = {} if (PREV or os.environ.get("AUDIO_ONLY")) else {k: open_dec(*v) for k, v in streams.items()}
 last = {k: None for k in streams}
 
-if not PREV:
+AUDIO_ONLY = bool(os.environ.get("AUDIO_ONLY")) and os.path.exists(f"{WORK}/{NAME}_mudo.mp4")
+if not PREV and not AUDIO_ONLY:
     enc = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}",
                             "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-preset", "medium", "-crf", "18",
                             "-pix_fmt", "yuv420p", f"{WORK}/{NAME}_mudo.mp4"], stdin=subprocess.PIPE)
@@ -189,7 +190,7 @@ first_seen = {}
 for c in clips:
     first_seen.setdefault(c["quem"], c["t0"])
 
-frames = [int(x * FPS) for x in PREV] if PREV else range(NF)
+frames = [int(x * FPS) for x in PREV] if PREV else ([] if AUDIO_ONLY else range(NF))
 last_frame = None
 for fi in frames:
     t = fi / FPS
@@ -226,7 +227,8 @@ for fi in frames:
     enc.stdin.write(fr.convert("RGB").tobytes())
     if fi % 150 == 0: print(f"{NAME} {fi}/{NF}", flush=True)
 if PREV: sys.exit(0)
-enc.stdin.close(); enc.wait()
+if not AUDIO_ONLY:
+    enc.stdin.close(); enc.wait()
 for dproc in decs.values(): dproc.kill()
 
 # ---------- 4. áudio ----------
@@ -238,32 +240,74 @@ voice = readwav(f"{WORK}/{NAME}_voz.wav")
 N = int(TOTAL * SR)
 mix = np.zeros((N, 2), np.float32); mix[:len(voice)] += voice[:N]
 mus = spec.get("musica")
+tt = np.arange(N) / SR
 if mus:
+    # música "abre espaço" para a voz: corte suave na faixa da fala (1-4 kHz) e topo mais macio
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", str(mus.get("inicio", 0)), "-t", str(TOTAL + 1), "-i", mus["arquivo"],
+                    "-af", "equalizer=f=1800:t=o:w=1.6:g=-7,equalizer=f=3500:t=o:w=1.2:g=-4,lowpass=f=10000",
                     "-ar", str(SR), "-ac", "2", f"{WORK}/_m.wav"], check=True)
     m = readwav(f"{WORK}/_m.wav")[:N]
     if len(m) < N: m = np.pad(m, ((0, N - len(m)), (0, 0)))
     m = m / (np.sqrt(np.mean(m ** 2)) + 1e-9) * .18
-    env = np.abs(voice.mean(1)); kk = int(.25 * SR); env = np.convolve(env, np.ones(kk) / kk, "same")
+    # ducking suave guiado pela voz (sem "bombear"): envelope lento + suavização do ganho
+    env = np.abs(voice.mean(1)); kk = int(.4 * SR); env = np.convolve(env, np.ones(kk) / kk, "same")
     env = np.pad(env, (0, max(0, N - len(env))))[:N]
-    gain = .30 - .22 * np.clip(env / .02, 0, 1)
-    tt = np.arange(N) / SR
-    gain *= np.clip(tt / .4, 0, 1)
-    e = np.clip((tt - VOICE_DUR) / .5, 0, 1); gain = gain * (1 - e) + .9 * e
-    fo = int(1.5 * SR); gain[-fo:] *= np.linspace(1, 0, fo)
+    fala = np.clip(env / .012, 0, 1)
+    gain = .11 - .075 * fala                      # ~-20 dB abaixo da voz durante a fala; respira nas pausas
+    ks = int(.35 * SR); gain = np.convolve(gain, np.ones(ks) / ks, "same")
+    gain *= np.clip(tt / .8, 0, 1)
+    e = np.clip((tt - VOICE_DUR) / .8, 0, 1); gain = gain * (1 - e) + .55 * e
+    fo = int(1.8 * SR); gain[-fo:] *= np.linspace(1, 0, fo)
     mix += m * gain[:, None]
+
+# ---------- efeitos sonoros sincronizados com o movimento (discretos) ----------
 rng = np.random.default_rng(3)
-L = int(.4 * SR); tt = np.arange(L) / SR
-wh = np.convolve(rng.normal(0, 1, L), np.ones(30) / 30, "same") * np.sin(np.pi * tt / tt[-1]) ** 2 * .3
-marks = sorted(set([g_["t0"] for g_ in GFX if g_["t0"] > .5] + [c["t0"] for c in clips if c["entrou"] and c["t0"] > .5]))
-for c_ in marks:
-    i = int((c_ - .15) * SR)
-    if 0 <= i < N - L: mix[i:i + L] += wh[:, None]
-L2 = int(1.6 * SR); t2 = np.arange(L2) / SR
-boom = np.sin(2 * np.pi * np.cumsum(30 + 70 * np.exp(-t2 * 6)) / SR) * np.exp(-t2 * 2.2) * .8
-boom += np.convolve(rng.normal(0, 1, L2), np.ones(8) / 8, "same") * np.exp(-t2 * 9) * .25
-for c_, gn in ((0.0, .6), (VOICE_DUR, 1.0)):
-    i = int(c_ * SR); j = min(N, i + L2); mix[i:j] += boom[:j - i, None] * gn
+def _env(L, a, r):
+    x = np.arange(L) / SR; return np.minimum(1, x / a) * np.exp(-x / r)
+def swoosh(dur=.32, g=.07):
+    L = int(dur * SR); x = np.arange(L) / SR
+    n = rng.normal(0, 1, L)
+    n = np.convolve(n, np.ones(6) / 6, "same") - np.convolve(n, np.ones(60) / 60, "same")   # passa-faixa simples
+    return n * np.sin(np.pi * x / x[-1]) ** 3 * g
+def pop(f=880, g=.05):
+    L = int(.12 * SR); x = np.arange(L) / SR
+    return (np.sin(2 * np.pi * f * x) + .3 * np.sin(2 * np.pi * f * 2 * x)) * _env(L, .002, .035) * g
+def ding(g=.045):
+    L = int(.6 * SR); x = np.arange(L) / SR
+    return sum(np.sin(2 * np.pi * f * x) * a for f, a in ((1318, 1), (1976, .45), (2637, .2))) * _env(L, .003, .18) * g
+def rise(dur=.5, g=.04):
+    L = int(dur * SR); x = np.arange(L) / SR; f = 300 + 500 * (x / x[-1]) ** 2
+    return np.sin(2 * np.pi * np.cumsum(f) / SR) * np.sin(np.pi * x / x[-1]) * g
+def soft_hit(g=.22):
+    L = int(1.2 * SR); x = np.arange(L) / SR
+    return np.sin(2 * np.pi * np.cumsum(45 + 40 * np.exp(-x * 8)) / SR) * _env(L, .004, .35) * g
+def put(t0, sig):
+    i = int(t0 * SR)
+    if i < 0 or i >= N: return
+    j = min(N, i + len(sig)); mix[i:j] += sig[:j - i, None]
+
+ev = []
+for gd in GFX:
+    t0, tp, dd = gd["t0"], gd["tipo"], gd.get("dados", {})
+    if t0 > .3: ev.append((t0 - .12, swoosh()))
+    if tp == "lista":
+        for i, it in enumerate(dd.get("itens", [])): ev.append((t0 + it.get("t", .5 + i * .6), pop(990 + 110 * i)))
+    elif tp == "etapas":
+        for i, it in enumerate(dd.get("etapas", [])): ev.append((t0 + it.get("t", .4 + i * .7), pop(780 + 90 * i)))
+    elif tp == "barras":
+        for i, _ in enumerate(dd.get("itens", [])): ev.append((t0 + .35 + i * .3, rise(.55, .03 + .006 * i)))
+    elif tp == "numero":
+        ev.append((t0 + .2, pop(660, .045))); ev.append((t0 + .3 + dd.get("conta", 1.6), ding()))
+    elif tp == "selo":
+        ev.append((t0 + .1, pop(740, .05))); ev.append((t0 + .8, ding(.035)))
+    elif tp == "linha" and dd.get("selo"):
+        ev.append((t0 + dd.get("selo_t", 3.0), pop(1100, .045)))
+    elif tp == "citacao" and dd.get("estrelas"):
+        ev.append((t0 + dd.get("estrelas_t", 2.5), ding(.035)))
+for c in clips:
+    if c["entrou"] and c["t0"] > .3: ev.append((c["t0"] - .1, swoosh(.28, .06)))
+ev.append((VOICE_DUR - .15, swoosh(.4, .08))); ev.append((VOICE_DUR, soft_hit()))
+for t_, sig in ev: put(t_, sig)
 pk = np.abs(mix).max()
 if pk > .98: mix *= .98 / pk
 w = wave.open(f"{WORK}/{NAME}_mix.wav", "wb"); w.setnchannels(2); w.setsampwidth(2); w.setframerate(SR)
