@@ -51,11 +51,11 @@ def rgba(c, a): return (c[0], c[1], c[2], int(255 * clamp(a)))
 
 # ---------------- camada de desenho (supersampled) ----------------
 class G:
-    def __init__(self, w=W, h=SOLO_GFX_H):
-        self.w, self.h = w, h
-        self.im = Image.new("RGBA", (w * SS, h * SS), (0, 0, 0, 0))
+    def __init__(self, w=W, h=SOLO_GFX_H, ss=SS):
+        self.w, self.h, self.ss = w, h, ss
+        self.im = Image.new("RGBA", (w * ss, h * ss), (0, 0, 0, 0))
         self.d = ImageDraw.Draw(self.im, "RGBA")
-    def s(self, v): return int(round(v * SS))
+    def s(self, v): return int(round(v * self.ss))
     def rect(self, x0, y0, x1, y1, fill, r=0, outline=None, width=0):
         if x1 - x0 < 1 or y1 - y0 < 1: return
         r = min(r, (x1 - x0) / 2, (y1 - y0) / 2)
@@ -71,7 +71,7 @@ class G:
     def poly(self, pts, fill):
         self.d.polygon([(self.s(x), self.s(y)) for x, y in pts], fill=fill)
     def tw(self, txt, weight, size):
-        return self.d.textlength(txt, font=font(weight, self.s(size))) / SS
+        return self.d.textlength(txt, font=font(weight, self.s(size))) / self.ss
     def text(self, x, y, txt, weight, size, fill, anchor="la"):
         a = fill[3] if len(fill) == 4 else 255
         if a < 3 or not txt: return
@@ -115,7 +115,7 @@ class G:
         self.rect(x - pw / 2, y - ph / 2, x + pw / 2, y + ph / 2, rgba(bg, alpha), r=ph / 2)
         self.text(x, y + size * .05, txt, weight, size, rgba(fg, alpha), "mm")
     def done(self):
-        return self.im.resize((self.w, self.h), Image.LANCZOS)
+        return self.im if self.ss == 1 else self.im.resize((self.w, self.h), Image.LANCZOS)
 
 def pop(t, a, d=.45):
     p = prog(t, a, d); return eback(p), eo(p * 1.6)

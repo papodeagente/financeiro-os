@@ -157,12 +157,16 @@ def tela_dupla(t, c, top, bot):
     d.rectangle([0, y, W, y + 8], fill=LILAC) if active_top else d.rectangle([0, H - 14, W, H - 6], fill=LILAC)
     return fr, SPLIT_Y
 
+_blur_cache = {}
 def tela_final(t, base_img):
     lt = t - VOICE_DUR; fin = spec.get("final", {})
     k = eo(prog(lt, 0, .6))
-    fr = Image.blend(base_img.convert("RGB"), base_img.convert("RGB").filter(ImageFilter.GaussianBlur(14)), k).convert("RGBA")
+    if _blur_cache.get("src") is not base_img:      # desfoque calculado uma vez só
+        _blur_cache.update(src=base_img, rgb=base_img.convert("RGB"),
+                           blur=base_img.convert("RGB").filter(ImageFilter.GaussianBlur(14)))
+    fr = Image.blend(_blur_cache["rgb"], _blur_cache["blur"], k).convert("RGBA")
     fr.alpha_composite(Image.new("RGBA", (W, H), (16, 6, 40, int(200 * k))))
-    g = G(W, H)
+    g = G(W, H, ss=1)
     for i, ln in enumerate(fin.get("linhas", [])):
         s, al = pop(lt, .15 + i * .3, .55)
         g.rich(W / 2, 760 + i * 95, ln.upper(), "Black", 72 * max(s, .3), WHITE, LILAC, al)
@@ -233,6 +237,12 @@ for dproc in decs.values(): dproc.kill()
 
 # ---------- 4. áudio ----------
 SR = 44100
+def media_movel(x, k):
+    """média móvel rápida (soma acumulada); np.convolve com janela longa é lento demais"""
+    k = max(1, int(k)); c = np.cumsum(np.insert(x.astype(np.float64), 0, 0))
+    out = (c[k:] - c[:-k]) / k
+    pad = k // 2
+    return np.concatenate([np.full(pad, out[0]), out, np.full(len(x) - len(out) - pad, out[-1])]).astype(np.float32)
 def readwav(p):
     w = wave.open(p); a = np.frombuffer(w.readframes(w.getnframes()), np.int16).astype(np.float32) / 32768
     return a.reshape(-1, w.getnchannels())
@@ -250,11 +260,11 @@ if mus:
     if len(m) < N: m = np.pad(m, ((0, N - len(m)), (0, 0)))
     m = m / (np.sqrt(np.mean(m ** 2)) + 1e-9) * .18
     # ducking suave guiado pela voz (sem "bombear"): envelope lento + suavização do ganho
-    env = np.abs(voice.mean(1)); kk = int(.4 * SR); env = np.convolve(env, np.ones(kk) / kk, "same")
+    env = media_movel(np.abs(voice.mean(1)), .4 * SR)
     env = np.pad(env, (0, max(0, N - len(env))))[:N]
     fala = np.clip(env / .012, 0, 1)
-    gain = .11 - .075 * fala                      # ~-20 dB abaixo da voz durante a fala; respira nas pausas
-    ks = int(.35 * SR); gain = np.convolve(gain, np.ones(ks) / ks, "same")
+    gain = .17 - .09 * fala                       # ~-18 dB abaixo da voz na fala; sobe ~+5 dB nas pausas
+    gain = media_movel(gain, .35 * SR)
     gain *= np.clip(tt / .8, 0, 1)
     e = np.clip((tt - VOICE_DUR) / .8, 0, 1); gain = gain * (1 - e) + .55 * e
     fo = int(1.8 * SR); gain[-fo:] *= np.linspace(1, 0, fo)
