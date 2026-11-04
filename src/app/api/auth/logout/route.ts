@@ -17,7 +17,11 @@ export async function POST() {
       });
       // Sair invalida o token, e não só o cookie deste navegador: um token
       // copiado antes continuaria valendo até vencer.
-      await revogarSessoes(session);
+      try {
+        await revogarSessoes(session);
+      } catch (e) {
+        console.error('[logout] não revogou as sessões:', e instanceof Error ? e.message : e);
+      }
     }
   } catch {
     return NextResponse.json({ error: 'Não foi possível registrar a saída. Tente novamente.' }, { status: 503 });

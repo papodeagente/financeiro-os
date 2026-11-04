@@ -4,7 +4,11 @@
  * Login comum e de superadmin aceitavam tentativas sem limite: dava para
  * testar senhas em massa. Agora, numa janela de 15 minutos:
  *   - cada IP faz no máximo 30 tentativas (certas ou erradas);
- *   - cada conta (e-mail) aceita no máximo 8 senhas erradas.
+ *   - cada conta aceita no máximo 8 senhas erradas vindas do MESMO IP;
+ *   - e no máximo 100 erradas no total, de qualquer IP.
+ * Contar por conta+IP impede que alguém tranque a conta de outra pessoa só
+ * errando a senha dela de propósito; o teto total ainda segura a força bruta
+ * distribuída.
  * Estourou, responde 429 até a janela passar. A conferência vem ANTES de
  * calcular o hash, para o ataque nem gastar CPU.
  *
@@ -13,7 +17,8 @@
  */
 const JANELA_MS = 15 * 60_000;
 const LIMITE_IP = 30;
-const LIMITE_CONTA = 8;
+const LIMITE_CONTA_IP = 8;
+const LIMITE_CONTA_TOTAL = 100;
 const MAX_CHAVES = 20_000;
 
 interface Balde { inicio: number; quantidade: number }
@@ -49,7 +54,9 @@ export function ipDoLogin(headers: Headers): string {
   // O Traefik sobrescreve X-Real-IP com o IP que chegou nele; X-Forwarded-For
   // fica de fora porque o cliente consegue antepor valores.
   const valor = (headers.get('x-real-ip') || headers.get('cf-connecting-ip') || 'desconhecido').trim().slice(0, 64);
-  return /^[0-9a-f:.]+$/i.test(valor) ? valor : 'desconhecido';
+  if (/^[0-9a-f:.]+$/i.test(valor)) return valor;
+  console.warn('[limite-login] requisição sem X-Real-IP: todos sem IP dividem o mesmo limite');
+  return 'desconhecido';
 }
 
 /**
@@ -57,20 +64,23 @@ export function ipDoLogin(headers: Headers): string {
  * do login da plataforma. Devolve os segundos de espera, ou null.
  */
 export function bloqueioDeLogin(escopo: string, ip: string, email: string, agora = Date.now()): number | null {
+  const contaIp = vigente(porConta, `${escopo}:${email}|${ip}`, agora);
+  if (contaIp && contaIp.quantidade >= LIMITE_CONTA_IP) return restante(contaIp, agora);
   const conta = vigente(porConta, `${escopo}:${email}`, agora);
-  if (conta && conta.quantidade >= LIMITE_CONTA) return restante(conta, agora);
+  if (conta && conta.quantidade >= LIMITE_CONTA_TOTAL) return restante(conta, agora);
   somar(porIp, `${escopo}:${ip}`, agora);
   const doIp = vigente(porIp, `${escopo}:${ip}`, agora)!;
   if (doIp.quantidade > LIMITE_IP) return restante(doIp, agora);
   return null;
 }
 
-export function registrarFalhaDeLogin(escopo: string, email: string, agora = Date.now()) {
+export function registrarFalhaDeLogin(escopo: string, email: string, ip: string, agora = Date.now()) {
+  somar(porConta, `${escopo}:${email}|${ip}`, agora);
   somar(porConta, `${escopo}:${email}`, agora);
 }
 
-export function registrarSucessoDeLogin(escopo: string, email: string) {
-  porConta.delete(`${escopo}:${email}`);
+export function registrarSucessoDeLogin(escopo: string, email: string, ip: string) {
+  porConta.delete(`${escopo}:${email}|${ip}`);
 }
 
 export function limparLimiteDeLoginParaTeste() {

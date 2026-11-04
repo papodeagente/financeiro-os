@@ -14,7 +14,8 @@ export async function POST(req: Request) {
     }
 
     const emailNormalizado = String(email).toLowerCase().trim();
-    const espera = bloqueioDeLogin('plataforma', ipDoLogin(req.headers), emailNormalizado);
+    const ipLogin = ipDoLogin(req.headers);
+    const espera = bloqueioDeLogin('plataforma', ipLogin, emailNormalizado);
     if (espera !== null) {
       return NextResponse.json(
         { error: 'Muitas tentativas. Aguarde alguns minutos e tente de novo.' },
@@ -33,7 +34,7 @@ export async function POST(req: Request) {
     );
 
     if (rows.length === 0) {
-      registrarFalhaDeLogin('plataforma', emailNormalizado);
+      registrarFalhaDeLogin('plataforma', emailNormalizado, ipLogin);
       return NextResponse.json({ error: 'Email ou senha incorretos' }, { status: 401 });
     }
 
@@ -62,7 +63,7 @@ export async function POST(req: Request) {
 
     const valid = await verifyPassword(senha, user.senha_hash);
     if (!valid) {
-      registrarFalhaDeLogin('plataforma', emailNormalizado);
+      registrarFalhaDeLogin('plataforma', emailNormalizado, ipLogin);
       await registrarFalha('credenciais inválidas');
       return NextResponse.json({ error: 'Email ou senha incorretos' }, { status: 401 });
     }
@@ -72,7 +73,7 @@ export async function POST(req: Request) {
       const etapa = await etapaSegundoFator(pool as unknown as ConsultaSegundoFator, 'super_admins', user, corpoLogin ?? {});
       if (!etapa.ok) {
         if (etapa.contaComoFalha) {
-          registrarFalhaDeLogin('plataforma', emailNormalizado);
+          registrarFalhaDeLogin('plataforma', emailNormalizado, ipLogin);
           await registrarFalha('código do segundo fator inválido');
         }
         return NextResponse.json(etapa.corpo, { status: etapa.status });
@@ -89,7 +90,7 @@ export async function POST(req: Request) {
       tenantSlug: '__platform__',
       isSuperAdmin: true,
     };
-    registrarSucessoDeLogin('plataforma', emailNormalizado);
+    registrarSucessoDeLogin('plataforma', emailNormalizado, ipLogin);
     const token = await createSession(session);
     await registrarEventoAuditoria({
       tenantId: '__platform__',

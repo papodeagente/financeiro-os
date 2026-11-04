@@ -99,7 +99,8 @@ export function mascararToken(token: string): string {
 
 /** Config sem o token, pronta para ir ao navegador. */
 export function configParaCliente(config: ConfigFiscal): ConfigFiscal {
-  const { token, ...resto } = config;
+  const { token, ...resto } = config as ConfigFiscal & { token_cofre?: unknown };
+  delete (resto as { token_cofre?: unknown }).token_cofre;
   return { ...resto, token: '', token_mascarado: mascararToken(token ?? '') };
 }
 
@@ -115,12 +116,13 @@ export async function carregarConfigFiscal(tenantId: string): Promise<ConfigFisc
   if (gravado.token_cofre) {
     try {
       gravado.token = decifrar(gravado.token_cofre);
+      delete gravado.token_cofre;
     } catch (e) {
+      // Fica com o envelope: a próxima gravação o preserva em vez de apagar.
       console.error('[nfse] token do emissor não decifrou:', e instanceof Error ? e.message : e);
       gravado.token = '';
     }
   }
-  delete gravado.token_cofre;
   const config = { ...configFiscalPadrao(), ...gravado, id: CONFIG_FISCAL_ID } as ConfigFiscal;
   if (rows.length > 0 && !(rows[0].data as Record<string, unknown>)?.token_cofre && config.token && cofreDisponivel()) {
     try { await salvarConfigFiscal(tenantId, config); } catch { /* fica para o próximo salvar */ }
@@ -138,6 +140,8 @@ export async function salvarConfigFiscal(
   if (config.token && cofreDisponivel()) {
     gravar.token_cofre = cifrar(config.token);
     gravar.token = '';
+  } else if (config.token) {
+    delete gravar.token_cofre;
   }
   // UPDATE e, se não existir, INSERT — mesmo caminho de config_apis, que não
   // depende de qual chave única a tabela tem no momento.

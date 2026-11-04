@@ -15,7 +15,8 @@ export async function POST(req: Request) {
     }
 
     const emailNormalizado = String(email).toLowerCase().trim();
-    const espera = bloqueioDeLogin('agencia', ipDoLogin(req.headers), emailNormalizado);
+    const ipLogin = ipDoLogin(req.headers);
+    const espera = bloqueioDeLogin('agencia', ipLogin, emailNormalizado);
     if (espera !== null) {
       return NextResponse.json(
         { error: 'Muitas tentativas. Aguarde alguns minutos e tente de novo.' },
@@ -34,12 +35,17 @@ export async function POST(req: Request) {
        FROM usuarios u
        LEFT JOIN tenants t ON t.id = u.tenant_id
        WHERE u.data->>'email' = $1
+       -- O mesmo e-mail pode existir em outra agência como cadastro sem senha
+       -- (veio de uma venda do CRM). O que entra é o que tem senha e está ativo.
+       ORDER BY (COALESCE(u.data->>'senha_hash', '') <> '') DESC,
+                (COALESCE(u.data->>'ativo', 'true') <> 'false') DESC,
+                u.created_at ASC
        LIMIT 1`,
       [email.toLowerCase().trim()]
     );
 
     if (rows.length === 0) {
-      registrarFalhaDeLogin('agencia', emailNormalizado);
+      registrarFalhaDeLogin('agencia', emailNormalizado, ipLogin);
       return NextResponse.json({ error: 'Email ou senha incorretos' }, { status: 401 });
     }
 
@@ -105,7 +111,7 @@ export async function POST(req: Request) {
     // Verify password
     const valid = await verifyPassword(senha, user.senha_hash);
     if (!valid) {
-      registrarFalhaDeLogin('agencia', emailNormalizado);
+      registrarFalhaDeLogin('agencia', emailNormalizado, ipLogin);
       await registrarFalha('credenciais inválidas');
       return NextResponse.json({ error: 'Email ou senha incorretos' }, { status: 401 });
     }
@@ -115,7 +121,7 @@ export async function POST(req: Request) {
       const etapa = await etapaSegundoFator(pool as unknown as ConsultaSegundoFator, 'usuarios', user, corpoLogin ?? {});
       if (!etapa.ok) {
         if (etapa.contaComoFalha) {
-          registrarFalhaDeLogin('agencia', emailNormalizado);
+          registrarFalhaDeLogin('agencia', emailNormalizado, ipLogin);
           await registrarFalha('código do segundo fator inválido');
         }
         return NextResponse.json(etapa.corpo, { status: etapa.status });
@@ -132,7 +138,7 @@ export async function POST(req: Request) {
       tenantId: row.tenant_id || '',
       tenantSlug: row.tenant_slug || '',
     };
-    registrarSucessoDeLogin('agencia', emailNormalizado);
+    registrarSucessoDeLogin('agencia', emailNormalizado, ipLogin);
     const token = await createSession(session);
     await registrarEventoAuditoria({
       tenantId: row.tenant_id,

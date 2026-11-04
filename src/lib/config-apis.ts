@@ -54,7 +54,10 @@ export function abrir(gravado: unknown): ConfigApis {
           p[base] = decifrar(valor);
         } catch (e) {
           console.error(`[config-apis] não decifrou ${nome}.${base}:`, e instanceof Error ? e.message : e);
+          // Guarda o envelope como veio: chave mestra trocada não pode virar
+          // chave apagada na próxima gravação.
           p[base] = '';
+          p[campo] = valor;
         }
       } else if (!(campo in p)) {
         p[campo] = valor;
@@ -72,8 +75,14 @@ export function selar(aberta: ConfigApis): ConfigApis {
   for (const [nome, prov] of Object.entries(aberta)) {
     const p: Provedor = {};
     for (const [campo, valor] of Object.entries(prov)) {
-      if (CAMPOS_SECRETOS.includes(campo) && typeof valor === 'string' && valor && podeCifrar) {
+      if (campo.endsWith(SUFIXO)) {
+        // Envelope que não decifrou: só sobrevive se ninguém mandou valor novo.
+        const base = campo.slice(0, -SUFIXO.length);
+        if (!prov[base]) p[campo] = valor;
+      } else if (CAMPOS_SECRETOS.includes(campo) && typeof valor === 'string' && valor && podeCifrar) {
         p[campo + SUFIXO] = cifrar(valor);
+      } else if (CAMPOS_SECRETOS.includes(campo) && !valor) {
+        continue;
       } else {
         p[campo] = valor;
       }
@@ -89,6 +98,7 @@ export function paraTela(aberta: ConfigApis): ConfigApis {
   const saida: ConfigApis = {};
   for (const [nome, prov] of Object.entries(aberta)) {
     const p: Provedor = { ...prov };
+    for (const k of Object.keys(p)) if (k.endsWith(SUFIXO)) delete p[k];
     for (const campo of CAMPOS_SECRETOS) {
       if (campo in p) {
         const valor = String(p[campo] ?? '');

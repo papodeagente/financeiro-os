@@ -77,6 +77,11 @@ console.log('--- FIN-04/11: chaves de API ---');
   eq((await C.chaveAnthropic(db, 'ag-2', 'x')), null, 'outra agência não enxerga a chave');
   await C.salvarConfigApis(db, 'ag-1', { anthropic: { api_key_cofre: { v: 1, iv: 'x', tag: 'y', ct: 'z' } } });
   eq((await C.lerConfigApis(db, 'ag-1')).anthropic.api_key, 'sk-ant-NOVA-9999', 'corpo não grava envelope por conta própria');
+  // Chave mestra trocada: a chave não decifra, mas também não pode sumir.
+  process.env.INTEGRACOES_MASTER_KEY = 'b'.repeat(64);
+  await C.salvarConfigApis(db, 'ag-1', { anthropic: { ativo: false } });
+  process.env.INTEGRACOES_MASTER_KEY = 'a'.repeat(64);
+  eq((await C.lerConfigApis(db, 'ag-1')).anthropic.api_key, 'sk-ant-NOVA-9999', 'falha ao decifrar não apaga a chave na gravação seguinte');
 }
 
 console.log('--- FIN-02: empresa fiscal tem dono único ---');
@@ -100,12 +105,15 @@ console.log('--- FIN-12: limite de login ---');
   const t0 = 1_000_000;
   for (let i = 0; i < 8; i++) {
     L.bloqueioDeLogin('agencia', '1.1.1.1', 'vitima@x.com', t0);
-    L.registrarFalhaDeLogin('agencia', 'vitima@x.com', t0);
+    L.registrarFalhaDeLogin('agencia', 'vitima@x.com', '1.1.1.1', t0);
   }
-  eq(L.bloqueioDeLogin('agencia', '9.9.9.9', 'vitima@x.com', t0) !== null, true, '8 senhas erradas travam a conta, de qualquer IP');
-  eq(L.bloqueioDeLogin('agencia', '9.9.9.9', 'outra@x.com', t0), null, 'outra conta segue');
-  eq(L.bloqueioDeLogin('agencia', '9.9.9.9', 'vitima@x.com', t0 + 15 * 60_000 + 1), null, 'janela passou, libera');
+  eq(L.bloqueioDeLogin('agencia', '1.1.1.1', 'vitima@x.com', t0) !== null, true, '8 senhas erradas do mesmo IP travam a conta para esse IP');
+  eq(L.bloqueioDeLogin('agencia', '9.9.9.9', 'vitima@x.com', t0), null, 'a dona da conta, de outro IP, ainda entra');
+  eq(L.bloqueioDeLogin('agencia', '1.1.1.1', 'vitima@x.com', t0 + 15 * 60_000 + 1), null, 'janela passou, libera');
   eq(L.bloqueioDeLogin('plataforma', '1.1.1.1', 'vitima@x.com', t0), null, 'escopos separados');
+  L.limparLimiteDeLoginParaTeste();
+  for (let i = 0; i < 100; i++) L.registrarFalhaDeLogin('agencia', 'alvo@x.com', `10.0.${i >> 8}.${i & 255}`, t0);
+  eq(L.bloqueioDeLogin('agencia', '8.8.8.8', 'alvo@x.com', t0) !== null, true, 'força bruta espalhada em 100 IPs trava a conta');
   L.limparLimiteDeLoginParaTeste();
   let ultimo = null;
   for (let i = 0; i < 31; i++) ultimo = L.bloqueioDeLogin('agencia', '2.2.2.2', `conta${i}@x.com`, t0);
@@ -190,9 +198,24 @@ console.log('--- FIN-12: segundo fator para administradores ---');
   r = await F.etapaSegundoFator(db, 'usuarios', await ler(), { codigo: F.codigoDoPasso(segredo, passo + 2) }, t + 60000);
   eq(r.ok, true, 'código seguinte entra');
 
+  // "Sair" no meio de uma edição do admin não é desfeito pela edição.
+  const antes = (await ler()).token_version ?? 0;
+  const lidaAntes = await ler();
+  await S.revogarSessoes({ userId: 'adm2fa', tenantId: 'ag-1' });
+  await query(`INSERT INTO usuarios (id, tenant_id, email, data) VALUES ('adm-b','ag-1','b@x.com','{"id":"adm-b","perfil":"ADMIN","ativo":true}')`);
+  await U.atualizarUsuario(db, { userId: 'adm-b', perfil: 'ADMIN' }, 'ag-1', 'adm2fa', { nome: 'Novo nome', ...lidaAntes });
+  const depois = await ler();
+  eq([depois.nome, depois.token_version], ['Novo nome', antes + 1], 'edição grava só o que mudou e mantém a revogação');
+  eq(F.segredoGravado(depois), segredo, 'edição não apaga o 2FA');
+
   const lista = await U.listarUsuarios(db, { userId: 'x', perfil: 'ADMIN' }, 'ag-1');
   const item = lista.find(u => u.id === 'adm2fa');
-  eq([item.tem_2fa, 'totp_cofre' in item, 'totp_ultimo_passo' in item], [true, false, false], 'lista não expõe o segredo');
+  eq([item.tem_2fa, 'totp_cofre' in item, 'totp_ultimo_passo' in item, 'token_version' in item], [true, false, false, false], 'lista não expõe o segredo');
+  await query(`UPDATE usuarios SET data = data || '{"vinculo":{"salario_base":9000}}'::jsonb WHERE id='op'`);
+  const vistaDoVendedor = (await U.listarUsuarios(db, { userId: 'v', perfil: 'VENDEDOR' }, 'ag-1')).find(u => u.id === 'op');
+  eq('vinculo' in vistaDoVendedor, false, 'vendedor não vê o salário dos outros');
+  const vistaDoAdmin = (await U.listarUsuarios(db, { userId: 'x', perfil: 'ADMIN' }, 'ag-1')).find(u => u.id === 'op');
+  eq(vistaDoAdmin.vinculo?.salario_base, 9000, 'admin vê a folha');
 }
 
 console.log(`\n${total - falhas}/${total} passaram`);

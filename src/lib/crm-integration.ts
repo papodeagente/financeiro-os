@@ -820,11 +820,13 @@ async function upsertVendedorByExternalId(
         origem: 'crm',
         external_id: externalId,
       };
+      // Só os campos da integração, por cima do banco atual (não desfaz
+      // sessão revogada nem 2FA gravados no meio).
       await pool.query(
         `UPDATE usuarios
-            SET nome = $1, email = $2, data = $3, updated_at = NOW()
+            SET nome = $1, email = $2, data = data || $3::jsonb, updated_at = NOW()
           WHERE id = $4 AND tenant_id = $5`,
-        [data.nome, data.email, JSON.stringify(data), id, tenantId],
+        [data.nome, data.email, JSON.stringify({ id, nome: data.nome, email: data.email, origem: 'crm', external_id: externalId }), id, tenantId],
       );
     }
     await vincularMembroPorEmail(id, email || normalizeEmail(atual.email), tenantId);
@@ -849,9 +851,9 @@ async function upsertVendedorByExternalId(
       const data = { ...atual, id, nome: nome || asStr(atual.nome), email, external_id: externalId };
       await pool.query(
         `UPDATE usuarios
-            SET nome = $1, email = $2, data = $3, external_id = $4, updated_at = NOW()
+            SET nome = $1, email = $2, data = data || $3::jsonb, external_id = $4, updated_at = NOW()
           WHERE id = $5 AND tenant_id = $6`,
-        [data.nome, email, JSON.stringify(data), externalId, id, tenantId],
+        [data.nome, email, JSON.stringify({ id, nome: data.nome, email, external_id: externalId }), externalId, id, tenantId],
       );
       await vincularMembroPorEmail(id, email, tenantId);
       // Quem já existia aqui foi cadastrado por alguém: não é pendente.

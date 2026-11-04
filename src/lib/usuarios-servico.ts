@@ -18,7 +18,7 @@
  *
  * Não importa nada do Next, para os testes rodarem contra um Postgres real.
  */
-import { podeGerenciarUsuarios, perfilCanonico, permissoesParaPerfil, type SessionLike } from './permissoes';
+import { podeGerenciarUsuarios, podeEditarFinanceiro, perfilCanonico, permissoesParaPerfil, type SessionLike } from './permissoes';
 import { hashPassword } from './senha';
 import { esquecerSessaoEmCache } from './sessao-viva';
 import type { PerfilUsuario } from './crm-types';
@@ -123,20 +123,32 @@ function novoId(): string {
   return `usr_${crypto.randomUUID().replace(/-/g, '')}`;
 }
 
+/** Folha (salário, encargos) e comissão dos outros só para quem cuida disso. */
+function paraQuemLe(u: Dados, sessao: SessionLike): Dados {
+  const limpo = semSegredos(u);
+  delete limpo.token_version;
+  if (podeGerenciarUsuarios(sessao) || podeEditarFinanceiro(sessao) || sessao.userId === u.id) return limpo;
+  delete limpo.vinculo;
+  delete limpo.plano_comissao_id;
+  delete limpo.meta_mensal_vendas;
+  delete limpo.meta_mensal_quantidade;
+  return limpo;
+}
+
 export async function listarUsuarios(db: Consulta, sessao: SessionLike | null | undefined, tenantId: string) {
   if (!sessao) throw new ErroUsuarios(401, 'Sessão necessária.');
   const { rows } = await db.query(
     `SELECT data FROM usuarios WHERE tenant_id = $1 ORDER BY created_at DESC`,
     [tenantId],
   );
-  return rows.map(r => semSegredos((r.data ?? {}) as Dados));
+  return rows.map(r => paraQuemLe((r.data ?? {}) as Dados, sessao));
 }
 
 export async function lerUsuario(db: Consulta, sessao: SessionLike | null | undefined, tenantId: string, id: string) {
   if (!sessao) throw new ErroUsuarios(401, 'Sessão necessária.');
   const { rows } = await db.query(`SELECT data FROM usuarios WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
   if (rows.length === 0) throw new ErroUsuarios(404, 'Usuário não encontrado.');
-  return semSegredos((rows[0].data ?? {}) as Dados);
+  return paraQuemLe((rows[0].data ?? {}) as Dados, sessao);
 }
 
 export async function criarUsuario(db: Consulta, sessao: SessionLike | null | undefined, tenantId: string, corpo: Dados) {
@@ -235,13 +247,27 @@ export async function atualizarUsuario(
     throw new ErroUsuarios(409, 'A agência precisa de pelo menos um administrador ativo.');
   }
 
-  if (invalidaSessoes) novo.token_version = (Number(atual.token_version) || 0) + 1;
-
-  await db.query(
-    `UPDATE usuarios SET data = $3, nome = $4, email = $5, updated_at = NOW()
-      WHERE id = $1 AND tenant_id = $2`,
-    [id, tenantId, JSON.stringify(novo), String(novo.nome ?? ''), String(novo.email ?? '')],
+  // Grava só o que mudou, por cima do que está no banco AGORA. Regravar o
+  // `data` inteiro lido antes desfazia o que outra requisição fez no meio:
+  // um "sair" (token_version), um cadastro de 2FA ou o último código usado.
+  const patch: Dados = {};
+  for (const [k, v] of Object.entries(novo)) {
+    if (JSON.stringify(v) !== JSON.stringify(atual[k])) patch[k] = v;
+  }
+  delete patch.token_version;
+  const remover = ['totp_cofre', 'totp_segredo', 'totp_ultimo_passo'].filter(k => k in atual && !(k in novo));
+  const { rows: gravadas } = await db.query(
+    `UPDATE usuarios
+        SET data = CASE WHEN $5::boolean
+                     THEN jsonb_set((data || $3::jsonb) - $4::text[], '{token_version}',
+                                    to_jsonb(COALESCE((data->>'token_version')::int, 0) + 1), true)
+                     ELSE (data || $3::jsonb) - $4::text[] END,
+            nome = $6, email = $7, updated_at = NOW()
+      WHERE id = $1 AND tenant_id = $2
+      RETURNING data`,
+    [id, tenantId, JSON.stringify(patch), remover, invalidaSessoes, String(novo.nome ?? ''), String(novo.email ?? '')],
   );
+  if (gravadas.length > 0) Object.assign(novo, { token_version: (gravadas[0].data as Dados)?.token_version });
   if (invalidaSessoes) esquecerSessaoEmCache({ userId: id, tenantId });
   return semSegredos(novo);
 }

@@ -176,6 +176,7 @@ export async function DELETE() {
       ...config,
       empresa_id: null,
       token: '',
+      token_cofre: undefined,
       certificado: null,
     };
     await salvarConfigFiscal(tenantId, desconectada);
