@@ -558,6 +558,27 @@ function ehDuplicata(e: unknown): boolean {
 }
 
 /**
+ * Como fica a nota quando a transmissão lança erro (FIN2-09): recusa de
+ * verdade vira REJEITADA; falha de transporte segue PROCESSANDO com o
+ * resultado desconhecido (viva, bloqueando outra emissão da parcela).
+ */
+export function notaAposFalhaDeTransmissao(nota: NotaFiscal, e: unknown): NotaFiscal {
+  const incerto = !(e instanceof ErroFiscal) || e.incerto;
+  return incerto
+    ? {
+        ...nota,
+        status: 'PROCESSANDO',
+        resultado_desconhecido: true,
+        erro: 'A transmissão não teve resposta. A nota pode ter sido emitida: use "Atualizar status" antes de qualquer outra ação.',
+      }
+    : {
+        ...nota,
+        status: 'REJEITADA',
+        erro: e instanceof Error ? e.message : 'Falha ao transmitir a nota.',
+      };
+}
+
+/**
  * Emite a nota de uma conta a receber.
  *
  * A nota é gravada ANTES de falar com o gateway, com status PROCESSANDO. Se a
@@ -694,13 +715,16 @@ export async function emitirNota(
     await gravarNota(tenantId, atualizada);
     return atualizada;
   } catch (e) {
-    const rejeitada: NotaFiscal = {
-      ...nota,
-      status: 'REJEITADA',
-      erro: e instanceof Error ? e.message : 'Falha ao transmitir a nota.',
-    };
-    await gravarNota(tenantId, rejeitada);
-    return rejeitada;
+    // Recusa de verdade (o emissor disse não, ou a nota nem saiu daqui) vira
+    // REJEITADA e libera nova tentativa. Falha de transporte NÃO: a prefeitura
+    // pode ter aceitado e a resposta se perdido. A nota fica PROCESSANDO com o
+    // resultado desconhecido, o índice de nota viva impede outra emissão, e
+    // "atualizar status" consulta ou reenvia com o MESMO id (mesma chave de
+    // idempotência no emissor). Antes, timeout virava REJEITADA e a parcela
+    // podia ganhar duas notas (FIN2-09).
+    const registrada = notaAposFalhaDeTransmissao(nota, e);
+    await gravarNota(tenantId, registrada);
+    return registrada;
   }
 }
 
@@ -720,6 +744,38 @@ export async function atualizarStatus(
 
   const config = await carregarConfigFiscal(tenantId);
   const emissor = emissorDaConfig(config);
+
+  // Resultado desconhecido sem protocolo: o emissor não deu referência para
+  // consultar. Reenvia a MESMA nota (mesmo id, mesma chave de idempotência
+  // no emissor): se ela já tinha saído, o emissor devolve a existente em vez
+  // de emitir outra.
+  if (nota.resultado_desconhecido && !nota.protocolo) {
+    try {
+      const emitente = await carregarEmitente(tenantId);
+      const r = await emissor.emitir({ nota, config, emitente });
+      const atualizada: NotaFiscal = {
+        ...nota,
+        resultado_desconhecido: false,
+        status: r.status,
+        numero: r.numero || nota.numero,
+        codigo_verificacao: r.codigo_verificacao || nota.codigo_verificacao,
+        protocolo: r.protocolo || r.referencia || nota.protocolo,
+        link_pdf: r.link_pdf, link_xml: r.link_xml,
+        erro: r.erro,
+        autorizada_em: r.status === 'AUTORIZADA' ? new Date().toISOString() : '',
+      };
+      await gravarNota(tenantId, atualizada);
+      return atualizada;
+    } catch (e) {
+      if (e instanceof ErroFiscal && !e.incerto) {
+        const rejeitada: NotaFiscal = { ...nota, resultado_desconhecido: false, status: 'REJEITADA', erro: e.message };
+        await gravarNota(tenantId, rejeitada);
+        return rejeitada;
+      }
+      return nota; // segue desconhecido; tenta de novo depois
+    }
+  }
+
   const referencia = nota.protocolo || nota.id;
   const r = await emissor.consultar(referencia, config);
   const atualizada: NotaFiscal = {

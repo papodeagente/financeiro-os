@@ -270,7 +270,8 @@ export function MateriaisTab({ grupoId, onChange }: Props) {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {filtrados.map(m => {
             const Icon = ICONE_TIPO[m.tipo];
-            const isExternal = !m.url.startsWith('/api/uploads/');
+            // Documento enviado vai para /api/arquivos/ (privado) desde 04/11/2026.
+            const isExternal = !m.url.startsWith('/api/uploads/') && !m.url.startsWith('/api/arquivos/');
             return (
               <div key={m.id} className="border p-4 flex flex-col gap-2" style={{ borderColor: 'var(--line)', background: 'var(--ink-surface)' }}>
                 <div className="flex items-start gap-3">

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getCanonicalBaseUrl } from '@/lib/canonical-hosts';
+import { assinarUrl, precisaAssinar } from '@/lib/arquivos';
 import {
   hashTokenCompartilhamento,
   prepararMapaCompartilhado,
@@ -13,6 +14,18 @@ const PUBLIC_HEADERS = {
   'Referrer-Policy': 'no-referrer',
   'X-Robots-Tag': 'noindex, nofollow, noarchive',
 };
+
+function assinarAnexos(valor: unknown, profundidade = 0): void {
+  if (!valor || typeof valor !== 'object' || profundidade > 30) return;
+  if (Array.isArray(valor)) { for (const v of valor) assinarAnexos(v, profundidade + 1); return; }
+  const obj = valor as Record<string, unknown>;
+  if (Array.isArray(obj.anexos)) {
+    for (const a of obj.anexos as Array<{ url?: unknown }>) {
+      if (a && typeof a.url === 'string' && precisaAssinar(a.url)) a.url = assinarUrl(a.url);
+    }
+  }
+  for (const v of Object.values(obj)) if (v && typeof v === 'object') assinarAnexos(v, profundidade + 1);
+}
 
 function json(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: PUBLIC_HEADERS });
@@ -57,6 +70,9 @@ export async function GET(
 
     const mapa = prepararMapaCompartilhado(rows[0].data, rows[0].id, rows[0].nome);
     if (!mapa) return json({ error: 'Link não encontrado ou revogado' }, 404);
+    // Documento anexado deixou de ser link aberto (FIN-08): quem tem o link
+    // do mapa recebe uma URL assinada de curta duração para cada anexo.
+    assinarAnexos(mapa);
     const baseUrl = getCanonicalBaseUrl().replace(/\/+$/, '');
     const encodedToken = encodeURIComponent(token);
     const allowCopy = rows[0].allow_copy === true;

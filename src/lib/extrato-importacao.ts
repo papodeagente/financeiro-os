@@ -74,6 +74,20 @@ export async function importarExtrato(
   linhas: readonly LinhaImportada[],
   aoAndar?: (a: Andamento) => void,
 ): Promise<ResultadoImportacao> {
+  // A conta precisa ser desta agência: extrato em conta alheia ou inventada
+  // não entra (e depois não vira conciliação).
+  const { rows: conta } = await exec.query(
+    `SELECT id FROM contas_bancarias WHERE id = $1 AND tenant_id = $2`,
+    [contaId, tenantId],
+  );
+  if (conta.length === 0) throw new Error('Conta bancária não encontrada nesta agência.');
+  // Duas importações da mesma conta ao mesmo tempo liam a mesma lista de
+  // chaves e inseriam a mesma linha duas vezes (auditoria 04/11, FIN2-20).
+  // A trava (até o fim da transação de quem chama) põe uma atrás da outra:
+  // a segunda lê o que a primeira gravou. Trava consultiva, para não
+  // bloquear as baixas que movem o saldo dessa conta.
+  await exec.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [`extrato:${tenantId}:${contaId}`]);
+
   // Chaves já existentes na conta — base da deduplicação.
   const { rows: existentes } = await exec.query(
     `SELECT data FROM ${TABLE} WHERE tenant_id = $1 AND conta_bancaria_id = $2`,
@@ -120,12 +134,18 @@ export async function importarExtrato(
         // reimportações futuras reconheçam a linha mesmo se a descrição mudar.
         ...(fitid ? { fitid } : {}),
       };
-      await exec.query(
+      // O índice único por FITID (EXTRATO_FITID_UNICO_SQL) é a segunda
+      // barreira: mesmo fora da trava, a mesma transação bancária não entra
+      // duas vezes na mesma conta.
+      const { rows: gravada } = await exec.query(
         `INSERT INTO ${TABLE} (id, tenant_id, conta_bancaria_id, status_conciliacao, data, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5::jsonb, NOW(), NOW())`,
+         VALUES ($1, $2, $3, $4, $5::jsonb, NOW(), NOW())
+         ON CONFLICT DO NOTHING
+         RETURNING id`,
         [item.id, tenantId, contaId, 'PENDENTE', JSON.stringify(item)],
       );
-      inseridas++;
+      if (gravada.length > 0) inseridas++;
+      else duplicadas++;
     }
     const feitas = i + 1;
     if (aoAndar && (feitas % passo === 0 || feitas === total)) {
@@ -135,3 +155,23 @@ export async function importarExtrato(
 
   return { inseridas, duplicadas, total };
 }
+
+/**
+ * Índice único da transação bancária por conta (FITID do OFX). Linhas sem
+ * FITID (CSV) seguem deduplicadas pela chave data+valor+descrição dentro da
+ * trava da importação; duas linhas legitimamente iguais no mesmo dia, sem
+ * FITID, continuam sendo uma limitação conhecida.
+ *
+ * Se a base já tiver duplicatas antigas, o índice não é criado (o boot não
+ * pode cair por isso) e um aviso vai para o log; a trava continua valendo.
+ */
+export const EXTRATO_FITID_UNICO_SQL = `
+DO $$
+BEGIN
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_extrato_fitid
+    ON extrato_bancario (tenant_id, conta_bancaria_id, (data->>'fitid'))
+    WHERE COALESCE(data->>'fitid', '') <> '';
+EXCEPTION WHEN unique_violation THEN
+  RAISE NOTICE 'uq_extrato_fitid nao criado: ha linhas duplicadas por FITID';
+END $$;
+`;

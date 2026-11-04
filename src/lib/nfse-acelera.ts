@@ -159,11 +159,14 @@ async function chamar(
       throw new ErroFiscal(
         'A AceleraAPI não respondeu a tempo. A nota pode ter sido enviada: '
         + 'consulte em Notas fiscais antes de emitir de novo.',
+        '',
+        true,
       );
     }
     throw new ErroFiscal(
       'Não foi possível falar com a AceleraAPI.',
       e instanceof Error ? e.message : '',
+      true,
     );
   } finally {
     clearTimeout(timer);

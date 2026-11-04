@@ -55,7 +55,18 @@ function ambiente(opcoes = {}) {
     },
     // Síncrona, como a real: um mock async passaria pelo `if (!...)` porque
     // Promise é sempre verdadeiro, escondendo uma quebra de contrato.
-    '@/lib/tenant-host': { isHostAuthorizedForProposta: () => true },
+    '@/lib/tenant-host': {
+      isHostAuthorizedForProposta: () => true,
+      resolvePropostaForHost: async () => ({ ok: true, id: 'proposta-12345', tenantId: 'tenant-1', data: proposta, linkPublico: null }),
+    },
+    // Escritas públicas são parciais e atômicas desde a auditoria de 04/11
+    // (src/lib/proposta-publica.ts): é aqui que a proposta é "persistida".
+    '@/lib/proposta-publica': {
+      acrescentarEventoPublico: async () => { ordem.push('persistiu'); return true; },
+      marcarVisualizada: async () => {},
+      registrarAceite: async () => { ordem.push('persistiu'); return true; },
+    },
+    '@/lib/limite-publico': { permitirChamada: () => true, ipDaRequisicao: () => '1.1.1.1' },
     '@/lib/proposta-aceite-crm': {
       processarEventoPropostaPublica: async () => {
         ordem.push('evento-local');

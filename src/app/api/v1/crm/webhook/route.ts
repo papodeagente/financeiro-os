@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     const bodyText = await req.text();
     const signature = req.headers.get('x-crm-signature') || '';
 
-    const tenantId = await resolverTenantPorAssinaturaCRM(bodyText, signature);
+    const tenantId = await resolverTenantPorAssinaturaCRM(bodyText, signature, req.headers.get('x-crm-timestamp'));
     if (!tenantId) {
       return NextResponse.json({ error: 'Assinatura invalida' }, { status: 401 });
     }

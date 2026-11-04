@@ -1,40 +1,46 @@
 import { chaveAnthropic, type Consulta } from '@/lib/config-apis';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
-import { isHostAuthorizedForProposta } from '@/lib/tenant-host';
+import { resolvePropostaForHost } from '@/lib/tenant-host';
+import { ipDaRequisicao, permitirChamada } from '@/lib/limite-publico';
 
+
+/** Tetos do chat público (FIN-09): por visitante, por link e de tamanho. */
+const TETO_MENSAGEM = 1000;
+const TETO_HISTORICO = 10;
+const TETO_ITEM_HISTORICO = 2000;
 
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
-    if (!slug || slug.length < 10 || !/^[\w-]+$/.test(slug)) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const ip = ipDaRequisicao(req);
+    // Orçamento ANTES de qualquer leitura ou chamada à IA: quem tem o link
+    // não pode gastar a conta da agência em laço.
+    if (!permitirChamada(`chat-ip:${ip}`, 20, 10 * 60_000)
+      || !permitirChamada(`chat-link:${slug}`, 200, 24 * 3600_000)) {
+      return NextResponse.json({ error: 'Muitas perguntas seguidas. Tente de novo mais tarde.' }, { status: 429 });
     }
-    const { mensagem, historico } = await req.json();
-    if (!mensagem?.trim()) {
+    const body = await req.json().catch(() => null);
+    const mensagem = typeof body?.mensagem === 'string' ? body.mensagem.trim() : '';
+    if (!mensagem) {
       return NextResponse.json({ error: 'Mensagem vazia' }, { status: 400 });
     }
+    if (mensagem.length > TETO_MENSAGEM) {
+      return NextResponse.json({ error: 'Mensagem longa demais' }, { status: 413 });
+    }
+    const historico = Array.isArray(body?.historico) ? body.historico : [];
 
-    // Load proposal data for context
+    // A proposta (e com ela a agência) vem antes da configuração da IA.
     await initDB();
     if (!pool) return NextResponse.json({ error: 'DB offline' }, { status: 500 });
-    const { rows } = await pool.query(
-      `SELECT tenant_id, data FROM propostas WHERE id = $1 LIMIT 1`,
-      [slug]
-    );
-    if (rows.length === 0) {
+    const r = await resolvePropostaForHost(req, slug);
+    if (!r.ok) {
       return NextResponse.json({ error: 'Proposta nao encontrada' }, { status: 404 });
     }
+    const proposta = r.data as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-    if (!isHostAuthorizedForProposta(req)) {
-      return NextResponse.json({ error: 'Proposta nao encontrada' }, { status: 404 });
-    }
-
-    const proposta = rows[0].data;
-
-    // A chave é a da agência dona da proposta. Antes era a do primeiro
-    // registro de config_apis do banco: uma agência pagava a IA das outras.
-    const config = await chaveAnthropic(pool as unknown as Consulta, String(rows[0].tenant_id || ''), 'claude-sonnet-4-5-20250929');
+    // A chave é a da agência dona da proposta.
+    const config = await chaveAnthropic(pool as unknown as Consulta, r.tenantId, 'claude-sonnet-4-5-20250929');
     if (!config) {
       return NextResponse.json({ error: 'IA nao configurada' }, { status: 503 });
     }
@@ -80,12 +86,12 @@ REGRAS:
 - Use no maximo 3 paragrafos curtos por resposta.
 - Nao mencione que voce e uma IA ou que esta lendo dados de uma proposta. Apenas responda naturalmente.`;
 
-    // Build messages array with history
-    const messages = [];
-    if (historico && Array.isArray(historico)) {
-      for (const msg of historico.slice(-10)) { // Keep last 10 messages
-        messages.push({ role: msg.role, content: msg.content });
-      }
+    // Histórico: só papéis válidos e texto, com teto de itens e tamanho.
+    const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+    for (const msg of historico.slice(-TETO_HISTORICO)) {
+      const role = msg?.role === 'assistant' ? 'assistant' : msg?.role === 'user' ? 'user' : null;
+      if (!role || typeof msg?.content !== 'string') continue;
+      messages.push({ role, content: msg.content.slice(0, TETO_ITEM_HISTORICO) });
     }
     messages.push({ role: 'user', content: mensagem });
 
@@ -98,15 +104,15 @@ REGRAS:
       },
       body: JSON.stringify({
         model: config.modelo,
-        max_tokens: 1024,
+        max_tokens: 600,
         system: systemPrompt,
         messages,
       }),
+      signal: AbortSignal.timeout(30_000),
     });
 
     if (!response.ok) {
-      const err = await response.text();
-      console.error('Anthropic API error:', err);
+      console.error('Anthropic API error:', response.status);
       return NextResponse.json({ error: 'Erro na IA' }, { status: 500 });
     }
 

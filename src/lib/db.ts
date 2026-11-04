@@ -1,4 +1,7 @@
 import { VINCULO_FISCAL_SCHEMA_SQL } from './vinculo-fiscal';
+import { PROPOSTA_LINK_SCHEMA_SQL } from './proposta-publica';
+import { ARQUIVOS_PRIVADOS_SCHEMA_SQL } from './arquivos';
+import { EXTRATO_FITID_UNICO_SQL } from './extrato-importacao';
 import { AuditPool } from './audit-pool';
 import { getAuditContext, runWithAuditContext, SYSTEM_AUDIT_CONTEXT } from './audit-context';
 import { AUDIT_SCHEMA_SQL } from './audit-schema';
@@ -1485,6 +1488,12 @@ async function executarInitDB() {
   `);
   // Dono único de cada empresa no emissor de notas (FIN-02).
   await pool.query(VINCULO_FISCAL_SCHEMA_SQL);
+  // Auditoria de 04/11/2026, Entrega B: link público da proposta por token
+  // (FIN-13), documentos privados por agência (FIN-08) e a mesma transação
+  // bancária uma vez só por conta (FIN2-20).
+  await pool.query(PROPOSTA_LINK_SCHEMA_SQL);
+  await pool.query(ARQUIVOS_PRIVADOS_SCHEMA_SQL);
+  await pool.query(EXTRATO_FITID_UNICO_SQL);
   // Instala a captura somente depois das migrações/seed, sem fabricar histórico.
   await pool.query(AUDIT_SCHEMA_SQL);
   initialized = true;
@@ -1497,6 +1506,15 @@ async function executarInitDB() {
     .catch(e => console.error('[revisao-hotmart]', e instanceof Error ? e.message : e));
   // Mesma ideia para o Pagar.me (08/10/2026): pedido e cobrança duplicados,
   // venda antecipada em 12 contas e venda do CRM que não se ligou.
+  // Token público para as propostas anteriores ao link por token. Em segundo
+  // plano e em lotes: o link antigo pelo id continua valendo 180 dias.
+  void import('./proposta-publica')
+    .then(async m => {
+      for (let i = 0; i < 200; i++) {
+        if (!pool || (await m.garantirLinksPendentes(pool as unknown as import('./proposta-publica').Consulta)) === 0) break;
+      }
+    })
+    .catch(e => console.error('[proposta-link]', e instanceof Error ? e.message : e));
   void import('./plataformas/revisao-pagarme')
     .then(m => m.revisarPagarmeUmaVez())
     .catch(e => console.error('[revisao-pagarme]', e instanceof Error ? e.message : e));

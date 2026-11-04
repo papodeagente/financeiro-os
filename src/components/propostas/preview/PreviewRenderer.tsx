@@ -6,6 +6,7 @@ import { MapaRoteiro } from '@/components/propostas/MapaRoteiro';
 import { t, type IdiomaProposal } from '@/lib/i18n-proposta';
 import { RichFlightCard } from './RichFlightCard';
 import { groupIntoRows } from '@/lib/proposta-layout';
+import { limparHtml, urlHttp } from '@/lib/html-seguro';
 
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -24,7 +25,7 @@ function TextoPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
       )}
       {c.corpo && (
         isHTML
-          ? <div className="prose prose-sm max-w-none leading-relaxed opacity-80 [&_a]:text-emerald-600 [&_a]:underline [&_mark]:bg-yellow-200/50 [&_blockquote]:border-l-4 [&_blockquote]:border-emerald-300 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:opacity-70" dangerouslySetInnerHTML={{ __html: c.corpo }} />
+          ? <div className="prose prose-sm max-w-none leading-relaxed opacity-80 [&_a]:text-emerald-600 [&_a]:underline [&_mark]:bg-yellow-200/50 [&_blockquote]:border-l-4 [&_blockquote]:border-emerald-300 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:opacity-70" dangerouslySetInnerHTML={{ __html: limparHtml(c.corpo) }} />
           : <p className="whitespace-pre-wrap leading-relaxed opacity-80 text-[15px]">{c.corpo}</p>
       )}
     </div>
@@ -435,7 +436,9 @@ function VideoPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
   const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
   if (ytMatch) embedUrl = `https://www.youtube-nocookie.com/embed/${ytMatch[1]}`;
   else if (vimeoMatch) embedUrl = `https://player.vimeo.com/video/${vimeoMatch[1]}`;
-  else embedUrl = url;
+  // Fora do YouTube/Vimeo, só https (um `javascript:` no iframe rodaria na página).
+  else embedUrl = /^https:\/\//i.test(urlHttp(url)) ? urlHttp(url) : '';
+  if (!embedUrl) return null;
 
   return (
     <div className="space-y-2">

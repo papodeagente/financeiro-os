@@ -10,6 +10,8 @@ export const PUBLIC_PATHS = [
   '/signup',
   '/api/health',
   '/p/', '/api/propostas/public/', '/api/uploads/',
+  // Documento privado: a rota confere sessão da agência dona ou URL assinada.
+  '/api/arquivos/',
   '/api/v1/crm/webhook', '/api/v1/crm/health',
   '/api/v1/sites/webhook/',
   '/api/v1/plataformas/',

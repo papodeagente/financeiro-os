@@ -3,7 +3,7 @@ import pool, { initDB } from './db';
 import { getTenantId } from './tenant';
 import { getSession } from './auth';
 import { bloqueioFinanceiro, podeExcluir, podeVerTodasVendas } from './permissoes';
-import { recusaDoPost, preservarCamposDerivados, CAMPOS_DERIVADOS } from './guarda-baixa';
+import { recusaDoPost, sqlPreservarDerivados, STATUS_DE_BAIXA } from './guarda-baixa';
 
 export interface CrudOpcoes {
   /**
@@ -51,6 +51,12 @@ export interface CrudOpcoes {
    * Baixa é operação do PUT, que roda em transação com guarda otimista.
    */
   protegerBaixa?: boolean;
+  /**
+   * Ajusta o item antes do upsert do POST. Vale para o cadastro novo; na
+   * regravação os campos derivados continuam vindo do banco. Contas
+   * bancárias usam para nascer com saldo_atual = saldo_inicial (FIN2-01).
+   */
+  normalizarCadastro?: (item: Record<string, unknown>) => void;
 }
 
 // As regras puras vivem em ./guarda-baixa para poderem ser testadas sem
@@ -131,24 +137,23 @@ export function createCrudHandlers(tableName: string, indexColumns: string[] = [
       const tenantId = await getTenantId();
 
       if (opcoes.protegerBaixa) {
-        const { rows: existente } = await pool.query(
-          `SELECT data->>'status' AS status FROM ${tableName} WHERE id = $1 AND tenant_id = $2`,
-          [item.id, tenantId],
-        );
-        const recusaBaixa = recusaDoPost(
-          String((item as Record<string, unknown>).status ?? ''),
-          existente.length > 0 ? String(existente[0].status ?? '') : null,
-        );
+        // Criar já baixado é recusado antes de qualquer SQL.
+        const recusaBaixa = recusaDoPost(String((item as Record<string, unknown>).status ?? ''), null);
         if (recusaBaixa) {
           return NextResponse.json({ error: recusaBaixa.erro }, { status: recusaBaixa.status });
         }
       }
 
+      opcoes.normalizarCadastro?.(item as Record<string, unknown>);
+
       // Build dynamic upsert with tenant_id
       const paramValues: unknown[] = [item.id, tenantId, JSON.stringify(item)];
       const insertCols = ['id', 'tenant_id', 'data'];
       const insertVals = ['$1', '$2', '$3'];
-      const updateSets = ['data = $3', 'updated_at = NOW()'];
+      // Campos derivados (saldo_atual) ficam com o valor do banco na
+      // regravação, decidido DENTRO do UPDATE: o POST era um caminho para
+      // escrever o saldo calculado sem lançamento (FIN2-01).
+      const updateSets = [`data = ${sqlPreservarDerivados(tableName, '$3::jsonb')}`, 'updated_at = NOW()'];
 
       indexColumns.forEach((col, i) => {
         const paramNum = i + 4;
@@ -159,17 +164,39 @@ export function createCrudHandlers(tableName: string, indexColumns: string[] = [
       });
 
       // Guarda de tenant no conflito: id já existente de OUTRO tenant não
-      // pode ser sobrescrito por upsert (vira no-op silencioso).
-      await pool.query(
+      // pode ser sobrescrito por upsert. Com protegerBaixa, a linha já
+      // baixada também não é regravada, e a checagem está no próprio UPDATE:
+      // ler o status antes e gravar depois deixava uma baixa concorrente ser
+      // rebaixada a PENDENTE sem estorno (FIN2-03).
+      let guardaBaixa = '';
+      if (opcoes.protegerBaixa) {
+        paramValues.push(STATUS_DE_BAIXA);
+        guardaBaixa = ` AND COALESCE(${tableName}.data->>'status', '') <> ALL ($${paramValues.length}::text[])`;
+      }
+      const { rows: gravadas } = await pool.query(
         `INSERT INTO ${tableName} (${insertCols.join(', ')}, created_at, updated_at)
          VALUES (${insertVals.join(', ')}, NOW(), NOW())
          ON CONFLICT (id) DO UPDATE SET ${updateSets.join(', ')}
-         WHERE ${tableName}.tenant_id = EXCLUDED.tenant_id`,
+         WHERE ${tableName}.tenant_id = EXCLUDED.tenant_id${guardaBaixa}
+         RETURNING data`,
         paramValues
       );
+      if (gravadas.length === 0) {
+        if (opcoes.protegerBaixa) {
+          const { rows: atual } = await pool.query(
+            `SELECT data->>'status' AS status FROM ${tableName} WHERE id = $1 AND tenant_id = $2`,
+            [item.id, tenantId],
+          );
+          const recusaBaixa = atual.length > 0 ? recusaDoPost('', String(atual[0].status ?? '')) : null;
+          if (recusaBaixa) return NextResponse.json({ error: recusaBaixa.erro }, { status: recusaBaixa.status });
+        }
+        // Id de outra agência: nada foi gravado.
+        return NextResponse.json({ error: 'Registro não encontrado' }, { status: 404 });
+      }
+      const salvo = (gravadas[0].data ?? item) as Record<string, unknown>;
 
-      const aviso = await rodarGancho(opcoes, tenantId, item as Record<string, unknown>);
-      return NextResponse.json(aviso ? { ...item, aviso } : item);
+      const aviso = await rodarGancho(opcoes, tenantId, salvo);
+      return NextResponse.json(aviso ? { ...salvo, aviso } : salvo);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
       return NextResponse.json({ error: msg }, { status: 500 });
@@ -224,21 +251,11 @@ export function createCrudItemHandlers(tableName: string, indexColumns: string[]
       // A tela de contas bancárias envia { ...existing, nome, banco, ... },
       // e `existing` carrega o saldo_atual lido quando a página abriu. Se uma
       // baixa aconteceu nesse meio-tempo, editar o nome da conta regravava o
-      // saldo antigo por cima — uma correção de texto apagava recebimentos
-      // reais. Todo o cuidado do UPDATE atômico do caixa era anulado aqui.
-      if (CAMPOS_DERIVADOS.some(c => c in (item as Record<string, unknown>))) {
-        const { rows: atual } = await pool.query(
-          `SELECT data FROM ${tableName} WHERE id = $1 AND tenant_id = $2`,
-          [id, tenantId],
-        );
-        preservarCamposDerivados(
-          item as Record<string, unknown>,
-          atual.length > 0 ? ((atual[0].data ?? {}) as Record<string, unknown>) : null,
-        );
-      }
-
+      // saldo antigo por cima. A preservação acontece DENTRO do UPDATE: ler o
+      // saldo antes e gravar depois ainda perdia a baixa que caísse entre os
+      // dois (FIN2-03).
       const paramValues: unknown[] = [id, tenantId, JSON.stringify(item)];
-      const setClauses = ['data = $3', 'updated_at = NOW()'];
+      const setClauses = [`data = ${sqlPreservarDerivados(tableName, '$3::jsonb')}`, 'updated_at = NOW()'];
 
       indexColumns.forEach((col, i) => {
         const paramNum = i + 4;
@@ -246,13 +263,25 @@ export function createCrudItemHandlers(tableName: string, indexColumns: string[]
         setClauses.push(`${col} = $${paramNum}`);
       });
 
-      await pool.query(
-        `UPDATE ${tableName} SET ${setClauses.join(', ')} WHERE id = $1 AND tenant_id = $2`,
+      let guardaBaixa = '';
+      if (opcoes.protegerBaixa) {
+        paramValues.push(STATUS_DE_BAIXA);
+        guardaBaixa = ` AND COALESCE(data->>'status', '') <> ALL ($${paramValues.length}::text[])`;
+      }
+      const { rows: gravadas } = await pool.query(
+        `UPDATE ${tableName} SET ${setClauses.join(', ')} WHERE id = $1 AND tenant_id = $2${guardaBaixa} RETURNING data`,
         paramValues
       );
+      if (gravadas.length === 0) {
+        return NextResponse.json(
+          { error: opcoes.protegerBaixa ? 'Registro não encontrado ou já baixado' : 'Registro não encontrado' },
+          { status: opcoes.protegerBaixa ? 409 : 404 },
+        );
+      }
+      const salvo = (gravadas[0].data ?? item) as Record<string, unknown>;
 
-      const aviso = await rodarGancho(opcoes, tenantId, { ...(item as Record<string, unknown>), id });
-      return NextResponse.json(aviso ? { ...item, aviso } : item);
+      const aviso = await rodarGancho(opcoes, tenantId, { ...salvo, id });
+      return NextResponse.json(aviso ? { ...salvo, aviso } : salvo);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
       return NextResponse.json({ error: msg }, { status: 500 });

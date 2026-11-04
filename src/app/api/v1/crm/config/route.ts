@@ -1,4 +1,5 @@
 import { recusaAdmin } from '@/lib/guarda-rota';
+import { abrirCrmConfig, selarCrmConfig } from '@/lib/crm-config-cofre';
 import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
@@ -36,9 +37,11 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const config = rows[0].data;
+    const config = abrirCrmConfig(rows[0].data);
+    // Envelopes do cofre não saem para a tela.
+    const { api_key_crm_cofre: _c, api_key_entur_cofre: _e, ...semEnvelopes } = config;
     return NextResponse.json({
-      ...config,
+      ...semEnvelopes,
       // Mask the secret on the wire — UI can request the raw value via ?reveal=1
       api_key_crm: config.api_key_crm
         ? '****' + String(config.api_key_crm).slice(-4)
@@ -69,7 +72,8 @@ export async function POST(req: NextRequest) {
       "SELECT data FROM crm_config WHERE id = 'singleton' AND tenant_id = $1",
       [tenantId],
     );
-    const prev = existing[0]?.data ?? {};
+    const gravado = existing[0]?.data ?? {};
+    const prev = abrirCrmConfig(gravado);
 
     // Preserve secrets when UI sends back the masked placeholder.
     if (typeof body.api_key_crm === 'string' && body.api_key_crm.startsWith('****')) {
@@ -98,17 +102,23 @@ export async function POST(req: NextRequest) {
       body.webhook_url_entur = suggestedWebhookUrl(req, tenantId);
     }
 
+    // Segredo cifrado ao gravar (FIN-11). Envelopes que vieram no corpo não
+    // valem: só o servidor escreve envelope.
+    delete body.api_key_crm_cofre;
+    delete body.api_key_entur_cofre;
+    const selado = selarCrmConfig(body, gravado);
+
     // Multi-tenant upsert (PK is composite (id, tenant_id)).
     const upsert = await pool.query(
       `UPDATE crm_config SET data = $2, updated_at = NOW()
        WHERE id = 'singleton' AND tenant_id = $1`,
-      [tenantId, JSON.stringify(body)],
+      [tenantId, JSON.stringify(selado)],
     );
     if (upsert.rowCount === 0) {
       await pool.query(
         `INSERT INTO crm_config (id, tenant_id, data, updated_at)
          VALUES ('singleton', $1, $2, NOW())`,
-        [tenantId, JSON.stringify(body)],
+        [tenantId, JSON.stringify(selado)],
       );
     }
     return NextResponse.json({ ok: true, tenant_id: tenantId });

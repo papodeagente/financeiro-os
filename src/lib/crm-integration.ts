@@ -1,6 +1,7 @@
 import pool, { initDB } from './db';
+import { abrirCrmConfig, lerCrmConfig, type Consulta as ConsultaCrm } from './crm-config-cofre';
 import { generateId } from './utils';
-import { createHmac } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { getProdutoGrupo } from './financial-calculations';
 import type { GrupoViagem } from './types';
 import {
@@ -427,6 +428,45 @@ function hmacSign(body: string, secret: string): string {
   return createHmac('sha256', secret).update(body).digest('hex');
 }
 
+/** Comparação em tempo constante de duas assinaturas hex (auditoria 04/11/2026). */
+export function assinaturaIgual(esperada: string, recebida: string): boolean {
+  const a = Buffer.from(String(esperada));
+  const b = Buffer.from(String(recebida));
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/** Janela aceita entre o carimbo de tempo assinado e o relógio daqui. */
+const JANELA_DO_CARIMBO_S = 300;
+
+/**
+ * Confere a assinatura de uma chamada do CRM.
+ *
+ * Formato novo (com `x-crm-timestamp`): HMAC de "<carimbo>.<corpo>", e o
+ * carimbo precisa estar a até 5 minutos do relógio daqui. Uma chamada
+ * capturada não pode ser repetida depois disso.
+ *
+ * Formato antigo (sem carimbo): HMAC só do corpo. Continua aceito durante a
+ * transição, porque o CRM em produção ainda assina assim; liga-se a exigência
+ * do carimbo com CRM_HMAC_EXIGE_TIMESTAMP=1 depois que o CRM passar a mandar.
+ * A comparação é sempre em tempo constante.
+ */
+export function assinaturaCRMConfere(
+  body: string,
+  signature: string,
+  segredo: string,
+  carimbo: string | null | undefined,
+  agora = Date.now(),
+): boolean {
+  if (!segredo || !signature) return false;
+  if (carimbo) {
+    if (!/^\d{9,11}$/.test(carimbo)) return false;
+    if (Math.abs(agora / 1000 - Number(carimbo)) > JANELA_DO_CARIMBO_S) return false;
+    return assinaturaIgual(hmacSign(`${carimbo}.${body}`, segredo), signature);
+  }
+  if (process.env.CRM_HMAC_EXIGE_TIMESTAMP === '1') return false;
+  return assinaturaIgual(hmacSign(body, segredo), signature);
+}
+
 const BACKOFF_MINUTES = [1, 5, 30, 120, 480]; // 1min, 5min, 30min, 2h, 8h
 
 function calcNextRetry(tentativas: number): Date {
@@ -438,12 +478,8 @@ function calcNextRetry(tentativas: number): Date {
 async function getCrmConfig(tenantId: string): Promise<CrmConfig | null> {
   if (!pool) return null;
   await initDB();
-  const { rows } = await pool.query(
-    "SELECT data FROM crm_config WHERE id = 'singleton' AND tenant_id = $1",
-    [tenantId],
-  );
-  if (rows.length === 0) return null;
-  return rows[0].data as CrmConfig;
+  // Segredo do HMAC guardado cifrado (FIN-11); lerCrmConfig abre e migra.
+  return (await lerCrmConfig(pool as unknown as ConsultaCrm, tenantId)) as CrmConfig | null;
 }
 
 // Lists every active CRM config across tenants. Used only by the legacy
@@ -455,7 +491,7 @@ async function listarCrmConfigsAtivas(): Promise<Array<{ tenantId: string; confi
     `SELECT tenant_id, data FROM crm_config WHERE id = 'singleton'`,
   );
   return rows
-    .map(r => ({ tenantId: r.tenant_id as string, config: r.data as CrmConfig }))
+    .map(r => ({ tenantId: r.tenant_id as string, config: abrirCrmConfig(r.data as Record<string, unknown>) as unknown as CrmConfig }))
     .filter(r => r.config?.ativo);
 }
 
@@ -994,6 +1030,9 @@ export async function emitirEventoCRM(
           'Content-Type': 'application/json',
           'x-entur-event': tipo,
           'x-entur-signature': signature,
+          // Assinatura com carimbo de tempo ("<carimbo>.<corpo>"), para o CRM
+          // passar a exigir e recusar repetição (auditoria 04/11/2026).
+          'x-entur-signature-ts': hmacSign(`${timestamp}.${bodyStr}`, config.api_key_crm || ''),
           'x-entur-event-id': id,
           'x-entur-timestamp': timestamp,
         },
@@ -1044,6 +1083,9 @@ export async function emitirEventoCRM(
 // processarEventoCRM — inbound events
 // ──────────────────────────────────────────
 
+/** Prazo para um evento RECEBIDO sem conclusão ser considerado órfão e retomado. */
+const PRAZO_DO_EVENTO_MIN = 10;
+
 export async function processarEventoCRM(
   tipo: string,
   payload: Record<string, unknown>,
@@ -1080,6 +1122,11 @@ export async function processarEventoCRM(
     // Agora um client dedicado é reservado, segura o lock e é devolvido ao
     // pool no finally. hashtext devolve int4, então a chave é combinada com
     // um segundo inteiro para reduzir colisão entre eventos diferentes.
+    // Falha ao pegar a trava, ou outra entrega segurando-a agora, NÃO é
+    // "processado": a resposta é de nova tentativa (5xx pela rota), e o CRM
+    // reentrega. Antes, os dois casos respondiam 200 sem gravar nada, e o
+    // evento se perdia para sempre se a entrega concorrente falhasse
+    // (auditoria 04/11/2026, FIN2-11).
     const lockClient = await pool.connect();
     let lockAdquirido = false;
     try {
@@ -1089,11 +1136,12 @@ export async function processarEventoCRM(
       );
       lockAdquirido = lockRows[0]?.obtido === true;
     } catch {
-      lockAdquirido = false;
+      lockClient.release();
+      return { processado: false, acao: 'trava indisponível', erro: 'Falha temporária ao registrar o evento. Tente de novo.' };
     }
     if (!lockAdquirido) {
       lockClient.release();
-      return { processado: true, acao: 'evento já em processamento (entrega concorrente)' };
+      return { processado: false, acao: 'evento já em processamento (entrega concorrente)', erro: 'Evento em processamento. Tente de novo em instantes.' };
     }
     // Liberação do lock e devolução do client acontecem juntas, sempre na
     // MESMA conexão que o adquiriu.
@@ -1122,7 +1170,7 @@ export async function processarEventoCRM(
     // processamento tinha o mesmo efeito sob concorrência: o handler pede
     // outras conexões ao mesmo pool e trava esperando a si mesmo.
     let id: string;
-    let duplicata: { processado: boolean; acao: string } | null = null;
+    let duplicata: { processado: boolean; acao: string; erro?: string } | null = null;
     try {
       const { rows: existing } = await pool.query(
         `SELECT id, processado, status FROM crm_eventos_entrada WHERE idempotency_key = $1 AND tenant_id = $2`,
@@ -1133,10 +1181,26 @@ export async function processarEventoCRM(
         duplicata = { processado: true, acao: 'duplicata ignorada' };
         id = '';
       } else if (anterior && String(anterior.status ?? '') !== 'ERRO') {
-        // Registro existente que NÃO falhou = outra entrega está processando
-        // agora (ou o processo caiu antes de registrar o erro). Não duplica.
-        duplicata = { processado: true, acao: 'duplicata ignorada (em processamento)' };
-        id = '';
+        // Registro existente que NÃO falhou e não concluiu: outra entrega
+        // está processando, ou o processo caiu no meio. Com prazo (lease):
+        // dentro de PRAZO_DO_EVENTO_MIN, é "em processamento" e o CRM tenta
+        // de novo depois; passado o prazo, o registro órfão é retomado por
+        // esta entrega (FIN2-11). O caminho é idempotente (upsert por
+        // external_id + regeneração das contas), então retomar não duplica.
+        const { rows: retomado } = await pool.query(
+          `UPDATE crm_eventos_entrada
+              SET status = 'REPROCESSANDO', erro = NULL, data = $2
+            WHERE id = $1 AND tenant_id = $3 AND processado = false AND status <> 'ERRO'
+              AND COALESCE(NULLIF(data->>'received_at', '')::timestamptz, created_at) < NOW() - ($4::int * INTERVAL '1 minute')
+            RETURNING id`,
+          [anterior.id, JSON.stringify({ tipo, payload, received_at: new Date().toISOString() }), tenantId, PRAZO_DO_EVENTO_MIN],
+        );
+        if (retomado.length > 0) {
+          id = anterior.id as string;
+        } else {
+          duplicata = { processado: false, acao: 'evento em processamento', erro: 'Evento em processamento. Tente de novo em instantes.' };
+          id = '';
+        }
       } else if (anterior) {
         // Retry de um evento que falhou: reaproveita o registro e limpa o erro.
         id = anterior.id as string;
@@ -2543,13 +2607,13 @@ export async function verificarAssinaturaCRM(
   body: string,
   signature: string,
   tenantId: string,
+  carimbo?: string | null,
 ): Promise<boolean> {
   try {
     if (!tenantId || !signature) return false;
     const config = await getCrmConfig(tenantId);
     if (!config || !config.api_key_entur) return false;
-    const expected = hmacSign(body, config.api_key_entur);
-    return expected === signature;
+    return assinaturaCRMConfere(body, signature, config.api_key_entur, carimbo);
   } catch {
     return false;
   }
@@ -2561,14 +2625,14 @@ export async function verificarAssinaturaCRM(
 export async function resolverTenantPorAssinaturaCRM(
   body: string,
   signature: string,
+  carimbo?: string | null,
 ): Promise<string | null> {
   try {
     if (!signature) return null;
     const configs = await listarCrmConfigsAtivas();
     for (const { tenantId, config } of configs) {
       if (!config.api_key_entur) continue;
-      const expected = hmacSign(body, config.api_key_entur);
-      if (expected === signature) return tenantId;
+      if (assinaturaCRMConfere(body, signature, config.api_key_entur, carimbo)) return tenantId;
     }
     return null;
   } catch {

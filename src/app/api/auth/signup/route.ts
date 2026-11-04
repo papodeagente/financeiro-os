@@ -169,8 +169,29 @@ export async function POST(req: Request) {
     // Transacao: cria tenant + user + assinatura. Se qualquer um falha,
     // rollback e nada e persistido.
     const client = await pool.connect();
+    let conviteEsgotado = false;
     try {
       await client.query('BEGIN');
+
+      // O uso do convite é reservado PRIMEIRO, num UPDATE condicional: só
+      // passa se o convite ainda está ativo, no prazo e com uso livre. Antes,
+      // a checagem acontecia fora da transação e o contador só subia no fim;
+      // duas inscrições simultâneas num convite de uso único levavam as duas
+      // o plano de 365 dias (auditoria 04/11/2026, FIN2-17).
+      if (conviteInfo) {
+        const { rows: reservado } = await client.query(
+          `UPDATE convites SET usos_atuais = usos_atuais + 1, updated_at = NOW()
+            WHERE id = $1 AND ativo = TRUE
+              AND (expira_em IS NULL OR expira_em > NOW())
+              AND (max_usos IS NULL OR usos_atuais < max_usos)
+            RETURNING id`,
+          [conviteInfo.id],
+        );
+        if (reservado.length === 0) {
+          conviteEsgotado = true;
+          throw new Error('convite esgotado');
+        }
+      }
 
       await client.query(
         `INSERT INTO tenants (id, slug, nome, cnpj, plano, status, data)
@@ -212,10 +233,6 @@ export async function POST(req: Request) {
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
           [generateId(), conviteInfo.id, tenantId, userId, nomeCompleto, email, ip, ua],
         );
-        await client.query(
-          `UPDATE convites SET usos_atuais = usos_atuais + 1, updated_at = NOW() WHERE id = $1`,
-          [conviteInfo.id],
-        );
       }
 
       // Bootstrap minimo: cria a agencia singleton dentro do tenant
@@ -236,6 +253,9 @@ export async function POST(req: Request) {
       await client.query('COMMIT');
     } catch (e) {
       await client.query('ROLLBACK');
+      if (conviteEsgotado) {
+        return NextResponse.json({ error: 'Convite esgotado' }, { status: 410 });
+      }
       throw e;
     } finally {
       client.release();

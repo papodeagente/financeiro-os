@@ -35,7 +35,7 @@ import { RodapeSection } from './preview/RodapeSection';
 import { DiscoveryRenderer } from './preview/discovery/DiscoveryRenderer';
 import { PreviewEditorProvider, type PreviewEditorBlockType } from './PreviewEditorContext';
 import { PreviewIframeCanvas } from './PreviewIframeCanvas';
-import { buildPropostaLink, normalizarPropostaLink } from '@/lib/proposta-link';
+import { normalizarPropostaLink } from '@/lib/proposta-link';
 import { groupIntoRows } from '@/lib/proposta-layout';
 import type { IdiomaProposal } from '@/lib/i18n-proposta';
 import { aplicarExemploNaProposta } from '@/lib/proposta-exemplo';
@@ -517,6 +517,18 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
   }, []);
 
   // Auto-save with debounce
+  // O link público é um token criado pelo servidor (não é mais o id da
+  // proposta). Depois de salvar, a tela adota o link que voltou, sem marcar
+  // a proposta como alterada.
+  const aplicarLinkDoServidor = (res: Response) => {
+    if (!res.ok) return;
+    res.clone().json().then((salvo: { link_publico?: string }) => {
+      const link = typeof salvo?.link_publico === 'string' ? salvo.link_publico : '';
+      if (!link) return;
+      setProposta(atual => (atual.link_publico === link ? atual : { ...atual, link_publico: link }));
+    }).catch(() => {});
+  };
+
   useEffect(() => {
     if (!hasUnsaved.current) return;
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
@@ -531,12 +543,13 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
         // que vai morrer junto com o certificado. Link já correto passa
         // intacto, então isto é inócuo no caso normal.
         p.link_publico = normalizarPropostaLink(p.link_publico, p.id, window.location.origin);
-        await fetch(`/api/propostas${isEdit ? `/${p.id}` : ''}`, {
+        const res = await fetch(`/api/propostas${isEdit ? `/${p.id}` : ''}`, {
           method: isEdit ? 'PUT' : 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(p),
         });
         hasUnsaved.current = false;
+        aplicarLinkDoServidor(res);
         setAutoSaveStatus('saved');
         setTimeout(() => setAutoSaveStatus('idle'), 2000);
       } catch {
@@ -550,9 +563,6 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
     setSaving(true);
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     const p = { ...proposta, atualizado_em: new Date().toISOString() };
-    if (!p.link_publico) {
-      p.link_publico = `${window.location.origin}/p/${p.id}`;
-    }
     await fetch(`/api/propostas${isEdit ? `/${p.id}` : ''}`, {
       method: isEdit ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -896,7 +906,6 @@ export function PropostaEditor({ proposta: initialProposta, clientes: clientesPr
       atualizado_em: new Date().toISOString(),
       secoes: current.secoes.map(s => ({ ...s, id: generateId() })),
     };
-    nova.link_publico = buildPropostaLink(nova.id, window.location.origin);
     const res = await fetch('/api/propostas', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -128,10 +128,17 @@ export interface EmissorNFSe {
 /** Erro que já vem com texto para o usuário final. */
 export class ErroFiscal extends Error {
   readonly detalhe: string;
-  constructor(mensagem: string, detalhe = '') {
+  /**
+   * true = falha de transporte (tempo esgotado, rede caiu) DEPOIS de começar
+   * a falar com o emissor: a nota pode ter saído. Não é recusa e não libera
+   * nova emissão (auditoria 04/11/2026, FIN2-09).
+   */
+  readonly incerto: boolean;
+  constructor(mensagem: string, detalhe = '', incerto = false) {
     super(mensagem);
     this.name = 'ErroFiscal';
     this.detalhe = detalhe;
+    this.incerto = incerto;
   }
 }
 
@@ -193,11 +200,14 @@ async function requisicao(
     if (e instanceof Error && e.name === 'AbortError') {
       throw new ErroFiscal(
         'O emissor de nota não respondeu a tempo. A nota pode ter sido enviada: consulte antes de emitir de novo.',
+        '',
+        true,
       );
     }
     throw new ErroFiscal(
       'Não foi possível falar com o emissor de nota.',
       e instanceof Error ? e.message : '',
+      true,
     );
   } finally {
     clearTimeout(timer);
