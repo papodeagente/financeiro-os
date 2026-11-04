@@ -14,6 +14,8 @@ interface AuthUser {
   tenantSlug?: string;
   /** Número curto da conta, para a pessoa ler no telefone com o suporte. */
   tenantNumero?: number | null;
+  /** 'ecossistema' só na conta da Entur (perfil-da-conta.ts); o resto é agência. */
+  tenantPerfil?: 'agencia' | 'ecossistema';
   isSuperAdmin?: boolean;
   impersonatingTenantId?: string | null;
   impersonatingTenantSlug?: string | null;

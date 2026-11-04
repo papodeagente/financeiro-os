@@ -41,6 +41,7 @@ import {
 } from './fornecedor-sync';
 import { lerFichaDoCrm } from './ficha-do-cliente';
 import { lerMetricasDoCrm, TIPO_METRICAS_COMERCIAIS, type ComercialDoCrm } from './metricas-comerciais';
+import { lerMrrVendido, TIPO_MRR_VENDIDO, type MrrDoCrm } from './mrr-vendido';
 
 // ──────────────────────────────────────────
 // Types
@@ -790,7 +791,7 @@ interface VendedorSincronizado {
   cadastroPendente: boolean;
 }
 
-async function upsertVendedorByExternalId(
+export async function upsertVendedorByExternalId(
   externalId: string,
   dados: { nome?: unknown; email?: unknown },
   tenantId: string,
@@ -2578,27 +2579,27 @@ export async function resolverTenantPorAssinaturaCRM(
 }
 
 // ──────────────────────────────────────────
-// Consulta: métricas comerciais do mês (acompanhamento do plano)
+// Consultas ao CRM: pergunta assinada, resposta assinada
 // ──────────────────────────────────────────
 
 /**
- * Pergunta ao CRM as negociações e as vendas ganhas do mês, pelo mesmo
- * webhook assinado dos eventos. É CONSULTA, não evento: não entra em
- * crm_eventos_saida, não tem retentativa e não mexe no disjuntor. Se o CRM
- * não responder, o acompanhamento mostra por quê e segue com o que o
- * Financeiro tem.
+ * Pergunta ao CRM pelo mesmo webhook assinado dos eventos e espera a resposta
+ * na hora. É CONSULTA, não evento: não entra em crm_eventos_saida, não tem
+ * retentativa e não mexe no disjuntor. Quem chama decide o que fazer quando o
+ * CRM não responde; nada aqui derruba a tela.
  *
  * A resposta vem assinada com o mesmo segredo (x-crm-signature): número que
- * não dá para provar que veio do CRM não entra no painel.
+ * não dá para provar que veio do CRM não entra em lugar nenhum.
  *
- * Cache curto por empresa e mês: o painel pergunta a cada abertura e a cada
- * troca de mês; o CRM não precisa responder a mesma pergunta dez vezes por
- * minuto.
+ * Cache curto por empresa, tipo e pergunta: as telas perguntam a cada
+ * abertura; o CRM não precisa responder a mesma pergunta dez vezes por minuto.
  */
-const CACHE_METRICAS = new Map<string, { ate: number; valor: ComercialDoCrm }>();
-const VALIDADE_METRICAS_MS: Record<ComercialDoCrm['situacao'], number> = {
+type FalhaDaConsulta = { situacao: 'sem_integracao' | 'crm_sem_suporte' | 'indisponivel' | 'nao_e_a_conta_operadora'; detalhe: string };
+const CACHE_CONSULTAS = new Map<string, { ate: number; valor: unknown }>();
+const VALIDADE_CONSULTA_MS: Record<'ok' | FalhaDaConsulta['situacao'], number> = {
   ok: 60_000,
   crm_sem_suporte: 10 * 60_000,
+  nao_e_a_conta_operadora: 10 * 60_000,
   indisponivel: 30_000,
   sem_integracao: 0,
 };
@@ -2610,27 +2611,35 @@ function assinaturaConfere(corpo: string, assinatura: string, segredo: string): 
   return esperada.length === recebida.length && timingSafeEqual(esperada, recebida);
 }
 
-export async function consultarMetricasComerciais(tenantId: string, mes: string): Promise<ComercialDoCrm> {
-  const chave = `${tenantId}:${mes}`;
-  const guardado = CACHE_METRICAS.get(chave);
-  if (guardado && guardado.ate > Date.now()) return guardado.valor;
+async function consultarCrm<T>(
+  tenantId: string,
+  tipo: string,
+  payload: Record<string, unknown>,
+  /** O campo da resposta que traz o resultado (ex.: 'metricas', 'mrr'). */
+  campo: string,
+  ler: (bruto: unknown) => T | null,
+  semSuporte: string,
+): Promise<{ situacao: 'ok'; valor: T; consultado_em: string } | FalhaDaConsulta> {
+  const chave = `${tenantId}:${tipo}:${JSON.stringify(payload)}`;
+  const guardado = CACHE_CONSULTAS.get(chave);
+  if (guardado && guardado.ate > Date.now()) return guardado.valor as { situacao: 'ok'; valor: T; consultado_em: string } | FalhaDaConsulta;
 
-  const resultado = await (async (): Promise<ComercialDoCrm> => {
+  const resultado = await (async (): Promise<{ situacao: 'ok'; valor: T; consultado_em: string } | FalhaDaConsulta> => {
     let config: CrmConfig | null = null;
     try { config = await getCrmConfig(tenantId); } catch { config = null; }
     if (!config || !config.ativo || !config.webhook_url_crm || !config.api_key_crm) {
       return { situacao: 'sem_integracao', detalhe: 'A integração com o CRM não está ligada nesta empresa (Configurações, CRM Entur).' };
     }
     const corpo = JSON.stringify({
-      id: randomUUID(), tipo: TIPO_METRICAS_COMERCIAIS, timestamp: new Date().toISOString(),
-      versao: 'v1', origem: 'entur-os', payload: { mes },
+      id: randomUUID(), tipo, timestamp: new Date().toISOString(),
+      versao: 'v1', origem: 'entur-os', payload,
     });
     try {
       const res = await fetch(config.webhook_url_crm, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-entur-event': TIPO_METRICAS_COMERCIAIS,
+          'x-entur-event': tipo,
           'x-entur-signature': hmacSign(corpo, config.api_key_crm),
         },
         body: corpo,
@@ -2638,29 +2647,52 @@ export async function consultarMetricasComerciais(tenantId: string, mes: string)
       });
       const texto = await res.text();
       if (res.status === 401) return { situacao: 'indisponivel', detalhe: 'O CRM recusou a assinatura: confira o segredo da integração.' };
+      if (res.status === 403) return { situacao: 'nao_e_a_conta_operadora', detalhe: 'O CRM só responde isto à conta da Entur: a integração desta empresa aponta para outra conta do CRM.' };
       if (res.status === 404 || res.status === 409 || res.status === 410) {
         return { situacao: 'sem_integracao', detalhe: 'A integração está desligada ou incompleta no CRM.' };
       }
       if (!res.ok) return { situacao: 'indisponivel', detalhe: `O CRM respondeu com erro (HTTP ${res.status}).` };
       let json: Record<string, unknown> | null = null;
       try { json = JSON.parse(texto); } catch { json = null; }
-      // CRM que ainda não conhece a consulta responde 200 sem `metricas`.
-      if (!json || !('metricas' in json)) {
-        return { situacao: 'crm_sem_suporte', detalhe: 'O CRM ainda não envia os números comerciais: falta atualizar o CRM.' };
-      }
+      // CRM que ainda não conhece a consulta responde 200 sem o resultado.
+      if (!json || !(campo in json)) return { situacao: 'crm_sem_suporte', detalhe: semSuporte };
       if (!assinaturaConfere(texto, res.headers.get('x-crm-signature') ?? '', config.api_key_crm)) {
         return { situacao: 'indisponivel', detalhe: 'A resposta do CRM veio sem assinatura válida e foi descartada.' };
       }
-      const metricas = lerMetricasDoCrm(json.metricas, mes);
-      if (!metricas) return { situacao: 'indisponivel', detalhe: 'A resposta do CRM não trouxe os números do mês pedido.' };
-      return { situacao: 'ok', metricas, consultado_em: new Date().toISOString() };
+      const valor = ler(json[campo]);
+      if (valor === null) return { situacao: 'indisponivel', detalhe: 'A resposta do CRM não trouxe o que foi pedido.' };
+      return { situacao: 'ok', valor, consultado_em: new Date().toISOString() };
     } catch (e) {
       const tempo = e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError');
       return { situacao: 'indisponivel', detalhe: tempo ? 'O CRM demorou mais de 6 segundos para responder.' : 'Não foi possível falar com o CRM agora.' };
     }
   })();
 
-  const validade = VALIDADE_METRICAS_MS[resultado.situacao];
-  if (validade > 0) CACHE_METRICAS.set(chave, { ate: Date.now() + validade, valor: resultado });
+  const validade = VALIDADE_CONSULTA_MS[resultado.situacao];
+  if (validade > 0) CACHE_CONSULTAS.set(chave, { ate: Date.now() + validade, valor: resultado });
   return resultado;
+}
+
+/** Leads e vendas ganhas do mês (acompanhamento do plano), com as contas das Análises do CRM. */
+export async function consultarMetricasComerciais(tenantId: string, mes: string): Promise<ComercialDoCrm> {
+  const r = await consultarCrm(
+    tenantId, TIPO_METRICAS_COMERCIAIS, { mes }, 'metricas', b => lerMetricasDoCrm(b, mes),
+    'O CRM ainda não envia os números comerciais: falta atualizar o CRM.',
+  );
+  if (r.situacao === 'ok') return { situacao: 'ok', metricas: r.valor, consultado_em: r.consultado_em };
+  // As métricas comerciais valem para qualquer conta: 403 aqui é CRM com problema.
+  return { situacao: r.situacao === 'nao_e_a_conta_operadora' ? 'indisponivel' : r.situacao, detalhe: r.detalhe };
+}
+
+/**
+ * O MRR vendido no mês, por vendedor e produto (comissão por MRR da conta da
+ * Entur). O CRM só responde à conta operadora: qualquer outra recebe 403.
+ */
+export async function consultarMrrVendido(tenantId: string, mes: string): Promise<MrrDoCrm> {
+  const r = await consultarCrm(
+    tenantId, TIPO_MRR_VENDIDO, { mes }, 'mrr', b => lerMrrVendido(b, mes),
+    'O CRM ainda não envia o MRR vendido: falta atualizar o CRM.',
+  );
+  if (r.situacao !== 'ok') return r;
+  return { situacao: 'ok', mrr: r.valor, consultado_em: r.consultado_em };
 }

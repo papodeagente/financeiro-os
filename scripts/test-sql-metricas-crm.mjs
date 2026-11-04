@@ -41,7 +41,7 @@ globalThis.__POOL_DE_TESTE__ = { query, connect: async () => ({ query, release()
 register('./ts-resolve-hook.mjs', import.meta.url);
 register('./db-de-teste-hook.mjs', import.meta.url);
 
-const { consultarMetricasComerciais } = await import('../src/lib/crm-integration.ts');
+const { consultarMetricasComerciais, consultarMrrVendido } = await import('../src/lib/crm-integration.ts');
 const { lerMetricasDoCrm } = await import('../src/lib/metricas-comerciais.ts');
 
 const assinar = (corpo, segredo) => createHmac('sha256', segredo).update(corpo).digest('hex');
@@ -69,6 +69,26 @@ const servidor = createServer((req, res) => {
       return res.end('{"recebido":true,"processado":false}');
     }
     const mes = json.payload.mes;
+    if (json.tipo === 'MRR_VENDIDO') {
+      // O CRM de verdade só responde à conta operadora (403 para as outras).
+      if (modo === 'nao-operadora') {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ ok: false, error: 'o MRR vendido só é enviado ao Financeiro da conta operadora' }));
+      }
+      const corpoMrr = JSON.stringify({
+        recebido: true, processado: true, acao: 'mrr vendido',
+        mrr: {
+          versao: 1, mes, apurado_em: '2026-11-04T12:00:00Z',
+          produtos: [{ chave: 'plano:essencial', nome: 'Essencial', classe: 'plano' }],
+          vendas: [{ conta_id: 10, conta_nome: 'Agência A', dia: `${mes}-03`, tipo: 'nova', mrr: 297,
+            itens: [{ chave: 'plano:essencial', nome: 'Essencial', classe: 'plano', mrr: 297 }],
+            vendedor: { id: 'crm_user_7', nome: 'Karen', email: 'karen@entur.com.br' }, negociacao_id: 'crm_deal_55' }],
+          resumo: { mrr: 297, contas: 1, sem_vendedor: 0, mrr_sem_vendedor: 0 },
+        },
+      });
+      res.writeHead(200, { 'Content-Type': 'application/json', 'x-crm-signature': assinar(corpoMrr, SEGREDO) });
+      return res.end(corpoMrr);
+    }
     const resposta = JSON.stringify({
       recebido: true, processado: true, acao: 'métricas comerciais',
       metricas: {
@@ -168,6 +188,21 @@ console.log('\n--- (e) uma empresa, uma integração ---');
   const antes = pedidos.length;
   const r = await consultarMetricasComerciais(T2, '2026-10');
   eq([r.situacao, pedidos.at(-1).assinaturaOk, pedidos.length - antes], ['indisponivel', false, 1], 'a agência B assina com o segredo dela (o CRM da A recusa), e não herda o cache da A');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+console.log('\n--- (f) o MRR vendido (comissão por MRR da Entur) ---');
+{
+  await configurar(T1, configA);
+  modo = 'ok';
+  const r = await consultarMrrVendido(T1, '2026-11');
+  const p = pedidos.at(-1);
+  eq([p.tipo, p.mes, p.assinaturaOk], ['MRR_VENDIDO', '2026-11', true], 'o pedido do MRR vai assinado, com o mês');
+  eq([r.situacao, r.mrr?.vendas[0]?.vendedor?.id, r.mrr?.vendas[0]?.itens[0]?.mrr, r.mrr?.produtos.length], ['ok', 'crm_user_7', 297, 1], 'a resposta assinada vira as vendas, com vendedor e produtos');
+  modo = 'nao-operadora';
+  const n = await consultarMrrVendido(T1, '2026-10');
+  eq([n.situacao, /só responde isto à conta da Entur/.test(n.detalhe)], ['nao_e_a_conta_operadora', true], 'CRM que recusa por não ser a conta operadora: o motivo certo, sem número');
+  modo = 'ok';
 }
 
 servidor.close();

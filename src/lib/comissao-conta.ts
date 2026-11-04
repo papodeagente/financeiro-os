@@ -87,9 +87,15 @@ export function contaDaComissao(
   if (valor <= 0) return null;
   const hoje = ctx.hoje ?? hojeISO();
   const venc = vencimentoDaComissao(ctx.datasPagamento, c.data_venda, hoje);
+  // Comissão por MRR (conta do ecossistema): é do mês do vendedor, não de uma
+  // venda. A conta não aponta para venda nenhuma e diz o que ela é.
+  const doMrr = c.origem === 'mrr';
+  const vendaId = doMrr ? null : c.venda_id || null;
 
   const observacoes = [
-    `Comissão da venda ${c.venda_numero || c.venda_id} (${c.plano_nome || 'plano de comissão'}, ${num(c.percentual_aplicado)}% sobre ${round2(num(c.valor_base)).toFixed(2)}).`,
+    doMrr
+      ? `Comissão por MRR de ${c.venda_numero.replace(/^MRR /, '')} (${c.plano_nome || 'plano de comissão'}, ${num(c.percentual_aplicado)}% sobre ${round2(num(c.valor_base)).toFixed(2)} de MRR vendido).`
+      : `Comissão da venda ${c.venda_numero || c.venda_id} (${c.plano_nome || 'plano de comissão'}, ${num(c.percentual_aplicado)}% sobre ${round2(num(c.valor_base)).toFixed(2)}).`,
     venc.semAgenda ? 'Agenda de pagamento de comissão não configurada: vencimento no fim do mês. Defina os dias em Configurações, Agência.' : '',
     c.status === 'PAGA' ? `Comissão consta como paga em ${String(c.data_pagamento ?? '').slice(0, 10) || 'data não informada'}: confirme a baixa com a conta bancária de onde o dinheiro saiu.` : '',
   ].filter(Boolean).join(' ');
@@ -97,11 +103,13 @@ export function contaDaComissao(
   return {
     id: idDaContaDaComissao(c.id),
     origem: 'OUTROS',
-    venda_id: c.venda_id || null,
+    venda_id: vendaId,
     grupo_id: null,
     fornecedor_id: '',
     fornecedor_nome: c.vendedor_nome || 'Vendedor',
-    descricao: `Comissão · ${c.vendedor_nome || 'vendedor'} · venda ${c.venda_numero || c.venda_id}`,
+    descricao: doMrr
+      ? `Comissão por MRR · ${c.vendedor_nome || 'vendedor'} · ${c.venda_numero.replace(/^MRR /, '')}`
+      : `Comissão · ${c.vendedor_nome || 'vendedor'} · venda ${c.venda_numero || c.venda_id}`,
     categoria_id: ctx.categoriaId,
     centro_custo: '',
     valor_original: valor,
@@ -128,7 +136,7 @@ export function contaDaComissao(
     rateio: [],
     anexos: [],
     observacoes,
-    origem_venda_id: c.venda_id || undefined,
+    origem_venda_id: vendaId || undefined,
     auto_gerado: true,
     origem_comissao_id: c.id,
   };

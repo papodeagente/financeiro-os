@@ -71,6 +71,10 @@ export async function PUT(
     }
 
     const existing = rows[0].data;
+    // O perfil da conta (perfil-da-conta.ts) só aceita os dois valores combinados.
+    if ('perfil' in body && body.perfil !== 'agencia' && body.perfil !== 'ecossistema') {
+      return NextResponse.json({ error: 'Perfil da conta inválido.' }, { status: 400 });
+    }
     const updated = { ...existing, ...body, id, updated_at: new Date().toISOString() };
 
     await pool.query(

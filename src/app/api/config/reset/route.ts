@@ -32,6 +32,7 @@ export const CATEGORIES = {
     'centros_custo',
     'planejamento_custos',
     'planejamento_progresso',
+    'metas_mrr',
     'planejamento_projetos',
   ],
   produtos: [

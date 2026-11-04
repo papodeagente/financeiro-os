@@ -1213,6 +1213,22 @@ async function executarInitDB() {
     CREATE INDEX IF NOT EXISTS idx_planejamento_progresso_tenant_mes ON planejamento_progresso(tenant_id, mes);
   `);
 
+  // Metas de MRR (04/11/2026), só na conta do ecossistema (comissao-mrr.ts):
+  // cada meta do mês com os produtos do CRM vinculados e o valor de cada
+  // vendedor. Tabela própria: as metas de venda de viagem (tabela metas) são
+  // por vendedor e medem faturamento; estas são por meta e medem MRR.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS metas_mrr (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      mes TEXT NOT NULL,
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_metas_mrr_tenant_mes ON metas_mrr(tenant_id, mes);
+  `);
+
   // O domínio personalizado de propostas foi removido do produto, e com ele o
   // índice único que garantia um domínio por agência. O POST de /api/agencia
   // descarta o campo na gravação, então o valor órfão some do documento no

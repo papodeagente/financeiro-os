@@ -13,6 +13,8 @@ interface TenantDetail {
   cnpj: string | null
   plano: string
   status: string
+  /** 'ecossistema' só na conta da Entur (src/lib/perfil-da-conta.ts). */
+  perfil?: string
   created_at: string
   stats: {
     usuarios: number
@@ -33,6 +35,7 @@ export default function AdminTenantDetailPage() {
   // Edit form state
   const [editNome, setEditNome] = useState('')
   const [editPlano, setEditPlano] = useState('')
+  const [editPerfil, setEditPerfil] = useState<'agencia' | 'ecossistema'>('agencia')
   const [saving, setSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState('')
 
@@ -51,6 +54,7 @@ export default function AdminTenantDetailPage() {
       setTenant(data)
       setEditNome(data.nome)
       setEditPlano(data.plano)
+      setEditPerfil(data.perfil === 'ecossistema' ? 'ecossistema' : 'agencia')
     } catch {
       setError('Erro ao carregar agencia')
     } finally {
@@ -109,7 +113,7 @@ export default function AdminTenantDetailPage() {
       const res = await fetch(`/api/admin/tenants/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: editNome, plano: editPlano }),
+        body: JSON.stringify({ nome: editNome, plano: editPlano, perfil: editPerfil }),
       })
       if (!res.ok) throw new Error('Falha ao salvar')
       setSaveMessage('Salvo com sucesso')
@@ -260,6 +264,22 @@ export default function AdminTenantDetailPage() {
                 <option value="pro">Pro</option>
                 <option value="enterprise">Enterprise</option>
               </select>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label htmlFor="perfil-da-conta" className="block text-sm font-medium text-[var(--fin-text-3)] mb-1.5">Perfil da conta</label>
+              <select
+                id="perfil-da-conta"
+                value={editPerfil}
+                onChange={e => setEditPerfil(e.target.value === 'ecossistema' ? 'ecossistema' : 'agencia')}
+                className="w-full bg-[var(--fin-surface)] border border-[var(--fin-border)] text-[var(--fin-text)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--fin-accent)]/50 focus:border-[var(--fin-accent)]"
+              >
+                <option value="agencia">Agência de viagens</option>
+                <option value="ecossistema">Ecossistema Entur OS (financeiro da Entur)</option>
+              </select>
+              <p className="mt-1.5 text-xs text-[var(--fin-text-3)]">
+                Ecossistema liga o que é só do financeiro da Entur, como a comissão por MRR. Toda outra conta é agência de viagens.
+              </p>
             </div>
           </div>
 
