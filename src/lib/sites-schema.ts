@@ -7,8 +7,20 @@ export const SITES_SCHEMA_SQL = `
     ativo BOOLEAN NOT NULL DEFAULT true,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_sites_config_company
-    ON sites_config(company_id);
+  -- A versão inicial permitia a mesma empresa do Sites em mais de um
+  -- tenant. Antes de ligar a trava, fechamos TODAS as configurações de uma
+  -- empresa ambígua. Escolher silenciosamente a mais recente poderia entregar
+  -- eventos ao tenant errado; o administrador precisa parear de novo.
+  -- Assim o deploy não derruba o Financeiro e também não adivinha o dono.
+  WITH duplicadas AS (
+    SELECT company_id FROM sites_config WHERE ativo
+    GROUP BY company_id HAVING count(*) > 1
+  )
+  UPDATE sites_config SET ativo = false
+  WHERE ativo AND company_id IN (SELECT company_id FROM duplicadas);
+  DROP INDEX IF EXISTS idx_sites_config_company;
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_sites_config_company_active
+    ON sites_config(company_id) WHERE ativo;
   CREATE TABLE IF NOT EXISTS sites_eventos (
     tenant_id TEXT NOT NULL,
     id UUID NOT NULL,
@@ -71,6 +83,7 @@ export const SITES_SCHEMA_SQL = `
     pedido_id TEXT,
     pedido_codigo TEXT,
     reserva_id TEXT,
+    agregado_versao INTEGER NOT NULL DEFAULT 0,
     valor_centavos BIGINT,
     taxa_centavos BIGINT,
     liquido_centavos BIGINT,
@@ -83,6 +96,8 @@ export const SITES_SCHEMA_SQL = `
     PRIMARY KEY (tenant_id, chave_natural),
     UNIQUE (tenant_id, evento_id)
   );
+  ALTER TABLE sites_movimentos
+    ADD COLUMN IF NOT EXISTS agregado_versao INTEGER NOT NULL DEFAULT 0;
   CREATE INDEX IF NOT EXISTS idx_sites_movimentos_pedido
     ON sites_movimentos(tenant_id, pedido_codigo, ocorrido_em DESC);
   CREATE INDEX IF NOT EXISTS idx_sites_movimentos_categoria

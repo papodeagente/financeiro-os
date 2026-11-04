@@ -114,6 +114,14 @@ function referenciaDe(d: Record<string, unknown>, nomes: string[], fallback: str
   return fallback;
 }
 
+function referenciaObrigatoria(d: Record<string, unknown>, nomes: string[]): string | null {
+  for (const nome of nomes) {
+    const valor = texto(d[nome], 160);
+    if (valor) return valor;
+  }
+  return null;
+}
+
 /**
  * Normaliza somente eventos que pertencem ao livro financeiro. Eventos de
  * reserva ficam em `sites_reservas`; `saldo.pago` é informativo (a entrada
@@ -131,60 +139,111 @@ export function projetarMovimentoSites(e: EnvelopeSites): MovimentoProjetadoSite
   let efetivo = false;
 
   switch (e.tipo) {
-    case 'pagamento.recebido':
-      categoria = 'recebimento'; referencia = referenciaDe(d, ['pagamentoId', 'idExterno'], e.id);
+    case 'pagamento.recebido': {
+      const ref = referenciaObrigatoria(d, ['pagamentoId', 'idExterno']);
+      valor = centavos(d.valorCentavos);
+      if (!ref || valor === null || !moeda(d.moeda)) return null;
+      categoria = 'recebimento'; referencia = ref;
       chaveNatural = `pagamento:${referencia}`;
-      valor = centavos(d.valorCentavos); taxa = centavos(d.taxaCentavos);
+      taxa = centavos(d.taxaCentavos);
       liquido = centavos(d.liquidoCentavos) ?? (valor !== null && taxa !== null ? valor - taxa : null);
       estado = 'recebido'; efetivo = true; break;
-    case 'pagamento.falhou':
-      categoria = 'cobranca_falhou'; referencia = referenciaDe(d, ['cobrancaId'], e.id);
+    }
+    case 'pagamento.falhou': {
+      const ref = referenciaObrigatoria(d, ['cobrancaId']);
+      if (!ref) return null;
+      categoria = 'cobranca_falhou'; referencia = ref;
       chaveNatural = `cobranca:${referencia}`;
       valor = centavos(d.valorCentavos); estado = 'falhou'; break;
-    case 'saldo.pago':
-      categoria = 'quitacao'; referencia = referenciaDe(d, ['pagamentoId'], e.id);
+    }
+    case 'saldo.pago': {
+      const ref = referenciaObrigatoria(d, ['pagamentoId']);
+      valor = centavos(d.valorCentavos);
+      if (!ref || valor === null || !moeda(d.moeda)) return null;
+      categoria = 'quitacao'; referencia = ref;
       chaveNatural = `quitacao:${referencia}`;
-      valor = centavos(d.valorCentavos); estado = 'quitado'; break;
-    case 'taxa.ajustada':
-      categoria = 'taxa'; referencia = referenciaDe(d, ['pagamentoId'], e.id);
+      estado = 'quitado'; break;
+    }
+    case 'taxa.ajustada': {
+      const ref = referenciaObrigatoria(d, ['pagamentoId']);
+      valor = centavos(d.finalCentavos);
+      if (!ref || valor === null) return null;
+      categoria = 'taxa'; referencia = ref;
       chaveNatural = `taxa:${referencia}`;
-      valor = centavos(d.finalCentavos); estado = 'ajustada'; efetivo = true; break;
-    case 'reembolso.emitido':
-      categoria = 'reembolso_pendente'; referencia = referenciaDe(d, ['reembolsoId'], e.id);
+      estado = 'ajustada'; efetivo = true; break;
+    }
+    case 'reembolso.emitido': {
+      const ref = referenciaObrigatoria(d, ['reembolsoId']);
+      valor = centavos(d.valorCentavos);
+      if (!ref || valor === null) return null;
+      categoria = 'reembolso_pendente'; referencia = ref;
       chaveNatural = `reembolso:${referencia}`;
-      valor = centavos(d.valorCentavos); estado = texto(d.estado, 40) ?? 'emitido'; break;
-    case 'reembolso.efetuado':
-      categoria = 'reembolso'; referencia = referenciaDe(d, ['reembolsoId'], e.id);
+      estado = texto(d.estado, 40) ?? 'emitido'; break;
+    }
+    case 'reembolso.efetuado': {
+      const ref = referenciaObrigatoria(d, ['reembolsoId']);
+      valor = centavos(d.valorCentavos);
+      if (!ref || valor === null) return null;
+      categoria = 'reembolso'; referencia = ref;
       chaveNatural = `reembolso:${referencia}`;
-      valor = centavos(d.valorCentavos); estado = 'efetuado'; efetivo = true; break;
-    case 'reembolso.falhou':
-      categoria = 'reembolso_falhou'; referencia = referenciaDe(d, ['reembolsoId'], e.id);
+      estado = 'efetuado'; efetivo = true; break;
+    }
+    case 'reembolso.falhou': {
+      const ref = referenciaObrigatoria(d, ['reembolsoId']);
+      valor = centavos(d.valorCentavos);
+      if (!ref || valor === null) return null;
+      categoria = 'reembolso_falhou'; referencia = ref;
       chaveNatural = `reembolso:${referencia}`;
-      valor = centavos(d.valorCentavos); estado = 'falhou'; break;
-    case 'repasse.recebido':
-      categoria = 'repasse'; referencia = referenciaDe(d, ['repasse'], e.id);
+      estado = 'falhou'; break;
+    }
+    case 'repasse.recebido': {
+      const ref = referenciaObrigatoria(d, ['repasse']);
+      valor = centavos(d.valorCentavos);
+      if (!ref || valor === null || !moeda(d.moeda)) return null;
+      categoria = 'repasse'; referencia = ref;
       chaveNatural = `repasse:${referencia}`;
-      valor = centavos(d.valorCentavos); estado = 'recebido'; efetivo = true; break;
-    case 'disputa.aberta':
-      categoria = 'disputa'; referencia = referenciaDe(d, ['disputa'], e.id);
+      estado = 'recebido'; efetivo = true; break;
+    }
+    case 'disputa.aberta': {
+      const ref = referenciaObrigatoria(d, ['disputa']);
+      valor = centavos(d.valorCentavos);
+      if (!ref || valor === null) return null;
+      categoria = 'disputa'; referencia = ref;
       chaveNatural = `disputa:${referencia}`;
-      valor = centavos(d.valorCentavos); estado = 'aberta'; break;
-    case 'disputa.encerrada':
-      categoria = 'disputa'; referencia = referenciaDe(d, ['disputa'], e.id);
+      estado = 'aberta'; break;
+    }
+    case 'disputa.encerrada': {
+      const ref = referenciaObrigatoria(d, ['disputa']);
+      valor = centavos(d.valorCentavos);
+      const resultado = texto(d.resultado, 40);
+      if (!ref || valor === null || !resultado) return null;
+      categoria = 'disputa'; referencia = ref;
       chaveNatural = `disputa:${referencia}`;
-      valor = centavos(d.valorCentavos); estado = texto(d.resultado, 40) ?? 'encerrada'; efetivo = true; break;
-    case 'custo.registrado':
-      categoria = 'custo'; referencia = referenciaDe(d, ['custoId'], e.id);
+      estado = resultado; efetivo = true; break;
+    }
+    case 'custo.registrado': {
+      const ref = referenciaObrigatoria(d, ['custoId']);
+      valor = centavos(d.realCentavos);
+      if (!ref || valor === null) return null;
+      categoria = 'custo'; referencia = ref;
       chaveNatural = `custo:${referencia}`;
-      valor = centavos(d.realCentavos); estado = 'registrado'; efetivo = true; break;
-    case 'acerto.fechado':
-      categoria = 'acerto'; referencia = referenciaDe(d, ['acertoId'], e.id);
+      estado = 'registrado'; efetivo = true; break;
+    }
+    case 'acerto.fechado': {
+      const ref = referenciaObrigatoria(d, ['acertoId']);
+      const receber = centavos(d.aReceberCentavos);
+      const pagar = centavos(d.aPagarCentavos);
+      if (!ref || receber === null || pagar === null || !moeda(d.moeda)) return null;
+      categoria = 'acerto'; referencia = ref;
       chaveNatural = `acerto.fechamento:${referencia}`;
-      valor = centavos(d.aReceberCentavos) ?? centavos(d.aPagarCentavos); estado = 'fechado'; break;
+      valor = receber || pagar; estado = 'fechado'; break;
+    }
     case 'acerto.pago':
+      valor = centavos(d.valorCentavos);
+      if (valor === null || !moeda(d.moeda)) return null;
       categoria = 'acerto'; referencia = referenciaDe(d, ['referencia'], e.id);
       chaveNatural = `acerto.pagamento:${referencia}`;
-      valor = centavos(d.valorCentavos); estado = d.quitado === true ? 'quitado' : 'parcial'; efetivo = true; break;
+      estado = d.quitado === true ? 'quitado' : 'parcial'; efetivo = true; break;
     default: return null;
   }
 

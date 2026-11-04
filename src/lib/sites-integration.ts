@@ -44,7 +44,12 @@ export function lerEnvelopeSites(valor: unknown, empresaId: number): EnvelopeSit
     || !Number.isSafeInteger(e.agregado.versao) || e.agregado.versao < 0 || e.agregado.versao > 2_147_483_647) return null;
   if (!e.dados || typeof e.dados !== 'object' || Array.isArray(e.dados) || e.dados.teste === true) return null;
   if (e.tipo.startsWith('reserva.') && e.agregado.tipo !== 'reserva' && e.dados.reservaId == null) return null;
-  return e as EnvelopeSites;
+  const envelope = e as EnvelopeSites;
+  // Um evento financeiro incompleto não pode ser arquivado como recebido:
+  // isso faria a reconciliação ficar verde sem valor/chave natural para o
+  // livro. O Sites retenta 422 depois de corrigido, usando o mesmo UUID.
+  if (TIPOS_FINANCEIROS_SITES.has(envelope.tipo) && !projetarMovimentoSites(envelope)) return null;
+  return envelope;
 }
 
 export async function configSites(tenantId: string) {
@@ -75,8 +80,16 @@ export async function salvarConfigSites(tenantId: string, companyId: number, seg
     if (!chave && (!atual?.segredo || atual.company_id !== companyId)) {
       throw new Error('Informe o novo segredo ao trocar a empresa do Sites');
     }
+    if (atual && atual.company_id !== companyId) {
+      const { rowCount: temHistorico } = await client.query(
+        'SELECT 1 FROM sites_eventos WHERE tenant_id=$1 LIMIT 1', [tenantId],
+      );
+      if (temHistorico) {
+        throw new Error('Esta integração já recebeu eventos. A troca de empresa exige migração assistida para não misturar históricos');
+      }
+    }
     const { rows: outro } = await client.query<{ tenant_id: string }>(
-      'SELECT tenant_id FROM sites_config WHERE company_id=$1 AND tenant_id<>$2 LIMIT 1', [companyId, tenantId],
+      'SELECT tenant_id FROM sites_config WHERE company_id=$1 AND tenant_id<>$2 AND ativo LIMIT 1', [companyId, tenantId],
     );
     if (outro[0]) throw new Error('Esta empresa do Sites já está pareada com outra empresa no Financeiro');
     const cifrado = chave ? cifrar(chave) : atual!.segredo;
@@ -109,6 +122,15 @@ export async function receberEventoSites(tenantId: string, envelope: EnvelopeSit
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // Serializa o primeiro evento com uma eventual troca de pareamento. Sem
+    // esta checagem, um request já assinado pela empresa antiga poderia entrar
+    // depois de a configuração passar a apontar para outra empresa.
+    const { rows: configs } = await client.query<{ company_id: number; ativo: boolean }>(
+      'SELECT company_id, ativo FROM sites_config WHERE tenant_id=$1 FOR SHARE', [tenantId],
+    );
+    if (!configs[0]?.ativo || configs[0].company_id !== envelope.empresaId) {
+      throw new Error('Pareamento do Sites mudou durante o recebimento');
+    }
     const { rowCount } = await client.query(
       `INSERT INTO sites_eventos
          (tenant_id, id, company_id, tipo, pedido_codigo, pedido_id, reserva_id,
@@ -163,14 +185,19 @@ export async function receberEventoSites(tenantId: string, envelope: EnvelopeSit
     if (movimento) await client.query(
       `INSERT INTO sites_movimentos
          (tenant_id, chave_natural, evento_id, company_id, tipo, categoria,
-          referencia, pedido_id, pedido_codigo, reserva_id, valor_centavos,
+          referencia, pedido_id, pedido_codigo, reserva_id, agregado_versao, valor_centavos,
           taxa_centavos, liquido_centavos, moeda, estado, efetivo, ocorrido_em, dados)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19::jsonb)
        ON CONFLICT (tenant_id, chave_natural) DO UPDATE SET
          evento_id = EXCLUDED.evento_id,
+         company_id = EXCLUDED.company_id,
+         tipo = EXCLUDED.tipo,
+         categoria = EXCLUDED.categoria,
+         referencia = EXCLUDED.referencia,
          pedido_id = COALESCE(EXCLUDED.pedido_id, sites_movimentos.pedido_id),
          pedido_codigo = COALESCE(EXCLUDED.pedido_codigo, sites_movimentos.pedido_codigo),
          reserva_id = COALESCE(EXCLUDED.reserva_id, sites_movimentos.reserva_id),
+         agregado_versao = EXCLUDED.agregado_versao,
          valor_centavos = EXCLUDED.valor_centavos,
          taxa_centavos = EXCLUDED.taxa_centavos,
          liquido_centavos = EXCLUDED.liquido_centavos,
@@ -178,10 +205,13 @@ export async function receberEventoSites(tenantId: string, envelope: EnvelopeSit
          estado = EXCLUDED.estado, efetivo = EXCLUDED.efetivo,
          ocorrido_em = EXCLUDED.ocorrido_em, dados = EXCLUDED.dados,
          recebido_em = NOW()
-       WHERE EXCLUDED.ocorrido_em >= sites_movimentos.ocorrido_em`,
+       WHERE EXCLUDED.agregado_versao > sites_movimentos.agregado_versao
+          OR (EXCLUDED.agregado_versao = sites_movimentos.agregado_versao
+              AND EXCLUDED.ocorrido_em >= sites_movimentos.ocorrido_em)`,
       [tenantId, movimento.chaveNatural, movimento.eventoId, envelope.empresaId,
         movimento.tipo, movimento.categoria, movimento.referencia,
         movimento.pedidoId, movimento.pedidoCodigo, movimento.reservaId,
+        envelope.agregado.versao,
         movimento.valorCentavos, movimento.taxaCentavos, movimento.liquidoCentavos,
         movimento.moeda, movimento.estado, movimento.efetivo,
         movimento.ocorridoEm, JSON.stringify(movimento.dados)],

@@ -26,7 +26,7 @@ assert.deepEqual(pagamento && {
   taxa: pagamento.taxaCentavos, liquido: pagamento.liquidoCentavos, efetivo: pagamento.efetivo,
 }, { chave: 'pagamento:88', categoria: 'recebimento', valor: 30000, taxa: 900, liquido: 29100, efetivo: true });
 
-const quitacao = projetarMovimentoSites(evento('saldo.pago', { pagamentoId: 88, valorCentavos: 30000 }));
+const quitacao = projetarMovimentoSites(evento('saldo.pago', { pagamentoId: 88, valorCentavos: 30000, moeda: 'BRL' }));
 assert.equal(quitacao?.efetivo, false, 'saldo.pago não duplica o pagamento recebido');
 const taxa = projetarMovimentoSites(evento('taxa.ajustada', { pagamentoId: 88, finalCentavos: 700 }));
 assert.deepEqual([taxa?.chaveNatural, taxa?.valorCentavos], ['taxa:88', 700]);
@@ -37,6 +37,8 @@ assert.equal(reembolsoPendente?.chaveNatural, reembolso?.chaveNatural, 'o ciclo 
 const disputaAberta = projetarMovimentoSites(evento('disputa.aberta', { disputa: 'dp_1', valorCentavos: 4000 }));
 const disputaEncerrada = projetarMovimentoSites(evento('disputa.encerrada', { disputa: 'dp_1', valorCentavos: 4000, resultado: 'ganha' }));
 assert.equal(disputaAberta?.chaveNatural, disputaEncerrada?.chaveNatural, 'o ciclo da disputa atualiza um único movimento');
+assert.equal(projetarMovimentoSites(evento('pagamento.recebido', { pagamentoId: 88, moeda: 'BRL' })), null, 'pagamento sem valor não deixa a reconciliação falsamente verde');
+assert.equal(projetarMovimentoSites(evento('reembolso.efetuado', { valorCentavos: 4000 })), null, 'reembolso sem chave natural é recusado');
 assert.equal(projetarMovimentoSites(evento('reserva.confirmada', { reservaId: 7 })), null);
 
 console.log('PASS EnturOS Sites: projeção idempotente de reserva e movimentos');

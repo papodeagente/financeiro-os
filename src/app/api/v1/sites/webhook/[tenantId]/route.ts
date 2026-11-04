@@ -2,11 +2,32 @@ import { NextRequest, NextResponse } from 'next/server';
 import { configSites, lerEnvelopeSites, receberEventoSites, verificarAssinaturaSites } from '@/lib/sites-integration';
 import { decifrar } from '@/lib/cofre';
 
+const LIMITE = 131_072;
+
+async function lerCorpoLimitado(req: NextRequest): Promise<string | null> {
+  const declarado = Number(req.headers.get('content-length'));
+  if (Number.isFinite(declarado) && declarado > LIMITE) return null;
+  if (!req.body) return '';
+  const leitor = req.body.getReader();
+  const partes: Uint8Array[] = [];
+  let tamanho = 0;
+  try {
+    while (true) {
+      const { done, value } = await leitor.read();
+      if (done) break;
+      tamanho += value.byteLength;
+      if (tamanho > LIMITE) { await leitor.cancel(); return null; }
+      partes.push(value);
+    }
+  } finally { leitor.releaseLock(); }
+  return Buffer.concat(partes.map((parte) => Buffer.from(parte))).toString('utf8');
+}
+
 export async function POST(req: NextRequest, ctx: { params: Promise<{ tenantId: string }> }) {
   const { tenantId } = await ctx.params;
-  if (!tenantId || tenantId.length > 100) return NextResponse.json({ erro: 'Agência inválida' }, { status: 400 });
-  const corpo = await req.text();
-  if (Buffer.byteLength(corpo, 'utf8') > 131_072) return NextResponse.json({ erro: 'Evento grande demais' }, { status: 413 });
+  if (!/^[A-Za-z0-9_-]{1,100}$/.test(tenantId)) return NextResponse.json({ erro: 'Agência inválida' }, { status: 400 });
+  const corpo = await lerCorpoLimitado(req);
+  if (corpo === null) return NextResponse.json({ erro: 'Evento grande demais' }, { status: 413 });
   try {
     const cfg = await configSites(tenantId);
     if (!cfg?.ativo || !verificarAssinaturaSites(corpo, req.headers.get('x-enturos-signature') ?? '', decifrar(cfg.segredo))) {

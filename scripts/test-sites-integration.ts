@@ -27,6 +27,8 @@ assert.equal(lerEnvelopeSites({ ...evento, versaoDoEsquema: 99 }, 42), null);
 assert.equal(lerEnvelopeSites({ ...evento, agregado: { tipo: '', id: '', versao: 1 } }, 42), null);
 assert.equal(lerEnvelopeSites({ ...evento, agregado: { tipo: 'pedido', id: '1', versao: 2_147_483_648 } }, 42), null);
 assert.equal(lerEnvelopeSites({ ...evento, tipo: 'reserva.confirmada', dados: {} }, 42), null);
-assert.equal(lerEnvelopeSites({ ...evento, tipo: 'reembolso.emitido', agregado: { tipo: 'reembolso', id: '9', versao: 1 } }, 42)?.tipo, 'reembolso.emitido');
+assert.equal(lerEnvelopeSites({ ...evento, tipo: 'pagamento.recebido', dados: { pagamentoId: 9 } }, 42), null);
+assert.equal(lerEnvelopeSites({ ...evento, tipo: 'pagamento.recebido', dados: { pagamentoId: 9, valorCentavos: 1000, moeda: 'BRL' } }, 42)?.tipo, 'pagamento.recebido');
+assert.equal(lerEnvelopeSites({ ...evento, tipo: 'reembolso.emitido', agregado: { tipo: 'reembolso', id: '9', versao: 1 }, dados: { ...evento.dados, reembolsoId: 9 } }, 42)?.tipo, 'reembolso.emitido');
 
 console.log('PASS EnturOS Sites: assinatura, replay, tenant e envelope');
