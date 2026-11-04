@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 import { isCanonicalHost, extractHost, getCanonicalBaseUrl } from './lib/canonical-hosts';
 import { isMindMapImportPath, isPublicMindMapShareRequest } from './lib/mapa-mental-public-path';
+import { isPublicBasePath } from './lib/public-paths';
 
 let _jwtSecret: Uint8Array | null = null;
 function getJwtSecret() {
@@ -16,28 +17,6 @@ function getJwtSecret() {
 }
 
 const COOKIE_NAME = 'entur-session';
-
-// Public routes that don't require authentication
-const PUBLIC_PATHS = [
-  '/login', '/api/auth/login', '/api/auth/seed', '/api/auth/session',
-  '/api/auth/signup',
-  '/signup',
-  '/p/', '/api/propostas/public/', '/api/uploads/',
-  '/api/v1/crm/webhook', '/api/v1/crm/health',
-  // Webhook das plataformas de venda: quem chama é a Hotmart, o Asaas ou
-  // o Pagar.me, que não têm sessão. A autenticação é por token ou
-  // assinatura dentro da própria rota, por agência.
-  '/api/v1/plataformas/',
-  '/admin/login', '/api/admin/auth/login', '/api/admin/auth/seed',
-  '/api/planos',
-  '/api/marketing/',
-  '/api/convites/',
-];
-
-// Caminho exato — '/' nao pode ser prefixo (capturaria tudo). Landing
-// page acessivel sem auth; logged-in users veem a LP normalmente
-// tambem (o /page.tsx redireciona logged-in pro dashboard via client).
-const PUBLIC_EXACT_PATHS = new Set(['/']);
 
 function loginComRetorno(request: NextRequest): URL {
   const target = new URL('/login', request.url);
@@ -97,11 +76,8 @@ export async function middleware(request: NextRequest) {
   // PUT e DELETE de planos de comissão) por simples casamento de string. O
   // isolamento sobrevivia só porque getTenantId lança sem sessão, ou seja,
   // dependia de uma exceção em vez da autenticação.
-  const casaPrefixoPublico = (p: string) =>
-    pathname === p || pathname.startsWith(p.endsWith('/') ? p : `${p}/`);
   if (
-    PUBLIC_EXACT_PATHS.has(pathname)
-    || PUBLIC_PATHS.some(casaPrefixoPublico)
+    isPublicBasePath(pathname)
     || isPublicMindMapShareRequest(pathname, request.method)
   ) {
     const response = addSecurityHeaders(next());

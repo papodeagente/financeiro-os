@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { configSites, lerEnvelopeSites, receberEventoSites, verificarAssinaturaSites } from '@/lib/sites-integration';
 import { decifrar } from '@/lib/cofre';
+import { origemDoWebhook, permitirWebhookSites } from '@/lib/sites-webhook-rate-limit';
 
 const LIMITE = 131_072;
 
@@ -26,6 +27,12 @@ async function lerCorpoLimitado(req: NextRequest): Promise<string | null> {
 export async function POST(req: NextRequest, ctx: { params: Promise<{ tenantId: string }> }) {
   const { tenantId } = await ctx.params;
   if (!/^[A-Za-z0-9_-]{1,100}$/.test(tenantId)) return NextResponse.json({ erro: 'Agência inválida' }, { status: 400 });
+  if (!permitirWebhookSites(tenantId, origemDoWebhook(req.headers))) {
+    return NextResponse.json(
+      { erro: 'Muitas tentativas. Tente novamente em instantes' },
+      { status: 429, headers: { 'Retry-After': '60' } },
+    );
+  }
   const corpo = await lerCorpoLimitado(req);
   if (corpo === null) return NextResponse.json({ erro: 'Evento grande demais' }, { status: 413 });
   try {
