@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Lock, Mail, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { redirectImportacaoMapaSeguro } from '@/lib/redirect-interno';
+import { SegundoFatorCampos, type EstadoSegundoFator } from '@/components/auth/SegundoFatorCampos';
 
 interface CampanhaLogin {
   image_url: string;
@@ -21,6 +22,9 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [campanha, setCampanha] = useState<CampanhaLogin | null>(null);
+  // Administrador: depois da senha, o código do aplicativo autenticador.
+  const [segundoFator, setSegundoFator] = useState<EstadoSegundoFator | null>(null);
+  const [codigo, setCodigo] = useState('');
 
   // Carrega imagem de campanha editavel pelo super admin em
   // /admin/marketing. Se nao houver image_url ou campanha estiver
@@ -45,12 +49,24 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), senha }),
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          senha,
+          ...(segundoFator ? { codigo, segredo_novo: segundoFator.segredo } : {}),
+        }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
+        if (data.precisa_cadastrar || data.precisa_codigo) {
+          // Primeira volta: a tela só pede o código, sem mostrar erro.
+          if (segundoFator) setError(data.error || 'Código inválido.');
+          setSegundoFator(data.precisa_cadastrar ? { segredo: data.segredo, uri: data.uri } : {});
+          setCodigo('');
+          setLoading(false);
+          return;
+        }
         setError(data.error || 'Erro ao fazer login');
         setLoading(false);
         return;
@@ -169,6 +185,10 @@ export default function LoginPage() {
                   </button>
                 </div>
               </div>
+
+              {segundoFator && (
+                <SegundoFatorCampos estado={segundoFator} codigo={codigo} onCodigo={setCodigo} />
+              )}
 
               {/* Submit */}
               <button

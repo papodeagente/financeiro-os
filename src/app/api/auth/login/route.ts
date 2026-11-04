@@ -1,14 +1,26 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { semAcessoAoSistema } from '@/lib/permissoes';
-import { verifyPassword, createSession, COOKIE_NAME, type SessionPayload } from '@/lib/auth';
+import { verifyPassword, createSession, COOKIE_NAME, SESSAO_SEGUNDOS, type SessionPayload } from '@/lib/auth';
 import { registrarEventoAuditoria } from '@/lib/audit';
+import { etapaSegundoFator, exigeSegundoFator, type Consulta as ConsultaSegundoFator } from '@/lib/segundo-fator';
+import { bloqueioDeLogin, ipDoLogin, registrarFalhaDeLogin, registrarSucessoDeLogin } from '@/lib/limite-login';
 
 export async function POST(req: Request) {
   try {
-    const { email, senha } = await req.json();
+    const corpoLogin = await req.json();
+    const { email, senha } = corpoLogin;
     if (!email || !senha) {
       return NextResponse.json({ error: 'Email e senha sao obrigatorios' }, { status: 400 });
+    }
+
+    const emailNormalizado = String(email).toLowerCase().trim();
+    const espera = bloqueioDeLogin('agencia', ipDoLogin(req.headers), emailNormalizado);
+    if (espera !== null) {
+      return NextResponse.json(
+        { error: 'Muitas tentativas. Aguarde alguns minutos e tente de novo.' },
+        { status: 429, headers: { 'Retry-After': String(espera) } },
+      );
     }
 
     await initDB();
@@ -27,6 +39,7 @@ export async function POST(req: Request) {
     );
 
     if (rows.length === 0) {
+      registrarFalhaDeLogin('agencia', emailNormalizado);
       return NextResponse.json({ error: 'Email ou senha incorretos' }, { status: 401 });
     }
 
@@ -57,7 +70,7 @@ export async function POST(req: Request) {
     // correta em cada rota.
     if (semAcessoAoSistema(user.perfil)) {
       return NextResponse.json(
-        { error: 'Este cadastro e de colaborador e nao tem acesso ao sistema.' },
+        { error: 'Este cadastro nao tem acesso ao sistema. Fale com o administrador da agencia.' },
         { status: 403 },
       );
     }
@@ -92,8 +105,21 @@ export async function POST(req: Request) {
     // Verify password
     const valid = await verifyPassword(senha, user.senha_hash);
     if (!valid) {
+      registrarFalhaDeLogin('agencia', emailNormalizado);
       await registrarFalha('credenciais inválidas');
       return NextResponse.json({ error: 'Email ou senha incorretos' }, { status: 401 });
+    }
+
+    // Administrador entra com senha e código do app autenticador (FIN-12).
+    if (exigeSegundoFator(user.perfil)) {
+      const etapa = await etapaSegundoFator(pool as unknown as ConsultaSegundoFator, 'usuarios', user, corpoLogin ?? {});
+      if (!etapa.ok) {
+        if (etapa.contaComoFalha) {
+          registrarFalhaDeLogin('agencia', emailNormalizado);
+          await registrarFalha('código do segundo fator inválido');
+        }
+        return NextResponse.json(etapa.corpo, { status: etapa.status });
+      }
     }
 
     // Create JWT session with tenant context
@@ -106,6 +132,7 @@ export async function POST(req: Request) {
       tenantId: row.tenant_id || '',
       tenantSlug: row.tenant_slug || '',
     };
+    registrarSucessoDeLogin('agencia', emailNormalizado);
     const token = await createSession(session);
     await registrarEventoAuditoria({
       tenantId: row.tenant_id,
@@ -135,7 +162,7 @@ export async function POST(req: Request) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7, // 7 days
+      maxAge: SESSAO_SEGUNDOS,
       path: '/',
     });
 

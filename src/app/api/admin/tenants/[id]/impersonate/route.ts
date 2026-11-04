@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
-import { getSession, createSession, COOKIE_NAME } from '@/lib/auth';
+import { getSession, createSession, COOKIE_NAME, SESSAO_SEGUNDOS } from '@/lib/auth';
 import { registrarEventoAuditoria } from '@/lib/audit';
 
 export async function POST(
@@ -83,7 +83,7 @@ export async function POST(
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7,
+      maxAge: SESSAO_SEGUNDOS,
       path: '/',
     });
 

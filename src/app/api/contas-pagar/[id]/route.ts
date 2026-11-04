@@ -1,3 +1,4 @@
+import { recusaFinanceira, recusaExclusao } from '@/lib/guarda-rota';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
@@ -15,6 +16,8 @@ const INDEX_COLS = ['fornecedor_id', 'status'];
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const recusa = await recusaFinanceira('ler');
+    if (recusa) return recusa;
     await initDB();
     const { id } = await params;
     if (!pool) return NextResponse.json(null);
@@ -40,6 +43,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 // duplo clique / PUT concorrente debita o caixa uma vez só.
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const recusa = await recusaFinanceira('escrever');
+    if (recusa) return recusa;
     await initDB();
     const { id } = await params;
     const item = await req.json();
@@ -116,6 +121,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 // uma vez só (o segundo não devolve linha).
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const recusa = (await recusaExclusao()) ?? (await recusaFinanceira('escrever'));
+    if (recusa) return recusa;
     await initDB();
     const { id } = await params;
     if (!pool) return NextResponse.json({ ok: true });

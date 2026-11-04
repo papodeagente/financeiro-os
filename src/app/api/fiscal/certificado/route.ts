@@ -1,3 +1,4 @@
+import { garantirVinculoFiscal, type Consulta as ConsultaVinculo } from '@/lib/vinculo-fiscal';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
@@ -126,6 +127,7 @@ export async function POST(req: Request) {
     if (config.provedor === 'aceleraapi' && !(config.empresa_id && config.token)) {
       const existente = await acharEmpresaPorCnpj(lido.cnpj);
       if (existente) {
+        await garantirVinculoFiscal(pool as unknown as ConsultaVinculo, tenantId, existente.id, lido.cnpj);
         config = { ...config, empresa_id: existente.id, token: await regenerarTokenEmpresa(existente.id) };
       } else {
         const nova = await criarEmpresaAcelera({
@@ -134,6 +136,7 @@ export async function POST(req: Request) {
           nome_fantasia: emitente.nome_fantasia,
           uf: emitente.endereco.estado,
         });
+        await garantirVinculoFiscal(pool as unknown as ConsultaVinculo, tenantId, nova.id, lido.cnpj);
         config = { ...config, empresa_id: nova.id, token: nova.token };
       }
       // O token vem uma vez só: grava antes de seguir.

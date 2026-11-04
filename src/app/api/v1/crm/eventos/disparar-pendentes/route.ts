@@ -1,3 +1,4 @@
+import { recusaAdmin } from '@/lib/guarda-rota';
 import { NextResponse } from 'next/server';
 import { disparaEventosPendentes } from '@/lib/crm-integration';
 import { getTenantId } from '@/lib/tenant';
@@ -7,6 +8,8 @@ import { getTenantId } from '@/lib/tenant';
 // o backlog ao ativa-la.
 export async function POST() {
   try {
+    const recusa = await recusaAdmin();
+    if (recusa) return recusa;
     const tenantId = await getTenantId();
     const resultado = await disparaEventosPendentes(tenantId);
     return NextResponse.json(resultado);

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { COOKIE_NAME, getSession } from '@/lib/auth';
 import { registrarEventoAuditoria } from '@/lib/audit';
+import { revogarSessoes } from '@/lib/sessao-viva';
 
 export async function POST() {
   try {
@@ -14,6 +15,9 @@ export async function POST() {
         entidadeId: session.userId,
         descricao: 'Saiu do sistema.',
       });
+      // Sair invalida o token, e não só o cookie deste navegador: um token
+      // copiado antes continuaria valendo até vencer.
+      await revogarSessoes(session);
     }
   } catch {
     return NextResponse.json({ error: 'Não foi possível registrar a saída. Tente novamente.' }, { status: 503 });

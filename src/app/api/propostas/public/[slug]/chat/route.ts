@@ -1,16 +1,8 @@
+import { chaveAnthropic, type Consulta } from '@/lib/config-apis';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { isHostAuthorizedForProposta } from '@/lib/tenant-host';
 
-async function getAnthropicConfig() {
-  await initDB();
-  if (!pool) return null;
-  const { rows } = await pool.query(`SELECT data FROM config_apis WHERE id = 'apis-config-singleton'`);
-  if (rows.length === 0) return null;
-  const cfg = rows[0].data;
-  if (!cfg.anthropic?.ativo || !cfg.anthropic?.api_key) return null;
-  return { api_key: cfg.anthropic.api_key, modelo: cfg.anthropic.modelo || 'claude-sonnet-4-5-20250929' };
-}
 
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
@@ -21,11 +13,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     const { mensagem, historico } = await req.json();
     if (!mensagem?.trim()) {
       return NextResponse.json({ error: 'Mensagem vazia' }, { status: 400 });
-    }
-
-    const config = await getAnthropicConfig();
-    if (!config) {
-      return NextResponse.json({ error: 'IA nao configurada' }, { status: 503 });
     }
 
     // Load proposal data for context
@@ -44,6 +31,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     }
 
     const proposta = rows[0].data;
+
+    // A chave é a da agência dona da proposta. Antes era a do primeiro
+    // registro de config_apis do banco: uma agência pagava a IA das outras.
+    const config = await chaveAnthropic(pool as unknown as Consulta, String(rows[0].tenant_id || ''), 'claude-sonnet-4-5-20250929');
+    if (!config) {
+      return NextResponse.json({ error: 'IA nao configurada' }, { status: 503 });
+    }
 
     // Build proposal summary for AI context
     const secoesSummary = (proposta.secoes || []).map((s: { tipo: string; conteudo: Record<string, unknown> }) => {

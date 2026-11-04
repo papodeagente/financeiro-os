@@ -1,3 +1,4 @@
+import { VINCULO_FISCAL_SCHEMA_SQL } from './vinculo-fiscal';
 import { AuditPool } from './audit-pool';
 import { getAuditContext, runWithAuditContext, SYSTEM_AUDIT_CONTEXT } from './audit-context';
 import { AUDIT_SCHEMA_SQL } from './audit-schema';
@@ -1471,6 +1472,8 @@ async function executarInitDB() {
   // Links opacos e revogáveis de visualização/cópia de mapas mentais.
   await pool.query(MAPAS_MENTAIS_COMPARTILHAMENTO_SCHEMA_SQL);
   await pool.query(SITES_SCHEMA_SQL);
+  // Dono único de cada empresa no emissor de notas (FIN-02).
+  await pool.query(VINCULO_FISCAL_SCHEMA_SQL);
   // Instala a captura somente depois das migrações/seed, sem fabricar histórico.
   await pool.query(AUDIT_SCHEMA_SQL);
   initialized = true;

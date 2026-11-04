@@ -1,5 +1,6 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
+import { sessaoViva, versaoAtualDaSessao } from './sessao-viva';
 
 let _jwtSecret: Uint8Array | null = null;
 function getJwtSecret() {
@@ -26,60 +27,33 @@ export interface SessionPayload {
   isSuperAdmin?: boolean;
   impersonatingTenantId?: string;
   impersonatingTenantSlug?: string;
+  /** Versão da sessão no cadastro (ver ./sessao-viva). */
+  tv?: number;
 }
 
-// ============================================================
-// PASSWORD HASHING (Web Crypto — no native deps needed)
-// ============================================================
+/** Duração da sessão: 12 horas (era 7 dias). Vale para o JWT e o cookie. */
+export const SESSAO_SEGUNDOS = 12 * 60 * 60;
 
-export async function hashPassword(password: string): Promise<string> {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(password),
-    'PBKDF2',
-    false,
-    ['deriveBits']
-  );
-  const derivedBits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
-    keyMaterial,
-    256
-  );
-  const saltHex = Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('');
-  const hashHex = Array.from(new Uint8Array(derivedBits)).map(b => b.toString(16).padStart(2, '0')).join('');
-  return `${saltHex}:${hashHex}`;
-}
-
-export async function verifyPassword(password: string, stored: string): Promise<boolean> {
-  const [saltHex, hashHex] = stored.split(':');
-  if (!saltHex || !hashHex) return false;
-  const salt = new Uint8Array(saltHex.match(/.{2}/g)!.map(b => parseInt(b, 16)));
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(password),
-    'PBKDF2',
-    false,
-    ['deriveBits']
-  );
-  const derivedBits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
-    keyMaterial,
-    256
-  );
-  const computedHex = Array.from(new Uint8Array(derivedBits)).map(b => b.toString(16).padStart(2, '0')).join('');
-  return computedHex === hashHex;
-}
+// Hash de senha mora em ./senha para poder ser usado (e testado) sem
+// arrastar next/headers.
+export { hashPassword, verifyPassword } from './senha';
 
 // ============================================================
 // JWT / SESSION
 // ============================================================
 
 export async function createSession(payload: SessionPayload): Promise<string> {
-  const token = await new SignJWT({ ...payload })
+  // A versão é sempre a do banco no momento da emissão, nunca a de quem chama:
+  // um token novo depois de "sair" já nasce com a versão nova.
+  const tv = await versaoAtualDaSessao({
+    userId: payload.userId,
+    tenantId: payload.tenantId,
+    isSuperAdmin: payload.isSuperAdmin,
+  });
+  const token = await new SignJWT({ ...payload, tv })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime('7d')
+    .setExpirationTime(`${SESSAO_SEGUNDOS}s`)
     .sign(getJwtSecret());
   return token;
 }
@@ -97,7 +71,11 @@ export async function getSession(): Promise<SessionPayload | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(COOKIE_NAME)?.value;
   if (!token) return null;
-  return verifySession(token);
+  const sessao = await verifySession(token);
+  if (!sessao) return null;
+  // Assinatura válida não basta: a pessoa pode ter sido desativada, ter o
+  // perfil trocado ou ter saído. Ver ./sessao-viva.
+  return (await sessaoViva(sessao)) ? sessao : null;
 }
 
 export { COOKIE_NAME };

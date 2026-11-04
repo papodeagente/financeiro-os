@@ -1,3 +1,5 @@
+import pool from '@/lib/db';
+import { garantirVinculoFiscal, type Consulta as ConsultaVinculo } from '@/lib/vinculo-fiscal';
 import { NextResponse } from 'next/server';
 import { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
@@ -92,6 +94,7 @@ export async function POST(req: Request) {
       try {
         const existente = await acharEmpresaPorCnpj(emitente.cnpj);
         if (existente) {
+          await garantirVinculoFiscal(pool as unknown as ConsultaVinculo, tenantId, existente.id, emitente.cnpj);
           config.empresa_id = existente.id;
           config.token = await regenerarTokenEmpresa(existente.id);
           anota('Conexão com a AceleraAPI', true, `Empresa #${existente.id} reaproveitada.`);
@@ -102,6 +105,7 @@ export async function POST(req: Request) {
             nome_fantasia: emitente.nome_fantasia,
             uf: emitente.endereco.estado,
           });
+          await garantirVinculoFiscal(pool as unknown as ConsultaVinculo, tenantId, nova.id, emitente.cnpj);
           config.empresa_id = nova.id;
           config.token = nova.token;
           anota('Conexão com a AceleraAPI', true, `Empresa #${nova.id} cadastrada.`);

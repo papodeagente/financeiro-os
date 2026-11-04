@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
-import { hashPassword, createSession, COOKIE_NAME } from '@/lib/auth';
+import { hashPassword, createSession, COOKIE_NAME, SESSAO_SEGUNDOS } from '@/lib/auth';
 import { generateId } from '@/lib/utils';
 
 const TRIAL_DAYS = 14;
@@ -263,7 +263,7 @@ export async function POST(req: Request) {
     });
     res.cookies.set(COOKIE_NAME, token, {
       httpOnly: true, secure: true, sameSite: 'lax',
-      path: '/', maxAge: 7 * 24 * 3600,
+      path: '/', maxAge: SESSAO_SEGUNDOS,
     });
     return res;
   } catch (e: unknown) {
