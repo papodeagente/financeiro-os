@@ -15,6 +15,18 @@ const healthPool = process.env.DATABASE_URL
     })
   : null;
 
+async function comTimeout<T>(promessa: Promise<T>, ms: number): Promise<T> {
+  let relogio: ReturnType<typeof setTimeout> | undefined;
+  const limite = new Promise<never>((_, rejeitar) => {
+    relogio = setTimeout(() => rejeitar(new Error('tempo limite da inicializacao excedido')), ms);
+  });
+  try {
+    return await Promise.race([promessa, limite]);
+  } finally {
+    if (relogio) clearTimeout(relogio);
+  }
+}
+
 export async function GET() {
   if (!pool || !healthPool) {
     return NextResponse.json(
@@ -25,7 +37,9 @@ export async function GET() {
   try {
     // A versao so fica pronta depois de executar as migracoes idempotentes e
     // provar que o schema da ponte Sites/Financeiro realmente existe.
-    await initDB();
+    // A migracao global continua em segundo plano e e memoizada por initDB;
+    // o probe, porem, sempre responde em tempo finito para o orquestrador.
+    await comTimeout(initDB(), 3_000);
     const { rows } = await healthPool.query<{
       sites_config: string | null;
       sites_eventos: string | null;
