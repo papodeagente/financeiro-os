@@ -27,6 +27,7 @@
 
 import {
   ErroFiscal,
+  respostaNaoERecusa,
   buscarArquivo,
   statusDoGateway,
   textoDoErro,
@@ -424,6 +425,15 @@ export class EmissorAceleraAPI implements EmissorNFSe {
       this.token(entrada.config),
     );
     if (!r.ok) {
+      // Falha do lado do emissor ou "já existe" (o cod_interno já foi usado:
+      // a nota pode ter saído na tentativa anterior) NÃO é recusa (FIN2-09).
+      if (respostaNaoERecusa(r.httpStatus, `${r.codigoErro} ${r.mensagemErro}`)) {
+        throw new ErroFiscal(
+          `A AceleraAPI não confirmou a nota (${r.mensagemErro || `HTTP ${r.httpStatus}`}). Ela pode ter sido emitida: confira no painel do emissor antes de emitir de novo.`,
+          '',
+          true,
+        );
+      }
       // `emissao_rejeitada` quer dizer "a SEFIN recusou OU falta configuração".
       // Sem dizer qual das duas, a mensagem não ajuda ninguém: então pergunta
       // ao emissor o que ele ainda considera pendente e mostra junto.

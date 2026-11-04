@@ -123,10 +123,11 @@ export function assinaturaValida(caminho: string, exp: string | null, sig: strin
   return esperado.length === recebido.length && timingSafeEqual(esperado, recebido);
 }
 
-/** Caminho de arquivo nosso que vale assinar (privado, ou documento antigo da pasta pública). */
-export function precisaAssinar(url: string): boolean {
-  const m = /^\/api\/(arquivos|uploads)\/([^/?#]+)$/.exec(url);
-  if (!m || !FORMATO_NOME.test(m[2])) return false;
-  if (m[1] === 'arquivos') return true;
-  return !EXTENSOES_DE_IMAGEM.has(m[2].split('.').pop() ?? '');
+/** Nome do documento privado citado numa URL nossa (/api/arquivos/<nome>), ou null. */
+export function documentoPrivadoDaUrl(url: string): string | null {
+  const m = /^\/api\/arquivos\/([^/?#]+)$/.exec(url);
+  return m && FORMATO_NOME.test(m[1]) ? m[1] : null;
 }
+
+/** Prazo do link de documento que a agência copia para mandar a alguém. */
+export const PRAZO_LINK_COMPARTILHADO_S = 90 * 24 * 3600;

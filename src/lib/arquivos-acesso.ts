@@ -19,15 +19,6 @@ export async function donoDoArquivoPrivado(db: Consulta, nome: string): Promise<
   return rows.length > 0 ? String(rows[0].tenant_id) : null;
 }
 
-/** Dono de um documento antigo da pasta pública, pelo registro de auditoria do envio. */
-export async function donoDoArquivoAntigo(db: Consulta, nome: string): Promise<string | null> {
-  const { rows } = await db.query(
-    `SELECT tenant_id FROM audit_log WHERE entidade = 'arquivos' AND entidade_id = $1 ORDER BY created_at ASC LIMIT 1`,
-    [nome],
-  );
-  return rows.length > 0 ? String(rows[0].tenant_id) : null;
-}
-
 /**
  * Decide o acesso a um documento.
  *  - plataforma (superadmin) abre qualquer um;

@@ -83,6 +83,20 @@ export async function POST(req: NextRequest) {
       body.api_key_entur = prev.api_key_entur ?? '';
     }
 
+    // Segredo gravado que não decifra (INTEGRACOES_MASTER_KEY trocada): NÃO
+    // gerar outro em silêncio — a integração com o CRM pararia sem ninguém
+    // saber por quê. Só segue se a tela mandou um segredo novo de verdade.
+    const temEnvelope = !!(gravado.api_key_crm_cofre || gravado.api_key_entur_cofre);
+    const ilegivel = temEnvelope && !prev.api_key_crm && !prev.api_key_entur;
+    const gerarNovo = body.gerar_novo_segredo === true;
+    delete body.gerar_novo_segredo;
+    if (ilegivel && !body.api_key_crm && !body.api_key_entur && !gerarNovo) {
+      return NextResponse.json({
+        error: 'Não foi possível ler o segredo atual da integração (a chave do cofre do servidor mudou). '
+          + 'Informe o segredo que está configurado no CRM, ou gere um novo (gerar_novo_segredo) e atualize o CRM também.',
+      }, { status: 409 });
+    }
+
     // The CRM uses a single hmacSecret for both directions; keep the two
     // local fields in sync. If only one was provided, mirror it. If neither
     // was provided and nothing exists yet, generate a fresh secret.

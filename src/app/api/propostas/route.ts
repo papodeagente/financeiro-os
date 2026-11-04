@@ -30,6 +30,18 @@ export async function POST(req: Request) {
   // Texto rico limpo ao gravar (FIN-07); a página limpa de novo ao desenhar.
   const corpo = await req.json().catch(() => null);
   if (!corpo || typeof corpo !== 'object') return NextResponse.json({ error: 'Formato inválido' }, { status: 400 });
+  // A tela de proposta nova salva sozinha pelo POST até ser reaberta. Se a
+  // proposta já existe nesta agência, a gravação passa pela MESMA fusão do
+  // PUT: aceite, interessados, comentários e status escritos pelo cliente
+  // não são apagados por tela velha (auditoria 04/11/2026, FIN2-07).
+  if (pool && typeof (corpo as { id?: unknown }).id === 'string') {
+    const id = (corpo as { id: string }).id;
+    const { rows } = await pool.query(`SELECT 1 FROM propostas WHERE id = $1 AND tenant_id = $2`, [id, await getTenantId()]);
+    if (rows.length > 0) {
+      const { PUT } = await import('./[id]/route');
+      return PUT(new Request(req.url, { method: 'PUT', headers: req.headers, body: JSON.stringify(corpo) }), { params: Promise.resolve({ id }) });
+    }
+  }
   const limpa = new Request(req.url, {
     method: 'POST',
     headers: req.headers,

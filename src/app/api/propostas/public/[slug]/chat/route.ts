@@ -16,8 +16,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     const ip = ipDaRequisicao(req);
     // Orçamento ANTES de qualquer leitura ou chamada à IA: quem tem o link
     // não pode gastar a conta da agência em laço.
-    if (!permitirChamada(`chat-ip:${ip}`, 20, 10 * 60_000)
-      || !permitirChamada(`chat-link:${slug}`, 200, 24 * 3600_000)) {
+    if (!permitirChamada(`chat-ip:${ip}`, 20, 10 * 60_000)) {
       return NextResponse.json({ error: 'Muitas perguntas seguidas. Tente de novo mais tarde.' }, { status: 429 });
     }
     const body = await req.json().catch(() => null);
@@ -36,6 +35,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     const r = await resolvePropostaForHost(req, slug);
     if (!r.ok) {
       return NextResponse.json({ error: 'Proposta nao encontrada' }, { status: 404 });
+    }
+    // Orçamento por link, contado só para proposta que existe (um slug
+    // inventado não ocupa espaço no limitador).
+    if (!permitirChamada(`chat-link:${r.id}`, 200, 24 * 3600_000)) {
+      return NextResponse.json({ error: 'Muitas perguntas seguidas. Tente de novo mais tarde.' }, { status: 429 });
     }
     const proposta = r.data as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 

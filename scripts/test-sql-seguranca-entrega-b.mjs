@@ -152,7 +152,9 @@ console.log('--- FIN2-02 e FIN2-03: baixa travada, sem sucesso sem dinheiro ---'
   // Tela velha pelo PUT: quem abriu com PENDENTE salva só a descrição.
   r = await I.PUT(req('/api/contas-receber/cr-1', 'PUT', { id: 'cr-1', status: 'PENDENTE', valor_final: 100, descricao: 'nova' }), ctx({ id: 'cr-1' }));
   const depois = await um(`SELECT data->>'status' AS s FROM contas_receber WHERE id = 'cr-1'`);
-  eq([depois.s, await saldo('banco-2')], ['PENDENTE', 0], 'edição sobre estado novo: conta e caixa andam juntos (estorno feito)');
+  eq([r.status, depois.s, await saldo('banco-2')], [409, 'RECEBIDO', 100], 'tela velha não desfaz a baixa (409), conta e caixa intactos');
+  r = await I.PUT(req('/api/contas-receber/cr-1', 'PUT', { id: 'cr-1', status: 'PENDENTE', valor_final: 100, descricao: 'nova', _status_lido: 'RECEBIDO' }), ctx({ id: 'cr-1' }));
+  eq([r.status, (await um(`SELECT data->>'status' AS s FROM contas_receber WHERE id = 'cr-1'`)).s, await saldo('banco-2')], [200, 'PENDENTE', 0], 'estorno explícito: conta e caixa andam juntos');
 
   r = await I.PUT(req('/api/contas-receber/nao-existe', 'PUT', { id: 'x', status: 'PENDENTE' }), ctx({ id: 'nao-existe' }));
   eq(r.status, 404, 'PUT em conta inexistente é 404, não 200');
@@ -501,6 +503,223 @@ console.log('--- FIN2-18 / FIN2-19: chaves de API de terceiros ---');
   const kb = AM.chaveDoTokenAmadeus({ api_key: 'B', api_secret: 'segredoB', ambiente: 'production' });
   eq(ka !== kb, true, 'credenciais diferentes não dividem o token em cache');
   eq(ka.includes('segredoA'), false, 'a chave do cache não leva o segredo');
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// Revisão independente do PR #5 (04/11/2026)
+// ═════════════════════════════════════════════════════════════════════════
+await pg.exec(`
+  CREATE TABLE support_tickets (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'aberto',
+    mensagens_count INT NOT NULL DEFAULT 0, ultima_msg_at TIMESTAMPTZ, updated_at TIMESTAMPTZ, tem_resposta_admin BOOLEAN DEFAULT false,
+    tem_nao_lida_usuario BOOLEAN DEFAULT false, resolved_at TIMESTAMPTZ, closed_at TIMESTAMPTZ);
+  CREATE TABLE support_ticket_messages (id TEXT PRIMARY KEY, ticket_id TEXT, tenant_id TEXT, from_type TEXT, from_id TEXT,
+    from_nome TEXT, mensagem TEXT, anexos JSONB);
+  CREATE TABLE mapas_mentais (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT '', nome TEXT NOT NULL DEFAULT '', data JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+`);
+
+console.log('--- R1: baixa sem banco vai para a Caixa Geral, mesmo com banco cadastrado ---');
+{
+  comoAgencia('ag-r1');
+  await query(`INSERT INTO contas_bancarias (id, tenant_id, data) VALUES ('itau-r1', 'ag-r1', '{"nome":"Itaú","saldo_inicial":0,"saldo_atual":0}')`);
+  await query(`INSERT INTO contas_receber (id, tenant_id, status, data) VALUES ('cr-r1', 'ag-r1', 'PENDENTE', '{"id":"cr-r1","status":"PENDENTE","valor_final":100,"conta_bancaria_id":null}')`);
+  await query(`INSERT INTO contas_pagar (id, tenant_id, status, data) VALUES ('cp-r1', 'ag-r1', 'PENDENTE', '{"id":"cp-r1","status":"PENDENTE","valor_final":30,"conta_bancaria_id":null}')`);
+  const IR = await import('../src/app/api/contas-receber/[id]/route.ts');
+  const IP = await import('../src/app/api/contas-pagar/[id]/route.ts');
+  let r = await IR.PUT(req('/x', 'PUT', { id: 'cr-r1', status: 'RECEBIDO', valor_final: 100, valor_recebido: 100, conta_bancaria_id: null }), ctx({ id: 'cr-r1' }));
+  eq(r.status, 200, 'parcela de venda sem banco, "Recebido": 200');
+  r = await IP.PUT(req('/x', 'PUT', { id: 'cp-r1', status: 'PAGO', valor_final: 30, valor_pago: 30, conta_bancaria_id: '' }), ctx({ id: 'cp-r1' }));
+  eq(r.status, 200, 'conta a pagar sem banco, "Pago": 200');
+  const cg = await um(`SELECT id, (data->>'saldo_atual')::numeric AS s FROM contas_bancarias WHERE tenant_id = 'ag-r1' AND data->>'nome' = 'Caixa Geral'`);
+  eq(Number(cg?.s), 70, 'o dinheiro entrou e saiu da Caixa Geral (criada na hora)');
+  eq((await um(`SELECT status FROM contas_pagar WHERE id = 'cp-r1'`)).status, 'PAGO', 'conta a pagar ficou PAGO');
+  eq(await saldo('itau-r1'), 0, 'o Itaú não foi mexido');
+  r = await IR.PUT(req('/x', 'PUT', { id: 'cr-r1', status: 'RECEBIDO', valor_final: 100, valor_recebido: 100, conta_bancaria_id: 'banco-alheio', _status_lido: 'RECEBIDO' }), ctx({ id: 'cr-r1' }));
+  eq(r.status, 409, 'banco explícito de outra agência continua 409');
+}
+
+console.log('--- R9: tela velha não desfaz baixa ---');
+{
+  comoAgencia('ag-r1');
+  const IR = await import('../src/app/api/contas-receber/[id]/route.ts');
+  let r = await IR.PUT(req('/x', 'PUT', { id: 'cr-r1', status: 'PENDENTE', valor_final: 100, descricao: 'velha' }), ctx({ id: 'cr-r1' }));
+  eq(r.status, 409, 'PENDENTE por cima de RECEBIDO sem a tela saber: 409');
+  eq((await r.json()).error.includes('Recarregue'), true, 'com a mensagem para recarregar');
+  eq((await um(`SELECT status FROM contas_receber WHERE id = 'cr-r1'`)).status, 'RECEBIDO', 'recebimento intacto');
+  r = await IR.PUT(req('/x', 'PUT', { id: 'cr-r1', status: 'PENDENTE', valor_final: 100, _status_lido: 'RECEBIDO' }), ctx({ id: 'cr-r1' }));
+  eq(r.status, 200, 'estorno explícito (a tela viu RECEBIDO) passa');
+  eq((await um(`SELECT data FROM contas_receber WHERE id = 'cr-r1'`)).data._status_lido, undefined, 'a marca não é gravada');
+}
+
+console.log('--- R2: link de material para o passageiro; documento antigo segue abrindo ---');
+{
+  const A = await import('../src/lib/arquivos.ts');
+  mkdirSync(A.PASTA_PRIVADA, { recursive: true });
+  const nome = 'MaterialR2abc.pdf';
+  writeFileSync(path.join(A.PASTA_PRIVADA, nome), '%PDF-1.7 material');
+  await query(`INSERT INTO arquivos_privados (nome, tenant_id) VALUES ($1, 'ag-r1')`, [nome]);
+  const L = await import('../src/app/api/arquivos-link/route.ts');
+  comoAgencia('ag-2');
+  let r = await L.POST(req('/api/arquivos-link', 'POST', { url: `/api/arquivos/${nome}` }));
+  eq(r.status, 404, 'outra agência não gera link do documento');
+  comoAgencia('ag-r1');
+  r = await L.POST(req('/api/arquivos-link', 'POST', { url: `/api/arquivos/${nome}` }));
+  const link = (await r.json()).url;
+  const u = new URL(link);
+  const dias = (Number(u.searchParams.get('exp')) * 1000 - Date.now()) / 86400_000;
+  eq([r.status, dias > 89 && dias <= 90], [200, true], 'agência dona recebe link de 90 dias');
+  semLogin();
+  const R = await import('../src/app/api/arquivos/[filename]/route.ts');
+  const aberto = await R.GET(new Request(`http://localhost${u.pathname}${u.search}`), ctx({ filename: nome }));
+  eq(aberto.status, 200, 'passageiro sem login abre pelo link copiado');
+  rmSync(path.join(A.PASTA_PRIVADA, nome), { force: true });
+
+  mkdirSync(A.PASTA_PUBLICA, { recursive: true });
+  const antigo = 'legadoR2xyz.pdf';
+  writeFileSync(path.join(A.PASTA_PUBLICA, antigo), '%PDF-1.4 antigo');
+  const U = await import('../src/app/api/uploads/[filename]/route.ts');
+  let consultas = 0;
+  const original = pool.query;
+  pool.query = async (...a) => { consultas++; return original(...a); };
+  const resp = await U.GET(new Request(`http://localhost/api/uploads/${antigo}`), ctx({ filename: antigo }));
+  pool.query = original;
+  eq([resp.status, consultas], [200, 0], 'documento antigo abre sem login, como antes, e sem consulta ao banco (R5)');
+  rmSync(path.join(A.PASTA_PUBLICA, antigo), { force: true });
+}
+
+console.log('--- R3: anexo do suporte passa a ser da agência do chamado ---');
+{
+  await query(`INSERT INTO support_tickets (id, tenant_id) VALUES ('tk-1', 'ag-r1')`);
+  await query(`INSERT INTO arquivos_privados (nome, tenant_id) VALUES ('RespostaSup1.pdf', '__platform__')`);
+  globalThis.__SESSAO_DE_TESTE__ = { ...sessao('__platform__'), isSuperAdmin: true };
+  const S = await import('../src/app/api/admin/support/tickets/[id]/messages/route.ts');
+  const r = await S.POST(req('/x', 'POST', { mensagem: 'segue', anexos: [{ url: '/api/arquivos/RespostaSup1.pdf', nome: 'r.pdf' }] }), ctx({ id: 'tk-1' }));
+  eq(r.status, 200, 'resposta do suporte gravada');
+  eq((await um(`SELECT tenant_id FROM arquivos_privados WHERE nome = 'RespostaSup1.pdf'`)).tenant_id, 'ag-r1', 'arquivo registrado com a agência do chamado');
+  const AC = await import('../src/lib/arquivos-acesso.ts');
+  eq(AC.podeAbrir(sessao('ag-r1'), 'ag-r1', false), true, 'e a agência abre');
+}
+
+console.log('--- R6: mapa compartilhado só assina documento da própria agência ---');
+{
+  const MC = await import('../src/lib/mapas-mentais-compartilhamento.ts');
+  await pg.exec(MC.MAPAS_MENTAIS_COMPARTILHAMENTO_SCHEMA_SQL);
+  const segredo = (await um(`SELECT secret_value FROM mapas_mentais_compartilhamento_segredos WHERE version = 1`)).secret_value;
+  const compId = 'comp-r6-0001';
+  const { token, tokenHash } = MC.gerarTokenCompartilhamento(compId, segredo);
+  await query(`INSERT INTO arquivos_privados (nome, tenant_id) VALUES ('DaAgenciaR6.pdf', 'ag-r1'), ('DeOutraR6x.pdf', 'ag-2')`);
+  const mapa = { rootId: 'raiz-0001', nodes: { 'raiz-0001': { text: 'R', parentId: null, attachments: [
+    { name: 'meu', url: '/api/arquivos/DaAgenciaR6.pdf' }, { name: 'alheio', url: '/api/arquivos/DeOutraR6x.pdf' }] } } };
+  await query(`INSERT INTO mapas_mentais (id, tenant_id, nome, data) VALUES ('mapa-r6-0001', 'ag-r1', 'M', $1)`, [JSON.stringify(mapa)]);
+  await query(`INSERT INTO mapas_mentais_compartilhamentos (id, tenant_id, mapa_id, token_hash) VALUES ($1, 'ag-r1', 'mapa-r6-0001', $2)`, [compId, tokenHash]);
+  const RM = await import('../src/app/api/mapas-mentais/compartilhados/[token]/route.ts');
+  const r = await RM.GET(new Request(`http://localhost/api/mapas-mentais/compartilhados/${token}`), ctx({ token }));
+  const corpo = await r.json();
+  const anexos = corpo.mapa?.nodes?.['raiz-0001']?.attachments ?? [];
+  eq(r.status, 200, 'mapa compartilhado abre');
+  eq(anexos.find(a => a.name === 'meu')?.url.includes('sig='), true, 'documento da agência do mapa vem assinado');
+  eq(anexos.find(a => a.name === 'alheio')?.url.includes('sig='), false, 'documento de outra agência NÃO é assinado');
+}
+
+console.log('--- R7: texto com "<" solto continua texto ---');
+{
+  comoAgencia('ag-1');
+  const E = await import('../src/app/api/propostas/[id]/route.ts');
+  await query(`INSERT INTO propostas (id, tenant_id, data) VALUES ('prop-r7-0001', 'ag-1', '{"id":"prop-r7-0001"}')`);
+  const r = await E.PUT(req('/x', 'PUT', { id: 'prop-r7-0001', secoes: [
+    { tipo: 'TEXTO', conteudo: { corpo: 'Preço < 100 e 3 > 2' } },
+    { tipo: 'TEXTO', conteudo: { corpo: '<p onclick="x()">oi</p>' } }] }), ctx({ id: 'prop-r7-0001' }));
+  const s = (await r.json()).secoes;
+  eq(s[0].conteudo.corpo, 'Preço < 100 e 3 > 2', 'texto simples gravado como veio (sem &lt; na tela)');
+  eq(s[1].conteudo.corpo, '<p>oi</p>', 'HTML de verdade continua limpo');
+  const H = await import('../src/lib/html-seguro.ts');
+  eq([H.temMarcacao('a < b'), H.temMarcacao('<b>x</b>')], [false, true], 'detecção de marcação');
+}
+
+console.log('--- R8: imagem por http volta a valer; rede interna continua barrada ---');
+{
+  const S = await import('../src/lib/saida-segura.ts');
+  eq(S.enderecoDeImagem('http://hotel.exemplo.com/foto.jpg').protocol, 'http:', 'http:// aceito');
+  eq(await erro(S.baixarImagemSegura('http://hotel.exemplo.com/foto.jpg', { lookup: (_n, _o, pronto) => pronto(Object.assign(new Error('x'), { code: 'EDESTINOINTERNO' }), '', 4) })), 'DestinoRecusado', 'http que resolve para dentro é recusado no socket');
+  eq(await erro(S.baixarImagemSegura('http://hotel.exemplo.com:8080/foto.jpg')), 'DestinoRecusado', 'porta fora do padrão recusada');
+  eq(await erro(S.baixarImagemSegura('ftp://hotel.exemplo.com/foto.jpg')), 'DestinoRecusado', 'outro protocolo recusado');
+}
+
+console.log('--- R10: POST de proposta existente não apaga o que o cliente escreveu ---');
+{
+  comoAgencia('ag-1');
+  const P = await import('../src/app/api/propostas/route.ts');
+  await query(`UPDATE propostas SET status = 'ACEITO', data = data || '{"status":"ACEITO","aceite":{"nome_aceite":"Bia"},"leads":[{"nome":"L"}]}' WHERE id = 'prop-r7-0001'`);
+  const r = await P.POST(req('/api/propostas', 'POST', { id: 'prop-r7-0001', status: 'RASCUNHO', aceite: null, leads: [], cabecalho: { titulo: 'novo' } }));
+  const salvo = await r.json();
+  eq([r.status, salvo.status, salvo.aceite?.nome_aceite, salvo.leads?.length, salvo.cabecalho?.titulo], [200, 'ACEITO', 'Bia', 1, 'novo'], 'POST sobre proposta existente usa a fusão do PUT');
+  comoAgencia('ag-2');
+  const r2 = await P.POST(req('/api/propostas', 'POST', { id: 'prop-r7-0001', status: 'RASCUNHO' }));
+  eq(r2.status, 404, 'id de outra agência: nada gravado');
+}
+
+console.log('--- R11: limitador público ---');
+{
+  const L = await import('../src/lib/limite-publico.ts');
+  const ip = h => L.ipDaRequisicao(new Request('http://x', { headers: h }));
+  eq(ip({ 'x-forwarded-for': '6.6.6.6, 10.0.0.9' }), '10.0.0.9', 'X-Forwarded-For: vale o último salto (o primeiro é forjável)');
+  eq(ip({ 'x-forwarded-for': '6.6.6.6', 'x-real-ip': '1.2.3.4' }), '1.2.3.4', 'x-real-ip do proxy tem prioridade');
+  L.limparLimitePublicoParaTeste();
+  const CH = await import('../src/app/api/propostas/public/[slug]/chat/route.ts');
+  for (let i = 0; i < 5; i++) await CH.POST(req('/x', 'POST', { mensagem: 'oi' }, { 'x-real-ip': `5.5.5.${i}` }), ctx({ slug: `inventado-${i}-xxxx` }));
+  eq(L.quantidadeDeBaldesParaTeste(), 5, 'slug inventado não ocupa balde de link (só o do visitante)');
+  L.limparLimitePublicoParaTeste();
+  const t0 = 1_000_000;
+  eq(L.permitirChamada('fixo', 1, 60_000, t0), true, 'primeira chamada passa');
+  eq(L.permitirChamada('fixo', 1, 60_000, t0), false, 'segunda é cortada');
+  for (let i = 0; i < 50_000; i++) L.permitirChamada(`k${i}`, 1, 10, t0 + 100);
+  eq(L.permitirChamada('fixo', 1, 60_000, t0 + 200), false, 'encher o limitador de chaves não devolve o orçamento de quem estava no teto');
+}
+
+console.log('--- R12: reserva antiga com mais de 24 parcelas ainda confirma ---');
+{
+  const G = await import('../src/lib/gestao-grupos.ts');
+  eq([G.parcelasDaConfirmacao(36), G.parcelasDaConfirmacao(240), G.parcelasDaConfirmacao(1e6)], [36, 240, null], 'confirmação: legado até 240; absurdo recusado');
+  eq(G.parcelasValidas(36), null, 'criação/edição nova continua com teto de 24');
+}
+
+console.log('--- R13: segredo do CRM ilegível não é trocado em silêncio ---');
+{
+  comoAgencia('ag-r13');
+  const K = await import('../src/lib/crm-config-cofre.ts');
+  await query(`INSERT INTO crm_config (id, tenant_id, data) VALUES ('singleton', 'ag-r13', $1)`, [JSON.stringify(K.selarCrmConfig({ ativo: true, api_key_entur: 'hmac-R13', api_key_crm: 'hmac-R13' }))]);
+  process.env.INTEGRACOES_MASTER_KEY = 'd'.repeat(64); // chave do cofre trocada
+  const C = await import('../src/app/api/v1/crm/config/route.ts');
+  let r = await C.POST(req('/api/v1/crm/config', 'POST', { ativo: true, api_key_crm: '****R13', api_key_entur: '****R13', webhook_url_entur: 'https://x' }));
+  eq(r.status, 409, 'máscara de volta com segredo ilegível: 409 com explicação');
+  r = await C.POST(req('/api/v1/crm/config', 'POST', { ativo: true, gerar_novo_segredo: true, webhook_url_entur: 'https://x' }));
+  eq(r.status, 200, 'gerar um novo só por pedido explícito');
+  process.env.INTEGRACOES_MASTER_KEY = 'c'.repeat(64);
+}
+
+console.log('--- R4: NFS-e, "já existe" e 5xx nunca viram REJEITADA ---');
+{
+  const { EmissorPlugNotas, ErroFiscal, respostaNaoERecusa } = await import('../src/lib/nfse-emissor.ts');
+  const N = await import('../src/lib/nfse-servico.ts');
+  eq([respostaNaoERecusa(500, ''), respostaNaoERecusa(400, 'Nota duplicada'), respostaNaoERecusa(400, 'idIntegracao já existe'), respostaNaoERecusa(400, 'CNPJ inválido')],
+    [true, true, true, false], 'classificação da resposta do emissor');
+  const nota = { id: 'nota-r4-0001', tomador: { cpf_cnpj: '1', razao_social: 'X', email: '', inscricao_municipal: '', endereco: {} }, valor_servicos: 10, discriminacao: 'd', regime: 'PROPRIO' };
+  const config = { token: 't', ambiente: 'HOMOLOGACAO', provedor: 'plugnotas' };
+  const emitente = { cnpj: '1', inscricao_municipal: '1', razao_social: 'E', endereco: {} };
+  const fetchOriginal = globalThis.fetch;
+  const urls = [];
+  globalThis.fetch = async (url) => { urls.push(String(url)); return new Response(JSON.stringify({ error: { message: 'Nota com idIntegracao já existe' } }), { status: 409 }); };
+  const e1 = await erro(new EmissorPlugNotas().emitir({ nota, config, emitente }).catch(e => { throw Object.assign(e, { status: e.incerto ? 'incerto' : 'recusa' }); }));
+  eq(e1, 'incerto', 'emissor responde "já existe": incerto, não recusa');
+  globalThis.fetch = async (url) => { urls.push(String(url)); return new Response('erro', { status: 502 }); };
+  const e2 = await erro(new EmissorPlugNotas().emitir({ nota, config, emitente }).catch(e => { throw Object.assign(e, { status: e.incerto ? 'incerto' : 'recusa' }); }));
+  eq(e2, 'incerto', 'emissor fora do ar (5xx): incerto');
+  eq(N.notaAposFalhaDeTransmissao({ ...nota, status: 'PROCESSANDO' }, new ErroFiscal('x', '', true)).status, 'PROCESSANDO', 'e a nota segue viva (bloqueia outra emissão)');
+  urls.length = 0;
+  globalThis.fetch = async (url) => { urls.push(String(url)); return new Response(JSON.stringify({ situacao: 'CONCLUIDO', numero: '77', protocolo: 'P1' }), { status: 200 }); };
+  const r = await new EmissorPlugNotas().consultarPorIntencao(nota, config);
+  eq([urls[0]?.endsWith('/nfse/consulta/status/nota-r4-0001'), r.numero], [true, '77'], 'sem protocolo, consulta pelo idIntegracao (o id da nota), sem reenviar');
+  globalThis.fetch = fetchOriginal;
 }
 
 console.log(`\n${total - falhas}/${total} passaram`);

@@ -745,22 +745,28 @@ export async function atualizarStatus(
   const config = await carregarConfigFiscal(tenantId);
   const emissor = emissorDaConfig(config);
 
-  // Resultado desconhecido sem protocolo: o emissor não deu referência para
-  // consultar. Reenvia a MESMA nota (mesmo id, mesma chave de idempotência
-  // no emissor): se ela já tinha saído, o emissor devolve a existente em vez
-  // de emitir outra.
+  // Resultado desconhecido sem protocolo (FIN2-09). Primeiro CONSULTA pela
+  // identidade que mandamos na emissão (idIntegracao). Só o emissor que não
+  // sabe consultar assim recebe a MESMA nota de novo (mesma chave de
+  // idempotência, cod_interno): se ela já saiu, ele responde "já existe",
+  // que fica como desconhecido — nunca vira REJEITADA e nunca libera outra.
   if (nota.resultado_desconhecido && !nota.protocolo) {
     try {
       const emitente = await carregarEmitente(tenantId);
-      const r = await emissor.emitir({ nota, config, emitente });
+      const r = emissor.consultarPorIntencao
+        ? await emissor.consultarPorIntencao(nota, config)
+        : await emissor.emitir({ nota, config, emitente });
+      const sabido = r.status === 'AUTORIZADA' || r.status === 'REJEITADA' || r.status === 'CANCELADA'
+        || !!(r.protocolo || r.numero);
+      if (!sabido) return nota; // segue desconhecido
       const atualizada: NotaFiscal = {
         ...nota,
         resultado_desconhecido: false,
         status: r.status,
         numero: r.numero || nota.numero,
         codigo_verificacao: r.codigo_verificacao || nota.codigo_verificacao,
-        protocolo: r.protocolo || r.referencia || nota.protocolo,
-        link_pdf: r.link_pdf, link_xml: r.link_xml,
+        protocolo: r.protocolo || nota.protocolo,
+        link_pdf: r.link_pdf || nota.link_pdf, link_xml: r.link_xml || nota.link_xml,
         erro: r.erro,
         autorizada_em: r.status === 'AUTORIZADA' ? new Date().toISOString() : '',
       };
@@ -819,8 +825,11 @@ export async function cancelarNota(
 
   const config = await carregarConfigFiscal(tenantId);
 
-  // Nota que nunca chegou à prefeitura não precisa ser cancelada lá.
-  if (nota.status === 'REJEITADA' || nota.status === 'RASCUNHO') {
+  // Nota que nunca chegou à prefeitura não precisa ser cancelada lá. A de
+  // resultado desconhecido sem protocolo também se encerra só aqui, por ação
+  // explícita com motivo (quem cancela conferiu no painel do emissor).
+  if (nota.status === 'REJEITADA' || nota.status === 'RASCUNHO'
+    || (nota.resultado_desconhecido && !nota.protocolo)) {
     const local: NotaFiscal = {
       ...nota,
       status: 'CANCELADA',

@@ -118,6 +118,15 @@ export function limparHtml(html: unknown): string {
   return saida;
 }
 
+/**
+ * O texto tem marcação HTML de verdade (uma marca ou comentário)? Texto puro
+ * com "<" solto ("preço < 100") NÃO é HTML: vai para a tela como texto, sem
+ * passar pela limpeza (que mostraria "&lt;").
+ */
+export function temMarcacao(texto: unknown): boolean {
+  return typeof texto === 'string' && /<\/?[a-zA-Z][^<>]*>|<!--/.test(texto);
+}
+
 /** URL para link/iframe vinda do conteúdo: só http(s). Qualquer outra vira vazio. */
 export function urlHttp(url: unknown): string {
   if (typeof url !== 'string') return '';
@@ -135,7 +144,7 @@ export function limparHtmlDaProposta<T>(proposta: T): T {
   if (!Array.isArray(p.secoes)) return proposta;
   for (const secao of p.secoes) {
     const c = secao?.conteudo;
-    if (c && typeof c.corpo === 'string' && c.corpo.includes('<')) c.corpo = limparHtml(c.corpo);
+    if (c && typeof c.corpo === 'string' && temMarcacao(c.corpo)) c.corpo = limparHtml(c.corpo);
   }
   return proposta;
 }

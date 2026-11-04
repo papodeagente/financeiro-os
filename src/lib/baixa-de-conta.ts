@@ -18,6 +18,7 @@ import {
   emTransacao,
   moverCaixaOuFalhar,
   atualizarContaComGuarda,
+  statusMovimentaCaixa,
   type ExecutorSQL,
 } from './caixa-atomico';
 
@@ -48,7 +49,18 @@ export async function editarContaNoExecutor(exec: ExecutorSQL, p: EdicaoDeConta)
   );
   if (rows.length === 0) throw new ErroEdicaoConta('Conta não encontrada.', 404);
   const prev = (rows[0].data ?? {}) as Record<string, unknown>;
-  const item = { ...p.item, id: p.id };
+  const { _status_lido: statusLido, ...semMarca } = p.item;
+  const item: Record<string, unknown> = { ...semMarca, id: p.id };
+
+  // Tela velha: a conta foi baixada por outra pessoa depois que esta tela
+  // abriu, e o salvamento chega com o status antigo (não baixado). Desfazer a
+  // baixa só vale como ação explícita: a tela manda o status que ela LEU
+  // (`_status_lido`), e ele precisa ser o status baixado que está no banco.
+  const prevStatus = String(prev.status ?? '');
+  const novoStatus = String(item.status ?? '');
+  if (statusMovimentaCaixa(prevStatus) && !statusMovimentaCaixa(novoStatus) && statusLido !== prevStatus) {
+    throw new ErroEdicaoConta('Esta conta foi atualizada por outra pessoa. Recarregue a página antes de salvar.', 409);
+  }
   const movimentos = calcularMovimentos(prev, item, p.campo, p.sinal);
 
   const ok = await atualizarContaComGuarda({

@@ -4,7 +4,8 @@
  * de imagens e o proxy de imagem buscavam qualquer endereço recebido, inclusive
  * da rede interna, seguindo redirecionamento sem conferir o destino.
  *
- * Mantida igual à do Sites de propósito; conserto numa vale para a outra.
+ * Mantida igual à do Sites, com uma diferença: imagem aceita http:// (ver
+ * enderecoDeImagem). Conserto de rede numa vale para a outra.
  */
 /**
  * Chamada para um endereço que a AGÊNCIA escolheu (webhook), sem deixar o
@@ -18,6 +19,7 @@
  * resolução. Redirecionamento não é seguido.
  */
 import https from "node:https";
+import http from "node:http";
 import { lookup as resolver } from "node:dns";
 import { BlockList, isIPv4, isIPv6, type LookupFunction } from "node:net";
 
@@ -71,7 +73,23 @@ export const lookupPublico: LookupFunction = (nome, opcoes, pronto) => {
 };
 
 /** Endereço de imagem que a plataforma aceita BAIXAR: as mesmas regras do webhook. */
-export const enderecoDeImagem = enderecoDeWebhook;
+/**
+ * Endereço de imagem que o Financeiro aceita BAIXAR. Diferente do Sites,
+ * aceita também http:// (porta 80): há foto de hotel publicada só em http,
+ * e a guarda que importa é a de rede (IP conferido no próprio socket), que
+ * vale igual para os dois. Sem usuário, porta padrão, nome de domínio.
+ */
+export function enderecoDeImagem(entrada: string): URL {
+  let u: URL;
+  try { u = new URL(entrada.trim()); } catch { throw new DestinoRecusado("Endereço inválido."); }
+  if (u.protocol === "https:") return enderecoDeWebhook(entrada);
+  if (u.protocol !== "http:") throw new DestinoRecusado("O endereço precisa começar com http:// ou https://");
+  if (u.username || u.password) throw new DestinoRecusado("O endereço não pode levar usuário nem senha.");
+  if (u.port && u.port !== "80") throw new DestinoRecusado("Use a porta padrão do http.");
+  if (!u.hostname.includes(".") || /^\[?[\d.:a-f]+\]?$/i.test(u.hostname)) throw new DestinoRecusado("Use um nome de domínio, não um IP.");
+  if (u.toString().length > 500) throw new DestinoRecusado("Endereço longo demais.");
+  return u;
+}
 
 /**
  * Baixa uma imagem de um endereço que veio de fora (a API e o MCP importam
@@ -91,8 +109,9 @@ export async function baixarImagemSegura(entrada: string, o: { tetoBytes?: numbe
     const restante = tempoMs - (Date.now() - inicio);
     if (restante <= 0) throw new DestinoRecusado("a imagem demorou demais para chegar");
     const r = await new Promise<{ status: number; local?: string; bytes?: Buffer }>((resolve, reject) => {
-      const req = https.request({
-        protocol: "https:", hostname: url.hostname, port: 443, path: `${url.pathname}${url.search}`, method: "GET",
+      const seguro = url.protocol === "https:";
+      const req = (seguro ? https : http).request({
+        protocol: seguro ? "https:" : "http:", hostname: url.hostname, port: seguro ? 443 : 80, path: `${url.pathname}${url.search}`, method: "GET",
         headers: { accept: "image/avif,image/webp,image/png,image/jpeg,*/*;q=0.5", "user-agent": "EnturOS-Financeiro-Imagens/1.0" },
         lookup: o.lookup ?? lookupPublico, timeout: restante,
       }, (res) => {

@@ -674,6 +674,20 @@ export function parcelasValidas(bruto: unknown): number | null {
   return inteiro > MAX_PARCELAS ? null : inteiro;
 }
 
+/**
+ * Na CONFIRMAÇÃO de reserva antiga (gravada antes do teto), vale o que a
+ * reserva já tinha, até este limite de sanidade: confirmar uma reserva de
+ * 36x feita antes da mudança continua funcionando; um número absurdo
+ * (milhões de contas numa transação) não.
+ */
+export const MAX_PARCELAS_LEGADO = 240;
+
+export function parcelasDaConfirmacao(bruto: unknown): number | null {
+  const n = Number(bruto);
+  const inteiro = Number.isFinite(n) ? Math.max(1, Math.floor(n)) : 1;
+  return inteiro > MAX_PARCELAS_LEGADO ? null : inteiro;
+}
+
 export async function recalcularVagasPeriodo(
   pool: Pool,
   periodoId: string,

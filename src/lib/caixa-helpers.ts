@@ -35,6 +35,10 @@ export async function ensureCaixaGeral(
   if (!db || !tenantId) return null;
   try {
     if (!exec) await initDB();
+    // Dentro de transação, duas baixas simultâneas não criam duas Caixas Gerais.
+    if (exec) {
+      await db.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [`caixa-geral:${tenantId}`]);
+    }
     // Busca conta CAIXA existente do tenant
     const { rows } = await db.query(
       `SELECT id, data FROM contas_bancarias WHERE tenant_id = $1`,
@@ -43,9 +47,12 @@ export async function ensureCaixaGeral(
     // Se já existe pelo menos 1 conta com nome "Caixa Geral", retorna ela
     const caixaGeral = rows.find(r => ((r.data as { nome?: string } | null)?.nome ?? '') === CAIXA_GERAL_NOME);
     if (caixaGeral) return caixaGeral.id as string;
-    // Se já existe qualquer conta, NÃO cria Caixa Geral (usuário avançado
-    // já configurou suas contas — não vamos poluir o cadastro).
-    if (rows.length > 0) return null;
+    // Baixa sem conta bancária escolhida SEMPRE cai na Caixa Geral, criada
+    // aqui se faltar — mesmo quando a agência já cadastrou outros bancos.
+    // Antes, com qualquer banco cadastrado, esta função devolvia null: a
+    // baixa "dava certo" sem o dinheiro entrar em lugar nenhum, e depois da
+    // auditoria de 04/11 (FIN2-02) passaria a ser recusada. As contas de
+    // venda e de comissão nascem sem banco, então a Caixa Geral é o destino.
 
     // Cria a Caixa Geral default
     const novo: ContaBancaria = {
@@ -146,9 +153,9 @@ export async function recalcularSaldosCaixa(tenantId: string): Promise<{
       cpRows.some(r => !(r.data as Record<string, unknown> | null)?.conta_bancaria_id);
     let caixaGeralId: string | null = null;
     if (precisaCaixaGeral) {
-      const hadAny = contasRows.length > 0;
+      const idsAntes = new Set(contasRows.map(r => String(r.id)));
       caixaGeralId = await ensureCaixaGeral(tenantId, client);
-      result.caixa_geral_criada = !hadAny && !!caixaGeralId;
+      result.caixa_geral_criada = !!caixaGeralId && !idsAntes.has(caixaGeralId);
       if (result.caixa_geral_criada) ({ rows: contasRows } = await travarContas());
     }
 

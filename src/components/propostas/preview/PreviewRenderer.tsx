@@ -6,7 +6,7 @@ import { MapaRoteiro } from '@/components/propostas/MapaRoteiro';
 import { t, type IdiomaProposal } from '@/lib/i18n-proposta';
 import { RichFlightCard } from './RichFlightCard';
 import { groupIntoRows } from '@/lib/proposta-layout';
-import { limparHtml, urlHttp } from '@/lib/html-seguro';
+import { limparHtml, temMarcacao, urlHttp } from '@/lib/html-seguro';
 
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -14,7 +14,7 @@ const BRL = (v: number) =>
 // ─── TEXTO ───
 function TextoPreview({ conteudo }: { conteudo: Record<string, unknown> }) {
   const c = conteudo as { titulo?: string; corpo?: string; imagem_url?: string };
-  const isHTML = c.corpo?.includes('<');
+  const isHTML = temMarcacao(c.corpo);
   return (
     <div className="space-y-3">
       {c.titulo && <h3 className="text-2xl font-bold tracking-tight">{c.titulo}</h3>}

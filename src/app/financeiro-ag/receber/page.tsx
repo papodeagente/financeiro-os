@@ -229,7 +229,9 @@ export default function ContasReceberPage() {
           valor_original: valorOriginal,
           valor_final: valorOriginal,
         };
-        await updateEntity('contas-receber', updated);
+        // O status que esta tela LEU: o servidor só desfaz uma baixa quando a
+        // tela sabia que a conta estava baixada (senão é tela velha, 409).
+        await updateEntity('contas-receber', { ...updated, _status_lido: existing.status });
       } else {
         const nova: ContaReceber = {
           ...createContaReceber(),

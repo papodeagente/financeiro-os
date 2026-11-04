@@ -292,7 +292,9 @@ export default function ContasPagarPage() {
           valor_final: valorBrl,
           valor_brl: valorBrl,
         };
-        await updateEntity('contas-pagar', updated);
+        // O status que esta tela LEU: o servidor só desfaz uma baixa quando a
+        // tela sabia que a conta estava baixada (senão é tela velha, 409).
+        await updateEntity('contas-pagar', { ...updated, _status_lido: existing.status });
         setShowForm(false);
         setEditId(null);
         toast.success('Conta atualizada');
