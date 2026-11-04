@@ -1,6 +1,8 @@
 const JANELA_MS = 60_000;
 const LIMITE_POR_ORIGEM = 120;
+const LIMITE_ORIGEM_GLOBAL = 1_000;
 const LIMITE_POR_TENANT = 600;
+const LIMITE_GLOBAL = 5_000;
 const MAX_CHAVES = 20_000;
 
 interface Balde {
@@ -9,8 +11,10 @@ interface Balde {
   vistoEm: number;
 }
 
+const porOrigemTenant = new Map<string, Balde>();
 const porOrigem = new Map<string, Balde>();
 const porTenant = new Map<string, Balde>();
+const global = new Map<string, Balde>();
 let chamadas = 0;
 
 function consumir(mapa: Map<string, Balde>, chave: string, limite: number, agora: number): boolean {
@@ -37,9 +41,12 @@ function podar(mapa: Map<string, Balde>, agora: number) {
 }
 
 export function origemDoWebhook(headers: Headers): string {
-  const valor = headers.get('cf-connecting-ip')
-    || headers.get('x-real-ip')
-    || headers.get('x-forwarded-for')?.split(',')[0]
+  // O Traefik sobrescreve X-Real-IP com o peer recebido. X-Forwarded-For nao
+  // entra aqui porque o cliente pode antepor valores. O header da Cloudflare
+  // fica como fallback; os tetos global/tenant continuam valendo mesmo que a
+  // borda esteja mal configurada.
+  const valor = headers.get('x-real-ip')
+    || headers.get('cf-connecting-ip')
     || 'desconhecida';
   const limpa = valor.trim().slice(0, 64);
   return /^[0-9a-f:.]+$/i.test(limpa) ? limpa : 'desconhecida';
@@ -52,17 +59,22 @@ export function origemDoWebhook(headers: Headers): string {
  */
 export function permitirWebhookSites(tenantId: string, origem: string, agora = Date.now()): boolean {
   chamadas += 1;
-  if ((chamadas & 255) === 0 || porOrigem.size > MAX_CHAVES || porTenant.size > MAX_CHAVES) {
+  if ((chamadas & 255) === 0 || porOrigemTenant.size > MAX_CHAVES || porOrigem.size > MAX_CHAVES || porTenant.size > MAX_CHAVES) {
+    podar(porOrigemTenant, agora);
     podar(porOrigem, agora);
     podar(porTenant, agora);
   }
+  const globalOk = consumir(global, 'global', LIMITE_GLOBAL, agora);
+  const origemGlobalOk = consumir(porOrigem, origem, LIMITE_ORIGEM_GLOBAL, agora);
   const tenantOk = consumir(porTenant, tenantId, LIMITE_POR_TENANT, agora);
-  const origemOk = consumir(porOrigem, `${tenantId}:${origem}`, LIMITE_POR_ORIGEM, agora);
-  return tenantOk && origemOk;
+  const origemOk = consumir(porOrigemTenant, `${tenantId}:${origem}`, LIMITE_POR_ORIGEM, agora);
+  return globalOk && origemGlobalOk && tenantOk && origemOk;
 }
 
 export function limparRateLimitSitesParaTeste() {
+  porOrigemTenant.clear();
   porOrigem.clear();
   porTenant.clear();
+  global.clear();
   chamadas = 0;
 }

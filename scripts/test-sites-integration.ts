@@ -48,8 +48,17 @@ for (let i = 0; i < 120; i += 1) assert.equal(permitirWebhookSites('tenant-a', '
 assert.equal(permitirWebhookSites('tenant-a', '203.0.113.10', agora), false);
 assert.equal(permitirWebhookSites('tenant-a', '203.0.113.10', agora + 60_001), true);
 assert.equal(permitirWebhookSites('tenant-b', '203.0.113.10', agora), true);
+assert.equal(origemDoWebhook(new Headers({ 'x-real-ip': '198.51.100.7', 'cf-connecting-ip': '203.0.113.11' })), '198.51.100.7');
 assert.equal(origemDoWebhook(new Headers({ 'cf-connecting-ip': '203.0.113.11' })), '203.0.113.11');
-assert.equal(origemDoWebhook(new Headers({ 'x-forwarded-for': '198.51.100.5, 10.0.0.1' })), '198.51.100.5');
+assert.equal(origemDoWebhook(new Headers({ 'x-forwarded-for': '198.51.100.5, 10.0.0.1' })), 'desconhecida');
 assert.equal(origemDoWebhook(new Headers({ 'x-forwarded-for': 'texto-invalido' })), 'desconhecida');
+
+limparRateLimitSitesParaTeste();
+for (let i = 0; i < 1_000; i += 1) assert.equal(permitirWebhookSites(`tenant-${i}`, '203.0.113.20', agora), true);
+assert.equal(permitirWebhookSites('tenant-origem-excedida', '203.0.113.20', agora), false);
+
+limparRateLimitSitesParaTeste();
+for (let i = 0; i < 5_000; i += 1) assert.equal(permitirWebhookSites(`tenant-${i}`, `198.51.${Math.floor(i / 256)}.${i % 256}`, agora), true);
+assert.equal(permitirWebhookSites('tenant-global-excedido', '192.0.2.1', agora), false);
 
 console.log('PASS EnturOS Sites: acesso publico restrito, rate limit, assinatura, replay, tenant e envelope');
