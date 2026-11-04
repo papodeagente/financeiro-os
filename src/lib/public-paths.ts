@@ -8,6 +8,7 @@ export const PUBLIC_PATHS = [
   '/login', '/api/auth/login', '/api/auth/seed', '/api/auth/session',
   '/api/auth/signup',
   '/signup',
+  '/api/health',
   '/p/', '/api/propostas/public/', '/api/uploads/',
   '/api/v1/crm/webhook', '/api/v1/crm/health',
   '/api/v1/sites/webhook/',

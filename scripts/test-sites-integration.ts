@@ -38,6 +38,7 @@ assert.equal(lerEnvelopeSites({ ...evento, tipo: 'pagamento.recebido', dados: { 
 assert.equal(lerEnvelopeSites({ ...evento, tipo: 'reembolso.emitido', agregado: { tipo: 'reembolso', id: '9', versao: 1 }, dados: { ...evento.dados, reembolsoId: 9 } }, 42)?.tipo, 'reembolso.emitido');
 
 assert.equal(isPublicBasePath('/api/v1/sites/webhook/agencia-1'), true);
+assert.equal(isPublicBasePath('/api/health'), true);
 assert.equal(isPublicBasePath('/api/v1/sites/config'), false);
 assert.equal(isPublicBasePath('/api/v1/sites/webhook-malicioso/agencia-1'), false);
 assert.equal(isPublicBasePath('/api/planos-comissao'), false);
