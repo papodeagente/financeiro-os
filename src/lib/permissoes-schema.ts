@@ -3,7 +3,7 @@
 //
 // Tabelas vazias = comportamento de antes (o papel decide tudo). Ficam no
 // gatilho de auditoria de propósito: quem mudou direito, conta liberada ou
-// decidiu um pedido aparece na Consulta Global de Log com antes e depois.
+// decidiu um pedido aparece no Registro de atividades com antes e depois.
 export const PERMISSOES_SCHEMA_SQL = String.raw`
   CREATE TABLE IF NOT EXISTS grupos_usuario (
     tenant_id TEXT NOT NULL,
