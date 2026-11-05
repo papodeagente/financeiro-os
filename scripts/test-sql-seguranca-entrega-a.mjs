@@ -218,5 +218,22 @@ console.log('--- FIN-12: segundo fator para administradores ---');
   eq(vistaDoAdmin.vinculo?.salario_base, 9000, 'admin vê a folha');
 }
 
+console.log('--- Sessão sem laço: a conferência consulta o banco como Sistema ---');
+{
+  // Em produção, cada consulta pede à auditoria quem está agindo, e a
+  // auditoria pergunta a sessão. Se a conferência da sessão consultasse o
+  // banco em nome da pessoa, pediria a sessão de novo, sem fim.
+  const A = await import('../src/lib/audit-context.ts');
+  const pool = globalThis.__POOL_DE_TESTE__;
+  const original = pool.query;
+  const atores = [];
+  pool.query = async (text, values) => { atores.push((await A.getAuditContext()).source); return original(text, values); };
+  await query(`INSERT INTO usuarios (id, tenant_id, data) VALUES ('op3', 'ag-1', '{"id":"op3","perfil":"OPERADOR","ativo":true}')`);
+  const pessoa = { userId: 'op3', userName: 'Op', tenantId: 'ag-1', perfil: 'OPERADOR', source: 'USUARIO' };
+  const viva = await A.runWithAuditContext(pessoa, () => S.sessaoViva({ userId: 'op3', tenantId: 'ag-1', tv: 0 }));
+  pool.query = original;
+  eq([viva, atores.length > 0, atores.every(a => a === 'SISTEMA')], [true, true, true], 'dentro do pedido da pessoa, a conferência lê o banco como Sistema');
+}
+
 console.log(`\n${total - falhas}/${total} passaram`);
 if (falhas) process.exit(1);

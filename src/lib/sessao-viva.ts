@@ -15,6 +15,7 @@
  * Trocar perfil, senha, e-mail, desativar ou sair sobe a versão.
  */
 import pool from './db';
+import { runWithAuditContext, SYSTEM_AUDIT_CONTEXT } from './audit-context';
 import { perfilCanonico, semAcessoAoSistema } from './permissoes';
 
 export interface DonoDaSessao {
@@ -34,7 +35,17 @@ function chave(p: DonoDaSessao): string {
   return p.isSuperAdmin ? `sa:${p.userId}` : `u:${p.tenantId ?? ''}:${p.userId}`;
 }
 
-async function lerEstado(p: DonoDaSessao): Promise<Estado> {
+/**
+ * A leitura roda como "Sistema": toda consulta ao banco pede à auditoria
+ * quem está agindo, e a auditoria pergunta a sessão. Sem isto, conferir a
+ * sessão pedia a sessão, que conferia de novo, sem fim (o servidor travava
+ * e estourava a memória no primeiro pedido de quem estava logado).
+ */
+function lerEstado(p: DonoDaSessao): Promise<Estado> {
+  return runWithAuditContext(SYSTEM_AUDIT_CONTEXT, () => lerEstadoNoBanco(p));
+}
+
+async function lerEstadoNoBanco(p: DonoDaSessao): Promise<Estado> {
   if (!pool) return { tv: Number(p.tv) || 0, ok: true, ate: 0 };
   if (p.isSuperAdmin) {
     const { rows } = await pool.query(`SELECT data FROM super_admins WHERE id = $1`, [p.userId]);
