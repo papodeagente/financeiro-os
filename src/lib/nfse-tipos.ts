@@ -191,6 +191,12 @@ export interface TomadorNota {
 
 export interface NotaFiscal {
   id: string;
+  /**
+   * A transmissão caiu sem resposta: a nota segue PROCESSANDO (viva, bloqueia
+   * outra emissão da mesma parcela) até a consulta ou o reenvio com o MESMO
+   * id dizerem o que aconteceu (auditoria 04/11/2026, FIN2-09).
+   */
+  resultado_desconhecido?: boolean;
   /** Conta a receber que originou a nota. É a chave anti-duplicata. */
   conta_receber_id: string;
   venda_id: string;

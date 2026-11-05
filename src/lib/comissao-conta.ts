@@ -186,11 +186,15 @@ export async function sincronizarContaDaComissao(
   // nunca excluída — o histórico de que ela existiu fica.
   if (!conta) {
     if (atual && atual.status !== 'CANCELADO') {
-      await exec.query(
-        `UPDATE contas_pagar SET data = $3::jsonb, status = 'CANCELADO', updated_at = NOW() WHERE id = $1 AND tenant_id = $2`,
-        [id, tenantId, JSON.stringify({ ...atual, status: 'CANCELADO' })],
+      // A guarda de baixa vai no próprio UPDATE: o pagamento pode ter caído
+      // depois da leitura acima (FIN2-03).
+      const { rows: canceladas } = await exec.query(
+        `UPDATE contas_pagar SET data = jsonb_set(data, '{status}', '"CANCELADO"', true), status = 'CANCELADO', updated_at = NOW()
+          WHERE id = $1 AND tenant_id = $2 AND COALESCE(data->>'status', '') NOT IN ('PAGO', 'PARCIAL')
+          RETURNING id`,
+        [id, tenantId],
       );
-      return { acao: 'cancelada', id };
+      return { acao: canceladas.length > 0 ? 'cancelada' : 'preservada', id };
     }
     return { acao: 'nenhuma', id };
   }
@@ -201,12 +205,19 @@ export async function sincronizarContaDaComissao(
     ? { ...conta, conta_bancaria_id: atual.conta_bancaria_id, centro_custo: atual.centro_custo, anexos: atual.anexos ?? [], comprovante: atual.comprovante ?? '' }
     : conta;
 
-  await exec.query(
+  // A conta paga NÃO é regravada, e a checagem está no próprio upsert: ler
+  // PENDENTE acima, o pagamento concorrente debitar e esta gravação voltar a
+  // conta a PENDENTE sem estorno deixava a próxima baixa debitar de novo
+  // (auditoria 04/11, FIN2-03).
+  const { rows: gravadas } = await exec.query(
     `INSERT INTO contas_pagar (id, tenant_id, fornecedor_id, status, data, created_at, updated_at)
      VALUES ($1, $2, $3, $4, $5::jsonb, NOW(), NOW())
      ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, status = EXCLUDED.status, updated_at = NOW()
-     WHERE contas_pagar.tenant_id = EXCLUDED.tenant_id`,
+     WHERE contas_pagar.tenant_id = EXCLUDED.tenant_id
+       AND COALESCE(contas_pagar.data->>'status', '') NOT IN ('PAGO', 'PARCIAL')
+     RETURNING id`,
     [gravar.id, tenantId, '', gravar.status, JSON.stringify(gravar)],
   );
+  if (gravadas.length === 0) return { acao: 'preservada', id };
   return { acao: atual ? (gravar.status === 'CANCELADO' ? 'cancelada' : 'atualizada') : 'criada', id };
 }

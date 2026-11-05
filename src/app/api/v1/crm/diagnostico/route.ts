@@ -1,4 +1,5 @@
 import { recusaFinanceira } from '@/lib/guarda-rota';
+import { abrirCrmConfig } from '@/lib/crm-config-cofre';
 import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
       [tenantId],
     );
     const cfgRow = cfgRes.rows[0];
-    const cfg = cfgRow?.data ?? null;
+    const cfg = abrirCrmConfig(cfgRow?.data ?? null);
 
     const config = cfg ? {
       ativo: cfg.ativo ?? false,

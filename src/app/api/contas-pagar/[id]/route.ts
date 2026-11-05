@@ -2,14 +2,8 @@ import { recusaFinanceira, recusaExclusao } from '@/lib/guarda-rota';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import {
-  aplicarMovimentoCaixaAtomico,
-  atualizarContaComGuarda,
-  calcularMovimentos,
-  emTransacao,
-  estornarBaixaDaConta,
-  type ExecutorSQL,
-} from '@/lib/caixa-atomico';
+import { emTransacao, estornarBaixaDaConta, ErroMovimentoCaixa } from '@/lib/caixa-atomico';
+import { editarConta, ErroEdicaoConta } from '@/lib/baixa-de-conta';
 
 const TABLE = 'contas_pagar';
 const INDEX_COLS = ['fornecedor_id', 'status'];
@@ -38,9 +32,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 //  PAGO→PAGO      => se trocou a conta, devolve o valor antigo à conta antiga
 //                    e debita o novo na nova; se só mudou o valor, ajusta a
 //                    diferença na mesma conta
-// A baixa é idempotente: o UPDATE tem guarda (versão da linha + status ainda
-// diferente do alvo) e o movimento de caixa só acontece se ele afetou linha —
-// duplo clique / PUT concorrente debita o caixa uma vez só.
+// A baixa é idempotente: a linha fica travada durante a edição, e o segundo
+// PUT de um duplo clique encontra a conta já baixada — debita o caixa uma vez só.
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const recusa = await recusaFinanceira('escrever');
@@ -48,69 +41,27 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     await initDB();
     const { id } = await params;
     const item = await req.json();
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      return NextResponse.json({ error: 'Formato inválido' }, { status: 400 });
+    }
     if (!pool) return NextResponse.json(item);
     const tenantId = await getTenantId();
-
-    // Estado anterior + versão da linha (xmin) para a guarda otimista
-    const { rows: prevRows } = await pool.query(
-      `SELECT data, xmin::text AS versao FROM ${TABLE} WHERE id = $1 AND tenant_id = $2`,
-      [id, tenantId],
-    );
-    const prev = (prevRows[0]?.data ?? {}) as Record<string, unknown>;
-    const versaoAnterior = (prevRows[0]?.versao as string | undefined) ?? null;
-    const prevStatus = String(prev.status ?? '');
-    const novoStatus = String(item.status ?? '');
-
-    // Movimentos derivados do VALOR BAIXADO (não do status): é isso que faz o
-    // pagamento PARCIAL — e a evolução de um parcial — debitar o caixa na
-    // medida certa. Sinal -1: pagar é saída. Só aplicados se a guarda segurar.
-    const movimentos = calcularMovimentos(prev, item as Record<string, unknown>, 'valor_pago', -1);
-
-    const params_ = {
+    // Linha travada, movimento calculado sobre o estado atual e caixa que não
+    // se move desfaz tudo (ver src/lib/baixa-de-conta.ts).
+    const gravado = await editarConta({
       tabela: TABLE,
       colunasIndice: INDEX_COLS,
+      campo: 'valor_pago',
+      sinal: -1,
       id,
       tenantId,
       item: item as Record<string, unknown>,
-    };
-
-    // Edição sem efeito no caixa (descrição, vencimento, etc.) → update direto
-    if (movimentos.length === 0) {
-      await atualizarContaComGuarda({
-        ...params_,
-        exec: pool as unknown as ExecutorSQL,
-        versaoAnterior: null,
-        statusAlvo: null,
-      });
-      return NextResponse.json(item);
-    }
-
-    const aplicado = await emTransacao(async exec => {
-      const ok = await atualizarContaComGuarda({
-        ...params_,
-        exec,
-        versaoAnterior,
-        statusAlvo: prevStatus !== novoStatus ? novoStatus : null,
-      });
-      if (!ok) return false;
-      // Ordem fixa por conta: duas trocas de conta simultâneas travariam uma
-      // na outra se cada transação bloqueasse as linhas em ordem diferente.
-      movimentos.sort((a, b) => String(a.conta).localeCompare(String(b.conta)));
-      for (const mov of movimentos) {
-        await aplicarMovimentoCaixaAtomico(tenantId, mov.conta, mov.delta, exec);
-      }
-      return true;
     });
-
-    if (!aplicado) {
-      // Outra requisição já pagou/alterou esta conta: devolve o estado atual
-      // sem debitar de novo.
-      const { rows } = await pool.query(`SELECT data FROM ${TABLE} WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
-      return NextResponse.json(rows[0]?.data ?? item);
-    }
-
-    return NextResponse.json(item);
+    return NextResponse.json(gravado);
   } catch (e) {
+    if (e instanceof ErroEdicaoConta || e instanceof ErroMovimentoCaixa) {
+      return NextResponse.json({ error: e.message }, { status: e.status });
+    }
     const msg = e instanceof Error ? e.message : 'Erro';
     return NextResponse.json({ error: msg }, { status: 500 });
   }

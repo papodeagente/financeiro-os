@@ -14,7 +14,7 @@ export async function POST(
     const bodyText = await req.text();
     const signature = req.headers.get('x-crm-signature') || '';
 
-    const valid = await verificarAssinaturaCRM(bodyText, signature, tenantId);
+    const valid = await verificarAssinaturaCRM(bodyText, signature, tenantId, req.headers.get('x-crm-timestamp'));
     if (!valid) {
       return NextResponse.json({ error: 'Assinatura invalida' }, { status: 401 });
     }

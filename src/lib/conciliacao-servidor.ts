@@ -127,7 +127,13 @@ async function moverCaixa(exec: ExecutorSQL, tenantId: string, prev: Dados, novo
   const movimentos = calcularMovimentos(prev, novo, t.campo, t.sinal);
   // Ordem fixa por conta, igual às rotas de baixa: evita travar em ordem cruzada.
   movimentos.sort((a, b) => String(a.conta).localeCompare(String(b.conta)));
-  for (const m of movimentos) await aplicarMovimentoCaixaAtomico(tenantId, m.conta, m.delta, exec);
+  // Movimento que não acontece (conta bancária apagada, de outra agência,
+  // Caixa Geral impossível) desfaz a conciliação inteira: antes a linha
+  // ficava CONCILIADA e a conta RECEBIDA sem o dinheiro no saldo (FIN2-02).
+  for (const m of movimentos) {
+    const ok = await aplicarMovimentoCaixaAtomico(tenantId, m.conta, m.delta, exec);
+    if (!ok) throw new ErroConciliacao('A conta bancária deste extrato não existe nesta agência. Nada foi conciliado.', 409);
+  }
 }
 
 function linhaConciliada(linha: Dados, vinculos: Vinculo[]): Dados {

@@ -1,75 +1,42 @@
 import { NextResponse } from 'next/server';
 import { readFile, stat } from 'fs/promises';
 import path from 'path';
+import { MIME_POR_EXTENSAO, PASTA_PUBLICA } from '@/lib/arquivos';
 
-// Persistent volume at /app/data/uploads in production
-const UPLOAD_DIRS = process.env.NODE_ENV === 'production'
-  ? ['/app/data/uploads']
-  : [path.join(process.cwd(), 'public', 'uploads')];
+const NAO_ACHOU = () => NextResponse.json({ error: 'File not found' }, { status: 404 });
 
-const MIME_TYPES: Record<string, string> = {
-  // imagens
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  png: 'image/png',
-  webp: 'image/webp',
-  gif: 'image/gif',
-  avif: 'image/avif',
-  // documentos
-  pdf: 'application/pdf',
-  doc: 'application/msword',
-  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  xls: 'application/vnd.ms-excel',
-  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  ppt: 'application/vnd.ms-powerpoint',
-  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  // texto
-  txt: 'text/plain',
-  csv: 'text/csv',
-  // compactados
-  zip: 'application/zip',
-};
-
-export async function GET(
-  _req: Request,
-  { params }: { params: Promise<{ filename: string }> }
-) {
+/**
+ * Pasta pública (/app/data/uploads): imagens de proposta, mapa e perfil.
+ *
+ * Desde a auditoria de 04/11/2026 (FIN-08) documento NOVO vai para a pasta
+ * privada (/api/arquivos/). Os documentos ANTIGOS que ficaram aqui continuam
+ * abrindo como antes, sem login: os links deles já foram mandados a clientes
+ * e passageiros, e quebrar todos de uma vez na publicação não é aceitável.
+ * Risco aceito e registrado: quem tem um link antigo de documento continua
+ * abrindo. A saída é o inventário desses arquivos (pendência da auditoria).
+ */
+export async function GET(_req: Request, { params }: { params: Promise<{ filename: string }> }) {
   try {
     const { filename } = await params;
-
-    // Sanitize: only allow alphanumeric, hyphens, dots
-    if (!/^[\w\-]+\.\w+$/.test(filename)) {
+    if (!/^[\w-]+\.\w+$/.test(filename)) {
       return NextResponse.json({ error: 'Invalid filename' }, { status: 400 });
     }
+    const filePath = path.join(PASTA_PUBLICA, filename);
+    if (path.dirname(filePath) !== PASTA_PUBLICA) return NAO_ACHOU();
+    const info = await stat(filePath).catch(() => null);
+    if (!info?.isFile()) return NAO_ACHOU();
+    const buffer = await readFile(filePath);
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
 
-    for (const dir of UPLOAD_DIRS) {
-      const filePath = path.join(dir, filename);
-
-      // Prevent path traversal
-      if (!filePath.startsWith(dir)) continue;
-
-      try {
-        const fileStat = await stat(filePath);
-        if (!fileStat.isFile()) continue;
-
-        const ext = filename.split('.').pop()?.toLowerCase() || '';
-        const contentType = MIME_TYPES[ext] || 'application/octet-stream';
-        const buffer = await readFile(filePath);
-
-        return new NextResponse(buffer, {
-          headers: {
-            'Content-Type': contentType,
-            'Cache-Control': 'public, max-age=31536000, immutable',
-            'Content-Length': String(buffer.length),
-          },
-        });
-      } catch {
-        continue;
-      }
-    }
-
-    return NextResponse.json({ error: 'File not found' }, { status: 404 });
+    return new NextResponse(buffer, {
+      headers: {
+        'Content-Type': MIME_POR_EXTENSAO[ext] || 'application/octet-stream',
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Content-Length': String(buffer.length),
+        'X-Content-Type-Options': 'nosniff',
+      },
+    });
   } catch {
-    return NextResponse.json({ error: 'File not found' }, { status: 404 });
+    return NAO_ACHOU();
   }
 }

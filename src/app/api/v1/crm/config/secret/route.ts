@@ -1,4 +1,5 @@
 import { recusaAdmin } from '@/lib/guarda-rota';
+import { abrirCrmConfig } from '@/lib/crm-config-cofre';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
@@ -19,7 +20,7 @@ export async function GET() {
       [tenantId],
     );
     if (rows.length === 0) return NextResponse.json({ secret: '' });
-    const data = rows[0].data;
+    const data = abrirCrmConfig(rows[0].data);
     await registrarEventoAuditoria({
       tenantId,
       acao: 'VISUALIZAR',

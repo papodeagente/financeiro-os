@@ -3,6 +3,7 @@ import { jwtVerify } from 'jose';
 import { isCanonicalHost, extractHost, getCanonicalBaseUrl } from './lib/canonical-hosts';
 import { isMindMapImportPath, isPublicMindMapShareRequest } from './lib/mapa-mental-public-path';
 import { isPublicBasePath } from './lib/public-paths';
+import { corpoSimplesEmRotaJson, origemPermitida } from './lib/origem-da-mutacao';
 
 let _jwtSecret: Uint8Array | null = null;
 function getJwtSecret() {
@@ -34,6 +35,10 @@ function addSecurityHeaders(response: NextResponse) {
   response.headers.set('X-XSS-Protection', '1; mode=block');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  // CSP mínima que não quebra a aplicação: sem plugin, sem <base> alheio,
+  // sem ser emoldurado por outro site. A limpeza do HTML (src/lib/html-seguro)
+  // continua sendo a defesa principal contra script injetado (FIN-07).
+  response.headers.set('Content-Security-Policy', "object-src 'none'; base-uri 'self'; frame-ancestors 'self'");
   return response;
 }
 
@@ -81,6 +86,11 @@ export async function middleware(request: NextRequest) {
     || isPublicMindMapShareRequest(pathname, request.method)
   ) {
     const response = addSecurityHeaders(next());
+    // O endereço da proposta é o token dela: não vaza pelo Referer (FIN-13).
+    if (pathname.startsWith('/p/') || pathname.startsWith('/api/propostas/public/')) {
+      response.headers.set('Referrer-Policy', 'no-referrer');
+      response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+    }
     if (isPublicMindMapShareRequest(pathname, request.method)) {
       response.headers.set('Referrer-Policy', 'no-referrer');
       response.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
@@ -124,6 +134,17 @@ export async function middleware(request: NextRequest) {
   // Verify JWT
   try {
     const { payload } = await jwtVerify(token, getJwtSecret());
+
+    // Escrita com cookie só da própria origem, e as rotas administrativas de
+    // JSON não aceitam corpo de formulário (auditoria 04/11/2026, FIN2-16).
+    if (pathname.startsWith('/api/')) {
+      if (!origemPermitida(request.method, request.url, request.headers, [getCanonicalBaseUrl()], isCanonicalHost)) {
+        return NextResponse.json({ error: 'Origem não permitida' }, { status: 403 });
+      }
+      if (corpoSimplesEmRotaJson(request.method, pathname, request.headers.get('content-type'))) {
+        return NextResponse.json({ error: 'Envie JSON (Content-Type: application/json)' }, { status: 415 });
+      }
+    }
 
     // Admin routes: require isSuperAdmin
     const isAdminRoute = pathname.startsWith('/admin') || pathname.startsWith('/api/admin/');

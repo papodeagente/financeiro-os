@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
-import { buildPropostaLink } from '@/lib/proposta-link';
+import { garantirLinkPublico, type Consulta } from '@/lib/proposta-publica';
 import { generateId } from '@/lib/utils';
 import { hojeISO } from '@/lib/money';
 import { calcProposta } from '@/lib/calculations';
@@ -744,6 +744,8 @@ export async function POST(req: NextRequest) {
       `INSERT INTO propostas (id, tenant_id, numero, cliente_id, vendedor_id, status, data) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [id, tenantId, num, '', '', 'RASCUNHO', JSON.stringify(proposta)]
     );
+    // Link público por token (auditoria 04/11, FIN-13), nunca pelo id.
+    const linkPublico = await garantirLinkPublico(pool as unknown as Consulta, tenantId, id);
 
     // Link proposta back to grupo and advance pipeline
     const updatedGrupo = { ...grupo, proposta_id: id, status_pipeline: 'PROPOSTA' };
@@ -767,7 +769,7 @@ export async function POST(req: NextRequest) {
       titulo: `Viagem — ${destino}`,
       // Mesmo defeito do outro produtor: slug de 8 caracteres é recusado pela
       // guarda de resolução, então este link nunca abriu.
-      link_publico: buildPropostaLink(id, baseUrl),
+      link_publico: linkPublico,
       link_editor:  `${baseUrl}/propostas/${id}`,
       valor_total_referencia: valorTotalRef,
       moeda: 'BRL',

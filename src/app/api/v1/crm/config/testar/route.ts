@@ -1,4 +1,5 @@
 import { recusaAdmin } from '@/lib/guarda-rota';
+import { abrirCrmConfig } from '@/lib/crm-config-cofre';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { createHmac } from 'crypto';
@@ -17,7 +18,7 @@ export async function POST() {
       return NextResponse.json({ sucesso: false, erro: 'Configuracao CRM nao encontrada' });
     }
 
-    const config = rows[0].data;
+    const config = abrirCrmConfig(rows[0].data);
     if (!config.webhook_url_crm) {
       return NextResponse.json({ sucesso: false, erro: 'URL do webhook do CRM nao configurada' });
     }

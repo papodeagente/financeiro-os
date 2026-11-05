@@ -91,6 +91,32 @@ export async function aplicarMovimentoCaixaAtomico(
   return (rowCount ?? 0) > 0;
 }
 
+/**
+ * O movimento de caixa não aconteceu: conta bancária inexistente, de outra
+ * agência, apagada no meio do caminho, ou Caixa Geral impossível de criar.
+ * Quem recebe isto desfaz a transação inteira: uma baixa nunca pode ficar
+ * RECEBIDA/PAGA sem o dinheiro correspondente no saldo (auditoria 04/11, FIN2-02).
+ */
+export class ErroMovimentoCaixa extends Error {
+  status = 409;
+  constructor(message = 'A conta bancária desta baixa não existe nesta agência. Escolha outra conta e tente de novo.') {
+    super(message);
+    this.name = 'ErroMovimentoCaixa';
+  }
+}
+
+/** Como aplicarMovimentoCaixaAtomico, mas falha (lança) quando nenhuma conta foi movida. */
+export async function moverCaixaOuFalhar(
+  tenantId: string,
+  contaId: string | null | undefined,
+  delta: number,
+  exec?: ExecutorSQL,
+): Promise<void> {
+  if (!round2(num(delta))) return;
+  const ok = await aplicarMovimentoCaixaAtomico(tenantId, contaId, delta, exec);
+  if (!ok) throw new ErroMovimentoCaixa();
+}
+
 /** Valor efetivamente baixado de uma conta (mesma precedência usada nas rotas). */
 export function valorBaixado(
   data: Record<string, unknown>,
@@ -175,7 +201,12 @@ export async function estornarBaixaDaConta(
   const valor = valorNoCaixa(data, campo);
   if (valor === 0) return;
   const sinal = tabela === 'contas_receber' ? -1 : +1;
-  await aplicarMovimentoCaixaAtomico(tenantId, conta, round2(valor * sinal), exec);
+  // Ao APAGAR a conta, banco que não existe mais não tem saldo a corrigir
+  // (o saldo dele sumiu junto). Recusar aqui travaria a exclusão para
+  // sempre; por isso só registra. Na edição (estorno pelo PUT) a regra é
+  // estrita: moverCaixaOuFalhar.
+  const ok = await aplicarMovimentoCaixaAtomico(tenantId, conta, round2(valor * sinal), exec);
+  if (!ok) console.warn(`[caixa] estorno sem conta bancária no tenant ${tenantId} (conta ${conta ?? 'Caixa Geral'})`);
 }
 
 export interface AtualizacaoGuardadaParams {
