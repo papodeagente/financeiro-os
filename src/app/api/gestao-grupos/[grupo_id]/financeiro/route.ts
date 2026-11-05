@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { recusaFinanceira } from '@/lib/guarda-rota';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
 import type { ContaReceber, ContaPagar } from '@/lib/crm-types';
@@ -27,6 +28,9 @@ import {
 //   - contagem_passageiros: { adt, chd, inf, total }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ grupo_id: string }> }) {
+  // Contas a pagar/receber do grupo: leitura financeira (05/11/2026).
+  const recusa = await recusaFinanceira('ler');
+  if (recusa) return recusa;
   if (!pool) return NextResponse.json({ error: 'no db' }, { status: 503 });
   await initDB();
   const tenantId = await getTenantId();

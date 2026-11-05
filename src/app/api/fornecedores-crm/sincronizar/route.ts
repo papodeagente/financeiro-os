@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { recusaFinanceira } from '@/lib/guarda-rota';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
 import { integracaoCrmAtiva, sincronizarTodosOsFornecedores } from '@/lib/crm-integration';
@@ -9,6 +10,8 @@ import { integracaoCrmAtiva, sincronizarTodosOsFornecedores } from '@/lib/crm-in
  * porque cada fornecedor é um aviso.
  */
 export async function POST() {
+  const recusa = await recusaFinanceira('escrever');
+  if (recusa) return recusa;
   try {
     await initDB();
     if (!pool) return NextResponse.json({ error: 'Banco indisponível' }, { status: 503 });

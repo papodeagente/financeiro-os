@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { recusaExclusao } from '@/lib/guarda-rota';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
 import { enviarFornecedorAoCrm, enviarRemocaoDeFornecedorAoCrm } from '@/lib/crm-integration';
@@ -57,6 +58,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  // Excluir é do perfil que exclui, como no resto do sistema (05/11/2026).
+  const recusa = await recusaExclusao();
+  if (recusa) return recusa;
   try {
     await initDB();
     const { id } = await params;

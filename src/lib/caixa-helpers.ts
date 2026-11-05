@@ -11,6 +11,9 @@ export { calcularSaldoBancario } from './saldo-bancario';
 // (trata PARCIAL pelo acumulado). O recálculo em lote precisa usar a mesma
 // regra da leitura, senão os dois divergem.
 import { valorMovimentado } from './saldo-bancario';
+import { reconstruirSaldos } from './razao';
+import { registrarMovimento } from './razao-servidor';
+import type { ExecutorSQL } from './caixa-atomico';
 
 // ──────────────────────────────────────────────────────────────────────────
 // Modo iniciante: 1 conta "Caixa Geral" criada automaticamente. Toda baixa
@@ -93,6 +96,7 @@ export async function recalcularSaldosCaixa(tenantId: string): Promise<{
   total_transferido: number;
   saldo_final_caixa_geral: number;
   caixa_geral_criada: boolean;
+  ajustes: Array<{ conta_bancaria_id: string; diferenca: number }>;
   erros: string[];
 }> {
   const result = {
@@ -102,6 +106,7 @@ export async function recalcularSaldosCaixa(tenantId: string): Promise<{
     total_transferido: 0,
     saldo_final_caixa_geral: 0,
     caixa_geral_criada: false,
+    ajustes: [] as Array<{ conta_bancaria_id: string; diferenca: number }>,
     erros: [] as string[],
   };
   if (!pool || !tenantId) {
@@ -159,64 +164,42 @@ export async function recalcularSaldosCaixa(tenantId: string): Promise<{
       if (result.caixa_geral_criada) ({ rows: contasRows } = await travarContas());
     }
 
-    // Carrega todas as contas + reseta para saldo_inicial
-    const contasMap: Record<string, { id: string; data: Record<string, unknown>; saldoNovo: number }> = {};
+    // Mesma regra de sempre, agora numa função única (razao.ts) que também
+    // serve à conferência da abertura do razão.
+    const rec = reconstruirSaldos({
+      contas: contasRows.map(r => ({ id: String(r.id), data: (r.data ?? {}) as Record<string, unknown> })),
+      receber: crRows.map(r => (r.data ?? {}) as Record<string, unknown>),
+      pagar: cpRows.map(r => (r.data ?? {}) as Record<string, unknown>),
+      transferencias: trRows.map(r => (r.data ?? {}) as Record<string, unknown>),
+      caixaGeralId,
+      valorMovimentado: (d, campo) => valorMovimentado(d as Parameters<typeof valorMovimentado>[0], campo),
+    });
+    result.total_recebido = rec.total_recebido;
+    result.total_pago = rec.total_pago;
+    result.total_transferido = rec.total_transferido;
+
+    // Persiste novos saldos (só o saldo). A diferença aplicada a cada conta
+    // vira um lançamento de ajuste no razão (05/11/2026): o recálculo não
+    // muda mais o saldo em silêncio — fica registrado e aparece para revisão.
     for (const r of contasRows) {
-      const data = r.data as Record<string, unknown>;
       const id = String(r.id);
-      contasMap[id] = { id, data, saldoNovo: num(data.saldo_inicial) };
-    }
-
-    // Soma recebidos. Numa conta PARCIAL o campo de baixa guarda o
-    // ACUMULADO recebido até agora, então ele é a fonte da verdade.
-    for (const r of crRows) {
-      const d = r.data as Record<string, unknown>;
-      const valor = valorMovimentado(d as Parameters<typeof valorMovimentado>[0], 'valor_recebido');
-      const contaId = (d.conta_bancaria_id as string) || caixaGeralId || '';
-      if (contaId && contasMap[contaId]) {
-        contasMap[contaId].saldoNovo = round2(contasMap[contaId].saldoNovo + valor);
-        result.total_recebido = round2(result.total_recebido + valor);
-      }
-    }
-    // Subtrai pagos, com a mesma regra do parcial.
-    for (const r of cpRows) {
-      const d = r.data as Record<string, unknown>;
-      const valor = valorMovimentado(d as Parameters<typeof valorMovimentado>[0], 'valor_pago');
-      const contaId = (d.conta_bancaria_id as string) || caixaGeralId || '';
-      if (contaId && contasMap[contaId]) {
-        contasMap[contaId].saldoNovo = round2(contasMap[contaId].saldoNovo - valor);
-        result.total_pago = round2(result.total_pago + valor);
-      }
-    }
-    // Aplica transferências efetivadas: sai da origem, entra no destino
-    for (const r of trRows) {
-      const d = r.data as Record<string, unknown>;
-      const valor = num(d.valor);
-      if (valor <= 0) continue;
-      const origemId = (d.conta_origem_id as string) || '';
-      const destinoId = (d.conta_destino_id as string) || '';
-      let movimentou = false;
-      if (origemId && contasMap[origemId]) {
-        contasMap[origemId].saldoNovo = round2(contasMap[origemId].saldoNovo - valor);
-        movimentou = true;
-      }
-      if (destinoId && contasMap[destinoId]) {
-        contasMap[destinoId].saldoNovo = round2(contasMap[destinoId].saldoNovo + valor);
-        movimentou = true;
-      }
-      if (movimentou) result.total_transferido = round2(result.total_transferido + valor);
-    }
-
-    // Persiste novos saldos (só o saldo).
-    for (const conta of Object.values(contasMap)) {
-      const saldoFinal = round2(conta.saldoNovo);
+      const anterior = round2(num(((r.data ?? {}) as Record<string, unknown>).saldo_atual));
+      const saldoFinal = round2(rec.saldos[id] ?? 0);
       await client.query(
         `UPDATE contas_bancarias SET data = jsonb_set(data, '{saldo_atual}', to_jsonb($1::numeric), true), updated_at = NOW()
           WHERE id = $2 AND tenant_id = $3`,
-        [saldoFinal, conta.id, tenantId],
+        [saldoFinal, id, tenantId],
       );
       result.contas_atualizadas++;
-      if (conta.id === caixaGeralId) result.saldo_final_caixa_geral = saldoFinal;
+      if (id === caixaGeralId) result.saldo_final_caixa_geral = saldoFinal;
+      const diferenca = round2(saldoFinal - anterior);
+      if (diferenca !== 0) {
+        result.ajustes.push({ conta_bancaria_id: id, diferenca });
+        await registrarMovimento(client as unknown as ExecutorSQL, tenantId, id, diferenca, {
+          tipo: 'ajuste', tabela: 'contas_bancarias', id,
+          descricao: 'Recalcular saldos: diferença aplicada ao saldo',
+        });
+      }
     }
 
     await client.query('COMMIT');
