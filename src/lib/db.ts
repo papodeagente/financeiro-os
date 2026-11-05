@@ -10,6 +10,7 @@ import { PERIODO_SCHEMA_SQL } from './periodo-fechado';
 import { RECORRENCIA_SCHEMA_SQL } from './recorrencia-schema';
 import { CENTROS_CUSTO_SCHEMA_SQL } from './centros-custo-servidor';
 import { PERMISSOES_SCHEMA_SQL } from './permissoes-schema';
+import { LEITURA_DOCUMENTO_SCHEMA_SQL } from './leitura-documento-servidor';
 import { AUDIT_SCHEMA_SQL } from './audit-schema';
 import { NOTIFICACOES_SCHEMA_SQL } from './notificacoes-schema';
 import { MAPAS_MENTAIS_COMPARTILHAMENTO_SCHEMA_SQL } from './mapas-mentais-compartilhamento';
@@ -1525,6 +1526,10 @@ async function executarInitDB() {
   // Perfis de acesso, restrição por conta, pedidos de aprovação e alçadas
   // (05/11/2026). Tabelas vazias = o papel decide como antes.
   await pool.query(PERMISSOES_SCHEMA_SQL);
+  // "Ler boleto ou nota" (05/11/2026): a leitura por IA guardada por
+  // arquivo (hash), para o mesmo arquivo não pagar duas vezes. Controle: fora
+  // do gatilho de auditoria (a leitura registra o próprio evento).
+  await pool.query(LEITURA_DOCUMENTO_SCHEMA_SQL);
   // Razão financeiro, agendador e fila de tarefas (05/11/2026). Antes da
   // auditoria: são tabelas imutáveis ou de controle e ficam fora do gatilho.
   // Histórico de baixas e trava de período (05/11/2026, E2).

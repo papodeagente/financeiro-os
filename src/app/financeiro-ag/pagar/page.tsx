@@ -177,10 +177,11 @@ function EsqueletoFiltros() {
   );
 }
 
-/** Campos do formulário que vão para o título (o bloco "Repetir" não vai). */
-function camposDoTitulo(form: FormState): Omit<FormState, 'repeticao'> {
-  const { repeticao: _repeticao, ...campos } = form;
+/** Campos do formulário que vão para o título (o bloco "Repetir" e a leitura do documento não vão). */
+function camposDoTitulo(form: FormState): Omit<FormState, 'repeticao' | 'leitura'> {
+  const { repeticao: _repeticao, leitura: _leitura, ...campos } = form;
   void _repeticao;
+  void _leitura;
   return campos;
 }
 
@@ -305,6 +306,13 @@ export default function ContasPagarPage() {
       rateio: Array.isArray(item.rateio) ? item.rateio : [],
       tags: Array.isArray(item.tags) ? item.tags : [],
       repeticao: REPETICAO_PADRAO,
+      fornecedor_id: item.fornecedor_id ?? '',
+      fornecedor_cnpj: item.fornecedor_cnpj ?? '',
+      numero_documento: item.numero_documento ?? '',
+      linha_digitavel: item.linha_digitavel ?? '',
+      chave_pix: item.chave_pix ?? '',
+      anexos: Array.isArray(item.anexos) ? item.anexos : [],
+      leitura: null,
     });
     setSerieEditada(null);
     setEditId(item.id);
@@ -377,7 +385,8 @@ export default function ContasPagarPage() {
           estado: rep,
           inicio: form.data_vencimento,
           valor: valorOriginal,
-          modelo: { ...camposDoTitulo(form), cartao_id: cartaoIdFinal, rateio: rateioFinal, cambio },
+          // Linha digitável e número do documento são de UM boleto: não se repetem nas outras contas.
+          modelo: { ...camposDoTitulo(form), linha_digitavel: '', numero_documento: '', cartao_id: cartaoIdFinal, rateio: rateioFinal, cambio },
         });
         setShowForm(false);
         setEditId(null);

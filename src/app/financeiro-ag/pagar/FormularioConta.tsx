@@ -15,9 +15,13 @@ import { cn } from '@/lib/utils';
 import { Money } from '@/components/fin/Money';
 import { BlocoDeRepeticao } from '@/components/financeiro/recorrencia/BlocoDeRepeticao';
 import { SecaoRateios } from '@/components/financeiro/SecaoRateios';
+import { LerBoletoOuNota } from '@/components/financeiro/LerBoletoOuNota';
+import { CampoLinhaDigitavel } from '@/components/financeiro/CampoLinhaDigitavel';
 
 import { CampoSelecao, CONTROLE, Interruptor, type OpcaoDeSelecao } from './campos';
 import type { ErrosDoFormulario, FormState } from './tipos';
+import { DetalhesDaLeitura } from './DetalhesDaLeitura';
+import { descartarLeitura, esquecerOrigem, trocarLeitura, usarDoBoleto } from './leitura';
 
 /** Sentinela de "nada escolhido". Nunca é gravada: vira '' ou null no estado. */
 const NENHUM = '__NENHUM__';
@@ -107,9 +111,14 @@ export function FormularioConta({
     })),
   ];
 
+  const origens = form.leitura?.origens ?? {};
+  const mostrarLinha = form.forma_pagamento === 'BOLETO' || form.linha_digitavel !== '';
+  const mostrarPix = form.forma_pagamento === 'PIX' || form.chave_pix !== '';
+
   const sujo =
     !editando &&
-    (form.fornecedor_nome.trim() !== '' ||
+    (form.leitura !== null ||
+      form.fornecedor_nome.trim() !== '' ||
       form.descricao.trim() !== '' ||
       form.valor_original > 0 ||
       form.data_vencimento !== '');
@@ -169,9 +178,26 @@ export function FormularioConta({
     >
       <div className="flex flex-col gap-4">
         {editando && faixaDaSerie ? faixaDaSerie : null}
+        {!editando ? (
+          <LerBoletoOuNota
+            resposta={form.leitura?.resposta ?? null}
+            desabilitado={salvando}
+            onLido={(r) => {
+              // Vazia, ou preenchida pela leitura anterior (que a troca limpa).
+              const categoriaVazia = !form.categoria_id || Boolean(form.leitura?.origens.categoria);
+              onForm((f) => trocarLeitura(f, r));
+              // Natureza e "custo comercial" vêm da categoria, como na escolha à mão.
+              const sugerida = r.sugestoes.categorias[0];
+              if (categoriaVazia && sugerida) onCategoriaChange(sugerida.id);
+            }}
+            onDescartar={() => onForm(descartarLeitura)}
+          >
+            <DetalhesDaLeitura form={form} onForm={onForm} onCategoriaChange={onCategoriaChange} />
+          </LerBoletoOuNota>
+        ) : null}
         <FormSection title="Essencial" description="O mínimo para a conta existir." alwaysOpen>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field rotulo="Fornecedor" obrigatorio erro={erros.fornecedor}>
+            <Field rotulo="Fornecedor" obrigatorio ajuda={origens.fornecedor} erro={erros.fornecedor}>
               {(a) => (
                 <Input
                   {...a}
@@ -179,13 +205,16 @@ export function FormularioConta({
                   value={form.fornecedor_nome}
                   placeholder="Quem recebe o pagamento"
                   autoComplete="off"
-                  onChange={(e) => onForm((f) => ({ ...f, fornecedor_nome: e.target.value }))}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    onForm((f) => ({ ...esquecerOrigem(f, 'fornecedor'), fornecedor_nome: v }));
+                  }}
                   className={cn(CONTROLE, erros.fornecedor && 'border-[var(--fin-negative)]')}
                 />
               )}
             </Field>
 
-            <Field rotulo="Descrição" obrigatorio erro={erros.descricao}>
+            <Field rotulo="Descrição" obrigatorio ajuda={origens.descricao} erro={erros.descricao}>
               {(a) => (
                 <Input
                   {...a}
@@ -193,7 +222,10 @@ export function FormularioConta({
                   value={form.descricao}
                   placeholder="O que está sendo pago"
                   autoComplete="off"
-                  onChange={(e) => onForm((f) => ({ ...f, descricao: e.target.value }))}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    onForm((f) => ({ ...esquecerOrigem(f, 'descricao'), descricao: v }));
+                  }}
                   className={cn(CONTROLE, erros.descricao && 'border-[var(--fin-negative)]')}
                 />
               )}
@@ -204,18 +236,22 @@ export function FormularioConta({
               obrigatorio
               moeda={form.moeda}
               valor={form.valor_original}
+              ajuda={origens.valor}
               erro={erros.valor}
-              onChange={(v) => onForm((f) => ({ ...f, valor_original: v }))}
+              onChange={(v) => onForm((f) => ({ ...esquecerOrigem(f, 'valor'), valor_original: v }))}
             />
 
-            <Field rotulo="Vencimento" obrigatorio erro={erros.vencimento}>
+            <Field rotulo="Vencimento" obrigatorio ajuda={origens.vencimento} erro={erros.vencimento}>
               {(a) => (
                 <Input
                   {...a}
                   aria-invalid={a['aria-invalid'] || undefined}
                   type="date"
                   value={form.data_vencimento}
-                  onChange={(e) => onForm((f) => ({ ...f, data_vencimento: e.target.value }))}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    onForm((f) => ({ ...esquecerOrigem(f, 'vencimento'), data_vencimento: v }));
+                  }}
                   className={cn(CONTROLE, 'tabular-nums', erros.vencimento && 'border-[var(--fin-negative)]')}
                 />
               )}
@@ -231,10 +267,13 @@ export function FormularioConta({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <CampoSelecao
               rotulo="Categoria"
-              ajuda="Preenche o tipo de despesa automaticamente."
+              ajuda={origens.categoria ?? 'Preenche o tipo de despesa automaticamente.'}
               valor={form.categoria_id || NENHUM}
               opcoes={opcoesCategoria}
-              onChange={(v) => onCategoriaChange(v === NENHUM ? '' : v)}
+              onChange={(v) => {
+                onCategoriaChange(v === NENHUM ? '' : v);
+                onForm((f) => esquecerOrigem(f, 'categoria'));
+              }}
             />
 
             <CampoSelecao
@@ -357,6 +396,75 @@ export function FormularioConta({
                   />
                 )}
               </Field>
+            ) : null}
+
+            <Field rotulo="Número do documento" ajuda="Da nota, da fatura ou do boleto.">
+              {(a) => (
+                <Input
+                  {...a}
+                  aria-invalid={a['aria-invalid'] || undefined}
+                  value={form.numero_documento}
+                  autoComplete="off"
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    onForm((f) => ({ ...f, numero_documento: v }));
+                  }}
+                  className={CONTROLE}
+                />
+              )}
+            </Field>
+
+            {mostrarLinha ? (
+              <CampoLinhaDigitavel
+                className="sm:col-span-2"
+                controle={CONTROLE}
+                valor={form.linha_digitavel}
+                onChange={(d) => onForm((f) => ({ ...f, linha_digitavel: d }))}
+                valorAtual={form.valor_original}
+                vencimentoAtual={form.data_vencimento}
+                onUsarDoBoleto={(dados) => onForm((f) => usarDoBoleto(f, dados))}
+              />
+            ) : null}
+
+            {mostrarPix ? (
+              <div className="sm:col-span-2">
+                <Field rotulo="Chave Pix" ajuda="A chave ou o código Pix copia e cola para pagar.">
+                  {(a) => (
+                    <Input
+                      {...a}
+                      aria-invalid={a['aria-invalid'] || undefined}
+                      value={form.chave_pix}
+                      autoComplete="off"
+                      spellCheck={false}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        onForm((f) => ({ ...f, chave_pix: v }));
+                      }}
+                      className={CONTROLE}
+                    />
+                  )}
+                </Field>
+              </div>
+            ) : null}
+
+            {editando && form.anexos.length > 0 ? (
+              <div className="flex flex-col gap-1 sm:col-span-2">
+                <span className="fin-t-body-strong text-[var(--fin-text)]">Anexos</span>
+                <ul className="flex flex-col gap-1">
+                  {form.anexos.map((anexo) => (
+                    <li key={anexo.url} className="fin-t-caption">
+                      <a
+                        href={anexo.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={cn('rounded-[var(--fin-r-sm)] text-[var(--fin-accent)] underline underline-offset-2 break-all', FOCO_LINK)}
+                      >
+                        {anexo.nome}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ) : null}
 
             <div className="sm:col-span-2">

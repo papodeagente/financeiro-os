@@ -529,6 +529,14 @@ export interface ContaPagar {
   tags?: string[];
   anexos: Array<{ nome: string; url: string }>;
   observacoes: string;
+  /** CPF/CNPJ de quem recebe, só dígitos (05/11/2026, "Ler boleto ou nota"). */
+  fornecedor_cnpj?: string;
+  /** Número da nota, da fatura ou do boleto. */
+  numero_documento?: string;
+  /** Linha digitável do boleto, só dígitos (44, 47 ou 48). */
+  linha_digitavel?: string;
+  /** Chave Pix ou código "Pix copia e cola" para pagar. */
+  chave_pix?: string;
   origem_venda_id?: string;
   origem_item_id?: string;
   auto_gerado?: boolean;
