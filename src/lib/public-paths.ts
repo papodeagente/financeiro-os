@@ -19,6 +19,8 @@ export const PUBLIC_PATHS = [
   '/api/planos',
   '/api/marketing/',
   '/api/convites/',
+  // Agendador: a rota confere o segredo AGENDADOR_SEGREDO.
+  '/api/agendador',
 ] as const;
 
 export const PUBLIC_EXACT_PATHS = new Set(['/']);

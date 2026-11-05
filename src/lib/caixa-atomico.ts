@@ -16,6 +16,10 @@
 import pool from './db';
 import { ensureCaixaGeral } from './caixa-helpers';
 import { num, round2 } from './money';
+import type { OrigemDoMovimento } from './razao';
+import { registrarMovimento } from './razao-servidor';
+
+export type { OrigemDoMovimento } from './razao';
 
 /** Pool ou client de transação — ambos expõem `query`. */
 export interface ExecutorSQL {
@@ -57,16 +61,26 @@ export async function emTransacao<T>(fn: (exec: ExecutorSQL) => Promise<T>): Pro
  * gravar, imune a corrida entre requisições). Delta positivo = entrada.
  * Conta vazia/nula cai na Caixa Geral, igual ao comportamento antigo.
  * Devolve true se alguma linha foi afetada.
+ *
+ * `origem` (05/11/2026) é obrigatória: todo movimento também vira um
+ * lançamento no razão financeiro, na mesma transação. O razão nunca derruba
+ * o movimento (erro dele vira registro em razao_falhas). Sem `exec`, o
+ * movimento e o lançamento rodam numa transação própria.
  */
 export async function aplicarMovimentoCaixaAtomico(
   tenantId: string,
   contaId: string | null | undefined,
   delta: number,
-  exec?: ExecutorSQL,
+  exec: ExecutorSQL | undefined,
+  origem: OrigemDoMovimento,
 ): Promise<boolean> {
-  const db = exec ?? (pool as ExecutorSQL | null);
   const valor = round2(num(delta));
-  if (!db || !tenantId || !valor) return false;
+  if (!tenantId || !valor) return false;
+  if (!exec) {
+    if (!pool) return false;
+    return emTransacao(tx => aplicarMovimentoCaixaAtomico(tenantId, contaId, delta, tx, origem));
+  }
+  const db = exec;
   // exec é repassado: dentro de uma transação, resolver a Caixa Geral pelo
   // pool pediria um segundo client e poderia esgotá-lo (deadlock).
   const id = contaId || (await ensureCaixaGeral(tenantId, exec));
@@ -88,7 +102,11 @@ export async function aplicarMovimentoCaixaAtomico(
       WHERE id = $1 AND tenant_id = $2`,
     [id, tenantId, valor],
   );
-  return (rowCount ?? 0) > 0;
+  const moveu = (rowCount ?? 0) > 0;
+  // Depois do UPDATE (que esperou a trava da conta): se a abertura do razão
+  // terminou enquanto este movimento esperava, ele já enxerga e entra.
+  if (moveu) await registrarMovimento(db, tenantId, id, valor, origem);
+  return moveu;
 }
 
 /**
@@ -110,10 +128,11 @@ export async function moverCaixaOuFalhar(
   tenantId: string,
   contaId: string | null | undefined,
   delta: number,
-  exec?: ExecutorSQL,
+  exec: ExecutorSQL | undefined,
+  origem: OrigemDoMovimento,
 ): Promise<void> {
   if (!round2(num(delta))) return;
-  const ok = await aplicarMovimentoCaixaAtomico(tenantId, contaId, delta, exec);
+  const ok = await aplicarMovimentoCaixaAtomico(tenantId, contaId, delta, exec, origem);
   if (!ok) throw new ErroMovimentoCaixa();
 }
 
@@ -205,8 +224,19 @@ export async function estornarBaixaDaConta(
   // (o saldo dele sumiu junto). Recusar aqui travaria a exclusão para
   // sempre; por isso só registra. Na edição (estorno pelo PUT) a regra é
   // estrita: moverCaixaOuFalhar.
-  const ok = await aplicarMovimentoCaixaAtomico(tenantId, conta, round2(valor * sinal), exec);
+  const ok = await aplicarMovimentoCaixaAtomico(tenantId, conta, round2(valor * sinal), exec, {
+    tipo: tabela === 'contas_receber' ? 'exclusao_receber' : 'exclusao_pagar',
+    tabela,
+    id: typeof data.id === 'string' ? data.id : undefined,
+    pessoaId: pessoaDaConta(tabela, data),
+  });
   if (!ok) console.warn(`[caixa] estorno sem conta bancária no tenant ${tenantId} (conta ${conta ?? 'Caixa Geral'})`);
+}
+
+/** Cliente (a receber) ou fornecedor (a pagar) da conta, para o razão. */
+export function pessoaDaConta(tabela: string, data: Record<string, unknown>): string | undefined {
+  const v = tabela === 'contas_pagar' ? data.fornecedor_id : data.cliente_id;
+  return typeof v === 'string' && v ? v : undefined;
 }
 
 export interface AtualizacaoGuardadaParams {

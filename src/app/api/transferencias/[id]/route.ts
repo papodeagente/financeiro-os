@@ -35,9 +35,15 @@ async function aplicarTransferencia(
   const origem = contaId(t, 'conta_origem_id');
   const destino = contaId(t, 'conta_destino_id');
 
-  const saiu = await aplicarMovimentoCaixaAtomico(tenantId, origem, -valor * sinal, exec);
+  const mov = {
+    tipo: 'transferencia' as const,
+    tabela: 'transferencias',
+    id: typeof t.id === 'string' ? t.id : undefined,
+    descricao: sinal === 1 ? 'Transferência entre contas' : 'Transferência entre contas (estorno)',
+  };
+  const saiu = await aplicarMovimentoCaixaAtomico(tenantId, origem, -valor * sinal, exec, mov);
   if (!saiu) throw new Error('Saldo da conta de origem não pôde ser movimentado.');
-  const entrou = await aplicarMovimentoCaixaAtomico(tenantId, destino, +valor * sinal, exec);
+  const entrou = await aplicarMovimentoCaixaAtomico(tenantId, destino, +valor * sinal, exec, mov);
   if (!entrou) throw new Error('Saldo da conta de destino não pôde ser movimentado.');
 }
 

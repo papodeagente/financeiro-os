@@ -17,6 +17,7 @@ import {
   calcularMovimentos,
   emTransacao,
   moverCaixaOuFalhar,
+  pessoaDaConta,
   atualizarContaComGuarda,
   statusMovimentaCaixa,
   type ExecutorSQL,
@@ -78,7 +79,13 @@ export async function editarContaNoExecutor(exec: ExecutorSQL, p: EdicaoDeConta)
   // Ordem fixa por conta: duas trocas de conta simultâneas travariam uma na
   // outra se cada transação bloqueasse as linhas em ordem diferente.
   movimentos.sort((a, b) => String(a.conta).localeCompare(String(b.conta)));
-  for (const mov of movimentos) await moverCaixaOuFalhar(p.tenantId, mov.conta, mov.delta, exec);
+  const origem = {
+    tipo: p.tabela === 'contas_receber' ? 'baixa_receber' as const : 'baixa_pagar' as const,
+    tabela: p.tabela,
+    id: p.id,
+    pessoaId: pessoaDaConta(p.tabela, { ...prev, ...item }),
+  };
+  for (const mov of movimentos) await moverCaixaOuFalhar(p.tenantId, mov.conta, mov.delta, exec, origem);
   return item;
 }
 

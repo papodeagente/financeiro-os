@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { RAZAO_LIMPEZA_DA_AGENCIA_SQL } from '@/lib/razao-schema';
 
 // ============================================================
 // Reset categorizado de dados do tenant
@@ -127,6 +128,14 @@ export async function POST(req: Request) {
           const n = res.rowCount || 0;
           summary[table] = (summary[table] || 0) + n;
           total += n;
+        }
+      }
+      // Sem contas bancárias, o razão da agência também começa do zero
+      // (05/11/2026). É o único caminho que apaga o razão; a abertura volta a
+      // rodar sozinha pelo agendador.
+      if ((validCats as string[]).includes('financeiro')) {
+        for (const sql of RAZAO_LIMPEZA_DA_AGENCIA_SQL) {
+          await client.query(sql, sql.includes('$1') ? [tenantId] : []);
         }
       }
       await client.query('COMMIT');

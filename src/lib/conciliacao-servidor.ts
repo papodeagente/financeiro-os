@@ -21,6 +21,7 @@ import {
   atualizarContaComGuarda,
   calcularMovimentos,
   estornarBaixaDaConta,
+  pessoaDaConta,
   type ExecutorSQL,
 } from './caixa-atomico';
 import { createContaPagar, createContaReceber } from './crm-types';
@@ -131,7 +132,12 @@ async function moverCaixa(exec: ExecutorSQL, tenantId: string, prev: Dados, novo
   // Caixa Geral impossível) desfaz a conciliação inteira: antes a linha
   // ficava CONCILIADA e a conta RECEBIDA sem o dinheiro no saldo (FIN2-02).
   for (const m of movimentos) {
-    const ok = await aplicarMovimentoCaixaAtomico(tenantId, m.conta, m.delta, exec);
+    const ok = await aplicarMovimentoCaixaAtomico(tenantId, m.conta, m.delta, exec, {
+      tipo: 'conciliacao',
+      tabela: t.tabela,
+      id: String(novo.id ?? prev.id ?? ''),
+      pessoaId: pessoaDaConta(t.tabela, { ...prev, ...novo }),
+    });
     if (!ok) throw new ErroConciliacao('A conta bancária deste extrato não existe nesta agência. Nada foi conciliado.', 409);
   }
 }

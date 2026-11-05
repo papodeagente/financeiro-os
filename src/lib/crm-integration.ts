@@ -25,6 +25,7 @@ import { criarNotificacao } from './notificacoes';
 // PUT das rotas de conta. O helper antigo lia, somava e regravava fora de
 // transação, com o erro engolido: duas confirmações simultâneas na mesma
 // conta bancária perdiam uma das entradas.
+import { nadaSai } from './nada-sai';
 import { aplicarMovimentoCaixaAtomico, emTransacao, STATUS_BAIXADOS, type ExecutorSQL } from './caixa-atomico';
 import { valorMovimentado } from './saldo-bancario';
 import {
@@ -999,6 +1000,8 @@ export async function emitirEventoCRM(
   try {
     if (!pool) return;
     if (!opcoes?.tenantId) return; // tenant context required
+    // Importação/ensaio em andamento: nada é avisado ao CRM (05/11/2026).
+    if (nadaSai()) return;
     await initDB();
 
     const tenantId = opcoes.tenantId;
@@ -1799,24 +1802,35 @@ export async function processarEventoCRM(
           d.status = statusAlvo;
           d.data_recebimento = data_pagamento || hojeISO();
           d.valor_recebido = acumulado;
-          const upd = await pool.query(
-            `UPDATE contas_receber SET status = $4, data = $2, updated_at = NOW()
-              WHERE id = $1 AND tenant_id = $3
-                AND COALESCE(data->>'valor_recebido', '0')::numeric = $5::numeric
-                AND COALESCE(data->>'status', '') IS DISTINCT FROM 'RECEBIDO'`,
-            [row.id, JSON.stringify(d), tenantId, statusAlvo, jaRecebido]
-          );
-          if ((upd.rowCount ?? 0) > 0) {
-            baixadas++;
-            // Movimento ATÔMICO e só do que entrou agora. A versão antiga
-            // usava o helper de ler-modificar-gravar, que perde escritas
-            // concorrentes e engole o erro em silêncio.
+          // Baixa da conta e movimento de caixa na MESMA transação
+          // (05/11/2026): antes eram dois passos soltos, e uma falha entre
+          // eles deixava a conta RECEBIDA sem o dinheiro no saldo.
+          const baixou = await emTransacao(async exec => {
+            const upd = await exec.query(
+              `UPDATE contas_receber SET status = $4, data = $2, updated_at = NOW()
+                WHERE id = $1 AND tenant_id = $3
+                  AND COALESCE(data->>'valor_recebido', '0')::numeric = $5::numeric
+                  AND COALESCE(data->>'status', '') IS DISTINCT FROM 'RECEBIDO'`,
+              [row.id, JSON.stringify(d), tenantId, statusAlvo, jaRecebido]
+            );
+            if ((upd.rowCount ?? 0) === 0) return false;
+            // Movimento ATÔMICO e só do que entrou agora.
             await aplicarMovimentoCaixaAtomico(
               tenantId,
               (d.conta_bancaria_id as string) || null,
               +delta,
+              exec,
+              {
+                tipo: 'crm_pagamento',
+                tabela: 'contas_receber',
+                id: String(row.id),
+                pessoaId: typeof d.cliente_id === 'string' && d.cliente_id ? d.cliente_id : undefined,
+                descricao: `Pagamento confirmado pelo CRM (parcela ${parcelaAlvo})`,
+              },
             );
-          }
+            return true;
+          });
+          if (baixou) baixadas++;
         }
         acao = baixadas > 0
           ? `pagamento confirmado parcela ${parcelaAlvo} (${baixadas} conta(s) baixada(s))`
