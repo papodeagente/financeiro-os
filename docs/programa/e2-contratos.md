@@ -15,7 +15,7 @@ Análise de referência (só leitura): `~/Documents/EnturOS Financeiro - analise
 8. **Tarefas agendadas**: exportar uma `DefinicaoTarefa` (ver `src/lib/agendador/nucleo.ts`); quem integra registra em `src/lib/agendador/tarefas.ts`.
 9. **Não editar** `package.json` (script de teste), `src/components/PillarSidebar.tsx` nem `src/lib/agendador/tarefas.ts`: informe no relatório final os testes a encadear, os itens de menu e as tarefas a registrar.
 10. **Testes**: lógica pura com `scripts/run-tests.mjs`; SQL real com PGlite + `db-de-teste-hook.mjs` (molde: `scripts/test-sql-razao.mjs`). `npx tsc --noEmit` (com `NODE_OPTIONS=--max-old-space-size=10240`) limpo.
-11. **Permissões**: até a parte de permissões entrar, use as guardas atuais (`recusaFinanceira`, `recusaExclusao`, `recusaAdmin` em `src/lib/guarda-rota.ts`).
+11. **Permissões** (já no ramo): ação do catálogo `src/lib/acoes-financeiras.ts` com `recusaAcao(acao, { contaBancariaId })` (`src/lib/guarda-rota.ts`) ou `pode(sessao, acao)` / `contasPermitidas(sessao)` (`src/lib/permissoes-servidor.ts`). Listas filtram pelas contas liberadas (`filtroDeConta` no CRUD). Baixa sempre por `POST /api/baixas` (o porteiro `src/lib/baixas-porteiro.ts` confere direito, conta, alçada e limites; fora dos limites responde 409 com `pedir_aprovacao` e a tela oferece "Pedir aprovação").
 
 ## Contrato da liquidação (parte "baixas", feita pela coordenação)
 - `POST /api/baixas` corpo `{ modo: 'previa' | 'gravar', itens: ItemBaixa[], assinatura?: string }`, cabeçalho `Idempotency-Key` ao gravar.
