@@ -131,7 +131,11 @@ export async function apagarCategorias(
   // Sem contas bancárias, o razão da agência também começa do zero
   // (05/11/2026). É o único caminho que apaga o razão; a abertura volta a
   // rodar sozinha pelo agendador.
-  if (categorias.some(c => (CATEGORIES[c] as readonly string[]).includes('contas_bancarias'))) {
+  const apagaContas = categorias.some(c => (CATEGORIES[c] as readonly string[]).includes('contas_bancarias'));
+  const { rows: temRazao } = apagaContas
+    ? await exec.query(`SELECT to_regclass('public.razao_estado') IS NOT NULL AS ok`)
+    : { rows: [] as Array<Record<string, unknown>> };
+  if (apagaContas && temRazao[0]?.ok) {
     for (const sql of RAZAO_LIMPEZA_DA_AGENCIA_SQL) {
       await exec.query(sql, sql.includes('$1') ? [tenantId] : []);
     }
