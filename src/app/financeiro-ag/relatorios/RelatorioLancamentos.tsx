@@ -14,7 +14,7 @@ import { ChevronLeft, ChevronRight, Download, type LucideIcon } from 'lucide-rea
 import type { CentroCusto, PlanoContas } from '@/lib/crm-types';
 import type { RespostaLancamentos } from '@/lib/lancamentos-por-dimensao-servidor';
 import {
-  ROTULO_AGRUPAR, ROTULO_DATA_DE, ROTULO_EM, ROTULO_SITUACAO,
+  ROTULO_AGRUPAR, ROTULO_DATA_DE, ROTULO_EM, ROTULO_SITUACAO, rotuloDaSituacaoNaLinha,
   type Agrupar, type CampoPesquisa, type DataDe, type LinhaLancamento, type Situacao, type TipoFiltro, type Visao,
 } from '@/lib/lancamentos-por-dimensao';
 import { ordenarEmArvore } from '@/lib/dimensoes';
@@ -111,8 +111,8 @@ function parametros(visao: Visao, f: Filtros): URLSearchParams {
   return p;
 }
 
-function Situacao({ s }: { s: Exclude<Situacao, 'TODAS'> }) {
-  return <span className={statusChipVariants({ tone: TOM_SITUACAO[s] })}>{ROTULO_SITUACAO[s]}</span>;
+function Situacao({ s, lado }: { s: Exclude<Situacao, 'TODAS'>; lado: 'pagar' | 'receber' }) {
+  return <span className={statusChipVariants({ tone: TOM_SITUACAO[s] })}>{rotuloDaSituacaoNaLinha(s, lado)}</span>;
 }
 
 const texto = (v: string, classe = 'fin-t-body text-[var(--fin-text-2)]') => <span className={classe}>{v || '—'}</span>;
@@ -129,7 +129,7 @@ function colunasDa(visao: Visao, regime: 'caixa' | 'competencia'): FinColuna<Lin
     render: l => (
       <span className="flex flex-col">
         <span className="fin-t-body-strong text-[var(--fin-text)]">{l.pessoa || '—'}</span>
-        <span className="fin-t-caption text-[var(--fin-text-3)]"><Situacao s={l.situacao} /></span>
+        <span className="fin-t-caption text-[var(--fin-text-3)]"><Situacao s={l.situacao} lado={l.lado} /></span>
       </span>
     ),
   };

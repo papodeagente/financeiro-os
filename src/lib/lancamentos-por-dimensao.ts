@@ -55,9 +55,15 @@ export const ROTULO_SITUACAO: Record<Situacao, string> = {
   TODAS: 'Todas',
   EM_ABERTO: 'Em aberto',
   EM_ATRASO: 'Em atraso',
-  LIQUIDADO: 'Liquidado',
-  EXCLUIDO: 'Excluído',
+  LIQUIDADO: 'Pago/Recebido',
+  EXCLUIDO: 'Cancelado',
 };
+
+/** Na linha, a palavra de cada lado: Pago (a pagar) ou Recebido (a receber). */
+export function rotuloDaSituacaoNaLinha(s: Situacao, lado: 'pagar' | 'receber'): string {
+  if (s === 'LIQUIDADO') return lado === 'pagar' ? 'Pago' : 'Recebido';
+  return ROTULO_SITUACAO[s];
+}
 
 export const ROTULO_EM: Record<CampoPesquisa, string> = {
   TUDO: 'Todos os campos',
@@ -470,7 +476,7 @@ const COLUNAS_CSV: Record<Visao, ColunaCsv[]> = {
     ['Descrição', l => l.descricao],
     ['Documento', l => l.documento],
     ['Conta', l => l.conta_bancaria],
-    ['Situação', l => ROTULO_SITUACAO[l.situacao]],
+    ['Situação', l => rotuloDaSituacaoNaLinha(l.situacao, l.lado)],
     ['Tags', l => l.tags.join(', ')],
   ],
   centro: [
@@ -483,7 +489,7 @@ const COLUNAS_CSV: Record<Visao, ColunaCsv[]> = {
     ['Valor no centro', l => numeroBR(l.valor)],
     ['Tipo', l => l.tipo],
     ['Conta', l => l.conta_bancaria],
-    ['Situação', l => ROTULO_SITUACAO[l.situacao]],
+    ['Situação', l => rotuloDaSituacaoNaLinha(l.situacao, l.lado)],
   ],
   rateio: [
     ['Tipo', l => l.tipo],

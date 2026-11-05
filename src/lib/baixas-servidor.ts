@@ -296,6 +296,10 @@ export async function registrarBaixas(
     await garantirLinhaAnterior(exec, ctx.tenantId, it.titulo_tabela, it.titulo_id, d);
 
     const novo = tituloDepoisDaBaixa(d, t, plano, { data, conta_bancaria_id: conta });
+    // A forma escolhida na liquidação fica na conta quando ela não tinha
+    // nenhuma (o extrato e as movimentações leem a forma da conta).
+    const campoForma = it.titulo_tabela === 'contas_receber' ? 'forma_recebimento' : 'forma_pagamento';
+    if (it.forma && !String(d[campoForma] ?? '').trim()) novo[campoForma] = String(it.forma).slice(0, 60);
     if (it.anexos && it.anexos.length) {
       novo.anexos = [...((d.anexos as unknown[]) ?? []), ...it.anexos];
       // `comprovante` guarda o mais recente, para quem lê um campo só.
