@@ -7,6 +7,7 @@
  */
 
 import pool from './db';
+import { cifrar, decifrar, cofreDisponivel } from './cofre';
 import { generateId } from './utils';
 import { hojeISO, num, percentual, round2 } from './money';
 import { opcoesTransmissiveis } from './nfse-formulario';
@@ -98,7 +99,8 @@ export function mascararToken(token: string): string {
 
 /** Config sem o token, pronta para ir ao navegador. */
 export function configParaCliente(config: ConfigFiscal): ConfigFiscal {
-  const { token, ...resto } = config;
+  const { token, ...resto } = config as ConfigFiscal & { token_cofre?: unknown };
+  delete (resto as { token_cofre?: unknown }).token_cofre;
   return { ...resto, token: '', token_mascarado: mascararToken(token ?? '') };
 }
 
@@ -108,8 +110,24 @@ export async function carregarConfigFiscal(tenantId: string): Promise<ConfigFisc
     `SELECT data FROM config_fiscal WHERE id = $1 AND tenant_id = $2`,
     [CONFIG_FISCAL_ID, tenantId],
   );
-  const gravado = (rows[0]?.data ?? {}) as Partial<ConfigFiscal>;
-  return { ...configFiscalPadrao(), ...gravado, id: CONFIG_FISCAL_ID };
+  const gravado = { ...((rows[0]?.data ?? {}) as Partial<ConfigFiscal> & { token_cofre?: unknown }) };
+  // O token do emissor fica cifrado no cofre (FIN-11). Registro antigo, em
+  // texto, é regravado cifrado aqui mesmo.
+  if (gravado.token_cofre) {
+    try {
+      gravado.token = decifrar(gravado.token_cofre);
+      delete gravado.token_cofre;
+    } catch (e) {
+      // Fica com o envelope: a próxima gravação o preserva em vez de apagar.
+      console.error('[nfse] token do emissor não decifrou:', e instanceof Error ? e.message : e);
+      gravado.token = '';
+    }
+  }
+  const config = { ...configFiscalPadrao(), ...gravado, id: CONFIG_FISCAL_ID } as ConfigFiscal;
+  if (rows.length > 0 && !(rows[0].data as Record<string, unknown>)?.token_cofre && config.token && cofreDisponivel()) {
+    try { await salvarConfigFiscal(tenantId, config); } catch { /* fica para o próximo salvar */ }
+  }
+  return config;
 }
 
 export async function salvarConfigFiscal(
@@ -117,17 +135,25 @@ export async function salvarConfigFiscal(
   config: ConfigFiscal,
 ): Promise<void> {
   if (!pool) return;
+  // Token do emissor vai cifrado. Sem a chave mestra, grava como antes.
+  const gravar: Record<string, unknown> = { ...config };
+  if (config.token && cofreDisponivel()) {
+    gravar.token_cofre = cifrar(config.token);
+    gravar.token = '';
+  } else if (config.token) {
+    delete gravar.token_cofre;
+  }
   // UPDATE e, se não existir, INSERT — mesmo caminho de config_apis, que não
   // depende de qual chave única a tabela tem no momento.
   const atualizado = await pool.query(
     `UPDATE config_fiscal SET data = $3, updated_at = NOW()
       WHERE id = $1 AND tenant_id = $2`,
-    [CONFIG_FISCAL_ID, tenantId, JSON.stringify(config)],
+    [CONFIG_FISCAL_ID, tenantId, JSON.stringify(gravar)],
   );
   if ((atualizado.rowCount ?? 0) === 0) {
     await pool.query(
       `INSERT INTO config_fiscal (id, tenant_id, data) VALUES ($1, $2, $3)`,
-      [CONFIG_FISCAL_ID, tenantId, JSON.stringify(config)],
+      [CONFIG_FISCAL_ID, tenantId, JSON.stringify(gravar)],
     );
   }
 }

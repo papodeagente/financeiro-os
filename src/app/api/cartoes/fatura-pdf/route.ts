@@ -1,3 +1,4 @@
+import { lerConfigApis, type Consulta } from '@/lib/config-apis';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
@@ -69,11 +70,8 @@ export async function POST(req: Request) {
     }
 
     // A chave da IA é a mesma configurada em Configurações, Integração com IA.
-    const { rows } = await pool.query(
-      `SELECT data FROM config_apis WHERE tenant_id = $1 LIMIT 1`, [tenantId],
-    );
-    const cfg = (rows[0]?.data ?? {}) as Record<string, { api_key?: string; modelo?: string; ativo?: boolean }>;
-    const ia = cfg.anthropic;
+    const cfg = await lerConfigApis(pool as unknown as Consulta, tenantId);
+    const ia = cfg.anthropic as { api_key?: string; modelo?: string; ativo?: boolean } | undefined;
     if (!ia?.ativo || !ia?.api_key) {
       return NextResponse.json(
         { error: 'A leitura por IA precisa da chave da Anthropic, em Configurações, Integração com IA.' },

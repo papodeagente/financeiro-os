@@ -1,3 +1,4 @@
+import { recusaAdmin } from '@/lib/guarda-rota';
 import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
@@ -56,6 +57,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const recusa = await recusaAdmin();
+    if (recusa) return recusa;
     if (!pool) return NextResponse.json({ error: 'no db' }, { status: 503 });
     await initDB();
     const tenantId = await getTenantId();

@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { hashPassword } from '@/lib/auth';
+import { seedAutorizado } from '@/lib/seed-token';
 
-export async function POST() {
+export async function POST(req: Request) {
   try {
+    // Só com o token de instalação (src/lib/seed-token.ts). Sem ele, a rota
+    // não existe.
+    if (!seedAutorizado(req)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     await initDB();
     if (!pool) {
       return NextResponse.json({ error: 'Banco de dados indisponivel' }, { status: 503 });

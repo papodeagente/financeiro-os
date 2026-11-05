@@ -1,3 +1,4 @@
+import { recusaFinanceira, recusaExclusao } from '@/lib/guarda-rota';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
@@ -70,6 +71,8 @@ function mesmoMovimento(a: Registro, b: Registro): boolean {
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const recusa = await recusaFinanceira('ler');
+    if (recusa) return recusa;
     await initDB();
     const { id } = await params;
     if (!pool) return NextResponse.json(null);
@@ -91,6 +94,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 //                        aplica o novo
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const recusa = await recusaFinanceira('escrever');
+    if (recusa) return recusa;
     await initDB();
     const { id } = await params;
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
@@ -184,6 +189,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 // sem reverter deixaria o saldo das contas errado para sempre.
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const recusa = (await recusaExclusao()) ?? (await recusaFinanceira('escrever'));
+    if (recusa) return recusa;
     await initDB();
     const { id } = await params;
     if (!pool) return NextResponse.json({ ok: true });

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from './db';
 import { getTenantId } from './tenant';
 import { getSession } from './auth';
-import { bloqueioFinanceiro } from './permissoes';
+import { bloqueioFinanceiro, podeExcluir, podeVerTodasVendas } from './permissoes';
 import { recusaDoPost, preservarCamposDerivados, CAMPOS_DERIVADOS } from './guarda-baixa';
 
 export interface CrudOpcoes {
@@ -14,6 +14,18 @@ export interface CrudOpcoes {
    * a restrição existia só na interface.
    */
   somenteFinanceiro?: boolean;
+  /**
+   * Leitura aberta a quem está logado, mas gravar exige editar o financeiro.
+   * Para tabelas que o vendedor precisa ver (planos, metas) e nunca alterar:
+   * um vendedor que grava o próprio plano de comissão está fixando quanto
+   * vai receber.
+   */
+  escritaFinanceira?: boolean;
+  /**
+   * Coluna com o id do vendedor. Quem só vê as próprias vendas (VENDEDOR)
+   * só lê as linhas em que ela é o próprio usuário.
+   */
+  colunaDoVendedor?: string;
   /**
    * Efeito colateral depois de gravar (POST ou PUT), com o item já salvo.
    *
@@ -46,10 +58,28 @@ export interface CrudOpcoes {
 
 /** Devolve a resposta de recusa, ou null quando a requisição pode seguir. */
 async function guardaFinanceira(opcoes: CrudOpcoes, modo: 'ler' | 'escrever') {
-  if (!opcoes.somenteFinanceiro) return null;
+  const exige = opcoes.somenteFinanceiro || (modo === 'escrever' && opcoes.escritaFinanceira);
+  if (!exige) return null;
   const bloqueio = bloqueioFinanceiro(await getSession(), modo);
   if (!bloqueio) return null;
   return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
+}
+
+/** Excluir exige o perfil que exclui, em qualquer tabela (FIN-03). */
+async function guardaExclusao() {
+  const sessao = await getSession();
+  if (!sessao) return NextResponse.json({ error: 'Sessao necessaria' }, { status: 401 });
+  if (podeExcluir(sessao)) return null;
+  return NextResponse.json({ error: 'Seu perfil nao pode excluir registros.' }, { status: 403 });
+}
+
+/** Id do vendedor que a leitura deve filtrar, ou null quando vê tudo. */
+async function vendedorDaLeitura(opcoes: CrudOpcoes): Promise<string | null> {
+  if (!opcoes.colunaDoVendedor) return null;
+  const sessao = await getSession();
+  if (podeVerTodasVendas(sessao)) return null;
+  // Sem sessão ou sem id: filtra por um valor que não casa com nada.
+  return sessao?.userId || '__sem_usuario__';
 }
 
 /** Roda o efeito colateral da tabela. Erro vira aviso, nunca desfaz a gravação. */
@@ -73,10 +103,14 @@ export function createCrudHandlers(tableName: string, indexColumns: string[] = [
       const recusa = await guardaFinanceira(opcoes, 'ler');
       if (recusa) return recusa;
       const tenantId = await getTenantId();
-      const { rows } = await pool.query(
-        `SELECT data FROM ${tableName} WHERE tenant_id = $1 ORDER BY created_at DESC`,
-        [tenantId]
-      );
+      const vendedor = await vendedorDaLeitura(opcoes);
+      const { rows } = vendedor === null
+        ? await pool.query(
+          `SELECT data FROM ${tableName} WHERE tenant_id = $1 ORDER BY created_at DESC`,
+          [tenantId])
+        : await pool.query(
+          `SELECT data FROM ${tableName} WHERE tenant_id = $1 AND ${opcoes.colunaDoVendedor} = $2 ORDER BY created_at DESC`,
+          [tenantId, vendedor]);
       return NextResponse.json(rows.map(r => r.data));
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
@@ -154,10 +188,14 @@ export function createCrudItemHandlers(tableName: string, indexColumns: string[]
       const recusa = await guardaFinanceira(opcoes, 'ler');
       if (recusa) return recusa;
       const tenantId = await getTenantId();
-      const { rows } = await pool.query(
-        `SELECT data FROM ${tableName} WHERE id = $1 AND tenant_id = $2`,
-        [id, tenantId]
-      );
+      const vendedor = await vendedorDaLeitura(opcoes);
+      const { rows } = vendedor === null
+        ? await pool.query(
+          `SELECT data FROM ${tableName} WHERE id = $1 AND tenant_id = $2`,
+          [id, tenantId])
+        : await pool.query(
+          `SELECT data FROM ${tableName} WHERE id = $1 AND tenant_id = $2 AND ${opcoes.colunaDoVendedor} = $3`,
+          [id, tenantId, vendedor]);
       if (rows.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
       return NextResponse.json(rows[0].data);
     } catch (e: unknown) {
@@ -226,7 +264,7 @@ export function createCrudItemHandlers(tableName: string, indexColumns: string[]
       await initDB();
       const { id } = await params;
       if (pool) {
-        const recusa = await guardaFinanceira(opcoes, 'escrever');
+        const recusa = (await guardaExclusao()) ?? (await guardaFinanceira(opcoes, 'escrever'));
         if (recusa) return recusa;
         const tenantId = await getTenantId();
         await pool.query(

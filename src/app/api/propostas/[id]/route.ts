@@ -1,3 +1,4 @@
+import { recusaExclusao } from '@/lib/guarda-rota';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { buildPropostaLink } from '@/lib/proposta-link';
@@ -92,6 +93,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const recusa = await recusaExclusao();
+    if (recusa) return recusa;
     await initDB();
     const { id } = await params;
     if (pool) {

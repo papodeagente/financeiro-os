@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Shield, Loader2 } from 'lucide-react'
+import { SegundoFatorCampos, type EstadoSegundoFator } from '@/components/auth/SegundoFatorCampos'
 
 export default function AdminLoginPage() {
   const router = useRouter()
@@ -10,6 +11,8 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [segundoFator, setSegundoFator] = useState<EstadoSegundoFator | null>(null)
+  const [codigo, setCodigo] = useState('')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -20,11 +23,21 @@ export default function AdminLoginPage() {
       const res = await fetch('/api/admin/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, senha: password }),
+        body: JSON.stringify({
+          email,
+          senha: password,
+          ...(segundoFator ? { codigo, segredo_novo: segundoFator.segredo } : {}),
+        }),
       })
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
+        if (data.precisa_cadastrar || data.precisa_codigo) {
+          if (segundoFator) setError(data.error || 'Codigo invalido')
+          setSegundoFator(data.precisa_cadastrar ? { segredo: data.segredo, uri: data.uri } : {})
+          setCodigo('')
+          return
+        }
         setError(data.error || 'Credenciais invalidas')
         return
       }
@@ -78,6 +91,10 @@ export default function AdminLoginPage() {
               placeholder="••••••••"
             />
           </div>
+
+          {segundoFator && (
+            <SegundoFatorCampos estado={segundoFator} codigo={codigo} onCodigo={setCodigo} />
+          )}
 
           <button
             type="submit"

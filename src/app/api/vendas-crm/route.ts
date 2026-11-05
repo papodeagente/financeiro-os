@@ -3,7 +3,7 @@ import pool, { initDB } from '@/lib/db';
 import { emitirEventoCRM } from '@/lib/crm-integration';
 import { getTenantId } from '@/lib/tenant';
 import { getSession } from '@/lib/auth';
-import { podeVerTodasVendas } from '@/lib/permissoes';
+import { podeVerTodasVendas, podeVerVenda } from '@/lib/permissoes';
 import { gerarContasVenda, receberPorFornecedorDe, type ItemVendaInput, type FornecedorInfo } from '@/lib/venda-financeiro';
 import { STATUS_BAIXADOS } from '@/lib/caixa-atomico';
 import { hojeISO } from '@/lib/money';
@@ -67,6 +67,25 @@ export async function POST(req: Request) {
 
     // Detecta fluxo: se body.itens existe → novo fluxo transacional
     const hasItens = Array.isArray(body.itens) && body.itens.length > 0;
+
+    // O POST é upsert pelo id do corpo. Quem só vê as próprias vendas não
+    // sobrescreve a venda de um colega nem lança venda no nome de outro
+    // (auditoria 04/11/2026, FIN2-04).
+    const sessao = await getSession();
+    if (!sessao) return NextResponse.json({ error: 'Sessao necessaria' }, { status: 401 });
+    const venda = (hasItens ? body.venda : body) as Record<string, unknown> | undefined;
+    if (!venda || typeof venda !== 'object' || typeof venda.id !== 'string' || !venda.id) {
+      return NextResponse.json({ error: 'Invalid payload: id is required' }, { status: 400 });
+    }
+    const { rows: existente } = await pool.query(
+      `SELECT vendedor_id FROM ${TABLE} WHERE id = $1 AND tenant_id = $2`, [venda.id, tenantId],
+    );
+    if (existente.length > 0 && !podeVerVenda(sessao, String(existente[0].vendedor_id ?? ''))) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+    if (!podeVerTodasVendas(sessao)) {
+      venda.vendedor_id = existente.length > 0 ? String(existente[0].vendedor_id ?? '') : sessao.userId;
+    }
 
     if (hasItens) {
       return await postComItens(body, tenantId);
