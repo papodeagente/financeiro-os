@@ -15,6 +15,7 @@
  * fiscais, assinatura e auditoria ficam.
  */
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
+import { RAZAO_LIMPEZA_DA_AGENCIA_SQL } from './razao-schema';
 import type { PerfilDaConta } from '@/lib/perfil-da-conta';
 
 export const CATEGORIES = {
@@ -125,6 +126,18 @@ export async function apagarCategorias(
       const n = res.rowCount || 0;
       summary[table] = (summary[table] || 0) + n;
       total += n;
+    }
+  }
+  // Sem contas bancárias, o razão da agência também começa do zero
+  // (05/11/2026). É o único caminho que apaga o razão; a abertura volta a
+  // rodar sozinha pelo agendador.
+  const apagaContas = categorias.some(c => (CATEGORIES[c] as readonly string[]).includes('contas_bancarias'));
+  const { rows: temRazao } = apagaContas
+    ? await exec.query(`SELECT to_regclass('public.razao_estado') IS NOT NULL AS ok`)
+    : { rows: [] as Array<Record<string, unknown>> };
+  if (apagaContas && temRazao[0]?.ok) {
+    for (const sql of RAZAO_LIMPEZA_DA_AGENCIA_SQL) {
+      await exec.query(sql, sql.includes('$1') ? [tenantId] : []);
     }
   }
   return { total, summary };

@@ -814,7 +814,13 @@ async function sincronizarContas(
     const jaCreditado = round2(num(creditado[chave]));
     const delta = round2(alvo - jaCreditado);
     if (delta !== 0) {
-      await aplicarMovimentoCaixaAtomico(tenantId, ctx.contaBancariaId, delta, exec);
+      await aplicarMovimentoCaixaAtomico(tenantId, ctx.contaBancariaId, delta, exec, {
+        tipo: 'plataforma',
+        tabela: 'contas_receber',
+        id: contaId,
+        pessoaId: ctx.clienteId || undefined,
+        descricao: `${plataforma}: parcela ${chave} da transação ${transacao.id_transacao}`,
+      });
       creditado[chave] = alvo;
       movido = round2(movido + delta);
     }
@@ -1209,7 +1215,12 @@ export async function absorverDuplicata(
   let movido = 0;
   if (creditado !== 0) {
     const banco = contas.find(c => c.conta_bancaria_id)?.conta_bancaria_id || contaBancariaPadrao;
-    await aplicarMovimentoCaixaAtomico(tenantId, banco, -creditado, exec);
+    await aplicarMovimentoCaixaAtomico(tenantId, banco, -creditado, exec, {
+      tipo: 'plataforma',
+      tabela: 'plataformas_transacoes',
+      id: secundaria,
+      descricao: `${plataforma}: transação duplicada absorvida (estorno do crédito)`,
+    });
     movido = -creditado;
   }
 

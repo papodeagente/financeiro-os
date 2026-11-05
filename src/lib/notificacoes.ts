@@ -1,4 +1,5 @@
 import type { PoolClient } from 'pg';
+import { nadaSai } from './nada-sai';
 import pool from './db';
 import { generateId } from './utils';
 import { podeVerTodasVendas } from './permissoes';
@@ -32,6 +33,8 @@ const safeLocalLink = (link?: string) => {
 
 export async function criarNotificacao(input: CriarNotificacaoInput): Promise<void> {
   if (!pool || !input.tenantId || !TIPOS_NOTIFICACAO.some(item => item.tipo === input.tipo)) return;
+  // Importação/ensaio em andamento: nenhuma notificação (05/11/2026).
+  if (nadaSai()) return;
   try {
     const key = input.chaveDeduplicacao?.trim().slice(0, 500) || null;
     await pool.query(

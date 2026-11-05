@@ -4,6 +4,7 @@ import { ARQUIVOS_PRIVADOS_SCHEMA_SQL } from './arquivos';
 import { EXTRATO_FITID_UNICO_SQL } from './extrato-importacao';
 import { AuditPool } from './audit-pool';
 import { getAuditContext, runWithAuditContext, SYSTEM_AUDIT_CONTEXT } from './audit-context';
+import { RAZAO_SCHEMA_SQL } from './razao-schema';
 import { AUDIT_SCHEMA_SQL } from './audit-schema';
 import { NOTIFICACOES_SCHEMA_SQL } from './notificacoes-schema';
 import { MAPAS_MENTAIS_COMPARTILHAMENTO_SCHEMA_SQL } from './mapas-mentais-compartilhamento';
@@ -1510,6 +1511,9 @@ async function executarInitDB() {
   await pool.query(PROPOSTA_LINK_SCHEMA_SQL);
   await pool.query(ARQUIVOS_PRIVADOS_SCHEMA_SQL);
   await pool.query(EXTRATO_FITID_UNICO_SQL);
+  // Razão financeiro, agendador e fila de tarefas (05/11/2026). Antes da
+  // auditoria: são tabelas imutáveis ou de controle e ficam fora do gatilho.
+  await pool.query(RAZAO_SCHEMA_SQL);
   // Instala a captura somente depois das migrações/seed, sem fabricar histórico.
   await pool.query(AUDIT_SCHEMA_SQL);
   initialized = true;
