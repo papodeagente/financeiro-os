@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { CalendarClock, CheckCheck, ChevronLeft, ChevronRight, Copy, Tags, Trash2, X } from 'lucide-react';
+import { BookCopy, CalendarClock, CheckCheck, ChevronLeft, ChevronRight, Copy, ReceiptText, Tags, Trash2, X } from 'lucide-react';
 
 import type { LinhaDeConta, TotaisDaLista } from '@/lib/contas-pagar-receber';
 import { round2 } from '@/lib/money';
@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 const contas = (n: number) => (n === 1 ? '1 conta' : `${n.toLocaleString('pt-BR')} contas`);
 const BOTAO = 'h-11 gap-[var(--fin-s-2)] lg:h-9';
 
-export type AcaoDaBarra = 'liquidar' | 'reagendar' | 'recategorizar' | 'copiar' | 'excluir' | 'desmarcar' | 'marcar_todas';
+export type AcaoDaBarra = 'liquidar' | 'reagendar' | 'recategorizar' | 'copiar' | 'excluir' | 'desmarcar' | 'marcar_todas' | 'boletos' | 'carne';
 
 /**
  * Aparece quando há conta marcada e acompanha a rolagem. Mostra quantas e
@@ -27,7 +27,12 @@ export function BarraDoLote({
   /** A página inteira está marcada e o filtro tem mais contas. */
   oferecerTodas: boolean;
   marcandoTodas: boolean;
-  pode: { liquidar: boolean; editar: boolean; excluir: boolean };
+  /**
+   * Cobrança (E3): `boletos` mostra "Gerar boletos"; `carne` só existe quando
+   * o provedor da agência faz carnê (null esconde o botão) e traz o motivo
+   * quando as marcadas não servem para um carnê.
+   */
+  pode: { liquidar: boolean; editar: boolean; excluir: boolean; boletos?: boolean; carne?: { motivo: string | null } | null };
   onAcao: (acao: AcaoDaBarra) => void;
 }) {
   const soma = (tipo: 'pagar' | 'receber') => round2(marcadas.filter(l => l.tipo === tipo).reduce((s, l) => s + l.saldo, 0));
@@ -73,6 +78,19 @@ export function BarraDoLote({
               <Tags aria-hidden="true" className="size-4" /> Categoria e centro
             </Button>
           </>
+        ) : null}
+        {pode.boletos && receber > 0 ? (
+          <Button type="button" variant="outline" size="sm" onClick={() => onAcao('boletos')} className={BOTAO}>
+            <ReceiptText aria-hidden="true" className="size-4" /> Gerar boletos
+          </Button>
+        ) : null}
+        {pode.boletos && pode.carne && receber > 0 ? (
+          <Button
+            type="button" variant="outline" size="sm" onClick={() => onAcao('carne')} className={BOTAO}
+            disabled={pode.carne.motivo !== null} title={pode.carne.motivo ?? undefined}
+          >
+            <BookCopy aria-hidden="true" className="size-4" /> Gerar carnê
+          </Button>
         ) : null}
         <Button type="button" variant="outline" size="sm" onClick={() => onAcao('copiar')} className={BOTAO}>
           <Copy aria-hidden="true" className="size-4" /> Copiar

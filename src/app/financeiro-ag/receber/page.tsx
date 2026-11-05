@@ -47,6 +47,7 @@ import { DetalheDaPlataforma } from './DetalheDaPlataforma';
 import { PainelNota } from './PainelNota';
 import type { NotaFiscal } from '@/lib/nfse-tipos';
 import { EMPTY_FORM, FormularioConta, type ErrosForm, type FormState } from './FormularioConta';
+import { BlocoDeCobranca, type ContaDoBloco } from '@/components/financeiro/cobranca/BlocoDeCobranca';
 
 /**
  * Status EFETIVO (derivado na leitura). Nenhum fluxo do sistema grava
@@ -92,6 +93,14 @@ function contagem(n: number, singular: string, plural: string): string {
 }
 
 type ContaComSerie = ContaReceber & { serie_id?: string };
+
+/** A conta como o bloco Cobrança lê (E3, 05/11/2026). */
+function contaDoBloco(i: ContaReceber): ContaDoBloco {
+  return {
+    id: i.id, cliente_id: i.cliente_id || '', cliente_nome: i.cliente_nome || '', descricao: i.descricao || '',
+    status: i.status, valor_final: num(i.valor_final), valor_recebido: i.valor_recebido, data_vencimento: i.data_vencimento || '',
+  };
+}
 
 /** Campos que a tela edita e que a série sabe propagar (05/11/2026). */
 const CAMPOS_DA_SERIE = [
@@ -139,6 +148,8 @@ export default function ContasReceberPage() {
   // A venda de turismo (serviços, fornecedores e margem) é o lançamento comum.
   const [vendaAberta, setVendaAberta] = useState(false);
   const [detalheAlvo, setDetalheAlvo] = useState<ContaReceber | null>(null);
+  // Cobrança (boleto/Pix) da conta, aberta pelo botão Cobrar da linha (E3).
+  const [cobrarAlvo, setCobrarAlvo] = useState<ContaReceber | null>(null);
   const [exclusaoAlvo, setExclusaoAlvo] = useState<ContaReceber | null>(null);
   const [excluindo, setExcluindo] = useState(false);
   const [filterStatus, setFilterStatus] = useState<StatusContaReceber | 'TODOS'>('TODOS');
@@ -633,6 +644,17 @@ export default function ContasReceberPage() {
               Receber
             </Button>
           )}
+          {/* Cobrança pelo provedor da agência (E3): boleto, Pix, 2ª via, recibo. */}
+          {!ehComissaoDeFornecedor(i) && i.status !== 'CANCELADO' && (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setCobrarAlvo(i)}
+              className={ACAO_LINHA}
+            >
+              {i.status === 'RECEBIDO' ? 'Recibo' : 'Cobrar'}
+            </Button>
+          )}
           {recebeuAlgo(i) && (() => {
             const nota = notaPorConta[i.id];
             // Nota autorizada: o que a pessoa quer ali é o documento, não
@@ -903,7 +925,28 @@ export default function ContasReceberPage() {
             />
           )}
         />
+        {(() => {
+          const editada = editId ? items.find(i => i.id === editId) : null;
+          if (!editada || ehComissaoDeFornecedor(editada) || editada.status === 'CANCELADO') return null;
+          return (
+            <div className="mt-[var(--fin-s-4)]">
+              <BlocoDeCobranca conta={contaDoBloco(editada)} onMudou={() => { void load(); }} />
+            </div>
+          );
+        })()}
         {editId ? <HistoricoDeBaixas tabela="contas_receber" tituloId={editId} onMudou={() => { void load(); }} /> : null}
+      </RecordSheet>
+
+      <RecordSheet
+        aberto={cobrarAlvo !== null}
+        onOpenChange={a => { if (!a) setCobrarAlvo(null); }}
+        titulo={cobrarAlvo?.status === 'RECEBIDO' ? 'Cobrança e recibo' : 'Cobrar'}
+        descricao={cobrarAlvo ? `${cobrarAlvo.cliente_nome || 'Cliente não informado'}${cobrarAlvo.descricao ? ` · ${cobrarAlvo.descricao}` : ''}` : undefined}
+        largura={640}
+        acaoPrimaria={{ rotulo: 'Fechar', onClick: () => setCobrarAlvo(null) }}
+        acaoSecundaria={null}
+      >
+        {cobrarAlvo ? <BlocoDeCobranca conta={contaDoBloco(cobrarAlvo)} onMudou={() => { void load(); }} /> : null}
       </RecordSheet>
 
       <EscopoDaSerie

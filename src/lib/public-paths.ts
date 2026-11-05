@@ -10,6 +10,9 @@ export const PUBLIC_PATHS = [
   '/signup',
   '/api/health',
   '/p/', '/api/propostas/public/', '/api/uploads/',
+  // Portal do cliente (cobranças): a rota confere o token do link, por
+  // cliente e revogável, com limite por IP (src/lib/cobranca/portal-*.ts).
+  '/c/', '/api/portal/',
   // Documento privado: a rota confere sessão da agência dona ou URL assinada.
   '/api/arquivos/',
   '/api/v1/crm/webhook', '/api/v1/crm/health',

@@ -25,7 +25,7 @@ import {
   PanelLeftClose, PanelLeftOpen,
   Eraser, LifeBuoy, FileText,
   LayoutGrid, ChartColumn, ArrowDownLeft, ArrowUpRight, GitCompareArrows, ListTree,
-  Contact, Truck, Repeat, Lock, ArrowDownUp, Network, Split, Tags, ShieldCheck, Stamp, Scale, ScrollText, ListOrdered, Table2,
+  Contact, Truck, Repeat, Lock, ArrowDownUp, Barcode, Network, Split, Tags, ShieldCheck, Stamp, Scale, ScrollText, ListOrdered, Table2,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -97,6 +97,7 @@ const FINANCEIRO_MENU: SidebarSection[] = [
       { key: 'contas', label: 'Contas a Pagar/Receber', icon: ArrowDownUp, href: '/financeiro-ag/contas' },
       { key: 'receber', label: 'Contas a receber', icon: ArrowDownLeft, href: '/financeiro-ag/receber' },
       { key: 'pagar', label: 'Contas a pagar', icon: ArrowUpRight, href: '/financeiro-ag/pagar' },
+      { key: 'cobrancas', label: 'Cobranças', icon: Barcode, href: '/financeiro-ag/cobrancas' },
       { key: 'conciliacao', label: 'Conciliação', icon: GitCompareArrows, href: '/financeiro-ag/conciliacao' },
       { key: 'notas-fiscais', label: 'Notas fiscais', icon: Receipt, href: '/financeiro-ag/notas' },
       { key: 'extrato', label: 'Extrato de conta', icon: ScrollText, href: '/financeiro-ag/extrato' },
@@ -135,6 +136,7 @@ const CONFIGURACOES_MENU: SidebarSection[] = [
       { key: 'cfg-agencia', label: 'Dados da agência', icon: Building2, href: '/config/agencia' },
       { key: 'cfg-usuarios', label: 'Usuários', icon: Users, href: '/config/usuarios' },
       { key: 'cfg-financeiro', label: 'Financeiro', icon: Percent, href: '/config/financeiro' },
+      { key: 'cfg-cobranca', label: 'Cobrança', icon: Barcode, href: '/config/cobranca' },
       { key: 'cfg-perfis', label: 'Perfis de acesso', icon: ShieldCheck, href: '/config/perfis-de-acesso' },
       { key: 'cfg-limites', label: 'Limites e aprovação', icon: Scale, href: '/config/limites-e-aprovacao' },
     ],

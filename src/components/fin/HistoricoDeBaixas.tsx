@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Undo2 } from 'lucide-react';
+import { Printer, Undo2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -143,6 +143,19 @@ export function HistoricoDeBaixas({
                 </div>
                 <div className="flex shrink-0 items-center gap-[var(--fin-s-2)]">
                   <Money valor={l.valor} size="body" tone={l.estornada ? 'suave' : 'neutro'} estado="ok" />
+                  {/* Recibo deste recebimento (E3): só a receber, só o que vale. */}
+                  {tabela === 'contas_receber' && !l.estornada && l.valor > 0 ? (
+                    <a
+                      href={`/recibo/${encodeURIComponent(tituloId)}?baixa=${encodeURIComponent(l.id)}`}
+                      target="_blank"
+                      rel="noopener"
+                      aria-label={`Recibo do recebimento de ${dataBR(l.data)}`}
+                      className="inline-flex h-8 items-center gap-1 rounded-[var(--fin-r-md)] px-2 fin-t-caption text-[var(--fin-text-2)] hover:bg-[var(--fin-surface-2)] hover:text-[var(--fin-text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)] max-lg:h-11"
+                    >
+                      <Printer aria-hidden="true" className="size-4" />
+                      Recibo
+                    </a>
+                  ) : null}
                   {!l.estornada ? (
                     <Button
                       type="button"

@@ -6,6 +6,8 @@ import { ArrowDownLeft, ArrowUpRight, Ellipsis, Layers } from 'lucide-react';
 import type { FinColuna } from '@/components/fin/FinTable';
 import { statusChipVariants, type StatusTone } from '@/components/fin/StatusChip';
 import { rotuloDaSituacao, ROTULO_DO_TIPO, type LinhaDeConta, type OrdemDaLista } from '@/lib/contas-pagar-receber';
+import type { StatusDaCobranca } from '@/lib/cobranca/contrato-telas';
+import { ROTULO_NA_CONTA, situacaoNaConta, type SituacaoDaCobrancaNaConta } from '@/lib/cobranca/regras-telas';
 import { cn, formatBRL } from '@/lib/utils';
 
 /**
@@ -15,7 +17,7 @@ import { cn, formatBRL } from '@/lib/utils';
 
 export type ColunaId =
   | 'tipo' | 'situacao' | 'vencimento' | 'emissao' | 'liquidacao' | 'pessoa' | 'descricao' | 'documento'
-  | 'parcela' | 'categoria' | 'centro' | 'conta' | 'forma' | 'valor' | 'baixado' | 'saldo' | 'acoes';
+  | 'parcela' | 'categoria' | 'centro' | 'conta' | 'forma' | 'valor' | 'baixado' | 'saldo' | 'cobranca' | 'acoes';
 
 export const COLUNAS_ESCOLHIVEIS: ReadonlyArray<{ id: ColunaId; rotulo: string }> = [
   { id: 'tipo', rotulo: 'Tipo' },
@@ -31,6 +33,7 @@ export const COLUNAS_ESCOLHIVEIS: ReadonlyArray<{ id: ColunaId; rotulo: string }
   { id: 'conta', rotulo: 'Conta bancária' },
   { id: 'forma', rotulo: 'Forma' },
   { id: 'situacao', rotulo: 'Situação' },
+  { id: 'cobranca', rotulo: 'Cobrança' },
   { id: 'valor', rotulo: 'Valor' },
   { id: 'baixado', rotulo: 'Pago/Recebido' },
   { id: 'saldo', rotulo: 'Saldo em aberto' },
@@ -40,7 +43,7 @@ export const COLUNAS_ESCOLHIVEIS: ReadonlyArray<{ id: ColunaId; rotulo: string }
 export const COLUNAS_FIXAS: readonly ColunaId[] = ['valor', 'acoes'];
 // O saldo em aberto aparece embaixo do valor quando difere dele; a coluna
 // própria continua em Colunas.
-export const COLUNAS_PADRAO: readonly ColunaId[] = ['tipo', 'vencimento', 'pessoa', 'descricao', 'categoria', 'situacao', 'valor', 'acoes'];
+export const COLUNAS_PADRAO: readonly ColunaId[] = ['tipo', 'vencimento', 'pessoa', 'descricao', 'categoria', 'situacao', 'cobranca', 'valor', 'acoes'];
 
 const CHAVE_SALVA = 'contas-pagar-receber-colunas';
 
@@ -93,6 +96,22 @@ export function ChipDaSituacao({ linha }: { linha: LinhaDeConta }) {
   );
 }
 
+const TOM_NA_CONTA: Record<SituacaoDaCobrancaNaConta, StatusTone> = {
+  sem_boleto: 'neutro', emitida: 'info', vencida: 'negativo', paga: 'positivo', falhou: 'aviso', nao_se_aplica: 'neutro',
+};
+
+/** Situação da cobrança (boleto/Pix) da conta a receber; conta a pagar fica em branco. */
+export function cobrancaDaLinha(l: LinhaDeConta): SituacaoDaCobrancaNaConta {
+  return situacaoNaConta(l, (l.cobranca_status || null) as StatusDaCobranca | null);
+}
+
+export function ChipDaCobranca({ linha }: { linha: LinhaDeConta }) {
+  const s = cobrancaDaLinha(linha);
+  if (s === 'nao_se_aplica') return <Fraco>—</Fraco>;
+  if (s === 'sem_boleto') return <span className="whitespace-nowrap fin-t-caption text-[var(--fin-text-3)]">{ROTULO_NA_CONTA[s]}</span>;
+  return <span className={statusChipVariants({ tone: TOM_NA_CONTA[s] })}>{ROTULO_NA_CONTA[s]}</span>;
+}
+
 function Fraco({ children }: { children: React.ReactNode }) {
   return <span className="text-[var(--fin-text-3)]">{children}</span>;
 }
@@ -142,6 +161,7 @@ export function criarColunas(opcoes: { onMenu: (l: LinhaDeConta, posicao: { x: n
     { id: 'conta', cabecalho: 'Conta bancária', tipo: 'texto', sortable: true, prioridade: 1, render: l => <Texto valor={l.conta_bancaria} max="max-w-[160px]" /> },
     { id: 'forma', cabecalho: 'Forma', tipo: 'texto', prioridade: 1, render: l => <Texto valor={l.forma} max="max-w-[120px]" /> },
     { id: 'situacao', cabecalho: 'Situação', tipo: 'texto', sortable: true, minWidth: 128, render: l => <ChipDaSituacao linha={l} /> },
+    { id: 'cobranca', cabecalho: 'Cobrança', tipo: 'texto', prioridade: 2, minWidth: 128, render: l => <ChipDaCobranca linha={l} /> },
     {
       id: 'valor', cabecalho: 'Valor', tipo: 'dinheiro', sortable: true, valor: l => l.valor,
       tone: l => (l.tipo === 'receber' && l.situacao !== 'cancelado' ? 'positivo' : 'neutro'),

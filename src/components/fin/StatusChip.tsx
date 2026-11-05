@@ -21,7 +21,7 @@ export const statusChipVariants = cva(
 
 export type StatusTone = NonNullable<VariantProps<typeof statusChipVariants>['tone']>;
 
-export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza' | 'comissao' | 'plano';
+export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza' | 'comissao' | 'plano' | 'cobranca';
 
 export type StatusChipProps = {
   /** Valor cru do banco. NUNCA é renderizado como veio. */
@@ -100,6 +100,17 @@ export const STATUS_LABELS: Record<StatusDominio, Record<string, { rotulo: strin
     FIXO:         { rotulo: 'Fixo',          tone: 'neutro' },
     VARIAVEL:     { rotulo: 'Variável',      tone: 'neutro' },
     COMPRA_UNICA: { rotulo: 'Compra única',  tone: 'neutro' },
+  },
+  // Cobrança emitida pelo Asaas/Pagar.me da agência (E3, 05/11/2026). Mesmos
+  // rótulos de src/lib/cobranca/regras-telas.ts (SITUACAO_DA_COBRANCA).
+  cobranca: {
+    emitindo:  { rotulo: 'Emitindo',             tone: 'info'     },
+    aberta:    { rotulo: 'Aguardando pagamento', tone: 'neutro'   },
+    vencida:   { rotulo: 'Vencida',              tone: 'negativo' },
+    paga:      { rotulo: 'Paga',                 tone: 'positivo' },
+    cancelada: { rotulo: 'Cancelada',            tone: 'neutro'   },
+    estornada: { rotulo: 'Estornada',            tone: 'aviso'    },
+    falhou:    { rotulo: 'Não emitida',          tone: 'negativo' },
   },
 };
 

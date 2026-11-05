@@ -174,6 +174,21 @@ export const DESTINOS_DE_MERCADO: readonly DestinoDeMercado[] = [
     frase: 'Ao lançar a conta, ligue "Repetir" para parcelar ou repetir todo mês.',
   },
   {
+    id: 'cobrancas', termos: ['boletos emitidos', 'emitir boleto', 'gerar boleto', 'boleto não emitido', 'segunda via', '2ª via', 'reemitir boleto', 'carnê', 'pix cobrança', 'cobrança automática'],
+    href: '/financeiro-ag/cobrancas', tela: 'Cobranças',
+    frase: 'O boleto e o Pix saem pelo Asaas ou Pagar.me da agência e baixam a conta sozinhos quando o cliente paga.',
+  },
+  {
+    id: 'recibo', termos: ['recibo', 'imprimir recibo', 'recibo de pagamento', 'comprovante para o cliente'],
+    href: '/financeiro-ag/receber', tela: 'Contas a receber',
+    frase: 'Na conta recebida, use Recibo: a página sai pronta para imprimir ou salvar em PDF.',
+  },
+  {
+    id: 'regua-cobranca', termos: ['régua de cobrança', 'lembrete de vencimento', 'cobrar cliente', 'aviso de cobrança', 'portal do cliente'],
+    href: '/config/cobranca', tela: 'Configurações de cobrança',
+    frase: 'Os lembretes saem pelo WhatsApp e e-mail do CRM; o cliente também tem um link pessoal para pagar e baixar recibos.',
+  },
+  {
     id: 'taxas-recebimento', termos: ['taxa da plataforma', 'taxas de pagamento', 'taxa do boleto', 'custo do recebimento'],
     href: '/relatorios/taxas', tela: 'Taxas de pagamento',
   },

@@ -23,6 +23,8 @@ export type ConfirmDialogProps = {
   /** Efeito da operação escrito por extenso. Ver seção 9.10. */
   previa?: React.ReactNode;
   confirmarRotulo: string;
+  /** Rótulo do botão que fecha sem fazer nada. Padrão: "Cancelar". */
+  voltarRotulo?: string;
   tone?: 'padrao' | 'destrutivo';
   processando?: boolean;
   onConfirmar: () => Promise<void> | void;
@@ -38,6 +40,7 @@ export function ConfirmDialog({
   detalhes,
   previa,
   confirmarRotulo,
+  voltarRotulo = 'Cancelar',
   tone = 'padrao',
   processando = false,
   onConfirmar,
@@ -104,7 +107,7 @@ export function ConfirmDialog({
             disabled={processando}
             onClick={() => onOpenChange(false)}
           >
-            Cancelar
+            {voltarRotulo}
           </Button>
           <Button
             className={cn(

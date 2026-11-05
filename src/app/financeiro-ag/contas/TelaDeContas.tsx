@@ -3,12 +3,17 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowDownLeft, ArrowUpRight, CheckCheck, Columns3, Copy, Download, ExternalLink, Plus, Scale, Trash2,
+  ArrowDownLeft, ArrowUpRight, CheckCheck, Columns3, Copy, Download, ExternalLink, Plus, ReceiptText, Scale, Trash2,
 } from 'lucide-react';
 
 import {
-  CAMPOS_DA_BUSCA, rotuloDaSituacao, type CampoDaBusca, type DataDoFiltro, type LinhaDeConta, type SituacaoDoFiltro,
+  CAMPOS_DA_BUSCA, COBRANCAS_DO_FILTRO, rotuloDaSituacao, type CampoDaBusca, type CobrancaDoFiltro, type DataDoFiltro, type LinhaDeConta,
+  type SituacaoDoFiltro,
 } from '@/lib/contas-pagar-receber';
+import { api as apiDaCobranca, type ProvedorDeCobranca } from '@/lib/cobranca/contrato-telas';
+import { motivoSemCarne, PROVEDORES, separarParaBoleto, type ContaParaCobrar } from '@/lib/cobranca/regras-telas';
+import { EmitirCobrancas } from '@/components/financeiro/cobranca/EmitirCobrancas';
+import { GerarCarne } from '@/components/financeiro/cobranca/GerarCarne';
 import type { AcaoDeLote } from '@/lib/contas-em-lote';
 import type { ContaBancaria, PlanoContas } from '@/lib/crm-types';
 import { loadEntities } from '@/lib/crm-storage';
@@ -24,7 +29,7 @@ import { resolverPeriodo, type PeriodoChave } from '@/components/fin/PeriodPicke
 import { AcaoEmLote, type Categoria, type Centro } from './AcaoEmLote';
 import {
   COLUNAS_ESCOLHIVEIS, COLUNAS_FIXAS, COLUNAS_PADRAO, ORDEM_DA_COLUNA, colunasSalvas, criarColunas, linhasParaCopiar, salvarColunas,
-  type ColunaId,
+  cobrancaDaLinha, type ColunaId,
 } from './colunas';
 import { LiquidarEmLote } from './LiquidarEmLote';
 import { MenuDaLinha, type ItemDoMenu } from './MenuDaLinha';
@@ -55,17 +60,29 @@ const ROTULO_EM: Record<CampoDaBusca, string> = {
   tudo: 'Todos os campos', descricao: 'Descrição', pessoa: 'Pessoa', documento: 'Documento', categoria: 'Categoria', centro: 'Centro de custo',
 };
 const TODOS = '__todos__';
+const ROTULO_COBRANCA: Record<CobrancaDoFiltro, string> = {
+  todas: 'Todas', sem_boleto: 'Boleto não emitido', emitida: 'Boleto emitido', vencida: 'Cobrança vencida', paga: 'Paga pela cobrança', falhou: 'Não emitida (erro)',
+};
+
+/** A linha da lista no formato que as regras de cobrança leem. */
+function paraCobrar(l: LinhaDeConta): ContaParaCobrar & { descricao: string } {
+  return {
+    id: l.id, tipo: l.tipo, situacao: l.situacao, saldo: l.saldo, pessoa: l.pessoa, vencimento: l.vencimento,
+    cobranca: cobrancaDaLinha(l), descricao: l.descricao,
+  };
+}
 
 type Filtros = {
   periodo: PeriodoChave; de: string; ate: string; data: DataDoFiltro; situacao: SituacaoDoFiltro;
   tipo: 'ambos' | 'pagar' | 'receber'; busca: string; em: CampoDaBusca; categoria: string; centro: string; conta: string;
+  cobranca: CobrancaDoFiltro;
 };
 
 function filtrosPadrao(): Filtros {
   const r = resolverPeriodo('MES_ATUAL');
   return {
     periodo: 'MES_ATUAL', de: r.de, ate: r.ate, data: 'vencimento', situacao: 'todas', tipo: 'ambos',
-    busca: '', em: 'tudo', categoria: '', centro: '', conta: '',
+    busca: '', em: 'tudo', categoria: '', centro: '', conta: '', cobranca: 'todas',
   };
 }
 
@@ -92,18 +109,29 @@ export function TelaDeContas() {
   const [lote, setLote] = React.useState<{ acao: AcaoDeLote; linhas: LinhaDeConta[] } | null>(null);
   const [exportando, setExportando] = React.useState(false);
   const [selecionandoTodas, setSelecionandoTodas] = React.useState(false);
+  const [boletos, setBoletos] = React.useState<Array<ContaParaCobrar & { descricao: string }> | null>(null);
+  const [carne, setCarne] = React.useState<Array<ContaParaCobrar & { descricao: string }> | null>(null);
+  // Provedor de cobrança da agência (E3): decide se "Gerar carnê" aparece.
+  const [provedor, setProvedor] = React.useState<ProvedorDeCobranca | '' | null>(null);
 
   const [categorias, setCategorias] = React.useState<Categoria[]>([]);
   const [centros, setCentros] = React.useState<Centro[]>([]);
   const [contasBancarias, setContasBancarias] = React.useState<Array<{ id: string; nome: string }>>([]);
 
   React.useEffect(() => {
+    // Atalho do endereço (?cobranca=sem_boleto), vindo da tela Cobranças:
+    // abre já no filtro, em todo o período.
+    const atalho = new URLSearchParams(window.location.search).get('cobranca');
+    if (atalho && (COBRANCAS_DO_FILTRO as readonly string[]).includes(atalho) && atalho !== 'todas') {
+      setF(atual => ({ ...atual, cobranca: atalho as CobrancaDoFiltro, periodo: 'TUDO', de: '', ate: '' }));
+    }
     setColunas(colunasSalvas());
     loadEntities<PlanoContas>('plano-contas')
       .then(l => setCategorias(l.map(c => ({ id: c.id, codigo: c.codigo, nome: c.nome, tipo: c.tipo, ativo: c.ativo }))))
       .catch(() => setCategorias([]));
     fetch('/api/centros-custo').then(r => (r.ok ? r.json() : [])).then((l: Centro[]) => setCentros(Array.isArray(l) ? l : [])).catch(() => setCentros([]));
     loadEntities<ContaBancaria>('contas-bancarias').then(l => setContasBancarias(l.map(c => ({ id: c.id, nome: c.nome || 'Conta' })))).catch(() => setContasBancarias([]));
+    apiDaCobranca.config().then(c => setProvedor(c.provedor_padrao)).catch(() => setProvedor(null));
   }, []);
 
   const busca = useDebounce(f.busca.trim());
@@ -115,8 +143,9 @@ export function TelaDeContas() {
     if (f.categoria) p.set('categoria', f.categoria);
     if (f.centro) p.set('centro', f.centro);
     if (f.conta) p.set('conta', f.conta);
+    if (f.cobranca !== 'todas') p.set('cobranca', f.cobranca);
     return p.toString();
-  }, [f.data, f.situacao, f.tipo, f.em, f.de, f.ate, busca, f.categoria, f.centro, f.conta]);
+  }, [f.data, f.situacao, f.tipo, f.em, f.de, f.ate, busca, f.categoria, f.centro, f.conta, f.cobranca]);
   const datasValidas = !f.de || !f.ate || f.de <= f.ate;
   const consulta = datasValidas
     ? `${recorte}&ordem=${ORDEM_DA_COLUNA[ordem.coluna] ?? 'vencimento'}&direcao=${ordem.direcao}&pagina=${pagina}&por_pagina=${porPagina}`
@@ -128,7 +157,7 @@ export function TelaDeContas() {
 
   const padrao = filtrosPadrao();
   const ativos = (f.periodo !== padrao.periodo ? 1 : 0) + (f.data !== padrao.data ? 1 : 0) + (f.situacao !== 'todas' ? 1 : 0)
-    + (f.tipo !== 'ambos' ? 1 : 0) + (f.busca ? 1 : 0) + (f.em !== 'tudo' ? 1 : 0) + (f.categoria ? 1 : 0) + (f.centro ? 1 : 0) + (f.conta ? 1 : 0);
+    + (f.tipo !== 'ambos' ? 1 : 0) + (f.busca ? 1 : 0) + (f.em !== 'tudo' ? 1 : 0) + (f.categoria ? 1 : 0) + (f.centro ? 1 : 0) + (f.conta ? 1 : 0) + (f.cobranca !== 'todas' ? 1 : 0);
   const limpar = React.useCallback(() => setF(filtrosPadrao()), []);
   const mudar = (patch: Partial<Filtros>) => setF(atual => ({ ...atual, ...patch }));
 
@@ -136,7 +165,7 @@ export function TelaDeContas() {
   // tela: Esc dentro de uma lista aberta, menu ou janela continua fechando ela.
   function teclado(e: React.KeyboardEvent<HTMLDivElement>) {
     if (e.key !== 'Escape' || e.defaultPrevented) return;
-    if (!moldura.current?.contains(e.target as Node) || menu || liquidar || lote) return;
+    if (!moldura.current?.contains(e.target as Node) || menu || liquidar || lote || boletos || carne) return;
     if (ativos > 0) { e.preventDefault(); limpar(); }
     else if (selecionadas.size > 0) { e.preventDefault(); setSelecionadas(new Map()); }
   }
@@ -215,6 +244,14 @@ export function TelaDeContas() {
         onEscolher: () => setLiquidar([l]),
       });
     }
+    if (l.tipo === 'receber' && pode('gerar_boletos')) {
+      const fora = separarParaBoleto([paraCobrar(l)]).fora[0];
+      itens.push({
+        id: 'boleto', rotulo: 'Gerar boleto', icone: ReceiptText,
+        desabilitado: fora ? fora.motivo : null,
+        onEscolher: () => setBoletos(marcadas.map(paraCobrar)),
+      });
+    }
     itens.push({
       id: 'copiar', rotulo: marcadas.length > 1 ? `Copiar ${marcadas.length} linhas` : 'Copiar linha', icone: Copy,
       onEscolher: () => { void copiar(marcadas); },
@@ -235,6 +272,8 @@ export function TelaDeContas() {
     if (acao === 'liquidar') setLiquidar(marcadas);
     else if (acao === 'reagendar' || acao === 'recategorizar' || acao === 'excluir') setLote({ acao, linhas: marcadas });
     else if (acao === 'copiar') void copiar(marcadas);
+    else if (acao === 'boletos') setBoletos(marcadas.map(paraCobrar));
+    else if (acao === 'carne') setCarne(marcadas.map(paraCobrar));
     else if (acao === 'desmarcar') setSelecionadas(new Map());
     else void selecionarTodasDoFiltro();
   }
@@ -290,6 +329,8 @@ export function TelaDeContas() {
               opcoes: [{ valor: TODOS, rotulo: 'Todos' }, ...centros.map(c => ({ valor: c.id, rotulo: c.nome }))] }] : []),
             ...(contasBancarias.length ? [{ id: 'cpr-conta', rotulo: 'Conta', valor: f.conta || TODOS, onChange: (v: string) => mudar({ conta: v === TODOS ? '' : v }),
               opcoes: [{ valor: TODOS, rotulo: 'Todas' }, ...contasBancarias.map(c => ({ valor: c.id, rotulo: c.nome }))] }] : []),
+            { id: 'cpr-cobranca', rotulo: 'Cobrança', valor: f.cobranca, onChange: v => mudar({ cobranca: v as CobrancaDoFiltro }),
+              opcoes: (Object.keys(ROTULO_COBRANCA) as CobrancaDoFiltro[]).map(c => ({ valor: c, rotulo: ROTULO_COBRANCA[c] })) },
           ]}
           resumo={{
             exibidos: dados?.linhas.length ?? 0,
@@ -344,7 +385,11 @@ export function TelaDeContas() {
             totalDoFiltro={dados?.total ?? 0}
             oferecerTodas={Boolean(paginaToda && dados && dados.total > dados.linhas.length && selecionadas.size < dados.total)}
             marcandoTodas={selecionandoTodas}
-            pode={{ liquidar: pode('liquidar_pagar') || pode('liquidar_receber'), editar: podeEditar, excluir: podeExcluir }}
+            pode={{
+              liquidar: pode('liquidar_pagar') || pode('liquidar_receber'), editar: podeEditar, excluir: podeExcluir,
+              boletos: pode('gerar_boletos'),
+              carne: provedor && PROVEDORES[provedor].capacidades.carne ? { motivo: motivoSemCarne(marcadas.map(paraCobrar), provedor) } : null,
+            }}
             onAcao={acaoDaBarra}
           />
         ) : null}
@@ -405,6 +450,18 @@ export function TelaDeContas() {
         contas={contasBancarias}
         onFechar={() => setLiquidar(null)}
         onConcluido={() => { setLiquidar(null); aposLote(); }}
+      />
+
+      <EmitirCobrancas
+        contas={boletos}
+        onFechar={() => setBoletos(null)}
+        onConcluido={aposLote}
+      />
+
+      <GerarCarne
+        contas={carne}
+        onFechar={() => setCarne(null)}
+        onConcluido={aposLote}
       />
 
       <AcaoEmLote

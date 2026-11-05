@@ -119,6 +119,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       pathname
       && pathname !== '/login'
       && !pathname.startsWith('/p/')
+      && !pathname.startsWith('/c/')
+      && !pathname.startsWith('/recibo/')
       && !pathname.startsWith('/mapas-mentais/publico/')
       && !isMindMapImport
     ) {
@@ -140,6 +142,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     pathname === '/login' ||
     pathname === '/signup' ||
     pathname.startsWith('/p/') ||
+    // Portal do cliente (público) e o recibo para imprimir: sem barra nem menu.
+    pathname.startsWith('/c/') ||
+    pathname.startsWith('/recibo/') ||
     pathname.startsWith('/mapas-mentais/publico/') ||
     pathname.startsWith('/admin') ||
     pathname === '/preview-iframe'
