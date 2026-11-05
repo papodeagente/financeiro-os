@@ -57,6 +57,11 @@ export interface CrudOpcoes {
    * bancárias usam para nascer com saldo_atual = saldo_inicial (FIN2-01).
    */
   normalizarCadastro?: (item: Record<string, unknown>) => void;
+  /**
+   * Confere (e pode ajustar) o item antes do upsert do POST. Devolve a
+   * mensagem de recusa (400) ou null. Contas usam para o rateio (05/11/2026).
+   */
+  validarCadastro?: (item: Record<string, unknown>) => string | null;
 }
 
 // As regras puras vivem em ./guarda-baixa para poderem ser testadas sem
@@ -145,6 +150,8 @@ export function createCrudHandlers(tableName: string, indexColumns: string[] = [
       }
 
       opcoes.normalizarCadastro?.(item as Record<string, unknown>);
+      const invalido = opcoes.validarCadastro?.(item as Record<string, unknown>) ?? null;
+      if (invalido) return NextResponse.json({ error: invalido }, { status: 400 });
 
       // Build dynamic upsert with tenant_id
       const paramValues: unknown[] = [item.id, tenantId, JSON.stringify(item)];

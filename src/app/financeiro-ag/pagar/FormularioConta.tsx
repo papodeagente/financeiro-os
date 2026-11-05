@@ -14,6 +14,7 @@ import { paraBRL } from '@/lib/money';
 import { cn } from '@/lib/utils';
 import { Money } from '@/components/fin/Money';
 import { BlocoDeRepeticao } from '@/components/financeiro/recorrencia/BlocoDeRepeticao';
+import { SecaoRateios } from '@/components/financeiro/SecaoRateios';
 
 import { CampoSelecao, CONTROLE, Interruptor, type OpcaoDeSelecao } from './campos';
 import type { ErrosDoFormulario, FormState } from './tipos';
@@ -258,6 +259,21 @@ export function FormularioConta({
               />
             </div>
           </div>
+        </FormSection>
+
+        <FormSection
+          title="Rateios"
+          description="Centro de custo da conta, divisão entre centros e tags."
+          defaultOpen={form.rateio.length > 0 || Boolean(form.centro_custo_id)}
+        >
+          <SecaoRateios
+            total={paraBRL(form.valor_original, form.moeda, form.cambio)}
+            tipo="DESPESA"
+            centroId={form.centro_custo_id}
+            rateio={form.rateio}
+            tags={form.tags}
+            onChange={(alteracao) => onForm((f) => ({ ...f, ...alteracao }))}
+          />
         </FormSection>
 
         <FormSection

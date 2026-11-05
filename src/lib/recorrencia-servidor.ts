@@ -23,6 +23,7 @@ import {
 } from './recorrencia';
 import { brlEmCentavos, CAMPOS_DO_MODELO, idDoTitulo, limparModelo, montarTitulo } from './recorrencia-titulos';
 import { CALENDARIO_NACIONAL } from './feriados';
+import { validarRateio } from './dimensoes';
 
 export class ErroRecorrencia extends Error {
   constructor(message: string, public status = 400) {
@@ -381,6 +382,13 @@ export function aplicarAlteracoes(
   } else if (alteracoes.valor_original !== undefined) {
     novo.valor_final = novo.valor_original;
   }
+  // Rateio guarda percentuais: o valor de cada linha é refeito sobre o
+  // valor deste título (o de outra parcela não serve).
+  if (Array.isArray(novo.rateio) && novo.rateio.length > 0
+    && (alteracoes.rateio !== undefined || alteracoes.valor_original !== undefined || alteracoes.moeda !== undefined || alteracoes.cambio !== undefined)) {
+    const r = validarRateio(num(novo.valor_final), novo.rateio);
+    novo.rateio = r.ok ? r.linhas : [];
+  }
   if (escopo === 'so_esta' && ehDataValida(alteracoes.data_vencimento)) {
     novo.data_vencimento = alteracoes.data_vencimento;
   }
@@ -685,6 +693,8 @@ export async function copiarMesNoExecutor(exec: ExecutorSQL, tenantId: string, p
         categoria_id: d.categoria_id, centro_custo: d.centro_custo, valor_original: round2(num(d.valor_original)),
         valor_final: valorBrl, moeda: d.moeda, cambio: d.cambio, valor_brl: valorBrl, data_vencimento: vencimento,
         forma_pagamento: d.forma_pagamento, natureza_custo: d.natureza_custo, is_custo_comercial: d.is_custo_comercial,
+        // Centro, rateio e tags vão junto na cópia do mês.
+        centro_custo_id: d.centro_custo_id, rateio: Array.isArray(d.rateio) ? d.rateio : [], tags: Array.isArray(d.tags) ? d.tags : [],
         observacoes, copia_chave, data_emissao: hoje,
       } as Record<string, unknown>;
     }
@@ -694,6 +704,7 @@ export async function copiarMesNoExecutor(exec: ExecutorSQL, tenantId: string, p
       origem: d.origem, cliente_id: d.cliente_id, cliente_nome: d.cliente_nome, descricao: d.descricao,
       categoria_id: d.categoria_id, centro_custo: d.centro_custo, valor_original: valor, valor_final: valor,
       forma_recebimento: d.forma_recebimento, data_vencimento: vencimento, observacoes, copia_chave, data_emissao: hoje,
+      centro_custo_id: d.centro_custo_id, rateio: Array.isArray(d.rateio) ? d.rateio : [], tags: Array.isArray(d.tags) ? d.tags : [],
     } as Record<string, unknown>;
   });
   const itens = novas.map((c, i) => ({

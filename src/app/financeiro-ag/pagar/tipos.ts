@@ -1,4 +1,4 @@
-import type { ContaPagar, NaturezaCusto } from '@/lib/crm-types';
+import type { ContaPagar, LinhaRateio, NaturezaCusto } from '@/lib/crm-types';
 import { REPETICAO_PADRAO, type EstadoRepeticao } from '@/lib/recorrencia';
 
 /** Recorte de período do filtro. Mesmas chaves de sempre. */
@@ -19,6 +19,11 @@ export type FormState = {
   natureza_custo: NaturezaCusto | null;
   is_custo_comercial: boolean;
   observacoes: string;
+  // Centro, rateio e tags (05/11/2026). Centro único = rateio vazio.
+  centro_custo_id: string;
+  centro_custo: string;
+  rateio: LinhaRateio[];
+  tags: string[];
   // Bloco "Repetir" (05/11/2026): Recorrente/Parcelado, quantidade,
   // periodicidade e mais opções. Só na criação; nunca vai para o título.
   repeticao: EstadoRepeticao;
@@ -38,6 +43,10 @@ export const EMPTY_FORM: FormState = {
   natureza_custo: null,
   is_custo_comercial: false,
   observacoes: '',
+  centro_custo_id: '',
+  centro_custo: '',
+  rateio: [],
+  tags: [],
   repeticao: REPETICAO_PADRAO,
 };
 

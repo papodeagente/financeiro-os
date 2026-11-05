@@ -6,6 +6,7 @@ import { ArrowUpRight, Plus, Target, TriangleAlert } from 'lucide-react';
 import { ContaPagar, PlanoContas, createContaPagar, StatusContaPagar, CartaoCorporativo } from '@/lib/crm-types';
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
 import { toast } from '@/lib/toast';
+import { validarRateio } from '@/lib/dimensoes';
 import { consumirAtalho, lerAtalhos } from '@/lib/atalho-da-url';
 import {
   round2, num, somaPor, paraBRL,
@@ -71,6 +72,7 @@ type ContaComSerie = ContaPagar & { serie_id?: string };
 const CAMPOS_DA_SERIE = [
   'origem', 'fornecedor_nome', 'descricao', 'categoria_id', 'moeda', 'forma_pagamento',
   'natureza_custo', 'is_custo_comercial', 'observacoes',
+  'centro_custo', 'centro_custo_id',
 ] as const;
 
 /** O que mudou no formulário em relação à conta lida (só o que mudou vai para a série). */
@@ -82,6 +84,11 @@ function diferencasDaConta(
     if ((form[c] ?? '') !== (existing[c] ?? '')) out[c] = form[c];
   }
   if (valorOriginal !== round2(num(existing.valor_original))) out.valor_original = valorOriginal;
+  // Rateio e tags: compara o que importa (centro, categoria, percentual).
+  const chaveRateio = (r: unknown) => JSON.stringify((Array.isArray(r) ? r : []).map((l: { centro_custo_id?: string; categoria_id?: string; percentual?: number }) =>
+    [l.centro_custo_id ?? '', l.categoria_id ?? '', round2(num(l.percentual))]));
+  if (chaveRateio(form.rateio) !== chaveRateio(existing.rateio)) out.rateio = form.rateio;
+  if (JSON.stringify(form.tags ?? []) !== JSON.stringify(existing.tags ?? [])) out.tags = form.tags ?? [];
   if (cambio !== num(existing.cambio || 1)) out.cambio = cambio;
   if ((cartaoId ?? null) !== (existing.cartao_id ?? null)) out.cartao_id = cartaoId;
   if (form.data_vencimento !== existing.data_vencimento) out.data_vencimento = form.data_vencimento;
@@ -216,6 +223,7 @@ export default function ContasPagarPage() {
   const [gravandoEscopo, setGravandoEscopo] = useState(false);
   const [parcelasDe, setParcelasDe] = useState<ContaPagar | null>(null);
   const [previaCopia, setPreviaCopia] = useState<RespostaCopiarMes | null>(null);
+  const abrirDepoisDeCarregar = useRef<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -229,6 +237,9 @@ export default function ContasPagarPage() {
       setPlanoContas(contas);
       setCartoes(cards);
       setErroCarga(null);
+      const alvo = abrirDepoisDeCarregar.current ? data.find(i => i.id === abrirDepoisDeCarregar.current) : null;
+      abrirDepoisDeCarregar.current = null;
+      if (alvo) { setFilterPeriodo('TODOS'); openEdit(alvo); }
     } catch {
       setErroCarga('A consulta ao servidor falhou. Nenhum dado foi alterado.');
     } finally {
@@ -244,6 +255,9 @@ export default function ContasPagarPage() {
     if (a.get('status') === 'VENCIDO') setFilterPeriodo('VENCIDOS');
     if (a.get('sem_fornecedor') === '1') { setFilterPeriodo('TODOS'); setFilterSemFornecedor(true); }
     if (a.get('nova') === '1') { consumirAtalho('nova'); openNew(); }
+    // Vindo dos relatórios por categoria, centro ou rateio: abre a conta (05/11/2026).
+    const abrir = a.get('abrir');
+    if (abrir) { consumirAtalho('abrir'); abrirDepoisDeCarregar.current = abrir; }
   }
 
   // Uma vez, ao abrir a tela: o atalho do endereço não é um estado a seguir.
@@ -286,6 +300,10 @@ export default function ContasPagarPage() {
       natureza_custo: item.natureza_custo ?? null,
       is_custo_comercial: item.is_custo_comercial ?? false,
       observacoes: item.observacoes,
+      centro_custo_id: item.centro_custo_id ?? '',
+      centro_custo: item.centro_custo ?? '',
+      rateio: Array.isArray(item.rateio) ? item.rateio : [],
+      tags: Array.isArray(item.tags) ? item.tags : [],
       repeticao: REPETICAO_PADRAO,
     });
     setSerieEditada(null);
@@ -312,6 +330,10 @@ export default function ContasPagarPage() {
     // A moeda de origem fica preservada em valor_original + moeda + cambio.
     const valorBrl = paraBRL(valorOriginal, form.moeda, cambio);
     const cartaoIdFinal = form.forma_pagamento === 'CARTAO_CORP' ? (form.cartao_id || null) : null;
+    // Rateio preenchido fecha 100% e os centavos do valor em reais (05/11/2026).
+    const rateioConferido = validarRateio(valorBrl, form.rateio);
+    if (!rateioConferido.ok) { toast.error(rateioConferido.erro); return; }
+    const rateioFinal = rateioConferido.linhas;
 
     setSaving(true);
     try {
@@ -324,6 +346,7 @@ export default function ContasPagarPage() {
           // A validação acima já garante que o nome não está em branco.
           fornecedor_pendente: false,
           cartao_id: cartaoIdFinal,
+          rateio: rateioFinal,
           valor_original: valorOriginal,
           cambio,
           valor_final: valorBrl,
@@ -354,7 +377,7 @@ export default function ContasPagarPage() {
           estado: rep,
           inicio: form.data_vencimento,
           valor: valorOriginal,
-          modelo: { ...camposDoTitulo(form), cartao_id: cartaoIdFinal, cambio },
+          modelo: { ...camposDoTitulo(form), cartao_id: cartaoIdFinal, rateio: rateioFinal, cambio },
         });
         setShowForm(false);
         setEditId(null);
@@ -371,6 +394,7 @@ export default function ContasPagarPage() {
         ...createContaPagar(),
         ...camposDoTitulo(form),
         cartao_id: cartaoIdFinal,
+        rateio: rateioFinal,
         valor_original: valorOriginal,
         cambio,
         valor_final: valorBrl,

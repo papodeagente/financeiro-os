@@ -10,6 +10,7 @@ import { FormSection } from '@/components/financeiro/FormSection';
 import { Input } from '@/components/ui/input';
 import { ClientePicker } from '@/components/ClientePicker';
 import { SeletorDePlataforma } from './SeletorDePlataforma';
+import { SecaoRateios } from '@/components/financeiro/SecaoRateios';
 import {
   Select,
   SelectContent,
@@ -27,7 +28,7 @@ export type FormState = Omit<ContaReceber,
   'id' | 'juros' | 'multa' | 'desconto' | 'valor_final' | 'data_emissao' |
   'data_recebimento' | 'valor_recebido' | 'conta_bancaria_id' |
   'boleto_emitido' | 'boleto_codigo' | 'boleto_url' | 'status' |
-  'rateio' | 'anexos' | 'venda_id' | 'grupo_id' | 'centro_custo'
+  'anexos' | 'venda_id' | 'grupo_id'
 >;
 
 export const EMPTY_FORM: FormState = {
@@ -50,6 +51,11 @@ export const EMPTY_FORM: FormState = {
   parcela_numero: 1,
   total_parcelas: 1,
   observacoes: '',
+  // Centro, rateio e tags (05/11/2026). Centro único = rateio vazio.
+  centro_custo: '',
+  centro_custo_id: '',
+  rateio: [],
+  tags: [],
 };
 
 export type CampoObrigatorio =
@@ -231,6 +237,21 @@ export function FormularioConta({
             </Field>
           </div>
         </div>
+      </FormSection>
+
+      <FormSection
+        title="Rateios"
+        description="Centro de custo da conta, divisão entre centros e tags."
+        defaultOpen={form.rateio.length > 0 || Boolean(form.centro_custo_id)}
+      >
+        <SecaoRateios
+          total={form.valor_original}
+          tipo="RECEITA"
+          centroId={form.centro_custo_id ?? ''}
+          rateio={form.rateio}
+          tags={form.tags ?? []}
+          onChange={alteracao => onChange(alteracao)}
+        />
       </FormSection>
 
       <FormSection

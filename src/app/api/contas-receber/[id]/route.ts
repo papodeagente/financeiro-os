@@ -4,6 +4,7 @@ import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
 import { emTransacao, estornarBaixaDaConta, ErroMovimentoCaixa } from '@/lib/caixa-atomico';
 import { editarConta, ErroEdicaoConta } from '@/lib/baixa-de-conta';
+import { prepararDimensoesDaConta } from '@/lib/dimensoes';
 
 const TABLE = 'contas_receber';
 const INDEX_COLS = ['venda_id', 'cliente_id', 'status'];
@@ -46,6 +47,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (!item || typeof item !== 'object' || Array.isArray(item)) {
       return NextResponse.json({ error: 'Formato inválido' }, { status: 400 });
     }
+    // Rateio preenchido fecha 100% e o valor em centavos (05/11/2026).
+    const rateioInvalido = prepararDimensoesDaConta(item as Record<string, unknown>);
+    if (rateioInvalido) return NextResponse.json({ error: rateioInvalido }, { status: 400 });
     if (!pool) return NextResponse.json(item);
     const tenantId = await getTenantId();
     // Linha travada, movimento calculado sobre o estado atual e caixa que não

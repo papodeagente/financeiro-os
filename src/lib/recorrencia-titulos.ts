@@ -8,6 +8,7 @@
  * serie_ordem e serie_modo.
  */
 import { createContaPagar, createContaReceber, type ContaPagar, type ContaReceber } from './crm-types';
+import { validarRateio } from './dimensoes';
 import { deCentavos, num, paraBRL, round2 } from './money';
 import { separarSufixo, sufixoDaDescricao, type ModoSerie, type RegraRecorrencia, type TabelaAlvo } from './recorrencia';
 
@@ -16,10 +17,12 @@ export const CAMPOS_DO_MODELO: Record<TabelaAlvo, readonly string[]> = {
   contas_pagar: [
     'origem', 'fornecedor_id', 'fornecedor_nome', 'descricao', 'categoria_id', 'centro_custo',
     'moeda', 'cambio', 'forma_pagamento', 'cartao_id', 'natureza_custo', 'is_custo_comercial', 'observacoes',
+    'centro_custo_id', 'rateio', 'tags',
   ],
   contas_receber: [
     'origem', 'cliente_id', 'cliente_nome', 'descricao', 'categoria_id', 'centro_custo',
     'forma_recebimento', 'taxa', 'taxa_plataforma', 'observacoes',
+    'centro_custo_id', 'rateio', 'tags',
   ],
 };
 
@@ -68,6 +71,15 @@ export function idDoTitulo(serieId: string, ordem: number): string {
   return `${serieId}-${String(ordem).padStart(3, '0')}`;
 }
 
+/**
+ * O rateio do modelo guarda percentuais; o valor de cada linha é refeito
+ * sobre o valor DESTE título (parcelas e reajustes mudam o total).
+ */
+function rateioDoTitulo(modelo: Record<string, unknown>, totalBrl: number) {
+  const r = validarRateio(totalBrl, modelo.rateio);
+  return r.ok ? r.linhas : [];
+}
+
 export function montarTitulo(d: DadosDoTitulo): ContaPagar | ContaReceber {
   const base = separarSufixo(String(d.modelo.descricao ?? ''));
   const descricao = `${base}${sufixoDaDescricao(d.modo, d.regra, d.ordem, d.total)}`;
@@ -92,6 +104,7 @@ export function montarTitulo(d: DadosDoTitulo): ContaPagar | ContaReceber {
       valor_original: valor,
       valor_final: valorBrl,
       valor_brl: valorBrl,
+      rateio: rateioDoTitulo(d.modelo, valorBrl),
       ...parcela,
       ...serie,
     } as ContaPagar;
@@ -108,6 +121,7 @@ export function montarTitulo(d: DadosDoTitulo): ContaPagar | ContaReceber {
     valor_final: valor,
     taxa: deCentavos(d.taxaCentavos ?? 0),
     taxa_plataforma: String(d.modelo.taxa_plataforma ?? ''),
+    rateio: rateioDoTitulo(d.modelo, valor),
     ...parcela,
     ...serie,
   } as ContaReceber;

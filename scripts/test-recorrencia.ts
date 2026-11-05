@@ -182,5 +182,26 @@ eq(recorte(novo(formDolar, 'MENSAL', 3)), recorte(legado(formDolar, 'MENSAL', 3)
 const n1 = novo(formBase, 'MENSAL', 3)[1] as ContaPagar & { serie_id: string; serie_ordem: number };
 eq([n1.serie_id, n1.serie_ordem, n1.id], ['s', 2, 's-002'], 'título novo ganha série, ordem e id estável');
 
+
+console.log('--- Centro, rateio e tags na série ---');
+{
+  const comRateio = {
+    ...formBase, valor_original: 1000, centro_custo_id: 'cc-sp', tags: ['loja'],
+    rateio: [{ centro_custo_id: 'cc-sp', percentual: 60, valor: 600 }, { centro_custo_id: 'cc-rj', percentual: 40, valor: 400 }],
+  };
+  const regra = regraDoPreset('MENSAL', vezes(3));
+  const modelo = limparModelo('contas_pagar', comRateio);
+  const valor = paraCentavos(1000);
+  const parcelas = [333.34, 333.33, 333.33];
+  const titulos = parcelas.map((p, i) => montarTitulo({
+    tabela: 'contas_pagar', serieId: 's', modo: 'parcelado', regra, modelo, ordem: i + 1, total: 3,
+    vencimento: addMeses('2026-01-10', i), valorCentavos: valor, valorBrlCentavos: paraCentavos(p),
+    emissao: '2026-11-05', id: idDoTitulo('s', i + 1),
+  }) as ContaPagar);
+  eq(titulos.map(t => [t.centro_custo_id, t.tags]), [['cc-sp', ['loja']], ['cc-sp', ['loja']], ['cc-sp', ['loja']]], 'centro e tags vão para cada título');
+  eq(titulos.map(t => t.rateio.map(l => l.percentual)), [[60, 40], [60, 40], [60, 40]], 'percentuais do rateio iguais em cada título');
+  eq(titulos.map(t => round2(t.rateio.reduce((a, l) => a + l.valor, 0))), parcelas, 'valores do rateio fecham o valor de cada parcela');
+}
+
 console.log(`\n${total - falhas}/${total} passaram`);
 if (falhas > 0) process.exit(1);

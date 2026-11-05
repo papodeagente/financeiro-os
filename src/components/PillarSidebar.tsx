@@ -25,7 +25,7 @@ import {
   PanelLeftClose, PanelLeftOpen,
   Eraser, LifeBuoy, FileText,
   LayoutGrid, ChartColumn, ArrowDownLeft, ArrowUpRight, GitCompareArrows, ListTree,
-  Contact, Truck, Repeat, Lock,
+  Contact, Truck, Repeat, Lock, Network, Split, Tags,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -109,6 +109,15 @@ const FINANCEIRO_MENU: SidebarSection[] = [
       { key: 'contas-bancarias', label: 'Contas bancárias', icon: Landmark, href: '/financeiro-ag/contas-bancarias' },
       { key: 'cartoes-corp', label: 'Cartões', icon: CreditCard, href: '/financeiro-ag/cartoes' },
       { key: 'plano-contas', label: 'Categorias', icon: ListTree, href: '/financeiro-ag/plano-contas' },
+      { key: 'centros-custo', label: 'Centros de custo', icon: Network, href: '/financeiro-ag/centros-custo' },
+    ],
+  },
+  {
+    title: 'Relatórios',
+    items: [
+      { key: 'rel-categoria', label: 'Por categoria', icon: Tags, href: '/financeiro-ag/relatorios/lancamentos-categoria' },
+      { key: 'rel-centro', label: 'Por centro de custo', icon: Network, href: '/financeiro-ag/relatorios/lancamentos-centro-custo' },
+      { key: 'rel-rateio', label: 'Por rateio', icon: Split, href: '/financeiro-ag/relatorios/lancamentos-rateio' },
     ],
   },
 ];

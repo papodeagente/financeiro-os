@@ -8,6 +8,7 @@ import { RAZAO_SCHEMA_SQL } from './razao-schema';
 import { BAIXAS_SCHEMA_SQL } from './baixas-servidor';
 import { PERIODO_SCHEMA_SQL } from './periodo-fechado';
 import { RECORRENCIA_SCHEMA_SQL } from './recorrencia-schema';
+import { CENTROS_CUSTO_SCHEMA_SQL } from './centros-custo-servidor';
 import { AUDIT_SCHEMA_SQL } from './audit-schema';
 import { NOTIFICACOES_SCHEMA_SQL } from './notificacoes-schema';
 import { MAPAS_MENTAIS_COMPARTILHAMENTO_SCHEMA_SQL } from './mapas-mentais-compartilhamento';
@@ -1517,6 +1518,9 @@ async function executarInitDB() {
   // Recorrência (05/11/2026): séries de contas e as chaves que impedem a
   // mesma ocorrência ou a mesma cópia de mês de nascer duas vezes.
   await pool.query(RECORRENCIA_SCHEMA_SQL);
+  // Regras de rateio e centros de custo vindos dos textos livres
+  // (05/11/2026). Migração única, marcada em marcos_de_migracao.
+  await pool.query(CENTROS_CUSTO_SCHEMA_SQL);
   // Razão financeiro, agendador e fila de tarefas (05/11/2026). Antes da
   // auditoria: são tabelas imutáveis ou de controle e ficam fora do gatilho.
   // Histórico de baixas e trava de período (05/11/2026, E2).

@@ -8,6 +8,7 @@ import { ArrowDownLeft, Clock, Pencil, Plus, Trash2, TriangleAlert } from 'lucid
 import { ContaReceber, createContaReceber, StatusContaReceber } from '@/lib/crm-types';
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
 import { toast } from '@/lib/toast';
+import { validarRateio } from '@/lib/dimensoes';
 import { consumirAtalho, lerAtalhos } from '@/lib/atalho-da-url';
 import {
   mensagemDaTaxaInvalida, normalizarPlataforma, validarTaxa,
@@ -95,6 +96,7 @@ type ContaComSerie = ContaReceber & { serie_id?: string };
 /** Campos que a tela edita e que a série sabe propagar (05/11/2026). */
 const CAMPOS_DA_SERIE = [
   'origem', 'cliente_id', 'cliente_nome', 'descricao', 'categoria_id', 'forma_recebimento', 'taxa_plataforma', 'observacoes',
+  'centro_custo', 'centro_custo_id',
 ] as const;
 
 /** O que mudou no formulário em relação à conta lida. */
@@ -104,6 +106,11 @@ function diferencasDaConta(existing: ContaReceber, campos: FormState, valorOrigi
     if ((campos[c] ?? '') !== (existing[c] ?? '')) out[c] = campos[c];
   }
   if (valorOriginal !== round2(num(existing.valor_original))) out.valor_original = valorOriginal;
+  // Rateio e tags: compara o que importa (centro, categoria, percentual).
+  const chaveRateio = (r: unknown) => JSON.stringify((Array.isArray(r) ? r : []).map((l: { centro_custo_id?: string; categoria_id?: string; percentual?: number }) =>
+    [l.centro_custo_id ?? '', l.categoria_id ?? '', round2(num(l.percentual))]));
+  if (chaveRateio(campos.rateio) !== chaveRateio(existing.rateio)) out.rateio = campos.rateio;
+  if (JSON.stringify(campos.tags ?? []) !== JSON.stringify(existing.tags ?? [])) out.tags = campos.tags ?? [];
   if (round2(num(campos.taxa)) !== round2(num(existing.taxa))) out.taxa = round2(num(campos.taxa));
   if (campos.data_vencimento !== existing.data_vencimento) out.data_vencimento = campos.data_vencimento;
   return out;
@@ -146,12 +153,16 @@ export default function ContasReceberPage() {
   const [edicaoPendente, setEdicaoPendente] = useState<EdicaoPendente | null>(null);
   const [gravandoEscopo, setGravandoEscopo] = useState(false);
   const [parcelasDe, setParcelasDe] = useState<ContaReceber | null>(null);
+  const abrirDepoisDeCarregar = useRef<string | null>(null);
 
   async function load() {
     setLoading(true);
     try {
       const data = await loadEntities<ContaReceber>('contas-receber');
       setItems(data);
+      const alvo = abrirDepoisDeCarregar.current ? data.find(i => i.id === abrirDepoisDeCarregar.current) : null;
+      abrirDepoisDeCarregar.current = null;
+      if (alvo) openEdit(alvo);
       // As notas vêm junto para o botão da linha saber se já existe documento.
       // Falhar aqui não pode derrubar a tela: sem as notas o botão volta a
       // ser "Emitir nota", que é o comportamento antigo.
@@ -187,6 +198,9 @@ export default function ContasReceberPage() {
     // conta a receber simples (reembolso, acerto, aluguel).
     if (a.get('nova') === '1') { consumirAtalho('nova'); setVendaAberta(true); }
     if (a.get('nova') === 'outro') { consumirAtalho('nova'); openNew(); }
+    // Vindo dos relatórios por categoria, centro ou rateio: abre a conta (05/11/2026).
+    const abrir = a.get('abrir');
+    if (abrir) { consumirAtalho('abrir'); abrirDepoisDeCarregar.current = abrir; }
   }
 
   // Uma vez, ao abrir a tela: o atalho do endereço não é um estado a seguir.
@@ -223,6 +237,10 @@ export default function ContasReceberPage() {
       parcela_numero: item.parcela_numero,
       total_parcelas: item.total_parcelas,
       observacoes: item.observacoes,
+      centro_custo: item.centro_custo ?? '',
+      centro_custo_id: item.centro_custo_id ?? '',
+      rateio: Array.isArray(item.rateio) ? item.rateio : [],
+      tags: Array.isArray(item.tags) ? item.tags : [],
     });
     setSerieEditada(null);
     setEditId(item.id);
@@ -251,6 +269,9 @@ export default function ContasReceberPage() {
       });
       return;
     }
+    // Rateio preenchido fecha 100% e os centavos (05/11/2026).
+    const rateioConferido = validarRateio(round2(form.valor_original), form.rateio);
+    if (!rateioConferido.ok) { toast.error(rateioConferido.erro); return; }
     setErrosForm({});
     setSalvando(true);
     const valorOriginal = round2(form.valor_original);
@@ -261,6 +282,7 @@ export default function ContasReceberPage() {
       ...form,
       taxa: round2(num(form.taxa)),
       taxa_plataforma: normalizarPlataforma(form.taxa_plataforma),
+      rateio: rateioConferido.linhas,
     };
     try {
       if (editId) {
@@ -300,6 +322,7 @@ export default function ContasReceberPage() {
             origem: campos.origem, cliente_id: campos.cliente_id, cliente_nome: campos.cliente_nome,
             descricao: campos.descricao, categoria_id: campos.categoria_id, forma_recebimento: campos.forma_recebimento,
             taxa: campos.taxa, taxa_plataforma: campos.taxa_plataforma, observacoes: campos.observacoes,
+            centro_custo: campos.centro_custo, centro_custo_id: campos.centro_custo_id, rateio: campos.rateio, tags: campos.tags,
           },
         });
         setShowForm(false);
