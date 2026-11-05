@@ -9,6 +9,7 @@ import { nomeDaPlataforma, plataformaDaConta } from '@/lib/plataformas/rotulo';
 import { toast } from '@/lib/toast';
 import { DialogBaixa } from './DialogBaixa';
 import { ehComissaoDeFornecedor } from '@/lib/comissao-da-venda';
+import { AguardandoAprovacao } from '@/components/fin/useLiquidacao';
 
 export type BaixaDeReceberProps = {
   /** A conta a receber; null fecha o diálogo. */
@@ -96,6 +97,7 @@ export function BaixaDeReceber({ conta, onFechar, onRegistrada, plataformasUsada
       if (dados.novoPadrao) await guardarDescontoPadrao(dados.novoPadrao);
       onRegistrada?.();
     } catch (e) {
+      if (e instanceof AguardandoAprovacao) return;
       toast.error('Não foi possível registrar o recebimento.', e instanceof Error ? e.message : '');
     } finally {
       setBaixando(false);

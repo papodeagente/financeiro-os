@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAdmin, recusaFinanceira } from '@/lib/guarda-rota';
+import { recusaAcao, recusaFinanceira } from '@/lib/guarda-rota';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { fecharPeriodo, listarPeriodos } from '@/lib/periodo-fechado';
 
@@ -21,11 +21,13 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const recusa = (await recusaFinanceira('escrever')) ?? (await recusaAdmin());
+  const corpo = (await req.json().catch(() => ({}))) as { conta_bancaria_id?: string; ate?: string };
+  // Direito "Fechar caixa" (perfis de acesso) e, com conta escolhida, a conta liberada.
+  const recusa = (await recusaFinanceira('escrever'))
+    ?? (await recusaAcao('fechar_periodo', { contaBancariaId: corpo.conta_bancaria_id || null }));
   if (recusa) return recusa;
   await initDB();
   if (!pool) return NextResponse.json({ error: 'Banco indisponível' }, { status: 503 });
-  const corpo = (await req.json().catch(() => ({}))) as { conta_bancaria_id?: string; ate?: string };
   if (!corpo.ate || !/^\d{4}-\d{2}-\d{2}$/.test(corpo.ate)) return NextResponse.json({ error: 'Informe a data.' }, { status: 400 });
   const tenantId = await getTenantId();
   const sessao = await getSession();

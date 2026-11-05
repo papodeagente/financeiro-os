@@ -148,6 +148,8 @@ export const AUDIT_SCHEMA_SQL = String.raw`
   CREATE OR REPLACE FUNCTION audit_module(table_name TEXT)
   RETURNS TEXT LANGUAGE sql IMMUTABLE AS $fn$
     SELECT CASE
+      WHEN table_name IN ('grupos_usuario','grupo_usuario_membros','usuario_restricoes') THEN 'Equipe'
+      WHEN table_name IN ('pedidos_aprovacao','alcadas_aprovacao') THEN 'Financeiro'
       WHEN table_name IN ('contas_receber','contas_pagar','contas_bancarias','plano_contas','centros_custo','regras_rateio','transferencias','extrato_bancario','cartoes_corp') THEN 'Financeiro'
       WHEN table_name IN ('config_fiscal','notas_fiscais') THEN 'Fiscal'
       WHEN table_name IN ('usuarios','membros','planos_comissao','comissoes','metas') THEN 'Equipe'

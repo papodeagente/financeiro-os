@@ -12,6 +12,8 @@ import type { ExecutorSQL } from '@/lib/caixa-atomico';
 // dela entra no razão uma vez só. Nunca derruba o cadastro.
 export const { GET, POST } = createCrudHandlers('contas_bancarias', ['nome', 'banco'], {
   somenteFinanceiro: true,
+  // Contas liberadas por perfil de acesso (05/11/2026); sem restrição, todas.
+  filtroDeConta: { cadastro: true },
   normalizarCadastro: item => { item.saldo_atual = round2(num(item.saldo_inicial)); },
   aposGravar: async (tenantId, item) => {
     if (!pool || typeof item.id !== 'string') return;

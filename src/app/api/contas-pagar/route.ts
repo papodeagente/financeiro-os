@@ -6,5 +6,9 @@ import { prepararDimensoesDaConta } from '@/lib/dimensoes';
 export const { GET, POST } = createCrudHandlers(
   'contas_pagar',
   ['fornecedor_id', 'status'],
-  { somenteFinanceiro: true, protegerBaixa: true, validarCadastro: prepararDimensoesDaConta },
+  {
+    somenteFinanceiro: true, protegerBaixa: true, validarCadastro: prepararDimensoesDaConta,
+    // Pago numa conta não liberada para a pessoa: some da lista (05/11/2026).
+    filtroDeConta: { campos: ['conta_bancaria_id'], soBaixados: true },
+  },
 );

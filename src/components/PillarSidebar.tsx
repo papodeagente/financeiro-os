@@ -25,7 +25,7 @@ import {
   PanelLeftClose, PanelLeftOpen,
   Eraser, LifeBuoy, FileText,
   LayoutGrid, ChartColumn, ArrowDownLeft, ArrowUpRight, GitCompareArrows, ListTree,
-  Contact, Truck, Repeat, Lock, Network, Split, Tags,
+  Contact, Truck, Repeat, Lock, Network, Split, Tags, ShieldCheck, Stamp, Scale,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -99,6 +99,7 @@ const FINANCEIRO_MENU: SidebarSection[] = [
       { key: 'notas-fiscais', label: 'Notas fiscais', icon: Receipt, href: '/financeiro-ag/notas' },
       { key: 'transferencias', label: 'Transferências', icon: ArrowRightLeft, href: '/financeiro-ag/transferencias' },
       { key: 'fechamento', label: 'Fechar Caixa', icon: Lock, href: '/financeiro-ag/fechamento' },
+      { key: 'aprovacoes', label: 'Aprovações', icon: Stamp, href: '/financeiro-ag/aprovacoes' },
     ],
   },
   {
@@ -129,6 +130,8 @@ const CONFIGURACOES_MENU: SidebarSection[] = [
       { key: 'cfg-agencia', label: 'Dados da agência', icon: Building2, href: '/config/agencia' },
       { key: 'cfg-usuarios', label: 'Usuários', icon: Users, href: '/config/usuarios' },
       { key: 'cfg-financeiro', label: 'Financeiro', icon: Percent, href: '/config/financeiro' },
+      { key: 'cfg-perfis', label: 'Perfis de acesso', icon: ShieldCheck, href: '/config/perfis-de-acesso' },
+      { key: 'cfg-limites', label: 'Limites e aprovação', icon: Scale, href: '/config/limites-e-aprovacao' },
     ],
   },
   {

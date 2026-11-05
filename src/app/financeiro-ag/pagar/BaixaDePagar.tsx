@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 import type { ContaPagar } from '@/lib/crm-types';
 import type { Anexo } from '@/components/fin/AnexoComprovante';
-import { useLiquidacao } from '@/components/fin/useLiquidacao';
+import { AguardandoAprovacao, useLiquidacao } from '@/components/fin/useLiquidacao';
 import { hojeISO, num, round2 } from '@/lib/money';
 import { toast } from '@/lib/toast';
 import { formatBRL } from '@/lib/utils';
@@ -63,6 +63,7 @@ export function BaixaDePagar({ conta, onFechar, onRegistrada }: BaixaDePagarProp
       onFechar();
       onRegistrada?.();
     } catch (e) {
+      if (e instanceof AguardandoAprovacao) return;
       toast.error('Não foi possível registrar o pagamento.', e instanceof Error ? e.message : '');
     } finally {
       setPagando(false);

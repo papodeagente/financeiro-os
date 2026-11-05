@@ -6,14 +6,20 @@ import { recusaFinanceira, respostaPeriodoFechado } from '@/lib/guarda-rota';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { ErroBaixa, historicoDaConta, registrarBaixas, type ItemBaixa } from '@/lib/baixas-servidor';
 import type { TituloTabela } from '@/lib/baixa-calculo';
+import { conferirBaixa, pedirAprovacaoDaBaixa, RecusaDaBaixa, type SessaoDaBaixa } from '@/lib/baixas-porteiro';
 
 // Liquidação no servidor (05/11/2026).
 //   POST { modo: 'previa' | 'gravar', itens: ItemBaixa[], assinatura? }
 //        cabeçalho Idempotency-Key ao gravar: repetir não grava duas vezes.
+//        pedir_aprovacao: true → fora dos limites, abre o pedido (202) em vez de recusar.
+//        Antes de gravar: direito de dar baixa, conta liberada, alçada e limites (baixas-porteiro).
 //   GET  ?titulo_tabela=contas_receber&titulo_id=...  → histórico de baixas.
 export const dynamic = 'force-dynamic';
 
 function erro(e: unknown) {
+  if (e instanceof RecusaDaBaixa) {
+    return NextResponse.json({ error: e.message, ...(e.pedir ? { pedir_aprovacao: e.pedir } : {}) }, { status: e.status });
+  }
   const periodo = respostaPeriodoFechado(e);
   if (periodo) return periodo;
   if (e instanceof ErroBaixa) return NextResponse.json({ error: e.message }, { status: e.status });
@@ -26,7 +32,9 @@ function erro(e: unknown) {
 }
 
 export async function POST(req: Request) {
-  const corpo = (await req.json().catch(() => null)) as { modo?: string; itens?: ItemBaixa[]; assinatura?: string } | null;
+  const corpo = (await req.json().catch(() => null)) as {
+    modo?: string; itens?: ItemBaixa[]; assinatura?: string; pedir_aprovacao?: boolean; motivo?: string;
+  } | null;
   const gravar = corpo?.modo === 'gravar';
   const recusa = await recusaFinanceira(gravar ? 'escrever' : 'ler');
   if (recusa) return recusa;
@@ -42,10 +50,48 @@ export async function POST(req: Request) {
     origem: (corpo.itens.length > 1 ? 'lote' : 'tela') as 'lote' | 'tela',
     idempotencia: req.headers.get('idempotency-key') || undefined,
   };
+  const itens = corpo.itens;
+  const quem = (sessao ?? {}) as SessaoDaBaixa;
   try {
-    const r = gravar
-      ? await emTransacao(exec => registrarBaixas(exec, ctx, corpo.itens!, { gravar: true, assinatura: corpo.assinatura }))
-      : await registrarBaixas(pool as unknown as ExecutorSQL, ctx, corpo.itens, { gravar: false });
+    if (!gravar) {
+      const previa = await registrarBaixas(pool as unknown as ExecutorSQL, ctx, itens, { gravar: false });
+      // A prévia também diz se vai precisar de aprovação, sem bloquear a tela.
+      let porteiro: { ok: true } | { ok: false; error: string; pedir_aprovacao?: RecusaDaBaixa['pedir'] } = { ok: true };
+      try {
+        await conferirBaixa(pool as unknown as ExecutorSQL, quem, tenantId, itens, previa.itens);
+      } catch (e) {
+        if (!(e instanceof RecusaDaBaixa)) throw e;
+        porteiro = { ok: false, error: e.message, ...(e.pedir ? { pedir_aprovacao: e.pedir } : {}) };
+      }
+      return NextResponse.json({ ...previa, porteiro });
+    }
+    const r = await emTransacao(async exec => {
+      // Repetição da mesma gravação (mesma Idempotency-Key): já passou pelo
+      // porteiro da primeira vez; devolve o que foi feito.
+      const chaves = ctx.idempotencia ? itens.map((_, i) => `${ctx.idempotencia}:${i}`) : [];
+      const jaFeitas = chaves.length
+        ? Number((await exec.query(
+          `SELECT count(*)::int AS n FROM baixas WHERE tenant_id = $1 AND chave_idempotencia = ANY($2::text[])`,
+          [tenantId, chaves])).rows[0]?.n ?? 0)
+        : 0;
+      if (jaFeitas === itens.length) return registrarBaixas(exec, ctx, itens, { gravar: true, assinatura: corpo.assinatura });
+      const previa = await registrarBaixas(exec, ctx, itens, { gravar: false });
+      try {
+        await conferirBaixa(exec, quem, tenantId, itens, previa.itens);
+      } catch (e) {
+        // Fora dos limites e a pessoa pediu aprovação: abre o pedido no lugar da baixa.
+        if (e instanceof RecusaDaBaixa && e.pedir?.tipo === 'limites' && corpo.pedir_aprovacao === true) {
+          const pedido = await pedirAprovacaoDaBaixa({
+            exec, tenantId, sessao: quem, itens, previa: previa.itens, origem: ctx.origem,
+            idempotencia: ctx.idempotencia, motivo: typeof corpo.motivo === 'string' ? corpo.motivo : undefined,
+          });
+          return { aguardando_aprovacao: true as const, ...pedido };
+        }
+        throw e;
+      }
+      return registrarBaixas(exec, ctx, itens, { gravar: true, assinatura: corpo.assinatura });
+    });
+    if ('aguardando_aprovacao' in r) return NextResponse.json(r, { status: 202 });
     return NextResponse.json(r);
   } catch (e) {
     return erro(e);

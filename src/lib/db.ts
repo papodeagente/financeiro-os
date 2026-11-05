@@ -9,6 +9,7 @@ import { BAIXAS_SCHEMA_SQL } from './baixas-servidor';
 import { PERIODO_SCHEMA_SQL } from './periodo-fechado';
 import { RECORRENCIA_SCHEMA_SQL } from './recorrencia-schema';
 import { CENTROS_CUSTO_SCHEMA_SQL } from './centros-custo-servidor';
+import { PERMISSOES_SCHEMA_SQL } from './permissoes-schema';
 import { AUDIT_SCHEMA_SQL } from './audit-schema';
 import { NOTIFICACOES_SCHEMA_SQL } from './notificacoes-schema';
 import { MAPAS_MENTAIS_COMPARTILHAMENTO_SCHEMA_SQL } from './mapas-mentais-compartilhamento';
@@ -1521,6 +1522,9 @@ async function executarInitDB() {
   // Regras de rateio e centros de custo vindos dos textos livres
   // (05/11/2026). Migração única, marcada em marcos_de_migracao.
   await pool.query(CENTROS_CUSTO_SCHEMA_SQL);
+  // Perfis de acesso, restrição por conta, pedidos de aprovação e alçadas
+  // (05/11/2026). Tabelas vazias = o papel decide como antes.
+  await pool.query(PERMISSOES_SCHEMA_SQL);
   // Razão financeiro, agendador e fila de tarefas (05/11/2026). Antes da
   // auditoria: são tabelas imutáveis ou de controle e ficam fora do gatilho.
   // Histórico de baixas e trava de período (05/11/2026, E2).

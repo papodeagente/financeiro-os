@@ -5,6 +5,9 @@ export const TIPOS_NOTIFICACAO = [
   { tipo: 'PROPOSTA_LEAD', label: 'Novos interessados', descricao: 'Quando alguém deixa seus dados em uma proposta.' },
   { tipo: 'VENDA_VENDEDOR_NAO_CADASTRADO', label: 'Pendências de vendedores', descricao: 'Vendas recebidas do CRM sem vendedor cadastrado.' },
   { tipo: 'VENDA_CANCELADA_CRM', label: 'Vendas perdidas no CRM', descricao: 'Quando o CRM perde uma venda que já movimentou dinheiro, ou pede aprovação para cancelar.' },
+  // Pedidos de aprovação do financeiro (05/11/2026).
+  { tipo: 'APROVACAO_PEDIDA', label: 'Pedidos de aprovação', descricao: 'Quando alguém pede aprovação para pagar, dar desconto ou mudar data.' },
+  { tipo: 'APROVACAO_DECIDIDA', label: 'Respostas de aprovação', descricao: 'Quando um pedido seu é aprovado ou recusado.' },
 ] as const;
 
 export type TipoNotificacao = (typeof TIPOS_NOTIFICACAO)[number]['tipo'];

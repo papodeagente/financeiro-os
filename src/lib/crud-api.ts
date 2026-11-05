@@ -4,6 +4,8 @@ import { getTenantId } from './tenant';
 import { getSession } from './auth';
 import { bloqueioFinanceiro, podeExcluir, podeVerTodasVendas } from './permissoes';
 import { recusaDoPost, sqlPreservarDerivados, STATUS_DE_BAIXA } from './guarda-baixa';
+import { contasPermitidas, pode } from './permissoes-servidor';
+import { filtrarPorConta, type FiltroDeConta } from './filtro-de-conta';
 
 export interface CrudOpcoes {
   /**
@@ -62,6 +64,12 @@ export interface CrudOpcoes {
    * mensagem de recusa (400) ou null. Contas usam para o rateio (05/11/2026).
    */
   validarCadastro?: (item: Record<string, unknown>) => string | null;
+  /**
+   * Permissão por conta bancária (05/11/2026): quem tem contas liberadas por
+   * perfil de acesso ou pela restrição própria não lê linhas de outras
+   * contas. Sem restrição (o padrão), a leitura é a mesma de antes.
+   */
+  filtroDeConta?: FiltroDeConta;
 }
 
 // As regras puras vivem em ./guarda-baixa para poderem ser testadas sem
@@ -71,16 +79,32 @@ export interface CrudOpcoes {
 async function guardaFinanceira(opcoes: CrudOpcoes, modo: 'ler' | 'escrever') {
   const exige = opcoes.somenteFinanceiro || (modo === 'escrever' && opcoes.escritaFinanceira);
   if (!exige) return null;
-  const bloqueio = bloqueioFinanceiro(await getSession(), modo);
-  if (!bloqueio) return null;
-  return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
+  const sessao = await getSession();
+  const bloqueio = bloqueioFinanceiro(sessao, modo);
+  if (bloqueio) return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
+  // Abaixo do teto do papel, o perfil de acesso ainda pode tirar o acesso.
+  if (await pode(sessao, modo === 'escrever' ? 'editar_financeiro' : 'ver_financeiro')) return null;
+  return NextResponse.json({ error: 'Seu perfil de acesso não inclui isto no financeiro.' }, { status: 403 });
+}
+
+/** Contas liberadas para a sessão, só quando a tabela filtra por conta. */
+async function contasDaLeitura(opcoes: CrudOpcoes): Promise<string[] | null> {
+  if (!opcoes.filtroDeConta) return null;
+  return contasPermitidas(await getSession());
+}
+
+/** O cadastro de conta bancária (por id) está liberado para a sessão? */
+async function contaDoCadastroLiberada(opcoes: CrudOpcoes, id: string): Promise<boolean> {
+  if (!opcoes.filtroDeConta?.cadastro) return true;
+  const contas = await contasDaLeitura(opcoes);
+  return contas === null || contas.includes(id);
 }
 
 /** Excluir exige o perfil que exclui, em qualquer tabela (FIN-03). */
 async function guardaExclusao() {
   const sessao = await getSession();
   if (!sessao) return NextResponse.json({ error: 'Sessao necessaria' }, { status: 401 });
-  if (podeExcluir(sessao)) return null;
+  if (podeExcluir(sessao) && await pode(sessao, 'excluir')) return null;
   return NextResponse.json({ error: 'Seu perfil nao pode excluir registros.' }, { status: 403 });
 }
 
@@ -122,7 +146,8 @@ export function createCrudHandlers(tableName: string, indexColumns: string[] = [
         : await pool.query(
           `SELECT data FROM ${tableName} WHERE tenant_id = $1 AND ${opcoes.colunaDoVendedor} = $2 ORDER BY created_at DESC`,
           [tenantId, vendedor]);
-      return NextResponse.json(rows.map(r => r.data));
+      const contas = await contasDaLeitura(opcoes);
+      return NextResponse.json(filtrarPorConta(rows.map(r => r.data as Record<string, unknown>), opcoes.filtroDeConta, contas));
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
       return NextResponse.json({ error: msg }, { status: 500 });
@@ -140,6 +165,15 @@ export function createCrudHandlers(tableName: string, indexColumns: string[] = [
       const recusa = await guardaFinanceira(opcoes, 'escrever');
       if (recusa) return recusa;
       const tenantId = await getTenantId();
+      // O POST é upsert: regravar uma conta bancária não liberada é recusado
+      // (criar uma conta nova continua valendo).
+      if (!(await contaDoCadastroLiberada(opcoes, item.id))) {
+        const { rows: existe } = await pool.query(
+          `SELECT 1 FROM ${tableName} WHERE id = $1 AND tenant_id = $2`, [item.id, tenantId]);
+        if (existe.length > 0) {
+          return NextResponse.json({ error: 'Esta conta bancária não está liberada para você.' }, { status: 403 });
+        }
+      }
 
       if (opcoes.protegerBaixa) {
         // Criar já baixado é recusado antes de qualquer SQL.
@@ -231,6 +265,10 @@ export function createCrudItemHandlers(tableName: string, indexColumns: string[]
           `SELECT data FROM ${tableName} WHERE id = $1 AND tenant_id = $2 AND ${opcoes.colunaDoVendedor} = $3`,
           [id, tenantId, vendedor]);
       if (rows.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      const contas = await contasDaLeitura(opcoes);
+      if (filtrarPorConta([rows[0].data as Record<string, unknown>], opcoes.filtroDeConta, contas).length === 0) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
       return NextResponse.json(rows[0].data);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
@@ -250,6 +288,9 @@ export function createCrudItemHandlers(tableName: string, indexColumns: string[]
       if (!pool) return NextResponse.json(item);
       const recusa = await guardaFinanceira(opcoes, 'escrever');
       if (recusa) return recusa;
+      if (!(await contaDoCadastroLiberada(opcoes, id))) {
+        return NextResponse.json({ error: 'Esta conta bancária não está liberada para você.' }, { status: 403 });
+      }
       const tenantId = await getTenantId();
 
       // Campos derivados ficam com o valor que está no banco, não com o que
@@ -302,6 +343,9 @@ export function createCrudItemHandlers(tableName: string, indexColumns: string[]
       if (pool) {
         const recusa = (await guardaExclusao()) ?? (await guardaFinanceira(opcoes, 'escrever'));
         if (recusa) return recusa;
+        if (!(await contaDoCadastroLiberada(opcoes, id))) {
+          return NextResponse.json({ error: 'Esta conta bancária não está liberada para você.' }, { status: 403 });
+        }
         const tenantId = await getTenantId();
         await pool.query(
           `DELETE FROM ${tableName} WHERE id = $1 AND tenant_id = $2`,

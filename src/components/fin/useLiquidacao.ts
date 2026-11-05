@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { loadEntities } from '@/lib/crm-storage';
+import { toast } from '@/lib/toast';
 import { hojeISO, num, round2 } from '@/lib/money';
 import { generateId } from '@/lib/utils';
 import {
@@ -106,10 +107,7 @@ export function useLiquidacao(tabela: TituloTabela, titulo: Titulo | null, valor
   /** Grava no servidor. Repetir (duplo clique) não grava duas vezes. */
   async function gravar(extras: { forma?: string; observacao?: string; anexos?: Array<Record<string, unknown>>; taxa_plataforma?: string } = {}) {
     if (!titulo) throw new Error('Nenhuma conta selecionada.');
-    const res = await fetch('/api/baixas', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': chave },
-      body: JSON.stringify({
+    const corpoDoPedido = {
         modo: 'gravar',
         itens: [{
           titulo_tabela: tabela, titulo_id: titulo.id, data, conta_bancaria_id: contaId,
@@ -117,12 +115,62 @@ export function useLiquidacao(tabela: TituloTabela, titulo: Titulo | null, valor
           ...extras,
           esperado: { status_depois: plano.status_depois, valor_baixado_depois: plano.valor_baixado_depois },
         }],
-      }),
+    };
+    const res = await fetch('/api/baixas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': chave },
+      body: JSON.stringify(corpoDoPedido),
     });
-    const corpo = (await res.json().catch(() => ({}))) as { error?: string };
+    const corpo = (await res.json().catch(() => ({}))) as {
+      error?: string; pedir_aprovacao?: { tipo: 'limites' | 'pagamento'; conta_pagar_id?: string; status?: string };
+    };
+    if (res.status === 409 && corpo.pedir_aprovacao) {
+      oferecerAprovacao(corpo.error || 'Precisa de aprovação.', corpo.pedir_aprovacao, corpoDoPedido);
+      throw new AguardandoAprovacao(corpo.error || 'Precisa de aprovação.');
+    }
     if (!res.ok) throw new Error(corpo.error || `Erro ${res.status}`);
     return plano;
   }
 
+  /**
+   * Fora dos limites ou acima da alçada: o aviso traz o botão que abre o
+   * pedido. Quem aprova vê em Financeiro › Aprovações; aprovada, a baixa
+   * é registrada sozinha (limites) ou o pagamento fica liberado (alçada).
+   */
+  function oferecerAprovacao(
+    motivo: string,
+    pedir: { tipo: 'limites' | 'pagamento'; conta_pagar_id?: string; status?: string },
+    corpoDoPedido: Record<string, unknown>,
+  ) {
+    if (pedir.tipo === 'pagamento' && pedir.status === 'PENDENTE') {
+      toast.info('Pagamento aguardando aprovação.', 'Quando for aprovado, registre o pagamento de novo.');
+      return;
+    }
+    toast.comAcao('Precisa de aprovação', motivo, {
+      rotulo: 'Pedir aprovação',
+      onClick: () => {
+        const req = pedir.tipo === 'pagamento'
+          ? fetch('/api/aprovacoes', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ acao: 'pedir_pagamento', conta_pagar_id: pedir.conta_pagar_id }),
+          })
+          : fetch('/api/baixas', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': chave },
+            body: JSON.stringify({ ...corpoDoPedido, pedir_aprovacao: true }),
+          });
+        void req.then(async r => {
+          const c = (await r.json().catch(() => ({}))) as { error?: string };
+          if (!r.ok) { toast.error('Não foi possível pedir aprovação.', c.error || `Erro ${r.status}`); return; }
+          toast.success('Pedido de aprovação enviado.', pedir.tipo === 'pagamento'
+            ? 'Quando for aprovado, registre o pagamento.'
+            : 'A baixa é registrada sozinha quando for aprovada.');
+        }).catch(() => toast.error('Não foi possível pedir aprovação.'));
+      },
+    });
+  }
+
   return { bloco, plano, gravar };
 }
+
+/** A baixa não foi gravada: espera aprovação. O aviso já foi mostrado. */
+export class AguardandoAprovacao extends Error {}

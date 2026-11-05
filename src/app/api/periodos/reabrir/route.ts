@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAdmin } from '@/lib/guarda-rota';
+import { recusaAcao, recusaAdmin } from '@/lib/guarda-rota';
 import { emTransacao } from '@/lib/caixa-atomico';
 import { reabrirPeriodo } from '@/lib/periodo-fechado';
 import { registrarEventoAuditoria } from '@/lib/audit';
@@ -13,11 +13,12 @@ import { registrarEventoAuditoria } from '@/lib/audit';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
-  const recusa = await recusaAdmin();
+  const corpo = (await req.json().catch(() => ({}))) as { conta_bancaria_id?: string; ate?: string | null; motivo?: string };
+  // Reabrir continua só para administrador, e o perfil de acesso pode tirar.
+  const recusa = (await recusaAdmin()) ?? (await recusaAcao('reabrir_periodo', { contaBancariaId: corpo.conta_bancaria_id || null }));
   if (recusa) return recusa;
   await initDB();
   if (!pool) return NextResponse.json({ error: 'Banco indisponível' }, { status: 503 });
-  const corpo = (await req.json().catch(() => ({}))) as { conta_bancaria_id?: string; ate?: string | null; motivo?: string };
   const tenantId = await getTenantId();
   const sessao = await getSession();
   try {

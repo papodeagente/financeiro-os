@@ -28,6 +28,8 @@ import {
   ThumbsUp,
   UserPlus,
   UserX,
+  ClipboardCheck,
+  Stamp,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -96,6 +98,8 @@ const ICON_FOR_TIPO: Record<string, typeof Bell> = {
   PROPOSTA_LEAD: UserPlus,
   VENDA_VENDEDOR_NAO_CADASTRADO: UserX,
   VENDA_CANCELADA_CRM: AlertCircle,
+  APROVACAO_PEDIDA: Stamp,
+  APROVACAO_DECIDIDA: ClipboardCheck,
 };
 
 const COLOR_FOR_TIPO: Record<string, string> = {
@@ -105,6 +109,8 @@ const COLOR_FOR_TIPO: Record<string, string> = {
   PROPOSTA_LEAD: 'text-[var(--fin-warning-text)] bg-[var(--fin-warning-soft)]',
   VENDA_VENDEDOR_NAO_CADASTRADO: 'text-[var(--fin-negative-text)] bg-[var(--fin-negative-soft)]',
   VENDA_CANCELADA_CRM: 'text-[var(--fin-warning-text)] bg-[var(--fin-warning-soft)]',
+  APROVACAO_PEDIDA: 'text-[var(--fin-accent)] bg-[var(--fin-accent-soft)]',
+  APROVACAO_DECIDIDA: 'text-[var(--fin-positive)] bg-[var(--fin-positive-soft)]',
 };
 
 function createDefaultPreferences(): PreferenciasNotificacoes {

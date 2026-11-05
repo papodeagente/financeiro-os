@@ -5,6 +5,9 @@ import { getTenantId } from '@/lib/tenant';
 import { emTransacao, estornarBaixaDaConta, ErroMovimentoCaixa } from '@/lib/caixa-atomico';
 import { editarConta, ErroEdicaoConta } from '@/lib/baixa-de-conta';
 import { prepararDimensoesDaConta } from '@/lib/dimensoes';
+import { getSession } from '@/lib/auth';
+import type { ExecutorSQL } from '@/lib/caixa-atomico';
+import { conferirEdicaoDoTitulo, type SessaoDaBaixa } from '@/lib/baixas-porteiro';
 
 const TABLE = 'contas_receber';
 const INDEX_COLS = ['venda_id', 'cliente_id', 'status'];
@@ -52,6 +55,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (rateioInvalido) return NextResponse.json({ error: rateioInvalido }, { status: 400 });
     if (!pool) return NextResponse.json(item);
     const tenantId = await getTenantId();
+    // Perfis de acesso (05/11/2026): baixa pela edição segue as mesmas regras da liquidação.
+    const barrado = await conferirEdicaoDoTitulo(
+      pool as unknown as ExecutorSQL, ((await getSession()) ?? {}) as SessaoDaBaixa, tenantId, TABLE, id, item as Record<string, unknown>);
+    if (barrado) return NextResponse.json({ error: barrado.message, ...(barrado.pedir ? { pedir_aprovacao: barrado.pedir } : {}) }, { status: barrado.status });
     // Linha travada, movimento calculado sobre o estado atual e caixa que não
     // se move desfaz tudo (ver src/lib/baixa-de-conta.ts).
     const gravado = await editarConta({
