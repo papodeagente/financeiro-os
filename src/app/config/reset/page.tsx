@@ -5,10 +5,12 @@ import { IconeDeIndicador } from '@/components/fin/MetricCard';
 import { useRouter } from 'next/navigation';
 import {
   AlertTriangle, Loader2, Eraser, Check,
-  Wallet, Package, Users, Sparkles, Filter, Workflow,
+  Wallet, Package, Users, Sparkles, Filter, Workflow, Contact, CreditCard,
 } from 'lucide-react';
 
-type CategoryId = 'financeiro' | 'produtos' | 'grupos' | 'mapas_mentais' | 'funis' | 'fluxogramas';
+type CategoryId =
+  | 'financeiro' | 'produtos' | 'grupos' | 'mapas_mentais' | 'funis' | 'fluxogramas'
+  | 'cadastros_e_crm' | 'plataformas';
 
 interface CategoryDef {
   id: CategoryId;
@@ -54,12 +56,28 @@ const CATEGORIES: CategoryDef[] = [
     description: 'Todos os fluxogramas e suas categorias.',
     icon: Workflow,
   },
+  // As duas abaixo só aparecem na conta do ecossistema (o servidor diz em `disponiveis`).
+  {
+    id: 'cadastros_e_crm',
+    label: 'Cadastros e integração com o CRM',
+    description: 'Clientes, fornecedores e equipe que vieram do CRM, anotações e tarefas das negociações, notificações, notas fiscais, voos monitorados e a configuração da integração, que fica desligada.',
+    icon: Contact,
+  },
+  {
+    id: 'plataformas',
+    label: 'Plataformas de pagamento',
+    description: 'Recebimentos importados da Hotmart, Asaas e Pagar.me, revisões, desconto padrão e as credenciais. Para voltar a importar, é preciso conectar de novo.',
+    icon: CreditCard,
+  },
 ];
+
+const SO_ECOSSISTEMA: CategoryId[] = ['cadastros_e_crm', 'plataformas'];
 
 export default function ResetPage() {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<CategoryId>>(new Set());
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
+  const [disponiveis, setDisponiveis] = useState<string[] | null>(null);
   const [confirmText, setConfirmText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,9 +93,16 @@ export default function ResetPage() {
         if (!r.ok) throw new Error(await r.text());
         const d = await r.json();
         setCounts(d.counts || {});
+        setDisponiveis(Array.isArray(d.disponiveis) ? d.disponiveis : null);
       })
       .catch(e => setError(e instanceof Error ? e.message : 'Falha ao carregar dados'));
   }, []);
+
+  // Sem a lista do servidor, só as categorias que toda conta tem.
+  const visiveis = CATEGORIES.filter(c =>
+    disponiveis ? disponiveis.includes(c.id) : !SO_ECOSSISTEMA.includes(c.id),
+  );
+  const zeraTudo = visiveis.some(c => SO_ECOSSISTEMA.includes(c.id));
 
   const toggle = (id: CategoryId) => {
     setSelected(prev => {
@@ -89,8 +114,8 @@ export default function ResetPage() {
   };
 
   const toggleAll = () => {
-    if (selected.size === CATEGORIES.length) setSelected(new Set());
-    else setSelected(new Set(CATEGORIES.map(c => c.id)));
+    if (selected.size === visiveis.length) setSelected(new Set());
+    else setSelected(new Set(visiveis.map(c => c.id)));
   };
 
   const totalSelected = Array.from(selected).reduce(
@@ -150,8 +175,17 @@ export default function ResetPage() {
           <div className="text-sm text-[var(--fin-negative-text)]">
             <p className="font-semibold mb-1">Atenção — ação destrutiva</p>
             <ul className="list-disc list-inside text-[var(--fin-negative-text)] text-[13px] space-y-0.5">
-              <li>Cadastros de pessoas (clientes, fornecedores, equipe) <strong>não</strong> serão removidos.</li>
-              <li>Configurações da agência, usuários, integrações e plano também ficam intactos.</li>
+              {zeraTudo ? (
+                <>
+                  <li>Cadastros, integração com o CRM e plataformas só saem se você marcar essas categorias.</li>
+                  <li>Usuários, dados da empresa, dados fiscais e assinatura ficam intactos.</li>
+                </>
+              ) : (
+                <>
+                  <li>Cadastros de pessoas (clientes, fornecedores, equipe) <strong>não</strong> serão removidos.</li>
+                  <li>Configurações da agência, usuários, integrações e plano também ficam intactos.</li>
+                </>
+              )}
               <li>Recomendado: exportar relatórios financeiros antes de zerar essa categoria.</li>
             </ul>
           </div>
@@ -191,11 +225,11 @@ export default function ResetPage() {
             onClick={toggleAll}
             className="text-xs font-medium text-[var(--fin-accent)] hover:text-[var(--fin-accent)]"
           >
-            {selected.size === CATEGORIES.length ? 'Desmarcar todos' : 'Selecionar todos'}
+            {selected.size === visiveis.length ? 'Desmarcar todos' : 'Selecionar todos'}
           </button>
         </div>
         <ul className="divide-y divide-[var(--fin-border)]">
-          {CATEGORIES.map(cat => {
+          {visiveis.map(cat => {
             const Icon = cat.icon;
             const isSelected = selected.has(cat.id);
             const count = counts?.[cat.id] ?? null;
