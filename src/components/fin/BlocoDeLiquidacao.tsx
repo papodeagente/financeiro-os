@@ -8,9 +8,11 @@ import { Money } from '@/components/fin/Money';
 import { Segmentado } from '@/components/fin/Segmentado';
 import { cn } from '@/lib/utils';
 import type { EncargosSugeridos, PlanoDaBaixa, TratamentoDiferenca } from '@/lib/baixa-calculo';
+import type { OpcaoDeForma } from '@/lib/formas-pagamento';
 
 const CONTROLE = 'h-11 rounded-[var(--fin-r-md)] border-[var(--fin-border-strong)] bg-[var(--fin-surface)] fin-t-body lg:h-10';
 const CAIXA_GERAL = '__caixa_geral__';
+const SEM_FORMA = '__sem_forma__';
 
 export type ContaOpcao = { id: string; nome: string };
 
@@ -37,6 +39,12 @@ export type BlocoDeLiquidacaoProps = {
   plano: PlanoDaBaixa;
   /** Dinheiro informado sem o que o tratamento acrescentou (para mostrar a diferença). */
   diferencaBruta: number;
+  /** Formas de pagamento do cadastro (05/11/2026). Sem elas, o campo não aparece. */
+  formas?: OpcaoDeForma[];
+  forma?: string;
+  onForma?: (v: string) => void;
+  /** A conta mostrada é a padrão da forma escolhida. */
+  contaDaForma?: boolean;
 };
 
 /**
@@ -51,6 +59,10 @@ export function BlocoDeLiquidacao(p: BlocoDeLiquidacaoProps) {
   const faltou = p.diferencaBruta < -0.005;
   const sobrou = p.diferencaBruta > 0.005;
   const nomeConta = (id: string | null) => (id ? p.contas.find(c => c.id === id)?.nome ?? 'Conta' : 'Caixa Geral');
+  const temFormas = Boolean(p.formas && p.onForma);
+  const opcaoForma = p.forma ? p.formas?.find(f => f.valor === p.forma) : undefined;
+  const rotuloForma = opcaoForma?.rotulo ?? 'Não informar';
+  const detalheForma = opcaoForma?.detalhe;
 
   return (
     <div className="flex flex-col gap-[var(--fin-s-3)]">
@@ -67,7 +79,30 @@ export function BlocoDeLiquidacao(p: BlocoDeLiquidacaoProps) {
             />
           )}
         </Field>
-        <Field rotulo="Conta" ajuda={p.contaTravadaMotivo ?? undefined}>
+        {temFormas ? (
+          <Field rotulo="Forma" ajuda={detalheForma}>
+            {a => (
+              <Select
+                value={p.forma || SEM_FORMA}
+                onValueChange={v => p.onForma?.(!v || v === SEM_FORMA ? '' : String(v))}
+              >
+                <SelectTrigger id={a.id} aria-describedby={a['aria-describedby']} className={cn(CONTROLE, 'w-full')}>
+                  <SelectValue>{() => rotuloForma}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SEM_FORMA} className="fin-t-body">Não informar</SelectItem>
+                  {(p.formas ?? []).map(f => (
+                    <SelectItem key={f.valor} value={f.valor} className="fin-t-body">{f.rotulo}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </Field>
+        ) : null}
+        <Field
+          rotulo="Conta"
+          ajuda={p.contaTravadaMotivo ?? (p.contaDaForma ? 'Conta padrão desta forma de pagamento.' : undefined)}
+        >
           {a => (
             <Select
               value={p.contaId ?? CAIXA_GERAL}

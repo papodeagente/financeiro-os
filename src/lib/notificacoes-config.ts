@@ -8,6 +8,9 @@ export const TIPOS_NOTIFICACAO = [
   // Pedidos de aprovação do financeiro (05/11/2026).
   { tipo: 'APROVACAO_PEDIDA', label: 'Pedidos de aprovação', descricao: 'Quando alguém pede aprovação para pagar, dar desconto ou mudar data.' },
   { tipo: 'APROVACAO_DECIDIDA', label: 'Respostas de aprovação', descricao: 'Quando um pedido seu é aprovado ou recusado.' },
+  // Avisos de vencimento (05/11/2026), ligados em Configurações › Financeiro.
+  { tipo: 'CONTAS_A_PAGAR_VENCENDO', label: 'Contas a pagar vencendo', descricao: 'De manhã, as contas a pagar que vencem hoje (e, se ligado, amanhã).' },
+  { tipo: 'CONTAS_A_RECEBER_ATRASADAS', label: 'Contas a receber em atraso', descricao: 'De manhã, quantas contas a receber estão em atraso e quanto somam.' },
 ] as const;
 
 export type TipoNotificacao = (typeof TIPOS_NOTIFICACAO)[number]['tipo'];

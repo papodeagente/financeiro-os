@@ -6,6 +6,7 @@ import { emTransacao, type ExecutorSQL } from '../caixa-atomico';
 import { abrirRazaoNoExecutor, conferirRazaoNoExecutor } from '../razao-servidor';
 import { processarFila } from './fila';
 import { tarefaRecorrenciaGerar } from '../recorrencia-servidor';
+import { tarefaAvisosVencimento } from '../avisos-vencimento-servidor';
 import { janelaDeMinutos, janelaDiaria, rodarAgendador, type DefinicaoTarefa, type ResumoAgendador } from './nucleo';
 
 /** Abre o razão das agências que ainda não têm (até 20 por chamada). */
@@ -48,7 +49,7 @@ export const tarefaFila: DefinicaoTarefa = {
   executar: async ({ exec, restanteMs }) => processarFila(exec, { orcamentoMs: Math.min(30_000, restanteMs()) }),
 };
 
-export const TAREFAS: DefinicaoTarefa[] = [tarefaRazaoAbertura, tarefaRazaoConferencia, tarefaRecorrenciaGerar, tarefaFila];
+export const TAREFAS: DefinicaoTarefa[] = [tarefaRazaoAbertura, tarefaRazaoConferencia, tarefaRecorrenciaGerar, tarefaAvisosVencimento, tarefaFila];
 
 /** Roda o agendador contra o banco de verdade. */
 export async function executarAgendadorAgora(): Promise<ResumoAgendador> {

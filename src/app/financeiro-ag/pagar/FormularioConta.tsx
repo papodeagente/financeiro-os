@@ -17,6 +17,8 @@ import { BlocoDeRepeticao } from '@/components/financeiro/recorrencia/BlocoDeRep
 import { SecaoRateios } from '@/components/financeiro/SecaoRateios';
 import { LerBoletoOuNota } from '@/components/financeiro/LerBoletoOuNota';
 import { CampoLinhaDigitavel } from '@/components/financeiro/CampoLinhaDigitavel';
+import { useFormasDePagamento } from '@/components/fin/useFormasDePagamento';
+import { detalheDaForma, formaDoValor, opcoesDeForma } from '@/lib/formas-pagamento';
 
 import { CampoSelecao, CONTROLE, Interruptor, type OpcaoDeSelecao } from './campos';
 import type { ErrosDoFormulario, FormState } from './tipos';
@@ -34,15 +36,6 @@ const OPCOES_ORIGEM: OpcaoDeSelecao[] = [
   { valor: 'GRUPO', rotulo: 'Grupo' },
   { valor: 'DESPESA_FIXA', rotulo: 'Despesa fixa' },
   { valor: 'OUTROS', rotulo: 'Outros' },
-];
-
-const OPCOES_FORMA: OpcaoDeSelecao[] = [
-  { valor: NENHUM, rotulo: 'Ainda não sei' },
-  { valor: 'PIX', rotulo: 'Pix' },
-  { valor: 'TED', rotulo: 'TED' },
-  { valor: 'CARTAO_CORP', rotulo: 'Cartão corporativo' },
-  { valor: 'BOLETO', rotulo: 'Boleto' },
-  { valor: 'DEPOSITO', rotulo: 'Depósito' },
 ];
 
 const OPCOES_MOEDA: OpcaoDeSelecao[] = [
@@ -102,6 +95,16 @@ export function FormularioConta({
     { valor: NENHUM, rotulo: 'Sem categoria' },
     ...despesaContas.map((c) => ({ valor: c.id, rotulo: `${c.codigo} · ${c.nome}` })),
   ];
+
+  // Formas do cadastro (05/11/2026). O valor que a conta já tem sempre
+  // aparece, mesmo antigo ("Depósito") ou desligado: salvar sem mexer não troca.
+  const formasDaAgencia = useFormasDePagamento();
+  const opcoesForma: OpcaoDeSelecao[] = [
+    { valor: NENHUM, rotulo: 'Ainda não sei' },
+    ...opcoesDeForma(formasDaAgencia, 'pagar', form.forma_pagamento).map((o) => ({ valor: o.valor, rotulo: o.rotulo })),
+  ];
+  const formaEscolhida = formaDoValor(form.forma_pagamento, formasDaAgencia);
+  const ajudaDaForma = formaEscolhida ? detalheDaForma(formaEscolhida) || undefined : undefined;
 
   const opcoesCartao: OpcaoDeSelecao[] = [
     { valor: NENHUM, rotulo: 'Escolha o cartão' },
@@ -331,7 +334,8 @@ export function FormularioConta({
             <CampoSelecao
               rotulo="Forma de pagamento"
               valor={form.forma_pagamento || NENHUM}
-              opcoes={OPCOES_FORMA}
+              opcoes={opcoesForma}
+              ajuda={ajudaDaForma}
               onChange={(v) =>
                 onForm((f) => ({
                   ...f,

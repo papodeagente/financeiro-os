@@ -27,6 +27,10 @@ import type { ContaPagar, ContaReceber, PlanoContas, VendaCRM } from './crm-type
 import { divSegura, mesDe, num, round2, soma, somaPor } from './money';
 import { valorMovimentado } from './saldo-bancario';
 import { taxaRealizada } from './taxa-plataforma';
+import {
+  ajusteDoValor, CATEGORIAS_PADRAO_ENCARGOS, classificarEncargos,
+  type ChaveEncargo, type EncargosDoTitulo, type RotulosEncargos,
+} from './encargos-categorias';
 
 export type RegimeDRE = 'competencia' | 'caixa';
 
@@ -96,6 +100,14 @@ export interface EntradaDRE {
   /** 'YYYY-MM'. */
   mes: string;
   regime?: RegimeDRE;
+  /**
+   * Juros, multa, desconto e taxa registrados na liquidação, por título
+   * (chave `${tabela}:${id}`, ver encargos-categorias.ts). Ausente ou vazio =
+   * o DRE de antes, número por número.
+   */
+  encargos?: ReadonlyMap<string, EncargosDoTitulo>;
+  /** Nome e código das linhas dos encargos (categorias escolhidas). */
+  rotulosEncargos?: RotulosEncargos;
 }
 
 /** Um componente da conta: o valor e os lançamentos que o formam. */
@@ -148,6 +160,16 @@ export function montarDRE(e: EntradaDRE): LinhaDRE[] {
   const valorCR = (cr: ContaReceber) => (regime === 'caixa' ? valorMovimentado(cr, 'valor_recebido') : num(cr.valor_final));
   const valorCP = (cp: ContaPagar) => (regime === 'caixa' ? valorMovimentado(cp, 'valor_pago') : num(cp.valor_final));
 
+  // Encargos da liquidação (05/11/2026): saem da linha de origem da conta e
+  // vão para linhas próprias. Sem encargo, o ajuste é zero e o valor é o
+  // mesmo número de antes (sem nem passar por round2).
+  const encDe = (tabela: 'contas_receber' | 'contas_pagar', id: string) => e.encargos?.get(`${tabela}:${id}`);
+  const semEncargos = (v: number, aj: number) => (aj === 0 ? v : round2(v - aj));
+  const ajusteCR = (cr: ContaReceber) => ajusteDoValor(encDe('contas_receber', cr.id));
+  const ajusteCP = (cp: ContaPagar) => ajusteDoValor(encDe('contas_pagar', cp.id));
+  const valorCRBase = (cr: ContaReceber) => semEncargos(valorCR(cr), ajusteCR(cr));
+  const valorCPBase = (cp: ContaPagar) => semEncargos(valorCP(cp), ajusteCP(cp));
+
   const monthReceber = e.receber.filter(cr =>
     mesDe(dataCR(cr)) === month && vivo(cr.status) && (regime === 'competencia' || valorCR(cr) > 0),
   );
@@ -171,7 +193,7 @@ export function montarDRE(e: EntradaDRE): LinhaDRE[] {
       if ((cr.origem ?? 'VENDA') !== 'VENDA') continue;
       const vendaId = String(cr.origem_venda_id || cr.venda_id || '').trim();
       if (!vendaId) continue;
-      recebidoPorVenda.set(vendaId, round2((recebidoPorVenda.get(vendaId) ?? 0) + valorCR(cr)));
+      recebidoPorVenda.set(vendaId, round2((recebidoPorVenda.get(vendaId) ?? 0) + valorCRBase(cr)));
     }
     const vendasPagas = e.vendasComLastro.filter(v => v.status !== 'CANCELADO' && (recebidoPorVenda.get(v.id) ?? 0) > 0);
     volume = parte(vendasPagas.map(v => deVenda(v, recebidoPorVenda.get(v.id) ?? 0, month)));
@@ -189,16 +211,17 @@ export function montarDRE(e: EntradaDRE): LinhaDRE[] {
     const valor = regime === 'caixa'
       ? round2(naoCapturada * Math.min(1, divSegura(valorCR(cr), num(cr.valor_final))))
       : naoCapturada;
-    return deCR(cr, valor, dataCR(cr));
+    const aj = ajusteCR(cr);
+    return deCR(cr, aj === 0 ? valor : Math.max(0, round2(valor - aj)), dataCR(cr));
   }));
-  const receitaFee = parte(monthReceber.filter(cr => cr.origem === 'FEE').map(cr => deCR(cr, valorCR(cr), dataCR(cr))));
-  const receitaOutras = parte(monthReceber.filter(cr => cr.origem === 'OUTROS').map(cr => deCR(cr, valorCR(cr), dataCR(cr))));
+  const receitaFee = parte(monthReceber.filter(cr => cr.origem === 'FEE').map(cr => deCR(cr, valorCRBase(cr), dataCR(cr))));
+  const receitaOutras = parte(monthReceber.filter(cr => cr.origem === 'OUTROS').map(cr => deCR(cr, valorCRBase(cr), dataCR(cr))));
 
   const receitaBruta = soma([comissaoVendas.valor, receitaComissoes.valor, receitaFee.valor, receitaOutras.valor]);
 
   function porCategoria(prefix: string): Parte {
     const catIds = new Set(idsDoPrefixo(prefix));
-    return parte(monthPagar.filter(cp => catIds.has(cp.categoria_id)).map(cp => deCP(cp, valorCP(cp), dataCP(cp))));
+    return parte(monthPagar.filter(cp => catIds.has(cp.categoria_id)).map(cp => deCP(cp, valorCPBase(cp), dataCP(cp))));
   }
 
   const despOperacionais = porCategoria('2.2');
@@ -208,25 +231,66 @@ export function montarDRE(e: EntradaDRE): LinhaDRE[] {
   // A taxa da plataforma é despesa financeira retida da conta a receber, fora
   // de qualquer conta a pagar. Competência: conta viva do mês, baixada ou não.
   // Caixa: a taxa já retida das contas recebidas no mês.
-  const taxasDePlataforma = parte(monthReceber.map(cr =>
-    deCR(cr, regime === 'caixa' ? taxaRealizada(cr) : Math.max(0, num(cr.taxa)), dataCR(cr))));
-  const despFinanceiras = round2(despFinanceirasCat.valor + taxasDePlataforma.valor);
+  // A taxa registrada na liquidação nova sai daqui e vai para a linha de
+  // taxas (encargos); a taxa de antes continua nesta linha.
+  const taxaDaPlataforma = (cr: ContaReceber) => {
+    const t = regime === 'caixa' ? taxaRealizada(cr) : Math.max(0, num(cr.taxa));
+    const daBaixa = encDe('contas_receber', cr.id)?.taxa ?? 0;
+    return daBaixa > 0 ? Math.max(0, round2(t - daBaixa)) : t;
+  };
+  const taxasDePlataforma = parte(monthReceber.map(cr => deCR(cr, taxaDaPlataforma(cr), dataCR(cr))));
+
+  // ── Encargos da liquidação, por linha ─────────────────────────────────────
+  // Seguem a conta: entram no mês em que a conta entra (vencimento na
+  // competência, baixa no caixa). Repasse de venda também: o juro pago ao
+  // fornecedor por atraso é despesa da agência.
+  const porChave: Record<ChaveEncargo, Array<{ l: LancamentoDRE }>> = {
+    receita_financeira: [], despesa_financeira: [], descontos_concedidos: [], taxas: [],
+  };
+  if (e.encargos && e.encargos.size > 0) {
+    for (const cr of monthReceber) {
+      const c = classificarEncargos('contas_receber', encDe('contas_receber', cr.id));
+      for (const k of Object.keys(c) as ChaveEncargo[]) if (c[k] > 0) porChave[k].push(deCR(cr, c[k], dataCR(cr)));
+    }
+    for (const cp of monthPagar) {
+      const c = classificarEncargos('contas_pagar', encDe('contas_pagar', cp.id));
+      for (const k of Object.keys(c) as ChaveEncargo[]) if (c[k] > 0) porChave[k].push(deCP(cp, c[k], dataCP(cp)));
+    }
+  }
+  const enc = {
+    receita_financeira: parte(porChave.receita_financeira),
+    despesa_financeira: parte(porChave.despesa_financeira),
+    descontos_concedidos: parte(porChave.descontos_concedidos),
+    taxas: parte(porChave.taxas),
+  };
+  const despEncargos = soma([enc.despesa_financeira.valor, enc.descontos_concedidos.valor, enc.taxas.valor]);
+  const receitaFinanceira = enc.receita_financeira.valor;
+  const rotulo = (k: ChaveEncargo) => e.rotulosEncargos?.[k] ?? { codigo: CATEGORIAS_PADRAO_ENCARGOS[k].codigo, nome: CATEGORIAS_PADRAO_ENCARGOS[k].nome };
+  const linhaEncargo = (k: ChaveEncargo): LinhaDRE[] => (enc[k].valor > 0
+    ? [{ codigo: rotulo(k).codigo, nome: rotulo(k).nome, valor: enc[k].valor, tipo: 'item', indent: 1, lancamentos: enc[k].lancamentos }]
+    : []);
+
+  const despFinanceiras = despEncargos > 0
+    ? round2(despFinanceirasCat.valor + taxasDePlataforma.valor + despEncargos)
+    : round2(despFinanceirasCat.valor + taxasDePlataforma.valor);
   const despOutras = porCategoria('2.5');
 
   // 2.1 sem o repasse auto-gerado da venda é despesa real.
   const idsCMV = new Set(idsDoPrefixo('2.1'));
-  const despCMV = parte(monthPagar.filter(cp => idsCMV.has(cp.categoria_id) && !ehRepasseDeVenda(cp)).map(cp => deCP(cp, valorCP(cp), dataCP(cp))));
+  const despCMV = parte(monthPagar.filter(cp => idsCMV.has(cp.categoria_id) && !ehRepasseDeVenda(cp)).map(cp => deCP(cp, valorCPBase(cp), dataCP(cp))));
 
   // Categoria fora de qualquer grupo da DRE (apagada, órfã ou vazia).
   const PREFIXOS_DRE = ['2.1', '2.2', '2.3', '2.4', '2.5', '2.6'];
   const idsConhecidos = new Set(PREFIXOS_DRE.flatMap(idsDoPrefixo));
-  const uncategorized = parte(monthPagar.filter(cp => !idsConhecidos.has(cp.categoria_id) && !ehRepasseDeVenda(cp)).map(cp => deCP(cp, valorCP(cp), dataCP(cp))));
+  const uncategorized = parte(monthPagar.filter(cp => !idsConhecidos.has(cp.categoria_id) && !ehRepasseDeVenda(cp)).map(cp => deCP(cp, valorCPBase(cp), dataCP(cp))));
 
   const totalDespesas = soma([despOperacionais.valor, despComerciais.valor, despTaxas.valor, despFinanceiras, despOutras.valor, despCMV.valor, uncategorized.valor]);
   const outrasDespesas = soma([despOutras.valor, despCMV.valor, uncategorized.valor]);
   const receitaLiquida = round2(receitaBruta - despTaxas.valor);
   const resultadoOperacional = round2(receitaLiquida - despOperacionais.valor - despComerciais.valor);
-  const lucroLiquido = round2(receitaBruta - totalDespesas);
+  const lucroLiquido = receitaFinanceira > 0
+    ? round2(receitaBruta + receitaFinanceira - totalDespesas)
+    : round2(receitaBruta - totalDespesas);
   const margemLiquida = round2(divSegura(lucroLiquido, receitaBruta) * 100);
   const margemSobreVolume = round2(divSegura(receitaBruta, volume.valor) * 100);
 
@@ -255,12 +319,22 @@ export function montarDRE(e: EntradaDRE): LinhaDRE[] {
 
     { codigo: '', nome: 'RESULTADO OPERACIONAL', valor: resultadoOperacional, tipo: 'subtotal', indent: 0 },
 
-    { codigo: '', nome: '(-) DESPESAS FINANCEIRAS', valor: -despFinanceiras, tipo: 'header', indent: 0, lancamentos: juntar(despFinanceirasCat, taxasDePlataforma) },
-    { codigo: '2.4', nome: 'Juros, tarifas bancárias', valor: round2(despFinanceiras - taxasDePlataforma.valor), tipo: 'item', indent: 1, lancamentos: despFinanceirasCat.lancamentos },
+    { codigo: '', nome: '(-) DESPESAS FINANCEIRAS', valor: -despFinanceiras, tipo: 'header', indent: 0, lancamentos: juntar(despFinanceirasCat, taxasDePlataforma, enc.despesa_financeira, enc.descontos_concedidos, enc.taxas) },
+    { codigo: '2.4', nome: 'Juros, tarifas bancárias', valor: despEncargos > 0 ? despFinanceirasCat.valor : round2(despFinanceiras - taxasDePlataforma.valor), tipo: 'item', indent: 1, lancamentos: despFinanceirasCat.lancamentos },
     ...(taxasDePlataforma.valor > 0
       ? [{ codigo: '2.4', nome: 'Taxas de plataformas de pagamento', valor: taxasDePlataforma.valor, tipo: 'item' as const, indent: 1, lancamentos: taxasDePlataforma.lancamentos }]
       : []),
+    ...linhaEncargo('despesa_financeira'),
+    ...linhaEncargo('descontos_concedidos'),
+    ...linhaEncargo('taxas'),
   );
+
+  if (receitaFinanceira > 0) {
+    lines.push(
+      { codigo: '', nome: '(+) RECEITAS FINANCEIRAS', valor: receitaFinanceira, tipo: 'header', indent: 0, lancamentos: enc.receita_financeira.lancamentos },
+      ...linhaEncargo('receita_financeira'),
+    );
+  }
 
   if (outrasDespesas !== 0) {
     lines.push({ codigo: '', nome: '(-) OUTRAS DESPESAS', valor: -outrasDespesas, tipo: 'header', indent: 0, lancamentos: juntar(despOutras, despCMV, uncategorized) });

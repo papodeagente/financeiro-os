@@ -21,6 +21,7 @@ import { Field } from '@/components/fin/Field';
 import { SeletorDePlataforma } from './SeletorDePlataforma';
 import { BlocoDeLiquidacao } from '@/components/fin/BlocoDeLiquidacao';
 import { useLiquidacao } from '@/components/fin/useLiquidacao';
+import { taxaDaForma, type FormaPagamento } from '@/lib/formas-pagamento';
 import type { ContaReceber } from '@/lib/crm-types';
 
 export type DialogBaixaProps = {
@@ -115,18 +116,34 @@ export function DialogBaixa({
   const parcial = informado > 0 && restante > 0.005;
 
   const padrao = descontoPadraoDa(plataforma, descontosPadrao);
-  const sugerido = padrao ? liquidoPeloPercentual(informado, padrao.percentual) : informado;
-  const liquido = liquidoDigitado ?? sugerido;
-  const desconto = descontoPeloLiquido(informado, liquido);
+  // O líquido sugerido: o padrão da plataforma manda; sem ele, a taxa da
+  // forma de pagamento escolhida na liquidação (cadastro, 05/11/2026); sem
+  // nenhum dos dois, entrou tudo. A mesma conta vale para a tela e para o
+  // que a liquidação grava (a forma só é conhecida dentro dela).
+  const contas = (forma: FormaPagamento | null) => {
+    const taxaForma = !padrao ? taxaDaForma(informado, forma) : 0;
+    const sugerido = padrao
+      ? liquidoPeloPercentual(informado, padrao.percentual)
+      : round2(informado - taxaForma);
+    const liquido = liquidoDigitado ?? sugerido;
+    const desconto = descontoPeloLiquido(informado, liquido);
+    const motivoLiquido = informado > 0 ? validarLiquido(informado, liquido) : null;
+    return { sugerido, liquido, desconto, motivoLiquido, pelaForma: taxaForma > 0 };
+  };
+  const liquidacao = useLiquidacao(
+    'contas_receber',
+    (titulo as unknown as (Record<string, unknown> & { id: string }) | null),
+    informado,
+    forma => { const c = contas(forma); return c.motivoLiquido ? 0 : c.desconto; },
+  );
+  const { sugerido, liquido, desconto, motivoLiquido, pelaForma } = contas(liquidacao.formaEscolhida);
   const pct = percentualDaTaxa(desconto, informado);
-  const motivoLiquido = informado > 0 ? validarLiquido(informado, liquido) : null;
 
   // Guardar como padrão só faz sentido com plataforma escolhida, desconto de
   // verdade e um percentual diferente do que já está cadastrado.
   const podeGuardar =
     plataforma.trim() !== '' && desconto > 0 && pct !== null && pct < 100 && (!padrao || padrao.percentual !== pct);
 
-  const liquidacao = useLiquidacao('contas_receber', (titulo as unknown as (Record<string, unknown> & { id: string }) | null), informado, motivoLiquido ? 0 : desconto);
   const comLiquidacao = Boolean(titulo);
   const invalido = informado <= 0 || motivoLiquido !== null || (comLiquidacao && liquidacao.plano.erros.length > 0);
 
@@ -186,7 +203,9 @@ export function DialogBaixa({
             ajuda={
               liquidoDigitado === null && padrao
                 ? 'Calculado com o desconto padrão desta plataforma. Confira com o extrato.'
-                : 'Já com o desconto da plataforma, como aparece no extrato.'
+                : liquidoDigitado === null && pelaForma
+                  ? 'Calculado com a taxa desta forma de pagamento. Confira com o extrato.'
+                  : 'Já com o desconto da plataforma, como aparece no extrato.'
             }
             erro={motivoLiquido ? mensagemDoLiquidoInvalido(motivoLiquido) : null}
             atalhos={
@@ -279,7 +298,12 @@ export function DialogBaixa({
               ? { plataforma: plataforma.trim(), percentual: pct }
               : null,
           gravar: comLiquidacao
-            ? () => liquidacao.gravar({ forma: plataforma.trim() || undefined, ...(desconto > 0 ? { taxa_plataforma: normalizarPlataforma(plataforma) || plataforma.trim() } : {}) })
+            // A forma escolhida na liquidação vai junto (useLiquidacao). Sem
+            // forma escolhida, fica como antes: o nome da plataforma.
+            ? () => liquidacao.gravar({
+              ...(liquidacao.forma ? {} : { forma: plataforma.trim() || undefined }),
+              ...(desconto > 0 ? { taxa_plataforma: normalizarPlataforma(plataforma) || plataforma.trim() } : {}),
+            })
             : undefined,
         });
       }}

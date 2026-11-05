@@ -11,6 +11,7 @@ import { RECORRENCIA_SCHEMA_SQL } from './recorrencia-schema';
 import { CENTROS_CUSTO_SCHEMA_SQL } from './centros-custo-servidor';
 import { PERMISSOES_SCHEMA_SQL } from './permissoes-schema';
 import { LEITURA_DOCUMENTO_SCHEMA_SQL } from './leitura-documento-servidor';
+import { FORMAS_PAGAMENTO_SCHEMA_SQL } from './formas-pagamento-servidor';
 import { AUDIT_SCHEMA_SQL } from './audit-schema';
 import { NOTIFICACOES_SCHEMA_SQL } from './notificacoes-schema';
 import { MAPAS_MENTAIS_COMPARTILHAMENTO_SCHEMA_SQL } from './mapas-mentais-compartilhamento';
@@ -1530,6 +1531,9 @@ async function executarInitDB() {
   // arquivo (hash), para o mesmo arquivo não pagar duas vezes. Controle: fora
   // do gatilho de auditoria (a leitura registra o próprio evento).
   await pool.query(LEITURA_DOCUMENTO_SCHEMA_SQL);
+  // Formas de pagamento (05/11/2026): só o que a agência ajustou ou criou.
+  // Tabela vazia = as formas de sempre, como antes.
+  await pool.query(FORMAS_PAGAMENTO_SCHEMA_SQL);
   // Razão financeiro, agendador e fila de tarefas (05/11/2026). Antes da
   // auditoria: são tabelas imutáveis ou de controle e ficam fora do gatilho.
   // Histórico de baixas e trava de período (05/11/2026, E2).

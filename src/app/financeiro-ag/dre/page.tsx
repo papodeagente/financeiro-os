@@ -20,6 +20,10 @@ import {
   type LancamentoDRE, type LinhaDRE, type RegimeDRE,
 } from '@/lib/resultado-dre';
 import { calcRelatorio, type CustosData } from '@/lib/planejamento-custos';
+import {
+  encargosPorTitulo, rotulosDasCategorias,
+  type CategoriasEncargos, type LinhaDeBaixaComEncargo,
+} from '@/lib/encargos-categorias';
 import { Segmentado } from '@/components/fin/Segmentado';
 import { LancamentosDaLinha } from './LancamentosDaLinha';
 import { formatBRL } from '@/lib/utils';
@@ -90,6 +94,10 @@ export default function DREPage() {
   // os lançamentos de um número clicado.
   const [regime, setRegime] = useState<RegimeDRE>('competencia');
   const [orcamento, setOrcamento] = useState<CustosData | null>(null);
+  // Juros, multa, desconto e taxa da liquidação (05/11/2026). Sem eles (ou
+  // se a consulta falhar), o DRE é o de antes.
+  const [baixasComEncargo, setBaixasComEncargo] = useState<LinhaDeBaixaComEncargo[]>([]);
+  const [categoriasEncargos, setCategoriasEncargos] = useState<CategoriasEncargos>({});
   const [aberta, setAberta] = useState<{ titulo: string; lancamentos: LancamentoDRE[]; valor: number } | null>(null);
 
   useEffect(() => {
@@ -134,6 +142,13 @@ export default function DREPage() {
       setContasPagar(cp);
       setVendas(v);
       setPlanoContas(pc);
+      fetch('/api/encargos-da-liquidacao')
+        .then(r => (r.ok ? r.json() : null))
+        .then((x: { linhas?: LinhaDeBaixaComEncargo[]; categorias?: CategoriasEncargos } | null) => {
+          setBaixasComEncargo(Array.isArray(x?.linhas) ? x!.linhas! : []);
+          setCategoriasEncargos(x?.categorias && typeof x.categorias === 'object' ? x.categorias : {});
+        })
+        .catch(() => { setBaixasComEncargo([]); setCategoriasEncargos({}); });
 
       setSelectedMonth(mesDe(hojeISO()));
       setAtualizadoEm(new Date());
@@ -208,6 +223,12 @@ export default function DREPage() {
   // DRE para agência de viagens (CNAE 7911-2/00), regime de intermediação.
   // A conta saiu da tela para a lib (05/11/2026) sem mudar: competência é o
   // padrão e dá os mesmos números de antes (scripts/test-demonstrativo-resultado.ts).
+  const encargos = useMemo(() => encargosPorTitulo(baixasComEncargo), [baixasComEncargo]);
+  const rotulosEncargos = useMemo(
+    () => rotulosDasCategorias(categoriasEncargos, planoContas),
+    [categoriasEncargos, planoContas],
+  );
+
   function buildDRE(month: string): LinhaDRE[] {
     return montarDRE({
       receber: contasReceber,
@@ -217,6 +238,8 @@ export default function DREPage() {
       comissaoNaoCapturada,
       mes: month,
       regime,
+      encargos,
+      rotulosEncargos,
     });
   }
 
@@ -236,9 +259,9 @@ export default function DREPage() {
   );
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const dreMain = useMemo(() => buildDRE(selectedMonth), [selectedMonth, contasReceber, contasPagar, vendasComLastro, planoContas, regime]);
+  const dreMain = useMemo(() => buildDRE(selectedMonth), [selectedMonth, contasReceber, contasPagar, vendasComLastro, planoContas, regime, encargos, rotulosEncargos]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const dreCompare = useMemo(() => compareMonth ? buildDRE(compareMonth) : [], [compareMonth, contasReceber, contasPagar, vendasComLastro, planoContas, regime]);
+  const dreCompare = useMemo(() => compareMonth ? buildDRE(compareMonth) : [], [compareMonth, contasReceber, contasPagar, vendasComLastro, planoContas, regime, encargos, rotulosEncargos]);
 
   // Summary metrics from main DRE
   const receitaBruta = dreMain.find(l => l.nome.startsWith('RECEITA BRUTA'))?.valor || 0;
@@ -254,6 +277,8 @@ export default function DREPage() {
     'RECEITA LÍQUIDA',
     '(-) DESPESAS OPERACIONAIS',
     '(-) DESPESAS FINANCEIRAS',
+    // Só aparece quando há juros, multa ou desconto obtido na liquidação.
+    '(+) RECEITAS FINANCEIRAS',
     '(-) OUTRAS DESPESAS',
     'LUCRO LÍQUIDO',
   ];

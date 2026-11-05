@@ -416,7 +416,12 @@ export interface ContaReceber {
   data_recebimento: string | null;
   valor_recebido: number | null;
   conta_bancaria_id: string | null;
-  forma_recebimento: 'PIX' | 'TED' | 'CARTAO' | 'BOLETO' | 'DINHEIRO' | 'CHEQUE' | '';
+  /**
+   * Código da forma de pagamento (cadastro em src/lib/formas-pagamento.ts,
+   * 05/11/2026). Os valores antigos continuam válidos e nunca são reescritos;
+   * formas próprias da agência trazem o código delas.
+   */
+  forma_recebimento: 'PIX' | 'TED' | 'CARTAO' | 'BOLETO' | 'DINHEIRO' | 'CHEQUE' | '' | (string & {});
   /**
    * O que a plataforma de pagamento reteve desta conta, em reais.
    *
@@ -513,7 +518,8 @@ export interface ContaPagar {
   data_pagamento: string | null;
   valor_pago: number | null;
   conta_bancaria_id: string | null;
-  forma_pagamento: 'PIX' | 'TED' | 'CARTAO_CORP' | 'BOLETO' | 'DEPOSITO' | '';
+  /** Código da forma de pagamento (ver forma_recebimento). 'CARTAO_CORP' liga ao cartão corporativo. */
+  forma_pagamento: 'PIX' | 'TED' | 'CARTAO_CORP' | 'BOLETO' | 'DEPOSITO' | '' | (string & {});
   cartao_id: string | null;
   comprovante: string;
   parcela_numero: number;

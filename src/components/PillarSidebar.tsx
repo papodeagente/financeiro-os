@@ -114,6 +114,7 @@ const FINANCEIRO_MENU: SidebarSection[] = [
       { key: 'cartoes-corp', label: 'Cartões', icon: CreditCard, href: '/financeiro-ag/cartoes' },
       { key: 'plano-contas', label: 'Categorias', icon: ListTree, href: '/financeiro-ag/plano-contas' },
       { key: 'centros-custo', label: 'Centros de custo', icon: Network, href: '/financeiro-ag/centros-custo' },
+      { key: 'formas-pagamento', label: 'Formas de pagamento', icon: Wallet, href: '/financeiro-ag/formas-pagamento' },
     ],
   },
   {

@@ -7,6 +7,7 @@ import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { ErroBaixa, historicoDaConta, registrarBaixas, type ItemBaixa } from '@/lib/baixas-servidor';
 import type { TituloTabela } from '@/lib/baixa-calculo';
 import { conferirBaixa, pedirAprovacaoDaBaixa, RecusaDaBaixa, type SessaoDaBaixa } from '@/lib/baixas-porteiro';
+import { garantirCategoriasDeEncargos } from '@/lib/encargos-servidor';
 
 // Liquidação no servidor (05/11/2026).
 //   POST { modo: 'previa' | 'gravar', itens: ItemBaixa[], assinatura? }
@@ -92,6 +93,14 @@ export async function POST(req: Request) {
       return registrarBaixas(exec, ctx, itens, { gravar: true, assinatura: corpo.assinatura });
     });
     if ('aguardando_aprovacao' in r) return NextResponse.json(r, { status: 202 });
+    // Primeira baixa com juros, multa, desconto ou taxa: garante as
+    // categorias desses encargos no plano de contas (05/11/2026). Fora da
+    // transação da baixa e sem nunca derrubá-la: a baixa já está gravada.
+    const comEncargo = r.itens.some(i => !i.ja_existia && (i.plano.juros > 0 || i.plano.multa > 0 || i.plano.desconto > 0 || i.plano.taxa > 0));
+    if (comEncargo) {
+      await emTransacao(exec => garantirCategoriasDeEncargos(exec, tenantId))
+        .catch(e => console.error('[baixas] categorias dos encargos:', e instanceof Error ? e.message : e));
+    }
     return NextResponse.json(r);
   } catch (e) {
     return erro(e);

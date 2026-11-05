@@ -7,15 +7,18 @@ import {
   LayoutDashboard, Medal, Percent, Settings, Wallet,
   Gauge, TrendingUp, Receipt, CreditCard, BookOpen, Landmark,
   ArrowRightLeft, Package, ShoppingCart, ListOrdered, UserPlus,
-  Building2, Briefcase, DollarSign, Link2, FileSpreadsheet, Plus,
+  Building2, Briefcase, DollarSign, Link2, FileSpreadsheet, Plus, Compass,
 } from 'lucide-react';
+import { buscarPorTermoDeMercado, normalizarBusca } from '@/lib/busca-de-mercado';
 
 interface CommandItem {
   id: string;
   label: string;
   href: string;
   icon: React.ReactNode;
-  section: 'navegacao' | 'criar' | 'recentes' | 'crm';
+  section: 'navegacao' | 'criar' | 'recentes' | 'crm' | 'mercado';
+  /** Linha curta abaixo do nome (busca por termo de mercado). */
+  dica?: string;
 }
 
 const NAVIGATION_ITEMS: CommandItem[] = [
@@ -42,6 +45,8 @@ const NAVIGATION_ITEMS: CommandItem[] = [
   { id: 'conciliacao', label: 'Conciliação', href: '/financeiro-ag/conciliacao', icon: <FileSpreadsheet className="w-4 h-4" />, section: 'navegacao' },
   { id: 'transferencias', label: 'Transferências', href: '/financeiro-ag/transferencias', icon: <ArrowRightLeft className="w-4 h-4" />, section: 'navegacao' },
   { id: 'plano-contas', label: 'Categorias (plano de contas)', href: '/financeiro-ag/plano-contas', icon: <BookOpen className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'formas-pagamento', label: 'Formas de pagamento', href: '/financeiro-ag/formas-pagamento', icon: <Wallet className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'config-financeiro', label: 'Configurações do financeiro', href: '/config/financeiro', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
   // Fora do menu do Financeiro desde 08/10/2026: a busca é o caminho curto.
   { id: 'recebimentos', label: 'Recebimentos das plataformas', href: '/financeiro-ag/recebimentos', icon: <Receipt className="w-4 h-4" />, section: 'navegacao' },
   { id: 'notas', label: 'Notas fiscais', href: '/financeiro-ag/notas', icon: <FileText className="w-4 h-4" />, section: 'navegacao' },
@@ -102,9 +107,25 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     if (!query.trim()) {
       return [...CREATE_ITEMS, ...recents.slice(0, 3), ...CRM_ITEMS];
     }
-    const q = query.toLowerCase();
+    const q = normalizarBusca(query);
     const all = [...CREATE_ITEMS, ...NAVIGATION_ITEMS, ...CRM_ITEMS];
-    return all.filter(item => item.label.toLowerCase().includes(q));
+    const porNome = all.filter(item => normalizarBusca(item.label).includes(q));
+    // Termos de mercado (05/11/2026): quem vem de outro sistema digita o nome
+    // que já usa ("retorno do banco", "fechar caixa") e cai na tela certa,
+    // com uma frase quando aqui funciona diferente.
+    const jaListados = new Set(porNome.map(i => i.href));
+    const mercado: CommandItem[] = buscarPorTermoDeMercado(query)
+      .filter(({ destino }) => destino.frase || !jaListados.has(destino.href))
+      .map(({ destino, termo }) => ({
+        id: `mercado-${destino.id}`,
+        label: destino.tela,
+        href: destino.href,
+        icon: <Compass className="w-4 h-4" />,
+        section: 'mercado' as const,
+        dica: destino.frase
+          ?? (normalizarBusca(termo) !== normalizarBusca(destino.tela) ? `Também chamado de "${termo}".` : undefined),
+      }));
+    return [...porNome, ...mercado];
   }, [query, recents]);
 
   const handleSelect = (item: CommandItem) => {
@@ -133,6 +154,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     recentes: 'Recentes',
     navegacao: 'Navegação',
     crm: 'Integração',
+    mercado: 'Pelo nome que você já usa',
   };
 
   let lastSection = '';
@@ -152,7 +174,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             value={query}
             onChange={e => { setQuery(e.target.value); setSelectedIdx(0); }}
             onKeyDown={handleKeyDown}
-            placeholder="Buscar paginas, criar..."
+            placeholder="Buscar páginas, criar ou pelo nome que você já usa..."
             className="flex-1 bg-transparent text-[length:var(--text-body)] text-[var(--t-text)] outline-none placeholder:text-[var(--t-text-muted)]"
           />
           <kbd className="text-[10px] text-[var(--t-text-muted)] bg-[var(--t-sidebar-item-hover)] px-1.5 py-0.5 rounded">ESC</kbd>
@@ -184,7 +206,14 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                   onMouseEnter={() => setSelectedIdx(idx)}
                 >
                   {item.icon}
-                  <span>{item.label}</span>
+                  {item.dica ? (
+                    <span className="flex min-w-0 flex-col text-left">
+                      <span>{item.label}</span>
+                      <span className="fin-t-caption text-[var(--fin-text-3)]">{item.dica}</span>
+                    </span>
+                  ) : (
+                    <span>{item.label}</span>
+                  )}
                 </button>
               </div>
             );
