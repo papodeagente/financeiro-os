@@ -62,6 +62,8 @@ await pg.exec(`
   CREATE TABLE config_apis (id TEXT NOT NULL, tenant_id TEXT NOT NULL DEFAULT '', data JSONB NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (id, tenant_id));
   CREATE TABLE audit_log (id TEXT PRIMARY KEY, tenant_id TEXT, entidade TEXT, entidade_id TEXT, created_at TIMESTAMPTZ DEFAULT NOW());
+  -- A config do CRM lê o perfil da conta (a do ecossistema só se integra com a 150002).
+  CREATE TABLE tenants (id TEXT PRIMARY KEY, numero INTEGER, data JSONB NOT NULL DEFAULT '{}'::jsonb);
 `);
 
 let quebrarTrava = false;
