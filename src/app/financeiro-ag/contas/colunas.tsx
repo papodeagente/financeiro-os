@@ -6,7 +6,7 @@ import { ArrowDownLeft, ArrowUpRight, Ellipsis, Layers } from 'lucide-react';
 import type { FinColuna } from '@/components/fin/FinTable';
 import { statusChipVariants, type StatusTone } from '@/components/fin/StatusChip';
 import { rotuloDaSituacao, ROTULO_DO_TIPO, type LinhaDeConta, type OrdemDaLista } from '@/lib/contas-pagar-receber';
-import { cn } from '@/lib/utils';
+import { cn, formatBRL } from '@/lib/utils';
 
 /**
  * Colunas da lista Contas a Pagar/Receber (05/11/2026). A pessoa escolhe
@@ -38,7 +38,9 @@ export const COLUNAS_ESCOLHIVEIS: ReadonlyArray<{ id: ColunaId; rotulo: string }
 
 /** Valor e o menu da linha nunca saem. */
 export const COLUNAS_FIXAS: readonly ColunaId[] = ['valor', 'acoes'];
-export const COLUNAS_PADRAO: readonly ColunaId[] = ['tipo', 'vencimento', 'pessoa', 'descricao', 'categoria', 'situacao', 'valor', 'saldo', 'acoes'];
+// O saldo em aberto aparece embaixo do valor quando difere dele; a coluna
+// própria continua em Colunas.
+export const COLUNAS_PADRAO: readonly ColunaId[] = ['tipo', 'vencimento', 'pessoa', 'descricao', 'categoria', 'situacao', 'valor', 'acoes'];
 
 const CHAVE_SALVA = 'contas-pagar-receber-colunas';
 
@@ -95,20 +97,20 @@ function Fraco({ children }: { children: React.ReactNode }) {
   return <span className="text-[var(--fin-text-3)]">{children}</span>;
 }
 
-function Texto({ valor, max = 'max-w-[220px]' }: { valor: string; max?: string }) {
+function Texto({ valor, max = 'max-w-[170px]' }: { valor: string; max?: string }) {
   return valor ? <span className={cn('block truncate', max)} title={valor}>{valor}</span> : <Fraco>—</Fraco>;
 }
 
 export function criarColunas(opcoes: { onMenu: (l: LinhaDeConta, posicao: { x: number; y: number }) => void }): FinColuna<LinhaDeConta>[] {
   return [
     {
-      id: 'tipo', cabecalho: 'Tipo', tipo: 'texto', sortable: true, minWidth: 104,
+      id: 'tipo', cabecalho: 'Tipo', tipo: 'texto', sortable: true,
       render: l => (
-        <span className="inline-flex items-center gap-[var(--fin-s-1)] whitespace-nowrap text-[var(--fin-text-2)]">
+        <span title={ROTULO_DO_TIPO[l.tipo]} className="inline-flex items-center whitespace-nowrap text-[var(--fin-text-2)]">
           {l.tipo === 'receber'
-            ? <ArrowDownLeft aria-hidden="true" className="size-3.5 text-[var(--fin-positive)]" />
-            : <ArrowUpRight aria-hidden="true" className="size-3.5 text-[var(--fin-text-3)]" />}
-          {ROTULO_DO_TIPO[l.tipo]}
+            ? <ArrowDownLeft aria-hidden="true" className="size-4 text-[var(--fin-positive)]" />
+            : <ArrowUpRight aria-hidden="true" className="size-4 text-[var(--fin-text-3)]" />}
+          <span className="sr-only">{ROTULO_DO_TIPO[l.tipo]}</span>
         </span>
       ),
     },
@@ -116,14 +118,14 @@ export function criarColunas(opcoes: { onMenu: (l: LinhaDeConta, posicao: { x: n
     { id: 'emissao', cabecalho: 'Emissão', tipo: 'data', sortable: true, prioridade: 1, valor: l => l.emissao || null },
     { id: 'liquidacao', cabecalho: 'Liquidação', tipo: 'data', sortable: true, prioridade: 1, valor: l => l.liquidacao || null },
     {
-      id: 'pessoa', cabecalho: 'Pessoa', tipo: 'texto', sortable: true, minWidth: 160,
+      id: 'pessoa', cabecalho: 'Pessoa', tipo: 'texto', sortable: true, minWidth: 140,
       render: l => <Texto valor={l.pessoa} />,
     },
     {
-      id: 'descricao', cabecalho: 'Descrição', tipo: 'texto', sortable: true, minWidth: 200, prioridade: 2,
+      id: 'descricao', cabecalho: 'Descrição', tipo: 'texto', sortable: true, minWidth: 160, prioridade: 2,
       render: l => (
         <span className="flex min-w-0 items-center gap-[var(--fin-s-1)]">
-          <Texto valor={l.descricao} max="max-w-[300px]" />
+          <Texto valor={l.descricao} max="max-w-[210px]" />
           {l.rateio ? (
             <span title="Dividida entre centros de custo (rateio)" className="inline-flex shrink-0 text-[var(--fin-text-3)]">
               <Layers aria-hidden="true" className="size-3.5" />
@@ -135,7 +137,7 @@ export function criarColunas(opcoes: { onMenu: (l: LinhaDeConta, posicao: { x: n
     },
     { id: 'documento', cabecalho: 'Documento', tipo: 'texto', sortable: true, prioridade: 1, render: l => <Texto valor={l.documento} max="max-w-[160px]" /> },
     { id: 'parcela', cabecalho: 'Parcela', tipo: 'texto', prioridade: 1, render: l => (l.parcela ? <span className="tabular-nums">{l.parcela}</span> : <Fraco>—</Fraco>) },
-    { id: 'categoria', cabecalho: 'Categoria', tipo: 'texto', sortable: true, prioridade: 2, minWidth: 140, render: l => <Texto valor={l.categoria} max="max-w-[200px]" /> },
+    { id: 'categoria', cabecalho: 'Categoria', tipo: 'texto', sortable: true, prioridade: 2, minWidth: 120, render: l => <Texto valor={l.categoria} max="max-w-[160px]" /> },
     { id: 'centro', cabecalho: 'Centro de custo', tipo: 'texto', sortable: true, prioridade: 1, render: l => <Texto valor={l.centro_custo} max="max-w-[160px]" /> },
     { id: 'conta', cabecalho: 'Conta bancária', tipo: 'texto', sortable: true, prioridade: 1, render: l => <Texto valor={l.conta_bancaria} max="max-w-[160px]" /> },
     { id: 'forma', cabecalho: 'Forma', tipo: 'texto', prioridade: 1, render: l => <Texto valor={l.forma} max="max-w-[120px]" /> },
@@ -143,7 +145,12 @@ export function criarColunas(opcoes: { onMenu: (l: LinhaDeConta, posicao: { x: n
     {
       id: 'valor', cabecalho: 'Valor', tipo: 'dinheiro', sortable: true, valor: l => l.valor,
       tone: l => (l.tipo === 'receber' && l.situacao !== 'cancelado' ? 'positivo' : 'neutro'),
-      sub: l => (l.moeda !== 'BRL' ? `em reais · origem ${l.moeda}` : null),
+      sub: l => {
+        const partes: string[] = [];
+        if (l.saldo > 0.005 && Math.abs(l.saldo - l.valor) > 0.005 && l.situacao !== 'cancelado') partes.push(`em aberto ${formatBRL(l.saldo)}`);
+        if (l.moeda !== 'BRL') partes.push(`em reais · origem ${l.moeda}`);
+        return partes.length ? partes.join(' · ') : null;
+      },
     },
     { id: 'baixado', cabecalho: 'Pago/Recebido', tipo: 'dinheiro', prioridade: 1, valor: l => l.baixado },
     { id: 'saldo', cabecalho: 'Saldo em aberto', tipo: 'dinheiro', sortable: true, valor: l => l.saldo },
