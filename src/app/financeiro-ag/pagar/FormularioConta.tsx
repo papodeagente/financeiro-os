@@ -1,5 +1,7 @@
 'use client';
 
+import type * as React from 'react';
+
 import Link from 'next/link';
 
 import type { CartaoCorporativo, ContaPagar, NaturezaCusto, PlanoContas } from '@/lib/crm-types';
@@ -74,6 +76,8 @@ export type FormularioContaProps = {
   erros: ErrosDoFormulario;
   salvando: boolean;
   onSalvar: () => void;
+  /** Conteúdo extra no fim da janela (ex.: histórico de baixas da conta em edição). */
+  extra?: React.ReactNode;
 };
 
 export function FormularioConta({
@@ -88,6 +92,7 @@ export function FormularioConta({
   erros,
   salvando,
   onSalvar,
+  extra,
 }: FormularioContaProps) {
   const cartoesAtivos = cartoes.filter((c) => c.ativo);
   const estrangeira = form.moeda !== 'BRL';
@@ -406,6 +411,7 @@ export function FormularioConta({
           </div>
         </FormSection>
       </div>
+      {extra}
     </RecordSheet>
   );
 }

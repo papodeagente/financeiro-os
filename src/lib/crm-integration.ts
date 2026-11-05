@@ -26,6 +26,8 @@ import { criarNotificacao } from './notificacoes';
 // transação, com o erro engolido: duas confirmações simultâneas na mesma
 // conta bancária perdiam uma das entradas.
 import { nadaSai } from './nada-sai';
+import { registrarBaixaLegada } from './baixas-servidor';
+import { dataForaDoFechamento } from './periodo-fechado';
 import { aplicarMovimentoCaixaAtomico, emTransacao, STATUS_BAIXADOS, type ExecutorSQL } from './caixa-atomico';
 import { valorMovimentado } from './saldo-bancario';
 import {
@@ -1822,7 +1824,13 @@ export async function processarEventoCRM(
 
           const statusAlvo = quitou ? 'RECEBIDO' : 'PARCIAL';
           d.status = statusAlvo;
-          d.data_recebimento = data_pagamento || hojeISO();
+          // Pagamento com data num período já fechado entra no dia seguinte ao
+          // fechamento; a data informada pelo CRM fica guardada (05/11/2026).
+          const dataInformada = String(data_pagamento || hojeISO()).slice(0, 10);
+          d.data_recebimento = await dataForaDoFechamento(
+            pool as unknown as ExecutorSQL, tenantId, (d.conta_bancaria_id as string) || null, dataInformada,
+          );
+          if (d.data_recebimento !== dataInformada) d.data_pagamento_informada = dataInformada;
           d.valor_recebido = acumulado;
           // Baixa da conta e movimento de caixa na MESMA transação
           // (05/11/2026): antes eram dois passos soltos, e uma falha entre
@@ -1836,6 +1844,10 @@ export async function processarEventoCRM(
               [row.id, JSON.stringify(d), tenantId, statusAlvo, jaRecebido]
             );
             if ((upd.rowCount ?? 0) === 0) return false;
+            await registrarBaixaLegada(exec, {
+              tenantId, tabela: 'contas_receber', tituloId: String(row.id), dadosAntes: row.data as Record<string, unknown>,
+              conta: (d.conta_bancaria_id as string) || null, caixa: +delta, data: String(d.data_recebimento ?? ''), origem: 'crm',
+            });
             // Movimento ATÔMICO e só do que entrou agora.
             await aplicarMovimentoCaixaAtomico(
               tenantId,

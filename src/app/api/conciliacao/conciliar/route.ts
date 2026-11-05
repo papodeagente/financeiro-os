@@ -1,3 +1,4 @@
+import { respostaPeriodoFechado } from '@/lib/guarda-rota';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
@@ -58,6 +59,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Ação desconhecida.' }, { status: 400 });
   } catch (e) {
     if (e instanceof ErroConciliacao) return NextResponse.json({ error: e.message }, { status: e.status });
+    const fechado = respostaPeriodoFechado(e);
+    if (fechado) return fechado;
     const msg = e instanceof Error ? e.message : 'Erro';
     return NextResponse.json({ error: msg }, { status: 500 });
   }

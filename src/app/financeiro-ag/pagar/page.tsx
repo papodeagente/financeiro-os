@@ -28,6 +28,7 @@ import { rotuloStatus } from '@/components/fin/StatusChip';
 
 import { criarColunas, semFornecedor } from './colunas';
 import { BaixaDePagar } from './BaixaDePagar';
+import { HistoricoDeBaixas } from '@/components/fin/HistoricoDeBaixas';
 import { saldoDevedor, valorBRLDaConta } from './valores';
 import { FormularioConta } from './FormularioConta';
 import { PainelCopiarMes } from './PainelCopiarMes';
@@ -770,6 +771,7 @@ export default function ContasPagarPage() {
         erros={erros}
         salvando={saving}
         onSalvar={salvarFormulario}
+        extra={editId ? <HistoricoDeBaixas tabela="contas_pagar" tituloId={editId} onMudou={() => { void load(); }} /> : null}
       />
 
       <PainelCopiarMes

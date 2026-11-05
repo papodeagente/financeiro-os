@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { getSession } from './auth';
 import { bloqueioFinanceiro, podeExcluir, podeGerenciarUsuarios } from './permissoes';
+import { mensagemPeriodoFechado, periodoFechadoDoErro } from './periodo-fechado';
 
 export async function recusaFinanceira(modo: 'ler' | 'escrever'): Promise<NextResponse | null> {
   const bloqueio = bloqueioFinanceiro(await getSession(), modo);
@@ -35,4 +36,14 @@ export function rotaDeTesteDesligada(): NextResponse | null {
   const producao = process.env.NODE_ENV === 'production';
   if (!producao || process.env.PERMITIR_ROTAS_DE_TESTE === '1') return null;
   return NextResponse.json({ error: 'Not found' }, { status: 404 });
+}
+
+/**
+ * Erro de período fechado (gatilho do banco) vira 423 com a frase pronta
+ * para a tela (05/11/2026). Devolve null para os demais erros.
+ */
+export function respostaPeriodoFechado(e: unknown): NextResponse | null {
+  const ate = periodoFechadoDoErro(e);
+  if (!ate) return null;
+  return NextResponse.json({ error: mensagemPeriodoFechado(ate), periodo_fechado_ate: ate }, { status: 423 });
 }

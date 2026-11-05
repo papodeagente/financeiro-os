@@ -1,4 +1,4 @@
-import { recusaFinanceira, recusaExclusao } from '@/lib/guarda-rota';
+import { recusaFinanceira, recusaExclusao, respostaPeriodoFechado } from '@/lib/guarda-rota';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
@@ -20,6 +20,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     if (rows.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json(rows[0].data);
   } catch (e) {
+    const fechado = respostaPeriodoFechado(e);
+    if (fechado) return fechado;
     const msg = e instanceof Error ? e.message : 'Erro';
     return NextResponse.json({ error: msg }, { status: 500 });
   }
@@ -62,6 +64,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (e instanceof ErroEdicaoConta || e instanceof ErroMovimentoCaixa) {
       return NextResponse.json({ error: e.message }, { status: e.status });
     }
+    const fechado = respostaPeriodoFechado(e);
+    if (fechado) return fechado;
     const msg = e instanceof Error ? e.message : 'Erro';
     return NextResponse.json({ error: msg }, { status: 500 });
   }
@@ -90,6 +94,8 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
 
     return NextResponse.json({ ok: true });
   } catch (e) {
+    const fechado = respostaPeriodoFechado(e);
+    if (fechado) return fechado;
     const msg = e instanceof Error ? e.message : 'Erro';
     return NextResponse.json({ error: msg }, { status: 500 });
   }

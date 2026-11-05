@@ -23,6 +23,8 @@ import pool from '../db';
 import { generateId } from '../utils';
 import { round2, num, hojeISO, addDias } from '../money';
 import { emTransacao, aplicarMovimentoCaixaAtomico, type ExecutorSQL } from '../caixa-atomico';
+import { registrarBaixaLegada } from '../baixas-servidor';
+import { dataForaDoFechamento } from '../periodo-fechado';
 import { cifrar, decifrar, mascarar } from '../cofre';
 import { acharAdapter } from './index';
 import { nomeDaPlataforma } from './rotulo';
@@ -727,6 +729,11 @@ async function sincronizarContas(
       );
     } else {
       const sufixo = parcela.total > 1 ? ` (${parcela.numero}/${parcela.total})` : '';
+      // Recebimento com data num período fechado entra no dia seguinte ao
+      // fechamento: a integração nunca para por isso (05/11/2026).
+      const dataRecebimento = parcela.data_recebimento
+        ? await dataForaDoFechamento(exec, tenantId, ctx.contaBancariaId, parcela.data_recebimento)
+        : '';
       const conta = {
         id: contaId,
         origem: ctx.vendaId ? 'VENDA' : 'VENDA_DIRETA',
@@ -745,7 +752,7 @@ async function sincronizarContas(
         data_emissao: transacao.data_venda || parcela.data_vencimento,
         data_vencimento: parcela.data_vencimento || transacao.data_venda,
         data_prevista_recebimento: parcela.data_prevista_recebimento,
-        data_recebimento: parcela.data_recebimento || '',
+        data_recebimento: dataRecebimento,
         // O que entrou de verdade é o líquido. O bruto fica em valor_final
         // para o DRE ver receita cheia, e a taxa fica declarada ao lado.
         valor_recebido: parcela.status === 'RECEBIDO' ? parcela.valor_liquido : 0,
@@ -820,6 +827,10 @@ async function sincronizarContas(
         id: contaId,
         pessoaId: ctx.clienteId || undefined,
         descricao: `${plataforma}: parcela ${chave} da transação ${transacao.id_transacao}`,
+      });
+      await registrarBaixaLegada(exec, {
+        tenantId, tabela: 'contas_receber', tituloId: contaId, dadosAntes: gravada.get(contaId) ?? {},
+        conta: ctx.contaBancariaId, caixa: delta, data: parcela.data_recebimento || '', origem: 'plataforma',
       });
       creditado[chave] = alvo;
       movido = round2(movido + delta);

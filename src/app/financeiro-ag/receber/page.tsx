@@ -31,6 +31,7 @@ import { StatusChip, rotuloStatus } from '@/components/fin/StatusChip';
 import { EtiquetaDaPlataforma } from '@/components/fin/EtiquetaDaPlataforma';
 import { descricaoSemPlataforma, nomeDaPlataforma, plataformaDaConta } from '@/lib/plataformas/rotulo';
 import { BaixaDeReceber, valorEmAberto } from './BaixaDeReceber';
+import { HistoricoDeBaixas } from '@/components/fin/HistoricoDeBaixas';
 import { ehComissaoDeFornecedor, fraseDaComissao } from '@/lib/comissao-da-venda';
 import { NovaVenda } from './NovaVenda';
 import { DetalheDaPlataforma } from './DetalheDaPlataforma';
@@ -718,6 +719,7 @@ export default function ContasReceberPage() {
           onChange={atualizarForm}
           plataformasUsadas={plataformasUsadas}
         />
+        {editId ? <HistoricoDeBaixas tabela="contas_receber" tituloId={editId} onMudou={() => { void load(); }} /> : null}
       </RecordSheet>
 
       <DetalheDaPlataforma conta={detalheAlvo} onFechar={() => setDetalheAlvo(null)} />
