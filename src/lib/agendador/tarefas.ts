@@ -7,6 +7,9 @@ import { abrirRazaoNoExecutor, conferirRazaoNoExecutor } from '../razao-servidor
 import { processarFila } from './fila';
 import { tarefaRecorrenciaGerar } from '../recorrencia-servidor';
 import { tarefaAvisosVencimento } from '../avisos-vencimento-servidor';
+// Importar a régua também registra os processadores da fila de emissão
+// e de atualização das cobranças.
+import { tarefaReguaCobranca } from '../cobranca/regua';
 import { janelaDeMinutos, janelaDiaria, rodarAgendador, type DefinicaoTarefa, type ResumoAgendador } from './nucleo';
 
 /** Abre o razão das agências que ainda não têm (até 20 por chamada). */
@@ -49,7 +52,7 @@ export const tarefaFila: DefinicaoTarefa = {
   executar: async ({ exec, restanteMs }) => processarFila(exec, { orcamentoMs: Math.min(30_000, restanteMs()) }),
 };
 
-export const TAREFAS: DefinicaoTarefa[] = [tarefaRazaoAbertura, tarefaRazaoConferencia, tarefaRecorrenciaGerar, tarefaAvisosVencimento, tarefaFila];
+export const TAREFAS: DefinicaoTarefa[] = [tarefaRazaoAbertura, tarefaRazaoConferencia, tarefaRecorrenciaGerar, tarefaAvisosVencimento, tarefaReguaCobranca, tarefaFila];
 
 /** Roda o agendador contra o banco de verdade. */
 export async function executarAgendadorAgora(): Promise<ResumoAgendador> {

@@ -7,6 +7,7 @@ import { getAuditContext, runWithAuditContext, SYSTEM_AUDIT_CONTEXT } from './au
 import { RAZAO_SCHEMA_SQL } from './razao-schema';
 import { BAIXAS_SCHEMA_SQL } from './baixas-servidor';
 import { PERIODO_SCHEMA_SQL } from './periodo-fechado';
+import { COBRANCA_SCHEMA_SQL } from './cobranca/schema';
 import { RECORRENCIA_SCHEMA_SQL } from './recorrencia-schema';
 import { CENTROS_CUSTO_SCHEMA_SQL } from './centros-custo-servidor';
 import { PERMISSOES_SCHEMA_SQL } from './permissoes-schema';
@@ -1539,6 +1540,10 @@ async function executarInitDB() {
   // Histórico de baixas e trava de período (05/11/2026, E2).
   await pool.query(BAIXAS_SCHEMA_SQL);
   await pool.query(PERIODO_SCHEMA_SQL);
+  // Cobrança pelo Asaas/Pagar.me da agência (05/11/2026, E3): cobranças,
+  // histórico, portal do cliente, régua e disjuntor. Antes do razão e da
+  // auditoria (as tabelas de controle ficam fora do gatilho).
+  await pool.query(COBRANCA_SCHEMA_SQL);
   await pool.query(RAZAO_SCHEMA_SQL);
   // Instala a captura somente depois das migrações/seed, sem fabricar histórico.
   await pool.query(AUDIT_SCHEMA_SQL);

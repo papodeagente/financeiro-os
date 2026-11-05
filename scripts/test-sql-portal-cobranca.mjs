@@ -70,6 +70,11 @@ const { BAIXAS_SCHEMA_SQL } = await import('../src/lib/baixas-servidor.ts');
 const { ESQUEMA_ASSUMIDO_DO_PORTAL, hashDoToken } = await import('../src/lib/cobranca/portal-servidor.ts');
 await pg.exec(PERMISSOES_SCHEMA_SQL);
 await pg.exec(BAIXAS_SCHEMA_SQL);
+// O esquema DE VERDADE da cobrança primeiro (núcleo, parte A); o assumido
+// pelas telas vem depois e, com CREATE IF NOT EXISTS, só completa o que
+// faltar. Se o portal ler coluna que o núcleo não tem, o teste quebra.
+const { COBRANCA_SCHEMA_SQL } = await import('../src/lib/cobranca/schema.ts');
+await pg.exec(COBRANCA_SCHEMA_SQL);
 await pg.exec(ESQUEMA_ASSUMIDO_DO_PORTAL);
 
 const P = await import('../src/lib/permissoes-servidor.ts');
@@ -124,8 +129,8 @@ await cr('a6', 'cli-a', { cliente_nome: 'Ana Souza', descricao: 'Transfer', valo
 await cr('b1', 'cli-b', { cliente_nome: 'Bruno Lima', descricao: 'Cruzeiro', valor_final: 700, data_vencimento: D(7) });
 await cr('z1', 'cli-a', { cliente_nome: 'Ana de Outra Agência', descricao: 'Outra viagem', valor_final: 999, data_vencimento: D(3) }, T2);
 const cob = (id, titulo, status, t = T, extra = {}) => query(
-  `INSERT INTO cobrancas (id, tenant_id, titulo_id, provedor, tipo, status, valor_centavos, vencimento, linha_digitavel, pix_copia_cola, url_boleto, url_fatura, criado_em)
-   VALUES ($1,$2,$3,'asaas','boleto_pix',$4,$5,$6,$7,$8,$9,$10,$11)`,
+  `INSERT INTO cobrancas (id, tenant_id, titulo_id, provedor, tipo, status, valor_centavos, vencimento, linha_digitavel, pix_copia_cola, url_boleto, url_fatura, criado_em, referencia)
+   VALUES ($1,$2,$3,'asaas','boleto_pix',$4,$5,$6,$7,$8,$9,$10,$11, 'f1;' || $2 || ';' || $1)`,
   [id, t, titulo, status, extra.valor ?? 100000, extra.venc ?? D(10), '23793381286000782713695000063305975520000370000', `pix-${id}`, `https://asaas/b/${id}.pdf`, `https://asaas/i/${id}`, extra.criado ?? new Date().toISOString()],
 );
 await cob('cob-a1-velha', 'a1', 'cancelada', T, { criado: '2026-01-01T00:00:00Z' });
