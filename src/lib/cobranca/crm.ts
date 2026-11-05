@@ -126,6 +126,8 @@ export async function avisarCrm(
   c: CobrancaParaCrm,
   chave: string,
   extra: { dias?: number; canal?: CanalCobranca; canais?: CanalCobranca[] } = {},
+  /** Preenchido com o que o CRM respondeu (null = ficou na fila). */
+  retorno?: { resposta?: import('../crm-integration').RespostaDoCrm | null },
 ): Promise<PayloadCobrancaCrm> {
   const cliente = await clienteParaCrm(exec, tenantId, c.cliente_id);
   let portal = '';
@@ -136,7 +138,8 @@ export async function avisarCrm(
   }
   const payload = montarPayload(c, cliente, portal, extra);
   const { emitirEventoCRM } = await import('../crm-integration');
-  await emitirEventoCRM(tipo, payload as unknown as Record<string, unknown>, { tenantId, idempotency_key: chave });
+  const resposta = await emitirEventoCRM(tipo, payload as unknown as Record<string, unknown>, { tenantId, idempotency_key: chave });
+  if (retorno) retorno.resposta = resposta;
   return payload;
 }
 

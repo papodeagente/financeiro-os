@@ -15,6 +15,7 @@ import { CONFIG_COBRANCA_PADRAO, encargosDaCobranca, normalizarConfigCobranca } 
 import { CAPACIDADES_ASAAS, criarAdapterAsaas, statusAsaas } from '../src/lib/cobranca/asaas.ts';
 import { CAPACIDADES_PAGARME, criarAdapterPagarme, encargosPagarme, statusPagarme } from '../src/lib/cobranca/pagarme.ts';
 import { ErroProvedor } from '../src/lib/cobranca/tipos.ts';
+import { resultadoDoEnvio } from '../src/lib/cobranca/resultado-envio.ts';
 import { aguardarVez, zerarLimitador } from '../src/lib/cobranca/limitador.ts';
 
 let falhas = 0, total = 0;
@@ -306,6 +307,13 @@ async function principal() {
   }
   eq(vezes, [['A', 0], ['A', 500], ['A', 1000], ['B', 0], ['A', 1500], ['B', 500]], 'cada agência na sua vez, meio segundo entre chamadas; uma não espera a outra');
   zerarLimitador();
+
+  console.log('--- Resposta do CRM ao pedido de envio ---');
+  eq(resultadoDoEnvio({ entregue: true, acao: 'cobrança c1: enviada por e-mail' }), { enviado: true, na_fila: false, motivo: '' }, 'CRM mandou: enviado');
+  eq(resultadoDoEnvio({ entregue: true, acao: 'cobrança c1: não enviada (o cliente não tem e-mail válido)' }),
+    { enviado: false, na_fila: false, motivo: 'o cliente não tem e-mail válido' }, 'CRM recebeu e não mandou: o motivo dele vai para a tela');
+  eq(resultadoDoEnvio(null).na_fila, true, 'CRM não respondeu: fica na fila, sem dizer que saiu');
+  eq(resultadoDoEnvio({ entregue: false, acao: '' }).enviado, false, 'aviso que não chegou não conta como enviado');
 
   console.log(`\n${total - falhas}/${total} passaram`);
   if (falhas > 0) process.exit(1);

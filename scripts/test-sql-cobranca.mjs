@@ -456,7 +456,21 @@ eq((await falha(srv.enviarCobranca(A, rg1.id, 'whatsapp')))?.status, 409, 'sem C
 await query(`INSERT INTO crm_config (id, tenant_id, data) VALUES ('singleton', $1, '{"ativo": true, "webhook_url_crm": "https://crm.exemplo.com/webhook"}')`, [A]);
 const env = await srv.enviarCobranca(A, rg1.id, 'whatsapp');
 const pedidos = await eventosCrm(A, 'COBRANCA_ENVIAR');
-eq([env.enviado, pedidos.at(-1)?.canal, pedidos.at(-1)?.cobranca_id], [true, 'whatsapp', rg1.id], 'COBRANCA_ENVIAR com o canal');
+eq([env.enviado, env.na_fila, pedidos.at(-1)?.canal, pedidos.at(-1)?.cobranca_id], [false, true, 'whatsapp', rg1.id], 'COBRANCA_ENVIAR com o canal; CRM sem resposta: fica na fila, sem dizer que saiu');
+{
+  // O CRM responde 200 sempre e diz em `acao` se mandou.
+  const fetchAntes = globalThis.fetch;
+  let acao = 'cobrança x: enviada por e-mail';
+  globalThis.fetch = async url => {
+    if (String(url).startsWith('https://crm.exemplo.com/')) return new Response(JSON.stringify({ recebido: true, processado: true, acao }), { status: 200, headers: { 'content-type': 'application/json' } });
+    return fetchAntes(url);
+  };
+  const ok = await srv.enviarCobranca(A, rg1.id, 'email');
+  acao = 'cobrança x: não enviada (o cliente não tem e-mail válido)';
+  const nao = await srv.enviarCobranca(A, rg1.id, 'email');
+  globalThis.fetch = fetchAntes;
+  eq([ok.enviado, nao.enviado, nao.motivo], [true, false, 'o cliente não tem e-mail válido'], 'CRM mandou: enviado; CRM não mandou: o motivo dele volta para a tela');
+}
 const antesDoClique = (await eventosCrm(A, 'COBRANCA_ENVIAR')).length;
 await srv.enviarCobranca(A, rg1.id, 'email', { idempotencia: 'clique-1' });
 const repetidoEnvio = await srv.enviarCobranca(A, rg1.id, 'email', { idempotencia: 'clique-1' });

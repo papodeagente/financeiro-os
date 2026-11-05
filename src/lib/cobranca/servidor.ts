@@ -34,6 +34,7 @@ import {
   type ItemPlanejado,
 } from './calculo';
 import { avisarCrm, crmLigado, type CobrancaParaCrm } from './crm';
+import { resultadoDoEnvio } from './resultado-envio';
 import {
   ErroCobranca, ErroProvedor, ehProvedorCobranca, STATUS_EM_ABERTO,
   type AdapterCobranca, type CapacidadesCobranca, type ClienteDaCobranca, type CobrancaNoProvedor,
@@ -1001,7 +1002,7 @@ export async function pedirEstorno(
 /** Pede ao CRM para mandar a cobrança ao cliente por e-mail ou WhatsApp. */
 export async function enviarCobranca(
   tenantId: string, cobrancaId: string, canal: CanalCobranca, o: { quem?: QuemFez; idempotencia?: string } = {},
-): Promise<{ enviado: true; canal: CanalCobranca; repetido?: boolean }> {
+): Promise<{ enviado: boolean; canal: CanalCobranca; repetido?: boolean; na_fila?: boolean; motivo?: string }> {
   if (pool && o.idempotencia) {
     // O mesmo pedido repetido (duplo clique): não manda duas vezes.
     const { rows } = await (pool as unknown as ExecutorSQL).query(
@@ -1020,10 +1021,12 @@ export async function enviarCobranca(
   if (!(await crmLigado(exec, tenantId))) {
     throw new ErroCobranca('O envio por e-mail e WhatsApp sai pelo CRM. Ligue a integração com o CRM em Configurações.', 409);
   }
-  await avisarCrm(exec, tenantId, 'COBRANCA_ENVIAR', paraCrm(c), `cobranca-enviar:${tenantId}:${c.id}:${generateId()}`, { canal });
+  const retorno: { resposta?: import('../crm-integration').RespostaDoCrm | null } = {};
+  await avisarCrm(exec, tenantId, 'COBRANCA_ENVIAR', paraCrm(c), `cobranca-enviar:${tenantId}:${c.id}:${generateId()}`, { canal }, retorno);
+  const r = resultadoDoEnvio(retorno.resposta);
   await emTransacao(tx => registrarEvento(tx, tenantId, c.id, 'envio_pedido', c.status, c.status,
-    { canal, ...(o.idempotencia ? { idempotencia: o.idempotencia.slice(0, 200) } : {}) }, o.quem));
-  return { enviado: true, canal };
+    { canal, enviado: r.enviado, ...(r.motivo ? { motivo: r.motivo } : {}), ...(o.idempotencia ? { idempotencia: o.idempotencia.slice(0, 200) } : {}) }, o.quem));
+  return { enviado: r.enviado, canal, ...(r.na_fila ? { na_fila: true } : {}), ...(r.motivo ? { motivo: r.motivo } : {}) };
 }
 
 // ---------------------------------------------------------------------------

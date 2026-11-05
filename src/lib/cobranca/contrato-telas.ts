@@ -308,7 +308,7 @@ export const api = {
     chamar<{ ok: true; cobranca: Cobranca }>(`/api/cobrancas/${encodeURIComponent(id)}`, { method: 'DELETE', chave }),
 
   enviar: (id: string, canal: CanalDeEnvio, chave: string) =>
-    chamar<{ ok: true }>(`/api/cobrancas/${encodeURIComponent(id)}/enviar`, { method: 'POST', body: JSON.stringify({ canal }), chave }),
+    chamar<{ ok: true; enviado?: boolean; na_fila?: boolean; motivo?: string }>(`/api/cobrancas/${encodeURIComponent(id)}/enviar`, { method: 'POST', body: JSON.stringify({ canal }), chave }),
 
   previaDeCarne: (contas: string[]) =>
     chamar<RespostaDaPreviaDeCarne>('/api/cobrancas/carne', { method: 'POST', body: JSON.stringify({ modo: 'previa', contas }) }),

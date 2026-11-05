@@ -89,8 +89,15 @@ export function useAcoesDaCobranca(opcoes: { onMudou: () => void; onEmitirDeNovo
         await api.segundaVia(dialogo.c.id, { vencimento }, chave.current);
         toast.success('2ª via pronta', `Novo vencimento em ${dataBR(vencimento)}. O boleto e o Pix antigos deixam de valer.`);
       } else if (dialogo.tipo === 'enviar') {
-        await api.enviar(dialogo.c.id, dialogo.canal, chave.current);
-        toast.success(dialogo.canal === 'email' ? 'Envio por e-mail pedido' : 'Envio por WhatsApp pedido', 'A mensagem sai pelo CRM da agência em instantes.');
+        const r = await api.enviar(dialogo.c.id, dialogo.canal, chave.current);
+        const meio = dialogo.canal === 'email' ? 'e-mail' : 'WhatsApp';
+        if (r.enviado === false && !r.na_fila) {
+          // O CRM recebeu, mas não mandou: o motivo vem dele, em palavras simples.
+          setErro(`O ${meio} não saiu: ${r.motivo || 'o CRM não disse o motivo'}.`);
+          return;
+        }
+        if (r.na_fila) toast.info(`Envio por ${meio} na fila`, r.motivo || 'Sai assim que o CRM responder.');
+        else toast.success(dialogo.canal === 'email' ? 'E-mail enviado pelo CRM' : 'Enviado para a automação de WhatsApp do CRM', 'A mensagem sai com a marca da agência.');
       } else {
         await api.cancelar(dialogo.c.id, chave.current);
         toast.success('Cobrança cancelada', 'O cliente não consegue mais pagar este boleto nem este Pix. A conta continua em aberto.');

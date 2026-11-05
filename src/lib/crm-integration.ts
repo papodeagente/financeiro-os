@@ -1016,16 +1016,19 @@ export async function sincronizarTodosOsFornecedores(
 // emitirEventoCRM — fire-and-forget
 // ──────────────────────────────────────────
 
+/** O que o CRM respondeu ao aviso (null = não foi ao CRM agora; fica na fila). */
+export interface RespostaDoCrm { entregue: boolean; acao: string }
+
 export async function emitirEventoCRM(
   tipo: string,
   payload: Record<string, unknown>,
   opcoes: { tenantId: string; idempotency_key?: string }
-): Promise<void> {
+): Promise<RespostaDoCrm | null> {
   try {
-    if (!pool) return;
-    if (!opcoes?.tenantId) return; // tenant context required
+    if (!pool) return null;
+    if (!opcoes?.tenantId) return null; // tenant context required
     // Importação/ensaio em andamento: nada é avisado ao CRM (05/11/2026).
-    if (nadaSai()) return;
+    if (nadaSai()) return null;
     await initDB();
 
     const tenantId = opcoes.tenantId;
@@ -1043,10 +1046,10 @@ export async function emitirEventoCRM(
 
     const config = await getCrmConfig(tenantId);
     if (!config || !config.ativo || config.circuit_breaker_status === 'aberto') {
-      return;
+      return null;
     }
 
-    if (!config.webhook_url_crm) return;
+    if (!config.webhook_url_crm) return null;
 
     const bodyStr = JSON.stringify(eventBody);
     const signature = hmacSign(bodyStr, config.api_key_crm || '');
@@ -1076,6 +1079,8 @@ export async function emitirEventoCRM(
           `UPDATE crm_eventos_saida SET status = 'ENVIADO', latencia_ms = $2, updated_at = NOW() WHERE id = $1`,
           [id, latencia]
         );
+        const resposta = (await res.json().catch(() => null)) as { acao?: unknown } | null;
+        return { entregue: true, acao: typeof resposta?.acao === 'string' ? resposta.acao : '' };
       } else {
         throw new Error(`HTTP ${res.status}`);
       }
@@ -1106,6 +1111,8 @@ export async function emitirEventoCRM(
   } catch {
     // Never propagate errors from CRM integration
   }
+  // Não chegou ao CRM agora: o aviso ficou na fila e sai na próxima tentativa.
+  return null;
 }
 
 // ──────────────────────────────────────────
