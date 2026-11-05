@@ -24,6 +24,7 @@ import {
   pessoaDaConta,
   type ExecutorSQL,
 } from './caixa-atomico';
+import { registrarBaixaLegada } from './baixas-servidor';
 import { createContaPagar, createContaReceber } from './crm-types';
 import { formatBRL, generateId } from './utils';
 import { num, round2 } from './money';
@@ -139,6 +140,10 @@ async function moverCaixa(exec: ExecutorSQL, tenantId: string, prev: Dados, novo
       pessoaId: pessoaDaConta(t.tabela, { ...prev, ...novo }),
     });
     if (!ok) throw new ErroConciliacao('A conta bancária deste extrato não existe nesta agência. Nada foi conciliado.', 409);
+    await registrarBaixaLegada(exec, {
+      tenantId, tabela: t.tabela, tituloId: String(novo.id ?? prev.id ?? ''), dadosAntes: prev, conta: m.conta, caixa: m.delta,
+      data: String(novo[t.campoData] ?? ''), origem: 'conciliacao',
+    });
   }
 }
 

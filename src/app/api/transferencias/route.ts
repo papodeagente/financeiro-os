@@ -8,5 +8,9 @@ import { createCrudHandlers } from '@/lib/crud-api';
 export const { GET, POST } = createCrudHandlers(
   'transferencias',
   ['conta_origem_id', 'conta_destino_id', 'status'],
-  { somenteFinanceiro: true, protegerBaixa: true },
+  {
+    somenteFinanceiro: true, protegerBaixa: true,
+    // Transferência que toca conta não liberada não aparece (05/11/2026).
+    filtroDeConta: { campos: ['conta_origem_id', 'conta_destino_id'] },
+  },
 );

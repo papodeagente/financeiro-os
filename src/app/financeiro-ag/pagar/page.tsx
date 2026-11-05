@@ -1,16 +1,26 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, Plus, Target, TriangleAlert } from 'lucide-react';
 
 import { ContaPagar, PlanoContas, createContaPagar, StatusContaPagar, CartaoCorporativo } from '@/lib/crm-types';
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
 import { toast } from '@/lib/toast';
+import { validarRateio } from '@/lib/dimensoes';
 import { consumirAtalho, lerAtalhos } from '@/lib/atalho-da-url';
 import {
   round2, num, somaPor, paraBRL,
   hojeISO, addDias, addMeses, dataSegura, estaVencido, mesDe, dentroDoPeriodo,
 } from '@/lib/money';
+import {
+  formatarData, podeCopiarConta, previaDoFormulario, REPETICAO_PADRAO, rotuloDoMes, tituloGeradoPeloSistema, tituloSemBaixa,
+} from '@/lib/recorrencia';
+import {
+  copiarMes, criarSerie, editarSerie, novoIdDeSerie, type EscopoDaEdicao, type RespostaCopiarMes, type SerieNaTela,
+} from '@/lib/recorrencia-cliente';
+import { EscopoDaSerie } from '@/components/financeiro/recorrencia/EscopoDaSerie';
+import { FaixaDaSerie } from '@/components/financeiro/recorrencia/FaixaDaSerie';
+import { MaisParcelas } from '@/components/financeiro/recorrencia/MaisParcelas';
 import { cn, formatBRL } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { PageShell } from '@/components/PageShell';
@@ -28,23 +38,14 @@ import { rotuloStatus } from '@/components/fin/StatusChip';
 
 import { criarColunas, semFornecedor } from './colunas';
 import { BaixaDePagar } from './BaixaDePagar';
+import { HistoricoDeBaixas } from '@/components/fin/HistoricoDeBaixas';
 import { saldoDevedor, valorBRLDaConta } from './valores';
 import { FormularioConta } from './FormularioConta';
 import { PainelCopiarMes } from './PainelCopiarMes';
-import { EMPTY_FORM, SEM_ERRO, type ErrosDoFormulario, type FiltroPeriodo, type FormState, type RecorrenciaPeriodo } from './tipos';
+import { EMPTY_FORM, SEM_ERRO, type ErrosDoFormulario, type FiltroPeriodo, type FormState } from './tipos';
 
-// Calcula próximo vencimento dado base e tipo de recorrência.
-// MENSAL usa addMeses, que CLAMPA o dia (31/01 + 1 mês = 28/02).
-function avancarData(baseISO: string, periodo: RecorrenciaPeriodo, count: number): string {
-  if (periodo === 'MENSAL') return addMeses(baseISO, count);
-  return addDias(baseISO, (periodo === 'SEMANAL' ? 7 : 14) * count);
-}
-
-function getMonthLabel(ym: string): string {
-  const [y, m] = ym.split('-');
-  const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-  return `${months[parseInt(m) - 1]}/${y}`;
-}
+/** "Jan/2026": o mesmo rótulo que a cópia de mês sempre gravou. */
+const getMonthLabel = rotuloDoMes;
 
 function addMonth(ym: string): string {
   return mesDe(addMeses(`${ym}-01`, 1));
@@ -57,17 +58,44 @@ function ehVencidoEmAberto(i: ContaPagar, hoje: string): boolean {
 }
 
 /**
- * Só entra na cópia de mês o que é lançamento MANUAL recorrente:
- * custo auto-gerado de venda/grupo é recriado pela própria venda (duplicaria),
- * e conta CANCELADA não pode ser ressuscitada.
+ * Só entra na cópia de mês o que é lançamento MANUAL recorrente: o mesmo
+ * critério de sempre (src/lib/recorrencia.ts, o servidor usa o mesmo) e,
+ * desde 05/11/2026, fora também o que já se repete sozinho numa série.
  */
 function podeCopiarParaOutroMes(i: ContaPagar): boolean {
-  if (i.natureza_custo === 'COMPRA_UNICA') return false;
-  if (i.auto_gerado) return false;
-  if (i.origem === 'VENDA' || i.origem === 'GRUPO') return false;
-  if (i.status === 'CANCELADO') return false;
-  return true;
+  return podeCopiarConta('contas_pagar', i as unknown as Record<string, unknown>);
 }
+
+type ContaComSerie = ContaPagar & { serie_id?: string };
+
+/** Campos que a tela edita e que a série sabe propagar. */
+const CAMPOS_DA_SERIE = [
+  'origem', 'fornecedor_nome', 'descricao', 'categoria_id', 'moeda', 'forma_pagamento',
+  'natureza_custo', 'is_custo_comercial', 'observacoes',
+  'centro_custo', 'centro_custo_id',
+] as const;
+
+/** O que mudou no formulário em relação à conta lida (só o que mudou vai para a série). */
+function diferencasDaConta(
+  existing: ContaPagar, form: FormState, valorOriginal: number, cambio: number, cartaoId: string | null,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const c of CAMPOS_DA_SERIE) {
+    if ((form[c] ?? '') !== (existing[c] ?? '')) out[c] = form[c];
+  }
+  if (valorOriginal !== round2(num(existing.valor_original))) out.valor_original = valorOriginal;
+  // Rateio e tags: compara o que importa (centro, categoria, percentual).
+  const chaveRateio = (r: unknown) => JSON.stringify((Array.isArray(r) ? r : []).map((l: { centro_custo_id?: string; categoria_id?: string; percentual?: number }) =>
+    [l.centro_custo_id ?? '', l.categoria_id ?? '', round2(num(l.percentual))]));
+  if (chaveRateio(form.rateio) !== chaveRateio(existing.rateio)) out.rateio = form.rateio;
+  if (JSON.stringify(form.tags ?? []) !== JSON.stringify(existing.tags ?? [])) out.tags = form.tags ?? [];
+  if (cambio !== num(existing.cambio || 1)) out.cambio = cambio;
+  if ((cartaoId ?? null) !== (existing.cartao_id ?? null)) out.cartao_id = cartaoId;
+  if (form.data_vencimento !== existing.data_vencimento) out.data_vencimento = form.data_vencimento;
+  return out;
+}
+
+type EdicaoPendente = { existing: ContaPagar; updated: ContaPagar; alteracoes: Record<string, unknown> };
 
 /** Mesma condição de sempre para a ação de pagar na linha. */
 function podePagar(i: ContaPagar): boolean {
@@ -149,6 +177,14 @@ function EsqueletoFiltros() {
   );
 }
 
+/** Campos do formulário que vão para o título (o bloco "Repetir" e a leitura do documento não vão). */
+function camposDoTitulo(form: FormState): Omit<FormState, 'repeticao' | 'leitura'> {
+  const { repeticao: _repeticao, leitura: _leitura, ...campos } = form;
+  void _repeticao;
+  void _leitura;
+  return campos;
+}
+
 export default function ContasPagarPage() {
   const [items, setItems] = useState<ContaPagar[]>([]);
   const [planoContas, setPlanoContas] = useState<PlanoContas[]>([]);
@@ -179,6 +215,16 @@ export default function ContasPagarPage() {
   // A conta cuja baixa está aberta. O diálogo e a regra vivem em BaixaDePagar,
   // o mesmo componente que a visão geral abre.
   const [contaAPagar, setContaAPagar] = useState<ContaPagar | null>(null);
+  // Recorrência (05/11/2026): id da série gerado ao abrir o formulário (o
+  // duplo clique reusa e o servidor não duplica), a série da conta em edição,
+  // a pergunta de escopo e as mais parcelas.
+  const serieNova = useRef(novoIdDeSerie());
+  const [serieEditada, setSerieEditada] = useState<SerieNaTela | null>(null);
+  const [edicaoPendente, setEdicaoPendente] = useState<EdicaoPendente | null>(null);
+  const [gravandoEscopo, setGravandoEscopo] = useState(false);
+  const [parcelasDe, setParcelasDe] = useState<ContaPagar | null>(null);
+  const [previaCopia, setPreviaCopia] = useState<RespostaCopiarMes | null>(null);
+  const abrirDepoisDeCarregar = useRef<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -192,6 +238,9 @@ export default function ContasPagarPage() {
       setPlanoContas(contas);
       setCartoes(cards);
       setErroCarga(null);
+      const alvo = abrirDepoisDeCarregar.current ? data.find(i => i.id === abrirDepoisDeCarregar.current) : null;
+      abrirDepoisDeCarregar.current = null;
+      if (alvo) { setFilterPeriodo('TODOS'); openEdit(alvo); }
     } catch {
       setErroCarga('A consulta ao servidor falhou. Nenhum dado foi alterado.');
     } finally {
@@ -207,6 +256,9 @@ export default function ContasPagarPage() {
     if (a.get('status') === 'VENCIDO') setFilterPeriodo('VENCIDOS');
     if (a.get('sem_fornecedor') === '1') { setFilterPeriodo('TODOS'); setFilterSemFornecedor(true); }
     if (a.get('nova') === '1') { consumirAtalho('nova'); openNew(); }
+    // Vindo dos relatórios por categoria, centro ou rateio: abre a conta (05/11/2026).
+    const abrir = a.get('abrir');
+    if (abrir) { consumirAtalho('abrir'); abrirDepoisDeCarregar.current = abrir; }
   }
 
   // Uma vez, ao abrir a tela: o atalho do endereço não é um estado a seguir.
@@ -226,6 +278,8 @@ export default function ContasPagarPage() {
 
   function openNew() {
     setForm(EMPTY_FORM);
+    serieNova.current = novoIdDeSerie();
+    setSerieEditada(null);
     setEditId(null);
     setTentouSalvar(false);
     setShowCopyModal(false);
@@ -247,10 +301,20 @@ export default function ContasPagarPage() {
       natureza_custo: item.natureza_custo ?? null,
       is_custo_comercial: item.is_custo_comercial ?? false,
       observacoes: item.observacoes,
-      recorrencia_ativa: false,
-      recorrencia_periodo: 'MENSAL',
-      recorrencia_repeticoes: 12,
+      centro_custo_id: item.centro_custo_id ?? '',
+      centro_custo: item.centro_custo ?? '',
+      rateio: Array.isArray(item.rateio) ? item.rateio : [],
+      tags: Array.isArray(item.tags) ? item.tags : [],
+      repeticao: REPETICAO_PADRAO,
+      fornecedor_id: item.fornecedor_id ?? '',
+      fornecedor_cnpj: item.fornecedor_cnpj ?? '',
+      numero_documento: item.numero_documento ?? '',
+      linha_digitavel: item.linha_digitavel ?? '',
+      chave_pix: item.chave_pix ?? '',
+      anexos: Array.isArray(item.anexos) ? item.anexos : [],
+      leitura: null,
     });
+    setSerieEditada(null);
     setEditId(item.id);
     setTentouSalvar(false);
     setShowCopyModal(false);
@@ -274,75 +338,137 @@ export default function ContasPagarPage() {
     // A moeda de origem fica preservada em valor_original + moeda + cambio.
     const valorBrl = paraBRL(valorOriginal, form.moeda, cambio);
     const cartaoIdFinal = form.forma_pagamento === 'CARTAO_CORP' ? (form.cartao_id || null) : null;
+    // Rateio preenchido fecha 100% e os centavos do valor em reais (05/11/2026).
+    const rateioConferido = validarRateio(valorBrl, form.rateio);
+    if (!rateioConferido.ok) { toast.error(rateioConferido.erro); return; }
+    const rateioFinal = rateioConferido.linhas;
 
     setSaving(true);
     try {
-      // Edição NÃO suporta recorrência (só aplica em criação).
       if (editId) {
         const existing = items.find(i => i.id === editId)!;
         const updated: ContaPagar = {
           ...existing,
-          ...form,
+          ...camposDoTitulo(form),
           // Preencher o fornecedor à mão resolve a pendência que veio do CRM.
           // A validação acima já garante que o nome não está em branco.
           fornecedor_pendente: false,
           cartao_id: cartaoIdFinal,
+          rateio: rateioFinal,
           valor_original: valorOriginal,
           cambio,
           valor_final: valorBrl,
           valor_brl: valorBrl,
         };
-        // O status que esta tela LEU: o servidor só desfaz uma baixa quando a
-        // tela sabia que a conta estava baixada (senão é tela velha, 409).
-        await updateEntity('contas-pagar', { ...updated, _status_lido: existing.status });
+        // Conta de uma série, ainda em aberto e sem baixa: pergunta se a
+        // mudança vale só para ela, para as seguintes ou para todas.
+        const serieId = (existing as ContaComSerie).serie_id;
+        if (serieId && tituloSemBaixa('contas_pagar', existing as unknown as Record<string, unknown>)) {
+          const alteracoes = diferencasDaConta(existing, form, valorOriginal, cambio, cartaoIdFinal);
+          if (Object.keys(alteracoes).length > 0) {
+            setEdicaoPendente({ existing, updated, alteracoes });
+            return;
+          }
+        }
+        await gravarSomenteEsta(existing, updated);
+        return;
+      }
+
+      // Repetir: a série nasce no servidor, numa transação só (05/11/2026).
+      const rep = form.repeticao;
+      const previa = rep.ativa ? previaDoFormulario(rep, form.data_vencimento, Math.round(valorOriginal * 100), hojeISO()) : null;
+      if (previa && 'erro' in previa) { toast.error(previa.erro); return; }
+      if (previa && !(previa.total === 1 && previa.ocorrencias.length === 1)) {
+        const r = await criarSerie({
+          id: serieNova.current,
+          tabela: 'contas_pagar',
+          estado: rep,
+          inicio: form.data_vencimento,
+          valor: valorOriginal,
+          // Linha digitável e número do documento são de UM boleto: não se repetem nas outras contas.
+          modelo: { ...camposDoTitulo(form), linha_digitavel: '', numero_documento: '', cartao_id: cartaoIdFinal, rateio: rateioFinal, cambio },
+        });
         setShowForm(false);
         setEditId(null);
-        toast.success('Conta atualizada');
+        const primeira = r.titulos[0];
+        const ultima = r.titulos[r.titulos.length - 1];
+        const datas = primeira && ultima ? `Vencimentos de ${formatarData(primeira.vencimento)} a ${formatarData(ultima.vencimento)}` : '';
+        if (r.ja_existia) toast.success('Essas contas já tinham sido criadas', datas);
+        else toast.success(`${r.criados} ${rep.modo === 'parcelado' ? 'parcelas criadas' : r.criados === 1 ? 'conta criada' : 'contas criadas'}`, datas);
         load();
         return;
       }
 
-      // Quantas contas criar: 1 para única, N para recorrente.
-      const isDespesaFixa = form.origem === 'DESPESA_FIXA';
-      const recorrer = isDespesaFixa && form.recorrencia_ativa && form.recorrencia_repeticoes > 1;
-      const total = recorrer ? form.recorrencia_repeticoes : 1;
-      const periodoLabel: Record<RecorrenciaPeriodo, string> = {
-        MENSAL: 'mensal', SEMANAL: 'semanal', QUINZENAL: 'quinzenal',
+      const nova: ContaPagar = {
+        ...createContaPagar(),
+        ...camposDoTitulo(form),
+        cartao_id: cartaoIdFinal,
+        rateio: rateioFinal,
+        valor_original: valorOriginal,
+        cambio,
+        valor_final: valorBrl,
+        valor_brl: valorBrl,
       };
-
-      for (let i = 0; i < total; i++) {
-        const vencimento = i === 0 ? form.data_vencimento : avancarData(form.data_vencimento, form.recorrencia_periodo, i);
-        const desc = recorrer
-          ? `${form.descricao} (${i + 1}/${total} — ${periodoLabel[form.recorrencia_periodo]})`
-          : form.descricao;
-        const nova: ContaPagar = {
-          ...createContaPagar(),
-          ...form,
-          cartao_id: cartaoIdFinal,
-          descricao: desc,
-          data_vencimento: vencimento,
-          valor_original: valorOriginal,
-          cambio,
-          valor_final: valorBrl,
-          valor_brl: valorBrl,
-          parcela_numero: i + 1,
-          total_parcelas: total,
-        };
-        await saveEntity('contas-pagar', nova);
-      }
-
+      await saveEntity('contas-pagar', nova);
       setShowForm(false);
       setEditId(null);
-      if (total > 1) {
-        const primeiroVenc = form.data_vencimento;
-        const ultimoVenc = avancarData(form.data_vencimento, form.recorrencia_periodo, total - 1);
-        toast.success(`${total} parcelas criadas`, `Vencimentos de ${primeiroVenc.split('-').reverse().join('/')} a ${ultimoVenc.split('-').reverse().join('/')}`);
-      } else {
-        toast.success('Conta criada', `${form.fornecedor_nome} · ${formatBRL(valorBrl)}`);
-      }
+      toast.success('Conta criada', `${form.fornecedor_nome} · ${formatBRL(valorBrl)}`);
       load();
+    } catch (e) {
+      toast.error('Não foi possível salvar', e instanceof Error ? e.message : '');
     } finally {
       setSaving(false);
+    }
+  }
+
+  /** O caminho de sempre para editar uma conta (também o "Só esta"). */
+  async function gravarSomenteEsta(existing: ContaPagar, updated: ContaPagar) {
+    // O status que esta tela LEU: o servidor só desfaz uma baixa quando a
+    // tela sabia que a conta estava baixada (senão é tela velha, 409).
+    await updateEntity('contas-pagar', { ...updated, _status_lido: existing.status });
+    setShowForm(false);
+    setEditId(null);
+    toast.success('Conta atualizada');
+    load();
+  }
+
+  async function confirmarEscopo(escopo: EscopoDaEdicao) {
+    if (!edicaoPendente || gravandoEscopo) return;
+    const { existing, updated, alteracoes } = edicaoPendente;
+    const serieId = (existing as ContaComSerie).serie_id!;
+    setGravandoEscopo(true);
+    try {
+      if (escopo === 'so_esta') {
+        await gravarSomenteEsta(existing, updated);
+      } else {
+        // Nas outras contas, a data nova vira "o dia do mês" (mensal/anual).
+        // Em outra periodicidade, a data nova vale só para esta conta.
+        const { data_vencimento: novaData, ...resto } = alteracoes;
+        const freq = serieEditada?.serie.regra.frequencia;
+        const porDia = typeof novaData === 'string' && (freq === 'MES' || freq === 'ANO');
+        const r = await editarSerie(serieId, {
+          escopo, titulo_id: existing.id, versao: serieEditada?.serie.versao,
+          alteracoes: porDia ? { ...resto, dia_do_mes: Number(String(novaData).slice(8, 10)) } : resto,
+        });
+        if (typeof novaData === 'string' && !porDia) {
+          await editarSerie(serieId, { escopo: 'so_esta', titulo_id: existing.id, alteracoes: { data_vencimento: novaData } });
+        }
+        setShowForm(false);
+        setEditId(null);
+        const n = r.alterados.length;
+        toast.success(
+          n === 1 ? '1 conta alterada' : `${n} contas alteradas`,
+          r.intocados.length > 0
+            ? `${r.intocados.length === 1 ? '1 conta já paga ficou' : `${r.intocados.length} contas já pagas ficaram`} como estava${r.intocados.length === 1 ? '' : 'm'}.`
+            : '',
+        );
+        load();
+      }
+      setEdicaoPendente(null);
+    } catch (e) {
+      toast.error('Não foi possível salvar', e instanceof Error ? e.message : '');
+    } finally {
+      setGravandoEscopo(false);
     }
   }
 
@@ -389,51 +515,38 @@ export default function ContasPagarPage() {
     i => mesDe(i.data_vencimento) === copySourceMonth && podeCopiarParaOutroMes(i)
   );
 
+  // A cópia acontece no servidor (05/11/2026), com a chave copia:<mês>:<conta>
+  // que impede copiar a mesma conta para o mesmo mês duas vezes.
   async function handleCopyMonth() {
     if (!copySourceMonth || !copyTargetMonth || copying) return;
     setCopying(true);
     try {
-      const [anoDestino, mesDestino] = copyTargetMonth.split('-').map(Number);
-
-      for (const item of itensCopiaveis) {
-        // Mesmo dia no mês destino, com clamp: dia 31 em fevereiro vira 28/29
-        // (antes fabricava 2026-02-31, data inexistente que sumia dos filtros).
-        const dia = Number(item.data_vencimento.slice(8, 10)) || 1;
-        const newDueDate = dataSegura(anoDestino, mesDestino, dia);
-        const valorBrl = valorBRLDaConta(item);
-
-        const nova: ContaPagar = {
-          ...createContaPagar(),
-          origem: item.origem,
-          fornecedor_id: item.fornecedor_id,
-          fornecedor_nome: item.fornecedor_nome,
-          descricao: item.descricao,
-          categoria_id: item.categoria_id,
-          centro_custo: item.centro_custo,
-          valor_original: round2(num(item.valor_original)),
-          valor_final: valorBrl,
-          moeda: item.moeda,
-          cambio: item.cambio,
-          valor_brl: valorBrl,
-          data_vencimento: newDueDate,
-          forma_pagamento: item.forma_pagamento,
-          natureza_custo: item.natureza_custo,
-          is_custo_comercial: item.is_custo_comercial,
-          observacoes: `Copiado de ${getMonthLabel(copySourceMonth)}`,
-        };
-        await saveEntity('contas-pagar', nova);
-      }
-
+      const r = await copiarMes({ tabela: 'contas_pagar', mes_origem: copySourceMonth, mes_destino: copyTargetMonth, previa: false });
       setShowCopyModal(false);
       toast.success(
-        `${itensCopiaveis.length} conta(s) copiada(s)`,
-        `${getMonthLabel(copySourceMonth)} para ${getMonthLabel(copyTargetMonth)}`
+        `${r.copiadas} conta(s) copiada(s)`,
+        `${getMonthLabel(copySourceMonth)} para ${getMonthLabel(copyTargetMonth)}${r.ja_copiadas > 0 ? `. ${r.ja_copiadas} já tinha(m) sido copiada(s) antes.` : ''}`,
       );
       load();
+    } catch (e) {
+      toast.error('Não foi possível copiar', e instanceof Error ? e.message : '');
     } finally {
       setCopying(false);
     }
   }
+
+  // Prévia do servidor para o painel: já desconta o que foi copiado antes.
+  useEffect(() => {
+    if (!showCopyModal || !copySourceMonth || !copyTargetMonth || copySourceMonth === copyTargetMonth) {
+      setPreviaCopia(null);
+      return;
+    }
+    let vivo = true;
+    copiarMes({ tabela: 'contas_pagar', mes_origem: copySourceMonth, mes_destino: copyTargetMonth, previa: true })
+      .then(r => { if (vivo) setPreviaCopia(r); })
+      .catch(() => { if (vivo) setPreviaCopia(null); });
+    return () => { vivo = false; };
+  }, [showCopyModal, copySourceMonth, copyTargetMonth]);
 
   // Get unique months from data for the copy modal
   const availableMonths = [...new Set(items.map(i => mesDe(i.data_vencimento)).filter(Boolean))].sort();
@@ -770,6 +883,47 @@ export default function ContasPagarPage() {
         erros={erros}
         salvando={saving}
         onSalvar={salvarFormulario}
+        extra={editId ? <HistoricoDeBaixas tabela="contas_pagar" tituloId={editId} onMudou={() => { void load(); }} /> : null}
+        faixaDaSerie={(() => {
+          const editada = editId ? (items.find(i => i.id === editId) as ContaComSerie | undefined) : undefined;
+          if (!editada?.serie_id) return null;
+          return (
+            <FaixaDaSerie
+              key={editada.serie_id}
+              serieId={editada.serie_id}
+              onSerie={setSerieEditada}
+              onEncerrada={() => { setShowForm(false); setEditId(null); load(); }}
+            />
+          );
+        })()}
+        onMaisParcelas={(() => {
+          const editada = editId ? items.find(i => i.id === editId) : undefined;
+          if (!editada || editada.status === 'CANCELADO') return null;
+          if (tituloGeradoPeloSistema('contas_pagar', editada as unknown as Record<string, unknown>)) return null;
+          return () => { setShowForm(false); setParcelasDe(editada); };
+        })()}
+      />
+
+      <EscopoDaSerie
+        aberto={Boolean(edicaoPendente)}
+        onOpenChange={a => { if (!a) setEdicaoPendente(null); }}
+        regra={serieEditada?.serie.descricao_regra ?? null}
+        avisoDeData={
+          edicaoPendente && typeof edicaoPendente.alteracoes.data_vencimento === 'string'
+            ? serieEditada?.serie.regra.frequencia === 'MES' || serieEditada?.serie.regra.frequencia === 'ANO'
+              ? `Nas outras contas, o vencimento passa para o dia ${Number(String(edicaoPendente.alteracoes.data_vencimento).slice(8, 10))}.`
+              : 'A data nova vale só para esta conta; as outras mantêm o vencimento.'
+            : null
+        }
+        processando={gravandoEscopo}
+        onConfirmar={escopo => { void confirmarEscopo(escopo); }}
+      />
+
+      <MaisParcelas
+        titulo={parcelasDe ? { id: parcelasDe.id, descricao: parcelasDe.descricao, pessoa: parcelasDe.fornecedor_nome } : null}
+        tabela="contas_pagar"
+        onFechar={() => setParcelasDe(null)}
+        onGeradas={() => { load(); }}
       />
 
       <PainelCopiarMes
@@ -781,8 +935,9 @@ export default function ContasPagarPage() {
         onMesDestino={setCopyTargetMonth}
         mesesDisponiveis={availableMonths}
         rotuloMes={getMonthLabel}
-        quantidade={itensCopiaveis.length}
-        soma={somaCopiaveis}
+        quantidade={previaCopia ? previaCopia.quantidade : itensCopiaveis.length}
+        soma={previaCopia ? previaCopia.soma : somaCopiaveis}
+        jaCopiadas={previaCopia?.ja_copiadas ?? 0}
         copiando={copying}
         onCopiar={() => { void handleCopyMonth(); }}
       />

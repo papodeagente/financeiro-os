@@ -1,9 +1,13 @@
-import { recusaFinanceira, recusaExclusao } from '@/lib/guarda-rota';
+import { recusaFinanceira, recusaExclusao, respostaPeriodoFechado } from '@/lib/guarda-rota';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
 import { emTransacao, estornarBaixaDaConta, ErroMovimentoCaixa } from '@/lib/caixa-atomico';
 import { editarConta, ErroEdicaoConta } from '@/lib/baixa-de-conta';
+import { prepararDimensoesDaConta } from '@/lib/dimensoes';
+import { getSession } from '@/lib/auth';
+import type { ExecutorSQL } from '@/lib/caixa-atomico';
+import { conferirEdicaoDoTitulo, type SessaoDaBaixa } from '@/lib/baixas-porteiro';
 
 const TABLE = 'contas_receber';
 const INDEX_COLS = ['venda_id', 'cliente_id', 'status'];
@@ -20,6 +24,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     if (rows.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json(rows[0].data);
   } catch (e) {
+    const fechado = respostaPeriodoFechado(e);
+    if (fechado) return fechado;
     const msg = e instanceof Error ? e.message : 'Erro';
     return NextResponse.json({ error: msg }, { status: 500 });
   }
@@ -44,8 +50,15 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (!item || typeof item !== 'object' || Array.isArray(item)) {
       return NextResponse.json({ error: 'Formato inválido' }, { status: 400 });
     }
+    // Rateio preenchido fecha 100% e o valor em centavos (05/11/2026).
+    const rateioInvalido = prepararDimensoesDaConta(item as Record<string, unknown>);
+    if (rateioInvalido) return NextResponse.json({ error: rateioInvalido }, { status: 400 });
     if (!pool) return NextResponse.json(item);
     const tenantId = await getTenantId();
+    // Perfis de acesso (05/11/2026): baixa pela edição segue as mesmas regras da liquidação.
+    const barrado = await conferirEdicaoDoTitulo(
+      pool as unknown as ExecutorSQL, ((await getSession()) ?? {}) as SessaoDaBaixa, tenantId, TABLE, id, item as Record<string, unknown>);
+    if (barrado) return NextResponse.json({ error: barrado.message, ...(barrado.pedir ? { pedir_aprovacao: barrado.pedir } : {}) }, { status: barrado.status });
     // Linha travada, movimento calculado sobre o estado atual e caixa que não
     // se move desfaz tudo (ver src/lib/baixa-de-conta.ts).
     const gravado = await editarConta({
@@ -62,6 +75,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (e instanceof ErroEdicaoConta || e instanceof ErroMovimentoCaixa) {
       return NextResponse.json({ error: e.message }, { status: e.status });
     }
+    const fechado = respostaPeriodoFechado(e);
+    if (fechado) return fechado;
     const msg = e instanceof Error ? e.message : 'Erro';
     return NextResponse.json({ error: msg }, { status: 500 });
   }
@@ -90,6 +105,8 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
 
     return NextResponse.json({ ok: true });
   } catch (e) {
+    const fechado = respostaPeriodoFechado(e);
+    if (fechado) return fechado;
     const msg = e instanceof Error ? e.message : 'Erro';
     return NextResponse.json({ error: msg }, { status: 500 });
   }

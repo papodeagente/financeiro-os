@@ -364,6 +364,20 @@ export interface PlanoContas {
   natureza_custo: NaturezaCusto | null;
   is_custo_comercial: boolean;
   ativo: boolean;
+  /** Dinheiro que só passa pela agência; fora dos relatórios por padrão (05/11/2026). */
+  repasse?: boolean;
+}
+
+/**
+ * Uma linha do rateio de um lançamento (05/11/2026). Quando o lançamento tem
+ * rateio, as linhas fecham 100% e o valor em centavos (ver dimensoes.ts).
+ * Sem `categoria_id`, vale a categoria do lançamento.
+ */
+export interface LinhaRateio {
+  centro_custo_id: string;
+  categoria_id?: string;
+  percentual: number;
+  valor: number;
 }
 
 export interface ContaBancaria {
@@ -402,7 +416,12 @@ export interface ContaReceber {
   data_recebimento: string | null;
   valor_recebido: number | null;
   conta_bancaria_id: string | null;
-  forma_recebimento: 'PIX' | 'TED' | 'CARTAO' | 'BOLETO' | 'DINHEIRO' | 'CHEQUE' | '';
+  /**
+   * Código da forma de pagamento (cadastro em src/lib/formas-pagamento.ts,
+   * 05/11/2026). Os valores antigos continuam válidos e nunca são reescritos;
+   * formas próprias da agência trazem o código delas.
+   */
+  forma_recebimento: 'PIX' | 'TED' | 'CARTAO' | 'BOLETO' | 'DINHEIRO' | 'CHEQUE' | '' | (string & {});
   /**
    * O que a plataforma de pagamento reteve desta conta, em reais.
    *
@@ -421,7 +440,12 @@ export interface ContaReceber {
   boleto_codigo: string;
   boleto_url: string;
   status: StatusContaReceber;
-  rateio: Array<{ centro_custo: string; percentual: number; valor: number }>;
+  /** Rateio por centro (e, se quiser, por categoria). Vazio = centro único. */
+  rateio: LinhaRateio[];
+  /** Centro de custo cadastrado (05/11/2026). `centro_custo` guarda o nome, como antes. */
+  centro_custo_id?: string;
+  /** Marcadores livres do lançamento (05/11/2026). */
+  tags?: string[];
   anexos: Array<{ nome: string; url: string }>;
   observacoes: string;
   origem_venda_id?: string;
@@ -494,7 +518,8 @@ export interface ContaPagar {
   data_pagamento: string | null;
   valor_pago: number | null;
   conta_bancaria_id: string | null;
-  forma_pagamento: 'PIX' | 'TED' | 'CARTAO_CORP' | 'BOLETO' | 'DEPOSITO' | '';
+  /** Código da forma de pagamento (ver forma_recebimento). 'CARTAO_CORP' liga ao cartão corporativo. */
+  forma_pagamento: 'PIX' | 'TED' | 'CARTAO_CORP' | 'BOLETO' | 'DEPOSITO' | '' | (string & {});
   cartao_id: string | null;
   comprovante: string;
   parcela_numero: number;
@@ -502,9 +527,22 @@ export interface ContaPagar {
   natureza_custo: NaturezaCusto | null;
   is_custo_comercial: boolean;
   status: StatusContaPagar;
-  rateio: Array<{ centro_custo: string; percentual: number; valor: number }>;
+  /** Rateio por centro (e, se quiser, por categoria). Vazio = centro único. */
+  rateio: LinhaRateio[];
+  /** Centro de custo cadastrado (05/11/2026). `centro_custo` guarda o nome, como antes. */
+  centro_custo_id?: string;
+  /** Marcadores livres do lançamento (05/11/2026). */
+  tags?: string[];
   anexos: Array<{ nome: string; url: string }>;
   observacoes: string;
+  /** CPF/CNPJ de quem recebe, só dígitos (05/11/2026, "Ler boleto ou nota"). */
+  fornecedor_cnpj?: string;
+  /** Número da nota, da fatura ou do boleto. */
+  numero_documento?: string;
+  /** Linha digitável do boleto, só dígitos (44, 47 ou 48). */
+  linha_digitavel?: string;
+  /** Chave Pix ou código "Pix copia e cola" para pagar. */
+  chave_pix?: string;
   origem_venda_id?: string;
   origem_item_id?: string;
   auto_gerado?: boolean;
@@ -613,6 +651,19 @@ export interface CentroCusto {
   nome: string;
   tipo: string;
   ativo: boolean;
+  /** Árvore e controle (05/11/2026). Opcionais: cadastros antigos não têm. */
+  codigo?: string;
+  centro_pai_id?: string | null;
+  responsavel?: string;
+  /** Orçamento do mês em reais; null = sem orçamento. */
+  orcamento_mensal?: number | null;
+}
+
+/** Regra de rateio salva, aplicada com um clique ("Aluguel: 50% SP / 50% RJ"). */
+export interface RegraRateio {
+  id: string;
+  nome: string;
+  linhas: Array<{ centro_custo_id: string; categoria_id?: string; percentual: number }>;
 }
 
 // ============================================================

@@ -1,5 +1,7 @@
 'use client';
 
+import type { ReactNode } from 'react';
+
 import Link from 'next/link';
 
 import type { CartaoCorporativo, ContaPagar, NaturezaCusto, PlanoContas } from '@/lib/crm-types';
@@ -9,11 +11,19 @@ import { RecordSheet } from '@/components/fin/RecordSheet';
 import { FormSection } from '@/components/financeiro/FormSection';
 import { Input } from '@/components/ui/input';
 import { paraBRL } from '@/lib/money';
-import { cn, formatDate } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { Money } from '@/components/fin/Money';
+import { BlocoDeRepeticao } from '@/components/financeiro/recorrencia/BlocoDeRepeticao';
+import { SecaoRateios } from '@/components/financeiro/SecaoRateios';
+import { LerBoletoOuNota } from '@/components/financeiro/LerBoletoOuNota';
+import { CampoLinhaDigitavel } from '@/components/financeiro/CampoLinhaDigitavel';
+import { useFormasDePagamento } from '@/components/fin/useFormasDePagamento';
+import { detalheDaForma, formaDoValor, opcoesDeForma } from '@/lib/formas-pagamento';
 
 import { CampoSelecao, CONTROLE, Interruptor, type OpcaoDeSelecao } from './campos';
-import type { ErrosDoFormulario, FormState, RecorrenciaPeriodo } from './tipos';
+import type { ErrosDoFormulario, FormState } from './tipos';
+import { DetalhesDaLeitura } from './DetalhesDaLeitura';
+import { descartarLeitura, esquecerOrigem, trocarLeitura, usarDoBoleto } from './leitura';
 
 /** Sentinela de "nada escolhido". Nunca é gravada: vira '' ou null no estado. */
 const NENHUM = '__NENHUM__';
@@ -26,15 +36,6 @@ const OPCOES_ORIGEM: OpcaoDeSelecao[] = [
   { valor: 'GRUPO', rotulo: 'Grupo' },
   { valor: 'DESPESA_FIXA', rotulo: 'Despesa fixa' },
   { valor: 'OUTROS', rotulo: 'Outros' },
-];
-
-const OPCOES_FORMA: OpcaoDeSelecao[] = [
-  { valor: NENHUM, rotulo: 'Ainda não sei' },
-  { valor: 'PIX', rotulo: 'Pix' },
-  { valor: 'TED', rotulo: 'TED' },
-  { valor: 'CARTAO_CORP', rotulo: 'Cartão corporativo' },
-  { valor: 'BOLETO', rotulo: 'Boleto' },
-  { valor: 'DEPOSITO', rotulo: 'Depósito' },
 ];
 
 const OPCOES_MOEDA: OpcaoDeSelecao[] = [
@@ -50,18 +51,6 @@ const OPCOES_NATUREZA: OpcaoDeSelecao[] = [
   { valor: 'COMPRA_UNICA', rotulo: 'Compra única' },
 ];
 
-const OPCOES_PERIODICIDADE: OpcaoDeSelecao[] = [
-  { valor: 'MENSAL', rotulo: 'Todo mês, no mesmo dia' },
-  { valor: 'QUINZENAL', rotulo: 'A cada 14 dias' },
-  { valor: 'SEMANAL', rotulo: 'A cada 7 dias' },
-];
-
-const PASSO_DA_REPETICAO: Record<RecorrenciaPeriodo, string> = {
-  MENSAL: 'mês a mês',
-  QUINZENAL: 'a cada 15 dias',
-  SEMANAL: 'a cada 7 dias',
-};
-
 export type FormularioContaProps = {
   aberto: boolean;
   onOpenChange: (aberto: boolean) => void;
@@ -74,6 +63,12 @@ export type FormularioContaProps = {
   erros: ErrosDoFormulario;
   salvando: boolean;
   onSalvar: () => void;
+  /** Conteúdo extra no fim da janela (ex.: histórico de baixas da conta em edição). */
+  extra?: ReactNode;
+  /** Ao editar uma conta que se repete: a faixa com a regra (05/11/2026). */
+  faixaDaSerie?: ReactNode;
+  /** Ao editar: abre "Mais parcelas" (null quando a conta não aceita). */
+  onMaisParcelas?: (() => void) | null;
 };
 
 export function FormularioConta({
@@ -88,16 +83,28 @@ export function FormularioConta({
   erros,
   salvando,
   onSalvar,
+  extra,
+  faixaDaSerie,
+  onMaisParcelas,
 }: FormularioContaProps) {
   const cartoesAtivos = cartoes.filter((c) => c.ativo);
   const estrangeira = form.moeda !== 'BRL';
-  const repetindo = form.origem === 'DESPESA_FIXA' && !editando && form.recorrencia_ativa;
-  const quantas = Math.max(1, form.recorrencia_repeticoes);
+  const repetindo = !editando && form.repeticao.ativa;
 
   const opcoesCategoria: OpcaoDeSelecao[] = [
     { valor: NENHUM, rotulo: 'Sem categoria' },
     ...despesaContas.map((c) => ({ valor: c.id, rotulo: `${c.codigo} · ${c.nome}` })),
   ];
+
+  // Formas do cadastro (05/11/2026). O valor que a conta já tem sempre
+  // aparece, mesmo antigo ("Depósito") ou desligado: salvar sem mexer não troca.
+  const formasDaAgencia = useFormasDePagamento();
+  const opcoesForma: OpcaoDeSelecao[] = [
+    { valor: NENHUM, rotulo: 'Ainda não sei' },
+    ...opcoesDeForma(formasDaAgencia, 'pagar', form.forma_pagamento).map((o) => ({ valor: o.valor, rotulo: o.rotulo })),
+  ];
+  const formaEscolhida = formaDoValor(form.forma_pagamento, formasDaAgencia);
+  const ajudaDaForma = formaEscolhida ? detalheDaForma(formaEscolhida) || undefined : undefined;
 
   const opcoesCartao: OpcaoDeSelecao[] = [
     { valor: NENHUM, rotulo: 'Escolha o cartão' },
@@ -107,9 +114,14 @@ export function FormularioConta({
     })),
   ];
 
+  const origens = form.leitura?.origens ?? {};
+  const mostrarLinha = form.forma_pagamento === 'BOLETO' || form.linha_digitavel !== '';
+  const mostrarPix = form.forma_pagamento === 'PIX' || form.chave_pix !== '';
+
   const sujo =
     !editando &&
-    (form.fornecedor_nome.trim() !== '' ||
+    (form.leitura !== null ||
+      form.fornecedor_nome.trim() !== '' ||
       form.descricao.trim() !== '' ||
       form.valor_original > 0 ||
       form.data_vencimento !== '');
@@ -134,12 +146,9 @@ export function FormularioConta({
       ) : null}
       {repetindo ? (
         <span>
-          Vão ser criadas{' '}
-          <span className="fin-t-body-strong text-[var(--fin-text)]">{quantas} contas a pagar</span>{' '}
-          a partir de{' '}
-          {form.data_vencimento ? formatDate(form.data_vencimento) : 'a data que você escolher'},
-          avançando {PASSO_DA_REPETICAO[form.recorrencia_periodo]}. Cada parcela pode ser paga ou
-          editada separadamente.
+          {form.repeticao.modo === 'parcelado'
+            ? 'O valor é dividido nas parcelas da prévia. Cada parcela pode ser paga ou editada separadamente.'
+            : 'As contas da prévia são criadas juntas. Cada uma pode ser paga ou editada separadamente.'}
         </span>
       ) : null}
       {!estrangeira && !repetindo ? (
@@ -157,7 +166,7 @@ export function FormularioConta({
       titulo={editando ? 'Editar conta a pagar' : 'Nova conta a pagar'}
       descricao={
         editando
-          ? 'Altere os dados desta conta. A repetição automática só existe na criação.'
+          ? 'Altere os dados desta conta.'
           : 'Lance uma conta que a agência precisa pagar.'
       }
       largura={640}
@@ -168,11 +177,30 @@ export function FormularioConta({
         onClick: onSalvar,
         carregando: salvando,
       }}
+      acaoSecundaria={editando && onMaisParcelas ? { rotulo: 'Mais parcelas', onClick: onMaisParcelas } : null}
     >
       <div className="flex flex-col gap-4">
+        {editando && faixaDaSerie ? faixaDaSerie : null}
+        {!editando ? (
+          <LerBoletoOuNota
+            resposta={form.leitura?.resposta ?? null}
+            desabilitado={salvando}
+            onLido={(r) => {
+              // Vazia, ou preenchida pela leitura anterior (que a troca limpa).
+              const categoriaVazia = !form.categoria_id || Boolean(form.leitura?.origens.categoria);
+              onForm((f) => trocarLeitura(f, r));
+              // Natureza e "custo comercial" vêm da categoria, como na escolha à mão.
+              const sugerida = r.sugestoes.categorias[0];
+              if (categoriaVazia && sugerida) onCategoriaChange(sugerida.id);
+            }}
+            onDescartar={() => onForm(descartarLeitura)}
+          >
+            <DetalhesDaLeitura form={form} onForm={onForm} onCategoriaChange={onCategoriaChange} />
+          </LerBoletoOuNota>
+        ) : null}
         <FormSection title="Essencial" description="O mínimo para a conta existir." alwaysOpen>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field rotulo="Fornecedor" obrigatorio erro={erros.fornecedor}>
+            <Field rotulo="Fornecedor" obrigatorio ajuda={origens.fornecedor} erro={erros.fornecedor}>
               {(a) => (
                 <Input
                   {...a}
@@ -180,13 +208,16 @@ export function FormularioConta({
                   value={form.fornecedor_nome}
                   placeholder="Quem recebe o pagamento"
                   autoComplete="off"
-                  onChange={(e) => onForm((f) => ({ ...f, fornecedor_nome: e.target.value }))}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    onForm((f) => ({ ...esquecerOrigem(f, 'fornecedor'), fornecedor_nome: v }));
+                  }}
                   className={cn(CONTROLE, erros.fornecedor && 'border-[var(--fin-negative)]')}
                 />
               )}
             </Field>
 
-            <Field rotulo="Descrição" obrigatorio erro={erros.descricao}>
+            <Field rotulo="Descrição" obrigatorio ajuda={origens.descricao} erro={erros.descricao}>
               {(a) => (
                 <Input
                   {...a}
@@ -194,7 +225,10 @@ export function FormularioConta({
                   value={form.descricao}
                   placeholder="O que está sendo pago"
                   autoComplete="off"
-                  onChange={(e) => onForm((f) => ({ ...f, descricao: e.target.value }))}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    onForm((f) => ({ ...esquecerOrigem(f, 'descricao'), descricao: v }));
+                  }}
                   className={cn(CONTROLE, erros.descricao && 'border-[var(--fin-negative)]')}
                 />
               )}
@@ -205,18 +239,22 @@ export function FormularioConta({
               obrigatorio
               moeda={form.moeda}
               valor={form.valor_original}
+              ajuda={origens.valor}
               erro={erros.valor}
-              onChange={(v) => onForm((f) => ({ ...f, valor_original: v }))}
+              onChange={(v) => onForm((f) => ({ ...esquecerOrigem(f, 'valor'), valor_original: v }))}
             />
 
-            <Field rotulo="Vencimento" obrigatorio erro={erros.vencimento}>
+            <Field rotulo="Vencimento" obrigatorio ajuda={origens.vencimento} erro={erros.vencimento}>
               {(a) => (
                 <Input
                   {...a}
                   aria-invalid={a['aria-invalid'] || undefined}
                   type="date"
                   value={form.data_vencimento}
-                  onChange={(e) => onForm((f) => ({ ...f, data_vencimento: e.target.value }))}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    onForm((f) => ({ ...esquecerOrigem(f, 'vencimento'), data_vencimento: v }));
+                  }}
                   className={cn(CONTROLE, 'tabular-nums', erros.vencimento && 'border-[var(--fin-negative)]')}
                 />
               )}
@@ -232,10 +270,13 @@ export function FormularioConta({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <CampoSelecao
               rotulo="Categoria"
-              ajuda="Preenche o tipo de despesa automaticamente."
+              ajuda={origens.categoria ?? 'Preenche o tipo de despesa automaticamente.'}
               valor={form.categoria_id || NENHUM}
               opcoes={opcoesCategoria}
-              onChange={(v) => onCategoriaChange(v === NENHUM ? '' : v)}
+              onChange={(v) => {
+                onCategoriaChange(v === NENHUM ? '' : v);
+                onForm((f) => esquecerOrigem(f, 'categoria'));
+              }}
             />
 
             <CampoSelecao
@@ -263,6 +304,21 @@ export function FormularioConta({
         </FormSection>
 
         <FormSection
+          title="Rateios"
+          description="Centro de custo da conta, divisão entre centros e tags."
+          defaultOpen={form.rateio.length > 0 || Boolean(form.centro_custo_id)}
+        >
+          <SecaoRateios
+            total={paraBRL(form.valor_original, form.moeda, form.cambio)}
+            tipo="DESPESA"
+            centroId={form.centro_custo_id}
+            rateio={form.rateio}
+            tags={form.tags}
+            onChange={(alteracao) => onForm((f) => ({ ...f, ...alteracao }))}
+          />
+        </FormSection>
+
+        <FormSection
           title="Pagamento e repetição"
           description="Como a conta vai ser paga e se ela se repete."
           defaultOpen
@@ -278,7 +334,8 @@ export function FormularioConta({
             <CampoSelecao
               rotulo="Forma de pagamento"
               valor={form.forma_pagamento || NENHUM}
-              opcoes={OPCOES_FORMA}
+              opcoes={opcoesForma}
+              ajuda={ajudaDaForma}
               onChange={(v) =>
                 onForm((f) => ({
                   ...f,
@@ -345,6 +402,75 @@ export function FormularioConta({
               </Field>
             ) : null}
 
+            <Field rotulo="Número do documento" ajuda="Da nota, da fatura ou do boleto.">
+              {(a) => (
+                <Input
+                  {...a}
+                  aria-invalid={a['aria-invalid'] || undefined}
+                  value={form.numero_documento}
+                  autoComplete="off"
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    onForm((f) => ({ ...f, numero_documento: v }));
+                  }}
+                  className={CONTROLE}
+                />
+              )}
+            </Field>
+
+            {mostrarLinha ? (
+              <CampoLinhaDigitavel
+                className="sm:col-span-2"
+                controle={CONTROLE}
+                valor={form.linha_digitavel}
+                onChange={(d) => onForm((f) => ({ ...f, linha_digitavel: d }))}
+                valorAtual={form.valor_original}
+                vencimentoAtual={form.data_vencimento}
+                onUsarDoBoleto={(dados) => onForm((f) => usarDoBoleto(f, dados))}
+              />
+            ) : null}
+
+            {mostrarPix ? (
+              <div className="sm:col-span-2">
+                <Field rotulo="Chave Pix" ajuda="A chave ou o código Pix copia e cola para pagar.">
+                  {(a) => (
+                    <Input
+                      {...a}
+                      aria-invalid={a['aria-invalid'] || undefined}
+                      value={form.chave_pix}
+                      autoComplete="off"
+                      spellCheck={false}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        onForm((f) => ({ ...f, chave_pix: v }));
+                      }}
+                      className={CONTROLE}
+                    />
+                  )}
+                </Field>
+              </div>
+            ) : null}
+
+            {editando && form.anexos.length > 0 ? (
+              <div className="flex flex-col gap-1 sm:col-span-2">
+                <span className="fin-t-body-strong text-[var(--fin-text)]">Anexos</span>
+                <ul className="flex flex-col gap-1">
+                  {form.anexos.map((anexo) => (
+                    <li key={anexo.url} className="fin-t-caption">
+                      <a
+                        href={anexo.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={cn('rounded-[var(--fin-r-sm)] text-[var(--fin-accent)] underline underline-offset-2 break-all', FOCO_LINK)}
+                      >
+                        {anexo.nome}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
             <div className="sm:col-span-2">
               <Field rotulo="Observações" ajuda="Fica visível na ficha da conta.">
                 {(a) => (
@@ -361,51 +487,22 @@ export function FormularioConta({
               </Field>
             </div>
 
-            {form.origem === 'DESPESA_FIXA' && !editando ? (
-              <div className="flex flex-col gap-3 rounded-[var(--fin-r-md)] border border-[var(--fin-border)] bg-[var(--fin-surface-sunken)] p-3 sm:col-span-2">
-                <Interruptor
-                  rotulo="Repetir esta despesa automaticamente"
-                  descricao="Cria as parcelas seguintes já com o vencimento avançado."
-                  ligado={form.recorrencia_ativa}
-                  onChange={(v) => onForm((f) => ({ ...f, recorrencia_ativa: v }))}
+            {!editando ? (
+              <div className="sm:col-span-2">
+                <BlocoDeRepeticao
+                  estado={form.repeticao}
+                  onChange={(patch) => onForm((f) => ({ ...f, repeticao: { ...f.repeticao, ...patch } }))}
+                  inicio={form.data_vencimento}
+                  valor={form.valor_original}
+                  moeda={form.moeda}
+                  substantivo="conta a pagar"
                 />
-
-                {form.recorrencia_ativa ? (
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <CampoSelecao
-                      rotulo="Periodicidade"
-                      valor={form.recorrencia_periodo}
-                      opcoes={OPCOES_PERIODICIDADE}
-                      onChange={(v) =>
-                        onForm((f) => ({ ...f, recorrencia_periodo: v as RecorrenciaPeriodo }))
-                      }
-                    />
-                    <Field rotulo="Quantidade de parcelas">
-                      {(a) => (
-                        <Input
-                          {...a}
-                          aria-invalid={a['aria-invalid'] || undefined}
-                          type="number"
-                          min={1}
-                          max={120}
-                          value={form.recorrencia_repeticoes}
-                          onChange={(e) =>
-                            onForm((f) => ({
-                              ...f,
-                              recorrencia_repeticoes: Math.max(1, parseInt(e.target.value) || 1),
-                            }))
-                          }
-                          className={cn(CONTROLE, 'tabular-nums')}
-                        />
-                      )}
-                    </Field>
-                  </div>
-                ) : null}
               </div>
             ) : null}
           </div>
         </FormSection>
       </div>
+      {extra}
     </RecordSheet>
   );
 }

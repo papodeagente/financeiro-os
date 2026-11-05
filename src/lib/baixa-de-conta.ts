@@ -22,6 +22,7 @@ import {
   statusMovimentaCaixa,
   type ExecutorSQL,
 } from './caixa-atomico';
+import { registrarBaixaLegada } from './baixas-servidor';
 
 export class ErroEdicaoConta extends Error {
   status: number;
@@ -85,7 +86,13 @@ export async function editarContaNoExecutor(exec: ExecutorSQL, p: EdicaoDeConta)
     id: p.id,
     pessoaId: pessoaDaConta(p.tabela, { ...prev, ...item }),
   };
-  for (const mov of movimentos) await moverCaixaOuFalhar(p.tenantId, mov.conta, mov.delta, exec, origem);
+  for (const mov of movimentos) {
+    await moverCaixaOuFalhar(p.tenantId, mov.conta, mov.delta, exec, origem);
+    await registrarBaixaLegada(exec, {
+      tenantId: p.tenantId, tabela: p.tabela, tituloId: p.id, dadosAntes: prev, conta: mov.conta, caixa: mov.delta,
+      data: String(item[p.tabela === 'contas_receber' ? 'data_recebimento' : 'data_pagamento'] ?? ''), origem: 'tela_antiga',
+    });
+  }
   return item;
 }
 

@@ -120,6 +120,22 @@ export async function apagarCategorias(
 
   const summary: Record<string, number> = {};
   let total = 0;
+  // Zerar o financeiro também zera o fechamento de período e o histórico de
+  // baixas (05/11/2026). O fechamento sai primeiro: a trava do período
+  // recusaria apagar contas baixadas em data fechada.
+  const zeraContas = categorias.some(c => (CATEGORIES[c] as readonly string[]).includes('contas_bancarias'));
+  if (zeraContas) {
+    const { rows: tem } = await exec.query(`SELECT to_regclass('public.periodos_fechados') IS NOT NULL AS p, to_regclass('public.baixas') IS NOT NULL AS b`);
+    if (tem[0]?.p) {
+      await exec.query(`DELETE FROM periodos_fechados WHERE tenant_id = $1`, [tenantId]);
+      await exec.query(`DELETE FROM periodos_eventos WHERE tenant_id = $1`, [tenantId]);
+    }
+    if (tem[0]?.b) {
+      const r = await exec.query(`DELETE FROM baixas WHERE tenant_id = $1`, [tenantId]);
+      summary.baixas = r.rowCount || 0;
+      total += summary.baixas;
+    }
+  }
   for (const cat of categorias) {
     for (const table of CATEGORIES[cat]) {
       const res = await exec.query(`DELETE FROM ${table} WHERE tenant_id = $1`, [tenantId]);
@@ -127,6 +143,18 @@ export async function apagarCategorias(
       summary[table] = (summary[table] || 0) + n;
       total += n;
     }
+  }
+  // Recorrência (05/11/2026): sem as contas, as séries também saem. Senão a
+  // tarefa diária recriaria as próximas contas de uma série zerada.
+  const apagaTitulos = categorias.some(c => (CATEGORIES[c] as readonly string[]).includes('contas_pagar'));
+  const { rows: temSeries } = apagaTitulos
+    ? await exec.query(`SELECT to_regclass('public.recorrencias') IS NOT NULL AS ok`)
+    : { rows: [] as Array<Record<string, unknown>> };
+  if (apagaTitulos && temSeries[0]?.ok) {
+    const res = await exec.query(`DELETE FROM recorrencias WHERE tenant_id = $1`, [tenantId]);
+    const n = res.rowCount || 0;
+    summary.recorrencias = n;
+    total += n;
   }
   // Sem contas bancárias, o razão da agência também começa do zero
   // (05/11/2026). É o único caminho que apaga o razão; a abertura volta a

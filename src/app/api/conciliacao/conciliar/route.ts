@@ -1,3 +1,4 @@
+import { respostaPeriodoFechado } from '@/lib/guarda-rota';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
@@ -11,6 +12,7 @@ import {
   ErroConciliacao,
 } from '@/lib/conciliacao-servidor';
 import type { TipoLancamento } from '@/lib/conciliacao-plano';
+import { recusaAcao } from '@/lib/guarda-rota';
 
 /**
  * Conciliação de uma linha do extrato, numa transação só.
@@ -33,6 +35,13 @@ export async function POST(req: Request) {
     const extratoId = String(body?.extrato_id ?? '');
     if (!extratoId) return NextResponse.json({ error: 'Informe a linha do extrato.' }, { status: 400 });
     const tenantId = await getTenantId();
+    // Conciliar mexe no saldo da conta da linha: ela precisa estar liberada
+    // para a pessoa (05/11/2026). Sem restrição, passa como antes.
+    const { rows: linhaExtrato } = await pool.query(
+      `SELECT COALESCE(NULLIF(conta_bancaria_id, ''), data->>'conta_bancaria_id', '') AS conta FROM extrato_bancario WHERE id = $1 AND tenant_id = $2`,
+      [extratoId, tenantId]);
+    const recusaConta = await recusaAcao('conciliar', { contaBancariaId: String(linhaExtrato[0]?.conta ?? '') || null });
+    if (recusaConta) return recusaConta;
 
     if (acao === 'vincular') {
       const contas = Array.isArray(body?.contas)
@@ -58,6 +67,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Ação desconhecida.' }, { status: 400 });
   } catch (e) {
     if (e instanceof ErroConciliacao) return NextResponse.json({ error: e.message }, { status: e.status });
+    const fechado = respostaPeriodoFechado(e);
+    if (fechado) return fechado;
     const msg = e instanceof Error ? e.message : 'Erro';
     return NextResponse.json({ error: msg }, { status: 500 });
   }

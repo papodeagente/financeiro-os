@@ -2,19 +2,28 @@
 
 import Link from 'next/link';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDownLeft, Clock, Pencil, Plus, Trash2, TriangleAlert } from 'lucide-react';
 
 import { ContaReceber, createContaReceber, StatusContaReceber } from '@/lib/crm-types';
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
 import { toast } from '@/lib/toast';
+import { validarRateio } from '@/lib/dimensoes';
 import { consumirAtalho, lerAtalhos } from '@/lib/atalho-da-url';
 import {
   mensagemDaTaxaInvalida, normalizarPlataforma, validarTaxa,
 } from '@/lib/taxa-plataforma';
 import {
-  round2, num, somaPor, estaVencido, dentroDoPeriodo,
+  round2, num, somaPor, estaVencido, dentroDoPeriodo, hojeISO,
 } from '@/lib/money';
+import {
+  formatarData, previaDoFormulario, REPETICAO_PADRAO, tituloGeradoPeloSistema, tituloSemBaixa, type EstadoRepeticao,
+} from '@/lib/recorrencia';
+import { criarSerie, editarSerie, novoIdDeSerie, type EscopoDaEdicao, type SerieNaTela } from '@/lib/recorrencia-cliente';
+import { BlocoDeRepeticao } from '@/components/financeiro/recorrencia/BlocoDeRepeticao';
+import { EscopoDaSerie } from '@/components/financeiro/recorrencia/EscopoDaSerie';
+import { FaixaDaSerie } from '@/components/financeiro/recorrencia/FaixaDaSerie';
+import { MaisParcelas } from '@/components/financeiro/recorrencia/MaisParcelas';
 
 import { PageShell } from '@/components/PageShell';
 import { Button } from '@/components/ui/button';
@@ -31,6 +40,7 @@ import { StatusChip, rotuloStatus } from '@/components/fin/StatusChip';
 import { EtiquetaDaPlataforma } from '@/components/fin/EtiquetaDaPlataforma';
 import { descricaoSemPlataforma, nomeDaPlataforma, plataformaDaConta } from '@/lib/plataformas/rotulo';
 import { BaixaDeReceber, valorEmAberto } from './BaixaDeReceber';
+import { HistoricoDeBaixas } from '@/components/fin/HistoricoDeBaixas';
 import { ehComissaoDeFornecedor, fraseDaComissao } from '@/lib/comissao-da-venda';
 import { NovaVenda } from './NovaVenda';
 import { DetalheDaPlataforma } from './DetalheDaPlataforma';
@@ -81,6 +91,33 @@ function contagem(n: number, singular: string, plural: string): string {
   return `${n} ${n === 1 ? singular : plural}`;
 }
 
+type ContaComSerie = ContaReceber & { serie_id?: string };
+
+/** Campos que a tela edita e que a série sabe propagar (05/11/2026). */
+const CAMPOS_DA_SERIE = [
+  'origem', 'cliente_id', 'cliente_nome', 'descricao', 'categoria_id', 'forma_recebimento', 'taxa_plataforma', 'observacoes',
+  'centro_custo', 'centro_custo_id',
+] as const;
+
+/** O que mudou no formulário em relação à conta lida. */
+function diferencasDaConta(existing: ContaReceber, campos: FormState, valorOriginal: number): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const c of CAMPOS_DA_SERIE) {
+    if ((campos[c] ?? '') !== (existing[c] ?? '')) out[c] = campos[c];
+  }
+  if (valorOriginal !== round2(num(existing.valor_original))) out.valor_original = valorOriginal;
+  // Rateio e tags: compara o que importa (centro, categoria, percentual).
+  const chaveRateio = (r: unknown) => JSON.stringify((Array.isArray(r) ? r : []).map((l: { centro_custo_id?: string; categoria_id?: string; percentual?: number }) =>
+    [l.centro_custo_id ?? '', l.categoria_id ?? '', round2(num(l.percentual))]));
+  if (chaveRateio(campos.rateio) !== chaveRateio(existing.rateio)) out.rateio = campos.rateio;
+  if (JSON.stringify(campos.tags ?? []) !== JSON.stringify(existing.tags ?? [])) out.tags = campos.tags ?? [];
+  if (round2(num(campos.taxa)) !== round2(num(existing.taxa))) out.taxa = round2(num(campos.taxa));
+  if (campos.data_vencimento !== existing.data_vencimento) out.data_vencimento = campos.data_vencimento;
+  return out;
+}
+
+type EdicaoPendente = { existing: ContaReceber; updated: ContaReceber; alteracoes: Record<string, unknown> };
+
 export default function ContasReceberPage() {
   const [items, setItems] = useState<ContaReceber[]>([]);
   // A lista de plataformas aprende com o que a agência já usou, para não
@@ -108,12 +145,24 @@ export default function ContasReceberPage() {
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
   const [periodo, setPeriodo] = useState<PeriodoChave>('TUDO');
+  // Recorrência (05/11/2026): bloco "Repetir", série da conta em edição,
+  // pergunta de escopo e mais parcelas.
+  const [repeticao, setRepeticao] = useState<EstadoRepeticao>(REPETICAO_PADRAO);
+  const serieNova = useRef(novoIdDeSerie());
+  const [serieEditada, setSerieEditada] = useState<SerieNaTela | null>(null);
+  const [edicaoPendente, setEdicaoPendente] = useState<EdicaoPendente | null>(null);
+  const [gravandoEscopo, setGravandoEscopo] = useState(false);
+  const [parcelasDe, setParcelasDe] = useState<ContaReceber | null>(null);
+  const abrirDepoisDeCarregar = useRef<string | null>(null);
 
   async function load() {
     setLoading(true);
     try {
       const data = await loadEntities<ContaReceber>('contas-receber');
       setItems(data);
+      const alvo = abrirDepoisDeCarregar.current ? data.find(i => i.id === abrirDepoisDeCarregar.current) : null;
+      abrirDepoisDeCarregar.current = null;
+      if (alvo) openEdit(alvo);
       // As notas vêm junto para o botão da linha saber se já existe documento.
       // Falhar aqui não pode derrubar a tela: sem as notas o botão volta a
       // ser "Emitir nota", que é o comportamento antigo.
@@ -149,6 +198,9 @@ export default function ContasReceberPage() {
     // conta a receber simples (reembolso, acerto, aluguel).
     if (a.get('nova') === '1') { consumirAtalho('nova'); setVendaAberta(true); }
     if (a.get('nova') === 'outro') { consumirAtalho('nova'); openNew(); }
+    // Vindo dos relatórios por categoria, centro ou rateio: abre a conta (05/11/2026).
+    const abrir = a.get('abrir');
+    if (abrir) { consumirAtalho('abrir'); abrirDepoisDeCarregar.current = abrir; }
   }
 
   // Uma vez, ao abrir a tela: o atalho do endereço não é um estado a seguir.
@@ -157,6 +209,9 @@ export default function ContasReceberPage() {
 
   function openNew() {
     setForm(EMPTY_FORM);
+    setRepeticao(REPETICAO_PADRAO);
+    serieNova.current = novoIdDeSerie();
+    setSerieEditada(null);
     setEditId(null);
     setErrosForm({});
     setFormTocado(false);
@@ -182,7 +237,12 @@ export default function ContasReceberPage() {
       parcela_numero: item.parcela_numero,
       total_parcelas: item.total_parcelas,
       observacoes: item.observacoes,
+      centro_custo: item.centro_custo ?? '',
+      centro_custo_id: item.centro_custo_id ?? '',
+      rateio: Array.isArray(item.rateio) ? item.rateio : [],
+      tags: Array.isArray(item.tags) ? item.tags : [],
     });
+    setSerieEditada(null);
     setEditId(item.id);
     setErrosForm({});
     setFormTocado(false);
@@ -209,6 +269,9 @@ export default function ContasReceberPage() {
       });
       return;
     }
+    // Rateio preenchido fecha 100% e os centavos (05/11/2026).
+    const rateioConferido = validarRateio(round2(form.valor_original), form.rateio);
+    if (!rateioConferido.ok) { toast.error(rateioConferido.erro); return; }
     setErrosForm({});
     setSalvando(true);
     const valorOriginal = round2(form.valor_original);
@@ -219,6 +282,7 @@ export default function ContasReceberPage() {
       ...form,
       taxa: round2(num(form.taxa)),
       taxa_plataforma: normalizarPlataforma(form.taxa_plataforma),
+      rateio: rateioConferido.linhas,
     };
     try {
       if (editId) {
@@ -229,27 +293,118 @@ export default function ContasReceberPage() {
           valor_original: valorOriginal,
           valor_final: valorOriginal,
         };
-        // O status que esta tela LEU: o servidor só desfaz uma baixa quando a
-        // tela sabia que a conta estava baixada (senão é tela velha, 409).
-        await updateEntity('contas-receber', { ...updated, _status_lido: existing.status });
-      } else {
-        const nova: ContaReceber = {
-          ...createContaReceber(),
-          ...campos,
-          valor_original: valorOriginal,
-          valor_final: valorOriginal,
-        };
-        await saveEntity('contas-receber', nova);
+        // Conta de uma série, em aberto e sem baixa: pergunta o escopo.
+        const serieId = (existing as ContaComSerie).serie_id;
+        if (serieId && tituloSemBaixa('contas_receber', existing as unknown as Record<string, unknown>)) {
+          const alteracoes = diferencasDaConta(existing, campos, valorOriginal);
+          if (Object.keys(alteracoes).length > 0) {
+            setEdicaoPendente({ existing, updated, alteracoes });
+            return;
+          }
+        }
+        await gravarSomenteEsta(existing, updated);
+        return;
       }
+
+      // Repetir: a série nasce no servidor, numa transação só (05/11/2026).
+      const previa = repeticao.ativa
+        ? previaDoFormulario(repeticao, form.data_vencimento, Math.round(valorOriginal * 100), hojeISO())
+        : null;
+      if (previa && 'erro' in previa) { toast.error(previa.erro); return; }
+      if (previa && !(previa.total === 1 && previa.ocorrencias.length === 1)) {
+        const r = await criarSerie({
+          id: serieNova.current,
+          tabela: 'contas_receber',
+          estado: repeticao,
+          inicio: form.data_vencimento,
+          valor: valorOriginal,
+          modelo: {
+            origem: campos.origem, cliente_id: campos.cliente_id, cliente_nome: campos.cliente_nome,
+            descricao: campos.descricao, categoria_id: campos.categoria_id, forma_recebimento: campos.forma_recebimento,
+            taxa: campos.taxa, taxa_plataforma: campos.taxa_plataforma, observacoes: campos.observacoes,
+            centro_custo: campos.centro_custo, centro_custo_id: campos.centro_custo_id, rateio: campos.rateio, tags: campos.tags,
+          },
+        });
+        setShowForm(false);
+        setFormTocado(false);
+        setEditId(null);
+        const primeira = r.titulos[0];
+        const ultima = r.titulos[r.titulos.length - 1];
+        const datas = primeira && ultima ? `Vencimentos de ${formatarData(primeira.vencimento)} a ${formatarData(ultima.vencimento)}.` : '';
+        if (r.ja_existia) toast.success('Essas contas já tinham sido lançadas.', datas);
+        else toast.success(`${r.criados} ${repeticao.modo === 'parcelado' ? 'parcelas lançadas' : r.criados === 1 ? 'conta lançada' : 'contas lançadas'}.`, datas);
+        load();
+        return;
+      }
+
+      const nova: ContaReceber = {
+        ...createContaReceber(),
+        ...campos,
+        valor_original: valorOriginal,
+        valor_final: valorOriginal,
+      };
+      await saveEntity('contas-receber', nova);
       setShowForm(false);
       setFormTocado(false);
-      toast.success(editId ? 'Conta a receber atualizada.' : 'Conta a receber lançada.');
+      toast.success('Conta a receber lançada.');
       setEditId(null);
       load();
-    } catch {
-      toast.error('Não foi possível salvar a conta a receber.');
+    } catch (e) {
+      toast.error('Não foi possível salvar a conta a receber.', e instanceof Error ? e.message : '');
     } finally {
       setSalvando(false);
+    }
+  }
+
+  /** O caminho de sempre para editar (também o "Só esta"). */
+  async function gravarSomenteEsta(existing: ContaReceber, updated: ContaReceber) {
+    // O status que esta tela LEU: o servidor só desfaz uma baixa quando a
+    // tela sabia que a conta estava baixada (senão é tela velha, 409).
+    await updateEntity('contas-receber', { ...updated, _status_lido: existing.status });
+    setShowForm(false);
+    setFormTocado(false);
+    toast.success('Conta a receber atualizada.');
+    setEditId(null);
+    load();
+  }
+
+  async function confirmarEscopo(escopo: EscopoDaEdicao) {
+    if (!edicaoPendente || gravandoEscopo) return;
+    const { existing, updated, alteracoes } = edicaoPendente;
+    const serieId = (existing as ContaComSerie).serie_id!;
+    setGravandoEscopo(true);
+    try {
+      if (escopo === 'so_esta') {
+        await gravarSomenteEsta(existing, updated);
+      } else {
+        // Nas outras contas, a data nova vira "o dia do mês" (mensal/anual).
+        const { data_vencimento: novaData, ...resto } = alteracoes;
+        const freq = serieEditada?.serie.regra.frequencia;
+        const porDia = typeof novaData === 'string' && (freq === 'MES' || freq === 'ANO');
+        const r = await editarSerie(serieId, {
+          escopo, titulo_id: existing.id, versao: serieEditada?.serie.versao,
+          alteracoes: porDia ? { ...resto, dia_do_mes: Number(String(novaData).slice(8, 10)) } : resto,
+        });
+        if (typeof novaData === 'string' && !porDia) {
+          await editarSerie(serieId, { escopo: 'so_esta', titulo_id: existing.id, alteracoes: { data_vencimento: novaData } });
+        }
+        setShowForm(false);
+        setFormTocado(false);
+        setEditId(null);
+        const n = r.alterados.length;
+        toast.success(
+          n === 1 ? '1 conta a receber alterada.' : `${n} contas a receber alteradas.`,
+          r.intocados.length > 0
+            ? `${r.intocados.length === 1 ? '1 conta já recebida ficou' : `${r.intocados.length} contas já recebidas ficaram`} como estava${r.intocados.length === 1 ? '' : 'm'}.`
+            : '',
+        );
+        load();
+      }
+      setEdicaoPendente(null);
+    } catch (e) {
+      toast.error('Não foi possível salvar a conta a receber.', e instanceof Error ? e.message : '');
+    } finally {
+      setGravandoEscopo(false);
     }
   }
 
@@ -697,7 +852,27 @@ export default function ContasReceberPage() {
           onClick: handleSave,
           carregando: salvando,
         }}
+        acaoSecundaria={(() => {
+          const editada = editId ? items.find(i => i.id === editId) : undefined;
+          if (!editada || editada.status === 'CANCELADO') return null;
+          if (tituloGeradoPeloSistema('contas_receber', editada as unknown as Record<string, unknown>)) return null;
+          return { rotulo: 'Mais parcelas', onClick: () => { setShowForm(false); setParcelasDe(editada); } };
+        })()}
       >
+        {(() => {
+          const editada = editId ? (items.find(i => i.id === editId) as ContaComSerie | undefined) : undefined;
+          if (!editada?.serie_id) return null;
+          return (
+            <div className="mb-[var(--fin-s-4)]">
+              <FaixaDaSerie
+                key={editada.serie_id}
+                serieId={editada.serie_id}
+                onSerie={setSerieEditada}
+                onEncerrada={() => { setShowForm(false); setEditId(null); load(); }}
+              />
+            </div>
+          );
+        })()}
         {(() => {
           const editada = editId ? items.find(i => i.id === editId) : null;
           const plataforma = plataformaDaConta(editada);
@@ -717,8 +892,41 @@ export default function ContasReceberPage() {
           erros={errosForm}
           onChange={atualizarForm}
           plataformasUsadas={plataformasUsadas}
+          ocultarParcelaManual={!editId && repeticao.ativa}
+          repeticao={editId ? null : (
+            <BlocoDeRepeticao
+              estado={repeticao}
+              onChange={patch => { setFormTocado(true); setRepeticao(r => ({ ...r, ...patch })); }}
+              inicio={form.data_vencimento}
+              valor={form.valor_original}
+              substantivo="conta a receber"
+            />
+          )}
         />
+        {editId ? <HistoricoDeBaixas tabela="contas_receber" tituloId={editId} onMudou={() => { void load(); }} /> : null}
       </RecordSheet>
+
+      <EscopoDaSerie
+        aberto={Boolean(edicaoPendente)}
+        onOpenChange={a => { if (!a) setEdicaoPendente(null); }}
+        regra={serieEditada?.serie.descricao_regra ?? null}
+        avisoDeData={
+          edicaoPendente && typeof edicaoPendente.alteracoes.data_vencimento === 'string'
+            ? serieEditada?.serie.regra.frequencia === 'MES' || serieEditada?.serie.regra.frequencia === 'ANO'
+              ? `Nas outras contas, o vencimento passa para o dia ${Number(String(edicaoPendente.alteracoes.data_vencimento).slice(8, 10))}.`
+              : 'A data nova vale só para esta conta; as outras mantêm o vencimento.'
+            : null
+        }
+        processando={gravandoEscopo}
+        onConfirmar={escopo => { void confirmarEscopo(escopo); }}
+      />
+
+      <MaisParcelas
+        titulo={parcelasDe ? { id: parcelasDe.id, descricao: parcelasDe.descricao, pessoa: parcelasDe.cliente_nome } : null}
+        tabela="contas_receber"
+        onFechar={() => setParcelasDe(null)}
+        onGeradas={() => { load(); }}
+      />
 
       <DetalheDaPlataforma conta={detalheAlvo} onFechar={() => setDetalheAlvo(null)} />
 

@@ -148,7 +148,9 @@ export const AUDIT_SCHEMA_SQL = String.raw`
   CREATE OR REPLACE FUNCTION audit_module(table_name TEXT)
   RETURNS TEXT LANGUAGE sql IMMUTABLE AS $fn$
     SELECT CASE
-      WHEN table_name IN ('contas_receber','contas_pagar','contas_bancarias','plano_contas','centros_custo','transferencias','extrato_bancario','cartoes_corp') THEN 'Financeiro'
+      WHEN table_name IN ('grupos_usuario','grupo_usuario_membros','usuario_restricoes') THEN 'Equipe'
+      WHEN table_name IN ('pedidos_aprovacao','alcadas_aprovacao') THEN 'Financeiro'
+      WHEN table_name IN ('contas_receber','contas_pagar','contas_bancarias','plano_contas','centros_custo','regras_rateio','transferencias','extrato_bancario','cartoes_corp') THEN 'Financeiro'
       WHEN table_name IN ('config_fiscal','notas_fiscais') THEN 'Fiscal'
       WHEN table_name IN ('usuarios','membros','planos_comissao','comissoes','metas') THEN 'Equipe'
       WHEN table_name IN ('clientes','fornecedores_crm','vendas_crm','itens_venda','negociacao_anotacoes','negociacao_tarefas') THEN 'CRM'
@@ -242,7 +244,7 @@ export const AUDIT_SCHEMA_SQL = String.raw`
       WHERE c.table_schema = 'public' AND c.column_name = 'tenant_id' AND t.table_type = 'BASE TABLE'
         AND c.table_name NOT IN ('audit_log','api_cache','audit_config','grupo_eventos',
           'razao_estado','razao_lancamentos','razao_partidas','razao_falhas','razao_conferencias',
-          'retrato_saldos','agendador_execucoes','agendador_estado','tarefas')
+          'retrato_saldos','agendador_execucoes','agendador_estado','tarefas','leituras_de_documento')
       UNION SELECT t.table_name FROM information_schema.tables t
       WHERE t.table_schema = 'public' AND t.table_name IN ('tenants','super_admins','planos','saas_config','convites')
       ORDER BY 1

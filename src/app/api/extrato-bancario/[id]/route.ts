@@ -3,5 +3,6 @@ import { createCrudItemHandlers } from '@/lib/crud-api';
 export const { GET, PUT, DELETE } = createCrudItemHandlers(
   'extrato_bancario',
   ['conta_bancaria_id', 'status_conciliacao'],
-  { somenteFinanceiro: true },
+  // Linha de conta não liberada não se abre (05/11/2026).
+  { somenteFinanceiro: true, filtroDeConta: { campos: ['conta_bancaria_id'] } },
 );

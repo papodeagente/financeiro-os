@@ -52,8 +52,14 @@ export async function POST(req: Request) {
     // de conflito precisa casar exatamente com a chave única existente, então
     // ela amarraria esta rota ao sucesso da promoção de PK para (id, tenant_id).
     // Assim a tela salva em qualquer um dos dois estados do schema.
+    // Os bloqueios do financeiro só mudam pela tela própria, que exige o
+    // direito "Configurar bloqueios" (05/11/2026). Aqui o valor do banco
+    // prevalece: quem salva os dados da agência não afrouxa limite nenhum.
+    delete (data as Record<string, unknown>).bloqueios_financeiros;
     const atualizado = await pool.query(
-      `UPDATE agencia SET data = $3, updated_at = NOW()
+      `UPDATE agencia SET data = CASE WHEN data ? 'bloqueios_financeiros'
+          THEN $3::jsonb || jsonb_build_object('bloqueios_financeiros', data->'bloqueios_financeiros')
+          ELSE $3::jsonb END, updated_at = NOW()
         WHERE id = $1 AND tenant_id = $2`,
       [agenciaId, tenantId, JSON.stringify(data)]
     );

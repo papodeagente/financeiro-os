@@ -1,5 +1,7 @@
 'use client';
 
+import type { ReactNode } from 'react';
+
 import { ContaReceber } from '@/lib/crm-types';
 import { percentualDaTaxa } from '@/lib/taxa-plataforma';
 import { Field } from '@/components/fin/Field';
@@ -8,6 +10,9 @@ import { FormSection } from '@/components/financeiro/FormSection';
 import { Input } from '@/components/ui/input';
 import { ClientePicker } from '@/components/ClientePicker';
 import { SeletorDePlataforma } from './SeletorDePlataforma';
+import { SecaoRateios } from '@/components/financeiro/SecaoRateios';
+import { useFormasDePagamento } from '@/components/fin/useFormasDePagamento';
+import { detalheDaForma, formaDoValor, opcoesDeForma } from '@/lib/formas-pagamento';
 import {
   Select,
   SelectContent,
@@ -25,7 +30,7 @@ export type FormState = Omit<ContaReceber,
   'id' | 'juros' | 'multa' | 'desconto' | 'valor_final' | 'data_emissao' |
   'data_recebimento' | 'valor_recebido' | 'conta_bancaria_id' |
   'boleto_emitido' | 'boleto_codigo' | 'boleto_url' | 'status' |
-  'rateio' | 'anexos' | 'venda_id' | 'grupo_id' | 'centro_custo'
+  'anexos' | 'venda_id' | 'grupo_id'
 >;
 
 export const EMPTY_FORM: FormState = {
@@ -48,6 +53,11 @@ export const EMPTY_FORM: FormState = {
   parcela_numero: 1,
   total_parcelas: 1,
   observacoes: '',
+  // Centro, rateio e tags (05/11/2026). Centro único = rateio vazio.
+  centro_custo: '',
+  centro_custo_id: '',
+  rateio: [],
+  tags: [],
 };
 
 export type CampoObrigatorio =
@@ -67,22 +77,16 @@ const ORIGENS: { valor: ContaReceber['origem']; rotulo: string }[] = [
   { valor: 'OUTROS', rotulo: 'Outros' },
 ];
 
-const FORMAS: { valor: ContaReceber['forma_recebimento']; rotulo: string }[] = [
-  { valor: '', rotulo: 'Ainda não definida' },
-  { valor: 'PIX', rotulo: 'Pix' },
-  { valor: 'TED', rotulo: 'Transferência' },
-  { valor: 'CARTAO', rotulo: 'Cartão' },
-  { valor: 'BOLETO', rotulo: 'Boleto' },
-  { valor: 'DINHEIRO', rotulo: 'Dinheiro' },
-  { valor: 'CHEQUE', rotulo: 'Cheque' },
-];
-
 export type FormularioContaProps = {
   form: FormState;
   erros: ErrosForm;
   onChange: (patch: Partial<FormState>) => void;
   /** Plataformas que a agência já usou, para o seletor aprender. */
   plataformasUsadas?: string[];
+  /** Bloco "Repetir" (05/11/2026), só na criação. */
+  repeticao?: ReactNode;
+  /** Com a repetição ligada, a série numera as parcelas sozinha. */
+  ocultarParcelaManual?: boolean;
 };
 
 export function FormularioConta({
@@ -90,9 +94,20 @@ export function FormularioConta({
   erros,
   onChange,
   plataformasUsadas = [],
+  repeticao,
+  ocultarParcelaManual = false,
 }: FormularioContaProps) {
   const rotuloOrigem = ORIGENS.find(o => o.valor === form.origem)?.rotulo ?? ORIGENS[0].rotulo;
+  // As escolhas vêm do cadastro de formas de pagamento (05/11/2026). O valor
+  // que a conta já tem sempre aparece, mesmo antigo ou desligado.
+  const formasDaAgencia = useFormasDePagamento();
+  const FORMAS = [
+    { valor: '', rotulo: 'Ainda não definida' },
+    ...opcoesDeForma(formasDaAgencia, 'receber', form.forma_recebimento),
+  ];
   const rotuloForma = FORMAS.find(f => f.valor === form.forma_recebimento)?.rotulo ?? FORMAS[0].rotulo;
+  const formaEscolhida = formaDoValor(form.forma_recebimento, formasDaAgencia);
+  const ajudaDaForma = formaEscolhida ? detalheDaForma(formaEscolhida) || undefined : undefined;
 
   // O percentual NUNCA é gravado: é derivado do que está na tela. Sem base
   // ele é null, e a ajuda diz o que falta em vez de mostrar "0%" — que se
@@ -226,6 +241,21 @@ export function FormularioConta({
       </FormSection>
 
       <FormSection
+        title="Rateios"
+        description="Centro de custo da conta, divisão entre centros e tags."
+        defaultOpen={form.rateio.length > 0 || Boolean(form.centro_custo_id)}
+      >
+        <SecaoRateios
+          total={form.valor_original}
+          tipo="RECEITA"
+          centroId={form.centro_custo_id ?? ''}
+          rateio={form.rateio}
+          tags={form.tags ?? []}
+          onChange={alteracao => onChange(alteracao)}
+        />
+      </FormSection>
+
+      <FormSection
         title="Taxa da plataforma de pagamento"
         description="O que a adquirente retém. O cliente paga o valor cheio; só a diferença cai no banco."
         defaultOpen
@@ -256,10 +286,10 @@ export function FormularioConta({
         </div>
       </FormSection>
 
-      <FormSection title="Recebimento e parcelas" description="Como e em quantas vezes o dinheiro entra.">
+      <FormSection title="Recebimento e parcelas" description="Como e em quantas vezes o dinheiro entra." defaultOpen={Boolean(repeticao)}>
         <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <Field rotulo="Forma de recebimento">
+            <Field rotulo="Forma de recebimento" ajuda={ajudaDaForma}>
               {a => (
                 <Select
                   value={form.forma_recebimento}
@@ -285,6 +315,8 @@ export function FormularioConta({
             </Field>
           </div>
 
+          {!ocultarParcelaManual ? (
+            <>
           <Field rotulo="Número da parcela">
             {a => (
               <Input
@@ -310,7 +342,10 @@ export function FormularioConta({
               />
             )}
           </Field>
+            </>
+          ) : null}
 
+          {repeticao ? <div className="sm:col-span-2">{repeticao}</div> : null}
         </div>
       </FormSection>
     </div>

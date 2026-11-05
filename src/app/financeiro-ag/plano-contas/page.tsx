@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ListTree, Pencil, Plus, Trash2 } from 'lucide-react';
+import { GitMerge, ListTree, Pencil, Plus, Trash2 } from 'lucide-react';
 
 import { PlanoContas, NaturezaCusto, getPlanoContasPadrao } from '@/lib/crm-types';
 import { loadEntities, saveEntity, deleteEntity } from '@/lib/crm-storage';
@@ -24,6 +24,8 @@ import { PageHeader } from '@/components/fin/PageHeader';
 import { RecordSheet } from '@/components/fin/RecordSheet';
 import { StatusChip, statusChipVariants } from '@/components/fin/StatusChip';
 import { cn } from '@/lib/utils';
+import { toast } from '@/lib/toast';
+import { JuntarCategorias } from './JuntarCategorias';
 
 const TIPO_LABEL: Record<PlanoContas['tipo'], string> = {
   RECEITA: 'Receita',
@@ -73,12 +75,13 @@ type FormState = {
   tipo: PlanoContas['tipo'];
   natureza_custo: NaturezaCusto | null;
   is_custo_comercial: boolean;
+  repasse: boolean;
 };
 
 // Default DESPESA (caso mais comum no dia a dia, aluguel, salários,
 // impostos, etc.). Antes default RECEITA fazia categorias novas
 // sumirem do dropdown de contas a pagar.
-const EMPTY_FORM: FormState = { codigo: '', nome: '', tipo: 'DESPESA', natureza_custo: null, is_custo_comercial: false };
+const EMPTY_FORM: FormState = { codigo: '', nome: '', tipo: 'DESPESA', natureza_custo: null, is_custo_comercial: false, repasse: false };
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
@@ -143,6 +146,7 @@ export default function PlanoContasPage() {
   const [paraExcluir, setParaExcluir] = useState<PlanoContas | null>(null);
   const [excluindo, setExcluindo] = useState(false);
   const [filterTipo, setFilterTipo] = useState<PlanoContas['tipo'] | 'TODOS'>('TODOS');
+  const [paraJuntar, setParaJuntar] = useState<PlanoContas | null>(null);
 
   const totalPadrao = useMemo(() => getPlanoContasPadrao().length, []);
 
@@ -188,6 +192,7 @@ export default function PlanoContasPage() {
       tipo: item.tipo,
       natureza_custo: item.natureza_custo ?? null,
       is_custo_comercial: item.is_custo_comercial ?? false,
+      repasse: item.repasse === true,
     };
     setForm(inicial);
     setFormInicial(inicial);
@@ -208,6 +213,7 @@ export default function PlanoContasPage() {
           tipo: form.tipo,
           natureza_custo: form.tipo === 'DESPESA' ? form.natureza_custo : null,
           is_custo_comercial: form.tipo === 'DESPESA' ? form.is_custo_comercial : false,
+          repasse: form.repasse,
         };
         await deleteEntity('plano-contas', editId);
         await saveEntity('plano-contas', updated);
@@ -221,6 +227,7 @@ export default function PlanoContasPage() {
           natureza_custo: form.tipo === 'DESPESA' ? form.natureza_custo : null,
           is_custo_comercial: form.tipo === 'DESPESA' ? form.is_custo_comercial : false,
           ativo: true,
+          repasse: form.repasse,
         };
         await saveEntity('plano-contas', nova);
       }
@@ -299,9 +306,10 @@ export default function PlanoContasPage() {
       minWidth: 200,
       prioridade: 1,
       render: (r) => {
-        if (r.natureza_custo || r.is_custo_comercial) {
+        if (r.natureza_custo || r.is_custo_comercial || r.repasse) {
           return (
             <span className="flex flex-wrap items-center gap-[var(--fin-s-1)]">
+              {r.repasse ? <span className={statusChipVariants({ tone: 'neutro' })}>Repasse</span> : null}
               {r.natureza_custo ? <StatusChip valor={r.natureza_custo} dominio="natureza" /> : null}
               {r.is_custo_comercial ? (
                 <span className={statusChipVariants({ tone: 'info' })}>Custo para conseguir cliente</span>
@@ -320,6 +328,7 @@ export default function PlanoContasPage() {
       id: 'acoes',
       cabecalho: 'Ações',
       tipo: 'acoes',
+      minWidth: 144,
       render: (r) => (
         <>
           <Button
@@ -331,6 +340,17 @@ export default function PlanoContasPage() {
             onClick={() => openEdit(r)}
           >
             <Pencil aria-hidden="true" className="size-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={`Juntar a categoria ${r.nome} com outra`}
+            title="Juntar com outra"
+            className={ACAO_LINHA}
+            onClick={() => setParaJuntar(r)}
+          >
+            <GitMerge aria-hidden="true" className="size-4" />
           </Button>
           <Button
             type="button"
@@ -535,6 +555,40 @@ export default function PlanoContasPage() {
             )}
           </Field>
 
+          <Field
+            rotulo="Repasse"
+            ajuda="Dinheiro que só passa pela agência, como o valor do fornecedor recebido do cliente. Fica fora dos relatórios, a não ser que você peça para incluir."
+          >
+            {(a) => (
+              <Button
+                id={a.id}
+                type="button"
+                variant="ghost"
+                role="switch"
+                aria-checked={form.repasse}
+                aria-label="Repasse"
+                aria-describedby={a['aria-describedby']}
+                onClick={() => setForm(f => ({ ...f, repasse: !f.repasse }))}
+                className={cn(
+                  'fin-t-body h-11 w-full justify-start gap-[var(--fin-s-2)] rounded-[var(--fin-r-md)] border px-3 shadow-none lg:h-10',
+                  FOCO,
+                  form.repasse
+                    ? 'border-[var(--fin-accent)] bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]'
+                    : 'border-[var(--fin-border-strong)] bg-[var(--fin-surface)] text-[var(--fin-text-2)]',
+                )}
+              >
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'size-1.5 shrink-0 rounded-[var(--fin-r-dot)]',
+                    form.repasse ? 'bg-[var(--fin-accent)]' : 'bg-[var(--fin-border-strong)]',
+                  )}
+                />
+                {form.repasse ? 'Sim, é repasse' : 'Não é repasse'}
+              </Button>
+            )}
+          </Field>
+
           {/* Campo condicional: não é renderizado quando não se aplica (seção 8.5). */}
           {form.tipo === 'DESPESA' && (
             <div className="flex flex-col gap-[var(--fin-s-4)] rounded-[var(--fin-r-md)] border border-[var(--fin-border)] bg-[var(--fin-surface-sunken)] p-[var(--fin-s-3)]">
@@ -617,6 +671,13 @@ export default function PlanoContasPage() {
           )}
         </div>
       </RecordSheet>
+
+      <JuntarCategorias
+        origem={paraJuntar}
+        categorias={items}
+        onFechar={() => setParaJuntar(null)}
+        onJuntada={(texto) => { setParaJuntar(null); toast.success('Categorias juntadas', texto); load(); }}
+      />
 
       <ConfirmDialog
         aberto={confirmarPadrao}

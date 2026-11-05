@@ -1,6 +1,6 @@
-import type { ContaPagar, NaturezaCusto } from '@/lib/crm-types';
-
-export type RecorrenciaPeriodo = 'MENSAL' | 'SEMANAL' | 'QUINZENAL';
+import type { ContaPagar, LinhaRateio, NaturezaCusto } from '@/lib/crm-types';
+import { REPETICAO_PADRAO, type EstadoRepeticao } from '@/lib/recorrencia';
+import type { LeituraNoFormulario } from './leitura';
 
 /** Recorte de período do filtro. Mesmas chaves de sempre. */
 export type FiltroPeriodo =
@@ -20,10 +20,24 @@ export type FormState = {
   natureza_custo: NaturezaCusto | null;
   is_custo_comercial: boolean;
   observacoes: string;
-  // Recorrência (só quando origem = DESPESA_FIXA)
-  recorrencia_ativa: boolean;
-  recorrencia_periodo: RecorrenciaPeriodo;
-  recorrencia_repeticoes: number;
+  // Centro, rateio e tags (05/11/2026). Centro único = rateio vazio.
+  centro_custo_id: string;
+  centro_custo: string;
+  rateio: LinhaRateio[];
+  tags: string[];
+  // Bloco "Repetir" (05/11/2026): Recorrente/Parcelado, quantidade,
+  // periodicidade e mais opções. Só na criação; nunca vai para o título.
+  repeticao: EstadoRepeticao;
+  // "Ler boleto ou nota" (05/11/2026). Vão para o título: o cadastro do
+  // fornecedor, o CNPJ lido, os dados de pagamento e o arquivo como anexo.
+  fornecedor_id: string;
+  fornecedor_cnpj: string;
+  numero_documento: string;
+  linha_digitavel: string;
+  chave_pix: string;
+  anexos: Array<{ nome: string; url: string }>;
+  // A leitura e a origem de cada campo, só para a tela; nunca vai para o título.
+  leitura: LeituraNoFormulario | null;
 };
 
 export const EMPTY_FORM: FormState = {
@@ -40,9 +54,18 @@ export const EMPTY_FORM: FormState = {
   natureza_custo: null,
   is_custo_comercial: false,
   observacoes: '',
-  recorrencia_ativa: false,
-  recorrencia_periodo: 'MENSAL',
-  recorrencia_repeticoes: 12,
+  centro_custo_id: '',
+  centro_custo: '',
+  rateio: [],
+  tags: [],
+  repeticao: REPETICAO_PADRAO,
+  fornecedor_id: '',
+  fornecedor_cnpj: '',
+  numero_documento: '',
+  linha_digitavel: '',
+  chave_pix: '',
+  anexos: [],
+  leitura: null,
 };
 
 /** Erros por campo, espelho das validações de handleSave. Só apresentação. */

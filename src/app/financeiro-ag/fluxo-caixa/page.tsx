@@ -1,6 +1,6 @@
 'use client';
 
-import { BarChart3, ChevronLeft, ChevronRight, CircleAlert, Info } from 'lucide-react';
+import { BarChart3, ChevronLeft, ChevronRight, CircleAlert, Info, TriangleAlert } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { ContaReceber, ContaPagar, ContaBancaria, Agencia } from '@/lib/crm-types';
@@ -14,6 +14,9 @@ import {
   type Agrupamento, type LinhaDoCaderno, type TipoDePeriodo,
 } from '@/lib/caderno-caixa';
 import { calcularSaldoBancario } from '@/lib/saldo-bancario';
+import {
+  alertaDeSaldo, comparativoDoPeriodo, lancamentosDaConta, titulosDaConta, type FiltroDeConta,
+} from '@/lib/fluxo-comparativo';
 import { hojeISO, num, round2 } from '@/lib/money';
 import { cn, formatBRL } from '@/lib/utils';
 import type { FunilPayload } from '@/lib/funil-types';
@@ -24,14 +27,23 @@ import { DataState } from '@/components/fin/DataState';
 import { EmptyLesson } from '@/components/fin/EmptyLesson';
 import { Money } from '@/components/fin/Money';
 import { Segmentado } from '@/components/fin/Segmentado';
+import { MoneyField } from '@/components/fin/MoneyField';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CurvaDoSaldo } from './CurvaDoSaldo';
 import { Caderno } from './Caderno';
 import { DetalheDaLinha } from './DetalheDaLinha';
+import { PrevistoRealizado } from './PrevistoRealizado';
 
 const CARTAO =
   'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]';
 
 const ROTULO_AGRUPAMENTO: Record<Agrupamento, string> = { dia: 'Dia a dia', semana: 'Por semana', mes: 'Por mês' };
+
+/** Saldo mínimo escolhido: fica no navegador (05/11/2026). */
+const CHAVE_MINIMO = 'fluxo-caixa-saldo-minimo';
+const TODAS_AS_CONTAS = 'todas';
+const CONTROLE =
+  'fin-t-body h-11 min-w-56 gap-[var(--fin-s-2)] rounded-[var(--fin-r-md)] border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-3 text-[var(--fin-text)] lg:h-10';
 
 /** "1 out", "31 dez": a ponta do período no rótulo do saldo. */
 function diaEMes(iso: string): string {
@@ -133,6 +145,26 @@ export default function FluxoCaixaPage() {
   const [ancora, setAncora] = useState(hoje);
   const [agrupamento, setAgrupamento] = useState<Agrupamento>(agrupamentoPadrao('mes'));
   const [linhaAberta, setLinhaAberta] = useState<LinhaDoCaderno | null>(null);
+  // 05/11/2026: conta escolhida (padrão: todas, o caderno de sempre), visão
+  // do Previsto × Realizado e saldo mínimo.
+  const [contaId, setContaId] = useState<string>(TODAS_AS_CONTAS);
+  const [visaoComparativo, setVisaoComparativo] = useState<Agrupamento>(agrupamentoPadrao('mes'));
+  const [saldoMinimo, setSaldoMinimo] = useState(0);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const salvo = Number(window.localStorage.getItem(CHAVE_MINIMO));
+    if (Number.isFinite(salvo) && salvo > 0) setSaldoMinimo(salvo);
+  }, []);
+
+  function trocarMinimo(v: number) {
+    const valor = Number.isFinite(v) && v > 0 ? round2(v) : 0;
+    setSaldoMinimo(valor);
+    if (typeof window !== 'undefined') {
+      if (valor > 0) window.localStorage.setItem(CHAVE_MINIMO, String(valor));
+      else window.localStorage.removeItem(CHAVE_MINIMO);
+    }
+  }
 
   const periodo = useMemo(() => periodoQueContem(tipo, ancora), [tipo, ancora]);
   const estaNoPeriodoDeHoje = periodoContem(periodo, hoje);
@@ -169,6 +201,7 @@ export default function FluxoCaixaPage() {
   function trocarTipo(novo: TipoDePeriodo) {
     setTipo(novo);
     setAgrupamento(agrupamentoPadrao(novo));
+    setVisaoComparativo(agrupamentoPadrao(novo));
   }
 
   const eventosFolha = useMemo(() => {
@@ -180,21 +213,46 @@ export default function FluxoCaixaPage() {
     );
   }, [incluirFolha, pessoasFolha, periodo, hoje, diaPagamentoFolha, contasPagar]);
 
-  const lancamentos = useMemo(
-    () => lancamentosDoCaixa({ receber: contasReceber, pagar: contasPagar, folha: eventosFolha, hoje }),
-    [contasReceber, contasPagar, eventosFolha, hoje],
-  );
+  // Conta escolhida que sumiu (apagada): volta para todas.
+  const contaEscolhida = contaId === TODAS_AS_CONTAS ? null : (contasBancarias.find(c => c.id === contaId) ?? null);
+  const filtro: FiltroDeConta = useMemo(() => ({
+    contaId: contaEscolhida?.id ?? null,
+    caixaGeralId: contasBancarias.find(c => c.nome === 'Caixa Geral')?.id ?? null,
+  }), [contaEscolhida, contasBancarias]);
+
+  // Todas as contas: exatamente o caderno de sempre (mesma chamada).
+  const { lancamentos, semConta } = useMemo(() => {
+    if (!filtro.contaId) {
+      return {
+        lancamentos: lancamentosDoCaixa({ receber: contasReceber, pagar: contasPagar, folha: eventosFolha, hoje }),
+        semConta: { quantidade: 0, valor: 0 },
+      };
+    }
+    return lancamentosDaConta({ receber: contasReceber, pagar: contasPagar, folha: eventosFolha, filtro, hoje });
+  }, [contasReceber, contasPagar, eventosFolha, filtro, hoje]);
 
   const caderno = useMemo(
-    () => montarCaderno({ lancamentos, contas: contasBancarias, periodo, agrupamento, hoje }),
-    [lancamentos, contasBancarias, periodo, agrupamento, hoje],
+    () => montarCaderno({
+      lancamentos, contas: contaEscolhida ? [contaEscolhida] : contasBancarias, periodo, agrupamento, hoje,
+    }),
+    [lancamentos, contaEscolhida, contasBancarias, periodo, agrupamento, hoje],
   );
 
   // O mesmo número do "Saldo atual" de sempre: o caderno fecha com ele.
-  const noBancoAgora = useMemo(
-    () => calcularSaldoBancario(contasBancarias, contasReceber, contasPagar),
-    [contasBancarias, contasReceber, contasPagar],
+  const noBancoAgora = useMemo(() => {
+    if (!contaEscolhida) return calcularSaldoBancario(contasBancarias, contasReceber, contasPagar);
+    const t = titulosDaConta({ receber: contasReceber, pagar: contasPagar, filtro });
+    return calcularSaldoBancario([contaEscolhida], t.receber, t.pagar);
+  }, [contaEscolhida, contasBancarias, contasReceber, contasPagar, filtro]);
+
+  const comparativo = useMemo(
+    () => comparativoDoPeriodo({
+      receber: contasReceber, pagar: contasPagar, folha: eventosFolha, periodo, visao: visaoComparativo, filtro, hoje,
+    }),
+    [contasReceber, contasPagar, eventosFolha, periodo, visaoComparativo, filtro, hoje],
   );
+
+  const alerta = useMemo(() => alertaDeSaldo(caderno.curva, saldoMinimo, hoje), [caderno.curva, saldoMinimo, hoje]);
 
   // Estimativa mensal dos funis em execução. Não é dinheiro contratado:
   // aparece escrita, fora do saldo, multiplicada pelos meses do período.
@@ -292,6 +350,36 @@ export default function FluxoCaixaPage() {
           </div>
         </div>
 
+        {contasBancarias.length > 1 ? (
+          <div className="flex flex-wrap items-center gap-[var(--fin-s-3)]">
+            <Select value={contaEscolhida ? contaEscolhida.id : TODAS_AS_CONTAS} onValueChange={v => setContaId(String(v))}>
+              <SelectTrigger
+                id="fluxo-conta"
+                aria-label="Conta"
+                className={cn(CONTROLE, 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)] focus-visible:ring-0')}
+              >
+                <span className="fin-t-overline shrink-0 text-[var(--fin-text-3)]">Conta</span>
+                <SelectValue>{() => contaEscolhida?.nome || 'Todas as contas'}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={TODAS_AS_CONTAS} className="fin-t-body">Todas as contas</SelectItem>
+                {contasBancarias.map(c => (
+                  <SelectItem key={c.id} value={c.id} className="fin-t-body">{c.nome || 'Conta sem nome'}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {contaEscolhida && semConta.quantidade > 0 ? (
+              <p className="flex items-start gap-[var(--fin-s-2)] fin-t-caption text-[var(--fin-text-2)]">
+                <Info aria-hidden="true" className="mt-px size-3.5 shrink-0 text-[var(--fin-text-3)]" />
+                {semConta.quantidade === 1
+                  ? `1 previsão sem conta escolhida (${formatBRL(semConta.valor)}) fica fora desta conta.`
+                  : `${semConta.quantidade} previsões sem conta escolhida (${formatBRL(semConta.valor)}) ficam fora desta conta.`}
+                {' '}Em Todas as contas elas entram.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
         {semDado ? (
           <EmptyLesson
             motivo="sem-dado"
@@ -332,15 +420,22 @@ export default function FluxoCaixaPage() {
                   />
                 </div>
 
-                <CurvaDoSaldo curva={caderno.curva} hoje={hoje} />
+                <CurvaDoSaldo curva={caderno.curva} hoje={hoje} minimo={saldoMinimo} />
 
                 <div className="flex flex-col gap-[var(--fin-s-2)]">
                   <p className="flex flex-wrap items-baseline gap-x-[var(--fin-s-2)] fin-t-body text-[var(--fin-text-2)]">
-                    No banco agora:
+                    {contaEscolhida ? `Em ${contaEscolhida.nome || 'esta conta'} agora:` : 'No banco agora:'}
                     <span className={cn('fin-t-body-strong tabular-nums', noBancoAgora < 0 ? 'text-[var(--fin-negative-text)]' : 'text-[var(--fin-text)]')}>
                       {formatBRL(noBancoAgora)}
                     </span>
                   </p>
+                  {saldoMinimo > 0 && alerta.primeiroAbaixoDoMinimo ? (
+                    <p className="flex items-start gap-[var(--fin-s-2)] fin-t-body text-[var(--fin-warning-text)]">
+                      <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+                      O saldo previsto fica abaixo do mínimo de {formatBRL(saldoMinimo)} em {rotuloDoDia(alerta.primeiroAbaixoDoMinimo)}
+                      {alerta.menor ? ` e chega a ${formatBRL(alerta.menor.saldo)} em ${rotuloDoDia(alerta.menor.data)}` : ''}.
+                    </p>
+                  ) : null}
                   {caderno.primeiroDiaNegativo ? (
                     <p className="flex items-start gap-[var(--fin-s-2)] fin-t-body text-[var(--fin-negative-text)]">
                       <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
@@ -362,6 +457,17 @@ export default function FluxoCaixaPage() {
                       É estimativa de {projecaoFunis.count === 1 ? '1 funil' : `${projecaoFunis.count} funis`} e não entra no saldo.
                     </p>
                   ) : null}
+                </div>
+
+                <div className="border-t border-[var(--fin-border)] pt-[var(--fin-s-4)]">
+                  <div className="w-full max-w-60">
+                    <MoneyField
+                      rotulo="Saldo mínimo"
+                      valor={saldoMinimo}
+                      onChange={trocarMinimo}
+                      ajuda="Linha de aviso no gráfico. Vazio desliga o aviso."
+                    />
+                  </div>
                 </div>
               </section>
 
@@ -394,6 +500,36 @@ export default function FluxoCaixaPage() {
                       <Interruptor ligado={incluirFunis} onChange={setIncluirFunis}>Projeção do CRM</Interruptor>
                     ) : null}
                   </div>
+                ) : null}
+              </section>
+
+              {/* Previsto × Realizado (05/11/2026): o combinado ao lado do que aconteceu. */}
+              <section aria-labelledby="t-previsto-realizado" className={cn(CARTAO, 'flex flex-col gap-[var(--fin-s-3)] py-[var(--fin-s-4)]')}>
+                <div className="flex flex-col gap-[var(--fin-s-3)] px-[var(--fin-s-4)] sm:flex-row sm:items-center sm:justify-between sm:px-[var(--fin-s-5)]">
+                  <div className="flex flex-col">
+                    <h2 id="t-previsto-realizado" className="fin-t-subhead text-[var(--fin-text)]">Previsto × Realizado</h2>
+                    <p className="fin-t-caption text-[var(--fin-text-3)]">
+                      Previsto pelo vencimento. Realizado pela data da baixa, a entrada já sem a taxa da plataforma. Desvio é a diferença.
+                    </p>
+                  </div>
+                  <Segmentado<Agrupamento>
+                    rotulo="Ver por"
+                    valor={visaoComparativo}
+                    onChange={setVisaoComparativo}
+                    opcoes={(['dia', 'semana', 'mes'] as Agrupamento[]).map(a => ({ valor: a, rotulo: ROTULO_AGRUPAMENTO[a] }))}
+                  />
+                </div>
+
+                <div className="border-y border-[var(--fin-border)]">
+                  <PrevistoRealizado comparativo={comparativo} rotuloPeriodo={periodo.rotulo} />
+                </div>
+
+                {comparativo.atrasados.quantidade > 0 ? (
+                  <p className="flex items-start gap-[var(--fin-s-2)] px-[var(--fin-s-4)] fin-t-caption text-[var(--fin-text-2)] sm:px-[var(--fin-s-5)]">
+                    <Info aria-hidden="true" className="mt-px size-3.5 shrink-0 text-[var(--fin-text-3)]" />
+                    Vencido e em aberto: {formatBRL(comparativo.atrasados.entradas)} a receber e {formatBRL(comparativo.atrasados.saidas)} a pagar.
+                    {' '}No caderno e na curva esse dinheiro está previsto para hoje.
+                  </p>
                 ) : null}
               </section>
             </div>

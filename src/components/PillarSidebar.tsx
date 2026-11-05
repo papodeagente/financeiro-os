@@ -25,7 +25,7 @@ import {
   PanelLeftClose, PanelLeftOpen,
   Eraser, LifeBuoy, FileText,
   LayoutGrid, ChartColumn, ArrowDownLeft, ArrowUpRight, GitCompareArrows, ListTree,
-  Contact, Truck, Repeat,
+  Contact, Truck, Repeat, Lock, ArrowDownUp, Network, Split, Tags, ShieldCheck, Stamp, Scale, ScrollText, ListOrdered, Table2,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -88,16 +88,22 @@ const FINANCEIRO_MENU: SidebarSection[] = [
       { key: 'fin-hub', label: 'Visão geral', icon: LayoutGrid, href: '/financeiro-ag' },
       { key: 'fluxo-caixa', label: 'Fluxo de caixa', icon: ChartColumn, href: '/financeiro-ag/fluxo-caixa' },
       { key: 'dre', label: 'Resultado do mês', icon: FileText, href: '/financeiro-ag/dre' },
+      { key: 'resultado-por-categoria', label: 'Resultado por categoria', icon: Table2, href: '/financeiro-ag/resultado-por-categoria' },
     ],
   },
   {
     title: 'Dia a dia',
     items: [
+      { key: 'contas', label: 'Contas a Pagar/Receber', icon: ArrowDownUp, href: '/financeiro-ag/contas' },
       { key: 'receber', label: 'Contas a receber', icon: ArrowDownLeft, href: '/financeiro-ag/receber' },
       { key: 'pagar', label: 'Contas a pagar', icon: ArrowUpRight, href: '/financeiro-ag/pagar' },
       { key: 'conciliacao', label: 'Conciliação', icon: GitCompareArrows, href: '/financeiro-ag/conciliacao' },
       { key: 'notas-fiscais', label: 'Notas fiscais', icon: Receipt, href: '/financeiro-ag/notas' },
+      { key: 'extrato', label: 'Extrato de conta', icon: ScrollText, href: '/financeiro-ag/extrato' },
+      { key: 'movimentacoes', label: 'Movimentações', icon: ListOrdered, href: '/financeiro-ag/movimentacoes' },
       { key: 'transferencias', label: 'Transferências', icon: ArrowRightLeft, href: '/financeiro-ag/transferencias' },
+      { key: 'fechamento', label: 'Fechar Caixa', icon: Lock, href: '/financeiro-ag/fechamento' },
+      { key: 'aprovacoes', label: 'Aprovações', icon: Stamp, href: '/financeiro-ag/aprovacoes' },
     ],
   },
   {
@@ -108,6 +114,16 @@ const FINANCEIRO_MENU: SidebarSection[] = [
       { key: 'contas-bancarias', label: 'Contas bancárias', icon: Landmark, href: '/financeiro-ag/contas-bancarias' },
       { key: 'cartoes-corp', label: 'Cartões', icon: CreditCard, href: '/financeiro-ag/cartoes' },
       { key: 'plano-contas', label: 'Categorias', icon: ListTree, href: '/financeiro-ag/plano-contas' },
+      { key: 'centros-custo', label: 'Centros de custo', icon: Network, href: '/financeiro-ag/centros-custo' },
+      { key: 'formas-pagamento', label: 'Formas de pagamento', icon: Wallet, href: '/financeiro-ag/formas-pagamento' },
+    ],
+  },
+  {
+    title: 'Relatórios',
+    items: [
+      { key: 'rel-categoria', label: 'Por categoria', icon: Tags, href: '/financeiro-ag/relatorios/lancamentos-categoria' },
+      { key: 'rel-centro', label: 'Por centro de custo', icon: Network, href: '/financeiro-ag/relatorios/lancamentos-centro-custo' },
+      { key: 'rel-rateio', label: 'Por rateio', icon: Split, href: '/financeiro-ag/relatorios/lancamentos-rateio' },
     ],
   },
 ];
@@ -118,6 +134,9 @@ const CONFIGURACOES_MENU: SidebarSection[] = [
     items: [
       { key: 'cfg-agencia', label: 'Dados da agência', icon: Building2, href: '/config/agencia' },
       { key: 'cfg-usuarios', label: 'Usuários', icon: Users, href: '/config/usuarios' },
+      { key: 'cfg-financeiro', label: 'Financeiro', icon: Percent, href: '/config/financeiro' },
+      { key: 'cfg-perfis', label: 'Perfis de acesso', icon: ShieldCheck, href: '/config/perfis-de-acesso' },
+      { key: 'cfg-limites', label: 'Limites e aprovação', icon: Scale, href: '/config/limites-e-aprovacao' },
     ],
   },
   {
@@ -134,7 +153,7 @@ const CONFIGURACOES_MENU: SidebarSection[] = [
     title: 'Sistema',
     items: [
       { key: 'cfg-suporte', label: 'Suporte', icon: LifeBuoy, href: '/suporte' },
-      { key: 'cfg-auditoria', label: 'Auditoria', icon: ClipboardList, href: '/config/auditoria' },
+      { key: 'cfg-auditoria', label: 'Registro de atividades', icon: ClipboardList, href: '/config/auditoria' },
       { key: 'cfg-reset', label: 'Resetar dados', icon: Eraser, href: '/config/reset' },
     ],
   },

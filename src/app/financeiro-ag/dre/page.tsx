@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { ArrowDownLeft, Info, TrendingUp, X } from 'lucide-react';
+import { ArrowDownLeft, CalendarClock, Info, TrendingUp, X } from 'lucide-react';
 import { ContaReceber, ContaPagar, VendaCRM, PlanoContas } from '@/lib/crm-types';
 import { loadEntities } from '@/lib/crm-storage';
 import { vendasComLancamento, apenasVendasComLastro } from '@/lib/venda-lancamentos';
@@ -14,15 +14,24 @@ import { MetricCard } from '@/components/fin/MetricCard';
 import { PageHeader } from '@/components/fin/PageHeader';
 import type { MoneyEstado } from '@/components/fin/Money';
 import { toast } from '@/lib/toast';
-import { soma, somaPor, round2, num, divSegura, mesDe, hojeISO } from '@/lib/money';
+import { somaPor, round2, num, mesDe, hojeISO } from '@/lib/money';
+import {
+  comissaoNaoCapturadaPorConta, mesAnterior, montarDRE, orcadoPorLinha,
+  type LancamentoDRE, type LinhaDRE, type RegimeDRE,
+} from '@/lib/resultado-dre';
+import { calcRelatorio, type CustosData } from '@/lib/planejamento-custos';
+import {
+  encargosPorTitulo, rotulosDasCategorias,
+  type CategoriasEncargos, type LinhaDeBaixaComEncargo,
+} from '@/lib/encargos-categorias';
+import { Segmentado } from '@/components/fin/Segmentado';
+import { LancamentosDaLinha } from './LancamentosDaLinha';
 import { formatBRL } from '@/lib/utils';
 import {
   DemonstrativoTabela,
   type LinhaDemonstrativo,
   type NotaDemonstrativo,
 } from './DemonstrativoTabela';
-
-const PCT = (v: number) => `${v.toFixed(1)}%`;
 
 const pctBR = (v: number) =>
   `${new Intl.NumberFormat('pt-BR', {
@@ -36,13 +45,9 @@ function getMonthLabel(ym: string): string {
   return `${months[parseInt(m) - 1]} ${y}`;
 }
 
-interface DRELine {
-  codigo: string;
-  nome: string;
-  valor: number;
-  tipo: 'header' | 'item' | 'subtotal' | 'total';
-  indent: number;
-}
+type DRELine = LinhaDRE;
+
+const ROTULO_REGIME: Record<RegimeDRE, string> = { competencia: 'Competência', caixa: 'Caixa' };
 
 /**
  * Camada de apresentação: o `nome` continua sendo a chave que casa os dois
@@ -85,6 +90,15 @@ export default function DREPage() {
   const [modoSimplificado, setModoSimplificado] = useState<boolean>(true);
   // Banner "Como ler": fechável, persiste em localStorage
   const [bannerVisivel, setBannerVisivel] = useState<boolean>(true);
+  // 05/11/2026: regime (competência é o de sempre), orçado do plano do mês e
+  // os lançamentos de um número clicado.
+  const [regime, setRegime] = useState<RegimeDRE>('competencia');
+  const [orcamento, setOrcamento] = useState<CustosData | null>(null);
+  // Juros, multa, desconto e taxa da liquidação (05/11/2026). Sem eles (ou
+  // se a consulta falhar), o DRE é o de antes.
+  const [baixasComEncargo, setBaixasComEncargo] = useState<LinhaDeBaixaComEncargo[]>([]);
+  const [categoriasEncargos, setCategoriasEncargos] = useState<CategoriasEncargos>({});
+  const [aberta, setAberta] = useState<{ titulo: string; lancamentos: LancamentoDRE[]; valor: number } | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -128,6 +142,13 @@ export default function DREPage() {
       setContasPagar(cp);
       setVendas(v);
       setPlanoContas(pc);
+      fetch('/api/encargos-da-liquidacao')
+        .then(r => (r.ok ? r.json() : null))
+        .then((x: { linhas?: LinhaDeBaixaComEncargo[]; categorias?: CategoriasEncargos } | null) => {
+          setBaixasComEncargo(Array.isArray(x?.linhas) ? x!.linhas! : []);
+          setCategoriasEncargos(x?.categorias && typeof x.categorias === 'object' ? x.categorias : {});
+        })
+        .catch(() => { setBaixasComEncargo([]); setCategoriasEncargos({}); });
 
       setSelectedMonth(mesDe(hojeISO()));
       setAtualizadoEm(new Date());
@@ -139,6 +160,28 @@ export default function DREPage() {
   }
 
   useEffect(() => { load(); }, []);
+
+  // Orçado: o plano do mês do planejamento, quando existe. Sem plano (ou sem
+  // permissão), a coluna simplesmente não aparece.
+  useEffect(() => {
+    if (!selectedMonth) return;
+    let vivo = true;
+    fetch(`/api/planejamento/custos?mes=${encodeURIComponent(selectedMonth)}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then((plano: CustosData | null) => { if (vivo) setOrcamento(plano && typeof plano === 'object' ? plano : null); })
+      .catch(() => { if (vivo) setOrcamento(null); });
+    return () => { vivo = false; };
+  }, [selectedMonth]);
+
+  const orcadoMap = useMemo(() => {
+    if (!orcamento) return orcadoPorLinha(null);
+    const r = calcRelatorio(orcamento);
+    return orcadoPorLinha({
+      receitaMeta: r.receitaMeta, custoFixoTotal: r.custoFixoTotal,
+      marketingTotal: r.marketingTotal, lucroProjetado: r.lucroProjetado,
+    });
+  }, [orcamento]);
+  const temOrcado = orcadoMap.size > 0;
 
   // Available months from data
   const availableMonths = useMemo(() => {
@@ -170,188 +213,34 @@ export default function DREPage() {
     [vendas, comLancamento],
   );
 
-  // Quanto de cada CR de comissão AINDA NÃO está representado na margem da
-  // sua venda. Calculado uma vez para todos os meses (a venda cai num mês e a
-  // comissão vence noutro): a margem de cada venda é consumida pelas suas
-  // comissões na ordem de vencimento, e o que sobrar da comissão é receita
-  // própria a reconhecer.
-  const comissaoNaoCapturada = useMemo(() => {
-    const restante = new Map<string, number>();
-    for (const v of vendasComLastro) {
-      if (v.status === 'CANCELADO') continue;
-      restante.set(v.id, Math.max(round2(num(v.valor_final) - num(v.valor_total_custo)), 0));
-    }
-    const fora = new Map<string, number>();
-    const comissoes = contasReceber
-      .filter(cr => cr.origem === 'COMISSAO_FORNECEDOR')
-      .sort((a, b) => String(a.data_vencimento).localeCompare(String(b.data_vencimento)));
-    for (const cr of comissoes) {
-      const vendaId = cr.origem_venda_id || cr.venda_id || '';
-      const valor = round2(num(cr.valor_final));
-      const margem = vendaId ? (restante.get(vendaId) ?? 0) : 0;
-      const capturado = Math.min(margem, valor);
-      if (vendaId && restante.has(vendaId)) restante.set(vendaId, round2(margem - capturado));
-      fora.set(cr.id, round2(valor - capturado));
-    }
-    return fora;
-  }, [contasReceber, vendasComLastro]);
+  // Quanto de cada CR de comissão ainda não está na margem da venda. A regra
+  // mora em src/lib/resultado-dre.ts desde 05/11/2026.
+  const comissaoNaoCapturada = useMemo(
+    () => comissaoNaoCapturadaPorConta(contasReceber, vendasComLastro),
+    [contasReceber, vendasComLastro],
+  );
 
-  // DRE para AGÊNCIA DE VIAGENS, CNAE 7911-2/00
-  // Regime de INTERMEDIAÇÃO: a agência recebe apenas a COMISSÃO sobre a
-  // venda. O valor pago à companhia aérea/hotel/operadora é repasse, não
-  // custo da agência (CMV = 0). Receita Bruta = comissão (valor_venda −
-  // custo_pago_ao_fornecedor) + comissões diretas + fees + outras receitas
-  // próprias. Sem 'Vendas de Serviços' inflando a receita.
-  function buildDRE(month: string): DRELine[] {
-    if (!month) return [];
+  // DRE para agência de viagens (CNAE 7911-2/00), regime de intermediação.
+  // A conta saiu da tela para a lib (05/11/2026) sem mudar: competência é o
+  // padrão e dá os mesmos números de antes (scripts/test-demonstrativo-resultado.ts).
+  const encargos = useMemo(() => encargosPorTitulo(baixasComEncargo), [baixasComEncargo]);
+  const rotulosEncargos = useMemo(
+    () => rotulosDasCategorias(categoriasEncargos, planoContas),
+    [categoriasEncargos, planoContas],
+  );
 
-    // Competência: entra tudo que não foi cancelado, inclusive ATRASADO e
-    // PARCIAL. Listar só RECEBIDO/PENDENTE fazia a conta parcialmente
-    // recebida (ou vencida) sumir INTEIRA do relatório.
-    const vivo = (s: string | undefined) => String(s ?? '') !== 'CANCELADO';
-    const monthReceber = contasReceber.filter(cr =>
-      mesDe(cr.data_vencimento) === month && vivo(cr.status)
-    );
-    const monthPagar = contasPagar.filter(cp =>
-      mesDe(cp.data_vencimento) === month && vivo(cp.status)
-    );
-    const monthVendas = vendasComLastro.filter(v =>
-      mesDe(v.data_venda) === month && v.status !== 'CANCELADO'
-    );
-
-    // VOLUME intermediado (informativo, não entra na DRE; é só
-    // referência de quanto a agência movimentou)
-    const volumeIntermediado = somaPor(monthVendas, v => v.valor_final);
-
-    // RECEITA BRUTA = margem (comissão) das vendas + comissões de
-    // fornecedores recebidas explicitamente + fees + outras receitas.
-    // É a base sobre a qual incidem impostos (ISS, PIS/COFINS).
-    const comissaoVendas = somaPor(monthVendas, v =>
-      Math.max(round2(num(v.valor_final) - num(v.valor_total_custo)), 0)
-    );
-
-    // FONTE ÚNICA, por DEDUÇÃO (não por exclusão): a comissão de uma venda
-    // entra na Receita Bruta UMA vez. Quando a margem da venda já a contém
-    // (linha 1.1), a CR espelho não soma de novo. Mas no fluxo "cliente paga
-    // o fornecedor" a venda não tem margem própria (margem = 0) e a comissão
-    // É a receita, e excluí-la simplesmente apagava esse dinheiro do DRE dos
-    // dois meses (o da venda e o do vencimento da comissão).
-    const receitaComissoes = somaPor(
-      monthReceber.filter(cr => cr.origem === 'COMISSAO_FORNECEDOR'),
-      cr => round2(num(comissaoNaoCapturada.get(cr.id) ?? num(cr.valor_final))),
-    );
-    const receitaFee = somaPor(monthReceber.filter(cr => cr.origem === 'FEE'), cr => cr.valor_final);
-    const receitaOutras = somaPor(monthReceber.filter(cr => cr.origem === 'OUTROS'), cr => cr.valor_final);
-
-    const receitaBruta = soma([comissaoVendas, receitaComissoes, receitaFee, receitaOutras]);
-
-    // CP auto-gerada pela venda = repasse ao fornecedor. Neste regime o
-    // cliente paga o fornecedor direto, então não é despesa da agência.
-    const ehRepasseDeVenda = (cp: ContaPagar) => !!cp.auto_gerado && cp.origem === 'VENDA';
-
-    const idsDoPrefixo = (prefixo: string) =>
-      planoContas.filter(p => p.codigo?.startsWith(prefixo)).map(p => p.id);
-
-    function sumByCategory(prefix: string): number {
-      const catIds = new Set(idsDoPrefixo(prefix));
-      return somaPor(monthPagar.filter(cp => catIds.has(cp.categoria_id)), cp => cp.valor_final);
-    }
-
-    // CNAE 7911-2: não tem CMV. Custo do fornecedor é repasse direto
-    // do cliente, não despesa da agência. Categorias 2.2..2.6 cobrem
-    // as despesas operacionais reais.
-    const despOperacionais = sumByCategory('2.2');
-    const despComerciais = sumByCategory('2.6');
-    const despTaxas = sumByCategory('2.3');
-    // A taxa da plataforma de pagamento é despesa financeira, mas NÃO vive
-    // numa conta a pagar: ela é retida da conta a receber antes do repasse,
-    // então nenhuma categoria do plano de contas a alcança. Sem esta linha o
-    // dinheiro sairia do saldo bancário (saldo-bancario.ts desconta a taxa) e
-    // continuaria invisível no resultado — o DRE e o extrato deixariam de
-    // bater exatamente pelo valor das taxas.
-    //
-    // Competência, como todo o resto deste relatório: conta viva com
-    // vencimento no mês, tenha sido baixada ou não. É a mesma base que
-    // resultado-financeiro.ts usa em `taxas`.
-    const taxasDePlataforma = somaPor(monthReceber, cr => Math.max(0, num(cr.taxa)));
-    const despFinanceiras = round2(sumByCategory('2.4') + taxasDePlataforma);
-    const despOutras = sumByCategory('2.5');
-
-    // 2.1 (CMV do plano padrão) não tem linha própria neste regime, mas o
-    // dinheiro precisa aparecer: o que sobra depois de tirar o repasse
-    // auto-gerado de venda é despesa real e vai para "Outras despesas".
-    const idsCMV = new Set(idsDoPrefixo('2.1'));
-    const despCMV = somaPor(
-      monthPagar.filter(cp => idsCMV.has(cp.categoria_id) && !ehRepasseDeVenda(cp)),
-      cp => cp.valor_final,
-    );
-
-    // Condição de NEGAÇÃO sobre os ids conhecidos: qualquer conta cuja
-    // categoria não caia num bucket da DRE (categoria apagada, id órfão ou
-    // categoria vazia) vira "Não categorizadas". Antes o filtro exigia
-    // categoria_id vazio e o dinheiro das outras sumia do relatório inteiro.
-    const PREFIXOS_DRE = ['2.1', '2.2', '2.3', '2.4', '2.5', '2.6'];
-    const idsConhecidos = new Set(PREFIXOS_DRE.flatMap(idsDoPrefixo));
-    const uncategorized = somaPor(
-      monthPagar.filter(cp => !idsConhecidos.has(cp.categoria_id) && !ehRepasseDeVenda(cp)),
-      cp => cp.valor_final,
-    );
-
-    const totalDespesas = soma([despOperacionais, despComerciais, despTaxas, despFinanceiras, despOutras, despCMV, uncategorized]);
-    const outrasDespesas = soma([despOutras, despCMV, uncategorized]);
-    const receitaLiquida = round2(receitaBruta - despTaxas);
-    const resultadoOperacional = round2(receitaLiquida - despOperacionais - despComerciais);
-    const lucroLiquido = round2(receitaBruta - totalDespesas);
-    const margemLiquida = round2(divSegura(lucroLiquido, receitaBruta) * 100);
-    const margemSobreVolume = round2(divSegura(receitaBruta, volumeIntermediado) * 100);
-
-    const lines: DRELine[] = [];
-
-    // Informativo no topo: volume intermediado (não entra na conta)
-    if (volumeIntermediado > 0) {
-      lines.push({ codigo: '', nome: 'VOLUME INTERMEDIADO (informativo)', valor: volumeIntermediado, tipo: 'header', indent: 0 });
-      lines.push({ codigo: '0.1', nome: 'Total transacionado (passagens, hotéis, etc.)', valor: volumeIntermediado, tipo: 'item', indent: 1 });
-    }
-
-    lines.push(
-      { codigo: '', nome: 'RECEITA BRUTA (comissão + serviços)', valor: receitaBruta, tipo: 'header', indent: 0 },
-      { codigo: '1.1', nome: 'Comissão sobre vendas', valor: comissaoVendas, tipo: 'item', indent: 1 },
-      { codigo: '1.2', nome: 'Comissões de fornecedores', valor: receitaComissoes, tipo: 'item', indent: 1 },
-      { codigo: '1.3', nome: 'Fee de serviço', valor: receitaFee, tipo: 'item', indent: 1 },
-      { codigo: '1.5', nome: 'Outras receitas', valor: receitaOutras, tipo: 'item', indent: 1 },
-
-      { codigo: '', nome: '(-) IMPOSTOS SOBRE A RECEITA', valor: -despTaxas, tipo: 'header', indent: 0 },
-      { codigo: '2.3', nome: 'ISS, PIS, COFINS e outros', valor: despTaxas, tipo: 'item', indent: 1 },
-
-      { codigo: '', nome: 'RECEITA LÍQUIDA', valor: receitaLiquida, tipo: 'subtotal', indent: 0 },
-
-      { codigo: '', nome: '(-) DESPESAS OPERACIONAIS', valor: -(despOperacionais + despComerciais), tipo: 'header', indent: 0 },
-      { codigo: '2.2', nome: 'Despesas operacionais (aluguel, salários, etc.)', valor: despOperacionais, tipo: 'item', indent: 1 },
-      { codigo: '2.6', nome: 'Despesas comerciais (marketing, comissão vendedor)', valor: despComerciais, tipo: 'item', indent: 1 },
-
-      { codigo: '', nome: 'RESULTADO OPERACIONAL', valor: resultadoOperacional, tipo: 'subtotal', indent: 0 },
-
-      { codigo: '', nome: '(-) DESPESAS FINANCEIRAS', valor: -despFinanceiras, tipo: 'header', indent: 0 },
-      { codigo: '2.4', nome: 'Juros, tarifas bancárias', valor: round2(despFinanceiras - taxasDePlataforma), tipo: 'item', indent: 1 },
-      ...(taxasDePlataforma > 0
-        ? [{ codigo: '2.4', nome: 'Taxas de plataformas de pagamento', valor: taxasDePlataforma, tipo: 'item' as const, indent: 1 }]
-        : []),
-    );
-
-    if (outrasDespesas !== 0) {
-      lines.push({ codigo: '', nome: '(-) OUTRAS DESPESAS', valor: -outrasDespesas, tipo: 'header', indent: 0 });
-      if (despOutras !== 0) lines.push({ codigo: '2.5', nome: 'Outras despesas', valor: despOutras, tipo: 'item', indent: 1 });
-      if (despCMV !== 0) lines.push({ codigo: '2.1', nome: 'Custos diretos (CMV)', valor: despCMV, tipo: 'item', indent: 1 });
-      if (uncategorized !== 0) lines.push({ codigo: '', nome: 'Não categorizadas', valor: uncategorized, tipo: 'item', indent: 1 });
-    }
-
-    lines.push(
-      { codigo: '', nome: 'LUCRO LÍQUIDO', valor: lucroLiquido, tipo: 'total', indent: 0 },
-      { codigo: '', nome: `Margem líquida (sobre receita): ${PCT(margemLiquida)}`, valor: margemLiquida, tipo: 'item', indent: 0 },
-      { codigo: '', nome: `Margem sobre volume intermediado: ${PCT(margemSobreVolume)}`, valor: margemSobreVolume, tipo: 'item', indent: 0 },
-    );
-
-    return lines;
+  function buildDRE(month: string): LinhaDRE[] {
+    return montarDRE({
+      receber: contasReceber,
+      pagar: contasPagar,
+      vendasComLastro,
+      planoContas,
+      comissaoNaoCapturada,
+      mes: month,
+      regime,
+      encargos,
+      rotulosEncargos,
+    });
   }
 
   // O que a regra do lastro tirou deste mês. Subtrair dinheiro em silêncio é
@@ -369,8 +258,10 @@ export default function DREPage() {
     [vendasSemLastro],
   );
 
-  const dreMain = useMemo(() => buildDRE(selectedMonth), [selectedMonth, contasReceber, contasPagar, vendasComLastro, planoContas]);
-  const dreCompare = useMemo(() => compareMonth ? buildDRE(compareMonth) : [], [compareMonth, contasReceber, contasPagar, vendasComLastro, planoContas]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const dreMain = useMemo(() => buildDRE(selectedMonth), [selectedMonth, contasReceber, contasPagar, vendasComLastro, planoContas, regime, encargos, rotulosEncargos]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const dreCompare = useMemo(() => compareMonth ? buildDRE(compareMonth) : [], [compareMonth, contasReceber, contasPagar, vendasComLastro, planoContas, regime, encargos, rotulosEncargos]);
 
   // Summary metrics from main DRE
   const receitaBruta = dreMain.find(l => l.nome.startsWith('RECEITA BRUTA'))?.valor || 0;
@@ -386,6 +277,8 @@ export default function DREPage() {
     'RECEITA LÍQUIDA',
     '(-) DESPESAS OPERACIONAIS',
     '(-) DESPESAS FINANCEIRAS',
+    // Só aparece quando há juros, multa ou desconto obtido na liquidação.
+    '(+) RECEITAS FINANCEIRAS',
     '(-) OUTRAS DESPESAS',
     'LUCRO LÍQUIDO',
   ];
@@ -437,6 +330,7 @@ export default function DREPage() {
         ) : (
           rotuloBase
         );
+      const orcado = orcadoMap.get(l.nome);
       return {
         chave: `${idx}-${l.nome}`,
         rotulo,
@@ -446,6 +340,9 @@ export default function DREPage() {
         valor: l.valor,
         comparativo: compareLine ? compareLine.valor : null,
         variacao: compareLine ? round2(l.valor - compareLine.valor) : null,
+        orcado: orcado ?? null,
+        desvioOrcado: orcado === undefined ? null : round2(l.valor - orcado),
+        detalhavel: Boolean(l.lancamentos && l.lancamentos.length > 0),
       };
     });
 
@@ -457,16 +354,26 @@ export default function DREPage() {
       valor: pctBR(l.valor),
     }));
 
+  function abrirValor(chave: string) {
+    const nome = chave.slice(chave.indexOf('-') + 1);
+    const l = dreFiltrado.find(x => x.nome === nome);
+    if (!l?.lancamentos) return;
+    setAberta({ titulo: ROTULO_LINHA[l.nome] ?? l.nome, lancamentos: l.lancamentos, valor: Math.abs(l.valor) });
+  }
+
   // A contagem conta o que a tabela desenha: as margens saem no rodapé como
   // nota, não como linha do demonstrativo, nos dois lados da razão.
   const totalLinhas = dreMain.filter(l => !l.nome.startsWith('Margem')).length;
 
-  const filtrosAtivos = (compareMonth ? 1 : 0) + (modoSimplificado ? 0 : 1);
+  const filtrosAtivos = (compareMonth ? 1 : 0) + (modoSimplificado ? 0 : 1) + (regime === 'competencia' ? 0 : 1);
 
   const limparFiltros = () => {
     setCompareMonth('');
     alternarModo(true);
+    setRegime('competencia');
   };
+
+  const anteriorAoSelecionado = selectedMonth ? mesAnterior(selectedMonth) : '';
 
   const contextoLucro =
     margemLiquida === null
@@ -503,6 +410,7 @@ export default function DREPage() {
             />
           }
           atualizadoEm={atualizadoEm}
+          acoesSecundarias={[{ rotulo: 'Resultado por categoria', href: '/financeiro-ag/resultado-por-categoria' }]}
         />
 
         <div className="mt-[var(--fin-s-6)] space-y-[var(--fin-s-5)]">
@@ -588,6 +496,38 @@ export default function DREPage() {
                 />
               )}
 
+              {semLancamento ? null : (
+                <div className="flex flex-col gap-[var(--fin-s-3)] sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-col gap-[var(--fin-s-1)]">
+                    <Segmentado<RegimeDRE>
+                      rotulo="Regime"
+                      valor={regime}
+                      onChange={setRegime}
+                      opcoes={[
+                        { valor: 'competencia', rotulo: ROTULO_REGIME.competencia },
+                        { valor: 'caixa', rotulo: ROTULO_REGIME.caixa },
+                      ]}
+                    />
+                    <span className="fin-t-caption text-[var(--fin-text-3)]">
+                      {regime === 'competencia'
+                        ? 'Pelo vencimento das contas e pela data da venda, recebidas ou não.'
+                        : 'Pela data em que o dinheiro entrou ou saiu. A margem da venda entra na proporção do que o cliente pagou.'}
+                    </span>
+                  </div>
+                  {anteriorAoSelecionado && compareMonth !== anteriorAoSelecionado ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setCompareMonth(anteriorAoSelecionado)}
+                      className="h-11 self-start lg:h-10 sm:self-auto"
+                    >
+                      <CalendarClock aria-hidden="true" className="size-4" />
+                      Comparar com o mês anterior
+                    </Button>
+                  ) : null}
+                </div>
+              )}
+
               {semLancamento ? (
                 <EmptyLesson
                   motivo="sem-dado"
@@ -667,8 +607,14 @@ export default function DREPage() {
                       notas={notasTabela}
                       rotuloPeriodo={rotuloMes}
                       rotuloComparativo={rotuloComparativo}
-                      descricao={`Resultado de ${rotuloMes}${rotuloComparativo ? `, comparado com ${rotuloComparativo}` : ''}`}
+                      rotuloOrcado={temOrcado ? 'Orçado' : null}
+                      onAbrirValor={abrirValor}
+                      descricao={`Resultado de ${rotuloMes}${regime === 'caixa' ? ' pelo caixa' : ''}${rotuloComparativo ? `, comparado com ${rotuloComparativo}` : ''}`}
                     />
+                    <p className="fin-t-caption text-[var(--fin-text-3)]">
+                      Toque num valor sublinhado para ver os lançamentos que o formam.
+                      {temOrcado ? ' O orçado vem do plano do mês em Custos do negócio.' : ''}
+                    </p>
                   </section>
                 </>
               )}
@@ -676,6 +622,13 @@ export default function DREPage() {
           </DataState>
         </div>
       </div>
+
+      <LancamentosDaLinha
+        aberta={aberta}
+        regime={regime}
+        rotuloMes={rotuloMes}
+        onFechar={() => setAberta(null)}
+      />
     </div>
   );
 }
