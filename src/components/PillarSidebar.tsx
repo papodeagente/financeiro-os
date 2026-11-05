@@ -25,7 +25,7 @@ import {
   PanelLeftClose, PanelLeftOpen,
   Eraser, LifeBuoy, FileText,
   LayoutGrid, ChartColumn, ArrowDownLeft, ArrowUpRight, GitCompareArrows, ListTree,
-  Contact, Truck, Repeat, Lock, Network, Split, Tags, ShieldCheck, Stamp, Scale,
+  Contact, Truck, Repeat, Lock, Network, Split, Tags, ShieldCheck, Stamp, Scale, ScrollText, ListOrdered, Table2,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -88,6 +88,7 @@ const FINANCEIRO_MENU: SidebarSection[] = [
       { key: 'fin-hub', label: 'Visão geral', icon: LayoutGrid, href: '/financeiro-ag' },
       { key: 'fluxo-caixa', label: 'Fluxo de caixa', icon: ChartColumn, href: '/financeiro-ag/fluxo-caixa' },
       { key: 'dre', label: 'Resultado do mês', icon: FileText, href: '/financeiro-ag/dre' },
+      { key: 'resultado-por-categoria', label: 'Resultado por categoria', icon: Table2, href: '/financeiro-ag/resultado-por-categoria' },
     ],
   },
   {
@@ -97,6 +98,8 @@ const FINANCEIRO_MENU: SidebarSection[] = [
       { key: 'pagar', label: 'Contas a pagar', icon: ArrowUpRight, href: '/financeiro-ag/pagar' },
       { key: 'conciliacao', label: 'Conciliação', icon: GitCompareArrows, href: '/financeiro-ag/conciliacao' },
       { key: 'notas-fiscais', label: 'Notas fiscais', icon: Receipt, href: '/financeiro-ag/notas' },
+      { key: 'extrato', label: 'Extrato de conta', icon: ScrollText, href: '/financeiro-ag/extrato' },
+      { key: 'movimentacoes', label: 'Movimentações', icon: ListOrdered, href: '/financeiro-ag/movimentacoes' },
       { key: 'transferencias', label: 'Transferências', icon: ArrowRightLeft, href: '/financeiro-ag/transferencias' },
       { key: 'fechamento', label: 'Fechar Caixa', icon: Lock, href: '/financeiro-ag/fechamento' },
       { key: 'aprovacoes', label: 'Aprovações', icon: Stamp, href: '/financeiro-ag/aprovacoes' },
@@ -148,7 +151,7 @@ const CONFIGURACOES_MENU: SidebarSection[] = [
     title: 'Sistema',
     items: [
       { key: 'cfg-suporte', label: 'Suporte', icon: LifeBuoy, href: '/suporte' },
-      { key: 'cfg-auditoria', label: 'Auditoria', icon: ClipboardList, href: '/config/auditoria' },
+      { key: 'cfg-auditoria', label: 'Registro de atividades', icon: ClipboardList, href: '/config/auditoria' },
       { key: 'cfg-reset', label: 'Resetar dados', icon: Eraser, href: '/config/reset' },
     ],
   },

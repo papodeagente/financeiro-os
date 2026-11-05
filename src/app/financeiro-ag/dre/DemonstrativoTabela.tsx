@@ -18,6 +18,12 @@ export type LinhaDemonstrativo = {
   /** null quando o mês comparado não tem a linha correspondente. */
   comparativo: number | null;
   variacao: number | null;
+  /** Orçado do plano do mês (05/11/2026). Ausente ou null: a linha não tem meta. */
+  orcado?: number | null;
+  /** Realizado menos orçado, calculado fora. */
+  desvioOrcado?: number | null;
+  /** O número abre os lançamentos que o formam (05/11/2026). */
+  detalhavel?: boolean;
 };
 
 /** Rodapé de percentuais. Valor já formatado fora. */
@@ -30,6 +36,10 @@ export type DemonstrativoTabelaProps = {
   rotuloComparativo: string | null;
   /** Vai para o <caption> e para o aria-label da região rolável. */
   descricao: string;
+  /** Com rótulo, aparecem as colunas Orçado e Desvio (05/11/2026). */
+  rotuloOrcado?: string | null;
+  /** Clique no número de uma linha detalhável: recebe a chave da linha. */
+  onAbrirValor?: (chave: string) => void;
 };
 
 /** Hierarquia por indentação de 16px por nível. */
@@ -83,9 +93,13 @@ export function DemonstrativoTabela({
   rotuloPeriodo,
   rotuloComparativo,
   descricao,
+  rotuloOrcado = null,
+  onAbrirValor,
 }: DemonstrativoTabelaProps) {
   const comComparativo = rotuloComparativo !== null;
-  const totalColunas = comComparativo ? 4 : 2;
+  const comOrcado = rotuloOrcado !== null;
+  const totalColunas = 2 + (comComparativo ? 2 : 0) + (comOrcado ? 2 : 0);
+  const ultimaEhPeriodo = !comComparativo && !comOrcado;
 
   return (
     <div className="rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]">
@@ -105,9 +119,19 @@ export function DemonstrativoTabela({
               <th scope="col" className={cn(CABECALHO, 'pl-4 text-left')}>
                 Conta
               </th>
-              <th scope="col" className={cn(CABECALHO, 'min-w-[128px] text-right', !comComparativo && 'pr-4')}>
+              <th scope="col" className={cn(CABECALHO, 'min-w-[128px] text-right', ultimaEhPeriodo && 'pr-4')}>
                 {rotuloPeriodo}
               </th>
+              {comOrcado ? (
+                <>
+                  <th scope="col" className={cn(CABECALHO, 'min-w-[128px] text-right')}>
+                    {rotuloOrcado}
+                  </th>
+                  <th scope="col" className={cn(CABECALHO, 'min-w-[96px] text-right', !comComparativo && 'pr-4')}>
+                    Desvio
+                  </th>
+                </>
+              ) : null}
               {comComparativo ? (
                 <>
                   <th scope="col" className={cn(CABECALHO, 'min-w-[128px] text-right')}>
@@ -141,14 +165,51 @@ export function DemonstrativoTabela({
                   </span>
                 </th>
 
-                <td className={cn(CELULA, 'text-right', !comComparativo && 'pr-4')}>
-                  <Money
-                    valor={linha.valor}
-                    estado="ok"
-                    size="strong"
-                    tone={tomDe(linha.tipo, linha.valor)}
-                  />
+                <td className={cn(CELULA, 'text-right', ultimaEhPeriodo && 'pr-4')}>
+                  {linha.detalhavel && onAbrirValor ? (
+                    <button
+                      type="button"
+                      onClick={() => onAbrirValor(linha.chave)}
+                      aria-label={`Ver os lançamentos de ${typeof linha.rotulo === 'string' ? linha.rotulo : 'esta linha'}`}
+                      className={cn(
+                        'inline-flex rounded-[var(--fin-r-sm)] underline decoration-[var(--fin-border-strong)] decoration-dotted underline-offset-4',
+                        'hover:decoration-[var(--fin-accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)]',
+                      )}
+                    >
+                      <Money valor={linha.valor} estado="ok" size="strong" tone={tomDe(linha.tipo, linha.valor)} />
+                    </button>
+                  ) : (
+                    <Money
+                      valor={linha.valor}
+                      estado="ok"
+                      size="strong"
+                      tone={tomDe(linha.tipo, linha.valor)}
+                    />
+                  )}
                 </td>
+
+                {comOrcado ? (
+                  <>
+                    <td className={cn(CELULA, 'text-right')}>
+                      {linha.orcado === undefined || linha.orcado === null ? (
+                        <span className="fin-t-caption text-[var(--fin-text-3)]">sem meta</span>
+                      ) : (
+                        <Money valor={linha.orcado} estado="ok" size="body" tone="suave" />
+                      )}
+                    </td>
+                    <td className={cn(CELULA, 'text-right', !comComparativo && 'pr-4')}>
+                      {linha.desvioOrcado === undefined || linha.desvioOrcado === null ? null : (
+                        <Money
+                          valor={linha.desvioOrcado}
+                          estado="ok"
+                          size="caption"
+                          tone="suave"
+                          sinal="sempre"
+                        />
+                      )}
+                    </td>
+                  </>
+                ) : null}
 
                 {comComparativo ? (
                   <>

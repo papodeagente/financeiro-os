@@ -46,6 +46,9 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   '/financeiro-ag': 'Visão geral',
   '/financeiro-ag/fluxo-caixa': 'Fluxo de caixa',
   '/financeiro-ag/dre': 'Resultado do mês',
+  '/financeiro-ag/extrato': 'Extrato de conta',
+  '/financeiro-ag/movimentacoes': 'Movimentações',
+  '/financeiro-ag/resultado-por-categoria': 'Resultado por categoria',
   '/financeiro-ag/conciliacao': 'Conciliação',
   '/financeiro-ag/recebimentos': 'Recebimentos das plataformas',
   '/financeiro-ag/receber': 'Contas a receber',
@@ -77,6 +80,7 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   '/config/agencia': 'Configurações',
   '/config/usuarios': 'Usuários',
   '/config/crm': 'Integração CRM',
+  '/config/auditoria': 'Registro de atividades',
 };
 
 const PILLAR_PREFIXES: { pillar: Pillar; prefixes: string[] }[] = [

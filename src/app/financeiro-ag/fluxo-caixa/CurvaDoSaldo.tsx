@@ -17,6 +17,11 @@ export type CurvaDoSaldoProps = {
   curva: PontoDaCurva[];
   hoje: string;
   className?: string;
+  /**
+   * Saldo mínimo escolhido (05/11/2026): linha tracejada de aviso. Opcional;
+   * sem ele (ou zero) a curva é desenhada exatamente como antes.
+   */
+  minimo?: number | null;
 };
 
 /** Marcas do eixo: dias 1, 8, 15, 22 e 29 num mês; o começo de cada mês em períodos maiores. */
@@ -45,7 +50,7 @@ function marcas(curva: PontoDaCurva[]): Array<{ indice: number; rotulo: string }
  * o dedo ou o mouse mostra o saldo de cada dia; os mesmos números estão no
  * caderno logo abaixo, que é a leitura acessível.
  */
-export function CurvaDoSaldo({ curva, hoje, className }: CurvaDoSaldoProps) {
+export function CurvaDoSaldo({ curva, hoje, className, minimo }: CurvaDoSaldoProps) {
   const id = React.useId().replace(/:/g, '');
   const [foco, setFoco] = React.useState<number | null>(null);
   const n = curva.length;
@@ -56,6 +61,12 @@ export function CurvaDoSaldo({ curva, hoje, className }: CurvaDoSaldoProps) {
   let max = Math.max(...valores);
   const temNegativo = min < 0;
   if (temNegativo) max = Math.max(max, 0);
+  // A linha do mínimo precisa caber no gráfico para ser vista.
+  const temMinimo = typeof minimo === 'number' && Number.isFinite(minimo) && minimo > 0;
+  if (temMinimo) {
+    min = Math.min(min, minimo as number);
+    max = Math.max(max, minimo as number);
+  }
   if (min === max) {
     const folga = Math.abs(min) * 0.1 || 1;
     min -= folga;
@@ -145,6 +156,13 @@ export function CurvaDoSaldo({ curva, hoje, className }: CurvaDoSaldoProps) {
             />
           ) : null}
 
+          {temMinimo ? (
+            <line
+              x1="0" x2={LARGURA} y1={y(minimo as number)} y2={y(minimo as number)}
+              stroke="var(--fin-warning)" strokeWidth={1.5} strokeDasharray="6 4" vectorEffect="non-scaling-stroke"
+            />
+          ) : null}
+
           {passado ? (
             <path
               d={passado} fill="none" stroke="var(--fin-accent)" strokeWidth={2.25}
@@ -166,6 +184,15 @@ export function CurvaDoSaldo({ curva, hoje, className }: CurvaDoSaldoProps) {
             style={{ top: pct(y(0), ALTURA) }}
           >
             R$ 0
+          </span>
+        ) : null}
+
+        {temMinimo ? (
+          <span
+            className="pointer-events-none absolute left-0 -translate-y-full pb-0.5 fin-t-caption font-medium text-[var(--fin-warning-text)]"
+            style={{ top: pct(y(minimo as number), ALTURA) }}
+          >
+            Mínimo {formatBRL(minimo as number)}
           </span>
         ) : null}
 

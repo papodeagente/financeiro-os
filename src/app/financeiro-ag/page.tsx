@@ -11,6 +11,7 @@ import {
   agendaDosProximosDias, diaMes, hojePorExtenso, mesAteHoje, pendencias, posicaoDeHoje, rotuloDoGrupo,
   type GrupoDaAgenda, type LinhaDaAgenda, type Pendencia,
 } from '@/lib/visao-geral';
+import { atrasosEPrazos, type TransferenciaDoResumo } from '@/lib/atrasos-e-prazos';
 
 import { Button } from '@/components/ui/button';
 import { DataState } from '@/components/fin/DataState';
@@ -19,6 +20,7 @@ import { PageHeader } from '@/components/fin/PageHeader';
 import { Segmentado } from '@/components/fin/Segmentado';
 import { BaixaDeReceber } from './receber/BaixaDeReceber';
 import { BaixaDePagar } from './pagar/BaixaDePagar';
+import { AtrasosEPrazos } from './AtrasosEPrazos';
 
 const CARTAO = 'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]';
 const LINK = 'inline-flex items-center gap-1 fin-t-caption font-medium text-[var(--fin-accent)] underline-offset-2 hover:underline';
@@ -33,6 +35,8 @@ interface Dados {
   contasBancarias: ContaBancaria[];
   extratoPendente: Array<{ conta_bancaria_id?: string; data?: string }>;
   plataformasParaConferir: number;
+  /** Só para o saldo por conta do Atrasos, prazos e projeção (05/11/2026). */
+  transferencias: TransferenciaDoResumo[];
 }
 
 async function lista<T>(url: string): Promise<T[]> {
@@ -159,7 +163,7 @@ export default function FinanceiroVisaoGeralPage() {
 
   const carregar = useCallback(async () => {
     try {
-      const [receber, pagar, contasBancarias, extrato, plataformas] = await Promise.all([
+      const [receber, pagar, contasBancarias, extrato, plataformas, transferencias] = await Promise.all([
         lista<ContaReceber>('/api/contas-receber'),
         lista<ContaPagar>('/api/contas-pagar'),
         lista<ContaBancaria>('/api/contas-bancarias').catch(() => []),
@@ -169,6 +173,8 @@ export default function FinanceiroVisaoGeralPage() {
         fetch(`/api/plataformas/recebimentos?status=SUGERIDA&de=2000-01-01&ate=${hojeISO()}`)
           .then(r => (r.ok ? r.json() : null))
           .catch(() => null),
+        // Atrasos, prazos e projeção: sem transferências o saldo por conta só não as mostra.
+        lista<TransferenciaDoResumo>('/api/transferencias').catch(() => []),
       ]);
       setDados({
         receber,
@@ -178,6 +184,7 @@ export default function FinanceiroVisaoGeralPage() {
           .filter(l => String(l.status_conciliacao ?? '') === 'PENDENTE')
           .map(l => ({ conta_bancaria_id: String(l.conta_bancaria_id ?? ''), data: String(l.data ?? '') })),
         plataformasParaConferir: Array.isArray(plataformas?.itens) ? plataformas.itens.length : 0,
+        transferencias,
       });
       setErro(null);
       setAtualizadoEm(new Date());
@@ -205,6 +212,10 @@ export default function FinanceiroVisaoGeralPage() {
     plataformasParaConferir: dados.plataformasParaConferir,
   }) : []), [dados, hoje]);
   const mes = useMemo(() => (dados ? mesAteHoje(dados.receber, dados.pagar, hoje) : null), [dados, hoje]);
+  const resumo = useMemo(() => (dados ? atrasosEPrazos({
+    contasBancarias: dados.contasBancarias, receber: dados.receber, pagar: dados.pagar,
+    transferencias: dados.transferencias, hoje,
+  }) : null), [dados, hoje]);
 
   const visiveis = useMemo(
     () => (agenda ? agenda.linhas.filter(l => filtro === 'todas' || l.lado === filtro) : []),
@@ -468,6 +479,9 @@ export default function FinanceiroVisaoGeralPage() {
                 </section>
               </div>
             </div>
+
+            {/* ── Atrasos, prazos e projeção (05/11/2026) ─────────────────────────────── */}
+            {resumo ? <AtrasosEPrazos resumo={resumo} /> : null}
           </div>
         ) : null}
       </DataState>

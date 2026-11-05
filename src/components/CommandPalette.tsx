@@ -29,6 +29,13 @@ const NAVIGATION_ITEMS: CommandItem[] = [
   { id: 'destinos', label: 'Destinos', href: '/destinos', icon: <Globe className="w-4 h-4" />, section: 'navegacao' },
   { id: 'fluxo', label: 'Fluxo de caixa', href: '/financeiro-ag/fluxo-caixa', icon: <DollarSign className="w-4 h-4" />, section: 'navegacao' },
   { id: 'dre', label: 'Resultado do mês (DRE)', href: '/financeiro-ag/dre', icon: <FileSpreadsheet className="w-4 h-4" />, section: 'navegacao' },
+  // Nomes de mercado (05/11/2026): quem vem do sistema anterior acha pelo nome que já usa.
+  { id: 'extrato', label: 'Extrato de conta', href: '/financeiro-ag/extrato', icon: <Landmark className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'movimentacoes', label: 'Movimentações', href: '/financeiro-ag/movimentacoes', icon: <ArrowRightLeft className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'dre-resultado', label: 'DRE', href: '/financeiro-ag/dre', icon: <FileSpreadsheet className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'resultado-por-categoria', label: 'Resultado por categoria', href: '/financeiro-ag/resultado-por-categoria', icon: <BarChart3 className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'visao-geral-financeiro', label: 'Visão geral do financeiro', href: '/financeiro-ag', icon: <Wallet className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'registro-atividades', label: 'Registro de atividades', href: '/config/auditoria', icon: <ListOrdered className="w-4 h-4" />, section: 'navegacao' },
   { id: 'lucro-real', label: 'Lucro real', href: '/relatorios/lucro-real', icon: <TrendingUp className="w-4 h-4" />, section: 'navegacao' },
   { id: 'receber', label: 'Contas a receber', href: '/financeiro-ag/receber', icon: <Receipt className="w-4 h-4" />, section: 'navegacao' },
   { id: 'pagar', label: 'Contas a pagar', href: '/financeiro-ag/pagar', icon: <CreditCard className="w-4 h-4" />, section: 'navegacao' },
