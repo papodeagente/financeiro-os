@@ -8,6 +8,7 @@ import type {
 } from '@/lib/movimentos-caixa';
 import { cn, formatBRL } from '@/lib/utils';
 import { dataCurta } from './periodos';
+import { rotuloDaForma } from '@/lib/formas-pagamento';
 
 /**
  * A grade do Extrato de conta e das Movimentações (05/11/2026).
@@ -101,7 +102,7 @@ function celula(l: MovimentoCaixa, id: ColunaId, multiConta: boolean): React.Rea
     case 'pessoa': return l.pessoa_nome ? <span className="block max-w-[220px] truncate" title={l.pessoa_nome}>{l.pessoa_nome}</span> : <Fraco>—</Fraco>;
     case 'cpf': return l.cpf_cnpj ? <span className="whitespace-nowrap tabular-nums">{l.cpf_cnpj}</span> : <Fraco>—</Fraco>;
     case 'informacoes': return l.informacoes ? <span className="block max-w-[260px] truncate text-[var(--fin-text-2)]" title={l.informacoes}>{l.informacoes}</span> : <Fraco>—</Fraco>;
-    case 'forma': return l.forma ? <span className="whitespace-nowrap">{l.forma}</span> : <Fraco>—</Fraco>;
+    case 'forma': return l.forma ? <span className="whitespace-nowrap">{rotuloDaForma(l.forma)}</span> : <Fraco>—</Fraco>;
     case 'cartao': return l.cartao_cheque ? <span className="tabular-nums">{l.cartao_cheque}</span> : <Fraco>—</Fraco>;
     case 'moeda': return l.moeda !== 'BRL' && l.valor_origem !== null ? (
       <span className="whitespace-nowrap tabular-nums">
@@ -130,7 +131,7 @@ export function rotuloDoGrupo(agrupar: AgrupamentoDoExtrato, l: MovimentoCaixa):
     case 'dia': return l.data ? dataCurta(l.data) : 'Sem data';
     case 'conta': return l.conta_nome || 'Sem conta';
     case 'pessoa': return l.pessoa_nome || 'Sem pessoa';
-    case 'forma': return l.forma || 'Sem forma';
+    case 'forma': return rotuloDaForma(l.forma) || 'Sem forma';
     case 'origem': return ROTULO_DA_ORIGEM[l.origem];
     default: return '';
   }

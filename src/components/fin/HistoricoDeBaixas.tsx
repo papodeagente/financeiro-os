@@ -11,6 +11,7 @@ import { Money } from '@/components/fin/Money';
 import { loadEntities } from '@/lib/crm-storage';
 import { toast } from '@/lib/toast';
 import type { TituloTabela } from '@/lib/baixa-calculo';
+import { rotuloDaForma } from '@/lib/formas-pagamento';
 
 type Linha = {
   id: string;
@@ -131,7 +132,7 @@ export function HistoricoDeBaixas({
                     <span className="tabular-nums">{dataBR(l.data)}</span>
                     {' · '}
                     {l.conta_bancaria_id ? contas[l.conta_bancaria_id] ?? 'Conta' : 'Caixa Geral'}
-                    {l.forma ? ` · ${l.forma}` : ''}
+                    {l.forma ? ` · ${rotuloDaForma(l.forma)}` : ''}
                   </p>
                   <p className="fin-t-caption text-[var(--fin-text-2)]">
                     {ORIGEM[l.origem] ?? l.origem}

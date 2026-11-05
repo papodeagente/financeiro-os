@@ -8,6 +8,7 @@ import type { MovimentoCaixa } from '@/lib/movimentos-caixa';
 import { cn, formatBRL } from '@/lib/utils';
 import { ROTULO_DA_ORIGEM } from './GradeDeMovimentos';
 import { dataCurta } from './periodos';
+import { rotuloDaForma } from '@/lib/formas-pagamento';
 
 /** Onde se abre o registro que gerou o movimento (05/11/2026). */
 export function linkDoRegistro(l: MovimentoCaixa): { href: string; rotulo: string } {
@@ -37,7 +38,7 @@ export function DetalheDoMovimento({ linha, multiConta, onFechar }: {
     ['Número', l.numero],
     ['Venda', l.venda_numero || l.venda_id],
     ['Documento', l.documento],
-    ['Forma', l.forma],
+    ['Forma', rotuloDaForma(l.forma)],
     ['Cheque/Cartão', l.cartao_cheque],
     ['Moeda de origem', l.moeda !== 'BRL' && l.valor_origem !== null
       ? `${l.moeda} ${l.valor_origem.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}${l.cambio ? ` · câmbio ${l.cambio.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}` : ''}`
