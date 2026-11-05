@@ -4,6 +4,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
 import { randomBytes } from 'crypto';
+import { perfilDaConta } from '@/lib/perfil-da-conta';
+import { CRM_DO_ECOSSISTEMA, motivoDaRecusa, urlDoCrmDoEcossistema } from '@/lib/crm-do-ecossistema';
+import type { ExecutorSQL } from '@/lib/caixa-atomico';
+
+/** Na conta do ecossistema, a tela mostra com qual conta do CRM ela pode se integrar. */
+async function regraDoEcossistema(tenantId: string, url: unknown) {
+  if ((await perfilDaConta(tenantId, pool as unknown as ExecutorSQL)) !== 'ecossistema') return null;
+  return { conta: CRM_DO_ECOSSISTEMA, url: urlDoCrmDoEcossistema(), recusada: motivoDaRecusa('ecossistema', url) };
+}
 
 function suggestedWebhookUrl(req: NextRequest, tenantId: string): string {
   const proto = req.headers.get('x-forwarded-proto') || 'https';
@@ -34,6 +43,7 @@ export async function GET(req: NextRequest) {
         circuit_breaker_status: 'fechado',
         tenant_id: tenantId,
         suggested_webhook_url_entur: suggested,
+        regra_do_ecossistema: await regraDoEcossistema(tenantId, ''),
       });
     }
 
@@ -51,6 +61,7 @@ export async function GET(req: NextRequest) {
         : '',
       tenant_id: tenantId,
       suggested_webhook_url_entur: suggested,
+      regra_do_ecossistema: await regraDoEcossistema(tenantId, config.webhook_url_crm),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Erro';
@@ -66,6 +77,11 @@ export async function POST(req: NextRequest) {
     await initDB();
     const tenantId = await getTenantId();
     const body = await req.json();
+    // O financeiro da Entur só se integra com a conta da Entur no CRM.
+    const recusaDoEcossistema = motivoDaRecusa(await perfilDaConta(tenantId, pool as unknown as ExecutorSQL), body?.webhook_url_crm);
+    if (recusaDoEcossistema) return NextResponse.json({ error: recusaDoEcossistema }, { status: 400 });
+    // O que a tela recebe para mostrar não é gravado.
+    delete body.regra_do_ecossistema;
 
     // Load existing config (if any) so we can preserve masked values.
     const { rows: existing } = await pool.query(

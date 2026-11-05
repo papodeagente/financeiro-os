@@ -4,6 +4,9 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { createHmac } from 'crypto';
 import { getTenantId } from '@/lib/tenant';
+import { perfilDaConta } from '@/lib/perfil-da-conta';
+import { motivoDaRecusa } from '@/lib/crm-do-ecossistema';
+import type { ExecutorSQL } from '@/lib/caixa-atomico';
 
 export async function POST() {
   try {
@@ -22,6 +25,8 @@ export async function POST() {
     if (!config.webhook_url_crm) {
       return NextResponse.json({ sucesso: false, erro: 'URL do webhook do CRM nao configurada' });
     }
+    const recusaDoEcossistema = motivoDaRecusa(await perfilDaConta(tenantId, pool as unknown as ExecutorSQL), config.webhook_url_crm);
+    if (recusaDoEcossistema) return NextResponse.json({ sucesso: false, erro: recusaDoEcossistema });
 
     const testPayload = {
       id: 'test-' + Date.now(),

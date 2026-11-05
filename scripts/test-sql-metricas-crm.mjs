@@ -33,6 +33,8 @@ function eq(a, b, label) {
 
 const pg = new PGlite();
 await pg.exec(`CREATE TABLE crm_config (id TEXT NOT NULL, tenant_id TEXT NOT NULL DEFAULT '', data JSONB NOT NULL, PRIMARY KEY (id, tenant_id));`);
+await pg.exec(`CREATE TABLE tenants (id TEXT PRIMARY KEY, numero INTEGER, data JSONB NOT NULL DEFAULT '{}'::jsonb);`);
+await pg.exec(`CREATE TABLE crm_eventos_saida (id TEXT PRIMARY KEY, tipo TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'PENDENTE', tentativas INTEGER NOT NULL DEFAULT 0, proxima_tentativa TIMESTAMPTZ, latencia_ms INTEGER, data JSONB NOT NULL, tenant_id TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());`);
 const query = async (text, values) => {
   const r = await pg.query(text, values ?? []);
   return { rows: r.rows, rowCount: r.affectedRows ?? r.rows.length };
@@ -41,7 +43,7 @@ globalThis.__POOL_DE_TESTE__ = { query, connect: async () => ({ query, release()
 register('./ts-resolve-hook.mjs', import.meta.url);
 register('./db-de-teste-hook.mjs', import.meta.url);
 
-const { consultarMetricasComerciais, consultarMrrVendido } = await import('../src/lib/crm-integration.ts');
+const { consultarMetricasComerciais, consultarMrrVendido, verificarAssinaturaCRM, emitirEventoCRM } = await import('../src/lib/crm-integration.ts');
 const { lerMetricasDoCrm } = await import('../src/lib/metricas-comerciais.ts');
 
 const assinar = (corpo, segredo) => createHmac('sha256', segredo).update(corpo).digest('hex');
@@ -203,6 +205,29 @@ console.log('\n--- (f) o MRR vendido (comissão por MRR da Entur) ---');
   const n = await consultarMrrVendido(T1, '2026-10');
   eq([n.situacao, /só responde isto à conta da Entur/.test(n.detalhe)], ['nao_e_a_conta_operadora', true], 'CRM que recusa por não ser a conta operadora: o motivo certo, sem número');
   modo = 'ok';
+}
+
+// ══════════════════════════════════════════════════════════════════════
+console.log('\n--- (g) o financeiro da Entur só se integra com a conta 150002 do CRM ---');
+{
+  const ENTUR = 'conta-entur';
+  await query(`INSERT INTO tenants (id, numero, data) VALUES ($1, 1, '{"perfil":"ecossistema"}')`, [ENTUR]);
+  // Apontando para outra conta do CRM (a 420533 do servidor de mentira).
+  await configurar(ENTUR, configA);
+  const antes = pedidos.length;
+  const r = await consultarMrrVendido(ENTUR, '2026-11');
+  eq([r.situacao, /só se integra com a conta 150002/.test(r.detalhe), /aponta para a conta 420533/.test(r.detalhe), pedidos.length - antes], ['sem_integracao', true, true, 0], 'apontando para a 420533: a consulta nem sai, e diz por quê');
+  const corpo = JSON.stringify({ id: 'ev-1', tipo: 'VENDA_FECHADA', payload: {} });
+  eq(await verificarAssinaturaCRM(corpo, assinar(corpo, SEGREDO), ENTUR), false, 'e o que chega do CRM é recusado, mesmo com o segredo certo');
+  await emitirEventoCRM('PRODUTO_PUBLICADO', { grupo_id: 'g1' }, { tenantId: ENTUR });
+  const saida = (await query(`SELECT status FROM crm_eventos_saida WHERE tenant_id = $1`, [ENTUR])).rows;
+  eq([saida.map(x => x.status), pedidos.length - antes], [['PENDENTE'], 0], 'evento de saída não é enviado: fica pendente até a configuração certa');
+  // Apontando para a 150002 (o mesmo servidor de mentira, no caminho da 150002).
+  await configurar(ENTUR, { ...configA, webhook_url_crm: `http://127.0.0.1:${porta}/api/integracao-financeiro/webhook/150002` });
+  const ok = await consultarMrrVendido(ENTUR, '2026-09');
+  eq([ok.situacao, pedidos.at(-1).caminho], ['ok', '/api/integracao-financeiro/webhook/150002'], 'apontando para a 150002: a consulta vai e volta');
+  eq(await verificarAssinaturaCRM(corpo, assinar(corpo, SEGREDO), ENTUR), true, 'e o que chega com o segredo certo é aceito');
+  eq((await consultarMrrVendido(T1, '2026-03')).situacao, 'ok', 'a agência segue integrada com a conta dela (420533)');
 }
 
 servidor.close();

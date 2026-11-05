@@ -43,6 +43,8 @@ import {
 import { lerFichaDoCrm } from './ficha-do-cliente';
 import { lerMetricasDoCrm, TIPO_METRICAS_COMERCIAIS, type ComercialDoCrm } from './metricas-comerciais';
 import { lerMrrVendido, TIPO_MRR_VENDIDO, type MrrDoCrm } from './mrr-vendido';
+import { motivoDaRecusa } from './crm-do-ecossistema';
+import { perfilDosDados } from './perfil-da-conta';
 
 // ──────────────────────────────────────────
 // Types
@@ -57,6 +59,8 @@ interface CrmConfig {
   retry_max: number;
   circuit_breaker_threshold: number;
   circuit_breaker_status: 'fechado' | 'aberto' | 'semi-aberto';
+  /** Preenchido quando a regra da conta recusa a integração (crm-do-ecossistema.ts). */
+  recusada?: string;
 }
 
 interface CrmStatus {
@@ -477,11 +481,26 @@ function calcNextRetry(tentativas: number): Date {
   return new Date(Date.now() + ms);
 }
 
+/**
+ * A configuração da integração que vale para enviar e receber. A conta do
+ * ecossistema só se integra com a conta da Entur no CRM (crm-do-ecossistema.ts):
+ * apontando para qualquer outra, a integração volta DESLIGADA e sem segredo,
+ * e com isso nada sai, nenhuma consulta roda e nenhum evento que chega passa
+ * na assinatura. Os eventos de saída ficam pendentes até a configuração certa.
+ */
+function configQueVale(cfg: CrmConfig, dadosDaConta: unknown): CrmConfig {
+  const recusa = motivoDaRecusa(perfilDosDados(dadosDaConta), cfg?.webhook_url_crm);
+  return recusa ? { ...cfg, ativo: false, api_key_crm: '', api_key_entur: '', recusada: recusa } : cfg;
+}
+
 async function getCrmConfig(tenantId: string): Promise<CrmConfig | null> {
   if (!pool) return null;
   await initDB();
   // Segredo do HMAC guardado cifrado (FIN-11); lerCrmConfig abre e migra.
-  return (await lerCrmConfig(pool as unknown as ConsultaCrm, tenantId)) as CrmConfig | null;
+  const cfg = (await lerCrmConfig(pool as unknown as ConsultaCrm, tenantId)) as CrmConfig | null;
+  if (!cfg) return null;
+  const { rows } = await pool.query(`SELECT data FROM tenants WHERE id = $1`, [tenantId]);
+  return configQueVale(cfg, rows[0]?.data);
 }
 
 // Lists every active CRM config across tenants. Used only by the legacy
@@ -490,10 +509,13 @@ async function listarCrmConfigsAtivas(): Promise<Array<{ tenantId: string; confi
   if (!pool) return [];
   await initDB();
   const { rows } = await pool.query(
-    `SELECT tenant_id, data FROM crm_config WHERE id = 'singleton'`,
+    `SELECT c.tenant_id, c.data, t.data AS conta FROM crm_config c LEFT JOIN tenants t ON t.id = c.tenant_id WHERE c.id = 'singleton'`,
   );
   return rows
-    .map(r => ({ tenantId: r.tenant_id as string, config: abrirCrmConfig(r.data as Record<string, unknown>) as unknown as CrmConfig }))
+    .map(r => ({
+      tenantId: r.tenant_id as string,
+      config: configQueVale(abrirCrmConfig(r.data as Record<string, unknown>) as unknown as CrmConfig, r.conta),
+    }))
     .filter(r => r.config?.ativo);
 }
 
@@ -2691,6 +2713,7 @@ async function consultarCrm<T>(
   const resultado = await (async (): Promise<{ situacao: 'ok'; valor: T; consultado_em: string } | FalhaDaConsulta> => {
     let config: CrmConfig | null = null;
     try { config = await getCrmConfig(tenantId); } catch { config = null; }
+    if (config?.recusada) return { situacao: 'sem_integracao', detalhe: config.recusada };
     if (!config || !config.ativo || !config.webhook_url_crm || !config.api_key_crm) {
       return { situacao: 'sem_integracao', detalhe: 'A integração com o CRM não está ligada nesta empresa (Configurações, CRM Entur).' };
     }
