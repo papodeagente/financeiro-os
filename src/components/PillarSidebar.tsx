@@ -25,7 +25,7 @@ import {
   PanelLeftClose, PanelLeftOpen,
   Eraser, LifeBuoy, FileText,
   LayoutGrid, ChartColumn, ArrowDownLeft, ArrowUpRight, GitCompareArrows, ListTree,
-  Contact, Truck, Repeat, Lock, Network, Split, Tags, ShieldCheck, Stamp, Scale, ScrollText, ListOrdered, Table2,
+  Contact, Truck, Repeat, Lock, ArrowDownUp, Network, Split, Tags, ShieldCheck, Stamp, Scale, ScrollText, ListOrdered, Table2,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -94,6 +94,7 @@ const FINANCEIRO_MENU: SidebarSection[] = [
   {
     title: 'Dia a dia',
     items: [
+      { key: 'contas', label: 'Contas a Pagar/Receber', icon: ArrowDownUp, href: '/financeiro-ag/contas' },
       { key: 'receber', label: 'Contas a receber', icon: ArrowDownLeft, href: '/financeiro-ag/receber' },
       { key: 'pagar', label: 'Contas a pagar', icon: ArrowUpRight, href: '/financeiro-ag/pagar' },
       { key: 'conciliacao', label: 'Conciliação', icon: GitCompareArrows, href: '/financeiro-ag/conciliacao' },

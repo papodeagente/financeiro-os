@@ -91,6 +91,14 @@ eq(e?.status, 409, 'tela desatualizada (esperado diferente) é recusada');
 const idem = await emTransacao(exec => registrarBaixas(exec, { ...ctx, idempotencia: 'k1' }, [{ titulo_tabela: 'contas_receber', titulo_id: 'r2', valor: 50 }], { gravar: true }));
 const idem2 = await emTransacao(exec => registrarBaixas(exec, { ...ctx, idempotencia: 'k1' }, [{ titulo_tabela: 'contas_receber', titulo_id: 'r2', valor: 50 }], { gravar: true }));
 eq([idem2.itens[0].ja_existia, idem2.itens[0].baixa_id === idem.itens[0].baixa_id, (await titulo('contas_receber', 'r2')).valor_recebido], [true, true, 150], 'repetir a mesma gravação (duplo clique) não grava duas vezes');
+{
+  await cr('r-ass', { valor_final: 100 });
+  const it = [{ titulo_tabela: 'contas_receber', titulo_id: 'r-ass', valor: 20 }];
+  const pv = await previa(it);
+  const g1 = await emTransacao(exec => registrarBaixas(exec, { ...ctx, idempotencia: 'k-ass' }, it, { gravar: true, assinatura: pv.assinatura }));
+  const e2 = await falha(emTransacao(exec => registrarBaixas(exec, { ...ctx, idempotencia: 'k-ass' }, it, { gravar: true, assinatura: pv.assinatura })));
+  eq([e2, (await titulo('contas_receber', 'r-ass')).valor_recebido, !!g1.itens[0].baixa_id], [null, 20, true], 'repetir com a assinatura da prévia devolve o que foi feito, sem 409');
+}
 e = await falha(gravar([{ titulo_tabela: 'contas_receber', titulo_id: 'r2', valor: 10, tratamento_diferenca: 'credito' }]));
 eq(e?.msg?.includes('carteira de crédito'), true, 'crédito do cliente ainda não liberado');
 

@@ -40,6 +40,10 @@ const NAVIGATION_ITEMS: CommandItem[] = [
   { id: 'visao-geral-financeiro', label: 'Visão geral do financeiro', href: '/financeiro-ag', icon: <Wallet className="w-4 h-4" />, section: 'navegacao' },
   { id: 'registro-atividades', label: 'Registro de atividades', href: '/config/auditoria', icon: <ListOrdered className="w-4 h-4" />, section: 'navegacao' },
   { id: 'lucro-real', label: 'Lucro real', href: '/relatorios/lucro-real', icon: <TrendingUp className="w-4 h-4" />, section: 'navegacao' },
+  // Pagar e receber numa lista só (05/11/2026). Mais de um nome, para achar pelo que a pessoa já fala.
+  { id: 'contas-pagar-receber', label: 'Contas a Pagar/Receber', href: '/financeiro-ag/contas', icon: <Wallet className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'liquidar-em-lote', label: 'Liquidar contas em lote (dar baixa em várias)', href: '/financeiro-ag/contas', icon: <Wallet className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'titulos-pagar-receber', label: 'Títulos a pagar e a receber', href: '/financeiro-ag/contas', icon: <Wallet className="w-4 h-4" />, section: 'navegacao' },
   { id: 'receber', label: 'Contas a receber', href: '/financeiro-ag/receber', icon: <Receipt className="w-4 h-4" />, section: 'navegacao' },
   { id: 'pagar', label: 'Contas a pagar', href: '/financeiro-ag/pagar', icon: <CreditCard className="w-4 h-4" />, section: 'navegacao' },
   { id: 'conciliacao', label: 'Conciliação', href: '/financeiro-ag/conciliacao', icon: <FileSpreadsheet className="w-4 h-4" />, section: 'navegacao' },

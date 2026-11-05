@@ -51,6 +51,7 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   '/financeiro-ag/resultado-por-categoria': 'Resultado por categoria',
   '/financeiro-ag/conciliacao': 'Conciliação',
   '/financeiro-ag/recebimentos': 'Recebimentos das plataformas',
+  '/financeiro-ag/contas': 'Contas a Pagar/Receber',
   '/financeiro-ag/receber': 'Contas a receber',
   '/financeiro-ag/pagar': 'Contas a pagar',
   '/financeiro-ag/plano-contas': 'Categorias',

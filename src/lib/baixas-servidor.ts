@@ -333,7 +333,10 @@ export async function registrarBaixas(
   }
 
   const assinatura = assinar(assinaturaPartes);
-  if (opcoes.gravar && opcoes.assinatura && opcoes.assinatura !== assinatura) {
+  // Repetição (mesma Idempotency-Key): o que já foi gravado não entra na
+  // assinatura, então ela só é conferida quando nenhum item é repetição.
+  const repeticao = resultados.some(r => r?.ja_existia);
+  if (opcoes.gravar && opcoes.assinatura && !repeticao && opcoes.assinatura !== assinatura) {
     throw new ErroBaixa('Os valores mudaram desde a prévia. Revise e confirme de novo.', 409);
   }
   return { itens: resultados, assinatura, lote_id: loteId };
