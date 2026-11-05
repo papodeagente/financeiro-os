@@ -144,6 +144,18 @@ export async function apagarCategorias(
       total += n;
     }
   }
+  // Recorrência (05/11/2026): sem as contas, as séries também saem. Senão a
+  // tarefa diária recriaria as próximas contas de uma série zerada.
+  const apagaTitulos = categorias.some(c => (CATEGORIES[c] as readonly string[]).includes('contas_pagar'));
+  const { rows: temSeries } = apagaTitulos
+    ? await exec.query(`SELECT to_regclass('public.recorrencias') IS NOT NULL AS ok`)
+    : { rows: [] as Array<Record<string, unknown>> };
+  if (apagaTitulos && temSeries[0]?.ok) {
+    const res = await exec.query(`DELETE FROM recorrencias WHERE tenant_id = $1`, [tenantId]);
+    const n = res.rowCount || 0;
+    summary.recorrencias = n;
+    total += n;
+  }
   // Sem contas bancárias, o razão da agência também começa do zero
   // (05/11/2026). É o único caminho que apaga o razão; a abertura volta a
   // rodar sozinha pelo agendador.

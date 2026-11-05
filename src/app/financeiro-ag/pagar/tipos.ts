@@ -1,6 +1,5 @@
 import type { ContaPagar, NaturezaCusto } from '@/lib/crm-types';
-
-export type RecorrenciaPeriodo = 'MENSAL' | 'SEMANAL' | 'QUINZENAL';
+import { REPETICAO_PADRAO, type EstadoRepeticao } from '@/lib/recorrencia';
 
 /** Recorte de período do filtro. Mesmas chaves de sempre. */
 export type FiltroPeriodo =
@@ -20,10 +19,9 @@ export type FormState = {
   natureza_custo: NaturezaCusto | null;
   is_custo_comercial: boolean;
   observacoes: string;
-  // Recorrência (só quando origem = DESPESA_FIXA)
-  recorrencia_ativa: boolean;
-  recorrencia_periodo: RecorrenciaPeriodo;
-  recorrencia_repeticoes: number;
+  // Bloco "Repetir" (05/11/2026): Recorrente/Parcelado, quantidade,
+  // periodicidade e mais opções. Só na criação; nunca vai para o título.
+  repeticao: EstadoRepeticao;
 };
 
 export const EMPTY_FORM: FormState = {
@@ -40,9 +38,7 @@ export const EMPTY_FORM: FormState = {
   natureza_custo: null,
   is_custo_comercial: false,
   observacoes: '',
-  recorrencia_ativa: false,
-  recorrencia_periodo: 'MENSAL',
-  recorrencia_repeticoes: 12,
+  repeticao: REPETICAO_PADRAO,
 };
 
 /** Erros por campo, espelho das validações de handleSave. Só apresentação. */

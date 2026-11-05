@@ -1,5 +1,7 @@
 'use client';
 
+import type { ReactNode } from 'react';
+
 import { ContaReceber } from '@/lib/crm-types';
 import { percentualDaTaxa } from '@/lib/taxa-plataforma';
 import { Field } from '@/components/fin/Field';
@@ -83,6 +85,10 @@ export type FormularioContaProps = {
   onChange: (patch: Partial<FormState>) => void;
   /** Plataformas que a agência já usou, para o seletor aprender. */
   plataformasUsadas?: string[];
+  /** Bloco "Repetir" (05/11/2026), só na criação. */
+  repeticao?: ReactNode;
+  /** Com a repetição ligada, a série numera as parcelas sozinha. */
+  ocultarParcelaManual?: boolean;
 };
 
 export function FormularioConta({
@@ -90,6 +96,8 @@ export function FormularioConta({
   erros,
   onChange,
   plataformasUsadas = [],
+  repeticao,
+  ocultarParcelaManual = false,
 }: FormularioContaProps) {
   const rotuloOrigem = ORIGENS.find(o => o.valor === form.origem)?.rotulo ?? ORIGENS[0].rotulo;
   const rotuloForma = FORMAS.find(f => f.valor === form.forma_recebimento)?.rotulo ?? FORMAS[0].rotulo;
@@ -256,7 +264,7 @@ export function FormularioConta({
         </div>
       </FormSection>
 
-      <FormSection title="Recebimento e parcelas" description="Como e em quantas vezes o dinheiro entra.">
+      <FormSection title="Recebimento e parcelas" description="Como e em quantas vezes o dinheiro entra." defaultOpen={Boolean(repeticao)}>
         <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:grid-cols-2">
           <div className="sm:col-span-2">
             <Field rotulo="Forma de recebimento">
@@ -285,6 +293,8 @@ export function FormularioConta({
             </Field>
           </div>
 
+          {!ocultarParcelaManual ? (
+            <>
           <Field rotulo="Número da parcela">
             {a => (
               <Input
@@ -310,7 +320,10 @@ export function FormularioConta({
               />
             )}
           </Field>
+            </>
+          ) : null}
 
+          {repeticao ? <div className="sm:col-span-2">{repeticao}</div> : null}
         </div>
       </FormSection>
     </div>

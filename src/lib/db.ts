@@ -7,6 +7,7 @@ import { getAuditContext, runWithAuditContext, SYSTEM_AUDIT_CONTEXT } from './au
 import { RAZAO_SCHEMA_SQL } from './razao-schema';
 import { BAIXAS_SCHEMA_SQL } from './baixas-servidor';
 import { PERIODO_SCHEMA_SQL } from './periodo-fechado';
+import { RECORRENCIA_SCHEMA_SQL } from './recorrencia-schema';
 import { AUDIT_SCHEMA_SQL } from './audit-schema';
 import { NOTIFICACOES_SCHEMA_SQL } from './notificacoes-schema';
 import { MAPAS_MENTAIS_COMPARTILHAMENTO_SCHEMA_SQL } from './mapas-mentais-compartilhamento';
@@ -1513,6 +1514,9 @@ async function executarInitDB() {
   await pool.query(PROPOSTA_LINK_SCHEMA_SQL);
   await pool.query(ARQUIVOS_PRIVADOS_SCHEMA_SQL);
   await pool.query(EXTRATO_FITID_UNICO_SQL);
+  // Recorrência (05/11/2026): séries de contas e as chaves que impedem a
+  // mesma ocorrência ou a mesma cópia de mês de nascer duas vezes.
+  await pool.query(RECORRENCIA_SCHEMA_SQL);
   // Razão financeiro, agendador e fila de tarefas (05/11/2026). Antes da
   // auditoria: são tabelas imutáveis ou de controle e ficam fora do gatilho.
   // Histórico de baixas e trava de período (05/11/2026, E2).

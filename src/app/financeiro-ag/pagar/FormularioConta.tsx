@@ -1,6 +1,6 @@
 'use client';
 
-import type * as React from 'react';
+import type { ReactNode } from 'react';
 
 import Link from 'next/link';
 
@@ -11,11 +11,12 @@ import { RecordSheet } from '@/components/fin/RecordSheet';
 import { FormSection } from '@/components/financeiro/FormSection';
 import { Input } from '@/components/ui/input';
 import { paraBRL } from '@/lib/money';
-import { cn, formatDate } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { Money } from '@/components/fin/Money';
+import { BlocoDeRepeticao } from '@/components/financeiro/recorrencia/BlocoDeRepeticao';
 
 import { CampoSelecao, CONTROLE, Interruptor, type OpcaoDeSelecao } from './campos';
-import type { ErrosDoFormulario, FormState, RecorrenciaPeriodo } from './tipos';
+import type { ErrosDoFormulario, FormState } from './tipos';
 
 /** Sentinela de "nada escolhido". Nunca é gravada: vira '' ou null no estado. */
 const NENHUM = '__NENHUM__';
@@ -52,18 +53,6 @@ const OPCOES_NATUREZA: OpcaoDeSelecao[] = [
   { valor: 'COMPRA_UNICA', rotulo: 'Compra única' },
 ];
 
-const OPCOES_PERIODICIDADE: OpcaoDeSelecao[] = [
-  { valor: 'MENSAL', rotulo: 'Todo mês, no mesmo dia' },
-  { valor: 'QUINZENAL', rotulo: 'A cada 14 dias' },
-  { valor: 'SEMANAL', rotulo: 'A cada 7 dias' },
-];
-
-const PASSO_DA_REPETICAO: Record<RecorrenciaPeriodo, string> = {
-  MENSAL: 'mês a mês',
-  QUINZENAL: 'a cada 15 dias',
-  SEMANAL: 'a cada 7 dias',
-};
-
 export type FormularioContaProps = {
   aberto: boolean;
   onOpenChange: (aberto: boolean) => void;
@@ -77,7 +66,11 @@ export type FormularioContaProps = {
   salvando: boolean;
   onSalvar: () => void;
   /** Conteúdo extra no fim da janela (ex.: histórico de baixas da conta em edição). */
-  extra?: React.ReactNode;
+  extra?: ReactNode;
+  /** Ao editar uma conta que se repete: a faixa com a regra (05/11/2026). */
+  faixaDaSerie?: ReactNode;
+  /** Ao editar: abre "Mais parcelas" (null quando a conta não aceita). */
+  onMaisParcelas?: (() => void) | null;
 };
 
 export function FormularioConta({
@@ -93,11 +86,12 @@ export function FormularioConta({
   salvando,
   onSalvar,
   extra,
+  faixaDaSerie,
+  onMaisParcelas,
 }: FormularioContaProps) {
   const cartoesAtivos = cartoes.filter((c) => c.ativo);
   const estrangeira = form.moeda !== 'BRL';
-  const repetindo = form.origem === 'DESPESA_FIXA' && !editando && form.recorrencia_ativa;
-  const quantas = Math.max(1, form.recorrencia_repeticoes);
+  const repetindo = !editando && form.repeticao.ativa;
 
   const opcoesCategoria: OpcaoDeSelecao[] = [
     { valor: NENHUM, rotulo: 'Sem categoria' },
@@ -139,12 +133,9 @@ export function FormularioConta({
       ) : null}
       {repetindo ? (
         <span>
-          Vão ser criadas{' '}
-          <span className="fin-t-body-strong text-[var(--fin-text)]">{quantas} contas a pagar</span>{' '}
-          a partir de{' '}
-          {form.data_vencimento ? formatDate(form.data_vencimento) : 'a data que você escolher'},
-          avançando {PASSO_DA_REPETICAO[form.recorrencia_periodo]}. Cada parcela pode ser paga ou
-          editada separadamente.
+          {form.repeticao.modo === 'parcelado'
+            ? 'O valor é dividido nas parcelas da prévia. Cada parcela pode ser paga ou editada separadamente.'
+            : 'As contas da prévia são criadas juntas. Cada uma pode ser paga ou editada separadamente.'}
         </span>
       ) : null}
       {!estrangeira && !repetindo ? (
@@ -162,7 +153,7 @@ export function FormularioConta({
       titulo={editando ? 'Editar conta a pagar' : 'Nova conta a pagar'}
       descricao={
         editando
-          ? 'Altere os dados desta conta. A repetição automática só existe na criação.'
+          ? 'Altere os dados desta conta.'
           : 'Lance uma conta que a agência precisa pagar.'
       }
       largura={640}
@@ -173,8 +164,10 @@ export function FormularioConta({
         onClick: onSalvar,
         carregando: salvando,
       }}
+      acaoSecundaria={editando && onMaisParcelas ? { rotulo: 'Mais parcelas', onClick: onMaisParcelas } : null}
     >
       <div className="flex flex-col gap-4">
+        {editando && faixaDaSerie ? faixaDaSerie : null}
         <FormSection title="Essencial" description="O mínimo para a conta existir." alwaysOpen>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field rotulo="Fornecedor" obrigatorio erro={erros.fornecedor}>
@@ -366,46 +359,16 @@ export function FormularioConta({
               </Field>
             </div>
 
-            {form.origem === 'DESPESA_FIXA' && !editando ? (
-              <div className="flex flex-col gap-3 rounded-[var(--fin-r-md)] border border-[var(--fin-border)] bg-[var(--fin-surface-sunken)] p-3 sm:col-span-2">
-                <Interruptor
-                  rotulo="Repetir esta despesa automaticamente"
-                  descricao="Cria as parcelas seguintes já com o vencimento avançado."
-                  ligado={form.recorrencia_ativa}
-                  onChange={(v) => onForm((f) => ({ ...f, recorrencia_ativa: v }))}
+            {!editando ? (
+              <div className="sm:col-span-2">
+                <BlocoDeRepeticao
+                  estado={form.repeticao}
+                  onChange={(patch) => onForm((f) => ({ ...f, repeticao: { ...f.repeticao, ...patch } }))}
+                  inicio={form.data_vencimento}
+                  valor={form.valor_original}
+                  moeda={form.moeda}
+                  substantivo="conta a pagar"
                 />
-
-                {form.recorrencia_ativa ? (
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <CampoSelecao
-                      rotulo="Periodicidade"
-                      valor={form.recorrencia_periodo}
-                      opcoes={OPCOES_PERIODICIDADE}
-                      onChange={(v) =>
-                        onForm((f) => ({ ...f, recorrencia_periodo: v as RecorrenciaPeriodo }))
-                      }
-                    />
-                    <Field rotulo="Quantidade de parcelas">
-                      {(a) => (
-                        <Input
-                          {...a}
-                          aria-invalid={a['aria-invalid'] || undefined}
-                          type="number"
-                          min={1}
-                          max={120}
-                          value={form.recorrencia_repeticoes}
-                          onChange={(e) =>
-                            onForm((f) => ({
-                              ...f,
-                              recorrencia_repeticoes: Math.max(1, parseInt(e.target.value) || 1),
-                            }))
-                          }
-                          className={cn(CONTROLE, 'tabular-nums')}
-                        />
-                      )}
-                    </Field>
-                  </div>
-                ) : null}
               </div>
             ) : null}
           </div>
