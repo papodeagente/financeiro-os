@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useActivePillar, PILLARS as PILARES_DO_MENU, type Pillar } from '@/hooks/useActivePillar';
+import { useAuth } from '@/contexts/AuthContext';
 
 /** Mesma tabela da barra de cima: a gaveta e o topo abrem a mesma porta. */
 const ROTA_DO_PILAR: Record<Pillar, string> = {
@@ -24,7 +25,7 @@ import {
   PanelLeftClose, PanelLeftOpen,
   Eraser, LifeBuoy, FileText,
   LayoutGrid, ChartColumn, ArrowDownLeft, ArrowUpRight, GitCompareArrows, ListTree,
-  Contact, Truck,
+  Contact, Truck, Repeat,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -34,6 +35,8 @@ export interface SidebarItem {
   label: string;
   icon: ComponentType<{ className?: string }>;
   href: string;
+  /** Só na conta do ecossistema (perfil-da-conta.ts). Esconder aqui é só a tela: a rota barra no servidor. */
+  soEcossistema?: boolean;
 }
 
 export interface SidebarSection {
@@ -63,6 +66,7 @@ const METAS_MENU: SidebarSection[] = [
     title: 'Equipe',
     items: [
       { key: 'comissoes', label: 'Comissões', icon: Percent, href: '/equipe/comissoes' },
+      { key: 'comissao-mrr', label: 'Comissão por MRR', icon: Repeat, href: '/equipe/mrr', soEcossistema: true },
       { key: 'vendedores', label: 'Vendedores e planos', icon: UserCheck, href: '/equipe/vendedores' },
       { key: 'folha', label: 'Folha', icon: Wallet2, href: '/equipe/folha' },
       { key: 'planos-comissao', label: 'Planos de comissão', icon: Settings, href: '/equipe/planos-comissao' },
@@ -167,10 +171,14 @@ const PAI_NO_MENU: Array<[string, string]> = [
 export function PillarSidebar({ collapsed = false, onToggle, comSeletorDePilar = false }: PillarSidebarProps) {
   const pathname = usePathname();
   const activePillar = useActivePillar();
+  const { user } = useAuth();
 
   if (!activePillar) return null;
 
-  const sections = PILLAR_MENUS[activePillar];
+  const ecossistema = user?.tenantPerfil === 'ecossistema';
+  const sections = PILLAR_MENUS[activePillar]
+    .map(sec => ({ ...sec, items: sec.items.filter(it => !it.soEcossistema || ecossistema) }))
+    .filter(sec => sec.items.length > 0);
 
   // Um item ativo só: o MAIS ESPECÍFICO que casa com a rota. Antes era
   // "casa por prefixo", e em /financeiro-ag/receber acendiam juntos

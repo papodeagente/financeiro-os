@@ -3,6 +3,11 @@
 import { useEffect, useState } from 'react';
 import { PlanoComissao, FaixaComissao, TipoBaseComissao, TipoProdutoVenda, createPlanoComissao } from '@/lib/crm-types';
 import { normalizarRegras, type RegraDeProduto } from '@/lib/comissao-regras';
+import { faixasEmPalavras, normalizarFaixas, type MetaMrr } from '@/lib/comissao-mrr';
+import { hojeISO } from '@/lib/money';
+import { useAuth } from '@/contexts/AuthContext';
+import { FaixasDeMrr, erroDasFaixas, faixasDigitadas, faixasParaGravar, type FaixaDigitada } from '@/components/fin/FaixasDeMrr';
+import Link from 'next/link';
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -48,6 +53,12 @@ function descreverRegra(r: RegraDeProduto, produtos: ProdutoEscolhivel[]): strin
 }
 
 export default function PlanosComissaoPage() {
+  // Só na conta do ecossistema: as faixas da comissão por MRR e as metas do
+  // mês, com os produtos vinculados (comissao-mrr.ts).
+  const ecossistema = useAuth().user?.tenantPerfil === 'ecossistema';
+  const [faixasMrr, setFaixasMrr] = useState<FaixaDigitada[]>([]);
+  const [metasMrr, setMetasMrr] = useState<MetaMrr[]>([]);
+  const [erroMrr, setErroMrr] = useState<string | null>(null);
   const [planos, setPlanos] = useState<PlanoComissao[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -79,6 +90,14 @@ export default function PlanosComissaoPage() {
 
   useEffect(() => { load(); }, []);
 
+  useEffect(() => {
+    if (!ecossistema) return;
+    fetch(`/api/metas-mrr?mes=${hojeISO().slice(0, 7)}`, { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : []))
+      .then(m => setMetasMrr(Array.isArray(m) ? m : []))
+      .catch(() => setMetasMrr([]));
+  }, [ecossistema]);
+
   function openNew() {
     setNome('');
     setDescricao('');
@@ -86,6 +105,8 @@ export default function PlanosComissaoPage() {
     setPercentualPadrao(10);
     setFaixas([]);
     setRegrasProduto([]);
+    setFaixasMrr([]);
+    setErroMrr(null);
     setEditId(null);
     setShowForm(true);
   }
@@ -97,22 +118,28 @@ export default function PlanosComissaoPage() {
     setPercentualPadrao(p.percentual_padrao);
     setFaixas([...p.faixas]);
     setRegrasProduto(normalizarRegras(p.regras_produto));
+    setFaixasMrr(faixasDigitadas(p.mrr?.faixas));
+    setErroMrr(null);
     setEditId(p.id);
     setShowForm(true);
   }
 
   async function handleSave() {
     if (!nome) return;
+    // Fora do ecossistema o campo nem aparece: o que já estiver gravado fica como está.
+    const erroDaMrr = ecossistema ? erroDasFaixas(faixasMrr) : null;
+    if (erroDaMrr) { setErroMrr(erroDaMrr); return; }
+    const mrr = ecossistema ? { mrr: { faixas: normalizarFaixas(faixasParaGravar(faixasMrr)) } } : {};
     if (editId) {
       const existing = planos.find(p => p.id === editId)!;
       await updateEntity('planos-comissao', {
         ...existing, nome, descricao, base_calculo: baseCalculo,
-        percentual_padrao: percentualPadrao, faixas, regras_produto: regrasProduto,
+        percentual_padrao: percentualPadrao, faixas, regras_produto: regrasProduto, ...mrr,
       });
     } else {
       const novo: PlanoComissao = {
         ...createPlanoComissao(), nome, descricao, base_calculo: baseCalculo,
-        percentual_padrao: percentualPadrao, faixas, regras_produto: regrasProduto,
+        percentual_padrao: percentualPadrao, faixas, regras_produto: regrasProduto, ...mrr,
       };
       await saveEntity('planos-comissao', novo);
     }
@@ -192,6 +219,28 @@ export default function PlanosComissaoPage() {
             <Plus className="w-4 h-4 mr-2" /> Novo Plano
           </Button>
         </div>
+
+        {/* Ecossistema: as metas de MRR do mês e os produtos vinculados a cada uma. */}
+        {ecossistema ? (
+          <div className="flex flex-col gap-2 rounded-[16px] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="fin-t-body-strong text-[var(--fin-text)]">Metas de MRR deste mês</p>
+              <Link href="/equipe/mrr" className="fin-t-caption font-medium text-[var(--fin-accent)] hover:underline">Abrir Comissão por MRR</Link>
+            </div>
+            {metasMrr.length === 0 ? (
+              <p className="fin-t-caption text-[var(--fin-text-3)]">Nenhuma meta de MRR neste mês. As faixas de MRR dos planos só pagam sobre o MRR dos produtos vinculados a uma meta.</p>
+            ) : (
+              <ul className="flex flex-col gap-1.5">
+                {metasMrr.map(m => (
+                  <li key={m.id} className="fin-t-caption text-[var(--fin-text-2)]">
+                    <b className="font-medium text-[var(--fin-text)]">{m.nome}</b>: {m.produtos.map(c => m.produtos_nomes[c] ?? c).join(', ')}
+                    {' · '}meta da equipe {Object.values(m.valores).reduce((a, b) => a + b, 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : null}
 
         {/* Form */}
         {showForm && (
@@ -388,6 +437,13 @@ export default function PlanosComissaoPage() {
                 )}
               </div>
 
+              {ecossistema ? (
+                <div className="flex flex-col gap-2">
+                  <FaixasDeMrr linhas={faixasMrr} onChange={l => { setFaixasMrr(l); setErroMrr(null); }} />
+                  {erroMrr ? <p role="alert" className="fin-t-caption text-[var(--fin-negative-text)]">{erroMrr}</p> : null}
+                </div>
+              ) : null}
+
               <div className="flex gap-2">
                 <Button onClick={handleSave} className="bg-[var(--t-green)] hover:brightness-110 text-[var(--fin-text-on-fill)]  font-semibold">
                   <Check className="w-4 h-4 mr-1" /> {editId ? 'Salvar' : 'Criar'}
@@ -461,6 +517,14 @@ export default function PlanosComissaoPage() {
                           </div>
                         )}
                       </div>
+                      {ecossistema ? (
+                        <div className="col-span-2">
+                          <p className="text-xs text-[var(--t-text-muted)] uppercase mb-2">Comissão por MRR</p>
+                          <p className="text-xs text-[var(--t-text-secondary)]">
+                            {normalizarFaixas(p.mrr?.faixas).length ? faixasEmPalavras(normalizarFaixas(p.mrr?.faixas)) : 'Sem faixas: não paga comissão por MRR.'}
+                          </p>
+                        </div>
+                      ) : null}
                       {normalizarRegras(p.regras_produto).length > 0 && (
                         <div className="col-span-2">
                           <p className="text-xs text-[var(--t-text-muted)] uppercase mb-2">Regras por Produto</p>

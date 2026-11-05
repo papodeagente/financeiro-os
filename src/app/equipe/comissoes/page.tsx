@@ -325,6 +325,9 @@ export default function ComissoesPage() {
     // Feito antes de tudo: essas comissões saem do acumulado do mês.
     for (const c of comissoes) {
       if (c.status === 'CANCELADA') continue;
+      // A comissão por MRR (conta do ecossistema) é do mês do vendedor, não de
+      // uma venda daqui: quem a calcula é a tela Comissão por MRR, nunca este motor.
+      if (c.origem === 'mrr') continue;
       const venda = vendasById.get(c.venda_id);
       if (venda && venda.status !== 'CANCELADO') continue;
 
@@ -544,6 +547,7 @@ export default function ComissoesPage() {
     const mapa = new Map<string, { nome: string; base: number; pct: number; vendas: number }>();
     for (const c of comissoes) {
       if (c.status === 'CANCELADA') continue;
+      if (c.origem === 'mrr') continue; // a escada do MRR é outra (faixas da meta)
       if (filterMonth && mesDe(c.data_venda) !== filterMonth) continue;
       const atual = mapa.get(c.vendedor_id) ?? { nome: c.vendedor_nome, base: 0, pct: 0, vendas: 0 };
       atual.base = round2(atual.base + num(c.valor_base));

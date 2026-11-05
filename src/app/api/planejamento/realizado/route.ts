@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth';
 import { bloqueioFinanceiro } from '@/lib/permissoes';
 import { carregarConfigFiscal } from '@/lib/nfse-servico';
 import { carregarRealizadoDoMes } from '@/lib/plano-do-mes-servidor';
+import { consultarMetricasComerciais } from '@/lib/crm-integration';
 import { hojeISO, num } from '@/lib/money';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 
@@ -35,8 +36,14 @@ export async function GET(req: Request) {
     try {
       aliquota = num((await carregarConfigFiscal(tenantId))?.aliquota_iss) || null;
     } catch { aliquota = null; }
-    const realizado = await carregarRealizadoDoMes(pool as unknown as ExecutorSQL, tenantId, mes, hojeISO(), aliquota);
-    return NextResponse.json(realizado, { headers: HEADERS });
+    // Leads e vendas ganhas vêm do CRM (as contas da tela Análises dele), em
+    // paralelo com o banco. A consulta nunca derruba o acompanhamento: sem
+    // resposta, `crm` diz por quê e a tela segue com o que o Financeiro tem.
+    const [realizado, crm] = await Promise.all([
+      carregarRealizadoDoMes(pool as unknown as ExecutorSQL, tenantId, mes, hojeISO(), aliquota),
+      consultarMetricasComerciais(tenantId, mes),
+    ]);
+    return NextResponse.json({ ...realizado, crm }, { headers: HEADERS });
   } catch (error) {
     console.error('[planejamento/realizado] Falha ao consultar:', error instanceof Error ? error.message : 'Erro');
     return NextResponse.json({ error: 'Não foi possível carregar o realizado do mês.' }, { status: 500, headers: HEADERS });
