@@ -5,6 +5,7 @@
  * acentos do português).
  */
 import type { ProvaDaMudanca, LinhaDaProva } from './provas';
+import { ROTULO_DA_COMPARACAO, type RelatorioDoMes } from './paralelo';
 import { dataBR } from './valores';
 
 type Doc = import('jspdf').jsPDF;
@@ -160,9 +161,89 @@ export async function pdfDaProva(p: ProvaDaMudanca, agencia: string): Promise<Ui
         alerta: a.confere === false,
       })));
   }
+  // Histórico (E7)
+  const h = p.historico;
+  if (h?.contas_no_corte.length) {
+    secao(ctx, 'Histórico sem dinheiro em dobro: saldo na data de corte',
+      'Cada liquidação antiga entrou na data e na conta dela, e a abertura da conta passou para antes dela. O saldo na data de corte, refeito aqui (saldo inicial + liquidações até o corte), tem de ser o informado pelo sistema anterior; o saldo de hoje não muda.');
+    tabela(ctx, ['Conta', 'Informado', 'Refeito aqui', 'Histórico', 'Diferença'], [70, 30, 30, 26, 26],
+      h.contas_no_corte.map(c => ({
+        celulas: [c.rotulo, brl(c.anterior_centavos), brl(c.enturos_centavos), brl(c.historico_centavos), brl(c.diferenca_centavos)],
+        notas: notasDe(c), alerta: !c.explicada,
+      })));
+  }
+  if (h?.liquidados.length) {
+    secao(ctx, 'Contas liquidadas trazidas, por mês da liquidação', 'Sistema anterior × liquidações que existem aqui para essas contas.');
+    tabela(ctx, ['Mês', 'Sistema anterior', 'EnturOS', 'Diferença'], [96, 30, 30, 26],
+      h.liquidados.map(l => ({ celulas: [l.rotulo, brl(l.anterior_centavos), brl(l.enturos_centavos), brl(l.diferenca_centavos)], notas: notasDe(l), alerta: !l.explicada })));
+  }
+  if (h?.receita.length) {
+    secao(ctx, 'Vendas e receita por mês', 'Faturamento e receita que o sistema anterior mostrava × as vendas trazidas aqui (receita pelos componentes de mercado: Comissão, Over, Taxa DU, RAV, Fee, Markup, Desconto).');
+    const linhas: Array<{ celulas: string[]; notas?: string[]; alerta?: boolean }> = [];
+    for (const r of h.receita) {
+      linhas.push({ celulas: [`${r.faturamento.rotulo} (${r.vendas})`, brl(r.faturamento.anterior_centavos), brl(r.faturamento.enturos_centavos), brl(r.faturamento.diferenca_centavos)], notas: notasDe(r.faturamento), alerta: !r.faturamento.explicada });
+      if (r.receita) linhas.push({ celulas: [r.receita.rotulo, brl(r.receita.anterior_centavos), brl(r.receita.enturos_centavos), brl(r.receita.diferenca_centavos)], notas: notasDe(r.receita), alerta: !r.receita.explicada });
+    }
+    tabela(ctx, ['Mês', 'Sistema anterior', 'EnturOS', 'Diferença'], [96, 30, 30, 26], linhas);
+  }
+  if (h && Object.values(h.registros).some(n => n > 0)) {
+    const r = h.registros;
+    secao(ctx, 'Registros trazidos do sistema anterior',
+      `${r.faturas} fatura(s) e ${r.notas} nota(s) fiscal(is) como registro (as notas nunca são emitidas de novo), ${r.comissoes_pagas} comissão(ões) já paga(s) como registro (não geram conta nem entram no cálculo de novo), ${r.metas} pessoa(s) com metas, ${r.reembolsos} reembolso(s) em aberto, ${r.creditos} crédito(s) de clientes, ${r.movimentos_ligados} linha(s) do extrato ligadas a liquidações e ${r.movimentos_criados} que viraram liquidação.`);
+  }
   if (p.fora.length) {
     secao(ctx, 'Linhas que ficaram fora da conta', 'Não estavam em aberto (já liquidadas ou excluídas) ou não deu para ler.');
     tabela(ctx, ['Motivo', 'Linhas'], [150, 32], p.fora.map(f => ({ celulas: [f.rotulo, String(f.quantidade)] })));
+  }
+  rodape(ctx);
+  return new Uint8Array(doc.output('arraybuffer'));
+}
+
+/** PDF do mês em paralelo (E7): sistema anterior × EnturOS no mesmo mês. Nada foi gravado para gerá-lo. */
+export async function pdfDoMesEmParalelo(r: RelatorioDoMes, agencia: string): Promise<Uint8Array> {
+  const { jsPDF } = await import('jspdf');
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  const mesBR = `${r.mes.slice(5, 7)}/${r.mes.slice(0, 4)}`;
+  const ctx: Ctx = { doc, y: MARGEM + 4, pagina: 1, titulo: `Mês em paralelo ${mesBR} · ${agencia || 'agência'}` };
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.setTextColor(...COR.tinta);
+  doc.text(`Mês em paralelo: ${mesBR}`, MARGEM, ctx.y + 4);
+  ctx.y += 11;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(...COR.tinta2);
+  doc.text(`${agencia ? `${agencia} · ` : ''}sistema anterior × EnturOS Financeiro, sem gravar nada`, MARGEM, ctx.y);
+  ctx.y += 8;
+  if (!r.secoes.length) secao(ctx, 'Nada para comparar', 'Solte as contas a pagar e a receber e o extrato do mês.');
+  for (const s of r.secoes) {
+    const c = s.contagem;
+    secao(ctx, s.rotulo,
+      `${c.bate} bate(m), ${c.valor} com valor diferente, ${c.data} com data diferente, ${c.so_la} só no sistema anterior e ${c.so_aqui} só no EnturOS. `
+      + `Saldo do mês (recebido − pago): sistema anterior ${brl(s.total.anterior)} · EnturOS ${brl(s.total.enturos)} · diferença ${brl(s.total.diferenca)}.`);
+    const diferentes = s.pares.filter(p => p.tipo !== 'bate');
+    if (diferentes.length) {
+      tabela(ctx, ['O que não bateu', 'Sistema anterior', 'EnturOS', 'Diferença'], [96, 30, 30, 26],
+        diferentes.map(p => {
+          const base = p.anterior ?? p.enturos!;
+          return {
+            celulas: [`${ROTULO_DA_COMPARACAO[p.tipo]}: ${base.pessoa || '(sem pessoa)'} · ${dataBR(base.liquidacao ?? base.vencimento)}`,
+              brl(p.anterior?.valor ?? null), brl(p.enturos?.valor ?? null), brl(p.diferenca)],
+            notas: [p.detalhe, p.anterior ? `Lá: ${p.anterior.ref}` : ''].filter(Boolean), alerta: true,
+          };
+        }));
+    }
+    for (const [titulo, grupos] of [['Por conta', s.por_conta], ['Por pessoa', s.por_pessoa], ['Por categoria', s.por_categoria]] as const) {
+      const comDif = grupos.filter(g => g.diferenca !== 0);
+      if (!comDif.length) continue;
+      secao(ctx, `${s.rotulo}: ${titulo.toLowerCase()}`, 'Só os grupos com diferença.');
+      tabela(ctx, [titulo.replace('Por ', ''), 'Sistema anterior', 'EnturOS', 'Diferença'], [96, 30, 30, 26],
+        comDif.map(g => ({ celulas: [g.rotulo, brl(g.anterior), brl(g.enturos), brl(g.diferenca)], alerta: true })));
+    }
+  }
+  if (r.fora.length) {
+    secao(ctx, 'Linhas que não deu para ler');
+    tabela(ctx, ['Arquivo e linha'], [182], r.fora.map(f => ({ celulas: [`${f.arquivo}${f.linha ? `, linha ${f.linha}` : ''}`], notas: [f.motivo] })));
   }
   rodape(ctx);
   return new Uint8Array(doc.output('arraybuffer'));

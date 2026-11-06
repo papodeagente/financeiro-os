@@ -10,7 +10,7 @@
 import { createHash } from 'node:crypto';
 import type { ExecutorSQL } from '../caixa-atomico';
 import { deCentavos } from '../money';
-import { camposDoCabecalho, definicaoDaLista, sugerirMapeamento, type ListaId } from './dicionario';
+import { camposDoCabecalho, definicaoDaLista, ORDEM_DAS_LISTAS, sugerirMapeamento, type ListaId } from './dicionario';
 import type { ResultadoDoDesfazer } from './desfazer';
 import type { RegistroLido } from './interpretar';
 import type { LinhaDaProva, ProvaDaMudanca } from './provas';
@@ -65,6 +65,7 @@ export interface LoteParaTela {
 const LISTA_DA_TABELA: Record<string, ListaId> = {
   contas_bancarias: 'contas', plano_contas: 'categorias', centros_custo: 'centros_custo', clientes: 'pessoas',
   fornecedores_crm: 'pessoas', contas_pagar: 'titulos', contas_receber: 'titulos',
+  baixas: 'liquidados', vendas_crm: 'vendas', migracao_historico: 'faturas', comissao_metas: 'metas', reembolsos: 'reembolsos', creditos_cliente: 'creditos',
 };
 
 export function situacaoParaTela(status: string): SituacaoParaTela {
@@ -189,6 +190,28 @@ function descricaoDaLinha(l: LinhaDoLote, registro: RegistroLido | undefined): {
       const t = registro.dados;
       return { descricao: `${t.movimento === 'receber' ? 'A receber de' : 'A pagar a'} ${t.pessoa} · ${reais(t.valor)} vence ${dataBR(t.vencimento)}`, valor: deCentavos(t.valor) };
     }
+    // Histórico (E7)
+    case 'liquidados': {
+      const t = registro.dados;
+      return { descricao: `${t.movimento === 'receber' ? 'Recebido de' : 'Pago a'} ${t.pessoa} · ${reais(t.baixa.valor)} em ${dataBR(t.baixa.data)}${t.baixa.conta ? ` (${t.baixa.conta})` : ''}`, valor: deCentavos(t.baixa.valor) };
+    }
+    case 'movimentos': {
+      const m = registro.dados;
+      return { descricao: `${m.entrada ? 'Entrada' : 'Saída'} em ${m.conta} · ${dataBR(m.data)}${m.pessoa ? ` · ${m.pessoa}` : ''}${m.descricao ? ` · ${m.descricao}` : ''}`, valor: deCentavos(m.entrada ? m.valor : -m.valor) };
+    }
+    case 'vendas': {
+      const p = registro.dados;
+      const v = registro.venda;
+      return v
+        ? { descricao: `Venda Nº ${v.numero} de ${dataBR(v.data_venda)} · ${v.cliente.nome} · ${v.produtos.length} produto(s)`, valor: deCentavos(v.produtos.reduce((a, x) => a + (x.valor_total ?? 0), 0)) }
+        : { descricao: `Venda Nº ${p.venda} · produto ${p.produto}`, valor: p.valor_total === null ? null : deCentavos(p.valor_total) };
+    }
+    case 'faturas': return { descricao: `Fatura Nº ${registro.dados.numero} · ${registro.dados.pessoa}`, valor: deCentavos(registro.dados.valor) };
+    case 'notas': return { descricao: `Nota Nº ${registro.dados.numero} de ${dataBR(registro.dados.emissao)} · ${registro.dados.tomador}`, valor: deCentavos(registro.dados.valor) };
+    case 'comissoes_pagas': return { descricao: `Comissão de ${registro.dados.pessoa}${registro.dados.venda ? ` · venda ${registro.dados.venda}` : ''}`, valor: deCentavos(registro.dados.valor) };
+    case 'metas': return { descricao: `Metas de ${registro.dados.pessoa} em ${registro.dados.ano}${registro.dados.funcao ? ` (${registro.dados.funcao})` : ''}`, valor: null };
+    case 'reembolsos': return { descricao: `Reembolso ${registro.dados.tipo === 'CLIENTE' ? 'ao cliente' : 'do fornecedor'} ${registro.dados.pessoa}`, valor: deCentavos(registro.dados.valor) };
+    case 'creditos': return { descricao: `Crédito de ${registro.dados.cliente}`, valor: deCentavos(registro.dados.saldo) };
   }
 }
 
@@ -245,6 +268,26 @@ export function provasParaTela(p: ProvaDaMudanca) {
     })),
     arquivos: p.arquivos.map(a => ({ ...a, soma: deCentavos(a.soma_centavos), total_rodape: a.total_rodape_centavos == null ? null : deCentavos(a.total_rodape_centavos) })),
     fora: p.fora, resumo: p.resumo, diferencas_sem_explicacao: p.diferencas_sem_explicacao,
+    historico: historicoParaTela(p.historico),
+  };
+}
+
+function linhaEmReais(l: LinhaDaProva) {
+  return {
+    rotulo: l.rotulo, anterior: deCentavos(l.anterior_centavos), enturos: deCentavos(l.enturos_centavos), diferenca: deCentavos(l.diferenca_centavos),
+    explicacoes: l.explicacoes.map(e => ({ motivo: e.motivo, linhas: e.quantidade, valor: deCentavos(e.centavos), codigo: e.codigo })), explicada: l.explicada,
+  };
+}
+
+/** As provas do histórico (E7) em reais, para a tela. */
+export function historicoParaTela(h: ProvaDaMudanca['historico']) {
+  return {
+    contas_no_corte: h.contas_no_corte.map(c => ({
+      ...linhaEmReais(c), conta_id: c.conta_id, historico: deCentavos(c.historico_centavos), saldo_hoje: deCentavos(c.saldo_hoje_centavos),
+    })),
+    liquidados: h.liquidados.map(l => ({ ...linhaEmReais(l), mes: l.mes, tipo: l.movimento })),
+    receita: h.receita.map(r => ({ mes: r.mes, vendas: r.vendas, faturamento: linhaEmReais(r.faturamento), receita: r.receita ? linhaEmReais(r.receita) : null })),
+    registros: h.registros,
   };
 }
 
@@ -314,7 +357,7 @@ export async function progressoParaTela(exec: ExecutorSQL, tenantId: string, lot
   );
   const { rows: at } = await exec.query(`SELECT atualizado_em FROM migracao_lotes WHERE tenant_id = $1 AND id = $2`, [tenantId, lote.id]);
   const porLista = new Map(rows.map(r => [String(r.lista), { feitos: Number(r.feitos), total: Number(r.total), erros: Number(r.erros) }]));
-  const ordem: ListaId[] = ['contas', 'categorias', 'centros_custo', 'pessoas', 'titulos', 'saldos'];
+  const ordem: ListaId[] = ORDEM_DAS_LISTAS;
   const aplicando = lote.status === 'aplicando';
   let achouAtual = false;
   const etapas = ordem.filter(l => porLista.has(l) && porLista.get(l)!.total > 0).map(l => {

@@ -14,6 +14,8 @@
 import { createHash } from 'node:crypto';
 import { emTransacao, moverCaixaOuFalhar, type ExecutorSQL } from '../caixa-atomico';
 import { comNadaSai } from '../nada-sai';
+import { estornarBaixa } from '../baixas-servidor';
+import { USUARIO_DA_MUDANCA } from './gravador-historico';
 import { ErroMudanca, lerLote, type StatusDoLote } from './servidor';
 
 export interface ItemMantido {
@@ -40,13 +42,15 @@ export interface ResultadoDoDesfazer {
 const ROTULO_DA_TABELA: Record<string, string> = {
   contas_bancarias: 'Conta bancária', plano_contas: 'Categoria', centros_custo: 'Centro de custo',
   clientes: 'Cliente', fornecedores_crm: 'Fornecedor', contas_pagar: 'Conta a pagar', contas_receber: 'Conta a receber',
+  baixas: 'Liquidação', vendas_crm: 'Venda', migracao_historico: 'Registro do sistema anterior', comissao_metas: 'Meta',
+  reembolsos: 'Reembolso', creditos_cliente: 'Crédito do cliente',
 };
 
 interface Vinculo {
   id: number;
   tabela: string;
   registro_id: string;
-  acao: 'criado' | 'vinculado' | 'saldo';
+  acao: 'criado' | 'vinculado' | 'saldo' | 'historico';
   hash: string | null;
   dados: Record<string, unknown>;
   arquivo: string;
@@ -68,6 +72,11 @@ async function estadoAtual(exec: ExecutorSQL, tenantId: string, tabela: string, 
   const { rows } = await exec.query(`SELECT id, md5(data::text) AS h, data FROM ${tabela} WHERE tenant_id = $1 AND id = ANY($2::text[])`, [tenantId, ids]);
   for (const r of rows) m.set(txt(r.id), { h: txt(r.h), data: (r.data ?? {}) as Record<string, unknown> });
   return m;
+}
+
+function dataBRCurta(d: string): string {
+  const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `de ${m[3]}/${m[2]}/${m[1]}` : '';
 }
 
 function rotuloDe(tabela: string, d: Record<string, unknown>): string {
@@ -124,6 +133,73 @@ export async function desfazerLote(tenantId: string, loteId: string, gravar: boo
       else { manter(v, atual.data, 'A conta teve movimento depois da mudança: o saldo de abertura ficou.'); contasPresas.add(v.registro_id); }
     }
 
+    // 1b. Histórico (E7): as liquidações que o lote trouxe, por título.
+    const historicas = vinculos.filter(v => v.acao === 'historico' && v.tabela === 'baixas');
+    const baixasDoLote = new Set(historicas.map(v => v.registro_id));
+    const historicasDoTitulo = new Map<string, Vinculo[]>();
+    for (const v of historicas) {
+      const k = `${txt(v.dados.titulo_tabela)}:${txt(v.dados.titulo_id)}`;
+      historicasDoTitulo.set(k, [...(historicasDoTitulo.get(k) ?? []), v]);
+    }
+
+    // 1c. Vendas trazidas: saem se ninguém mexeu nelas (nem fechou, cancelou, reembolsou ou comissionou).
+    const vendasVs = criados(['vendas_crm']);
+    const vendasAtuais = await estadoAtual(exec, tenantId, 'vendas_crm', vendasVs.map(v => v.registro_id));
+    for (const v of vendasVs) {
+      const atual = vendasAtuais.get(v.registro_id);
+      if (!atual) { soltar.push(v.id); continue; }
+      const usos: string[] = [];
+      const conferir = async (tabela: string, sql: string, motivo: string) => {
+        if (!(await existe(exec, tabela))) return;
+        const { rows: r } = await exec.query(sql, [tenantId, v.registro_id]);
+        if (r.length) usos.push(motivo);
+      };
+      await conferir('vendas_modelo', `SELECT 1 FROM vendas_modelo WHERE tenant_id = $1 AND venda_id = $2 AND situacao = 'FECHADA'`, 'A venda foi fechada depois da mudança.');
+      await conferir('venda_cancelamentos', `SELECT 1 FROM venda_cancelamentos WHERE tenant_id = $1 AND venda_id = $2 LIMIT 1`, 'A venda teve cancelamento depois da mudança.');
+      await conferir('comissao_lancamentos', `SELECT 1 FROM comissao_lancamentos WHERE tenant_id = $1 AND venda_id = $2 AND (fechado_centavos <> 0 OR fechado_retido_centavos <> 0) LIMIT 1`, 'A venda tem comissão fechada depois da mudança.');
+      await conferir('reembolsos', `SELECT 1 FROM reembolsos WHERE tenant_id = $1 AND venda_id = $2 AND vinculado_a NOT LIKE 'mudanca:%' LIMIT 1`, 'A venda tem reembolso lançado depois da mudança.');
+      if (usos.length) manter(v, atual.data, usos[0]);
+      else if (atual.h !== v.hash) manter(v, atual.data, 'A venda foi alterada depois da mudança.');
+      else marcarApagar(v);
+    }
+
+    // 1d. Reembolsos e créditos trazidos.
+    if (await existe(exec, 'reembolsos')) {
+      for (const v of criados(['reembolsos'])) {
+        const { rows: r } = await exec.query(`SELECT situacao, pessoa_nome FROM reembolsos WHERE tenant_id = $1 AND id = $2`, [tenantId, v.registro_id]);
+        if (!r.length) { soltar.push(v.id); continue; }
+        const d = { nome: txt(r[0].pessoa_nome) };
+        if (txt(r[0].situacao) !== txt(v.dados.situacao)) manter(v, d, 'O reembolso andou depois da mudança (aprovado, pago ou cancelado aqui).');
+        else marcarApagar(v);
+      }
+    }
+    if (await existe(exec, 'creditos_cliente')) {
+      for (const v of criados(['creditos_cliente'])) {
+        const { rows: r } = await exec.query(
+          `SELECT c.cliente_nome, c.saldo_centavos, (SELECT COUNT(*)::int FROM creditos_cliente_movimentos m WHERE m.tenant_id = c.tenant_id AND m.credito_id = c.id) AS movs
+             FROM creditos_cliente c WHERE c.tenant_id = $1 AND c.id = $2`, [tenantId, v.registro_id]);
+        if (!r.length) { soltar.push(v.id); continue; }
+        const d = { nome: txt(r[0].cliente_nome) };
+        if (Number(r[0].movs) > 1 || Number(r[0].saldo_centavos) !== Number(v.dados.valor_centavos ?? -1)) manter(v, d, 'O crédito foi usado ou ajustado depois da mudança.');
+        else marcarApagar(v);
+      }
+    }
+
+    // 1e. Metas: voltam ao que eram, se ninguém mudou depois.
+    const metasVoltar: Vinculo[] = [];
+    if (await existe(exec, 'comissao_metas')) {
+      for (const v of criados(['comissao_metas'])) {
+        const { rows: r } = await exec.query(`SELECT valor_centavos FROM comissao_metas WHERE tenant_id = $1 AND pessoa_funcao_id = $2 AND mes = $3`,
+          [tenantId, txt(v.dados.pessoa_funcao_id), txt(v.dados.mes)]);
+        const atual = r.length ? Number(r[0].valor_centavos) : null;
+        if (atual !== Number(v.dados.depois)) manter(v, { nome: txt(v.dados.mes) }, 'A meta foi mudada depois da mudança.');
+        else metasVoltar.push(v);
+      }
+    }
+
+    // 1f. Registros do sistema anterior (faturas, notas, comissões pagas): só consulta, sempre saem.
+    for (const v of criados(['migracao_historico'])) marcarApagar(v);
+
     // 2. Títulos.
     const temBaixas = await existe(exec, 'baixas');
     const temCobrancas = await existe(exec, 'cobrancas');
@@ -131,8 +207,12 @@ export async function desfazerLote(tenantId: string, loteId: string, gravar: boo
       const vs = criados([tabela]);
       const atuais = await estadoAtual(exec, tenantId, tabela, vs.map(v => v.registro_id));
       const ids = vs.map(v => v.registro_id);
+      // Baixa que NÃO é a liquidação trazida pelo próprio lote (nem o estorno dela).
       const comBaixa = temBaixas && ids.length
-        ? new Set((await exec.query(`SELECT DISTINCT titulo_id FROM baixas WHERE tenant_id = $1 AND titulo_tabela = $2 AND titulo_id = ANY($3::text[])`, [tenantId, tabela, ids])).rows.map(r => txt(r.titulo_id)))
+        ? new Set((await exec.query(
+          `SELECT DISTINCT titulo_id FROM baixas WHERE tenant_id = $1 AND titulo_tabela = $2 AND titulo_id = ANY($3::text[])
+              AND NOT (id = ANY($4::text[])) AND NOT (COALESCE(estorna_baixa_id, '') = ANY($4::text[]))`,
+          [tenantId, tabela, ids, [...baixasDoLote]])).rows.map(r => txt(r.titulo_id)))
         : new Set<string>();
       const comCobranca = temCobrancas && ids.length
         ? new Set((await exec.query(`SELECT DISTINCT titulo_id FROM cobrancas WHERE tenant_id = $1 AND titulo_tabela = $2 AND titulo_id = ANY($3::text[])`, [tenantId, tabela, ids])).rows.map(r => txt(r.titulo_id)))
@@ -141,12 +221,22 @@ export async function desfazerLote(tenantId: string, loteId: string, gravar: boo
         const atual = atuais.get(v.registro_id);
         if (!atual) { soltar.push(v.id); continue; }
         const status = txt(atual.data.status);
-        if (comBaixa.has(v.registro_id) || ['RECEBIDO', 'PAGO', 'PARCIAL'].includes(status)) manter(v, atual.data, 'Recebeu baixa depois da mudança.');
+        // A conta liquidada trazida do histórico chega liquidada: só baixa de fora do lote a segura.
+        const doHistorico = historicasDoTitulo.has(`${tabela}:${v.registro_id}`);
+        if (comBaixa.has(v.registro_id) || (!doHistorico && ['RECEBIDO', 'PAGO', 'PARCIAL'].includes(status))) manter(v, atual.data, 'Recebeu baixa depois da mudança.');
         else if (status === 'CANCELADO') manter(v, atual.data, 'Foi cancelado depois da mudança.');
         else if (comCobranca.has(v.registro_id)) manter(v, atual.data, 'Tem cobrança emitida depois da mudança.');
         else if (atual.h !== v.hash) manter(v, atual.data, 'Foi alterado depois da mudança.');
         else marcarApagar(v);
       }
+    }
+
+    // 2b. Cada liquidação trazida sai junto com a conta dela (estorno explícito, no razão).
+    const historicasEstornar: Vinculo[] = [];
+    for (const v of historicas) {
+      const tabela = txt(v.dados.titulo_tabela);
+      if (vaiApagar(tabela).includes(txt(v.dados.titulo_id))) historicasEstornar.push(v);
+      else manter(v, { nome: dataBRCurta(txt(v.dados.data)) }, 'A conta desta liquidação ficou (alguém mexeu nela).');
     }
 
     // 3. Pessoas.
@@ -158,7 +248,19 @@ export async function desfazerLote(tenantId: string, loteId: string, gravar: boo
         `SELECT DISTINCT COALESCE(NULLIF(${col}, ''), data->>'${col}') AS ref FROM ${titulos} WHERE tenant_id = $1 AND NOT (id = ANY($2::text[]))`,
         vaiApagar(titulos));
       if (tabela === 'clientes' && await existe(exec, 'vendas_crm')) {
-        for (const r of (await exec.query(`SELECT DISTINCT cliente_id AS ref FROM vendas_crm WHERE tenant_id = $1`, [tenantId])).rows) usados.add(txt(r.ref));
+        for (const r of (await exec.query(`SELECT DISTINCT cliente_id AS ref FROM vendas_crm WHERE tenant_id = $1 AND NOT (id = ANY($2::text[]))`, [tenantId, vaiApagar('vendas_crm')])).rows) usados.add(txt(r.ref));
+      }
+      if (tabela === 'fornecedores_crm' && await existe(exec, 'venda_produtos')) {
+        for (const r of (await exec.query(
+          `SELECT fornecedor_id AS a, representante_id AS b FROM venda_produtos WHERE tenant_id = $1 AND NOT (venda_id = ANY($2::text[]))`, [tenantId, vaiApagar('vendas_crm')])).rows) {
+          usados.add(txt(r.a)); usados.add(txt(r.b));
+        }
+      }
+      if (await existe(exec, 'reembolsos')) {
+        for (const r of (await exec.query(`SELECT DISTINCT pessoa_id AS ref FROM reembolsos WHERE tenant_id = $1 AND NOT (id = ANY($2::text[]))`, [tenantId, vaiApagar('reembolsos')])).rows) usados.add(txt(r.ref));
+      }
+      if (tabela === 'clientes' && await existe(exec, 'creditos_cliente')) {
+        for (const r of (await exec.query(`SELECT DISTINCT cliente_id AS ref FROM creditos_cliente WHERE tenant_id = $1 AND NOT (id = ANY($2::text[]))`, [tenantId, vaiApagar('creditos_cliente')])).rows) usados.add(txt(r.ref));
       }
       for (const v of vs) {
         const atual = atuais.get(v.registro_id);
@@ -225,7 +327,10 @@ export async function desfazerLote(tenantId: string, loteId: string, gravar: boo
         for (const r of tr) { usados.add(txt(r.a)); usados.add(txt(r.b)); }
       }
       if (temBaixas) {
-        for (const r of (await exec.query(`SELECT DISTINCT conta_bancaria_id AS ref FROM baixas WHERE tenant_id = $1`, [tenantId])).rows) usados.add(txt(r.ref));
+        const fora = historicasEstornar.map(v => v.registro_id);
+        for (const r of (await exec.query(
+          `SELECT DISTINCT conta_bancaria_id AS ref FROM baixas WHERE tenant_id = $1 AND NOT (id = ANY($2::text[])) AND NOT (COALESCE(estorna_baixa_id, '') = ANY($2::text[]))`,
+          [tenantId, fora])).rows) usados.add(txt(r.ref));
       }
       for (const v of vs) {
         const atual = contasAtuais.get(v.registro_id);
@@ -245,6 +350,8 @@ export async function desfazerLote(tenantId: string, loteId: string, gravar: boo
       lote: loteId,
       apagar: [...apagar.values()].flat().map(v => v.id).sort((a, b) => a - b),
       estornos: estornos.map(v => v.id).sort((a, b) => a - b),
+      historico: historicasEstornar.map(v => v.id).sort((a, b) => a - b),
+      metas: metasVoltar.map(v => v.id).sort((a, b) => a - b),
       mantidos: mantidos.map(m => `${m.vinculo}:${m.motivo}`).sort(),
     })).digest('hex').slice(0, 32);
     if (gravar && assinaturaDaPrevia && assinaturaDaPrevia !== assinatura) {
@@ -252,6 +359,53 @@ export async function desfazerLote(tenantId: string, loteId: string, gravar: boo
     }
     let status: StatusDoLote = lote.status;
     if (gravar) {
+      // Histórico: estorna a liquidação trazida (o dinheiro volta pelo razão) e
+      // devolve a abertura para onde estava (o saldo da data de corte não muda).
+      for (const v of historicasEstornar) {
+        await estornarBaixa(exec, { tenantId, usuarioNome: USUARIO_DA_MUDANCA }, v.registro_id, { motivo: 'Mudança de sistema desfeita', data: txt(v.dados.data) || undefined });
+        const caixa = Number(v.dados.caixa_centavos ?? 0);
+        const conta = txt(v.dados.conta_id);
+        if (caixa && conta) {
+          await moverCaixaOuFalhar(tenantId, conta, caixa / 100, exec, {
+            tipo: 'abertura', tabela: 'baixas', id: v.registro_id, descricao: 'Histórico desfeito: a abertura volta para a data de corte (mudança de sistema)',
+          });
+          await exec.query(
+            `UPDATE contas_bancarias SET data = jsonb_set(data, '{saldo_inicial}', to_jsonb(ROUND((CASE WHEN data->>'saldo_inicial' ~ '^-?[0-9]+([.][0-9]+)?$' THEN (data->>'saldo_inicial')::numeric ELSE 0 END) + $3::numeric, 2)), true), updated_at = NOW()
+              WHERE tenant_id = $1 AND id = $2`,
+            [tenantId, conta, (caixa / 100).toFixed(2)],
+          );
+        }
+      }
+      for (const v of metasVoltar) {
+        const antes = v.dados.antes;
+        if (antes === null || antes === undefined) {
+          await exec.query(`DELETE FROM comissao_metas WHERE tenant_id = $1 AND pessoa_funcao_id = $2 AND mes = $3`, [tenantId, txt(v.dados.pessoa_funcao_id), txt(v.dados.mes)]);
+        } else {
+          await exec.query(`UPDATE comissao_metas SET valor_centavos = $4 WHERE tenant_id = $1 AND pessoa_funcao_id = $2 AND mes = $3`, [tenantId, txt(v.dados.pessoa_funcao_id), txt(v.dados.mes), Number(antes)]);
+        }
+      }
+      const vendasSaem = vaiApagar('vendas_crm');
+      if (vendasSaem.length) {
+        for (const t of ['venda_componentes', 'venda_passageiros', 'venda_produtos', 'venda_pagamentos', 'venda_pendencias', 'itens_venda', 'vendas_modelo']) {
+          if (await existe(exec, t)) await exec.query(`DELETE FROM ${t} WHERE tenant_id = $1 AND venda_id = ANY($2::text[])`, [tenantId, vendasSaem]);
+        }
+        await exec.query(`DELETE FROM vendas_crm WHERE tenant_id = $1 AND id = ANY($2::text[])`, [tenantId, vendasSaem]);
+        // Conta que fica (alguém mexeu) deixa de apontar para a venda que saiu.
+        for (const t of ['contas_receber', 'contas_pagar']) {
+          await exec.query(
+            `UPDATE ${t} SET data = data - 'origem_venda_id' - 'venda_id' - 'origem_venda_numero', updated_at = NOW()
+              WHERE tenant_id = $1 AND data->>'origem_venda_id' = ANY($2::text[])`, [tenantId, vendasSaem]);
+        }
+      }
+      const reembolsosSaem = vaiApagar('reembolsos');
+      if (reembolsosSaem.length) await exec.query(`DELETE FROM reembolsos WHERE tenant_id = $1 AND id = ANY($2::text[])`, [tenantId, reembolsosSaem]);
+      const creditosSaem = vaiApagar('creditos_cliente');
+      if (creditosSaem.length) {
+        await exec.query(`DELETE FROM creditos_cliente_movimentos WHERE tenant_id = $1 AND credito_id = ANY($2::text[])`, [tenantId, creditosSaem]);
+        await exec.query(`DELETE FROM creditos_cliente WHERE tenant_id = $1 AND id = ANY($2::text[])`, [tenantId, creditosSaem]);
+      }
+      const registrosSaem = vaiApagar('migracao_historico');
+      if (registrosSaem.length) await exec.query(`DELETE FROM migracao_historico WHERE tenant_id = $1 AND id = ANY($2::text[])`, [tenantId, registrosSaem]);
       for (const v of estornos) {
         const delta = Number(v.dados.delta_centavos ?? 0);
         const antes = (v.dados.antes ?? {}) as Record<string, unknown>;
@@ -277,7 +431,7 @@ export async function desfazerLote(tenantId: string, loteId: string, gravar: boo
       }
       const contas = vaiApagar('contas_bancarias');
       if (contas.length) await exec.query(`DELETE FROM contas_bancarias WHERE tenant_id = $1 AND id = ANY($2::text[])`, [tenantId, contas]);
-      const feitos = [...soltar, ...estornos.map(v => v.id), ...[...apagar.values()].flat().map(v => v.id)];
+      const feitos = [...soltar, ...estornos.map(v => v.id), ...historicasEstornar.map(v => v.id), ...metasVoltar.map(v => v.id), ...[...apagar.values()].flat().map(v => v.id)];
       // O vínculo "criado" de uma conta cujo saldo ficou também fica.
       if (feitos.length) {
         await exec.query(`UPDATE migracao_vinculos SET desfeito = true, desfeito_em = NOW(), mantido_motivo = NULL WHERE tenant_id = $1 AND id = ANY($2::bigint[])`, [tenantId, feitos]);

@@ -16,6 +16,10 @@ import type {
   CategoriaLida, CodigoDeRecusa, ContaLida, PessoaLida, RegistroLido, SaldoLido, TituloLido,
 } from './interpretar';
 import { dataBR, reais } from './valores';
+import type { Venda } from '../venda-modelo';
+import type { TituloDoLote, VendaConhecida } from './identidade';
+import type { BaixaLida, CreditoLido, ReembolsoLido } from './interpretar-historico';
+import { processarHistorico } from './plano-historico';
 
 export type Resultado = 'criar' | 'vincular' | 'recusar' | 'ignorar';
 
@@ -47,6 +51,16 @@ export interface Gravador {
   criarPessoa(papel: PapelSimples, d: PessoaLida, o: OrigemDaLinha): Promise<string>;
   criarTitulo(tabela: 'contas_pagar' | 'contas_receber', t: TituloLido, refs: RefsDoTitulo, chave: string, o: OrigemDaLinha): Promise<string>;
   vincular(tabela: string, id: string, o: OrigemDaLinha, chave?: string): Promise<void>;
+  // ---- Histórico (E7) ----
+  /** Liquida a conta trazida na data e na conta do sistema anterior, sem mudar o saldo da data de corte. Devolve o id da baixa. */
+  criarBaixaHistorica(tabela: 'contas_pagar' | 'contas_receber', tituloId: string, b: BaixaLida, contaId: string | null, o: OrigemDaLinha): Promise<string>;
+  /** Grava a venda no modelo completo (origem "mudança"), sem gerar contas; liga os títulos trazidos com o mesmo número. */
+  criarVenda(venda: Venda, extra: { numero_anterior: string; chave: string; titulos: TituloDoLote[] }, o: OrigemDaLinha): Promise<string>;
+  /** Registro do sistema anterior (fatura, nota, comissão paga): só consulta. */
+  gravarRegistro(tipo: 'faturas' | 'notas' | 'comissoes_pagas', chave: string, resumo: { data: string | null; valor: number; pessoa: string; numero: string; venda_id: string }, dados: Record<string, unknown>, o: OrigemDaLinha): Promise<string>;
+  gravarMeta(pessoaFuncaoId: string, mes: string, centavos: number, o: OrigemDaLinha): Promise<void>;
+  criarReembolso(r: ReembolsoLido, pessoa: { id: string; nome: string }, conta: TituloDoLote | null, venda: VendaConhecida | null, chave: string, o: OrigemDaLinha): Promise<string>;
+  criarCredito(c: CreditoLido, cliente: { id: string; nome: string }, venda: VendaConhecida | null, chave: string, o: OrigemDaLinha): Promise<string>;
 }
 
 /** Decisões que dependem do lote inteiro, tomadas no ensaio e guardadas na linha. */
@@ -63,6 +77,8 @@ export interface ContextoDoPlano {
   chavesDoLote: Map<string, string>;
   /** Contas que já receberam saldo neste lote. */
   saldosDoLote: Set<string>;
+  /** Vendas recusadas na primeira linha delas: os outros produtos da venda dizem o porquê. */
+  vendasRecusadas?: Map<string, { codigo: string; motivo: string }>;
 }
 
 export interface Decisao {
@@ -105,7 +121,7 @@ export function proximoCodigo(indice: IndiceDeCadastros, pai: CategoriaConhecida
 }
 
 /** Acha ou cria a categoria (e o grupo dela). */
-async function garantirCategoria(
+export async function garantirCategoria(
   indice: IndiceDeCadastros, g: Gravador, o: OrigemDaLinha,
   tipo: 'RECEITA' | 'DESPESA', nome: string, grupo: string, repasse = false,
 ): Promise<{ categoria: CategoriaConhecida; criada: boolean; grupoCriado: boolean }> {
@@ -133,7 +149,7 @@ async function garantirCategoria(
   return { categoria, criada: true, grupoCriado };
 }
 
-async function garantirCentro(indice: IndiceDeCadastros, g: Gravador, o: OrigemDaLinha, nome: string): Promise<{ id: string; nome: string; criado: boolean }> {
+export async function garantirCentro(indice: IndiceDeCadastros, g: Gravador, o: OrigemDaLinha, nome: string): Promise<{ id: string; nome: string; criado: boolean }> {
   const ja = acharCentro(indice, nome);
   if (ja) return { id: ja.id, nome: ja.nome, criado: false };
   const id = await g.criarCentro(nome, o);
@@ -141,14 +157,14 @@ async function garantirCentro(indice: IndiceDeCadastros, g: Gravador, o: OrigemD
   return { id, nome, criado: true };
 }
 
-function pessoaVazia(nome: string): PessoaLida {
+export function pessoaVazia(nome: string): PessoaLida {
   return {
     nome, razao_social: '', documento: '', email: '', telefone: '', celular: '', tipo_pessoa: 'PF', papel: null,
     cep: '', endereco: '', numero: '', bairro: '', cidade: '', uf: '', codigo: '',
   };
 }
 
-function registrarPessoa(indice: IndiceDeCadastros, id: string, papel: PapelSimples, d: PessoaLida): PessoaConhecida {
+export function registrarPessoa(indice: IndiceDeCadastros, id: string, papel: PapelSimples, d: PessoaLida): PessoaConhecida {
   const p: PessoaConhecida = {
     id, papel, nome: d.nome, razao_social: d.razao_social, documento: d.documento, email: d.email,
     telefones: [d.telefone, d.celular].filter(Boolean), doLote: true,
@@ -322,12 +338,15 @@ export async function processarRegistro(
       const id = await g.criarTitulo(tabela, t, {
         pessoa_id: pessoa.id, pessoa_nome: pessoa.nome, categoria_id: categoriaId, centro_id: centroId, centro_nome: centroNome, conta_id: contaId,
       }, chave, o);
+      indice.titulosDoLote.push({ tabela, id, pessoa_id: pessoa.id, valor: t.valor, venda: t.venda, liquidado: false });
       return {
         resultado: 'criar', codigo: null,
         motivo: `Conta a ${t.movimento} de ${reais(t.valor)} com vencimento em ${dataBR(t.vencimento)}.`,
         avisos, alvo_tabela: tabela, alvo_id: id, chave,
       };
     }
+    default:
+      return processarHistorico(registro, enriq, indice, ctx, g, o);
   }
 }
 
@@ -344,6 +363,12 @@ export function gravadorDeEnsaio(): Gravador {
     criarPessoa: novo,
     criarTitulo: novo,
     vincular: async () => {},
+    criarBaixaHistorica: novo,
+    criarVenda: novo,
+    gravarRegistro: novo,
+    gravarMeta: async () => {},
+    criarReembolso: novo,
+    criarCredito: novo,
   };
 }
 
@@ -356,5 +381,11 @@ export function tabelasDaLista(lista: ListaId): string[] {
     case 'pessoas': return ['clientes', 'fornecedores_crm'];
     case 'titulos': return ['contas_pagar', 'contas_receber'];
     case 'saldos': return ['contas_bancarias'];
+    case 'liquidados': case 'movimentos': return ['contas_pagar', 'contas_receber', 'baixas'];
+    case 'vendas': return ['vendas_crm'];
+    case 'faturas': case 'notas': case 'comissoes_pagas': return ['migracao_historico'];
+    case 'metas': return ['comissao_metas'];
+    case 'reembolsos': return ['reembolsos'];
+    case 'creditos': return ['creditos_cliente'];
   }
 }

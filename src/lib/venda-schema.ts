@@ -43,11 +43,19 @@ export const VENDA_SCHEMA_SQL = `
     atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (tenant_id, venda_id),
     CONSTRAINT vendas_modelo_situacao_ok CHECK (situacao IN ('ABERTA','FECHADA')),
-    CONSTRAINT vendas_modelo_origem_ok CHECK (origem IN ('manual','crm')),
+    CONSTRAINT vendas_modelo_origem_ok CHECK (origem IN ('manual','crm','mudanca')),
     CONSTRAINT vendas_modelo_versao_ok CHECK (versao_modelo IN (1, 2))
   );
   CREATE INDEX IF NOT EXISTS idx_vendas_modelo_crm ON vendas_modelo(tenant_id, crm_venda_id) WHERE crm_venda_id <> '';
   CREATE INDEX IF NOT EXISTS idx_vendas_modelo_situacao ON vendas_modelo(tenant_id, situacao, data_venda);
+  -- E7: venda trazida pela mudança de sistema (origem 'mudanca'). Banco criado antes aceita só manual/crm.
+  DO $mud$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'vendas_modelo_origem_ok' AND conrelid = 'vendas_modelo'::regclass
+               AND pg_get_constraintdef(oid) NOT LIKE '%mudanca%') THEN
+      ALTER TABLE vendas_modelo DROP CONSTRAINT vendas_modelo_origem_ok;
+      ALTER TABLE vendas_modelo ADD CONSTRAINT vendas_modelo_origem_ok CHECK (origem IN ('manual','crm','mudanca'));
+    END IF;
+  END $mud$;
 
   CREATE TABLE IF NOT EXISTS venda_produtos (
     tenant_id TEXT NOT NULL,

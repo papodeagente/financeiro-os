@@ -125,7 +125,7 @@ export interface ContextoBaixa {
   tenantId: string;
   usuarioId?: string;
   usuarioNome?: string;
-  origem: 'tela' | 'lote' | 'conciliacao' | 'crm' | 'plataforma' | 'api';
+  origem: 'tela' | 'lote' | 'conciliacao' | 'crm' | 'plataforma' | 'api' | 'migracao';
   /** Cabeçalho Idempotency-Key: repetir a mesma gravação não grava duas vezes. */
   idempotencia?: string;
   politica?: PoliticaCobranca | null;

@@ -179,7 +179,7 @@ globalThis.__SESSAO_DE_TESTE__ = sessao('OPERADOR');
 eq((await json(await rotaLotes.POST(pedir('POST', '/api/mudanca/lotes', { data_corte: '2026-11-05' })))).status, 403, 'só administrador começa a mudança');
 globalThis.__SESSAO_DE_TESTE__ = sessao('ADMIN');
 const dic = await json(await rotaDicionario.GET());
-eq([dic.status, dic.corpo.listas.map(l => l.id)], [200, ['contas', 'categorias', 'centros_custo', 'pessoas', 'titulos', 'saldos']], 'dicionário das listas para o passo 1');
+eq([dic.status, dic.corpo.listas.map(l => l.id).slice(0, 6)], [200, ['contas', 'categorias', 'centros_custo', 'pessoas', 'titulos', 'saldos']], 'dicionário das listas para o passo 1 (a v1 primeiro; o histórico da E7 depois)');
 const c1 = await json(await rotaLotes.POST(pedir('POST', '/api/mudanca/lotes', { data_corte: '05/11/2026' }, { 'Idempotency-Key': 'criar-1' })));
 const c1b = await json(await rotaLotes.POST(pedir('POST', '/api/mudanca/lotes', { data_corte: '05/11/2026' }, { 'Idempotency-Key': 'criar-1' })));
 const L = c1.corpo.id;
