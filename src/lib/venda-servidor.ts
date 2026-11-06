@@ -48,7 +48,7 @@ export class ErroVenda extends Error {
 
 export interface UsuarioDaAcao { id: string; nome: string }
 
-export type TipoDeEventoDaVenda = 'criada' | 'alterada' | 'recebida_do_crm' | 'fechada' | 'reaberta' | 'mudanca_do_crm_recusada';
+export type TipoDeEventoDaVenda = 'criada' | 'alterada' | 'recebida_do_crm' | 'fechada' | 'reaberta' | 'mudanca_do_crm_recusada' | 'cancelamento';
 
 export interface EventoDaVenda {
   id: string;
@@ -416,9 +416,20 @@ async function regerarTabela(
       else ajustarValor(livres[i], v - tira);
     }
     if (delta < 0) {
-      avisos.push({ codigo: 'MOVIDO_ACIMA_DO_PREVISTO', valor_centavos: -delta, mensagem: `Já se moveu ${deCentavos(-delta).toFixed(2)} a mais do que a venda prevê agora (${lado.startsWith('cliente') ? 'cliente' : 'fornecedor'}). Isso pede devolução ou acerto, que não acontece sozinho.` });
+      avisos.push({ codigo: 'MOVIDO_ACIMA_DO_PREVISTO', valor_centavos: -delta, lado, mensagem: `Já se moveu ${deCentavos(-delta).toFixed(2)} a mais do que a venda prevê agora (${lado.startsWith('cliente') ? 'cliente' : 'fornecedor'}). Isso pede devolução ou acerto, que não acontece sozinho.` });
     }
     finais.push(...livres);
+  }
+  // Lado que a venda não prevê mais e que já movimentou dinheiro (o produto
+  // ou o pagamento saiu inteiro): tudo o que se moveu ali está a mais.
+  const ladosTravados = new Map<string, Centavos>();
+  for (const c of travadas) {
+    const l = ladoDaConta(tabela, c.data);
+    if (!lados.has(l)) ladosTravados.set(l, (ladosTravados.get(l) ?? 0) + valorDe(c.data));
+  }
+  for (const [lado, valor] of ladosTravados) {
+    if (valor <= 0) continue;
+    avisos.push({ codigo: 'MOVIDO_ACIMA_DO_PREVISTO', valor_centavos: valor, lado, mensagem: `Já se moveu ${deCentavos(valor).toFixed(2)} a mais do que a venda prevê agora (${lado.startsWith('cliente') ? 'cliente' : 'fornecedor'}). Isso pede devolução ou acerto, que não acontece sozinho.` });
   }
 
   const usadas = new Set<string>();
@@ -616,7 +627,7 @@ async function gravarFilhos(exec: ExecutorSQL, tenantId: string, venda: Venda): 
   }
 }
 
-async function sincronizarPendencias(exec: ExecutorSQL, tenantId: string, vendaId: string, novas: PendenciaDaVenda[], avisos: AvisoDaVenda[]): Promise<void> {
+async function sincronizarPendencias(exec: ExecutorSQL, tenantId: string, vendaId: string, novas: PendenciaDaVenda[], avisos: AvisoDaVenda[], comCarteira = false): Promise<void> {
   const { rows } = await exec.query(`SELECT chave, situacao, valor_centavos FROM venda_pendencias WHERE tenant_id = $1 AND venda_id = $2`, [tenantId, vendaId]);
   const atuais = new Map(rows.map(r => [txt(r.chave), { situacao: txt(r.situacao), valor: Number(r.valor_centavos) || 0 }]));
   const chaves = new Set(novas.map(p => p.chave));
@@ -629,7 +640,16 @@ async function sincronizarPendencias(exec: ExecutorSQL, tenantId: string, vendaI
         [tenantId, vendaId, p.chave, p.tipo, p.pessoa.id, p.pessoa.nome, p.valor_centavos, dados],
       );
     } else if (a.situacao === 'RESOLVIDA') {
-      if (a.valor !== p.valor_centavos) avisos.push({ codigo: 'CREDITO_JA_USADO', valor_centavos: p.valor_centavos - a.valor, mensagem: 'O crédito do cliente já foi usado com outro valor. Ajuste na carteira de crédito do cliente.' });
+      if (a.valor !== p.valor_centavos && comCarteira) {
+        // Com a carteira (parte D), o valor novo vale e a carteira se acerta
+        // sozinha (usa a diferença ou devolve o que sobrou).
+        await exec.query(
+          `UPDATE venda_pendencias SET valor_centavos = $4, dados = dados || $5::jsonb, atualizado_em = NOW() WHERE tenant_id = $1 AND venda_id = $2 AND chave = $3`,
+          [tenantId, vendaId, p.chave, p.valor_centavos, dados],
+        );
+      } else if (a.valor !== p.valor_centavos) {
+        avisos.push({ codigo: 'CREDITO_JA_USADO', valor_centavos: p.valor_centavos - a.valor, mensagem: 'O crédito do cliente já foi usado com outro valor. Ajuste na carteira de crédito do cliente.' });
+      }
     } else {
       await exec.query(
         `UPDATE venda_pendencias SET valor_centavos = $4, pessoa_id = $5, pessoa_nome = $6, situacao = 'ABERTA', dados = $7::jsonb, atualizado_em = NOW()
@@ -644,7 +664,12 @@ async function sincronizarPendencias(exec: ExecutorSQL, tenantId: string, vendaI
   }
   for (const [chave, a] of atuais) {
     if (!chaves.has(chave) && a.situacao === 'RESOLVIDA') {
-      avisos.push({ codigo: 'CREDITO_JA_USADO', valor_centavos: a.valor, mensagem: 'Um crédito do cliente já usado saiu da venda. Devolva o valor na carteira de crédito do cliente.' });
+      if (comCarteira) {
+        // O crédito usado volta para a carteira (sincronizarCreditosDaVenda).
+        await exec.query(`UPDATE venda_pendencias SET situacao = 'CANCELADA', atualizado_em = NOW() WHERE tenant_id = $1 AND venda_id = $2 AND chave = $3`, [tenantId, vendaId, chave]);
+      } else {
+        avisos.push({ codigo: 'CREDITO_JA_USADO', valor_centavos: a.valor, mensagem: 'Um crédito do cliente já usado saiu da venda. Devolva o valor na carteira de crédito do cliente.' });
+      }
     }
   }
 }
@@ -664,21 +689,37 @@ export async function previaDasContas(exec: ExecutorSQL, tenantId: string, venda
  */
 export async function salvarVenda(
   exec: ExecutorSQL, tenantId: string, entrada: Venda,
-  opts: { usuario: UsuarioDaAcao | null; origem: 'manual' | 'crm'; cabecalho?: Record<string, unknown>; evento?: TipoDeEventoDaVenda; detalheDoEvento?: Record<string, unknown> },
+  opts: {
+    usuario: UsuarioDaAcao | null; origem: 'manual' | 'crm'; cabecalho?: Record<string, unknown>; evento?: TipoDeEventoDaVenda; detalheDoEvento?: Record<string, unknown>;
+    /** Só o cancelamento (parte D): grava mesmo com a venda fechada, sem reabri-la. */
+    ignorarFechamento?: boolean;
+    /** Quem chama registra o próprio evento (o cancelamento, com motivo e resumo). */
+    semEvento?: boolean;
+  },
 ): Promise<ResultadoDaGravacao> {
   if (!tenantId) throw new ErroVenda('SEM_EMPRESA', 'Empresa não identificada.', 400);
   if (!entrada.id) throw new ErroVenda('SEM_ID', 'A venda precisa de id.', 400);
-  const venda: Venda = { ...entrada, origem: opts.origem === 'crm' ? 'crm' : entrada.origem };
+  let venda: Venda = { ...entrada, origem: opts.origem === 'crm' ? 'crm' : entrada.origem };
   await travarVenda(exec, tenantId, venda.id);
   const { rows: cabRows } = await exec.query(`SELECT data FROM vendas_crm WHERE tenant_id = $1 AND id = $2`, [tenantId, venda.id]);
   const existente = (cabRows[0]?.data ?? null) as Record<string, unknown> | null;
   const { rows: modRows } = await exec.query(`SELECT situacao, numero FROM vendas_modelo WHERE tenant_id = $1 AND venda_id = $2`, [tenantId, venda.id]);
-  if (txt(modRows[0]?.situacao) === 'FECHADA') {
+  const fechada = txt(modRows[0]?.situacao) === 'FECHADA';
+  if (fechada && !opts.ignorarFechamento) {
     throw new ErroVenda('VENDA_FECHADA', 'A venda está fechada. Reabra a venda para mudar produtos ou pagamentos.', 409);
   }
   const nova = !existente;
   venda.numero = txt(existente?.numero) || txt(modRows[0]?.numero) || venda.numero || await proximoNumero(exec, tenantId);
-  venda.situacao = 'ABERTA';
+  venda.situacao = fechada ? 'FECHADA' : 'ABERTA';
+  // A venda que chega de novo do CRM não sabe do cancelamento feito aqui
+  // (parte D): os cancelamentos gravados são reaplicados por cima.
+  // (Só o que vem do CRM: a tela manda a venda já com o cancelamento dentro.)
+  if (opts.evento === 'recebida_do_crm' && !nova) {
+    const { reaplicarCancelamentosGravados } = await import('./cancelamento-servidor');
+    venda = await reaplicarCancelamentosGravados(exec, tenantId, venda);
+  }
+  const { carteiraDisponivel, sincronizarCreditosDaVenda } = await import('./credito-cliente-servidor');
+  const comCarteira = await carteiraDisponivel(exec);
 
   const config = await lerConfigVenda(exec, tenantId);
   const contas = await previaDasContas(exec, tenantId, venda);
@@ -736,8 +777,13 @@ export async function salvarVenda(
 
   const regerado = await regerarContasDaVenda(exec, tenantId, venda.id, contas);
   const avisos = [...contas.avisos, ...regerado.avisos];
-  await sincronizarPendencias(exec, tenantId, venda.id, contas.pendencias, avisos);
-  await registrarEventoDaVenda(exec, tenantId, venda.id, opts.evento ?? (nova ? 'criada' : 'alterada'), {
+  await sincronizarPendencias(exec, tenantId, venda.id, contas.pendencias, avisos, comCarteira);
+  // Crédito do cliente (parte D): a carteira paga o que a forma pede, ou devolve.
+  if (comCarteira) {
+    const c = await sincronizarCreditosDaVenda(exec, tenantId, venda.id, opts.usuario ?? { id: '', nome: opts.origem === 'crm' ? 'CRM' : '' });
+    if (c.faltando > 0) avisos.push({ codigo: 'CREDITO_INSUFICIENTE', valor_centavos: c.faltando, mensagem: `O cliente não tem crédito disponível para cobrir ${deCentavos(c.faltando).toFixed(2)} pagos com "Crédito do cliente". A pendência continua aberta até o crédito existir ou a forma mudar.` });
+  }
+  if (!opts.semEvento) await registrarEventoDaVenda(exec, tenantId, venda.id, opts.evento ?? (nova ? 'criada' : 'alterada'), {
     usuario: opts.usuario,
     detalhe: { ...(opts.detalheDoEvento ?? {}), contas: regerado.contas, total_cliente_centavos: totaisDaVenda(venda).valor_cliente, avisos: avisos.map(a => a.codigo) },
   });

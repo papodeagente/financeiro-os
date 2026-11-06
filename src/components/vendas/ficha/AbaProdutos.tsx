@@ -16,12 +16,12 @@ import { RecordSheet } from '@/components/fin/RecordSheet';
 import { Segmentado } from '@/components/fin/Segmentado';
 import { Field } from '@/components/fin/Field';
 import {
-  CAMPOS_DO_TIPO, COMPONENTES, ROTULO_QUEM_COBRA, ROTULO_TIPO_PASSAGEIRO, ROTULO_TIPO_PRODUTO, TIPOS_COMPONENTE, TIPOS_PRODUTO,
+  CAMPOS_DO_TIPO, COMPONENTES, ROTULO_QUEM_COBRA, ROTULO_TIPO_PASSAGEIRO, ROTULO_TIPO_PRODUTO, TIPOS_COMPONENTE_DA_TELA, TIPOS_PRODUTO,
   normalizarProduto, novoIdDaVenda, totaisDoProduto,
   type ComponenteDeReceita, type ParteDaVenda, type Passageiro, type ProdutoDaVenda, type TipoComponente, type TipoPassageiro, type TipoProduto,
 } from '@/lib/venda-modelo';
 import { cn } from '@/lib/utils';
-import { CampoReais, CONTROLE, naMoeda, Pilula, reais, ROTULO, SELECT } from './comum';
+import { CampoReais, CONTROLE, dataBR, naMoeda, Pilula, reais, ROTULO, SELECT } from './comum';
 
 export const MOEDAS = ['BRL', 'USD', 'EUR', 'GBP', 'ARS', 'CLP', 'UYU', 'MXN', 'CAD', 'CHF', 'JPY', 'AUD'] as const;
 
@@ -60,7 +60,7 @@ export function AbaProdutos({
           <span className="truncate fin-t-caption text-[var(--fin-text-3)]">
             {ROTULO_TIPO_PRODUTO[p.tipo]}
             {p.localizador ? ` · ${p.localizador}` : ''}
-            {p.cancelado_em ? ' · cancelado' : ''}
+            {p.cancelado_em ? ` · cancelado em ${dataBR(p.cancelado_em)}` : ''}
           </span>
         </div>
       ),
@@ -323,7 +323,10 @@ function EditorDeProduto({ inicial, novo, editavel, verReceita, fornecedores, on
                 <tbody>
                   {p.passageiros.map((x, i) => (
                     <tr key={x.id} className={cn('border-t border-[var(--fin-border)]', x.cancelado_em && 'opacity-60')}>
-                      <td className="px-2 py-1.5"><Input aria-label={`Nome do passageiro ${i + 1}`} className={CONTROLE} value={x.nome} onChange={e => mudarPax(x.id, { nome: e.target.value })} /></td>
+                      <td className="px-2 py-1.5">
+                        <Input aria-label={`Nome do passageiro ${i + 1}`} className={CONTROLE} value={x.nome} onChange={e => mudarPax(x.id, { nome: e.target.value })} />
+                        {x.cancelado_em ? <span className="mt-0.5 block fin-t-caption text-[var(--fin-negative-text)]">Cancelado em {dataBR(x.cancelado_em)}</span> : null}
+                      </td>
                       <td className="px-2 py-1.5">
                         <select aria-label={`Tipo do passageiro ${i + 1}`} className={cn(SELECT, 'w-28')} value={x.tipo} onChange={e => mudarPax(x.id, { tipo: e.target.value as TipoPassageiro })}>
                           {(['ADT', 'CHD', 'INF'] as const).map(k => <option key={k} value={k}>{ROTULO_TIPO_PASSAGEIRO[k]}</option>)}
@@ -363,7 +366,7 @@ function EditorDeProduto({ inicial, novo, editavel, verReceita, fornecedores, on
               ))}
               <select aria-label="Outro componente" className={cn(SELECT, 'h-11 w-auto lg:h-8')} value="" onChange={e => { if (e.target.value) novoComp(e.target.value as TipoComponente); }}>
                 <option value="">Outro…</option>
-                {TIPOS_COMPONENTE.filter(tp => !atalhosDoTipo(p.tipo).includes(tp)).map(tp => <option key={tp} value={tp}>{COMPONENTES[tp].rotulo}</option>)}
+                {TIPOS_COMPONENTE_DA_TELA.filter(tp => !atalhosDoTipo(p.tipo).includes(tp)).map(tp => <option key={tp} value={tp}>{COMPONENTES[tp].rotulo}</option>)}
               </select>
             </div>
           ) : null}
@@ -380,22 +383,26 @@ function EditorDeProduto({ inicial, novo, editavel, verReceita, fornecedores, on
                   </tr>
                 </thead>
                 <tbody>
-                  {p.componentes.map(c => (
+                  {p.componentes.map(c => {
+                    // Os do cancelamento (parte D) são do sistema: aparecem, não se editam.
+                    const doSistema = Boolean(COMPONENTES[c.tipo].interno);
+                    const mexe = editavel && !doSistema;
+                    return (
                     <tr key={c.id} className="border-t border-[var(--fin-border)]">
                       <td className="px-3 py-1.5">
                         <span className="flex items-center gap-2">
                           <span className={cn('fin-t-body-strong', COMPONENTES[c.tipo].sinal < 0 ? 'text-[var(--fin-negative-text)]' : 'text-[var(--fin-text)]')}>{COMPONENTES[c.tipo].rotulo}</span>
                         </span>
-                        <span className="block fin-t-caption text-[var(--fin-text-3)]">{COMPONENTES[c.tipo].ajuda}</span>
+                        <span className="block fin-t-caption text-[var(--fin-text-3)]">{doSistema && c.descricao ? c.descricao : COMPONENTES[c.tipo].ajuda}</span>
                       </td>
                       <td className="px-2 py-1.5">
-                        <select aria-label={`${COMPONENTES[c.tipo].rotulo}: de quem`} className={cn(SELECT, 'w-44')} value={c.passageiro_id ?? ''} onChange={e => mudarComp(c.id, { passageiro_id: e.target.value || null })}>
+                        <select aria-label={`${COMPONENTES[c.tipo].rotulo}: de quem`} disabled={!mexe} className={cn(SELECT, 'w-44')} value={c.passageiro_id ?? ''} onChange={e => mudarComp(c.id, { passageiro_id: e.target.value || null })}>
                           <option value="">Produto inteiro</option>
                           {p.passageiros.map((x, i) => <option key={x.id} value={x.id}>{x.nome || `Passageiro ${i + 1}`}</option>)}
                         </select>
                       </td>
                       <td className="px-2 py-1.5">
-                        <Input aria-label={`${COMPONENTES[c.tipo].rotulo}: percentual`} type="number" inputMode="decimal" min={0} step="0.01" className={cn(CONTROLE, 'w-24 text-right tabular-nums')}
+                        <Input aria-label={`${COMPONENTES[c.tipo].rotulo}: percentual`} disabled={!mexe} type="number" inputMode="decimal" min={0} step="0.01" className={cn(CONTROLE, 'w-24 text-right tabular-nums')}
                           value={c.percentual ?? ''}
                           onChange={e => {
                             const pct = e.target.value === '' ? null : Math.max(0, Number(e.target.value.replace(',', '.')) || 0);
@@ -403,17 +410,18 @@ function EditorDeProduto({ inicial, novo, editavel, verReceita, fornecedores, on
                           }} />
                       </td>
                       <td className="px-2 py-1.5">
-                        <CampoReais rotulo={`${COMPONENTES[c.tipo].rotulo}: valor`} prefixo={prefixo} centavos={c.valor_centavos} onChange={v => mudarComp(c.id, { valor_centavos: v, percentual: null })} desabilitado={!editavel} />
+                        <CampoReais rotulo={`${COMPONENTES[c.tipo].rotulo}: valor`} prefixo={prefixo} centavos={c.valor_centavos} onChange={v => mudarComp(c.id, { valor_centavos: v, percentual: null })} desabilitado={!mexe} />
                       </td>
                       <td className="px-1 py-1.5 text-right">
-                        {editavel ? (
+                        {mexe ? (
                           <Button type="button" variant="ghost" size="icon" aria-label={`Remover ${COMPONENTES[c.tipo].rotulo}`} onClick={() => mudar({ componentes: p.componentes.filter(y => y.id !== c.id) })}>
                             <Trash2 aria-hidden="true" className="size-4 text-[var(--fin-text-3)]" />
                           </Button>
                         ) : null}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

@@ -21,7 +21,7 @@ export const statusChipVariants = cva(
 
 export type StatusTone = NonNullable<VariantProps<typeof statusChipVariants>['tone']>;
 
-export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza' | 'comissao' | 'plano' | 'cobranca' | 'mudanca' | 'nota' | 'comissao_item';
+export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza' | 'comissao' | 'plano' | 'cobranca' | 'mudanca' | 'nota' | 'comissao_item' | 'reembolso' | 'credito';
 
 export type StatusChipProps = {
   /** Valor cru do banco. NUNCA é renderizado como veio. */
@@ -142,6 +142,21 @@ export const STATUS_LABELS: Record<StatusDominio, Record<string, { rotulo: strin
     EMITIDA:      { rotulo: 'Em nota',               tone: 'positivo' },
     ACIMA:        { rotulo: 'Nota acima da receita', tone: 'negativo' },
     CANCELADA:    { rotulo: 'Cancelada com nota',    tone: 'negativo' },
+  },
+  // Reembolsos e crédito do cliente (E5, parte D). Mesmos rótulos de
+  // src/lib/reembolsos-servidor.ts e src/lib/credito-cliente.ts.
+  reembolso: {
+    SOLICITADO: { rotulo: 'Solicitado', tone: 'info'     },
+    APROVADO:   { rotulo: 'Aprovado',   tone: 'aviso'    },
+    PAGO:       { rotulo: 'Pago',       tone: 'positivo' },
+    CANCELADO:  { rotulo: 'Cancelado',  tone: 'neutro'   },
+    ATRASADO:   { rotulo: 'Prazo vencido', tone: 'negativo' },
+  },
+  credito: {
+    ATIVO:     { rotulo: 'Com saldo', tone: 'positivo' },
+    USADO:     { rotulo: 'Usado',     tone: 'neutro'   },
+    VENCIDO:   { rotulo: 'Vencido',   tone: 'negativo' },
+    CANCELADO: { rotulo: 'Cancelado', tone: 'neutro'   },
   },
 };
 

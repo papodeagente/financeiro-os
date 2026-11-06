@@ -188,11 +188,30 @@ export function BlocoDeLiquidacao(p: BlocoDeLiquidacaoProps) {
             : 'O restante continua em aberto na mesma conta, com cada parcela no histórico.'}
         </p>
       ) : null}
+      {sobrou && p.sentido === 'recebimento' ? (
+        <div className="flex flex-col gap-[var(--fin-s-2)]">
+          <p className="fin-t-body text-[var(--fin-text)]">
+            Entrou{' '}
+            <Money valor={p.diferencaBruta} size="body" align="esquerda" className="inline-block min-w-0" estado="ok" />{' '}
+            a mais que o devido. O que fazer com a sobra?
+          </p>
+          <Segmentado<TratamentoDiferenca>
+            rotulo="O que fazer com a sobra"
+            cheio
+            valor={p.tratamento === 'credito' ? 'credito' : 'acrescimo'}
+            onChange={p.onTratamento}
+            opcoes={[
+              { valor: 'acrescimo', rotulo: 'Lançar como acréscimo' },
+              { valor: 'credito', rotulo: 'Guardar como crédito do cliente' },
+            ]}
+          />
+        </div>
+      ) : null}
       {sobrou ? (
         <p className="fin-t-caption text-[var(--fin-text-2)]">
-          Entrou{' '}
-          <Money valor={p.diferencaBruta} size="caption" align="esquerda" className="inline-block min-w-0" estado="ok" />{' '}
-          a mais que o devido: a sobra entra como acréscimo e a conta fica quitada.
+          {p.sentido === 'recebimento' && p.tratamento === 'credito'
+            ? 'A conta fica quitada e a sobra entra na carteira de crédito do cliente, para usar numa próxima viagem.'
+            : <>Entrou <Money valor={p.diferencaBruta} size="caption" align="esquerda" className="inline-block min-w-0" estado="ok" /> a mais que o devido: a sobra entra como acréscimo e a conta fica quitada.</>}
         </p>
       ) : null}
 

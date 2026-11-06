@@ -29,6 +29,8 @@ const EXEMPLO: Record<TipoComponente, string> = {
   DESCONTO: 'Sai da receita quando entra.',
   TAXA_CC: 'Sai da receita quando entra.',
   REPASSE_INTERMEDIARIO: 'Sai da receita quando entra.',
+  COBRADO_NO_CANCELAMENTO: 'Ex.: multa de R$ 300 que o cliente paga ao desistir.',
+  RETIDO_PELO_FORNECEDOR: 'Sai da receita quando entra.',
 };
 
 export default function ConfigVendasPage() {

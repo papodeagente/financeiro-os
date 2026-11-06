@@ -31,6 +31,7 @@ import { cn } from '@/lib/utils';
 import { AbaProdutos, type PessoaDaLista } from './AbaProdutos';
 import { AbaPagamentos } from './AbaPagamentos';
 import { AbaCliente, AbaComissoes, AbaFornecedor, AbaPosicao } from './AbasDoFinanceiro';
+import { CancelamentoDaVenda } from './CancelamentoDaVenda';
 import { CONTROLE, dataBR, LINK, Pilula, quandoBR, reais, SELECT, Total } from './comum';
 
 type Aba = 'produtos' | 'pagamentos' | 'cliente' | 'fornecedor' | 'comissoes' | 'posicao';
@@ -74,6 +75,7 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
   const [contas, setContas] = React.useState<PessoaDaLista[]>([]);
   const [fechar, setFechar] = React.useState<null | 'perguntar' | { confirmar: string[] }>(null);
   const [reabrir, setReabrir] = React.useState(false);
+  const [cancelando, setCancelando] = React.useState(false);
   const [motivo, setMotivo] = React.useState('');
   const [processando, setProcessando] = React.useState(false);
   const [atualizadoEm, setAtualizadoEm] = React.useState<Date | null>(null);
@@ -204,7 +206,12 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
             <Pilula tom={fechada ? 'neutro' : 'positivo'}>{fechada ? <><Lock aria-hidden="true" className="size-3" /> Fechada</> : 'Aberta'}</Pilula>
           ) : undefined}
           acaoPrimaria={acaoPrimaria}
-          acoesSecundarias={!nova && vendaId ? [{ rotulo: 'Ver na tela anterior', href: `/vendas/${encodeURIComponent(vendaId)}` }] : undefined}
+          acoesSecundarias={!nova && vendaId ? [
+            ...(ficha && ficha.versao_modelo === 2 && ficha.permissoes.cancelar && ficha.venda.produtos.some(p => !p.cancelado_em)
+              ? [{ rotulo: 'Cancelar produto ou passageiro', onClick: () => (sujo ? toast.warning('Salve antes de cancelar', 'Há mudanças que ainda não foram salvas.') : setCancelando(true)) }]
+              : []),
+            { rotulo: 'Ver na tela anterior', href: `/vendas/${encodeURIComponent(vendaId)}` },
+          ] : undefined}
           atualizadoEm={nova ? undefined : atualizadoEm}
           onRecarregar={nova ? undefined : carregar}
         />
@@ -336,6 +343,14 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
         processando={processando}
         onConfirmar={() => confirmarFechamento(!!(fechar && typeof fechar === 'object'))}
       />
+      {ficha && ficha.versao_modelo === 2 ? (
+        <CancelamentoDaVenda
+          ficha={ficha}
+          aberto={cancelando}
+          onFechar={() => setCancelando(false)}
+          onConcluido={f => { setFicha(f); setRascunho(f.venda); setSujo(false); setCancelando(false); setAtualizadoEm(new Date()); }}
+        />
+      ) : null}
       <ConfirmDialog
         aberto={reabrir}
         onOpenChange={a => { if (!a) { setReabrir(false); setMotivo(''); } }}

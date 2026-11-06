@@ -47,6 +47,8 @@ export interface PermissoesDaFicha {
   editar: boolean;
   fechar: boolean;
   reabrir: boolean;
+  /** Cancelar produto ou passageiro (parte D). */
+  cancelar: boolean;
   /** Contas, posição e fornecedor. */
   ver_financeiro: boolean;
   /** Receita e comissão da agência. */
@@ -78,6 +80,7 @@ export async function permissoesDaFicha(sessao: SessionPayload | null, exec: Exe
     editar: !!sessao && podeEditarFinanceiro(sessao) && await pode(sessao, 'editar_financeiro', { exec }),
     fechar: await pode(sessao, 'fechar_venda', { exec }),
     reabrir: await pode(sessao, 'reabrir_venda', { exec }),
+    cancelar: await pode(sessao, 'cancelar_produto', { exec }),
     ver_financeiro: await pode(sessao, 'ver_aba_financeiro', { exec }),
     ver_receita: await pode(sessao, 'ver_colunas_comissao', { exec }),
   };

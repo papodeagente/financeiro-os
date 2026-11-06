@@ -14,6 +14,7 @@ import { VENDA_SCHEMA_SQL } from './venda-schema';
 import { FORNECEDOR_SCHEMA_SQL } from './fornecedor-schema';
 import { NOTAS_REGRAS_SCHEMA_SQL } from './nota-regras-schema';
 import { COMISSAO_FUNCOES_SCHEMA_SQL } from './comissao-funcoes-schema';
+import { PARTE_D_SCHEMA_SQL } from './cancelamento-schema';
 import { RECORRENCIA_SCHEMA_SQL } from './recorrencia-schema';
 import { CENTROS_CUSTO_SCHEMA_SQL } from './centros-custo-servidor';
 import { PERMISSOES_SCHEMA_SQL } from './permissoes-schema';
@@ -1571,6 +1572,9 @@ async function executarInitDB() {
   // Comissões por função (05/11/2026, E5 parte F): funções, planos em matriz,
   // metas, o cálculo do dia, fechamentos e pagamentos. Antes da auditoria.
   await pool.query(COMISSAO_FUNCOES_SCHEMA_SQL);
+  // Cancelamento, reembolsos e carteira de crédito do cliente (E5, parte D).
+  // O extrato do crédito é imutável e fica fora da auditoria.
+  await pool.query(PARTE_D_SCHEMA_SQL);
   await pool.query(RAZAO_SCHEMA_SQL);
   // Instala a captura somente depois das migrações/seed, sem fabricar histórico.
   await pool.query(AUDIT_SCHEMA_SQL);

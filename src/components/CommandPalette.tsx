@@ -49,6 +49,10 @@ const NAVIGATION_ITEMS: CommandItem[] = [
   { id: 'titulos-pagar-receber', label: 'Títulos a pagar e a receber', href: '/financeiro-ag/contas', icon: <Wallet className="w-4 h-4" />, section: 'navegacao' },
   { id: 'receber', label: 'Contas a receber', href: '/financeiro-ag/receber', icon: <Receipt className="w-4 h-4" />, section: 'navegacao' },
   { id: 'cobrancas', label: 'Cobranças (boletos e Pix)', href: '/financeiro-ag/cobrancas', icon: <Receipt className="w-4 h-4" />, section: 'navegacao' },
+  // Cancelamento, reembolsos e crédito do cliente (E5, parte D).
+  { id: 'reembolsos', label: 'Reembolsos (ao cliente e do fornecedor)', href: '/financeiro-ag/reembolsos', icon: <Receipt className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'creditos-cliente', label: 'Crédito do cliente (carteira, validade e extrato)', href: '/financeiro-ag/creditos', icon: <Wallet className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'cancelar-passageiro', label: 'Cancelar passageiro ou produto (abra a venda e use Cancelar)', href: '/vendas', icon: <ListOrdered className="w-4 h-4" />, section: 'navegacao' },
   { id: 'boletos-nao-emitidos', label: 'Gerar boletos (contas sem boleto)', href: '/financeiro-ag/contas?cobranca=sem_boleto', icon: <Receipt className="w-4 h-4" />, section: 'navegacao' },
   { id: 'config-cobranca', label: 'Configurações de cobrança', href: '/config/cobranca', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
   { id: 'pagar', label: 'Contas a pagar', href: '/financeiro-ag/pagar', icon: <CreditCard className="w-4 h-4" />, section: 'navegacao' },

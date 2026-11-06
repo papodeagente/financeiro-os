@@ -114,10 +114,23 @@ export const VENDA_SCHEMA_SQL = `
     passageiro_id TEXT,
     descricao TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (tenant_id, venda_id, id),
-    CONSTRAINT venda_componentes_tipo_ok CHECK (tipo IN ('COMISSAO','OVER','TAXA_DU','RAV','FEE','MARKUP','DESCONTO','TAXA_CC','REPASSE_INTERMEDIARIO')),
+    CONSTRAINT venda_componentes_tipo_ok CHECK (tipo IN ('COMISSAO','OVER','TAXA_DU','RAV','FEE','MARKUP','DESCONTO','TAXA_CC','REPASSE_INTERMEDIARIO','COBRADO_NO_CANCELAMENTO','RETIDO_PELO_FORNECEDOR')),
     CONSTRAINT venda_componentes_valor_ok CHECK (valor_centavos >= 0)
   );
   CREATE INDEX IF NOT EXISTS idx_venda_componentes_tipo ON venda_componentes(tenant_id, tipo);
+  -- Os componentes do cancelamento (parte D) entram na lista em quem já tinha a tabela.
+  DO $vendacomp$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint
+       WHERE conrelid = 'venda_componentes'::regclass AND conname = 'venda_componentes_tipo_ok'
+         AND pg_get_constraintdef(oid) LIKE '%RETIDO_PELO_FORNECEDOR%'
+    ) THEN
+      ALTER TABLE venda_componentes DROP CONSTRAINT IF EXISTS venda_componentes_tipo_ok;
+      ALTER TABLE venda_componentes ADD CONSTRAINT venda_componentes_tipo_ok CHECK (tipo IN ('COMISSAO','OVER','TAXA_DU','RAV','FEE','MARKUP','DESCONTO','TAXA_CC','REPASSE_INTERMEDIARIO','COBRADO_NO_CANCELAMENTO','RETIDO_PELO_FORNECEDOR'));
+    END IF;
+  END;
+  $vendacomp$;
 
   CREATE TABLE IF NOT EXISTS venda_pagamentos (
     tenant_id TEXT NOT NULL,

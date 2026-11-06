@@ -102,6 +102,8 @@ const TABELAS_DA_VENDA_COMPLETA = [
 const TABELAS_DAS_COMISSOES_POR_FUNCAO = [
   'comissao_lancamentos', 'comissao_fechamento_itens', 'comissao_fechamentos', 'comissao_pagamentos',
 ] as const;
+/** Parte D (cancelamento-servidor.ts): sai junto com as vendas. */
+const TABELAS_DA_PARTE_D = ['venda_cancelamentos', 'reembolsos', 'creditos_cliente_movimentos', 'creditos_cliente'] as const;
 
 const SO_NO_ECOSSISTEMA: ReadonlySet<ResetCategory> = new Set(['cadastros_e_crm', 'plataformas']);
 
@@ -167,6 +169,17 @@ export async function apagarCategorias(
       const n = res.rowCount || 0;
       summary[table] = n;
       total += n;
+    }
+    // Cancelamentos, reembolsos e a carteira de crédito (E5, parte D) nascem
+    // das vendas e saem com elas.
+    const { rows: temParteD } = await exec.query(`SELECT to_regclass('public.venda_cancelamentos') IS NOT NULL AS ok`);
+    if (temParteD[0]?.ok) {
+      for (const table of TABELAS_DA_PARTE_D) {
+        const res = await exec.query(`DELETE FROM ${table} WHERE tenant_id = $1`, [tenantId]);
+        const n = res.rowCount || 0;
+        summary[table] = n;
+        total += n;
+      }
     }
   }
   // Lado do fornecedor (E5 parte C, 05/11/2026): sem as contas a pagar, as

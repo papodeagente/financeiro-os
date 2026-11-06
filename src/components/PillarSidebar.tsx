@@ -25,7 +25,7 @@ import {
   PanelLeftClose, PanelLeftOpen,
   Eraser, LifeBuoy, FileText,
   LayoutGrid, ChartColumn, ArrowDownLeft, ArrowUpRight, GitCompareArrows, ListTree,
-  Contact, Truck, Repeat, Lock, ArrowDownUp, Barcode, FolderInput, Coins, FileStack, HandCoins, Handshake, BadgePercent, FilePlus2, FileCog, ReceiptText, Users2, Grid3x3, CalendarCheck, Banknote, UserRound, BarChart3, Network, Split, Tags, ShieldCheck, Stamp, Scale, ScrollText, ListOrdered, Table2,
+  Contact, Truck, Repeat, Lock, ArrowDownUp, Barcode, FolderInput, Coins, FileStack, HandCoins, Handshake, BadgePercent, FilePlus2, FileCog, ReceiptText, Users2, Grid3x3, CalendarCheck, Banknote, UserRound, BarChart3, Undo2, PiggyBank, Network, Split, Tags, ShieldCheck, Stamp, Scale, ScrollText, ListOrdered, Table2,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -114,6 +114,8 @@ const FINANCEIRO_MENU: SidebarSection[] = [
       { key: 'transferencias', label: 'Transferências', icon: ArrowRightLeft, href: '/financeiro-ag/transferencias' },
       { key: 'fechamento', label: 'Fechar Caixa', icon: Lock, href: '/financeiro-ag/fechamento' },
       { key: 'aprovacoes', label: 'Aprovações', icon: Stamp, href: '/financeiro-ag/aprovacoes' },
+      { key: 'reembolsos', label: 'Reembolsos', icon: Undo2, href: '/financeiro-ag/reembolsos' },
+      { key: 'creditos', label: 'Crédito do cliente', icon: PiggyBank, href: '/financeiro-ag/creditos' },
     ],
   },
   {

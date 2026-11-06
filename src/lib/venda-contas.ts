@@ -78,11 +78,15 @@ export interface AvisoDaVenda {
     /** Gravação: crédito do cliente já usado mudou de valor ou saiu da venda. */
     | 'CREDITO_JA_USADO'
     /** Retenção na fonte do cliente maior do que ele ainda paga (nota-retencoes.ts). */
-    | 'RETENCAO_MAIOR_QUE_O_A_RECEBER';
+    | 'RETENCAO_MAIOR_QUE_O_A_RECEBER'
+    /** Gravação (parte D): a carteira do cliente não cobre a forma "Crédito do cliente". */
+    | 'CREDITO_INSUFICIENTE';
   mensagem: string;
   valor_centavos?: Centavos;
   produto_id?: string;
   pagamento_id?: string;
+  /** Gravação: de que lado da venda é o aviso ('cliente', 'forn:<id>'...), ver ladoDaConta. */
+  lado?: string;
 }
 
 /** Campos que a conta da venda completa carrega além dos de sempre. */
@@ -186,10 +190,12 @@ function contasDaVendaCompleta(venda: Venda, fornecedores: FornecedorInfo[], hoj
   let itens_proprio = 0;
   let itens_fornecedor = 0;
   for (const p of venda.produtos) {
-    if (p.cancelado_em) continue;
     const t = totaisDoProduto(p);
+    // Produto cancelado só segue no acerto pelo que o cancelamento deixou
+    // valendo (multa ou saldo mantido, parte D).
+    if (p.cancelado_em && t.valor_fornecedor === 0 && t.valor_cliente === 0) continue;
     if (p.quem_cobra === 'FORNECEDOR') itens_fornecedor++; else itens_proprio++;
-    if (t.brl.receita_bruta === 0 && t.brl.valor_cliente > 0) {
+    if (!p.cancelado_em && t.brl.receita_bruta === 0 && t.brl.valor_cliente > 0) {
       avisos.push({ codigo: 'PRODUTO_RECEITA_ZERO', produto_id: p.id, mensagem: `${p.descricao || ROTULO_TIPO_PRODUTO[p.tipo]}: a agência não ganha nada neste produto.` });
     }
     const { chave, parte, via_representante } = parteDoAcerto(p);

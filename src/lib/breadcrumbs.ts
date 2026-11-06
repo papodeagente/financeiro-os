@@ -41,6 +41,8 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   '/vendas/nova': 'Nova venda',
   '/vendas/lancar': 'Lançar venda',
   '/vendas/orcamentos': 'Orçamentos',
+  '/financeiro-ag/reembolsos': 'Reembolsos',
+  '/financeiro-ag/creditos': 'Crédito do cliente',
   '/voos': 'Buscar voos',
   '/hoteis': 'Buscar hotéis',
   '/destinos': 'Destinos',

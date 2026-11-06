@@ -19,6 +19,8 @@
  *   taxas       = taxas + outras taxas (embarque etc.): passam ao fornecedor
  *   valor_cliente    = tarifa + taxas + Taxa DU + RAV + Fee + Markup − Desconto
  *   valor_fornecedor = tarifa + taxas − Comissão − Over + Taxa CC
+ *   (+ Cobrado no cancelamento no cliente e + Retido pelo fornecedor no
+ *    fornecedor: o que o cancelamento deixou valendo, parte D)
  *   repasse          = Repasse ao intermediário
  *   receita (todos os componentes) = valor_cliente − valor_fornecedor − repasse
  * Quais componentes CONTAM como receita da agência é escolha dela
@@ -93,8 +95,14 @@ export interface ParteDaVenda {
 
 export const TIPOS_COMPONENTE = [
   'COMISSAO', 'OVER', 'TAXA_DU', 'RAV', 'FEE', 'MARKUP', 'DESCONTO', 'TAXA_CC', 'REPASSE_INTERMEDIARIO',
+  // Só o cancelamento grava estes dois (E5, parte D): o que continua valendo
+  // do que foi cancelado. Ninguém os escolhe na tela.
+  'COBRADO_NO_CANCELAMENTO', 'RETIDO_PELO_FORNECEDOR',
 ] as const;
 export type TipoComponente = (typeof TIPOS_COMPONENTE)[number];
+
+/** Componentes que nascem do cancelamento (parte D): valem mesmo com o passageiro ou o produto cancelado. */
+export const COMPONENTES_DO_CANCELAMENTO: ReadonlySet<TipoComponente> = new Set(['COBRADO_NO_CANCELAMENTO', 'RETIDO_PELO_FORNECEDOR']);
 
 /**
  * Como o componente mexe no dinheiro:
@@ -113,6 +121,8 @@ export interface InfoDoComponente {
   natureza: NaturezaDoComponente;
   /** +1 soma à receita, −1 tira. */
   sinal: 1 | -1;
+  /** Gravado só pelo sistema (cancelamento); a tela não oferece. */
+  interno?: boolean;
 }
 
 export const COMPONENTES: Record<TipoComponente, InfoDoComponente> = {
@@ -125,7 +135,12 @@ export const COMPONENTES: Record<TipoComponente, InfoDoComponente> = {
   DESCONTO: { rotulo: 'Desconto', ajuda: 'Desconto dado ao cliente; sai da receita.', natureza: 'abatido_do_cliente', sinal: -1 },
   TAXA_CC: { rotulo: 'Taxa CC (DU/RAV)', ajuda: 'Custo de cartão que o fornecedor cobra sobre DU/RAV; sai da receita.', natureza: 'custo_da_receita', sinal: -1 },
   REPASSE_INTERMEDIARIO: { rotulo: 'Repasse ao intermediário', ajuda: 'Parte da receita de quem trouxe a venda.', natureza: 'custo_da_receita', sinal: -1 },
+  COBRADO_NO_CANCELAMENTO: { rotulo: 'Cobrado no cancelamento', ajuda: 'O que o cliente continua devendo pelo que foi cancelado: a multa, ou o valor inteiro quando o saldo dele foi mantido.', natureza: 'cobrado_do_cliente', sinal: 1, interno: true },
+  RETIDO_PELO_FORNECEDOR: { rotulo: 'Retido pelo fornecedor', ajuda: 'O que o fornecedor fica pelo que foi cancelado: a multa dele, ou o valor inteiro quando o saldo com ele foi mantido. Sai da receita.', natureza: 'custo_da_receita', sinal: -1, interno: true },
 };
+
+/** Componentes que a pessoa escolhe na venda (sem os do cancelamento). */
+export const TIPOS_COMPONENTE_DA_TELA: readonly TipoComponente[] = TIPOS_COMPONENTE.filter(t => !COMPONENTES[t].interno);
 
 export interface ComponenteDeReceita {
   id: string;
@@ -530,8 +545,10 @@ export interface TotaisDoProduto {
 }
 
 /**
- * Os números de um produto. Passageiro e produto cancelados não entram (o
- * cancelamento com multa e reembolso é da parte D).
+ * Os números de um produto. Passageiro e produto cancelados não entram; o
+ * que o cancelamento deixou valendo (parte D) entra pelos dois componentes do
+ * cancelamento: o cobrado do cliente soma ao valor do cliente, o retido pelo
+ * fornecedor soma ao valor do fornecedor.
  */
 export function totaisDoProduto(p: ProdutoDaVenda): TotaisDoProduto {
   const cancelado = Boolean(p.cancelado_em);
@@ -551,14 +568,16 @@ export function totaisDoProduto(p: ProdutoDaVenda): TotaisDoProduto {
     taxas = p.taxas_centavos;
   }
   const comp = componentesZerados();
-  if (!cancelado) {
-    for (const c of p.componentes) {
+  for (const c of p.componentes) {
+    // O que o cancelamento deixou valendo conta sempre; o resto, só do que está ativo.
+    if (!COMPONENTES_DO_CANCELAMENTO.has(c.tipo)) {
+      if (cancelado) continue;
       if (c.passageiro_id && !idsAtivos.has(c.passageiro_id)) continue;
-      comp[c.tipo] += c.valor_centavos;
     }
+    comp[c.tipo] += c.valor_centavos;
   }
-  const valor_cliente = tarifa + taxas + comp.TAXA_DU + comp.RAV + comp.FEE + comp.MARKUP - comp.DESCONTO;
-  const valor_fornecedor = tarifa + taxas - comp.COMISSAO - comp.OVER + comp.TAXA_CC;
+  const valor_cliente = tarifa + taxas + comp.TAXA_DU + comp.RAV + comp.FEE + comp.MARKUP - comp.DESCONTO + comp.COBRADO_NO_CANCELAMENTO;
+  const valor_fornecedor = tarifa + taxas - comp.COMISSAO - comp.OVER + comp.TAXA_CC + comp.RETIDO_PELO_FORNECEDOR;
   const repasse = comp.REPASSE_INTERMEDIARIO;
   const receita_bruta = valor_cliente - valor_fornecedor - repasse;
   const r = (x: Centavos) => emReais(x, p.moeda, p.cambio);

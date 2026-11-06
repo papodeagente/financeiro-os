@@ -77,6 +77,10 @@ const DEFINICOES = [
   { id: 'ver_proprias_comissoes', modulo: 'vendas_comissoes', rotulo: 'Ver a própria comissão', descricao: 'Quanto a pessoa tem a receber de comissão.', teto: p => p.ver_comissoes },
   { id: 'fechar_venda', modulo: 'vendas_comissoes', rotulo: 'Fechar venda', descricao: 'Encerra a venda: produtos e pagamentos param de mudar.', teto: p => p.editar_financeiro },
   { id: 'reabrir_venda', modulo: 'vendas_comissoes', rotulo: 'Reabrir venda', descricao: 'Volta a venda fechada para edição, com motivo registrado.', teto: p => p.editar_financeiro },
+  // Cancelamento, reembolsos e crédito do cliente (E5, parte D).
+  { id: 'cancelar_produto', modulo: 'vendas_comissoes', rotulo: 'Cancelar produto ou passageiro', descricao: 'Cancela parte da venda com multa, acerto das contas e estorno da comissão, sempre com prévia.', teto: p => p.editar_financeiro },
+  { id: 'cuidar_reembolsos', modulo: 'vendas_comissoes', rotulo: 'Aprovar e cancelar reembolsos', descricao: 'Aprova o reembolso (gera a conta), cancela ou transforma em crédito do cliente.', teto: p => p.editar_financeiro },
+  { id: 'usar_credito_cliente', modulo: 'vendas_comissoes', rotulo: 'Usar e ajustar crédito do cliente', descricao: 'Liquida conta com o crédito do cliente e lança ou corrige crédito à mão.', teto: p => p.editar_financeiro },
   { id: 'ver_comissoes_todos', modulo: 'vendas_comissoes', rotulo: 'Ver a comissão da equipe', descricao: 'Comissão de todos os vendedores.', teto: p => p.ver_comissoes && p.ver_vendas_todos },
   { id: 'fechar_comissoes', modulo: 'vendas_comissoes', rotulo: 'Fechar comissões', descricao: 'Fecha as comissões da equipe até uma data, para pagar.', teto: p => p.editar_financeiro && p.ver_comissoes },
   { id: 'pagar_comissoes', modulo: 'vendas_comissoes', rotulo: 'Pagar comissões', descricao: 'Transforma as comissões fechadas em conta a pagar, total ou em parte.', teto: p => p.editar_financeiro && p.ver_comissoes },

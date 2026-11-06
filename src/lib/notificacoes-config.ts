@@ -15,6 +15,9 @@ export const TIPOS_NOTIFICACAO = [
   // Avisos de vencimento (05/11/2026), ligados em Configurações › Financeiro.
   { tipo: 'CONTAS_A_PAGAR_VENCENDO', label: 'Contas a pagar vencendo', descricao: 'De manhã, as contas a pagar que vencem hoje (e, se ligado, amanhã).' },
   { tipo: 'CONTAS_A_RECEBER_ATRASADAS', label: 'Contas a receber em atraso', descricao: 'De manhã, quantas contas a receber estão em atraso e quanto somam.' },
+  // Crédito do cliente e reembolsos (E5, parte D).
+  { tipo: 'CREDITO_CLIENTE_VENCENDO', label: 'Crédito do cliente vencendo', descricao: 'Um aviso por crédito, 30 dias antes de ele vencer sem uso.' },
+  { tipo: 'REEMBOLSO_NO_PRAZO', label: 'Reembolsos no prazo', descricao: 'Quando um reembolso ao cliente ou do fornecedor chega perto do prazo sem ser pago.' },
 ] as const;
 
 export type TipoNotificacao = (typeof TIPOS_NOTIFICACAO)[number]['tipo'];

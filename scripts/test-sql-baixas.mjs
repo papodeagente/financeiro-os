@@ -99,8 +99,15 @@ eq([idem2.itens[0].ja_existia, idem2.itens[0].baixa_id === idem.itens[0].baixa_i
   const e2 = await falha(emTransacao(exec => registrarBaixas(exec, { ...ctx, idempotencia: 'k-ass' }, it, { gravar: true, assinatura: pv.assinatura })));
   eq([e2, (await titulo('contas_receber', 'r-ass')).valor_recebido, !!g1.itens[0].baixa_id], [null, 20, true], 'repetir com a assinatura da prévia devolve o que foi feito, sem 409');
 }
-e = await falha(gravar([{ titulo_tabela: 'contas_receber', titulo_id: 'r2', valor: 10, tratamento_diferenca: 'credito' }]));
-eq(e?.msg?.includes('carteira de crédito'), true, 'crédito do cliente ainda não liberado');
+// Crédito do cliente liberado pela carteira (E5, parte D): sem as tabelas da
+// carteira neste banco, a sobra não vira crédito e nada é gravado (o caminho
+// com a carteira é provado em test-sql-cancelamento.mjs).
+await cr('r-cred', { valor_final: 100 });
+e = await falha(gravar([{ titulo_tabela: 'contas_receber', titulo_id: 'r-cred', conta_bancaria_id: 'b1', valor: 130, tratamento_diferenca: 'credito' }]));
+eq([e?.msg?.includes('carteira de crédito'), (await titulo('contas_receber', 'r-cred')).status ?? 'PENDENTE'], [true, 'PENDENTE'], 'sobra como crédito sem a carteira no banco: recusa e não grava');
+await cp('p-cred', { valor_final: 100 });
+e = await falha(gravar([{ titulo_tabela: 'contas_pagar', titulo_id: 'p-cred', conta_bancaria_id: 'b1', valor: 130, tratamento_diferenca: 'credito' }]));
+eq(e?.msg?.includes('só vale em contas a receber'), true, 'crédito do cliente não vale em conta a pagar');
 
 console.log('--- Lote: pagar e receber juntos ---');
 await cr('r3', { valor_final: 200 });
