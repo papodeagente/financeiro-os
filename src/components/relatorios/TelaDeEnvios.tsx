@@ -13,6 +13,7 @@ import { RecordSheet } from '@/components/fin/RecordSheet';
 import { ConfirmDialog } from '@/components/fin/ConfirmDialog';
 import { usePodeExportar } from '@/components/fin/BotaoExportar';
 import { FormularioDeEnvio, type EnvioParaEditar } from '@/components/relatorios/FormularioDeEnvio';
+import { ROTULO_RELATORIO_AGENDAVEL } from '@/lib/relatorios-agendados/regras';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 
@@ -133,7 +134,7 @@ export function TelaDeEnvios() {
       render: a => (
         <span className="flex flex-col">
           <span className="fin-t-body-strong text-[var(--fin-text)]">{a.nome}</span>
-          <span className="fin-t-caption text-[var(--fin-text-3)]">{a.descricao}</span>
+          <span className="fin-t-caption text-[var(--fin-text-3)]">{ROTULO_RELATORIO_AGENDAVEL[a.relatorio] ?? 'Relatório'} · {a.descricao}</span>
         </span>
       ) },
     { id: 'para', cabecalho: 'Para', tipo: 'texto', prioridade: 2, render: a => <span className="fin-t-body text-[var(--fin-text-2)]">{a.destinatarios.length === 1 ? a.destinatarios[0] : `${a.destinatarios[0]} e mais ${a.destinatarios.length - 1}`}</span> },
@@ -156,7 +157,11 @@ export function TelaDeEnvios() {
         icone={CalendarClock}
         titulo="Envios agendados"
         subtitulo="Relatórios que saem sozinhos por e-mail, com um link de leitura que vale por um tempo e pode ser desligado."
-        acoesSecundarias={[{ rotulo: 'Relatórios de vendas', href: '/relatorios/vendas' }]}
+        acoesSecundarias={[
+          { rotulo: 'Relatórios de vendas', href: '/relatorios/vendas' },
+          { rotulo: 'Resultado do mês', href: '/financeiro-ag/dre' },
+          { rotulo: 'Fluxo de caixa', href: '/financeiro-ag/fluxo-caixa' },
+        ]}
         atualizadoEm={atualizadoEm}
         onRecarregar={carregar}
       />
@@ -175,7 +180,7 @@ export function TelaDeEnvios() {
           vazio={{
             motivo: 'sem-dado', titulo: 'Nenhum envio agendado',
             oQueE: 'Relatórios que saem sozinhos por e-mail todo dia, toda semana ou todo mês.',
-            comoComeca: ['Abra Relatórios de vendas', 'Escolha o relatório e os filtros', 'Use "Agendar envio"'],
+            comoComeca: ['Abra Relatórios de vendas, o Resultado do mês, o Fluxo de caixa ou a Visão geral', 'Escolha os filtros', 'Use "Agendar envio"'],
             acao: { rotulo: 'Abrir relatórios de vendas', href: '/relatorios/vendas' },
           }}
           onLinhaClick={a => { void abrir(a); }}

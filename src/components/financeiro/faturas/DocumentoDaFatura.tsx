@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { INFO_DO_MODELO, MODELOS_DE_FATURA, type ModeloDeFatura } from '@/lib/fatura-regras';
 import { colunasDoModelo, ROTULO_DA_COLUNA, TEXTO_DE_ABERTURA, valorDaColuna } from '@/lib/fatura-documento';
 import { cn } from '@/lib/utils';
+import type { DadosDaFolhaDaFatura } from '@/lib/cobranca/portal-fatura';
 import { apiFaturas, type FichaDaFatura } from './api';
 import { dataBR, periodoBR, reais } from './comum';
 
@@ -50,7 +51,7 @@ export function DocumentoDaFatura({ faturaId, modeloPedido }: { faturaId: string
         </span>
       </div>
 
-      {ficha ? <Folha ficha={ficha} modelo={modelo} /> : erro ? (
+      {ficha ? <FolhaDaFatura ficha={ficha} modelo={modelo} /> : erro ? (
         <div role="alert" className="mx-auto my-[var(--fin-s-6)] flex max-w-[560px] flex-col gap-[var(--fin-s-2)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-5)] text-center">
           <p className="fin-t-subhead text-[var(--fin-text)]">Sem fatura para mostrar</p>
           <p className="fin-t-body text-[var(--fin-text-2)]">{erro}</p>
@@ -67,7 +68,11 @@ export function DocumentoDaFatura({ faturaId, modeloPedido }: { faturaId: string
   );
 }
 
-function Folha({ ficha, modelo }: { ficha: FichaDaFatura; modelo: ModeloDeFatura }) {
+/**
+ * A folha da fatura. Serve à ficha interna e ao portal do cliente (E7), que
+ * recebe só os campos da folha (`DadosDaFolhaDaFatura`).
+ */
+export function FolhaDaFatura({ ficha, modelo }: { ficha: DadosDaFolhaDaFatura; modelo: ModeloDeFatura }) {
   const f = ficha.fatura;
   const t = ficha.totais;
   const { emitente, sacado } = ficha;

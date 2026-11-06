@@ -20,10 +20,13 @@ import {
 import { addDias, hojeISO, num } from '@/lib/money';
 import { toast } from '@/lib/toast';
 import { SecaoContaPrevisao } from './SecaoContaPrevisao';
+import { SecaoAvisoWhatsApp } from './SecaoAvisoWhatsApp';
 import { SecaoCamposPersonalizados } from './SecaoCamposPersonalizados';
 import { SecaoCategoriasDosTitulos } from './SecaoCategoriasDosTitulos';
 import { EmpresaDaConfiguracao, empresaEmEdicao, naEmpresa } from '@/components/fin/EmpresaDaConfiguracao';
 import { AssistenteInicial } from '@/components/fin/AssistenteInicial';
+import { ReferenciaDeJuros } from '@/components/fin/ReferenciaDeJuros';
+import { referenciaDaOpcao, referenciaValida, textoDaReferencia } from '@/lib/juros-selic';
 
 const CONTROLE = 'h-11 rounded-[var(--fin-r-md)] border-[var(--fin-border-strong)] bg-[var(--fin-surface)] fin-t-body tabular-nums lg:h-10';
 const VAZIA: PoliticaCobranca = { juros_am_pct: 0, multa_pct: 0, tolerancia_dias: 0, desconto_antecipacao: null, aplicar_em_pagar: false };
@@ -223,12 +226,22 @@ export default function ConfigFinanceiroPage() {
             <h2 id="t-encargos" className="fin-t-subhead text-[var(--fin-text)]">Juros, multa e desconto</h2>
             <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:grid-cols-3">
               <Numero rotulo="Juros ao mês" ajuda="Proporcional por dia de atraso." unidade="%" max={20}
-                valor={num(p.juros_am_pct)} onChange={v => setP(x => ({ ...x, juros_am_pct: v }))} />
+                valor={num(p.juros_am_pct)} onChange={v => setP(x => ({ ...x, juros_am_pct: v, juros_referencia: referenciaValida(x.juros_referencia, v) }))} />
               <Numero rotulo="Multa por atraso" ajuda="Cobrada uma vez." unidade="%" max={20}
                 valor={num(p.multa_pct)} onChange={v => setP(x => ({ ...x, multa_pct: v }))} />
               <Numero rotulo="Tolerância" ajuda="Dias sem cobrar depois do vencimento." unidade="dias" max={60}
                 valor={num(p.tolerancia_dias)} onChange={v => setP(x => ({ ...x, tolerancia_dias: Math.round(v) }))} />
             </div>
+            {/* Selic (E7): sugestão com fonte e data; o campo continua sendo o que a agência escrever. */}
+            {(() => {
+              const ref = referenciaValida(p.juros_referencia, p.juros_am_pct);
+              return ref ? <p className="fin-t-caption text-[var(--fin-text-2)]">Juros pela {textoDaReferencia(ref)} Para outro número, é só digitar.</p> : null;
+            })()}
+            <ReferenciaDeJuros
+              avisarSemIndice
+              valorAtual={num(p.juros_am_pct)}
+              onUsar={(v, opcao) => setP(x => ({ ...x, juros_am_pct: v, juros_referencia: referenciaDaOpcao(opcao) }))}
+            />
             <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:grid-cols-3">
               <Numero rotulo="Desconto por pagar antes" unidade="%" max={50}
                 valor={num(d.pct)} onChange={v => setP(x => ({ ...x, desconto_antecipacao: { pct: v, dias: num(x.desconto_antecipacao?.dias) || 5 } }))} />
@@ -347,6 +360,7 @@ export default function ConfigFinanceiroPage() {
               </div>
             </section>
 
+            <SecaoAvisoWhatsApp />
             <SecaoContaPrevisao />
             {naPrincipal ? <AssistenteInicial onAplicado={() => setVersaoDasCategorias(v => v + 1)} /> : null}
             <SecaoCategoriasDosTitulos key={versaoDasCategorias} />

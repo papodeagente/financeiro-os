@@ -46,8 +46,44 @@ export const CAPACIDADES_PAGARME: CapacidadesCobranca = {
     'No Pagar.me a cobrança é boleto ou Pix: os dois no mesmo documento não existem lá.',
     'Juros, multa e desconto só valem em conta Pagar.me com liquidação pelo próprio Pagar.me (PSP), e só em porcentagem.',
     'Boleto pelo Pagar.me exige o endereço do cliente; Pix exige e-mail e telefone.',
+    'No link de pagamento o cliente escolhe Pix, boleto ou cartão de crédito à vista.',
   ],
 };
+
+/**
+ * Corpo do link de pagamento (`POST /paymentlinks`, doc oficial lida em
+ * 06/11/2026, docs.pagar.me/reference/criar-link):
+ *   · `accepted_payment_methods` com boleto, Pix e cartão (`credit_card`);
+ *   · cada forma leva a configuração que a doc marca como obrigatória quando
+ *     a forma vai: `boleto_settings.due_at` (ISO), `pix_settings.expires_in`
+ *     (SEGUNDOS) e `credit_card_settings` com `operation_type`
+ *     'auth_and_capture' (captura na hora) e `installments` só com 1x pelo
+ *     valor cheio — parcelar com juros é decisão da agência, fora daqui;
+ *   · `order_code` leva a nossa referência (`f1;…`) para o pedido gerado
+ *     voltar ligado à cobrança. A doc não diz se o `order_code` aparece no
+ *     pedido do aviso (confirmar no ambiente de teste): quando não aparece,
+ *     o aviso procura o id do link no corpo e, sem achar, vira pendência
+ *     (aviso.ts), nunca venda direta.
+ */
+export function corpoDoLinkPagarme(p: { referencia: string; nome: string; descricao: string; valor_centavos: number; vence_em: string }, agora: Date = new Date()) {
+  const nome = p.nome.slice(0, 64);
+  const fim = `${p.vence_em}T23:59:59-03:00`;
+  const segundos = Math.max(3600, Math.round((Date.parse(fim) - agora.getTime()) / 1000));
+  return {
+    name: nome,
+    type: 'order',
+    order_code: p.referencia,
+    expires_at: p.vence_em,
+    max_paid_sessions: 1,
+    payment_settings: {
+      accepted_payment_methods: ['boleto', 'pix', 'credit_card'],
+      boleto_settings: { due_at: `${p.vence_em}T00:00:00Z` },
+      pix_settings: { expires_in: Number.isFinite(segundos) ? segundos : 86_400 },
+      credit_card_settings: { operation_type: 'auth_and_capture', installments: [{ number: 1, total: p.valor_centavos }] },
+    },
+    cart_settings: { items: [{ amount: p.valor_centavos, name: nome, description: p.descricao.slice(0, 256), default_quantity: 1 }] },
+  };
+}
 
 /** Status da cobrança (charge) no Pagar.me → nosso. */
 export function statusPagarme(status: string): StatusCobranca {
@@ -281,15 +317,7 @@ export function criarAdapterPagarme(o: OpcoesPagarme): AdapterCobranca {
     },
 
     async criarLink(p) {
-      const corpo = {
-        name: p.nome.slice(0, 64),
-        type: 'order',
-        order_code: p.referencia,
-        expires_at: p.vence_em,
-        max_paid_sessions: 1,
-        payment_settings: { accepted_payment_methods: ['boleto', 'pix'] },
-        cart_settings: { items: [{ amount: p.valor_centavos, name: p.nome.slice(0, 64), description: p.descricao.slice(0, 256), default_quantity: 1 }] },
-      };
+      const corpo = corpoDoLinkPagarme(p);
       const r = await http.chamar('/paymentlinks', { metodo: 'POST', corpo });
       const id = texto(r, 'id');
       if (!id) throw new ErroProvedor('servidor', 'O Pagar.me não devolveu o link criado.');

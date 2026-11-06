@@ -353,7 +353,7 @@ export function BlocoDeCobranca({ conta, onMudou }: { conta: ContaDoBloco; onMud
         aberto={link.aberto}
         onOpenChange={a => { if (!a) setLink({ aberto: false, gravando: false, erro: null }); }}
         titulo="Gerar link de pagamento?"
-        oQueVaiAcontecer="O provedor cria uma página com o valor desta conta, onde o cliente escolhe como pagar (no Asaas: Pix, boleto ou cartão; no Pagar.me: Pix ou boleto). O link é copiado para você mandar e vale pelos dias escolhidos em Configurações › Cobrança; quando ele pagar, a conta é baixada sozinha."
+        oQueVaiAcontecer="O provedor cria uma página com o valor desta conta, onde o cliente escolhe como pagar: Pix, boleto ou cartão de crédito (à vista). O link é copiado para você mandar e vale pelos dias escolhidos em Configurações › Cobrança; quando ele pagar, a conta é baixada sozinha."
         detalhes={[
           { rotulo: 'Cliente', valor: conta.cliente_nome || 'Cliente' },
           { rotulo: 'Valor', valor: <Money valor={saldo} size="body" align="esquerda" estado="ok" /> },

@@ -5,6 +5,7 @@ import { recusaAdmin, recusaFinanceira } from '@/lib/guarda-rota';
 import { emTransacao } from '@/lib/caixa-atomico';
 import { normalizarPolitica, type PoliticaCobranca } from '@/lib/baixa-calculo';
 import { normalizarAvisos } from '@/lib/avisos-vencimento';
+import { normalizarAvisoWhatsApp, telefonesInvalidos } from '@/lib/avisos-vencimento-whatsapp';
 import { ErroEncargos, gravarChaveDaAgencia, salvarCategoriasDosEncargos } from '@/lib/encargos-servidor';
 import { lerChavesDaEmpresa, temConfigPropria, type ExecutorEmpresas } from '@/lib/empresas-servidor';
 import { empresaDoPedido } from '@/lib/empresas-rota';
@@ -15,7 +16,9 @@ import { empresaDoPedido } from '@/lib/empresas-rota';
 //    que a liquidação SUGERE (a pessoa sempre pode mudar na hora);
 //  - categorias_encargos: em que categoria do resultado entram juros, multa,
 //    desconto e taxa registrados na liquidação;
-//  - avisos_vencimento: quais avisos de vencimento vão para o sino.
+//  - avisos_vencimento: quais avisos de vencimento vão para o sino;
+//  - avisos_vencimento_whatsapp (E7): o resumo do dia pelo WhatsApp do CRM para
+//    os números da equipe cadastrados (desligado por padrão; da agência inteira).
 // O PUT grava só as chaves enviadas, sem tocar o resto do cadastro.
 export const dynamic = 'force-dynamic';
 
@@ -40,7 +43,8 @@ export async function GET(req: Request) {
     });
   }
   const { rows } = await pool.query(
-    `SELECT data->'politica_cobranca' AS p, data->'categorias_encargos' AS c, data->'avisos_vencimento' AS a
+    `SELECT data->'politica_cobranca' AS p, data->'categorias_encargos' AS c, data->'avisos_vencimento' AS a,
+            data->'avisos_vencimento_whatsapp' AS w
        FROM agencia WHERE tenant_id = $1 ORDER BY updated_at DESC NULLS LAST, id ASC LIMIT 1`,
     [tenantId],
   );
@@ -48,6 +52,7 @@ export async function GET(req: Request) {
     politica_cobranca: rows[0]?.p ?? null,
     categorias_encargos: rows[0]?.c ?? {},
     avisos_vencimento: normalizarAvisos(rows[0]?.a),
+    avisos_vencimento_whatsapp: normalizarAvisoWhatsApp(rows[0]?.w),
   });
 }
 
@@ -60,10 +65,21 @@ export async function PUT(req: Request) {
     politica_cobranca?: Partial<PoliticaCobranca>;
     categorias_encargos?: unknown;
     avisos_vencimento?: unknown;
+    avisos_vencimento_whatsapp?: unknown;
   };
   const tenantId = await getTenantId();
   const { empresa, recusa: recusaEmpresa } = await empresaDoPedido(req);
   if (recusaEmpresa) return recusaEmpresa;
+  if ('avisos_vencimento_whatsapp' in corpo) {
+    const ruins = telefonesInvalidos(corpo.avisos_vencimento_whatsapp);
+    if (ruins.length) {
+      return NextResponse.json({ error: `${ruins.length === 1 ? 'Este número não parece' : 'Estes números não parecem'} um celular do Brasil com DDD: ${ruins.join(', ')}.` }, { status: 400 });
+    }
+    const w = normalizarAvisoWhatsApp(corpo.avisos_vencimento_whatsapp);
+    if (w.ligado && !w.telefones.length) {
+      return NextResponse.json({ error: 'Cadastre pelo menos um número para receber o aviso pelo WhatsApp.' }, { status: 400 });
+    }
+  }
   try {
     const resposta = await emTransacao(async exec => {
       const r: Record<string, unknown> = {};
@@ -78,6 +94,11 @@ export async function PUT(req: Request) {
       if ('avisos_vencimento' in corpo && !empresa) {
         r.avisos_vencimento = normalizarAvisos(corpo.avisos_vencimento);
         await gravarChaveDaAgencia(exec, tenantId, 'avisos_vencimento', r.avisos_vencimento);
+      }
+      // O resumo pelo WhatsApp também é da agência inteira (E7).
+      if ('avisos_vencimento_whatsapp' in corpo && !empresa) {
+        r.avisos_vencimento_whatsapp = normalizarAvisoWhatsApp(corpo.avisos_vencimento_whatsapp);
+        await gravarChaveDaAgencia(exec, tenantId, 'avisos_vencimento_whatsapp', r.avisos_vencimento_whatsapp);
       }
       return r;
     });

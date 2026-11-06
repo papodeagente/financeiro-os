@@ -83,6 +83,10 @@ export interface Cobranca {
   taxa_boleto?: number | null;
   /** Página do link de pagamento (tipo 'link'). */
   url_link?: string | null;
+  /** Negativação no Serasa pedida para esta cobrança (E7): a situação no provedor. */
+  negativacao?: { status: string } | null;
+  /** Número da fatura quando a cobrança é de uma fatura (E7): o e-mail pode levar o documento dela. */
+  fatura_numero?: number | null;
 }
 
 export interface TotaisDasCobrancas {
@@ -143,6 +147,8 @@ export interface EnvioPersonalizadoNaTela {
   copia_para?: string[];
   assunto?: string;
   mensagem?: string;
+  /** E7: o que vai no e-mail. Ausente = boleto (o e-mail de sempre). */
+  documentos?: 'boleto' | 'fatura' | 'boleto_e_fatura';
 }
 
 // ─── POST /api/cobrancas (emitir uma ou várias, com prévia) ────────────────
@@ -362,6 +368,9 @@ export const api = {
 
   enviar: (id: string, canal: CanalDeEnvio, chave: string, extra: EnvioPersonalizadoNaTela = {}) =>
     chamar<{ ok: true; enviado?: boolean; na_fila?: boolean; motivo?: string }>(`/api/cobrancas/${encodeURIComponent(id)}/enviar`, { method: 'POST', body: JSON.stringify({ canal, ...extra }), chave }),
+  /** POST /api/faturas/[id]/enviar (E7): a ficha da fatura manda boleto, fatura ou os dois. */
+  enviarFatura: (faturaId: string, chave: string, extra: EnvioPersonalizadoNaTela) =>
+    chamar<{ ok: true; enviado?: boolean; na_fila?: boolean; motivo?: string; com_boleto?: boolean }>(`/api/faturas/${encodeURIComponent(faturaId)}/enviar`, { method: 'POST', body: JSON.stringify(extra), chave }),
 
   pendencia: (id: string) => chamar<PendenciaDaCobranca>(`/api/cobrancas/${encodeURIComponent(id)}/pendencia`),
 

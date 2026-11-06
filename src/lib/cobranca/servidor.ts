@@ -1042,12 +1042,22 @@ export async function enviarCobranca(
   if (!(await crmLigado(exec, tenantId))) {
     throw new ErroCobranca('O envio por e-mail e WhatsApp sai pelo CRM. Ligue a integração com o CRM em Configurações.', 409);
   }
+  // Fatura no e-mail (E7): o documento da fatura desta conta, pelo link do portal do cliente.
+  let fatura_documento: { numero: number; url: string } | undefined;
+  if (personalizado.documentos) {
+    const { documentoDaFaturaParaEnvio } = await import('./envio-fatura');
+    const doc = await documentoDaFaturaParaEnvio(exec, tenantId, c.titulo_id);
+    if (!doc.ok) throw new ErroCobranca(doc.motivo, 409);
+    fatura_documento = { numero: doc.numero, url: doc.url };
+  }
   const retorno: { resposta?: import('../crm-integration').RespostaDoCrm | null } = {};
-  await avisarCrm(exec, tenantId, 'COBRANCA_ENVIAR', paraCrm(c), `cobranca-enviar:${tenantId}:${c.id}:${generateId()}`, { canal, ...personalizado }, retorno);
+  await avisarCrm(exec, tenantId, 'COBRANCA_ENVIAR', paraCrm(c), `cobranca-enviar:${tenantId}:${c.id}:${generateId()}`,
+    { canal, ...personalizado, ...(fatura_documento ? { fatura_documento } : {}) }, retorno);
   const r = resultadoDoEnvio(retorno.resposta);
   await emTransacao(tx => registrarEvento(tx, tenantId, c.id, 'envio_pedido', c.status, c.status,
     { canal, enviado: r.enviado, ...(personalizado.copia_para ? { copia_para: personalizado.copia_para } : {}),
-      ...(personalizado.assunto ? { assunto: personalizado.assunto } : {}), ...(personalizado.mensagem ? { com_mensagem: true } : {}), ...(r.motivo ? { motivo: r.motivo } : {}), ...(o.idempotencia ? { idempotencia: o.idempotencia.slice(0, 200) } : {}) }, o.quem));
+      ...(personalizado.assunto ? { assunto: personalizado.assunto } : {}), ...(personalizado.mensagem ? { com_mensagem: true } : {}),
+      ...(personalizado.documentos ? { documentos: personalizado.documentos } : {}), ...(r.motivo ? { motivo: r.motivo } : {}), ...(o.idempotencia ? { idempotencia: o.idempotencia.slice(0, 200) } : {}) }, o.quem));
   return { enviado: r.enviado, canal, ...(r.na_fila ? { na_fila: true } : {}), ...(r.motivo ? { motivo: r.motivo } : {}) };
 }
 
@@ -1125,6 +1135,7 @@ export async function listarCobrancas(
   const { rows } = await exec.query(
     `SELECT ${colunas('c.')},
             COALESCE(cr.data->>'cliente_nome', '') AS cliente_nome, COALESCE(cr.data->>'descricao', '') AS conta_descricao,
+            COALESCE(cr.data->>'fatura_numero', '') AS fatura_numero,
             COUNT(*) OVER () AS total_linhas
        FROM cobrancas c
        LEFT JOIN contas_receber cr ON cr.tenant_id = c.tenant_id AND cr.id = c.titulo_id
@@ -1162,6 +1173,7 @@ export async function listarCobrancas(
   return {
     itens: rows.map(r => ({
       ...lerLinha(r), cliente_nome: String(r.cliente_nome ?? ''), conta_descricao: String(r.conta_descricao ?? ''),
+      fatura_numero: Number(r.fatura_numero) > 0 ? Number(r.fatura_numero) : null,
       valor: deCentavos(r.valor_centavos as string),
     })),
     total: Number(rows[0]?.total_linhas ?? 0),
@@ -1181,7 +1193,8 @@ export async function detalheDaCobranca(exec: ExecutorSQL, tenantId: string, id:
     [tenantId, id],
   );
   const { rows: conta } = await exec.query(
-    `SELECT data->>'descricao' AS descricao, data->>'cliente_nome' AS cliente_nome, data->>'status' AS status
+    `SELECT data->>'descricao' AS descricao, data->>'cliente_nome' AS cliente_nome, data->>'status' AS status,
+            data->>'fatura_numero' AS fatura_numero
        FROM contas_receber WHERE tenant_id = $1 AND id = $2`,
     [tenantId, c.titulo_id],
   );

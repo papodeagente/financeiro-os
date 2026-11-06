@@ -8,6 +8,7 @@ import { RecordSheet } from '@/components/fin/RecordSheet';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Field } from '@/components/fin/Field';
+import { Segmentado } from '@/components/fin/Segmentado';
 import {
   api, chaveDeIdempotencia, ErroDaCobranca, type CanalDeEnvio, type Cobranca,
 } from '@/lib/cobranca/contrato-telas';
@@ -40,6 +41,22 @@ export async function copiarTexto(texto: string, oQue: string): Promise<void> {
   }
 }
 
+type DocumentosNaTela = 'boleto' | 'fatura' | 'boleto_e_fatura';
+
+/** A escolha do que vai no e-mail, quando a cobrança é de uma fatura (E7). */
+export const OPCOES_DE_DOCUMENTOS: ReadonlyArray<{ valor: DocumentosNaTela; rotulo: string }> = [
+  { valor: 'boleto', rotulo: 'Boleto' },
+  { valor: 'fatura', rotulo: 'Fatura' },
+  { valor: 'boleto_e_fatura', rotulo: 'Boleto e fatura' },
+];
+
+export function ajudaDosDocumentos(d: DocumentosNaTela, numero: number | null | undefined): string {
+  const fatura = numero ? `a fatura Nº ${numero}` : 'a fatura';
+  if (d === 'fatura') return `Só o documento de ${fatura}, para o cliente conferir e salvar em PDF. Sem boleto nem Pix.`;
+  if (d === 'boleto_e_fatura') return `O boleto e o Pix, e o documento de ${fatura} para o cliente conferir e salvar em PDF.`;
+  return 'O valor, o vencimento, o Pix e o link do boleto.';
+}
+
 type Dialogo =
   | { tipo: 'segunda_via'; c: Cobranca }
   | { tipo: 'enviar'; c: Cobranca; canal: CanalDeEnvio }
@@ -54,6 +71,8 @@ export function useAcoesDaCobranca(opcoes: { onMudou: () => void; onEmitirDeNovo
   const [copia, setCopia] = React.useState('');
   const [assunto, setAssunto] = React.useState('');
   const [mensagem, setMensagem] = React.useState('');
+  // O que vai no e-mail (E7): só a cobrança de uma fatura escolhe; as outras levam o boleto.
+  const [documentos, setDocumentos] = React.useState<DocumentosNaTela>('boleto');
   // Uma chave por janela aberta: confirmar duas vezes não manda duas vezes.
   const chave = React.useRef('');
 
@@ -61,6 +80,7 @@ export function useAcoesDaCobranca(opcoes: { onMudou: () => void; onEmitirDeNovo
     chave.current = chaveDeIdempotencia();
     setErro(null);
     setCopia(''); setAssunto(''); setMensagem('');
+    setDocumentos(d.tipo === 'enviar' && d.c.fatura_numero ? 'boleto_e_fatura' : 'boleto');
     if (d.tipo === 'segunda_via') {
       const hoje = hojeISO();
       setVencimento(d.c.vencimento && d.c.vencimento > hoje ? d.c.vencimento : addDias(hoje, 3));
@@ -97,7 +117,10 @@ export function useAcoesDaCobranca(opcoes: { onMudou: () => void; onEmitirDeNovo
       } else if (dialogo.tipo === 'enviar') {
         const copiaPara = copia.split(/[\s,;]+/).map(x => x.trim()).filter(Boolean);
         const extra = dialogo.canal === 'email'
-          ? { ...(copiaPara.length ? { copia_para: copiaPara } : {}), ...(assunto.trim() ? { assunto: assunto.trim() } : {}), ...(mensagem.trim() ? { mensagem: mensagem.trim() } : {}) }
+          ? {
+            ...(copiaPara.length ? { copia_para: copiaPara } : {}), ...(assunto.trim() ? { assunto: assunto.trim() } : {}), ...(mensagem.trim() ? { mensagem: mensagem.trim() } : {}),
+            ...(dialogo.c.fatura_numero && documentos !== 'boleto' ? { documentos } : {}),
+          }
           : {};
         const r = await api.enviar(dialogo.c.id, dialogo.canal, chave.current, extra);
         const meio = dialogo.canal === 'email' ? 'e-mail' : 'WhatsApp';
@@ -176,6 +199,13 @@ export function useAcoesDaCobranca(opcoes: { onMudou: () => void; onEmitirDeNovo
               <dt className="text-[var(--fin-text-3)]">Valor</dt>
               <dd><Money valor={c.valor} size="body" align="esquerda" estado="ok" /></dd>
             </dl>
+          ) : null}
+          {c?.fatura_numero ? (
+            <div className="flex flex-col gap-[var(--fin-s-1)]">
+              <span className="fin-t-body-strong text-[var(--fin-text)]">O que vai no e-mail</span>
+              <Segmentado rotulo="O que vai no e-mail" opcoes={OPCOES_DE_DOCUMENTOS} valor={documentos} onChange={setDocumentos} cheio="celular" />
+              <p className="fin-t-caption text-[var(--fin-text-2)]">{ajudaDosDocumentos(documentos, c.fatura_numero)}</p>
+            </div>
           ) : null}
           <Field rotulo="Com cópia para" ajuda="Até 5 e-mails, separados por vírgula. Ex.: o financeiro da empresa do cliente.">
             {a => (

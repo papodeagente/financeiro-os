@@ -5,7 +5,7 @@ import { validarAgendamento } from '@/lib/relatorios-agendados/regras';
 import {
   alterarAtivo, apagarAgendamento, historicoDeEnvios, lerAgendamento, listarLeituras, salvarAgendamento,
 } from '@/lib/relatorios-agendados/servidor';
-import { CABECALHOS, autorDaSessao, entrada, erroDaRota } from '@/lib/relatorios-agendados/rota';
+import { CABECALHOS, autorDaSessao, entrada, erroDaRota, recusaDoRelatorio } from '@/lib/relatorios-agendados/rota';
 
 /** Um envio agendado (E7, G3). Contrato em src/lib/relatorios-agendados/rota.ts. */
 export const dynamic = 'force-dynamic';
@@ -35,6 +35,8 @@ export async function PUT(req: Request, { params }: Params) {
   try { corpo = await req.json(); } catch { return NextResponse.json({ error: 'Pedido inválido.' }, { status: 400, headers: CABECALHOS }); }
   const v = validarAgendamento(corpo);
   if (!v.ok) return NextResponse.json({ error: 'Confira os campos marcados.', erros: v.erros, codigo: 'DADOS' }, { status: 422, headers: CABECALHOS });
+  const recusa = await recusaDoRelatorio(ctx, v.dados.relatorio);
+  if (recusa) return recusa;
   try {
     const a = await salvarAgendamento(ctx.exec, ctx.tenantId, id, v.dados, await autorDaSessao(ctx), new Date());
     await registrarEventoAuditoria({ session: ctx.sessao, acao: 'EDITAR', modulo: 'Financeiro', entidade: 'relatorios_agendados', entidadeId: a.id, descricao: `Alterou o envio agendado "${a.nome}".` }).catch(() => undefined);

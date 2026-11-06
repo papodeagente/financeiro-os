@@ -36,7 +36,7 @@ eq(consultaSemDatas('?relatorio=vendedor&de=2026-01-01&ate=2026-01-31&formato=pd
 const base = { nome: 'Vendas', relatorio: 'vendas', consulta: 'relatorio=produto', frequencia: 'semanal', dia_semana: 1, hora: 8, periodo: 'semana_anterior', formato: 'pdf', destinatarios: ['a@x.com'], validade_dias: 30 };
 const ok = validarAgendamento(base);
 eq(ok.ok, true, 'agendamento válido');
-const ruim = validarAgendamento({ ...base, nome: 'a', frequencia: 'anual', hora: 23, periodo: 'sempre', destinatarios: [], validade_dias: 120, relatorio: 'dre' });
+const ruim = validarAgendamento({ ...base, nome: 'a', frequencia: 'anual', hora: 23, periodo: 'sempre', destinatarios: [], validade_dias: 120, relatorio: 'contabil' });
 eq(ruim.ok ? [] : Object.keys(ruim.erros).sort(), ['destinatarios', 'frequencia', 'hora', 'nome', 'periodo', 'relatorio', 'validade_dias'], 'cada erro no seu campo');
 eq(validarAgendamento({ ...base, destinatarios: Array.from({ length: 21 }, (_, i) => `p${i}@x.com`) }).ok, false, 'até 20 e-mails');
 eq(validarAgendamento({ ...base, frequencia: 'mensal', dia_mes: 31 }).ok, false, 'dia do mês até 28 (ou o último)');

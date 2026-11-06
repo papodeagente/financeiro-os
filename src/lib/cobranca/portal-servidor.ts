@@ -23,7 +23,11 @@ import { createHash, randomBytes } from 'node:crypto';
 import type { ExecutorSQL } from '../caixa-atomico';
 import { cifrar, cofreDisponivel, decifrar } from '../cofre';
 import { documentoDoCliente, contaReceberDoTenant, lerRecibo } from './recibo-servidor';
-import { documentoMascarado, montarPortal, tokenComFormatoValido, type CobrancaParaPortal, type PortalPublico } from './portal-regras';
+import {
+  documentoMascarado, montarPortal, tokenComFormatoValido,
+  type CobrancaParaPortal, type EncargosDoPortal, type NotaParaPortal, type PortalPublico,
+} from './portal-regras';
+import { encargosDaCobranca, lerConfigCobranca } from './config';
 import type { ResultadoDoRecibo } from './recibo';
 
 export const TABELA_LINKS = 'cobranca_portal_links';
@@ -216,7 +220,54 @@ export async function lerPortal(exec: ExecutorSQL, link: LinkAtivo, hoje: string
     contas,
     cobrancas: cobs,
     hoje,
+    notas: await notasDoCliente(exec, link),
+    encargos: await encargosDoPortal(exec, tenant),
   });
+}
+
+/** Juros e multa da política da agência, para a 2ª via pedida pelo cliente (E7). */
+export async function encargosDoPortal(exec: ExecutorSQL, tenantId: string): Promise<EncargosDoPortal | null> {
+  const { config, politica } = await lerConfigCobranca(exec, tenantId);
+  const e = encargosDaCobranca(config, politica);
+  if (!e) return null;
+  return { juros_am_pct: Number(e.juros_am_pct) || 0, multa_pct: Number(e.multa_pct) || 0, tolerancia_dias: Number(e.tolerancia_dias) || 0 };
+}
+
+/**
+ * Notas fiscais do cliente do link (E7): as da MESMA agência e do MESMO
+ * cliente, dos últimos 24 meses, até 50. O recorte do que sai é de
+ * `notasDoPortal` (só autorizada; nunca a do fornecedor/representante).
+ */
+export async function notasDoCliente(exec: ExecutorSQL, link: LinkAtivo): Promise<NotaParaPortal[]> {
+  const { rows: tem } = await exec.query(`SELECT to_regclass('public.notas_fiscais') IS NOT NULL AS ok`);
+  if (!tem[0]?.ok) return [];
+  const { rows } = await exec.query(
+    `SELECT id, status, data FROM notas_fiscais
+      WHERE tenant_id = $1 AND COALESCE(NULLIF(cliente_id, ''), data->>'cliente_id', '') = $2
+        AND status = 'AUTORIZADA' AND created_at >= NOW() - INTERVAL '24 months'
+      ORDER BY created_at DESC, id DESC LIMIT 50`,
+    [link.tenant_id, link.cliente_id],
+  );
+  return rows.map(r => ({ id: String(r.id), status: String(r.status ?? ''), data: (r.data ?? {}) as Record<string, unknown> }));
+}
+
+/**
+ * A nota do portal para baixar o arquivo: da MESMA agência e do MESMO
+ * cliente do link, autorizada e emitida para ele. Senão, null (404).
+ */
+export async function notaDoPortal(exec: ExecutorSQL, link: LinkAtivo, notaId: string): Promise<Record<string, unknown> | null> {
+  if (typeof notaId !== 'string' || !notaId || notaId.length > 100) return null;
+  const notas = await exec.query(
+    `SELECT id, status, data FROM notas_fiscais
+      WHERE tenant_id = $1 AND id = $2 AND COALESCE(NULLIF(cliente_id, ''), data->>'cliente_id', '') = $3 LIMIT 1`,
+    [link.tenant_id, notaId, link.cliente_id],
+  ).catch(() => ({ rows: [] as Array<Record<string, unknown>> }));
+  const r = notas.rows[0];
+  if (!r) return null;
+  const d = (r.data ?? {}) as Record<string, unknown>;
+  if (String(r.status ?? '').toUpperCase() !== 'AUTORIZADA') return null;
+  if (d.destino === 'FORNECEDOR' || d.destino === 'REPRESENTANTE') return null;
+  return { ...d, status: 'AUTORIZADA' };
 }
 
 /**

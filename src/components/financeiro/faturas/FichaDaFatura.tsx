@@ -31,6 +31,7 @@ import { cn } from '@/lib/utils';
 import { apiFaturas, ErroDaFatura, novaChave, type FichaDaFatura as Ficha } from './api';
 import { dataBR, fraseDoEvento, periodoBR, quandoBR, reais } from './comum';
 import { ConferenciaPorArquivo } from './ConferenciaPorArquivo';
+import { EnviarFaturaPorEmail } from './EnviarFaturaPorEmail';
 import { Aviso, BOTAO_LINHA, CONTROLE, LINK, SECAO, TituloDaSecao } from './pecas';
 import { ROTULO_COBRANCA_CURTO } from './rotulos';
 
@@ -54,6 +55,7 @@ type Dialogo =
   | { tipo: 'nota' }
   | { tipo: 'remover_nota'; nota: AjusteDaFatura }
   | { tipo: 'imprimir' }
+  | { tipo: 'enviar_email' }
   | { tipo: 'retencoes' };
 
 const MOTIVO_MINIMO = 10;
@@ -134,6 +136,8 @@ export function FichaDaFatura({ faturaId }: { faturaId: string }) {
     if (fechada && perm?.reabrir && !paga && !parcial) secundarias.push({ rotulo: 'Reabrir', onClick: () => abrir({ tipo: 'reabrir' }) });
     if (parcial && perm?.editar) secundarias.push({ rotulo: 'Levar saldo para a próxima', onClick: () => abrir({ tipo: 'saldo' }) });
     secundarias.push({ rotulo: 'Imprimir', onClick: () => abrir({ tipo: 'imprimir' }) });
+    // E7: o cliente recebe o documento da fatura (link para ler e salvar em PDF), com ou sem o boleto.
+    if (fechada && perm?.cobrar && !paga) secundarias.push({ rotulo: 'Enviar por e-mail', onClick: () => abrir({ tipo: 'enviar_email' }) });
     // Recibo consolidado (E7): cada recebimento da fatura e o total; parcial diz quanto falta.
     if (paga || parcial) secundarias.push({ rotulo: parcial ? 'Recibo do que já foi pago' : 'Recibo', href: `/financeiro-ag/faturas/${encodeURIComponent(f.id)}/recibo` });
     if (perm?.exportar) {
@@ -706,6 +710,14 @@ function Dialogos({ ficha, dialogo, ocupado, escolhidos, onFechar, executar, onC
         confirmarRotulo="Remover nota" tone="destrutivo" processando={ocupado}
         onConfirmar={() => { if (dialogo?.tipo === 'remover_nota') void executar(() => apiFaturas.removerNota(f.id, dialogo.nota.id), 'Nota removida'); }}
       />
+
+      {aberto('enviar_email') ? (
+        <EnviarFaturaPorEmail
+          aberto onFechar={onFechar} faturaId={f.id} numero={f.numero} cliente={f.pessoa_nome}
+          totalCentavos={ficha.totais.liquido} vencimento={ficha.cobranca?.vencimento ?? f.vencimento}
+          temBoleto={Boolean(ficha.cobranca && ['aberta', 'vencida'].includes(ficha.cobranca.status))}
+        />
+      ) : null}
 
       <RecordSheet
         aberto={aberto('imprimir')} onOpenChange={fechar} titulo="Imprimir a fatura"
