@@ -41,6 +41,8 @@ import {
 import { lerPedidoDeCancelamento, aplicarCancelamentoDoCrm } from './crm-venda-cancelada';
 import { ehVendaV2 } from './venda-crm-v2';
 import { receberVendaV2DoCrm, voltarVendaParaV1 } from './venda-crm-v2-servidor';
+import { empresaDaVendaDoCrm } from './venda-crm-empresa';
+import { receberExtratoDoCrm } from './conferencia-operadora-crm-servidor';
 import { situacaoDaVenda, registrarEventoDaVenda } from './venda-servidor';
 import {
   receberFornecedorDoCrm, lerFornecedorDoCrm, lerFornecedorDaVenda, descreverFornecedor,
@@ -1469,6 +1471,21 @@ export async function processarEventoCRM(
         // de comissão por produto casar — sem eles a regra é ignorada e a
         // comissão sai no percentual padrão. Ver src/lib/venda-crm-produtos.ts.
         const produtosDaVenda = produtosDoPayload(payload);
+        // A empresa da venda (E7, várias empresas): só quando o CRM a manda
+        // (`empresa_cnpj`/`empresa_id`). Sem o campo, nada muda: a venda nova
+        // nasce na principal pelo gatilho e a que existe fica onde está.
+        const empresa = await empresaDaVendaDoCrm(pool as unknown as ExecutorSQL, tenantId, payload, { vendaNova: !vendaJaExiste });
+        if (empresa.aviso) {
+          await criarNotificacao({
+            tenantId,
+            tipo: 'VENDA_EMPRESA_NAO_ENCONTRADA',
+            titulo: `Venda ${numeroVenda}: empresa do CRM não encontrada`,
+            descricao: `${empresa.aviso} Confira o CNPJ em Configurações › Empresas ou no CRM e, se for preciso, mude a empresa na venda.`,
+            link: `/vendas/${vendaId}`,
+            data: { venda_id: vendaId, empresa_cnpj: asStr(payload.empresa_cnpj), empresa_id: asStr(payload.empresa_id) },
+            chaveDeduplicacao: `venda-empresa:${vendaId}:${asStr(payload.empresa_cnpj) || asStr(payload.empresa_id)}`,
+          });
+        }
         const vendaData: VendaCRM & Record<string, unknown> = {
           ...baseVenda,
           id: vendaId,
@@ -1514,6 +1531,7 @@ export async function processarEventoCRM(
           crm_plataforma_transacao: carimbo.crm_plataforma_transacao,
           historico,
           versao_contrato: Number.isFinite(versaoContrato) && versaoContrato > 0 ? versaoContrato : 1,
+          ...(empresa.empresa_id ? { empresa_id: empresa.empresa_id } : {}),
         };
         // A reentrega atualiza também as colunas: o cliente pode ter mudado
         // no CRM, e a venda fechada de novo volta a ser CONFIRMADO na coluna,
@@ -1571,6 +1589,7 @@ export async function processarEventoCRM(
             + (vendedorPendente ? ' [vendedor nao cadastrado]' : '')
             + `; ${descreverCliente(cliente)}`
             + (sobrePagamentoV2 ? `; ${sobrePagamentoV2}` : '')
+            + (empresa.aviso ? `; ${empresa.aviso}` : '')
             + (historico ? '; reenvio histórico do CRM' : '');
           break;
         }
@@ -1853,6 +1872,7 @@ export async function processarEventoCRM(
           + (pagosDireto > 0 ? `; ${pagosDireto} pago(s) direto ao fornecedor, comissão de R$ ${contasGen.resumo.total_comissoes.toFixed(2)} a receber` : '')
           + `; ${descreverCliente(cliente)}`
           + (sobrePagamento ? `; ${sobrePagamento}` : '')
+          + (empresa.aviso ? `; ${empresa.aviso}` : '')
           + (historico ? '; reenvio histórico do CRM' : '');
         break;
       }
@@ -2206,6 +2226,17 @@ export async function processarEventoCRM(
           );
           acao = `fornecedor "${asStr(alvo.nome_fantasia)}" desativado: foi apagado no CRM`;
         }
+        break;
+      }
+
+      case 'EXTRATO_CONSOLIDADORA': {
+        // O extrato de comissão que o CRM já lê na Conciliação (E7 frente E):
+        // vira uma conferência de operadora A REVISAR. Nada é aplicado
+        // sozinho; a comissão de cada linha entra no esperado × recebido.
+        const r = await emTransacao(exec => receberExtratoDoCrm(exec, tenantId, payload));
+        if (r.ecoar) ecosDeFornecedor.push(r.ecoar);
+        if (r.aviso) await criarNotificacao(r.aviso);
+        acao = r.acao;
         break;
       }
 

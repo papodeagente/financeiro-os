@@ -29,6 +29,9 @@ export const TIPOS_NOTIFICACAO = [
   // Fechamento de paridade (E7, 06/11/2026): pendência da baixa automática e nota recusada.
   { tipo: 'COBRANCA_PENDENCIA', label: 'Pagamentos que não baixaram sozinhos', descricao: 'Quando o banco avisa um pagamento, mas a baixa da conta não entra sozinha e precisa da sua escolha.' },
   { tipo: 'NOTA_RECUSADA', label: 'Notas recusadas pela prefeitura', descricao: 'Quando uma nota que estava na prefeitura volta recusada, com o motivo.' },
+  // Integração com o CRM (E7 frente E, 06/11/2026): empresa da venda e extrato da consolidadora.
+  { tipo: 'VENDA_EMPRESA_NAO_ENCONTRADA', label: 'Vendas com empresa não encontrada', descricao: 'Quando o CRM manda uma venda para um CNPJ que não é de nenhuma empresa cadastrada aqui.' },
+  { tipo: 'EXTRATO_OPERADORA_DO_CRM', label: 'Extratos de operadora vindos do CRM', descricao: 'Quando um extrato de comissão lido no CRM chega para você conferir.' },
 ] as const;
 
 export type TipoNotificacao = (typeof TIPOS_NOTIFICACAO)[number]['tipo'];

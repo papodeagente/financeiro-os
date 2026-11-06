@@ -49,7 +49,8 @@ export function chaveDaLeitura(hashDoArquivo: string): string {
 const MAX_TEXTO = 400_000;
 export const MAX_ARQUIVO = 10 * 1024 * 1024;
 
-export type OrigemDoExtrato = 'pdf' | 'imagem' | 'planilha' | 'csv' | 'email';
+/** `crm`: o extrato de comissão que o CRM leu na Conciliação e mandou (E7 frente E). */
+export type OrigemDoExtrato = 'pdf' | 'imagem' | 'planilha' | 'csv' | 'email' | 'crm';
 
 /** O que fica guardado da leitura (pelo hash): o extrato limpo e de onde ele veio. */
 export interface LeituraGuardada { extrato: ExtratoLido; origem: OrigemDoExtrato }
