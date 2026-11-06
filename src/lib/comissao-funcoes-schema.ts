@@ -150,4 +150,38 @@ export const COMISSAO_FUNCOES_SCHEMA_SQL = `
     PRIMARY KEY (tenant_id, id),
     CONSTRAINT comissao_pagamentos_modo_ok CHECK (modo IN ('TOTAL','PARCIAL'))
   );
+
+  -- E7: quem fecha cada função (ids de usuário e grupo:<id>; vazio = quem tem o direito).
+  ALTER TABLE comissao_funcoes ADD COLUMN IF NOT EXISTS quem_fecha JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+  -- E7: comissão lançada à mão numa venda fechada (indicação, bônus). Entra no
+  -- Fechar comissões como item próprio (chave manual|<id>). Excluir = marcar
+  -- excluida_em (nunca apagar), e só antes de fechar.
+  CREATE TABLE IF NOT EXISTS comissao_manuais (
+    tenant_id TEXT NOT NULL,
+    id TEXT NOT NULL,
+    venda_id TEXT NOT NULL,
+    venda_numero TEXT NOT NULL DEFAULT '',
+    cliente_nome TEXT NOT NULL DEFAULT '',
+    pessoa_funcao_id TEXT NOT NULL,
+    pessoa_id TEXT NOT NULL,
+    pessoa_nome TEXT NOT NULL DEFAULT '',
+    funcao_id TEXT NOT NULL DEFAULT '',
+    funcao_nome TEXT NOT NULL DEFAULT '',
+    descricao TEXT NOT NULL DEFAULT '',
+    tipo TEXT NOT NULL DEFAULT 'VALOR',
+    percentual NUMERIC(9,4) NOT NULL DEFAULT 0,
+    base_centavos BIGINT NOT NULL DEFAULT 0,
+    valor_centavos BIGINT NOT NULL,
+    data DATE NOT NULL,
+    lancado_por_id TEXT NOT NULL DEFAULT '',
+    lancado_por TEXT NOT NULL DEFAULT '',
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    excluida_em TIMESTAMPTZ,
+    excluida_por TEXT,
+    PRIMARY KEY (tenant_id, id),
+    CONSTRAINT comissao_manuais_tipo_ok CHECK (tipo IN ('PERCENTUAL','VALOR')),
+    CONSTRAINT comissao_manuais_valor_ok CHECK (valor_centavos > 0)
+  );
+  CREATE INDEX IF NOT EXISTS idx_comissao_manuais_venda ON comissao_manuais(tenant_id, venda_id);
 `;

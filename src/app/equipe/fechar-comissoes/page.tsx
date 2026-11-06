@@ -117,7 +117,7 @@ export default function FecharComissoesPage() {
         subtitulo="O que está liberado até a data, por pessoa. Quem tem pendência fica de fora; os outros fecham."
         atualizadoEm={atualizadoEm}
         onRecarregar={carregar}
-        acoesSecundarias={[{ rotulo: 'Pagar comissões', href: '/equipe/pagar-comissoes' }, { rotulo: 'Funções e metas', href: '/equipe/funcoes' }]}
+        acoesSecundarias={[{ rotulo: 'Pagar comissões', href: '/equipe/pagar-comissoes' }, { rotulo: 'Funções', href: '/equipe/funcoes' }, { rotulo: 'Grade de metas', href: '/equipe/metas-por-funcao' }]}
       />
 
       <div className="flex flex-wrap items-end gap-[var(--fin-s-3)]">
@@ -141,6 +141,14 @@ export default function FecharComissoesPage() {
           </Callout>
         ) : null}
         {previa?.so_as_suas ? <Callout tom="info">Mostrando só as suas comissões.</Callout> : null}
+        {previa && previa.funcoes_de_outros?.length ? (
+          <Callout tom="info">
+            {previa.funcoes_de_outros.length === 1 ? 'A função' : 'As funções'} {previa.funcoes_de_outros.join(', ')} {previa.funcoes_de_outros.length === 1 ? 'é fechada' : 'são fechadas'} por outras pessoas e não {previa.funcoes_de_outros.length === 1 ? 'aparece' : 'aparecem'} aqui. Quem fecha cada função se escolhe em <Link className="underline underline-offset-4" href="/equipe/funcoes">Funções</Link>.
+          </Callout>
+        ) : null}
+        {previa && previa.dia_fechamento_meta > 0 ? (
+          <p className="fin-t-caption text-[var(--fin-text-3)]">As metas fecham no dia {previa.dia_fechamento_meta}: a venda depois desse dia conta para a meta do mês seguinte.</p>
+        ) : null}
         {previa && previa.vendas_abertas > 0 ? (
           <Callout tom="aviso">{previa.vendas_abertas} {previa.vendas_abertas === 1 ? 'venda ainda aberta não entra' : 'vendas ainda abertas não entram'} até esta data: só vendas fechadas geram comissão.</Callout>
         ) : null}

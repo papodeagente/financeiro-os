@@ -28,12 +28,22 @@ import { cn } from '@/lib/utils';
  */
 
 type Opcao = { id: string; nome: string };
-type Cadastro = CadastroDeComissoes & { config: ConfigComissao; equipe: Opcao[]; intermediarios: Opcao[]; unidades: string[] };
+type Cadastro = CadastroDeComissoes & { config: ConfigComissao; equipe: Opcao[]; intermediarios: Opcao[]; unidades: string[]; perfis?: Opcao[] };
 
 const CAMPO = 'h-11 w-full rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-2 fin-t-body text-[var(--fin-text)] lg:h-10';
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
-const novaFuncao = (): Funcao => ({ id: '', nome: '', sistema: null, sobre_pessoas: [], sobre_unidades: [], ativo: true });
+const novaFuncao = (): Funcao => ({ id: '', nome: '', sistema: null, sobre_pessoas: [], sobre_unidades: [], ativo: true, quem_fecha: [] });
+
+function Escolha({ marcada, onTrocar, children }: { marcada: boolean; onTrocar: () => void; children: React.ReactNode }) {
+  return (
+    <label className={cn('inline-flex h-9 cursor-pointer items-center gap-[var(--fin-s-2)] rounded-[var(--fin-r-md)] border px-[var(--fin-s-2)] fin-t-caption transition-colors duration-[var(--fin-dur-rapida)]',
+      marcada ? 'border-[var(--fin-accent)] bg-[var(--fin-accent-soft)] text-[var(--fin-text)]' : 'border-[var(--fin-border)] text-[var(--fin-text-2)] hover:bg-[var(--fin-surface-2)]')}>
+      <input type="checkbox" className="size-4 accent-[var(--fin-accent)]" checked={marcada} onChange={onTrocar} />
+      {children}
+    </label>
+  );
+}
 
 export default function FuncoesPage() {
   const [dados, setDados] = React.useState<Cadastro | null>(null);
@@ -115,11 +125,11 @@ export default function FuncoesPage() {
       <PageHeader
         icone={UsersRound}
         titulo="Funções"
-        subtitulo="Quem ganha comissão, sobre quais vendas, com qual plano e qual meta."
+        subtitulo="Quem ganha comissão, sobre quais vendas, com qual plano, qual meta e quem fecha."
         atualizadoEm={atualizadoEm}
         onRecarregar={carregar}
         acaoPrimaria={{ rotulo: 'Nova função', icone: Plus, onClick: () => { setSelecionada(''); setFuncao(novaFuncao()); setPessoas([]); setSujo(true); } }}
-        acoesSecundarias={[{ rotulo: 'Planos de comissão', href: '/equipe/planos-por-funcao' }, { rotulo: 'Configurações', href: '/config/comissoes' }]}
+        acoesSecundarias={[{ rotulo: 'Grade de metas', href: '/equipe/metas-por-funcao' }, { rotulo: 'Planos de comissão', href: '/equipe/planos-por-funcao' }, { rotulo: 'Configurações', href: '/config/comissoes' }]}
       />
       <DataState
         estado={estado}
@@ -254,6 +264,35 @@ export default function FuncoesPage() {
                       </ul>
                     )}
                   </div>
+
+                  <fieldset className="flex flex-col gap-[var(--fin-s-3)] border-t border-[var(--fin-border)] pt-[var(--fin-s-4)]">
+                    <legend className="fin-t-subhead text-[var(--fin-text)]">Quem fecha as comissões desta função</legend>
+                    <div className="flex flex-col gap-[var(--fin-s-1)]">
+                      <p className="fin-t-caption text-[var(--fin-text-2)]">
+                        {funcao.quem_fecha.length
+                          ? 'Só as pessoas e os perfis marcados fecham esta função (o administrador fecha todas). Para os outros, ela some do Fechar comissões.'
+                          : 'Ninguém marcado: fecha quem tem o direito "Fechar comissões", como sempre.'}
+                      </p>
+                    </div>
+                    {dados.perfis && dados.perfis.length ? (
+                      <div className="flex flex-col gap-[var(--fin-s-2)]">
+                        <span className="fin-t-caption text-[var(--fin-text-3)]">Perfis de acesso</span>
+                        <div className="flex flex-wrap gap-[var(--fin-s-2)]">
+                          {dados.perfis.map(g => (
+                            <Escolha key={g.id} marcada={funcao.quem_fecha.includes(`grupo:${g.id}`)} onTrocar={() => { setFuncao({ ...funcao, quem_fecha: alternar(funcao.quem_fecha, `grupo:${g.id}`) }); setSujo(true); }}>{g.nome}</Escolha>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                    <div className="flex flex-col gap-[var(--fin-s-2)]">
+                      <span className="fin-t-caption text-[var(--fin-text-3)]">Pessoas da equipe</span>
+                      <div className="flex flex-wrap gap-[var(--fin-s-2)]">
+                        {dados.equipe.map(p => (
+                          <Escolha key={p.id} marcada={funcao.quem_fecha.includes(p.id)} onTrocar={() => { setFuncao({ ...funcao, quem_fecha: alternar(funcao.quem_fecha, p.id) }); setSujo(true); }}>{p.nome}</Escolha>
+                        ))}
+                      </div>
+                    </div>
+                  </fieldset>
 
                   <div className="flex flex-col-reverse gap-[var(--fin-s-2)] border-t border-[var(--fin-border)] pt-[var(--fin-s-4)] sm:flex-row sm:items-center sm:justify-between">
                     {funcao.id && !funcao.sistema ? (

@@ -10,7 +10,7 @@ import { MolduraDaPagina, RITMO_DA_PAGINA } from '@/components/fin/MolduraDaPagi
 import { Field } from '@/components/fin/Field';
 import { Callout } from '@/components/fin/Callout';
 import { EscolhaDaBase } from '@/components/comissoes/EscolhaDaBase';
-import type { ConfigComissao } from '@/lib/comissao-funcoes';
+import { rotuloDoPeriodoDaMeta, type ConfigComissao } from '@/lib/comissao-funcoes';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 
@@ -126,6 +126,20 @@ export default function ConfigComissoesPage() {
                   <h2 id="t-meta" className="fin-t-subhead text-[var(--fin-text)]">Meta</h2>
                   <p className="fin-t-caption text-[var(--fin-text-2)]">O resultado de cada pessoa no mês, comparado com a meta dela, define a faixa do plano.</p>
                   <EscolhaDaBase rotulo="A meta é medida sobre" valor={config.meta_sobre} onChange={v => mudar({ meta_sobre: v })} />
+                  <Field
+                    rotulo="Dia de fechamento das metas"
+                    ajuda={config.dia_fechamento_meta
+                      ? `A meta de cada mês vai do dia ${config.dia_fechamento_meta + 1} do mês anterior ao dia ${config.dia_fechamento_meta}. Ex.: a meta de novembro ${rotuloDoPeriodoDaMeta('2026-11', config.dia_fechamento_meta)}.`
+                      : 'A meta de cada mês vai do dia 1 ao último dia do mês. Os dias 28 a 31 também valem como último dia.'}
+                  >
+                    {a => (
+                      <select {...a} value={config.dia_fechamento_meta} onChange={e => mudar({ dia_fechamento_meta: Number(e.target.value) })}
+                        className="h-11 w-full max-w-xs rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-2 fin-t-body text-[var(--fin-text)] lg:h-10">
+                        <option value={0}>Último dia do mês</option>
+                        {Array.from({ length: 27 }, (_, i) => i + 1).map(d => <option key={d} value={d}>Dia {d}</option>)}
+                      </select>
+                    )}
+                  </Field>
                   <Field rotulo="Vendas a partir de" ajuda="Vendas anteriores não entram na comissão por função.">
                     {a => (
                       <input {...a} type="date" value={config.data_inicial} onChange={e => mudar({ data_inicial: e.target.value })}
