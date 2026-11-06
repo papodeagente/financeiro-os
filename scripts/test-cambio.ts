@@ -72,6 +72,18 @@ const ptax = lerRespostaPtax(respPtax, 'EUR', AGORA);
 eq(ptax.map(c => [c.referencia, c.compra, c.venda]), [['2026-11-03', 6.14, 6.142], ['2026-11-04', 6.1531, 6.1549]], 'só o boletim de fechamento, um por dia, em ordem');
 eq(ptax[1].cotado_em, '2026-11-04T16:05:19.000Z', 'hora da Olinda é de Brasília (13h05 = 16h05 UTC)');
 eq(lerRespostaPtax({ value: [] }, 'EUR', AGORA), [], 'fim de semana/feriado: lista vazia, nada inventado');
+{
+  // Resposta REAL da Olinda (05/11/2026, USD de 29/10): o boletim vem como
+  // "Fechamento", entre "Abertura" e "Intermediário".
+  const real = { value: [
+    { cotacaoCompra: 5.3484, cotacaoVenda: 5.349, dataHoraCotacao: '2026-10-29 10:10:54.921', tipoBoletim: 'Abertura' },
+    { cotacaoCompra: 5.3662, cotacaoVenda: 5.3668, dataHoraCotacao: '2026-10-29 11:03:53.702626', tipoBoletim: 'Intermediário' },
+    { cotacaoCompra: 5.3738, cotacaoVenda: 5.3744, dataHoraCotacao: '2026-10-29 13:11:53.555689', tipoBoletim: 'Fechamento' },
+    { cotacaoCompra: 5.4206, cotacaoVenda: 5.4212, dataHoraCotacao: '2026-10-30 13:04:18.706316', tipoBoletim: 'Fechamento' },
+  ] };
+  const lidas = lerRespostaPtax(real, 'USD', AGORA);
+  eq(lidas.map(c => [c.referencia, c.compra, c.venda]), [['2026-10-29', 5.3738, 5.3744], ['2026-10-30', 5.4206, 5.4212]], 'resposta real: só o boletim "Fechamento" de cada dia (abertura e intermediário ficam de fora)');
+}
 eq(lanca(() => lerRespostaPtax({ erro: 'x' }, 'EUR', AGORA)), 'ErroDeFonte', 'formato estranho vira erro da fonte');
 
 console.log('--- SGS (respostas da documentação) ---');
