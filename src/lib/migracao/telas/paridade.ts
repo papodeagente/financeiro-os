@@ -37,6 +37,12 @@ export interface ItemDaParidade {
   entrega: Entrega;
   /** Onde fica aqui. Obrigatório quando já existe (o teste confere). */
   href?: string;
+  /**
+   * O que ainda falta para o item valer por inteiro, mesmo com a entrega no
+   * ar (ex.: depende de uma chave, do contador ou de arquivo real). Item com
+   * falta não conta como pronto.
+   */
+  falta?: string;
 }
 
 export interface BlocoDaParidade {
@@ -56,6 +62,7 @@ export const BLOCOS_DA_PARIDADE: readonly BlocoDaParidade[] = [
       { rotulo: 'Ações em lote com prévia (liquidar, reagendar, recategorizar)', entrega: 'E2', href: '/financeiro-ag/contas' },
       { rotulo: 'Recorrência flexível e Mais parcelas', entrega: 'E2', href: '/financeiro-ag/pagar' },
       { rotulo: 'Ler boleto ou nota em PDF e preencher a conta', entrega: 'E2', href: '/financeiro-ag/pagar' },
+      { rotulo: 'Mudança provada com os arquivos reais de uma agência que usa o sistema anterior', entrega: 'E7', href: '/mudanca', falta: 'Precisa dos arquivos exportados por uma agência parceira (os testes usam planilhas montadas).' },
       { rotulo: 'Pedido de aprovação no lugar do bloqueio', entrega: 'E2', href: '/financeiro-ag/aprovacoes' },
       { rotulo: 'Telas separadas de Contas a pagar e Contas a receber', entrega: 'hoje', href: '/financeiro-ag/receber' },
       { rotulo: 'Contas já liquidadas trazidas do sistema anterior, na data e na conta certas, sem dinheiro em dobro', entrega: 'E7', href: '/mudanca' },
@@ -76,7 +83,7 @@ export const BLOCOS_DA_PARIDADE: readonly BlocoDaParidade[] = [
       { rotulo: 'Saldo de abertura trazido do sistema anterior', entrega: 'E4', href: '/mudanca' },
       { rotulo: 'Extrato e movimentações antigos trazidos, ligados às liquidações', entrega: 'E7', href: '/mudanca' },
       { rotulo: 'Conta em moeda estrangeira e transferência com câmbio', entrega: 'E6', href: '/financeiro-ag/transferencias' },
-      { rotulo: 'Extrato do banco automático', entrega: 'E6', href: '/financeiro-ag/extrato-automatico' },
+      { rotulo: 'Extrato do banco automático', entrega: 'E6', href: '/financeiro-ag/extrato-automatico', falta: 'Hoje só para o Banco Inter. Os outros bancos dependem de contratar o provedor de extrato.' },
     ],
   },
   {
@@ -103,10 +110,10 @@ export const BLOCOS_DA_PARIDADE: readonly BlocoDaParidade[] = [
   {
     numero: 5, titulo: 'Boletos, carnê e cobrança', resumo: 'Boleto e Pix pelo provedor da agência, sem arquivo de remessa nem de retorno.',
     itens: [
-      { rotulo: 'Cobranças: boleto, Pix e carnê pelo Asaas ou Pagar.me da agência', entrega: 'E3', href: '/financeiro-ag/cobrancas' },
+      { rotulo: 'Cobranças: boleto, Pix e carnê pelo Asaas ou Pagar.me da agência', entrega: 'E3', href: '/financeiro-ag/cobrancas', falta: 'Provado com provedor simulado. Falta uma rodada com a conta de uma agência no ambiente de testes do Asaas e do Pagar.me.' },
       { rotulo: 'Gerar boletos em lote e filtro Boleto não emitido', entrega: 'E3', href: '/financeiro-ag/contas' },
       { rotulo: 'O pagamento baixa a conta sozinho, com a taxa', entrega: 'E3', href: '/financeiro-ag/cobrancas' },
-      { rotulo: 'Régua de lembretes por e-mail e WhatsApp', entrega: 'E3', href: '/config/cobranca' },
+      { rotulo: 'Régua de lembretes por e-mail e WhatsApp', entrega: 'E3', href: '/config/cobranca', falta: 'O WhatsApp precisa do modelo de mensagem aprovado na Meta para cada agência.' },
       { rotulo: 'Recibo da conta recebida', entrega: 'E3', href: '/financeiro-ag/receber' },
       { rotulo: 'Portal do cliente com 2ª via e recibos', entrega: 'E3', href: '/pessoas/clientes' },
     ],
@@ -156,7 +163,8 @@ export const BLOCOS_DA_PARIDADE: readonly BlocoDaParidade[] = [
       { rotulo: 'NFS-e no padrão nacional', entrega: 'hoje', href: '/financeiro-ag/notas' },
       { rotulo: 'Configuração fiscal da agência', entrega: 'hoje', href: '/config/fiscal' },
       { rotulo: 'Gerar notas por regra e nota complementar', entrega: 'E5', href: '/financeiro-ag/notas/gerar' },
-      { rotulo: 'Retenções na fonte (Lei 9.430)', entrega: 'E5', href: '/financeiro-ag/notas/retencoes' },
+      { rotulo: 'Retenções na fonte (Lei 9.430)', entrega: 'E5', href: '/financeiro-ag/notas/retencoes', falta: 'Valor mínimo para reter e restituição de retenção: confirmar com o contador.' },
+      { rotulo: 'Campos da reforma tributária (IBS e CBS) na nota', entrega: 'E5', href: '/config/fiscal', falta: 'Regras e alíquotas a confirmar com o contador.' },
       { rotulo: 'Notas já emitidas trazidas para consulta (nunca emitidas de novo)', entrega: 'E7', href: '/mudanca/historico' },
     ],
   },
@@ -176,7 +184,7 @@ export const BLOCOS_DA_PARIDADE: readonly BlocoDaParidade[] = [
     numero: 12, titulo: 'Formas de pagamento, moedas e câmbio', resumo: 'Como o dinheiro entra e sai, em reais ou em outra moeda.',
     itens: [
       { rotulo: 'Formas de pagamento, com Pix', entrega: 'E2', href: '/financeiro-ag/formas-pagamento' },
-      { rotulo: 'Câmbio sugerido ao vivo, sempre editável', entrega: 'E6', href: '/financeiro-ag/moedas' },
+      { rotulo: 'Câmbio sugerido ao vivo, sempre editável', entrega: 'E6', href: '/financeiro-ag/moedas', falta: 'A PTAX já está ao vivo. O câmbio turismo liga quando a chave da AwesomeAPI for cadastrada no cofre do Super Admin.' },
       { rotulo: 'Moedas e variação cambial', entrega: 'E6', href: '/financeiro-ag/moedas' },
       { rotulo: 'Lista oficial de bancos', entrega: 'E6', href: '/financeiro-ag/contas-bancarias' },
     ],
@@ -220,7 +228,7 @@ export function itemNoAr(entrega: Entrega, noAr: Entrega = ENTREGA_NO_AR): boole
 
 export type SituacaoDoBloco = 'pronto' | 'parcial' | 'vem';
 
-export interface ItemMontado extends ItemDaParidade { pronto: boolean }
+export interface ItemMontado extends ItemDaParidade { pronto: boolean; noAr: boolean }
 
 export interface BlocoMontado extends Omit<BlocoDaParidade, 'itens'> {
   itens: ItemMontado[];
@@ -235,6 +243,8 @@ export interface ChecklistMontado {
   itensProntos: number;
   itensTotal: number;
   blocosProntos: number;
+  /** Itens no ar que ainda dependem de algo (chave, contador, arquivo real). */
+  comFalta: number;
   /** Quantos itens chegam em cada entrega futura. */
   porEntrega: Array<{ entrega: Entrega; itens: number }>;
 }
@@ -243,10 +253,13 @@ export interface ChecklistMontado {
 export function montarChecklist(blocos: readonly BlocoDaParidade[] = BLOCOS_DA_PARIDADE, noAr: Entrega = ENTREGA_NO_AR): ChecklistMontado {
   const futuras = new Map<Entrega, number>();
   const montados = blocos.map<BlocoMontado>(b => {
-    const itens = b.itens.map(i => ({ ...i, pronto: itemNoAr(i.entrega, noAr) }));
+    const itens = b.itens.map(i => {
+      const estaNoAr = itemNoAr(i.entrega, noAr);
+      return { ...i, noAr: estaNoAr, pronto: estaNoAr && !i.falta };
+    });
     const prontos = itens.filter(i => i.pronto).length;
-    const faltam = [...new Set(itens.filter(i => !i.pronto).map(i => i.entrega))].sort((x, y) => ORDEM.indexOf(x) - ORDEM.indexOf(y));
-    for (const i of itens) if (!i.pronto) futuras.set(i.entrega, (futuras.get(i.entrega) ?? 0) + 1);
+    const faltam = [...new Set(itens.filter(i => !i.noAr).map(i => i.entrega))].sort((x, y) => ORDEM.indexOf(x) - ORDEM.indexOf(y));
+    for (const i of itens) if (!i.noAr) futuras.set(i.entrega, (futuras.get(i.entrega) ?? 0) + 1);
     const situacao: SituacaoDoBloco = prontos === itens.length ? 'pronto' : prontos === 0 ? 'vem' : 'parcial';
     return { numero: b.numero, titulo: b.titulo, resumo: b.resumo, itens, situacao, prontos, faltam };
   });
@@ -257,6 +270,7 @@ export function montarChecklist(blocos: readonly BlocoDaParidade[] = BLOCOS_DA_P
     itensProntos,
     itensTotal,
     blocosProntos: montados.filter(b => b.situacao === 'pronto').length,
+    comFalta: montados.reduce((s, b) => s + b.itens.filter(i => i.noAr && i.falta).length, 0),
     porEntrega: [...futuras.entries()].sort((a, b) => ORDEM.indexOf(a[0]) - ORDEM.indexOf(b[0])).map(([entrega, itens]) => ({ entrega, itens })),
   };
 }

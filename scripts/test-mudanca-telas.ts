@@ -208,9 +208,9 @@ eq(montado.blocos.flatMap(b => b.itens).filter(i => i.pronto && !i.href).map(i =
 eq(montado.blocos.flatMap(b => b.itens).filter(i => i.href && !rotaExiste(i.href)).map(i => i.href), [], 'todo link do checklist existe');
 eq(montado.blocos.flatMap(b => b.itens).filter(i => !i.pronto && i.entrega === 'hoje').length, 0, 'o que já existia nunca aparece como "vem"');
 eq(ENTREGA_NO_AR, 'E7', 'checklist sai com a E7 no ar (todas as entregas)');
-eq(montado.blocos.find(b => b.numero === 5)?.situacao, 'pronto', 'bloco 5 (cobrança, E3) completo');
+eq(montado.blocos.find(b => b.numero === 5)?.situacao, 'parcial', 'bloco 5 (cobrança): no ar, mas falta a rodada com provedor real e o modelo do WhatsApp');
 eq(montado.blocos.find(b => b.numero === 6)?.situacao, 'pronto', 'bloco 6 (faturas, E5) completo');
-eq(montado.blocos.find(b => b.numero === 2)?.situacao, 'pronto', 'bloco 2 (contas, E2 + E6 + E7) completo');
+eq(montado.blocos.find(b => b.numero === 2)?.situacao, 'parcial', 'bloco 2: extrato automático só no Inter, o resto completo');
 eq(montado.blocos.find(b => b.numero === 2)?.faltam, [], 'bloco 2 não espera mais nenhuma entrega');
 eq(montarChecklist(BLOCOS_DA_PARIDADE, 'E4').blocos.find(b => b.numero === 2)?.faltam, ['E6', 'E7'], 'com a E4 no ar, o bloco 2 fechava na E6 e na E7');
 eq(montado.itensTotal, BLOCOS_DA_PARIDADE.reduce((s, b) => s + b.itens.length, 0), 'conta todos os itens');
@@ -220,8 +220,12 @@ eq(montarChecklist(BLOCOS_DA_PARIDADE, 'E6').porEntrega.map(p => p.entrega), ['E
 eq(BLOCOS_DA_PARIDADE.flatMap(b => b.itens).filter(i => (i.entrega === 'E5' || i.entrega === 'E7') && !i.href).map(i => i.rotulo), [], 'o que a E5 e a E7 fecham já tem o link da tela');
 // Montagem por entrega: com a E7 no ar, todo bloco fica completo.
 const futuro = montarChecklist(BLOCOS_DA_PARIDADE, 'E7');
-eq(futuro.blocosProntos, 15, 'com a E7 no ar, os 15 blocos completos');
-eq(futuro.porEntrega, [], 'nada mais a chegar');
+eq(futuro.porEntrega, [], 'com a E7 no ar, nada mais a chegar');
+const comFalta = futuro.blocos.flatMap(b => b.itens).filter(i => i.falta);
+eq(comFalta.every(i => i.noAr && !i.pronto), true, 'item com falta está no ar mas não conta como pronto');
+eq(futuro.comFalta, comFalta.length, 'conta os itens que dependem de um passo de fora');
+eq(futuro.blocosProntos, 15 - new Set(futuro.blocos.filter(b => b.itens.some(i => i.falta)).map(b => b.numero)).size, 'bloco com item que depende de passo de fora não aparece como completo');
+eq(comFalta.every(i => i.falta!.length > 20), true, 'toda falta diz o que falta, em palavras');
 const sintetico: BlocoDaParidade[] = [{ numero: 1, titulo: 'X', resumo: 'x', itens: [{ rotulo: 'a', entrega: 'E2', href: '/x' }, { rotulo: 'b', entrega: 'E5' }, { rotulo: 'c', entrega: 'E7' }] }];
 const s1 = montarChecklist(sintetico, 'E4');
 eq([s1.blocos[0].situacao, s1.blocos[0].prontos, s1.blocos[0].faltam], ['parcial', 1, ['E5', 'E7']], 'bloco sintético: parcial, 1 pronto, falta E5 e E7');

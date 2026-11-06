@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { ArrowUpRight, Check, Clock, LayoutList, ListChecks, Milestone } from 'lucide-react';
+import { AlertCircle, ArrowUpRight, Check, Clock, LayoutList, ListChecks, Milestone } from 'lucide-react';
 
 import { FilterBar } from '@/components/fin/FilterBar';
 import { MetricCard } from '@/components/fin/MetricCard';
@@ -56,10 +56,17 @@ export function TelaDaParidade() {
           rotulo="Blocos completos" icone={LayoutList} valor={checklist.blocosProntos} formato="contagem" estado="ok"
           contexto={`de ${checklist.blocos.length} blocos; os outros já têm parte pronta ou chegam depois.`}
         />
-        <MetricCard
-          rotulo="Na próxima entrega" icone={Milestone} valor={proxima?.itens ?? 0} formato="contagem" estado="ok" tomDoIcone="aviso"
-          contexto={proxima ? `itens chegam na ${rotuloDaEntrega(proxima.entrega)}.` : 'Nada mais a chegar.'}
-        />
+        {proxima ? (
+          <MetricCard
+            rotulo="Na próxima entrega" icone={Milestone} valor={proxima.itens} formato="contagem" estado="ok" tomDoIcone="aviso"
+            contexto={`itens chegam na ${rotuloDaEntrega(proxima.entrega)}.`}
+          />
+        ) : (
+          <MetricCard
+            rotulo="Falta um passo" icone={AlertCircle} valor={checklist.comFalta} formato="contagem" estado="ok" tomDoIcone="aviso"
+            contexto={checklist.comFalta ? 'itens já existem e dependem de chave, contador ou arquivo real.' : 'Nada depende de passo de fora.'}
+          />
+        )}
       </div>
 
       <FilterBar
@@ -113,20 +120,25 @@ function BlocoDoChecklist({ bloco }: { bloco: BlocoMontado }) {
           <li key={i.rotulo} className="flex items-start gap-[var(--fin-s-2)] border-t border-[var(--fin-border)] py-[var(--fin-s-2)] first:border-0">
             {i.pronto
               ? <Check aria-label="Já existe" className="mt-0.5 size-4 shrink-0 text-[var(--fin-positive)]" />
-              : <Clock aria-label="Ainda vem" className="mt-0.5 size-4 shrink-0 text-[var(--fin-text-3)]" />}
-            <span className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-[var(--fin-s-3)]">
-              <span className={cn('fin-t-body', i.pronto ? 'text-[var(--fin-text)]' : 'text-[var(--fin-text-2)]')}>{i.rotulo}</span>
-              {i.pronto && i.href ? (
-                <Link
-                  href={i.href}
-                  className="inline-flex shrink-0 items-center gap-0.5 fin-t-caption text-[var(--fin-accent)] underline-offset-2 hover:underline max-lg:min-h-11 max-lg:items-center"
-                >
-                  Abrir <ArrowUpRight aria-hidden="true" className="size-3" />
-                  <span className="sr-only">: {i.rotulo}</span>
-                </Link>
-              ) : (
-                <span className="shrink-0 fin-t-caption text-[var(--fin-text-3)]">{i.pronto ? rotuloDaEntrega(i.entrega) : `Chega na ${rotuloDaEntrega(i.entrega)}`}</span>
-              )}
+              : i.noAr
+                ? <AlertCircle aria-label="Existe, falta um passo" className="mt-0.5 size-4 shrink-0 text-[var(--fin-warning-text)]" />
+                : <Clock aria-label="Ainda vem" className="mt-0.5 size-4 shrink-0 text-[var(--fin-text-3)]" />}
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-[var(--fin-s-3)]">
+                <span className={cn('fin-t-body', i.noAr ? 'text-[var(--fin-text)]' : 'text-[var(--fin-text-2)]')}>{i.rotulo}</span>
+                {i.noAr && i.href ? (
+                  <Link
+                    href={i.href}
+                    className="inline-flex shrink-0 items-center gap-0.5 fin-t-caption text-[var(--fin-accent)] underline-offset-2 hover:underline max-lg:min-h-11 max-lg:items-center"
+                  >
+                    Abrir <ArrowUpRight aria-hidden="true" className="size-3" />
+                    <span className="sr-only">: {i.rotulo}</span>
+                  </Link>
+                ) : (
+                  <span className="shrink-0 fin-t-caption text-[var(--fin-text-3)]">{i.noAr ? rotuloDaEntrega(i.entrega) : `Chega na ${rotuloDaEntrega(i.entrega)}`}</span>
+                )}
+              </span>
+              {i.noAr && i.falta ? <span className="fin-t-caption text-[var(--fin-warning-text)]">Falta: {i.falta}</span> : null}
             </span>
           </li>
         ))}
