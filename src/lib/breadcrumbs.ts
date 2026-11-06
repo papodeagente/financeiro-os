@@ -109,6 +109,7 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   '/mudanca': 'Mudar para o EnturOS',
   '/mudanca/glossario': 'Glossário',
   '/mudanca/paridade': 'Checklist de paridade',
+  '/mudanca/historico': 'Registros trazidos',
 };
 
 const PILLAR_PREFIXES: { pillar: Pillar; prefixes: string[] }[] = [

@@ -148,6 +148,11 @@ export const STATUS_LABELS: Record<StatusDominio, Record<string, { rotulo: strin
     pronto:         { rotulo: 'Completo',            tone: 'positivo' },
     parcial:        { rotulo: 'Em parte',            tone: 'aviso'    },
     vem:            { rotulo: 'Ainda vem',           tone: 'neutro'   },
+    // Mês em paralelo (E7)
+    data:           { rotulo: 'Data diferente',      tone: 'aviso'    },
+    valor:          { rotulo: 'Valor diferente',     tone: 'negativo' },
+    so_la:          { rotulo: 'Só no sistema anterior', tone: 'negativo' },
+    so_aqui:        { rotulo: 'Só no EnturOS',       tone: 'info'     },
   },
   // Gerar notas (E5, parte E): a situação de cada produto da venda.
   nota: {

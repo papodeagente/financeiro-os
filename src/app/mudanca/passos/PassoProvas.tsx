@@ -10,14 +10,15 @@ import { FilterBar } from '@/components/fin/FilterBar';
 import { FinTable, type FinColuna } from '@/components/fin/FinTable';
 import { Segmentado } from '@/components/fin/Segmentado';
 import {
-  api, type ExplicacaoDaDiferenca, type FiltroDoEnsaio, type ProvaDaConta, type ProvaDaPessoa, type ProvaDoMes, type RespostaDasProvas,
+  api, type ExplicacaoDaDiferenca, type FiltroDoEnsaio, type LinhaDoHistorico, type ProvaDaConta, type ProvaDaPessoa, type ProvaDoMes,
+  type ProvasDoHistorico, type RespostaDasProvas,
 } from '@/lib/migracao/contrato-telas';
 import { contarProvas, dataBR, nomeDoMes, situacaoDaProva } from '@/lib/migracao/telas/assistente';
 import { cn, formatBRL } from '@/lib/utils';
 
 import { BarraDoPasso, CabecaDoPasso, plural, textoDoErro, type PropsDoPasso } from '../pecas';
 
-type Aba = 'contas' | 'pessoas' | 'meses';
+type Aba = 'contas' | 'pessoas' | 'meses' | 'historico';
 type Mostrar = 'tudo' | 'diferencas';
 
 /**
@@ -44,7 +45,12 @@ export function PassoProvas({ lote, irPara, onVerNoEnsaio }: PropsDoPasso & { on
 
   if (!lote) return null;
 
-  const todas = provas ? [...provas.contas, ...provas.pessoas, ...provas.meses] : [];
+  const h = provas?.historico;
+  const linhasDoHistorico = h ? [...h.contas_no_corte, ...h.liquidados, ...h.receita.flatMap(r => [r.faturamento, ...(r.receita ? [r.receita] : [])])] : [];
+  const temHistorico = Boolean(h && (linhasDoHistorico.length || Object.values(h.registros).some(n => n > 0)));
+  // A linha do histórico que o servidor não deu como explicada conta como sem explicação.
+  const historicoParaContar = linhasDoHistorico.map(l => ({ diferenca: l.diferenca, explicacoes: l.explicada ? l.explicacoes.map(e => ({ motivo: e.motivo, linhas: e.linhas, valor: e.valor })) : [] }));
+  const todas = provas ? [...provas.contas, ...provas.pessoas, ...provas.meses, ...historicoParaContar] : [];
   const c = contarProvas(todas);
   const q = busca.trim().toLocaleLowerCase('pt-BR');
   const filtra = <T extends { diferenca: number; explicacoes: ExplicacaoDaDiferenca[] }>(linhas: T[], texto: (l: T) => string) =>
@@ -133,6 +139,7 @@ export function PassoProvas({ lote, irPara, onVerNoEnsaio }: PropsDoPasso & { on
                 { valor: 'contas', rotulo: 'Saldos das contas', contagem: provas?.contas.length },
                 { valor: 'pessoas', rotulo: 'Em aberto por pessoa', contagem: provas?.pessoas.length },
                 { valor: 'meses', rotulo: 'Mês e categoria', contagem: provas?.meses.length },
+                ...(temHistorico ? [{ valor: 'historico' as Aba, rotulo: 'Histórico', contagem: linhasDoHistorico.length }] : []),
               ]}
             />
             <a
@@ -145,7 +152,9 @@ export function PassoProvas({ lote, irPara, onVerNoEnsaio }: PropsDoPasso & { on
             </a>
           </div>
 
-          <FilterBar
+          {aba === 'historico' && h ? <ProvasDoHistoricoNaTela h={h} /> : null}
+
+          {aba === 'historico' ? null : <FilterBar
             busca={{ valor: busca, onChange: setBusca, placeholder: aba === 'contas' ? 'Pesquisar conta…' : aba === 'pessoas' ? 'Pesquisar pessoa…' : 'Pesquisar categoria…' }}
             selects={[{
               id: 'provas-mostrar', rotulo: 'Mostrar', valor: mostrar, onChange: v => setMostrar(v as Mostrar),
@@ -158,7 +167,7 @@ export function PassoProvas({ lote, irPara, onVerNoEnsaio }: PropsDoPasso & { on
             }}
             ativos={(mostrar !== 'tudo' ? 1 : 0) + (q ? 1 : 0)}
             onLimpar={() => { setMostrar('tudo'); setBusca(''); }}
-          />
+          />}
 
           {aba === 'contas' ? (
             <FinTable<ProvaDaConta> linhas={filtra(provas?.contas ?? [], l => l.conta)} colunas={colunasConta} chave={l => l.conta} densidade="compacta" estado="ok" vazio={vazio('contas')} />
@@ -196,5 +205,68 @@ function Explicacoes({ linhas, diferenca, onVer }: { linhas: ExplicacaoDaDiferen
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * As provas do histórico (E7): o saldo na data de corte refeito aqui (o
+ * histórico entrou sem contar o dinheiro duas vezes), o liquidado por mês e
+ * as vendas e a receita por mês.
+ */
+function ProvasDoHistoricoNaTela({ h }: { h: ProvasDoHistorico }) {
+  type L = LinhaDoHistorico & { chave: string; tituloDaLinha: string; sub?: string };
+  const tabela = (titulo: string, frase: string, linhas: L[], rotulos: [string, string] = ['Sistema anterior', 'EnturOS']) => {
+    if (!linhas.length) return null;
+    const colunas: FinColuna<L>[] = [
+      {
+        id: 'rotulo', cabecalho: '', tipo: 'texto', minWidth: 180,
+        render: l => (
+          <span className="flex flex-col">
+            <span className="fin-t-body-strong text-[var(--fin-text)]">{l.tituloDaLinha}</span>
+            {l.sub ? <span className="fin-t-caption text-[var(--fin-text-3)]">{l.sub}</span> : null}
+          </span>
+        ),
+      },
+      { id: 'anterior', cabecalho: rotulos[0], tipo: 'dinheiro', valor: l => l.anterior },
+      { id: 'enturos', cabecalho: rotulos[1], tipo: 'dinheiro', valor: l => l.enturos },
+      { id: 'diferenca', cabecalho: 'Diferença', tipo: 'dinheiro', valor: l => l.diferenca, tone: l => (Math.abs(l.diferenca) < 0.005 ? 'neutro' : 'negativo') },
+      { id: 'situacao', cabecalho: 'Situação', tipo: 'status', dominio: 'mudanca', valor: l => (Math.abs(l.diferenca) < 0.005 ? 'bate' : l.explicada ? 'explicada' : 'sem_explicacao') },
+      {
+        id: 'motivo', cabecalho: 'Por que não bateu', tipo: 'texto', minWidth: 220,
+        render: l => (Math.abs(l.diferenca) < 0.005 ? <span className="fin-t-caption text-[var(--fin-text-3)]">—</span> : (
+          <ul className="flex flex-col gap-0.5">{l.explicacoes.map(e => <li key={e.codigo} className="fin-t-body text-[var(--fin-text-2)]">{e.motivo}<span className="tabular-nums text-[var(--fin-text-3)]"> · {formatBRL(e.valor)}</span></li>)}</ul>
+        )),
+      },
+    ];
+    return (
+      <section className="flex flex-col gap-[var(--fin-s-2)]">
+        <h3 className="fin-t-body-strong text-[var(--fin-text)]">{titulo}</h3>
+        <p className="max-w-[72ch] fin-t-caption text-[var(--fin-text-2)]">{frase}</p>
+        <FinTable<L> linhas={linhas} colunas={colunas} chave={l => l.chave} densidade="compacta" estado="ok" vazio={{ motivo: 'sem-dado', titulo: 'Nada', oQueE: '' }} />
+      </section>
+    );
+  };
+  const r = h.registros;
+  return (
+    <div className="flex flex-col gap-[var(--fin-s-5)]">
+      {tabela('Saldo na data de corte, sem dinheiro em dobro',
+        'Cada liquidação antiga entrou na data e na conta dela, e a abertura da conta passou para antes. Refazendo a conta até o corte (saldo inicial + liquidações), o saldo tem de ser o informado; o de hoje não muda.',
+        h.contas_no_corte.map(c => ({ ...c, chave: c.conta_id, tituloDaLinha: c.rotulo, sub: `histórico ${formatBRL(c.historico)} · saldo hoje ${formatBRL(c.saldo_hoje)}` })), ['Informado', 'Refeito aqui'])}
+      {tabela('Liquidado por mês', 'O que o arquivo diz que foi pago e recebido em cada mês × as liquidações que existem aqui.',
+        h.liquidados.map(l => ({ ...l, chave: `${l.mes}|${l.tipo}`, tituloDaLinha: `${l.tipo === 'receber' ? 'Recebido' : 'Pago'} em ${nomeDoMes(l.mes)}` })))}
+      {tabela('Vendas e receita por mês', 'Faturamento e receita que o sistema anterior mostrava × as vendas trazidas, com a receita aberta pelos componentes (Comissão, Over, Taxa DU, RAV, Fee, Markup, Desconto).',
+        h.receita.flatMap(m => [
+          { ...m.faturamento, chave: `fat:${m.mes}`, tituloDaLinha: `Vendas de ${nomeDoMes(m.mes)}`, sub: plural(m.vendas, 'venda', 'vendas') },
+          ...(m.receita ? [{ ...m.receita, chave: `rec:${m.mes}`, tituloDaLinha: `Receita de ${nomeDoMes(m.mes)}` }] : []),
+        ]))}
+      {Object.values(r).some(n => n > 0) ? (
+        <p className="max-w-[72ch] fin-t-body text-[var(--fin-text-2)]">
+          Também vieram {plural(r.faturas, 'fatura', 'faturas')} e {plural(r.notas, 'nota emitida', 'notas emitidas')} (só para consulta; nota trazida nunca é emitida de novo),
+          {' '}{plural(r.comissoes_pagas, 'comissão paga', 'comissões pagas')}, {plural(r.metas, 'pessoa com metas', 'pessoas com metas')},
+          {' '}{plural(r.reembolsos, 'reembolso em aberto', 'reembolsos em aberto')} e {plural(r.creditos, 'crédito de cliente', 'créditos de clientes')}.
+          {r.movimentos_ligados + r.movimentos_criados ? ` No extrato, ${plural(r.movimentos_ligados, 'linha se ligou', 'linhas se ligaram')} a liquidações e ${plural(r.movimentos_criados, 'virou liquidação', 'viraram liquidação')}.` : ''}
+        </p>
+      ) : null}
+    </div>
   );
 }

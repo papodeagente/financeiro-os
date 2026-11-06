@@ -91,6 +91,7 @@ const NAVIGATION_ITEMS: CommandItem[] = [
   { id: 'mudanca', label: 'Mudar para o EnturOS (trazer dados do sistema anterior)', href: '/mudanca', icon: <FolderInput className="w-4 h-4" />, section: 'navegacao' },
   { id: 'mudanca-glossario', label: 'Glossário: como chamava lá, como chama aqui', href: '/mudanca/glossario', icon: <BookA className="w-4 h-4" />, section: 'navegacao' },
   { id: 'mudanca-paridade', label: 'Checklist de paridade', href: '/mudanca/paridade', icon: <ListChecks className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'mudanca-registros', label: 'Registros trazidos do sistema anterior (faturas, notas, comissões pagas)', href: '/mudanca/historico', icon: <FolderInput className="w-4 h-4" />, section: 'navegacao' },
 ];
 
 const CREATE_ITEMS: CommandItem[] = [

@@ -5,7 +5,7 @@
  * acentos do português).
  */
 import type { ProvaDaMudanca, LinhaDaProva } from './provas';
-import { ROTULO_DA_COMPARACAO, type RelatorioDoMes } from './paralelo';
+import { ROTULO_DA_COMPARACAO, type RelatorioDoMes } from './comparar-mes';
 import { dataBR } from './valores';
 
 type Doc = import('jspdf').jsPDF;
