@@ -145,6 +145,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     // Portal do cliente (público) e o recibo para imprimir: sem barra nem menu.
     pathname.startsWith('/c/') ||
     pathname.startsWith('/recibo/') ||
+    // Documento da fatura para imprimir (E5, parte B): a folha sai limpa.
+    (pathname.startsWith('/financeiro-ag/faturas/') && pathname.endsWith('/imprimir')) ||
+    // Nota de débito da venda para imprimir (E5, parte B).
+    (pathname.startsWith('/vendas/') && pathname.endsWith('/nota-de-debito')) ||
     pathname.startsWith('/mapas-mentais/publico/') ||
     pathname.startsWith('/admin') ||
     pathname === '/preview-iframe'

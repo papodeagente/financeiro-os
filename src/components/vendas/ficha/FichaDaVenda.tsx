@@ -210,6 +210,7 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
             ...(ficha && ficha.versao_modelo === 2 && ficha.permissoes.cancelar && ficha.venda.produtos.some(p => !p.cancelado_em)
               ? [{ rotulo: 'Cancelar produto ou passageiro', onClick: () => (sujo ? toast.warning('Salve antes de cancelar', 'Há mudanças que ainda não foram salvas.') : setCancelando(true)) }]
               : []),
+            { rotulo: 'Nota de débito', href: `/vendas/${encodeURIComponent(vendaId)}/nota-de-debito` },
             { rotulo: 'Ver na tela anterior', href: `/vendas/${encodeURIComponent(vendaId)}` },
           ] : undefined}
           atualizadoEm={nova ? undefined : atualizadoEm}

@@ -14,6 +14,7 @@ import { tarefaCotacoes } from '../cambio-servidor';
 import { tarefaFaturasFornecedor } from '../fornecedor-tarefa';
 import { tarefaComissoesDoDia } from '../comissao-funcoes-servidor';
 import { tarefaCreditosEReembolsos } from '../creditos-e-reembolsos-tarefa';
+import { tarefaMontarFaturas } from '../fatura-tarefa';
 import { TAREFA_NOTA_POR_GATILHO, processarNotaPorGatilho, tarefaNotasPorGatilho } from '../nota-regras-servidor';
 import { TIPO_TAREFA_MIGRACAO, processarTarefaMigracao } from '../migracao/servidor';
 import { janelaDeMinutos, janelaDiaria, rodarAgendador, type DefinicaoTarefa, type ResumoAgendador } from './nucleo';
@@ -63,7 +64,7 @@ export const tarefaFila: DefinicaoTarefa = {
   executar: async ({ exec, restanteMs }) => processarFila(exec, { orcamentoMs: Math.min(30_000, restanteMs()) }),
 };
 
-export const TAREFAS: DefinicaoTarefa[] = [tarefaRazaoAbertura, tarefaRazaoConferencia, tarefaRecorrenciaGerar, tarefaAvisosVencimento, tarefaReguaCobranca, tarefaCotacoes, tarefaFaturasFornecedor, tarefaNotasPorGatilho, tarefaComissoesDoDia, tarefaCreditosEReembolsos, tarefaFila];
+export const TAREFAS: DefinicaoTarefa[] = [tarefaRazaoAbertura, tarefaRazaoConferencia, tarefaRecorrenciaGerar, tarefaAvisosVencimento, tarefaReguaCobranca, tarefaCotacoes, tarefaFaturasFornecedor, tarefaNotasPorGatilho, tarefaComissoesDoDia, tarefaCreditosEReembolsos, tarefaMontarFaturas, tarefaFila];
 
 /** Roda o agendador contra o banco de verdade. */
 export async function executarAgendadorAgora(): Promise<ResumoAgendador> {

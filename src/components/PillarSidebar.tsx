@@ -25,7 +25,7 @@ import {
   PanelLeftClose, PanelLeftOpen,
   Eraser, LifeBuoy, FileText,
   LayoutGrid, ChartColumn, ArrowDownLeft, ArrowUpRight, GitCompareArrows, ListTree,
-  Contact, Truck, Repeat, Lock, ArrowDownUp, Barcode, FolderInput, Coins, FileStack, HandCoins, Handshake, BadgePercent, FilePlus2, FileCog, ReceiptText, Users2, Grid3x3, CalendarCheck, Banknote, UserRound, BarChart3, Undo2, PiggyBank, Network, Split, Tags, ShieldCheck, Stamp, Scale, ScrollText, ListOrdered, Table2,
+  Contact, Truck, Repeat, Lock, ArrowDownUp, Barcode, FolderInput, Coins, FileStack, HandCoins, Handshake, BadgePercent, FilePlus2, FileCog, ReceiptText, Users2, Grid3x3, CalendarCheck, Banknote, UserRound, BarChart3, Undo2, PiggyBank, FileText as FileTextIcon, CalendarRange, Network, Split, Tags, ShieldCheck, Stamp, Scale, ScrollText, ListOrdered, Table2,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -104,6 +104,8 @@ const FINANCEIRO_MENU: SidebarSection[] = [
       { key: 'receber', label: 'Contas a receber', icon: ArrowDownLeft, href: '/financeiro-ag/receber' },
       { key: 'pagar', label: 'Contas a pagar', icon: ArrowUpRight, href: '/financeiro-ag/pagar' },
       { key: 'cobrancas', label: 'Cobranças', icon: Barcode, href: '/financeiro-ag/cobrancas' },
+      { key: 'faturas', label: 'Faturas', icon: FileTextIcon, href: '/financeiro-ag/faturas' },
+      { key: 'regras-faturamento', label: 'Regras de faturamento', icon: CalendarRange, href: '/financeiro-ag/regras-faturamento' },
       { key: 'conciliacao', label: 'Conciliação', icon: GitCompareArrows, href: '/financeiro-ag/conciliacao' },
       { key: 'notas-fiscais', label: 'Notas fiscais', icon: Receipt, href: '/financeiro-ag/notas' },
       { key: 'notas-gerar', label: 'Gerar notas', icon: FilePlus2, href: '/financeiro-ag/notas/gerar' },

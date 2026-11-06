@@ -60,6 +60,8 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   '/financeiro-ag/notas/gerar': 'Gerar notas',
   '/financeiro-ag/notas/regras': 'Regras da nota',
   '/financeiro-ag/notas/retencoes': 'Retenções na fonte',
+  '/financeiro-ag/faturas': 'Faturas',
+  '/financeiro-ag/regras-faturamento': 'Regras de faturamento',
   '/financeiro-ag/pagar': 'Contas a pagar',
   '/financeiro-ag/plano-contas': 'Categorias',
   '/financeiro-ag/formas-pagamento': 'Formas de pagamento',
@@ -133,6 +135,11 @@ function humanize(slug: string): string {
     .replace(/^./, c => c.toUpperCase());
 }
 
+/** Rotas com id no caminho que têm um nome melhor que o id (E5, parte B). */
+const ROTAS_COM_ID: { padrao: RegExp; rotulo: string }[] = [
+  { padrao: /^\/financeiro-ag\/faturas\/[^/]+$/, rotulo: 'Ficha da fatura' },
+];
+
 /**
  * Build a breadcrumb trail for the given pathname.
  *
@@ -159,7 +166,7 @@ export function buildTrail(pathname: string, leafLabel?: string): Crumb[] {
   for (let i = 0; i < segments.length; i++) {
     acc += '/' + segments[i];
     const isLast = i === segments.length - 1;
-    const known = BREADCRUMB_MAP[acc];
+    const known = BREADCRUMB_MAP[acc] ?? ROTAS_COM_ID.find(r => r.padrao.test(acc))?.rotulo;
     // Skip duplicates with the pillar root crumb.
     if (trail.some(c => c.href === acc)) continue;
     // Dynamic / unknown segment.

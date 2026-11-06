@@ -17,6 +17,7 @@
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { RAZAO_LIMPEZA_DA_AGENCIA_SQL } from './razao-schema';
 import { TABELAS_DO_FORNECEDOR } from './fornecedor-schema';
+import { TABELAS_DA_FATURA } from './fatura-schema';
 import type { PerfilDaConta } from '@/lib/perfil-da-conta';
 
 export const CATEGORIES = {
@@ -201,6 +202,20 @@ export async function apagarCategorias(
     : { rows: [] as Array<Record<string, unknown>> };
   if (apagaVendas && temComissoes[0]?.ok) {
     for (const table of TABELAS_DAS_COMISSOES_POR_FUNCAO) {
+      const res = await exec.query(`DELETE FROM ${table} WHERE tenant_id = $1`, [tenantId]);
+      const n = res.rowCount || 0;
+      summary[table] = n;
+      total += n;
+    }
+  }
+  // Faturas ao cliente (E5, parte B): sem as contas a receber, as faturas, as
+  // notas e as regras de faturamento saem junto (a fatura É uma conta a receber).
+  const apagaReceber = categorias.some(c => (CATEGORIES[c] as readonly string[]).includes('contas_receber'));
+  const { rows: temFaturas } = apagaReceber
+    ? await exec.query(`SELECT to_regclass('public.faturas') IS NOT NULL AS ok`)
+    : { rows: [] as Array<Record<string, unknown>> };
+  if (apagaReceber && temFaturas[0]?.ok) {
+    for (const table of TABELAS_DA_FATURA) {
       const res = await exec.query(`DELETE FROM ${table} WHERE tenant_id = $1`, [tenantId]);
       const n = res.rowCount || 0;
       summary[table] = n;

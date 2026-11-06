@@ -132,6 +132,8 @@ export function planejarItem(
   const status = String(d.status ?? 'PENDENTE').toUpperCase();
   if (status === 'CANCELADO') erros.push('A conta está cancelada.');
   if (status === 'RECEBIDO') erros.push('A conta já foi recebida.');
+  // Fatura do cliente ainda aberta (E5, parte B): o valor ainda muda; cobra-se depois de fechar.
+  if (String(d.origem ?? '') === 'FATURA' && String(d.fatura_situacao ?? '') === 'ABERTA') erros.push('A fatura ainda está aberta: feche a fatura antes de cobrar.');
   if (conta.cobranca_valendo) erros.push('Esta conta já tem cobrança emitida. Para mudar, faça a 2ª via ou cancele a atual.');
   const saldo = saldoEmAberto(d, 'contas_receber');
   if (saldo <= 0 && !erros.length) erros.push('Não há saldo em aberto nesta conta.');

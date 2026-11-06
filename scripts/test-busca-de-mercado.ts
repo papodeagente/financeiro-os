@@ -44,8 +44,24 @@ const casos: Array<[string, string]> = [
   ['juros', '/config/financeiro'],
   ['  Fluxo   de  Caixa ', '/financeiro-ag/fluxo-caixa'],
   ['onde fica o retorno do banco', '/financeiro-ag/recebimentos'],
+  // Faturas ao cliente (E5, parte B).
+  ['fatura', '/financeiro-ag/faturas'],
+  ['fatura corporativa', '/financeiro-ag/faturas'],
+  ['cliente faturado', '/financeiro-ag/faturas'],
+  ['fechamento de fatura', '/financeiro-ag/faturas'],
+  ['nota de débito', '/financeiro-ag/faturas'],
+  ['nota de debito', '/financeiro-ag/faturas'],
+  ['conferência de fatura', '/financeiro-ag/faturas'],
+  ['regras de faturamento', '/financeiro-ag/regras-faturamento'],
+  ['período de faturamento', '/financeiro-ag/regras-faturamento'],
+  ['decendial', '/financeiro-ag/regras-faturamento'],
+  ['quinzenal', '/financeiro-ag/regras-faturamento'],
+  ['semanal IATA', '/financeiro-ag/regras-faturamento'],
+  ['recalcular vencimentos', '/financeiro-ag/regras-faturamento'],
 ];
 for (const [q, href] of casos) eq(primeiro(q)?.href, href, `"${q.trim()}" → ${href}`);
+eq(primeiro('fatura do cartão')?.href, '/financeiro-ag/cartoes', '"fatura do cartão" continua nos Cartões');
+eq(buscarPorTermoDeMercado('faturar').map(r => r.destino.id).slice(0, 1), ['faturas'], '"faturar" leva às Faturas');
 eq(buscarPorTermoDeMercado('liquidar').map(r => r.destino.id).slice(0, 2), ['liquidar-pagar', 'liquidar-receber'], '"liquidar" mostra pagar e receber');
 eq(primeiro('baixar boleto')?.frase, 'Aqui o pagamento do boleto baixa sozinho; acompanhe em Contas a receber.', 'frase quando aqui é diferente');
 eq(primeiro('extrato')?.frase, undefined, 'tela igual: sem frase');

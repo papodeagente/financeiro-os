@@ -34,6 +34,7 @@ import { normalizarConfigReceita, receitaDaVenda, type ConfigReceita } from './v
 import { posicaoDaVenda, type CobrancaDaPosicao, type PosicaoDaVenda } from './venda-posicao';
 import { contasNaFaturaDoFornecedor, refletirFaturasNasContas } from './fornecedor-fatura-banco';
 import { aplicarRetencoesDaAgencia } from './nota-retencoes-servidor';
+import { contasTravadasPelaFatura, projetarContasNaFatura, sincronizarFaturasDaVenda } from './fatura-servidor';
 
 // ============================================================
 // Tipos públicos
@@ -350,6 +351,8 @@ const valorDe = (d: Record<string, unknown>): Centavos => Math.round(round2(Numb
 const CAMPOS_DA_PESSOA = [
   'categoria_id', 'centro_custo', 'centro_custo_id', 'rateio', 'anexos', 'tags', 'observacoes', 'conta_bancaria_id',
   'forma_pagamento', 'linha_digitavel', 'chave_pix', 'numero_documento', 'fornecedor_cnpj', 'comprovante', 'cartao_id', 'data_emissao',
+  // Item tirado da fatura à mão (E5, parte B): continua fora das faturas automáticas.
+  'fatura_manual',
 ];
 function vazio(v: unknown): boolean {
   return v === null || v === undefined || v === '' || (Array.isArray(v) && v.length === 0);
@@ -497,6 +500,8 @@ export async function regerarContasDaVenda(exec: ExecutorSQL, tenantId: string, 
   // Conta que entrou na fatura do fornecedor (parte C) também fica como está:
   // a diferença da venda vai para uma conta livre, que entra na próxima fatura.
   for (const id of await contasNaFaturaDoFornecedor(exec, tenantId, vendaId)) travadas.add(id);
+  // Item de fatura fechada, recebida ou cobrada (E5, parte B) também não muda.
+  for (const id of await contasTravadasPelaFatura(exec, tenantId, vendaId)) travadas.add(id);
   const cr = await regerarTabela(exec, tenantId, vendaId, 'contas_receber', contas.contas_receber as unknown as Array<Record<string, unknown>>, travadas, avisos);
   const cp = await regerarTabela(exec, tenantId, vendaId, 'contas_pagar', contas.contas_pagar as unknown as Array<Record<string, unknown>>, travadas, avisos);
   return {
@@ -783,6 +788,8 @@ export async function salvarVenda(
     const c = await sincronizarCreditosDaVenda(exec, tenantId, venda.id, opts.usuario ?? { id: '', nome: opts.origem === 'crm' ? 'CRM' : '' });
     if (c.faltando > 0) avisos.push({ codigo: 'CREDITO_INSUFICIENTE', valor_centavos: c.faltando, mensagem: `O cliente não tem crédito disponível para cobrir ${deCentavos(c.faltando).toFixed(2)} pagos com "Crédito do cliente". A pendência continua aberta até o crédito existir ou a forma mudar.` });
   }
+  // Faturas ao cliente (E5, parte B): a forma Faturar entra na fatura pela regra do pagante.
+  await sincronizarFaturasDaVenda(exec, tenantId, venda.id, { avisos, venda_numero: venda.numero });
   if (!opts.semEvento) await registrarEventoDaVenda(exec, tenantId, venda.id, opts.evento ?? (nova ? 'criada' : 'alterada'), {
     usuario: opts.usuario,
     detalhe: { ...(opts.detalheDoEvento ?? {}), contas: regerado.contas, total_cliente_centavos: totaisDaVenda(venda).valor_cliente, avisos: avisos.map(a => a.codigo) },
@@ -878,8 +885,12 @@ export async function contasDaVendaNoBanco(exec: ExecutorSQL, tenantId: string, 
     [tenantId, vendaId],
   );
   const juntar = (r: Record<string, unknown>) => ({ ...(r.data as Record<string, unknown>), id: txt(r.id), status: txt((r.data as Record<string, unknown>)?.status ?? r.status) });
-  // A conta que entrou na fatura do fornecedor aparece com o pagamento da fatura (parte C).
-  return { contas_receber: cr.map(juntar), contas_pagar: await refletirFaturasNasContas(exec, tenantId, cp.map(juntar)) };
+  // A conta que está numa fatura aparece pela situação da fatura (parte B);
+  // a que entrou na fatura do fornecedor, pelo pagamento dela (parte C).
+  return {
+    contas_receber: await projetarContasNaFatura(exec, tenantId, cr.map(juntar)),
+    contas_pagar: await refletirFaturasNasContas(exec, tenantId, cp.map(juntar)),
+  };
 }
 
 export async function posicaoDaVendaNoBanco(exec: ExecutorSQL, tenantId: string, vendaId: string, hoje = hojeISO()): Promise<PosicaoNoBanco | null> {

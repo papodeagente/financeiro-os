@@ -200,6 +200,21 @@ export function montarDRE(e: EntradaDRE): LinhaDRE[] {
     // VENDA; origem ausente conta como VENDA) e a margem na mesma proporção.
     const recebidoPorVenda = new Map<string, number>();
     for (const cr of monthReceber) {
+      // Fatura do cliente (E5, parte B): o recebido se divide entre as vendas
+      // da fatura, na proporção de cada uma (os itens ficam dentro dela).
+      const daFatura = (cr as unknown as { origem?: string; fatura_vendas?: Array<{ venda_id?: string; valor?: number }> });
+      if (daFatura.origem === 'FATURA' && Array.isArray(daFatura.fatura_vendas) && daFatura.fatura_vendas.length) {
+        const pesos = daFatura.fatura_vendas.map(v => Math.max(0, num(v.valor)));
+        const totalPesos = pesos.reduce((a, b) => a + b, 0);
+        if (totalPesos > 0) {
+          const recebido = valorCRBase(cr);
+          daFatura.fatura_vendas.forEach((v, i) => {
+            const id = String(v.venda_id ?? '').trim();
+            if (id) recebidoPorVenda.set(id, round2((recebidoPorVenda.get(id) ?? 0) + recebido * pesos[i] / totalPesos));
+          });
+        }
+        continue;
+      }
       if ((cr.origem ?? 'VENDA') !== 'VENDA') continue;
       const vendaId = String(cr.origem_venda_id || cr.venda_id || '').trim();
       if (!vendaId) continue;

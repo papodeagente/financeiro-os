@@ -21,7 +21,7 @@ export const statusChipVariants = cva(
 
 export type StatusTone = NonNullable<VariantProps<typeof statusChipVariants>['tone']>;
 
-export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza' | 'comissao' | 'plano' | 'cobranca' | 'mudanca' | 'nota' | 'comissao_item' | 'reembolso' | 'credito';
+export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza' | 'comissao' | 'plano' | 'cobranca' | 'mudanca' | 'nota' | 'comissao_item' | 'reembolso' | 'credito' | 'fatura' | 'conferencia_fatura';
 
 export type StatusChipProps = {
   /** Valor cru do banco. NUNCA é renderizado como veio. */
@@ -119,6 +119,22 @@ export const STATUS_LABELS: Record<StatusDominio, Record<string, { rotulo: strin
     cancelada: { rotulo: 'Cancelada',            tone: 'neutro'   },
     estornada: { rotulo: 'Estornada',            tone: 'aviso'    },
     falhou:    { rotulo: 'Não emitida',          tone: 'negativo' },
+  },
+  // Fatura ao cliente (E5, parte B, 05/11/2026). Mesmos rótulos de
+  // src/lib/fatura-regras.ts (ROTULO_SITUACAO e ROTULO_CONFERENCIA).
+  fatura: {
+    ABERTA:    { rotulo: 'Aberta',        tone: 'info'     },
+    FECHADA:   { rotulo: 'Fechada',       tone: 'neutro'   },
+    EM_ATRASO: { rotulo: 'Em atraso',     tone: 'negativo' },
+    PARCIAL:   { rotulo: 'Paga em parte', tone: 'aviso'    },
+    PAGA:      { rotulo: 'Paga',          tone: 'positivo' },
+    CANCELADA: { rotulo: 'Cancelada',     tone: 'neutro'   },
+  },
+  conferencia_fatura: {
+    NAO_ENVIADA: { rotulo: 'Não enviada',            tone: 'neutro'   },
+    AGUARDANDO:  { rotulo: 'Aguardando o cliente',   tone: 'info'     },
+    APROVADA:    { rotulo: 'Aprovada pelo cliente',  tone: 'positivo' },
+    CONTESTADA:  { rotulo: 'Contestada',             tone: 'negativo' },
   },
   // Mudança de sistema (E4, 05/11/2026): resultado de cada linha do ensaio e
   // situação de cada prova (src/lib/migracao/telas/assistente.ts).

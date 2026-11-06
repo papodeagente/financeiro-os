@@ -193,6 +193,17 @@ export const DESTINOS_DE_MERCADO: readonly DestinoDeMercado[] = [
     href: '/financeiro-ag/cobrancas', tela: 'Cobranças',
     frase: 'O boleto e o Pix saem pelo Asaas ou Pagar.me da agência e baixam a conta sozinhos quando o cliente paga.',
   },
+  // Faturas ao cliente e Regras de faturamento (E5, parte B).
+  {
+    id: 'faturas', termos: ['fatura', 'faturas', 'fatura corporativa', 'faturar', 'cliente faturado', 'fechamento de fatura', 'fechar fatura', 'reabrir fatura', 'conferência de fatura', 'nota de débito', 'nota de crédito', 'faturar avulso', 'mover itens da fatura'],
+    href: '/financeiro-ag/faturas', tela: 'Faturas',
+    frase: 'A venda na forma "Faturar" entra sozinha na fatura do cliente; o cliente confere e aprova no portal, e o ajuste vira nota de crédito ou débito escrita.',
+  },
+  {
+    id: 'regras-faturamento', termos: ['regras de faturamento', 'regra de faturamento', 'período de faturamento', 'faturamento mensal', 'faturamento quinzenal', 'decendial', 'quinzenal', 'semanal iata', 'recalcular vencimentos', 'vencimento da fatura'],
+    href: '/financeiro-ag/regras-faturamento', tela: 'Regras de faturamento',
+    frase: 'A prévia mostra as próximas 3 faturas e os feriados entram no vencimento.',
+  },
   {
     id: 'recibo', termos: ['recibo', 'imprimir recibo', 'recibo de pagamento', 'comprovante para o cliente'],
     href: '/financeiro-ag/receber', tela: 'Contas a receber',
