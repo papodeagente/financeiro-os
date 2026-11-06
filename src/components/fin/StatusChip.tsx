@@ -21,7 +21,7 @@ export const statusChipVariants = cva(
 
 export type StatusTone = NonNullable<VariantProps<typeof statusChipVariants>['tone']>;
 
-export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza' | 'comissao' | 'plano' | 'cobranca';
+export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza' | 'comissao' | 'plano' | 'cobranca' | 'mudanca';
 
 export type StatusChipProps = {
   /** Valor cru do banco. NUNCA é renderizado como veio. */
@@ -111,6 +111,19 @@ export const STATUS_LABELS: Record<StatusDominio, Record<string, { rotulo: strin
     cancelada: { rotulo: 'Cancelada',            tone: 'neutro'   },
     estornada: { rotulo: 'Estornada',            tone: 'aviso'    },
     falhou:    { rotulo: 'Não emitida',          tone: 'negativo' },
+  },
+  // Mudança de sistema (E4, 05/11/2026): resultado de cada linha do ensaio e
+  // situação de cada prova (src/lib/migracao/telas/assistente.ts).
+  mudanca: {
+    criar:          { rotulo: 'Será criado',         tone: 'positivo' },
+    vincular:       { rotulo: 'Liga com existente',  tone: 'info'     },
+    recusar:        { rotulo: 'Recusado',            tone: 'negativo' },
+    bate:           { rotulo: 'Bateu',               tone: 'positivo' },
+    explicada:      { rotulo: 'Diferença explicada', tone: 'aviso'    },
+    sem_explicacao: { rotulo: 'Sem explicação',      tone: 'negativo' },
+    pronto:         { rotulo: 'Completo',            tone: 'positivo' },
+    parcial:        { rotulo: 'Em parte',            tone: 'aviso'    },
+    vem:            { rotulo: 'Ainda vem',           tone: 'neutro'   },
   },
 };
 
