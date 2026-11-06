@@ -56,6 +56,8 @@ export interface CapacidadesCobranca {
   avisaCredito: boolean;
   /** Frases curtas para a tela explicar o que muda neste provedor. */
   observacoes: string[];
+  /** Negativação (Serasa) de cobrança vencida pela API (E7). Ausente = não. */
+  negativacao?: boolean;
 }
 
 export interface EnderecoDoCliente {
@@ -158,6 +160,53 @@ export interface LinkNoProvedor {
   url: string;
 }
 
+// ---------------------------------------------------------------------------
+// Negativação (E7, 06/11/2026; doc oficial do Asaas lida no mesmo dia)
+
+/** O que o provedor responde na simulação, antes de pedir. */
+export interface SimulacaoDeNegativacao {
+  permitida: boolean;
+  /** Por que não pode (frase do provedor). */
+  motivo: string;
+  taxa_centavos: number;
+  liquido_centavos: number;
+  /** Data prevista de início (AAAA-MM-DD) ou ''. */
+  inicio_previsto: string;
+}
+
+/** Dados do devedor que a negativação exige (Asaas: todos obrigatórios menos complemento e descrição). */
+export interface DevedorDaNegativacao {
+  nome: string;
+  documento: string;
+  telefone: string;
+  cep: string;
+  logradouro: string;
+  numero: string;
+  complemento: string;
+  bairro: string;
+}
+
+export interface PedidoDeNegativacao {
+  /** Id da cobrança no provedor. */
+  cobranca_externa: string;
+  descricao: string;
+  devedor: DevedorDaNegativacao;
+}
+
+/** Situação da negativação no provedor. */
+export type StatusNegativacao =
+  | 'PENDING' | 'AWAITING_APPROVAL' | 'AWAITING_CANCELLATION' | 'PROCESSED' | 'PAID' | 'PARTIALLY_PAID' | 'DENIED' | 'CANCELLED';
+
+export interface NegativacaoNoProvedor {
+  id_externo: string;
+  numero: string;
+  status: StatusNegativacao;
+  taxa_centavos: number;
+  pode_cancelar: boolean;
+  motivo_recusa: string;
+  reenviar_documentos: boolean;
+}
+
 export interface MudancaDeCobranca {
   valor_centavos?: number;
   vencimento?: string;
@@ -184,6 +233,13 @@ export interface AdapterCobranca {
   consultarCarnePorReferencia?(referencia: string): Promise<CarneNoProvedor | null>;
   pdfDoCarne?(idCarne: string): Promise<{ conteudo: ArrayBuffer; tipo: string }>;
   criarLink?(pedido: PedidoDeLink): Promise<LinkNoProvedor>;
+  /** Negativação (só onde `capacidades.negativacao`). Nunca automática: só pela ação com prévia. */
+  simularNegativacao?(cobrancaExterna: string): Promise<SimulacaoDeNegativacao>;
+  negativar?(pedido: PedidoDeNegativacao): Promise<NegativacaoNoProvedor>;
+  /** A negativação ativa desta cobrança no provedor, se houver (depois de um timeout). */
+  negativacaoDaCobranca?(cobrancaExterna: string): Promise<NegativacaoNoProvedor | null>;
+  consultarNegativacao?(id: string): Promise<NegativacaoNoProvedor>;
+  cancelarNegativacao?(id: string): Promise<NegativacaoNoProvedor>;
 }
 
 /**

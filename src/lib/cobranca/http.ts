@@ -45,6 +45,11 @@ export interface OpcoesChamada {
   corpo?: unknown;
   /** Resposta binária (PDF do carnê). */
   binario?: boolean;
+  /**
+   * Corpo em multipart/form-data (a negativação do Asaas, que aceita
+   * arquivo). O `fetch` monta o cabeçalho com o separador.
+   */
+  formulario?: Record<string, string>;
 }
 
 export interface ClienteHttp {
@@ -71,14 +76,19 @@ export function criarClienteHttp(o: {
     const relogio = setTimeout(() => controle.abort(), amb.timeoutMs);
     let res: Response;
     try {
+      let formulario: FormData | undefined;
+      if (opcoes.formulario) {
+        formulario = new FormData();
+        for (const [k, v] of Object.entries(opcoes.formulario)) if (v !== '') formulario.append(k, v);
+      }
       res = await amb.fetch(`${o.base}${caminho}`, {
         method: opcoes.metodo ?? 'GET',
         headers: {
           ...o.cabecalhos,
           Accept: opcoes.binario ? 'application/pdf' : 'application/json',
-          ...(opcoes.corpo !== undefined ? { 'Content-Type': 'application/json' } : {}),
+          ...(opcoes.corpo !== undefined && !formulario ? { 'Content-Type': 'application/json' } : {}),
         },
-        body: opcoes.corpo !== undefined ? JSON.stringify(opcoes.corpo) : undefined,
+        body: formulario ?? (opcoes.corpo !== undefined ? JSON.stringify(opcoes.corpo) : undefined),
         signal: controle.signal,
       });
     } catch (e) {

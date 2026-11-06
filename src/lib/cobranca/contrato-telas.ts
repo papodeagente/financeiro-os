@@ -83,6 +83,8 @@ export interface Cobranca {
   taxa_boleto?: number | null;
   /** Página do link de pagamento (tipo 'link'). */
   url_link?: string | null;
+  /** Negativação no Serasa pedida para esta cobrança (E7): a situação no provedor. */
+  negativacao?: { status: string } | null;
 }
 
 export interface TotaisDasCobrancas {

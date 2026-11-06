@@ -64,6 +64,10 @@ export function cobrancaParaTela(c: LinhaCobranca & { cliente_nome?: string; con
     pendencia: typeof c.dados?.pendencia === 'string' && c.dados.pendencia ? c.dados.pendencia : null,
     pendencia_em: typeof c.dados?.pendencia_em === 'string' ? c.dados.pendencia_em : null,
     taxa_boleto: Number(c.dados?.taxa_boleto_centavos ?? 0) > 0 ? deCentavos(Number(c.dados.taxa_boleto_centavos)) : null,
+    // Negativação (E7): só a situação, para a lista mostrar e o menu oferecer a janela certa.
+    negativacao: c.dados?.negativacao && typeof c.dados.negativacao === 'object'
+      ? { status: String((c.dados.negativacao as Record<string, unknown>).status ?? '') }
+      : null,
   };
 }
 

@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  AlertTriangle, Ban, BookCopy, Clock, Copy, Ellipsis, ExternalLink, Mail, MessageCircle, ReceiptText, RefreshCw, RotateCcw, Wallet,
+  AlertTriangle, Ban, BookCopy, Clock, Copy, Ellipsis, ExternalLink, Gavel, Mail, MessageCircle, ReceiptText, RefreshCw, RotateCcw, Wallet,
 } from 'lucide-react';
 
 import { BotaoExportar } from '@/components/fin/BotaoExportar';
@@ -17,6 +17,7 @@ import { resolverPeriodo, type PeriodoChave } from '@/components/fin/PeriodPicke
 import { EmitirCobrancas, type ContaParaEmitir } from '@/components/financeiro/cobranca/EmitirCobrancas';
 import { useAcoesDaCobranca } from '@/components/financeiro/cobranca/useAcoesDaCobranca';
 import { ResolverPendencia } from '@/components/financeiro/cobranca/ResolverPendencia';
+import { NegativarCobranca } from '@/components/financeiro/cobranca/NegativarCobranca';
 import { MenuDaLinha, type ItemDoMenu } from '@/app/financeiro-ag/contas/MenuDaLinha';
 import { usePermissoes } from '@/app/financeiro-ag/contas/useContas';
 import {
@@ -84,6 +85,8 @@ export function TelaDeCobrancas() {
   const [menu, setMenu] = React.useState<{ c: Cobranca; posicao: { x: number; y: number } } | null>(null);
   const [emitir, setEmitir] = React.useState<ContaParaEmitir[] | null>(null);
   const [pendencia, setPendencia] = React.useState<string | null>(null);
+  // Negativação no Serasa (E7): só Asaas, só vencida, sempre com prévia.
+  const [negativar, setNegativar] = React.useState<Cobranca | null>(null);
 
   // Vindo do sino (?pendencia=1&abrir=<id>): abre direto no que precisa de decisão.
   React.useEffect(() => {
@@ -133,7 +136,7 @@ export function TelaDeCobrancas() {
   const mudar = (patch: Partial<Filtros>) => setF(atual => ({ ...atual, ...patch }));
 
   function teclado(e: React.KeyboardEvent<HTMLDivElement>) {
-    if (e.key !== 'Escape' || e.defaultPrevented || menu || emitir || pendencia) return;
+    if (e.key !== 'Escape' || e.defaultPrevented || menu || emitir || pendencia || negativar) return;
     if (!moldura.current?.contains(e.target as Node)) return;
     if (ativos > 0) { e.preventDefault(); limpar(); }
   }
@@ -147,6 +150,12 @@ export function TelaDeCobrancas() {
     itens.push({ id: 'abrir', rotulo: 'Abrir a conta', icone: ReceiptText, atalho: 'Enter', onEscolher: () => abrirConta(c) });
     for (const a of acoesDaCobranca(c, { emitir: podeEmitir })) {
       itens.push({ id: a.id, rotulo: a.rotulo, icone: ICONE_DA_ACAO[a.id], destrutivo: a.destrutiva, desabilitado: a.bloqueio, onEscolher: () => executar(a.id, c) });
+    }
+    if (c.provedor === 'asaas' && (c.status === 'vencida' || c.negativacao)) {
+      itens.push({
+        id: 'negativar', rotulo: c.negativacao ? 'Negativação no Serasa' : 'Negativar no Serasa', icone: Gavel,
+        desabilitado: podeEmitir ? null : 'Seu acesso não inclui emitir boleto e Pix.', onEscolher: () => setNegativar(c),
+      });
     }
     return itens;
   }
@@ -362,6 +371,7 @@ export function TelaDeCobrancas() {
       {dialogos}
       <EmitirCobrancas contas={emitir} onFechar={() => setEmitir(null)} onConcluido={() => { void recarregar(); }} />
       <ResolverPendencia cobrancaId={pendencia} onFechar={() => setPendencia(null)} onResolvida={() => { void recarregar(); }} />
+      <NegativarCobranca cobrancaId={negativar?.id ?? null} clienteNome={negativar?.cliente_nome ?? ''} onFechar={() => setNegativar(null)} onMudou={() => { void recarregar(); }} />
     </MolduraDaPagina>
   );
 }
