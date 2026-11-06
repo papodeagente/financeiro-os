@@ -25,7 +25,7 @@ import {
   PanelLeftClose, PanelLeftOpen,
   Eraser, LifeBuoy, FileText,
   LayoutGrid, ChartColumn, ArrowDownLeft, ArrowUpRight, GitCompareArrows, ListTree,
-  Contact, Truck, Repeat, Lock, ArrowDownUp, Barcode, FolderInput, Coins, FileStack, HandCoins, Handshake, BadgePercent, Network, Split, Tags, ShieldCheck, Stamp, Scale, ScrollText, ListOrdered, Table2,
+  Contact, Truck, Repeat, Lock, ArrowDownUp, Barcode, FolderInput, Coins, FileStack, HandCoins, Handshake, BadgePercent, FilePlus2, FileCog, ReceiptText, Network, Split, Tags, ShieldCheck, Stamp, Scale, ScrollText, ListOrdered, Table2,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -100,6 +100,9 @@ const FINANCEIRO_MENU: SidebarSection[] = [
       { key: 'cobrancas', label: 'Cobranças', icon: Barcode, href: '/financeiro-ag/cobrancas' },
       { key: 'conciliacao', label: 'Conciliação', icon: GitCompareArrows, href: '/financeiro-ag/conciliacao' },
       { key: 'notas-fiscais', label: 'Notas fiscais', icon: Receipt, href: '/financeiro-ag/notas' },
+      { key: 'notas-gerar', label: 'Gerar notas', icon: FilePlus2, href: '/financeiro-ag/notas/gerar' },
+      { key: 'notas-regras', label: 'Regras da nota', icon: FileCog, href: '/financeiro-ag/notas/regras' },
+      { key: 'notas-retencoes', label: 'Retenções na fonte', icon: ReceiptText, href: '/financeiro-ag/notas/retencoes' },
       { key: 'extrato', label: 'Extrato de conta', icon: ScrollText, href: '/financeiro-ag/extrato' },
       { key: 'movimentacoes', label: 'Movimentações', icon: ListOrdered, href: '/financeiro-ag/movimentacoes' },
       { key: 'transferencias', label: 'Transferências', icon: ArrowRightLeft, href: '/financeiro-ag/transferencias' },

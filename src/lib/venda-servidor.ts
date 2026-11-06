@@ -33,6 +33,7 @@ import { contasDaVenda, type AvisoDaVenda, type ContasDaVenda, type PendenciaDaV
 import { normalizarConfigReceita, receitaDaVenda, type ConfigReceita } from './venda-receita';
 import { posicaoDaVenda, type CobrancaDaPosicao, type PosicaoDaVenda } from './venda-posicao';
 import { contasNaFaturaDoFornecedor, refletirFaturasNasContas } from './fornecedor-fatura-banco';
+import { aplicarRetencoesDaAgencia } from './nota-retencoes-servidor';
 
 // ============================================================
 // Tipos públicos
@@ -640,7 +641,10 @@ async function sincronizarPendencias(exec: ExecutorSQL, tenantId: string, vendaI
 
 /** As contas que a venda geraria agora, sem gravar nada (prévia da tela). */
 export async function previaDasContas(exec: ExecutorSQL, tenantId: string, venda: Venda): Promise<ContasDaVenda> {
-  return contasDaVenda({ versao: 2, venda, fornecedores: await fornecedoresInfo(exec, tenantId, idsDeFornecedores(venda)), hoje: hojeISO() });
+  const contas = contasDaVenda({ versao: 2, venda, fornecedores: await fornecedoresInfo(exec, tenantId, idsDeFornecedores(venda)), hoje: hojeISO() });
+  // Cliente que retém tributos na fonte (Lei 9.430, parte E): a conta a
+  // receber dele sai líquida. Sem retenção cadastrada, as contas não mudam.
+  return aplicarRetencoesDaAgencia(exec, tenantId, venda, contas);
 }
 
 /**

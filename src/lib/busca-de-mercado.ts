@@ -157,6 +157,21 @@ export const DESTINOS_DE_MERCADO: readonly DestinoDeMercado[] = [
     href: '/financeiro-ag/notas', tela: 'Notas fiscais',
   },
   {
+    id: 'gerar-notas', termos: ['gerar notas', 'gerar notas fiscais', 'nota complementar', 'notas das vendas', 'nota da venda', 'nota para operadora'],
+    href: '/financeiro-ag/notas/gerar', tela: 'Gerar notas',
+    frase: 'Cada venda mostra a receita, o que já está em nota e o saldo; o saldo vira nota pela regra, com prévia.',
+  },
+  {
+    id: 'regras-da-nota', termos: ['regra da nota', 'regras da nota', 'regras de nota fiscal', 'nota ao fornecedor', 'nota ao representante', 'emissão automática de nota'],
+    href: '/financeiro-ag/notas/regras', tela: 'Regras da nota',
+    frase: 'Para quem sai nota (pagante, fornecedor, representante), sobre quais componentes e quando sai sozinha.',
+  },
+  {
+    id: 'retencoes-na-fonte', termos: ['retenções na fonte', 'retenção na fonte', 'lei 9.430', 'irrf retido', 'csll retida', 'pis cofins retido', 'órgão público'],
+    href: '/financeiro-ag/notas/retencoes', tela: 'Retenções na fonte (Lei 9.430)',
+    frase: 'IR, CSLL, PIS e COFINS que o cliente retém, por produto: a conta a receber sai líquida.',
+  },
+  {
     id: 'comissao', termos: ['comissão', 'comissões', 'pagar comissão', 'fechar comissão'],
     href: '/equipe/comissoes', tela: 'Comissões',
   },

@@ -21,7 +21,7 @@ export const statusChipVariants = cva(
 
 export type StatusTone = NonNullable<VariantProps<typeof statusChipVariants>['tone']>;
 
-export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza' | 'comissao' | 'plano' | 'cobranca' | 'mudanca';
+export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza' | 'comissao' | 'plano' | 'cobranca' | 'mudanca' | 'nota';
 
 export type StatusChipProps = {
   /** Valor cru do banco. NUNCA é renderizado como veio. */
@@ -124,6 +124,16 @@ export const STATUS_LABELS: Record<StatusDominio, Record<string, { rotulo: strin
     pronto:         { rotulo: 'Completo',            tone: 'positivo' },
     parcial:        { rotulo: 'Em parte',            tone: 'aviso'    },
     vem:            { rotulo: 'Ainda vem',           tone: 'neutro'   },
+  },
+  // Gerar notas (E5, parte E): a situação de cada produto da venda.
+  nota: {
+    SEM_REGRA:    { rotulo: 'Sem regra',             tone: 'aviso'    },
+    SEM_RECEITA:  { rotulo: 'Nada a emitir',         tone: 'neutro'   },
+    A_EMITIR:     { rotulo: 'A emitir',              tone: 'info'     },
+    COMPLEMENTAR: { rotulo: 'Complementar sugerida', tone: 'aviso'    },
+    EMITIDA:      { rotulo: 'Em nota',               tone: 'positivo' },
+    ACIMA:        { rotulo: 'Nota acima da receita', tone: 'negativo' },
+    CANCELADA:    { rotulo: 'Cancelada com nota',    tone: 'negativo' },
   },
 };
 

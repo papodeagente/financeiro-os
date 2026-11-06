@@ -76,7 +76,9 @@ export interface AvisoDaVenda {
     /** Gravação (venda-servidor.ts): já se moveu mais do que a venda prevê agora. */
     | 'MOVIDO_ACIMA_DO_PREVISTO'
     /** Gravação: crédito do cliente já usado mudou de valor ou saiu da venda. */
-    | 'CREDITO_JA_USADO';
+    | 'CREDITO_JA_USADO'
+    /** Retenção na fonte do cliente maior do que ele ainda paga (nota-retencoes.ts). */
+    | 'RETENCAO_MAIOR_QUE_O_A_RECEBER';
   mensagem: string;
   valor_centavos?: Centavos;
   produto_id?: string;

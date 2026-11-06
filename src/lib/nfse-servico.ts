@@ -211,10 +211,36 @@ function tomadorDoCliente(cliente: Record<string, unknown> | null): TomadorNota 
   };
 }
 
+/**
+ * O tomador da nota quando quem pagou foi o FORNECEDOR (a comissão que a
+ * operadora ou a consolidadora paga à agência). Lê o cadastro de
+ * fornecedores, que guarda CNPJ e razão social nas colunas e no JSON.
+ */
+export function tomadorDoFornecedor(f: Record<string, unknown> | null): TomadorNota {
+  const end = enderecoDoCliente(f);
+  return {
+    cpf_cnpj: String(f?.cnpj ?? f?.cpf_cnpj ?? '').trim(),
+    razao_social: String(f?.razao_social || f?.nome_fantasia || f?.nome || '').trim(),
+    email: String(f?.email ?? ''),
+    inscricao_municipal: String(f?.inscricao_municipal ?? ''),
+    endereco: { ...end, cidade: end.cidade || String(f?.cidade ?? ''), estado: end.estado || String(f?.estado ?? '') },
+  };
+}
+
+/** Quem paga a conta: o cliente da venda, ou o fornecedor (comissão). */
+export type NaturezaDaConta = 'CLIENTE' | 'COMISSAO_FORNECEDOR';
+
+export function naturezaDaConta(conta: Record<string, unknown>): NaturezaDaConta {
+  return String(conta.origem ?? '') === 'COMISSAO_FORNECEDOR' ? 'COMISSAO_FORNECEDOR' : 'CLIENTE';
+}
+
 export interface ContextoDaNota {
   conta: Record<string, unknown>;
   venda: Record<string, unknown> | null;
   cliente: Record<string, unknown> | null;
+  /** Conta de comissão: quem paga é o fornecedor, e ele é o tomador. */
+  natureza?: NaturezaDaConta;
+  fornecedor?: Record<string, unknown> | null;
 }
 
 /** Carrega a conta a receber com a venda e o cliente dela. */
@@ -240,6 +266,34 @@ export async function carregarContexto(
     venda = (r.rows[0]?.data ?? null) as Record<string, unknown> | null;
   }
 
+  // CONTA DE COMISSÃO (05/11/2026, E5): quem paga é o fornecedor, e o
+  // cliente_id dela guarda o id DELE. Antes, este id era procurado em
+  // clientes, não achava nada, e a nota para a operadora saía sem tomador
+  // (pendência "cliente sem CPF ou CNPJ" que ninguém conseguia resolver).
+  if (naturezaDaConta(conta) === 'COMISSAO_FORNECEDOR') {
+    const fornecedorId = String(conta.fornecedor_id || conta.venda_parte_id || conta.cliente_id || '');
+    let fornecedor: Record<string, unknown> | null = null;
+    if (fornecedorId) {
+      const r = await pool.query(
+        `SELECT nome_fantasia, cnpj, data FROM fornecedores_crm WHERE id = $1 AND tenant_id = $2`,
+        [fornecedorId, tenantId],
+      ).catch(() => ({ rows: [] as Array<Record<string, unknown>> }));
+      const linha = r.rows[0];
+      if (linha) {
+        const d = (linha.data ?? {}) as Record<string, unknown>;
+        fornecedor = {
+          ...d,
+          nome_fantasia: d.nome_fantasia || linha.nome_fantasia,
+          cnpj: d.cnpj || linha.cnpj,
+        };
+      }
+    }
+    if (!fornecedor && String(conta.cliente_nome || conta.fornecedor_nome || '')) {
+      fornecedor = { nome: String(conta.fornecedor_nome || conta.cliente_nome), cnpj: String(conta.fornecedor_cnpj ?? '') };
+    }
+    return { conta, venda, cliente: null, natureza: 'COMISSAO_FORNECEDOR', fornecedor };
+  }
+
   const clienteId = String(conta.cliente_id || venda?.cliente_id || '');
   let cliente: Record<string, unknown> | null = null;
   if (clienteId) {
@@ -249,7 +303,7 @@ export async function carregarContexto(
     );
     cliente = (r.rows[0]?.data ?? null) as Record<string, unknown> | null;
   }
-  return { conta, venda, cliente };
+  return { conta, venda, cliente, natureza: 'CLIENTE', fornecedor: null };
 }
 
 /**
@@ -354,10 +408,15 @@ export async function montarPrevia(
   );
   const custo = round2(num(ctx.venda?.valor_total_custo) || num(ctx.venda?.custo_total));
 
+  const daComissao = ctx.natureza === 'COMISSAO_FORNECEDOR';
+  // A comissão é receita inteira da agência: o regime de intermediação é o
+  // que descreve o serviço, e a margem da venda do cliente não se aplica.
   const regime = opcoes.regime
-    ?? (config.regime_padrao === 'INTERMEDIACAO'
-      ? regimeSugerido(valorTotalVenda, custo)
-      : config.regime_padrao);
+    ?? (daComissao
+      ? 'INTERMEDIACAO'
+      : config.regime_padrao === 'INTERMEDIACAO'
+        ? regimeSugerido(valorTotalVenda, custo)
+        : config.regime_padrao);
   const formaBase = opcoes.forma_base ?? config.forma_base_intermediacao;
   const aliquota = opcoes.aliquota_iss ?? config.aliquota_iss;
   const issRetido = opcoes.iss_retido ?? config.iss_retido_padrao;
@@ -372,9 +431,10 @@ export async function montarPrevia(
     iss_retido: issRetido,
     desconto_incondicionado: opcoes.desconto_incondicionado ?? 0,
     deducao_manual: opcoes.deducao_manual ?? null,
+    receita_integral: daComissao,
   });
 
-  const tomador = tomadorDoCliente(ctx.cliente);
+  const tomador = daComissao ? tomadorDoFornecedor(ctx.fornecedor ?? null) : tomadorDoCliente(ctx.cliente);
 
   // As capacidades do emissor entram no cálculo como ERRO, não como aviso:
   // uma nota emitida num formato que o emissor não recebe sai com valor
@@ -419,6 +479,7 @@ export async function montarPrevia(
     cod_tributacao_nacional: config.cod_tributacao_nacional,
     simples_nacional: config.simples_nacional,
     regime_apuracao: config.regime_apuracao,
+    tomador_e_fornecedor: daComissao,
   });
 
   const totalParcelas = Math.max(1, Math.floor(num(ctx.conta.total_parcelas)) || 1);
@@ -530,7 +591,7 @@ export async function notaDaConta(
   return (rows[0]?.data ?? null) as NotaFiscal | null;
 }
 
-async function gravarNota(tenantId: string, nota: NotaFiscal): Promise<void> {
+export async function gravarNota(tenantId: string, nota: NotaFiscal): Promise<void> {
   if (!pool) return;
   await pool.query(
     `INSERT INTO notas_fiscais

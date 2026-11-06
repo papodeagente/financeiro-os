@@ -68,6 +68,8 @@ const DEFINICOES = [
   { id: 'reabrir_fatura', modulo: 'faturas', rotulo: 'Reabrir fatura do cliente', descricao: 'Volta a fatura fechada para edição.', teto: p => p.editar_financeiro },
   { id: 'gerar_fatura_fornecedor', modulo: 'faturas', rotulo: 'Montar fatura de fornecedor', descricao: 'Junta os itens do fornecedor numa conta a pagar.', teto: p => p.editar_financeiro },
   { id: 'gerar_boletos', modulo: 'faturas', rotulo: 'Emitir boleto e Pix', descricao: 'Gera a cobrança para o cliente pagar.', teto: p => p.editar_financeiro },
+  { id: 'emitir_nota', modulo: 'faturas', rotulo: 'Emitir notas fiscais das vendas', descricao: 'Gera as notas pela regra, com prévia, inclusive as complementares.', teto: p => p.editar_financeiro },
+  { id: 'configurar_notas', modulo: 'faturas', rotulo: 'Configurar regras da nota e retenções', descricao: 'Define para quem sai nota, sobre o quê, quando sai sozinha e as retenções na fonte de cada cliente.', teto: p => p.editar_financeiro },
 
   // Vendas e comissões
   { id: 'ver_aba_financeiro', modulo: 'vendas_comissoes', rotulo: 'Ver o financeiro dentro da venda', descricao: 'Contas a pagar e a receber ligadas à venda.', teto: p => p.ver_financeiro },

@@ -424,6 +424,11 @@ export default function NotasFiscaisPage() {
         icone={FileCheck2}
         titulo="Notas fiscais"
         subtitulo="As notas de serviço emitidas a partir dos recebimentos confirmados."
+        acoesSecundarias={[
+          { rotulo: 'Gerar notas das vendas', href: '/financeiro-ag/notas/gerar' },
+          { rotulo: 'Regras da nota', href: '/financeiro-ag/notas/regras' },
+          { rotulo: 'Retenções na fonte', href: '/financeiro-ag/notas/retencoes' },
+        ]}
       />
 
       <DataState

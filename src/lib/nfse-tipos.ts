@@ -271,4 +271,41 @@ export interface NotaFiscal {
   cancelada_em: string;
   motivo_cancelamento: string;
   emitida_por: string;
+
+  // ── Nota por regra (05/11/2026, E5) ──
+  // Notas geradas a partir da venda pela regra da nota (nota-regras.ts). A
+  // nota de antes (uma por conta a receber) não tem estes campos.
+  /** 'REGRA' para a nota gerada pela regra; ausente na nota por conta. */
+  origem?: 'REGRA';
+  /** Para quem a nota sai: o pagante, o fornecedor ou o representante. */
+  destino?: 'PAGANTE' | 'FORNECEDOR' | 'REPRESENTANTE';
+  regra_id?: string;
+  /** Chave da geração (venda|destino|tomador|nº): impede a mesma nota duas vezes. */
+  chave_geracao?: string;
+  /** Produtos da venda que a nota cobre, com o valor de cada um, em centavos. */
+  itens?: Array<{ produto_id: string; descricao: string; valor_centavos: number }>;
+  /** Nota complementar: as notas anteriores do mesmo destino. */
+  complementar_de?: string[];
+  /** O que disparou a emissão: a tela ou um gatilho. */
+  gatilho?: string;
+  /** Retenções na fonte (Lei 9.430), em reais. */
+  aliquota_csll?: number;
+  valor_csll_retido?: number;
+  aliquota_pis?: number;
+  valor_pis_retido?: number;
+  aliquota_cofins?: number;
+  valor_cofins_retido?: number;
+  /**
+   * Reforma tributária (IBS/CBS): os campos que a regra informou. Nada é
+   * calculado aqui: as regras do regime de agências de turismo ainda pedem
+   * a confirmação do contador.
+   */
+  ibs_cbs?: {
+    cst: string;
+    classificacao_tributaria: string;
+    indicador_operacao: string;
+    aliquota_ibs: number | null;
+    aliquota_cbs: number | null;
+    situacao: 'CONFIRMAR_COM_O_CONTADOR';
+  };
 }
