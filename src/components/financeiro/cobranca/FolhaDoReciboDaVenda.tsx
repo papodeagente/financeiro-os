@@ -28,7 +28,7 @@ const FOLHA = 'mx-auto my-[var(--fin-s-4)] flex w-full max-w-[760px] flex-col ga
 const TH = 'py-[var(--fin-s-2)] pr-[var(--fin-s-3)] text-left fin-t-caption font-medium text-[var(--fin-text-3)]';
 const TD = 'py-[var(--fin-s-2)] pr-[var(--fin-s-3)] align-top fin-t-body';
 
-function Cabecalho({ emitente, titulo, numero, valor }: { emitente: ReciboDaVenda['emitente']; titulo: string; numero: string; valor: number }) {
+function Cabecalho({ emitente, titulo, numero, valor, substitui }: { emitente: ReciboDaVenda['emitente']; titulo: string; numero: string; valor: number; substitui?: string | null }) {
   return (
     <header className="flex flex-col gap-[var(--fin-s-4)] border-b border-[var(--fin-border)] pb-[var(--fin-s-4)] sm:flex-row sm:items-start sm:justify-between">
       <div className="flex min-w-0 items-start gap-[var(--fin-s-3)]">
@@ -46,6 +46,7 @@ function Cabecalho({ emitente, titulo, numero, valor }: { emitente: ReciboDaVend
       <div className="flex shrink-0 flex-col gap-1 sm:items-end">
         <h1 className="fin-t-title tracking-[0.04em]">{titulo}</h1>
         <span className="fin-t-caption tabular-nums text-[var(--fin-text-3)]">Nº {numero}</span>
+        {substitui ? <span className="fin-t-caption tabular-nums text-[var(--fin-text-2)]">Substitui o recibo Nº {substitui}</span> : null}
         <span className="mt-1 rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] px-[var(--fin-s-3)] py-[var(--fin-s-1)] fin-t-metric-sm tabular-nums">
           {formatBRL(valor)}
         </span>
@@ -111,7 +112,7 @@ export function FolhaDoReciboDaVenda({ recibo }: { recibo: ReciboDaVenda }) {
   const fornecedor = recibo.pagos_ao_fornecedor.reduce((s, l) => s + l.valor, 0);
   return (
     <article aria-label={`Recibo ${recibo.numero}`} className={FOLHA}>
-      <Cabecalho emitente={recibo.emitente} titulo="RECIBO" numero={recibo.numero} valor={recibo.valor} />
+      <Cabecalho emitente={recibo.emitente} titulo="RECIBO" numero={recibo.numero} valor={recibo.valor} substitui={recibo.substitui} />
       {recibo.parcial ? <FaixaParcial emAberto={recibo.em_aberto} data={recibo.data} /> : null}
       <p className="fin-t-body max-w-[68ch] whitespace-pre-line text-[15px] leading-relaxed">{recibo.declaracao}</p>
 
@@ -245,7 +246,8 @@ export function PaginaDoReciboDaVenda({ vendaId, pagante, onPagante }: { vendaId
     setRecibo(null);
     setErro(null);
     const qs = pagante ? `?pagante=${encodeURIComponent(pagante)}` : '';
-    fetch(`/api/vendas/completa/${encodeURIComponent(vendaId)}/recibo${qs}`, { signal: ac.signal })
+    // Abrir o recibo para imprimir ou mandar = emitir (E7): POST registra o número e a versão.
+    fetch(`/api/vendas/completa/${encodeURIComponent(vendaId)}/recibo${qs}`, { method: 'POST', signal: ac.signal })
       .then(async r => {
         const corpo = await r.json().catch(() => null);
         if (Array.isArray(corpo?.pagantes)) setPagantes(corpo.pagantes as PaganteDoRecibo[]);

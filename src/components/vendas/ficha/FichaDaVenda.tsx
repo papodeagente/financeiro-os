@@ -78,6 +78,8 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
   const [contas, setContas] = React.useState<PessoaDaLista[]>([]);
   const [fechar, setFechar] = React.useState<null | 'perguntar' | { confirmar: string[] }>(null);
   const [reabrir, setReabrir] = React.useState(false);
+  // Trava do recibo (E7): a venda tem recibo emitido e a mudança altera o recibo.
+  const [comRecibo, setComRecibo] = React.useState<null | { recibos: Array<{ numero: string; pagador_nome: string }>; resumo: string }>(null);
   const [cancelando, setCancelando] = React.useState(false);
   const [motivo, setMotivo] = React.useState('');
   const [processando, setProcessando] = React.useState(false);
@@ -132,7 +134,7 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
   const mudar = (parcial: Partial<Venda>) => { setRascunho(v => (v ? { ...v, ...parcial } : v)); setSujo(true); };
   const atualizarFicha = (f: Ficha) => { setFicha(f); setRascunho(f.venda); setSujo(false); setAtualizadoEm(new Date()); };
 
-  async function salvar() {
+  async function salvar(confirmarRecibo = false) {
     if (!rascunho) return;
     if (!rascunho.cliente.id) { toast.error('Escolha o cliente da venda', 'A venda precisa de um cliente cadastrado para as contas a receber.'); return; }
     if (!rascunho.produtos.length) { toast.error('Inclua ao menos um produto', 'O total da venda vem dos produtos.'); setAba('produtos'); return; }
@@ -140,7 +142,7 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
     try {
       // A empresa só vai quando a agência tem mais de uma (o campo existe).
       const empresa = variasEmpresas ? empresaId ?? (nova ? empresaSugerida : undefined) : undefined;
-      const corpo = { venda: rascunho, ...(empresa ? { empresa_id: empresa } : {}) };
+      const corpo = { venda: rascunho, ...(empresa ? { empresa_id: empresa } : {}), ...(confirmarRecibo ? { confirmar_recibo: true } : {}) };
       const f = nova
         ? await chamar<Ficha>('/api/vendas/completa', 'POST', corpo)
         : await chamar<Ficha>(`/api/vendas/completa/${encodeURIComponent(vendaId!)}`, 'PUT', corpo);
@@ -149,7 +151,15 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
         `Contas: ${contasDoEvento.criadas ?? 0} criadas, ${contasDoEvento.atualizadas ?? 0} atualizadas, ${contasDoEvento.removidas ?? 0} removidas${contasDoEvento.preservadas ? `, ${contasDoEvento.preservadas} já baixadas mantidas` : ''}.`);
       if (nova) { router.push(`/vendas/${encodeURIComponent(f.venda.id)}/ficha`); return; }
       setFicha(f); setRascunho(f.venda); setSujo(false); setAtualizadoEm(new Date());
+      setComRecibo(null);
+      if (confirmarRecibo) toast.info('Recibo a refazer', 'O recibo emitido ficou substituído. O próximo sai com número novo.');
     } catch (e) {
+      if (e instanceof ErroDaTela && e.codigo === 'VENDA_COM_RECIBO' && !confirmarRecibo) {
+        const d = e.detalhes as { recibos?: Array<{ numero: string; pagador_nome: string }>; resumo?: string } | undefined;
+        setComRecibo({ recibos: d?.recibos ?? [], resumo: d?.resumo ?? '' });
+        return;
+      }
+      setComRecibo(null);
       toast.error('A venda não foi salva', e instanceof Error ? e.message : undefined);
     } finally {
       setSalvando(false);
@@ -363,7 +373,7 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
             </p>
             <div className="flex gap-[var(--fin-s-2)]">
               {!nova ? <Button type="button" variant="ghost" disabled={salvando} onClick={() => { if (ficha) { setRascunho(ficha.venda); setSujo(false); } }}>Desfazer</Button> : <Button type="button" variant="ghost" onClick={() => router.push('/vendas')}>Cancelar</Button>}
-              <Button type="button" onClick={() => { void salvar(); }} disabled={salvando}>{salvando ? 'Salvando…' : nova ? 'Lançar venda' : 'Salvar venda'}</Button>
+              <Button type="button" onClick={() => { void salvar(false); }} disabled={salvando}>{salvando ? 'Salvando…' : nova ? 'Lançar venda' : 'Salvar venda'}</Button>
             </div>
           </div>
         </div>
@@ -395,6 +405,16 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
           onConcluido={f => { setFicha(f); setRascunho(f.venda); setSujo(false); setCancelando(false); setAtualizadoEm(new Date()); }}
         />
       ) : null}
+      <ConfirmDialog
+        aberto={comRecibo !== null}
+        onOpenChange={a => { if (!a) setComRecibo(null); }}
+        titulo="Esta venda já tem recibo emitido"
+        oQueVaiAcontecer={`A mudança altera o que o recibo mostra${comRecibo?.resumo ? ` (${comRecibo.resumo})` : ''}. Ao gravar, a mudança fica no histórico da venda e o recibo emitido passa a valer como substituído: o próximo sai com número novo e diz qual substitui. Se o cliente já recebeu o recibo, mande o novo.`}
+        detalhes={comRecibo ? comRecibo.recibos.map(r => ({ rotulo: `Recibo Nº ${r.numero}`, valor: r.pagador_nome || '—' })) : undefined}
+        confirmarRotulo="Gravar e substituir o recibo"
+        processando={salvando}
+        onConfirmar={() => { void salvar(true); }}
+      />
       <ConfirmDialog
         aberto={reabrir}
         onOpenChange={a => { if (!a) { setReabrir(false); setMotivo(''); } }}

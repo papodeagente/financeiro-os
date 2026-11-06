@@ -12,6 +12,7 @@ import { COBRANCA_SCHEMA_SQL } from './cobranca/schema';
 import { MIGRACAO_SCHEMA_SQL } from './migracao/schema';
 import { CAMBIO_SCHEMA_SQL } from './cambio-servidor';
 import { VENDA_SCHEMA_SQL } from './venda-schema';
+import { RECIBOS_EMITIDOS_SCHEMA_SQL } from './recibo-emitido';
 import { FORNECEDOR_SCHEMA_SQL } from './fornecedor-schema';
 import { NOTAS_REGRAS_SCHEMA_SQL } from './nota-regras-schema';
 import { COMISSAO_FUNCOES_SCHEMA_SQL } from './comissao-funcoes-schema';
@@ -1571,6 +1572,9 @@ async function executarInitDB() {
   // receita, pagamentos por forma, pendências e o histórico da venda. Antes
   // do razão e da auditoria (o histórico fica fora do gatilho).
   await pool.query(VENDA_SCHEMA_SQL);
+  // Recibos da venda emitidos (E7): número e versão; a edição da venda com
+  // recibo emitido pede confirmação e o recibo novo substitui o anterior.
+  await pool.query(RECIBOS_EMITIDOS_SCHEMA_SQL);
   // Lado do fornecedor (05/11/2026, E5 parte C): acordos com vigência, fatura
   // do fornecedor, sinal e comissão informada no extrato. Antes do razão e da
   // auditoria (as tabelas são auditadas).

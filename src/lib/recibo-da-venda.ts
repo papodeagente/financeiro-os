@@ -212,6 +212,8 @@ export interface ReciboDaVenda {
   /** AAAA-MM-DD: o último recebimento. */
   data: string;
   cidade: string;
+  /** Recibo emitido que este substitui (E7: a venda mudou depois de emitido). */
+  substitui?: string | null;
 }
 
 export type ResultadoDoReciboDaVenda =
