@@ -18,6 +18,12 @@ export type FormState = {
   /** De onde veio o câmbio (sugestão usada ou digitado), guardado na conta (05/11/2026, E6). */
   cambio_carimbo: CarimboDoCambio | null;
   data_vencimento: string;
+  /** Emissão (06/11/2026, E7): editável, nunca depois do vencimento. */
+  data_emissao: string;
+  /** Conta bancária onde se espera pagar (06/11/2026, E7). Vazia = a padrão da agência. */
+  conta_previsao_id: string;
+  /** Campos que a agência criou para os títulos (06/11/2026, E7). */
+  campos_personalizados: Record<string, unknown>;
   forma_pagamento: ContaPagar['forma_pagamento'];
   cartao_id: string;
   natureza_custo: NaturezaCusto | null;
@@ -53,6 +59,9 @@ export const EMPTY_FORM: FormState = {
   cambio: 1,
   cambio_carimbo: null,
   data_vencimento: '',
+  data_emissao: '',
+  conta_previsao_id: '',
+  campos_personalizados: {},
   forma_pagamento: '',
   cartao_id: '',
   natureza_custo: null,
@@ -77,6 +86,7 @@ export type ErrosDoFormulario = {
   fornecedor: string | null;
   descricao: string | null;
   vencimento: string | null;
+  emissao: string | null;
   valor: string | null;
   cambio: string | null;
 };
@@ -85,6 +95,7 @@ export const SEM_ERRO: ErrosDoFormulario = {
   fornecedor: null,
   descricao: null,
   vencimento: null,
+  emissao: null,
   valor: null,
   cambio: null,
 };

@@ -43,8 +43,11 @@ export function validarRateio(total: number, linhas: unknown): ResultadoRateio {
     const n = i + 1;
     if (!l || typeof l !== 'object') return { ok: false, erro: `A linha ${n} do rateio está vazia.` };
     const centro = String(l.centro_custo_id ?? '').trim();
-    if (!centro) return { ok: false, erro: `Escolha o centro de custo da linha ${n} do rateio.` };
     const categoria = String(l.categoria_id ?? '').trim();
+    // Várias categorias no mesmo título (06/11/2026, E7): a linha com
+    // categoria pode ficar sem centro. Sem nenhum dos dois, a linha não diz
+    // nada e continua recusada como antes.
+    if (!centro && !categoria) return { ok: false, erro: `Escolha o centro de custo da linha ${n} do rateio.` };
     const pct = Number(l.percentual);
     if (!Number.isFinite(pct) || pct <= 0) {
       return { ok: false, erro: `O percentual da linha ${n} do rateio precisa ser maior que zero.` };
@@ -52,7 +55,12 @@ export function validarRateio(total: number, linhas: unknown): ResultadoRateio {
     if (pct > 100) return { ok: false, erro: `O percentual da linha ${n} do rateio passa de 100%.` };
     const chave = `${centro}|${categoria}`;
     if (vistas.has(chave)) {
-      return { ok: false, erro: `A linha ${n} repete centro e categoria de outra linha. Junte as duas.` };
+      return {
+        ok: false,
+        erro: centro
+          ? `A linha ${n} repete centro e categoria de outra linha. Junte as duas.`
+          : `A linha ${n} repete a categoria de outra linha sem centro. Junte as duas.`,
+      };
     }
     vistas.add(chave);
     limpas.push({ centro_custo_id: centro, ...(categoria ? { categoria_id: categoria } : {}), percentual: round2(pct) });

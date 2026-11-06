@@ -12,6 +12,12 @@ import { RecordSheet } from '@/components/fin/RecordSheet';
 import { FormSection } from '@/components/financeiro/FormSection';
 import { Input } from '@/components/ui/input';
 import { paraBRL } from '@/lib/money';
+import { formatarNaMoeda } from '@/lib/cambio';
+import {
+  AvisoDeDiaNaoUtil, CampoContaPrevista, CampoMoeda, CampoSoLeitura, FaixaDaVenda, type ContaParaPrevisao,
+} from '@/components/financeiro/CamposDoLancamento';
+import { CamposPersonalizadosDoTitulo } from '@/components/fin/CamposPersonalizadosDoTitulo';
+import { HistoricoRecolhivel } from '@/components/fin/HistoricoDoRegistro';
 import { cn } from '@/lib/utils';
 import { Money } from '@/components/fin/Money';
 import { BlocoDeRepeticao } from '@/components/financeiro/recorrencia/BlocoDeRepeticao';
@@ -39,12 +45,6 @@ const OPCOES_ORIGEM: OpcaoDeSelecao[] = [
   { valor: 'OUTROS', rotulo: 'Outros' },
 ];
 
-const OPCOES_MOEDA: OpcaoDeSelecao[] = [
-  { valor: 'BRL', rotulo: 'Real (BRL)' },
-  { valor: 'USD', rotulo: 'Dólar (USD)' },
-  { valor: 'EUR', rotulo: 'Euro (EUR)' },
-];
-
 const OPCOES_NATUREZA: OpcaoDeSelecao[] = [
   { valor: NENHUM, rotulo: 'Sem classificação' },
   { valor: 'FIXO', rotulo: 'Fixo' },
@@ -70,7 +70,19 @@ export type FormularioContaProps = {
   faixaDaSerie?: ReactNode;
   /** Ao editar: abre "Mais parcelas" (null quando a conta não aceita). */
   onMaisParcelas?: (() => void) | null;
+  /** Contas bancárias e a padrão da agência, para a conta prevista (06/11/2026). */
+  contasPrevisao?: readonly ContaParaPrevisao[];
+  padraoPrevisaoId?: string | null;
+  /** Conta que nasceu de uma venda: pessoa, valor e vencimento só mudam por ela. */
+  vendaId?: string | null;
+  /** Id da conta em edição (histórico). */
+  tituloId?: string | null;
 };
+
+function dataBR(iso: string): string {
+  const [a, m, d] = String(iso || '').slice(0, 10).split('-');
+  return a && m && d ? `${d}/${m}/${a}` : 'Sem vencimento';
+}
 
 export function FormularioConta({
   aberto,
@@ -87,7 +99,12 @@ export function FormularioConta({
   extra,
   faixaDaSerie,
   onMaisParcelas,
+  contasPrevisao = [],
+  padraoPrevisaoId = null,
+  vendaId = null,
+  tituloId = null,
 }: FormularioContaProps) {
+  const travada = Boolean(editando && vendaId);
   const cartoesAtivos = cartoes.filter((c) => c.ativo);
   const estrangeira = form.moeda !== 'BRL';
   const repetindo = !editando && form.repeticao.ativa;
@@ -182,6 +199,7 @@ export function FormularioConta({
     >
       <div className="flex flex-col gap-4">
         {editando && faixaDaSerie ? faixaDaSerie : null}
+        {travada && vendaId ? <FaixaDaVenda vendaId={vendaId} /> : null}
         {!editando ? (
           <LerBoletoOuNota
             resposta={form.leitura?.resposta ?? null}
@@ -201,6 +219,9 @@ export function FormularioConta({
         ) : null}
         <FormSection title="Essencial" description="O mínimo para a conta existir." alwaysOpen>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {travada ? (
+              <CampoSoLeitura rotulo="Fornecedor">{form.fornecedor_nome || 'Sem fornecedor'}</CampoSoLeitura>
+            ) : (
             <Field rotulo="Fornecedor" obrigatorio ajuda={origens.fornecedor} erro={erros.fornecedor}>
               {(a) => (
                 <Input
@@ -217,6 +238,7 @@ export function FormularioConta({
                 />
               )}
             </Field>
+            )}
 
             <Field rotulo="Descrição" obrigatorio ajuda={origens.descricao} erro={erros.descricao}>
               {(a) => (
@@ -235,6 +257,9 @@ export function FormularioConta({
               )}
             </Field>
 
+            {travada ? (
+              <CampoSoLeitura rotulo="Valor">{formatarNaMoeda(form.valor_original, form.moeda)}</CampoSoLeitura>
+            ) : (
             <MoneyField
               rotulo="Valor"
               obrigatorio
@@ -244,7 +269,11 @@ export function FormularioConta({
               erro={erros.valor}
               onChange={(v) => onForm((f) => ({ ...esquecerOrigem(f, 'valor'), valor_original: v }))}
             />
+            )}
 
+            {travada ? (
+              <CampoSoLeitura rotulo="Vencimento">{dataBR(form.data_vencimento)}</CampoSoLeitura>
+            ) : (
             <Field rotulo="Vencimento" obrigatorio ajuda={origens.vencimento} erro={erros.vencimento}>
               {(a) => (
                 <Input
@@ -260,6 +289,36 @@ export function FormularioConta({
                 />
               )}
             </Field>
+            )}
+
+            <Field
+              rotulo="Emissão"
+              ajuda="Quando a conta nasceu (nota, fatura, combinado). Não pode ser depois do vencimento."
+              erro={erros.emissao}
+            >
+              {(a) => (
+                <Input
+                  {...a}
+                  aria-invalid={a['aria-invalid'] || undefined}
+                  type="date"
+                  value={form.data_emissao}
+                  max={form.data_vencimento || undefined}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    onForm((f) => ({ ...f, data_emissao: v }));
+                  }}
+                  className={cn(CONTROLE, 'tabular-nums', erros.emissao && 'border-[var(--fin-negative)]')}
+                />
+              )}
+            </Field>
+
+            <div className="sm:col-span-2">
+              <AvisoDeDiaNaoUtil
+                vencimento={form.data_vencimento}
+                desabilitado={travada}
+                onUsar={(iso) => onForm((f) => ({ ...esquecerOrigem(f, 'vencimento'), data_vencimento: iso }))}
+              />
+            </div>
           </div>
         </FormSection>
 
@@ -372,14 +431,16 @@ export function FormularioConta({
               )
             ) : null}
 
-            <CampoSelecao
-              rotulo="Moeda"
+            <CampoMoeda
               valor={form.moeda}
-              opcoes={OPCOES_MOEDA}
-              onChange={(v) => onForm((f) => ({ ...f, moeda: v as ContaPagar['moeda'] }))}
+              travada={editando}
+              ajuda="Conta em outra moeda: informe o câmbio. A conta é registrada em reais."
+              onChange={(v) => onForm((f) => ({ ...f, moeda: v as ContaPagar['moeda'], ...(v === 'BRL' ? { cambio: 1, cambio_carimbo: null } : {}) }))}
             />
 
-            {estrangeira ? (
+            {estrangeira && travada ? (
+              <CampoSoLeitura rotulo="Câmbio">{String(form.cambio).replace('.', ',')}</CampoSoLeitura>
+            ) : estrangeira ? (
               <CampoCambio
                 moeda={form.moeda}
                 valor={form.cambio}
@@ -389,6 +450,14 @@ export function FormularioConta({
                 onChange={(cambio, carimbo) => onForm((f) => ({ ...f, cambio, cambio_carimbo: carimbo }))}
               />
             ) : null}
+
+            <CampoContaPrevista
+              valor={form.conta_previsao_id}
+              onChange={(id) => onForm((f) => ({ ...f, conta_previsao_id: id }))}
+              contas={contasPrevisao}
+              padraoId={padraoPrevisaoId}
+              verbo="pagar"
+            />
 
             <Field rotulo="Número do documento" ajuda="Da nota, da fatura ou do boleto.">
               {(a) => (
@@ -489,8 +558,15 @@ export function FormularioConta({
             ) : null}
           </div>
         </FormSection>
+
+        <CamposPersonalizadosDoTitulo
+          tabela="contas_pagar"
+          valores={form.campos_personalizados ?? {}}
+          onChange={(valores) => onForm((f) => ({ ...f, campos_personalizados: valores }))}
+        />
       </div>
       {extra}
+      {editando && tituloId ? <HistoricoRecolhivel entidade="contas_pagar" id={tituloId} /> : null}
     </RecordSheet>
   );
 }

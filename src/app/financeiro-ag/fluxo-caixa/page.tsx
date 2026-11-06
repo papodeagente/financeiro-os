@@ -150,6 +150,9 @@ export default function FluxoCaixaPage() {
   const [contaId, setContaId] = useState<string>(TODAS_AS_CONTAS);
   const [visaoComparativo, setVisaoComparativo] = useState<Agrupamento>(agrupamentoPadrao('mes'));
   const [saldoMinimo, setSaldoMinimo] = useState(0);
+  // Conta previsão padrão da agência (06/11/2026, E7): o que está em aberto
+  // sem conta prevista entra nela no fluxo por conta.
+  const [contaPrevisaoPadraoId, setContaPrevisaoPadraoId] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -172,7 +175,7 @@ export default function FluxoCaixaPage() {
   async function load() {
     setLoading(true);
     try {
-      const [cr, cp, cb, fs, folhaResp, ag] = await Promise.all([
+      const [cr, cp, cb, fs, folhaResp, ag, previsao] = await Promise.all([
         loadEntities<ContaReceber>('contas-receber'),
         loadEntities<ContaPagar>('contas-pagar'),
         loadEntities<ContaBancaria>('contas-bancarias'),
@@ -180,7 +183,9 @@ export default function FluxoCaixaPage() {
         // Sem permissão de folha a tela continua com receber e pagar.
         fetch('/api/folha').then(r => (r.ok ? r.json() : null)).catch(() => null),
         loadAgencia<Agencia>().catch(() => null),
+        fetch('/api/config/financeiro/conta-previsao').then(r => (r.ok ? r.json() : null)).catch(() => null),
       ]);
+      setContaPrevisaoPadraoId(typeof previsao?.conta_previsao_padrao === 'string' && previsao.conta_previsao_padrao ? previsao.conta_previsao_padrao : null);
       setContasReceber(cr);
       setContasPagar(cp);
       setContasBancarias(cb);
@@ -218,7 +223,8 @@ export default function FluxoCaixaPage() {
   const filtro: FiltroDeConta = useMemo(() => ({
     contaId: contaEscolhida?.id ?? null,
     caixaGeralId: contasBancarias.find(c => c.nome === 'Caixa Geral')?.id ?? null,
-  }), [contaEscolhida, contasBancarias]);
+    contaPrevisaoPadraoId,
+  }), [contaEscolhida, contasBancarias, contaPrevisaoPadraoId]);
 
   // Todas as contas: exatamente o caderno de sempre (mesma chamada).
   const { lancamentos, semConta } = useMemo(() => {

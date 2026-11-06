@@ -47,12 +47,19 @@ export interface FiltroDeConta {
   contaId: string | null;
   /** Id da Caixa Geral: baixa sem conta cai nela. */
   caixaGeralId?: string | null;
+  /**
+   * Conta previsão padrão da agência (06/11/2026, E7): o título em aberto sem
+   * conta prevista nem conta escolhida é esperado nela. Ausente = como antes.
+   */
+  contaPrevisaoPadraoId?: string | null;
 }
 
 /** O que receber e pagar têm em comum para achar a conta. */
 type Titulo = {
   status?: string | null;
   conta_bancaria_id?: string | null;
+  /** Conta onde se espera pagar ou receber (06/11/2026, E7). */
+  conta_previsao_id?: string | null;
   valor_final?: number | null;
   valor_recebido?: number | null;
   valor_pago?: number | null;
@@ -65,13 +72,21 @@ function movimentou(t: Titulo, lado: 'receber' | 'pagar'): number {
 }
 
 /**
- * A conta de um título. Com conta escolhida, é ela. Sem conta: se já se
- * moveu, a Caixa Geral (onde o saldo o contou); se não, nenhuma.
+ * A conta de um título. O que já se moveu vale pela conta escolhida (sem
+ * conta, a Caixa Geral, onde o saldo o contou). O que está em aberto vale
+ * pela conta prevista do título (06/11/2026, E7); sem ela, pela conta
+ * escolhida, como antes; sem nenhuma, pela conta previsão padrão da agência;
+ * sem padrão, nenhuma.
  */
-export function contaDoTitulo(t: Titulo, lado: 'receber' | 'pagar', caixaGeralId?: string | null): string | null {
+export function contaDoTitulo(
+  t: Titulo, lado: 'receber' | 'pagar', caixaGeralId?: string | null, contaPrevisaoPadraoId?: string | null,
+): string | null {
   const escolhida = String(t.conta_bancaria_id ?? '').trim();
+  if (movimentou(t, lado) > 0) return escolhida || caixaGeralId || null;
+  const prevista = String(t.conta_previsao_id ?? '').trim();
+  if (prevista) return prevista;
   if (escolhida) return escolhida;
-  return movimentou(t, lado) > 0 ? (caixaGeralId || null) : null;
+  return String(contaPrevisaoPadraoId ?? '').trim() || null;
 }
 
 export interface TitulosDaConta {
@@ -114,7 +129,7 @@ export function titulosDaConta(entrada: {
   let valor = 0;
   const filtrar = <T extends Titulo>(lista: readonly T[], lado: 'receber' | 'pagar'): T[] => lista.filter(t => {
     if (t.status === 'CANCELADO') return false;
-    const conta = contaDoTitulo(t, lado, filtro.caixaGeralId);
+    const conta = contaDoTitulo(t, lado, filtro.caixaGeralId, filtro.contaPrevisaoPadraoId);
     if (conta === null) {
       const aberto = emAberto(t, lado);
       if (aberto > 0) { quantidade++; valor = round2(valor + aberto); }

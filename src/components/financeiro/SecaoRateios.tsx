@@ -145,6 +145,18 @@ export function SecaoRateios({ total, tipo, centroId, rateio, tags, onChange }: 
     });
   }
 
+  // Várias categorias no mesmo título (06/11/2026, E7): linhas com categoria
+  // e centro opcional. Cada linha sem centro conta só pela categoria.
+  function dividirEntreCategorias() {
+    const [a, b] = dividirIgual(2);
+    onChange({
+      rateio: [
+        { centro_custo_id: centroId, percentual: a, valor: 0 },
+        { centro_custo_id: centroId, percentual: b, valor: 0 },
+      ],
+    });
+  }
+
   function aplicarRegra(id: string) {
     const regra = regras.find(r => r.id === id);
     if (!regra) return;
@@ -198,16 +210,26 @@ export function SecaoRateios({ total, tipo, centroId, rateio, tags, onChange }: 
               />
             )}
           </Field>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={dividirEntreCentros}
-            disabled={semCentros}
-            className={cn('h-11 gap-[var(--fin-s-2)] lg:h-10', FOCO)}
-          >
-            <Split aria-hidden="true" className="size-4" />
-            Dividir entre centros
-          </Button>
+          <div className="flex flex-wrap gap-[var(--fin-s-2)]">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={dividirEntreCentros}
+              disabled={semCentros}
+              className={cn('h-11 gap-[var(--fin-s-2)] lg:h-10', FOCO)}
+            >
+              <Split aria-hidden="true" className="size-4" />
+              Dividir entre centros
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={dividirEntreCategorias}
+              className={cn('h-11 lg:h-10', FOCO)}
+            >
+              Várias categorias
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="flex flex-col gap-[var(--fin-s-2)]">
@@ -229,7 +251,7 @@ export function SecaoRateios({ total, tipo, centroId, rateio, tags, onChange }: 
                     ariaLabel={`Centro de custo da linha ${i + 1}`}
                     valor={linha.centro_custo_id}
                     centros={arvore}
-                    rotuloVazio="Escolha o centro"
+                    rotuloVazio={linha.categoria_id ? 'Sem centro de custo' : 'Escolha o centro'}
                     onChange={id => trocarLinha(i, { centro_custo_id: id })}
                   />
                 </div>
@@ -316,6 +338,9 @@ export function SecaoRateios({ total, tipo, centroId, rateio, tags, onChange }: 
               Voltar para um centro só
             </Button>
           </div>
+          <p className="fin-t-caption text-[var(--fin-text-3)]">
+            Cada linha precisa de um centro de custo ou de uma categoria. Com categoria, o centro é opcional.
+          </p>
         </div>
       )}
 
