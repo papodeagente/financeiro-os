@@ -9,11 +9,13 @@ import {
 import { FilterBar } from '@/components/fin/FilterBar';
 import { FinTable, type FinColuna } from '@/components/fin/FinTable';
 import { MetricCard } from '@/components/fin/MetricCard';
+import { Callout } from '@/components/fin/Callout';
 import { MolduraDaPagina } from '@/components/fin/MolduraDaPagina';
 import { PageHeader } from '@/components/fin/PageHeader';
 import { resolverPeriodo, type PeriodoChave } from '@/components/fin/PeriodPicker';
 import { EmitirCobrancas, type ContaParaEmitir } from '@/components/financeiro/cobranca/EmitirCobrancas';
 import { useAcoesDaCobranca } from '@/components/financeiro/cobranca/useAcoesDaCobranca';
+import { ResolverPendencia } from '@/components/financeiro/cobranca/ResolverPendencia';
 import { MenuDaLinha, type ItemDoMenu } from '@/app/financeiro-ag/contas/MenuDaLinha';
 import { usePermissoes } from '@/app/financeiro-ag/contas/useContas';
 import {
@@ -38,9 +40,11 @@ import { cn, formatBRL } from '@/lib/utils';
  */
 
 const PERIODOS: PeriodoChave[] = ['MES_ATUAL', 'PROX_30', 'PROX_90', 'MES_PASSADO', 'TUDO', 'PERSONALIZADO'];
-type FiltroDeStatus = NonNullable<FiltroDasCobrancas['status']>;
+/** 'com_pendencia' (E7): pagas pelo provedor cuja baixa não entrou sozinha, de qualquer período. */
+type FiltroDeStatus = NonNullable<FiltroDasCobrancas['status']> | 'com_pendencia';
 const STATUS: Array<{ valor: FiltroDeStatus; rotulo: string }> = [
   { valor: 'em_aberto', rotulo: 'Em aberto (a pagar pelo cliente)' },
+  { valor: 'com_pendencia', rotulo: 'Com pendência (pago, sem baixa)' },
   { valor: 'todas', rotulo: 'Todas' },
   ...(['aberta', 'vencida', 'paga', 'emitindo', 'falhou', 'cancelada', 'estornada'] as StatusDaCobranca[])
     .map(s => ({ valor: s as FiltroDeStatus, rotulo: SITUACAO_DA_COBRANCA[s].rotulo })),
@@ -77,6 +81,18 @@ export function TelaDeCobrancas() {
   const [versao, setVersao] = React.useState(0);
   const [menu, setMenu] = React.useState<{ c: Cobranca; posicao: { x: number; y: number } } | null>(null);
   const [emitir, setEmitir] = React.useState<ContaParaEmitir[] | null>(null);
+  const [pendencia, setPendencia] = React.useState<string | null>(null);
+
+  // Vindo do sino (?pendencia=1&abrir=<id>): abre direto no que precisa de decisão.
+  React.useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get('pendencia') === '1') {
+      const r = resolverPeriodo('TUDO');
+      setF(atual => ({ ...atual, status: 'com_pendencia', periodo: 'TUDO', de: r.de, ate: r.ate }));
+    }
+    const abrir = q.get('abrir');
+    if (abrir) setPendencia(abrir);
+  }, []);
 
   const busca = useDebounce(f.busca.trim());
   const datasValidas = !f.de || !f.ate || f.de <= f.ate;
@@ -85,7 +101,12 @@ export function TelaDeCobrancas() {
     if (!datasValidas) return;
     const ac = new AbortController();
     setCarregando(true);
-    api.listar({ status: f.status, de: f.de || undefined, ate: f.ate || undefined, provedor: f.provedor, busca: busca || undefined }, ac.signal)
+    const comPendencia = f.status === 'com_pendencia';
+    const status: FiltroDasCobrancas['status'] = f.status === 'com_pendencia' ? 'todas' : f.status;
+    api.listar({
+      status, de: f.de || undefined, ate: f.ate || undefined, provedor: f.provedor,
+      busca: busca || undefined, ...(comPendencia ? { pendencia: '1' as const } : {}),
+    }, ac.signal)
       .then(r => { setDados(r); setErro(null); setAtualizadoEm(new Date()); })
       .catch(e => {
         if (ac.signal.aborted) return;
@@ -110,7 +131,7 @@ export function TelaDeCobrancas() {
   const mudar = (patch: Partial<Filtros>) => setF(atual => ({ ...atual, ...patch }));
 
   function teclado(e: React.KeyboardEvent<HTMLDivElement>) {
-    if (e.key !== 'Escape' || e.defaultPrevented || menu || emitir) return;
+    if (e.key !== 'Escape' || e.defaultPrevented || menu || emitir || pendencia) return;
     if (!moldura.current?.contains(e.target as Node)) return;
     if (ativos > 0) { e.preventDefault(); limpar(); }
   }
@@ -119,7 +140,9 @@ export function TelaDeCobrancas() {
   const podeEmitir = pode('gerar_boletos');
 
   function itensDoMenu(c: Cobranca): ItemDoMenu[] {
-    const itens: ItemDoMenu[] = [{ id: 'abrir', rotulo: 'Abrir a conta', icone: ReceiptText, atalho: 'Enter', onEscolher: () => abrirConta(c) }];
+    const itens: ItemDoMenu[] = [];
+    if (c.pendencia) itens.push({ id: 'pendencia', rotulo: 'Resolver o pagamento sem baixa', icone: AlertTriangle, onEscolher: () => setPendencia(c.id) });
+    itens.push({ id: 'abrir', rotulo: 'Abrir a conta', icone: ReceiptText, atalho: 'Enter', onEscolher: () => abrirConta(c) });
     for (const a of acoesDaCobranca(c, { emitir: podeEmitir })) {
       itens.push({ id: a.id, rotulo: a.rotulo, icone: ICONE_DA_ACAO[a.id], destrutivo: a.destrutiva, desabilitado: a.bloqueio, onEscolher: () => executar(a.id, c) });
     }
@@ -134,6 +157,19 @@ export function TelaDeCobrancas() {
         <span className="flex min-w-0 flex-col">
           <span className="truncate fin-t-body-strong text-[var(--fin-text)]" title={c.cliente_nome}>{c.cliente_nome || 'Cliente'}</span>
           {c.descricao ? <span className="max-w-[40ch] truncate fin-t-caption text-[var(--fin-text-3)]" title={c.descricao}>{c.descricao}</span> : null}
+          {c.pendencia ? (
+            <button
+              type="button"
+              onClick={() => setPendencia(c.id)}
+              title={c.pendencia}
+              className={cn(
+                'mt-0.5 inline-flex w-fit items-center gap-1 rounded-[var(--fin-r-sm)] bg-[var(--fin-warning-soft)] px-1.5 py-0.5 fin-t-caption text-[var(--fin-warning-text)]',
+                'hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)] max-lg:min-h-11',
+              )}
+            >
+              <AlertTriangle aria-hidden="true" className="size-3" /> Pago, sem baixa · resolver
+            </button>
+          ) : null}
         </span>
       ),
     },
@@ -203,6 +239,7 @@ export function TelaDeCobrancas() {
   const estado: 'carregando' | 'erro' | 'ok' = !dados && carregando ? 'carregando' : !dados && erro ? 'erro' : 'ok';
   const numeros = dados ? 'ok' : carregando ? 'carregando' : 'indisponivel';
   const linhas = dados?.cobrancas ?? [];
+  const pendentes = dados?.pendencias?.quantidade ?? 0;
 
   return (
     <MolduraDaPagina>
@@ -235,6 +272,19 @@ export function TelaDeCobrancas() {
             contexto="O provedor recusou. O motivo aparece na linha; corrija e emita de novo."
           />
         </div>
+
+        {pendentes > 0 && f.status !== 'com_pendencia' ? (
+          <Callout
+            tom="aviso"
+            titulo={pendentes === 1 ? '1 pagamento avisado não baixou sozinho' : `${pendentes} pagamentos avisados não baixaram sozinhos`}
+            acao={{
+              rotulo: 'Ver e resolver',
+              onClick: () => { const r = resolverPeriodo('TUDO'); mudar({ status: 'com_pendencia', periodo: 'TUDO', de: r.de, ate: r.ate }); },
+            }}
+          >
+            O cliente pagou pelo provedor, mas a conta a receber não foi baixada (por exemplo, já tinha baixa feita à mão ou estava cancelada). Escolha, um por um, se dá a baixa, guarda como crédito do cliente ou marca como resolvido.
+          </Callout>
+        ) : null}
 
         <FilterBar
           busca={{ valor: f.busca, onChange: v => mudar({ busca: v }), placeholder: 'Pesquisar cliente ou descrição…' }}
@@ -294,6 +344,7 @@ export function TelaDeCobrancas() {
       />
       {dialogos}
       <EmitirCobrancas contas={emitir} onFechar={() => setEmitir(null)} onConcluido={() => { void recarregar(); }} />
+      <ResolverPendencia cobrancaId={pendencia} onFechar={() => setPendencia(null)} onResolvida={() => { void recarregar(); }} />
     </MolduraDaPagina>
   );
 }

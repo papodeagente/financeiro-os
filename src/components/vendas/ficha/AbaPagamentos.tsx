@@ -6,7 +6,7 @@
  * antes de guardar. Não existe botão de "gerar".
  */
 import * as React from 'react';
-import { ChevronDown, Trash2 } from 'lucide-react';
+import { ChevronDown, ReceiptText, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,11 @@ import {
   type FormaDaVenda, type PagamentoDaVenda, type ParteDaVenda, type Venda,
 } from '@/lib/venda-modelo';
 import { contasDaVenda } from '@/lib/venda-contas';
+import { EmitirCobrancas, type ContaParaEmitir } from '@/components/financeiro/cobranca/EmitirCobrancas';
+import { usePermissoes } from '@/app/financeiro-ag/contas/useContas';
+import { contasDaVendaParaCobrar } from '@/lib/cobranca/regras-telas';
+import { hojeISO } from '@/lib/money';
+import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { CampoReais, CONTROLE, dataBR, reais, ROTULO, SELECT } from './comum';
 import type { PessoaDaLista } from './AbaProdutos';
@@ -49,6 +54,28 @@ export function AbaPagamentos({
   const [novo, setNovo] = React.useState(false);
   const [menu, setMenu] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
+  const pode = usePermissoes();
+  const podeEmitir = pode('gerar_boletos');
+  const [emitir, setEmitir] = React.useState<ContaParaEmitir[] | null>(null);
+  const [buscandoContas, setBuscandoContas] = React.useState(false);
+
+  // "Emitir boletos" (E7): as contas a receber GRAVADAS desta venda, na mesma janela de Gerar boleto(s).
+  async function abrirEmissao() {
+    setBuscandoContas(true);
+    try {
+      const r = await fetch(`/api/vendas/completa/${encodeURIComponent(venda.id)}`);
+      if (r.status === 404) { toast.info('Salve a venda primeiro', 'Os boletos saem das contas a receber que a venda gravou.'); return; }
+      const corpo = (await r.json().catch(() => null)) as { contas_receber?: Array<Record<string, unknown>>; error?: string } | null;
+      if (!r.ok) { toast.error('Não foi possível ler as contas da venda.', corpo?.error); return; }
+      const contas = contasDaVendaParaCobrar(corpo?.contas_receber ?? [], hojeISO());
+      if (!contas.length) { toast.info('Nenhuma conta a receber nesta venda', 'Inclua um pagamento (Boleto, Pix...) e salve: a conta nasce sozinha.'); return; }
+      setEmitir(contas);
+    } catch {
+      toast.error('Sem resposta do servidor.', 'Nada foi emitido; tente de novo.');
+    } finally {
+      setBuscandoContas(false);
+    }
+  }
 
   React.useEffect(() => {
     if (!menu) return;
@@ -100,8 +127,15 @@ export function AbaPagamentos({
             : faltando < 0 ? `Os pagamentos passam do total em ${reais(-faltando)}.`
               : venda.produtos.length ? 'Os pagamentos cobrem a venda inteira.' : 'Inclua os produtos primeiro: o total da venda vem deles.'}
         </p>
+        <div className="flex flex-wrap items-center gap-[var(--fin-s-2)] self-end">
+        {podeEmitir && venda.pagamentos.length ? (
+          <Button type="button" variant="outline" disabled={buscandoContas} aria-busy={buscandoContas} onClick={() => { void abrirEmissao(); }}
+            title="Boleto ou Pix pelo provedor da agência, para as contas a receber desta venda que ainda não têm cobrança">
+            <ReceiptText aria-hidden="true" className="size-4" /> {buscandoContas ? 'Lendo as contas…' : 'Emitir boletos'}
+          </Button>
+        ) : null}
         {editavel ? (
-          <div ref={menuRef} className="relative self-end">
+          <div ref={menuRef} className="relative">
             <Button type="button" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(m => !m)}>
               Adicionar pagamento <ChevronDown aria-hidden="true" className="size-4" />
             </Button>
@@ -125,6 +159,7 @@ export function AbaPagamentos({
             ) : null}
           </div>
         ) : null}
+        </div>
       </div>
       <FinTable
         linhas={venda.pagamentos}
@@ -141,6 +176,7 @@ export function AbaPagamentos({
           acaoSecundaria: editavel && venda.produtos.length ? { rotulo: 'Boleto', onClick: () => abrirNovo('BOLETO') } : undefined,
         }}
       />
+      <EmitirCobrancas contas={emitir} onFechar={() => setEmitir(null)} onConcluido={() => { /* a janela mostra o resultado; a aba Cliente lê as contas de novo ao abrir */ }} />
       {aberto ? (
         <EditorDePagamento
           key={aberto.id} inicial={aberto} novo={novo} editavel={editavel} venda={venda}

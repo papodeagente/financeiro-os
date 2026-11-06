@@ -8,7 +8,7 @@
  * ter os próprios.
  */
 import { normalizarPolitica, type PoliticaCobranca } from '../baixa-calculo';
-import { num } from '../money';
+import { deCentavos, num, paraCentavos } from '../money';
 import { CAPACIDADES_ASAAS } from './asaas';
 import { CAPACIDADES_PAGARME } from './pagarme';
 import { encargosDaCobranca, type CanalCobranca, type ConfigCobranca } from './config';
@@ -32,6 +32,8 @@ export interface ConfigNaTela {
   dias_link: number;
   encargos: ReturnType<typeof encargosDaCobranca>;
   politica_cobranca: PoliticaCobranca | null;
+  /** Taxa de boleto repassada ao cliente marcado, em reais (0 = não repassa). */
+  taxa_boleto: number;
 }
 
 export function configParaTela(
@@ -70,6 +72,7 @@ export function configParaTela(
     dias_link: config.dias_link,
     encargos: encargosDaCobranca(config, politica),
     politica_cobranca: politica,
+    taxa_boleto: deCentavos(config.taxa_boleto_centavos),
   };
 }
 
@@ -83,6 +86,7 @@ export function configDaTela(
   const copiar = <K extends keyof ConfigCobranca>(k: K) => { if (corpo[k] !== undefined) nova[k] = corpo[k] as ConfigCobranca[K]; };
   for (const k of ['provedor_padrao', 'tipo_padrao', 'conta_bancaria_id', 'pagarme_conta_psp', 'notificacoes_do_provedor',
     'descricao_modelo', 'dias_link'] as const) copiar(k);
+  if (corpo.taxa_boleto !== undefined) nova.taxa_boleto_centavos = Math.max(0, paraCentavos(num(corpo.taxa_boleto)));
 
   const mexeuEncargos = ['juros_am_pct', 'multa_pct', 'desconto_pct', 'desconto_dias', 'tolerancia_dias', 'desconto']
     .some(k => (corpo as Record<string, unknown>)[k] !== undefined);

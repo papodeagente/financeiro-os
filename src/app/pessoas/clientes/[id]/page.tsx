@@ -22,6 +22,7 @@ import { MetricCard } from '@/components/fin/MetricCard';
 import { Money } from '@/components/fin/Money';
 import { Resposta } from '@/components/fin/Resposta';
 import { secoesDaFicha, type SecaoDaFicha } from '@/lib/ficha-do-cliente';
+import { TaxaDeBoletoDoCliente } from '@/components/financeiro/cobranca/TaxaDeBoletoDoCliente';
 
 interface Linha { id: string; status: string; [k: string]: unknown }
 
@@ -343,6 +344,7 @@ export default function PerfilDoClientePage({ params }: { params: Promise<{ id: 
                   />
                 ) : null}
               </div>
+              <TaxaDeBoletoDoCliente clienteId={id} />
             </Secao>
 
             <Secao
