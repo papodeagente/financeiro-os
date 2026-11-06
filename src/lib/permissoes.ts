@@ -52,7 +52,7 @@ export const PERFIS: { id: 'ADMIN' | 'OPERADOR' | 'VENDEDOR' | 'COLABORADOR'; la
   {
     id: 'ADMIN',
     label: 'Administrador',
-    descricao: 'Acesso total à conta. Pode criar, editar, excluir, exportar, gerenciar usuários e configurações.',
+    descricao: 'Pode tudo na conta: criar, editar, excluir, exportar, gerenciar usuários e configurações.',
   },
   {
     id: 'OPERADOR',
