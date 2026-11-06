@@ -514,3 +514,80 @@ export function planoDoEstornoDeComissao(comissoes: ComissaoParaEstorno[], recei
 export function noReal(valor: Centavos, moeda: string, cambio: number): Centavos {
   return emReais(valor, moeda, cambio);
 }
+
+// ============================================================
+// Desfazer (reativar) um cancelamento
+// ============================================================
+
+export const MOTIVO_MINIMO_DESFAZER = 5;
+
+export interface PagamentoDevolvido {
+  pagamento_id: string;
+  forma: PagamentoDaVenda['forma'];
+  centavos: Centavos;
+  /** O pagamento tinha sumido da venda (ficou zerado) e voltou. */
+  recriado: boolean;
+}
+
+export interface DesfazerNoModelo {
+  venda: Venda;
+  produtos: Array<{ produto_id: string; descricao: string; produto_inteiro: boolean; passageiros: string[] }>;
+  pagamentos: PagamentoDevolvido[];
+}
+
+/**
+ * O contrário de `planejarCancelamento`, sobre a venda de agora: os
+ * passageiros e produtos que ESTE cancelamento cancelou voltam, os
+ * componentes que ele gravou (`cx:<id>:…`) saem e o que ele tirou de cada
+ * pagamento volta. Pagamento que tinha sumido (ficou zerado) volta com os
+ * dados de antes do cancelamento, quando guardados; senão, com a forma e o
+ * valor. Cancelamentos anteriores ficam como estão.
+ */
+export function desfazerNoModelo(venda: Venda, gravado: CancelamentoGravado, pagamentosAntes: readonly PagamentoDaVenda[] = []): DesfazerNoModelo {
+  const v: Venda = {
+    ...venda,
+    produtos: venda.produtos.map(p => ({ ...p, passageiros: p.passageiros.map(x => ({ ...x })), componentes: p.componentes.map(c => ({ ...c })) })),
+    pagamentos: venda.pagamentos.map(g => ({ ...g })),
+  };
+  const prefixo = `cx:${gravado.id}:`;
+  const produtos: DesfazerNoModelo['produtos'] = [];
+  for (const cp of gravado.produtos) {
+    const p = v.produtos.find(x => x.id === cp.produto_id);
+    if (!p) continue;
+    const ids = new Set(cp.passageiros.map(x => x.id));
+    const nomes: string[] = [];
+    for (const x of p.passageiros) {
+      if (ids.has(x.id) && x.cancelado_em) { x.cancelado_em = null; nomes.push(x.nome); }
+    }
+    if (cp.produto_inteiro || p.passageiros.some(x => !x.cancelado_em)) p.cancelado_em = null;
+    p.componentes = p.componentes.filter(c => !c.id.startsWith(prefixo));
+    produtos.push({ produto_id: p.id, descricao: nomeDoProduto(p), produto_inteiro: cp.produto_inteiro, passageiros: nomes });
+  }
+  const pagamentos: PagamentoDevolvido[] = [];
+  for (const r of gravado.reducoes) {
+    if (!(r.centavos > 0)) continue;
+    let g = v.pagamentos.find(x => x.id === r.pagamento_id);
+    let recriado = false;
+    if (!g) {
+      const antes = pagamentosAntes.find(x => x.id === r.pagamento_id);
+      g = antes
+        ? { ...antes, valor_centavos: 0 }
+        : {
+            id: r.pagamento_id, forma: r.forma, valor_centavos: 0, parcelas: 1, primeiro_vencimento: '', intervalo_dias: 0,
+            pagante: null, fornecedor: null, conta_bancaria_id: null, cartao_tipo: r.forma === 'CARTAO' ? 'credito' : null, detalhe: '', venda_origem_credito: '',
+          } as PagamentoDaVenda;
+      v.pagamentos.push(g);
+      recriado = true;
+    }
+    g.valor_centavos += r.centavos;
+    const id = g.id;
+    const ja = pagamentos.find(x => x.pagamento_id === id);
+    if (ja) ja.centavos += r.centavos; else pagamentos.push({ pagamento_id: id, forma: g.forma, centavos: r.centavos, recriado });
+  }
+  // A ordem de antes do cancelamento, quando conhecida (as parcelas e a tela seguem a mesma).
+  if (pagamentosAntes.length) {
+    const ordem = new Map(pagamentosAntes.map((x, i) => [x.id, i]));
+    v.pagamentos.sort((a, b) => (ordem.get(a.id) ?? 1e9) - (ordem.get(b.id) ?? 1e9));
+  }
+  return { venda: v, produtos, pagamentos };
+}

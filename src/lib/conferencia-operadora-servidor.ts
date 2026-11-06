@@ -18,7 +18,7 @@
  */
 import type { ExecutorSQL } from './caixa-atomico';
 import { generateId } from './utils';
-import { num, paraBRL, paraCentavos } from './money';
+import { hojeISO, num, paraBRL, paraCentavos } from './money';
 import type { ItemVendaData } from './crm-types';
 import { calcularComissao } from './venda-financeiro';
 import { lerPlanilha, decodificarTexto } from './migracao/leitor';
@@ -26,10 +26,11 @@ import { detectarTipo } from './arquivos';
 import type { MimeLegivel } from './leitura-documento-ia';
 import type { ConteudoParaLer } from './conferencia-operadora-ia';
 import {
-  casarLinha, comissaoPorOperadora, compararLinha, conferirLinhas, normalizarLocalizador, podeFechar, linhaResolvida,
+  casarLinha, comissaoPorOperadora, compararLinha, conferirLinhas, normalizarLocalizador, podeFechar, linhaResolvida, sinalDoTipo,
   type ComissaoDaOperadora, type Diferenca, type ExtratoLido, type ItemParaCasar, type LinhaLida, type PropostaDeCancelamento,
   type Situacao, type TipoDeLinha,
 } from './conferencia-operadora';
+import { registrarComissoesDoExtrato } from './fornecedor-servidor';
 
 export class ErroConferencia extends Error {
   status: number;
@@ -147,6 +148,7 @@ export async function carregarItensParaCasar(
   );
   const pagarDo = new Map(pagar.map(p => [String((p.data as Dados).origem_item_id), p]));
   const comissaoDo = new Map(comissoes.map(c => [String((c.data as Dados).origem_item_id), c]));
+  const v2 = await contasDaVendaCompleta(exec, tenantId, rows);
   return rows.map(r => {
     const item = (r.item ?? {}) as ItemVendaData & Dados;
     const venda = (r.venda ?? {}) as Dados;
@@ -156,17 +158,23 @@ export async function carregarItensParaCasar(
     const localizadores = [...new Set([
       normalizarLocalizador(item.localizador),
       ...produtos
-        .filter(p => !p.id || p.id === r.item_id || produtos.length === 1 || String(p.fornecedor_id ?? '') === String(r.fornecedor_id ?? ''))
+        .filter(p => !p.id || p.id === r.item_id || p.id === item.produto_id || produtos.length === 1 || String(p.fornecedor_id ?? '') === String(r.fornecedor_id ?? ''))
         .map(p => normalizarLocalizador(p.localizador)),
     ].filter(l => l.length >= 5))];
     const passageiros = [
       ...(Array.isArray(venda.passageiros) ? (venda.passageiros as Dados[]).map(p => String(p.nome ?? '')) : []),
       String(venda.cliente_nome ?? ''),
     ].filter(Boolean);
-    const cp = pagarDo.get(String(r.item_id));
-    const cc = comissaoDo.get(String(r.item_id));
+    // Venda completa (E5): as contas são por pessoa do acerto, e a pessoa é
+    // o representante quando há (é ele quem manda o extrato).
+    const doV2 = v2.get(String(r.item_id));
+    const cp = doV2 ? doV2.pagar : pagarDo.get(String(r.item_id));
+    const cc = doV2 ? doV2.comissao : comissaoDo.get(String(r.item_id));
     const comissaoItem = paraBRL(calcularComissao(item, undefined).comissao_valor, moeda, cambio);
     const ccDados = (cc?.data ?? {}) as Dados;
+    const cpDados = (cp?.data ?? {}) as Dados;
+    const custoDoItem = paraBRL(num(item.valor_custo), moeda, cambio);
+    const contaSoDoItem = (d: Dados) => !doV2 || (Array.isArray(d.venda_produtos) && (d.venda_produtos as unknown[]).length === 1);
     return {
       item_id: String(r.item_id),
       venda_id: String(r.venda_id),
@@ -176,19 +184,88 @@ export async function carregarItensParaCasar(
       data_servico: String(item.data_inicio ?? '').slice(0, 10),
       localizadores,
       passageiros,
-      fornecedor_id: String(r.fornecedor_id ?? ''),
-      fornecedor_nome: String(item.fornecedor_nome ?? ''),
+      fornecedor_id: doV2?.parte_id || String(r.fornecedor_id ?? ''),
+      fornecedor_nome: doV2?.parte_nome || String(item.fornecedor_nome ?? ''),
       meio: item.meio_pagamento === 'fornecedor' ? 'fornecedor' : 'proprio',
-      custo_centavos: paraCentavos(cp ? num((cp.data as Dados).valor_final) : paraBRL(num(item.valor_custo), moeda, cambio)),
+      custo_centavos: paraCentavos(cp && contaSoDoItem(cpDados) ? num(cpDados.valor_final) : custoDoItem),
       venda_centavos: paraCentavos(paraBRL(num(item.valor_venda), moeda, cambio)),
-      comissao_centavos: paraCentavos(cc ? num(ccDados.valor_final) : comissaoItem),
-      conta_pagar: cp ? { id: String(cp.id), valor_centavos: paraCentavos(num((cp.data as Dados).valor_final)), status: String((cp.data as Dados).status ?? '') } : null,
+      comissao_centavos: paraCentavos(cc && contaSoDoItem(ccDados) ? num(ccDados.valor_final) : comissaoItem),
+      conta_pagar: cp ? { id: String(cp.id), valor_centavos: paraCentavos(num(cpDados.valor_final)), status: String(cpDados.status ?? '') } : null,
       conta_comissao: cc ? {
         id: String(cc.id), valor_centavos: paraCentavos(num(ccDados.valor_final)), status: String(ccDados.status ?? ''),
         recebido_centavos: ['RECEBIDO', 'PARCIAL'].includes(String(ccDados.status ?? '')) ? paraCentavos(num(ccDados.valor_recebido) || (ccDados.status === 'RECEBIDO' ? num(ccDados.valor_final) : 0)) : 0,
       } : null,
     } satisfies ItemParaCasar;
   });
+}
+
+interface ContasDoItemV2 {
+  parte_id: string;
+  parte_nome: string;
+  pagar: Dados | undefined;
+  comissao: Dados | undefined;
+}
+
+/**
+ * Venda completa (E5, modelo 2): o item de venda é derivado de um produto
+ * (`data.produto_id`), e as contas são da PESSOA DO ACERTO (representante,
+ * senão fornecedor), por venda: `v2:forn:…` a pagar e `v2:comissao:…` a
+ * receber, com a lista dos produtos que cobrem (`venda_produtos`). Devolve,
+ * por item, a conta de cada lado que cobre aquele produto e quem é a pessoa.
+ */
+async function contasDaVendaCompleta(exec: ExecutorSQL, tenantId: string, rows: Dados[]): Promise<Map<string, ContasDoItemV2>> {
+  const saida = new Map<string, ContasDoItemV2>();
+  const itens = rows
+    .map(r => ({ r, item: (r.item ?? {}) as Dados }))
+    .filter(x => Number(x.item.modelo_venda) === 2 && String(x.item.produto_id ?? ''));
+  if (itens.length === 0) return saida;
+  const vendas = [...new Set(itens.map(x => String(x.r.venda_id)))];
+  // Conta que entrou na fatura do fornecedor fica cancelada, mas continua dizendo o custo.
+  const { rows: pagar } = await exec.query(
+    `SELECT id, data FROM contas_pagar WHERE tenant_id = $1 AND data->>'origem_venda_id' = ANY($2::text[])
+        AND data->>'origem_item_id' LIKE 'v2:forn:%'
+        AND (COALESCE(data->>'status', '') <> 'CANCELADO' OR COALESCE(data->>'fatura_fornecedor_id', '') <> '')`,
+    [tenantId, vendas],
+  );
+  const { rows: receber } = await exec.query(
+    `SELECT id, data FROM contas_receber WHERE tenant_id = $1 AND data->>'origem_venda_id' = ANY($2::text[])
+        AND data->>'origem_item_id' LIKE 'v2:comissao:%' AND data->>'origem' = 'COMISSAO_FORNECEDOR'
+        AND COALESCE(data->>'status', '') <> 'CANCELADO'`,
+    [tenantId, vendas],
+  );
+  const representantes = new Map<string, { id: string; nome: string }>();
+  const { rows: temTabela } = await exec.query(`SELECT to_regclass('public.venda_produtos') IS NOT NULL AS ok`);
+  if (temTabela[0]?.ok === true) {
+    const { rows: ps } = await exec.query(
+      `SELECT venda_id, id, representante_id, representante_nome FROM venda_produtos WHERE tenant_id = $1 AND venda_id = ANY($2::text[])`,
+      [tenantId, vendas],
+    );
+    for (const p of ps) {
+      if (String(p.representante_id ?? '') || String(p.representante_nome ?? '')) {
+        representantes.set(`${p.venda_id}|${p.id}`, { id: String(p.representante_id ?? ''), nome: String(p.representante_nome ?? '') });
+      }
+    }
+  }
+  const cobre = (c: Dados, vendaId: string, produtoId: string) => {
+    const d = (c.data ?? {}) as Dados;
+    return String(d.origem_venda_id ?? '') === vendaId && Array.isArray(d.venda_produtos) && (d.venda_produtos as unknown[]).map(String).includes(produtoId);
+  };
+  for (const { r, item } of itens) {
+    const vendaId = String(r.venda_id);
+    const produtoId = String(item.produto_id);
+    // A conta mais recente primeiro (o complemento depois da original não muda a pessoa).
+    const cp = pagar.find(c => cobre(c, vendaId, produtoId) && !String(((c.data ?? {}) as Dados).origem_item_id ?? '').includes(':complemento'))
+      ?? pagar.find(c => cobre(c, vendaId, produtoId));
+    const cc = receber.find(c => cobre(c, vendaId, produtoId));
+    const rep = representantes.get(`${vendaId}|${produtoId}`);
+    const daConta = (cp?.data ?? cc?.data ?? null) as Dados | null;
+    saida.set(String(r.item_id), {
+      parte_id: rep?.id || String(daConta?.fornecedor_id ?? '') || String(r.fornecedor_id ?? ''),
+      parte_nome: rep?.nome || String(daConta?.fornecedor_nome ?? '') || String(item.fornecedor_nome ?? ''),
+      pagar: cp, comissao: cc,
+    });
+  }
+  return saida;
 }
 
 // ── Prévia e gravação ─────────────────────────────────────────────────────
@@ -266,7 +343,52 @@ export async function criarConferencia(
         l.comparacao.proposta ? JSON.stringify(l.comparacao.proposta) : null, l.comparacao.proposta ? 'proposta' : null],
     );
   }
+  await sincronizarComissoesDoExtrato(exec, tenantId, id);
   return { id };
+}
+
+/** Referência estável da linha no registro de comissões do fornecedor. */
+export function referenciaDaLinha(conferenciaId: string, ordem: number): string {
+  return `conferencia:${conferenciaId}:${ordem}`;
+}
+
+/**
+ * O que a operadora diz que pagou de comissão vai para o lado do fornecedor
+ * (E5, parte C: "Comissão de fornecedores" mostra "No extrato"). Uma linha
+ * por linha do extrato com comissão (venda soma, cancelamento devolve),
+ * ligada à venda casada. Refeito inteiro a cada mudança de casamento (criar,
+ * ligar à mão, casar de novo), para a venda de cada linha acompanhar.
+ * Sem o cadastro da operadora (ou sem a tabela, em base antiga), não grava.
+ */
+export async function sincronizarComissoesDoExtrato(exec: ExecutorSQL, tenantId: string, conferenciaId: string): Promise<number> {
+  const { rows: tem } = await exec.query(`SELECT to_regclass('public.fornecedor_extrato_comissoes') IS NOT NULL AS ok`);
+  if (tem[0]?.ok !== true) return 0;
+  const { rows: cab } = await exec.query(
+    `SELECT fornecedor_id, periodo_de::text AS de, periodo_ate::text AS ate, created_at::text AS criada FROM conferencias_operadora WHERE tenant_id = $1 AND id = $2`,
+    [tenantId, conferenciaId],
+  );
+  if (!cab.length) return 0;
+  await exec.query(
+    `DELETE FROM fornecedor_extrato_comissoes WHERE tenant_id = $1 AND origem = 'extrato' AND referencia LIKE $2`,
+    [tenantId, `conferencia:${conferenciaId}:%`],
+  );
+  const parteId = String(cab[0].fornecedor_id ?? '');
+  if (!parteId) return 0;
+  const reserva = String(cab[0].ate ?? '') || String(cab[0].de ?? '') || String(cab[0].criada ?? '').slice(0, 10) || hojeISO();
+  const { rows } = await exec.query(
+    `SELECT ordem, data::text AS data_txt, localizador, tipo, comissao_centavos, venda_id FROM conferencias_operadora_linhas
+      WHERE tenant_id = $1 AND conferencia_id = $2 AND tipo IN ('venda', 'cancelamento') AND COALESCE(comissao_centavos, 0) <> 0 ORDER BY ordem`,
+    [tenantId, conferenciaId],
+  );
+  return registrarComissoesDoExtrato(exec, tenantId, rows.map(r => ({
+    parte_id: parteId,
+    data: String(r.data_txt ?? '') || reserva,
+    valor_centavos: sinalDoTipo(String(r.tipo) as TipoDeLinha) * Number(r.comissao_centavos),
+    venda_id: String(r.venda_id ?? '') || null,
+    localizador: String(r.localizador ?? ''),
+    referencia: referenciaDaLinha(conferenciaId, Number(r.ordem)),
+    origem: 'extrato' as const,
+  })));
 }
 
 // ── Ler ───────────────────────────────────────────────────────────────────
@@ -375,6 +497,16 @@ async function travarConferencia(exec: ExecutorSQL, tenantId: string, id: string
   return rows[0];
 }
 
+/**
+ * A conta de comissão de uma linha: na venda de antes, a do item
+ * (`origem_item_id`); na venda completa (E5), a da pessoa do acerto naquela
+ * venda que cobre o produto do item (o item é `<venda>:<produto>`).
+ */
+const COMISSAO_DA_LINHA = `(c.data->>'origem_item_id' = l.item_id
+  OR (l.venda_id <> '' AND c.data->>'origem_venda_id' = l.venda_id AND c.data->>'origem_item_id' LIKE 'v2:comissao:%'
+      AND jsonb_typeof(c.data->'venda_produtos') = 'array'
+      AND c.data->'venda_produtos' ? substr(l.item_id, length(l.venda_id) + 2)))`;
+
 async function linhasDaConferencia(exec: ExecutorSQL, tenantId: string, id: string): Promise<LinhaNaTela[]> {
   const { rows } = await exec.query(
     `SELECT l.*, l.data::text AS data_txt,
@@ -383,10 +515,10 @@ async function linhasDaConferencia(exec: ExecutorSQL, tenantId: string, id: stri
                                                       CASE WHEN c.data->>'status' = 'RECEBIDO' THEN (c.data->>'valor_final')::numeric ELSE 0 END) * 100)
                                   ELSE 0 END
                         FROM contas_receber c
-                       WHERE c.tenant_id = l.tenant_id AND l.item_id <> '' AND c.data->>'origem_item_id' = l.item_id
+                       WHERE c.tenant_id = l.tenant_id AND l.item_id <> '' AND ${COMISSAO_DA_LINHA}
                          AND c.data->>'origem' = 'COMISSAO_FORNECEDOR' AND COALESCE(c.data->>'status','') <> 'CANCELADO'
                        LIMIT 1), 0) AS recebido,
-            EXISTS (SELECT 1 FROM contas_receber c WHERE c.tenant_id = l.tenant_id AND l.item_id <> '' AND c.data->>'origem_item_id' = l.item_id
+            EXISTS (SELECT 1 FROM contas_receber c WHERE c.tenant_id = l.tenant_id AND l.item_id <> '' AND ${COMISSAO_DA_LINHA}
                        AND c.data->>'origem' = 'COMISSAO_FORNECEDOR' AND COALESCE(c.data->>'status','') <> 'CANCELADO') AS tem_comissao
        FROM conferencias_operadora_linhas l
       WHERE l.tenant_id = $1 AND l.conferencia_id = $2 ORDER BY l.ordem`,
@@ -555,6 +687,7 @@ export async function acaoNaLinha(
     const item = candidatos.find(i => i.item_id === itemId) ?? null;
     if (!item) throw new ErroConferencia('Venda não encontrada.', 404);
     await regravarComparacao(exec, tenantId, linhaId, lida, item, 'manual', (r.proposta_status as string | null) ?? null);
+    await sincronizarComissoesDoExtrato(exec, tenantId, conferenciaId);
     return;
   }
   throw new ErroConferencia('Ação desconhecida.');
@@ -597,6 +730,7 @@ export async function recasarConferencia(exec: ExecutorSQL, tenantId: string, co
     const d = depois[0];
     if (`${d.situacao}|${d.item_id}|${JSON.stringify(d.diferencas)}|${d.proposta_status}` !== antes) mudaram += 1;
   }
+  await sincronizarComissoesDoExtrato(exec, tenantId, conferenciaId);
   return { mudaram };
 }
 

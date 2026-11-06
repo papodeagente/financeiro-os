@@ -12,9 +12,14 @@
  *                   prazo_reembolso?, validade_credito? }
  *        → ResultadoDoCancelamento (prévia: nada gravado; ids de criação null) | gravar: o mesmo, gravado, + ficha
  *        409 MUDOU quando a assinatura da prévia não confere.
- *   GET  /api/reembolsos?tipo=&situacao=(SOLICITADO|APROVADO|PAGO|CANCELADO|em_andamento)&de=&ate=&busca=&venda_id=
- *        → { reembolsos, totais }
- *   POST /api/reembolsos { tipo, venda_id?, pessoa_id, pessoa_nome, valor_centavos, descricao, prazo?, aprovar? }
+ *   POST /api/vendas/completa/[id]/cancelamento/desfazer { modo: 'previa'|'gravar', cancelamento_id, motivo, assinatura? }
+ *        Desfaz (reativa) o ÚLTIMO cancelamento que vale: → ResultadoDoDesfazer (contas antes → depois, reembolsos e
+ *        crédito cancelados, comissão devolvida) | gravar: o mesmo, gravado, + ficha. Direito `cancelar_produto`.
+ *        409 NAO_E_O_ULTIMO, JA_DESFEITO, REEMBOLSO_PAGO, CREDITO_USADO, MUDOU.
+ *        O GET do cancelamento lista também os desfeitos (`desfeito_em`, `motivo_desfazer`) e marca `pode_desfazer`.
+ *   GET  /api/reembolsos?tipo=&sentido=(RECEBER|PAGAR)&situacao=(SOLICITADO|APROVADO|PAGO|CANCELADO|em_andamento)&de=&ate=&busca=&venda_id=
+ *        → { reembolsos (cada um com `sentido`), totais (a_devolver_ao_cliente, a_receber_do_fornecedor, a_pagar_ao_fornecedor, ...) }
+ *   POST /api/reembolsos { tipo, sentido?: 'RECEBER'|'PAGAR' (só FORNECEDOR; padrão RECEBER), venda_id?, pessoa_id, pessoa_nome, valor_centavos, descricao, prazo?, aprovar? }
  *   PATCH /api/reembolsos/[id] { acao: 'aprovar'|'cancelar'|'converter_em_credito', prazo?, motivo?, validade? }
  *   GET  /api/creditos-cliente?busca=&so_com_saldo=1 → { carteiras, totais }
  *   GET  /api/creditos-cliente?cliente_id= → ExtratoCompleto (créditos, saldo e extrato)
