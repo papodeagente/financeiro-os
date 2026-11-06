@@ -6,7 +6,7 @@
 // limite: o perfil só tira. Também: restrição por pessoa e a matriz papel × direito.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Building2, Check, Copy, Landmark, Minus, Plus, Save, ShieldCheck, Trash2, UsersRound } from 'lucide-react';
+import { Building2, Check, Copy, Eye, Landmark, Minus, Plus, Save, ShieldCheck, Trash2, UsersRound } from 'lucide-react';
 import { MolduraDaPagina, RITMO_DA_PAGINA } from '@/components/fin/MolduraDaPagina';
 import { PageHeader } from '@/components/fin/PageHeader';
 import { DataState } from '@/components/fin/DataState';
@@ -22,8 +22,13 @@ import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { useEmpresas } from '@/components/fin/useEmpresas';
 
-interface Grupo { id: string; nome: string; acesso_total: boolean; acoes: string[]; contas: string[]; empresas?: string[]; membros: string[] }
-interface Restricao { usuario_id: string; contas_liberadas: string[]; acoes_negadas: string[]; empresas_liberadas?: string[] }
+interface Grupo {
+  id: string; nome: string; acesso_total: boolean; acoes: string[]; contas: string[]; empresas?: string[];
+  /** Contas que o perfil só vê: saldo e extrato, sem pagar, receber, transferir nem lançar (E7). */
+  contas_so_ver?: string[];
+  membros: string[];
+}
+interface Restricao { usuario_id: string; contas_liberadas: string[]; acoes_negadas: string[]; empresas_liberadas?: string[]; contas_so_ver?: string[] }
 interface Pessoa { id: string; nome: string; email: string; papel: 'ADMIN' | 'OPERADOR' | 'VENDEDOR'; ativo: boolean }
 interface Conta { id: string; nome: string; detalhe?: string }
 interface Dados {
@@ -44,7 +49,7 @@ async function pedir<T>(url: string, init?: RequestInit): Promise<T> {
 
 function grupoNovo(dados: Dados, base?: Grupo): Grupo {
   if (base) return { ...base, id: '', nome: `Cópia de ${base.nome}`.slice(0, 80), membros: [] };
-  return { id: '', nome: '', acesso_total: false, acoes: [...dados.tetos.OPERADOR], contas: [], empresas: [], membros: [] };
+  return { id: '', nome: '', acesso_total: false, acoes: [...dados.tetos.OPERADOR], contas: [], empresas: [], contas_so_ver: [], membros: [] };
 }
 
 export default function PerfisDeAcessoPage() {
@@ -205,7 +210,7 @@ function VisaoGrupos({ dados, recarregar }: { dados: Dados; recarregar: () => Pr
                 {a => <Input {...a} value={rascunho.nome} maxLength={80} placeholder="Ex.: Contas a pagar" onChange={e => { setErroNome(null); set({ nome: e.target.value }); }} />}
               </Field>
               <label className="flex cursor-pointer items-center gap-2 rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] px-3 py-2.5">
-                <Caixinha marcada={rascunho.acesso_total} onChange={v => set({ acesso_total: v, contas: v ? [] : rascunho.contas })} />
+                <Caixinha marcada={rascunho.acesso_total} onChange={v => set({ acesso_total: v, contas: v ? [] : rascunho.contas, contas_so_ver: v ? [] : rascunho.contas_so_ver })} />
                 <span className="fin-t-body-strong">Acesso completo</span>
               </label>
             </div>
@@ -254,12 +259,14 @@ function VisaoGrupos({ dados, recarregar }: { dados: Dados; recarregar: () => Pr
               onChange={s => set({ empresas: [...s] })}
             />
 
-            <Bloco titulo="Contas bancárias que este perfil vê" ajuda={rascunho.acesso_total ? 'Com acesso completo, o perfil vê todas as contas.' : 'Marque as contas. Sem nenhuma marcada, o perfil vê todas.'}>
+            <Bloco titulo="Contas bancárias que este perfil vê" ajuda={rascunho.acesso_total ? 'Com acesso completo, o perfil vê e usa todas as contas.' : 'Marque as contas. Sem nenhuma marcada, o perfil vê todas. "Só ver" deixa ver saldo e extrato, sem pagar, receber, transferir nem lançar na conta.'}>
               <SeletorDeContas
                 contas={dados.contas}
                 marcadas={contas}
                 desabilitado={rascunho.acesso_total}
-                onChange={s => set({ contas: [...s] })}
+                onChange={s => set({ contas: [...s], contas_so_ver: (rascunho.contas_so_ver ?? []).filter(c => s.size === 0 || s.has(c)) })}
+                soVer={new Set(rascunho.contas_so_ver ?? [])}
+                onSoVer={s => set({ contas_so_ver: [...s] })}
               />
             </Bloco>
           </div>
@@ -333,28 +340,57 @@ function BlocoDeEmpresas({
   );
 }
 
+/**
+ * Contas que o perfil (ou a pessoa) vê. Com `onSoVer`, cada conta visível
+ * ganha a escolha "Só ver" (E7): saldo e extrato, sem movimentar.
+ */
 function SeletorDeContas({
-  contas, marcadas, onChange, desabilitado,
-}: { contas: Conta[]; marcadas: ReadonlySet<string>; onChange: (s: Set<string>) => void; desabilitado?: boolean }) {
+  contas, marcadas, onChange, desabilitado, soVer, onSoVer,
+}: {
+  contas: Conta[]; marcadas: ReadonlySet<string>; onChange: (s: Set<string>) => void; desabilitado?: boolean;
+  soVer?: ReadonlySet<string>; onSoVer?: (s: Set<string>) => void;
+}) {
   if (contas.length === 0) return <p className="fin-t-body text-[var(--fin-text-3)]">Nenhuma conta bancária cadastrada.</p>;
   return (
     <ul className={cn('grid gap-1 sm:grid-cols-2', desabilitado && 'opacity-60')}>
-      {contas.map(c => (
-        <li key={c.id}>
-          <label className={cn('flex items-center gap-3 rounded-[var(--fin-r-md)] px-2 py-2', desabilitado ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-[var(--fin-surface-2)]')}>
-            <Caixinha
-              marcada={marcadas.has(c.id)}
-              desabilitada={desabilitado}
-              onChange={v => { const s = new Set(marcadas); if (v) s.add(c.id); else s.delete(c.id); onChange(s); }}
-            />
-            <Landmark aria-hidden="true" className="size-4 shrink-0 text-[var(--fin-text-3)]" />
-            <span className="flex min-w-0 flex-col">
-              <span className="fin-t-body truncate">{c.nome}</span>
-              {c.detalhe && <span className="fin-t-caption truncate text-[var(--fin-text-3)]">{c.detalhe}</span>}
-            </span>
-          </label>
-        </li>
-      ))}
+      {contas.map(c => {
+        // Sem nenhuma marcada, o perfil vê todas: "só ver" vale para qualquer uma.
+        const visivel = marcadas.size === 0 || marcadas.has(c.id);
+        const soVendo = !!soVer?.has(c.id);
+        return (
+          <li key={c.id} className="flex items-center gap-1 rounded-[var(--fin-r-md)] hover:bg-[var(--fin-surface-2)]">
+            <label className={cn('flex min-w-0 flex-1 items-center gap-3 px-2 py-2', desabilitado ? 'cursor-not-allowed' : 'cursor-pointer')}>
+              <Caixinha
+                marcada={marcadas.has(c.id)}
+                desabilitada={desabilitado}
+                onChange={v => { const s = new Set(marcadas); if (v) s.add(c.id); else s.delete(c.id); onChange(s); }}
+              />
+              <Landmark aria-hidden="true" className="size-4 shrink-0 text-[var(--fin-text-3)]" />
+              <span className="flex min-w-0 flex-col">
+                <span className="fin-t-body truncate">{c.nome}</span>
+                {c.detalhe && <span className="fin-t-caption truncate text-[var(--fin-text-3)]">{c.detalhe}</span>}
+              </span>
+            </label>
+            {onSoVer && soVer && visivel && !desabilitado && (
+              <button
+                type="button"
+                aria-pressed={soVendo}
+                title={soVendo ? 'Vê saldo e extrato; não paga, recebe, transfere nem lança nesta conta.' : 'Vê e usa esta conta. Clique para deixar só ver.'}
+                onClick={() => { const s = new Set(soVer); if (soVendo) s.delete(c.id); else s.add(c.id); onSoVer(s); }}
+                className={cn(
+                  'fin-t-caption mr-1 inline-flex shrink-0 items-center gap-1 rounded-[var(--fin-r-sm)] border px-2 py-1 transition-colors',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fin-accent)]',
+                  soVendo
+                    ? 'border-[var(--fin-warning)]/40 bg-[var(--fin-warning-soft)] text-[var(--fin-warning-text)]'
+                    : 'border-[var(--fin-border)] text-[var(--fin-text-3)] hover:text-[var(--fin-text)]',
+                )}
+              >
+                <Eye aria-hidden="true" className="size-3.5" /> Só ver
+              </button>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -369,6 +405,7 @@ function VisaoPessoas({ dados, recarregar, meuId }: { dados: Dados; recarregar: 
   const teto = useMemo(() => new Set(pessoa ? dados.tetos[pessoa.papel] ?? [] : []), [pessoa, dados.tetos]);
   const [permitidas, setPermitidas] = useState<Set<string>>(new Set());
   const [contas, setContas] = useState<Set<string>>(new Set());
+  const [soVerDaPessoa, setSoVerDaPessoa] = useState<Set<string>>(new Set());
   const [empresasDaPessoa, setEmpresasDaPessoa] = useState<Set<string>>(new Set());
   const [salvando, setSalvando] = useState(false);
 
@@ -376,6 +413,7 @@ function VisaoPessoas({ dados, recarregar, meuId }: { dados: Dados; recarregar: 
     const negadas = new Set(restricao?.acoes_negadas ?? []);
     setPermitidas(new Set([...teto].filter(a => !negadas.has(a))));
     setContas(new Set(restricao?.contas_liberadas ?? []));
+    setSoVerDaPessoa(new Set(restricao?.contas_so_ver ?? []));
     setEmpresasDaPessoa(new Set(restricao?.empresas_liberadas ?? []));
   }, [restricao, teto]);
 
@@ -400,6 +438,7 @@ function VisaoPessoas({ dados, recarregar, meuId }: { dados: Dados; recarregar: 
         body: JSON.stringify({ restricao: {
           usuario_id: pessoa.id, contas_liberadas: [...contas], acoes_negadas: [...teto].filter(a => !permitidas.has(a)),
           empresas_liberadas: [...empresasDaPessoa],
+          contas_so_ver: [...soVerDaPessoa].filter(c => contas.size === 0 || contas.has(c)),
         } }),
       });
       await recarregar();
@@ -456,8 +495,8 @@ function VisaoPessoas({ dados, recarregar, meuId }: { dados: Dados; recarregar: 
                   marcadas={empresasDaPessoa}
                   onChange={setEmpresasDaPessoa}
                 />
-                <Bloco titulo="Contas bancárias que esta pessoa vê" ajuda="Marque as contas. Sem nenhuma marcada, vale o que os perfis dela mostram.">
-                  <SeletorDeContas contas={dados.contas} marcadas={contas} onChange={setContas} />
+                <Bloco titulo="Contas bancárias que esta pessoa vê" ajuda='Marque as contas. Sem nenhuma marcada, vale o que os perfis dela mostram. "Só ver" deixa ver saldo e extrato, sem pagar, receber, transferir nem lançar na conta.'>
+                  <SeletorDeContas contas={dados.contas} marcadas={contas} onChange={setContas} soVer={soVerDaPessoa} onSoVer={setSoVerDaPessoa} />
                 </Bloco>
               </>
             )}

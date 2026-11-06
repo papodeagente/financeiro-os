@@ -21,7 +21,7 @@ export const AUDIT_SCHEMA_SQL = String.raw`
   CREATE OR REPLACE FUNCTION audit_sensitive_key(key_name TEXT)
   RETURNS BOOLEAN LANGUAGE sql IMMUTABLE AS $fn$
     SELECT regexp_replace(lower(key_name), '[^a-z0-9]', '', 'g') ~
-      '(senha|password|passwd|secret|token|apikey|apisecret|chaveapi|chaveprivada|privatekey|credential|credencial|authorization|cookie|certificado|certificate|pfx|base64|hash|salt|cvv|cvc|numerocartao|cardnumber|payload|rawbody|requestbody|responsebody|xml|connectionstring|databaseurl)'
+      '(senha|totp|password|passwd|secret|token|apikey|apisecret|chaveapi|chaveprivada|privatekey|credential|credencial|authorization|cookie|certificado|certificate|pfx|base64|hash|salt|cvv|cvc|numerocartao|cardnumber|payload|rawbody|requestbody|responsebody|xml|connectionstring|databaseurl)'
       OR lower(key_name) IN ('headers', 'body', 'raw', 'chave', 'key', 'segredo');
   $fn$;
 

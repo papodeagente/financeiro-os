@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { SegundoFatorDoPerfil } from '@/components/auth/SegundoFatorDoPerfil';
 import {
   ArrowLeft, Loader2, Save, Upload, User as UserIcon, Mail, Phone, Check, X,
 } from 'lucide-react';
@@ -223,6 +224,8 @@ export default function PerfilPage() {
           </button>
         </div>
       </div>
+
+      <SegundoFatorDoPerfil />
     </div>
   );
 }

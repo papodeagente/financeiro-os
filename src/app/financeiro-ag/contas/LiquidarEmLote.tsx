@@ -18,6 +18,7 @@ import { RecordSheet } from '@/components/fin/RecordSheet';
 import { useFormasDePagamento } from '@/components/fin/useFormasDePagamento';
 import { Input } from '@/components/ui/input';
 import { oferecerAprovacao, type PedidoDeAprovacao } from './aprovacao';
+import { levarParaSegundoFator, lembrarSegundoFator, type RespostaComSegundoFator } from '@/components/fin/segundoFatorNaTela';
 import { CAMPO, SELECT, Rotulo, ListaDaPrevia } from './pecas';
 
 /**
@@ -222,13 +223,16 @@ export function LiquidarEmLote({
         headers: { 'Content-Type': 'application/json', 'Idempotency-Key': chave },
         body: JSON.stringify(corpoDoPedido),
       });
-      const corpo = (await r.json().catch(() => ({}))) as { error?: string; pedir_aprovacao?: PedidoDeAprovacao };
+      const corpo = (await r.json().catch(() => ({}))) as RespostaComSegundoFator & { error?: string; pedir_aprovacao?: PedidoDeAprovacao };
       if (r.status === 409 && corpo.pedir_aprovacao) {
         oferecerAprovacao(corpo.error || 'Precisa de aprovação.', corpo.pedir_aprovacao, corpoDoPedido, chave);
         onFechar();
         return;
       }
+      // Sem a verificação em duas etapas (E7): o aviso leva a Meu perfil.
+      if (levarParaSegundoFator(r.status, corpo)) { onFechar(); return; }
       if (!r.ok) { setErro(corpo.error || `Erro ${r.status}`); return; }
+      lembrarSegundoFator(corpo);
       const n = previa.itens.length;
       toast.success(n === 1 ? 'Conta liquidada' : `${n} contas liquidadas`, 'O caixa e o extrato já mostram as baixas.');
       onConcluido();

@@ -19,7 +19,8 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from './db';
 import { getTenantId } from './tenant';
 import { getSession } from './auth';
-import { recusaFinanceira, recusaExclusao, respostaPeriodoFechado } from './guarda-rota';
+import { conferirSegundoFatorDoPagador, recusaFinanceira, recusaExclusao, respostaPeriodoFechado } from './guarda-rota';
+import { recusaDaContaNaGravacao } from './conta-da-gravacao';
 import { emTransacao, ErroMovimentoCaixa, type ExecutorSQL } from './caixa-atomico';
 import { editarConta, ErroEdicaoConta } from './baixa-de-conta';
 import { prepararDimensoesDaConta } from './dimensoes';
@@ -106,10 +107,22 @@ export function rotasDoTitulo(tabela: TabelaDoTitulo) {
       const barrado = await conferirEdicaoDoTitulo(
         pool as unknown as ExecutorSQL, ((await getSession()) ?? {}) as SessaoDaBaixa, tenantId, tabela, id, item as Record<string, unknown>);
       if (barrado) return NextResponse.json({ error: barrado.message, ...(barrado.pedir ? { pedir_aprovacao: barrado.pedir } : {}) }, { status: barrado.status });
+      // Conta nova ou trocada precisa estar liberada para movimentar (E7: quem
+      // só vê a conta não lança nela). Pagar pela edição pede a verificação
+      // em duas etapas, como a liquidação.
+      const { rows: atual } = await pool.query(`SELECT data, status FROM ${tabela} WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+      const antes = (atual[0]?.data ?? null) as Record<string, unknown> | null;
+      const recusaConta = await recusaDaContaNaGravacao(await getSession(), item as Record<string, unknown>, antes, { campos: ['conta_bancaria_id'] });
+      if (recusaConta) return NextResponse.json({ error: recusaConta.error, acao: recusaConta.acao }, { status: recusaConta.status });
+      const statusAntes = String(atual[0]?.status || antes?.status || '');
+      const statusDepois = String((item as Record<string, unknown>).status ?? statusAntes);
+      const pagaAgora = tabela === 'contas_pagar' && (statusDepois === 'PAGO' || statusDepois === 'PARCIAL') && statusDepois !== statusAntes;
+      const segundoFator = pagaAgora ? await conferirSegundoFatorDoPagador() : { recusa: null, aviso: null };
+      if (segundoFator.recusa) return segundoFator.recusa;
       const gravado = await editarConta({
         tabela, colunasIndice: COLUNAS[tabela], campo, sinal, id, tenantId, item: item as Record<string, unknown>,
       });
-      return NextResponse.json(gravado);
+      return NextResponse.json(segundoFator.aviso ? { ...gravado, aviso_segundo_fator: segundoFator.aviso } : gravado);
     } catch (e) {
       if (e instanceof ErroEdicaoConta) return NextResponse.json({ error: e.message, ...e.extra }, { status: e.status });
       if (e instanceof ErroMovimentoCaixa) return NextResponse.json({ error: e.message }, { status: e.status });

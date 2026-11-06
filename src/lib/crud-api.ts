@@ -9,6 +9,8 @@ import { filtrarPorConta, type FiltroDeConta } from './filtro-de-conta';
 import { MENSAGEM_CONFLITO, SQL_VERSAO, semMarcasDeControle, versaoLida } from './versao-do-registro';
 import { filtrarPorEmpresa, empresasDoRegistro, empresasDaContaBancaria, recusaDoRateioEntreEmpresas, type FiltroDeEmpresa } from './empresas';
 import { contasBancariasVisiveis, escopoDaSessao, type EscopoDeEmpresas, type ExecutorEmpresas } from './empresas-servidor';
+import { ACOES_FINANCEIRAS, type AcaoFinanceira } from './acoes-financeiras';
+import { recusaDaContaNaGravacao, type ContasDaGravacao } from './conta-da-gravacao';
 
 export interface CrudOpcoes {
   /**
@@ -88,6 +90,16 @@ export interface CrudOpcoes {
   versao?: boolean;
   /** Mensagem do 409 de edição simultânea (padrão: a genérica). */
   mensagemConflito?: string;
+  /**
+   * Direito do catálogo exigido para gravar (POST e PUT), além de editar o
+   * financeiro (E7). Transferência exige "Transferir entre contas".
+   */
+  acaoDaGravacao?: AcaoFinanceira;
+  /**
+   * Contas bancárias que a gravação usa (E7): cada uma precisa estar liberada
+   * para MOVIMENTAR. Quem só vê a conta não lança nem transfere nela.
+   */
+  contasDaGravacao?: ContasDaGravacao;
 }
 
 /** O registro lido, com a versão quando a tabela usa o aviso de edição simultânea. */
@@ -109,6 +121,28 @@ async function guardaFinanceira(opcoes: CrudOpcoes, modo: 'ler' | 'escrever') {
   // Abaixo do teto do papel, o perfil de acesso ainda pode tirar o acesso.
   if (await pode(sessao, modo === 'escrever' ? 'editar_financeiro' : 'ver_financeiro')) return null;
   return NextResponse.json({ error: 'Seu perfil de acesso não inclui isto no financeiro.' }, { status: 403 });
+}
+
+/**
+ * Direito de gravar e contas da gravação (E7). `antes` = o registro como
+ * está no banco (null = novo). Devolve a recusa ou null.
+ */
+async function guardaDaGravacao(
+  opcoes: CrudOpcoes, tabela: string, tenantId: string, id: string, item: Record<string, unknown>,
+): Promise<NextResponse | null> {
+  if (!opcoes.acaoDaGravacao && !opcoes.contasDaGravacao) return null;
+  const sessao = await getSession();
+  if (opcoes.acaoDaGravacao && !(await pode(sessao, opcoes.acaoDaGravacao))) {
+    const rotulo = ACOES_FINANCEIRAS.find(a => a.id === opcoes.acaoDaGravacao)?.rotulo ?? opcoes.acaoDaGravacao;
+    return NextResponse.json({
+      error: `Seu acesso não inclui: ${rotulo.charAt(0).toLowerCase()}${rotulo.slice(1)}.`, acao: opcoes.acaoDaGravacao,
+    }, { status: 403 });
+  }
+  if (!opcoes.contasDaGravacao || !pool) return null;
+  const { rows } = await pool.query(`SELECT data FROM ${tabela} WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+  const antes = (rows[0]?.data ?? null) as Record<string, unknown> | null;
+  const recusa = await recusaDaContaNaGravacao(sessao, item, antes, opcoes.contasDaGravacao);
+  return recusa ? NextResponse.json({ error: recusa.error, acao: recusa.acao }, { status: recusa.status }) : null;
 }
 
 /** Contas liberadas para a sessão, só quando a tabela filtra por conta. */
@@ -294,6 +328,8 @@ export function createCrudHandlers(tableName: string, indexColumns: string[] = [
       if (invalido) return NextResponse.json({ error: invalido }, { status: 400 });
       const recusaEmpresa = await guardaDeEmpresaNaGravacao(opcoes, tenantId, item.id, item as Record<string, unknown>);
       if (recusaEmpresa) return recusaEmpresa;
+      const recusaGravacao = await guardaDaGravacao(opcoes, tableName, tenantId, item.id, item as Record<string, unknown>);
+      if (recusaGravacao) return recusaGravacao;
 
       // Build dynamic upsert with tenant_id
       const paramValues: unknown[] = [item.id, tenantId, JSON.stringify(item)];
@@ -412,6 +448,8 @@ export function createCrudItemHandlers(tableName: string, indexColumns: string[]
       const tenantId = await getTenantId();
       const recusaEmpresa = await guardaDeEmpresaNaGravacao(opcoes, tenantId, id, item as Record<string, unknown>);
       if (recusaEmpresa) return recusaEmpresa;
+      const recusaGravacao = await guardaDaGravacao(opcoes, tableName, tenantId, id, item as Record<string, unknown>);
+      if (recusaGravacao) return recusaGravacao;
 
       // Campos derivados ficam com o valor que está no banco, não com o que
       // veio do cliente.

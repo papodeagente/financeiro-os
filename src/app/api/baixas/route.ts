@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getTenantId } from '@/lib/tenant';
-import { recusaFinanceira, respostaPeriodoFechado } from '@/lib/guarda-rota';
+import { conferirSegundoFatorDoPagador, recusaFinanceira, respostaPeriodoFechado } from '@/lib/guarda-rota';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { ErroBaixa, historicoDaConta, registrarBaixas, type ItemBaixa } from '@/lib/baixas-servidor';
 import type { TituloTabela } from '@/lib/baixa-calculo';
@@ -53,6 +53,12 @@ export async function POST(req: Request) {
   };
   const itens = corpo.itens;
   const quem = (sessao ?? {}) as SessaoDaBaixa;
+  // Quem PAGA (conta a pagar) sem ser administrador precisa da verificação em
+  // duas etapas (E7): sem ela, a tela leva a Meu perfil; até o prazo, só avisa.
+  // Receber não pede o código.
+  const pagando = itens.some(i => i?.titulo_tabela === 'contas_pagar');
+  const segundoFator = pagando ? await conferirSegundoFatorDoPagador() : { recusa: null, aviso: null };
+  if (gravar && segundoFator.recusa) return segundoFator.recusa;
   try {
     if (!gravar) {
       const previa = await registrarBaixas(pool as unknown as ExecutorSQL, ctx, itens, { gravar: false });
@@ -64,7 +70,11 @@ export async function POST(req: Request) {
         if (!(e instanceof RecusaDaBaixa)) throw e;
         porteiro = { ok: false, error: e.message, ...(e.pedir ? { pedir_aprovacao: e.pedir } : {}) };
       }
-      return NextResponse.json({ ...previa, porteiro });
+      return NextResponse.json({
+        ...previa, porteiro,
+        ...(segundoFator.recusa ? { precisa_segundo_fator: true } : {}),
+        ...(segundoFator.aviso ? { aviso_segundo_fator: segundoFator.aviso } : {}),
+      });
     }
     const r = await emTransacao(async exec => {
       // Repetição da mesma gravação (mesma Idempotency-Key): já passou pelo
@@ -101,7 +111,7 @@ export async function POST(req: Request) {
       await emTransacao(exec => garantirCategoriasDeEncargos(exec, tenantId))
         .catch(e => console.error('[baixas] categorias dos encargos:', e instanceof Error ? e.message : e));
     }
-    return NextResponse.json(r);
+    return NextResponse.json(segundoFator.aviso ? { ...r, aviso_segundo_fator: segundoFator.aviso } : r);
   } catch (e) {
     return erro(e);
   }

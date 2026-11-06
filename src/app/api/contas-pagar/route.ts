@@ -12,6 +12,8 @@ export const { GET, POST } = createCrudHandlers(
     versao: true,
     // Pago numa conta não liberada para a pessoa: some da lista (05/11/2026).
     filtroDeConta: { campos: ['conta_bancaria_id'], soBaixados: true },
+    // Lançar numa conta que a pessoa só vê é recusado (E7).
+    contasDaGravacao: { campos: ['conta_bancaria_id'] },
     // Várias empresas (E7): só as empresas marcadas e liberadas; rateio entre
     // empresas aparece em cada empresa que ele toca.
     filtroDeEmpresa: { tipo: 'registro' },

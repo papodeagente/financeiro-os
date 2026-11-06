@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { loadEntities } from '@/lib/crm-storage';
 import { toast } from '@/lib/toast';
+import { levarParaSegundoFator, lembrarSegundoFator, type RespostaComSegundoFator } from './segundoFatorNaTela';
 import { hojeISO, num, round2 } from '@/lib/money';
 import { generateId } from '@/lib/utils';
 import {
@@ -217,14 +218,18 @@ export function useLiquidacao(
       headers: { 'Content-Type': 'application/json', 'Idempotency-Key': chave },
       body: JSON.stringify(corpoDoPedido),
     });
-    const corpo = (await res.json().catch(() => ({}))) as {
+    const corpo = (await res.json().catch(() => ({}))) as RespostaComSegundoFator & {
       error?: string; pedir_aprovacao?: { tipo: 'limites' | 'pagamento'; conta_pagar_id?: string; status?: string };
     };
     if (res.status === 409 && corpo.pedir_aprovacao) {
       oferecerAprovacao(corpo.error || 'Precisa de aprovação.', corpo.pedir_aprovacao, corpoDoPedido);
       throw new AguardandoAprovacao(corpo.error || 'Precisa de aprovação.');
     }
+    // Sem a verificação em duas etapas (E7): o aviso leva a Meu perfil. A tela
+    // trata como o pedido de aprovação: nada mais a mostrar.
+    if (levarParaSegundoFator(res.status, corpo)) throw new AguardandoAprovacao(corpo.error || 'Ative a verificação em duas etapas.');
     if (!res.ok) throw new Error(corpo.error || `Erro ${res.status}`);
+    lembrarSegundoFator(corpo);
     return plano;
   }
 

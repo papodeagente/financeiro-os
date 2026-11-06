@@ -43,8 +43,16 @@ import {
 // ============================================================
 
 export class ErroFatura extends Error {
-  constructor(public codigo: string, mensagem: string, public status = 400, public detalhes?: unknown) {
+  // Campos declarados à parte (sem "parameter property") para o arquivo
+  // carregar no node --experimental-strip-types dos testes.
+  codigo: string;
+  status: number;
+  detalhes?: unknown;
+  constructor(codigo: string, mensagem: string, status = 400, detalhes?: unknown) {
     super(mensagem);
+    this.codigo = codigo;
+    this.status = status;
+    this.detalhes = detalhes;
     this.name = 'ErroFatura';
   }
 }

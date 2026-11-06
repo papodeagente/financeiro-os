@@ -5,6 +5,7 @@ import { ArrowLeftRight, ArrowRight, Clock, Plus, Trash2, Undo2 } from 'lucide-r
 
 import { TransferenciaBancaria, createTransferencia, StatusTransferencia } from '@/lib/crm-types';
 import { loadEntities, saveEntity } from '@/lib/crm-storage';
+import { levarParaSegundoFator, lembrarSegundoFator } from '@/components/fin/segundoFatorNaTela';
 import { somaPor, round2, hojeISO } from '@/lib/money';
 import { toast } from '@/lib/toast';
 import { consumirAtalho, lerAtalhos } from '@/lib/atalho-da-url';
@@ -39,6 +40,11 @@ import {
 // Efetivar/cancelar/excluir transferência mexe no saldo das contas e por isso
 // vive INTEIRO no servidor (/api/transferencias/[id]): ele relê o saldo do
 // banco e aplica o delta. O cliente nunca calcula nem envia saldo_atual.
+//
+// Transferir pede a verificação em duas etapas a quem não é administrador
+// (E7): sem ela, o aviso leva a Meu perfil e a tela não repete o erro.
+class AvisoJaMostrado extends Error {}
+
 async function salvarTransferencia(item: TransferenciaBancaria): Promise<TransferenciaBancaria> {
   const res = await fetch(`/api/transferencias/${item.id}`, {
     method: 'PUT',
@@ -46,13 +52,16 @@ async function salvarTransferencia(item: TransferenciaBancaria): Promise<Transfe
     body: JSON.stringify(item),
   });
   const body = await res.json().catch(() => null);
+  if (levarParaSegundoFator(res.status, body ?? {})) throw new AvisoJaMostrado(body?.error ?? '');
   if (!res.ok) throw new Error(body?.error || 'Não foi possível salvar a transferência.');
+  lembrarSegundoFator(body);
   return body as TransferenciaBancaria;
 }
 
 async function excluirTransferencia(id: string): Promise<void> {
   const res = await fetch(`/api/transferencias/${id}`, { method: 'DELETE' });
   const body = await res.json().catch(() => null);
+  if (levarParaSegundoFator(res.status, body ?? {})) throw new AvisoJaMostrado(body?.error ?? '');
   if (!res.ok) throw new Error(body?.error || 'Não foi possível excluir a transferência.');
 }
 
@@ -273,7 +282,7 @@ export default function TransferenciasPage() {
       await salvarTransferencia({ ...item, status: 'EFETIVADA' });
       toast.success('Transferência efetivada');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao efetivar transferência');
+      if (!(e instanceof AvisoJaMostrado)) toast.error(e instanceof Error ? e.message : 'Erro ao efetivar transferência');
     } finally {
       setSalvando(false);
       setConfirmacao(null);
@@ -290,7 +299,7 @@ export default function TransferenciasPage() {
       await salvarTransferencia({ ...item, status: 'CANCELADA' });
       toast.success(efetivada ? 'Transferência estornada' : 'Transferência cancelada');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao cancelar transferência');
+      if (!(e instanceof AvisoJaMostrado)) toast.error(e instanceof Error ? e.message : 'Erro ao cancelar transferência');
     } finally {
       setSalvando(false);
       setConfirmacao(null);
@@ -306,7 +315,7 @@ export default function TransferenciasPage() {
       await excluirTransferencia(item.id);
       toast.success(efetivada ? 'Transferência excluída e saldos estornados' : 'Transferência excluída');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao excluir transferência');
+      if (!(e instanceof AvisoJaMostrado)) toast.error(e instanceof Error ? e.message : 'Erro ao excluir transferência');
     } finally {
       setSalvando(false);
       setConfirmacao(null);

@@ -32,6 +32,15 @@ export function exigeSegundoFator(perfil: string | undefined, isSuperAdmin = fal
   return isSuperAdmin || perfilCanonico(perfil) === 'ADMIN';
 }
 
+/**
+ * O login pede o código? Administrador sempre (FIN-12); quem não é
+ * administrador, só depois de cadastrar o aplicativo (para pagar, E7). Quem
+ * não cadastrou entra com a senha e é levado a cadastrar na hora de pagar.
+ */
+export function loginPedeSegundoFator(usuario: Record<string, unknown>): boolean {
+  return exigeSegundoFator(usuario.perfil as string | undefined) || segredoGravado(usuario) !== null;
+}
+
 export function base32(bytes: Uint8Array): string {
   let bits = 0, valor = 0, saida = '';
   for (const b of bytes) {
