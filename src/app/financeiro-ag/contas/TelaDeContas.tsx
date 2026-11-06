@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 import {
-  CAMPOS_DA_BUSCA, COBRANCAS_DO_FILTRO, camposDaConfig, rotuloDaSituacao, type CampoDaBusca, type CampoDaLista, type CobrancaDoFiltro,
+  CAMPOS_DA_BUSCA, camposDaConfig, rotuloDaSituacao, type CampoDaBusca, type CampoDaLista, type CobrancaDoFiltro,
   type DataDoFiltro, type LinhaDeConta, type SituacaoDoFiltro,
 } from '@/lib/contas-pagar-receber';
 import { contasParaEscolher } from '@/lib/contas-bancarias-regras';
@@ -38,6 +38,7 @@ import {
   ordemDaColuna, salvarColunas, cobrancaDaLinha, type ColunaId,
 } from './colunas';
 import { LiquidarEmLote } from './LiquidarEmLote';
+import { filtrosDoEndereco } from './filtro-do-endereco';
 import { MenuDaLinha, type ItemDoMenu } from './MenuDaLinha';
 import { BarraDoLote, RodapeDaLista, type AcaoDaBarra } from './PartesDaLista';
 import { enderecoDaConta, enderecoDaExportacao, todasDoFiltro, useContas, usePermissoes } from './useContas';
@@ -133,12 +134,11 @@ export function TelaDeContas() {
   const [gravandoRestauro, setGravandoRestauro] = React.useState(false);
 
   React.useEffect(() => {
-    // Atalho do endereço (?cobranca=sem_boleto), vindo da tela Cobranças:
-    // abre já no filtro, em todo o período.
-    const atalho = new URLSearchParams(window.location.search).get('cobranca');
-    if (atalho && (COBRANCAS_DO_FILTRO as readonly string[]).includes(atalho) && atalho !== 'todas') {
-      setF(atual => ({ ...atual, cobranca: atalho as CobrancaDoFiltro, periodo: 'TUDO', de: '', ate: '' }));
-    }
+    // Filtro no endereço: o atalho da tela Cobranças (?cobranca=sem_boleto,
+    // em todo o período) e o link do "Perguntar em texto" (E7), com o filtro
+    // que a resposta usou. Sem parâmetro, a tela de sempre.
+    const doEndereco = window.location.search;
+    setF(atual => filtrosDoEndereco(doEndereco, atual as Filtros & { periodo: string }) as Filtros);
     setColunas(colunasSalvas());
     // Campos personalizados da agência viram colunas; depois, a escolha
     // guardada no servidor (a deste navegador fica de reserva).
