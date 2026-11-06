@@ -247,7 +247,7 @@ export const AUDIT_SCHEMA_SQL = String.raw`
           'retrato_saldos','agendador_execucoes','agendador_estado','tarefas','leituras_de_documento',
           'cobranca_eventos','cobranca_lembretes','cobranca_disjuntor','cobranca_portal_links',
           'migracao_lotes','migracao_arquivos','migracao_linhas','migracao_vinculos',
-          'variacoes_cambiais','conciliacoes_automaticas','conferencias_operadora_linhas')
+          'variacoes_cambiais','conciliacoes_automaticas','conferencias_operadora_linhas','conexoes_bancarias_segredo','sincronizacoes_bancarias')
       UNION SELECT t.table_name FROM information_schema.tables t
       WHERE t.table_schema = 'public' AND t.table_name IN ('tenants','super_admins','planos','saas_config','convites')
       ORDER BY 1

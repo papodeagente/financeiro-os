@@ -31,7 +31,7 @@ import {
   ClipboardCheck,
   Stamp,
   CalendarClock,
-  AlarmClock,
+  AlarmClock, Landmark,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -104,6 +104,7 @@ const ICON_FOR_TIPO: Record<string, typeof Bell> = {
   APROVACAO_DECIDIDA: ClipboardCheck,
   CONTAS_A_PAGAR_VENCENDO: CalendarClock,
   CONTAS_A_RECEBER_ATRASADAS: AlarmClock,
+  EXTRATO_AUTOMATICO: Landmark,
 };
 
 const COLOR_FOR_TIPO: Record<string, string> = {
@@ -117,6 +118,7 @@ const COLOR_FOR_TIPO: Record<string, string> = {
   APROVACAO_DECIDIDA: 'text-[var(--fin-positive)] bg-[var(--fin-positive-soft)]',
   CONTAS_A_PAGAR_VENCENDO: 'text-[var(--fin-warning-text)] bg-[var(--fin-warning-soft)]',
   CONTAS_A_RECEBER_ATRASADAS: 'text-[var(--fin-negative-text)] bg-[var(--fin-negative-soft)]',
+  EXTRATO_AUTOMATICO: 'text-[var(--fin-warning-text)] bg-[var(--fin-warning-soft)]',
 };
 
 function createDefaultPreferences(): PreferenciasNotificacoes {

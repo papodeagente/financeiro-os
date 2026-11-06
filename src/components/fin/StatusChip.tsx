@@ -21,7 +21,7 @@ export const statusChipVariants = cva(
 
 export type StatusTone = NonNullable<VariantProps<typeof statusChipVariants>['tone']>;
 
-export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza' | 'comissao' | 'plano' | 'cobranca' | 'mudanca' | 'conferencia';
+export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza' | 'comissao' | 'plano' | 'cobranca' | 'mudanca' | 'conferencia' | 'conexao_banco';
 
 export type StatusChipProps = {
   /** Valor cru do banco. NUNCA é renderizado como veio. */
@@ -53,6 +53,14 @@ export const STATUS_LABELS: Record<StatusDominio, Record<string, { rotulo: strin
     ATRASADO:  { rotulo: 'Em atraso',          tone: 'negativo' },
     VENCIDO:   { rotulo: 'Vencido',            tone: 'negativo' },
     CANCELADO: { rotulo: 'Cancelado',          tone: 'neutro'   },
+  },
+  // Extrato automático: estado da conexão de uma conta com o banco (06/11/2026).
+  conexao_banco: {
+    ATIVA:        { rotulo: 'Conectada',     tone: 'positivo' },
+    ATENCAO:      { rotulo: 'Atenção',       tone: 'aviso'    },
+    EXPIRADA:     { rotulo: 'Expirada',      tone: 'negativo' },
+    DESCONECTADA: { rotulo: 'Desconectada',  tone: 'neutro'   },
+    SEM_CONEXAO:  { rotulo: 'Sem conexão',   tone: 'neutro'   },
   },
   conciliacao: {
     PENDENTE:   { rotulo: 'A conciliar', tone: 'neutro'   },
