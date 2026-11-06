@@ -9,8 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/lib/toast';
 import {
-  DIAS_DA_SEMANA, LIMITES_DO_AGENDAMENTO, PERIODOS_DO_ENVIO, ROTULO_PERIODO_DO_ENVIO, descricaoDoAgendamento, lerDestinatarios,
-  type DadosDoAgendamento, type Frequencia, type PeriodoDoEnvio,
+  DIAS_DA_SEMANA, LIMITES_DO_AGENDAMENTO, PERIODOS_POR_RELATORIO, ROTULO_PERIODO_DO_ENVIO, descricaoDoAgendamento, lerDestinatarios, periodoSugerido,
+  type DadosDoAgendamento, type Frequencia, type PeriodoDoEnvio, type RelatorioAgendavel,
 } from '@/lib/relatorios-agendados/regras';
 
 /**
@@ -26,10 +26,16 @@ export interface EnvioParaEditar extends DadosDoAgendamento { id: string }
 const FREQ: Array<{ valor: Frequencia; rotulo: string }> = [
   { valor: 'diario', rotulo: 'Todo dia' }, { valor: 'semanal', rotulo: 'Toda semana' }, { valor: 'mensal', rotulo: 'Todo mês' },
 ];
-const PERIODO_SUGERIDO: Record<Frequencia, PeriodoDoEnvio> = { diario: 'ontem', semanal: 'semana_anterior', mensal: 'mes_anterior' };
+/** O que a ajuda do período diz em cada relatório. */
+const AJUDA_DO_PERIODO: Record<RelatorioAgendavel, string> = {
+  vendas: 'O período é contado a partir do dia do envio. O dia do envio fica de fora: os números dele ainda estão mudando.',
+  dre: 'O resultado sai por mês. Mais de um mês vira o resultado mês a mês, com total e média.',
+  fluxo: 'O que já aconteceu entra pela data da baixa; o que vem pela frente, pelo vencimento.',
+  visao_geral: '',
+};
 
 export function FormularioDeEnvio({
-  aberto, onFechar, onSalvo, consulta, nomeSugerido, resumoDosFiltros, crmLigado, existente,
+  aberto, onFechar, onSalvo, consulta, nomeSugerido, resumoDosFiltros, crmLigado, existente, relatorio: relatorioPedido,
 }: {
   aberto: boolean;
   onFechar: () => void;
@@ -41,13 +47,17 @@ export function FormularioDeEnvio({
   resumoDosFiltros: string;
   crmLigado: boolean | null;
   existente?: EnvioParaEditar | null;
+  /** Que relatório vai (padrão: o do envio existente, ou vendas). */
+  relatorio?: RelatorioAgendavel;
 }) {
+  const relatorio: RelatorioAgendavel = existente?.relatorio ?? relatorioPedido ?? 'vendas';
+  const periodos = PERIODOS_POR_RELATORIO[relatorio];
   const [nome, setNome] = React.useState(existente?.nome ?? nomeSugerido);
   const [frequencia, setFrequencia] = React.useState<Frequencia>(existente?.frequencia ?? 'semanal');
   const [diaSemana, setDiaSemana] = React.useState(existente?.dia_semana ?? 1);
   const [diaMes, setDiaMes] = React.useState(existente?.dia_mes ?? 1);
   const [hora, setHora] = React.useState(existente?.hora ?? 7);
-  const [periodo, setPeriodo] = React.useState<PeriodoDoEnvio>(existente?.periodo ?? 'semana_anterior');
+  const [periodo, setPeriodo] = React.useState<PeriodoDoEnvio>(existente?.periodo ?? periodoSugerido(relatorio, 'semanal'));
   const [periodoTocado, setPeriodoTocado] = React.useState(Boolean(existente));
   const [formato, setFormato] = React.useState<'xlsx' | 'pdf'>(existente?.formato ?? 'xlsx');
   const [emails, setEmails] = React.useState((existente?.destinatarios ?? []).join(', '));
@@ -57,7 +67,7 @@ export function FormularioDeEnvio({
 
   const trocarFrequencia = (f: Frequencia) => {
     setFrequencia(f);
-    if (!periodoTocado) setPeriodo(PERIODO_SUGERIDO[f]);
+    if (!periodoTocado) setPeriodo(periodoSugerido(relatorio, f));
   };
   const lidos = lerDestinatarios(emails);
   const quando = descricaoDoAgendamento({ frequencia, dia_semana: diaSemana, dia_mes: diaMes, hora, periodo });
@@ -67,7 +77,7 @@ export function FormularioDeEnvio({
     setErros({});
     try {
       const corpo = {
-        nome, relatorio: 'vendas', consulta, frequencia, dia_semana: diaSemana, dia_mes: diaMes, hora, periodo, formato,
+        nome, relatorio, consulta, frequencia, dia_semana: diaSemana, dia_mes: diaMes, hora, periodo, formato,
         destinatarios: emails, validade_dias: validade, ativo: true,
       };
       const r = await fetch(existente ? `/api/relatorios/agendados/${encodeURIComponent(existente.id)}` : '/api/relatorios/agendados', {
@@ -150,13 +160,17 @@ export function FormularioDeEnvio({
           </Field>
         </div>
 
-        <Field rotulo="Cada envio mostra" ajuda="O período é contado a partir do dia do envio. O dia do envio fica de fora: os números dele ainda estão mudando." erro={erros.periodo}>
-          {a => (
-            <select {...a} className={CAMPO_SELECT} value={periodo} onChange={e => { setPeriodo(e.target.value as PeriodoDoEnvio); setPeriodoTocado(true); }}>
-              {PERIODOS_DO_ENVIO.map(p => <option key={p} value={p}>{ROTULO_PERIODO_DO_ENVIO[p]}</option>)}
-            </select>
-          )}
-        </Field>
+        {periodos.length > 1 ? (
+          <Field rotulo="Cada envio mostra" ajuda={AJUDA_DO_PERIODO[relatorio]} erro={erros.periodo}>
+            {a => (
+              <select {...a} className={CAMPO_SELECT} value={periodo} onChange={e => { setPeriodo(e.target.value as PeriodoDoEnvio); setPeriodoTocado(true); }}>
+                {periodos.map(p => <option key={p} value={p}>{ROTULO_PERIODO_DO_ENVIO[p]}</option>)}
+              </select>
+            )}
+          </Field>
+        ) : (
+          <p className="fin-t-caption text-[var(--fin-text-2)]">Cada envio mostra {ROTULO_PERIODO_DO_ENVIO[periodos[0]].toLowerCase()}: o caixa, o que está em aberto e a agenda dos 30 dias seguintes.</p>
+        )}
 
         <Field rotulo="Para quem" obrigatorio ajuda={`Um ou mais e-mails, separados por vírgula ou linha. Até ${LIMITES_DO_AGENDAMENTO.destinatarios}.`} erro={erros.destinatarios ?? (lidos.invalidos.length ? `Confira: ${lidos.invalidos.slice(0, 3).join(', ')}` : null)}>
           {a => <Textarea {...a} rows={2} value={emails} onChange={e => setEmails(e.target.value)} placeholder="diretoria@suaagencia.com.br, financeiro@suaagencia.com.br" />}
@@ -180,7 +194,9 @@ export function FormularioDeEnvio({
           </Field>
         </div>
         <p className="fin-t-caption text-[var(--fin-text-3)]">
-          Quem abrir o link vê só este relatório, como estava no envio, sem entrar no sistema. O ganho da agência só aparece se você pode vê-lo.
+          {relatorio === 'vendas'
+            ? 'Quem abrir o link vê só este relatório, como estava no envio, sem entrar no sistema. O ganho da agência só aparece se você pode vê-lo.'
+            : 'Quem abrir o link vê só este relatório, como estava no envio, sem entrar no sistema. Os números saem com o que você pode ver hoje (contas e empresas liberadas); se você perder o acesso, o envio para e o motivo aparece em Envios agendados.'}
         </p>
       </div>
     </RecordSheet>

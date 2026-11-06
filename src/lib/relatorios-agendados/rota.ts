@@ -12,6 +12,13 @@
  *   POST   /api/relatorios/agendados/leituras/[id]/revogar
  *   GET    /api/leitura/[token]                      público: a cópia do relatório; ?formato=xlsx|pdf|imprimir baixa
  *
+ * Relatórios: 'vendas' (consulta = a URL de /relatorios/vendas), 'dre'
+ * (regime, centro, rateio, detalhe), 'fluxo' (conta, agrupamento, vista,
+ * medida, folha) e 'visao_geral' (sem filtro; período 'posicao_do_dia').
+ * DRE, fluxo e visão geral pedem também "Acessar o financeiro" para agendar,
+ * e a cada envio conferem de novo os direitos de quem salvou
+ * (financeiro-servidor.ts).
+ *
  * Direitos: ver a lista com "Abrir relatórios"; criar, mudar, enviar e
  * revogar com "Abrir relatórios" + "Baixar em Excel e PDF" (o relatório sai
  * da agência). O envio usa os direitos de quem salvou por último: o ganho da
@@ -54,6 +61,16 @@ export async function autorDaSessao(ctx: ContextoDaRota): Promise<AutorDoAgendam
     verReceita: await pode(ctx.sessao, 'ver_colunas_comissao', { exec: ctx.exec }),
     vendedorId: podeVerTodasVendas(ctx.sessao) ? null : ctx.sessao.userId,
   };
+}
+
+/**
+ * DRE, fluxo de caixa e visão geral são do financeiro: quem agenda precisa
+ * poder abrir o financeiro (além de relatórios e exportar, na `entrada`).
+ */
+export async function recusaDoRelatorio(ctx: ContextoDaRota, relatorio: string): Promise<NextResponse | null> {
+  if (relatorio === 'vendas') return null;
+  if (await pode(ctx.sessao, 'ver_financeiro', { exec: ctx.exec })) return null;
+  return NextResponse.json({ error: 'Agendar este relatório pede acesso ao financeiro.', codigo: 'SEM_DIREITO' }, { status: 403, headers: CABECALHOS });
 }
 
 export function erroDaRota(e: unknown): NextResponse {

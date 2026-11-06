@@ -24,6 +24,7 @@ import { janelaDeMinutos, type DefinicaoTarefa } from '../agendador/nucleo';
 import { documentoDoRelatorio, lerConsulta, montarRelatorioDeVendas } from '../relatorios-vendas-servidor';
 import type { DocumentoExportado } from '../exportacao/documento';
 import { payloadDoEnvio } from './payload';
+import { documentoFinanceiroDoAgendamento, ehRelatorioFinanceiro, SemDireitoNoEnvio } from './financeiro-servidor';
 import { hashDoTokenDeLeitura, novoTokenDeLeitura } from './token';
 import {
   LIMITES_DO_AGENDAMENTO, brasilia, descricaoDoAgendamento, periodoDoEnvio, proximoEnvio,
@@ -140,10 +141,19 @@ export class ErroDoAgendamento extends Error {
 // Relatório do envio
 // ============================================================
 
-/** Monta o documento do relatório agendado para o período, com os direitos de quem criou. */
+/**
+ * Monta o documento do relatório agendado para o período, com os direitos de
+ * quem criou. Vendas: os direitos gravados ao salvar. DRE, fluxo e visão
+ * geral: os direitos de hoje de quem salvou (financeiro-servidor.ts).
+ */
 export async function documentoDoAgendamento(
-  exec: ExecutorSQL, tenantId: string, a: Pick<Agendamento, 'relatorio' | 'consulta' | 'ver_receita' | 'vendedor_id'>, de: string, ate: string,
+  exec: ExecutorSQL, tenantId: string, a: Pick<Agendamento, 'relatorio' | 'consulta' | 'ver_receita' | 'vendedor_id'> & { criado_por?: string },
+  de: string, ate: string, hoje?: string,
 ): Promise<DocumentoExportado> {
+  if (ehRelatorioFinanceiro(a.relatorio)) {
+    const doc = await documentoFinanceiroDoAgendamento(exec, tenantId, { relatorio: a.relatorio, consulta: a.consulta, criado_por: a.criado_por ?? '' }, de, ate, hoje ?? ate);
+    return limitarLinhas(doc);
+  }
   if (a.relatorio !== 'vendas') throw new ErroDoAgendamento('RELATORIO', 'Relatório desconhecido.');
   const q = new URLSearchParams(a.consulta);
   q.set('de', de);
@@ -151,7 +161,11 @@ export async function documentoDoAgendamento(
   const lida = lerConsulta(q);
   if (!lida.ok) throw new ErroDoAgendamento('CONSULTA', lida.erro);
   const r = await montarRelatorioDeVendas(exec, tenantId, lida.consulta, { verReceita: a.ver_receita, vendedorId: a.vendedor_id ?? undefined });
-  const doc = documentoDoRelatorio(r, lida.consulta);
+  return limitarLinhas(documentoDoRelatorio(r, lida.consulta));
+}
+
+/** O link guarda até LIMITES_DO_AGENDAMENTO.linhasNoLink linhas (o total considera todas). */
+function limitarLinhas(doc: DocumentoExportado): DocumentoExportado {
   if (doc.linhas.length > LIMITES_DO_AGENDAMENTO.linhasNoLink) {
     return {
       ...doc, linhas: doc.linhas.slice(0, LIMITES_DO_AGENDAMENTO.linhasNoLink),
@@ -299,9 +313,11 @@ export async function enviarAgendamento(
   let leitura: LeituraCriada;
   let doc: DocumentoExportado;
   try {
-    doc = await documentoDoAgendamento(exec, tenantId, a, de, ate);
+    doc = await documentoDoAgendamento(exec, tenantId, a, de, ate, dia);
     leitura = await criarLeitura(exec, tenantId, a.id, doc, a.validade_dias, agora, opcoes.base);
   } catch (e) {
+    // Quem salvou perdeu o direito (ou a conta salva sumiu): não envia e fica o motivo.
+    if (e instanceof SemDireitoNoEnvio) return registrar({ situacao: 'pulado', canal: '', detalhe: e.message, de, ate }, null);
     return registrar({ situacao: 'falhou', canal: '', detalhe: e instanceof Error ? e.message : 'erro ao montar', de, ate }, null);
   }
   const base = { url: leitura.url, expira_em: leitura.expira_em, de, ate, linhas: doc.linhas.length };

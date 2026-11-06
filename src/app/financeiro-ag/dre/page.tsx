@@ -22,9 +22,11 @@ import {
 import { aplicarRecorteDRE, type FiltroDeRateio, type RecorteDRE } from '@/lib/dre-recorte';
 import { ordenarEmArvore } from '@/lib/dimensoes';
 import type { CentroCusto } from '@/lib/crm-types';
-import type { DocumentoExportado, FiltroAplicado } from '@/lib/exportacao/documento';
+import type { DocumentoExportado } from '@/lib/exportacao/documento';
+import { documentoDoDREdoMes, documentoDoDREMesAMes } from '@/lib/exportacao/documentos-financeiro';
 import { BotaoExportar } from '@/components/fin/BotaoExportar';
-import { DemonstrativoMeses, rotuloCurtoDoMes } from './DemonstrativoMeses';
+import { BotaoAgendarEnvio } from '@/components/relatorios/BotaoAgendarEnvio';
+import { DemonstrativoMeses } from './DemonstrativoMeses';
 import { calcRelatorio, type CustosData } from '@/lib/planejamento-custos';
 import {
   encargosPorTitulo, rotulosDasCategorias,
@@ -448,51 +450,40 @@ export default function DREPage() {
     ? `${getMonthLabel(mesesDaVisao[0])} a ${getMonthLabel(mesesDaVisao[mesesDaVisao.length - 1])}`
     : rotuloMes;
 
-  /** O que está na tela, para o Excel, o PDF e a impressão. */
+  /** O que está na tela, para o Excel, o PDF e a impressão (o mesmo desenho do envio agendado). */
   function documentoDaTela(): DocumentoExportado {
-    const filtros: FiltroAplicado[] = [
-      { rotulo: 'Período', valor: visao === 'meses' ? rotuloDoPeriodoMeses : rotuloMes },
-      { rotulo: 'Regime', valor: ROTULO_REGIME[regime] },
-    ];
-    if (centroEscolhido) filtros.push({ rotulo: 'Centro de custo', valor: centroEscolhido.nome });
-    if (filtroRateio !== 'todas') filtros.push({ rotulo: 'Rateio', valor: ROTULO_RATEIO[filtroRateio] });
-    if (visao === 'mes' && rotuloComparativo) filtros.push({ rotulo: 'Comparado com', valor: rotuloComparativo });
-    const recuo = (n: number) => '   '.repeat(Math.max(0, n));
-    if (visao === 'meses' && mesAMes) {
-      const colunas = [
-        { id: 'linha', rotulo: 'Conta', tipo: 'texto' as const },
-        ...mesAMes.meses.map(m => ({ id: m, rotulo: rotuloCurtoDoMes(m), tipo: 'dinheiro' as const })),
-        { id: 'total', rotulo: 'Total', tipo: 'dinheiro' as const },
-        { id: 'media', rotulo: 'Média', tipo: 'dinheiro' as const },
-      ];
-      const linhas = linhasMesAMes.filter(l => !l.percentual).map(l => {
-        const r: Record<string, string | number> = { linha: `${recuo(l.indent)}${l.codigo ? `${l.codigo} ` : ''}${ROTULO_LINHA[l.nome] ?? l.nome}`, total: l.total, media: l.media };
-        mesAMes.meses.forEach((m, i) => { r[m] = l.valores[i]; });
-        return r;
-      });
-      const margens = linhasMesAMes.filter(l => l.percentual)
-        .map(l => `${rotuloNota(l.nome)}: ${l.total.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% no período`).join(' · ');
-      return { titulo: 'Resultado mês a mês (DRE)', filtros, colunas, linhas, orientacao: 'paisagem', ...(margens ? { nota: margens } : {}) };
-    }
-    const comComparativo = Boolean(rotuloComparativo);
-    const colunas = [
-      { id: 'linha', rotulo: 'Conta', tipo: 'texto' as const },
-      { id: 'valor', rotulo: rotuloMes, tipo: 'dinheiro' as const },
-      ...(temOrcado ? [{ id: 'orcado', rotulo: 'Orçado', tipo: 'dinheiro' as const }, { id: 'desvio', rotulo: 'Desvio', tipo: 'dinheiro' as const }] : []),
-      ...(comComparativo ? [{ id: 'comparativo', rotulo: rotuloComparativo!, tipo: 'dinheiro' as const }, { id: 'variacao', rotulo: 'Variação', tipo: 'dinheiro' as const }] : []),
-    ];
-    const linhas = dreFiltrado.filter(l => !l.nome.startsWith('Margem')).map(l => {
-      const c = compareByNome.get(l.nome);
-      const o = orcadoMap.get(l.nome);
-      return {
-        linha: `${recuo(l.indent)}${l.codigo ? `${l.codigo} ` : ''}${ROTULO_LINHA[l.nome] ?? l.nome}`,
-        valor: l.valor,
-        orcado: o ?? null, desvio: o === undefined ? null : round2(l.valor - o),
-        comparativo: c ? c.valor : null, variacao: c ? round2(l.valor - c.valor) : null,
-      };
+    const filtros = {
+      periodo: visao === 'meses' ? rotuloDoPeriodoMeses : rotuloMes,
+      regime,
+      centro: centroEscolhido?.nome ?? null,
+      rateio: filtroRateio,
+      comparadoCom: visao === 'mes' ? rotuloComparativo : null,
+    };
+    if (visao === 'meses' && mesAMes) return documentoDoDREMesAMes({ filtros, mesAMes, linhas: linhasMesAMes });
+    return documentoDoDREdoMes({
+      filtros, rotuloMes, linhas: dreFiltrado,
+      comparativo: rotuloComparativo ? dreCompareFiltrado : null,
+      orcado: temOrcado ? orcadoMap : null,
     });
-    const nota = notasTabela.map(n => `${n.rotulo}: ${n.valor}`).join(' · ');
-    return { titulo: 'Resultado do mês (DRE)', filtros, colunas, linhas, ...(nota ? { nota } : {}) };
+  }
+
+  /** Os filtros que o envio agendado leva (o período vem de cada envio). */
+  function consultaDoAgendamento(): string {
+    const q = new URLSearchParams();
+    if (regime !== 'competencia') q.set('regime', regime);
+    if (centroId) q.set('centro', centroId);
+    if (filtroRateio !== 'todas') q.set('rateio', filtroRateio);
+    if (!modoSimplificado) q.set('detalhe', 'completo');
+    return q.toString();
+  }
+
+  function resumoDoAgendamento(): string {
+    return [
+      `Regime de ${ROTULO_REGIME[regime].toLowerCase()}`,
+      modoSimplificado ? 'resumido' : 'completo',
+      centroEscolhido ? `centro de custo ${centroEscolhido.nome}` : null,
+      filtroRateio !== 'todas' ? ROTULO_RATEIO[filtroRateio].toLowerCase() : null,
+    ].filter(Boolean).join(', ') + '. O comparativo e o orçado ficam só na tela.';
   }
 
   const anteriorAoSelecionado = selectedMonth ? mesAnterior(selectedMonth) : '';
@@ -711,6 +702,12 @@ export default function DREPage() {
                       </Button>
                     ) : null}
                     <BotaoExportar origem="dre" documento={documentoDaTela} />
+                    <BotaoAgendarEnvio
+                      relatorio="dre"
+                      nomeSugerido="Resultado do mês"
+                      consulta={consultaDoAgendamento}
+                      resumoDosFiltros={resumoDoAgendamento}
+                    />
                   </div>
                 </div>
               )}

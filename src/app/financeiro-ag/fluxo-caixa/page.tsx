@@ -18,8 +18,10 @@ import {
   alertaDeSaldo, comparativoDoPeriodo, gradeContaPorDia, lancamentosDaConta, titulosDaConta,
   type FiltroDeConta, type LinhaDaGrade,
 } from '@/lib/fluxo-comparativo';
-import type { DocumentoExportado, FiltroAplicado } from '@/lib/exportacao/documento';
+import type { DocumentoExportado } from '@/lib/exportacao/documento';
+import { documentoDaGradeDoFluxo, documentoDoCadernoDoFluxo } from '@/lib/exportacao/documentos-financeiro';
 import { BotaoExportar } from '@/components/fin/BotaoExportar';
+import { BotaoAgendarEnvio } from '@/components/relatorios/BotaoAgendarEnvio';
 import { GradePorConta, type MedidaDaGrade } from './GradePorConta';
 import { hojeISO, num, round2 } from '@/lib/money';
 import { cn, formatBRL } from '@/lib/utils';
@@ -290,62 +292,36 @@ export default function FluxoCaixaPage() {
     });
   }
 
-  const filtrosDoArquivo = (): FiltroAplicado[] => [
-    { rotulo: 'Período', valor: periodo.rotulo },
-    ...(contaEscolhida ? [{ rotulo: 'Conta', valor: contaEscolhida.nome || 'Conta sem nome' }] : []),
-  ];
-
-  /** O caderno na tela: uma linha por dia, semana ou mês. */
+  /** O caderno na tela: uma linha por dia, semana ou mês (o mesmo desenho do envio agendado). */
   function documentoDoCaderno(): DocumentoExportado {
-    return {
-      titulo: 'Fluxo de caixa',
-      subtitulo: `${ROTULO_AGRUPAMENTO[agrupamento]} · previsto pelo vencimento, realizado pela data da baixa`,
-      filtros: filtrosDoArquivo(),
-      colunas: [
-        { id: 'rotulo', rotulo: agrupamento === 'dia' ? 'Dia' : agrupamento === 'semana' ? 'Semana' : 'Mês', tipo: 'texto' },
-        { id: 'entradas', rotulo: 'Entrou', tipo: 'dinheiro' },
-        { id: 'saidas', rotulo: 'Saiu', tipo: 'dinheiro' },
-        { id: 'saldo', rotulo: 'Saldo no fim', tipo: 'dinheiro' },
-        { id: 'situacao', rotulo: 'Situação', tipo: 'texto' },
-      ],
-      linhas: [
-        { rotulo: `Saldo em ${diaEMes(periodo.inicio)}`, saldo: caderno.saldoInicial },
-        ...caderno.linhas.map(l => ({
-          rotulo: l.rotulo, entradas: l.entradas, saidas: l.saidas, saldo: l.saldo,
-          situacao: l.contemHoje ? 'Hoje' : l.futura ? 'Previsto' : 'Realizado',
-        })),
-      ],
-      totais: { entradas: caderno.entradas, saidas: caderno.saidas, saldo: caderno.saldoFinal },
-    };
+    return documentoDoCadernoDoFluxo({ caderno, periodo, agrupamento, conta: contaEscolhida ? (contaEscolhida.nome ?? '') : null });
   }
 
   /** A grade conta × dia, em pé: um dia por linha, uma conta por coluna (cabe no papel). */
   function documentoDaGrade(): DocumentoExportado {
-    const medida = medidaGrade === 'saldo' ? 'Saldo no fim do dia' : 'Movimento do dia';
-    const valores = (l: { saldos: number[]; movimentos: number[] }, i: number) => (medidaGrade === 'saldo' ? l.saldos[i] : l.movimentos[i]);
-    return {
-      titulo: 'Fluxo de caixa por conta e dia',
-      subtitulo: `${medida} · dias depois de hoje são previsão`,
-      filtros: [{ rotulo: 'Período', valor: periodo.rotulo }, { rotulo: 'Mostrar', valor: medida }],
-      colunas: [
-        { id: 'dia', rotulo: 'Dia', tipo: 'data' },
-        ...grade.linhas.map(l => ({ id: `c_${l.id}`, rotulo: l.nome, tipo: 'dinheiro' as const })),
-        { id: 'total', rotulo: 'Total', tipo: 'dinheiro' },
-      ],
-      linhas: [
-        ...(medidaGrade === 'saldo'
-          ? [{ dia: 'Saldo anterior', total: grade.total.saldoInicial, ...Object.fromEntries(grade.linhas.map(l => [`c_${l.id}`, l.saldoInicial])) }]
-          : []),
-        ...grade.dias.map((d, i) => ({
-          dia: d, total: valores(grade.total, i),
-          ...Object.fromEntries(grade.linhas.map(l => [`c_${l.id}`, valores(l, i)])),
-        })),
-      ],
-      ...(medidaGrade === 'movimento'
-        ? { totais: { total: grade.total.movimentos.reduce((a, b) => round2(a + b), 0), ...Object.fromEntries(grade.linhas.map(l => [`c_${l.id}`, l.movimentos.reduce((a, b) => round2(a + b), 0)])) } }
-        : {}),
-      orientacao: grade.linhas.length > 5 ? 'paisagem' : 'retrato',
-    };
+    return documentoDaGradeDoFluxo({ grade, periodo, medida: medidaGrade });
+  }
+
+  /** Os filtros que o envio agendado leva (o período vem de cada envio). */
+  function consultaDoAgendamento(vista: 'caderno' | 'grade'): string {
+    const q = new URLSearchParams();
+    if (vista === 'grade') {
+      q.set('vista', 'grade');
+      q.set('medida', medidaGrade);
+    } else {
+      q.set('agrupamento', agrupamento);
+      if (contaEscolhida) q.set('conta', contaEscolhida.id);
+    }
+    if (!incluirFolha) q.set('folha', '0');
+    return q.toString();
+  }
+
+  function resumoDoAgendamento(vista: 'caderno' | 'grade'): string {
+    const partes = vista === 'grade'
+      ? ['Uma coluna por conta', medidaGrade === 'saldo' ? 'saldo no fim do dia' : 'movimento do dia']
+      : [ROTULO_AGRUPAMENTO[agrupamento], contaEscolhida ? `só a conta ${contaEscolhida.nome || 'sem nome'}` : 'todas as contas liberadas'];
+    partes.push(incluirFolha ? 'com a folha prevista' : 'sem a folha');
+    return `${partes.join(', ')}.`;
   }
 
   // Estimativa mensal dos funis em execução. Não é dinheiro contratado:
@@ -581,6 +557,12 @@ export default function FluxoCaixaPage() {
                       opcoes={agrupamentosDoPeriodo(tipo).map(a => ({ valor: a, rotulo: ROTULO_AGRUPAMENTO[a] }))}
                     />
                     <BotaoExportar origem="fluxo-de-caixa" documento={documentoDoCaderno} />
+                    <BotaoAgendarEnvio
+                      relatorio="fluxo"
+                      nomeSugerido="Fluxo de caixa"
+                      consulta={() => consultaDoAgendamento('caderno')}
+                      resumoDosFiltros={() => resumoDoAgendamento('caderno')}
+                    />
                   </div>
                 </div>
 
@@ -621,6 +603,12 @@ export default function FluxoCaixaPage() {
                         opcoes={[{ valor: 'saldo', rotulo: 'Saldo' }, { valor: 'movimento', rotulo: 'Movimento' }]}
                       />
                       <BotaoExportar origem="fluxo-por-conta" documento={documentoDaGrade} />
+                      <BotaoAgendarEnvio
+                        relatorio="fluxo"
+                        nomeSugerido="Fluxo de caixa por conta e dia"
+                        consulta={() => consultaDoAgendamento('grade')}
+                        resumoDosFiltros={() => resumoDoAgendamento('grade')}
+                      />
                     </div>
                   </div>
                   <div className="border-y border-[var(--fin-border)]">

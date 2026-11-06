@@ -15,8 +15,15 @@ export const FREQUENCIAS = ['diario', 'semanal', 'mensal'] as const;
 export type Frequencia = (typeof FREQUENCIAS)[number];
 export const ROTULO_FREQUENCIA: Record<Frequencia, string> = { diario: 'Todo dia', semanal: 'Toda semana', mensal: 'Todo mês' };
 
-/** Que período cada envio cobre, contado a partir do dia do envio. */
-export const PERIODOS_DO_ENVIO = ['ontem', 'ultimos_7', 'semana_anterior', 'mes_atual', 'mes_anterior', 'ultimos_30', 'ano_atual'] as const;
+/**
+ * Que período cada envio cobre, contado a partir do dia do envio. Os sete
+ * primeiros são os de sempre (relatórios de vendas); os outros servem ao
+ * fluxo de caixa (que olha para a frente) e à visão geral (a posição do dia).
+ */
+export const PERIODOS_DO_ENVIO = [
+  'ontem', 'ultimos_7', 'semana_anterior', 'mes_atual', 'mes_anterior', 'ultimos_30', 'ano_atual',
+  'mes_atual_inteiro', 'proximos_7', 'proximos_30', 'posicao_do_dia',
+] as const;
 export type PeriodoDoEnvio = (typeof PERIODOS_DO_ENVIO)[number];
 export const ROTULO_PERIODO_DO_ENVIO: Record<PeriodoDoEnvio, string> = {
   ontem: 'Ontem',
@@ -26,6 +33,10 @@ export const ROTULO_PERIODO_DO_ENVIO: Record<PeriodoDoEnvio, string> = {
   mes_anterior: 'Mês passado',
   ultimos_30: 'Últimos 30 dias',
   ano_atual: 'Ano atual até ontem',
+  mes_atual_inteiro: 'Mês atual inteiro (o que já entrou e saiu e o previsto)',
+  proximos_7: 'Próximos 7 dias (a partir do dia do envio)',
+  proximos_30: 'Próximos 30 dias (a partir do dia do envio)',
+  posicao_do_dia: 'A posição do dia do envio',
 };
 
 export const DIAS_DA_SEMANA = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'] as const;
@@ -34,8 +45,39 @@ export const FORMATOS_DO_ANEXO = ['xlsx', 'pdf'] as const;
 export type FormatoDoAnexo = (typeof FORMATOS_DO_ANEXO)[number];
 
 /** Relatórios que podem ser agendados (o registro fica em servidor.ts). */
-export const RELATORIOS_AGENDAVEIS = ['vendas'] as const;
+export const RELATORIOS_AGENDAVEIS = ['vendas', 'dre', 'fluxo', 'visao_geral'] as const;
 export type RelatorioAgendavel = (typeof RELATORIOS_AGENDAVEIS)[number];
+export const ROTULO_RELATORIO_AGENDAVEL: Record<RelatorioAgendavel, string> = {
+  vendas: 'Relatórios de vendas',
+  dre: 'Resultado do mês (DRE)',
+  fluxo: 'Fluxo de caixa',
+  visao_geral: 'Visão geral do financeiro',
+};
+
+/**
+ * Os períodos que fazem sentido em cada relatório. O DRE é por mês; o fluxo
+ * também olha para a frente; a visão geral é a foto do dia. O primeiro de
+ * cada lista é o sugerido.
+ */
+export const PERIODOS_POR_RELATORIO: Record<RelatorioAgendavel, readonly PeriodoDoEnvio[]> = {
+  vendas: ['ontem', 'ultimos_7', 'semana_anterior', 'mes_atual', 'mes_anterior', 'ultimos_30', 'ano_atual'],
+  dre: ['mes_anterior', 'mes_atual', 'ano_atual'],
+  fluxo: ['mes_atual_inteiro', 'proximos_7', 'proximos_30', 'ontem', 'ultimos_7', 'semana_anterior', 'mes_anterior', 'mes_atual'],
+  visao_geral: ['posicao_do_dia'],
+};
+
+/** O período sugerido para a frequência escolhida, dentro do que o relatório aceita. */
+export function periodoSugerido(relatorio: RelatorioAgendavel, frequencia: Frequencia): PeriodoDoEnvio {
+  const lista = PERIODOS_POR_RELATORIO[relatorio];
+  const preferido: Record<RelatorioAgendavel, Record<Frequencia, PeriodoDoEnvio>> = {
+    vendas: { diario: 'ontem', semanal: 'semana_anterior', mensal: 'mes_anterior' },
+    dre: { diario: 'mes_atual', semanal: 'mes_atual', mensal: 'mes_anterior' },
+    fluxo: { diario: 'proximos_7', semanal: 'proximos_30', mensal: 'mes_atual_inteiro' },
+    visao_geral: { diario: 'posicao_do_dia', semanal: 'posicao_do_dia', mensal: 'posicao_do_dia' },
+  };
+  const p = preferido[relatorio][frequencia];
+  return lista.includes(p) ? p : lista[0];
+}
 
 export const LIMITES_DO_AGENDAMENTO = { destinatarios: 20, nome: 120, validadeMinima: 1, validadeMaxima: 90, validadePadrao: 30, linhasNoLink: 5000 } as const;
 
@@ -101,6 +143,7 @@ export function validarAgendamento(e: Record<string, unknown>): { ok: true; dado
   if (hora < 6 || hora > 22) erros.hora = 'Escolha uma hora entre 6h e 22h.';
   const periodo = (PERIODOS_DO_ENVIO as readonly string[]).includes(String(e.periodo)) ? (e.periodo as PeriodoDoEnvio) : null;
   if (!periodo) erros.periodo = 'Escolha o período que cada envio cobre.';
+  else if (relatorio && !PERIODOS_POR_RELATORIO[relatorio].includes(periodo)) erros.periodo = 'Este período não serve para este relatório. Escolha um da lista.';
   const formato = (FORMATOS_DO_ANEXO as readonly string[]).includes(String(e.formato)) ? (e.formato as FormatoDoAnexo) : 'xlsx';
   const { emails, invalidos } = lerDestinatarios(e.destinatarios);
   if (invalidos.length) erros.destinatarios = `E-mail inválido: ${invalidos.slice(0, 3).join(', ')}.`;
@@ -203,6 +246,13 @@ export function periodoDoEnvio(p: PeriodoDoEnvio, dataDoEnvio: string): { de: st
       const primeiro = `${ano}-01-01`;
       return primeiro === dataDoEnvio ? { de: `${ano - 1}-01-01`, ate: `${ano - 1}-12-31` } : { de: primeiro, ate: ontem };
     }
+    case 'mes_atual_inteiro': {
+      const mm = String(mes).padStart(2, '0');
+      return { de: `${ano}-${mm}-01`, ate: `${ano}-${mm}-${String(ultimoDiaDoMes(ano, mes)).padStart(2, '0')}` };
+    }
+    case 'proximos_7': return { de: dataDoEnvio, ate: somarDias(dataDoEnvio, 6) };
+    case 'proximos_30': return { de: dataDoEnvio, ate: somarDias(dataDoEnvio, 29) };
+    case 'posicao_do_dia': return { de: dataDoEnvio, ate: dataDoEnvio };
   }
 }
 
@@ -211,7 +261,8 @@ export function descricaoDoAgendamento(a: Pick<DadosDoAgendamento, 'frequencia' 
   const quando = a.frequencia === 'diario' ? 'Todo dia'
     : a.frequencia === 'semanal' ? `Toda ${DIAS_DA_SEMANA[a.dia_semana]}`.replace('Toda domingo', 'Todo domingo').replace('Toda sábado', 'Todo sábado')
       : a.dia_mes === 0 ? 'Todo último dia do mês' : `Todo dia ${a.dia_mes}`;
-  return `${quando} às ${a.hora}h, com ${ROTULO_PERIODO_DO_ENVIO[a.periodo].toLowerCase().replace(' (segunda a domingo)', '')}`;
+  if (a.periodo === 'posicao_do_dia') return `${quando} às ${a.hora}h, com a posição do dia`;
+  return `${quando} às ${a.hora}h, com ${ROTULO_PERIODO_DO_ENVIO[a.periodo].toLowerCase().replace(/ \(.*\)$/, '')}`;
 }
 
 // ============================================================
