@@ -8,7 +8,7 @@ import {
   Gauge, TrendingUp, Receipt, CreditCard, BookOpen, Landmark,
   ArrowRightLeft, Package, ShoppingCart, ListOrdered, UserPlus,
   Building2, Briefcase, DollarSign, Link2, FileSpreadsheet, Plus, Compass,
-  FolderInput, BookA, ListChecks,
+  FolderInput, BookA, ListChecks, MessageCircleQuestion, ScanText,
 } from 'lucide-react';
 import { buscarPorTermoDeMercado, normalizarBusca } from '@/lib/busca-de-mercado';
 import { buscarNoGlossario } from '@/lib/migracao/telas/glossario';
@@ -30,6 +30,8 @@ const NAVIGATION_ITEMS: CommandItem[] = [
   { id: 'propostas', label: 'Propostas', href: '/propostas', icon: <FileText className="w-4 h-4" />, section: 'navegacao' },
   { id: 'orcamentos', label: 'Orçamentos', href: '/vendas/orcamentos', icon: <BarChart3 className="w-4 h-4" />, section: 'navegacao' },
   { id: 'vendas', label: 'Vendas fechadas', href: '/vendas', icon: <ListOrdered className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'venda-voucher', label: 'Lançar venda pelo voucher (a IA lê e você revisa)', href: '/vendas/lancar/voucher', icon: <ScanText className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'perguntar', label: 'Perguntar ao financeiro (em texto)', href: '/financeiro-ag/perguntar', icon: <MessageCircleQuestion className="w-4 h-4" />, section: 'navegacao' },
   { id: 'voos', label: 'Buscar voos', href: '/voos', icon: <Plane className="w-4 h-4" />, section: 'navegacao' },
   { id: 'hoteis', label: 'Buscar hotéis', href: '/hoteis', icon: <Hotel className="w-4 h-4" />, section: 'navegacao' },
   { id: 'destinos', label: 'Destinos', href: '/destinos', icon: <Globe className="w-4 h-4" />, section: 'navegacao' },
@@ -176,7 +178,15 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       }))
       .filter(i => !vistos.has(`${i.href}|${normalizarBusca(i.label)}`))
       .slice(0, 4);
-    return [...porNome, ...mercado, ...glossario];
+    // Pergunta em texto: o que foi digitado vira pergunta ao financeiro.
+    const pergunta: CommandItem[] = query.trim().length >= 8 ? [{
+      id: 'perguntar-texto',
+      label: `Perguntar: "${query.trim()}"`,
+      href: `/financeiro-ag/perguntar?q=${encodeURIComponent(query.trim())}`,
+      icon: <MessageCircleQuestion className="w-4 h-4" />,
+      section: 'navegacao' as const,
+    }] : [];
+    return [...porNome, ...mercado, ...glossario, ...pergunta];
   }, [query, recents]);
 
   const handleSelect = (item: CommandItem) => {

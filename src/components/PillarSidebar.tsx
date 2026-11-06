@@ -25,7 +25,7 @@ import {
   PanelLeftClose, PanelLeftOpen,
   Eraser, LifeBuoy, FileText,
   LayoutGrid, ChartColumn, ArrowDownLeft, ArrowUpRight, GitCompareArrows, ListTree,
-  Contact, Truck, Repeat, Lock, ArrowDownUp, Barcode, FolderInput, Coins, FileStack, HandCoins, Handshake, BadgePercent, FilePlus2, FileCog, ReceiptText, Users2, Grid3x3, CalendarCheck, Banknote, UserRound, BarChart3, Undo2, PiggyBank, FileText as FileTextIcon, CalendarRange, Network, Split, Tags, ShieldCheck, Stamp, Scale, ScrollText, ListOrdered, Table2, ClipboardCheck, RefreshCw,
+  MessageCircleQuestion, Contact, Truck, Repeat, Lock, ArrowDownUp, Barcode, FolderInput, Coins, FileStack, HandCoins, Handshake, BadgePercent, FilePlus2, FileCog, ReceiptText, Users2, Grid3x3, CalendarCheck, Banknote, UserRound, BarChart3, Undo2, PiggyBank, FileText as FileTextIcon, CalendarRange, Network, Split, Tags, ShieldCheck, Stamp, Scale, ScrollText, ListOrdered, Table2, ClipboardCheck, RefreshCw,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -94,6 +94,7 @@ const FINANCEIRO_MENU: SidebarSection[] = [
     title: 'Visão geral',
     items: [
       { key: 'fin-hub', label: 'Visão geral', icon: LayoutGrid, href: '/financeiro-ag' },
+      { key: 'fin-perguntar', label: 'Perguntar', icon: MessageCircleQuestion, href: '/financeiro-ag/perguntar' },
       { key: 'fluxo-caixa', label: 'Fluxo de caixa', icon: ChartColumn, href: '/financeiro-ag/fluxo-caixa' },
       { key: 'dre', label: 'Resultado do mês', icon: FileText, href: '/financeiro-ag/dre' },
       { key: 'resultado-por-categoria', label: 'Resultado por categoria', icon: Table2, href: '/financeiro-ag/resultado-por-categoria' },
