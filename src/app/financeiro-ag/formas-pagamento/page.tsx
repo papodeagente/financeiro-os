@@ -25,6 +25,7 @@ import { MolduraDaPagina } from '@/components/fin/MolduraDaPagina';
 import { MoneyField } from '@/components/fin/MoneyField';
 import { PageHeader } from '@/components/fin/PageHeader';
 import { RecordSheet } from '@/components/fin/RecordSheet';
+import { HistoricoRecolhivel } from '@/components/fin/HistoricoDoRegistro';
 import { statusChipVariants } from '@/components/fin/StatusChip';
 import { invalidarFormasDePagamento } from '@/components/fin/useFormasDePagamento';
 
@@ -387,6 +388,7 @@ export default function FormasDePagamentoPage() {
               )}
             </Field>
           </div>
+          {aberta?.forma ? <div className="sm:col-span-2"><HistoricoRecolhivel entidade="formas_pagamento" id={aberta.forma.codigo} /></div> : null}
         </div>
       </RecordSheet>
 

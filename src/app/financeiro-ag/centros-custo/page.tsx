@@ -23,6 +23,7 @@ import { MolduraDaPagina } from '@/components/fin/MolduraDaPagina';
 import { MoneyField } from '@/components/fin/MoneyField';
 import { PageHeader } from '@/components/fin/PageHeader';
 import { RecordSheet } from '@/components/fin/RecordSheet';
+import { HistoricoRecolhivel } from '@/components/fin/HistoricoDoRegistro';
 import { statusChipVariants } from '@/components/fin/StatusChip';
 
 const FOCO =
@@ -406,6 +407,9 @@ export default function CentrosDeCustoPage() {
               )}
             </Field>
           </div>
+          {centroAberto?.id ? (
+            <div className="sm:col-span-2"><HistoricoRecolhivel entidade="centros_custo" id={centroAberto.id} /></div>
+          ) : null}
         </div>
       </RecordSheet>
 

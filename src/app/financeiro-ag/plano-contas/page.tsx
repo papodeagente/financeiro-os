@@ -22,6 +22,7 @@ import { FinTable, type FinColuna } from '@/components/fin/FinTable';
 import { Jargao } from '@/components/fin/Jargao';
 import { PageHeader } from '@/components/fin/PageHeader';
 import { RecordSheet } from '@/components/fin/RecordSheet';
+import { HistoricoRecolhivel } from '@/components/fin/HistoricoDoRegistro';
 import { StatusChip, statusChipVariants } from '@/components/fin/StatusChip';
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
@@ -669,6 +670,7 @@ export default function PlanoContasPage() {
               </Field>
             </div>
           )}
+          {editId ? <HistoricoRecolhivel entidade="plano_contas" id={editId} /> : null}
         </div>
       </RecordSheet>
 
