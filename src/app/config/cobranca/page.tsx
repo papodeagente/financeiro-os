@@ -1,5 +1,6 @@
 'use client';
 
+import { ReferenciaDeJuros } from '@/components/fin/ReferenciaDeJuros';
 import * as React from 'react';
 import Link from 'next/link';
 import { CheckCircle2, CircleDashed, ReceiptText } from 'lucide-react';
@@ -243,6 +244,7 @@ export default function ConfigCobrancaPage() {
                   <Numero rotulo="Desconto por pagar antes" unidade="%" valor={config.desconto_pct} erro={erros.desconto_pct} onChange={v => mudar({ desconto_pct: v })} />
                   <Numero rotulo="Pagando até" ajuda="Dias antes do vencimento." unidade="dias" inteiro valor={config.desconto_dias} erro={erros.desconto_dias} onChange={v => mudar({ desconto_dias: v })} />
                 </div>
+                <ReferenciaDeJuros valorAtual={config.juros_am_pct} onUsar={v => mudar({ juros_am_pct: v })} />
                 {provedor ? (
                   <p className="rounded-[var(--fin-r-md)] bg-[var(--fin-surface-2)] px-[var(--fin-s-3)] py-[var(--fin-s-2)] fin-t-caption text-[var(--fin-text-2)]">
                     <span className="font-medium">{provedor.nome}:</span> {provedor.encargos}

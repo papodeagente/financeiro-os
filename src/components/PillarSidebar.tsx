@@ -25,7 +25,7 @@ import {
   PanelLeftClose, PanelLeftOpen,
   Eraser, LifeBuoy, FileText,
   LayoutGrid, ChartColumn, ArrowDownLeft, ArrowUpRight, GitCompareArrows, ListTree,
-  Contact, Truck, Repeat, Lock, ArrowDownUp, Barcode, FolderInput, Network, Split, Tags, ShieldCheck, Stamp, Scale, ScrollText, ListOrdered, Table2,
+  Contact, Truck, Repeat, Lock, ArrowDownUp, Barcode, FolderInput, Coins, Network, Split, Tags, ShieldCheck, Stamp, Scale, ScrollText, ListOrdered, Table2,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -117,6 +117,7 @@ const FINANCEIRO_MENU: SidebarSection[] = [
       { key: 'plano-contas', label: 'Categorias', icon: ListTree, href: '/financeiro-ag/plano-contas' },
       { key: 'centros-custo', label: 'Centros de custo', icon: Network, href: '/financeiro-ag/centros-custo' },
       { key: 'formas-pagamento', label: 'Formas de pagamento', icon: Wallet, href: '/financeiro-ag/formas-pagamento' },
+      { key: 'moedas', label: 'Moedas e câmbio', icon: Coins, href: '/financeiro-ag/moedas' },
     ],
   },
   {

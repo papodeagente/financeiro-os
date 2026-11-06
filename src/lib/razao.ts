@@ -10,6 +10,7 @@
  * sendo o saldo_atual de sempre, e o razão é conferido contra ele todo dia.
  */
 import { num, paraCentavos, round2 } from './money';
+import { pernasDaTransferencia } from './cambio';
 
 /** Contas de sistema do razão (a perna que não é o banco). */
 export type ContaDoRazao =
@@ -43,6 +44,12 @@ export interface OrigemDoMovimento {
   /** Cliente ou fornecedor, quando houver. */
   pessoaId?: string;
   descricao?: string;
+  /**
+   * O valor já está na moeda da conta bancária (E6): só a liquidação nova e a
+   * transferência entre moedas conferem isso. Sem esta marca, o movimento é
+   * em reais e conta em moeda estrangeira recusa.
+   */
+  naMoedaDaConta?: boolean;
 }
 
 export interface PartidaDoRazao {
@@ -199,15 +206,18 @@ export function reconstruirSaldos(e: EntradaReconstrucao): ResultadoReconstrucao
   for (const d of e.transferencias) {
     const valor = num(d.valor);
     if (valor <= 0) continue;
+    // Entre moedas (05/11/2026): chega `valor_destino` e a tarifa sai da
+    // origem. Sem esses campos (todas as antigas), o mesmo valor nas duas.
+    const { entra, tarifa } = pernasDaTransferencia(d);
     const origemId = (d.conta_origem_id as string) || '';
     const destinoId = (d.conta_destino_id as string) || '';
     let movimentou = false;
     if (origemId && origemId in saldos) {
-      saldos[origemId] = round2(saldos[origemId] - valor);
+      saldos[origemId] = round2(saldos[origemId] - valor - tarifa);
       movimentou = true;
     }
     if (destinoId && destinoId in saldos) {
-      saldos[destinoId] = round2(saldos[destinoId] + valor);
+      saldos[destinoId] = round2(saldos[destinoId] + entra);
       movimentou = true;
     }
     if (movimentou) total_transferido = round2(total_transferido + valor);

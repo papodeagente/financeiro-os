@@ -1,6 +1,7 @@
 import type { ContaPagar, LinhaRateio, NaturezaCusto } from '@/lib/crm-types';
 import { REPETICAO_PADRAO, type EstadoRepeticao } from '@/lib/recorrencia';
 import type { LeituraNoFormulario } from './leitura';
+import type { CarimboDoCambio } from '@/lib/cambio';
 
 /** Recorte de período do filtro. Mesmas chaves de sempre. */
 export type FiltroPeriodo =
@@ -14,6 +15,8 @@ export type FormState = {
   valor_original: number;
   moeda: ContaPagar['moeda'];
   cambio: number;
+  /** De onde veio o câmbio (sugestão usada ou digitado), guardado na conta (05/11/2026, E6). */
+  cambio_carimbo: CarimboDoCambio | null;
   data_vencimento: string;
   forma_pagamento: ContaPagar['forma_pagamento'];
   cartao_id: string;
@@ -48,6 +51,7 @@ export const EMPTY_FORM: FormState = {
   valor_original: 0,
   moeda: 'BRL',
   cambio: 1,
+  cambio_carimbo: null,
   data_vencimento: '',
   forma_pagamento: '',
   cartao_id: '',

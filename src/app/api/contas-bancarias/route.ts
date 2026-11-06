@@ -3,6 +3,7 @@ import { num, round2 } from '@/lib/money';
 import pool from '@/lib/db';
 import { garantirAberturaDaConta } from '@/lib/razao-servidor';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
+import { moedaDe } from '@/lib/cambio';
 
 // Saldo atual é calculado pelo servidor (baixas, transferências, recálculo).
 // No cadastro, nasce igual ao saldo inicial; na regravação, o valor do banco
@@ -14,7 +15,13 @@ export const { GET, POST } = createCrudHandlers('contas_bancarias', ['nome', 'ba
   somenteFinanceiro: true,
   // Contas liberadas por perfil de acesso (05/11/2026); sem restrição, todas.
   filtroDeConta: { cadastro: true },
-  normalizarCadastro: item => { item.saldo_atual = round2(num(item.saldo_inicial)); },
+  // Moeda da conta (05/11/2026, E6): ausente ou desconhecida = real, como
+  // sempre. O saldo da conta fica na moeda dela; a moeda não muda depois que
+  // a conta tem movimento (gatilho fin_moeda_da_conta_fixa).
+  normalizarCadastro: item => {
+    item.saldo_atual = round2(num(item.saldo_inicial));
+    item.moeda = moedaDe(item.moeda);
+  },
   aposGravar: async (tenantId, item) => {
     if (!pool || typeof item.id !== 'string') return;
     await garantirAberturaDaConta(pool as unknown as ExecutorSQL, tenantId, item.id);

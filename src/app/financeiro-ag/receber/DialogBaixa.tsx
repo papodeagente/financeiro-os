@@ -135,6 +135,7 @@ export function DialogBaixa({
     (titulo as unknown as (Record<string, unknown> & { id: string }) | null),
     informado,
     forma => { const c = contas(forma); return c.motivoLiquido ? 0 : c.desconto; },
+    setValor,
   );
   const { sugerido, liquido, desconto, motivoLiquido, pelaForma } = contas(liquidacao.formaEscolhida);
   const pct = percentualDaTaxa(desconto, informado);

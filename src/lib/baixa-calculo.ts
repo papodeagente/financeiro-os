@@ -44,6 +44,8 @@ export interface TituloParaBaixa {
   desconto?: number;
   valor_base_encargos?: number | null;
   conta_bancaria_id?: string | null;
+  /** Variação cambial já somada ao valor em reais (liquidações anteriores). */
+  variacao_cambial?: number;
 }
 
 export interface EncargosSugeridos {
@@ -103,6 +105,12 @@ export interface PedidoDeBaixa {
   /** Retido pela plataforma/banco (só informativo; segue a regra de hoje). */
   taxa?: number;
   tratamento_diferenca?: TratamentoDiferenca;
+  /**
+   * Variação cambial desta liquidação (conta em moeda paga com câmbio
+   * diferente do lançado). Soma ao valor em reais da conta numa parcela
+   * própria, sem mexer no valor lançado. Ausente = 0, o cálculo de sempre.
+   */
+  variacao_cambial?: number;
 }
 
 export interface PlanoDaBaixa {
@@ -115,6 +123,8 @@ export interface PlanoDaBaixa {
   credito: number;
   /** Quanto do valor abate a dívida. */
   principal: number;
+  /** Variação cambial desta liquidação (0 quando não há). */
+  variacao_cambial: number;
   saldo_antes: number;
   saldo_depois: number;
   /** pago − (saldo + encargos − desconto). <0 pagou menos; >0 pagou mais. */
@@ -142,6 +152,7 @@ export function planoDaBaixa(t: TituloParaBaixa, pedido: PedidoDeBaixa): PlanoDa
   let multa = Math.max(0, round2(num(pedido.multa)));
   let desconto = Math.max(0, round2(num(pedido.desconto)));
   const taxa = Math.max(0, round2(num(pedido.taxa)));
+  const variacao = round2(num(pedido.variacao_cambial));
   const quitadoStatus = t.tabela === 'contas_receber' ? 'RECEBIDO' : 'PAGO';
 
   if (valor <= 0) erros.push('Informe um valor maior que zero.');
@@ -152,7 +163,9 @@ export function planoDaBaixa(t: TituloParaBaixa, pedido: PedidoDeBaixa): PlanoDa
   const saldo_antes = saldoDoTitulo(t);
   if (saldo_antes <= 0 && t.status === quitadoStatus) erros.push('Esta conta já está liquidada.');
 
-  const devidoComEncargos = round2(saldo_antes + juros + multa - desconto);
+  const devidoComEncargos = variacao === 0
+    ? round2(saldo_antes + juros + multa - desconto)
+    : round2(saldo_antes + juros + multa - desconto + variacao);
   let diferenca = round2(valor - devidoComEncargos);
   let credito = 0;
   const tratamento = pedido.tratamento_diferenca;
@@ -175,21 +188,24 @@ export function planoDaBaixa(t: TituloParaBaixa, pedido: PedidoDeBaixa): PlanoDa
     diferenca = 0;
   }
 
-  const base = num(t.valor_base_encargos) || round2(num(t.valor_final) - num(t.juros) + num(t.desconto) - num(t.multa));
+  const base = baseDosEncargos(t);
   const jurosTot = round2(num(t.juros) + juros);
   const multaTot = round2(num(t.multa) + multa);
   const descTot = round2(num(t.desconto) + desconto);
-  const valor_final_depois = round2(base + jurosTot + multaTot - descTot);
+  const varTot = round2(num(t.variacao_cambial) + variacao);
+  const valor_final_depois = varTot === 0
+    ? round2(base + jurosTot + multaTot - descTot)
+    : round2(base + jurosTot + multaTot - descTot + varTot);
   const valor_baixado_depois = round2(num(t.valor_baixado) + valor - credito);
   const restante = round2(valor_final_depois - valor_baixado_depois);
   const quitado = restante <= 0.005;
   const status_depois = quitado ? quitadoStatus : valor_baixado_depois > 0 ? 'PARCIAL' : t.status;
   const principal = round2(valor - credito - juros - multa);
   if (principal < 0) erros.push('Os encargos são maiores que o valor pago.');
-  if (descTot > round2(base + jurosTot + multaTot)) erros.push('O desconto não pode ser maior que a conta.');
+  if (descTot > round2(base + jurosTot + multaTot + Math.max(0, varTot))) erros.push('O desconto não pode ser maior que a conta.');
 
   return {
-    valor, juros, multa, desconto, taxa, credito, principal,
+    valor, juros, multa, desconto, taxa, credito, principal, variacao_cambial: variacao,
     saldo_antes,
     saldo_depois: Math.max(0, restante),
     diferenca,
@@ -210,7 +226,7 @@ export function tituloDepoisDaBaixa(
 ): Record<string, unknown> {
   const campoValor = t.tabela === 'contas_receber' ? 'valor_recebido' : 'valor_pago';
   const campoData = t.tabela === 'contas_receber' ? 'data_recebimento' : 'data_pagamento';
-  const base = num(t.valor_base_encargos) || round2(num(t.valor_final) - num(t.juros) + num(t.desconto) - num(t.multa));
+  const base = baseDosEncargos(t);
   const novo: Record<string, unknown> = {
     ...dados,
     status: plano.status_depois,
@@ -224,26 +240,46 @@ export function tituloDepoisDaBaixa(
   };
   if (pedido.conta_bancaria_id) novo.conta_bancaria_id = pedido.conta_bancaria_id;
   if (t.tabela === 'contas_receber' && plano.taxa > 0) novo.taxa = round2(num(dados.taxa) + plano.taxa);
+  if (plano.variacao_cambial !== 0) novo.variacao_cambial = round2(num(dados.variacao_cambial) + plano.variacao_cambial);
   return novo;
+}
+
+/**
+ * Valor da conta antes de qualquer encargo e de qualquer variação cambial
+ * (guardado uma vez em `valor_base_encargos`). Sem variação, a conta de sempre.
+ */
+export function baseDosEncargos(t: Pick<TituloParaBaixa, 'valor_base_encargos' | 'valor_final' | 'juros' | 'desconto' | 'multa' | 'variacao_cambial'>): number {
+  const salvo = num(t.valor_base_encargos);
+  if (salvo) return salvo;
+  const v = num(t.variacao_cambial);
+  return v === 0
+    ? round2(num(t.valor_final) - num(t.juros) + num(t.desconto) - num(t.multa))
+    : round2(num(t.valor_final) - num(t.juros) + num(t.desconto) - num(t.multa) - v);
 }
 
 /** Os campos do título depois de estornar uma baixa gravada. */
 export function tituloDepoisDoEstorno(
   dados: Record<string, unknown>,
   tabela: TituloTabela,
-  baixa: { valor: number; juros: number; multa: number; desconto: number; taxa: number; credito: number },
+  baixa: { valor: number; juros: number; multa: number; desconto: number; taxa: number; credito: number; variacao_cambial?: number },
 ): Record<string, unknown> {
   const campoValor = tabela === 'contas_receber' ? 'valor_recebido' : 'valor_pago';
   const quitado = tabela === 'contas_receber' ? 'RECEBIDO' : 'PAGO';
   const juros = Math.max(0, round2(num(dados.juros) - baixa.juros));
   const multa = Math.max(0, round2(num(dados.multa) - baixa.multa));
   const desconto = Math.max(0, round2(num(dados.desconto) - baixa.desconto));
-  const base = num(dados.valor_base_encargos) || round2(num(dados.valor_final) - num(dados.juros) + num(dados.desconto) - num(dados.multa));
-  const valorFinal = round2(base + juros + multa - desconto);
+  const base = baseDosEncargos({
+    valor_base_encargos: num(dados.valor_base_encargos), valor_final: num(dados.valor_final), juros: num(dados.juros),
+    desconto: num(dados.desconto), multa: num(dados.multa), variacao_cambial: num(dados.variacao_cambial),
+  });
+  const varBaixa = round2(num(baixa.variacao_cambial));
+  const variacao = round2(num(dados.variacao_cambial) - varBaixa);
+  const valorFinal = variacao === 0 ? round2(base + juros + multa - desconto) : round2(base + juros + multa - desconto + variacao);
   const baixado = Math.max(0, round2(num(dados[campoValor]) - (baixa.valor - baixa.credito)));
   const status = baixado <= 0.005 ? 'PENDENTE' : round2(valorFinal - baixado) <= 0.005 ? quitado : 'PARCIAL';
   const novo: Record<string, unknown> = { ...dados, status, [campoValor]: baixado, juros, multa, desconto, valor_final: valorFinal };
   if (tabela === 'contas_receber' && baixa.taxa > 0) novo.taxa = Math.max(0, round2(num(dados.taxa) - baixa.taxa));
+  if (varBaixa !== 0 || dados.variacao_cambial !== undefined) novo.variacao_cambial = variacao;
   return novo;
 }
 

@@ -4,6 +4,7 @@ import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
 import { aplicarMovimentoCaixaAtomico, emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { num, round2, hojeISO } from '@/lib/money';
+import { lerCarimbo, moedaDe, pernasDaTransferencia, planoDaTransferencia } from '@/lib/cambio';
 
 const TABLE = 'transferencias';
 const INDEX_COLS = ['conta_origem_id', 'conta_destino_id', 'status'];
@@ -30,8 +31,11 @@ async function aplicarTransferencia(
   sinal: 1 | -1,
   exec: ExecutorSQL,
 ): Promise<void> {
-  const valor = round2(num(t.valor));
-  if (valor <= 0) return;
+  // Entre moedas (05/11/2026, E6): sai `valor` da origem, entra
+  // `valor_destino` no destino e a tarifa sai da origem. Transferência
+  // antiga não tem esses campos: o mesmo valor nas duas pontas, como antes.
+  const { sai, entra, tarifa } = pernasDaTransferencia(t);
+  if (sai <= 0) return;
   const origem = contaId(t, 'conta_origem_id');
   const destino = contaId(t, 'conta_destino_id');
 
@@ -40,11 +44,51 @@ async function aplicarTransferencia(
     tabela: 'transferencias',
     id: typeof t.id === 'string' ? t.id : undefined,
     descricao: sinal === 1 ? 'Transferência entre contas' : 'Transferência entre contas (estorno)',
+    // pernasDaTransferencia já pôs cada ponta na moeda da sua conta.
+    naMoedaDaConta: true,
   };
-  const saiu = await aplicarMovimentoCaixaAtomico(tenantId, origem, -valor * sinal, exec, mov);
+  // A tarifa sai junto com o valor, num movimento só: o razão aceita um
+  // movimento por conta e por origem em cada transação.
+  const movOrigem = tarifa > 0
+    ? { ...mov, descricao: sinal === 1 ? 'Transferência entre contas (com tarifa)' : 'Transferência entre contas (estorno, com tarifa)' }
+    : mov;
+  const saiu = await aplicarMovimentoCaixaAtomico(tenantId, origem, -round2(sai + tarifa) * sinal, exec, movOrigem);
   if (!saiu) throw new Error('Saldo da conta de origem não pôde ser movimentado.');
-  const entrou = await aplicarMovimentoCaixaAtomico(tenantId, destino, +valor * sinal, exec, mov);
+  const entrou = await aplicarMovimentoCaixaAtomico(tenantId, destino, +entra * sinal, exec, mov);
   if (!entrou) throw new Error('Saldo da conta de destino não pôde ser movimentado.');
+}
+
+/**
+ * Moedas das duas contas e o plano da transferência (valor que chega, tarifa
+ * e câmbio). Grava no item o que foi usado, com a fonte do câmbio.
+ */
+async function prepararMoedas(tenantId: string, item: Registro, exec: ExecutorSQL): Promise<string | null> {
+  const origem = contaId(item, 'conta_origem_id');
+  const destino = contaId(item, 'conta_destino_id');
+  const { rows } = await exec.query(
+    `SELECT id, data->>'moeda' AS moeda FROM contas_bancarias WHERE tenant_id = $1 AND id IN ($2, $3)`,
+    [tenantId, origem, destino],
+  );
+  const moedaDaConta = (id: string | null) => moedaDe(rows.find(r => r.id === id)?.moeda);
+  const plano = planoDaTransferencia({
+    valor: num(item.valor), moeda_origem: moedaDaConta(origem), moeda_destino: moedaDaConta(destino),
+    cambio: num(item.cambio), tarifa: num(item.tarifa),
+  });
+  if (plano.erros.length) return plano.erros[0];
+  item.moeda_origem = plano.moeda_origem;
+  item.moeda_destino = plano.moeda_destino;
+  item.tarifa = plano.tarifa;
+  if (plano.cambio !== null) {
+    item.cambio = plano.cambio;
+    item.valor_destino = plano.valor_destino;
+    item.cambio_carimbo = lerCarimbo(item.cambio_carimbo, plano.cambio);
+  } else {
+    // Mesma moeda: nada de câmbio; o mesmo valor nas duas pontas.
+    delete item.cambio;
+    delete item.cambio_carimbo;
+    delete item.valor_destino;
+  }
+  return null;
 }
 
 // Contas que a transferência referencia mas que não existem mais no cadastro.
@@ -68,10 +112,13 @@ async function contasFaltando(
 }
 
 function mesmoMovimento(a: Registro, b: Registro): boolean {
+  const pa = pernasDaTransferencia(a);
+  const pb = pernasDaTransferencia(b);
   return (
     contaId(a, 'conta_origem_id') === contaId(b, 'conta_origem_id') &&
     contaId(a, 'conta_destino_id') === contaId(b, 'conta_destino_id') &&
-    round2(num(a.valor)) === round2(num(b.valor))
+    round2(num(a.valor)) === round2(num(b.valor)) &&
+    pa.entra === pb.entra && pa.tarifa === pb.tarifa
   );
 }
 
@@ -139,6 +186,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         if (!origem || !destino || origem === destino) {
           return { erro: 'Origem e destino devem ser contas diferentes', status: 400 as const };
         }
+        const recusaMoeda = await prepararMoedas(tenantId, item, exec);
+        if (recusaMoeda) return { erro: recusaMoeda, status: 400 as const };
         // Carimbo de efetivação é do servidor (data civil no fuso do tenant).
         if (!eraEfetivada || !item.data_efetivacao) item.data_efetivacao = hojeISO();
       } else if (eraEfetivada) {

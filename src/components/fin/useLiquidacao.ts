@@ -7,6 +7,7 @@ import { toast } from '@/lib/toast';
 import { hojeISO, num, round2 } from '@/lib/money';
 import { generateId } from '@/lib/utils';
 import {
+  baseDosEncargos,
   calcularEncargos,
   planoDaBaixa,
   type PoliticaCobranca,
@@ -17,6 +18,7 @@ import {
 import { formaDoValor, opcoesDeForma, type FormaPagamento } from '@/lib/formas-pagamento';
 import type { BlocoDeLiquidacaoProps, ContaOpcao } from './BlocoDeLiquidacao';
 import { useFormasDePagamento } from './useFormasDePagamento';
+import { cambioDaLiquidacao, moedaDe, valorNaMoedaDoTitulo, type CarimboDoCambio } from '@/lib/cambio';
 
 type Titulo = Record<string, unknown> & { id: string };
 
@@ -34,6 +36,7 @@ function paraBaixa(tabela: TituloTabela, d: Titulo): TituloParaBaixa {
     juros: num(d.juros), multa: num(d.multa), desconto: num(d.desconto),
     valor_base_encargos: d.valor_base_encargos == null ? null : num(d.valor_base_encargos),
     conta_bancaria_id: (d.conta_bancaria_id as string | null | undefined) || null,
+    ...(num(d.variacao_cambial) !== 0 ? { variacao_cambial: num(d.variacao_cambial) } : {}),
   };
 }
 
@@ -48,6 +51,8 @@ export function useLiquidacao(
   valorPago: number,
   /** Taxa retida, ou a conta dela a partir da forma escolhida (05/11/2026). */
   taxaOuConta: number | ((forma: FormaPagamento | null) => number) = 0,
+  /** Preenche o valor pago (o "usar o valor pelo câmbio" chama). */
+  onValorPago?: (v: number) => void,
 ) {
   const [contas, setContas] = useState<ContaOpcao[]>([]);
   const [politica, setPolitica] = useState<PoliticaCobranca | null>(null);
@@ -63,11 +68,14 @@ export function useLiquidacao(
   const [desconto, setDesconto] = useState<number | null>(null);
   const [tratamento, setTratamento] = useState<TratamentoDiferenca>('deixar_aberto');
   const [chave, setChave] = useState(generateId());
+  // Câmbio do pagamento, só para conta lançada em moeda (05/11/2026, E6).
+  const [cambio, setCambio] = useState(0);
+  const [cambioCarimbo, setCambioCarimbo] = useState<CarimboDoCambio | null>(null);
 
   useEffect(() => {
     let vivo = true;
-    loadEntities<{ id: string; nome?: string }>('contas-bancarias')
-      .then(l => { if (vivo) setContas(l.map(c => ({ id: c.id, nome: c.nome || 'Conta' }))); })
+    loadEntities<{ id: string; nome?: string; moeda?: string }>('contas-bancarias')
+      .then(l => { if (vivo) setContas(l.map(c => ({ id: c.id, nome: c.nome || 'Conta', moeda: moedaDe(c.moeda) }))); })
       .catch(() => undefined);
     fetch('/api/config/financeiro')
       .then(r => (r.ok ? r.json() : null))
@@ -86,6 +94,8 @@ export function useLiquidacao(
     setJuros(null); setMulta(null); setDesconto(null);
     setTratamento('deixar_aberto');
     setChave(generateId());
+    setCambio(0);
+    setCambioCarimbo(null);
   }
 
   const t = titulo ? paraBaixa(tabela, titulo) : null;
@@ -107,9 +117,28 @@ export function useLiquidacao(
   const m = multa ?? sugeridos.multa;
   const ds = desconto ?? sugeridos.desconto_antecipacao;
 
-  const pedido = { valor: valorPago, data, juros: j, multa: m, desconto: ds, taxa, tratamento_diferenca: tratamento };
+  // Câmbio: a mesma conta que o servidor faz (cambioDaLiquidacao).
+  const moedaConta = moedaDe(contas.find(c => c.id === contaId)?.moeda);
+  const naMoeda = titulo && t ? valorNaMoedaDoTitulo(titulo, baseDosEncargos(t)) : null;
+  const cambioCalc = titulo && t && naMoeda
+    ? cambioDaLiquidacao({
+      tabela, titulo, base_reais: baseDosEncargos(t), valor_baixado: t.valor_baixado,
+      valor: valorPago, juros: j, multa: m, desconto: ds, cambio_pago: cambio, moeda_conta: moedaConta,
+    })
+    : null;
+  const variacao = cambioCalc?.variacao.variacao ?? 0;
+
+  const pedido = {
+    valor: valorPago, data, juros: j, multa: m, desconto: ds, taxa, tratamento_diferenca: tratamento,
+    ...(variacao !== 0 ? { variacao_cambial: variacao } : {}),
+  };
   const plano = t ? planoDaBaixa(t, pedido) : planoDaBaixa(paraBaixa(tabela, { id: '' }), { valor: 0, data });
-  const bruto = t ? round2(round2(valorPago) - round2(plano.saldo_antes + j + m - ds)) : 0;
+  const bruto = t ? round2(round2(valorPago) - round2(plano.saldo_antes + j + m - ds + variacao)) : 0;
+  // Valor em reais pelo câmbio informado: o que falta na moeda × câmbio + encargos.
+  const saldoMoedaAgora = cambioCalc?.saldo_moeda ?? null;
+  const valorPeloCambio = naMoeda && cambio > 0 && saldoMoedaAgora !== null
+    ? round2(round2(saldoMoedaAgora * cambio) + j + m - ds)
+    : null;
 
   const contaTravadaMotivo = contaTravada
     ? 'As parcelas desta conta entram na mesma conta bancária das anteriores.'
@@ -130,6 +159,22 @@ export function useLiquidacao(
     onJuros: setJuros, onMulta: setMulta, onDesconto: setDesconto,
     sugeridos, tratamento, onTratamento: setTratamento,
     plano, diferencaBruta: bruto,
+    ...(naMoeda ? {
+      cambio: {
+        moeda: naMoeda.moeda,
+        valor: cambio,
+        carimbo: cambioCarimbo,
+        onChange: (v: number, k: CarimboDoCambio) => { setCambio(v); setCambioCarimbo(k); },
+        cambio_lancado: naMoeda.cambio,
+        saldo_moeda: saldoMoedaAgora ?? naMoeda.valor,
+        variacao: cambioCalc?.variacao ?? null,
+        valor_pelo_cambio: valorPeloCambio,
+        onUsarValor: onValorPago && valorPeloCambio !== null && valorPeloCambio !== round2(valorPago) ? () => onValorPago(valorPeloCambio) : undefined,
+        moeda_conta: moedaConta,
+        caixa_na_moeda: cambioCalc?.caixa_na_moeda ?? null,
+        lado: tabela === 'contas_receber' ? 'compra' as const : 'venda' as const,
+      },
+    } : {}),
   };
 
   /** Grava no servidor. Repetir (duplo clique) não grava duas vezes. */
@@ -141,6 +186,7 @@ export function useLiquidacao(
           titulo_tabela: tabela, titulo_id: titulo.id, data, conta_bancaria_id: contaId,
           valor: round2(valorPago), juros: j, multa: m, desconto: ds, taxa, tratamento_diferenca: tratamento,
           ...(forma ? { forma } : {}),
+          ...(naMoeda && cambio > 0 ? { cambio, cambio_carimbo: cambioCarimbo } : {}),
           ...extras,
           esperado: { status_depois: plano.status_depois, valor_baixado_depois: plano.valor_baixado_depois },
         }],

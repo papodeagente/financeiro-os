@@ -17,6 +17,7 @@ import { aplicarMovimentoCaixaAtomico, pessoaDaConta, type ExecutorSQL } from '.
 import { generateId } from './utils';
 import { hojeISO, num, paraCentavos, deCentavos, round2 } from './money';
 import {
+  baseDosEncargos,
   calcularEncargos,
   planoDaBaixa,
   tituloDepoisDaBaixa,
@@ -28,6 +29,10 @@ import {
   type TratamentoDiferenca,
 } from './baixa-calculo';
 import { mensagemPeriodoFechado } from './periodo-fechado';
+import {
+  cambioDaLiquidacao, lerCarimbo, moedaDe, round4, valorNaMoedaDoTitulo,
+  type CarimboDoCambio, type CodigoMoeda, type VariacaoCambial,
+} from './cambio';
 
 export const BAIXAS_SCHEMA_SQL = `
   CREATE TABLE IF NOT EXISTS baixas (
@@ -94,6 +99,26 @@ export interface ItemBaixa {
   anexos?: Array<Record<string, unknown>>;
   /** Plataforma que reteve a taxa (contas a receber). */
   taxa_plataforma?: string;
+  /**
+   * Câmbio do pagamento (reais por 1 unidade da moeda), para conta lançada em
+   * moeda estrangeira (05/11/2026, E6). Com ele, a diferença para o câmbio
+   * lançado vira variação cambial; sem ele, a liquidação é a de sempre.
+   */
+  cambio?: number;
+  /** De onde veio o câmbio (sugestão escolhida ou digitado). */
+  cambio_carimbo?: unknown;
+}
+
+/** O que a liquidação fez com o câmbio (prévia e gravação). */
+export interface CambioDaBaixa {
+  moeda_titulo: CodigoMoeda;
+  moeda_conta: CodigoMoeda;
+  /** Ainda em aberto na moeda, antes desta baixa. */
+  saldo_moeda: number;
+  carimbo: CarimboDoCambio;
+  variacao: VariacaoCambial;
+  /** Quanto sai/entra na conta bancária, na moeda dela (conta em moeda). */
+  caixa_na_moeda: number | null;
 }
 
 export interface ContextoBaixa {
@@ -117,6 +142,8 @@ export interface ResultadoItem {
   encargos_sugeridos: ReturnType<typeof calcularEncargos>;
   baixa_id?: string;
   ja_existia?: boolean;
+  /** Presente quando a conta é em moeda e veio o câmbio do pagamento. */
+  cambio?: CambioDaBaixa;
 }
 
 const CAMPO = { contas_receber: 'valor_recebido', contas_pagar: 'valor_pago' } as const;
@@ -144,6 +171,43 @@ export function tituloParaBaixa(tabela: TituloTabela, d: Record<string, unknown>
     desconto: num(d.desconto),
     valor_base_encargos: d.valor_base_encargos == null ? null : num(d.valor_base_encargos),
     conta_bancaria_id: (d.conta_bancaria_id as string | null | undefined) || null,
+    ...(num(d.variacao_cambial) !== 0 ? { variacao_cambial: num(d.variacao_cambial) } : {}),
+  };
+}
+
+/**
+ * Câmbio da liquidação (05/11/2026, E6).
+ * - Conta bancária em moeda estrangeira só liquida conta lançada na MESMA
+ *   moeda, e exige o câmbio do pagamento (o saldo dela está na moeda).
+ * - Conta lançada em moeda + câmbio informado: a moeda liquidada ×
+ *   (câmbio pago − câmbio lançado) é a variação cambial desta baixa.
+ * - Sem câmbio, ou conta antiga sem o valor na moeda: null, a liquidação de
+ *   sempre.
+ */
+async function cambioDaBaixa(
+  exec: ExecutorSQL, tenantId: string, it: ItemBaixa, d: Record<string, unknown>, t: TituloParaBaixa, conta: string | null,
+): Promise<CambioDaBaixa | null> {
+  let moedaConta: CodigoMoeda = 'BRL';
+  if (conta) {
+    const { rows } = await exec.query(`SELECT data->>'moeda' AS moeda FROM contas_bancarias WHERE id = $1 AND tenant_id = $2`, [conta, tenantId]);
+    moedaConta = moedaDe(rows[0]?.moeda);
+  }
+  const naMoeda = valorNaMoedaDoTitulo(d, baseDosEncargos(t));
+  const cambioPago = num(it.cambio) > 0 ? round4(num(it.cambio)) : null;
+  if (moedaConta !== 'BRL') {
+    if (!naMoeda || naMoeda.moeda !== moedaConta) {
+      throw new ErroBaixa(`Esta conta bancária é em ${moedaConta}. Por ela só se liquida conta lançada em ${moedaConta}, com o valor na moeda e o câmbio. Escolha uma conta em reais ou transfira antes.`, 409);
+    }
+    if (!cambioPago) throw new ErroBaixa(`Informe o câmbio do pagamento: a conta bancária é em ${moedaConta}.`);
+  }
+  const c = cambioDaLiquidacao({
+    tabela: t.tabela, titulo: d, base_reais: baseDosEncargos(t), valor_baixado: t.valor_baixado,
+    valor: num(it.valor), juros: it.juros, multa: it.multa, desconto: it.desconto, cambio_pago: cambioPago, moeda_conta: moedaConta,
+  });
+  if (!c || !cambioPago) return null;
+  return {
+    moeda_titulo: c.moeda, moeda_conta: moedaConta, saldo_moeda: c.saldo_moeda,
+    carimbo: lerCarimbo(it.cambio_carimbo, cambioPago), variacao: c.variacao, caixa_na_moeda: c.caixa_na_moeda,
   };
 }
 
@@ -268,10 +332,12 @@ export async function registrarBaixas(
     if (fechado) throw new ErroBaixa(mensagemPeriodoFechado(fechado), 423);
 
     const encargos = calcularEncargos(t, data, politica);
+    const cambio = await cambioDaBaixa(exec, ctx.tenantId, it, d, t, conta);
     const plano = planoDaBaixa(t, {
       valor: it.valor, data,
       juros: it.juros, multa: it.multa, desconto: it.desconto, taxa: it.taxa,
       tratamento_diferenca: it.tratamento_diferenca,
+      ...(cambio && cambio.variacao.variacao !== 0 ? { variacao_cambial: cambio.variacao.variacao } : {}),
     });
 
     resultados[i] = {
@@ -279,8 +345,10 @@ export async function registrarBaixas(
       descricao: String(d.descricao ?? ''),
       pessoa: String((it.titulo_tabela === 'contas_receber' ? d.cliente_nome : d.fornecedor_nome) ?? ''),
       conta_bancaria_id: conta, data, plano, encargos_sugeridos: encargos,
+      ...(cambio ? { cambio } : {}),
     };
-    assinaturaPartes.push([it.titulo_tabela, it.titulo_id, rows[0].v, plano.valor, plano.juros, plano.multa, plano.desconto, plano.status_depois, conta, data]);
+    assinaturaPartes.push([it.titulo_tabela, it.titulo_id, rows[0].v, plano.valor, plano.juros, plano.multa, plano.desconto, plano.status_depois, conta, data,
+      ...(cambio ? [cambio.carimbo.valor, cambio.variacao.variacao, cambio.caixa_na_moeda] : [])]);
 
     if (!opcoes.gravar) continue;
     if (plano.erros.length) throw new ErroBaixa(`${d.descricao ? `${String(d.descricao)}: ` : ''}${plano.erros[0]}`);
@@ -308,16 +376,24 @@ export async function registrarBaixas(
     }
     if (it.taxa_plataforma && plano.taxa > 0) novo.taxa_plataforma = it.taxa_plataforma;
     if (it.observacao) novo.observacoes = `${d.observacoes ? `${String(d.observacoes)} · ` : ''}${it.observacao}`;
+    if (cambio) {
+      novo.valor_moeda_liquidado = round2(num(d.valor_moeda_liquidado) + cambio.variacao.valor_moeda);
+      novo.valor_reais_liquidado_com_cambio = round2(num(d.valor_reais_liquidado_com_cambio) + plano.valor);
+    }
     await exec.query(
       `UPDATE ${it.titulo_tabela} SET data = $3::jsonb, status = $4, updated_at = NOW() WHERE id = $1 AND tenant_id = $2`,
       [it.titulo_id, ctx.tenantId, JSON.stringify(novo), plano.status_depois],
     );
 
     const sinal = it.titulo_tabela === 'contas_receber' ? 1 : -1;
-    const caixa = round2(plano.valor * sinal);
+    // Conta bancária em moeda: o caixa dela anda na moeda (05/11/2026, E6).
+    const caixa = round2((cambio?.caixa_na_moeda ?? plano.valor) * sinal);
     const ok = await aplicarMovimentoCaixaAtomico(ctx.tenantId, conta, caixa, exec, {
       tipo: it.titulo_tabela === 'contas_receber' ? 'baixa_receber' : 'baixa_pagar',
       tabela: it.titulo_tabela, id: it.titulo_id, pessoaId: pessoaDaConta(it.titulo_tabela, d),
+      // A liquidação já conferiu a moeda da conta (só liquida conta em moeda
+      // lançada na mesma moeda, com câmbio) antes daqui.
+      naMoedaDaConta: true,
     });
     if (!ok) throw new ErroBaixa('A conta bancária escolhida não existe nesta agência. Escolha outra.', 409);
 
@@ -325,15 +401,27 @@ export async function registrarBaixas(
     await exec.query(
       `INSERT INTO baixas (id, tenant_id, tipo, chave_idempotencia, titulo_tabela, titulo_id, data_baixa, conta_bancaria_id, forma,
                            valor_centavos, juros_centavos, multa_centavos, desconto_centavos, taxa_centavos, credito_centavos,
-                           caixa_centavos, tratamento_diferenca, politica_aplicada, lote_id, origem, usuario_id, usuario_nome, observacao)
-       VALUES ($1, $2, 'baixa', $3, $4, $5, $6::date, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb, $18, $19, $20, $21, $22)`,
+                           caixa_centavos, tratamento_diferenca, politica_aplicada, lote_id, origem, usuario_id, usuario_nome, observacao, dados)
+       VALUES ($1, $2, 'baixa', $3, $4, $5, $6::date, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb, $18, $19, $20, $21, $22, $23::jsonb)`,
       [baixaId, ctx.tenantId, chave, it.titulo_tabela, it.titulo_id, data, conta, it.forma ?? '',
         paraCentavos(plano.valor), paraCentavos(plano.juros), paraCentavos(plano.multa), paraCentavos(plano.desconto),
         paraCentavos(plano.taxa), paraCentavos(plano.credito), paraCentavos(caixa), it.tratamento_diferenca ?? null,
         JSON.stringify(politica ?? null), loteId, loteId ? 'lote' : ctx.origem, ctx.usuarioId ?? null, ctx.usuarioNome ?? null,
-        it.observacao ?? null],
+        it.observacao ?? null, JSON.stringify(cambio ? { cambio } : {})],
     );
     resultados[i].baixa_id = baixaId;
+    if (cambio && cambio.variacao.variacao !== 0) {
+      const v = cambio.variacao;
+      await exec.query(
+        `INSERT INTO variacoes_cambiais (id, tenant_id, baixa_id, titulo_tabela, titulo_id, data, moeda, valor_moeda_centavos,
+                                         cambio_lancado, cambio_pago, variacao_centavos, resultado_centavos,
+                                         cambio_origem, cambio_fonte, cambio_cotado_em)
+         VALUES ($1, $2, $3, $4, $5, $6::date, $7, $8, $9, $10, $11, $12, $13, $14, $15::timestamptz)`,
+        [generateId(), ctx.tenantId, baixaId, it.titulo_tabela, it.titulo_id, data, cambio.moeda_titulo, paraCentavos(v.valor_moeda),
+          v.cambio_lancado, v.cambio_pago, paraCentavos(v.variacao), paraCentavos(v.resultado),
+          cambio.carimbo.origem, cambio.carimbo.fonte ?? null, cambio.carimbo.cotado_em ?? null],
+      );
+    }
   }
 
   const assinatura = assinar(assinaturaPartes);
@@ -367,12 +455,18 @@ export async function estornarBaixa(
   if (!tr.length) throw new ErroBaixa('A conta desta baixa não existe mais.', 404);
   const d = (tr[0].data ?? {}) as Record<string, unknown>;
 
+  const cambioDaBaixaOriginal = ((b.dados ?? {}) as { cambio?: CambioDaBaixa }).cambio ?? null;
   const valores = {
     valor: deCentavos(b.valor_centavos as string), juros: deCentavos(b.juros_centavos as string),
     multa: deCentavos(b.multa_centavos as string), desconto: deCentavos(b.desconto_centavos as string),
     taxa: deCentavos(b.taxa_centavos as string), credito: deCentavos(b.credito_centavos as string),
+    variacao_cambial: cambioDaBaixaOriginal ? num(cambioDaBaixaOriginal.variacao?.variacao) : 0,
   };
   const novo = tituloDepoisDoEstorno(d, tabela, valores);
+  if (cambioDaBaixaOriginal) {
+    novo.valor_moeda_liquidado = Math.max(0, round2(num(d.valor_moeda_liquidado) - num(cambioDaBaixaOriginal.variacao?.valor_moeda)));
+    novo.valor_reais_liquidado_com_cambio = Math.max(0, round2(num(d.valor_reais_liquidado_com_cambio) - valores.valor));
+  }
   // Data do título passa a ser a da última baixa que continua valendo.
   const { rows: ultimas } = await exec.query(
     `SELECT data_baixa::text AS d FROM baixas x
@@ -400,6 +494,8 @@ export async function estornarBaixa(
       tipo: tabela === 'contas_receber' ? 'baixa_receber' : 'baixa_pagar',
       tabela, id: String(b.titulo_id), pessoaId: pessoaDaConta(tabela, d),
       descricao: `Estorno de baixa: ${motivo}`,
+      // Devolve exatamente o que entrou/saiu, na moeda em que entrou.
+      naMoedaDaConta: true,
     });
     if (!ok) throw new ErroBaixa('A conta bancária desta baixa não existe mais. Nada foi estornado.', 409);
   }
@@ -414,6 +510,18 @@ export async function estornarBaixa(
       b.valor_centavos, b.juros_centavos, b.multa_centavos, b.desconto_centavos, b.taxa_centavos, b.credito_centavos,
       paraCentavos(-caixaOriginal), ctx.usuarioId ?? null, ctx.usuarioNome ?? null, baixaId, motivo],
   );
+  // A variação da baixa estornada sai do resultado por uma linha de estorno
+  // (a original continua lá; nada é apagado).
+  if (cambioDaBaixaOriginal && num(cambioDaBaixaOriginal.variacao?.variacao) !== 0) {
+    await exec.query(
+      `INSERT INTO variacoes_cambiais (id, tenant_id, baixa_id, estorna_id, titulo_tabela, titulo_id, data, moeda, valor_moeda_centavos,
+                                       cambio_lancado, cambio_pago, variacao_centavos, resultado_centavos, cambio_origem, cambio_fonte, cambio_cotado_em)
+       SELECT $1, tenant_id, baixa_id, id, titulo_tabela, titulo_id, $3::date, moeda, -valor_moeda_centavos,
+              cambio_lancado, cambio_pago, -variacao_centavos, -resultado_centavos, cambio_origem, cambio_fonte, cambio_cotado_em
+         FROM variacoes_cambiais WHERE tenant_id = $2 AND baixa_id = $4 AND estorna_id IS NULL`,
+      [generateId(), ctx.tenantId, (p.data || hojeISO()).slice(0, 10), baixaId],
+    );
+  }
   return { estorno_id: id, status_depois: String(novo.status) };
 }
 

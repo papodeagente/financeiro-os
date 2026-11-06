@@ -9,12 +9,32 @@ import { Segmentado } from '@/components/fin/Segmentado';
 import { cn } from '@/lib/utils';
 import type { EncargosSugeridos, PlanoDaBaixa, TratamentoDiferenca } from '@/lib/baixa-calculo';
 import type { OpcaoDeForma } from '@/lib/formas-pagamento';
+import { CampoCambio } from '@/components/fin/CampoCambio';
+import { formatarCambio, formatarNaMoeda, rotuloDaVariacao, type CarimboDoCambio, type VariacaoCambial } from '@/lib/cambio';
 
 const CONTROLE = 'h-11 rounded-[var(--fin-r-md)] border-[var(--fin-border-strong)] bg-[var(--fin-surface)] fin-t-body lg:h-10';
 const CAIXA_GERAL = '__caixa_geral__';
 const SEM_FORMA = '__sem_forma__';
 
-export type ContaOpcao = { id: string; nome: string };
+export type ContaOpcao = { id: string; nome: string; moeda?: string };
+
+/** Câmbio da liquidação de uma conta lançada em moeda (05/11/2026, E6). */
+export type CambioDoBloco = {
+  moeda: string;
+  valor: number;
+  carimbo: CarimboDoCambio | null;
+  onChange: (v: number, carimbo: CarimboDoCambio) => void;
+  cambio_lancado: number;
+  /** Em aberto na moeda. */
+  saldo_moeda: number;
+  variacao: VariacaoCambial | null;
+  /** O que falta, em reais, pelo câmbio informado (com encargos). */
+  valor_pelo_cambio: number | null;
+  onUsarValor?: () => void;
+  moeda_conta: string;
+  caixa_na_moeda: number | null;
+  lado: 'venda' | 'compra';
+};
 
 export type BlocoDeLiquidacaoProps = {
   /** "recebimento" ou "pagamento": muda só as palavras. */
@@ -45,6 +65,8 @@ export type BlocoDeLiquidacaoProps = {
   onForma?: (v: string) => void;
   /** A conta mostrada é a padrão da forma escolhida. */
   contaDaForma?: boolean;
+  /** Conta lançada em moeda: câmbio do pagamento e a variação cambial. */
+  cambio?: CambioDoBloco;
 };
 
 /**
@@ -123,6 +145,8 @@ export function BlocoDeLiquidacao(p: BlocoDeLiquidacaoProps) {
         </Field>
       </div>
 
+      {p.cambio ? <BlocoDeCambio c={p.cambio} palavra={palavra} /> : null}
+
       <fieldset className="flex flex-col gap-[var(--fin-s-2)]">
         <legend className="fin-t-body-strong text-[var(--fin-text)]">Juros, multa e desconto</legend>
         <p className="fin-t-caption text-[var(--fin-text-2)]">
@@ -182,8 +206,19 @@ export function BlocoDeLiquidacao(p: BlocoDeLiquidacaoProps) {
         <dd className="text-right">
           <Money valor={p.plano.saldo_depois} size="body" tone={p.plano.saldo_depois > 0 ? 'negativo' : 'neutro'} estado="ok" />
         </dd>
+        {p.cambio?.variacao && p.cambio.variacao.variacao !== 0 ? (
+          <>
+            <dt className="fin-t-caption text-[var(--fin-text-2)]">{rotuloDaVariacao(p.cambio.variacao.resultado)} (linha própria no resultado)</dt>
+            <dd className="text-right">
+              <Money valor={p.cambio.variacao.resultado} size="body" sinal="sempre" tone={p.cambio.variacao.resultado > 0 ? 'positivo' : 'negativo'} estado="ok" />
+            </dd>
+          </>
+        ) : null}
         <dt className="fin-t-caption text-[var(--fin-text-2)]">Entra na conta</dt>
-        <dd className="fin-t-body-strong text-right text-[var(--fin-text)]">{nomeConta(p.contaId)}</dd>
+        <dd className="fin-t-body-strong text-right text-[var(--fin-text)]">
+          {nomeConta(p.contaId)}
+          {p.cambio?.caixa_na_moeda != null ? <span className="fin-t-caption block font-normal text-[var(--fin-text-3)]">{formatarNaMoeda(p.cambio.caixa_na_moeda, p.cambio.moeda_conta)} na moeda da conta</span> : null}
+        </dd>
       </dl>
       {p.plano.erros.length > 0 ? (
         <p role="alert" className="fin-t-caption text-[var(--fin-negative-text)]">{p.plano.erros[0]}</p>
@@ -193,3 +228,45 @@ export function BlocoDeLiquidacao(p: BlocoDeLiquidacaoProps) {
 }
 
 export default BlocoDeLiquidacao;
+
+/** Câmbio do pagamento de uma conta lançada em moeda. */
+function BlocoDeCambio({ c, palavra }: { c: CambioDoBloco; palavra: string }) {
+  const contaEmMoeda = c.moeda_conta !== 'BRL';
+  return (
+    <fieldset className="flex flex-col gap-[var(--fin-s-2)]">
+      <legend className="fin-t-body-strong text-[var(--fin-text)]">Câmbio do {palavra}</legend>
+      <p className="fin-t-caption text-[var(--fin-text-2)]">
+        Em aberto: {formatarNaMoeda(c.saldo_moeda, c.moeda)}, lançados a {formatarCambio(c.cambio_lancado)}.
+        {contaEmMoeda
+          ? ` A conta bancária é em ${c.moeda_conta}: o câmbio é obrigatório.`
+          : ' Informe o câmbio do dia para registrar a variação; sem ele, a conta é liquidada pelo valor em reais, como sempre.'}
+      </p>
+      <CampoCambio
+        moeda={c.moeda}
+        valor={c.valor}
+        carimbo={c.carimbo}
+        lado={c.lado}
+        obrigatorio={contaEmMoeda}
+        rotulo={`Câmbio do ${palavra}`}
+        onChange={c.onChange}
+      />
+      {c.valor_pelo_cambio !== null ? (
+        <div className="flex flex-wrap items-center justify-between gap-[var(--fin-s-2)] rounded-[var(--fin-r-md)] bg-[var(--fin-surface-2)] px-[var(--fin-s-3)] py-[var(--fin-s-2)]">
+          <p className="fin-t-body text-[var(--fin-text-2)]">
+            Pelo câmbio informado, o que falta é{' '}
+            <Money valor={c.valor_pelo_cambio} size="strong" align="esquerda" className="inline-block min-w-0" estado="ok" />
+          </p>
+          {c.onUsarValor ? (
+            <button
+              type="button"
+              onClick={c.onUsarValor}
+              className="fin-t-body h-11 rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-3 font-medium text-[var(--fin-accent)] hover:bg-[var(--fin-accent-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)] lg:h-9"
+            >
+              Usar este valor
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </fieldset>
+  );
+}

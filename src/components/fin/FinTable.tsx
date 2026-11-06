@@ -28,6 +28,8 @@ export type FinColuna<T> =
       /** Sublinha em caption logo abaixo do número, NUNCA coluna extra. */
       sub?: (r: T) => React.ReactNode | null;
       tone?: (r: T) => 'neutro' | 'positivo' | 'negativo';
+      /** 'indisponivel' não pinta número (ex.: conta em moeda sem cotação). Ausente = 'ok'. */
+      estado?: (r: T) => 'ok' | 'indisponivel';
     })
   | (FinColunaBase<T> & { tipo: 'data'; valor: (r: T) => string | null })
   | (FinColunaBase<T> & { tipo: 'status'; valor: (r: T) => string; dominio: StatusDominio })
@@ -456,7 +458,7 @@ export function FinTable<T>({
                           valor={coluna.valor(linha)}
                           size="strong"
                           tone={coluna.tone?.(linha) ?? 'neutro'}
-                          estado="ok"
+                          estado={coluna.estado?.(linha) ?? 'ok'}
                         />
                         {sublinha ? (
                           <span className="mt-[var(--fin-s-1)] block fin-t-caption text-[var(--fin-text-3)]">
