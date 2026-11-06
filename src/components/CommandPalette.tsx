@@ -97,6 +97,8 @@ const NAVIGATION_ITEMS: CommandItem[] = [
   { id: 'cac', label: 'Dashboard CAC', href: '/cac/dashboard', icon: <Gauge className="w-4 h-4" />, section: 'navegacao' },
   { id: 'rentabilidade', label: 'Rentabilidade', href: '/relatorios/rentabilidade', icon: <TrendingUp className="w-4 h-4" />, section: 'navegacao' },
   { id: 'config-agencia', label: 'Configurações', href: '/config/agencia', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'cheques', label: 'Cheques emitidos (imprimir cheque, compensar, devolver)', href: '/financeiro-ag/cheques', icon: <Receipt className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'cartao-corporativo-cliente', label: 'Conciliação do cartão corporativo do cliente (relatório de vendas)', href: '/relatorios/vendas?relatorio=cartao_corporativo', icon: <CreditCard className="w-4 h-4" />, section: 'navegacao' },
   { id: 'moedas-agencia', label: 'Moedas da agência (cadastrar moeda, câmbio)', href: '/financeiro-ag/moedas', icon: <DollarSign className="w-4 h-4" />, section: 'navegacao' },
   { id: 'config-empresas', label: 'Empresas da agência (lojas, CNPJs, multiempresa)', href: '/config/empresas', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
   // Mudança de sistema (E4, 05/11/2026).

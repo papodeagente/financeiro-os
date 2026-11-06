@@ -18,7 +18,7 @@ import { BarrasNomeadas, type LinhaBarra } from '@/components/fin/BarrasNomeadas
 import { GradeDinamica } from '@/app/financeiro-ag/resultado-por-categoria/GradeDinamica';
 import { FormularioDeEnvio } from '@/components/relatorios/FormularioDeEnvio';
 import {
-  CAMPOS_DA_DINAMICA, DATAS_BASE, RELATORIOS, ROTULO_DATA_BASE, ROTULO_RELATORIO, registrosDaDinamica,
+  CAMPOS_DA_DINAMICA, CAMPOS_DA_DINAMICA_MULTIEMPRESA, DATAS_BASE, RELATORIOS, RELATORIOS_MULTIEMPRESA, ROTULO_DATA_BASE, ROTULO_RELATORIO, registrosDaDinamica,
   type ColunaDoRelatorio, type DataBase, type LinhaDoRelatorio, type OpcoesDosFiltros, type OrdemDoRanking, type TipoDeRelatorio,
 } from '@/lib/relatorios-vendas';
 import { montarTabelaDinamica, registrosDaCelula } from '@/lib/tabela-dinamica';
@@ -33,6 +33,9 @@ import { cn } from '@/lib/utils';
  * unidade, situação do produto e qual data vale; gráfico de barras do recorte;
  * Excel, PDF e Imprimir; agendar o envio por e-mail. Clicar abre a venda. O
  * ganho da agência só aparece para quem pode vê-lo (o servidor nem manda).
+ * E7 (frente C): por empresa (só com duas ou mais), mais de 80 colunas em
+ * Vendas por produto (serviço, bilhetes, taxas, moeda de origem, viagem
+ * corporativa) e a conciliação do cartão corporativo do cliente.
  */
 
 interface Resposta {
@@ -49,14 +52,18 @@ interface Resposta {
   so_as_suas: boolean;
   ordem: OrdemDoRanking;
   quantidade_vendas: number;
+  /** Duas ou mais empresas (E7): o relatório, o filtro e a coluna de empresa aparecem. */
+  multiempresa?: boolean;
 }
 
 const CAMPO = 'h-11 rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-2 fin-t-body text-[var(--fin-text)] lg:h-10';
 const ROTULO_CURTO: Record<TipoDeRelatorio, string> = {
-  produto: 'Por produto', vendedor: 'Por vendedor', unidade: 'Por unidade', fornecedor: 'Por fornecedor', forma: 'Por forma de pagamento',
-  pagamentos: 'Pagamentos', clientes: 'Ranking de clientes', dinamica: 'Tabela dinâmica',
+  produto: 'Por produto', vendedor: 'Por vendedor', unidade: 'Por unidade', empresa: 'Por empresa', fornecedor: 'Por fornecedor', forma: 'Por forma de pagamento',
+  pagamentos: 'Pagamentos', clientes: 'Ranking de clientes', dinamica: 'Tabela dinâmica', cartao_corporativo: 'Cartão corporativo',
 };
-const AGRUPADOS: TipoDeRelatorio[] = ['vendedor', 'unidade', 'fornecedor', 'clientes'];
+const AGRUPADOS: TipoDeRelatorio[] = ['vendedor', 'unidade', 'empresa', 'fornecedor', 'clientes'];
+/** Relatórios em que a linha é de uma venda (clicar abre a venda). */
+const ABRE_A_VENDA: TipoDeRelatorio[] = ['produto', 'pagamentos', 'cartao_corporativo'];
 const dataBR = (s: unknown) => (typeof s === 'string' && /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10).split('-').reverse().join('/') : '');
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -67,9 +74,10 @@ interface Filtros {
   tipo: string;
   produto: string;
   unidade: string;
+  empresa: string;
   situacao_produto: 'todos' | 'ativos' | 'cancelados';
 }
-const SEM_FILTRO: Filtros = { data_base: 'venda', vendedor: '', fornecedor: '', tipo: '', produto: '', unidade: '', situacao_produto: 'todos' };
+const SEM_FILTRO: Filtros = { data_base: 'venda', vendedor: '', fornecedor: '', tipo: '', produto: '', unidade: '', empresa: '', situacao_produto: 'todos' };
 
 function colunaDaTabela(c: ColunaDoRelatorio, i: number): FinColuna<LinhaDoRelatorio> {
   const base = { id: c.id, cabecalho: c.rotulo, sortable: true as const, prioridade: (i < 3 ? 3 : i < 6 ? 2 : 1) as 1 | 2 | 3 };
@@ -84,6 +92,7 @@ function colunaDaTabela(c: ColunaDoRelatorio, i: number): FinColuna<LinhaDoRelat
 function barrasDoRelatorio(d: Resposta): { titulo: string; sublinha: string; linhas: LinhaBarra[] } | null {
   const metrica = d.ordem === 'receita' && d.ver_receita ? 'receita' : 'faturamento';
   const nomeMetrica = metrica === 'receita' ? 'receita da agência' : 'faturamento';
+  if (d.relatorio === 'cartao_corporativo') return null;
   if (d.relatorio === 'produto' || d.relatorio === 'pagamentos' || d.relatorio === 'dinamica') {
     if (d.relatorio !== 'produto' || d.serie.length < 2) return null;
     return {
@@ -97,7 +106,7 @@ function barrasDoRelatorio(d: Resposta): { titulo: string; sublinha: string; lin
       linhas: d.linhas.map(l => ({ id: String(l.forma ?? l.grupo), nome: String(l.grupo), valor: Number(l.valor ?? 0) / 100, secundario: `${l.vendas} ${Number(l.vendas) === 1 ? 'venda' : 'vendas'}` })),
     };
   }
-  const nomeGrupo = d.relatorio === 'clientes' ? 'clientes' : d.relatorio === 'vendedor' ? 'vendedores' : d.relatorio === 'unidade' ? 'unidades' : 'fornecedores';
+  const nomeGrupo = d.relatorio === 'clientes' ? 'clientes' : d.relatorio === 'vendedor' ? 'vendedores' : d.relatorio === 'unidade' ? 'unidades' : d.relatorio === 'empresa' ? 'empresas' : 'fornecedores';
   return {
     titulo: `Os 10 ${nomeGrupo} com mais ${nomeMetrica}`, sublinha: `Do maior para o menor ${nomeMetrica}, todos na mesma escala.`,
     linhas: d.linhas.slice(0, 10).map(l => ({
@@ -166,7 +175,7 @@ export function RelatoriosDeVendas({ abrirVenda }: { abrirVenda: (vendaId: strin
     const cols = escolhidas[relatorio];
     if (cols?.length) q.set('colunas', cols.join(','));
     if (filtros.data_base !== 'venda') q.set('data_base', filtros.data_base);
-    for (const k of ['vendedor', 'fornecedor', 'tipo', 'produto', 'unidade'] as const) if (filtros[k].trim()) q.set(k, filtros[k].trim());
+    for (const k of ['vendedor', 'fornecedor', 'tipo', 'produto', 'unidade', 'empresa'] as const) if (filtros[k].trim()) q.set(k, filtros[k].trim());
     if (filtros.situacao_produto !== 'todos') q.set('situacao_produto', filtros.situacao_produto);
     if (ordem !== 'faturamento' && AGRUPADOS.includes(relatorio)) q.set('ordem', ordem);
     if (soLiquidados && relatorio === 'pagamentos') q.set('so_liquidados', '1');
@@ -201,6 +210,10 @@ export function RelatoriosDeVendas({ abrirVenda }: { abrirVenda: (vendaId: strin
   }, [consultaDaTela]);
   React.useEffect(() => { void carregar(); }, [carregar]);
 
+  // Uma empresa só: nada de empresa na tela (o servidor responde o por produto se pedirem por empresa).
+  const multi = dados?.multiempresa === true;
+  const camposDaDinamica = CAMPOS_DA_DINAMICA.filter(c => multi || !CAMPOS_DA_DINAMICA_MULTIEMPRESA.has(c));
+
   const linhas = dados?.linhas ?? [];
   const colunas = React.useMemo(() => (dados?.colunas ?? []).map(colunaDaTabela), [dados?.colunas]);
   const visiveis = new Set((dados?.colunas ?? []).map(c => c.id));
@@ -231,6 +244,7 @@ export function RelatoriosDeVendas({ abrirVenda }: { abrirVenda: (vendaId: strin
     filtros.tipo ? nomeDe(opcoes.tipos, filtros.tipo) : '',
     filtros.produto ? `produto com "${filtros.produto}"` : '',
     filtros.unidade ? `unidade ${filtros.unidade}` : '',
+    filtros.empresa ? `empresa ${nomeDe(opcoes.empresas ?? [], filtros.empresa)}` : '',
     filtros.situacao_produto !== 'todos' ? `só produtos ${filtros.situacao_produto}` : '',
     ordem === 'receita' && AGRUPADOS.includes(relatorio) ? 'ordem pela receita' : '',
     soLiquidados && relatorio === 'pagamentos' ? 'só pagamentos liquidados' : '',
@@ -259,7 +273,7 @@ export function RelatoriosDeVendas({ abrirVenda }: { abrirVenda: (vendaId: strin
 
       <div className="overflow-x-auto">
         <Segmentado<TipoDeRelatorio> rotulo="Relatório" valor={relatorio} onChange={setRelatorio}
-          opcoes={RELATORIOS.map(r => ({ valor: r, rotulo: ROTULO_CURTO[r] }))} />
+          opcoes={RELATORIOS.filter(r => multi || !RELATORIOS_MULTIEMPRESA.has(r)).map(r => ({ valor: r, rotulo: ROTULO_CURTO[r] }))} />
       </div>
 
       <section aria-label="Filtros" className="flex flex-col gap-[var(--fin-s-3)]">
@@ -317,6 +331,15 @@ export function RelatoriosDeVendas({ abrirVenda }: { abrirVenda: (vendaId: strin
               {opcoes.unidades.map(o => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
             </select>
           </label>
+          {multi && opcoes.empresas?.length ? (
+            <label className="flex min-w-[10rem] flex-col gap-1">
+              <span className="fin-t-caption font-medium text-[var(--fin-text-2)]">Empresa</span>
+              <select className={CAMPO} value={filtros.empresa} onChange={e => mudar('empresa', e.target.value)}>
+                <option value="">Todas</option>
+                {opcoes.empresas.map(o => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
+              </select>
+            </label>
+          ) : null}
           <label className="flex flex-col gap-1">
             <span className="fin-t-caption font-medium text-[var(--fin-text-2)]">Situação do produto</span>
             <select className={CAMPO} value={filtros.situacao_produto} onChange={e => mudar('situacao_produto', e.target.value as Filtros['situacao_produto'])}>
@@ -348,7 +371,7 @@ export function RelatoriosDeVendas({ abrirVenda }: { abrirVenda: (vendaId: strin
               <summary className="inline-flex h-11 cursor-pointer list-none items-center gap-1.5 rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-3 text-[13px] font-medium text-[var(--fin-text)] hover:bg-[var(--fin-surface-2)] lg:h-9">
                 <Columns3 aria-hidden="true" className="size-4" /> Colunas
               </summary>
-              <div className="absolute right-0 z-[var(--fin-z-popover)] mt-1 flex max-h-80 w-64 flex-col gap-1 overflow-y-auto rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-2)] shadow-[var(--fin-e1)]">
+              <div className="absolute right-0 z-[var(--fin-z-popover)] mt-1 flex max-h-96 w-72 flex-col gap-1 overflow-y-auto rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-2)] shadow-[var(--fin-e1)]">
                 {dados.catalogo.map(c => (
                   <label key={c.id} className="flex h-9 shrink-0 cursor-pointer items-center gap-[var(--fin-s-2)] rounded-[var(--fin-r-md)] px-[var(--fin-s-2)] fin-t-body text-[var(--fin-text)] hover:bg-[var(--fin-surface-2)]">
                     <input type="checkbox" className="size-4 accent-[var(--fin-accent)]" checked={visiveis.has(c.id)} onChange={() => alternarColuna(c.id)} />
@@ -371,6 +394,13 @@ export function RelatoriosDeVendas({ abrirVenda }: { abrirVenda: (vendaId: strin
       <div className={RITMO_DA_PAGINA}>
         {dados?.so_as_suas ? <Callout tom="info">Mostrando só as suas vendas.</Callout> : null}
         {dados && !dados.ver_receita ? <Callout tom="info">A receita da agência e os componentes não aparecem para o seu acesso.</Callout> : null}
+        {relatorio === 'cartao_corporativo' ? (
+          <Callout tom="info">
+            Uma linha por bilhete pago com o cartão corporativo do cliente, no formato que a administradora do cartão usa para conciliar a fatura.
+            Do cartão vão só a bandeira, os 4 últimos números e a autorização. Marque o pagamento como &ldquo;Cartão corporativo do cliente&rdquo; na venda;
+            a coluna &ldquo;O que falta&rdquo; mostra o que completar antes de mandar o arquivo.
+          </Callout>
+        ) : null}
 
         {barras && barras.linhas.length > 1 ? (
           <GraficoMoldura
@@ -393,7 +423,7 @@ export function RelatoriosDeVendas({ abrirVenda }: { abrirVenda: (vendaId: strin
                   <span className="fin-t-caption font-medium text-[var(--fin-text-2)]">{rot}</span>
                   <select className={CAMPO} value={val} onChange={e => set(e.target.value)}>
                     <option value="">Nenhum</option>
-                    {CAMPOS_DA_DINAMICA.map(c => <option key={c} value={c}>{c}</option>)}
+                    {camposDaDinamica.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </label>
               ))}
@@ -423,13 +453,15 @@ export function RelatoriosDeVendas({ abrirVenda }: { abrirVenda: (vendaId: strin
           <FinTable<LinhaDoRelatorio>
             linhas={linhas}
             colunas={colunas}
-            chave={l => `${l.venda_id ?? ''}|${String(l.grupo ?? '')}|${String(l.descricao ?? '')}|${String(l.data_venda ?? '')}|${String(l.forma ?? '')}|${linhas.indexOf(l)}`}
+            chave={l => `${l.venda_id ?? ''}|${String(l.grupo ?? '')}|${String(l.descricao ?? '')}|${String(l.data_venda ?? '')}|${String(l.forma ?? '')}|${String(l.passageiro ?? '')}|${linhas.indexOf(l)}`}
             estado={estado}
             erro={erro ? { mensagem: erro, onTentarDeNovo: () => { void carregar(); } } : null}
             vazio={temFiltro
               ? { motivo: 'sem-resultado', titulo: 'Nada com esses filtros', oQueE: 'Nenhuma venda do período passa em todos os filtros escolhidos.', acaoSecundaria: { rotulo: 'Limpar filtros', onClick: limpar } }
-              : { motivo: 'sem-resultado', titulo: 'Nenhuma venda no período', oQueE: `${ROTULO_RELATORIO[relatorio]} soma as vendas lançadas e as que chegam do CRM.`, acaoSecundaria: { rotulo: 'Ver o ano inteiro', onClick: () => setDe(`${hoje.slice(0, 4)}-01-01`) } }}
-            onLinhaClick={relatorio === 'produto' || relatorio === 'pagamentos' ? l => { if (l.venda_id) abrirVenda(String(l.venda_id)); } : undefined}
+              : relatorio === 'cartao_corporativo'
+                ? { motivo: 'sem-resultado', titulo: 'Nenhum pagamento no cartão corporativo do cliente', oQueE: 'Na venda, marque o pagamento com cartão (ou pago direto no fornecedor) como cartão corporativo do cliente para ele entrar aqui.', acaoSecundaria: { rotulo: 'Ver o ano inteiro', onClick: () => setDe(`${hoje.slice(0, 4)}-01-01`) } }
+                : { motivo: 'sem-resultado', titulo: 'Nenhuma venda no período', oQueE: `${ROTULO_RELATORIO[relatorio]} soma as vendas lançadas e as que chegam do CRM.`, acaoSecundaria: { rotulo: 'Ver o ano inteiro', onClick: () => setDe(`${hoje.slice(0, 4)}-01-01`) } }}
+            onLinhaClick={ABRE_A_VENDA.includes(relatorio) ? l => { if (l.venda_id) abrirVenda(String(l.venda_id)); } : undefined}
             totais={totais}
             rodape={dados ? <p className="px-[var(--fin-s-4)] py-[var(--fin-s-2)] fin-t-caption text-[var(--fin-text-3)]">{dados.quantidade_vendas} {dados.quantidade_vendas === 1 ? 'venda' : 'vendas'} de {dataBR(de) || 'sempre'} a {dataBR(ate) || 'hoje'}{filtros.data_base !== 'venda' ? `, pela ${ROTULO_DATA_BASE[filtros.data_base].toLowerCase()}` : ''}.</p> : null}
           />

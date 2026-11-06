@@ -21,7 +21,7 @@ export const statusChipVariants = cva(
 
 export type StatusTone = NonNullable<VariantProps<typeof statusChipVariants>['tone']>;
 
-export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza' | 'comissao' | 'plano' | 'cobranca' | 'mudanca' | 'nota' | 'comissao_item' | 'reembolso' | 'credito' | 'fatura' | 'conferencia_fatura' | 'conferencia' | 'conexao_banco';
+export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza' | 'comissao' | 'plano' | 'cobranca' | 'mudanca' | 'nota' | 'comissao_item' | 'reembolso' | 'credito' | 'fatura' | 'conferencia_fatura' | 'conferencia' | 'conexao_banco' | 'cheque';
 
 export type StatusChipProps = {
   /** Valor cru do banco. NUNCA é renderizado como veio. */
@@ -55,6 +55,13 @@ export const STATUS_LABELS: Record<StatusDominio, Record<string, { rotulo: strin
     CANCELADO: { rotulo: 'Cancelado',          tone: 'neutro'   },
   },
   // Extrato automático: estado da conexão de uma conta com o banco (06/11/2026).
+  // Cheques emitidos (E7, frente C).
+  cheque: {
+    EMITIDO:    { rotulo: 'Emitido',    tone: 'info' },
+    COMPENSADO: { rotulo: 'Compensado', tone: 'positivo' },
+    DEVOLVIDO:  { rotulo: 'Devolvido',  tone: 'negativo' },
+    CANCELADO:  { rotulo: 'Cancelado',  tone: 'neutro' },
+  },
   conexao_banco: {
     ATIVA:        { rotulo: 'Conectada',     tone: 'positivo' },
     ATENCAO:      { rotulo: 'Atenção',       tone: 'aviso'    },

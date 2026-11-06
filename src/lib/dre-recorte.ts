@@ -19,6 +19,11 @@
  *
  * Rateio: "Só rateadas" deixa só as contas com rateio; "Sem rateio", só as de
  * centro único. Combina com o centro.
+ *
+ * Tag (E7, frente C): a conta com a tag entra inteira (ou com a parte dela no
+ * centro, quando há centro também); sem a tag, fica fora. A comparação ignora
+ * acento e maiúscula, como o relatório por dimensão. Venda sem conta a
+ * receber não tem tag: fica fora quando há tag escolhida.
  */
 import { dimensoesDoLancamento, type CentroDoContexto } from './dimensoes';
 import { num, round2 } from './money';
@@ -30,6 +35,8 @@ export interface RecorteDRE {
   /** Centro de custo (e os de baixo). Vazio = todos. */
   centro_id?: string | null;
   rateio?: FiltroDeRateio;
+  /** Tag do título (E7, frente C). Vazio = todas. */
+  tag?: string | null;
 }
 
 export interface CentroDoRecorte extends CentroDoContexto {
@@ -37,7 +44,19 @@ export interface CentroDoRecorte extends CentroDoContexto {
 }
 
 export function recorteVazio(r: RecorteDRE | null | undefined): boolean {
-  return !r || (!r.centro_id && (!r.rateio || r.rateio === 'todas'));
+  return !r || (!r.centro_id && (!r.rateio || r.rateio === 'todas') && !chaveDaTag(r.tag));
+}
+
+/** Tag comparável: sem acento, sem maiúscula, sem espaço sobrando. */
+export function chaveDaTag(tag: unknown): string {
+  return String(tag ?? '').replace(/\s+/g, ' ').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+}
+
+/** A conta tem a tag (sem acento e maiúscula)? */
+export function contaTemTag(conta: { tags?: unknown }, tag: string): boolean {
+  const alvo = chaveDaTag(tag);
+  if (!alvo) return true;
+  return Array.isArray(conta.tags) && conta.tags.some(t => chaveDaTag(t) === alvo);
 }
 
 /** Ids do centro e de todos abaixo dele. */
@@ -60,6 +79,7 @@ type ContaComDimensao = {
   rateio?: unknown;
   categoria_id?: string | null;
   status?: string | null;
+  tags?: unknown;
 };
 
 /** Fração (0 a 1) da conta que cai no recorte. */
@@ -67,6 +87,7 @@ export function fracaoNoRecorte(
   conta: ContaComDimensao, recorte: RecorteDRE, centros: readonly CentroDoRecorte[], lado: 'receber' | 'pagar',
 ): number {
   if (recorteVazio(recorte)) return 1;
+  if (chaveDaTag(recorte.tag) && !contaTemTag(conta, String(recorte.tag))) return 0;
   const dim = dimensoesDoLancamento(conta as Parameters<typeof dimensoesDoLancamento>[0], { centros, lado });
   if (recorte.rateio === 'rateadas' && !dim.rateado) return 0;
   if (recorte.rateio === 'sem_rateio' && dim.rateado) return 0;
@@ -144,7 +165,7 @@ export function aplicarRecorteDRE<CR extends CRDoRecorte, CP extends CPDoRecorte
     const p = pesoDaVenda.get(v.id);
     let f: number;
     if (p && p.peso > 0) f = Math.max(0, Math.min(1, p.dentro / p.peso));
-    else if (recorte.rateio === 'rateadas') f = 0;
+    else if (recorte.rateio === 'rateadas' || chaveDaTag(recorte.tag)) f = 0;
     else if (!aceitos) f = 1;
     else {
       const nome = String(v.centro_custo ?? '').trim().toLocaleLowerCase('pt-BR');

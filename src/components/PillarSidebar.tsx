@@ -119,6 +119,7 @@ const FINANCEIRO_MENU: SidebarSection[] = [
       { key: 'extrato', label: 'Extrato de conta', icon: ScrollText, href: '/financeiro-ag/extrato' },
       { key: 'movimentacoes', label: 'Movimentações', icon: ListOrdered, href: '/financeiro-ag/movimentacoes' },
       { key: 'transferencias', label: 'Transferências', icon: ArrowRightLeft, href: '/financeiro-ag/transferencias' },
+      { key: 'cheques', label: 'Cheques emitidos', icon: ReceiptText, href: '/financeiro-ag/cheques' },
       { key: 'fechamento', label: 'Fechar Caixa', icon: Lock, href: '/financeiro-ag/fechamento' },
       { key: 'aprovacoes', label: 'Aprovações', icon: Stamp, href: '/financeiro-ag/aprovacoes' },
       { key: 'reembolsos', label: 'Reembolsos', icon: Undo2, href: '/financeiro-ag/reembolsos' },

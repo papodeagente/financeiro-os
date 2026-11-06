@@ -211,6 +211,14 @@ export interface Passageiro {
   outras_taxas_centavos: Centavos;
   /** Data do cancelamento (parte D); passageiro cancelado não entra nas contas. */
   cancelado_em: string | null;
+  /** Viagem a trabalho (E7): centro de custo e matrícula do viajante no cliente. Só quando há. */
+  corporativo?: CorporativoDoPassageiro;
+}
+
+/** O viajante na empresa cliente (E7): para a fatura e a conciliação do cartão. */
+export interface CorporativoDoPassageiro {
+  centro_custo?: string;
+  matricula?: string;
 }
 
 export interface ProdutoDaVenda {
@@ -341,6 +349,14 @@ export interface CamposDaForma {
   autorizacao?: string;
   bandeira?: string;
   final_cartao?: string;
+  /**
+   * Cartão corporativo do CLIENTE (E7): o cartão de viagem da empresa
+   * cliente, recebido pela agência ou passado direto no fornecedor. Entra
+   * na exportação para a conciliação da administradora do cartão.
+   */
+  cartao_corporativo?: boolean;
+  /** Requisição ou ordem de compra do cliente para esta compra. */
+  requisicao?: string;
 }
 
 // ============================================================
@@ -377,6 +393,58 @@ export interface Venda {
   operacao_propria?: boolean;
   /** Produtos tirados da venda, guardados para restaurar. Não entram em conta nenhuma. */
   produtos_removidos?: ProdutoDaVenda[];
+  /** Viagem a trabalho (E7): os dados que a empresa cliente pede. Só quando há. */
+  corporativo?: DadosCorporativos;
+}
+
+/**
+ * Viagem corporativa (E7): o que a empresa cliente pede para aprovar,
+ * ratear e conciliar a despesa. Texto livre, como vem da política de viagem
+ * do cliente. Vai para os relatórios, a fatura e a conciliação do cartão.
+ */
+export interface DadosCorporativos {
+  /** Centro de custo NO CLIENTE (o da agência é `centro_custo` da venda). */
+  centro_custo?: string;
+  solicitante?: string;
+  aprovador?: string;
+  /** Matrícula do viajante principal (cada passageiro pode ter a sua). */
+  matricula?: string;
+  motivo?: string;
+  projeto?: string;
+  /** Requisição, pedido ou ordem de compra do cliente. */
+  requisicao?: string;
+}
+
+export const CAMPOS_CORPORATIVOS: ReadonlyArray<{ chave: keyof DadosCorporativos; rotulo: string; ajuda?: string }> = [
+  { chave: 'centro_custo', rotulo: 'Centro de custo do cliente', ajuda: 'O da empresa que viaja, não o da agência.' },
+  { chave: 'solicitante', rotulo: 'Solicitante' },
+  { chave: 'aprovador', rotulo: 'Aprovador' },
+  { chave: 'matricula', rotulo: 'Matrícula' },
+  { chave: 'motivo', rotulo: 'Motivo da viagem' },
+  { chave: 'projeto', rotulo: 'Projeto' },
+  { chave: 'requisicao', rotulo: 'Requisição', ajuda: 'Pedido ou ordem de compra do cliente.' },
+];
+
+/** Os dados corporativos limpos; undefined quando não há nenhum. */
+export function normalizarCorporativo(v: unknown): DadosCorporativos | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const o = v as Record<string, unknown>;
+  const c: DadosCorporativos = {};
+  for (const { chave } of CAMPOS_CORPORATIVOS) {
+    const s = txt(o[chave], 120);
+    if (s) c[chave] = s;
+  }
+  return Object.keys(c).length ? c : undefined;
+}
+
+/** O viajante na empresa cliente, limpo; undefined quando não há nada. */
+export function normalizarCorporativoDoPassageiro(v: unknown): CorporativoDoPassageiro | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const o = v as Record<string, unknown>;
+  const c: CorporativoDoPassageiro = {};
+  const cc = txt(o.centro_custo, 120); if (cc) c.centro_custo = cc;
+  const m = txt(o.matricula, 60); if (m) c.matricula = m;
+  return Object.keys(c).length ? c : undefined;
 }
 
 // ============================================================
@@ -489,6 +557,7 @@ export function normalizarProduto(v: unknown, sequencia: number, erros: ErroDaVe
       taxas_centavos: naoNegativo(centavos(q.taxas_centavos)),
       outras_taxas_centavos: naoNegativo(centavos(q.outras_taxas_centavos)),
       cancelado_em: dataOuVazio(q.cancelado_em) || null,
+      ...(normalizarCorporativoDoPassageiro(q.corporativo) ? { corporativo: normalizarCorporativoDoPassageiro(q.corporativo) } : {}),
     };
   });
   const quantidade = Math.max(1, Math.min(10_000, Math.floor(Number(o.quantidade) || 1)));
@@ -609,20 +678,42 @@ export function normalizarPagamento(v: unknown, i: number, erros: ErroDaVenda[] 
 
 /** Os campos do cheque e do cartão, limpos. Do cartão fica só o final (4 dígitos), nunca o número. */
 export function normalizarCamposDaForma(forma: FormaDaVenda, v: unknown): CamposDaForma | undefined {
-  if (!v || typeof v !== 'object' || (forma !== 'CHEQUE' && forma !== 'CARTAO')) return undefined;
+  if (!v || typeof v !== 'object' || (forma !== 'CHEQUE' && forma !== 'CARTAO' && forma !== 'PAGO_DIRETO_FORNECEDOR')) return undefined;
   const o = v as Record<string, unknown>;
   const c: CamposDaForma = {};
+  if (forma === 'PAGO_DIRETO_FORNECEDOR') {
+    // Pago direto no fornecedor: só o cartão corporativo do cliente guarda campos (E7).
+    if (o.cartao_corporativo !== true) return undefined;
+    camposDoCartao(o, c);
+    c.cartao_corporativo = true;
+    const req = txt(o.requisicao, 60); if (req) c.requisicao = req;
+    return c;
+  }
   if (forma === 'CHEQUE') {
     const banco = txt(o.banco, 80); if (banco) c.banco = banco;
     const numero = txt(o.numero_cheque, 40); if (numero) c.numero_cheque = numero;
     const doc = txt(o.emitente_documento, 20).replace(/[^\d./-]/g, ''); if (doc) c.emitente_documento = doc;
   } else {
-    const aut = txt(o.autorizacao, 40); if (aut) c.autorizacao = aut;
-    const bandeira = txt(o.bandeira, 40); if (bandeira) c.bandeira = bandeira;
-    const digitos = txt(o.final_cartao, 40).replace(/\D/g, '');
-    if (digitos.length >= 4) c.final_cartao = digitos.slice(-4);
+    camposDoCartao(o, c);
+    if (o.cartao_corporativo === true) {
+      c.cartao_corporativo = true;
+      const req = txt(o.requisicao, 60); if (req) c.requisicao = req;
+    }
   }
   return Object.keys(c).length ? c : undefined;
+}
+
+/** Autorização, bandeira e o final do cartão (4 dígitos, nunca o número). */
+function camposDoCartao(o: Record<string, unknown>, c: CamposDaForma): void {
+  const aut = txt(o.autorizacao, 40); if (aut) c.autorizacao = aut;
+  const bandeira = txt(o.bandeira, 40); if (bandeira) c.bandeira = bandeira;
+  const digitos = txt(o.final_cartao, 40).replace(/\D/g, '');
+  if (digitos.length >= 4) c.final_cartao = digitos.slice(-4);
+}
+
+/** O pagamento foi feito com o cartão corporativo do cliente? */
+export function pagoComCartaoCorporativo(p: Pick<PagamentoDaVenda, 'forma' | 'campos'>): boolean {
+  return (p.forma === 'CARTAO' || p.forma === 'PAGO_DIRETO_FORNECEDOR') && p.campos?.cartao_corporativo === true;
 }
 
 /** Texto curto dos campos da forma ("Itaú · nº 000123", "Visa · final 4321 · aut 99"). */
@@ -630,7 +721,9 @@ export function textoDosCampos(c: CamposDaForma | undefined): string {
   if (!c) return '';
   return [
     c.banco, c.numero_cheque ? `nº ${c.numero_cheque}` : '', c.emitente_documento ? `emitente ${c.emitente_documento}` : '',
+    c.cartao_corporativo ? 'corporativo do cliente' : '',
     c.bandeira, c.final_cartao ? `final ${c.final_cartao}` : '', c.autorizacao ? `aut ${c.autorizacao}` : '',
+    c.requisicao ? `requisição ${c.requisicao}` : '',
   ].filter(Boolean).join(' · ');
 }
 
@@ -672,6 +765,7 @@ export function normalizarVenda(v: unknown): { venda: Venda; erros: ErroDaVenda[
       crm_venda_id: txt(o.crm_venda_id, 200),
       ...(o.operacao_propria === true ? { operacao_propria: true } : {}),
       ...(removidos.length ? { produtos_removidos: removidos } : {}),
+      ...(normalizarCorporativo(o.corporativo) ? { corporativo: normalizarCorporativo(o.corporativo) } : {}),
     },
     erros,
   };

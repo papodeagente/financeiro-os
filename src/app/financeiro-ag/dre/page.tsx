@@ -21,6 +21,8 @@ import {
 } from '@/lib/resultado-dre';
 import { aplicarRecorteDRE, type FiltroDeRateio, type RecorteDRE } from '@/lib/dre-recorte';
 import { ordenarEmArvore } from '@/lib/dimensoes';
+import { resultadoPorTag, tagsDasContas } from '@/lib/resultado-por-dimensao';
+import { ResultadoPorTag } from './ResultadoPorTag';
 import type { CentroCusto } from '@/lib/crm-types';
 import type { DocumentoExportado, FiltroAplicado } from '@/lib/exportacao/documento';
 import { BotaoExportar } from '@/components/fin/BotaoExportar';
@@ -119,6 +121,9 @@ export default function DREPage() {
   const [centros, setCentros] = useState<CentroCusto[]>([]);
   const [centroId, setCentroId] = useState('');
   const [filtroRateio, setFiltroRateio] = useState<FiltroDeRateio>('todas');
+  // E7, frente C: recorte por tag e o quadro "Por tag". Sem escolha, a tela de antes.
+  const [tag, setTag] = useState('');
+  const [agrupar, setAgrupar] = useState<'nada' | 'tag'>('nada');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -260,7 +265,9 @@ export default function DREPage() {
   // Recorte por centro de custo e rateio (E7, G3): cada conta entra com a
   // parte dela no centro escolhido (src/lib/dre-recorte.ts). Sem recorte, as
   // listas de sempre, intactas.
-  const recorte: RecorteDRE = useMemo(() => ({ centro_id: centroId || null, rateio: filtroRateio }), [centroId, filtroRateio]);
+  const recorte: RecorteDRE = useMemo(() => ({ centro_id: centroId || null, rateio: filtroRateio, tag: tag || null }), [centroId, filtroRateio, tag]);
+  // Tags que existem nas contas: sem nenhuma, nem o filtro nem o agrupamento aparecem.
+  const tagsDisponiveis = useMemo(() => tagsDasContas(contasReceber, contasPagar), [contasReceber, contasPagar]);
   const recortado = useMemo(
     () => aplicarRecorteDRE({ receber: contasReceber, pagar: contasPagar, vendas: vendasComLastro, encargos: encargosTodos, variacoes: variacoesTodas }, recorte, centros),
     [contasReceber, contasPagar, vendasComLastro, encargosTodos, variacoesTodas, recorte, centros],
@@ -298,6 +305,12 @@ export default function DREPage() {
     () => (mesesDaVisao.length ? dreMesAMes(baseDRE, mesesDaVisao) : null),
     [baseDRE, mesesDaVisao],
   );
+  // "Por tag": os mesmos meses, regime e recorte do demonstrativo. Só calcula quando pedido.
+  const porTag = useMemo(() => {
+    if (agrupar !== 'tag' || !selectedMonth) return null;
+    const meses = visao === 'meses' && mesesDaVisao.length ? mesesDaVisao : [selectedMonth];
+    return resultadoPorTag({ receber: recortado.receber, pagar: recortado.pagar, meses, regime });
+  }, [agrupar, selectedMonth, visao, mesesDaVisao, recortado, regime]);
 
   // O que a regra do lastro tirou deste mês. Subtrair dinheiro em silêncio é
   // pior do que mostrá-lo: aqui o DRE diz quantas vendas ficaram de fora e
@@ -424,7 +437,7 @@ export default function DREPage() {
   const totalLinhas = dreMain.filter(l => !l.nome.startsWith('Margem')).length;
 
   const filtrosAtivos = (compareMonth && visao === 'mes' ? 1 : 0) + (modoSimplificado ? 0 : 1) + (regime === 'competencia' ? 0 : 1)
-    + (centroId ? 1 : 0) + (filtroRateio === 'todas' ? 0 : 1);
+    + (centroId ? 1 : 0) + (filtroRateio === 'todas' ? 0 : 1) + (tag ? 1 : 0);
 
   const limparFiltros = () => {
     setCompareMonth('');
@@ -432,6 +445,7 @@ export default function DREPage() {
     setRegime('competencia');
     setCentroId('');
     setFiltroRateio('todas');
+    setTag('');
   };
 
   // Mês a mês, no mesmo detalhe (resumido/completo) da visão de um mês.
@@ -444,6 +458,8 @@ export default function DREPage() {
 
   const arvoreDeCentros = useMemo(() => ordenarEmArvore(centros.filter(c => c.ativo !== false || c.id === centroId)), [centros, centroId]);
   const centroEscolhido = centros.find(c => c.id === centroId) ?? null;
+  const tagEscolhida = tag ? (tagsDisponiveis.find(t => t.valor === tag)?.rotulo ?? tag) : '';
+  const escopoDoRecorte = `${centroEscolhido ? ` · ${centroEscolhido.nome}` : ''}${tagEscolhida ? ` · tag ${tagEscolhida}` : ''}`;
   const ROTULO_RATEIO: Record<FiltroDeRateio, string> = { todas: 'Todas as contas', rateadas: 'Só contas rateadas', sem_rateio: 'Só contas sem rateio' };
   const rotuloDaLinhaMeses = (l: LinhaMesAMes) => (l.percentual ? rotuloNota(l.nome) : (ROTULO_LINHA[l.nome] ?? l.nome));
   const rotuloDoPeriodoMeses = mesesDaVisao.length
@@ -458,6 +474,7 @@ export default function DREPage() {
     ];
     if (centroEscolhido) filtros.push({ rotulo: 'Centro de custo', valor: centroEscolhido.nome });
     if (filtroRateio !== 'todas') filtros.push({ rotulo: 'Rateio', valor: ROTULO_RATEIO[filtroRateio] });
+    if (tagEscolhida) filtros.push({ rotulo: 'Tag', valor: tagEscolhida });
     if (visao === 'mes' && rotuloComparativo) filtros.push({ rotulo: 'Comparado com', valor: rotuloComparativo });
     const recuo = (n: number) => '   '.repeat(Math.max(0, n));
     if (visao === 'meses' && mesAMes) {
@@ -639,6 +656,15 @@ export default function DREPage() {
                         },
                       ]
                       : []),
+                    ...(tagsDisponiveis.length
+                      ? [{
+                        id: 'dre-tag',
+                        rotulo: 'Tag',
+                        valor: tag || 'todas',
+                        opcoes: [{ valor: 'todas', rotulo: 'Todas as tags' }, ...tagsDisponiveis],
+                        onChange: (v: string) => setTag(v === 'todas' ? '' : v),
+                      }]
+                      : []),
                     {
                       id: 'dre-detalhe',
                       rotulo: 'Detalhe',
@@ -654,12 +680,12 @@ export default function DREPage() {
                     exibidos: linhasMesAMes.filter(l => !l.percentual).length,
                     total: mesAMes.linhas.filter(l => !l.percentual).length,
                     substantivo: 'linhas do demonstrativo',
-                    escopo: `de ${rotuloDoPeriodoMeses}${centroEscolhido ? ` · ${centroEscolhido.nome}` : ''}`,
+                    escopo: `de ${rotuloDoPeriodoMeses}${escopoDoRecorte}`,
                   } : {
                     exibidos: linhasTabela.length,
                     total: totalLinhas,
                     substantivo: 'linhas do demonstrativo',
-                    escopo: `em ${rotuloMes}${centroEscolhido ? ` · ${centroEscolhido.nome}` : ''}`,
+                    escopo: `em ${rotuloMes}${escopoDoRecorte}`,
                   }}
                   ativos={filtrosAtivos}
                   onLimpar={limparFiltros}
@@ -699,6 +725,22 @@ export default function DREPage() {
                           : 'Pela data em que o dinheiro entrou ou saiu. A margem da venda entra na proporção do que o cliente pagou.'}
                       </span>
                     </div>
+                    {tagsDisponiveis.length ? (
+                      <div className="flex flex-col gap-[var(--fin-s-1)]">
+                        <Segmentado<'nada' | 'tag'>
+                          rotulo="Agrupar"
+                          valor={agrupar}
+                          onChange={setAgrupar}
+                          opcoes={[
+                            { valor: 'nada', rotulo: 'Só o demonstrativo' },
+                            { valor: 'tag', rotulo: 'Por tag' },
+                          ]}
+                        />
+                        <span className="max-w-[40ch] fin-t-caption text-[var(--fin-text-3)]">
+                          {agrupar === 'tag' ? 'Um quadro com o que entrou e saiu em cada tag, abaixo do demonstrativo.' : 'Escolha "Por tag" para ver o resultado de cada tag.'}
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
                   <div className="flex flex-wrap items-center gap-[var(--fin-s-2)]">
                     {visao === 'mes' && anteriorAoSelecionado && compareMonth !== anteriorAoSelecionado ? (
@@ -822,15 +864,24 @@ export default function DREPage() {
                         </p>
                       </>
                     )}
-                    {centroEscolhido || filtroRateio !== 'todas' ? (
+                    {centroEscolhido || filtroRateio !== 'todas' || tagEscolhida ? (
                       <p className="fin-t-caption text-[var(--fin-text-3)]">
                         {centroEscolhido
                           ? `Só a parte de ${centroEscolhido.nome} (e dos centros abaixo dele): conta rateada entra com o percentual deste centro; venda, na proporção das contas a receber dela.`
                           : ''}
                         {filtroRateio !== 'todas' ? ` ${ROTULO_RATEIO[filtroRateio]}.` : ''}
+                        {tagEscolhida ? ` Só as contas com a tag ${tagEscolhida}; venda entra pelas contas a receber dela que têm a tag.` : ''}
                       </p>
                     ) : null}
                   </section>
+
+                  {agrupar === 'tag' && tagsDisponiveis.length > 0 && porTag ? (
+                    <ResultadoPorTag
+                      resultado={porTag}
+                      rotuloPeriodo={visao === 'meses' ? rotuloDoPeriodoMeses : rotuloMes}
+                      regime={regime}
+                    />
+                  ) : null}
                 </>
               )}
             </div>

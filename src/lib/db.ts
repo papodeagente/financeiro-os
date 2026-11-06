@@ -35,6 +35,7 @@ import { CONCILIACAO_REGRAS_SCHEMA_SQL } from './conciliacao-regras-schema';
 import { CONFERENCIA_OPERADORA_SCHEMA_SQL } from './conferencia-operadora-schema';
 import { RELATORIOS_AGENDADOS_SCHEMA_SQL } from './relatorios-agendados/schema';
 import { PERGUNTAS_IA_SCHEMA_SQL } from './perguntar/uso';
+import { CHEQUES_SCHEMA_SQL } from './cheques-servidor';
 
 const pool = process.env.DATABASE_URL
   ? new AuditPool({ connectionString: process.env.DATABASE_URL, max: 5 }, getAuditContext)
@@ -1621,6 +1622,9 @@ async function executarInitDB() {
   // Perguntar em texto (E7, fechamento): limite por agência e registro das
   // perguntas. Controle: fora da auditoria por linha.
   await pool.query(PERGUNTAS_IA_SCHEMA_SQL);
+  // Cheques emitidos (E7, frente C): o talão da agência, a situação de cada
+  // cheque e as liquidações pagas com ele. Auditadas.
+  await pool.query(CHEQUES_SCHEMA_SQL);
   await pool.query(RAZAO_SCHEMA_SQL);
   // Instala a captura somente depois das migrações/seed, sem fabricar histórico.
   await pool.query(AUDIT_SCHEMA_SQL);

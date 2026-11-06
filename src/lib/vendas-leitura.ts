@@ -33,6 +33,8 @@ export interface VendaLida {
   versao_modelo: 1 | 2;
   /** Pagamentos para o relatório por forma (na v1, vindos do cabeçalho). */
   pagamentos: PagamentoDaVenda[];
+  /** Empresa da venda (E7, várias empresas). Ausente = a principal. */
+  empresa_id?: string;
 }
 
 export interface FiltroDeVendas {
@@ -193,7 +195,7 @@ export async function lerVendas(exec: ExecutorSQL, tenantId: string, filtro: Fil
     const situacao: 'ABERTA' | 'FECHADA' = txt(m?.situacao) === 'FECHADA' ? 'FECHADA' : 'ABERTA';
     venda.situacao = situacao;
     const pagamentos = versao === 2 ? venda.pagamentos : pagamentosDoCabecalho(cab, reaisParaCentavos(cab.valor_final ?? cab.valor_total_venda));
-    saida.push({ venda, status, cancelada: status === 'CANCELADO', situacao, versao_modelo: versao, pagamentos });
+    saida.push({ venda, status, cancelada: status === 'CANCELADO', situacao, versao_modelo: versao, pagamentos, empresa_id: txt(cab.empresa_id) || 'principal' });
   }
   return saida;
 }

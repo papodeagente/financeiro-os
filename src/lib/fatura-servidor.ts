@@ -37,6 +37,8 @@ import {
   type RegraDeFaturamento, type RelatorioDaConferencia, type SituacaoDaFatura, type SituacaoVisivel, type TotaisDaFatura,
   type TipoDePessoaDaRegra,
 } from './fatura-regras';
+import type { CorporativoDoItem } from './fatura-documento';
+import { normalizarCorporativo } from './venda-modelo';
 
 // ============================================================
 // Tipos públicos
@@ -111,6 +113,8 @@ export interface DetalhesDoItem {
   centro_custo: string;
   solicitante: string;
   cliente_nome: string;
+  /** Viagem corporativa da venda (E7): só quando a venda tem. */
+  corporativo?: CorporativoDoItem;
 }
 
 export interface ItemDaFatura {
@@ -250,7 +254,10 @@ function lerItem(r: Record<string, unknown>): ItemDaFatura {
     conta_id: txt(r.conta_id), fatura_id: txt(r.fatura_id), venda_id: txt(r.venda_id), venda_numero: txt(r.venda_numero),
     data_venda: dataISO(r.data_venda), data_referencia: dataISO(r.data_referencia), descricao: txt(r.descricao),
     valor_centavos: Number(r.valor_centavos) || 0, taxas_servico_centavos: Number(r.taxas_servico_centavos) || 0,
-    detalhes: { produtos: Array.isArray(d.produtos) ? d.produtos : [], centro_custo: txt(d.centro_custo), solicitante: txt(d.solicitante), cliente_nome: txt(d.cliente_nome) },
+    detalhes: {
+      produtos: Array.isArray(d.produtos) ? d.produtos : [], centro_custo: txt(d.centro_custo), solicitante: txt(d.solicitante), cliente_nome: txt(d.cliente_nome),
+      ...(d.corporativo && typeof d.corporativo === 'object' ? { corporativo: d.corporativo as CorporativoDoItem } : {}),
+    },
     conferido: r.conferido === true, conferencia_nota: txt(r.conferencia_nota), contestacao: txt(r.contestacao),
     contestado_em: r.contestado_em ? quando(r.contestado_em) : null, resposta: txt(r.resposta),
   };
@@ -447,12 +454,21 @@ async function infoDoItem(exec: ExecutorSQL, tenantId: string, conta: { id: stri
   const v = (cab[0]?.data ?? {}) as Record<string, unknown>;
   base.venda_numero = txt(v.numero);
   if (DATA.test(txt(v.data_venda).slice(0, 10))) base.data_venda = txt(v.data_venda).slice(0, 10);
-  const { rows: mod } = await exec.query(`SELECT numero, data_venda, centro_custo, total_cliente_centavos FROM vendas_modelo WHERE tenant_id = $1 AND venda_id = $2`, [tenantId, vendaId])
+  const { rows: mod } = await exec.query(`SELECT * FROM vendas_modelo WHERE tenant_id = $1 AND venda_id = $2`, [tenantId, vendaId])
     .catch(() => ({ rows: [] as Array<Record<string, unknown>> }));
   if (!mod[0]) return base;
   base.venda_numero = txt(mod[0].numero) || base.venda_numero;
   base.data_venda = dataISO(mod[0].data_venda) ?? base.data_venda;
   if (txt(mod[0].centro_custo)) base.detalhes.centro_custo = base.detalhes.centro_custo || txt(mod[0].centro_custo);
+  // Viagem corporativa (E7): o solicitante da venda e os dados da empresa cliente.
+  const corp = normalizarCorporativo(mod[0].corporativo);
+  if (corp) {
+    if (corp.solicitante) base.detalhes.solicitante = corp.solicitante;
+    const item: CorporativoDoItem = {};
+    if (corp.centro_custo) item.cc_cliente = corp.centro_custo;
+    for (const k of ['aprovador', 'matricula', 'projeto', 'motivo', 'requisicao'] as const) if (corp[k]) item[k] = corp[k];
+    if (Object.keys(item).length) base.detalhes.corporativo = item;
+  }
   const { rows: prods } = await exec.query(
     `SELECT id, tipo, descricao, fornecedor_id, fornecedor_nome, localizador, data_inicio, data_fim, cambio FROM venda_produtos
       WHERE tenant_id = $1 AND venda_id = $2 AND cancelado_em IS NULL ORDER BY sequencia, id`,

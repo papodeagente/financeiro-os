@@ -50,6 +50,8 @@ export const VENDA_SCHEMA_SQL = `
   -- da venda, guardados para restaurar.
   ALTER TABLE vendas_modelo ADD COLUMN IF NOT EXISTS operacao_propria BOOLEAN NOT NULL DEFAULT false;
   ALTER TABLE vendas_modelo ADD COLUMN IF NOT EXISTS produtos_removidos JSONB NOT NULL DEFAULT '[]'::jsonb;
+  -- E7: viagem corporativa (centro de custo do cliente, solicitante, aprovador...).
+  ALTER TABLE vendas_modelo ADD COLUMN IF NOT EXISTS corporativo JSONB NOT NULL DEFAULT '{}'::jsonb;
   CREATE INDEX IF NOT EXISTS idx_vendas_modelo_crm ON vendas_modelo(tenant_id, crm_venda_id) WHERE crm_venda_id <> '';
   CREATE INDEX IF NOT EXISTS idx_vendas_modelo_situacao ON vendas_modelo(tenant_id, situacao, data_venda);
   -- E7: venda trazida pela mudança de sistema (origem 'mudanca'). Banco criado antes aceita só manual/crm.
@@ -113,6 +115,8 @@ export const VENDA_SCHEMA_SQL = `
     CONSTRAINT venda_passageiros_valores_ok CHECK (tarifa_centavos >= 0 AND taxas_centavos >= 0 AND outras_taxas_centavos >= 0)
   );
   CREATE INDEX IF NOT EXISTS idx_venda_passageiros_produto ON venda_passageiros(tenant_id, venda_id, produto_id);
+  -- E7: o viajante na empresa cliente (centro de custo, matrícula).
+  ALTER TABLE venda_passageiros ADD COLUMN IF NOT EXISTS dados JSONB NOT NULL DEFAULT '{}'::jsonb;
 
   CREATE TABLE IF NOT EXISTS venda_componentes (
     tenant_id TEXT NOT NULL,
