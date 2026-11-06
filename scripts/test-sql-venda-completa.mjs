@@ -184,6 +184,14 @@ r = await processarEventoCRM('PAGAMENTO_CONFIRMADO', { entur_venda_id: vid, parc
 const car3 = (await contas('contas_receber', vid)).find(c => c.forma_recebimento === 'CARTAO_CREDITO' && c.parcela_numero === 3);
 eq([r.processado, car3.status, car3.valor_recebido], [true, 'PARCIAL', 1], 'com pagamento_ref: baixa só a parcela daquela forma');
 await query(`UPDATE contas_receber SET status = 'PENDENTE', data = data || '{"status":"PENDENTE","valor_recebido":null}' WHERE id = $1`, [car3.id]);
+{
+  // O CRM conhece a venda dele (crm_venda_id), não o id do Financeiro.
+  const crmId = cab.crm_venda_id;
+  r = await processarEventoCRM('PAGAMENTO_CONFIRMADO', { crm_venda_id: crmId, parcela: 3, valor: 1, data_pagamento: '2026-11-04', pagamento_ref: 'car' }, 'pc-3', T);
+  const car3b = (await contas('contas_receber', vid)).find(c => c.id === car3.id);
+  eq([Boolean(crmId), r.processado, car3b.status], [true, true, 'PARCIAL'], 'pagamento confirmado pelo crm_venda_id acha a venda e baixa a parcela certa');
+  await query(`UPDATE contas_receber SET status = 'PENDENTE', data = data || '{"status":"PENDENTE","valor_recebido":null}' WHERE id = $1`, [car3.id]);
+}
 
 console.log('--- (e) Posição: baixa parcial e cobrança ---');
 cr = await contas('contas_receber', vid);

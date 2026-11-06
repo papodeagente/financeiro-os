@@ -43,6 +43,9 @@ export async function POST(req: NextRequest) {
       processado: resultado.processado,
       evento_id: id,
       acao: resultado.acao,
+      // Versões da VENDA_FECHADA que este Financeiro entende (E5): o CRM
+      // passa a mandar a v2 quando vê o 2 aqui (ou pela chave da empresa).
+      versoes_venda: [1, 2],
       ...(resultado.processado ? {} : { erro: resultado.erro ?? resultado.acao }),
     }, { status: resultado.processado ? 200 : 500 });
   } catch (e) {

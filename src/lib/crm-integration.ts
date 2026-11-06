@@ -1858,12 +1858,21 @@ export async function processarEventoCRM(
       }
 
       case 'PAGAMENTO_CONFIRMADO': {
-        const { entur_venda_id, parcela: numParcela, valor, data_pagamento } = payload;
+        const { parcela: numParcela, valor, data_pagamento } = payload;
+        // O CRM conhece a própria venda (crm_venda_id), não o id daqui: com
+        // ele, acha a venda que a VENDA_FECHADA criou (E5).
+        let entur_venda_id = asStr(payload.entur_venda_id);
+        if (!entur_venda_id && asStr(payload.crm_venda_id)) {
+          const { rows: achada } = await pool.query(
+            `SELECT id FROM vendas_crm WHERE tenant_id = $1 AND data->>'crm_venda_id' = $2 ORDER BY created_at DESC LIMIT 1`,
+            [tenantId, asStr(payload.crm_venda_id)]);
+          entur_venda_id = achada[0] ? String(achada[0].id) : '';
+        }
         // A parcela é OBRIGATÓRIA: sem ela, o casamento pegaria todas as
         // contas da venda e marcaria tudo como recebido com um pagamento só.
         const parcelaAlvo = Number(numParcela);
         if (!entur_venda_id || !Number.isFinite(parcelaAlvo) || parcelaAlvo < 1) {
-          acao = 'PAGAMENTO_CONFIRMADO sem entur_venda_id/parcela válida';
+          acao = 'PAGAMENTO_CONFIRMADO sem venda (entur_venda_id ou crm_venda_id) ou parcela válida';
           break;
         }
         const { rows: receber } = await pool.query(
