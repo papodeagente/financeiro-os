@@ -10,6 +10,7 @@ import { loadEntities, saveEntity, updateEntity, deleteEntity, loadAgencia, load
 import { proximaDataPagamento, descreverAgenda } from '@/lib/comissao-agenda';
 import { calcularComissaoDoMes, chaveAcumulado } from '@/lib/comissao-acumulada';
 import { normalizarRegras, repartirVenda, type ParteDaVenda } from '@/lib/comissao-regras';
+import { planoUsaMrr } from '@/lib/plano-comissao';
 import {
   round2, num, somaPor, percentual, paraBRL, hojeISO, dataLocal, mesDe,
 } from '@/lib/money';
@@ -252,7 +253,7 @@ export default function ComissoesPage() {
     }
 
     /** Apura a base da venda, ou devolve o motivo da pendência. */
-    async function montar(venda: VendaCRM, anterior?: ComissaoVenda): Promise<BaseApurada | { erro: string }> {
+    async function montar(venda: VendaCRM, anterior?: ComissaoVenda): Promise<BaseApurada | { erro: string } | { ignorarMrr: true; plano: PlanoComissao }> {
       // A equipe é uma lista só, vinda de `usuarios`, e é exatamente para
       // lá que venda.vendedor_id aponta quando a venda vem do CRM. Venda
       // antiga, gravada quando existia o cadastro paralelo, resolve pelos
@@ -276,6 +277,10 @@ export default function ComissoesPage() {
             : `vendedor ${vendedor.nome} está sem plano de comissão vinculado`,
         };
       }
+
+      // Este plano é apurado pelo motor de MRR, com uma linha mensal por
+      // vendedor. Ele nunca pode gerar também uma comissão por venda.
+      if (planoUsaMrr(plano)) return { ignorarMrr: true, plano };
 
       const base = await calcularValorBase(venda, plano, comissoesPorVenda, cacheItens);
       if ('erro' in base) return base;
@@ -366,6 +371,22 @@ export default function ComissoesPage() {
       const r = await montar(venda, anterior);
       if ('erro' in r) {
         pend.push({ id: anterior?.id ?? venda.id, venda: venda.numero, motivo: r.erro });
+        continue;
+      }
+      if ('ignorarMrr' in r) {
+        if (anterior?.status === 'CALCULADA') {
+          await updateEntity('comissoes', {
+            ...anterior,
+            status: 'CANCELADA',
+            observacoes: `${anterior.observacoes ? anterior.observacoes + ' | ' : ''}Cancelada automaticamente em ${hoje}: o plano ${r.plano.nome} usa a base MRR gerado.`,
+          });
+        } else if (anterior && anterior.status !== 'CANCELADA') {
+          pend.push({
+            id: anterior.id,
+            venda: venda.numero,
+            motivo: `o plano ${r.plano.nome} passou a usar MRR gerado, mas esta comissão já está ${anterior.status.toLowerCase()} — revise antes de cancelar`,
+          });
+        }
         continue;
       }
       apuradas.push(r);

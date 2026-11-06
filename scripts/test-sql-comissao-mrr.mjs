@@ -60,7 +60,7 @@ for (const [id, tenant, nome, email, ext, plano] of [
     [id, nome, email, ext, tenant, JSON.stringify({ id, nome, email, perfil: 'VENDEDOR', plano_comissao_id: plano })]);
 }
 const FAIXAS = [{ ate_pct: 70, percentual: 20 }, { ate_pct: 100, percentual: 40 }, { ate_pct: null, percentual: 60 }];
-await query(`INSERT INTO planos_comissao (id, nome, tenant_id, data) VALUES ('p-mrr', 'SDR MRR', $1, $2::jsonb)`, [ENTUR, JSON.stringify({ id: 'p-mrr', nome: 'SDR MRR', ativo: true, mrr: { faixas: FAIXAS } })]);
+await query(`INSERT INTO planos_comissao (id, nome, tenant_id, data) VALUES ('p-mrr', 'SDR MRR', $1, $2::jsonb)`, [ENTUR, JSON.stringify({ id: 'p-mrr', nome: 'SDR MRR', ativo: true, base_calculo: 'MRR_GERADO', mrr: { faixas: FAIXAS } })]);
 await query(`INSERT INTO plano_contas (id, tenant_id, codigo, data) VALUES ('cat-26', $1, '2.6', '{"codigo":"2.6"}')`, [ENTUR]);
 await query(`INSERT INTO agencia (id, tenant_id, data) VALUES ('ag-1', $1, '{"datas_pagamento_comissao":[10]}')`, [ENTUR]);
 

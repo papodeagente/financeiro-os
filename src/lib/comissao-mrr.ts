@@ -66,6 +66,7 @@ export interface PlanoComFaixasDeMrr {
   id: string;
   nome: string;
   ativo: boolean;
+  base_calculo?: string;
   mrr?: { faixas?: unknown } | null;
 }
 
@@ -279,10 +280,10 @@ export function apurarComissaoMrr(e: {
   const vendedores: ResultadoDoVendedor[] = [];
   for (const [vid, doVendedor] of porVendedor) {
     const vendedor = e.vendedores.find(v => v.id === vid)!;
-    const plano = e.planos.find(p => p.id === vendedor.plano_comissao_id && p.ativo) ?? null;
+    const plano = e.planos.find(p => p.id === vendedor.plano_comissao_id && p.ativo && p.base_calculo === 'MRR_GERADO') ?? null;
     const faixas = normalizarFaixas(plano?.mrr?.faixas);
     const pendencias: string[] = [];
-    if (!plano) pendencias.push('Sem plano de comissão ativo: escolha um em Vendedores e planos.');
+    if (!plano) pendencias.push('Sem plano ativo com base MRR gerado: escolha um em Vendedores e planos.');
     else if (!faixas.length) pendencias.push(`O plano "${plano.nome}" não tem faixas de MRR.`);
 
     const resultados: ResultadoDaMeta[] = [];

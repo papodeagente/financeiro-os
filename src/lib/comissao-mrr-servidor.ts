@@ -135,7 +135,13 @@ export async function lerPlanos(exec: ExecutorSQL, tenantId: string): Promise<Pl
   const { rows } = await exec.query(`SELECT id, nome, data FROM planos_comissao WHERE tenant_id = $1`, [tenantId]);
   return rows.map(r => {
     const d = (r.data ?? {}) as Record<string, unknown>;
-    return { id: String(r.id), nome: String(r.nome || d.nome || ''), ativo: d.ativo !== false, mrr: (d.mrr ?? null) as PlanoComFaixasDeMrr['mrr'] };
+    return {
+      id: String(r.id),
+      nome: String(r.nome || d.nome || ''),
+      ativo: d.ativo !== false,
+      base_calculo: String(d.base_calculo ?? ''),
+      mrr: (d.mrr ?? null) as PlanoComFaixasDeMrr['mrr'],
+    };
   });
 }
 

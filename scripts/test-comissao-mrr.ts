@@ -21,6 +21,7 @@ import {
   type MetaMrr, type PlanoComFaixasDeMrr, type VendedorDoFinanceiro,
 } from '../src/lib/comissao-mrr.ts';
 import { lerMrrVendido, type VendaMrr } from '../src/lib/mrr-vendido.ts';
+import { planoUsaMrr, validarBaseDoPlano } from '../src/lib/plano-comissao.ts';
 
 let falhas = 0, total = 0;
 function eq(atual: unknown, esperado: unknown, label: string) {
@@ -37,7 +38,7 @@ const vendedores: VendedorDoFinanceiro[] = [
   { id: 'u-joao', nome: 'João', email: 'joao@entur.com.br', external_id: '', plano_comissao_id: 'p-mrr' },
   { id: 'u-ana', nome: 'Ana', email: 'ana@entur.com.br', external_id: 'crm_user_9', plano_comissao_id: '' },
 ];
-const planos: PlanoComFaixasDeMrr[] = [{ id: 'p-mrr', nome: 'SDR MRR', ativo: true, mrr: { faixas: FAIXAS } }];
+const planos: PlanoComFaixasDeMrr[] = [{ id: 'p-mrr', nome: 'SDR MRR', ativo: true, base_calculo: 'MRR_GERADO', mrr: { faixas: FAIXAS } }];
 const metaPlanos: MetaMrr = {
   id: 'm1', mes: MES, nome: 'Planos', produtos: ['plano:essencial', 'plano:performance'],
   produtos_nomes: { 'plano:essencial': 'Essencial', 'plano:performance': 'Performance' },
@@ -101,6 +102,8 @@ console.log('\n--- (d) quem vendeu ---');
 
 console.log('\n--- (e) apuração ---');
 {
+  eq([planoUsaMrr({ base_calculo: 'MRR_GERADO' }), planoUsaMrr({ base_calculo: 'MARKUP' })], [true, false], 'a base MRR é explícita no plano');
+  eq([validarBaseDoPlano('MRR_GERADO', 'ecossistema'), validarBaseDoPlano('MRR_GERADO', 'agencia') !== null], [null, true], 'MRR gerado só pode ser gravado no ecossistema');
   const a = apurarComissaoMrr({
     mes: MES, metas: [metaPlanos], vendedores, planos,
     vendas: [
@@ -127,7 +130,9 @@ console.log('\n--- (e) apuração ---');
   const semVenda = apurarComissaoMrr({ mes: MES, metas: [metaPlanos], vendedores, planos, vendas: [] });
   eq(semVenda.vendedores.map(v => [v.nome, v.metas[0].realizado, v.metas[0].pct]), [['João', 0, 0], ['Karen', 0, 0]], 'quem tem meta aparece mesmo sem venda, a 0%');
   const planoInativo = apurarComissaoMrr({ mes: MES, metas: [metaPlanos], vendedores, planos: [{ ...planos[0], ativo: false }], vendas: [venda({})] });
-  eq([planoInativo.vendedores[0].comissao, planoInativo.vendedores[0].pendencias[0].startsWith('Sem plano de comissão ativo')], [0, true], 'plano inativo não paga');
+  eq([planoInativo.vendedores[0].comissao, planoInativo.vendedores[0].pendencias[0].startsWith('Sem plano ativo com base MRR gerado')], [0, true], 'plano inativo não paga');
+  const baseErrada = apurarComissaoMrr({ mes: MES, metas: [metaPlanos], vendedores, planos: [{ ...planos[0], base_calculo: 'MARKUP' }], vendas: [venda({})] });
+  eq([baseErrada.vendedores[0].comissao, baseErrada.vendedores[0].pendencias[0].startsWith('Sem plano ativo com base MRR gerado')], [0, true], 'plano de venda comum não paga também a comissão de MRR');
   const semFaixa = apurarComissaoMrr({ mes: MES, metas: [metaPlanos], vendedores, planos: [{ ...planos[0], mrr: null }], vendas: [venda({})] });
   eq(semFaixa.vendedores[0].pendencias[0], 'O plano "SDR MRR" não tem faixas de MRR.', 'plano sem faixas de MRR: pendência, não comissão');
   const duasMetas = apurarComissaoMrr({

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { PlanoComissao, FaixaComissao, TipoBaseComissao, TipoProdutoVenda, createPlanoComissao } from '@/lib/crm-types';
 import { normalizarRegras, type RegraDeProduto } from '@/lib/comissao-regras';
 import { faixasEmPalavras, normalizarFaixas, type MetaMrr } from '@/lib/comissao-mrr';
+import { planoUsaMrr, ROTULOS_BASE_COMISSAO } from '@/lib/plano-comissao';
 import { hojeISO } from '@/lib/money';
 import { useAuth } from '@/contexts/AuthContext';
 import { FaixasDeMrr, erroDasFaixas, faixasDigitadas, faixasParaGravar, type FaixaDigitada } from '@/components/fin/FaixasDeMrr';
@@ -16,14 +17,6 @@ import { Input } from '@/components/ui/input';
 import {
   Plus, X, Check, Trash2, Settings2, Percent, Layers, ChevronDown, ChevronUp,
 } from 'lucide-react';
-
-const BASES: Record<TipoBaseComissao, string> = {
-  RECEITA_AGENCIA: 'Receita da Agencia (Comissao)',
-  MARKUP: 'Markup (Venda - Custo)',
-  VALOR_VENDA: 'Valor Total da Venda',
-  COMISSAO_FORNECEDOR: 'Comissao do Fornecedor',
-  LUCRO: 'Lucro Liquido',
-};
 
 const TIPOS_PRODUTO: TipoProdutoVenda[] = ['AEREO', 'HOTEL', 'PACOTE', 'SEGURO', 'RECEPTIVO', 'CRUZEIRO', 'CARRO', 'INGRESSO', 'GRUPO', 'OUTROS'];
 
@@ -55,7 +48,8 @@ function descreverRegra(r: RegraDeProduto, produtos: ProdutoEscolhivel[]): strin
 export default function PlanosComissaoPage() {
   // Só na conta do ecossistema: as faixas da comissão por MRR e as metas do
   // mês, com os produtos vinculados (comissao-mrr.ts).
-  const ecossistema = useAuth().user?.tenantPerfil === 'ecossistema';
+  const { user } = useAuth();
+  const ecossistema = user?.tenantNumero === 1 && user?.tenantPerfil === 'ecossistema';
   const [faixasMrr, setFaixasMrr] = useState<FaixaDigitada[]>([]);
   const [metasMrr, setMetasMrr] = useState<MetaMrr[]>([]);
   const [erroMrr, setErroMrr] = useState<string | null>(null);
@@ -73,6 +67,7 @@ export default function PlanosComissaoPage() {
   const [faixas, setFaixas] = useState<FaixaComissao[]>([]);
   const [regrasProduto, setRegrasProduto] = useState<RegraDeProduto[]>([]);
   const [produtos, setProdutos] = useState<ProdutoEscolhivel[]>([]);
+  const baseMrr = baseCalculo === 'MRR_GERADO';
 
   async function load() {
     setLoading(true);
@@ -127,9 +122,9 @@ export default function PlanosComissaoPage() {
   async function handleSave() {
     if (!nome) return;
     // Fora do ecossistema o campo nem aparece: o que já estiver gravado fica como está.
-    const erroDaMrr = ecossistema ? erroDasFaixas(faixasMrr) : null;
+    const erroDaMrr = ecossistema && baseMrr ? erroDasFaixas(faixasMrr) : null;
     if (erroDaMrr) { setErroMrr(erroDaMrr); return; }
-    const mrr = ecossistema ? { mrr: { faixas: normalizarFaixas(faixasParaGravar(faixasMrr)) } } : {};
+    const mrr = ecossistema && baseMrr ? { mrr: { faixas: normalizarFaixas(faixasParaGravar(faixasMrr)) } } : {};
     if (editId) {
       const existing = planos.find(p => p.id === editId)!;
       await updateEntity('planos-comissao', {
@@ -263,14 +258,16 @@ export default function PlanosComissaoPage() {
                   <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Base de Cálculo</label>
                   <select value={baseCalculo} onChange={e => setBaseCalculo(e.target.value as TipoBaseComissao)}
                     className="w-full bg-[var(--t-input-bg)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text)]">
-                    {Object.entries(BASES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    {Object.entries(ROTULOS_BASE_COMISSAO)
+                      .filter(([k]) => k !== 'MRR_GERADO' || ecossistema)
+                      .map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
                 </div>
-                <div>
+                {!baseMrr ? <div>
                   <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">% Padrão</label>
                   <Input type="number" min={0} max={100} step={0.5} value={percentualPadrao} onChange={e => setPercentualPadrao(parseFloat(e.target.value) || 0)}
                     className="bg-[var(--t-input-bg)] border-[var(--t-border)] text-[var(--t-text)]" />
-                </div>
+                </div> : null}
               </div>
               <div>
                 <label className="text-xs text-[var(--t-text-secondary)] mb-1 block">Descrição</label>
@@ -279,7 +276,7 @@ export default function PlanosComissaoPage() {
               </div>
 
               {/* Faixas progressivas */}
-              <div className="p-4 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)]">
+              {!baseMrr ? <div className="p-4 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)]">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-sm font-medium text-[var(--t-text)]">Faixas Progressivas (opcional)</p>
                   <Button size="sm" variant="outline" onClick={addFaixa} className="border-[var(--t-border)] text-[var(--t-text-secondary)] h-7 text-xs">
@@ -315,10 +312,10 @@ export default function PlanosComissaoPage() {
                     ))}
                   </div>
                 )}
-              </div>
+              </div> : null}
 
               {/* Regras por produto */}
-              <div className="p-4 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)]">
+              {!baseMrr ? <div className="p-4 rounded-lg bg-[var(--t-bg)] shadow-[var(--t-card-shadow)]">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-sm font-medium text-[var(--t-text)]">Regras por produto (opcional)</p>
                   <Button size="sm" variant="outline" onClick={addRegraProduto} className="border-[var(--t-border)] text-[var(--t-text-secondary)] h-7 text-xs">
@@ -435,9 +432,9 @@ export default function PlanosComissaoPage() {
                     ))}
                   </div>
                 )}
-              </div>
+              </div> : null}
 
-              {ecossistema ? (
+              {ecossistema && baseMrr ? (
                 <div className="flex flex-col gap-2">
                   <FaixasDeMrr linhas={faixasMrr} onChange={l => { setFaixasMrr(l); setErroMrr(null); }} />
                   {erroMrr ? <p role="alert" className="fin-t-caption text-[var(--fin-negative-text)]">{erroMrr}</p> : null}
@@ -474,12 +471,12 @@ export default function PlanosComissaoPage() {
                       {expandedId === p.id ? <ChevronUp className="w-4 h-4 text-[var(--t-text-muted)]" /> : <ChevronDown className="w-4 h-4 text-[var(--t-text-muted)]" />}
                       <div>
                         <h3 className="font-medium text-[var(--t-text)]">{p.nome}</h3>
-                        <p className="text-xs text-[var(--t-text-muted)]">{p.descricao || BASES[p.base_calculo]}</p>
+                        <p className="text-xs text-[var(--t-text-muted)]">{p.descricao || ROTULOS_BASE_COMISSAO[p.base_calculo]}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge className="bg-[var(--t-green-bg)] text-[var(--t-green)] border-0 text-sm font-mono">
-                        <Percent className="w-3 h-3 mr-0.5" />{p.percentual_padrao}
+                        {planoUsaMrr(p) ? 'MRR' : <><Percent className="w-3 h-3 mr-0.5" />{p.percentual_padrao}</>}
                       </Badge>
                       <Badge className={`${p.ativo ? 'bg-[var(--t-green-bg)] text-[var(--t-green)]' : 'bg-[var(--t-surface)] text-[var(--t-text-muted)]'} border-0 text-xs`}>
                         {p.ativo ? 'Ativo' : 'Inativo'}
@@ -501,9 +498,9 @@ export default function PlanosComissaoPage() {
                     <div className="mt-4 pt-4 border-t border-[var(--t-border)] grid grid-cols-2 gap-4">
                       <div>
                         <p className="text-xs text-[var(--t-text-muted)] uppercase mb-2">Base de Cálculo</p>
-                        <p className="text-sm text-[var(--t-text)]">{BASES[p.base_calculo]}</p>
+                        <p className="text-sm text-[var(--t-text)]">{ROTULOS_BASE_COMISSAO[p.base_calculo]}</p>
                       </div>
-                      <div>
+                      {!planoUsaMrr(p) ? <div>
                         <p className="text-xs text-[var(--t-text-muted)] uppercase mb-2">Faixas ({p.faixas.length})</p>
                         {p.faixas.length === 0 ? (
                           <p className="text-xs text-[var(--t-text-muted)]">Percentual fixo</p>
@@ -516,10 +513,10 @@ export default function PlanosComissaoPage() {
                             ))}
                           </div>
                         )}
-                      </div>
-                      {ecossistema ? (
-                        <div className="col-span-2">
-                          <p className="text-xs text-[var(--t-text-muted)] uppercase mb-2">Comissão por MRR</p>
+                      </div> : null}
+                      {ecossistema && planoUsaMrr(p) ? (
+                        <div>
+                          <p className="text-xs text-[var(--t-text-muted)] uppercase mb-2">Faixas de MRR</p>
                           <p className="text-xs text-[var(--t-text-secondary)]">
                             {normalizarFaixas(p.mrr?.faixas).length ? faixasEmPalavras(normalizarFaixas(p.mrr?.faixas)) : 'Sem faixas: não paga comissão por MRR.'}
                           </p>

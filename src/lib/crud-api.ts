@@ -455,6 +455,11 @@ export function createCrudItemHandlers(tableName: string, indexColumns: string[]
         return NextResponse.json({ error: 'Esta conta bancária não está liberada para você.' }, { status: 403 });
       }
       const tenantId = await getTenantId();
+      opcoes.normalizarCadastro?.(item as Record<string, unknown>);
+      const invalido = opcoes.validarCadastro?.(item as Record<string, unknown>) ?? null;
+      if (invalido) return NextResponse.json({ error: invalido }, { status: 400 });
+      const recusaServidor = opcoes.conferirNoServidor ? await opcoes.conferirNoServidor(tenantId, item as Record<string, unknown>) : null;
+      if (recusaServidor) return NextResponse.json({ error: recusaServidor }, { status: 400 });
       const recusaEmpresa = await guardaDeEmpresaNaGravacao(opcoes, tenantId, id, item as Record<string, unknown>);
       if (recusaEmpresa) return recusaEmpresa;
       const recusaGravacao = await guardaDaGravacao(opcoes, tableName, tenantId, id, item as Record<string, unknown>);

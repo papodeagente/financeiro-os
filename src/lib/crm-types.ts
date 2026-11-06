@@ -728,7 +728,7 @@ export interface ExtratoLinha {
 
 import type { RegraDeProduto } from './comissao-regras';
 
-export type TipoBaseComissao = 'MARKUP' | 'VALOR_VENDA' | 'COMISSAO_FORNECEDOR' | 'LUCRO' | 'RECEITA_AGENCIA';
+export type TipoBaseComissao = 'MARKUP' | 'VALOR_VENDA' | 'COMISSAO_FORNECEDOR' | 'LUCRO' | 'RECEITA_AGENCIA' | 'MRR_GERADO';
 
 export interface FaixaComissao {
   de: number;
