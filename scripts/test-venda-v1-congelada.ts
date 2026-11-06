@@ -27,6 +27,9 @@ function eq(atual: unknown, esperado: unknown, label: string) {
   } else console.log(`PASS  ${label}`);
 }
 
+/** Dia em que o retrato (fixture) foi gravado. */
+const DIA_DO_RETRATO = '2026-11-05';
+
 /** Troca ids sorteados por #1, #2... na ordem em que aparecem, e hoje por <hoje>. */
 function estavel(valor: unknown): unknown {
   const ids = new Map<string, string>();
@@ -42,7 +45,9 @@ function estavel(valor: unknown): unknown {
       if (!ids.has(v)) ids.set(v, `#${ids.size + 1}`);
       return ids.get(v);
     }
-    if (v === hoje) return '<hoje>';
+    // O retrato foi tirado em 05/11/2026: as datas de entrada desse dia
+    // também viram <hoje>, senão o teste mudaria de resultado com o calendário.
+    if (v === hoje || v === DIA_DO_RETRATO) return '<hoje>';
     return v;
   };
   return andar(valor);
