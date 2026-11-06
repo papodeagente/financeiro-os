@@ -50,7 +50,7 @@ type FormCentro = {
 const CENTRO_VAZIO: FormCentro = { codigo: '', nome: '', centro_pai_id: '', responsavel: '', orcamento_mensal: 0, ativo: true };
 
 type LinhaRegra = { centro_custo_id: string; categoria_id?: string; percentual: number };
-type FormRegra = { nome: string; linhas: LinhaRegra[] };
+type FormRegra = { nome: string; linhas: LinhaRegra[]; aplicar_quando?: { categoria_id?: string; pessoa?: string } };
 
 function novoId(prefixo: string): string {
   return `${prefixo}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
@@ -165,7 +165,7 @@ export default function CentrosDeCustoPage() {
 
   function abrirRegra(r: RegraRateio | null) {
     const pcts = dividirIgual(2);
-    setFormRegra(r ? { nome: r.nome, linhas: r.linhas.map(l => ({ ...l })) } : { nome: '', linhas: [{ centro_custo_id: '', percentual: pcts[0] }, { centro_custo_id: '', percentual: pcts[1] }] });
+    setFormRegra(r ? { nome: r.nome, linhas: r.linhas.map(l => ({ ...l })), aplicar_quando: r.aplicar_quando ? { ...r.aplicar_quando } : undefined } : { nome: '', linhas: [{ centro_custo_id: '', percentual: pcts[0] }, { centro_custo_id: '', percentual: pcts[1] }] });
     setRegraAberta({ id: r?.id ?? null });
   }
 
@@ -250,7 +250,19 @@ export default function CentrosDeCustoPage() {
   ];
 
   const colunasRegra: FinColuna<RegraRateio>[] = [
-    { id: 'nome', cabecalho: 'Regra', tipo: 'texto', minWidth: 160, render: r => <span className="fin-t-body-strong text-[var(--fin-text)]">{r.nome}</span> },
+    {
+      id: 'nome', cabecalho: 'Regra', tipo: 'texto', minWidth: 160,
+      render: r => {
+        const g = r.aplicar_quando;
+        const quando = [g?.categoria_id ? categoriaPorId.get(g.categoria_id)?.nome ?? 'categoria excluída' : '', g?.pessoa ?? ''].filter(Boolean).join(' + ');
+        return (
+          <span className="flex flex-col">
+            <span className="fin-t-body-strong text-[var(--fin-text)]">{r.nome}</span>
+            {quando ? <span className="fin-t-caption text-[var(--fin-text-3)]">Entra sozinha: {quando}</span> : null}
+          </span>
+        );
+      },
+    },
     {
       id: 'divisao', cabecalho: 'Divisão', tipo: 'texto', minWidth: 280,
       render: r => (
@@ -486,6 +498,45 @@ export default function CentrosDeCustoPage() {
               Dividir igual
             </Button>
           </div>
+          {/* Aplicar sozinha (E7, frente D): a regra entra no lançamento ao
+              escolher esta categoria e/ou esta pessoa, sempre editável. */}
+          <fieldset className="flex flex-col gap-[var(--fin-s-3)] border-t border-[var(--fin-border)] pt-[var(--fin-s-4)]">
+            <legend className="fin-t-body-strong text-[var(--fin-text)]">Aplicar sozinha</legend>
+            <p className="fin-t-caption text-[var(--fin-text-3)]">
+              Ao escolher esta categoria ou esta pessoa num lançamento ainda sem rateio, a regra já entra preenchida. Dá para mudar
+              ou desfazer no próprio lançamento. Sem nada aqui, a regra só entra quando você escolhe.
+            </p>
+            <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:grid-cols-2">
+              <Field rotulo="Quando a categoria for">
+                {a => (
+                  <Opcoes
+                    id={a.id}
+                    describedBy={a['aria-describedby']}
+                    rotulo="Categoria que aplica a regra sozinha"
+                    valor={formRegra.aplicar_quando?.categoria_id ?? ''}
+                    onChange={v => setFormRegra(f => ({ ...f, aplicar_quando: { ...f.aplicar_quando, categoria_id: v || undefined } }))}
+                    opcoes={[
+                      { valor: NENHUM, rotulo: 'Qualquer categoria' },
+                      ...[...categorias].filter(c => c.ativo !== false).sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true })).map(c => ({ valor: c.id, rotulo: `${c.codigo} · ${c.nome}` })),
+                    ]}
+                  />
+                )}
+              </Field>
+              <Field rotulo="Quando o fornecedor ou cliente for" ajuda="O nome como aparece no lançamento.">
+                {a => (
+                  <Input
+                    id={a.id}
+                    aria-describedby={a['aria-describedby']}
+                    value={formRegra.aplicar_quando?.pessoa ?? ''}
+                    maxLength={120}
+                    placeholder="Qualquer pessoa"
+                    onChange={e => setFormRegra(f => ({ ...f, aplicar_quando: { ...f.aplicar_quando, pessoa: e.target.value } }))}
+                    className={CONTROLE}
+                  />
+                )}
+              </Field>
+            </div>
+          </fieldset>
         </div>
       </RecordSheet>
 

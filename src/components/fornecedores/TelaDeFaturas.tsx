@@ -29,6 +29,7 @@ import { Segmentado } from '@/components/fin/Segmentado';
 import { Field } from '@/components/fin/Field';
 import { Callout } from '@/components/fin/Callout';
 import { toast } from '@/lib/toast';
+import { HistoricoRecolhivel } from '@/components/fin/HistoricoDoRegistro';
 import { cn } from '@/lib/utils';
 import {
   DIAS_DA_SEMANA, PERIODICIDADES, ROTULO_AJUSTE, ROTULO_DATA_BASE, ROTULO_PERIODICIDADE, descreverRegra, normalizarRegra, proximasFaturas,
@@ -900,6 +901,8 @@ function DetalheDaFaturaSheet({ id, onFechar, onMudou }: { id: string; onFechar:
             estado="ok"
             vazio={{ motivo: 'sem-dado', titulo: 'Sem itens', oQueE: 'Esta fatura não tem itens.' }}
           />
+          {/* Histórico da fatura (E7, frente D): gerada, vencimento ajustado, desfeita. */}
+          <HistoricoRecolhivel entidade="faturas_fornecedor" id={f.id} />
         </div>
       ) : null}
     </RecordSheet>

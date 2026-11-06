@@ -14,6 +14,9 @@ import { empresaComConfigPropria, lerChavesDaEmpresa } from './empresas-config';
 import { EMPRESA_PRINCIPAL_ID } from './empresas';
 
 export async function lerCamposDosTitulos(exec: ExecutorSQL, tenantId: string, empresaId?: string | null): Promise<CampoPersonalizado[]> {
+  // Banco sem o cadastro da agência (antigo ou teste): nenhum campo, sem erro.
+  const { rows: ok } = await exec.query(`SELECT to_regclass('public.agencia') IS NOT NULL AS ok`);
+  if (ok[0]?.ok !== true) return [];
   if (empresaComConfigPropria(empresaId)) {
     const v = (await lerChavesDaEmpresa(exec, tenantId, empresaId, [CHAVE_DOS_CAMPOS]))[CHAVE_DOS_CAMPOS];
     return normalizarDefinicoes(v ?? []);

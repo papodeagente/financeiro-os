@@ -1,8 +1,10 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
-import { ContaReceber } from '@/lib/crm-types';
+import { ContaReceber, type PlanoContas } from '@/lib/crm-types';
+import { loadEntities } from '@/lib/crm-storage';
+import { SugestaoDeCategoria } from '@/components/financeiro/SugestaoDeCategoria';
 import type { CarimboDoCambio } from '@/lib/cambio';
 import { formatarNaMoeda } from '@/lib/cambio';
 import { paraBRL } from '@/lib/money';
@@ -125,7 +127,11 @@ export type FormularioContaProps = {
   /** Contas bancárias e a padrão da agência, para a conta prevista. */
   contasPrevisao?: readonly ContaParaPrevisao[];
   padraoPrevisaoId?: string | null;
+  /** Empresa da conta em edição (E7, frente D): vale a lista de campos dela. */
+  empresaId?: string | null;
 };
+
+const SEM_CATEGORIA = '__sem_categoria__';
 
 function dataBR(iso: string): string {
   const [a, m, d] = String(iso || '').slice(0, 10).split('-');
@@ -143,8 +149,23 @@ export function FormularioConta({
   vendaId = null,
   contasPrevisao = [],
   padraoPrevisaoId = null,
+  empresaId = null,
 }: FormularioContaProps) {
   const travada = Boolean(editando && vendaId);
+  // Categorias de receita do plano (E7, frente D).
+  const [planoDeContas, setPlanoDeContas] = useState<PlanoContas[]>([]);
+  useEffect(() => {
+    let vivo = true;
+    loadEntities<PlanoContas>('plano-contas').then(l => { if (vivo) setPlanoDeContas(l); }).catch(() => undefined);
+    return () => { vivo = false; };
+  }, []);
+  const categoriasReceita = planoDeContas
+    .filter(c => String(c.tipo).toUpperCase() === 'RECEITA' && (c.ativo !== false || c.id === form.categoria_id))
+    .sort((x, y) => String(x.codigo).localeCompare(String(y.codigo), undefined, { numeric: true }));
+  const categoriaEscolhida = planoDeContas.find(c => c.id === form.categoria_id);
+  const categoriaAntiga = Boolean(form.categoria_id) && planoDeContas.length > 0 && !categoriaEscolhida;
+  const rotuloDaCategoria = !form.categoria_id ? 'Sem categoria'
+    : categoriaEscolhida ? `${categoriaEscolhida.codigo} · ${categoriaEscolhida.nome}` : form.categoria_id;
   const estrangeira = Boolean(form.moeda) && form.moeda !== 'BRL';
   const emReais = valorEmReais(form);
   const rotuloOrigem = ORIGENS.find(o => o.valor === form.origem)?.rotulo ?? ORIGENS[0].rotulo;
@@ -334,17 +355,35 @@ export function FormularioConta({
             )}
           </Field>
 
-          <Field rotulo="Código da categoria" ajuda="Opcional. Use o código do seu plano de categorias.">
+          {/* Categoria de receita do plano (E7, frente D): escolhida da lista,
+              com a sugestão pelo histórico do cliente. Um código digitado
+              antes continua aparecendo como está. */}
+          <Field rotulo="Categoria" ajuda="Opcional. Onde a receita entra nos relatórios.">
             {a => (
-              <Input
-                {...a}
-                value={form.categoria_id}
-                onChange={e => onChange({ categoria_id: e.target.value })}
-                placeholder="Ex: 3.01"
-                className={CONTROLE}
-              />
+              <Select value={form.categoria_id || SEM_CATEGORIA} onValueChange={v => onChange({ categoria_id: String(v) === SEM_CATEGORIA ? '' : String(v) })}>
+                <SelectTrigger id={a.id} aria-describedby={a['aria-describedby']} className={CONTROLE}>
+                  <SelectValue>{() => rotuloDaCategoria}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SEM_CATEGORIA} className="fin-t-body">Sem categoria</SelectItem>
+                  {categoriaAntiga ? <SelectItem value={form.categoria_id} className="fin-t-body">{form.categoria_id} (código digitado antes)</SelectItem> : null}
+                  {categoriasReceita.map(c => (
+                    <SelectItem key={c.id} value={c.id} className="fin-t-body">{c.codigo} · {c.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
           </Field>
+
+          <div className="sm:col-span-2 sm:-mt-1">
+            <SugestaoDeCategoria
+              tabela="receber"
+              pessoaId={form.cliente_id}
+              nome={form.cliente_nome}
+              atual={form.categoria_id}
+              onEscolher={c => onChange({ categoria_id: c.id })}
+            />
+          </div>
 
           <div className="sm:col-span-2">
             <Field rotulo="Observações">
@@ -374,6 +413,8 @@ export function FormularioConta({
           rateio={form.rateio}
           tags={form.tags ?? []}
           onChange={alteracao => onChange(alteracao)}
+          categoriaId={form.categoria_id}
+          pessoa={form.cliente_nome}
         />
       </FormSection>
 
@@ -483,6 +524,7 @@ export function FormularioConta({
 
       <CamposPersonalizadosDoTitulo
         tabela="contas_receber"
+        empresaId={empresaId}
         valores={form.campos_personalizados ?? {}}
         onChange={valores => onChange({ campos_personalizados: valores })}
       />

@@ -79,8 +79,7 @@ export default function ConfigFinanceiroPage() {
   const [p, setP] = useState<PoliticaCobranca>(VAZIA);
   // Assistente inicial (E7, frente D): depois de ligar, as seções releem.
   const [versaoDasCategorias, setVersaoDasCategorias] = useState(0);
-  const [naPrincipal, setNaPrincipal] = useState(true);
-  useEffect(() => { const e = empresaEmEdicao(); setNaPrincipal(!e || e === 'principal'); }, []);
+  const [naPrincipal] = useState(() => { const e = empresaEmEdicao(); return !e || e === 'principal'; });
   const [estado, setEstado] = useState<'carregando' | 'ok' | 'erro'>('carregando');
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);

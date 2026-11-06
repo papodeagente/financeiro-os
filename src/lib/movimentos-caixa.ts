@@ -585,17 +585,19 @@ export function dataBR(iso: string): string {
  */
 export function csvDosMovimentos(linhas: readonly MovimentoCaixa[], leiaute: LeiauteDeExportacao): string {
   const cel = (v: unknown) => auditCsvCell(v);
+  // Coluna Fechado (E7, frente D): a mesma marca de cadeado da tela.
+  const fechado = (l: MovimentoCaixa) => cel(l.fechado ? 'Sim' : '');
   const numCel = (v: number | null) => (v === null ? '""' : `"${numeroBR(v)}"`);
   if (leiaute === 'extrato') {
-    const cab = ['Data', 'Conta', 'Número', 'Descrição', 'Documento', 'Pessoa', 'CPF/CNPJ', 'Informações', 'Forma', 'Origem', 'Valor', 'Saldo da conta', 'Saldo'];
+    const cab = ['Data', 'Conta', 'Número', 'Descrição', 'Documento', 'Pessoa', 'CPF/CNPJ', 'Informações', 'Forma', 'Origem', 'Valor', 'Saldo da conta', 'Saldo', 'Fechado'];
     const corpo = linhas.map(l => [cel(dataBR(l.data)), cel(l.conta_nome), cel(l.numero), cel(l.descricao), cel(l.documento), cel(l.pessoa_nome),
-      cel(l.cpf_cnpj), cel(l.informacoes), cel(l.forma), cel(rotuloDaOrigem(l.origem)), numCel(l.valor), numCel(l.saldo_conta), numCel(l.saldo_total)].join(';'));
+      cel(l.cpf_cnpj), cel(l.informacoes), cel(l.forma), cel(rotuloDaOrigem(l.origem)), numCel(l.valor), numCel(l.saldo_conta), numCel(l.saldo_total), fechado(l)].join(';'));
     return '﻿' + [cab.map(cel).join(';'), ...corpo].join('\r\n');
   }
-  const cab = ['Data', 'Número', 'Venda', 'Conta', 'Forma de pagamento', 'Pessoa', 'Documento', 'Cheque/Cartão', 'Moeda', 'Valor origem', 'Câmbio', 'Movimento', 'Valor'];
+  const cab = ['Data', 'Número', 'Venda', 'Conta', 'Forma de pagamento', 'Pessoa', 'Documento', 'Cheque/Cartão', 'Moeda', 'Valor origem', 'Câmbio', 'Movimento', 'Valor', 'Fechado'];
   const corpo = linhas.map(l => [cel(dataBR(l.data)), cel(l.numero), cel(l.venda_numero || l.venda_id), cel(l.conta_nome), cel(l.forma), cel(l.pessoa_nome),
     cel(l.documento), cel(l.cartao_cheque), cel(l.moeda), numCel(l.valor_origem), l.cambio === null ? '""' : `"${String(l.cambio).replace('.', ',')}"`,
-    cel(`${l.tipo === 'entrada' ? 'Entrada' : 'Saída'} · ${rotuloDaOrigem(l.origem)}`), numCel(l.valor)].join(';'));
+    cel(`${l.tipo === 'entrada' ? 'Entrada' : 'Saída'} · ${rotuloDaOrigem(l.origem)}`), numCel(l.valor), fechado(l)].join(';'));
   return '﻿' + [cab.map(cel).join(';'), ...corpo].join('\r\n');
 }
 
@@ -635,12 +637,12 @@ export function documentoDosMovimentos(
         { id: 'cpf_cnpj', rotulo: 'CPF/CNPJ', tipo: 'texto' }, { id: 'informacoes', rotulo: 'Informações', tipo: 'texto' },
         { id: 'forma', rotulo: 'Forma', tipo: 'texto' }, { id: 'origem', rotulo: 'Origem', tipo: 'texto' },
         { id: 'valor', rotulo: 'Valor', tipo: 'dinheiro' }, { id: 'saldo_conta', rotulo: 'Saldo da conta', tipo: 'dinheiro' },
-        { id: 'saldo_total', rotulo: 'Saldo', tipo: 'dinheiro' },
+        { id: 'saldo_total', rotulo: 'Saldo', tipo: 'dinheiro' }, { id: 'fechado', rotulo: 'Fechado', tipo: 'texto' },
       ],
       linhas: linhas.map(l => ({
         data: l.data, conta: l.conta_nome, numero: l.numero, descricao: l.descricao, documento: l.documento, pessoa: l.pessoa_nome,
         cpf_cnpj: l.cpf_cnpj, informacoes: l.informacoes, forma: l.forma, origem: rotuloDaOrigem(l.origem),
-        valor: l.valor, saldo_conta: l.saldo_conta, saldo_total: l.saldo_total,
+        valor: l.valor, saldo_conta: l.saldo_conta, saldo_total: l.saldo_total, fechado: l.fechado ? 'Sim' : '',
       })),
       totais: { valor: total },
       rotulo_total: `Total (${linhas.length} ${linhas.length === 1 ? 'lançamento' : 'lançamentos'})`,
@@ -658,12 +660,12 @@ export function documentoDosMovimentos(
       { id: 'documento', rotulo: 'Documento', tipo: 'texto' }, { id: 'cartao_cheque', rotulo: 'Cheque/Cartão', tipo: 'texto' },
       { id: 'moeda', rotulo: 'Moeda', tipo: 'texto' }, { id: 'valor_origem', rotulo: 'Valor origem', tipo: 'numero' },
       { id: 'cambio', rotulo: 'Câmbio', tipo: 'numero' }, { id: 'movimento', rotulo: 'Movimento', tipo: 'texto' },
-      { id: 'valor', rotulo: 'Valor', tipo: 'dinheiro' },
+      { id: 'valor', rotulo: 'Valor', tipo: 'dinheiro' }, { id: 'fechado', rotulo: 'Fechado', tipo: 'texto' },
     ],
     linhas: linhas.map(l => ({
       data: l.data, numero: l.numero, venda: l.venda_numero || l.venda_id, conta: l.conta_nome, forma: l.forma, pessoa: l.pessoa_nome,
       documento: l.documento, cartao_cheque: l.cartao_cheque, moeda: l.moeda, valor_origem: l.valor_origem, cambio: l.cambio,
-      movimento: `${l.tipo === 'entrada' ? 'Entrada' : 'Saída'} · ${rotuloDaOrigem(l.origem)}`, valor: l.valor,
+      movimento: `${l.tipo === 'entrada' ? 'Entrada' : 'Saída'} · ${rotuloDaOrigem(l.origem)}`, valor: l.valor, fechado: l.fechado ? 'Sim' : '',
     })),
     totais: { valor: total },
     rotulo_total: `Total (${linhas.length} ${linhas.length === 1 ? 'lançamento' : 'lançamentos'})`,

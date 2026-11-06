@@ -18,13 +18,25 @@ export const CAMPOS_DO_MODELO: Record<TabelaAlvo, readonly string[]> = {
     'origem', 'fornecedor_id', 'fornecedor_nome', 'descricao', 'categoria_id', 'centro_custo',
     'moeda', 'cambio', 'forma_pagamento', 'cartao_id', 'natureza_custo', 'is_custo_comercial', 'observacoes',
     'centro_custo_id', 'rateio', 'tags',
+    // E7, frente D: a tela já mandava e a série descartava.
+    'conta_previsao_id', 'campos_personalizados',
   ],
   contas_receber: [
     'origem', 'cliente_id', 'cliente_nome', 'descricao', 'categoria_id', 'centro_custo',
     'forma_recebimento', 'taxa', 'taxa_plataforma', 'observacoes',
     'centro_custo_id', 'rateio', 'tags',
+    // E7, frente D: conta a receber em moeda estrangeira também se repete (na
+    // moeda; o câmbio de cada parcela vem na liquidação), e a série guarda a
+    // conta prevista e os campos personalizados que a tela manda.
+    'moeda', 'cambio', 'conta_previsao_id', 'campos_personalizados',
   ],
 };
+
+/** Código de moeda de três letras (o catálogo da agência é conferido na rota). */
+function moedaDoModelo(v: unknown): string {
+  const s = typeof v === 'string' ? v.trim().toUpperCase() : '';
+  return /^[A-Z]{3}$/.test(s) ? s : 'BRL';
+}
 
 /** Só os campos permitidos, sem dinheiro nem situação (esses a série decide). */
 export function limparModelo(tabela: TabelaAlvo, bruto: unknown): Record<string, unknown> {
@@ -33,10 +45,11 @@ export function limparModelo(tabela: TabelaAlvo, bruto: unknown): Record<string,
   const b = bruto as Record<string, unknown>;
   for (const c of CAMPOS_DO_MODELO[tabela]) if (b[c] !== undefined) out[c] = b[c];
   if (typeof out.descricao === 'string') out.descricao = out.descricao.trim();
-  if (tabela === 'contas_pagar') {
-    if (!['BRL', 'USD', 'EUR'].includes(String(out.moeda ?? 'BRL'))) out.moeda = 'BRL';
-    if (!out.origem) out.origem = 'OUTROS';
-  }
+  // Moedas da agência (E7, frente D): qualquer código de três letras; a rota
+  // confere no catálogo da agência. Antes só BRL, USD e EUR (o resto virava real).
+  if (tabela === 'contas_pagar' || out.moeda !== undefined) out.moeda = moedaDoModelo(out.moeda);
+  if (tabela === 'contas_receber' && out.moeda === 'BRL') { delete out.moeda; delete out.cambio; }
+  if (tabela === 'contas_pagar' && !out.origem) out.origem = 'OUTROS';
   return out;
 }
 
@@ -110,6 +123,9 @@ export function montarTitulo(d: DadosDoTitulo): ContaPagar | ContaReceber {
     } as ContaPagar;
     return conta;
   }
+  // Em moeda estrangeira (E7, frente D): valor na moeda em valor_original e
+  // em reais pelo câmbio do lançamento em valor_final, como na conta avulsa.
+  const moedaReceber = moedaDoModelo(d.modelo.moeda);
   const conta: ContaReceber = {
     ...createContaReceber(),
     ...(d.modelo as Partial<ContaReceber>),
@@ -117,11 +133,12 @@ export function montarTitulo(d: DadosDoTitulo): ContaPagar | ContaReceber {
     descricao,
     data_emissao: d.emissao,
     data_vencimento: d.vencimento,
+    ...(moedaReceber !== 'BRL' ? { moeda: moedaReceber, cambio: num(d.modelo.cambio) } : {}),
     valor_original: valor,
-    valor_final: valor,
+    valor_final: valorBrl,
     taxa: deCentavos(d.taxaCentavos ?? 0),
     taxa_plataforma: String(d.modelo.taxa_plataforma ?? ''),
-    rateio: rateioDoTitulo(d.modelo, valor),
+    rateio: rateioDoTitulo(d.modelo, valorBrl),
     ...parcela,
     ...serie,
   } as ContaReceber;
@@ -130,7 +147,8 @@ export function montarTitulo(d: DadosDoTitulo): ContaPagar | ContaReceber {
 
 /** Valor em BRL (centavos) a partir do valor na moeda do título. */
 export function brlEmCentavos(tabela: TabelaAlvo, modelo: Record<string, unknown>, valorCentavos: number): number {
-  if (tabela !== 'contas_pagar') return valorCentavos;
   const moeda = String(modelo.moeda ?? 'BRL');
+  // A receber em real: o mesmo número, como sempre.
+  if (tabela !== 'contas_pagar' && moeda === 'BRL') return valorCentavos;
   return Math.round(round2(paraBRL(deCentavos(valorCentavos), moeda, num(modelo.cambio))) * 100);
 }

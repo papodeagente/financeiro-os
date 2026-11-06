@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { Money } from '@/components/fin/Money';
 import { BlocoDeRepeticao } from '@/components/financeiro/recorrencia/BlocoDeRepeticao';
 import { SecaoRateios } from '@/components/financeiro/SecaoRateios';
+import { SugestaoDeCategoria } from '@/components/financeiro/SugestaoDeCategoria';
 import { LerBoletoOuNota } from '@/components/financeiro/LerBoletoOuNota';
 import { CampoLinhaDigitavel } from '@/components/financeiro/CampoLinhaDigitavel';
 import { useFormasDePagamento } from '@/components/fin/useFormasDePagamento';
@@ -77,6 +78,8 @@ export type FormularioContaProps = {
   vendaId?: string | null;
   /** Id da conta em edição (histórico). */
   tituloId?: string | null;
+  /** Empresa da conta em edição (E7, frente D): vale a lista de campos dela. */
+  empresaId?: string | null;
 };
 
 function dataBR(iso: string): string {
@@ -103,6 +106,7 @@ export function FormularioConta({
   padraoPrevisaoId = null,
   vendaId = null,
   tituloId = null,
+  empresaId = null,
 }: FormularioContaProps) {
   const travada = Boolean(editando && vendaId);
   const cartoesAtivos = cartoes.filter((c) => c.ativo);
@@ -339,6 +343,21 @@ export function FormularioConta({
               }}
             />
 
+            {/* Sugestão pelo histórico também no lançamento à mão (E7, frente D). */}
+            <div className="sm:col-span-2 sm:-mt-1">
+              <SugestaoDeCategoria
+                tabela="pagar"
+                pessoaId={form.fornecedor_id}
+                nome={form.fornecedor_nome}
+                documento={form.fornecedor_cnpj}
+                atual={form.categoria_id}
+                onEscolher={(c) => {
+                  onCategoriaChange(c.id);
+                  onForm((f) => esquecerOrigem(f, 'categoria'));
+                }}
+              />
+            </div>
+
             <CampoSelecao
               rotulo="Tipo de despesa"
               ajuda="Fixo, variável ou compra única. Também chamado de natureza do custo."
@@ -375,6 +394,8 @@ export function FormularioConta({
             rateio={form.rateio}
             tags={form.tags}
             onChange={(alteracao) => onForm((f) => ({ ...f, ...alteracao }))}
+            categoriaId={form.categoria_id}
+            pessoa={form.fornecedor_nome}
           />
         </FormSection>
 
@@ -561,6 +582,7 @@ export function FormularioConta({
 
         <CamposPersonalizadosDoTitulo
           tabela="contas_pagar"
+          empresaId={empresaId}
           valores={form.campos_personalizados ?? {}}
           onChange={(valores) => onForm((f) => ({ ...f, campos_personalizados: valores }))}
         />

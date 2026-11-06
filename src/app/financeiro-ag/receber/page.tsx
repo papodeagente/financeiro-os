@@ -53,6 +53,10 @@ import { PainelNota } from './PainelNota';
 import type { NotaFiscal } from '@/lib/nfse-tipos';
 import { EMPTY_FORM, FormularioConta, valorEmReais, type ErrosForm, type FormState } from './FormularioConta';
 import { BlocoDeCobranca, type ContaDoBloco } from '@/components/financeiro/cobranca/BlocoDeCobranca';
+import { PainelDoTitulo } from '@/components/financeiro/PainelDoTitulo';
+import { carregarDefinicoes } from '@/components/fin/CamposPersonalizadosDoTitulo';
+import { validarObrigatorios } from '@/lib/campos-personalizados';
+import type { Anexo } from '@/lib/anexos-do-titulo';
 
 /**
  * Status EFETIVO (derivado na leitura). Nenhum fluxo do sistema grava
@@ -284,6 +288,11 @@ export default function ContasReceberPage() {
     setForm(f => ({ ...f, ...patch }));
   }
 
+  /** O anexo mudou no servidor: a conta em mãos fica com a lista e a versão novas (salvar depois não desfaz). */
+  function anexosMudaram(id: string, anexos: Anexo[], versao: string) {
+    setItems(lista => lista.map(i => (i.id === id ? ({ ...i, anexos, ...(versao ? { _versao: versao } : {}) } as ContaReceber) : i)));
+  }
+
   async function handleSave() {
     // Em moeda estrangeira o que vale para taxa, rateio e saldo é o valor em reais.
     const estrangeira = Boolean(form.moeda) && form.moeda !== 'BRL';
@@ -306,10 +315,17 @@ export default function ContasReceberPage() {
       });
       return;
     }
-    // A repetição gera as contas em reais: em outra moeda, lance uma por vez.
-    if (!editId && estrangeira && repeticao.ativa) {
-      toast.error('A repetição é só para contas em reais.', 'Em outra moeda, lance cada conta separadamente, com o câmbio dela.');
-      return;
+    // Em outra moeda a repetição também vale (E7, frente D): cada conta da
+    // série nasce na moeda, com o câmbio de hoje para o valor em reais, e o
+    // câmbio de cada parcela é o da liquidação.
+    // Campo personalizado obrigatório (E7, frente D): a mesma regra do servidor.
+    {
+      const existente = editId ? items.find(i => i.id === editId) : undefined;
+      if (!existente || !tituloGeradoPeloSistema('contas_receber', existente as unknown as Record<string, unknown>)) {
+        const defs = await carregarDefinicoes((existente as { empresa_id?: string } | undefined)?.empresa_id).catch(() => []);
+        const faltou = validarObrigatorios(defs, 'contas_receber', form.campos_personalizados);
+        if (faltou) { toast.error(faltou); return; }
+      }
     }
     // Rateio preenchido fecha 100% e os centavos (05/11/2026).
     const rateioConferido = validarRateio(emReais, form.rateio);
@@ -369,6 +385,7 @@ export default function ContasReceberPage() {
             taxa: campos.taxa, taxa_plataforma: campos.taxa_plataforma, observacoes: campos.observacoes,
             centro_custo: campos.centro_custo, centro_custo_id: campos.centro_custo_id, rateio: campos.rateio, tags: campos.tags,
             conta_previsao_id: campos.conta_previsao_id, campos_personalizados: campos.campos_personalizados,
+            ...(estrangeira ? { moeda: campos.moeda, cambio: campos.cambio } : {}),
           },
         });
         setShowForm(false);
@@ -959,12 +976,14 @@ export default function ContasReceberPage() {
           vendaId={editId ? vendaQueTravaATitulo(items.find(i => i.id === editId) as ContaComExtras | undefined) : null}
           contasPrevisao={previsao.contas}
           padraoPrevisaoId={previsao.padraoId}
+          empresaId={editId ? ((items.find(i => i.id === editId) as { empresa_id?: string } | undefined)?.empresa_id ?? null) : null}
           repeticao={editId ? null : (
             <BlocoDeRepeticao
               estado={repeticao}
               onChange={patch => { setFormTocado(true); setRepeticao(r => ({ ...r, ...patch })); }}
               inicio={form.data_vencimento}
               valor={form.valor_original}
+              moeda={form.moeda || 'BRL'}
               substantivo="conta a receber"
             />
           )}
@@ -978,6 +997,8 @@ export default function ContasReceberPage() {
             </div>
           );
         })()}
+        {/* Itens, Comissões e Anexos da conta (E7, frente D). */}
+        {editId ? <PainelDoTitulo key={editId} tabela="contas_receber" tituloId={editId} onAnexosMudaram={(anexos, versao) => anexosMudaram(editId, anexos, versao)} /> : null}
         {editId ? <HistoricoDeBaixas tabela="contas_receber" tituloId={editId} onMudou={() => { void load(); }} /> : null}
         {editId ? <HistoricoRecolhivel entidade="contas_receber" id={editId} /> : null}
       </RecordSheet>

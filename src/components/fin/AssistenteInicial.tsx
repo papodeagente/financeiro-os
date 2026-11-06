@@ -27,7 +27,9 @@ function listaPorExtenso(itens: string[]): string {
 export function AssistenteInicial({ onAplicado, className }: { onAplicado?: () => void; className?: string }) {
   const [situacao, setSituacao] = React.useState<Situacao | null>(null);
   const [aplicando, setAplicando] = React.useState(false);
-  const [adiado, setAdiado] = React.useState(false);
+  const [adiado, setAdiado] = React.useState(() => {
+    try { return typeof window !== 'undefined' && window.sessionStorage.getItem(CHAVE_ADIADO) === '1'; } catch { return false; }
+  });
 
   const aplicar = React.useCallback(async (automatico: boolean) => {
     setAplicando(true);
@@ -61,7 +63,6 @@ export function AssistenteInicial({ onAplicado, className }: { onAplicado?: () =
 
   React.useEffect(() => {
     let vivo = true;
-    try { setAdiado(window.sessionStorage.getItem(CHAVE_ADIADO) === '1'); } catch { /* sem armazenamento */ }
     fetch('/api/config/financeiro/assistente', { cache: 'no-store' })
       .then(r => (r.ok ? r.json() : null))
       .then((s: Situacao | null) => {
