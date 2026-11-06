@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ROTULO_STATUS_PEDIDO, type PedidoAprovacao, type StatusPedido } from '@/lib/aprovacoes';
 import { toast } from '@/lib/toast';
+import { levarParaSegundoFator, lembrarSegundoFator } from '@/components/fin/segundoFatorNaTela';
 import { cn } from '@/lib/utils';
 
 type Pedido = PedidoAprovacao & { posso_decidir: boolean; motivo_nao_posso: string };
@@ -72,7 +73,10 @@ export default function AprovacoesPage() {
         body: JSON.stringify({ acao: 'decidir', id: p.id, decisao, motivo: texto }),
       });
       const corpo = await r.json().catch(() => ({}));
+      // Aprovar pede a verificação em duas etapas a quem não é administrador (E7).
+      if (levarParaSegundoFator(r.status, corpo)) { setAprovar(null); return; }
       if (!r.ok) throw new Error(corpo?.error || 'Não foi possível decidir.');
+      lembrarSegundoFator(corpo);
       const final = corpo.pedido as PedidoAprovacao;
       if (decisao === 'recusar') toast.success('Pedido recusado.');
       else if (final.status === 'PENDENTE') toast.success('Sua aprovação foi registrada.', 'Falta outra pessoa aprovar.');

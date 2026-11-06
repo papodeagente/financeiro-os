@@ -18,6 +18,20 @@ const SEM_FORMA = '__sem_forma__';
 
 export type ContaOpcao = { id: string; nome: string; moeda?: string };
 
+/**
+ * Cheque ou cartão da liquidação (06/11/2026, E7): o número do cheque, ou os
+ * 4 últimos dígitos e a autorização do cartão. Nunca o número completo.
+ */
+export type MeioDoBloco = {
+  tipo: 'cheque' | 'cartao';
+  cheque: string;
+  ultimos4: string;
+  autorizacao: string;
+  onCheque: (v: string) => void;
+  onUltimos4: (v: string) => void;
+  onAutorizacao: (v: string) => void;
+};
+
 /** Câmbio da liquidação de uma conta lançada em moeda (05/11/2026, E6). */
 export type CambioDoBloco = {
   moeda: string;
@@ -67,6 +81,8 @@ export type BlocoDeLiquidacaoProps = {
   contaDaForma?: boolean;
   /** Conta lançada em moeda: câmbio do pagamento e a variação cambial. */
   cambio?: CambioDoBloco;
+  /** Forma cheque ou cartão: os dados do meio (06/11/2026). */
+  meio?: MeioDoBloco;
 };
 
 /**
@@ -144,6 +160,8 @@ export function BlocoDeLiquidacao(p: BlocoDeLiquidacaoProps) {
           )}
         </Field>
       </div>
+
+      {p.meio ? <BlocoDoMeio m={p.meio} /> : null}
 
       {p.cambio ? <BlocoDeCambio c={p.cambio} palavra={palavra} /> : null}
 
@@ -247,6 +265,64 @@ export function BlocoDeLiquidacao(p: BlocoDeLiquidacaoProps) {
 }
 
 export default BlocoDeLiquidacao;
+
+/** Só algarismos, no máximo `max`. */
+const algarismos = (v: string, max: number) => v.replace(/\D/g, '').slice(0, max);
+
+/** Número do cheque, ou final e autorização do cartão. */
+function BlocoDoMeio({ m }: { m: MeioDoBloco }) {
+  if (m.tipo === 'cheque') {
+    return (
+      <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:grid-cols-2">
+        <Field rotulo="Nº do cheque">
+          {a => (
+            <Input
+              {...a}
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={12}
+              placeholder="000123"
+              value={m.cheque}
+              onChange={e => m.onCheque(algarismos(e.target.value, 12))}
+              className={cn(CONTROLE, 'tabular-nums')}
+            />
+          )}
+        </Field>
+      </div>
+    );
+  }
+  return (
+    <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:grid-cols-2">
+      <Field rotulo="Final do cartão" ajuda="Só os 4 últimos dígitos. O número completo nunca é guardado.">
+        {a => (
+          <Input
+            {...a}
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={4}
+            placeholder="1234"
+            value={m.ultimos4}
+            onChange={e => m.onUltimos4(algarismos(e.target.value, 4))}
+            className={cn(CONTROLE, 'tabular-nums')}
+          />
+        )}
+      </Field>
+      <Field rotulo="Autorização" ajuda="O código do comprovante.">
+        {a => (
+          <Input
+            {...a}
+            autoComplete="off"
+            maxLength={20}
+            placeholder="A1B2C3"
+            value={m.autorizacao}
+            onChange={e => m.onAutorizacao(e.target.value.replace(/[^0-9A-Za-z]/g, '').slice(0, 20))}
+            className={cn(CONTROLE, 'uppercase tabular-nums')}
+          />
+        )}
+      </Field>
+    </div>
+  );
+}
 
 /** Câmbio do pagamento de uma conta lançada em moeda. */
 function BlocoDeCambio({ c, palavra }: { c: CambioDoBloco; palavra: string }) {

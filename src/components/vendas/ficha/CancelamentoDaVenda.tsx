@@ -10,9 +10,15 @@
  * palavras); e a PRÉVIA de todas as contas que mudam, calculada pelo
  * servidor com a mesma regra da gravação. Confirmar só vale para a prévia à
  * vista: mudou um campo, a prévia se refaz antes.
+ *
+ * No alto, os cancelamentos já feitos na venda. O último que ainda vale pode
+ * ser DESFEITO (a venda volta como era), com motivo e a mesma prévia das
+ * contas antes de gravar.
  */
 import * as React from 'react';
-import { AlertTriangle, ArrowRight, CircleCheck, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CircleCheck, RefreshCw, Undo2 } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
 
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -22,7 +28,7 @@ import { Field } from '@/components/fin/Field';
 import { hojeISO } from '@/lib/money';
 import { totaisDoProduto, ROTULO_TIPO_PRODUTO, type ProdutoDaVenda, type Venda } from '@/lib/venda-modelo';
 import { sugerirMulta, type MultaSugerida, type PoliticaDeCancelamento } from '@/lib/cancelamento';
-import type { ContextoDoCancelamento, ResultadoDoCancelamento, MudancaDeConta } from '@/lib/cancelamento-servidor';
+import type { CancelamentoNaLista, ContextoDoCancelamento, ResultadoDoCancelamento, ResultadoDoDesfazer, MudancaDeConta } from '@/lib/cancelamento-servidor';
 import type { FichaDaVenda } from '@/lib/venda-rota';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
@@ -77,11 +83,17 @@ export function CancelamentoDaVenda({ ficha, aberto, onFechar, onConcluido }: {
   const [erroPrevia, setErroPrevia] = React.useState<string | null>(null);
   const [calculando, setCalculando] = React.useState(false);
   const [gravando, setGravando] = React.useState(false);
+  // Desfazer o último cancelamento.
+  const [alvo, setAlvo] = React.useState<CancelamentoNaLista | null>(null);
+  const [motivoDesfazer, setMotivoDesfazer] = React.useState('');
+  const [previaDesfazer, setPreviaDesfazer] = React.useState<{ chave: string; r: ResultadoDoDesfazer } | null>(null);
+  const [erroDesfazer, setErroDesfazer] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (!aberto) return;
     setEscolhas({}); setMultas({}); setMotivo(''); setData(hojeISO()); setPrevia(null); setErroPrevia(null);
     setZerarFornecedor(true); setZerarCliente(true); setManterNaMeta(false); setSobra('reembolso'); setPrazo(''); setValidade('');
+    setAlvo(null); setMotivoDesfazer(''); setPreviaDesfazer(null); setErroDesfazer(null);
     void chamar<ContextoDoCancelamento>(`/api/vendas/completa/${encodeURIComponent(venda.id)}/cancelamento`, 'GET').then(setContexto).catch(() => setContexto(null));
   }, [aberto, venda.id]);
 
@@ -123,7 +135,47 @@ export function CancelamentoDaVenda({ ficha, aberto, onFechar, onConcluido }: {
     return () => clearTimeout(t);
   }, [aberto, pronto, chave, venda.id]);
 
+  const urlDesfazer = `/api/vendas/completa/${encodeURIComponent(venda.id)}/cancelamento/desfazer`;
+  const chaveDesfazer = alvo ? JSON.stringify([alvo.id, motivoDesfazer.trim()]) : '';
+  const prontoDesfazer = Boolean(alvo) && motivoDesfazer.trim().length >= 5;
+  const previaDesfazerVale = previaDesfazer?.chave === chaveDesfazer;
+
+  // A prévia do desfazer também se refaz sozinha (o servidor desfaz e volta atrás).
+  React.useEffect(() => {
+    if (!aberto || !alvo || !prontoDesfazer) return;
+    const t = setTimeout(() => {
+      setCalculando(true);
+      chamar<ResultadoDoDesfazer>(urlDesfazer, 'POST', { modo: 'previa', cancelamento_id: alvo.id, motivo: motivoDesfazer.trim() })
+        .then(r => { setPreviaDesfazer({ chave: chaveDesfazer, r }); setErroDesfazer(null); })
+        .catch(e => { setPreviaDesfazer(null); setErroDesfazer(e instanceof Error ? e.message : 'A prévia não respondeu.'); })
+        .finally(() => setCalculando(false));
+    }, 600);
+    return () => clearTimeout(t);
+  }, [aberto, alvo, prontoDesfazer, chaveDesfazer, motivoDesfazer, urlDesfazer]);
+
+  async function confirmarDesfazer() {
+    if (!alvo || !previaDesfazer || !previaDesfazerVale) return;
+    setGravando(true);
+    try {
+      const r = await chamar<ResultadoDoDesfazer & { ficha: FichaDaVenda }>(urlDesfazer, 'POST', { modo: 'gravar', cancelamento_id: alvo.id, motivo: motivoDesfazer.trim(), assinatura: previaDesfazer.r.assinatura });
+      const partes = [
+        `${r.mudancas.length} ${r.mudancas.length === 1 ? 'conta mudou' : 'contas mudaram'}`,
+        r.reembolsos_cancelados.length ? `${r.reembolsos_cancelados.length} reembolso${r.reembolsos_cancelados.length > 1 ? 's' : ''} cancelado${r.reembolsos_cancelados.length > 1 ? 's' : ''}` : '',
+        r.creditos_cancelados.length ? `${reais(r.creditos_cancelados.reduce((a, c) => a + c.valor_centavos, 0))} saíram da carteira do cliente` : '',
+      ].filter(Boolean);
+      toast.success('Cancelamento desfeito', `${partes.join('; ')}.`);
+      onConcluido(r.ficha);
+    } catch (e) {
+      const codigo = (e as { codigo?: string }).codigo;
+      toast.error(codigo === 'MUDOU' ? 'A venda mudou' : 'O cancelamento não foi desfeito', e instanceof Error ? e.message : undefined);
+      if (codigo === 'MUDOU') setPreviaDesfazer(null);
+    } finally {
+      setGravando(false);
+    }
+  }
+
   async function confirmar() {
+    if (alvo) { await confirmarDesfazer(); return; }
     if (!previa || !previaVale) return;
     setGravando(true);
     try {
@@ -163,20 +215,86 @@ export function CancelamentoDaVenda({ ficha, aberto, onFechar, onConcluido }: {
     : !previaVale
       ? (calculando ? 'Calculando o que muda…' : erroPrevia ?? 'Refazendo a prévia com o que você mudou…')
       : `${r!.mudancas.length ? `${r!.mudancas.length} ${r!.mudancas.length === 1 ? 'conta muda' : 'contas mudam'}` : 'Nenhuma conta muda'} · receita ${reais(r!.receita_antes_centavos)} → ${reais(r!.receita_depois_centavos)}.`;
+  const rd = previaDesfazer?.r ?? null;
+  const resumoDesfazer = !prontoDesfazer
+    ? 'Diga por que o cancelamento está sendo desfeito. A prévia aparece em seguida.'
+    : !previaDesfazerVale
+      ? (calculando ? 'Calculando o que muda…' : erroDesfazer ?? 'Refazendo a prévia…')
+      : `${rd!.mudancas.length ? `${rd!.mudancas.length} ${rd!.mudancas.length === 1 ? 'conta muda' : 'contas mudam'}` : 'Nenhuma conta muda'} · receita ${reais(rd!.receita_antes_centavos)} → ${reais(rd!.receita_depois_centavos)}.`;
+  const cancelamentos = contexto?.cancelamentos ?? [];
 
   return (
     <RecordSheet
       aberto={aberto}
       onOpenChange={a => { if (!a) onFechar(); }}
-      titulo="Cancelar produto ou passageiro"
+      titulo={alvo ? 'Desfazer o cancelamento' : 'Cancelar produto ou passageiro'}
       descricao={`Venda ${venda.numero} · ${venda.cliente.nome}. Nada muda antes de você confirmar a prévia.`}
       largura={960}
-      sujo={selecionados.length > 0}
-      resumo={<span aria-live="polite">{resumo}</span>}
-      acaoPrimaria={{ rotulo: gravando ? 'Gravando…' : 'Confirmar cancelamento', onClick: confirmar, carregando: gravando, desabilitado: !pronto || !previaVale || calculando }}
-      acaoSecundaria={{ rotulo: 'Voltar', onClick: onFechar }}
+      sujo={alvo ? motivoDesfazer.trim().length > 0 : selecionados.length > 0}
+      resumo={<span aria-live="polite">{alvo ? resumoDesfazer : resumo}</span>}
+      acaoPrimaria={alvo
+        ? { rotulo: gravando ? 'Gravando…' : 'Desfazer cancelamento', onClick: confirmar, carregando: gravando, desabilitado: !prontoDesfazer || !previaDesfazerVale || calculando }
+        : { rotulo: gravando ? 'Gravando…' : 'Confirmar cancelamento', onClick: confirmar, carregando: gravando, desabilitado: !pronto || !previaVale || calculando }}
+      acaoSecundaria={alvo
+        ? { rotulo: 'Voltar à lista', onClick: () => { setAlvo(null); setMotivoDesfazer(''); setPreviaDesfazer(null); setErroDesfazer(null); } }
+        : { rotulo: 'Voltar', onClick: onFechar }}
     >
+      {alvo ? (
+        <div className="flex flex-col gap-[var(--fin-s-4)]">
+          <section aria-labelledby="dx-qual" className={SECAO}>
+            <h3 id="dx-qual" className="fin-t-subhead text-[var(--fin-text)]">Cancelamento de {dataBR(alvo.data)}</h3>
+            <p className="fin-t-body text-[var(--fin-text-2)]">
+              {resumoDoCancelamento(alvo)}. Motivo: “{alvo.motivo}”{alvo.usuario_nome ? `, por ${alvo.usuario_nome}` : ''}.
+            </p>
+            <p className="fin-t-caption text-[var(--fin-text-2)]">
+              Desfazer devolve à venda os passageiros e produtos, tira a multa e devolve aos pagamentos o que saiu. Os reembolsos e o crédito que ele gerou são cancelados. Contas já recebidas ou pagas ficam como estão; a diferença se ajusta nas que estão em aberto.
+            </p>
+            <Field rotulo="Por que desfazer" obrigatorio ajuda="Fica no histórico da venda. Pelo menos 5 letras.">
+              {a => <Textarea {...a} value={motivoDesfazer} maxLength={500} onChange={ev => setMotivoDesfazer(ev.target.value)} className="min-h-11 fin-t-body" placeholder="Ex.: o cliente decidiu viajar, afinal" />}
+            </Field>
+          </section>
+          {prontoDesfazer ? (
+            <section aria-labelledby="dx-previa" aria-busy={calculando} className={SECAO}>
+              <div className="flex items-center justify-between gap-[var(--fin-s-3)]">
+                <h3 id="dx-previa" className="fin-t-subhead text-[var(--fin-text)]">Prévia: o que muda</h3>
+                {calculando ? <span className="inline-flex items-center gap-1 fin-t-caption text-[var(--fin-text-3)]"><RefreshCw aria-hidden="true" className="size-3.5 motion-safe:animate-spin" /> Calculando</span> : null}
+              </div>
+              {erroDesfazer && !previaDesfazerVale ? (
+                <p role="alert" className="flex items-start gap-2 rounded-[var(--fin-r-md)] bg-[var(--fin-negative-soft)] px-[var(--fin-s-3)] py-[var(--fin-s-2)] fin-t-body text-[var(--fin-negative-text)]">
+                  <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> {erroDesfazer}
+                </p>
+              ) : null}
+              {rd ? <PreviaDoDesfazer r={rd} desatualizada={!previaDesfazerVale} /> : !erroDesfazer ? <div className="h-32 rounded-[var(--fin-r-md)] bg-[var(--fin-surface-2)]" /> : null}
+            </section>
+          ) : null}
+        </div>
+      ) : (
       <div className="flex flex-col gap-[var(--fin-s-4)]">
+        {cancelamentos.length ? (
+          <section aria-labelledby="cx-feitos" className={SECAO}>
+            <h3 id="cx-feitos" className="fin-t-subhead text-[var(--fin-text)]">Cancelamentos desta venda</h3>
+            <ul className="flex flex-col divide-y divide-[var(--fin-border)]">
+              {cancelamentos.map(c => (
+                <li key={c.id} className="flex flex-col gap-[var(--fin-s-2)] py-[var(--fin-s-2)] first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className={cn('fin-t-body-strong', c.desfeito_em ? 'text-[var(--fin-text-2)] line-through decoration-[var(--fin-text-3)]' : 'text-[var(--fin-text)]')}>
+                      {dataBR(c.data)} · {resumoDoCancelamento(c)}
+                    </span>
+                    <span className="fin-t-caption text-[var(--fin-text-3)]">
+                      “{c.motivo}”{c.usuario_nome ? ` · ${c.usuario_nome}` : ''}
+                      {c.desfeito_em ? ` · desfeito em ${dataBR(c.desfeito_em.slice(0, 10))}${c.desfeito_por ? ` por ${c.desfeito_por}` : ''}: “${c.motivo_desfazer}”` : ''}
+                    </span>
+                  </span>
+                  {c.pode_desfazer ? (
+                    <Button type="button" variant="outline" size="sm" className="shrink-0 self-start sm:self-center" onClick={() => { setAlvo(c); setMotivoDesfazer(''); setPreviaDesfazer(null); setErroDesfazer(null); }}>
+                      <Undo2 aria-hidden="true" className="size-4" /> Desfazer
+                    </Button>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
         <section aria-labelledby="cx-o-que" className={SECAO}>
           <h3 id="cx-o-que" className="fin-t-subhead text-[var(--fin-text)]">O que cancela</h3>
           {ativos.length === 0 ? (
@@ -310,8 +428,17 @@ export function CancelamentoDaVenda({ ficha, aberto, onFechar, onConcluido }: {
           </section>
         ) : null}
       </div>
+      )}
     </RecordSheet>
   );
+}
+
+/** "Hotel Mar: Ana, Bia" ou "Seguro (produto inteiro)", a partir do resumo gravado. */
+function resumoDoCancelamento(c: CancelamentoNaLista): string {
+  const itens = Array.isArray(c.resumo.itens) ? (c.resumo.itens as Array<{ produto?: string; produto_inteiro?: boolean; passageiros?: Array<string | { nome?: string }> }>) : [];
+  if (!itens.length) return 'Cancelamento';
+  const nome = (x: string | { nome?: string }) => (typeof x === 'string' ? x : x.nome ?? '');
+  return itens.map(i => `${i.produto || 'Produto'}${i.produto_inteiro ? ' (produto inteiro)' : i.passageiros?.length ? `: ${i.passageiros.map(nome).filter(Boolean).join(', ')}` : ''}`).join('; ');
 }
 
 function Escolher({ ligado, onChange, titulo, texto }: { ligado: boolean; onChange: (v: boolean) => void; titulo: string; texto: string }) {
@@ -329,6 +456,75 @@ function Escolher({ ligado, onChange, titulo, texto }: { ligado: boolean; onChan
   );
 }
 
+function PreviaDoDesfazer({ r, desatualizada }: { r: ResultadoDoDesfazer; desatualizada: boolean }) {
+  const devolvida = r.comissoes.reduce((a, c) => a + c.devolvido, 0);
+  return (
+    <div className={cn('flex flex-col gap-[var(--fin-s-3)] transition-opacity duration-[var(--fin-dur-base)]', desatualizada && 'opacity-50')}>
+      <dl className="grid grid-cols-2 gap-[var(--fin-s-3)] sm:grid-cols-4">
+        <Numero rotulo="Receita da venda" valor={`${reais(r.receita_antes_centavos)} → ${reais(r.receita_depois_centavos)}`} />
+        <Numero rotulo="Volta à venda" valor={r.produtos.map(p => (p.produto_inteiro || !p.passageiros.length ? p.descricao : p.passageiros.join(', '))).join(' · ') || '—'} />
+        <Numero rotulo="Sai da carteira do cliente" valor={r.creditos_cancelados.length ? reais(r.creditos_cancelados.reduce((a, c) => a + c.valor_centavos, 0)) : '—'} />
+        <Numero rotulo="Comissão do vendedor" valor={devolvida > 0 ? `+${reais(Math.round(devolvida * 100))}` : 'sem mudança'} />
+      </dl>
+      {r.reembolsos_cancelados.length ? (
+        <p className="fin-t-body text-[var(--fin-text-2)]">
+          Reembolsos cancelados: {r.reembolsos_cancelados.map(x => `${x.tipo === 'CLIENTE' ? 'ao cliente' : 'com o fornecedor'} ${x.pessoa}, ${reais(x.valor_centavos)}`).join(' · ')}.
+        </p>
+      ) : null}
+      {r.venda_reativada ? <p className="fin-t-body text-[var(--fin-text-2)]">A venda volta a contar nas vendas, na meta e na comissão.</p> : null}
+      <TabelaDeMudancas linhas={r.mudancas} legenda="Contas que mudam ao desfazer o cancelamento" vazio="Nenhuma conta muda." />
+      {r.avisos.length ? (
+        <ul className="flex flex-col gap-1">
+          {r.avisos.map((a, i) => (
+            <li key={`${a.codigo}${i}`} className="flex items-start gap-2 rounded-[var(--fin-r-md)] bg-[var(--fin-warning-soft)] px-[var(--fin-s-3)] py-[var(--fin-s-2)] fin-t-body text-[var(--fin-warning-text)]">
+              <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> {a.mensagem}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function TabelaDeMudancas({ linhas, legenda, vazio }: { linhas: MudancaDeConta[]; legenda: string; vazio: string }) {
+  if (!linhas.length) {
+    return <p className="flex items-center gap-2 fin-t-body text-[var(--fin-text-2)]"><CircleCheck aria-hidden="true" className="size-4 text-[var(--fin-positive)]" /> {vazio}</p>;
+  }
+  return (
+    <div className="overflow-x-auto rounded-[var(--fin-r-md)] border border-[var(--fin-border)]">
+      <table className="w-full min-w-[640px] border-collapse fin-t-body">
+        <caption className="sr-only">{legenda}</caption>
+        <thead className="bg-[var(--fin-surface-2)]">
+          <tr className="text-left fin-t-overline text-[var(--fin-text-3)]">
+            <th scope="col" className="px-3 py-2 font-medium">Conta</th>
+            <th scope="col" className="px-3 py-2 font-medium">Vence</th>
+            <th scope="col" className="px-3 py-2 text-right font-medium">Antes</th>
+            <th scope="col" className="px-3 py-2"><span className="sr-only">para</span></th>
+            <th scope="col" className="px-3 py-2 text-right font-medium">Depois</th>
+          </tr>
+        </thead>
+        <tbody>
+          {linhas.map((m, i) => (
+            <tr key={`${m.tabela}:${m.id ?? `n${i}`}`} className="border-t border-[var(--fin-border)]">
+              <td className="px-3 py-2">
+                <span className="block fin-t-body text-[var(--fin-text)]">{m.descricao || (m.tabela === 'contas_pagar' ? 'Conta a pagar' : 'Conta a receber')}</span>
+                <span className="block fin-t-caption text-[var(--fin-text-3)]">
+                  {m.tabela === 'contas_pagar' ? 'A pagar' : 'A receber'}{m.pessoa ? ` · ${m.pessoa}` : ''}
+                  {m.tipo === 'criada' ? ' · nova' : m.tipo === 'removida' ? ' · sai' : m.status_antes !== m.status_depois && m.status_depois ? ` · fica ${ROTULO_STATUS[m.status_depois] ?? m.status_depois.toLowerCase()}` : ''}
+                </span>
+              </td>
+              <td className="px-3 py-2 tabular-nums text-[var(--fin-text-2)]">{dataBR(m.vencimento)}</td>
+              <td className="px-3 py-2 text-right tabular-nums text-[var(--fin-text-2)]">{m.antes === null ? '—' : reais(Math.round(m.antes * 100))}</td>
+              <td className="px-1 py-2 text-[var(--fin-text-3)]"><ArrowRight aria-hidden="true" className="size-3.5" /></td>
+              <td className={cn('px-3 py-2 text-right tabular-nums fin-t-body-strong', m.depois === null ? 'text-[var(--fin-negative-text)]' : 'text-[var(--fin-text)]')}>{m.depois === null ? 'sai' : reais(Math.round(m.depois * 100))}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function Previa({ r, desatualizada }: { r: ResultadoDoCancelamento; desatualizada: boolean }) {
   const linhas: MudancaDeConta[] = r.mudancas;
   return (
@@ -339,41 +535,7 @@ function Previa({ r, desatualizada }: { r: ResultadoDoCancelamento; desatualizad
         <Numero rotulo="Reembolsos" valor={r.reembolsos.length ? r.reembolsos.map(x => `${x.tipo === 'CLIENTE' ? 'ao cliente' : 'do fornecedor'} ${reais(x.valor_centavos)}`).join(' · ') : '—'} />
         <Numero rotulo="Comissão do vendedor" valor={r.comissoes.some(c => c.estorno > 0) ? `−${reais(Math.round(r.comissoes.reduce((a, c) => a + c.estorno, 0) * 100))}` : 'sem mudança'} />
       </dl>
-      {linhas.length ? (
-        <div className="overflow-x-auto rounded-[var(--fin-r-md)] border border-[var(--fin-border)]">
-          <table className="w-full min-w-[640px] border-collapse fin-t-body">
-            <caption className="sr-only">Contas que mudam com o cancelamento</caption>
-            <thead className="bg-[var(--fin-surface-2)]">
-              <tr className="text-left fin-t-overline text-[var(--fin-text-3)]">
-                <th scope="col" className="px-3 py-2 font-medium">Conta</th>
-                <th scope="col" className="px-3 py-2 font-medium">Vence</th>
-                <th scope="col" className="px-3 py-2 text-right font-medium">Antes</th>
-                <th scope="col" className="px-3 py-2"><span className="sr-only">para</span></th>
-                <th scope="col" className="px-3 py-2 text-right font-medium">Depois</th>
-              </tr>
-            </thead>
-            <tbody>
-              {linhas.map((m, i) => (
-                <tr key={`${m.tabela}:${m.id ?? `n${i}`}`} className="border-t border-[var(--fin-border)]">
-                  <td className="px-3 py-2">
-                    <span className="block fin-t-body text-[var(--fin-text)]">{m.descricao || (m.tabela === 'contas_pagar' ? 'Conta a pagar' : 'Conta a receber')}</span>
-                    <span className="block fin-t-caption text-[var(--fin-text-3)]">
-                      {m.tabela === 'contas_pagar' ? 'A pagar' : 'A receber'}{m.pessoa ? ` · ${m.pessoa}` : ''}
-                      {m.tipo === 'criada' ? ' · nova' : m.tipo === 'removida' ? ' · sai' : m.status_antes !== m.status_depois && m.status_depois ? ` · fica ${ROTULO_STATUS[m.status_depois] ?? m.status_depois.toLowerCase()}` : ''}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 tabular-nums text-[var(--fin-text-2)]">{dataBR(m.vencimento)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-[var(--fin-text-2)]">{m.antes === null ? '—' : reais(Math.round(m.antes * 100))}</td>
-                  <td className="px-1 py-2 text-[var(--fin-text-3)]"><ArrowRight aria-hidden="true" className="size-3.5" /></td>
-                  <td className={cn('px-3 py-2 text-right tabular-nums fin-t-body-strong', m.depois === null ? 'text-[var(--fin-negative-text)]' : 'text-[var(--fin-text)]')}>{m.depois === null ? 'sai' : reais(Math.round(m.depois * 100))}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <p className="flex items-center gap-2 fin-t-body text-[var(--fin-text-2)]"><CircleCheck aria-hidden="true" className="size-4 text-[var(--fin-positive)]" /> Nenhuma conta muda: cliente e fornecedor seguem devendo o mesmo.</p>
-      )}
+      <TabelaDeMudancas linhas={linhas} legenda="Contas que mudam com o cancelamento" vazio="Nenhuma conta muda: cliente e fornecedor seguem devendo o mesmo." />
       {r.credito_devolvido_centavos > 0 ? <p className="fin-t-caption text-[var(--fin-text-2)]">{reais(r.credito_devolvido_centavos)} de crédito do cliente usado nesta venda voltam para a carteira dele.</p> : null}
       {r.avisos.length ? (
         <ul className="flex flex-col gap-1">

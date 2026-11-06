@@ -86,6 +86,7 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   '/equipe/pagar-comissoes': 'Pagar comissões',
   '/equipe/minhas-comissoes': 'Minhas comissões',
   '/relatorios/vendas': 'Relatórios de vendas',
+  '/relatorios/envios': 'Envios agendados',
   '/cac/dashboard': 'Dashboard CAC',
   '/cac/cenarios': 'Simulador CAC',
   '/planejamento/custos': 'Custos do negócio',
@@ -111,6 +112,7 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   '/mudanca': 'Mudar para o EnturOS',
   '/mudanca/glossario': 'Glossário',
   '/mudanca/paridade': 'Checklist de paridade',
+  '/mudanca/historico': 'Registros trazidos',
 };
 
 const PILLAR_PREFIXES: { pillar: Pillar; prefixes: string[] }[] = [

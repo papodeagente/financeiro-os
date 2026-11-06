@@ -273,7 +273,9 @@ await query(`UPDATE contas_receber SET status = 'RECEBIDO', data = data || '{"st
 let res = await tarefa.executar(ctxTarefa, T);
 eq(res, { na_fila: 0, motivo: 'emissão automática desligada' }, 'automático desligado: nada entra na fila');
 r = await json(await rotaConfig.PUT(pedir('PUT', '/api/fiscal/notas-config', { automatico: true, enviar_ao_cliente: true })));
-eq(r.corpo, { automatico: true, enviar_ao_cliente: true }, 'emissão automática ligada');
+eq({ automatico: r.corpo.automatico, enviar_ao_cliente: r.corpo.enviar_ao_cliente }, { automatico: true, enviar_ao_cliente: true }, 'emissão automática ligada');
+// E7: os campos novos chegam com o padrão de antes (data do dia, sem dispensa, sem tributos aproximados).
+eq([r.corpo.data_da_nota, r.corpo.retencao_minima, r.corpo.tributos_aproximados.ligado], ['DIA', { ir_centavos: null, csll_pis_cofins_centavos: null }, false], 'configuração nova com o padrão de antes');
 res = await comNadaSai('ensaio da mudança', () => tarefa.executar(ctxTarefa, T));
 eq(res.na_fila, 0, '"nada sai": a tarefa não põe nota na fila');
 erro = await comNadaSai('ensaio', () => notas.emitirNotasDaRegra(pool, T, { selecao: [{ venda_id: 'v-gat' }] }, { id: '', nome: '' })).then(() => null, e => e.codigo);

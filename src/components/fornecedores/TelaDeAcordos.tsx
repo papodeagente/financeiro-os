@@ -6,6 +6,7 @@
  * caso, com vigência. A venda usa o acordo da data dela; mudar o acordo
  * hoje não mexe nas vendas de antes.
  */
+import { HistoricoRecolhivel } from '@/components/fin/HistoricoDoRegistro';
 import * as React from 'react';
 import { Handshake } from 'lucide-react';
 
@@ -303,6 +304,8 @@ function FormularioDoAcordo({ acordo, fornecedores, onFechar, onSalvo }: {
               <Button type="button" variant="ghost" className="h-11 text-[var(--fin-negative-text)] lg:h-10" onClick={() => setExcluir(true)}>Excluir acordo</Button>
             </div>
           ) : null}
+          {/* Histórico do acordo (E7, frente D): quem mudou o quê, e quando. */}
+          {acordo ? <HistoricoRecolhivel entidade="fornecedor_acordos" id={acordo.id} /> : null}
         </div>
       </RecordSheet>
       {acordo ? (

@@ -11,23 +11,32 @@ import { PERIODO_SCHEMA_SQL } from './periodo-fechado';
 import { COBRANCA_SCHEMA_SQL } from './cobranca/schema';
 import { MIGRACAO_SCHEMA_SQL } from './migracao/schema';
 import { CAMBIO_SCHEMA_SQL } from './cambio-servidor';
+import { MOEDAS_SCHEMA_SQL } from './moedas-servidor';
 import { VENDA_SCHEMA_SQL } from './venda-schema';
+import { RECIBOS_EMITIDOS_SCHEMA_SQL } from './recibo-emitido';
 import { FORNECEDOR_SCHEMA_SQL } from './fornecedor-schema';
 import { NOTAS_REGRAS_SCHEMA_SQL } from './nota-regras-schema';
 import { COMISSAO_FUNCOES_SCHEMA_SQL } from './comissao-funcoes-schema';
 import { PARTE_D_SCHEMA_SQL } from './cancelamento-schema';
 import { FATURA_SCHEMA_SQL } from './fatura-schema';
+import { EMPRESAS_SCHEMA_SQL } from './empresas-schema';
 import { RECORRENCIA_SCHEMA_SQL } from './recorrencia-schema';
 import { CENTROS_CUSTO_SCHEMA_SQL } from './centros-custo-servidor';
 import { PERMISSOES_SCHEMA_SQL } from './permissoes-schema';
 import { LEITURA_DOCUMENTO_SCHEMA_SQL } from './leitura-documento-servidor';
 import { FORMAS_PAGAMENTO_SCHEMA_SQL } from './formas-pagamento-servidor';
+import { CONTAS_EXCLUIDAS_SCHEMA_SQL } from './contas-excluidas-schema';
+import { NUMERACAO_TITULOS_SCHEMA_SQL } from './numeracao-titulos';
+import { PREFERENCIAS_USUARIO_SCHEMA_SQL } from './preferencias-usuario';
 import { AUDIT_SCHEMA_SQL } from './audit-schema';
 import { NOTIFICACOES_SCHEMA_SQL } from './notificacoes-schema';
 import { MAPAS_MENTAIS_COMPARTILHAMENTO_SCHEMA_SQL } from './mapas-mentais-compartilhamento';
 import { SITES_SCHEMA_SQL } from './sites-schema';
 import { CONCILIACAO_REGRAS_SCHEMA_SQL } from './conciliacao-regras-schema';
 import { CONFERENCIA_OPERADORA_SCHEMA_SQL } from './conferencia-operadora-schema';
+import { RELATORIOS_AGENDADOS_SCHEMA_SQL } from './relatorios-agendados/schema';
+import { PERGUNTAS_IA_SCHEMA_SQL } from './perguntar/uso';
+import { CHEQUES_SCHEMA_SQL } from './cheques-servidor';
 
 const pool = process.env.DATABASE_URL
   ? new AuditPool({ connectionString: process.env.DATABASE_URL, max: 5 }, getAuditContext)
@@ -1562,10 +1571,16 @@ async function executarInitDB() {
   // fontes, cofre do Super Admin, variações cambiais e a trava da moeda da
   // conta bancária. Antes do razão e da auditoria.
   await pool.query(CAMBIO_SCHEMA_SQL);
+  // Cadastro de moedas da agência (06/11/2026, E7 frente D): as que ela
+  // acrescenta às oito do sistema. Cadastro: entra na auditoria.
+  await pool.query(MOEDAS_SCHEMA_SQL);
   // Venda completa (05/11/2026, E5): produtos, passageiros, componentes de
   // receita, pagamentos por forma, pendências e o histórico da venda. Antes
   // do razão e da auditoria (o histórico fica fora do gatilho).
   await pool.query(VENDA_SCHEMA_SQL);
+  // Recibos da venda emitidos (E7): número e versão; a edição da venda com
+  // recibo emitido pede confirmação e o recibo novo substitui o anterior.
+  await pool.query(RECIBOS_EMITIDOS_SCHEMA_SQL);
   // Lado do fornecedor (05/11/2026, E5 parte C): acordos com vigência, fatura
   // do fornecedor, sinal e comissão informada no extrato. Antes do razão e da
   // auditoria (as tabelas são auditadas).
@@ -1582,6 +1597,13 @@ async function executarInitDB() {
   // Faturas ao cliente e Regras de faturamento (05/11/2026, E5 parte B).
   // Antes do razão e da auditoria (o histórico da fatura fica fora do gatilho).
   await pool.query(FATURA_SCHEMA_SQL);
+  // Várias empresas dentro da agência (06/11/2026, E7 G2): cadastro, seletor
+  // por usuário, configurações por empresa, empresa nos perfis de acesso e o
+  // gatilho que põe `empresa_id` em todo título, conta, cartão, venda, nota,
+  // fatura e cobrança. Migração única: tudo de antes na empresa principal.
+  // Depois das permissões, da cobrança, das notas e das faturas; antes do
+  // razão e da auditoria.
+  await pool.query(EMPRESAS_SCHEMA_SQL);
   // Conciliação com regras aprendidas e conferência do extrato de operadora
   // (05/11/2026, E6). A lista "conciliado sozinho" e as linhas da conferência
   // são controle e ficam fora do gatilho de auditoria.
@@ -1592,6 +1614,21 @@ async function executarInitDB() {
   // o identificador do banco deduplica no mesmo lugar do FITID.
   await pool.query(EXTRATO_AUTOMATICO_SCHEMA_SQL);
   await pool.query(EXTRATO_ID_EXTERNO_UNICO_SQL);
+  // Fechamento de paridade (06/11/2026, E7): contas excluídas (exclusão
+  // lógica, com Restaurar), o Nº sequencial dos títulos por agência e as
+  // preferências por usuário (colunas da lista). Controle: fora da auditoria.
+  await pool.query(CONTAS_EXCLUIDAS_SCHEMA_SQL);
+  await pool.query(NUMERACAO_TITULOS_SCHEMA_SQL);
+  await pool.query(PREFERENCIAS_USUARIO_SCHEMA_SQL);
+  // Envio agendado de relatório e link de leitura (E7, G3): agendamentos
+  // (auditados), cópias lidas pelo link e histórico dos envios (controle).
+  await pool.query(RELATORIOS_AGENDADOS_SCHEMA_SQL);
+  // Perguntar em texto (E7, fechamento): limite por agência e registro das
+  // perguntas. Controle: fora da auditoria por linha.
+  await pool.query(PERGUNTAS_IA_SCHEMA_SQL);
+  // Cheques emitidos (E7, frente C): o talão da agência, a situação de cada
+  // cheque e as liquidações pagas com ele. Auditadas.
+  await pool.query(CHEQUES_SCHEMA_SQL);
   await pool.query(RAZAO_SCHEMA_SQL);
   // Instala a captura somente depois das migrações/seed, sem fabricar histórico.
   await pool.query(AUDIT_SCHEMA_SQL);

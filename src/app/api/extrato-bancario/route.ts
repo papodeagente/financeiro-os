@@ -8,5 +8,7 @@ export const { GET, POST } = createCrudHandlers(
     somenteFinanceiro: true,
     // Extrato só das contas liberadas para a pessoa (05/11/2026).
     filtroDeConta: { campos: ['conta_bancaria_id'] },
+    // Extrato das contas disponíveis nas empresas marcadas (E7).
+    filtroDeEmpresa: { tipo: 'por_conta', campos: ['conta_bancaria_id'] },
   },
 );

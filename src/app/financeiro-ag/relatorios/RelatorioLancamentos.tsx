@@ -9,7 +9,7 @@
  */
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Download, type LucideIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
 
 import type { CentroCusto, PlanoContas } from '@/lib/crm-types';
 import type { RespostaLancamentos } from '@/lib/lancamentos-por-dimensao-servidor';
@@ -18,9 +18,9 @@ import {
   type Agrupar, type CampoPesquisa, type DataDe, type LinhaLancamento, type Situacao, type TipoFiltro, type Visao,
 } from '@/lib/lancamentos-por-dimensao';
 import { ordenarEmArvore } from '@/lib/dimensoes';
-import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { BotaoExportar } from '@/components/fin/BotaoExportar';
 import { Callout } from '@/components/fin/Callout';
 import { FilterBar } from '@/components/fin/FilterBar';
 import { FinTable, type FinColuna } from '@/components/fin/FinTable';
@@ -30,6 +30,7 @@ import { PageHeader } from '@/components/fin/PageHeader';
 import { resolverPeriodo, type PeriodoChave } from '@/components/fin/PeriodPicker';
 import { statusChipVariants } from '@/components/fin/StatusChip';
 import { Interruptor } from '@/app/financeiro-ag/pagar/campos';
+import { nomeDaEmpresa, useEmpresas } from '@/components/fin/useEmpresas';
 
 const FOCO =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)] focus-visible:ring-0';
@@ -202,7 +203,6 @@ export function RelatorioLancamentos({ visao, icone }: { visao: Visao; icone: Lu
   const [estado, setEstado] = React.useState<'carregando' | 'erro' | 'ok'>('carregando');
   const [erro, setErro] = React.useState<string | null>(null);
   const [atualizadoEm, setAtualizadoEm] = React.useState<Date | null>(null);
-  const [exportando, setExportando] = React.useState(false);
   const [centros, setCentros] = React.useState<CentroCusto[]>([]);
   const [categorias, setCategorias] = React.useState<PlanoContas[]>([]);
   const pedido = React.useRef(0);
@@ -243,36 +243,25 @@ export function RelatorioLancamentos({ visao, icone }: { visao: Visao; icone: Lu
 
   React.useEffect(() => { void consultar(); }, [consultar]);
 
-  async function exportar() {
-    setExportando(true);
-    try {
-      const res = await fetch(`/api/relatorios/lancamentos?${parametros(visao, f)}&formato=csv`, { cache: 'no-store' });
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error(typeof json.error === 'string' ? json.error : 'A exportação falhou.');
-      }
-      const blob = await res.blob();
-      const nome = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? 'lancamentos.csv';
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = nome;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      toast.error('Não foi possível exportar', e instanceof Error ? e.message : '');
-    } finally {
-      setExportando(false);
-    }
-  }
-
   const arvore = React.useMemo(() => ordenarEmArvore(centros), [centros]);
   const categoriasOrdenadas = React.useMemo(
     () => [...categorias].sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true })),
     [categorias],
   );
   const regime = dados?.regime ?? (f.data_de === 'MOVIMENTACAO' ? 'caixa' : 'competencia');
-  const colunas = React.useMemo(() => colunasDa(visao, regime), [visao, regime]);
+  // Várias empresas (E7): no relatório por rateio entra a coluna Empresa
+  // (de cada parte). Uma empresa só: as colunas de sempre.
+  const { multi: variasEmpresas, empresas } = useEmpresas();
+  const colunas = React.useMemo(() => {
+    const base = colunasDa(visao, regime);
+    if (!variasEmpresas || visao !== 'rateio') return base;
+    const empresa: FinColuna<LinhaLancamento> = {
+      id: 'empresa', cabecalho: 'Empresa', tipo: 'texto', minWidth: 120,
+      render: l => <span className="fin-t-body text-[var(--fin-text)]">{nomeDaEmpresa(empresas, l.empresa_id)}</span>,
+    };
+    const i = base.findIndex(c => c.id === 'centro');
+    return [...base.slice(0, i), empresa, ...base.slice(i)];
+  }, [visao, regime, variasEmpresas, empresas]);
 
   const ativos = [
     f.periodo !== 'MES_ATUAL', f.data_de !== 'VENCIMENTO', f.situacao !== 'TODAS', f.tipo !== 'TODOS', f.incluir_repasse,
@@ -284,12 +273,12 @@ export function RelatorioLancamentos({ visao, icone }: { visao: Visao; icone: Lu
   return (
     <MolduraDaPagina>
       <PageHeader
+        empresas
         icone={icone}
         titulo={TITULO[visao]}
         subtitulo={SUBTITULO[visao]}
         atualizadoEm={atualizadoEm}
         onRecarregar={consultar}
-        acaoPrimaria={{ rotulo: exportando ? 'Exportando…' : 'Exportar para Excel', icone: Download, onClick: () => { if (!exportando) void exportar(); } }}
         acoesSecundarias={(Object.keys(TITULO) as Visao[]).filter(v => v !== visao).map(v => ({ rotulo: TITULO[v], href: ROTA[v] }))}
       />
 
@@ -351,12 +340,24 @@ export function RelatorioLancamentos({ visao, icone }: { visao: Visao; icone: Lu
         onLimpar={() => { setBusca(''); setF(filtrosIniciais()); }}
       />
 
-      <Interruptor
-        rotulo="Mostrar repasses"
-        descricao="O dinheiro que só passa pela agência fica fora da conta até você ligar aqui."
-        ligado={f.incluir_repasse}
-        onChange={v => mudar({ incluir_repasse: v })}
-      />
+      <div className="flex flex-wrap items-start justify-between gap-[var(--fin-s-3)]">
+        <Interruptor
+          rotulo="Mostrar repasses"
+          descricao="O dinheiro que só passa pela agência fica fora da conta até você ligar aqui."
+          ligado={f.incluir_repasse}
+          onChange={v => mudar({ incluir_repasse: v })}
+        />
+        <BotaoExportar
+          origem={`relatorio-por-${visao}`}
+          desabilitado={!totais?.quantidade}
+          endereco={formato => {
+            const p = parametros(visao, f);
+            p.delete('pagina'); p.delete('por_pagina');
+            p.set('formato', formato);
+            return `/api/relatorios/lancamentos?${p}`;
+          }}
+        />
+      </div>
 
       {regime === 'caixa' ? (
         <Callout tom="info" titulo="Regime de caixa">

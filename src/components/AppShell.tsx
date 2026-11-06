@@ -120,6 +120,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       && pathname !== '/login'
       && !pathname.startsWith('/p/')
       && !pathname.startsWith('/c/')
+      && !pathname.startsWith('/r/')
       && !pathname.startsWith('/recibo/')
       && !pathname.startsWith('/mapas-mentais/publico/')
       && !isMindMapImport
@@ -144,11 +145,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     pathname.startsWith('/p/') ||
     // Portal do cliente (público) e o recibo para imprimir: sem barra nem menu.
     pathname.startsWith('/c/') ||
+    // Link de leitura de relatório (público, E7).
+    pathname.startsWith('/r/') ||
     pathname.startsWith('/recibo/') ||
     // Documento da fatura para imprimir (E5, parte B): a folha sai limpa.
     (pathname.startsWith('/financeiro-ag/faturas/') && pathname.endsWith('/imprimir')) ||
     // Nota de débito da venda para imprimir (E5, parte B).
     (pathname.startsWith('/vendas/') && pathname.endsWith('/nota-de-debito')) ||
+    // Recibo da venda e recibo consolidado da fatura para imprimir (E7).
+    (pathname.startsWith('/vendas/') && pathname.endsWith('/recibo')) ||
+    (pathname.startsWith('/financeiro-ag/faturas/') && pathname.endsWith('/recibo')) ||
     pathname.startsWith('/mapas-mentais/publico/') ||
     pathname.startsWith('/admin') ||
     pathname === '/preview-iframe'

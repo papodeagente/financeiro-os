@@ -1,5 +1,6 @@
 'use client';
 
+import { planoPadraoComIdsNovos } from '@/lib/assistente-inicial';
 import { useEffect, useMemo, useState } from 'react';
 import { GitMerge, ListTree, Pencil, Plus, Trash2 } from 'lucide-react';
 
@@ -22,6 +23,7 @@ import { FinTable, type FinColuna } from '@/components/fin/FinTable';
 import { Jargao } from '@/components/fin/Jargao';
 import { PageHeader } from '@/components/fin/PageHeader';
 import { RecordSheet } from '@/components/fin/RecordSheet';
+import { HistoricoRecolhivel } from '@/components/fin/HistoricoDoRegistro';
 import { StatusChip, statusChipVariants } from '@/components/fin/StatusChip';
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
@@ -168,9 +170,9 @@ export default function PlanoContasPage() {
 
   async function handleCarregarPadrao() {
     setLoadingPadrao(true);
-    const padrao = getPlanoContasPadrao();
-    for (const conta of padrao) {
-      const novaConta: PlanoContas = { ...conta, id: generateId() };
+    // Ids novos com a categoria-mãe ligada pelo id novo (E7, frente D): antes a
+    // mãe ficava apontando para o número do plano padrão, que não existe.
+    for (const novaConta of planoPadraoComIdsNovos(getPlanoContasPadrao(), generateId)) {
       await saveEntity('plano-contas', novaConta);
     }
     setLoadingPadrao(false);
@@ -669,6 +671,7 @@ export default function PlanoContasPage() {
               </Field>
             </div>
           )}
+          {editId ? <HistoricoRecolhivel entidade="plano_contas" id={editId} /> : null}
         </div>
       </RecordSheet>
 

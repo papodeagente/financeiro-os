@@ -1,17 +1,25 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { Banknote, Building2, CreditCard, Landmark, Pencil, PiggyBank, Plus, Trash2, TrendingUp } from 'lucide-react';
 
 import { ContaBancaria } from '@/lib/crm-types';
-import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
+import { loadEntities, saveEntity } from '@/lib/crm-storage';
+import { atualizarRegistro, excluirRegistro, ErroAoGravar } from '@/lib/gravar-registro';
+import { BANCOS, bancoPorCodigo, rotuloDoBanco } from '@/lib/bancos';
+import { contaBancariaAtiva } from '@/lib/contas-bancarias-regras';
+import { identificacaoDaConta } from '@/lib/contas-bancarias-dados';
+import { AvisoDeEdicaoSimultanea } from '@/components/fin/AvisoDeEdicaoSimultanea';
+import { HistoricoRecolhivel } from '@/components/fin/HistoricoDoRegistro';
 import { somaPor } from '@/lib/money';
 import {
-  MOEDAS, formatarCambio, formatarNaMoeda, infoDaMoeda, moedaDe, saldoTotalEmReais, saldosEmReais,
+  formatarCambio, formatarNaMoeda, infoDaMoeda, moedaDe, saldoTotalEmReais, saldosEmReais,
   type SaldoEmReais,
 } from '@/lib/cambio';
 import { useCotacoes } from '@/components/fin/useCotacoes';
+import { useMoedas } from '@/components/fin/useMoedas';
+import { moedasParaEscolher } from '@/lib/moedas';
 import { Callout } from '@/components/fin/Callout';
 
 import { Button } from '@/components/ui/button';
@@ -34,6 +42,7 @@ import { Money } from '@/components/fin/Money';
 import { MoneyField } from '@/components/fin/MoneyField';
 import { PageHeader } from '@/components/fin/PageHeader';
 import { RecordSheet } from '@/components/fin/RecordSheet';
+import { CampoEmpresa, CampoEmpresasDisponiveis, useEmpresaSugerida } from '@/components/fin/CamposDeEmpresa';
 import type { EmptyLessonProps } from '@/components/fin/EmptyLesson';
 
 const TIPO_LABEL: Record<ContaBancaria['tipo'], string> = {
@@ -61,6 +70,9 @@ const TIPO_OPCOES: { valor: ContaBancaria['tipo']; rotulo: string }[] = [
 ];
 
 const TIPO_TODOS = 'TODOS';
+const SITUACAO_ATIVAS = 'ATIVAS';
+const SITUACAO_DESATIVADAS = 'DESATIVADAS';
+const SITUACAO_TODAS = 'TODAS';
 
 const CONTROLE_FORMULARIO =
   'fin-t-body h-11 w-full rounded-[var(--fin-r-md)] border-[var(--fin-border-strong)] bg-[var(--fin-surface)] text-[var(--fin-text)] lg:h-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)] focus-visible:ring-0';
@@ -84,17 +96,41 @@ function createNewConta(): ContaBancaria {
   };
 }
 
-/** Conta com a moeda (05/11/2026, E6). Ausente = real, como sempre foi. */
-type ContaComMoeda = ContaBancaria & { moeda?: string };
+/**
+ * Conta com a moeda (05/11/2026, E6), o cadastro completo (06/11/2026, E7:
+ * titular, banco da lista oficial, dígitos separados e desativada) e a
+ * empresa (E7: a dona e as outras em que a conta está disponível). Ausentes
+ * = como sempre foi (real, ativa, banco em texto livre, empresa principal).
+ */
+type ContaComMoeda = ContaBancaria & {
+  moeda?: string;
+  titular?: string;
+  titular_documento?: string;
+  banco_codigo?: string;
+  agencia_digito?: string;
+  conta_digito?: string;
+  ativo?: boolean;
+  _versao?: string;
+  empresa_id?: string;
+  empresas_disponiveis?: string[];
+};
 
 type FormState = {
   nome: string;
   moeda: string;
   tipo: ContaBancaria['tipo'];
   banco: string;
+  banco_codigo: string;
   agencia: string;
+  agencia_digito: string;
   conta: string;
+  conta_digito: string;
+  titular: string;
+  titular_documento: string;
+  ativo: boolean;
   saldo_inicial: number;
+  empresa_id?: string;
+  empresas_disponiveis: string[];
 };
 
 const EMPTY_FORM: FormState = {
@@ -102,10 +138,28 @@ const EMPTY_FORM: FormState = {
   moeda: 'BRL',
   tipo: 'CORRENTE',
   banco: '',
+  banco_codigo: '',
   agencia: '',
+  agencia_digito: '',
   conta: '',
+  conta_digito: '',
+  titular: '',
+  titular_documento: '',
+  ativo: true,
   saldo_inicial: 0,
+  empresas_disponiveis: [],
 };
+
+/** O que vai para o cadastro a partir do formulário. */
+function dadosDoFormulario(f: FormState) {
+  return {
+    nome: f.nome, moeda: f.moeda, tipo: f.tipo, banco: f.banco, banco_codigo: f.banco_codigo,
+    agencia: f.agencia, agencia_digito: f.agencia_digito, conta: f.conta, conta_digito: f.conta_digito,
+    titular: f.titular, titular_documento: f.titular_documento, ativo: f.ativo, saldo_inicial: f.saldo_inicial,
+  };
+}
+
+const ID_LISTA_DE_BANCOS = 'lista-oficial-de-bancos';
 
 function normalizar(texto: string): string {
   return texto
@@ -114,15 +168,18 @@ function normalizar(texto: string): string {
     .toLocaleLowerCase('pt-BR');
 }
 
-function identificacaoDe(item: ContaBancaria): string {
-  const partes: string[] = [];
-  if (item.agencia) partes.push(`Ag ${item.agencia}`);
-  if (item.conta) partes.push(`Conta ${item.conta}`);
-  return partes.join(' · ');
+function identificacaoDe(item: ContaComMoeda): string {
+  return identificacaoDaConta(item);
 }
 
-function sublinhaDe(item: ContaBancaria): string {
-  return [item.banco, identificacaoDe(item)].filter(Boolean).join(' · ');
+/** O banco como aparece: o da lista oficial, senão o texto gravado. */
+function bancoDe(item: ContaComMoeda): string {
+  const b = bancoPorCodigo(item.banco_codigo);
+  return b ? rotuloDoBanco(b) : item.banco;
+}
+
+function sublinhaDe(item: ContaComMoeda): string {
+  return [bancoDe(item), identificacaoDe(item)].filter(Boolean).join(' · ');
 }
 
 function contagemDeContas(n: number): string {
@@ -132,6 +189,9 @@ function contagemDeContas(n: number): string {
 export default function ContasBancariasPage() {
   const [items, setItems] = useState<ContaComMoeda[]>([]);
   const cotacoes = useCotacoes();
+  // Catálogo da agência (E7): as oito do sistema e as que ela cadastrou.
+  const { moedas } = useMoedas();
+  const empresaSugerida = useEmpresaSugerida();
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
@@ -143,11 +203,17 @@ export default function ContasBancariasPage() {
   const [erroNome, setErroNome] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
-  const [aExcluir, setAExcluir] = useState<ContaBancaria | null>(null);
+  const [aExcluir, setAExcluir] = useState<ContaComMoeda | null>(null);
   const [excluindo, setExcluindo] = useState(false);
+  /** A exclusão foi recusada porque a conta tem movimento: oferece desativar. */
+  const [comMovimento, setComMovimento] = useState<{ conta: ContaComMoeda; motivo: string } | null>(null);
+  const [desativando, setDesativando] = useState(false);
+  const [conflito, setConflito] = useState(false);
+  const [erroDoForm, setErroDoForm] = useState<string | null>(null);
 
   const [busca, setBusca] = useState('');
   const [tipoFiltro, setTipoFiltro] = useState<string>(TIPO_TODOS);
+  const [situacaoFiltro, setSituacaoFiltro] = useState<string>(SITUACAO_ATIVAS);
 
   async function load() {
     setLoading(true);
@@ -171,27 +237,38 @@ export default function ContasBancariasPage() {
   }
 
   function openNew() {
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, empresa_id: empresaSugerida });
     setEditId(null);
     setShowForm(true);
     setSujo(false);
     setErroNome(null);
+    setErroDoForm(null);
   }
 
   function openEdit(item: ContaComMoeda) {
+    const oficial = bancoPorCodigo(item.banco_codigo);
     setForm({
       nome: item.nome,
       moeda: moedaDe(item.moeda),
       tipo: item.tipo,
-      banco: item.banco,
-      agencia: item.agencia,
-      conta: item.conta,
+      banco: oficial ? rotuloDoBanco(oficial) : item.banco ?? '',
+      banco_codigo: oficial?.codigo ?? '',
+      agencia: item.agencia ?? '',
+      agencia_digito: item.agencia_digito ?? '',
+      conta: item.conta ?? '',
+      conta_digito: item.conta_digito ?? '',
+      titular: item.titular ?? '',
+      titular_documento: item.titular_documento ?? '',
+      ativo: contaBancariaAtiva(item),
       saldo_inicial: item.saldo_inicial,
+      empresa_id: item.empresa_id,
+      empresas_disponiveis: Array.isArray(item.empresas_disponiveis) ? item.empresas_disponiveis : [],
     });
     setEditId(item.id);
     setShowForm(true);
     setSujo(false);
     setErroNome(null);
+    setErroDoForm(null);
   }
 
   async function handleSave() {
@@ -202,32 +279,29 @@ export default function ContasBancariasPage() {
     setErroNome(null);
     setSalvando(true);
     try {
+      // Banco da lista oficial: grava o nome e o código; texto livre (conta
+      // antiga) continua como estava.
+      const oficial = form.banco_codigo ? bancoPorCodigo(form.banco_codigo) : null;
+      const dados = { ...dadosDoFormulario(form), banco: oficial ? oficial.nome : form.banco };
       if (editId) {
         const existing = items.find(i => i.id === editId)!;
-        const updated: ContaComMoeda = {
+        // Leva a versão lida: se outra pessoa salvou depois, nada é gravado (409).
+        await atualizarRegistro('contas-bancarias', {
           ...existing,
-          nome: form.nome,
-          moeda: form.moeda,
-          tipo: form.tipo,
-          banco: form.banco,
-          agencia: form.agencia,
-          conta: form.conta,
-          saldo_inicial: form.saldo_inicial,
-        };
-        await updateEntity('contas-bancarias', updated);
+          ...dados,
+          ...(form.empresa_id ? { empresa_id: form.empresa_id } : {}),
+          empresas_disponiveis: form.empresas_disponiveis.filter(e => e !== form.empresa_id),
+        });
       } else {
         const nova: ContaComMoeda = {
           ...createNewConta(),
-          nome: form.nome,
-          moeda: form.moeda,
-          tipo: form.tipo,
-          banco: form.banco,
-          agencia: form.agencia,
-          conta: form.conta,
-          saldo_inicial: form.saldo_inicial,
+          ...dados,
           saldo_atual: form.saldo_inicial,
+          ...(form.empresa_id ? { empresa_id: form.empresa_id } : {}),
+          ...(form.empresas_disponiveis.length ? { empresas_disponiveis: form.empresas_disponiveis.filter(e => e !== form.empresa_id) } : {}),
         };
-        await saveEntity('contas-bancarias', nova);
+        const r = await saveEntity('contas-bancarias', nova) as ContaComMoeda & { error?: string };
+        if (r && typeof r.error === 'string') throw new Error(r.error);
       }
       setShowForm(false);
       setEditId(null);
@@ -235,23 +309,65 @@ export default function ContasBancariasPage() {
       toast.success(editId ? 'Conta atualizada.' : 'Conta criada.');
       load();
     } catch (e) {
-      // A moeda de uma conta com movimento não muda: o servidor explica.
-      const msg = e instanceof Error && /moeda/i.test(e.message) ? e.message : 'Não foi possível salvar a conta. Nada foi alterado.';
-      toast.error(msg);
+      if (e instanceof ErroAoGravar && e.conflito) { setConflito(true); return; }
+      // O servidor explica (moeda de conta com movimento, dígito, documento do titular).
+      const msg = e instanceof Error && e.message ? e.message : 'Não foi possível salvar a conta. Nada foi alterado.';
+      setErroDoForm(msg);
+      toast.error('Não foi possível salvar a conta', msg);
     } finally {
       setSalvando(false);
     }
   }
 
-  async function handleDelete(id: string) {
+  async function recarregarDepoisDoConflito() {
+    setConflito(false);
+    setShowForm(false);
+    setEditId(null);
+    setSujo(false);
+    await load();
+  }
+
+  async function desativar(conta: ContaComMoeda) {
+    setDesativando(true);
+    try {
+      await atualizarRegistro('contas-bancarias', { ...conta, ativo: false });
+      setComMovimento(null);
+      toast.success('Conta desativada', 'Ela some das telas de lançar, pagar e receber e continua nos relatórios.');
+      load();
+    } catch (e) {
+      if (e instanceof ErroAoGravar && e.conflito) { setComMovimento(null); setConflito(true); return; }
+      toast.error('Não foi possível desativar a conta', e instanceof Error ? e.message : '');
+    } finally {
+      setDesativando(false);
+    }
+  }
+
+  async function reativar(conta: ContaComMoeda) {
+    try {
+      await atualizarRegistro('contas-bancarias', { ...conta, ativo: true });
+      toast.success('Conta reativada');
+      load();
+    } catch (e) {
+      if (e instanceof ErroAoGravar && e.conflito) { setConflito(true); return; }
+      toast.error('Não foi possível reativar a conta', e instanceof Error ? e.message : '');
+    }
+  }
+
+  async function handleDelete(conta: ContaComMoeda) {
     setExcluindo(true);
     try {
-      await deleteEntity('contas-bancarias', id);
+      await excluirRegistro('contas-bancarias', conta.id);
       setAExcluir(null);
       toast.success('Conta excluída.');
       load();
-    } catch {
-      toast.error('Não foi possível excluir a conta. Nada foi alterado.');
+    } catch (e) {
+      setAExcluir(null);
+      // Conta já usada não se exclui: oferece desativar.
+      if (e instanceof ErroAoGravar && e.corpo.com_movimento === true) {
+        setComMovimento({ conta, motivo: e.message });
+      } else {
+        toast.error('Não foi possível excluir a conta. Nada foi alterado.', e instanceof Error ? e.message : '');
+      }
     } finally {
       setExcluindo(false);
     }
@@ -260,7 +376,7 @@ export default function ContasBancariasPage() {
   // Saldo de cada conta em reais (conta em moeda pela PTAX de venda do cache).
   // Só contas em real: o mesmo número de sempre.
   const listaDeCotacoes = cotacoes.painel?.cotacoes;
-  const saldos = useMemo(() => new Map(saldosEmReais(items, listaDeCotacoes ?? []).map(x => [x.id, x])), [items, listaDeCotacoes]);
+  const saldos = useMemo(() => new Map(saldosEmReais(items, listaDeCotacoes ?? [], moedas).map(x => [x.id, x])), [items, listaDeCotacoes, moedas]);
   const temMoeda = items.some(i => moedaDe(i.moeda) !== 'BRL');
   const somaEmReais = (lista: ContaComMoeda[]) => saldoTotalEmReais(lista.map(i => saldos.get(i.id)).filter((x): x is SaldoEmReais => !!x));
   const totalGeral = somaEmReais(items);
@@ -273,18 +389,23 @@ export default function ContasBancariasPage() {
     const termo = normalizar(busca.trim());
     return items.filter(item => {
       if (tipoFiltro !== TIPO_TODOS && item.tipo !== tipoFiltro) return false;
+      const ativa = contaBancariaAtiva(item);
+      if (situacaoFiltro === SITUACAO_ATIVAS && !ativa) return false;
+      if (situacaoFiltro === SITUACAO_DESATIVADAS && ativa) return false;
       if (!termo) return true;
-      const alvo = normalizar(`${item.nome} ${item.banco} ${item.agencia} ${item.conta}`);
+      const alvo = normalizar(`${item.nome} ${bancoDe(item)} ${item.agencia} ${item.conta} ${item.titular ?? ''}`);
       return alvo.includes(termo);
     });
-  }, [items, busca, tipoFiltro]);
+  }, [items, busca, tipoFiltro, situacaoFiltro]);
+  const desativadas = items.filter(i => !contaBancariaAtiva(i)).length;
 
   const totalDoRecorte = temMoeda ? somaEmReais(filtradas).total : somaPor(filtradas, i => i.saldo_atual);
-  const filtrosAtivos = (busca.trim() ? 1 : 0) + (tipoFiltro !== TIPO_TODOS ? 1 : 0);
+  const filtrosAtivos = (busca.trim() ? 1 : 0) + (tipoFiltro !== TIPO_TODOS ? 1 : 0) + (situacaoFiltro !== SITUACAO_ATIVAS ? 1 : 0);
 
   function limparFiltros() {
     setBusca('');
     setTipoFiltro(TIPO_TODOS);
+    setSituacaoFiltro(SITUACAO_ATIVAS);
   }
 
   const vazio: EmptyLessonProps =
@@ -325,7 +446,13 @@ export default function ContasBancariasPage() {
             {TIPO_ICONE[item.tipo]}
           </span>
           <span className="flex min-w-0 flex-col">
-            <span className="fin-t-body-strong truncate text-[var(--fin-text)]">{item.nome}</span>
+            <span className="flex items-center gap-[var(--fin-s-2)]">
+              <span className="fin-t-body-strong truncate text-[var(--fin-text)]">{item.nome}</span>
+              {contaBancariaAtiva(item) ? null : (
+                <span className="shrink-0 rounded-[var(--fin-r-sm)] bg-[var(--fin-surface-2)] px-1.5 py-0.5 fin-t-caption text-[var(--fin-text-2)]">Desativada</span>
+              )}
+            </span>
+            {item.titular ? <span className="fin-t-caption truncate text-[var(--fin-text-3)]">Titular: {item.titular}</span> : null}
             {sublinhaDe(item) ? (
               <span className="fin-t-caption hidden truncate text-[var(--fin-text-3)] max-lg:block">
                 {sublinhaDe(item)}
@@ -342,10 +469,10 @@ export default function ContasBancariasPage() {
       sortable: true,
       minWidth: 140,
       prioridade: 1,
-      acessor: item => item.banco,
+      acessor: item => bancoDe(item),
       render: item =>
-        item.banco ? (
-          <span>{item.banco}</span>
+        bancoDe(item) ? (
+          <span>{bancoDe(item)}</span>
         ) : (
           <span className="text-[var(--fin-text-3)]">Não informado</span>
         ),
@@ -454,6 +581,17 @@ export default function ContasBancariasPage() {
           >
             <Pencil className="size-4" aria-hidden="true" />
           </Button>
+          {contaBancariaAtiva(item) ? null : (
+            <Button
+              type="button"
+              variant="outline"
+              aria-label={`Reativar a conta ${item.nome}`}
+              onClick={() => { void reativar(item); }}
+              className="h-11 rounded-[var(--fin-r-md)] px-[var(--fin-s-3)] shadow-none lg:h-10"
+            >
+              Reativar
+            </Button>
+          )}
           <Button
             type="button"
             variant="ghost"
@@ -553,6 +691,17 @@ export default function ContasBancariasPage() {
                       ...TIPO_OPCOES.map(o => ({ valor: o.valor, rotulo: o.rotulo })),
                     ],
                   },
+                  ...(desativadas > 0 || situacaoFiltro !== SITUACAO_ATIVAS ? [{
+                    id: 'filtro-situacao-conta',
+                    rotulo: 'Situação',
+                    valor: situacaoFiltro,
+                    onChange: setSituacaoFiltro,
+                    opcoes: [
+                      { valor: SITUACAO_ATIVAS, rotulo: 'Ativas' },
+                      { valor: SITUACAO_DESATIVADAS, rotulo: `Desativadas (${desativadas})` },
+                      { valor: SITUACAO_TODAS, rotulo: 'Todas' },
+                    ],
+                  }] : []),
                 ]}
                 resumo={{
                   exibidos: filtradas.length,
@@ -615,6 +764,18 @@ export default function ContasBancariasPage() {
             )}
           </Field>
 
+          {/* Várias empresas (E7): só aparecem com duas ou mais. */}
+          <CampoEmpresa
+            valor={form.empresa_id}
+            onChange={empresa_id => atualizarForm({ empresa_id, empresas_disponiveis: form.empresas_disponiveis.filter(e => e !== empresa_id) })}
+            ajuda="A empresa dona da conta. O dinheiro que entra e sai por ela conta nesta empresa."
+          />
+          <CampoEmpresasDisponiveis
+            dona={form.empresa_id}
+            valor={form.empresas_disponiveis}
+            onChange={empresas_disponiveis => atualizarForm({ empresas_disponiveis })}
+          />
+
           <Field rotulo="Tipo de conta">
             {a => (
               <Select
@@ -649,7 +810,7 @@ export default function ContasBancariasPage() {
                   <SelectValue>{() => `${infoDaMoeda(form.moeda).nome} (${infoDaMoeda(form.moeda).simbolo})`}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {MOEDAS.map(m => (
+                  {moedasParaEscolher(moedas, form.moeda).map(m => (
                     <SelectItem key={m.codigo} value={m.codigo} className="fin-t-body">
                       {m.nome} ({m.simbolo})
                     </SelectItem>
@@ -659,28 +820,61 @@ export default function ContasBancariasPage() {
             )}
           </Field>
 
-          <Field rotulo="Banco">
+          <Field
+            rotulo="Banco"
+            ajuda={form.banco_codigo
+              ? `Da lista oficial do Banco Central (código ${form.banco_codigo}).`
+              : form.banco
+                ? 'Escreva o código ou o nome e escolha na lista oficial do Banco Central.'
+                : 'Escreva o código (ex.: 341) ou o nome e escolha na lista oficial do Banco Central.'}
+          >
             {a => (
-              <Input
-                id={a.id}
-                aria-describedby={a['aria-describedby']}
-                value={form.banco}
-                onChange={e => atualizarForm({ banco: e.target.value })}
-                placeholder="Bradesco, Itaú, Nubank"
-                className={CONTROLE_FORMULARIO}
-              />
+              <>
+                <Input
+                  id={a.id}
+                  aria-describedby={a['aria-describedby']}
+                  value={form.banco}
+                  list={ID_LISTA_DE_BANCOS}
+                  autoComplete="off"
+                  onChange={e => {
+                    const texto = e.target.value;
+                    const escolhido = BANCOS.find(b => rotuloDoBanco(b) === texto);
+                    atualizarForm({ banco: texto, banco_codigo: escolhido?.codigo ?? '' });
+                  }}
+                  placeholder="341 · Itaú, 077 · Inter, 260 · Nu"
+                  className={CONTROLE_FORMULARIO}
+                />
+                <datalist id={ID_LISTA_DE_BANCOS}>
+                  {BANCOS.map(b => <option key={b.codigo} value={rotuloDoBanco(b)} />)}
+                </datalist>
+              </>
             )}
           </Field>
 
-          <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:grid-cols-2">
+          <div className="grid grid-cols-[1fr_5rem] gap-[var(--fin-s-3)] sm:grid-cols-[1fr_5rem_1fr_5rem]">
             <Field rotulo="Agência">
               {a => (
                 <Input
                   id={a.id}
                   aria-describedby={a['aria-describedby']}
                   value={form.agencia}
+                  inputMode="numeric"
                   onChange={e => atualizarForm({ agencia: e.target.value })}
-                  placeholder="0000-0"
+                  placeholder="0000"
+                  className={`${CONTROLE_FORMULARIO} tabular-nums`}
+                />
+              )}
+            </Field>
+            <Field rotulo="Dígito">
+              {a => (
+                <Input
+                  id={a.id}
+                  aria-describedby={a['aria-describedby']}
+                  aria-label="Dígito da agência"
+                  value={form.agencia_digito}
+                  maxLength={2}
+                  onChange={e => atualizarForm({ agencia_digito: e.target.value.toUpperCase() })}
+                  placeholder="0"
                   className={`${CONTROLE_FORMULARIO} tabular-nums`}
                 />
               )}
@@ -692,8 +886,53 @@ export default function ContasBancariasPage() {
                   id={a.id}
                   aria-describedby={a['aria-describedby']}
                   value={form.conta}
+                  inputMode="numeric"
                   onChange={e => atualizarForm({ conta: e.target.value })}
-                  placeholder="00000000-0"
+                  placeholder="00000000"
+                  className={`${CONTROLE_FORMULARIO} tabular-nums`}
+                />
+              )}
+            </Field>
+            <Field rotulo="Dígito">
+              {a => (
+                <Input
+                  id={a.id}
+                  aria-describedby={a['aria-describedby']}
+                  aria-label="Dígito da conta"
+                  value={form.conta_digito}
+                  maxLength={2}
+                  onChange={e => atualizarForm({ conta_digito: e.target.value.toUpperCase() })}
+                  placeholder="0"
+                  className={`${CONTROLE_FORMULARIO} tabular-nums`}
+                />
+              )}
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:grid-cols-[1fr_12rem]">
+            <Field rotulo="Titular" ajuda="De quem é a conta, como está no banco. Opcional.">
+              {a => (
+                <Input
+                  id={a.id}
+                  aria-describedby={a['aria-describedby']}
+                  value={form.titular}
+                  maxLength={120}
+                  onChange={e => atualizarForm({ titular: e.target.value })}
+                  placeholder="Entur Viagens Ltda."
+                  className={CONTROLE_FORMULARIO}
+                />
+              )}
+            </Field>
+            <Field rotulo="CPF ou CNPJ do titular">
+              {a => (
+                <Input
+                  id={a.id}
+                  aria-describedby={a['aria-describedby']}
+                  value={form.titular_documento}
+                  inputMode="numeric"
+                  maxLength={18}
+                  onChange={e => atualizarForm({ titular_documento: e.target.value })}
+                  placeholder="Só números"
                   className={`${CONTROLE_FORMULARIO} tabular-nums`}
                 />
               )}
@@ -709,8 +948,48 @@ export default function ContasBancariasPage() {
               ? 'Copie o saldo que o aplicativo do banco mostra hoje.'
               : `Na moeda da conta (${form.moeda}): copie o saldo que o banco mostra hoje.`}
           />
+
+          {editId ? (
+            <label className="flex items-start gap-2 fin-t-body text-[var(--fin-text)]">
+              <input
+                type="checkbox"
+                checked={!form.ativo}
+                onChange={e => atualizarForm({ ativo: !e.target.checked })}
+                className="mt-0.5 size-4 shrink-0 accent-[var(--fin-accent)]"
+              />
+              <span>
+                Conta desativada
+                <span className="block fin-t-caption text-[var(--fin-text-3)]">
+                  Some das telas de lançar, pagar, receber e transferir. Continua nos relatórios, no extrato e no saldo total.
+                </span>
+              </span>
+            </label>
+          ) : null}
+
+          {erroDoForm ? <p role="alert" className="fin-t-caption text-[var(--fin-negative-text)]">{erroDoForm}</p> : null}
+
+          {editId ? <HistoricoRecolhivel entidade="contas_bancarias" id={editId} /> : null}
         </div>
       </RecordSheet>
+
+      <AvisoDeEdicaoSimultanea
+        aberto={conflito}
+        onOpenChange={setConflito}
+        onRecarregar={recarregarDepoisDoConflito}
+        oQue="esta conta bancária"
+      />
+
+      <ConfirmDialog
+        aberto={comMovimento !== null}
+        onOpenChange={aberto => { if (!aberto) setComMovimento(null); }}
+        titulo="Esta conta já foi usada"
+        oQueVaiAcontecer={comMovimento?.motivo ?? ''}
+        detalhes={comMovimento ? [{ rotulo: 'Conta', valor: comMovimento.conta.nome }] : undefined}
+        confirmarRotulo="Desativar a conta"
+        voltarRotulo="Deixar como está"
+        processando={desativando}
+        onConfirmar={() => { if (comMovimento) return desativar(comMovimento.conta); }}
+      />
 
       <ConfirmDialog
         aberto={aExcluir !== null}
@@ -718,7 +997,7 @@ export default function ContasBancariasPage() {
           if (!aberto) setAExcluir(null);
         }}
         titulo="Excluir esta conta bancária"
-        oQueVaiAcontecer="A conta sai da lista e o saldo dela deixa de entrar no total em caixa. Os lançamentos já feitos continuam onde estão."
+        oQueVaiAcontecer="Só a conta que nunca foi usada pode ser excluída: ela sai da lista e o saldo dela deixa de entrar no total. Se já houver pagamentos, recebimentos ou transferências nela, a exclusão é recusada e você pode desativá-la."
         detalhes={
           aExcluir
             ? [
@@ -735,7 +1014,7 @@ export default function ContasBancariasPage() {
         tone="destrutivo"
         processando={excluindo}
         onConfirmar={() => {
-          if (aExcluir) return handleDelete(aExcluir.id);
+          if (aExcluir) return handleDelete(aExcluir);
         }}
       />
     </div>

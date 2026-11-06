@@ -11,7 +11,7 @@ import { normalizarVenda, totaisDaVenda, totaisDoProduto, TIPOS_COMPONENTE_DA_TE
 import { receitaDaVenda } from '../src/lib/venda-receita.ts';
 import { contasDaVenda } from '../src/lib/venda-contas.ts';
 import {
-  normalizarPedidoDeCancelamento, planejarCancelamento, planoDoEstornoDeComissao, reaplicarCancelamentos, sugerirMulta, normalizarPolitica,
+  desfazerNoModelo, normalizarPedidoDeCancelamento, planejarCancelamento, planoDoEstornoDeComissao, reaplicarCancelamentos, sugerirMulta, normalizarPolitica,
 } from '../src/lib/cancelamento.ts';
 import {
   creditosParaAvisar, creditosParaVencer, extratoDoCliente, planoDeDevolucao, planoDeUso, saldoDoCliente, situacaoEm, type Credito,
@@ -137,6 +137,21 @@ const reenvio = reaplicarCancelamentos(venda, [gravado]);
 eq([totaisDaVenda(reenvio).valor_cliente, totaisDaVenda(reenvio).saldo_sem_forma, reenvio.pagamentos.find(g => g.id === 'bol')!.valor_centavos], [138000, 0, 12000], 'a venda original + o cancelamento gravado = a venda cancelada');
 const duas = reaplicarCancelamentos(reaplicarCancelamentos(venda, [gravado]), []);
 eq(duas.produtos[0].componentes.length, reenvio.produtos[0].componentes.length, 'componente pelo id: não duplica');
+
+console.log('--- Desfazer um cancelamento no modelo ---');
+const igual = (v: typeof venda) => JSON.stringify([v.produtos.map(p => [p.cancelado_em, p.passageiros.map(x => x.cancelado_em), p.componentes.map(c => [c.id, c.valor_centavos])]), v.pagamentos.map(g => [g.id, g.forma, g.valor_centavos, g.parcelas])]);
+const dA = desfazerNoModelo(planoA.venda, gravado, venda.pagamentos);
+eq(igual(dA.venda), igual(venda), 'desfazer a Ana: a venda volta a ser a de antes');
+eq([dA.produtos, dA.pagamentos], [[{ produto_id: 'h1', descricao: 'Hotel Mar', produto_inteiro: false, passageiros: ['Ana'] }], [{ pagamento_id: 'bol', forma: 'BOLETO', centavos: 88000, recriado: false }]], 'e diz quem voltou e o que voltou a cada pagamento');
+const gravadoT = { id: 'c4', data: HOJE, produtos: planoT.produtos, reducoes: planoT.reducoes };
+const dT = desfazerNoModelo(planoT.venda, gravadoT, venda.pagamentos);
+eq([igual(dT.venda) === igual(venda), dT.pagamentos.map(g => [g.pagamento_id, g.centavos, g.recriado])], [true, [['bol', 100000, true], ['cre', 20000, true], ['pix', 106000, true]]], 'tudo cancelado: os pagamentos que sumiram voltam com os dados de antes, na ordem de antes');
+const semAntes = desfazerNoModelo(planoT.venda, gravadoT);
+eq(semAntes.venda.pagamentos.map(g => [g.id, g.forma, g.valor_centavos, g.parcelas]), [['bol', 'BOLETO', 100000, 1], ['cre', 'CREDITO_CLIENTE', 20000, 1], ['pix', 'PIX', 106000, 1]], 'sem os dados de antes (cancelamento antigo): volta com a forma e o valor');
+const duasVezes = planejarCancelamento(planoA.venda, normalizarPedidoDeCancelamento({ data: HOJE, motivo: 'Bia também', itens: [{ produto_id: 'h1', passageiro_ids: ['b'] }], zerar_cliente: true, zerar_fornecedor: true }, planoA.venda, HOJE).pedido, { livre: { bol: 12000 }, credito_nao_usado: {} }, 'c7');
+const dB = desfazerNoModelo(duasVezes.venda, { id: 'c7', data: HOJE, produtos: duasVezes.produtos, reducoes: duasVezes.reducoes }, planoA.venda.pagamentos);
+eq([dB.venda.produtos[0].passageiros.map(x => !!x.cancelado_em), dB.venda.produtos[0].cancelado_em, dB.venda.produtos[0].componentes.filter(c => c.id.startsWith('cx:')).map(c => c.id)],
+  [[true, false], null, ['cx:c1:h1:cli', 'cx:c1:h1:forn']], 'desfazer o segundo: a Bia volta e o produto também; o cancelamento da Ana continua');
 
 console.log('--- Carteira de crédito ---');
 const cred = (id: string, saldo: number, validade: string, origem_venda_id = '', criado_em = '2026-01-01'): Credito => ({

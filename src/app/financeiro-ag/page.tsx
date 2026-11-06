@@ -17,10 +17,13 @@ import { Button } from '@/components/ui/button';
 import { DataState } from '@/components/fin/DataState';
 import { MolduraDaPagina, RITMO_DA_PAGINA } from '@/components/fin/MolduraDaPagina';
 import { PageHeader } from '@/components/fin/PageHeader';
+import { AssistenteInicial } from '@/components/fin/AssistenteInicial';
 import { Segmentado } from '@/components/fin/Segmentado';
 import { BaixaDeReceber } from './receber/BaixaDeReceber';
 import { BaixaDePagar } from './pagar/BaixaDePagar';
 import { AtrasosEPrazos } from './AtrasosEPrazos';
+import { PerguntarEmTexto } from '@/components/fin/PerguntarEmTexto';
+import { useAgendarEnvio } from '@/components/relatorios/BotaoAgendarEnvio';
 
 const CARTAO = 'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]';
 const LINK = 'inline-flex items-center gap-1 fin-t-caption font-medium text-[var(--fin-accent)] underline-offset-2 hover:underline';
@@ -160,6 +163,13 @@ export default function FinanceiroVisaoGeralPage() {
   const [receberAlvo, setReceberAlvo] = useState<ContaReceber | null>(null);
   const [pagarAlvo, setPagarAlvo] = useState<ContaPagar | null>(null);
   const hoje = hojeISO();
+  // Envio agendado da foto do dia (E7): o caixa, o que está em aberto e a agenda.
+  const agendamento = useAgendarEnvio({
+    relatorio: 'visao_geral',
+    nomeSugerido: 'Visão geral do financeiro',
+    consulta: () => '',
+    resumoDosFiltros: () => 'Em caixa, a receber, a pagar, o caixa previsto em 30 dias, o mês até o dia e a agenda dos próximos 30 dias, das contas e empresas que você vê.',
+  });
 
   const carregar = useCallback(async () => {
     try {
@@ -239,7 +249,10 @@ export default function FinanceiroVisaoGeralPage() {
         subtitulo={`${hojePorExtenso(hoje)}. O que entra, o que sai e o que precisa de você.`}
         atualizadoEm={atualizadoEm}
         onRecarregar={carregar}
-        acoesSecundarias={[{ rotulo: 'Conciliar extrato', href: '/financeiro-ag/conciliacao' }]}
+        acoesSecundarias={[
+          { rotulo: 'Conciliar extrato', href: '/financeiro-ag/conciliacao' },
+          ...(agendamento.podeExportar ? [{ rotulo: 'Agendar envio', onClick: agendamento.abrir }] : []),
+        ]}
         acaoPrimaria={{
           rotulo: 'Lançar conta',
           icone: Plus,
@@ -251,6 +264,12 @@ export default function FinanceiroVisaoGeralPage() {
           ],
         }}
       />
+
+      {/* Assistente inicial (E7, frente D): agência nova fica pronta sozinha;
+          a que já tem dados recebe a oferta num clique. */}
+      <AssistenteInicial onAplicado={() => { void carregar(); }} />
+      {/* Perguntar em texto (E7): some sozinha para quem não tem financeiro nem relatórios. */}
+      <PerguntarEmTexto compacta />
 
       <DataState
         className={RITMO_DA_PAGINA}
@@ -488,6 +507,7 @@ export default function FinanceiroVisaoGeralPage() {
 
       <BaixaDeReceber conta={receberAlvo} onFechar={() => setReceberAlvo(null)} onRegistrada={() => { void carregar(); }} />
       <BaixaDePagar conta={pagarAlvo} onFechar={() => setPagarAlvo(null)} onRegistrada={() => { void carregar(); }} />
+      {agendamento.formulario}
     </MolduraDaPagina>
   );
 }

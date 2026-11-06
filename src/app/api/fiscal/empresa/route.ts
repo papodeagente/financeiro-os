@@ -18,6 +18,7 @@ import {
   criarEmpresaAcelera,
   regenerarTokenEmpresa,
 } from '@/lib/nfse-acelera';
+import { empresaDoPedido } from '@/lib/empresas-rota';
 
 /**
  * Conecta ESTA agência à AceleraAPI.
@@ -32,16 +33,19 @@ import {
  * conectada e é só tentar de novo. Gravar por último arriscaria perder o
  * token e deixar uma empresa órfã no cadastro.
  */
-export async function POST() {
+export async function POST(req: Request) {
   try {
+    // Configuração fiscal por empresa (E7): ?empresa=<id>; sem ele, a de sempre.
+    const { empresa: empresaFiscal, recusa: recusaEmpresa } = await empresaDoPedido(req);
+    if (recusaEmpresa) return recusaEmpresa;
     await initDB();
     const bloqueio = bloqueioFinanceiro(await getSession(), 'escrever');
     if (bloqueio) return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
     const tenantId = await getTenantId();
 
     const [config, emitente] = await Promise.all([
-      carregarConfigFiscal(tenantId),
-      carregarEmitente(tenantId),
+      carregarConfigFiscal(tenantId, empresaFiscal),
+      carregarEmitente(tenantId, empresaFiscal),
     ]);
 
     // O empresa_id NUNCA vem do corpo (FIN-02): com ele, uma agência ligava a
@@ -92,7 +96,7 @@ export async function POST() {
       empresa_id: empresaId,
       token,
     };
-    await salvarConfigFiscal(tenantId, conectada);
+    await salvarConfigFiscal(tenantId, conectada, empresaFiscal);
 
     // A configuração do prestador é melhor-esforço: se faltar município ou
     // código de tributação, a resposta já diz o que falta e a agência
@@ -127,13 +131,16 @@ export async function POST() {
 }
 
 /** Gera um token novo para a empresa, revogando o anterior. */
-export async function PUT() {
+export async function PUT(req: Request) {
   try {
+    // Configuração fiscal por empresa (E7): ?empresa=<id>; sem ele, a de sempre.
+    const { empresa: empresaFiscal, recusa: recusaEmpresa } = await empresaDoPedido(req);
+    if (recusaEmpresa) return recusaEmpresa;
     await initDB();
     const bloqueio = bloqueioFinanceiro(await getSession(), 'escrever');
     if (bloqueio) return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
     const tenantId = await getTenantId();
-    const config = await carregarConfigFiscal(tenantId);
+    const config = await carregarConfigFiscal(tenantId, empresaFiscal);
     if (!config.empresa_id) {
       return NextResponse.json(
         { error: 'Esta agência ainda não está conectada à AceleraAPI.' },
@@ -143,7 +150,7 @@ export async function PUT() {
     await garantirVinculoFiscal(pool as unknown as ConsultaVinculo, tenantId, config.empresa_id);
     const token = await regenerarTokenEmpresa(config.empresa_id);
     const novo = { ...config, token };
-    await salvarConfigFiscal(tenantId, novo);
+    await salvarConfigFiscal(tenantId, novo, empresaFiscal);
     return NextResponse.json({ config: configParaCliente(novo) });
   } catch (e) {
     const msg = e instanceof ErroFiscal || e instanceof ErroVinculoFiscal
@@ -164,13 +171,16 @@ export async function PUT() {
  * O cadastro da empresa NÃO é apagado lá. Notas já emitidas continuam
  * existindo, e reconectar com o mesmo CNPJ reaproveita o mesmo cadastro.
  */
-export async function DELETE() {
+export async function DELETE(req: Request) {
   try {
+    // Configuração fiscal por empresa (E7): ?empresa=<id>; sem ele, a de sempre.
+    const { empresa: empresaFiscal, recusa: recusaEmpresa } = await empresaDoPedido(req);
+    if (recusaEmpresa) return recusaEmpresa;
     await initDB();
     const bloqueio = bloqueioFinanceiro(await getSession(), 'escrever');
     if (bloqueio) return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
     const tenantId = await getTenantId();
-    const config = await carregarConfigFiscal(tenantId);
+    const config = await carregarConfigFiscal(tenantId, empresaFiscal);
 
     const desconectada = {
       ...config,
@@ -179,7 +189,7 @@ export async function DELETE() {
       token_cofre: undefined,
       certificado: null,
     };
-    await salvarConfigFiscal(tenantId, desconectada);
+    await salvarConfigFiscal(tenantId, desconectada, empresaFiscal);
     return NextResponse.json({
       config: configParaCliente(desconectada),
       empresa_anterior: config.empresa_id,
@@ -199,12 +209,15 @@ export async function DELETE() {
  * chave de operação. Listar o vizinho nunca foi necessário para configurar a
  * própria nota.
  */
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    // Configuração fiscal por empresa (E7): ?empresa=<id>; sem ele, a de sempre.
+    const { empresa: empresaFiscal, recusa: recusaEmpresa } = await empresaDoPedido(req);
+    if (recusaEmpresa) return recusaEmpresa;
     await initDB();
     const bloqueio = bloqueioFinanceiro(await getSession(), 'ler');
     if (bloqueio) return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
-    const config = await carregarConfigFiscal(await getTenantId());
+    const config = await carregarConfigFiscal(await getTenantId(), empresaFiscal);
     return NextResponse.json({
       empresa_id: config.empresa_id,
       conectada: Boolean(config.empresa_id && config.token),

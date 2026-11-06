@@ -6,6 +6,11 @@ import { bloqueioFinanceiro, podeExcluir, podeVerTodasVendas } from './permissoe
 import { recusaDoPost, sqlPreservarDerivados, STATUS_DE_BAIXA } from './guarda-baixa';
 import { contasPermitidas, pode } from './permissoes-servidor';
 import { filtrarPorConta, type FiltroDeConta } from './filtro-de-conta';
+import { MENSAGEM_CONFLITO, SQL_VERSAO, semMarcasDeControle, versaoLida } from './versao-do-registro';
+import { filtrarPorEmpresa, empresasDoRegistro, empresasDaContaBancaria, recusaDoRateioEntreEmpresas, type FiltroDeEmpresa } from './empresas';
+import { contasBancariasVisiveis, escopoDaSessao, type EscopoDeEmpresas, type ExecutorEmpresas } from './empresas-servidor';
+import { ACOES_FINANCEIRAS, type AcaoFinanceira } from './acoes-financeiras';
+import { recusaDaContaNaGravacao, type ContasDaGravacao } from './conta-da-gravacao';
 
 export interface CrudOpcoes {
   /**
@@ -65,11 +70,49 @@ export interface CrudOpcoes {
    */
   validarCadastro?: (item: Record<string, unknown>) => string | null;
   /**
+   * Conferência que precisa do banco (E7, frente D, 06/11/2026): roda no
+   * POST depois de validarCadastro, com a agência. Devolve a recusa (400) ou
+   * null; pode ajustar o item (a moeda normalizada pelo catálogo da agência).
+   * Usada para a moeda cadastrada e os campos personalizados obrigatórios.
+   */
+  conferirNoServidor?: (tenantId: string, item: Record<string, unknown>) => Promise<string | null>;
+  /**
    * Permissão por conta bancária (05/11/2026): quem tem contas liberadas por
    * perfil de acesso ou pela restrição própria não lê linhas de outras
    * contas. Sem restrição (o padrão), a leitura é a mesma de antes.
    */
   filtroDeConta?: FiltroDeConta;
+  /**
+   * Várias empresas na agência (06/11/2026, E7): a lista mostra só as
+   * empresas marcadas no seletor e liberadas para a pessoa. Com uma empresa
+   * só, nada muda (sem recorte).
+   */
+  filtroDeEmpresa?: FiltroDeEmpresa;
+  /**
+   * Aviso de edição simultânea (06/11/2026): a leitura devolve `_versao` em
+   * cada registro e o PUT que manda a versão lida responde 409
+   * (`conflito: true`) quando outra pessoa gravou depois. PUT sem `_versao`
+   * grava como sempre.
+   */
+  versao?: boolean;
+  /** Mensagem do 409 de edição simultânea (padrão: a genérica). */
+  mensagemConflito?: string;
+  /**
+   * Direito do catálogo exigido para gravar (POST e PUT), além de editar o
+   * financeiro (E7). Transferência exige "Transferir entre contas".
+   */
+  acaoDaGravacao?: AcaoFinanceira;
+  /**
+   * Contas bancárias que a gravação usa (E7): cada uma precisa estar liberada
+   * para MOVIMENTAR. Quem só vê a conta não lança nem transfere nela.
+   */
+  contasDaGravacao?: ContasDaGravacao;
+}
+
+/** O registro lido, com a versão quando a tabela usa o aviso de edição simultânea. */
+function comVersao(opcoes: CrudOpcoes, r: Record<string, unknown>): Record<string, unknown> {
+  const data = (r.data ?? {}) as Record<string, unknown>;
+  return opcoes.versao ? { ...data, _versao: String(r.v ?? '') } : data;
 }
 
 // As regras puras vivem em ./guarda-baixa para poderem ser testadas sem
@@ -87,10 +130,109 @@ async function guardaFinanceira(opcoes: CrudOpcoes, modo: 'ler' | 'escrever') {
   return NextResponse.json({ error: 'Seu perfil de acesso não inclui isto no financeiro.' }, { status: 403 });
 }
 
+/**
+ * Direito de gravar e contas da gravação (E7). `antes` = o registro como
+ * está no banco (null = novo). Devolve a recusa ou null.
+ */
+async function guardaDaGravacao(
+  opcoes: CrudOpcoes, tabela: string, tenantId: string, id: string, item: Record<string, unknown>,
+): Promise<NextResponse | null> {
+  if (!opcoes.acaoDaGravacao && !opcoes.contasDaGravacao) return null;
+  const sessao = await getSession();
+  if (opcoes.acaoDaGravacao && !(await pode(sessao, opcoes.acaoDaGravacao))) {
+    const rotulo = ACOES_FINANCEIRAS.find(a => a.id === opcoes.acaoDaGravacao)?.rotulo ?? opcoes.acaoDaGravacao;
+    return NextResponse.json({
+      error: `Seu acesso não inclui: ${rotulo.charAt(0).toLowerCase()}${rotulo.slice(1)}.`, acao: opcoes.acaoDaGravacao,
+    }, { status: 403 });
+  }
+  if (!opcoes.contasDaGravacao || !pool) return null;
+  const { rows } = await pool.query(`SELECT data FROM ${tabela} WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+  const antes = (rows[0]?.data ?? null) as Record<string, unknown> | null;
+  const recusa = await recusaDaContaNaGravacao(sessao, item, antes, opcoes.contasDaGravacao);
+  return recusa ? NextResponse.json({ error: recusa.error, acao: recusa.acao }, { status: recusa.status }) : null;
+}
+
 /** Contas liberadas para a sessão, só quando a tabela filtra por conta. */
 async function contasDaLeitura(opcoes: CrudOpcoes): Promise<string[] | null> {
   if (!opcoes.filtroDeConta) return null;
   return contasPermitidas(await getSession());
+}
+
+/** Escopo de empresas da sessão, só quando a tabela tem empresa. */
+async function escopoDaLeitura(opcoes: CrudOpcoes): Promise<EscopoDeEmpresas | null> {
+  if (!opcoes.filtroDeEmpresa || !pool) return null;
+  return escopoDaSessao(await getSession(), pool as unknown as ExecutorEmpresas);
+}
+
+/** Aplica o recorte de empresas às linhas já lidas. */
+async function recortarPorEmpresa(
+  opcoes: CrudOpcoes, tenantId: string, itens: Record<string, unknown>[],
+): Promise<Record<string, unknown>[]> {
+  const escopo = await escopoDaLeitura(opcoes);
+  if (!escopo || escopo.visiveis === null) return itens;
+  const contas = opcoes.filtroDeEmpresa?.tipo === 'por_conta'
+    ? await contasBancariasVisiveis(pool as unknown as ExecutorEmpresas, tenantId, escopo.visiveis)
+    : null;
+  return filtrarPorEmpresa(itens, opcoes.filtroDeEmpresa, escopo.visiveis, contas ?? undefined);
+}
+
+/**
+ * Confere a empresa antes de gravar (POST e PUT): a empresa do item e a do
+ * registro que já está no banco precisam estar liberadas. Devolve a recusa.
+ */
+async function guardaDeEmpresaNaGravacao(
+  opcoes: CrudOpcoes, tenantId: string, id: string, item: Record<string, unknown>,
+): Promise<NextResponse | null> {
+  if (!opcoes.filtroDeEmpresa || opcoes.filtroDeEmpresa.tipo === 'por_conta' || !pool) return null;
+  const escopo = await escopoDaLeitura(opcoes);
+  if (!escopo) return null;
+  const recusa = await recusaDaEmpresa(opcoes, escopo, item);
+  if (recusa) return NextResponse.json({ error: recusa }, { status: 403 });
+  if (escopo.multi && escopo.permitidas !== null) {
+    const { rows: antes } = await pool.query(`SELECT data FROM ${tabelaDoCrud.get(opcoes)} WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+    if (linhaForaDasEmpresas(opcoes, escopo, (antes[0]?.data ?? null) as Record<string, unknown> | null)) {
+      return NextResponse.json({ error: 'Este registro é de uma empresa que não está liberada para você.' }, { status: 403 });
+    }
+  }
+  return null;
+}
+
+// Tabela de cada conjunto de opções (para a guarda de empresa ler o registro).
+const tabelaDoCrud = new WeakMap<CrudOpcoes, string>();
+
+/**
+ * Gravar numa empresa que a pessoa não pode usar, ou ratear para uma empresa
+ * que não existe, é recusado. Devolve a mensagem ou null. Com uma empresa só
+ * e sem empresa no item, nada a conferir.
+ */
+async function recusaDaEmpresa(
+  opcoes: CrudOpcoes, escopo: EscopoDeEmpresas | null, item: Record<string, unknown>,
+): Promise<string | null> {
+  if (!opcoes.filtroDeEmpresa || opcoes.filtroDeEmpresa.tipo === 'por_conta') return null;
+  if (!escopo) return null;
+  const rateio = (item as Record<string, unknown>).rateio;
+  const temEmpresaNoRateio = Array.isArray(rateio) && rateio.some(l => typeof (l as Record<string, unknown>)?.empresa_id === 'string' && (l as Record<string, unknown>).empresa_id !== '');
+  if (temEmpresaNoRateio) {
+    if (!escopo.multi) return 'Para ratear entre empresas, cadastre antes a segunda empresa.';
+    const recusa = recusaDoRateioEntreEmpresas(rateio, escopo.empresas.map(e => e.id));
+    if (recusa) return recusa;
+  }
+  if (!escopo.multi || escopo.permitidas === null) return null;
+  const tocadas = opcoes.filtroDeEmpresa.tipo === 'conta_bancaria'
+    ? [String(item.empresa_id || 'principal')]
+    : (typeof item.empresa_id === 'string' && item.empresa_id ? empresasDoRegistro(item) : []);
+  if (tocadas.some(e => !escopo.permitidas!.includes(e))) return 'Esta empresa não está liberada para você.';
+  return null;
+}
+
+/** A linha gravada hoje é de uma empresa que a pessoa não pode ver? */
+function linhaForaDasEmpresas(
+  opcoes: CrudOpcoes, escopo: EscopoDeEmpresas | null, atual: Record<string, unknown> | null,
+): boolean {
+  if (!atual || !opcoes.filtroDeEmpresa || opcoes.filtroDeEmpresa.tipo === 'por_conta') return false;
+  if (!escopo || !escopo.multi || escopo.permitidas === null) return false;
+  const delas = opcoes.filtroDeEmpresa.tipo === 'conta_bancaria' ? empresasDaContaBancaria(atual) : empresasDoRegistro(atual);
+  return !delas.some(e => escopo.permitidas!.includes(e));
 }
 
 /** O cadastro de conta bancária (por id) está liberado para a sessão? */
@@ -131,6 +273,7 @@ async function rodarGancho(opcoes: CrudOpcoes, tenantId: string, item: Record<st
 }
 
 export function createCrudHandlers(tableName: string, indexColumns: string[] = [], opcoes: CrudOpcoes = {}) {
+  tabelaDoCrud.set(opcoes, tableName);
   async function GET() {
     try {
       await initDB();
@@ -139,15 +282,17 @@ export function createCrudHandlers(tableName: string, indexColumns: string[] = [
       if (recusa) return recusa;
       const tenantId = await getTenantId();
       const vendedor = await vendedorDaLeitura(opcoes);
+      const colunas = opcoes.versao ? `data, ${SQL_VERSAO} AS v` : 'data';
       const { rows } = vendedor === null
         ? await pool.query(
-          `SELECT data FROM ${tableName} WHERE tenant_id = $1 ORDER BY created_at DESC`,
+          `SELECT ${colunas} FROM ${tableName} WHERE tenant_id = $1 ORDER BY created_at DESC`,
           [tenantId])
         : await pool.query(
-          `SELECT data FROM ${tableName} WHERE tenant_id = $1 AND ${opcoes.colunaDoVendedor} = $2 ORDER BY created_at DESC`,
+          `SELECT ${colunas} FROM ${tableName} WHERE tenant_id = $1 AND ${opcoes.colunaDoVendedor} = $2 ORDER BY created_at DESC`,
           [tenantId, vendedor]);
       const contas = await contasDaLeitura(opcoes);
-      return NextResponse.json(filtrarPorConta(rows.map(r => r.data as Record<string, unknown>), opcoes.filtroDeConta, contas));
+      const liberadas = filtrarPorConta(rows.map(r => comVersao(opcoes, r)), opcoes.filtroDeConta, contas);
+      return NextResponse.json(await recortarPorEmpresa(opcoes, tenantId, liberadas));
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
       return NextResponse.json({ error: msg }, { status: 500 });
@@ -157,10 +302,12 @@ export function createCrudHandlers(tableName: string, indexColumns: string[] = [
   async function POST(req: Request) {
     try {
       await initDB();
-      const item = await req.json();
-      if (!item || typeof item !== 'object' || !item.id || typeof item.id !== 'string') {
+      const recebido = await req.json();
+      if (!recebido || typeof recebido !== 'object' || !recebido.id || typeof recebido.id !== 'string') {
         return NextResponse.json({ error: 'Invalid payload: id is required' }, { status: 400 });
       }
+      // `_versao` é controle da tela, nunca vai para o registro.
+      const item = semMarcasDeControle(recebido as Record<string, unknown>) as Record<string, unknown> & { id: string };
       if (!pool) return NextResponse.json(item);
       const recusa = await guardaFinanceira(opcoes, 'escrever');
       if (recusa) return recusa;
@@ -186,6 +333,12 @@ export function createCrudHandlers(tableName: string, indexColumns: string[] = [
       opcoes.normalizarCadastro?.(item as Record<string, unknown>);
       const invalido = opcoes.validarCadastro?.(item as Record<string, unknown>) ?? null;
       if (invalido) return NextResponse.json({ error: invalido }, { status: 400 });
+      const recusaServidor = opcoes.conferirNoServidor ? await opcoes.conferirNoServidor(tenantId, item as Record<string, unknown>) : null;
+      if (recusaServidor) return NextResponse.json({ error: recusaServidor }, { status: 400 });
+      const recusaEmpresa = await guardaDeEmpresaNaGravacao(opcoes, tenantId, item.id, item as Record<string, unknown>);
+      if (recusaEmpresa) return recusaEmpresa;
+      const recusaGravacao = await guardaDaGravacao(opcoes, tableName, tenantId, item.id, item as Record<string, unknown>);
+      if (recusaGravacao) return recusaGravacao;
 
       // Build dynamic upsert with tenant_id
       const paramValues: unknown[] = [item.id, tenantId, JSON.stringify(item)];
@@ -248,6 +401,7 @@ export function createCrudHandlers(tableName: string, indexColumns: string[] = [
 }
 
 export function createCrudItemHandlers(tableName: string, indexColumns: string[] = [], opcoes: CrudOpcoes = {}) {
+  tabelaDoCrud.set(opcoes, tableName);
   async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
       await initDB();
@@ -257,19 +411,26 @@ export function createCrudItemHandlers(tableName: string, indexColumns: string[]
       if (recusa) return recusa;
       const tenantId = await getTenantId();
       const vendedor = await vendedorDaLeitura(opcoes);
+      const colunas = opcoes.versao ? `data, ${SQL_VERSAO} AS v` : 'data';
       const { rows } = vendedor === null
         ? await pool.query(
-          `SELECT data FROM ${tableName} WHERE id = $1 AND tenant_id = $2`,
+          `SELECT ${colunas} FROM ${tableName} WHERE id = $1 AND tenant_id = $2`,
           [id, tenantId])
         : await pool.query(
-          `SELECT data FROM ${tableName} WHERE id = $1 AND tenant_id = $2 AND ${opcoes.colunaDoVendedor} = $3`,
+          `SELECT ${colunas} FROM ${tableName} WHERE id = $1 AND tenant_id = $2 AND ${opcoes.colunaDoVendedor} = $3`,
           [id, tenantId, vendedor]);
       if (rows.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
       const contas = await contasDaLeitura(opcoes);
       if (filtrarPorConta([rows[0].data as Record<string, unknown>], opcoes.filtroDeConta, contas).length === 0) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
       }
-      return NextResponse.json(rows[0].data);
+      // Abrir pelo id um registro de empresa não liberada: some como na lista.
+      // (A empresa só fora do SELETOR continua abrindo: o seletor recorta a
+      // lista, não a permissão.)
+      if (linhaForaDasEmpresas(opcoes, await escopoDaLeitura(opcoes), rows[0].data as Record<string, unknown>)) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
+      return NextResponse.json(comVersao(opcoes, rows[0]));
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
       return NextResponse.json({ error: msg }, { status: 500 });
@@ -281,10 +442,12 @@ export function createCrudItemHandlers(tableName: string, indexColumns: string[]
       await initDB();
       const { id } = await params;
       if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
-      const item = await req.json();
-      if (!item || typeof item !== 'object') {
+      const recebido = await req.json();
+      if (!recebido || typeof recebido !== 'object') {
         return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
       }
+      const lida = opcoes.versao ? versaoLida(recebido as Record<string, unknown>) : null;
+      const item = semMarcasDeControle(recebido as Record<string, unknown>);
       if (!pool) return NextResponse.json(item);
       const recusa = await guardaFinanceira(opcoes, 'escrever');
       if (recusa) return recusa;
@@ -292,6 +455,10 @@ export function createCrudItemHandlers(tableName: string, indexColumns: string[]
         return NextResponse.json({ error: 'Esta conta bancária não está liberada para você.' }, { status: 403 });
       }
       const tenantId = await getTenantId();
+      const recusaEmpresa = await guardaDeEmpresaNaGravacao(opcoes, tenantId, id, item as Record<string, unknown>);
+      if (recusaEmpresa) return recusaEmpresa;
+      const recusaGravacao = await guardaDaGravacao(opcoes, tableName, tenantId, id, item as Record<string, unknown>);
+      if (recusaGravacao) return recusaGravacao;
 
       // Campos derivados ficam com o valor que está no banco, não com o que
       // veio do cliente.
@@ -316,10 +483,23 @@ export function createCrudItemHandlers(tableName: string, indexColumns: string[]
         paramValues.push(STATUS_DE_BAIXA);
         guardaBaixa = ` AND COALESCE(data->>'status', '') <> ALL ($${paramValues.length}::text[])`;
       }
+      // Edição simultânea: só grava se ninguém gravou depois da leitura.
+      let guardaVersao = '';
+      if (lida !== null) {
+        paramValues.push(lida);
+        guardaVersao = ` AND ${SQL_VERSAO} = $${paramValues.length}`;
+      }
       const { rows: gravadas } = await pool.query(
-        `UPDATE ${tableName} SET ${setClauses.join(', ')} WHERE id = $1 AND tenant_id = $2${guardaBaixa} RETURNING data`,
+        `UPDATE ${tableName} SET ${setClauses.join(', ')} WHERE id = $1 AND tenant_id = $2${guardaBaixa}${guardaVersao} RETURNING data`,
         paramValues
       );
+      if (gravadas.length === 0 && lida !== null) {
+        const { rows: existe } = await pool.query(
+          `SELECT ${SQL_VERSAO} AS v FROM ${tableName} WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+        if (existe.length > 0 && String(existe[0].v) !== lida) {
+          return NextResponse.json({ error: opcoes.mensagemConflito ?? MENSAGEM_CONFLITO, conflito: true }, { status: 409 });
+        }
+      }
       if (gravadas.length === 0) {
         return NextResponse.json(
           { error: opcoes.protegerBaixa ? 'Registro não encontrado ou já baixado' : 'Registro não encontrado' },

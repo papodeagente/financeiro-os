@@ -54,6 +54,25 @@ export interface PayloadCobrancaCrm {
   canal?: CanalCobranca;
   valor_pago?: number;
   pago_em?: string;
+  /** COBRANCA_ENVIAR por e-mail (E7): cópia para outros e-mails e o texto próprio. */
+  copia_para?: string[];
+  assunto?: string;
+  mensagem?: string;
+  /** E7: o que o e-mail leva ('fatura' ou 'boleto_e_fatura'); ausente = o boleto, o e-mail de sempre. */
+  documentos?: 'fatura' | 'boleto_e_fatura';
+  /** E7: o documento da fatura (link do portal para ler e salvar em PDF). */
+  fatura_documento?: { numero: number; url: string };
+}
+
+export interface ExtraDoAviso {
+  dias?: number;
+  canal?: CanalCobranca;
+  canais?: CanalCobranca[];
+  copia_para?: string[];
+  assunto?: string;
+  mensagem?: string;
+  documentos?: 'fatura' | 'boleto_e_fatura';
+  fatura_documento?: { numero: number; url: string };
 }
 
 /** O id do contato no CRM, a partir do `external_id` do cliente ("crm_contact_<id>"). */
@@ -67,7 +86,7 @@ export function montarPayload(
   c: CobrancaParaCrm,
   cliente: { id: string; nome: string; email: string; telefone: string; cpf_cnpj: string; external_id: string },
   urlPortal: string,
-  extra: { dias?: number; canal?: CanalCobranca; canais?: CanalCobranca[] } = {},
+  extra: ExtraDoAviso = {},
 ): PayloadCobrancaCrm {
   const p: PayloadCobrancaCrm = {
     cobranca_id: c.id,
@@ -89,6 +108,11 @@ export function montarPayload(
   if (extra.dias !== undefined) p.dias = extra.dias;
   if (extra.canal) p.canal = extra.canal;
   if (extra.canais) p.canais = extra.canais;
+  if (extra.copia_para?.length) p.copia_para = extra.copia_para;
+  if (extra.assunto) p.assunto = extra.assunto;
+  if (extra.mensagem) p.mensagem = extra.mensagem;
+  if (extra.documentos) p.documentos = extra.documentos;
+  if (extra.fatura_documento) p.fatura_documento = extra.fatura_documento;
   if (c.pago_centavos != null) p.valor_pago = deCentavos(c.pago_centavos);
   if (c.pago_em) p.pago_em = c.pago_em;
   return p;
@@ -125,7 +149,7 @@ export async function avisarCrm(
   tipo: EventoCobrancaCRM,
   c: CobrancaParaCrm,
   chave: string,
-  extra: { dias?: number; canal?: CanalCobranca; canais?: CanalCobranca[] } = {},
+  extra: ExtraDoAviso = {},
   /** Preenchido com o que o CRM respondeu (null = ficou na fila). */
   retorno?: { resposta?: import('../crm-integration').RespostaDoCrm | null },
 ): Promise<PayloadCobrancaCrm> {

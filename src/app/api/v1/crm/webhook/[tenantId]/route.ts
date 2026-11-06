@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { TIPO_ASAAS_OPERACAO } from '@/lib/asaas-unificado/regras';
+import { responderOperacaoDoCrm } from '@/lib/asaas-unificado/rota';
 import { processarEventoCRM, verificarAssinaturaCRM } from '@/lib/crm-integration';
 
 export async function POST(
@@ -27,6 +29,12 @@ export async function POST(
       return NextResponse.json({ error: 'Corpo nao e JSON valido' }, { status: 400 });
     }
     const { id, tipo, payload } = body ?? {};
+
+    // Conexão Asaas unificada (E7): o CRM pede uma operação no Asaas da
+    // agência e espera a resposta na hora (não é evento, não entra na fila).
+    if (tipo === TIPO_ASAAS_OPERACAO) {
+      return responderOperacaoDoCrm(tenantId, payload, req.headers.get('x-crm-timestamp'));
+    }
 
     if (!id || !tipo || !payload) {
       return NextResponse.json({ error: 'Campos obrigatorios: id, tipo, payload' }, { status: 400 });

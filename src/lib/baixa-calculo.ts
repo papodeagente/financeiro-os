@@ -14,6 +14,7 @@
  * - quitado quando o pago alcança o valor final (tolerância de meio centavo).
  */
 import { addDias, num, paraCentavos, round2 } from './money';
+import { referenciaValida, type ReferenciaDeJurosGuardada } from './juros-selic';
 
 export type TituloTabela = 'contas_receber' | 'contas_pagar';
 export type TratamentoDiferenca = 'deixar_aberto' | 'desconto' | 'acrescimo' | 'credito' | 'taxa';
@@ -30,6 +31,11 @@ export interface PoliticaCobranca {
   desconto_antecipacao?: { pct: number; dias: number } | null;
   /** Sugerir encargos também nas contas a pagar (padrão: não). */
   aplicar_em_pagar?: boolean;
+  /**
+   * De onde veio o número dos juros, quando a pessoa escolheu a Selic
+   * (E7): fonte e data. Só fica enquanto os juros forem esse número.
+   */
+  juros_referencia?: ReferenciaDeJurosGuardada | null;
 }
 
 export interface TituloParaBaixa {
@@ -288,7 +294,7 @@ const limitar = (v: unknown, min: number, max: number) => Math.min(max, Math.max
 /** Política gravada sempre dentro de faixas razoáveis. */
 export function normalizarPolitica(p: Partial<PoliticaCobranca> | null | undefined): PoliticaCobranca {
   const d = p?.desconto_antecipacao;
-  return {
+  const saida: PoliticaCobranca = {
     juros_am_pct: limitar(p?.juros_am_pct, 0, 20),
     multa_pct: limitar(p?.multa_pct, 0, 20),
     tolerancia_dias: Math.round(limitar(p?.tolerancia_dias, 0, 60)),
@@ -297,6 +303,11 @@ export function normalizarPolitica(p: Partial<PoliticaCobranca> | null | undefin
       : null,
     aplicar_em_pagar: Boolean(p?.aplicar_em_pagar),
   };
+  // Juros pela Selic (E7): a fonte e a data viajam com o número; sem
+  // referência (o caso de sempre), o objeto sai exatamente como antes.
+  const ref = referenciaValida(p?.juros_referencia, saida.juros_am_pct);
+  if (ref) saida.juros_referencia = ref;
+  return saida;
 }
 
 /** Centavos, para gravar a baixa. */

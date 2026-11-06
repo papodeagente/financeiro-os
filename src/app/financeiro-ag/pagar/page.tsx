@@ -4,7 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, Plus, Target, TriangleAlert } from 'lucide-react';
 
 import { ContaPagar, PlanoContas, createContaPagar, StatusContaPagar, CartaoCorporativo } from '@/lib/crm-types';
-import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
+import { loadEntities, saveEntity } from '@/lib/crm-storage';
+import { atualizarRegistro, excluirRegistro } from '@/lib/gravar-registro';
+import { conferirEmissao, vendaQueTravaATitulo } from '@/lib/lancamento-titulo';
+import { AvisoDeEdicaoSimultanea } from '@/components/fin/AvisoDeEdicaoSimultanea';
+import { tratarErroAoGravar, padraoDaEmpresa, useContasDaPrevisao } from '@/components/financeiro/CamposDoLancamento';
 import { toast } from '@/lib/toast';
 import { validarRateio } from '@/lib/dimensoes';
 import { consumirAtalho, lerAtalhos } from '@/lib/atalho-da-url';
@@ -39,9 +43,14 @@ import { rotuloStatus } from '@/components/fin/StatusChip';
 import { criarColunas, semFornecedor } from './colunas';
 import { BaixaDePagar } from './BaixaDePagar';
 import { HistoricoDeBaixas } from '@/components/fin/HistoricoDeBaixas';
+import { PainelDoTitulo } from '@/components/financeiro/PainelDoTitulo';
+import { carregarDefinicoes } from '@/components/fin/CamposPersonalizadosDoTitulo';
+import { validarObrigatorios } from '@/lib/campos-personalizados';
+import type { Anexo } from '@/lib/anexos-do-titulo';
 import { saldoDevedor, valorBRLDaConta } from './valores';
 import { FormularioConta } from './FormularioConta';
 import { PainelCopiarMes } from './PainelCopiarMes';
+import { EmitirCheque } from '@/components/financeiro/cheques/EmitirCheque';
 import { EMPTY_FORM, SEM_ERRO, type ErrosDoFormulario, type FiltroPeriodo, type FormState } from './tipos';
 
 /** "Jan/2026": o mesmo rótulo que a cópia de mês sempre gravou. */
@@ -67,6 +76,10 @@ function podeCopiarParaOutroMes(i: ContaPagar): boolean {
 }
 
 type ContaComSerie = ContaPagar & { serie_id?: string };
+/** Campos que o formulário guarda e que o tipo antigo da conta não declara (06/11/2026, E7). */
+type ContaComExtras = ContaPagar & {
+  _versao?: string; origem_venda_id?: string; conta_previsao_id?: string; campos_personalizados?: Record<string, unknown>;
+};
 
 /** Campos que a tela edita e que a série sabe propagar. */
 const CAMPOS_DA_SERIE = [
@@ -113,7 +126,8 @@ const FILTRO_PARA_PICKER: Record<FiltroPeriodo, PeriodoChave> = {
   CUSTOM: 'PERSONALIZADO',
 };
 
-const PICKER_PARA_FILTRO: Record<PeriodoChave, FiltroPeriodo> = {
+// Os atalhos novos do seletor (06/11/2026) viram período personalizado aqui.
+const PICKER_PARA_FILTRO: Partial<Record<PeriodoChave, FiltroPeriodo>> = {
   TUDO: 'TODOS',
   MES_ATUAL: 'MES_ATUAL',
   PROX_30: 'PROX_30D',
@@ -211,6 +225,8 @@ export default function ContasPagarPage() {
   const [copying, setCopying] = useState(false);
   const [saving, setSaving] = useState(false);
   const [excluindo, setExcluindo] = useState<ContaPagar | null>(null);
+  // Imprimir cheque de uma conta em aberto (E7, frente C).
+  const [chequeDe, setChequeDe] = useState<ContaPagar | null>(null);
   const [removendo, setRemovendo] = useState(false);
   // A conta cuja baixa está aberta. O diálogo e a regra vivem em BaixaDePagar,
   // o mesmo componente que a visão geral abre.
@@ -225,6 +241,9 @@ export default function ContasPagarPage() {
   const [parcelasDe, setParcelasDe] = useState<ContaPagar | null>(null);
   const [previaCopia, setPreviaCopia] = useState<RespostaCopiarMes | null>(null);
   const abrirDepoisDeCarregar = useRef<string | null>(null);
+  // Outra pessoa salvou a conta depois que o formulário abriu (06/11/2026, E7).
+  const [conflito, setConflito] = useState(false);
+  const previsao = useContasDaPrevisao();
 
   async function load() {
     setLoading(true);
@@ -277,7 +296,7 @@ export default function ContasPagarPage() {
   }
 
   function openNew() {
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, data_emissao: hojeISO() });
     serieNova.current = novoIdDeSerie();
     setSerieEditada(null);
     setEditId(null);
@@ -297,6 +316,9 @@ export default function ContasPagarPage() {
       cambio: item.cambio,
       cambio_carimbo: (item as ContaPagar & { cambio_carimbo?: FormState['cambio_carimbo'] }).cambio_carimbo ?? null,
       data_vencimento: item.data_vencimento,
+      data_emissao: item.data_emissao ?? '',
+      conta_previsao_id: (item as ContaComExtras).conta_previsao_id ?? '',
+      campos_personalizados: (item as ContaComExtras).campos_personalizados ?? {},
       forma_pagamento: item.forma_pagamento,
       cartao_id: item.cartao_id || '',
       natureza_custo: item.natureza_custo ?? null,
@@ -322,6 +344,12 @@ export default function ContasPagarPage() {
     setShowForm(true);
   }
 
+  /** O anexo mudou no servidor: a conta em mãos fica com a lista e a versão novas (salvar depois não desfaz). */
+  function anexosMudaram(id: string, anexos: Anexo[], versao: string) {
+    setItems(lista => lista.map(i => (i.id === id ? ({ ...i, anexos, ...(versao ? { _versao: versao } : {}) } as ContaPagar) : i)));
+    setForm(f => ({ ...f, anexos }));
+  }
+
   async function handleSave() {
     // Guarda de duplo-submit: sem isso, clique duplo cria a conta (ou a série
     // inteira de parcelas) duas vezes.
@@ -332,6 +360,19 @@ export default function ContasPagarPage() {
     if (!form.data_vencimento) { toast.error('Informe a data de vencimento'); return; }
     if (form.valor_original <= 0) { toast.error('Valor deve ser maior que zero'); return; }
     if (form.moeda !== 'BRL' && num(form.cambio) <= 0) { toast.error('Informe o câmbio da moeda estrangeira'); return; }
+    const emissaoInvalida = conferirEmissao({ emissao: form.data_emissao, vencimento: form.data_vencimento });
+    if (emissaoInvalida) { toast.error(emissaoInvalida); return; }
+    // Campo personalizado obrigatório (E7, frente D): a mesma regra que o
+    // servidor confere, pela lista da empresa da conta. Conta gerada pelo
+    // sistema não trava.
+    {
+      const existente = editId ? items.find(i => i.id === editId) : undefined;
+      if (!existente || !tituloGeradoPeloSistema('contas_pagar', existente as unknown as Record<string, unknown>)) {
+        const defs = await carregarDefinicoes((existente as { empresa_id?: string } | undefined)?.empresa_id).catch(() => []);
+        const faltou = validarObrigatorios(defs, 'contas_pagar', form.campos_personalizados);
+        if (faltou) { setTentouSalvar(true); toast.error(faltou); return; }
+      }
+    }
 
     const valorOriginal = round2(num(form.valor_original));
     const cambio = form.moeda === 'BRL' ? 1 : num(form.cambio);
@@ -416,7 +457,7 @@ export default function ContasPagarPage() {
       toast.success('Conta criada', `${form.fornecedor_nome} · ${formatBRL(valorBrl)}`);
       load();
     } catch (e) {
-      toast.error('Não foi possível salvar', e instanceof Error ? e.message : '');
+      tratarErroAoGravar(e, 'Não foi possível salvar', () => setConflito(true));
     } finally {
       setSaving(false);
     }
@@ -426,7 +467,11 @@ export default function ContasPagarPage() {
   async function gravarSomenteEsta(existing: ContaPagar, updated: ContaPagar) {
     // O status que esta tela LEU: o servidor só desfaz uma baixa quando a
     // tela sabia que a conta estava baixada (senão é tela velha, 409).
-    await updateEntity('contas-pagar', { ...updated, _status_lido: existing.status });
+    // E a versão lida (06/11/2026): se outra pessoa salvou depois, o servidor
+    // recusa com 409 e a tela oferece recarregar.
+    await atualizarRegistro('contas-pagar', {
+      ...updated, _status_lido: existing.status, _versao: (existing as ContaComExtras)._versao,
+    });
     setShowForm(false);
     setEditId(null);
     toast.success('Conta atualizada');
@@ -467,7 +512,7 @@ export default function ContasPagarPage() {
       }
       setEdicaoPendente(null);
     } catch (e) {
-      toast.error('Não foi possível salvar', e instanceof Error ? e.message : '');
+      tratarErroAoGravar(e, 'Não foi possível salvar', () => { setEdicaoPendente(null); setConflito(true); });
     } finally {
       setGravandoEscopo(false);
     }
@@ -489,9 +534,9 @@ export default function ContasPagarPage() {
     const item = excluindo;
     setRemovendo(true);
     try {
-      await deleteEntity('contas-pagar', item.id);
+      const r = await excluirRegistro<{ ok?: boolean; aviso?: string }>('contas-pagar', item.id);
       setExcluindo(null);
-      toast.success('Conta removida', item.fornecedor_nome || '');
+      toast.success('Conta excluída', r?.aviso || `${item.fornecedor_nome || 'A conta'} fica em Contas a Pagar/Receber, situação Excluído, se precisar restaurar.`);
       load();
     } catch (e) {
       // A conta continua na tela de propósito: dizer "removida" e recarregar
@@ -679,6 +724,7 @@ export default function ContasPagarPage() {
         fornecedor: form.fornecedor_nome.trim() ? null : 'Informe o fornecedor.',
         descricao: form.descricao.trim() ? null : 'Informe uma descrição.',
         vencimento: form.data_vencimento ? null : 'Informe a data de vencimento.',
+        emissao: conferirEmissao({ emissao: form.data_emissao, vencimento: form.data_vencimento }),
         valor: form.valor_original > 0 ? null : 'O valor precisa ser maior que zero.',
         cambio:
           form.moeda !== 'BRL' && num(form.cambio) <= 0
@@ -695,6 +741,7 @@ export default function ContasPagarPage() {
     onPagar: abrirModalPagar,
     onEditar: openEdit,
     onExcluir: item => setExcluindo(item),
+    onImprimirCheque: item => setChequeDe(item),
   });
 
   const vazio: EmptyLessonProps =
@@ -721,6 +768,7 @@ export default function ContasPagarPage() {
   return (
     <PageShell width="full" padding="md" gap="md" className="max-w-[1280px]">
       <PageHeader
+        empresas
         icone={ArrowUpRight}
         titulo="Contas a pagar"
         subtitulo="O que a agência precisa pagar, com vencimento, saldo devedor e situação."
@@ -822,8 +870,9 @@ export default function ContasPagarPage() {
             de: filterDateFrom,
             ate: filterDateTo,
             onChange: (chave: PeriodoChave, range: PeriodoRange) => {
-              setFilterPeriodo(PICKER_PARA_FILTRO[chave]);
-              if (chave === 'PERSONALIZADO') {
+              const filtro = PICKER_PARA_FILTRO[chave] ?? 'CUSTOM';
+              setFilterPeriodo(filtro);
+              if (filtro === 'CUSTOM') {
                 setFilterDateFrom(range.de);
                 setFilterDateTo(range.ate);
               }
@@ -884,7 +933,18 @@ export default function ContasPagarPage() {
         erros={erros}
         salvando={saving}
         onSalvar={salvarFormulario}
-        extra={editId ? <HistoricoDeBaixas tabela="contas_pagar" tituloId={editId} onMudou={() => { void load(); }} /> : null}
+        contasPrevisao={previsao.contas}
+        padraoPrevisaoId={padraoDaEmpresa(previsao, editId ? (items.find(i => i.id === editId) as { empresa_id?: string } | undefined)?.empresa_id : null)}
+        tituloId={editId}
+        vendaId={editId ? vendaQueTravaATitulo(items.find(i => i.id === editId) as ContaComExtras | undefined) : null}
+        empresaId={editId ? ((items.find(i => i.id === editId) as { empresa_id?: string } | undefined)?.empresa_id ?? null) : null}
+        extra={editId ? (
+          <>
+            {/* Itens, Comissões e Anexos da conta (E7, frente D). */}
+            <PainelDoTitulo key={editId} tabela="contas_pagar" tituloId={editId} onAnexosMudaram={(anexos, versao) => anexosMudaram(editId, anexos, versao)} />
+            <HistoricoDeBaixas tabela="contas_pagar" tituloId={editId} onMudou={() => { void load(); }} />
+          </>
+        ) : null}
         faixaDaSerie={(() => {
           const editada = editId ? (items.find(i => i.id === editId) as ContaComSerie | undefined) : undefined;
           if (!editada?.serie_id) return null;
@@ -943,6 +1003,8 @@ export default function ContasPagarPage() {
         onCopiar={() => { void handleCopyMonth(); }}
       />
 
+      <EmitirCheque conta={chequeDe} onFechar={() => setChequeDe(null)} />
+
       <BaixaDePagar
         conta={contaAPagar}
         onFechar={() => setContaAPagar(null)}
@@ -953,7 +1015,11 @@ export default function ContasPagarPage() {
         aberto={Boolean(excluindo)}
         onOpenChange={aberto => { if (!aberto) setExcluindo(null); }}
         titulo="Excluir esta conta a pagar"
-        oQueVaiAcontecer="A conta sai da lista e dos totais desta tela. Não dá para desfazer."
+        oQueVaiAcontecer={
+          excluindo && (excluindo.status === 'PAGO' || excluindo.status === 'PARCIAL')
+            ? 'A conta sai das listas, dos totais e dos relatórios, e o que já foi pago volta para a conta bancária que pagou. Dá para restaurar depois em Contas a Pagar/Receber, situação Excluído; ela volta em aberto.'
+            : 'A conta sai das listas, dos totais e dos relatórios. Dá para restaurar depois em Contas a Pagar/Receber, situação Excluído.'
+        }
         detalhes={
           excluindo
             ? [
@@ -971,6 +1037,19 @@ export default function ContasPagarPage() {
         tone="destrutivo"
         processando={removendo}
         onConfirmar={() => { void confirmarExclusao(); }}
+      />
+
+      <AvisoDeEdicaoSimultanea
+        aberto={conflito}
+        onOpenChange={setConflito}
+        onRecarregar={() => {
+          const id = editId;
+          setConflito(false);
+          setShowForm(false);
+          setEditId(null);
+          abrirDepoisDeCarregar.current = id;
+          void load();
+        }}
       />
     </PageShell>
   );

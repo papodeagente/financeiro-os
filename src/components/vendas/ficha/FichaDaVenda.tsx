@@ -23,7 +23,8 @@ import { ConfirmDialog } from '@/components/fin/ConfirmDialog';
 import { Field } from '@/components/fin/Field';
 import { loadEntities } from '@/lib/crm-storage';
 import { hojeISO } from '@/lib/money';
-import { normalizarVenda, totaisDaVenda, totaisDoProduto, type PagamentoDaVenda, type Venda } from '@/lib/venda-modelo';
+import { CAMPOS_CORPORATIVOS, normalizarVenda, totaisDaVenda, totaisDoProduto, type DadosCorporativos, type PagamentoDaVenda, type Venda } from '@/lib/venda-modelo';
+import { BlocoRecolhivel } from '@/components/fin/BlocoRecolhivel';
 import { receitaDaVenda, CONFIG_RECEITA_PADRAO, type ConfigReceita } from '@/lib/venda-receita';
 import type { FichaDaVenda as Ficha } from '@/lib/venda-rota';
 import { toast } from '@/lib/toast';
@@ -32,7 +33,12 @@ import { AbaProdutos, type PessoaDaLista } from './AbaProdutos';
 import { AbaPagamentos } from './AbaPagamentos';
 import { AbaCliente, AbaComissoes, AbaFornecedor, AbaPosicao } from './AbasDoFinanceiro';
 import { CancelamentoDaVenda } from './CancelamentoDaVenda';
+import { NotasERetencoes } from './NotasERetencoes';
+import { LidoDoVoucher } from './LidoDoVoucher';
+import type { RascunhoDoVoucher } from '@/lib/venda-voucher';
 import { CONTROLE, dataBR, LINK, Pilula, quandoBR, reais, SELECT, Total } from './comum';
+import { CampoEmpresa, useEmpresaSugerida } from '@/components/fin/CamposDeEmpresa';
+import { useEmpresas } from '@/components/fin/useEmpresas';
 
 type Aba = 'produtos' | 'pagamentos' | 'cliente' | 'fornecedor' | 'comissoes' | 'posicao';
 const ABAS: ReadonlyArray<{ id: Aba; rotulo: string; soDaVendaGravada?: boolean }> = [
@@ -75,10 +81,16 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
   const [contas, setContas] = React.useState<PessoaDaLista[]>([]);
   const [fechar, setFechar] = React.useState<null | 'perguntar' | { confirmar: string[] }>(null);
   const [reabrir, setReabrir] = React.useState(false);
+  // Trava do recibo (E7): a venda tem recibo emitido e a mudança altera o recibo.
+  const [comRecibo, setComRecibo] = React.useState<null | { recibos: Array<{ numero: string; pagador_nome: string }>; resumo: string }>(null);
   const [cancelando, setCancelando] = React.useState(false);
   const [motivo, setMotivo] = React.useState('');
   const [processando, setProcessando] = React.useState(false);
   const [atualizadoEm, setAtualizadoEm] = React.useState<Date | null>(null);
+  // Várias empresas (E7): a empresa da venda (o campo só aparece com 2+ empresas).
+  const empresaSugerida = useEmpresaSugerida();
+  const { multi: variasEmpresas } = useEmpresas();
+  const [empresaId, setEmpresaId] = React.useState<string | undefined>(undefined);
 
   const carregar = React.useCallback(async () => {
     if (!vendaId) return;
@@ -88,6 +100,7 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
       setFicha(f);
       setRascunho(f.venda);
       setConfig(f.config_receita);
+      setEmpresaId(f.empresa_id ?? 'principal');
       setSujo(false);
       setEstado('ok');
       setAtualizadoEm(new Date());
@@ -98,6 +111,24 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
   }, [vendaId]);
 
   React.useEffect(() => { void carregar(); }, [carregar]);
+
+  // Lançar pelo voucher (E7): /vendas/lancar?voucher=<hash> abre com o
+  // rascunho lido pela IA. Nada foi gravado; o "Salvar" é o de sempre.
+  const [lidoDoVoucher, setLidoDoVoucher] = React.useState<(Omit<RascunhoDoVoucher, 'venda'> & { arquivo: string }) | null>(null);
+  React.useEffect(() => {
+    if (!nova) return;
+    const hash = new URLSearchParams(window.location.search).get('voucher');
+    if (!hash) return;
+    setEstado('carregando');
+    void chamar<{ arquivo_nome: string; rascunho: RascunhoDoVoucher }>(`/api/vendas/voucher?hash=${encodeURIComponent(hash)}`, 'GET')
+      .then(r => {
+        setRascunho(normalizarVenda(r.rascunho.venda).venda);
+        setLidoDoVoucher({ arquivo: r.arquivo_nome, origens: r.rascunho.origens, avisos: r.rascunho.avisos, vazios: r.rascunho.vazios });
+        setSujo(true);
+      })
+      .catch(e => toast.error('Não deu para abrir o rascunho do voucher', e instanceof Error ? e.message : undefined))
+      .finally(() => setEstado('ok'));
+  }, [nova]);
   React.useEffect(() => {
     if (!nova) return;
     void chamar<{ receita: ConfigReceita }>('/api/config/vendas', 'GET').then(c => setConfig(c.receita)).catch(() => undefined);
@@ -122,22 +153,34 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
   }, [editavel]);
 
   const mudar = (parcial: Partial<Venda>) => { setRascunho(v => (v ? { ...v, ...parcial } : v)); setSujo(true); };
+  const atualizarFicha = (f: Ficha) => { setFicha(f); setRascunho(f.venda); setSujo(false); setAtualizadoEm(new Date()); };
 
-  async function salvar() {
+  async function salvar(confirmarRecibo = false) {
     if (!rascunho) return;
     if (!rascunho.cliente.id) { toast.error('Escolha o cliente da venda', 'A venda precisa de um cliente cadastrado para as contas a receber.'); return; }
     if (!rascunho.produtos.length) { toast.error('Inclua ao menos um produto', 'O total da venda vem dos produtos.'); setAba('produtos'); return; }
     setSalvando(true);
     try {
+      // A empresa só vai quando a agência tem mais de uma (o campo existe).
+      const empresa = variasEmpresas ? empresaId ?? (nova ? empresaSugerida : undefined) : undefined;
+      const corpo = { venda: rascunho, ...(empresa ? { empresa_id: empresa } : {}), ...(confirmarRecibo ? { confirmar_recibo: true } : {}) };
       const f = nova
-        ? await chamar<Ficha>('/api/vendas/completa', 'POST', { venda: rascunho })
-        : await chamar<Ficha>(`/api/vendas/completa/${encodeURIComponent(vendaId!)}`, 'PUT', { venda: rascunho });
+        ? await chamar<Ficha>('/api/vendas/completa', 'POST', corpo)
+        : await chamar<Ficha>(`/api/vendas/completa/${encodeURIComponent(vendaId!)}`, 'PUT', corpo);
       const contasDoEvento = (f.eventos[0]?.detalhe?.contas ?? {}) as { criadas?: number; atualizadas?: number; removidas?: number; preservadas?: number };
       toast.success(nova ? `Venda ${f.venda.numero} lançada` : 'Venda salva',
         `Contas: ${contasDoEvento.criadas ?? 0} criadas, ${contasDoEvento.atualizadas ?? 0} atualizadas, ${contasDoEvento.removidas ?? 0} removidas${contasDoEvento.preservadas ? `, ${contasDoEvento.preservadas} já baixadas mantidas` : ''}.`);
       if (nova) { router.push(`/vendas/${encodeURIComponent(f.venda.id)}/ficha`); return; }
       setFicha(f); setRascunho(f.venda); setSujo(false); setAtualizadoEm(new Date());
+      setComRecibo(null);
+      if (confirmarRecibo) toast.info('Recibo a refazer', 'O recibo emitido ficou substituído. O próximo sai com número novo.');
     } catch (e) {
+      if (e instanceof ErroDaTela && e.codigo === 'VENDA_COM_RECIBO' && !confirmarRecibo) {
+        const d = e.detalhes as { recibos?: Array<{ numero: string; pagador_nome: string }>; resumo?: string } | undefined;
+        setComRecibo({ recibos: d?.recibos ?? [], resumo: d?.resumo ?? '' });
+        return;
+      }
+      setComRecibo(null);
       toast.error('A venda não foi salva', e instanceof Error ? e.message : undefined);
     } finally {
       setSalvando(false);
@@ -207,9 +250,11 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
           ) : undefined}
           acaoPrimaria={acaoPrimaria}
           acoesSecundarias={!nova && vendaId ? [
-            ...(ficha && ficha.versao_modelo === 2 && ficha.permissoes.cancelar && ficha.venda.produtos.some(p => !p.cancelado_em)
-              ? [{ rotulo: 'Cancelar produto ou passageiro', onClick: () => (sujo ? toast.warning('Salve antes de cancelar', 'Há mudanças que ainda não foram salvas.') : setCancelando(true)) }]
+            ...(ficha && ficha.versao_modelo === 2 && ficha.permissoes.cancelar && ficha.venda.produtos.some(p => !p.cancelado_em || p.passageiros.some(x => x.cancelado_em))
+              ? [{ rotulo: ficha.venda.produtos.some(p => !p.cancelado_em) ? 'Cancelar produto ou passageiro' : 'Cancelamentos da venda', onClick: () => (sujo ? toast.warning('Salve antes de cancelar', 'Há mudanças que ainda não foram salvas.') : setCancelando(true)) }]
               : []),
+            { rotulo: 'Recibo', href: `/vendas/${encodeURIComponent(vendaId)}/recibo` },
+            ...(ficha?.link_crm ? [{ rotulo: 'Contrato e voucher no CRM', href: ficha.link_crm }] : []),
             { rotulo: 'Nota de débito', href: `/vendas/${encodeURIComponent(vendaId)}/nota-de-debito` },
             { rotulo: 'Ver na tela anterior', href: `/vendas/${encodeURIComponent(vendaId)}` },
           ] : undefined}
@@ -236,6 +281,16 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
                 </p>
               ) : null}
 
+              {editavel && variasEmpresas ? (
+                <div className="max-w-sm">
+                  <CampoEmpresa
+                    valor={empresaId ?? empresaSugerida}
+                    onChange={e => { setEmpresaId(e); setSujo(true); }}
+                    ajuda="Os títulos da venda nascem nesta empresa. Trocar leva junto os que ainda estão em aberto."
+                  />
+                </div>
+              ) : null}
+              {nova && lidoDoVoucher ? <LidoDoVoucher {...lidoDoVoucher} /> : null}
               <DadosDaVenda venda={venda} editavel={editavel} clientes={clientes} intermediarios={fornecedores} onMudar={mudar} />
 
               <dl aria-label="Totais da venda" className="grid grid-cols-2 gap-[var(--fin-s-4)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)] shadow-[var(--fin-e-card)] sm:grid-cols-3 lg:grid-cols-6">
@@ -287,9 +342,24 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
               <div role="tabpanel" id={`painel-${aba}`} aria-labelledby={`aba-${aba}`}>
                 {aba === 'produtos' ? (
                   <AbaProdutos
-                    produtos={venda.produtos} editavel={editavel} verReceita={verReceita} fornecedores={fornecedores}
+                    produtos={venda.produtos} removidos={venda.produtos_removidos ?? []} editavel={editavel} verReceita={verReceita} fornecedores={fornecedores}
                     onSalvarProduto={p => mudar({ produtos: substituir(venda.produtos, p).map((x, i) => ({ ...x, sequencia: i + 1 })) })}
-                    onRemoverProduto={id => mudar({ produtos: venda.produtos.filter(x => x.id !== id).map((x, i) => ({ ...x, sequencia: i + 1 })) })}
+                    onRemoverProduto={id => {
+                      const saiu = venda.produtos.find(x => x.id === id);
+                      mudar({
+                        produtos: venda.produtos.filter(x => x.id !== id).map((x, i) => ({ ...x, sequencia: i + 1 })),
+                        produtos_removidos: saiu ? [...(venda.produtos_removidos ?? []), saiu] : venda.produtos_removidos,
+                      });
+                      if (saiu) toast.info('Produto removido', 'Ele fica guardado em "produtos removidos" e dá para restaurar. As contas se refazem ao salvar.');
+                    }}
+                    onRestaurarProduto={id => {
+                      const volta = (venda.produtos_removidos ?? []).find(x => x.id === id);
+                      if (!volta) return;
+                      mudar({
+                        produtos: [...venda.produtos, volta].map((x, i) => ({ ...x, sequencia: i + 1 })),
+                        produtos_removidos: (venda.produtos_removidos ?? []).filter(x => x.id !== id),
+                      });
+                    }}
                   />
                 ) : aba === 'pagamentos' ? (
                   <AbaPagamentos
@@ -302,8 +372,13 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
                     Há mudanças ainda não salvas. Esta aba mostra a venda como está gravada.
                   </p>
                 ) : null}
-                {ficha && aba === 'cliente' ? <div className="mt-[var(--fin-s-3)]"><AbaCliente ficha={ficha} /></div> : null}
-                {ficha && aba === 'fornecedor' ? <div className="mt-[var(--fin-s-3)]"><AbaFornecedor ficha={ficha} /></div> : null}
+                {ficha && aba === 'cliente' ? (
+                  <div className="mt-[var(--fin-s-3)] flex flex-col gap-[var(--fin-s-4)]">
+                    <AbaCliente ficha={ficha} podeLancar={podeEditar && !sujo} onAtualizada={atualizarFicha} />
+                    {ficha.permissoes.ver_financeiro && vendaId ? <NotasERetencoes vendaId={vendaId} /> : null}
+                  </div>
+                ) : null}
+                {ficha && aba === 'fornecedor' ? <div className="mt-[var(--fin-s-3)]"><AbaFornecedor ficha={ficha} podeLancar={podeEditar && !sujo} onAtualizada={atualizarFicha} /></div> : null}
                 {ficha && aba === 'comissoes' ? <div className="mt-[var(--fin-s-3)]"><AbaComissoes ficha={ficha} /></div> : null}
                 {ficha && aba === 'posicao' ? <div className="mt-[var(--fin-s-3)]"><AbaPosicao ficha={ficha} /></div> : null}
               </div>
@@ -320,7 +395,7 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
             </p>
             <div className="flex gap-[var(--fin-s-2)]">
               {!nova ? <Button type="button" variant="ghost" disabled={salvando} onClick={() => { if (ficha) { setRascunho(ficha.venda); setSujo(false); } }}>Desfazer</Button> : <Button type="button" variant="ghost" onClick={() => router.push('/vendas')}>Cancelar</Button>}
-              <Button type="button" onClick={() => { void salvar(); }} disabled={salvando}>{salvando ? 'Salvando…' : nova ? 'Lançar venda' : 'Salvar venda'}</Button>
+              <Button type="button" onClick={() => { void salvar(false); }} disabled={salvando}>{salvando ? 'Salvando…' : nova ? 'Lançar venda' : 'Salvar venda'}</Button>
             </div>
           </div>
         </div>
@@ -352,6 +427,16 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
           onConcluido={f => { setFicha(f); setRascunho(f.venda); setSujo(false); setCancelando(false); setAtualizadoEm(new Date()); }}
         />
       ) : null}
+      <ConfirmDialog
+        aberto={comRecibo !== null}
+        onOpenChange={a => { if (!a) setComRecibo(null); }}
+        titulo="Esta venda já tem recibo emitido"
+        oQueVaiAcontecer={`A mudança altera o que o recibo mostra${comRecibo?.resumo ? ` (${comRecibo.resumo})` : ''}. Ao gravar, a mudança fica no histórico da venda e o recibo emitido passa a valer como substituído: o próximo sai com número novo e diz qual substitui. Se o cliente já recebeu o recibo, mande o novo.`}
+        detalhes={comRecibo ? comRecibo.recibos.map(r => ({ rotulo: `Recibo Nº ${r.numero}`, valor: r.pagador_nome || '—' })) : undefined}
+        confirmarRotulo="Gravar e substituir o recibo"
+        processando={salvando}
+        onConfirmar={() => { void salvar(true); }}
+      />
       <ConfirmDialog
         aberto={reabrir}
         onOpenChange={a => { if (!a) { setReabrir(false); setMotivo(''); } }}
@@ -404,6 +489,10 @@ function DadosDaVenda({ venda, editavel, clientes, intermediarios, onMudar }: {
         <Total rotulo="Data da venda" valor={dataBR(venda.data_venda)} />
         <Total rotulo="Intermediário" valor={venda.intermediario?.nome || '—'} />
         <Total rotulo="Centro de custo" valor={venda.centro_custo || '—'} />
+        {venda.operacao_propria ? <Total rotulo="Operação" valor="Própria da agência" /> : null}
+        {CAMPOS_CORPORATIVOS.filter(c => venda.corporativo?.[c.chave]).map(c => (
+          <Total key={c.chave} rotulo={c.rotulo} valor={venda.corporativo?.[c.chave] ?? ''} />
+        ))}
       </dl>
     );
   }
@@ -442,6 +531,34 @@ function DadosDaVenda({ venda, editavel, clientes, intermediarios, onMudar }: {
       <Field rotulo="Centro de custo">
         {a => <Input {...a} className={CONTROLE} value={venda.centro_custo} maxLength={120} onChange={e => onMudar({ centro_custo: e.target.value })} />}
       </Field>
+      <label className="flex cursor-pointer items-start gap-[var(--fin-s-2)] sm:col-span-2 lg:col-span-4">
+        <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-[var(--fin-accent)]" checked={venda.operacao_propria === true}
+          onChange={e => onMudar({ operacao_propria: e.target.checked })} />
+        <span className="flex flex-col gap-0.5">
+          <span className="fin-t-body text-[var(--fin-text)]">Operação própria</span>
+          <span className="fin-t-caption text-[var(--fin-text-3)]">A agência opera a viagem (um grupo dela, por exemplo). Produto sem fornecedor não vira conta a pagar: o custo é da própria agência.</span>
+        </span>
+      </label>
+      <div className="sm:col-span-2 lg:col-span-4">
+        <BlocoRecolhivel
+          titulo="Viagem corporativa"
+          descricao="O que a empresa cliente pede para aprovar e ratear a despesa. Sai nos relatórios de vendas, na fatura e no arquivo do cartão corporativo."
+          preenchido={CAMPOS_CORPORATIVOS.some(c => venda.corporativo?.[c.chave])}
+        >
+          <div className="grid grid-cols-1 gap-[var(--fin-s-3)] pt-[var(--fin-s-3)] sm:grid-cols-2 lg:grid-cols-4">
+            {CAMPOS_CORPORATIVOS.map(c => (
+              <Field key={c.chave} rotulo={c.rotulo} ajuda={c.ajuda}>
+                {a => (
+                  <Input
+                    {...a} className={CONTROLE} maxLength={120} value={venda.corporativo?.[c.chave] ?? ''}
+                    onChange={e => onMudar({ corporativo: { ...(venda.corporativo ?? {}), [c.chave]: e.target.value } as DadosCorporativos })}
+                  />
+                )}
+              </Field>
+            ))}
+          </div>
+        </BlocoRecolhivel>
+      </div>
       <p className="fin-t-caption text-[var(--fin-text-3)] sm:col-span-2 lg:col-span-4">
         Quais componentes contam como receita da agência se escolhe em <Link href="/config/vendas" className={LINK}>Configurações › Vendas</Link>.
       </p>

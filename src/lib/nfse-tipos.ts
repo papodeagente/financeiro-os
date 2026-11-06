@@ -187,6 +187,15 @@ export interface TomadorNota {
     cidade: string;
     estado: string;
   };
+  /**
+   * Tomador do exterior (E7, 06/11/2026): sem CPF/CNPJ, com o documento do
+   * país dele. Os emissores ligados aqui ainda não mandam este tomador; a
+   * nota sai no portal do emissor e é registrada como emitida fora. O código
+   * do país e o tratamento de exportação de serviço: confirmar com o contador.
+   */
+  estrangeiro?: boolean;
+  documento_estrangeiro?: string;
+  pais?: string;
 }
 
 export interface NotaFiscal {
@@ -307,5 +316,24 @@ export interface NotaFiscal {
     aliquota_ibs: number | null;
     aliquota_cbs: number | null;
     situacao: 'CONFIRMAR_COM_O_CONTADOR';
+  };
+
+  // ── E7 (06/11/2026) ──
+  /** Data (competência) da nota, AAAA-MM-DD. Vazia: a da emissão. */
+  data_competencia?: string;
+  /** Nota emitida fora do sistema (no portal da prefeitura ou em outro sistema) e só registrada aqui. */
+  emitida_fora?: boolean;
+  /** Chave da nota de fora: prestador|série|número. Impede registrar a mesma duas vezes. */
+  chave_externa?: string;
+  /** De onde veio o registro da nota de fora: a tela ou a mudança de sistema. */
+  registro_origem?: 'TELA' | 'MUDANCA';
+  /** Acompanhamento sozinho da nota que ficou na prefeitura (nota-acompanhamento.ts). */
+  acompanhamento?: {
+    tentativas: number;
+    /** ISO: quando consultar de novo. */
+    proxima_em: string;
+    ultima_em: string;
+    /** O aviso de recusa já foi para o sino. */
+    avisada_recusa?: boolean;
   };
 }

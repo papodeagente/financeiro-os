@@ -12,6 +12,7 @@ import type { ExecutorSQL } from './caixa-atomico';
 import { generateId } from './utils';
 import { hojeISO, round2 } from './money';
 import { pode, type SessaoPermissoes, type ExecutorPermissoes } from './permissoes-servidor';
+import { MENSAGEM_CONTA_SO_VER } from './conta-da-gravacao';
 import { verificarBloqueios } from './bloqueios-financeiros';
 import { lerBloqueios } from './bloqueios-servidor';
 import {
@@ -54,7 +55,9 @@ async function conferirDireitos(exec: ExecutorSQL, sessao: SessaoDaBaixa, itens:
         : 'Seu acesso não inclui dar baixa em contas a receber.');
     }
     if (it.conta_bancaria_id && !(await pode(sessao, 'movimentar_conta_bancaria', { contaBancariaId: it.conta_bancaria_id, exec: e }))) {
-      throw new RecusaDaBaixa(403, 'Esta conta bancária não está liberada para você.');
+      // Conta "só ver" (E7): a pessoa vê o saldo, mas não paga nem recebe nela.
+      const soVer = await pode(sessao, 'ver_conta_bancaria', { contaBancariaId: it.conta_bancaria_id, exec: e });
+      throw new RecusaDaBaixa(403, soVer ? MENSAGEM_CONTA_SO_VER : 'Esta conta bancária não está liberada para você.');
     }
   }
 }

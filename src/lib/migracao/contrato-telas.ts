@@ -29,9 +29,18 @@
  * Cada arquivo solto é de uma lista do sistema anterior. A ordem de
  * `ORDEM_DAS_LISTAS` é a ordem de aplicação (contrato E4, "O que entra na v1").
  */
-export type TipoDeLista = 'contas' | 'categorias' | 'centros_custo' | 'pessoas' | 'titulos' | 'saldos';
+export type TipoDeLista =
+  | 'contas' | 'categorias' | 'centros_custo' | 'pessoas' | 'titulos' | 'saldos'
+  // E7 (mudança v2): o histórico, opcional, depois dos saldos.
+  | 'liquidados' | 'movimentos' | 'vendas' | 'faturas' | 'notas' | 'comissoes_pagas' | 'metas' | 'reembolsos' | 'creditos';
 
-export const ORDEM_DAS_LISTAS: readonly TipoDeLista[] = ['contas', 'categorias', 'centros_custo', 'pessoas', 'titulos', 'saldos'];
+export const ORDEM_DAS_LISTAS: readonly TipoDeLista[] = [
+  'contas', 'categorias', 'centros_custo', 'pessoas', 'titulos', 'saldos',
+  'liquidados', 'movimentos', 'vendas', 'faturas', 'notas', 'comissoes_pagas', 'metas', 'reembolsos', 'creditos',
+];
+
+/** As listas do histórico (E7): opcionais, entram depois dos saldos de abertura. */
+export const LISTAS_DO_HISTORICO: readonly TipoDeLista[] = ['liquidados', 'movimentos', 'vendas', 'faturas', 'notas', 'comissoes_pagas', 'metas', 'reembolsos', 'creditos'];
 
 /** Formato lido pelo leitor de planilha da parte A. */
 export type FormatoDoArquivo = 'xlsx' | 'xls' | 'csv' | 'txt';
@@ -281,7 +290,92 @@ export interface RespostaDasProvas {
   pessoas: ProvaDaPessoa[];
   meses: ProvaDoMes[];
   gerado_em: string;
+  /** E7: as provas do histórico (vazias quando a mudança não trouxe histórico). */
+  historico?: ProvasDoHistorico;
 }
+
+/** Uma linha das provas do histórico: sistema anterior × EnturOS, em reais. */
+export interface LinhaDoHistorico {
+  rotulo: string;
+  anterior: number;
+  enturos: number;
+  diferenca: number;
+  explicacoes: Array<{ motivo: string; linhas: number; valor: number; codigo: string }>;
+  explicada: boolean;
+}
+
+export interface ProvasDoHistorico {
+  /** Dinheiro em dobro: saldo na data de corte refeito aqui × o informado. */
+  contas_no_corte: Array<LinhaDoHistorico & { conta_id: string; historico: number; saldo_hoje: number }>;
+  /** Liquidado por mês (AAAA-MM) e lado. */
+  liquidados: Array<LinhaDoHistorico & { mes: string; tipo: 'pagar' | 'receber' }>;
+  /** Vendas e receita por mês. `receita` null = o arquivo não trouxe a coluna de receita. */
+  receita: Array<{ mes: string; vendas: number; faturamento: LinhaDoHistorico; receita: LinhaDoHistorico | null }>;
+  registros: { faturas: number; notas: number; comissoes_pagas: number; metas: number; reembolsos: number; creditos: number; movimentos_ligados: number; movimentos_criados: number };
+}
+
+// ─── Mês em paralelo (E7) ──────────────────────────────────────────────────
+
+export type TipoDaComparacao = 'bate' | 'data' | 'valor' | 'so_la' | 'so_aqui';
+
+export interface ItemComparado {
+  ref: string;
+  tabela: string | null;
+  id: string | null;
+  tipo: 'pagar' | 'receber';
+  pessoa: string;
+  valor: number;
+  vencimento: string | null;
+  liquidacao: string | null;
+  conta: string;
+  categoria: string;
+  descricao: string;
+}
+
+export interface ParComparado {
+  tipo: TipoDaComparacao;
+  rotulo: string;
+  anterior: ItemComparado | null;
+  enturos: ItemComparado | null;
+  diferenca: number;
+  detalhe: string;
+}
+
+export interface GrupoComparado {
+  chave: string;
+  rotulo: string;
+  anterior: number;
+  enturos: number;
+  diferenca: number;
+  contagem: Record<TipoDaComparacao, number>;
+}
+
+export interface SecaoComparada {
+  fonte: 'contas' | 'extrato';
+  rotulo: string;
+  pares: ParComparado[];
+  contagem: Record<TipoDaComparacao, number>;
+  total: { anterior: number; enturos: number; diferenca: number };
+  por_conta: GrupoComparado[];
+  por_pessoa: GrupoComparado[];
+  por_categoria: GrupoComparado[];
+}
+
+export interface RelatorioDoMes {
+  lote_id: string;
+  mes: string;
+  gerado_em: string;
+  secoes: SecaoComparada[];
+  fora: Array<{ arquivo: string; linha: number; motivo: string }>;
+  tudo_bate: boolean;
+}
+
+/** A comparação do mês é um lote no modo "paralelo": arquivos e colunas pelas rotas de sempre. */
+export type Comparacao = Lote & { mes: string };
+
+// ─── Recriar (E7): plano de comissão e regras de faturamento ───────────────
+
+export interface FuncaoDaComissao { id: string; nome: string; ativo: boolean }
 
 // ─── Desfazer e concluir ───────────────────────────────────────────────────
 
@@ -441,4 +535,19 @@ export const api = {
 
   concluir: (id: string, assinatura: string, chave: string) =>
     chamar<Lote>(`${doLote(id)}/concluir`, { method: 'POST', body: JSON.stringify({ modo: 'gravar', assinatura }), chave }),
+
+  // ── Mês em paralelo (E7): compara sem gravar ──
+  comparacoes: (signal?: AbortSignal) => chamar<{ comparacoes: Comparacao[] }>('/api/mudanca/paralelo', { signal }),
+  criarComparacao: (mes: string, chave: string) =>
+    chamar<Comparacao>('/api/mudanca/paralelo', { method: 'POST', body: JSON.stringify({ mes }), chave }),
+  comparar: (id: string, signal?: AbortSignal) => chamar<RelatorioDoMes>(`${doLote(id)}/paralelo`, { signal }),
+  urlDoPdfDoMes: (id: string) => `${doLote(id)}/paralelo/pdf`,
+
+  // ── Recriar (E7): plano de comissão pelas telas da E5 ──
+  funcoesDaComissao: async (signal?: AbortSignal) => {
+    const r = await chamar<{ funcoes?: FuncaoDaComissao[]; cadastro?: { funcoes?: FuncaoDaComissao[] } }>('/api/comissoes-por-funcao/cadastro', { signal });
+    return (r.funcoes ?? r.cadastro?.funcoes ?? []).filter(f => f.ativo !== false);
+  },
+  salvarPlano: (plano: Record<string, unknown>) =>
+    chamar<{ id: string; nome: string }>('/api/comissoes-por-funcao/planos', { method: 'PUT', body: JSON.stringify({ plano }) }),
 };

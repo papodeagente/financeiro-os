@@ -52,7 +52,7 @@ const ensaiado = (p: Partial<Lote> = {}) => lote({ situacao: 'ensaiado', arquivo
 
 // ─── Passos do assistente ──────────────────────────────────────────────────
 console.log('--- Em que passo o assistente abre ---');
-eq(ETAPAS.map(e => e.id), ['exportar', 'arquivos', 'colunas', 'ensaio', 'aplicar', 'provas', 'concluir'], 'sete passos, na ordem');
+eq(ETAPAS.map(e => e.id), ['exportar', 'arquivos', 'colunas', 'ensaio', 'aplicar', 'provas', 'concluir', 'recriar', 'paralelo'], 'os sete passos da mudança e os dois de depois (E7), na ordem');
 eq(etapaInicial(null), 'exportar', 'sem mudança: começa pelo que exportar');
 eq(etapaInicial(lote()), 'arquivos', 'mudança criada sem arquivo: soltar arquivos');
 eq(etapaInicial(lote({ arquivos: [arquivo({ tipo_lista: null })] })), 'arquivos', 'arquivo sem lista: volta aos arquivos');
@@ -80,6 +80,8 @@ eq(travaDaEtapa('arquivos', aplicado)?.includes('desfaça'), true, 'depois de ap
 eq(travaDaEtapa('colunas', aplicado)?.includes('desfaça'), true, 'depois de aplicar, colunas travam');
 eq(travaDaEtapa('ensaio', aplicado), null, 'o ensaio aplicado continua para consulta');
 eq(travaDaEtapa('provas', aplicado), null, 'provas abrem depois de aplicar');
+eq(travaDaEtapa('recriar', null), null, 'recriar regras e planos abre sempre (não depende dos arquivos)');
+eq([typeof travaDaEtapa('paralelo', ensaiado()), travaDaEtapa('paralelo', aplicado)], ['string', null], 'o mês em paralelo só depois de aplicar');
 eq(ensaioEmDia(ensaiado()), true, 'ensaio na mesma versão: em dia');
 eq(ensaioEmDia(ensaiado({ versao: 5 })), false, 'versão nova: ensaio velho');
 eq(ensaioEmDia(ensaiado({ resumo_do_ensaio: null })), false, 'sem resumo: não está em dia');
@@ -178,7 +180,7 @@ eq(mensagemDeErro(null, 'Arquivo protegido por senha.'), 'Arquivo protegido por 
 // ─── Guia do que exportar ──────────────────────────────────────────────────
 console.log('--- Guia do que exportar ---');
 eq(GUIA_DE_EXPORTACAO.map(g => g.tipo), [...ORDEM_DAS_LISTAS], 'uma explicação por lista, na ordem de aplicação');
-eq(GUIA_DE_EXPORTACAO.filter(g => g.umArquivoPorMes).map(g => g.tipo), ['titulos'], 'contas em aberto: um arquivo por mês');
+eq(GUIA_DE_EXPORTACAO.filter(g => g.umArquivoPorMes).map(g => g.tipo), ['titulos', 'liquidados', 'movimentos', 'vendas'], 'contas em aberto, liquidadas, extrato e vendas: um arquivo por mês');
 eq(GUIA_DE_EXPORTACAO.every(g => g.colunas.length > 0 && g.passos.length > 0), true, 'toda lista diz as colunas e os passos');
 eq(GUIA_DE_EXPORTACAO.filter(g => !rotaExiste(g.aqui.href)).map(g => g.aqui.href), [], 'todo "aqui vira" leva a uma tela que existe');
 eq(GUIA_DE_EXPORTACAO.find(g => g.tipo === 'pessoas')?.colunas.includes('CPF'), true, 'pessoas pede CPF e CNPJ visíveis');
@@ -192,7 +194,7 @@ eq(GLOSSARIO.filter(t => !t.href && !t.chega).map(t => t.id), [], 'sem tela: diz
 eq(GLOSSARIO.filter(t => t.href && t.chega).map(t => t.id), [], 'com tela: não diz que ainda vem');
 eq(GLOSSARIO.filter(t => t.chega && itemNoAr(t.chega)).map(t => t.id), [], '"ainda vem" só para entrega que não está no ar');
 eq(buscarNoGlossario('liquidado')[0]?.aqui, 'Pago (a pagar) ou Recebido (a receber)', '"liquidado" acha Pago/Recebido');
-eq(buscarNoGlossario('cambio')[0]?.chega, 'E6', 'sem acento acha câmbio, que chega na E6');
+eq(buscarNoGlossario('cambio')[0]?.href, '/financeiro-ag/moedas', 'sem acento acha câmbio e leva à tela de Moedas e câmbio');
 eq(buscarNoGlossario('remessa')[0]?.href, '/financeiro-ag/cobrancas', 'remessa leva a Cobranças');
 eq(buscarNoGlossario('x'), [], 'uma letra: nada');
 eq(glossarioPorAssunto().reduce((s, g) => s + g.termos.length, 0), GLOSSARIO.length, 'todo termo tem assunto');
@@ -205,17 +207,25 @@ const montado = montarChecklist();
 eq(montado.blocos.flatMap(b => b.itens).filter(i => i.pronto && !i.href).map(i => i.rotulo), [], 'o que já existe tem link para a tela');
 eq(montado.blocos.flatMap(b => b.itens).filter(i => i.href && !rotaExiste(i.href)).map(i => i.href), [], 'todo link do checklist existe');
 eq(montado.blocos.flatMap(b => b.itens).filter(i => !i.pronto && i.entrega === 'hoje').length, 0, 'o que já existia nunca aparece como "vem"');
-eq(ENTREGA_NO_AR, 'E4', 'checklist sai com a E4 no ar');
-eq(montado.blocos.find(b => b.numero === 5)?.situacao, 'pronto', 'bloco 5 (cobrança, E3) completo');
-eq(montado.blocos.find(b => b.numero === 6)?.situacao, 'vem', 'bloco 6 (faturas, E5) ainda vem');
-eq(montado.blocos.find(b => b.numero === 2)?.situacao, 'parcial', 'bloco 2 tem parte pronta e parte na E6');
-eq(montado.blocos.find(b => b.numero === 2)?.faltam, ['E6'], 'bloco 2 diz em qual entrega fecha');
+eq(ENTREGA_NO_AR, 'E7', 'checklist sai com a E7 no ar (todas as entregas)');
+eq(montado.blocos.find(b => b.numero === 5)?.situacao, 'parcial', 'bloco 5 (cobrança): no ar, mas falta a rodada com provedor real e o modelo do WhatsApp');
+eq(montado.blocos.find(b => b.numero === 6)?.situacao, 'pronto', 'bloco 6 (faturas, E5) completo');
+eq(montado.blocos.find(b => b.numero === 2)?.situacao, 'parcial', 'bloco 2: extrato automático só no Inter, o resto completo');
+eq(montado.blocos.find(b => b.numero === 2)?.faltam, [], 'bloco 2 não espera mais nenhuma entrega');
+eq(montarChecklist(BLOCOS_DA_PARIDADE, 'E4').blocos.find(b => b.numero === 2)?.faltam, ['E6', 'E7'], 'com a E4 no ar, o bloco 2 fechava na E6 e na E7');
 eq(montado.itensTotal, BLOCOS_DA_PARIDADE.reduce((s, b) => s + b.itens.length, 0), 'conta todos os itens');
-eq(montado.porEntrega.map(p => p.entrega), ['E5', 'E6'], 'o que falta, por entrega, em ordem');
-// Montagem por entrega: com a E6 no ar, só sobra a E7 (nenhum item) e todo bloco fica completo.
-const futuro = montarChecklist(BLOCOS_DA_PARIDADE, 'E6');
-eq(futuro.blocosProntos, 15, 'com a E6 no ar, os 15 blocos completos');
-eq(futuro.porEntrega, [], 'nada mais a chegar');
+eq(montado.porEntrega.map(p => p.entrega), [], 'nada falta por entrega');
+eq(montarChecklist(BLOCOS_DA_PARIDADE, 'E4').porEntrega.map(p => p.entrega), ['E5', 'E6', 'E7'], 'com a E4 no ar: o que faltava, por entrega, em ordem');
+eq(montarChecklist(BLOCOS_DA_PARIDADE, 'E6').porEntrega.map(p => p.entrega), ['E7'], 'com a E6 no ar, só sobra o que a E7 fecha');
+eq(BLOCOS_DA_PARIDADE.flatMap(b => b.itens).filter(i => (i.entrega === 'E5' || i.entrega === 'E7') && !i.href).map(i => i.rotulo), [], 'o que a E5 e a E7 fecham já tem o link da tela');
+// Montagem por entrega: com a E7 no ar, todo bloco fica completo.
+const futuro = montarChecklist(BLOCOS_DA_PARIDADE, 'E7');
+eq(futuro.porEntrega, [], 'com a E7 no ar, nada mais a chegar');
+const comFalta = futuro.blocos.flatMap(b => b.itens).filter(i => i.falta);
+eq(comFalta.every(i => i.noAr && !i.pronto), true, 'item com falta está no ar mas não conta como pronto');
+eq(futuro.comFalta, comFalta.length, 'conta os itens que dependem de um passo de fora');
+eq(futuro.blocosProntos, 15 - new Set(futuro.blocos.filter(b => b.itens.some(i => i.falta)).map(b => b.numero)).size, 'bloco com item que depende de passo de fora não aparece como completo');
+eq(comFalta.every(i => i.falta!.length > 20), true, 'toda falta diz o que falta, em palavras');
 const sintetico: BlocoDaParidade[] = [{ numero: 1, titulo: 'X', resumo: 'x', itens: [{ rotulo: 'a', entrega: 'E2', href: '/x' }, { rotulo: 'b', entrega: 'E5' }, { rotulo: 'c', entrega: 'E7' }] }];
 const s1 = montarChecklist(sintetico, 'E4');
 eq([s1.blocos[0].situacao, s1.blocos[0].prontos, s1.blocos[0].faltam], ['parcial', 1, ['E5', 'E7']], 'bloco sintético: parcial, 1 pronto, falta E5 e E7');

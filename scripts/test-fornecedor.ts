@@ -16,7 +16,7 @@ import {
   normalizarAcordo, acordoVigente, conflitosDeVigencia, aplicarAcordosNaVenda, esperadoDoProduto, alterarTaxaCCDoProduto,
   taxasDoProduto, ladoDaTaxaCC, type AcordoComFornecedor,
 } from '../src/lib/fornecedor-acordos.ts';
-import { itemAFaturar, planejarCompensacao, previaDaFatura, refletirContaFaturada, saldoDoSinal, pagoDaFatura } from '../src/lib/fornecedor-fatura.ts';
+import { itemAFaturar, planejarCompensacao, previaDaFatura, refletirContaFaturada, saldoDoSinal, pagoDaFatura, receitasDoItem } from '../src/lib/fornecedor-fatura.ts';
 import { comissoesPorOperadora } from '../src/lib/fornecedor-comissao.ts';
 
 let falhas = 0;
@@ -55,8 +55,31 @@ eq(ultimoCortePassado('2026-11-05', r25x15), '2026-10-25', 'último corte que pa
 eq(ultimoCortePassado('2026-11-25', r25x15), '2026-11-25', 'hoje é dia de corte: ele mesmo');
 eq(dataBaseDoItem({ data_venda: '2026-10-01', data_inicio: '2026-12-20' }, { ...r25x15, data_base: 'inicio' }), '2026-12-20', 'data base: início da viagem');
 eq(dataBaseDoItem({ data_venda: '2026-10-01' }, { ...r25x15, data_base: 'fim' }), '2026-10-01', 'sem a data da viagem: a da venda');
-eq(normalizarRegra({ dia_corte: 99, ajuste_vencimento: 'x' }), { dia_corte: 25, dia_vencimento: 10, ajuste_vencimento: 'proximo', data_base: 'venda', gerar_sozinha: false, prazo_pagamento_dias: 30 }, 'regra inválida cai no padrão');
+eq(normalizarRegra({ dia_corte: 99, ajuste_vencimento: 'x' }), { periodicidade: 'MENSAL', inicio_semana: 1, prazo_dias: 7, dia_corte: 25, dia_vencimento: 10, ajuste_vencimento: 'proximo', data_base: 'venda', gerar_sozinha: false, prazo_pagamento_dias: 30 }, 'regra inválida cai no padrão (mensal)');
+eq(normalizarRegra({ dia_corte: 25, dia_vencimento: 15 }).periodicidade, 'MENSAL', 'cadastro antigo, sem periodicidade: continua mensal');
 eq(descreverRegra(r25x15), 'Corte dia 25; vence dia 15 do mês seguinte, adiado para o próximo dia útil.', 'regra por extenso');
+
+console.log('--- Regra do fornecedor: diária, semanal, decendial e quinzenal ---');
+const sem = normalizarRegra({ periodicidade: 'SEMANAL', inicio_semana: 1, prazo_dias: 7 });
+eq([corteDe('2026-11-05', sem), periodoDe('2026-11-05', sem).inicio], ['2026-11-08', '2026-11-02'], 'semanal (segunda a domingo): quinta 05/11 fecha no domingo 08/11');
+const vs = vencimentoDoCorte('2026-11-08', sem);
+eq([vs.pela_regra, vs.data, vs.motivo_ajuste], ['2026-11-15', '2026-11-16', 'Proclamação da República'], 'semanal: corte + 7 dias cai no feriado de domingo: segunda 16/11');
+eq(corteDe('2026-11-05', normalizarRegra({ periodicidade: 'SEMANAL', inicio_semana: 0 })), '2026-11-07', 'semana de domingo a sábado: fecha no sábado 07/11');
+eq([ultimoCortePassado('2026-11-05', sem), ultimoCortePassado('2026-11-08', sem)], ['2026-11-01', '2026-11-08'], 'semanal: último corte que passou');
+const dia1 = normalizarRegra({ periodicidade: 'DIARIO', prazo_dias: 1 });
+const vd = vencimentoDoCorte(corteDe('2026-11-19', dia1), dia1);
+eq([corteDe('2026-11-19', dia1), periodoDe('2026-11-19', dia1).inicio, vd.pela_regra, vd.data], ['2026-11-19', '2026-11-19', '2026-11-20', '2026-11-23'], 'diária: fecha no dia; vence 20/11 (Consciência Negra, sexta) e vai para segunda 23/11');
+const dec = normalizarRegra({ periodicidade: 'DECENDIAL', prazo_dias: 5 });
+eq([corteDe('2026-11-15', dec), periodoDe('2026-11-15', dec).inicio, vencimentoDoCorte('2026-11-20', dec).data], ['2026-11-20', '2026-11-11', '2026-11-25'], 'decendial: 11 a 20, vence 5 dias depois');
+eq([corteDe('2026-11-25', dec), periodoDe('2026-11-25', dec).inicio, corteDe('2026-02-25', dec)], ['2026-11-30', '2026-11-21', '2026-02-28'], 'decendial: o terceiro período vai até o fim do mês');
+const qui = normalizarRegra({ periodicidade: 'QUINZENAL', prazo_dias: 10 });
+eq(proximasFaturas('2026-11-05', qui, 3).map(p => [p.inicio, p.corte, p.vencimento.data]), [
+  ['2026-11-01', '2026-11-15', '2026-11-25'], ['2026-11-16', '2026-11-30', '2026-12-10'], ['2026-12-01', '2026-12-15', '2026-12-28'],
+], 'quinzenal: próximas três, a última vence no Natal e vai para segunda 28/12');
+eq(descreverRegra(sem), 'Uma fatura por semana, de segunda-feira a domingo; vence 7 dias depois do corte, adiado para o próximo dia útil.', 'semanal por extenso');
+eq(descreverRegra(normalizarRegra({ periodicidade: 'QUINZENAL', prazo_dias: 0, ajuste_vencimento: 'nenhum' })), 'Uma fatura a cada quinze dias (cortes no dia 15 e no último do mês); vence no dia do corte.', 'quinzenal por extenso');
+eq(normalizarRegra({ periodicidade: 'anual', inicio_semana: 9, prazo_dias: -3 }).periodicidade, 'MENSAL', 'periodicidade desconhecida: mensal');
+eq([normalizarRegra({ inicio_semana: 9 }).inicio_semana, normalizarRegra({ inicio_semana: 0 }).inicio_semana, normalizarRegra({ prazo_dias: 500 }).prazo_dias], [1, 0, 7], 'semana fora de 0–6 e prazo absurdo caem no padrão');
 
 console.log('--- Acordos com vigência ---');
 const acordo = (o: Record<string, unknown>): AcordoComFornecedor => {
@@ -142,6 +165,24 @@ eq(planejarCompensacao(itensS, [{ id: 's3', parte_id: 'f', venda_id: 'vb', data:
 eq(planejarCompensacao(itensS, [{ id: 's4', parte_id: 'f', venda_id: null, data: '2026-10-01', disponivel: 100000 }]), [{ sinal_id: 's4', valor_centavos: 70000 }], 'sinal maior que a fatura: compensa só o total');
 const pv = previaDaFatura({ parte_id: contaForn.fornecedor_id as string, parte_nome: 'Operadora Sol', itens: [item0], sinais: [{ id: 's1', parte_id: 'f', venda_id: null, data: '2026-10-01', disponivel: 30000 }], vencimento: v, corte: '2026-10-25' });
 eq([pv.total_itens, pv.total_sinal, pv.a_pagar, pv.alertas.map(a => a.codigo)], [100000, 30000, 70000, ['CLIENTE_NAO_PAGOU', 'CLIENTE_EM_ATRASO']], 'prévia: 1.000 − 300 de sinal = 700; avisa que o cliente não pagou');
+
+console.log('--- Fatura pelo valor bruto ---');
+const vb = ap.venda;
+const contasB = contasDaVenda({ versao: 2, venda: vb, hoje: '2026-11-03' });
+const contaB = { ...contasB.contas_pagar[0], id: 'cpb' } as unknown as Record<string, unknown>;
+const posB = posicaoDaVenda({ venda: vb, contas_receber: contasB.contas_receber as unknown as Array<Record<string, unknown>>, contas_pagar: [contaB], hoje: '2026-11-05' });
+const itemB = itemAFaturar({ conta: contaB, venda: vb, posicao: posB, situacao_venda: 'ABERTA', data_base: x => x.data_venda, editavel: true });
+eq([itemB.valor_a_gerar, itemB.comissao, itemB.over, receitasDoItem(itemB)], [83000, 12000, 5000, 17000], 'item: líquido 830 (1.000 − 120 de comissão − 50 de over); receitas 170');
+eq(receitasDoItem({ ...itemB, complemento: true }), 0, 'complemento não soma receitas de novo');
+eq(receitasDoItem({ ...itemB, papel: 'intermediario' }), 0, 'repasse ao intermediário não tem receitas');
+const pSaldo = previaDaFatura({ parte_id: 'f-sol', parte_nome: 'Operadora Sol', itens: [itemB], sinais: [], vencimento: v, corte: '2026-10-25' });
+eq([pSaldo.modo, pSaldo.receitas, pSaldo.receitas_no_bruto, pSaldo.a_pagar], ['SALDO', 0, 17000, 83000], 'saldo (padrão): paga o líquido; mostra quanto seria o bruto');
+const pBruto = previaDaFatura({ parte_id: 'f-sol', parte_nome: 'Operadora Sol', itens: [itemB], sinais: [{ id: 's1', parte_id: 'f', venda_id: null, data: '2026-10-01', disponivel: 3000 }], vencimento: v, corte: '2026-10-25', modo: 'BRUTO' });
+eq([pBruto.modo, pBruto.total_itens, pBruto.total_sinal, pBruto.receitas, pBruto.a_pagar], ['BRUTO', 83000, 3000, 17000, 97000], 'saldo + receitas: 830 − 30 de sinal + 170 = 970 a pagar');
+const fatB = { id: 'fb', numero: 'FF-0002', situacao: 'GERADA', vencimento: '2026-11-16', valor_itens_centavos: 100000, sinal_centavos: 0, receitas_centavos: 10000, conta_status: 'PARCIAL', conta_valor_centavos: 110000, conta_pago_centavos: 55000 };
+eq(pagoDaFatura(fatB), 50000, 'bruto pago pela metade: só a parte dos itens conta (550 × 1.000/1.100)');
+eq(pagoDaFatura({ ...fatB, conta_status: 'PAGO' }), 100000, 'bruto pago: itens pagos, sem passar do valor dos itens');
+eq(pagoDaFatura({ ...fatB, receitas_centavos: undefined, conta_valor_centavos: 100000, conta_pago_centavos: 50000 }), 50000, 'fatura de antes (sem receitas): a conta de sempre');
 
 console.log('--- A conta faturada na posição ---');
 const fat = { id: 'f1', numero: 'FF-0001', situacao: 'GERADA', vencimento: '2026-11-16', valor_itens_centavos: 100000, sinal_centavos: 30000, conta_status: 'PARCIAL', conta_valor_centavos: 70000, conta_pago_centavos: 20000 };

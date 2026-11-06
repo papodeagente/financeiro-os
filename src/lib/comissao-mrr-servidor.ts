@@ -87,7 +87,11 @@ export async function gravarMetaMrr(exec: ExecutorSQL, tenantId: string, e: Entr
   const { id, mes, ...data } = meta;
   await exec.query(
     `INSERT INTO metas_mrr (id, tenant_id, mes, data, created_at, updated_at)
-     VALUES ($1, $2, $3, $4::jsonb, NOW(), NOW())
+     -- A ordem das metas do mês é a de criação: a nova fica sempre depois da
+     -- última (relógio de milissegundo empata metas gravadas em seguida).
+     VALUES ($1, $2, $3, $4::jsonb,
+       GREATEST(clock_timestamp(), (SELECT MAX(created_at) + INTERVAL '1 millisecond' FROM metas_mrr WHERE tenant_id = $2 AND mes = $3)),
+       clock_timestamp())
      ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, mes = EXCLUDED.mes, updated_at = NOW()
      WHERE metas_mrr.tenant_id = EXCLUDED.tenant_id`,
     [id, tenantId, mes, JSON.stringify(data)],

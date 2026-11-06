@@ -8,7 +8,7 @@ import {
   Gauge, TrendingUp, Receipt, CreditCard, BookOpen, Landmark,
   ArrowRightLeft, Package, ShoppingCart, ListOrdered, UserPlus,
   Building2, Briefcase, DollarSign, Link2, FileSpreadsheet, Plus, Compass,
-  FolderInput, BookA, ListChecks,
+  FolderInput, BookA, ListChecks, MessageCircleQuestion, ScanText,
 } from 'lucide-react';
 import { buscarPorTermoDeMercado, normalizarBusca } from '@/lib/busca-de-mercado';
 import { buscarNoGlossario } from '@/lib/migracao/telas/glossario';
@@ -30,6 +30,8 @@ const NAVIGATION_ITEMS: CommandItem[] = [
   { id: 'propostas', label: 'Propostas', href: '/propostas', icon: <FileText className="w-4 h-4" />, section: 'navegacao' },
   { id: 'orcamentos', label: 'Orçamentos', href: '/vendas/orcamentos', icon: <BarChart3 className="w-4 h-4" />, section: 'navegacao' },
   { id: 'vendas', label: 'Vendas fechadas', href: '/vendas', icon: <ListOrdered className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'venda-voucher', label: 'Lançar venda pelo voucher (a IA lê e você revisa)', href: '/vendas/lancar/voucher', icon: <ScanText className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'perguntar', label: 'Perguntar ao financeiro (em texto)', href: '/financeiro-ag/perguntar', icon: <MessageCircleQuestion className="w-4 h-4" />, section: 'navegacao' },
   { id: 'voos', label: 'Buscar voos', href: '/voos', icon: <Plane className="w-4 h-4" />, section: 'navegacao' },
   { id: 'hoteis', label: 'Buscar hotéis', href: '/hoteis', icon: <Hotel className="w-4 h-4" />, section: 'navegacao' },
   { id: 'destinos', label: 'Destinos', href: '/destinos', icon: <Globe className="w-4 h-4" />, section: 'navegacao' },
@@ -83,20 +85,27 @@ const NAVIGATION_ITEMS: CommandItem[] = [
   { id: 'planos-comissao', label: 'Planos de comissão', href: '/equipe/planos-comissao', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
   { id: 'funcoes-comissao', label: 'Funções e metas (comissão por função)', href: '/equipe/funcoes', icon: <Briefcase className="w-4 h-4" />, section: 'navegacao' },
   { id: 'planos-por-funcao', label: 'Planos de comissão por função', href: '/equipe/planos-por-funcao', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'metas-por-funcao', label: 'Grade de metas (pessoas × meses)', href: '/equipe/metas-por-funcao', icon: <Medal className="w-4 h-4" />, section: 'navegacao' },
   { id: 'fechar-comissoes', label: 'Fechar comissões', href: '/equipe/fechar-comissoes', icon: <Percent className="w-4 h-4" />, section: 'navegacao' },
   { id: 'pagar-comissoes', label: 'Pagar comissões', href: '/equipe/pagar-comissoes', icon: <Wallet className="w-4 h-4" />, section: 'navegacao' },
   { id: 'minhas-comissoes', label: 'Minhas comissões (painel do vendedor)', href: '/equipe/minhas-comissoes', icon: <Medal className="w-4 h-4" />, section: 'navegacao' },
   { id: 'config-comissoes', label: 'Configurações de comissão', href: '/config/comissoes', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'relatorios-vendas', label: 'Relatórios de vendas (por produto, vendedor, forma de pagamento, ranking de clientes, tabela dinâmica)', href: '/relatorios/vendas', icon: <BarChart3 className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'relatorios-vendas', label: 'Relatórios de vendas (por produto, vendedor, unidade, fornecedor, forma de pagamento, pagamentos, ranking de clientes, tabela dinâmica)', href: '/relatorios/vendas', icon: <BarChart3 className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'relatorios-envios', label: 'Envios agendados de relatório (por e-mail, com link de leitura)', href: '/relatorios/envios', icon: <BarChart3 className="w-4 h-4" />, section: 'navegacao' },
   { id: 'custos', label: 'Custos do negócio', href: '/planejamento/custos', icon: <Wallet className="w-4 h-4" />, section: 'navegacao' },
   { id: 'relatorios', label: 'Relatórios financeiros', href: '/relatorios/financeiro', icon: <DollarSign className="w-4 h-4" />, section: 'navegacao' },
   { id: 'cac', label: 'Dashboard CAC', href: '/cac/dashboard', icon: <Gauge className="w-4 h-4" />, section: 'navegacao' },
   { id: 'rentabilidade', label: 'Rentabilidade', href: '/relatorios/rentabilidade', icon: <TrendingUp className="w-4 h-4" />, section: 'navegacao' },
   { id: 'config-agencia', label: 'Configurações', href: '/config/agencia', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'cheques', label: 'Cheques emitidos (imprimir cheque, compensar, devolver)', href: '/financeiro-ag/cheques', icon: <Receipt className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'cartao-corporativo-cliente', label: 'Conciliação do cartão corporativo do cliente (relatório de vendas)', href: '/relatorios/vendas?relatorio=cartao_corporativo', icon: <CreditCard className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'moedas-agencia', label: 'Moedas da agência (cadastrar moeda, câmbio)', href: '/financeiro-ag/moedas', icon: <DollarSign className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'config-empresas', label: 'Empresas da agência (lojas, CNPJs, multiempresa)', href: '/config/empresas', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
   // Mudança de sistema (E4, 05/11/2026).
   { id: 'mudanca', label: 'Mudar para o EnturOS (trazer dados do sistema anterior)', href: '/mudanca', icon: <FolderInput className="w-4 h-4" />, section: 'navegacao' },
   { id: 'mudanca-glossario', label: 'Glossário: como chamava lá, como chama aqui', href: '/mudanca/glossario', icon: <BookA className="w-4 h-4" />, section: 'navegacao' },
   { id: 'mudanca-paridade', label: 'Checklist de paridade', href: '/mudanca/paridade', icon: <ListChecks className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'mudanca-registros', label: 'Registros trazidos do sistema anterior (faturas, notas, comissões pagas)', href: '/mudanca/historico', icon: <FolderInput className="w-4 h-4" />, section: 'navegacao' },
 ];
 
 const CREATE_ITEMS: CommandItem[] = [
@@ -172,7 +181,15 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       }))
       .filter(i => !vistos.has(`${i.href}|${normalizarBusca(i.label)}`))
       .slice(0, 4);
-    return [...porNome, ...mercado, ...glossario];
+    // Pergunta em texto: o que foi digitado vira pergunta ao financeiro.
+    const pergunta: CommandItem[] = query.trim().length >= 8 ? [{
+      id: 'perguntar-texto',
+      label: `Perguntar: "${query.trim()}"`,
+      href: `/financeiro-ag/perguntar?q=${encodeURIComponent(query.trim())}`,
+      icon: <MessageCircleQuestion className="w-4 h-4" />,
+      section: 'navegacao' as const,
+    }] : [];
+    return [...porNome, ...mercado, ...glossario, ...pergunta];
   }, [query, recents]);
 
   const handleSelect = (item: CommandItem) => {

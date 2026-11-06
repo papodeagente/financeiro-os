@@ -150,6 +150,14 @@ export async function apagarCategorias(
       summary.baixas = r.rowCount || 0;
       total += summary.baixas;
     }
+    // Cheques emitidos (E7, frente C): sem as contas, o talão zera junto.
+    const { rows: chq } = await exec.query(`SELECT to_regclass('public.cheques_emitidos') IS NOT NULL AS ok`);
+    if (chq[0]?.ok) {
+      await exec.query(`DELETE FROM cheque_baixas WHERE tenant_id = $1`, [tenantId]);
+      const r = await exec.query(`DELETE FROM cheques_emitidos WHERE tenant_id = $1`, [tenantId]);
+      summary.cheques_emitidos = r.rowCount || 0;
+      total += summary.cheques_emitidos;
+    }
   }
   for (const cat of categorias) {
     for (const table of CATEGORIES[cat]) {

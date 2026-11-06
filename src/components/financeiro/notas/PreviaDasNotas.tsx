@@ -13,6 +13,8 @@ import { reais, type PreviaDeNotas } from './api';
 
 type NotaDaPrevia = PreviaDeNotas['notas'][number];
 
+const dataBR = (iso: string) => (iso ? iso.slice(0, 10).split('-').reverse().join('/') : 'a data da emissão');
+
 /**
  * A prévia das notas que vão sair: para quem, quanto, por que este valor (a
  * fórmula da regra com números), o que o cliente retém e se o e-mail vai.
@@ -116,6 +118,19 @@ function ItemDaPrevia({ n }: { n: NotaDaPrevia }) {
             </dd>
           </>
         ) : null}
+        {n.dispensas.length ? (
+          <>
+            <dt className="fin-t-caption text-[var(--fin-text-3)]">Não retido</dt>
+            <dd className="fin-t-body text-[var(--fin-text-2)]">{n.dispensas.join(' ')}</dd>
+          </>
+        ) : null}
+        <dt className="fin-t-caption text-[var(--fin-text-3)]">Data da nota</dt>
+        <dd className="fin-t-body tabular-nums text-[var(--fin-text-2)]">
+          {dataBR(n.data_nota)}
+          {n.aviso_data ? <span className="block fin-t-caption text-[var(--fin-warning-text)]">{n.aviso_data}</span> : null}
+        </dd>
+        <dt className="fin-t-caption text-[var(--fin-text-3)]">Texto da nota</dt>
+        <dd className="fin-t-body text-[var(--fin-text-2)]">{n.discriminacao}</dd>
         <dt className="fin-t-caption text-[var(--fin-text-3)]">ISS</dt>
         <dd className="fin-t-body tabular-nums text-[var(--fin-text-2)]">
           {formatarReais(n.valor_iss)} ({n.aliquota_iss.toLocaleString('pt-BR')}%){n.iss_e_estimativa ? ', estimativa: quem calcula é a prefeitura' : ''}

@@ -3,7 +3,7 @@ import pool, { initDB } from '@/lib/db';
 import { semAcessoAoSistema } from '@/lib/permissoes';
 import { verifyPassword, createSession, COOKIE_NAME, SESSAO_SEGUNDOS, type SessionPayload } from '@/lib/auth';
 import { registrarEventoAuditoria } from '@/lib/audit';
-import { etapaSegundoFator, exigeSegundoFator, type Consulta as ConsultaSegundoFator } from '@/lib/segundo-fator';
+import { etapaSegundoFator, loginPedeSegundoFator, type Consulta as ConsultaSegundoFator } from '@/lib/segundo-fator';
 import { bloqueioDeLogin, ipDoLogin, registrarFalhaDeLogin, registrarSucessoDeLogin } from '@/lib/limite-login';
 
 export async function POST(req: Request) {
@@ -117,7 +117,11 @@ export async function POST(req: Request) {
     }
 
     // Administrador entra com senha e código do app autenticador (FIN-12).
-    if (exigeSegundoFator(user.perfil)) {
+    // Quem não é administrador e já cadastrou o aplicativo (para pagar, E7)
+    // também: o código cadastrado passa a valer no login. Quem não cadastrou
+    // entra só com a senha e é levado a cadastrar na hora de pagar.
+    const comSegundoFator = loginPedeSegundoFator(user);
+    if (comSegundoFator) {
       const etapa = await etapaSegundoFator(pool as unknown as ConsultaSegundoFator, 'usuarios', user, corpoLogin ?? {});
       if (!etapa.ok) {
         if (etapa.contaComoFalha) {
@@ -137,6 +141,7 @@ export async function POST(req: Request) {
       permissoes: user.permissoes || {},
       tenantId: row.tenant_id || '',
       tenantSlug: row.tenant_slug || '',
+      ...(comSegundoFator ? { sf: true } : {}),
     };
     registrarSucessoDeLogin('agencia', emailNormalizado, ipLogin);
     const token = await createSession(session);

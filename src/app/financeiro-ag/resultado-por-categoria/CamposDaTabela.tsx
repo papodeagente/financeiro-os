@@ -133,13 +133,17 @@ function AreaDeCampos({
  * Os campos da tabela dinâmica (05/11/2026): arrastar entre Linhas, Colunas e
  * Disponíveis, ou usar os botões de cada campo (teclado e toque).
  */
-export function CamposDaTabela({ disposicao, onChange }: { disposicao: Disposicao; onChange: (d: Disposicao) => void }) {
+export function CamposDaTabela({ disposicao, onChange, campos = CAMPOS_DO_DEMONSTRATIVO }: {
+  disposicao: Disposicao; onChange: (d: Disposicao) => void;
+  /** Os campos oferecidos (com 2+ empresas entra Empresa, E7). */
+  campos?: readonly CampoDemonstrativo[];
+}) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor),
   );
   const usados = new Set([...disposicao.linhas, ...disposicao.colunas]);
-  const disponiveis = CAMPOS_DO_DEMONSTRATIVO.filter(c => !usados.has(c));
+  const disponiveis = campos.filter(c => !usados.has(c));
 
   function mover(campo: CampoDemonstrativo, destino: Zona, posicao?: number) {
     onChange(moverCampo(disposicao, campo, destino, posicao));

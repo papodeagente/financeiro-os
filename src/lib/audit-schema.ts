@@ -21,7 +21,7 @@ export const AUDIT_SCHEMA_SQL = String.raw`
   CREATE OR REPLACE FUNCTION audit_sensitive_key(key_name TEXT)
   RETURNS BOOLEAN LANGUAGE sql IMMUTABLE AS $fn$
     SELECT regexp_replace(lower(key_name), '[^a-z0-9]', '', 'g') ~
-      '(senha|password|passwd|secret|token|apikey|apisecret|chaveapi|chaveprivada|privatekey|credential|credencial|authorization|cookie|certificado|certificate|pfx|base64|hash|salt|cvv|cvc|numerocartao|cardnumber|payload|rawbody|requestbody|responsebody|xml|connectionstring|databaseurl)'
+      '(senha|totp|password|passwd|secret|token|apikey|apisecret|chaveapi|chaveprivada|privatekey|credential|credencial|authorization|cookie|certificado|certificate|pfx|base64|hash|salt|cvv|cvc|numerocartao|cardnumber|payload|rawbody|requestbody|responsebody|xml|connectionstring|databaseurl)'
       OR lower(key_name) IN ('headers', 'body', 'raw', 'chave', 'key', 'segredo');
   $fn$;
 
@@ -246,8 +246,9 @@ export const AUDIT_SCHEMA_SQL = String.raw`
           'razao_estado','razao_lancamentos','razao_partidas','razao_falhas','razao_conferencias',
           'retrato_saldos','agendador_execucoes','agendador_estado','tarefas','leituras_de_documento',
           'cobranca_eventos','cobranca_lembretes','cobranca_disjuntor','cobranca_portal_links',
-          'migracao_lotes','migracao_arquivos','migracao_linhas','migracao_vinculos',
-          'variacoes_cambiais','venda_eventos','comissao_lancamentos','comissao_fechamentos','creditos_cliente_movimentos','fatura_eventos','conciliacoes_automaticas','conferencias_operadora_linhas','conexoes_bancarias_segredo','sincronizacoes_bancarias')
+          'migracao_lotes','migracao_arquivos','migracao_linhas','migracao_vinculos','migracao_historico',
+          'variacoes_cambiais','venda_eventos','comissao_lancamentos','comissao_fechamentos','creditos_cliente_movimentos','fatura_eventos','conciliacoes_automaticas','conferencias_operadora_linhas','conexoes_bancarias_segredo','sincronizacoes_bancarias','relatorios_leituras','relatorios_envios','empresa_selecao',
+          'contas_excluidas','titulos_numeros','titulos_numeracao','preferencias_usuario','perguntas_ia')
       UNION SELECT t.table_name FROM information_schema.tables t
       WHERE t.table_schema = 'public' AND t.table_name IN ('tenants','super_admins','planos','saas_config','convites')
       ORDER BY 1

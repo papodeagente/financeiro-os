@@ -17,6 +17,9 @@ export default function PortalDoClientePage({ params }: { params: Promise<{ toke
   const { token } = use(params);
   const [estado, setEstado] = React.useState<Estado>({ tipo: 'carregando' });
 
+  const [versao, setVersao] = React.useState(0);
+  const recarregar = React.useCallback(() => setVersao(v => v + 1), []);
+
   React.useEffect(() => {
     const ac = new AbortController();
     fetch(`/api/portal/${encodeURIComponent(token)}`, { signal: ac.signal, cache: 'no-store' })
@@ -29,7 +32,7 @@ export default function PortalDoClientePage({ params }: { params: Promise<{ toke
       })
       .catch(() => { if (!ac.signal.aborted) setEstado({ tipo: 'erro', titulo: 'Sem conexão', texto: 'Confira a internet e abra o link de novo.' }); });
     return () => ac.abort();
-  }, [token]);
+  }, [token, versao]);
 
   if (estado.tipo === 'carregando') {
     return (
@@ -51,5 +54,5 @@ export default function PortalDoClientePage({ params }: { params: Promise<{ toke
     );
   }
 
-  return <VisaoDoPortal portal={estado.portal} token={token} />;
+  return <VisaoDoPortal portal={estado.portal} token={token} recarregar={recarregar} />;
 }

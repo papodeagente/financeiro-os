@@ -10,6 +10,7 @@ import { normalizarPolitica, type PoliticaCobranca } from '../baixa-calculo';
 import { num } from '../money';
 import type { ExecutorSQL } from '../caixa-atomico';
 import { ehProvedorCobranca, type EncargosDaCobranca, type ProvedorCobranca, type TipoEmissao } from './tipos';
+import { empresaComConfigPropria, lerChavesDaEmpresa } from '../empresas-config';
 
 export type CanalCobranca = 'email' | 'whatsapp';
 
@@ -42,6 +43,14 @@ export interface ConfigCobranca {
   /** Validade do link de pagamento, em dias. */
   dias_link: number;
   regua: ReguaDeCobranca;
+  /**
+   * Taxa de boleto repassada ao cliente (E7, 06/11/2026), em centavos. 0 =
+   * não repassa. Só vale para o cliente marcado "Repassar a taxa do boleto" e
+   * só em boleto (com ou sem Pix): o valor entra no boleto e, quando o
+   * cliente paga, vira uma conta a receber própria na categoria de taxa de
+   * cobrança (a conta da venda fecha pelo valor dela).
+   */
+  taxa_boleto_centavos: number;
 }
 
 export const DIAS_DA_REGUA_PADRAO = [-5, 0, 1, 3, 7];
@@ -60,6 +69,7 @@ export const CONFIG_COBRANCA_PADRAO: ConfigCobranca = {
   descricao_modelo: '',
   dias_link: 7,
   regua: { ligada: false, dias: DIAS_DA_REGUA_PADRAO, canais: ['email'] },
+  taxa_boleto_centavos: 0,
 };
 
 const limitar = (v: unknown, min: number, max: number) => Math.min(max, Math.max(min, num(v)));
@@ -95,6 +105,8 @@ export function normalizarConfigCobranca(v: unknown): ConfigCobranca {
     descricao_modelo: typeof c.descricao_modelo === 'string' ? c.descricao_modelo.trim().slice(0, 200) : '',
     dias_link: Math.round(limitar(c.dias_link ?? 7, 1, 90)),
     regua: normalizarRegua(c.regua),
+    // Até R$ 100,00 por boleto: acima disso é engano de digitação.
+    taxa_boleto_centavos: Math.round(limitar(c.taxa_boleto_centavos, 0, 10_000)),
   };
 }
 
@@ -115,8 +127,19 @@ export function encargosDaCobranca(config: ConfigCobranca, politica: PoliticaCob
 
 /** Configuração e política da agência, numa leitura. */
 export async function lerConfigCobranca(
-  exec: ExecutorSQL, tenantId: string,
+  exec: ExecutorSQL, tenantId: string, empresaId?: string | null,
 ): Promise<{ config: ConfigCobranca; politica: PoliticaCobranca | null; nome_agencia: string }> {
+  // Empresa com configuração própria (E7): a cobrança e a política dela; no
+  // resto, as da agência. Uma empresa só: exatamente a leitura de sempre.
+  if (empresaComConfigPropria(empresaId)) {
+    const c = await lerChavesDaEmpresa(exec, tenantId, empresaId, ['cobranca', 'politica_cobranca', 'nome_fantasia', 'nome', 'razao_social']);
+    const { rows: emp } = await exec.query(`SELECT nome FROM empresas WHERE tenant_id = $1 AND id = $2`, [tenantId, empresaId]);
+    return {
+      config: normalizarConfigCobranca(c.cobranca ?? null),
+      politica: (c.politica_cobranca as PoliticaCobranca | null) ?? null,
+      nome_agencia: String(emp[0]?.nome ?? c.nome_fantasia ?? c.nome ?? c.razao_social ?? ''),
+    };
+  }
   const { rows } = await exec.query(
     `SELECT data->'cobranca' AS c, data->'politica_cobranca' AS p,
             COALESCE(data->>'nome_fantasia', data->>'nome', data->>'razao_social', '') AS nome

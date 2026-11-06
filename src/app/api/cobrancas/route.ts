@@ -5,6 +5,7 @@ import { getTenantId } from '@/lib/tenant';
 import { recusaAcao, recusaFinanceira } from '@/lib/guarda-rota';
 import { contasPermitidas } from '@/lib/permissoes-servidor';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
+import { escopoDaSessao, type ExecutorEmpresas } from '@/lib/empresas-servidor';
 import {
   gravarEmissao, hojeEmBrasilia, listarCobrancas, previaDaEmissao, type PedidoDeEmissao,
 } from '@/lib/cobranca/servidor';
@@ -14,8 +15,9 @@ import {
 
 // Cobranças (E3, 05/11/2026). Dinheiro em reais nas respostas; erro = { error, codigo? }.
 //   GET  ?status=<um status | em_aberto | lista com vírgula>&de=&ate= (vencimento)&provedor=&tipo=&busca=&conta_id=
-//        &cliente_id=&pagina=&por_pagina=
-//        → { cobrancas: Cobranca[], totais: { aberto, vencido, pago, falhou }, por_status, total, pagina, por_pagina }
+//        &cliente_id=&pendencia=1 (só as pagas cuja baixa não entrou sozinha)&pagina=&por_pagina=
+//        → { cobrancas: Cobranca[], totais: { aberto, vencido, pago, falhou }, por_status, pendencias: { quantidade, valor },
+//            total, pagina, por_pagina }
 //        (com conta_id: a mais recente primeiro)
 //   POST { modo: 'previa' | 'gravar', contas: string[] (ou itens: [{ conta_id, vencimento? }]), provedor?, tipo?,
 //          vencimento_vencidas?, descricao?, assinatura? }   cabeçalho Idempotency-Key ao gravar
@@ -43,7 +45,10 @@ export async function GET(req: Request) {
       vencimento_de: u.get('de') || u.get('vencimento_de') || undefined,
       vencimento_ate: u.get('ate') || u.get('vencimento_ate') || undefined,
       cliente_id: u.get('cliente_id') || undefined, titulo_id: u.get('conta_id') || undefined, busca: u.get('busca') || undefined,
+      pendencia: u.get('pendencia') === '1',
       pagina: Number(u.get('pagina')) || 1, por_pagina: Number(u.get('por_pagina')) || 50,
+      // Empresas marcadas e liberadas (E7). Uma empresa só: todas.
+      empresas: (await escopoDaSessao(await getSession(), pool as unknown as ExecutorEmpresas)).visiveis,
     }, await contasPermitidas(await getSession()));
     const { itens, ...resto } = r;
     return NextResponse.json({ ...resto, cobrancas: itens.map(cobrancaParaTela) });

@@ -6,7 +6,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
-import { recusaFinanceira } from '@/lib/guarda-rota';
+import { conferirSegundoFatorDoPagador, recusaFinanceira } from '@/lib/guarda-rota';
 import '@/lib/aprovacoes-executores';
 import {
   decidirPedido, expirarVencidos, listarPedidos, marcarQuemPodeDecidir, pedirAprovacaoDoPagamento,
@@ -44,11 +44,15 @@ export async function POST(req: Request) {
     const sessao = (await getSession())!;
     const corpo = await corpoJson(req);
     if (corpo.acao === 'decidir') {
+      // Aprovar libera dinheiro saindo: quem aprova sem ser administrador
+      // precisa da verificação em duas etapas (E7). Recusar não pede.
+      const segundoFator = corpo.decisao === 'aprovar' ? await conferirSegundoFatorDoPagador() : { recusa: null, aviso: null };
+      if (segundoFator.recusa) return segundoFator.recusa;
       const pedido = await decidirPedido({
         id: String(corpo.id ?? ''), decisao: corpo.decisao === 'recusar' ? 'recusar' : corpo.decisao === 'aprovar' ? 'aprovar' : ('' as 'aprovar'),
         motivo: typeof corpo.motivo === 'string' ? corpo.motivo : '', sessao,
       });
-      return NextResponse.json({ pedido });
+      return NextResponse.json(segundoFator.aviso ? { pedido, aviso_segundo_fator: segundoFator.aviso } : { pedido });
     }
     if (corpo.acao === 'pedir_pagamento') {
       const r = await pedirAprovacaoDoPagamento({

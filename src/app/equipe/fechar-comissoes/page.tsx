@@ -11,6 +11,8 @@ import { FinTable, type FinColuna } from '@/components/fin/FinTable';
 import { ConfirmDialog } from '@/components/fin/ConfirmDialog';
 import { RecordSheet } from '@/components/fin/RecordSheet';
 import { Callout } from '@/components/fin/Callout';
+import { BotaoExportar } from '@/components/fin/BotaoExportar';
+import { documentoDoFechamento } from '@/lib/exportacao/listas-financeiro';
 import { reais } from '@/components/comissoes/PainelDoVendedor';
 import type { Funcao, ItemAFechar, LinhaDoFechamento } from '@/lib/comissao-funcoes';
 import { frasesDaExplicacao } from '@/lib/comissao-funcoes';
@@ -117,7 +119,7 @@ export default function FecharComissoesPage() {
         subtitulo="O que está liberado até a data, por pessoa. Quem tem pendência fica de fora; os outros fecham."
         atualizadoEm={atualizadoEm}
         onRecarregar={carregar}
-        acoesSecundarias={[{ rotulo: 'Pagar comissões', href: '/equipe/pagar-comissoes' }, { rotulo: 'Funções e metas', href: '/equipe/funcoes' }]}
+        acoesSecundarias={[{ rotulo: 'Pagar comissões', href: '/equipe/pagar-comissoes' }, { rotulo: 'Funções', href: '/equipe/funcoes' }, { rotulo: 'Grade de metas', href: '/equipe/metas-por-funcao' }]}
       />
 
       <div className="flex flex-wrap items-end gap-[var(--fin-s-3)]">
@@ -132,6 +134,12 @@ export default function FecharComissoesPage() {
             {funcoes.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
           </select>
         </label>
+        <BotaoExportar
+          className="ml-auto"
+          origem="fechar_comissoes"
+          desabilitado={!linhas.length}
+          documento={() => documentoDoFechamento(linhas, { ate, funcao: funcoes.find(f => f.id === funcaoId)?.nome })}
+        />
       </div>
 
       <div className={RITMO_DA_PAGINA}>
@@ -141,6 +149,14 @@ export default function FecharComissoesPage() {
           </Callout>
         ) : null}
         {previa?.so_as_suas ? <Callout tom="info">Mostrando só as suas comissões.</Callout> : null}
+        {previa && previa.funcoes_de_outros?.length ? (
+          <Callout tom="info">
+            {previa.funcoes_de_outros.length === 1 ? 'A função' : 'As funções'} {previa.funcoes_de_outros.join(', ')} {previa.funcoes_de_outros.length === 1 ? 'é fechada' : 'são fechadas'} por outras pessoas e não {previa.funcoes_de_outros.length === 1 ? 'aparece' : 'aparecem'} aqui. Quem fecha cada função se escolhe em <Link className="underline underline-offset-4" href="/equipe/funcoes">Funções</Link>.
+          </Callout>
+        ) : null}
+        {previa && previa.dia_fechamento_meta > 0 ? (
+          <p className="fin-t-caption text-[var(--fin-text-3)]">As metas fecham no dia {previa.dia_fechamento_meta}: a venda depois desse dia conta para a meta do mês seguinte.</p>
+        ) : null}
         {previa && previa.vendas_abertas > 0 ? (
           <Callout tom="aviso">{previa.vendas_abertas} {previa.vendas_abertas === 1 ? 'venda ainda aberta não entra' : 'vendas ainda abertas não entram'} até esta data: só vendas fechadas geram comissão.</Callout>
         ) : null}

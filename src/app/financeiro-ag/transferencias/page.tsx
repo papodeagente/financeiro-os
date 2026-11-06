@@ -5,9 +5,11 @@ import { ArrowLeftRight, ArrowRight, Clock, Plus, Trash2, Undo2 } from 'lucide-r
 
 import { TransferenciaBancaria, createTransferencia, StatusTransferencia } from '@/lib/crm-types';
 import { loadEntities, saveEntity } from '@/lib/crm-storage';
+import { levarParaSegundoFator, lembrarSegundoFator } from '@/components/fin/segundoFatorNaTela';
 import { somaPor, round2, hojeISO } from '@/lib/money';
 import { toast } from '@/lib/toast';
 import { consumirAtalho, lerAtalhos } from '@/lib/atalho-da-url';
+import { contasParaEscolher } from '@/lib/contas-bancarias-regras';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,6 +32,7 @@ import { PageHeader } from '@/components/fin/PageHeader';
 import { RecordSheet } from '@/components/fin/RecordSheet';
 import { rotuloStatus } from '@/components/fin/StatusChip';
 import type { EmptyLessonProps } from '@/components/fin/EmptyLesson';
+import { useMoedas } from '@/components/fin/useMoedas';
 import { formatarNaMoeda, moedaDe, pernasDaTransferencia, planoDaTransferencia, type CarimboDoCambio } from '@/lib/cambio';
 import {
   CambioDaTransferencia, SaldoNaMoeda, valorEmReais, type ContaComMoeda, type TransferenciaComMoeda,
@@ -38,6 +41,11 @@ import {
 // Efetivar/cancelar/excluir transferência mexe no saldo das contas e por isso
 // vive INTEIRO no servidor (/api/transferencias/[id]): ele relê o saldo do
 // banco e aplica o delta. O cliente nunca calcula nem envia saldo_atual.
+//
+// Transferir pede a verificação em duas etapas a quem não é administrador
+// (E7): sem ela, o aviso leva a Meu perfil e a tela não repete o erro.
+class AvisoJaMostrado extends Error {}
+
 async function salvarTransferencia(item: TransferenciaBancaria): Promise<TransferenciaBancaria> {
   const res = await fetch(`/api/transferencias/${item.id}`, {
     method: 'PUT',
@@ -45,13 +53,16 @@ async function salvarTransferencia(item: TransferenciaBancaria): Promise<Transfe
     body: JSON.stringify(item),
   });
   const body = await res.json().catch(() => null);
+  if (levarParaSegundoFator(res.status, body ?? {})) throw new AvisoJaMostrado(body?.error ?? '');
   if (!res.ok) throw new Error(body?.error || 'Não foi possível salvar a transferência.');
+  lembrarSegundoFator(body);
   return body as TransferenciaBancaria;
 }
 
 async function excluirTransferencia(id: string): Promise<void> {
   const res = await fetch(`/api/transferencias/${id}`, { method: 'DELETE' });
   const body = await res.json().catch(() => null);
+  if (levarParaSegundoFator(res.status, body ?? {})) throw new AvisoJaMostrado(body?.error ?? '');
   if (!res.ok) throw new Error(body?.error || 'Não foi possível excluir a transferência.');
 }
 
@@ -139,6 +150,9 @@ function PreviaDeSaldos({
 }
 
 export default function TransferenciasPage() {
+  // Catálogo da agência (E7): ao chegar, moedas cadastradas por ela passam a
+  // ser lidas e formatadas como as do sistema em toda a tela.
+  useMoedas();
   const [items, setItems] = useState<TransferenciaComMoeda[]>([]);
   const [contas, setContas] = useState<ContaComMoeda[]>([]);
   const [loading, setLoading] = useState(true);
@@ -151,6 +165,8 @@ export default function TransferenciasPage() {
   const [valor, setValor] = useState(0);
   const [data, setData] = useState(hojeISO());
   const [descricao, setDescricao] = useState('');
+  // Nº do cheque, quando a transferência é feita com cheque (06/11/2026).
+  const [chequeNumero, setChequeNumero] = useState('');
   // Entre moedas (05/11/2026, E6): câmbio com a origem dele, e a tarifa do banco.
   const [cambio, setCambio] = useState(0);
   const [cambioCarimbo, setCambioCarimbo] = useState<CarimboDoCambio | null>(null);
@@ -202,6 +218,7 @@ export default function TransferenciasPage() {
     setValor(0);
     setData(hojeISO());
     setDescricao('');
+    setChequeNumero('');
     setCambio(0);
     setCambioCarimbo(null);
     setTarifa(0);
@@ -244,6 +261,7 @@ export default function TransferenciasPage() {
       valor: round2(valor),
       data,
       descricao,
+      ...(chequeNumero.trim() ? { cheque_numero: chequeNumero.replace(/\D/g, '').slice(0, 20) } : {}),
       moeda_origem: moedaOrigem,
       moeda_destino: moedaDestino,
       tarifa: round2(tarifa),
@@ -268,7 +286,7 @@ export default function TransferenciasPage() {
       await salvarTransferencia({ ...item, status: 'EFETIVADA' });
       toast.success('Transferência efetivada');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao efetivar transferência');
+      if (!(e instanceof AvisoJaMostrado)) toast.error(e instanceof Error ? e.message : 'Erro ao efetivar transferência');
     } finally {
       setSalvando(false);
       setConfirmacao(null);
@@ -285,7 +303,7 @@ export default function TransferenciasPage() {
       await salvarTransferencia({ ...item, status: 'CANCELADA' });
       toast.success(efetivada ? 'Transferência estornada' : 'Transferência cancelada');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao cancelar transferência');
+      if (!(e instanceof AvisoJaMostrado)) toast.error(e instanceof Error ? e.message : 'Erro ao cancelar transferência');
     } finally {
       setSalvando(false);
       setConfirmacao(null);
@@ -301,7 +319,7 @@ export default function TransferenciasPage() {
       await excluirTransferencia(item.id);
       toast.success(efetivada ? 'Transferência excluída e saldos estornados' : 'Transferência excluída');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao excluir transferência');
+      if (!(e instanceof AvisoJaMostrado)) toast.error(e instanceof Error ? e.message : 'Erro ao excluir transferência');
     } finally {
       setSalvando(false);
       setConfirmacao(null);
@@ -388,6 +406,9 @@ export default function TransferenciasPage() {
             <ArrowRight aria-hidden="true" className="size-3 shrink-0 text-[var(--fin-text-3)]" />
             <span className="min-w-0 truncate">{nomeDaConta(item.conta_destino_nome)}</span>
           </span>
+          {(item as TransferenciaComMoeda & { cheque_numero?: string }).cheque_numero ? (
+            <span className="fin-t-caption tabular-nums text-[var(--fin-text-3)]">Cheque nº {(item as TransferenciaComMoeda & { cheque_numero?: string }).cheque_numero}</span>
+          ) : null}
           {item.descricao ? (
             <span className="fin-t-caption truncate text-[var(--fin-text-3)]">{item.descricao}</span>
           ) : null}
@@ -729,7 +750,7 @@ export default function TransferenciasPage() {
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {contas.map(c => (
+                  {contasParaEscolher(contas, contaOrigemId).map(c => (
                     <SelectItem key={c.id} value={c.id} className="fin-t-body">
                       <span className="flex w-full items-baseline justify-between gap-[var(--fin-s-3)]">
                         <span className="min-w-0 truncate">{c.nome}</span>
@@ -774,7 +795,7 @@ export default function TransferenciasPage() {
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {contas.filter(c => c.id !== contaOrigemId).map(c => (
+                  {contasParaEscolher(contas, contaDestinoId).filter(c => c.id !== contaOrigemId).map(c => (
                     <SelectItem key={c.id} value={c.id} className="fin-t-body">
                       <span className="flex w-full items-baseline justify-between gap-[var(--fin-s-3)]">
                         <span className="min-w-0 truncate">{c.nome}</span>
@@ -827,6 +848,23 @@ export default function TransferenciasPage() {
                   setData(e.target.value);
                   setSujo(true);
                 }}
+                className={`${CONTROLE_FORMULARIO} tabular-nums`}
+              />
+            )}
+          </Field>
+
+          <Field rotulo="Nº do cheque" ajuda="Só se a transferência foi feita com cheque. Aparece no extrato.">
+            {a => (
+              <Input
+                {...a}
+                value={chequeNumero}
+                inputMode="numeric"
+                maxLength={20}
+                onChange={e => {
+                  setChequeNumero(e.target.value.replace(/\D/g, ''));
+                  setSujo(true);
+                }}
+                placeholder="000123"
                 className={`${CONTROLE_FORMULARIO} tabular-nums`}
               />
             )}

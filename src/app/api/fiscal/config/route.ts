@@ -11,6 +11,7 @@ import {
   salvarConfigFiscal,
 } from '@/lib/nfse-servico';
 import type { ConfigFiscal } from '@/lib/nfse-tipos';
+import { empresaDoPedido } from '@/lib/empresas-rota';
 
 /**
  * Configuração fiscal da agência.
@@ -20,15 +21,18 @@ import type { ConfigFiscal } from '@/lib/nfse-tipos';
  * Sem isso, abrir a tela de configuração entregaria a chave de emissão de
  * notas para qualquer um com acesso à sessão.
  */
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    // Configuração fiscal por empresa (E7): ?empresa=<id>; sem ele, a de sempre.
+    const { empresa: empresaFiscal, recusa: recusaEmpresa } = await empresaDoPedido(req);
+    if (recusaEmpresa) return recusaEmpresa;
     await initDB();
     const bloqueio = bloqueioFinanceiro(await getSession(), 'ler');
     if (bloqueio) return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
     const tenantId = await getTenantId();
     const [config, emitente] = await Promise.all([
-      carregarConfigFiscal(tenantId),
-      carregarEmitente(tenantId),
+      carregarConfigFiscal(tenantId, empresaFiscal),
+      carregarEmitente(tenantId, empresaFiscal),
     ]);
     return NextResponse.json({ config: configParaCliente(config), emitente });
   } catch (e) {
@@ -39,13 +43,16 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    // Configuração fiscal por empresa (E7): ?empresa=<id>; sem ele, a de sempre.
+    const { empresa: empresaFiscal, recusa: recusaEmpresa } = await empresaDoPedido(req);
+    if (recusaEmpresa) return recusaEmpresa;
     await initDB();
     const bloqueio = bloqueioFinanceiro(await getSession(), 'escrever');
     if (bloqueio) return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
     const tenantId = await getTenantId();
     const recebido = (await req.json()) as Partial<ConfigFiscal>;
 
-    const atual = await carregarConfigFiscal(tenantId);
+    const atual = await carregarConfigFiscal(tenantId, empresaFiscal);
     // O certificado só muda pela rota de upload, e o token só quando vem
     // preenchido. Salvar a tela de configuração não pode apagar nenhum dos
     // dois — a tela nunca recebeu os valores para devolver.
@@ -69,7 +76,7 @@ export async function POST(req: Request) {
       certificado: atual.certificado,
       empresa_id: atual.empresa_id,
     };
-    await salvarConfigFiscal(tenantId, novo);
+    await salvarConfigFiscal(tenantId, novo, empresaFiscal);
     return NextResponse.json({ config: configParaCliente(novo) });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Erro';

@@ -20,7 +20,8 @@ import { criarClienteHttp, type AmbienteDeCobranca, type ClienteHttp } from './h
 import {
   ErroProvedor,
   type AdapterCobranca, type CapacidadesCobranca, type CarneNoProvedor, type ClienteDaCobranca, type CobrancaNoProvedor,
-  type DadosDePagamento, type EncargosDaCobranca, type PedidoDeCobranca, type StatusCobranca,
+  type DadosDePagamento, type EncargosDaCobranca, type NegativacaoNoProvedor, type PedidoDeCobranca, type StatusCobranca,
+  type StatusNegativacao,
 } from './tipos';
 
 export const CAPACIDADES_ASAAS: CapacidadesCobranca = {
@@ -40,7 +41,24 @@ export const CAPACIDADES_ASAAS: CapacidadesCobranca = {
     'O boleto já sai com o QR do Pix quando a conta Asaas tem chave Pix cadastrada.',
     'Juros e multa começam no dia seguinte ao vencimento: o Asaas não tem dias de tolerância.',
   ],
+  negativacao: true,
 };
+
+const STATUS_NEGATIVACAO = ['PENDING', 'AWAITING_APPROVAL', 'AWAITING_CANCELLATION', 'PROCESSED', 'PAID', 'PARTIALLY_PAID', 'DENIED', 'CANCELLED'] as const;
+
+/** Negativação do Asaas (`/paymentDunnings`) → nossa. */
+export function negativacaoAsaas(r: unknown): NegativacaoNoProvedor {
+  const st = texto(r, 'status').toUpperCase();
+  return {
+    id_externo: texto(r, 'id'),
+    numero: String((r as Record<string, unknown> | null)?.dunningNumber ?? ''),
+    status: (STATUS_NEGATIVACAO as readonly string[]).includes(st) ? st as StatusNegativacao : 'PENDING',
+    taxa_centavos: paraCentavos(Number((r as Record<string, unknown> | null)?.feeValue ?? 0)),
+    pode_cancelar: (r as Record<string, unknown> | null)?.canBeCancelled === true,
+    motivo_recusa: texto(r, 'denialReason') || texto(r, 'cannotBeCancelledReason'),
+    reenviar_documentos: (r as Record<string, unknown> | null)?.isNecessaryResendDocumentation === true,
+  };
+}
 
 /** Status da cobrança no Asaas → nosso. */
 export function statusAsaas(status: string, removida = false): StatusCobranca {
@@ -304,6 +322,53 @@ export function criarAdapterAsaas(o: OpcoesAsaas): AdapterCobranca {
       const id = texto(r, 'id');
       if (!id) throw new ErroProvedor('servidor', 'O Asaas não devolveu o link criado.');
       return { id_externo: id, url: texto(r, 'url') };
+    },
+
+    // Negativação (Serasa) pela API (doc oficial lida em 06/11/2026,
+    // docs.asaas.com/reference/criar-uma-negativacao). Protesto não existe na API.
+    async simularNegativacao(cobrancaExterna) {
+      const r = await http.chamar(`/paymentDunnings/simulate?payment=${encodeURIComponent(cobrancaExterna)}`, { metodo: 'POST' });
+      const sims = (((r as Record<string, unknown>).typeSimulations as unknown[]) ?? []);
+      const serasa = sims.find(x => texto(x, 'type') === 'CREDIT_BUREAU') ?? sims[0];
+      if (!serasa) return { permitida: false, motivo: 'O Asaas não ofereceu negativação para esta cobrança.', taxa_centavos: 0, liquido_centavos: 0, inicio_previsto: '' };
+      const s = serasa as Record<string, unknown>;
+      return {
+        permitida: s.isAllowed === true,
+        motivo: texto(s, 'notAllowedReason'),
+        taxa_centavos: paraCentavos(Number(s.feeValue ?? 0)),
+        liquido_centavos: paraCentavos(Number(s.netValue ?? 0)),
+        inicio_previsto: data(s, 'startDate'),
+      };
+    },
+
+    async negativar(p) {
+      const d = p.devedor;
+      const r = await http.chamar('/paymentDunnings', {
+        metodo: 'POST',
+        formulario: {
+          payment: p.cobranca_externa, type: 'CREDIT_BUREAU', description: p.descricao.slice(0, 500),
+          customerName: d.nome, customerCpfCnpj: digitos(d.documento), customerPrimaryPhone: digitos(d.telefone),
+          customerPostalCode: digitos(d.cep), customerAddress: d.logradouro, customerAddressNumber: d.numero,
+          customerComplement: d.complemento, customerProvince: d.bairro,
+        },
+      });
+      const n = negativacaoAsaas(r);
+      if (!n.id_externo) throw new ErroProvedor('servidor', 'O Asaas não devolveu a negativação criada.');
+      return n;
+    },
+
+    async negativacaoDaCobranca(cobrancaExterna) {
+      const r = await http.chamar(`/paymentDunnings?payment=${encodeURIComponent(cobrancaExterna)}&limit=10`);
+      const lista = ((r as Record<string, unknown>).data as unknown[] ?? []).map(negativacaoAsaas);
+      return lista.find(n => n.status !== 'CANCELLED' && n.status !== 'DENIED') ?? null;
+    },
+
+    async consultarNegativacao(id) {
+      return negativacaoAsaas(await http.chamar(`/paymentDunnings/${encodeURIComponent(id)}`));
+    },
+
+    async cancelarNegativacao(id) {
+      return negativacaoAsaas(await http.chamar(`/paymentDunnings/${encodeURIComponent(id)}/cancel`, { metodo: 'POST' }));
     },
   };
   return adapter;

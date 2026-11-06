@@ -1,19 +1,20 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Download, Table2 } from 'lucide-react';
+import { Table2 } from 'lucide-react';
 
 import type { ContaBancaria, ContaPagar, ContaReceber, PlanoContas } from '@/lib/crm-types';
 import { loadEntities } from '@/lib/crm-storage';
 import { hojeISO } from '@/lib/money';
 import {
-  CAMPOS_DO_DEMONSTRATIVO, COLUNAS_PADRAO, LINHAS_PADRAO, ORDEM_DO_DEMONSTRATIVO, csvDoDemonstrativo,
-  registrosDoDemonstrativo, type CampoDemonstrativo, type LancamentoDoDemonstrativo,
+  CAMPOS_COM_EMPRESA, COLUNAS_PADRAO, camposDoDemonstrativo, LINHAS_PADRAO, ORDEM_DO_DEMONSTRATIVO, ROTULO_DO_CAMPO,
+  registrosDoDemonstrativo, rotuloDoValor, type CampoDemonstrativo, type LancamentoDoDemonstrativo,
 } from '@/lib/resultado-por-categoria';
+import { documentoDaTabelaDinamica } from '@/lib/exportacao/tabela-dinamica';
 import { montarTabelaDinamica, registrosDaCelula } from '@/lib/tabela-dinamica';
 import { cn } from '@/lib/utils';
 
-import { Button } from '@/components/ui/button';
+import { BotaoExportar } from '@/components/fin/BotaoExportar';
 import { DataState } from '@/components/fin/DataState';
 import { EmptyLesson } from '@/components/fin/EmptyLesson';
 import { FilterBar } from '@/components/fin/FilterBar';
@@ -23,6 +24,7 @@ import { Segmentado } from '@/components/fin/Segmentado';
 import { CamposDaTabela, type Disposicao } from './CamposDaTabela';
 import { GradeDinamica } from './GradeDinamica';
 import { LancamentosDaCelula } from './LancamentosDaCelula';
+import { useEmpresas } from '@/components/fin/useEmpresas';
 
 type Regime = 'competencia' | 'caixa';
 const CHAVE_LAYOUT = 'resultado-por-categoria-layout';
@@ -60,7 +62,7 @@ function disposicaoValida(v: unknown): Disposicao | null {
   if (!v || typeof v !== 'object') return null;
   const o = v as { linhas?: unknown; colunas?: unknown };
   const ok = (x: unknown): x is CampoDemonstrativo[] =>
-    Array.isArray(x) && x.every(c => (CAMPOS_DO_DEMONSTRATIVO as string[]).includes(String(c)));
+    Array.isArray(x) && x.every(c => (CAMPOS_COM_EMPRESA as string[]).includes(String(c)));
   if (!ok(o.linhas) || !ok(o.colunas)) return null;
   if (new Set([...o.linhas, ...o.colunas]).size !== o.linhas.length + o.colunas.length) return null;
   return { linhas: o.linhas, colunas: o.colunas };
@@ -85,6 +87,8 @@ export default function DemonstrativoPorCategoriasPage() {
   const [ano, setAno] = useState<string>(hojeISO().slice(0, 4));
   const [incluirRepasse, setIncluirRepasse] = useState(false);
   const [usarRateio, setUsarRateio] = useState(false);
+  // Várias empresas (E7): o campo Empresa e a divisão do rateio entre empresas.
+  const empresasCtx = useEmpresas();
   const [disposicao, setDisposicao] = useState<Disposicao>({ linhas: LINHAS_PADRAO, colunas: COLUNAS_PADRAO });
   const [celula, setCelula] = useState<{ titulo: string; lancamentos: LancamentoDoDemonstrativo[] } | null>(null);
 
@@ -130,15 +134,27 @@ export default function DemonstrativoPorCategoriasPage() {
     return [...s].filter(a => /^\d{4}$/.test(a)).sort().reverse();
   }, [receber, pagar]);
 
+  const multiempresa = useMemo(
+    () => (empresasCtx.multi
+      ? { nomes: new Map(empresasCtx.empresas.map(x => [x.id, x.nome])), visiveis: empresasCtx.visiveis }
+      : undefined),
+    [empresasCtx.multi, empresasCtx.empresas, empresasCtx.visiveis],
+  );
+  // Disposição salva com o campo Empresa numa agência que voltou a ter uma empresa só.
+  const disposicaoEfetiva = useMemo<Disposicao>(() => (multiempresa ? disposicao : {
+    linhas: disposicao.linhas.filter(c => c !== 'empresa'), colunas: disposicao.colunas.filter(c => c !== 'empresa'),
+  }), [multiempresa, disposicao]);
+
   const registros = useMemo(() => registrosDoDemonstrativo({
     receber, pagar, planoContas, contasBancarias, regime, incluirRepasse, usarRateio,
     de: ano === TODOS ? undefined : `${ano}-01-01`,
     ate: ano === TODOS ? undefined : `${ano}-12-31`,
-  }), [receber, pagar, planoContas, contasBancarias, regime, incluirRepasse, usarRateio, ano]);
+    ...(multiempresa ? { multiempresa } : {}),
+  }), [receber, pagar, planoContas, contasBancarias, regime, incluirRepasse, usarRateio, ano, multiempresa]);
 
   const tabela = useMemo(
-    () => montarTabelaDinamica(registros, disposicao.linhas, disposicao.colunas, { ordem: ORDEM_DO_DEMONSTRATIVO }),
-    [registros, disposicao],
+    () => montarTabelaDinamica(registros, disposicaoEfetiva.linhas, disposicaoEfetiva.colunas, { ordem: ORDEM_DO_DEMONSTRATIVO }),
+    [registros, disposicaoEfetiva],
   );
 
   function abrirCelula(caminhoLinha: string[] | null, chaveColuna: string | null, titulo: string) {
@@ -146,14 +162,21 @@ export default function DemonstrativoPorCategoriasPage() {
     setCelula({ titulo, lancamentos: regs.map(r => r.ref!).filter(Boolean) });
   }
 
-  function exportar() {
-    const blob = new Blob([csvDoDemonstrativo(tabela)], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `resultado-por-categoria-${ano === TODOS ? 'todos' : ano}-${regime}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  function documento() {
+    return documentoDaTabelaDinamica(tabela, {
+      titulo: 'Resultado por categoria',
+      subtitulo: regime === 'competencia'
+        ? 'Competência: cada conta pelo vencimento e pelo valor total. Receitas somam, despesas subtraem.'
+        : 'Caixa: cada conta pela data da baixa e pelo valor que entrou ou saiu. Receitas somam, despesas subtraem.',
+      filtros: [
+        { rotulo: 'Ano', valor: ano === TODOS ? 'todos os anos' : ano },
+        { rotulo: 'Regime', valor: regime === 'competencia' ? 'Competência' : 'Caixa' },
+        ...(incluirRepasse ? [{ rotulo: 'Repasses', valor: 'incluídos' }] : []),
+        ...(usarRateio ? [{ rotulo: 'Rateio', valor: 'dividido' }] : []),
+      ],
+      rotuloDoCampo: c => ROTULO_DO_CAMPO[c as CampoDemonstrativo] ?? c,
+      rotuloDoValor,
+    });
   }
 
   const semDado = !carregando && !erro && receber.length === 0 && pagar.length === 0;
@@ -162,6 +185,7 @@ export default function DemonstrativoPorCategoriasPage() {
   return (
     <MolduraDaPagina>
       <PageHeader
+        empresas
         icone={Table2}
         titulo="Resultado por categoria"
         subtitulo="Receitas e despesas cruzadas por categoria e mês. Arraste os campos para montar a sua visão."
@@ -228,10 +252,7 @@ export default function DemonstrativoPorCategoriasPage() {
                   <Interruptor ligado={incluirRepasse} onChange={setIncluirRepasse}>Mostrar repasses ao fornecedor</Interruptor>
                   <Interruptor ligado={usarRateio} onChange={setUsarRateio}>Dividir pelo rateio</Interruptor>
                 </div>
-                <Button type="button" variant="outline" onClick={exportar} disabled={registros.length === 0} className="h-11 self-start lg:h-10">
-                  <Download aria-hidden="true" className="size-4" />
-                  Exportar Excel (CSV)
-                </Button>
+                <BotaoExportar origem="resultado_por_categoria" tamanho="default" className="self-start" desabilitado={registros.length === 0} documento={documento} />
               </div>
               <p className="fin-t-caption text-[var(--fin-text-3)]">
                 {regime === 'competencia'
@@ -240,7 +261,7 @@ export default function DemonstrativoPorCategoriasPage() {
                 {' '}Receitas somam, despesas subtraem: o total geral é o resultado.
                 {incluirRepasse ? '' : ' O repasse ao fornecedor fica de fora.'}
               </p>
-              <CamposDaTabela disposicao={disposicao} onChange={trocarDisposicao} />
+              <CamposDaTabela disposicao={disposicaoEfetiva} onChange={trocarDisposicao} campos={camposDoDemonstrativo(Boolean(multiempresa))} />
             </section>
 
             {registros.length === 0 ? (

@@ -94,6 +94,9 @@ try {
   await db.exec("UPDATE usuarios SET data=jsonb_set(data,'{senha_hash}','\"nova-senha-secreta\"') WHERE id='u-secret'");
   eq(await count(), previous + 1, 'alteração só de senha continua auditada');
   eq((await latest()).data.alteracoes, [{campo:'data.senha_hash',valor_anterior:'[PROTEGIDO]',valor_novo:'[PROTEGIDO]'}], 'diff registra mudança sem revelar segredo');
+  // Segundo fator (E7): a chave do aplicativo autenticador nunca vai para o registro.
+  await db.exec(`UPDATE usuarios SET data = data || '{"totp_segredo":"JBSWY3DPEHPK3PXPCHAVETOTP","totp_ultimo_passo":123}'::jsonb WHERE id='u-secret'`);
+  eq(JSON.stringify((await latest()).data).includes('JBSWY3DPEHPK3PXPCHAVETOTP'), false, 'chave do segundo fator protegida no registro');
 
   await db.query('SELECT set_config($1,$2,false)', ['app.audit_context','']);
   await save('system', 'tenant-a', { nome:'Sistema' });

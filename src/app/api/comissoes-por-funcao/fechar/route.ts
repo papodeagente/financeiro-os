@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
-import { contextoDaComissao, respostaDeErroDaComissao } from '@/lib/comissao-rota';
+import { contextoDaComissao, quemFechaDo, respostaDeErroDaComissao } from '@/lib/comissao-rota';
 import { fecharComissoes } from '@/lib/comissao-funcoes-servidor';
 import { emTransacao } from '@/lib/caixa-atomico';
 
-// Fechar comissões até a data: { ate, participantes, assinatura? }. Uma pessoa com erro não trava as outras.
+// Fechar comissões até a data: { ate, participantes, assinatura? }. Uma pessoa com erro não trava as outras;
+// a de uma função que outra pessoa fecha volta em "recusados".
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
@@ -16,7 +17,7 @@ export async function POST(req: Request) {
       ate: String(corpo.ate ?? ''),
       participantes: Array.isArray(corpo.participantes) ? corpo.participantes.map(String) : [],
       assinatura: corpo.assinatura ? String(corpo.assinatura) : undefined,
-    }, ctx.usuario);
+    }, ctx.usuario, await quemFechaDo(ctx));
     return NextResponse.json(r);
   } catch (e) { return respostaDeErroDaComissao(e); }
 }

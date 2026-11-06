@@ -21,7 +21,7 @@ import { auditCsvCell } from './audit-query';
 import type { RegistroDinamico, TabelaDinamica } from './tabela-dinamica';
 import { COLUNA_TOTAL } from './tabela-dinamica';
 
-export type CampoDemonstrativo = 'tipo' | 'grupo' | 'categoria' | 'ano' | 'mes' | 'pessoa' | 'conta' | 'centro';
+export type CampoDemonstrativo = 'tipo' | 'grupo' | 'categoria' | 'ano' | 'mes' | 'pessoa' | 'conta' | 'centro' | 'empresa';
 
 export const ROTULO_DO_CAMPO: Record<CampoDemonstrativo, string> = {
   tipo: 'Tipo',
@@ -32,9 +32,15 @@ export const ROTULO_DO_CAMPO: Record<CampoDemonstrativo, string> = {
   pessoa: 'Pessoa',
   conta: 'Conta',
   centro: 'Centro de custo',
+  empresa: 'Empresa',
 };
 
 export const CAMPOS_DO_DEMONSTRATIVO: CampoDemonstrativo[] = ['tipo', 'grupo', 'categoria', 'ano', 'mes', 'pessoa', 'conta', 'centro'];
+/** Com duas ou mais empresas (E7) entra o campo Empresa; com uma, os de sempre. */
+export const CAMPOS_COM_EMPRESA: CampoDemonstrativo[] = [...CAMPOS_DO_DEMONSTRATIVO, 'empresa'];
+export function camposDoDemonstrativo(multiempresa: boolean): CampoDemonstrativo[] {
+  return multiempresa ? CAMPOS_COM_EMPRESA : CAMPOS_DO_DEMONSTRATIVO;
+}
 export const LINHAS_PADRAO: CampoDemonstrativo[] = ['tipo', 'grupo', 'categoria'];
 export const COLUNAS_PADRAO: CampoDemonstrativo[] = ['ano', 'mes'];
 
@@ -83,6 +89,13 @@ export interface EntradaDemonstrativo {
   /** Período pela data do regime, 'YYYY-MM-DD' inclusive. Vazio = sem corte. */
   de?: string;
   ate?: string;
+  /**
+   * Várias empresas (E7). Ausente = agência de uma empresa só: os registros
+   * saem exatamente como antes, sem o campo Empresa. Presente: cada registro
+   * ganha a empresa; com "Dividir pelo rateio", a conta rateada entre empresas
+   * se divide pelo percentual de cada uma; e só entra o que é das `visiveis`.
+   */
+  multiempresa?: { nomes: ReadonlyMap<string, string>; visiveis: readonly string[] | null };
 }
 
 function rotuloDaCategoria(p: PlanoContas | undefined): string {
@@ -117,6 +130,31 @@ export function ratearCentavos(
   return saida;
 }
 
+/**
+ * Divide os centavos pelas empresas das linhas do rateio (E7). Linha sem
+ * empresa fica na empresa da conta. Sem linha de empresa: tudo na da conta.
+ * Os centavos fecham o total.
+ */
+export function ratearPorEmpresa(
+  centavos: number,
+  rateio: ReadonlyArray<{ empresa_id?: string; percentual?: number }> | null | undefined,
+  empresaDaConta: string,
+): Array<{ empresa: string; centavos: number }> {
+  const linhas = (rateio ?? []).filter(l => num(l.percentual) > 0);
+  if (!linhas.some(l => String(l.empresa_id ?? '').trim())) return [{ empresa: empresaDaConta, centavos }];
+  const pct = new Map<string, number>();
+  for (const l of linhas) {
+    const e = String(l.empresa_id ?? '').trim() || empresaDaConta;
+    pct.set(e, (pct.get(e) ?? 0) + num(l.percentual));
+  }
+  const total = [...pct.values()].reduce((s, p) => s + p, 0);
+  if (total <= 0) return [{ empresa: empresaDaConta, centavos }];
+  const saida = [...pct.entries()].map(([empresa, p]) => ({ empresa, centavos: Math.trunc((centavos * p) / total) }));
+  const resto = centavos - saida.reduce((s, x) => s + x.centavos, 0);
+  if (resto !== 0) saida[saida.length - 1].centavos += resto;
+  return saida;
+}
+
 export function registrosDoDemonstrativo(e: EntradaDemonstrativo): RegistroDinamico<LancamentoDoDemonstrativo>[] {
   const porId = new Map(e.planoContas.map(p => [p.id, p]));
   const nomeDaConta = new Map(e.contasBancarias.map(c => [c.id, c.nome]));
@@ -127,6 +165,7 @@ export function registrosDoDemonstrativo(e: EntradaDemonstrativo): RegistroDinam
     id: string; descricao: string; pessoa: string; categoriaId: string;
     data: string; reais: number; sinal: 1 | -1; conta: string; centro: string;
     rateio: ContaReceber['rateio'] | undefined;
+    empresa: string;
   }) {
     if (!o.reais) return;
     if (e.de && o.data < e.de) return;
@@ -142,15 +181,24 @@ export function registrosDoDemonstrativo(e: EntradaDemonstrativo): RegistroDinam
       pessoa: o.pessoa.trim() || SEM_PESSOA,
       conta: (o.conta && nomeDaConta.get(o.conta)) || SEM_CONTA,
     };
-    const centavos = paraCentavos(o.reais) * o.sinal;
-    const partes = e.usarRateio ? ratearCentavos(centavos, o.rateio) : [];
-    const pedacos = partes.length > 0 ? partes : [{ centro: o.centro.trim() || SEM_CENTRO, centavos }];
-    for (const p of pedacos) {
-      saida.push({
-        campos: { ...base, centro: p.centro },
-        centavos: p.centavos,
-        ref: { tabela: o.tabela, id: o.id, descricao: o.descricao, pessoa: o.pessoa, data: o.data, valor: p.centavos / 100, rateado: partes.length > 0 },
-      });
+    const centavosTotal = paraCentavos(o.reais) * o.sinal;
+    const me = e.multiempresa;
+    // Rateio entre empresas (E7): com "Dividir pelo rateio", cada empresa fica
+    // com o seu percentual; sem ele, a conta inteira é da empresa dela.
+    const porEmpresa = me && e.usarRateio ? ratearPorEmpresa(centavosTotal, o.rateio, o.empresa) : [{ empresa: o.empresa, centavos: centavosTotal }];
+    for (const fatia of porEmpresa) {
+      if (me?.visiveis && !me.visiveis.includes(fatia.empresa)) continue;
+      const centavos = fatia.centavos;
+      const partes = e.usarRateio ? ratearCentavos(centavos, o.rateio) : [];
+      const pedacos = partes.length > 0 ? partes : [{ centro: o.centro.trim() || SEM_CENTRO, centavos }];
+      const campoEmpresa: Record<string, string> = me ? { empresa: me.nomes.get(fatia.empresa) ?? fatia.empresa } : {};
+      for (const p of pedacos) {
+        saida.push({
+          campos: { ...base, centro: p.centro, ...campoEmpresa },
+          centavos: p.centavos,
+          ref: { tabela: o.tabela, id: o.id, descricao: o.descricao, pessoa: o.pessoa, data: o.data, valor: p.centavos / 100, rateado: partes.length > 0 || porEmpresa.length > 1 },
+        });
+      }
     }
   }
 
@@ -165,6 +213,7 @@ export function registrosDoDemonstrativo(e: EntradaDemonstrativo): RegistroDinam
       categoriaId: String(cr.categoria_id ?? ''), data,
       reais: caixa ? valorMovimentado(cr, 'valor_recebido') : num(cr.valor_final), sinal: 1,
       conta: String(cr.conta_bancaria_id ?? ''), centro: String(cr.centro_custo ?? ''), rateio: cr.rateio,
+      empresa: String((cr as { empresa_id?: string }).empresa_id || 'principal'),
     });
   }
   for (const cp of e.pagar) {
@@ -179,6 +228,7 @@ export function registrosDoDemonstrativo(e: EntradaDemonstrativo): RegistroDinam
       categoriaId: String(cp.categoria_id ?? ''), data,
       reais: caixa ? valorMovimentado(cp, 'valor_pago') : num(cp.valor_final), sinal: -1,
       conta: String(cp.conta_bancaria_id ?? ''), centro: String(cp.centro_custo ?? ''), rateio: cp.rateio,
+      empresa: String((cp as { empresa_id?: string }).empresa_id || 'principal'),
     });
   }
   return saida;

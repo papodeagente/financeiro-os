@@ -7,6 +7,7 @@ import { AlertTriangle, CheckCircle2, FileStack, Layers, Wallet } from 'lucide-r
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { BotaoExportar } from '@/components/fin/BotaoExportar';
 import { FilterBar } from '@/components/fin/FilterBar';
 import { FinTable, type FinColuna } from '@/components/fin/FinTable';
 import { MetricCard } from '@/components/fin/MetricCard';
@@ -23,6 +24,7 @@ import { MOTIVO_DO_ITEM, dataBR, hojeBR, periodoBR, reais, somarDias } from '@/c
 import { Abas, Aviso, LINK, SECAO, TituloDaSecao } from '@/components/financeiro/faturas/pecas';
 import { ROTULO_COBRANCA_CURTO } from '@/components/financeiro/faturas/rotulos';
 import { deCentavos } from '@/lib/money';
+import { documentoDasFaturas } from '@/lib/exportacao/listas-financeiro';
 import { toast } from '@/lib/toast';
 
 /**
@@ -179,6 +181,7 @@ export function TelaDeFaturas() {
     <MolduraDaPagina>
       <div ref={moldura} onKeyDown={teclado} className="flex flex-col gap-[var(--fin-s-5)]">
         <PageHeader
+          empresas
           icone={FileStack}
           titulo="Faturas"
           subtitulo="Cada cliente faturado recebe uma fatura por período, montada pela regra de faturamento dele. Feche, mande conferir no portal e cobre com boleto e Pix."
@@ -235,6 +238,18 @@ export function TelaDeFaturas() {
                 onLimpar={limpar}
               />
               {!datasValidas ? <p role="alert" className="fin-t-body text-[var(--fin-negative-text)]">A data inicial precisa ser igual ou anterior à final.</p> : null}
+              <div className="flex justify-end">
+                <BotaoExportar
+                  origem="faturas"
+                  podeExportar={pode('exportar')}
+                  desabilitado={!linhas.length}
+                  documento={() => documentoDasFaturas(linhas, {
+                    campo: f.campo, de: f.de, ate: f.ate,
+                    situacao: SITUACOES.find(s => s.valor === f.situacao)?.rotulo,
+                    busca: f.busca.trim() || undefined,
+                  }, ROTULO_COBRANCA_CURTO)}
+                />
+              </div>
               <FinTable<ResumoDaFatura>
                 linhas={linhas}
                 colunas={colunas}

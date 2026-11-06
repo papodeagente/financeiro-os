@@ -40,7 +40,7 @@ export async function faturasParaReflexo(exec: ExecutorSQL, tenantId: string, id
   const unicos = [...new Set(ids.filter(Boolean))];
   if (!unicos.length || !(await temFaturas(exec))) return mapa;
   const { rows } = await exec.query(
-    `SELECT f.id, f.numero, f.situacao, f.vencimento::text AS vencimento, f.valor_itens_centavos, f.sinal_centavos,
+    `SELECT f.id, f.numero, f.situacao, f.vencimento::text AS vencimento, f.valor_itens_centavos, f.sinal_centavos, f.receitas_centavos,
             c.data AS conta
        FROM faturas_fornecedor f
        LEFT JOIN contas_pagar c ON c.tenant_id = f.tenant_id AND c.id = f.conta_pagar_id
@@ -51,7 +51,7 @@ export async function faturasParaReflexo(exec: ExecutorSQL, tenantId: string, id
     const c = (r.conta ?? null) as Record<string, unknown> | null;
     mapa.set(String(r.id), {
       id: String(r.id), numero: String(r.numero), situacao: String(r.situacao), vencimento: String(r.vencimento ?? '').slice(0, 10),
-      valor_itens_centavos: Number(r.valor_itens_centavos) || 0, sinal_centavos: Number(r.sinal_centavos) || 0,
+      valor_itens_centavos: Number(r.valor_itens_centavos) || 0, sinal_centavos: Number(r.sinal_centavos) || 0, receitas_centavos: Number(r.receitas_centavos) || 0,
       conta_status: c ? String(c.status ?? '') : null,
       conta_valor_centavos: c ? paraCentavos(num(c.valor_final)) : 0,
       conta_pago_centavos: c ? paraCentavos(num(c.valor_pago)) : 0,

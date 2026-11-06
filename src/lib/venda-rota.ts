@@ -10,7 +10,13 @@
  *   PUT  /api/vendas/completa/[id]       { venda } → FichaDaVenda
  *   POST /api/vendas/completa/[id]/fechar  { confirmar? } → FichaDaVenda | 409 { codigo, detalhes }
  *   POST /api/vendas/completa/[id]/reabrir { motivo }     → FichaDaVenda
- *   GET/PUT /api/config/vendas  { receita: { componentes: { COMISSAO: true, ... } } }
+ *   GET/PUT /api/config/vendas  { receita: { componentes: { COMISSAO: true, ... } }, recibo: { texto, complemento } }
+ *        (PUT com só uma das partes mantém a outra; E7)
+ *   GET  /api/vendas/completa/[id]/recibo?pagante=<chave> → { recibo: ReciboDaVenda, pagantes } | 422 { error, pagantes }
+ *        (E7; quem vê a venda vê o recibo; regras em recibo-da-venda.ts)
+ *   GET  /api/vendas/completa/[id]/fiscal → FiscalDaVenda (notas da venda e retenção na fonte; precisa ver o financeiro da venda)
+ *   GET  /api/faturas/[id]/recibo → ReciboDaFatura | 422 { error }   (recibo consolidado da fatura ao cliente)
+ *   Telas: /vendas/[id]/recibo?pagante=, /financeiro-ag/faturas/[id]/recibo
  * Erros: { error, codigo, detalhes? } com 400 (dados), 403, 404, 409 (fechada,
  * não fecha, confirmar), 423 (período fechado).
  */
@@ -73,6 +79,40 @@ export interface FichaDaVenda {
   comissoes: Array<Record<string, unknown>>;
   config_receita: ConfigReceita;
   permissoes: PermissoesDaFicha;
+  /** Empresa da venda (E7). Só vem quando não é a principal (agência de uma empresa só: nunca). */
+  empresa_id?: string;
+  /**
+   * A negociação no CRM (E7), onde ficam o contrato e o voucher da viagem.
+   * null na venda lançada à mão ou sem integração com o CRM.
+   */
+  link_crm: string | null;
+}
+
+/**
+ * Endereço da negociação no CRM a partir do id que o CRM manda
+ * (`crm_deal_<id>`) e do endereço da integração. Puro.
+ */
+export function linkDaNegociacaoNoCrm(crmVendaId: string, webhookCrm: string | null | undefined): string | null {
+  const m = String(crmVendaId ?? '').trim().match(/^(?:crm_deal_|deal_)?(\d+)$/);
+  if (!m || !webhookCrm) return null;
+  try {
+    const u = new URL(String(webhookCrm));
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+    return `${u.origin}/deal/${m[1]}`;
+  } catch {
+    return null;
+  }
+}
+
+async function enderecoDoCrm(exec: ExecutorSQL, tenantId: string): Promise<string | null> {
+  try {
+    const { rows: tem } = await exec.query(`SELECT to_regclass('public.crm_config') IS NOT NULL AS ok`);
+    if (!tem[0]?.ok) return null;
+    const { rows } = await exec.query(`SELECT data->>'webhook_url_crm' AS u FROM crm_config WHERE id = 'singleton' AND tenant_id = $1`, [tenantId]);
+    return rows[0]?.u ? String(rows[0].u) : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function permissoesDaFicha(sessao: SessionPayload | null, exec: ExecutorSQL): Promise<PermissoesDaFicha> {
@@ -91,7 +131,10 @@ export async function montarFicha(exec: ExecutorSQL, tenantId: string, vendaId: 
   if (!p) return null;
   const perm = await permissoesDaFicha(sessao, exec);
   const { carregada } = p;
-  const config = await lerConfigVenda(exec, tenantId);
+  // Várias empresas (E7): a configuração de vendas da empresa da venda.
+  const { rows: emp } = await exec.query(`SELECT data->>'empresa_id' AS e FROM vendas_crm WHERE tenant_id = $1 AND id = $2`, [tenantId, vendaId]);
+  const empresaDaVenda = String(emp[0]?.e ?? '');
+  const config = await lerConfigVenda(exec, tenantId, empresaDaVenda);
   const { rows: com } = await exec.query(`SELECT id, status, data FROM comissoes WHERE tenant_id = $1 AND venda_id = $2`, [tenantId, vendaId])
     .catch(() => ({ rows: [] as Array<Record<string, unknown>> }));
   const porProduto: Record<string, TotaisDoProduto> = {};
@@ -106,11 +149,13 @@ export async function montarFicha(exec: ExecutorSQL, tenantId: string, vendaId: 
     comissoes: perm.ver_receita ? com.map(r => ({ ...(r.data as Record<string, unknown>), id: r.id, status: (r.data as Record<string, unknown>)?.status ?? r.status })) : [],
     config_receita: config.receita,
     permissoes: perm,
+    link_crm: carregada.venda.crm_venda_id ? linkDaNegociacaoNoCrm(carregada.venda.crm_venda_id, await enderecoDoCrm(exec, tenantId)) : null,
+    ...(empresaDaVenda && empresaDaVenda !== 'principal' ? { empresa_id: empresaDaVenda } : {}),
   });
 }
 
 function receitaVazia(): ReceitaDaVenda {
-  return { linhas: [], por_produto: [], receita: 0, fora_da_receita: 0, faturamento: 0, percentual: 0 };
+  return { linhas: [], por_produto: [], receita: 0, fora_da_receita: 0, faturamento: 0, taxa_cartao: { valor: 0, entra: true }, percentual: 0 };
 }
 
 function fichaDe(c: VendaCarregada, resto: Omit<FichaDaVenda, 'venda' | 'versao_modelo' | 'situacao' | 'fechada_em' | 'fechada_por' | 'pendencias' | 'eventos'>): FichaDaVenda {

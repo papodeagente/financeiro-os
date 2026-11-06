@@ -16,9 +16,19 @@ import type { MoneyEstado } from '@/components/fin/Money';
 import { toast } from '@/lib/toast';
 import { somaPor, round2, num, mesDe, hojeISO } from '@/lib/money';
 import {
-  comissaoNaoCapturadaPorConta, mesAnterior, montarDRE, orcadoPorLinha,
-  type LancamentoDRE, type LinhaDRE, type RegimeDRE,
+  comissaoNaoCapturadaPorConta, dreMesAMes, mesAnterior, mesesEntre, montarDRE, orcadoPorLinha,
+  type LancamentoDRE, type LinhaDRE, type LinhaMesAMes, type RegimeDRE,
 } from '@/lib/resultado-dre';
+import { aplicarRecorteDRE, type FiltroDeRateio, type RecorteDRE } from '@/lib/dre-recorte';
+import { ordenarEmArvore } from '@/lib/dimensoes';
+import { resultadoPorTag, tagsDasContas } from '@/lib/resultado-por-dimensao';
+import { ResultadoPorTag } from './ResultadoPorTag';
+import type { CentroCusto } from '@/lib/crm-types';
+import type { DocumentoExportado } from '@/lib/exportacao/documento';
+import { documentoDoDREdoMes, documentoDoDREMesAMes } from '@/lib/exportacao/documentos-financeiro';
+import { BotaoExportar } from '@/components/fin/BotaoExportar';
+import { BotaoAgendarEnvio } from '@/components/relatorios/BotaoAgendarEnvio';
+import { DemonstrativoMeses } from './DemonstrativoMeses';
 import { calcRelatorio, type CustosData } from '@/lib/planejamento-custos';
 import {
   encargosPorTitulo, rotulosDasCategorias,
@@ -36,6 +46,8 @@ import {
   type LinhaDemonstrativo,
   type NotaDemonstrativo,
 } from './DemonstrativoTabela';
+import { lerEmpresasVisiveis } from '@/components/fin/useEmpresas';
+import { contasNoRecorte } from '@/lib/empresas';
 
 const pctBR = (v: number) =>
   `${new Intl.NumberFormat('pt-BR', {
@@ -104,6 +116,16 @@ export default function DREPage() {
   const [linhasDeVariacao, setLinhasDeVariacao] = useState<LinhaDeVariacaoDRE[]>([]);
   const [categoriasEncargos, setCategoriasEncargos] = useState<CategoriasEncargos>({});
   const [aberta, setAberta] = useState<{ titulo: string; lancamentos: LancamentoDRE[]; valor: number } | null>(null);
+  // E7, G3: visão mês a mês (meses em colunas) e recorte por centro de custo
+  // e rateio. Sem recorte e em "Um mês", a tela é a de antes.
+  const [visao, setVisao] = useState<'mes' | 'meses'>('mes');
+  const [mesInicial, setMesInicial] = useState('');
+  const [centros, setCentros] = useState<CentroCusto[]>([]);
+  const [centroId, setCentroId] = useState('');
+  const [filtroRateio, setFiltroRateio] = useState<FiltroDeRateio>('todas');
+  // E7, frente C: recorte por tag e o quadro "Por tag". Sem escolha, a tela de antes.
+  const [tag, setTag] = useState('');
+  const [agrupar, setAgrupar] = useState<'nada' | 'tag'>('nada');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -143,8 +165,11 @@ export default function DREPage() {
         loadEntities<VendaCRM>('vendas-crm'),
         loadEntities<PlanoContas>('plano-contas'),
       ]);
-      setContasReceber(cr);
-      setContasPagar(cp);
+      // Várias empresas (E7): o rateado entre empresas entra só com a parte das
+      // empresas marcadas. Uma empresa só: as listas como vieram.
+      const visiveis = await lerEmpresasVisiveis();
+      setContasReceber(contasNoRecorte(cr, visiveis));
+      setContasPagar(contasNoRecorte(cp, visiveis));
       setVendas(v);
       setPlanoContas(pc);
       fetch('/api/encargos-da-liquidacao')
@@ -155,8 +180,16 @@ export default function DREPage() {
           setLinhasDeVariacao(Array.isArray(x?.variacoes) ? x!.variacoes! : []);
         })
         .catch(() => { setBaixasComEncargo([]); setCategoriasEncargos({}); setLinhasDeVariacao([]); });
+      // Centros de custo para o recorte. Sem eles (ou sem acesso), o filtro não aparece.
+      fetch('/api/centros-custo')
+        .then(r => (r.ok ? r.json() : null))
+        .then((c: CentroCusto[] | null) => setCentros(Array.isArray(c) ? c : []))
+        .catch(() => setCentros([]));
 
-      setSelectedMonth(mesDe(hojeISO()));
+      // ?mes=AAAA-MM (link do "Perguntar em texto", E7) abre no mês pedido.
+      const mesDoEndereco = new URLSearchParams(window.location.search).get('mes') ?? '';
+      setSelectedMonth(/^\d{4}-(0[1-9]|1[0-2])$/.test(mesDoEndereco) ? mesDoEndereco : mesDe(hojeISO()));
+      setMesInicial(`${hojeISO().slice(0, 4)}-01`);
       setAtualizadoEm(new Date());
     } catch {
       setErro(true);
@@ -221,35 +254,65 @@ export default function DREPage() {
 
   // Quanto de cada CR de comissão ainda não está na margem da venda. A regra
   // mora em src/lib/resultado-dre.ts desde 05/11/2026.
-  const comissaoNaoCapturada = useMemo(
-    () => comissaoNaoCapturadaPorConta(contasReceber, vendasComLastro),
-    [contasReceber, vendasComLastro],
-  );
-
   // DRE para agência de viagens (CNAE 7911-2/00), regime de intermediação.
   // A conta saiu da tela para a lib (05/11/2026) sem mudar: competência é o
   // padrão e dá os mesmos números de antes (scripts/test-demonstrativo-resultado.ts).
-  const encargos = useMemo(() => encargosPorTitulo(baixasComEncargo), [baixasComEncargo]);
-  const variacoes = useMemo(() => variacaoPorTitulo(linhasDeVariacao), [linhasDeVariacao]);
+  const encargosTodos = useMemo(() => encargosPorTitulo(baixasComEncargo), [baixasComEncargo]);
+  const variacoesTodas = useMemo(() => variacaoPorTitulo(linhasDeVariacao), [linhasDeVariacao]);
   const rotulosEncargos = useMemo(
     () => rotulosDasCategorias(categoriasEncargos, planoContas),
     [categoriasEncargos, planoContas],
   );
 
+  // Recorte por centro de custo e rateio (E7, G3): cada conta entra com a
+  // parte dela no centro escolhido (src/lib/dre-recorte.ts). Sem recorte, as
+  // listas de sempre, intactas.
+  const recorte: RecorteDRE = useMemo(() => ({ centro_id: centroId || null, rateio: filtroRateio, tag: tag || null }), [centroId, filtroRateio, tag]);
+  // Tags que existem nas contas: sem nenhuma, nem o filtro nem o agrupamento aparecem.
+  const tagsDisponiveis = useMemo(() => tagsDasContas(contasReceber, contasPagar), [contasReceber, contasPagar]);
+  const recortado = useMemo(
+    () => aplicarRecorteDRE({ receber: contasReceber, pagar: contasPagar, vendas: vendasComLastro, encargos: encargosTodos, variacoes: variacoesTodas }, recorte, centros),
+    [contasReceber, contasPagar, vendasComLastro, encargosTodos, variacoesTodas, recorte, centros],
+  );
+  const encargos = recortado.encargos;
+  const variacoes = recortado.variacoes;
+
+  const comissaoNaoCapturada = useMemo(
+    () => comissaoNaoCapturadaPorConta(recortado.receber, recortado.vendas),
+    [recortado],
+  );
+
+  const baseDRE = useMemo(() => ({
+    receber: recortado.receber,
+    pagar: recortado.pagar,
+    vendasComLastro: recortado.vendas,
+    planoContas,
+    comissaoNaoCapturada,
+    regime,
+    encargos,
+    rotulosEncargos,
+    variacoes,
+  }), [recortado, planoContas, comissaoNaoCapturada, regime, encargos, rotulosEncargos, variacoes]);
+
   function buildDRE(month: string): LinhaDRE[] {
-    return montarDRE({
-      receber: contasReceber,
-      pagar: contasPagar,
-      vendasComLastro,
-      planoContas,
-      comissaoNaoCapturada,
-      mes: month,
-      regime,
-      encargos,
-      rotulosEncargos,
-      variacoes,
-    });
+    return montarDRE({ ...baseDRE, mes: month });
   }
+
+  // Mês a mês: do mês inicial até o mês escolhido (no máximo 24 colunas).
+  const mesesDaVisao = useMemo(
+    () => (visao === 'meses' && selectedMonth ? mesesEntre(mesInicial || selectedMonth, selectedMonth, 24) : []),
+    [visao, mesInicial, selectedMonth],
+  );
+  const mesAMes = useMemo(
+    () => (mesesDaVisao.length ? dreMesAMes(baseDRE, mesesDaVisao) : null),
+    [baseDRE, mesesDaVisao],
+  );
+  // "Por tag": os mesmos meses, regime e recorte do demonstrativo. Só calcula quando pedido.
+  const porTag = useMemo(() => {
+    if (agrupar !== 'tag' || !selectedMonth) return null;
+    const meses = visao === 'meses' && mesesDaVisao.length ? mesesDaVisao : [selectedMonth];
+    return resultadoPorTag({ receber: recortado.receber, pagar: recortado.pagar, meses, regime });
+  }, [agrupar, selectedMonth, visao, mesesDaVisao, recortado, regime]);
 
   // O que a regra do lastro tirou deste mês. Subtrair dinheiro em silêncio é
   // pior do que mostrá-lo: aqui o DRE diz quantas vendas ficaram de fora e
@@ -267,15 +330,17 @@ export default function DREPage() {
   );
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const dreMain = useMemo(() => buildDRE(selectedMonth), [selectedMonth, contasReceber, contasPagar, vendasComLastro, planoContas, regime, encargos, rotulosEncargos, variacoes]);
+  const dreMain = useMemo(() => buildDRE(selectedMonth), [selectedMonth, baseDRE]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const dreCompare = useMemo(() => compareMonth ? buildDRE(compareMonth) : [], [compareMonth, contasReceber, contasPagar, vendasComLastro, planoContas, regime, encargos, rotulosEncargos, variacoes]);
+  const dreCompare = useMemo(() => compareMonth ? buildDRE(compareMonth) : [], [compareMonth, baseDRE]);
 
   // Summary metrics from main DRE
-  const receitaBruta = dreMain.find(l => l.nome.startsWith('RECEITA BRUTA'))?.valor || 0;
-  const receitaLiquida = dreMain.find(l => l.nome === 'RECEITA LÍQUIDA')?.valor || 0;
-  const lucroLiquido = dreMain.find(l => l.nome === 'LUCRO LÍQUIDO')?.valor || 0;
-  const margemLiquida = dreMain.find(l => l.nome.startsWith('Margem líquida'))?.valor ?? null;
+  // Mês a mês: os cartões mostram o período inteiro.
+  const doPeriodo = (prefixo: string) => mesAMes?.linhas.find(l => l.nome.startsWith(prefixo));
+  const receitaBruta = (mesAMes ? doPeriodo('RECEITA BRUTA')?.total : dreMain.find(l => l.nome.startsWith('RECEITA BRUTA'))?.valor) || 0;
+  const receitaLiquida = (mesAMes ? doPeriodo('RECEITA LÍQUIDA')?.total : dreMain.find(l => l.nome === 'RECEITA LÍQUIDA')?.valor) || 0;
+  const lucroLiquido = (mesAMes ? doPeriodo('LUCRO LÍQUIDO')?.total : dreMain.find(l => l.nome === 'LUCRO LÍQUIDO')?.valor) || 0;
+  const margemLiquida = (mesAMes ? doPeriodo('Margem líquida')?.total : dreMain.find(l => l.nome.startsWith('Margem líquida'))?.valor) ?? null;
 
   // Modo Simplificado: mostra só os totais principais. Modo Completo: tudo.
   // Iniciante consegue ler 4-6 linhas; contador prefere ver detalhe.
@@ -373,20 +438,79 @@ export default function DREPage() {
   // nota, não como linha do demonstrativo, nos dois lados da razão.
   const totalLinhas = dreMain.filter(l => !l.nome.startsWith('Margem')).length;
 
-  const filtrosAtivos = (compareMonth ? 1 : 0) + (modoSimplificado ? 0 : 1) + (regime === 'competencia' ? 0 : 1);
+  const filtrosAtivos = (compareMonth && visao === 'mes' ? 1 : 0) + (modoSimplificado ? 0 : 1) + (regime === 'competencia' ? 0 : 1)
+    + (centroId ? 1 : 0) + (filtroRateio === 'todas' ? 0 : 1) + (tag ? 1 : 0);
 
   const limparFiltros = () => {
     setCompareMonth('');
     alternarModo(true);
     setRegime('competencia');
+    setCentroId('');
+    setFiltroRateio('todas');
+    setTag('');
   };
+
+  // Mês a mês, no mesmo detalhe (resumido/completo) da visão de um mês.
+  const linhasMesAMes = useMemo(() => {
+    if (!mesAMes) return [];
+    return modoSimplificado
+      ? mesAMes.linhas.filter(l => SIMPL_KEEP.some(k => l.nome.startsWith(k)) || l.percentual)
+      : mesAMes.linhas;
+  }, [mesAMes, modoSimplificado]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const arvoreDeCentros = useMemo(() => ordenarEmArvore(centros.filter(c => c.ativo !== false || c.id === centroId)), [centros, centroId]);
+  const centroEscolhido = centros.find(c => c.id === centroId) ?? null;
+  const tagEscolhida = tag ? (tagsDisponiveis.find(t => t.valor === tag)?.rotulo ?? tag) : '';
+  const escopoDoRecorte = `${centroEscolhido ? ` · ${centroEscolhido.nome}` : ''}${tagEscolhida ? ` · tag ${tagEscolhida}` : ''}`;
+  const ROTULO_RATEIO: Record<FiltroDeRateio, string> = { todas: 'Todas as contas', rateadas: 'Só contas rateadas', sem_rateio: 'Só contas sem rateio' };
+  const rotuloDaLinhaMeses = (l: LinhaMesAMes) => (l.percentual ? rotuloNota(l.nome) : (ROTULO_LINHA[l.nome] ?? l.nome));
+  const rotuloDoPeriodoMeses = mesesDaVisao.length
+    ? `${getMonthLabel(mesesDaVisao[0])} a ${getMonthLabel(mesesDaVisao[mesesDaVisao.length - 1])}`
+    : rotuloMes;
+
+  /** O que está na tela, para o Excel, o PDF e a impressão (o mesmo desenho do envio agendado). */
+  function documentoDaTela(): DocumentoExportado {
+    const filtros = {
+      periodo: visao === 'meses' ? rotuloDoPeriodoMeses : rotuloMes,
+      regime,
+      centro: centroEscolhido?.nome ?? null,
+      rateio: filtroRateio,
+      tag: tagEscolhida || null,
+      comparadoCom: visao === 'mes' ? rotuloComparativo : null,
+    };
+    if (visao === 'meses' && mesAMes) return documentoDoDREMesAMes({ filtros, mesAMes, linhas: linhasMesAMes });
+    return documentoDoDREdoMes({
+      filtros, rotuloMes, linhas: dreFiltrado,
+      comparativo: rotuloComparativo ? dreCompareFiltrado : null,
+      orcado: temOrcado ? orcadoMap : null,
+    });
+  }
+
+  /** Os filtros que o envio agendado leva (o período vem de cada envio). */
+  function consultaDoAgendamento(): string {
+    const q = new URLSearchParams();
+    if (regime !== 'competencia') q.set('regime', regime);
+    if (centroId) q.set('centro', centroId);
+    if (filtroRateio !== 'todas') q.set('rateio', filtroRateio);
+    if (!modoSimplificado) q.set('detalhe', 'completo');
+    return q.toString();
+  }
+
+  function resumoDoAgendamento(): string {
+    return [
+      `Regime de ${ROTULO_REGIME[regime].toLowerCase()}`,
+      modoSimplificado ? 'resumido' : 'completo',
+      centroEscolhido ? `centro de custo ${centroEscolhido.nome}` : null,
+      filtroRateio !== 'todas' ? ROTULO_RATEIO[filtroRateio].toLowerCase() : null,
+    ].filter(Boolean).join(', ') + '. O comparativo e o orçado ficam só na tela.';
+  }
 
   const anteriorAoSelecionado = selectedMonth ? mesAnterior(selectedMonth) : '';
 
   const contextoLucro =
     margemLiquida === null
-      ? `Receita menos impostos e despesas de ${rotuloMes}`
-      : `Margem de ${pctBR(margemLiquida)} sobre a receita bruta de ${rotuloMes}`;
+      ? `Receita menos impostos e despesas de ${rotuloDoPeriodoMeses}`
+      : `Margem de ${pctBR(margemLiquida)} sobre a receita bruta de ${rotuloDoPeriodoMeses}`;
 
   const esqueleto = (
     <div className="space-y-[var(--fin-s-5)]">
@@ -407,6 +531,7 @@ export default function DREPage() {
     <div className="w-full bg-[var(--fin-bg)] px-[var(--fin-page-pad)] py-[var(--fin-page-pad)] text-[var(--fin-text)]">
       <div className="mx-auto w-full max-w-[var(--fin-page-max)]">
         <PageHeader
+          empresas
           icone={TrendingUp}
           titulo="Resultado do mês"
           subtitulo={
@@ -463,25 +588,74 @@ export default function DREPage() {
               {semLancamento ? null : (
                 <FilterBar
                   selects={[
-                    {
-                      id: 'dre-mes',
-                      rotulo: 'Mês',
-                      valor: selectedMonth,
-                      opcoes: availableMonths.map(m => ({ valor: m, rotulo: getMonthLabel(m) })),
-                      onChange: trocarMes,
-                    },
-                    {
-                      id: 'dre-comparar',
-                      rotulo: 'Comparar com',
-                      valor: compareMonth === '' ? 'nenhum' : compareMonth,
-                      opcoes: [
-                        { valor: 'nenhum', rotulo: 'Sem comparação' },
-                        ...availableMonths
-                          .filter(m => m !== selectedMonth)
-                          .map(m => ({ valor: m, rotulo: getMonthLabel(m) })),
-                      ],
-                      onChange: v => setCompareMonth(v === 'nenhum' ? '' : v),
-                    },
+                    ...(visao === 'meses'
+                      ? [
+                        {
+                          id: 'dre-de',
+                          rotulo: 'De',
+                          valor: mesInicial,
+                          opcoes: availableMonths.filter(m => m <= selectedMonth).map(m => ({ valor: m, rotulo: getMonthLabel(m) })),
+                          onChange: setMesInicial,
+                        },
+                        {
+                          id: 'dre-ate',
+                          rotulo: 'Até',
+                          valor: selectedMonth,
+                          opcoes: availableMonths.map(m => ({ valor: m, rotulo: getMonthLabel(m) })),
+                          onChange: (m: string) => { setSelectedMonth(m); if (mesInicial > m) setMesInicial(m); },
+                        },
+                      ]
+                      : [
+                        {
+                          id: 'dre-mes',
+                          rotulo: 'Mês',
+                          valor: selectedMonth,
+                          opcoes: availableMonths.map(m => ({ valor: m, rotulo: getMonthLabel(m) })),
+                          onChange: trocarMes,
+                        },
+                        {
+                          id: 'dre-comparar',
+                          rotulo: 'Comparar com',
+                          valor: compareMonth === '' ? 'nenhum' : compareMonth,
+                          opcoes: [
+                            { valor: 'nenhum', rotulo: 'Sem comparação' },
+                            ...availableMonths
+                              .filter(m => m !== selectedMonth)
+                              .map(m => ({ valor: m, rotulo: getMonthLabel(m) })),
+                          ],
+                          onChange: (v: string) => setCompareMonth(v === 'nenhum' ? '' : v),
+                        },
+                      ]),
+                    ...(centros.length
+                      ? [
+                        {
+                          id: 'dre-centro',
+                          rotulo: 'Centro de custo',
+                          valor: centroId || 'todos',
+                          opcoes: [
+                            { valor: 'todos', rotulo: 'Todos os centros' },
+                            ...arvoreDeCentros.map(c => ({ valor: c.id, rotulo: `${'  '.repeat(c.nivel)}${c.codigo ? `${c.codigo} ` : ''}${c.nome}` })),
+                          ],
+                          onChange: (v: string) => setCentroId(v === 'todos' ? '' : v),
+                        },
+                        {
+                          id: 'dre-rateio',
+                          rotulo: 'Rateio',
+                          valor: filtroRateio,
+                          opcoes: (['todas', 'rateadas', 'sem_rateio'] as FiltroDeRateio[]).map(r => ({ valor: r, rotulo: ROTULO_RATEIO[r] })),
+                          onChange: (v: string) => setFiltroRateio(v as FiltroDeRateio),
+                        },
+                      ]
+                      : []),
+                    ...(tagsDisponiveis.length
+                      ? [{
+                        id: 'dre-tag',
+                        rotulo: 'Tag',
+                        valor: tag || 'todas',
+                        opcoes: [{ valor: 'todas', rotulo: 'Todas as tags' }, ...tagsDisponiveis],
+                        onChange: (v: string) => setTag(v === 'todas' ? '' : v),
+                      }]
+                      : []),
                     {
                       id: 'dre-detalhe',
                       rotulo: 'Detalhe',
@@ -493,11 +667,16 @@ export default function DREPage() {
                       onChange: v => alternarModo(v === 'resumido'),
                     },
                   ]}
-                  resumo={{
+                  resumo={visao === 'meses' && mesAMes ? {
+                    exibidos: linhasMesAMes.filter(l => !l.percentual).length,
+                    total: mesAMes.linhas.filter(l => !l.percentual).length,
+                    substantivo: 'linhas do demonstrativo',
+                    escopo: `de ${rotuloDoPeriodoMeses}${escopoDoRecorte}`,
+                  } : {
                     exibidos: linhasTabela.length,
                     total: totalLinhas,
                     substantivo: 'linhas do demonstrativo',
-                    escopo: `em ${rotuloMes}`,
+                    escopo: `em ${rotuloMes}${escopoDoRecorte}`,
                   }}
                   ativos={filtrosAtivos}
                   onLimpar={limparFiltros}
@@ -505,34 +684,75 @@ export default function DREPage() {
               )}
 
               {semLancamento ? null : (
-                <div className="flex flex-col gap-[var(--fin-s-3)] sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex flex-col gap-[var(--fin-s-1)]">
-                    <Segmentado<RegimeDRE>
-                      rotulo="Regime"
-                      valor={regime}
-                      onChange={setRegime}
-                      opcoes={[
-                        { valor: 'competencia', rotulo: ROTULO_REGIME.competencia },
-                        { valor: 'caixa', rotulo: ROTULO_REGIME.caixa },
-                      ]}
-                    />
-                    <span className="fin-t-caption text-[var(--fin-text-3)]">
-                      {regime === 'competencia'
-                        ? 'Pelo vencimento das contas e pela data da venda, recebidas ou não.'
-                        : 'Pela data em que o dinheiro entrou ou saiu. A margem da venda entra na proporção do que o cliente pagou.'}
-                    </span>
+                <div className="flex flex-col gap-[var(--fin-s-3)] lg:flex-row lg:items-start lg:justify-between">
+                  <div className="flex flex-wrap items-start gap-x-[var(--fin-s-5)] gap-y-[var(--fin-s-3)]">
+                    <div className="flex flex-col gap-[var(--fin-s-1)]">
+                      <Segmentado<'mes' | 'meses'>
+                        rotulo="Visão"
+                        valor={visao}
+                        onChange={setVisao}
+                        opcoes={[
+                          { valor: 'mes', rotulo: 'Um mês' },
+                          { valor: 'meses', rotulo: 'Mês a mês' },
+                        ]}
+                      />
+                      <span className="fin-t-caption text-[var(--fin-text-3)]">
+                        {visao === 'mes' ? 'O mês escolhido, com comparação e orçado.' : 'Cada mês numa coluna, com total e média do período.'}
+                      </span>
+                    </div>
+                    <div className="flex flex-col gap-[var(--fin-s-1)]">
+                      <Segmentado<RegimeDRE>
+                        rotulo="Regime"
+                        valor={regime}
+                        onChange={setRegime}
+                        opcoes={[
+                          { valor: 'competencia', rotulo: ROTULO_REGIME.competencia },
+                          { valor: 'caixa', rotulo: ROTULO_REGIME.caixa },
+                        ]}
+                      />
+                      <span className="max-w-[46ch] fin-t-caption text-[var(--fin-text-3)]">
+                        {regime === 'competencia'
+                          ? 'Pelo vencimento das contas e pela data da venda, recebidas ou não.'
+                          : 'Pela data em que o dinheiro entrou ou saiu. A margem da venda entra na proporção do que o cliente pagou.'}
+                      </span>
+                    </div>
+                    {tagsDisponiveis.length ? (
+                      <div className="flex flex-col gap-[var(--fin-s-1)]">
+                        <Segmentado<'nada' | 'tag'>
+                          rotulo="Agrupar"
+                          valor={agrupar}
+                          onChange={setAgrupar}
+                          opcoes={[
+                            { valor: 'nada', rotulo: 'Só o demonstrativo' },
+                            { valor: 'tag', rotulo: 'Por tag' },
+                          ]}
+                        />
+                        <span className="max-w-[40ch] fin-t-caption text-[var(--fin-text-3)]">
+                          {agrupar === 'tag' ? 'Um quadro com o que entrou e saiu em cada tag, abaixo do demonstrativo.' : 'Escolha "Por tag" para ver o resultado de cada tag.'}
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
-                  {anteriorAoSelecionado && compareMonth !== anteriorAoSelecionado ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setCompareMonth(anteriorAoSelecionado)}
-                      className="h-11 self-start lg:h-10 sm:self-auto"
-                    >
-                      <CalendarClock aria-hidden="true" className="size-4" />
-                      Comparar com o mês anterior
-                    </Button>
-                  ) : null}
+                  <div className="flex flex-wrap items-center gap-[var(--fin-s-2)]">
+                    {visao === 'mes' && anteriorAoSelecionado && compareMonth !== anteriorAoSelecionado ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setCompareMonth(anteriorAoSelecionado)}
+                        className="h-11 lg:h-9"
+                      >
+                        <CalendarClock aria-hidden="true" className="size-4" />
+                        Comparar com o mês anterior
+                      </Button>
+                    ) : null}
+                    <BotaoExportar origem="dre" documento={documentoDaTela} />
+                    <BotaoAgendarEnvio
+                      relatorio="dre"
+                      nomeSugerido="Resultado do mês"
+                      consulta={consultaDoAgendamento}
+                      resumoDosFiltros={resumoDoAgendamento}
+                    />
+                  </div>
                 </div>
               )}
 
@@ -562,7 +782,7 @@ export default function DREPage() {
                       rotulo="Receita bruta" icone={ArrowDownLeft}
                       valor={receitaBruta}
                       estado={estadoValor}
-                      contexto={`Comissões, fees e outras receitas de ${rotuloMes}`}
+                      contexto={`Comissões, fees e outras receitas de ${rotuloDoPeriodoMeses}`}
                       explicacao={'Margem das vendas + comissões de fornecedores + fees + outras receitas próprias da agência. É sobre este valor que incidem impostos (ISS, PIS/COFINS, Simples).'}
                     />
                     <MetricCard
@@ -610,20 +830,55 @@ export default function DREPage() {
                       </p>
                     </div>
 
-                    <DemonstrativoTabela
-                      linhas={linhasTabela}
-                      notas={notasTabela}
-                      rotuloPeriodo={rotuloMes}
-                      rotuloComparativo={rotuloComparativo}
-                      rotuloOrcado={temOrcado ? 'Orçado' : null}
-                      onAbrirValor={abrirValor}
-                      descricao={`Resultado de ${rotuloMes}${regime === 'caixa' ? ' pelo caixa' : ''}${rotuloComparativo ? `, comparado com ${rotuloComparativo}` : ''}`}
-                    />
-                    <p className="fin-t-caption text-[var(--fin-text-3)]">
-                      Toque num valor sublinhado para ver os lançamentos que o formam.
-                      {temOrcado ? ' O orçado vem do plano do mês em Custos do negócio.' : ''}
-                    </p>
+                    {visao === 'meses' && mesAMes ? (
+                      <>
+                        <DemonstrativoMeses
+                          meses={mesAMes.meses}
+                          linhas={linhasMesAMes}
+                          rotulo={rotuloDaLinhaMeses}
+                          descricao={`Resultado mês a mês de ${rotuloDoPeriodoMeses}${regime === 'caixa' ? ' pelo caixa' : ''}${centroEscolhido ? `, centro de custo ${centroEscolhido.nome}` : ''}`}
+                          onAbrirMes={m => { setSelectedMonth(m); setVisao('mes'); }}
+                        />
+                        <p className="fin-t-caption text-[var(--fin-text-3)]">
+                          Toque no nome de um mês para abri-lo sozinho, com os lançamentos de cada linha.
+                          {mesesEntre(mesInicial || selectedMonth, selectedMonth, 999).length > mesAMes.meses.length ? ' A tabela mostra até 24 meses.' : ''}
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <DemonstrativoTabela
+                          linhas={linhasTabela}
+                          notas={notasTabela}
+                          rotuloPeriodo={rotuloMes}
+                          rotuloComparativo={rotuloComparativo}
+                          rotuloOrcado={temOrcado ? 'Orçado' : null}
+                          onAbrirValor={abrirValor}
+                          descricao={`Resultado de ${rotuloMes}${regime === 'caixa' ? ' pelo caixa' : ''}${rotuloComparativo ? `, comparado com ${rotuloComparativo}` : ''}`}
+                        />
+                        <p className="fin-t-caption text-[var(--fin-text-3)]">
+                          Toque num valor sublinhado para ver os lançamentos que o formam.
+                          {temOrcado ? ' O orçado vem do plano do mês em Custos do negócio.' : ''}
+                        </p>
+                      </>
+                    )}
+                    {centroEscolhido || filtroRateio !== 'todas' || tagEscolhida ? (
+                      <p className="fin-t-caption text-[var(--fin-text-3)]">
+                        {centroEscolhido
+                          ? `Só a parte de ${centroEscolhido.nome} (e dos centros abaixo dele): conta rateada entra com o percentual deste centro; venda, na proporção das contas a receber dela.`
+                          : ''}
+                        {filtroRateio !== 'todas' ? ` ${ROTULO_RATEIO[filtroRateio]}.` : ''}
+                        {tagEscolhida ? ` Só as contas com a tag ${tagEscolhida}; venda entra pelas contas a receber dela que têm a tag.` : ''}
+                      </p>
+                    ) : null}
                   </section>
+
+                  {agrupar === 'tag' && tagsDisponiveis.length > 0 && porTag ? (
+                    <ResultadoPorTag
+                      resultado={porTag}
+                      rotuloPeriodo={visao === 'meses' ? rotuloDoPeriodoMeses : rotuloMes}
+                      regime={regime}
+                    />
+                  ) : null}
                 </>
               )}
             </div>

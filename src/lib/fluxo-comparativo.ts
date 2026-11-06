@@ -37,7 +37,7 @@ import {
   intervalos, lancamentosDoCaixa, periodoContem,
   type Agrupamento, type EventoDeFolha, type Lancamento, type Periodo, type PontoDaCurva,
 } from './caderno-caixa';
-import { num, round2, somaPor } from './money';
+import { addDias, num, round2, somaPor } from './money';
 import { entradaLiquidaNoBanco, valorMovimentado } from './saldo-bancario';
 
 // ─── Conta ──────────────────────────────────────────────────────────────────
@@ -47,12 +47,24 @@ export interface FiltroDeConta {
   contaId: string | null;
   /** Id da Caixa Geral: baixa sem conta cai nela. */
   caixaGeralId?: string | null;
+  /**
+   * Conta previsão padrão da agência (06/11/2026, E7): o título em aberto sem
+   * conta prevista nem conta escolhida é esperado nela. Ausente = como antes.
+   */
+  contaPrevisaoPadraoId?: string | null;
+  /**
+   * Conta previsão de cada empresa que escolheu a própria (E7, frente D):
+   * o título da empresa usa a dela; sem escolha própria, a padrão acima.
+   */
+  contaPrevisaoPorEmpresa?: Readonly<Record<string, string>> | null;
 }
 
 /** O que receber e pagar têm em comum para achar a conta. */
 type Titulo = {
   status?: string | null;
   conta_bancaria_id?: string | null;
+  /** Conta onde se espera pagar ou receber (06/11/2026, E7). */
+  conta_previsao_id?: string | null;
   valor_final?: number | null;
   valor_recebido?: number | null;
   valor_pago?: number | null;
@@ -65,13 +77,24 @@ function movimentou(t: Titulo, lado: 'receber' | 'pagar'): number {
 }
 
 /**
- * A conta de um título. Com conta escolhida, é ela. Sem conta: se já se
- * moveu, a Caixa Geral (onde o saldo o contou); se não, nenhuma.
+ * A conta de um título. O que já se moveu vale pela conta escolhida (sem
+ * conta, a Caixa Geral, onde o saldo o contou). O que está em aberto vale
+ * pela conta prevista do título (06/11/2026, E7); sem ela, pela conta
+ * escolhida, como antes; sem nenhuma, pela conta previsão padrão da agência;
+ * sem padrão, nenhuma.
  */
-export function contaDoTitulo(t: Titulo, lado: 'receber' | 'pagar', caixaGeralId?: string | null): string | null {
+export function contaDoTitulo(
+  t: Titulo, lado: 'receber' | 'pagar', caixaGeralId?: string | null, contaPrevisaoPadraoId?: string | null,
+  contaPrevisaoPorEmpresa?: Readonly<Record<string, string>> | null,
+): string | null {
   const escolhida = String(t.conta_bancaria_id ?? '').trim();
+  if (movimentou(t, lado) > 0) return escolhida || caixaGeralId || null;
+  const prevista = String(t.conta_previsao_id ?? '').trim();
+  if (prevista) return prevista;
   if (escolhida) return escolhida;
-  return movimentou(t, lado) > 0 ? (caixaGeralId || null) : null;
+  const empresa = String((t as { empresa_id?: unknown }).empresa_id ?? '').trim();
+  const daEmpresa = empresa && contaPrevisaoPorEmpresa ? String(contaPrevisaoPorEmpresa[empresa] ?? '').trim() : '';
+  return daEmpresa || String(contaPrevisaoPadraoId ?? '').trim() || null;
 }
 
 export interface TitulosDaConta {
@@ -114,7 +137,7 @@ export function titulosDaConta(entrada: {
   let valor = 0;
   const filtrar = <T extends Titulo>(lista: readonly T[], lado: 'receber' | 'pagar'): T[] => lista.filter(t => {
     if (t.status === 'CANCELADO') return false;
-    const conta = contaDoTitulo(t, lado, filtro.caixaGeralId);
+    const conta = contaDoTitulo(t, lado, filtro.caixaGeralId, filtro.contaPrevisaoPadraoId, filtro.contaPrevisaoPorEmpresa);
     if (conta === null) {
       const aberto = emAberto(t, lado);
       if (aberto > 0) { quantidade++; valor = round2(valor + aberto); }
@@ -307,5 +330,129 @@ export function alertaDeSaldo(curva: readonly PontoDaCurva[], minimo: number, ho
     primeiroAbaixoDoMinimo: min > 0 ? (previstos.find(p => p.saldo < min)?.data ?? null) : null,
     primeiroNegativo: previstos.find(p => p.saldo < 0)?.data ?? null,
     menor,
+  };
+}
+
+// ─── Grade conta × dia (E7, G3) ─────────────────────────────────────────────
+
+export interface LinhaDaGrade {
+  /** Id da conta bancária; SEM_CONTA e OUTRAS_CONTAS nas linhas sintéticas. */
+  id: string;
+  nome: string;
+  tipo: 'conta' | 'sem_conta' | 'outras';
+  saldoInicial: number;
+  /** Saldo no fim de cada dia (na ordem de `dias`). */
+  saldos: number[];
+  /** Entradas − saídas de cada dia. */
+  movimentos: number[];
+  entradas: number[];
+  saidas: number[];
+  /** Os lançamentos de cada dia com movimento (para abrir o detalhe). */
+  lancamentosPorDia: Record<string, Lancamento[]>;
+}
+
+export interface GradeContaDia {
+  dias: string[];
+  linhas: LinhaDaGrade[];
+  total: Omit<LinhaDaGrade, 'id' | 'nome' | 'tipo' | 'lancamentosPorDia'>;
+}
+
+export const SEM_CONTA = '__sem_conta';
+export const OUTRAS_CONTAS = '__outras';
+
+/**
+ * Cada conta bancária numa linha, cada dia do período numa coluna: o saldo no
+ * fim do dia (ou o movimento do dia), pela regra do caderno (realizado na
+ * data da baixa, em aberto no vencimento ou hoje se venceu). Baixa sem conta
+ * vai para a Caixa Geral; previsão sem conta e folha ainda não lançada ficam
+ * numa linha própria ("Previsto sem conta"), e título de conta que não está
+ * na lista (excluída ou não liberada para a pessoa) em "Outras contas". Assim
+ * a soma das linhas é exatamente o caderno de "Todas as contas".
+ */
+export function gradeContaPorDia(entrada: {
+  receber: readonly ContaReceber[];
+  pagar: readonly ContaPagar[];
+  folha?: readonly EventoDeFolha[];
+  contas: ReadonlyArray<{ id: string; nome?: string | null; saldo_inicial?: number | null }>;
+  caixaGeralId?: string | null;
+  /** Conta previsão padrão da agência: o que está em aberto sem conta prevista entra nela. */
+  contaPrevisaoPadraoId?: string | null;
+  /** A de cada empresa que escolheu a própria (E7, frente D). */
+  contaPrevisaoPorEmpresa?: Readonly<Record<string, string>> | null;
+  periodo: Periodo;
+  hoje: string;
+}): GradeContaDia {
+  const { periodo, hoje } = entrada;
+  const dias: string[] = [];
+  for (let d = periodo.inicio; d <= periodo.fim && dias.length < 400; d = addDias(d, 1)) dias.push(d);
+
+  const conhecidas = new Set(entrada.contas.map(c => c.id));
+  const grupos = new Map<string, { receber: ContaReceber[]; pagar: ContaPagar[] }>();
+  const grupo = (id: string) => {
+    let g = grupos.get(id);
+    if (!g) { g = { receber: [], pagar: [] }; grupos.set(id, g); }
+    return g;
+  };
+  const chaveDe = (conta: string | null) => (conta === null ? SEM_CONTA : conhecidas.has(conta) ? conta : OUTRAS_CONTAS);
+  for (const cr of entrada.receber) {
+    if (cr.status === 'CANCELADO') continue;
+    grupo(chaveDe(contaDoTitulo(cr, 'receber', entrada.caixaGeralId, entrada.contaPrevisaoPadraoId, entrada.contaPrevisaoPorEmpresa))).receber.push(cr);
+  }
+  for (const cp of entrada.pagar) {
+    if (cp.status === 'CANCELADO') continue;
+    grupo(chaveDe(contaDoTitulo(cp, 'pagar', entrada.caixaGeralId, entrada.contaPrevisaoPadraoId, entrada.contaPrevisaoPorEmpresa))).pagar.push(cp);
+  }
+
+  const montar = (id: string, nome: string, tipo: LinhaDaGrade['tipo'], saldoInicialDaConta: number, folha: readonly EventoDeFolha[]): LinhaDaGrade => {
+    const g = grupos.get(id) ?? { receber: [], pagar: [] };
+    const lancs = lancamentosDoCaixa({ receber: g.receber, pagar: g.pagar, folha, hoje });
+    const anteriores = lancs.filter(l => !l.data || l.data < periodo.inicio);
+    const saldoInicial = round2(saldoInicialDaConta + somaPor(anteriores, l => (l.tipo === 'entrada' ? l.valor : -l.valor)));
+    const porDia = new Map<string, Lancamento[]>();
+    for (const l of lancs) if (l.data && periodoContem(periodo, l.data)) porDia.set(l.data, [...(porDia.get(l.data) ?? []), l]);
+    const saldos: number[] = [];
+    const movimentos: number[] = [];
+    const entradas: number[] = [];
+    const saidas: number[] = [];
+    let corrido = saldoInicial;
+    const lancamentosPorDia: Record<string, Lancamento[]> = {};
+    for (const d of dias) {
+      const ls = porDia.get(d) ?? [];
+      const e = somaPor(ls.filter(l => l.tipo === 'entrada'), l => l.valor);
+      const s = somaPor(ls.filter(l => l.tipo === 'saida'), l => l.valor);
+      corrido = round2(corrido + e - s);
+      entradas.push(e);
+      saidas.push(s);
+      movimentos.push(round2(e - s));
+      saldos.push(corrido);
+      if (ls.length) lancamentosPorDia[d] = ls;
+    }
+    return { id, nome, tipo, saldoInicial, saldos, movimentos, entradas, saidas, lancamentosPorDia };
+  };
+
+  const linhas: LinhaDaGrade[] = entrada.contas.map(c =>
+    montar(c.id, String(c.nome ?? '').trim() || 'Conta sem nome', 'conta', round2(num(c.saldo_inicial)), []));
+  const folha = (entrada.folha ?? []).filter(f => num(f.valor) > 0);
+  if (grupos.has(SEM_CONTA) || folha.length) {
+    const l = montar(SEM_CONTA, 'Previsto sem conta', 'sem_conta', 0, folha);
+    if (l.saldoInicial !== 0 || l.movimentos.some(v => v !== 0)) linhas.push(l);
+  }
+  if (grupos.has(OUTRAS_CONTAS)) {
+    const l = montar(OUTRAS_CONTAS, 'Outras contas', 'outras', 0, []);
+    if (l.saldoInicial !== 0 || l.movimentos.some(v => v !== 0)) linhas.push(l);
+  }
+
+  const somaColuna = (k: 'saldos' | 'movimentos' | 'entradas' | 'saidas') =>
+    dias.map((_, i) => round2(linhas.reduce((s, l) => s + l[k][i], 0)));
+  return {
+    dias,
+    linhas,
+    total: {
+      saldoInicial: round2(linhas.reduce((s, l) => s + l.saldoInicial, 0)),
+      saldos: somaColuna('saldos'),
+      movimentos: somaColuna('movimentos'),
+      entradas: somaColuna('entradas'),
+      saidas: somaColuna('saidas'),
+    },
   };
 }

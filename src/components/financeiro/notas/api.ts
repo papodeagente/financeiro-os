@@ -2,7 +2,7 @@
  * Chamadas das telas de notas por regra e retenções (E5, parte E). Contrato
  * das rotas em src/lib/nota-regras-rota.ts. Dinheiro em centavos.
  */
-import type { RegraDaNota } from '@/lib/nota-regras';
+import type { DataDaNota, RegraDaNota } from '@/lib/nota-regras';
 import type { RetencaoDoCliente } from '@/lib/nota-retencoes';
 import type {
   ConfigNotas, GradeDeNotas, PreviaDeNotas, ResultadoDaEmissao, SelecaoDeNotas,
@@ -24,15 +24,26 @@ async function chamar<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const apiNotas = {
-  grade: (f: { de: string; ate: string; busca?: string; pendentes?: boolean }, signal?: AbortSignal) => {
+  grade: (f: {
+    de: string; ate: string; busca?: string; pendentes?: boolean;
+    data_de?: 'VENDA' | 'EMBARQUE'; tipo?: string; vendedor?: string; fornecedor?: string; pagina?: number;
+  }, signal?: AbortSignal) => {
     const q = new URLSearchParams({ de: f.de, ate: f.ate });
     if (f.busca) q.set('busca', f.busca);
     if (f.pendentes) q.set('pendentes', '1');
+    if (f.data_de === 'EMBARQUE') q.set('data_de', 'EMBARQUE');
+    if (f.tipo) q.set('tipo', f.tipo);
+    if (f.vendedor) q.set('vendedor', f.vendedor);
+    if (f.fornecedor) q.set('fornecedor', f.fornecedor);
+    if (f.pagina && f.pagina > 1) q.set('pagina', String(f.pagina));
     return chamar<GradeDeNotas>(`/api/fiscal/gerar?${q}`, { signal });
   },
-  previa: (selecao: SelecaoDeNotas[]) => chamar<PreviaDeNotas>('/api/fiscal/gerar/previa', { method: 'POST', body: JSON.stringify({ selecao }) }),
-  emitir: (selecao: SelecaoDeNotas[], assinatura: string) =>
-    chamar<ResultadoDaEmissao>('/api/fiscal/gerar', { method: 'POST', body: JSON.stringify({ selecao, assinatura }) }),
+  previa: (selecao: SelecaoDeNotas[], data_da_nota?: DataDaNota) =>
+    chamar<PreviaDeNotas>('/api/fiscal/gerar/previa', { method: 'POST', body: JSON.stringify({ selecao, data_da_nota }) }),
+  emitir: (selecao: SelecaoDeNotas[], assinatura: string, data_da_nota?: DataDaNota) =>
+    chamar<ResultadoDaEmissao>('/api/fiscal/gerar', { method: 'POST', body: JSON.stringify({ selecao, assinatura, data_da_nota }) }),
+  registrarNotaDeFora: (n: Record<string, unknown>) =>
+    chamar<{ nota: { id: string; numero: string }; repetida: boolean }>('/api/fiscal/notas-externas', { method: 'POST', body: JSON.stringify(n) }),
   cancelarNota: (id: string, motivo: string) =>
     chamar<unknown>(`/api/fiscal/notas/${encodeURIComponent(id)}`, { method: 'DELETE', body: JSON.stringify({ motivo }) }),
   regras: () => chamar<{ regras: RegraDaNota[]; config: ConfigNotas; sugerida: RegraDaNota }>('/api/fiscal/regras'),

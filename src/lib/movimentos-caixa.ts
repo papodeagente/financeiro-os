@@ -38,6 +38,7 @@ import { deCentavos, num, paraCentavos, round2 } from './money';
 import { valorMovimentado } from './saldo-bancario';
 import { taxaRealizada } from './taxa-plataforma';
 import { auditCsvCell } from './audit-query';
+import { rotuloDoPeriodo, type DocumentoExportado, type FiltroAplicado } from './exportacao/documento';
 
 export const CAIXA_GERAL = 'Caixa Geral';
 
@@ -77,6 +78,11 @@ export interface MovimentoCaixa {
   saldo_conta: number;
   /** Saldo das contas escolhidas, somadas, depois desta linha. */
   saldo_total: number;
+  /**
+   * A data do movimento está num período fechado pelo Fechar Caixa (da
+   * agência inteira ou desta conta): não muda mais sem reabrir (06/11/2026).
+   */
+  fechado: boolean;
 }
 
 // ─── Filtros ────────────────────────────────────────────────────────────────
@@ -240,7 +246,7 @@ WITH cb AS (
          -ROUND(${numerico("t.data->>'valor'")} * 100)::bigint,
          'Transferência para ' || COALESCE(NULLIF(t.data->>'conta_destino_nome', ''), 'outra conta')
            || CASE WHEN ${texto('t', 'descricao')} <> '' THEN ': ' || (t.data->>'descricao') ELSE '' END,
-         '', '', '', 'Transferência', '', '', '', '', '', 'BRL', NULL, NULL, '', '', 1
+         '', '', '', 'Transferência', '', '', '', '', COALESCE(NULLIF(t.data->>'cheque_numero', ''), ''), 'BRL', NULL, NULL, '', '', 1
     FROM transferencias t
    WHERE t.tenant_id = $1 AND (t.data->>'status') = 'EFETIVADA' AND ${numerico("t.data->>'valor'")} > 0
   UNION ALL
@@ -250,7 +256,7 @@ WITH cb AS (
          ROUND(${numerico("t.data->>'valor'")} * 100)::bigint,
          'Transferência de ' || COALESCE(NULLIF(t.data->>'conta_origem_nome', ''), 'outra conta')
            || CASE WHEN ${texto('t', 'descricao')} <> '' THEN ': ' || (t.data->>'descricao') ELSE '' END,
-         '', '', '', 'Transferência', '', '', '', '', '', 'BRL', NULL, NULL, '', '', 0
+         '', '', '', 'Transferência', '', '', '', '', COALESCE(NULLIF(t.data->>'cheque_numero', ''), ''), 'BRL', NULL, NULL, '', '', 0
     FROM transferencias t
    WHERE t.tenant_id = $1 AND (t.data->>'status') = 'EFETIVADA' AND ${numerico("t.data->>'valor'")} > 0
 ), mov AS (
@@ -408,7 +414,37 @@ function linhaDoBanco(r: Record<string, unknown>): MovimentoCaixa {
     informacoes: s('informacoes'),
     saldo_conta: deCentavos(r.saldo_conta_c as number),
     saldo_total: deCentavos(r.saldo_total_c as number),
+    fechado: false,
   };
+}
+
+/**
+ * Até quando cada conta está fechada (Fechar Caixa): '' = a agência inteira.
+ * Sem a tabela de períodos (banco antigo), nada está fechado.
+ */
+async function fechamentosDaAgencia(exec: ExecutorSQL, tenantId: string): Promise<Map<string, string>> {
+  const m = new Map<string, string>();
+  try {
+    const { rows: existe } = await exec.query(`SELECT to_regclass('public.periodos_fechados') IS NOT NULL AS ok`);
+    if (existe[0]?.ok !== true) return m;
+    const { rows } = await exec.query(
+      `SELECT conta_bancaria_id AS c, fechado_ate::text AS d FROM periodos_fechados WHERE tenant_id = $1`, [tenantId]);
+    for (const r of rows) m.set(String(r.c ?? ''), String(r.d ?? '').slice(0, 10));
+  } catch {
+    return m;
+  }
+  return m;
+}
+
+/** Marca as linhas cuja data está num período fechado (da agência ou da conta). */
+export function marcarFechados(linhas: MovimentoCaixa[], fechamentos: ReadonlyMap<string, string>): MovimentoCaixa[] {
+  if (fechamentos.size === 0) return linhas;
+  const geral = fechamentos.get('') ?? '';
+  return linhas.map(l => {
+    const daConta = fechamentos.get(l.conta_id) ?? '';
+    const ate = daConta > geral ? daConta : geral;
+    return { ...l, fechado: Boolean(ate && l.data && l.data <= ate) };
+  });
 }
 
 /**
@@ -491,7 +527,7 @@ export async function lerMovimentos(exec: ExecutorSQL, tenantId: string, f: Filt
   const ent = Number(tot[0]?.ent ?? 0);
   const sai = Number(tot[0]?.sai ?? 0);
   return {
-    linhas: rows.map(linhaDoBanco),
+    linhas: marcarFechados(rows.map(linhaDoBanco), await fechamentosDaAgencia(exec, tenantId)),
     total, pagina, por_pagina: f.porPagina, total_paginas: totalPaginas,
     de: f.de, ate: f.ate,
     saldo_anterior: round2(resumo.reduce((s, c) => s + c.saldo_anterior, 0)),
@@ -512,7 +548,7 @@ export async function lerParaExportar(exec: ExecutorSQL, tenantId: string, f: Fi
      SELECT a.* FROM enr a WHERE ${where} ORDER BY ${ordemSql(f)} LIMIT $${valores.length + 1}`,
     [...valores, EXPORTACAO_MAX + 1],
   );
-  return rows.map(linhaDoBanco);
+  return marcarFechados(rows.map(linhaDoBanco), await fechamentosDaAgencia(exec, tenantId));
 }
 
 // ─── Exportação ─────────────────────────────────────────────────────────────
@@ -549,18 +585,93 @@ export function dataBR(iso: string): string {
  */
 export function csvDosMovimentos(linhas: readonly MovimentoCaixa[], leiaute: LeiauteDeExportacao): string {
   const cel = (v: unknown) => auditCsvCell(v);
+  // Coluna Fechado (E7, frente D): a mesma marca de cadeado da tela.
+  const fechado = (l: MovimentoCaixa) => cel(l.fechado ? 'Sim' : '');
   const numCel = (v: number | null) => (v === null ? '""' : `"${numeroBR(v)}"`);
   if (leiaute === 'extrato') {
-    const cab = ['Data', 'Conta', 'Número', 'Descrição', 'Documento', 'Pessoa', 'CPF/CNPJ', 'Informações', 'Forma', 'Origem', 'Valor', 'Saldo da conta', 'Saldo'];
+    const cab = ['Data', 'Conta', 'Número', 'Descrição', 'Documento', 'Pessoa', 'CPF/CNPJ', 'Informações', 'Forma', 'Origem', 'Valor', 'Saldo da conta', 'Saldo', 'Fechado'];
     const corpo = linhas.map(l => [cel(dataBR(l.data)), cel(l.conta_nome), cel(l.numero), cel(l.descricao), cel(l.documento), cel(l.pessoa_nome),
-      cel(l.cpf_cnpj), cel(l.informacoes), cel(l.forma), cel(rotuloDaOrigem(l.origem)), numCel(l.valor), numCel(l.saldo_conta), numCel(l.saldo_total)].join(';'));
+      cel(l.cpf_cnpj), cel(l.informacoes), cel(l.forma), cel(rotuloDaOrigem(l.origem)), numCel(l.valor), numCel(l.saldo_conta), numCel(l.saldo_total), fechado(l)].join(';'));
     return '﻿' + [cab.map(cel).join(';'), ...corpo].join('\r\n');
   }
-  const cab = ['Data', 'Número', 'Venda', 'Conta', 'Forma de pagamento', 'Pessoa', 'Documento', 'Cheque/Cartão', 'Moeda', 'Valor origem', 'Câmbio', 'Movimento', 'Valor'];
+  const cab = ['Data', 'Número', 'Venda', 'Conta', 'Forma de pagamento', 'Pessoa', 'Documento', 'Cheque/Cartão', 'Moeda', 'Valor origem', 'Câmbio', 'Movimento', 'Valor', 'Fechado'];
   const corpo = linhas.map(l => [cel(dataBR(l.data)), cel(l.numero), cel(l.venda_numero || l.venda_id), cel(l.conta_nome), cel(l.forma), cel(l.pessoa_nome),
     cel(l.documento), cel(l.cartao_cheque), cel(l.moeda), numCel(l.valor_origem), l.cambio === null ? '""' : `"${String(l.cambio).replace('.', ',')}"`,
-    cel(`${l.tipo === 'entrada' ? 'Entrada' : 'Saída'} · ${rotuloDaOrigem(l.origem)}`), numCel(l.valor)].join(';'));
+    cel(`${l.tipo === 'entrada' ? 'Entrada' : 'Saída'} · ${rotuloDaOrigem(l.origem)}`), numCel(l.valor), fechado(l)].join(';'));
   return '﻿' + [cab.map(cel).join(';'), ...corpo].join('\r\n');
+}
+
+// ─── Excel (.xlsx), PDF e impressão (E7, G3) ───────────────────────────────
+
+/** O filtro aplicado, por extenso (vai no topo do arquivo e no nome dele). */
+export function filtrosDosMovimentos(f: FiltroDeMovimentos, nomesDasContas: readonly string[]): FiltroAplicado[] {
+  const out: FiltroAplicado[] = [{ rotulo: 'Período', valor: rotuloDoPeriodo(f.de, f.ate) }];
+  if (f.contas.length) out.push({ rotulo: f.contas.length === 1 ? 'Conta' : 'Contas', valor: nomesDasContas.length ? nomesDasContas.join(', ') : `${f.contas.length} contas` });
+  if (f.tipo) out.push({ rotulo: 'Tipo', valor: f.tipo === 'entrada' ? 'Só entradas' : 'Só saídas' });
+  if (f.origem) out.push({ rotulo: 'Origem', valor: rotuloDaOrigem(f.origem) });
+  if (f.forma) out.push({ rotulo: 'Forma', valor: f.forma });
+  if (f.pessoa) out.push({ rotulo: 'Pessoa', valor: f.pessoa });
+  if (f.busca) out.push({ rotulo: 'Busca', valor: f.busca });
+  if (!f.taxas) out.push({ rotulo: 'Taxas retidas', valor: 'fora' });
+  return out;
+}
+
+/**
+ * O recorte inteiro como documento de exportação, com as MESMAS colunas do
+ * CSV de cada leiaute. Valores em reais (com sinal: saída negativa).
+ */
+export function documentoDosMovimentos(
+  linhas: readonly MovimentoCaixa[], leiaute: LeiauteDeExportacao, f: FiltroDeMovimentos,
+): DocumentoExportado {
+  const nomes = f.contas.length ? [...new Set(linhas.filter(l => f.contas.includes(l.conta_id)).map(l => l.conta_nome))] : [];
+  const filtros = filtrosDosMovimentos(f, nomes);
+  const total = round2(linhas.reduce((s, l) => s + l.valor, 0));
+  if (leiaute === 'extrato') {
+    return {
+      titulo: 'Extrato de conta',
+      filtros,
+      colunas: [
+        { id: 'data', rotulo: 'Data', tipo: 'data' }, { id: 'conta', rotulo: 'Conta', tipo: 'texto' },
+        { id: 'numero', rotulo: 'Número', tipo: 'texto' }, { id: 'descricao', rotulo: 'Descrição', tipo: 'texto' },
+        { id: 'documento', rotulo: 'Documento', tipo: 'texto' }, { id: 'pessoa', rotulo: 'Pessoa', tipo: 'texto' },
+        { id: 'cpf_cnpj', rotulo: 'CPF/CNPJ', tipo: 'texto' }, { id: 'informacoes', rotulo: 'Informações', tipo: 'texto' },
+        { id: 'forma', rotulo: 'Forma', tipo: 'texto' }, { id: 'origem', rotulo: 'Origem', tipo: 'texto' },
+        { id: 'valor', rotulo: 'Valor', tipo: 'dinheiro' }, { id: 'saldo_conta', rotulo: 'Saldo da conta', tipo: 'dinheiro' },
+        { id: 'saldo_total', rotulo: 'Saldo', tipo: 'dinheiro' }, { id: 'fechado', rotulo: 'Fechado', tipo: 'texto' },
+      ],
+      linhas: linhas.map(l => ({
+        data: l.data, conta: l.conta_nome, numero: l.numero, descricao: l.descricao, documento: l.documento, pessoa: l.pessoa_nome,
+        cpf_cnpj: l.cpf_cnpj, informacoes: l.informacoes, forma: l.forma, origem: rotuloDaOrigem(l.origem),
+        valor: l.valor, saldo_conta: l.saldo_conta, saldo_total: l.saldo_total, fechado: l.fechado ? 'Sim' : '',
+      })),
+      totais: { valor: total },
+      rotulo_total: `Total (${linhas.length} ${linhas.length === 1 ? 'lançamento' : 'lançamentos'})`,
+      dinheiro_em: 'reais',
+      orientacao: 'paisagem',
+    };
+  }
+  return {
+    titulo: 'Movimentações',
+    filtros,
+    colunas: [
+      { id: 'data', rotulo: 'Data', tipo: 'data' }, { id: 'numero', rotulo: 'Número', tipo: 'texto' },
+      { id: 'venda', rotulo: 'Venda', tipo: 'texto' }, { id: 'conta', rotulo: 'Conta', tipo: 'texto' },
+      { id: 'forma', rotulo: 'Forma de pagamento', tipo: 'texto' }, { id: 'pessoa', rotulo: 'Pessoa', tipo: 'texto' },
+      { id: 'documento', rotulo: 'Documento', tipo: 'texto' }, { id: 'cartao_cheque', rotulo: 'Cheque/Cartão', tipo: 'texto' },
+      { id: 'moeda', rotulo: 'Moeda', tipo: 'texto' }, { id: 'valor_origem', rotulo: 'Valor origem', tipo: 'numero' },
+      { id: 'cambio', rotulo: 'Câmbio', tipo: 'numero' }, { id: 'movimento', rotulo: 'Movimento', tipo: 'texto' },
+      { id: 'valor', rotulo: 'Valor', tipo: 'dinheiro' }, { id: 'fechado', rotulo: 'Fechado', tipo: 'texto' },
+    ],
+    linhas: linhas.map(l => ({
+      data: l.data, numero: l.numero, venda: l.venda_numero || l.venda_id, conta: l.conta_nome, forma: l.forma, pessoa: l.pessoa_nome,
+      documento: l.documento, cartao_cheque: l.cartao_cheque, moeda: l.moeda, valor_origem: l.valor_origem, cambio: l.cambio,
+      movimento: `${l.tipo === 'entrada' ? 'Entrada' : 'Saída'} · ${rotuloDaOrigem(l.origem)}`, valor: l.valor, fechado: l.fechado ? 'Sim' : '',
+    })),
+    totais: { valor: total },
+    rotulo_total: `Total (${linhas.length} ${linhas.length === 1 ? 'lançamento' : 'lançamentos'})`,
+    dinheiro_em: 'reais',
+    orientacao: 'paisagem',
+  };
 }
 
 // ─── Espelho em TypeScript (para o teste comparar com o SQL) ───────────────

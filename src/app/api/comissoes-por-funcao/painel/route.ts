@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { contextoDaComissao, respostaDeErroDaComissao, ISO_MES } from '@/lib/comissao-rota';
 import { painelDoVendedor } from '@/lib/comissao-funcoes-servidor';
 import { hojeISO } from '@/lib/money';
+import { registrarAcessoSensivel } from '@/lib/acesso-sensivel';
 
 // Painel do vendedor: o mês, a faixa, quanto falta e cada venda com "por que recebi isto?".
 export const dynamic = 'force-dynamic';
@@ -17,6 +18,9 @@ export async function GET(req: Request) {
   const mes = u.get('mes') ?? hojeISO().slice(0, 7);
   if (!ISO_MES.test(mes)) return NextResponse.json({ error: 'Mês inválido.', codigo: 'DADOS' }, { status: 400 });
   try {
-    return NextResponse.json(await painelDoVendedor(ctx.exec, ctx.tenantId, pessoa, mes));
+    const painel = await painelDoVendedor(ctx.exec, ctx.tenantId, pessoa, mes);
+    // Comissão de OUTRA pessoa: quem viu fica no Registro de atividades (E7).
+    if (pessoa !== ctx.usuario.id) await registrarAcessoSensivel(ctx.sessao, 'comissao_pessoa', { alvo: pessoa, detalhe: `Mês ${mes}.` });
+    return NextResponse.json(painel);
   } catch (e) { return respostaDeErroDaComissao(e); }
 }

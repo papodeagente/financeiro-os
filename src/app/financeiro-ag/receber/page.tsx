@@ -6,7 +6,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDownLeft, Clock, Pencil, Plus, Trash2, TriangleAlert } from 'lucide-react';
 
 import { ContaReceber, createContaReceber, StatusContaReceber } from '@/lib/crm-types';
-import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
+import { loadEntities, saveEntity } from '@/lib/crm-storage';
+import { atualizarRegistro, excluirRegistro } from '@/lib/gravar-registro';
+import { conferirEmissao, vendaQueTravaATitulo } from '@/lib/lancamento-titulo';
+import { AvisoDeEdicaoSimultanea } from '@/components/fin/AvisoDeEdicaoSimultanea';
+import { HistoricoRecolhivel } from '@/components/fin/HistoricoDoRegistro';
+import { tratarErroAoGravar, padraoDaEmpresa, useContasDaPrevisao } from '@/components/financeiro/CamposDoLancamento';
 import { toast } from '@/lib/toast';
 import { validarRateio } from '@/lib/dimensoes';
 import { consumirAtalho, lerAtalhos } from '@/lib/atalho-da-url';
@@ -46,8 +51,12 @@ import { NovaVenda } from './NovaVenda';
 import { DetalheDaPlataforma } from './DetalheDaPlataforma';
 import { PainelNota } from './PainelNota';
 import type { NotaFiscal } from '@/lib/nfse-tipos';
-import { EMPTY_FORM, FormularioConta, type ErrosForm, type FormState } from './FormularioConta';
+import { EMPTY_FORM, FormularioConta, valorEmReais, type ErrosForm, type FormState } from './FormularioConta';
 import { BlocoDeCobranca, type ContaDoBloco } from '@/components/financeiro/cobranca/BlocoDeCobranca';
+import { PainelDoTitulo } from '@/components/financeiro/PainelDoTitulo';
+import { carregarDefinicoes } from '@/components/fin/CamposPersonalizadosDoTitulo';
+import { validarObrigatorios } from '@/lib/campos-personalizados';
+import type { Anexo } from '@/lib/anexos-do-titulo';
 
 /**
  * Status EFETIVO (derivado na leitura). Nenhum fluxo do sistema grava
@@ -93,6 +102,11 @@ function contagem(n: number, singular: string, plural: string): string {
 }
 
 type ContaComSerie = ContaReceber & { serie_id?: string };
+/** Campos que o formulário guarda e que o tipo antigo da conta não declara (06/11/2026, E7). */
+type ContaComExtras = ContaReceber & {
+  _versao?: string; origem_venda_id?: string; conta_previsao_id?: string; campos_personalizados?: Record<string, unknown>;
+  moeda?: string; cambio?: number; cambio_carimbo?: FormState['cambio_carimbo'];
+};
 
 /** A conta como o bloco Cobrança lê (E3, 05/11/2026). */
 function contaDoBloco(i: ContaReceber): ContaDoBloco {
@@ -165,6 +179,9 @@ export default function ContasReceberPage() {
   const [gravandoEscopo, setGravandoEscopo] = useState(false);
   const [parcelasDe, setParcelasDe] = useState<ContaReceber | null>(null);
   const abrirDepoisDeCarregar = useRef<string | null>(null);
+  // Outra pessoa salvou a conta depois que o formulário abriu (06/11/2026, E7).
+  const [conflito, setConflito] = useState(false);
+  const previsao = useContasDaPrevisao();
 
   async function load() {
     setLoading(true);
@@ -219,7 +236,7 @@ export default function ContasReceberPage() {
   useEffect(() => { load(); aplicarAtalhos(); }, []);
 
   function openNew() {
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, data_emissao: hojeISO() });
     setRepeticao(REPETICAO_PADRAO);
     serieNova.current = novoIdDeSerie();
     setSerieEditada(null);
@@ -252,6 +269,12 @@ export default function ContasReceberPage() {
       centro_custo_id: item.centro_custo_id ?? '',
       rateio: Array.isArray(item.rateio) ? item.rateio : [],
       tags: Array.isArray(item.tags) ? item.tags : [],
+      data_emissao: item.data_emissao ?? '',
+      conta_previsao_id: (item as ContaComExtras).conta_previsao_id ?? '',
+      campos_personalizados: (item as ContaComExtras).campos_personalizados ?? {},
+      moeda: (item as ContaComExtras).moeda || 'BRL',
+      cambio: num((item as ContaComExtras).cambio) || 1,
+      cambio_carimbo: (item as ContaComExtras).cambio_carimbo ?? null,
     });
     setSerieEditada(null);
     setEditId(item.id);
@@ -265,11 +288,21 @@ export default function ContasReceberPage() {
     setForm(f => ({ ...f, ...patch }));
   }
 
+  /** O anexo mudou no servidor: a conta em mãos fica com a lista e a versão novas (salvar depois não desfaz). */
+  function anexosMudaram(id: string, anexos: Anexo[], versao: string) {
+    setItems(lista => lista.map(i => (i.id === id ? ({ ...i, anexos, ...(versao ? { _versao: versao } : {}) } as ContaReceber) : i)));
+  }
+
   async function handleSave() {
-    const taxaInvalida = validarTaxa(form.taxa, form.valor_original);
+    // Em moeda estrangeira o que vale para taxa, rateio e saldo é o valor em reais.
+    const estrangeira = Boolean(form.moeda) && form.moeda !== 'BRL';
+    const emReais = round2(valorEmReais(form));
+    const taxaInvalida = validarTaxa(form.taxa, emReais);
+    const emissaoInvalida = conferirEmissao({ emissao: form.data_emissao, vencimento: form.data_vencimento });
+    const semCambio = estrangeira && !(num(form.cambio) > 0);
     if (
       !form.cliente_nome || !form.descricao || !form.data_vencimento
-      || form.valor_original <= 0 || taxaInvalida
+      || form.valor_original <= 0 || taxaInvalida || emissaoInvalida || semCambio
     ) {
       setErrosForm({
         cliente_nome: form.cliente_nome ? undefined : 'Informe o cliente.',
@@ -277,11 +310,25 @@ export default function ContasReceberPage() {
         data_vencimento: form.data_vencimento ? undefined : 'Informe a data de vencimento.',
         valor_original: form.valor_original > 0 ? undefined : 'Informe um valor maior que zero.',
         taxa: taxaInvalida ? mensagemDaTaxaInvalida(taxaInvalida) : undefined,
+        data_emissao: emissaoInvalida ?? undefined,
+        cambio: semCambio ? 'Informe o câmbio da moeda estrangeira.' : undefined,
       });
       return;
     }
+    // Em outra moeda a repetição também vale (E7, frente D): cada conta da
+    // série nasce na moeda, com o câmbio de hoje para o valor em reais, e o
+    // câmbio de cada parcela é o da liquidação.
+    // Campo personalizado obrigatório (E7, frente D): a mesma regra do servidor.
+    {
+      const existente = editId ? items.find(i => i.id === editId) : undefined;
+      if (!existente || !tituloGeradoPeloSistema('contas_receber', existente as unknown as Record<string, unknown>)) {
+        const defs = await carregarDefinicoes((existente as { empresa_id?: string } | undefined)?.empresa_id).catch(() => []);
+        const faltou = validarObrigatorios(defs, 'contas_receber', form.campos_personalizados);
+        if (faltou) { toast.error(faltou); return; }
+      }
+    }
     // Rateio preenchido fecha 100% e os centavos (05/11/2026).
-    const rateioConferido = validarRateio(round2(form.valor_original), form.rateio);
+    const rateioConferido = validarRateio(emReais, form.rateio);
     if (!rateioConferido.ok) { toast.error(rateioConferido.erro); return; }
     setErrosForm({});
     setSalvando(true);
@@ -291,6 +338,9 @@ export default function ContasReceberPage() {
     // banco com três grafias da mesma plataforma para a próxima consulta.
     const campos = {
       ...form,
+      moeda: estrangeira ? form.moeda : 'BRL',
+      cambio: estrangeira ? num(form.cambio) : 1,
+      cambio_carimbo: estrangeira ? form.cambio_carimbo : null,
       taxa: round2(num(form.taxa)),
       taxa_plataforma: normalizarPlataforma(form.taxa_plataforma),
       rateio: rateioConferido.linhas,
@@ -302,7 +352,7 @@ export default function ContasReceberPage() {
           ...existing,
           ...campos,
           valor_original: valorOriginal,
-          valor_final: valorOriginal,
+          valor_final: emReais,
         };
         // Conta de uma série, em aberto e sem baixa: pergunta o escopo.
         const serieId = (existing as ContaComSerie).serie_id;
@@ -334,6 +384,8 @@ export default function ContasReceberPage() {
             descricao: campos.descricao, categoria_id: campos.categoria_id, forma_recebimento: campos.forma_recebimento,
             taxa: campos.taxa, taxa_plataforma: campos.taxa_plataforma, observacoes: campos.observacoes,
             centro_custo: campos.centro_custo, centro_custo_id: campos.centro_custo_id, rateio: campos.rateio, tags: campos.tags,
+            conta_previsao_id: campos.conta_previsao_id, campos_personalizados: campos.campos_personalizados,
+            ...(estrangeira ? { moeda: campos.moeda, cambio: campos.cambio } : {}),
           },
         });
         setShowForm(false);
@@ -352,7 +404,7 @@ export default function ContasReceberPage() {
         ...createContaReceber(),
         ...campos,
         valor_original: valorOriginal,
-        valor_final: valorOriginal,
+        valor_final: emReais,
       };
       await saveEntity('contas-receber', nova);
       setShowForm(false);
@@ -361,7 +413,7 @@ export default function ContasReceberPage() {
       setEditId(null);
       load();
     } catch (e) {
-      toast.error('Não foi possível salvar a conta a receber.', e instanceof Error ? e.message : '');
+      tratarErroAoGravar(e, 'Não foi possível salvar a conta a receber.', () => setConflito(true));
     } finally {
       setSalvando(false);
     }
@@ -371,7 +423,11 @@ export default function ContasReceberPage() {
   async function gravarSomenteEsta(existing: ContaReceber, updated: ContaReceber) {
     // O status que esta tela LEU: o servidor só desfaz uma baixa quando a
     // tela sabia que a conta estava baixada (senão é tela velha, 409).
-    await updateEntity('contas-receber', { ...updated, _status_lido: existing.status });
+    // E a versão lida (06/11/2026): se outra pessoa salvou depois, o servidor
+    // recusa com 409 e a tela oferece recarregar.
+    await atualizarRegistro('contas-receber', {
+      ...updated, _status_lido: existing.status, _versao: (existing as ContaComExtras)._versao,
+    });
     setShowForm(false);
     setFormTocado(false);
     toast.success('Conta a receber atualizada.');
@@ -413,7 +469,7 @@ export default function ContasReceberPage() {
       }
       setEdicaoPendente(null);
     } catch (e) {
-      toast.error('Não foi possível salvar a conta a receber.', e instanceof Error ? e.message : '');
+      tratarErroAoGravar(e, 'Não foi possível salvar a conta a receber.', () => { setEdicaoPendente(null); setConflito(true); });
     } finally {
       setGravandoEscopo(false);
     }
@@ -422,9 +478,9 @@ export default function ContasReceberPage() {
   async function handleDelete(id: string) {
     setExcluindo(true);
     try {
-      await deleteEntity('contas-receber', id);
+      const r = await excluirRegistro<{ ok?: boolean; aviso?: string }>('contas-receber', id);
       setExclusaoAlvo(null);
-      toast.success('Conta a receber excluída.');
+      toast.success('Conta a receber excluída.', r?.aviso || 'Fica em Contas a Pagar/Receber, situação Excluído, se precisar restaurar.');
       load();
     } catch (e) {
       toast.error(
@@ -746,6 +802,7 @@ export default function ContasReceberPage() {
       className="max-w-[1280px]"
       header={
         <PageHeader
+          empresas
           icone={ArrowDownLeft}
           titulo="Contas a receber"
           subtitulo="O que os clientes ainda devem para a agência."
@@ -915,12 +972,18 @@ export default function ContasReceberPage() {
           onChange={atualizarForm}
           plataformasUsadas={plataformasUsadas}
           ocultarParcelaManual={!editId && repeticao.ativa}
+          editando={Boolean(editId)}
+          vendaId={editId ? vendaQueTravaATitulo(items.find(i => i.id === editId) as ContaComExtras | undefined) : null}
+          contasPrevisao={previsao.contas}
+          padraoPrevisaoId={padraoDaEmpresa(previsao, editId ? (items.find(i => i.id === editId) as { empresa_id?: string } | undefined)?.empresa_id : null)}
+          empresaId={editId ? ((items.find(i => i.id === editId) as { empresa_id?: string } | undefined)?.empresa_id ?? null) : null}
           repeticao={editId ? null : (
             <BlocoDeRepeticao
               estado={repeticao}
               onChange={patch => { setFormTocado(true); setRepeticao(r => ({ ...r, ...patch })); }}
               inicio={form.data_vencimento}
               valor={form.valor_original}
+              moeda={form.moeda || 'BRL'}
               substantivo="conta a receber"
             />
           )}
@@ -934,7 +997,10 @@ export default function ContasReceberPage() {
             </div>
           );
         })()}
+        {/* Itens, Comissões e Anexos da conta (E7, frente D). */}
+        {editId ? <PainelDoTitulo key={editId} tabela="contas_receber" tituloId={editId} onAnexosMudaram={(anexos, versao) => anexosMudaram(editId, anexos, versao)} /> : null}
         {editId ? <HistoricoDeBaixas tabela="contas_receber" tituloId={editId} onMudou={() => { void load(); }} /> : null}
+        {editId ? <HistoricoRecolhivel entidade="contas_receber" id={editId} /> : null}
       </RecordSheet>
 
       <RecordSheet
@@ -998,7 +1064,11 @@ export default function ContasReceberPage() {
         aberto={exclusaoAlvo !== null}
         onOpenChange={aberto => { if (!aberto) setExclusaoAlvo(null); }}
         titulo="Excluir esta conta a receber?"
-        oQueVaiAcontecer="A conta sai da lista e deixa de contar nos indicadores. Não dá para desfazer."
+        oQueVaiAcontecer={
+          exclusaoAlvo && (exclusaoAlvo.status === 'RECEBIDO' || exclusaoAlvo.status === 'PARCIAL')
+            ? 'A conta sai das listas, dos indicadores e dos relatórios, e o que já foi recebido sai da conta bancária que recebeu. Dá para restaurar depois em Contas a Pagar/Receber, situação Excluído; ela volta em aberto.'
+            : 'A conta sai das listas, dos indicadores e dos relatórios. Dá para restaurar depois em Contas a Pagar/Receber, situação Excluído.'
+        }
         detalhes={
           exclusaoAlvo
             ? [
@@ -1012,6 +1082,20 @@ export default function ContasReceberPage() {
         tone="destrutivo"
         processando={excluindo}
         onConfirmar={() => (exclusaoAlvo ? handleDelete(exclusaoAlvo.id) : undefined)}
+      />
+
+      <AvisoDeEdicaoSimultanea
+        aberto={conflito}
+        onOpenChange={setConflito}
+        onRecarregar={() => {
+          const id = editId;
+          setConflito(false);
+          setShowForm(false);
+          setFormTocado(false);
+          setEditId(null);
+          abrirDepoisDeCarregar.current = id;
+          void load();
+        }}
       />
     </PageShell>
   );

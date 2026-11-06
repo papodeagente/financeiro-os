@@ -227,7 +227,8 @@ eq(csv.startsWith('﻿"Data";"Conta"'), true, 'CSV com BOM e cabeçalho entre as
 eq(csv.includes(`"'=HYPERLINK(""x"")"`), true, 'fórmula neutralizada e aspas escapadas (auditCsvCell)');
 eq(csv.includes('"200,00"'), true, 'valor com vírgula decimal, como número');
 const csvMov = csvDosMovimentos(exp, 'movimentacoes');
-eq(csvMov.split('\r\n')[0], '﻿"Data";"Número";"Venda";"Conta";"Forma de pagamento";"Pessoa";"Documento";"Cheque/Cartão";"Moeda";"Valor origem";"Câmbio";"Movimento";"Valor"', 'colunas das Movimentações');
+eq(csvMov.split('\r\n')[0], '﻿"Data";"Número";"Venda";"Conta";"Forma de pagamento";"Pessoa";"Documento";"Cheque/Cartão";"Moeda";"Valor origem";"Câmbio";"Movimento";"Valor";"Fechado"', 'colunas das Movimentações (com Fechado, E7 frente D)');
+eq(csv.split('\r\n')[0].endsWith('"Saldo";"Fechado"'), true, 'extrato: a coluna Fechado no fim do CSV (E7, frente D)');
 
 function round(n) { return Math.round(n * 100) / 100; }
 console.log(`\n${total - falhas}/${total} passaram`);

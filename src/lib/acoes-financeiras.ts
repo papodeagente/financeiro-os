@@ -84,6 +84,8 @@ const DEFINICOES = [
   { id: 'ver_comissoes_todos', modulo: 'vendas_comissoes', rotulo: 'Ver a comissão da equipe', descricao: 'Comissão de todos os vendedores.', teto: p => p.ver_comissoes && p.ver_vendas_todos },
   { id: 'fechar_comissoes', modulo: 'vendas_comissoes', rotulo: 'Fechar comissões', descricao: 'Fecha as comissões da equipe até uma data, para pagar.', teto: p => p.editar_financeiro && p.ver_comissoes },
   { id: 'pagar_comissoes', modulo: 'vendas_comissoes', rotulo: 'Pagar comissões', descricao: 'Transforma as comissões fechadas em conta a pagar, total ou em parte.', teto: p => p.editar_financeiro && p.ver_comissoes },
+  // E7: comissão de indicação ou bônus lançada à mão numa venda fechada.
+  { id: 'lancar_comissao_manual', modulo: 'vendas_comissoes', rotulo: 'Lançar comissão manual na venda', descricao: 'Lança comissão de indicação ou bônus numa venda fechada e exclui a que ainda não foi fechada.', teto: p => p.editar_financeiro && p.ver_comissoes },
 
   // Painel e relatórios
   { id: 'resumo_pagar_receber', modulo: 'resumo', rotulo: 'Ver totais a pagar e a receber no painel', descricao: 'Os números de contas em aberto no painel inicial.', teto: p => p.ver_financeiro },
@@ -142,12 +144,23 @@ export interface GrupoDoUsuario {
   acoes: string[];
   /** Vazio = todas as contas. */
   contas: string[];
+  /** Vazio (ou ausente) = todas as empresas da agência (E7, multiempresa). */
+  empresas?: string[];
+  /**
+   * Contas que este perfil só VÊ (saldo e extrato), sem pagar, receber,
+   * transferir nem lançar nelas (E7). Vazio (ou ausente) = usa todas as que vê.
+   */
+  contas_so_ver?: string[];
 }
 
 export interface RestricaoDoUsuario {
   /** Vazio = sem restrição própria de conta. */
   contas_liberadas: string[];
   acoes_negadas: string[];
+  /** Vazio (ou ausente) = sem restrição própria de empresa (E7). */
+  empresas_liberadas?: string[];
+  /** Contas que a pessoa só vê, mesmo que um perfil deixe movimentar (E7). */
+  contas_so_ver?: string[];
 }
 
 export interface RestricoesCarregadas {
@@ -184,6 +197,76 @@ export function contasLiberadasPor(quem: QuemPede, r: RestricoesCarregadas | nul
 }
 
 /**
+ * Ações que só LEEM a conta bancária: para elas basta a conta estar visível.
+ * Qualquer outra ação com conta (pagar, receber, transferir, conciliar,
+ * cobrar, fechar caixa...) exige a conta liberada para MOVIMENTAR (E7).
+ */
+export const ACOES_SO_DE_LEITURA: ReadonlySet<AcaoFinanceira> = new Set<AcaoFinanceira>([
+  'ver_financeiro', 'ver_conta_bancaria', 'resumo_saldo', 'resumo_pagar_receber', 'acessar_relatorios', 'exportar',
+  'ver_aba_financeiro', 'ver_colunas_comissao', 'ver_proprias_comissoes', 'ver_comissoes_todos',
+]);
+
+/** Todas as contas da agência menos as que só se veem: o perfil movimenta "o resto". */
+const TODAS = Symbol('todas');
+
+/**
+ * Contas em que a pessoa pode MOVIMENTAR (pagar, receber, transferir, lançar).
+ * `null` = todas (o de hoje). Nunca vai além de `contasLiberadasPor`.
+ *
+ * Por perfil: movimenta o que o perfil vê menos as `contas_so_ver` dele; com
+ * mais de um perfil, vale a soma. A restrição do usuário corta por cima (as
+ * contas dela e as que ela marca como só ver). Sem nenhuma conta "só ver"
+ * marcada, é exatamente `contasLiberadasPor`.
+ *
+ * Quando a resposta depende de "todas menos algumas", devolve a lista de
+ * exclusão em `exceto` (a agência pode criar contas novas depois).
+ */
+export function contasMovimentaveisPor(
+  quem: QuemPede, r: RestricoesCarregadas | null,
+): { todas: true; exceto: string[] } | { todas: false; contas: string[] } {
+  const visiveis = contasLiberadasPor(quem, r);
+  if (nuncaRestringido(quem) || !r) return { todas: true, exceto: [] };
+  const soVerUsuario = new Set(r.usuario?.contas_so_ver ?? []);
+  // O que os perfis deixam movimentar (soma). TODAS = todas menos `excetoGrupo`.
+  let doGrupo: Set<string> | typeof TODAS = TODAS;
+  let excetoGrupo: Set<string> = new Set();
+  if (r.grupos.length > 0) {
+    const abertos = r.grupos.filter(g => g.acesso_total || g.contas.length === 0);
+    if (abertos.length > 0) {
+      // Interseção das exclusões dos perfis "todas": uma conta só fica fora
+      // se TODO perfil aberto a marcou como só ver e nenhum perfil fechado a movimenta.
+      const listas = abertos.map(g => new Set(g.acesso_total ? [] : (g.contas_so_ver ?? [])));
+      excetoGrupo = new Set([...listas[0]].filter(c => listas.every(l => l.has(c))));
+      for (const g of r.grupos) {
+        if (g.acesso_total || g.contas.length === 0) continue;
+        const so = new Set(g.contas_so_ver ?? []);
+        for (const c of g.contas) if (!so.has(c)) excetoGrupo.delete(c);
+      }
+    } else {
+      const s = new Set<string>();
+      for (const g of r.grupos) {
+        const so = new Set(g.contas_so_ver ?? []);
+        for (const c of g.contas) if (!so.has(c)) s.add(c);
+      }
+      doGrupo = s;
+    }
+  }
+  if (visiveis === null) {
+    // Vê todas: movimenta todas menos as exclusões.
+    if (doGrupo === TODAS) return { todas: true, exceto: [...new Set([...excetoGrupo, ...soVerUsuario])].sort() };
+    return { todas: false, contas: [...doGrupo].filter(c => !soVerUsuario.has(c)).sort() };
+  }
+  const base = doGrupo === TODAS ? visiveis.filter(c => !excetoGrupo.has(c)) : visiveis.filter(c => (doGrupo as Set<string>).has(c));
+  return { todas: false, contas: base.filter(c => !soVerUsuario.has(c)).sort() };
+}
+
+/** A conta está liberada para movimentar? */
+export function contaMovimentavel(quem: QuemPede, r: RestricoesCarregadas | null, conta: string): boolean {
+  const m = contasMovimentaveisPor(quem, r);
+  return m.todas ? !m.exceto.includes(conta) : m.contas.includes(conta);
+}
+
+/**
  * A decisão inteira, sem banco. `r = null` (ninguém configurou nada) dá
  * exatamente o teto do papel.
  */
@@ -202,6 +285,8 @@ export function decidirAcao(
   if (conta) {
     const liberadas = contasLiberadasPor(quem, r);
     if (liberadas && !liberadas.includes(conta)) return false;
+    // Conta só para ver (E7): ver saldo e extrato, sim; mexer nela, não.
+    if (!ACOES_SO_DE_LEITURA.has(acao) && !contaMovimentavel(quem, r, conta)) return false;
   }
   return true;
 }

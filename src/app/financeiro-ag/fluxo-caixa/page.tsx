@@ -3,7 +3,7 @@
 import { BarChart3, ChevronLeft, ChevronRight, CircleAlert, Info, TriangleAlert } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
-import { ContaReceber, ContaPagar, ContaBancaria, Agencia } from '@/lib/crm-types';
+import { ContaReceber, ContaPagar, ContaBancaria, Agencia, type CentroCusto } from '@/lib/crm-types';
 import { loadEntities, loadAgencia } from '@/lib/crm-storage';
 import {
   eventosFolhaPrevistos, DIA_PAGAMENTO_FOLHA_PADRAO, type EntradaPessoa,
@@ -15,8 +15,14 @@ import {
 } from '@/lib/caderno-caixa';
 import { calcularSaldoBancario } from '@/lib/saldo-bancario';
 import {
-  alertaDeSaldo, comparativoDoPeriodo, lancamentosDaConta, titulosDaConta, type FiltroDeConta,
+  alertaDeSaldo, comparativoDoPeriodo, gradeContaPorDia, lancamentosDaConta, titulosDaConta,
+  type FiltroDeConta, type LinhaDaGrade,
 } from '@/lib/fluxo-comparativo';
+import type { DocumentoExportado, FiltroAplicado } from '@/lib/exportacao/documento';
+import { documentoDaGradeDoFluxo, documentoDoCadernoDoFluxo } from '@/lib/exportacao/documentos-financeiro';
+import { BotaoExportar } from '@/components/fin/BotaoExportar';
+import { BotaoAgendarEnvio } from '@/components/relatorios/BotaoAgendarEnvio';
+import { GradePorConta, type MedidaDaGrade } from './GradePorConta';
 import { hojeISO, num, round2 } from '@/lib/money';
 import { cn, formatBRL } from '@/lib/utils';
 import type { FunilPayload } from '@/lib/funil-types';
@@ -33,6 +39,14 @@ import { CurvaDoSaldo } from './CurvaDoSaldo';
 import { Caderno } from './Caderno';
 import { DetalheDaLinha } from './DetalheDaLinha';
 import { PrevistoRealizado } from './PrevistoRealizado';
+import { lerEmpresasVisiveis } from '@/components/fin/useEmpresas';
+import { contasNoRecorte } from '@/lib/empresas';
+import { ordenarEmArvore } from '@/lib/dimensoes';
+import {
+  fluxoPorDimensao, recortarContasDoFluxo, recorteDoFluxoVazio, tagsDasContas,
+  type DimensaoDoFluxo, type RecorteDoFluxo,
+} from '@/lib/resultado-por-dimensao';
+import { PorDimensao } from './PorDimensao';
 
 const CARTAO =
   'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]';
@@ -42,6 +56,9 @@ const ROTULO_AGRUPAMENTO: Record<Agrupamento, string> = { dia: 'Dia a dia', sema
 /** Saldo mínimo escolhido: fica no navegador (05/11/2026). */
 const CHAVE_MINIMO = 'fluxo-caixa-saldo-minimo';
 const TODAS_AS_CONTAS = 'todas';
+const TODOS = 'todos';
+/** Recuo da árvore de centros na lista (espaço que não quebra). */
+const RECUO = '\u00a0\u00a0';
 const CONTROLE =
   'fin-t-body h-11 min-w-56 gap-[var(--fin-s-2)] rounded-[var(--fin-r-md)] border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-3 text-[var(--fin-text)] lg:h-10';
 
@@ -150,6 +167,20 @@ export default function FluxoCaixaPage() {
   const [contaId, setContaId] = useState<string>(TODAS_AS_CONTAS);
   const [visaoComparativo, setVisaoComparativo] = useState<Agrupamento>(agrupamentoPadrao('mes'));
   const [saldoMinimo, setSaldoMinimo] = useState(0);
+  // Conta previsão padrão da agência (06/11/2026, E7): o que está em aberto
+  // sem conta prevista entra nela no fluxo por conta.
+  const [contaPrevisaoPadraoId, setContaPrevisaoPadraoId] = useState<string | null>(null);
+  // Conta previsão de cada empresa que escolheu a própria (E7, frente D).
+  const [contaPrevisaoPorEmpresa, setContaPrevisaoPorEmpresa] = useState<Record<string, string> | null>(null);
+  // E7, G3: grade conta × dia (saldo no fim do dia ou movimento do dia).
+  const [medidaGrade, setMedidaGrade] = useState<MedidaDaGrade>('saldo');
+  const [contaDoDetalhe, setContaDoDetalhe] = useState<string | null>(null);
+  // E7, frente C: recorte por centro de custo e tag, e a visão por centro/tag.
+  // Sem escolha, o caderno do banco de sempre.
+  const [centros, setCentros] = useState<CentroCusto[]>([]);
+  const [centroId, setCentroId] = useState('');
+  const [tag, setTag] = useState('');
+  const [dimensao, setDimensao] = useState<DimensaoDoFluxo>('centro');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -172,7 +203,7 @@ export default function FluxoCaixaPage() {
   async function load() {
     setLoading(true);
     try {
-      const [cr, cp, cb, fs, folhaResp, ag] = await Promise.all([
+      const [cr, cp, cb, fs, folhaResp, ag, previsao] = await Promise.all([
         loadEntities<ContaReceber>('contas-receber'),
         loadEntities<ContaPagar>('contas-pagar'),
         loadEntities<ContaBancaria>('contas-bancarias'),
@@ -180,13 +211,24 @@ export default function FluxoCaixaPage() {
         // Sem permissão de folha a tela continua com receber e pagar.
         fetch('/api/folha').then(r => (r.ok ? r.json() : null)).catch(() => null),
         loadAgencia<Agencia>().catch(() => null),
+        fetch('/api/config/financeiro/conta-previsao').then(r => (r.ok ? r.json() : null)).catch(() => null),
       ]);
-      setContasReceber(cr);
-      setContasPagar(cp);
+      setContaPrevisaoPadraoId(typeof previsao?.conta_previsao_padrao === 'string' && previsao.conta_previsao_padrao ? previsao.conta_previsao_padrao : null);
+      setContaPrevisaoPorEmpresa(previsao?.por_empresa && typeof previsao.por_empresa === 'object' ? previsao.por_empresa as Record<string, string> : null);
+      // Várias empresas (E7): o rateado entre empresas entra só com a parte das
+      // empresas marcadas. Uma empresa só: as listas como vieram.
+      const visiveis = await lerEmpresasVisiveis();
+      setContasReceber(contasNoRecorte(cr, visiveis));
+      setContasPagar(contasNoRecorte(cp, visiveis));
       setContasBancarias(cb);
       setFunis(fs);
       setPessoasFolha(folhaResp?.pessoas ?? []);
       setDiaPagamentoFolha(Number(ag?.dia_pagamento_folha) || DIA_PAGAMENTO_FOLHA_PADRAO);
+      // Centros de custo para o recorte. Sem eles (ou sem acesso), o filtro não aparece.
+      fetch('/api/centros-custo')
+        .then(r => (r.ok ? r.json() : null))
+        .then((c: CentroCusto[] | null) => setCentros(Array.isArray(c) ? c : []))
+        .catch(() => setCentros([]));
       setErro(null);
       setAtualizadoEm(new Date());
     } catch {
@@ -218,10 +260,28 @@ export default function FluxoCaixaPage() {
   const filtro: FiltroDeConta = useMemo(() => ({
     contaId: contaEscolhida?.id ?? null,
     caixaGeralId: contasBancarias.find(c => c.nome === 'Caixa Geral')?.id ?? null,
-  }), [contaEscolhida, contasBancarias]);
+    contaPrevisaoPadraoId,
+    contaPrevisaoPorEmpresa,
+  }), [contaEscolhida, contasBancarias, contaPrevisaoPadraoId, contaPrevisaoPorEmpresa]);
+
+  // Recorte por centro de custo e tag (E7, frente C). O saldo do banco não se
+  // divide por centro: com recorte, o caderno começa em zero e acumula só o
+  // que entra e sai nas contas do recorte (a parte delas no centro); a folha
+  // ainda não lançada fica fora. Sem recorte, nada abaixo muda.
+  const recorte: RecorteDoFluxo = useMemo(() => ({ centro_id: centroId || null, tag: tag || null }), [centroId, tag]);
+  const comRecorte = !recorteDoFluxoVazio(recorte);
+  const tagsDisponiveis = useMemo(() => tagsDasContas(contasReceber, contasPagar), [contasReceber, contasPagar]);
+  const arvoreDeCentros = useMemo(() => ordenarEmArvore(centros.filter(c => c.ativo !== false || c.id === centroId)), [centros, centroId]);
+  const centroEscolhido = centros.find(c => c.id === centroId) ?? null;
+  const tagEscolhida = tag ? (tagsDisponiveis.find(t => t.valor === tag)?.rotulo ?? tag) : '';
+  const rotuloDoRecorte = [centroEscolhido ? centroEscolhido.nome : '', tagEscolhida ? `tag ${tagEscolhida}` : ''].filter(Boolean).join(' · ');
+  const doRecorte = useMemo(
+    () => recortarContasDoFluxo({ receber: contasReceber, pagar: contasPagar }, recorte, centros),
+    [contasReceber, contasPagar, recorte, centros],
+  );
 
   // Todas as contas: exatamente o caderno de sempre (mesma chamada).
-  const { lancamentos, semConta } = useMemo(() => {
+  const { lancamentos: lancamentosDoBanco, semConta } = useMemo(() => {
     if (!filtro.contaId) {
       return {
         lancamentos: lancamentosDoCaixa({ receber: contasReceber, pagar: contasPagar, folha: eventosFolha, hoje }),
@@ -231,11 +291,20 @@ export default function FluxoCaixaPage() {
     return lancamentosDaConta({ receber: contasReceber, pagar: contasPagar, folha: eventosFolha, filtro, hoje });
   }, [contasReceber, contasPagar, eventosFolha, filtro, hoje]);
 
+  // Com recorte: só as contas do recorte, sem folha e sem o que veio antes do período.
+  const lancamentos = useMemo(() => {
+    if (!comRecorte) return lancamentosDoBanco;
+    const lista = filtro.contaId
+      ? lancamentosDaConta({ receber: doRecorte.receber, pagar: doRecorte.pagar, filtro, hoje }).lancamentos
+      : lancamentosDoCaixa({ receber: doRecorte.receber, pagar: doRecorte.pagar, hoje });
+    return lista.filter(l => l.data && l.data >= periodo.inicio);
+  }, [comRecorte, lancamentosDoBanco, doRecorte, filtro, hoje, periodo.inicio]);
+
   const caderno = useMemo(
     () => montarCaderno({
-      lancamentos, contas: contaEscolhida ? [contaEscolhida] : contasBancarias, periodo, agrupamento, hoje,
+      lancamentos, contas: comRecorte ? [] : contaEscolhida ? [contaEscolhida] : contasBancarias, periodo, agrupamento, hoje,
     }),
-    [lancamentos, contaEscolhida, contasBancarias, periodo, agrupamento, hoje],
+    [lancamentos, comRecorte, contaEscolhida, contasBancarias, periodo, agrupamento, hoje],
   );
 
   // O mesmo número do "Saldo atual" de sempre: o caderno fecha com ele.
@@ -247,12 +316,105 @@ export default function FluxoCaixaPage() {
 
   const comparativo = useMemo(
     () => comparativoDoPeriodo({
-      receber: contasReceber, pagar: contasPagar, folha: eventosFolha, periodo, visao: visaoComparativo, filtro, hoje,
+      receber: doRecorte.receber, pagar: doRecorte.pagar, folha: comRecorte ? [] : eventosFolha, periodo, visao: visaoComparativo, filtro, hoje,
     }),
-    [contasReceber, contasPagar, eventosFolha, periodo, visaoComparativo, filtro, hoje],
+    [doRecorte, comRecorte, eventosFolha, periodo, visaoComparativo, filtro, hoje],
   );
 
   const alerta = useMemo(() => alertaDeSaldo(caderno.curva, saldoMinimo, hoje), [caderno.curva, saldoMinimo, hoje]);
+
+  // Por centro de custo ou tag: as contas inteiras (o recorte é aplicado lá dentro, parte a parte).
+  const temDimensoes = centros.length > 0 || tagsDisponiveis.length > 0;
+  const porDimensao = useMemo(
+    () => (temDimensoes
+      ? fluxoPorDimensao({ lancamentos: lancamentosDoBanco, receber: contasReceber, pagar: contasPagar, periodo, dimensao, centros, recorte })
+      : null),
+    [temDimensoes, lancamentosDoBanco, contasReceber, contasPagar, periodo, dimensao, centros, recorte],
+  );
+  const dimensoesVisiveis: DimensaoDoFluxo[] = [...(centros.length ? ['centro' as const] : []), ...(tagsDisponiveis.length ? ['tag' as const] : [])];
+  const dimensaoNaTela: DimensaoDoFluxo = dimensoesVisiveis.includes(dimensao) ? dimensao : (dimensoesVisiveis[0] ?? 'centro');
+
+  // Todas as contas liberadas, cada uma numa linha; a soma é o caderno de todas.
+  const grade = useMemo(
+    () => gradeContaPorDia({
+      receber: contasReceber, pagar: contasPagar, folha: eventosFolha, contas: contasBancarias,
+      caixaGeralId: filtro.caixaGeralId, contaPrevisaoPadraoId, contaPrevisaoPorEmpresa, periodo, hoje,
+    }),
+    [contasReceber, contasPagar, eventosFolha, contasBancarias, filtro.caixaGeralId, contaPrevisaoPadraoId, contaPrevisaoPorEmpresa, periodo, hoje],
+  );
+
+  function abrirDiaDaConta(l: LinhaDaGrade, dia: string, i: number) {
+    setContaDoDetalhe(l.nome);
+    setLinhaAberta({
+      chave: `${l.id}|${dia}`, inicio: dia, fim: dia, rotulo: rotuloDoDia(dia),
+      entradas: l.entradas[i], saidas: l.saidas[i], saldo: l.saldos[i],
+      lancamentos: l.lancamentosPorDia[dia] ?? [], contemHoje: dia === hoje, futura: dia > hoje,
+    });
+  }
+
+  const filtrosDoArquivo = (): FiltroAplicado[] => [
+    { rotulo: 'Período', valor: periodo.rotulo },
+    ...(contaEscolhida ? [{ rotulo: 'Conta', valor: contaEscolhida.nome || 'Conta sem nome' }] : []),
+    ...(centroEscolhido ? [{ rotulo: 'Centro de custo', valor: centroEscolhido.nome }] : []),
+    ...(tagEscolhida ? [{ rotulo: 'Tag', valor: tagEscolhida }] : []),
+  ];
+
+  /** O quadro por centro ou por tag. */
+  function documentoPorDimensao(): DocumentoExportado {
+    const f = porDimensao ?? { linhas: [], totais: { entrou: 0, saiu: 0, a_entrar: 0, a_sair: 0, resultado: 0 } };
+    const recuo = (n: number) => '   '.repeat(Math.max(0, n));
+    return {
+      titulo: dimensaoNaTela === 'centro' ? 'Fluxo de caixa por centro de custo' : 'Fluxo de caixa por tag',
+      subtitulo: 'Realizado pela data da baixa, previsto pelo vencimento',
+      filtros: filtrosDoArquivo(),
+      colunas: [
+        { id: 'nome', rotulo: dimensaoNaTela === 'centro' ? 'Centro de custo' : 'Tag', tipo: 'texto' },
+        { id: 'entrou', rotulo: 'Entrou', tipo: 'dinheiro' },
+        { id: 'saiu', rotulo: 'Saiu', tipo: 'dinheiro' },
+        { id: 'a_entrar', rotulo: 'A entrar', tipo: 'dinheiro' },
+        { id: 'a_sair', rotulo: 'A sair', tipo: 'dinheiro' },
+        { id: 'resultado', rotulo: 'Resultado', tipo: 'dinheiro' },
+      ],
+      linhas: f.linhas.map(l => ({ nome: `${recuo(l.nivel)}${l.rotulo}`, entrou: l.entrou, saiu: l.saiu, a_entrar: l.a_entrar, a_sair: l.a_sair, resultado: l.resultado })),
+      totais: f.totais,
+      ...(dimensaoNaTela === 'tag' ? { nota: 'Conta com mais de uma tag aparece em cada uma; o total conta cada conta uma vez.' } : {}),
+    };
+  }
+
+  /** O caderno na tela: uma linha por dia, semana ou mês (o mesmo desenho do envio agendado). */
+  function documentoDoCaderno(): DocumentoExportado {
+    return documentoDoCadernoDoFluxo({
+      caderno, periodo, agrupamento, conta: contaEscolhida ? (contaEscolhida.nome ?? '') : null,
+      centro: centroEscolhido?.nome ?? null, tag: tagEscolhida || null,
+    });
+  }
+
+  /** A grade conta × dia, em pé: um dia por linha, uma conta por coluna (cabe no papel). */
+  function documentoDaGrade(): DocumentoExportado {
+    return documentoDaGradeDoFluxo({ grade, periodo, medida: medidaGrade });
+  }
+
+  /** Os filtros que o envio agendado leva (o período vem de cada envio). */
+  function consultaDoAgendamento(vista: 'caderno' | 'grade'): string {
+    const q = new URLSearchParams();
+    if (vista === 'grade') {
+      q.set('vista', 'grade');
+      q.set('medida', medidaGrade);
+    } else {
+      q.set('agrupamento', agrupamento);
+      if (contaEscolhida) q.set('conta', contaEscolhida.id);
+    }
+    if (!incluirFolha) q.set('folha', '0');
+    return q.toString();
+  }
+
+  function resumoDoAgendamento(vista: 'caderno' | 'grade'): string {
+    const partes = vista === 'grade'
+      ? ['Uma coluna por conta', medidaGrade === 'saldo' ? 'saldo no fim do dia' : 'movimento do dia']
+      : [ROTULO_AGRUPAMENTO[agrupamento], contaEscolhida ? `só a conta ${contaEscolhida.nome || 'sem nome'}` : 'todas as contas liberadas'];
+    partes.push(incluirFolha ? 'com a folha prevista' : 'sem a folha');
+    return `${partes.join(', ')}.`;
+  }
 
   // Estimativa mensal dos funis em execução. Não é dinheiro contratado:
   // aparece escrita, fora do saldo, multiplicada pelos meses do período.
@@ -296,6 +458,7 @@ export default function FluxoCaixaPage() {
     <div className="bg-[var(--fin-bg)] py-[var(--fin-page-pad)] text-[var(--fin-text)]">
       <div className="mx-auto flex w-full max-w-[var(--fin-page-max)] flex-col gap-[var(--fin-s-5)] px-[var(--fin-page-pad)]">
         <PageHeader
+          empresas
           icone={BarChart3}
           titulo="Fluxo de caixa"
           subtitulo="O que entra e o que sai, como num caderno: saldo anterior, mais as entradas, menos as saídas"
@@ -350,8 +513,9 @@ export default function FluxoCaixaPage() {
           </div>
         </div>
 
-        {contasBancarias.length > 1 ? (
+        {contasBancarias.length > 1 || centros.length > 0 || tagsDisponiveis.length > 0 ? (
           <div className="flex flex-wrap items-center gap-[var(--fin-s-3)]">
+            {contasBancarias.length > 1 ? (
             <Select value={contaEscolhida ? contaEscolhida.id : TODAS_AS_CONTAS} onValueChange={v => setContaId(String(v))}>
               <SelectTrigger
                 id="fluxo-conta"
@@ -368,6 +532,50 @@ export default function FluxoCaixaPage() {
                 ))}
               </SelectContent>
             </Select>
+            ) : null}
+            {centros.length > 0 ? (
+              <Select value={centroEscolhido ? centroEscolhido.id : TODOS} onValueChange={v => setCentroId(String(v) === TODOS ? '' : String(v))}>
+                <SelectTrigger
+                  id="fluxo-centro"
+                  aria-label="Centro de custo"
+                  className={cn(CONTROLE, 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)] focus-visible:ring-0')}
+                >
+                  <span className="fin-t-overline shrink-0 text-[var(--fin-text-3)]">Centro</span>
+                  <SelectValue>{() => centroEscolhido?.nome || 'Todos os centros'}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={TODOS} className="fin-t-body">Todos os centros</SelectItem>
+                  {arvoreDeCentros.map(c => (
+                    <SelectItem key={c.id} value={c.id} className="fin-t-body">
+                      {`${RECUO.repeat(c.nivel)}${c.codigo ? `${c.codigo} ` : ''}${c.nome}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
+            {tagsDisponiveis.length > 0 ? (
+              <Select value={tag || TODOS} onValueChange={v => setTag(String(v) === TODOS ? '' : String(v))}>
+                <SelectTrigger
+                  id="fluxo-tag"
+                  aria-label="Tag"
+                  className={cn(CONTROLE, 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)] focus-visible:ring-0')}
+                >
+                  <span className="fin-t-overline shrink-0 text-[var(--fin-text-3)]">Tag</span>
+                  <SelectValue>{() => tagEscolhida || 'Todas as tags'}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={TODOS} className="fin-t-body">Todas as tags</SelectItem>
+                  {tagsDisponiveis.map(t => (
+                    <SelectItem key={t.valor} value={t.valor} className="fin-t-body">{t.rotulo}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
+            {comRecorte ? (
+              <Button type="button" variant="ghost" className="h-11 lg:h-9" onClick={() => { setCentroId(''); setTag(''); }}>
+                Limpar centro e tag
+              </Button>
+            ) : null}
             {contaEscolhida && semConta.quantidade > 0 ? (
               <p className="flex items-start gap-[var(--fin-s-2)] fin-t-caption text-[var(--fin-text-2)]">
                 <Info aria-hidden="true" className="mt-px size-3.5 shrink-0 text-[var(--fin-text-3)]" />
@@ -401,6 +609,37 @@ export default function FluxoCaixaPage() {
             <div className="flex flex-col gap-[var(--fin-s-5)]">
               {/* A conta do período, de ponta a ponta. */}
               <section aria-label={`Resumo de ${periodo.rotulo}`} className={cn(CARTAO, 'flex flex-col gap-[var(--fin-s-5)] p-[var(--fin-s-5)] sm:p-[var(--fin-s-6)]')}>
+                {comRecorte ? (
+                <>
+                <div className="grid grid-cols-2 gap-x-[var(--fin-s-4)] gap-y-[var(--fin-s-5)] lg:grid-cols-3">
+                  <Termo sinal="+" rotulo="Entrou" valor={caderno.entradas} tom="positivo" nota={notaEntrou} />
+                  <Termo sinal="−" rotulo="Saiu" valor={caderno.saidas} nota={notaSaiu} />
+                  <Termo
+                    sinal="="
+                    rotulo={`Resultado de ${rotuloDoRecorte}`}
+                    valor={caderno.saldoFinal}
+                    tom={caderno.saldoFinal < 0 ? 'negativo' : 'neutro'}
+                    nota={periodoFechado ? 'fechado' : 'com o previsto'}
+                    destaque
+                  />
+                </div>
+                <p className="flex max-w-[80ch] items-start gap-[var(--fin-s-2)] fin-t-body text-[var(--fin-text-2)]">
+                  <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-[var(--fin-text-3)]" />
+                  O saldo do banco não se divide por centro de custo nem por tag. Por isso, com este filtro, o caderno começa em zero e
+                  soma só o que entra e sai nas contas de {rotuloDoRecorte} no período: conta rateada entra com a parte do centro,
+                  e a folha ainda não lançada fica fora. Limpe o filtro para voltar ao saldo do banco.
+                </p>
+                {caderno.vencidasForaDoPeriodo.quantidade > 0 ? (
+                  <p className="flex items-start gap-[var(--fin-s-2)] fin-t-body text-[var(--fin-text-2)]">
+                    <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-[var(--fin-text-3)]" />
+                    {caderno.vencidasForaDoPeriodo.quantidade === 1
+                      ? `1 conta do recorte venceu neste período e segue em aberto (${formatBRL(caderno.vencidasForaDoPeriodo.valor)}). Ela está prevista para hoje.`
+                      : `${caderno.vencidasForaDoPeriodo.quantidade} contas do recorte venceram neste período e seguem em aberto (${formatBRL(caderno.vencidasForaDoPeriodo.valor)}). Elas estão previstas para hoje.`}
+                  </p>
+                ) : null}
+                </>
+                ) : (
+                <>
                 <div className="grid grid-cols-2 gap-x-[var(--fin-s-4)] gap-y-[var(--fin-s-5)] lg:grid-cols-4">
                   <Termo
                     largoNoCelular
@@ -469,6 +708,8 @@ export default function FluxoCaixaPage() {
                     />
                   </div>
                 </div>
+                </>
+                )}
               </section>
 
               {/* O caderno. */}
@@ -478,19 +719,28 @@ export default function FluxoCaixaPage() {
                     <h2 className="fin-t-subhead text-[var(--fin-text)]">Caderno</h2>
                     <p className="fin-t-caption text-[var(--fin-text-3)]">Toque numa linha para ver o que entrou e o que saiu.</p>
                   </div>
-                  <Segmentado<Agrupamento>
-                    rotulo="Mostrar o caderno"
-                    valor={agrupamento}
-                    onChange={setAgrupamento}
-                    opcoes={agrupamentosDoPeriodo(tipo).map(a => ({ valor: a, rotulo: ROTULO_AGRUPAMENTO[a] }))}
-                  />
+                  <div className="flex flex-wrap items-center gap-[var(--fin-s-2)]">
+                    <Segmentado<Agrupamento>
+                      rotulo="Mostrar o caderno"
+                      valor={agrupamento}
+                      onChange={setAgrupamento}
+                      opcoes={agrupamentosDoPeriodo(tipo).map(a => ({ valor: a, rotulo: ROTULO_AGRUPAMENTO[a] }))}
+                    />
+                    <BotaoExportar origem="fluxo-de-caixa" documento={documentoDoCaderno} />
+                    <BotaoAgendarEnvio
+                      relatorio="fluxo"
+                      nomeSugerido="Fluxo de caixa"
+                      consulta={() => consultaDoAgendamento('caderno')}
+                      resumoDosFiltros={() => resumoDoAgendamento('caderno')}
+                    />
+                  </div>
                 </div>
 
                 <div className="px-[var(--fin-s-1)] sm:px-[var(--fin-s-2)]">
-                  <Caderno caderno={caderno} onAbrir={setLinhaAberta} />
+                  <Caderno caderno={caderno} recorte={comRecorte} onAbrir={l => { setContaDoDetalhe(null); setLinhaAberta(l); }} />
                 </div>
 
-                {temFolha || projecaoFunis.count > 0 ? (
+                {!comRecorte && (temFolha || projecaoFunis.count > 0) ? (
                   <div className="flex flex-wrap items-center gap-x-[var(--fin-s-5)] gap-y-1 border-t border-[var(--fin-border)] px-[var(--fin-s-4)] pt-[var(--fin-s-3)] sm:px-[var(--fin-s-5)]">
                     <span className="fin-t-caption text-[var(--fin-text-3)]">Na previsão:</span>
                     {temFolha ? (
@@ -502,6 +752,76 @@ export default function FluxoCaixaPage() {
                   </div>
                 ) : null}
               </section>
+
+              {/* Por conta e dia (E7, G3): cada conta numa linha, cada dia numa coluna. */}
+              {contasBancarias.length > 0 && !comRecorte ? (
+                <section aria-labelledby="t-por-conta" className={cn(CARTAO, 'flex flex-col gap-[var(--fin-s-3)] py-[var(--fin-s-4)]')}>
+                  <div className="flex flex-col gap-[var(--fin-s-3)] px-[var(--fin-s-4)] sm:flex-row sm:items-center sm:justify-between sm:px-[var(--fin-s-5)]">
+                    <div className="flex flex-col">
+                      <h2 id="t-por-conta" className="fin-t-subhead text-[var(--fin-text)]">Por conta e dia</h2>
+                      <p className="fin-t-caption text-[var(--fin-text-3)]">
+                        {medidaGrade === 'saldo'
+                          ? 'Quanto cada conta tem no fim de cada dia. Depois de hoje, é previsão.'
+                          : 'Quanto entrou menos o que saiu em cada conta, dia a dia. Toque num valor para ver os lançamentos.'}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-[var(--fin-s-2)]">
+                      <Segmentado<MedidaDaGrade>
+                        rotulo="Mostrar"
+                        valor={medidaGrade}
+                        onChange={setMedidaGrade}
+                        opcoes={[{ valor: 'saldo', rotulo: 'Saldo' }, { valor: 'movimento', rotulo: 'Movimento' }]}
+                      />
+                      <BotaoExportar origem="fluxo-por-conta" documento={documentoDaGrade} />
+                      <BotaoAgendarEnvio
+                        relatorio="fluxo"
+                        nomeSugerido="Fluxo de caixa por conta e dia"
+                        consulta={() => consultaDoAgendamento('grade')}
+                        resumoDosFiltros={() => resumoDoAgendamento('grade')}
+                      />
+                    </div>
+                  </div>
+                  <div className="border-y border-[var(--fin-border)]">
+                    <GradePorConta grade={grade} medida={medidaGrade} hoje={hoje} onAbrir={abrirDiaDaConta} />
+                  </div>
+                  {grade.linhas.some(l => l.tipo !== 'conta') ? (
+                    <p className="flex items-start gap-[var(--fin-s-2)] px-[var(--fin-s-4)] fin-t-caption text-[var(--fin-text-2)] sm:px-[var(--fin-s-5)]">
+                      <Info aria-hidden="true" className="mt-px size-3.5 shrink-0 text-[var(--fin-text-3)]" />
+                      {grade.linhas.some(l => l.tipo === 'sem_conta') ? 'Previsto sem conta: contas em aberto sem conta bancária escolhida e a folha ainda não lançada. ' : ''}
+                      {grade.linhas.some(l => l.tipo === 'outras') ? 'Outras contas: títulos de uma conta que não aparece nesta lista. ' : ''}
+                      Com elas, a soma bate com o caderno de todas as contas.
+                    </p>
+                  ) : null}
+                </section>
+              ) : null}
+
+              {/* Por centro de custo e por tag (E7, frente C). */}
+              {porDimensao && dimensoesVisiveis.length > 0 ? (
+                <section aria-labelledby="t-por-dimensao" className={cn(CARTAO, 'flex flex-col gap-[var(--fin-s-3)] py-[var(--fin-s-4)]')}>
+                  <div className="flex flex-col gap-[var(--fin-s-3)] px-[var(--fin-s-4)] sm:flex-row sm:items-center sm:justify-between sm:px-[var(--fin-s-5)]">
+                    <div className="flex flex-col">
+                      <h2 id="t-por-dimensao" className="fin-t-subhead text-[var(--fin-text)]">
+                        {dimensaoNaTela === 'centro' ? 'Por centro de custo' : 'Por tag'}
+                      </h2>
+                      <p className="fin-t-caption text-[var(--fin-text-3)]">
+                        O que entrou e saiu em {periodo.rotulo} e o que ainda vai entrar e sair{rotuloDoRecorte ? `, só em ${rotuloDoRecorte}` : ''}.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-[var(--fin-s-2)]">
+                      {dimensoesVisiveis.length > 1 ? (
+                        <Segmentado<DimensaoDoFluxo>
+                          rotulo="Ver por"
+                          valor={dimensaoNaTela}
+                          onChange={setDimensao}
+                          opcoes={[{ valor: 'centro', rotulo: 'Centro de custo' }, { valor: 'tag', rotulo: 'Tag' }]}
+                        />
+                      ) : null}
+                      <BotaoExportar origem="fluxo-por-dimensao" documento={documentoPorDimensao} />
+                    </div>
+                  </div>
+                  <PorDimensao fluxo={porDimensao} dimensao={dimensaoNaTela} rotuloPeriodo={periodo.rotulo} />
+                </section>
+              ) : null}
 
               {/* Previsto × Realizado (05/11/2026): o combinado ao lado do que aconteceu. */}
               <section aria-labelledby="t-previsto-realizado" className={cn(CARTAO, 'flex flex-col gap-[var(--fin-s-3)] py-[var(--fin-s-4)]')}>
@@ -538,10 +858,11 @@ export default function FluxoCaixaPage() {
 
         <DetalheDaLinha
           linha={linhaAberta}
-          agrupamento={agrupamento}
+          agrupamento={contaDoDetalhe ? 'dia' : agrupamento}
+          contexto={contaDoDetalhe}
           ano={periodo.inicio.slice(0, 4)}
           hoje={hoje}
-          onFechar={() => setLinhaAberta(null)}
+          onFechar={() => { setLinhaAberta(null); setContaDoDetalhe(null); }}
         />
       </div>
     </div>

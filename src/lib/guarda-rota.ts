@@ -6,6 +6,11 @@ import { bloqueioFinanceiro, podeExcluir, podeGerenciarUsuarios } from './permis
 import { mensagemPeriodoFechado, periodoFechadoDoErro } from './periodo-fechado';
 import { pode } from './permissoes-servidor';
 import { ACOES_FINANCEIRAS, type AcaoFinanceira } from './acoes-financeiras';
+import {
+  MENSAGEM_BLOQUEIO_PAGADOR, ONDE_ATIVAR_SEGUNDO_FATOR, mensagemAvisoPagador, regraDoPagador, situacaoDoPagador,
+} from './segundo-fator-pagador';
+import { hojeISO } from './money';
+import { MENSAGEM_CONTA_SO_VER } from './conta-da-gravacao';
 
 export async function recusaFinanceira(modo: 'ler' | 'escrever'): Promise<NextResponse | null> {
   const sessao = await getSession();
@@ -45,12 +50,37 @@ export async function recusaAcao(
   if (await pode(sessao, acao, opcoes)) return null;
   const rotulo = ACOES_FINANCEIRAS.find(a => a.id === acao)?.rotulo ?? acao;
   const conta = opcoes?.contaBancariaId && await pode(sessao, acao);
+  // Conta "só ver" (E7): vê saldo e extrato, mas não movimenta.
+  const soVer = conta && await pode(sessao, 'ver_conta_bancaria', { contaBancariaId: opcoes?.contaBancariaId });
   return NextResponse.json({
-    error: conta
-      ? 'Esta conta bancária não está liberada para você.'
-      : `Seu acesso não inclui: ${rotulo.charAt(0).toLowerCase()}${rotulo.slice(1)}.`,
+    error: soVer
+      ? MENSAGEM_CONTA_SO_VER
+      : conta
+        ? 'Esta conta bancária não está liberada para você.'
+        : `Seu acesso não inclui: ${rotulo.charAt(0).toLowerCase()}${rotulo.slice(1)}.`,
     acao,
   }, { status: 403 });
+}
+
+/**
+ * Verificação em duas etapas de quem vai pagar ou transferir agora (E7, ver
+ * ./segundo-fator-pagador). `recusa` = 403 com `precisa_segundo_fator` (a tela
+ * leva a Meu perfil); `aviso` = passa, mas a resposta avisa do prazo.
+ */
+export async function conferirSegundoFatorDoPagador(): Promise<{ recusa: NextResponse | null; aviso: string | null }> {
+  const sessao = await getSession();
+  if (!sessao) return { recusa: NextResponse.json({ error: 'Sessao necessaria' }, { status: 401 }), aviso: null };
+  const regra = regraDoPagador();
+  const situacao = situacaoDoPagador(sessao, regra, hojeISO());
+  if (situacao === 'bloqueio') {
+    return {
+      recusa: NextResponse.json({
+        error: MENSAGEM_BLOQUEIO_PAGADOR, precisa_segundo_fator: true, onde_ativar: ONDE_ATIVAR_SEGUNDO_FATOR,
+      }, { status: 403 }),
+      aviso: null,
+    };
+  }
+  return { recusa: null, aviso: situacao === 'aviso' ? mensagemAvisoPagador(regra.prazo) : null };
 }
 
 /**

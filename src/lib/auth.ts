@@ -29,6 +29,12 @@ export interface SessionPayload {
   impersonatingTenantSlug?: string;
   /** Versão da sessão no cadastro (ver ./sessao-viva). */
   tv?: number;
+  /**
+   * Segundo fator provado nesta sessão: login com o código do aplicativo ou
+   * cadastro feito em Meu perfil (E7). Quem paga sem isto é levado a ativar
+   * (ver ./segundo-fator-pagador).
+   */
+  sf?: boolean;
 }
 
 /** Duração da sessão: 12 horas (era 7 dias). Vale para o JWT e o cookie. */

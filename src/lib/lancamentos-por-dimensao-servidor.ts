@@ -110,10 +110,11 @@ export async function linhasDoRelatorio(
   tenantId: string,
   f: FiltrosLancamentos,
   hoje: string,
+  empresas: readonly string[] | null = null,
 ): Promise<{ linhas: LinhaLancamento[]; truncado: boolean }> {
   if (!tenantId) throw new Error('Agência não identificada');
   const { contas, truncado } = await contasDoPeriodo(exec, tenantId, f);
-  const ctx = await contexto(exec, tenantId, contas);
+  const ctx = { ...(await contexto(exec, tenantId, contas)), empresas };
   return { linhas: ordenarLinhas(montarLinhas(contas, ctx, f, hoje), f), truncado };
 }
 
@@ -122,8 +123,9 @@ export async function consultarLancamentos(
   tenantId: string,
   f: FiltrosLancamentos,
   hoje: string,
+  empresas: readonly string[] | null = null,
 ): Promise<RespostaLancamentos> {
-  const { linhas, truncado } = await linhasDoRelatorio(exec, tenantId, f, hoje);
+  const { linhas, truncado } = await linhasDoRelatorio(exec, tenantId, f, hoje, empresas);
   const pagina = paginar(linhas, f.pagina, f.por_pagina);
   return {
     regime: regimeDosFiltros(f),

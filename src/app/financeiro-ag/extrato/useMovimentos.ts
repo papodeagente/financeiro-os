@@ -44,19 +44,5 @@ export function useMovimentos(consulta: string) {
   return { dados, carregando, erro, atualizadoEm, recarregar };
 }
 
-/** Baixa o CSV do recorte filtrado; devolve a mensagem de erro, se houver. */
-export async function exportarMovimentos(consulta: string, leiaute: 'extrato' | 'movimentacoes'): Promise<string | null> {
-  const r = await fetch(`/api/movimentos-caixa?${consulta}&format=csv&leiaute=${leiaute}`);
-  if (!r.ok) {
-    const corpo = await r.json().catch(() => null);
-    return typeof corpo?.error === 'string' ? corpo.error : 'A exportação falhou. Tente de novo.';
-  }
-  const nome = /filename="([^"]+)"/.exec(r.headers.get('Content-Disposition') ?? '')?.[1] ?? `${leiaute}.csv`;
-  const url = URL.createObjectURL(await r.blob());
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = nome;
-  a.click();
-  URL.revokeObjectURL(url);
-  return null;
-}
+// A exportação (Excel, PDF, imprimir) sai pelo BotaoExportar, com o mesmo
+// recorte em /api/movimentos-caixa?format=xlsx|pdf|imprimir (o CSV continua na rota).

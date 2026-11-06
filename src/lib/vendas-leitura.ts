@@ -33,6 +33,8 @@ export interface VendaLida {
   versao_modelo: 1 | 2;
   /** Pagamentos para o relatório por forma (na v1, vindos do cabeçalho). */
   pagamentos: PagamentoDaVenda[];
+  /** Empresa da venda (E7, várias empresas). Ausente = a principal. */
+  empresa_id?: string;
 }
 
 export interface FiltroDeVendas {
@@ -44,6 +46,8 @@ export interface FiltroDeVendas {
   vendedor_id?: string;
   /** Inclui as canceladas (o padrão é não incluir). */
   incluir_canceladas?: boolean;
+  /** Empresas no recorte (E7). Ausente ou null = todas. */
+  empresas?: readonly string[] | null;
 }
 
 type Linha = Record<string, unknown>;
@@ -102,6 +106,8 @@ export async function lerVendas(exec: ExecutorSQL, tenantId: string, filtro: Fil
   if (filtro.ate && ISO.test(filtro.ate)) { args.push(filtro.ate); cond.push(`COALESCE(data->>'data_venda', '') <> '' AND LEFT(data->>'data_venda', 10) <= $${args.length}`); }
   if (filtro.ids) { args.push(filtro.ids); cond.push(`id = ANY($${args.length}::text[])`); }
   if (filtro.vendedor_id !== undefined) { args.push(filtro.vendedor_id); cond.push(`(vendedor_id = $${args.length} OR data->>'vendedor_id' = $${args.length})`); }
+  // Várias empresas (E7): só as vendas das empresas no recorte.
+  if (filtro.empresas) { args.push([...filtro.empresas]); cond.push(`COALESCE(NULLIF(data->>'empresa_id', ''), 'principal') = ANY($${args.length}::text[])`); }
   if (!filtro.incluir_canceladas) cond.push(`UPPER(COALESCE(data->>'status', status, '')) <> 'CANCELADO'`);
   // Orçamento não é venda.
   cond.push(`UPPER(COALESCE(data->>'status', status, '')) NOT IN ('ORCAMENTO')`);
@@ -189,7 +195,7 @@ export async function lerVendas(exec: ExecutorSQL, tenantId: string, filtro: Fil
     const situacao: 'ABERTA' | 'FECHADA' = txt(m?.situacao) === 'FECHADA' ? 'FECHADA' : 'ABERTA';
     venda.situacao = situacao;
     const pagamentos = versao === 2 ? venda.pagamentos : pagamentosDoCabecalho(cab, reaisParaCentavos(cab.valor_final ?? cab.valor_total_venda));
-    saida.push({ venda, status, cancelada: status === 'CANCELADO', situacao, versao_modelo: versao, pagamentos });
+    saida.push({ venda, status, cancelada: status === 'CANCELADO', situacao, versao_modelo: versao, pagamentos, empresa_id: txt(cab.empresa_id) || 'principal' });
   }
   return saida;
 }

@@ -279,7 +279,24 @@ eq([csv.headers.get('content-type'), texto.split('\r\n')[0].replace('﻿', '').s
 const xl = await R.relatorio.GET(pedir('GET', '/api/relatorios/vendas?relatorio=vendedor&formato=xlsx'));
 const wb = XLSX.read(new Uint8Array(await xl.arrayBuffer()), { type: 'array' });
 const folha = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
-eq([folha[0][0], folha[1][0], typeof folha[1][folha[0].indexOf('Faturamento')]], ['Vendedor', 'Leo', 'number'], 'XLSX com números de verdade');
+// E7: o arquivo abre com o título e os filtros; o cabeçalho vem depois.
+const cab = folha.findIndex(l => l[0] === 'Vendedor');
+eq([folha[0][0], cab > 0, folha[cab + 1][0], typeof folha[cab + 1][folha[cab].indexOf('Faturamento')]], ['Vendas por vendedor', true, 'Leo', 'number'], 'XLSX com título, filtros e números de verdade');
+const pdf = await R.relatorio.GET(pedir('GET', '/api/relatorios/vendas?relatorio=vendedor&formato=pdf&de=2026-11-01&ate=2026-11-30'));
+eq([pdf.status, pdf.headers.get('content-type'), /vendas-por-vendedor-data-da-venda|vendas-por-vendedor-2026-11-01-a-2026-11-30/.test(pdf.headers.get('content-disposition') ?? '')], [200, 'application/pdf', true], 'PDF com o período no nome do arquivo');
+r = await json(await R.relatorio.GET(pedir('GET', '/api/relatorios/vendas?relatorio=pagamentos&de=2026-11-01&ate=2026-11-30')));
+eq([r.status, r.corpo.linhas.length > 0, r.corpo.linhas.every(l => ['Liquidado', 'Parcial', 'Em aberto', 'Compensado'].includes(l.situacao_pagamento))], [200, true, true], 'pagamentos das vendas, um por linha, com a situação');
+const boleto = r.corpo.linhas.find(l => l.venda_id === vA);
+eq([boleto?.grupo, boleto?.valor, boleto?.situacao_pagamento], ['Boleto', 105000, 'Em aberto'], 'boleto ainda não recebido');
+r = await json(await R.relatorio.GET(pedir('GET', '/api/relatorios/vendas?relatorio=pagamentos&so_liquidados=1&de=2026-11-01&ate=2026-11-30')));
+eq(r.corpo.linhas.some(l => l.venda_id === vA), false, 'só liquidados tira o boleto em aberto');
+r = await json(await R.relatorio.GET(pedir('GET', '/api/relatorios/vendas?relatorio=produto&vendedor=id:u-bia')));
+eq([...new Set(r.corpo.linhas.map(l => l.vendedor))], ['Bia'], 'filtro por vendedor');
+eq(r.corpo.opcoes.vendedores.some(o => o.valor === 'id:u-leo'), true, 'as opções do filtro continuam com a equipe toda');
+r = await json(await R.relatorio.GET(pedir('GET', '/api/relatorios/vendas?relatorio=produto&fornecedor=id:f1')));
+eq([...new Set(r.corpo.linhas.map(l => l.fornecedor))], ['Hotel Mar'], 'filtro por fornecedor');
+r = await json(await R.relatorio.GET(pedir('GET', '/api/relatorios/vendas?relatorio=clientes&ordem=receita')));
+eq([r.corpo.ordem, r.corpo.linhas.every((l, i, a) => i === 0 || Number(a[i - 1].receita) >= Number(l.receita))], ['receita', true], 'ranking pela receita');
 
 await salvarRestricaoDeUsuario(pool, T, { usuario_id: 'u-ope', acoes_negadas: ['ver_colunas_comissao', 'exportar'] });
 invalidarPermissoes(T);

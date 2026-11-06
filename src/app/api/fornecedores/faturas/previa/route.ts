@@ -19,7 +19,7 @@ export async function POST(req: Request) {
   try {
     return NextResponse.json(await previaDaFaturaNoBanco(pool as unknown as ExecutorSQL, tenantId, {
       parte_id: texto(c.parte_id), conta_ids: Array.isArray(c.conta_ids) ? c.conta_ids.map(texto) : [],
-      corte: texto(c.corte) || undefined, vencimento: texto(c.vencimento) || undefined,
+      corte: texto(c.corte) || undefined, vencimento: texto(c.vencimento) || undefined, modo: texto(c.modo) === 'BRUTO' ? 'BRUTO' : 'SALDO',
     }));
   } catch (e) {
     return respostaDeErroDoFornecedor(e);

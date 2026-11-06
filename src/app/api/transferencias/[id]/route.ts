@@ -1,4 +1,10 @@
-import { recusaFinanceira, recusaExclusao, respostaPeriodoFechado } from '@/lib/guarda-rota';
+import {
+  conferirSegundoFatorDoPagador, recusaAcao, recusaFinanceira, recusaExclusao, respostaPeriodoFechado,
+} from '@/lib/guarda-rota';
+import { getSession } from '@/lib/auth';
+import { recusaDaContaNaGravacao } from '@/lib/conta-da-gravacao';
+import type { ExecutorPermissoes } from '@/lib/permissoes-servidor';
+import { lerCatalogoDaAgencia } from '@/lib/moedas-servidor';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
@@ -69,11 +75,13 @@ async function prepararMoedas(tenantId: string, item: Registro, exec: ExecutorSQ
     `SELECT id, data->>'moeda' AS moeda FROM contas_bancarias WHERE tenant_id = $1 AND id IN ($2, $3)`,
     [tenantId, origem, destino],
   );
-  const moedaDaConta = (id: string | null) => moedaDe(rows.find(r => r.id === id)?.moeda);
+  // Catálogo da agência (E7, frente D): moedas cadastradas por ela também valem.
+  const catalogo = await lerCatalogoDaAgencia(exec, tenantId);
+  const moedaDaConta = (id: string | null) => moedaDe(rows.find(r => r.id === id)?.moeda, catalogo);
   const plano = planoDaTransferencia({
     valor: num(item.valor), moeda_origem: moedaDaConta(origem), moeda_destino: moedaDaConta(destino),
     cambio: num(item.cambio), tarifa: num(item.tarifa),
-  });
+  }, catalogo);
   if (plano.erros.length) return plano.erros[0];
   item.moeda_origem = plano.moeda_origem;
   item.moeda_destino = plano.moeda_destino;
@@ -109,6 +117,20 @@ async function contasFaltando(
   );
   const existentes = new Set(rows.map(r => r.id as string));
   return alvo.filter(id => !existentes.has(id));
+}
+
+/**
+ * Transferir exige o direito "Transferir entre contas" e as DUAS contas
+ * liberadas para movimentar — as de antes e as de agora (E7). Quem só vê uma
+ * das contas não transfere. Devolve a recusa (403) ou null.
+ */
+async function recusaDasContas(novo: Registro, antes: Registro | null, exec: ExecutorSQL) {
+  const recusa = await recusaDaContaNaGravacao(
+    await getSession(), novo, antes,
+    { campos: ['conta_origem_id', 'conta_destino_id'], sempre: true, acao: 'transferir' },
+    exec as unknown as ExecutorPermissoes,
+  );
+  return recusa ? { erro: recusa.error, status: 403 as const } : null;
 }
 
 function mesmoMovimento(a: Registro, b: Registro): boolean {
@@ -149,11 +171,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 //                        aplica o novo
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const recusa = await recusaFinanceira('escrever');
+    const recusa = (await recusaFinanceira('escrever')) ?? (await recusaAcao('transferir'));
     if (recusa) return recusa;
     await initDB();
     const { id } = await params;
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
+    // Verificação em duas etapas de quem transfere (E7): conferida antes,
+    // aplicada só se o saldo vai mexer.
+    const segundoFator = await conferirSegundoFatorDoPagador();
     const body = await req.json();
     if (!body || typeof body !== 'object') {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
@@ -172,6 +197,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       );
       if (prevRows.length === 0) return { erro: 'Not found', status: 404 as const };
       const prev = (prevRows[0].data ?? {}) as Registro;
+      const recusaConta = await recusaDasContas(item, prev, exec);
+      if (recusaConta) return recusaConta;
 
       const prevStatus = String(prev.status ?? '');
       const novoStatus = String(item.status ?? '');
@@ -199,6 +226,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       const semEfeitoNoCaixa =
         (!eraEfetivada && !ficaEfetivada) ||
         (eraEfetivada && ficaEfetivada && mesmoMovimento(prev, item));
+
+      if (!semEfeitoNoCaixa && segundoFator.recusa) return { erro: null, recusaPronta: segundoFator.recusa };
 
       if (!semEfeitoNoCaixa) {
         const faltando = await contasFaltando(tenantId, [
@@ -228,13 +257,15 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         if (ficaEfetivada) await aplicarTransferencia(tenantId, item, +1, exec);
       }
 
-      return { erro: null };
+      return { erro: null, moveu: !semEfeitoNoCaixa };
     });
 
+    if ('recusaPronta' in resultado && resultado.recusaPronta) return resultado.recusaPronta;
     if (resultado.erro) {
-      return NextResponse.json({ error: resultado.erro }, { status: resultado.status });
+      return NextResponse.json({ error: resultado.erro }, { status: 'status' in resultado ? resultado.status : 400 });
     }
-    return NextResponse.json(item);
+    const aviso = 'moveu' in resultado && resultado.moveu ? segundoFator.aviso : null;
+    return NextResponse.json(aviso ? { ...item, aviso_segundo_fator: aviso } : item);
   } catch (e) {
     const fechado = respostaPeriodoFechado(e);
     if (fechado) return fechado;
@@ -248,12 +279,13 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 // sem reverter deixaria o saldo das contas errado para sempre.
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const recusa = (await recusaExclusao()) ?? (await recusaFinanceira('escrever'));
+    const recusa = (await recusaExclusao()) ?? (await recusaFinanceira('escrever')) ?? (await recusaAcao('transferir'));
     if (recusa) return recusa;
     await initDB();
     const { id } = await params;
     if (!pool) return NextResponse.json({ ok: true });
     const tenantId = await getTenantId();
+    const segundoFator = await conferirSegundoFatorDoPagador();
 
     // Estorno e exclusão na mesma transação: se o DELETE falhar depois do
     // estorno, o saldo não pode ficar creditado com a transferência viva.
@@ -264,8 +296,12 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
       );
       if (rows.length === 0) return { erro: null };
       const prev = (rows[0].data ?? {}) as Registro;
+      const recusaConta = await recusaDasContas(prev, null, exec);
+      if (recusaConta) return recusaConta;
 
       if (String(prev.status ?? '') === 'EFETIVADA') {
+        // Excluir efetivada devolve o dinheiro às contas: é transferir.
+        if (segundoFator.recusa) return { erro: null, recusaPronta: segundoFator.recusa };
         const faltando = await contasFaltando(tenantId, [
           contaId(prev, 'conta_origem_id'),
           contaId(prev, 'conta_destino_id'),
@@ -283,8 +319,9 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
       return { erro: null };
     });
 
+    if ('recusaPronta' in resultado && resultado.recusaPronta) return resultado.recusaPronta;
     if (resultado.erro) {
-      return NextResponse.json({ error: resultado.erro }, { status: resultado.status });
+      return NextResponse.json({ error: resultado.erro }, { status: 'status' in resultado ? resultado.status : 400 });
     }
     return NextResponse.json({ ok: true });
   } catch (e) {

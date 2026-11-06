@@ -10,13 +10,21 @@ import type { ExecutorSQL } from './caixa-atomico';
 import type { Venda } from './venda-modelo';
 import type { ContasDaVenda } from './venda-contas';
 import {
-  aplicarRetencoesNasContas, normalizarRetencao, retencoesDaVenda,
-  type RetencaoDoCliente,
+  aplicarRetencoesNasContas, dispensarRetencaoPequena, normalizarRetencao, normalizarRetencaoMinima, retencoesDaVenda,
+  type RetencaoDoCliente, type RetencaoMinima,
 } from './nota-retencoes';
 
 export class ErroRetencao extends Error {
-  constructor(public codigo: string, mensagem: string, public status = 400, public detalhes?: unknown) {
+  // Campos declarados à parte (sem "parameter property") para o arquivo
+  // carregar no node --experimental-strip-types dos testes.
+  codigo: string;
+  status: number;
+  detalhes?: unknown;
+  constructor(codigo: string, mensagem: string, status = 400, detalhes?: unknown) {
     super(mensagem);
+    this.codigo = codigo;
+    this.status = status;
+    this.detalhes = detalhes;
     this.name = 'ErroRetencao';
   }
 }
@@ -73,6 +81,15 @@ export async function apagarRetencao(exec: ExecutorSQL, tenantId: string, id: st
   return (r.rowCount ?? 0) > 0;
 }
 
+/** O limite de dispensa de retenção da agência (agencia.notas_config.retencao_minima). */
+export async function retencaoMinimaDaAgencia(exec: ExecutorSQL, tenantId: string): Promise<RetencaoMinima> {
+  const { rows } = await exec.query(
+    `SELECT data->'notas_config'->'retencao_minima' AS m FROM agencia WHERE tenant_id = $1 ORDER BY updated_at DESC NULLS LAST, id ASC LIMIT 1`,
+    [tenantId],
+  ).catch(() => ({ rows: [] as Array<Record<string, unknown>> }));
+  return normalizarRetencaoMinima(rows[0]?.m);
+}
+
 /**
  * As contas da venda com a retenção do cliente descontada (conta a receber
  * líquida). Sem retenção cadastrada para o cliente, devolve as mesmas contas,
@@ -82,7 +99,11 @@ export async function aplicarRetencoesDaAgencia(exec: ExecutorSQL, tenantId: str
   if (!venda.cliente.id || !(await tabelaExiste(exec))) return contas;
   const regras = await listarRetencoes(exec, tenantId, venda.cliente.id).catch(() => [] as RetencaoDoCliente[]);
   if (!regras.length) return contas;
-  const r = retencoesDaVenda(venda, regras);
+  const bruta = retencoesDaVenda(venda, regras);
+  // Dispensa de retenção pequena (E7), quando a agência digitou o limite.
+  const minimo = await retencaoMinimaDaAgencia(exec, tenantId);
+  const dispensa = dispensarRetencaoPequena(bruta.por_tributo, minimo);
+  const r = { ...bruta, por_tributo: dispensa.por_tributo, total: dispensa.total };
   if (!(r.total > 0)) return contas;
   const { contas: receber, aviso } = aplicarRetencoesNasContas(contas.contas_receber as unknown as Array<Record<string, unknown>>, r);
   return {

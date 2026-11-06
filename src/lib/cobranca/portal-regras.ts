@@ -13,6 +13,9 @@
  * scripts/test-sql-portal-cobranca.mjs.
  */
 import type { StatusDaCobranca, TipoDeCobranca } from './contrato-telas';
+import { calcularEncargos } from '../baixa-calculo';
+import { addDias } from '../money';
+import { CALENDARIO_NACIONAL, ehFimDeSemana } from '../feriados';
 
 /** 32 bytes em base64url = 43 caracteres. Aceita 32 a 64 para não amarrar o gerador. */
 const FORMATO_DO_TOKEN = /^[A-Za-z0-9_-]{32,64}$/;
@@ -62,6 +65,31 @@ export interface CobrancaNoPortal {
   pix_copia_cola: string | null;
   url_boleto: string | null;
   url_fatura: string | null;
+  /**
+   * 2ª via que o próprio cliente pode gerar (E7): só quando o boleto venceu e
+   * o provedor não deu o link que já cobra o valor atualizado. Null = não há.
+   */
+  segunda_via: SegundaViaNoPortal | null;
+}
+
+/** O que a 2ª via pelo portal vai ser, já calculado (o cliente vê antes de pedir). */
+export interface SegundaViaNoPortal {
+  vencimento: string;
+  valor: number;
+  juros: number;
+  multa: number;
+}
+
+/** Nota fiscal do cliente no portal (E7): só autorizada, só dele. */
+export interface NotaNoPortal {
+  /** Referência da nota para baixar o arquivo (só vale com o mesmo token). */
+  ref: string;
+  numero: string;
+  emitida_em: string | null;
+  valor: number;
+  /** O emissor guardou o PDF/XML (nota emitida fora do sistema pode não ter). */
+  tem_pdf: boolean;
+  tem_xml: boolean;
 }
 
 export interface ItemDoPortal {
@@ -85,6 +113,8 @@ export interface PortalPublico {
   cliente: { primeiro_nome: string; documento: string };
   em_aberto: ItemDoPortal[];
   pagas: ItemDoPortal[];
+  /** Notas fiscais autorizadas do cliente (E7). */
+  notas: NotaNoPortal[];
   /** Soma do que falta pagar. */
   total_em_aberto: number;
   hoje: string;
@@ -109,12 +139,95 @@ export interface CobrancaParaPortal {
   url_fatura: string | null;
 }
 
+/** Nota fiscal como o servidor lê (data JSON + colunas). */
+export interface NotaParaPortal {
+  id: string;
+  status: string;
+  data: Record<string, unknown>;
+}
+
+/** Juros e multa da política que a 2ª via pelo portal aplica (null = nenhum). */
+export interface EncargosDoPortal {
+  juros_am_pct: number;
+  multa_pct: number;
+  tolerancia_dias: number;
+}
+
 const TIPOS: readonly string[] = ['boleto', 'pix', 'boleto_pix', 'link', 'carne'];
 const VIVAS: readonly string[] = ['emitindo', 'aberta', 'vencida'];
 const n = (v: unknown) => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
 const r2 = (v: number) => Math.round(v * 100) / 100;
 /** Só endereço https vai para o navegador do cliente. */
 const url = (v: unknown) => (typeof v === 'string' && /^https:\/\//i.test(v) ? v : null);
+
+/** Dia útil (sem sábado, domingo e feriado nacional) a partir de `iso`, inclusive. */
+export function diaUtilAPartirDe(iso: string): string {
+  let d = iso;
+  for (let i = 0; i < 10 && (ehFimDeSemana(d) || CALENDARIO_NACIONAL.ehFeriado(d)); i++) d = addDias(d, 1);
+  return d;
+}
+
+/**
+ * Vencimento da 2ª via pedida pelo cliente: o próximo dia útil depois de hoje
+ * (boleto que vence no mesmo dia pode não ser registrado a tempo no banco).
+ */
+export function vencimentoDaSegundaVia(hoje: string): string {
+  return diaUtilAPartirDe(addDias(hoje, 1));
+}
+
+/**
+ * A 2ª via que o cliente pode gerar sozinho, ou null.
+ *
+ * Só quando o boleto/Pix venceu e NÃO há o link do provedor que já cobra o
+ * valor atualizado (com ele, o portal manda para o link: nada a gerar). Link
+ * de pagamento não ganha 2ª via (não tem vencimento de boleto). O valor é o
+ * do documento mais os juros e a multa da política da agência até o novo
+ * vencimento, pela mesma conta da liquidação (`calcularEncargos`).
+ */
+export function segundaViaPossivel(
+  cob: { tipo: string; status: string; valor_centavos: number | string; vencimento: string; url_fatura: string | null },
+  hoje: string,
+  encargos: EncargosDoPortal | null,
+): SegundaViaNoPortal | null {
+  if (!['boleto', 'pix', 'boleto_pix', 'carne'].includes(cob.tipo)) return null;
+  const venc = String(cob.vencimento ?? '').slice(0, 10);
+  const vencida = cob.status === 'vencida' || (cob.status === 'aberta' && !!venc && venc < hoje);
+  if (!vencida) return null;
+  if (url(cob.url_fatura)) return null;
+  const base = r2(n(cob.valor_centavos) / 100);
+  if (base <= 0) return null;
+  const vencimento = vencimentoDaSegundaVia(hoje);
+  const e = encargos
+    ? calcularEncargos({ tabela: 'contas_receber', status: 'PENDENTE', valor_final: base, valor_baixado: 0, data_vencimento: venc }, vencimento, {
+      juros_am_pct: encargos.juros_am_pct, multa_pct: encargos.multa_pct, tolerancia_dias: encargos.tolerancia_dias,
+    })
+    : { juros: 0, multa: 0 };
+  return { vencimento, valor: r2(base + e.juros + e.multa), juros: e.juros, multa: e.multa };
+}
+
+/**
+ * As notas que o cliente vê: autorizadas, emitidas para ele (nunca a do
+ * fornecedor ou do representante), da mais nova para a mais velha.
+ */
+export function notasDoPortal(notas: readonly NotaParaPortal[]): NotaNoPortal[] {
+  const lista: NotaNoPortal[] = [];
+  for (const nota of notas) {
+    const d = nota.data ?? {};
+    const status = String(nota.status || d.status || '').toUpperCase();
+    if (status !== 'AUTORIZADA') continue;
+    const destino = String(d.destino ?? '');
+    if (destino === 'FORNECEDOR' || destino === 'REPRESENTANTE') continue;
+    lista.push({
+      ref: nota.id,
+      numero: String(d.numero ?? '').trim(),
+      emitida_em: String(d.autorizada_em || d.emitida_em || '').slice(0, 10) || null,
+      valor: r2(n(d.valor_servicos) || n(d.valor_recebido)),
+      tem_pdf: !!String(d.link_pdf ?? '').trim(),
+      tem_xml: !!String(d.link_xml ?? '').trim(),
+    });
+  }
+  return lista.sort((a, b) => String(b.emitida_em ?? '').localeCompare(String(a.emitida_em ?? '')));
+}
 
 /**
  * Monta o que o cliente vê. Recebe linhas já filtradas por agência e cliente
@@ -127,6 +240,10 @@ export function montarPortal(entrada: {
   contas: readonly ContaParaPortal[];
   cobrancas: readonly CobrancaParaPortal[];
   hoje: string;
+  /** Notas fiscais do cliente (E7); ausente = nenhuma. */
+  notas?: readonly NotaParaPortal[];
+  /** Juros e multa da política para a 2ª via pelo portal (E7); null = sem encargos. */
+  encargos?: EncargosDoPortal | null;
 }): PortalPublico {
   const a = entrada.agencia ?? {};
   const redes = (a.redes_sociais ?? {}) as Record<string, unknown>;
@@ -162,6 +279,7 @@ export function montarPortal(entrada: {
         pix_copia_cola: pago || cob.status === 'paga' ? null : cob.pix_copia_cola || null,
         url_boleto: pago || cob.status === 'paga' ? null : url(cob.url_boleto),
         url_fatura: url(cob.url_fatura),
+        segunda_via: pago ? null : segundaViaPossivel(cob, entrada.hoje, entrada.encargos ?? null),
       }
       : null;
     const item: ItemDoPortal = {
@@ -194,6 +312,7 @@ export function montarPortal(entrada: {
     cliente: { primeiro_nome: primeiroNome(entrada.cliente.nome), documento: documentoMascarado(entrada.cliente.documento) },
     em_aberto,
     pagas,
+    notas: notasDoPortal(entrada.notas ?? []),
     total_em_aberto: r2(em_aberto.reduce((s, i) => s + i.saldo, 0)),
     hoje: entrada.hoje,
   };

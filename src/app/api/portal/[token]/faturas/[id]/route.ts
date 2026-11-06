@@ -3,6 +3,7 @@ import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { hojeISO } from '@/lib/money';
 import { porteiroDoPortal, respostaDoPortal } from '@/lib/cobranca/portal-porteiro';
 import { aprovarNoPortal, contestarNoPortal, ErroFatura, faturasDoPortal } from '@/lib/fatura-servidor';
+import { documentoDaFaturaNoPortal } from '@/lib/cobranca/portal-fatura';
 
 /**
  * O cliente responde a fatura no portal (E5, parte B), sem login, pelo link pessoal:
@@ -12,6 +13,27 @@ import { aprovarNoPortal, contestarNoPortal, ErroFatura, faturasDoPortal } from 
  * Exige corpo JSON (um formulário de outro site não consegue mandar).
  */
 export const dynamic = 'force-dynamic';
+
+/**
+ * O documento da fatura para o cliente ler e salvar em PDF (E7): GET /api/portal/<token>/faturas/<id>.
+ * Só fatura FECHADA do cliente do link; o recorte é o da folha impressa (src/lib/cobranca/portal-fatura.ts).
+ */
+export async function GET(req: Request, { params }: { params: Promise<{ token: string; id: string }> }) {
+  try {
+    const { token, id } = await params;
+    await initDB();
+    if (!pool) return respostaDoPortal({ error: 'Serviço indisponível. Tente em alguns minutos.' }, 503);
+    const exec = pool as unknown as ExecutorSQL;
+    const p = await porteiroDoPortal(req, exec, token);
+    if ('resposta' in p) return p.resposta;
+    const doc = await documentoDaFaturaNoPortal(exec, p.link, id);
+    if (!doc) return respostaDoPortal({ error: 'Fatura não encontrada.' }, 404);
+    return respostaDoPortal(doc);
+  } catch (e) {
+    console.error('[portal-fatura] falha:', e instanceof Error ? e.message : e);
+    return respostaDoPortal({ error: 'Não foi possível abrir agora. Tente de novo em alguns minutos.' }, 500);
+  }
+}
 
 export async function POST(req: Request, { params }: { params: Promise<{ token: string; id: string }> }) {
   try {

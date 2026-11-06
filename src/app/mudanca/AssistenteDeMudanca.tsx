@@ -20,7 +20,9 @@ import { PassoColunas } from './passos/PassoColunas';
 import { PassoConcluir } from './passos/PassoConcluir';
 import { PassoEnsaio } from './passos/PassoEnsaio';
 import { PassoExportar } from './passos/PassoExportar';
+import { PassoParalelo } from './passos/PassoParalelo';
 import { PassoProvas } from './passos/PassoProvas';
+import { PassoRecriar } from './passos/PassoRecriar';
 
 /**
  * Mudar para o EnturOS (E4, 05/11/2026). Um assistente de 7 passos que traz
@@ -86,11 +88,12 @@ export function AssistenteDeMudanca() {
       <PageHeader
         icone={FolderInput}
         titulo="Mudar para o EnturOS"
-        subtitulo="Traga do sistema anterior as contas, categorias, clientes e fornecedores, as contas em aberto e os saldos. Nada é gravado antes de você ver o ensaio, e tudo pode ser desfeito."
+        subtitulo="Traga do sistema anterior as contas, categorias, clientes e fornecedores, as contas em aberto, os saldos e, se quiser, o histórico. Nada é gravado antes de você ver o ensaio, e tudo pode ser desfeito."
         atualizadoEm={atualizadoEm}
         onRecarregar={carregar}
         acoesSecundarias={[
           { rotulo: 'Glossário', href: '/mudanca/glossario' },
+          { rotulo: 'Registros trazidos', href: '/mudanca/historico' },
           { rotulo: 'Checklist de paridade', href: '/mudanca/paridade' },
         ]}
       />
@@ -132,6 +135,8 @@ export function AssistenteDeMudanca() {
             {etapa === 'aplicar' ? <PassoAplicar {...props} onVerNoEnsaio={verNoEnsaio} /> : null}
             {etapa === 'provas' ? <PassoProvas {...props} onVerNoEnsaio={verNoEnsaio} /> : null}
             {etapa === 'concluir' ? <PassoConcluir {...props} onNovaMudanca={novaMudanca} /> : null}
+            {etapa === 'recriar' ? <PassoRecriar {...props} /> : null}
+            {etapa === 'paralelo' ? <PassoParalelo {...props} /> : null}
           </section>
         </div>
       </DataState>

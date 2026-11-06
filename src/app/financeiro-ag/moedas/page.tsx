@@ -9,6 +9,8 @@ import { DataState } from '@/components/fin/DataState';
 import { Segmentado } from '@/components/fin/Segmentado';
 import { Money } from '@/components/fin/Money';
 import { useCotacoes, type PainelDeCambioTela } from '@/components/fin/useCotacoes';
+import { useMoedas } from '@/components/fin/useMoedas';
+import { CadastroDeMoedas } from './CadastroDeMoedas';
 import { cn } from '@/lib/utils';
 import {
   MOEDAS_ESTRANGEIRAS, NOMES_DAS_FONTES, SERIES_SGS, equivalenteMensalPct, fonteEmPausa, formatarCambio, formatarNaMoeda,
@@ -115,6 +117,9 @@ type LinhaDeVariacao = { titulo_tabela: string; titulo_id: string; data: string;
 
 export default function MoedasECambioPage() {
   const { painel, estado, recarregar } = useCotacoes();
+  // Catálogo da agência (E7, frente D): as moedas dela entram nas cotações
+  // quando a PTAX as publica.
+  const { moedas } = useMoedas();
   const [lido, setLido] = useState<{ moeda: CodigoMoeda; lista: Cotacao[] } | null>(null);
   const [moedaHist, setMoedaHist] = useState<CodigoMoeda>('USD');
   const [variacoes, setVariacoes] = useState<LinhaDeVariacao[] | null>(null);
@@ -146,8 +151,9 @@ export default function MoedasECambioPage() {
 
   const moedasComDado = useMemo(() => {
     const comCotacao = new Set((painel?.cotacoes ?? []).map(c => c.moeda));
-    return MOEDAS_ESTRANGEIRAS.filter(m => m === 'USD' || m === 'EUR' || comCotacao.has(m));
-  }, [painel]);
+    const daAgencia = moedas.filter(m => m.da_agencia && m.ptax).map(m => m.codigo);
+    return [...MOEDAS_ESTRANGEIRAS, ...daAgencia].filter(m => m === 'USD' || m === 'EUR' || comCotacao.has(m));
+  }, [painel, moedas]);
 
   const doMes = useMemo(() => {
     const mes = new Date().toISOString().slice(0, 7);
@@ -250,6 +256,8 @@ export default function MoedasECambioPage() {
                 </section>
               </div>
             </div>
+
+            <CadastroDeMoedas />
 
             <section aria-labelledby="titulo-historico" className={CARTAO}>
               <div className="flex flex-col gap-[var(--fin-s-3)] sm:flex-row sm:items-center sm:justify-between">

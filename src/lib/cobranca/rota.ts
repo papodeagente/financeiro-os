@@ -41,9 +41,11 @@ const ouNulo = (v: string | null | undefined) => (v ? v : null);
  * A cobrança como a tela usa (`Cobranca` de contrato-telas.ts): valores em
  * reais, `conta_id`, vazios como null. Os campos da linha vão junto.
  */
-export function cobrancaParaTela(c: LinhaCobranca & { cliente_nome?: string; conta_descricao?: string }) {
+export function cobrancaParaTela(c: LinhaCobranca & { cliente_nome?: string; conta_descricao?: string; fatura_numero?: number | null }) {
   return {
     ...c,
+    // Cobrança de uma fatura (E7): o envio por e-mail pode levar o documento da fatura.
+    fatura_numero: Number(c.fatura_numero) > 0 ? Number(c.fatura_numero) : null,
     conta_id: c.titulo_id,
     cliente_id: c.cliente_id ?? '',
     cliente_nome: c.cliente_nome ?? '',
@@ -61,7 +63,13 @@ export function cobrancaParaTela(c: LinhaCobranca & { cliente_nome?: string; con
     taxa: c.taxa_centavos != null ? deCentavos(c.taxa_centavos) : null,
     pago_em: c.pago_em,
     criado_por: c.criado_por_nome ?? c.criado_por,
-    pendencia: typeof c.dados?.pendencia === 'string' ? c.dados.pendencia : null,
+    pendencia: typeof c.dados?.pendencia === 'string' && c.dados.pendencia ? c.dados.pendencia : null,
+    pendencia_em: typeof c.dados?.pendencia_em === 'string' ? c.dados.pendencia_em : null,
+    taxa_boleto: Number(c.dados?.taxa_boleto_centavos ?? 0) > 0 ? deCentavos(Number(c.dados.taxa_boleto_centavos)) : null,
+    // Negativação (E7): só a situação, para a lista mostrar e o menu oferecer a janela certa.
+    negativacao: c.dados?.negativacao && typeof c.dados.negativacao === 'object'
+      ? { status: String((c.dados.negativacao as Record<string, unknown>).status ?? '') }
+      : null,
   };
 }
 

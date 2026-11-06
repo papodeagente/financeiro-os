@@ -6,7 +6,7 @@
  * antes de guardar. Não existe botão de "gerar".
  */
 import * as React from 'react';
-import { ChevronDown, Trash2 } from 'lucide-react';
+import { ChevronDown, ReceiptText, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,10 +15,17 @@ import { RecordSheet } from '@/components/fin/RecordSheet';
 import { Segmentado } from '@/components/fin/Segmentado';
 import { Field } from '@/components/fin/Field';
 import {
-  FORMAS, novoIdDaVenda, normalizarPagamento, parteDoAcerto, vencimentoDaParcela,
-  type FormaDaVenda, type PagamentoDaVenda, type ParteDaVenda, type Venda,
+  FORMAS, congelarTaxaDoCartao, novoIdDaVenda, normalizarPagamento, parteDoAcerto, taxaDoCartao, taxaDoCartaoIndefinida, textoDosCampos, vencimentoDaParcela,
+  type CamposDaForma, type FormaDaVenda, type PagamentoDaVenda, type ParteDaVenda, type Venda,
 } from '@/lib/venda-modelo';
 import { contasDaVenda } from '@/lib/venda-contas';
+import { EmitirCobrancas, type ContaParaEmitir } from '@/components/financeiro/cobranca/EmitirCobrancas';
+import { usePermissoes } from '@/app/financeiro-ag/contas/useContas';
+import { contasDaVendaParaCobrar } from '@/lib/cobranca/regras-telas';
+import { hojeISO } from '@/lib/money';
+import { toast } from '@/lib/toast';
+import { useFormasDePagamento } from '@/components/fin/useFormasDePagamento';
+import type { FormaPagamento } from '@/lib/formas-pagamento';
 import { cn } from '@/lib/utils';
 import { CampoReais, CONTROLE, dataBR, reais, ROTULO, SELECT } from './comum';
 import type { PessoaDaLista } from './AbaProdutos';
@@ -49,6 +56,28 @@ export function AbaPagamentos({
   const [novo, setNovo] = React.useState(false);
   const [menu, setMenu] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
+  const pode = usePermissoes();
+  const podeEmitir = pode('gerar_boletos');
+  const [emitir, setEmitir] = React.useState<ContaParaEmitir[] | null>(null);
+  const [buscandoContas, setBuscandoContas] = React.useState(false);
+
+  // "Emitir boletos" (E7): as contas a receber GRAVADAS desta venda, na mesma janela de Gerar boleto(s).
+  async function abrirEmissao() {
+    setBuscandoContas(true);
+    try {
+      const r = await fetch(`/api/vendas/completa/${encodeURIComponent(venda.id)}`);
+      if (r.status === 404) { toast.info('Salve a venda primeiro', 'Os boletos saem das contas a receber que a venda gravou.'); return; }
+      const corpo = (await r.json().catch(() => null)) as { contas_receber?: Array<Record<string, unknown>>; error?: string } | null;
+      if (!r.ok) { toast.error('Não foi possível ler as contas da venda.', corpo?.error); return; }
+      const contas = contasDaVendaParaCobrar(corpo?.contas_receber ?? [], hojeISO());
+      if (!contas.length) { toast.info('Nenhuma conta a receber nesta venda', 'Inclua um pagamento (Boleto, Pix...) e salve: a conta nasce sozinha.'); return; }
+      setEmitir(contas);
+    } catch {
+      toast.error('Sem resposta do servidor.', 'Nada foi emitido; tente de novo.');
+    } finally {
+      setBuscandoContas(false);
+    }
+  }
 
   React.useEffect(() => {
     if (!menu) return;
@@ -74,7 +103,10 @@ export function AbaPagamentos({
       render: p => (
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="fin-t-body-strong text-[var(--fin-text)]">{FORMAS[p.forma].rotulo}{p.forma === 'CARTAO' ? ` (${p.cartao_tipo === 'debito' ? 'débito' : 'crédito'})` : ''}</span>
-          <span className="truncate fin-t-caption text-[var(--fin-text-3)]">{p.detalhe || efeitoCurto(p, venda)}</span>
+          <span className="truncate fin-t-caption text-[var(--fin-text-3)]">
+            {[p.detalhe, textoDosCampos(p.campos)].filter(Boolean).join(' · ') || efeitoCurto(p, venda)}
+            {taxaDoCartao(p) > 0 ? ` · taxa do cartão ${reais(taxaDoCartao(p))}` : ''}
+          </span>
         </div>
       ),
     },
@@ -100,8 +132,15 @@ export function AbaPagamentos({
             : faltando < 0 ? `Os pagamentos passam do total em ${reais(-faltando)}.`
               : venda.produtos.length ? 'Os pagamentos cobrem a venda inteira.' : 'Inclua os produtos primeiro: o total da venda vem deles.'}
         </p>
+        <div className="flex flex-wrap items-center gap-[var(--fin-s-2)] self-end">
+        {podeEmitir && venda.pagamentos.length ? (
+          <Button type="button" variant="outline" disabled={buscandoContas} aria-busy={buscandoContas} onClick={() => { void abrirEmissao(); }}
+            title="Boleto ou Pix pelo provedor da agência, para as contas a receber desta venda que ainda não têm cobrança">
+            <ReceiptText aria-hidden="true" className="size-4" /> {buscandoContas ? 'Lendo as contas…' : 'Emitir boletos'}
+          </Button>
+        ) : null}
         {editavel ? (
-          <div ref={menuRef} className="relative self-end">
+          <div ref={menuRef} className="relative">
             <Button type="button" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(m => !m)}>
               Adicionar pagamento <ChevronDown aria-hidden="true" className="size-4" />
             </Button>
@@ -125,6 +164,7 @@ export function AbaPagamentos({
             ) : null}
           </div>
         ) : null}
+        </div>
       </div>
       <FinTable
         linhas={venda.pagamentos}
@@ -141,6 +181,7 @@ export function AbaPagamentos({
           acaoSecundaria: editavel && venda.produtos.length ? { rotulo: 'Boleto', onClick: () => abrirNovo('BOLETO') } : undefined,
         }}
       />
+      <EmitirCobrancas contas={emitir} onFechar={() => setEmitir(null)} onConcluido={() => { /* a janela mostra o resultado; a aba Cliente lê as contas de novo ao abrir */ }} />
       {aberto ? (
         <EditorDePagamento
           key={aberto.id} inicial={aberto} novo={novo} editavel={editavel} venda={venda}
@@ -177,9 +218,15 @@ function EditorDePagamento({ inicial, novo, editavel, venda, contasBancarias, cl
   inicial: PagamentoDaVenda; novo: boolean; editavel: boolean; venda: Venda; contasBancarias: PessoaDaLista[]; clientes: PessoaDaLista[];
   onFechar: () => void; onSalvar: (p: PagamentoDaVenda) => void;
 }) {
-  const [p, setP] = React.useState<PagamentoDaVenda>(inicial);
+  const [bruto, setP] = React.useState<PagamentoDaVenda>(inicial);
   const [sujo, setSujo] = React.useState(false);
   const mudar = (parcial: Partial<PagamentoDaVenda>) => { setP(x => ({ ...x, ...parcial })); setSujo(true); };
+  const formasDaAgencia = useFormasDePagamento();
+  // Cartão ainda sem taxa: a da forma de pagamento da agência (a gravação congela a mesma).
+  const formaDoCartao = formasDaAgencia.find(f => f.codigo === (bruto.cartao_tipo === 'debito' ? 'CARTAO_DEBITO' : 'CARTAO_CREDITO'));
+  const p: PagamentoDaVenda = taxaDoCartaoIndefinida(bruto) ? congelarTaxaDoCartao(bruto, formaDoCartao) : bruto;
+  const mudarCampos = (parcial: CamposDaForma) => mudar({ campos: { ...(p.campos ?? {}), ...parcial } });
+  const formasProprias = formasDaAgencia.filter(f => !f.sistema && f.ativo && f.uso !== 'pagar');
   const info = FORMAS[p.forma];
   const fornecedores = fornecedoresDaVenda(venda);
   const outros = venda.pagamentos.filter(x => x.id !== p.id).reduce((a, x) => a + x.valor_centavos, 0);
@@ -228,7 +275,83 @@ function EditorDePagamento({ inicial, novo, editavel, venda, contasBancarias, cl
           {p.forma === 'CARTAO' ? (
             <div className="flex flex-col gap-1 sm:col-span-2">
               <span className={ROTULO}>Cartão</span>
-              <Segmentado rotulo="Tipo do cartão" valor={p.cartao_tipo ?? 'credito'} onChange={v => mudar({ cartao_tipo: v })} opcoes={[{ valor: 'credito', rotulo: 'Crédito' }, { valor: 'debito', rotulo: 'Débito' }]} />
+              <Segmentado rotulo="Tipo do cartão" valor={p.cartao_tipo ?? 'credito'}
+                onChange={v => mudar({ cartao_tipo: v, taxa_cartao_percentual: null, taxa_cartao_fixa_centavos: null, taxa_cartao_centavos: null, dias_para_cair: null })}
+                opcoes={[{ valor: 'credito', rotulo: 'Crédito' }, { valor: 'debito', rotulo: 'Débito' }]} />
+            </div>
+          ) : null}
+          {p.forma === 'CARTAO' ? <TaxaDoCartao p={p} forma={formaDoCartao ?? null} onMudar={mudar} /> : null}
+          {p.forma === 'CARTAO' ? (
+            <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:col-span-2 sm:grid-cols-3">
+              <Field rotulo="Bandeira">
+                {a => <Input {...a} className={CONTROLE} maxLength={40} placeholder="Ex.: Visa" value={p.campos?.bandeira ?? ''} onChange={e => mudarCampos({ bandeira: e.target.value })} />}
+              </Field>
+              <Field rotulo="Autorização">
+                {a => <Input {...a} className={CONTROLE} maxLength={40} value={p.campos?.autorizacao ?? ''} onChange={e => mudarCampos({ autorizacao: e.target.value })} />}
+              </Field>
+              <Field rotulo="Final do cartão" ajuda="Só os 4 últimos números.">
+                {a => <Input {...a} className={cn(CONTROLE, 'tabular-nums')} inputMode="numeric" maxLength={4} autoComplete="off" placeholder="0000" value={p.campos?.final_cartao ?? ''} onChange={e => mudarCampos({ final_cartao: e.target.value.replace(/\D/g, '').slice(0, 4) })} />}
+              </Field>
+            </div>
+          ) : null}
+          {p.forma === 'CARTAO' || p.forma === 'PAGO_DIRETO_FORNECEDOR' ? (
+            <div className="flex flex-col gap-[var(--fin-s-3)] sm:col-span-2">
+              <label className="flex cursor-pointer items-start gap-[var(--fin-s-2)]">
+                <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-[var(--fin-accent)]" checked={p.campos?.cartao_corporativo === true}
+                  onChange={e => mudarCampos({ cartao_corporativo: e.target.checked })} />
+                <span className="flex flex-col gap-0.5">
+                  <span className="fin-t-body text-[var(--fin-text)]">Cartão corporativo do cliente</span>
+                  <span className="fin-t-caption text-[var(--fin-text-3)]">O cartão de viagem da empresa cliente. Entra no arquivo de conciliação que a administradora do cartão pede (Relatórios de vendas).</span>
+                </span>
+              </label>
+              {p.campos?.cartao_corporativo ? (
+                <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:grid-cols-3">
+                  {p.forma === 'PAGO_DIRETO_FORNECEDOR' ? (
+                    <>
+                      <Field rotulo="Bandeira">
+                        {a => <Input {...a} className={CONTROLE} maxLength={40} placeholder="Ex.: Visa" value={p.campos?.bandeira ?? ''} onChange={e => mudarCampos({ bandeira: e.target.value })} />}
+                      </Field>
+                      <Field rotulo="Autorização">
+                        {a => <Input {...a} className={CONTROLE} maxLength={40} value={p.campos?.autorizacao ?? ''} onChange={e => mudarCampos({ autorizacao: e.target.value })} />}
+                      </Field>
+                      <Field rotulo="Final do cartão" ajuda="Só os 4 últimos números.">
+                        {a => <Input {...a} className={cn(CONTROLE, 'tabular-nums')} inputMode="numeric" maxLength={4} autoComplete="off" placeholder="0000" value={p.campos?.final_cartao ?? ''} onChange={e => mudarCampos({ final_cartao: e.target.value.replace(/\D/g, '').slice(0, 4) })} />}
+                      </Field>
+                    </>
+                  ) : null}
+                  <Field rotulo="Requisição" ajuda="Pedido ou ordem de compra do cliente, quando ele usa.">
+                    {a => <Input {...a} className={CONTROLE} maxLength={60} value={p.campos?.requisicao ?? ''} onChange={e => mudarCampos({ requisicao: e.target.value })} />}
+                  </Field>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {p.forma === 'CHEQUE' ? (
+            <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:col-span-2 sm:grid-cols-3">
+              <Field rotulo="Banco">
+                {a => <Input {...a} className={CONTROLE} maxLength={80} value={p.campos?.banco ?? ''} onChange={e => mudarCampos({ banco: e.target.value })} />}
+              </Field>
+              <Field rotulo="Número do 1º cheque">
+                {a => <Input {...a} className={cn(CONTROLE, 'tabular-nums')} maxLength={40} value={p.campos?.numero_cheque ?? ''} onChange={e => mudarCampos({ numero_cheque: e.target.value })} />}
+              </Field>
+              <Field rotulo="CPF ou CNPJ do emitente">
+                {a => <Input {...a} className={cn(CONTROLE, 'tabular-nums')} inputMode="numeric" maxLength={20} value={p.campos?.emitente_documento ?? ''} onChange={e => mudarCampos({ emitente_documento: e.target.value })} />}
+              </Field>
+            </div>
+          ) : null}
+          {p.forma === 'OUTROS' && formasProprias.length ? (
+            <div className="sm:col-span-2">
+              <Field rotulo="Forma combinada" ajuda="As formas próprias da agência (Formas de pagamento). O texto pronto dela entra na observação.">
+                {a => (
+                  <select {...a} className={SELECT} value={p.forma_agencia ?? ''} onChange={e => {
+                    const f = formasProprias.find(x => x.codigo === e.target.value);
+                    mudar({ forma_agencia: f?.codigo ?? '', ...(f?.informacoes && !p.detalhe ? { detalhe: f.informacoes.slice(0, 300) } : {}) });
+                  }}>
+                    <option value="">Outra, sem cadastro</option>
+                    {formasProprias.map(f => <option key={f.codigo} value={f.codigo}>{f.nome}</option>)}
+                  </select>
+                )}
+              </Field>
             </div>
           ) : null}
           {info.efeito !== 'abate_do_fornecedor' && info.efeito !== 'credito_do_cliente' ? (
@@ -284,7 +407,7 @@ function EditorDePagamento({ inicial, novo, editavel, venda, contasBancarias, cl
             </Field>
           ) : null}
           <div className="sm:col-span-2">
-            <Field rotulo={p.forma === 'CHEQUE' ? 'Banco e número dos cheques' : p.forma === 'CARTAO' ? 'Autorização e bandeira' : 'Observação'} ajuda={p.forma === 'CARTAO' ? 'Nunca digite o número do cartão: o sistema não guarda.' : undefined}>
+            <Field rotulo="Observação" ajuda={p.forma === 'CARTAO' ? 'Nunca digite o número do cartão: o sistema não guarda.' : undefined}>
               {a => <Input {...a} className={CONTROLE} maxLength={300} value={p.detalhe} onChange={e => mudar({ detalhe: e.target.value })} />}
             </Field>
           </div>
@@ -313,4 +436,43 @@ function ResumoDoQueNasce({ p, doPagamento, venda }: { p: PagamentoDaVenda; doPa
     texto = <>Nasce uma conta a receber de {venda.intermediario?.nome || 'intermediário (diga quem é na aba Cliente)'}, já descontado o repasse que cabe a ele.</>;
   }
   return <span className="fin-t-caption text-[var(--fin-text-2)]">{texto}</span>;
+}
+
+/**
+ * Taxa do cartão que a agência recebe (E7): vem da forma de pagamento da
+ * agência e fica guardada na venda. É custo da agência: sai da receita e
+ * não muda o que o cliente paga.
+ */
+function TaxaDoCartao({ p, forma, onMudar }: { p: PagamentoDaVenda; forma: FormaPagamento | null; onMudar: (x: Partial<PagamentoDaVenda>) => void }) {
+  const taxa = taxaDoCartao(p);
+  const pct = p.taxa_cartao_percentual ?? 0;
+  const fixa = p.taxa_cartao_fixa_centavos ?? 0;
+  return (
+    <div className="flex flex-col gap-[var(--fin-s-2)] rounded-[var(--fin-r-md)] bg-[var(--fin-surface-2)] p-[var(--fin-s-3)] sm:col-span-2">
+      <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:grid-cols-3">
+        <Field rotulo="Taxa da operadora (%)">
+          {a => (
+            <Input {...a} type="number" inputMode="decimal" min={0} max={99.99} step="0.01" className={cn(CONTROLE, 'text-right tabular-nums')}
+              value={String(pct)} onChange={e => onMudar({ taxa_cartao_percentual: Math.max(0, Math.min(99.99, Number(e.target.value.replace(',', '.')) || 0)), taxa_cartao_fixa_centavos: fixa, taxa_cartao_centavos: null })} />
+          )}
+        </Field>
+        <div className="flex flex-col gap-1">
+          <span className={ROTULO}>Fixa por operação</span>
+          <CampoReais rotulo="Taxa fixa por operação" centavos={fixa} onChange={v => onMudar({ taxa_cartao_fixa_centavos: v, taxa_cartao_percentual: pct, taxa_cartao_centavos: null })} />
+        </div>
+        <Field rotulo="Dias para cair" ajuda="Vazio: 1º vencimento um mês depois.">
+          {a => (
+            <Input {...a} type="number" inputMode="numeric" min={0} max={365} step={1} placeholder="—" className={cn(CONTROLE, 'text-right tabular-nums')}
+              value={p.dias_para_cair ? String(p.dias_para_cair) : ''} onChange={e => onMudar({ dias_para_cair: e.target.value === '' ? null : Math.max(0, Math.min(365, Math.floor(Number(e.target.value) || 0))) })} />
+          )}
+        </Field>
+      </div>
+      <p className="fin-t-caption text-[var(--fin-text-2)]" aria-live="polite">
+        {taxa > 0
+          ? <>A operadora fica com <strong className="tabular-nums text-[var(--fin-text)]">{reais(taxa)}</strong>: sai da receita da agência; o cliente paga o mesmo.</>
+          : 'Sem taxa: a agência recebe o valor inteiro.'}
+        {forma ? ` Padrão da agência: ${(forma.taxa_pct || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%${forma.taxa_fixa ? ` + ${reais(Math.round(forma.taxa_fixa * 100))}` : ''}${forma.dias_para_cair ? `, cai em ${forma.dias_para_cair} dias` : ''}.` : ''}
+      </p>
+    </div>
+  );
 }

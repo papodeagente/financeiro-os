@@ -14,7 +14,7 @@ import Link from 'next/link';
 import { Plus, Split, Trash2, X } from 'lucide-react';
 
 import type { CentroCusto, LinhaRateio, PlanoContas, RegraRateio } from '@/lib/crm-types';
-import { aplicarRegraDeRateio, dividirIgual, normalizarTags, ordenarEmArvore, validarRateio } from '@/lib/dimensoes';
+import { aplicarRegraDeRateio, dividirIgual, normalizarTags, ordenarEmArvore, regraQueSeAplicaSozinha, validarRateio } from '@/lib/dimensoes';
 import { round2, soma } from '@/lib/money';
 import { Field } from '@/components/fin/Field';
 import { Money } from '@/components/fin/Money';
@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { useEmpresas } from '@/components/fin/useEmpresas';
 
 const FOCO =
   'focus-visible:outline-2 focus-visible:outline-[var(--fin-accent)] focus-visible:outline-offset-2 focus-visible:ring-0';
@@ -32,6 +33,12 @@ const CONTROLE = cn(
 const RECUO: Record<number, string> = { 0: '', 1: 'pl-6', 2: 'pl-9', 3: 'pl-12' };
 const NENHUM = '__NENHUM__';
 const MESMA = '__MESMA__';
+const DA_CONTA = '__DA_CONTA__';
+
+// Colunas da linha do rateio. Com duas ou mais empresas (E7) entra a coluna
+// Empresa na frente; com uma, a grade de sempre.
+const GRADE = 'sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1.3fr)_96px_120px_44px]';
+const GRADE_COM_EMPRESA = 'sm:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_minmax(0,1.15fr)_88px_112px_44px]';
 
 export type AlteracaoDeDimensoes = Partial<{
   centro_custo_id: string;
@@ -48,6 +55,13 @@ export type SecaoRateiosProps = {
   rateio: LinhaRateio[];
   tags: string[];
   onChange: (alteracao: AlteracaoDeDimensoes) => void;
+  /**
+   * Categoria e pessoa (fornecedor ou cliente) do lançamento (E7, frente D):
+   * ao escolher uma que tem regra salva "aplicar sozinha", e sem rateio
+   * preenchido, a regra entra no formulário — sempre editável.
+   */
+  categoriaId?: string;
+  pessoa?: string;
 };
 
 /** O erro do rateio para mostrar antes de salvar, ou null. */
@@ -113,8 +127,32 @@ function SeletorDeCentro({
   );
 }
 
-export function SecaoRateios({ total, tipo, centroId, rateio, tags, onChange }: SecaoRateiosProps) {
+export function SecaoRateios({ total, tipo, centroId, rateio, tags, onChange, categoriaId, pessoa }: SecaoRateiosProps) {
   const { centros, regras, categorias, carregando } = useCadastros();
+  // Rateio salvo aplicado sozinho (E7, frente D): só quando a pessoa ESCOLHE
+  // a categoria ou a pessoa (nunca ao abrir) e o rateio está vazio.
+  const [aplicadaSozinha, setAplicadaSozinha] = React.useState<string | null>(null);
+  const chaveDoGatilho = `${categoriaId ?? ''}|${(pessoa ?? '').trim().toLowerCase()}`;
+  const gatilhoAnterior = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (carregando) return;
+    if (gatilhoAnterior.current === null) { gatilhoAnterior.current = chaveDoGatilho; return; }
+    if (gatilhoAnterior.current === chaveDoGatilho) return;
+    gatilhoAnterior.current = chaveDoGatilho;
+    if (rateio.length > 0) return;
+    const regra = regraQueSeAplicaSozinha(regras, { categoria_id: categoriaId, pessoa });
+    if (!regra) return;
+    const r = aplicarRegraDeRateio(regra, total);
+    if (!r.ok) return;
+    onChange({ rateio: r.linhas });
+    // Resposta a uma escolha da pessoa (categoria ou pessoa mudou), não a uma renderização.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAplicadaSozinha(regra.nome);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveDoGatilho, carregando]);
+  // Rateio entre empresas (E7): só com duas ou mais empresas.
+  const { multi, empresas } = useEmpresas();
+  const grade = multi ? GRADE_COM_EMPRESA : GRADE;
   const arvore = React.useMemo(() => ordenarEmArvore(centros), [centros]);
   const categoriasDoTipo = React.useMemo(
     () => categorias
@@ -141,6 +179,28 @@ export function SecaoRateios({ total, tipo, centroId, rateio, tags, onChange }: 
       rateio: [
         { centro_custo_id: centroId, percentual: a, valor: 0 },
         { centro_custo_id: '', percentual: b, valor: 0 },
+      ],
+    });
+  }
+
+  // Várias categorias no mesmo título (06/11/2026, E7): linhas com categoria
+  // e centro opcional. Cada linha sem centro conta só pela categoria.
+  function dividirEntreCategorias() {
+    const [a, b] = dividirIgual(2);
+    onChange({
+      rateio: [
+        { centro_custo_id: centroId, percentual: a, valor: 0 },
+        { centro_custo_id: centroId, percentual: b, valor: 0 },
+      ],
+    });
+  }
+
+  function dividirEntreEmpresas() {
+    const [a, b] = dividirIgual(2);
+    onChange({
+      rateio: [
+        { centro_custo_id: centroId, empresa_id: empresas[0]?.id, percentual: a, valor: 0 },
+        { centro_custo_id: centroId, empresa_id: empresas[1]?.id, percentual: b, valor: 0 },
       ],
     });
   }
@@ -198,20 +258,43 @@ export function SecaoRateios({ total, tipo, centroId, rateio, tags, onChange }: 
               />
             )}
           </Field>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={dividirEntreCentros}
-            disabled={semCentros}
-            className={cn('h-11 gap-[var(--fin-s-2)] lg:h-10', FOCO)}
-          >
-            <Split aria-hidden="true" className="size-4" />
-            Dividir entre centros
-          </Button>
+          {/* Os botões lado a lado; com duas ou mais empresas, empilhados no celular. */}
+          <div className={multi ? 'flex flex-col gap-[var(--fin-s-2)] sm:flex-row' : 'flex flex-wrap gap-[var(--fin-s-2)]'}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={dividirEntreCentros}
+              disabled={semCentros}
+              className={cn('h-11 gap-[var(--fin-s-2)] lg:h-10', FOCO)}
+            >
+              <Split aria-hidden="true" className="size-4" />
+              Dividir entre centros
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={dividirEntreCategorias}
+              className={cn('h-11 lg:h-10', FOCO)}
+            >
+              Várias categorias
+            </Button>
+            {multi ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={dividirEntreEmpresas}
+                className={cn('h-11 gap-[var(--fin-s-2)] lg:h-10', FOCO)}
+              >
+                <Split aria-hidden="true" className="size-4" />
+                Dividir entre empresas
+              </Button>
+            ) : null}
+          </div>
         </div>
       ) : (
         <div className="flex flex-col gap-[var(--fin-s-2)]">
-          <div className="hidden grid-cols-[minmax(0,1.3fr)_minmax(0,1.3fr)_96px_120px_44px] gap-[var(--fin-s-2)] px-1 sm:grid">
+          <div className={cn('hidden gap-[var(--fin-s-2)] px-1 sm:grid', grade)}>
+            {multi ? <span className="fin-t-overline text-[var(--fin-text-3)]">Empresa</span> : null}
             <span className="fin-t-overline text-[var(--fin-text-3)]">Centro de custo</span>
             <span className="fin-t-overline text-[var(--fin-text-3)]">Categoria</span>
             <span className="fin-t-overline text-right text-[var(--fin-text-3)]">%</span>
@@ -222,14 +305,39 @@ export function SecaoRateios({ total, tipo, centroId, rateio, tags, onChange }: 
             {rateio.map((linha, i) => (
               <li
                 key={i}
-                className="grid grid-cols-[1fr_96px_44px] items-center gap-[var(--fin-s-2)] rounded-[var(--fin-r-md)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-2)] sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1.3fr)_96px_120px_44px] sm:border-0 sm:bg-transparent sm:p-0"
+                className={cn(
+                  'grid grid-cols-[1fr_96px_44px] items-center gap-[var(--fin-s-2)] rounded-[var(--fin-r-md)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-2)] sm:border-0 sm:bg-transparent sm:p-0',
+                  grade,
+                )}
               >
+                {multi ? (
+                  <div className="col-span-3 sm:col-span-1">
+                    <Select
+                      value={linha.empresa_id || DA_CONTA}
+                      onValueChange={v => trocarLinha(i, { empresa_id: String(v) === DA_CONTA ? undefined : String(v) })}
+                    >
+                      <SelectTrigger aria-label={`Empresa da linha ${i + 1}`} className={cn(CONTROLE, 'justify-between gap-2')}>
+                        <SelectValue>
+                          {() => empresas.find(e => e.id === linha.empresa_id)?.nome ?? 'Da conta'}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={DA_CONTA} className="fin-t-body">Da conta</SelectItem>
+                        {empresas.map(e => (
+                          <SelectItem key={e.id} value={e.id} className="fin-t-body">{e.nome}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
                 <div className="col-span-3 sm:col-span-1">
                   <SeletorDeCentro
                     ariaLabel={`Centro de custo da linha ${i + 1}`}
                     valor={linha.centro_custo_id}
                     centros={arvore}
-                    rotuloVazio="Escolha o centro"
+                    // Linha com empresa pode ficar sem centro (vale o da conta);
+                    // linha com categoria também (conta só pela categoria).
+                    rotuloVazio={linha.empresa_id ? 'Centro da conta' : linha.categoria_id ? 'Sem centro de custo' : 'Escolha o centro'}
                     onChange={id => trocarLinha(i, { centro_custo_id: id })}
                   />
                 </div>
@@ -313,11 +421,25 @@ export function SecaoRateios({ total, tipo, centroId, rateio, tags, onChange }: 
               Dividir igual
             </Button>
             <Button type="button" variant="ghost" onClick={voltarParaCentroUnico} className={cn('h-11 lg:h-10', FOCO)}>
-              Voltar para um centro só
+              {multi ? 'Desfazer o rateio' : 'Voltar para um centro só'}
             </Button>
           </div>
+          <p className="fin-t-caption text-[var(--fin-text-3)]">
+            Cada linha precisa de um centro de custo ou de uma categoria. Com categoria, o centro é opcional.
+          </p>
         </div>
       )}
+
+      {aplicadaSozinha && dividindo ? (
+        <div role="status" className="flex flex-col gap-[var(--fin-s-2)] rounded-[var(--fin-r-md)] bg-[var(--fin-surface-sunken)] p-[var(--fin-s-3)] sm:flex-row sm:items-center sm:justify-between">
+          <p className="fin-t-caption text-[var(--fin-text-2)]">
+            A regra <strong className="fin-t-body-strong text-[var(--fin-text)]">{aplicadaSozinha}</strong> entrou sozinha por causa da categoria ou da pessoa escolhida. Ajuste as linhas à vontade.
+          </p>
+          <Button type="button" variant="ghost" size="sm" className={FOCO} onClick={() => { setAplicadaSozinha(null); onChange({ rateio: [] }); }}>
+            Desfazer
+          </Button>
+        </div>
+      ) : null}
 
       {opcoesRegra.length > 0 ? (
         <Field rotulo="Aplicar regra salva" ajuda="Preenche o rateio de uma vez. Você ainda pode ajustar as linhas.">

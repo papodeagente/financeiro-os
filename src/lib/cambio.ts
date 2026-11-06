@@ -34,7 +34,14 @@ import { CALENDARIO_NACIONAL, ehDiaUtil, diaUtilAnterior } from './feriados';
 // Moedas
 // ---------------------------------------------------------------------------
 
-export type CodigoMoeda = 'BRL' | 'USD' | 'EUR' | 'GBP' | 'CAD' | 'CHF' | 'AUD' | 'JPY';
+/** As oito moedas que o sistema sempre conhece. */
+export type CodigoMoedaDoSistema = 'BRL' | 'USD' | 'EUR' | 'GBP' | 'CAD' | 'CHF' | 'AUD' | 'JPY';
+/**
+ * Código ISO 4217 de três letras. Desde a E7 (06/11/2026) a agência pode
+ * cadastrar outras moedas além das oito do sistema (ARS, CLP, MXN...): por
+ * isso o tipo é texto. Quem decide se um código vale é o catálogo.
+ */
+export type CodigoMoeda = string;
 
 export interface Moeda {
   codigo: CodigoMoeda;
@@ -42,43 +49,82 @@ export interface Moeda {
   simbolo: string;
   /** Existe câmbio turismo na AwesomeAPI (só dólar e euro). */
   turismo: boolean;
+  /** Casas decimais da moeda (0 no iene). */
+  casas: number;
+  /** O Banco Central publica a PTAX desta moeda. */
+  ptax?: boolean;
+  /** Cadastrada pela agência (as do sistema não têm a marca). */
+  da_agencia?: boolean;
+  /** Moeda da agência desativada: some das escolhas, mas os registros nela continuam lidos nela. */
+  ativo?: boolean;
 }
 
-export const MOEDAS: readonly Moeda[] = [
-  { codigo: 'BRL', nome: 'Real', simbolo: 'R$', turismo: false },
-  { codigo: 'USD', nome: 'Dólar americano', simbolo: 'US$', turismo: true },
-  { codigo: 'EUR', nome: 'Euro', simbolo: '€', turismo: true },
-  { codigo: 'GBP', nome: 'Libra esterlina', simbolo: '£', turismo: false },
-  { codigo: 'CAD', nome: 'Dólar canadense', simbolo: 'C$', turismo: false },
-  { codigo: 'CHF', nome: 'Franco suíço', simbolo: 'CHF', turismo: false },
-  { codigo: 'AUD', nome: 'Dólar australiano', simbolo: 'A$', turismo: false },
-  { codigo: 'JPY', nome: 'Iene', simbolo: '¥', turismo: false },
+/** Catálogo de moedas de uma agência: as do sistema mais as que ela cadastrou. */
+export type CatalogoDeMoedas = readonly Moeda[];
+
+export const MOEDAS: CatalogoDeMoedas = [
+  { codigo: 'BRL', nome: 'Real', simbolo: 'R$', turismo: false, casas: 2 },
+  { codigo: 'USD', nome: 'Dólar americano', simbolo: 'US$', turismo: true, casas: 2, ptax: true },
+  { codigo: 'EUR', nome: 'Euro', simbolo: '€', turismo: true, casas: 2, ptax: true },
+  { codigo: 'GBP', nome: 'Libra esterlina', simbolo: '£', turismo: false, casas: 2, ptax: true },
+  { codigo: 'CAD', nome: 'Dólar canadense', simbolo: 'C$', turismo: false, casas: 2, ptax: true },
+  { codigo: 'CHF', nome: 'Franco suíço', simbolo: 'CHF', turismo: false, casas: 2, ptax: true },
+  { codigo: 'AUD', nome: 'Dólar australiano', simbolo: 'A$', turismo: false, casas: 2, ptax: true },
+  { codigo: 'JPY', nome: 'Iene', simbolo: '¥', turismo: false, casas: 0, ptax: true },
 ];
 
-export const MOEDAS_ESTRANGEIRAS = MOEDAS.filter(m => m.codigo !== 'BRL').map(m => m.codigo);
-export const MOEDAS_TURISMO = MOEDAS.filter(m => m.turismo).map(m => m.codigo);
+export const MOEDAS_ESTRANGEIRAS: readonly CodigoMoeda[] = MOEDAS.filter(m => m.codigo !== 'BRL').map(m => m.codigo);
+export const MOEDAS_TURISMO: readonly CodigoMoeda[] = MOEDAS.filter(m => m.turismo).map(m => m.codigo);
 
-export function ehMoedaConhecida(v: unknown): v is CodigoMoeda {
-  return typeof v === 'string' && MOEDAS.some(m => m.codigo === v);
+/**
+ * Moedas com PTAX publicada pelo Banco Central. Conferido no serviço oficial
+ * (Olinda, `PTAX/versao/v1/odata/Moedas`) em 06/11/2026: AUD, CAD, CHF, DKK,
+ * EUR, GBP, JPY, NOK, SEK e USD. Moeda da agência fora desta lista não tem
+ * cotação ao vivo: o câmbio é sempre digitado.
+ */
+export const MOEDAS_PTAX_DISPONIVEIS: readonly CodigoMoeda[] = ['USD', 'EUR', 'GBP', 'CAD', 'CHF', 'AUD', 'JPY', 'DKK', 'NOK', 'SEK'];
+
+// No navegador há uma agência só por página: a tela que carrega o catálogo da
+// agência (useMoedas) deixa ele aqui, e formatação e leitura passam a
+// reconhecer as moedas dela. No servidor NUNCA: lá o catálogo vai explícito
+// em cada chamada (o processo atende várias agências).
+let catalogoDoNavegador: CatalogoDeMoedas | null = null;
+
+export function definirCatalogoDoNavegador(c: CatalogoDeMoedas | null): void {
+  if (typeof window !== 'undefined') catalogoDoNavegador = c;
 }
 
-/** Moeda gravada (ausente, vazia ou desconhecida = real, como sempre foi). */
-export function moedaDe(v: unknown): CodigoMoeda {
+function catalogoPadrao(): CatalogoDeMoedas {
+  return typeof window !== 'undefined' && catalogoDoNavegador ? catalogoDoNavegador : MOEDAS;
+}
+
+export function ehMoedaConhecida(v: unknown, catalogo?: CatalogoDeMoedas): v is CodigoMoeda {
+  return typeof v === 'string' && (catalogo ?? catalogoPadrao()).some(m => m.codigo === v);
+}
+
+/**
+ * Moeda gravada (ausente, vazia ou desconhecida = real, como sempre foi).
+ * Sem catálogo, só as oito do sistema são conhecidas.
+ */
+export function moedaDe(v: unknown, catalogo?: CatalogoDeMoedas): CodigoMoeda {
   const s = typeof v === 'string' ? v.trim().toUpperCase() : '';
-  return ehMoedaConhecida(s) ? s : 'BRL';
+  return ehMoedaConhecida(s, catalogo) ? s : 'BRL';
 }
 
-export function infoDaMoeda(codigo: string): Moeda {
-  return MOEDAS.find(m => m.codigo === codigo) ?? MOEDAS[0];
+export function infoDaMoeda(codigo: string, catalogo?: CatalogoDeMoedas): Moeda {
+  const c = catalogo ?? catalogoPadrao();
+  return c.find(m => m.codigo === codigo) ?? MOEDAS.find(m => m.codigo === codigo) ?? MOEDAS[0];
 }
 
-/** "US$ 1.234,56" — valor na moeda, para tela. */
-export function formatarNaMoeda(valor: number, moeda: string): string {
-  const m = moedaDe(moeda);
+/** "US$ 1.234,56" — valor na moeda, para tela, com as casas da moeda. */
+export function formatarNaMoeda(valor: number, moeda: string, catalogo?: CatalogoDeMoedas): string {
+  const m = moedaDe(moeda, catalogo);
+  const info = infoDaMoeda(m, catalogo);
+  const casas = Number.isInteger(info.casas) && info.casas >= 0 && info.casas <= 3 ? info.casas : 2;
   try {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: m }).format(num(valor));
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: m, minimumFractionDigits: casas, maximumFractionDigits: casas }).format(num(valor));
   } catch {
-    return `${infoDaMoeda(m).simbolo} ${num(valor).toFixed(2)}`;
+    return `${info.simbolo} ${num(valor).toFixed(casas)}`;
   }
 }
 
@@ -425,8 +471,8 @@ export function descreverCarimbo(c: CarimboDoCambio | null | undefined): string 
 }
 
 /** As sugestões para uma moeda, lado a lado e com nome — nunca uma no lugar da outra. */
-export function sugestoesPara(moeda: string, cotacoes: readonly Cotacao[]): { turismo: Cotacao | null; ptax: Cotacao | null } {
-  const m = moedaDe(moeda);
+export function sugestoesPara(moeda: string, cotacoes: readonly Cotacao[], catalogo?: CatalogoDeMoedas): { turismo: Cotacao | null; ptax: Cotacao | null } {
+  const m = moedaDe(moeda, catalogo);
   const ultima = (tipo: TipoCotacao) => cotacoes
     .filter(c => c.moeda === m && c.tipo === tipo)
     .sort((a, b) => b.cotado_em.localeCompare(a.cotado_em))[0] ?? null;
@@ -460,12 +506,12 @@ export interface SaldoEmReais {
  * estrangeira usa a PTAX de venda mais recente; sem PTAX, fica sem valor em
  * reais (a tela avisa), nunca com outra cotação no lugar.
  */
-export function saldosEmReais(contas: readonly ContaComMoeda[], cotacoes: readonly Cotacao[]): SaldoEmReais[] {
+export function saldosEmReais(contas: readonly ContaComMoeda[], cotacoes: readonly Cotacao[], catalogo?: CatalogoDeMoedas): SaldoEmReais[] {
   return contas.map(c => {
-    const moeda = moedaDe(c.moeda);
+    const moeda = moedaDe(c.moeda, catalogo);
     const saldo = round2(num(c.saldo_atual));
     if (moeda === 'BRL') return { id: c.id, moeda, saldo_moeda: saldo, saldo_reais: saldo, cambio: 1, referencia: null };
-    const ref = sugestoesPara(moeda, cotacoes).ptax;
+    const ref = sugestoesPara(moeda, cotacoes, catalogo).ptax;
     return {
       id: c.id, moeda, saldo_moeda: saldo,
       saldo_reais: ref ? round2(saldo * ref.venda) : null,
@@ -517,18 +563,18 @@ export interface PlanoDaTransferencia {
 }
 
 /** Rótulo do campo de câmbio para o par (o que o número significa). */
-export function significadoDoCambio(origem: string, destino: string): string {
-  const o = moedaDe(origem);
-  const d = moedaDe(destino);
+export function significadoDoCambio(origem: string, destino: string, catalogo?: CatalogoDeMoedas): string {
+  const o = moedaDe(origem, catalogo);
+  const d = moedaDe(destino, catalogo);
   if (o === d) return '';
   if (o === 'BRL') return `Quantos reais vale 1 ${d}`;
   if (d === 'BRL') return `Quantos reais vale 1 ${o}`;
   return `Quantos ${d} vale 1 ${o}`;
 }
 
-export function planoDaTransferencia(p: PedidoDeTransferencia): PlanoDaTransferencia {
-  const moeda_origem = moedaDe(p.moeda_origem);
-  const moeda_destino = moedaDe(p.moeda_destino);
+export function planoDaTransferencia(p: PedidoDeTransferencia, catalogo?: CatalogoDeMoedas): PlanoDaTransferencia {
+  const moeda_origem = moedaDe(p.moeda_origem, catalogo);
+  const moeda_destino = moedaDe(p.moeda_destino, catalogo);
   const valor = round2(num(p.valor));
   const tarifa = Math.max(0, round2(num(p.tarifa)));
   const erros: string[] = [];
@@ -539,7 +585,7 @@ export function planoDaTransferencia(p: PedidoDeTransferencia): PlanoDaTransfere
   if (moeda_origem !== moeda_destino) {
     const c = round4(num(p.cambio));
     if (!(c > 0)) {
-      erros.push(`Informe o câmbio (${significadoDoCambio(moeda_origem, moeda_destino).toLowerCase()}).`);
+      erros.push(`Informe o câmbio (${significadoDoCambio(moeda_origem, moeda_destino, catalogo).toLowerCase()}).`);
     } else {
       cambio = c;
       // Reais → estrangeira divide; estrangeira → reais e entre estrangeiras multiplica.
@@ -574,8 +620,8 @@ export function pernasDaTransferencia(t: Record<string, unknown>): { sai: number
  * Contas antigas com o valor em reais repetido no "original" ficam de fora
  * (null): nelas não existe variação a calcular.
  */
-export function valorNaMoedaDoTitulo(d: Record<string, unknown>, baseEmReais: number): { moeda: CodigoMoeda; valor: number; cambio: number } | null {
-  const moeda = moedaDe(d.moeda);
+export function valorNaMoedaDoTitulo(d: Record<string, unknown>, baseEmReais: number, catalogo?: CatalogoDeMoedas): { moeda: CodigoMoeda; valor: number; cambio: number } | null {
+  const moeda = moedaDe(d.moeda, catalogo);
   if (moeda === 'BRL') return null;
   const valor = round2(num(d.valor_original));
   const cambio = round4(num(d.cambio));
@@ -727,8 +773,10 @@ export function cambioDaLiquidacao(p: {
   desconto?: number;
   cambio_pago: number | null | undefined;
   moeda_conta?: CodigoMoeda;
+  /** Catálogo da agência (moedas cadastradas por ela). */
+  catalogo?: CatalogoDeMoedas;
 }): CambioNaLiquidacao | null {
-  const naMoeda = valorNaMoedaDoTitulo(p.titulo, p.base_reais);
+  const naMoeda = valorNaMoedaDoTitulo(p.titulo, p.base_reais, p.catalogo);
   const cambioPago = num(p.cambio_pago) > 0 ? round4(num(p.cambio_pago)) : 0;
   if (!naMoeda || !cambioPago) return null;
   const semCambio = Math.max(0, round2(num(p.valor_baixado) - num(p.titulo.valor_reais_liquidado_com_cambio)));
