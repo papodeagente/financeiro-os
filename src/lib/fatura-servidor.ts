@@ -26,6 +26,7 @@
  *     mesma agência não se atropelam. Quem chama abre a transação.
  */
 import { generateId } from './utils';
+import { EMPRESA_PRINCIPAL_ID, empresaDoRegistro } from './empresas';
 import { addDias, deCentavos, hojeISO, round2 } from './money';
 import { STATUS_BAIXADOS, type ExecutorSQL } from './caixa-atomico';
 import { criarCalendario, CALENDARIO_NACIONAL, type Calendario } from './feriados';
@@ -487,7 +488,7 @@ function descricaoDoTitulo(f: Pick<Fatura, 'numero' | 'descricao' | 'pessoa_nome
   return [`Fatura Nº ${f.numero}`, f.descricao || f.pessoa_nome].filter(Boolean).join(' - ');
 }
 
-async function criarTitulo(exec: ExecutorSQL, tenantId: string, f: Fatura, hoje: string): Promise<string> {
+async function criarTitulo(exec: ExecutorSQL, tenantId: string, f: Fatura, hoje: string, empresaId?: string): Promise<string> {
   const id = generateId();
   const dados: Record<string, unknown> = {
     id, origem: 'FATURA', venda_id: null, grupo_id: null, cliente_id: f.pessoa_id, cliente_nome: f.pessoa_nome,
@@ -496,6 +497,8 @@ async function criarTitulo(exec: ExecutorSQL, tenantId: string, f: Fatura, hoje:
     conta_bancaria_id: null, forma_recebimento: 'FATURAR', taxa: 0, taxa_plataforma: '', parcela_numero: 1, total_parcelas: 1,
     boleto_emitido: false, boleto_codigo: '', boleto_url: '', status: 'PENDENTE', rateio: [], anexos: [], observacoes: '',
     fatura_id: f.id, fatura_numero: f.numero, fatura_situacao: f.situacao, gerado_pela_fatura: true,
+    // Várias empresas (E7): a conta da fatura é da empresa da fatura.
+    ...(empresaId ? { empresa_id: empresaId } : {}),
   };
   await exec.query(
     `INSERT INTO contas_receber (id, tenant_id, venda_id, cliente_id, status, data, created_at, updated_at) VALUES ($1,$2,'',$3,'PENDENTE',$4::jsonb,NOW(),NOW())`,
@@ -585,6 +588,21 @@ interface NovaFatura {
   vencimento_ajuste?: string;
   avulsa?: boolean;
   complementar_de?: string;
+  /** Empresa da fatura (E7). Ausente = a principal (agência de uma empresa só). */
+  empresa_id?: string;
+}
+
+/** A empresa de uma fatura (E7): coluna empresa_id; sem ela, a principal. */
+async function empresaDaFatura(exec: ExecutorSQL, tenantId: string, faturaId: string): Promise<string> {
+  const { rows } = await exec.query(
+    `SELECT COALESCE(NULLIF(to_jsonb(f)->>'empresa_id', ''), 'principal') AS e FROM faturas f WHERE tenant_id = $1 AND id = $2`,
+    [tenantId, faturaId]);
+  return txt(rows[0]?.e) || EMPRESA_PRINCIPAL_ID;
+}
+
+/** A chave da fatura aberta ganha a empresa quando não é a principal (E7). */
+function chaveNaEmpresa(chave: string, empresa: string | undefined): string {
+  return empresa && empresa !== EMPRESA_PRINCIPAL_ID ? `${chave}|emp:${empresa}` : chave;
 }
 
 async function criarFatura(exec: ExecutorSQL, tenantId: string, n: NovaFatura, usuario: UsuarioDaFatura, hoje: string): Promise<Fatura> {
@@ -599,8 +617,12 @@ async function criarFatura(exec: ExecutorSQL, tenantId: string, n: NovaFatura, u
       n.avulsa === true, n.complementar_de ?? '', r?.descricao ?? '', r?.solicitante ?? '', r?.centro_custo ?? '', r?.modelo ?? 'PADRAO',
       JSON.stringify(r?.campos ?? []), JSON.stringify(r?.retencoes ?? {})],
   );
+  // Várias empresas (E7): a fatura e a conta dela ficam na empresa dos itens.
+  if (n.empresa_id && n.empresa_id !== EMPRESA_PRINCIPAL_ID) {
+    await exec.query(`UPDATE faturas SET empresa_id = $3 WHERE tenant_id = $1 AND id = $2`, [tenantId, id, n.empresa_id]);
+  }
   const f = (await carregarFatura(exec, tenantId, id))!;
-  f.titulo_id = await criarTitulo(exec, tenantId, f, hoje);
+  f.titulo_id = await criarTitulo(exec, tenantId, f, hoje, n.empresa_id);
   await exec.query(`UPDATE faturas SET titulo_id = $3 WHERE tenant_id = $1 AND id = $2`, [tenantId, id, f.titulo_id]);
   await registrarEventoDaFatura(exec, tenantId, id, 'criada', {
     usuario, detalhe: { regra_id: r?.id ?? '', vencimento: n.vencimento, avulsa: n.avulsa === true, complementar_de: n.complementar_de ?? '' },
@@ -622,6 +644,7 @@ async function anexarAjustesPendentes(exec: ExecutorSQL, tenantId: string, f: Fa
 async function acharOuCriarFaturaAberta(
   exec: ExecutorSQL, tenantId: string, n: NovaFatura, usuario: UsuarioDaFatura, hoje: string,
 ): Promise<Fatura> {
+  n = { ...n, chave: chaveNaEmpresa(n.chave, n.empresa_id) };
   const { rows } = await exec.query(
     `SELECT ${COLUNAS_FATURA} FROM faturas WHERE tenant_id = $1 AND pessoa_id = $2 AND chave = $3 AND situacao = 'ABERTA'`,
     [tenantId, n.pessoa_id, n.chave],
@@ -742,6 +765,8 @@ export async function alocarItens(
     const f = await acharOuCriarFaturaAberta(exec, tenantId, {
       pessoa_id: pessoa, pessoa_nome: txt(data.cliente_nome) || regra.pessoa_nome, regra, chave: pos.chave,
       inicio: pos.inicio, fim: pos.fim, vencimento: pos.vencimento, vencimento_ajuste: pos.ajuste, avulsa: regra.periodo === 'AVULSO',
+      // Uma fatura por empresa (E7): conta da empresa B não entra na fatura da A.
+      empresa_id: empresaDoRegistro(data),
     }, usuario, hoje);
     if (await incluirItem(exec, tenantId, f, conta, info, pos.referencia, usuario)) {
       res.alocados.push({ conta_id: conta.id, fatura_id: f.id, numero: f.numero, vencimento: f.vencimento });
@@ -880,13 +905,16 @@ export async function moverItens(
   await exigirEditavel(exec, tenantId, f);
   const itens = await itensDaFatura(exec, tenantId, f, contaIds);
   if (vencimento === f.vencimento) throw new ErroFatura('MESMO_VENCIMENTO', 'Os itens já estão numa fatura com este vencimento.', 409);
+  // A fatura de destino é da mesma empresa (E7).
+  const empresa = await empresaDaFatura(exec, tenantId, f.id);
   const { rows } = await exec.query(
-    `SELECT ${COLUNAS_FATURA} FROM faturas WHERE tenant_id = $1 AND pessoa_id = $2 AND situacao = 'ABERTA' AND vencimento = $3::date AND id <> $4 AND NOT avulsa ORDER BY numero LIMIT 1`,
-    [tenantId, f.pessoa_id, vencimento, f.id],
+    `SELECT ${COLUNAS_FATURA} FROM faturas f2 WHERE tenant_id = $1 AND pessoa_id = $2 AND situacao = 'ABERTA' AND vencimento = $3::date AND id <> $4 AND NOT avulsa
+        AND COALESCE(NULLIF(to_jsonb(f2)->>'empresa_id', ''), 'principal') = $5 ORDER BY numero LIMIT 1`,
+    [tenantId, f.pessoa_id, vencimento, f.id, empresa],
   );
   const destino = rows[0] ? lerFatura(rows[0]) : await criarFatura(exec, tenantId, {
     pessoa_id: f.pessoa_id, pessoa_nome: f.pessoa_nome, regra: f.regra_id ? await carregarRegra(exec, tenantId, f.regra_id) : null,
-    chave: `manual|${vencimento}`, inicio: null, fim: null, vencimento,
+    chave: chaveNaEmpresa(`manual|${vencimento}`, empresa), inicio: null, fim: null, vencimento, empresa_id: empresa,
   }, o.usuario, hoje);
   await exigirEditavel(exec, tenantId, destino);
   for (const it of itens) await moverItemPara(exec, tenantId, it.conta_id, destino);
@@ -910,6 +938,7 @@ export async function faturarAvulso(
   const avulsa = await criarFatura(exec, tenantId, {
     pessoa_id: f.pessoa_id, pessoa_nome: f.pessoa_nome, regra: f.regra_id ? await carregarRegra(exec, tenantId, f.regra_id) : null,
     chave: `avulsa|${generateId()}`, inicio: f.periodo_inicio, fim: f.periodo_fim, vencimento: venc, avulsa: true,
+    empresa_id: await empresaDaFatura(exec, tenantId, f.id),
   }, o.usuario, hoje);
   for (const it of itens) await moverItemPara(exec, tenantId, it.conta_id, avulsa);
   const total = itens.reduce((a, i) => a + i.valor_centavos, 0);
@@ -928,11 +957,14 @@ export async function faturarSoltosAvulso(
   const contas = await contasSoltas(exec, tenantId, contaIds);
   const pessoas = [...new Set(contas.map(c => txt(c.data.cliente_id)))];
   if (pessoas.length !== 1 || !pessoas[0]) throw new ErroFatura('PAGANTES_DIFERENTES', 'Escolha itens de um mesmo pagante.', 409);
+  // Uma fatura é de uma empresa só (E7).
+  const empresas = [...new Set(contas.map(c => empresaDoRegistro(c.data)))];
+  if (empresas.length > 1) throw new ErroFatura('EMPRESAS_DIFERENTES', 'Os itens escolhidos são de empresas diferentes. Gere uma fatura para cada empresa.', 409);
   const venc = o.vencimento && ehDataValida(o.vencimento) ? o.vencimento : (contas.map(c => txt(c.data.data_vencimento).slice(0, 10)).filter(ehDataValida).sort()[0] || addDias(hoje, 30));
   const regra = escolherRegra(await listarRegras(exec, tenantId, { pessoa_tipo: 'CLIENTE', pessoa_id: pessoas[0] }), { pessoa_tipo: 'CLIENTE', pessoa_id: pessoas[0], produto_tipos: [], fornecedor_ids: [] });
   const f = await criarFatura(exec, tenantId, {
     pessoa_id: pessoas[0], pessoa_nome: txt(contas[0].data.cliente_nome), regra, chave: `avulsa|${generateId()}`,
-    inicio: null, fim: null, vencimento: venc, avulsa: true,
+    inicio: null, fim: null, vencimento: venc, avulsa: true, empresa_id: empresas[0],
   }, o.usuario, hoje);
   for (const c of contas) await incluirItem(exec, tenantId, f, c, await infoDoItem(exec, tenantId, c), null, o.usuario);
   await registrarEventoDaFatura(exec, tenantId, f.id, 'itens_incluidos', { usuario: o.usuario, detalhe: { contas: contas.map(c => c.id), avulsa: true } });
@@ -1458,6 +1490,8 @@ export interface FiltroDasFaturas {
   pessoa_id?: string;
   busca?: string;
   limite?: number;
+  /** Empresas no recorte (E7). Ausente ou null = todas. */
+  empresas?: readonly string[] | null;
 }
 
 export async function listarFaturas(exec: ExecutorSQL, tenantId: string, filtro: FiltroDasFaturas, hoje = hojeISO()): Promise<{ itens: ResumoDaFatura[]; totais: { quantidade: number; total_centavos: number; recebido_centavos: number; em_aberto_centavos: number } }> {
@@ -1474,6 +1508,7 @@ export async function listarFaturas(exec: ExecutorSQL, tenantId: string, filtro:
       OR EXISTS (SELECT 1 FROM fatura_itens fi WHERE fi.tenant_id = f.tenant_id AND fi.fatura_id = f.id AND (lower(fi.venda_numero) LIKE $${n} OR lower(fi.detalhes::text) LIKE $${n})))`);
   }
   if (filtro.situacao !== 'CANCELADA') where.push(`f.situacao <> 'CANCELADA'`);
+  if (filtro.empresas) { args.push([...filtro.empresas]); where.push(`COALESCE(NULLIF(to_jsonb(f)->>'empresa_id', ''), 'principal') = ANY($${args.length}::text[])`); }
   const limite = Math.min(Math.max(Number(filtro.limite) || 500, 1), 2000);
   const { rows } = await exec.query(
     `SELECT ${COLUNAS_FATURA.split(',').map(c => `f.${c.trim()}`).join(', ')},

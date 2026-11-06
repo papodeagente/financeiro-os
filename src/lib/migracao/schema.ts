@@ -118,4 +118,28 @@ export const MIGRACAO_SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_migracao_vinculos_lote ON migracao_vinculos (tenant_id, lote_id, etapa);
   CREATE INDEX IF NOT EXISTS idx_migracao_vinculos_chave ON migracao_vinculos (tenant_id, tabela, chave) WHERE chave IS NOT NULL;
   CREATE INDEX IF NOT EXISTS idx_migracao_vinculos_registro ON migracao_vinculos (tenant_id, tabela, registro_id);
+
+  -- E7 (mudança v2): o que o sistema anterior já fez e aqui fica só como
+  -- registro para consulta: faturas ao cliente, notas emitidas (nunca são
+  -- emitidas de novo) e comissões já pagas (não geram conta nem entram no
+  -- cálculo de novo). Dinheiro em centavos.
+  CREATE TABLE IF NOT EXISTS migracao_historico (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    lote_id TEXT NOT NULL,
+    tipo TEXT NOT NULL,
+    chave TEXT NOT NULL,
+    data DATE,
+    valor_centavos BIGINT NOT NULL DEFAULT 0,
+    pessoa TEXT NOT NULL DEFAULT '',
+    numero TEXT NOT NULL DEFAULT '',
+    venda_id TEXT NOT NULL DEFAULT '',
+    dados JSONB NOT NULL DEFAULT '{}'::jsonb,
+    origem JSONB NOT NULL DEFAULT '{}'::jsonb,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT migracao_historico_tipo_ok CHECK (tipo IN ('faturas','notas','comissoes_pagas'))
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_migracao_historico_chave ON migracao_historico (tenant_id, tipo, chave);
+  CREATE INDEX IF NOT EXISTS idx_migracao_historico_tipo ON migracao_historico (tenant_id, tipo, data DESC);
+  CREATE INDEX IF NOT EXISTS idx_migracao_historico_venda ON migracao_historico (tenant_id, venda_id) WHERE venda_id <> '';
 `;

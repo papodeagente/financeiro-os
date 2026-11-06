@@ -13,5 +13,8 @@ export const { GET, POST } = createCrudHandlers(
     versao: true,
     // Recebido numa conta não liberada para a pessoa: some da lista (05/11/2026).
     filtroDeConta: { campos: ['conta_bancaria_id'], soBaixados: true },
+    // Várias empresas (E7): só as empresas marcadas e liberadas; rateio entre
+    // empresas aparece em cada empresa que ele toca.
+    filtroDeEmpresa: { tipo: 'registro' },
   },
 );

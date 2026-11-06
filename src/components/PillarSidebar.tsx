@@ -72,10 +72,12 @@ const METAS_MENU: SidebarSection[] = [
       { key: 'planos-comissao', label: 'Planos de comissão', icon: Settings, href: '/equipe/planos-comissao' },
       { key: 'funcoes', label: 'Funções', icon: Users2, href: '/equipe/funcoes' },
       { key: 'planos-por-funcao', label: 'Planos por função', icon: Grid3x3, href: '/equipe/planos-por-funcao' },
+      { key: 'metas-por-funcao', label: 'Grade de metas', icon: Table2, href: '/equipe/metas-por-funcao' },
       { key: 'fechar-comissoes', label: 'Fechar comissões', icon: CalendarCheck, href: '/equipe/fechar-comissoes' },
       { key: 'pagar-comissoes', label: 'Pagar comissões', icon: Banknote, href: '/equipe/pagar-comissoes' },
       { key: 'minhas-comissoes', label: 'Minhas comissões', icon: UserRound, href: '/equipe/minhas-comissoes' },
       { key: 'relatorios-vendas', label: 'Relatórios de vendas', icon: BarChart3, href: '/relatorios/vendas' },
+      { key: 'relatorios-envios', label: 'Envios agendados', icon: CalendarRange, href: '/relatorios/envios' },
     ],
   },
 ];
@@ -159,6 +161,7 @@ const CONFIGURACOES_MENU: SidebarSection[] = [
     title: 'Geral',
     items: [
       { key: 'cfg-agencia', label: 'Dados da agência', icon: Building2, href: '/config/agencia' },
+      { key: 'cfg-empresas', label: 'Empresas', icon: Network, href: '/config/empresas' },
       { key: 'cfg-usuarios', label: 'Usuários', icon: Users, href: '/config/usuarios' },
       { key: 'cfg-financeiro', label: 'Financeiro', icon: Percent, href: '/config/financeiro' },
       { key: 'cfg-cobranca', label: 'Cobrança', icon: Barcode, href: '/config/cobranca' },

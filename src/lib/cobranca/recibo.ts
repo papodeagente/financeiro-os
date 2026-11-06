@@ -185,3 +185,8 @@ export function dataPorExtenso(iso: string, cidade?: string): string {
   const texto = `${Number(m[3])} de ${MESES[Number(m[2]) - 1]} de ${m[1]}`;
   return cidade ? `${cidade}, ${texto}` : texto;
 }
+
+/** O cabeçalho da agência no formato do recibo (o recibo da venda e o da fatura usam o mesmo). */
+export function emitenteDoRecibo(a: AgenciaDoRecibo | null): Recibo['emitente'] {
+  return emitenteDe(a);
+}

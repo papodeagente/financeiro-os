@@ -17,8 +17,9 @@
  *   tarifa      = soma das tarifas dos passageiros ativos (ou quantidade ×
  *                 valor unitário, no produto sem passageiro)
  *   taxas       = taxas + outras taxas (embarque etc.): passam ao fornecedor
- *   valor_cliente    = tarifa + taxas + Taxa DU + RAV + Fee + Markup − Desconto
- *   valor_fornecedor = tarifa + taxas − Comissão − Over + Taxa CC
+ *   valor_cliente    = tarifa + taxas + Taxa DU + RAV + Fee + Markup − Desconto − Abatimento
+ *   valor_fornecedor = tarifa + taxas − Comissão − Over + Taxa CC − Abatimento
+ *   (o Abatimento do fornecedor baixa os dois lados: a receita não muda)
  *   (+ Cobrado no cancelamento no cliente e + Retido pelo fornecedor no
  *    fornecedor: o que o cancelamento deixou valendo, parte D)
  *   repasse          = Repasse ao intermediário
@@ -55,19 +56,45 @@ export const ROTULO_TIPO_PRODUTO: Record<TipoProduto, string> = {
   OUTROS: 'Outros',
 };
 
+/** Como a tela pede o campo do tipo: texto livre, data ou número inteiro. */
+export type FormatoDoCampo = 'texto' | 'data' | 'numero';
+
+export interface CampoDoTipo { chave: string; rotulo: string; formato?: FormatoDoCampo; ajuda?: string }
+
 /** Campos de identificação próprios de cada tipo (ficam em `detalhes`). */
-export const CAMPOS_DO_TIPO: Record<TipoProduto, ReadonlyArray<{ chave: string; rotulo: string }>> = {
+export const CAMPOS_DO_TIPO: Record<TipoProduto, ReadonlyArray<CampoDoTipo>> = {
   AEREO: [{ chave: 'cia', rotulo: 'Companhia aérea' }, { chave: 'trechos', rotulo: 'Trechos' }, { chave: 'destino', rotulo: 'Destino' }],
   AEREO_AGENCIA: [{ chave: 'cia', rotulo: 'Companhia aérea' }, { chave: 'trechos', rotulo: 'Trechos' }, { chave: 'destino', rotulo: 'Destino' }],
-  HOSPEDAGEM: [{ chave: 'hotel', rotulo: 'Hotel' }, { chave: 'acomodacao', rotulo: 'Acomodação' }, { chave: 'regime', rotulo: 'Regime' }, { chave: 'destino', rotulo: 'Destino' }],
+  HOSPEDAGEM: [
+    { chave: 'hotel', rotulo: 'Hotel' }, { chave: 'destino', rotulo: 'Destino' },
+    { chave: 'checkin', rotulo: 'Check-in', formato: 'data' }, { chave: 'checkout', rotulo: 'Check-out', formato: 'data' },
+    { chave: 'diarias', rotulo: 'Diárias', formato: 'numero', ajuda: 'Vazio: conta pelas datas.' },
+    { chave: 'acomodacao', rotulo: 'Acomodação' }, { chave: 'categoria', rotulo: 'Categoria do quarto' }, { chave: 'regime', rotulo: 'Regime' },
+  ],
   PACOTE: [{ chave: 'pacote', rotulo: 'Nome do pacote' }, { chave: 'destino', rotulo: 'Destino' }, { chave: 'transporte', rotulo: 'Transporte' }],
-  CRUZEIRO: [{ chave: 'navio', rotulo: 'Navio' }, { chave: 'cabine', rotulo: 'Cabine' }, { chave: 'regime', rotulo: 'Regime' }, { chave: 'destino', rotulo: 'Roteiro' }],
+  CRUZEIRO: [
+    { chave: 'navio', rotulo: 'Navio' }, { chave: 'destino', rotulo: 'Roteiro' }, { chave: 'reserva', rotulo: 'Número da reserva' },
+    { chave: 'cabine', rotulo: 'Número da cabine' }, { chave: 'cabine_tipo', rotulo: 'Tipo de cabine' }, { chave: 'cabine_categoria', rotulo: 'Categoria da cabine' },
+    { chave: 'regime', rotulo: 'Regime' },
+  ],
   SEGURO: [{ chave: 'plano', rotulo: 'Plano' }, { chave: 'destino', rotulo: 'Destino' }],
-  LOCACAO: [{ chave: 'retirada', rotulo: 'Retirada' }, { chave: 'devolucao', rotulo: 'Devolução' }, { chave: 'categoria', rotulo: 'Categoria' }],
+  LOCACAO: [
+    { chave: 'retirada', rotulo: 'Local de retirada' }, { chave: 'retirada_data', rotulo: 'Data da retirada', formato: 'data' },
+    { chave: 'devolucao', rotulo: 'Local de devolução' }, { chave: 'devolucao_data', rotulo: 'Data da devolução', formato: 'data' },
+    { chave: 'diarias', rotulo: 'Diárias', formato: 'numero', ajuda: 'Vazio: conta pelas datas.' },
+    { chave: 'categoria', rotulo: 'Categoria do carro' }, { chave: 'extras', rotulo: 'Extras' },
+  ],
   RECEPTIVO: [{ chave: 'servico', rotulo: 'Serviço' }, { chave: 'destino', rotulo: 'Destino' }],
   INGRESSO: [{ chave: 'evento', rotulo: 'Evento' }, { chave: 'local', rotulo: 'Local' }],
   OUTROS: [{ chave: 'produto', rotulo: 'Produto' }],
 };
+
+/** Noites entre duas datas (check-in e check-out, retirada e devolução); 0 se faltar uma. */
+export function diariasEntre(de: string | undefined, ate: string | undefined): number {
+  if (!de || !ate || !/^\d{4}-\d{2}-\d{2}$/.test(de) || !/^\d{4}-\d{2}-\d{2}$/.test(ate)) return 0;
+  const d = Math.round((Date.parse(`${ate}T00:00:00Z`) - Date.parse(`${de}T00:00:00Z`)) / 86_400_000);
+  return d > 0 ? d : 0;
+}
 
 /** Quem recebe o dinheiro do cliente por este item. */
 export type QuemCobra = 'AGENCIA' | 'FORNECEDOR';
@@ -98,6 +125,8 @@ export const TIPOS_COMPONENTE = [
   // Só o cancelamento grava estes dois (E5, parte D): o que continua valendo
   // do que foi cancelado. Ninguém os escolhe na tela.
   'COBRADO_NO_CANCELAMENTO', 'RETIDO_PELO_FORNECEDOR',
+  // E7: desconto que o fornecedor dá no preço e a agência repassa ao cliente.
+  'ABATIMENTO',
 ] as const;
 export type TipoComponente = (typeof TIPOS_COMPONENTE)[number];
 
@@ -111,16 +140,18 @@ export const COMPONENTES_DO_CANCELAMENTO: ReadonlySet<TipoComponente> = new Set(
  *  - cobrado_do_cliente: soma ao que o cliente paga;
  *  - abatido_do_cliente: tira do que o cliente paga;
  *  - custo_da_receita: sai da receita para outra pessoa (fornecedor ou
- *    intermediário).
+ *    intermediário);
+ *  - abatido_dos_dois: o fornecedor cobra menos e o cliente paga menos na
+ *    mesma medida (a receita não muda).
  */
-export type NaturezaDoComponente = 'devolvido_pelo_fornecedor' | 'cobrado_do_cliente' | 'abatido_do_cliente' | 'custo_da_receita';
+export type NaturezaDoComponente = 'devolvido_pelo_fornecedor' | 'cobrado_do_cliente' | 'abatido_do_cliente' | 'custo_da_receita' | 'abatido_dos_dois';
 
 export interface InfoDoComponente {
   rotulo: string;
   ajuda: string;
   natureza: NaturezaDoComponente;
-  /** +1 soma à receita, −1 tira. */
-  sinal: 1 | -1;
+  /** +1 soma à receita, −1 tira, 0 não mexe (Abatimento do fornecedor). */
+  sinal: 1 | -1 | 0;
   /** Gravado só pelo sistema (cancelamento); a tela não oferece. */
   interno?: boolean;
 }
@@ -137,7 +168,19 @@ export const COMPONENTES: Record<TipoComponente, InfoDoComponente> = {
   REPASSE_INTERMEDIARIO: { rotulo: 'Repasse ao intermediário', ajuda: 'Parte da receita de quem trouxe a venda.', natureza: 'custo_da_receita', sinal: -1 },
   COBRADO_NO_CANCELAMENTO: { rotulo: 'Cobrado no cancelamento', ajuda: 'O que o cliente continua devendo pelo que foi cancelado: a multa, ou o valor inteiro quando o saldo dele foi mantido.', natureza: 'cobrado_do_cliente', sinal: 1, interno: true },
   RETIDO_PELO_FORNECEDOR: { rotulo: 'Retido pelo fornecedor', ajuda: 'O que o fornecedor fica pelo que foi cancelado: a multa dele, ou o valor inteiro quando o saldo com ele foi mantido. Sai da receita.', natureza: 'custo_da_receita', sinal: -1, interno: true },
+  ABATIMENTO: { rotulo: 'Abatimento do fornecedor', ajuda: 'Desconto que o fornecedor dá no preço e a agência repassa ao cliente: o cliente paga menos, o fornecedor recebe menos e a receita não muda.', natureza: 'abatido_dos_dois', sinal: 0 },
 };
+
+/** Sobre o que o percentual do componente é calculado. */
+export type BaseDoPercentual = 'TARIFA' | 'TARIFA_TAXAS' | 'COMISSAO';
+export const BASES_DO_PERCENTUAL: readonly BaseDoPercentual[] = ['TARIFA', 'TARIFA_TAXAS', 'COMISSAO'];
+export const ROTULO_BASE_DO_PERCENTUAL: Record<BaseDoPercentual, string> = {
+  TARIFA: 'sobre a tarifa',
+  TARIFA_TAXAS: 'sobre a tarifa com as taxas',
+  COMISSAO: 'sobre a comissão',
+};
+/** Componentes em que a pessoa escolhe a base (os outros são sempre sobre a tarifa). */
+export const COMPONENTES_COM_BASE: ReadonlySet<TipoComponente> = new Set(['OVER']);
 
 /** Componentes que a pessoa escolhe na venda (sem os do cancelamento). */
 export const TIPOS_COMPONENTE_DA_TELA: readonly TipoComponente[] = TIPOS_COMPONENTE.filter(t => !COMPONENTES[t].interno);
@@ -152,6 +195,8 @@ export interface ComponenteDeReceita {
   /** Componente de um passageiro só (Taxa DU, RAV, Fee por passageiro). */
   passageiro_id: string | null;
   descricao: string;
+  /** Base do percentual (Over: tarifa, tarifa com taxas ou comissão). Ausente: tarifa. */
+  base?: BaseDoPercentual;
 }
 
 export interface Passageiro {
@@ -269,6 +314,33 @@ export interface PagamentoDaVenda {
   detalhe: string;
   /** Crédito: a venda que originou o crédito, quando a pessoa sabe. */
   venda_origem_credito: string;
+  /**
+   * Cartão recebido pela agência (E7): a taxa da operadora do cartão é um
+   * custo da agência e sai da receita. O percentual e a parte fixa vêm da
+   * forma de pagamento da agência e ficam congelados ao gravar a venda (mudar
+   * o cadastro depois não mexe em venda feita); a taxa acompanha o valor.
+   * `taxa_cartao_centavos` só existe quando a pessoa digitou a taxa à mão.
+   */
+  taxa_cartao_centavos?: number | null;
+  taxa_cartao_percentual?: number | null;
+  /** Parte fixa da taxa por operação, em centavos. */
+  taxa_cartao_fixa_centavos?: number | null;
+  /** Dias até o dinheiro do cartão cair (da forma da agência); decide o vencimento. */
+  dias_para_cair?: number | null;
+  /** "Outros": a forma própria da agência usada (código do cadastro de formas). */
+  forma_agencia?: string;
+  /** Campos do cheque e do cartão. Nunca o número inteiro do cartão. */
+  campos?: CamposDaForma;
+}
+
+/** Cheque: banco, número e documento do emitente. Cartão: autorização, bandeira e os 4 últimos dígitos. */
+export interface CamposDaForma {
+  banco?: string;
+  numero_cheque?: string;
+  emitente_documento?: string;
+  autorizacao?: string;
+  bandeira?: string;
+  final_cartao?: string;
 }
 
 // ============================================================
@@ -276,7 +348,8 @@ export interface PagamentoDaVenda {
 // ============================================================
 
 export type SituacaoDaVenda = 'ABERTA' | 'FECHADA';
-export type OrigemDaVenda = 'manual' | 'crm';
+/** mudanca = trazida do sistema anterior pela mudança de sistema (E7): as contas dela vieram das listas de contas. */
+export type OrigemDaVenda = 'manual' | 'crm' | 'mudanca';
 
 export interface Venda {
   /** Mesmo id da linha em vendas_crm (o cabeçalho que as telas antigas leem). */
@@ -296,6 +369,14 @@ export interface Venda {
   observacoes: string;
   /** Negócio no CRM (vazio na venda lançada à mão). */
   crm_venda_id: string;
+  /**
+   * Operação própria (E7): a agência opera a viagem (grupo dela). Produto
+   * sem fornecedor não vira conta a pagar a ninguém: o custo é da própria
+   * agência e entra pelas contas do grupo.
+   */
+  operacao_propria?: boolean;
+  /** Produtos tirados da venda, guardados para restaurar. Não entram em conta nenhuma. */
+  produtos_removidos?: ProdutoDaVenda[];
 }
 
 // ============================================================
@@ -366,6 +447,34 @@ function tarifaBase(p: Pick<ProdutoDaVenda, 'passageiros' | 'quantidade' | 'valo
   return Math.round(p.quantidade * p.valor_unitario_centavos);
 }
 
+/** Taxas ativas (do passageiro ou do produto inteiro). */
+function taxasBase(p: Pick<ProdutoDaVenda, 'passageiros' | 'taxas_centavos'>, passageiroId: string | null): Centavos {
+  const ativos = p.passageiros.filter(x => !x.cancelado_em);
+  const t = (x: Passageiro) => x.taxas_centavos + x.outras_taxas_centavos;
+  if (passageiroId) { const x = ativos.find(y => y.id === passageiroId); return x ? t(x) : 0; }
+  if (p.passageiros.length > 0) return ativos.reduce((a, x) => a + t(x), 0);
+  return p.taxas_centavos;
+}
+
+/**
+ * O valor sobre o qual o percentual de um componente é calculado: a tarifa
+ * (padrão), a tarifa com as taxas ou, no Over, a comissão do mesmo produto
+ * (ou do mesmo passageiro). A tela e a gravação usam a mesma conta.
+ */
+export function basePercentualDoComponente(
+  p: Pick<ProdutoDaVenda, 'passageiros' | 'quantidade' | 'valor_unitario_centavos' | 'taxas_centavos' | 'componentes'>,
+  c: Pick<ComponenteDeReceita, 'tipo' | 'passageiro_id' | 'base' | 'id'>,
+): Centavos {
+  const base = COMPONENTES_COM_BASE.has(c.tipo) ? (c.base ?? 'TARIFA') : 'TARIFA';
+  if (base === 'COMISSAO') {
+    return p.componentes
+      .filter(x => x.tipo === 'COMISSAO' && x.id !== c.id && (c.passageiro_id ? x.passageiro_id === c.passageiro_id : true))
+      .reduce((a, x) => a + x.valor_centavos, 0);
+  }
+  const tarifa = tarifaBase(p, c.passageiro_id);
+  return base === 'TARIFA_TAXAS' ? tarifa + taxasBase(p, c.passageiro_id) : tarifa;
+}
+
 export function normalizarProduto(v: unknown, sequencia: number, erros: ErroDaVenda[] = []): ProdutoDaVenda {
   const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
   const moeda = normalizarMoeda(o.moeda);
@@ -386,8 +495,12 @@ export function normalizarProduto(v: unknown, sequencia: number, erros: ErroDaVe
   const base = {
     passageiros, quantidade,
     valor_unitario_centavos: naoNegativo(centavos(o.valor_unitario_centavos)),
+    taxas_centavos: naoNegativo(centavos(o.taxas_centavos)),
   };
   const idsPax = new Set(passageiros.map(x => x.id));
+  // Percentual sem valor vira valor depois que todos foram lidos: o Over
+  // "sobre a comissão" precisa da comissão já calculada.
+  const pendentes: ComponenteDeReceita[] = [];
   const componentes: ComponenteDeReceita[] = (Array.isArray(o.componentes) ? o.componentes : []).slice(0, 200).flatMap(x => {
     const q = (x && typeof x === 'object' ? x : {}) as Record<string, unknown>;
     const tipo = txt(q.tipo).toUpperCase() as TipoComponente;
@@ -398,10 +511,17 @@ export function normalizarProduto(v: unknown, sequencia: number, erros: ErroDaVe
     const passageiro_id = txt(q.passageiro_id, 80) && idsPax.has(txt(q.passageiro_id, 80)) ? txt(q.passageiro_id, 80) : null;
     const pctBruto = q.percentual === null || q.percentual === undefined || q.percentual === '' ? null : Number(q.percentual);
     const percentual = pctBruto !== null && Number.isFinite(pctBruto) && pctBruto > 0 ? Math.round(pctBruto * 10000) / 10000 : null;
-    let valor = naoNegativo(centavos(q.valor_centavos));
-    if (valor === 0 && percentual !== null) valor = Math.round(tarifaBase(base, passageiro_id) * percentual / 100);
-    return [{ id: txt(q.id, 80) || novoIdDaVenda('cp'), tipo, valor_centavos: valor, percentual, passageiro_id, descricao: txt(q.descricao, 200) }];
+    const valor = naoNegativo(centavos(q.valor_centavos));
+    const baseTxt = txt(q.base).toUpperCase() as BaseDoPercentual;
+    const comp: ComponenteDeReceita = { id: txt(q.id, 80) || novoIdDaVenda('cp'), tipo, valor_centavos: valor, percentual, passageiro_id, descricao: txt(q.descricao, 200) };
+    if (COMPONENTES_COM_BASE.has(tipo) && BASES_DO_PERCENTUAL.includes(baseTxt) && baseTxt !== 'TARIFA') comp.base = baseTxt;
+    if (valor === 0 && percentual !== null) pendentes.push(comp);
+    return [comp];
   });
+  // Primeiro os que valem sobre tarifa/taxas, depois os que valem sobre a comissão.
+  for (const c of [...pendentes.filter(c => c.base !== 'COMISSAO'), ...pendentes.filter(c => c.base === 'COMISSAO')]) {
+    c.valor_centavos = Math.round(basePercentualDoComponente({ ...base, componentes }, c) * (c.percentual ?? 0) / 100);
+  }
   const detalhes: Record<string, string> = {};
   if (o.detalhes && typeof o.detalhes === 'object') {
     for (const [k, x] of Object.entries(o.detalhes as Record<string, unknown>).slice(0, 30)) {
@@ -425,7 +545,7 @@ export function normalizarProduto(v: unknown, sequencia: number, erros: ErroDaVe
     data_pagamento_fornecedor: dataOuVazio(o.data_pagamento_fornecedor),
     quantidade,
     valor_unitario_centavos: base.valor_unitario_centavos,
-    taxas_centavos: naoNegativo(centavos(o.taxas_centavos)),
+    taxas_centavos: base.taxas_centavos,
     passageiros,
     componentes,
     detalhes,
@@ -447,6 +567,28 @@ export function normalizarPagamento(v: unknown, i: number, erros: ErroDaVenda[] 
     return null;
   }
   const cartao = txt(o.cartao_tipo).toLowerCase();
+  const numeroOuNulo = (x: unknown, max: number): number | null => {
+    if (x === null || x === undefined || x === '') return null;
+    const n = Number(x);
+    return Number.isFinite(n) && n >= 0 ? Math.min(max, n) : null;
+  };
+  const extras: Pick<PagamentoDaVenda, 'taxa_cartao_centavos' | 'taxa_cartao_percentual' | 'taxa_cartao_fixa_centavos' | 'dias_para_cair' | 'forma_agencia' | 'campos'> = {};
+  if (forma === 'CARTAO') {
+    const taxa = numeroOuNulo(o.taxa_cartao_centavos, valor);
+    if (taxa !== null) extras.taxa_cartao_centavos = Math.round(taxa);
+    const pct = numeroOuNulo(o.taxa_cartao_percentual, 99.99);
+    if (pct !== null) extras.taxa_cartao_percentual = Math.round(pct * 100) / 100;
+    const fixa = numeroOuNulo(o.taxa_cartao_fixa_centavos, valor);
+    if (fixa !== null) extras.taxa_cartao_fixa_centavos = Math.round(fixa);
+    const dias = numeroOuNulo(o.dias_para_cair, 365);
+    if (dias !== null) extras.dias_para_cair = Math.floor(dias);
+  }
+  if (forma === 'OUTROS') {
+    const fa = txt(o.forma_agencia, 60).toUpperCase();
+    if (/^[A-Z0-9_]+$/.test(fa)) extras.forma_agencia = fa;
+  }
+  const campos = normalizarCamposDaForma(forma, o.campos);
+  if (campos) extras.campos = campos;
   return {
     id: txt(o.id, 80) || novoIdDaVenda('pg'),
     forma,
@@ -461,7 +603,35 @@ export function normalizarPagamento(v: unknown, i: number, erros: ErroDaVenda[] 
     // Número de cartão nunca é guardado: sequência longa de dígitos vira máscara.
     detalhe: txt(o.detalhe, 300).replace(/\d[\d .-]{11,}\d/g, m => `•••• ${m.replace(/\D/g, '').slice(-4)}`),
     venda_origem_credito: txt(o.venda_origem_credito, 80),
+    ...extras,
   };
+}
+
+/** Os campos do cheque e do cartão, limpos. Do cartão fica só o final (4 dígitos), nunca o número. */
+export function normalizarCamposDaForma(forma: FormaDaVenda, v: unknown): CamposDaForma | undefined {
+  if (!v || typeof v !== 'object' || (forma !== 'CHEQUE' && forma !== 'CARTAO')) return undefined;
+  const o = v as Record<string, unknown>;
+  const c: CamposDaForma = {};
+  if (forma === 'CHEQUE') {
+    const banco = txt(o.banco, 80); if (banco) c.banco = banco;
+    const numero = txt(o.numero_cheque, 40); if (numero) c.numero_cheque = numero;
+    const doc = txt(o.emitente_documento, 20).replace(/[^\d./-]/g, ''); if (doc) c.emitente_documento = doc;
+  } else {
+    const aut = txt(o.autorizacao, 40); if (aut) c.autorizacao = aut;
+    const bandeira = txt(o.bandeira, 40); if (bandeira) c.bandeira = bandeira;
+    const digitos = txt(o.final_cartao, 40).replace(/\D/g, '');
+    if (digitos.length >= 4) c.final_cartao = digitos.slice(-4);
+  }
+  return Object.keys(c).length ? c : undefined;
+}
+
+/** Texto curto dos campos da forma ("Itaú · nº 000123", "Visa · final 4321 · aut 99"). */
+export function textoDosCampos(c: CamposDaForma | undefined): string {
+  if (!c) return '';
+  return [
+    c.banco, c.numero_cheque ? `nº ${c.numero_cheque}` : '', c.emitente_documento ? `emitente ${c.emitente_documento}` : '',
+    c.bandeira, c.final_cartao ? `final ${c.final_cartao}` : '', c.autorizacao ? `aut ${c.autorizacao}` : '',
+  ].filter(Boolean).join(' · ');
 }
 
 /**
@@ -482,6 +652,8 @@ export function normalizarVenda(v: unknown): { venda: Venda; erros: ErroDaVenda[
     .map((p, i) => normalizarPagamento(p, i, erros))
     .filter((p): p is PagamentoDaVenda => p !== null);
   const situacao = txt(o.situacao).toUpperCase() === 'FECHADA' ? 'FECHADA' : 'ABERTA';
+  const removidos = (Array.isArray(o.produtos_removidos) ? o.produtos_removidos : []).slice(0, 100)
+    .map((p, i) => normalizarProduto(p, i + 1));
   return {
     venda: {
       id: txt(o.id, 200),
@@ -492,12 +664,14 @@ export function normalizarVenda(v: unknown): { venda: Venda; erros: ErroDaVenda[
       intermediario: normalizarParte(o.intermediario),
       grupo_id: txt(o.grupo_id, 120) || null,
       centro_custo: txt(o.centro_custo, 120),
-      origem: txt(o.origem) === 'crm' ? 'crm' : 'manual',
+      origem: txt(o.origem) === 'crm' ? 'crm' : txt(o.origem) === 'mudanca' ? 'mudanca' : 'manual',
       situacao,
       produtos,
       pagamentos,
       observacoes: txt(o.observacoes, 2000),
       crm_venda_id: txt(o.crm_venda_id, 200),
+      ...(o.operacao_propria === true ? { operacao_propria: true } : {}),
+      ...(removidos.length ? { produtos_removidos: removidos } : {}),
     },
     erros,
   };
@@ -576,8 +750,8 @@ export function totaisDoProduto(p: ProdutoDaVenda): TotaisDoProduto {
     }
     comp[c.tipo] += c.valor_centavos;
   }
-  const valor_cliente = tarifa + taxas + comp.TAXA_DU + comp.RAV + comp.FEE + comp.MARKUP - comp.DESCONTO + comp.COBRADO_NO_CANCELAMENTO;
-  const valor_fornecedor = tarifa + taxas - comp.COMISSAO - comp.OVER + comp.TAXA_CC + comp.RETIDO_PELO_FORNECEDOR;
+  const valor_cliente = tarifa + taxas + comp.TAXA_DU + comp.RAV + comp.FEE + comp.MARKUP - comp.DESCONTO + comp.COBRADO_NO_CANCELAMENTO - comp.ABATIMENTO;
+  const valor_fornecedor = tarifa + taxas - comp.COMISSAO - comp.OVER + comp.TAXA_CC + comp.RETIDO_PELO_FORNECEDOR - comp.ABATIMENTO;
   const repasse = comp.REPASSE_INTERMEDIARIO;
   const receita_bruta = valor_cliente - valor_fornecedor - repasse;
   const r = (x: Centavos) => emReais(x, p.moeda, p.cambio);
@@ -647,12 +821,58 @@ export function totaisDaVenda(v: Pick<Venda, 'produtos' | 'pagamentos'>): Totais
 // Datas das parcelas
 // ============================================================
 
-/** Vencimento da parcela `n` (1..N) de um pagamento. */
-export function vencimentoDaParcela(pag: Pick<PagamentoDaVenda, 'forma' | 'primeiro_vencimento' | 'intervalo_dias'>, dataVenda: string, n: number): string {
+/**
+ * Vencimento da parcela `n` (1..N) de um pagamento. No cartão com os dias
+ * para o dinheiro cair (da forma da agência), a 1ª parcela cai a tantos dias
+ * da venda e as outras de mês em mês.
+ */
+export function vencimentoDaParcela(pag: Pick<PagamentoDaVenda, 'forma' | 'primeiro_vencimento' | 'intervalo_dias' | 'dias_para_cair'>, dataVenda: string, n: number): string {
   const info = FORMAS[pag.forma];
+  const dias = pag.forma === 'CARTAO' && pag.dias_para_cair !== null && pag.dias_para_cair !== undefined ? pag.dias_para_cair : null;
   const primeiro = pag.primeiro_vencimento
     || (info.efeito === 'faturar_ao_cliente' ? addDias(dataVenda, 30)
-      : info.a_vista ? dataVenda : addMeses(dataVenda, 1));
+      : dias !== null ? addDias(dataVenda, dias)
+        : info.a_vista ? dataVenda : addMeses(dataVenda, 1));
   if (n <= 1) return primeiro;
   return pag.intervalo_dias > 0 ? addDias(primeiro, pag.intervalo_dias * (n - 1)) : addMeses(primeiro, n - 1);
+}
+
+// ============================================================
+// Taxa do cartão da agência (E7)
+// ============================================================
+
+/**
+ * Taxa do cartão de um pagamento, em centavos de real: a digitada à mão ou
+ * percentual × valor + parte fixa (nunca mais que o valor). 0 quando não é
+ * cartão ou não tem taxa.
+ */
+export function taxaDoCartao(pag: Pick<PagamentoDaVenda, 'forma' | 'valor_centavos' | 'taxa_cartao_centavos' | 'taxa_cartao_percentual' | 'taxa_cartao_fixa_centavos'>): Centavos {
+  if (pag.forma !== 'CARTAO') return 0;
+  if (pag.taxa_cartao_centavos !== null && pag.taxa_cartao_centavos !== undefined) return Math.max(0, Math.min(pag.valor_centavos, Math.round(pag.taxa_cartao_centavos)));
+  const t = Math.round(pag.valor_centavos * (pag.taxa_cartao_percentual ?? 0) / 100 + (pag.taxa_cartao_fixa_centavos ?? 0));
+  return Math.max(0, Math.min(pag.valor_centavos, t));
+}
+
+/** A taxa do pagamento ainda não foi definida (nem congelada da forma, nem digitada). */
+export function taxaDoCartaoIndefinida(pag: Pick<PagamentoDaVenda, 'forma' | 'taxa_cartao_centavos' | 'taxa_cartao_percentual' | 'taxa_cartao_fixa_centavos'>): boolean {
+  const nada = (v: number | null | undefined) => v === null || v === undefined;
+  return pag.forma === 'CARTAO' && nada(pag.taxa_cartao_centavos) && nada(pag.taxa_cartao_percentual) && nada(pag.taxa_cartao_fixa_centavos);
+}
+
+/** Soma das taxas de cartão da venda (custo da agência, sai da receita). */
+export function taxasDeCartaoDaVenda(v: Pick<Venda, 'pagamentos'>): Centavos {
+  return v.pagamentos.reduce((a, p) => a + taxaDoCartao(p), 0);
+}
+
+/**
+ * Congela no pagamento de cartão a taxa e os dias da forma da agência
+ * (`taxa_pct` em %, `taxa_fixa` em reais, `dias_para_cair`), só onde a taxa
+ * ainda não foi definida. Dias 0 não mudam o vencimento de sempre.
+ */
+export function congelarTaxaDoCartao<P extends PagamentoDaVenda>(pag: P, forma: { taxa_pct: number; taxa_fixa: number; dias_para_cair: number } | null | undefined): P {
+  if (pag.forma !== 'CARTAO' || !forma || !taxaDoCartaoIndefinida(pag)) return pag;
+  const novo: P = { ...pag, taxa_cartao_percentual: Math.round((Number(forma.taxa_pct) || 0) * 100) / 100, taxa_cartao_fixa_centavos: Math.round((Number(forma.taxa_fixa) || 0) * 100) };
+  const dias = Math.floor(Number(forma.dias_para_cair) || 0);
+  if ((pag.dias_para_cair === null || pag.dias_para_cair === undefined) && dias > 0) novo.dias_para_cair = Math.min(365, dias);
+  return novo;
 }

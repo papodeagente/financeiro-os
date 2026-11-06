@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
-import { contextoDaComissao, respostaDeErroDaComissao, ISO_DATA } from '@/lib/comissao-rota';
+import { contextoDaComissao, quemFechaDo, respostaDeErroDaComissao, ISO_DATA } from '@/lib/comissao-rota';
 import { previaDoFechamento } from '@/lib/comissao-funcoes-servidor';
 import { hojeISO } from '@/lib/money';
 
-// Prévia do Fechar comissões até a data. Quem não vê a equipe vê só as suas.
+// Prévia do Fechar comissões até a data. Quem não vê a equipe vê só as suas;
+// as funções que outra pessoa fecha (Equipe › Funções) não aparecem.
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
@@ -17,6 +18,7 @@ export async function GET(req: Request) {
     return NextResponse.json(await previaDoFechamento(ctx.exec, ctx.tenantId, ate, {
       funcao_id: u.get('funcao_id') || undefined,
       pessoa_id: ctx.ver_todos ? undefined : ctx.usuario.id,
+      quem: ctx.ver_todos ? await quemFechaDo(ctx) : undefined,
     }));
   } catch (e) { return respostaDeErroDaComissao(e); }
 }

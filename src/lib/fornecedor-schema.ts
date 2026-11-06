@@ -76,6 +76,11 @@ export const FORNECEDOR_SCHEMA_SQL = `
       AND valor_centavos = valor_itens_centavos - sinal_centavos)
   );
   CREATE INDEX IF NOT EXISTS idx_faturas_fornecedor_parte ON faturas_fornecedor(tenant_id, parte_id, situacao, vencimento);
+  -- E7: "Bruto" (paga o bruto e recebe a comissão depois). O valor
+  -- dos itens continua em valor_centavos (itens − sinal); as receitas vão à parte.
+  ALTER TABLE faturas_fornecedor ADD COLUMN IF NOT EXISTS modo TEXT NOT NULL DEFAULT 'SALDO';
+  ALTER TABLE faturas_fornecedor ADD COLUMN IF NOT EXISTS receitas_centavos BIGINT NOT NULL DEFAULT 0;
+  ALTER TABLE faturas_fornecedor ADD COLUMN IF NOT EXISTS conta_receber_id TEXT;
 
   CREATE TABLE IF NOT EXISTS fatura_fornecedor_itens (
     tenant_id TEXT NOT NULL,
@@ -93,6 +98,9 @@ export const FORNECEDOR_SCHEMA_SQL = `
   );
   CREATE UNIQUE INDEX IF NOT EXISTS uq_fatura_fornecedor_item_ativo ON fatura_fornecedor_itens(tenant_id, conta_pagar_id) WHERE ativo;
   CREATE INDEX IF NOT EXISTS idx_fatura_fornecedor_itens_venda ON fatura_fornecedor_itens(tenant_id, venda_id);
+  ALTER TABLE fatura_fornecedor_itens ADD COLUMN IF NOT EXISTS receitas_centavos BIGINT NOT NULL DEFAULT 0;
+  ALTER TABLE fatura_fornecedor_itens ADD COLUMN IF NOT EXISTS conferido_em TIMESTAMPTZ;
+  ALTER TABLE fatura_fornecedor_itens ADD COLUMN IF NOT EXISTS conferido_por TEXT;
 
   CREATE TABLE IF NOT EXISTS fornecedor_sinais (
     tenant_id TEXT NOT NULL,

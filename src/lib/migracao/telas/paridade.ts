@@ -15,7 +15,10 @@
 /** Entregas do plano. 'hoje' = já existia antes do plano. */
 export type Entrega = 'hoje' | 'E1' | 'E2' | 'E3' | 'E4' | 'E5' | 'E6' | 'E7';
 
-/** A última entrega publicada (esta tela sai com a E4). */
+/**
+ * A última entrega publicada (esta tela saiu com a E4). Quem publicar a E5,
+ * a E6 e a E7 sobe este valor: os itens delas já têm o link da tela.
+ */
 export const ENTREGA_NO_AR: Entrega = 'E4';
 
 export const O_QUE_TRAZ_A_ENTREGA: Record<Exclude<Entrega, 'hoje'>, string> = {
@@ -55,6 +58,8 @@ export const BLOCOS_DA_PARIDADE: readonly BlocoDaParidade[] = [
       { rotulo: 'Ler boleto ou nota em PDF e preencher a conta', entrega: 'E2', href: '/financeiro-ag/pagar' },
       { rotulo: 'Pedido de aprovação no lugar do bloqueio', entrega: 'E2', href: '/financeiro-ag/aprovacoes' },
       { rotulo: 'Telas separadas de Contas a pagar e Contas a receber', entrega: 'hoje', href: '/financeiro-ag/receber' },
+      { rotulo: 'Contas já liquidadas trazidas do sistema anterior, na data e na conta certas, sem dinheiro em dobro', entrega: 'E7', href: '/mudanca' },
+      { rotulo: 'Mês em paralelo: as listas do mês de lá comparadas com as daqui, sem gravar', entrega: 'E7', href: '/mudanca' },
     ],
   },
   {
@@ -69,6 +74,7 @@ export const BLOCOS_DA_PARIDADE: readonly BlocoDaParidade[] = [
       { rotulo: 'Fechar Caixa que trava de verdade e reabre com motivo', entrega: 'E2', href: '/financeiro-ag/fechamento' },
       { rotulo: 'Permissão por conta bancária', entrega: 'E2', href: '/config/perfis-de-acesso' },
       { rotulo: 'Saldo de abertura trazido do sistema anterior', entrega: 'E4', href: '/mudanca' },
+      { rotulo: 'Extrato e movimentações antigos trazidos, ligados às liquidações', entrega: 'E7', href: '/mudanca' },
       { rotulo: 'Conta em moeda estrangeira e transferência com câmbio', entrega: 'E6' },
       { rotulo: 'Extrato do banco automático', entrega: 'E6' },
     ],
@@ -108,9 +114,11 @@ export const BLOCOS_DA_PARIDADE: readonly BlocoDaParidade[] = [
   {
     numero: 6, titulo: 'Faturas ao cliente e regras de faturamento', resumo: 'Fatura corporativa por período, nota de débito e aprovação pelo cliente.',
     itens: [
-      { rotulo: 'Regras de faturamento por cliente e fornecedor', entrega: 'E5' },
-      { rotulo: 'Fatura do cliente: fechar, reabrir, mover itens, faturar avulso', entrega: 'E5' },
-      { rotulo: 'Nota de débito e aprovação da fatura no portal', entrega: 'E5' },
+      { rotulo: 'Regras de faturamento por cliente e fornecedor', entrega: 'E5', href: '/financeiro-ag/regras-faturamento' },
+      { rotulo: 'Fatura do cliente: fechar, reabrir, mover itens, faturar avulso', entrega: 'E5', href: '/financeiro-ag/faturas' },
+      { rotulo: 'Nota de débito e aprovação da fatura no portal', entrega: 'E5', href: '/financeiro-ag/faturas' },
+      { rotulo: 'Regras de faturamento recriadas respondendo perguntas', entrega: 'E7', href: '/mudanca' },
+      { rotulo: 'Faturas antigas trazidas para consulta', entrega: 'E7', href: '/mudanca/historico' },
     ],
   },
   {
@@ -118,26 +126,28 @@ export const BLOCOS_DA_PARIDADE: readonly BlocoDaParidade[] = [
     itens: [
       { rotulo: 'Contas da venda nascem sozinhas (vindas do CRM)', entrega: 'hoje', href: '/vendas' },
       { rotulo: 'Nova venda lançada no financeiro', entrega: 'hoje', href: '/vendas/nova' },
-      { rotulo: 'Venda com passageiros, Taxa DU, RAV, Over e Fee', entrega: 'E5' },
-      { rotulo: 'Posição da venda: cliente, fornecedor e receita', entrega: 'E5' },
+      { rotulo: 'Venda com passageiros, Taxa DU, RAV, Over e Fee', entrega: 'E5', href: '/vendas/lancar' },
+      { rotulo: 'Posição da venda: cliente, fornecedor e receita', entrega: 'E5', href: '/vendas' },
+      { rotulo: 'Vendas antigas trazidas completas (viagens futuras incluídas), sem gerar contas de novo', entrega: 'E7', href: '/vendas' },
     ],
   },
   {
     numero: 8, titulo: 'Fatura do fornecedor e comissão do fornecedor', resumo: 'O que pagar a cada fornecedor e a comissão esperada.',
     itens: [
       { rotulo: 'Fornecedores', entrega: 'hoje', href: '/pessoas/fornecedores' },
-      { rotulo: 'Fatura do fornecedor com o quanto o cliente já pagou', entrega: 'E5' },
-      { rotulo: 'Sinal ao fornecedor com saldo a compensar', entrega: 'E5' },
-      { rotulo: 'Acordos de comissão com vigência e comissão esperada × recebida', entrega: 'E5' },
+      { rotulo: 'Fatura do fornecedor com o quanto o cliente já pagou', entrega: 'E5', href: '/financeiro-ag/fornecedores/faturas' },
+      { rotulo: 'Sinal ao fornecedor com saldo a compensar', entrega: 'E5', href: '/financeiro-ag/fornecedores/sinais' },
+      { rotulo: 'Acordos de comissão com vigência e comissão esperada × recebida', entrega: 'E5', href: '/financeiro-ag/fornecedores/acordos' },
     ],
   },
   {
     numero: 9, titulo: 'Cancelamento, reembolso e crédito do cliente', resumo: 'O que acontece com o dinheiro quando a viagem muda.',
     itens: [
       { rotulo: 'Cancelar as contas em aberto da venda', entrega: 'hoje', href: '/vendas' },
-      { rotulo: 'Cancelamento por passageiro com multa do fornecedor', entrega: 'E5' },
-      { rotulo: 'Reembolsos com situação e prazo', entrega: 'E5' },
-      { rotulo: 'Carteira de crédito do cliente', entrega: 'E5' },
+      { rotulo: 'Cancelamento por passageiro com multa do fornecedor', entrega: 'E5', href: '/vendas' },
+      { rotulo: 'Reembolsos com situação e prazo', entrega: 'E5', href: '/financeiro-ag/reembolsos' },
+      { rotulo: 'Carteira de crédito do cliente', entrega: 'E5', href: '/financeiro-ag/creditos' },
+      { rotulo: 'Reembolsos em aberto e créditos de clientes trazidos do sistema anterior', entrega: 'E7', href: '/financeiro-ag/creditos' },
     ],
   },
   {
@@ -145,8 +155,9 @@ export const BLOCOS_DA_PARIDADE: readonly BlocoDaParidade[] = [
     itens: [
       { rotulo: 'NFS-e no padrão nacional', entrega: 'hoje', href: '/financeiro-ag/notas' },
       { rotulo: 'Configuração fiscal da agência', entrega: 'hoje', href: '/config/fiscal' },
-      { rotulo: 'Gerar notas por regra e nota complementar', entrega: 'E5' },
-      { rotulo: 'Retenções na fonte (Lei 9.430)', entrega: 'E5' },
+      { rotulo: 'Gerar notas por regra e nota complementar', entrega: 'E5', href: '/financeiro-ag/notas/gerar' },
+      { rotulo: 'Retenções na fonte (Lei 9.430)', entrega: 'E5', href: '/financeiro-ag/notas/retencoes' },
+      { rotulo: 'Notas já emitidas trazidas para consulta (nunca emitidas de novo)', entrega: 'E7', href: '/mudanca/historico' },
     ],
   },
   {
@@ -155,8 +166,10 @@ export const BLOCOS_DA_PARIDADE: readonly BlocoDaParidade[] = [
       { rotulo: 'Planos de comissão com faixas', entrega: 'hoje', href: '/equipe/planos-comissao' },
       { rotulo: 'Comissões do mês', entrega: 'hoje', href: '/equipe/comissoes' },
       { rotulo: 'Metas da equipe', entrega: 'hoje', href: '/equipe/metas' },
-      { rotulo: 'Fechar e pagar comissões no servidor, com prévia', entrega: 'E5' },
-      { rotulo: 'Painel do vendedor no celular', entrega: 'E5' },
+      { rotulo: 'Fechar e pagar comissões no servidor, com prévia', entrega: 'E5', href: '/equipe/fechar-comissoes' },
+      { rotulo: 'Painel do vendedor no celular', entrega: 'E5', href: '/equipe/minhas-comissoes' },
+      { rotulo: 'Planos de comissão recriados respondendo perguntas', entrega: 'E7', href: '/mudanca' },
+      { rotulo: 'Comissões já pagas e metas trazidas do sistema anterior', entrega: 'E7', href: '/mudanca/historico' },
     ],
   },
   {
@@ -191,8 +204,9 @@ export const BLOCOS_DA_PARIDADE: readonly BlocoDaParidade[] = [
     itens: [
       { rotulo: 'Vendas fechadas', entrega: 'hoje', href: '/vendas' },
       { rotulo: 'Rentabilidade', entrega: 'hoje', href: '/relatorios/rentabilidade' },
-      { rotulo: 'Vendas por produto, vendedor, empresa e forma de pagamento', entrega: 'E5' },
-      { rotulo: 'Ranking de clientes e tabela dinâmica de vendas', entrega: 'E5' },
+      { rotulo: 'Vendas por produto, vendedor, empresa e forma de pagamento', entrega: 'E5', href: '/relatorios/vendas' },
+      { rotulo: 'Ranking de clientes e tabela dinâmica de vendas', entrega: 'E5', href: '/relatorios/vendas' },
+      { rotulo: 'Vendas antigas nos relatórios, com a receita por mês provada', entrega: 'E7', href: '/relatorios/vendas' },
     ],
   },
 ];

@@ -7,31 +7,38 @@
  * mostrada e somada (painel, comissão "sobre a receita", nota fiscal); o
  * dinheiro que circula (contas a pagar e a receber) é o mesmo.
  *
+ * A taxa do cartão que a agência recebe (E7) é um custo dela: sai da receita
+ * numa linha própria, "Taxa do cartão", também configurável.
+ *
  * Arquivo puro. Valores em centavos de real.
  */
 
 import {
-  COMPONENTES, TIPOS_COMPONENTE, ROTULO_TIPO_PRODUTO, componentesZerados, totaisDoProduto,
+  COMPONENTES, TIPOS_COMPONENTE, ROTULO_TIPO_PRODUTO, componentesZerados, taxasDeCartaoDaVenda, totaisDoProduto,
   type Centavos, type TipoComponente, type TipoProduto, type ValoresPorComponente, type Venda,
 } from './venda-modelo';
 
 export interface ConfigReceita {
   /** Componente → entra na receita da agência? */
   componentes: Record<TipoComponente, boolean>;
+  /** A taxa do cartão recebido pela agência sai da receita? (padrão: sim) */
+  taxa_cartao: boolean;
 }
 
 /** Padrão: todo componente conta (é a fórmula do mercado). */
 export const CONFIG_RECEITA_PADRAO: ConfigReceita = {
   componentes: Object.fromEntries(TIPOS_COMPONENTE.map(t => [t, true])) as Record<TipoComponente, boolean>,
+  taxa_cartao: true,
 };
 
 export function normalizarConfigReceita(v: unknown): ConfigReceita {
-  const o = (v && typeof v === 'object' ? (v as Record<string, unknown>).componentes : null) as Record<string, unknown> | null;
+  const raiz = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+  const o = raiz.componentes as Record<string, unknown> | null | undefined;
   const componentes = { ...CONFIG_RECEITA_PADRAO.componentes };
   if (o && typeof o === 'object') {
     for (const t of TIPOS_COMPONENTE) if (typeof o[t] === 'boolean') componentes[t] = o[t] as boolean;
   }
-  return { componentes };
+  return { componentes, taxa_cartao: typeof raiz.taxa_cartao === 'boolean' ? raiz.taxa_cartao : true };
 }
 
 export interface LinhaDeReceita {
@@ -67,6 +74,8 @@ export interface ReceitaDaVenda {
   fora_da_receita: Centavos;
   /** Valor total que o cliente paga. */
   faturamento: Centavos;
+  /** Taxa do cartão recebido pela agência (custo dela), e se sai da receita. */
+  taxa_cartao: { valor: Centavos; entra: boolean };
   /** Receita ÷ faturamento × 100, duas casas. */
   percentual: number;
 }
@@ -82,7 +91,7 @@ function receitaDe(comp: ValoresPorComponente, cfg: ConfigReceita, entra: boolea
  * agência. A soma de `receita` e `fora_da_receita` é sempre a receita bruta
  * (cliente − fornecedor − repasse).
  */
-export function receitaDaVenda(venda: Pick<Venda, 'produtos'>, config: ConfigReceita = CONFIG_RECEITA_PADRAO): ReceitaDaVenda {
+export function receitaDaVenda(venda: Pick<Venda, 'produtos'> & { pagamentos?: Venda['pagamentos'] }, config: ConfigReceita = CONFIG_RECEITA_PADRAO): ReceitaDaVenda {
   const total = componentesZerados();
   const por_produto: ReceitaDoProduto[] = [];
   let faturamento = 0;
@@ -96,16 +105,20 @@ export function receitaDaVenda(venda: Pick<Venda, 'produtos'>, config: ConfigRec
       receita: receitaDe(t.brl.componentes, config, true),
     });
   }
+  // O Abatimento do fornecedor (sinal 0) não mexe na receita: fica fora da lista.
   const linhas: LinhaDeReceita[] = TIPOS_COMPONENTE
-    .filter(t => total[t] !== 0)
-    .map(t => ({ tipo: t, rotulo: COMPONENTES[t].rotulo, sinal: COMPONENTES[t].sinal, valor: total[t], entra: config.componentes[t] }));
-  const receita = receitaDe(total, config, true);
+    .filter(t => total[t] !== 0 && COMPONENTES[t].sinal !== 0)
+    .map(t => ({ tipo: t, rotulo: COMPONENTES[t].rotulo, sinal: COMPONENTES[t].sinal as 1 | -1, valor: total[t], entra: config.componentes[t] }));
+  const taxaCartao = taxasDeCartaoDaVenda({ pagamentos: venda.pagamentos ?? [] });
+  const entraCartao = config.taxa_cartao !== false;
+  const receita = receitaDe(total, config, true) - (entraCartao ? taxaCartao : 0);
   return {
     linhas,
     por_produto,
     receita,
-    fora_da_receita: receitaDe(total, config, false),
+    fora_da_receita: receitaDe(total, config, false) - (entraCartao ? 0 : taxaCartao),
     faturamento,
+    taxa_cartao: { valor: taxaCartao, entra: entraCartao },
     percentual: faturamento > 0 ? Math.round((receita / faturamento) * 10000) / 100 : 0,
   };
 }

@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowDownLeft, ArrowUpRight, CheckCheck, Columns3, Copy, Download, ExternalLink, Plus, ReceiptText, RotateCcw, Scale, ShoppingBag, Trash2,
+  ArrowDownLeft, ArrowUpRight, CheckCheck, Columns3, Copy, ExternalLink, Plus, ReceiptText, RotateCcw, Scale, ShoppingBag, Trash2,
 } from 'lucide-react';
 
 import {
@@ -28,6 +28,8 @@ import { FilterBar } from '@/components/fin/FilterBar';
 import { FinTable } from '@/components/fin/FinTable';
 import { MolduraDaPagina } from '@/components/fin/MolduraDaPagina';
 import { PageHeader } from '@/components/fin/PageHeader';
+import { nomeDaEmpresa, useEmpresas } from '@/components/fin/useEmpresas';
+import type { FinColuna } from '@/components/fin/FinTable';
 import { resolverPeriodo, type PeriodoChave } from '@/components/fin/PeriodPicker';
 
 import { AcaoEmLote, type Categoria, type Centro } from './AcaoEmLote';
@@ -38,7 +40,8 @@ import {
 import { LiquidarEmLote } from './LiquidarEmLote';
 import { MenuDaLinha, type ItemDoMenu } from './MenuDaLinha';
 import { BarraDoLote, RodapeDaLista, type AcaoDaBarra } from './PartesDaLista';
-import { enderecoDaConta, exportarContas, todasDoFiltro, useContas, usePermissoes } from './useContas';
+import { enderecoDaConta, enderecoDaExportacao, todasDoFiltro, useContas, usePermissoes } from './useContas';
+import { BotaoExportar } from '@/components/fin/BotaoExportar';
 
 /**
  * Contas a Pagar/Receber (05/11/2026): as contas a pagar e a receber numa
@@ -116,7 +119,6 @@ export function TelaDeContas() {
   const [menu, setMenu] = React.useState<{ linha: LinhaDeConta; posicao: { x: number; y: number } } | null>(null);
   const [liquidar, setLiquidar] = React.useState<LinhaDeConta[] | null>(null);
   const [lote, setLote] = React.useState<{ acao: AcaoDeLote; linhas: LinhaDeConta[] } | null>(null);
-  const [exportando, setExportando] = React.useState(false);
   const [selecionandoTodas, setSelecionandoTodas] = React.useState(false);
   const [boletos, setBoletos] = React.useState<Array<ContaParaCobrar & { descricao: string }> | null>(null);
   const [carne, setCarne] = React.useState<Array<ContaParaCobrar & { descricao: string }> | null>(null);
@@ -243,13 +245,6 @@ export function TelaDeContas() {
     }
   }
 
-  async function exportar() {
-    setExportando(true);
-    const e = await exportarContas(`${recorte}&ordem=${ordemDaColuna(ordem.coluna) ?? 'vencimento'}&direcao=${ordem.direcao}`);
-    if (e) toast.error('Não foi possível exportar.', e);
-    setExportando(false);
-  }
-
   const abrir = React.useCallback((l: LinhaDeConta) => router.push(enderecoDaConta(l)), [router]);
   const aposLote = () => { setSelecionadas(new Map()); void recarregar(); };
 
@@ -317,10 +312,19 @@ export function TelaDeContas() {
     return itens;
   }
 
-  const colunasDaTabela = React.useMemo(
-    () => criarColunas({ onMenu: (linha, posicao) => setMenu({ linha, posicao }), campos }),
-    [campos],
-  );
+  // Várias empresas (E7): a coluna Empresa só existe com duas ou mais.
+  const { multi, empresas } = useEmpresas();
+  const colunasDaTabela = React.useMemo(() => {
+    const base = criarColunas({ onMenu: (linha, posicao) => setMenu({ linha, posicao }), campos });
+    if (!multi) return base;
+    const empresa: FinColuna<LinhaDeConta> = {
+      id: 'empresa', cabecalho: 'Empresa', tipo: 'texto', minWidth: 120,
+      render: l => <span className="whitespace-nowrap text-[var(--fin-text-2)]">{nomeDaEmpresa(empresas, l.empresa_id)}</span>,
+    };
+    const i = base.findIndex(c => c.id === 'pessoa');
+    return [...base.slice(0, i), empresa, ...base.slice(i)];
+  }, [multi, empresas, campos]);
+  const colunasVisiveisDaTabela = React.useMemo(() => (multi ? [...colunas, 'empresa'] : colunas), [multi, colunas]);
   const verExcluidas = f.situacao === 'excluido';
   const contasEscolhiveis = contasParaEscolher(contasBancarias, f.conta);
   const contasParaLiquidar = contasParaEscolher(contasBancarias);
@@ -348,6 +352,7 @@ export function TelaDeContas() {
     <MolduraDaPagina>
       <div ref={moldura} onKeyDown={teclado} className="flex flex-col gap-[var(--fin-s-5)]">
         <PageHeader
+          empresas
           icone={Scale}
           titulo="Contas a Pagar/Receber"
           subtitulo="O que a agência tem a pagar e a receber, numa lista só. Marque várias para liquidar, reagendar ou mudar a categoria de uma vez."
@@ -408,12 +413,12 @@ export function TelaDeContas() {
           <p className="hidden fin-t-caption text-[var(--fin-text-3)] lg:block">
             Duplo clique abre a conta. Clique direito mostra as ações. Esc limpa os filtros.
           </p>
-          {pode('exportar') ? (
-            <Button type="button" variant="outline" size="sm" disabled={exportando || !dados?.total} onClick={() => { void exportar(); }} className="h-11 gap-[var(--fin-s-2)] lg:h-9">
-              <Download aria-hidden="true" className="size-4" />
-              {exportando ? 'Exportando…' : 'Exportar para Excel'}
-            </Button>
-          ) : null}
+          <BotaoExportar
+            origem="contas"
+            podeExportar={pode('exportar')}
+            desabilitado={!dados?.total}
+            endereco={f => enderecoDaExportacao(`${recorte}&ordem=${ordemDaColuna(ordem.coluna) ?? 'vencimento'}&direcao=${ordem.direcao}`, f)}
+          />
         </div>
 
         {mostrarColunas ? (
@@ -462,7 +467,7 @@ export function TelaDeContas() {
         <FinTable<LinhaDeConta>
           linhas={dados?.linhas ?? []}
           colunas={colunasDaTabela}
-          colunasVisiveis={colunas}
+          colunasVisiveis={colunasVisiveisDaTabela}
           chave={l => l.chave}
           densidade="compacta"
           estado={estado}

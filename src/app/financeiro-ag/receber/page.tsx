@@ -785,6 +785,7 @@ export default function ContasReceberPage() {
       className="max-w-[1280px]"
       header={
         <PageHeader
+          empresas
           icone={ArrowDownLeft}
           titulo="Contas a receber"
           subtitulo="O que os clientes ainda devem para a agência."

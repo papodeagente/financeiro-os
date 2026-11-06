@@ -3,12 +3,14 @@ import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { bloqueioFinanceiro } from '@/lib/permissoes';
-import { contasPermitidas, pode } from '@/lib/permissoes-servidor';
+import { contasPermitidas, pode, type ExecutorPermissoes } from '@/lib/permissoes-servidor';
+import { responderExportacao } from '@/lib/exportacao/servidor';
 import { registrarEventoAuditoria } from '@/lib/audit';
+import { contasBancariasVisiveis, escopoDaSessao, type ExecutorEmpresas } from '@/lib/empresas-servidor';
 import { hojeISO } from '@/lib/money';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import {
-  EXPORTACAO_MAX, FiltroInvalido, csvDosMovimentos, lerFiltro, lerMovimentos, lerParaExportar,
+  EXPORTACAO_MAX, FiltroInvalido, csvDosMovimentos, documentoDosMovimentos, lerFiltro, lerMovimentos, lerParaExportar,
   type LeiauteDeExportacao,
 } from '@/lib/movimentos-caixa';
 
@@ -20,6 +22,7 @@ import {
  *   GET ?contas=a,b&de=&ate=&tipo=&origem=&forma=&pessoa=&busca=&taxas=0|1
  *       &ordem=&direcao=&agrupar=&pagina=&por_pagina=
  *   GET ...&format=csv&leiaute=extrato|movimentacoes  (até 50.000 linhas)
+ *   GET ...&format=xlsx|pdf|imprimir&leiaute=...       (o mesmo recorte em Excel, PDF ou impressão)
  */
 export const dynamic = 'force-dynamic';
 const HEADERS = { 'Cache-Control': 'private, no-store' };
@@ -45,6 +48,34 @@ export async function GET(req: Request) {
       const pedidas = filtro.contas.length ? filtro.contas.filter(c => liberadas.includes(c)) : liberadas;
       // Lista vazia quer dizer "todas"; sem conta liberada, um id que não existe.
       filtro.contas = pedidas.length ? pedidas : ['__nenhuma_conta_liberada__'];
+    }
+    // Várias empresas (E7): só as contas disponíveis nas empresas marcadas.
+    // Uma empresa só: nada muda.
+    const { visiveis } = await escopoDaSessao(session, pool as unknown as ExecutorEmpresas);
+    const daEmpresa = await contasBancariasVisiveis(pool as unknown as ExecutorEmpresas, tenantId, visiveis);
+    if (daEmpresa) {
+      const pedidas = filtro.contas.length ? filtro.contas.filter(c => daEmpresa.has(c)) : [...daEmpresa];
+      filtro.contas = pedidas.length ? pedidas : ['__nenhuma_conta_na_empresa__'];
+    }
+
+    // Excel (.xlsx), PDF e impressão (E7, G3): o mesmo recorte e o mesmo limite do CSV.
+    const formatoNovo = params.get('format');
+    if (formatoNovo === 'xlsx' || formatoNovo === 'pdf' || formatoNovo === 'imprimir') {
+      const exec = pool as unknown as ExecutorSQL;
+      if (!(await pode(session, 'exportar'))) {
+        return NextResponse.json({ error: 'Seu acesso não inclui baixar em Excel e PDF.' }, { status: 403, headers: HEADERS });
+      }
+      const leiaute: LeiauteDeExportacao = params.get('leiaute') === 'movimentacoes' ? 'movimentacoes' : 'extrato';
+      const linhas = await lerParaExportar(exec, tenantId, filtro);
+      if (linhas.length > EXPORTACAO_MAX) {
+        return NextResponse.json(
+          { error: 'A exportação aceita até 50.000 linhas. Reduza o período ou use mais filtros.' },
+          { status: 422, headers: HEADERS },
+        );
+      }
+      return responderExportacao(session, documentoDosMovimentos(linhas, leiaute, filtro), formatoNovo, {
+        exec: exec as unknown as ExecutorPermissoes, entidade: 'movimentos_caixa', direitoConferido: true,
+      });
     }
 
     if (params.get('format') === 'csv') {

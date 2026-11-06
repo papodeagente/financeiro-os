@@ -14,14 +14,38 @@
  */
 import { normalizar } from './valores';
 
-export type ListaId = 'contas' | 'categorias' | 'centros_custo' | 'pessoas' | 'titulos' | 'saldos';
+export type ListaIdV1 = 'contas' | 'categorias' | 'centros_custo' | 'pessoas' | 'titulos' | 'saldos';
+
+/**
+ * Listas do histórico (E7, mudança v2, 06/11/2026): contas já liquidadas,
+ * movimentações e extrato de conta, vendas por produto, faturas ao cliente,
+ * notas emitidas, comissões já pagas, metas, reembolsos em aberto e
+ * créditos de clientes.
+ */
+export type ListaIdV2 = 'liquidados' | 'movimentos' | 'vendas' | 'faturas' | 'notas' | 'comissoes_pagas' | 'metas' | 'reembolsos' | 'creditos';
+
+export type ListaId = ListaIdV1 | ListaIdV2;
+
+/** As listas da v1 (E4), na ordem. */
+export const LISTAS_V1: ListaIdV1[] = ['contas', 'categorias', 'centros_custo', 'pessoas', 'titulos', 'saldos'];
+
+/** As listas do histórico (E7), na ordem. */
+export const LISTAS_V2: ListaIdV2[] = ['liquidados', 'movimentos', 'vendas', 'faturas', 'notas', 'comissoes_pagas', 'metas', 'reembolsos', 'creditos'];
 
 /** Ordem de aplicação: cada etapa depende das anteriores. */
-export const ORDEM_DAS_LISTAS: ListaId[] = ['contas', 'categorias', 'centros_custo', 'pessoas', 'titulos', 'saldos'];
+export const ORDEM_DAS_LISTAS: ListaId[] = [...LISTAS_V1, ...LISTAS_V2];
 
-/** Etapa (1–5) em que as linhas de cada lista são gravadas. */
+/**
+ * Etapa em que as linhas de cada lista são gravadas. O histórico vem DEPOIS
+ * dos saldos de abertura (etapa 5): a baixa antiga encontra a conta já com o
+ * saldo da data de corte e só leva a abertura para antes dela (a regra do
+ * dinheiro em dobro, em plano.ts). As movimentações vêm depois das contas
+ * liquidadas, para se ligarem a elas; as vendas, antes dos registros que
+ * citam o número da venda.
+ */
 export const ETAPA_DA_LISTA: Record<ListaId, number> = {
   contas: 1, categorias: 2, centros_custo: 2, pessoas: 3, titulos: 4, saldos: 5,
+  liquidados: 6, movimentos: 7, vendas: 8, faturas: 9, notas: 9, comissoes_pagas: 9, metas: 9, reembolsos: 9, creditos: 9,
 };
 
 export type TipoDoCampo = 'texto' | 'data' | 'dinheiro' | 'documento' | 'simnao' | 'parcela';
@@ -45,7 +69,263 @@ export interface DefinicaoDaLista {
   campos: CampoDaLista[];
   /** Pelo menos um destes precisa estar ligado (além dos obrigatórios). */
   algumDe?: string[][];
+  /**
+   * false = o cabeçalho sozinho não decide esta lista: as contas liquidadas
+   * e as faturas saem da MESMA lista de contas a pagar e a receber. O leitor
+   * olha o conteúdo (liquidados) ou a pessoa escolhe.
+   */
+  adivinhar?: boolean;
+  /** Lista do histórico (E7): opcional, entra depois dos saldos. */
+  historico?: boolean;
 }
+
+/** Janeiro a dezembro, como saem nas colunas da lista de metas. */
+export const MESES_DO_ANO = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+export const CAMPOS_DOS_MESES = MESES_DO_ANO.map((_, i) => `mes_${String(i + 1).padStart(2, '0')}`);
+
+// ---------------------------------------------------------------------------
+// Histórico (E7, mudança v2). Cabeçalhos como saem nas exportações do sistema
+// anterior: servem só para reconhecer a coluna; a tela mostra o rótulo nosso.
+
+const PESSOA_DO_TITULO = ['Pessoa', 'Cliente', 'Fornecedor', 'Nome', 'Favorecido', 'Sacado', 'Cliente/Fornecedor'];
+const DOC_DA_PESSOA = ['CPF/CNPJ', 'CNPJ/CPF', 'CPF', 'CNPJ', 'CPF ou CNPJ'];
+
+const LISTAS_DO_HISTORICO: DefinicaoDaLista[] = [
+  {
+    id: 'liquidados',
+    rotulo: 'Contas já liquidadas (histórico)',
+    historico: true,
+    adivinhar: false,
+    comoExportar: [
+      'Abra a lista de contas a pagar e a receber.',
+      'Em "Data de", escolha Liquidação; em Situação, Liquidado. Um arquivo por mês, até a data de corte.',
+      'Deixe à mostra Pessoa, CPF/CNPJ, Movimento, Documento, Descrição, Emissão, Vencimento, Liquidação, Valor, Valor Final, Categoria, Conta e Forma de pagamento.',
+    ],
+    campos: [
+      { id: 'pessoa', rotulo: 'Pessoa', tipo: 'texto', obrigatorio: true, sinonimos: PESSOA_DO_TITULO },
+      { id: 'razao_social', rotulo: 'Razão social', tipo: 'texto', sinonimos: ['Razão social'] },
+      { id: 'documento_pessoa', rotulo: 'CPF/CNPJ da pessoa', tipo: 'documento', sinonimos: DOC_DA_PESSOA },
+      { id: 'movimento', rotulo: 'A pagar ou a receber', tipo: 'texto', sinonimos: ['Movimento', 'Movimentação', 'Pagar/Receber', 'Receber/Pagar', 'Tipo de movimento', 'Natureza', 'Pagar ou receber'] },
+      { id: 'numero', rotulo: 'Número no sistema anterior', tipo: 'texto', sinonimos: ['Número', 'Nº', 'Numero', 'Código'] },
+      { id: 'documento', rotulo: 'Documento', tipo: 'texto', sinonimos: ['Documento', 'Nº documento', 'Número do documento', 'Nota', 'Nota fiscal', 'NF'] },
+      { id: 'descricao', rotulo: 'Descrição', tipo: 'texto', sinonimos: ['Descrição', 'Histórico', 'Descricao'] },
+      { id: 'emissao', rotulo: 'Emissão', tipo: 'data', sinonimos: ['Emissão', 'Data de emissão', 'Data emissão', 'Competência', 'Cadastrado em'] },
+      { id: 'vencimento', rotulo: 'Vencimento', tipo: 'data', obrigatorio: true, sinonimos: ['Vencimento', 'Data de vencimento', 'Data vencimento', 'Vence em'] },
+      { id: 'liquidacao', rotulo: 'Liquidação', tipo: 'data', obrigatorio: true, sinonimos: ['Liquidação', 'Data de liquidação', 'Pagamento', 'Recebimento', 'Data de pagamento', 'Data de recebimento', 'Baixa', 'Pago em', 'Recebido em'] },
+      { id: 'valor', rotulo: 'Valor', tipo: 'dinheiro', sinonimos: ['Valor', 'Valor original', 'Valor do título'] },
+      { id: 'valor_final', rotulo: 'Valor final', tipo: 'dinheiro', sinonimos: ['Valor Final', 'Valor total', 'Total'] },
+      { id: 'valor_pago', rotulo: 'Valor pago ou recebido', tipo: 'dinheiro', sinonimos: ['Valor pago', 'Valor recebido', 'Valor liquidado', 'Valor da baixa'] },
+      { id: 'juros', rotulo: 'Juros', tipo: 'dinheiro', sinonimos: ['Juros'] },
+      { id: 'multa', rotulo: 'Multa', tipo: 'dinheiro', sinonimos: ['Multa'] },
+      { id: 'desconto', rotulo: 'Desconto', tipo: 'dinheiro', sinonimos: ['Desconto', 'Descontos'] },
+      { id: 'taxa', rotulo: 'Taxa (banco ou cartão)', tipo: 'dinheiro', sinonimos: ['Taxa', 'Taxa do cartão', 'Taxa banco', 'Tarifa bancária'] },
+      { id: 'situacao', rotulo: 'Situação', tipo: 'texto', sinonimos: ['Situação', 'Status', 'Situacao'] },
+      { id: 'categoria', rotulo: 'Categoria', tipo: 'texto', sinonimos: ['Categoria', 'Categorias', 'Plano de contas', 'Conta contábil'] },
+      { id: 'grupo', rotulo: 'Grupo da categoria', tipo: 'texto', sinonimos: ['Grupo', 'Grupo de categoria', 'Grupo da categoria'] },
+      { id: 'centro_custo', rotulo: 'Centro de custo', tipo: 'texto', sinonimos: ['Centro de custo', 'Centro de custos', 'Centro'] },
+      { id: 'conta', rotulo: 'Conta da liquidação', tipo: 'texto', sinonimos: ['Conta', 'Conta bancária', 'Conta da liquidação', 'Conta (previsão)'] },
+      { id: 'empresa', rotulo: 'Empresa', tipo: 'texto', sinonimos: ['Empresa', 'Filial', 'Loja', 'Unidade'] },
+      { id: 'venda', rotulo: 'Venda Nº', tipo: 'texto', sinonimos: ['Venda Nº', 'Venda', 'Nº da venda', 'Número da venda'] },
+      { id: 'fatura', rotulo: 'Fatura Nº', tipo: 'texto', sinonimos: ['Fatura Nº', 'Fatura', 'Nº da fatura', 'Número da fatura'] },
+      { id: 'vendedor', rotulo: 'Vendedor', tipo: 'texto', sinonimos: ['Vendedor', 'Vendedora', 'Agente'] },
+      { id: 'parcela', rotulo: 'Parcela', tipo: 'parcela', sinonimos: ['Parcela', 'Parcelas', 'Nº parcela'] },
+      { id: 'forma', rotulo: 'Forma de pagamento', tipo: 'texto', sinonimos: ['Formas de pagamento', 'Forma de pagamento', 'Forma'] },
+      { id: 'moeda', rotulo: 'Moeda', tipo: 'texto', sinonimos: ['Moeda'] },
+      { id: 'observacoes', rotulo: 'Observações', tipo: 'texto', sinonimos: ['Observações', 'Observação', 'Obs'] },
+    ],
+    algumDe: [['valor', 'valor_final', 'valor_pago']],
+  },
+  {
+    id: 'movimentos',
+    rotulo: 'Movimentações e extrato de conta',
+    historico: true,
+    comoExportar: [
+      'Abra as movimentações das contas (ou o extrato de cada conta).',
+      'Escolha o período até a data de corte, um mês por arquivo.',
+      'Deixe à mostra Data, Conta, Pessoa, CPF/CNPJ, Descrição, Documento, Forma de pagamento, Movimento e Valor.',
+    ],
+    campos: [
+      { id: 'data', rotulo: 'Data', tipo: 'data', obrigatorio: true, sinonimos: ['Data', 'Data do movimento', 'Data da movimentação', 'Dia'] },
+      { id: 'valor', rotulo: 'Valor', tipo: 'dinheiro', obrigatorio: true, sinonimos: ['Valor', 'Valor (R$)', 'Valor movimentado', 'Quantia'] },
+      { id: 'conta', rotulo: 'Conta', tipo: 'texto', obrigatorio: true, sinonimos: ['Conta', 'Conta bancária', 'Banco/Conta'] },
+      { id: 'movimento', rotulo: 'Entrada ou saída', tipo: 'texto', sinonimos: ['Movimento', 'Entrada/Saída', 'Crédito/Débito', 'C/D', 'D/C', 'Natureza'] },
+      { id: 'pessoa', rotulo: 'Pessoa', tipo: 'texto', sinonimos: ['Pessoa', 'Pessoa - Nome', 'Favorecido', 'Cliente/Fornecedor', 'Nome'] },
+      { id: 'documento_pessoa', rotulo: 'CPF/CNPJ da pessoa', tipo: 'documento', sinonimos: ['CPF/CNPJ', 'Pessoa - CPF/CNPJ', 'CNPJ/CPF', 'CPF', 'CNPJ'] },
+      { id: 'descricao', rotulo: 'Descrição', tipo: 'texto', sinonimos: ['Descrição', 'Histórico', 'Informações', 'Descricao'] },
+      { id: 'documento', rotulo: 'Documento', tipo: 'texto', sinonimos: ['Documento', 'Nº documento', 'Cheque - Número'] },
+      { id: 'numero', rotulo: 'Número no sistema anterior', tipo: 'texto', sinonimos: ['Número', 'Nº', 'Código'] },
+      { id: 'venda', rotulo: 'Venda Nº', tipo: 'texto', sinonimos: ['Número Venda', 'Venda Nº', 'Venda'] },
+      { id: 'fatura', rotulo: 'Fatura Nº', tipo: 'texto', sinonimos: ['Número Fatura', 'Fatura Nº', 'Fatura'] },
+      { id: 'forma', rotulo: 'Forma de pagamento', tipo: 'texto', sinonimos: ['Forma Pagamento', 'Forma de pagamento', 'Forma'] },
+      { id: 'categoria', rotulo: 'Categoria', tipo: 'texto', sinonimos: ['Categoria'] },
+      { id: 'empresa', rotulo: 'Empresa', tipo: 'texto', sinonimos: ['Empresa', 'Filial', 'Unidade'] },
+      { id: 'moeda', rotulo: 'Moeda', tipo: 'texto', sinonimos: ['Moeda'] },
+    ],
+  },
+  {
+    id: 'vendas',
+    rotulo: 'Vendas por produto',
+    historico: true,
+    comoExportar: [
+      'Abra o relatório de vendas por produto.',
+      'Em "Data de", escolha Venda; um mês por arquivo. Traga também as viagens que ainda vão acontecer.',
+      'Deixe à mostra Venda Nº, Data Venda, Situação, Produto, Pagante, CPF, CNPJ, Vendedor, Fornecedor, Representante, Intermediário, Passageiros, Documento, Data Início, Data Fim, Total Produtos, Total Taxas, Taxa DU, Taxa RAV, Comissão, Over, Desconto, Valor Total e Moeda.',
+    ],
+    campos: [
+      { id: 'venda', rotulo: 'Venda Nº', tipo: 'texto', obrigatorio: true, sinonimos: ['Venda Nº', 'Nº da venda', 'Número da venda', 'Numero venda', 'Venda'] },
+      { id: 'data_venda', rotulo: 'Data da venda', tipo: 'data', obrigatorio: true, sinonimos: ['Data Venda', 'Data da venda', 'Emissão da venda'] },
+      { id: 'produto', rotulo: 'Produto (tipo)', tipo: 'texto', obrigatorio: true, sinonimos: ['Produto', 'Tipo de produto', 'Tipo produto', 'Serviço'] },
+      { id: 'pagante', rotulo: 'Cliente (pagante)', tipo: 'texto', obrigatorio: true, sinonimos: ['Pagante', 'Cliente', 'Contratante'] },
+      { id: 'cpf', rotulo: 'CPF do cliente', tipo: 'documento', sinonimos: ['CPF', 'CPF do pagante'] },
+      { id: 'cnpj', rotulo: 'CNPJ do cliente', tipo: 'documento', sinonimos: ['CNPJ', 'CNPJ do pagante'] },
+      { id: 'documento_cliente', rotulo: 'CPF/CNPJ do cliente', tipo: 'documento', sinonimos: ['CPF/CNPJ', 'CNPJ/CPF'] },
+      { id: 'email', rotulo: 'E-mail do cliente', tipo: 'texto', sinonimos: ['E-mail', 'Email'] },
+      { id: 'situacao', rotulo: 'Situação da venda', tipo: 'texto', sinonimos: ['Situação', 'Situação Venda', 'Situação da venda'] },
+      { id: 'cancelado', rotulo: 'Produto cancelado', tipo: 'simnao', sinonimos: ['Produto Cancelado', 'Cancelado'] },
+      { id: 'data_cancelamento', rotulo: 'Data do cancelamento', tipo: 'data', sinonimos: ['Data Cancelamento', 'Cancelado em'] },
+      { id: 'empresa', rotulo: 'Empresa', tipo: 'texto', sinonimos: ['Empresa', 'Filial', 'Unidade'] },
+      { id: 'vendedor', rotulo: 'Vendedor', tipo: 'texto', sinonimos: ['Vendedor', 'Vendedora', 'Agente'] },
+      { id: 'intermediario', rotulo: 'Intermediário', tipo: 'texto', sinonimos: ['Intermediário', 'Intermediario', 'Agência parceira'] },
+      { id: 'fornecedor', rotulo: 'Fornecedor', tipo: 'texto', sinonimos: ['Fornecedor', 'Operadora', 'Companhia'] },
+      { id: 'representante', rotulo: 'Representante', tipo: 'texto', sinonimos: ['Representante', 'Consolidador'] },
+      { id: 'passageiros', rotulo: 'Passageiros', tipo: 'texto', sinonimos: ['Passageiros', 'Passageiro', 'Hóspedes', 'Pax'] },
+      { id: 'localizador', rotulo: 'Localizador ou documento', tipo: 'texto', sinonimos: ['Documento', 'Localizador', 'Bilhete', 'Voucher', 'Reserva'] },
+      { id: 'descricao', rotulo: 'Descrição', tipo: 'texto', sinonimos: ['Descrição', 'Destino', 'Pacote', 'Trechos'] },
+      { id: 'data_inicio', rotulo: 'Início da viagem', tipo: 'data', sinonimos: ['Data Início', 'Início', 'Embarque', 'Check-in', 'Ida'] },
+      { id: 'data_fim', rotulo: 'Fim da viagem', tipo: 'data', sinonimos: ['Data Fim', 'Fim', 'Retorno', 'Check-out', 'Volta'] },
+      { id: 'quantidade', rotulo: 'Quantidade', tipo: 'texto', sinonimos: ['Quantidade', 'Qtd'] },
+      { id: 'valor_unitario', rotulo: 'Valor unitário', tipo: 'dinheiro', sinonimos: ['Valor Unitário', 'Valor unitario'] },
+      { id: 'tarifa', rotulo: 'Tarifa (total dos produtos)', tipo: 'dinheiro', sinonimos: ['Total Produtos', 'Tarifa', 'Valor dos produtos', 'Valor Produto'] },
+      { id: 'taxas', rotulo: 'Taxas', tipo: 'dinheiro', sinonimos: ['Total Taxas', 'Taxas', 'Taxa de embarque'] },
+      { id: 'outras_taxas', rotulo: 'Outras taxas', tipo: 'dinheiro', sinonimos: ['Outras Taxas'] },
+      { id: 'taxa_du', rotulo: 'Taxa DU', tipo: 'dinheiro', sinonimos: ['Taxa DU', 'DU'] },
+      { id: 'rav', rotulo: 'RAV', tipo: 'dinheiro', sinonimos: ['Taxa RAV', 'RAV'] },
+      { id: 'fee', rotulo: 'Fee', tipo: 'dinheiro', sinonimos: ['Fee', 'Taxa de serviço', 'Taxa Serviço Destacada', 'Taxa Serviço Oculta'] },
+      { id: 'markup', rotulo: 'Markup', tipo: 'dinheiro', sinonimos: ['Markup', 'Mark-up'] },
+      { id: 'comissao', rotulo: 'Comissão', tipo: 'dinheiro', sinonimos: ['Comissão', 'Comissao', 'Comissão do fornecedor'] },
+      { id: 'over', rotulo: 'Over', tipo: 'dinheiro', sinonimos: ['Over', 'Incentivo'] },
+      { id: 'taxa_cc', rotulo: 'Taxa CC (DU/RAV)', tipo: 'dinheiro', sinonimos: ['Taxa CC DU', 'Taxa CC RAV', 'Taxa CC'] },
+      { id: 'desconto', rotulo: 'Desconto', tipo: 'dinheiro', sinonimos: ['Total Desconto', 'Desconto', 'Abatimentos'] },
+      { id: 'valor_total', rotulo: 'Valor total do produto', tipo: 'dinheiro', sinonimos: ['Valor Total', 'Total', 'Valor da venda'] },
+      { id: 'receita', rotulo: 'Receita no sistema anterior', tipo: 'dinheiro', sinonimos: ['Receitas', 'Receita'] },
+      { id: 'moeda', rotulo: 'Moeda', tipo: 'texto', sinonimos: ['Moeda Venda', 'Moeda', 'Moeda Origem'] },
+      { id: 'cambio', rotulo: 'Câmbio', tipo: 'texto', sinonimos: ['Câmbio Operadora', 'Câmbio', 'Cambio'] },
+    ],
+  },
+  {
+    id: 'faturas',
+    rotulo: 'Faturas ao cliente (registro)',
+    historico: true,
+    adivinhar: false,
+    comoExportar: [
+      'As faturas ficam na própria lista de contas a pagar e a receber, com a coluna Fatura Nº.',
+      'Exporte com Fatura Nº, Pessoa, CPF/CNPJ, Emissão, Vencimento, Liquidação, Valor e Situação. Um arquivo por mês.',
+    ],
+    campos: [
+      { id: 'fatura', rotulo: 'Fatura Nº', tipo: 'texto', obrigatorio: true, sinonimos: ['Fatura Nº', 'Fatura', 'Nº da fatura', 'Número da fatura', 'Número Fatura'] },
+      { id: 'pessoa', rotulo: 'Cliente', tipo: 'texto', obrigatorio: true, sinonimos: ['Pessoa', 'Cliente', 'Pagante', 'Sacado'] },
+      { id: 'documento_pessoa', rotulo: 'CPF/CNPJ', tipo: 'documento', sinonimos: DOC_DA_PESSOA },
+      { id: 'emissao', rotulo: 'Emissão', tipo: 'data', sinonimos: ['Emissão', 'Faturado em', 'Data de emissão'] },
+      { id: 'vencimento', rotulo: 'Vencimento', tipo: 'data', sinonimos: ['Vencimento', 'Data de vencimento'] },
+      { id: 'liquidacao', rotulo: 'Liquidação', tipo: 'data', sinonimos: ['Liquidação', 'Recebimento'] },
+      { id: 'valor', rotulo: 'Valor', tipo: 'dinheiro', obrigatorio: true, sinonimos: ['Valor Final', 'Valor', 'Valor total', 'Total'] },
+      { id: 'situacao', rotulo: 'Situação', tipo: 'texto', sinonimos: ['Situação', 'Status'] },
+      { id: 'descricao', rotulo: 'Descrição', tipo: 'texto', sinonimos: ['Descrição', 'Histórico'] },
+    ],
+  },
+  {
+    id: 'notas',
+    rotulo: 'Notas fiscais emitidas (registro)',
+    historico: true,
+    comoExportar: [
+      'Abra a lista de notas fiscais, escolha o período (um mês por arquivo) e a situação Emitida.',
+      'Deixe à mostra Número, Série, Data de emissão, Tomador, CPF/CNPJ, Valor total dos serviços, Valor ISS, Situação, Código de verificação e Venda Nº.',
+    ],
+    campos: [
+      { id: 'numero', rotulo: 'Número da nota', tipo: 'texto', obrigatorio: true, sinonimos: ['Número da nota', 'Número NFS-e', 'NFS-e', 'Número', 'Nº', 'Nota'] },
+      { id: 'serie', rotulo: 'Série', tipo: 'texto', sinonimos: ['Série', 'Serie'] },
+      { id: 'emissao', rotulo: 'Data de emissão', tipo: 'data', obrigatorio: true, sinonimos: ['Data de Emissão', 'Emissão', 'Data emissão'] },
+      { id: 'tomador', rotulo: 'Tomador', tipo: 'texto', obrigatorio: true, sinonimos: ['Tomador', 'Nome/Razão social', 'Razão social do tomador'] },
+      { id: 'documento', rotulo: 'CPF/CNPJ do tomador', tipo: 'documento', sinonimos: DOC_DA_PESSOA },
+      { id: 'valor', rotulo: 'Valor dos serviços', tipo: 'dinheiro', obrigatorio: true, sinonimos: ['Valor Total Serviços', 'Valor dos serviços', 'Valor total', 'Valor'] },
+      { id: 'iss', rotulo: 'ISS', tipo: 'dinheiro', sinonimos: ['Valor ISS', 'ISS'] },
+      { id: 'situacao', rotulo: 'Situação', tipo: 'texto', sinonimos: ['Situação', 'Status'] },
+      { id: 'codigo_verificacao', rotulo: 'Código de verificação', tipo: 'texto', sinonimos: ['Código de verificação', 'Código verificação', 'Verificação'] },
+      { id: 'venda', rotulo: 'Venda Nº', tipo: 'texto', sinonimos: ['Venda Nº', 'Venda', 'Número Venda'] },
+    ],
+  },
+  {
+    id: 'comissoes_pagas',
+    rotulo: 'Comissões já pagas (registro)',
+    historico: true,
+    comoExportar: [
+      'Abra as comissões já pagas de cada pessoa (ou a conta a pagar de cada pagamento de comissão).',
+      'Deixe à mostra Pessoa, Venda Nº, Data Venda, Pagante, Descrição, Valor, Valor Retido e a data do pagamento.',
+    ],
+    campos: [
+      { id: 'pessoa', rotulo: 'Quem recebeu', tipo: 'texto', obrigatorio: true, sinonimos: ['Pessoa', 'Vendedor', 'Comissionado', 'Nome'] },
+      { id: 'data_venda', rotulo: 'Data da venda', tipo: 'data', obrigatorio: true, sinonimos: ['Data Venda', 'Data da venda'] },
+      { id: 'valor', rotulo: 'Valor da comissão', tipo: 'dinheiro', obrigatorio: true, sinonimos: ['Valor', 'Comissão', 'Valor da comissão'] },
+      { id: 'venda', rotulo: 'Venda Nº', tipo: 'texto', sinonimos: ['Venda Nº', 'Venda', 'Número Venda'] },
+      { id: 'pagante', rotulo: 'Cliente da venda', tipo: 'texto', sinonimos: ['Pagante', 'Cliente'] },
+      { id: 'descricao', rotulo: 'Descrição ou produto', tipo: 'texto', sinonimos: ['Descrição/Produto', 'Descrição', 'Produto'] },
+      { id: 'documento', rotulo: 'Documento', tipo: 'texto', sinonimos: ['Documento'] },
+      { id: 'retido', rotulo: 'Valor retido', tipo: 'dinheiro', sinonimos: ['Valor Retido', 'Retido'] },
+      { id: 'pago_em', rotulo: 'Pago em', tipo: 'data', sinonimos: ['Pago em', 'Data do pagamento', 'Pagamento', 'Liquidação'] },
+      { id: 'funcao', rotulo: 'Função', tipo: 'texto', sinonimos: ['Função', 'Funcao'] },
+    ],
+  },
+  {
+    id: 'metas',
+    rotulo: 'Metas',
+    historico: true,
+    comoExportar: ['Abra as metas, escolha o ano e exporte. Uma linha por pessoa e função, com os 12 meses.'],
+    campos: [
+      { id: 'pessoa', rotulo: 'Pessoa', tipo: 'texto', obrigatorio: true, sinonimos: ['Pessoa', 'Vendedor', 'Nome'] },
+      { id: 'funcao', rotulo: 'Função', tipo: 'texto', sinonimos: ['Função', 'Funcao'] },
+      { id: 'plano', rotulo: 'Plano', tipo: 'texto', sinonimos: ['Plano', 'Plano de comissão'] },
+      { id: 'ano', rotulo: 'Ano', tipo: 'texto', sinonimos: ['Ano'] },
+      ...MESES_DO_ANO.map((m, i) => ({ id: CAMPOS_DOS_MESES[i], rotulo: m, tipo: 'dinheiro' as const, sinonimos: [m, m.slice(0, 3)] })),
+    ],
+    algumDe: [CAMPOS_DOS_MESES],
+  },
+  {
+    id: 'reembolsos',
+    rotulo: 'Reembolsos em aberto',
+    historico: true,
+    comoExportar: [
+      'Abra os reembolsos (ao cliente e do fornecedor) que ainda não foram pagos.',
+      'Deixe à mostra Pessoa, CPF/CNPJ, Tipo (ao cliente ou do fornecedor), Venda Nº, Valor, Prazo e Descrição.',
+    ],
+    campos: [
+      { id: 'pessoa', rotulo: 'Pessoa', tipo: 'texto', obrigatorio: true, sinonimos: ['Pessoa', 'Cliente', 'Fornecedor', 'Favorecido', 'Nome'] },
+      { id: 'documento_pessoa', rotulo: 'CPF/CNPJ', tipo: 'documento', sinonimos: DOC_DA_PESSOA },
+      { id: 'tipo', rotulo: 'Ao cliente ou do fornecedor', tipo: 'texto', sinonimos: ['Tipo', 'Tipo de reembolso', 'Reembolso', 'Movimento'] },
+      { id: 'valor', rotulo: 'Valor do reembolso', tipo: 'dinheiro', obrigatorio: true, sinonimos: ['Valor', 'Valor do reembolso', 'Reembolso ao Cliente', 'Reembolso do Fornecedor'] },
+      { id: 'prazo', rotulo: 'Prazo', tipo: 'data', sinonimos: ['Prazo', 'Vencimento', 'Data prevista'] },
+      { id: 'venda', rotulo: 'Venda Nº', tipo: 'texto', sinonimos: ['Venda Nº', 'Venda', 'Número Venda'] },
+      { id: 'situacao', rotulo: 'Situação', tipo: 'texto', sinonimos: ['Situação', 'Status'] },
+      { id: 'descricao', rotulo: 'Descrição', tipo: 'texto', sinonimos: ['Descrição', 'Motivo', 'Histórico'] },
+    ],
+  },
+  {
+    id: 'creditos',
+    rotulo: 'Créditos de clientes',
+    historico: true,
+    comoExportar: [
+      'Abra os créditos que os clientes têm com a agência (saldo a usar em próximas viagens).',
+      'Deixe à mostra Cliente, CPF/CNPJ, Saldo, Validade, Venda de origem e Descrição.',
+    ],
+    campos: [
+      { id: 'cliente', rotulo: 'Cliente', tipo: 'texto', obrigatorio: true, sinonimos: ['Cliente', 'Pessoa', 'Nome'] },
+      { id: 'documento_pessoa', rotulo: 'CPF/CNPJ', tipo: 'documento', sinonimos: DOC_DA_PESSOA },
+      { id: 'saldo', rotulo: 'Saldo do crédito', tipo: 'dinheiro', obrigatorio: true, sinonimos: ['Saldo', 'Saldo do crédito', 'Crédito', 'Valor disponível', 'Valor'] },
+      { id: 'validade', rotulo: 'Validade', tipo: 'data', sinonimos: ['Validade', 'Válido até', 'Vence em'] },
+      { id: 'venda', rotulo: 'Venda de origem', tipo: 'texto', sinonimos: ['Venda Origem Crédito', 'Venda de origem', 'Venda Nº', 'Venda'] },
+      { id: 'descricao', rotulo: 'Descrição', tipo: 'texto', sinonimos: ['Descrição', 'Motivo', 'Histórico'] },
+    ],
+  },
+];
 
 export const LISTAS: DefinicaoDaLista[] = [
   {
@@ -171,6 +451,7 @@ export const LISTAS: DefinicaoDaLista[] = [
       { id: 'moeda', rotulo: 'Moeda', tipo: 'texto', sinonimos: ['Moeda'] },
     ],
   },
+  ...LISTAS_DO_HISTORICO,
 ];
 
 export function definicaoDaLista(id: string): DefinicaoDaLista | null {
@@ -259,7 +540,12 @@ export function rotuloDosFaltando(listaId: ListaId, faltando: readonly string[])
  */
 export function adivinharLista(cabecalhos: readonly string[]): { lista: ListaId; sugestao: SugestaoDeMapeamento } {
   let melhor: { lista: ListaId; sugestao: SugestaoDeMapeamento; nota: number } | null = null;
-  for (const id of [...ORDEM_DAS_LISTAS].reverse()) {
+  // As listas da v1 primeiro (ordem invertida, como sempre), depois as do
+  // histórico que o cabeçalho decide. Empate fica com quem veio antes: um
+  // arquivo que a v1 já reconhecia continua reconhecido igual.
+  const candidatas: ListaId[] = [...LISTAS_V1].reverse();
+  for (const l of LISTAS) if (l.historico && l.adivinhar !== false) candidatas.push(l.id);
+  for (const id of candidatas) {
     const s = sugerirMapeamento(cabecalhos, id);
     const nota = s.pontos * 10 - s.faltando.length * 25 + (s.faltando.length === 0 ? 5 : 0);
     if (!melhor || nota > melhor.nota) melhor = { lista: id, sugestao: s, nota };

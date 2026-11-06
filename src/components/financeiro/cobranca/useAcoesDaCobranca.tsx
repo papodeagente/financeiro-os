@@ -6,6 +6,7 @@ import { ConfirmDialog } from '@/components/fin/ConfirmDialog';
 import { Money } from '@/components/fin/Money';
 import { RecordSheet } from '@/components/fin/RecordSheet';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Field } from '@/components/fin/Field';
 import {
   api, chaveDeIdempotencia, ErroDaCobranca, type CanalDeEnvio, type Cobranca,
@@ -49,12 +50,17 @@ export function useAcoesDaCobranca(opcoes: { onMudou: () => void; onEmitirDeNovo
   const [processando, setProcessando] = React.useState(false);
   const [vencimento, setVencimento] = React.useState('');
   const [erro, setErro] = React.useState<string | null>(null);
+  // E-mail com cópia e texto próprios (E7): vazio = o padrão do CRM.
+  const [copia, setCopia] = React.useState('');
+  const [assunto, setAssunto] = React.useState('');
+  const [mensagem, setMensagem] = React.useState('');
   // Uma chave por janela aberta: confirmar duas vezes não manda duas vezes.
   const chave = React.useRef('');
 
   const abrir = React.useCallback((d: Dialogo) => {
     chave.current = chaveDeIdempotencia();
     setErro(null);
+    setCopia(''); setAssunto(''); setMensagem('');
     if (d.tipo === 'segunda_via') {
       const hoje = hojeISO();
       setVencimento(d.c.vencimento && d.c.vencimento > hoje ? d.c.vencimento : addDias(hoje, 3));
@@ -89,7 +95,11 @@ export function useAcoesDaCobranca(opcoes: { onMudou: () => void; onEmitirDeNovo
         await api.segundaVia(dialogo.c.id, { vencimento }, chave.current);
         toast.success('2ª via pronta', `Novo vencimento em ${dataBR(vencimento)}. O boleto e o Pix antigos deixam de valer.`);
       } else if (dialogo.tipo === 'enviar') {
-        const r = await api.enviar(dialogo.c.id, dialogo.canal, chave.current);
+        const copiaPara = copia.split(/[\s,;]+/).map(x => x.trim()).filter(Boolean);
+        const extra = dialogo.canal === 'email'
+          ? { ...(copiaPara.length ? { copia_para: copiaPara } : {}), ...(assunto.trim() ? { assunto: assunto.trim() } : {}), ...(mensagem.trim() ? { mensagem: mensagem.trim() } : {}) }
+          : {};
+        const r = await api.enviar(dialogo.c.id, dialogo.canal, chave.current, extra);
         const meio = dialogo.canal === 'email' ? 'e-mail' : 'WhatsApp';
         if (r.enviado === false && !r.na_fila) {
           // O CRM recebeu, mas não mandou: o motivo vem dele, em palavras simples.
@@ -148,13 +158,49 @@ export function useAcoesDaCobranca(opcoes: { onMudou: () => void; onEmitirDeNovo
         </div>
       </RecordSheet>
 
-      <ConfirmDialog
-        aberto={dialogo?.tipo === 'enviar'}
+      <RecordSheet
+        aberto={dialogo?.tipo === 'enviar' && dialogo.canal === 'email'}
         onOpenChange={a => { if (!a) setDialogo(null); }}
-        titulo={dialogo?.tipo === 'enviar' && dialogo.canal === 'whatsapp' ? 'Enviar a cobrança por WhatsApp?' : 'Enviar a cobrança por e-mail?'}
-        oQueVaiAcontecer={dialogo?.tipo === 'enviar' && dialogo.canal === 'whatsapp'
-          ? 'O CRM da agência manda ao cliente, pelo modelo de mensagem aprovado, o valor, o vencimento, o Pix e o link do boleto.'
-          : 'O CRM da agência manda ao cliente um e-mail com o valor, o vencimento, o Pix e o link do boleto.'}
+        titulo="Enviar a cobrança por e-mail"
+        descricao="O CRM da agência manda ao cliente um e-mail com o valor, o vencimento, o Pix e o link do boleto. Cópia e texto são opcionais."
+        largura={640}
+        resumo={c ? <>Vai para o e-mail de {c.cliente_nome || 'cliente'} cadastrado no CRM{copia.trim() ? ', com cópia para os endereços acima' : ''}.</> : null}
+        acaoPrimaria={{ rotulo: 'Enviar', onClick: confirmar, carregando: processando }}
+        acaoSecundaria={{ rotulo: 'Cancelar', onClick: () => setDialogo(null) }}
+      >
+        <div className="flex flex-col gap-[var(--fin-s-4)]">
+          {c ? (
+            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-[var(--fin-s-4)] gap-y-[var(--fin-s-1)] fin-t-body">
+              <dt className="text-[var(--fin-text-3)]">Cobrança</dt>
+              <dd className="text-[var(--fin-text)]">{ROTULO_DO_TIPO[c.tipo]} · vence {dataBR(c.vencimento)}</dd>
+              <dt className="text-[var(--fin-text-3)]">Valor</dt>
+              <dd><Money valor={c.valor} size="body" align="esquerda" estado="ok" /></dd>
+            </dl>
+          ) : null}
+          <Field rotulo="Com cópia para" ajuda="Até 5 e-mails, separados por vírgula. Ex.: o financeiro da empresa do cliente.">
+            {a => (
+              <Input {...a} type="text" inputMode="email" autoComplete="off" value={copia} onChange={e => setCopia(e.target.value)}
+                placeholder="financeiro@empresa.com.br" className={CAMPO} />
+            )}
+          </Field>
+          <Field rotulo="Assunto" ajuda="Em branco, sai o assunto padrão do CRM.">
+            {a => <Input {...a} type="text" maxLength={150} value={assunto} onChange={e => setAssunto(e.target.value)} className={CAMPO} />}
+          </Field>
+          <Field rotulo="Mensagem" ajuda="Abre o e-mail, antes dos dados do pagamento. Em branco, sai o texto padrão.">
+            {a => (
+              <Textarea {...a} rows={4} maxLength={2000} value={mensagem} onChange={e => setMensagem(e.target.value)}
+                className="rounded-[var(--fin-r-md)] border-[var(--fin-border-strong)] bg-[var(--fin-surface)] fin-t-body" />
+            )}
+          </Field>
+          {erro ? <p role="alert" className="rounded-[var(--fin-r-md)] bg-[var(--fin-negative-soft)] p-[var(--fin-s-3)] fin-t-body text-[var(--fin-negative-text)]">{erro}</p> : null}
+        </div>
+      </RecordSheet>
+
+      <ConfirmDialog
+        aberto={dialogo?.tipo === 'enviar' && dialogo.canal === 'whatsapp'}
+        onOpenChange={a => { if (!a) setDialogo(null); }}
+        titulo="Enviar a cobrança por WhatsApp?"
+        oQueVaiAcontecer="O CRM da agência manda ao cliente, pelo modelo de mensagem aprovado, o valor, o vencimento, o Pix e o link do boleto."
         detalhes={detalhes}
         previa={erro ? <p role="alert" className="fin-t-body text-[var(--fin-negative-text)]">{erro}</p> : undefined}
         confirmarRotulo="Enviar"

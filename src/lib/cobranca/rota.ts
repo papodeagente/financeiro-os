@@ -61,7 +61,9 @@ export function cobrancaParaTela(c: LinhaCobranca & { cliente_nome?: string; con
     taxa: c.taxa_centavos != null ? deCentavos(c.taxa_centavos) : null,
     pago_em: c.pago_em,
     criado_por: c.criado_por_nome ?? c.criado_por,
-    pendencia: typeof c.dados?.pendencia === 'string' ? c.dados.pendencia : null,
+    pendencia: typeof c.dados?.pendencia === 'string' && c.dados.pendencia ? c.dados.pendencia : null,
+    pendencia_em: typeof c.dados?.pendencia_em === 'string' ? c.dados.pendencia_em : null,
+    taxa_boleto: Number(c.dados?.taxa_boleto_centavos ?? 0) > 0 ? deCentavos(Number(c.dados.taxa_boleto_centavos)) : null,
   };
 }
 

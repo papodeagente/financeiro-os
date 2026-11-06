@@ -23,6 +23,7 @@ import type { RegistroLido } from './interpretar';
 import { definicaoDaLista, type ListaId, type Mapeamento } from './dicionario';
 import { lerLote, rotuloDoCodigo, type Lote } from './servidor';
 import { lerCentavos, normalizar, texto, type Celula } from './valores';
+import { provasDoHistorico, semExplicacaoNoHistorico, type ProvaDoHistorico } from './provas-historico';
 
 export interface ExplicacaoDaDiferenca { codigo: string; motivo: string; quantidade: number; centavos: number }
 
@@ -65,6 +66,8 @@ export interface ProvaDaMudanca {
   fora: Array<{ codigo: string; rotulo: string; quantidade: number }>;
   resumo: { criados: Record<string, number>; vinculados: number; recusados: number; ignorados: number; desfeitos: number; mantidos_no_desfazer: number };
   diferencas_sem_explicacao: number;
+  /** E7: dinheiro em dobro (saldo na data de corte), liquidado por mês e receita por mês. */
+  historico: ProvaDoHistorico;
 }
 
 const txt = (v: unknown) => (v == null ? '' : String(v));
@@ -285,11 +288,13 @@ export async function provasDoLote(exec: ExecutorSQL, tenantId: string, loteId: 
     ...a, confere: a.total_rodape_centavos === null ? null : a.total_rodape_centavos === a.soma_centavos,
   }));
   const todas = [...provasDeConta, ...pagar, ...receber, ...listaMeses];
+  const historico = await provasDoHistorico(exec, tenantId, lote, linhas);
   const { rows: agora } = await exec.query(`SELECT NOW() AS t`);
   return {
     lote, gerada_em: agora[0]?.t instanceof Date ? (agora[0].t as Date).toISOString() : txt(agora[0]?.t), data_corte: lote.data_corte,
     contas: provasDeConta, pessoas: { pagar, receber }, meses: listaMeses, arquivos: listaArquivos,
     fora: [...fora.entries()].map(([codigo, quantidade]) => ({ codigo, rotulo: rotuloDoCodigo(codigo), quantidade })).sort((a, b) => b.quantidade - a.quantidade),
-    resumo, diferencas_sem_explicacao: todas.filter(l => !l.explicada).length,
+    resumo, diferencas_sem_explicacao: todas.filter(l => !l.explicada).length + semExplicacaoNoHistorico(historico),
+    historico,
   };
 }

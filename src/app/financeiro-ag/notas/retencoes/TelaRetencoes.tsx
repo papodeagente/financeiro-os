@@ -163,6 +163,10 @@ export function TelaRetencoes() {
           ]}
         />
 
+        <Callout tom="info" titulo="Antes de mexer numa nota com retenção">
+          Retenção pequena que não se retém (o limite) fica em Regras da nota › Data e tributos da nota. Se uma nota com retenção for cancelada, o tributo que o cliente já recolheu não volta sozinho: combine com o cliente como acertar e confirme com o contador como recuperar ou compensar.
+        </Callout>
+
         <FinTable<RetencaoDoCliente>
           linhas={lista ?? []}
           colunas={colunas}

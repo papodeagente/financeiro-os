@@ -27,6 +27,7 @@ import { STATUS_DE_BAIXA } from './guarda-baixa';
 import { deCentavos, num, round2 } from './money';
 import { auditCsvCell } from './audit-query';
 import { tituloGeradoPeloSistema, tituloSemBaixa } from './recorrencia';
+import { rotuloDoPeriodo, type ColunaExportada, type DocumentoExportado, type FiltroAplicado } from './exportacao/documento';
 
 export type TabelaDaConta = 'contas_pagar' | 'contas_receber';
 export type TipoDaConta = 'pagar' | 'receber';
@@ -120,6 +121,8 @@ export interface LinhaDeConta {
   estornado_na_exclusao: number;
   /** Campos personalizados da agência (id → valor). */
   campos_personalizados: Record<string, unknown>;
+  /** Empresa do título (E7). A coluna só aparece com 2+ empresas. */
+  empresa_id: string;
 }
 
 export interface FiltroDaLista {
@@ -140,6 +143,11 @@ export interface FiltroDaLista {
   porPagina: number;
   /** AAAA-MM-DD em Brasília: o "hoje" do atraso. */
   hoje: string;
+  /**
+   * Empresas no recorte (E7): as marcadas no seletor e liberadas. Ausente ou
+   * null = todas (agência de uma empresa só, ou quem vê todas).
+   */
+  empresas?: readonly string[] | null;
 }
 
 export class FiltroInvalido extends Error {}
@@ -545,6 +553,12 @@ export function clausulas(f: FiltroDaLista, contasLiberadas: readonly string[] |
     else if (f.cobranca === 'falhou') partes.push(`(${aberta} AND a.cobranca_status = 'falhou')`);
     else partes.push(`(a.tipo = 'receber' AND a.cobranca_status = 'paga')`);
   }
+  if (f.empresas) {
+    // Várias empresas (E7): a empresa do título ou a de uma linha do rateio.
+    const e = p([...f.empresas]);
+    partes.push(`(COALESCE(NULLIF(a.d->>'empresa_id', ''), 'principal') = ANY(${e}::text[])
+      OR EXISTS (SELECT 1 FROM jsonb_array_elements(a.rateio_j) re WHERE re->>'empresa_id' = ANY(${e}::text[])))`);
+  }
   if (contasLiberadas !== null) {
     // Mesma regra do CRUD (filtro-de-conta.ts, soBaixados): só some a linha
     // já baixada numa conta bancária que a pessoa não enxerga.
@@ -580,7 +594,8 @@ const COLUNAS_DA_LINHA = `a.chave, a.tabela, a.tipo, a.id, a.status, a.situacao,
     'plataforma_origem', a.d->'plataforma_origem', 'compra_id', a.d->'compra_id', 'fatura_id', a.d->'fatura_id',
     'valor_pago', a.d->'valor_pago', 'valor_recebido', a.d->'valor_recebido',
     'data_pagamento', a.d->'data_pagamento', 'data_recebimento', a.d->'data_recebimento',
-    'campos_personalizados', a.d->'campos_personalizados'
+    'campos_personalizados', a.d->'campos_personalizados',
+    'empresa_id', a.d->'empresa_id'
   ) AS marcas`;
 
 function linhaDoBanco(r: Record<string, unknown>, hoje: string): LinhaDeConta {
@@ -638,6 +653,7 @@ function linhaDoBanco(r: Record<string, unknown>, hoje: string): LinhaDeConta {
     excluido_por: s('excluido_por'),
     estornado_na_exclusao: deCentavos(r.estornado_c as number),
     campos_personalizados: campos && typeof campos === 'object' && !Array.isArray(campos) ? campos as Record<string, unknown> : {},
+    empresa_id: String(m.empresa_id ?? '') || 'principal',
   };
 }
 
@@ -853,4 +869,70 @@ export function csvDasContas(linhas: readonly LinhaDeConta[], campos: readonly C
     ...campos.map(c => cel(c.aplica_a === 'ambos' || c.aplica_a === l.tipo ? textoDoCampo(c, l.campos_personalizados[c.id]) : '')),
   ].join(';'));
   return '﻿' + [cab.map(cel).join(';'), ...corpo].join('\r\n');
+}
+
+// ─── Exportação em Excel e PDF (E7, G3) ─────────────────────────────────────
+
+const ROTULO_DA_DATA: Record<DataDoFiltro, string> = { emissao: 'Emissão', vencimento: 'Vencimento', liquidacao: 'Liquidação' };
+const ROTULO_DA_SITUACAO_DO_FILTRO: Record<SituacaoDoFiltro, string> = {
+  todas: 'Todas', em_aberto: 'Em aberto', em_atraso: 'Em atraso', liquidado: 'Pago ou recebido', cancelado: 'Cancelado', excluido: 'Excluído',
+};
+const ROTULO_DA_COBRANCA_DO_FILTRO: Record<CobrancaDoFiltro, string> = {
+  todas: 'Todas', sem_boleto: 'Boleto não emitido', emitida: 'Cobrança emitida', vencida: 'Cobrança vencida', paga: 'Cobrança paga', falhou: 'Cobrança com falha',
+};
+
+/** O filtro por extenso (vai no topo do arquivo e no nome dele). Nomes de categoria, centro e conta saem das linhas. */
+export function filtrosLegiveisDasContas(f: FiltroDaLista, linhas: readonly LinhaDeConta[]): FiltroAplicado[] {
+  const out: FiltroAplicado[] = [];
+  if (f.tipo !== 'ambos') out.push({ rotulo: 'Tipo', valor: f.tipo === 'pagar' ? 'A pagar' : 'A receber' });
+  if (f.de || f.ate) out.push({ rotulo: ROTULO_DA_DATA[f.data], valor: rotuloDoPeriodo(f.de || null, f.ate || null) });
+  if (f.situacao !== 'todas') out.push({ rotulo: 'Situação', valor: ROTULO_DA_SITUACAO_DO_FILTRO[f.situacao] });
+  if (f.cobranca !== 'todas') out.push({ rotulo: 'Cobrança', valor: ROTULO_DA_COBRANCA_DO_FILTRO[f.cobranca] });
+  if (f.busca) out.push({ rotulo: 'Busca', valor: f.busca });
+  const nome = (id: string, campo: 'categoria' | 'centro_custo' | 'conta_bancaria', campoId: 'categoria_id' | 'centro_custo_id' | 'conta_bancaria_id') =>
+    linhas.find(l => l[campoId] === id)?.[campo] || id;
+  if (f.categoria) out.push({ rotulo: 'Categoria', valor: nome(f.categoria, 'categoria', 'categoria_id') });
+  if (f.centro) out.push({ rotulo: 'Centro de custo', valor: nome(f.centro, 'centro_custo', 'centro_custo_id') });
+  if (f.conta) out.push({ rotulo: 'Conta bancária', valor: nome(f.conta, 'conta_bancaria', 'conta_bancaria_id') });
+  return out;
+}
+
+/** As mesmas colunas da planilha CSV, em documento para Excel (.xlsx), PDF e impressão. */
+export function documentoDasContas(linhas: readonly LinhaDeConta[], f: FiltroDaLista): DocumentoExportado {
+  const titulo = f.tipo === 'pagar' ? 'Contas a pagar' : f.tipo === 'receber' ? 'Contas a receber' : 'Contas a pagar e receber';
+  // As mesmas colunas da planilha CSV, na mesma ordem (Nº, moeda, venda, fatura,
+  // vendedor e cadastro desde a E7, G1).
+  const colunas: ColunaExportada[] = [
+    { id: 'numero', rotulo: 'Nº', tipo: 'inteiro' },
+    { id: 'tipo', rotulo: 'Tipo', tipo: 'texto' }, { id: 'situacao', rotulo: 'Situação', tipo: 'texto' },
+    { id: 'vencimento', rotulo: 'Vencimento', tipo: 'data' }, { id: 'emissao', rotulo: 'Emissão', tipo: 'data' },
+    { id: 'liquidacao', rotulo: 'Liquidação', tipo: 'data' }, { id: 'pessoa', rotulo: 'Pessoa', tipo: 'texto' },
+    { id: 'descricao', rotulo: 'Descrição', tipo: 'texto' }, { id: 'documento', rotulo: 'Documento', tipo: 'texto' },
+    { id: 'parcela', rotulo: 'Parcela', tipo: 'texto' }, { id: 'categoria', rotulo: 'Categoria', tipo: 'texto' },
+    { id: 'centro_custo', rotulo: 'Centro de custo', tipo: 'texto' }, { id: 'conta_bancaria', rotulo: 'Conta bancária', tipo: 'texto' },
+    { id: 'forma', rotulo: 'Forma', tipo: 'texto' }, { id: 'moeda', rotulo: 'Moeda', tipo: 'texto' },
+    { id: 'valor', rotulo: 'Valor', tipo: 'dinheiro' },
+    { id: 'baixado', rotulo: 'Pago/Recebido', tipo: 'dinheiro' }, { id: 'saldo', rotulo: 'Saldo em aberto', tipo: 'dinheiro' },
+    { id: 'dias_atraso', rotulo: 'Dias de atraso', tipo: 'inteiro' },
+    { id: 'venda_numero', rotulo: 'Venda Nº', tipo: 'texto' }, { id: 'fatura_numero', rotulo: 'Fatura Nº', tipo: 'texto' },
+    { id: 'vendedor', rotulo: 'Vendedor', tipo: 'texto' }, { id: 'cadastrado_em', rotulo: 'Cadastrado em', tipo: 'texto' },
+    { id: 'cadastrado_por', rotulo: 'Cadastrado por', tipo: 'texto' },
+  ];
+  const soma = (k: 'valor' | 'baixado' | 'saldo') => round2(linhas.reduce((a, l) => a + (l[k] || 0), 0));
+  return {
+    titulo,
+    filtros: filtrosLegiveisDasContas(f, linhas),
+    colunas,
+    linhas: linhas.map(l => ({
+      tipo: ROTULO_DO_TIPO[l.tipo], situacao: rotuloDaSituacao(l), vencimento: l.vencimento, emissao: l.emissao, liquidacao: l.liquidacao,
+      pessoa: l.pessoa, descricao: l.descricao, documento: l.documento, parcela: l.parcela, categoria: l.categoria,
+      centro_custo: l.centro_custo, conta_bancaria: l.conta_bancaria, forma: l.forma, valor: l.valor, baixado: l.baixado,
+      saldo: l.saldo, dias_atraso: l.dias_atraso || null,
+      numero: l.numero, moeda: l.moeda, venda_numero: l.venda_numero, fatura_numero: l.fatura_numero, vendedor: l.vendedor,
+      cadastrado_em: dataHoraBR(l.cadastrado_em), cadastrado_por: l.cadastrado_por || 'Sistema',
+    })),
+    totais: linhas.length ? { valor: soma('valor'), baixado: soma('baixado'), saldo: soma('saldo') } : null,
+    dinheiro_em: 'reais',
+    orientacao: 'paisagem',
+  };
 }

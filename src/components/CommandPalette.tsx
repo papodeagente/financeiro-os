@@ -87,7 +87,8 @@ const NAVIGATION_ITEMS: CommandItem[] = [
   { id: 'pagar-comissoes', label: 'Pagar comissões', href: '/equipe/pagar-comissoes', icon: <Wallet className="w-4 h-4" />, section: 'navegacao' },
   { id: 'minhas-comissoes', label: 'Minhas comissões (painel do vendedor)', href: '/equipe/minhas-comissoes', icon: <Medal className="w-4 h-4" />, section: 'navegacao' },
   { id: 'config-comissoes', label: 'Configurações de comissão', href: '/config/comissoes', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
-  { id: 'relatorios-vendas', label: 'Relatórios de vendas (por produto, vendedor, forma de pagamento, ranking de clientes, tabela dinâmica)', href: '/relatorios/vendas', icon: <BarChart3 className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'relatorios-vendas', label: 'Relatórios de vendas (por produto, vendedor, unidade, fornecedor, forma de pagamento, pagamentos, ranking de clientes, tabela dinâmica)', href: '/relatorios/vendas', icon: <BarChart3 className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'relatorios-envios', label: 'Envios agendados de relatório (por e-mail, com link de leitura)', href: '/relatorios/envios', icon: <BarChart3 className="w-4 h-4" />, section: 'navegacao' },
   { id: 'custos', label: 'Custos do negócio', href: '/planejamento/custos', icon: <Wallet className="w-4 h-4" />, section: 'navegacao' },
   { id: 'relatorios', label: 'Relatórios financeiros', href: '/relatorios/financeiro', icon: <DollarSign className="w-4 h-4" />, section: 'navegacao' },
   { id: 'cac', label: 'Dashboard CAC', href: '/cac/dashboard', icon: <Gauge className="w-4 h-4" />, section: 'navegacao' },
@@ -97,6 +98,7 @@ const NAVIGATION_ITEMS: CommandItem[] = [
   { id: 'mudanca', label: 'Mudar para o EnturOS (trazer dados do sistema anterior)', href: '/mudanca', icon: <FolderInput className="w-4 h-4" />, section: 'navegacao' },
   { id: 'mudanca-glossario', label: 'Glossário: como chamava lá, como chama aqui', href: '/mudanca/glossario', icon: <BookA className="w-4 h-4" />, section: 'navegacao' },
   { id: 'mudanca-paridade', label: 'Checklist de paridade', href: '/mudanca/paridade', icon: <ListChecks className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'mudanca-registros', label: 'Registros trazidos do sistema anterior (faturas, notas, comissões pagas)', href: '/mudanca/historico', icon: <FolderInput className="w-4 h-4" />, section: 'navegacao' },
 ];
 
 const CREATE_ITEMS: CommandItem[] = [

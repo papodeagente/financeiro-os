@@ -43,11 +43,23 @@ export const VENDA_SCHEMA_SQL = `
     atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (tenant_id, venda_id),
     CONSTRAINT vendas_modelo_situacao_ok CHECK (situacao IN ('ABERTA','FECHADA')),
-    CONSTRAINT vendas_modelo_origem_ok CHECK (origem IN ('manual','crm')),
+    CONSTRAINT vendas_modelo_origem_ok CHECK (origem IN ('manual','crm','mudanca')),
     CONSTRAINT vendas_modelo_versao_ok CHECK (versao_modelo IN (1, 2))
   );
+  -- E7: operação própria (a agência opera a viagem) e os produtos removidos
+  -- da venda, guardados para restaurar.
+  ALTER TABLE vendas_modelo ADD COLUMN IF NOT EXISTS operacao_propria BOOLEAN NOT NULL DEFAULT false;
+  ALTER TABLE vendas_modelo ADD COLUMN IF NOT EXISTS produtos_removidos JSONB NOT NULL DEFAULT '[]'::jsonb;
   CREATE INDEX IF NOT EXISTS idx_vendas_modelo_crm ON vendas_modelo(tenant_id, crm_venda_id) WHERE crm_venda_id <> '';
   CREATE INDEX IF NOT EXISTS idx_vendas_modelo_situacao ON vendas_modelo(tenant_id, situacao, data_venda);
+  -- E7: venda trazida pela mudança de sistema (origem 'mudanca'). Banco criado antes aceita só manual/crm.
+  DO $mud$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'vendas_modelo_origem_ok' AND conrelid = 'vendas_modelo'::regclass
+               AND pg_get_constraintdef(oid) NOT LIKE '%mudanca%') THEN
+      ALTER TABLE vendas_modelo DROP CONSTRAINT vendas_modelo_origem_ok;
+      ALTER TABLE vendas_modelo ADD CONSTRAINT vendas_modelo_origem_ok CHECK (origem IN ('manual','crm','mudanca'));
+    END IF;
+  END $mud$;
 
   CREATE TABLE IF NOT EXISTS venda_produtos (
     tenant_id TEXT NOT NULL,
@@ -114,7 +126,7 @@ export const VENDA_SCHEMA_SQL = `
     passageiro_id TEXT,
     descricao TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (tenant_id, venda_id, id),
-    CONSTRAINT venda_componentes_tipo_ok CHECK (tipo IN ('COMISSAO','OVER','TAXA_DU','RAV','FEE','MARKUP','DESCONTO','TAXA_CC','REPASSE_INTERMEDIARIO','COBRADO_NO_CANCELAMENTO','RETIDO_PELO_FORNECEDOR')),
+    CONSTRAINT venda_componentes_tipo_ok CHECK (tipo IN ('COMISSAO','OVER','TAXA_DU','RAV','FEE','MARKUP','DESCONTO','TAXA_CC','REPASSE_INTERMEDIARIO','COBRADO_NO_CANCELAMENTO','RETIDO_PELO_FORNECEDOR','ABATIMENTO')),
     CONSTRAINT venda_componentes_valor_ok CHECK (valor_centavos >= 0)
   );
   CREATE INDEX IF NOT EXISTS idx_venda_componentes_tipo ON venda_componentes(tenant_id, tipo);
@@ -124,13 +136,15 @@ export const VENDA_SCHEMA_SQL = `
     IF NOT EXISTS (
       SELECT 1 FROM pg_constraint
        WHERE conrelid = 'venda_componentes'::regclass AND conname = 'venda_componentes_tipo_ok'
-         AND pg_get_constraintdef(oid) LIKE '%RETIDO_PELO_FORNECEDOR%'
+         AND pg_get_constraintdef(oid) LIKE '%ABATIMENTO%'
     ) THEN
       ALTER TABLE venda_componentes DROP CONSTRAINT IF EXISTS venda_componentes_tipo_ok;
-      ALTER TABLE venda_componentes ADD CONSTRAINT venda_componentes_tipo_ok CHECK (tipo IN ('COMISSAO','OVER','TAXA_DU','RAV','FEE','MARKUP','DESCONTO','TAXA_CC','REPASSE_INTERMEDIARIO','COBRADO_NO_CANCELAMENTO','RETIDO_PELO_FORNECEDOR'));
+      ALTER TABLE venda_componentes ADD CONSTRAINT venda_componentes_tipo_ok CHECK (tipo IN ('COMISSAO','OVER','TAXA_DU','RAV','FEE','MARKUP','DESCONTO','TAXA_CC','REPASSE_INTERMEDIARIO','COBRADO_NO_CANCELAMENTO','RETIDO_PELO_FORNECEDOR','ABATIMENTO'));
     END IF;
   END;
   $vendacomp$;
+  -- E7: base do percentual (Over sobre a tarifa, a tarifa com taxas ou a comissão).
+  ALTER TABLE venda_componentes ADD COLUMN IF NOT EXISTS base TEXT NOT NULL DEFAULT '';
 
   CREATE TABLE IF NOT EXISTS venda_pagamentos (
     tenant_id TEXT NOT NULL,
@@ -153,6 +167,10 @@ export const VENDA_SCHEMA_SQL = `
     CONSTRAINT venda_pagamentos_valor_ok CHECK (valor_centavos > 0 AND parcelas BETWEEN 1 AND 120)
   );
   CREATE INDEX IF NOT EXISTS idx_venda_pagamentos_forma ON venda_pagamentos(tenant_id, forma);
+  -- E7: o que a forma guarda além do de sempre (taxa e prazo do cartão da
+  -- agência congelados ao gravar, campos do cheque e do cartão, a forma
+  -- própria da agência em "Outros").
+  ALTER TABLE venda_pagamentos ADD COLUMN IF NOT EXISTS dados JSONB NOT NULL DEFAULT '{}'::jsonb;
 
   CREATE TABLE IF NOT EXISTS venda_pendencias (
     tenant_id TEXT NOT NULL,

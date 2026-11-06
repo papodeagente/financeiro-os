@@ -7,17 +7,45 @@
  */
 import * as React from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ArrowDownLeft, ArrowUpRight, Info } from 'lucide-react';
+import { AlertTriangle, ArrowDownLeft, ArrowUpRight, Info, Plus, Trash2 } from 'lucide-react';
 
+import { Button } from '@/components/ui/button';
 import { FinTable, type FinColuna } from '@/components/fin/FinTable';
 import { Meter } from '@/components/fin/Meter';
 import { StatusChip } from '@/components/fin/StatusChip';
+import { RecordSheet } from '@/components/fin/RecordSheet';
+import { ConfirmDialog } from '@/components/fin/ConfirmDialog';
+import { MoneyField } from '@/components/fin/MoneyField';
+import { Segmentado } from '@/components/fin/Segmentado';
+import { Field } from '@/components/fin/Field';
+import type { ComissaoManualNaVenda } from '@/lib/comissao-funcoes-servidor';
+import { parseMoneyBR } from '@/lib/money';
+import { toast } from '@/lib/toast';
 import { FORMAS } from '@/lib/venda-modelo';
 import type { FichaDaVenda } from '@/lib/venda-rota';
 import type { LadoDoFornecedor, PosicaoDaVenda } from '@/lib/venda-posicao';
 import { rotuloDaForma } from '@/lib/formas-pagamento';
 import { cn } from '@/lib/utils';
-import { dataBR, LINK, Pilula, quandoBR, reais, SECAO } from './comum';
+import { dataBR, LINK, Pilula, quandoBR, reais, ROTULO, SECAO, SELECT } from './comum';
+import { ContaAvulsaDaVenda } from './ContaAvulsaDaVenda';
+import type { TipoDeAvulsa } from '@/lib/venda-avulsas-modelo';
+
+/** Botões de lançar conta avulsa da venda (E7) e o painel que abrem. */
+function LancarAvulsa({ ficha, tipos, onAtualizada }: { ficha: FichaDaVenda; tipos: Array<{ tipo: TipoDeAvulsa; rotulo: string }>; onAtualizada: (f: FichaDaVenda) => void }) {
+  const [aberto, setAberto] = React.useState<TipoDeAvulsa | null>(null);
+  return (
+    <>
+      <div className="flex flex-wrap justify-end gap-[var(--fin-s-2)]">
+        {tipos.map(t => (
+          <Button key={t.tipo} type="button" variant="outline" onClick={() => setAberto(t.tipo)}>
+            <Plus aria-hidden="true" className="size-4" /> {t.rotulo}
+          </Button>
+        ))}
+      </div>
+      {aberto ? <ContaAvulsaDaVenda ficha={ficha} tipo={aberto} onFechar={() => setAberto(null)} onLancada={f => { setAberto(null); onAtualizada(f); }} /> : null}
+    </>
+  );
+}
 
 type Conta = Record<string, unknown> & { id: string };
 const n = (v: unknown) => Math.round((Number(v) || 0) * 100);
@@ -45,7 +73,7 @@ function Nota({ children }: { children: React.ReactNode }) {
 // Cliente (financeiro do cliente)
 // ============================================================
 
-export function AbaCliente({ ficha }: { ficha: FichaDaVenda }) {
+export function AbaCliente({ ficha, podeLancar = false, onAtualizada }: { ficha: FichaDaVenda; podeLancar?: boolean; onAtualizada?: (f: FichaDaVenda) => void }) {
   if (!ficha.permissoes.ver_financeiro) return <SemPermissao oQue="o financeiro da venda" />;
   const contas = (ficha.contas_receber as Conta[]).filter(c => txt(c.origem) !== 'COMISSAO_FORNECEDOR');
   const colunas: FinColuna<Conta>[] = [
@@ -57,7 +85,8 @@ export function AbaCliente({ ficha }: { ficha: FichaDaVenda }) {
           <span className="truncate fin-t-caption text-[var(--fin-text-3)]">
             {txt(c.venda_forma) ? FORMAS[txt(c.venda_forma) as keyof typeof FORMAS]?.rotulo : rotuloDaForma(txt(c.forma_recebimento)) || 'Forma a combinar'}
             {c.faturar ? ' · vai para a fatura' : ''}
-            {c.auto_gerado ? '' : ' · lançada à mão'}
+            {c.auto_gerado ? '' : c.avulsa_da_venda ? ' · avulsa, fora das contas da venda' : ' · lançada à mão'}
+            {Number(c.taxa_cartao_prevista) > 0 ? ` · taxa do cartão prevista ${reais(n(c.taxa_cartao_prevista))}` : ''}
           </span>
         </div>
       ),
@@ -71,6 +100,7 @@ export function AbaCliente({ ficha }: { ficha: FichaDaVenda }) {
   const lado = ficha.posicao?.cliente;
   return (
     <div className="flex flex-col gap-[var(--fin-s-3)]">
+      {podeLancar && onAtualizada ? <LancarAvulsa ficha={ficha} onAtualizada={onAtualizada} tipos={[{ tipo: 'receber', rotulo: 'Conta a receber avulsa' }]} /> : null}
       {lado ? (
         <dl className="grid grid-cols-2 gap-[var(--fin-s-3)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)] sm:grid-cols-4">
           <Par rotulo="A receber do cliente" valor={reais(lado.a_receber)} />
@@ -105,7 +135,7 @@ function Par({ rotulo, valor, tom = 'neutro' }: { rotulo: string; valor: string;
 // Fornecedor
 // ============================================================
 
-export function AbaFornecedor({ ficha }: { ficha: FichaDaVenda }) {
+export function AbaFornecedor({ ficha, podeLancar = false, onAtualizada }: { ficha: FichaDaVenda; podeLancar?: boolean; onAtualizada?: (f: FichaDaVenda) => void }) {
   if (!ficha.permissoes.ver_financeiro || !ficha.posicao) return <SemPermissao oQue="o financeiro da venda" />;
   const lados = ficha.posicao.fornecedores;
   const colunasLado: FinColuna<LadoDoFornecedor>[] = [
@@ -130,7 +160,10 @@ export function AbaFornecedor({ ficha }: { ficha: FichaDaVenda }) {
     { id: 'desc', cabecalho: 'Conta a pagar', tipo: 'texto', minWidth: 240, acessor: c => txt(c.descricao), render: c => (
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="truncate fin-t-body text-[var(--fin-text)]">{txt(c.descricao)}</span>
-        {c.fornecedor_pendente ? <span className="fin-t-caption text-[var(--fin-warning-text)]">Falta dizer a quem pagar</span> : txt(c.observacoes) ? <span className="truncate fin-t-caption text-[var(--fin-text-3)]">{txt(c.observacoes)}</span> : null}
+        {c.fornecedor_pendente ? <span className="fin-t-caption text-[var(--fin-warning-text)]">Falta dizer a quem pagar</span>
+          : c.avulsa_da_venda === 'pagamento_fornecedor' ? <span className="truncate fin-t-caption text-[var(--fin-text-3)]">Pagamento avulso: já sai do que a venda deve a ele</span>
+            : c.avulsa_da_venda ? <span className="truncate fin-t-caption text-[var(--fin-text-3)]">Avulsa, fora das contas da venda</span>
+              : txt(c.observacoes) ? <span className="truncate fin-t-caption text-[var(--fin-text-3)]">{txt(c.observacoes)}</span> : null}
       </div>
     ) },
     { id: 'venc', cabecalho: 'Vencimento', tipo: 'data', valor: c => txt(c.data_vencimento) || null },
@@ -140,6 +173,12 @@ export function AbaFornecedor({ ficha }: { ficha: FichaDaVenda }) {
   ];
   return (
     <div className="flex flex-col gap-[var(--fin-s-4)]">
+      {podeLancar && onAtualizada ? (
+        <LancarAvulsa ficha={ficha} onAtualizada={onAtualizada} tipos={[
+          ...(ficha.versao_modelo === 2 && ficha.posicao.fornecedores.some(f => f.papel === 'fornecedor' && f.parte_id) ? [{ tipo: 'pagamento_fornecedor' as const, rotulo: 'Pagamento avulso ao fornecedor' }] : []),
+          { tipo: 'pagar', rotulo: 'Conta a pagar avulsa' },
+        ]} />
+      ) : null}
       <FinTable
         linhas={lados} colunas={colunasLado} chave={l => `${l.papel}:${l.parte_id || l.nome}`} estado="ok" densidade="compacta"
         vazio={{ motivo: 'sem-dado', titulo: 'Nenhum fornecedor ainda', oQueE: 'Cada fornecedor aparece aqui com o que a agência deve, o que já pagou e a comissão que ele deve à agência.' }}
@@ -177,6 +216,7 @@ export function AbaComissoes({ ficha }: { ficha: FichaDaVenda }) {
           <Linha key={c.id} esquerda={txt(c.fornecedor_nome) || 'Intermediário não informado'} meio={`vence ${dataBR(txt(c.data_vencimento))}`} valor={n(c.valor_final)} status={<StatusChip dominio="pagar" valor={txt(c.status) || 'PENDENTE'} />} />
         ))}
       </Bloco>
+      <ComissoesManuais vendaId={ficha.venda.id} />
       <Bloco titulo="Comissão do vendedor" vazio="Ainda não calculada para esta venda. A comissão do vendedor é calculada em Comissões, pelas regras da agência.">
         {vendedor.map(c => (
           <Linha key={c.id} esquerda={txt(c.vendedor_nome) || 'Vendedor'} meio={`${txt(c.plano_nome) || 'Plano'} · ${Number(c.percentual_aplicado || 0).toLocaleString('pt-BR')}% sobre ${reais(n(c.valor_base))}`} valor={n(c.valor_comissao)} status={<StatusChip dominio="comissao" valor={txt(c.status) || 'CALCULADA'} />} />
@@ -184,6 +224,202 @@ export function AbaComissoes({ ficha }: { ficha: FichaDaVenda }) {
       </Bloco>
       <Nota>Comissões dos vendedores em <Link href="/equipe/comissoes" className={LINK}>Comissões</Link>.</Nota>
     </div>
+  );
+}
+
+// ============================================================
+// Comissão manual (indicação, bônus), E7
+// ============================================================
+
+interface DadosDasManuais {
+  regra: 'ATUAL' | 'FUNCOES';
+  pode_lancar: boolean;
+  situacao_venda: 'ABERTA' | 'FECHADA';
+  cancelada: boolean;
+  base_centavos: number;
+  manuais: ComissaoManualNaVenda[];
+  pessoas: Array<{ id: string; nome: string; funcao_nome: string }>;
+}
+
+const pctBR = (p: number) => `${p.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}%`;
+
+export function situacaoDaManual(m: Pick<ComissaoManualNaVenda, 'fechado_centavos' | 'pago_centavos'>): { rotulo: string; tom: 'neutro' | 'positivo' | 'aviso' } {
+  if (m.pago_centavos > 0 && m.pago_centavos >= m.fechado_centavos) return { rotulo: 'Paga', tom: 'positivo' };
+  if (m.fechado_centavos > 0) return { rotulo: 'Fechada', tom: 'neutro' };
+  return { rotulo: 'A fechar', tom: 'aviso' };
+}
+
+/** Por que não dá para lançar agora, numa frase (null = dá). */
+export function impedimentoDaManual(d: Pick<DadosDasManuais, 'regra' | 'cancelada' | 'situacao_venda' | 'pessoas'>): string | null {
+  if (d.regra !== 'FUNCOES') return 'A comissão manual entra no Fechar comissões da regra por função. A agência ainda usa o plano por vendedor (Configurações › Comissões): nele, o ajuste é feito na tela de Comissões.';
+  if (d.cancelada) return 'A venda está cancelada.';
+  if (d.situacao_venda !== 'FECHADA') return 'Feche a venda para lançar: assim a base da comissão não muda depois.';
+  if (!d.pessoas.length) return 'Ninguém está numa função de comissão ainda (Equipe › Funções).';
+  return null;
+}
+
+export function ComissoesManuais({ vendaId }: { vendaId: string }) {
+  const [dados, setDados] = React.useState<DadosDasManuais | null>(null);
+  const [falhou, setFalhou] = React.useState(false);
+  const [lancar, setLancar] = React.useState(false);
+  const [excluir, setExcluir] = React.useState<ComissaoManualNaVenda | null>(null);
+  const [processando, setProcessando] = React.useState(false);
+
+  const carregar = React.useCallback(async () => {
+    try {
+      const r = await fetch(`/api/comissoes-por-funcao/manuais?venda_id=${encodeURIComponent(vendaId)}`);
+      if (!r.ok) { setFalhou(true); return; }
+      setDados(await r.json());
+      setFalhou(false);
+    } catch { setFalhou(true); }
+  }, [vendaId]);
+  React.useEffect(() => { void carregar(); }, [carregar]);
+
+  async function confirmarExclusao() {
+    if (!excluir) return;
+    setProcessando(true);
+    try {
+      const r = await fetch(`/api/comissoes-por-funcao/manuais?venda_id=${encodeURIComponent(vendaId)}&id=${encodeURIComponent(excluir.id)}`, { method: 'DELETE' });
+      const j = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(j?.error ?? 'Não foi excluída.');
+      toast.success('Comissão excluída', `${excluir.pessoa_nome}: ${excluir.descricao}.`);
+      setExcluir(null);
+      await carregar();
+    } catch (e) {
+      toast.error('Não foi excluída', e instanceof Error ? e.message : undefined);
+    } finally {
+      setProcessando(false);
+    }
+  }
+
+  // Sem o direito de ver o ganho, a rota recusa: o bloco some (o de cima já avisa).
+  if (falhou) return null;
+  if (!dados) return <div className="h-24 animate-pulse rounded-[var(--fin-r-lg)] bg-[var(--fin-surface-2)]" aria-hidden="true" />;
+  const impedimento = impedimentoDaManual(dados);
+
+  return (
+    <section className={SECAO} aria-labelledby="t-manual">
+      <div className="flex flex-col gap-[var(--fin-s-2)] sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-0.5">
+          <h3 id="t-manual" className="fin-t-body-strong text-[var(--fin-text)]">Comissão manual</h3>
+          <p className="fin-t-caption text-[var(--fin-text-3)]">Indicação, bônus ou outro ganho fora do plano. Entra inteira no próximo fechamento da pessoa e não conta para a meta.</p>
+        </div>
+        {dados.pode_lancar ? (
+          <Button type="button" variant="outline" size="sm" className="h-11 shrink-0 lg:h-9" disabled={Boolean(impedimento)} onClick={() => setLancar(true)}>
+            <Plus aria-hidden="true" className="size-4" /> Lançar comissão
+          </Button>
+        ) : null}
+      </div>
+      {impedimento && dados.pode_lancar ? <p className="fin-t-caption text-[var(--fin-text-2)]">{impedimento}</p> : null}
+      {dados.manuais.length ? (
+        <ul className="flex flex-col divide-y divide-[var(--fin-border)]">
+          {dados.manuais.map(m => {
+            const sit = situacaoDaManual(m);
+            return (
+              <li key={m.id} className="grid grid-cols-[1fr_auto] items-center gap-x-[var(--fin-s-3)] gap-y-1 py-[var(--fin-s-2)] sm:grid-cols-[1fr_auto_auto_auto]">
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate fin-t-body text-[var(--fin-text)]">{m.pessoa_nome} <span className="text-[var(--fin-text-3)]">· {m.funcao_nome}</span></span>
+                  <span className="truncate fin-t-caption text-[var(--fin-text-3)]">
+                    {m.descricao} · {m.tipo === 'PERCENTUAL' ? `${pctBR(m.percentual)} de ${reais(m.base_centavos)}` : 'valor fixo'} · {m.lancado_por || 'lançada'} em {dataBR(m.data)}
+                  </span>
+                </span>
+                <span className="order-3 sm:order-none"><Pilula tom={sit.tom}>{sit.rotulo}</Pilula></span>
+                <span className="text-right fin-t-body-strong tabular-nums text-[var(--fin-text)]">{reais(m.valor_centavos)}</span>
+                <span className="order-4 justify-self-end sm:order-none">
+                  {dados.pode_lancar && m.pode_excluir ? (
+                    <Button type="button" variant="ghost" size="icon" className="size-9" aria-label={`Excluir a comissão de ${m.pessoa_nome}`} onClick={() => setExcluir(m)}>
+                      <Trash2 aria-hidden="true" className="size-4" />
+                    </Button>
+                  ) : <span className="inline-block size-9" aria-hidden="true" />}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : <p className="fin-t-caption text-[var(--fin-text-3)]">Nenhuma comissão manual nesta venda.</p>}
+
+      {lancar ? <LancarComissaoManual vendaId={vendaId} dados={dados} onFechar={() => setLancar(false)} onLancada={async () => { setLancar(false); await carregar(); }} /> : null}
+      <ConfirmDialog
+        aberto={Boolean(excluir)} onOpenChange={o => { if (!o) setExcluir(null); }} tone="destrutivo" processando={processando}
+        titulo={`Excluir a comissão de ${excluir?.pessoa_nome ?? ''}?`}
+        oQueVaiAcontecer="Ela sai do próximo fechamento. O histórico da venda guarda quem excluiu e quando."
+        detalhes={excluir ? [{ rotulo: 'Do que é', valor: excluir.descricao }, { rotulo: 'Valor', valor: reais(excluir.valor_centavos) }] : []}
+        confirmarRotulo="Excluir comissão" onConfirmar={confirmarExclusao}
+      />
+    </section>
+  );
+}
+
+function LancarComissaoManual({ vendaId, dados, onFechar, onLancada }: { vendaId: string; dados: DadosDasManuais; onFechar: () => void; onLancada: () => Promise<void> }) {
+  const [pessoa, setPessoa] = React.useState('');
+  const [descricao, setDescricao] = React.useState('');
+  const [tipo, setTipo] = React.useState<'VALOR' | 'PERCENTUAL'>(dados.base_centavos > 0 ? 'PERCENTUAL' : 'VALOR');
+  const [percentual, setPercentual] = React.useState('');
+  const [valor, setValor] = React.useState(0);
+  const [salvando, setSalvando] = React.useState(false);
+  const pct = parseMoneyBR(percentual) ?? 0;
+  const calculado = tipo === 'PERCENTUAL' ? Math.round(Math.max(dados.base_centavos, 0) * Math.max(pct, 0) / 100) : Math.round(valor * 100);
+  const falta = !pessoa ? 'Escolha quem recebe.' : !descricao.trim() ? 'Diga do que é a comissão.'
+    : tipo === 'PERCENTUAL' && (pct <= 0 || pct > 100) ? 'O percentual vai de 0,01% a 100%.'
+      : calculado <= 0 ? 'A comissão dá zero.' : null;
+
+  async function salvar() {
+    if (falta) { toast.error('Falta um dado', falta); return; }
+    setSalvando(true);
+    try {
+      const r = await fetch('/api/comissoes-por-funcao/manuais', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ venda_id: vendaId, pessoa_funcao_id: pessoa, descricao, tipo, percentual: pct, valor_centavos: Math.round(valor * 100) }),
+      });
+      const j = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(j?.error ?? 'Não foi lançada.');
+      toast.success('Comissão lançada', `${j.pessoa_nome}: ${reais(j.valor_centavos)}. Entra no próximo fechamento.`);
+      await onLancada();
+    } catch (e) {
+      toast.error('Não foi lançada', e instanceof Error ? e.message : undefined);
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <RecordSheet
+      aberto onOpenChange={o => { if (!o) onFechar(); }} largura={480}
+      titulo="Lançar comissão manual"
+      descricao="Para indicação, bônus ou outro ganho fora do plano. Quem recebe precisa estar numa função de comissão."
+      resumo={calculado > 0 ? <>Comissão de <strong className="tabular-nums">{reais(calculado)}</strong>, no próximo fechamento.</> : null}
+      sujo={Boolean(pessoa || descricao || percentual || valor)}
+      acaoPrimaria={{ rotulo: 'Lançar comissão', onClick: salvar, carregando: salvando, desabilitado: Boolean(falta) }}
+    >
+      <div className="flex flex-col gap-[var(--fin-s-4)]">
+        <Field rotulo="Quem recebe" obrigatorio>
+          {a => (
+            <select {...a} className={SELECT} value={pessoa} onChange={e => setPessoa(e.target.value)}>
+              <option value="">Escolha…</option>
+              {dados.pessoas.map(p => <option key={p.id} value={p.id}>{p.nome} · {p.funcao_nome}</option>)}
+            </select>
+          )}
+        </Field>
+        <Field rotulo="Do que é" ajuda="Aparece no fechamento e na conta da pessoa." obrigatorio>
+          {a => (
+            <input {...a} className={SELECT} value={descricao} maxLength={120} placeholder="Ex.: Indicação do cliente" onChange={e => setDescricao(e.target.value)} />
+          )}
+        </Field>
+        <div className="flex flex-col gap-[var(--fin-s-2)]">
+          <span className={ROTULO}>Como calcular</span>
+          <Segmentado rotulo="Como calcular" valor={tipo} onChange={setTipo} opcoes={[{ valor: 'PERCENTUAL', rotulo: 'Percentual' }, { valor: 'VALOR', rotulo: 'Valor fixo' }]} />
+        </div>
+        {tipo === 'PERCENTUAL' ? (
+          <Field rotulo="Percentual" ajuda={`Sobre a receita da agência nesta venda: ${reais(dados.base_centavos)}. O valor fica gravado como está hoje.`} obrigatorio>
+            {a => (
+              <input {...a} inputMode="decimal" className={cn(SELECT, 'max-w-[10rem] text-right tabular-nums')} value={percentual} placeholder="0,00" onChange={e => setPercentual(e.target.value)} />
+            )}
+          </Field>
+        ) : (
+          <MoneyField rotulo="Valor" valor={valor} onChange={setValor} obrigatorio />
+        )}
+      </div>
+    </RecordSheet>
   );
 }
 
@@ -280,7 +516,7 @@ export function AbaPosicao({ ficha }: { ficha: FichaDaVenda }) {
             Aberta por componente. Os que a agência deixou fora da receita aparecem riscados (<Link href="/config/vendas" className={LINK}>Configurações › Vendas</Link>).
           </p>
         </div>
-        {ficha.receita && ficha.receita.linhas.length ? (
+        {ficha.receita && (ficha.receita.linhas.length || ficha.receita.taxa_cartao?.valor) ? (
           <table className="w-full border-collapse fin-t-body">
             <tbody>
               {ficha.receita.linhas.map(l => (
@@ -289,6 +525,12 @@ export function AbaPosicao({ ficha }: { ficha: FichaDaVenda }) {
                   <td className={cn('py-1.5 text-right tabular-nums', !l.entra && 'line-through', l.entra && l.sinal < 0 && 'text-[var(--fin-negative-text)]')}>{l.sinal < 0 ? '− ' : ''}{reais(l.valor)}</td>
                 </tr>
               ))}
+              {ficha.receita.taxa_cartao?.valor ? (
+                <tr className={cn('border-b border-[var(--fin-border)]', !ficha.receita.taxa_cartao.entra && 'text-[var(--fin-text-3)]')}>
+                  <th scope="row" className={cn('py-1.5 text-left font-normal', !ficha.receita.taxa_cartao.entra && 'line-through')}>Taxa do cartão <span className="fin-t-caption text-[var(--fin-text-3)]">(a operadora fica com ela)</span></th>
+                  <td className={cn('py-1.5 text-right tabular-nums', ficha.receita.taxa_cartao.entra ? 'text-[var(--fin-negative-text)]' : 'line-through')}>− {reais(ficha.receita.taxa_cartao.valor)}</td>
+                </tr>
+              ) : null}
             </tbody>
             <tfoot>
               <tr>
@@ -333,6 +575,11 @@ const ROTULO_EVENTO: Record<string, string> = {
   fechada: 'Venda fechada',
   reaberta: 'Venda reaberta',
   mudanca_do_crm_recusada: 'O CRM mandou uma mudança, mas a venda estava fechada',
+  comissao_manual: 'Comissão manual lançada',
+  comissao_manual_excluida: 'Comissão manual excluída',
+  cancelamento: 'Cancelamento',
+  cancelamento_desfeito: 'Cancelamento desfeito',
+  conta_avulsa: 'Conta avulsa lançada',
 };
 
 function resumoDoEvento(d: Record<string, unknown>): React.ReactNode {

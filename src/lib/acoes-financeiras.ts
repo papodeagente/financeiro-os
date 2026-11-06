@@ -84,6 +84,8 @@ const DEFINICOES = [
   { id: 'ver_comissoes_todos', modulo: 'vendas_comissoes', rotulo: 'Ver a comissão da equipe', descricao: 'Comissão de todos os vendedores.', teto: p => p.ver_comissoes && p.ver_vendas_todos },
   { id: 'fechar_comissoes', modulo: 'vendas_comissoes', rotulo: 'Fechar comissões', descricao: 'Fecha as comissões da equipe até uma data, para pagar.', teto: p => p.editar_financeiro && p.ver_comissoes },
   { id: 'pagar_comissoes', modulo: 'vendas_comissoes', rotulo: 'Pagar comissões', descricao: 'Transforma as comissões fechadas em conta a pagar, total ou em parte.', teto: p => p.editar_financeiro && p.ver_comissoes },
+  // E7: comissão de indicação ou bônus lançada à mão numa venda fechada.
+  { id: 'lancar_comissao_manual', modulo: 'vendas_comissoes', rotulo: 'Lançar comissão manual na venda', descricao: 'Lança comissão de indicação ou bônus numa venda fechada e exclui a que ainda não foi fechada.', teto: p => p.editar_financeiro && p.ver_comissoes },
 
   // Painel e relatórios
   { id: 'resumo_pagar_receber', modulo: 'resumo', rotulo: 'Ver totais a pagar e a receber no painel', descricao: 'Os números de contas em aberto no painel inicial.', teto: p => p.ver_financeiro },
@@ -142,12 +144,16 @@ export interface GrupoDoUsuario {
   acoes: string[];
   /** Vazio = todas as contas. */
   contas: string[];
+  /** Vazio (ou ausente) = todas as empresas da agência (E7, multiempresa). */
+  empresas?: string[];
 }
 
 export interface RestricaoDoUsuario {
   /** Vazio = sem restrição própria de conta. */
   contas_liberadas: string[];
   acoes_negadas: string[];
+  /** Vazio (ou ausente) = sem restrição própria de empresa (E7). */
+  empresas_liberadas?: string[];
 }
 
 export interface RestricoesCarregadas {

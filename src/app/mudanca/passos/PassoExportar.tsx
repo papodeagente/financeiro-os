@@ -6,7 +6,8 @@ import { CalendarRange, Columns3, Lightbulb } from 'lucide-react';
 
 import { Field } from '@/components/fin/Field';
 import { Input } from '@/components/ui/input';
-import { api, chaveDeIdempotencia, ErroDaMudanca } from '@/lib/migracao/contrato-telas';
+import { BlocoRecolhivel } from '@/components/fin/BlocoRecolhivel';
+import { api, chaveDeIdempotencia, ErroDaMudanca, LISTAS_DO_HISTORICO } from '@/lib/migracao/contrato-telas';
 import { dataBR, erroDaDataDeCorte, jaAplicou } from '@/lib/migracao/telas/assistente';
 import { GUIA_DE_EXPORTACAO, type GuiaDaLista } from '@/lib/migracao/telas/listas';
 import { toast } from '@/lib/toast';
@@ -98,8 +99,18 @@ export function PassoExportar({ lote, onLote, irPara, onCarregar }: PropsDoPasso
       </div>
 
       <ol className="grid grid-cols-1 gap-[var(--fin-s-4)] xl:grid-cols-2">
-        {GUIA_DE_EXPORTACAO.map((g, i) => <GuiaDeUmaLista key={g.tipo} guia={g} ordem={i + 1} />)}
+        {GUIA_DE_EXPORTACAO.filter(g => !LISTAS_DO_HISTORICO.includes(g.tipo)).map((g, i) => <GuiaDeUmaLista key={g.tipo} guia={g} ordem={i + 1} />)}
       </ol>
+
+      <BlocoRecolhivel
+        titulo="O histórico do sistema anterior"
+        preenchido={Boolean(lote?.arquivos.some(a => a.tipo_lista && LISTAS_DO_HISTORICO.includes(a.tipo_lista)))}
+        descricao="Para ter aqui o que já aconteceu antes da data de corte: contas já liquidadas, extrato, vendas por produto, faturas, notas, comissões pagas, metas, reembolsos em aberto e créditos de clientes. Entra depois dos saldos e não muda o saldo da data de corte."
+      >
+        <ol start={7} className="grid grid-cols-1 gap-[var(--fin-s-4)] xl:grid-cols-2">
+          {GUIA_DE_EXPORTACAO.filter(g => LISTAS_DO_HISTORICO.includes(g.tipo)).map((g, i) => <GuiaDeUmaLista key={g.tipo} guia={g} ordem={i + 7} />)}
+        </ol>
+      </BlocoRecolhivel>
 
       <BarraDoPasso
         bloqueio={tocado ? erro : null}

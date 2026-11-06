@@ -14,6 +14,11 @@
  * Liquidado e Saldo do cliente): é a conferência que impede pagar o
  * fornecedor com dinheiro que ainda não entrou.
  *
+ * VALOR A GERAR: "Líquido" (padrão) paga ao fornecedor o líquido de cada item
+ * (ele já ficou com a comissão). "Bruto" paga o bruto: o líquido
+ * mais a Comissão e o Over dos itens; o fornecedor devolve essas receitas
+ * depois, e por isso a mesma gravação cria a conta a receber delas.
+ *
  * SINAL: adiantamento ao fornecedor. Só o que já foi pago dele pode ser
  * compensado, e a compensação é automática ao montar as próximas faturas
  * (o mais antigo primeiro; sinal de uma venda só compensa itens daquela
@@ -296,6 +301,27 @@ export function planejarCompensacao(itens: ReadonlyArray<Pick<ItemAFaturar, 'ven
 // Prévia
 // ============================================================
 
+/** "Líquido": paga o líquido. "Bruto": paga o bruto e recebe a comissão depois. */
+export type ModoDaFatura = 'SALDO' | 'BRUTO';
+export const MODOS_DA_FATURA: readonly ModoDaFatura[] = ['SALDO', 'BRUTO'];
+export const ROTULO_MODO_DA_FATURA: Record<ModoDaFatura, string> = {
+  SALDO: 'Líquido',
+  BRUTO: 'Bruto (com comissão e over)',
+};
+export function normalizarModo(v: unknown): ModoDaFatura {
+  return String(v ?? '').toUpperCase() === 'BRUTO' ? 'BRUTO' : 'SALDO';
+}
+
+/**
+ * Receitas (Comissão + Over) que o item acrescenta no modo "Bruto".
+ * Repasse ao intermediário e complemento não acrescentam (o complemento é a
+ * diferença de uma conta cujas receitas já estavam no item de origem).
+ */
+export function receitasDoItem(i: Pick<ItemAFaturar, 'papel' | 'complemento' | 'comissao' | 'over'>): Centavos {
+  if (i.papel !== 'fornecedor' || i.complemento) return 0;
+  return Math.max(0, i.comissao + i.over);
+}
+
 export interface AlertaDaFatura {
   codigo: CodigoDoAlerta | 'SEM_ITENS' | 'PARTE_MISTURADA';
   gravidade: 'aviso' | 'atencao';
@@ -313,6 +339,13 @@ export interface PreviaDaFatura {
   total_itens: Centavos;
   compensacoes: Compensacao[];
   total_sinal: Centavos;
+  /** Líquido ou bruto. */
+  modo: ModoDaFatura;
+  /** Comissão + Over dos itens: entram no "a pagar" e viram conta a receber só no modo bruto. */
+  receitas: Centavos;
+  /** O que as receitas seriam no modo bruto (para a tela mostrar a escolha). */
+  receitas_no_bruto: Centavos;
+  /** Itens − sinal (+ receitas no modo bruto). */
   a_pagar: Centavos;
   vencimento: Vencimento;
   corte: string;
@@ -323,8 +356,12 @@ export interface PreviaDaFatura {
 
 export function previaDaFatura(e: {
   parte_id: string; parte_nome: string; itens: ItemAFaturar[]; sinais: readonly SinalDisponivel[]; vencimento: Vencimento; corte: string;
+  modo?: ModoDaFatura;
 }): PreviaDaFatura {
+  const modo = normalizarModo(e.modo);
   const total = e.itens.reduce((a, i) => a + i.valor_a_gerar, 0);
+  const receitasNoBruto = e.itens.reduce((a, i) => a + receitasDoItem(i), 0);
+  const receitas = modo === 'BRUTO' ? receitasNoBruto : 0;
   const compensacoes = planejarCompensacao(e.itens, e.sinais);
   const sinal = compensacoes.reduce((a, c) => a + c.valor_centavos, 0);
   const saldoCliente = e.itens.reduce((a, i) => a + i.saldo_cliente, 0);
@@ -347,7 +384,7 @@ export function previaDaFatura(e: {
   return {
     parte_id: e.parte_id, parte_nome: e.parte_nome, itens: e.itens,
     quantidade: e.itens.length, vendas: new Set(e.itens.map(i => i.venda_id)).size,
-    total_itens: total, compensacoes, total_sinal: sinal, a_pagar: total - sinal,
+    total_itens: total, compensacoes, total_sinal: sinal, modo, receitas, receitas_no_bruto: receitasNoBruto, a_pagar: total - sinal + receitas,
     vencimento: e.vencimento, corte: e.corte, saldo_cliente: saldoCliente, alertas,
   };
 }
@@ -363,6 +400,8 @@ export interface FaturaParaReflexo {
   vencimento: string;
   valor_itens_centavos: Centavos;
   sinal_centavos: Centavos;
+  /** Modo "Bruto": a parte da conta a pagar que é comissão/over (não é pagamento dos itens). */
+  receitas_centavos?: Centavos;
   /** A conta a pagar da fatura (null quando o sinal cobriu tudo). */
   conta_status: string | null;
   conta_valor_centavos: Centavos;
@@ -372,8 +411,15 @@ export interface FaturaParaReflexo {
 /** Quanto da fatura já foi pago (sinal + baixa da conta), em centavos. */
 export function pagoDaFatura(f: FaturaParaReflexo): Centavos {
   let pago = f.sinal_centavos;
-  if (f.conta_status === 'PAGO') pago += f.conta_valor_centavos;
-  else if (f.conta_status === 'PARCIAL') pago += Math.min(f.conta_pago_centavos, f.conta_valor_centavos);
+  // No modo "Bruto" a conta leva também as receitas: só a parte
+  // dos itens conta como pagamento deles (na proporção do que foi pago).
+  const receitas = Math.max(0, f.receitas_centavos ?? 0);
+  const parteDosItens = Math.max(0, f.conta_valor_centavos - receitas);
+  if (f.conta_status === 'PAGO') pago += parteDosItens;
+  else if (f.conta_status === 'PARCIAL') {
+    const pagoDaConta = Math.min(f.conta_pago_centavos, f.conta_valor_centavos);
+    pago += receitas > 0 && f.conta_valor_centavos > 0 ? Math.round(pagoDaConta * parteDosItens / f.conta_valor_centavos) : pagoDaConta;
+  }
   return Math.min(pago, f.valor_itens_centavos);
 }
 

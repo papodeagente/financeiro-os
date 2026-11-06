@@ -42,7 +42,7 @@ import {
   type ContasGeradas, type FornecedorInfo, type ResumoFinanceiro, type VendaInput,
 } from './venda-financeiro';
 import {
-  FORMAS, ROTULO_TIPO_PRODUTO, parteDoAcerto, totaisDaVenda, totaisDoProduto, vencimentoDaParcela,
+  FORMAS, ROTULO_TIPO_PRODUTO, parteDoAcerto, taxaDoCartao, textoDosCampos, totaisDaVenda, totaisDoProduto, vencimentoDaParcela,
   type Centavos, type ParteDaVenda, type PagamentoDaVenda, type ProdutoDaVenda, type Venda,
 } from './venda-modelo';
 
@@ -80,7 +80,9 @@ export interface AvisoDaVenda {
     /** Retenção na fonte do cliente maior do que ele ainda paga (nota-retencoes.ts). */
     | 'RETENCAO_MAIOR_QUE_O_A_RECEBER'
     /** Gravação (parte D): a carteira do cliente não cobre a forma "Crédito do cliente". */
-    | 'CREDITO_INSUFICIENTE';
+    | 'CREDITO_INSUFICIENTE'
+    /** E7: dinheiro ou cheque baixado sozinho (ou que ficou em aberto). */
+    | 'LIQUIDADA_AUTOMATICAMENTE' | 'LIQUIDACAO_AUTOMATICA_RECUSADA';
   mensagem: string;
   valor_centavos?: Centavos;
   produto_id?: string;
@@ -101,6 +103,8 @@ export interface MarcaDaContaV2 {
   venda_produtos?: string[];
   /** Conta da forma "Faturar": a fatura do cliente (parte B) a junta. */
   faturar?: boolean;
+  /** Cartão recebido pela agência (E7): a taxa da operadora prevista para esta parcela, em reais. */
+  taxa_cartao_prevista?: number;
 }
 
 export type ContaReceberDaVenda = ContaReceber & Partial<MarcaDaContaV2>;
@@ -195,10 +199,12 @@ function contasDaVendaCompleta(venda: Venda, fornecedores: FornecedorInfo[], hoj
     // valendo (multa ou saldo mantido, parte D).
     if (p.cancelado_em && t.valor_fornecedor === 0 && t.valor_cliente === 0) continue;
     if (p.quem_cobra === 'FORNECEDOR') itens_fornecedor++; else itens_proprio++;
+    const { chave, parte, via_representante } = parteDoAcerto(p);
+    // Operação própria (E7): sem fornecedor, o custo é da própria agência.
+    if (!parte && venda.operacao_propria) continue;
     if (!p.cancelado_em && t.brl.receita_bruta === 0 && t.brl.valor_cliente > 0) {
       avisos.push({ codigo: 'PRODUTO_RECEITA_ZERO', produto_id: p.id, mensagem: `${p.descricao || ROTULO_TIPO_PRODUTO[p.tipo]}: a agência não ganha nada neste produto.` });
     }
-    const { chave, parte, via_representante } = parteDoAcerto(p);
     if (!parte && t.brl.valor_fornecedor > 0) {
       avisos.push({ codigo: 'PRODUTO_SEM_FORNECEDOR', produto_id: p.id, mensagem: `${p.descricao || ROTULO_TIPO_PRODUTO[p.tipo]}: falta dizer o fornecedor. A conta a pagar nasce marcada para preencher.` });
     }
@@ -237,7 +243,11 @@ function contasDaVendaCompleta(venda: Venda, fornecedores: FornecedorInfo[], hoj
       const pagante = pag.pagante && (pag.pagante.id || pag.pagante.nome) ? pag.pagante : cliente;
       const n = info.efeito === 'faturar_ao_cliente' ? Math.max(1, pag.parcelas) : pag.parcelas;
       const valores = dividirParcelas(reais(pag.valor_centavos), n);
-      const codigo = pag.forma === 'CARTAO' && pag.cartao_tipo === 'debito' ? 'CARTAO_DEBITO' : info.codigo;
+      const codigo = pag.forma === 'CARTAO' && pag.cartao_tipo === 'debito' ? 'CARTAO_DEBITO'
+        : pag.forma === 'OUTROS' && pag.forma_agencia ? pag.forma_agencia : info.codigo;
+      const taxa = taxaDoCartao(pag);
+      const taxas = taxa > 0 ? dividirParcelas(reais(taxa), n) : null;
+      const obs = [pag.detalhe, textoDosCampos(pag.campos)].filter(Boolean).join(' · ');
       for (let i = 1; i <= n; i++) {
         contas_receber.push({
           ...contaReceberBase(venda, hoje),
@@ -248,9 +258,10 @@ function contasDaVendaCompleta(venda: Venda, fornecedores: FornecedorInfo[], hoj
           data_vencimento: vencimentoDaParcela(pag, venda.data_venda, i),
           conta_bancaria_id: pag.conta_bancaria_id, forma_recebimento: codigo,
           parcela_numero: i, total_parcelas: n,
-          observacoes: pag.detalhe,
+          observacoes: obs,
           origem_item_id: chave, venda_chave: chave, venda_pagamento_id: pag.id, venda_forma: pag.forma,
           ...(info.efeito === 'faturar_ao_cliente' ? { faturar: true } : {}),
+          ...(taxas ? { taxa_cartao_prevista: taxas[i - 1] } : {}),
         });
       }
     } else if (info.efeito === 'credito_do_cliente') {

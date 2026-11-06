@@ -25,6 +25,7 @@ export async function GET(req: Request) {
   try {
     return NextResponse.json(await emTransacao(exec => listarReembolsos(exec, tenantId, {
       tipo: TIPOS.has(tipo) ? tipo as TipoDeReembolso : '',
+      sentido: u.get('sentido') === 'PAGAR' ? 'PAGAR' : u.get('sentido') === 'RECEBER' ? 'RECEBER' : '',
       situacao: SITUACOES.has(situacao) ? situacao as SituacaoDoReembolso | 'em_andamento' : '',
       de: u.get('de') ?? '', ate: u.get('ate') ?? '', busca: u.get('busca') ?? '', venda_id: u.get('venda_id') ?? '',
     })));
@@ -53,6 +54,7 @@ export async function POST(req: Request) {
     }
     const r = await emTransacao(e => criarReembolso(e, tenantId, {
       tipo: (TIPOS.has(tipo) ? tipo : '') as TipoDeReembolso, venda_id: vendaId, venda_numero: vendaNumero,
+      sentido: String(c?.sentido ?? '').toUpperCase() === 'PAGAR' ? 'PAGAR' : 'RECEBER',
       pessoa_id: String(c?.pessoa_id ?? ''), pessoa_nome: String(c?.pessoa_nome ?? ''),
       valor_centavos: centavosDe(c?.valor_centavos), descricao: String(c?.descricao ?? ''),
       prazo: typeof c?.prazo === 'string' ? c.prazo : undefined, aprovar: c?.aprovar === true,

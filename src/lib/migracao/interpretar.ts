@@ -11,6 +11,7 @@
 import type { ContaBancaria } from '../crm-types';
 import { definicaoDaLista, type ListaId, type Mapeamento } from './dicionario';
 import type { LinhaPreparada } from './leitor';
+import { interpretarDoHistorico, type RegistroDoHistorico } from './interpretar-historico';
 import {
   dataBR, lerCentavos, lerData, lerDocumento, lerParcela, lerSimNao, normalizar, texto, type Celula,
 } from './valores';
@@ -87,14 +88,17 @@ export type RegistroLido =
   | { lista: 'centros_custo'; dados: CentroLido }
   | { lista: 'pessoas'; dados: PessoaLida }
   | { lista: 'titulos'; dados: TituloLido }
-  | { lista: 'saldos'; dados: SaldoLido };
+  | { lista: 'saldos'; dados: SaldoLido }
+  | RegistroDoHistorico;
 
 /** Códigos de recusa. A tela filtra por eles; as provas explicam cada diferença por eles. */
 export type CodigoDeRecusa =
   | 'falta_coluna' | 'sem_nome' | 'sem_valor' | 'valor_invalido' | 'data_invalida' | 'sem_movimento'
   | 'liquidado' | 'excluido' | 'moeda_estrangeira' | 'outra_empresa' | 'sem_tipo'
   | 'duplicado_no_arquivo' | 'ja_importado' | 'pessoa_ambigua' | 'conta_nao_encontrada' | 'conta_com_movimento'
-  | 'linha_de_total' | 'linha_de_agrupamento' | 'aviso_do_arquivo';
+  | 'linha_de_total' | 'linha_de_agrupamento' | 'aviso_do_arquivo'
+  // Histórico (E7)
+  | 'depois_do_corte' | 'nao_emitida' | 'vencido';
 
 export type Interpretacao =
   | { ok: true; registro: RegistroLido; avisos: string[] }
@@ -108,6 +112,8 @@ export interface OpcoesDeLeitura {
   movimento?: Movimento | null;
   /** Só estas empresas (nomes como no arquivo). Vazio = todas. */
   empresas?: string[];
+  /** Hoje (AAAA-MM-DD), para o que vence (créditos). Vazio = o relógio. */
+  hoje?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -184,6 +190,8 @@ export function interpretarLinha(
   mapeamento: Mapeamento,
   opcoes: OpcoesDeLeitura = {},
   contexto: Record<string, string> = {},
+  /** Lê a conta sem olhar a liquidação (o histórico lê a liquidação à parte). */
+  semLiquidacao = false,
 ): Interpretacao {
   const ler = leitorDaLinha(celulas, mapeamento, contexto);
   const t = (campo: string) => texto(ler(campo));
@@ -287,9 +295,9 @@ export function interpretarLinha(
       if (moeda && !ehReal(moeda)) return { ok: false, codigo: 'moeda_estrangeira', motivo: `Lançamento em ${moeda}: títulos em outra moeda ficam para a próxima etapa da mudança.` };
       const avisos: string[] = [];
       const liqBruto = ler('liquidacao');
-      const liquidacao = liqBruto === null || liqBruto === '' ? null : lerData(liqBruto);
+      const liquidacao = semLiquidacao || liqBruto === null || liqBruto === '' ? null : lerData(liqBruto);
       let liquidadoDepois: string | null = null;
-      if (liqBruto !== null && liqBruto !== '' && !liquidacao) {
+      if (!semLiquidacao && liqBruto !== null && liqBruto !== '' && !liquidacao) {
         return { ok: false, codigo: 'data_invalida', motivo: `A liquidação "${texto(liqBruto)}" não é uma data.` };
       }
       if (liquidacao) {
@@ -297,10 +305,10 @@ export function interpretarLinha(
           liquidadoDepois = liquidacao;
           avisos.push(`Liquidado no sistema anterior em ${dataBR(liquidacao)}, depois da data de corte: entra em aberto, dê a baixa aqui.`);
         } else {
-          return { ok: false, codigo: 'liquidado', motivo: `Já liquidado em ${dataBR(liquidacao)}. O histórico liquidado fica para a próxima etapa da mudança.` };
+          return { ok: false, codigo: 'liquidado', motivo: `Já liquidado em ${dataBR(liquidacao)}. Para trazer o histórico, solte este arquivo como "Contas já liquidadas".` };
         }
-      } else if (/liquidad|quitad|^pago|^recebido|^paga$/.test(situacao)) {
-        return { ok: false, codigo: 'liquidado', motivo: 'Já liquidado no sistema anterior. O histórico liquidado fica para a próxima etapa da mudança.' };
+      } else if (!semLiquidacao && /liquidad|quitad|^pago|^recebido|^paga$/.test(situacao)) {
+        return { ok: false, codigo: 'liquidado', motivo: 'Já liquidado no sistema anterior. Para trazer o histórico, solte este arquivo como "Contas já liquidadas".' };
       }
       const emissao = lerData(ler('emissao'));
       if (ler('emissao') !== null && ler('emissao') !== '' && !emissao) avisos.push(`A emissão "${t('emissao')}" não é uma data: usei o vencimento.`);
@@ -323,6 +331,8 @@ export function interpretarLinha(
         },
       };
     }
+    default:
+      return interpretarDoHistorico(lista, ler, opcoes, sem => interpretarLinha('titulos', celulas, mapeamento, opcoes, contexto, sem === true));
   }
 }
 

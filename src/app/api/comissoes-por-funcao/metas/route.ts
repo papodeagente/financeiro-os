@@ -1,15 +1,24 @@
 import { NextResponse } from 'next/server';
 import { contextoDaComissao, respostaDeErroDaComissao } from '@/lib/comissao-rota';
-import { salvarMetas } from '@/lib/comissao-funcoes-servidor';
+import { salvarGradeDeMetas, salvarMetas } from '@/lib/comissao-funcoes-servidor';
 import { emTransacao } from '@/lib/caixa-atomico';
 
-// Metas do ano de uma pessoa na função: { pessoa_funcao_id, ano, meses: [12 valores em centavos] }.
+// Metas do ano. Uma pessoa: { pessoa_funcao_id, ano, meses: [12 valores em centavos] }.
+// A grade (todas as pessoas): { ano, linhas: [{ pessoa_funcao_id, meses }] }, tudo ou nada.
 export const dynamic = 'force-dynamic';
+
+type Corpo = { pessoa_funcao_id?: string; ano?: number; meses?: unknown[]; linhas?: Array<{ pessoa_funcao_id?: unknown; meses?: unknown }> };
 
 export async function PUT(req: Request) {
   const ctx = await contextoDaComissao(['editar_financeiro', 'ver_comissoes_todos']);
   if (ctx instanceof NextResponse) return ctx;
-  const corpo = (await req.json().catch(() => null)) as { pessoa_funcao_id?: string; ano?: number; meses?: unknown[] } | null;
+  const corpo = (await req.json().catch(() => null)) as Corpo | null;
+  if (corpo && Array.isArray(corpo.linhas)) {
+    const linhas = corpo.linhas;
+    try {
+      return NextResponse.json(await emTransacao(e => salvarGradeDeMetas(e, ctx.tenantId, Number(corpo.ano), linhas)));
+    } catch (e) { return respostaDeErroDaComissao(e); }
+  }
   if (!corpo || !Array.isArray(corpo.meses)) return NextResponse.json({ error: 'Informe as metas dos 12 meses.', codigo: 'DADOS' }, { status: 400 });
   const meses = corpo.meses;
   try {

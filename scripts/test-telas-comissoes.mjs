@@ -73,6 +73,7 @@ const paginas = {
   pagar: '../src/app/equipe/pagar-comissoes/page.tsx',
   minhas: '../src/app/equipe/minhas-comissoes/page.tsx',
   config: '../src/app/config/comissoes/page.tsx',
+  metas: '../src/app/equipe/metas-por-funcao/page.tsx',
 };
 const textos = [];
 for (const [nome, caminho] of Object.entries(paginas)) {
@@ -87,10 +88,28 @@ for (const [nome, caminho] of Object.entries(paginas)) {
   }
   eq(ok, true, `página ${nome} desenha`);
 }
+// Comissão manual na ficha da venda (E7): o porquê de não poder lançar, numa frase.
+const { impedimentoDaManual, situacaoDaManual, ComissoesManuais } = await import('../src/components/vendas/ficha/AbasDoFinanceiro.tsx');
+const pessoas = [{ id: 'fn-vendedor:u-bia', nome: 'Bia', funcao_nome: 'Vendedor' }];
+eq([
+  impedimentoDaManual({ regra: 'ATUAL', cancelada: false, situacao_venda: 'FECHADA', pessoas })?.startsWith('A comissão manual entra no Fechar comissões da regra por função'),
+  impedimentoDaManual({ regra: 'FUNCOES', cancelada: false, situacao_venda: 'ABERTA', pessoas }),
+  impedimentoDaManual({ regra: 'FUNCOES', cancelada: false, situacao_venda: 'FECHADA', pessoas: [] }),
+  impedimentoDaManual({ regra: 'FUNCOES', cancelada: false, situacao_venda: 'FECHADA', pessoas }),
+], [true, 'Feche a venda para lançar: assim a base da comissão não muda depois.', 'Ninguém está numa função de comissão ainda (Equipe › Funções).', null], 'comissão manual: regra de hoje, venda aberta, ninguém na função, liberado');
+eq([situacaoDaManual({ fechado_centavos: 0, pago_centavos: 0 }).rotulo, situacaoDaManual({ fechado_centavos: 100, pago_centavos: 0 }).rotulo, situacaoDaManual({ fechado_centavos: 100, pago_centavos: 100 }).rotulo], ['A fechar', 'Fechada', 'Paga'], 'situação da comissão manual');
+eq(html(h(ComissoesManuais, { vendaId: 'v1' })).includes('animate-pulse'), true, 'bloco da comissão manual desenha carregando');
+
 const { RelatoriosDeVendas } = await import('../src/components/relatorios/RelatoriosDeVendas.tsx');
 const rel = html(h(RelatoriosDeVendas, { abrirVenda() {} }));
-eq(['Relatórios de vendas', 'Por produto', 'Por vendedor', 'Por unidade', 'Por forma de pagamento', 'Ranking de clientes', 'Tabela dinâmica', 'CSV', 'Excel', 'formato=xlsx'].filter(t => !rel.includes(t)), [], 'relatórios: os seis relatórios e a exportação');
-const tudo = [tela, base, rel, ...textos].join(' ');
+// E7: a exportação virou o botão único (Excel, PDF e Imprimir num menu) e entrou o envio agendado.
+eq(['Relatórios de vendas', 'Por produto', 'Por vendedor', 'Por unidade', 'Por fornecedor', 'Por forma de pagamento', 'Pagamentos', 'Ranking de clientes', 'Tabela dinâmica', 'Exportar', 'Agendar envio', 'Fornecedor', 'Situação do produto', 'Período pela'].filter(t => !rel.includes(t)), [], 'relatórios: os oito relatórios, os filtros, a exportação e o envio agendado');
+const { TelaDeEnvios } = await import('../src/components/relatorios/TelaDeEnvios.tsx');
+const envios = html(h(TelaDeEnvios));
+eq(['Envios agendados', 'Relatórios de vendas'].filter(t => !envios.includes(t)), [], 'envios agendados desenha');
+const { FormularioDeEnvio } = await import('../src/components/relatorios/FormularioDeEnvio.tsx');
+eq(typeof FormularioDeEnvio, 'function', 'formulário do envio agendado carrega');
+const tudo = [tela, base, rel, envios, ...textos].join(' ');
 const proibidos = ['Gerar Lançamento', 'Taxa de Serviço Oculta', 'Taxa de Serviço Destacada', 'Saldo Excluído', 'Lei Kandir', 'Fornecimento', 'Representação', 'Gerar Fatura', 'Grupos de Usuário', 'Acesso Total'];
 eq(proibidos.filter(t => tudo.includes(t)), [], 'nenhum termo proibido nas telas');
 

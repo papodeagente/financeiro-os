@@ -308,3 +308,55 @@ export function aplicarRetencoesNasContas<T extends Record<string, unknown>>(
   });
   return { contas: saida, aviso };
 }
+
+// ============================================================
+// Dispensa de retenção de valor pequeno (E7, 06/11/2026)
+// ============================================================
+
+/**
+ * Até quanto o valor retido é dispensado (não se retém). A agência digita os
+ * dois limites combinados com o contador; vazio (null) = sem dispensa, que é
+ * o comportamento de antes. Nada aqui tem número padrão.
+ *  - `ir_centavos`: o IR retido até este valor (inclusive) não é retido;
+ *  - `csll_pis_cofins_centavos`: a soma de CSLL + PIS + COFINS até este valor
+ *    (inclusive) não é retida (os três juntos, como se recolhem).
+ */
+export interface RetencaoMinima {
+  ir_centavos: Centavos | null;
+  csll_pis_cofins_centavos: Centavos | null;
+}
+
+export const RETENCAO_MINIMA_VAZIA: RetencaoMinima = { ir_centavos: null, csll_pis_cofins_centavos: null };
+
+function centavosOuNulo(v: unknown): Centavos | null {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n) : null;
+}
+
+export function normalizarRetencaoMinima(v: unknown): RetencaoMinima {
+  const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+  return { ir_centavos: centavosOuNulo(o.ir_centavos), csll_pis_cofins_centavos: centavosOuNulo(o.csll_pis_cofins_centavos) };
+}
+
+/**
+ * Tira o que fica dentro da dispensa. Devolve o novo valor por tributo, o
+ * total e as frases do que foi dispensado (a prévia explica).
+ */
+export function dispensarRetencaoPequena(
+  por_tributo: Record<TributoRetido, Centavos>, minimo: RetencaoMinima | null | undefined,
+): { por_tributo: Record<TributoRetido, Centavos>; total: Centavos; dispensas: string[] } {
+  const novo = { ...por_tributo };
+  const dispensas: string[] = [];
+  const brl = (c: number) => `R$ ${(c / 100).toFixed(2).replace('.', ',')}`;
+  if (minimo?.ir_centavos != null && novo.IR > 0 && novo.IR <= minimo.ir_centavos) {
+    dispensas.push(`IR de ${brl(novo.IR)} não retido: fica dentro do limite de dispensa (${brl(minimo.ir_centavos)}).`);
+    novo.IR = 0;
+  }
+  const pcc = novo.CSLL + novo.PIS + novo.COFINS;
+  if (minimo?.csll_pis_cofins_centavos != null && pcc > 0 && pcc <= minimo.csll_pis_cofins_centavos) {
+    dispensas.push(`CSLL, PIS e COFINS somam ${brl(pcc)} e não são retidos: ficam dentro do limite de dispensa (${brl(minimo.csll_pis_cofins_centavos)}).`);
+    novo.CSLL = 0; novo.PIS = 0; novo.COFINS = 0;
+  }
+  return { por_tributo: novo, total: TRIBUTOS_RETIDOS.reduce((s, t) => s + novo[t], 0), dispensas };
+}

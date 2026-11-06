@@ -1,11 +1,15 @@
 /**
  * REEMBOLSOS (E5, parte D, 05/11/2026).
  *
- * Dois sentidos, com as palavras do mercado:
+ * Com as palavras do mercado:
  *  - Reembolso ao cliente: a agência devolve dinheiro ao cliente. Aprovado,
  *    vira conta a PAGAR (para o cliente), com vencimento no prazo.
- *  - Reembolso do fornecedor: o fornecedor devolve à agência. Aprovado, vira
- *    conta a RECEBER (do fornecedor), com vencimento no prazo.
+ *  - Reembolso do fornecedor (sentido RECEBER, o de sempre): o fornecedor
+ *    devolve à agência. Aprovado, vira conta a RECEBER (do fornecedor).
+ *  - Reembolso ao fornecedor (sentido PAGAR): a agência devolve ao
+ *    fornecedor (ex.: recebeu dele a mais, ou o cliente pagou a agência por
+ *    um item que o fornecedor já tinha cobrado). Aprovado, vira conta a PAGAR
+ *    (ao fornecedor).
  *
  * Situação: Solicitado → Aprovado → Pago (ou Cancelado). "Pago" acontece
  * quando a conta gerada é liquidada pelo caminho de sempre (POST
@@ -55,6 +59,9 @@ export const REEMBOLSOS_SCHEMA_SQL = `
   );
   CREATE INDEX IF NOT EXISTS idx_reembolsos_situacao ON reembolsos(tenant_id, situacao, prazo);
   CREATE INDEX IF NOT EXISTS idx_reembolsos_venda ON reembolsos(tenant_id, venda_id);
+  -- E7: reembolso do fornecedor também "a pagar". Vazio = o de sempre
+  -- (cliente: a agência paga; fornecedor: a agência recebe).
+  ALTER TABLE reembolsos ADD COLUMN IF NOT EXISTS sentido TEXT NOT NULL DEFAULT '';
 `;
 
 export type TipoDeReembolso = 'CLIENTE' | 'FORNECEDOR';
@@ -64,6 +71,21 @@ export const ROTULO_TIPO_REEMBOLSO: Record<TipoDeReembolso, string> = {
   CLIENTE: 'Ao cliente',
   FORNECEDOR: 'Do fornecedor',
 };
+
+/** Do ponto de vista da agência: ela recebe ou paga o reembolso. */
+export type SentidoDoReembolso = 'RECEBER' | 'PAGAR';
+
+/** O sentido de um reembolso: ao cliente a agência sempre paga; do fornecedor, recebe (padrão) ou paga. */
+export function sentidoDoReembolso(tipo: TipoDeReembolso, sentido?: unknown): SentidoDoReembolso {
+  if (tipo === 'CLIENTE') return 'PAGAR';
+  return String(sentido ?? '').toUpperCase() === 'PAGAR' ? 'PAGAR' : 'RECEBER';
+}
+
+/** "Ao cliente", "Do fornecedor" ou "Ao fornecedor". */
+export function rotuloDoReembolso(r: { tipo: TipoDeReembolso; sentido?: SentidoDoReembolso }): string {
+  if (r.tipo === 'CLIENTE') return 'Ao cliente';
+  return r.sentido === 'PAGAR' ? 'Ao fornecedor' : 'Do fornecedor';
+}
 export const ROTULO_SITUACAO_REEMBOLSO: Record<SituacaoDoReembolso, string> = {
   SOLICITADO: 'Solicitado',
   APROVADO: 'Aprovado',
@@ -74,6 +96,8 @@ export const ROTULO_SITUACAO_REEMBOLSO: Record<SituacaoDoReembolso, string> = {
 export interface Reembolso {
   id: string;
   tipo: TipoDeReembolso;
+  /** RECEBER: a agência recebe (do fornecedor). PAGAR: a agência paga (ao cliente ou ao fornecedor). */
+  sentido: SentidoDoReembolso;
   situacao: SituacaoDoReembolso;
   venda_id: string;
   venda_numero: string;
@@ -117,7 +141,7 @@ function linha(r: Record<string, unknown>, hoje: string): Reembolso {
   const situacao = txt(r.situacao) as SituacaoDoReembolso;
   const prazo = r.prazo ? dataISO(r.prazo) : '';
   return {
-    id: txt(r.id), tipo: txt(r.tipo) as TipoDeReembolso, situacao, venda_id: txt(r.venda_id), venda_numero: txt(r.venda_numero),
+    id: txt(r.id), tipo: txt(r.tipo) as TipoDeReembolso, sentido: sentidoDoReembolso(txt(r.tipo) as TipoDeReembolso, r.sentido), situacao, venda_id: txt(r.venda_id), venda_numero: txt(r.venda_numero),
     cancelamento_id: txt(r.cancelamento_id), produto_id: txt(r.produto_id), pessoa_id: txt(r.pessoa_id), pessoa_nome: txt(r.pessoa_nome),
     valor_centavos: Number(r.valor_centavos) || 0, descricao: txt(r.descricao), prazo, centro_custo: txt(r.centro_custo),
     conta_tabela: txt(r.conta_tabela) as Reembolso['conta_tabela'], conta_id: txt(r.conta_id), credito_id: txt(r.credito_id),
@@ -137,6 +161,8 @@ async function historico(exec: ExecutorSQL, tenantId: string, id: string, de: st
 
 export interface NovoReembolso {
   tipo: TipoDeReembolso;
+  /** Só no reembolso do fornecedor: RECEBER (padrão) ou PAGAR (a agência devolve a ele). */
+  sentido?: SentidoDoReembolso;
   venda_id?: string;
   venda_numero?: string;
   cancelamento_id?: string;
@@ -158,16 +184,18 @@ export async function criarReembolso(exec: ExecutorSQL, tenantId: string, n: Nov
   if (n.tipo !== 'CLIENTE' && n.tipo !== 'FORNECEDOR') throw new ErroReembolso('TIPO', 'Diga se o reembolso é ao cliente ou do fornecedor.');
   const valor = Math.round(n.valor_centavos);
   if (!(valor > 0)) throw new ErroReembolso('VALOR', 'O reembolso precisa de valor maior que zero.');
-  if (!n.pessoa_id && !n.pessoa_nome.trim()) throw new ErroReembolso('PESSOA', n.tipo === 'CLIENTE' ? 'Diga para quem devolver.' : 'Diga qual fornecedor devolve.');
+  const sentido = sentidoDoReembolso(n.tipo, n.sentido);
+  if (!n.pessoa_id && !n.pessoa_nome.trim()) throw new ErroReembolso('PESSOA', n.tipo === 'CLIENTE' ? 'Diga para quem devolver.' : sentido === 'PAGAR' ? 'Diga a qual fornecedor devolver.' : 'Diga qual fornecedor devolve.');
   const hoje = hojeISO();
   const prazo = n.prazo && ISO.test(n.prazo) ? n.prazo : addDias(hoje, DIAS_PADRAO_DO_PRAZO[n.tipo]);
   const id = generateId();
   await exec.query(
-    `INSERT INTO reembolsos (tenant_id, id, tipo, situacao, venda_id, venda_numero, cancelamento_id, produto_id, pessoa_id, pessoa_nome, valor_centavos, descricao, prazo, centro_custo, vinculado_a, criado_por, historico)
-     VALUES ($1,$2,$3,'SOLICITADO',$4,$5,$6,$7,$8,$9,$10,$11,$12::date,$13,$14,$15,$16::jsonb)`,
+    `INSERT INTO reembolsos (tenant_id, id, tipo, situacao, venda_id, venda_numero, cancelamento_id, produto_id, pessoa_id, pessoa_nome, valor_centavos, descricao, prazo, centro_custo, vinculado_a, criado_por, historico, sentido)
+     VALUES ($1,$2,$3,'SOLICITADO',$4,$5,$6,$7,$8,$9,$10,$11,$12::date,$13,$14,$15,$16::jsonb,$17)`,
     [tenantId, id, n.tipo, n.venda_id ?? '', n.venda_numero ?? '', n.cancelamento_id ?? '', n.produto_id ?? '', n.pessoa_id, n.pessoa_nome.trim(), valor,
       n.descricao.slice(0, 300), prazo, n.centro_custo ?? '', n.vinculado_a ?? '', usuario,
-      JSON.stringify([{ em: new Date().toISOString(), quem: usuario, de: '', para: 'SOLICITADO', nota: '' }])],
+      JSON.stringify([{ em: new Date().toISOString(), quem: usuario, de: '', para: 'SOLICITADO', nota: '' }]),
+      n.tipo === 'FORNECEDOR' ? sentido : ''],
   );
   if (n.aprovar) return aprovarReembolso(exec, tenantId, id, usuario);
   return (await lerReembolso(exec, tenantId, id))!;
@@ -184,7 +212,7 @@ async function travar(exec: ExecutorSQL, tenantId: string, id: string): Promise<
   return linha(rows[0], hojeISO());
 }
 
-/** Aprovar gera a conta: a pagar ao cliente, ou a receber do fornecedor. */
+/** Aprovar gera a conta: a pagar ao cliente, a receber do fornecedor, ou a pagar ao fornecedor. */
 export async function aprovarReembolso(exec: ExecutorSQL, tenantId: string, id: string, usuario: string, opcoes: { prazo?: string } = {}): Promise<Reembolso> {
   const r = await travar(exec, tenantId, id);
   if (r.situacao !== 'SOLICITADO') throw new ErroReembolso('SITUACAO', 'Só se aprova reembolso solicitado.', 409);
@@ -193,27 +221,30 @@ export async function aprovarReembolso(exec: ExecutorSQL, tenantId: string, id: 
   const hoje = hojeISO();
   const contaId = generateId();
   const padroes = await lerCategoriasDosTitulos(exec, tenantId);
-  const descricao = r.tipo === 'CLIENTE'
-    ? `Reembolso ao cliente · ${r.pessoa_nome}${r.venda_numero ? ` · Venda ${r.venda_numero}` : ''}`
-    : `Reembolso do fornecedor · ${r.pessoa_nome}${r.venda_numero ? ` · Venda ${r.venda_numero}` : ''}`;
+  const descricao = `Reembolso ${rotuloDoReembolso(r).toLowerCase()} · ${r.pessoa_nome}${r.venda_numero ? ` · Venda ${r.venda_numero}` : ''}`;
   const comum = {
     id: contaId, descricao, valor_original: valor, valor_final: valor, juros: 0, multa: 0, desconto: 0,
     data_emissao: hoje, data_vencimento: prazo, status: 'PENDENTE',
-    // Categoria padrão do reembolso (06/11/2026); vazia sem escolha, como antes.
-    categoria_id: (padroes[r.tipo === 'CLIENTE' ? 'reembolso_pagar' : 'reembolso_receber'] ?? ''), centro_custo: r.centro_custo,
+    // Categoria padrão do reembolso (06/11/2026): a pagar (ao cliente ou ao
+    // fornecedor) ou a receber (do fornecedor); vazia sem escolha, como antes.
+    categoria_id: (padroes[r.sentido === 'PAGAR' ? 'reembolso_pagar' : 'reembolso_receber'] ?? ''), centro_custo: r.centro_custo,
     rateio: [], anexos: [], observacoes: r.descricao, origem: 'OUTROS', reembolso_id: r.id,
     venda_id: r.venda_id || null, grupo_id: null, origem_venda_id: r.venda_id || undefined, auto_gerado: false,
     parcela_numero: 1, total_parcelas: 1, conta_bancaria_id: null,
   };
-  if (r.tipo === 'CLIENTE') {
+  const aPagar = r.sentido === 'PAGAR';
+  if (aPagar) {
+    const aoFornecedor = r.tipo === 'FORNECEDOR';
     const conta = {
-      ...comum, fornecedor_id: '', fornecedor_nome: r.pessoa_nome, cliente_id: r.pessoa_id, cliente_nome: r.pessoa_nome,
+      ...comum,
+      fornecedor_id: aoFornecedor ? r.pessoa_id : '', fornecedor_nome: r.pessoa_nome,
+      ...(aoFornecedor ? {} : { cliente_id: r.pessoa_id, cliente_nome: r.pessoa_nome }),
       moeda: 'BRL', cambio: 1, valor_brl: valor, data_pagamento: null, valor_pago: null, forma_pagamento: '', cartao_id: null, comprovante: '',
       natureza_custo: 'VARIAVEL', is_custo_comercial: false,
     };
     await exec.query(
-      `INSERT INTO contas_pagar (id, tenant_id, fornecedor_id, status, data, created_at, updated_at) VALUES ($1, $2, '', 'PENDENTE', $3::jsonb, NOW(), NOW())`,
-      [contaId, tenantId, JSON.stringify(conta)],
+      `INSERT INTO contas_pagar (id, tenant_id, fornecedor_id, status, data, created_at, updated_at) VALUES ($1, $2, $3, 'PENDENTE', $4::jsonb, NOW(), NOW())`,
+      [contaId, tenantId, conta.fornecedor_id, JSON.stringify(conta)],
     );
   } else {
     const conta = {
@@ -228,9 +259,10 @@ export async function aprovarReembolso(exec: ExecutorSQL, tenantId: string, id: 
   }
   await exec.query(
     `UPDATE reembolsos SET situacao = 'APROVADO', prazo = $3::date, conta_tabela = $4, conta_id = $5, atualizado_em = NOW() WHERE tenant_id = $1 AND id = $2`,
-    [tenantId, id, prazo, r.tipo === 'CLIENTE' ? 'contas_pagar' : 'contas_receber', contaId],
+    [tenantId, id, prazo, aPagar ? 'contas_pagar' : 'contas_receber', contaId],
   );
-  await historico(exec, tenantId, id, 'SOLICITADO', 'APROVADO', usuario, r.tipo === 'CLIENTE' ? 'Conta a pagar ao cliente gerada.' : 'Conta a receber do fornecedor gerada.');
+  await historico(exec, tenantId, id, 'SOLICITADO', 'APROVADO', usuario,
+    r.tipo === 'CLIENTE' ? 'Conta a pagar ao cliente gerada.' : aPagar ? 'Conta a pagar ao fornecedor gerada.' : 'Conta a receber do fornecedor gerada.');
   return (await lerReembolso(exec, tenantId, id))!;
 }
 
@@ -307,6 +339,8 @@ export async function acertarSituacoes(exec: ExecutorSQL, tenantId: string): Pro
 
 export interface FiltroDeReembolsos {
   tipo?: TipoDeReembolso | '';
+  /** RECEBER ou PAGAR (do ponto de vista da agência). */
+  sentido?: SentidoDoReembolso | '';
   situacao?: SituacaoDoReembolso | 'em_andamento' | '';
   de?: string;
   ate?: string;
@@ -319,6 +353,7 @@ export interface ListaDeReembolsos {
   totais: {
     a_devolver_ao_cliente: number;
     a_receber_do_fornecedor: number;
+    a_pagar_ao_fornecedor: number;
     atrasados: number;
     pagos_no_periodo: number;
   };
@@ -330,6 +365,8 @@ export async function listarReembolsos(exec: ExecutorSQL, tenantId: string, f: F
   const args: unknown[] = [tenantId];
   const add = (sql: string, v: unknown) => { args.push(v); cond.push(sql.replace('?', `$${args.length}`)); };
   if (f.tipo) add('tipo = ?', f.tipo);
+  if (f.sentido === 'PAGAR') cond.push(`(tipo = 'CLIENTE' OR sentido = 'PAGAR')`);
+  else if (f.sentido === 'RECEBER') cond.push(`(tipo = 'FORNECEDOR' AND sentido <> 'PAGAR')`);
   if (f.situacao === 'em_andamento') cond.push(`situacao IN ('SOLICITADO','APROVADO')`);
   else if (f.situacao) add('situacao = ?', f.situacao);
   if (f.venda_id) add('venda_id = ?', f.venda_id);
@@ -343,7 +380,8 @@ export async function listarReembolsos(exec: ExecutorSQL, tenantId: string, f: F
     reembolsos: lista,
     totais: {
       a_devolver_ao_cliente: lista.filter(r => r.tipo === 'CLIENTE' && andamento(r)).reduce((a, r) => a + r.valor_centavos, 0),
-      a_receber_do_fornecedor: lista.filter(r => r.tipo === 'FORNECEDOR' && andamento(r)).reduce((a, r) => a + r.valor_centavos, 0),
+      a_receber_do_fornecedor: lista.filter(r => r.tipo === 'FORNECEDOR' && r.sentido === 'RECEBER' && andamento(r)).reduce((a, r) => a + r.valor_centavos, 0),
+      a_pagar_ao_fornecedor: lista.filter(r => r.tipo === 'FORNECEDOR' && r.sentido === 'PAGAR' && andamento(r)).reduce((a, r) => a + r.valor_centavos, 0),
       atrasados: lista.filter(r => r.atrasado).length,
       pagos_no_periodo: lista.filter(r => r.situacao === 'PAGO').reduce((a, r) => a + r.valor_centavos, 0),
     },
@@ -364,8 +402,8 @@ export async function avisarReembolsosNoPrazo(
     const br = `${r.prazo.slice(8, 10)}/${r.prazo.slice(5, 7)}`;
     const valor = deCentavos(r.valor_centavos).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     await notificar({
-      titulo: r.tipo === 'CLIENTE' ? `Reembolso a ${r.pessoa_nome} vence ${r.prazo < hoje ? 'atrasado desde' : 'em'} ${br}` : `Reembolso de ${r.pessoa_nome} esperado até ${br}`,
-      descricao: r.tipo === 'CLIENTE'
+      titulo: r.sentido === 'PAGAR' ? `Reembolso a ${r.pessoa_nome} vence ${r.prazo < hoje ? 'atrasado desde' : 'em'} ${br}` : `Reembolso de ${r.pessoa_nome} esperado até ${br}`,
+      descricao: r.sentido === 'PAGAR'
         ? `${valor} a devolver${r.venda_numero ? ` (venda ${r.venda_numero})` : ''}. ${r.situacao === 'SOLICITADO' ? 'Ainda falta aprovar.' : 'Já aprovado: falta pagar.'}`
         : `${valor} que o fornecedor deve devolver${r.venda_numero ? ` (venda ${r.venda_numero})` : ''}. Cobre o fornecedor se ainda não caiu.`,
       link: `/financeiro-ag/reembolsos?abrir=${encodeURIComponent(r.id)}`,

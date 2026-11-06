@@ -12,6 +12,7 @@ import {
   type AcaoFinanceira, type GrupoDoUsuario, type RestricoesCarregadas,
 } from './acoes-financeiras';
 import type { SessionLike } from './permissoes';
+import { empresasLiberadasPor } from './empresas';
 
 export interface ExecutorPermissoes {
   query(text: string, values?: unknown[]): Promise<{ rows: Record<string, unknown>[]; rowCount?: number | null }>;
@@ -48,22 +49,28 @@ export async function carregarRestricoesNoExecutor(
   const { rows } = await exec.query(
     `SELECT
        (SELECT COALESCE(jsonb_agg(jsonb_build_object('id', g.id, 'nome', g.nome,
-           'acesso_total', g.acesso_total, 'acoes', g.acoes, 'contas', g.contas) ORDER BY g.nome), '[]'::jsonb)
+           'acesso_total', g.acesso_total, 'acoes', g.acoes, 'contas', g.contas,
+           'empresas', COALESCE(to_jsonb(g)->'empresas', '[]'::jsonb)) ORDER BY g.nome), '[]'::jsonb)
           FROM grupo_usuario_membros m
           JOIN grupos_usuario g ON g.tenant_id = m.tenant_id AND g.id = m.grupo_id
          WHERE m.tenant_id = $1 AND m.usuario_id = $2) AS grupos,
-       (SELECT jsonb_build_object('contas_liberadas', r.contas_liberadas, 'acoes_negadas', r.acoes_negadas)
+       (SELECT jsonb_build_object('contas_liberadas', r.contas_liberadas, 'acoes_negadas', r.acoes_negadas,
+           'empresas_liberadas', COALESCE(to_jsonb(r)->'empresas_liberadas', '[]'::jsonb))
           FROM usuario_restricoes r WHERE r.tenant_id = $1 AND r.usuario_id = $2) AS usuario`,
     [tenantId, usuarioId],
   );
   const linha = rows[0] ?? {};
   const grupos = (Array.isArray(linha.grupos) ? linha.grupos : []).map((g: Record<string, unknown>): GrupoDoUsuario => ({
     id: String(g.id ?? ''), nome: String(g.nome ?? ''), acesso_total: g.acesso_total === true,
-    acoes: listaDeTextos(g.acoes), contas: listaDeTextos(g.contas),
+    acoes: listaDeTextos(g.acoes), contas: listaDeTextos(g.contas), empresas: listaDeTextos(g.empresas),
   }));
   const u = linha.usuario as Record<string, unknown> | null | undefined;
-  const usuario = u ? { contas_liberadas: listaDeTextos(u.contas_liberadas), acoes_negadas: listaDeTextos(u.acoes_negadas) } : null;
-  const usuarioVazio = !usuario || (usuario.contas_liberadas.length === 0 && usuario.acoes_negadas.length === 0);
+  const usuario = u ? {
+    contas_liberadas: listaDeTextos(u.contas_liberadas), acoes_negadas: listaDeTextos(u.acoes_negadas),
+    empresas_liberadas: listaDeTextos(u.empresas_liberadas),
+  } : null;
+  const usuarioVazio = !usuario || (usuario.contas_liberadas.length === 0 && usuario.acoes_negadas.length === 0
+    && usuario.empresas_liberadas.length === 0);
   if (grupos.length === 0 && usuarioVazio) return null;
   return { grupos, usuario: usuarioVazio ? null : usuario };
 }
@@ -132,6 +139,22 @@ export async function contasPermitidas(
   return contasLiberadasPor(session, await restricoesDa(session, exec));
 }
 
+/**
+ * Empresas liberadas pelo perfil de acesso e pela restrição própria (E7).
+ * `null` = todas (sem restrição, como hoje). Administrador nunca é restringido.
+ */
+export async function empresasPermitidas(
+  session: SessaoPermissoes | null | undefined, exec?: ExecutorPermissoes,
+): Promise<string[] | null> {
+  if (!session) return [];
+  if (nuncaRestringido(session)) return null;
+  const r = await restricoesDa(session, exec);
+  if (!r) return null;
+  return empresasLiberadasPor(false,
+    r.grupos.map(g => ({ acesso_total: g.acesso_total, empresas: g.empresas ?? [] })),
+    r.usuario ? { empresas_liberadas: r.usuario.empresas_liberadas ?? [] } : null);
+}
+
 /** Para as telas: o que esta pessoa pode, ação por ação, e as contas. */
 export async function resumoDePermissoes(session: SessaoPermissoes): Promise<{
   acoes: Record<string, boolean>; contas: string[] | null; restringido: boolean;
@@ -151,6 +174,8 @@ export interface GrupoCadastro {
   acesso_total: boolean;
   acoes: AcaoFinanceira[];
   contas: string[];
+  /** Empresas em que o perfil vale (vazio = todas). Só aparece com 2+ empresas. */
+  empresas: string[];
   membros: string[];
   updated_at?: string;
 }
@@ -161,7 +186,7 @@ export class ErroPermissoes extends Error {
 
 export async function listarGrupos(exec: ExecutorPermissoes, tenantId: string): Promise<GrupoCadastro[]> {
   const { rows } = await exec.query(
-    `SELECT g.id, g.nome, g.acesso_total, g.acoes, g.contas, g.updated_at,
+    `SELECT g.id, g.nome, g.acesso_total, g.acoes, g.contas, COALESCE(to_jsonb(g)->'empresas', '[]'::jsonb) AS empresas, g.updated_at,
             COALESCE((SELECT jsonb_agg(m.usuario_id ORDER BY m.usuario_id) FROM grupo_usuario_membros m
                        WHERE m.tenant_id = g.tenant_id AND m.grupo_id = g.id), '[]'::jsonb) AS membros
        FROM grupos_usuario g WHERE g.tenant_id = $1 ORDER BY lower(g.nome)`,
@@ -169,7 +194,7 @@ export async function listarGrupos(exec: ExecutorPermissoes, tenantId: string): 
   );
   return rows.map(r => ({
     id: String(r.id), nome: String(r.nome), acesso_total: r.acesso_total === true,
-    acoes: listaDeAcoes(r.acoes), contas: listaDeTextos(r.contas), membros: listaDeTextos(r.membros),
+    acoes: listaDeAcoes(r.acoes), contas: listaDeTextos(r.contas), empresas: listaDeTextos(r.empresas), membros: listaDeTextos(r.membros),
     updated_at: r.updated_at instanceof Date ? r.updated_at.toISOString() : String(r.updated_at ?? ''),
   }));
 }
@@ -186,6 +211,13 @@ export async function salvarGrupo(
   // Acesso completo vê todas as contas: lista de contas não se aplica.
   const contas = acessoTotal ? [] : listaDeTextos(entrada.contas);
   const membros = listaDeTextos(entrada.membros);
+  // Empresas (E7): só quando a tela manda; ausente = não mexe.
+  const empresas = Array.isArray(entrada.empresas) ? listaDeTextos(entrada.empresas) : null;
+  if (empresas && empresas.length > 0) {
+    const { rows } = await exec.query(
+      `SELECT id FROM empresas WHERE tenant_id = $1 AND id = ANY($2::text[])`, [tenantId, empresas]);
+    if (rows.length !== empresas.length) throw new ErroPermissoes('Uma das empresas escolhidas não existe mais. Recarregue a tela.');
+  }
 
   if (contas.length > 0) {
     const { rows } = await exec.query(
@@ -208,6 +240,10 @@ export async function salvarGrupo(
        acoes = EXCLUDED.acoes, contas = EXCLUDED.contas, updated_at = NOW()`,
     [tenantId, id, nome, acessoTotal, JSON.stringify(acoes), JSON.stringify(contas), autorId],
   );
+  if (empresas) {
+    await exec.query(`UPDATE grupos_usuario SET empresas = $3::jsonb WHERE tenant_id = $1 AND id = $2`,
+      [tenantId, id, JSON.stringify(empresas)]);
+  }
   await exec.query(
     `DELETE FROM grupo_usuario_membros WHERE tenant_id = $1 AND grupo_id = $2 AND NOT (usuario_id = ANY($3::text[]))`,
     [tenantId, id, membros]);
@@ -218,7 +254,13 @@ export async function salvarGrupo(
       [tenantId, id, membros]);
   }
   invalidarPermissoes(tenantId);
-  return { id, nome, acesso_total: acessoTotal, acoes, contas, membros };
+  let empresasGravadas = empresas ?? [];
+  if (!empresas) {
+    const { rows } = await exec.query(
+      `SELECT COALESCE(to_jsonb(g)->'empresas', '[]'::jsonb) AS e FROM grupos_usuario g WHERE tenant_id = $1 AND id = $2`, [tenantId, id]);
+    empresasGravadas = listaDeTextos(rows[0]?.e);
+  }
+  return { id, nome, acesso_total: acessoTotal, acoes, contas, empresas: empresasGravadas, membros };
 }
 
 export async function excluirGrupo(exec: ExecutorPermissoes, tenantId: string, id: string): Promise<boolean> {
@@ -227,13 +269,15 @@ export async function excluirGrupo(exec: ExecutorPermissoes, tenantId: string, i
   return (r.rowCount ?? 0) > 0;
 }
 
-export interface RestricaoCadastro { usuario_id: string; contas_liberadas: string[]; acoes_negadas: AcaoFinanceira[] }
+export interface RestricaoCadastro { usuario_id: string; contas_liberadas: string[]; acoes_negadas: AcaoFinanceira[]; empresas_liberadas: string[] }
 
 export async function listarRestricoesDeUsuarios(exec: ExecutorPermissoes, tenantId: string): Promise<RestricaoCadastro[]> {
   const { rows } = await exec.query(
-    `SELECT usuario_id, contas_liberadas, acoes_negadas FROM usuario_restricoes WHERE tenant_id = $1`, [tenantId]);
+    `SELECT usuario_id, contas_liberadas, acoes_negadas, COALESCE(to_jsonb(r)->'empresas_liberadas', '[]'::jsonb) AS empresas_liberadas
+       FROM usuario_restricoes r WHERE tenant_id = $1`, [tenantId]);
   return rows.map(r => ({
     usuario_id: String(r.usuario_id), contas_liberadas: listaDeTextos(r.contas_liberadas), acoes_negadas: listaDeAcoes(r.acoes_negadas),
+    empresas_liberadas: listaDeTextos(r.empresas_liberadas),
   }));
 }
 
@@ -247,12 +291,28 @@ export async function salvarRestricaoDeUsuario(
   if (rows.length === 0) throw new ErroPermissoes('Pessoa não encontrada nesta agência.', 404);
   const contas = listaDeTextos(entrada.contas_liberadas);
   const negadas = listaDeAcoes(entrada.acoes_negadas);
+  // Empresas (E7): só quando a tela manda; ausente = mantém as de antes.
+  let empresas: string[] = [];
+  const mandouEmpresas = Array.isArray(entrada.empresas_liberadas);
+  if (mandouEmpresas) {
+    empresas = listaDeTextos(entrada.empresas_liberadas);
+    if (empresas.length > 0) {
+      const { rows: existem } = await exec.query(
+        `SELECT id FROM empresas WHERE tenant_id = $1 AND id = ANY($2::text[])`, [tenantId, empresas]);
+      if (existem.length !== empresas.length) throw new ErroPermissoes('Uma das empresas escolhidas não existe mais. Recarregue a tela.');
+    }
+  } else {
+    const { rows: antes } = await exec.query(
+      `SELECT COALESCE(to_jsonb(r)->'empresas_liberadas', '[]'::jsonb) AS e FROM usuario_restricoes r WHERE tenant_id = $1 AND usuario_id = $2`,
+      [tenantId, usuarioId]);
+    empresas = listaDeTextos(antes[0]?.e);
+  }
   if (contas.length > 0) {
     const { rows: existentes } = await exec.query(
       `SELECT id FROM contas_bancarias WHERE tenant_id = $1 AND id = ANY($2::text[])`, [tenantId, contas]);
     if (existentes.length !== contas.length) throw new ErroPermissoes('Uma das contas escolhidas não existe mais. Recarregue a tela.');
   }
-  if (contas.length === 0 && negadas.length === 0) {
+  if (contas.length === 0 && negadas.length === 0 && empresas.length === 0) {
     await exec.query(`DELETE FROM usuario_restricoes WHERE tenant_id = $1 AND usuario_id = $2`, [tenantId, usuarioId]);
   } else {
     await exec.query(
@@ -261,9 +321,13 @@ export async function salvarRestricaoDeUsuario(
        ON CONFLICT (tenant_id, usuario_id) DO UPDATE SET contas_liberadas = EXCLUDED.contas_liberadas,
          acoes_negadas = EXCLUDED.acoes_negadas, updated_at = NOW()`,
       [tenantId, usuarioId, JSON.stringify(contas), JSON.stringify(negadas)]);
+    if (mandouEmpresas) {
+      await exec.query(`UPDATE usuario_restricoes SET empresas_liberadas = $3::jsonb WHERE tenant_id = $1 AND usuario_id = $2`,
+        [tenantId, usuarioId, JSON.stringify(empresas)]);
+    }
   }
   invalidarPermissoes(tenantId);
-  return { usuario_id: usuarioId, contas_liberadas: contas, acoes_negadas: negadas };
+  return { usuario_id: usuarioId, contas_liberadas: contas, acoes_negadas: negadas, empresas_liberadas: empresas };
 }
 
 /** Membros (ids de usuário) de um grupo, para resolver aprovadores 'grupo:<id>'. */

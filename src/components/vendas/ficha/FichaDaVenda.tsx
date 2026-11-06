@@ -32,7 +32,10 @@ import { AbaProdutos, type PessoaDaLista } from './AbaProdutos';
 import { AbaPagamentos } from './AbaPagamentos';
 import { AbaCliente, AbaComissoes, AbaFornecedor, AbaPosicao } from './AbasDoFinanceiro';
 import { CancelamentoDaVenda } from './CancelamentoDaVenda';
+import { NotasERetencoes } from './NotasERetencoes';
 import { CONTROLE, dataBR, LINK, Pilula, quandoBR, reais, SELECT, Total } from './comum';
+import { CampoEmpresa, useEmpresaSugerida } from '@/components/fin/CamposDeEmpresa';
+import { useEmpresas } from '@/components/fin/useEmpresas';
 
 type Aba = 'produtos' | 'pagamentos' | 'cliente' | 'fornecedor' | 'comissoes' | 'posicao';
 const ABAS: ReadonlyArray<{ id: Aba; rotulo: string; soDaVendaGravada?: boolean }> = [
@@ -79,6 +82,10 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
   const [motivo, setMotivo] = React.useState('');
   const [processando, setProcessando] = React.useState(false);
   const [atualizadoEm, setAtualizadoEm] = React.useState<Date | null>(null);
+  // Várias empresas (E7): a empresa da venda (o campo só aparece com 2+ empresas).
+  const empresaSugerida = useEmpresaSugerida();
+  const { multi: variasEmpresas } = useEmpresas();
+  const [empresaId, setEmpresaId] = React.useState<string | undefined>(undefined);
 
   const carregar = React.useCallback(async () => {
     if (!vendaId) return;
@@ -88,6 +95,7 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
       setFicha(f);
       setRascunho(f.venda);
       setConfig(f.config_receita);
+      setEmpresaId(f.empresa_id ?? 'principal');
       setSujo(false);
       setEstado('ok');
       setAtualizadoEm(new Date());
@@ -122,6 +130,7 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
   }, [editavel]);
 
   const mudar = (parcial: Partial<Venda>) => { setRascunho(v => (v ? { ...v, ...parcial } : v)); setSujo(true); };
+  const atualizarFicha = (f: Ficha) => { setFicha(f); setRascunho(f.venda); setSujo(false); setAtualizadoEm(new Date()); };
 
   async function salvar() {
     if (!rascunho) return;
@@ -129,9 +138,12 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
     if (!rascunho.produtos.length) { toast.error('Inclua ao menos um produto', 'O total da venda vem dos produtos.'); setAba('produtos'); return; }
     setSalvando(true);
     try {
+      // A empresa só vai quando a agência tem mais de uma (o campo existe).
+      const empresa = variasEmpresas ? empresaId ?? (nova ? empresaSugerida : undefined) : undefined;
+      const corpo = { venda: rascunho, ...(empresa ? { empresa_id: empresa } : {}) };
       const f = nova
-        ? await chamar<Ficha>('/api/vendas/completa', 'POST', { venda: rascunho })
-        : await chamar<Ficha>(`/api/vendas/completa/${encodeURIComponent(vendaId!)}`, 'PUT', { venda: rascunho });
+        ? await chamar<Ficha>('/api/vendas/completa', 'POST', corpo)
+        : await chamar<Ficha>(`/api/vendas/completa/${encodeURIComponent(vendaId!)}`, 'PUT', corpo);
       const contasDoEvento = (f.eventos[0]?.detalhe?.contas ?? {}) as { criadas?: number; atualizadas?: number; removidas?: number; preservadas?: number };
       toast.success(nova ? `Venda ${f.venda.numero} lançada` : 'Venda salva',
         `Contas: ${contasDoEvento.criadas ?? 0} criadas, ${contasDoEvento.atualizadas ?? 0} atualizadas, ${contasDoEvento.removidas ?? 0} removidas${contasDoEvento.preservadas ? `, ${contasDoEvento.preservadas} já baixadas mantidas` : ''}.`);
@@ -207,9 +219,11 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
           ) : undefined}
           acaoPrimaria={acaoPrimaria}
           acoesSecundarias={!nova && vendaId ? [
-            ...(ficha && ficha.versao_modelo === 2 && ficha.permissoes.cancelar && ficha.venda.produtos.some(p => !p.cancelado_em)
-              ? [{ rotulo: 'Cancelar produto ou passageiro', onClick: () => (sujo ? toast.warning('Salve antes de cancelar', 'Há mudanças que ainda não foram salvas.') : setCancelando(true)) }]
+            ...(ficha && ficha.versao_modelo === 2 && ficha.permissoes.cancelar && ficha.venda.produtos.some(p => !p.cancelado_em || p.passageiros.some(x => x.cancelado_em))
+              ? [{ rotulo: ficha.venda.produtos.some(p => !p.cancelado_em) ? 'Cancelar produto ou passageiro' : 'Cancelamentos da venda', onClick: () => (sujo ? toast.warning('Salve antes de cancelar', 'Há mudanças que ainda não foram salvas.') : setCancelando(true)) }]
               : []),
+            { rotulo: 'Recibo', href: `/vendas/${encodeURIComponent(vendaId)}/recibo` },
+            ...(ficha?.link_crm ? [{ rotulo: 'Contrato e voucher no CRM', href: ficha.link_crm }] : []),
             { rotulo: 'Nota de débito', href: `/vendas/${encodeURIComponent(vendaId)}/nota-de-debito` },
             { rotulo: 'Ver na tela anterior', href: `/vendas/${encodeURIComponent(vendaId)}` },
           ] : undefined}
@@ -236,6 +250,15 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
                 </p>
               ) : null}
 
+              {editavel && variasEmpresas ? (
+                <div className="max-w-sm">
+                  <CampoEmpresa
+                    valor={empresaId ?? empresaSugerida}
+                    onChange={e => { setEmpresaId(e); setSujo(true); }}
+                    ajuda="Os títulos da venda nascem nesta empresa. Trocar leva junto os que ainda estão em aberto."
+                  />
+                </div>
+              ) : null}
               <DadosDaVenda venda={venda} editavel={editavel} clientes={clientes} intermediarios={fornecedores} onMudar={mudar} />
 
               <dl aria-label="Totais da venda" className="grid grid-cols-2 gap-[var(--fin-s-4)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)] shadow-[var(--fin-e-card)] sm:grid-cols-3 lg:grid-cols-6">
@@ -287,9 +310,24 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
               <div role="tabpanel" id={`painel-${aba}`} aria-labelledby={`aba-${aba}`}>
                 {aba === 'produtos' ? (
                   <AbaProdutos
-                    produtos={venda.produtos} editavel={editavel} verReceita={verReceita} fornecedores={fornecedores}
+                    produtos={venda.produtos} removidos={venda.produtos_removidos ?? []} editavel={editavel} verReceita={verReceita} fornecedores={fornecedores}
                     onSalvarProduto={p => mudar({ produtos: substituir(venda.produtos, p).map((x, i) => ({ ...x, sequencia: i + 1 })) })}
-                    onRemoverProduto={id => mudar({ produtos: venda.produtos.filter(x => x.id !== id).map((x, i) => ({ ...x, sequencia: i + 1 })) })}
+                    onRemoverProduto={id => {
+                      const saiu = venda.produtos.find(x => x.id === id);
+                      mudar({
+                        produtos: venda.produtos.filter(x => x.id !== id).map((x, i) => ({ ...x, sequencia: i + 1 })),
+                        produtos_removidos: saiu ? [...(venda.produtos_removidos ?? []), saiu] : venda.produtos_removidos,
+                      });
+                      if (saiu) toast.info('Produto removido', 'Ele fica guardado em "produtos removidos" e dá para restaurar. As contas se refazem ao salvar.');
+                    }}
+                    onRestaurarProduto={id => {
+                      const volta = (venda.produtos_removidos ?? []).find(x => x.id === id);
+                      if (!volta) return;
+                      mudar({
+                        produtos: [...venda.produtos, volta].map((x, i) => ({ ...x, sequencia: i + 1 })),
+                        produtos_removidos: (venda.produtos_removidos ?? []).filter(x => x.id !== id),
+                      });
+                    }}
                   />
                 ) : aba === 'pagamentos' ? (
                   <AbaPagamentos
@@ -302,8 +340,13 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
                     Há mudanças ainda não salvas. Esta aba mostra a venda como está gravada.
                   </p>
                 ) : null}
-                {ficha && aba === 'cliente' ? <div className="mt-[var(--fin-s-3)]"><AbaCliente ficha={ficha} /></div> : null}
-                {ficha && aba === 'fornecedor' ? <div className="mt-[var(--fin-s-3)]"><AbaFornecedor ficha={ficha} /></div> : null}
+                {ficha && aba === 'cliente' ? (
+                  <div className="mt-[var(--fin-s-3)] flex flex-col gap-[var(--fin-s-4)]">
+                    <AbaCliente ficha={ficha} podeLancar={podeEditar && !sujo} onAtualizada={atualizarFicha} />
+                    {ficha.permissoes.ver_financeiro && vendaId ? <NotasERetencoes vendaId={vendaId} /> : null}
+                  </div>
+                ) : null}
+                {ficha && aba === 'fornecedor' ? <div className="mt-[var(--fin-s-3)]"><AbaFornecedor ficha={ficha} podeLancar={podeEditar && !sujo} onAtualizada={atualizarFicha} /></div> : null}
                 {ficha && aba === 'comissoes' ? <div className="mt-[var(--fin-s-3)]"><AbaComissoes ficha={ficha} /></div> : null}
                 {ficha && aba === 'posicao' ? <div className="mt-[var(--fin-s-3)]"><AbaPosicao ficha={ficha} /></div> : null}
               </div>
@@ -404,6 +447,7 @@ function DadosDaVenda({ venda, editavel, clientes, intermediarios, onMudar }: {
         <Total rotulo="Data da venda" valor={dataBR(venda.data_venda)} />
         <Total rotulo="Intermediário" valor={venda.intermediario?.nome || '—'} />
         <Total rotulo="Centro de custo" valor={venda.centro_custo || '—'} />
+        {venda.operacao_propria ? <Total rotulo="Operação" valor="Própria da agência" /> : null}
       </dl>
     );
   }
@@ -442,6 +486,14 @@ function DadosDaVenda({ venda, editavel, clientes, intermediarios, onMudar }: {
       <Field rotulo="Centro de custo">
         {a => <Input {...a} className={CONTROLE} value={venda.centro_custo} maxLength={120} onChange={e => onMudar({ centro_custo: e.target.value })} />}
       </Field>
+      <label className="flex cursor-pointer items-start gap-[var(--fin-s-2)] sm:col-span-2 lg:col-span-4">
+        <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-[var(--fin-accent)]" checked={venda.operacao_propria === true}
+          onChange={e => onMudar({ operacao_propria: e.target.checked })} />
+        <span className="flex flex-col gap-0.5">
+          <span className="fin-t-body text-[var(--fin-text)]">Operação própria</span>
+          <span className="fin-t-caption text-[var(--fin-text-3)]">A agência opera a viagem (um grupo dela, por exemplo). Produto sem fornecedor não vira conta a pagar: o custo é da própria agência.</span>
+        </span>
+      </label>
       <p className="fin-t-caption text-[var(--fin-text-3)] sm:col-span-2 lg:col-span-4">
         Quais componentes contam como receita da agência se escolhe em <Link href="/config/vendas" className={LINK}>Configurações › Vendas</Link>.
       </p>

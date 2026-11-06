@@ -37,7 +37,7 @@ import {
   intervalos, lancamentosDoCaixa, periodoContem,
   type Agrupamento, type EventoDeFolha, type Lancamento, type Periodo, type PontoDaCurva,
 } from './caderno-caixa';
-import { num, round2, somaPor } from './money';
+import { addDias, num, round2, somaPor } from './money';
 import { entradaLiquidaNoBanco, valorMovimentado } from './saldo-bancario';
 
 // ─── Conta ──────────────────────────────────────────────────────────────────
@@ -322,5 +322,127 @@ export function alertaDeSaldo(curva: readonly PontoDaCurva[], minimo: number, ho
     primeiroAbaixoDoMinimo: min > 0 ? (previstos.find(p => p.saldo < min)?.data ?? null) : null,
     primeiroNegativo: previstos.find(p => p.saldo < 0)?.data ?? null,
     menor,
+  };
+}
+
+// ─── Grade conta × dia (E7, G3) ─────────────────────────────────────────────
+
+export interface LinhaDaGrade {
+  /** Id da conta bancária; SEM_CONTA e OUTRAS_CONTAS nas linhas sintéticas. */
+  id: string;
+  nome: string;
+  tipo: 'conta' | 'sem_conta' | 'outras';
+  saldoInicial: number;
+  /** Saldo no fim de cada dia (na ordem de `dias`). */
+  saldos: number[];
+  /** Entradas − saídas de cada dia. */
+  movimentos: number[];
+  entradas: number[];
+  saidas: number[];
+  /** Os lançamentos de cada dia com movimento (para abrir o detalhe). */
+  lancamentosPorDia: Record<string, Lancamento[]>;
+}
+
+export interface GradeContaDia {
+  dias: string[];
+  linhas: LinhaDaGrade[];
+  total: Omit<LinhaDaGrade, 'id' | 'nome' | 'tipo' | 'lancamentosPorDia'>;
+}
+
+export const SEM_CONTA = '__sem_conta';
+export const OUTRAS_CONTAS = '__outras';
+
+/**
+ * Cada conta bancária numa linha, cada dia do período numa coluna: o saldo no
+ * fim do dia (ou o movimento do dia), pela regra do caderno (realizado na
+ * data da baixa, em aberto no vencimento ou hoje se venceu). Baixa sem conta
+ * vai para a Caixa Geral; previsão sem conta e folha ainda não lançada ficam
+ * numa linha própria ("Previsto sem conta"), e título de conta que não está
+ * na lista (excluída ou não liberada para a pessoa) em "Outras contas". Assim
+ * a soma das linhas é exatamente o caderno de "Todas as contas".
+ */
+export function gradeContaPorDia(entrada: {
+  receber: readonly ContaReceber[];
+  pagar: readonly ContaPagar[];
+  folha?: readonly EventoDeFolha[];
+  contas: ReadonlyArray<{ id: string; nome?: string | null; saldo_inicial?: number | null }>;
+  caixaGeralId?: string | null;
+  /** Conta previsão padrão da agência: o que está em aberto sem conta prevista entra nela. */
+  contaPrevisaoPadraoId?: string | null;
+  periodo: Periodo;
+  hoje: string;
+}): GradeContaDia {
+  const { periodo, hoje } = entrada;
+  const dias: string[] = [];
+  for (let d = periodo.inicio; d <= periodo.fim && dias.length < 400; d = addDias(d, 1)) dias.push(d);
+
+  const conhecidas = new Set(entrada.contas.map(c => c.id));
+  const grupos = new Map<string, { receber: ContaReceber[]; pagar: ContaPagar[] }>();
+  const grupo = (id: string) => {
+    let g = grupos.get(id);
+    if (!g) { g = { receber: [], pagar: [] }; grupos.set(id, g); }
+    return g;
+  };
+  const chaveDe = (conta: string | null) => (conta === null ? SEM_CONTA : conhecidas.has(conta) ? conta : OUTRAS_CONTAS);
+  for (const cr of entrada.receber) {
+    if (cr.status === 'CANCELADO') continue;
+    grupo(chaveDe(contaDoTitulo(cr, 'receber', entrada.caixaGeralId, entrada.contaPrevisaoPadraoId))).receber.push(cr);
+  }
+  for (const cp of entrada.pagar) {
+    if (cp.status === 'CANCELADO') continue;
+    grupo(chaveDe(contaDoTitulo(cp, 'pagar', entrada.caixaGeralId, entrada.contaPrevisaoPadraoId))).pagar.push(cp);
+  }
+
+  const montar = (id: string, nome: string, tipo: LinhaDaGrade['tipo'], saldoInicialDaConta: number, folha: readonly EventoDeFolha[]): LinhaDaGrade => {
+    const g = grupos.get(id) ?? { receber: [], pagar: [] };
+    const lancs = lancamentosDoCaixa({ receber: g.receber, pagar: g.pagar, folha, hoje });
+    const anteriores = lancs.filter(l => !l.data || l.data < periodo.inicio);
+    const saldoInicial = round2(saldoInicialDaConta + somaPor(anteriores, l => (l.tipo === 'entrada' ? l.valor : -l.valor)));
+    const porDia = new Map<string, Lancamento[]>();
+    for (const l of lancs) if (l.data && periodoContem(periodo, l.data)) porDia.set(l.data, [...(porDia.get(l.data) ?? []), l]);
+    const saldos: number[] = [];
+    const movimentos: number[] = [];
+    const entradas: number[] = [];
+    const saidas: number[] = [];
+    let corrido = saldoInicial;
+    const lancamentosPorDia: Record<string, Lancamento[]> = {};
+    for (const d of dias) {
+      const ls = porDia.get(d) ?? [];
+      const e = somaPor(ls.filter(l => l.tipo === 'entrada'), l => l.valor);
+      const s = somaPor(ls.filter(l => l.tipo === 'saida'), l => l.valor);
+      corrido = round2(corrido + e - s);
+      entradas.push(e);
+      saidas.push(s);
+      movimentos.push(round2(e - s));
+      saldos.push(corrido);
+      if (ls.length) lancamentosPorDia[d] = ls;
+    }
+    return { id, nome, tipo, saldoInicial, saldos, movimentos, entradas, saidas, lancamentosPorDia };
+  };
+
+  const linhas: LinhaDaGrade[] = entrada.contas.map(c =>
+    montar(c.id, String(c.nome ?? '').trim() || 'Conta sem nome', 'conta', round2(num(c.saldo_inicial)), []));
+  const folha = (entrada.folha ?? []).filter(f => num(f.valor) > 0);
+  if (grupos.has(SEM_CONTA) || folha.length) {
+    const l = montar(SEM_CONTA, 'Previsto sem conta', 'sem_conta', 0, folha);
+    if (l.saldoInicial !== 0 || l.movimentos.some(v => v !== 0)) linhas.push(l);
+  }
+  if (grupos.has(OUTRAS_CONTAS)) {
+    const l = montar(OUTRAS_CONTAS, 'Outras contas', 'outras', 0, []);
+    if (l.saldoInicial !== 0 || l.movimentos.some(v => v !== 0)) linhas.push(l);
+  }
+
+  const somaColuna = (k: 'saldos' | 'movimentos' | 'entradas' | 'saidas') =>
+    dias.map((_, i) => round2(linhas.reduce((s, l) => s + l[k][i], 0)));
+  return {
+    dias,
+    linhas,
+    total: {
+      saldoInicial: round2(linhas.reduce((s, l) => s + l.saldoInicial, 0)),
+      saldos: somaColuna('saldos'),
+      movimentos: somaColuna('movimentos'),
+      entradas: somaColuna('entradas'),
+      saidas: somaColuna('saidas'),
+    },
   };
 }

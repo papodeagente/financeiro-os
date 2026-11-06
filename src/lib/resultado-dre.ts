@@ -431,3 +431,101 @@ export function orcadoPorLinha(o: OrcamentoDoMes | null): Map<string, number> {
   m.set('LUCRO LÍQUIDO', round2(o.lucroProjetado));
   return m;
 }
+
+// ============================================================
+// Mês a mês (E7, G3): cada mês do período numa coluna, mais total e média
+// ============================================================
+
+export interface LinhaMesAMes {
+  /** Chave estável entre os meses (o nome, ou o começo do nome nas margens). */
+  chave: string;
+  nome: string;
+  codigo: string;
+  tipo: TipoLinhaDRE;
+  indent: number;
+  /** Um valor por mês, na ordem de `meses`. Mês sem a linha = 0. */
+  valores: number[];
+  total: number;
+  media: number;
+  /** Margens: valores em %, total e média recalculados sobre os totais. */
+  percentual?: boolean;
+}
+
+export interface DREMesAMes {
+  meses: string[];
+  linhas: LinhaMesAMes[];
+}
+
+/** Os meses 'AAAA-MM' de `de` até `ate`, inclusive (no máximo `max`). */
+export function mesesEntre(de: string, ate: string, max = 24): string[] {
+  if (!/^\d{4}-\d{2}$/.test(de) || !/^\d{4}-\d{2}$/.test(ate)) return [];
+  const [ini, fim] = de <= ate ? [de, ate] : [ate, de];
+  const saida: string[] = [];
+  let [a, m] = ini.split('-').map(Number);
+  while (saida.length < max) {
+    const ym = `${a}-${String(m).padStart(2, '0')}`;
+    if (ym > fim) break;
+    saida.push(ym);
+    m += 1;
+    if (m > 12) { m = 1; a += 1; }
+  }
+  return saida;
+}
+
+/** Margens trazem o número no nome ("...: 12.3%"): a chave é o começo. */
+export function chaveDaLinhaDRE(nome: string): string {
+  if (nome.startsWith('Margem')) return nome.split(':')[0].trim();
+  return nome;
+}
+
+/**
+ * O DRE de cada mês lado a lado. As linhas casam pelo nome (como o
+ * comparativo); uma linha que só existe em alguns meses (variação cambial,
+ * outras despesas) entra no lugar em que aparece e vale 0 nos outros.
+ * Total = soma dos meses; média = total ÷ número de meses. Nas margens, total
+ * e média são a margem do período inteiro (lucro total ÷ receita total).
+ */
+export function dreMesAMes(base: Omit<EntradaDRE, 'mes'>, meses: readonly string[]): DREMesAMes {
+  const porMes = meses.map(mes => montarDRE({ ...base, mes }));
+  const ordem: string[] = [];
+  const modelo = new Map<string, LinhaDRE>();
+  const valores = new Map<string, number[]>();
+  porMes.forEach((linhas, i) => {
+    let anterior: string | null = null;
+    const vistas = new Map<string, number>();
+    for (const l of linhas) {
+      const raiz = chaveDaLinhaDRE(l.nome);
+      const n = vistas.get(raiz) ?? 0;
+      vistas.set(raiz, n + 1);
+      const chave = n === 0 ? raiz : `${raiz}#${n + 1}`;
+      if (!modelo.has(chave)) {
+        modelo.set(chave, l);
+        valores.set(chave, meses.map(() => 0));
+        const pos = anterior === null ? 0 : ordem.indexOf(anterior) + 1;
+        ordem.splice(pos, 0, chave);
+      }
+      valores.get(chave)![i] = l.valor;
+      anterior = chave;
+    }
+  });
+  const totalDe = (chave: string) => round2(soma(valores.get(chave) ?? []));
+  const qtd = Math.max(meses.length, 1);
+  const linhas: LinhaMesAMes[] = ordem.map(chave => {
+    const l = modelo.get(chave)!;
+    const percentual = l.nome.startsWith('Margem');
+    let total = totalDe(chave);
+    let media = round2(total / qtd);
+    if (percentual) {
+      const receita = totalDe('RECEITA BRUTA (comissão + serviços)');
+      total = chave.startsWith('Margem líquida')
+        ? round2(divSegura(totalDe('LUCRO LÍQUIDO'), receita) * 100)
+        : round2(divSegura(receita, totalDe('VOLUME INTERMEDIADO (informativo)')) * 100);
+      media = total;
+    }
+    return {
+      chave, nome: percentual ? chave : l.nome, codigo: l.codigo, tipo: l.tipo, indent: l.indent,
+      valores: valores.get(chave)!, total, media, ...(percentual ? { percentual: true } : {}),
+    };
+  });
+  return { meses: [...meses], linhas };
+}

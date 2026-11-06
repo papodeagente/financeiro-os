@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { BotaoExportar } from '@/components/fin/BotaoExportar';
 import { ConfirmDialog } from '@/components/fin/ConfirmDialog';
 import { Field } from '@/components/fin/Field';
 import { FilterBar } from '@/components/fin/FilterBar';
@@ -28,6 +29,7 @@ import { loadEntities } from '@/lib/crm-storage';
 import { consumirAtalho, lerAtalhos } from '@/lib/atalho-da-url';
 import { addDias, deCentavos, hojeISO } from '@/lib/money';
 import type { ListaDeReembolsos, Reembolso, TipoDeReembolso } from '@/lib/reembolsos-servidor';
+import { documentoDosReembolsos } from '@/lib/exportacao/reembolsos-e-creditos';
 import { toast } from '@/lib/toast';
 import { cn, formatBRL } from '@/lib/utils';
 
@@ -44,7 +46,15 @@ import { cn, formatBRL } from '@/lib/utils';
 
 const PERIODOS: PeriodoChave[] = ['TUDO', 'MES_ATUAL', 'PROX_30', 'MES_PASSADO', 'PERSONALIZADO'];
 type FiltroSituacao = 'em_andamento' | 'todas' | 'SOLICITADO' | 'APROVADO' | 'PAGO' | 'CANCELADO';
-type Filtros = { periodo: PeriodoChave; de: string; ate: string; tipo: '' | TipoDeReembolso; situacao: FiltroSituacao; busca: string };
+/** Os três sentidos, do ponto de vista da agência. */
+type Sentido = 'CLIENTE' | 'DO_FORNECEDOR' | 'AO_FORNECEDOR';
+const ROTULO_SENTIDO: Record<Sentido, string> = { CLIENTE: 'Ao cliente', DO_FORNECEDOR: 'Do fornecedor', AO_FORNECEDOR: 'Ao fornecedor' };
+const sentidoDe = (r: Pick<Reembolso, 'tipo' | 'sentido'>): Sentido =>
+  r.tipo === 'CLIENTE' ? 'CLIENTE' : r.sentido === 'PAGAR' ? 'AO_FORNECEDOR' : 'DO_FORNECEDOR';
+/** A agência paga (ao cliente ou ao fornecedor): a conta gerada é a pagar. */
+const agenciaPaga = (r: Pick<Reembolso, 'tipo' | 'sentido'>) => sentidoDe(r) !== 'DO_FORNECEDOR';
+
+type Filtros = { periodo: PeriodoChave; de: string; ate: string; tipo: '' | Sentido; situacao: FiltroSituacao; busca: string };
 const TODOS = '__todos__';
 
 function filtrosPadrao(): Filtros {
@@ -95,7 +105,10 @@ export function TelaDeReembolsos() {
     const ac = new AbortController();
     setCarregando(true);
     const q = new URLSearchParams();
-    if (f.tipo) q.set('tipo', f.tipo);
+    if (f.tipo) {
+      q.set('tipo', f.tipo === 'CLIENTE' ? 'CLIENTE' : 'FORNECEDOR');
+      if (f.tipo !== 'CLIENTE') q.set('sentido', f.tipo === 'AO_FORNECEDOR' ? 'PAGAR' : 'RECEBER');
+    }
     if (f.situacao !== 'todas') q.set('situacao', f.situacao);
     if (f.de) q.set('de', f.de);
     if (f.ate) q.set('ate', f.ate);
@@ -137,9 +150,9 @@ export function TelaDeReembolsos() {
     const semDireito = podeCuidar ? null : 'Seu acesso não inclui cuidar de reembolsos.';
     return [
       { id: 'ver', rotulo: 'Ver detalhes e histórico', icone: ReceiptText, atalho: 'Enter', onEscolher: () => setDetalhe(r) },
-      { id: 'aprovar', rotulo: r.tipo === 'CLIENTE' ? 'Aprovar e gerar a conta a pagar' : 'Aprovar e gerar a conta a receber', icone: CircleCheck,
+      { id: 'aprovar', rotulo: agenciaPaga(r) ? 'Aprovar e gerar a conta a pagar' : 'Aprovar e gerar a conta a receber', icone: CircleCheck,
         desabilitado: semDireito ?? (r.situacao === 'SOLICITADO' ? null : 'Só se aprova reembolso solicitado.'), onEscolher: () => { setPrazo(r.prazo); setAcao({ tipo: 'aprovar', r }); } },
-      { id: 'pagar', rotulo: r.tipo === 'CLIENTE' ? 'Registrar o pagamento na conta' : 'Registrar o recebimento na conta', icone: Wallet,
+      { id: 'pagar', rotulo: agenciaPaga(r) ? 'Registrar o pagamento na conta' : 'Registrar o recebimento na conta', icone: Wallet,
         desabilitado: r.situacao === 'APROVADO' && r.conta_id ? null : 'Aprove antes: o pagamento é dado na conta gerada.', onEscolher: () => abrirConta(r) },
       ...(r.tipo === 'CLIENTE' ? [{ id: 'credito', rotulo: 'Transformar em crédito do cliente', icone: Undo2,
         desabilitado: (podeCredito ? null : 'Seu acesso não inclui crédito do cliente.') ?? (andamento ? null : 'Este reembolso já foi pago ou cancelado.'), onEscolher: () => setAcao({ tipo: 'credito', r }) }] : []),
@@ -155,7 +168,11 @@ export function TelaDeReembolsos() {
     try {
       if (acao.tipo === 'aprovar') {
         await mudar(acao.r.id, { acao: 'aprovar', prazo });
-        toast.success('Reembolso aprovado', acao.r.tipo === 'CLIENTE' ? 'A conta a pagar ao cliente já está nas contas, com vencimento no prazo.' : 'A conta a receber do fornecedor já está nas contas, com vencimento no prazo.');
+        toast.success('Reembolso aprovado', {
+          CLIENTE: 'A conta a pagar ao cliente já está nas contas, com vencimento no prazo.',
+          DO_FORNECEDOR: 'A conta a receber do fornecedor já está nas contas, com vencimento no prazo.',
+          AO_FORNECEDOR: 'A conta a pagar ao fornecedor já está nas contas, com vencimento no prazo.',
+        }[sentidoDe(acao.r)]);
       } else if (acao.tipo === 'cancelar') {
         if (motivo.trim().length < 5) { toast.error('Diga o motivo', 'Pelo menos 5 letras: fica no histórico do reembolso.'); return; }
         await mudar(acao.r.id, { acao: 'cancelar', motivo });
@@ -189,10 +206,10 @@ export function TelaDeReembolsos() {
       id: 'tipo', cabecalho: 'Sentido', tipo: 'texto', minWidth: 130, prioridade: 2,
       render: r => (
         <span className="inline-flex items-center gap-1.5 text-[var(--fin-text)]">
-          {r.tipo === 'CLIENTE'
+          {agenciaPaga(r)
             ? <ArrowUpRight aria-hidden="true" className="size-3.5 text-[var(--fin-negative-text)]" />
             : <ArrowDownLeft aria-hidden="true" className="size-3.5 text-[var(--fin-positive)]" />}
-          {r.tipo === 'CLIENTE' ? 'Ao cliente' : 'Do fornecedor'}
+          {ROTULO_SENTIDO[sentidoDe(r)]}
         </span>
       ),
     },
@@ -238,7 +255,7 @@ export function TelaDeReembolsos() {
         <PageHeader
           icone={Undo2}
           titulo="Reembolsos"
-          subtitulo="O que a agência devolve aos clientes e o que os fornecedores devolvem à agência. Aprovar gera a conta; pagar é a baixa de sempre, na própria conta."
+          subtitulo="O que a agência devolve a clientes e fornecedores, e o que os fornecedores devolvem a ela. Aprovar gera a conta; pagar é a baixa de sempre, na própria conta."
           atualizadoEm={atualizadoEm}
           onRecarregar={recarregar}
           acaoPrimaria={podeCuidar ? { rotulo: 'Lançar reembolso', icone: Plus, onClick: () => setNovo(true) } : undefined}
@@ -249,7 +266,9 @@ export function TelaDeReembolsos() {
           <MetricCard rotulo="A devolver aos clientes" icone={ArrowUpRight} valor={t ? deCentavos(t.a_devolver_ao_cliente) : null} estado={numeros} tomDoIcone="negativo"
             contexto="Solicitados e aprovados ainda não pagos, no filtro." />
           <MetricCard rotulo="A receber dos fornecedores" icone={ArrowDownLeft} valor={t ? deCentavos(t.a_receber_do_fornecedor) : null} estado={numeros} tomDoIcone="positivo"
-            contexto="O que os fornecedores ainda devem devolver, no filtro." />
+            contexto={t && t.a_pagar_ao_fornecedor > 0
+              ? `O que os fornecedores ainda devem devolver, no filtro. A agência deve devolver a fornecedores ${reais(t.a_pagar_ao_fornecedor)}.`
+              : 'O que os fornecedores ainda devem devolver, no filtro.'} />
           <MetricCard rotulo="Prazo vencido" icone={Clock} valor={t?.atrasados ?? null} formato="contagem" estado={numeros} tone={t && t.atrasados > 0 ? 'negativo' : 'neutro'} tomDoIcone="aviso"
             contexto="Reembolsos em andamento que passaram do prazo combinado." />
           <MetricCard rotulo="Pagos" icone={Wallet} valor={t ? deCentavos(t.pagos_no_periodo) : null} estado={numeros} tone="positivo" tomDoIcone="positivo"
@@ -271,8 +290,8 @@ export function TelaDeReembolsos() {
               ],
             },
             {
-              id: 'reemb-tipo', rotulo: 'Sentido', valor: f.tipo || TODOS, onChange: v => mudarFiltro({ tipo: v === TODOS ? '' : v as TipoDeReembolso }),
-              opcoes: [{ valor: TODOS, rotulo: 'Os dois' }, { valor: 'CLIENTE', rotulo: 'Ao cliente' }, { valor: 'FORNECEDOR', rotulo: 'Do fornecedor' }],
+              id: 'reemb-tipo', rotulo: 'Sentido', valor: f.tipo || TODOS, onChange: v => mudarFiltro({ tipo: v === TODOS ? '' : v as Sentido }),
+              opcoes: [{ valor: TODOS, rotulo: 'Todos' }, { valor: 'CLIENTE', rotulo: 'Ao cliente' }, { valor: 'DO_FORNECEDOR', rotulo: 'Do fornecedor' }, { valor: 'AO_FORNECEDOR', rotulo: 'Ao fornecedor' }],
             },
           ]}
           resumo={{ exibidos: linhas.length, total: linhas.length, substantivo: linhas.length === 1 ? 'reembolso' : 'reembolsos' }}
@@ -280,6 +299,14 @@ export function TelaDeReembolsos() {
           onLimpar={limpar}
         />
         {!datasValidas ? <p role="alert" className="fin-t-body text-[var(--fin-negative-text)]">A data inicial precisa ser igual ou anterior à final.</p> : null}
+        <div className="flex justify-end">
+          <BotaoExportar
+            origem="reembolsos"
+            podeExportar={pode('exportar')}
+            desabilitado={!linhas.length}
+            documento={() => documentoDosReembolsos(linhas, { de: f.de, ate: f.ate, tipo: f.tipo, situacao: f.situacao, busca })}
+          />
+        </div>
 
         <FinTable<Reembolso>
           linhas={linhas}
@@ -320,7 +347,7 @@ export function TelaDeReembolsos() {
         onOpenChange={a => { if (!a) setAcao(null); }}
         titulo={acao?.tipo === 'aprovar' ? 'Aprovar o reembolso' : acao?.tipo === 'cancelar' ? 'Cancelar o reembolso' : 'Transformar em crédito do cliente'}
         oQueVaiAcontecer={!acao ? '' : acao.tipo === 'aprovar'
-          ? (acao.r.tipo === 'CLIENTE'
+          ? (agenciaPaga(acao.r)
             ? `Nasce uma conta a pagar de ${reais(acao.r.valor_centavos)} para ${acao.r.pessoa_nome}, vencendo no prazo. Quando ela for paga, o reembolso fica pago.`
             : `Nasce uma conta a receber de ${reais(acao.r.valor_centavos)} de ${acao.r.pessoa_nome}, vencendo no prazo. Quando ela for recebida, o reembolso fica pago.`)
           : acao.tipo === 'cancelar'
@@ -366,7 +393,7 @@ function DetalheDoReembolso({ r, onFechar, onAcao, podeCuidar, podeCredito, onPr
     <RecordSheet
       aberto
       onOpenChange={a => { if (!a) onFechar(); }}
-      titulo={`Reembolso ${r.tipo === 'CLIENTE' ? 'ao cliente' : 'do fornecedor'}`}
+      titulo={`Reembolso ${ROTULO_SENTIDO[sentidoDe(r)].toLowerCase()}`}
       descricao={`${r.pessoa_nome} · ${reais(r.valor_centavos)}${r.venda_numero ? ` · venda ${r.venda_numero}` : ''}`}
       acaoPrimaria={primaria}
       acaoSecundaria={r.situacao === 'SOLICITADO' && podeCuidar ? { rotulo: 'Fechar', onClick: onFechar } : null}
@@ -406,7 +433,9 @@ function DetalheDoReembolso({ r, onFechar, onAcao, podeCuidar, podeCredito, onPr
 const rotuloSituacao = (s: string) => ({ SOLICITADO: 'Solicitado', APROVADO: 'Aprovado', PAGO: 'Pago', CANCELADO: 'Cancelado' } as Record<string, string>)[s] ?? s;
 
 function NovoReembolso({ aberto, onFechar, onCriado }: { aberto: boolean; onFechar: () => void; onCriado: () => void }) {
-  const [tipo, setTipo] = React.useState<TipoDeReembolso>('CLIENTE');
+  const [sentido, setSentido] = React.useState<Sentido>('CLIENTE');
+  const tipo: TipoDeReembolso = sentido === 'CLIENTE' ? 'CLIENTE' : 'FORNECEDOR';
+  const paga = sentido !== 'DO_FORNECEDOR';
   const [pessoas, setPessoas] = React.useState<{ clientes: Array<{ id: string; nome: string }>; fornecedores: Array<{ id: string; nome: string }> }>({ clientes: [], fornecedores: [] });
   const [pessoa, setPessoa] = React.useState('');
   const [valor, setValor] = React.useState(0);
@@ -417,7 +446,7 @@ function NovoReembolso({ aberto, onFechar, onCriado }: { aberto: boolean; onFech
 
   React.useEffect(() => {
     if (!aberto) return;
-    setTipo('CLIENTE'); setPessoa(''); setValor(0); setPrazo(addDias(hojeISO(), 7)); setDescricao(''); setAprovar(false);
+    setSentido('CLIENTE'); setPessoa(''); setValor(0); setPrazo(addDias(hojeISO(), 7)); setDescricao(''); setAprovar(false);
     void Promise.all([
       loadEntities<{ id: string; nome: string }>('clientes'),
       loadEntities<{ id: string; nome_fantasia?: string; razao_social?: string }>('fornecedores-crm'),
@@ -435,7 +464,7 @@ function NovoReembolso({ aberto, onFechar, onCriado }: { aberto: boolean; onFech
     if (valor <= 0) { toast.error('Informe o valor'); return; }
     setGravando(true);
     try {
-      const r = await fetch('/api/reembolsos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo, pessoa_id: escolhida.id, pessoa_nome: escolhida.nome, valor_centavos: valor, prazo, descricao, aprovar }) });
+      const r = await fetch('/api/reembolsos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo, sentido: paga ? 'PAGAR' : 'RECEBER', pessoa_id: escolhida.id, pessoa_nome: escolhida.nome, valor_centavos: valor, prazo, descricao, aprovar }) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(String(j?.error ?? 'Não deu certo.'));
       toast.success(aprovar ? 'Reembolso aprovado' : 'Reembolso solicitado', aprovar ? 'A conta já foi gerada.' : 'Aprove quando estiver combinado: a conta nasce na aprovação.');
@@ -454,13 +483,17 @@ function NovoReembolso({ aberto, onFechar, onCriado }: { aberto: boolean; onFech
       titulo="Lançar reembolso"
       descricao="Para devolução combinada fora de um cancelamento. O cancelamento na venda já cria os reembolsos sozinho."
       sujo={valor > 0 || Boolean(pessoa)}
-      resumo={escolhida && valor > 0 ? `${tipo === 'CLIENTE' ? 'Devolver' : 'Receber de volta'} ${reais(valor)} ${tipo === 'CLIENTE' ? 'para' : 'de'} ${escolhida.nome} até ${dataBR(prazo)}.` : undefined}
+      resumo={escolhida && valor > 0 ? `${paga ? 'Devolver' : 'Receber de volta'} ${reais(valor)} ${paga ? 'para' : 'de'} ${escolhida.nome} até ${dataBR(prazo)}.` : undefined}
       acaoPrimaria={{ rotulo: aprovar ? 'Lançar e aprovar' : 'Lançar reembolso', onClick: salvar, carregando: gravando }}
       acaoSecundaria={{ rotulo: 'Voltar', onClick: onFechar }}
     >
       <div className="flex flex-col gap-[var(--fin-s-4)]">
-        <Segmentado<TipoDeReembolso> rotulo="Sentido do reembolso" cheio valor={tipo} onChange={v => { setTipo(v); setPessoa(''); }}
-          opcoes={[{ valor: 'CLIENTE', rotulo: 'A agência devolve ao cliente' }, { valor: 'FORNECEDOR', rotulo: 'O fornecedor devolve à agência' }]} />
+        <Segmentado<Sentido> rotulo="Sentido do reembolso" cheio valor={sentido} onChange={v => { if (tipo !== (v === 'CLIENTE' ? 'CLIENTE' : 'FORNECEDOR')) setPessoa(''); setSentido(v); }}
+          opcoes={[
+            { valor: 'CLIENTE', rotulo: 'Devolver ao cliente' },
+            { valor: 'DO_FORNECEDOR', rotulo: 'Receber do fornecedor' },
+            { valor: 'AO_FORNECEDOR', rotulo: 'Devolver ao fornecedor' },
+          ]} />
         <Field rotulo={tipo === 'CLIENTE' ? 'Cliente' : 'Fornecedor'} obrigatorio>
           {a => (
             <select {...a} className={SELECT} value={pessoa} onChange={e => setPessoa(e.target.value)}>
@@ -485,7 +518,7 @@ function NovoReembolso({ aberto, onFechar, onCriado }: { aberto: boolean; onFech
           <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-[var(--fin-accent)]" checked={aprovar} onChange={e => setAprovar(e.target.checked)} />
           <span className="flex flex-col gap-0.5">
             <span className="fin-t-body-strong text-[var(--fin-text)]">Já aprovar</span>
-            <span className="fin-t-caption text-[var(--fin-text-2)]">A conta {tipo === 'CLIENTE' ? 'a pagar' : 'a receber'} nasce agora, vencendo no prazo.</span>
+            <span className="fin-t-caption text-[var(--fin-text-2)]">A conta {paga ? 'a pagar' : 'a receber'} nasce agora, vencendo no prazo.</span>
           </span>
         </label>
       </div>

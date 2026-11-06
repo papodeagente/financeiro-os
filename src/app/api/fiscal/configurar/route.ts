@@ -21,6 +21,7 @@ import {
 } from '@/lib/nfse-acelera';
 import { codigoDoItem, itemSugerido } from '@/lib/lc116-servicos';
 import type { ConfigFiscal } from '@/lib/nfse-tipos';
+import { empresaDoPedido } from '@/lib/empresas-rota';
 
 /**
  * Configura a nota fiscal da agência do início ao fim, num clique.
@@ -49,13 +50,16 @@ export async function POST(req: Request) {
   };
 
   try {
+    // Configuração fiscal por empresa (E7): ?empresa=<id>; sem ele, a de sempre.
+    const { empresa: empresaFiscal, recusa: recusaEmpresa } = await empresaDoPedido(req);
+    if (recusaEmpresa) return recusaEmpresa;
     await initDB();
     const bloqueio = bloqueioFinanceiro(await getSession(), 'escrever');
     if (bloqueio) return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
     const tenantId = await getTenantId();
 
-    const gravada = await carregarConfigFiscal(tenantId);
-    let emitente = await carregarEmitente(tenantId);
+    const gravada = await carregarConfigFiscal(tenantId, empresaFiscal);
+    let emitente = await carregarEmitente(tenantId, empresaFiscal);
 
     // O que está na tela entra antes de qualquer coisa: é o dado mais novo.
     let config: ConfigFiscal = gravada;
@@ -111,10 +115,10 @@ export async function POST(req: Request) {
           anota('Conexão com a AceleraAPI', true, `Empresa #${nova.id} cadastrada.`);
         }
         // Grava assim que o token aparece: ele vem uma vez só.
-        await salvarConfigFiscal(tenantId, config);
+        await salvarConfigFiscal(tenantId, config, empresaFiscal);
       } catch (e) {
         anota('Conexão com a AceleraAPI', false, e instanceof Error ? e.message : 'Falhou.');
-        await salvarConfigFiscal(tenantId, config);
+        await salvarConfigFiscal(tenantId, config, empresaFiscal);
         return NextResponse.json({ config: configParaCliente(config), passos, pendencias: null });
       }
     }
@@ -158,7 +162,7 @@ export async function POST(req: Request) {
       anota('Dados da Receita', false, e instanceof Error ? e.message : 'Não consultou.');
     }
 
-    await salvarConfigFiscal(tenantId, config);
+    await salvarConfigFiscal(tenantId, config, empresaFiscal);
 
     // ---- 3. O que ainda falta, dito por campo ----
     const faltas: string[] = [];

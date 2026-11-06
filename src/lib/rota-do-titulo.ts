@@ -30,8 +30,18 @@ import { conferirEmissaoDaConta } from './lancamento-titulo';
 import { ErroDaLixeira, excluirTitulo, lerExcluida, restaurarTitulo, type TabelaDoTitulo } from './contas-excluidas';
 import { tituloGeradoPeloSistema } from './recorrencia';
 import { pode } from './permissoes-servidor';
+import { escopoDaSessao, tituloForaDasEmpresas, type ExecutorEmpresas } from './empresas-servidor';
+import { empresasDoRegistro } from './empresas';
 
 type Params = { params: Promise<{ id: string }> };
+
+const NAO_ACHADO = () => NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+/** Título de empresa não liberada para a pessoa (E7, várias empresas): como se não existisse. */
+async function foraDasEmpresas(tabela: TabelaDoTitulo, id: string): Promise<boolean> {
+  if (!pool) return false;
+  return tituloForaDasEmpresas(pool as unknown as ExecutorEmpresas, await getSession(), tabela, id);
+}
 
 const COLUNAS: Record<TabelaDoTitulo, string[]> = {
   contas_pagar: ['fornecedor_id', 'status'],
@@ -66,6 +76,7 @@ export function rotasDoTitulo(tabela: TabelaDoTitulo) {
       const { id } = await params;
       if (!pool) return NextResponse.json(null);
       const tenantId = await getTenantId();
+      if (await foraDasEmpresas(tabela, id)) return NAO_ACHADO();
       const { rows } = await pool.query(`SELECT data, ${SQL_VERSAO} AS v FROM ${tabela} WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
       if (rows.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
       return NextResponse.json({ ...(rows[0].data as Record<string, unknown>), _versao: String(rows[0].v ?? '') });
@@ -90,6 +101,7 @@ export function rotasDoTitulo(tabela: TabelaDoTitulo) {
       if (invalido) return NextResponse.json({ error: invalido }, { status: 400 });
       if (!pool) return NextResponse.json(item);
       const tenantId = await getTenantId();
+      if (await foraDasEmpresas(tabela, id)) return NAO_ACHADO();
       // Perfis de acesso (05/11/2026): baixa pela edição segue as mesmas regras da liquidação.
       const barrado = await conferirEdicaoDoTitulo(
         pool as unknown as ExecutorSQL, ((await getSession()) ?? {}) as SessaoDaBaixa, tenantId, tabela, id, item as Record<string, unknown>);
@@ -116,6 +128,7 @@ export function rotasDoTitulo(tabela: TabelaDoTitulo) {
       const { id } = await params;
       if (!pool) return NextResponse.json({ ok: true });
       const tenantId = await getTenantId();
+      if (await foraDasEmpresas(tabela, id)) return NAO_ACHADO();
       const sessao = await getSession();
       const r = await emTransacao(exec => excluirTitulo(exec, tenantId, tabela, id, { id: sessao?.userId, nome: sessao?.nome }));
       return NextResponse.json(r?.aviso ? { ok: true, aviso: r.aviso } : { ok: true });
@@ -137,6 +150,13 @@ export function rotasDoTitulo(tabela: TabelaDoTitulo) {
       const sessao = await getSession();
       const excluida = await lerExcluida(pool as unknown as ExecutorSQL, tenantId, tabela, id);
       if (!excluida) return NextResponse.json({ error: 'Esta conta não está entre as excluídas. Recarregue a lista.' }, { status: 404 });
+      // Várias empresas (E7): conta de empresa não liberada para a pessoa não se restaura.
+      if (sessao) {
+        const escopo = await escopoDaSessao(sessao, pool as unknown as ExecutorEmpresas);
+        if (escopo.multi && escopo.permitidas !== null && !empresasDoRegistro(excluida.data).some(e => escopo.permitidas!.includes(e))) {
+          return NextResponse.json({ error: 'Esta conta não está entre as excluídas. Recarregue a lista.' }, { status: 404 });
+        }
+      }
       if (tituloGeradoPeloSistema(tabela, excluida.data) && !(await pode(sessao, 'excluir_com_vinculo'))) {
         return NextResponse.json({ error: 'Esta conta nasceu de uma venda ou fatura, e seu acesso não inclui excluir ou restaurar lançamento ligado a venda ou fatura.' }, { status: 403 });
       }

@@ -19,15 +19,15 @@ import { generateId } from './utils';
 import { hojeISO, deCentavos } from './money';
 import type { ExecutorSQL } from './caixa-atomico';
 import { vencimentoDaComissao } from './comissao-conta';
-import { lerConfigVenda } from './venda-servidor';
+import { carregarVenda, lerConfigVenda } from './venda-servidor';
 import { lerRecebimentos, lerVendas } from './vendas-leitura';
 import type { DefinicaoTarefa } from './agendador/nucleo';
 import { janelaDiaria } from './agendador/nucleo';
 import {
-  CONFIG_COMISSAO_PADRAO, assinaturaDaPrevia, calcularComissoesPorFuncao, errosDoPlano, frasesDaExplicacao, funcoesDoSistema,
+  CONFIG_COMISSAO_PADRAO, assinaturaDaPrevia, baseDaComissaoManual, calcularComissoesPorFuncao, podeFecharAFuncao, prepararComissaoManual, errosDoPlano, frasesDaExplicacao, funcoesDoSistema,
   itensAFechar, linhasDoFechamento, normalizarConfigComissao, normalizarFuncao, normalizarPessoaDaFuncao, normalizarPlano,
   repartirPagamento, rotuloDoMes, situacaoDoItem,
-  type ConfigComissao, type Funcao, type ItemAFechar, type ItemDeComissao, type LancamentoGravado, type LinhaDoFechamento,
+  type ComissaoManual, type ConfigComissao, type Funcao, type ItemAFechar, type ItemDeComissao, type LancamentoGravado, type LinhaDoFechamento,
   type MetaDoMes, type PessoaDaFuncao, type PlanoPorFuncao, type RecebimentoDoCliente, type ResumoDoParticipante, type SituacaoDoItem,
 } from './comissao-funcoes';
 
@@ -118,10 +118,22 @@ export async function salvarFuncao(exec: ExecutorSQL, tenantId: string, entrada:
     if (!f.id) f.id = `fn-${generateId()}`;
     if (!f.sobre_pessoas.length && !f.sobre_unidades.length) throw new ErroComissao('DADOS', 'Diga sobre as vendas de quem esta função ganha: pessoas da equipe, unidades ou as duas.');
   }
+  // Quem fecha: só pessoas da equipe e perfis de acesso desta agência.
+  if (f.quem_fecha.length) {
+    const ids = f.quem_fecha.filter(q => !q.startsWith('grupo:'));
+    const grupos = f.quem_fecha.filter(q => q.startsWith('grupo:')).map(q => q.slice(6));
+    const [{ rows: us }, { rows: gs }] = await Promise.all([
+      ids.length ? exec.query(`SELECT id FROM usuarios WHERE tenant_id = $1 AND id = ANY($2::text[])`, [tenantId, ids]) : Promise.resolve({ rows: [] as Linha[] }),
+      grupos.length ? exec.query(`SELECT id FROM grupos_usuario WHERE tenant_id = $1 AND id = ANY($2::text[])`, [tenantId, grupos]).catch(() => ({ rows: [] as Linha[] })) : Promise.resolve({ rows: [] as Linha[] }),
+    ]);
+    const validos = new Set([...us.map(r => txt(r.id)), ...gs.map(r => `grupo:${txt(r.id)}`)]);
+    f.quem_fecha = f.quem_fecha.filter(q => validos.has(q));
+  }
   await exec.query(
-    `INSERT INTO comissao_funcoes (tenant_id, id, nome, sistema, sobre_pessoas, sobre_unidades, ativo) VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7)
-     ON CONFLICT (tenant_id, id) DO UPDATE SET nome = EXCLUDED.nome, sobre_pessoas = EXCLUDED.sobre_pessoas, sobre_unidades = EXCLUDED.sobre_unidades, ativo = EXCLUDED.ativo`,
-    [tenantId, f.id, f.nome, f.sistema, JSON.stringify(f.sobre_pessoas), JSON.stringify(f.sobre_unidades), f.ativo],
+    `INSERT INTO comissao_funcoes (tenant_id, id, nome, sistema, sobre_pessoas, sobre_unidades, ativo, quem_fecha) VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8::jsonb)
+     ON CONFLICT (tenant_id, id) DO UPDATE SET nome = EXCLUDED.nome, sobre_pessoas = EXCLUDED.sobre_pessoas, sobre_unidades = EXCLUDED.sobre_unidades, ativo = EXCLUDED.ativo,
+       quem_fecha = EXCLUDED.quem_fecha`,
+    [tenantId, f.id, f.nome, f.sistema, JSON.stringify(f.sobre_pessoas), JSON.stringify(f.sobre_unidades), f.ativo, JSON.stringify(f.quem_fecha)],
   );
   if (!entrada.pessoas) return { funcao: f, pessoas: [] };
   const pessoas = entrada.pessoas.map(p => normalizarPessoaDaFuncao({ ...(p as object), funcao_id: f.id })).filter(p => p.pessoa_id);
@@ -200,6 +212,163 @@ export async function salvarMetas(exec: ExecutorSQL, tenantId: string, pessoaFun
   return saida;
 }
 
+/**
+ * A grade de metas do ano (E7): várias pessoas de uma vez, cada uma com os 12
+ * meses. Tudo ou nada: uma linha com erro (meta negativa, pessoa que saiu da
+ * função) não grava nenhuma, e a frase diz qual.
+ */
+export async function salvarGradeDeMetas(exec: ExecutorSQL, tenantId: string, ano: number, linhas: Array<{ pessoa_funcao_id?: unknown; meses?: unknown }>): Promise<{ pessoas: number; metas: MetaDoMes[] }> {
+  if (!Number.isInteger(ano) || ano < 2000 || ano > 2100) throw new ErroComissao('DADOS', 'Ano inválido.');
+  if (!linhas.length) throw new ErroComissao('DADOS', 'Nenhuma meta para salvar.');
+  const { rows } = await exec.query(`SELECT id, pessoa_nome FROM comissao_pessoas WHERE tenant_id = $1`, [tenantId]);
+  const nomes = new Map(rows.map(r => [txt(r.id), txt(r.pessoa_nome)]));
+  for (const l of linhas) {
+    const id = txt(l.pessoa_funcao_id);
+    if (!nomes.has(id)) throw new ErroComissao('NAO_ENCONTRADA', 'Uma das pessoas saiu da função. Recarregue a grade.', 404);
+    const meses = Array.isArray(l.meses) ? l.meses : [];
+    if (meses.some(v => !Number.isFinite(Number(v ?? 0)) || Number(v ?? 0) < 0)) {
+      throw new ErroComissao('DADOS', `Meta não pode ser negativa (${nomes.get(id) || 'pessoa'}).`);
+    }
+  }
+  const metas: MetaDoMes[] = [];
+  for (const l of linhas) metas.push(...await salvarMetas(exec, tenantId, txt(l.pessoa_funcao_id), ano, Array.isArray(l.meses) ? l.meses : []));
+  return { pessoas: linhas.length, metas };
+}
+
+// ============================================================
+// Quem fecha cada função (E7)
+// ============================================================
+
+export interface QuemFecha {
+  usuario_id: string;
+  /** Ids dos perfis de acesso da pessoa. */
+  grupos: string[];
+  /** Administrador e superadmin fecham todas. */
+  admin: boolean;
+}
+
+export async function gruposDaPessoa(exec: ExecutorSQL, tenantId: string, usuarioId: string): Promise<string[]> {
+  if (!usuarioId) return [];
+  const { rows } = await exec.query(`SELECT grupo_id FROM grupo_usuario_membros WHERE tenant_id = $1 AND usuario_id = $2`, [tenantId, usuarioId])
+    .catch(() => ({ rows: [] as Linha[] }));
+  return rows.map(r => txt(r.grupo_id));
+}
+
+// ============================================================
+// Comissão manual na venda (E7)
+// ============================================================
+
+export interface ComissaoManualNaVenda extends ComissaoManual {
+  criado_em: string;
+  fechado_centavos: number;
+  pago_centavos: number;
+  /** Pode excluir: ainda não entrou em nenhum fechamento. */
+  pode_excluir: boolean;
+}
+
+function lerManual(r: Linha): ComissaoManual {
+  return {
+    id: txt(r.id), venda_id: txt(r.venda_id), venda_numero: txt(r.venda_numero), cliente_nome: txt(r.cliente_nome),
+    pessoa_funcao_id: txt(r.pessoa_funcao_id), pessoa_id: txt(r.pessoa_id), pessoa_nome: txt(r.pessoa_nome),
+    funcao_id: txt(r.funcao_id), funcao_nome: txt(r.funcao_nome), descricao: txt(r.descricao),
+    tipo: txt(r.tipo) === 'PERCENTUAL' ? 'PERCENTUAL' : 'VALOR', percentual: Number(r.percentual) || 0,
+    base_centavos: n(r.base_centavos), valor_centavos: n(r.valor_centavos), data: dataISO(r.data), lancado_por: txt(r.lancado_por),
+  };
+}
+
+async function lerManuais(exec: ExecutorSQL, tenantId: string, vendaId?: string): Promise<ComissaoManual[]> {
+  const args: unknown[] = [tenantId];
+  if (vendaId) args.push(vendaId);
+  const { rows } = await exec.query(
+    `SELECT * FROM comissao_manuais WHERE tenant_id = $1 AND excluida_em IS NULL${vendaId ? ' AND venda_id = $2' : ''} ORDER BY criado_em, id`, args,
+  ).catch(() => ({ rows: [] as Linha[] }));
+  return rows.map(lerManual);
+}
+
+/** As comissões manuais da venda, com quanto já foi fechado e pago. */
+export async function comissoesManuaisDaVenda(exec: ExecutorSQL, tenantId: string, vendaId: string): Promise<ComissaoManualNaVenda[]> {
+  const lista = await lerManuais(exec, tenantId, vendaId);
+  if (!lista.length) return [];
+  const chaves = lista.map(m => `manual|${m.id}`);
+  const [{ rows: lanc }, { rows: pagos }, { rows: criados }] = await Promise.all([
+    exec.query(`SELECT chave, fechado_centavos FROM comissao_lancamentos WHERE tenant_id = $1 AND chave = ANY($2::text[])`, [tenantId, chaves]),
+    exec.query(`SELECT chave, SUM(pago_centavos)::bigint AS pago FROM comissao_fechamento_itens WHERE tenant_id = $1 AND chave = ANY($2::text[]) GROUP BY chave`, [tenantId, chaves]),
+    exec.query(`SELECT id, criado_em FROM comissao_manuais WHERE tenant_id = $1 AND id = ANY($2::text[])`, [tenantId, lista.map(m => m.id)]),
+  ]);
+  const fechado = new Map(lanc.map(r => [txt(r.chave), n(r.fechado_centavos)]));
+  const pago = new Map(pagos.map(r => [txt(r.chave), n(r.pago)]));
+  const quando = new Map(criados.map(r => [txt(r.id), r.criado_em instanceof Date ? r.criado_em.toISOString() : txt(r.criado_em)]));
+  return lista.map(m => {
+    const f = fechado.get(`manual|${m.id}`) ?? 0;
+    const p = pago.get(`manual|${m.id}`) ?? 0;
+    return { ...m, criado_em: quando.get(m.id) ?? '', fechado_centavos: f, pago_centavos: p, pode_excluir: f === 0 && p === 0 };
+  });
+}
+
+/**
+ * Lança a comissão manual numa venda FECHADA (os números dela já não mudam),
+ * para uma pessoa que está numa função de comissão. Só na regra por função:
+ * na regra de hoje não há onde ela entrar.
+ */
+export async function lancarComissaoManual(
+  exec: ExecutorSQL, tenantId: string, vendaId: string,
+  entrada: { pessoa_funcao_id?: unknown; descricao?: unknown; tipo?: unknown; percentual?: unknown; valor_centavos?: unknown },
+  usuario: UsuarioDaAcao, hoje = hojeISO(),
+): Promise<ComissaoManualNaVenda> {
+  const config = await lerConfigComissao(exec, tenantId);
+  if (config.regra !== 'FUNCOES') {
+    throw new ErroComissao('REGRA_ATUAL', 'A comissão manual entra no Fechar comissões da regra por função. A agência ainda usa o plano por vendedor (Configurações › Comissões).', 409);
+  }
+  const carregada = await carregarVenda(exec, tenantId, vendaId);
+  if (!carregada) throw new ErroComissao('NAO_ENCONTRADA', 'Venda não encontrada.', 404);
+  if (carregada.situacao !== 'FECHADA') throw new ErroComissao('VENDA_ABERTA', 'Feche a venda antes de lançar comissão manual: assim a base não muda depois.', 409);
+  if (txt(carregada.cabecalho.status).toUpperCase() === 'CANCELADO') throw new ErroComissao('VENDA_CANCELADA', 'A venda está cancelada.', 409);
+  const pfId = txt(entrada.pessoa_funcao_id);
+  const cadastro = await lerCadastro(exec, tenantId);
+  const pessoa = cadastro.pessoas.find(p => p.id === pfId);
+  if (!pessoa) throw new ErroComissao('DADOS', 'Escolha a pessoa (ela precisa estar numa função de comissão).');
+  const funcao = cadastro.funcoes.find(f => f.id === pessoa.funcao_id);
+  const cfgVenda = await lerConfigVenda(exec, tenantId);
+  const base = baseDaComissaoManual(carregada.venda, cfgVenda.receita);
+  const p = prepararComissaoManual(entrada, base);
+  if (p.erros.length) throw new ErroComissao('DADOS', p.erros[0], 400, { erros: p.erros });
+  const id = `cm-${generateId()}`;
+  await exec.query(
+    `INSERT INTO comissao_manuais (tenant_id, id, venda_id, venda_numero, cliente_nome, pessoa_funcao_id, pessoa_id, pessoa_nome, funcao_id, funcao_nome,
+       descricao, tipo, percentual, base_centavos, valor_centavos, data, lancado_por_id, lancado_por)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::date, $17, $18)`,
+    [tenantId, id, vendaId, carregada.venda.numero, carregada.venda.cliente?.nome ?? '', pessoa.id, pessoa.pessoa_id, pessoa.pessoa_nome,
+      pessoa.funcao_id, funcao?.nome ?? '', p.descricao, p.tipo, p.percentual, p.tipo === 'PERCENTUAL' ? base : 0, p.valor_centavos, hoje,
+      usuario.id, usuario.nome || usuario.id],
+  );
+  await eventoDaVenda(exec, tenantId, vendaId, 'comissao_manual', usuario, { comissao_manual_id: id, pessoa: pessoa.pessoa_nome, descricao: p.descricao, valor_centavos: p.valor_centavos });
+  const lista = await comissoesManuaisDaVenda(exec, tenantId, vendaId);
+  return lista.find(m => m.id === id)!;
+}
+
+/** O histórico da venda (venda_eventos, imutável) ganha a linha da comissão manual. */
+async function eventoDaVenda(exec: ExecutorSQL, tenantId: string, vendaId: string, tipo: string, usuario: UsuarioDaAcao, detalhe: Record<string, unknown>): Promise<void> {
+  await exec.query(
+    `INSERT INTO venda_eventos (tenant_id, id, venda_id, tipo, usuario_id, usuario_nome, detalhe) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)`,
+    [tenantId, generateId(), vendaId, tipo, usuario.id, usuario.nome, JSON.stringify(detalhe)],
+  );
+}
+
+/** Exclui a comissão manual que ainda não entrou em nenhum fechamento. */
+export async function excluirComissaoManual(exec: ExecutorSQL, tenantId: string, vendaId: string, id: string, usuario: UsuarioDaAcao): Promise<void> {
+  const { rows } = await exec.query(
+    `SELECT id, descricao, pessoa_nome FROM comissao_manuais WHERE tenant_id = $1 AND venda_id = $2 AND id = $3 AND excluida_em IS NULL FOR UPDATE`, [tenantId, vendaId, id]);
+  if (!rows.length) throw new ErroComissao('NAO_ENCONTRADA', 'Comissão manual não encontrada.', 404);
+  const { rows: l } = await exec.query(
+    `SELECT fechado_centavos FROM comissao_lancamentos WHERE tenant_id = $1 AND chave = $2 FOR UPDATE`, [tenantId, `manual|${id}`]);
+  if (n(l[0]?.fechado_centavos) !== 0) {
+    throw new ErroComissao('JA_FECHADA', 'Esta comissão já entrou num fechamento e não se exclui mais.', 409);
+  }
+  await exec.query(`UPDATE comissao_manuais SET excluida_em = NOW(), excluida_por = $3 WHERE tenant_id = $1 AND id = $2`, [tenantId, id, usuario.nome || usuario.id]);
+  await exec.query(`DELETE FROM comissao_lancamentos WHERE tenant_id = $1 AND chave = $2 AND fechado_centavos = 0 AND fechado_retido_centavos = 0`, [tenantId, `manual|${id}`]);
+  await eventoDaVenda(exec, tenantId, vendaId, 'comissao_manual_excluida', usuario, { comissao_manual_id: id, pessoa: txt(rows[0].pessoa_nome), descricao: txt(rows[0].descricao) });
+}
+
 // ============================================================
 // Cálculo
 // ============================================================
@@ -224,21 +393,34 @@ async function lerGravados(exec: ExecutorSQL, tenantId: string, config: ConfigCo
       mes: txt(r.mes), descricao: txt(r.descricao), fechado_centavos: n(r.fechado_centavos), fechado_retido_centavos: n(r.fechado_retido_centavos),
     }))
     // Venda de antes da data inicial fica como está: mudar a data não estorna o que já foi fechado.
-    .filter(g => !config.data_inicial || !g.data_venda || g.data_venda >= config.data_inicial);
+    // A comissão manual (manual|...) entra sempre: ela está no cálculo, seja qual for a data.
+    .filter(g => g.chave.startsWith('manual|') || !config.data_inicial || !g.data_venda || g.data_venda >= config.data_inicial);
 }
 
 export async function calcularNoBanco(exec: ExecutorSQL, tenantId: string, ate: string, opcoes: { so_participantes?: string[] } = {}): Promise<CalculoNoBanco> {
   const [config, cadastro, cfgVenda] = await Promise.all([lerConfigComissao(exec, tenantId), lerCadastro(exec, tenantId), lerConfigVenda(exec, tenantId)]);
   const lidas = (await lerVendas(exec, tenantId, { de: config.data_inicial || undefined, incluir_canceladas: true }))
-    .filter(v => STATUS_QUE_CONTAM.has(v.status) || v.versao_modelo === 2);
+    .filter(v => STATUS_QUE_CONTAM.has(v.status) || v.versao_modelo === 2)
+    // Venda trazida do sistema anterior (E7): a comissão dela foi calculada (e
+    // paga) lá; fica no registro "Comissões já pagas". Calcular de novo aqui
+    // pagaria duas vezes.
+    .filter(v => v.venda.origem !== 'mudanca');
   let recebimentos: Record<string, RecebimentoDoCliente> | undefined;
   if (config.liberar === 'RECEBIMENTO') {
     recebimentos = Object.fromEntries(await lerRecebimentos(exec, tenantId, lidas.map(v => v.venda.id)));
   }
+  const manuais: ComissaoManual[] = await lerManuais(exec, tenantId);
+  // A venda da comissão manual pode ser de antes da data inicial: lê só o cancelamento dela.
+  const lidasIds = new Set(lidas.map(v => v.venda.id));
+  const faltam = [...new Set(manuais.map(m => m.venda_id).filter(id => !lidasIds.has(id)))];
+  const canceladasFora = faltam.length
+    ? (await exec.query(`SELECT id FROM vendas_crm WHERE tenant_id = $1 AND id = ANY($2::text[]) AND UPPER(COALESCE(data->>'status', status, '')) = 'CANCELADO'`, [tenantId, faltam])).rows.map(r => txt(r.id))
+    : [];
   const { itens, resumos } = calcularComissoesPorFuncao({
     vendas: lidas.map(v => ({ venda: v.venda, cancelada: v.cancelada, situacao: v.situacao })),
+    vendas_canceladas: canceladasFora,
     funcoes: cadastro.funcoes, pessoas: cadastro.pessoas, planos: cadastro.planos, metas: cadastro.metas,
-    config, config_receita: cfgVenda.receita, ate, recebimentos, so_participantes: opcoes.so_participantes,
+    config, config_receita: cfgVenda.receita, ate, recebimentos, so_participantes: opcoes.so_participantes, manuais,
   });
   let gravados = await lerGravados(exec, tenantId, config);
   if (opcoes.so_participantes?.length) {
@@ -323,11 +505,29 @@ export interface PreviaDoFechamento {
   /** Vendas do período ainda abertas (não entram quando a agência só comissiona vendas fechadas). */
   vendas_abertas: number;
   so_as_suas: boolean;
+  /** Funções que outra pessoa fecha (E7): as linhas delas não aparecem para quem pediu. */
+  funcoes_de_outros: string[];
+  /** O dia de fechamento das metas (0 = último dia do mês). */
+  dia_fechamento_meta: number;
 }
 
-export async function previaDoFechamento(exec: ExecutorSQL, tenantId: string, ate: string, filtro: { funcao_id?: string; pessoa_id?: string } = {}): Promise<PreviaDoFechamento> {
+/** As funções desta agência que a pessoa NÃO fecha (pela lista "quem fecha" de cada uma). */
+function funcoesQueNaoFecha(funcoes: Funcao[], quem: QuemFecha | undefined): Funcao[] {
+  if (!quem) return [];
+  return funcoes.filter(f => !podeFecharAFuncao(f, quem.usuario_id, quem.grupos, quem.admin));
+}
+
+export async function previaDoFechamento(
+  exec: ExecutorSQL, tenantId: string, ate: string, filtro: { funcao_id?: string; pessoa_id?: string; quem?: QuemFecha } = {},
+): Promise<PreviaDoFechamento> {
   const c = await calcularNoBanco(exec, tenantId, ate);
   let linhas = linhasDoFechamento(c.resumos, itensAFechar(c.itens, c.gravados));
+  // Quem não fecha a função não vê as linhas dela aqui; as outras seguem.
+  const deOutros = filtro.pessoa_id === undefined ? funcoesQueNaoFecha(c.cadastro.funcoes, filtro.quem) : [];
+  if (deOutros.length) {
+    const ocultas = new Set(c.cadastro.pessoas.filter(p => deOutros.some(f => f.id === p.funcao_id)).map(p => p.id));
+    linhas = linhas.filter(l => !ocultas.has(l.pessoa_funcao_id));
+  }
   if (filtro.funcao_id) {
     const daFuncao = new Set(c.cadastro.pessoas.filter(p => p.funcao_id === filtro.funcao_id).map(p => p.id));
     linhas = linhas.filter(l => daFuncao.has(l.pessoa_funcao_id));
@@ -341,7 +541,10 @@ export async function previaDoFechamento(exec: ExecutorSQL, tenantId: string, at
     ).catch(() => ({ rows: [{ n: 0 }] }));
     vendas_abertas = n(rows[0]?.n);
   }
-  return { ate, regra: c.config.regra, linhas, assinatura: assinaturaDaPrevia(ate, linhas), vendas_abertas, so_as_suas: filtro.pessoa_id !== undefined };
+  return {
+    ate, regra: c.config.regra, linhas, assinatura: assinaturaDaPrevia(ate, linhas), vendas_abertas, so_as_suas: filtro.pessoa_id !== undefined,
+    funcoes_de_outros: deOutros.map(f => f.nome), dia_fechamento_meta: c.config.dia_fechamento_meta,
+  };
 }
 
 export interface ResultadoDoFechamento {
@@ -360,6 +563,7 @@ export async function fecharComissoes(
   tx: Transacao, exec: ExecutorSQL, tenantId: string,
   entrada: { ate: string; participantes: string[]; assinatura?: string },
   usuario: UsuarioDaAcao,
+  quem?: QuemFecha,
 ): Promise<ResultadoDoFechamento> {
   const config = await lerConfigComissao(exec, tenantId);
   if (config.regra !== 'FUNCOES') throw new ErroComissao('REGRA_ATUAL', 'A agência usa a regra de comissão de hoje. Escolha a regra por função em Configurações › Comissões para fechar por aqui.', 409);
@@ -379,11 +583,18 @@ export async function fecharComissoes(
     [tenantId, fechamentoId, entrada.ate, usuario.id, usuario.nome]);
   const itensPorChave = new Map(c.itens.map(i => [i.chave, i]));
   const resultado: ResultadoDoFechamento = { fechamento_id: fechamentoId, ate: entrada.ate, fechados: [], recusados: [] };
+  const naoFecha = new Set(funcoesQueNaoFecha(c.cadastro.funcoes, quem).map(f => f.id));
   for (const id of quer) {
     const linha = todas.find(l => l.pessoa_funcao_id === id);
     const pessoa = c.cadastro.pessoas.find(p => p.id === id);
     const nome = linha?.pessoa_nome ?? pessoa?.pessoa_nome ?? id;
     const funcao = linha?.funcao_nome ?? c.cadastro.funcoes.find(f => f.id === pessoa?.funcao_id)?.nome ?? '';
+    // A função da pessoa: pelo cadastro, ou pelo id "funcao:pessoa" quando ela já saiu da função.
+    const funcaoId = pessoa?.funcao_id ?? id.split(':')[0];
+    if (naoFecha.has(funcaoId)) {
+      resultado.recusados.push({ pessoa_funcao_id: id, pessoa_nome: nome, funcao_nome: funcao, motivo: `Quem fecha a função ${funcao || 'desta pessoa'} são outras pessoas (Equipe › Funções).` });
+      continue;
+    }
     if (!linha) { resultado.recusados.push({ pessoa_funcao_id: id, pessoa_nome: nome, funcao_nome: funcao, motivo: 'Nada a fechar até esta data.' }); continue; }
     if (linha.erros.length) { resultado.recusados.push({ pessoa_funcao_id: id, pessoa_nome: nome, funcao_nome: funcao, motivo: linha.erros.join(' ') }); continue; }
     if (!linha.itens.length) { resultado.recusados.push({ pessoa_funcao_id: id, pessoa_nome: nome, funcao_nome: funcao, motivo: 'Nada a fechar até esta data.' }); continue; }

@@ -31,6 +31,8 @@ import {
 import { mensagemPeriodoFechado } from './periodo-fechado';
 import { ErroDoMeio, lerMeioDoPagamento, recusaDaForma, type MeioDoPagamento } from './baixa-meio';
 import type { FormaPagamento } from './formas-pagamento';
+import { EMPRESA_PRINCIPAL_ID, empresaDoRegistro } from './empresas';
+import { empresaComConfigPropria, lerChavesDaEmpresa } from './empresas-config';
 import {
   cambioDaLiquidacao, lerCarimbo, moedaDe, round4, valorNaMoedaDoTitulo,
   type CarimboDoCambio, type CodigoMoeda, type VariacaoCambial,
@@ -135,7 +137,7 @@ export interface ContextoBaixa {
   tenantId: string;
   usuarioId?: string;
   usuarioNome?: string;
-  origem: 'tela' | 'lote' | 'conciliacao' | 'crm' | 'plataforma' | 'api';
+  origem: 'tela' | 'lote' | 'conciliacao' | 'crm' | 'plataforma' | 'api' | 'migracao' | 'venda';
   /** Cabeçalho Idempotency-Key: repetir a mesma gravação não grava duas vezes. */
   idempotencia?: string;
   politica?: PoliticaCobranca | null;
@@ -223,7 +225,12 @@ async function cambioDaBaixa(
   };
 }
 
-async function politicaDaAgencia(exec: ExecutorSQL, tenantId: string): Promise<PoliticaCobranca | null> {
+async function politicaDaAgencia(exec: ExecutorSQL, tenantId: string, empresaId = EMPRESA_PRINCIPAL_ID): Promise<PoliticaCobranca | null> {
+  // Empresa com configuração própria (E7): a política dela; no resto, a da agência.
+  if (empresaComConfigPropria(empresaId)) {
+    const r = await lerChavesDaEmpresa(exec, tenantId, empresaId, ['politica_cobranca']);
+    return (r.politica_cobranca as PoliticaCobranca | null) ?? null;
+  }
   try {
     const { rows } = await exec.query(`SELECT data->'politica_cobranca' AS p FROM agencia WHERE tenant_id = $1 ORDER BY updated_at DESC NULLS LAST, id ASC LIMIT 1`, [tenantId]);
     return (rows[0]?.p as PoliticaCobranca | null) ?? null;
@@ -289,7 +296,14 @@ export async function registrarBaixas(
 ): Promise<{ itens: ResultadoItem[]; assinatura: string; lote_id: string | null }> {
   if (!Array.isArray(itens) || itens.length === 0) throw new ErroBaixa('Nenhuma conta para liquidar.');
   if (itens.length > 500) throw new ErroBaixa('Até 500 contas por vez.');
-  const politica = ctx.politica !== undefined ? ctx.politica : await politicaDaAgencia(exec, ctx.tenantId);
+  // Política de encargos da empresa de cada título (E7); uma empresa só = a da agência, como sempre.
+  const politicas = new Map<string, PoliticaCobranca | null>();
+  const politicaDe = async (dados: Record<string, unknown>): Promise<PoliticaCobranca | null> => {
+    if (ctx.politica !== undefined) return ctx.politica;
+    const empresa = empresaDoRegistro(dados);
+    if (!politicas.has(empresa)) politicas.set(empresa, await politicaDaAgencia(exec, ctx.tenantId, empresa));
+    return politicas.get(empresa) ?? null;
+  };
   const loteId = opcoes.gravar && itens.length > 1 ? (opcoes.loteId || generateId()) : null;
 
   // Ordem fixa: duas liquidações em lote cruzadas não travam uma na outra.
@@ -349,6 +363,7 @@ export async function registrarBaixas(
     const d = (rows[0].data ?? {}) as Record<string, unknown>;
     const t = tituloParaBaixa(it.titulo_tabela, d);
     const data = (it.data || hojeISO()).slice(0, 10);
+    const politica = await politicaDe(d);
 
     // Parcelas de um mesmo título ficam na mesma conta bancária: os caminhos
     // antigos (estorno ao excluir, conciliação) contam com isso.

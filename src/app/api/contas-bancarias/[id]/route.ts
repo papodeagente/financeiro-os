@@ -18,6 +18,7 @@ const crud = createCrudItemHandlers('contas_bancarias', ['nome', 'banco'], {
   filtroDeConta: { cadastro: true },
   versao: true,
   mensagemConflito: 'Alguém mudou esta conta bancária depois que você abriu. Recarregue para ver a versão atual antes de salvar.',
+  filtroDeEmpresa: { tipo: 'conta_bancaria' },
 });
 
 type Params = { params: Promise<{ id: string }> };

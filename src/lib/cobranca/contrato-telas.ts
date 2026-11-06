@@ -73,6 +73,16 @@ export interface Cobranca {
   pago_em: string | null;
   criado_em: string;
   criado_por: string | null;
+  /**
+   * O provedor avisou o pagamento e a baixa não entrou sozinha (E7): a frase
+   * do que houve. Null quando não há nada a resolver.
+   */
+  pendencia?: string | null;
+  pendencia_em?: string | null;
+  /** Taxa de boleto somada a esta cobrança (cliente marcado), em reais. */
+  taxa_boleto?: number | null;
+  /** Página do link de pagamento (tipo 'link'). */
+  url_link?: string | null;
 }
 
 export interface TotaisDasCobrancas {
@@ -96,11 +106,43 @@ export interface FiltroDasCobrancas {
   busca?: string;
   conta_id?: string;
   cliente_id?: string;
+  /** '1' = só as pagas cuja baixa não entrou sozinha. */
+  pendencia?: '1';
 }
 
 export interface RespostaDaListaDeCobrancas {
   cobrancas: Cobranca[];
   totais: TotaisDasCobrancas;
+  /** Pagamentos avisados cuja baixa não entrou sozinha (mesmos filtros, sem o de situação). */
+  pendencias?: { quantidade: number; valor: number };
+}
+
+// ─── /api/cobrancas/[id]/pendencia (E7) ────────────────────────────────────
+
+export type EscolhaDaPendencia = 'corrigir' | 'credito' | 'ignorar';
+
+export interface OpcaoDaPendencia {
+  pode: boolean;
+  frase: string;
+  credito?: number;
+  entra?: number;
+}
+
+export interface PendenciaDaCobranca {
+  cobranca_id: string;
+  pendencia: string;
+  tipo: 'pagamento' | 'estorno' | 'devolucao_parcial';
+  pagamento: { valor_centavos: number; taxa_centavos: number; data: string; conta_bancaria_id: string | null; forma: string } | null;
+  conta: { status: string; saldo: number; cliente_id: string } | null;
+  conta_aberta: boolean;
+  escolhas: Record<EscolhaDaPendencia, OpcaoDaPendencia>;
+}
+
+/** Cópia, assunto e mensagem próprios no envio por e-mail (E7). */
+export interface EnvioPersonalizadoNaTela {
+  copia_para?: string[];
+  assunto?: string;
+  mensagem?: string;
 }
 
 // ─── POST /api/cobrancas (emitir uma ou várias, com prévia) ────────────────
@@ -191,6 +233,13 @@ export interface RespostaDaGravacaoDeCarne {
 
 // ─── GET/PUT /api/config/cobranca ──────────────────────────────────────────
 
+/** Só em Configurações › Cobrança: leva o ?empresa= do endereço (E7). Fora dela, nada muda. */
+function comEmpresaDaTela(url: string): string {
+  if (typeof window === 'undefined' || !window.location.pathname.startsWith('/config/cobranca')) return url;
+  const empresa = new URLSearchParams(window.location.search).get('empresa');
+  return empresa && empresa !== 'principal' ? `${url}?empresa=${encodeURIComponent(empresa)}` : url;
+}
+
 export interface ReguaDeCobranca {
   ligada: boolean;
   /** Dias em relação ao vencimento: −5 = cinco dias antes, 0 = no dia, 3 = três dias depois. */
@@ -224,6 +273,10 @@ export interface ConfigDeCobranca {
   descricao_modelo: string;
   /** Só leitura: o que está conectado e o que cada um faz. */
   provedores: ProvedorConectado[];
+  /** Taxa de boleto repassada ao cliente marcado no cadastro, em reais (0 = não repassa). */
+  taxa_boleto?: number;
+  /** Validade do link de pagamento, em dias. */
+  dias_link?: number;
 }
 
 export type ConfigDeCobrancaGravavel = Omit<ConfigDeCobranca, 'provedores' | 'encargos_da_politica'>;
@@ -307,8 +360,29 @@ export const api = {
   cancelar: (id: string, chave: string) =>
     chamar<{ ok: true; cobranca: Cobranca }>(`/api/cobrancas/${encodeURIComponent(id)}`, { method: 'DELETE', chave }),
 
-  enviar: (id: string, canal: CanalDeEnvio, chave: string) =>
-    chamar<{ ok: true; enviado?: boolean; na_fila?: boolean; motivo?: string }>(`/api/cobrancas/${encodeURIComponent(id)}/enviar`, { method: 'POST', body: JSON.stringify({ canal }), chave }),
+  enviar: (id: string, canal: CanalDeEnvio, chave: string, extra: EnvioPersonalizadoNaTela = {}) =>
+    chamar<{ ok: true; enviado?: boolean; na_fila?: boolean; motivo?: string }>(`/api/cobrancas/${encodeURIComponent(id)}/enviar`, { method: 'POST', body: JSON.stringify({ canal, ...extra }), chave }),
+
+  pendencia: (id: string) => chamar<PendenciaDaCobranca>(`/api/cobrancas/${encodeURIComponent(id)}/pendencia`),
+
+  resolverPendencia: (id: string, escolha: EscolhaDaPendencia, motivo: string, chave: string) =>
+    chamar<{ escolha: EscolhaDaPendencia; baixa_id: string | null; credito_id: string | null }>(
+      `/api/cobrancas/${encodeURIComponent(id)}/pendencia`, { method: 'POST', body: JSON.stringify({ escolha, motivo }), chave }),
+
+  /** Link de pagamento de UMA conta (o cliente escolhe Pix, boleto ou cartão na página do provedor). */
+  previaDoLink: (contaId: string) =>
+    chamar<RespostaDaPreviaDeEmissao>('/api/cobrancas/link', { method: 'POST', body: JSON.stringify({ modo: 'previa', conta_id: contaId }) }),
+
+  criarLink: (contaId: string, assinatura: string, chave: string) =>
+    chamar<Cobranca>('/api/cobrancas/link', { method: 'POST', body: JSON.stringify({ modo: 'gravar', conta_id: contaId, assinatura }), chave }),
+
+  taxaDoCliente: (clienteId: string) =>
+    chamar<{ cliente_id: string; cobrar_taxa_boleto: boolean; taxa_boleto: number }>(`/api/cobrancas/cliente-taxa?cliente_id=${encodeURIComponent(clienteId)}`),
+
+  marcarTaxaDoCliente: (clienteId: string, cobrar: boolean) =>
+    chamar<{ cliente_id: string; cobrar_taxa_boleto: boolean; taxa_boleto: number }>('/api/cobrancas/cliente-taxa', {
+      method: 'PUT', body: JSON.stringify({ cliente_id: clienteId, cobrar_taxa_boleto: cobrar }),
+    }),
 
   previaDeCarne: (contas: string[]) =>
     chamar<RespostaDaPreviaDeCarne>('/api/cobrancas/carne', { method: 'POST', body: JSON.stringify({ modo: 'previa', contas }) }),
@@ -316,10 +390,11 @@ export const api = {
   gerarCarne: (contas: string[], assinatura: string, chave: string) =>
     chamar<RespostaDaGravacaoDeCarne>('/api/cobrancas/carne', { method: 'POST', body: JSON.stringify({ modo: 'gravar', contas, assinatura }), chave }),
 
-  config: () => chamar<ConfigDeCobranca>('/api/config/cobranca'),
+  // ?empresa= da tela de configuração (E7): a cobrança daquela empresa.
+  config: () => chamar<ConfigDeCobranca>(comEmpresaDaTela('/api/config/cobranca')),
 
   salvarConfig: (c: ConfigDeCobrancaGravavel) =>
-    chamar<ConfigDeCobranca>('/api/config/cobranca', { method: 'PUT', body: JSON.stringify(c) }),
+    chamar<ConfigDeCobranca>(comEmpresaDaTela('/api/config/cobranca'), { method: 'PUT', body: JSON.stringify(c) }),
 };
 
 // ─── Rotas desta parte (B), para as telas ──────────────────────────────────

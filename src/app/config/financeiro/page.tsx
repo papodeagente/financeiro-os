@@ -22,6 +22,7 @@ import { toast } from '@/lib/toast';
 import { SecaoContaPrevisao } from './SecaoContaPrevisao';
 import { SecaoCamposPersonalizados } from './SecaoCamposPersonalizados';
 import { SecaoCategoriasDosTitulos } from './SecaoCategoriasDosTitulos';
+import { EmpresaDaConfiguracao, naEmpresa } from '@/components/fin/EmpresaDaConfiguracao';
 
 const CONTROLE = 'h-11 rounded-[var(--fin-r-md)] border-[var(--fin-border-strong)] bg-[var(--fin-surface)] fin-t-body tabular-nums lg:h-10';
 const VAZIA: PoliticaCobranca = { juros_am_pct: 0, multa_pct: 0, tolerancia_dias: 0, desconto_antecipacao: null, aplicar_em_pagar: false };
@@ -87,7 +88,7 @@ export default function ConfigFinanceiroPage() {
 
   async function load() {
     try {
-      const r = await fetch('/api/config/financeiro');
+      const r = await fetch(naEmpresa('/api/config/financeiro'));
       if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.error || `Erro ${r.status}`);
       const c = (await r.json()) as {
         politica_cobranca: PoliticaCobranca | null;
@@ -109,7 +110,7 @@ export default function ConfigFinanceiroPage() {
   async function salvar() {
     setSalvando(true);
     try {
-      const r = await fetch('/api/config/financeiro', {
+      const r = await fetch(naEmpresa('/api/config/financeiro'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ politica_cobranca: p }),
@@ -126,7 +127,7 @@ export default function ConfigFinanceiroPage() {
   }
 
   async function enviar(corpo: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const r = await fetch('/api/config/financeiro', {
+    const r = await fetch(naEmpresa('/api/config/financeiro'), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(corpo),
@@ -204,6 +205,8 @@ export default function ConfigFinanceiroPage() {
           titulo="Financeiro"
           subtitulo="Juros, multa e desconto que a liquidação sugere, onde eles entram no resultado e os avisos de vencimento."
         />
+        {/* Várias empresas (E7): de qual empresa é esta configuração. */}
+        <EmpresaDaConfiguracao secao="financeiro" />
         <DataState
           estado={estado}
           erro={erro ? { mensagem: erro, onTentarDeNovo: () => { void load(); } } : null}

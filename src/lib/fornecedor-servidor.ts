@@ -37,9 +37,10 @@ import {
   aplicarAcordosNaVenda, alterarTaxaCCDoProduto, conflitosDeVigencia, normalizarAcordo, taxasDoProduto, ErroTaxaCC,
   type AcordoComFornecedor, type AplicacaoDoAcordo, type LadoDaTaxaCC,
 } from './fornecedor-acordos';
+import { calcularVencimentoComissao, type FornecedorInfo } from './venda-financeiro';
 import {
-  itemAFaturar, pagoDaFatura, previaDaFatura, saldoDoSinal,
-  type Compensacao, type FaturaParaReflexo, type ItemAFaturar, type PreviaDaFatura, type SinalDisponivel,
+  itemAFaturar, normalizarModo, pagoDaFatura, previaDaFatura, receitasDoItem, saldoDoSinal,
+  type Compensacao, type ModoDaFatura, type FaturaParaReflexo, type ItemAFaturar, type PreviaDaFatura, type SinalDisponivel,
 } from './fornecedor-fatura';
 import { faturasParaReflexo, refletirFaturasNasContas } from './fornecedor-fatura-banco';
 import { lerCategoriasDosTitulos } from './categorias-padrao-titulos-servidor';
@@ -112,7 +113,7 @@ export async function vendasEmLote(exec: ExecutorSQL, tenantId: string, ids: str
       id: vid, numero: txt(m.numero), data_venda: dataISO(m.data_venda),
       cliente: m.cliente, vendedor: m.vendedor, intermediario: m.intermediario,
       grupo_id: m.grupo_id, centro_custo: m.centro_custo, origem: m.origem, situacao: m.situacao,
-      observacoes: m.observacoes, crm_venda_id: m.crm_venda_id,
+      observacoes: m.observacoes, crm_venda_id: m.crm_venda_id, operacao_propria: m.operacao_propria === true, produtos_removidos: m.produtos_removidos,
       produtos: ps.filter(p => txt(p.venda_id) === vid).map(p => ({
         id: p.id, tipo: p.tipo, descricao: p.descricao,
         fornecedor: parte(p.fornecedor_id, p.fornecedor_nome, p.fornecedor_externo),
@@ -128,11 +129,11 @@ export async function vendasEmLote(exec: ExecutorSQL, tenantId: string, ids: str
         })),
         componentes: cs.filter(c => txt(c.venda_id) === vid && c.produto_id === p.id).map(c => ({
           id: c.id, tipo: c.tipo, valor_centavos: Number(c.valor_centavos), percentual: c.percentual === null ? null : Number(c.percentual),
-          passageiro_id: c.passageiro_id, descricao: c.descricao,
+          passageiro_id: c.passageiro_id, descricao: c.descricao, base: c.base,
         })),
       })),
       pagamentos: gs.filter(g => txt(g.venda_id) === vid).map(g => ({
-        id: g.id, forma: g.forma, valor_centavos: Number(g.valor_centavos), parcelas: g.parcelas,
+        ...((g.dados ?? {}) as Record<string, unknown>), id: g.id, forma: g.forma, valor_centavos: Number(g.valor_centavos), parcelas: g.parcelas,
         primeiro_vencimento: dataISO(g.primeiro_vencimento), intervalo_dias: g.intervalo_dias,
         pagante: g.pagante, fornecedor: g.fornecedor, conta_bancaria_id: g.conta_bancaria_id,
         cartao_tipo: g.cartao_tipo, detalhe: g.detalhe, venda_origem_credito: g.venda_origem_credito,
@@ -227,6 +228,7 @@ export async function salvarRegraDoFornecedor(exec: ExecutorSQL, tenantId: strin
   const o = (entrada && typeof entrada === 'object' ? entrada : {}) as Record<string, unknown>;
   const nova = normalizarRegra({ ...atual.regra, ...o });
   const parcial = {
+    periodicidade: nova.periodicidade, inicio_semana: nova.inicio_semana, prazo_dias: nova.prazo_dias,
     dia_corte: nova.dia_corte, dia_vencimento: nova.dia_vencimento, ajuste_vencimento: nova.ajuste_vencimento,
     data_base: nova.data_base, gerar_sozinha: nova.gerar_sozinha,
   };
@@ -506,6 +508,8 @@ export interface PedidoDeFatura {
   corte?: string;
   /** Vencimento escolhido à mão (padrão: o da regra, ajustado para dia útil). */
   vencimento?: string;
+  /** "Líquido" (padrão) ou "Bruto" (com a conta a receber da comissão). */
+  modo?: ModoDaFatura;
   observacoes?: string;
 }
 
@@ -521,6 +525,8 @@ function assinar(previa: PreviaDaFatura): string {
     i: previa.itens.map(i => [i.conta_id, i.valor_a_gerar]).sort(),
     c: previa.compensacoes.map(c => [c.sinal_id, c.valor_centavos]),
     v: previa.vencimento.data,
+    // O modo entra na assinatura só quando é o bruto (a do líquido não muda).
+    ...(previa.modo === 'BRUTO' ? { m: previa.modo, r: previa.receitas } : {}),
   };
   return createHash('sha256').update(JSON.stringify(base)).digest('hex').slice(0, 32);
 }
@@ -545,7 +551,7 @@ export async function previaDaFaturaNoBanco(exec: ExecutorSQL, tenantId: string,
     vencimento = { data: manual, pela_regra: periodo.vencimento.data, motivo_ajuste: 'escolhido na hora' };
   }
   const sinais = await sinaisComSaldo(exec, tenantId, { parte_ids: [pedido.parte_id], so_abertos: true });
-  const previa = previaDaFatura({ parte_id: pedido.parte_id, parte_nome: nome || itens[0].parte_nome, itens, sinais, vencimento, corte });
+  const previa = previaDaFatura({ parte_id: pedido.parte_id, parte_nome: nome || itens[0].parte_nome, itens, sinais, vencimento, corte, modo: normalizarModo(pedido.modo) });
   return { previa, assinatura: assinar(previa), periodo: { inicio: periodo.inicio, corte } };
 }
 
@@ -601,6 +607,7 @@ export async function gerarFatura(
       observacoes: [
         `Período ${periodo.inicio.split('-').reverse().join('/')} a ${periodo.corte.split('-').reverse().join('/')}.`,
         previa.total_sinal > 0 ? `Já descontado o sinal de ${deCentavos(previa.total_sinal).toFixed(2)}.` : '',
+        previa.receitas > 0 ? `Valor bruto: inclui ${deCentavos(previa.receitas).toFixed(2)} de comissão e over, que o fornecedor devolve (conta a receber da fatura ${numero}).` : '',
         txt(pedido.observacoes).slice(0, 500),
       ].filter(Boolean).join(' '),
       numero_documento: numero, auto_gerado: true, fatura_fornecedor_id: id, fatura_fornecedor_numero: numero, tipo_titulo: 'FATURA_FORNECEDOR',
@@ -611,19 +618,59 @@ export async function gerarFatura(
     );
   }
   const { regra } = await lerRegraDoFornecedor(exec, tenantId, pedido.parte_id);
+  // "Bruto": a comissão e o over que entraram no valor pago voltam
+  // do fornecedor depois. UMA conta a receber, ligada à fatura e fora da venda
+  // (sem origem_venda_id: a regeração das vendas nunca mexe nela).
+  let contaReceberId: string | null = null;
+  if (previa.receitas > 0) {
+    contaReceberId = generateId();
+    const { rows: fr } = await exec.query(`SELECT data FROM fornecedores_crm WHERE tenant_id = $1 AND id = $2`, [tenantId, pedido.parte_id]);
+    const regraComissao = ((fr[0]?.data ?? {}) as Record<string, unknown>).regras_faturamento as FornecedorInfo['regras_faturamento'] | undefined;
+    const reaisR = deCentavos(previa.receitas);
+    const porVenda = new Map<string, { venda_id: string; venda_numero: string; receitas_centavos: Centavos }>();
+    for (const i of previa.itens) {
+      const r = receitasDoItem(i);
+      if (r <= 0) continue;
+      const x = porVenda.get(i.venda_id) ?? { venda_id: i.venda_id, venda_numero: i.venda_numero, receitas_centavos: 0 };
+      x.receitas_centavos += r;
+      porVenda.set(i.venda_id, x);
+    }
+    const contaR = {
+      id: contaReceberId, origem: 'COMISSAO_FORNECEDOR', venda_id: null, grupo_id: null,
+      cliente_id: pedido.parte_id, cliente_nome: previa.parte_nome, fornecedor_id: pedido.parte_id, fornecedor_nome: previa.parte_nome,
+      descricao: `Comissão a receber - ${previa.parte_nome} - Fatura ${numero} (paga pelo valor bruto)`,
+      categoria_id: '', centro_custo: maisComum(dados.map(d => txt(d.centro_custo))),
+      valor_original: reaisR, juros: 0, multa: 0, desconto: 0, valor_final: reaisR,
+      data_emissao: hoje, data_vencimento: calcularVencimentoComissao(previa.vencimento.data, regraComissao?.regra_vencimento_comissao),
+      data_recebimento: null, valor_recebido: null, conta_bancaria_id: null, forma_recebimento: '', taxa: 0, taxa_plataforma: '',
+      boleto_emitido: false, boleto_codigo: '', boleto_url: '', status: 'PENDENTE', parcela_numero: 1, total_parcelas: 1,
+      rateio: [], anexos: [],
+      observacoes: `A fatura ${numero} pagou ao fornecedor o valor bruto; esta é a comissão e o over que ele devolve.`,
+      auto_gerado: true, numero_documento: numero, fatura_fornecedor_id: id, fatura_fornecedor_numero: numero,
+      tipo_titulo: 'COMISSAO_FATURA_FORNECEDOR', fatura_vendas: [...porVenda.values()],
+    };
+    await exec.query(
+      `INSERT INTO contas_receber (id, tenant_id, venda_id, cliente_id, status, data, created_at, updated_at) VALUES ($1, $2, '', $3, 'PENDENTE', $4::jsonb, NOW(), NOW())`,
+      [contaReceberId, tenantId, pedido.parte_id, JSON.stringify(contaR)],
+    );
+  }
+  const valorDosItens = previa.total_itens - previa.total_sinal;
   await exec.query(
     `INSERT INTO faturas_fornecedor (tenant_id, id, numero, parte_id, parte_nome, situacao, periodo_inicio, corte, vencimento, vencimento_pela_regra,
-       motivo_ajuste, valor_itens_centavos, sinal_centavos, valor_centavos, conta_pagar_id, regra, observacoes, automatica, criada_por)
-     VALUES ($1,$2,$3,$4,$5,'GERADA',$6::date,$7::date,$8::date,$9::date,$10,$11,$12,$13,$14,$15::jsonb,$16,$17,$18)`,
+       motivo_ajuste, valor_itens_centavos, sinal_centavos, valor_centavos, conta_pagar_id, regra, observacoes, automatica, criada_por,
+       modo, receitas_centavos, conta_receber_id)
+     VALUES ($1,$2,$3,$4,$5,'GERADA',$6::date,$7::date,$8::date,$9::date,$10,$11,$12,$13,$14,$15::jsonb,$16,$17,$18,$19,$20,$21)`,
     [tenantId, id, numero, pedido.parte_id, previa.parte_nome, periodo.inicio, periodo.corte, previa.vencimento.data, previa.vencimento.pela_regra,
-      previa.vencimento.motivo_ajuste ?? '', previa.total_itens, previa.total_sinal, previa.a_pagar, contaId, JSON.stringify(regra),
-      txt(pedido.observacoes).slice(0, 1000), !!pedido.automatica, usuario.nome || usuario.id],
+      previa.vencimento.motivo_ajuste ?? '', previa.total_itens, previa.total_sinal, valorDosItens, contaId, JSON.stringify(regra),
+      txt(pedido.observacoes).slice(0, 1000), !!pedido.automatica, usuario.nome || usuario.id,
+      previa.modo, previa.receitas, contaReceberId],
   );
   for (const i of previa.itens) {
     await exec.query(
-      `INSERT INTO fatura_fornecedor_itens (tenant_id, fatura_id, conta_pagar_id, venda_id, venda_numero, valor_centavos, moeda, valor_moeda_centavos, saldo_cliente_centavos, descricao)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [tenantId, id, i.conta_id, i.venda_id, i.venda_numero, i.valor_a_gerar, i.moeda_fornecedor, i.saldo_moeda_fornecedor, i.saldo_cliente, `${i.tipos}: ${i.produto}`.slice(0, 300)],
+      `INSERT INTO fatura_fornecedor_itens (tenant_id, fatura_id, conta_pagar_id, venda_id, venda_numero, valor_centavos, moeda, valor_moeda_centavos, saldo_cliente_centavos, descricao, receitas_centavos)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [tenantId, id, i.conta_id, i.venda_id, i.venda_numero, i.valor_a_gerar, i.moeda_fornecedor, i.saldo_moeda_fornecedor, i.saldo_cliente, `${i.tipos}: ${i.produto}`.slice(0, 300),
+        previa.modo === 'BRUTO' ? receitasDoItem(i) : 0],
     );
   }
   const r = await exec.query(
@@ -663,9 +710,17 @@ export interface FaturaResumo {
   vendas: number;
   valor_itens: Centavos;
   sinal: Centavos;
+  /** Itens − sinal (o que a fatura paga pelos itens). */
   valor: Centavos;
+  /** Líquido ou bruto. */
+  modo: ModoDaFatura;
+  /** Comissão + over pagos no bruto e a receber de volta (0 no líquido). */
+  receitas: Centavos;
+  /** A conta a pagar da fatura: valor + receitas. */
+  valor_a_pagar: Centavos;
   pago: Centavos;
   conta_pagar_id: string | null;
+  conta_receber_id: string | null;
   automatica: boolean;
   criada_por: string;
   criada_em: string;
@@ -677,6 +732,8 @@ export interface FaturaResumo {
 
 export interface DetalheDaFatura extends FaturaResumo {
   linhas: ItemAFaturar[];
+  /** Itens já conferidos com a fatura do fornecedor (conta a pagar da venda → quem e quando). */
+  conferidos: Record<string, { em: string; por: string }>;
   compensacoes: Array<Compensacao & { sinal_descricao: string; sinal_data: string; desfeita: boolean }>;
 }
 
@@ -715,6 +772,9 @@ export async function listarFaturas(exec: ExecutorSQL, tenantId: string, filtro:
       periodo_inicio: dataISO(r.periodo_inicio), corte: dataISO(r.corte), vencimento: venc, vencimento_pela_regra: dataISO(r.vencimento_pela_regra),
       motivo_ajuste: txt(r.motivo_ajuste), itens: Number(r.itens) || 0, vendas: Number(r.vendas) || 0,
       valor_itens: Number(r.valor_itens_centavos) || 0, sinal: Number(r.sinal_centavos) || 0, valor: Number(r.valor_centavos) || 0,
+      modo: normalizarModo(r.modo), receitas: Number(r.receitas_centavos) || 0,
+      valor_a_pagar: (Number(r.valor_centavos) || 0) + (Number(r.receitas_centavos) || 0),
+      conta_receber_id: r.conta_receber_id ? txt(r.conta_receber_id) : null,
       pago: txt(r.situacao) === 'DESFEITA' ? 0 : pagoDaFatura(reflexo),
       conta_pagar_id: r.conta_pagar_id ? txt(r.conta_pagar_id) : null, automatica: r.automatica === true,
       criada_por: txt(r.criada_por), criada_em: quando(r.criada_em),
@@ -727,7 +787,9 @@ export async function listarFaturas(exec: ExecutorSQL, tenantId: string, filtro:
 export async function detalheDaFatura(exec: ExecutorSQL, tenantId: string, id: string, hoje = hojeISO()): Promise<DetalheDaFatura | null> {
   const [resumo] = await listarFaturas(exec, tenantId, { ids: [id] }, hoje);
   if (!resumo) return null;
-  const { rows: its } = await exec.query(`SELECT conta_pagar_id FROM fatura_fornecedor_itens WHERE tenant_id = $1 AND fatura_id = $2`, [tenantId, id]);
+  const { rows: its } = await exec.query(`SELECT conta_pagar_id, conferido_em, conferido_por FROM fatura_fornecedor_itens WHERE tenant_id = $1 AND fatura_id = $2`, [tenantId, id]);
+  const conferidos: DetalheDaFatura['conferidos'] = {};
+  for (const r of its) if (r.conferido_em) conferidos[txt(r.conta_pagar_id)] = { em: quando(r.conferido_em), por: txt(r.conferido_por) };
   const { rows: cs } = await exec.query(`SELECT id, data FROM contas_pagar WHERE tenant_id = $1 AND id = ANY($2::text[])`, [tenantId, its.map(r => txt(r.conta_pagar_id))]);
   const contas: Array<Record<string, unknown>> = cs.map(r => ({ ...(r.data as Record<string, unknown>), id: txt(r.id) }));
   const lote = await vendasEmLote(exec, tenantId, contas.map(c => txt(c.origem_venda_id)));
@@ -749,6 +811,7 @@ export async function detalheDaFatura(exec: ExecutorSQL, tenantId: string, id: s
   return {
     ...resumo,
     linhas: linhas.sort((a, b) => (a.data_venda < b.data_venda ? -1 : a.data_venda > b.data_venda ? 1 : 0)),
+    conferidos,
     compensacoes: ks.map(k => ({ sinal_id: txt(k.sinal_id), valor_centavos: Number(k.valor_centavos) || 0, sinal_descricao: txt(k.descricao), sinal_data: dataISO(k.data), desfeita: !!k.desfeita_em })),
   };
 }
@@ -760,13 +823,20 @@ export async function desfazerFatura(exec: ExecutorSQL, tenantId: string, id: st
   const { rows } = await exec.query(`SELECT parte_id, situacao, conta_pagar_id FROM faturas_fornecedor WHERE tenant_id = $1 AND id = $2`, [tenantId, id]);
   if (!rows.length) throw new ErroFornecedor('NAO_ENCONTRADA', 'Fatura não encontrada.', 404);
   await travar(exec, tenantId, `fatura-forn:${txt(rows[0].parte_id)}`);
-  const { rows: [f] } = await exec.query(`SELECT situacao, conta_pagar_id FROM faturas_fornecedor WHERE tenant_id = $1 AND id = $2`, [tenantId, id]);
+  const { rows: [f] } = await exec.query(`SELECT situacao, conta_pagar_id, conta_receber_id FROM faturas_fornecedor WHERE tenant_id = $1 AND id = $2`, [tenantId, id]);
   if (txt(f.situacao) !== 'GERADA') throw new ErroFornecedor('JA_DESFEITA', 'A fatura já foi desfeita.', 409);
   if (f.conta_pagar_id) {
     const { rows: c } = await exec.query(`SELECT data->>'status' AS s FROM contas_pagar WHERE tenant_id = $1 AND id = $2`, [tenantId, f.conta_pagar_id]);
     const st = txt(c[0]?.s);
     if (st === 'PAGO' || st === 'PARCIAL') {
       throw new ErroFornecedor('FATURA_PAGA', 'A fatura já tem pagamento. Estorne o pagamento antes de desfazer.', 409);
+    }
+  }
+  if (f.conta_receber_id) {
+    const { rows: c } = await exec.query(`SELECT data->>'status' AS s FROM contas_receber WHERE tenant_id = $1 AND id = $2`, [tenantId, f.conta_receber_id]);
+    const st = txt(c[0]?.s);
+    if (st === 'RECEBIDO' || st === 'PARCIAL') {
+      throw new ErroFornecedor('COMISSAO_RECEBIDA', 'A comissão desta fatura já foi recebida do fornecedor. Estorne o recebimento antes de desfazer.', 409);
     }
   }
   const { rows: its } = await exec.query(
@@ -798,6 +868,13 @@ export async function desfazerFatura(exec: ExecutorSQL, tenantId: string, id: st
       [tenantId, f.conta_pagar_id, `Fatura desfeita: ${m}`],
     );
   }
+  if (f.conta_receber_id) {
+    await exec.query(
+      `UPDATE contas_receber SET status = 'CANCELADO', data = data || jsonb_build_object('status', 'CANCELADO', 'motivo_cancelamento', $3::text), updated_at = NOW()
+        WHERE tenant_id = $1 AND id = $2`,
+      [tenantId, f.conta_receber_id, `Fatura desfeita: ${m}`],
+    );
+  }
   await exec.query(
     `UPDATE faturas_fornecedor SET situacao = 'DESFEITA', desfeita_em = NOW(), desfeita_por = $3, motivo_desfazer = $4 WHERE tenant_id = $1 AND id = $2`,
     [tenantId, id, usuario.nome || usuario.id, m],
@@ -809,6 +886,25 @@ export async function desfazerFatura(exec: ExecutorSQL, tenantId: string, id: st
     await regerarContasDaVenda(exec, tenantId, vid, await previaDasContas(exec, tenantId, c.venda));
   }
   return (await detalheDaFatura(exec, tenantId, id, hoje))!;
+}
+
+/**
+ * Marca (ou desmarca) um item da fatura como conferido com o documento do
+ * fornecedor. Só na fatura valendo; não mexe em valor nenhum.
+ */
+export async function marcarItemConferido(
+  exec: ExecutorSQL, tenantId: string, faturaId: string, contaPagarId: string, conferido: boolean, usuario: UsuarioDaAcao, hoje = hojeISO(),
+): Promise<DetalheDaFatura> {
+  const { rows } = await exec.query(`SELECT situacao FROM faturas_fornecedor WHERE tenant_id = $1 AND id = $2`, [tenantId, faturaId]);
+  if (!rows.length) throw new ErroFornecedor('NAO_ENCONTRADA', 'Fatura não encontrada.', 404);
+  if (txt(rows[0].situacao) !== 'GERADA') throw new ErroFornecedor('JA_DESFEITA', 'A fatura foi desfeita: os itens não se conferem mais nela.', 409);
+  const r = await exec.query(
+    `UPDATE fatura_fornecedor_itens SET conferido_em = CASE WHEN $4 THEN NOW() ELSE NULL END, conferido_por = CASE WHEN $4 THEN $5 ELSE NULL END
+      WHERE tenant_id = $1 AND fatura_id = $2 AND conta_pagar_id = $3 AND ativo`,
+    [tenantId, faturaId, contaPagarId, conferido, usuario.nome || usuario.id],
+  );
+  if (!(r.rowCount ?? 0)) throw new ErroFornecedor('NAO_ENCONTRADO', 'Este item não está nesta fatura.', 404);
+  return (await detalheDaFatura(exec, tenantId, faturaId, hoje))!;
 }
 
 // ============================================================

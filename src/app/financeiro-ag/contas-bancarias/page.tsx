@@ -40,6 +40,7 @@ import { Money } from '@/components/fin/Money';
 import { MoneyField } from '@/components/fin/MoneyField';
 import { PageHeader } from '@/components/fin/PageHeader';
 import { RecordSheet } from '@/components/fin/RecordSheet';
+import { CampoEmpresa, CampoEmpresasDisponiveis, useEmpresaSugerida } from '@/components/fin/CamposDeEmpresa';
 import type { EmptyLessonProps } from '@/components/fin/EmptyLesson';
 
 const TIPO_LABEL: Record<ContaBancaria['tipo'], string> = {
@@ -94,9 +95,10 @@ function createNewConta(): ContaBancaria {
 }
 
 /**
- * Conta com a moeda (05/11/2026, E6) e o cadastro completo (06/11/2026, E7):
- * titular, banco da lista oficial, dígitos separados e desativada. Ausentes =
- * como sempre foi (real, ativa, banco em texto livre).
+ * Conta com a moeda (05/11/2026, E6), o cadastro completo (06/11/2026, E7:
+ * titular, banco da lista oficial, dígitos separados e desativada) e a
+ * empresa (E7: a dona e as outras em que a conta está disponível). Ausentes
+ * = como sempre foi (real, ativa, banco em texto livre, empresa principal).
  */
 type ContaComMoeda = ContaBancaria & {
   moeda?: string;
@@ -107,6 +109,8 @@ type ContaComMoeda = ContaBancaria & {
   conta_digito?: string;
   ativo?: boolean;
   _versao?: string;
+  empresa_id?: string;
+  empresas_disponiveis?: string[];
 };
 
 type FormState = {
@@ -123,6 +127,8 @@ type FormState = {
   titular_documento: string;
   ativo: boolean;
   saldo_inicial: number;
+  empresa_id?: string;
+  empresas_disponiveis: string[];
 };
 
 const EMPTY_FORM: FormState = {
@@ -139,6 +145,7 @@ const EMPTY_FORM: FormState = {
   titular_documento: '',
   ativo: true,
   saldo_inicial: 0,
+  empresas_disponiveis: [],
 };
 
 /** O que vai para o cadastro a partir do formulário. */
@@ -180,6 +187,7 @@ function contagemDeContas(n: number): string {
 export default function ContasBancariasPage() {
   const [items, setItems] = useState<ContaComMoeda[]>([]);
   const cotacoes = useCotacoes();
+  const empresaSugerida = useEmpresaSugerida();
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
@@ -225,7 +233,7 @@ export default function ContasBancariasPage() {
   }
 
   function openNew() {
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, empresa_id: empresaSugerida });
     setEditId(null);
     setShowForm(true);
     setSujo(false);
@@ -249,6 +257,8 @@ export default function ContasBancariasPage() {
       titular_documento: item.titular_documento ?? '',
       ativo: contaBancariaAtiva(item),
       saldo_inicial: item.saldo_inicial,
+      empresa_id: item.empresa_id,
+      empresas_disponiveis: Array.isArray(item.empresas_disponiveis) ? item.empresas_disponiveis : [],
     });
     setEditId(item.id);
     setShowForm(true);
@@ -272,9 +282,20 @@ export default function ContasBancariasPage() {
       if (editId) {
         const existing = items.find(i => i.id === editId)!;
         // Leva a versão lida: se outra pessoa salvou depois, nada é gravado (409).
-        await atualizarRegistro('contas-bancarias', { ...existing, ...dados });
+        await atualizarRegistro('contas-bancarias', {
+          ...existing,
+          ...dados,
+          ...(form.empresa_id ? { empresa_id: form.empresa_id } : {}),
+          empresas_disponiveis: form.empresas_disponiveis.filter(e => e !== form.empresa_id),
+        });
       } else {
-        const nova: ContaComMoeda = { ...createNewConta(), ...dados, saldo_atual: form.saldo_inicial };
+        const nova: ContaComMoeda = {
+          ...createNewConta(),
+          ...dados,
+          saldo_atual: form.saldo_inicial,
+          ...(form.empresa_id ? { empresa_id: form.empresa_id } : {}),
+          ...(form.empresas_disponiveis.length ? { empresas_disponiveis: form.empresas_disponiveis.filter(e => e !== form.empresa_id) } : {}),
+        };
         const r = await saveEntity('contas-bancarias', nova) as ContaComMoeda & { error?: string };
         if (r && typeof r.error === 'string') throw new Error(r.error);
       }
@@ -738,6 +759,18 @@ export default function ContasBancariasPage() {
               />
             )}
           </Field>
+
+          {/* Várias empresas (E7): só aparecem com duas ou mais. */}
+          <CampoEmpresa
+            valor={form.empresa_id}
+            onChange={empresa_id => atualizarForm({ empresa_id, empresas_disponiveis: form.empresas_disponiveis.filter(e => e !== empresa_id) })}
+            ajuda="A empresa dona da conta. O dinheiro que entra e sai por ela conta nesta empresa."
+          />
+          <CampoEmpresasDisponiveis
+            dona={form.empresa_id}
+            valor={form.empresas_disponiveis}
+            onChange={empresas_disponiveis => atualizarForm({ empresas_disponiveis })}
+          />
 
           <Field rotulo="Tipo de conta">
             {a => (

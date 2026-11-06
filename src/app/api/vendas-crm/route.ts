@@ -9,6 +9,8 @@ import { STATUS_BAIXADOS } from '@/lib/caixa-atomico';
 import { hojeISO } from '@/lib/money';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { situacaoDaVenda, versaoDoModelo } from '@/lib/venda-servidor';
+import { filtrarPorEmpresa } from '@/lib/empresas';
+import { escopoDaSessao, type ExecutorEmpresas } from '@/lib/empresas-servidor';
 
 const TABLE = 'vendas_crm';
 const INDEX_COLS = ['cliente_id', 'vendedor_id', 'status'];
@@ -41,6 +43,11 @@ export async function GET() {
     const tenantId = await getTenantId();
     const session = await getSession();
 
+    // Várias empresas (E7): só as vendas das empresas marcadas e liberadas.
+    // Uma empresa só: nada muda.
+    const { visiveis } = await escopoDaSessao(session, pool as unknown as ExecutorEmpresas);
+    const recortar = (lista: Record<string, unknown>[]) => filtrarPorEmpresa(lista, { tipo: 'registro' }, visiveis);
+
     // VENDEDOR só vê as próprias vendas (vendedor_id = session.userId).
     // ADMIN/OPERADOR veem tudo do tenant.
     if (session && !podeVerTodasVendas(session)) {
@@ -48,11 +55,11 @@ export async function GET() {
         `SELECT data FROM ${TABLE} WHERE tenant_id = $1 AND vendedor_id = $2 ORDER BY created_at DESC`,
         [tenantId, session.userId || ''],
       );
-      return NextResponse.json(rows.map(r => r.data));
+      return NextResponse.json(recortar(rows.map(r => r.data as Record<string, unknown>)));
     }
 
     const { rows } = await pool.query(`SELECT data FROM ${TABLE} WHERE tenant_id = $1 ORDER BY created_at DESC`, [tenantId]);
-    return NextResponse.json(rows.map(r => r.data));
+    return NextResponse.json(recortar(rows.map(r => r.data as Record<string, unknown>)));
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Unknown error';
     return NextResponse.json({ error: msg }, { status: 500 });

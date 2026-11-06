@@ -5,13 +5,16 @@ import { getSession } from '@/lib/auth';
 import { recusaFinanceira } from '@/lib/guarda-rota';
 import { contasPermitidas, pode } from '@/lib/permissoes-servidor';
 import { registrarEventoAuditoria } from '@/lib/audit';
+import { escopoDaSessao, type ExecutorEmpresas } from '@/lib/empresas-servidor';
 import { hojeISO } from '@/lib/money';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import {
-  EXPORTACAO_MAX, FiltroInvalido, SELECAO_MAX, csvDasContas, existeTabelaDeCobranca, lerContas, lerFiltro, lerTodas,
+  EXPORTACAO_MAX, FiltroInvalido, SELECAO_MAX, csvDasContas, documentoDasContas, existeTabelaDeCobranca, lerContas, lerFiltro, lerTodas,
   tabelasDaLista,
 } from '@/lib/contas-pagar-receber';
 import { camposParaExportar } from '@/lib/contas-pagar-receber-campos';
+import { formatoDaConsulta } from '@/lib/exportacao/arquivo';
+import { responderExportacao } from '@/lib/exportacao/servidor';
 
 /**
  * Contas a Pagar/Receber numa lista só (05/11/2026): só leitura, paginada no
@@ -21,6 +24,7 @@ import { camposParaExportar } from '@/lib/contas-pagar-receber-campos';
  *       &busca=&em=&categoria=&centro=&conta=&cobranca=todas|sem_boleto|emitida|vencida|paga|falhou
  *       &ordem=&direcao=&pagina=&por_pagina=
  *   GET ...&format=csv     planilha do filtro inteiro (até 50.000 linhas; direito "exportar")
+ *   GET ...&format=xlsx|pdf|imprimir  o mesmo recorte em Excel, PDF ou PDF que já imprime (E7)
  *   GET ...&format=chaves  as contas do filtro inteiro, para "selecionar todas" (até 2.000)
  *
  * 06/11/2026 (E7): Nº, moeda, venda, fatura, vendedor, cadastrado por/em e
@@ -44,6 +48,8 @@ export async function GET(req: Request) {
     // Contas liberadas (perfis de acesso): a regra das telas de pagar e receber.
     const liberadas = await contasPermitidas(session);
     const exec = pool as unknown as ExecutorSQL;
+    // Empresas marcadas no seletor e liberadas (E7). Uma empresa só: todas.
+    filtro.empresas = (await escopoDaSessao(session, pool as unknown as ExecutorEmpresas)).visiveis;
     const formato = params.get('format');
     // Situação da cobrança (E3) quando a tabela de cobranças já existe.
     const opcoes = { comCobranca: await existeTabelaDeCobranca(exec), tabelas: await tabelasDaLista(exec) };
@@ -67,6 +73,24 @@ export async function GET(req: Request) {
       const campos = await camposParaExportar(exec, tenantId);
       return new Response(csvDasContas(linhas, campos), {
         headers: { ...HEADERS, 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="${nome}"` },
+      });
+    }
+
+    // Excel (.xlsx), PDF e impressão (E7): o mesmo filtro e o mesmo limite do CSV.
+    const formatoDoArquivo = formatoDaConsulta(formato);
+    if (formatoDoArquivo && formatoDoArquivo !== 'csv') {
+      if (!(await pode(session, 'exportar'))) {
+        return NextResponse.json({ error: 'Seu acesso não inclui baixar em Excel e PDF.' }, { status: 403, headers: HEADERS });
+      }
+      const linhas = await lerTodas(exec, tenantId, filtro, liberadas, EXPORTACAO_MAX + 1, opcoes);
+      if (linhas.length > EXPORTACAO_MAX) {
+        return NextResponse.json(
+          { error: 'O arquivo aceita até 50.000 contas. Escolha um período menor ou mais filtros.' },
+          { status: 422, headers: HEADERS },
+        );
+      }
+      return responderExportacao(session, documentoDasContas(linhas, filtro), formatoDoArquivo, {
+        exec, entidade: 'contas_pagar_receber', direitoConferido: true,
       });
     }
 

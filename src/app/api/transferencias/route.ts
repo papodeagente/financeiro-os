@@ -20,5 +20,7 @@ export const { GET, POST } = createCrudHandlers(
       item.cheque_numero = n;
       return null;
     },
+    // Aparece em quem vê alguma das duas contas (E7).
+    filtroDeEmpresa: { tipo: 'por_conta', campos: ['conta_origem_id', 'conta_destino_id'] },
   },
 );

@@ -313,3 +313,37 @@ export function linhaEmBlocos(linha: string | null | undefined): string {
   const n = t.replace(/\D/g, '').length;
   return n === 47 || n === 48 ? formatarLinhaDigitavel(t) : t;
 }
+
+// ─── Emitir boletos da venda (E7, 06/11/2026) ─────────────────────────────
+
+/**
+ * As contas a receber da venda (como a ficha as lê do banco) no formato de
+ * "Gerar boleto(s)". Ficam de fora a comissão a receber do fornecedor e o que
+ * vai para a fatura do cliente (a fatura tem a cobrança dela). O servidor
+ * confere tudo de novo na prévia.
+ */
+export function contasDaVendaParaCobrar(
+  contas: ReadonlyArray<Record<string, unknown>>, hoje: string,
+): Array<ContaParaCobrar & { descricao: string }> {
+  const n = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  const saida: Array<ContaParaCobrar & { descricao: string }> = [];
+  for (const c of contas) {
+    const origem = String(c.origem ?? '');
+    if (origem === 'COMISSAO_FORNECEDOR' || c.faturar === true || c.na_fatura) continue;
+    const status = String(c.status ?? 'PENDENTE').toUpperCase();
+    const vencimento = String(c.data_vencimento ?? '').slice(0, 10);
+    const situacao: ContaParaCobrar['situacao'] = status === 'CANCELADO' ? 'cancelado'
+      : status === 'RECEBIDO' ? 'liquidado'
+        : vencimento && vencimento < hoje ? 'em_atraso' : 'em_aberto';
+    const recebido = status === 'PARCIAL' ? n(c.valor_recebido) : 0;
+    const saldo = Math.round((n(c.valor_final) - recebido) * 100) / 100;
+    const cob = (c.cobranca ?? null) as { status?: StatusDaCobranca } | null;
+    if (!c.id) continue;
+    saida.push({
+      id: String(c.id), tipo: 'receber', situacao, saldo, pessoa: String(c.cliente_nome ?? ''),
+      cliente_id: String(c.cliente_id ?? ''), vencimento, descricao: String(c.descricao ?? ''),
+      cobranca: situacaoNaConta({ tipo: 'receber', situacao }, cob?.status ?? null),
+    });
+  }
+  return saida;
+}

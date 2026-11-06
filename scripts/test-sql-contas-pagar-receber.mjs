@@ -247,6 +247,8 @@ eq(r.corpo.linhas.some(l => l.id === 'p-paga-b1' || l.id === 'r-recebida-b1' || 
 eq(r.corpo.linhas.some(l => l.id === 'p-aberta'), true, 'em aberto com previsão na b1 continua (só some o que já foi baixado)');
 eq((await RL.GET(req('/api/contas-pagar-receber?format=chaves'))).status, 200, 'selecionar todas do filtro responde');
 eq((await json(await RL.GET(req('/api/contas-pagar-receber?format=csv')))).status, 403, 'planilha sem o direito "exportar": 403');
+eq((await json(await RL.GET(req('/api/contas-pagar-receber?format=xlsx')))).status, 403, 'Excel sem o direito "exportar": 403');
+eq((await json(await RL.GET(req('/api/contas-pagar-receber?format=pdf')))).status, 403, 'PDF sem o direito "exportar": 403');
 como(sessao('VENDEDOR'));
 eq((await lista({})).status, 403, 'vendedor não lê o financeiro');
 
@@ -259,6 +261,15 @@ const csv = new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes);
 eq([resp.status, [...bytes.slice(0, 3)], resp.headers.get('content-type')], [200, [0xEF, 0xBB, 0xBF], 'text/csv; charset=utf-8'], 'CSV com BOM, para o Excel');
 eq(csv.includes(`"'=HYPERLINK(""x"")"`), true, 'fórmula neutralizada');
 eq(csv.includes('"10,50"'), true, 'valor com vírgula decimal (número no Excel)');
+// Excel (.xlsx), PDF e impressão (E7): mesmo filtro, filtro no nome do arquivo.
+resp = await RL.GET(req('/api/contas-pagar-receber?format=xlsx&tipo=pagar&busca=HYPERLINK'));
+const xlsx = new Uint8Array(await resp.arrayBuffer());
+eq([resp.status, resp.headers.get('content-type'), [...xlsx.slice(0, 2)]], [200, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', [0x50, 0x4B]], 'Excel (.xlsx) do filtro');
+eq(/filename="contas-a-pagar-a-pagar-hyperlink\.xlsx"/.test(resp.headers.get('content-disposition') ?? ''), true, 'nome do arquivo leva o filtro');
+resp = await RL.GET(req('/api/contas-pagar-receber?format=pdf&busca=HYPERLINK'));
+eq([resp.status, new TextDecoder().decode(new Uint8Array(await resp.arrayBuffer()).slice(0, 5))], [200, '%PDF-'], 'PDF do filtro');
+resp = await RL.GET(req('/api/contas-pagar-receber?format=imprimir&busca=HYPERLINK'));
+eq([resp.status, (resp.headers.get('content-disposition') ?? '').startsWith('inline')], [200, true], 'imprimir abre na janela');
 await query(`DELETE FROM contas_pagar WHERE id = 'p-formula'`);
 
 console.log('--- 5. Liquidar em lote pelo /api/baixas ---');

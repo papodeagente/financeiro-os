@@ -17,6 +17,7 @@ import { NOTAS_REGRAS_SCHEMA_SQL } from './nota-regras-schema';
 import { COMISSAO_FUNCOES_SCHEMA_SQL } from './comissao-funcoes-schema';
 import { PARTE_D_SCHEMA_SQL } from './cancelamento-schema';
 import { FATURA_SCHEMA_SQL } from './fatura-schema';
+import { EMPRESAS_SCHEMA_SQL } from './empresas-schema';
 import { RECORRENCIA_SCHEMA_SQL } from './recorrencia-schema';
 import { CENTROS_CUSTO_SCHEMA_SQL } from './centros-custo-servidor';
 import { PERMISSOES_SCHEMA_SQL } from './permissoes-schema';
@@ -31,6 +32,7 @@ import { MAPAS_MENTAIS_COMPARTILHAMENTO_SCHEMA_SQL } from './mapas-mentais-compa
 import { SITES_SCHEMA_SQL } from './sites-schema';
 import { CONCILIACAO_REGRAS_SCHEMA_SQL } from './conciliacao-regras-schema';
 import { CONFERENCIA_OPERADORA_SCHEMA_SQL } from './conferencia-operadora-schema';
+import { RELATORIOS_AGENDADOS_SCHEMA_SQL } from './relatorios-agendados/schema';
 
 const pool = process.env.DATABASE_URL
   ? new AuditPool({ connectionString: process.env.DATABASE_URL, max: 5 }, getAuditContext)
@@ -1585,6 +1587,13 @@ async function executarInitDB() {
   // Faturas ao cliente e Regras de faturamento (05/11/2026, E5 parte B).
   // Antes do razão e da auditoria (o histórico da fatura fica fora do gatilho).
   await pool.query(FATURA_SCHEMA_SQL);
+  // Várias empresas dentro da agência (06/11/2026, E7 G2): cadastro, seletor
+  // por usuário, configurações por empresa, empresa nos perfis de acesso e o
+  // gatilho que põe `empresa_id` em todo título, conta, cartão, venda, nota,
+  // fatura e cobrança. Migração única: tudo de antes na empresa principal.
+  // Depois das permissões, da cobrança, das notas e das faturas; antes do
+  // razão e da auditoria.
+  await pool.query(EMPRESAS_SCHEMA_SQL);
   // Conciliação com regras aprendidas e conferência do extrato de operadora
   // (05/11/2026, E6). A lista "conciliado sozinho" e as linhas da conferência
   // são controle e ficam fora do gatilho de auditoria.
@@ -1601,6 +1610,9 @@ async function executarInitDB() {
   await pool.query(CONTAS_EXCLUIDAS_SCHEMA_SQL);
   await pool.query(NUMERACAO_TITULOS_SCHEMA_SQL);
   await pool.query(PREFERENCIAS_USUARIO_SCHEMA_SQL);
+  // Envio agendado de relatório e link de leitura (E7, G3): agendamentos
+  // (auditados), cópias lidas pelo link e histórico dos envios (controle).
+  await pool.query(RELATORIOS_AGENDADOS_SCHEMA_SQL);
   await pool.query(RAZAO_SCHEMA_SQL);
   // Instala a captura somente depois das migrações/seed, sem fabricar histórico.
   await pool.query(AUDIT_SCHEMA_SQL);

@@ -12,6 +12,8 @@ import { ConfirmDialog } from '@/components/fin/ConfirmDialog';
 import { RecordSheet } from '@/components/fin/RecordSheet';
 import { MoneyField } from '@/components/fin/MoneyField';
 import { Callout } from '@/components/fin/Callout';
+import { BotaoExportar } from '@/components/fin/BotaoExportar';
+import { documentoDoPagamento } from '@/lib/exportacao/listas-financeiro';
 import { reais } from '@/components/comissoes/PainelDoVendedor';
 import type { PessoaAPagar, ResultadoDoPagamento } from '@/lib/comissao-funcoes-servidor';
 import { toast } from '@/lib/toast';
@@ -104,6 +106,9 @@ export default function PagarComissoesPage() {
         acoesSecundarias={[{ rotulo: 'Fechar comissões', href: '/equipe/fechar-comissoes' }, { rotulo: 'Contas a pagar', href: '/financeiro-ag/pagar' }]}
       />
       <div className={RITMO_DA_PAGINA}>
+        <div className="flex justify-end">
+          <BotaoExportar origem="pagar_comissoes" desabilitado={!pessoas.length} documento={() => documentoDoPagamento(pessoas)} />
+        </div>
         {dados?.so_as_suas ? <Callout tom="info">Mostrando só as suas comissões.</Callout> : null}
         {resultado && (resultado.pagos.length || resultado.recusados.length) ? (
           <Callout tom={resultado.recusados.length ? 'aviso' : 'positivo'} titulo="Último pagamento">

@@ -25,18 +25,21 @@ import type { ItemVendaData, ProdutoVenda, VendaCRM } from './crm-types';
 import { createVendaCRM } from './crm-types';
 import type { FornecedorInfo, ItemVendaInput } from './venda-financeiro';
 import {
-  FORMAS, TIPOS_COMPONENTE, normalizarVenda, totaisDaVenda, totaisDoProduto,
+  FORMAS, TIPOS_COMPONENTE, congelarTaxaDoCartao, normalizarVenda, taxaDoCartaoIndefinida, totaisDaVenda, totaisDoProduto,
   type Centavos, type ParteDaVenda, type Venda,
 } from './venda-modelo';
+import { LIQUIDAR_PADRAO, liquidarContasDaVenda, normalizarLiquidar, textoDoTotal, type LiquidarAutomaticamente } from './venda-liquidar-auto';
 import { vendaDoV1, TIPO_PARA_V1 } from './venda-modelo-v1';
 import { contasDaVenda, type AvisoDaVenda, type ContasDaVenda, type PendenciaDaVenda } from './venda-contas';
 import { normalizarConfigReceita, receitaDaVenda, type ConfigReceita } from './venda-receita';
+import { normalizarConfigDoRecibo, type ConfigDoRecibo } from './recibo-da-venda';
 import { posicaoDaVenda, type CobrancaDaPosicao, type PosicaoDaVenda } from './venda-posicao';
 import { contasNaFaturaDoFornecedor, refletirFaturasNasContas } from './fornecedor-fatura-banco';
 import { aplicarRetencoesDaAgencia } from './nota-retencoes-servidor';
 import { contasTravadasPelaFatura, projetarContasNaFatura, sincronizarFaturasDaVenda } from './fatura-servidor';
 import { lerCategoriasDosTitulos } from './categorias-padrao-titulos-servidor';
 import { categoriaParaContaNova, chaveDaContaDaVenda, type CategoriasDosTitulos } from './categorias-padrao-titulos';
+import { empresaComConfigPropria, lerChavesDaEmpresa } from './empresas-config';
 
 // ============================================================
 // Tipos públicos
@@ -51,7 +54,9 @@ export class ErroVenda extends Error {
 
 export interface UsuarioDaAcao { id: string; nome: string }
 
-export type TipoDeEventoDaVenda = 'criada' | 'alterada' | 'recebida_do_crm' | 'fechada' | 'reaberta' | 'mudanca_do_crm_recusada' | 'cancelamento';
+export type TipoDeEventoDaVenda = 'criada' | 'alterada' | 'recebida_do_crm' | 'fechada' | 'reaberta' | 'mudanca_do_crm_recusada' | 'cancelamento'
+  // E7
+  | 'cancelamento_desfeito' | 'conta_avulsa';
 
 export interface EventoDaVenda {
   id: string;
@@ -102,7 +107,13 @@ export interface ResultadoDaGravacao {
 }
 
 /** Configurações › Vendas, guardadas em agencia.data.venda_config. */
-export interface ConfigVenda { receita: ConfigReceita }
+export interface ConfigVenda {
+  receita: ConfigReceita;
+  /** Texto do recibo da venda (E7): declaração com marcadores e complemento. */
+  recibo: ConfigDoRecibo;
+  /** E7: dinheiro e cheque baixados sozinhos, com a conta padrão de cada um. */
+  liquidar_automaticamente: LiquidarAutomaticamente;
+}
 
 // ============================================================
 // Utilitários
@@ -133,18 +144,34 @@ async function travarVenda(exec: ExecutorSQL, tenantId: string, vendaId: string)
 // Configuração
 // ============================================================
 
-export async function lerConfigVenda(exec: ExecutorSQL, tenantId: string): Promise<ConfigVenda> {
+export async function lerConfigVenda(exec: ExecutorSQL, tenantId: string, empresaId?: string | null): Promise<ConfigVenda> {
   const { rows } = await exec.query(
     `SELECT data->'venda_config' AS c FROM agencia WHERE tenant_id = $1 ORDER BY updated_at DESC NULLS LAST, id ASC LIMIT 1`,
     [tenantId],
   ).catch(() => ({ rows: [] as Array<Record<string, unknown>> }));
-  const c = (rows[0]?.c ?? {}) as Record<string, unknown>;
-  return { receita: normalizarConfigReceita(c.receita) };
+  const principal = normalizarConfigVenda((rows[0]?.c ?? {}) as Record<string, unknown>);
+  // Empresa com configuração própria (E7): a dela, e no que ela não definiu, a
+  // da principal. Uma empresa só: a de sempre.
+  if (empresaComConfigPropria(empresaId)) {
+    const c = await lerChavesDaEmpresa(exec, tenantId, empresaId, ['venda_config']);
+    return normalizarConfigVenda(c.venda_config ?? {}, principal);
+  }
+  return principal;
 }
 
-export function normalizarConfigVenda(v: unknown): ConfigVenda {
+/**
+ * O pedido da tela sobre a configuração atual: a parte que não veio fica
+ * como estava (a tela antiga mandava só `receita`).
+ */
+export function normalizarConfigVenda(v: unknown, atual?: ConfigVenda): ConfigVenda {
   const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
-  return { receita: normalizarConfigReceita(o.receita) };
+  return {
+    receita: o.receita === undefined && atual ? atual.receita : normalizarConfigReceita(o.receita),
+    recibo: o.recibo === undefined ? (atual?.recibo ?? normalizarConfigDoRecibo(null)) : normalizarConfigDoRecibo(o.recibo),
+    liquidar_automaticamente: o.liquidar_automaticamente === undefined
+      ? (atual?.liquidar_automaticamente ?? LIQUIDAR_PADRAO)
+      : normalizarLiquidar(o.liquidar_automaticamente),
+  };
 }
 
 // ============================================================
@@ -255,7 +282,7 @@ export function vendaDasLinhas(vendaId: string, linha: Linha, cab: Linha, ps: Li
     id: vendaId, numero: txt(linha.numero) || txt(cab.numero), data_venda: dataISO(linha.data_venda) || txt(cab.data_venda),
     cliente: linha.cliente, vendedor: linha.vendedor, intermediario: linha.intermediario,
     grupo_id: linha.grupo_id, centro_custo: linha.centro_custo, origem: linha.origem, situacao: linha.situacao,
-    observacoes: linha.observacoes, crm_venda_id: linha.crm_venda_id,
+    observacoes: linha.observacoes, crm_venda_id: linha.crm_venda_id, operacao_propria: linha.operacao_propria === true, produtos_removidos: linha.produtos_removidos,
     produtos: ps.map(p => ({
       id: p.id, tipo: p.tipo, descricao: p.descricao,
       fornecedor: parte(p.fornecedor_id, p.fornecedor_nome, p.fornecedor_externo),
@@ -271,11 +298,11 @@ export function vendaDasLinhas(vendaId: string, linha: Linha, cab: Linha, ps: Li
       })),
       componentes: cs.filter(c => c.produto_id === p.id).map(c => ({
         id: c.id, tipo: c.tipo, valor_centavos: Number(c.valor_centavos), percentual: c.percentual === null ? null : Number(c.percentual),
-        passageiro_id: c.passageiro_id, descricao: c.descricao,
+        passageiro_id: c.passageiro_id, descricao: c.descricao, base: c.base,
       })),
     })),
     pagamentos: gs.map(g => ({
-      id: g.id, forma: g.forma, valor_centavos: Number(g.valor_centavos), parcelas: g.parcelas,
+      ...((g.dados ?? {}) as Record<string, unknown>), id: g.id, forma: g.forma, valor_centavos: Number(g.valor_centavos), parcelas: g.parcelas,
       primeiro_vencimento: dataISO(g.primeiro_vencimento), intervalo_dias: g.intervalo_dias,
       pagante: g.pagante, fornecedor: g.fornecedor, conta_bancaria_id: g.conta_bancaria_id,
       cartao_tipo: g.cartao_tipo, detalhe: g.detalhe, venda_origem_credito: g.venda_origem_credito,
@@ -370,6 +397,8 @@ function ajustarValor(d: Record<string, unknown>, centavosNovos: Centavos): void
 async function regerarTabela(
   exec: ExecutorSQL, tenantId: string, vendaId: string, tabela: Tabela,
   novas: Array<Record<string, unknown>>, travadasIds: Set<string>, avisos: AvisoDaVenda[],
+  /** Contas fora da regeração que já cobrem um lado (pagamento avulso ao fornecedor, E7). */
+  externas: ContaExistente[] = [],
 ): Promise<ContagemDasContas> {
   const cont: ContagemDasContas = { criadas: 0, atualizadas: 0, removidas: 0, preservadas: 0 };
   const { rows } = await exec.query(
@@ -378,7 +407,8 @@ async function regerarTabela(
   );
   const existentes: ContaExistente[] = rows.map(r => ({ id: txt(r.id), status: txt((r.data as Record<string, unknown>)?.status ?? r.status), data: (r.data ?? {}) as Record<string, unknown> }));
   const travada = (c: ContaExistente) => (STATUS_BAIXADOS as readonly string[]).includes(c.status) || travadasIds.has(c.id);
-  const travadas = existentes.filter(travada);
+  // As externas entram como travadas: o que já cobrem sai das livres do mesmo lado; nunca são mexidas.
+  const travadas = [...existentes.filter(travada), ...externas];
   const livresExistentes = new Map(existentes.filter(c => !travada(c)).map(c => [chaveDe(c.data), c]));
   cont.preservadas = travadas.length;
   const chavesTravadas = new Set(travadas.map(c => chaveDe(c.data)));
@@ -491,6 +521,21 @@ async function regerarTabela(
 }
 
 /**
+ * Pagamentos avulsos ao fornecedor lançados na ficha da venda (E7): contas a
+ * pagar fora da regeração (`auto_gerado` false) que adiantam parte do que a
+ * venda deve àquela pessoa. A regeração as conta como já feitas no lado
+ * dela, para o total a pagar ao fornecedor continuar batendo com a venda.
+ */
+async function pagamentosAvulsosAoFornecedor(exec: ExecutorSQL, tenantId: string, vendaId: string): Promise<ContaExistente[]> {
+  const { rows } = await exec.query(
+    `SELECT id, status, data FROM contas_pagar WHERE tenant_id = $1 AND data->>'origem_venda_id' = $2
+        AND data->>'avulsa_da_venda' = 'pagamento_fornecedor' AND COALESCE(data->>'status', '') <> 'CANCELADO'`,
+    [tenantId, vendaId],
+  );
+  return rows.map(r => ({ id: txt(r.id), status: txt((r.data as Record<string, unknown>)?.status ?? r.status), data: (r.data ?? {}) as Record<string, unknown> }));
+}
+
+/**
  * Grava as contas geradas para a venda, preservando o baixado e o que tem
  * cobrança valendo. Devolve a contagem e avisos de valor que não fechou.
  */
@@ -513,7 +558,8 @@ export async function regerarContasDaVenda(exec: ExecutorSQL, tenantId: string, 
   // Item de fatura fechada, recebida ou cobrada (E5, parte B) também não muda.
   for (const id of await contasTravadasPelaFatura(exec, tenantId, vendaId)) travadas.add(id);
   const cr = await regerarTabela(exec, tenantId, vendaId, 'contas_receber', contas.contas_receber as unknown as Array<Record<string, unknown>>, travadas, avisos);
-  const cp = await regerarTabela(exec, tenantId, vendaId, 'contas_pagar', contas.contas_pagar as unknown as Array<Record<string, unknown>>, travadas, avisos);
+  const cp = await regerarTabela(exec, tenantId, vendaId, 'contas_pagar', contas.contas_pagar as unknown as Array<Record<string, unknown>>, travadas, avisos,
+    await pagamentosAvulsosAoFornecedor(exec, tenantId, vendaId));
   return {
     contas: { criadas: cr.criadas + cp.criadas, atualizadas: cr.atualizadas + cp.atualizadas, removidas: cr.removidas + cp.removidas, preservadas: cr.preservadas + cp.preservadas },
     avisos,
@@ -600,6 +646,38 @@ async function proximoNumero(exec: ExecutorSQL, tenantId: string): Promise<strin
   return `VND-${String(Number(rows[0]?.c ?? 0) + 1).padStart(4, '0')}`;
 }
 
+/** O que o pagamento guarda na coluna `dados` (E7): só o que existe. */
+function dadosDoPagamento(g: Venda['pagamentos'][number]): Record<string, unknown> {
+  const d: Record<string, unknown> = {};
+  for (const k of ['taxa_cartao_centavos', 'taxa_cartao_percentual', 'taxa_cartao_fixa_centavos', 'dias_para_cair', 'forma_agencia', 'campos'] as const) {
+    const v = g[k];
+    if (v !== null && v !== undefined && v !== '') d[k] = v;
+  }
+  return d;
+}
+
+/**
+ * Cartão (E7): congela no pagamento a taxa e os dias da forma de pagamento da
+ * agência, onde ainda não foram definidos. Venda feita não muda quando o
+ * cadastro da forma muda depois.
+ */
+async function congelarTaxasDoCartao(exec: ExecutorSQL, tenantId: string, venda: Venda): Promise<Venda> {
+  if (!venda.pagamentos.some(taxaDoCartaoIndefinida)) return venda;
+  // Sem a tabela de formas (base antiga), nada a congelar. Conferir antes:
+  // um SELECT que falha dentro da transação a deixaria inutilizável.
+  const { rows: tem } = await exec.query(`SELECT to_regclass('public.formas_pagamento') IS NOT NULL AS ok`);
+  if (!tem[0]?.ok) return venda;
+  const { listarFormas } = await import('./formas-pagamento-servidor');
+  const formas = await listarFormas(exec, tenantId);
+  const porCodigo = new Map(formas.map(f => [f.codigo, f]));
+  return {
+    ...venda,
+    pagamentos: venda.pagamentos.map(g => (taxaDoCartaoIndefinida(g)
+      ? congelarTaxaDoCartao(g, porCodigo.get(g.cartao_tipo === 'debito' ? 'CARTAO_DEBITO' : 'CARTAO_CREDITO'))
+      : g)),
+  };
+}
+
 async function gravarFilhos(exec: ExecutorSQL, tenantId: string, venda: Venda): Promise<void> {
   const args = [tenantId, venda.id];
   for (const t of ['venda_componentes', 'venda_passageiros', 'venda_produtos', 'venda_pagamentos']) {
@@ -625,19 +703,20 @@ async function gravarFilhos(exec: ExecutorSQL, tenantId: string, venda: Venda): 
     }
     for (const [k, c] of p.componentes.entries()) {
       await exec.query(
-        `INSERT INTO venda_componentes (tenant_id, venda_id, produto_id, id, ordem, tipo, valor_centavos, percentual, passageiro_id, descricao)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-        [tenantId, venda.id, p.id, c.id, k + 1, c.tipo, c.valor_centavos, c.percentual, c.passageiro_id, c.descricao],
+        `INSERT INTO venda_componentes (tenant_id, venda_id, produto_id, id, ordem, tipo, valor_centavos, percentual, passageiro_id, descricao, base)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [tenantId, venda.id, p.id, c.id, k + 1, c.tipo, c.valor_centavos, c.percentual, c.passageiro_id, c.descricao, c.base ?? ''],
       );
     }
   }
   for (const [k, g] of venda.pagamentos.entries()) {
     await exec.query(
       `INSERT INTO venda_pagamentos (tenant_id, venda_id, id, ordem, forma, valor_centavos, parcelas, primeiro_vencimento, intervalo_dias,
-         pagante, fornecedor, conta_bancaria_id, cartao_tipo, detalhe, venda_origem_credito)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,NULLIF($8,'')::date,$9,$10::jsonb,$11::jsonb,$12,$13,$14,$15)`,
+         pagante, fornecedor, conta_bancaria_id, cartao_tipo, detalhe, venda_origem_credito, dados)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,NULLIF($8,'')::date,$9,$10::jsonb,$11::jsonb,$12,$13,$14,$15,$16::jsonb)`,
       [tenantId, venda.id, g.id, k + 1, g.forma, g.valor_centavos, g.parcelas, g.primeiro_vencimento, g.intervalo_dias,
-        g.pagante ? JSON.stringify(g.pagante) : null, g.fornecedor ? JSON.stringify(g.fornecedor) : null, g.conta_bancaria_id, g.cartao_tipo, g.detalhe, g.venda_origem_credito],
+        g.pagante ? JSON.stringify(g.pagante) : null, g.fornecedor ? JSON.stringify(g.fornecedor) : null, g.conta_bancaria_id, g.cartao_tipo, g.detalhe, g.venda_origem_credito,
+        JSON.stringify(dadosDoPagamento(g))],
     );
   }
 }
@@ -705,7 +784,7 @@ export async function previaDasContas(exec: ExecutorSQL, tenantId: string, venda
 export async function salvarVenda(
   exec: ExecutorSQL, tenantId: string, entrada: Venda,
   opts: {
-    usuario: UsuarioDaAcao | null; origem: 'manual' | 'crm'; cabecalho?: Record<string, unknown>; evento?: TipoDeEventoDaVenda; detalheDoEvento?: Record<string, unknown>;
+    usuario: UsuarioDaAcao | null; origem: 'manual' | 'crm' | 'mudanca'; cabecalho?: Record<string, unknown>; evento?: TipoDeEventoDaVenda; detalheDoEvento?: Record<string, unknown>;
     /** Só o cancelamento (parte D): grava mesmo com a venda fechada, sem reabri-la. */
     ignorarFechamento?: boolean;
     /** Quem chama registra o próprio evento (o cancelamento, com motivo e resumo). */
@@ -714,11 +793,13 @@ export async function salvarVenda(
 ): Promise<ResultadoDaGravacao> {
   if (!tenantId) throw new ErroVenda('SEM_EMPRESA', 'Empresa não identificada.', 400);
   if (!entrada.id) throw new ErroVenda('SEM_ID', 'A venda precisa de id.', 400);
-  let venda: Venda = { ...entrada, origem: opts.origem === 'crm' ? 'crm' : entrada.origem };
+  let venda: Venda = { ...entrada, origem: opts.origem === 'crm' || opts.origem === 'mudanca' ? opts.origem : entrada.origem };
   await travarVenda(exec, tenantId, venda.id);
   const { rows: cabRows } = await exec.query(`SELECT data FROM vendas_crm WHERE tenant_id = $1 AND id = $2`, [tenantId, venda.id]);
   const existente = (cabRows[0]?.data ?? null) as Record<string, unknown> | null;
-  const { rows: modRows } = await exec.query(`SELECT situacao, numero FROM vendas_modelo WHERE tenant_id = $1 AND venda_id = $2`, [tenantId, venda.id]);
+  const { rows: modRows } = await exec.query(`SELECT situacao, numero, origem FROM vendas_modelo WHERE tenant_id = $1 AND venda_id = $2`, [tenantId, venda.id]);
+  // Venda trazida pela mudança de sistema (E7): continua "mudança" para sempre.
+  if (txt(modRows[0]?.origem) === 'mudanca') venda = { ...venda, origem: 'mudanca' };
   const fechada = txt(modRows[0]?.situacao) === 'FECHADA';
   if (fechada && !opts.ignorarFechamento) {
     throw new ErroVenda('VENDA_FECHADA', 'A venda está fechada. Reabra a venda para mudar produtos ou pagamentos.', 409);
@@ -736,7 +817,10 @@ export async function salvarVenda(
   const { carteiraDisponivel, sincronizarCreditosDaVenda } = await import('./credito-cliente-servidor');
   const comCarteira = await carteiraDisponivel(exec);
 
-  const config = await lerConfigVenda(exec, tenantId);
+  venda = await congelarTaxasDoCartao(exec, tenantId, venda);
+  // Configuração de vendas da empresa da venda (E7). Uma empresa só: a de sempre.
+  const empresaDaVenda = txt(opts.cabecalho?.empresa_id) || txt(existente?.empresa_id);
+  const config = await lerConfigVenda(exec, tenantId, empresaDaVenda);
   const contas = await previaDasContas(exec, tenantId, venda);
   const receita = receitaDaVenda(venda, config.receita);
 
@@ -765,16 +849,17 @@ export async function salvarVenda(
 
   await exec.query(
     `INSERT INTO vendas_modelo (tenant_id, venda_id, versao_modelo, origem, situacao, numero, data_venda, cliente, vendedor, intermediario,
-       grupo_id, centro_custo, observacoes, crm_venda_id, total_cliente_centavos, receita_centavos)
-     VALUES ($1,$2,2,$3,'ABERTA',$4,NULLIF($5,'')::date,$6::jsonb,$7::jsonb,$8::jsonb,$9,$10,$11,$12,$13,$14)
+       grupo_id, centro_custo, observacoes, crm_venda_id, total_cliente_centavos, receita_centavos, operacao_propria, produtos_removidos)
+     VALUES ($1,$2,2,$3,'ABERTA',$4,NULLIF($5,'')::date,$6::jsonb,$7::jsonb,$8::jsonb,$9,$10,$11,$12,$13,$14,$15,$16::jsonb)
      ON CONFLICT (tenant_id, venda_id) DO UPDATE SET versao_modelo = 2, origem = EXCLUDED.origem, numero = EXCLUDED.numero,
        data_venda = EXCLUDED.data_venda, cliente = EXCLUDED.cliente, vendedor = EXCLUDED.vendedor, intermediario = EXCLUDED.intermediario,
        grupo_id = EXCLUDED.grupo_id, centro_custo = EXCLUDED.centro_custo, observacoes = EXCLUDED.observacoes, crm_venda_id = EXCLUDED.crm_venda_id,
        total_cliente_centavos = EXCLUDED.total_cliente_centavos, receita_centavos = EXCLUDED.receita_centavos,
+       operacao_propria = EXCLUDED.operacao_propria, produtos_removidos = EXCLUDED.produtos_removidos,
        revisao = vendas_modelo.revisao + 1, atualizado_em = NOW()`,
     [tenantId, venda.id, venda.origem, venda.numero, venda.data_venda, JSON.stringify(venda.cliente), venda.vendedor ? JSON.stringify(venda.vendedor) : null,
       venda.intermediario ? JSON.stringify(venda.intermediario) : null, venda.grupo_id, venda.centro_custo, venda.observacoes, venda.crm_venda_id,
-      totaisDaVenda(venda).valor_cliente, receita.receita],
+      totaisDaVenda(venda).valor_cliente, receita.receita, venda.operacao_propria === true, JSON.stringify(venda.produtos_removidos ?? [])],
   );
   await gravarFilhos(exec, tenantId, venda);
 
@@ -790,16 +875,34 @@ export async function salvarVenda(
     );
   }
 
-  const regerado = await regerarContasDaVenda(exec, tenantId, venda.id, contas);
-  const avisos = [...contas.avisos, ...regerado.avisos];
-  await sincronizarPendencias(exec, tenantId, venda.id, contas.pendencias, avisos, comCarteira);
+  // Venda trazida do sistema anterior (E7): as contas dela vieram das listas de
+  // contas (em aberto e liquidadas) e ficam ligadas a ela. Gerar de novo
+  // contaria o mesmo dinheiro duas vezes: as contas não nascem desta venda,
+  // nem agora nem quando ela for editada ou cancelada aqui.
+  const contasDaMudanca = venda.origem === 'mudanca';
+  const regerado = contasDaMudanca
+    ? { contas: { criadas: 0, atualizadas: 0, removidas: 0, preservadas: 0 }, avisos: [] as AvisoDaVenda[] }
+    : await regerarContasDaVenda(exec, tenantId, venda.id, contas);
+  const avisos = contasDaMudanca ? [] as AvisoDaVenda[] : [...contas.avisos, ...regerado.avisos];
+  if (!contasDaMudanca) await sincronizarPendencias(exec, tenantId, venda.id, contas.pendencias, avisos, comCarteira);
   // Crédito do cliente (parte D): a carteira paga o que a forma pede, ou devolve.
-  if (comCarteira) {
+  if (comCarteira && !contasDaMudanca) {
     const c = await sincronizarCreditosDaVenda(exec, tenantId, venda.id, opts.usuario ?? { id: '', nome: opts.origem === 'crm' ? 'CRM' : '' });
     if (c.faltando > 0) avisos.push({ codigo: 'CREDITO_INSUFICIENTE', valor_centavos: c.faltando, mensagem: `O cliente não tem crédito disponível para cobrir ${deCentavos(c.faltando).toFixed(2)} pagos com "Crédito do cliente". A pendência continua aberta até o crédito existir ou a forma mudar.` });
   }
   // Faturas ao cliente (E5, parte B): a forma Faturar entra na fatura pela regra do pagante.
-  await sincronizarFaturasDaVenda(exec, tenantId, venda.id, { avisos, venda_numero: venda.numero });
+  if (!contasDaMudanca) {
+    await sincronizarFaturasDaVenda(exec, tenantId, venda.id, { avisos, venda_numero: venda.numero });
+    // Dinheiro e cheque com "Liquidar automaticamente" (E7): a baixa de sempre, sozinha.
+    const liquidacao = await liquidarContasDaVenda(exec, tenantId, venda.id, config.liquidar_automaticamente, hojeISO(), opts.usuario);
+    if (liquidacao.liquidadas.length) {
+      const n = liquidacao.liquidadas.length;
+      avisos.push({ codigo: 'LIQUIDADA_AUTOMATICAMENTE', valor_centavos: Math.round(liquidacao.liquidadas.reduce((a, x) => a + x.valor, 0) * 100), mensagem: `${n === 1 ? '1 conta liquidada sozinha' : `${n} contas liquidadas sozinhas`} (${textoDoTotal(liquidacao)}), pela regra de Configurações › Vendas.` });
+    }
+    for (const x of liquidacao.recusadas) {
+      avisos.push({ codigo: 'LIQUIDACAO_AUTOMATICA_RECUSADA', mensagem: `Uma conta de dinheiro ou cheque ficou em aberto: ${x.motivo}` });
+    }
+  }
   if (!opts.semEvento) await registrarEventoDaVenda(exec, tenantId, venda.id, opts.evento ?? (nova ? 'criada' : 'alterada'), {
     usuario: opts.usuario,
     detalhe: { ...(opts.detalheDoEvento ?? {}), contas: regerado.contas, total_cliente_centavos: totaisDaVenda(venda).valor_cliente, avisos: avisos.map(a => a.codigo) },
@@ -824,7 +927,7 @@ export function conferirFechamento(venda: Venda): { impedimentos: PendenciaDoFec
   for (const p of venda.produtos) {
     if (p.cancelado_em) continue;
     const tp = totaisDoProduto(p);
-    if (!p.fornecedor && !p.representante && tp.valor_fornecedor > 0) impedimentos.push({ codigo: 'PRODUTO_SEM_FORNECEDOR', mensagem: `${p.descricao || p.tipo}: falta o fornecedor.` });
+    if (!p.fornecedor && !p.representante && tp.valor_fornecedor > 0 && !venda.operacao_propria) impedimentos.push({ codigo: 'PRODUTO_SEM_FORNECEDOR', mensagem: `${p.descricao || p.tipo}: falta o fornecedor.` });
     if (tp.receita_bruta === 0) confirmar.push({ codigo: 'PRODUTO_RECEITA_ZERO', mensagem: `${p.descricao || p.tipo}: a agência não ganha nada neste produto.` });
   }
   return { impedimentos, confirmar };
