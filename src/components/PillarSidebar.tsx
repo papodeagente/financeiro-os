@@ -25,7 +25,7 @@ import {
   PanelLeftClose, PanelLeftOpen,
   Eraser, LifeBuoy, FileText,
   LayoutGrid, ChartColumn, ArrowDownLeft, ArrowUpRight, GitCompareArrows, ListTree,
-  Contact, Truck, Repeat, Lock, ArrowDownUp, Barcode, FolderInput, Coins, Network, Split, Tags, ShieldCheck, Stamp, Scale, ScrollText, ListOrdered, Table2,
+  Contact, Truck, Repeat, Lock, ArrowDownUp, Barcode, FolderInput, Coins, ClipboardCheck, RefreshCw, Network, Split, Tags, ShieldCheck, Stamp, Scale, ScrollText, ListOrdered, Table2,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -99,6 +99,8 @@ const FINANCEIRO_MENU: SidebarSection[] = [
       { key: 'pagar', label: 'Contas a pagar', icon: ArrowUpRight, href: '/financeiro-ag/pagar' },
       { key: 'cobrancas', label: 'Cobranças', icon: Barcode, href: '/financeiro-ag/cobrancas' },
       { key: 'conciliacao', label: 'Conciliação', icon: GitCompareArrows, href: '/financeiro-ag/conciliacao' },
+      { key: 'extrato-automatico', label: 'Extrato automático', icon: RefreshCw, href: '/financeiro-ag/extrato-automatico' },
+      { key: 'conferencia-operadora', label: 'Conferência de operadora', icon: ClipboardCheck, href: '/financeiro-ag/conferencia-operadora' },
       { key: 'notas-fiscais', label: 'Notas fiscais', icon: Receipt, href: '/financeiro-ag/notas' },
       { key: 'extrato', label: 'Extrato de conta', icon: ScrollText, href: '/financeiro-ag/extrato' },
       { key: 'movimentacoes', label: 'Movimentações', icon: ListOrdered, href: '/financeiro-ag/movimentacoes' },

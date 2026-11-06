@@ -1,7 +1,8 @@
 import { VINCULO_FISCAL_SCHEMA_SQL } from './vinculo-fiscal';
 import { PROPOSTA_LINK_SCHEMA_SQL } from './proposta-publica';
 import { ARQUIVOS_PRIVADOS_SCHEMA_SQL } from './arquivos';
-import { EXTRATO_FITID_UNICO_SQL } from './extrato-importacao';
+import { EXTRATO_FITID_UNICO_SQL, EXTRATO_ID_EXTERNO_UNICO_SQL } from './extrato-importacao';
+import { EXTRATO_AUTOMATICO_SCHEMA_SQL } from './extrato-automatico/schema';
 import { AuditPool } from './audit-pool';
 import { getAuditContext, runWithAuditContext, SYSTEM_AUDIT_CONTEXT } from './audit-context';
 import { RAZAO_SCHEMA_SQL } from './razao-schema';
@@ -19,6 +20,8 @@ import { AUDIT_SCHEMA_SQL } from './audit-schema';
 import { NOTIFICACOES_SCHEMA_SQL } from './notificacoes-schema';
 import { MAPAS_MENTAIS_COMPARTILHAMENTO_SCHEMA_SQL } from './mapas-mentais-compartilhamento';
 import { SITES_SCHEMA_SQL } from './sites-schema';
+import { CONCILIACAO_REGRAS_SCHEMA_SQL } from './conciliacao-regras-schema';
+import { CONFERENCIA_OPERADORA_SCHEMA_SQL } from './conferencia-operadora-schema';
 
 const pool = process.env.DATABASE_URL
   ? new AuditPool({ connectionString: process.env.DATABASE_URL, max: 5 }, getAuditContext)
@@ -1553,6 +1556,16 @@ async function executarInitDB() {
   // fontes, cofre do Super Admin, variações cambiais e a trava da moeda da
   // conta bancária. Antes do razão e da auditoria.
   await pool.query(CAMBIO_SCHEMA_SQL);
+  // Conciliação com regras aprendidas e conferência do extrato de operadora
+  // (05/11/2026, E6). A lista "conciliado sozinho" e as linhas da conferência
+  // são controle e ficam fora do gatilho de auditoria.
+  await pool.query(CONCILIACAO_REGRAS_SCHEMA_SQL);
+  await pool.query(CONFERENCIA_OPERADORA_SCHEMA_SQL);
+  // Extrato automático pela API do banco da agência (06/11/2026, E6 parte
+  // B): conexão por conta, segredo cifrado à parte e histórico de leituras;
+  // o identificador do banco deduplica no mesmo lugar do FITID.
+  await pool.query(EXTRATO_AUTOMATICO_SCHEMA_SQL);
+  await pool.query(EXTRATO_ID_EXTERNO_UNICO_SQL);
   await pool.query(RAZAO_SCHEMA_SQL);
   // Instala a captura somente depois das migrações/seed, sem fabricar histórico.
   await pool.query(AUDIT_SCHEMA_SQL);

@@ -50,6 +50,8 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   '/financeiro-ag/movimentacoes': 'Movimentações',
   '/financeiro-ag/resultado-por-categoria': 'Resultado por categoria',
   '/financeiro-ag/conciliacao': 'Conciliação',
+  '/financeiro-ag/conciliacao/automatica': 'Conciliação automática',
+  '/financeiro-ag/conferencia-operadora': 'Conferência de operadora',
   '/financeiro-ag/recebimentos': 'Recebimentos das plataformas',
   '/financeiro-ag/contas': 'Contas a Pagar/Receber',
   '/financeiro-ag/receber': 'Contas a receber',

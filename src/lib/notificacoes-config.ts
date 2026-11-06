@@ -11,6 +11,8 @@ export const TIPOS_NOTIFICACAO = [
   // Avisos de vencimento (05/11/2026), ligados em Configurações › Financeiro.
   { tipo: 'CONTAS_A_PAGAR_VENCENDO', label: 'Contas a pagar vencendo', descricao: 'De manhã, as contas a pagar que vencem hoje (e, se ligado, amanhã).' },
   { tipo: 'CONTAS_A_RECEBER_ATRASADAS', label: 'Contas a receber em atraso', descricao: 'De manhã, quantas contas a receber estão em atraso e quanto somam.' },
+  // Extrato automático do banco (06/11/2026): leitura parada e certificado vencendo.
+  { tipo: 'EXTRATO_AUTOMATICO', label: 'Extrato automático do banco', descricao: 'Quando a leitura do extrato falha seguidas vezes ou o certificado do banco está perto de vencer.' },
 ] as const;
 
 export type TipoNotificacao = (typeof TIPOS_NOTIFICACAO)[number]['tipo'];
