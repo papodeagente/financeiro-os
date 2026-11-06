@@ -197,9 +197,11 @@ export function ListaDeVendas() {
           menu: [
             { rotulo: 'Venda completa', descricao: 'Produtos, passageiros, componentes de receita e pagamentos por forma.', href: '/vendas/lancar' },
             { rotulo: 'Venda simples', descricao: 'A tela de antes: um valor por fornecedor.', href: '/vendas/nova' },
+            { rotulo: 'Pelo voucher', descricao: 'A IA lê o voucher ou o e-mail da operadora e monta a venda para você conferir.', href: '/vendas/lancar/voucher' },
           ],
         }}
         acoesSecundarias={[
+          { rotulo: 'Lançar pelo voucher', href: '/vendas/lancar/voucher' },
           { rotulo: 'Orçamentos', href: '/vendas/orcamentos' },
           { rotulo: 'Relatórios de vendas', href: '/relatorios/vendas' },
         ]}
