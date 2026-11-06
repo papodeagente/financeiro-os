@@ -19,6 +19,7 @@ import {
 } from '@/lib/nfse-acelera';
 import { ErroCertificado, lerCertificadoA1 } from '@/lib/certificado-a1';
 import type { ConfigFiscal } from '@/lib/nfse-tipos';
+import { empresaDoPedido } from '@/lib/empresas-rota';
 
 /** Certificado A1 costuma ter menos de 10 KB; 2 MB já é folga generosa. */
 const TAMANHO_MAXIMO = 2 * 1024 * 1024;
@@ -48,6 +49,9 @@ function digitos(v: unknown): string {
  */
 export async function POST(req: Request) {
   try {
+    // Configuração fiscal por empresa (E7): ?empresa=<id>; sem ele, a de sempre.
+    const { empresa: empresaFiscal, recusa: recusaEmpresa } = await empresaDoPedido(req);
+    if (recusaEmpresa) return recusaEmpresa;
     await initDB();
     const sessao = await getSession();
     const bloqueio = bloqueioFinanceiro(sessao, 'escrever');
@@ -84,7 +88,7 @@ export async function POST(req: Request) {
     }
 
     // ---- 2. Casar com a agência ----
-    const emitente = await carregarEmitente(tenantId);
+    const emitente = await carregarEmitente(tenantId, empresaFiscal);
     const cnpjAgencia = digitos(emitente.cnpj);
     if (cnpjAgencia && cnpjAgencia !== lido.cnpj) {
       return NextResponse.json(
@@ -121,7 +125,7 @@ export async function POST(req: Request) {
     }
 
     // ---- 3. Garantir a empresa no emissor ----
-    let config: ConfigFiscal = await carregarConfigFiscal(tenantId);
+    let config: ConfigFiscal = await carregarConfigFiscal(tenantId, empresaFiscal);
     config.provedor = config.provedor || 'aceleraapi';
 
     if (config.provedor === 'aceleraapi' && !(config.empresa_id && config.token)) {
@@ -140,7 +144,7 @@ export async function POST(req: Request) {
         config = { ...config, empresa_id: nova.id, token: nova.token };
       }
       // O token vem uma vez só: grava antes de seguir.
-      await salvarConfigFiscal(tenantId, config);
+      await salvarConfigFiscal(tenantId, config, empresaFiscal);
     }
 
     // ---- 4. Enviar ao emissor ----
@@ -173,7 +177,7 @@ export async function POST(req: Request) {
         enviado_por: sessao?.nome || sessao?.email || '',
       },
     };
-    await salvarConfigFiscal(tenantId, novo);
+    await salvarConfigFiscal(tenantId, novo, empresaFiscal);
 
     return NextResponse.json({
       config: configParaCliente(novo),
@@ -190,15 +194,18 @@ export async function POST(req: Request) {
 }
 
 /** Remove o certificado da configuração. A nota deixa de poder ser emitida. */
-export async function DELETE() {
+export async function DELETE(req: Request) {
   try {
+    // Configuração fiscal por empresa (E7): ?empresa=<id>; sem ele, a de sempre.
+    const { empresa: empresaFiscal, recusa: recusaEmpresa } = await empresaDoPedido(req);
+    if (recusaEmpresa) return recusaEmpresa;
     await initDB();
     const bloqueio = bloqueioFinanceiro(await getSession(), 'escrever');
     if (bloqueio) return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
     const tenantId = await getTenantId();
-    const config = await carregarConfigFiscal(tenantId);
+    const config = await carregarConfigFiscal(tenantId, empresaFiscal);
     const novo = { ...config, certificado: null };
-    await salvarConfigFiscal(tenantId, novo);
+    await salvarConfigFiscal(tenantId, novo, empresaFiscal);
     return NextResponse.json({ config: configParaCliente(novo) });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Erro';

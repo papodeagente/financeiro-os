@@ -376,6 +376,8 @@ export interface PlanoContas {
 export interface LinhaRateio {
   centro_custo_id: string;
   categoria_id?: string;
+  /** Rateio entre empresas (E7): a empresa desta parte. Ausente = a do lançamento. */
+  empresa_id?: string;
   percentual: number;
   valor: number;
 }
@@ -581,6 +583,8 @@ export interface CartaoCorporativo {
   taxa_anuidade: number;
   ativo: boolean;
   observacoes: string;
+  /** Empresa em que a fatura do cartão nasce (E7). Ausente = a principal. */
+  empresa_id?: string;
 }
 
 // ============================================================

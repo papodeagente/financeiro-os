@@ -142,12 +142,16 @@ export interface GrupoDoUsuario {
   acoes: string[];
   /** Vazio = todas as contas. */
   contas: string[];
+  /** Vazio (ou ausente) = todas as empresas da agência (E7, multiempresa). */
+  empresas?: string[];
 }
 
 export interface RestricaoDoUsuario {
   /** Vazio = sem restrição própria de conta. */
   contas_liberadas: string[];
   acoes_negadas: string[];
+  /** Vazio (ou ausente) = sem restrição própria de empresa (E7). */
+  empresas_liberadas?: string[];
 }
 
 export interface RestricoesCarregadas {

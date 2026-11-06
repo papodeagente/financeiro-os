@@ -73,6 +73,8 @@ export interface FichaDaVenda {
   comissoes: Array<Record<string, unknown>>;
   config_receita: ConfigReceita;
   permissoes: PermissoesDaFicha;
+  /** Empresa da venda (E7). Só vem quando não é a principal (agência de uma empresa só: nunca). */
+  empresa_id?: string;
 }
 
 export async function permissoesDaFicha(sessao: SessionPayload | null, exec: ExecutorSQL): Promise<PermissoesDaFicha> {
@@ -91,7 +93,10 @@ export async function montarFicha(exec: ExecutorSQL, tenantId: string, vendaId: 
   if (!p) return null;
   const perm = await permissoesDaFicha(sessao, exec);
   const { carregada } = p;
-  const config = await lerConfigVenda(exec, tenantId);
+  // Várias empresas (E7): a configuração de vendas da empresa da venda.
+  const { rows: emp } = await exec.query(`SELECT data->>'empresa_id' AS e FROM vendas_crm WHERE tenant_id = $1 AND id = $2`, [tenantId, vendaId]);
+  const empresaDaVenda = String(emp[0]?.e ?? '');
+  const config = await lerConfigVenda(exec, tenantId, empresaDaVenda);
   const { rows: com } = await exec.query(`SELECT id, status, data FROM comissoes WHERE tenant_id = $1 AND venda_id = $2`, [tenantId, vendaId])
     .catch(() => ({ rows: [] as Array<Record<string, unknown>> }));
   const porProduto: Record<string, TotaisDoProduto> = {};
@@ -106,6 +111,7 @@ export async function montarFicha(exec: ExecutorSQL, tenantId: string, vendaId: 
     comissoes: perm.ver_receita ? com.map(r => ({ ...(r.data as Record<string, unknown>), id: r.id, status: (r.data as Record<string, unknown>)?.status ?? r.status })) : [],
     config_receita: config.receita,
     permissoes: perm,
+    ...(empresaDaVenda && empresaDaVenda !== 'principal' ? { empresa_id: empresaDaVenda } : {}),
   });
 }
 

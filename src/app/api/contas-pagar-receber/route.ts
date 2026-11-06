@@ -5,6 +5,7 @@ import { getSession } from '@/lib/auth';
 import { recusaFinanceira } from '@/lib/guarda-rota';
 import { contasPermitidas, pode } from '@/lib/permissoes-servidor';
 import { registrarEventoAuditoria } from '@/lib/audit';
+import { escopoDaSessao, type ExecutorEmpresas } from '@/lib/empresas-servidor';
 import { hojeISO } from '@/lib/money';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import {
@@ -39,6 +40,8 @@ export async function GET(req: Request) {
     // Contas liberadas (perfis de acesso): a regra das telas de pagar e receber.
     const liberadas = await contasPermitidas(session);
     const exec = pool as unknown as ExecutorSQL;
+    // Empresas marcadas no seletor e liberadas (E7). Uma empresa só: todas.
+    filtro.empresas = (await escopoDaSessao(session, pool as unknown as ExecutorEmpresas)).visiveis;
     const formato = params.get('format');
     // Situação da cobrança (E3) quando a tabela de cobranças já existe.
     const opcoes = { comCobranca: await existeTabelaDeCobranca(exec) };

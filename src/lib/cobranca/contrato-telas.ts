@@ -191,6 +191,13 @@ export interface RespostaDaGravacaoDeCarne {
 
 // ─── GET/PUT /api/config/cobranca ──────────────────────────────────────────
 
+/** Só em Configurações › Cobrança: leva o ?empresa= do endereço (E7). Fora dela, nada muda. */
+function comEmpresaDaTela(url: string): string {
+  if (typeof window === 'undefined' || !window.location.pathname.startsWith('/config/cobranca')) return url;
+  const empresa = new URLSearchParams(window.location.search).get('empresa');
+  return empresa && empresa !== 'principal' ? `${url}?empresa=${encodeURIComponent(empresa)}` : url;
+}
+
 export interface ReguaDeCobranca {
   ligada: boolean;
   /** Dias em relação ao vencimento: −5 = cinco dias antes, 0 = no dia, 3 = três dias depois. */
@@ -316,10 +323,11 @@ export const api = {
   gerarCarne: (contas: string[], assinatura: string, chave: string) =>
     chamar<RespostaDaGravacaoDeCarne>('/api/cobrancas/carne', { method: 'POST', body: JSON.stringify({ modo: 'gravar', contas, assinatura }), chave }),
 
-  config: () => chamar<ConfigDeCobranca>('/api/config/cobranca'),
+  // ?empresa= da tela de configuração (E7): a cobrança daquela empresa.
+  config: () => chamar<ConfigDeCobranca>(comEmpresaDaTela('/api/config/cobranca')),
 
   salvarConfig: (c: ConfigDeCobrancaGravavel) =>
-    chamar<ConfigDeCobranca>('/api/config/cobranca', { method: 'PUT', body: JSON.stringify(c) }),
+    chamar<ConfigDeCobranca>(comEmpresaDaTela('/api/config/cobranca'), { method: 'PUT', body: JSON.stringify(c) }),
 };
 
 // ─── Rotas desta parte (B), para as telas ──────────────────────────────────

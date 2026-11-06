@@ -24,6 +24,8 @@ import { FilterBar } from '@/components/fin/FilterBar';
 import { FinTable } from '@/components/fin/FinTable';
 import { MolduraDaPagina } from '@/components/fin/MolduraDaPagina';
 import { PageHeader } from '@/components/fin/PageHeader';
+import { nomeDaEmpresa, useEmpresas } from '@/components/fin/useEmpresas';
+import type { FinColuna } from '@/components/fin/FinTable';
 import { resolverPeriodo, type PeriodoChave } from '@/components/fin/PeriodPicker';
 
 import { AcaoEmLote, type Categoria, type Centro } from './AcaoEmLote';
@@ -262,10 +264,19 @@ export function TelaDeContas() {
     return itens;
   }
 
-  const colunasDaTabela = React.useMemo(
-    () => criarColunas({ onMenu: (linha, posicao) => setMenu({ linha, posicao }) }),
-    [],
-  );
+  // Várias empresas (E7): a coluna Empresa só existe com duas ou mais.
+  const { multi, empresas } = useEmpresas();
+  const colunasDaTabela = React.useMemo(() => {
+    const base = criarColunas({ onMenu: (linha, posicao) => setMenu({ linha, posicao }) });
+    if (!multi) return base;
+    const empresa: FinColuna<LinhaDeConta> = {
+      id: 'empresa', cabecalho: 'Empresa', tipo: 'texto', minWidth: 120,
+      render: l => <span className="whitespace-nowrap text-[var(--fin-text-2)]">{nomeDaEmpresa(empresas, l.empresa_id)}</span>,
+    };
+    const i = base.findIndex(c => c.id === 'pessoa');
+    return [...base.slice(0, i), empresa, ...base.slice(i)];
+  }, [multi, empresas]);
+  const colunasVisiveisDaTabela = React.useMemo(() => (multi ? [...colunas, 'empresa'] : colunas), [multi, colunas]);
 
   const marcadas = [...selecionadas.values()];
   function acaoDaBarra(acao: AcaoDaBarra) {
@@ -290,6 +301,7 @@ export function TelaDeContas() {
     <MolduraDaPagina>
       <div ref={moldura} onKeyDown={teclado} className="flex flex-col gap-[var(--fin-s-5)]">
         <PageHeader
+          empresas
           icone={Scale}
           titulo="Contas a Pagar/Receber"
           subtitulo="O que a agência tem a pagar e a receber, numa lista só. Marque várias para liquidar, reagendar ou mudar a categoria de uma vez."
@@ -397,7 +409,7 @@ export function TelaDeContas() {
         <FinTable<LinhaDeConta>
           linhas={dados?.linhas ?? []}
           colunas={colunasDaTabela}
-          colunasVisiveis={colunas}
+          colunasVisiveis={colunasVisiveisDaTabela}
           chave={l => l.chave}
           densidade="compacta"
           estado={estado}

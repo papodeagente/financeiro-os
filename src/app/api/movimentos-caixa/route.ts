@@ -5,6 +5,7 @@ import { getSession } from '@/lib/auth';
 import { bloqueioFinanceiro } from '@/lib/permissoes';
 import { contasPermitidas, pode } from '@/lib/permissoes-servidor';
 import { registrarEventoAuditoria } from '@/lib/audit';
+import { contasBancariasVisiveis, escopoDaSessao, type ExecutorEmpresas } from '@/lib/empresas-servidor';
 import { hojeISO } from '@/lib/money';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import {
@@ -45,6 +46,14 @@ export async function GET(req: Request) {
       const pedidas = filtro.contas.length ? filtro.contas.filter(c => liberadas.includes(c)) : liberadas;
       // Lista vazia quer dizer "todas"; sem conta liberada, um id que não existe.
       filtro.contas = pedidas.length ? pedidas : ['__nenhuma_conta_liberada__'];
+    }
+    // Várias empresas (E7): só as contas disponíveis nas empresas marcadas.
+    // Uma empresa só: nada muda.
+    const { visiveis } = await escopoDaSessao(session, pool as unknown as ExecutorEmpresas);
+    const daEmpresa = await contasBancariasVisiveis(pool as unknown as ExecutorEmpresas, tenantId, visiveis);
+    if (daEmpresa) {
+      const pedidas = filtro.contas.length ? filtro.contas.filter(c => daEmpresa.has(c)) : [...daEmpresa];
+      filtro.contas = pedidas.length ? pedidas : ['__nenhuma_conta_na_empresa__'];
     }
 
     if (params.get('format') === 'csv') {

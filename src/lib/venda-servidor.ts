@@ -35,6 +35,7 @@ import { posicaoDaVenda, type CobrancaDaPosicao, type PosicaoDaVenda } from './v
 import { contasNaFaturaDoFornecedor, refletirFaturasNasContas } from './fornecedor-fatura-banco';
 import { aplicarRetencoesDaAgencia } from './nota-retencoes-servidor';
 import { contasTravadasPelaFatura, projetarContasNaFatura, sincronizarFaturasDaVenda } from './fatura-servidor';
+import { empresaComConfigPropria, lerChavesDaEmpresa } from './empresas-config';
 
 // ============================================================
 // Tipos públicos
@@ -131,7 +132,12 @@ async function travarVenda(exec: ExecutorSQL, tenantId: string, vendaId: string)
 // Configuração
 // ============================================================
 
-export async function lerConfigVenda(exec: ExecutorSQL, tenantId: string): Promise<ConfigVenda> {
+export async function lerConfigVenda(exec: ExecutorSQL, tenantId: string, empresaId?: string | null): Promise<ConfigVenda> {
+  // Empresa com configuração própria (E7): a dela; uma empresa só, a de sempre.
+  if (empresaComConfigPropria(empresaId)) {
+    const c = await lerChavesDaEmpresa(exec, tenantId, empresaId, ['venda_config']);
+    return { receita: normalizarConfigReceita(((c.venda_config ?? {}) as Record<string, unknown>).receita) };
+  }
   const { rows } = await exec.query(
     `SELECT data->'venda_config' AS c FROM agencia WHERE tenant_id = $1 ORDER BY updated_at DESC NULLS LAST, id ASC LIMIT 1`,
     [tenantId],
@@ -726,7 +732,9 @@ export async function salvarVenda(
   const { carteiraDisponivel, sincronizarCreditosDaVenda } = await import('./credito-cliente-servidor');
   const comCarteira = await carteiraDisponivel(exec);
 
-  const config = await lerConfigVenda(exec, tenantId);
+  // Configuração de vendas da empresa da venda (E7). Uma empresa só: a de sempre.
+  const empresaDaVenda = txt(opts.cabecalho?.empresa_id) || txt(existente?.empresa_id);
+  const config = await lerConfigVenda(exec, tenantId, empresaDaVenda);
   const contas = await previaDasContas(exec, tenantId, venda);
   const receita = receitaDaVenda(venda, config.receita);
 

@@ -7,6 +7,7 @@ import { pode } from '@/lib/permissoes-servidor';
 import { podeVerTodasVendas } from '@/lib/permissoes';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { lerVendas } from '@/lib/vendas-leitura';
+import { escopoDaSessao, type ExecutorEmpresas } from '@/lib/empresas-servidor';
 import { lerConfigVenda } from '@/lib/venda-servidor';
 import {
   COLUNAS_POR_FORMA, COLUNAS_POR_PRODUTO, COLUNAS_RANKING, MEDIDAS_DA_DINAMICA, RELATORIOS, ROTULO_RELATORIO,
@@ -61,7 +62,11 @@ export async function GET(req: Request) {
   try {
     const tenantId = await getTenantId();
     const [lidasTodas, cfg] = await Promise.all([
-      lerVendas(exec, tenantId, { de: de || undefined, ate: ate || undefined, incluir_canceladas: u.get('canceladas') === '1', vendedor_id: soAsSuas ? sessao.userId : undefined }),
+      lerVendas(exec, tenantId, {
+        de: de || undefined, ate: ate || undefined, incluir_canceladas: u.get('canceladas') === '1', vendedor_id: soAsSuas ? sessao.userId : undefined,
+        // Empresas marcadas e liberadas (E7). Uma empresa só: todas.
+        empresas: (await escopoDaSessao(sessao, exec as unknown as ExecutorEmpresas)).visiveis,
+      }),
       lerConfigVenda(exec, tenantId),
     ]);
     const lidas = lidasTodas.filter(v => situacao === 'abertas' ? v.situacao === 'ABERTA' && !v.cancelada : situacao === 'fechadas' ? v.situacao === 'FECHADA' : true);

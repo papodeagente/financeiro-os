@@ -35,6 +35,8 @@ import type {
   RegimeNota,
   TomadorNota,
 } from './nfse-tipos';
+import { empresaDoRegistro } from './empresas';
+import { empresaComConfigPropria } from './empresas-config';
 
 export const CONFIG_FISCAL_ID = 'config-fiscal-singleton';
 
@@ -104,11 +106,22 @@ export function configParaCliente(config: ConfigFiscal): ConfigFiscal {
   return { ...resto, token: '', token_mascarado: mascararToken(token ?? '') };
 }
 
-export async function carregarConfigFiscal(tenantId: string): Promise<ConfigFiscal> {
+/**
+ * A linha da configuração fiscal de cada empresa (E7). A principal fica na
+ * linha de sempre; as outras empresas têm a própria, que NUNCA herda token,
+ * certificado nem o número do emissor da principal (emitir pela empresa B
+ * com o CNPJ da A seria nota no nome errado).
+ */
+export function idDaConfigFiscal(empresaId?: string | null): string {
+  return empresaComConfigPropria(empresaId) ? `${CONFIG_FISCAL_ID}:${empresaId}` : CONFIG_FISCAL_ID;
+}
+
+export async function carregarConfigFiscal(tenantId: string, empresaId?: string | null): Promise<ConfigFiscal> {
   if (!pool) return configFiscalPadrao();
+  const idDaLinha = idDaConfigFiscal(empresaId);
   const { rows } = await pool.query(
     `SELECT data FROM config_fiscal WHERE id = $1 AND tenant_id = $2`,
-    [CONFIG_FISCAL_ID, tenantId],
+    [idDaLinha, tenantId],
   );
   const gravado = { ...((rows[0]?.data ?? {}) as Partial<ConfigFiscal> & { token_cofre?: unknown }) };
   // O token do emissor fica cifrado no cofre (FIN-11). Registro antigo, em
@@ -125,7 +138,7 @@ export async function carregarConfigFiscal(tenantId: string): Promise<ConfigFisc
   }
   const config = { ...configFiscalPadrao(), ...gravado, id: CONFIG_FISCAL_ID } as ConfigFiscal;
   if (rows.length > 0 && !(rows[0].data as Record<string, unknown>)?.token_cofre && config.token && cofreDisponivel()) {
-    try { await salvarConfigFiscal(tenantId, config); } catch { /* fica para o próximo salvar */ }
+    try { await salvarConfigFiscal(tenantId, config, empresaId); } catch { /* fica para o próximo salvar */ }
   }
   return config;
 }
@@ -133,8 +146,10 @@ export async function carregarConfigFiscal(tenantId: string): Promise<ConfigFisc
 export async function salvarConfigFiscal(
   tenantId: string,
   config: ConfigFiscal,
+  empresaId?: string | null,
 ): Promise<void> {
   if (!pool) return;
+  const idDaLinha = idDaConfigFiscal(empresaId);
   // Token do emissor vai cifrado. Sem a chave mestra, grava como antes.
   const gravar: Record<string, unknown> = { ...config };
   if (config.token && cofreDisponivel()) {
@@ -148,17 +163,33 @@ export async function salvarConfigFiscal(
   const atualizado = await pool.query(
     `UPDATE config_fiscal SET data = $3, updated_at = NOW()
       WHERE id = $1 AND tenant_id = $2`,
-    [CONFIG_FISCAL_ID, tenantId, JSON.stringify(gravar)],
+    [idDaLinha, tenantId, JSON.stringify(gravar)],
   );
   if ((atualizado.rowCount ?? 0) === 0) {
     await pool.query(
       `INSERT INTO config_fiscal (id, tenant_id, data) VALUES ($1, $2, $3)`,
-      [CONFIG_FISCAL_ID, tenantId, JSON.stringify(gravar)],
+      [idDaLinha, tenantId, JSON.stringify(gravar)],
     );
   }
 }
 
-export async function carregarEmitente(tenantId: string): Promise<DadosEmitente> {
+export async function carregarEmitente(tenantId: string, empresaId?: string | null): Promise<DadosEmitente> {
+  const daAgencia = await carregarEmitenteDaAgencia(tenantId);
+  if (!pool || !empresaComConfigPropria(empresaId)) return daAgencia;
+  // Empresa além da principal (E7): nome, razão social e CNPJ dela; o
+  // endereço e o regime seguem os da agência até a empresa ter os próprios.
+  const { rows } = await pool.query(
+    `SELECT nome, razao_social, cnpj FROM empresas WHERE tenant_id = $1 AND id = $2`, [tenantId, empresaId]);
+  if (!rows[0]) return daAgencia;
+  return {
+    ...daAgencia,
+    cnpj: String(rows[0].cnpj ?? ''),
+    razao_social: String(rows[0].razao_social || rows[0].nome || ''),
+    nome_fantasia: String(rows[0].nome ?? ''),
+  };
+}
+
+async function carregarEmitenteDaAgencia(tenantId: string): Promise<DadosEmitente> {
   const vazio: DadosEmitente = {
     cnpj: '', inscricao_municipal: '', razao_social: '', nome_fantasia: '',
     endereco: { cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', estado: '' },
@@ -398,8 +429,10 @@ export async function montarPrevia(
 ): Promise<PreviaDaNota | null> {
   const ctx = await carregarContexto(tenantId, contaReceberId);
   if (!ctx) return null;
-  const config = await carregarConfigFiscal(tenantId);
-  const emitente = await carregarEmitente(tenantId);
+  // Emissão por empresa (E7): a nota sai pela empresa da conta a receber.
+  const empresaDaNota = empresaDoRegistro(ctx.conta as Record<string, unknown>);
+  const config = await carregarConfigFiscal(tenantId, empresaDaNota);
+  const emitente = await carregarEmitente(tenantId, empresaDaNota);
   const notaExistente = await notaDaConta(tenantId, contaReceberId);
 
   const valorRecebido = valorRecebidoDaConta(ctx.conta);
@@ -669,7 +702,9 @@ export async function emitirNota(
    * A alíquota do ISS é a única que fica: ela já é tratada como estimativa em
    * todo o sistema, e `issEhEstimativa` é o que diz isso na tela.
    */
-  const configParaLimite = await carregarConfigFiscal(tenantId);
+  const ctxDaEmpresa = await carregarContexto(tenantId, contaReceberId);
+  const empresaDaNota = empresaDoRegistro((ctxDaEmpresa?.conta ?? {}) as Record<string, unknown>);
+  const configParaLimite = await carregarConfigFiscal(tenantId, empresaDaNota);
   let transmite = {
     deducoes: true, aliquota_por_nota: true, intermediario: true,
     retencao_fonte: false, reforma_tributaria: false, nbs: false,
@@ -697,8 +732,8 @@ export async function emitirNota(
   }
 
 
-  const config = await carregarConfigFiscal(tenantId);
-  const emitente = await carregarEmitente(tenantId);
+  const config = await carregarConfigFiscal(tenantId, empresaDaNota);
+  const emitente = await carregarEmitente(tenantId, empresaDaNota);
   const ctx = await carregarContexto(tenantId, contaReceberId);
   const agora = new Date().toISOString();
 
@@ -803,7 +838,9 @@ export async function atualizarStatus(
   if (!nota) return null;
   if (nota.status !== 'PROCESSANDO') return nota;
 
-  const config = await carregarConfigFiscal(tenantId);
+  // O emissor da empresa da nota (E7).
+  const empresaDaNota = String((nota as unknown as Record<string, unknown>).empresa_id ?? '');
+  const config = await carregarConfigFiscal(tenantId, empresaDaNota);
   const emissor = emissorDaConfig(config);
 
   // Resultado desconhecido sem protocolo (FIN2-09). Primeiro CONSULTA pela
@@ -813,7 +850,7 @@ export async function atualizarStatus(
   // que fica como desconhecido — nunca vira REJEITADA e nunca libera outra.
   if (nota.resultado_desconhecido && !nota.protocolo) {
     try {
-      const emitente = await carregarEmitente(tenantId);
+      const emitente = await carregarEmitente(tenantId, empresaDaNota);
       const r = emissor.consultarPorIntencao
         ? await emissor.consultarPorIntencao(nota, config)
         : await emissor.emitir({ nota, config, emitente });
@@ -884,7 +921,8 @@ export async function cancelarNota(
   if (nota.status === 'CANCELADA') return nota;
   if (!motivo.trim()) throw new ErroFiscal('Informe o motivo do cancelamento.');
 
-  const config = await carregarConfigFiscal(tenantId);
+  // O emissor da empresa da nota (E7).
+  const config = await carregarConfigFiscal(tenantId, String((nota as unknown as Record<string, unknown>).empresa_id ?? ''));
 
   // Nota que nunca chegou à prefeitura não precisa ser cancelada lá. A de
   // resultado desconhecido sem protocolo também se encerra só aqui, por ação
@@ -913,11 +951,18 @@ export async function cancelarNota(
   return cancelada;
 }
 
-export async function listarNotas(tenantId: string): Promise<NotaFiscal[]> {
+export async function listarNotas(tenantId: string, empresas: readonly string[] | null = null): Promise<NotaFiscal[]> {
   if (!pool) return [];
-  const { rows } = await pool.query(
-    `SELECT data FROM notas_fiscais WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 500`,
-    [tenantId],
-  );
+  // Várias empresas (E7): só as notas das empresas no recorte.
+  const { rows } = empresas
+    ? await pool.query(
+      `SELECT data FROM notas_fiscais WHERE tenant_id = $1 AND COALESCE(NULLIF(data->>'empresa_id', ''), 'principal') = ANY($2::text[])
+        ORDER BY created_at DESC LIMIT 500`,
+      [tenantId, [...empresas]],
+    )
+    : await pool.query(
+      `SELECT data FROM notas_fiscais WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 500`,
+      [tenantId],
+    );
   return rows.map(r => r.data as NotaFiscal);
 }

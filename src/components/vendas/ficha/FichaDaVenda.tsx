@@ -33,6 +33,8 @@ import { AbaPagamentos } from './AbaPagamentos';
 import { AbaCliente, AbaComissoes, AbaFornecedor, AbaPosicao } from './AbasDoFinanceiro';
 import { CancelamentoDaVenda } from './CancelamentoDaVenda';
 import { CONTROLE, dataBR, LINK, Pilula, quandoBR, reais, SELECT, Total } from './comum';
+import { CampoEmpresa, useEmpresaSugerida } from '@/components/fin/CamposDeEmpresa';
+import { useEmpresas } from '@/components/fin/useEmpresas';
 
 type Aba = 'produtos' | 'pagamentos' | 'cliente' | 'fornecedor' | 'comissoes' | 'posicao';
 const ABAS: ReadonlyArray<{ id: Aba; rotulo: string; soDaVendaGravada?: boolean }> = [
@@ -79,6 +81,10 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
   const [motivo, setMotivo] = React.useState('');
   const [processando, setProcessando] = React.useState(false);
   const [atualizadoEm, setAtualizadoEm] = React.useState<Date | null>(null);
+  // Várias empresas (E7): a empresa da venda (o campo só aparece com 2+ empresas).
+  const empresaSugerida = useEmpresaSugerida();
+  const { multi: variasEmpresas } = useEmpresas();
+  const [empresaId, setEmpresaId] = React.useState<string | undefined>(undefined);
 
   const carregar = React.useCallback(async () => {
     if (!vendaId) return;
@@ -88,6 +94,7 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
       setFicha(f);
       setRascunho(f.venda);
       setConfig(f.config_receita);
+      setEmpresaId(f.empresa_id ?? 'principal');
       setSujo(false);
       setEstado('ok');
       setAtualizadoEm(new Date());
@@ -129,9 +136,12 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
     if (!rascunho.produtos.length) { toast.error('Inclua ao menos um produto', 'O total da venda vem dos produtos.'); setAba('produtos'); return; }
     setSalvando(true);
     try {
+      // A empresa só vai quando a agência tem mais de uma (o campo existe).
+      const empresa = variasEmpresas ? empresaId ?? (nova ? empresaSugerida : undefined) : undefined;
+      const corpo = { venda: rascunho, ...(empresa ? { empresa_id: empresa } : {}) };
       const f = nova
-        ? await chamar<Ficha>('/api/vendas/completa', 'POST', { venda: rascunho })
-        : await chamar<Ficha>(`/api/vendas/completa/${encodeURIComponent(vendaId!)}`, 'PUT', { venda: rascunho });
+        ? await chamar<Ficha>('/api/vendas/completa', 'POST', corpo)
+        : await chamar<Ficha>(`/api/vendas/completa/${encodeURIComponent(vendaId!)}`, 'PUT', corpo);
       const contasDoEvento = (f.eventos[0]?.detalhe?.contas ?? {}) as { criadas?: number; atualizadas?: number; removidas?: number; preservadas?: number };
       toast.success(nova ? `Venda ${f.venda.numero} lançada` : 'Venda salva',
         `Contas: ${contasDoEvento.criadas ?? 0} criadas, ${contasDoEvento.atualizadas ?? 0} atualizadas, ${contasDoEvento.removidas ?? 0} removidas${contasDoEvento.preservadas ? `, ${contasDoEvento.preservadas} já baixadas mantidas` : ''}.`);
@@ -236,6 +246,15 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
                 </p>
               ) : null}
 
+              {editavel && variasEmpresas ? (
+                <div className="max-w-sm">
+                  <CampoEmpresa
+                    valor={empresaId ?? empresaSugerida}
+                    onChange={e => { setEmpresaId(e); setSujo(true); }}
+                    ajuda="Os títulos da venda nascem nesta empresa. Trocar leva junto os que ainda estão em aberto."
+                  />
+                </div>
+              ) : null}
               <DadosDaVenda venda={venda} editavel={editavel} clientes={clientes} intermediarios={fornecedores} onMudar={mudar} />
 
               <dl aria-label="Totais da venda" className="grid grid-cols-2 gap-[var(--fin-s-4)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)] shadow-[var(--fin-e-card)] sm:grid-cols-3 lg:grid-cols-6">

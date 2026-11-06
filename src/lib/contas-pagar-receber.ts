@@ -97,6 +97,8 @@ export interface LinhaDeConta {
    * nenhuma cobrança (ou conta a pagar).
    */
   cobranca_status: string;
+  /** Empresa do título (E7). A coluna só aparece com 2+ empresas. */
+  empresa_id: string;
 }
 
 export interface FiltroDaLista {
@@ -117,6 +119,11 @@ export interface FiltroDaLista {
   porPagina: number;
   /** AAAA-MM-DD em Brasília: o "hoje" do atraso. */
   hoje: string;
+  /**
+   * Empresas no recorte (E7): as marcadas no seletor e liberadas. Ausente ou
+   * null = todas (agência de uma empresa só, ou quem vê todas).
+   */
+  empresas?: readonly string[] | null;
 }
 
 export class FiltroInvalido extends Error {}
@@ -386,6 +393,12 @@ export function clausulas(f: FiltroDaLista, contasLiberadas: readonly string[] |
     else if (f.cobranca === 'falhou') partes.push(`(${aberta} AND a.cobranca_status = 'falhou')`);
     else partes.push(`(a.tipo = 'receber' AND a.cobranca_status = 'paga')`);
   }
+  if (f.empresas) {
+    // Várias empresas (E7): a empresa do título ou a de uma linha do rateio.
+    const e = p([...f.empresas]);
+    partes.push(`(COALESCE(NULLIF(a.d->>'empresa_id', ''), 'principal') = ANY(${e}::text[])
+      OR EXISTS (SELECT 1 FROM jsonb_array_elements(a.rateio_j) re WHERE re->>'empresa_id' = ANY(${e}::text[])))`);
+  }
   if (contasLiberadas !== null) {
     // Mesma regra do CRUD (filtro-de-conta.ts, soBaixados): só some a linha
     // já baixada numa conta bancária que a pessoa não enxerga.
@@ -417,7 +430,8 @@ const COLUNAS_DA_LINHA = `a.chave, a.tabela, a.tipo, a.id, a.status, a.situacao,
     'origem_comissao_id', a.d->'origem_comissao_id', 'grupo_id', a.d->'grupo_id', 'auto_gerado', a.d->'auto_gerado',
     'plataforma_origem', a.d->'plataforma_origem', 'compra_id', a.d->'compra_id', 'fatura_id', a.d->'fatura_id',
     'valor_pago', a.d->'valor_pago', 'valor_recebido', a.d->'valor_recebido',
-    'data_pagamento', a.d->'data_pagamento', 'data_recebimento', a.d->'data_recebimento'
+    'data_pagamento', a.d->'data_pagamento', 'data_recebimento', a.d->'data_recebimento',
+    'empresa_id', a.d->'empresa_id'
   ) AS marcas`;
 
 function linhaDoBanco(r: Record<string, unknown>, hoje: string): LinhaDeConta {
@@ -463,6 +477,7 @@ function linhaDoBanco(r: Record<string, unknown>, hoje: string): LinhaDeConta {
     gerada_pelo_sistema: tituloGeradoPeloSistema(tabela, m),
     sem_baixa: tituloSemBaixa(tabela, m),
     cobranca_status: s('cobranca_status'),
+    empresa_id: String(m.empresa_id ?? '') || 'principal',
   };
 }
 

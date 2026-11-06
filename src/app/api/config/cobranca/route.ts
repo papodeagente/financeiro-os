@@ -8,6 +8,8 @@ import { listarConfigs } from '@/lib/plataformas/servico';
 import { lerConfigCobranca, normalizarConfigCobranca, type ConfigCobranca } from '@/lib/cobranca/config';
 import { configParaTela, configDaTela, type ConfigNaTela } from '@/lib/cobranca/config-tela';
 import { respostaDeErroDaCobranca } from '@/lib/cobranca/rota';
+import { temConfigPropria, type ExecutorEmpresas } from '@/lib/empresas-servidor';
+import { empresaDoPedido } from '@/lib/empresas-rota';
 
 // Configurações › Cobrança (E3, 05/11/2026). Guardada em agencia.data.cobranca.
 //   GET → { provedor_padrao ('asaas'|'pagarme'|''), tipo_padrao, conta_bancaria_id, juros_am_pct, multa_pct,
@@ -20,19 +22,25 @@ import { respostaDeErroDaCobranca } from '@/lib/cobranca/rota';
 //        Enviar juros/multa/desconto grava números próprios da cobrança; `usar_politica: true` volta à política.
 export const dynamic = 'force-dynamic';
 
-async function resposta(exec: ExecutorSQL, tenantId: string) {
-  const { config, politica } = await lerConfigCobranca(exec, tenantId);
+// ?empresa=<id> (E7): a configuração daquela empresa (as que não são a
+// principal guardam só o que mudaram; no resto, seguem a principal).
+async function resposta(exec: ExecutorSQL, tenantId: string, empresa: string | null = null) {
+  const { config, politica } = await lerConfigCobranca(exec, tenantId, empresa);
   const integracoes = await listarConfigs(tenantId);
-  return configParaTela(config, politica, integracoes);
+  const tela = configParaTela(config, politica, integracoes);
+  if (!empresa) return tela;
+  return { ...tela, empresa_id: empresa, ...(await temConfigPropria(exec as unknown as ExecutorEmpresas, tenantId, empresa, 'cobranca')) };
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const recusa = await recusaFinanceira('ler');
   if (recusa) return recusa;
   await initDB();
   if (!pool) return NextResponse.json({ error: 'Banco indisponível' }, { status: 503 });
+  const { empresa, recusa: recusaEmpresa } = await empresaDoPedido(req);
+  if (recusaEmpresa) return recusaEmpresa;
   try {
-    return NextResponse.json(await resposta(pool as unknown as ExecutorSQL, await getTenantId()));
+    return NextResponse.json(await resposta(pool as unknown as ExecutorSQL, await getTenantId(), empresa));
   } catch (e) {
     return respostaDeErroDaCobranca(e, 'config');
   }
@@ -46,12 +54,14 @@ export async function PUT(req: Request) {
   const corpo = (await req.json().catch(() => null)) as (Partial<ConfigNaTela> & Partial<ConfigCobranca>) | null;
   if (!corpo || typeof corpo !== 'object') return NextResponse.json({ error: 'Corpo inválido.' }, { status: 400 });
   const tenantId = await getTenantId();
+  const { empresa, recusa: recusaEmpresa } = await empresaDoPedido(req);
+  if (recusaEmpresa) return recusaEmpresa;
   try {
     await emTransacao(async exec => {
-      const { config, politica } = await lerConfigCobranca(exec, tenantId);
-      await gravarChaveDaAgencia(exec, tenantId, 'cobranca', normalizarConfigCobranca(configDaTela(config, politica, corpo)));
+      const { config, politica } = await lerConfigCobranca(exec, tenantId, empresa);
+      await gravarChaveDaAgencia(exec, tenantId, 'cobranca', normalizarConfigCobranca(configDaTela(config, politica, corpo)), empresa);
     });
-    return NextResponse.json(await resposta(pool as unknown as ExecutorSQL, tenantId));
+    return NextResponse.json(await resposta(pool as unknown as ExecutorSQL, tenantId, empresa));
   } catch (e) {
     return respostaDeErroDaCobranca(e, 'config');
   }

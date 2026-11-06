@@ -208,6 +208,7 @@ export function TelaDeCobrancas() {
     <MolduraDaPagina>
       <div ref={moldura} onKeyDown={teclado} className="flex flex-col gap-[var(--fin-s-5)]">
         <PageHeader
+          empresas
           icone={ReceiptText}
           titulo="Cobranças"
           subtitulo="Boletos, Pix e carnês emitidos pelo provedor da agência. Quando o cliente paga, a conta é baixada sozinha: sem remessa e sem retorno."

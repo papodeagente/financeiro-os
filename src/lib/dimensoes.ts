@@ -36,26 +36,37 @@ export function validarRateio(total: number, linhas: unknown): ResultadoRateio {
   if (linhas.length === 0) return { ok: true, linhas: [] };
   if (linhas.length > 50) return { ok: false, erro: 'O rateio aceita no máximo 50 linhas.' };
 
-  const limpas: Array<{ centro_custo_id: string; categoria_id?: string; percentual: number }> = [];
+  const limpas: Array<{ centro_custo_id: string; categoria_id?: string; empresa_id?: string; percentual: number }> = [];
   const vistas = new Set<string>();
   for (let i = 0; i < linhas.length; i++) {
     const l = linhas[i] as Record<string, unknown> | null;
     const n = i + 1;
     if (!l || typeof l !== 'object') return { ok: false, erro: `A linha ${n} do rateio está vazia.` };
     const centro = String(l.centro_custo_id ?? '').trim();
-    if (!centro) return { ok: false, erro: `Escolha o centro de custo da linha ${n} do rateio.` };
+    // Rateio entre empresas (E7): a linha pode dizer só a empresa; sem
+    // empresa, o centro continua obrigatório, como sempre.
+    const empresa = String(l.empresa_id ?? '').trim().slice(0, 80);
+    if (!centro && !empresa) return { ok: false, erro: `Escolha o centro de custo da linha ${n} do rateio.` };
     const categoria = String(l.categoria_id ?? '').trim();
     const pct = Number(l.percentual);
     if (!Number.isFinite(pct) || pct <= 0) {
       return { ok: false, erro: `O percentual da linha ${n} do rateio precisa ser maior que zero.` };
     }
     if (pct > 100) return { ok: false, erro: `O percentual da linha ${n} do rateio passa de 100%.` };
-    const chave = `${centro}|${categoria}`;
+    const chave = `${centro}|${categoria}|${empresa}`;
     if (vistas.has(chave)) {
-      return { ok: false, erro: `A linha ${n} repete centro e categoria de outra linha. Junte as duas.` };
+      return {
+        ok: false,
+        erro: empresa
+          ? `A linha ${n} repete empresa, centro e categoria de outra linha. Junte as duas.`
+          : `A linha ${n} repete centro e categoria de outra linha. Junte as duas.`,
+      };
     }
     vistas.add(chave);
-    limpas.push({ centro_custo_id: centro, ...(categoria ? { categoria_id: categoria } : {}), percentual: round2(pct) });
+    limpas.push({
+      centro_custo_id: centro, ...(categoria ? { categoria_id: categoria } : {}), ...(empresa ? { empresa_id: empresa } : {}),
+      percentual: round2(pct),
+    });
   }
 
   const somaPct = round2(soma(limpas.map(l => l.percentual)));
@@ -81,7 +92,7 @@ export function dividirIgual(n: number): number[] {
 
 /** Aplica uma regra salva a um lançamento de `total` reais. */
 export function aplicarRegraDeRateio(
-  regra: { linhas: ReadonlyArray<{ centro_custo_id: string; categoria_id?: string; percentual: number }> },
+  regra: { linhas: ReadonlyArray<{ centro_custo_id: string; categoria_id?: string; empresa_id?: string; percentual: number }> },
   total: number,
 ): ResultadoRateio {
   return validarRateio(total, regra.linhas.map(l => ({ ...l, valor: 0 })));
@@ -155,6 +166,8 @@ export interface FatiaDoLancamento {
   grupo_nome: string;
   centro_custo_id: string;
   centro_custo_nome: string;
+  /** Empresa da fatia (E7): a da linha do rateio ou, sem ela, a do lançamento. */
+  empresa_id: string;
   tags: string[];
   repasse: boolean;
   percentual: number;
@@ -271,16 +284,22 @@ export function dimensoesDoLancamento(conta: ContaLike, ctx: ContextoDimensoes =
   const rateado = linhas.length > 0;
 
   const porId = indice(ctx.categorias);
+  const empresaDaConta = String(conta.empresa_id ?? '').trim() || 'principal';
   const base = rateado
     ? linhas.map(l => ({
       categoria: l.categoria_id || categoriaDaConta,
-      centro: resolverCentro(l.centro_custo_id, '', ctx.centros),
+      // Linha só de empresa (sem centro) fica com o centro da conta.
+      centro: l.centro_custo_id
+        ? resolverCentro(l.centro_custo_id, '', ctx.centros)
+        : resolverCentro(String(conta.centro_custo_id ?? ''), String(conta.centro_custo ?? ''), ctx.centros),
+      empresa: (l as LinhaRateio).empresa_id || empresaDaConta,
       percentual: l.percentual,
       valor: l.valor,
     }))
     : [{
       categoria: categoriaDaConta,
       centro: resolverCentro(String(conta.centro_custo_id ?? ''), String(conta.centro_custo ?? ''), ctx.centros),
+      empresa: empresaDaConta,
       percentual: 100,
       valor: total,
     }];
@@ -297,6 +316,7 @@ export function dimensoesDoLancamento(conta: ContaLike, ctx: ContextoDimensoes =
       grupo_nome: grupo?.nome ?? '',
       centro_custo_id: b.centro.id,
       centro_custo_nome: b.centro.nome,
+      empresa_id: b.empresa,
       tags,
       repasse: cat?.repasse === true,
       percentual: b.percentual,
@@ -305,6 +325,17 @@ export function dimensoesDoLancamento(conta: ContaLike, ctx: ContextoDimensoes =
     };
   });
   return { lado, valor_total: total, valor_movimentado: movimentado, rateado, fatias };
+}
+
+/**
+ * Só as fatias das empresas visíveis (E7). `null` = sem recorte (todas, como
+ * sempre). Uma despesa rateada 60/40 entre A e B soma 60% em quem vê só A.
+ */
+export function fatiasDasEmpresas(
+  fatias: readonly FatiaDoLancamento[], visiveis: readonly string[] | null,
+): FatiaDoLancamento[] {
+  if (visiveis === null) return [...fatias];
+  return fatias.filter(f => visiveis.includes(f.empresa_id || 'principal'));
 }
 
 // ---------------------------------------------------------------------------
@@ -370,7 +401,8 @@ export function trocarCategoriaNaConta(
     const juntas: Array<Record<string, unknown>> = [];
     for (const bruta of data.rateio as Array<Record<string, unknown>>) {
       const l: Record<string, unknown> = { ...bruta, ...(casa(bruta?.categoria_id) ? { categoria_id: destinoId } : {}) };
-      const igual = juntas.find(j => j.centro_custo_id === l.centro_custo_id && (j.categoria_id ?? '') === (l.categoria_id ?? ''));
+      const igual = juntas.find(j => j.centro_custo_id === l.centro_custo_id && (j.categoria_id ?? '') === (l.categoria_id ?? '')
+        && (j.empresa_id ?? '') === (l.empresa_id ?? ''));
       if (igual) {
         igual.percentual = round2(num(igual.percentual) + num(l.percentual));
         igual.valor = round2(num(igual.valor) + num(l.valor));

@@ -6,6 +6,9 @@ import { emTransacao } from '@/lib/caixa-atomico';
 import { normalizarPolitica, type PoliticaCobranca } from '@/lib/baixa-calculo';
 import { normalizarAvisos } from '@/lib/avisos-vencimento';
 import { ErroEncargos, gravarChaveDaAgencia, salvarCategoriasDosEncargos } from '@/lib/encargos-servidor';
+import { lerChavesDaEmpresa, temConfigPropria, type ExecutorEmpresas } from '@/lib/empresas-servidor';
+import { empresaDoPedido } from '@/lib/empresas-rota';
+
 
 // Configurações › Financeiro (05/11/2026):
 //  - politica_cobranca: juros, multa, tolerância e desconto por antecipação
@@ -16,12 +19,26 @@ import { ErroEncargos, gravarChaveDaAgencia, salvarCategoriasDosEncargos } from 
 // O PUT grava só as chaves enviadas, sem tocar o resto do cadastro.
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(req: Request) {
   const recusa = await recusaFinanceira('ler');
   if (recusa) return recusa;
   await initDB();
   if (!pool) return NextResponse.json({ politica_cobranca: null, categorias_encargos: {}, avisos_vencimento: normalizarAvisos(null) });
   const tenantId = await getTenantId();
+  const { empresa, recusa: recusaEmpresa } = await empresaDoPedido(req);
+  if (recusaEmpresa) return recusaEmpresa;
+  if (empresa) {
+    // Empresa além da principal: o que ela gravou e, no resto, o da agência.
+    const exec = pool as unknown as ExecutorEmpresas;
+    const c = await lerChavesDaEmpresa(exec, tenantId, empresa, ['politica_cobranca', 'categorias_encargos', 'avisos_vencimento']);
+    return NextResponse.json({
+      politica_cobranca: c.politica_cobranca ?? null,
+      categorias_encargos: c.categorias_encargos ?? {},
+      avisos_vencimento: normalizarAvisos(c.avisos_vencimento),
+      empresa_id: empresa,
+      ...(await temConfigPropria(exec, tenantId, empresa, 'financeiro')),
+    });
+  }
   const { rows } = await pool.query(
     `SELECT data->'politica_cobranca' AS p, data->'categorias_encargos' AS c, data->'avisos_vencimento' AS a
        FROM agencia WHERE tenant_id = $1 ORDER BY updated_at DESC NULLS LAST, id ASC LIMIT 1`,
@@ -45,17 +62,20 @@ export async function PUT(req: Request) {
     avisos_vencimento?: unknown;
   };
   const tenantId = await getTenantId();
+  const { empresa, recusa: recusaEmpresa } = await empresaDoPedido(req);
+  if (recusaEmpresa) return recusaEmpresa;
   try {
     const resposta = await emTransacao(async exec => {
       const r: Record<string, unknown> = {};
       if ('politica_cobranca' in corpo) {
         r.politica_cobranca = normalizarPolitica(corpo.politica_cobranca);
-        await gravarChaveDaAgencia(exec, tenantId, 'politica_cobranca', r.politica_cobranca);
+        await gravarChaveDaAgencia(exec, tenantId, 'politica_cobranca', r.politica_cobranca, empresa);
       }
       if ('categorias_encargos' in corpo) {
-        r.categorias_encargos = await salvarCategoriasDosEncargos(exec, tenantId, corpo.categorias_encargos);
+        r.categorias_encargos = await salvarCategoriasDosEncargos(exec, tenantId, corpo.categorias_encargos, empresa);
       }
-      if ('avisos_vencimento' in corpo) {
+      // Os avisos de vencimento valem para a agência inteira (o sino é um só).
+      if ('avisos_vencimento' in corpo && !empresa) {
         r.avisos_vencimento = normalizarAvisos(corpo.avisos_vencimento);
         await gravarChaveDaAgencia(exec, tenantId, 'avisos_vencimento', r.avisos_vencimento);
       }

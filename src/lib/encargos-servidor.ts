@@ -17,6 +17,7 @@ import {
   CATEGORIAS_PADRAO_ENCARGOS, CHAVES_ENCARGO, codigoLivre,
   type CategoriasEncargos, type ChaveEncargo, type LinhaDeBaixaComEncargo,
 } from './encargos-categorias';
+import { SECAO_DA_CHAVE, empresaComConfigPropria, gravarChaveDaEmpresa, lerChavesDaEmpresa } from './empresas-config';
 
 export class ErroEncargos extends Error {
   status: number;
@@ -36,7 +37,15 @@ async function agenciaDe(exec: ExecutorSQL, tenantId: string): Promise<{ id: str
 }
 
 /** Grava uma chave em agencia.data sem tocar o resto (cria a linha se faltar). */
-export async function gravarChaveDaAgencia(exec: ExecutorSQL, tenantId: string, chave: string, valor: unknown): Promise<void> {
+export async function gravarChaveDaAgencia(
+  exec: ExecutorSQL, tenantId: string, chave: string, valor: unknown, empresaId?: string | null,
+): Promise<void> {
+  // Configuração por empresa (E7): as empresas além da principal guardam a
+  // própria; a principal continua no agencia.data, como sempre.
+  if (empresaComConfigPropria(empresaId) && SECAO_DA_CHAVE[chave]) {
+    await gravarChaveDaEmpresa(exec, tenantId, empresaId, chave, valor);
+    return;
+  }
   const ag = await agenciaDe(exec, tenantId);
   if (ag) {
     await exec.query(
@@ -62,7 +71,11 @@ function limparMapa(v: unknown): CategoriasEncargos {
   return m;
 }
 
-export async function categoriasDosEncargos(exec: ExecutorSQL, tenantId: string): Promise<CategoriasEncargos> {
+export async function categoriasDosEncargos(exec: ExecutorSQL, tenantId: string, empresaId?: string | null): Promise<CategoriasEncargos> {
+  if (empresaComConfigPropria(empresaId)) {
+    const r = await lerChavesDaEmpresa(exec, tenantId, empresaId, ['categorias_encargos']);
+    return limparMapa(r.categorias_encargos);
+  }
   const ag = await agenciaDe(exec, tenantId);
   return limparMapa(ag?.data.categorias_encargos);
 }
@@ -124,7 +137,9 @@ export async function garantirCategoriasDeEncargos(exec: ExecutorSQL, tenantId: 
 }
 
 /** Grava a escolha da tela. Cada categoria precisa ser desta agência e do tipo certo. */
-export async function salvarCategoriasDosEncargos(exec: ExecutorSQL, tenantId: string, pedido: unknown): Promise<CategoriasEncargos> {
+export async function salvarCategoriasDosEncargos(
+  exec: ExecutorSQL, tenantId: string, pedido: unknown, empresaId?: string | null,
+): Promise<CategoriasEncargos> {
   const novo = limparMapa(pedido);
   const plano = await planoDaAgencia(exec, tenantId);
   for (const k of Object.keys(novo) as ChaveEncargo[]) {
@@ -135,9 +150,9 @@ export async function salvarCategoriasDosEncargos(exec: ExecutorSQL, tenantId: s
       throw new ErroEncargos(`"${p.nome}" é uma categoria de ${p.tipo === 'RECEITA' ? 'receita' : 'despesa'}; escolha uma de ${tipo === 'RECEITA' ? 'receita' : 'despesa'}.`);
     }
   }
-  const atual = await categoriasDosEncargos(exec, tenantId);
+  const atual = await categoriasDosEncargos(exec, tenantId, empresaId);
   const mapa = { ...atual, ...novo };
-  await gravarChaveDaAgencia(exec, tenantId, 'categorias_encargos', mapa);
+  await gravarChaveDaAgencia(exec, tenantId, 'categorias_encargos', mapa, empresaId);
   return mapa;
 }
 

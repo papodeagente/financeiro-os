@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { useEmpresas } from '@/components/fin/useEmpresas';
 
 const FOCO =
   'focus-visible:outline-2 focus-visible:outline-[var(--fin-accent)] focus-visible:outline-offset-2 focus-visible:ring-0';
@@ -32,6 +33,12 @@ const CONTROLE = cn(
 const RECUO: Record<number, string> = { 0: '', 1: 'pl-6', 2: 'pl-9', 3: 'pl-12' };
 const NENHUM = '__NENHUM__';
 const MESMA = '__MESMA__';
+const DA_CONTA = '__DA_CONTA__';
+
+// Colunas da linha do rateio. Com duas ou mais empresas (E7) entra a coluna
+// Empresa na frente; com uma, a grade de sempre.
+const GRADE = 'sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1.3fr)_96px_120px_44px]';
+const GRADE_COM_EMPRESA = 'sm:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_minmax(0,1.15fr)_88px_112px_44px]';
 
 export type AlteracaoDeDimensoes = Partial<{
   centro_custo_id: string;
@@ -115,6 +122,9 @@ function SeletorDeCentro({
 
 export function SecaoRateios({ total, tipo, centroId, rateio, tags, onChange }: SecaoRateiosProps) {
   const { centros, regras, categorias, carregando } = useCadastros();
+  // Rateio entre empresas (E7): só com duas ou mais empresas.
+  const { multi, empresas } = useEmpresas();
+  const grade = multi ? GRADE_COM_EMPRESA : GRADE;
   const arvore = React.useMemo(() => ordenarEmArvore(centros), [centros]);
   const categoriasDoTipo = React.useMemo(
     () => categorias
@@ -141,6 +151,16 @@ export function SecaoRateios({ total, tipo, centroId, rateio, tags, onChange }: 
       rateio: [
         { centro_custo_id: centroId, percentual: a, valor: 0 },
         { centro_custo_id: '', percentual: b, valor: 0 },
+      ],
+    });
+  }
+
+  function dividirEntreEmpresas() {
+    const [a, b] = dividirIgual(2);
+    onChange({
+      rateio: [
+        { centro_custo_id: centroId, empresa_id: empresas[0]?.id, percentual: a, valor: 0 },
+        { centro_custo_id: centroId, empresa_id: empresas[1]?.id, percentual: b, valor: 0 },
       ],
     });
   }
@@ -198,20 +218,36 @@ export function SecaoRateios({ total, tipo, centroId, rateio, tags, onChange }: 
               />
             )}
           </Field>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={dividirEntreCentros}
-            disabled={semCentros}
-            className={cn('h-11 gap-[var(--fin-s-2)] lg:h-10', FOCO)}
-          >
-            <Split aria-hidden="true" className="size-4" />
-            Dividir entre centros
-          </Button>
+          {/* Uma empresa só: o invólucro some do leiaute (display: contents) e a
+              linha fica exatamente como era. */}
+          <div className={multi ? 'flex flex-col gap-[var(--fin-s-2)] sm:flex-row' : 'contents'}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={dividirEntreCentros}
+              disabled={semCentros}
+              className={cn('h-11 gap-[var(--fin-s-2)] lg:h-10', FOCO)}
+            >
+              <Split aria-hidden="true" className="size-4" />
+              Dividir entre centros
+            </Button>
+            {multi ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={dividirEntreEmpresas}
+                className={cn('h-11 gap-[var(--fin-s-2)] lg:h-10', FOCO)}
+              >
+                <Split aria-hidden="true" className="size-4" />
+                Dividir entre empresas
+              </Button>
+            ) : null}
+          </div>
         </div>
       ) : (
         <div className="flex flex-col gap-[var(--fin-s-2)]">
-          <div className="hidden grid-cols-[minmax(0,1.3fr)_minmax(0,1.3fr)_96px_120px_44px] gap-[var(--fin-s-2)] px-1 sm:grid">
+          <div className={cn('hidden gap-[var(--fin-s-2)] px-1 sm:grid', grade)}>
+            {multi ? <span className="fin-t-overline text-[var(--fin-text-3)]">Empresa</span> : null}
             <span className="fin-t-overline text-[var(--fin-text-3)]">Centro de custo</span>
             <span className="fin-t-overline text-[var(--fin-text-3)]">Categoria</span>
             <span className="fin-t-overline text-right text-[var(--fin-text-3)]">%</span>
@@ -222,14 +258,38 @@ export function SecaoRateios({ total, tipo, centroId, rateio, tags, onChange }: 
             {rateio.map((linha, i) => (
               <li
                 key={i}
-                className="grid grid-cols-[1fr_96px_44px] items-center gap-[var(--fin-s-2)] rounded-[var(--fin-r-md)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-2)] sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1.3fr)_96px_120px_44px] sm:border-0 sm:bg-transparent sm:p-0"
+                className={cn(
+                  'grid grid-cols-[1fr_96px_44px] items-center gap-[var(--fin-s-2)] rounded-[var(--fin-r-md)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-2)] sm:border-0 sm:bg-transparent sm:p-0',
+                  grade,
+                )}
               >
+                {multi ? (
+                  <div className="col-span-3 sm:col-span-1">
+                    <Select
+                      value={linha.empresa_id || DA_CONTA}
+                      onValueChange={v => trocarLinha(i, { empresa_id: String(v) === DA_CONTA ? undefined : String(v) })}
+                    >
+                      <SelectTrigger aria-label={`Empresa da linha ${i + 1}`} className={cn(CONTROLE, 'justify-between gap-2')}>
+                        <SelectValue>
+                          {() => empresas.find(e => e.id === linha.empresa_id)?.nome ?? 'Da conta'}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={DA_CONTA} className="fin-t-body">Da conta</SelectItem>
+                        {empresas.map(e => (
+                          <SelectItem key={e.id} value={e.id} className="fin-t-body">{e.nome}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
                 <div className="col-span-3 sm:col-span-1">
                   <SeletorDeCentro
                     ariaLabel={`Centro de custo da linha ${i + 1}`}
                     valor={linha.centro_custo_id}
                     centros={arvore}
-                    rotuloVazio="Escolha o centro"
+                    // Linha com empresa pode ficar sem centro: vale o da conta.
+                    rotuloVazio={linha.empresa_id ? 'Centro da conta' : 'Escolha o centro'}
                     onChange={id => trocarLinha(i, { centro_custo_id: id })}
                   />
                 </div>
@@ -313,7 +373,7 @@ export function SecaoRateios({ total, tipo, centroId, rateio, tags, onChange }: 
               Dividir igual
             </Button>
             <Button type="button" variant="ghost" onClick={voltarParaCentroUnico} className={cn('h-11 lg:h-10', FOCO)}>
-              Voltar para um centro só
+              {multi ? 'Desfazer o rateio' : 'Voltar para um centro só'}
             </Button>
           </div>
         </div>

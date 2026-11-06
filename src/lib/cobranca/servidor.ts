@@ -1048,6 +1048,8 @@ export interface FiltrosDaLista {
   busca?: string;
   pagina?: number;
   por_pagina?: number;
+  /** Empresas no recorte (E7). Ausente ou null = todas. */
+  empresas?: readonly string[] | null;
 }
 
 export interface ItemDaLista extends LinhaCobranca {
@@ -1086,6 +1088,7 @@ export async function listarCobrancas(
     cond.push(`(c.descricao ILIKE ${n} OR COALESCE(cr.data->>'cliente_nome', '') ILIKE ${n} OR c.linha_digitavel ILIKE ${n})`);
   }
   if (contasPermitidas !== null) add(`(COALESCE(c.conta_bancaria_id, '') = '' OR c.conta_bancaria_id = ANY(?::text[]))`, contasPermitidas);
+  if (f.empresas) add(`COALESCE(NULLIF(to_jsonb(c)->>'empresa_id', ''), 'principal') = ANY(?::text[])`, [...f.empresas]);
   // Os totais valem para os mesmos filtros, sem o de situação (a tela mostra todos os cartões).
   const whereSemStatus = cond.join(' AND ');
   const vSemStatus = [...v];
