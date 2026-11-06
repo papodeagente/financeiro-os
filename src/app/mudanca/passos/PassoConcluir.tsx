@@ -90,6 +90,7 @@ export function PassoConcluir({ lote, onLote, irPara, onNovaMudanca }: PropsDoPa
           <Link href="/mudanca/paridade" className={buttonVariants({ variant: 'outline' })}>Checklist de paridade</Link>
           <Button variant="ghost" onClick={onNovaMudanca}><RotateCcw aria-hidden="true" /> Trazer mais arquivos (nova mudança)</Button>
         </div>
+        <DepoisDaMudanca irPara={irPara} />
       </>
     );
   }
@@ -146,6 +147,8 @@ export function PassoConcluir({ lote, onLote, irPara, onNovaMudanca }: PropsDoPa
           </Button>
         </section>
       </div>
+
+      <DepoisDaMudanca irPara={irPara} />
 
       <BarraDoPasso voltar={{ rotulo: 'Provas', onClick: () => irPara('provas') }} />
 
@@ -222,5 +225,26 @@ function TabelaDoQueFica({ linhas }: { linhas: RegistroQueFica[] }) {
       estado="ok"
       vazio={{ motivo: 'sem-dado', titulo: 'Nada ficou', oQueE: 'Tudo o que a mudança criou foi apagado.' }}
     />
+  );
+}
+
+/** O que vem depois de aplicar: recriar as regras e planos e conferir um mês nos dois sistemas. */
+function DepoisDaMudanca({ irPara }: { irPara: PropsDoPasso['irPara'] }) {
+  return (
+    <section aria-labelledby="depois-titulo" className="flex flex-col gap-[var(--fin-s-3)]">
+      <h3 id="depois-titulo" className="fin-t-subhead text-[var(--fin-text)]">Depois da mudança</h3>
+      <div className="grid grid-cols-1 gap-[var(--fin-s-4)] lg:grid-cols-2">
+        <div className={`${PAINEL} flex flex-col gap-[var(--fin-s-3)] p-[var(--fin-s-5)]`}>
+          <p className="fin-t-body-strong text-[var(--fin-text)]">Regras de faturamento e planos de comissão</p>
+          <p className="fin-t-body text-[var(--fin-text-2)]">O sistema anterior não exporta o detalhe deles. Responda algumas perguntas e o EnturOS monta cada um nas telas certas.</p>
+          <Button variant="outline" className="mt-auto self-start max-sm:w-full max-sm:self-stretch" onClick={() => irPara('recriar')}>Recriar regras e planos</Button>
+        </div>
+        <div className={`${PAINEL} flex flex-col gap-[var(--fin-s-3)] p-[var(--fin-s-5)]`}>
+          <p className="fin-t-body-strong text-[var(--fin-text)]">Mês em paralelo</p>
+          <p className="fin-t-body text-[var(--fin-text-2)]">Trabalhou um mês nos dois sistemas? Solte as listas do mês de lá e veja, sem gravar nada, o que bate e o que ficou diferente.</p>
+          <Button variant="outline" className="mt-auto self-start max-sm:w-full max-sm:self-stretch" onClick={() => irPara('paralelo')}>Comparar um mês</Button>
+        </div>
+      </div>
+    </section>
   );
 }

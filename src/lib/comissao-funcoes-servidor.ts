@@ -230,7 +230,11 @@ async function lerGravados(exec: ExecutorSQL, tenantId: string, config: ConfigCo
 export async function calcularNoBanco(exec: ExecutorSQL, tenantId: string, ate: string, opcoes: { so_participantes?: string[] } = {}): Promise<CalculoNoBanco> {
   const [config, cadastro, cfgVenda] = await Promise.all([lerConfigComissao(exec, tenantId), lerCadastro(exec, tenantId), lerConfigVenda(exec, tenantId)]);
   const lidas = (await lerVendas(exec, tenantId, { de: config.data_inicial || undefined, incluir_canceladas: true }))
-    .filter(v => STATUS_QUE_CONTAM.has(v.status) || v.versao_modelo === 2);
+    .filter(v => STATUS_QUE_CONTAM.has(v.status) || v.versao_modelo === 2)
+    // Venda trazida do sistema anterior (E7): a comissão dela foi calculada (e
+    // paga) lá; fica no registro "Comissões já pagas". Calcular de novo aqui
+    // pagaria duas vezes.
+    .filter(v => v.venda.origem !== 'mudanca');
   let recebimentos: Record<string, RecebimentoDoCliente> | undefined;
   if (config.liberar === 'RECEBIMENTO') {
     recebimentos = Object.fromEntries(await lerRecebimentos(exec, tenantId, lidas.map(v => v.venda.id)));

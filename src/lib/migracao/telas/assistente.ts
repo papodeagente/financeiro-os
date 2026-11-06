@@ -17,7 +17,7 @@ import { GUIA_DE_EXPORTACAO, ROTULO_DA_LISTA } from './listas';
 
 // ─── Passos ────────────────────────────────────────────────────────────────
 
-export type IdDaEtapa = 'exportar' | 'arquivos' | 'colunas' | 'ensaio' | 'aplicar' | 'provas' | 'concluir';
+export type IdDaEtapa = 'exportar' | 'arquivos' | 'colunas' | 'ensaio' | 'aplicar' | 'provas' | 'concluir' | 'recriar' | 'paralelo';
 
 export const ETAPAS: ReadonlyArray<{ id: IdDaEtapa; rotulo: string; titulo: string }> = [
   { id: 'exportar', rotulo: 'Exportar', titulo: 'O que exportar do sistema anterior' },
@@ -27,6 +27,9 @@ export const ETAPAS: ReadonlyArray<{ id: IdDaEtapa; rotulo: string; titulo: stri
   { id: 'aplicar', rotulo: 'Aplicar', titulo: 'Aplicar a mudança' },
   { id: 'provas', rotulo: 'Provas', titulo: 'Provas de que bateu' },
   { id: 'concluir', rotulo: 'Concluir', titulo: 'Concluir ou desfazer' },
+  // E7: o que vem depois de aplicar.
+  { id: 'recriar', rotulo: 'Regras e planos', titulo: 'Recriar regras de faturamento e planos de comissão' },
+  { id: 'paralelo', rotulo: 'Mês em paralelo', titulo: 'Mês em paralelo: o sistema anterior e o EnturOS lado a lado' },
 ];
 
 export function indiceDaEtapa(id: IdDaEtapa): number {
@@ -100,6 +103,12 @@ export function travaDaEtapa(id: IdDaEtapa, lote: Lote | null): string | null {
     case 'provas':
     case 'concluir':
       if (!aplicou) return 'As provas e a conclusão aparecem depois de aplicar.';
+      return null;
+    case 'recriar':
+      // Recriar não depende dos arquivos: dá para fazer antes, durante ou depois.
+      return null;
+    case 'paralelo':
+      if (!aplicou || lote?.situacao === 'desfeito' || lote?.situacao === 'desfazendo') return 'O mês em paralelo vem depois de aplicar a mudança: ele compara o que foi lançado aqui com o que foi lançado lá.';
       return null;
   }
 }

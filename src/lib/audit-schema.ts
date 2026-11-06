@@ -246,7 +246,7 @@ export const AUDIT_SCHEMA_SQL = String.raw`
           'razao_estado','razao_lancamentos','razao_partidas','razao_falhas','razao_conferencias',
           'retrato_saldos','agendador_execucoes','agendador_estado','tarefas','leituras_de_documento',
           'cobranca_eventos','cobranca_lembretes','cobranca_disjuntor','cobranca_portal_links',
-          'migracao_lotes','migracao_arquivos','migracao_linhas','migracao_vinculos',
+          'migracao_lotes','migracao_arquivos','migracao_linhas','migracao_vinculos','migracao_historico',
           'variacoes_cambiais','venda_eventos','comissao_lancamentos','comissao_fechamentos','creditos_cliente_movimentos','fatura_eventos','conciliacoes_automaticas','conferencias_operadora_linhas','conexoes_bancarias_segredo','sincronizacoes_bancarias')
       UNION SELECT t.table_name FROM information_schema.tables t
       WHERE t.table_schema = 'public' AND t.table_name IN ('tenants','super_admins','planos','saas_config','convites')

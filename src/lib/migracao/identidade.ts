@@ -75,10 +75,50 @@ export interface IndiceDeCadastros {
   titulos: TituloConhecido[];
   /** Chaves naturais de títulos já trazidos por outra mudança (não desfeita): chave → onde. */
   chavesImportadas: Map<string, string>;
+  // ---- Histórico (E7) ----
+  /** Vendas trazidas do sistema anterior (por qualquer mudança não desfeita). */
+  vendas: VendaConhecida[];
+  /** Registros do histórico (faturas, notas, comissões pagas, reembolsos, créditos) já trazidos por OUTRA mudança: "tipo:chave" → onde. */
+  registros: Map<string, string>;
+  /** Pessoas nas funções de comissão (para as metas). */
+  pessoasFuncao: PessoaNaFuncaoConhecida[];
+  /** Baixas (dinheiro que entrou ou saiu) para ligar as linhas do extrato a elas. */
+  baixas: BaixaConhecida[];
+  /** Títulos que ESTA mudança criou (para ligar à venda e ao reembolso). */
+  titulosDoLote: TituloDoLote[];
+}
+
+export interface VendaConhecida { id: string; numero_anterior: string; doLote: boolean }
+export interface PessoaNaFuncaoConhecida { id: string; pessoa_nome: string; funcao_nome: string }
+export interface BaixaConhecida {
+  id: string;
+  conta_id: string;
+  data: string;
+  /** Centavos que entraram ou saíram da conta. */
+  valor: number;
+  entrada: boolean;
+  pessoa_id: string;
+  titulo_id: string;
+  doLote: boolean;
+  /** Já ligada a uma linha do extrato nesta mudança. */
+  ligada?: boolean;
+}
+export interface TituloDoLote {
+  tabela: 'contas_pagar' | 'contas_receber';
+  id: string;
+  pessoa_id: string;
+  valor: number;
+  venda: string;
+  liquidado: boolean;
+  /** Já ligado a um reembolso. */
+  reembolso?: boolean;
 }
 
 export function indiceVazio(): IndiceDeCadastros {
-  return { pessoas: [], categorias: [], centros: [], contas: [], titulos: [], chavesImportadas: new Map() };
+  return {
+    pessoas: [], categorias: [], centros: [], contas: [], titulos: [], chavesImportadas: new Map(),
+    vendas: [], registros: new Map(), pessoasFuncao: [], baixas: [], titulosDoLote: [],
+  };
 }
 
 const dig = (v: string) => String(v ?? '').replace(/\D/g, '');

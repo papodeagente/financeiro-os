@@ -36,6 +36,8 @@ import {
   gravadorDeEnsaio, processarRegistro, type ContextoDoPlano, type Decisao, type Enriquecimento, type Gravador, type OrigemDaLinha,
 } from './plano';
 import { dataBR, lerData, normalizar, texto, type Celula } from './valores';
+import { gravadorDoHistorico, type AcaoDoVinculo } from './gravador-historico';
+import { agruparVendas, type ProdutoVendidoLido } from './interpretar-historico';
 
 // ---------------------------------------------------------------------------
 // Tipos do contrato com as telas
@@ -48,7 +50,21 @@ export interface OpcoesDoLote {
   papel_padrao?: PapelPadrao;
   /** Só estas empresas (como escritas no arquivo). Vazio = todas. */
   empresas?: string[];
+  /**
+   * E7: "paralelo" = mês em paralelo. O lote só recebe arquivos e compara
+   * com o que foi lançado aqui no mesmo mês; nunca ensaia, aplica nem grava
+   * no financeiro, e não conta como mudança em andamento.
+   */
+  modo?: 'mudanca' | 'paralelo';
+  /** Mês comparado (AAAA-MM), no modo paralelo. */
+  mes?: string;
 }
+
+/** O lote é uma comparação do mês em paralelo (não uma mudança)? */
+export function ehParalelo(l: { opcoes: OpcoesDoLote }): boolean {
+  return l.opcoes.modo === 'paralelo';
+}
+const SO_MUDANCA = `COALESCE(opcoes->>'modo', 'mudanca') <> 'paralelo'`;
 
 export interface Lote {
   id: string;
@@ -121,6 +137,25 @@ export interface ResumoDoEnsaio {
   problemas: Array<{ codigo: string; mensagem: string; arquivo_id?: string }>;
   avisos: Array<{ codigo: string; mensagem: string; arquivo_id?: string }>;
   pode_aplicar: boolean;
+  /** Histórico (E7): o que entra além das contas em aberto. */
+  historico?: ResumoDoHistorico;
+}
+
+export interface ResumoDoHistorico {
+  liquidados: { quantidade: number; centavos: number };
+  movimentos: { criar: number; vincular: number; centavos: number };
+  vendas: { quantidade: number; produtos: number; centavos: number };
+  registros: { faturas: number; notas: number; comissoes_pagas: number };
+  metas: number;
+  reembolsos: { quantidade: number; centavos: number };
+  creditos: { quantidade: number; centavos: number };
+}
+
+export function resumoDoHistoricoVazio(): ResumoDoHistorico {
+  return {
+    liquidados: { quantidade: 0, centavos: 0 }, movimentos: { criar: 0, vincular: 0, centavos: 0 }, vendas: { quantidade: 0, produtos: 0, centavos: 0 },
+    registros: { faturas: 0, notas: 0, comissoes_pagas: 0 }, metas: 0, reembolsos: { quantidade: 0, centavos: 0 }, creditos: { quantidade: 0, centavos: 0 },
+  };
 }
 
 export class ErroMudanca extends Error {
@@ -145,7 +180,7 @@ const ROTULO_DO_CODIGO: Record<string, string> = {
   valor_invalido: 'Valor ilegível',
   data_invalida: 'Data ilegível ou sem vencimento',
   sem_movimento: 'Não diz se é a pagar ou a receber',
-  liquidado: 'Já liquidado (histórico fica para depois)',
+  liquidado: 'Já liquidado (solte como "Contas já liquidadas")',
   excluido: 'Excluído no sistema anterior',
   moeda_estrangeira: 'Em outra moeda (fica para depois)',
   outra_empresa: 'De outra empresa',
@@ -159,6 +194,13 @@ const ROTULO_DO_CODIGO: Record<string, string> = {
   linha_de_agrupamento: 'Linha de agrupamento',
   aviso_do_arquivo: 'Aviso de lista cortada',
   erro: 'Erro ao gravar',
+  // Histórico (E7)
+  depois_do_corte: 'Depois da data de corte (lance aqui)',
+  nao_emitida: 'Nota que não foi emitida lá',
+  vencido: 'Crédito já vencido',
+  transferencia: 'Transferência entre contas',
+  venda_invalida: 'Venda incompleta',
+  pessoa_sem_funcao: 'Pessoa fora das funções de comissão',
 };
 
 export function rotuloDoCodigo(codigo: string): string {
@@ -194,8 +236,10 @@ function loteDaLinha(r: Record<string, unknown>): Lote {
 
 const COLUNAS_DO_LOTE = `l.*, (SELECT COUNT(*)::int FROM migracao_arquivos a WHERE a.lote_id = l.id) AS qtd_arquivos`;
 
-export async function listarLotes(exec: ExecutorSQL, tenantId: string): Promise<Lote[]> {
-  const { rows } = await exec.query(`SELECT ${COLUNAS_DO_LOTE} FROM migracao_lotes l WHERE l.tenant_id = $1 ORDER BY l.criado_em DESC`, [tenantId]);
+/** As mudanças da agência (sem as comparações do mês em paralelo, que têm a lista delas). */
+export async function listarLotes(exec: ExecutorSQL, tenantId: string, modo: 'mudanca' | 'paralelo' = 'mudanca'): Promise<Lote[]> {
+  const filtro = modo === 'paralelo' ? `COALESCE(l.opcoes->>'modo', '') = 'paralelo'` : `COALESCE(l.opcoes->>'modo', 'mudanca') <> 'paralelo'`;
+  const { rows } = await exec.query(`SELECT ${COLUNAS_DO_LOTE} FROM migracao_lotes l WHERE l.tenant_id = $1 AND ${filtro} ORDER BY l.criado_em DESC`, [tenantId]);
   return rows.map(loteDaLinha);
 }
 
@@ -212,6 +256,11 @@ function limparOpcoes(entrada: unknown): OpcoesDoLote {
   const o = (entrada && typeof entrada === 'object' ? entrada : {}) as Record<string, unknown>;
   const papel = o.papel_padrao === 'fornecedor' || o.papel_padrao === 'ambos' ? o.papel_padrao : 'cliente';
   const empresas = Array.isArray(o.empresas) ? o.empresas.map(e => texto(e)).filter(Boolean).slice(0, 50) : [];
+  if (o.modo === 'paralelo') {
+    const mes = texto(o.mes);
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes)) throw new ErroMudanca('Escolha o mês a comparar (mês e ano).', 400, 'MES_INVALIDO');
+    return { papel_padrao: papel, empresas, modo: 'paralelo', mes };
+  }
   return { papel_padrao: papel, empresas };
 }
 
@@ -235,18 +284,19 @@ export async function criarLote(
     const { rows } = await exec.query(`SELECT id FROM migracao_lotes WHERE tenant_id = $1 AND chave_criacao = $2`, [tenantId, chaveIdem]);
     if (rows.length) return lerLote(exec, tenantId, txt(rows[0].id));
   }
-  const { rows: aberto } = await exec.query(
-    `SELECT nome FROM migracao_lotes WHERE tenant_id = $1 AND status = ANY($2::text[]) LIMIT 1`, [tenantId, STATUS_ABERTOS],
+  const opcoes = limparOpcoes(entrada.opcoes);
+  const { rows: aberto } = opcoes.modo === 'paralelo' ? { rows: [] } : await exec.query(
+    `SELECT nome FROM migracao_lotes WHERE tenant_id = $1 AND status = ANY($2::text[]) AND ${SO_MUDANCA} LIMIT 1`, [tenantId, STATUS_ABERTOS],
   );
   if (aberto.length) {
     throw new ErroMudanca(`Já existe uma mudança em andamento ("${txt(aberto[0].nome)}"). Termine ou desfaça antes de começar outra.`, 409, 'LOTE_ABERTO');
   }
   const id = randomUUID();
-  const nome = texto(entrada.nome).slice(0, 120) || 'Mudança do sistema anterior';
+  const nome = texto(entrada.nome).slice(0, 120) || (opcoes.modo === 'paralelo' ? `Mês em paralelo ${opcoes.mes}` : 'Mudança do sistema anterior');
   await exec.query(
     `INSERT INTO migracao_lotes (id, tenant_id, nome, data_corte, opcoes, criado_por, criado_por_nome, chave_criacao)
      VALUES ($1, $2, $3, $4::date, $5::jsonb, $6, $7, $8)`,
-    [id, tenantId, nome, limparDataCorte(entrada.data_corte), JSON.stringify(limparOpcoes(entrada.opcoes)), quem.id, quem.nome, chaveIdem ?? null],
+    [id, tenantId, nome, limparDataCorte(entrada.data_corte), JSON.stringify(opcoes), quem.id, quem.nome, chaveIdem ?? null],
   );
   return lerLote(exec, tenantId, id);
 }
@@ -275,7 +325,7 @@ export async function atualizarLote(
   exigirEditavel(l);
   const nome = entrada.nome === undefined ? l.nome : texto(entrada.nome).slice(0, 120) || l.nome;
   const corte = entrada.data_corte === undefined ? l.data_corte : limparDataCorte(entrada.data_corte);
-  const opcoes = entrada.opcoes === undefined ? l.opcoes : limparOpcoes({ ...l.opcoes, ...(entrada.opcoes as object) });
+  const opcoes = entrada.opcoes === undefined ? l.opcoes : limparOpcoes({ ...l.opcoes, ...(entrada.opcoes as object), modo: l.opcoes.modo, ...(l.opcoes.modo === 'paralelo' ? { mes: (entrada.opcoes as { mes?: unknown })?.mes ?? l.opcoes.mes } : {}) });
   await exec.query(
     `UPDATE migracao_lotes SET nome = $3, data_corte = $4::date, opcoes = $5::jsonb, atualizado_em = NOW() WHERE tenant_id = $1 AND id = $2`,
     [tenantId, loteId, nome, corte, JSON.stringify(opcoes)],
@@ -379,7 +429,7 @@ export async function adicionarArquivo(
     const chave = abas.length > 1 ? `${hash}:${i}` : hash;
     const { rows: ja } = await exec.query(`SELECT nome FROM migracao_arquivos WHERE lote_id = $1 AND hash = $2`, [loteId, chave]);
     if (ja.length) throw new ErroMudanca(`Este arquivo já foi solto nesta mudança ("${txt(ja[0].nome)}").`, 409, 'ARQUIVO_REPETIDO');
-    const { lista, sugestao } = adivinharLista(prep.cabecalhos);
+    const { lista, sugestao } = listaPeloConteudo(prep.cabecalhos, prep.linhas);
     const reconhecida = sugestao.pontos >= 2 && sugestao.faltando.length === 0;
     const id = randomUUID();
     ordem += 1;
@@ -403,6 +453,23 @@ export async function adicionarArquivo(
   return out;
 }
 
+/**
+ * A lista pelo cabeçalho e, para as contas a pagar e a receber, pelo
+ * conteúdo: as contas liquidadas e as em aberto saem da MESMA lista do
+ * sistema anterior. Com a maior parte das linhas liquidada, o arquivo é o
+ * histórico ("Contas já liquidadas"); senão, as contas em aberto da v1.
+ */
+export function listaPeloConteudo(cabecalhos: string[], linhas: LinhaPreparada[]): { lista: ListaId; sugestao: ReturnType<typeof sugerirMapeamento> } {
+  const r = adivinharLista(cabecalhos);
+  if (r.lista !== 'titulos') return r;
+  const col = r.sugestao.mapeamento.liquidacao;
+  if (col === undefined) return r;
+  const dados = linhas.filter(l => l.tipo === 'dado');
+  const liquidadas = dados.filter(l => lerData(l.celulas[col]) !== null).length;
+  if (dados.length && liquidadas * 2 > dados.length) return { lista: 'liquidados', sugestao: sugerirMapeamento(cabecalhos, 'liquidados') };
+  return r;
+}
+
 async function gravarLinhas(exec: ExecutorSQL, tenantId: string, loteId: string, arquivoId: string, etapa: number, linhas: LinhaPreparada[]): Promise<void> {
   for (let i = 0; i < linhas.length; i += 1000) {
     const parte = linhas.slice(i, i + 1000).map(l => ({ linha: l.numero, tipo: l.tipo, celulas: l.celulas, agrupamento: l.agrupamento ?? null }));
@@ -417,7 +484,10 @@ async function gravarLinhas(exec: ExecutorSQL, tenantId: string, loteId: string,
 
 /** Menor e maior data da coluna principal (vencimento nos títulos, data nos saldos). */
 async function atualizarPeriodo(exec: ExecutorSQL, tenantId: string, arquivoId: string, lista: ListaId, mapeamento: Mapeamento): Promise<void> {
-  const campo = lista === 'titulos' ? 'vencimento' : lista === 'saldos' ? 'data' : null;
+  const campo: string | null = ({
+    titulos: 'vencimento', saldos: 'data', liquidados: 'liquidacao', movimentos: 'data', vendas: 'data_venda', faturas: 'vencimento',
+    notas: 'emissao', comissoes_pagas: 'data_venda',
+  } as Partial<Record<ListaId, string>>)[lista] ?? null;
   const col = campo ? mapeamento[campo] : undefined;
   let periodo: { de: string; ate: string } | null = null;
   if (col !== undefined) {
@@ -594,7 +664,81 @@ export async function carregarIndice(exec: ExecutorSQL, tenantId: string, loteId
     const quando = r.criado_em ? dataBR(new Date(r.criado_em as string).toISOString()) : '';
     indice.chavesImportadas.set(txt(r.chave), `"${txt(r.nome)}"${quando ? ` de ${quando}` : ''}`);
   }
+  await carregarIndiceDoHistorico(exec, tenantId, loteId, indice);
   return indice;
+}
+
+async function existeTabela(exec: ExecutorSQL, nome: string): Promise<boolean> {
+  const { rows } = await exec.query(`SELECT to_regclass($1) IS NOT NULL AS ok`, [`public.${nome}`]);
+  return Boolean(rows[0]?.ok);
+}
+
+/** O que o histórico (E7) precisa saber: vendas e registros trazidos, funções, baixas e os títulos deste lote. */
+async function carregarIndiceDoHistorico(exec: ExecutorSQL, tenantId: string, loteId: string | null, indice: IndiceDeCadastros): Promise<void> {
+  const doLote = new Map<string, Record<string, unknown>>();
+  if (loteId) {
+    const { rows } = await exec.query(
+      `SELECT tabela, registro_id, acao, dados FROM migracao_vinculos WHERE tenant_id = $1 AND lote_id = $2 AND NOT desfeito`, [tenantId, loteId],
+    );
+    for (const r of rows) doLote.set(`${txt(r.tabela)}:${txt(r.registro_id)}:${txt(r.acao)}`, (r.dados ?? {}) as Record<string, unknown>);
+  }
+  // Vendas trazidas (de qualquer mudança): pelo número que tinham lá.
+  const { rows: vendas } = await exec.query(
+    `SELECT id, data->>'numero_anterior' AS n FROM vendas_crm WHERE tenant_id = $1 AND COALESCE(data->>'numero_anterior', '') <> ''`, [tenantId],
+  );
+  for (const r of vendas) indice.vendas.push({ id: txt(r.id), numero_anterior: txt(r.n), doLote: doLote.has(`vendas_crm:${txt(r.id)}:criado`) });
+  // Registros do histórico já trazidos por OUTRA mudança: a mesma linha não entra duas vezes.
+  const { rows: chaves } = await exec.query(
+    `SELECT v.chave, l.nome FROM migracao_vinculos v JOIN migracao_lotes l ON l.id = v.lote_id
+      WHERE v.tenant_id = $1 AND v.chave IS NOT NULL AND NOT v.desfeito AND v.lote_id <> $2`,
+    [tenantId, loteId ?? ''],
+  );
+  for (const r of chaves) indice.registros.set(txt(r.chave), `"${txt(r.nome)}"`);
+  // Pessoas nas funções de comissão (metas).
+  if (await existeTabela(exec, 'comissao_pessoas')) {
+    const { rows } = await exec.query(
+      `SELECT p.id, p.pessoa_nome, COALESCE(f.nome, '') AS funcao FROM comissao_pessoas p
+         LEFT JOIN comissao_funcoes f ON f.tenant_id = p.tenant_id AND f.id = p.funcao_id WHERE p.tenant_id = $1`, [tenantId],
+    );
+    for (const r of rows) indice.pessoasFuncao.push({ id: txt(r.id), pessoa_nome: txt(r.pessoa_nome), funcao_nome: txt(r.funcao) });
+  }
+  // Baixas que movimentaram dinheiro (sem as estornadas): o extrato se liga a elas.
+  if (await existeTabela(exec, 'baixas')) {
+    const { rows } = await exec.query(
+      `SELECT b.id, COALESCE(b.conta_bancaria_id, '') AS conta, b.data_baixa::text AS data, b.caixa_centavos, b.titulo_tabela, b.titulo_id,
+              COALESCE(NULLIF(r.cliente_id, ''), r.data->>'cliente_id', NULLIF(p.fornecedor_id, ''), p.data->>'fornecedor_id', '') AS pessoa
+         FROM baixas b
+         LEFT JOIN contas_receber r ON b.titulo_tabela = 'contas_receber' AND r.tenant_id = b.tenant_id AND r.id = b.titulo_id
+         LEFT JOIN contas_pagar p ON b.titulo_tabela = 'contas_pagar' AND p.tenant_id = b.tenant_id AND p.id = b.titulo_id
+        WHERE b.tenant_id = $1 AND b.tipo = 'baixa'
+          AND NOT EXISTS (SELECT 1 FROM baixas e WHERE e.tenant_id = b.tenant_id AND e.estorna_baixa_id = b.id)`,
+      [tenantId],
+    );
+    for (const r of rows) {
+      const id = txt(r.id);
+      indice.baixas.push({
+        id, conta_id: txt(r.conta), data: txt(r.data).slice(0, 10), valor: Math.abs(Number(r.caixa_centavos ?? 0)),
+        entrada: txt(r.titulo_tabela) === 'contas_receber', pessoa_id: txt(r.pessoa), titulo_id: txt(r.titulo_id),
+        doLote: doLote.has(`baixas:${id}:historico`), ligada: doLote.has(`baixas:${id}:vinculado`),
+      });
+    }
+  }
+  // Títulos que este lote criou (para ligar à venda e ao reembolso).
+  if (loteId) {
+    for (const tabela of ['contas_receber', 'contas_pagar'] as const) {
+      const ids = [...doLote.keys()].filter(k => k.startsWith(`${tabela}:`) && k.endsWith(':criado')).map(k => k.split(':')[1]);
+      if (!ids.length) continue;
+      const { rows } = await exec.query(`SELECT id, data FROM ${tabela} WHERE tenant_id = $1 AND id = ANY($2::text[])`, [tenantId, ids]);
+      for (const r of rows) {
+        const d = (r.data ?? {}) as Record<string, unknown>;
+        const om = (d.origem_migracao ?? {}) as Record<string, unknown>;
+        indice.titulosDoLote.push({
+          tabela, id: txt(r.id), pessoa_id: txt(tabela === 'contas_receber' ? d.cliente_id : d.fornecedor_id), valor: paraCentavos(num(d.valor_final)),
+          venda: txt(om.venda), liquidado: ['RECEBIDO', 'PAGO', 'PARCIAL'].includes(txt(d.status)), reembolso: Boolean(d.reembolso_id),
+        });
+      }
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -656,13 +800,30 @@ async function montarItens(exec: ExecutorSQL, tenantId: string, lote: Lote, arqu
       });
     }
   }
+  // Vendas por produto (E7): as linhas com o mesmo Venda Nº formam UMA venda,
+  // montada na primeira delas (na ordem dos arquivos e das linhas).
+  const linhasDeVenda: Array<{ linha: number; dados: ProdutoVendidoLido; it: ItemDoPlano }> = [];
+  for (const it of itens) {
+    if (it.interp?.ok && it.interp.registro.lista === 'vendas') linhasDeVenda.push({ linha: it.linha, dados: it.interp.registro.dados, it });
+  }
+  if (linhasDeVenda.length) {
+    const vendas = agruparVendas(linhasDeVenda);
+    const cabeca = new Set<string>();
+    for (const l of linhasDeVenda) {
+      const chave = normalizar(l.dados.venda);
+      if (cabeca.has(chave)) continue;
+      cabeca.add(chave);
+      const reg = (l.it.interp as { ok: true; registro: RegistroLido }).registro;
+      if (reg.lista === 'vendas') reg.venda = vendas.get(chave);
+    }
+  }
   // Papéis pelo uso: quem aparece a receber é cliente; a pagar, fornecedor.
   const uso = new Map<string, Set<PapelSimples>>();
   const contasComSaldo = new Set<string>();
   for (const it of itens) {
     if (!it.interp?.ok) continue;
     const r = it.interp.registro;
-    if (r.lista === 'titulos') {
+    if (r.lista === 'titulos' || r.lista === 'liquidados') {
       const papel: PapelSimples = r.dados.movimento === 'receber' ? 'cliente' : 'fornecedor';
       for (const k of chavesDaPessoa(r.dados.pessoa, r.dados.razao_social, r.dados.documento_pessoa)) {
         const s = uso.get(k) ?? new Set<PapelSimples>();
@@ -717,6 +878,7 @@ function assinar(lote: Lote, arquivos: ArquivoDoLote[], resumo: ResumoDoEnsaio, 
 export async function ensaiarLote(exec: ExecutorSQL, tenantId: string, loteId: string): Promise<{ lote: Lote; resumo: ResumoDoEnsaio; assinatura: string }> {
   const lote = await lerLote(exec, tenantId, loteId, true);
   exigirEditavel(lote);
+  if (ehParalelo(lote)) throw new ErroMudanca('Este é um mês em paralelo: ele só compara, não grava. Use "Comparar".', 409, 'LOTE_DE_COMPARACAO');
   const arquivos = await listarArquivos(exec, tenantId, loteId);
   if (!arquivos.length) throw new ErroMudanca('Solte pelo menos um arquivo antes do ensaio.', 400, 'SEM_ARQUIVOS');
   const itens = await montarItens(exec, tenantId, lote, arquivos);
@@ -730,7 +892,9 @@ export async function ensaiarLote(exec: ExecutorSQL, tenantId: string, loteId: s
     por_lista: {}, total: contagemVazia(), motivos: [],
     titulos: { pagar: { quantidade: 0, centavos: 0 }, receber: { quantidade: 0, centavos: 0 } },
     saldos: { contas: 0, centavos: 0 }, pessoas_novas_dos_titulos: 0, problemas: [], avisos: [], pode_aplicar: false,
+    historico: resumoDoHistoricoVazio(),
   };
+  const h = resumo.historico!;
   const motivos = new Map<string, number>();
   const atualizacoes: Array<Record<string, unknown>> = [];
 
@@ -755,6 +919,16 @@ export async function ensaiarLote(exec: ExecutorSQL, tenantId: string, loteId: s
             const t = resumo.titulos[registro.dados.movimento];
             t.quantidade += 1; t.centavos += registro.dados.valor;
           }
+          if (registro.lista === 'liquidados' && d.resultado === 'criar') { h.liquidados.quantidade += 1; h.liquidados.centavos += registro.dados.baixa.valor; }
+          if (registro.lista === 'movimentos') { h.movimentos[d.resultado === 'criar' ? 'criar' : 'vincular'] += 1; if (d.resultado === 'criar') h.movimentos.centavos += registro.dados.valor; }
+          if (registro.lista === 'vendas' && d.resultado === 'criar' && registro.venda) {
+            h.vendas.quantidade += 1; h.vendas.produtos += registro.venda.produtos.length;
+            h.vendas.centavos += registro.venda.produtos.reduce((a, p) => a + (p.valor_total ?? 0), 0);
+          }
+          if ((registro.lista === 'faturas' || registro.lista === 'notas' || registro.lista === 'comissoes_pagas') && d.resultado === 'criar') h.registros[registro.lista] += 1;
+          if (registro.lista === 'metas' && d.resultado === 'criar') h.metas += 1;
+          if (registro.lista === 'reembolsos' && d.resultado === 'criar') { h.reembolsos.quantidade += 1; h.reembolsos.centavos += registro.dados.valor; }
+          if (registro.lista === 'creditos' && d.resultado === 'criar') { h.creditos.quantidade += 1; h.creditos.centavos += registro.dados.saldo; }
           if (registro.lista === 'saldos' || (registro.lista === 'contas' && registro.dados.saldo !== null && /Saldo de abertura/.test(d.motivo))) {
             resumo.saldos.contas += 1;
             resumo.saldos.centavos += registro.lista === 'saldos' ? registro.dados.saldo : (registro.dados.saldo ?? 0);
@@ -786,6 +960,10 @@ export async function ensaiarLote(exec: ExecutorSQL, tenantId: string, loteId: s
   }
   const temSaldo = itens.some(it => it.interp?.ok && (it.interp.registro.lista === 'saldos' || (it.interp.registro.lista === 'contas' && it.interp.registro.dados.saldo !== null)));
   if (temSaldo && !lote.data_corte) resumo.problemas.push({ codigo: 'SEM_DATA_CORTE', mensagem: 'Informe a data de corte: é nela que os saldos das contas valem.' });
+  const temHistorico = itens.some(it => it.interp?.ok && (it.interp.registro.lista === 'liquidados' || it.interp.registro.lista === 'movimentos'));
+  if (temHistorico && !lote.data_corte && !resumo.problemas.some(p => p.codigo === 'SEM_DATA_CORTE')) {
+    resumo.problemas.push({ codigo: 'SEM_DATA_CORTE', mensagem: 'Informe a data de corte: o histórico liquidado é o que aconteceu até ela.' });
+  }
   resumo.pode_aplicar = resumo.problemas.length === 0 && resumo.total.criar + resumo.total.vincular > 0;
 
   for (let i = 0; i < atualizacoes.length; i += 500) {
@@ -884,7 +1062,13 @@ export async function listarLinhas(
 // ---------------------------------------------------------------------------
 // Aplicação
 
-const TABELAS_GRAVAVEIS = new Set(['contas_bancarias', 'plano_contas', 'centros_custo', 'clientes', 'fornecedores_crm', 'contas_pagar', 'contas_receber']);
+const TABELAS_GRAVAVEIS = new Set([
+  'contas_bancarias', 'plano_contas', 'centros_custo', 'clientes', 'fornecedores_crm', 'contas_pagar', 'contas_receber',
+  // Histórico (E7)
+  'baixas', 'vendas_crm', 'migracao_historico', 'comissao_metas', 'reembolsos', 'creditos_cliente',
+]);
+/** Tabelas com a coluna `data` (JSONB): o retrato é o md5 dela. As outras guardam o estado em `dados` do vínculo. */
+const TABELAS_COM_RETRATO = new Set(['contas_bancarias', 'plano_contas', 'centros_custo', 'clientes', 'fornecedores_crm', 'contas_pagar', 'contas_receber', 'vendas_crm']);
 
 function origemParaGravar(o: OrigemDaLinha) {
   return { lote_id: o.lote_id, arquivo_id: o.arquivo_id, arquivo: o.arquivo, linha: o.linha };
@@ -892,16 +1076,18 @@ function origemParaGravar(o: OrigemDaLinha) {
 
 /** Gravador de verdade: grava no financeiro e guarda o vínculo (com o retrato) de cada registro. */
 export function gravadorDoBanco(exec: ExecutorSQL, tenantId: string, dataCorte: string | null): Gravador {
-  const vinculo = async (tabela: string, id: string, acao: 'criado' | 'vinculado' | 'saldo', o: OrigemDaLinha, chave?: string | null, dados?: Record<string, unknown>) => {
+  const vinculo = async (tabela: string, id: string, acao: AcaoDoVinculo, o: OrigemDaLinha, chave?: string | null, dados?: Record<string, unknown>) => {
     if (!TABELAS_GRAVAVEIS.has(tabela)) throw new Error(`tabela inesperada: ${tabela}`);
+    const hash = TABELAS_COM_RETRATO.has(tabela) ? `(SELECT md5(data::text) FROM ${tabela} WHERE tenant_id = $1 AND id = $5)` : 'NULL';
     await exec.query(
       `INSERT INTO migracao_vinculos (tenant_id, lote_id, etapa, tabela, registro_id, acao, arquivo_id, linha, chave, hash, dados)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, (SELECT md5(data::text) FROM ${tabela} WHERE tenant_id = $1 AND id = $5), $10::jsonb)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, ${hash}, $10::jsonb)
        ON CONFLICT (lote_id, tabela, registro_id, acao) DO NOTHING`,
       [tenantId, o.lote_id, o.etapa, tabela, id, acao, o.arquivo_id, o.linha, chave ?? null, JSON.stringify(dados ?? {})],
     );
   };
   const retrato = async (tabela: string, id: string, loteId: string) => {
+    if (!TABELAS_COM_RETRATO.has(tabela)) return;
     await exec.query(
       `UPDATE migracao_vinculos SET hash = (SELECT md5(data::text) FROM ${tabela} WHERE tenant_id = $1 AND id = $3)
         WHERE tenant_id = $1 AND lote_id = $2 AND tabela = '${tabela}' AND registro_id = $3 AND acao IN ('criado', 'saldo')`,
@@ -910,6 +1096,7 @@ export function gravadorDoBanco(exec: ExecutorSQL, tenantId: string, dataCorte: 
   };
   return {
     simulado: false,
+    ...gravadorDoHistorico(exec, tenantId, vinculo, retrato, origemParaGravar),
     async criarConta(d, o) {
       const id = randomUUID();
       const data = {
@@ -1053,6 +1240,7 @@ export function gravadorDoBanco(exec: ExecutorSQL, tenantId: string, dataCorte: 
 /** Começa a aplicar: confere a assinatura do ensaio e põe o lote na fila. Roda numa transação. */
 export async function iniciarAplicacao(exec: ExecutorSQL, tenantId: string, loteId: string, assinatura: unknown): Promise<Lote> {
   const lote = await lerLote(exec, tenantId, loteId, true);
+  if (ehParalelo(lote)) throw new ErroMudanca('Este é um mês em paralelo: ele só compara, não grava.', 409, 'LOTE_DE_COMPARACAO');
   if (lote.status === 'rascunho') throw new ErroMudanca('Faça o ensaio antes de aplicar.', 409, 'ENSAIO_NECESSARIO');
   if (lote.status !== 'ensaiado') throw new ErroMudanca('Esta mudança já foi aplicada.', 409, 'JA_APLICADO');
   if (!assinatura || assinatura !== lote.assinatura) {

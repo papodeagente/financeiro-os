@@ -695,7 +695,7 @@ export async function previaDasContas(exec: ExecutorSQL, tenantId: string, venda
 export async function salvarVenda(
   exec: ExecutorSQL, tenantId: string, entrada: Venda,
   opts: {
-    usuario: UsuarioDaAcao | null; origem: 'manual' | 'crm'; cabecalho?: Record<string, unknown>; evento?: TipoDeEventoDaVenda; detalheDoEvento?: Record<string, unknown>;
+    usuario: UsuarioDaAcao | null; origem: 'manual' | 'crm' | 'mudanca'; cabecalho?: Record<string, unknown>; evento?: TipoDeEventoDaVenda; detalheDoEvento?: Record<string, unknown>;
     /** Só o cancelamento (parte D): grava mesmo com a venda fechada, sem reabri-la. */
     ignorarFechamento?: boolean;
     /** Quem chama registra o próprio evento (o cancelamento, com motivo e resumo). */
@@ -704,11 +704,13 @@ export async function salvarVenda(
 ): Promise<ResultadoDaGravacao> {
   if (!tenantId) throw new ErroVenda('SEM_EMPRESA', 'Empresa não identificada.', 400);
   if (!entrada.id) throw new ErroVenda('SEM_ID', 'A venda precisa de id.', 400);
-  let venda: Venda = { ...entrada, origem: opts.origem === 'crm' ? 'crm' : entrada.origem };
+  let venda: Venda = { ...entrada, origem: opts.origem === 'crm' || opts.origem === 'mudanca' ? opts.origem : entrada.origem };
   await travarVenda(exec, tenantId, venda.id);
   const { rows: cabRows } = await exec.query(`SELECT data FROM vendas_crm WHERE tenant_id = $1 AND id = $2`, [tenantId, venda.id]);
   const existente = (cabRows[0]?.data ?? null) as Record<string, unknown> | null;
-  const { rows: modRows } = await exec.query(`SELECT situacao, numero FROM vendas_modelo WHERE tenant_id = $1 AND venda_id = $2`, [tenantId, venda.id]);
+  const { rows: modRows } = await exec.query(`SELECT situacao, numero, origem FROM vendas_modelo WHERE tenant_id = $1 AND venda_id = $2`, [tenantId, venda.id]);
+  // Venda trazida pela mudança de sistema (E7): continua "mudança" para sempre.
+  if (txt(modRows[0]?.origem) === 'mudanca') venda = { ...venda, origem: 'mudanca' };
   const fechada = txt(modRows[0]?.situacao) === 'FECHADA';
   if (fechada && !opts.ignorarFechamento) {
     throw new ErroVenda('VENDA_FECHADA', 'A venda está fechada. Reabra a venda para mudar produtos ou pagamentos.', 409);
@@ -780,16 +782,23 @@ export async function salvarVenda(
     );
   }
 
-  const regerado = await regerarContasDaVenda(exec, tenantId, venda.id, contas);
-  const avisos = [...contas.avisos, ...regerado.avisos];
-  await sincronizarPendencias(exec, tenantId, venda.id, contas.pendencias, avisos, comCarteira);
+  // Venda trazida do sistema anterior (E7): as contas dela vieram das listas de
+  // contas (em aberto e liquidadas) e ficam ligadas a ela. Gerar de novo
+  // contaria o mesmo dinheiro duas vezes: as contas não nascem desta venda,
+  // nem agora nem quando ela for editada ou cancelada aqui.
+  const contasDaMudanca = venda.origem === 'mudanca';
+  const regerado = contasDaMudanca
+    ? { contas: { criadas: 0, atualizadas: 0, removidas: 0, preservadas: 0 }, avisos: [] as AvisoDaVenda[] }
+    : await regerarContasDaVenda(exec, tenantId, venda.id, contas);
+  const avisos = contasDaMudanca ? [] as AvisoDaVenda[] : [...contas.avisos, ...regerado.avisos];
+  if (!contasDaMudanca) await sincronizarPendencias(exec, tenantId, venda.id, contas.pendencias, avisos, comCarteira);
   // Crédito do cliente (parte D): a carteira paga o que a forma pede, ou devolve.
-  if (comCarteira) {
+  if (comCarteira && !contasDaMudanca) {
     const c = await sincronizarCreditosDaVenda(exec, tenantId, venda.id, opts.usuario ?? { id: '', nome: opts.origem === 'crm' ? 'CRM' : '' });
     if (c.faltando > 0) avisos.push({ codigo: 'CREDITO_INSUFICIENTE', valor_centavos: c.faltando, mensagem: `O cliente não tem crédito disponível para cobrir ${deCentavos(c.faltando).toFixed(2)} pagos com "Crédito do cliente". A pendência continua aberta até o crédito existir ou a forma mudar.` });
   }
   // Faturas ao cliente (E5, parte B): a forma Faturar entra na fatura pela regra do pagante.
-  await sincronizarFaturasDaVenda(exec, tenantId, venda.id, { avisos, venda_numero: venda.numero });
+  if (!contasDaMudanca) await sincronizarFaturasDaVenda(exec, tenantId, venda.id, { avisos, venda_numero: venda.numero });
   if (!opts.semEvento) await registrarEventoDaVenda(exec, tenantId, venda.id, opts.evento ?? (nova ? 'criada' : 'alterada'), {
     usuario: opts.usuario,
     detalhe: { ...(opts.detalheDoEvento ?? {}), contas: regerado.contas, total_cliente_centavos: totaisDaVenda(venda).valor_cliente, avisos: avisos.map(a => a.codigo) },

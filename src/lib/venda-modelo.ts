@@ -276,7 +276,8 @@ export interface PagamentoDaVenda {
 // ============================================================
 
 export type SituacaoDaVenda = 'ABERTA' | 'FECHADA';
-export type OrigemDaVenda = 'manual' | 'crm';
+/** mudanca = trazida do sistema anterior pela mudança de sistema (E7): as contas dela vieram das listas de contas. */
+export type OrigemDaVenda = 'manual' | 'crm' | 'mudanca';
 
 export interface Venda {
   /** Mesmo id da linha em vendas_crm (o cabeçalho que as telas antigas leem). */
@@ -492,7 +493,7 @@ export function normalizarVenda(v: unknown): { venda: Venda; erros: ErroDaVenda[
       intermediario: normalizarParte(o.intermediario),
       grupo_id: txt(o.grupo_id, 120) || null,
       centro_custo: txt(o.centro_custo, 120),
-      origem: txt(o.origem) === 'crm' ? 'crm' : 'manual',
+      origem: txt(o.origem) === 'crm' ? 'crm' : txt(o.origem) === 'mudanca' ? 'mudanca' : 'manual',
       situacao,
       produtos,
       pagamentos,
