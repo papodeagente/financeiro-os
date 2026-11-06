@@ -950,6 +950,15 @@ export async function processarEvento(
   if (depoisDaCobranca) {
     await depoisDaCobranca().catch(e => console.error('[cobranca] depois do aviso:', e instanceof Error ? e.message : e));
   }
+  // Conexão Asaas unificada (E7, 06/11/2026): aviso de cobrança do CRM
+  // (referência p2;/c1;) vai também ao CRM, quando a agência unificou. O
+  // caminho do aviso aqui é o de sempre; o repasse é depois do COMMIT, só do
+  // aviso novo (o repetido parou acima) e nunca derruba o aviso.
+  if (resultado.processado && plataforma === 'asaas') {
+    await import('../asaas-unificado/servidor')
+      .then(m => m.repassarAvisoAoCrm(tenantId, plataforma, evento))
+      .catch(e => console.error('[asaas-unificado] repasse ao CRM:', e instanceof Error ? e.message : e));
+  }
   return resultado;
 }
 

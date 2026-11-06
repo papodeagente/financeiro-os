@@ -9,6 +9,7 @@ import { PageHeader } from '@/components/fin/PageHeader';
 import { DataState } from '@/components/fin/DataState';
 import { toast } from '@/lib/toast';
 import { DescontosPadrao } from './DescontosPadrao';
+import { UnificacaoAsaas } from './UnificacaoAsaas';
 
 interface CampoCred { chave: string; rotulo: string; tipo: string; obrigatorio: boolean; ajuda: string }
 interface Plataforma { id: string; nome: string; campos: CampoCred[] }
@@ -319,6 +320,9 @@ export default function PlataformasPage() {
             </section>
           );
         })}
+
+        {/* Asaas no CRM e aqui: o assistente de unificação (E7). Só aparece quando há o que decidir. */}
+        <UnificacaoAsaas />
 
         <DescontosPadrao />
 
