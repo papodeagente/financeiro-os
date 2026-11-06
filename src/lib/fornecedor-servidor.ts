@@ -112,7 +112,7 @@ export async function vendasEmLote(exec: ExecutorSQL, tenantId: string, ids: str
       id: vid, numero: txt(m.numero), data_venda: dataISO(m.data_venda),
       cliente: m.cliente, vendedor: m.vendedor, intermediario: m.intermediario,
       grupo_id: m.grupo_id, centro_custo: m.centro_custo, origem: m.origem, situacao: m.situacao,
-      observacoes: m.observacoes, crm_venda_id: m.crm_venda_id,
+      observacoes: m.observacoes, crm_venda_id: m.crm_venda_id, operacao_propria: m.operacao_propria === true, produtos_removidos: m.produtos_removidos,
       produtos: ps.filter(p => txt(p.venda_id) === vid).map(p => ({
         id: p.id, tipo: p.tipo, descricao: p.descricao,
         fornecedor: parte(p.fornecedor_id, p.fornecedor_nome, p.fornecedor_externo),
@@ -128,11 +128,11 @@ export async function vendasEmLote(exec: ExecutorSQL, tenantId: string, ids: str
         })),
         componentes: cs.filter(c => txt(c.venda_id) === vid && c.produto_id === p.id).map(c => ({
           id: c.id, tipo: c.tipo, valor_centavos: Number(c.valor_centavos), percentual: c.percentual === null ? null : Number(c.percentual),
-          passageiro_id: c.passageiro_id, descricao: c.descricao,
+          passageiro_id: c.passageiro_id, descricao: c.descricao, base: c.base,
         })),
       })),
       pagamentos: gs.filter(g => txt(g.venda_id) === vid).map(g => ({
-        id: g.id, forma: g.forma, valor_centavos: Number(g.valor_centavos), parcelas: g.parcelas,
+        ...((g.dados ?? {}) as Record<string, unknown>), id: g.id, forma: g.forma, valor_centavos: Number(g.valor_centavos), parcelas: g.parcelas,
         primeiro_vencimento: dataISO(g.primeiro_vencimento), intervalo_dias: g.intervalo_dias,
         pagante: g.pagante, fornecedor: g.fornecedor, conta_bancaria_id: g.conta_bancaria_id,
         cartao_tipo: g.cartao_tipo, detalhe: g.detalhe, venda_origem_credito: g.venda_origem_credito,

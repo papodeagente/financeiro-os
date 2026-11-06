@@ -30,7 +30,7 @@ import {
 } from './cancelamento';
 import {
   ErroVenda, carregarVenda, contasDaVendaNoBanco, ladoDaConta, lerConfigVenda, registrarEventoDaVenda, salvarVenda,
-  type TipoDeEventoDaVenda, type UsuarioDaAcao,
+  type UsuarioDaAcao,
 } from './venda-servidor';
 import { cancelarCreditosDaOrigem, creditoNaoUsadoPorPagamento, criarCredito, saldoDisponivel } from './credito-cliente-servidor';
 import { acertarSituacoes, cancelarReembolso, criarReembolso } from './reembolsos-servidor';
@@ -700,7 +700,7 @@ export async function executarDesfazerCancelamento(
     produtos: desfeito.produtos, pagamentos: desfeito.pagamentos, mudancas, reembolsos_cancelados, creditos_cancelados, comissoes,
     receita_antes_centavos: receitaAntes, receita_depois_centavos: receitaDepois, venda_reativada, avisos, assinatura,
   };
-  await registrarEventoDaVenda(exec, tenantId, vendaId, 'cancelamento_desfeito' as unknown as TipoDeEventoDaVenda, {
+  await registrarEventoDaVenda(exec, tenantId, vendaId, 'cancelamento_desfeito', {
     usuario, motivo,
     detalhe: {
       cancelamento_id: cancelamentoId, data_do_cancelamento: alvo.data, contas: gravacao.contas, contas_mudaram: mudancas.length,
