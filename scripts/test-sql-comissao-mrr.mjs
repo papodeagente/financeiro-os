@@ -11,7 +11,10 @@
  *   (d) gerar de novo: igual não muda nada; calculada é regravada; aprovada
  *       com valor diferente não é reescrita e avisa; zerada é cancelada com a
  *       conta; quem sumiu da apuração tem a linha zerada;
- *   (e) uma empresa nunca enxerga nem grava a meta ou a comissão da outra.
+ *   (e) uma empresa nunca enxerga nem grava a meta ou a comissão da outra;
+ *   (f) D31 (05/11/2026): com a comissão vindo do CRM (o padrão da conta),
+ *       gerar por faixas recusa sem gravar nada. Os cenários (c) e (d) rodam
+ *       com a fonte trocada para "mrr" (tenants.data.fonte_da_comissao).
  *
  * Uso: node --experimental-strip-types --no-warnings scripts/test-sql-comissao-mrr.mjs
  */
@@ -50,7 +53,7 @@ const { perfilDaConta, exigirEcossistema } = await import('../src/lib/perfil-da-
 const { gravarMetaMrr, listarMetasMrr, apagarMetaMrr, copiarMetasDoMes, apurarMes, gerarComissoesMrr } = await import('../src/lib/comissao-mrr-servidor.ts');
 
 const ENTUR = 't-entur', AGENCIA = 't-agencia', MES = '2026-11';
-await query(`INSERT INTO tenants (id, numero, data) VALUES ($1, 1, '{"perfil":"ecossistema"}'), ($2, 2, '{}')`, [ENTUR, AGENCIA]);
+await query(`INSERT INTO tenants (id, numero, data) VALUES ($1, 1, '{"perfil":"ecossistema","fonte_da_comissao":"mrr"}'), ($2, 2, '{}')`, [ENTUR, AGENCIA]);
 for (const [id, tenant, nome, email, ext, plano] of [
   ['u-karen', ENTUR, 'Karen', 'karen@entur.com.br', 'crm_user_7', 'p-mrr'],
   ['u-joao', ENTUR, 'João', 'joao@entur.com.br', 'crm_user_8', 'p-mrr'],
@@ -150,6 +153,16 @@ console.log('\n--- (e) uma empresa, as suas comissões ---');
 eq([(await comissoes(AGENCIA)).length, (await contas(AGENCIA)).length], [0, 0], 'nada da comissão por MRR cai na agência (mesmo com vendedora de external_id igual)');
 const apAgencia = await apurarMes(exec, AGENCIA, MES, vendasNov);
 eq([apAgencia.vendedores.length, apAgencia.total.mrr_nas_metas], [0, 0], 'a apuração da agência não usa as metas da Entur');
+
+// ══════════════════════════════════════════════════════════════════════
+console.log('\n--- (f) a comissão vem do CRM: as faixas não geram ---');
+await query(`UPDATE tenants SET data = data - 'fonte_da_comissao' WHERE id = $1`, [ENTUR]);
+const antes = JSON.stringify(await comissoes());
+let recusa = null;
+try { await gerarComissoesMrr(exec, ENTUR, await apurarMes(exec, ENTUR, MES, vendasNov), '2026-11-20'); } catch (e) { recusa = e; }
+eq([recusa?.name, recusa?.status, recusa?.message], ['ComissaoVemDoCrm', 409, 'A comissão agora vem do CRM (Área Comercial). As metas de MRR seguem só para acompanhamento.'], 'sem a fonte gravada (o padrão é o CRM), gerar recusa com o texto combinado');
+eq(JSON.stringify(await comissoes()), antes, 'e nada é gravado');
+eq((await listarMetasMrr(exec, ENTUR, MES)).length, 2, 'as metas seguem lá, para acompanhamento');
 
 console.log(`\n${total - falhas}/${total} testes da comissão por MRR (banco) passaram`);
 if (falhas > 0) process.exit(1);

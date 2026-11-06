@@ -2,6 +2,8 @@ import { apurarMes, gerarComissoesMrr, listarMetasMrr } from '@/lib/comissao-mrr
 import { consultarMrrVendido, upsertVendedorByExternalId } from '@/lib/crm-integration';
 import { contextoDoEcossistema, respostaJson as json } from '@/lib/rota-do-ecossistema';
 import { hojeISO } from '@/lib/money';
+import { AVISO_COMISSAO_VEM_DO_CRM, ComissaoVemDoCrm } from '@/lib/comissao-do-crm';
+import { fonteDaComissao } from '@/lib/comissao-do-crm-servidor';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +14,10 @@ const MES = /^\d{4}-(0[1-9]|1[0-2])$/;
  * vendido, a apuração (meta × realizado × faixa) e as comissões já gravadas.
  * Sem resposta do CRM, a apuração não sai: comissão nunca é calculada sobre
  * número que não veio.
+ *
+ * `fonte` diz de onde vem a comissão da conta (D31, 05/11/2026): 'crm', o
+ * padrão, faz a tela mostrar o aviso, esconder o "Gerar" e somar os extratos
+ * do mês que chegaram do CRM (`comissoes_crm`).
  */
 export async function GET(req: Request) {
   try {
@@ -19,11 +25,18 @@ export async function GET(req: Request) {
     if ('response' in ctx) return ctx.response;
     const mes = new URL(req.url).searchParams.get('mes') ?? '';
     if (!MES.test(mes)) return json({ error: 'Mês de referência inválido.' }, 400);
-    const [metas, crm, gravadas] = await Promise.all([
+    const [metas, crm, gravadas, fonte, doCrm] = await Promise.all([
       listarMetasMrr(ctx.exec, ctx.tenantId, mes),
       consultarMrrVendido(ctx.tenantId, mes),
       ctx.exec.query(
         `SELECT id, status, data FROM comissoes WHERE tenant_id = $1 AND data->>'origem' = 'mrr' AND data->'mrr'->>'mes' = $2`,
+        [ctx.tenantId, mes],
+      ),
+      fonteDaComissao(ctx.exec, ctx.tenantId),
+      ctx.exec.query(
+        `SELECT id, status, data->>'vendedor_nome' AS vendedor_nome, data->>'valor_comissao' AS valor_comissao
+           FROM comissoes WHERE tenant_id = $1 AND data->>'origem' = 'crm' AND data->'crm'->>'competencia' = $2
+          ORDER BY id`,
         [ctx.tenantId, mes],
       ),
     ]);
@@ -31,6 +44,8 @@ export async function GET(req: Request) {
     return json({
       mes, metas, crm, apuracao,
       comissoes: gravadas.rows.map(r => ({ ...(r.data as object), id: r.id, status: r.status })),
+      fonte,
+      comissoes_crm: doCrm.rows.map(r => ({ id: String(r.id), status: String(r.status), vendedor_nome: String(r.vendedor_nome ?? ''), valor_comissao: Number(r.valor_comissao) || 0 })),
     });
   } catch (error) {
     console.error('[comissao-mrr] Falha ao montar:', error instanceof Error ? error.message : 'Erro');
@@ -48,6 +63,8 @@ export async function POST(req: Request) {
     const mes = String(corpo?.mes ?? '');
     if (corpo?.acao !== 'gerar' || !MES.test(mes)) return json({ error: 'Pedido inválido.' }, 400);
     if (mes > hojeISO().slice(0, 7)) return json({ error: 'O mês ainda não começou.' }, 400);
+    // D31: com a comissão vindo do CRM, as faixas não geram comissão.
+    if ((await fonteDaComissao(ctx.exec, ctx.tenantId)) === 'crm') return json({ error: AVISO_COMISSAO_VEM_DO_CRM }, 409);
     const crm = await consultarMrrVendido(ctx.tenantId, mes);
     if (crm.situacao !== 'ok') return json({ error: `Sem o MRR vendido do CRM não há comissão: ${crm.detalhe}` }, 409);
 
@@ -61,6 +78,7 @@ export async function POST(req: Request) {
     const r = await gerarComissoesMrr(ctx.exec, ctx.tenantId, apuracao, hojeISO());
     return json(r);
   } catch (error) {
+    if (error instanceof ComissaoVemDoCrm) return json({ error: error.message }, error.status);
     console.error('[comissao-mrr] Falha ao gerar:', error instanceof Error ? error.message : 'Erro');
     return json({ error: 'Não foi possível gerar a comissão por MRR.' }, 500);
   }

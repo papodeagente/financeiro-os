@@ -14,6 +14,7 @@ import {
   type ApuracaoMrr, type MetaMrr, type PlanoComFaixasDeMrr, type VendedorDoFinanceiro,
 } from './comissao-mrr';
 import type { VendaMrr } from './mrr-vendido';
+import { exigirComissaoPorFaixas } from './comissao-do-crm-servidor';
 
 const MES = /^\d{4}-(0[1-9]|1[0-2])$/;
 
@@ -161,6 +162,10 @@ export interface ResultadoDaGeracao {
  * Grava a comissão de MRR do mês de cada vendedor (uma linha por vendedor e
  * mês) e programa a conta a pagar pelo mesmo gancho de toda comissão.
  * Linha já aprovada ou paga não é reescrita (decidirComissaoMrr).
+ *
+ * D31 (05/11/2026): enquanto a fonte da comissão da conta for o CRM (o
+ * padrão), recusa com ComissaoVemDoCrm, sem gravar nada: a comissão chega
+ * pronta da Área Comercial (comissao-do-crm.ts) e a meta é acompanhamento.
  */
 export async function gerarComissoesMrr(
   exec: ExecutorSQL,
@@ -168,6 +173,7 @@ export async function gerarComissoesMrr(
   apuracao: ApuracaoMrr,
   hoje?: string,
 ): Promise<ResultadoDaGeracao> {
+  await exigirComissaoPorFaixas(exec, tenantId);
   const out: ResultadoDaGeracao = { gravadas: 0, canceladas: 0, sem_mudanca: 0, avisos: [] };
   const ids = apuracao.vendedores.map(v => idDaComissaoMrr(v.vendedor_id, apuracao.mes));
   // Quem tinha comissão gravada no mês e saiu da apuração (sem venda e sem meta) também precisa ser decidido.

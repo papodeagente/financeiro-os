@@ -51,6 +51,8 @@ import {
 import { lerFichaDoCrm } from './ficha-do-cliente';
 import { lerMetricasDoCrm, TIPO_METRICAS_COMERCIAIS, type ComercialDoCrm } from './metricas-comerciais';
 import { lerMrrVendido, TIPO_MRR_VENDIDO, type MrrDoCrm } from './mrr-vendido';
+import { TIPO_COMISSAO_DO_MES } from './comissao-do-crm';
+import { receberComissaoDoMes, respostaDaComissaoRepetida, type RespostaDaComissaoDoMes } from './comissao-do-crm-servidor';
 import { motivoDaRecusa } from './crm-do-ecossistema';
 import { perfilDosDados } from './perfil-da-conta';
 
@@ -1132,7 +1134,7 @@ export async function processarEventoCRM(
   payload: Record<string, unknown>,
   idempotency_key: string,
   tenantId: string,
-): Promise<{ processado: boolean; acao: string; erro?: string }> {
+): Promise<{ processado: boolean; acao: string; erro?: string; resposta?: RespostaDaComissaoDoMes }> {
   // O lock consultivo é adquirido e liberado dentro da seção crítica, no
   // próprio finally dela. Não existe mais nada a soltar no finally externo.
   try {
@@ -1263,11 +1265,20 @@ export async function processarEventoCRM(
       // conexão sempre volta para o pool com o lock liberado.
       await soltarLock();
     }
-    if (duplicata) return duplicata;
+    if (duplicata) {
+      // COMISSAO_DO_MES repetido e já concluído: o CRM recebe de novo o corpo
+      // da primeira vez, como "já existia" (comissao-do-crm-servidor.ts).
+      if (tipo === TIPO_COMISSAO_DO_MES && duplicata.processado) {
+        return { ...duplicata, resposta: await respostaDaComissaoRepetida(tenantId, idempotency_key) };
+      }
+      return duplicata;
+    }
 
     let acao = '';
     /** Fornecedores cujo cadastro o CRM precisa receber de volta (o vínculo). */
     const ecosDeFornecedor: string[] = [];
+    /** Corpo e status que a rota devolve ao CRM, para o evento que responde no corpo. */
+    let resposta: RespostaDaComissaoDoMes | undefined;
 
     switch (tipo) {
       case 'VENDA_FECHADA': {
@@ -2252,6 +2263,36 @@ export async function processarEventoCRM(
         break;
       }
 
+      // Comissão do mês da equipe comercial da Entur, apurada na Área Comercial
+      // do CRM (05/11/2026, D31 a D40). Só na conta do ecossistema. Responde no
+      // corpo: criada, atualizada, já existia ou recusada com o motivo
+      // (comissao-do-crm-servidor.ts; contrato em docs/integracao-crm.md).
+      case TIPO_COMISSAO_DO_MES: {
+        const r = await receberComissaoDoMes(tenantId, payload, idempotency_key, {
+          pessoa: (externalId, dados) => upsertVendedorByExternalId(externalId, dados, tenantId),
+        });
+        if (!r.corpo.ok) {
+          // Recusa não conclui o evento: fica como ERRO, com o motivo, e a
+          // mesma entrega é avaliada de novo quando voltar (a conta pode ter
+          // virado ecossistema, o extrato pode ter sido corrigido).
+          await pool.query(
+            `UPDATE crm_eventos_entrada
+                SET status = 'ERRO', erro = $2, data = COALESCE(data, '{}'::jsonb) || jsonb_build_object('resposta', $3::jsonb)
+              WHERE id = $1 AND tenant_id = $4`,
+            [id, `Recusado: ${r.corpo.motivo}`, JSON.stringify(r), tenantId],
+          );
+          return { processado: false, acao: `${TIPO_COMISSAO_DO_MES} recusado: ${r.corpo.motivo}`, erro: r.corpo.motivo, resposta: r };
+        }
+        await pool.query(
+          `UPDATE crm_eventos_entrada SET data = COALESCE(data, '{}'::jsonb) || jsonb_build_object('resposta', $2::jsonb)
+            WHERE id = $1 AND tenant_id = $3`,
+          [id, JSON.stringify(r), tenantId],
+        );
+        resposta = r;
+        acao = `comissão ${r.corpo.comissaoId} ${r.corpo.situacao}${r.corpo.contaPagarId ? `, conta a pagar ${r.corpo.contaPagarId}` : ''}`;
+        break;
+      }
+
       default:
         acao = `tipo desconhecido: ${tipo}`;
     }
@@ -2270,7 +2311,7 @@ export async function processarEventoCRM(
     // Depois de gravar: o eco é um evento novo, e o CRM o processa sozinho.
     for (const fornecedorId of ecosDeFornecedor) void enviarFornecedorAoCrm(tenantId, fornecedorId);
 
-    return { processado: true, acao };
+    return { processado: true, acao, ...(resposta ? { resposta } : {}) };
   } catch (e) {
     const erro = e instanceof Error ? e.message : 'Erro desconhecido';
     // Marca ERRO: é o que autoriza o reprocessamento na próxima entrega.
@@ -2515,6 +2556,74 @@ export async function disparaEventosPendentes(tenantId: string): Promise<{
   } catch {
     return result;
   }
+}
+
+// ──────────────────────────────────────────
+// enviarEventosDaFila: um tipo de evento da fila de saída
+// --------------------------------------------------------------------
+// O agendador manda por aqui os avisos COMISSAO_PAGA (05/11/2026,
+// comissao-do-crm-servidor.ts): pendentes e falhas com a nova tentativa
+// vencida, só do tipo pedido. Os outros eventos pendentes da conta não
+// saem por aqui; seguem esperando o "Disparar pendentes" da tela.
+// ──────────────────────────────────────────
+
+export async function enviarEventosDaFila(
+  tenantId: string,
+  tipo: string,
+  limite = 50,
+): Promise<{ enviados: number; falhas: number; parado?: string }> {
+  const result: { enviados: number; falhas: number; parado?: string } = { enviados: 0, falhas: 0 };
+  if (!pool || !tenantId || !tipo) return result;
+  const saidaDesligada = nadaSai();
+  if (saidaDesligada) return { ...result, parado: saidaDesligada };
+  await initDB();
+
+  const config = await getCrmConfig(tenantId);
+  if (!config || !config.ativo || !config.webhook_url_crm) return { ...result, parado: config?.recusada || 'integração com o CRM desligada' };
+  if (config.circuit_breaker_status === 'aberto') return { ...result, parado: 'disjuntor da integração aberto' };
+
+  const { rows } = await pool.query(
+    `SELECT id, tipo, tentativas, data FROM crm_eventos_saida
+      WHERE tenant_id = $1 AND tipo = $2 AND status IN ('PENDENTE', 'FALHA')
+        AND (proxima_tentativa IS NULL OR proxima_tentativa <= NOW())
+      ORDER BY created_at ASC, id ASC LIMIT $3`,
+    [tenantId, tipo, limite],
+  );
+  for (const row of rows) {
+    const bodyStr = JSON.stringify(row.data);
+    const carimbo = new Date().toISOString();
+    const start = Date.now();
+    try {
+      const res = await fetch(config.webhook_url_crm, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-entur-event': String(row.tipo),
+          'x-entur-signature': hmacSign(bodyStr, config.api_key_crm || ''),
+          'x-entur-signature-ts': hmacSign(`${carimbo}.${bodyStr}`, config.api_key_crm || ''),
+          'x-entur-event-id': String(row.id),
+          'x-entur-timestamp': carimbo,
+        },
+        body: bodyStr,
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await pool.query(
+        `UPDATE crm_eventos_saida SET status = 'ENVIADO', latencia_ms = $2, updated_at = NOW() WHERE id = $1 AND tenant_id = $3`,
+        [row.id, Date.now() - start, tenantId],
+      );
+      result.enviados++;
+    } catch {
+      const tentativas = (Number(row.tentativas) || 0) + 1;
+      await pool.query(
+        `UPDATE crm_eventos_saida SET status = 'FALHA', tentativas = $2, proxima_tentativa = $3, updated_at = NOW()
+          WHERE id = $1 AND tenant_id = $4`,
+        [row.id, tentativas, calcNextRetry(tentativas).toISOString(), tenantId],
+      );
+      result.falhas++;
+    }
+  }
+  return result;
 }
 
 // ──────────────────────────────────────────

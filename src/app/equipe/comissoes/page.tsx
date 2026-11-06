@@ -333,9 +333,10 @@ export default function ComissoesPage() {
     // Feito antes de tudo: essas comissões saem do acumulado do mês.
     for (const c of comissoes) {
       if (c.status === 'CANCELADA') continue;
-      // A comissão por MRR (conta do ecossistema) é do mês do vendedor, não de
-      // uma venda daqui: quem a calcula é a tela Comissão por MRR, nunca este motor.
-      if (c.origem === 'mrr') continue;
+      // A comissão por MRR e o extrato do CRM (conta do ecossistema) são do mês
+      // da pessoa, não de uma venda daqui: quem os calcula é a tela Comissão por
+      // MRR e a Área Comercial do CRM, nunca este motor.
+      if (c.origem === 'mrr' || c.origem === 'crm') continue;
       const venda = vendasById.get(c.venda_id);
       if (venda && venda.status !== 'CANCELADO') continue;
 
@@ -577,7 +578,7 @@ export default function ComissoesPage() {
     const mapa = new Map<string, { nome: string; base: number; pct: number; vendas: number }>();
     for (const c of comissoes) {
       if (c.status === 'CANCELADA') continue;
-      if (c.origem === 'mrr') continue; // a escada do MRR é outra (faixas da meta)
+      if (c.origem === 'mrr' || c.origem === 'crm') continue; // a escada do MRR é outra (faixas da meta); o CRM manda pronta
       if (filterMonth && mesDe(c.data_venda) !== filterMonth) continue;
       const atual = mapa.get(c.vendedor_id) ?? { nome: c.vendedor_nome, base: 0, pct: 0, vendas: 0 };
       atual.base = round2(atual.base + num(c.valor_base));
@@ -614,7 +615,8 @@ export default function ComissoesPage() {
     return { calculadas: porStatus('CALCULADA'), aprovadas: porStatus('APROVADA'), pagas: porStatus('PAGA') };
   }, [doEscopo]);
 
-  const aAprovar = useMemo(() => doEscopo.filter(c => c.status === 'CALCULADA'), [doEscopo]);
+  // O extrato do CRM já nasce com a conta a pagar: não passa por "Aprovar" aqui.
+  const aAprovar = useMemo(() => doEscopo.filter(c => c.status === 'CALCULADA' && c.origem !== 'crm'), [doEscopo]);
   const proximaSaida = proximaDataPagamento(agendaPagamento, hojeISO());
   const nomeDoMes = rotuloDoMes(filterMonth);
 
@@ -682,7 +684,7 @@ export default function ComissoesPage() {
       // A base NOMEADA: "R$ 1.815,55" sozinho não diz sobre o que a comissão
       // incidiu, e a coluna "%" repetia a mesma alíquota em todas as linhas
       // da mesma pessoa, sugerindo variação onde não há.
-      sub: c => <span>{`${num(c.percentual_aplicado)}% sobre a receita da agência`}</span>,
+      sub: c => <span>{c.origem === 'crm' ? 'extrato do mês da Área Comercial do CRM' : `${num(c.percentual_aplicado)}% sobre a receita da agência`}</span>,
     },
     { id: 'valor', cabecalho: 'Comissão', tipo: 'dinheiro', prioridade: 3, sortable: true, valor: c => num(c.valor_comissao) },
     { id: 'situacao', cabecalho: 'Situação', tipo: 'status', prioridade: 2, valor: c => c.status, dominio: 'comissao' },
@@ -693,22 +695,25 @@ export default function ComissoesPage() {
       prioridade: 3,
       render: c => (
         <div className="flex flex-wrap justify-end gap-1">
-          {c.status === 'CALCULADA' && (
+          {/* Extrato do CRM: a conta a pagar já existe e é paga em Contas a pagar;
+              aprovar ou pagar por aqui criaria uma segunda conta. */}
+          {c.origem === 'crm' && c.status === 'CALCULADA' && <span className="fin-t-caption text-[var(--fin-text-3)]">Pague em Contas a pagar</span>}
+          {c.origem !== 'crm' && c.status === 'CALCULADA' && (
             <button className={BOTAO} onClick={() => setConfirmando({ tipo: 'aprovar', comissao: c })}>
               Aprovar
             </button>
           )}
-          {c.status === 'APROVADA' && (
+          {c.origem !== 'crm' && c.status === 'APROVADA' && (
             <button className={BOTAO} onClick={() => setConfirmando({ tipo: 'pagar', comissao: c })}>
               Pagar
             </button>
           )}
-          {c.status !== 'PAGA' && c.status !== 'CANCELADA' && (
+          {c.origem !== 'crm' && c.status !== 'PAGA' && c.status !== 'CANCELADA' && (
             <button className={BOTAO} onClick={() => setConfirmando({ tipo: 'cancelar', comissao: c })}>
               Cancelar
             </button>
           )}
-          {c.status === 'CANCELADA' && (
+          {c.origem !== 'crm' && c.status === 'CANCELADA' && (
             <button className={BOTAO} onClick={() => setConfirmando({ tipo: 'excluir', comissao: c })}>
               Excluir
             </button>

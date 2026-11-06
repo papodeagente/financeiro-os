@@ -21,6 +21,7 @@ import { tarefaAcompanharNotas } from '../nota-acompanhamento';
 import { tarefaRelatoriosAgendados } from '../relatorios-agendados/servidor';
 import { tarefaLiquidarAutomaticamente } from '../venda-liquidar-auto';
 import { TIPO_TAREFA_MIGRACAO, processarTarefaMigracao } from '../migracao/servidor';
+import { tarefaComissaoPagaAoCrm } from '../comissao-do-crm-servidor';
 import { janelaDeMinutos, janelaDiaria, rodarAgendador, type DefinicaoTarefa, type ResumoAgendador } from './nucleo';
 
 // A aplicação da mudança de sistema roda em blocos pela fila.
@@ -69,6 +70,8 @@ export const tarefaFila: DefinicaoTarefa = {
 };
 
 export const TAREFAS: DefinicaoTarefa[] = [tarefaRazaoAbertura, tarefaRazaoConferencia, tarefaRecorrenciaGerar, tarefaAvisosVencimento, tarefaReguaCobranca, tarefaCotacoes, tarefaFaturasFornecedor, tarefaNotasPorGatilho, tarefaComissoesDoDia, tarefaCreditosEReembolsos, tarefaMontarFaturas, tarefaExtratoAutomatico, tarefaAcompanharNotas, tarefaRelatoriosAgendados, tarefaLiquidarAutomaticamente, tarefaFila];
+// Avisos de comissão do CRM paga (comissao-do-crm-servidor.ts), só nas contas do ecossistema.
+TAREFAS.push(tarefaComissaoPagaAoCrm);
 
 /** Roda o agendador contra o banco de verdade. */
 export async function executarAgendadorAgora(): Promise<ResumoAgendador> {
