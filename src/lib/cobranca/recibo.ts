@@ -19,6 +19,8 @@ import { comMaiuscula, valorPorExtenso } from './extenso';
 export interface AgenciaDoRecibo {
   razao_social?: string;
   nome_fantasia?: string;
+  /** Nome da agência no cadastro (Configurações › Dados da agência). */
+  nome?: string;
   cnpj?: string;
   telefone?: string;
   email?: string;
@@ -90,7 +92,7 @@ function emitenteDe(a: AgenciaDoRecibo | null) {
   const linha1 = [e.logradouro, e.numero].filter(Boolean).join(', ');
   const linha2 = [e.bairro, [e.cidade, e.estado].filter(Boolean).join('/')].filter(Boolean).join(' · ');
   return {
-    nome: (a?.razao_social || a?.nome_fantasia || 'Agência').trim(),
+    nome: (a?.razao_social || a?.nome_fantasia || a?.nome || 'Agência').trim(),
     documento: a?.cnpj ? `CNPJ ${formatarDocumento(a.cnpj)}` : '',
     endereco: [linha1, linha2].filter(Boolean).join(' · '),
     contato: [a?.telefone, a?.email].filter(Boolean).join(' · '),

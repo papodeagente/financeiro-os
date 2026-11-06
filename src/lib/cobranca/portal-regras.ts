@@ -185,7 +185,7 @@ export function montarPortal(entrada: {
   const whats = String(redes.whatsapp ?? a.whatsapp ?? '').replace(/\D/g, '') || telefone.replace(/\D/g, '');
   return {
     agencia: {
-      nome: String(a.nome_fantasia || a.razao_social || 'Sua agência de viagens').trim(),
+      nome: String(a.nome_fantasia || a.nome || a.razao_social || 'Sua agência de viagens').trim(),
       logo: url(a.logo) ?? '',
       telefone,
       email: String(a.email ?? '').trim(),
