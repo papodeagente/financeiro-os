@@ -11,6 +11,7 @@ import { montarTabelaDinamica } from '../src/lib/tabela-dinamica.ts';
 import {
   COLUNAS_POR_PRODUTO, colunasAgrupadas, colunasPermitidas, csvDaMatriz, linhasPorForma, linhasPorProduto, linhasPorUnidade,
   linhasPorVendedor, matrizParaExportar, formaDoCabecalho, rankingDeClientes, registrosDaDinamica, semColunasSensiveis, totaisDasLinhas,
+  chaveDoPagamento, dataDaLinha, filtrarLinhas, linhasDosPagamentos, linhasPorFornecedor, opcoesDosFiltros, paganteDaVenda, seriePorMes, temFiltroDeProduto,
 } from '../src/lib/relatorios-vendas.ts';
 import type { VendaLida } from '../src/lib/vendas-leitura.ts';
 
@@ -77,6 +78,54 @@ const m = matrizParaExportar(cols, pv);
 eq([m[0], m[1], m[m.length - 1]], [['Vendedor', 'Vendas', 'Faturamento', '% de receita'], ['Bia', 1, 2080, 8.65], ['Total', 2, 2310, 9.09]], 'matriz em reais com total');
 eq(csvDaMatriz(m).split('\r\n')[1], 'Bia;1;2080;8,65', 'CSV com vírgula decimal');
 eq(matrizParaExportar(colunasPermitidas(COLUNAS_POR_PRODUTO, true, ['data_venda']), linhas)[1], ['02/10/2026'], 'data em dd/mm/aaaa');
+
+console.log('--- Filtros, ranking pela receita, pagamentos e série (E7) ---');
+{
+  const ls = linhasPorProduto(vendas);
+  eq(filtrarLinhas(ls, {}).length, 3, 'sem filtro: todas');
+  eq(filtrarLinhas(ls, { vendedor: 'id:u2' }).map(l => l.descricao), ['Seguro'], 'por vendedor (chave do cadastro)');
+  eq(filtrarLinhas(ls, { tipo: 'AEREO' }).map(l => l.descricao), ['Voo'], 'por tipo de produto');
+  eq(filtrarLinhas(ls, { produto: 'hótel' }).map(l => l.descricao), ['Hotel'], 'busca no produto sem acento');
+  eq(filtrarLinhas(ls, { unidade: 'Matriz' }).length, 2, 'por unidade');
+  eq(filtrarLinhas(ls, { situacao_produto: 'cancelados' }).length, 0, 'só cancelados');
+  eq(filtrarLinhas(ls, { fornecedor: 'nome:inexistente' }).length, 0, 'fornecedor que não está');
+  const comDatas = ls.map((l, i) => ({ ...l, data_inicio: ['2027-01-10', '2026-12-01', ''][i] }));
+  eq(filtrarLinhas(comDatas, { data_base: 'inicio', de: '2027-01-01', ate: '2027-01-31' }).map(l => l.descricao), ['Hotel'], 'período pela data de início do serviço');
+  eq(filtrarLinhas(comDatas, { data_base: 'inicio', de: '2026-01-01' }).some(l => l.descricao === 'Seguro'), false, 'sem a data escolhida, fica fora do período');
+  eq(dataDaLinha(comDatas[0], 'venda'), '2026-10-02', 'data da venda');
+  eq(temFiltroDeProduto({ situacao_produto: 'todos', data_base: 'venda' }), false, 'padrão não é filtro');
+  const op = opcoesDosFiltros(ls);
+  eq([op.vendedores.map(o => o.rotulo), op.tipos.map(o => o.valor), op.unidades.map(o => o.valor)], [['Bia', 'Leo'], ['AEREO', 'HOSPEDAGEM', 'SEGURO'], ['Matriz', 'Sem unidade']], 'opções dos filtros tiradas das vendas');
+  eq(ls[0].pagante, 'Carla', 'pagante é o cliente quando o pagamento não diz');
+  eq(paganteDaVenda({ cliente: { id: 'c', nome: 'Carla' }, pagamentos: [{ pagante: { id: 'e', nome: 'Empresa X' } }, { pagante: null }] } as never), 'Empresa X', 'pagante do pagamento');
+
+  // Ranking pela receita: Davi tem menos faturamento mas, com a receita maior, sobe.
+  const outro = [...ls, { ...ls[2], venda_id: 'c', cliente: 'Eva', faturamento: 1000, receita: 90000 }];
+  eq(rankingDeClientes(outro, 'receita').map(l => l.grupo), ['Eva', 'Carla', 'Davi'], 'ranking pela receita');
+  eq(rankingDeClientes(outro).map(l => l.grupo), ['Carla', 'Davi', 'Eva'], 'ranking pelo faturamento (padrão)');
+  eq(linhasPorFornecedor(ls).map(l => l.grupo), ['Sem fornecedor'], 'por fornecedor');
+
+  const liq = new Map([
+    [chaveDoPagamento('a', 'g'), { valor_centavos: 108000, liquidado_centavos: 108000, ultima_liquidacao: '2026-10-05', conta_bancaria_id: 'cb1', contas: 1 }],
+    [chaveDoPagamento('a', 'h'), { valor_centavos: 105000, liquidado_centavos: 35000, ultima_liquidacao: '2026-11-05', conta_bancaria_id: '', contas: 3 }],
+  ]);
+  const pags = linhasDosPagamentos(vendas, liq, new Map([['cb1', 'Itaú']]));
+  eq(pags.map(l => [l.venda_numero, l.grupo, l.valor, l.liquidado, l.situacao_pagamento, l.conta]), [
+    ['VND-1', 'Pix', 108000, 108000, 'Liquidado', 'Itaú'],
+    ['VND-1', 'Cartão', 105000, 35000, 'Parcial', ''],
+    ['VND-2', 'Pix', 23000, 0, 'Em aberto', ''],
+  ], 'um pagamento por linha, com o que já entrou');
+  eq(pags[1].cartao_cheque, 'Crédito', 'cartão de crédito');
+  eq(linhasDosPagamentos(vendas, liq, new Map(), { soLiquidados: true }).length, 1, 'só liquidados');
+  const credito = lida({ id: 'z', numero: 'VND-9', data_venda: '2026-11-09', cliente: { id: 'c1', nome: 'Carla' }, produtos: [],
+    pagamentos: [{ id: 'k', forma: 'CREDITO_CLIENTE', valor_centavos: 5000, venda_origem_credito: 'VND-1' }] });
+  const pc = linhasDosPagamentos([credito], new Map(), new Map())[0];
+  eq([pc.situacao_pagamento, pc.venda_origem_credito, pc.liquidado], ['Compensado', 'VND-1', 5000], 'crédito do cliente: compensado, com a venda de origem');
+
+  eq(seriePorMes(ls, 'faturamento').map(p => [p.rotulo, p.centavos]), [['out/2026', 208000], ['nov/2026', 23000]], 'série por mês');
+  const reg = registrosDaDinamica(ls, 'faturamento')[0].campos;
+  eq([reg['Ano'], reg['Destino'], reg['Pagante'], reg['Representante'], reg['Situação do produto']], ['2026', 'Sem destino', 'Carla', 'Sem representante', 'Ativo'], 'mais dimensões na tabela dinâmica');
+}
 
 console.log(`\n${total - falhas}/${total} passaram`);
 if (falhas > 0) process.exit(1);

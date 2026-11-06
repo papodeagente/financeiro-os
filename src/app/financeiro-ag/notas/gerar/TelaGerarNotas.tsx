@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { Ban, ChevronLeft, ChevronRight, FileStack, Layers, ReceiptText, Scale } from 'lucide-react';
 
+import { BotaoExportar } from '@/components/fin/BotaoExportar';
 import { Callout } from '@/components/fin/Callout';
 import { ConfirmDialog } from '@/components/fin/ConfirmDialog';
 import { FilterBar } from '@/components/fin/FilterBar';
@@ -21,6 +22,7 @@ import {
   DATAS_DA_NOTA, ROTULO_DATA_DA_NOTA, formatarReais, ROTULO_DESTINO, type DataDaNota, type LinhaDaGrade, type SugestaoDeCancelamento,
 } from '@/lib/nota-regras';
 import { ROTULO_TIPO_PRODUTO, TIPOS_PRODUTO } from '@/lib/venda-modelo';
+import { documentoDeGerarNotas } from '@/lib/exportacao/listas-financeiro';
 import { toast } from '@/lib/toast';
 import { formatBRL } from '@/lib/utils';
 
@@ -333,6 +335,18 @@ export function TelaGerarNotas() {
           />
         </div>
         {avisoData ? <Callout tom="aviso">{avisoData}</Callout> : null}
+        <div className="flex justify-end">
+          <BotaoExportar
+            origem="gerar_notas"
+            podeExportar={pode('exportar')}
+            desabilitado={!linhas.length}
+            documento={() => documentoDeGerarNotas(linhas, {
+              de: f.de, ate: f.ate,
+              mostrar: f.mostrar === 'pendentes' ? 'O que pede ação' : 'Tudo',
+              busca: f.busca.trim() || undefined,
+            })}
+          />
+        </div>
 
         <FinTable<LinhaDaGrade>
           linhas={linhas}

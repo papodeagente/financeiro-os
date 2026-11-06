@@ -17,12 +17,14 @@ import { DataState } from '@/components/fin/DataState';
 import { MetricCard } from '@/components/fin/MetricCard';
 import { Money } from '@/components/fin/Money';
 import { FinTable, type FinColuna } from '@/components/fin/FinTable';
+import { BotaoExportar } from '@/components/fin/BotaoExportar';
 import { ConfirmDialog } from '@/components/fin/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/lib/toast';
 import { lerErroNota } from '@/lib/nfse-simples';
 import { somaPor } from '@/lib/money';
+import { documentoDasNotas } from '@/lib/exportacao/listas-financeiro';
 import type { NotaFiscal, StatusNota } from '@/lib/nfse-tipos';
 import { RegistrarNotaDeFora } from '@/components/financeiro/notas/RegistrarNotaDeFora';
 
@@ -535,6 +537,16 @@ export default function NotasFiscaisPage() {
             </Button>
           </div>
         ) : null}
+        <BotaoExportar
+          className="ml-auto"
+          origem="notas_fiscais"
+          desabilitado={!notasFiltradas.length}
+          documento={() => documentoDasNotas(notasFiltradas, {
+            de, ate,
+            situacao: filtroStatus !== 'TODAS' ? ROTULO[filtroStatus as StatusNota] : undefined,
+            busca: buscaCliente.trim() || undefined,
+          })}
+        />
       </div>
 
       <FinTable<NotaFiscal>

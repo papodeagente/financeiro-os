@@ -1,19 +1,20 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Download, Table2 } from 'lucide-react';
+import { Table2 } from 'lucide-react';
 
 import type { ContaBancaria, ContaPagar, ContaReceber, PlanoContas } from '@/lib/crm-types';
 import { loadEntities } from '@/lib/crm-storage';
 import { hojeISO } from '@/lib/money';
 import {
-  CAMPOS_DO_DEMONSTRATIVO, COLUNAS_PADRAO, LINHAS_PADRAO, ORDEM_DO_DEMONSTRATIVO, csvDoDemonstrativo,
-  registrosDoDemonstrativo, type CampoDemonstrativo, type LancamentoDoDemonstrativo,
+  CAMPOS_DO_DEMONSTRATIVO, COLUNAS_PADRAO, LINHAS_PADRAO, ORDEM_DO_DEMONSTRATIVO, ROTULO_DO_CAMPO,
+  registrosDoDemonstrativo, rotuloDoValor, type CampoDemonstrativo, type LancamentoDoDemonstrativo,
 } from '@/lib/resultado-por-categoria';
+import { documentoDaTabelaDinamica } from '@/lib/exportacao/tabela-dinamica';
 import { montarTabelaDinamica, registrosDaCelula } from '@/lib/tabela-dinamica';
 import { cn } from '@/lib/utils';
 
-import { Button } from '@/components/ui/button';
+import { BotaoExportar } from '@/components/fin/BotaoExportar';
 import { DataState } from '@/components/fin/DataState';
 import { EmptyLesson } from '@/components/fin/EmptyLesson';
 import { FilterBar } from '@/components/fin/FilterBar';
@@ -146,14 +147,21 @@ export default function DemonstrativoPorCategoriasPage() {
     setCelula({ titulo, lancamentos: regs.map(r => r.ref!).filter(Boolean) });
   }
 
-  function exportar() {
-    const blob = new Blob([csvDoDemonstrativo(tabela)], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `resultado-por-categoria-${ano === TODOS ? 'todos' : ano}-${regime}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  function documento() {
+    return documentoDaTabelaDinamica(tabela, {
+      titulo: 'Resultado por categoria',
+      subtitulo: regime === 'competencia'
+        ? 'Competência: cada conta pelo vencimento e pelo valor total. Receitas somam, despesas subtraem.'
+        : 'Caixa: cada conta pela data da baixa e pelo valor que entrou ou saiu. Receitas somam, despesas subtraem.',
+      filtros: [
+        { rotulo: 'Ano', valor: ano === TODOS ? 'todos os anos' : ano },
+        { rotulo: 'Regime', valor: regime === 'competencia' ? 'Competência' : 'Caixa' },
+        ...(incluirRepasse ? [{ rotulo: 'Repasses', valor: 'incluídos' }] : []),
+        ...(usarRateio ? [{ rotulo: 'Rateio', valor: 'dividido' }] : []),
+      ],
+      rotuloDoCampo: c => ROTULO_DO_CAMPO[c as CampoDemonstrativo] ?? c,
+      rotuloDoValor,
+    });
   }
 
   const semDado = !carregando && !erro && receber.length === 0 && pagar.length === 0;
@@ -228,10 +236,7 @@ export default function DemonstrativoPorCategoriasPage() {
                   <Interruptor ligado={incluirRepasse} onChange={setIncluirRepasse}>Mostrar repasses ao fornecedor</Interruptor>
                   <Interruptor ligado={usarRateio} onChange={setUsarRateio}>Dividir pelo rateio</Interruptor>
                 </div>
-                <Button type="button" variant="outline" onClick={exportar} disabled={registros.length === 0} className="h-11 self-start lg:h-10">
-                  <Download aria-hidden="true" className="size-4" />
-                  Exportar Excel (CSV)
-                </Button>
+                <BotaoExportar origem="resultado_por_categoria" tamanho="default" className="self-start" desabilitado={registros.length === 0} documento={documento} />
               </div>
               <p className="fin-t-caption text-[var(--fin-text-3)]">
                 {regime === 'competencia'

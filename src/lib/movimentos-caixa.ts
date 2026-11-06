@@ -38,6 +38,7 @@ import { deCentavos, num, paraCentavos, round2 } from './money';
 import { valorMovimentado } from './saldo-bancario';
 import { taxaRealizada } from './taxa-plataforma';
 import { auditCsvCell } from './audit-query';
+import { rotuloDoPeriodo, type DocumentoExportado, type FiltroAplicado } from './exportacao/documento';
 
 export const CAIXA_GERAL = 'Caixa Geral';
 
@@ -561,6 +562,79 @@ export function csvDosMovimentos(linhas: readonly MovimentoCaixa[], leiaute: Lei
     cel(l.documento), cel(l.cartao_cheque), cel(l.moeda), numCel(l.valor_origem), l.cambio === null ? '""' : `"${String(l.cambio).replace('.', ',')}"`,
     cel(`${l.tipo === 'entrada' ? 'Entrada' : 'Saída'} · ${rotuloDaOrigem(l.origem)}`), numCel(l.valor)].join(';'));
   return '﻿' + [cab.map(cel).join(';'), ...corpo].join('\r\n');
+}
+
+// ─── Excel (.xlsx), PDF e impressão (E7, G3) ───────────────────────────────
+
+/** O filtro aplicado, por extenso (vai no topo do arquivo e no nome dele). */
+export function filtrosDosMovimentos(f: FiltroDeMovimentos, nomesDasContas: readonly string[]): FiltroAplicado[] {
+  const out: FiltroAplicado[] = [{ rotulo: 'Período', valor: rotuloDoPeriodo(f.de, f.ate) }];
+  if (f.contas.length) out.push({ rotulo: f.contas.length === 1 ? 'Conta' : 'Contas', valor: nomesDasContas.length ? nomesDasContas.join(', ') : `${f.contas.length} contas` });
+  if (f.tipo) out.push({ rotulo: 'Tipo', valor: f.tipo === 'entrada' ? 'Só entradas' : 'Só saídas' });
+  if (f.origem) out.push({ rotulo: 'Origem', valor: rotuloDaOrigem(f.origem) });
+  if (f.forma) out.push({ rotulo: 'Forma', valor: f.forma });
+  if (f.pessoa) out.push({ rotulo: 'Pessoa', valor: f.pessoa });
+  if (f.busca) out.push({ rotulo: 'Busca', valor: f.busca });
+  if (!f.taxas) out.push({ rotulo: 'Taxas retidas', valor: 'fora' });
+  return out;
+}
+
+/**
+ * O recorte inteiro como documento de exportação, com as MESMAS colunas do
+ * CSV de cada leiaute. Valores em reais (com sinal: saída negativa).
+ */
+export function documentoDosMovimentos(
+  linhas: readonly MovimentoCaixa[], leiaute: LeiauteDeExportacao, f: FiltroDeMovimentos,
+): DocumentoExportado {
+  const nomes = f.contas.length ? [...new Set(linhas.filter(l => f.contas.includes(l.conta_id)).map(l => l.conta_nome))] : [];
+  const filtros = filtrosDosMovimentos(f, nomes);
+  const total = round2(linhas.reduce((s, l) => s + l.valor, 0));
+  if (leiaute === 'extrato') {
+    return {
+      titulo: 'Extrato de conta',
+      filtros,
+      colunas: [
+        { id: 'data', rotulo: 'Data', tipo: 'data' }, { id: 'conta', rotulo: 'Conta', tipo: 'texto' },
+        { id: 'numero', rotulo: 'Número', tipo: 'texto' }, { id: 'descricao', rotulo: 'Descrição', tipo: 'texto' },
+        { id: 'documento', rotulo: 'Documento', tipo: 'texto' }, { id: 'pessoa', rotulo: 'Pessoa', tipo: 'texto' },
+        { id: 'cpf_cnpj', rotulo: 'CPF/CNPJ', tipo: 'texto' }, { id: 'informacoes', rotulo: 'Informações', tipo: 'texto' },
+        { id: 'forma', rotulo: 'Forma', tipo: 'texto' }, { id: 'origem', rotulo: 'Origem', tipo: 'texto' },
+        { id: 'valor', rotulo: 'Valor', tipo: 'dinheiro' }, { id: 'saldo_conta', rotulo: 'Saldo da conta', tipo: 'dinheiro' },
+        { id: 'saldo_total', rotulo: 'Saldo', tipo: 'dinheiro' },
+      ],
+      linhas: linhas.map(l => ({
+        data: l.data, conta: l.conta_nome, numero: l.numero, descricao: l.descricao, documento: l.documento, pessoa: l.pessoa_nome,
+        cpf_cnpj: l.cpf_cnpj, informacoes: l.informacoes, forma: l.forma, origem: rotuloDaOrigem(l.origem),
+        valor: l.valor, saldo_conta: l.saldo_conta, saldo_total: l.saldo_total,
+      })),
+      totais: { valor: total },
+      rotulo_total: `Total (${linhas.length} ${linhas.length === 1 ? 'lançamento' : 'lançamentos'})`,
+      dinheiro_em: 'reais',
+      orientacao: 'paisagem',
+    };
+  }
+  return {
+    titulo: 'Movimentações',
+    filtros,
+    colunas: [
+      { id: 'data', rotulo: 'Data', tipo: 'data' }, { id: 'numero', rotulo: 'Número', tipo: 'texto' },
+      { id: 'venda', rotulo: 'Venda', tipo: 'texto' }, { id: 'conta', rotulo: 'Conta', tipo: 'texto' },
+      { id: 'forma', rotulo: 'Forma de pagamento', tipo: 'texto' }, { id: 'pessoa', rotulo: 'Pessoa', tipo: 'texto' },
+      { id: 'documento', rotulo: 'Documento', tipo: 'texto' }, { id: 'cartao_cheque', rotulo: 'Cheque/Cartão', tipo: 'texto' },
+      { id: 'moeda', rotulo: 'Moeda', tipo: 'texto' }, { id: 'valor_origem', rotulo: 'Valor origem', tipo: 'numero' },
+      { id: 'cambio', rotulo: 'Câmbio', tipo: 'numero' }, { id: 'movimento', rotulo: 'Movimento', tipo: 'texto' },
+      { id: 'valor', rotulo: 'Valor', tipo: 'dinheiro' },
+    ],
+    linhas: linhas.map(l => ({
+      data: l.data, numero: l.numero, venda: l.venda_numero || l.venda_id, conta: l.conta_nome, forma: l.forma, pessoa: l.pessoa_nome,
+      documento: l.documento, cartao_cheque: l.cartao_cheque, moeda: l.moeda, valor_origem: l.valor_origem, cambio: l.cambio,
+      movimento: `${l.tipo === 'entrada' ? 'Entrada' : 'Saída'} · ${rotuloDaOrigem(l.origem)}`, valor: l.valor,
+    })),
+    totais: { valor: total },
+    rotulo_total: `Total (${linhas.length} ${linhas.length === 1 ? 'lançamento' : 'lançamentos'})`,
+    dinheiro_em: 'reais',
+    orientacao: 'paisagem',
+  };
 }
 
 // ─── Espelho em TypeScript (para o teste comparar com o SQL) ───────────────

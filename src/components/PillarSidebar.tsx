@@ -77,6 +77,7 @@ const METAS_MENU: SidebarSection[] = [
       { key: 'pagar-comissoes', label: 'Pagar comissões', icon: Banknote, href: '/equipe/pagar-comissoes' },
       { key: 'minhas-comissoes', label: 'Minhas comissões', icon: UserRound, href: '/equipe/minhas-comissoes' },
       { key: 'relatorios-vendas', label: 'Relatórios de vendas', icon: BarChart3, href: '/relatorios/vendas' },
+      { key: 'relatorios-envios', label: 'Envios agendados', icon: CalendarRange, href: '/relatorios/envios' },
     ],
   },
 ];

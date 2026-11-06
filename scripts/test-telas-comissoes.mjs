@@ -102,8 +102,14 @@ eq(html(h(ComissoesManuais, { vendaId: 'v1' })).includes('animate-pulse'), true,
 
 const { RelatoriosDeVendas } = await import('../src/components/relatorios/RelatoriosDeVendas.tsx');
 const rel = html(h(RelatoriosDeVendas, { abrirVenda() {} }));
-eq(['Relatórios de vendas', 'Por produto', 'Por vendedor', 'Por unidade', 'Por forma de pagamento', 'Ranking de clientes', 'Tabela dinâmica', 'CSV', 'Excel', 'formato=xlsx'].filter(t => !rel.includes(t)), [], 'relatórios: os seis relatórios e a exportação');
-const tudo = [tela, base, rel, ...textos].join(' ');
+// E7: a exportação virou o botão único (Excel, PDF e Imprimir num menu) e entrou o envio agendado.
+eq(['Relatórios de vendas', 'Por produto', 'Por vendedor', 'Por unidade', 'Por fornecedor', 'Por forma de pagamento', 'Pagamentos', 'Ranking de clientes', 'Tabela dinâmica', 'Exportar', 'Agendar envio', 'Fornecedor', 'Situação do produto', 'Período pela'].filter(t => !rel.includes(t)), [], 'relatórios: os oito relatórios, os filtros, a exportação e o envio agendado');
+const { TelaDeEnvios } = await import('../src/components/relatorios/TelaDeEnvios.tsx');
+const envios = html(h(TelaDeEnvios));
+eq(['Envios agendados', 'Relatórios de vendas'].filter(t => !envios.includes(t)), [], 'envios agendados desenha');
+const { FormularioDeEnvio } = await import('../src/components/relatorios/FormularioDeEnvio.tsx');
+eq(typeof FormularioDeEnvio, 'function', 'formulário do envio agendado carrega');
+const tudo = [tela, base, rel, envios, ...textos].join(' ');
 const proibidos = ['Gerar Lançamento', 'Taxa de Serviço Oculta', 'Taxa de Serviço Destacada', 'Saldo Excluído', 'Lei Kandir', 'Fornecimento', 'Representação', 'Gerar Fatura', 'Grupos de Usuário', 'Acesso Total'];
 eq(proibidos.filter(t => tudo.includes(t)), [], 'nenhum termo proibido nas telas');
 

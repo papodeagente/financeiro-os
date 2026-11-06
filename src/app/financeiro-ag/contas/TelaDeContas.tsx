@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowDownLeft, ArrowUpRight, CheckCheck, Columns3, Copy, Download, ExternalLink, Plus, ReceiptText, Scale, Trash2,
+  ArrowDownLeft, ArrowUpRight, CheckCheck, Columns3, Copy, ExternalLink, Plus, ReceiptText, Scale, Trash2,
 } from 'lucide-react';
 
 import {
@@ -34,7 +34,8 @@ import {
 import { LiquidarEmLote } from './LiquidarEmLote';
 import { MenuDaLinha, type ItemDoMenu } from './MenuDaLinha';
 import { BarraDoLote, RodapeDaLista, type AcaoDaBarra } from './PartesDaLista';
-import { enderecoDaConta, exportarContas, todasDoFiltro, useContas, usePermissoes } from './useContas';
+import { enderecoDaConta, enderecoDaExportacao, todasDoFiltro, useContas, usePermissoes } from './useContas';
+import { BotaoExportar } from '@/components/fin/BotaoExportar';
 
 /**
  * Contas a Pagar/Receber (05/11/2026): as contas a pagar e a receber numa
@@ -107,7 +108,6 @@ export function TelaDeContas() {
   const [menu, setMenu] = React.useState<{ linha: LinhaDeConta; posicao: { x: number; y: number } } | null>(null);
   const [liquidar, setLiquidar] = React.useState<LinhaDeConta[] | null>(null);
   const [lote, setLote] = React.useState<{ acao: AcaoDeLote; linhas: LinhaDeConta[] } | null>(null);
-  const [exportando, setExportando] = React.useState(false);
   const [selecionandoTodas, setSelecionandoTodas] = React.useState(false);
   const [boletos, setBoletos] = React.useState<Array<ContaParaCobrar & { descricao: string }> | null>(null);
   const [carne, setCarne] = React.useState<Array<ContaParaCobrar & { descricao: string }> | null>(null);
@@ -215,13 +215,6 @@ export function TelaDeContas() {
     } catch {
       toast.error('Não foi possível copiar.', 'O navegador não liberou a área de transferência.');
     }
-  }
-
-  async function exportar() {
-    setExportando(true);
-    const e = await exportarContas(`${recorte}&ordem=${ORDEM_DA_COLUNA[ordem.coluna] ?? 'vencimento'}&direcao=${ordem.direcao}`);
-    if (e) toast.error('Não foi possível exportar.', e);
-    setExportando(false);
   }
 
   const abrir = React.useCallback((l: LinhaDeConta) => router.push(enderecoDaConta(l)), [router]);
@@ -350,12 +343,12 @@ export function TelaDeContas() {
           <p className="hidden fin-t-caption text-[var(--fin-text-3)] lg:block">
             Duplo clique abre a conta. Clique direito mostra as ações. Esc limpa os filtros.
           </p>
-          {pode('exportar') ? (
-            <Button type="button" variant="outline" size="sm" disabled={exportando || !dados?.total} onClick={() => { void exportar(); }} className="h-11 gap-[var(--fin-s-2)] lg:h-9">
-              <Download aria-hidden="true" className="size-4" />
-              {exportando ? 'Exportando…' : 'Exportar para Excel'}
-            </Button>
-          ) : null}
+          <BotaoExportar
+            origem="contas"
+            podeExportar={pode('exportar')}
+            desabilitado={!dados?.total}
+            endereco={f => enderecoDaExportacao(`${recorte}&ordem=${ORDEM_DA_COLUNA[ordem.coluna] ?? 'vencimento'}&direcao=${ordem.direcao}`, f)}
+          />
         </div>
 
         {mostrarColunas ? (

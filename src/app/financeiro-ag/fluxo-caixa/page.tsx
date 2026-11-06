@@ -15,8 +15,12 @@ import {
 } from '@/lib/caderno-caixa';
 import { calcularSaldoBancario } from '@/lib/saldo-bancario';
 import {
-  alertaDeSaldo, comparativoDoPeriodo, lancamentosDaConta, titulosDaConta, type FiltroDeConta,
+  alertaDeSaldo, comparativoDoPeriodo, gradeContaPorDia, lancamentosDaConta, titulosDaConta,
+  type FiltroDeConta, type LinhaDaGrade,
 } from '@/lib/fluxo-comparativo';
+import type { DocumentoExportado, FiltroAplicado } from '@/lib/exportacao/documento';
+import { BotaoExportar } from '@/components/fin/BotaoExportar';
+import { GradePorConta, type MedidaDaGrade } from './GradePorConta';
 import { hojeISO, num, round2 } from '@/lib/money';
 import { cn, formatBRL } from '@/lib/utils';
 import type { FunilPayload } from '@/lib/funil-types';
@@ -150,6 +154,9 @@ export default function FluxoCaixaPage() {
   const [contaId, setContaId] = useState<string>(TODAS_AS_CONTAS);
   const [visaoComparativo, setVisaoComparativo] = useState<Agrupamento>(agrupamentoPadrao('mes'));
   const [saldoMinimo, setSaldoMinimo] = useState(0);
+  // E7, G3: grade conta × dia (saldo no fim do dia ou movimento do dia).
+  const [medidaGrade, setMedidaGrade] = useState<MedidaDaGrade>('saldo');
+  const [contaDoDetalhe, setContaDoDetalhe] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -253,6 +260,82 @@ export default function FluxoCaixaPage() {
   );
 
   const alerta = useMemo(() => alertaDeSaldo(caderno.curva, saldoMinimo, hoje), [caderno.curva, saldoMinimo, hoje]);
+
+  // Todas as contas liberadas, cada uma numa linha; a soma é o caderno de todas.
+  const grade = useMemo(
+    () => gradeContaPorDia({
+      receber: contasReceber, pagar: contasPagar, folha: eventosFolha, contas: contasBancarias,
+      caixaGeralId: filtro.caixaGeralId, periodo, hoje,
+    }),
+    [contasReceber, contasPagar, eventosFolha, contasBancarias, filtro.caixaGeralId, periodo, hoje],
+  );
+
+  function abrirDiaDaConta(l: LinhaDaGrade, dia: string, i: number) {
+    setContaDoDetalhe(l.nome);
+    setLinhaAberta({
+      chave: `${l.id}|${dia}`, inicio: dia, fim: dia, rotulo: rotuloDoDia(dia),
+      entradas: l.entradas[i], saidas: l.saidas[i], saldo: l.saldos[i],
+      lancamentos: l.lancamentosPorDia[dia] ?? [], contemHoje: dia === hoje, futura: dia > hoje,
+    });
+  }
+
+  const filtrosDoArquivo = (): FiltroAplicado[] => [
+    { rotulo: 'Período', valor: periodo.rotulo },
+    ...(contaEscolhida ? [{ rotulo: 'Conta', valor: contaEscolhida.nome || 'Conta sem nome' }] : []),
+  ];
+
+  /** O caderno na tela: uma linha por dia, semana ou mês. */
+  function documentoDoCaderno(): DocumentoExportado {
+    return {
+      titulo: 'Fluxo de caixa',
+      subtitulo: `${ROTULO_AGRUPAMENTO[agrupamento]} · previsto pelo vencimento, realizado pela data da baixa`,
+      filtros: filtrosDoArquivo(),
+      colunas: [
+        { id: 'rotulo', rotulo: agrupamento === 'dia' ? 'Dia' : agrupamento === 'semana' ? 'Semana' : 'Mês', tipo: 'texto' },
+        { id: 'entradas', rotulo: 'Entrou', tipo: 'dinheiro' },
+        { id: 'saidas', rotulo: 'Saiu', tipo: 'dinheiro' },
+        { id: 'saldo', rotulo: 'Saldo no fim', tipo: 'dinheiro' },
+        { id: 'situacao', rotulo: 'Situação', tipo: 'texto' },
+      ],
+      linhas: [
+        { rotulo: `Saldo em ${diaEMes(periodo.inicio)}`, saldo: caderno.saldoInicial },
+        ...caderno.linhas.map(l => ({
+          rotulo: l.rotulo, entradas: l.entradas, saidas: l.saidas, saldo: l.saldo,
+          situacao: l.contemHoje ? 'Hoje' : l.futura ? 'Previsto' : 'Realizado',
+        })),
+      ],
+      totais: { entradas: caderno.entradas, saidas: caderno.saidas, saldo: caderno.saldoFinal },
+    };
+  }
+
+  /** A grade conta × dia, em pé: um dia por linha, uma conta por coluna (cabe no papel). */
+  function documentoDaGrade(): DocumentoExportado {
+    const medida = medidaGrade === 'saldo' ? 'Saldo no fim do dia' : 'Movimento do dia';
+    const valores = (l: { saldos: number[]; movimentos: number[] }, i: number) => (medidaGrade === 'saldo' ? l.saldos[i] : l.movimentos[i]);
+    return {
+      titulo: 'Fluxo de caixa por conta e dia',
+      subtitulo: `${medida} · dias depois de hoje são previsão`,
+      filtros: [{ rotulo: 'Período', valor: periodo.rotulo }, { rotulo: 'Mostrar', valor: medida }],
+      colunas: [
+        { id: 'dia', rotulo: 'Dia', tipo: 'data' },
+        ...grade.linhas.map(l => ({ id: `c_${l.id}`, rotulo: l.nome, tipo: 'dinheiro' as const })),
+        { id: 'total', rotulo: 'Total', tipo: 'dinheiro' },
+      ],
+      linhas: [
+        ...(medidaGrade === 'saldo'
+          ? [{ dia: 'Saldo anterior', total: grade.total.saldoInicial, ...Object.fromEntries(grade.linhas.map(l => [`c_${l.id}`, l.saldoInicial])) }]
+          : []),
+        ...grade.dias.map((d, i) => ({
+          dia: d, total: valores(grade.total, i),
+          ...Object.fromEntries(grade.linhas.map(l => [`c_${l.id}`, valores(l, i)])),
+        })),
+      ],
+      ...(medidaGrade === 'movimento'
+        ? { totais: { total: grade.total.movimentos.reduce((a, b) => round2(a + b), 0), ...Object.fromEntries(grade.linhas.map(l => [`c_${l.id}`, l.movimentos.reduce((a, b) => round2(a + b), 0)])) } }
+        : {}),
+      orientacao: grade.linhas.length > 5 ? 'paisagem' : 'retrato',
+    };
+  }
 
   // Estimativa mensal dos funis em execução. Não é dinheiro contratado:
   // aparece escrita, fora do saldo, multiplicada pelos meses do período.
@@ -478,16 +561,19 @@ export default function FluxoCaixaPage() {
                     <h2 className="fin-t-subhead text-[var(--fin-text)]">Caderno</h2>
                     <p className="fin-t-caption text-[var(--fin-text-3)]">Toque numa linha para ver o que entrou e o que saiu.</p>
                   </div>
-                  <Segmentado<Agrupamento>
-                    rotulo="Mostrar o caderno"
-                    valor={agrupamento}
-                    onChange={setAgrupamento}
-                    opcoes={agrupamentosDoPeriodo(tipo).map(a => ({ valor: a, rotulo: ROTULO_AGRUPAMENTO[a] }))}
-                  />
+                  <div className="flex flex-wrap items-center gap-[var(--fin-s-2)]">
+                    <Segmentado<Agrupamento>
+                      rotulo="Mostrar o caderno"
+                      valor={agrupamento}
+                      onChange={setAgrupamento}
+                      opcoes={agrupamentosDoPeriodo(tipo).map(a => ({ valor: a, rotulo: ROTULO_AGRUPAMENTO[a] }))}
+                    />
+                    <BotaoExportar origem="fluxo-de-caixa" documento={documentoDoCaderno} />
+                  </div>
                 </div>
 
                 <div className="px-[var(--fin-s-1)] sm:px-[var(--fin-s-2)]">
-                  <Caderno caderno={caderno} onAbrir={setLinhaAberta} />
+                  <Caderno caderno={caderno} onAbrir={l => { setContaDoDetalhe(null); setLinhaAberta(l); }} />
                 </div>
 
                 {temFolha || projecaoFunis.count > 0 ? (
@@ -502,6 +588,42 @@ export default function FluxoCaixaPage() {
                   </div>
                 ) : null}
               </section>
+
+              {/* Por conta e dia (E7, G3): cada conta numa linha, cada dia numa coluna. */}
+              {contasBancarias.length > 0 ? (
+                <section aria-labelledby="t-por-conta" className={cn(CARTAO, 'flex flex-col gap-[var(--fin-s-3)] py-[var(--fin-s-4)]')}>
+                  <div className="flex flex-col gap-[var(--fin-s-3)] px-[var(--fin-s-4)] sm:flex-row sm:items-center sm:justify-between sm:px-[var(--fin-s-5)]">
+                    <div className="flex flex-col">
+                      <h2 id="t-por-conta" className="fin-t-subhead text-[var(--fin-text)]">Por conta e dia</h2>
+                      <p className="fin-t-caption text-[var(--fin-text-3)]">
+                        {medidaGrade === 'saldo'
+                          ? 'Quanto cada conta tem no fim de cada dia. Depois de hoje, é previsão.'
+                          : 'Quanto entrou menos o que saiu em cada conta, dia a dia. Toque num valor para ver os lançamentos.'}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-[var(--fin-s-2)]">
+                      <Segmentado<MedidaDaGrade>
+                        rotulo="Mostrar"
+                        valor={medidaGrade}
+                        onChange={setMedidaGrade}
+                        opcoes={[{ valor: 'saldo', rotulo: 'Saldo' }, { valor: 'movimento', rotulo: 'Movimento' }]}
+                      />
+                      <BotaoExportar origem="fluxo-por-conta" documento={documentoDaGrade} />
+                    </div>
+                  </div>
+                  <div className="border-y border-[var(--fin-border)]">
+                    <GradePorConta grade={grade} medida={medidaGrade} hoje={hoje} onAbrir={abrirDiaDaConta} />
+                  </div>
+                  {grade.linhas.some(l => l.tipo !== 'conta') ? (
+                    <p className="flex items-start gap-[var(--fin-s-2)] px-[var(--fin-s-4)] fin-t-caption text-[var(--fin-text-2)] sm:px-[var(--fin-s-5)]">
+                      <Info aria-hidden="true" className="mt-px size-3.5 shrink-0 text-[var(--fin-text-3)]" />
+                      {grade.linhas.some(l => l.tipo === 'sem_conta') ? 'Previsto sem conta: contas em aberto sem conta bancária escolhida e a folha ainda não lançada. ' : ''}
+                      {grade.linhas.some(l => l.tipo === 'outras') ? 'Outras contas: títulos de uma conta que não aparece nesta lista. ' : ''}
+                      Com elas, a soma bate com o caderno de todas as contas.
+                    </p>
+                  ) : null}
+                </section>
+              ) : null}
 
               {/* Previsto × Realizado (05/11/2026): o combinado ao lado do que aconteceu. */}
               <section aria-labelledby="t-previsto-realizado" className={cn(CARTAO, 'flex flex-col gap-[var(--fin-s-3)] py-[var(--fin-s-4)]')}>
@@ -538,10 +660,11 @@ export default function FluxoCaixaPage() {
 
         <DetalheDaLinha
           linha={linhaAberta}
-          agrupamento={agrupamento}
+          agrupamento={contaDoDetalhe ? 'dia' : agrupamento}
+          contexto={contaDoDetalhe}
           ano={periodo.inicio.slice(0, 4)}
           hoje={hoje}
-          onFechar={() => setLinhaAberta(null)}
+          onFechar={() => { setLinhaAberta(null); setContaDoDetalhe(null); }}
         />
       </div>
     </div>

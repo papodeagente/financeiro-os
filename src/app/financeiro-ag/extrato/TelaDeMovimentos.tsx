@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { ArrowLeftRight, ChevronLeft, ChevronRight, Columns3, Download, Info, Landmark, TriangleAlert, X } from 'lucide-react';
+import { ArrowLeftRight, ChevronLeft, ChevronRight, Columns3, Info, Landmark, TriangleAlert, X } from 'lucide-react';
 
 import type {
   AgrupamentoDoExtrato, MovimentoCaixa, OrdemDoExtrato, OrigemDoMovimento, TipoDoMovimento,
@@ -15,6 +15,7 @@ import { cn, formatBRL } from '@/lib/utils';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { BotaoExportar } from '@/components/fin/BotaoExportar';
 import { DataState } from '@/components/fin/DataState';
 import { EmptyLesson } from '@/components/fin/EmptyLesson';
 import { FilterBar } from '@/components/fin/FilterBar';
@@ -23,7 +24,7 @@ import { PageHeader } from '@/components/fin/PageHeader';
 import { COLUNAS, GradeDeMovimentos, ROTULO_DA_ORIGEM, type ColunaId } from './GradeDeMovimentos';
 import { DetalheDoMovimento } from './DetalheDoMovimento';
 import { ATALHOS_DE_PERIODO, atalhoDoIntervalo, dataCurta, intervaloDoAtalho, type AtalhoDePeriodo } from './periodos';
-import { exportarMovimentos, useMovimentos } from './useMovimentos';
+import { useMovimentos } from './useMovimentos';
 
 /**
  * Extrato de conta e Movimentações (05/11/2026): a mesma fonte
@@ -99,8 +100,6 @@ export function TelaDeMovimentos({ leiaute }: { leiaute: Leiaute }) {
   const [mostrarColunas, setMostrarColunas] = React.useState(false);
   const [selecionadas, setSelecionadas] = React.useState<Map<string, number>>(new Map());
   const [aberta, setAberta] = React.useState<MovimentoCaixa | null>(null);
-  const [exportando, setExportando] = React.useState(false);
-  const [erroExportar, setErroExportar] = React.useState<string | null>(null);
 
   // Preferências e atalho do endereço (?conta=<id>), uma vez, no navegador.
   React.useEffect(() => {
@@ -161,13 +160,13 @@ export function TelaDeMovimentos({ leiaute }: { leiaute: Leiaute }) {
     if (iv) { setDe(iv.de); setAte(iv.ate); }
   }
 
-  async function exportar() {
-    setExportando(true);
-    setErroExportar(null);
+  /** Endereço do arquivo: o recorte inteiro (sem página), no leiaute da tela. */
+  function enderecoDoArquivo(formato: string): string {
     const p = new URLSearchParams(consulta);
     p.delete('pagina'); p.delete('por_pagina');
-    setErroExportar(await exportarMovimentos(p.toString(), leiaute));
-    setExportando(false);
+    p.set('format', formato);
+    p.set('leiaute', leiaute);
+    return `/api/movimentos-caixa?${p}`;
   }
 
   const multiConta = contas.length !== 1 && contasBancarias.length > 1;
@@ -346,13 +345,7 @@ export function TelaDeMovimentos({ leiaute }: { leiaute: Leiaute }) {
             <Columns3 aria-hidden="true" className="size-4" />
             Colunas
           </Button>
-          <div className="flex flex-wrap items-center gap-[var(--fin-s-2)]">
-            {erroExportar ? <span role="alert" className="fin-t-caption text-[var(--fin-negative-text)]">{erroExportar}</span> : null}
-            <Button type="button" variant="outline" size="sm" disabled={exportando || !dados?.total} onClick={() => { void exportar(); }} className="h-11 gap-[var(--fin-s-2)] lg:h-9">
-              <Download aria-hidden="true" className="size-4" />
-              {exportando ? 'Exportando…' : 'Exportar para Excel (CSV)'}
-            </Button>
-          </div>
+          <BotaoExportar origem={extrato ? 'extrato' : 'movimentacoes'} desabilitado={!dados?.total} endereco={enderecoDoArquivo} />
         </div>
 
         {mostrarColunas ? (

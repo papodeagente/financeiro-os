@@ -16,6 +16,10 @@ import {
   type FatiaDoLancamento,
 } from './dimensoes';
 import { num, round2, soma } from './money';
+import {
+  rotuloDoPeriodo,
+  type ColunaExportada, type DocumentoExportado, type FiltroAplicado, type LinhaExportada,
+} from './exportacao/documento';
 
 export type Visao = 'categoria' | 'centro' | 'rateio';
 export type DataDe = 'EMISSAO' | 'VENCIMENTO' | 'LIQUIDACAO' | 'MOVIMENTACAO';
@@ -515,4 +519,107 @@ export function planilhaDasLinhas(visao: Visao, linhas: readonly LinhaLancamento
   const cabecalho = colunas.map(([nome]) => auditCsvCell(nome)).join(';');
   const corpo = linhas.map(l => colunas.map(([, valor]) => auditCsvCell(valor(l))).join(';'));
   return '﻿' + [cabecalho, ...corpo].join('\r\n');
+}
+
+// ---------------------------------------------------------------------------
+// Excel (.xlsx), PDF e impressão (E7, G3): o mesmo recorte do CSV, no
+// documento único de src/lib/exportacao.
+// ---------------------------------------------------------------------------
+
+export const TITULO_DO_RELATORIO: Record<Visao, string> = {
+  categoria: 'Relatório por categoria',
+  centro: 'Relatório por centro de custo',
+  rateio: 'Relatório por rateio',
+};
+
+type ColunaDoc = ColunaExportada & { valor: (l: LinhaLancamento) => string | number };
+
+const DOC_INICIO: ColunaDoc[] = [
+  { id: 'numero', rotulo: 'Número', tipo: 'texto', valor: l => l.numero },
+  { id: 'venda', rotulo: 'Nº da venda', tipo: 'texto', valor: l => l.venda_numero },
+  { id: 'emissao', rotulo: 'Emissão', tipo: 'data', valor: l => l.emissao },
+  { id: 'vencimento', rotulo: 'Vencimento', tipo: 'data', valor: l => l.vencimento },
+  { id: 'liquidacao', rotulo: 'Liquidação', tipo: 'data', valor: l => l.liquidacao },
+  { id: 'movimentacao', rotulo: 'Movimentação', tipo: 'data', valor: l => l.movimentacao },
+  { id: 'pessoa', rotulo: 'Pessoa', tipo: 'texto', valor: l => l.pessoa },
+];
+const SITUACAO_DOC: ColunaDoc = { id: 'situacao', rotulo: 'Situação', tipo: 'texto', valor: l => rotuloDaSituacaoNaLinha(l.situacao, l.lado) };
+
+const COLUNAS_DOC: Record<Visao, ColunaDoc[]> = {
+  categoria: [
+    ...DOC_INICIO,
+    { id: 'moeda', rotulo: 'Moeda', tipo: 'texto', valor: l => l.moeda },
+    { id: 'valor', rotulo: 'Valor', tipo: 'dinheiro', valor: l => l.valor },
+    { id: 'grupo', rotulo: 'Grupo', tipo: 'texto', valor: l => l.grupo_nome },
+    { id: 'codigo', rotulo: 'Código', tipo: 'texto', valor: l => l.categoria_codigo },
+    { id: 'categoria', rotulo: 'Categoria', tipo: 'texto', valor: l => l.categoria_nome },
+    { id: 'tipo', rotulo: 'Tipo', tipo: 'texto', valor: l => l.tipo },
+    { id: 'descricao', rotulo: 'Descrição', tipo: 'texto', valor: l => l.descricao },
+    { id: 'documento', rotulo: 'Documento', tipo: 'texto', valor: l => l.documento },
+    { id: 'conta', rotulo: 'Conta', tipo: 'texto', valor: l => l.conta_bancaria },
+    SITUACAO_DOC,
+    { id: 'tags', rotulo: 'Tags', tipo: 'texto', valor: l => l.tags.join(', ') },
+  ],
+  centro: [
+    ...DOC_INICIO,
+    { id: 'descricao', rotulo: 'Descrição', tipo: 'texto', valor: l => l.descricao },
+    { id: 'centro', rotulo: 'Centro de custo', tipo: 'texto', valor: l => l.centro_custo_nome },
+    { id: 'valor_lancamento', rotulo: 'Valor do lançamento', tipo: 'dinheiro', valor: l => l.valor_lancamento },
+    { id: 'valor_movimentacao', rotulo: 'Pago/recebido', tipo: 'dinheiro', valor: l => l.valor_movimentacao },
+    { id: 'percentual', rotulo: '% no centro', tipo: 'percentual', valor: l => round2(l.percentual) },
+    { id: 'valor', rotulo: 'Valor no centro', tipo: 'dinheiro', valor: l => l.valor },
+    { id: 'tipo', rotulo: 'Tipo', tipo: 'texto', valor: l => l.tipo },
+    { id: 'conta', rotulo: 'Conta', tipo: 'texto', valor: l => l.conta_bancaria },
+    SITUACAO_DOC,
+  ],
+  rateio: [
+    { id: 'tipo', rotulo: 'Tipo', tipo: 'texto', valor: l => l.tipo },
+    ...DOC_INICIO.slice(2),
+    { id: 'descricao', rotulo: 'Descrição', tipo: 'texto', valor: l => l.descricao },
+    { id: 'conta', rotulo: 'Conta', tipo: 'texto', valor: l => l.conta_bancaria },
+    { id: 'centro', rotulo: 'Centro de custo', tipo: 'texto', valor: l => l.centro_custo_nome },
+    { id: 'categoria', rotulo: 'Categoria', tipo: 'texto', valor: l => `${l.categoria_codigo} ${l.categoria_nome}`.trim() },
+    { id: 'valor_lancamento', rotulo: 'Valor do lançamento', tipo: 'dinheiro', valor: l => l.valor_lancamento },
+    { id: 'percentual', rotulo: '% da parte', tipo: 'percentual', valor: l => round2(l.percentual) },
+    { id: 'valor', rotulo: 'Valor da parte', tipo: 'dinheiro', valor: l => l.valor },
+    { id: 'valor_movimentacao', rotulo: 'Pago/recebido', tipo: 'dinheiro', valor: l => l.valor_movimentacao },
+  ],
+};
+
+/** O filtro aplicado, por extenso (vai no topo do arquivo e no nome dele). */
+export function filtrosLegiveis(
+  f: FiltrosLancamentos, nomes: { centro?: string; categoria?: string } = {},
+): FiltroAplicado[] {
+  const out: FiltroAplicado[] = [{ rotulo: 'Período', valor: rotuloDoPeriodo(f.de, f.ate) }];
+  if (f.data_de !== 'VENCIMENTO') out.push({ rotulo: 'Data de', valor: ROTULO_DATA_DE[f.data_de] });
+  if (f.situacao !== 'TODAS') out.push({ rotulo: 'Situação', valor: ROTULO_SITUACAO[f.situacao] });
+  if (f.tipo !== 'TODOS') out.push({ rotulo: 'Tipo', valor: f.tipo === 'DESPESA' ? 'Só despesas' : 'Só receitas' });
+  if (f.centro_custo_id) out.push({ rotulo: 'Centro de custo', valor: nomes.centro || f.centro_custo_id });
+  if (f.categoria_id) out.push({ rotulo: 'Categoria', valor: nomes.categoria || f.categoria_id });
+  if (f.tag) out.push({ rotulo: 'Tag', valor: f.tag });
+  if (f.pesquisar) out.push({ rotulo: f.em === 'TUDO' ? 'Pesquisa' : `Pesquisa em ${ROTULO_EM[f.em].toLocaleLowerCase('pt-BR')}`, valor: f.pesquisar });
+  if (f.incluir_repasse) out.push({ rotulo: 'Repasses', valor: 'incluídos' });
+  if (f.agrupar) out.push({ rotulo: 'Agrupado por', valor: ROTULO_AGRUPAR[f.agrupar] });
+  return out;
+}
+
+/** O relatório inteiro como documento de exportação (valores em reais). */
+export function documentoDasLinhas(f: FiltrosLancamentos, linhas: readonly LinhaLancamento[]): DocumentoExportado {
+  const colunas = COLUNAS_DOC[f.visao];
+  const centro = f.centro_custo_id ? linhas.find(l => l.centro_custo_id === f.centro_custo_id)?.centro_custo_nome : undefined;
+  const cat = f.categoria_id ? linhas.find(l => l.categoria_id === f.categoria_id) : undefined;
+  const t = totalizar(linhas);
+  const totais: LinhaExportada = { valor: t.valor };
+  if (colunas.some(c => c.id === 'valor_lancamento')) totais.valor_lancamento = t.valor_lancamento;
+  if (colunas.some(c => c.id === 'valor_movimentacao')) totais.valor_movimentacao = t.valor_movimentacao;
+  return {
+    titulo: TITULO_DO_RELATORIO[f.visao],
+    ...(regimeDosFiltros(f) === 'caixa' ? { subtitulo: 'Valores pelo regime de caixa (proporcional ao que já foi pago ou recebido).' } : {}),
+    filtros: filtrosLegiveis(f, { centro, categoria: cat ? `${cat.categoria_codigo} ${cat.categoria_nome}`.trim() : undefined }),
+    colunas: colunas.map(({ id, rotulo, tipo }) => ({ id, rotulo, tipo })),
+    linhas: linhas.map(l => Object.fromEntries(colunas.map(c => [c.id, c.valor(l)]))),
+    totais,
+    rotulo_total: `Total (${t.lancamentos} ${t.lancamentos === 1 ? 'lançamento' : 'lançamentos'})`,
+    dinheiro_em: 'reais',
+  };
 }

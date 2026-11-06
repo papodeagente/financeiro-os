@@ -8,8 +8,10 @@ import { registrarEventoAuditoria } from '@/lib/audit';
 import { hojeISO } from '@/lib/money';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import {
-  EXPORTACAO_MAX, FiltroInvalido, SELECAO_MAX, csvDasContas, existeTabelaDeCobranca, lerContas, lerFiltro, lerTodas,
+  EXPORTACAO_MAX, FiltroInvalido, SELECAO_MAX, csvDasContas, documentoDasContas, existeTabelaDeCobranca, lerContas, lerFiltro, lerTodas,
 } from '@/lib/contas-pagar-receber';
+import { formatoDaConsulta } from '@/lib/exportacao/arquivo';
+import { responderExportacao } from '@/lib/exportacao/servidor';
 
 /**
  * Contas a Pagar/Receber numa lista só (05/11/2026): só leitura, paginada no
@@ -19,6 +21,7 @@ import {
  *       &busca=&em=&categoria=&centro=&conta=&cobranca=todas|sem_boleto|emitida|vencida|paga|falhou
  *       &ordem=&direcao=&pagina=&por_pagina=
  *   GET ...&format=csv     planilha do filtro inteiro (até 50.000 linhas; direito "exportar")
+ *   GET ...&format=xlsx|pdf|imprimir  o mesmo recorte em Excel, PDF ou PDF que já imprime (E7)
  *   GET ...&format=chaves  as contas do filtro inteiro, para "selecionar todas" (até 2.000)
  */
 export const dynamic = 'force-dynamic';
@@ -61,6 +64,24 @@ export async function GET(req: Request) {
       const nome = `contas-a-pagar-e-receber-${filtro.hoje}.csv`;
       return new Response(csvDasContas(linhas), {
         headers: { ...HEADERS, 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="${nome}"` },
+      });
+    }
+
+    // Excel (.xlsx), PDF e impressão (E7): o mesmo filtro e o mesmo limite do CSV.
+    const formatoDoArquivo = formatoDaConsulta(formato);
+    if (formatoDoArquivo && formatoDoArquivo !== 'csv') {
+      if (!(await pode(session, 'exportar'))) {
+        return NextResponse.json({ error: 'Seu acesso não inclui baixar em Excel e PDF.' }, { status: 403, headers: HEADERS });
+      }
+      const linhas = await lerTodas(exec, tenantId, filtro, liberadas, EXPORTACAO_MAX + 1, opcoes);
+      if (linhas.length > EXPORTACAO_MAX) {
+        return NextResponse.json(
+          { error: 'O arquivo aceita até 50.000 contas. Escolha um período menor ou mais filtros.' },
+          { status: 422, headers: HEADERS },
+        );
+      }
+      return responderExportacao(session, documentoDasContas(linhas, filtro), formatoDoArquivo, {
+        exec, entidade: 'contas_pagar_receber', direitoConferido: true,
       });
     }
 

@@ -11,6 +11,8 @@ import { FinTable, type FinColuna } from '@/components/fin/FinTable';
 import { ConfirmDialog } from '@/components/fin/ConfirmDialog';
 import { RecordSheet } from '@/components/fin/RecordSheet';
 import { Callout } from '@/components/fin/Callout';
+import { BotaoExportar } from '@/components/fin/BotaoExportar';
+import { documentoDoFechamento } from '@/lib/exportacao/listas-financeiro';
 import { reais } from '@/components/comissoes/PainelDoVendedor';
 import type { Funcao, ItemAFechar, LinhaDoFechamento } from '@/lib/comissao-funcoes';
 import { frasesDaExplicacao } from '@/lib/comissao-funcoes';
@@ -132,6 +134,12 @@ export default function FecharComissoesPage() {
             {funcoes.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
           </select>
         </label>
+        <BotaoExportar
+          className="ml-auto"
+          origem="fechar_comissoes"
+          desabilitado={!linhas.length}
+          documento={() => documentoDoFechamento(linhas, { ate, funcao: funcoes.find(f => f.id === funcaoId)?.nome })}
+        />
       </div>
 
       <div className={RITMO_DA_PAGINA}>
