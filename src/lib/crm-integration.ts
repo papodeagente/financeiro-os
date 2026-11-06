@@ -2865,9 +2865,11 @@ async function consultarCrm<T>(
   campo: string,
   ler: (bruto: unknown) => T | null,
   semSuporte: string,
+  /** Comandos e telas que precisam do estado de agora (unificação do Asaas) não usam o cache. */
+  opcoes: { semCache?: boolean; tempoMs?: number } = {},
 ): Promise<{ situacao: 'ok'; valor: T; consultado_em: string } | FalhaDaConsulta> {
   const chave = `${tenantId}:${tipo}:${JSON.stringify(payload)}`;
-  const guardado = CACHE_CONSULTAS.get(chave);
+  const guardado = opcoes.semCache ? undefined : CACHE_CONSULTAS.get(chave);
   if (guardado && guardado.ate > Date.now()) return guardado.valor as { situacao: 'ok'; valor: T; consultado_em: string } | FalhaDaConsulta;
 
   const resultado = await (async (): Promise<{ situacao: 'ok'; valor: T; consultado_em: string } | FalhaDaConsulta> => {
@@ -2890,7 +2892,7 @@ async function consultarCrm<T>(
           'x-entur-signature': hmacSign(corpo, config.api_key_crm),
         },
         body: corpo,
-        signal: AbortSignal.timeout(6000),
+        signal: AbortSignal.timeout(opcoes.tempoMs ?? 6000),
       });
       const texto = await res.text();
       if (res.status === 401) return { situacao: 'indisponivel', detalhe: 'O CRM recusou a assinatura: confira o segredo da integração.' };
@@ -2911,13 +2913,49 @@ async function consultarCrm<T>(
       return { situacao: 'ok', valor, consultado_em: new Date().toISOString() };
     } catch (e) {
       const tempo = e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError');
-      return { situacao: 'indisponivel', detalhe: tempo ? 'O CRM demorou mais de 6 segundos para responder.' : 'Não foi possível falar com o CRM agora.' };
+      return { situacao: 'indisponivel', detalhe: tempo ? `O CRM demorou mais de ${Math.round((opcoes.tempoMs ?? 6000) / 1000)} segundos para responder.` : 'Não foi possível falar com o CRM agora.' };
     }
   })();
 
   const validade = VALIDADE_CONSULTA_MS[resultado.situacao];
-  if (validade > 0) CACHE_CONSULTAS.set(chave, { ate: Date.now() + validade, valor: resultado });
+  if (validade > 0 && !opcoes.semCache) CACHE_CONSULTAS.set(chave, { ate: Date.now() + validade, valor: resultado });
   return resultado;
+}
+
+/**
+ * Conexão Asaas unificada (E7, 06/11/2026): consulta e comandos ao CRM sobre
+ * o Asaas dele (`ASAAS_CONEXAO`, `ASAAS_UNIFICAR`, `ASAAS_DESUNIFICAR`). Sem
+ * cache: a tela e os comandos precisam do estado de agora. A resposta vem no
+ * campo `asaas`, assinada como as outras consultas.
+ */
+export async function consultarAsaasDoCrm(
+  tenantId: string,
+  tipo: string,
+  payload: Record<string, unknown> = {},
+): Promise<{ situacao: 'ok'; valor: Record<string, unknown>; consultado_em: string } | FalhaDaConsulta> {
+  return consultarCrm(
+    tenantId, tipo, payload, 'asaas',
+    b => (b && typeof b === 'object' && !Array.isArray(b) ? (b as Record<string, unknown>) : null),
+    'O CRM ainda não conhece a conexão Asaas unificada: falta atualizar o CRM.',
+    { semCache: true, tempoMs: 15_000 },
+  );
+}
+
+/**
+ * Assina a resposta a um pedido do CRM com o segredo que o CRM usa para
+ * assinar (o mesmo que acabou de conferir a assinatura do pedido). O CRM
+ * descarta resposta sem assinatura válida.
+ */
+export async function assinarRespostaAoCrm(tenantId: string, corpo: string): Promise<string> {
+  const config = await getCrmConfig(tenantId);
+  const segredo = config?.api_key_entur || config?.api_key_crm || '';
+  return segredo ? hmacSign(corpo, segredo) : '';
+}
+
+/** O endereço do CRM desta empresa (para saber a empresa do CRM: `.../webhook/<empresa>`). */
+export async function enderecoDoCrm(tenantId: string): Promise<string | null> {
+  const config = await getCrmConfig(tenantId);
+  return config?.ativo ? (config.webhook_url_crm || null) : null;
 }
 
 /** Leads e vendas ganhas do mês (acompanhamento do plano), com as contas das Análises do CRM. */

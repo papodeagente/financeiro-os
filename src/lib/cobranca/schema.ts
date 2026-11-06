@@ -117,6 +117,25 @@ export const COBRANCA_SCHEMA_SQL = `
     atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (tenant_id, provedor)
   );
+
+  -- Conexão Asaas unificada com o CRM (E7, 06/11/2026): uma linha por
+  -- agência. Ligada = o CRM usa a conexão daqui e os avisos das cobranças
+  -- dele são repassados. Guarda o que mudou no aviso do Financeiro para o
+  -- "Desfazer" devolver exatamente como era. Fica NA auditoria (quem unificou).
+  CREATE TABLE IF NOT EXISTS asaas_unificacao (
+    tenant_id TEXT PRIMARY KEY,
+    ativo BOOLEAN NOT NULL DEFAULT FALSE,
+    desde TIMESTAMPTZ,
+    aplicado_por TEXT,
+    aplicado_por_nome TEXT,
+    carteira TEXT,
+    aviso_id TEXT,
+    eventos_antes JSONB,
+    eventos_incluidos JSONB NOT NULL DEFAULT '[]'::jsonb,
+    aviso_do_crm TEXT,
+    historico JSONB NOT NULL DEFAULT '[]'::jsonb,
+    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
 `;
 
 /** Tabelas de controle: fora do gatilho de auditoria (audit-schema.ts). */
