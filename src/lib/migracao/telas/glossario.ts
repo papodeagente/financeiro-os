@@ -74,7 +74,7 @@ export const GLOSSARIO: readonly TermoDoGlossario[] = [
   { id: 'cheque', assunto: 'caixa', la: ['Cheque', 'Cheque pré-datado'], aqui: 'Forma de pagamento Cheque', href: '/financeiro-ag/formas-pagamento' },
   { id: 'formas', assunto: 'caixa', la: ['Formas de pagamento'], aqui: 'Formas de pagamento', href: '/financeiro-ag/formas-pagamento',
     diferenca: 'Pix é uma forma de pagamento própria.' },
-  { id: 'moeda', assunto: 'caixa', la: ['Moedas', 'Câmbio', 'Atualizar câmbio'], aqui: 'Câmbio sugerido ao vivo, sempre editável', chega: 'E6' },
+  { id: 'moeda', assunto: 'caixa', la: ['Moedas', 'Câmbio', 'Atualizar câmbio'], aqui: 'Câmbio sugerido ao vivo, sempre editável', href: '/financeiro-ag/moedas' },
 
   // Categorias, centros e rateio
   { id: 'categoria', assunto: 'categorias', la: ['Categoria', 'Categoria financeira'], aqui: 'Categorias', href: '/financeiro-ag/plano-contas' },
@@ -97,7 +97,7 @@ export const GLOSSARIO: readonly TermoDoGlossario[] = [
     diferenca: 'Por competência ou por caixa, à escolha.' },
   { id: 'tabela-dinamica', assunto: 'relatorios', la: ['Tabela dinâmica por categoria', 'Gastos por categoria'], aqui: 'Resultado por categoria', href: '/financeiro-ag/resultado-por-categoria' },
   { id: 'painel', assunto: 'relatorios', la: ['Painel inicial', 'Contas do dia', 'Saldo das contas'], aqui: 'Visão geral do financeiro', href: '/financeiro-ag' },
-  { id: 'vendas-relatorios', assunto: 'relatorios', la: ['Vendas por produto', 'Vendas por vendedor', 'Ranking de clientes'], aqui: 'Relatórios de vendas', chega: 'E5' },
+  { id: 'vendas-relatorios', assunto: 'relatorios', la: ['Vendas por produto', 'Vendas por vendedor', 'Ranking de clientes'], aqui: 'Relatórios de vendas', href: '/relatorios/vendas' },
 
   // Boletos e cobrança
   { id: 'boleto', assunto: 'cobranca', la: ['Boleto', 'Gerar boleto'], aqui: 'Cobranças (boleto e Pix)', href: '/financeiro-ag/cobrancas',
@@ -116,15 +116,15 @@ export const GLOSSARIO: readonly TermoDoGlossario[] = [
   // Venda, fornecedor e comissão
   { id: 'venda', assunto: 'venda', la: ['Venda', 'Fechar venda'], aqui: 'Vendas fechadas', href: '/vendas',
     diferenca: 'As contas a pagar e a receber da venda nascem sozinhas, sem passo manual.' },
-  { id: 'taxas-venda', assunto: 'venda', la: ['Taxa DU', 'RAV', 'Over', 'Fee'], aqui: 'Componentes da receita na venda', chega: 'E5' },
-  { id: 'fatura-cliente', assunto: 'venda', la: ['Fatura do cliente', 'Regras de faturamento', 'Nota de débito'], aqui: 'Faturas e Regras de faturamento', chega: 'E5' },
-  { id: 'fatura-fornecedor', assunto: 'venda', la: ['Fatura do fornecedor', 'Sinal ao fornecedor'], aqui: 'Fatura do fornecedor e sinal', chega: 'E5' },
-  { id: 'reembolso', assunto: 'venda', la: ['Reembolso', 'Crédito do cliente', 'Cancelamento de produto'], aqui: 'Reembolsos e crédito do cliente', chega: 'E5' },
+  { id: 'taxas-venda', assunto: 'venda', la: ['Taxa DU', 'RAV', 'Over', 'Fee'], aqui: 'Componentes da receita na venda', href: '/config/vendas' },
+  { id: 'fatura-cliente', assunto: 'venda', la: ['Fatura do cliente', 'Regras de faturamento', 'Nota de débito'], aqui: 'Faturas e Regras de faturamento', href: '/financeiro-ag/faturas' },
+  { id: 'fatura-fornecedor', assunto: 'venda', la: ['Fatura do fornecedor', 'Sinal ao fornecedor'], aqui: 'Fatura do fornecedor e sinal', href: '/financeiro-ag/fornecedores/faturas' },
+  { id: 'reembolso', assunto: 'venda', la: ['Reembolso', 'Crédito do cliente', 'Cancelamento de produto'], aqui: 'Reembolsos e crédito do cliente', href: '/financeiro-ag/reembolsos' },
   { id: 'comissao', assunto: 'venda', la: ['Comissão', 'Plano de comissão', 'Metas'], aqui: 'Comissões e Planos de comissão', href: '/equipe/comissoes' },
-  { id: 'fechar-comissao', assunto: 'venda', la: ['Fechar comissões', 'Pagar comissões'], aqui: 'Fechar e pagar comissões no servidor', chega: 'E5' },
+  { id: 'fechar-comissao', assunto: 'venda', la: ['Fechar comissões', 'Pagar comissões'], aqui: 'Fechar e pagar comissões no servidor', href: '/equipe/fechar-comissoes' },
   { id: 'nota-fiscal', assunto: 'venda', la: ['Nota fiscal', 'NFS-e'], aqui: 'Notas fiscais (padrão nacional)', href: '/financeiro-ag/notas' },
-  { id: 'retencao', assunto: 'venda', la: ['Retenção', 'Imposto retido'], aqui: 'Retenções na fonte (Lei 9.430)', chega: 'E5' },
-  { id: 'operadora', assunto: 'venda', la: ['Extrato da operadora', 'Conferência de depósito'], aqui: 'Conferência de extrato de qualquer operadora', chega: 'E6' },
+  { id: 'retencao', assunto: 'venda', la: ['Retenção', 'Imposto retido'], aqui: 'Retenções na fonte (Lei 9.430)', href: '/financeiro-ag/notas/retencoes' },
+  { id: 'operadora', assunto: 'venda', la: ['Extrato da operadora', 'Conferência de depósito'], aqui: 'Conferência de extrato de qualquer operadora', href: '/financeiro-ag/conferencia-operadora' },
 
   // Cadastros
   { id: 'pessoa', assunto: 'cadastros', la: ['Pessoa', 'Cadastro de pessoas'], aqui: 'Clientes e Fornecedores', href: '/pessoas/clientes',

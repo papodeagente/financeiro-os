@@ -19,7 +19,7 @@ export type Entrega = 'hoje' | 'E1' | 'E2' | 'E3' | 'E4' | 'E5' | 'E6' | 'E7';
  * A última entrega publicada (esta tela saiu com a E4). Quem publicar a E5,
  * a E6 e a E7 sobe este valor: os itens delas já têm o link da tela.
  */
-export const ENTREGA_NO_AR: Entrega = 'E4';
+export const ENTREGA_NO_AR: Entrega = 'E7';
 
 export const O_QUE_TRAZ_A_ENTREGA: Record<Exclude<Entrega, 'hoje'>, string> = {
   E1: 'Base que protege o número',
@@ -75,8 +75,8 @@ export const BLOCOS_DA_PARIDADE: readonly BlocoDaParidade[] = [
       { rotulo: 'Permissão por conta bancária', entrega: 'E2', href: '/config/perfis-de-acesso' },
       { rotulo: 'Saldo de abertura trazido do sistema anterior', entrega: 'E4', href: '/mudanca' },
       { rotulo: 'Extrato e movimentações antigos trazidos, ligados às liquidações', entrega: 'E7', href: '/mudanca' },
-      { rotulo: 'Conta em moeda estrangeira e transferência com câmbio', entrega: 'E6' },
-      { rotulo: 'Extrato do banco automático', entrega: 'E6' },
+      { rotulo: 'Conta em moeda estrangeira e transferência com câmbio', entrega: 'E6', href: '/financeiro-ag/transferencias' },
+      { rotulo: 'Extrato do banco automático', entrega: 'E6', href: '/financeiro-ag/extrato-automatico' },
     ],
   },
   {
@@ -176,9 +176,9 @@ export const BLOCOS_DA_PARIDADE: readonly BlocoDaParidade[] = [
     numero: 12, titulo: 'Formas de pagamento, moedas e câmbio', resumo: 'Como o dinheiro entra e sai, em reais ou em outra moeda.',
     itens: [
       { rotulo: 'Formas de pagamento, com Pix', entrega: 'E2', href: '/financeiro-ag/formas-pagamento' },
-      { rotulo: 'Câmbio sugerido ao vivo, sempre editável', entrega: 'E6' },
-      { rotulo: 'Moedas e variação cambial', entrega: 'E6' },
-      { rotulo: 'Lista oficial de bancos', entrega: 'E6' },
+      { rotulo: 'Câmbio sugerido ao vivo, sempre editável', entrega: 'E6', href: '/financeiro-ag/moedas' },
+      { rotulo: 'Moedas e variação cambial', entrega: 'E6', href: '/financeiro-ag/moedas' },
+      { rotulo: 'Lista oficial de bancos', entrega: 'E6', href: '/financeiro-ag/contas-bancarias' },
     ],
   },
   {
@@ -186,7 +186,7 @@ export const BLOCOS_DA_PARIDADE: readonly BlocoDaParidade[] = [
     itens: [
       { rotulo: 'Recebimentos das plataformas (Asaas, Pagar.me, Hotmart)', entrega: 'hoje', href: '/financeiro-ag/recebimentos' },
       { rotulo: 'Integração com o CRM', entrega: 'hoje', href: '/config/crm' },
-      { rotulo: 'Conferência de extrato de qualquer operadora', entrega: 'E6' },
+      { rotulo: 'Conferência de extrato de qualquer operadora', entrega: 'E6', href: '/financeiro-ag/conferencia-operadora' },
     ],
   },
   {

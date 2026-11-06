@@ -83,6 +83,7 @@ const NAVIGATION_ITEMS: CommandItem[] = [
   { id: 'planos-comissao', label: 'Planos de comissão', href: '/equipe/planos-comissao', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
   { id: 'funcoes-comissao', label: 'Funções e metas (comissão por função)', href: '/equipe/funcoes', icon: <Briefcase className="w-4 h-4" />, section: 'navegacao' },
   { id: 'planos-por-funcao', label: 'Planos de comissão por função', href: '/equipe/planos-por-funcao', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'metas-por-funcao', label: 'Grade de metas (pessoas × meses)', href: '/equipe/metas-por-funcao', icon: <Medal className="w-4 h-4" />, section: 'navegacao' },
   { id: 'fechar-comissoes', label: 'Fechar comissões', href: '/equipe/fechar-comissoes', icon: <Percent className="w-4 h-4" />, section: 'navegacao' },
   { id: 'pagar-comissoes', label: 'Pagar comissões', href: '/equipe/pagar-comissoes', icon: <Wallet className="w-4 h-4" />, section: 'navegacao' },
   { id: 'minhas-comissoes', label: 'Minhas comissões (painel do vendedor)', href: '/equipe/minhas-comissoes', icon: <Medal className="w-4 h-4" />, section: 'navegacao' },
@@ -94,6 +95,7 @@ const NAVIGATION_ITEMS: CommandItem[] = [
   { id: 'cac', label: 'Dashboard CAC', href: '/cac/dashboard', icon: <Gauge className="w-4 h-4" />, section: 'navegacao' },
   { id: 'rentabilidade', label: 'Rentabilidade', href: '/relatorios/rentabilidade', icon: <TrendingUp className="w-4 h-4" />, section: 'navegacao' },
   { id: 'config-agencia', label: 'Configurações', href: '/config/agencia', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'config-empresas', label: 'Empresas da agência (lojas, CNPJs, multiempresa)', href: '/config/empresas', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
   // Mudança de sistema (E4, 05/11/2026).
   { id: 'mudanca', label: 'Mudar para o EnturOS (trazer dados do sistema anterior)', href: '/mudanca', icon: <FolderInput className="w-4 h-4" />, section: 'navegacao' },
   { id: 'mudanca-glossario', label: 'Glossário: como chamava lá, como chama aqui', href: '/mudanca/glossario', icon: <BookA className="w-4 h-4" />, section: 'navegacao' },
