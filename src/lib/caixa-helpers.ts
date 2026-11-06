@@ -12,6 +12,7 @@ export { calcularSaldoBancario } from './saldo-bancario';
 // regra da leitura, senão os dois divergem.
 import { valorMovimentado } from './saldo-bancario';
 import { reconstruirSaldos } from './razao';
+import { moedaDe } from './cambio';
 import { registrarMovimento } from './razao-servidor';
 import type { ExecutorSQL } from './caixa-atomico';
 
@@ -97,6 +98,8 @@ export async function recalcularSaldosCaixa(tenantId: string): Promise<{
   saldo_final_caixa_geral: number;
   caixa_geral_criada: boolean;
   ajustes: Array<{ conta_bancaria_id: string; diferenca: number }>;
+  /** Contas em moeda estrangeira: o saldo fica como está (ver abaixo). */
+  contas_em_moeda_mantidas: string[];
   erros: string[];
 }> {
   const result = {
@@ -107,6 +110,7 @@ export async function recalcularSaldosCaixa(tenantId: string): Promise<{
     saldo_final_caixa_geral: 0,
     caixa_geral_criada: false,
     ajustes: [] as Array<{ conta_bancaria_id: string; diferenca: number }>,
+    contas_em_moeda_mantidas: [] as string[],
     erros: [] as string[],
   };
   if (!pool || !tenantId) {
@@ -183,6 +187,13 @@ export async function recalcularSaldosCaixa(tenantId: string): Promise<{
     // muda mais o saldo em silêncio — fica registrado e aparece para revisão.
     for (const r of contasRows) {
       const id = String(r.id);
+      // Conta em moeda estrangeira (05/11/2026, E6): o histórico das contas
+      // a pagar/receber está em reais e o saldo dela está na moeda. Recalcular
+      // misturaria as duas; o saldo fica como está e a conferência é pelo razão.
+      if (moedaDe(((r.data ?? {}) as Record<string, unknown>).moeda) !== 'BRL') {
+        result.contas_em_moeda_mantidas.push(id);
+        continue;
+      }
       const anterior = round2(num(((r.data ?? {}) as Record<string, unknown>).saldo_atual));
       const saldoFinal = round2(rec.saldos[id] ?? 0);
       await client.query(

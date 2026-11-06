@@ -24,6 +24,8 @@ import {
   type ChavePreset, type EstadoRepeticao, type Frequencia, type ModoSerie,
 } from '@/lib/recorrencia';
 import { cn } from '@/lib/utils';
+import { useCotacoes } from '@/components/fin/useCotacoes';
+import { mesPorExtenso, reajusteDosUltimos12Meses } from '@/lib/cambio';
 
 const OPCOES_MODO = [
   { valor: 'recorrente' as ModoSerie, rotulo: 'Recorrente' },
@@ -265,18 +267,22 @@ export function BlocoDeRepeticao({ estado, onChange, inicio, valor, substantivo,
 
                   <Field rotulo="Reajuste anual (%)" ajuda="Opcional. Aplicado uma vez por ano, no mês escolhido.">
                     {a => (
-                      <Input
-                        {...a}
-                        aria-invalid={a['aria-invalid'] || undefined}
-                        type="number"
-                        inputMode="decimal"
-                        step="0.01"
-                        min={0}
-                        value={estado.reajuste_percentual || ''}
-                        placeholder="Sem reajuste"
-                        onChange={e => onChange({ reajuste_percentual: parseFloat(e.target.value) || 0 })}
-                        className={cn(CONTROLE, 'tabular-nums')}
-                      />
+                      <div className="flex flex-col gap-[var(--fin-s-2)]">
+                        <Input
+                          {...a}
+                          aria-invalid={a['aria-invalid'] || undefined}
+                          type="number"
+                          inputMode="decimal"
+                          step="0.01"
+                          min={0}
+                          value={estado.reajuste_percentual || ''}
+                          placeholder="Sem reajuste"
+                          // Digitar outro número desfaz a ligação com o índice.
+                          onChange={e => onChange({ reajuste_percentual: parseFloat(e.target.value) || 0, reajuste_origem: null })}
+                          className={cn(CONTROLE, 'tabular-nums')}
+                        />
+                        <SugestaoDeIndice estado={estado} onChange={onChange} />
+                      </div>
                     )}
                   </Field>
                   {estado.reajuste_percentual ? (
@@ -375,3 +381,49 @@ function PreviaDaRepeticao({
 }
 
 export default BlocoDeRepeticao;
+
+/**
+ * IPCA e IGP-M de 12 meses como opção para o reajuste (05/11/2026, E6). Só
+ * sugere: o percentual fica escrito no campo e é ele que vale; a origem do
+ * índice vai junto para a regra, para a descrição dizer de onde veio.
+ */
+function SugestaoDeIndice({ estado, onChange }: { estado: EstadoRepeticao; onChange: (p: Partial<EstadoRepeticao>) => void }) {
+  const { painel } = useCotacoes();
+  const opcoes = (['ipca', 'igpm'] as const)
+    .map(i => reajusteDosUltimos12Meses(painel?.indices ?? [], i))
+    .filter((r): r is NonNullable<typeof r> => r !== null);
+  if (!opcoes.length) return null;
+  const nome = (i: 'ipca' | 'igpm') => (i === 'ipca' ? 'IPCA' : 'IGP-M');
+  const fmt = (n: number) => `${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+  const origem = estado.reajuste_origem;
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap gap-[var(--fin-s-2)]">
+        {opcoes.map(r => {
+          const emUso = origem?.indice === r.indice && origem.ate === r.ate && estado.reajuste_percentual === r.percentual;
+          return (
+            <button
+              key={r.indice}
+              type="button"
+              aria-pressed={emUso}
+              onClick={() => onChange({ reajuste_percentual: r.percentual, reajuste_origem: { indice: r.indice, de: r.de, ate: r.ate, fonte: 'bcb_sgs' } })}
+              className={cn(
+                'fin-t-caption min-h-11 rounded-[var(--fin-r-md)] border px-3 font-medium transition-colors duration-[var(--fin-dur-rapida)] lg:min-h-9 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)]',
+                emUso
+                  ? 'border-[var(--fin-accent)] bg-[var(--fin-accent-soft)] text-[var(--fin-accent)]'
+                  : 'border-[var(--fin-border-strong)] bg-[var(--fin-surface)] text-[var(--fin-text-2)] hover:bg-[var(--fin-surface-2)]',
+              )}
+            >
+              Usar {nome(r.indice)} de 12 meses ({fmt(r.percentual)})
+            </button>
+          );
+        })}
+      </div>
+      {origem ? (
+        <p className="fin-t-caption text-[var(--fin-text-3)]">
+          {nome(origem.indice)} acumulado de {mesPorExtenso(origem.de)} a {mesPorExtenso(origem.ate)}, do Banco Central. O percentual fica fixo na série; não muda sozinho a cada ano.
+        </p>
+      ) : null}
+    </div>
+  );
+}

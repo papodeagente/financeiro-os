@@ -99,10 +99,23 @@ export async function aplicarMovimentoCaixaAtomico(
                       ELSE 0 END) + $3::numeric, 2)),
               true),
             updated_at = NOW()
-      WHERE id = $1 AND tenant_id = $2`,
-    [id, tenantId, valor],
+      WHERE id = $1 AND tenant_id = $2
+        AND ($4::boolean OR COALESCE(NULLIF(data->>'moeda', ''), 'BRL') = 'BRL')`,
+    [id, tenantId, valor, origem.naMoedaDaConta === true],
   );
   const moveu = (rowCount ?? 0) > 0;
+  if (!moveu && origem.naMoedaDaConta !== true) {
+    // Conta em moeda estrangeira não recebe reais por caminho que não
+    // converte (tela antiga, conciliação, CRM, plataformas): o saldo dela
+    // está na moeda e ficaria misturado.
+    const { rows } = await db.query(
+      `SELECT data->>'moeda' AS moeda, data->>'nome' AS nome FROM contas_bancarias WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+    const moeda = String(rows[0]?.moeda ?? '').trim();
+    if (rows[0] && moeda && moeda !== 'BRL') {
+      throw new ErroMovimentoCaixa(
+        `A conta ${String(rows[0].nome || 'escolhida')} é em ${moeda}. Pagamento em reais não entra nela: escolha uma conta em reais, ou liquide pela tela de liquidação informando o câmbio.`);
+    }
+  }
   // Depois do UPDATE (que esperou a trava da conta): se a abertura do razão
   // terminou enquanto este movimento esperava, ele já enxerga e entra.
   if (moveu) await registrarMovimento(db, tenantId, id, valor, origem);

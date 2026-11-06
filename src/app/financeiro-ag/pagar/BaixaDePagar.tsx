@@ -41,7 +41,10 @@ export function BaixaDePagar({ conta, onFechar, onRegistrada }: BaixaDePagarProp
     setForm(conta ? { dataPagamento: hojeISO(), valorPago: saldoDevedor(conta), observacao: '', anexos: [] } : null);
   }
 
-  const liquidacao = useLiquidacao('contas_pagar', (conta as unknown as (Record<string, unknown> & { id: string }) | null), round2(num(form?.valorPago)));
+  const liquidacao = useLiquidacao(
+    'contas_pagar', (conta as unknown as (Record<string, unknown> & { id: string }) | null), round2(num(form?.valorPago)), 0,
+    v => setForm(f => (f ? { ...f, valorPago: v } : f)),
+  );
 
   async function confirmar() {
     if (!conta || !form || pagando) return;

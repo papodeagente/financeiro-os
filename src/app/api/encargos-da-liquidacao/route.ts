@@ -3,6 +3,7 @@ import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
 import { recusaFinanceira } from '@/lib/guarda-rota';
 import { categoriasDosEncargos, linhasDeEncargos } from '@/lib/encargos-servidor';
+import { variacoesDaAgencia } from '@/lib/cambio-servidor';
 
 // Encargos registrados na liquidação (05/11/2026), para o DRE: as baixas com
 // juros, multa, desconto ou taxa e a categoria escolhida para cada um. Só
@@ -13,11 +14,13 @@ export async function GET() {
   const recusa = await recusaFinanceira('ler');
   if (recusa) return recusa;
   await initDB();
-  if (!pool) return NextResponse.json({ linhas: [], categorias: {} });
+  if (!pool) return NextResponse.json({ linhas: [], categorias: {}, variacoes: [] });
   const tenantId = await getTenantId();
-  const [linhas, categorias] = await Promise.all([
+  // Variação cambial das liquidações (05/11/2026, E6): linha própria no DRE.
+  const [linhas, categorias, variacoes] = await Promise.all([
     linhasDeEncargos(pool, tenantId),
     categoriasDosEncargos(pool, tenantId).catch(() => ({})),
+    variacoesDaAgencia(pool, tenantId),
   ]);
-  return NextResponse.json({ linhas, categorias });
+  return NextResponse.json({ linhas, categorias, variacoes });
 }

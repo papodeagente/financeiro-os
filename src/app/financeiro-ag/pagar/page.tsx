@@ -295,6 +295,7 @@ export default function ContasPagarPage() {
       valor_original: item.valor_original,
       moeda: item.moeda,
       cambio: item.cambio,
+      cambio_carimbo: (item as ContaPagar & { cambio_carimbo?: FormState['cambio_carimbo'] }).cambio_carimbo ?? null,
       data_vencimento: item.data_vencimento,
       forma_pagamento: item.forma_pagamento,
       cartao_id: item.cartao_id || '',

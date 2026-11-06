@@ -27,6 +27,10 @@ import {
 import { Segmentado } from '@/components/fin/Segmentado';
 import { LancamentosDaLinha } from './LancamentosDaLinha';
 import { formatBRL } from '@/lib/utils';
+import { variacaoPorTitulo } from '@/lib/cambio';
+
+/** Linha de variação cambial vinda de /api/encargos-da-liquidacao. */
+interface LinhaDeVariacaoDRE { titulo_tabela: string; titulo_id: string; variacao: number }
 import {
   DemonstrativoTabela,
   type LinhaDemonstrativo,
@@ -97,6 +101,7 @@ export default function DREPage() {
   // Juros, multa, desconto e taxa da liquidação (05/11/2026). Sem eles (ou
   // se a consulta falhar), o DRE é o de antes.
   const [baixasComEncargo, setBaixasComEncargo] = useState<LinhaDeBaixaComEncargo[]>([]);
+  const [linhasDeVariacao, setLinhasDeVariacao] = useState<LinhaDeVariacaoDRE[]>([]);
   const [categoriasEncargos, setCategoriasEncargos] = useState<CategoriasEncargos>({});
   const [aberta, setAberta] = useState<{ titulo: string; lancamentos: LancamentoDRE[]; valor: number } | null>(null);
 
@@ -144,11 +149,12 @@ export default function DREPage() {
       setPlanoContas(pc);
       fetch('/api/encargos-da-liquidacao')
         .then(r => (r.ok ? r.json() : null))
-        .then((x: { linhas?: LinhaDeBaixaComEncargo[]; categorias?: CategoriasEncargos } | null) => {
+        .then((x: { linhas?: LinhaDeBaixaComEncargo[]; categorias?: CategoriasEncargos; variacoes?: LinhaDeVariacaoDRE[] } | null) => {
           setBaixasComEncargo(Array.isArray(x?.linhas) ? x!.linhas! : []);
           setCategoriasEncargos(x?.categorias && typeof x.categorias === 'object' ? x.categorias : {});
+          setLinhasDeVariacao(Array.isArray(x?.variacoes) ? x!.variacoes! : []);
         })
-        .catch(() => { setBaixasComEncargo([]); setCategoriasEncargos({}); });
+        .catch(() => { setBaixasComEncargo([]); setCategoriasEncargos({}); setLinhasDeVariacao([]); });
 
       setSelectedMonth(mesDe(hojeISO()));
       setAtualizadoEm(new Date());
@@ -224,6 +230,7 @@ export default function DREPage() {
   // A conta saiu da tela para a lib (05/11/2026) sem mudar: competência é o
   // padrão e dá os mesmos números de antes (scripts/test-demonstrativo-resultado.ts).
   const encargos = useMemo(() => encargosPorTitulo(baixasComEncargo), [baixasComEncargo]);
+  const variacoes = useMemo(() => variacaoPorTitulo(linhasDeVariacao), [linhasDeVariacao]);
   const rotulosEncargos = useMemo(
     () => rotulosDasCategorias(categoriasEncargos, planoContas),
     [categoriasEncargos, planoContas],
@@ -240,6 +247,7 @@ export default function DREPage() {
       regime,
       encargos,
       rotulosEncargos,
+      variacoes,
     });
   }
 
@@ -259,9 +267,9 @@ export default function DREPage() {
   );
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const dreMain = useMemo(() => buildDRE(selectedMonth), [selectedMonth, contasReceber, contasPagar, vendasComLastro, planoContas, regime, encargos, rotulosEncargos]);
+  const dreMain = useMemo(() => buildDRE(selectedMonth), [selectedMonth, contasReceber, contasPagar, vendasComLastro, planoContas, regime, encargos, rotulosEncargos, variacoes]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const dreCompare = useMemo(() => compareMonth ? buildDRE(compareMonth) : [], [compareMonth, contasReceber, contasPagar, vendasComLastro, planoContas, regime, encargos, rotulosEncargos]);
+  const dreCompare = useMemo(() => compareMonth ? buildDRE(compareMonth) : [], [compareMonth, contasReceber, contasPagar, vendasComLastro, planoContas, regime, encargos, rotulosEncargos, variacoes]);
 
   // Summary metrics from main DRE
   const receitaBruta = dreMain.find(l => l.nome.startsWith('RECEITA BRUTA'))?.valor || 0;

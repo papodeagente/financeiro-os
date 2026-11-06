@@ -9,6 +9,7 @@ import { BAIXAS_SCHEMA_SQL } from './baixas-servidor';
 import { PERIODO_SCHEMA_SQL } from './periodo-fechado';
 import { COBRANCA_SCHEMA_SQL } from './cobranca/schema';
 import { MIGRACAO_SCHEMA_SQL } from './migracao/schema';
+import { CAMBIO_SCHEMA_SQL } from './cambio-servidor';
 import { RECORRENCIA_SCHEMA_SQL } from './recorrencia-schema';
 import { CENTROS_CUSTO_SCHEMA_SQL } from './centros-custo-servidor';
 import { PERMISSOES_SCHEMA_SQL } from './permissoes-schema';
@@ -1548,6 +1549,10 @@ async function executarInitDB() {
   // Mudança do sistema anterior (05/11/2026, E4): lotes, arquivos, linhas e
   // vínculos origem → registro. Tabelas de controle, fora da auditoria.
   await pool.query(MIGRACAO_SCHEMA_SQL);
+  // Câmbio e índices (05/11/2026, E6): cache global de cotações, estado das
+  // fontes, cofre do Super Admin, variações cambiais e a trava da moeda da
+  // conta bancária. Antes do razão e da auditoria.
+  await pool.query(CAMBIO_SCHEMA_SQL);
   await pool.query(RAZAO_SCHEMA_SQL);
   // Instala a captura somente depois das migrações/seed, sem fabricar histórico.
   await pool.query(AUDIT_SCHEMA_SQL);

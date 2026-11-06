@@ -7,6 +7,12 @@ import { Banknote, Building2, CreditCard, Landmark, Pencil, PiggyBank, Plus, Tra
 import { ContaBancaria } from '@/lib/crm-types';
 import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-storage';
 import { somaPor } from '@/lib/money';
+import {
+  MOEDAS, formatarCambio, formatarNaMoeda, infoDaMoeda, moedaDe, saldoTotalEmReais, saldosEmReais,
+  type SaldoEmReais,
+} from '@/lib/cambio';
+import { useCotacoes } from '@/components/fin/useCotacoes';
+import { Callout } from '@/components/fin/Callout';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -78,8 +84,12 @@ function createNewConta(): ContaBancaria {
   };
 }
 
+/** Conta com a moeda (05/11/2026, E6). Ausente = real, como sempre foi. */
+type ContaComMoeda = ContaBancaria & { moeda?: string };
+
 type FormState = {
   nome: string;
+  moeda: string;
   tipo: ContaBancaria['tipo'];
   banco: string;
   agencia: string;
@@ -89,6 +99,7 @@ type FormState = {
 
 const EMPTY_FORM: FormState = {
   nome: '',
+  moeda: 'BRL',
   tipo: 'CORRENTE',
   banco: '',
   agencia: '',
@@ -119,7 +130,8 @@ function contagemDeContas(n: number): string {
 }
 
 export default function ContasBancariasPage() {
-  const [items, setItems] = useState<ContaBancaria[]>([]);
+  const [items, setItems] = useState<ContaComMoeda[]>([]);
+  const cotacoes = useCotacoes();
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
@@ -140,7 +152,7 @@ export default function ContasBancariasPage() {
   async function load() {
     setLoading(true);
     try {
-      const data = await loadEntities<ContaBancaria>('contas-bancarias');
+      const data = await loadEntities<ContaComMoeda>('contas-bancarias');
       setItems(data);
       setErro(null);
       setAtualizadoEm(new Date());
@@ -166,9 +178,10 @@ export default function ContasBancariasPage() {
     setErroNome(null);
   }
 
-  function openEdit(item: ContaBancaria) {
+  function openEdit(item: ContaComMoeda) {
     setForm({
       nome: item.nome,
+      moeda: moedaDe(item.moeda),
       tipo: item.tipo,
       banco: item.banco,
       agencia: item.agencia,
@@ -191,9 +204,10 @@ export default function ContasBancariasPage() {
     try {
       if (editId) {
         const existing = items.find(i => i.id === editId)!;
-        const updated: ContaBancaria = {
+        const updated: ContaComMoeda = {
           ...existing,
           nome: form.nome,
+          moeda: form.moeda,
           tipo: form.tipo,
           banco: form.banco,
           agencia: form.agencia,
@@ -202,9 +216,10 @@ export default function ContasBancariasPage() {
         };
         await updateEntity('contas-bancarias', updated);
       } else {
-        const nova: ContaBancaria = {
+        const nova: ContaComMoeda = {
           ...createNewConta(),
           nome: form.nome,
+          moeda: form.moeda,
           tipo: form.tipo,
           banco: form.banco,
           agencia: form.agencia,
@@ -219,8 +234,10 @@ export default function ContasBancariasPage() {
       setSujo(false);
       toast.success(editId ? 'Conta atualizada.' : 'Conta criada.');
       load();
-    } catch {
-      toast.error('Não foi possível salvar a conta. Nada foi alterado.');
+    } catch (e) {
+      // A moeda de uma conta com movimento não muda: o servidor explica.
+      const msg = e instanceof Error && /moeda/i.test(e.message) ? e.message : 'Não foi possível salvar a conta. Nada foi alterado.';
+      toast.error(msg);
     } finally {
       setSalvando(false);
     }
@@ -240,7 +257,15 @@ export default function ContasBancariasPage() {
     }
   }
 
-  const totalSaldo = somaPor(items, i => i.saldo_atual);
+  // Saldo de cada conta em reais (conta em moeda pela PTAX de venda do cache).
+  // Só contas em real: o mesmo número de sempre.
+  const listaDeCotacoes = cotacoes.painel?.cotacoes;
+  const saldos = useMemo(() => new Map(saldosEmReais(items, listaDeCotacoes ?? []).map(x => [x.id, x])), [items, listaDeCotacoes]);
+  const temMoeda = items.some(i => moedaDe(i.moeda) !== 'BRL');
+  const somaEmReais = (lista: ContaComMoeda[]) => saldoTotalEmReais(lista.map(i => saldos.get(i.id)).filter((x): x is SaldoEmReais => !!x));
+  const totalGeral = somaEmReais(items);
+  const totalSaldo = temMoeda ? totalGeral.total : somaPor(items, i => i.saldo_atual);
+  const semCotacao = items.filter(i => totalGeral.sem_cotacao.includes(i.id));
 
   const estado: 'carregando' | 'erro' | 'ok' = loading ? 'carregando' : erro ? 'erro' : 'ok';
 
@@ -254,7 +279,7 @@ export default function ContasBancariasPage() {
     });
   }, [items, busca, tipoFiltro]);
 
-  const totalDoRecorte = somaPor(filtradas, i => i.saldo_atual);
+  const totalDoRecorte = temMoeda ? somaEmReais(filtradas).total : somaPor(filtradas, i => i.saldo_atual);
   const filtrosAtivos = (busca.trim() ? 1 : 0) + (tipoFiltro !== TIPO_TODOS ? 1 : 0);
 
   function limparFiltros() {
@@ -283,7 +308,7 @@ export default function ContasBancariasPage() {
           acao: { rotulo: 'Nova conta', onClick: openNew },
         };
 
-  const colunas: FinColuna<ContaBancaria>[] = [
+  const colunas: FinColuna<ContaComMoeda>[] = [
     {
       id: 'conta',
       cabecalho: 'Conta',
@@ -347,15 +372,46 @@ export default function ContasBancariasPage() {
       acessor: item => TIPO_LABEL[item.tipo],
       render: item => <span>{TIPO_LABEL[item.tipo]}</span>,
     },
+    ...(temMoeda
+      ? [{
+          id: 'moeda',
+          cabecalho: 'Na moeda da conta',
+          tipo: 'texto' as const,
+          sortable: true,
+          minWidth: 150,
+          prioridade: 2 as const,
+          acessor: (item: ContaComMoeda) => moedaDe(item.moeda),
+          render: (item: ContaComMoeda) => moedaDe(item.moeda) === 'BRL'
+            ? <span className="text-[var(--fin-text-3)]">Real</span>
+            : (
+              <span className="flex flex-col items-start">
+                <span className="fin-t-body-strong tabular-nums">{formatarNaMoeda(item.saldo_atual, moedaDe(item.moeda))}</span>
+                <span className="fin-t-caption text-[var(--fin-text-3)]">{infoDaMoeda(moedaDe(item.moeda)).nome}</span>
+              </span>
+            ),
+        }]
+      : []),
     {
       id: 'saldo',
-      cabecalho: 'Saldo',
+      cabecalho: temMoeda ? 'Saldo em reais' : 'Saldo',
       tipo: 'dinheiro',
       sortable: true,
       minWidth: 140,
-      valor: item => item.saldo_atual,
+      valor: item => saldos.get(item.id)?.saldo_reais ?? item.saldo_atual,
+      estado: item => (moedaDe(item.moeda) !== 'BRL' && saldos.get(item.id)?.saldo_reais == null ? 'indisponivel' : 'ok'),
       tone: item => (item.saldo_atual < 0 ? 'negativo' : 'neutro'),
       sub: item => {
+        const s = saldos.get(item.id);
+        if (s && s.moeda !== 'BRL') {
+          if (s.saldo_reais === null) return <span>Sem cotação de {s.moeda} para converter; fora do total</span>;
+          const ref = s.referencia;
+          return (
+            <span>
+              {formatarNaMoeda(s.saldo_moeda, s.moeda)} a {formatarCambio(s.cambio ?? 0)}
+              {ref ? ` (PTAX de ${ref.referencia.slice(8, 10)}/${ref.referencia.slice(5, 7)})` : ''}
+            </span>
+          );
+        }
         if (item.tipo === 'CARTAO_CREDITO' && item.limite > 0) {
           return (
             <span>
@@ -454,18 +510,28 @@ export default function ContasBancariasPage() {
               <div className="flex flex-col gap-[var(--fin-s-2)]">
                 <div className="grid grid-cols-1 gap-[var(--fin-s-4)] sm:grid-cols-2">
                   <MetricCard
-                    rotulo="Saldo total em caixa" icone={Landmark}
+                    rotulo={temMoeda ? 'Saldo total em reais' : 'Saldo total em caixa'} icone={Landmark}
                     valor={totalSaldo}
-                    estado="ok"
+                    estado={temMoeda && cotacoes.estado === 'carregando' ? 'carregando' : 'ok'}
                     emphasis="destaque"
                     tone={totalSaldo < 0 ? 'negativo' : 'neutro'}
                     contexto={contagemDeContas(items.length)}
-                    explicacao="Saldo inicial mais recebido menos pago, somando todas as contas."
+                    explicacao={temMoeda
+                      ? 'Contas em real pelo saldo; contas em moeda convertidas pela PTAX de venda mais recente do Banco Central.'
+                      : 'Saldo inicial mais recebido menos pago, somando todas as contas.'}
                   />
                 </div>
                 <p className="fin-t-caption text-[var(--fin-text-3)]">
-                  Como o saldo de cada conta é formado: saldo inicial mais recebido menos pago.
+                  Como o saldo de cada conta é formado: saldo inicial mais recebido menos pago
+                  {temMoeda ? ', na moeda da própria conta.' : '.'}
                 </p>
+                {semCotacao.length > 0 ? (
+                  <Callout tom="aviso" titulo="Conta em moeda fora do total">
+                    {semCotacao.map(c => c.nome).join(', ')} {semCotacao.length === 1 ? 'ficou' : 'ficaram'} fora do total em reais porque
+                    ainda não há PTAX guardada para {[...new Set(semCotacao.map(c => moedaDe(c.moeda)))].join(' e ')}. O saldo na moeda
+                    continua certo; a conversão volta sozinha quando a cotação chegar.
+                  </Callout>
+                ) : null}
               </div>
             ) : null}
 
@@ -509,7 +575,7 @@ export default function ContasBancariasPage() {
                 {
                   colunaId: 'saldo',
                   valor: totalDoRecorte,
-                  rotulo: filtrosAtivos > 0 ? 'Total das contas filtradas' : 'Total em caixa',
+                  rotulo: filtrosAtivos > 0 ? 'Total das contas filtradas' : temMoeda ? 'Total em reais' : 'Total em caixa',
                 },
               ]}
             />
@@ -573,6 +639,26 @@ export default function ContasBancariasPage() {
             )}
           </Field>
 
+          <Field
+            rotulo="Moeda da conta"
+            ajuda="O saldo da conta fica nesta moeda. Depois do primeiro movimento a moeda não muda; para outra moeda, crie outra conta."
+          >
+            {a => (
+              <Select value={form.moeda} onValueChange={v => atualizarForm({ moeda: v ?? 'BRL' })}>
+                <SelectTrigger id={a.id} aria-describedby={a['aria-describedby']} className={CONTROLE_FORMULARIO}>
+                  <SelectValue>{() => `${infoDaMoeda(form.moeda).nome} (${infoDaMoeda(form.moeda).simbolo})`}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {MOEDAS.map(m => (
+                    <SelectItem key={m.codigo} value={m.codigo} className="fin-t-body">
+                      {m.nome} ({m.simbolo})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </Field>
+
           <Field rotulo="Banco">
             {a => (
               <Input
@@ -617,8 +703,11 @@ export default function ContasBancariasPage() {
           <MoneyField
             rotulo="Saldo inicial"
             valor={form.saldo_inicial}
+            moeda={form.moeda}
             onChange={v => atualizarForm({ saldo_inicial: v })}
-            ajuda="Copie o saldo que o aplicativo do banco mostra hoje."
+            ajuda={form.moeda === 'BRL'
+              ? 'Copie o saldo que o aplicativo do banco mostra hoje.'
+              : `Na moeda da conta (${form.moeda}): copie o saldo que o banco mostra hoje.`}
           />
         </div>
       </RecordSheet>

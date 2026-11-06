@@ -46,6 +46,31 @@ export interface ReajusteDaRegra {
   percentual: number;
   /** Mês do ano em que o reajuste passa a valer (1 a 12). */
   mes: number;
+  /**
+   * De onde veio o percentual, quando a pessoa usou a sugestão do índice
+   * (05/11/2026, E6): IPCA ou IGP-M acumulado de 12 meses, do Banco Central.
+   * Só registra a origem; o percentual aplicado é sempre o gravado acima.
+   */
+  origem?: OrigemDoReajuste;
+}
+
+export interface OrigemDoReajuste {
+  indice: 'ipca' | 'igpm';
+  /** Primeiro e último mês somados ('AAAA-MM'). */
+  de: string;
+  ate: string;
+  fonte: 'bcb_sgs';
+}
+
+const NOME_DO_INDICE: Record<OrigemDoReajuste['indice'], string> = { ipca: 'IPCA', igpm: 'IGP-M' };
+
+/** Origem válida do reajuste (ou nada). */
+export function lerOrigemDoReajuste(v: unknown): OrigemDoReajuste | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const o = v as Record<string, unknown>;
+  const ym = (x: unknown) => typeof x === 'string' && /^\d{4}-\d{2}$/.test(x);
+  if ((o.indice !== 'ipca' && o.indice !== 'igpm') || !ym(o.de) || !ym(o.ate)) return undefined;
+  return { indice: o.indice, de: o.de as string, ate: o.ate as string, fonte: 'bcb_sgs' };
 }
 
 export interface RegraRecorrencia {
@@ -219,6 +244,8 @@ export function lerRegra(bruta: unknown, modo: ModoSerie = 'recorrente'): { regr
       if (!Number.isFinite(pct) || pct <= -100 || pct > 1000) return { erro: 'Percentual de reajuste inválido.' };
       if (!Number.isFinite(mes) || mes < 1 || mes > 12) return { erro: 'Escolha o mês do reajuste.' };
       regra.reajuste = { tipo: 'fixo', percentual: pct, mes };
+      const origem = lerOrigemDoReajuste(rj.origem);
+      if (origem) regra.reajuste.origem = origem;
     }
   }
   return { regra };
@@ -447,7 +474,9 @@ export function descreverRegra(regra: RegraRecorrencia, inicio?: string): string
   }
 
   if (regra.reajuste) {
-    partes.push(`com reajuste de ${pct(regra.reajuste.percentual)} todo mês de ${nomeDoMes(regra.reajuste.mes)}`);
+    const o = regra.reajuste.origem;
+    const deOnde = o ? ` (${NOME_DO_INDICE[o.indice]} de 12 meses até ${o.ate.slice(5, 7)}/${o.ate.slice(0, 4)})` : '';
+    partes.push(`com reajuste de ${pct(regra.reajuste.percentual)}${deOnde} todo mês de ${nomeDoMes(regra.reajuste.mes)}`);
   }
   return partes.filter(Boolean).join(', ');
 }
@@ -567,6 +596,8 @@ export interface EstadoRepeticao {
   termina_em: string;
   reajuste_percentual: number;
   reajuste_mes: number;
+  /** Origem do percentual quando veio da sugestão do índice (some se a pessoa digitar outro). */
+  reajuste_origem?: OrigemDoReajuste | null;
 }
 
 export const REPETICAO_PADRAO: EstadoRepeticao = {
@@ -604,6 +635,7 @@ export function regraDoEstado(e: EstadoRepeticao): RegraRecorrencia {
   }
   if (e.personalizar && e.modo === 'recorrente' && e.reajuste_percentual) {
     regra.reajuste = { tipo: 'fixo', percentual: e.reajuste_percentual, mes: e.reajuste_mes };
+    if (e.reajuste_origem) regra.reajuste.origem = e.reajuste_origem;
   }
   return regra;
 }

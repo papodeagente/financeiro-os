@@ -108,6 +108,13 @@ export interface EntradaDRE {
   encargos?: ReadonlyMap<string, EncargosDoTitulo>;
   /** Nome e código das linhas dos encargos (categorias escolhidas). */
   rotulosEncargos?: RotulosEncargos;
+  /**
+   * Variação cambial das liquidações (05/11/2026, E6), por título (chave
+   * `${tabela}:${id}`): quanto a liquidação somou ao valor em reais. Sai da
+   * linha de origem e vai para a linha "Variação cambial". Ausente ou vazio =
+   * o DRE de antes, número por número.
+   */
+  variacoes?: ReadonlyMap<string, number>;
 }
 
 /** Um componente da conta: o valor e os lançamentos que o formam. */
@@ -165,8 +172,11 @@ export function montarDRE(e: EntradaDRE): LinhaDRE[] {
   // mesmo número de antes (sem nem passar por round2).
   const encDe = (tabela: 'contas_receber' | 'contas_pagar', id: string) => e.encargos?.get(`${tabela}:${id}`);
   const semEncargos = (v: number, aj: number) => (aj === 0 ? v : round2(v - aj));
-  const ajusteCR = (cr: ContaReceber) => ajusteDoValor(encDe('contas_receber', cr.id));
-  const ajusteCP = (cp: ContaPagar) => ajusteDoValor(encDe('contas_pagar', cp.id));
+  // A variação cambial também sai da linha de origem (vai para a linha dela).
+  const varDe = (tabela: 'contas_receber' | 'contas_pagar', id: string) => e.variacoes?.get(`${tabela}:${id}`) ?? 0;
+  const comVariacao = (aj: number, v: number) => (v === 0 ? aj : round2(aj + v));
+  const ajusteCR = (cr: ContaReceber) => comVariacao(ajusteDoValor(encDe('contas_receber', cr.id)), varDe('contas_receber', cr.id));
+  const ajusteCP = (cp: ContaPagar) => comVariacao(ajusteDoValor(encDe('contas_pagar', cp.id)), varDe('contas_pagar', cp.id));
   const valorCRBase = (cr: ContaReceber) => semEncargos(valorCR(cr), ajusteCR(cr));
   const valorCPBase = (cp: ContaPagar) => semEncargos(valorCP(cp), ajusteCP(cp));
 
@@ -270,6 +280,22 @@ export function montarDRE(e: EntradaDRE): LinhaDRE[] {
     ? [{ codigo: rotulo(k).codigo, nome: rotulo(k).nome, valor: enc[k].valor, tipo: 'item', indent: 1, lancamentos: enc[k].lancamentos }]
     : []);
 
+  // ── Variação cambial (linha própria; + ganho, − perda) ─────────────────────
+  // Segue a conta, como os encargos. Receber: câmbio que subiu é ganho.
+  // Pagar: câmbio que subiu é perda.
+  const variacaoItens: Array<{ l: LancamentoDRE }> = [];
+  if (e.variacoes && e.variacoes.size > 0) {
+    for (const cr of monthReceber) {
+      const v = varDe('contas_receber', cr.id);
+      if (v !== 0) variacaoItens.push(deCR(cr, v, dataCR(cr)));
+    }
+    for (const cp of monthPagar) {
+      const v = varDe('contas_pagar', cp.id);
+      if (v !== 0) variacaoItens.push(deCP(cp, round2(-v), dataCP(cp)));
+    }
+  }
+  const variacaoCambial = parte(variacaoItens);
+
   const despFinanceiras = despEncargos > 0
     ? round2(despFinanceirasCat.valor + taxasDePlataforma.valor + despEncargos)
     : round2(despFinanceirasCat.valor + taxasDePlataforma.valor);
@@ -288,9 +314,10 @@ export function montarDRE(e: EntradaDRE): LinhaDRE[] {
   const outrasDespesas = soma([despOutras.valor, despCMV.valor, uncategorized.valor]);
   const receitaLiquida = round2(receitaBruta - despTaxas.valor);
   const resultadoOperacional = round2(receitaLiquida - despOperacionais.valor - despComerciais.valor);
-  const lucroLiquido = receitaFinanceira > 0
+  const lucroAntesDoCambio = receitaFinanceira > 0
     ? round2(receitaBruta + receitaFinanceira - totalDespesas)
     : round2(receitaBruta - totalDespesas);
+  const lucroLiquido = variacaoCambial.valor === 0 ? lucroAntesDoCambio : round2(lucroAntesDoCambio + variacaoCambial.valor);
   const margemLiquida = round2(divSegura(lucroLiquido, receitaBruta) * 100);
   const margemSobreVolume = round2(divSegura(receitaBruta, volume.valor) * 100);
 
@@ -333,6 +360,13 @@ export function montarDRE(e: EntradaDRE): LinhaDRE[] {
     lines.push(
       { codigo: '', nome: '(+) RECEITAS FINANCEIRAS', valor: receitaFinanceira, tipo: 'header', indent: 0, lancamentos: enc.receita_financeira.lancamentos },
       ...linhaEncargo('receita_financeira'),
+    );
+  }
+
+  if (variacaoCambial.lancamentos.length > 0) {
+    lines.push(
+      { codigo: '', nome: '(+/-) VARIAÇÃO CAMBIAL', valor: variacaoCambial.valor, tipo: 'header', indent: 0, lancamentos: variacaoCambial.lancamentos },
+      { codigo: '', nome: 'Variação cambial (ganhos e perdas na liquidação)', valor: variacaoCambial.valor, tipo: 'item', indent: 1, lancamentos: variacaoCambial.lancamentos },
     );
   }
 

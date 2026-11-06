@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 
 import type { CartaoCorporativo, ContaPagar, NaturezaCusto, PlanoContas } from '@/lib/crm-types';
+import { CampoCambio } from '@/components/fin/CampoCambio';
 import { Field } from '@/components/fin/Field';
 import { MoneyField } from '@/components/fin/MoneyField';
 import { RecordSheet } from '@/components/fin/RecordSheet';
@@ -379,27 +380,14 @@ export function FormularioConta({
             />
 
             {estrangeira ? (
-              <Field
-                rotulo="Câmbio"
+              <CampoCambio
+                moeda={form.moeda}
+                valor={form.cambio}
+                carimbo={form.cambio_carimbo}
                 obrigatorio
-                ajuda="Quantos reais vale uma unidade da moeda escolhida."
                 erro={erros.cambio}
-              >
-                {(a) => (
-                  <Input
-                    {...a}
-                    aria-invalid={a['aria-invalid'] || undefined}
-                    type="number"
-                    min={0}
-                    step="0.0001"
-                    value={form.cambio}
-                    onChange={(e) =>
-                      onForm((f) => ({ ...f, cambio: parseFloat(e.target.value) || 1 }))
-                    }
-                    className={cn(CONTROLE, 'tabular-nums', erros.cambio && 'border-[var(--fin-negative)]')}
-                  />
-                )}
-              </Field>
+                onChange={(cambio, carimbo) => onForm((f) => ({ ...f, cambio, cambio_carimbo: carimbo }))}
+              />
             ) : null}
 
             <Field rotulo="Número do documento" ajuda="Da nota, da fatura ou do boleto.">

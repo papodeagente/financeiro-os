@@ -10,6 +10,7 @@ import { tarefaAvisosVencimento } from '../avisos-vencimento-servidor';
 // Importar a régua também registra os processadores da fila de emissão
 // e de atualização das cobranças.
 import { tarefaReguaCobranca } from '../cobranca/regua';
+import { tarefaCotacoes } from '../cambio-servidor';
 import { TIPO_TAREFA_MIGRACAO, processarTarefaMigracao } from '../migracao/servidor';
 import { janelaDeMinutos, janelaDiaria, rodarAgendador, type DefinicaoTarefa, type ResumoAgendador } from './nucleo';
 
@@ -56,7 +57,7 @@ export const tarefaFila: DefinicaoTarefa = {
   executar: async ({ exec, restanteMs }) => processarFila(exec, { orcamentoMs: Math.min(30_000, restanteMs()) }),
 };
 
-export const TAREFAS: DefinicaoTarefa[] = [tarefaRazaoAbertura, tarefaRazaoConferencia, tarefaRecorrenciaGerar, tarefaAvisosVencimento, tarefaReguaCobranca, tarefaFila];
+export const TAREFAS: DefinicaoTarefa[] = [tarefaRazaoAbertura, tarefaRazaoConferencia, tarefaRecorrenciaGerar, tarefaAvisosVencimento, tarefaReguaCobranca, tarefaCotacoes, tarefaFila];
 
 /** Roda o agendador contra o banco de verdade. */
 export async function executarAgendadorAgora(): Promise<ResumoAgendador> {
