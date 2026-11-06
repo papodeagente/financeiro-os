@@ -6,6 +6,7 @@ import {
   AlertTriangle, Ban, BookCopy, Clock, Copy, Ellipsis, ExternalLink, Mail, MessageCircle, ReceiptText, RefreshCw, RotateCcw, Wallet,
 } from 'lucide-react';
 
+import { BotaoExportar } from '@/components/fin/BotaoExportar';
 import { FilterBar } from '@/components/fin/FilterBar';
 import { FinTable, type FinColuna } from '@/components/fin/FinTable';
 import { MetricCard } from '@/components/fin/MetricCard';
@@ -23,6 +24,7 @@ import {
 import {
   acoesDaCobranca, dataBR, mensagemDeErro, nomeDoProvedor, ROTULO_DO_TIPO, SITUACAO_DA_COBRANCA, type IdDaAcao,
 } from '@/lib/cobranca/regras-telas';
+import { documentoDasCobrancas } from '@/lib/exportacao/listas-financeiro';
 import { cn, formatBRL } from '@/lib/utils';
 
 /**
@@ -254,6 +256,20 @@ export function TelaDeCobrancas() {
           onLimpar={limpar}
         />
         {!datasValidas ? <p role="alert" className="fin-t-body text-[var(--fin-negative-text)]">A data inicial precisa ser igual ou anterior à final.</p> : null}
+
+        <div className="flex justify-end">
+          <BotaoExportar
+            origem="cobrancas"
+            podeExportar={pode('exportar')}
+            desabilitado={!linhas.length}
+            documento={() => documentoDasCobrancas(linhas, {
+              de: f.de, ate: f.ate,
+              situacao: STATUS.find(s => s.valor === f.status)?.rotulo,
+              provedor: f.provedor ? nomeDoProvedor(f.provedor) : undefined,
+              busca: f.busca.trim() || undefined,
+            })}
+          />
+        </div>
 
         <FinTable<Cobranca>
           linhas={linhas}

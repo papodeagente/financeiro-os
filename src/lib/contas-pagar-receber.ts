@@ -27,6 +27,7 @@ import { STATUS_DE_BAIXA } from './guarda-baixa';
 import { deCentavos, num, round2 } from './money';
 import { auditCsvCell } from './audit-query';
 import { tituloGeradoPeloSistema, tituloSemBaixa } from './recorrencia';
+import { rotuloDoPeriodo, type ColunaExportada, type DocumentoExportado, type FiltroAplicado } from './exportacao/documento';
 
 export type TabelaDaConta = 'contas_pagar' | 'contas_receber';
 export type TipoDaConta = 'pagar' | 'receber';
@@ -604,4 +605,61 @@ export function csvDasContas(linhas: readonly LinhaDeConta[]): string {
     cel(l.forma), n(l.valor), n(l.baixado), n(l.saldo), `"${l.dias_atraso || ''}"`,
   ].join(';'));
   return '﻿' + [cab.map(cel).join(';'), ...corpo].join('\r\n');
+}
+
+// ─── Exportação em Excel e PDF (E7, G3) ─────────────────────────────────────
+
+const ROTULO_DA_DATA: Record<DataDoFiltro, string> = { emissao: 'Emissão', vencimento: 'Vencimento', liquidacao: 'Liquidação' };
+const ROTULO_DA_SITUACAO_DO_FILTRO: Record<SituacaoDoFiltro, string> = {
+  todas: 'Todas', em_aberto: 'Em aberto', em_atraso: 'Em atraso', liquidado: 'Pago ou recebido', cancelado: 'Cancelado',
+};
+const ROTULO_DA_COBRANCA_DO_FILTRO: Record<CobrancaDoFiltro, string> = {
+  todas: 'Todas', sem_boleto: 'Boleto não emitido', emitida: 'Cobrança emitida', vencida: 'Cobrança vencida', paga: 'Cobrança paga', falhou: 'Cobrança com falha',
+};
+
+/** O filtro por extenso (vai no topo do arquivo e no nome dele). Nomes de categoria, centro e conta saem das linhas. */
+export function filtrosLegiveisDasContas(f: FiltroDaLista, linhas: readonly LinhaDeConta[]): FiltroAplicado[] {
+  const out: FiltroAplicado[] = [];
+  if (f.tipo !== 'ambos') out.push({ rotulo: 'Tipo', valor: f.tipo === 'pagar' ? 'A pagar' : 'A receber' });
+  if (f.de || f.ate) out.push({ rotulo: ROTULO_DA_DATA[f.data], valor: rotuloDoPeriodo(f.de || null, f.ate || null) });
+  if (f.situacao !== 'todas') out.push({ rotulo: 'Situação', valor: ROTULO_DA_SITUACAO_DO_FILTRO[f.situacao] });
+  if (f.cobranca !== 'todas') out.push({ rotulo: 'Cobrança', valor: ROTULO_DA_COBRANCA_DO_FILTRO[f.cobranca] });
+  if (f.busca) out.push({ rotulo: 'Busca', valor: f.busca });
+  const nome = (id: string, campo: 'categoria' | 'centro_custo' | 'conta_bancaria', campoId: 'categoria_id' | 'centro_custo_id' | 'conta_bancaria_id') =>
+    linhas.find(l => l[campoId] === id)?.[campo] || id;
+  if (f.categoria) out.push({ rotulo: 'Categoria', valor: nome(f.categoria, 'categoria', 'categoria_id') });
+  if (f.centro) out.push({ rotulo: 'Centro de custo', valor: nome(f.centro, 'centro_custo', 'centro_custo_id') });
+  if (f.conta) out.push({ rotulo: 'Conta bancária', valor: nome(f.conta, 'conta_bancaria', 'conta_bancaria_id') });
+  return out;
+}
+
+/** As mesmas colunas da planilha CSV, em documento para Excel (.xlsx), PDF e impressão. */
+export function documentoDasContas(linhas: readonly LinhaDeConta[], f: FiltroDaLista): DocumentoExportado {
+  const titulo = f.tipo === 'pagar' ? 'Contas a pagar' : f.tipo === 'receber' ? 'Contas a receber' : 'Contas a pagar e receber';
+  const colunas: ColunaExportada[] = [
+    { id: 'tipo', rotulo: 'Tipo', tipo: 'texto' }, { id: 'situacao', rotulo: 'Situação', tipo: 'texto' },
+    { id: 'vencimento', rotulo: 'Vencimento', tipo: 'data' }, { id: 'emissao', rotulo: 'Emissão', tipo: 'data' },
+    { id: 'liquidacao', rotulo: 'Liquidação', tipo: 'data' }, { id: 'pessoa', rotulo: 'Pessoa', tipo: 'texto' },
+    { id: 'descricao', rotulo: 'Descrição', tipo: 'texto' }, { id: 'documento', rotulo: 'Documento', tipo: 'texto' },
+    { id: 'parcela', rotulo: 'Parcela', tipo: 'texto' }, { id: 'categoria', rotulo: 'Categoria', tipo: 'texto' },
+    { id: 'centro_custo', rotulo: 'Centro de custo', tipo: 'texto' }, { id: 'conta_bancaria', rotulo: 'Conta bancária', tipo: 'texto' },
+    { id: 'forma', rotulo: 'Forma', tipo: 'texto' }, { id: 'valor', rotulo: 'Valor', tipo: 'dinheiro' },
+    { id: 'baixado', rotulo: 'Pago/Recebido', tipo: 'dinheiro' }, { id: 'saldo', rotulo: 'Saldo em aberto', tipo: 'dinheiro' },
+    { id: 'dias_atraso', rotulo: 'Dias de atraso', tipo: 'inteiro' },
+  ];
+  const soma = (k: 'valor' | 'baixado' | 'saldo') => round2(linhas.reduce((a, l) => a + (l[k] || 0), 0));
+  return {
+    titulo,
+    filtros: filtrosLegiveisDasContas(f, linhas),
+    colunas,
+    linhas: linhas.map(l => ({
+      tipo: ROTULO_DO_TIPO[l.tipo], situacao: rotuloDaSituacao(l), vencimento: l.vencimento, emissao: l.emissao, liquidacao: l.liquidacao,
+      pessoa: l.pessoa, descricao: l.descricao, documento: l.documento, parcela: l.parcela, categoria: l.categoria,
+      centro_custo: l.centro_custo, conta_bancaria: l.conta_bancaria, forma: l.forma, valor: l.valor, baixado: l.baixado,
+      saldo: l.saldo, dias_atraso: l.dias_atraso || null,
+    })),
+    totais: linhas.length ? { valor: soma('valor'), baixado: soma('baixado'), saldo: soma('saldo') } : null,
+    dinheiro_em: 'reais',
+    orientacao: 'paisagem',
+  };
 }

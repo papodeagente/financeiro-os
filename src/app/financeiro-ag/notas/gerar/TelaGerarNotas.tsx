@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { Ban, FileStack, Layers, ReceiptText, Scale } from 'lucide-react';
 
+import { BotaoExportar } from '@/components/fin/BotaoExportar';
 import { Callout } from '@/components/fin/Callout';
 import { ConfirmDialog } from '@/components/fin/ConfirmDialog';
 import { FilterBar } from '@/components/fin/FilterBar';
@@ -16,6 +17,7 @@ import { usePermissoes } from '@/app/financeiro-ag/contas/useContas';
 import { apiNotas, ErroDaNota, reais, type GradeDeNotas, type PreviaDeNotas } from '@/components/financeiro/notas/api';
 import { PreviaDasNotas } from '@/components/financeiro/notas/PreviaDasNotas';
 import { formatarReais, ROTULO_DESTINO, type LinhaDaGrade, type SugestaoDeCancelamento } from '@/lib/nota-regras';
+import { documentoDeGerarNotas } from '@/lib/exportacao/listas-financeiro';
 import { toast } from '@/lib/toast';
 import { formatBRL } from '@/lib/utils';
 
@@ -269,6 +271,18 @@ export function TelaGerarNotas() {
         {dados && dados.vendas_fora > 0 ? (
           <p className="fin-t-caption text-[var(--fin-text-3)]">Período longo: as vendas mais antigas ficaram de fora. Diminua o período para ver todas.</p>
         ) : null}
+        <div className="flex justify-end">
+          <BotaoExportar
+            origem="gerar_notas"
+            podeExportar={pode('exportar')}
+            desabilitado={!linhas.length}
+            documento={() => documentoDeGerarNotas(linhas, {
+              de: f.de, ate: f.ate,
+              mostrar: f.mostrar === 'pendentes' ? 'O que pede ação' : 'Tudo',
+              busca: f.busca.trim() || undefined,
+            })}
+          />
+        </div>
 
         <FinTable<LinhaDaGrade>
           linhas={linhas}

@@ -46,6 +46,11 @@ export function useContas(consulta: string) {
   return { dados, carregando: consulta ? carregando : false, erro, atualizadoEm, recarregar };
 }
 
+/** Endereço do arquivo do filtro inteiro em Excel (.xlsx), PDF ou impressão (E7). */
+export function enderecoDaExportacao(consulta: string, formato: 'xlsx' | 'pdf' | 'imprimir'): string {
+  return `${ROTA}?${consulta}&format=${formato}`;
+}
+
 /** Baixa a planilha do filtro inteiro; devolve a mensagem de erro, se houver. */
 export async function exportarContas(consulta: string): Promise<string | null> {
   const r = await fetch(`${ROTA}?${consulta}&format=csv`);
