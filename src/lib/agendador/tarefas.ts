@@ -4,13 +4,17 @@
 import pool, { initDB } from '../db';
 import { emTransacao, type ExecutorSQL } from '../caixa-atomico';
 import { abrirRazaoNoExecutor, conferirRazaoNoExecutor } from '../razao-servidor';
-import { processarFila } from './fila';
+import { processarFila, registrarProcessador } from './fila';
 import { tarefaRecorrenciaGerar } from '../recorrencia-servidor';
 import { tarefaAvisosVencimento } from '../avisos-vencimento-servidor';
 // Importar a régua também registra os processadores da fila de emissão
 // e de atualização das cobranças.
 import { tarefaReguaCobranca } from '../cobranca/regua';
+import { TIPO_TAREFA_MIGRACAO, processarTarefaMigracao } from '../migracao/servidor';
 import { janelaDeMinutos, janelaDiaria, rodarAgendador, type DefinicaoTarefa, type ResumoAgendador } from './nucleo';
+
+// A aplicação da mudança de sistema roda em blocos pela fila.
+registrarProcessador(TIPO_TAREFA_MIGRACAO, processarTarefaMigracao);
 
 /** Abre o razão das agências que ainda não têm (até 20 por chamada). */
 export const tarefaRazaoAbertura: DefinicaoTarefa = {

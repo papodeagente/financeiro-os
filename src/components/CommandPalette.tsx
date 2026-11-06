@@ -8,15 +8,18 @@ import {
   Gauge, TrendingUp, Receipt, CreditCard, BookOpen, Landmark,
   ArrowRightLeft, Package, ShoppingCart, ListOrdered, UserPlus,
   Building2, Briefcase, DollarSign, Link2, FileSpreadsheet, Plus, Compass,
+  FolderInput, BookA, ListChecks,
 } from 'lucide-react';
 import { buscarPorTermoDeMercado, normalizarBusca } from '@/lib/busca-de-mercado';
+import { buscarNoGlossario } from '@/lib/migracao/telas/glossario';
+import { rotuloDaEntrega } from '@/lib/migracao/telas/paridade';
 
 interface CommandItem {
   id: string;
   label: string;
   href: string;
   icon: React.ReactNode;
-  section: 'navegacao' | 'criar' | 'recentes' | 'crm' | 'mercado';
+  section: 'navegacao' | 'criar' | 'recentes' | 'crm' | 'mercado' | 'glossario';
   /** Linha curta abaixo do nome (busca por termo de mercado). */
   dica?: string;
 }
@@ -73,6 +76,10 @@ const NAVIGATION_ITEMS: CommandItem[] = [
   { id: 'cac', label: 'Dashboard CAC', href: '/cac/dashboard', icon: <Gauge className="w-4 h-4" />, section: 'navegacao' },
   { id: 'rentabilidade', label: 'Rentabilidade', href: '/relatorios/rentabilidade', icon: <TrendingUp className="w-4 h-4" />, section: 'navegacao' },
   { id: 'config-agencia', label: 'Configurações', href: '/config/agencia', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
+  // Mudança de sistema (E4, 05/11/2026).
+  { id: 'mudanca', label: 'Mudar para o EnturOS (trazer dados do sistema anterior)', href: '/mudanca', icon: <FolderInput className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'mudanca-glossario', label: 'Glossário: como chamava lá, como chama aqui', href: '/mudanca/glossario', icon: <BookA className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'mudanca-paridade', label: 'Checklist de paridade', href: '/mudanca/paridade', icon: <ListChecks className="w-4 h-4" />, section: 'navegacao' },
 ];
 
 const CREATE_ITEMS: CommandItem[] = [
@@ -132,7 +139,23 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         dica: destino.frase
           ?? (normalizarBusca(termo) !== normalizarBusca(destino.tela) ? `Também chamado de "${termo}".` : undefined),
       }));
-    return [...porNome, ...mercado];
+    // Glossário da mudança (E4): o nome antigo leva à tela de agora, com a
+    // diferença numa frase; o que ainda não existe leva ao glossário.
+    const vistos = new Set([...porNome, ...mercado].map(i => `${i.href}|${normalizarBusca(i.label)}`));
+    const glossario: CommandItem[] = buscarNoGlossario(query)
+      .map(t => ({
+        id: `glossario-${t.id}`,
+        label: t.aqui,
+        href: t.href ?? '/mudanca/glossario',
+        icon: <BookA className="w-4 h-4" />,
+        section: 'glossario' as const,
+        dica: t.chega
+          ? `Lá: "${t.la[0]}". Ainda vem: ${rotuloDaEntrega(t.chega)}.`
+          : `Lá: "${t.la[0]}".${t.diferenca ? ` ${t.diferenca}` : ''}`,
+      }))
+      .filter(i => !vistos.has(`${i.href}|${normalizarBusca(i.label)}`))
+      .slice(0, 4);
+    return [...porNome, ...mercado, ...glossario];
   }, [query, recents]);
 
   const handleSelect = (item: CommandItem) => {
@@ -162,6 +185,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     navegacao: 'Navegação',
     crm: 'Integração',
     mercado: 'Pelo nome que você já usa',
+    glossario: 'Glossário da mudança',
   };
 
   let lastSection = '';

@@ -19,6 +19,7 @@ import { emTransacao, type ExecutorSQL } from '../caixa-atomico';
 import { addDias, deCentavos, hojeISO } from '../money';
 import { generateId } from '../utils';
 import { nadaSai } from '../nada-sai';
+import { mudancaSegurandoSaidas } from '../migracao/estado';
 import { carregarCredenciais } from '../plataformas/servico';
 import { enfileirarTarefa, type TarefaReivindicada } from '../agendador/fila';
 import { horaDeBrasilia } from '../agendador/nucleo';
@@ -445,7 +446,8 @@ export async function gravarEmissao(
     const ja = await cobrancasDaChave(pool as unknown as ExecutorSQL, tenantId, o.idempotencia);
     if (ja.length) return { previa: null, cobrancas: ja, na_fila: ja.filter(c => c.status === 'emitindo').length, puladas: [], repetido: true };
   }
-  const motivo = nadaSai();
+  // Também segura durante a mudança do sistema anterior (até "Concluir mudança").
+  const motivo = nadaSai() ?? (pool ? await mudancaSegurandoSaidas(pool as unknown as ExecutorSQL, tenantId) : null);
   if (motivo) throw new ErroCobranca(`Nenhuma cobrança sai agora (${motivo}). Tente de novo quando terminar.`, 409, 'NADA_SAI');
   const hoje = o.hoje ?? hojeEmBrasilia();
   const tipoPedido = pedido.tipo;
@@ -734,7 +736,8 @@ export async function gravarCarne(
     const ja = await cobrancasDaChave(pool as unknown as ExecutorSQL, tenantId, o.idempotencia);
     if (ja.length && ja[0].carne_id) return executarCarne(tenantId, ja[0].carne_id);
   }
-  const motivo = nadaSai();
+  // Também segura durante a mudança do sistema anterior (até "Concluir mudança").
+  const motivo = nadaSai() ?? (pool ? await mudancaSegurandoSaidas(pool as unknown as ExecutorSQL, tenantId) : null);
   if (motivo) throw new ErroCobranca(`Nenhuma cobrança sai agora (${motivo}). Tente de novo quando terminar.`, 409, 'NADA_SAI');
   const hoje = o.hoje ?? hojeEmBrasilia();
   const carneId = generateId();
@@ -874,7 +877,8 @@ export async function alterarCobranca(
   tenantId: string, cobrancaId: string, mudancaPedida: MudancaDeCobranca, o: { quem?: QuemFez; hoje?: string } = {},
 ): Promise<LinhaCobranca> {
   if (!pool) throw new ErroCobranca('Banco indisponível.', 503);
-  const motivo = nadaSai();
+  // Também segura durante a mudança do sistema anterior (até "Concluir mudança").
+  const motivo = nadaSai() ?? (pool ? await mudancaSegurandoSaidas(pool as unknown as ExecutorSQL, tenantId) : null);
   if (motivo) throw new ErroCobranca(`Nenhuma cobrança sai agora (${motivo}).`, 409, 'NADA_SAI');
   const exec = pool as unknown as ExecutorSQL;
   const hoje = o.hoje ?? hojeEmBrasilia();
@@ -1013,7 +1017,8 @@ export async function enviarCobranca(
   }
   if (!pool) throw new ErroCobranca('Banco indisponível.', 503);
   if (canal !== 'email' && canal !== 'whatsapp') throw new ErroCobranca('Escolha e-mail ou WhatsApp.');
-  const motivo = nadaSai();
+  // Também segura durante a mudança do sistema anterior (até "Concluir mudança").
+  const motivo = nadaSai() ?? (pool ? await mudancaSegurandoSaidas(pool as unknown as ExecutorSQL, tenantId) : null);
   if (motivo) throw new ErroCobranca(`Nada é enviado agora (${motivo}).`, 409, 'NADA_SAI');
   const exec = pool as unknown as ExecutorSQL;
   const c = await exigirCobranca(exec, tenantId, cobrancaId);

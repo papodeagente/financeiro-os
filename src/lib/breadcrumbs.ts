@@ -85,6 +85,9 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   '/config/crm': 'Integração CRM',
   '/config/cobranca': 'Cobrança',
   '/config/auditoria': 'Registro de atividades',
+  '/mudanca': 'Mudar para o EnturOS',
+  '/mudanca/glossario': 'Glossário',
+  '/mudanca/paridade': 'Checklist de paridade',
 };
 
 const PILLAR_PREFIXES: { pillar: Pillar; prefixes: string[] }[] = [
@@ -92,6 +95,8 @@ const PILLAR_PREFIXES: { pillar: Pillar; prefixes: string[] }[] = [
   { pillar: 'metas', prefixes: ['/dashboard', '/equipe', '/cac', '/relatorios'] },
   { pillar: 'produtos', prefixes: ['/grupos', '/grupo', '/propostas', '/vendas', '/voos', '/hoteis', '/destinos'] },
   { pillar: 'financeiro', prefixes: ['/financeiro-ag', '/financeiro-grupos', '/financeiro', '/pessoas'] },
+  // Mudança de sistema (E4): mora junto das configurações da agência.
+  { pillar: 'configuracoes', prefixes: ['/mudanca'] },
 ];
 
 export function pillarFromPathname(pathname: string): Pillar | null {

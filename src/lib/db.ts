@@ -8,6 +8,7 @@ import { RAZAO_SCHEMA_SQL } from './razao-schema';
 import { BAIXAS_SCHEMA_SQL } from './baixas-servidor';
 import { PERIODO_SCHEMA_SQL } from './periodo-fechado';
 import { COBRANCA_SCHEMA_SQL } from './cobranca/schema';
+import { MIGRACAO_SCHEMA_SQL } from './migracao/schema';
 import { RECORRENCIA_SCHEMA_SQL } from './recorrencia-schema';
 import { CENTROS_CUSTO_SCHEMA_SQL } from './centros-custo-servidor';
 import { PERMISSOES_SCHEMA_SQL } from './permissoes-schema';
@@ -1544,6 +1545,9 @@ async function executarInitDB() {
   // histórico, portal do cliente, régua e disjuntor. Antes do razão e da
   // auditoria (as tabelas de controle ficam fora do gatilho).
   await pool.query(COBRANCA_SCHEMA_SQL);
+  // Mudança do sistema anterior (05/11/2026, E4): lotes, arquivos, linhas e
+  // vínculos origem → registro. Tabelas de controle, fora da auditoria.
+  await pool.query(MIGRACAO_SCHEMA_SQL);
   await pool.query(RAZAO_SCHEMA_SQL);
   // Instala a captura somente depois das migrações/seed, sem fabricar histórico.
   await pool.query(AUDIT_SCHEMA_SQL);

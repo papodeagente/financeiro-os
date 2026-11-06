@@ -192,6 +192,20 @@ export const DESTINOS_DE_MERCADO: readonly DestinoDeMercado[] = [
     id: 'taxas-recebimento', termos: ['taxa da plataforma', 'taxas de pagamento', 'taxa do boleto', 'custo do recebimento'],
     href: '/relatorios/taxas', tela: 'Taxas de pagamento',
   },
+  // Mudança de sistema (E4): quem chega de outro sistema procura assim.
+  {
+    id: 'mudanca', termos: ['mudança de sistema', 'migrar', 'migração', 'trazer dados do sistema anterior', 'importar dados', 'importar planilha', 'implantação', 'saldo inicial'],
+    href: '/mudanca', tela: 'Mudar para o EnturOS',
+    frase: 'Traz contas, categorias, pessoas, contas em aberto e saldos do sistema anterior, com ensaio e desfazer.',
+  },
+  {
+    id: 'glossario', termos: ['glossário', 'de para', 'como chama aqui', 'nome antigo'],
+    href: '/mudanca/glossario', tela: 'Glossário da mudança',
+  },
+  {
+    id: 'paridade', termos: ['checklist de paridade', 'paridade', 'o que já tem aqui', 'o que falta'],
+    href: '/mudanca/paridade', tela: 'Checklist de paridade',
+  },
 ];
 
 /** Minúsculas, sem acento e sem espaço sobrando. */
