@@ -98,6 +98,11 @@ const TABELAS_DA_VENDA_COMPLETA = [
   'venda_pendencias', 'venda_eventos', 'vendas_modelo',
 ] as const;
 
+/** Comissões por função calculadas, fechadas e pagas (comissao-funcoes-schema.ts): saem com as vendas. O cadastro (funções, planos, metas) fica. */
+const TABELAS_DAS_COMISSOES_POR_FUNCAO = [
+  'comissao_lancamentos', 'comissao_fechamento_itens', 'comissao_fechamentos', 'comissao_pagamentos',
+] as const;
+
 const SO_NO_ECOSSISTEMA: ReadonlySet<ResetCategory> = new Set(['cadastros_e_crm', 'plataformas']);
 
 /** As categorias que esta conta pode zerar. */
@@ -172,6 +177,17 @@ export async function apagarCategorias(
     : { rows: [] as Array<Record<string, unknown>> };
   if (apagaPagar && temFornecedor[0]?.ok) {
     for (const table of TABELAS_DO_FORNECEDOR) {
+      const res = await exec.query(`DELETE FROM ${table} WHERE tenant_id = $1`, [tenantId]);
+      const n = res.rowCount || 0;
+      summary[table] = n;
+      total += n;
+    }
+  }
+  const { rows: temComissoes } = apagaVendas
+    ? await exec.query(`SELECT to_regclass('public.comissao_lancamentos') IS NOT NULL AS ok`)
+    : { rows: [] as Array<Record<string, unknown>> };
+  if (apagaVendas && temComissoes[0]?.ok) {
+    for (const table of TABELAS_DAS_COMISSOES_POR_FUNCAO) {
       const res = await exec.query(`DELETE FROM ${table} WHERE tenant_id = $1`, [tenantId]);
       const n = res.rowCount || 0;
       summary[table] = n;

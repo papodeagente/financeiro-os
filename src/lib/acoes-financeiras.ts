@@ -78,6 +78,8 @@ const DEFINICOES = [
   { id: 'fechar_venda', modulo: 'vendas_comissoes', rotulo: 'Fechar venda', descricao: 'Encerra a venda: produtos e pagamentos param de mudar.', teto: p => p.editar_financeiro },
   { id: 'reabrir_venda', modulo: 'vendas_comissoes', rotulo: 'Reabrir venda', descricao: 'Volta a venda fechada para edição, com motivo registrado.', teto: p => p.editar_financeiro },
   { id: 'ver_comissoes_todos', modulo: 'vendas_comissoes', rotulo: 'Ver a comissão da equipe', descricao: 'Comissão de todos os vendedores.', teto: p => p.ver_comissoes && p.ver_vendas_todos },
+  { id: 'fechar_comissoes', modulo: 'vendas_comissoes', rotulo: 'Fechar comissões', descricao: 'Fecha as comissões da equipe até uma data, para pagar.', teto: p => p.editar_financeiro && p.ver_comissoes },
+  { id: 'pagar_comissoes', modulo: 'vendas_comissoes', rotulo: 'Pagar comissões', descricao: 'Transforma as comissões fechadas em conta a pagar, total ou em parte.', teto: p => p.editar_financeiro && p.ver_comissoes },
 
   // Painel e relatórios
   { id: 'resumo_pagar_receber', modulo: 'resumo', rotulo: 'Ver totais a pagar e a receber no painel', descricao: 'Os números de contas em aberto no painel inicial.', teto: p => p.ver_financeiro },

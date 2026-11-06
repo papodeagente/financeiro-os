@@ -21,7 +21,7 @@ export const statusChipVariants = cva(
 
 export type StatusTone = NonNullable<VariantProps<typeof statusChipVariants>['tone']>;
 
-export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza' | 'comissao' | 'plano' | 'cobranca' | 'mudanca' | 'nota';
+export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza' | 'comissao' | 'plano' | 'cobranca' | 'mudanca' | 'nota' | 'comissao_item';
 
 export type StatusChipProps = {
   /** Valor cru do banco. NUNCA é renderizado como veio. */
@@ -84,6 +84,14 @@ export const STATUS_LABELS: Record<StatusDominio, Record<string, { rotulo: strin
     APROVADA:  { rotulo: 'Aprovada, a pagar', tone: 'info'    },
     PAGA:      { rotulo: 'Paga',             tone: 'positivo' },
     CANCELADA: { rotulo: 'Cancelada',        tone: 'neutro'   },
+  },
+  // Comissão por função, item a item (comissao-funcoes.ts › situacaoDoItem).
+  comissao_item: {
+    PREVISTA:  { rotulo: 'Prevista',  tone: 'neutro'   },
+    LIBERADA:  { rotulo: 'Liberada',  tone: 'info'     },
+    FECHADA:   { rotulo: 'Fechada',   tone: 'aviso'    },
+    PAGA:      { rotulo: 'Paga',      tone: 'positivo' },
+    ESTORNADA: { rotulo: 'Estornada', tone: 'negativo' },
   },
   // Acompanhamento do plano do mês (src/lib/plano-do-mes.ts).
   plano: {

@@ -13,6 +13,7 @@ import { CAMBIO_SCHEMA_SQL } from './cambio-servidor';
 import { VENDA_SCHEMA_SQL } from './venda-schema';
 import { FORNECEDOR_SCHEMA_SQL } from './fornecedor-schema';
 import { NOTAS_REGRAS_SCHEMA_SQL } from './nota-regras-schema';
+import { COMISSAO_FUNCOES_SCHEMA_SQL } from './comissao-funcoes-schema';
 import { RECORRENCIA_SCHEMA_SQL } from './recorrencia-schema';
 import { CENTROS_CUSTO_SCHEMA_SQL } from './centros-custo-servidor';
 import { PERMISSOES_SCHEMA_SQL } from './permissoes-schema';
@@ -1567,6 +1568,9 @@ async function executarInitDB() {
   // Notas por regra e retenções na fonte (05/11/2026, E5 parte E): regras da
   // nota, retenções por cliente × produto e a chave única da nota gerada.
   await pool.query(NOTAS_REGRAS_SCHEMA_SQL);
+  // Comissões por função (05/11/2026, E5 parte F): funções, planos em matriz,
+  // metas, o cálculo do dia, fechamentos e pagamentos. Antes da auditoria.
+  await pool.query(COMISSAO_FUNCOES_SCHEMA_SQL);
   await pool.query(RAZAO_SCHEMA_SQL);
   // Instala a captura somente depois das migrações/seed, sem fabricar histórico.
   await pool.query(AUDIT_SCHEMA_SQL);

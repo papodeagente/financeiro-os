@@ -162,7 +162,7 @@ export async function versaoDoModelo(exec: ExecutorSQL, tenantId: string, vendaI
   return Number(rows[0].versao_modelo) === 2 ? 2 : 1;
 }
 
-async function fornecedoresInfo(exec: ExecutorSQL, tenantId: string, ids: string[]): Promise<FornecedorInfo[]> {
+export async function fornecedoresInfo(exec: ExecutorSQL, tenantId: string, ids: string[]): Promise<FornecedorInfo[]> {
   const unicos = [...new Set(ids.filter(Boolean))];
   if (!unicos.length) return [];
   const { rows } = await exec.query(`SELECT id, data FROM fornecedores_crm WHERE tenant_id = $1 AND id = ANY($2::text[])`, [tenantId, unicos]);
@@ -228,7 +228,6 @@ export async function registrarEventoDaVenda(
 async function lerModelo(exec: ExecutorSQL, tenantId: string, vendaId: string, cab: Record<string, unknown>): Promise<Venda | null> {
   const { rows: m } = await exec.query(`SELECT * FROM vendas_modelo WHERE tenant_id = $1 AND venda_id = $2`, [tenantId, vendaId]);
   if (!m.length || Number(m[0].versao_modelo) !== 2) return null;
-  const linha = m[0];
   const args = [tenantId, vendaId];
   const [{ rows: ps }, { rows: xs }, { rows: cs }, { rows: gs }] = await Promise.all([
     exec.query(`SELECT * FROM venda_produtos WHERE tenant_id = $1 AND venda_id = $2 ORDER BY sequencia, id`, args),
@@ -236,6 +235,17 @@ async function lerModelo(exec: ExecutorSQL, tenantId: string, vendaId: string, c
     exec.query(`SELECT * FROM venda_componentes WHERE tenant_id = $1 AND venda_id = $2 ORDER BY ordem, id`, args),
     exec.query(`SELECT * FROM venda_pagamentos WHERE tenant_id = $1 AND venda_id = $2 ORDER BY ordem, id`, args),
   ]);
+  return vendaDasLinhas(vendaId, m[0], cab, ps, xs, cs, gs);
+}
+
+type Linha = Record<string, unknown>;
+
+/**
+ * A venda do modelo a partir das linhas das tabelas (as de UMA venda). Serve
+ * a leitura de uma venda e a leitura em lote dos relatórios e das comissões
+ * (vendas-leitura.ts), para as duas nunca divergirem.
+ */
+export function vendaDasLinhas(vendaId: string, linha: Linha, cab: Linha, ps: Linha[], xs: Linha[], cs: Linha[], gs: Linha[]): Venda {
   const parte = (id: unknown, nome: unknown, ext: unknown): ParteDaVenda | null =>
     (txt(id) || txt(nome) || txt(ext)) ? { id: txt(id), nome: txt(nome), ...(txt(ext) ? { id_externo: txt(ext) } : {}) } : null;
   const bruto = {

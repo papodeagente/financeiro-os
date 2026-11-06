@@ -25,7 +25,7 @@ import {
   PanelLeftClose, PanelLeftOpen,
   Eraser, LifeBuoy, FileText,
   LayoutGrid, ChartColumn, ArrowDownLeft, ArrowUpRight, GitCompareArrows, ListTree,
-  Contact, Truck, Repeat, Lock, ArrowDownUp, Barcode, FolderInput, Coins, FileStack, HandCoins, Handshake, BadgePercent, FilePlus2, FileCog, ReceiptText, Network, Split, Tags, ShieldCheck, Stamp, Scale, ScrollText, ListOrdered, Table2,
+  Contact, Truck, Repeat, Lock, ArrowDownUp, Barcode, FolderInput, Coins, FileStack, HandCoins, Handshake, BadgePercent, FilePlus2, FileCog, ReceiptText, Users2, Grid3x3, CalendarCheck, Banknote, UserRound, BarChart3, Network, Split, Tags, ShieldCheck, Stamp, Scale, ScrollText, ListOrdered, Table2,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -70,6 +70,12 @@ const METAS_MENU: SidebarSection[] = [
       { key: 'vendedores', label: 'Vendedores e planos', icon: UserCheck, href: '/equipe/vendedores' },
       { key: 'folha', label: 'Folha', icon: Wallet2, href: '/equipe/folha' },
       { key: 'planos-comissao', label: 'Planos de comissão', icon: Settings, href: '/equipe/planos-comissao' },
+      { key: 'funcoes', label: 'Funções', icon: Users2, href: '/equipe/funcoes' },
+      { key: 'planos-por-funcao', label: 'Planos por função', icon: Grid3x3, href: '/equipe/planos-por-funcao' },
+      { key: 'fechar-comissoes', label: 'Fechar comissões', icon: CalendarCheck, href: '/equipe/fechar-comissoes' },
+      { key: 'pagar-comissoes', label: 'Pagar comissões', icon: Banknote, href: '/equipe/pagar-comissoes' },
+      { key: 'minhas-comissoes', label: 'Minhas comissões', icon: UserRound, href: '/equipe/minhas-comissoes' },
+      { key: 'relatorios-vendas', label: 'Relatórios de vendas', icon: BarChart3, href: '/relatorios/vendas' },
     ],
   },
 ];
@@ -151,6 +157,7 @@ const CONFIGURACOES_MENU: SidebarSection[] = [
       { key: 'cfg-financeiro', label: 'Financeiro', icon: Percent, href: '/config/financeiro' },
       { key: 'cfg-cobranca', label: 'Cobrança', icon: Barcode, href: '/config/cobranca' },
       { key: 'cfg-vendas', label: 'Vendas', icon: ShoppingBag, href: '/config/vendas' },
+      { key: 'cfg-comissoes', label: 'Comissões', icon: Percent, href: '/config/comissoes' },
       { key: 'cfg-mudanca', label: 'Mudar para o EnturOS', icon: FolderInput, href: '/mudanca' },
       { key: 'cfg-perfis', label: 'Perfis de acesso', icon: ShieldCheck, href: '/config/perfis-de-acesso' },
       { key: 'cfg-limites', label: 'Limites e aprovação', icon: Scale, href: '/config/limites-e-aprovacao' },
