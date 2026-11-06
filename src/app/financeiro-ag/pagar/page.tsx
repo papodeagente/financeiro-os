@@ -8,7 +8,7 @@ import { loadEntities, saveEntity } from '@/lib/crm-storage';
 import { atualizarRegistro, excluirRegistro } from '@/lib/gravar-registro';
 import { conferirEmissao, vendaQueTravaATitulo } from '@/lib/lancamento-titulo';
 import { AvisoDeEdicaoSimultanea } from '@/components/fin/AvisoDeEdicaoSimultanea';
-import { tratarErroAoGravar, useContasDaPrevisao } from '@/components/financeiro/CamposDoLancamento';
+import { tratarErroAoGravar, padraoDaEmpresa, useContasDaPrevisao } from '@/components/financeiro/CamposDoLancamento';
 import { toast } from '@/lib/toast';
 import { validarRateio } from '@/lib/dimensoes';
 import { consumirAtalho, lerAtalhos } from '@/lib/atalho-da-url';
@@ -930,7 +930,7 @@ export default function ContasPagarPage() {
         salvando={saving}
         onSalvar={salvarFormulario}
         contasPrevisao={previsao.contas}
-        padraoPrevisaoId={previsao.padraoId}
+        padraoPrevisaoId={padraoDaEmpresa(previsao, editId ? (items.find(i => i.id === editId) as { empresa_id?: string } | undefined)?.empresa_id : null)}
         tituloId={editId}
         vendaId={editId ? vendaQueTravaATitulo(items.find(i => i.id === editId) as ContaComExtras | undefined) : null}
         empresaId={editId ? ((items.find(i => i.id === editId) as { empresa_id?: string } | undefined)?.empresa_id ?? null) : null}

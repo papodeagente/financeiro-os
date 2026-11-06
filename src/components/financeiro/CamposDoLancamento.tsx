@@ -35,9 +35,13 @@ const PADRAO = '__PADRAO__';
 
 export type ContaParaPrevisao = { id: string; nome: string; ativo?: unknown; moeda?: string };
 
-/** Contas bancárias e a conta previsão padrão da agência, para os formulários. */
-export function useContasDaPrevisao(): { contas: ContaParaPrevisao[]; padraoId: string | null } {
-  const [estado, setEstado] = React.useState<{ contas: ContaParaPrevisao[]; padraoId: string | null }>({ contas: [], padraoId: null });
+/**
+ * Contas bancárias e a conta previsão padrão da agência, para os formulários.
+ * `porEmpresa` (E7, frente D): a de cada empresa que escolheu a própria; use
+ * padraoDaEmpresa() para a conta em edição.
+ */
+export function useContasDaPrevisao(): { contas: ContaParaPrevisao[]; padraoId: string | null; porEmpresa: Record<string, string> } {
+  const [estado, setEstado] = React.useState<{ contas: ContaParaPrevisao[]; padraoId: string | null; porEmpresa: Record<string, string> }>({ contas: [], padraoId: null, porEmpresa: {} });
   React.useEffect(() => {
     let vivo = true;
     Promise.all([
@@ -53,11 +57,18 @@ export function useContasDaPrevisao(): { contas: ContaParaPrevisao[]; padraoId: 
       const padrao = cfg && typeof cfg === 'object' && typeof (cfg as Record<string, unknown>).conta_previsao_padrao === 'string'
         ? String((cfg as Record<string, unknown>).conta_previsao_padrao) || null
         : null;
-      setEstado({ contas: lista, padraoId: padrao });
+      const porEmpresa = cfg && typeof cfg === 'object' && (cfg as Record<string, unknown>).por_empresa && typeof (cfg as Record<string, unknown>).por_empresa === 'object'
+        ? (cfg as { por_empresa: Record<string, string> }).por_empresa : {};
+      setEstado({ contas: lista, padraoId: padrao, porEmpresa });
     });
     return () => { vivo = false; };
   }, []);
   return estado;
+}
+
+/** A conta previsão padrão que vale para a empresa da conta (sem escolha própria, a da agência). */
+export function padraoDaEmpresa(previsao: { padraoId: string | null; porEmpresa?: Record<string, string> }, empresaId?: string | null): string | null {
+  return (empresaId && previsao.porEmpresa?.[empresaId]) || previsao.padraoId;
 }
 
 export function CampoContaPrevista({

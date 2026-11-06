@@ -11,7 +11,7 @@ import { atualizarRegistro, excluirRegistro } from '@/lib/gravar-registro';
 import { conferirEmissao, vendaQueTravaATitulo } from '@/lib/lancamento-titulo';
 import { AvisoDeEdicaoSimultanea } from '@/components/fin/AvisoDeEdicaoSimultanea';
 import { HistoricoRecolhivel } from '@/components/fin/HistoricoDoRegistro';
-import { tratarErroAoGravar, useContasDaPrevisao } from '@/components/financeiro/CamposDoLancamento';
+import { tratarErroAoGravar, padraoDaEmpresa, useContasDaPrevisao } from '@/components/financeiro/CamposDoLancamento';
 import { toast } from '@/lib/toast';
 import { validarRateio } from '@/lib/dimensoes';
 import { consumirAtalho, lerAtalhos } from '@/lib/atalho-da-url';
@@ -975,7 +975,7 @@ export default function ContasReceberPage() {
           editando={Boolean(editId)}
           vendaId={editId ? vendaQueTravaATitulo(items.find(i => i.id === editId) as ContaComExtras | undefined) : null}
           contasPrevisao={previsao.contas}
-          padraoPrevisaoId={previsao.padraoId}
+          padraoPrevisaoId={padraoDaEmpresa(previsao, editId ? (items.find(i => i.id === editId) as { empresa_id?: string } | undefined)?.empresa_id : null)}
           empresaId={editId ? ((items.find(i => i.id === editId) as { empresa_id?: string } | undefined)?.empresa_id ?? null) : null}
           repeticao={editId ? null : (
             <BlocoDeRepeticao
