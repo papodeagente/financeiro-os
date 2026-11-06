@@ -43,6 +43,14 @@ export const NOTAS_REGRAS_SCHEMA_SQL = String.raw`
         ON notas_fiscais (tenant_id, (data->>'chave_geracao'))
         WHERE status IN ('RASCUNHO', 'PROCESSANDO', 'AUTORIZADA') AND COALESCE(data->>'chave_geracao', '') <> '';
       CREATE INDEX IF NOT EXISTS idx_notas_fiscais_venda ON notas_fiscais(tenant_id, venda_id);
+      -- Nota emitida fora do sistema (E7): a mesma (prestador|série|número)
+      -- só se registra uma vez, em qualquer situação.
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_nota_chave_externa
+        ON notas_fiscais (tenant_id, (data->>'chave_externa'))
+        WHERE COALESCE(data->>'chave_externa', '') <> '';
+      -- O acompanhamento sozinho das notas na prefeitura (E7) lê só estas.
+      CREATE INDEX IF NOT EXISTS idx_notas_fiscais_processando
+        ON notas_fiscais (tenant_id) WHERE status = 'PROCESSANDO';
     END IF;
   END
   $notas$;

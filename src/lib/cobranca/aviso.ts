@@ -28,6 +28,8 @@ import { paraCentavos, round2 } from '../money';
 import { em, texto } from '../plataformas/comum';
 import type { EventoNormalizado } from '../plataformas/tipos';
 import { efeitoDoAviso } from './calculo';
+import { dividirPagamento } from './taxa-boleto';
+import { avisarPendencia, completarCategoriaDaTaxa, itensDoPagamento } from './pagamento-servidor';
 import { avisarCrm } from './crm';
 import { lerReferencia, PREFIXO_REFERENCIA } from './referencia';
 import {
@@ -213,7 +215,8 @@ async function aplicarAviso(
   const nome = nomeDoProvedor(c.provedor);
   const parcela = evento.transacao?.parcelas?.[0];
   const efeito = efeitoDoAviso(c.status, evento.tipo, caps, {
-    jaBaixada: Boolean(c.baixa_id),
+    // Pendência já resolvida por uma pessoa (crédito, "resolvida"): o aviso repetido não baixa de novo.
+    jaBaixada: Boolean(c.baixa_id) || Boolean(c.dados?.pendencia_resolvida),
     estornoParcial: pistas.eventoBruto === 'PAYMENT_PARTIALLY_REFUNDED',
     vencimentoNoAviso: pistas.vencimento,
     hoje,
@@ -227,6 +230,7 @@ async function aplicarAviso(
   let pagoEm: string | null = c.pago_em;
   let pendencia: string | null = null;
   let novaBaixa = false;
+  let contaDaTaxaNova = false;
   let valorCentavos = c.valor_centavos;
   let vencimento = c.vencimento;
 
@@ -248,20 +252,23 @@ async function aplicarAviso(
     const dataPedida = (parcela?.data_pagamento || parcela?.data_recebimento || hoje).slice(0, 10);
     const conta = c.conta_bancaria_id || opcoes.contaBancariaId || null;
     const data = await dataForaDoFechamento(exec, tenantId, conta, dataPedida);
+    const forma = pistas.formaPaga === 'pix' ? 'Pix' : 'Boleto';
+    // Taxa de boleto repassada ao cliente (E7): a parte dela vai para a conta própria da taxa.
+    const divisao = dividirPagamento(paraCentavos(valor), c.valor_centavos, Number(c.dados?.taxa_boleto_centavos ?? 0));
     await exec.query('SAVEPOINT cobranca_baixa');
     try {
+      const itens = await itensDoPagamento(exec, tenantId, c, {
+        contaCentavos: divisao.conta, taxaBoletoCentavos: divisao.taxa, taxaProvedorCentavos: paraCentavos(taxa),
+        juros, desconto, data, conta_bancaria_id: conta, forma,
+      });
       const r = await registrarBaixas(exec, {
         tenantId, usuarioNome: `Aviso do ${nome}`, origem: 'plataforma',
         idempotencia: `cobranca:${c.provedor}:${pistas.idPagamento || c.id_externo || c.id}`,
-      }, [{
-        titulo_tabela: 'contas_receber', titulo_id: c.titulo_id, data, conta_bancaria_id: conta,
-        forma: pistas.formaPaga === 'pix' ? 'Pix' : 'Boleto', valor, juros, desconto, taxa,
-        taxa_plataforma: taxa > 0 ? c.provedor : undefined,
-        observacao: `Recebido pelo ${nome} (cobrança ${c.id}).`,
-      }], { gravar: true });
+      }, itens, { gravar: true });
       await exec.query('RELEASE SAVEPOINT cobranca_baixa');
       baixaId = r.itens[0]?.baixa_id ?? null;
       novaBaixa = !r.itens[0]?.ja_existia;
+      contaDaTaxaNova = divisao.taxa > 0 && !r.itens[1]?.ja_existia;
       pagoCentavos = paraCentavos(valor);
       taxaCentavos = paraCentavos(taxa);
       pagoEm = data;
@@ -269,11 +276,23 @@ async function aplicarAviso(
       detalhe.valor = valor;
       detalhe.taxa = taxa;
       detalhe.data = data;
+      if (divisao.taxa > 0) detalhe.taxa_boleto = round2(divisao.taxa / 100);
       dados.aguardando_credito = false;
+      // A baixa entrou agora (o aviso repetido depois de alguém arrumar a conta): a pendência some.
+      if (c.dados?.pendencia) { dados.pendencia = null; dados.pendencia_tipo = null; }
     } catch (e) {
       await exec.query('ROLLBACK TO SAVEPOINT cobranca_baixa');
       if (!(e instanceof ErroBaixa)) throw e;
       pendencia = `O ${nome} avisou o pagamento, mas a baixa não entrou: ${e.message} Dê a baixa à mão.`;
+      // O pagamento fica guardado para a pessoa resolver com um clique (pendencia.ts).
+      dados.pendencia_tipo = 'pagamento';
+      dados.pendencia_pagamento = {
+        valor_centavos: paraCentavos(valor), taxa_centavos: paraCentavos(taxa), juros, desconto, data: dataPedida,
+        conta_bancaria_id: conta, forma, id_pagamento: pistas.idPagamento,
+      };
+      pagoCentavos = paraCentavos(valor);
+      taxaCentavos = paraCentavos(taxa);
+      pagoEm = dataPedida;
     }
   }
 
@@ -287,10 +306,12 @@ async function aplicarAviso(
       await exec.query('ROLLBACK TO SAVEPOINT cobranca_estorno');
       if (!(e instanceof ErroBaixa) && !/PERIODO_FECHADO|período/i.test(e instanceof Error ? e.message : '')) throw e;
       pendencia = `O ${nome} avisou o estorno, mas a baixa não pôde ser desfeita: ${e instanceof Error ? e.message : e} Estorne a baixa à mão.`;
+      dados.pendencia_tipo = 'estorno';
     }
   }
   if (pistas.eventoBruto === 'PAYMENT_PARTIALLY_REFUNDED') {
     pendencia = `O ${nome} avisou uma devolução PARCIAL. Confira o valor devolvido e lance o ajuste.`;
+    dados.pendencia_tipo = 'devolucao_parcial';
   }
 
   // "Alterada" no provedor: valor e vencimento do aviso; linha e QR mudam, a fila busca de novo.
@@ -301,9 +322,11 @@ async function aplicarAviso(
     if (pistas.valorCentavos && pistas.valorCentavos !== c.valor_centavos) { valorCentavos = pistas.valorCentavos; buscarDeNovo = true; }
     if (buscarDeNovo) detalhe.alterada = { valor_centavos: valorCentavos, vencimento };
   }
+  const pendenciaNova = Boolean(pendencia) && pendencia !== c.dados?.pendencia;
   if (pendencia) {
     dados.pendencia = pendencia;
     detalhe.pendencia = pendencia;
+    if (pendenciaNova) dados.pendencia_em = new Date().toISOString();
   }
 
   const { rows } = await exec.query(
@@ -322,15 +345,24 @@ async function aplicarAviso(
   }
 
   const ficouPaga = nova.status === 'paga' && c.status !== 'paga';
-  const comTaxa = novaBaixa && (taxaCentavos ?? 0) > 0;
-  const depois = ficouPaga || comTaxa
+  const comTaxa = (novaBaixa && (taxaCentavos ?? 0) > 0) || contaDaTaxaNova;
+  const depois = ficouPaga || comTaxa || pendenciaNova
     ? async () => {
         if (comTaxa) {
           await emTransacao(tx => garantirCategoriasDeEncargos(tx, tenantId))
             .catch(e => console.error('[cobranca] categorias dos encargos:', e instanceof Error ? e.message : e));
         }
+        if (contaDaTaxaNova) {
+          await completarCategoriaDaTaxa(tenantId, c.id)
+            .catch(e => console.error('[cobranca] categoria da taxa de boleto:', e instanceof Error ? e.message : e));
+        }
         if (ficouPaga) {
           if (pool) await avisarCrm(pool as unknown as ExecutorSQL, tenantId, 'COBRANCA_PAGA', cobrancaParaCrm(nova), `cobranca-paga:${tenantId}:${nova.id}`);
+        }
+        // Aviso no sino fora da transação do aviso: falhar aqui nunca desfaz a baixa.
+        if (pendenciaNova && pendencia) {
+          await avisarPendencia(tenantId, nova, pendencia, efeito.evento)
+            .catch(e => console.error('[cobranca] aviso da pendência:', e instanceof Error ? e.message : e));
         }
       }
     : undefined;

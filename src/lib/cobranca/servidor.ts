@@ -35,6 +35,8 @@ import {
   type ItemPlanejado,
 } from './calculo';
 import { avisarCrm, crmLigado, type CobrancaParaCrm } from './crm';
+import { levaTaxaDeBoleto } from './taxa-boleto';
+import { camposDoEnvio, lerEnvioPersonalizado } from './envio';
 import { resultadoDoEnvio } from './resultado-envio';
 import {
   ErroCobranca, ErroProvedor, ehProvedorCobranca, STATUS_EM_ABERTO,
@@ -305,6 +307,7 @@ export async function clienteDaConta(exec: ExecutorSQL, tenantId: string, client
     email: txt(d.email),
     telefone: (txt(d.whatsapp) || txt(d.telefone_principal) || txt(d.telefone)).replace(/\D/g, ''),
     endereco,
+    cobrar_taxa_boleto: d.cobrar_taxa_boleto === true,
   };
 }
 
@@ -323,6 +326,8 @@ export interface PedidoDeEmissao {
 
 export interface ItemDaPrevia extends ItemPlanejado {
   ok: boolean;
+  /** Taxa de boleto somada (cliente marcado; Configurações › Cobrança), em centavos. */
+  taxa_boleto_centavos?: number;
 }
 
 export interface PreviaDeEmissao {
@@ -400,7 +405,14 @@ export async function previaDaEmissao(
     const faltas = faltasDoCliente(clientes.get(chave)!, provedor, tipo);
     if (faltas.length) it.erros.push(`Complete o cadastro do cliente: falta ${faltas.join(', ')}.`);
     if (!it.cliente_id) it.erros.push('A conta não está ligada a um cliente cadastrado.');
-    itens.push({ ...it, ok: it.erros.length === 0 });
+    // Taxa de boleto repassada (E7): só para o cliente marcado e só em boleto (taxa-boleto.ts).
+    let taxaBoleto = 0;
+    if (it.valor_centavos > 0 && levaTaxaDeBoleto(tipo, config.taxa_boleto_centavos, clientes.get(chave)!.cobrar_taxa_boleto)) {
+      taxaBoleto = config.taxa_boleto_centavos;
+      it.valor_centavos += taxaBoleto;
+      it.avisos.push(`Inclui a taxa de boleto de R$ ${deCentavos(taxaBoleto).toFixed(2).replace('.', ',')} (o cadastro do cliente pede).`);
+    }
+    itens.push({ ...it, ok: it.erros.length === 0, ...(taxaBoleto ? { taxa_boleto_centavos: taxaBoleto } : {}) });
   }
   const prontas = itens.filter(i => i.ok);
   const total_centavos = prontas.reduce((a, i) => a + i.valor_centavos, 0);
@@ -462,7 +474,7 @@ export async function gravarEmissao(
       throw new ErroCobranca(primeiro, 409, codigoDoMotivo(primeiro));
     }
     const { config, nome_agencia: agencia } = await lerConfigCobranca(exec, tenantId);
-    const dados = JSON.stringify(o.idempotencia ? { idempotencia: o.idempotencia.slice(0, 200) } : {});
+    const base = o.idempotencia ? { idempotencia: o.idempotencia.slice(0, 200) } : {};
     const criadas: LinhaCobranca[] = [];
     const puladas: Array<{ conta_id: string; motivo: string }> = [];
     for (const it of previa.itens) {
@@ -476,7 +488,8 @@ export async function gravarEmissao(
          RETURNING ${COLUNAS}`,
         [id, tenantId, it.conta_id, it.cliente_id || null, previa.provedor, referenciaDaCobranca(tenantId, id), previa.tipo,
           it.valor_centavos, it.vencimento, descricaoDa(config, agencia, pedido.descricao, it), previa.conta_bancaria_id,
-          JSON.stringify(previa.tipo === 'link' ? null : previa.encargos), o.quem?.usuarioId ?? null, o.quem?.usuarioNome ?? null, dados],
+          JSON.stringify(previa.tipo === 'link' ? null : previa.encargos), o.quem?.usuarioId ?? null, o.quem?.usuarioNome ?? null,
+          JSON.stringify(it.taxa_boleto_centavos ? { ...base, taxa_boleto_centavos: it.taxa_boleto_centavos } : base)],
       );
       if (!rows.length) { puladas.push({ conta_id: it.conta_id, motivo: 'Esta conta já tem cobrança emitida.' }); continue; }
       const linha = lerLinha(rows[0]);
@@ -1005,7 +1018,8 @@ export async function pedirEstorno(
 
 /** Pede ao CRM para mandar a cobrança ao cliente por e-mail ou WhatsApp. */
 export async function enviarCobranca(
-  tenantId: string, cobrancaId: string, canal: CanalCobranca, o: { quem?: QuemFez; idempotencia?: string } = {},
+  tenantId: string, cobrancaId: string, canal: CanalCobranca,
+  o: { quem?: QuemFez; idempotencia?: string; personalizado?: Record<string, unknown> | null } = {},
 ): Promise<{ enviado: boolean; canal: CanalCobranca; repetido?: boolean; na_fila?: boolean; motivo?: string }> {
   if (pool && o.idempotencia) {
     // O mesmo pedido repetido (duplo clique): não manda duas vezes.
@@ -1017,6 +1031,8 @@ export async function enviarCobranca(
   }
   if (!pool) throw new ErroCobranca('Banco indisponível.', 503);
   if (canal !== 'email' && canal !== 'whatsapp') throw new ErroCobranca('Escolha e-mail ou WhatsApp.');
+  // Cópia, assunto e mensagem próprios (E7): só no e-mail; conferidos antes de qualquer coisa sair.
+  const personalizado = camposDoEnvio(lerEnvioPersonalizado(canal, o.personalizado ?? null));
   // Também segura durante a mudança do sistema anterior (até "Concluir mudança").
   const motivo = nadaSai() ?? (pool ? await mudancaSegurandoSaidas(pool as unknown as ExecutorSQL, tenantId) : null);
   if (motivo) throw new ErroCobranca(`Nada é enviado agora (${motivo}).`, 409, 'NADA_SAI');
@@ -1027,10 +1043,11 @@ export async function enviarCobranca(
     throw new ErroCobranca('O envio por e-mail e WhatsApp sai pelo CRM. Ligue a integração com o CRM em Configurações.', 409);
   }
   const retorno: { resposta?: import('../crm-integration').RespostaDoCrm | null } = {};
-  await avisarCrm(exec, tenantId, 'COBRANCA_ENVIAR', paraCrm(c), `cobranca-enviar:${tenantId}:${c.id}:${generateId()}`, { canal }, retorno);
+  await avisarCrm(exec, tenantId, 'COBRANCA_ENVIAR', paraCrm(c), `cobranca-enviar:${tenantId}:${c.id}:${generateId()}`, { canal, ...personalizado }, retorno);
   const r = resultadoDoEnvio(retorno.resposta);
   await emTransacao(tx => registrarEvento(tx, tenantId, c.id, 'envio_pedido', c.status, c.status,
-    { canal, enviado: r.enviado, ...(r.motivo ? { motivo: r.motivo } : {}), ...(o.idempotencia ? { idempotencia: o.idempotencia.slice(0, 200) } : {}) }, o.quem));
+    { canal, enviado: r.enviado, ...(personalizado.copia_para ? { copia_para: personalizado.copia_para } : {}),
+      ...(personalizado.assunto ? { assunto: personalizado.assunto } : {}), ...(personalizado.mensagem ? { com_mensagem: true } : {}), ...(r.motivo ? { motivo: r.motivo } : {}), ...(o.idempotencia ? { idempotencia: o.idempotencia.slice(0, 200) } : {}) }, o.quem));
   return { enviado: r.enviado, canal, ...(r.na_fila ? { na_fila: true } : {}), ...(r.motivo ? { motivo: r.motivo } : {}) };
 }
 
@@ -1046,6 +1063,8 @@ export interface FiltrosDaLista {
   cliente_id?: string;
   titulo_id?: string;
   busca?: string;
+  /** Só as pagas pelo provedor cuja baixa não entrou sozinha (E7). */
+  pendencia?: boolean;
   pagina?: number;
   por_pagina?: number;
 }
@@ -1070,6 +1089,8 @@ export async function listarCobrancas(
 ): Promise<{
   itens: ItemDaLista[]; total: number; pagina: number; por_pagina: number;
   totais: TotaisDaLista; por_status: Record<string, { quantidade: number; valor: number }>;
+  /** Pagamentos avisados cuja baixa não entrou sozinha (mesmos filtros, sem o de situação). */
+  pendencias: { quantidade: number; valor: number };
 }> {
   const cond: string[] = ['c.tenant_id = $1'];
   const v: unknown[] = [tenantId];
@@ -1092,6 +1113,7 @@ export async function listarCobrancas(
   const status = (f.status ?? []).flatMap(s => (s === 'em_aberto' ? [...STATUS_EM_ABERTO] : [s]))
     .filter(s => ['emitindo', 'aberta', 'vencida', 'paga', 'cancelada', 'estornada', 'falhou'].includes(s));
   if (status.length) add('c.status = ANY(?::text[])', status);
+  if (f.pendencia) cond.push(`COALESCE(c.dados->>'pendencia', '') <> ''`);
   const where = cond.join(' AND ');
   const porPagina = Math.min(200, Math.max(1, Math.round(Number(f.por_pagina) || 50)));
   const pagina = Math.max(1, Math.round(Number(f.pagina) || 1));
@@ -1128,6 +1150,12 @@ export async function listarCobrancas(
     if (st === 'falhou') totais.falhou = { quantidade: n };
   }
   totais.aberto.valor = deCentavos(abertoCentavos);
+  const { rows: pend } = await exec.query(
+    `SELECT COUNT(*)::int AS n, COALESCE(SUM(COALESCE(c.pago_centavos, c.valor_centavos)), 0)::bigint AS centavos
+       FROM cobrancas c LEFT JOIN contas_receber cr ON cr.tenant_id = c.tenant_id AND cr.id = c.titulo_id
+      WHERE ${whereSemStatus} AND COALESCE(c.dados->>'pendencia', '') <> ''`,
+    vSemStatus,
+  );
   return {
     itens: rows.map(r => ({
       ...lerLinha(r), cliente_nome: String(r.cliente_nome ?? ''), conta_descricao: String(r.conta_descricao ?? ''),
@@ -1138,6 +1166,7 @@ export async function listarCobrancas(
     por_pagina: porPagina,
     totais,
     por_status,
+    pendencias: { quantidade: Number(pend[0]?.n ?? 0), valor: deCentavos(pend[0]?.centavos as string) },
   };
 }
 

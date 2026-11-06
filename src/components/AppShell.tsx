@@ -149,6 +149,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     (pathname.startsWith('/financeiro-ag/faturas/') && pathname.endsWith('/imprimir')) ||
     // Nota de débito da venda para imprimir (E5, parte B).
     (pathname.startsWith('/vendas/') && pathname.endsWith('/nota-de-debito')) ||
+    // Recibo da venda e recibo consolidado da fatura para imprimir (E7).
+    (pathname.startsWith('/vendas/') && pathname.endsWith('/recibo')) ||
+    (pathname.startsWith('/financeiro-ag/faturas/') && pathname.endsWith('/recibo')) ||
     pathname.startsWith('/mapas-mentais/publico/') ||
     pathname.startsWith('/admin') ||
     pathname === '/preview-iframe'

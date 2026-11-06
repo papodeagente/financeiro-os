@@ -54,6 +54,12 @@ export interface Funcao {
   /** Ganha sobre as vendas destas unidades (centros de custo). */
   sobre_unidades: string[];
   ativo: boolean;
+  /**
+   * Quem fecha as comissões desta função (E7): ids de usuário e `grupo:<id>`
+   * (perfil de acesso). Vazio = qualquer pessoa com o direito "Fechar
+   * comissões", como sempre foi. O administrador fecha todas.
+   */
+  quem_fecha: string[];
 }
 
 export interface PessoaDaFuncao {
@@ -145,11 +151,17 @@ export interface ConfigComissao {
   /** Categorias da conta a pagar (e da conta a receber, quando a pessoa fica devendo). Vazio = 2.6. */
   categoria_pagamento_id: string;
   categoria_recebimento_id: string;
+  /**
+   * Dia de fechamento das metas (E7). 0 = último dia do mês (o mês civil, como
+   * sempre). De 1 a 27: o período da meta vai do dia seguinte ao fechamento
+   * anterior até este dia, e leva o nome do mês em que fecha. 28 a 31 viram 0.
+   */
+  dia_fechamento_meta: number;
 }
 
 export const CONFIG_COMISSAO_PADRAO: ConfigComissao = {
   regra: 'ATUAL', liberar: 'VENDA', meta_sobre: ['RECEITA'], data_inicial: '',
-  so_vendas_fechadas: false, categoria_pagamento_id: '', categoria_recebimento_id: '',
+  so_vendas_fechadas: false, categoria_pagamento_id: '', categoria_recebimento_id: '', dia_fechamento_meta: 0,
 };
 
 // ============================================================
@@ -235,6 +247,7 @@ export function normalizarFuncao(v: unknown): Funcao {
     sistema: sistema === 'VENDEDOR' || sistema === 'INTERMEDIARIO' ? sistema : null,
     sobre_pessoas: [...new Set(lista(o.sobre_pessoas))], sobre_unidades: [...new Set(lista(o.sobre_unidades))],
     ativo: o.ativo !== false,
+    quem_fecha: [...new Set(lista(o.quem_fecha))],
   };
 }
 
@@ -258,14 +271,164 @@ export function normalizarConfigComissao(v: unknown): ConfigComissao {
     data_inicial: ISO.test(di) ? di : '',
     so_vendas_fechadas: o.so_vendas_fechadas === true,
     categoria_pagamento_id: txt(o.categoria_pagamento_id), categoria_recebimento_id: txt(o.categoria_recebimento_id),
+    dia_fechamento_meta: normalizarDiaDeFechamento(o.dia_fechamento_meta),
   };
+}
+
+/** 1 a 27 valem como estão; 0, vazio e 28 a 31 = último dia do mês (0). */
+export function normalizarDiaDeFechamento(v: unknown): number {
+  const d = inteiro(v);
+  return d >= 1 && d <= 27 ? d : 0;
+}
+
+const ultimoDia = (ano: number, mes: number) => new Date(Date.UTC(ano, mes, 0)).getUTCDate();
+const doisDig = (x: number) => String(x).padStart(2, '0');
+
+/**
+ * O mês da meta a que uma data pertence. Sem dia de fechamento (0), é o mês
+ * da data. Com dia D, a venda depois do dia D conta para o mês seguinte
+ * (o período que fecha no dia D do mês seguinte).
+ */
+export function mesDaMeta(data: string, dia: number): string {
+  if (!data || data.length < 10) return data && data.length >= 7 ? data.slice(0, 7) : '';
+  const d = normalizarDiaDeFechamento(dia);
+  const mes = data.slice(0, 7);
+  if (!d || Number(data.slice(8, 10)) <= d) return mes;
+  const ano = Number(mes.slice(0, 4));
+  const m = Number(mes.slice(5, 7));
+  return m === 12 ? `${ano + 1}-01` : `${ano}-${doisDig(m + 1)}`;
+}
+
+/** O período (de, até) da meta de um mês, com o dia de fechamento. */
+export function periodoDaMeta(mes: string, dia: number): { de: string; ate: string } {
+  const ano = Number(mes.slice(0, 4));
+  const m = Number(mes.slice(5, 7));
+  const d = normalizarDiaDeFechamento(dia);
+  if (!d) return { de: `${mes}-01`, ate: `${mes}-${doisDig(ultimoDia(ano, m))}` };
+  const anoAnt = m === 1 ? ano - 1 : ano;
+  const mAnt = m === 1 ? 12 : m - 1;
+  return { de: `${anoAnt}-${doisDig(mAnt)}-${doisDig(d + 1)}`, ate: `${mes}-${doisDig(d)}` };
+}
+
+/** "de 26/10 a 25/11" ou "de 01/11 a 30/11". */
+export function rotuloDoPeriodoDaMeta(mes: string, dia: number): string {
+  const { de, ate } = periodoDaMeta(mes, dia);
+  const curta = (x: string) => `${x.slice(8, 10)}/${x.slice(5, 7)}`;
+  return `de ${curta(de)} a ${curta(ate)}`;
+}
+
+export const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'] as const;
+
+export interface LinhaDaGradeDeMetas {
+  pessoa_funcao_id: string;
+  pessoa_nome: string;
+  funcao_id: string;
+  funcao_nome: string;
+  plano_nome: string;
+  nao_comissionado: boolean;
+  /** 12 metas do ano em centavos (0 = sem meta). */
+  meses: Centavos[];
+}
+
+/** A grade de metas do ano: cada pessoa de cada função (na ordem das funções), com os 12 meses. */
+export function linhasDaGradeDeMetas(
+  c: { funcoes: Funcao[]; pessoas: PessoaDaFuncao[]; planos: Array<Pick<PlanoPorFuncao, 'id' | 'nome'>>; metas: MetaDoMes[] },
+  ano: number, funcaoId = '',
+): LinhaDaGradeDeMetas[] {
+  const metas = new Map(c.metas.map(m => [`${m.pessoa_funcao_id}|${m.mes}`, m.centavos]));
+  const planos = new Map(c.planos.map(p => [p.id, p.nome]));
+  const saida: LinhaDaGradeDeMetas[] = [];
+  for (const f of c.funcoes) {
+    if (funcaoId && f.id !== funcaoId) continue;
+    const pessoas = c.pessoas.filter(p => p.funcao_id === f.id).sort((a, b) => a.pessoa_nome.localeCompare(b.pessoa_nome, 'pt-BR'));
+    for (const p of pessoas) {
+      saida.push({
+        pessoa_funcao_id: p.id, pessoa_nome: p.pessoa_nome, funcao_id: f.id, funcao_nome: f.nome,
+        plano_nome: planos.get(p.plano_id) ?? '', nao_comissionado: p.nao_comissionado,
+        meses: Array.from({ length: 12 }, (_, i) => metas.get(`${p.id}|${ano}-${doisDig(i + 1)}`) ?? 0),
+      });
+    }
+  }
+  return saida;
+}
+
+/**
+ * Quem fecha a função? Vazio = todos com o direito de fechar. O
+ * administrador (`admin`) fecha sempre. `grupos` = ids dos perfis de acesso
+ * da pessoa.
+ */
+export function podeFecharAFuncao(funcao: Pick<Funcao, 'quem_fecha'> | undefined, usuarioId: string, grupos: string[], admin: boolean): boolean {
+  if (admin || !funcao || !funcao.quem_fecha.length) return true;
+  if (usuarioId && funcao.quem_fecha.includes(usuarioId)) return true;
+  return grupos.some(g => funcao.quem_fecha.includes(`grupo:${g}`));
+}
+
+// ============================================================
+// Comissão manual na venda (indicação, bônus)
+// ============================================================
+
+/**
+ * Comissão lançada à mão numa venda fechada (E7). O valor fica gravado no
+ * lançamento: o percentual é sobre a receita da agência na venda NO DIA do
+ * lançamento, e a base vai junto para a explicação. Entra inteira no
+ * próximo "Fechar comissões" da pessoa (liberada na data do lançamento).
+ */
+export interface ComissaoManual {
+  id: string;
+  venda_id: string;
+  venda_numero: string;
+  cliente_nome: string;
+  pessoa_funcao_id: string;
+  pessoa_id: string;
+  pessoa_nome: string;
+  funcao_id: string;
+  funcao_nome: string;
+  descricao: string;
+  tipo: 'PERCENTUAL' | 'VALOR';
+  percentual: number;
+  base_centavos: Centavos;
+  valor_centavos: Centavos;
+  /** Data do lançamento (AAAA-MM-DD): a partir dela entra no fechamento. */
+  data: string;
+  lancado_por: string;
+}
+
+export const ROTULO_BASE_MANUAL = 'Receita da agência na venda';
+
+/** A base do percentual: a receita da agência nos produtos não cancelados. */
+export function baseDaComissaoManual(venda: Venda, cfgReceita: ConfigReceita = CONFIG_RECEITA_PADRAO): Centavos {
+  return venda.produtos.filter(p => !p.cancelado_em).reduce((a, p) => a + baseDoProduto(p, ['RECEITA'], cfgReceita), 0);
+}
+
+/** Valida e calcula o lançamento. `erros` vazio = pode gravar. */
+export function prepararComissaoManual(
+  entrada: unknown, base: Centavos,
+): { tipo: 'PERCENTUAL' | 'VALOR'; percentual: number; valor_centavos: Centavos; descricao: string; erros: string[] } {
+  const o = obj(entrada);
+  const tipo = txt(o.tipo).toUpperCase() === 'PERCENTUAL' ? 'PERCENTUAL' : 'VALOR';
+  const descricao = txt(o.descricao, 120);
+  const erros: string[] = [];
+  if (!descricao) erros.push('Diga do que é a comissão (ex.: indicação do cliente, bônus da campanha).');
+  let percentual = 0;
+  let valor = 0;
+  if (tipo === 'PERCENTUAL') {
+    percentual = Math.round(num(o.percentual) * 10000) / 10000;
+    if (percentual <= 0 || percentual > 100) erros.push('O percentual vai de 0,01% a 100%.');
+    else if (base <= 0) erros.push('A venda não tem receita da agência: lance um valor fixo.');
+    valor = Math.round(Math.max(base, 0) * Math.max(percentual, 0) / 100);
+  } else {
+    valor = Math.max(inteiro(o.valor_centavos), 0);
+    if (valor <= 0) erros.push('Diga o valor da comissão.');
+  }
+  if (!erros.length && valor <= 0) erros.push('A comissão dá zero: confira o percentual.');
+  return { tipo, percentual, valor_centavos: valor, descricao, erros };
 }
 
 /** As duas funções do sistema. */
 export function funcoesDoSistema(): Funcao[] {
   return [
-    { id: 'fn-vendedor', nome: 'Vendedor', sistema: 'VENDEDOR', sobre_pessoas: [], sobre_unidades: [], ativo: true },
-    { id: 'fn-intermediario', nome: 'Intermediário', sistema: 'INTERMEDIARIO', sobre_pessoas: [], sobre_unidades: [], ativo: true },
+    { id: 'fn-vendedor', nome: 'Vendedor', sistema: 'VENDEDOR', sobre_pessoas: [], sobre_unidades: [], ativo: true, quem_fecha: [] },
+    { id: 'fn-intermediario', nome: 'Intermediário', sistema: 'INTERMEDIARIO', sobre_pessoas: [], sobre_unidades: [], ativo: true, quem_fecha: [] },
   ];
 }
 
@@ -374,6 +537,10 @@ export interface EntradaDoCalculo {
   recebimentos?: Record<string, RecebimentoDoCliente>;
   /** Só estes participantes (ids de pessoa na função). Vazio = todos. */
   so_participantes?: string[];
+  /** Comissões lançadas à mão nas vendas (E7). */
+  manuais?: ComissaoManual[];
+  /** Vendas canceladas fora da lista `vendas` (antes da data inicial), só para zerar as manuais delas. */
+  vendas_canceladas?: string[];
 }
 
 export interface Explicacao {
@@ -387,6 +554,8 @@ export interface Explicacao {
   faixas: Array<{ percentual_meta: number; peso: number; tipo: 'PERCENTUAL' | 'VALOR'; percentual: number; valor_centavos: Centavos; base: ParteDaBase[]; base_centavos: Centavos; resultado_centavos: number }>;
   liberacao: { modo: Liberacao; ate: string; recebido_centavos: Centavos; total_centavos: Centavos; fracao: number };
   retido_centavos: Centavos;
+  /** Comissão lançada à mão (E7): o que foi lançado e por quem. */
+  manual?: { descricao: string; tipo: 'PERCENTUAL' | 'VALOR'; percentual: number; base_centavos: Centavos; data: string; lancado_por: string };
 }
 
 export interface ItemDeComissao {
@@ -445,7 +614,6 @@ export interface ResultadoDoCalculo {
   resumos: ResumoDoParticipante[];
 }
 
-const mesDaData = (d: string) => (d && d.length >= 7 ? d.slice(0, 7) : '');
 export function rotuloDoMes(mes: string): string {
   return MES.test(mes) ? `${mes.slice(5, 7)}/${mes.slice(0, 4)}` : mes;
 }
@@ -500,7 +668,7 @@ export function calcularComissoesPorFuncao(e: EntradaDoCalculo): ResultadoDoCalc
     // Mês a mês: a meta e a faixa são do mês da venda.
     const porMes = new Map<string, VendaParaComissao[]>();
     for (const v of vendas) {
-      const m = mesDaData(v.venda.data_venda);
+      const m = mesDaMeta(v.venda.data_venda, e.config.dia_fechamento_meta);
       if (!m) continue;
       const l = porMes.get(m); if (l) l.push(v); else porMes.set(m, [v]);
     }
@@ -606,7 +774,42 @@ export function calcularComissoesPorFuncao(e: EntradaDoCalculo): ResultadoDoCalc
       resumos.push(base);
     }
   }
+  itens.push(...itensDasComissoesManuais(e));
   return { itens, resumos };
+}
+
+/**
+ * A comissão manual vira um item próprio (chave `manual|<id>`), liberado
+ * inteiro na data do lançamento. Não conta para a meta. Venda cancelada
+ * depois zera o item (o que já foi fechado volta como estorno).
+ */
+export function itensDasComissoesManuais(e: Pick<EntradaDoCalculo, 'manuais' | 'vendas' | 'vendas_canceladas' | 'ate' | 'so_participantes' | 'config'>): ItemDeComissao[] {
+  const so = new Set(e.so_participantes ?? []);
+  const canceladas = new Set([...e.vendas.filter(v => v.cancelada).map(v => v.venda.id), ...(e.vendas_canceladas ?? [])]);
+  const saida: ItemDeComissao[] = [];
+  for (const m of e.manuais ?? []) {
+    if (so.size && !so.has(m.pessoa_funcao_id)) continue;
+    const cancelada = canceladas.has(m.venda_id);
+    const valor = cancelada ? 0 : m.valor_centavos;
+    const liberado = m.data && m.data <= e.ate ? valor : 0;
+    const mes = mesDaMeta(m.data, e.config.dia_fechamento_meta);
+    saida.push({
+      chave: `manual|${m.id}`, venda_id: m.venda_id, venda_numero: m.venda_numero, data_venda: m.data, mes,
+      produto_id: '', descricao: m.descricao, cliente_nome: m.cliente_nome,
+      pessoa_funcao_id: m.pessoa_funcao_id, pessoa_id: m.pessoa_id, pessoa_nome: m.pessoa_nome,
+      funcao_id: m.funcao_id, funcao_nome: m.funcao_nome, plano_id: '',
+      valor_centavos: valor, retido_centavos: 0, liberado_centavos: liberado, liberado_retido_centavos: 0,
+      explicacao: {
+        venda_numero: m.venda_numero, produto: m.descricao, tipo_produto: 'Comissão manual',
+        motivo: cancelada ? 'VENDA_CANCELADA' : '', modo_faixa: 'DEGRAU', com_intermediario: false,
+        meta: { mes, meta_centavos: null, atingida_centavos: 0, percentual: null }, faixas: [],
+        liberacao: { modo: 'VENDA', ate: e.ate, recebido_centavos: 0, total_centavos: 0, fracao: liberado ? 1 : 0 },
+        retido_centavos: 0,
+        manual: { descricao: m.descricao, tipo: m.tipo, percentual: m.percentual, base_centavos: m.base_centavos, data: m.data, lancado_por: m.lancado_por },
+      },
+    });
+  }
+  return saida;
 }
 
 // ============================================================
@@ -806,6 +1009,15 @@ export function frasesDaExplicacao(e: Explicacao, valorCentavos: Centavos): stri
   if (e.motivo === 'VENDA_CANCELADA') return ['A venda foi cancelada: a comissão dela é zero. O que já tinha sido fechado volta no próximo fechamento.'];
   if (e.motivo === 'PRODUTO_CANCELADO') return ['Este produto foi cancelado: a comissão dele é zero.'];
   if (e.motivo === 'SAIU_DO_CALCULO') return ['Esta venda não entra mais na sua comissão. O que já tinha sido fechado volta no próximo fechamento.'];
+  if (e.manual) {
+    const m = e.manual;
+    const quando = m.data ? m.data.split('-').reverse().join('/') : '';
+    f.push(`Comissão lançada à mão${m.lancado_por ? ` por ${m.lancado_por}` : ''}${quando ? ` em ${quando}` : ''}: ${m.descricao}.`);
+    if (m.tipo === 'PERCENTUAL') f.push(`${pct(m.percentual)} sobre a receita da agência na venda (${reais(m.base_centavos)}) = ${reais(valorCentavos)}.`);
+    else f.push(`Valor fixo: ${reais(valorCentavos)}.`);
+    f.push('Não conta para a meta. Entra inteira no próximo fechamento.');
+    return f;
+  }
   const meta = e.meta;
   if (meta.meta_centavos !== null && meta.percentual !== null) {
     f.push(`Meta de ${rotuloDoMes(meta.mes)}: ${reais(meta.meta_centavos)}. Você chegou a ${reais(meta.atingida_centavos)} (${pct(meta.percentual)}).`);

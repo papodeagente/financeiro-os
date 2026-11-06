@@ -208,7 +208,8 @@ export function montarCorpoEmissao(entrada: {
     // O valor tributável da nota. Em intermediação isto é a comissão: o
     // repasse ao fornecedor não é receita da agência e não entra aqui.
     valor_servico: nota.valor_servicos,
-    data_competencia: (nota.emitida_em || '').slice(0, 10) || undefined,
+    // A data escolhida pela agência (dia, venda ou embarque) vence; sem ela, a da emissão.
+    data_competencia: (nota.data_competencia || nota.emitida_em || '').slice(0, 10) || undefined,
     cod_interno: codigoInterno(nota.id),
   };
   if (nota.tomador.email) corpo.tomador_email = nota.tomador.email;

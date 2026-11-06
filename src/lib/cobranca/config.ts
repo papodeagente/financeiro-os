@@ -42,6 +42,14 @@ export interface ConfigCobranca {
   /** Validade do link de pagamento, em dias. */
   dias_link: number;
   regua: ReguaDeCobranca;
+  /**
+   * Taxa de boleto repassada ao cliente (E7, 06/11/2026), em centavos. 0 =
+   * não repassa. Só vale para o cliente marcado "Repassar a taxa do boleto" e
+   * só em boleto (com ou sem Pix): o valor entra no boleto e, quando o
+   * cliente paga, vira uma conta a receber própria na categoria de taxa de
+   * cobrança (a conta da venda fecha pelo valor dela).
+   */
+  taxa_boleto_centavos: number;
 }
 
 export const DIAS_DA_REGUA_PADRAO = [-5, 0, 1, 3, 7];
@@ -60,6 +68,7 @@ export const CONFIG_COBRANCA_PADRAO: ConfigCobranca = {
   descricao_modelo: '',
   dias_link: 7,
   regua: { ligada: false, dias: DIAS_DA_REGUA_PADRAO, canais: ['email'] },
+  taxa_boleto_centavos: 0,
 };
 
 const limitar = (v: unknown, min: number, max: number) => Math.min(max, Math.max(min, num(v)));
@@ -95,6 +104,8 @@ export function normalizarConfigCobranca(v: unknown): ConfigCobranca {
     descricao_modelo: typeof c.descricao_modelo === 'string' ? c.descricao_modelo.trim().slice(0, 200) : '',
     dias_link: Math.round(limitar(c.dias_link ?? 7, 1, 90)),
     regua: normalizarRegua(c.regua),
+    // Até R$ 100,00 por boleto: acima disso é engano de digitação.
+    taxa_boleto_centavos: Math.round(limitar(c.taxa_boleto_centavos, 0, 10_000)),
   };
 }
 

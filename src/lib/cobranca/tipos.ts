@@ -79,6 +79,8 @@ export interface ClienteDaCobranca {
   /** Só dígitos, com DDD. */
   telefone: string;
   endereco: EnderecoDoCliente | null;
+  /** Marca do cadastro (E7): a taxa de boleto da agência é somada ao boleto deste cliente. */
+  cobrar_taxa_boleto?: boolean;
 }
 
 /** Juros, multa e desconto que vão no documento (todos em %). */

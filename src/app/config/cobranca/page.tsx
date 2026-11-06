@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DataState } from '@/components/fin/DataState';
 import { Field } from '@/components/fin/Field';
+import { MoneyField } from '@/components/fin/MoneyField';
 import { PageHeader } from '@/components/fin/PageHeader';
 import { Segmentado } from '@/components/fin/Segmentado';
 import {
@@ -250,6 +251,24 @@ export default function ConfigCobrancaPage() {
                     <span className="font-medium">{provedor.nome}:</span> {provedor.encargos}
                   </p>
                 ) : null}
+              </section>
+
+              <section aria-labelledby="t-taxa-boleto" className={SECAO}>
+                <div className="flex flex-col gap-[var(--fin-s-1)]">
+                  <h2 id="t-taxa-boleto" className="fin-t-subhead text-[var(--fin-text)]">Taxa de boleto repassada ao cliente</h2>
+                  <p className="fin-t-caption text-[var(--fin-text-2)]">
+                    Só para os clientes marcados com &quot;Repassar a taxa do boleto&quot; na ficha do cliente, e só em boleto (Pix e link não levam). O valor entra no boleto; a conta da venda não muda. Quando o cliente paga, a taxa vira uma conta própria na categoria de taxa de cobrança.
+                  </p>
+                </div>
+                <div className="sm:max-w-xs">
+                  <MoneyField
+                    rotulo="Taxa por boleto"
+                    ajuda="Em branco ou zero: não repassa a ninguém."
+                    valor={num(config.taxa_boleto)}
+                    maximo={100}
+                    onChange={v => mudar({ taxa_boleto: Math.max(0, num(v)) })}
+                  />
+                </div>
               </section>
 
               <section aria-labelledby="t-regua" className={SECAO}>

@@ -889,7 +889,9 @@ export async function cancelarNota(
   // Nota que nunca chegou à prefeitura não precisa ser cancelada lá. A de
   // resultado desconhecido sem protocolo também se encerra só aqui, por ação
   // explícita com motivo (quem cancela conferiu no painel do emissor).
-  if (nota.status === 'REJEITADA' || nota.status === 'RASCUNHO'
+  // A nota emitida fora do sistema (só registrada aqui) também: o emissor
+  // daqui não a conhece. A tela avisa para cancelar no portal da prefeitura.
+  if (nota.status === 'REJEITADA' || nota.status === 'RASCUNHO' || nota.emitida_fora === true
     || (nota.resultado_desconhecido && !nota.protocolo)) {
     const local: NotaFiscal = {
       ...nota,

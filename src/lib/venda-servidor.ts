@@ -31,6 +31,7 @@ import {
 import { vendaDoV1, TIPO_PARA_V1 } from './venda-modelo-v1';
 import { contasDaVenda, type AvisoDaVenda, type ContasDaVenda, type PendenciaDaVenda } from './venda-contas';
 import { normalizarConfigReceita, receitaDaVenda, type ConfigReceita } from './venda-receita';
+import { normalizarConfigDoRecibo, type ConfigDoRecibo } from './recibo-da-venda';
 import { posicaoDaVenda, type CobrancaDaPosicao, type PosicaoDaVenda } from './venda-posicao';
 import { contasNaFaturaDoFornecedor, refletirFaturasNasContas } from './fornecedor-fatura-banco';
 import { aplicarRetencoesDaAgencia } from './nota-retencoes-servidor';
@@ -100,7 +101,11 @@ export interface ResultadoDaGravacao {
 }
 
 /** Configurações › Vendas, guardadas em agencia.data.venda_config. */
-export interface ConfigVenda { receita: ConfigReceita }
+export interface ConfigVenda {
+  receita: ConfigReceita;
+  /** Texto do recibo da venda (E7): declaração com marcadores e complemento. */
+  recibo: ConfigDoRecibo;
+}
 
 // ============================================================
 // Utilitários
@@ -137,12 +142,19 @@ export async function lerConfigVenda(exec: ExecutorSQL, tenantId: string): Promi
     [tenantId],
   ).catch(() => ({ rows: [] as Array<Record<string, unknown>> }));
   const c = (rows[0]?.c ?? {}) as Record<string, unknown>;
-  return { receita: normalizarConfigReceita(c.receita) };
+  return { receita: normalizarConfigReceita(c.receita), recibo: normalizarConfigDoRecibo(c.recibo) };
 }
 
-export function normalizarConfigVenda(v: unknown): ConfigVenda {
+/**
+ * O pedido da tela sobre a configuração atual: a parte que não veio fica
+ * como estava (a tela antiga mandava só `receita`).
+ */
+export function normalizarConfigVenda(v: unknown, atual?: ConfigVenda): ConfigVenda {
   const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
-  return { receita: normalizarConfigReceita(o.receita) };
+  return {
+    receita: o.receita === undefined && atual ? atual.receita : normalizarConfigReceita(o.receita),
+    recibo: o.recibo === undefined ? (atual?.recibo ?? normalizarConfigDoRecibo(null)) : normalizarConfigDoRecibo(o.recibo),
+  };
 }
 
 // ============================================================

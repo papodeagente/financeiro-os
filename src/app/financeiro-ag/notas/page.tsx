@@ -9,7 +9,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Ban, Clock, Download, FileCheck2, FileCode, Pencil, Percent, RefreshCw } from 'lucide-react';
+import { Ban, Clock, Download, ExternalLink, FileCheck2, FileCode, FilePlus2, Pencil, Percent, RefreshCw } from 'lucide-react';
 
 import { PageShell } from '@/components/PageShell';
 import { PageHeader } from '@/components/fin/PageHeader';
@@ -24,6 +24,7 @@ import { toast } from '@/lib/toast';
 import { lerErroNota } from '@/lib/nfse-simples';
 import { somaPor } from '@/lib/money';
 import type { NotaFiscal, StatusNota } from '@/lib/nfse-tipos';
+import { RegistrarNotaDeFora } from '@/components/financeiro/notas/RegistrarNotaDeFora';
 
 const ROTULO: Record<StatusNota, string> = {
   RASCUNHO: 'Rascunho',
@@ -58,6 +59,7 @@ export default function NotasFiscaisPage() {
   const [ate, setAte] = useState('');
   const [buscaCliente, setBuscaCliente] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('TODAS');
+  const [registrando, setRegistrando] = useState(false);
 
   const CAMPO_CLASSE = 'h-9 rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-2 fin-t-body text-[var(--fin-text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)]';
 
@@ -291,7 +293,13 @@ export default function NotasFiscaisPage() {
             {n.numero ? `Nota ${n.numero}` : 'Sem número ainda'}
             {n.regime === 'INTERMEDIACAO' ? ' · intermediação' : ''}
             {n.ambiente === 'HOMOLOGACAO' ? ' · homologação' : ''}
+            {n.emitida_fora ? ' · emitida fora do sistema' : ''}
           </span>
+          {n.status === 'PROCESSANDO' && n.acompanhamento?.proxima_em ? (
+            <span className="fin-t-caption text-[var(--fin-text-3)]">
+              Consultada sozinha; a próxima consulta é às {new Date(n.acompanhamento.proxima_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}.
+            </span>
+          ) : null}
           {n.erro ? (
             <span className="fin-t-caption text-[var(--fin-negative)]">{n.erro}</span>
           ) : null}
@@ -355,7 +363,19 @@ export default function NotasFiscaisPage() {
               <RefreshCw aria-hidden="true" className="size-4" />
             </Button>
           ) : null}
-          {n.status === 'AUTORIZADA' || n.status === 'CANCELADA' ? (
+          {n.emitida_fora && n.link_pdf ? (
+            <a
+              href={n.link_pdf}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Abrir a nota ${n.numero || ''} na prefeitura`}
+              title="Abrir a nota no site da prefeitura"
+              className="inline-flex size-9 items-center justify-center rounded-[var(--fin-r-md)] text-[var(--fin-text-2)] hover:bg-[var(--fin-surface-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)]"
+            >
+              <ExternalLink aria-hidden="true" className="size-4" />
+            </a>
+          ) : null}
+          {!n.emitida_fora && (n.status === 'AUTORIZADA' || n.status === 'CANCELADA') ? (
             <>
               <Button
                 type="button"
@@ -383,7 +403,7 @@ export default function NotasFiscaisPage() {
           ) : null}
           {/* Substituir: cancela e emite outra com o texto corrigido. Nota
               autorizada não se edita, por lei; o que existe é substituição. */}
-          {n.status === 'AUTORIZADA' || n.status === 'REJEITADA' ? (
+          {!n.emitida_fora && (n.status === 'AUTORIZADA' || n.status === 'REJEITADA') ? (
             <Button
               type="button"
               variant="ghost"
@@ -424,6 +444,7 @@ export default function NotasFiscaisPage() {
         icone={FileCheck2}
         titulo="Notas fiscais"
         subtitulo="As notas de serviço emitidas a partir dos recebimentos confirmados."
+        acaoPrimaria={{ rotulo: 'Registrar nota emitida fora', icone: FilePlus2, onClick: () => setRegistrando(true) }}
         acoesSecundarias={[
           { rotulo: 'Gerar notas das vendas', href: '/financeiro-ag/notas/gerar' },
           { rotulo: 'Regras da nota', href: '/financeiro-ag/notas/regras' },
@@ -547,7 +568,9 @@ export default function NotasFiscaisPage() {
         aberto={Boolean(cancelando)}
         onOpenChange={a => { if (!a) setCancelando(null); }}
         titulo="Cancelar esta nota fiscal"
-        oQueVaiAcontecer="A nota é cancelada na prefeitura e continua no histórico, com o motivo e a data. Não dá para desfazer."
+        oQueVaiAcontecer={cancelando?.emitida_fora
+          ? 'Esta nota foi emitida fora do sistema: aqui ela só fica registrada como cancelada, com o motivo e a data. Cancele também no portal da prefeitura.'
+          : 'A nota é cancelada na prefeitura e continua no histórico, com o motivo e a data. Não dá para desfazer.'}
         detalhes={
           cancelando
             ? [
@@ -646,6 +669,7 @@ export default function NotasFiscaisPage() {
         processando={processando}
         onConfirmar={() => { void confirmarCorrecao(); }}
       />
+      <RegistrarNotaDeFora aberto={registrando} onFechar={() => setRegistrando(false)} onRegistrada={() => { void carregar(); }} />
     </PageShell>
   );
 }
