@@ -46,6 +46,7 @@ import { HistoricoDeBaixas } from '@/components/fin/HistoricoDeBaixas';
 import { saldoDevedor, valorBRLDaConta } from './valores';
 import { FormularioConta } from './FormularioConta';
 import { PainelCopiarMes } from './PainelCopiarMes';
+import { EmitirCheque } from '@/components/financeiro/cheques/EmitirCheque';
 import { EMPTY_FORM, SEM_ERRO, type ErrosDoFormulario, type FiltroPeriodo, type FormState } from './tipos';
 
 /** "Jan/2026": o mesmo rótulo que a cópia de mês sempre gravou. */
@@ -220,6 +221,8 @@ export default function ContasPagarPage() {
   const [copying, setCopying] = useState(false);
   const [saving, setSaving] = useState(false);
   const [excluindo, setExcluindo] = useState<ContaPagar | null>(null);
+  // Imprimir cheque de uma conta em aberto (E7, frente C).
+  const [chequeDe, setChequeDe] = useState<ContaPagar | null>(null);
   const [removendo, setRemovendo] = useState(false);
   // A conta cuja baixa está aberta. O diálogo e a regra vivem em BaixaDePagar,
   // o mesmo componente que a visão geral abre.
@@ -717,6 +720,7 @@ export default function ContasPagarPage() {
     onPagar: abrirModalPagar,
     onEditar: openEdit,
     onExcluir: item => setExcluindo(item),
+    onImprimirCheque: item => setChequeDe(item),
   });
 
   const vazio: EmptyLessonProps =
@@ -970,6 +974,8 @@ export default function ContasPagarPage() {
         copiando={copying}
         onCopiar={() => { void handleCopyMonth(); }}
       />
+
+      <EmitirCheque conta={chequeDe} onFechar={() => setChequeDe(null)} />
 
       <BaixaDePagar
         conta={contaAPagar}

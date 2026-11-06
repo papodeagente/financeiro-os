@@ -33,6 +33,7 @@ import { SITES_SCHEMA_SQL } from './sites-schema';
 import { CONCILIACAO_REGRAS_SCHEMA_SQL } from './conciliacao-regras-schema';
 import { CONFERENCIA_OPERADORA_SCHEMA_SQL } from './conferencia-operadora-schema';
 import { RELATORIOS_AGENDADOS_SCHEMA_SQL } from './relatorios-agendados/schema';
+import { CHEQUES_SCHEMA_SQL } from './cheques-servidor';
 
 const pool = process.env.DATABASE_URL
   ? new AuditPool({ connectionString: process.env.DATABASE_URL, max: 5 }, getAuditContext)
@@ -1613,6 +1614,9 @@ async function executarInitDB() {
   // Envio agendado de relatório e link de leitura (E7, G3): agendamentos
   // (auditados), cópias lidas pelo link e histórico dos envios (controle).
   await pool.query(RELATORIOS_AGENDADOS_SCHEMA_SQL);
+  // Cheques emitidos (E7, frente C): o talão da agência, a situação de cada
+  // cheque e as liquidações pagas com ele. Auditadas.
+  await pool.query(CHEQUES_SCHEMA_SQL);
   await pool.query(RAZAO_SCHEMA_SQL);
   // Instala a captura somente depois das migrações/seed, sem fabricar histórico.
   await pool.query(AUDIT_SCHEMA_SQL);

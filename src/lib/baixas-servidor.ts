@@ -447,6 +447,9 @@ export async function registrarBaixas(
       if (ultimo && typeof ultimo.url === 'string') novo.comprovante = ultimo.url;
     }
     if (it.taxa_plataforma && plano.taxa > 0) novo.taxa_plataforma = it.taxa_plataforma;
+    // Cheque (E7, frente C): o número fica na conta, como o extrato e as
+    // movimentações já leem (numero_cheque).
+    if (meio.cheque_numero) novo.numero_cheque = meio.cheque_numero;
     if (it.observacao) novo.observacoes = `${d.observacoes ? `${String(d.observacoes)} · ` : ''}${it.observacao}`;
     if (cambio) {
       novo.valor_moeda_liquidado = round2(num(d.valor_moeda_liquidado) + cambio.variacao.valor_moeda);
@@ -482,6 +485,21 @@ export async function registrarBaixas(
         it.observacao ?? null, JSON.stringify({ ...(cambio ? { cambio } : {}), ...(temMeio ? { meio } : {}) })],
     );
     resultados[i].baixa_id = baixaId;
+    // Controle dos cheques emitidos (E7, frente C): a conta a pagar paga com
+    // cheque liga ao cheque daquele número (ou o registra). Mesma transação.
+    if (meio.cheque_numero && it.titulo_tabela === 'contas_pagar') {
+      const { chequeDaLiquidacao, ErroCheque } = await import('./cheques-servidor');
+      try {
+        await chequeDaLiquidacao(exec, ctx.tenantId, {
+          baixa_id: baixaId, titulo_tabela: it.titulo_tabela, titulo_id: it.titulo_id, conta_bancaria_id: conta,
+          numero: meio.cheque_numero, valor_centavos: paraCentavos(plano.valor), data,
+          favorecido: String(d.fornecedor_nome ?? '').trim(), usuario: ctx.usuarioNome || ctx.usuarioId || '',
+        });
+      } catch (e) {
+        if (e instanceof ErroCheque) throw new ErroBaixa(e.message, e.status);
+        throw e;
+      }
+    }
     if (plano.credito > 0) {
       // A sobra entra na carteira do cliente, ligada a esta baixa (o estorno desfaz).
       const { creditoDaSobraDaBaixa, ErroCredito } = await import('./credito-cliente-servidor');
@@ -583,6 +601,12 @@ export async function estornarBaixa(
       naMoedaDaConta: true,
     });
     if (!ok) throw new ErroBaixa('A conta bancária desta baixa não existe mais. Nada foi estornado.', 409);
+  }
+
+  // O cheque ligado a esta baixa (E7, frente C) solta dela.
+  if (tabela === 'contas_pagar' && String(b.forma ?? '').trim().toUpperCase() === 'CHEQUE') {
+    const { desligarDaBaixa } = await import('./cheques-servidor');
+    await desligarDaBaixa(exec, ctx.tenantId, baixaId, ctx.usuarioNome || ctx.usuarioId || '');
   }
 
   // O que a baixa fez na carteira de crédito volta junto (sobra que virou
