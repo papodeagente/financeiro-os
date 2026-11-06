@@ -7,6 +7,10 @@
  * cada meta, o que o CRM diz que cada um vendeu no mês e a comissão pelas
  * faixas do plano (regras em src/lib/comissao-mrr.ts). Para uma agência a
  * página não existe: a rota responde 404 e o menu não a mostra.
+ *
+ * D31 (05/11/2026): com a comissão vindo do CRM (o padrão da conta,
+ * comissao-do-crm.ts), a tela mostra o aviso, não gera comissão por faixas e
+ * soma os extratos do mês que chegaram; metas e acompanhamento continuam.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -15,7 +19,8 @@ import {
 } from 'lucide-react';
 
 import { cn, formatBRL } from '@/lib/utils';
-import { hojeISO } from '@/lib/money';
+import { hojeISO, somaPor } from '@/lib/money';
+import { AVISO_COMISSAO_VEM_DO_CRM, type FonteDaComissao } from '@/lib/comissao-do-crm';
 import { useAuth } from '@/contexts/AuthContext';
 import { podeEditarFinanceiro } from '@/lib/permissoes';
 import type { ApuracaoMrr, MetaMrr, ResultadoDaMeta } from '@/lib/comissao-mrr';
@@ -33,7 +38,11 @@ import {
 } from '@/components/fin/PecasDoPainel';
 
 interface ComissaoGravada { id: string; status: string; valor_comissao: number; vendedor_id: string }
-interface Painel { mes: string; metas: MetaMrr[]; crm: MrrDoCrm; apuracao: ApuracaoMrr | null; comissoes: ComissaoGravada[] }
+interface ExtratoDoCrm { id: string; status: string; vendedor_nome: string; valor_comissao: number }
+interface Painel {
+  mes: string; metas: MetaMrr[]; crm: MrrDoCrm; apuracao: ApuracaoMrr | null; comissoes: ComissaoGravada[];
+  fonte?: FonteDaComissao; comissoes_crm?: ExtratoDoCrm[];
+}
 interface Pessoa { id: string; nome: string; perfil: string; status: string }
 
 const CAMPO = 'fin-t-body h-11 w-full rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-3 text-[var(--fin-text)] lg:h-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)]';
@@ -316,6 +325,10 @@ export default function ComissaoPorMrrPage() {
   const foraDaComissao = ap ? ap.foraDasMetas.mrr + ap.semVendedor.mrr + ap.semCadastro.reduce((s, x) => s + x.mrr, 0) : 0;
   const comissaoGravada = (painel?.comissoes ?? []).filter(c => c.status !== 'CANCELADA').reduce((s, c) => s + (Number(c.valor_comissao) || 0), 0);
   const mesFuturo = mes > hojeISO().slice(0, 7);
+  // A comissão vem do CRM (padrão): sem faixas, sem "Gerar"; a meta é acompanhamento.
+  const comissaoDoCrm = painel?.fonte !== 'mrr';
+  const extratosDoCrm = (painel?.comissoes_crm ?? []).filter(c => c.status !== 'CANCELADA');
+  const totalDoCrm = somaPor(extratosDoCrm, c => c.valor_comissao);
 
   if (foraDoEcossistema) {
     return (
@@ -333,7 +346,9 @@ export default function ComissaoPorMrrPage() {
       <PageHeader
         icone={Repeat}
         titulo="Comissão por MRR"
-        subtitulo="Metas de MRR novo por vendedor, os produtos do Entur OS que contam e a comissão pelas faixas do plano"
+        subtitulo={comissaoDoCrm
+          ? 'Metas de MRR novo por vendedor e o acompanhamento do mês'
+          : 'Metas de MRR novo por vendedor, os produtos do Entur OS que contam e a comissão pelas faixas do plano'}
       />
 
       <div className={cn(CARTAO_DO_PAINEL, 'flex flex-col gap-[var(--fin-s-3)] p-3 sm:px-4 md:flex-row md:items-center md:justify-between')}>
@@ -346,15 +361,20 @@ export default function ComissaoPorMrrPage() {
               : <SeloDoTom tom="aviso" title={painel.crm.situacao !== 'ok' ? painel.crm.detalhe : undefined}>Sem o MRR do CRM</SeloDoTom>
           ) : null}
         </div>
-        {podeEditar ? (
+        {podeEditar && !comissaoDoCrm ? (
           <Button onClick={gerar} disabled={!crmOk || gerando || mesFuturo} className="h-10 rounded-[10px] px-4">
             <Calculator aria-hidden="true" /> {gerando ? 'Gerando…' : 'Gerar comissões do mês'}
           </Button>
         ) : null}
       </div>
 
+      {painel && comissaoDoCrm ? (
+        <Callout tom="info" titulo={AVISO_COMISSAO_VEM_DO_CRM}>
+          O extrato de cada pessoa chega do CRM no dia 1º e vira conta a pagar em <Link className="text-[var(--fin-accent)] hover:underline" href="/financeiro-ag/contas">Contas a pagar</Link>, vencendo no dia 10.
+        </Callout>
+      ) : null}
       {painel && painel.crm.situacao !== 'ok' ? (
-        <Callout tom="aviso" titulo="Sem o MRR vendido do CRM não há comissão">
+        <Callout tom="aviso" titulo={comissaoDoCrm ? 'Sem o MRR vendido do CRM' : 'Sem o MRR vendido do CRM não há comissão'}>
           {painel.crm.detalhe} As metas podem ser montadas assim mesmo; a apuração aparece quando o CRM responder.
         </Callout>
       ) : null}
@@ -391,6 +411,15 @@ export default function ComissaoPorMrrPage() {
                 sub: somaDasMetas > 0 ? `de ${reais(somaDasMetas)} nas metas da equipe` : 'nenhuma meta no mês',
                 anel: ap && somaDasMetas > 0 ? { pct: (ap.total.mrr_nas_metas / somaDasMetas) * 100, rotulo: `${pctBR((ap.total.mrr_nas_metas / somaDasMetas) * 100)} da soma das metas` } : null,
               }} />
+              {comissaoDoCrm ? (
+                <CartaoDeNumero n={{
+                  rotulo: 'Comissão do CRM', icone: Wallet, tom: 'positivo',
+                  valor: reais(totalDoCrm), valorCompleto: formatBRL(totalDoCrm),
+                  sub: extratosDoCrm.length
+                    ? `${extratosDoCrm.length} ${extratosDoCrm.length === 1 ? 'extrato recebido' : 'extratos recebidos'}`
+                    : 'nenhum extrato recebido',
+                }} />
+              ) : (
               <CartaoDeNumero n={{
                 rotulo: 'Comissão do mês', icone: Wallet, tom: 'positivo',
                 valor: ap ? reais(ap.total.comissao) : '—', valorCompleto: ap ? formatBRL(ap.total.comissao) : undefined,
@@ -401,8 +430,9 @@ export default function ComissaoPorMrrPage() {
                     : { tom: 'aviso', texto: 'difere do gerado', dica: 'O cálculo de agora não é o que foi gerado: gere de novo para atualizar as calculadas.' }
                   : null,
               }} />
+              )}
               <CartaoDeNumero n={{
-                rotulo: 'Fora da comissão', icone: CircleAlert, tom: foraDaComissao > 0 ? 'aviso' : 'neutro',
+                rotulo: comissaoDoCrm ? 'Fora das metas' : 'Fora da comissão', icone: CircleAlert, tom: foraDaComissao > 0 ? 'aviso' : 'neutro',
                 valor: ap ? reais(foraDaComissao) : '—', valorCompleto: ap ? formatBRL(foraDaComissao) : undefined,
                 sub: foraDaComissao > 0 ? 'produto fora das metas, sem vendedor ou sem cadastro' : 'todo o MRR do mês está nas metas',
               }} />
@@ -474,7 +504,7 @@ export default function ComissaoPorMrrPage() {
 
             {/* ── Resultado por vendedor ───────────────────────────── */}
             <div className="mt-[34px]">
-              <TituloDeSecao extra="faixa pelo quanto a meta foi batida; vale para o MRR inteiro da meta">Resultado por vendedor</TituloDeSecao>
+              <TituloDeSecao extra={comissaoDoCrm ? 'MRR vendido contra a meta de cada um' : 'faixa pelo quanto a meta foi batida; vale para o MRR inteiro da meta'}>Resultado por vendedor</TituloDeSecao>
             </div>
             {!ap ? (
               <p className="fin-t-body mt-3.5 text-[var(--fin-text-2)]">A apuração aparece quando o CRM responder.</p>
@@ -490,12 +520,12 @@ export default function ComissaoPorMrrPage() {
                       <div className="flex flex-wrap items-start gap-[var(--fin-s-3)]">
                         <div className="min-w-0 flex-1">
                           <p className="fin-t-subhead text-[var(--fin-text)]">{v.nome}</p>
-                          <p className="fin-t-caption text-[var(--fin-text-3)]">{v.plano_nome ? `Plano ${v.plano_nome}` : 'Sem plano de comissão'}</p>
+                          {comissaoDoCrm ? null : <p className="fin-t-caption text-[var(--fin-text-3)]">{v.plano_nome ? `Plano ${v.plano_nome}` : 'Sem plano de comissão'}</p>}
                         </div>
-                        <div className="flex flex-col items-end gap-1">
+                        {comissaoDoCrm ? null : <div className="flex flex-col items-end gap-1">
                           <span className="text-[24px] font-medium leading-none tracking-[-0.02em] tabular-nums text-[var(--fin-text)]">{formatBRL(v.comissao)}</span>
                           {st ? <SeloDoTom tom={st.tom}>{st.rotulo}{gravada && Math.abs(gravada.valor_comissao - v.comissao) > 0.005 ? ` · ${formatBRL(gravada.valor_comissao)}` : ''}</SeloDoTom> : <SeloDoTom tom="neutro">Não gerada</SeloDoTom>}
-                        </div>
+                        </div>}
                       </div>
                       <ul className="flex flex-col gap-[18px]">
                         {v.metas.map((r: ResultadoDaMeta) => (
@@ -505,7 +535,9 @@ export default function ComissaoPorMrrPage() {
                               numeros={`${reais(r.realizado)}${r.alvo !== null ? ` de ${reais(r.alvo)}` : ''}`}
                               selo={r.pct !== null ? <SeloDoTom tom={tomDoPct(r.pct)}>{pctBR(r.pct)}</SeloDoTom> : <SeloDoTom tom="aviso">Sem meta</SeloDoTom>}
                               pct={r.pct}
-                              sub={r.pendencia
+                              sub={comissaoDoCrm
+                                ? <span>{r.contas.length} {r.contas.length === 1 ? 'conta' : 'contas'}</span>
+                                : r.pendencia
                                 ? <span className="text-[var(--fin-warning-text)]">{r.pendencia}</span>
                                 : r.faixa
                                   ? <span>Faixa de {pctBR(r.percentual)} do MRR <b className="font-medium text-[var(--fin-text-2)]">= {formatBRL(r.comissao)}</b> · {r.contas.length} {r.contas.length === 1 ? 'conta' : 'contas'}</span>
@@ -514,7 +546,7 @@ export default function ComissaoPorMrrPage() {
                           </li>
                         ))}
                       </ul>
-                      {v.pendencias.filter(p => !v.metas.some(r => r.pendencia === p)).map(p => (
+                      {(comissaoDoCrm ? [] : v.pendencias.filter(p => !v.metas.some(r => r.pendencia === p))).map(p => (
                         <p key={p} className="fin-t-caption flex items-start gap-1.5 rounded-[12px] bg-[var(--fin-warning-soft)] px-2.5 py-2 text-[var(--fin-text-2)]">
                           <CircleAlert aria-hidden="true" className="mt-px size-[13px] shrink-0 text-[var(--fin-warning-text)]" />{p}
                         </p>
@@ -529,7 +561,7 @@ export default function ComissaoPorMrrPage() {
             {ap && foraDaComissao > 0 ? (
               <>
                 <div className="mt-[34px]">
-                  <TituloDeSecao extra="MRR do mês que não vira comissão, e por quê">Fora da comissão</TituloDeSecao>
+                  <TituloDeSecao extra={comissaoDoCrm ? 'MRR do mês que não conta para meta nenhuma, e por quê' : 'MRR do mês que não vira comissão, e por quê'}>{comissaoDoCrm ? 'Fora das metas' : 'Fora da comissão'}</TituloDeSecao>
                 </div>
                 <div className="mt-3.5 grid grid-cols-1 gap-3.5 lg:grid-cols-3">
                   {ap.foraDasMetas.itens.length ? (
@@ -554,7 +586,7 @@ export default function ComissaoPorMrrPage() {
                   ) : null}
                   {ap.semCadastro.length ? (
                     <section aria-labelledby="sem-cadastro" className={cn(CARTAO_DO_PAINEL, 'flex flex-col gap-[var(--fin-s-3)] p-[22px]')}>
-                      <CabecaDoBloco id="sem-cadastro" tom="aviso" icone={UserX} titulo="Vendedor sem cadastro" sub="Gerar as comissões cria o cadastro; depois escolha o plano" />
+                      <CabecaDoBloco id="sem-cadastro" tom="aviso" icone={UserX} titulo="Vendedor sem cadastro" sub={comissaoDoCrm ? 'Sem cadastro aqui, não entra em meta: cadastre em Usuários' : 'Gerar as comissões cria o cadastro; depois escolha o plano'} />
                       <ul className="flex flex-col gap-2">
                         {ap.semCadastro.map(s => (
                           <li key={s.id} className="fin-t-body flex justify-between gap-2"><span className="truncate text-[var(--fin-text)]">{s.nome || s.email}</span><span className="tabular-nums text-[var(--fin-text-2)]">{formatBRL(s.mrr)}</span></li>
@@ -566,10 +598,16 @@ export default function ComissaoPorMrrPage() {
               </>
             ) : null}
 
+            {comissaoDoCrm ? (
+              <p className="fin-t-caption mt-[var(--fin-s-5)] text-[var(--fin-text-3)]">
+                O MRR vendido é o das contas novas e reativadas do mês na Área Comercial do CRM, com o anual dividido por 12. A comissão vem do CRM: o extrato de cada pessoa chega no dia 1º e vira conta a pagar.
+              </p>
+            ) : (
             <p className="fin-t-caption mt-[var(--fin-s-5)] text-[var(--fin-text-3)]">
               O MRR vendido é o das contas novas e reativadas do mês na Área Comercial do CRM, com o anual dividido por 12. A faixa sai do plano de comissão de cada vendedor
               (<Link className="text-[var(--fin-accent)] hover:underline" href="/equipe/planos-comissao">Planos de comissão</Link>) e vale para o MRR inteiro da meta. Comissão aprovada ou paga nunca é reescrita: se o número mudar, a tela avisa.
             </p>
+            )}
           </div>
         ) : null}
       </DataState>
