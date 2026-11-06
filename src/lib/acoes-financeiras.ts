@@ -73,6 +73,8 @@ const DEFINICOES = [
   { id: 'ver_aba_financeiro', modulo: 'vendas_comissoes', rotulo: 'Ver o financeiro dentro da venda', descricao: 'Contas a pagar e a receber ligadas à venda.', teto: p => p.ver_financeiro },
   { id: 'ver_colunas_comissao', modulo: 'vendas_comissoes', rotulo: 'Ver o ganho da agência nas vendas', descricao: 'Comissão, over e receita de cada venda.', teto: p => p.ver_financeiro },
   { id: 'ver_proprias_comissoes', modulo: 'vendas_comissoes', rotulo: 'Ver a própria comissão', descricao: 'Quanto a pessoa tem a receber de comissão.', teto: p => p.ver_comissoes },
+  { id: 'fechar_venda', modulo: 'vendas_comissoes', rotulo: 'Fechar venda', descricao: 'Encerra a venda: produtos e pagamentos param de mudar.', teto: p => p.editar_financeiro },
+  { id: 'reabrir_venda', modulo: 'vendas_comissoes', rotulo: 'Reabrir venda', descricao: 'Volta a venda fechada para edição, com motivo registrado.', teto: p => p.editar_financeiro },
   { id: 'ver_comissoes_todos', modulo: 'vendas_comissoes', rotulo: 'Ver a comissão da equipe', descricao: 'Comissão de todos os vendedores.', teto: p => p.ver_comissoes && p.ver_vendas_todos },
 
   // Painel e relatórios

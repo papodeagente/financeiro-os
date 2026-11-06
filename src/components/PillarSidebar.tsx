@@ -138,6 +138,7 @@ const CONFIGURACOES_MENU: SidebarSection[] = [
       { key: 'cfg-usuarios', label: 'Usuários', icon: Users, href: '/config/usuarios' },
       { key: 'cfg-financeiro', label: 'Financeiro', icon: Percent, href: '/config/financeiro' },
       { key: 'cfg-cobranca', label: 'Cobrança', icon: Barcode, href: '/config/cobranca' },
+      { key: 'cfg-vendas', label: 'Vendas', icon: ShoppingBag, href: '/config/vendas' },
       { key: 'cfg-mudanca', label: 'Mudar para o EnturOS', icon: FolderInput, href: '/mudanca' },
       { key: 'cfg-perfis', label: 'Perfis de acesso', icon: ShieldCheck, href: '/config/perfis-de-acesso' },
       { key: 'cfg-limites', label: 'Limites e aprovação', icon: Scale, href: '/config/limites-e-aprovacao' },

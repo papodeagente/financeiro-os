@@ -91,6 +91,12 @@ export const CATEGORIES = {
 
 export type ResetCategory = keyof typeof CATEGORIES;
 
+/** Modelo da venda completa (venda-schema.ts): sai junto com as vendas. */
+const TABELAS_DA_VENDA_COMPLETA = [
+  'venda_componentes', 'venda_passageiros', 'venda_produtos', 'venda_pagamentos',
+  'venda_pendencias', 'venda_eventos', 'vendas_modelo',
+] as const;
+
 const SO_NO_ECOSSISTEMA: ReadonlySet<ResetCategory> = new Set(['cadastros_e_crm', 'plataformas']);
 
 /** As categorias que esta conta pode zerar. */
@@ -141,6 +147,19 @@ export async function apagarCategorias(
       const res = await exec.query(`DELETE FROM ${table} WHERE tenant_id = $1`, [tenantId]);
       const n = res.rowCount || 0;
       summary[table] = (summary[table] || 0) + n;
+      total += n;
+    }
+  }
+  // Venda completa (E5, 05/11/2026): sem as vendas, o modelo delas também sai.
+  const apagaVendas = categorias.some(c => (CATEGORIES[c] as readonly string[]).includes('vendas_crm'));
+  const { rows: temModelo } = apagaVendas
+    ? await exec.query(`SELECT to_regclass('public.vendas_modelo') IS NOT NULL AS ok`)
+    : { rows: [] as Array<Record<string, unknown>> };
+  if (apagaVendas && temModelo[0]?.ok) {
+    for (const table of TABELAS_DA_VENDA_COMPLETA) {
+      const res = await exec.query(`DELETE FROM ${table} WHERE tenant_id = $1`, [tenantId]);
+      const n = res.rowCount || 0;
+      summary[table] = n;
       total += n;
     }
   }

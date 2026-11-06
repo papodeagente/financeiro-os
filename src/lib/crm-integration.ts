@@ -39,6 +39,9 @@ import {
   reconciliarPagamentosSemDono, descreverReconciliacao,
 } from './crm-venda-plataforma';
 import { lerPedidoDeCancelamento, aplicarCancelamentoDoCrm } from './crm-venda-cancelada';
+import { ehVendaV2 } from './venda-crm-v2';
+import { receberVendaV2DoCrm, voltarVendaParaV1 } from './venda-crm-v2-servidor';
+import { situacaoDaVenda, registrarEventoDaVenda } from './venda-servidor';
 import {
   receberFornecedorDoCrm, lerFornecedorDoCrm, lerFornecedorDaVenda, descreverFornecedor,
   cadastroCompleto, payloadParaOCrm,
@@ -1319,6 +1322,27 @@ export async function processarEventoCRM(
           break;
         }
 
+        // Venda FECHADA no financeiro (E5, 05/11/2026) não muda pelo CRM: a
+        // mudança fica no histórico da venda e é avisada; o evento conta como
+        // processado. Quem reabre a venda pede o reenvio ao CRM.
+        if (vendaAnterior && (await situacaoDaVenda(pool as unknown as ExecutorSQL, tenantId, vendaAnterior.id)) === 'FECHADA') {
+          const numeroFechada = asStr(vendaAnterior.data.numero) || vendaAnterior.id;
+          await registrarEventoDaVenda(pool as unknown as ExecutorSQL, tenantId, vendaAnterior.id, 'mudanca_do_crm_recusada', {
+            detalhe: { evento: idempotency_key, versao_venda: ehVendaV2(payload) ? 2 : 1, valor_total: payload.valor_total ?? null },
+          });
+          await criarNotificacao({
+            tenantId,
+            tipo: 'VENDA_FECHADA_MUDANCA_CRM',
+            titulo: `Venda ${numeroFechada} mudou no CRM, mas está fechada`,
+            descricao: 'A venda está fechada no financeiro, então a mudança do CRM não entrou. Se ela vale, reabra a venda e peça ao CRM para reenviar.',
+            link: `/vendas/${vendaAnterior.id}/ficha`,
+            chaveDeduplicacao: `venda-fechada-crm:${vendaAnterior.id}:${idempotency_key}`,
+            data: { venda_id: vendaAnterior.id, crm_venda_id: crmVendaId },
+          });
+          acao = `venda ${vendaAnterior.id} está fechada no financeiro: a mudança do CRM ficou registrada no histórico da venda`;
+          break;
+        }
+
         // Cliente: o caminho único de identidade (crm-cliente.ts). Venda só
         // preenche o que está vazio no cadastro.
         const cliente = await resolverClienteCRM(pool as unknown as ExecutorSQL, tenantId, {
@@ -1503,6 +1527,55 @@ export async function processarEventoCRM(
            WHERE vendas_crm.tenant_id = EXCLUDED.tenant_id`,
           [vendaId, clienteId, vendedorId, JSON.stringify(vendaData), tenantId]
         );
+
+        // VENDA_FECHADA v2 (E5, 05/11/2026): a venda completa (produtos,
+        // passageiros, componentes de receita, quem cobra, moeda, pagamentos
+        // por forma) entra pelo MESMO modelo e gerador da venda lançada à mão
+        // (venda-servidor.ts). A v1 segue exatamente o caminho de sempre,
+        // logo abaixo.
+        if (ehVendaV2(payload)) {
+          const v2 = await receberVendaV2DoCrm({
+            tenantId, payload, vendaId, numero: numeroVenda, dataVenda,
+            cliente: { id: clienteId, nome: asStr(payload.cliente_nome), id_externo: clienteExternalId },
+            vendedor: vendedorId ? { id: vendedorId, nome: vendedorNome, id_externo: vendedorExternalId } : null,
+            grupoId: asStr(payload.entur_grupo_id) || null,
+            cabecalho: vendaData,
+          });
+          ecosDeFornecedor.push(...v2.ecos);
+          if (vendedorPendente) {
+            await criarNotificacao({
+              tenantId,
+              tipo: 'VENDA_VENDEDOR_NAO_CADASTRADO',
+              titulo: `Venda ${numeroVenda} recebida com vendedor não cadastrado`,
+              descricao: `${vendedorNome || 'O vendedor'} fechou esta venda no CRM mas não está cadastrado no financeiro. A venda entrou normalmente. A comissão não vai ser calculada e a venda não conta para nenhuma meta enquanto a pessoa não for cadastrada em Configurações, Usuários.`,
+              link: `/vendas/${vendaId}`,
+              vendedorId,
+              data: { venda_id: vendaId, vendedor_external_id: vendedorExternalId, vendedor_nome: vendedorNome },
+            });
+          }
+          const pagamentosV2 = await emTransacao(exec => vincularPagamentosDaVendaCRM(exec, tenantId, vendaId, {
+            plataforma: carimbo.crm_plataforma_origem,
+            transacoes: carimbo.vincular,
+          }));
+          let sobreProcuraV2 = '';
+          try {
+            const procura = await emTransacao(exec => reconciliarPagamentosSemDono(exec, tenantId, vendaId));
+            sobreProcuraV2 = descreverReconciliacao(procura);
+          } catch (e) {
+            sobreProcuraV2 = `procura de pagamento sem dono falhou: ${e instanceof Error ? e.message : String(e)}`;
+          }
+          const sobrePagamentoV2 = [descreverPagamentos(pagamentosV2, carimbo.conflito), sobreProcuraV2].filter(Boolean).join('; ');
+          acao = `venda ${vendaJaExiste ? 'atualizada' : 'criada'} (${vendaId}) pelo contrato v2: ${v2.venda.produtos.length} produtos, ${v2.venda.pagamentos.length} pagamentos; contas: ${v2.contas.criadas} criadas, ${v2.contas.atualizadas} atualizadas, ${v2.contas.removidas} removidas, ${v2.contas.preservadas} preservadas`
+            + (v2.pendencias.length ? `; ${v2.pendencias.length} pendência(s) de crédito do cliente` : '')
+            + (v2.avisos.length ? `; avisos: ${[...new Set(v2.avisos.map(a => a.codigo))].join(', ')}` : '')
+            + (vendedorPendente ? ' [vendedor nao cadastrado]' : '')
+            + `; ${descreverCliente(cliente)}`
+            + (sobrePagamentoV2 ? `; ${sobrePagamentoV2}` : '')
+            + (historico ? '; reenvio histórico do CRM' : '');
+          break;
+        }
+        // A v1 de uma venda que estava no modelo completo: ela volta à v1.
+        await voltarVendaParaV1(pool as unknown as ExecutorSQL, tenantId, vendaId).catch(() => false);
 
         // 3) Cria itens_venda + contas via fluxo UNIFICADO (mesma lógica
         //    de venda manual /vendas/nova).
@@ -1798,8 +1871,22 @@ export async function processarEventoCRM(
           [entur_venda_id, tenantId]
         );
         let baixadas = 0;
+        // Venda completa (E5): várias formas de pagamento têm a sua parcela 1.
+        // O CRM diz qual pelo `pagamento_ref`; sem ele, só baixa quando há uma
+        // conta só com aquele número de parcela (a v1 segue igual).
+        const refPagamento = asStr(payload.pagamento_ref) ? `crm:pag:${asStr(payload.pagamento_ref)}` : '';
+        const candidatasV2 = receber.filter(r => {
+          const d = r.data as Record<string, unknown>;
+          return Number(d.venda_modelo) === 2 && Number(d.parcela_numero) === parcelaAlvo && String(d.origem ?? 'VENDA') === 'VENDA'
+            && (!refPagamento || String(d.venda_pagamento_id ?? '') === refPagamento);
+        });
+        if (!refPagamento && candidatasV2.length > 1) {
+          acao = `parcela ${parcelaAlvo} da venda ${entur_venda_id} é ambígua (${candidatasV2.length} formas de pagamento): o CRM precisa mandar pagamento_ref`;
+          break;
+        }
         for (const row of receber) {
           const d = row.data as Record<string, unknown>;
+          if (refPagamento && Number(d.venda_modelo) === 2 && String(d.venda_pagamento_id ?? '') !== refPagamento) continue;
           // O campo persistido é parcela_numero (ver gerarContasVenda);
           // e a baixa vale só para a parcela do CLIENTE, não para a
           // comissão a receber do fornecedor da mesma venda.

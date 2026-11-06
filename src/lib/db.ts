@@ -10,6 +10,7 @@ import { PERIODO_SCHEMA_SQL } from './periodo-fechado';
 import { COBRANCA_SCHEMA_SQL } from './cobranca/schema';
 import { MIGRACAO_SCHEMA_SQL } from './migracao/schema';
 import { CAMBIO_SCHEMA_SQL } from './cambio-servidor';
+import { VENDA_SCHEMA_SQL } from './venda-schema';
 import { RECORRENCIA_SCHEMA_SQL } from './recorrencia-schema';
 import { CENTROS_CUSTO_SCHEMA_SQL } from './centros-custo-servidor';
 import { PERMISSOES_SCHEMA_SQL } from './permissoes-schema';
@@ -1553,6 +1554,10 @@ async function executarInitDB() {
   // fontes, cofre do Super Admin, variações cambiais e a trava da moeda da
   // conta bancária. Antes do razão e da auditoria.
   await pool.query(CAMBIO_SCHEMA_SQL);
+  // Venda completa (05/11/2026, E5): produtos, passageiros, componentes de
+  // receita, pagamentos por forma, pendências e o histórico da venda. Antes
+  // do razão e da auditoria (o histórico fica fora do gatilho).
+  await pool.query(VENDA_SCHEMA_SQL);
   await pool.query(RAZAO_SCHEMA_SQL);
   // Instala a captura somente depois das migrações/seed, sem fabricar histórico.
   await pool.query(AUDIT_SCHEMA_SQL);

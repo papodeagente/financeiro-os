@@ -161,6 +161,10 @@ export default function VendaDetalhe() {
           >
             <Copy className="w-3.5 h-3.5" /> Copiar numero
           </Button>
+          {/* Ficha da venda completa (E5): produtos, pagamentos, posição, fechar/reabrir. */}
+          <Button className="ml-2 text-xs" onClick={() => router.push(`/vendas/${encodeURIComponent(venda.id)}/ficha`)}>
+            Ficha da venda
+          </Button>
         </div>
       </div>
 

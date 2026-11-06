@@ -184,6 +184,16 @@ export const DESTINOS_DE_MERCADO: readonly DestinoDeMercado[] = [
     frase: 'Na conta recebida, use Recibo: a página sai pronta para imprimir ou salvar em PDF.',
   },
   {
+    id: 'lancar-venda', termos: ['lançar venda', 'venda de turismo', 'pagamentos da venda', 'fechar venda', 'reabrir venda', 'posição da venda', 'passageiros da venda'],
+    href: '/vendas/lancar', tela: 'Lançar venda',
+    frase: 'As contas a receber e a pagar nascem sozinhas de cada forma de pagamento, sem botão de gerar.',
+  },
+  {
+    id: 'receita-da-venda', termos: ['receita da venda', 'componentes de receita', 'taxa du', 'rav', 'over', 'markup', 'fee da agência'],
+    href: '/config/vendas', tela: 'Configurações de vendas',
+    frase: 'A agência escolhe quais componentes contam como receita; a ficha da venda mostra a receita aberta por componente.',
+  },
+  {
     id: 'regua-cobranca', termos: ['régua de cobrança', 'lembrete de vencimento', 'cobrar cliente', 'aviso de cobrança', 'portal do cliente'],
     href: '/config/cobranca', tela: 'Configurações de cobrança',
     frase: 'Os lembretes saem pelo WhatsApp e e-mail do CRM; o cliente também tem um link pessoal para pagar e baixar recibos.',

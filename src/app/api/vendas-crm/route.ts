@@ -7,6 +7,8 @@ import { podeVerTodasVendas, podeVerVenda } from '@/lib/permissoes';
 import { gerarContasVenda, receberPorFornecedorDe, type ItemVendaInput, type FornecedorInfo } from '@/lib/venda-financeiro';
 import { STATUS_BAIXADOS } from '@/lib/caixa-atomico';
 import { hojeISO } from '@/lib/money';
+import type { ExecutorSQL } from '@/lib/caixa-atomico';
+import { situacaoDaVenda, versaoDoModelo } from '@/lib/venda-servidor';
 
 const TABLE = 'vendas_crm';
 const INDEX_COLS = ['cliente_id', 'vendedor_id', 'status'];
@@ -85,6 +87,17 @@ export async function POST(req: Request) {
     }
     if (!podeVerTodasVendas(sessao)) {
       venda.vendedor_id = existente.length > 0 ? String(existente[0].vendedor_id ?? '') : sessao.userId;
+    }
+    // Venda completa (E5, 05/11/2026): a venda fechada não muda, e a venda do
+    // modelo completo é editada na ficha dela (as contas seguem outro gerador).
+    if (existente.length > 0) {
+      const exec = pool as unknown as ExecutorSQL;
+      if ((await situacaoDaVenda(exec, tenantId, venda.id)) === 'FECHADA') {
+        return NextResponse.json({ error: 'A venda está fechada. Reabra a venda para mudar.', codigo: 'VENDA_FECHADA' }, { status: 409 });
+      }
+      if ((await versaoDoModelo(exec, tenantId, venda.id)) === 2) {
+        return NextResponse.json({ error: 'Esta venda é editada na ficha da venda.', codigo: 'VENDA_COMPLETA' }, { status: 409 });
+      }
     }
 
     if (hasItens) {

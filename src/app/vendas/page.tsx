@@ -181,12 +181,18 @@ export default function VendasPage() {
           title="Vendas"
           subtitle="Gerencie todas as vendas fechadas, com filtros por período, status e cliente"
           actions={
-            <Link href="/vendas/nova">
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                Nova venda
-              </Button>
-            </Link>
+            <div className="flex gap-2">
+              {/* Venda completa (E5): produtos, passageiros, componentes e pagamentos por forma. */}
+              <Link href="/vendas/lancar">
+                <Button variant="outline">Lançar venda completa</Button>
+              </Link>
+              <Link href="/vendas/nova">
+                <Button>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Nova venda
+                </Button>
+              </Link>
+            </div>
           }
         />
       }
