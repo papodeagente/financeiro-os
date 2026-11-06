@@ -119,11 +119,11 @@ export async function abrirRazaoNoExecutor(exec: ExecutorSQL, tenantId: string):
   }
 
   // Diferenças para revisão: saldo de hoje × o que o histórico reconstruiria.
-  const [{ rows: cr }, { rows: cp }, { rows: tr }] = await Promise.all([
-    exec.query(`SELECT data FROM contas_receber WHERE tenant_id = $1 AND (data->>'status') IN ('RECEBIDO','PARCIAL')`, [tenantId]),
-    exec.query(`SELECT data FROM contas_pagar WHERE tenant_id = $1 AND (data->>'status') IN ('PAGO','PARCIAL')`, [tenantId]),
-    exec.query(`SELECT data FROM transferencias WHERE tenant_id = $1 AND (data->>'status') = 'EFETIVADA'`, [tenantId]),
-  ]);
+  // Uma consulta de cada vez: é a mesma conexão da transação (o pg avisa
+  // e vai deixar de aceitar consultas simultâneas no mesmo cliente).
+  const { rows: cr } = await exec.query(`SELECT data FROM contas_receber WHERE tenant_id = $1 AND (data->>'status') IN ('RECEBIDO','PARCIAL')`, [tenantId]);
+  const { rows: cp } = await exec.query(`SELECT data FROM contas_pagar WHERE tenant_id = $1 AND (data->>'status') IN ('PAGO','PARCIAL')`, [tenantId]);
+  const { rows: tr } = await exec.query(`SELECT data FROM transferencias WHERE tenant_id = $1 AND (data->>'status') = 'EFETIVADA'`, [tenantId]);
   const caixaGeral = contas.find(c => ((c.data as { nome?: string } | null)?.nome ?? '') === 'Caixa Geral');
   const rec = reconstruirSaldos({
     contas: contas.map(c => ({ id: String(c.id), data: (c.data ?? {}) as Record<string, unknown> })),
