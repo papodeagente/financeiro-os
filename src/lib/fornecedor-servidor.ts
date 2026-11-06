@@ -42,6 +42,7 @@ import {
   type Compensacao, type FaturaParaReflexo, type ItemAFaturar, type PreviaDaFatura, type SinalDisponivel,
 } from './fornecedor-fatura';
 import { faturasParaReflexo, refletirFaturasNasContas } from './fornecedor-fatura-banco';
+import { lerCategoriasDosTitulos } from './categorias-padrao-titulos-servidor';
 import { comissoesPorOperadora, type ComissoesPorOperadora, type LinhaDoExtrato } from './fornecedor-comissao';
 
 export class ErroFornecedor extends Error {
@@ -449,7 +450,9 @@ export async function criarSinal(exec: ExecutorSQL, tenantId: string, e: NovoSin
     id: contaId, origem: 'VENDA', venda_id: null, grupo_id: null,
     fornecedor_id: e.parte_id, fornecedor_nome: nome,
     descricao: `Sinal - ${nome}${vendaNumero ? ` - Venda ${vendaNumero}` : ''}${descricao ? ` - ${descricao}` : ''}`,
-    categoria_id: '', centro_custo: '', valor_original: reais, juros: 0, multa: 0, desconto: 0, valor_final: reais,
+    // Categoria padrão de pagamento ao fornecedor (06/11/2026); vazia sem escolha.
+    categoria_id: (await lerCategoriasDosTitulos(exec, tenantId)).pagamento_fornecedor ?? '',
+    centro_custo: '', valor_original: reais, juros: 0, multa: 0, desconto: 0, valor_final: reais,
     moeda: 'BRL', cambio: 1, valor_brl: reais, data_emissao: hoje, data_vencimento: venc, data_pagamento: null, valor_pago: null,
     conta_bancaria_id: null, forma_pagamento: '', cartao_id: null, comprovante: '', parcela_numero: 1, total_parcelas: 1,
     natureza_custo: 'VARIAVEL', is_custo_comercial: false, status: 'PENDENTE', rateio: [], anexos: [],
@@ -588,7 +591,9 @@ export async function gerarFatura(
       id: contaId, origem: 'VENDA', venda_id: null, grupo_id: null,
       fornecedor_id: pedido.parte_id, fornecedor_nome: previa.parte_nome,
       descricao: `Fatura ${numero} - ${previa.parte_nome} (${previa.quantidade} ${previa.quantidade === 1 ? 'item' : 'itens'} de ${previa.vendas} ${previa.vendas === 1 ? 'venda' : 'vendas'})`,
-      categoria_id: maisComum(dados.map(d => txt(d.categoria_id))), centro_custo: maisComum(dados.map(d => txt(d.centro_custo))),
+      // A dos itens; sem ela, a padrão da fatura do fornecedor (06/11/2026).
+      categoria_id: maisComum(dados.map(d => txt(d.categoria_id))) || ((await lerCategoriasDosTitulos(exec, tenantId)).fatura_fornecedor ?? ''),
+      centro_custo: maisComum(dados.map(d => txt(d.centro_custo))),
       valor_original: reais, juros: 0, multa: 0, desconto: 0, valor_final: reais, moeda: 'BRL', cambio: 1, valor_brl: reais,
       data_emissao: hoje, data_vencimento: previa.vencimento.data, data_pagamento: null, valor_pago: null,
       conta_bancaria_id: null, forma_pagamento: '', cartao_id: null, comprovante: '', parcela_numero: 1, total_parcelas: 1,

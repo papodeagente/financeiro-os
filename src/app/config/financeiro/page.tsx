@@ -19,6 +19,9 @@ import {
 } from '@/lib/encargos-categorias';
 import { addDias, hojeISO, num } from '@/lib/money';
 import { toast } from '@/lib/toast';
+import { SecaoContaPrevisao } from './SecaoContaPrevisao';
+import { SecaoCamposPersonalizados } from './SecaoCamposPersonalizados';
+import { SecaoCategoriasDosTitulos } from './SecaoCategoriasDosTitulos';
 
 const CONTROLE = 'h-11 rounded-[var(--fin-r-md)] border-[var(--fin-border-strong)] bg-[var(--fin-surface)] fin-t-body tabular-nums lg:h-10';
 const VAZIA: PoliticaCobranca = { juros_am_pct: 0, multa_pct: 0, tolerancia_dias: 0, desconto_antecipacao: null, aplicar_em_pagar: false };
@@ -336,6 +339,10 @@ export default function ConfigFinanceiroPage() {
                 </Button>
               </div>
             </section>
+
+            <SecaoContaPrevisao />
+            <SecaoCategoriasDosTitulos />
+            <SecaoCamposPersonalizados />
           </div>
         </DataState>
       </div>

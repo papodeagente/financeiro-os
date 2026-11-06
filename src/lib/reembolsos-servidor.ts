@@ -17,6 +17,7 @@
  */
 import { generateId } from './utils';
 import { addDias, deCentavos, hojeISO, round2 } from './money';
+import { lerCategoriasDosTitulos } from './categorias-padrao-titulos-servidor';
 import type { ExecutorSQL } from './caixa-atomico';
 import { criarCredito } from './credito-cliente-servidor';
 
@@ -191,12 +192,15 @@ export async function aprovarReembolso(exec: ExecutorSQL, tenantId: string, id: 
   const valor = round2(deCentavos(r.valor_centavos));
   const hoje = hojeISO();
   const contaId = generateId();
+  const padroes = await lerCategoriasDosTitulos(exec, tenantId);
   const descricao = r.tipo === 'CLIENTE'
     ? `Reembolso ao cliente · ${r.pessoa_nome}${r.venda_numero ? ` · Venda ${r.venda_numero}` : ''}`
     : `Reembolso do fornecedor · ${r.pessoa_nome}${r.venda_numero ? ` · Venda ${r.venda_numero}` : ''}`;
   const comum = {
     id: contaId, descricao, valor_original: valor, valor_final: valor, juros: 0, multa: 0, desconto: 0,
-    data_emissao: hoje, data_vencimento: prazo, status: 'PENDENTE', categoria_id: '', centro_custo: r.centro_custo,
+    data_emissao: hoje, data_vencimento: prazo, status: 'PENDENTE',
+    // Categoria padrão do reembolso (06/11/2026); vazia sem escolha, como antes.
+    categoria_id: (padroes[r.tipo === 'CLIENTE' ? 'reembolso_pagar' : 'reembolso_receber'] ?? ''), centro_custo: r.centro_custo,
     rateio: [], anexos: [], observacoes: r.descricao, origem: 'OUTROS', reembolso_id: r.id,
     venda_id: r.venda_id || null, grupo_id: null, origem_venda_id: r.venda_id || undefined, auto_gerado: false,
     parcela_numero: 1, total_parcelas: 1, conta_bancaria_id: null,

@@ -35,6 +35,8 @@ import { posicaoDaVenda, type CobrancaDaPosicao, type PosicaoDaVenda } from './v
 import { contasNaFaturaDoFornecedor, refletirFaturasNasContas } from './fornecedor-fatura-banco';
 import { aplicarRetencoesDaAgencia } from './nota-retencoes-servidor';
 import { contasTravadasPelaFatura, projetarContasNaFatura, sincronizarFaturasDaVenda } from './fatura-servidor';
+import { lerCategoriasDosTitulos } from './categorias-padrao-titulos-servidor';
+import { categoriaParaContaNova, chaveDaContaDaVenda, type CategoriasDosTitulos } from './categorias-padrao-titulos';
 
 // ============================================================
 // Tipos públicos
@@ -436,6 +438,9 @@ async function regerarTabela(
   }
 
   const usadas = new Set<string>();
+  // Categoria padrão (06/11/2026, E7): só a conta que NASCE agora a recebe;
+  // a que já existe mantém a sua (CAMPOS_DA_PESSOA), mesmo vazia.
+  let padroes: CategoriasDosTitulos | null = null;
   for (const n of finais) {
     const ex = livresExistentes.get(chaveDe(n));
     if (ex) {
@@ -458,6 +463,11 @@ async function regerarTabela(
       }
       cont.atualizadas++;
     } else {
+      if (vazio(n.categoria_id)) {
+        padroes ??= await lerCategoriasDosTitulos(exec, tenantId);
+        const cat = categoriaParaContaNova(n.categoria_id, padroes, chaveDaContaDaVenda(tabela));
+        if (cat) n.categoria_id = cat;
+      }
       if (tabela === 'contas_receber') {
         await exec.query(
           `INSERT INTO contas_receber (id, tenant_id, venda_id, cliente_id, status, data, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6::jsonb, NOW(), NOW())`,

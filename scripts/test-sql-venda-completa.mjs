@@ -318,5 +318,31 @@ r = await processarEventoCRM('VENDA_FECHADA', { ...payloadV2(), versao_venda: un
 eq([r.processado, (await um(`SELECT versao_modelo FROM vendas_modelo WHERE tenant_id = $1 AND venda_id = $2`, [T, vid])).versao_modelo], [true, 1], 'payload v1: a venda volta para a v1');
 globalThis.__SESSAO_DE_TESTE__ = null;
 
+console.log('--- Categoria padrão das contas geradas (06/11/2026, E7) ---');
+{
+  const deCadaVenda = async crmId => {
+    const id = (await um(`SELECT id FROM vendas_crm WHERE tenant_id = $1 AND data->>'crm_venda_id' = $2`, [T, crmId])).id;
+    return [...await contas('contas_receber', id), ...await contas('contas_pagar', id)];
+  };
+  // Antes da escolha: nasce sem categoria, como sempre.
+  await processarEventoCRM('VENDA_FECHADA', payloadV2({ crm_venda_id: 'deal_cat_antes' }), 'cat-1', T);
+  const antes = await deCadaVenda('deal_cat_antes');
+  eq(antes.every(c => c.categoria_id === ''), true, 'sem escolha: as contas nascem sem categoria (como antes)');
+  await query(`INSERT INTO agencia (id, tenant_id, data) VALUES ('ag-cat', $1, $2)`,
+    [T, JSON.stringify({ categorias_dos_titulos: { receita_venda: 'cat-receita', pagamento_fornecedor: 'cat-fornecedor' } })]);
+  // A venda refeita depois da escolha: as contas que já existiam não mudam.
+  await processarEventoCRM('VENDA_FECHADA', payloadV2({ crm_venda_id: 'deal_cat_antes', valor_total: 5761 }), 'cat-2', T);
+  const depois = await deCadaVenda('deal_cat_antes');
+  eq([depois.map(c => c.id).sort().join() === antes.map(c => c.id).sort().join(), depois.every(c => c.categoria_id === '')], [true, true],
+    'venda refeita: as contas já gravadas ficam como estavam');
+  // Venda nova: cada lado nasce com a sua categoria.
+  await processarEventoCRM('VENDA_FECHADA', payloadV2({ crm_venda_id: 'deal_cat_depois' }), 'cat-3', T);
+  const idNova = (await um(`SELECT id FROM vendas_crm WHERE tenant_id = $1 AND data->>'crm_venda_id' = 'deal_cat_depois'`, [T])).id;
+  const doCliente = await contas('contas_receber', idNova);
+  const doFornecedor = await contas('contas_pagar', idNova);
+  eq([doCliente.length > 0 && doCliente.every(c => c.categoria_id === 'cat-receita'), doFornecedor.length > 0 && doFornecedor.every(c => c.categoria_id === 'cat-fornecedor')],
+    [true, true], 'venda nova: a receber e a pagar nascem com a categoria escolhida');
+}
+
 console.log(`\n${total - falhas}/${total} passaram`);
 if (falhas > 0) process.exit(1);
