@@ -294,6 +294,38 @@ function EditorDePagamento({ inicial, novo, editavel, venda, contasBancarias, cl
               </Field>
             </div>
           ) : null}
+          {p.forma === 'CARTAO' || p.forma === 'PAGO_DIRETO_FORNECEDOR' ? (
+            <div className="flex flex-col gap-[var(--fin-s-3)] sm:col-span-2">
+              <label className="flex cursor-pointer items-start gap-[var(--fin-s-2)]">
+                <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-[var(--fin-accent)]" checked={p.campos?.cartao_corporativo === true}
+                  onChange={e => mudarCampos({ cartao_corporativo: e.target.checked })} />
+                <span className="flex flex-col gap-0.5">
+                  <span className="fin-t-body text-[var(--fin-text)]">Cartão corporativo do cliente</span>
+                  <span className="fin-t-caption text-[var(--fin-text-3)]">O cartão de viagem da empresa cliente. Entra no arquivo de conciliação que a administradora do cartão pede (Relatórios de vendas).</span>
+                </span>
+              </label>
+              {p.campos?.cartao_corporativo ? (
+                <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:grid-cols-3">
+                  {p.forma === 'PAGO_DIRETO_FORNECEDOR' ? (
+                    <>
+                      <Field rotulo="Bandeira">
+                        {a => <Input {...a} className={CONTROLE} maxLength={40} placeholder="Ex.: Visa" value={p.campos?.bandeira ?? ''} onChange={e => mudarCampos({ bandeira: e.target.value })} />}
+                      </Field>
+                      <Field rotulo="Autorização">
+                        {a => <Input {...a} className={CONTROLE} maxLength={40} value={p.campos?.autorizacao ?? ''} onChange={e => mudarCampos({ autorizacao: e.target.value })} />}
+                      </Field>
+                      <Field rotulo="Final do cartão" ajuda="Só os 4 últimos números.">
+                        {a => <Input {...a} className={cn(CONTROLE, 'tabular-nums')} inputMode="numeric" maxLength={4} autoComplete="off" placeholder="0000" value={p.campos?.final_cartao ?? ''} onChange={e => mudarCampos({ final_cartao: e.target.value.replace(/\D/g, '').slice(0, 4) })} />}
+                      </Field>
+                    </>
+                  ) : null}
+                  <Field rotulo="Requisição" ajuda="Pedido ou ordem de compra do cliente, quando ele usa.">
+                    {a => <Input {...a} className={CONTROLE} maxLength={60} value={p.campos?.requisicao ?? ''} onChange={e => mudarCampos({ requisicao: e.target.value })} />}
+                  </Field>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           {p.forma === 'CHEQUE' ? (
             <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:col-span-2 sm:grid-cols-3">
               <Field rotulo="Banco">

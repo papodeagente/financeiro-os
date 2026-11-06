@@ -283,6 +283,7 @@ export function vendaDasLinhas(vendaId: string, linha: Linha, cab: Linha, ps: Li
     cliente: linha.cliente, vendedor: linha.vendedor, intermediario: linha.intermediario,
     grupo_id: linha.grupo_id, centro_custo: linha.centro_custo, origem: linha.origem, situacao: linha.situacao,
     observacoes: linha.observacoes, crm_venda_id: linha.crm_venda_id, operacao_propria: linha.operacao_propria === true, produtos_removidos: linha.produtos_removidos,
+    corporativo: linha.corporativo,
     produtos: ps.map(p => ({
       id: p.id, tipo: p.tipo, descricao: p.descricao,
       fornecedor: parte(p.fornecedor_id, p.fornecedor_nome, p.fornecedor_externo),
@@ -295,6 +296,7 @@ export function vendaDasLinhas(vendaId: string, linha: Linha, cab: Linha, ps: Li
         id: x.id, nome: x.nome, tipo: x.tipo, documento: x.documento,
         tarifa_centavos: Number(x.tarifa_centavos), taxas_centavos: Number(x.taxas_centavos), outras_taxas_centavos: Number(x.outras_taxas_centavos),
         cancelado_em: dataISO(x.cancelado_em),
+        corporativo: (x.dados as Record<string, unknown> | null | undefined)?.corporativo,
       })),
       componentes: cs.filter(c => c.produto_id === p.id).map(c => ({
         id: c.id, tipo: c.tipo, valor_centavos: Number(c.valor_centavos), percentual: c.percentual === null ? null : Number(c.percentual),
@@ -696,9 +698,10 @@ async function gravarFilhos(exec: ExecutorSQL, tenantId: string, venda: Venda): 
     );
     for (const [k, x] of p.passageiros.entries()) {
       await exec.query(
-        `INSERT INTO venda_passageiros (tenant_id, venda_id, produto_id, id, ordem, nome, tipo, documento, tarifa_centavos, taxas_centavos, outras_taxas_centavos, cancelado_em)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NULLIF($12,'')::date)`,
-        [tenantId, venda.id, p.id, x.id, k + 1, x.nome, x.tipo, x.documento, x.tarifa_centavos, x.taxas_centavos, x.outras_taxas_centavos, x.cancelado_em ?? ''],
+        `INSERT INTO venda_passageiros (tenant_id, venda_id, produto_id, id, ordem, nome, tipo, documento, tarifa_centavos, taxas_centavos, outras_taxas_centavos, cancelado_em, dados)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NULLIF($12,'')::date,$13::jsonb)`,
+        [tenantId, venda.id, p.id, x.id, k + 1, x.nome, x.tipo, x.documento, x.tarifa_centavos, x.taxas_centavos, x.outras_taxas_centavos, x.cancelado_em ?? '',
+          JSON.stringify(x.corporativo ? { corporativo: x.corporativo } : {})],
       );
     }
     for (const [k, c] of p.componentes.entries()) {
@@ -849,17 +852,18 @@ export async function salvarVenda(
 
   await exec.query(
     `INSERT INTO vendas_modelo (tenant_id, venda_id, versao_modelo, origem, situacao, numero, data_venda, cliente, vendedor, intermediario,
-       grupo_id, centro_custo, observacoes, crm_venda_id, total_cliente_centavos, receita_centavos, operacao_propria, produtos_removidos)
-     VALUES ($1,$2,2,$3,'ABERTA',$4,NULLIF($5,'')::date,$6::jsonb,$7::jsonb,$8::jsonb,$9,$10,$11,$12,$13,$14,$15,$16::jsonb)
+       grupo_id, centro_custo, observacoes, crm_venda_id, total_cliente_centavos, receita_centavos, operacao_propria, produtos_removidos, corporativo)
+     VALUES ($1,$2,2,$3,'ABERTA',$4,NULLIF($5,'')::date,$6::jsonb,$7::jsonb,$8::jsonb,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17::jsonb)
      ON CONFLICT (tenant_id, venda_id) DO UPDATE SET versao_modelo = 2, origem = EXCLUDED.origem, numero = EXCLUDED.numero,
        data_venda = EXCLUDED.data_venda, cliente = EXCLUDED.cliente, vendedor = EXCLUDED.vendedor, intermediario = EXCLUDED.intermediario,
        grupo_id = EXCLUDED.grupo_id, centro_custo = EXCLUDED.centro_custo, observacoes = EXCLUDED.observacoes, crm_venda_id = EXCLUDED.crm_venda_id,
        total_cliente_centavos = EXCLUDED.total_cliente_centavos, receita_centavos = EXCLUDED.receita_centavos,
-       operacao_propria = EXCLUDED.operacao_propria, produtos_removidos = EXCLUDED.produtos_removidos,
+       operacao_propria = EXCLUDED.operacao_propria, produtos_removidos = EXCLUDED.produtos_removidos, corporativo = EXCLUDED.corporativo,
        revisao = vendas_modelo.revisao + 1, atualizado_em = NOW()`,
     [tenantId, venda.id, venda.origem, venda.numero, venda.data_venda, JSON.stringify(venda.cliente), venda.vendedor ? JSON.stringify(venda.vendedor) : null,
       venda.intermediario ? JSON.stringify(venda.intermediario) : null, venda.grupo_id, venda.centro_custo, venda.observacoes, venda.crm_venda_id,
-      totaisDaVenda(venda).valor_cliente, receita.receita, venda.operacao_propria === true, JSON.stringify(venda.produtos_removidos ?? [])],
+      totaisDaVenda(venda).valor_cliente, receita.receita, venda.operacao_propria === true, JSON.stringify(venda.produtos_removidos ?? []),
+      JSON.stringify(venda.corporativo ?? {})],
   );
   await gravarFilhos(exec, tenantId, venda);
 

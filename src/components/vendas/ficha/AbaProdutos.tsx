@@ -7,7 +7,7 @@
  * Fee, Markup, Desconto...).
  */
 import * as React from 'react';
-import { Copy, Plus, RotateCcw, Trash2, UserPlus, Users } from 'lucide-react';
+import { Briefcase, Copy, Plus, RotateCcw, Trash2, UserPlus, Users } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -248,6 +248,10 @@ function EditorDeProduto({ inicial, novo, editavel, verReceita, fornecedores, on
   const prefixo = estrangeira ? p.moeda : 'R$';
 
   const mudarPax = (id: string, parcial: Partial<Passageiro>) => mudar({ passageiros: p.passageiros.map(x => (x.id === id ? { ...x, ...parcial } : x)) });
+  // Viagem corporativa (E7): centro de custo e matrícula de cada viajante no cliente.
+  // Aparece sozinha quando algum passageiro já tem; senão, a pessoa liga.
+  const [verCorporativo, setVerCorporativo] = React.useState(() => inicial.passageiros.some(x => x.corporativo?.centro_custo || x.corporativo?.matricula));
+  const mudarCorp = (x: Passageiro, campo: 'centro_custo' | 'matricula', valor: string) => mudarPax(x.id, { corporativo: { ...(x.corporativo ?? {}), [campo]: valor } });
   const mudarComp = (id: string, parcial: Partial<ComponenteDeReceita>) => mudar({ componentes: p.componentes.map(x => (x.id === id ? { ...x, ...parcial } : x)) });
   const novoComp = (tipo: TipoComponente) => mudar({ componentes: [...p.componentes, { id: novoIdDaVenda('cp'), tipo, valor_centavos: 0, percentual: null, passageiro_id: null, descricao: '' }] });
   // A mesma conta da gravação: tarifa, tarifa com taxas ou (Over) a comissão.
@@ -373,12 +377,20 @@ function EditorDeProduto({ inicial, novo, editavel, verReceita, fornecedores, on
         <section aria-labelledby="t-pax" className="flex flex-col gap-[var(--fin-s-2)]">
           <div className="flex items-center justify-between gap-[var(--fin-s-2)]">
             <h3 id="t-pax" className="fin-t-body-strong text-[var(--fin-text)]">Passageiros</h3>
+            <div className="flex flex-wrap items-center gap-[var(--fin-s-2)]">
+            {p.passageiros.length > 0 ? (
+              <Button type="button" variant="ghost" size="sm" className="h-11 lg:h-8" aria-pressed={verCorporativo}
+                onClick={() => setVerCorporativo(v => !v)}>
+                <Briefcase aria-hidden="true" className="size-4" /> {verCorporativo ? 'Esconder dados corporativos' : 'Dados corporativos'}
+              </Button>
+            ) : null}
             {editavel ? (
               <Button type="button" variant="outline" size="sm" className="h-11 lg:h-8"
                 onClick={() => mudar({ passageiros: [...p.passageiros, { id: novoIdDaVenda('px'), nome: '', tipo: 'ADT', documento: '', tarifa_centavos: 0, taxas_centavos: 0, outras_taxas_centavos: 0, cancelado_em: null }] })}>
                 <UserPlus aria-hidden="true" className="size-4" /> Passageiro
               </Button>
             ) : null}
+            </div>
           </div>
           {p.passageiros.length === 0 ? (
             <div className="grid grid-cols-1 gap-[var(--fin-s-3)] rounded-[var(--fin-r-md)] bg-[var(--fin-surface-2)] p-[var(--fin-s-3)] sm:grid-cols-3">
@@ -397,7 +409,7 @@ function EditorDeProduto({ inicial, novo, editavel, verReceita, fornecedores, on
             </div>
           ) : (
             <div className="overflow-x-auto rounded-[var(--fin-r-md)] border border-[var(--fin-border)]">
-              <table className="w-full min-w-[760px] border-collapse fin-t-body">
+              <table className={cn('w-full border-collapse fin-t-body', verCorporativo ? 'min-w-[1080px]' : 'min-w-[760px]')}>
                 <thead className="bg-[var(--fin-surface-2)]">
                   <tr className="text-left fin-t-overline text-[var(--fin-text-3)]">
                     <th className="px-3 py-2 font-medium">Nome</th>
@@ -406,6 +418,12 @@ function EditorDeProduto({ inicial, novo, editavel, verReceita, fornecedores, on
                     <th className="px-3 py-2 text-right font-medium">Tarifa</th>
                     <th className="px-3 py-2 text-right font-medium">{p.tipo.startsWith('AEREO') ? 'Taxa de embarque' : 'Taxas'}</th>
                     <th className="px-3 py-2 text-right font-medium">Outras taxas</th>
+                    {verCorporativo ? (
+                      <>
+                        <th className="px-3 py-2 font-medium">Centro de custo no cliente</th>
+                        <th className="px-3 py-2 font-medium">Matrícula</th>
+                      </>
+                    ) : null}
                     <th className="px-3 py-2"><span className="sr-only">Remover</span></th>
                   </tr>
                 </thead>
@@ -425,6 +443,12 @@ function EditorDeProduto({ inicial, novo, editavel, verReceita, fornecedores, on
                       <td className="px-2 py-1.5"><CampoReais rotulo={`Tarifa do passageiro ${i + 1}`} prefixo={prefixo} centavos={x.tarifa_centavos} onChange={v => mudarPax(x.id, { tarifa_centavos: v })} desabilitado={!editavel} /></td>
                       <td className="px-2 py-1.5"><CampoReais rotulo={`Taxas do passageiro ${i + 1}`} prefixo={prefixo} centavos={x.taxas_centavos} onChange={v => mudarPax(x.id, { taxas_centavos: v })} desabilitado={!editavel} /></td>
                       <td className="px-2 py-1.5"><CampoReais rotulo={`Outras taxas do passageiro ${i + 1}`} prefixo={prefixo} centavos={x.outras_taxas_centavos} onChange={v => mudarPax(x.id, { outras_taxas_centavos: v })} desabilitado={!editavel} /></td>
+                      {verCorporativo ? (
+                        <>
+                          <td className="px-2 py-1.5"><Input aria-label={`Centro de custo no cliente do passageiro ${i + 1}`} className={CONTROLE} maxLength={120} value={x.corporativo?.centro_custo ?? ''} disabled={!editavel} onChange={e => mudarCorp(x, 'centro_custo', e.target.value)} /></td>
+                          <td className="px-2 py-1.5"><Input aria-label={`Matrícula do passageiro ${i + 1}`} className={cn(CONTROLE, 'w-32')} maxLength={60} value={x.corporativo?.matricula ?? ''} disabled={!editavel} onChange={e => mudarCorp(x, 'matricula', e.target.value)} /></td>
+                        </>
+                      ) : null}
                       <td className="px-1 py-1.5 text-right">
                         {editavel ? (
                           <Button type="button" variant="ghost" size="icon" aria-label={`Remover ${x.nome || `passageiro ${i + 1}`}`}

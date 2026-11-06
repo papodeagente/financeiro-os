@@ -71,8 +71,23 @@ export interface ItemParaDocumento {
     produtos: Array<{ tipo: string; descricao: string; fornecedor_nome: string; localizador: string; data_inicio: string; data_fim: string; passageiros: string[] }>;
     centro_custo: string;
     solicitante: string;
+    /** Viagem corporativa (E7): só nos itens de venda que têm. */
+    corporativo?: CorporativoDoItem;
   };
 }
+
+/** Os dados da viagem corporativa que a fatura mostra por item (E7). */
+export interface CorporativoDoItem {
+  cc_cliente?: string;
+  aprovador?: string;
+  matricula?: string;
+  projeto?: string;
+  motivo?: string;
+  requisicao?: string;
+}
+
+/** Colunas da viagem corporativa, na ordem da exportação. */
+export const COLUNAS_CORPORATIVAS = ['cc_cliente', 'aprovador', 'matricula', 'projeto', 'motivo', 'requisicao'] as const;
 
 export interface NotaParaDocumento { tipo: 'CREDITO' | 'DEBITO'; valor_centavos: number; motivo: string }
 
@@ -93,6 +108,8 @@ export function valorDaColuna(item: ItemParaDocumento, campo: CampoDaFatura): st
     }
     case 'centro_custo': return item.detalhes.centro_custo;
     case 'solicitante': return item.detalhes.solicitante;
+    case 'cc_cliente': case 'aprovador': case 'matricula': case 'projeto': case 'motivo': case 'requisicao':
+      return item.detalhes.corporativo?.[campo] ?? '';
     case 'valor': return reaisBR(item.valor_centavos);
   }
 }
@@ -126,24 +143,33 @@ export const CABECALHO_DA_EXPORTACAO = [
   'Período da viagem', 'Centro de custo', 'Solicitante', 'Descrição', 'Valor',
 ] as const;
 
-/** A fatura em linhas: um item por linha, as notas, as retenções e o total. Valor como número (reais). */
+/**
+ * A fatura em linhas: um item por linha, as notas, as retenções e o total.
+ * Valor como número (reais). As colunas da viagem corporativa (E7) entram
+ * depois de "Solicitante" só quando algum item tem esses dados: a fatura de
+ * quem não usa sai exatamente como sempre saiu.
+ */
 export function linhasDaExportacao(f: FaturaParaExportar): Array<Array<string | number>> {
   const base = (tipo: string) => [f.numero, dataBR(f.vencimento), f.pessoa_nome, tipo];
-  const linhas: Array<Array<string | number>> = [[...CABECALHO_DA_EXPORTACAO]];
+  const corp = f.itens.some(i => COLUNAS_CORPORATIVAS.some(c => i.detalhes.corporativo?.[c]));
+  const vazioCorp = corp ? COLUNAS_CORPORATIVAS.map(() => '') : [];
+  const cab = [...CABECALHO_DA_EXPORTACAO] as string[];
+  if (corp) cab.splice(cab.indexOf('Solicitante') + 1, 0, ...COLUNAS_CORPORATIVAS.map(c => ROTULO_DA_COLUNA[c]));
+  const linhas: Array<Array<string | number>> = [cab];
   for (const i of f.itens) {
     linhas.push([
       ...base('Item'), i.venda_numero, dataBR(i.data_venda), valorDaColuna(i, 'produto'), valorDaColuna(i, 'fornecedor'),
       valorDaColuna(i, 'passageiros'), valorDaColuna(i, 'localizador'), valorDaColuna(i, 'viagem'), i.detalhes.centro_custo,
-      i.detalhes.solicitante, i.descricao, i.valor_centavos / 100,
+      i.detalhes.solicitante, ...(corp ? COLUNAS_CORPORATIVAS.map(c => valorDaColuna(i, c)) : []), i.descricao, i.valor_centavos / 100,
     ]);
   }
   for (const n of f.notas) {
-    linhas.push([...base(n.tipo === 'CREDITO' ? 'Nota de crédito' : 'Nota de débito'), '', '', '', '', '', '', '', '', '', n.motivo, (n.tipo === 'CREDITO' ? -1 : 1) * n.valor_centavos / 100]);
+    linhas.push([...base(n.tipo === 'CREDITO' ? 'Nota de crédito' : 'Nota de débito'), '', '', '', '', '', '', '', '', '', ...vazioCorp, n.motivo, (n.tipo === 'CREDITO' ? -1 : 1) * n.valor_centavos / 100]);
   }
   for (const r of f.totais.retencoes) {
-    linhas.push([...base('Retenção'), '', '', '', '', '', '', '', '', '', `${r.nome} ${String(r.percentual).replace('.', ',')}%`, -r.valor_centavos / 100]);
+    linhas.push([...base('Retenção'), '', '', '', '', '', '', '', '', '', ...vazioCorp, `${r.nome} ${String(r.percentual).replace('.', ',')}%`, -r.valor_centavos / 100]);
   }
-  linhas.push([...base('Total a pagar'), '', '', '', '', '', '', '', '', '', '', f.totais.liquido / 100]);
+  linhas.push([...base('Total a pagar'), '', '', '', '', '', '', '', '', '', ...vazioCorp, '', f.totais.liquido / 100]);
   return linhas;
 }
 

@@ -21,7 +21,7 @@ import { cifrar, cofreDisponivel, decifrar } from '../cofre';
 import { criarNotificacao } from '../notificacoes';
 import { getDefaultPublicBase } from '../proposta-link';
 import { janelaDeMinutos, type DefinicaoTarefa } from '../agendador/nucleo';
-import { documentoDoRelatorio, lerConsulta, montarRelatorioDeVendas } from '../relatorios-vendas-servidor';
+import { documentoDoRelatorio, empresasDoRelatorio, lerConsulta, montarRelatorioDeVendas } from '../relatorios-vendas-servidor';
 import type { DocumentoExportado } from '../exportacao/documento';
 import { payloadDoEnvio } from './payload';
 import { hashDoTokenDeLeitura, novoTokenDeLeitura } from './token';
@@ -150,7 +150,11 @@ export async function documentoDoAgendamento(
   q.set('ate', ate);
   const lida = lerConsulta(q);
   if (!lida.ok) throw new ErroDoAgendamento('CONSULTA', lida.erro);
-  const r = await montarRelatorioDeVendas(exec, tenantId, lida.consulta, { verReceita: a.ver_receita, vendedorId: a.vendedor_id ?? undefined });
+  const r = await montarRelatorioDeVendas(exec, tenantId, lida.consulta, {
+    verReceita: a.ver_receita, vendedorId: a.vendedor_id ?? undefined,
+    // Várias empresas (E7): a coluna e o filtro de empresa valem também no envio.
+    ...(await empresasDoRelatorio(exec, tenantId)),
+  });
   const doc = documentoDoRelatorio(r, lida.consulta);
   if (doc.linhas.length > LIMITES_DO_AGENDAMENTO.linhasNoLink) {
     return {

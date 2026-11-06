@@ -90,6 +90,13 @@ export const CAMPOS_DA_FATURA = [
   { id: 'viagem', rotulo: 'Período da viagem' },
   { id: 'centro_custo', rotulo: 'Centro de custo' },
   { id: 'solicitante', rotulo: 'Solicitante' },
+  // Viagem corporativa (E7): o que a empresa cliente pede para aprovar e ratear.
+  { id: 'cc_cliente', rotulo: 'Centro de custo do cliente' },
+  { id: 'aprovador', rotulo: 'Aprovador' },
+  { id: 'matricula', rotulo: 'Matrícula' },
+  { id: 'projeto', rotulo: 'Projeto' },
+  { id: 'motivo', rotulo: 'Motivo da viagem' },
+  { id: 'requisicao', rotulo: 'Requisição' },
   { id: 'valor', rotulo: 'Valor' },
 ] as const;
 export type CampoDaFatura = (typeof CAMPOS_DA_FATURA)[number]['id'];

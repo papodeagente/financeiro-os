@@ -23,7 +23,8 @@ import { ConfirmDialog } from '@/components/fin/ConfirmDialog';
 import { Field } from '@/components/fin/Field';
 import { loadEntities } from '@/lib/crm-storage';
 import { hojeISO } from '@/lib/money';
-import { normalizarVenda, totaisDaVenda, totaisDoProduto, type PagamentoDaVenda, type Venda } from '@/lib/venda-modelo';
+import { CAMPOS_CORPORATIVOS, normalizarVenda, totaisDaVenda, totaisDoProduto, type DadosCorporativos, type PagamentoDaVenda, type Venda } from '@/lib/venda-modelo';
+import { BlocoRecolhivel } from '@/components/fin/BlocoRecolhivel';
 import { receitaDaVenda, CONFIG_RECEITA_PADRAO, type ConfigReceita } from '@/lib/venda-receita';
 import type { FichaDaVenda as Ficha } from '@/lib/venda-rota';
 import { toast } from '@/lib/toast';
@@ -448,6 +449,9 @@ function DadosDaVenda({ venda, editavel, clientes, intermediarios, onMudar }: {
         <Total rotulo="Intermediário" valor={venda.intermediario?.nome || '—'} />
         <Total rotulo="Centro de custo" valor={venda.centro_custo || '—'} />
         {venda.operacao_propria ? <Total rotulo="Operação" valor="Própria da agência" /> : null}
+        {CAMPOS_CORPORATIVOS.filter(c => venda.corporativo?.[c.chave]).map(c => (
+          <Total key={c.chave} rotulo={c.rotulo} valor={venda.corporativo?.[c.chave] ?? ''} />
+        ))}
       </dl>
     );
   }
@@ -494,6 +498,26 @@ function DadosDaVenda({ venda, editavel, clientes, intermediarios, onMudar }: {
           <span className="fin-t-caption text-[var(--fin-text-3)]">A agência opera a viagem (um grupo dela, por exemplo). Produto sem fornecedor não vira conta a pagar: o custo é da própria agência.</span>
         </span>
       </label>
+      <div className="sm:col-span-2 lg:col-span-4">
+        <BlocoRecolhivel
+          titulo="Viagem corporativa"
+          descricao="O que a empresa cliente pede para aprovar e ratear a despesa. Sai nos relatórios de vendas, na fatura e no arquivo do cartão corporativo."
+          preenchido={CAMPOS_CORPORATIVOS.some(c => venda.corporativo?.[c.chave])}
+        >
+          <div className="grid grid-cols-1 gap-[var(--fin-s-3)] pt-[var(--fin-s-3)] sm:grid-cols-2 lg:grid-cols-4">
+            {CAMPOS_CORPORATIVOS.map(c => (
+              <Field key={c.chave} rotulo={c.rotulo} ajuda={c.ajuda}>
+                {a => (
+                  <Input
+                    {...a} className={CONTROLE} maxLength={120} value={venda.corporativo?.[c.chave] ?? ''}
+                    onChange={e => onMudar({ corporativo: { ...(venda.corporativo ?? {}), [c.chave]: e.target.value } as DadosCorporativos })}
+                  />
+                )}
+              </Field>
+            ))}
+          </div>
+        </BlocoRecolhivel>
+      </div>
       <p className="fin-t-caption text-[var(--fin-text-3)] sm:col-span-2 lg:col-span-4">
         Quais componentes contam como receita da agência se escolhe em <Link href="/config/vendas" className={LINK}>Configurações › Vendas</Link>.
       </p>
