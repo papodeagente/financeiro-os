@@ -43,6 +43,13 @@ export const ORDENS = [
   'categoria', 'centro', 'conta', 'situacao', 'tipo',
 ] as const;
 export type OrdemDaLista = (typeof ORDENS)[number];
+/**
+ * Situação da cobrança (boleto/Pix) da conta a receber (E3, 05/11/2026).
+ * "sem_boleto" = a receber em aberto sem cobrança viva nem paga ("Boleto não
+ * emitido"). Filtrar por cobrança deixa só contas a receber.
+ */
+export const COBRANCAS_DO_FILTRO = ['todas', 'sem_boleto', 'emitida', 'vencida', 'paga', 'falhou'] as const;
+export type CobrancaDoFiltro = (typeof COBRANCAS_DO_FILTRO)[number];
 
 export interface LinhaDeConta {
   /** 'cp:<id>' ou 'cr:<id>': única entre as duas tabelas. */
@@ -84,6 +91,12 @@ export interface LinhaDeConta {
   gerada_pelo_sistema: boolean;
   /** Em aberto e sem nenhuma baixa: pode mudar o vencimento. */
   sem_baixa: boolean;
+  /**
+   * Status da cobrança que vale para a conta (a viva; senão a mais recente):
+   * emitindo, aberta, vencida, paga, cancelada, estornada, falhou. Vazio =
+   * nenhuma cobrança (ou conta a pagar).
+   */
+  cobranca_status: string;
 }
 
 export interface FiltroDaLista {
@@ -97,6 +110,7 @@ export interface FiltroDaLista {
   categoria: string;
   centro: string;
   conta: string;
+  cobranca: CobrancaDoFiltro;
   ordem: OrdemDaLista;
   direcao: 'asc' | 'desc';
   pagina: number;
@@ -151,6 +165,7 @@ export function lerFiltro(p: URLSearchParams, hoje: string): FiltroDaLista {
     categoria: texto('categoria', 100),
     centro: texto('centro', 100),
     conta: texto('conta', 100),
+    cobranca: deUmaLista(COBRANCAS_DO_FILTRO, texto('cobranca'), 'todas', 'Situação da cobrança'),
     ordem: deUmaLista(ORDENS, texto('ordem'), 'vencimento', 'Ordem'),
     direcao: texto('direcao') === 'desc' ? 'desc' : 'asc',
     pagina: inteiro('pagina', 1, 1_000_000),
@@ -253,11 +268,38 @@ function lado(tabela: TabelaDaConta): string {
    WHERE t.tenant_id = $1`;
 }
 
+/** Cobranças vivas primeiro; depois a mais recente. */
+const COBRANCA_DA_CONTA = `
+    LEFT JOIN LATERAL (
+      SELECT c.status FROM cobrancas c
+       WHERE c.tenant_id = $1 AND c.titulo_id = b.id
+       ORDER BY (c.status IN ('emitindo', 'aberta', 'vencida')) DESC, c.criado_em DESC
+       LIMIT 1
+    ) cobr ON b.tabela = 'contas_receber'`;
+
+let tabelaDeCobrancaExiste = false;
+/**
+ * A tabela `cobrancas` (E3, parte A) existe neste banco? Enquanto não existir
+ * a lista funciona igual a antes e o filtro "Boleto não emitido" vale para
+ * toda conta a receber em aberto. Depois que existe, não pergunta mais.
+ */
+export async function existeTabelaDeCobranca(exec: ExecutorSQL): Promise<boolean> {
+  if (tabelaDeCobrancaExiste) return true;
+  try {
+    const { rows } = await exec.query(`SELECT to_regclass('cobrancas') IS NOT NULL AS ok`);
+    tabelaDeCobrancaExiste = rows[0]?.ok === true;
+  } catch {
+    tabelaDeCobrancaExiste = false;
+  }
+  return tabelaDeCobrancaExiste;
+}
+
 /**
  * Todas as contas da agência no formato comum, com categoria, centro e conta
- * bancária pelo nome. $1 = agência, $2 = hoje.
+ * bancária pelo nome. $1 = agência, $2 = hoje. Com `comCobranca`, traz o
+ * status da cobrança de cada conta a receber (tabela da E3).
  */
-export function sqlDasContas(): string {
+export function sqlDasContas(comCobranca = false): string {
   return `
 WITH cat AS (
   SELECT id, COALESCE(NULLIF(data->>'nome', ''), descricao, '') AS nome, COALESCE(NULLIF(data->>'codigo', ''), codigo, '') AS codigo
@@ -281,11 +323,12 @@ WITH cat AS (
          COALESCE(NULLIF(cen.nome, ''), b.d->>'centro_custo', '') AS centro_custo,
          COALESCE(b.d->>'conta_bancaria_id', '') AS conta_bancaria_id,
          COALESCE(cb.nome, '') AS conta_bancaria,
-         CASE WHEN jsonb_typeof(b.d->'rateio') = 'array' THEN b.d->'rateio' ELSE '[]'::jsonb END AS rateio_j
+         CASE WHEN jsonb_typeof(b.d->'rateio') = 'array' THEN b.d->'rateio' ELSE '[]'::jsonb END AS rateio_j,
+         ${comCobranca ? `COALESCE(cobr.status, '')` : `''::text`} AS cobranca_status
     FROM brutos b
     LEFT JOIN cat ON cat.id = b.d->>'categoria_id'
     LEFT JOIN cen ON cen.id = b.d->>'centro_custo_id'
-    LEFT JOIN cb ON cb.id = b.d->>'conta_bancaria_id'
+    LEFT JOIN cb ON cb.id = b.d->>'conta_bancaria_id'${comCobranca ? COBRANCA_DA_CONTA : ''}
 )`;
 }
 
@@ -335,6 +378,14 @@ export function clausulas(f: FiltroDaLista, contasLiberadas: readonly string[] |
     partes.push(`(a.centro_custo_id = ${c} OR EXISTS (SELECT 1 FROM jsonb_array_elements(a.rateio_j) e WHERE e->>'centro_custo_id' = ${c}))`);
   }
   if (f.conta) partes.push(`a.conta_bancaria_id = ${p(f.conta)}`);
+  if (f.cobranca && f.cobranca !== 'todas') {
+    const aberta = `a.tipo = 'receber' AND a.situacao IN ('em_aberto', 'em_atraso')`;
+    if (f.cobranca === 'sem_boleto') partes.push(`(${aberta} AND a.cobranca_status NOT IN ('emitindo', 'aberta', 'vencida', 'paga'))`);
+    else if (f.cobranca === 'emitida') partes.push(`(${aberta} AND a.cobranca_status IN ('emitindo', 'aberta'))`);
+    else if (f.cobranca === 'vencida') partes.push(`(${aberta} AND a.cobranca_status = 'vencida')`);
+    else if (f.cobranca === 'falhou') partes.push(`(${aberta} AND a.cobranca_status = 'falhou')`);
+    else partes.push(`(a.tipo = 'receber' AND a.cobranca_status = 'paga')`);
+  }
   if (contasLiberadas !== null) {
     // Mesma regra do CRUD (filtro-de-conta.ts, soBaixados): só some a linha
     // já baixada numa conta bancária que a pessoa não enxerga.
@@ -359,7 +410,7 @@ function ordemSql(f: FiltroDaLista): string {
 const COLUNAS_DA_LINHA = `a.chave, a.tabela, a.tipo, a.id, a.status, a.situacao, a.valor_c, a.baixado_c, a.saldo_c, a.campo_baixa_c,
   a.vencimento, a.emissao, a.liquidacao, a.pessoa, a.documento, a.forma, a.moeda,
   a.categoria_id, a.categoria, a.centro_custo_id, a.centro_custo, a.conta_bancaria_id, a.conta_bancaria,
-  jsonb_array_length(a.rateio_j) > 0 AS tem_rateio,
+  jsonb_array_length(a.rateio_j) > 0 AS tem_rateio, a.cobranca_status,
   jsonb_build_object(
     'status', a.status, 'descricao', a.d->'descricao', 'parcela_numero', a.d->'parcela_numero', 'total_parcelas', a.d->'total_parcelas',
     'origem', a.d->'origem', 'serie_id', a.d->'serie_id', 'venda_id', a.d->'venda_id', 'origem_venda_id', a.d->'origem_venda_id',
@@ -411,6 +462,7 @@ function linhaDoBanco(r: Record<string, unknown>, hoje: string): LinhaDeConta {
     rateio: r.tem_rateio === true,
     gerada_pelo_sistema: tituloGeradoPeloSistema(tabela, m),
     sem_baixa: tituloSemBaixa(tabela, m),
+    cobranca_status: s('cobranca_status'),
   };
 }
 
@@ -464,10 +516,11 @@ function totaisDoLado(r: Record<string, unknown> | undefined): TotaisDoLado {
 
 export async function lerContas(
   exec: ExecutorSQL, tenantId: string, f: FiltroDaLista, contasLiberadas: readonly string[] | null,
+  opcoes: { comCobranca?: boolean } = {},
 ): Promise<ResultadoDaLista> {
   const valores: unknown[] = [tenantId, f.hoje];
   const where = clausulas(f, contasLiberadas, valores);
-  const base = sqlDasContas();
+  const base = sqlDasContas(Boolean(opcoes.comCobranca));
 
   const { rows: tot } = await exec.query(
     `${base}
@@ -512,11 +565,12 @@ export async function lerContas(
 /** Todas as linhas do recorte (até `limite`), para exportar ou selecionar tudo. */
 export async function lerTodas(
   exec: ExecutorSQL, tenantId: string, f: FiltroDaLista, contasLiberadas: readonly string[] | null, limite: number,
+  opcoes: { comCobranca?: boolean } = {},
 ): Promise<LinhaDeConta[]> {
   const valores: unknown[] = [tenantId, f.hoje];
   const where = clausulas(f, contasLiberadas, valores);
   const { rows } = await exec.query(
-    `${sqlDasContas()}
+    `${sqlDasContas(Boolean(opcoes.comCobranca))}
      SELECT ${COLUNAS_DA_LINHA} FROM base a WHERE ${where} ORDER BY ${ordemSql(f)} LIMIT $${valores.length + 1}`,
     [...valores, limite],
   );

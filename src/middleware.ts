@@ -87,7 +87,11 @@ export async function middleware(request: NextRequest) {
   ) {
     const response = addSecurityHeaders(next());
     // O endereço da proposta é o token dela: não vaza pelo Referer (FIN-13).
-    if (pathname.startsWith('/p/') || pathname.startsWith('/api/propostas/public/')) {
+    if (
+      pathname.startsWith('/p/') || pathname.startsWith('/api/propostas/public/')
+      // O endereço do portal do cliente também é o token dele.
+      || pathname.startsWith('/c/') || pathname.startsWith('/api/portal/')
+    ) {
       response.headers.set('Referrer-Policy', 'no-referrer');
       response.headers.set('X-Robots-Tag', 'noindex, nofollow');
     }

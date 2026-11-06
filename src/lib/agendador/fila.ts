@@ -108,7 +108,26 @@ export async function falharTarefa(exec: ExecutorSQL, t: Pick<TarefaReivindicada
   return 'repetir';
 }
 
-export type ProcessadorDeTarefa = (t: TarefaReivindicada) => Promise<Record<string, unknown> | void>;
+/**
+ * Adia a tarefa até `ate` (ISO) SEM gastar tentativa: o problema é de fora
+ * (disjuntor aberto, provedor pediu para esperar), não da tarefa.
+ */
+export async function adiarTarefa(exec: ExecutorSQL, id: string, ate: string, motivo: string): Promise<void> {
+  await exec.query(
+    `UPDATE tarefas SET status = 'pendente', erro = $3, proxima_em = GREATEST($2::timestamptz, NOW() + INTERVAL '1 second'),
+            tentativas = GREATEST(tentativas - 1, 0), atualizado_em = NOW()
+      WHERE id = $1`,
+    [id, ate, motivo.slice(0, 2000)],
+  );
+}
+
+/** O processador pede para adiar lançando um erro com `adiarAte` (ISO). */
+function adiamentoDe(e: unknown): string | null {
+  const ate = (e as { adiarAte?: unknown } | null)?.adiarAte;
+  return typeof ate === 'string' && ate ? ate : null;
+}
+
+export type ProcessadorDeTarefa =(t: TarefaReivindicada) => Promise<Record<string, unknown> | void>;
 
 /** Tipos de tarefa conhecidos. Cada entrega registra os seus (cobrança, régua...). */
 export const PROCESSADORES: Record<string, ProcessadorDeTarefa> = {};
@@ -124,13 +143,14 @@ export function registrarProcessador(tipo: string, fn: ProcessadorDeTarefa): voi
 export async function processarFila(
   exec: ExecutorSQL,
   opts: { orcamentoMs?: number; porAgencia?: number; total?: number; agora?: () => number } = {},
-): Promise<{ processadas: number; falhas: number }> {
+): Promise<{ processadas: number; falhas: number; adiadas: number }> {
   const agora = opts.agora ?? (() => Date.now());
   const fim = agora() + (opts.orcamentoMs ?? 30_000);
   const tipos = Object.keys(PROCESSADORES);
-  if (tipos.length === 0) return { processadas: 0, falhas: 0 };
+  if (tipos.length === 0) return { processadas: 0, falhas: 0, adiadas: 0 };
   let processadas = 0;
   let falhas = 0;
+  let adiadas = 0;
   while (agora() < fim) {
     const lote = await reivindicarTarefas(exec, { porAgencia: opts.porAgencia, total: opts.total, tipos });
     if (lote.length === 0) break;
@@ -140,10 +160,16 @@ export async function processarFila(
         await concluirTarefa(exec, t.id, r ?? undefined);
         processadas++;
       } catch (e) {
+        const ate = adiamentoDe(e);
+        if (ate) {
+          adiadas++;
+          await adiarTarefa(exec, t.id, ate, e instanceof Error ? e.message : String(e));
+          continue;
+        }
         falhas++;
         await falharTarefa(exec, t, e instanceof Error ? e.message : String(e));
       }
     }
   }
-  return { processadas, falhas };
+  return { processadas, falhas, adiadas };
 }

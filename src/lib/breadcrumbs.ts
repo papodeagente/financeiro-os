@@ -53,6 +53,7 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   '/financeiro-ag/recebimentos': 'Recebimentos das plataformas',
   '/financeiro-ag/contas': 'Contas a Pagar/Receber',
   '/financeiro-ag/receber': 'Contas a receber',
+  '/financeiro-ag/cobrancas': 'Cobranças',
   '/financeiro-ag/pagar': 'Contas a pagar',
   '/financeiro-ag/plano-contas': 'Categorias',
   '/financeiro-ag/formas-pagamento': 'Formas de pagamento',
@@ -82,6 +83,7 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   '/config/agencia': 'Configurações',
   '/config/usuarios': 'Usuários',
   '/config/crm': 'Integração CRM',
+  '/config/cobranca': 'Cobrança',
   '/config/auditoria': 'Registro de atividades',
 };
 

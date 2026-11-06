@@ -40,6 +40,16 @@ export function permitirChamada(chave: string, maximo: number, janelaMs: number,
   return true;
 }
 
+/**
+ * Só olha, sem contar: a chave já está no teto desta janela? Serve para
+ * barrar ANTES de consultar o banco quem já errou demais (ex.: tokens do
+ * portal do cliente chutados), contando só os erros com `permitirChamada`.
+ */
+export function estaNoLimite(chave: string, maximo: number, agora = Date.now()): boolean {
+  const b = baldes.get(chave);
+  return Boolean(b && agora - b.inicio < b.janela && b.n >= maximo);
+}
+
 export function limparLimitePublicoParaTeste() {
   baldes.clear();
 }

@@ -34,6 +34,7 @@ import { contasJaUsadas } from '../conciliacao-servidor';
 import { desfazerUnificacao, unificarRecebimento, type ResultadoUnificacao } from './unificar-db';
 import { parcelaUnicaAntecipada, planoDeParcelaUnica } from './antecipacao';
 import { valorDaParcela } from './pagarme';
+import { desviarAvisoDeCobranca, transacaoEhDeCobranca } from '../cobranca/aviso';
 import {
   decidir, type CandidatoVenda, type Decisao, type PagamentoParaConciliar,
 } from './conciliacao';
@@ -848,6 +849,8 @@ export interface ResultadoProcessamento {
   processado: boolean;
   acao: string;
   sincronizacao?: ResultadoSincronizacao;
+  /** Aviso de cobrança emitida pelo financeiro (E3): não virou venda. */
+  cobranca?: { cobranca_id: string | null; status?: string; baixa_id?: string | null };
 }
 
 /**
@@ -869,7 +872,8 @@ export async function processarEvento(
   const conciliacaoAutomatica = conf?.config.conciliacao_automatica === true;
   const recebimentoAntecipado = conf?.config.recebimento_antecipado ?? antecipadoPorPadrao(plataforma, undefined);
 
-  return emTransacao(async (exec: ExecutorSQL) => {
+  let depoisDaCobranca: (() => Promise<void>) | undefined;
+  const resultado = await emTransacao(async (exec: ExecutorSQL): Promise<ResultadoProcessamento> => {
     const ins = await exec.query(
       `INSERT INTO plataformas_eventos (id, tenant_id, plataforma, id_externo, tipo, status, data, created_at)
        VALUES ($1, $2, $3, $4, $5, 'RECEBIDO', $6::jsonb, NOW())
@@ -889,6 +893,20 @@ export async function processarEvento(
     if (evento.tipo === 'IGNORADO') {
       await marcar('IGNORADO');
       return { processado: true, acao: 'evento sem efeito financeiro' };
+    }
+
+    // Cobrança emitida pelo financeiro (referência `f1;` ou id de cobrança
+    // nossa): vai para a cobrança e NÃO vira venda. Aviso que não é nosso
+    // devolve null e segue exatamente o caminho de antes (E3, 05/11/2026).
+    const desvio = await desviarAvisoDeCobranca(exec, tenantId, plataforma, evento, { contaBancariaId: contaBancaria });
+    if (desvio) {
+      await marcar('PROCESSADO');
+      depoisDaCobranca = desvio.depois;
+      return {
+        processado: true,
+        acao: desvio.acao,
+        cobranca: { cobranca_id: desvio.cobranca_id, status: desvio.status, baixa_id: desvio.baixa_id },
+      };
     }
 
     const transacao = evento.transacao;
@@ -927,6 +945,12 @@ export async function processarEvento(
       sincronizacao: r,
     };
   });
+  // Avisos ao CRM da cobrança paga: só depois do COMMIT, e sem nunca
+  // derrubar o aviso (que já está gravado).
+  if (depoisDaCobranca) {
+    await depoisDaCobranca().catch(e => console.error('[cobranca] depois do aviso:', e instanceof Error ? e.message : e));
+  }
+  return resultado;
 }
 
 export interface ResultadoImportacao {
@@ -936,6 +960,8 @@ export interface ResultadoImportacao {
   atualizadas: number;
   caixa_movido: number;
   erros: string[];
+  /** Cobranças emitidas pelo financeiro que vieram junto e foram puladas (E3). */
+  cobrancas_do_financeiro?: number;
 }
 
 /**
@@ -967,6 +993,13 @@ export async function importarPeriodo(
   for (const t of transacoes) {
     if (t.moeda && t.moeda !== 'BRL') {
       saida.erros.push(`Transação ${t.id_transacao} em ${t.moeda}: precisa de câmbio informado.`);
+      continue;
+    }
+    // Cobrança emitida pelo financeiro (E3) não é venda: quem cuida dela é
+    // o aviso do provedor. Sem isto, importar o histórico do Asaas criaria
+    // uma "venda direta" para cada boleto que a própria agência emitiu.
+    if (await transacaoEhDeCobranca(pool as unknown as ExecutorSQL, tenantId, plataforma, t)) {
+      saida.cobrancas_do_financeiro = (saida.cobrancas_do_financeiro ?? 0) + 1;
       continue;
     }
     try {
