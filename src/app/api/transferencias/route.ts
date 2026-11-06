@@ -12,5 +12,13 @@ export const { GET, POST } = createCrudHandlers(
     somenteFinanceiro: true, protegerBaixa: true,
     // Transferência que toca conta não liberada não aparece (05/11/2026).
     filtroDeConta: { campos: ['conta_origem_id', 'conta_destino_id'] },
+    // Nº do cheque (06/11/2026): opcional, só números.
+    validarCadastro: item => {
+      if (item.cheque_numero === undefined || item.cheque_numero === null || item.cheque_numero === '') return null;
+      const n = String(item.cheque_numero).trim();
+      if (!/^\d{1,20}$/.test(n)) return 'O número do cheque tem só números (até 20).';
+      item.cheque_numero = n;
+      return null;
+    },
   },
 );

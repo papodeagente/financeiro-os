@@ -43,11 +43,11 @@ const SELECT = cn(CAMPO, 'border px-3 focus-visible:outline-2 focus-visible:outl
 
 const COLUNAS_DO_LEIAUTE: Record<Leiaute, { todas: ColunaId[]; padrao: ColunaId[] }> = {
   extrato: {
-    todas: ['data', 'conta', 'numero', 'descricao', 'documento', 'pessoa', 'cpf', 'informacoes', 'forma', 'valor', 'saldo'],
-    padrao: ['data', 'conta', 'numero', 'descricao', 'documento', 'pessoa', 'cpf', 'informacoes', 'valor', 'saldo'],
+    todas: ['data', 'conta', 'numero', 'descricao', 'documento', 'pessoa', 'cpf', 'informacoes', 'forma', 'valor', 'saldo', 'fechado'],
+    padrao: ['data', 'conta', 'numero', 'descricao', 'documento', 'pessoa', 'cpf', 'informacoes', 'valor', 'saldo', 'fechado'],
   },
   movimentacoes: {
-    todas: ['data', 'numero', 'venda', 'conta', 'forma', 'pessoa', 'documento', 'cartao', 'moeda', 'movimento', 'valor', 'descricao', 'saldo'],
+    todas: ['data', 'numero', 'venda', 'conta', 'forma', 'pessoa', 'documento', 'cartao', 'moeda', 'movimento', 'valor', 'descricao', 'saldo', 'fechado'],
     padrao: ['data', 'numero', 'venda', 'conta', 'forma', 'pessoa', 'documento', 'cartao', 'moeda', 'movimento', 'valor'],
   },
 };

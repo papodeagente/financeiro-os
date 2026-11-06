@@ -77,6 +77,11 @@ export interface MovimentoCaixa {
   saldo_conta: number;
   /** Saldo das contas escolhidas, somadas, depois desta linha. */
   saldo_total: number;
+  /**
+   * A data do movimento está num período fechado pelo Fechar Caixa (da
+   * agência inteira ou desta conta): não muda mais sem reabrir (06/11/2026).
+   */
+  fechado: boolean;
 }
 
 // ─── Filtros ────────────────────────────────────────────────────────────────
@@ -240,7 +245,7 @@ WITH cb AS (
          -ROUND(${numerico("t.data->>'valor'")} * 100)::bigint,
          'Transferência para ' || COALESCE(NULLIF(t.data->>'conta_destino_nome', ''), 'outra conta')
            || CASE WHEN ${texto('t', 'descricao')} <> '' THEN ': ' || (t.data->>'descricao') ELSE '' END,
-         '', '', '', 'Transferência', '', '', '', '', '', 'BRL', NULL, NULL, '', '', 1
+         '', '', '', 'Transferência', '', '', '', '', COALESCE(NULLIF(t.data->>'cheque_numero', ''), ''), 'BRL', NULL, NULL, '', '', 1
     FROM transferencias t
    WHERE t.tenant_id = $1 AND (t.data->>'status') = 'EFETIVADA' AND ${numerico("t.data->>'valor'")} > 0
   UNION ALL
@@ -250,7 +255,7 @@ WITH cb AS (
          ROUND(${numerico("t.data->>'valor'")} * 100)::bigint,
          'Transferência de ' || COALESCE(NULLIF(t.data->>'conta_origem_nome', ''), 'outra conta')
            || CASE WHEN ${texto('t', 'descricao')} <> '' THEN ': ' || (t.data->>'descricao') ELSE '' END,
-         '', '', '', 'Transferência', '', '', '', '', '', 'BRL', NULL, NULL, '', '', 0
+         '', '', '', 'Transferência', '', '', '', '', COALESCE(NULLIF(t.data->>'cheque_numero', ''), ''), 'BRL', NULL, NULL, '', '', 0
     FROM transferencias t
    WHERE t.tenant_id = $1 AND (t.data->>'status') = 'EFETIVADA' AND ${numerico("t.data->>'valor'")} > 0
 ), mov AS (
@@ -408,7 +413,37 @@ function linhaDoBanco(r: Record<string, unknown>): MovimentoCaixa {
     informacoes: s('informacoes'),
     saldo_conta: deCentavos(r.saldo_conta_c as number),
     saldo_total: deCentavos(r.saldo_total_c as number),
+    fechado: false,
   };
+}
+
+/**
+ * Até quando cada conta está fechada (Fechar Caixa): '' = a agência inteira.
+ * Sem a tabela de períodos (banco antigo), nada está fechado.
+ */
+async function fechamentosDaAgencia(exec: ExecutorSQL, tenantId: string): Promise<Map<string, string>> {
+  const m = new Map<string, string>();
+  try {
+    const { rows: existe } = await exec.query(`SELECT to_regclass('public.periodos_fechados') IS NOT NULL AS ok`);
+    if (existe[0]?.ok !== true) return m;
+    const { rows } = await exec.query(
+      `SELECT conta_bancaria_id AS c, fechado_ate::text AS d FROM periodos_fechados WHERE tenant_id = $1`, [tenantId]);
+    for (const r of rows) m.set(String(r.c ?? ''), String(r.d ?? '').slice(0, 10));
+  } catch {
+    return m;
+  }
+  return m;
+}
+
+/** Marca as linhas cuja data está num período fechado (da agência ou da conta). */
+export function marcarFechados(linhas: MovimentoCaixa[], fechamentos: ReadonlyMap<string, string>): MovimentoCaixa[] {
+  if (fechamentos.size === 0) return linhas;
+  const geral = fechamentos.get('') ?? '';
+  return linhas.map(l => {
+    const daConta = fechamentos.get(l.conta_id) ?? '';
+    const ate = daConta > geral ? daConta : geral;
+    return { ...l, fechado: Boolean(ate && l.data && l.data <= ate) };
+  });
 }
 
 /**
@@ -491,7 +526,7 @@ export async function lerMovimentos(exec: ExecutorSQL, tenantId: string, f: Filt
   const ent = Number(tot[0]?.ent ?? 0);
   const sai = Number(tot[0]?.sai ?? 0);
   return {
-    linhas: rows.map(linhaDoBanco),
+    linhas: marcarFechados(rows.map(linhaDoBanco), await fechamentosDaAgencia(exec, tenantId)),
     total, pagina, por_pagina: f.porPagina, total_paginas: totalPaginas,
     de: f.de, ate: f.ate,
     saldo_anterior: round2(resumo.reduce((s, c) => s + c.saldo_anterior, 0)),
@@ -512,7 +547,7 @@ export async function lerParaExportar(exec: ExecutorSQL, tenantId: string, f: Fi
      SELECT a.* FROM enr a WHERE ${where} ORDER BY ${ordemSql(f)} LIMIT $${valores.length + 1}`,
     [...valores, EXPORTACAO_MAX + 1],
   );
-  return rows.map(linhaDoBanco);
+  return marcarFechados(rows.map(linhaDoBanco), await fechamentosDaAgencia(exec, tenantId));
 }
 
 // ─── Exportação ─────────────────────────────────────────────────────────────

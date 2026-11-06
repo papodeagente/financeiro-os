@@ -10,6 +10,7 @@ import * as React from 'react';
 import { Pencil, Plus, Trash2, Wallet } from 'lucide-react';
 
 import { loadEntities } from '@/lib/crm-storage';
+import { contaBancariaAtiva } from '@/lib/contas-bancarias-regras';
 import { detalheDaForma, type FormaPagamento, type UsoDaForma } from '@/lib/formas-pagamento';
 import { num } from '@/lib/money';
 import { toast } from '@/lib/toast';
@@ -141,12 +142,13 @@ export default function FormasDePagamentoPage() {
     try {
       const [res, cb] = await Promise.all([
         fetch('/api/formas-pagamento', { cache: 'no-store' }),
-        loadEntities<{ id: string; nome?: string }>('contas-bancarias').catch(() => []),
+        loadEntities<{ id: string; nome?: string; ativo?: unknown }>('contas-bancarias').catch(() => []),
       ]);
       if (!res.ok) throw new Error('A consulta não respondeu.');
       const lista = (await res.json()) as unknown;
       setFormas(Array.isArray(lista) ? (lista as FormaPagamento[]) : []);
-      setContas(cb.map(c => ({ id: c.id, nome: c.nome || 'Conta' })));
+      // Conta desativada some da escolha (06/11/2026).
+      setContas(cb.filter(contaBancariaAtiva).map(c => ({ id: c.id, nome: c.nome || 'Conta' })));
       setErro(null);
       setAtualizadoEm(new Date());
       setEstado('ok');

@@ -8,6 +8,7 @@ import { loadEntities, saveEntity } from '@/lib/crm-storage';
 import { somaPor, round2, hojeISO } from '@/lib/money';
 import { toast } from '@/lib/toast';
 import { consumirAtalho, lerAtalhos } from '@/lib/atalho-da-url';
+import { contasParaEscolher } from '@/lib/contas-bancarias-regras';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -151,6 +152,8 @@ export default function TransferenciasPage() {
   const [valor, setValor] = useState(0);
   const [data, setData] = useState(hojeISO());
   const [descricao, setDescricao] = useState('');
+  // Nº do cheque, quando a transferência é feita com cheque (06/11/2026).
+  const [chequeNumero, setChequeNumero] = useState('');
   // Entre moedas (05/11/2026, E6): câmbio com a origem dele, e a tarifa do banco.
   const [cambio, setCambio] = useState(0);
   const [cambioCarimbo, setCambioCarimbo] = useState<CarimboDoCambio | null>(null);
@@ -202,6 +205,7 @@ export default function TransferenciasPage() {
     setValor(0);
     setData(hojeISO());
     setDescricao('');
+    setChequeNumero('');
     setCambio(0);
     setCambioCarimbo(null);
     setTarifa(0);
@@ -244,6 +248,7 @@ export default function TransferenciasPage() {
       valor: round2(valor),
       data,
       descricao,
+      ...(chequeNumero.trim() ? { cheque_numero: chequeNumero.replace(/\D/g, '').slice(0, 20) } : {}),
       moeda_origem: moedaOrigem,
       moeda_destino: moedaDestino,
       tarifa: round2(tarifa),
@@ -388,6 +393,9 @@ export default function TransferenciasPage() {
             <ArrowRight aria-hidden="true" className="size-3 shrink-0 text-[var(--fin-text-3)]" />
             <span className="min-w-0 truncate">{nomeDaConta(item.conta_destino_nome)}</span>
           </span>
+          {(item as TransferenciaComMoeda & { cheque_numero?: string }).cheque_numero ? (
+            <span className="fin-t-caption tabular-nums text-[var(--fin-text-3)]">Cheque nº {(item as TransferenciaComMoeda & { cheque_numero?: string }).cheque_numero}</span>
+          ) : null}
           {item.descricao ? (
             <span className="fin-t-caption truncate text-[var(--fin-text-3)]">{item.descricao}</span>
           ) : null}
@@ -729,7 +737,7 @@ export default function TransferenciasPage() {
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {contas.map(c => (
+                  {contasParaEscolher(contas, contaOrigemId).map(c => (
                     <SelectItem key={c.id} value={c.id} className="fin-t-body">
                       <span className="flex w-full items-baseline justify-between gap-[var(--fin-s-3)]">
                         <span className="min-w-0 truncate">{c.nome}</span>
@@ -774,7 +782,7 @@ export default function TransferenciasPage() {
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {contas.filter(c => c.id !== contaOrigemId).map(c => (
+                  {contasParaEscolher(contas, contaDestinoId).filter(c => c.id !== contaOrigemId).map(c => (
                     <SelectItem key={c.id} value={c.id} className="fin-t-body">
                       <span className="flex w-full items-baseline justify-between gap-[var(--fin-s-3)]">
                         <span className="min-w-0 truncate">{c.nome}</span>
@@ -827,6 +835,23 @@ export default function TransferenciasPage() {
                   setData(e.target.value);
                   setSujo(true);
                 }}
+                className={`${CONTROLE_FORMULARIO} tabular-nums`}
+              />
+            )}
+          </Field>
+
+          <Field rotulo="Nº do cheque" ajuda="Só se a transferência foi feita com cheque. Aparece no extrato.">
+            {a => (
+              <Input
+                {...a}
+                value={chequeNumero}
+                inputMode="numeric"
+                maxLength={20}
+                onChange={e => {
+                  setChequeNumero(e.target.value.replace(/\D/g, ''));
+                  setSujo(true);
+                }}
+                placeholder="000123"
                 className={`${CONTROLE_FORMULARIO} tabular-nums`}
               />
             )}

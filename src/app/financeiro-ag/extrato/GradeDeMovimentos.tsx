@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronsUpDown, Lock } from 'lucide-react';
 
 import type {
   AgrupamentoDoExtrato, GrupoDoExtrato, MovimentoCaixa, OrdemDoExtrato, OrigemDoMovimento,
@@ -29,7 +29,7 @@ export const ROTULO_DA_ORIGEM: Record<OrigemDoMovimento, string> = {
 
 export type ColunaId =
   | 'data' | 'conta' | 'numero' | 'venda' | 'descricao' | 'documento' | 'pessoa' | 'cpf'
-  | 'informacoes' | 'forma' | 'cartao' | 'moeda' | 'movimento' | 'valor' | 'saldo';
+  | 'informacoes' | 'forma' | 'cartao' | 'moeda' | 'movimento' | 'valor' | 'saldo' | 'fechado';
 
 export interface DefinicaoDeColuna {
   id: ColunaId;
@@ -56,6 +56,7 @@ export const COLUNAS: Record<ColunaId, DefinicaoDeColuna> = {
   movimento: { id: 'movimento', cabecalho: 'Movimento', largura: 'min-w-[150px]' },
   valor: { id: 'valor', cabecalho: 'Valor', ordem: 'valor', direita: true, largura: 'min-w-[120px]' },
   saldo: { id: 'saldo', cabecalho: 'Saldo', direita: true, largura: 'min-w-[128px]' },
+  fechado: { id: 'fechado', cabecalho: 'Fechado', largura: 'min-w-[88px]' },
 };
 
 function Valor({ v, forte = false }: { v: number; forte?: boolean }) {
@@ -117,6 +118,9 @@ function celula(l: MovimentoCaixa, id: ColunaId, multiConta: boolean): React.Rea
       </span>
     );
     case 'valor': return <Valor v={l.valor} />;
+    case 'fechado': return l.fechado
+      ? <span className="inline-flex items-center gap-1 whitespace-nowrap text-[var(--fin-text-2)]" title="Período fechado pelo Fechar Caixa: só muda depois de reabrir"><Lock className="size-3.5" aria-hidden="true" />Fechado</span>
+      : <Fraco>Aberto</Fraco>;
     case 'saldo': return (
       <span className="flex flex-col items-end">
         <Saldo v={l.saldo_total} />

@@ -19,6 +19,7 @@ import {
   ROTULO_DO_TIPO, rotuloDoDiaDaRegua,
 } from '@/lib/cobranca/regras-telas';
 import { loadEntities } from '@/lib/crm-storage';
+import { contaBancariaAtiva } from '@/lib/contas-bancarias-regras';
 import type { ContaBancaria } from '@/lib/crm-types';
 import { num } from '@/lib/money';
 import { cn } from '@/lib/utils';
@@ -126,7 +127,8 @@ export default function ConfigCobrancaPage() {
 
   React.useEffect(() => {
     void carregar();
-    loadEntities<ContaBancaria>('contas-bancarias').then(l => setContas(l.map(c => ({ id: c.id, nome: c.nome || 'Conta' })))).catch(() => setContas([]));
+    // Conta desativada some da escolha (06/11/2026).
+    loadEntities<ContaBancaria & { ativo?: unknown }>('contas-bancarias').then(l => setContas(l.filter(contaBancariaAtiva).map(c => ({ id: c.id, nome: c.nome || 'Conta' })))).catch(() => setContas([]));
     fetch('/api/agencia').then(r => (r.ok ? r.json() : null)).then((a: { nome_fantasia?: string; razao_social?: string } | null) => setAgencia(a?.nome_fantasia || a?.razao_social || '')).catch(() => undefined);
   }, [carregar]);
 

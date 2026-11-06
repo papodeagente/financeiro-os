@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Check, Copy, Link2, TriangleAlert } from 'lucide-react';
 import type { ContaBancaria } from '@/lib/crm-types';
 import { loadEntities } from '@/lib/crm-storage';
+import { contaBancariaAtiva } from '@/lib/contas-bancarias-regras';
 import { PageHeader } from '@/components/fin/PageHeader';
 import { DataState } from '@/components/fin/DataState';
 import { toast } from '@/lib/toast';
@@ -58,7 +59,8 @@ export default function PlataformasPage() {
         loadEntities<ContaBancaria>('contas-bancarias').catch(() => []),
       ]);
       setDados(r);
-      setContas(cb);
+      // Conta desativada some da escolha (06/11/2026).
+      setContas(cb.filter(c => contaBancariaAtiva(c as { ativo?: unknown })));
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Não foi possível carregar');
     } finally {
