@@ -12,6 +12,7 @@ import { loadEntities } from '@/lib/crm-storage';
 import { toast } from '@/lib/toast';
 import type { TituloTabela } from '@/lib/baixa-calculo';
 import { rotuloDaForma } from '@/lib/formas-pagamento';
+import { descreverMeio, type MeioDoPagamento } from '@/lib/baixa-meio';
 
 type Linha = {
   id: string;
@@ -29,6 +30,8 @@ type Linha = {
   motivo: string | null;
   estornada: boolean;
   lote_id: string | null;
+  /** Cheque ou cartão informado na liquidação (06/11/2026). */
+  meio?: MeioDoPagamento;
 };
 
 const ORIGEM: Record<string, string> = {
@@ -133,6 +136,7 @@ export function HistoricoDeBaixas({
                     {' · '}
                     {l.conta_bancaria_id ? contas[l.conta_bancaria_id] ?? 'Conta' : 'Caixa Geral'}
                     {l.forma ? ` · ${rotuloDaForma(l.forma)}` : ''}
+                    {descreverMeio(l.meio) ? ` · ${descreverMeio(l.meio)}` : ''}
                   </p>
                   <p className="fin-t-caption text-[var(--fin-text-2)]">
                     {ORIGEM[l.origem] ?? l.origem}

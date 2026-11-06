@@ -5,10 +5,17 @@ import { TriangleAlert } from 'lucide-react';
 
 import type { LinhaDeConta } from '@/lib/contas-pagar-receber';
 import type { ItemBaixa, ResultadoItem } from '@/lib/baixas-servidor';
+import { descreverMeio, formaEhCartao, formaEhCheque, formasDoLote } from '@/lib/baixa-meio';
+import { formatarCambio, formatarNaMoeda, rotuloDaVariacao, type CarimboDoCambio } from '@/lib/cambio';
+import { contasParaEscolher } from '@/lib/contas-bancarias-regras';
+import { loadEntities } from '@/lib/crm-storage';
+import { detalheDaForma, formaDoValor } from '@/lib/formas-pagamento';
 import { hojeISO, round2 } from '@/lib/money';
 import { toast } from '@/lib/toast';
 import { cn, formatBRL, generateId } from '@/lib/utils';
+import { CampoCambio } from '@/components/fin/CampoCambio';
 import { RecordSheet } from '@/components/fin/RecordSheet';
+import { useFormasDePagamento } from '@/components/fin/useFormasDePagamento';
 import { Input } from '@/components/ui/input';
 import { oferecerAprovacao, type PedidoDeAprovacao } from './aprovacao';
 import { CAMPO, SELECT, Rotulo, ListaDaPrevia } from './pecas';
@@ -23,6 +30,12 @@ import { CAMPO, SELECT, Rotulo, ListaDaPrevia } from './pecas';
  *      (`esperado`): se algo mudou no meio, nada é gravado.
  * O servidor confere direito, conta liberada, alçada e limites; fora deles
  * responde 409 com `pedir_aprovacao`, e o aviso oferece "Pedir aprovação".
+ *
+ * 06/11/2026 (E7): as formas são as da agência (Formas de pagamento), a
+ * conta bancária desativada some da escolha, cada conta em moeda estrangeira
+ * tem o próprio câmbio (o valor pago passa a ser o saldo na moeda × câmbio) e
+ * cheque/cartão guardam o número do cheque ou os 4 últimos dígitos e a
+ * autorização — nunca o número completo do cartão.
  */
 
 type Previa = {
@@ -32,16 +45,11 @@ type Previa = {
   removidas: Array<{ linha: LinhaDeConta; motivo: string }>;
 };
 
-const FORMAS = [
-  { valor: '', rotulo: 'Não informar' },
-  { valor: 'PIX', rotulo: 'Pix' },
-  { valor: 'TED', rotulo: 'Transferência (TED)' },
-  { valor: 'BOLETO', rotulo: 'Boleto' },
-  { valor: 'CARTAO', rotulo: 'Cartão' },
-  { valor: 'DINHEIRO', rotulo: 'Dinheiro' },
-  { valor: 'CHEQUE', rotulo: 'Cheque' },
-  { valor: 'DEPOSITO', rotulo: 'Depósito' },
-];
+type ContaDoLote = { id: string; nome: string; moeda?: string; ativo?: unknown };
+type CambioDoTitulo = { valor: number; carimbo: CarimboDoCambio | null };
+
+/** Só algarismos, no máximo `max` (o campo dos dígitos do cartão nunca aceita mais que 4). */
+const algarismos = (v: string, max: number) => v.replace(/\D/g, '').slice(0, max);
 
 async function pedirPrevia(itens: ItemBaixa[]): Promise<{ itens: ResultadoItem[]; porteiro: Previa['porteiro'] }> {
   const r = await fetch('/api/baixas', {
@@ -66,6 +74,12 @@ export function LiquidarEmLote({
   const [data, setData] = React.useState(hojeISO());
   const [contaId, setContaId] = React.useState('');
   const [forma, setForma] = React.useState('');
+  const [cheque, setCheque] = React.useState('');
+  const [ultimos4, setUltimos4] = React.useState('');
+  const [autorizacao, setAutorizacao] = React.useState('');
+  const [cambios, setCambios] = React.useState<Record<string, CambioDoTitulo>>({});
+  const [contasLidas, setContasLidas] = React.useState<ContaDoLote[] | null>(null);
+  const todasAsFormas = useFormasDePagamento();
   const [politica, setPolitica] = React.useState(true);
   const [previa, setPrevia] = React.useState<Previa | null>(null);
   const [erro, setErro] = React.useState<string | null>(null);
@@ -88,21 +102,71 @@ export function LiquidarEmLote({
   React.useEffect(() => {
     if (!aberto) return;
     setData(hojeISO()); setContaId(''); setForma(''); setPolitica(true); setPrevia(null); setErro(null);
+    setCheque(''); setUltimos4(''); setAutorizacao(''); setCambios({});
   }, [aberto]);
+
+  // Contas bancárias com moeda e situação (a desativada some da escolha).
+  React.useEffect(() => {
+    if (!aberto) return;
+    let vivo = true;
+    loadEntities<ContaDoLote>('contas-bancarias')
+      .then(l => { if (vivo) setContasLidas(l.map(c => ({ id: c.id, nome: c.nome || 'Conta', moeda: c.moeda, ativo: c.ativo }))); })
+      .catch(() => { if (vivo) setContasLidas(null); });
+    return () => { vivo = false; };
+  }, [aberto]);
+  const contasDaEscolha = React.useMemo(
+    () => contasParaEscolher<ContaDoLote>(contasLidas ?? contas, contaId || null),
+    [contasLidas, contas, contaId],
+  );
+
+  const sentidos = React.useMemo(
+    () => new Set<'pagar' | 'receber'>(elegiveis.map(l => l.tipo)),
+    [elegiveis],
+  );
+  const formasDaEscolha = React.useMemo(() => formasDoLote(todasAsFormas, sentidos), [todasAsFormas, sentidos]);
+  const formaEscolhida = formaDoValor(forma, todasAsFormas);
+  const ehCheque = formaEhCheque(forma);
+  const ehCartao = formaEhCartao(forma);
+  const emMoeda = React.useMemo(() => elegiveis.filter(l => l.moeda && l.moeda !== 'BRL'), [elegiveis]);
+  const moedaDaConta = (contasLidas ?? []).find(c => c.id === contaId)?.moeda;
+  const contaEmMoeda = Boolean(moedaDaConta && moedaDaConta !== 'BRL');
+  // O que a prévia e a gravação levam de cheque/cartão (só o que vale para a forma).
+  const meio = React.useMemo(() => ({
+    ...(ehCheque && cheque ? { cheque_numero: cheque } : {}),
+    ...(ehCartao && ultimos4 ? { cartao_ultimos4: ultimos4 } : {}),
+    ...(ehCartao && autorizacao.trim() ? { cartao_autorizacao: autorizacao.trim() } : {}),
+  }), [ehCheque, ehCartao, cheque, ultimos4, autorizacao]);
+
+  function escolherForma(v: string) {
+    setForma(v);
+    // A conta padrão da forma entra quando a pessoa ainda não escolheu uma.
+    const f = formaDoValor(v, todasAsFormas);
+    if (!contaId && f?.conta_bancaria_id && contasDaEscolha.some(c => c.id === f.conta_bancaria_id)) setContaId(f.conta_bancaria_id);
+  }
 
   React.useEffect(() => {
     if (!aberto || elegiveis.length === 0 || !/^\d{4}-\d{2}-\d{2}$/.test(data)) { setPrevia(null); return; }
     let vivo = true;
-    const montar = (ls: LinhaDeConta[], sugeridos?: Map<string, ResultadoItem['encargos_sugeridos']>): ItemBaixa[] => ls.map(l => {
+    const montar = (
+      ls: LinhaDeConta[], sugeridos?: Map<string, ResultadoItem['encargos_sugeridos']>, saldosNaMoeda?: Map<string, number>,
+    ): ItemBaixa[] => ls.map(l => {
       const s = sugeridos?.get(l.chave);
       const juros = s ? s.juros : 0;
       const multa = s ? s.multa : 0;
       const desconto = s ? s.desconto_antecipacao : 0;
+      const c = cambios[l.chave];
+      const comCambio = Boolean(c && c.valor > 0 && l.moeda && l.moeda !== 'BRL');
+      // Com câmbio, quita o que falta NA MOEDA pelo câmbio do dia; a
+      // diferença para o câmbio lançado vira variação cambial no servidor.
+      const naMoeda = comCambio ? saldosNaMoeda?.get(l.chave) : undefined;
+      const principal = naMoeda !== undefined ? round2(naMoeda * c!.valor) : l.saldo;
       return {
         titulo_tabela: l.tabela, titulo_id: l.id, data,
         // Conta já paga em parte continua na mesma conta bancária das parcelas anteriores.
         conta_bancaria_id: l.parcial ? null : contaId || null,
-        forma, valor: round2(l.saldo + juros + multa - desconto), juros, multa, desconto,
+        forma, valor: round2(principal + juros + multa - desconto), juros, multa, desconto,
+        ...(comCambio ? { cambio: c!.valor, cambio_carimbo: c!.carimbo } : {}),
+        ...meio,
       };
     });
     const t = setTimeout(async () => {
@@ -122,7 +186,12 @@ export function LiquidarEmLote({
           return;
         }
         const sugeridos = new Map(restantes.map(l => [l.chave, primeira.itens[elegiveis.indexOf(l)].encargos_sugeridos]));
-        const itens = montar(restantes, politica ? sugeridos : undefined);
+        const saldosNaMoeda = new Map<string, number>();
+        for (const l of restantes) {
+          const cb = primeira.itens[elegiveis.indexOf(l)].cambio;
+          if (cb) saldosNaMoeda.set(l.chave, cb.saldo_moeda);
+        }
+        const itens = montar(restantes, politica ? sugeridos : undefined, saldosNaMoeda);
         const final = await pedirPrevia(itens);
         if (!vivo) return;
         setPrevia({ itens, resultado: final.itens, porteiro: final.porteiro, removidas });
@@ -135,7 +204,7 @@ export function LiquidarEmLote({
       }
     }, 250);
     return () => { vivo = false; clearTimeout(t); };
-  }, [aberto, elegiveis, data, contaId, forma, politica]);
+  }, [aberto, elegiveis, data, contaId, forma, politica, cambios, meio]);
 
   async function gravar() {
     if (!previa || previa.itens.length === 0 || gravando) return;
@@ -210,15 +279,98 @@ export function LiquidarEmLote({
           <Rotulo texto="Conta bancária">
             <select value={contaId} onChange={e => setContaId(e.target.value)} className={SELECT}>
               <option value="">A prevista em cada conta</option>
-              {contas.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              {contasDaEscolha.map(c => (
+                <option key={c.id} value={c.id}>{c.nome}{c.moeda && c.moeda !== 'BRL' ? ` (${c.moeda})` : ''}</option>
+              ))}
             </select>
           </Rotulo>
-          <Rotulo texto="Forma">
-            <select value={forma} onChange={e => setForma(e.target.value)} className={SELECT}>
-              {FORMAS.map(f => <option key={f.valor} value={f.valor}>{f.rotulo}</option>)}
+          <Rotulo texto="Forma" ajuda={formaEscolhida ? detalheDaForma(formaEscolhida) || undefined : undefined}>
+            <select value={forma} onChange={e => escolherForma(e.target.value)} className={SELECT}>
+              <option value="">Não informar</option>
+              {formasDaEscolha.map(f => <option key={f.codigo} value={f.codigo}>{f.nome}</option>)}
             </select>
           </Rotulo>
         </div>
+
+        {ehCheque ? (
+          <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:grid-cols-3">
+            <Rotulo texto="Nº do cheque" ajuda={elegiveis.length > 1 ? 'Um cheque para todas as contas da lista.' : undefined}>
+              <Input
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={12}
+                value={cheque}
+                onChange={e => setCheque(algarismos(e.target.value, 12))}
+                placeholder="000123"
+                className={cn(CAMPO, 'tabular-nums')}
+              />
+            </Rotulo>
+          </div>
+        ) : null}
+        {ehCartao ? (
+          <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:grid-cols-3">
+            <Rotulo texto="Final do cartão" ajuda="Só os 4 últimos dígitos.">
+              <Input
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={4}
+                value={ultimos4}
+                onChange={e => setUltimos4(algarismos(e.target.value, 4))}
+                placeholder="1234"
+                aria-describedby="lote-cartao-aviso"
+                className={cn(CAMPO, 'tabular-nums')}
+              />
+            </Rotulo>
+            <Rotulo texto="Autorização" ajuda="O código do comprovante.">
+              <Input
+                autoComplete="off"
+                maxLength={20}
+                value={autorizacao}
+                onChange={e => setAutorizacao(e.target.value.replace(/[^0-9A-Za-z]/g, '').slice(0, 20))}
+                placeholder="A1B2C3"
+                className={cn(CAMPO, 'uppercase tabular-nums')}
+              />
+            </Rotulo>
+            <p id="lote-cartao-aviso" className="fin-t-caption self-end text-[var(--fin-text-3)] sm:pb-[var(--fin-s-2)]">
+              O número completo do cartão nunca é pedido nem guardado.
+            </p>
+          </div>
+        ) : null}
+
+        {emMoeda.length > 0 ? (
+          <fieldset className="flex flex-col gap-[var(--fin-s-3)] rounded-[var(--fin-r-md)] border border-[var(--fin-border)] p-[var(--fin-s-3)]">
+            <legend className="px-1 fin-t-body-strong text-[var(--fin-text)]">Câmbio de cada conta em moeda</legend>
+            <p className="fin-t-caption text-[var(--fin-text-2)]">
+              {contaEmMoeda
+                ? `A conta bancária é em ${moedaDaConta}: informe o câmbio de cada conta.`
+                : 'Com o câmbio do dia, a conta é quitada pelo que falta na moeda e a diferença para o câmbio lançado vira variação cambial. Sem câmbio, ela é liquidada pelo saldo em reais, como sempre.'}
+            </p>
+            <ul className="flex flex-col divide-y divide-[var(--fin-border)]">
+              {emMoeda.map(l => {
+                const c = cambios[l.chave];
+                return (
+                  <li key={l.chave} className="grid grid-cols-1 gap-[var(--fin-s-2)] py-[var(--fin-s-3)] first:pt-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+                    <div className="min-w-0">
+                      <p className="truncate fin-t-body-strong text-[var(--fin-text)]">{l.pessoa || 'Sem nome'}</p>
+                      <p className="truncate fin-t-caption text-[var(--fin-text-2)]">{l.descricao}</p>
+                      <p className="fin-t-caption tabular-nums text-[var(--fin-text-3)]">Em aberto {formatBRL(l.saldo)} · {l.moeda}</p>
+                    </div>
+                    <CampoCambio
+                      moeda={l.moeda}
+                      valor={c?.valor ?? 0}
+                      carimbo={c?.carimbo ?? null}
+                      lado={l.tipo === 'receber' ? 'compra' : 'venda'}
+                      obrigatorio={contaEmMoeda}
+                      rotulo={`Câmbio (${l.moeda})`}
+                      ajuda={`Quantos reais vale 1 ${l.moeda} neste pagamento.`}
+                      onChange={(v, k) => setCambios(atual => ({ ...atual, [l.chave]: { valor: v, carimbo: k } }))}
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+          </fieldset>
+        ) : null}
         <label className="inline-flex min-h-11 items-center gap-[var(--fin-s-2)] fin-t-body text-[var(--fin-text-2)] lg:min-h-9">
           <input type="checkbox" checked={politica} onChange={e => setPolitica(e.target.checked)} className="size-4 accent-[var(--fin-accent)]" />
           Calcular juros, multa e desconto pela regra da agência
@@ -245,6 +397,10 @@ export function LiquidarEmLote({
               ok: true,
               valor: r.plano.valor,
               nota: [
+                r.cambio ? `${formatarNaMoeda(r.cambio.variacao.valor_moeda, r.cambio.moeda_titulo)} a ${formatarCambio(r.cambio.variacao.cambio_pago)}` : '',
+                r.cambio && r.cambio.variacao.resultado !== 0
+                  ? `${rotuloDaVariacao(r.cambio.variacao.resultado).toLowerCase()} de ${formatBRL(Math.abs(r.cambio.variacao.resultado))}`
+                  : '',
                 enc > 0 ? `inclui ${formatBRL(enc)} de juros e multa` : enc < 0 ? `com ${formatBRL(-enc)} de desconto` : '',
                 r.plano.saldo_depois > 0 ? `fica ${formatBRL(r.plano.saldo_depois)} em aberto` : r.titulo_tabela === 'contas_pagar' ? 'fica paga' : 'fica recebida',
               ].filter(Boolean).join(' · '),
@@ -252,6 +408,11 @@ export function LiquidarEmLote({
           })}
           fora={foraDaLista.map(f => ({ chave: f.linha.chave, titulo: f.linha.pessoa || 'Sem nome', detalhe: f.linha.descricao, motivo: f.motivo }))}
         />
+        {descreverMeio(meio) ? (
+          <p className="fin-t-caption text-[var(--fin-text-2)]">
+            Fica registrado em cada baixa: {descreverMeio(meio)}.
+          </p>
+        ) : null}
         {elegiveis.some(l => l.parcial) && contaId ? (
           <p className={cn('fin-t-caption text-[var(--fin-text-3)]')}>
             Contas já pagas em parte continuam na conta bancária das parcelas anteriores.

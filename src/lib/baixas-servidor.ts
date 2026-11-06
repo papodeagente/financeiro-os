@@ -29,6 +29,8 @@ import {
   type TratamentoDiferenca,
 } from './baixa-calculo';
 import { mensagemPeriodoFechado } from './periodo-fechado';
+import { ErroDoMeio, lerMeioDoPagamento, recusaDaForma, type MeioDoPagamento } from './baixa-meio';
+import type { FormaPagamento } from './formas-pagamento';
 import {
   cambioDaLiquidacao, lerCarimbo, moedaDe, round4, valorNaMoedaDoTitulo,
   type CarimboDoCambio, type CodigoMoeda, type VariacaoCambial,
@@ -107,6 +109,14 @@ export interface ItemBaixa {
   cambio?: number;
   /** De onde veio o câmbio (sugestão escolhida ou digitado). */
   cambio_carimbo?: unknown;
+  /**
+   * Cheque e cartão (06/11/2026, E7): número do cheque (forma cheque);
+   * 4 últimos dígitos e autorização (forma cartão). O número completo do
+   * cartão é recusado. Ficam em baixas.dados.meio.
+   */
+  cheque_numero?: string;
+  cartao_ultimos4?: string;
+  cartao_autorizacao?: string;
 }
 
 /** O que a liquidação fez com o câmbio (prévia e gravação). */
@@ -144,6 +154,8 @@ export interface ResultadoItem {
   ja_existia?: boolean;
   /** Presente quando a conta é em moeda e veio o câmbio do pagamento. */
   cambio?: CambioDaBaixa;
+  /** Cheque ou cartão informado (06/11/2026). */
+  meio?: MeioDoPagamento;
 }
 
 const CAMPO = { contas_receber: 'valor_recebido', contas_pagar: 'valor_pago' } as const;
@@ -287,6 +299,23 @@ export async function registrarBaixas(
 
   const resultados: ResultadoItem[] = new Array(itens.length);
   const assinaturaPartes: unknown[] = [];
+  // Formas da agência (06/11/2026, E7): a liquidação pela tela (uma conta ou
+  // lote) só aceita forma ligada e do sentido certo. Os caminhos automáticos
+  // (conciliação, cobrança, plataformas) gravam a forma como sempre.
+  const conferirForma = ctx.origem === 'tela' || ctx.origem === 'lote';
+  let formasDaAgencia: Promise<FormaPagamento[]> | null = null;
+  const formas = () => {
+    // Sem a tabela de formas (banco antigo), valem as de sempre. Perguntar
+    // antes evita um SELECT que falha e envenena a transação da baixa.
+    if (!formasDaAgencia) {
+      formasDaAgencia = (async () => {
+        const { rows } = await exec.query(`SELECT to_regclass('formas_pagamento') IS NOT NULL AS ok`);
+        if (rows[0]?.ok !== true) return (await import('./formas-pagamento')).formasDaAgencia([]);
+        return (await import('./formas-pagamento-servidor')).listarFormas(exec, ctx.tenantId);
+      })();
+    }
+    return formasDaAgencia;
+  };
 
   for (const { it, i } of ordenados) {
     if (!TABELAS_OK.has(it.titulo_tabela)) throw new ErroBaixa('Tipo de conta inválido.');
@@ -333,14 +362,39 @@ export async function registrarBaixas(
     const fechado = await periodoFechadoPara(exec, ctx.tenantId, conta, data);
     if (fechado) throw new ErroBaixa(mensagemPeriodoFechado(fechado), 423);
 
+    const campoDaForma = it.titulo_tabela === 'contas_receber' ? 'forma_recebimento' : 'forma_pagamento';
+    if (conferirForma && it.forma) {
+      const recusa = recusaDaForma(it.forma, it.titulo_tabela === 'contas_receber' ? 'receber' : 'pagar', await formas(), String(d[campoDaForma] ?? ''));
+      if (recusa) throw new ErroBaixa(recusa);
+    }
+    let meio: MeioDoPagamento;
+    try {
+      meio = lerMeioDoPagamento(it.forma, it);
+    } catch (e) {
+      if (e instanceof ErroDoMeio) throw new ErroBaixa(e.message);
+      throw e;
+    }
+    const temMeio = Object.keys(meio).length > 0;
+
     const encargos = calcularEncargos(t, data, politica);
-    const cambio = await cambioDaBaixa(exec, ctx.tenantId, it, d, t, conta);
+    // Na prévia, a conta bancária em moeda que não serve para este título vira
+    // aviso do item (o lote mostra a conta fora da lista com o motivo); na
+    // gravação continua recusando tudo, como sempre.
+    let cambio: CambioDaBaixa | null = null;
+    let erroDoCambio: string | null = null;
+    try {
+      cambio = await cambioDaBaixa(exec, ctx.tenantId, it, d, t, conta);
+    } catch (e) {
+      if (opcoes.gravar || !(e instanceof ErroBaixa)) throw e;
+      erroDoCambio = e.message;
+    }
     const plano = planoDaBaixa(t, {
       valor: it.valor, data,
       juros: it.juros, multa: it.multa, desconto: it.desconto, taxa: it.taxa,
       tratamento_diferenca: it.tratamento_diferenca,
       ...(cambio && cambio.variacao.variacao !== 0 ? { variacao_cambial: cambio.variacao.variacao } : {}),
     });
+    if (erroDoCambio) plano.erros.unshift(erroDoCambio);
 
     resultados[i] = {
       titulo_tabela: it.titulo_tabela, titulo_id: it.titulo_id,
@@ -348,6 +402,7 @@ export async function registrarBaixas(
       pessoa: String((it.titulo_tabela === 'contas_receber' ? d.cliente_nome : d.fornecedor_nome) ?? ''),
       conta_bancaria_id: conta, data, plano, encargos_sugeridos: encargos,
       ...(cambio ? { cambio } : {}),
+      ...(temMeio ? { meio } : {}),
     };
     assinaturaPartes.push([it.titulo_tabela, it.titulo_id, rows[0].v, plano.valor, plano.juros, plano.multa, plano.desconto, plano.status_depois, conta, data,
       ...(cambio ? [cambio.carimbo.valor, cambio.variacao.variacao, cambio.caixa_na_moeda] : [])]);
@@ -409,7 +464,7 @@ export async function registrarBaixas(
         paraCentavos(plano.valor), paraCentavos(plano.juros), paraCentavos(plano.multa), paraCentavos(plano.desconto),
         paraCentavos(plano.taxa), paraCentavos(plano.credito), paraCentavos(caixa), it.tratamento_diferenca ?? null,
         JSON.stringify(politica ?? null), loteId, loteId ? 'lote' : ctx.origem, ctx.usuarioId ?? null, ctx.usuarioNome ?? null,
-        it.observacao ?? null, JSON.stringify(cambio ? { cambio } : {})],
+        it.observacao ?? null, JSON.stringify({ ...(cambio ? { cambio } : {}), ...(temMeio ? { meio } : {}) })],
     );
     resultados[i].baixa_id = baixaId;
     if (plano.credito > 0) {
@@ -572,6 +627,8 @@ export interface LinhaHistorico {
   estorna: string | null;
   lote_id: string | null;
   criado_em: string;
+  /** Cheque ou cartão informado na liquidação (06/11/2026); ausente quando não houve. */
+  meio?: MeioDoPagamento;
 }
 
 export async function historicoDaConta(exec: ExecutorSQL, tenantId: string, tabela: TituloTabela, id: string): Promise<LinhaHistorico[]> {
@@ -593,7 +650,19 @@ export async function historicoDaConta(exec: ExecutorSQL, tenantId: string, tabe
     motivo: (r.motivo as string | null) ?? null, observacao: (r.observacao as string | null) ?? null,
     estornada: Boolean(r.estornada), estorna: (r.estorna_baixa_id as string | null) ?? null,
     lote_id: (r.lote_id as string | null) ?? null, criado_em: String(r.criado_txt),
+    ...meioDosDados(r.dados),
   }));
+}
+
+/** O meio (cheque/cartão) guardado em baixas.dados, só quando existe. */
+function meioDosDados(dados: unknown): { meio?: MeioDoPagamento } {
+  const m = (dados && typeof dados === 'object' ? (dados as { meio?: unknown }).meio : null) as Record<string, unknown> | null;
+  if (!m || typeof m !== 'object') return {};
+  const meio: MeioDoPagamento = {};
+  if (typeof m.cheque_numero === 'string' && m.cheque_numero) meio.cheque_numero = m.cheque_numero;
+  if (typeof m.cartao_ultimos4 === 'string' && m.cartao_ultimos4) meio.cartao_ultimos4 = m.cartao_ultimos4;
+  if (typeof m.cartao_autorizacao === 'string' && m.cartao_autorizacao) meio.cartao_autorizacao = m.cartao_autorizacao;
+  return Object.keys(meio).length ? { meio } : {};
 }
 
 /**

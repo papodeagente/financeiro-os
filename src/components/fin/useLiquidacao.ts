@@ -16,6 +16,8 @@ import {
   type TratamentoDiferenca,
 } from '@/lib/baixa-calculo';
 import { formaDoValor, opcoesDeForma, type FormaPagamento } from '@/lib/formas-pagamento';
+import { formaEhCartao, formaEhCheque } from '@/lib/baixa-meio';
+import { contasParaEscolher } from '@/lib/contas-bancarias-regras';
 import type { BlocoDeLiquidacaoProps, ContaOpcao } from './BlocoDeLiquidacao';
 import { useFormasDePagamento } from './useFormasDePagamento';
 import { cambioDaLiquidacao, moedaDe, valorNaMoedaDoTitulo, type CarimboDoCambio } from '@/lib/cambio';
@@ -54,7 +56,7 @@ export function useLiquidacao(
   /** Preenche o valor pago (o "usar o valor pelo câmbio" chama). */
   onValorPago?: (v: number) => void,
 ) {
-  const [contas, setContas] = useState<ContaOpcao[]>([]);
+  const [contas, setContas] = useState<Array<ContaOpcao & { ativo?: unknown }>>([]);
   const [politica, setPolitica] = useState<PoliticaCobranca | null>(null);
   const [alvo, setAlvo] = useState<string | null>(null);
   const [data, setData] = useState(hojeISO());
@@ -71,11 +73,15 @@ export function useLiquidacao(
   // Câmbio do pagamento, só para conta lançada em moeda (05/11/2026, E6).
   const [cambio, setCambio] = useState(0);
   const [cambioCarimbo, setCambioCarimbo] = useState<CarimboDoCambio | null>(null);
+  // Cheque e cartão (06/11/2026, E7): nunca o número completo do cartão.
+  const [cheque, setCheque] = useState('');
+  const [ultimos4, setUltimos4] = useState('');
+  const [autorizacao, setAutorizacao] = useState('');
 
   useEffect(() => {
     let vivo = true;
     loadEntities<{ id: string; nome?: string; moeda?: string }>('contas-bancarias')
-      .then(l => { if (vivo) setContas(l.map(c => ({ id: c.id, nome: c.nome || 'Conta', moeda: moedaDe(c.moeda) }))); })
+      .then(l => { if (vivo) setContas(l.map(c => ({ id: c.id, nome: c.nome || 'Conta', moeda: moedaDe(c.moeda), ativo: (c as { ativo?: unknown }).ativo }))); })
       .catch(() => undefined);
     fetch('/api/config/financeiro')
       .then(r => (r.ok ? r.json() : null))
@@ -96,6 +102,7 @@ export function useLiquidacao(
     setChave(generateId());
     setCambio(0);
     setCambioCarimbo(null);
+    setCheque(''); setUltimos4(''); setAutorizacao('');
   }
 
   const t = titulo ? paraBaixa(tabela, titulo) : null;
@@ -144,11 +151,18 @@ export function useLiquidacao(
     ? 'As parcelas desta conta entram na mesma conta bancária das anteriores.'
     : null;
   const sentido = tabela === 'contas_receber' ? 'receber' : 'pagar';
+  const tipoDoMeio = formaEhCheque(forma) ? 'cheque' as const : formaEhCartao(forma) ? 'cartao' as const : null;
+  const meio = {
+    ...(tipoDoMeio === 'cheque' && cheque ? { cheque_numero: cheque } : {}),
+    ...(tipoDoMeio === 'cartao' && ultimos4 ? { cartao_ultimos4: ultimos4 } : {}),
+    ...(tipoDoMeio === 'cartao' && autorizacao.trim() ? { cartao_autorizacao: autorizacao.trim() } : {}),
+  };
 
   const bloco: BlocoDeLiquidacaoProps = {
     sentido: tabela === 'contas_receber' ? 'recebimento' : 'pagamento',
     data, onData: setData,
-    contas, contaId, onConta: setContaEscolhida, contaTravadaMotivo,
+    // Conta desativada some da escolha (a que o título já usa continua).
+    contas: contasParaEscolher(contas, contaId), contaId, onConta: setContaEscolhida, contaTravadaMotivo,
     formas: opcoesDeForma(formas, sentido, forma),
     forma,
     // Trocar a forma volta a conta para a padrão dela (se a pessoa não
@@ -159,6 +173,12 @@ export function useLiquidacao(
     onJuros: setJuros, onMulta: setMulta, onDesconto: setDesconto,
     sugeridos, tratamento, onTratamento: setTratamento,
     plano, diferencaBruta: bruto,
+    ...(tipoDoMeio ? {
+      meio: {
+        tipo: tipoDoMeio, cheque, ultimos4, autorizacao,
+        onCheque: setCheque, onUltimos4: setUltimos4, onAutorizacao: setAutorizacao,
+      },
+    } : {}),
     ...(naMoeda ? {
       cambio: {
         moeda: naMoeda.moeda,
@@ -187,6 +207,7 @@ export function useLiquidacao(
           valor: round2(valorPago), juros: j, multa: m, desconto: ds, taxa, tratamento_diferenca: tratamento,
           ...(forma ? { forma } : {}),
           ...(naMoeda && cambio > 0 ? { cambio, cambio_carimbo: cambioCarimbo } : {}),
+          ...meio,
           ...extras,
           esperado: { status_depois: plano.status_depois, valor_baixado_depois: plano.valor_baixado_depois },
         }],
