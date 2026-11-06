@@ -212,14 +212,14 @@ export function criarColunas(opcoes: {
     { id: 'emissao', cabecalho: 'Emissão', tipo: 'data', sortable: true, prioridade: 1, valor: l => l.emissao || null },
     { id: 'liquidacao', cabecalho: 'Liquidação', tipo: 'data', sortable: true, prioridade: 1, valor: l => l.liquidacao || null },
     {
-      id: 'pessoa', cabecalho: 'Pessoa', tipo: 'texto', sortable: true, minWidth: 140,
-      render: l => <Texto valor={l.pessoa} />,
+      id: 'pessoa', cabecalho: 'Pessoa', tipo: 'texto', sortable: true, minWidth: 120,
+      render: l => <Texto valor={l.pessoa} max="max-w-[140px]" />,
     },
     {
-      id: 'descricao', cabecalho: 'Descrição', tipo: 'texto', sortable: true, minWidth: 160, prioridade: 2,
+      id: 'descricao', cabecalho: 'Descrição', tipo: 'texto', sortable: true, minWidth: 140, prioridade: 2,
       render: l => (
         <span className="flex min-w-0 items-center gap-[var(--fin-s-1)]">
-          <Texto valor={l.descricao} max="max-w-[210px]" />
+          <Texto valor={l.descricao} max="max-w-[160px]" />
           {l.rateio ? (
             <span title="Dividida entre centros de custo (rateio)" className="inline-flex shrink-0 text-[var(--fin-text-3)]">
               <Layers aria-hidden="true" className="size-3.5" />
@@ -231,7 +231,7 @@ export function criarColunas(opcoes: {
     },
     { id: 'documento', cabecalho: 'Documento', tipo: 'texto', sortable: true, prioridade: 1, render: l => <Texto valor={l.documento} max="max-w-[160px]" /> },
     { id: 'parcela', cabecalho: 'Parcela', tipo: 'texto', prioridade: 1, render: l => (l.parcela ? <span className="tabular-nums">{l.parcela}</span> : <Fraco>—</Fraco>) },
-    { id: 'categoria', cabecalho: 'Categoria', tipo: 'texto', sortable: true, prioridade: 2, minWidth: 120, render: l => <Texto valor={l.categoria} max="max-w-[160px]" /> },
+    { id: 'categoria', cabecalho: 'Categoria', tipo: 'texto', sortable: true, prioridade: 2, minWidth: 110, render: l => <Texto valor={l.categoria} max="max-w-[140px]" /> },
     { id: 'centro', cabecalho: 'Centro de custo', tipo: 'texto', sortable: true, prioridade: 1, render: l => <Texto valor={l.centro_custo} max="max-w-[160px]" /> },
     { id: 'conta', cabecalho: 'Conta bancária', tipo: 'texto', sortable: true, prioridade: 1, render: l => <Texto valor={l.conta_bancaria} max="max-w-[160px]" /> },
     { id: 'forma', cabecalho: 'Forma', tipo: 'texto', prioridade: 1, render: l => <Texto valor={l.forma} max="max-w-[120px]" /> },
@@ -244,8 +244,8 @@ export function criarColunas(opcoes: {
     },
     { id: 'fatura', cabecalho: 'Fatura Nº', tipo: 'texto', prioridade: 1, render: l => (l.fatura_numero ? <span className="tabular-nums">{l.fatura_numero}</span> : <Fraco>—</Fraco>) },
     { id: 'vendedor', cabecalho: 'Vendedor', tipo: 'texto', sortable: true, prioridade: 1, render: l => <Texto valor={l.vendedor} max="max-w-[150px]" /> },
-    { id: 'situacao', cabecalho: 'Situação', tipo: 'texto', sortable: true, minWidth: 128, render: l => <ChipDaSituacao linha={l} /> },
-    { id: 'cobranca', cabecalho: 'Cobrança', tipo: 'texto', prioridade: 2, minWidth: 128, render: l => <ChipDaCobranca linha={l} /> },
+    { id: 'situacao', cabecalho: 'Situação', tipo: 'texto', sortable: true, minWidth: 116, render: l => <ChipDaSituacao linha={l} /> },
+    { id: 'cobranca', cabecalho: 'Cobrança', tipo: 'texto', prioridade: 2, minWidth: 116, render: l => <ChipDaCobranca linha={l} /> },
     {
       id: 'valor', cabecalho: 'Valor', tipo: 'dinheiro', sortable: true, valor: l => l.valor,
       tone: l => (l.tipo === 'receber' && l.situacao !== 'cancelado' ? 'positivo' : 'neutro'),
