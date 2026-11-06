@@ -134,6 +134,22 @@ export function RelatoriosDeVendas({ abrirVenda }: { abrirVenda: (vendaId: strin
   const [crmLigado, setCrmLigado] = React.useState<boolean | null>(null);
   const podeExportar = usePodeExportar();
 
+  // Link do "Perguntar em texto" (E7): o relatório, o período, a ordem e os
+  // filtros que a resposta usou vêm no endereço. Sem parâmetro, a tela de sempre.
+  React.useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const pedido = p.get('relatorio');
+    if (!pedido || !(RELATORIOS as readonly string[]).includes(pedido)) return;
+    const data = (k: string) => (/^\d{4}-\d{2}-\d{2}$/.test(p.get(k) ?? '') ? p.get(k)! : '');
+    setRelatorio(pedido as TipoDeRelatorio);
+    setDe(data('de'));
+    setAte(data('ate'));
+    if (p.get('ordem') === 'receita') setOrdem('receita');
+    const fornecedor = (p.get('fornecedor') ?? '').slice(0, 200);
+    const vendedor = (p.get('vendedor') ?? '').slice(0, 200);
+    if (fornecedor || vendedor) setFiltros(f => ({ ...f, fornecedor, vendedor }));
+  }, []);
+
   // A busca no produto espera a pessoa parar de digitar.
   React.useEffect(() => {
     const t = setTimeout(() => setFiltros(f => (f.produto === buscaDigitada ? f : { ...f, produto: buscaDigitada })), 350);

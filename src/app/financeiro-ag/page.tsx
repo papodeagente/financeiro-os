@@ -21,6 +21,7 @@ import { Segmentado } from '@/components/fin/Segmentado';
 import { BaixaDeReceber } from './receber/BaixaDeReceber';
 import { BaixaDePagar } from './pagar/BaixaDePagar';
 import { AtrasosEPrazos } from './AtrasosEPrazos';
+import { PerguntarEmTexto } from '@/components/fin/PerguntarEmTexto';
 
 const CARTAO = 'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]';
 const LINK = 'inline-flex items-center gap-1 fin-t-caption font-medium text-[var(--fin-accent)] underline-offset-2 hover:underline';
@@ -251,6 +252,9 @@ export default function FinanceiroVisaoGeralPage() {
           ],
         }}
       />
+
+      {/* Perguntar em texto (E7): some sozinha para quem não tem financeiro nem relatórios. */}
+      <PerguntarEmTexto compacta />
 
       <DataState
         className={RITMO_DA_PAGINA}

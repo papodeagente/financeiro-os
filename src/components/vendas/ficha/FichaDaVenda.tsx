@@ -33,6 +33,8 @@ import { AbaPagamentos } from './AbaPagamentos';
 import { AbaCliente, AbaComissoes, AbaFornecedor, AbaPosicao } from './AbasDoFinanceiro';
 import { CancelamentoDaVenda } from './CancelamentoDaVenda';
 import { NotasERetencoes } from './NotasERetencoes';
+import { LidoDoVoucher } from './LidoDoVoucher';
+import type { RascunhoDoVoucher } from '@/lib/venda-voucher';
 import { CONTROLE, dataBR, LINK, Pilula, quandoBR, reais, SELECT, Total } from './comum';
 import { CampoEmpresa, useEmpresaSugerida } from '@/components/fin/CamposDeEmpresa';
 import { useEmpresas } from '@/components/fin/useEmpresas';
@@ -106,6 +108,24 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
   }, [vendaId]);
 
   React.useEffect(() => { void carregar(); }, [carregar]);
+
+  // Lançar pelo voucher (E7): /vendas/lancar?voucher=<hash> abre com o
+  // rascunho lido pela IA. Nada foi gravado; o "Salvar" é o de sempre.
+  const [lidoDoVoucher, setLidoDoVoucher] = React.useState<(Omit<RascunhoDoVoucher, 'venda'> & { arquivo: string }) | null>(null);
+  React.useEffect(() => {
+    if (!nova) return;
+    const hash = new URLSearchParams(window.location.search).get('voucher');
+    if (!hash) return;
+    setEstado('carregando');
+    void chamar<{ arquivo_nome: string; rascunho: RascunhoDoVoucher }>(`/api/vendas/voucher?hash=${encodeURIComponent(hash)}`, 'GET')
+      .then(r => {
+        setRascunho(normalizarVenda(r.rascunho.venda).venda);
+        setLidoDoVoucher({ arquivo: r.arquivo_nome, origens: r.rascunho.origens, avisos: r.rascunho.avisos, vazios: r.rascunho.vazios });
+        setSujo(true);
+      })
+      .catch(e => toast.error('Não deu para abrir o rascunho do voucher', e instanceof Error ? e.message : undefined))
+      .finally(() => setEstado('ok'));
+  }, [nova]);
   React.useEffect(() => {
     if (!nova) return;
     void chamar<{ receita: ConfigReceita }>('/api/config/vendas', 'GET').then(c => setConfig(c.receita)).catch(() => undefined);
@@ -259,6 +279,7 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
                   />
                 </div>
               ) : null}
+              {nova && lidoDoVoucher ? <LidoDoVoucher {...lidoDoVoucher} /> : null}
               <DadosDaVenda venda={venda} editavel={editavel} clientes={clientes} intermediarios={fornecedores} onMudar={mudar} />
 
               <dl aria-label="Totais da venda" className="grid grid-cols-2 gap-[var(--fin-s-4)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)] shadow-[var(--fin-e-card)] sm:grid-cols-3 lg:grid-cols-6">

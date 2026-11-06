@@ -179,7 +179,9 @@ export default function DREPage() {
         .then((c: CentroCusto[] | null) => setCentros(Array.isArray(c) ? c : []))
         .catch(() => setCentros([]));
 
-      setSelectedMonth(mesDe(hojeISO()));
+      // ?mes=AAAA-MM (link do "Perguntar em texto", E7) abre no mês pedido.
+      const mesDoEndereco = new URLSearchParams(window.location.search).get('mes') ?? '';
+      setSelectedMonth(/^\d{4}-(0[1-9]|1[0-2])$/.test(mesDoEndereco) ? mesDoEndereco : mesDe(hojeISO()));
       setMesInicial(`${hojeISO().slice(0, 4)}-01`);
       setAtualizadoEm(new Date());
     } catch {
