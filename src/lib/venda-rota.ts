@@ -10,7 +10,13 @@
  *   PUT  /api/vendas/completa/[id]       { venda } → FichaDaVenda
  *   POST /api/vendas/completa/[id]/fechar  { confirmar? } → FichaDaVenda | 409 { codigo, detalhes }
  *   POST /api/vendas/completa/[id]/reabrir { motivo }     → FichaDaVenda
- *   GET/PUT /api/config/vendas  { receita: { componentes: { COMISSAO: true, ... } } }
+ *   GET/PUT /api/config/vendas  { receita: { componentes: { COMISSAO: true, ... } }, recibo: { texto, complemento } }
+ *        (PUT com só uma das partes mantém a outra; E7)
+ *   GET  /api/vendas/completa/[id]/recibo?pagante=<chave> → { recibo: ReciboDaVenda, pagantes } | 422 { error, pagantes }
+ *        (E7; quem vê a venda vê o recibo; regras em recibo-da-venda.ts)
+ *   GET  /api/vendas/completa/[id]/fiscal → FiscalDaVenda (notas da venda e retenção na fonte; precisa ver o financeiro da venda)
+ *   GET  /api/faturas/[id]/recibo → ReciboDaFatura | 422 { error }   (recibo consolidado da fatura ao cliente)
+ *   Telas: /vendas/[id]/recibo?pagante=, /financeiro-ag/faturas/[id]/recibo
  * Erros: { error, codigo, detalhes? } com 400 (dados), 403, 404, 409 (fechada,
  * não fecha, confirmar), 423 (período fechado).
  */

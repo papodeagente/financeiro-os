@@ -32,6 +32,7 @@ import { AbaProdutos, type PessoaDaLista } from './AbaProdutos';
 import { AbaPagamentos } from './AbaPagamentos';
 import { AbaCliente, AbaComissoes, AbaFornecedor, AbaPosicao } from './AbasDoFinanceiro';
 import { CancelamentoDaVenda } from './CancelamentoDaVenda';
+import { NotasERetencoes } from './NotasERetencoes';
 import { CONTROLE, dataBR, LINK, Pilula, quandoBR, reais, SELECT, Total } from './comum';
 
 type Aba = 'produtos' | 'pagamentos' | 'cliente' | 'fornecedor' | 'comissoes' | 'posicao';
@@ -210,6 +211,7 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
             ...(ficha && ficha.versao_modelo === 2 && ficha.permissoes.cancelar && ficha.venda.produtos.some(p => !p.cancelado_em)
               ? [{ rotulo: 'Cancelar produto ou passageiro', onClick: () => (sujo ? toast.warning('Salve antes de cancelar', 'Há mudanças que ainda não foram salvas.') : setCancelando(true)) }]
               : []),
+            { rotulo: 'Recibo', href: `/vendas/${encodeURIComponent(vendaId)}/recibo` },
             { rotulo: 'Nota de débito', href: `/vendas/${encodeURIComponent(vendaId)}/nota-de-debito` },
             { rotulo: 'Ver na tela anterior', href: `/vendas/${encodeURIComponent(vendaId)}` },
           ] : undefined}
@@ -302,7 +304,12 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
                     Há mudanças ainda não salvas. Esta aba mostra a venda como está gravada.
                   </p>
                 ) : null}
-                {ficha && aba === 'cliente' ? <div className="mt-[var(--fin-s-3)]"><AbaCliente ficha={ficha} /></div> : null}
+                {ficha && aba === 'cliente' ? (
+                  <div className="mt-[var(--fin-s-3)] flex flex-col gap-[var(--fin-s-4)]">
+                    <AbaCliente ficha={ficha} />
+                    {ficha.permissoes.ver_financeiro && vendaId ? <NotasERetencoes vendaId={vendaId} /> : null}
+                  </div>
+                ) : null}
                 {ficha && aba === 'fornecedor' ? <div className="mt-[var(--fin-s-3)]"><AbaFornecedor ficha={ficha} /></div> : null}
                 {ficha && aba === 'comissoes' ? <div className="mt-[var(--fin-s-3)]"><AbaComissoes ficha={ficha} /></div> : null}
                 {ficha && aba === 'posicao' ? <div className="mt-[var(--fin-s-3)]"><AbaPosicao ficha={ficha} /></div> : null}

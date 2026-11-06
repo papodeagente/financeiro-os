@@ -134,6 +134,8 @@ export function FichaDaFatura({ faturaId }: { faturaId: string }) {
     if (fechada && perm?.reabrir && !paga && !parcial) secundarias.push({ rotulo: 'Reabrir', onClick: () => abrir({ tipo: 'reabrir' }) });
     if (parcial && perm?.editar) secundarias.push({ rotulo: 'Levar saldo para a próxima', onClick: () => abrir({ tipo: 'saldo' }) });
     secundarias.push({ rotulo: 'Imprimir', onClick: () => abrir({ tipo: 'imprimir' }) });
+    // Recibo consolidado (E7): cada recebimento da fatura e o total; parcial diz quanto falta.
+    if (paga || parcial) secundarias.push({ rotulo: parcial ? 'Recibo do que já foi pago' : 'Recibo', href: `/financeiro-ag/faturas/${encodeURIComponent(f.id)}/recibo` });
     if (perm?.exportar) {
       secundarias.push({ rotulo: 'Exportar CSV', href: apiFaturas.urlExportar(f.id, 'csv') });
       secundarias.push({ rotulo: 'Exportar Excel', href: apiFaturas.urlExportar(f.id, 'xlsx') });
