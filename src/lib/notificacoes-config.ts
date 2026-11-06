@@ -5,12 +5,23 @@ export const TIPOS_NOTIFICACAO = [
   { tipo: 'PROPOSTA_LEAD', label: 'Novos interessados', descricao: 'Quando alguém deixa seus dados em uma proposta.' },
   { tipo: 'VENDA_VENDEDOR_NAO_CADASTRADO', label: 'Pendências de vendedores', descricao: 'Vendas recebidas do CRM sem vendedor cadastrado.' },
   { tipo: 'VENDA_CANCELADA_CRM', label: 'Vendas perdidas no CRM', descricao: 'Quando o CRM perde uma venda que já movimentou dinheiro, ou pede aprovação para cancelar.' },
+  // Venda completa (E5, 05/11/2026).
+  // Fatura do fornecedor (E5, parte C, 05/11/2026).
+  { tipo: 'FATURA_FORNECEDOR_PRONTA', label: 'Faturas de fornecedor', descricao: 'No dia seguinte ao corte do fornecedor: a fatura pronta para montar (ou montada sozinha, se a regra pedir).' },
+  { tipo: 'VENDA_FECHADA_MUDANCA_CRM', label: 'Mudanças do CRM em venda fechada', descricao: 'Quando o CRM muda uma venda que já está fechada no financeiro: a mudança espera alguém reabrir a venda.' },
+  // Faturas ao cliente (E5, parte B, 05/11/2026): resposta do cliente no portal.
+  { tipo: 'FATURA_CONTESTADA', label: 'Faturas contestadas pelo cliente', descricao: 'Quando o cliente contesta um item da fatura no portal.' },
+  { tipo: 'FATURA_APROVADA', label: 'Faturas aprovadas pelo cliente', descricao: 'Quando o cliente confere e aprova a fatura no portal.' },
+  { tipo: 'VENDA_CANCELADA_EM_FATURA', label: 'Venda cancelada já faturada', descricao: 'Quando uma venda é cancelada com itens numa fatura já fechada: falta a nota de crédito.' },
   // Pedidos de aprovação do financeiro (05/11/2026).
   { tipo: 'APROVACAO_PEDIDA', label: 'Pedidos de aprovação', descricao: 'Quando alguém pede aprovação para pagar, dar desconto ou mudar data.' },
   { tipo: 'APROVACAO_DECIDIDA', label: 'Respostas de aprovação', descricao: 'Quando um pedido seu é aprovado ou recusado.' },
   // Avisos de vencimento (05/11/2026), ligados em Configurações › Financeiro.
   { tipo: 'CONTAS_A_PAGAR_VENCENDO', label: 'Contas a pagar vencendo', descricao: 'De manhã, as contas a pagar que vencem hoje (e, se ligado, amanhã).' },
   { tipo: 'CONTAS_A_RECEBER_ATRASADAS', label: 'Contas a receber em atraso', descricao: 'De manhã, quantas contas a receber estão em atraso e quanto somam.' },
+  // Crédito do cliente e reembolsos (E5, parte D).
+  { tipo: 'CREDITO_CLIENTE_VENCENDO', label: 'Crédito do cliente vencendo', descricao: 'Um aviso por crédito, 30 dias antes de ele vencer sem uso.' },
+  { tipo: 'REEMBOLSO_NO_PRAZO', label: 'Reembolsos no prazo', descricao: 'Quando um reembolso ao cliente ou do fornecedor chega perto do prazo sem ser pago.' },
   // Extrato automático do banco (06/11/2026): leitura parada e certificado vencendo.
   { tipo: 'EXTRATO_AUTOMATICO', label: 'Extrato automático do banco', descricao: 'Quando a leitura do extrato falha seguidas vezes ou o certificado do banco está perto de vencer.' },
 ] as const;

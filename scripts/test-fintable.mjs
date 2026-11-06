@@ -102,5 +102,12 @@ eq(nomes, ['Hotel Beira Mar', 'Operadora X', 'Ana'], 'ordem no servidor: as linh
 const comMenu = desenhar({ ...CASOS.ok_completo, onLinhaDuploClique: () => {}, onLinhaMenu: () => {} });
 eq((comMenu.match(/<tr[^>]*tabindex="0"/g) ?? []).length, 3, 'duplo clique e menu: a linha recebe foco pelo teclado');
 
+const doisTotais = desenhar({ ...CASOS.ok_completo, totais: [
+  { colunaId: 'valor', valor: 1170.5, rotulo: 'Total' },
+  { colunaId: 'nome', valor: 3, rotulo: 'Total' },
+] });
+const rodape = doisTotais.slice(doisTotais.indexOf('<tfoot'));
+eq((rodape.match(/<tr/g) ?? []).length, 1, 'totais com o mesmo rótulo ficam numa linha só (relatório com várias colunas de dinheiro)');
+
 console.log(`\n${total - falhas}/${total} passaram`);
 if (falhas > 0) process.exit(1);

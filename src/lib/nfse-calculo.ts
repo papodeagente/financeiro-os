@@ -33,6 +33,16 @@ export interface EntradaCalculoNota {
   desconto_incondicionado?: number;
   /** Dedução informada à mão, quando o município exige um valor específico. */
   deducao_manual?: number | null;
+  /**
+   * O valor recebido é INTEIRO receita da agência (05/11/2026, E5).
+   *
+   * É a comissão que a operadora ou a consolidadora paga à agência: nada
+   * daquele dinheiro é repasse a fornecedor. Sem esta marca, a nota para a
+   * operadora aplicava a margem da venda do cliente sobre a comissão (uma
+   * comissão de R$ 1.500 numa venda com 20% de margem saía com base de
+   * R$ 300), subdeclarando o serviço.
+   */
+  receita_integral?: boolean;
 }
 
 export interface ResultadoCalculoNota {
@@ -93,12 +103,13 @@ export function calcularNota(entrada: EntradaCalculoNota): ResultadoCalculoNota 
 
   // Fatia desta parcela dentro da venda. Sem valor de venda registrado, a
   // parcela É a referência: não dá para ratear contra um total que não existe.
+  const integral = entrada.receita_integral === true;
   const proporcao = totalVenda > 0 ? Math.min(1, divSegura(recebido, totalVenda)) : 1;
-  const margemPct = proporcaoDeMargem(totalVenda, custo);
+  const margemPct = integral ? 1 : proporcaoDeMargem(totalVenda, custo);
   const comissaoParcela = round2(recebido * margemPct);
   const repasseParcela = round2(recebido - comissaoParcela);
 
-  if (entrada.regime === 'INTERMEDIACAO') {
+  if (entrada.regime === 'INTERMEDIACAO' && !integral) {
     if (totalVenda <= 0) {
       erros.push(
         'Sem valor de venda registrado não dá para separar comissão de repasse. '
@@ -340,6 +351,8 @@ export function pendenciasParaEmitir(entrada: {
   simples_nacional?: number;
   /** 1, 2 ou 3. Exigido quando a empresa é do Simples. */
   regime_apuracao?: string;
+  /** O tomador é o fornecedor que pagou a comissão (nota para a operadora). */
+  tomador_e_fornecedor?: boolean;
 }): string[] {
   const faltas: string[] = [];
   if (!entrada.provedor) faltas.push('Escolha o emissor de nota em Configurações › Fiscal.');
@@ -386,10 +399,14 @@ export function pendenciasParaEmitir(entrada: {
   if (!String(entrada.tomador_documento || '').trim()) {
     // A pendência diz ONDE consertar. Sem isso a frase é um beco sem saída:
     // a pessoa sabe o que falta e não sabe em que tela resolver.
-    faltas.push('O cliente desta conta está sem CPF ou CNPJ, e a prefeitura exige o documento do tomador. Edite a conta e complete o cadastro do cliente pelo seletor.');
+    faltas.push(entrada.tomador_e_fornecedor
+      ? 'O fornecedor que paga esta comissão está sem CNPJ, e a prefeitura exige o documento do tomador. Complete o cadastro dele em Fornecedores.'
+      : 'O cliente desta conta está sem CPF ou CNPJ, e a prefeitura exige o documento do tomador. Edite a conta e complete o cadastro do cliente pelo seletor.');
   }
   if (!String(entrada.tomador_nome || '').trim()) {
-    faltas.push('O cliente desta venda está sem nome.');
+    faltas.push(entrada.tomador_e_fornecedor
+      ? 'O fornecedor que paga esta comissão está sem nome no cadastro.'
+      : 'O cliente desta venda está sem nome.');
   }
 
   const validade = String(entrada.certificadoValidoAte || '');

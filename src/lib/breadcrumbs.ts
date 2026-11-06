@@ -39,7 +39,10 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   '/propostas/analytics': 'Analytics',
   '/vendas': 'Vendas fechadas',
   '/vendas/nova': 'Nova venda',
+  '/vendas/lancar': 'Lançar venda',
   '/vendas/orcamentos': 'Orçamentos',
+  '/financeiro-ag/reembolsos': 'Reembolsos',
+  '/financeiro-ag/creditos': 'Crédito do cliente',
   '/voos': 'Buscar voos',
   '/hoteis': 'Buscar hotéis',
   '/destinos': 'Destinos',
@@ -56,6 +59,11 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   '/financeiro-ag/contas': 'Contas a Pagar/Receber',
   '/financeiro-ag/receber': 'Contas a receber',
   '/financeiro-ag/cobrancas': 'Cobranças',
+  '/financeiro-ag/notas/gerar': 'Gerar notas',
+  '/financeiro-ag/notas/regras': 'Regras da nota',
+  '/financeiro-ag/notas/retencoes': 'Retenções na fonte',
+  '/financeiro-ag/faturas': 'Faturas',
+  '/financeiro-ag/regras-faturamento': 'Regras de faturamento',
   '/financeiro-ag/pagar': 'Contas a pagar',
   '/financeiro-ag/plano-contas': 'Categorias',
   '/financeiro-ag/formas-pagamento': 'Formas de pagamento',
@@ -72,6 +80,12 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   '/equipe/metas': 'Metas da equipe',
   '/equipe/comissoes': 'Comissões',
   '/equipe/planos-comissao': 'Planos de comissão',
+  '/equipe/funcoes': 'Funções',
+  '/equipe/planos-por-funcao': 'Planos por função',
+  '/equipe/fechar-comissoes': 'Fechar comissões',
+  '/equipe/pagar-comissoes': 'Pagar comissões',
+  '/equipe/minhas-comissoes': 'Minhas comissões',
+  '/relatorios/vendas': 'Relatórios de vendas',
   '/cac/dashboard': 'Dashboard CAC',
   '/cac/cenarios': 'Simulador CAC',
   '/planejamento/custos': 'Custos do negócio',
@@ -86,6 +100,13 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   '/config/usuarios': 'Usuários',
   '/config/crm': 'Integração CRM',
   '/config/cobranca': 'Cobrança',
+  '/config/vendas': 'Vendas',
+  '/financeiro-ag/fornecedores': 'Fornecedores',
+  '/financeiro-ag/fornecedores/faturas': 'Fatura do fornecedor',
+  '/financeiro-ag/fornecedores/sinais': 'Sinais a fornecedores',
+  '/financeiro-ag/fornecedores/acordos': 'Acordos com fornecedores',
+  '/financeiro-ag/fornecedores/comissoes': 'Comissão de fornecedores',
+  '/config/comissoes': 'Comissões',
   '/config/auditoria': 'Registro de atividades',
   '/mudanca': 'Mudar para o EnturOS',
   '/mudanca/glossario': 'Glossário',
@@ -116,6 +137,11 @@ function humanize(slug: string): string {
     .replace(/^./, c => c.toUpperCase());
 }
 
+/** Rotas com id no caminho que têm um nome melhor que o id (E5, parte B). */
+const ROTAS_COM_ID: { padrao: RegExp; rotulo: string }[] = [
+  { padrao: /^\/financeiro-ag\/faturas\/[^/]+$/, rotulo: 'Ficha da fatura' },
+];
+
 /**
  * Build a breadcrumb trail for the given pathname.
  *
@@ -142,7 +168,7 @@ export function buildTrail(pathname: string, leafLabel?: string): Crumb[] {
   for (let i = 0; i < segments.length; i++) {
     acc += '/' + segments[i];
     const isLast = i === segments.length - 1;
-    const known = BREADCRUMB_MAP[acc];
+    const known = BREADCRUMB_MAP[acc] ?? ROTAS_COM_ID.find(r => r.padrao.test(acc))?.rotulo;
     // Skip duplicates with the pillar root crumb.
     if (trail.some(c => c.href === acc)) continue;
     // Dynamic / unknown segment.

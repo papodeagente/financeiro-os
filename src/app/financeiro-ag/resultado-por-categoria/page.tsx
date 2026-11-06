@@ -151,7 +151,7 @@ export default function DemonstrativoPorCategoriasPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `demonstrativo-por-categorias-${ano === TODOS ? 'todos' : ano}-${regime}.csv`;
+    a.download = `resultado-por-categoria-${ano === TODOS ? 'todos' : ano}-${regime}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }

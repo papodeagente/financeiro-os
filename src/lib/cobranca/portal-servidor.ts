@@ -176,7 +176,8 @@ const CONTAS_DO_CLIENTE = `
    WHERE t.tenant_id = $1
      AND COALESCE(NULLIF(t.cliente_id, ''), t.data->>'cliente_id', '') = $2
      AND COALESCE(t.data->>'origem', '') <> 'COMISSAO_FORNECEDOR'
-     AND COALESCE(NULLIF(t.data->>'status', ''), t.status, '') <> 'CANCELADO'`;
+     AND COALESCE(NULLIF(t.data->>'status', ''), t.status, '') <> 'CANCELADO'
+     AND NOT (COALESCE(t.data->>'origem', '') = 'FATURA' AND COALESCE(t.data->>'fatura_situacao', '') = 'ABERTA')`;
 
 export async function lerPortal(exec: ExecutorSQL, link: LinkAtivo, hoje: string): Promise<PortalPublico> {
   const { tenant_id: tenant, cliente_id: cliente } = link;

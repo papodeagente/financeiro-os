@@ -11,12 +11,19 @@ import { tarefaAvisosVencimento } from '../avisos-vencimento-servidor';
 // e de atualização das cobranças.
 import { tarefaReguaCobranca } from '../cobranca/regua';
 import { tarefaCotacoes } from '../cambio-servidor';
+import { tarefaFaturasFornecedor } from '../fornecedor-tarefa';
+import { tarefaComissoesDoDia } from '../comissao-funcoes-servidor';
+import { tarefaCreditosEReembolsos } from '../creditos-e-reembolsos-tarefa';
+import { tarefaMontarFaturas } from '../fatura-tarefa';
+import { TAREFA_NOTA_POR_GATILHO, processarNotaPorGatilho, tarefaNotasPorGatilho } from '../nota-regras-servidor';
 import { tarefaExtratoAutomatico } from '../extrato-automatico/servidor';
 import { TIPO_TAREFA_MIGRACAO, processarTarefaMigracao } from '../migracao/servidor';
 import { janelaDeMinutos, janelaDiaria, rodarAgendador, type DefinicaoTarefa, type ResumoAgendador } from './nucleo';
 
 // A aplicação da mudança de sistema roda em blocos pela fila.
 registrarProcessador(TIPO_TAREFA_MIGRACAO, processarTarefaMigracao);
+// Notas emitidas por gatilho (ao receber, ao fechar fatura, ao receber a comissão).
+registrarProcessador(TAREFA_NOTA_POR_GATILHO, processarNotaPorGatilho);
 
 /** Abre o razão das agências que ainda não têm (até 20 por chamada). */
 export const tarefaRazaoAbertura: DefinicaoTarefa = {
@@ -58,7 +65,7 @@ export const tarefaFila: DefinicaoTarefa = {
   executar: async ({ exec, restanteMs }) => processarFila(exec, { orcamentoMs: Math.min(30_000, restanteMs()) }),
 };
 
-export const TAREFAS: DefinicaoTarefa[] = [tarefaRazaoAbertura, tarefaRazaoConferencia, tarefaRecorrenciaGerar, tarefaAvisosVencimento, tarefaReguaCobranca, tarefaCotacoes, tarefaExtratoAutomatico, tarefaFila];
+export const TAREFAS: DefinicaoTarefa[] = [tarefaRazaoAbertura, tarefaRazaoConferencia, tarefaRecorrenciaGerar, tarefaAvisosVencimento, tarefaReguaCobranca, tarefaCotacoes, tarefaFaturasFornecedor, tarefaNotasPorGatilho, tarefaComissoesDoDia, tarefaCreditosEReembolsos, tarefaMontarFaturas, tarefaExtratoAutomatico, tarefaFila];
 
 /** Roda o agendador contra o banco de verdade. */
 export async function executarAgendadorAgora(): Promise<ResumoAgendador> {

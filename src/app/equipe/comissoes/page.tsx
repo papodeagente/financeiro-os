@@ -171,8 +171,11 @@ export default function ComissoesPage() {
     comissoesPorVenda: Map<string, number>,
     cacheItens: Map<string, ItemVendaData[]>,
   ): Promise<{ valor: number } | { erro: string }> {
-    const valorFinal = num(venda.valor_final);
-    const custo = num(venda.valor_total_custo);
+    // Cancelamento com "manter na meta" (E5, parte D): o que saiu da venda
+    // continua contando para a comissão e a meta do vendedor.
+    const mantida = (venda as VendaCRM & { meta_mantida?: { valor_final?: number; valor_total_custo?: number } }).meta_mantida;
+    const valorFinal = round2(num(venda.valor_final) + num(mantida?.valor_final));
+    const custo = round2(num(venda.valor_total_custo) + num(mantida?.valor_total_custo));
 
     if (plano.base_calculo === 'VALOR_VENDA') return { valor: round2(valorFinal) };
 
@@ -332,6 +335,9 @@ export default function ComissoesPage() {
       if (venda && venda.status !== 'CANCELADO') continue;
 
       const motivo = venda ? 'venda cancelada' : 'venda removida';
+      // O cancelamento pela venda (E5, parte D) já lançou o estorno a receber do vendedor.
+      const jaEstornada = Array.isArray((c as ComissaoVenda & { estornos?: unknown[] }).estornos) && ((c as ComissaoVenda & { estornos?: unknown[] }).estornos?.length ?? 0) > 0;
+      if (c.status === 'PAGA' && jaEstornada) continue;
       if (c.status === 'PAGA') {
         pend.push({ id: c.id, venda: c.venda_numero, motivo: `${motivo} com comissão JÁ PAGA — estornar manualmente` });
       } else {
@@ -424,6 +430,9 @@ export default function ComissoesPage() {
           // acumulado do mês pode ter subido a faixa DEPOIS da aprovação, e
           // aí existe complemento devido: dizer o número é obrigação.
           const diferenca = round2(nova.valor_comissao - round2(num(anterior.valor_comissao)));
+          // Queda que o cancelamento da venda já estornou (E5, parte D): nada a avisar.
+          const estornado = ((anterior as ComissaoVenda & { estornos?: Array<{ valor?: number }> }).estornos ?? []).reduce((a, x) => a + num(x.valor), 0);
+          if (diferenca < 0 && estornado > 0 && Math.abs(diferenca) <= round2(estornado) + 0.01) continue;
           const motivo = diferenca > 0
             ? `acumulado do mês ${BRL(resultado.base_acumulada)} subiu a faixa para ${nova.percentual_aplicado}% — complemento de ${BRL(diferenca)} devido (comissão ${anterior.status} mantida em ${BRL(num(anterior.valor_comissao))})`
             : diferenca < 0

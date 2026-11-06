@@ -27,6 +27,8 @@ export type ConfirmDialogProps = {
   voltarRotulo?: string;
   tone?: 'padrao' | 'destrutivo';
   processando?: boolean;
+  /** Falta algo para confirmar (ex.: o motivo). Só o botão de confirmar fica fechado. */
+  confirmarDesabilitado?: boolean;
   onConfirmar: () => Promise<void> | void;
 };
 
@@ -43,6 +45,7 @@ export function ConfirmDialog({
   voltarRotulo = 'Cancelar',
   tone = 'padrao',
   processando = false,
+  confirmarDesabilitado = false,
   onConfirmar,
 }: ConfirmDialogProps) {
   const destrutivo = tone === 'destrutivo';
@@ -117,7 +120,7 @@ export function ConfirmDialog({
                 ? 'bg-[var(--fin-negative)] hover:bg-[var(--fin-negative-text)]'
                 : 'bg-[var(--fin-accent)] hover:bg-[var(--fin-accent-hover)]'
             )}
-            disabled={processando}
+            disabled={processando || confirmarDesabilitado}
             aria-busy={processando}
             onClick={() => {
               void onConfirmar();

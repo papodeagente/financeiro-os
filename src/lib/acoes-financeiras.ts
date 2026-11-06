@@ -68,12 +68,22 @@ const DEFINICOES = [
   { id: 'reabrir_fatura', modulo: 'faturas', rotulo: 'Reabrir fatura do cliente', descricao: 'Volta a fatura fechada para edição.', teto: p => p.editar_financeiro },
   { id: 'gerar_fatura_fornecedor', modulo: 'faturas', rotulo: 'Montar fatura de fornecedor', descricao: 'Junta os itens do fornecedor numa conta a pagar.', teto: p => p.editar_financeiro },
   { id: 'gerar_boletos', modulo: 'faturas', rotulo: 'Emitir boleto e Pix', descricao: 'Gera a cobrança para o cliente pagar.', teto: p => p.editar_financeiro },
+  { id: 'emitir_nota', modulo: 'faturas', rotulo: 'Emitir notas fiscais das vendas', descricao: 'Gera as notas pela regra, com prévia, inclusive as complementares.', teto: p => p.editar_financeiro },
+  { id: 'configurar_notas', modulo: 'faturas', rotulo: 'Configurar regras da nota e retenções', descricao: 'Define para quem sai nota, sobre o quê, quando sai sozinha e as retenções na fonte de cada cliente.', teto: p => p.editar_financeiro },
 
   // Vendas e comissões
   { id: 'ver_aba_financeiro', modulo: 'vendas_comissoes', rotulo: 'Ver o financeiro dentro da venda', descricao: 'Contas a pagar e a receber ligadas à venda.', teto: p => p.ver_financeiro },
   { id: 'ver_colunas_comissao', modulo: 'vendas_comissoes', rotulo: 'Ver o ganho da agência nas vendas', descricao: 'Comissão, over e receita de cada venda.', teto: p => p.ver_financeiro },
   { id: 'ver_proprias_comissoes', modulo: 'vendas_comissoes', rotulo: 'Ver a própria comissão', descricao: 'Quanto a pessoa tem a receber de comissão.', teto: p => p.ver_comissoes },
+  { id: 'fechar_venda', modulo: 'vendas_comissoes', rotulo: 'Fechar venda', descricao: 'Encerra a venda: produtos e pagamentos param de mudar.', teto: p => p.editar_financeiro },
+  { id: 'reabrir_venda', modulo: 'vendas_comissoes', rotulo: 'Reabrir venda', descricao: 'Volta a venda fechada para edição, com motivo registrado.', teto: p => p.editar_financeiro },
+  // Cancelamento, reembolsos e crédito do cliente (E5, parte D).
+  { id: 'cancelar_produto', modulo: 'vendas_comissoes', rotulo: 'Cancelar produto ou passageiro', descricao: 'Cancela parte da venda com multa, acerto das contas e estorno da comissão, sempre com prévia.', teto: p => p.editar_financeiro },
+  { id: 'cuidar_reembolsos', modulo: 'vendas_comissoes', rotulo: 'Aprovar e cancelar reembolsos', descricao: 'Aprova o reembolso (gera a conta), cancela ou transforma em crédito do cliente.', teto: p => p.editar_financeiro },
+  { id: 'usar_credito_cliente', modulo: 'vendas_comissoes', rotulo: 'Usar e ajustar crédito do cliente', descricao: 'Liquida conta com o crédito do cliente e lança ou corrige crédito à mão.', teto: p => p.editar_financeiro },
   { id: 'ver_comissoes_todos', modulo: 'vendas_comissoes', rotulo: 'Ver a comissão da equipe', descricao: 'Comissão de todos os vendedores.', teto: p => p.ver_comissoes && p.ver_vendas_todos },
+  { id: 'fechar_comissoes', modulo: 'vendas_comissoes', rotulo: 'Fechar comissões', descricao: 'Fecha as comissões da equipe até uma data, para pagar.', teto: p => p.editar_financeiro && p.ver_comissoes },
+  { id: 'pagar_comissoes', modulo: 'vendas_comissoes', rotulo: 'Pagar comissões', descricao: 'Transforma as comissões fechadas em conta a pagar, total ou em parte.', teto: p => p.editar_financeiro && p.ver_comissoes },
 
   // Painel e relatórios
   { id: 'resumo_pagar_receber', modulo: 'resumo', rotulo: 'Ver totais a pagar e a receber no painel', descricao: 'Os números de contas em aberto no painel inicial.', teto: p => p.ver_financeiro },

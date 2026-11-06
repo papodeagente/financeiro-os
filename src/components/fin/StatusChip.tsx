@@ -21,7 +21,7 @@ export const statusChipVariants = cva(
 
 export type StatusTone = NonNullable<VariantProps<typeof statusChipVariants>['tone']>;
 
-export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza' | 'comissao' | 'plano' | 'cobranca' | 'mudanca' | 'conferencia' | 'conexao_banco';
+export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza' | 'comissao' | 'plano' | 'cobranca' | 'mudanca' | 'nota' | 'comissao_item' | 'reembolso' | 'credito' | 'fatura' | 'conferencia_fatura' | 'conferencia' | 'conexao_banco';
 
 export type StatusChipProps = {
   /** Valor cru do banco. NUNCA é renderizado como veio. */
@@ -93,6 +93,14 @@ export const STATUS_LABELS: Record<StatusDominio, Record<string, { rotulo: strin
     PAGA:      { rotulo: 'Paga',             tone: 'positivo' },
     CANCELADA: { rotulo: 'Cancelada',        tone: 'neutro'   },
   },
+  // Comissão por função, item a item (comissao-funcoes.ts › situacaoDoItem).
+  comissao_item: {
+    PREVISTA:  { rotulo: 'Prevista',  tone: 'neutro'   },
+    LIBERADA:  { rotulo: 'Liberada',  tone: 'info'     },
+    FECHADA:   { rotulo: 'Fechada',   tone: 'aviso'    },
+    PAGA:      { rotulo: 'Paga',      tone: 'positivo' },
+    ESTORNADA: { rotulo: 'Estornada', tone: 'negativo' },
+  },
   // Acompanhamento do plano do mês (src/lib/plano-do-mes.ts).
   plano: {
     concluido: { rotulo: 'Concluído',       tone: 'positivo' },
@@ -120,6 +128,22 @@ export const STATUS_LABELS: Record<StatusDominio, Record<string, { rotulo: strin
     estornada: { rotulo: 'Estornada',            tone: 'aviso'    },
     falhou:    { rotulo: 'Não emitida',          tone: 'negativo' },
   },
+  // Fatura ao cliente (E5, parte B, 05/11/2026). Mesmos rótulos de
+  // src/lib/fatura-regras.ts (ROTULO_SITUACAO e ROTULO_CONFERENCIA).
+  fatura: {
+    ABERTA:    { rotulo: 'Aberta',        tone: 'info'     },
+    FECHADA:   { rotulo: 'Fechada',       tone: 'neutro'   },
+    EM_ATRASO: { rotulo: 'Em atraso',     tone: 'negativo' },
+    PARCIAL:   { rotulo: 'Paga em parte', tone: 'aviso'    },
+    PAGA:      { rotulo: 'Paga',          tone: 'positivo' },
+    CANCELADA: { rotulo: 'Cancelada',     tone: 'neutro'   },
+  },
+  conferencia_fatura: {
+    NAO_ENVIADA: { rotulo: 'Não enviada',            tone: 'neutro'   },
+    AGUARDANDO:  { rotulo: 'Aguardando o cliente',   tone: 'info'     },
+    APROVADA:    { rotulo: 'Aprovada pelo cliente',  tone: 'positivo' },
+    CONTESTADA:  { rotulo: 'Contestada',             tone: 'negativo' },
+  },
   // Mudança de sistema (E4, 05/11/2026): resultado de cada linha do ensaio e
   // situação de cada prova (src/lib/migracao/telas/assistente.ts).
   mudanca: {
@@ -132,6 +156,31 @@ export const STATUS_LABELS: Record<StatusDominio, Record<string, { rotulo: strin
     pronto:         { rotulo: 'Completo',            tone: 'positivo' },
     parcial:        { rotulo: 'Em parte',            tone: 'aviso'    },
     vem:            { rotulo: 'Ainda vem',           tone: 'neutro'   },
+  },
+  // Gerar notas (E5, parte E): a situação de cada produto da venda.
+  nota: {
+    SEM_REGRA:    { rotulo: 'Sem regra',             tone: 'aviso'    },
+    SEM_RECEITA:  { rotulo: 'Nada a emitir',         tone: 'neutro'   },
+    A_EMITIR:     { rotulo: 'A emitir',              tone: 'info'     },
+    COMPLEMENTAR: { rotulo: 'Complementar sugerida', tone: 'aviso'    },
+    EMITIDA:      { rotulo: 'Em nota',               tone: 'positivo' },
+    ACIMA:        { rotulo: 'Nota acima da receita', tone: 'negativo' },
+    CANCELADA:    { rotulo: 'Cancelada com nota',    tone: 'negativo' },
+  },
+  // Reembolsos e crédito do cliente (E5, parte D). Mesmos rótulos de
+  // src/lib/reembolsos-servidor.ts e src/lib/credito-cliente.ts.
+  reembolso: {
+    SOLICITADO: { rotulo: 'Solicitado', tone: 'info'     },
+    APROVADO:   { rotulo: 'Aprovado',   tone: 'aviso'    },
+    PAGO:       { rotulo: 'Pago',       tone: 'positivo' },
+    CANCELADO:  { rotulo: 'Cancelado',  tone: 'neutro'   },
+    ATRASADO:   { rotulo: 'Prazo vencido', tone: 'negativo' },
+  },
+  credito: {
+    ATIVO:     { rotulo: 'Com saldo', tone: 'positivo' },
+    USADO:     { rotulo: 'Usado',     tone: 'neutro'   },
+    VENCIDO:   { rotulo: 'Vencido',   tone: 'negativo' },
+    CANCELADO: { rotulo: 'Cancelado', tone: 'neutro'   },
   },
   // Conferência do extrato da operadora e conciliação automática (E6,
   // 05/11/2026): situação de cada linha e da conferência.

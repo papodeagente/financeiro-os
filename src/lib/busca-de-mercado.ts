@@ -167,6 +167,21 @@ export const DESTINOS_DE_MERCADO: readonly DestinoDeMercado[] = [
     href: '/financeiro-ag/notas', tela: 'Notas fiscais',
   },
   {
+    id: 'gerar-notas', termos: ['gerar notas', 'gerar notas fiscais', 'nota complementar', 'notas das vendas', 'nota da venda', 'nota para operadora'],
+    href: '/financeiro-ag/notas/gerar', tela: 'Gerar notas',
+    frase: 'Cada venda mostra a receita, o que já está em nota e o saldo; o saldo vira nota pela regra, com prévia.',
+  },
+  {
+    id: 'regras-da-nota', termos: ['regra da nota', 'regras da nota', 'regras de nota fiscal', 'nota ao fornecedor', 'nota ao representante', 'emissão automática de nota'],
+    href: '/financeiro-ag/notas/regras', tela: 'Regras da nota',
+    frase: 'Para quem sai nota (pagante, fornecedor, representante), sobre quais componentes e quando sai sozinha.',
+  },
+  {
+    id: 'retencoes-na-fonte', termos: ['retenções na fonte', 'retenção na fonte', 'lei 9.430', 'irrf retido', 'csll retida', 'pis cofins retido', 'órgão público'],
+    href: '/financeiro-ag/notas/retencoes', tela: 'Retenções na fonte (Lei 9.430)',
+    frase: 'IR, CSLL, PIS e COFINS que o cliente retém, por produto: a conta a receber sai líquida.',
+  },
+  {
     id: 'comissao', termos: ['comissão', 'comissões', 'pagar comissão', 'fechar comissão'],
     href: '/equipe/comissoes', tela: 'Comissões',
   },
@@ -188,10 +203,51 @@ export const DESTINOS_DE_MERCADO: readonly DestinoDeMercado[] = [
     href: '/financeiro-ag/cobrancas', tela: 'Cobranças',
     frase: 'O boleto e o Pix saem pelo Asaas ou Pagar.me da agência e baixam a conta sozinhos quando o cliente paga.',
   },
+  // Faturas ao cliente e Regras de faturamento (E5, parte B).
+  {
+    id: 'faturas', termos: ['fatura', 'faturas', 'fatura corporativa', 'faturar', 'cliente faturado', 'fechamento de fatura', 'fechar fatura', 'reabrir fatura', 'conferência de fatura', 'nota de débito', 'nota de crédito', 'faturar avulso', 'mover itens da fatura'],
+    href: '/financeiro-ag/faturas', tela: 'Faturas',
+    frase: 'A venda na forma "Faturar" entra sozinha na fatura do cliente; o cliente confere e aprova no portal, e o ajuste vira nota de crédito ou débito escrita.',
+  },
+  {
+    id: 'regras-faturamento', termos: ['regras de faturamento', 'regra de faturamento', 'período de faturamento', 'faturamento mensal', 'faturamento quinzenal', 'decendial', 'quinzenal', 'semanal iata', 'recalcular vencimentos', 'vencimento da fatura'],
+    href: '/financeiro-ag/regras-faturamento', tela: 'Regras de faturamento',
+    frase: 'A prévia mostra as próximas 3 faturas e os feriados entram no vencimento.',
+  },
   {
     id: 'recibo', termos: ['recibo', 'imprimir recibo', 'recibo de pagamento', 'comprovante para o cliente'],
     href: '/financeiro-ag/receber', tela: 'Contas a receber',
     frase: 'Na conta recebida, use Recibo: a página sai pronta para imprimir ou salvar em PDF.',
+  },
+  {
+    id: 'lancar-venda', termos: ['lançar venda', 'venda de turismo', 'pagamentos da venda', 'fechar venda', 'reabrir venda', 'posição da venda', 'passageiros da venda'],
+    href: '/vendas/lancar', tela: 'Lançar venda',
+    frase: 'As contas a receber e a pagar nascem sozinhas de cada forma de pagamento, sem botão de gerar.',
+  },
+  {
+    id: 'receita-da-venda', termos: ['receita da venda', 'componentes de receita', 'taxa du', 'rav', 'over', 'markup', 'fee da agência'],
+    href: '/config/vendas', tela: 'Configurações de vendas',
+    frase: 'A agência escolhe quais componentes contam como receita; a ficha da venda mostra a receita aberta por componente.',
+  },
+  {
+    id: 'fatura-fornecedor', termos: ['fatura do fornecedor', 'fatura de fornecedor', 'faturar fornecedor', 'pagar operadora', 'corte do fornecedor', 'taxa cc du', 'taxa cc rav', 'pagar consolidadora'],
+    href: '/financeiro-ag/fornecedores/faturas', tela: 'Fatura do fornecedor',
+    frase: 'Junta os itens de várias vendas numa conta a pagar, pela regra de corte e vencimento do fornecedor, mostrando quanto cada cliente já pagou.',
+  },
+  {
+    id: 'sinal-fornecedor', termos: ['sinal ao fornecedor', 'adiantamento ao fornecedor', 'sinal da operadora', 'pagamento antecipado ao fornecedor'],
+    href: '/financeiro-ag/fornecedores/sinais', tela: 'Sinais a fornecedores',
+    frase: 'O sinal pago é descontado sozinho das próximas faturas do fornecedor.',
+  },
+  {
+    id: 'acordos-fornecedor', termos: ['acordo com fornecedor', 'comissão do fornecedor', 'over da operadora', 'incentivo da operadora', 'tabela de comissão', 'vigência da comissão'],
+    href: '/financeiro-ag/fornecedores/acordos', tela: 'Acordos com fornecedores',
+    frase: 'Comissão, over e Taxa CC por fornecedor e produto, com vigência: a venda usa o acordo da data dela.',
+  },
+  {
+    id: 'comissao-fornecedor', termos: ['comissão esperada', 'comissão recebida', 'conferir comissão', 'comissão da operadora', 'comissão atrasada'],
+    href: '/financeiro-ag/fornecedores/comissoes', tela: 'Comissão de fornecedores',
+    frase: 'Esperado pelo acordo, lançado na venda e recebido de fato, por operadora, com alerta do que não bate.',
   },
   {
     id: 'regua-cobranca', termos: ['régua de cobrança', 'lembrete de vencimento', 'cobrar cliente', 'aviso de cobrança', 'portal do cliente'],

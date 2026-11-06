@@ -11,6 +11,12 @@ import { PERIODO_SCHEMA_SQL } from './periodo-fechado';
 import { COBRANCA_SCHEMA_SQL } from './cobranca/schema';
 import { MIGRACAO_SCHEMA_SQL } from './migracao/schema';
 import { CAMBIO_SCHEMA_SQL } from './cambio-servidor';
+import { VENDA_SCHEMA_SQL } from './venda-schema';
+import { FORNECEDOR_SCHEMA_SQL } from './fornecedor-schema';
+import { NOTAS_REGRAS_SCHEMA_SQL } from './nota-regras-schema';
+import { COMISSAO_FUNCOES_SCHEMA_SQL } from './comissao-funcoes-schema';
+import { PARTE_D_SCHEMA_SQL } from './cancelamento-schema';
+import { FATURA_SCHEMA_SQL } from './fatura-schema';
 import { RECORRENCIA_SCHEMA_SQL } from './recorrencia-schema';
 import { CENTROS_CUSTO_SCHEMA_SQL } from './centros-custo-servidor';
 import { PERMISSOES_SCHEMA_SQL } from './permissoes-schema';
@@ -1556,6 +1562,26 @@ async function executarInitDB() {
   // fontes, cofre do Super Admin, variações cambiais e a trava da moeda da
   // conta bancária. Antes do razão e da auditoria.
   await pool.query(CAMBIO_SCHEMA_SQL);
+  // Venda completa (05/11/2026, E5): produtos, passageiros, componentes de
+  // receita, pagamentos por forma, pendências e o histórico da venda. Antes
+  // do razão e da auditoria (o histórico fica fora do gatilho).
+  await pool.query(VENDA_SCHEMA_SQL);
+  // Lado do fornecedor (05/11/2026, E5 parte C): acordos com vigência, fatura
+  // do fornecedor, sinal e comissão informada no extrato. Antes do razão e da
+  // auditoria (as tabelas são auditadas).
+  await pool.query(FORNECEDOR_SCHEMA_SQL);
+  // Notas por regra e retenções na fonte (05/11/2026, E5 parte E): regras da
+  // nota, retenções por cliente × produto e a chave única da nota gerada.
+  await pool.query(NOTAS_REGRAS_SCHEMA_SQL);
+  // Comissões por função (05/11/2026, E5 parte F): funções, planos em matriz,
+  // metas, o cálculo do dia, fechamentos e pagamentos. Antes da auditoria.
+  await pool.query(COMISSAO_FUNCOES_SCHEMA_SQL);
+  // Cancelamento, reembolsos e carteira de crédito do cliente (E5, parte D).
+  // O extrato do crédito é imutável e fica fora da auditoria.
+  await pool.query(PARTE_D_SCHEMA_SQL);
+  // Faturas ao cliente e Regras de faturamento (05/11/2026, E5 parte B).
+  // Antes do razão e da auditoria (o histórico da fatura fica fora do gatilho).
+  await pool.query(FATURA_SCHEMA_SQL);
   // Conciliação com regras aprendidas e conferência do extrato de operadora
   // (05/11/2026, E6). A lista "conciliado sozinho" e as linhas da conferência
   // são controle e ficam fora do gatilho de auditoria.

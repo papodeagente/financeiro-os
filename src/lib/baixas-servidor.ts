@@ -291,8 +291,10 @@ export async function registrarBaixas(
   for (const { it, i } of ordenados) {
     if (!TABELAS_OK.has(it.titulo_tabela)) throw new ErroBaixa('Tipo de conta inválido.');
     if (!it.titulo_id) throw new ErroBaixa('Conta não informada.');
-    if (it.tratamento_diferenca === 'credito') {
-      throw new ErroBaixa('Guardar a sobra como crédito do cliente chega com a carteira de crédito. Lance a sobra como acréscimo.');
+    // A sobra vira crédito do cliente (carteira da E5, parte D): só faz
+    // sentido no que o cliente paga.
+    if (it.tratamento_diferenca === 'credito' && it.titulo_tabela !== 'contas_receber') {
+      throw new ErroBaixa('Guardar a sobra como crédito do cliente só vale em contas a receber.');
     }
 
     // Idempotência: a mesma gravação repetida devolve o que já foi feito.
@@ -410,6 +412,16 @@ export async function registrarBaixas(
         it.observacao ?? null, JSON.stringify(cambio ? { cambio } : {})],
     );
     resultados[i].baixa_id = baixaId;
+    if (plano.credito > 0) {
+      // A sobra entra na carteira do cliente, ligada a esta baixa (o estorno desfaz).
+      const { creditoDaSobraDaBaixa, ErroCredito } = await import('./credito-cliente-servidor');
+      try {
+        await creditoDaSobraDaBaixa(exec, ctx.tenantId, { baixa_id: baixaId, conta: novo, credito_reais: plano.credito, usuario: ctx.usuarioNome || ctx.usuarioId || '' });
+      } catch (e) {
+        if (e instanceof ErroCredito) throw new ErroBaixa(e.message, e.status);
+        throw e;
+      }
+    }
     if (cambio && cambio.variacao.variacao !== 0) {
       const v = cambio.variacao;
       await exec.query(
@@ -485,9 +497,12 @@ export async function estornarBaixa(
   await exec.query(`SELECT set_config('fin.estorno_data', '', true)`);
 
   const sinal = tabela === 'contas_receber' ? 1 : -1;
+  // Liquidada com crédito do cliente (E5, parte D): nenhum dinheiro entrou;
+  // o estorno devolve o crédito, não o caixa.
+  const usoDeCredito = ((b.dados ?? {}) as { uso_de_credito?: boolean }).uso_de_credito === true;
   // Linha "anterior" não tem caixa_centavos (o dinheiro entrou antes do
   // histórico), mas o estorno devolve o valor dela do mesmo jeito.
-  const caixaOriginal = Number(b.caixa_centavos) !== 0 ? deCentavos(b.caixa_centavos as string) : round2(valores.valor * sinal);
+  const caixaOriginal = usoDeCredito ? 0 : Number(b.caixa_centavos) !== 0 ? deCentavos(b.caixa_centavos as string) : round2(valores.valor * sinal);
   const conta = (b.conta_bancaria_id as string | null) || (d.conta_bancaria_id as string | null) || null;
   if (caixaOriginal !== 0) {
     const ok = await aplicarMovimentoCaixaAtomico(ctx.tenantId, conta, -caixaOriginal, exec, {
@@ -498,6 +513,18 @@ export async function estornarBaixa(
       naMoedaDaConta: true,
     });
     if (!ok) throw new ErroBaixa('A conta bancária desta baixa não existe mais. Nada foi estornado.', 409);
+  }
+
+  // O que a baixa fez na carteira de crédito volta junto (sobra que virou
+  // crédito sai; crédito usado para liquidar volta para o cliente).
+  if (usoDeCredito || Number(b.credito_centavos) > 0) {
+    const { desfazerCreditoDaBaixa, ErroCredito } = await import('./credito-cliente-servidor');
+    try {
+      await desfazerCreditoDaBaixa(exec, ctx.tenantId, baixaId, ctx.usuarioNome || ctx.usuarioId || '');
+    } catch (e) {
+      if (e instanceof ErroCredito) throw new ErroBaixa(e.message, e.status);
+      throw e;
+    }
   }
 
   const id = generateId();

@@ -7,6 +7,7 @@ import { Check, Copy, ExternalLink, FileText, Mail, MessageCircle, Phone, Shield
 import type { ItemDoPortal, PortalPublico } from '@/lib/cobranca/portal-regras';
 import { dataBR, linhaEmBlocos } from '@/lib/cobranca/regras-telas';
 import { cn, formatBRL } from '@/lib/utils';
+import { FaturasParaConferir } from './FaturasParaConferir';
 
 /**
  * Portal do cliente (05/11/2026): a página que o cliente da agência abre
@@ -176,6 +177,8 @@ export function VisaoDoPortal({ portal, token }: { portal: PortalPublico; token:
             <p className="fin-t-caption text-[var(--fin-text-3)]">Depois de pagar, a conta aparece como paga em alguns minutos (o boleto pode levar até 3 dias úteis).</p>
           </section>
         ) : null}
+
+        <FaturasParaConferir token={token} />
 
         {portal.pagas.length ? (
           <section aria-labelledby="t-pagas" className="flex flex-col gap-[var(--fin-s-3)]">

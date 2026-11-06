@@ -16,6 +16,8 @@
  */
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { RAZAO_LIMPEZA_DA_AGENCIA_SQL } from './razao-schema';
+import { TABELAS_DO_FORNECEDOR } from './fornecedor-schema';
+import { TABELAS_DA_FATURA } from './fatura-schema';
 import type { PerfilDaConta } from '@/lib/perfil-da-conta';
 
 export const CATEGORIES = {
@@ -91,6 +93,19 @@ export const CATEGORIES = {
 
 export type ResetCategory = keyof typeof CATEGORIES;
 
+/** Modelo da venda completa (venda-schema.ts): sai junto com as vendas. */
+const TABELAS_DA_VENDA_COMPLETA = [
+  'venda_componentes', 'venda_passageiros', 'venda_produtos', 'venda_pagamentos',
+  'venda_pendencias', 'venda_eventos', 'vendas_modelo',
+] as const;
+
+/** Comissões por função calculadas, fechadas e pagas (comissao-funcoes-schema.ts): saem com as vendas. O cadastro (funções, planos, metas) fica. */
+const TABELAS_DAS_COMISSOES_POR_FUNCAO = [
+  'comissao_lancamentos', 'comissao_fechamento_itens', 'comissao_fechamentos', 'comissao_pagamentos',
+] as const;
+/** Parte D (cancelamento-servidor.ts): sai junto com as vendas. */
+const TABELAS_DA_PARTE_D = ['venda_cancelamentos', 'reembolsos', 'creditos_cliente_movimentos', 'creditos_cliente'] as const;
+
 const SO_NO_ECOSSISTEMA: ReadonlySet<ResetCategory> = new Set(['cadastros_e_crm', 'plataformas']);
 
 /** As categorias que esta conta pode zerar. */
@@ -141,6 +156,69 @@ export async function apagarCategorias(
       const res = await exec.query(`DELETE FROM ${table} WHERE tenant_id = $1`, [tenantId]);
       const n = res.rowCount || 0;
       summary[table] = (summary[table] || 0) + n;
+      total += n;
+    }
+  }
+  // Venda completa (E5, 05/11/2026): sem as vendas, o modelo delas também sai.
+  const apagaVendas = categorias.some(c => (CATEGORIES[c] as readonly string[]).includes('vendas_crm'));
+  const { rows: temModelo } = apagaVendas
+    ? await exec.query(`SELECT to_regclass('public.vendas_modelo') IS NOT NULL AS ok`)
+    : { rows: [] as Array<Record<string, unknown>> };
+  if (apagaVendas && temModelo[0]?.ok) {
+    for (const table of TABELAS_DA_VENDA_COMPLETA) {
+      const res = await exec.query(`DELETE FROM ${table} WHERE tenant_id = $1`, [tenantId]);
+      const n = res.rowCount || 0;
+      summary[table] = n;
+      total += n;
+    }
+    // Cancelamentos, reembolsos e a carteira de crédito (E5, parte D) nascem
+    // das vendas e saem com elas.
+    const { rows: temParteD } = await exec.query(`SELECT to_regclass('public.venda_cancelamentos') IS NOT NULL AS ok`);
+    if (temParteD[0]?.ok) {
+      for (const table of TABELAS_DA_PARTE_D) {
+        const res = await exec.query(`DELETE FROM ${table} WHERE tenant_id = $1`, [tenantId]);
+        const n = res.rowCount || 0;
+        summary[table] = n;
+        total += n;
+      }
+    }
+  }
+  // Lado do fornecedor (E5 parte C, 05/11/2026): sem as contas a pagar, as
+  // faturas e os sinais do fornecedor também saem (os acordos são cadastro).
+  const apagaPagar = categorias.some(c => (CATEGORIES[c] as readonly string[]).includes('contas_pagar'));
+  const { rows: temFornecedor } = apagaPagar
+    ? await exec.query(`SELECT to_regclass('public.faturas_fornecedor') IS NOT NULL AS ok`)
+    : { rows: [] as Array<Record<string, unknown>> };
+  if (apagaPagar && temFornecedor[0]?.ok) {
+    for (const table of TABELAS_DO_FORNECEDOR) {
+      const res = await exec.query(`DELETE FROM ${table} WHERE tenant_id = $1`, [tenantId]);
+      const n = res.rowCount || 0;
+      summary[table] = n;
+      total += n;
+    }
+  }
+  const { rows: temComissoes } = apagaVendas
+    ? await exec.query(`SELECT to_regclass('public.comissao_lancamentos') IS NOT NULL AS ok`)
+    : { rows: [] as Array<Record<string, unknown>> };
+  if (apagaVendas && temComissoes[0]?.ok) {
+    for (const table of TABELAS_DAS_COMISSOES_POR_FUNCAO) {
+      const res = await exec.query(`DELETE FROM ${table} WHERE tenant_id = $1`, [tenantId]);
+      const n = res.rowCount || 0;
+      summary[table] = n;
+      total += n;
+    }
+  }
+  // Faturas ao cliente (E5, parte B): sem as contas a receber, as faturas, as
+  // notas e as regras de faturamento saem junto (a fatura É uma conta a receber).
+  const apagaReceber = categorias.some(c => (CATEGORIES[c] as readonly string[]).includes('contas_receber'));
+  const { rows: temFaturas } = apagaReceber
+    ? await exec.query(`SELECT to_regclass('public.faturas') IS NOT NULL AS ok`)
+    : { rows: [] as Array<Record<string, unknown>> };
+  if (apagaReceber && temFaturas[0]?.ok) {
+    for (const table of TABELAS_DA_FATURA) {
+      const res = await exec.query(`DELETE FROM ${table} WHERE tenant_id = $1`, [tenantId]);
+      const n = res.rowCount || 0;
+      summary[table] = n;
       total += n;
     }
   }
