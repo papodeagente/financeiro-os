@@ -27,6 +27,25 @@ import type { LadoDoFornecedor, PosicaoDaVenda } from '@/lib/venda-posicao';
 import { rotuloDaForma } from '@/lib/formas-pagamento';
 import { cn } from '@/lib/utils';
 import { dataBR, LINK, Pilula, quandoBR, reais, ROTULO, SECAO, SELECT } from './comum';
+import { ContaAvulsaDaVenda } from './ContaAvulsaDaVenda';
+import type { TipoDeAvulsa } from '@/lib/venda-avulsas-modelo';
+
+/** Botões de lançar conta avulsa da venda (E7) e o painel que abrem. */
+function LancarAvulsa({ ficha, tipos, onAtualizada }: { ficha: FichaDaVenda; tipos: Array<{ tipo: TipoDeAvulsa; rotulo: string }>; onAtualizada: (f: FichaDaVenda) => void }) {
+  const [aberto, setAberto] = React.useState<TipoDeAvulsa | null>(null);
+  return (
+    <>
+      <div className="flex flex-wrap justify-end gap-[var(--fin-s-2)]">
+        {tipos.map(t => (
+          <Button key={t.tipo} type="button" variant="outline" onClick={() => setAberto(t.tipo)}>
+            <Plus aria-hidden="true" className="size-4" /> {t.rotulo}
+          </Button>
+        ))}
+      </div>
+      {aberto ? <ContaAvulsaDaVenda ficha={ficha} tipo={aberto} onFechar={() => setAberto(null)} onLancada={f => { setAberto(null); onAtualizada(f); }} /> : null}
+    </>
+  );
+}
 
 type Conta = Record<string, unknown> & { id: string };
 const n = (v: unknown) => Math.round((Number(v) || 0) * 100);
@@ -54,7 +73,7 @@ function Nota({ children }: { children: React.ReactNode }) {
 // Cliente (financeiro do cliente)
 // ============================================================
 
-export function AbaCliente({ ficha }: { ficha: FichaDaVenda }) {
+export function AbaCliente({ ficha, podeLancar = false, onAtualizada }: { ficha: FichaDaVenda; podeLancar?: boolean; onAtualizada?: (f: FichaDaVenda) => void }) {
   if (!ficha.permissoes.ver_financeiro) return <SemPermissao oQue="o financeiro da venda" />;
   const contas = (ficha.contas_receber as Conta[]).filter(c => txt(c.origem) !== 'COMISSAO_FORNECEDOR');
   const colunas: FinColuna<Conta>[] = [
@@ -66,7 +85,8 @@ export function AbaCliente({ ficha }: { ficha: FichaDaVenda }) {
           <span className="truncate fin-t-caption text-[var(--fin-text-3)]">
             {txt(c.venda_forma) ? FORMAS[txt(c.venda_forma) as keyof typeof FORMAS]?.rotulo : rotuloDaForma(txt(c.forma_recebimento)) || 'Forma a combinar'}
             {c.faturar ? ' · vai para a fatura' : ''}
-            {c.auto_gerado ? '' : ' · lançada à mão'}
+            {c.auto_gerado ? '' : c.avulsa_da_venda ? ' · avulsa, fora das contas da venda' : ' · lançada à mão'}
+            {Number(c.taxa_cartao_prevista) > 0 ? ` · taxa do cartão prevista ${reais(n(c.taxa_cartao_prevista))}` : ''}
           </span>
         </div>
       ),
@@ -80,6 +100,7 @@ export function AbaCliente({ ficha }: { ficha: FichaDaVenda }) {
   const lado = ficha.posicao?.cliente;
   return (
     <div className="flex flex-col gap-[var(--fin-s-3)]">
+      {podeLancar && onAtualizada ? <LancarAvulsa ficha={ficha} onAtualizada={onAtualizada} tipos={[{ tipo: 'receber', rotulo: 'Conta a receber avulsa' }]} /> : null}
       {lado ? (
         <dl className="grid grid-cols-2 gap-[var(--fin-s-3)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)] sm:grid-cols-4">
           <Par rotulo="A receber do cliente" valor={reais(lado.a_receber)} />
@@ -114,7 +135,7 @@ function Par({ rotulo, valor, tom = 'neutro' }: { rotulo: string; valor: string;
 // Fornecedor
 // ============================================================
 
-export function AbaFornecedor({ ficha }: { ficha: FichaDaVenda }) {
+export function AbaFornecedor({ ficha, podeLancar = false, onAtualizada }: { ficha: FichaDaVenda; podeLancar?: boolean; onAtualizada?: (f: FichaDaVenda) => void }) {
   if (!ficha.permissoes.ver_financeiro || !ficha.posicao) return <SemPermissao oQue="o financeiro da venda" />;
   const lados = ficha.posicao.fornecedores;
   const colunasLado: FinColuna<LadoDoFornecedor>[] = [
@@ -139,7 +160,10 @@ export function AbaFornecedor({ ficha }: { ficha: FichaDaVenda }) {
     { id: 'desc', cabecalho: 'Conta a pagar', tipo: 'texto', minWidth: 240, acessor: c => txt(c.descricao), render: c => (
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="truncate fin-t-body text-[var(--fin-text)]">{txt(c.descricao)}</span>
-        {c.fornecedor_pendente ? <span className="fin-t-caption text-[var(--fin-warning-text)]">Falta dizer a quem pagar</span> : txt(c.observacoes) ? <span className="truncate fin-t-caption text-[var(--fin-text-3)]">{txt(c.observacoes)}</span> : null}
+        {c.fornecedor_pendente ? <span className="fin-t-caption text-[var(--fin-warning-text)]">Falta dizer a quem pagar</span>
+          : c.avulsa_da_venda === 'pagamento_fornecedor' ? <span className="truncate fin-t-caption text-[var(--fin-text-3)]">Pagamento avulso: já sai do que a venda deve a ele</span>
+            : c.avulsa_da_venda ? <span className="truncate fin-t-caption text-[var(--fin-text-3)]">Avulsa, fora das contas da venda</span>
+              : txt(c.observacoes) ? <span className="truncate fin-t-caption text-[var(--fin-text-3)]">{txt(c.observacoes)}</span> : null}
       </div>
     ) },
     { id: 'venc', cabecalho: 'Vencimento', tipo: 'data', valor: c => txt(c.data_vencimento) || null },
@@ -149,6 +173,12 @@ export function AbaFornecedor({ ficha }: { ficha: FichaDaVenda }) {
   ];
   return (
     <div className="flex flex-col gap-[var(--fin-s-4)]">
+      {podeLancar && onAtualizada ? (
+        <LancarAvulsa ficha={ficha} onAtualizada={onAtualizada} tipos={[
+          ...(ficha.versao_modelo === 2 && ficha.posicao.fornecedores.some(f => f.papel === 'fornecedor' && f.parte_id) ? [{ tipo: 'pagamento_fornecedor' as const, rotulo: 'Pagamento avulso ao fornecedor' }] : []),
+          { tipo: 'pagar', rotulo: 'Conta a pagar avulsa' },
+        ]} />
+      ) : null}
       <FinTable
         linhas={lados} colunas={colunasLado} chave={l => `${l.papel}:${l.parte_id || l.nome}`} estado="ok" densidade="compacta"
         vazio={{ motivo: 'sem-dado', titulo: 'Nenhum fornecedor ainda', oQueE: 'Cada fornecedor aparece aqui com o que a agência deve, o que já pagou e a comissão que ele deve à agência.' }}
@@ -486,7 +516,7 @@ export function AbaPosicao({ ficha }: { ficha: FichaDaVenda }) {
             Aberta por componente. Os que a agência deixou fora da receita aparecem riscados (<Link href="/config/vendas" className={LINK}>Configurações › Vendas</Link>).
           </p>
         </div>
-        {ficha.receita && ficha.receita.linhas.length ? (
+        {ficha.receita && (ficha.receita.linhas.length || ficha.receita.taxa_cartao?.valor) ? (
           <table className="w-full border-collapse fin-t-body">
             <tbody>
               {ficha.receita.linhas.map(l => (
@@ -495,6 +525,12 @@ export function AbaPosicao({ ficha }: { ficha: FichaDaVenda }) {
                   <td className={cn('py-1.5 text-right tabular-nums', !l.entra && 'line-through', l.entra && l.sinal < 0 && 'text-[var(--fin-negative-text)]')}>{l.sinal < 0 ? '− ' : ''}{reais(l.valor)}</td>
                 </tr>
               ))}
+              {ficha.receita.taxa_cartao?.valor ? (
+                <tr className={cn('border-b border-[var(--fin-border)]', !ficha.receita.taxa_cartao.entra && 'text-[var(--fin-text-3)]')}>
+                  <th scope="row" className={cn('py-1.5 text-left font-normal', !ficha.receita.taxa_cartao.entra && 'line-through')}>Taxa do cartão <span className="fin-t-caption text-[var(--fin-text-3)]">(a operadora fica com ela)</span></th>
+                  <td className={cn('py-1.5 text-right tabular-nums', ficha.receita.taxa_cartao.entra ? 'text-[var(--fin-negative-text)]' : 'line-through')}>− {reais(ficha.receita.taxa_cartao.valor)}</td>
+                </tr>
+              ) : null}
             </tbody>
             <tfoot>
               <tr>
@@ -541,6 +577,9 @@ const ROTULO_EVENTO: Record<string, string> = {
   mudanca_do_crm_recusada: 'O CRM mandou uma mudança, mas a venda estava fechada',
   comissao_manual: 'Comissão manual lançada',
   comissao_manual_excluida: 'Comissão manual excluída',
+  cancelamento: 'Cancelamento',
+  cancelamento_desfeito: 'Cancelamento desfeito',
+  conta_avulsa: 'Conta avulsa lançada',
 };
 
 function resumoDoEvento(d: Record<string, unknown>): React.ReactNode {

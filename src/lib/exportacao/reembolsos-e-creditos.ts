@@ -10,17 +10,22 @@ import { rotuloDoPeriodo, type DocumentoExportado, type FiltroAplicado } from '.
 
 const SITUACAO: Record<SituacaoDoReembolso, string> = { SOLICITADO: 'Solicitado', APROVADO: 'Aprovado', PAGO: 'Pago', CANCELADO: 'Cancelado' };
 const SENTIDO: Record<TipoDeReembolso, string> = { CLIENTE: 'Ao cliente', FORNECEDOR: 'Do fornecedor' };
+/** Filtro da tela: o reembolso do fornecedor pode ser a receber (dele) ou a pagar (a ele). */
+export type SentidoDoFiltro = TipoDeReembolso | 'DO_FORNECEDOR' | 'AO_FORNECEDOR';
+const SENTIDO_DO_FILTRO: Record<SentidoDoFiltro, string> = { ...SENTIDO, DO_FORNECEDOR: 'Do fornecedor', AO_FORNECEDOR: 'Ao fornecedor' };
+const sentidoDaLinha = (r: Reembolso): string =>
+  r.tipo === 'FORNECEDOR' && (r as { sentido?: string }).sentido === 'PAGAR' ? 'Ao fornecedor' : (SENTIDO[r.tipo] ?? r.tipo);
 const FILTRO_SITUACAO: Record<string, string> = {
   em_andamento: 'Em andamento', SOLICITADO: 'Solicitados', APROVADO: 'Aprovados', PAGO: 'Pagos', CANCELADO: 'Cancelados',
 };
 
-export interface FiltroDosReembolsos { de: string; ate: string; tipo: '' | TipoDeReembolso; situacao: string; busca: string }
+export interface FiltroDosReembolsos { de: string; ate: string; tipo: '' | SentidoDoFiltro; situacao: string; busca: string }
 
 export function filtrosDosReembolsos(f: FiltroDosReembolsos): FiltroAplicado[] {
   const out: FiltroAplicado[] = [];
   if (f.de || f.ate) out.push({ rotulo: 'Prazo', valor: rotuloDoPeriodo(f.de, f.ate) });
   if (f.situacao !== 'todas') out.push({ rotulo: 'Situação', valor: FILTRO_SITUACAO[f.situacao] ?? f.situacao });
-  if (f.tipo) out.push({ rotulo: 'Sentido', valor: SENTIDO[f.tipo] });
+  if (f.tipo) out.push({ rotulo: 'Sentido', valor: SENTIDO_DO_FILTRO[f.tipo] });
   if (f.busca.trim()) out.push({ rotulo: 'Busca', valor: f.busca.trim() });
   return out;
 }
@@ -41,7 +46,7 @@ export function documentoDosReembolsos(lista: readonly Reembolso[], f: FiltroDos
       { id: 'valor', rotulo: 'Valor', tipo: 'dinheiro' },
     ],
     linhas: lista.map(r => ({
-      prazo: r.prazo, pessoa: r.pessoa_nome, descricao: r.descricao, sentido: SENTIDO[r.tipo] ?? r.tipo, venda: r.venda_numero,
+      prazo: r.prazo, pessoa: r.pessoa_nome, descricao: r.descricao, sentido: sentidoDaLinha(r), venda: r.venda_numero,
       situacao: r.atrasado && (r.situacao === 'SOLICITADO' || r.situacao === 'APROVADO') ? 'Prazo vencido' : (r.credito_id && r.situacao === 'PAGO' ? 'Pago (virou crédito)' : SITUACAO[r.situacao] ?? r.situacao),
       pago_em: r.pago_em, valor: r.valor_centavos,
     })),

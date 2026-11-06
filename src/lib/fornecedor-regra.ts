@@ -16,6 +16,12 @@
  * A data que decide o período de cada item é a "data base": a da venda
  * (padrão), a do início ou a do fim da viagem.
  *
+ * PERIODICIDADE (E7): além da mensal (a de sempre, padrão, com o mesmo
+ * resultado), a fatura pode fechar todo dia, toda semana (a semana começa no
+ * dia escolhido), a cada dez dias (1–10, 11–20, 21–fim) ou a cada quinze
+ * (1–15, 16–fim). Nessas, o corte é o fim do período e o vencimento é o
+ * corte + `prazo_dias`, com o mesmo ajuste de fim de semana e feriado.
+ *
  * Arquivo puro: datas civis 'AAAA-MM-DD', sem relógio.
  */
 import { addDias, dataSegura, num } from './money';
@@ -26,7 +32,27 @@ import {
 export type AjusteDoVencimento = 'proximo' | 'anterior' | 'nenhum';
 export type DataBaseDaFatura = 'venda' | 'inicio' | 'fim';
 
+export const PERIODICIDADES = ['MENSAL', 'DIARIO', 'SEMANAL', 'DECENDIAL', 'QUINZENAL'] as const;
+export type PeriodicidadeDaFatura = (typeof PERIODICIDADES)[number];
+
+export const ROTULO_PERIODICIDADE: Record<PeriodicidadeDaFatura, string> = {
+  MENSAL: 'Uma por mês',
+  DIARIO: 'Uma por dia',
+  SEMANAL: 'Uma por semana',
+  DECENDIAL: 'A cada dez dias (1–10, 11–20, 21 ao fim do mês)',
+  QUINZENAL: 'A cada quinze dias (1–15, 16 ao fim do mês)',
+};
+
+/** 0 = domingo … 6 = sábado. */
+export const DIAS_DA_SEMANA = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'] as const;
+
 export interface RegraDeFaturamento {
+  /** De quanto em quanto tempo a fatura fecha. MENSAL usa dia_corte e dia_vencimento. */
+  periodicidade: PeriodicidadeDaFatura;
+  /** Semanal: o dia em que a semana começa (0 = domingo … 6 = sábado). O corte é a véspera. */
+  inicio_semana: number;
+  /** Diária, semanal, decendial e quinzenal: dias depois do corte para vencer. */
+  prazo_dias: number;
   /** 1 a 31 (31 = último dia do mês). */
   dia_corte: number;
   /** 1 a 31 (31 = último dia do mês). */
@@ -43,6 +69,7 @@ export interface RegraDeFaturamento {
 
 /** O que o cadastro novo do fornecedor já traz (crm-types.ts, createFornecedorCRM). */
 export const REGRA_PADRAO: RegraDeFaturamento = {
+  periodicidade: 'MENSAL', inicio_semana: 1, prazo_dias: 7,
   dia_corte: 25, dia_vencimento: 10, ajuste_vencimento: 'proximo', data_base: 'venda', gerar_sozinha: false, prazo_pagamento_dias: 30,
 };
 
@@ -68,8 +95,14 @@ export function normalizarRegra(v: unknown): RegraDeFaturamento {
   const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
   const ajuste = String(o.ajuste_vencimento ?? '');
   const base = String(o.data_base ?? '');
+  const per = String(o.periodicidade ?? '').toUpperCase() as PeriodicidadeDaFatura;
+  const semana = Math.floor(num(o.inicio_semana));
+  const prazoDias = o.prazo_dias === undefined || o.prazo_dias === null || o.prazo_dias === '' ? -1 : Math.floor(num(o.prazo_dias));
   const prazo = o.prazo_pagamento_dias === undefined || o.prazo_pagamento_dias === null || o.prazo_pagamento_dias === '' ? -1 : Math.floor(num(o.prazo_pagamento_dias));
   return {
+    periodicidade: PERIODICIDADES.includes(per) ? per : 'MENSAL',
+    inicio_semana: o.inicio_semana !== undefined && o.inicio_semana !== null && o.inicio_semana !== '' && semana >= 0 && semana <= 6 ? semana : REGRA_PADRAO.inicio_semana,
+    prazo_dias: prazoDias >= 0 && prazoDias <= 365 ? prazoDias : REGRA_PADRAO.prazo_dias,
     dia_corte: dia(o.dia_corte, REGRA_PADRAO.dia_corte),
     dia_vencimento: dia(o.dia_vencimento, REGRA_PADRAO.dia_vencimento),
     ajuste_vencimento: ajuste === 'anterior' || ajuste === 'nenhum' ? ajuste : 'proximo',
@@ -88,8 +121,37 @@ function corteDoMes(ano: number, mes: number, r: RegraDeFaturamento): string {
   return dataSegura(ano, mes, r.dia_corte);
 }
 
+const diaDaSemana = (iso: string) => new Date(`${iso}T12:00:00Z`).getUTCDay();
+
+/** Início do período (não mensal) em que a data cai. */
+function inicioDoPeriodo(data: string, r: RegraDeFaturamento): string {
+  const { ano, mes } = anoMes(data);
+  const d = Number(data.slice(8, 10));
+  switch (r.periodicidade) {
+    case 'DIARIO': return data;
+    case 'SEMANAL': return addDias(data, -((diaDaSemana(data) - r.inicio_semana + 7) % 7));
+    case 'DECENDIAL': return dataSegura(ano, mes, d <= 10 ? 1 : d <= 20 ? 11 : 21);
+    case 'QUINZENAL': return dataSegura(ano, mes, d <= 15 ? 1 : 16);
+    default: return data;
+  }
+}
+
+/** Fim (corte) do período não mensal em que a data cai. */
+function fimDoPeriodo(data: string, r: RegraDeFaturamento): string {
+  const { ano, mes } = anoMes(data);
+  const d = Number(data.slice(8, 10));
+  switch (r.periodicidade) {
+    case 'DIARIO': return data;
+    case 'SEMANAL': return addDias(inicioDoPeriodo(data, r), 6);
+    case 'DECENDIAL': return d <= 10 ? dataSegura(ano, mes, 10) : d <= 20 ? dataSegura(ano, mes, 20) : dataSegura(ano, mes, 31);
+    case 'QUINZENAL': return d <= 15 ? dataSegura(ano, mes, 15) : dataSegura(ano, mes, 31);
+    default: return data;
+  }
+}
+
 /** O corte do período em que a data cai (a própria data, se for dia de corte). */
 export function corteDe(data: string, r: RegraDeFaturamento): string {
+  if (r.periodicidade && r.periodicidade !== 'MENSAL') return fimDoPeriodo(data, r);
   const { ano, mes } = anoMes(data);
   const c = corteDoMes(ano, mes, r);
   if (data <= c) return c;
@@ -99,6 +161,7 @@ export function corteDe(data: string, r: RegraDeFaturamento): string {
 
 /** O corte anterior a um corte. */
 export function corteAnterior(corte: string, r: RegraDeFaturamento): string {
+  if (r.periodicidade && r.periodicidade !== 'MENSAL') return addDias(inicioDoPeriodo(corte, r), -1);
   const { ano, mes } = anoMes(corte);
   const p = mesMais(ano, mes, -1);
   return corteDoMes(p.ano, p.mes, r);
@@ -122,10 +185,15 @@ export interface Vencimento {
 /** Vencimento da fatura que fecha num corte. */
 export function vencimentoDoCorte(corte: string, r: RegraDeFaturamento, cal: Calendario = CALENDARIO_NACIONAL): Vencimento {
   const { ano, mes } = anoMes(corte);
-  let alvo = dataSegura(ano, mes, r.dia_vencimento);
-  if (alvo <= corte) {
-    const p = mesMais(ano, mes, 1);
-    alvo = dataSegura(p.ano, p.mes, r.dia_vencimento);
+  let alvo: string;
+  if (r.periodicidade && r.periodicidade !== 'MENSAL') {
+    alvo = addDias(corte, Math.max(0, r.prazo_dias));
+  } else {
+    alvo = dataSegura(ano, mes, r.dia_vencimento);
+    if (alvo <= corte) {
+      const p = mesMais(ano, mes, 1);
+      alvo = dataSegura(p.ano, p.mes, r.dia_vencimento);
+    }
   }
   const motivo = motivoDeNaoSerUtil(alvo, cal);
   let data = alvo;
@@ -169,6 +237,16 @@ export function dataBaseDoItem(item: { data_venda: string; data_inicio?: string;
 
 /** Frase da regra para a tela ("Corte dia 25, vence dia 10 do mês seguinte, adiado para dia útil"). */
 export function descreverRegra(r: RegraDeFaturamento): string {
+  if (r.periodicidade && r.periodicidade !== 'MENSAL') {
+    const ajusteCurto = r.ajuste_vencimento === 'proximo' ? ', adiado para o próximo dia útil'
+      : r.ajuste_vencimento === 'anterior' ? ', antecipado para o dia útil anterior' : '';
+    const prazo = r.prazo_dias === 0 ? 'vence no dia do corte' : r.prazo_dias === 1 ? 'vence 1 dia depois do corte' : `vence ${r.prazo_dias} dias depois do corte`;
+    const periodo = r.periodicidade === 'DIARIO' ? 'Uma fatura por dia'
+      : r.periodicidade === 'SEMANAL' ? `Uma fatura por semana, de ${DIAS_DA_SEMANA[r.inicio_semana]} a ${DIAS_DA_SEMANA[(r.inicio_semana + 6) % 7]}`
+        : r.periodicidade === 'DECENDIAL' ? 'Uma fatura a cada dez dias (cortes nos dias 10, 20 e no último do mês)'
+          : 'Uma fatura a cada quinze dias (cortes no dia 15 e no último do mês)';
+    return `${periodo}; ${prazo}${ajusteCurto}.`;
+  }
   const corte = r.dia_corte >= 31 ? 'no último dia do mês' : `dia ${r.dia_corte}`;
   const mesmoMes = r.dia_vencimento > r.dia_corte;
   const venc = r.dia_vencimento >= 31 ? 'no último dia' : `dia ${r.dia_vencimento}`;

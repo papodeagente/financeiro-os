@@ -79,6 +79,38 @@ export interface FichaDaVenda {
   comissoes: Array<Record<string, unknown>>;
   config_receita: ConfigReceita;
   permissoes: PermissoesDaFicha;
+  /**
+   * A negociação no CRM (E7), onde ficam o contrato e o voucher da viagem.
+   * null na venda lançada à mão ou sem integração com o CRM.
+   */
+  link_crm: string | null;
+}
+
+/**
+ * Endereço da negociação no CRM a partir do id que o CRM manda
+ * (`crm_deal_<id>`) e do endereço da integração. Puro.
+ */
+export function linkDaNegociacaoNoCrm(crmVendaId: string, webhookCrm: string | null | undefined): string | null {
+  const m = String(crmVendaId ?? '').trim().match(/^(?:crm_deal_|deal_)?(\d+)$/);
+  if (!m || !webhookCrm) return null;
+  try {
+    const u = new URL(String(webhookCrm));
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+    return `${u.origin}/deal/${m[1]}`;
+  } catch {
+    return null;
+  }
+}
+
+async function enderecoDoCrm(exec: ExecutorSQL, tenantId: string): Promise<string | null> {
+  try {
+    const { rows: tem } = await exec.query(`SELECT to_regclass('public.crm_config') IS NOT NULL AS ok`);
+    if (!tem[0]?.ok) return null;
+    const { rows } = await exec.query(`SELECT data->>'webhook_url_crm' AS u FROM crm_config WHERE id = 'singleton' AND tenant_id = $1`, [tenantId]);
+    return rows[0]?.u ? String(rows[0].u) : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function permissoesDaFicha(sessao: SessionPayload | null, exec: ExecutorSQL): Promise<PermissoesDaFicha> {
@@ -112,11 +144,12 @@ export async function montarFicha(exec: ExecutorSQL, tenantId: string, vendaId: 
     comissoes: perm.ver_receita ? com.map(r => ({ ...(r.data as Record<string, unknown>), id: r.id, status: (r.data as Record<string, unknown>)?.status ?? r.status })) : [],
     config_receita: config.receita,
     permissoes: perm,
+    link_crm: carregada.venda.crm_venda_id ? linkDaNegociacaoNoCrm(carregada.venda.crm_venda_id, await enderecoDoCrm(exec, tenantId)) : null,
   });
 }
 
 function receitaVazia(): ReceitaDaVenda {
-  return { linhas: [], por_produto: [], receita: 0, fora_da_receita: 0, faturamento: 0, percentual: 0 };
+  return { linhas: [], por_produto: [], receita: 0, fora_da_receita: 0, faturamento: 0, taxa_cartao: { valor: 0, entra: true }, percentual: 0 };
 }
 
 function fichaDe(c: VendaCarregada, resto: Omit<FichaDaVenda, 'venda' | 'versao_modelo' | 'situacao' | 'fechada_em' | 'fechada_por' | 'pendencias' | 'eventos'>): FichaDaVenda {

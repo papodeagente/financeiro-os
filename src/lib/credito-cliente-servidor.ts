@@ -464,6 +464,43 @@ export async function desfazerCreditoDaBaixa(exec: ExecutorSQL, tenantId: string
 }
 
 /**
+ * Cancela os créditos que uma origem gerou (ex.: um cancelamento que foi
+ * desfeito), só se nada deles foi usado. Usado em parte: recusa, para o
+ * cliente não perder o que já gastou. Devolve o que saiu da carteira.
+ */
+export async function cancelarCreditosDaOrigem(
+  exec: ExecutorSQL, tenantId: string, origem: OrigemDoCredito, origemRef: string, motivo: string, usuario: string,
+  opcoes: { soConferir?: boolean } = {},
+): Promise<Array<{ id: string; valor_centavos: Centavos }>> {
+  if (!(await carteiraDisponivel(exec)) || !origemRef) return [];
+  const { rows } = await exec.query(
+    `SELECT * FROM creditos_cliente WHERE tenant_id = $1 AND origem = $2 AND origem_ref = $3 AND situacao <> 'CANCELADO'`,
+    [tenantId, origem, origemRef],
+  );
+  const saida: Array<{ id: string; valor_centavos: Centavos }> = [];
+  for (const r of rows) {
+    const c = credito(r);
+    await travarCliente(exec, tenantId, c.cliente_id);
+    const atual = credito((await exec.query(`SELECT * FROM creditos_cliente WHERE tenant_id = $1 AND id = $2`, [tenantId, c.id])).rows[0]);
+    if (atual.saldo_centavos < atual.valor_centavos) {
+      const brl = (v: Centavos) => deCentavos(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      throw new ErroCredito('CREDITO_USADO',
+        atual.situacao === 'VENCIDO'
+          ? `O crédito de ${brl(atual.valor_centavos)} de ${atual.cliente_nome || 'cliente'} já venceu. Ajuste a carteira antes de desfazer.`
+          : `O crédito de ${brl(atual.valor_centavos)} de ${atual.cliente_nome || 'cliente'} já foi usado em parte (sobram ${brl(atual.saldo_centavos)}). Devolva o uso antes de desfazer.`,
+        409);
+    }
+    saida.push({ id: atual.id, valor_centavos: atual.valor_centavos });
+    if (opcoes.soConferir) continue;
+    if (atual.saldo_centavos > 0) {
+      await mover(exec, tenantId, atual, 'AJUSTE', -atual.saldo_centavos, { tipo: 'cancelamento_desfeito', id: origemRef }, motivo.slice(0, 300), usuario);
+    }
+    await exec.query(`UPDATE creditos_cliente SET situacao = 'CANCELADO', atualizado_em = NOW() WHERE tenant_id = $1 AND id = $2`, [tenantId, atual.id]);
+  }
+  return saida;
+}
+
+/**
  * Liquida (no todo ou em parte) uma conta a receber com o crédito do
  * cliente. Nenhum dinheiro entra no caixa: a conta é baixada e a carteira
  * diminui. Fica no histórico de baixas como forma "Crédito do cliente", com

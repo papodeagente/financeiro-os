@@ -100,6 +100,7 @@ const rotaReemb = await import('../src/app/api/reembolsos/route.ts');
 const rotaReembId = await import('../src/app/api/reembolsos/[id]/route.ts');
 const rotaCred = await import('../src/app/api/creditos-cliente/route.ts');
 const rotaCredUsar = await import('../src/app/api/creditos-cliente/usar/route.ts');
+const rotaDesfazer = await import('../src/app/api/vendas/completa/[id]/cancelamento/desfazer/route.ts');
 
 const T = 'agencia-d';
 const T2 = 'agencia-outra';
@@ -293,6 +294,93 @@ await emTransacao(e => srv.fecharVenda(e, T, 'v5', { usuario: { id: 'u', nome: '
 const g6 = await cancelar('v5', 'gravar', { data: HOJE, motivo: 'Yara também desistiu', itens: [{ produto_id: 'h1', passageiro_ids: ['y'] }], zerar_fornecedor: true, zerar_cliente: true, manter_na_meta: true });
 eq([g6.status, g6.corpo.ficha.situacao, (await contas('contas_receber', 'v5')).filter(c => c.status !== 'CANCELADO').reduce((a, c) => a + c.valor_final, 0)], [200, 'FECHADA', 1030], 'venda fechada: cancela sem reabrir; o cliente segue devendo só a parte do Xavier');
 eq((await um(`SELECT data FROM vendas_crm WHERE id = 'v5'`)).data.meta_mantida.valor_final, 1030, 'manter na meta guarda o que saiu para a comissão e a meta');
+
+console.log('--- (j) Desfazer (reativar) um cancelamento ---');
+const desfazer = (id, modo, cancelamento_id, motivo, assinatura) => rotaDesfazer.POST(pedir('POST', `/api/vendas/completa/${id}/cancelamento/desfazer`, { modo, cancelamento_id, motivo, assinatura }), params(id)).then(json);
+const ctxDe = async id => (await json(await rotaCancel.GET(pedir('GET', `/api/vendas/completa/${id}/cancelamento`), params(id)))).corpo;
+// v1: o último cancelamento gerou reembolso do fornecedor já pago.
+let lst = (await ctxDe(v1)).cancelamentos;
+eq([lst.length, lst.map(c => c.pode_desfazer)], [2, [true, false]], 'a lista mostra os cancelamentos, só o último pode ser desfeito');
+let rd = await desfazer(v1, 'previa', lst[1].id, 'Errei a passageira');
+eq([rd.status, rd.corpo.codigo], [409, 'NAO_E_O_ULTIMO'], 'não desfaz um cancelamento que não é o último');
+rd = await desfazer(v1, 'previa', lst[0].id, 'Cliente voltou atrás');
+eq([rd.status, rd.corpo.codigo], [409, 'REEMBOLSO_PAGO'], 'reembolso já pago: recusa e diz o que fazer');
+rd = await desfazer(v1, 'previa', lst[0].id, 'x');
+eq(rd.status, 400, 'motivo é obrigatório');
+
+// v6: um passageiro cancelado com multa, zerando os dois lados; desfazer devolve tudo.
+const venda6 = { ...venda1, id: 'v6', produtos: [hotel([['a', 'Ana'], ['b', 'Bia']])] };
+await json(await rotaNova.POST(pedir('POST', '/api/vendas/completa', { venda: venda6 })));
+await baixar('contas_receber', (await contas('contas_receber', 'v6')).find(c => c.forma_recebimento === 'PIX').id, 1060);
+await query(`INSERT INTO comissoes (id, tenant_id, venda_id, vendedor_id, status, data) VALUES ('k6', $1, 'v6', 'vend', 'CALCULADA', $2::jsonb)`,
+  [T, JSON.stringify({ id: 'k6', venda_id: 'v6', venda_numero: 'VND', vendedor_id: 'vend', vendedor_nome: 'Vera', data_venda: HOJE, valor_base: 260, percentual_aplicado: 10, valor_comissao: 26, status: 'CALCULADA', observacoes: '' })]);
+const foto6 = async () => JSON.stringify([
+  ...(await contas('contas_receber', 'v6')).filter(c => c.status !== 'CANCELADO').map(c => [c.descricao, c.valor_final, c.status]),
+  ...(await contas('contas_pagar', 'v6')).filter(c => c.status !== 'CANCELADO' && !c.origem_comissao_id).map(c => [c.descricao, c.valor_final, c.status]),
+]);
+const antes6 = await foto6();
+const pv6 = await cancelar('v6', 'previa', { ...pedidoAna });
+await cancelar('v6', 'gravar', { ...pedidoAna }, pv6.corpo.assinatura);
+eq((await um(`SELECT data FROM comissoes WHERE id = 'k6'`)).data.valor_comissao, 18, 'v6: cancelada a Ana, comissão 26 → 18');
+const c6 = (await ctxDe('v6')).cancelamentos[0];
+const pd6 = await desfazer('v6', 'previa', c6.id, 'A Ana vai viajar, sim');
+eq([pd6.status, pd6.corpo.mudancas.map(m => [m.tabela, m.tipo, m.antes, m.depois])], [200, [
+  ['contas_pagar', 'alterada', 18, 26],
+  ['contas_pagar', 'alterada', 1000, 1800],
+  ['contas_receber', 'alterada', 60, 500], ['contas_receber', 'alterada', 60, 500],
+]], 'prévia do desfazer: hotel volta a 1.800, boleto a 500+500, conta da comissão a 26');
+eq([pd6.corpo.produtos.map(p => p.passageiros), pd6.corpo.receita_antes_centavos, pd6.corpo.receita_depois_centavos, pd6.corpo.comissoes.map(c => c.devolvido)],
+  [[['Ana']], 18000, 26000, [8]], 'prévia: Ana volta, receita 180 → 260, comissão recebe 8 de volta');
+eq([(await um(`SELECT desfeito_em FROM venda_cancelamentos WHERE id = $1`, [c6.id])).desfeito_em, (await um(`SELECT data FROM comissoes WHERE id = 'k6'`)).data.valor_comissao], [null, 18], 'prévia não grava nada');
+eq((await desfazer('v6', 'gravar', c6.id, 'A Ana vai viajar, sim', 'velha')).status, 409, 'assinatura que não é da prévia: 409');
+const gd6 = await desfazer('v6', 'gravar', c6.id, 'A Ana vai viajar, sim', pd6.corpo.assinatura);
+eq([gd6.status, gd6.corpo.ficha.venda.produtos[0].passageiros.map(x => !!x.cancelado_em), gd6.corpo.ficha.venda.produtos[0].componentes.some(c => c.id.startsWith('cx:'))],
+  [200, [false, false], false], 'gravado: os dois passageiros ativos, sem os componentes do cancelamento');
+eq(await foto6(), antes6, 'as contas voltam a ser o que eram antes do cancelamento');
+const k6 = (await um(`SELECT data FROM comissoes WHERE id = 'k6'`)).data;
+eq([k6.valor_comissao, k6.valor_base, k6.status, (k6.estornos ?? []).length], [26, 260, 'CALCULADA', 0], 'comissão de volta a 26, base 260, sem o estorno');
+const lista6 = (await ctxDe('v6')).cancelamentos;
+eq([lista6.length, !!lista6[0].desfeito_em, lista6[0].motivo_desfazer, lista6[0].pode_desfazer], [1, true, 'A Ana vai viajar, sim', false], 'o cancelamento fica na lista, marcado como desfeito');
+eq((await todos(`SELECT motivo FROM venda_eventos WHERE tenant_id = $1 AND venda_id = 'v6' AND tipo = 'cancelamento_desfeito'`, [T])).map(e => e.motivo), ['A Ana vai viajar, sim'], 'e o histórico da venda guarda o motivo');
+eq((await desfazer('v6', 'previa', c6.id, 'De novo, por engano')).corpo.codigo, 'JA_DESFEITO', 'não desfaz duas vezes');
+// O CRM manda a venda de novo: o cancelamento desfeito não volta.
+await emTransacao(e => srv.salvarVenda(e, T, normalizarVenda({ ...venda6, origem: 'crm' }).venda, { usuario: { id: 'crm', nome: 'CRM' }, origem: 'crm', evento: 'recebida_do_crm' }));
+eq((await srv.carregarVenda(pool, T, 'v6')).venda.produtos[0].passageiros.map(x => !!x.cancelado_em), [false, false], 'reenvio do CRM: o cancelamento desfeito não é reaplicado');
+
+// v7: tudo cancelado, sobra vira crédito; o crédito usado impede desfazer até devolver o uso.
+const venda7 = { id: 'v7', data_venda: HOJE, cliente: { id: 'cli-7', nome: 'Lia' }, produtos: [{ id: 's7', tipo: 'SEGURO', descricao: 'Seguro', fornecedor: { id: 'f-seg', nome: 'Seguradora' }, quantidade: 1, valor_unitario_centavos: 30000, componentes: [{ id: 'cs7', tipo: 'COMISSAO', valor_centavos: 3000 }] }], pagamentos: [{ id: 'p7', forma: 'PIX', valor_centavos: 30000 }] };
+await json(await rotaNova.POST(pedir('POST', '/api/vendas/completa', { venda: venda7 })));
+await baixar('contas_receber', (await contas('contas_receber', 'v7'))[0].id, 300);
+const g7 = await cancelar('v7', 'gravar', { data: HOJE, motivo: 'Desistiu do seguro', itens: [{ produto_id: 's7' }], zerar_fornecedor: true, zerar_cliente: true, sobra: 'credito' });
+eq([g7.status, g7.corpo.credito?.valor_centavos, (await um(`SELECT status FROM vendas_crm WHERE id = 'v7'`)).status, await saldoCredito('cli-7')], [200, 30000, 'CANCELADO', 30000], 'v7 cancelada inteira: 300 de crédito, venda fora das vendas');
+await query(`INSERT INTO contas_receber (id, tenant_id, cliente_id, status, data) VALUES ('r-v7', $1, 'cli-7', 'PENDENTE', $2::jsonb)`,
+  [T, JSON.stringify({ id: 'r-v7', cliente_id: 'cli-7', cliente_nome: 'Lia', descricao: 'Outra viagem', valor_final: 200, data_vencimento: HOJE, status: 'PENDENTE' })]);
+const uso7 = await json(await rotaCredUsar.POST(pedir('POST', '/api/creditos-cliente/usar', { conta_receber_id: 'r-v7', valor_centavos: 10000 })));
+const c7 = (await ctxDe('v7')).cancelamentos[0];
+rd = await desfazer('v7', 'previa', c7.id, 'Cliente quer o seguro');
+eq([rd.status, rd.corpo.codigo], [409, 'CREDITO_USADO'], 'crédito já usado em parte: recusa');
+await emTransacao(e => estornarBaixa(e, { tenantId: T, usuarioNome: 'Ana' }, uso7.corpo.baixa_id, { motivo: 'Para desfazer o cancelamento' }));
+const pd7 = await desfazer('v7', 'previa', c7.id, 'Cliente quer o seguro');
+const gd7 = await desfazer('v7', 'gravar', c7.id, 'Cliente quer o seguro', pd7.corpo.assinatura);
+eq([gd7.status, gd7.corpo.venda_reativada, gd7.corpo.creditos_cancelados.map(c => c.valor_centavos), await saldoCredito('cli-7')], [200, true, [30000], 0], 'devolvido o uso: desfaz, o crédito sai da carteira e a venda volta');
+eq([(await um(`SELECT status, data->>'status' AS s, data->>'cancelada_em' AS em FROM vendas_crm WHERE id = 'v7'`))],
+  [{ status: 'CONFIRMADO', s: 'CONFIRMADO', em: null }], 'a venda volta a contar como venda');
+eq((await contas('contas_pagar', 'v7')).filter(c => c.status !== 'CANCELADO').map(c => [c.fornecedor_nome, c.valor_final]), [['Seguradora', 270]], 'a conta do fornecedor volta');
+eq((await contas('contas_receber', 'v7')).filter(c => c.status !== 'CANCELADO' && c.origem === 'VENDA').map(c => [c.forma_recebimento, c.valor_final, c.status]), [['PIX', 300, 'RECEBIDO']], 'o Pix recebido fica como estava, cobrindo a venda');
+
+console.log('--- (k) Reembolso ao fornecedor (a agência paga) ---');
+const aoForn = await json(await rotaReemb.POST(pedir('POST', '/api/reembolsos', { tipo: 'FORNECEDOR', sentido: 'PAGAR', pessoa_id: 'f-hotel', pessoa_nome: 'Hotel Mar', valor_centavos: 12000, descricao: 'Recebemos do hotel em dobro' })));
+eq([aoForn.status, aoForn.corpo.tipo, aoForn.corpo.sentido], [201, 'FORNECEDOR', 'PAGAR'], 'lançado: do fornecedor, no sentido "a pagar"');
+const aprovF = await json(await rotaReembId.PATCH(pedir('PATCH', `/api/reembolsos/${aoForn.corpo.id}`, { acao: 'aprovar' }), params(aoForn.corpo.id)));
+const contaAF = await um(`SELECT fornecedor_id, data FROM contas_pagar WHERE id = $1`, [aprovF.corpo.conta_id]);
+eq([aprovF.corpo.conta_tabela, contaAF.fornecedor_id, contaAF.data.fornecedor_nome, contaAF.data.valor_final, /ao fornecedor/.test(contaAF.data.descricao)],
+  ['contas_pagar', 'f-hotel', 'Hotel Mar', 120, true], 'aprovado: vira conta a PAGAR ao fornecedor');
+const doForn = await json(await rotaReemb.POST(pedir('POST', '/api/reembolsos', { tipo: 'FORNECEDOR', pessoa_id: 'f-hotel', pessoa_nome: 'Hotel Mar', valor_centavos: 5000, descricao: 'Sem sentido: o de sempre' })));
+eq(doForn.corpo.sentido, 'RECEBER', 'sem dizer o sentido, o reembolso do fornecedor continua "a receber"');
+let lf = await json(await rotaReemb.GET(pedir('GET', '/api/reembolsos?tipo=FORNECEDOR&situacao=em_andamento')));
+eq([lf.corpo.totais.a_pagar_ao_fornecedor, lf.corpo.totais.a_receber_do_fornecedor], [12000, 5000], 'totais separados: a pagar ao fornecedor × a receber dele');
+lf = await json(await rotaReemb.GET(pedir('GET', '/api/reembolsos?tipo=FORNECEDOR&sentido=PAGAR')));
+eq(lf.corpo.reembolsos.map(r => r.id), [aoForn.corpo.id], 'filtro pelo sentido');
 
 console.log('--- (i) Isolamento e permissões ---');
 globalThis.__SESSAO_DE_TESTE__ = sessao('VENDEDOR');

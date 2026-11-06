@@ -19,6 +19,7 @@ import { TAREFA_NOTA_POR_GATILHO, processarNotaPorGatilho, tarefaNotasPorGatilho
 import { tarefaExtratoAutomatico } from '../extrato-automatico/servidor';
 import { tarefaAcompanharNotas } from '../nota-acompanhamento';
 import { tarefaRelatoriosAgendados } from '../relatorios-agendados/servidor';
+import { tarefaLiquidarAutomaticamente } from '../venda-liquidar-auto';
 import { TIPO_TAREFA_MIGRACAO, processarTarefaMigracao } from '../migracao/servidor';
 import { janelaDeMinutos, janelaDiaria, rodarAgendador, type DefinicaoTarefa, type ResumoAgendador } from './nucleo';
 
@@ -67,7 +68,7 @@ export const tarefaFila: DefinicaoTarefa = {
   executar: async ({ exec, restanteMs }) => processarFila(exec, { orcamentoMs: Math.min(30_000, restanteMs()) }),
 };
 
-export const TAREFAS: DefinicaoTarefa[] = [tarefaRazaoAbertura, tarefaRazaoConferencia, tarefaRecorrenciaGerar, tarefaAvisosVencimento, tarefaReguaCobranca, tarefaCotacoes, tarefaFaturasFornecedor, tarefaNotasPorGatilho, tarefaComissoesDoDia, tarefaCreditosEReembolsos, tarefaMontarFaturas, tarefaExtratoAutomatico, tarefaAcompanharNotas, tarefaRelatoriosAgendados, tarefaFila];
+export const TAREFAS: DefinicaoTarefa[] = [tarefaRazaoAbertura, tarefaRazaoConferencia, tarefaRecorrenciaGerar, tarefaAvisosVencimento, tarefaReguaCobranca, tarefaCotacoes, tarefaFaturasFornecedor, tarefaNotasPorGatilho, tarefaComissoesDoDia, tarefaCreditosEReembolsos, tarefaMontarFaturas, tarefaExtratoAutomatico, tarefaAcompanharNotas, tarefaRelatoriosAgendados, tarefaLiquidarAutomaticamente, tarefaFila];
 
 /** Roda o agendador contra o banco de verdade. */
 export async function executarAgendadorAgora(): Promise<ResumoAgendador> {

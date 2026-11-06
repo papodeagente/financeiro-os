@@ -22,6 +22,10 @@ export const VENDA_CANCELAMENTOS_SCHEMA_SQL = `
     PRIMARY KEY (tenant_id, id)
   );
   CREATE INDEX IF NOT EXISTS idx_venda_cancelamentos_venda ON venda_cancelamentos(tenant_id, venda_id, criado_em);
+  -- E7: desfazer (reativar) um cancelamento. O registro fica, marcado.
+  ALTER TABLE venda_cancelamentos ADD COLUMN IF NOT EXISTS desfeito_em TIMESTAMPTZ;
+  ALTER TABLE venda_cancelamentos ADD COLUMN IF NOT EXISTS desfeito_por TEXT NOT NULL DEFAULT '';
+  ALTER TABLE venda_cancelamentos ADD COLUMN IF NOT EXISTS motivo_desfazer TEXT NOT NULL DEFAULT '';
 `;
 
 /** Tudo da parte D, na ordem: carteira, reembolsos, cancelamentos. O initDB roda depois de VENDA_SCHEMA_SQL. */

@@ -36,6 +36,7 @@ export async function POST(req: Request) {
     const fatura = await emTransacao(e => gerarFatura(e, tenantId, {
       parte_id: texto(c.parte_id), conta_ids: Array.isArray(c.conta_ids) ? c.conta_ids.map(texto) : [],
       corte: texto(c.corte) || undefined, vencimento: texto(c.vencimento) || undefined, observacoes: texto(c.observacoes),
+      modo: texto(c.modo) === 'BRUTO' ? 'BRUTO' : 'SALDO',
       assinatura: texto(c.assinatura),
     }, usuario));
     return NextResponse.json(fatura, { status: 201 });

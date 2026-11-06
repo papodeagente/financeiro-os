@@ -123,6 +123,7 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
   }, [editavel]);
 
   const mudar = (parcial: Partial<Venda>) => { setRascunho(v => (v ? { ...v, ...parcial } : v)); setSujo(true); };
+  const atualizarFicha = (f: Ficha) => { setFicha(f); setRascunho(f.venda); setSujo(false); setAtualizadoEm(new Date()); };
 
   async function salvar() {
     if (!rascunho) return;
@@ -208,10 +209,11 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
           ) : undefined}
           acaoPrimaria={acaoPrimaria}
           acoesSecundarias={!nova && vendaId ? [
-            ...(ficha && ficha.versao_modelo === 2 && ficha.permissoes.cancelar && ficha.venda.produtos.some(p => !p.cancelado_em)
-              ? [{ rotulo: 'Cancelar produto ou passageiro', onClick: () => (sujo ? toast.warning('Salve antes de cancelar', 'Há mudanças que ainda não foram salvas.') : setCancelando(true)) }]
+            ...(ficha && ficha.versao_modelo === 2 && ficha.permissoes.cancelar && ficha.venda.produtos.some(p => !p.cancelado_em || p.passageiros.some(x => x.cancelado_em))
+              ? [{ rotulo: ficha.venda.produtos.some(p => !p.cancelado_em) ? 'Cancelar produto ou passageiro' : 'Cancelamentos da venda', onClick: () => (sujo ? toast.warning('Salve antes de cancelar', 'Há mudanças que ainda não foram salvas.') : setCancelando(true)) }]
               : []),
             { rotulo: 'Recibo', href: `/vendas/${encodeURIComponent(vendaId)}/recibo` },
+            ...(ficha?.link_crm ? [{ rotulo: 'Contrato e voucher no CRM', href: ficha.link_crm }] : []),
             { rotulo: 'Nota de débito', href: `/vendas/${encodeURIComponent(vendaId)}/nota-de-debito` },
             { rotulo: 'Ver na tela anterior', href: `/vendas/${encodeURIComponent(vendaId)}` },
           ] : undefined}
@@ -289,9 +291,24 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
               <div role="tabpanel" id={`painel-${aba}`} aria-labelledby={`aba-${aba}`}>
                 {aba === 'produtos' ? (
                   <AbaProdutos
-                    produtos={venda.produtos} editavel={editavel} verReceita={verReceita} fornecedores={fornecedores}
+                    produtos={venda.produtos} removidos={venda.produtos_removidos ?? []} editavel={editavel} verReceita={verReceita} fornecedores={fornecedores}
                     onSalvarProduto={p => mudar({ produtos: substituir(venda.produtos, p).map((x, i) => ({ ...x, sequencia: i + 1 })) })}
-                    onRemoverProduto={id => mudar({ produtos: venda.produtos.filter(x => x.id !== id).map((x, i) => ({ ...x, sequencia: i + 1 })) })}
+                    onRemoverProduto={id => {
+                      const saiu = venda.produtos.find(x => x.id === id);
+                      mudar({
+                        produtos: venda.produtos.filter(x => x.id !== id).map((x, i) => ({ ...x, sequencia: i + 1 })),
+                        produtos_removidos: saiu ? [...(venda.produtos_removidos ?? []), saiu] : venda.produtos_removidos,
+                      });
+                      if (saiu) toast.info('Produto removido', 'Ele fica guardado em "produtos removidos" e dá para restaurar. As contas se refazem ao salvar.');
+                    }}
+                    onRestaurarProduto={id => {
+                      const volta = (venda.produtos_removidos ?? []).find(x => x.id === id);
+                      if (!volta) return;
+                      mudar({
+                        produtos: [...venda.produtos, volta].map((x, i) => ({ ...x, sequencia: i + 1 })),
+                        produtos_removidos: (venda.produtos_removidos ?? []).filter(x => x.id !== id),
+                      });
+                    }}
                   />
                 ) : aba === 'pagamentos' ? (
                   <AbaPagamentos
@@ -306,11 +323,11 @@ export function FichaDaVenda({ vendaId }: { vendaId?: string }) {
                 ) : null}
                 {ficha && aba === 'cliente' ? (
                   <div className="mt-[var(--fin-s-3)] flex flex-col gap-[var(--fin-s-4)]">
-                    <AbaCliente ficha={ficha} />
+                    <AbaCliente ficha={ficha} podeLancar={podeEditar && !sujo} onAtualizada={atualizarFicha} />
                     {ficha.permissoes.ver_financeiro && vendaId ? <NotasERetencoes vendaId={vendaId} /> : null}
                   </div>
                 ) : null}
-                {ficha && aba === 'fornecedor' ? <div className="mt-[var(--fin-s-3)]"><AbaFornecedor ficha={ficha} /></div> : null}
+                {ficha && aba === 'fornecedor' ? <div className="mt-[var(--fin-s-3)]"><AbaFornecedor ficha={ficha} podeLancar={podeEditar && !sujo} onAtualizada={atualizarFicha} /></div> : null}
                 {ficha && aba === 'comissoes' ? <div className="mt-[var(--fin-s-3)]"><AbaComissoes ficha={ficha} /></div> : null}
                 {ficha && aba === 'posicao' ? <div className="mt-[var(--fin-s-3)]"><AbaPosicao ficha={ficha} /></div> : null}
               </div>
@@ -411,6 +428,7 @@ function DadosDaVenda({ venda, editavel, clientes, intermediarios, onMudar }: {
         <Total rotulo="Data da venda" valor={dataBR(venda.data_venda)} />
         <Total rotulo="Intermediário" valor={venda.intermediario?.nome || '—'} />
         <Total rotulo="Centro de custo" valor={venda.centro_custo || '—'} />
+        {venda.operacao_propria ? <Total rotulo="Operação" valor="Própria da agência" /> : null}
       </dl>
     );
   }
@@ -449,6 +467,14 @@ function DadosDaVenda({ venda, editavel, clientes, intermediarios, onMudar }: {
       <Field rotulo="Centro de custo">
         {a => <Input {...a} className={CONTROLE} value={venda.centro_custo} maxLength={120} onChange={e => onMudar({ centro_custo: e.target.value })} />}
       </Field>
+      <label className="flex cursor-pointer items-start gap-[var(--fin-s-2)] sm:col-span-2 lg:col-span-4">
+        <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-[var(--fin-accent)]" checked={venda.operacao_propria === true}
+          onChange={e => onMudar({ operacao_propria: e.target.checked })} />
+        <span className="flex flex-col gap-0.5">
+          <span className="fin-t-body text-[var(--fin-text)]">Operação própria</span>
+          <span className="fin-t-caption text-[var(--fin-text-3)]">A agência opera a viagem (um grupo dela, por exemplo). Produto sem fornecedor não vira conta a pagar: o custo é da própria agência.</span>
+        </span>
+      </label>
       <p className="fin-t-caption text-[var(--fin-text-3)] sm:col-span-2 lg:col-span-4">
         Quais componentes contam como receita da agência se escolhe em <Link href="/config/vendas" className={LINK}>Configurações › Vendas</Link>.
       </p>
