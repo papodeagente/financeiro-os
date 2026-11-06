@@ -23,12 +23,18 @@ import {
   type ExecutorSQL,
 } from './caixa-atomico';
 import { registrarBaixaLegada } from './baixas-servidor';
+import { MENSAGEM_CONFLITO_TITULO, SQL_VERSAO, semMarcasDeControle, versaoLida, versaoMudou } from './versao-do-registro';
+import { conferirTravaDaVenda, mensagemDaTrava, vendaDeOrigem } from './trava-da-venda';
+import { conferirEmissaoDaConta } from './lancamento-titulo';
 
 export class ErroEdicaoConta extends Error {
   status: number;
-  constructor(message: string, status = 400) {
+  /** O que mais vai no corpo da resposta (conflito, venda_id). */
+  extra: Record<string, unknown>;
+  constructor(message: string, status = 400, extra: Record<string, unknown> = {}) {
     super(message);
     this.status = status;
+    this.extra = extra;
     this.name = 'ErroEdicaoConta';
   }
 }
@@ -46,13 +52,32 @@ export interface EdicaoDeConta {
 /** Variante que recebe o executor (para testes e para quem já está numa transação). */
 export async function editarContaNoExecutor(exec: ExecutorSQL, p: EdicaoDeConta): Promise<Record<string, unknown>> {
   const { rows } = await exec.query(
-    `SELECT data FROM ${p.tabela} WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
+    `SELECT data, ${SQL_VERSAO} AS v FROM ${p.tabela} WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
     [p.id, p.tenantId],
   );
   if (rows.length === 0) throw new ErroEdicaoConta('Conta não encontrada.', 404);
   const prev = (rows[0].data ?? {}) as Record<string, unknown>;
-  const { _status_lido: statusLido, ...semMarca } = p.item;
-  const item: Record<string, unknown> = { ...semMarca, id: p.id };
+  // Edição simultânea (06/11/2026): a tela manda a versão que leu; se outra
+  // pessoa gravou depois, nada é gravado (409) e a tela oferece recarregar.
+  if (versaoMudou(versaoLida(p.item), rows[0].v)) {
+    throw new ErroEdicaoConta(MENSAGEM_CONFLITO_TITULO, 409, { conflito: true });
+  }
+  const { _status_lido: statusLido, ...semMarca } = semMarcasDeControle(p.item);
+  // Conta nascida de venda (06/11/2026): pessoa, valor e vencimento só mudam
+  // pela venda. Ausentes no pedido, ficam como estão.
+  const trava = conferirTravaDaVenda(p.tabela, prev, semMarca);
+  if (trava.mudou.length > 0) {
+    throw new ErroEdicaoConta(mensagemDaTrava(trava.mudou), 409, { venda_id: vendaDeOrigem(prev) });
+  }
+  const item: Record<string, unknown> = { ...trava.item, id: p.id };
+  // Emissão editável (06/11/2026): não fica depois do vencimento nem da
+  // liquidação. Só confere quando uma das datas muda: conta antiga com datas
+  // fora de ordem continua editável no resto.
+  const datas = ['data_emissao', 'data_vencimento'];
+  if (datas.some(c => String(item[c] ?? '') !== String(prev[c] ?? ''))) {
+    const recusa = conferirEmissaoDaConta(p.tabela, item);
+    if (recusa) throw new ErroEdicaoConta(recusa, 400);
+  }
 
   // Tela velha: a conta foi baixada por outra pessoa depois que esta tela
   // abriu, e o salvamento chega com o status antigo (não baixado). Desfazer a

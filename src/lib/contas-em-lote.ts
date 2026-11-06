@@ -22,11 +22,14 @@
  *     do que já foi baixado na conta que pagou/recebeu, período fechado pelo
  *     gatilho do banco). Conta já baixada pede "Alterar lançamento já
  *     baixado"; conta que nasceu de venda/fatura pede "Excluir lançamento
- *     ligado a venda ou fatura".
+ *     ligado a venda ou fatura". Desde 06/11/2026 a exclusão é lógica (a
+ *     conta vai para Excluídas e pode ser restaurada; ver contas-excluidas.ts);
+ *   - reagendar: conta nascida de venda muda o vencimento pela venda.
  */
 import { createHash } from 'node:crypto';
 import type { ExecutorSQL } from './caixa-atomico';
-import { estornarBaixaDaConta } from './caixa-atomico';
+import { excluirTitulo } from './contas-excluidas';
+import { vendaDeOrigem } from './trava-da-venda';
 import { addDias, num, round2 } from './money';
 import { mensagemPeriodoFechado } from './periodo-fechado';
 import { verificarBloqueios } from './bloqueios-financeiros';
@@ -89,6 +92,8 @@ export interface ResultadoDoLote {
 export interface QuemPedeLote {
   pode(acao: AcaoFinanceira): Promise<boolean>;
   contasLiberadas: readonly string[] | null;
+  /** Quem está fazendo (vai para a conta excluída). */
+  usuario?: { id?: string | null; nome?: string | null };
 }
 
 export class ErroDoLote extends Error {
@@ -310,6 +315,7 @@ export async function executarLote(
       r.antes = atual ? dataBR(atual) : 'sem vencimento';
       r.depois = nova ? dataBR(nova) : undefined;
       if (status === 'CANCELADO') fora('Conta cancelada.', 'regra');
+      else if (vendaDeOrigem(d)) fora('Nasceu de uma venda: o vencimento muda pela venda.', 'regra');
       else if (!tituloSemBaixa(l.tabela, d)) fora(l.tabela === 'contas_pagar' ? 'Já tem pagamento registrado: o vencimento fica como está.' : 'Já tem recebimento registrado: o vencimento fica como está.', 'regra');
       else if (!nova) fora('A conta não tem vencimento para mover.', 'regra');
       else if (nova === atual) fora('O vencimento já é esta data.', 'regra');
@@ -356,7 +362,7 @@ export async function executarLote(
       // excluir
       const valorNoCaixa = baixadoDaConta(l.tabela, d) > 0 ? round2(num(l.tabela === 'contas_pagar' ? d.valor_pago : d.valor_recebido) || valorDaConta(l.tabela, d)) : 0;
       r.antes = valorNoCaixa > 0 ? `${l.tabela === 'contas_pagar' ? 'Pago' : 'Recebido'} ${brl(valorNoCaixa)}` : 'Sem baixa';
-      r.depois = 'Excluída';
+      r.depois = 'Excluída (dá para restaurar)';
       const ate = existeFechamento && valorNoCaixa > 0 ? await dinheiroEmPeriodoFechado(exec, tenantId, l) : null;
       if (ate) fora(mensagemPeriodoFechado(ate), 'periodo');
       else if (baixado && !(await pode('editar_liquidado'))) fora('Já foi baixada, e seu acesso não inclui alterar lançamento já baixado.', 'permissao');
@@ -393,9 +399,7 @@ export async function executarLote(
 
   for (const p of prontas) {
     if (pedido.acao === 'excluir') {
-      const { rows } = await exec.query(`DELETE FROM ${p.linha.tabela} WHERE id = $1 AND tenant_id = $2 RETURNING data`, [p.linha.id, tenantId]);
-      const data = rows[0]?.data as Record<string, unknown> | undefined;
-      if (data) await estornarBaixaDaConta(tenantId, p.linha.tabela, data, exec);
+      await excluirTitulo(exec, tenantId, p.linha.tabela, p.linha.id, quem.usuario ?? {});
     } else {
       await exec.query(
         `UPDATE ${p.linha.tabela} SET data = $3::jsonb, updated_at = NOW() WHERE id = $1 AND tenant_id = $2`,

@@ -22,6 +22,9 @@ import { CENTROS_CUSTO_SCHEMA_SQL } from './centros-custo-servidor';
 import { PERMISSOES_SCHEMA_SQL } from './permissoes-schema';
 import { LEITURA_DOCUMENTO_SCHEMA_SQL } from './leitura-documento-servidor';
 import { FORMAS_PAGAMENTO_SCHEMA_SQL } from './formas-pagamento-servidor';
+import { CONTAS_EXCLUIDAS_SCHEMA_SQL } from './contas-excluidas-schema';
+import { NUMERACAO_TITULOS_SCHEMA_SQL } from './numeracao-titulos';
+import { PREFERENCIAS_USUARIO_SCHEMA_SQL } from './preferencias-usuario';
 import { AUDIT_SCHEMA_SQL } from './audit-schema';
 import { NOTIFICACOES_SCHEMA_SQL } from './notificacoes-schema';
 import { MAPAS_MENTAIS_COMPARTILHAMENTO_SCHEMA_SQL } from './mapas-mentais-compartilhamento';
@@ -1592,6 +1595,12 @@ async function executarInitDB() {
   // o identificador do banco deduplica no mesmo lugar do FITID.
   await pool.query(EXTRATO_AUTOMATICO_SCHEMA_SQL);
   await pool.query(EXTRATO_ID_EXTERNO_UNICO_SQL);
+  // Fechamento de paridade (06/11/2026, E7): contas excluídas (exclusão
+  // lógica, com Restaurar), o Nº sequencial dos títulos por agência e as
+  // preferências por usuário (colunas da lista). Controle: fora da auditoria.
+  await pool.query(CONTAS_EXCLUIDAS_SCHEMA_SQL);
+  await pool.query(NUMERACAO_TITULOS_SCHEMA_SQL);
+  await pool.query(PREFERENCIAS_USUARIO_SCHEMA_SQL);
   await pool.query(RAZAO_SCHEMA_SQL);
   // Instala a captura somente depois das migrações/seed, sem fabricar histórico.
   await pool.query(AUDIT_SCHEMA_SQL);

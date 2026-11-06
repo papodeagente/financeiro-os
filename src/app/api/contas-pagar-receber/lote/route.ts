@@ -46,6 +46,7 @@ export async function POST(req: Request) {
     const quemNo = async (exec: ExecutorSQL): Promise<QuemPedeLote> => ({
       pode: acao => pode(sessao, acao, { exec: exec as unknown as ExecutorPermissoes }),
       contasLiberadas: await contasPermitidas(sessao, exec as unknown as ExecutorPermissoes),
+      usuario: { id: sessao?.userId ?? null, nome: sessao?.nome ?? null },
     });
 
     if (!gravar) {

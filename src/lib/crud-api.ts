@@ -6,6 +6,7 @@ import { bloqueioFinanceiro, podeExcluir, podeVerTodasVendas } from './permissoe
 import { recusaDoPost, sqlPreservarDerivados, STATUS_DE_BAIXA } from './guarda-baixa';
 import { contasPermitidas, pode } from './permissoes-servidor';
 import { filtrarPorConta, type FiltroDeConta } from './filtro-de-conta';
+import { MENSAGEM_CONFLITO, SQL_VERSAO, semMarcasDeControle, versaoLida } from './versao-do-registro';
 
 export interface CrudOpcoes {
   /**
@@ -70,6 +71,21 @@ export interface CrudOpcoes {
    * contas. Sem restrição (o padrão), a leitura é a mesma de antes.
    */
   filtroDeConta?: FiltroDeConta;
+  /**
+   * Aviso de edição simultânea (06/11/2026): a leitura devolve `_versao` em
+   * cada registro e o PUT que manda a versão lida responde 409
+   * (`conflito: true`) quando outra pessoa gravou depois. PUT sem `_versao`
+   * grava como sempre.
+   */
+  versao?: boolean;
+  /** Mensagem do 409 de edição simultânea (padrão: a genérica). */
+  mensagemConflito?: string;
+}
+
+/** O registro lido, com a versão quando a tabela usa o aviso de edição simultânea. */
+function comVersao(opcoes: CrudOpcoes, r: Record<string, unknown>): Record<string, unknown> {
+  const data = (r.data ?? {}) as Record<string, unknown>;
+  return opcoes.versao ? { ...data, _versao: String(r.v ?? '') } : data;
 }
 
 // As regras puras vivem em ./guarda-baixa para poderem ser testadas sem
@@ -139,15 +155,16 @@ export function createCrudHandlers(tableName: string, indexColumns: string[] = [
       if (recusa) return recusa;
       const tenantId = await getTenantId();
       const vendedor = await vendedorDaLeitura(opcoes);
+      const colunas = opcoes.versao ? `data, ${SQL_VERSAO} AS v` : 'data';
       const { rows } = vendedor === null
         ? await pool.query(
-          `SELECT data FROM ${tableName} WHERE tenant_id = $1 ORDER BY created_at DESC`,
+          `SELECT ${colunas} FROM ${tableName} WHERE tenant_id = $1 ORDER BY created_at DESC`,
           [tenantId])
         : await pool.query(
-          `SELECT data FROM ${tableName} WHERE tenant_id = $1 AND ${opcoes.colunaDoVendedor} = $2 ORDER BY created_at DESC`,
+          `SELECT ${colunas} FROM ${tableName} WHERE tenant_id = $1 AND ${opcoes.colunaDoVendedor} = $2 ORDER BY created_at DESC`,
           [tenantId, vendedor]);
       const contas = await contasDaLeitura(opcoes);
-      return NextResponse.json(filtrarPorConta(rows.map(r => r.data as Record<string, unknown>), opcoes.filtroDeConta, contas));
+      return NextResponse.json(filtrarPorConta(rows.map(r => comVersao(opcoes, r)), opcoes.filtroDeConta, contas));
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
       return NextResponse.json({ error: msg }, { status: 500 });
@@ -157,10 +174,12 @@ export function createCrudHandlers(tableName: string, indexColumns: string[] = [
   async function POST(req: Request) {
     try {
       await initDB();
-      const item = await req.json();
-      if (!item || typeof item !== 'object' || !item.id || typeof item.id !== 'string') {
+      const recebido = await req.json();
+      if (!recebido || typeof recebido !== 'object' || !recebido.id || typeof recebido.id !== 'string') {
         return NextResponse.json({ error: 'Invalid payload: id is required' }, { status: 400 });
       }
+      // `_versao` é controle da tela, nunca vai para o registro.
+      const item = semMarcasDeControle(recebido as Record<string, unknown>) as Record<string, unknown> & { id: string };
       if (!pool) return NextResponse.json(item);
       const recusa = await guardaFinanceira(opcoes, 'escrever');
       if (recusa) return recusa;
@@ -257,19 +276,20 @@ export function createCrudItemHandlers(tableName: string, indexColumns: string[]
       if (recusa) return recusa;
       const tenantId = await getTenantId();
       const vendedor = await vendedorDaLeitura(opcoes);
+      const colunas = opcoes.versao ? `data, ${SQL_VERSAO} AS v` : 'data';
       const { rows } = vendedor === null
         ? await pool.query(
-          `SELECT data FROM ${tableName} WHERE id = $1 AND tenant_id = $2`,
+          `SELECT ${colunas} FROM ${tableName} WHERE id = $1 AND tenant_id = $2`,
           [id, tenantId])
         : await pool.query(
-          `SELECT data FROM ${tableName} WHERE id = $1 AND tenant_id = $2 AND ${opcoes.colunaDoVendedor} = $3`,
+          `SELECT ${colunas} FROM ${tableName} WHERE id = $1 AND tenant_id = $2 AND ${opcoes.colunaDoVendedor} = $3`,
           [id, tenantId, vendedor]);
       if (rows.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
       const contas = await contasDaLeitura(opcoes);
       if (filtrarPorConta([rows[0].data as Record<string, unknown>], opcoes.filtroDeConta, contas).length === 0) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
       }
-      return NextResponse.json(rows[0].data);
+      return NextResponse.json(comVersao(opcoes, rows[0]));
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
       return NextResponse.json({ error: msg }, { status: 500 });
@@ -281,10 +301,12 @@ export function createCrudItemHandlers(tableName: string, indexColumns: string[]
       await initDB();
       const { id } = await params;
       if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
-      const item = await req.json();
-      if (!item || typeof item !== 'object') {
+      const recebido = await req.json();
+      if (!recebido || typeof recebido !== 'object') {
         return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
       }
+      const lida = opcoes.versao ? versaoLida(recebido as Record<string, unknown>) : null;
+      const item = semMarcasDeControle(recebido as Record<string, unknown>);
       if (!pool) return NextResponse.json(item);
       const recusa = await guardaFinanceira(opcoes, 'escrever');
       if (recusa) return recusa;
@@ -316,10 +338,23 @@ export function createCrudItemHandlers(tableName: string, indexColumns: string[]
         paramValues.push(STATUS_DE_BAIXA);
         guardaBaixa = ` AND COALESCE(data->>'status', '') <> ALL ($${paramValues.length}::text[])`;
       }
+      // Edição simultânea: só grava se ninguém gravou depois da leitura.
+      let guardaVersao = '';
+      if (lida !== null) {
+        paramValues.push(lida);
+        guardaVersao = ` AND ${SQL_VERSAO} = $${paramValues.length}`;
+      }
       const { rows: gravadas } = await pool.query(
-        `UPDATE ${tableName} SET ${setClauses.join(', ')} WHERE id = $1 AND tenant_id = $2${guardaBaixa} RETURNING data`,
+        `UPDATE ${tableName} SET ${setClauses.join(', ')} WHERE id = $1 AND tenant_id = $2${guardaBaixa}${guardaVersao} RETURNING data`,
         paramValues
       );
+      if (gravadas.length === 0 && lida !== null) {
+        const { rows: existe } = await pool.query(
+          `SELECT ${SQL_VERSAO} AS v FROM ${tableName} WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+        if (existe.length > 0 && String(existe[0].v) !== lida) {
+          return NextResponse.json({ error: opcoes.mensagemConflito ?? MENSAGEM_CONFLITO, conflito: true }, { status: 409 });
+        }
+      }
       if (gravadas.length === 0) {
         return NextResponse.json(
           { error: opcoes.protegerBaixa ? 'Registro não encontrado ou já baixado' : 'Registro não encontrado' },
