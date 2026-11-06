@@ -184,6 +184,7 @@ export function TelaDeMovimentos({ leiaute }: { leiaute: Leiaute }) {
   return (
     <MolduraDaPagina>
       <PageHeader
+        empresas
         icone={extrato ? Landmark : ArrowLeftRight}
         titulo={titulo}
         subtitulo={extrato

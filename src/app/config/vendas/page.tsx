@@ -17,6 +17,7 @@ import type { LiquidarAutomaticamente, FormaLiquidavel } from '@/lib/venda-liqui
 import { loadEntities } from '@/lib/crm-storage';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { EmpresaDaConfiguracao, naEmpresa } from '@/components/fin/EmpresaDaConfiguracao';
 
 /**
  * Configurações › Vendas (E5, 05/11/2026; E7): quais componentes contam como
@@ -62,7 +63,7 @@ export default function ConfigVendasPage() {
   const carregar = React.useCallback(async () => {
     setEstado('carregando');
     try {
-      const r = await fetch('/api/config/vendas');
+      const r = await fetch(naEmpresa('/api/config/vendas'));
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error ?? 'Não foi possível abrir.');
       setConfig(j.receita);
@@ -86,7 +87,7 @@ export default function ConfigVendasPage() {
     if (!config) return;
     setSalvando(true);
     try {
-      const r = await fetch('/api/config/vendas', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ receita: config, recibo, liquidar_automaticamente: liquidar ?? undefined }) });
+      const r = await fetch(naEmpresa('/api/config/vendas'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ receita: config, recibo, liquidar_automaticamente: liquidar ?? undefined }) });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error ?? 'Não foi salvo.');
       setConfig(j.receita);
@@ -129,6 +130,8 @@ export default function ConfigVendasPage() {
           titulo="Vendas"
           subtitulo="O que conta como receita da agência em cada venda e o texto do recibo que o cliente recebe. As contas a pagar e a receber não mudam com estas escolhas."
         />
+        {/* Várias empresas (E7): de qual empresa é esta configuração. */}
+        <EmpresaDaConfiguracao secao="vendas" />
         <DataState
           estado={estado}
           erro={erro ? { mensagem: erro, onTentarDeNovo: () => { void carregar(); } } : null}

@@ -6,7 +6,7 @@
 // limite: o perfil só tira. Também: restrição por pessoa e a matriz papel × direito.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, Copy, Landmark, Minus, Plus, Save, ShieldCheck, Trash2, UsersRound } from 'lucide-react';
+import { Building2, Check, Copy, Landmark, Minus, Plus, Save, ShieldCheck, Trash2, UsersRound } from 'lucide-react';
 import { MolduraDaPagina, RITMO_DA_PAGINA } from '@/components/fin/MolduraDaPagina';
 import { PageHeader } from '@/components/fin/PageHeader';
 import { DataState } from '@/components/fin/DataState';
@@ -20,9 +20,10 @@ import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { useEmpresas } from '@/components/fin/useEmpresas';
 
-interface Grupo { id: string; nome: string; acesso_total: boolean; acoes: string[]; contas: string[]; membros: string[] }
-interface Restricao { usuario_id: string; contas_liberadas: string[]; acoes_negadas: string[] }
+interface Grupo { id: string; nome: string; acesso_total: boolean; acoes: string[]; contas: string[]; empresas?: string[]; membros: string[] }
+interface Restricao { usuario_id: string; contas_liberadas: string[]; acoes_negadas: string[]; empresas_liberadas?: string[] }
 interface Pessoa { id: string; nome: string; email: string; papel: 'ADMIN' | 'OPERADOR' | 'VENDEDOR'; ativo: boolean }
 interface Conta { id: string; nome: string; detalhe?: string }
 interface Dados {
@@ -43,7 +44,7 @@ async function pedir<T>(url: string, init?: RequestInit): Promise<T> {
 
 function grupoNovo(dados: Dados, base?: Grupo): Grupo {
   if (base) return { ...base, id: '', nome: `Cópia de ${base.nome}`.slice(0, 80), membros: [] };
-  return { id: '', nome: '', acesso_total: false, acoes: [...dados.tetos.OPERADOR], contas: [], membros: [] };
+  return { id: '', nome: '', acesso_total: false, acoes: [...dados.tetos.OPERADOR], contas: [], empresas: [], membros: [] };
 }
 
 export default function PerfisDeAcessoPage() {
@@ -244,6 +245,15 @@ function VisaoGrupos({ dados, recarregar }: { dados: Dados; recarregar: () => Pr
               )}
             </Bloco>
 
+            {/* Várias empresas (E7): só com duas ou mais. Acesso completo também
+                pode valer só numa loja. */}
+            <BlocoDeEmpresas
+              titulo="Empresas em que este perfil vale"
+              ajuda="Marque as empresas. Sem nenhuma marcada, o perfil vale em todas. Acesso completo também respeita esta escolha."
+              marcadas={new Set(rascunho.empresas ?? [])}
+              onChange={s => set({ empresas: [...s] })}
+            />
+
             <Bloco titulo="Contas bancárias que este perfil vê" ajuda={rascunho.acesso_total ? 'Com acesso completo, o perfil vê todas as contas.' : 'Marque as contas. Sem nenhuma marcada, o perfil vê todas.'}>
               <SeletorDeContas
                 contas={dados.contas}
@@ -297,6 +307,32 @@ function Bloco({ titulo, ajuda, children }: { titulo: string; ajuda?: string; ch
   );
 }
 
+/** Empresas do perfil ou da pessoa (E7). Com uma empresa só, não aparece. */
+function BlocoDeEmpresas({
+  titulo, ajuda, marcadas, onChange,
+}: { titulo: string; ajuda: string; marcadas: ReadonlySet<string>; onChange: (s: Set<string>) => void }) {
+  const { multi, empresas, carregando } = useEmpresas();
+  if (carregando || !multi) return null;
+  return (
+    <Bloco titulo={titulo} ajuda={ajuda}>
+      <ul className="grid gap-1 sm:grid-cols-2">
+        {empresas.map(e => (
+          <li key={e.id}>
+            <label className="flex cursor-pointer items-center gap-3 rounded-[var(--fin-r-md)] px-2 py-2 hover:bg-[var(--fin-surface-2)]">
+              <Caixinha
+                marcada={marcadas.has(e.id)}
+                onChange={v => { const s = new Set(marcadas); if (v) s.add(e.id); else s.delete(e.id); onChange(s); }}
+              />
+              <Building2 aria-hidden="true" className="size-4 shrink-0 text-[var(--fin-text-3)]" />
+              <span className="fin-t-body truncate">{e.nome}{e.principal ? <span className="fin-t-caption ml-1.5 text-[var(--fin-text-3)]">principal</span> : null}</span>
+            </label>
+          </li>
+        ))}
+      </ul>
+    </Bloco>
+  );
+}
+
 function SeletorDeContas({
   contas, marcadas, onChange, desabilitado,
 }: { contas: Conta[]; marcadas: ReadonlySet<string>; onChange: (s: Set<string>) => void; desabilitado?: boolean }) {
@@ -333,12 +369,14 @@ function VisaoPessoas({ dados, recarregar, meuId }: { dados: Dados; recarregar: 
   const teto = useMemo(() => new Set(pessoa ? dados.tetos[pessoa.papel] ?? [] : []), [pessoa, dados.tetos]);
   const [permitidas, setPermitidas] = useState<Set<string>>(new Set());
   const [contas, setContas] = useState<Set<string>>(new Set());
+  const [empresasDaPessoa, setEmpresasDaPessoa] = useState<Set<string>>(new Set());
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
     const negadas = new Set(restricao?.acoes_negadas ?? []);
     setPermitidas(new Set([...teto].filter(a => !negadas.has(a))));
     setContas(new Set(restricao?.contas_liberadas ?? []));
+    setEmpresasDaPessoa(new Set(restricao?.empresas_liberadas ?? []));
   }, [restricao, teto]);
 
   if (pessoas.length === 0) {
@@ -359,7 +397,10 @@ function VisaoPessoas({ dados, recarregar, meuId }: { dados: Dados; recarregar: 
     try {
       await pedir('/api/perfis-de-acesso', {
         method: 'POST',
-        body: JSON.stringify({ restricao: { usuario_id: pessoa.id, contas_liberadas: [...contas], acoes_negadas: [...teto].filter(a => !permitidas.has(a)) } }),
+        body: JSON.stringify({ restricao: {
+          usuario_id: pessoa.id, contas_liberadas: [...contas], acoes_negadas: [...teto].filter(a => !permitidas.has(a)),
+          empresas_liberadas: [...empresasDaPessoa],
+        } }),
       });
       await recarregar();
       toast.success('Restrição salva.');
@@ -409,6 +450,12 @@ function VisaoPessoas({ dados, recarregar, meuId }: { dados: Dados; recarregar: 
                 <Bloco titulo="Direitos" ajuda="Marcado = pode. Desmarque o que esta pessoa não deve fazer.">
                   <MatrizDeDireitos catalogo={dados.catalogo} marcadas={permitidas} teto={teto} onChange={setPermitidas} foraDoTeto="O papel não permite" />
                 </Bloco>
+                <BlocoDeEmpresas
+                  titulo="Empresas que esta pessoa vê"
+                  ajuda="Marque as empresas. Sem nenhuma marcada, vale o que os perfis dela mostram."
+                  marcadas={empresasDaPessoa}
+                  onChange={setEmpresasDaPessoa}
+                />
                 <Bloco titulo="Contas bancárias que esta pessoa vê" ajuda="Marque as contas. Sem nenhuma marcada, vale o que os perfis dela mostram.">
                   <SeletorDeContas contas={dados.contas} marcadas={contas} onChange={setContas} />
                 </Bloco>

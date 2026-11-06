@@ -745,12 +745,37 @@ export async function emitirNotasDaRegra(
     throw new ErroNota('PREVIA_MUDOU', 'Os valores mudaram desde a prévia. Confira a prévia nova antes de emitir.', 409, previa);
   }
   if (previa.pendencias_gerais.length) throw new ErroNota('CONFIGURACAO', previa.pendencias_gerais.join(' '), 400, previa.pendencias_gerais);
-  const config = await carregarConfigFiscal(tenantId);
-  const emitente = await carregarEmitente(tenantId);
-  const emissor = emissorDaConfig(config);
+  // Emissão por empresa (E7): cada nota sai pelo emissor da empresa da venda.
+  // Uma empresa só: o emissor de sempre, carregado uma vez.
+  const porEmpresa = new Map<string, { config: Awaited<ReturnType<typeof carregarConfigFiscal>>; emitente: Awaited<ReturnType<typeof carregarEmitente>>; emissor: ReturnType<typeof emissorDaConfig> }>();
+  const doEmissor = async (empresa: string) => {
+    let e = porEmpresa.get(empresa);
+    if (!e) {
+      const config = await carregarConfigFiscal(tenantId, empresa);
+      e = { config, emitente: await carregarEmitente(tenantId, empresa), emissor: emissorDaConfig(config) };
+      porEmpresa.set(empresa, e);
+    }
+    return e;
+  };
+  const vendasDasNotas = [...new Set(previa.notas.map(p => p.venda_id).filter(Boolean))];
+  const empresaDaVenda = new Map<string, string>();
+  if (vendasDasNotas.length) {
+    const { rows } = await exec.query(
+      `SELECT id, COALESCE(NULLIF(data->>'empresa_id', ''), 'principal') AS e FROM vendas_crm WHERE tenant_id = $1 AND id = ANY($2::text[])`,
+      [tenantId, vendasDasNotas]);
+    for (const r of rows) empresaDaVenda.set(String(r.id), String(r.e));
+  }
   const resultado: ResultadoDaEmissao = { emitidas: [], recusadas: [] };
   for (const p of previa.notas) {
     if (!p.valida) { resultado.recusadas.push({ chave: p.chave, motivo: p.pendencias.join(' ') || 'Nota com pendência.' }); continue; }
+    let daEmpresa: Awaited<ReturnType<typeof doEmissor>>;
+    try {
+      daEmpresa = await doEmissor(empresaDaVenda.get(p.venda_id) ?? 'principal');
+    } catch (e) {
+      resultado.recusadas.push({ chave: p.chave, motivo: e instanceof Error ? e.message : 'O emissor de notas desta empresa não está configurado.' });
+      continue;
+    }
+    const { config, emitente, emissor } = daEmpresa;
     const nota = notaFiscalDaPrevia(p, config, emissor.capacidades, autor.nome || autor.id || 'Sistema', opcoes.gatilho ?? 'tela');
     try {
       await gravarNotaNoExecutor(exec, tenantId, nota);

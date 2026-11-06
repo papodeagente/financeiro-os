@@ -37,6 +37,8 @@ import { CurvaDoSaldo } from './CurvaDoSaldo';
 import { Caderno } from './Caderno';
 import { DetalheDaLinha } from './DetalheDaLinha';
 import { PrevistoRealizado } from './PrevistoRealizado';
+import { lerEmpresasVisiveis } from '@/components/fin/useEmpresas';
+import { contasNoRecorte } from '@/lib/empresas';
 
 const CARTAO =
   'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]';
@@ -188,8 +190,11 @@ export default function FluxoCaixaPage() {
         fetch('/api/folha').then(r => (r.ok ? r.json() : null)).catch(() => null),
         loadAgencia<Agencia>().catch(() => null),
       ]);
-      setContasReceber(cr);
-      setContasPagar(cp);
+      // Várias empresas (E7): o rateado entre empresas entra só com a parte das
+      // empresas marcadas. Uma empresa só: as listas como vieram.
+      const visiveis = await lerEmpresasVisiveis();
+      setContasReceber(contasNoRecorte(cr, visiveis));
+      setContasPagar(contasNoRecorte(cp, visiveis));
       setContasBancarias(cb);
       setFunis(fs);
       setPessoasFolha(folhaResp?.pessoas ?? []);
@@ -379,6 +384,7 @@ export default function FluxoCaixaPage() {
     <div className="bg-[var(--fin-bg)] py-[var(--fin-page-pad)] text-[var(--fin-text)]">
       <div className="mx-auto flex w-full max-w-[var(--fin-page-max)] flex-col gap-[var(--fin-s-5)] px-[var(--fin-page-pad)]">
         <PageHeader
+          empresas
           icone={BarChart3}
           titulo="Fluxo de caixa"
           subtitulo="O que entra e o que sai, como num caderno: saldo anterior, mais as entradas, menos as saídas"

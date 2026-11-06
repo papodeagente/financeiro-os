@@ -181,6 +181,7 @@ export function TelaDeFaturas() {
     <MolduraDaPagina>
       <div ref={moldura} onKeyDown={teclado} className="flex flex-col gap-[var(--fin-s-5)]">
         <PageHeader
+          empresas
           icone={FileStack}
           titulo="Faturas"
           subtitulo="Cada cliente faturado recebe uma fatura por período, montada pela regra de faturamento dele. Feche, mande conferir no portal e cobre com boleto e Pix."

@@ -232,6 +232,7 @@ export function RelatoriosDeVendas({ abrirVenda }: { abrirVenda: (vendaId: strin
   return (
     <MolduraDaPagina>
       <PageHeader
+        empresas
         icone={ShoppingCart}
         titulo="Relatórios de vendas"
         subtitulo="Faturamento e receita da agência, aberta por componente. Clique numa linha para abrir a venda."

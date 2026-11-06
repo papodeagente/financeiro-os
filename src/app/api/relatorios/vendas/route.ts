@@ -11,6 +11,7 @@ import { formatoDaConsulta } from '@/lib/exportacao/arquivo';
 import { nomeDoArquivo } from '@/lib/exportacao/documento';
 import { responderExportacao } from '@/lib/exportacao/servidor';
 import { registrarEventoAuditoria } from '@/lib/audit';
+import { escopoDaSessao, type ExecutorEmpresas } from '@/lib/empresas-servidor';
 
 /**
  * Relatórios de vendas (E5, parte F; filtros, pagamentos e exportação na E7).
@@ -49,7 +50,11 @@ export async function GET(req: Request) {
   const soAsSuas = !podeVerTodasVendas(sessao);
   try {
     const tenantId = await getTenantId();
-    const r = await montarRelatorioDeVendas(exec, tenantId, consulta, { verReceita, vendedorId: soAsSuas ? sessao.userId : undefined });
+    const r = await montarRelatorioDeVendas(exec, tenantId, consulta, {
+      verReceita, vendedorId: soAsSuas ? sessao.userId : undefined,
+      // Empresas marcadas e liberadas (E7). Uma empresa só: todas.
+      empresas: (await escopoDaSessao(sessao, exec as unknown as ExecutorEmpresas)).visiveis,
+    });
     if (formato === 'csv') {
       // O CSV de sempre: cabeçalho na primeira linha, total no fim.
       const doc = documentoDoRelatorio(r, consulta);

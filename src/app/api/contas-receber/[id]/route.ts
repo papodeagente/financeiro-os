@@ -8,6 +8,7 @@ import { prepararDimensoesDaConta } from '@/lib/dimensoes';
 import { getSession } from '@/lib/auth';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { conferirEdicaoDoTitulo, type SessaoDaBaixa } from '@/lib/baixas-porteiro';
+import { tituloForaDasEmpresas, type ExecutorEmpresas } from '@/lib/empresas-servidor';
 
 const TABLE = 'contas_receber';
 const INDEX_COLS = ['venda_id', 'cliente_id', 'status'];
@@ -20,6 +21,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const { id } = await params;
     if (!pool) return NextResponse.json(null);
     const tenantId = await getTenantId();
+    // Título de empresa não liberada para a pessoa (E7): como se não existisse.
+    if (await tituloForaDasEmpresas(pool as unknown as ExecutorEmpresas, await getSession(), TABLE, id)) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
     const { rows } = await pool.query(`SELECT data FROM ${TABLE} WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
     if (rows.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json(rows[0].data);
@@ -55,6 +60,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (rateioInvalido) return NextResponse.json({ error: rateioInvalido }, { status: 400 });
     if (!pool) return NextResponse.json(item);
     const tenantId = await getTenantId();
+    // Título de empresa não liberada para a pessoa (E7): como se não existisse.
+    if (await tituloForaDasEmpresas(pool as unknown as ExecutorEmpresas, await getSession(), TABLE, id)) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
     // Perfis de acesso (05/11/2026): baixa pela edição segue as mesmas regras da liquidação.
     const barrado = await conferirEdicaoDoTitulo(
       pool as unknown as ExecutorSQL, ((await getSession()) ?? {}) as SessaoDaBaixa, tenantId, TABLE, id, item as Record<string, unknown>);
@@ -93,6 +102,10 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     const { id } = await params;
     if (!pool) return NextResponse.json({ ok: true });
     const tenantId = await getTenantId();
+    // Título de empresa não liberada para a pessoa (E7): como se não existisse.
+    if (await tituloForaDasEmpresas(pool as unknown as ExecutorEmpresas, await getSession(), TABLE, id)) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
 
     await emTransacao(async exec => {
       const { rows } = await exec.query(

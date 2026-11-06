@@ -79,6 +79,8 @@ export interface FichaDaVenda {
   comissoes: Array<Record<string, unknown>>;
   config_receita: ConfigReceita;
   permissoes: PermissoesDaFicha;
+  /** Empresa da venda (E7). Só vem quando não é a principal (agência de uma empresa só: nunca). */
+  empresa_id?: string;
   /**
    * A negociação no CRM (E7), onde ficam o contrato e o voucher da viagem.
    * null na venda lançada à mão ou sem integração com o CRM.
@@ -129,7 +131,10 @@ export async function montarFicha(exec: ExecutorSQL, tenantId: string, vendaId: 
   if (!p) return null;
   const perm = await permissoesDaFicha(sessao, exec);
   const { carregada } = p;
-  const config = await lerConfigVenda(exec, tenantId);
+  // Várias empresas (E7): a configuração de vendas da empresa da venda.
+  const { rows: emp } = await exec.query(`SELECT data->>'empresa_id' AS e FROM vendas_crm WHERE tenant_id = $1 AND id = $2`, [tenantId, vendaId]);
+  const empresaDaVenda = String(emp[0]?.e ?? '');
+  const config = await lerConfigVenda(exec, tenantId, empresaDaVenda);
   const { rows: com } = await exec.query(`SELECT id, status, data FROM comissoes WHERE tenant_id = $1 AND venda_id = $2`, [tenantId, vendaId])
     .catch(() => ({ rows: [] as Array<Record<string, unknown>> }));
   const porProduto: Record<string, TotaisDoProduto> = {};
@@ -145,6 +150,7 @@ export async function montarFicha(exec: ExecutorSQL, tenantId: string, vendaId: 
     config_receita: config.receita,
     permissoes: perm,
     link_crm: carregada.venda.crm_venda_id ? linkDaNegociacaoNoCrm(carregada.venda.crm_venda_id, await enderecoDoCrm(exec, tenantId)) : null,
+    ...(empresaDaVenda && empresaDaVenda !== 'principal' ? { empresa_id: empresaDaVenda } : {}),
   });
 }
 

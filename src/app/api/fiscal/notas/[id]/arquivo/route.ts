@@ -49,7 +49,8 @@ export async function GET(
       return NextResponse.json({ error: decisao.mensagem }, { status: 409 });
     }
 
-    const config = await carregarConfigFiscal(await getTenantId());
+    // A nota sai pelo emissor da empresa dela (E7).
+    const config = await carregarConfigFiscal(await getTenantId(), String((nota as unknown as Record<string, unknown>).empresa_id ?? ''));
     const arquivo = await emissorDaConfig(config).baixarArquivo(
       decisao.url,
       decisao.tipo_conteudo,

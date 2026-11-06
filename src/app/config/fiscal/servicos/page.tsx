@@ -21,6 +21,7 @@ import { toast } from '@/lib/toast';
 import { num, round2 } from '@/lib/money';
 import { ISS_MAXIMO, ISS_MINIMO } from '@/lib/nfse-formulario';
 import type { ServicoFiscalCadastrado } from '@/lib/nfse-tipos';
+import { EmpresaDaConfiguracao, naEmpresa } from '@/components/fin/EmpresaDaConfiguracao';
 
 const CARTAO = 'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-4 shadow-[var(--fin-e-card)]';
 const CAMPO =
@@ -57,7 +58,7 @@ export default function ServicosFiscaisPage() {
   const carregar = useCallback(async () => {
     try {
       const [a, b] = await Promise.all([
-        fetch('/api/fiscal/servicos-empresa').then(r => r.json()),
+        fetch(naEmpresa('/api/fiscal/servicos-empresa')).then(r => r.json()),
         fetch('/api/fiscal/servicos?busca=').then(r => r.json()),
       ]);
       if (a?.error) { setErro(a.error); setServicos([]); return; }
@@ -79,7 +80,7 @@ export default function ServicosFiscaisPage() {
     if (salvando) return;
     setSalvando(true);
     try {
-      const res = await fetch('/api/fiscal/servicos-empresa', {
+      const res = await fetch(naEmpresa('/api/fiscal/servicos-empresa'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ servicos }),
@@ -104,6 +105,8 @@ export default function ServicosFiscaisPage() {
         titulo="Serviços da nota fiscal"
         subtitulo="O que a empresa presta. Cada serviço leva o código de tributação e a alíquota que vão na nota."
       />
+      {/* Várias empresas (E7): de qual empresa é esta configuração. */}
+      <EmpresaDaConfiguracao secao="notas" />
 
       {servicos === null ? (
         <DataState estado="carregando" esqueleto={<div className={`${CARTAO} h-32`} />}>

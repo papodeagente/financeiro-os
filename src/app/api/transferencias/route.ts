@@ -12,5 +12,7 @@ export const { GET, POST } = createCrudHandlers(
     somenteFinanceiro: true, protegerBaixa: true,
     // Transferência que toca conta não liberada não aparece (05/11/2026).
     filtroDeConta: { campos: ['conta_origem_id', 'conta_destino_id'] },
+    // Aparece em quem vê alguma das duas contas (E7).
+    filtroDeEmpresa: { tipo: 'por_conta', campos: ['conta_origem_id', 'conta_destino_id'] },
   },
 );

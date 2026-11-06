@@ -37,6 +37,7 @@ import { posicaoDaVenda, type CobrancaDaPosicao, type PosicaoDaVenda } from './v
 import { contasNaFaturaDoFornecedor, refletirFaturasNasContas } from './fornecedor-fatura-banco';
 import { aplicarRetencoesDaAgencia } from './nota-retencoes-servidor';
 import { contasTravadasPelaFatura, projetarContasNaFatura, sincronizarFaturasDaVenda } from './fatura-servidor';
+import { empresaComConfigPropria, lerChavesDaEmpresa } from './empresas-config';
 
 // ============================================================
 // Tipos públicos
@@ -141,13 +142,19 @@ async function travarVenda(exec: ExecutorSQL, tenantId: string, vendaId: string)
 // Configuração
 // ============================================================
 
-export async function lerConfigVenda(exec: ExecutorSQL, tenantId: string): Promise<ConfigVenda> {
+export async function lerConfigVenda(exec: ExecutorSQL, tenantId: string, empresaId?: string | null): Promise<ConfigVenda> {
   const { rows } = await exec.query(
     `SELECT data->'venda_config' AS c FROM agencia WHERE tenant_id = $1 ORDER BY updated_at DESC NULLS LAST, id ASC LIMIT 1`,
     [tenantId],
   ).catch(() => ({ rows: [] as Array<Record<string, unknown>> }));
-  const c = (rows[0]?.c ?? {}) as Record<string, unknown>;
-  return normalizarConfigVenda(c);
+  const principal = normalizarConfigVenda((rows[0]?.c ?? {}) as Record<string, unknown>);
+  // Empresa com configuração própria (E7): a dela, e no que ela não definiu, a
+  // da principal. Uma empresa só: a de sempre.
+  if (empresaComConfigPropria(empresaId)) {
+    const c = await lerChavesDaEmpresa(exec, tenantId, empresaId, ['venda_config']);
+    return normalizarConfigVenda(c.venda_config ?? {}, principal);
+  }
+  return principal;
 }
 
 /**
@@ -801,7 +808,9 @@ export async function salvarVenda(
   const comCarteira = await carteiraDisponivel(exec);
 
   venda = await congelarTaxasDoCartao(exec, tenantId, venda);
-  const config = await lerConfigVenda(exec, tenantId);
+  // Configuração de vendas da empresa da venda (E7). Uma empresa só: a de sempre.
+  const empresaDaVenda = txt(opts.cabecalho?.empresa_id) || txt(existente?.empresa_id);
+  const config = await lerConfigVenda(exec, tenantId, empresaDaVenda);
   const contas = await previaDasContas(exec, tenantId, venda);
   const receita = receitaDaVenda(venda, config.receita);
 

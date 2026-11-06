@@ -24,6 +24,7 @@ import type { ContaBancaria } from '@/lib/crm-types';
 import { num } from '@/lib/money';
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
+import { EmpresaDaConfiguracao, naEmpresa } from '@/components/fin/EmpresaDaConfiguracao';
 
 /**
  * Configurações › Cobrança (05/11/2026). Qual provedor da agência emite
@@ -180,6 +181,8 @@ export default function ConfigCobrancaPage() {
           titulo="Cobrança"
           subtitulo="Boleto e Pix pelo Asaas ou Pagar.me da própria agência: quem emite, juros e multa, lembretes ao cliente e o texto da cobrança."
         />
+        {/* Várias empresas (E7): de qual empresa é esta configuração. */}
+        <EmpresaDaConfiguracao secao="cobranca" />
         <DataState
           estado={estado}
           erro={erroCarga ? { mensagem: erroCarga, onTentarDeNovo: () => { void carregar(); } } : null}

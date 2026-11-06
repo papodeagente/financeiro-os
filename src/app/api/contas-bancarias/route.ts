@@ -15,6 +15,8 @@ export const { GET, POST } = createCrudHandlers('contas_bancarias', ['nome', 'ba
   somenteFinanceiro: true,
   // Contas liberadas por perfil de acesso (05/11/2026); sem restrição, todas.
   filtroDeConta: { cadastro: true },
+  // Conta disponível por empresa (E7): a dela e as marcadas como disponíveis.
+  filtroDeEmpresa: { tipo: 'conta_bancaria' },
   // Moeda da conta (05/11/2026, E6): ausente ou desconhecida = real, como
   // sempre. O saldo da conta fica na moeda dela; a moeda não muda depois que
   // a conta tem movimento (gatilho fin_moeda_da_conta_fixa).

@@ -10,6 +10,7 @@ import { normalizarPolitica, type PoliticaCobranca } from '../baixa-calculo';
 import { num } from '../money';
 import type { ExecutorSQL } from '../caixa-atomico';
 import { ehProvedorCobranca, type EncargosDaCobranca, type ProvedorCobranca, type TipoEmissao } from './tipos';
+import { empresaComConfigPropria, lerChavesDaEmpresa } from '../empresas-config';
 
 export type CanalCobranca = 'email' | 'whatsapp';
 
@@ -126,8 +127,19 @@ export function encargosDaCobranca(config: ConfigCobranca, politica: PoliticaCob
 
 /** Configuração e política da agência, numa leitura. */
 export async function lerConfigCobranca(
-  exec: ExecutorSQL, tenantId: string,
+  exec: ExecutorSQL, tenantId: string, empresaId?: string | null,
 ): Promise<{ config: ConfigCobranca; politica: PoliticaCobranca | null; nome_agencia: string }> {
+  // Empresa com configuração própria (E7): a cobrança e a política dela; no
+  // resto, as da agência. Uma empresa só: exatamente a leitura de sempre.
+  if (empresaComConfigPropria(empresaId)) {
+    const c = await lerChavesDaEmpresa(exec, tenantId, empresaId, ['cobranca', 'politica_cobranca', 'nome_fantasia', 'nome', 'razao_social']);
+    const { rows: emp } = await exec.query(`SELECT nome FROM empresas WHERE tenant_id = $1 AND id = $2`, [tenantId, empresaId]);
+    return {
+      config: normalizarConfigCobranca(c.cobranca ?? null),
+      politica: (c.politica_cobranca as PoliticaCobranca | null) ?? null,
+      nome_agencia: String(emp[0]?.nome ?? c.nome_fantasia ?? c.nome ?? c.razao_social ?? ''),
+    };
+  }
   const { rows } = await exec.query(
     `SELECT data->'cobranca' AS c, data->'politica_cobranca' AS p,
             COALESCE(data->>'nome_fantasia', data->>'nome', data->>'razao_social', '') AS nome

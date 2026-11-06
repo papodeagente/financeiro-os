@@ -42,6 +42,8 @@ import {
   type LinhaDemonstrativo,
   type NotaDemonstrativo,
 } from './DemonstrativoTabela';
+import { lerEmpresasVisiveis } from '@/components/fin/useEmpresas';
+import { contasNoRecorte } from '@/lib/empresas';
 
 const pctBR = (v: number) =>
   `${new Intl.NumberFormat('pt-BR', {
@@ -156,8 +158,11 @@ export default function DREPage() {
         loadEntities<VendaCRM>('vendas-crm'),
         loadEntities<PlanoContas>('plano-contas'),
       ]);
-      setContasReceber(cr);
-      setContasPagar(cp);
+      // Várias empresas (E7): o rateado entre empresas entra só com a parte das
+      // empresas marcadas. Uma empresa só: as listas como vieram.
+      const visiveis = await lerEmpresasVisiveis();
+      setContasReceber(contasNoRecorte(cr, visiveis));
+      setContasPagar(contasNoRecorte(cp, visiveis));
       setVendas(v);
       setPlanoContas(pc);
       fetch('/api/encargos-da-liquidacao')
@@ -516,6 +521,7 @@ export default function DREPage() {
     <div className="w-full bg-[var(--fin-bg)] px-[var(--fin-page-pad)] py-[var(--fin-page-pad)] text-[var(--fin-text)]">
       <div className="mx-auto w-full max-w-[var(--fin-page-max)]">
         <PageHeader
+          empresas
           icone={TrendingUp}
           titulo="Resultado do mês"
           subtitulo={

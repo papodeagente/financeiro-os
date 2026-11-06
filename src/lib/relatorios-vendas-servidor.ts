@@ -118,6 +118,8 @@ export interface AcessoAoRelatorio {
   verReceita: boolean;
   /** Só as vendas desta pessoa (quem não vê as da equipe). */
   vendedorId?: string;
+  /** Várias empresas (E7): só as vendas destas. null/ausente = todas. */
+  empresas?: readonly string[] | null;
 }
 
 export interface ResultadoDoRelatorio {
@@ -194,7 +196,7 @@ async function nomesDasContas(exec: ExecutorSQL, tenantId: string): Promise<Map<
 export async function montarRelatorioDeVendas(exec: ExecutorSQL, tenantId: string, c: ConsultaDeVendas, acesso: AcessoAoRelatorio): Promise<ResultadoDoRelatorio> {
   const janela = janelaDaLeitura(c);
   const [lidasTodas, cfg] = await Promise.all([
-    lerVendas(exec, tenantId, { ...janela, incluir_canceladas: c.canceladas, vendedor_id: acesso.vendedorId }),
+    lerVendas(exec, tenantId, { ...janela, incluir_canceladas: c.canceladas, vendedor_id: acesso.vendedorId, empresas: acesso.empresas ?? undefined }),
     lerConfigVenda(exec, tenantId),
   ]);
   const lidas = lidasTodas.filter(v => c.situacao === 'abertas' ? v.situacao === 'ABERTA' && !v.cancelada : c.situacao === 'fechadas' ? v.situacao === 'FECHADA' : true);

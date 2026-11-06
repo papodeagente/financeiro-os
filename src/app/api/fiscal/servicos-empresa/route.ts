@@ -7,6 +7,7 @@ import { carregarConfigFiscal, salvarConfigFiscal } from '@/lib/nfse-servico';
 import { num, round2 } from '@/lib/money';
 import { generateId } from '@/lib/utils';
 import type { ServicoFiscalCadastrado } from '@/lib/nfse-tipos';
+import { empresaDoPedido } from '@/lib/empresas-rota';
 
 /** Normaliza o que chega do formulário. Serviço sem código não é serviço. */
 function sanear(bruto: unknown): ServicoFiscalCadastrado[] {
@@ -35,12 +36,15 @@ function sanear(bruto: unknown): ServicoFiscalCadastrado[] {
   return saida;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    // Configuração fiscal por empresa (E7): ?empresa=<id>; sem ele, a de sempre.
+    const { empresa: empresaFiscal, recusa: recusaEmpresa } = await empresaDoPedido(req);
+    if (recusaEmpresa) return recusaEmpresa;
     await initDB();
     const bloqueio = bloqueioFinanceiro(await getSession(), 'ler');
     if (bloqueio) return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
-    const config = await carregarConfigFiscal(await getTenantId());
+    const config = await carregarConfigFiscal(await getTenantId(), empresaFiscal);
     return NextResponse.json({ servicos: config.servicos ?? [] });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Erro';
@@ -51,14 +55,17 @@ export async function GET() {
 /** Grava a lista inteira. A tela envia o catálogo completo a cada salvar. */
 export async function POST(req: Request) {
   try {
+    // Configuração fiscal por empresa (E7): ?empresa=<id>; sem ele, a de sempre.
+    const { empresa: empresaFiscal, recusa: recusaEmpresa } = await empresaDoPedido(req);
+    if (recusaEmpresa) return recusaEmpresa;
     await initDB();
     const bloqueio = bloqueioFinanceiro(await getSession(), 'escrever');
     if (bloqueio) return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
     const tenantId = await getTenantId();
     const corpo = await req.json();
-    const config = await carregarConfigFiscal(tenantId);
+    const config = await carregarConfigFiscal(tenantId, empresaFiscal);
     const servicos = sanear(corpo?.servicos);
-    await salvarConfigFiscal(tenantId, { ...config, servicos });
+    await salvarConfigFiscal(tenantId, { ...config, servicos }, empresaFiscal);
     return NextResponse.json({ servicos });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Erro';

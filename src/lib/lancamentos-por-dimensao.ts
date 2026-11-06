@@ -12,6 +12,7 @@ import { auditCsvCell } from './audit-query';
 import {
   dataMovimentoDaConta,
   dimensoesDoLancamento,
+  fatiasDasEmpresas,
   type CategoriaDoContexto,
   type FatiaDoLancamento,
 } from './dimensoes';
@@ -151,6 +152,8 @@ export interface ContextoRelatorio {
   centros: ReadonlyArray<{ id: string; nome?: string; codigo?: string; centro_pai_id?: string | null }>;
   contasBancarias: ReadonlyMap<string, string>;
   vendas: ReadonlyMap<string, string>;
+  /** Empresas no recorte (E7). Ausente ou null = todas, como sempre. */
+  empresas?: readonly string[] | null;
 }
 
 export interface LinhaLancamento {
@@ -178,6 +181,8 @@ export interface LinhaLancamento {
   grupo_nome: string;
   centro_custo_id: string;
   centro_custo_nome: string;
+  /** Empresa da fatia (E7; 'principal' em agência de uma empresa só). */
+  empresa_id: string;
   percentual: number;
   /** Valor da categoria/centro/linha neste regime. */
   valor: number;
@@ -278,11 +283,14 @@ export function montarLinhas(
     if (f.visao === 'rateio' && !dim.rateado) continue;
     if (caixa && dim.valor_movimentado === 0) continue;
 
+    // Várias empresas (E7): só a parte das empresas no recorte.
+    const dasEmpresas = fatiasDasEmpresas(dim.fatias, ctx.empresas ?? null);
+    if (dasEmpresas.length === 0) continue;
     const fatias = f.visao === 'categoria'
-      ? juntarFatias(dim.fatias, x => x.categoria_id)
+      ? juntarFatias(dasEmpresas, x => x.categoria_id)
       : f.visao === 'centro'
-        ? juntarFatias(dim.fatias, x => x.centro_custo_id || `nome:${x.centro_custo_nome}`)
-        : dim.fatias;
+        ? juntarFatias(dasEmpresas, x => x.centro_custo_id || `nome:${x.centro_custo_nome}`)
+        : dasEmpresas;
 
     const comum = {
       conta_id: conta.id,
@@ -319,6 +327,7 @@ export function montarLinhas(
         grupo_nome: fatia.grupo_nome,
         centro_custo_id: fatia.centro_custo_id,
         centro_custo_nome: fatia.centro_custo_nome,
+        empresa_id: fatia.empresa_id,
         percentual: fatia.percentual,
         valor: caixa ? fatia.valor_caixa : fatia.valor,
         tags: fatia.tags,

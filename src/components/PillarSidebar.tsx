@@ -161,6 +161,7 @@ const CONFIGURACOES_MENU: SidebarSection[] = [
     title: 'Geral',
     items: [
       { key: 'cfg-agencia', label: 'Dados da agência', icon: Building2, href: '/config/agencia' },
+      { key: 'cfg-empresas', label: 'Empresas', icon: Network, href: '/config/empresas' },
       { key: 'cfg-usuarios', label: 'Usuários', icon: Users, href: '/config/usuarios' },
       { key: 'cfg-financeiro', label: 'Financeiro', icon: Percent, href: '/config/financeiro' },
       { key: 'cfg-cobranca', label: 'Cobrança', icon: Barcode, href: '/config/cobranca' },

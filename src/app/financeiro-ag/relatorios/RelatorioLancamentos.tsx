@@ -30,6 +30,7 @@ import { PageHeader } from '@/components/fin/PageHeader';
 import { resolverPeriodo, type PeriodoChave } from '@/components/fin/PeriodPicker';
 import { statusChipVariants } from '@/components/fin/StatusChip';
 import { Interruptor } from '@/app/financeiro-ag/pagar/campos';
+import { nomeDaEmpresa, useEmpresas } from '@/components/fin/useEmpresas';
 
 const FOCO =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)] focus-visible:ring-0';
@@ -248,7 +249,19 @@ export function RelatorioLancamentos({ visao, icone }: { visao: Visao; icone: Lu
     [categorias],
   );
   const regime = dados?.regime ?? (f.data_de === 'MOVIMENTACAO' ? 'caixa' : 'competencia');
-  const colunas = React.useMemo(() => colunasDa(visao, regime), [visao, regime]);
+  // Várias empresas (E7): no relatório por rateio entra a coluna Empresa
+  // (de cada parte). Uma empresa só: as colunas de sempre.
+  const { multi: variasEmpresas, empresas } = useEmpresas();
+  const colunas = React.useMemo(() => {
+    const base = colunasDa(visao, regime);
+    if (!variasEmpresas || visao !== 'rateio') return base;
+    const empresa: FinColuna<LinhaLancamento> = {
+      id: 'empresa', cabecalho: 'Empresa', tipo: 'texto', minWidth: 120,
+      render: l => <span className="fin-t-body text-[var(--fin-text)]">{nomeDaEmpresa(empresas, l.empresa_id)}</span>,
+    };
+    const i = base.findIndex(c => c.id === 'centro');
+    return [...base.slice(0, i), empresa, ...base.slice(i)];
+  }, [visao, regime, variasEmpresas, empresas]);
 
   const ativos = [
     f.periodo !== 'MES_ATUAL', f.data_de !== 'VENCIMENTO', f.situacao !== 'TODAS', f.tipo !== 'TODOS', f.incluir_repasse,
@@ -260,6 +273,7 @@ export function RelatorioLancamentos({ visao, icone }: { visao: Visao; icone: Lu
   return (
     <MolduraDaPagina>
       <PageHeader
+        empresas
         icone={icone}
         titulo={TITULO[visao]}
         subtitulo={SUBTITULO[visao]}
