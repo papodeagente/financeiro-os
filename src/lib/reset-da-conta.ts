@@ -16,6 +16,7 @@
  */
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { RAZAO_LIMPEZA_DA_AGENCIA_SQL } from './razao-schema';
+import { TABELAS_DO_FORNECEDOR } from './fornecedor-schema';
 import type { PerfilDaConta } from '@/lib/perfil-da-conta';
 
 export const CATEGORIES = {
@@ -157,6 +158,20 @@ export async function apagarCategorias(
     : { rows: [] as Array<Record<string, unknown>> };
   if (apagaVendas && temModelo[0]?.ok) {
     for (const table of TABELAS_DA_VENDA_COMPLETA) {
+      const res = await exec.query(`DELETE FROM ${table} WHERE tenant_id = $1`, [tenantId]);
+      const n = res.rowCount || 0;
+      summary[table] = n;
+      total += n;
+    }
+  }
+  // Lado do fornecedor (E5 parte C, 05/11/2026): sem as contas a pagar, as
+  // faturas e os sinais do fornecedor também saem (os acordos são cadastro).
+  const apagaPagar = categorias.some(c => (CATEGORIES[c] as readonly string[]).includes('contas_pagar'));
+  const { rows: temFornecedor } = apagaPagar
+    ? await exec.query(`SELECT to_regclass('public.faturas_fornecedor') IS NOT NULL AS ok`)
+    : { rows: [] as Array<Record<string, unknown>> };
+  if (apagaPagar && temFornecedor[0]?.ok) {
+    for (const table of TABELAS_DO_FORNECEDOR) {
       const res = await exec.query(`DELETE FROM ${table} WHERE tenant_id = $1`, [tenantId]);
       const n = res.rowCount || 0;
       summary[table] = n;

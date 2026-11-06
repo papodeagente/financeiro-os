@@ -25,7 +25,7 @@ import {
   PanelLeftClose, PanelLeftOpen,
   Eraser, LifeBuoy, FileText,
   LayoutGrid, ChartColumn, ArrowDownLeft, ArrowUpRight, GitCompareArrows, ListTree,
-  Contact, Truck, Repeat, Lock, ArrowDownUp, Barcode, FolderInput, Coins, Network, Split, Tags, ShieldCheck, Stamp, Scale, ScrollText, ListOrdered, Table2,
+  Contact, Truck, Repeat, Lock, ArrowDownUp, Barcode, FolderInput, Coins, FileStack, HandCoins, Handshake, BadgePercent, Network, Split, Tags, ShieldCheck, Stamp, Scale, ScrollText, ListOrdered, Table2,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -105,6 +105,15 @@ const FINANCEIRO_MENU: SidebarSection[] = [
       { key: 'transferencias', label: 'Transferências', icon: ArrowRightLeft, href: '/financeiro-ag/transferencias' },
       { key: 'fechamento', label: 'Fechar Caixa', icon: Lock, href: '/financeiro-ag/fechamento' },
       { key: 'aprovacoes', label: 'Aprovações', icon: Stamp, href: '/financeiro-ag/aprovacoes' },
+    ],
+  },
+  {
+    title: 'Fornecedores',
+    items: [
+      { key: 'forn-faturas', label: 'Fatura do fornecedor', icon: FileStack, href: '/financeiro-ag/fornecedores/faturas' },
+      { key: 'forn-sinais', label: 'Sinais a fornecedores', icon: HandCoins, href: '/financeiro-ag/fornecedores/sinais' },
+      { key: 'forn-acordos', label: 'Acordos com fornecedores', icon: Handshake, href: '/financeiro-ag/fornecedores/acordos' },
+      { key: 'forn-comissoes', label: 'Comissão de fornecedores', icon: BadgePercent, href: '/financeiro-ag/fornecedores/comissoes' },
     ],
   },
   {

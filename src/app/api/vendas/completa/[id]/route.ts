@@ -5,6 +5,7 @@ import { vendaAutorizada } from '@/lib/venda-autorizada';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { normalizarVenda } from '@/lib/venda-modelo';
 import { carregarVenda, salvarVenda } from '@/lib/venda-servidor';
+import { aplicarAcordosDaAgencia } from '@/lib/fornecedor-servidor';
 import { montarFicha, respostaDeErroDaVenda, usuarioDa } from '@/lib/venda-rota';
 
 // Ficha da venda completa (E5): ler e gravar. Contrato em src/lib/venda-rota.ts.
@@ -40,7 +41,8 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
     venda.id = id;
     venda.origem = atual?.venda.origem ?? 'manual';
     venda.crm_venda_id = atual?.venda.crm_venda_id ?? '';
-    await emTransacao(e => salvarVenda(e, acesso.tenantId, venda, { usuario: usuarioDa(acesso.sessao), origem: venda.origem }));
+    // Venda à mão: o que falta de Comissão, Over e Taxa CC vem do acordo vigente (parte C).
+    await emTransacao(async e => salvarVenda(e, acesso.tenantId, (await aplicarAcordosDaAgencia(e, acesso.tenantId, venda)).venda, { usuario: usuarioDa(acesso.sessao), origem: venda.origem }));
     return NextResponse.json(await montarFicha(exec, acesso.tenantId, id, acesso.sessao));
   } catch (e) {
     return respostaDeErroDaVenda(e);

@@ -194,6 +194,26 @@ export const DESTINOS_DE_MERCADO: readonly DestinoDeMercado[] = [
     frase: 'A agência escolhe quais componentes contam como receita; a ficha da venda mostra a receita aberta por componente.',
   },
   {
+    id: 'fatura-fornecedor', termos: ['fatura do fornecedor', 'fatura de fornecedor', 'faturar fornecedor', 'pagar operadora', 'corte do fornecedor', 'taxa cc du', 'taxa cc rav', 'pagar consolidadora'],
+    href: '/financeiro-ag/fornecedores/faturas', tela: 'Fatura do fornecedor',
+    frase: 'Junta os itens de várias vendas numa conta a pagar, pela regra de corte e vencimento do fornecedor, mostrando quanto cada cliente já pagou.',
+  },
+  {
+    id: 'sinal-fornecedor', termos: ['sinal ao fornecedor', 'adiantamento ao fornecedor', 'sinal da operadora', 'pagamento antecipado ao fornecedor'],
+    href: '/financeiro-ag/fornecedores/sinais', tela: 'Sinais a fornecedores',
+    frase: 'O sinal pago é descontado sozinho das próximas faturas do fornecedor.',
+  },
+  {
+    id: 'acordos-fornecedor', termos: ['acordo com fornecedor', 'comissão do fornecedor', 'over da operadora', 'incentivo da operadora', 'tabela de comissão', 'vigência da comissão'],
+    href: '/financeiro-ag/fornecedores/acordos', tela: 'Acordos com fornecedores',
+    frase: 'Comissão, over e Taxa CC por fornecedor e produto, com vigência: a venda usa o acordo da data dela.',
+  },
+  {
+    id: 'comissao-fornecedor', termos: ['comissão esperada', 'comissão recebida', 'conferir comissão', 'comissão da operadora', 'comissão atrasada'],
+    href: '/financeiro-ag/fornecedores/comissoes', tela: 'Comissão de fornecedores',
+    frase: 'Esperado pelo acordo, lançado na venda e recebido de fato, por operadora, com alerta do que não bate.',
+  },
+  {
     id: 'regua-cobranca', termos: ['régua de cobrança', 'lembrete de vencimento', 'cobrar cliente', 'aviso de cobrança', 'portal do cliente'],
     href: '/config/cobranca', tela: 'Configurações de cobrança',
     frase: 'Os lembretes saem pelo WhatsApp e e-mail do CRM; o cliente também tem um link pessoal para pagar e baixar recibos.',

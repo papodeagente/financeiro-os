@@ -6,6 +6,7 @@ import { recusaFinanceira } from '@/lib/guarda-rota';
 import { emTransacao, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { normalizarVenda, novoIdDaVenda } from '@/lib/venda-modelo';
 import { salvarVenda } from '@/lib/venda-servidor';
+import { aplicarAcordosDaAgencia } from '@/lib/fornecedor-servidor';
 import { montarFicha, respostaDeErroDaVenda, usuarioDa } from '@/lib/venda-rota';
 
 // Lançar venda à mão no modelo completo (E5). Contrato em src/lib/venda-rota.ts.
@@ -28,7 +29,8 @@ export async function POST(req: Request) {
   try {
     const { rows } = await exec.query(`SELECT 1 FROM vendas_crm WHERE tenant_id = $1 AND id = $2`, [tenantId, venda.id]);
     if (rows.length) return NextResponse.json({ error: 'Esta venda já existe. Use a ficha da venda para mudar.', codigo: 'JA_EXISTE' }, { status: 409 });
-    await emTransacao(e => salvarVenda(e, tenantId, venda, { usuario: usuarioDa(sessao), origem: 'manual' }));
+    // Comissão, Over e Taxa CC que faltam vêm do acordo vigente na data da venda (parte C).
+    await emTransacao(async e => salvarVenda(e, tenantId, (await aplicarAcordosDaAgencia(e, tenantId, venda)).venda, { usuario: usuarioDa(sessao), origem: 'manual' }));
     return NextResponse.json(await montarFicha(exec, tenantId, venda.id, sessao), { status: 201 });
   } catch (e) {
     return respostaDeErroDaVenda(e);

@@ -6,6 +6,8 @@ export const TIPOS_NOTIFICACAO = [
   { tipo: 'VENDA_VENDEDOR_NAO_CADASTRADO', label: 'Pendências de vendedores', descricao: 'Vendas recebidas do CRM sem vendedor cadastrado.' },
   { tipo: 'VENDA_CANCELADA_CRM', label: 'Vendas perdidas no CRM', descricao: 'Quando o CRM perde uma venda que já movimentou dinheiro, ou pede aprovação para cancelar.' },
   // Venda completa (E5, 05/11/2026).
+  // Fatura do fornecedor (E5, parte C, 05/11/2026).
+  { tipo: 'FATURA_FORNECEDOR_PRONTA', label: 'Faturas de fornecedor', descricao: 'No dia seguinte ao corte do fornecedor: a fatura pronta para montar (ou montada sozinha, se a regra pedir).' },
   { tipo: 'VENDA_FECHADA_MUDANCA_CRM', label: 'Mudanças do CRM em venda fechada', descricao: 'Quando o CRM muda uma venda que já está fechada no financeiro: a mudança espera alguém reabrir a venda.' },
   // Pedidos de aprovação do financeiro (05/11/2026).
   { tipo: 'APROVACAO_PEDIDA', label: 'Pedidos de aprovação', descricao: 'Quando alguém pede aprovação para pagar, dar desconto ou mudar data.' },

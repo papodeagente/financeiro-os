@@ -32,6 +32,7 @@ import { vendaDoV1, TIPO_PARA_V1 } from './venda-modelo-v1';
 import { contasDaVenda, type AvisoDaVenda, type ContasDaVenda, type PendenciaDaVenda } from './venda-contas';
 import { normalizarConfigReceita, receitaDaVenda, type ConfigReceita } from './venda-receita';
 import { posicaoDaVenda, type CobrancaDaPosicao, type PosicaoDaVenda } from './venda-posicao';
+import { contasNaFaturaDoFornecedor, refletirFaturasNasContas } from './fornecedor-fatura-banco';
 
 // ============================================================
 // Tipos públicos
@@ -471,6 +472,9 @@ export async function regerarContasDaVenda(exec: ExecutorSQL, tenantId: string, 
     );
     for (const r of rows) travadas.add(txt(r.titulo_id));
   }
+  // Conta que entrou na fatura do fornecedor (parte C) também fica como está:
+  // a diferença da venda vai para uma conta livre, que entra na próxima fatura.
+  for (const id of await contasNaFaturaDoFornecedor(exec, tenantId, vendaId)) travadas.add(id);
   const cr = await regerarTabela(exec, tenantId, vendaId, 'contas_receber', contas.contas_receber as unknown as Array<Record<string, unknown>>, travadas, avisos);
   const cp = await regerarTabela(exec, tenantId, vendaId, 'contas_pagar', contas.contas_pagar as unknown as Array<Record<string, unknown>>, travadas, avisos);
   return {
@@ -814,7 +818,8 @@ export async function contasDaVendaNoBanco(exec: ExecutorSQL, tenantId: string, 
     [tenantId, vendaId],
   );
   const juntar = (r: Record<string, unknown>) => ({ ...(r.data as Record<string, unknown>), id: txt(r.id), status: txt((r.data as Record<string, unknown>)?.status ?? r.status) });
-  return { contas_receber: cr.map(juntar), contas_pagar: cp.map(juntar) };
+  // A conta que entrou na fatura do fornecedor aparece com o pagamento da fatura (parte C).
+  return { contas_receber: cr.map(juntar), contas_pagar: await refletirFaturasNasContas(exec, tenantId, cp.map(juntar)) };
 }
 
 export async function posicaoDaVendaNoBanco(exec: ExecutorSQL, tenantId: string, vendaId: string, hoje = hojeISO()): Promise<PosicaoNoBanco | null> {
