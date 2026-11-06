@@ -37,9 +37,11 @@ export async function responderExportacao(
   const verSensivel = opcoes.sensiveisConferidas ? true : await pode(sessao, 'ver_colunas_comissao', { exec: opcoes.exec });
   const doc = semColunasSensiveis(documento, verSensivel);
   const nome = nomeDoArquivo(doc, formato);
+  // Registro de acesso sensível (E7): o arquivo levou o ganho da agência?
+  const comGanho = doc.colunas.some(c => c.sensivel);
   await registrarEventoAuditoria({
     session: sessao, acao: 'EXPORTAR', modulo: 'Financeiro', entidade: opcoes.entidade,
-    descricao: `${formato === 'imprimir' ? 'Imprimiu' : 'Exportou'} "${doc.titulo}" (${doc.linhas.length} ${doc.linhas.length === 1 ? 'linha' : 'linhas'}, ${formato === 'imprimir' ? 'PDF' : formato.toUpperCase()}).`,
+    descricao: `${formato === 'imprimir' ? 'Imprimiu' : 'Exportou'} "${doc.titulo}" (${doc.linhas.length} ${doc.linhas.length === 1 ? 'linha' : 'linhas'}, ${formato === 'imprimir' ? 'PDF' : formato.toUpperCase()}${comGanho ? ', com as colunas do ganho da agência' : ''}).`,
   }).catch(() => undefined);
   const bytes = await bytesDoDocumento(doc, formato);
   return new Response(new Uint8Array(bytes), { headers: cabecalhosDoArquivo(nome, formato) });

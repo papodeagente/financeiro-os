@@ -8,7 +8,7 @@
 import pool from './db';
 import { generateId } from './utils';
 import {
-  ACOES_FINANCEIRAS, contasLiberadasPor, decidirAcao, listaDeAcoes, listaDeTextos, nuncaRestringido, tetoDoPapel,
+  ACOES_FINANCEIRAS, contasLiberadasPor, contasMovimentaveisPor, decidirAcao, listaDeAcoes, listaDeTextos, nuncaRestringido, tetoDoPapel,
   type AcaoFinanceira, type GrupoDoUsuario, type RestricoesCarregadas,
 } from './acoes-financeiras';
 import type { SessionLike } from './permissoes';
@@ -50,12 +50,14 @@ export async function carregarRestricoesNoExecutor(
     `SELECT
        (SELECT COALESCE(jsonb_agg(jsonb_build_object('id', g.id, 'nome', g.nome,
            'acesso_total', g.acesso_total, 'acoes', g.acoes, 'contas', g.contas,
-           'empresas', COALESCE(to_jsonb(g)->'empresas', '[]'::jsonb)) ORDER BY g.nome), '[]'::jsonb)
+           'empresas', COALESCE(to_jsonb(g)->'empresas', '[]'::jsonb),
+           'contas_so_ver', COALESCE(to_jsonb(g)->'contas_so_ver', '[]'::jsonb)) ORDER BY g.nome), '[]'::jsonb)
           FROM grupo_usuario_membros m
           JOIN grupos_usuario g ON g.tenant_id = m.tenant_id AND g.id = m.grupo_id
          WHERE m.tenant_id = $1 AND m.usuario_id = $2) AS grupos,
        (SELECT jsonb_build_object('contas_liberadas', r.contas_liberadas, 'acoes_negadas', r.acoes_negadas,
-           'empresas_liberadas', COALESCE(to_jsonb(r)->'empresas_liberadas', '[]'::jsonb))
+           'empresas_liberadas', COALESCE(to_jsonb(r)->'empresas_liberadas', '[]'::jsonb),
+           'contas_so_ver', COALESCE(to_jsonb(r)->'contas_so_ver', '[]'::jsonb))
           FROM usuario_restricoes r WHERE r.tenant_id = $1 AND r.usuario_id = $2) AS usuario`,
     [tenantId, usuarioId],
   );
@@ -63,14 +65,15 @@ export async function carregarRestricoesNoExecutor(
   const grupos = (Array.isArray(linha.grupos) ? linha.grupos : []).map((g: Record<string, unknown>): GrupoDoUsuario => ({
     id: String(g.id ?? ''), nome: String(g.nome ?? ''), acesso_total: g.acesso_total === true,
     acoes: listaDeTextos(g.acoes), contas: listaDeTextos(g.contas), empresas: listaDeTextos(g.empresas),
+    contas_so_ver: g.acesso_total === true ? [] : listaDeTextos(g.contas_so_ver),
   }));
   const u = linha.usuario as Record<string, unknown> | null | undefined;
   const usuario = u ? {
     contas_liberadas: listaDeTextos(u.contas_liberadas), acoes_negadas: listaDeTextos(u.acoes_negadas),
-    empresas_liberadas: listaDeTextos(u.empresas_liberadas),
+    empresas_liberadas: listaDeTextos(u.empresas_liberadas), contas_so_ver: listaDeTextos(u.contas_so_ver),
   } : null;
   const usuarioVazio = !usuario || (usuario.contas_liberadas.length === 0 && usuario.acoes_negadas.length === 0
-    && usuario.empresas_liberadas.length === 0);
+    && usuario.empresas_liberadas.length === 0 && usuario.contas_so_ver.length === 0);
   if (grupos.length === 0 && usuarioVazio) return null;
   return { grupos, usuario: usuarioVazio ? null : usuario };
 }
@@ -140,6 +143,25 @@ export async function contasPermitidas(
 }
 
 /**
+ * Contas em que a pessoa pode pagar, receber, transferir e lançar (E7).
+ * `null` = todas as que ela vê (ninguém marcou conta "só ver"); senão, a
+ * lista de ids. Quem só vê uma conta enxerga saldo e extrato dela, nada mais.
+ */
+export async function contasMovimentaveis(
+  session: SessaoPermissoes | null | undefined, exec?: ExecutorPermissoes,
+): Promise<string[] | null> {
+  if (!session) return [];
+  if (nuncaRestringido(session)) return null;
+  const m = contasMovimentaveisPor(session, await restricoesDa(session, exec));
+  if (!m.todas) return m.contas;
+  if (m.exceto.length === 0) return null;
+  const executor = exec ?? (pool as unknown as ExecutorPermissoes | null);
+  if (!executor) return null;
+  const { rows } = await executor.query(`SELECT id FROM contas_bancarias WHERE tenant_id = $1`, [tenantDaSessao(session)]);
+  return rows.map(r => String(r.id)).filter(id => !m.exceto.includes(id)).sort();
+}
+
+/**
  * Empresas liberadas pelo perfil de acesso e pela restrição própria (E7).
  * `null` = todas (sem restrição, como hoje). Administrador nunca é restringido.
  */
@@ -157,12 +179,12 @@ export async function empresasPermitidas(
 
 /** Para as telas: o que esta pessoa pode, ação por ação, e as contas. */
 export async function resumoDePermissoes(session: SessaoPermissoes): Promise<{
-  acoes: Record<string, boolean>; contas: string[] | null; restringido: boolean;
+  acoes: Record<string, boolean>; contas: string[] | null; contas_movimentar: string[] | null; restringido: boolean;
 }> {
   const r = nuncaRestringido(session) ? null : await restricoesDa(session);
   const acoes: Record<string, boolean> = {};
   for (const a of ACOES_FINANCEIRAS) acoes[a.id] = session.isSuperAdmin ? true : tetoDoPapel(session.perfil, a.id) && decidirAcao(session, a.id, r);
-  return { acoes, contas: contasLiberadasPor(session, r), restringido: r !== null };
+  return { acoes, contas: contasLiberadasPor(session, r), contas_movimentar: await contasMovimentaveis(session), restringido: r !== null };
 }
 
 // ---------------------------------------------------------------------------
@@ -176,6 +198,8 @@ export interface GrupoCadastro {
   contas: string[];
   /** Empresas em que o perfil vale (vazio = todas). Só aparece com 2+ empresas. */
   empresas: string[];
+  /** Contas que o perfil só vê, sem movimentar (E7). */
+  contas_so_ver: string[];
   membros: string[];
   updated_at?: string;
 }
@@ -186,7 +210,8 @@ export class ErroPermissoes extends Error {
 
 export async function listarGrupos(exec: ExecutorPermissoes, tenantId: string): Promise<GrupoCadastro[]> {
   const { rows } = await exec.query(
-    `SELECT g.id, g.nome, g.acesso_total, g.acoes, g.contas, COALESCE(to_jsonb(g)->'empresas', '[]'::jsonb) AS empresas, g.updated_at,
+    `SELECT g.id, g.nome, g.acesso_total, g.acoes, g.contas, COALESCE(to_jsonb(g)->'empresas', '[]'::jsonb) AS empresas,
+            COALESCE(to_jsonb(g)->'contas_so_ver', '[]'::jsonb) AS contas_so_ver, g.updated_at,
             COALESCE((SELECT jsonb_agg(m.usuario_id ORDER BY m.usuario_id) FROM grupo_usuario_membros m
                        WHERE m.tenant_id = g.tenant_id AND m.grupo_id = g.id), '[]'::jsonb) AS membros
        FROM grupos_usuario g WHERE g.tenant_id = $1 ORDER BY lower(g.nome)`,
@@ -194,7 +219,8 @@ export async function listarGrupos(exec: ExecutorPermissoes, tenantId: string): 
   );
   return rows.map(r => ({
     id: String(r.id), nome: String(r.nome), acesso_total: r.acesso_total === true,
-    acoes: listaDeAcoes(r.acoes), contas: listaDeTextos(r.contas), empresas: listaDeTextos(r.empresas), membros: listaDeTextos(r.membros),
+    acoes: listaDeAcoes(r.acoes), contas: listaDeTextos(r.contas), empresas: listaDeTextos(r.empresas),
+    contas_so_ver: listaDeTextos(r.contas_so_ver), membros: listaDeTextos(r.membros),
     updated_at: r.updated_at instanceof Date ? r.updated_at.toISOString() : String(r.updated_at ?? ''),
   }));
 }
@@ -210,6 +236,12 @@ export async function salvarGrupo(
   const acoes = listaDeAcoes(entrada.acoes);
   // Acesso completo vê todas as contas: lista de contas não se aplica.
   const contas = acessoTotal ? [] : listaDeTextos(entrada.contas);
+  // Contas só para ver (E7): só quando a tela manda; ausente = não mexe.
+  // Acesso completo movimenta tudo: a lista não se aplica.
+  const soVer = Array.isArray(entrada.contas_so_ver) ? (acessoTotal ? [] : listaDeTextos(entrada.contas_so_ver)) : null;
+  if (soVer && contas.length > 0 && soVer.some(c => !contas.includes(c))) {
+    throw new ErroPermissoes('Uma conta marcada como "só ver" não está entre as contas do perfil.');
+  }
   const membros = listaDeTextos(entrada.membros);
   // Empresas (E7): só quando a tela manda; ausente = não mexe.
   const empresas = Array.isArray(entrada.empresas) ? listaDeTextos(entrada.empresas) : null;
@@ -219,10 +251,11 @@ export async function salvarGrupo(
     if (rows.length !== empresas.length) throw new ErroPermissoes('Uma das empresas escolhidas não existe mais. Recarregue a tela.');
   }
 
-  if (contas.length > 0) {
+  const contasConferir = [...new Set([...contas, ...(soVer ?? [])])];
+  if (contasConferir.length > 0) {
     const { rows } = await exec.query(
-      `SELECT id FROM contas_bancarias WHERE tenant_id = $1 AND id = ANY($2::text[])`, [tenantId, contas]);
-    if (rows.length !== contas.length) throw new ErroPermissoes('Uma das contas escolhidas não existe mais. Recarregue a tela.');
+      `SELECT id FROM contas_bancarias WHERE tenant_id = $1 AND id = ANY($2::text[])`, [tenantId, contasConferir]);
+    if (rows.length !== contasConferir.length) throw new ErroPermissoes('Uma das contas escolhidas não existe mais. Recarregue a tela.');
   }
   if (membros.length > 0) {
     const { rows } = await exec.query(
@@ -244,6 +277,10 @@ export async function salvarGrupo(
     await exec.query(`UPDATE grupos_usuario SET empresas = $3::jsonb WHERE tenant_id = $1 AND id = $2`,
       [tenantId, id, JSON.stringify(empresas)]);
   }
+  if (soVer || acessoTotal) {
+    await exec.query(`UPDATE grupos_usuario SET contas_so_ver = $3::jsonb WHERE tenant_id = $1 AND id = $2`,
+      [tenantId, id, JSON.stringify(soVer ?? [])]);
+  }
   await exec.query(
     `DELETE FROM grupo_usuario_membros WHERE tenant_id = $1 AND grupo_id = $2 AND NOT (usuario_id = ANY($3::text[]))`,
     [tenantId, id, membros]);
@@ -254,13 +291,14 @@ export async function salvarGrupo(
       [tenantId, id, membros]);
   }
   invalidarPermissoes(tenantId);
-  let empresasGravadas = empresas ?? [];
-  if (!empresas) {
-    const { rows } = await exec.query(
-      `SELECT COALESCE(to_jsonb(g)->'empresas', '[]'::jsonb) AS e FROM grupos_usuario g WHERE tenant_id = $1 AND id = $2`, [tenantId, id]);
-    empresasGravadas = listaDeTextos(rows[0]?.e);
-  }
-  return { id, nome, acesso_total: acessoTotal, acoes, contas, empresas: empresasGravadas, membros };
+  const { rows: gravado } = await exec.query(
+    `SELECT COALESCE(to_jsonb(g)->'empresas', '[]'::jsonb) AS e, COALESCE(to_jsonb(g)->'contas_so_ver', '[]'::jsonb) AS so
+       FROM grupos_usuario g WHERE tenant_id = $1 AND id = $2`, [tenantId, id]);
+  const empresasGravadas = empresas ?? listaDeTextos(gravado[0]?.e);
+  return {
+    id, nome, acesso_total: acessoTotal, acoes, contas, empresas: empresasGravadas,
+    contas_so_ver: listaDeTextos(gravado[0]?.so), membros,
+  };
 }
 
 export async function excluirGrupo(exec: ExecutorPermissoes, tenantId: string, id: string): Promise<boolean> {
@@ -269,15 +307,20 @@ export async function excluirGrupo(exec: ExecutorPermissoes, tenantId: string, i
   return (r.rowCount ?? 0) > 0;
 }
 
-export interface RestricaoCadastro { usuario_id: string; contas_liberadas: string[]; acoes_negadas: AcaoFinanceira[]; empresas_liberadas: string[] }
+export interface RestricaoCadastro {
+  usuario_id: string; contas_liberadas: string[]; acoes_negadas: AcaoFinanceira[]; empresas_liberadas: string[];
+  /** Contas que a pessoa só vê (E7). */
+  contas_so_ver: string[];
+}
 
 export async function listarRestricoesDeUsuarios(exec: ExecutorPermissoes, tenantId: string): Promise<RestricaoCadastro[]> {
   const { rows } = await exec.query(
-    `SELECT usuario_id, contas_liberadas, acoes_negadas, COALESCE(to_jsonb(r)->'empresas_liberadas', '[]'::jsonb) AS empresas_liberadas
+    `SELECT usuario_id, contas_liberadas, acoes_negadas, COALESCE(to_jsonb(r)->'empresas_liberadas', '[]'::jsonb) AS empresas_liberadas,
+            COALESCE(to_jsonb(r)->'contas_so_ver', '[]'::jsonb) AS contas_so_ver
        FROM usuario_restricoes r WHERE tenant_id = $1`, [tenantId]);
   return rows.map(r => ({
     usuario_id: String(r.usuario_id), contas_liberadas: listaDeTextos(r.contas_liberadas), acoes_negadas: listaDeAcoes(r.acoes_negadas),
-    empresas_liberadas: listaDeTextos(r.empresas_liberadas),
+    empresas_liberadas: listaDeTextos(r.empresas_liberadas), contas_so_ver: listaDeTextos(r.contas_so_ver),
   }));
 }
 
@@ -291,6 +334,16 @@ export async function salvarRestricaoDeUsuario(
   if (rows.length === 0) throw new ErroPermissoes('Pessoa não encontrada nesta agência.', 404);
   const contas = listaDeTextos(entrada.contas_liberadas);
   const negadas = listaDeAcoes(entrada.acoes_negadas);
+  // Contas só para ver (E7): só quando a tela manda; ausente = mantém as de antes.
+  const mandouSoVer = Array.isArray(entrada.contas_so_ver);
+  let soVer: string[] = [];
+  if (mandouSoVer) soVer = listaDeTextos(entrada.contas_so_ver);
+  else {
+    const { rows: antes } = await exec.query(
+      `SELECT COALESCE(to_jsonb(r)->'contas_so_ver', '[]'::jsonb) AS so FROM usuario_restricoes r WHERE tenant_id = $1 AND usuario_id = $2`,
+      [tenantId, usuarioId]);
+    soVer = listaDeTextos(antes[0]?.so);
+  }
   // Empresas (E7): só quando a tela manda; ausente = mantém as de antes.
   let empresas: string[] = [];
   const mandouEmpresas = Array.isArray(entrada.empresas_liberadas);
@@ -307,12 +360,13 @@ export async function salvarRestricaoDeUsuario(
       [tenantId, usuarioId]);
     empresas = listaDeTextos(antes[0]?.e);
   }
-  if (contas.length > 0) {
+  const contasConferir = [...new Set([...contas, ...(mandouSoVer ? soVer : [])])];
+  if (contasConferir.length > 0) {
     const { rows: existentes } = await exec.query(
-      `SELECT id FROM contas_bancarias WHERE tenant_id = $1 AND id = ANY($2::text[])`, [tenantId, contas]);
-    if (existentes.length !== contas.length) throw new ErroPermissoes('Uma das contas escolhidas não existe mais. Recarregue a tela.');
+      `SELECT id FROM contas_bancarias WHERE tenant_id = $1 AND id = ANY($2::text[])`, [tenantId, contasConferir]);
+    if (existentes.length !== contasConferir.length) throw new ErroPermissoes('Uma das contas escolhidas não existe mais. Recarregue a tela.');
   }
-  if (contas.length === 0 && negadas.length === 0 && empresas.length === 0) {
+  if (contas.length === 0 && negadas.length === 0 && empresas.length === 0 && soVer.length === 0) {
     await exec.query(`DELETE FROM usuario_restricoes WHERE tenant_id = $1 AND usuario_id = $2`, [tenantId, usuarioId]);
   } else {
     await exec.query(
@@ -325,9 +379,13 @@ export async function salvarRestricaoDeUsuario(
       await exec.query(`UPDATE usuario_restricoes SET empresas_liberadas = $3::jsonb WHERE tenant_id = $1 AND usuario_id = $2`,
         [tenantId, usuarioId, JSON.stringify(empresas)]);
     }
+    if (mandouSoVer) {
+      await exec.query(`UPDATE usuario_restricoes SET contas_so_ver = $3::jsonb WHERE tenant_id = $1 AND usuario_id = $2`,
+        [tenantId, usuarioId, JSON.stringify(soVer)]);
+    }
   }
   invalidarPermissoes(tenantId);
-  return { usuario_id: usuarioId, contas_liberadas: contas, acoes_negadas: negadas, empresas_liberadas: empresas };
+  return { usuario_id: usuarioId, contas_liberadas: contas, acoes_negadas: negadas, empresas_liberadas: empresas, contas_so_ver: soVer };
 }
 
 /** Membros (ids de usuário) de um grupo, para resolver aprovadores 'grupo:<id>'. */

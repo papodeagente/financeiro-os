@@ -43,6 +43,10 @@ export const PERMISSOES_SCHEMA_SQL = String.raw`
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (tenant_id, usuario_id)
   );
+  -- Conta "só ver" (E7): saldo e extrato sim; pagar, receber, transferir e
+  -- lançar nela, não. Vazio = movimenta todas as contas que vê (o de antes).
+  ALTER TABLE grupos_usuario ADD COLUMN IF NOT EXISTS contas_so_ver JSONB NOT NULL DEFAULT '[]'::jsonb;
+  ALTER TABLE usuario_restricoes ADD COLUMN IF NOT EXISTS contas_so_ver JSONB NOT NULL DEFAULT '[]'::jsonb;
 
   CREATE TABLE IF NOT EXISTS pedidos_aprovacao (
     tenant_id TEXT NOT NULL,

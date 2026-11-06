@@ -10,6 +10,10 @@ export const { GET, POST } = createCrudHandlers(
   ['conta_origem_id', 'conta_destino_id', 'status'],
   {
     somenteFinanceiro: true, protegerBaixa: true,
+    // Lançar transferência exige "Transferir entre contas" e as DUAS contas
+    // liberadas para movimentar (E7); quem só vê uma delas não transfere.
+    acaoDaGravacao: 'transferir',
+    contasDaGravacao: { campos: ['conta_origem_id', 'conta_destino_id'], sempre: true, acao: 'transferir' },
     // Transferência que toca conta não liberada não aparece (05/11/2026).
     filtroDeConta: { campos: ['conta_origem_id', 'conta_destino_id'] },
     // Nº do cheque (06/11/2026): opcional, só números.

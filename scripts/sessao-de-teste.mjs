@@ -6,9 +6,19 @@
 export const SESSAO_SEGUNDOS = 12 * 60 * 60;
 export const COOKIE_NAME = 'entur-session';
 export async function getSession() {
-  return globalThis.__SESSAO_DE_TESTE__ ?? null;
+  const s = globalThis.__SESSAO_DE_TESTE__ ?? null;
+  // A sessão de teste entra como quem passou pelo código do aplicativo
+  // (verificação em duas etapas, E7): pagar não pede o código. O teste que
+  // quer a pessoa sem o código pendura a sessão com `sf: false`.
+  if (s && typeof s === 'object' && s.sf === undefined) s.sf = true;
+  return s;
 }
-export async function createSession() { throw new Error('createSession não existe no teste'); }
+// Emite um "token" de teste e guarda o que seria a sessão nova, para o teste
+// conferir (ex.: a sessão trocada depois de ativar o segundo fator).
+export async function createSession(payload) {
+  globalThis.__SESSAO_CRIADA__ = payload;
+  return 'token-de-teste';
+}
 export async function verifySession() { return null; }
 export async function hashPassword() { throw new Error('hashPassword não existe no teste'); }
 export async function verifyPassword() { return false; }

@@ -3,6 +3,7 @@ import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
 import { getSession } from '@/lib/auth';
 import { podeEditarFinanceiro } from '@/lib/permissoes';
+import { registrarAcessoSensivel } from '@/lib/acesso-sensivel';
 import { num, round2 } from '@/lib/money';
 import type { EntradaPessoa } from '@/lib/folha-pagamento';
 
@@ -73,6 +74,8 @@ export async function GET() {
       };
     });
 
+    // Quem abriu a folha fica no Registro de atividades (E7), sem os valores.
+    await registrarAcessoSensivel(session, 'folha');
     return NextResponse.json({ pessoas, faturamento });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Erro interno';
