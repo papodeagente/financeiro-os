@@ -30,17 +30,21 @@ import { tituloGeradoPeloSistema, tituloSemBaixa } from './recorrencia';
 
 export type TabelaDaConta = 'contas_pagar' | 'contas_receber';
 export type TipoDaConta = 'pagar' | 'receber';
-export type Situacao = 'em_aberto' | 'em_atraso' | 'liquidado' | 'cancelado';
+export type Situacao = 'em_aberto' | 'em_atraso' | 'liquidado' | 'cancelado' | 'excluido';
 
-export const SITUACOES_DO_FILTRO = ['todas', 'em_aberto', 'em_atraso', 'liquidado', 'cancelado'] as const;
+/**
+ * "Excluído" (06/11/2026, E7) lê só os títulos guardados em contas_excluidas;
+ * "Todas" nunca mostra excluídos (eles saíram das contas).
+ */
+export const SITUACOES_DO_FILTRO = ['todas', 'em_aberto', 'em_atraso', 'liquidado', 'cancelado', 'excluido'] as const;
 export type SituacaoDoFiltro = (typeof SITUACOES_DO_FILTRO)[number];
 export const DATAS_DO_FILTRO = ['emissao', 'vencimento', 'liquidacao'] as const;
 export type DataDoFiltro = (typeof DATAS_DO_FILTRO)[number];
-export const CAMPOS_DA_BUSCA = ['tudo', 'descricao', 'pessoa', 'documento', 'categoria', 'centro'] as const;
+export const CAMPOS_DA_BUSCA = ['tudo', 'numero', 'descricao', 'pessoa', 'documento', 'categoria', 'centro', 'venda'] as const;
 export type CampoDaBusca = (typeof CAMPOS_DA_BUSCA)[number];
 export const ORDENS = [
   'vencimento', 'emissao', 'liquidacao', 'valor', 'saldo', 'pessoa', 'descricao', 'documento',
-  'categoria', 'centro', 'conta', 'situacao', 'tipo',
+  'categoria', 'centro', 'conta', 'situacao', 'tipo', 'numero', 'venda', 'vendedor', 'cadastrado',
 ] as const;
 export type OrdemDaLista = (typeof ORDENS)[number];
 /**
@@ -97,6 +101,25 @@ export interface LinhaDeConta {
    * nenhuma cobrança (ou conta a pagar).
    */
   cobranca_status: string;
+  /** Nº do título: sequencial por agência, único entre pagar e receber. Null = ainda sem número. */
+  numero: number | null;
+  /** Nº da venda de origem (vazio quando não veio de venda). */
+  venda_numero: string;
+  /** Nº da fatura (ao cliente ou do fornecedor) em que a conta está. */
+  fatura_numero: string;
+  /** Vendedor da venda de origem. */
+  vendedor: string;
+  /** Quando a conta foi cadastrada (AAAA-MM-DDTHH:MM, Brasília). */
+  cadastrado_em: string;
+  /** Quem cadastrou (vazio = o sistema). */
+  cadastrado_por: string;
+  /** Só na situação Excluído: quando e quem excluiu (AAAA-MM-DDTHH:MM, Brasília). */
+  excluido_em: string;
+  excluido_por: string;
+  /** Só na situação Excluído: o que tinha sido pago/recebido e voltou ao caixa na exclusão. */
+  estornado_na_exclusao: number;
+  /** Campos personalizados da agência (id → valor). */
+  campos_personalizados: Record<string, unknown>;
 }
 
 export interface FiltroDaLista {
@@ -220,8 +243,8 @@ export function diasDeAtraso(vencimento: string, hoje: string): number {
 }
 
 const ROTULOS: Record<TipoDaConta, Record<Situacao | 'parcial', string>> = {
-  pagar: { em_aberto: 'Em aberto', em_atraso: 'Em atraso', liquidado: 'Pago', cancelado: 'Cancelado', parcial: 'Pago em parte' },
-  receber: { em_aberto: 'Em aberto', em_atraso: 'Em atraso', liquidado: 'Recebido', cancelado: 'Cancelado', parcial: 'Recebido em parte' },
+  pagar: { em_aberto: 'Em aberto', em_atraso: 'Em atraso', liquidado: 'Pago', cancelado: 'Cancelado', excluido: 'Excluído', parcial: 'Pago em parte' },
+  receber: { em_aberto: 'Em aberto', em_atraso: 'Em atraso', liquidado: 'Recebido', cancelado: 'Cancelado', excluido: 'Excluído', parcial: 'Recebido em parte' },
 };
 
 /** Rótulo da situação na tela e na planilha. */
@@ -237,9 +260,60 @@ export const ROTULO_DO_TIPO: Record<TipoDaConta, string> = { pagar: 'A pagar', r
 const centavos = (expr: string) => `ROUND(${expr} * 100)::bigint`;
 const txt = (campo: string) => `COALESCE(d->>'${campo}', '')`;
 const dia = (expr: string) => `LEFT(COALESCE(${expr}, ''), 10)`;
+const quandoBR = (expr: string) => `COALESCE(to_char((${expr}) AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD"T"HH24:MI'), '')`;
 
-/** Uma tabela no formato comum. $1 = agência. */
-function lado(tabela: TabelaDaConta): string {
+/**
+ * Tabelas que enriquecem a lista (06/11/2026, E7). Cada uma só entra na
+ * consulta quando existe neste banco: sem ela, a coluna fica vazia e a lista
+ * funciona como antes.
+ */
+export interface TabelasDaLista {
+  /** titulos_numeros: Nº e "cadastrado por". */
+  numeros: boolean;
+  /** vendas_modelo e vendas_crm: Nº da venda e vendedor. */
+  vendasModelo: boolean;
+  vendasCrm: boolean;
+  usuarios: boolean;
+  /** faturas + fatura_itens: Nº da fatura ao cliente. */
+  faturas: boolean;
+  /** faturas_fornecedor + fatura_fornecedor_itens: Nº da fatura do fornecedor. */
+  faturasFornecedor: boolean;
+  /** contas_excluidas: a situação Excluído. */
+  excluidas: boolean;
+}
+
+export const SEM_TABELAS_EXTRAS: TabelasDaLista = {
+  numeros: false, vendasModelo: false, vendasCrm: false, usuarios: false, faturas: false, faturasFornecedor: false, excluidas: false,
+};
+
+let tabelasConhecidas: TabelasDaLista | null = null;
+/** Quais tabelas extras existem (o que já existe não é perguntado de novo). */
+export async function tabelasDaLista(exec: ExecutorSQL): Promise<TabelasDaLista> {
+  if (tabelasConhecidas && Object.values(tabelasConhecidas).every(Boolean)) return tabelasConhecidas;
+  try {
+    const { rows } = await exec.query(
+      `SELECT to_regclass('titulos_numeros') IS NOT NULL AS numeros,
+              to_regclass('vendas_modelo') IS NOT NULL AS vendas_modelo,
+              to_regclass('vendas_crm') IS NOT NULL AS vendas_crm,
+              to_regclass('usuarios') IS NOT NULL AS usuarios,
+              (to_regclass('faturas') IS NOT NULL AND to_regclass('fatura_itens') IS NOT NULL) AS faturas,
+              (to_regclass('faturas_fornecedor') IS NOT NULL AND to_regclass('fatura_fornecedor_itens') IS NOT NULL) AS faturas_fornecedor,
+              to_regclass('contas_excluidas') IS NOT NULL AS excluidas`,
+    );
+    const r = rows[0] ?? {};
+    tabelasConhecidas = {
+      numeros: r.numeros === true, vendasModelo: r.vendas_modelo === true, vendasCrm: r.vendas_crm === true,
+      usuarios: r.usuarios === true, faturas: r.faturas === true, faturasFornecedor: r.faturas_fornecedor === true,
+      excluidas: r.excluidas === true,
+    };
+  } catch {
+    tabelasConhecidas = { ...SEM_TABELAS_EXTRAS };
+  }
+  return tabelasConhecidas;
+}
+
+/** Uma tabela no formato comum. $1 = agência. `excluidas` lê a guarda dos excluídos. */
+function lado(tabela: TabelaDaConta, excluidas: boolean): string {
   const pagar = tabela === 'contas_pagar';
   const campoBaixa = pagar ? 'valor_pago' : 'valor_recebido';
   const quitado = pagar ? 'PAGO' : 'RECEBIDO';
@@ -247,9 +321,21 @@ function lado(tabela: TabelaDaConta): string {
     ? `(CASE WHEN ${numerico("d->>'valor_final'")} <> 0 THEN ${numerico("d->>'valor_final'")} ELSE ${numerico("d->>'valor_brl'")} END)`
     : numerico("d->>'valor_final'");
   const baixa = numerico(`d->>'${campoBaixa}'`);
+  const fonte = excluidas
+    ? `FROM contas_excluidas t, LATERAL (SELECT t.data AS d,
+              COALESCE(NULLIF(t.data->>'status', ''), t.linha->>'status', '') AS st,
+              COALESCE(CASE WHEN COALESCE(t.linha->>'created_at', '') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+                            THEN (t.linha->>'created_at')::timestamptz END, t.excluido_em) AS criado) x
+   WHERE t.tenant_id = $1 AND t.tabela = '${tabela}'`
+    : `FROM ${tabela} t, LATERAL (SELECT t.data AS d, COALESCE(NULLIF(t.data->>'status', ''), t.status, '') AS st, t.created_at AS criado) x
+   WHERE t.tenant_id = $1`;
+  const marcasDaExclusao = excluidas
+    ? `TRUE AS excluido, ${quandoBR('t.excluido_em')} AS excluido_em, COALESCE(t.excluido_por_nome, '') AS excluido_por,
+         ${centavos(`ROUND(${numerico("t.baixa_estornada->>'valor'")}, 2)`)} AS estornado_c`
+    : `FALSE AS excluido, ''::text AS excluido_em, ''::text AS excluido_por, 0::bigint AS estornado_c`;
   return `
   SELECT '${pagar ? 'cp' : 'cr'}:' || t.id AS chave, '${tabela}'::text AS tabela, '${pagar ? 'pagar' : 'receber'}'::text AS tipo,
-         t.id, t.updated_at, d, st AS status,
+         t.id, d, st AS status,
          ${centavos(`ROUND(${valor}, 2)`)} AS valor_c,
          ${centavos(`ROUND(${baixa}, 2)`)} AS campo_baixa_c,
          ${centavos(`(CASE WHEN st = 'CANCELADO' THEN 0
@@ -257,15 +343,17 @@ function lado(tabela: TabelaDaConta): string {
                     WHEN st = '${quitado}' THEN ROUND(COALESCE(NULLIF(${baixa}, 0), ${valor}), 2)
                     ELSE 0 END)`)} AS baixado_c,
          ${dia(`d->>'data_vencimento'`)} AS vencimento,
-         ${dia(`COALESCE(NULLIF(d->>'data_emissao', ''), to_char(t.created_at AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD'))`)} AS emissao,
+         ${dia(`COALESCE(NULLIF(d->>'data_emissao', ''), to_char(x.criado AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD'))`)} AS emissao,
          ${dia(`d->>'${pagar ? 'data_pagamento' : 'data_recebimento'}'`)} AS liquidacao,
          ${txt(pagar ? 'fornecedor_nome' : 'cliente_nome')} AS pessoa,
          COALESCE(NULLIF(d->>'documento', ''), NULLIF(d->>'numero_documento', ''), NULLIF(d->>'boleto_codigo', ''),
                   NULLIF(d->>'plataforma_transacao', ''), '') AS documento,
          ${txt(pagar ? 'forma_pagamento' : 'forma_recebimento')} AS forma,
-         ${pagar ? `COALESCE(NULLIF(d->>'moeda', ''), 'BRL')` : `'BRL'::text`} AS moeda
-    FROM ${tabela} t, LATERAL (SELECT t.data AS d, COALESCE(NULLIF(t.data->>'status', ''), t.status, '') AS st) x
-   WHERE t.tenant_id = $1`;
+         COALESCE(NULLIF(d->>'moeda', ''), 'BRL') AS moeda,
+         COALESCE(NULLIF(d->>'origem_venda_id', ''), NULLIF(d->>'venda_id', ''), '') AS venda_ref,
+         ${quandoBR('x.criado')} AS cadastrado_em,
+         ${marcasDaExclusao}
+    ${fonte}`;
 }
 
 /** Cobranças vivas primeiro; depois a mais recente. */
@@ -294,12 +382,66 @@ export async function existeTabelaDeCobranca(exec: ExecutorSQL): Promise<boolean
   return tabelaDeCobrancaExiste;
 }
 
+export interface OpcoesDaLeitura {
+  comCobranca?: boolean;
+  /** Tabelas extras (Nº, venda, fatura, vendedor, excluídos). Ausente = nenhuma. */
+  tabelas?: TabelasDaLista;
+}
+
+/** Nº da fatura de cada conta: a fatura que a conta representa, senão a fatura em que ela é item. */
+function sqlDasFaturas(t: TabelasDaLista): string | null {
+  const partes: string[] = [];
+  if (t.faturas) {
+    partes.push(`SELECT 'contas_receber'::text AS tabela, f.titulo_id AS conta, f.numero::text AS numero, 0 AS pri, f.criado_em AS quando
+        FROM faturas f WHERE f.tenant_id = $1 AND f.titulo_id <> '' AND f.situacao <> 'CANCELADA'`);
+    partes.push(`SELECT 'contas_receber'::text, i.conta_id, f.numero::text, 1, f.criado_em
+        FROM fatura_itens i JOIN faturas f ON f.tenant_id = i.tenant_id AND f.id = i.fatura_id
+       WHERE i.tenant_id = $1 AND f.situacao <> 'CANCELADA'`);
+  }
+  if (t.faturasFornecedor) {
+    partes.push(`SELECT 'contas_pagar'::text, ff.conta_pagar_id, ff.numero, 0, ff.criada_em
+        FROM faturas_fornecedor ff WHERE ff.tenant_id = $1 AND COALESCE(ff.conta_pagar_id, '') <> '' AND ff.situacao <> 'DESFEITA'`);
+    partes.push(`SELECT 'contas_pagar'::text, it.conta_pagar_id, ff.numero, 1, ff.criada_em
+        FROM fatura_fornecedor_itens it JOIN faturas_fornecedor ff ON ff.tenant_id = it.tenant_id AND ff.id = it.fatura_id
+       WHERE it.tenant_id = $1 AND it.ativo AND ff.situacao <> 'DESFEITA'`);
+  }
+  if (!partes.length) return null;
+  return `SELECT DISTINCT ON (tabela, conta) tabela, conta, numero
+      FROM (${partes.join('\n      UNION ALL ')}) x
+     ORDER BY tabela, conta, pri, quando DESC`;
+}
+
 /**
  * Todas as contas da agência no formato comum, com categoria, centro e conta
  * bancária pelo nome. $1 = agência, $2 = hoje. Com `comCobranca`, traz o
- * status da cobrança de cada conta a receber (tabela da E3).
+ * status da cobrança de cada conta a receber (tabela da E3). Com
+ * `excluidas`, lê SÓ os títulos excluídos (situação Excluído).
  */
-export function sqlDasContas(comCobranca = false): string {
+export function sqlDasContas(opcoes: boolean | OpcoesDaLeitura = false, excluidas = false): string {
+  const o: OpcoesDaLeitura = typeof opcoes === 'boolean' ? { comCobranca: opcoes } : opcoes;
+  const comCobranca = Boolean(o.comCobranca);
+  const t = o.tabelas ?? SEM_TABELAS_EXTRAS;
+  const soExcluidas = excluidas && t.excluidas;
+  const faturas = sqlDasFaturas(t);
+  // Sem a tabela dos excluídos, a situação Excluído é uma lista vazia.
+  const brutos = excluidas && !soExcluidas
+    ? `${lado('contas_pagar', false)} AND FALSE\n  UNION ALL ${lado('contas_receber', false)} AND FALSE`
+    : `${lado('contas_pagar', soExcluidas)}\n  UNION ALL ${lado('contas_receber', soExcluidas)}`;
+  const idVendedor = [
+    t.vendasModelo ? `NULLIF(vm.vendedor->>'id', '')` : null,
+    t.vendasCrm ? `NULLIF(vc.vendedor_id, '')` : null,
+    t.vendasCrm ? `NULLIF(vc.data->>'vendedor_id', '')` : null,
+  ].filter(Boolean).join(', ');
+  const vendaNumero = [
+    t.vendasModelo ? `NULLIF(vm.numero, '')` : null,
+    t.vendasCrm ? `NULLIF(vc.data->>'numero', '')` : null,
+  ].filter(Boolean);
+  const vendedor = [
+    t.vendasModelo ? `NULLIF(vm.vendedor->>'nome', '')` : null,
+    t.usuarios && idVendedor ? `NULLIF(COALESCE(NULLIF(us.nome, ''), us.data->>'nome'), '')` : null,
+    t.vendasCrm ? `NULLIF(vc.data->>'vendedor_nome', '')` : null,
+    `NULLIF(b.d->>'vendedor_nome', '')`,
+  ].filter(Boolean);
   return `
 WITH cat AS (
   SELECT id, COALESCE(NULLIF(data->>'nome', ''), descricao, '') AS nome, COALESCE(NULLIF(data->>'codigo', ''), codigo, '') AS codigo
@@ -308,15 +450,15 @@ WITH cat AS (
   SELECT id, COALESCE(NULLIF(nome, ''), data->>'nome', '') AS nome FROM centros_custo WHERE tenant_id = $1
 ), cb AS (
   SELECT id, COALESCE(NULLIF(data->>'nome', ''), nome, '') AS nome FROM contas_bancarias WHERE tenant_id = $1
-), brutos AS (${lado('contas_pagar')}
-  UNION ALL ${lado('contas_receber')}
+),${faturas ? ` fat AS (\n  ${faturas}\n),` : ''} brutos AS (${brutos}
 ), base AS (
   SELECT b.*,
-         CASE WHEN b.status = 'CANCELADO' THEN 'cancelado'
+         CASE WHEN b.excluido THEN 'excluido'
+              WHEN b.status = 'CANCELADO' THEN 'cancelado'
               WHEN b.status IN ('PAGO', 'RECEBIDO') THEN 'liquidado'
               WHEN b.vencimento <> '' AND b.vencimento < $2 THEN 'em_atraso'
               ELSE 'em_aberto' END AS situacao,
-         CASE WHEN b.status IN ('PAGO', 'RECEBIDO', 'CANCELADO') THEN 0 ELSE b.valor_c - b.campo_baixa_c END AS saldo_c,
+         CASE WHEN b.excluido OR b.status IN ('PAGO', 'RECEBIDO', 'CANCELADO') THEN 0 ELSE b.valor_c - b.campo_baixa_c END AS saldo_c,
          COALESCE(b.d->>'categoria_id', '') AS categoria_id,
          COALESCE(NULLIF(TRIM(concat_ws(' · ', NULLIF(cat.codigo, ''), NULLIF(cat.nome, ''))), ''), '') AS categoria,
          COALESCE(b.d->>'centro_custo_id', '') AS centro_custo_id,
@@ -324,11 +466,21 @@ WITH cat AS (
          COALESCE(b.d->>'conta_bancaria_id', '') AS conta_bancaria_id,
          COALESCE(cb.nome, '') AS conta_bancaria,
          CASE WHEN jsonb_typeof(b.d->'rateio') = 'array' THEN b.d->'rateio' ELSE '[]'::jsonb END AS rateio_j,
-         ${comCobranca ? `COALESCE(cobr.status, '')` : `''::text`} AS cobranca_status
+         ${comCobranca ? `COALESCE(cobr.status, '')` : `''::text`} AS cobranca_status,
+         ${t.numeros ? 'num.numero' : 'NULL::bigint'} AS numero,
+         ${t.numeros ? `COALESCE(num.cadastrado_por_nome, '')` : `''::text`} AS cadastrado_por,
+         ${vendaNumero.length ? `COALESCE(${vendaNumero.join(', ')}, '')` : `''::text`} AS venda_numero,
+         COALESCE(${vendedor.join(', ')}, '') AS vendedor,
+         ${faturas ? `COALESCE(fat.numero, '')` : `''::text`} AS fatura_numero
     FROM brutos b
     LEFT JOIN cat ON cat.id = b.d->>'categoria_id'
     LEFT JOIN cen ON cen.id = b.d->>'centro_custo_id'
-    LEFT JOIN cb ON cb.id = b.d->>'conta_bancaria_id'${comCobranca ? COBRANCA_DA_CONTA : ''}
+    LEFT JOIN cb ON cb.id = b.d->>'conta_bancaria_id'${comCobranca ? COBRANCA_DA_CONTA : ''}${t.numeros ? `
+    LEFT JOIN titulos_numeros num ON num.tenant_id = $1 AND num.tabela = b.tabela AND num.id = b.id` : ''}${t.vendasModelo ? `
+    LEFT JOIN vendas_modelo vm ON vm.tenant_id = $1 AND b.venda_ref <> '' AND vm.venda_id = b.venda_ref` : ''}${t.vendasCrm ? `
+    LEFT JOIN vendas_crm vc ON vc.tenant_id = $1 AND b.venda_ref <> '' AND vc.id = b.venda_ref` : ''}${t.usuarios && idVendedor ? `
+    LEFT JOIN usuarios us ON us.tenant_id = $1 AND us.id = COALESCE(${idVendedor})` : ''}${faturas ? `
+    LEFT JOIN fat ON fat.tabela = b.tabela AND fat.conta = b.id` : ''}
 )`;
 }
 
@@ -348,14 +500,21 @@ const COLUNA_DA_ORDEM: Record<OrdemDaLista, string> = {
   conta: 'LOWER(a.conta_bancaria)',
   situacao: `CASE a.situacao WHEN 'em_atraso' THEN 0 WHEN 'em_aberto' THEN 1 WHEN 'liquidado' THEN 2 ELSE 3 END`,
   tipo: 'a.tipo',
+  numero: 'a.numero',
+  // Nº de venda costuma ser número: ordena pelo número quando é, senão pelo texto.
+  venda: `NULLIF(LPAD(a.venda_numero, 20, '0'), '')`,
+  vendedor: `NULLIF(LOWER(a.vendedor), '')`,
+  cadastrado: `NULLIF(a.cadastrado_em, '')`,
 };
 
 const CAMPO_DA_BUSCA: Record<Exclude<CampoDaBusca, 'tudo'>, string> = {
+  numero: `COALESCE(a.numero::text, '')`,
   descricao: `COALESCE(a.d->>'descricao', '')`,
   pessoa: 'a.pessoa',
   documento: `concat_ws(' ', a.documento, a.id)`,
   categoria: 'a.categoria',
   centro: 'a.centro_custo',
+  venda: 'a.venda_numero',
 };
 
 /** WHERE dos filtros. `valores` já traz $1 (agência) e $2 (hoje). */
@@ -394,7 +553,8 @@ export function clausulas(f: FiltroDaLista, contasLiberadas: readonly string[] |
   if (f.busca) {
     const like = p(`%${f.busca.replace(/[\\%_]/g, '\\$&')}%`);
     const alvo = f.em === 'tudo'
-      ? `concat_ws(' ', a.d->>'descricao', a.pessoa, a.documento, a.id, a.categoria, a.centro_custo, a.conta_bancaria, a.d->>'observacoes')`
+      ? `concat_ws(' ', a.d->>'descricao', a.pessoa, a.documento, a.id, a.categoria, a.centro_custo, a.conta_bancaria, a.d->>'observacoes',
+                   a.numero::text, a.venda_numero, a.fatura_numero, a.vendedor)`
       : CAMPO_DA_BUSCA[f.em];
     partes.push(`${alvo} ILIKE ${like}`);
   }
@@ -411,13 +571,16 @@ const COLUNAS_DA_LINHA = `a.chave, a.tabela, a.tipo, a.id, a.status, a.situacao,
   a.vencimento, a.emissao, a.liquidacao, a.pessoa, a.documento, a.forma, a.moeda,
   a.categoria_id, a.categoria, a.centro_custo_id, a.centro_custo, a.conta_bancaria_id, a.conta_bancaria,
   jsonb_array_length(a.rateio_j) > 0 AS tem_rateio, a.cobranca_status,
+  a.numero, a.venda_numero, a.fatura_numero, a.vendedor, a.cadastrado_em, a.cadastrado_por,
+  a.excluido_em, a.excluido_por, a.estornado_c,
   jsonb_build_object(
     'status', a.status, 'descricao', a.d->'descricao', 'parcela_numero', a.d->'parcela_numero', 'total_parcelas', a.d->'total_parcelas',
     'origem', a.d->'origem', 'serie_id', a.d->'serie_id', 'venda_id', a.d->'venda_id', 'origem_venda_id', a.d->'origem_venda_id',
     'origem_comissao_id', a.d->'origem_comissao_id', 'grupo_id', a.d->'grupo_id', 'auto_gerado', a.d->'auto_gerado',
     'plataforma_origem', a.d->'plataforma_origem', 'compra_id', a.d->'compra_id', 'fatura_id', a.d->'fatura_id',
     'valor_pago', a.d->'valor_pago', 'valor_recebido', a.d->'valor_recebido',
-    'data_pagamento', a.d->'data_pagamento', 'data_recebimento', a.d->'data_recebimento'
+    'data_pagamento', a.d->'data_pagamento', 'data_recebimento', a.d->'data_recebimento',
+    'campos_personalizados', a.d->'campos_personalizados'
   ) AS marcas`;
 
 function linhaDoBanco(r: Record<string, unknown>, hoje: string): LinhaDeConta {
@@ -429,6 +592,8 @@ function linhaDoBanco(r: Record<string, unknown>, hoje: string): LinhaDeConta {
   const vencimento = s('vencimento');
   const situacao = s('situacao') as Situacao;
   const baixadoCampo = Number(r.campo_baixa_c ?? 0);
+  const numero = r.numero === null || r.numero === undefined || r.numero === '' ? null : Number(r.numero);
+  const campos = m.campos_personalizados;
   return {
     chave: s('chave'),
     tabela,
@@ -455,7 +620,7 @@ function linhaDoBanco(r: Record<string, unknown>, hoje: string): LinhaDeConta {
     baixado: deCentavos(r.baixado_c as number),
     saldo: deCentavos(r.saldo_c as number),
     forma: s('forma'),
-    venda_id: String(m.venda_id || m.origem_venda_id || ''),
+    venda_id: String(m.origem_venda_id || m.venda_id || ''),
     origem: String(m.origem ?? ''),
     moeda: s('moeda') || 'BRL',
     serie_id: String(m.serie_id ?? ''),
@@ -463,6 +628,16 @@ function linhaDoBanco(r: Record<string, unknown>, hoje: string): LinhaDeConta {
     gerada_pelo_sistema: tituloGeradoPeloSistema(tabela, m),
     sem_baixa: tituloSemBaixa(tabela, m),
     cobranca_status: s('cobranca_status'),
+    numero: Number.isFinite(numero) ? numero : null,
+    venda_numero: s('venda_numero'),
+    fatura_numero: s('fatura_numero'),
+    vendedor: s('vendedor'),
+    cadastrado_em: s('cadastrado_em'),
+    cadastrado_por: s('cadastrado_por'),
+    excluido_em: s('excluido_em'),
+    excluido_por: s('excluido_por'),
+    estornado_na_exclusao: deCentavos(r.estornado_c as number),
+    campos_personalizados: campos && typeof campos === 'object' && !Array.isArray(campos) ? campos as Record<string, unknown> : {},
   };
 }
 
@@ -470,7 +645,7 @@ function linhaDoBanco(r: Record<string, unknown>, hoje: string): LinhaDeConta {
 
 export interface TotaisDoLado {
   quantidade: number;
-  /** Soma do valor das contas listadas, sem as canceladas. */
+  /** Soma do valor das contas listadas, sem as canceladas e as excluídas. */
   valor: number;
   /** Saldo em aberto (inclui o atrasado). */
   aberto: number;
@@ -491,6 +666,8 @@ export interface TotaisDaLista {
   saldo_aberto: number;
   /** Quantas canceladas estão na lista (ficam fora dos totais). */
   canceladas: number;
+  /** Quantas excluídas estão na lista (ficam fora dos totais). */
+  excluidas: number;
 }
 
 export interface ResultadoDaLista {
@@ -516,21 +693,22 @@ function totaisDoLado(r: Record<string, unknown> | undefined): TotaisDoLado {
 
 export async function lerContas(
   exec: ExecutorSQL, tenantId: string, f: FiltroDaLista, contasLiberadas: readonly string[] | null,
-  opcoes: { comCobranca?: boolean } = {},
+  opcoes: OpcoesDaLeitura = {},
 ): Promise<ResultadoDaLista> {
   const valores: unknown[] = [tenantId, f.hoje];
   const where = clausulas(f, contasLiberadas, valores);
-  const base = sqlDasContas(Boolean(opcoes.comCobranca));
+  const base = sqlDasContas(opcoes, f.situacao === 'excluido');
 
   const { rows: tot } = await exec.query(
     `${base}
      SELECT a.tipo, COUNT(*)::int AS n,
-            COALESCE(SUM(a.valor_c) FILTER (WHERE a.situacao <> 'cancelado'), 0)::bigint AS valor,
+            COALESCE(SUM(a.valor_c) FILTER (WHERE a.situacao NOT IN ('cancelado', 'excluido')), 0)::bigint AS valor,
             COALESCE(SUM(a.saldo_c) FILTER (WHERE a.situacao IN ('em_aberto', 'em_atraso')), 0)::bigint AS aberto,
             COALESCE(SUM(a.saldo_c) FILTER (WHERE a.situacao = 'em_atraso'), 0)::bigint AS atraso,
-            COALESCE(SUM(a.baixado_c), 0)::bigint AS baixado,
+            COALESCE(SUM(a.baixado_c) FILTER (WHERE a.situacao <> 'excluido'), 0)::bigint AS baixado,
             COALESCE(SUM(a.baixado_c) FILTER (WHERE a.situacao = 'liquidado'), 0)::bigint AS liquidado,
-            COUNT(*) FILTER (WHERE a.situacao = 'cancelado')::int AS canceladas
+            COUNT(*) FILTER (WHERE a.situacao = 'cancelado')::int AS canceladas,
+            COUNT(*) FILTER (WHERE a.situacao = 'excluido')::int AS excluidas
        FROM base a WHERE ${where} GROUP BY a.tipo`,
     valores,
   );
@@ -557,6 +735,7 @@ export async function lerContas(
       saldo: round2(receber.valor - pagar.valor),
       saldo_aberto: round2(receber.aberto - pagar.aberto),
       canceladas: tot.reduce((s, r) => s + Number(r.canceladas ?? 0), 0),
+      excluidas: tot.reduce((s, r) => s + Number(r.excluidas ?? 0), 0),
     },
     hoje: f.hoje,
   };
@@ -565,16 +744,71 @@ export async function lerContas(
 /** Todas as linhas do recorte (até `limite`), para exportar ou selecionar tudo. */
 export async function lerTodas(
   exec: ExecutorSQL, tenantId: string, f: FiltroDaLista, contasLiberadas: readonly string[] | null, limite: number,
-  opcoes: { comCobranca?: boolean } = {},
+  opcoes: OpcoesDaLeitura = {},
 ): Promise<LinhaDeConta[]> {
   const valores: unknown[] = [tenantId, f.hoje];
   const where = clausulas(f, contasLiberadas, valores);
   const { rows } = await exec.query(
-    `${sqlDasContas(Boolean(opcoes.comCobranca))}
+    `${sqlDasContas(opcoes, f.situacao === 'excluido')}
      SELECT ${COLUNAS_DA_LINHA} FROM base a WHERE ${where} ORDER BY ${ordemSql(f)} LIMIT $${valores.length + 1}`,
     [...valores, limite],
   );
   return rows.map(r => linhaDoBanco(r, f.hoje));
+}
+
+// ─── Campos personalizados (item 10, lado da lista) ─────────────────────────
+
+export type TipoDoCampo = 'texto' | 'numero' | 'data' | 'sim_nao' | 'lista';
+
+/** Campo personalizado da agência, como a lista precisa dele. */
+export interface CampoDaLista {
+  id: string;
+  nome: string;
+  tipo: TipoDoCampo;
+  aplica_a: 'ambos' | 'pagar' | 'receber';
+}
+
+const TIPOS_DO_CAMPO = new Set<TipoDoCampo>(['texto', 'numero', 'data', 'sim_nao', 'lista']);
+
+/**
+ * Lê a resposta de Configurações › Financeiro › Campos personalizados
+ * (`{ campos: [...] }` ou a lista direto) sem confiar no formato: só os
+ * ativos, com id e nome. Nunca lança.
+ */
+export function camposDaConfig(json: unknown): CampoDaLista[] {
+  const lista = Array.isArray(json) ? json
+    : json && typeof json === 'object' && Array.isArray((json as { campos?: unknown }).campos) ? (json as { campos: unknown[] }).campos : [];
+  const vistos = new Set<string>();
+  const saida: CampoDaLista[] = [];
+  for (const c of lista) {
+    if (!c || typeof c !== 'object') continue;
+    const o = c as Record<string, unknown>;
+    const id = typeof o.id === 'string' ? o.id.trim() : '';
+    const nome = typeof o.nome === 'string' ? o.nome.trim() : '';
+    if (!id || !nome || vistos.has(id) || o.ativo === false) continue;
+    vistos.add(id);
+    const tipo = TIPOS_DO_CAMPO.has(o.tipo as TipoDoCampo) ? o.tipo as TipoDoCampo : 'texto';
+    const aplica = o.aplica_a === 'pagar' || o.aplica_a === 'receber' ? o.aplica_a : 'ambos';
+    saida.push({ id: id.slice(0, 80), nome: nome.slice(0, 80), tipo, aplica_a: aplica });
+  }
+  return saida;
+}
+
+/** O valor do campo por extenso, como aparece na lista e na planilha. */
+export function textoDoCampo(campo: Pick<CampoDaLista, 'tipo'>, valor: unknown): string {
+  if (valor === null || valor === undefined || valor === '') return '';
+  if (campo.tipo === 'sim_nao') {
+    if (valor === true || valor === 'true' || valor === 'sim') return 'Sim';
+    if (valor === false || valor === 'false' || valor === 'nao') return 'Não';
+    return '';
+  }
+  if (campo.tipo === 'data' && typeof valor === 'string' && DATA.test(valor.slice(0, 10))) return dataBR(valor.slice(0, 10));
+  if (campo.tipo === 'numero') {
+    const v = typeof valor === 'number' ? valor : Number(String(valor).replace(',', '.'));
+    return Number.isFinite(v) ? v.toLocaleString('pt-BR', { maximumFractionDigits: 6 }) : '';
+  }
+  if (typeof valor === 'object') return '';
+  return String(valor).slice(0, 500);
 }
 
 // ─── Exportação ─────────────────────────────────────────────────────────────
@@ -588,20 +822,35 @@ function dataBR(iso: string): string {
   return a && m && d ? `${d}/${m}/${a}` : '';
 }
 
+/** AAAA-MM-DDTHH:MM → DD/MM/AAAA HH:MM. */
+export function dataHoraBR(v: string): string {
+  if (!v) return '';
+  const [d, h] = v.split('T');
+  return h ? `${dataBR(d)} ${h.slice(0, 5)}` : dataBR(d);
+}
+
 /**
  * CSV que o Excel abre direto (BOM, ';', vírgula decimal). Texto passa por
  * auditCsvCell (aspas, quebras e fórmulas neutralizadas); número sai como
- * número, para a planilha somar.
+ * número, para a planilha somar. Os campos personalizados ativos entram no fim.
  */
-export function csvDasContas(linhas: readonly LinhaDeConta[]): string {
+export function csvDasContas(linhas: readonly LinhaDeConta[], campos: readonly CampoDaLista[] = []): string {
   const cel = (v: unknown) => auditCsvCell(v);
   const n = (v: number) => `"${numeroBR(v)}"`;
-  const cab = ['Tipo', 'Situação', 'Vencimento', 'Emissão', 'Liquidação', 'Pessoa', 'Descrição', 'Documento', 'Parcela',
-    'Categoria', 'Centro de custo', 'Conta bancária', 'Forma', 'Valor', 'Pago/Recebido', 'Saldo em aberto', 'Dias de atraso'];
+  const excluidas = linhas.some(l => l.situacao === 'excluido');
+  const cab = ['Nº', 'Tipo', 'Situação', 'Vencimento', 'Emissão', 'Liquidação', 'Pessoa', 'Descrição', 'Documento', 'Parcela',
+    'Categoria', 'Centro de custo', 'Conta bancária', 'Forma', 'Moeda', 'Valor', 'Pago/Recebido', 'Saldo em aberto', 'Dias de atraso',
+    'Venda Nº', 'Fatura Nº', 'Vendedor', 'Cadastrado em', 'Cadastrado por',
+    ...(excluidas ? ['Excluído em', 'Excluído por'] : []),
+    ...campos.map(c => c.nome)];
   const corpo = linhas.map(l => [
+    `"${l.numero ?? ''}"`,
     cel(ROTULO_DO_TIPO[l.tipo]), cel(rotuloDaSituacao(l)), cel(dataBR(l.vencimento)), cel(dataBR(l.emissao)), cel(dataBR(l.liquidacao)),
     cel(l.pessoa), cel(l.descricao), cel(l.documento), cel(l.parcela), cel(l.categoria), cel(l.centro_custo), cel(l.conta_bancaria),
-    cel(l.forma), n(l.valor), n(l.baixado), n(l.saldo), `"${l.dias_atraso || ''}"`,
+    cel(l.forma), cel(l.moeda), n(l.valor), n(l.baixado), n(l.saldo), `"${l.dias_atraso || ''}"`,
+    cel(l.venda_numero), cel(l.fatura_numero), cel(l.vendedor), cel(dataHoraBR(l.cadastrado_em)), cel(l.cadastrado_por || 'Sistema'),
+    ...(excluidas ? [cel(dataHoraBR(l.excluido_em)), cel(l.excluido_por)] : []),
+    ...campos.map(c => cel(c.aplica_a === 'ambos' || c.aplica_a === l.tipo ? textoDoCampo(c, l.campos_personalizados[c.id]) : '')),
   ].join(';'));
   return '﻿' + [cab.map(cel).join(';'), ...corpo].join('\r\n');
 }

@@ -3,13 +3,15 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowDownLeft, ArrowUpRight, CheckCheck, Columns3, Copy, Download, ExternalLink, Plus, ReceiptText, Scale, Trash2,
+  ArrowDownLeft, ArrowUpRight, CheckCheck, Columns3, Copy, Download, ExternalLink, Plus, ReceiptText, RotateCcw, Scale, ShoppingBag, Trash2,
 } from 'lucide-react';
 
 import {
-  CAMPOS_DA_BUSCA, COBRANCAS_DO_FILTRO, rotuloDaSituacao, type CampoDaBusca, type CobrancaDoFiltro, type DataDoFiltro, type LinhaDeConta,
-  type SituacaoDoFiltro,
+  CAMPOS_DA_BUSCA, COBRANCAS_DO_FILTRO, camposDaConfig, rotuloDaSituacao, type CampoDaBusca, type CampoDaLista, type CobrancaDoFiltro,
+  type DataDoFiltro, type LinhaDeConta, type SituacaoDoFiltro,
 } from '@/lib/contas-pagar-receber';
+import { contasParaEscolher } from '@/lib/contas-bancarias-regras';
+import { enderecoDaVenda, postarRegistro } from '@/lib/gravar-registro';
 import { api as apiDaCobranca, type ProvedorDeCobranca } from '@/lib/cobranca/contrato-telas';
 import { motivoSemCarne, PROVEDORES, separarParaBoleto, type ContaParaCobrar } from '@/lib/cobranca/regras-telas';
 import { EmitirCobrancas } from '@/components/financeiro/cobranca/EmitirCobrancas';
@@ -18,8 +20,10 @@ import type { AcaoDeLote } from '@/lib/contas-em-lote';
 import type { ContaBancaria, PlanoContas } from '@/lib/crm-types';
 import { loadEntities } from '@/lib/crm-storage';
 import { toast } from '@/lib/toast';
+import { formatBRL } from '@/lib/utils';
 
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/fin/ConfirmDialog';
 import { FilterBar } from '@/components/fin/FilterBar';
 import { FinTable } from '@/components/fin/FinTable';
 import { MolduraDaPagina } from '@/components/fin/MolduraDaPagina';
@@ -28,8 +32,8 @@ import { resolverPeriodo, type PeriodoChave } from '@/components/fin/PeriodPicke
 
 import { AcaoEmLote, type Categoria, type Centro } from './AcaoEmLote';
 import {
-  COLUNAS_ESCOLHIVEIS, COLUNAS_FIXAS, COLUNAS_PADRAO, ORDEM_DA_COLUNA, colunasSalvas, criarColunas, linhasParaCopiar, salvarColunas,
-  cobrancaDaLinha, type ColunaId,
+  COLUNAS_ESCOLHIVEIS, COLUNAS_FIXAS, COLUNAS_PADRAO, colunasDoServidor, colunasSalvas, criarColunas, linhasParaCopiar, normalizarColunas,
+  ordemDaColuna, salvarColunas, cobrancaDaLinha, type ColunaId,
 } from './colunas';
 import { LiquidarEmLote } from './LiquidarEmLote';
 import { MenuDaLinha, type ItemDoMenu } from './MenuDaLinha';
@@ -50,14 +54,18 @@ import { enderecoDaConta, exportarContas, todasDoFiltro, useContas, usePermissoe
  *   · marcar várias e agir de uma vez, sempre com prévia.
  */
 
-const PERIODOS: PeriodoChave[] = ['MES_ATUAL', 'PROX_30', 'PROX_90', 'MES_PASSADO', 'TUDO', 'PERSONALIZADO'];
+const PERIODOS: PeriodoChave[] = [
+  'MES_ATUAL', 'SEMANA_ATUAL', 'AMANHA', 'PROX_7', 'PROX_14', 'PROX_30', 'PROX_90', 'PROX_MES',
+  'ULT_7', 'ULT_14', 'ULT_30', 'MES_PASSADO', 'ANO_ATUAL', 'TUDO', 'PERSONALIZADO',
+];
 
 const ROTULO_SITUACAO: Record<SituacaoDoFiltro, string> = {
-  todas: 'Todas', em_aberto: 'Em aberto', em_atraso: 'Em atraso', liquidado: 'Pago/Recebido', cancelado: 'Cancelado',
+  todas: 'Todas', em_aberto: 'Em aberto', em_atraso: 'Em atraso', liquidado: 'Pago/Recebido', cancelado: 'Cancelado', excluido: 'Excluído',
 };
 const ROTULO_DATA: Record<DataDoFiltro, string> = { emissao: 'Emissão', vencimento: 'Vencimento', liquidacao: 'Liquidação' };
 const ROTULO_EM: Record<CampoDaBusca, string> = {
-  tudo: 'Todos os campos', descricao: 'Descrição', pessoa: 'Pessoa', documento: 'Documento', categoria: 'Categoria', centro: 'Centro de custo',
+  tudo: 'Todos os campos', numero: 'Nº', descricao: 'Descrição', pessoa: 'Pessoa', documento: 'Documento', categoria: 'Categoria',
+  centro: 'Centro de custo', venda: 'Venda Nº',
 };
 const TODOS = '__todos__';
 const ROTULO_COBRANCA: Record<CobrancaDoFiltro, string> = {
@@ -67,7 +75,8 @@ const ROTULO_COBRANCA: Record<CobrancaDoFiltro, string> = {
 /** A linha da lista no formato que as regras de cobrança leem. */
 function paraCobrar(l: LinhaDeConta): ContaParaCobrar & { descricao: string } {
   return {
-    id: l.id, tipo: l.tipo, situacao: l.situacao, saldo: l.saldo, pessoa: l.pessoa, vencimento: l.vencimento,
+    // Excluída não se cobra: para as regras de cobrança, é como cancelada.
+    id: l.id, tipo: l.tipo, situacao: l.situacao === 'excluido' ? 'cancelado' : l.situacao, saldo: l.saldo, pessoa: l.pessoa, vencimento: l.vencimento,
     cobranca: cobrancaDaLinha(l), descricao: l.descricao,
   };
 }
@@ -116,7 +125,10 @@ export function TelaDeContas() {
 
   const [categorias, setCategorias] = React.useState<Categoria[]>([]);
   const [centros, setCentros] = React.useState<Centro[]>([]);
-  const [contasBancarias, setContasBancarias] = React.useState<Array<{ id: string; nome: string }>>([]);
+  const [contasBancarias, setContasBancarias] = React.useState<Array<{ id: string; nome: string; ativo?: unknown }>>([]);
+  const [campos, setCampos] = React.useState<CampoDaLista[]>([]);
+  const [restaurando, setRestaurando] = React.useState<LinhaDeConta | null>(null);
+  const [gravandoRestauro, setGravandoRestauro] = React.useState(false);
 
   React.useEffect(() => {
     // Atalho do endereço (?cobranca=sem_boleto), vindo da tela Cobranças:
@@ -126,11 +138,22 @@ export function TelaDeContas() {
       setF(atual => ({ ...atual, cobranca: atalho as CobrancaDoFiltro, periodo: 'TUDO', de: '', ate: '' }));
     }
     setColunas(colunasSalvas());
+    // Campos personalizados da agência viram colunas; depois, a escolha
+    // guardada no servidor (a deste navegador fica de reserva).
+    void (async () => {
+      const lidos = await fetch('/api/config/financeiro/campos-personalizados')
+        .then(r => (r.ok ? r.json() : null)).then(camposDaConfig).catch(() => [] as CampoDaLista[]);
+      setCampos(lidos);
+      const doServidor = normalizarColunas(await colunasDoServidor(), lidos);
+      if (doServidor) setColunas(doServidor);
+    })();
     loadEntities<PlanoContas>('plano-contas')
       .then(l => setCategorias(l.map(c => ({ id: c.id, codigo: c.codigo, nome: c.nome, tipo: c.tipo, ativo: c.ativo }))))
       .catch(() => setCategorias([]));
     fetch('/api/centros-custo').then(r => (r.ok ? r.json() : [])).then((l: Centro[]) => setCentros(Array.isArray(l) ? l : [])).catch(() => setCentros([]));
-    loadEntities<ContaBancaria>('contas-bancarias').then(l => setContasBancarias(l.map(c => ({ id: c.id, nome: c.nome || 'Conta' })))).catch(() => setContasBancarias([]));
+    loadEntities<ContaBancaria & { ativo?: unknown }>('contas-bancarias')
+      .then(l => setContasBancarias(l.map(c => ({ id: c.id, nome: c.nome || 'Conta', ativo: c.ativo }))))
+      .catch(() => setContasBancarias([]));
     apiDaCobranca.config().then(c => setProvedor(c.provedor_padrao)).catch(() => setProvedor(null));
   }, []);
 
@@ -148,7 +171,7 @@ export function TelaDeContas() {
   }, [f.data, f.situacao, f.tipo, f.em, f.de, f.ate, busca, f.categoria, f.centro, f.conta, f.cobranca]);
   const datasValidas = !f.de || !f.ate || f.de <= f.ate;
   const consulta = datasValidas
-    ? `${recorte}&ordem=${ORDEM_DA_COLUNA[ordem.coluna] ?? 'vencimento'}&direcao=${ordem.direcao}&pagina=${pagina}&por_pagina=${porPagina}`
+    ? `${recorte}&ordem=${ordemDaColuna(ordem.coluna) ?? 'vencimento'}&direcao=${ordem.direcao}&pagina=${pagina}&por_pagina=${porPagina}`
     : '';
   const { dados, carregando, erro, atualizadoEm, recarregar } = useContas(consulta);
 
@@ -165,14 +188,14 @@ export function TelaDeContas() {
   // tela: Esc dentro de uma lista aberta, menu ou janela continua fechando ela.
   function teclado(e: React.KeyboardEvent<HTMLDivElement>) {
     if (e.key !== 'Escape' || e.defaultPrevented) return;
-    if (!moldura.current?.contains(e.target as Node) || menu || liquidar || lote || boletos || carne) return;
+    if (!moldura.current?.contains(e.target as Node) || menu || liquidar || lote || boletos || carne || restaurando) return;
     if (ativos > 0) { e.preventDefault(); limpar(); }
     else if (selecionadas.size > 0) { e.preventDefault(); setSelecionadas(new Map()); }
   }
 
   function ordenar(colunaId: string) {
     const c = colunaId as ColunaId;
-    if (!ORDEM_DA_COLUNA[c]) return;
+    if (!ordemDaColuna(c)) return;
     setOrdem(o => (o.coluna === c ? { coluna: c, direcao: o.direcao === 'asc' ? 'desc' : 'asc' } : { coluna: c, direcao: 'asc' }));
     setPagina(1);
   }
@@ -202,7 +225,10 @@ export function TelaDeContas() {
   }
 
   function trocarColunas(novas: ColunaId[]) {
-    const final = COLUNAS_ESCOLHIVEIS.map(c => c.id).filter(c => novas.includes(c));
+    const final: ColunaId[] = [
+      ...COLUNAS_ESCOLHIVEIS.map(c => c.id).filter(c => novas.includes(c)),
+      ...campos.map(c => `campo:${c.id}` as const).filter(c => novas.includes(c)),
+    ];
     const comFixas = [...final, ...COLUNAS_FIXAS.filter(c => !final.includes(c))];
     setColunas(comFixas);
     salvarColunas(comFixas);
@@ -219,7 +245,7 @@ export function TelaDeContas() {
 
   async function exportar() {
     setExportando(true);
-    const e = await exportarContas(`${recorte}&ordem=${ORDEM_DA_COLUNA[ordem.coluna] ?? 'vencimento'}&direcao=${ordem.direcao}`);
+    const e = await exportarContas(`${recorte}&ordem=${ordemDaColuna(ordem.coluna) ?? 'vencimento'}&direcao=${ordem.direcao}`);
     if (e) toast.error('Não foi possível exportar.', e);
     setExportando(false);
   }
@@ -231,11 +257,40 @@ export function TelaDeContas() {
   const podeEditar = pode('editar_financeiro');
   const podeExcluir = pode('excluir');
 
+  /** Restaurar um título excluído (a rota decide caixa, razão e permissão). */
+  async function restaurar(l: LinhaDeConta) {
+    setGravandoRestauro(true);
+    try {
+      const r = await postarRegistro<{ ok: boolean; aviso?: string }>(
+        `/api/${l.tipo === 'pagar' ? 'contas-pagar' : 'contas-receber'}/${encodeURIComponent(l.id)}/restaurar`,
+      );
+      toast.success('Conta restaurada', r?.aviso || `${l.pessoa || 'A conta'} voltou para a lista e para os relatórios.`);
+      setRestaurando(null);
+      void recarregar();
+    } catch (e) {
+      toast.error('Não foi possível restaurar', e instanceof Error ? e.message : '');
+    } finally {
+      setGravandoRestauro(false);
+    }
+  }
+
   function itensDoMenu(l: LinhaDeConta): ItemDoMenu[] {
+    const vendaItem: ItemDoMenu[] = l.venda_id
+      ? [{ id: 'venda', rotulo: l.venda_numero ? `Abrir a venda ${l.venda_numero}` : 'Abrir a venda', icone: ShoppingBag,
+          onEscolher: () => router.push(enderecoDaVenda(l.venda_id)) }]
+      : [];
+    if (l.situacao === 'excluido') {
+      return [
+        ...(podeEditar ? [{ id: 'restaurar', rotulo: 'Restaurar', icone: RotateCcw, onEscolher: () => setRestaurando(l) }] : []),
+        ...vendaItem,
+        { id: 'copiar', rotulo: 'Copiar linha', icone: Copy, onEscolher: () => { void copiar([l]); } },
+      ];
+    }
     const marcadas = selecionadas.has(l.chave) && selecionadas.size > 1 ? [...selecionadas.values()] : [l];
     const aberta = l.situacao === 'em_aberto' || l.situacao === 'em_atraso';
     const itens: ItemDoMenu[] = [
       { id: 'abrir', rotulo: 'Abrir', icone: ExternalLink, atalho: 'Enter', onEscolher: () => abrir(l) },
+      ...vendaItem,
     ];
     if (podeLiquidarTipo(l)) {
       itens.push({
@@ -263,9 +318,12 @@ export function TelaDeContas() {
   }
 
   const colunasDaTabela = React.useMemo(
-    () => criarColunas({ onMenu: (linha, posicao) => setMenu({ linha, posicao }) }),
-    [],
+    () => criarColunas({ onMenu: (linha, posicao) => setMenu({ linha, posicao }), campos }),
+    [campos],
   );
+  const verExcluidas = f.situacao === 'excluido';
+  const contasEscolhiveis = contasParaEscolher(contasBancarias, f.conta);
+  const contasParaLiquidar = contasParaEscolher(contasBancarias);
 
   const marcadas = [...selecionadas.values()];
   function acaoDaBarra(acao: AcaoDaBarra) {
@@ -327,8 +385,8 @@ export function TelaDeContas() {
               opcoes: [{ valor: TODOS, rotulo: 'Todas' }, ...opcoesCategoria.map(c => ({ valor: c.id, rotulo: `${c.codigo ? `${c.codigo} · ` : ''}${c.nome}` }))] },
             ...(centros.length ? [{ id: 'cpr-centro', rotulo: 'Centro', valor: f.centro || TODOS, onChange: (v: string) => mudar({ centro: v === TODOS ? '' : v }),
               opcoes: [{ valor: TODOS, rotulo: 'Todos' }, ...centros.map(c => ({ valor: c.id, rotulo: c.nome }))] }] : []),
-            ...(contasBancarias.length ? [{ id: 'cpr-conta', rotulo: 'Conta', valor: f.conta || TODOS, onChange: (v: string) => mudar({ conta: v === TODOS ? '' : v }),
-              opcoes: [{ valor: TODOS, rotulo: 'Todas' }, ...contasBancarias.map(c => ({ valor: c.id, rotulo: c.nome }))] }] : []),
+            ...(contasEscolhiveis.length ? [{ id: 'cpr-conta', rotulo: 'Conta', valor: f.conta || TODOS, onChange: (v: string) => mudar({ conta: v === TODOS ? '' : v }),
+              opcoes: [{ valor: TODOS, rotulo: 'Todas' }, ...contasEscolhiveis.map(c => ({ valor: c.id, rotulo: c.nome }))] }] : []),
             { id: 'cpr-cobranca', rotulo: 'Cobrança', valor: f.cobranca, onChange: v => mudar({ cobranca: v as CobrancaDoFiltro }),
               opcoes: (Object.keys(ROTULO_COBRANCA) as CobrancaDoFiltro[]).map(c => ({ valor: c, rotulo: ROTULO_COBRANCA[c] })) },
           ]}
@@ -361,7 +419,7 @@ export function TelaDeContas() {
         {mostrarColunas ? (
           <fieldset className="flex flex-wrap gap-x-[var(--fin-s-4)] gap-y-[var(--fin-s-2)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-[var(--fin-s-4)] shadow-[var(--fin-e-card)]">
             <legend className="sr-only">Colunas visíveis</legend>
-            {COLUNAS_ESCOLHIVEIS.map(c => (
+            {[...COLUNAS_ESCOLHIVEIS, ...campos.map(c => ({ id: `campo:${c.id}` as ColunaId, rotulo: c.nome }))].map(c => (
               <label key={c.id} className="inline-flex min-h-11 items-center gap-[var(--fin-s-2)] fin-t-body text-[var(--fin-text-2)] lg:min-h-8">
                 <input
                   type="checkbox"
@@ -379,7 +437,14 @@ export function TelaDeContas() {
           </fieldset>
         ) : null}
 
-        {selecionadas.size > 0 ? (
+        {verExcluidas ? (
+          <p className="fin-t-body text-[var(--fin-text-2)]">
+            Contas excluídas não entram nos totais, nos relatórios nem no fluxo de caixa. Restaurar devolve a conta à lista;
+            o que tinha sido pago ou recebido voltou ao caixa na exclusão e não volta sozinho.
+          </p>
+        ) : null}
+
+        {selecionadas.size > 0 && !verExcluidas ? (
           <BarraDoLote
             marcadas={marcadas}
             totalDoFiltro={dados?.total ?? 0}
@@ -402,7 +467,14 @@ export function TelaDeContas() {
           densidade="compacta"
           estado={estado}
           erro={erro ? { mensagem: erro, onTentarDeNovo: () => { void recarregar(); } } : null}
-          vazio={ativos > 0
+          vazio={verExcluidas
+            ? {
+                motivo: 'sem-resultado',
+                titulo: 'Nenhuma conta excluída neste filtro',
+                oQueE: 'Contas excluídas ficam guardadas aqui e podem ser restauradas. Experimente um período maior.',
+                acaoSecundaria: { rotulo: 'Limpar filtros', onClick: limpar },
+              }
+            : ativos > 0
             ? {
                 motivo: 'sem-resultado',
                 titulo: 'Nenhuma conta neste filtro',
@@ -415,13 +487,13 @@ export function TelaDeContas() {
                 oQueE: 'Aqui aparecem juntas as contas que a agência tem a pagar e a receber, com a situação e o saldo de cada uma.',
                 comoComeca: ['Escolha um período maior no filtro.', 'Ou lance uma conta nova pelo botão Nova conta.'],
               }}
-          selecao={{
+          selecao={verExcluidas ? undefined : {
             selecionadas: new Set(selecionadas.keys()),
             onAlterar: alterarSelecao,
             rotulo: l => `Marcar ${l.pessoa || 'conta'}${l.descricao ? `, ${l.descricao}` : ''}`,
           }}
           ordemControlada={{ colunaId: ordem.coluna, direcao: ordem.direcao, onOrdenar: ordenar }}
-          onLinhaDuploClique={abrir}
+          onLinhaDuploClique={l => { if (l.situacao === 'excluido') { if (podeEditar) setRestaurando(l); } else abrir(l); }}
           onLinhaMenu={(linha, posicao) => setMenu({ linha, posicao })}
           rodape={dados && t ? (
             <RodapeDaLista
@@ -445,9 +517,28 @@ export function TelaDeContas() {
         onFechar={() => setMenu(null)}
       />
 
+      <ConfirmDialog
+        aberto={Boolean(restaurando)}
+        onOpenChange={aberto => { if (!aberto) setRestaurando(null); }}
+        titulo="Restaurar esta conta?"
+        oQueVaiAcontecer={restaurando && restaurando.estornado_na_exclusao > 0
+          ? `A conta volta para a lista, em aberto. Os ${formatBRL(restaurando.estornado_na_exclusao)} que tinham sido ${restaurando.tipo === 'pagar' ? 'pagos' : 'recebidos'} voltaram ao caixa na exclusão: se o dinheiro saiu ou entrou de verdade, liquide de novo.`
+          : 'A conta volta para a lista, para os totais e para os relatórios, como estava antes de ser excluída.'}
+        detalhes={restaurando ? [
+          ...(restaurando.numero !== null ? [{ rotulo: 'Nº', valor: String(restaurando.numero) }] : []),
+          { rotulo: restaurando.tipo === 'pagar' ? 'Fornecedor' : 'Cliente', valor: restaurando.pessoa || '—' },
+          { rotulo: 'Valor', valor: formatBRL(restaurando.valor) },
+          ...(restaurando.excluido_por ? [{ rotulo: 'Excluída por', valor: restaurando.excluido_por }] : []),
+        ] : undefined}
+        confirmarRotulo="Restaurar conta"
+        voltarRotulo="Deixar excluída"
+        processando={gravandoRestauro}
+        onConfirmar={async () => { if (restaurando) await restaurar(restaurando); }}
+      />
+
       <LiquidarEmLote
         linhas={liquidar}
-        contas={contasBancarias}
+        contas={contasParaLiquidar}
         onFechar={() => setLiquidar(null)}
         onConcluido={() => { setLiquidar(null); aposLote(); }}
       />

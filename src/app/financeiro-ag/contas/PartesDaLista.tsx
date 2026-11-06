@@ -156,6 +156,11 @@ export function RodapeDaLista({
             {totais.canceladas === 1 ? 'A conta cancelada não entra' : `As ${totais.canceladas} canceladas não entram`} nos totais.
           </span>
         ) : null}
+        {totais.excluidas > 0 ? (
+          <span className="fin-t-caption text-[var(--fin-text-3)]">
+            {totais.excluidas === 1 ? 'A conta excluída não entra' : `As ${totais.excluidas} excluídas não entram`} nos totais nem nos relatórios.
+          </span>
+        ) : null}
         <nav aria-label="Páginas" className="flex items-center gap-[var(--fin-s-2)]">
           <label className="inline-flex items-center gap-[var(--fin-s-2)] fin-t-caption text-[var(--fin-text-3)]">
             Por página

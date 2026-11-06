@@ -9,7 +9,9 @@ import { hojeISO } from '@/lib/money';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import {
   EXPORTACAO_MAX, FiltroInvalido, SELECAO_MAX, csvDasContas, existeTabelaDeCobranca, lerContas, lerFiltro, lerTodas,
+  tabelasDaLista,
 } from '@/lib/contas-pagar-receber';
+import { camposParaExportar } from '@/lib/contas-pagar-receber-campos';
 
 /**
  * Contas a Pagar/Receber numa lista só (05/11/2026): só leitura, paginada no
@@ -20,6 +22,9 @@ import {
  *       &ordem=&direcao=&pagina=&por_pagina=
  *   GET ...&format=csv     planilha do filtro inteiro (até 50.000 linhas; direito "exportar")
  *   GET ...&format=chaves  as contas do filtro inteiro, para "selecionar todas" (até 2.000)
+ *
+ * 06/11/2026 (E7): Nº, moeda, venda, fatura, vendedor, cadastrado por/em e
+ * campos personalizados em cada linha; situacao=excluido lê os excluídos.
  */
 export const dynamic = 'force-dynamic';
 const HEADERS = { 'Cache-Control': 'private, no-store' };
@@ -41,7 +46,7 @@ export async function GET(req: Request) {
     const exec = pool as unknown as ExecutorSQL;
     const formato = params.get('format');
     // Situação da cobrança (E3) quando a tabela de cobranças já existe.
-    const opcoes = { comCobranca: await existeTabelaDeCobranca(exec) };
+    const opcoes = { comCobranca: await existeTabelaDeCobranca(exec), tabelas: await tabelasDaLista(exec) };
 
     if (formato === 'csv') {
       if (!(await pode(session, 'exportar'))) {
@@ -59,7 +64,8 @@ export async function GET(req: Request) {
         descricao: `Exportou ${linhas.length} contas a pagar e a receber.`,
       }).catch(() => undefined);
       const nome = `contas-a-pagar-e-receber-${filtro.hoje}.csv`;
-      return new Response(csvDasContas(linhas), {
+      const campos = await camposParaExportar(exec, tenantId);
+      return new Response(csvDasContas(linhas, campos), {
         headers: { ...HEADERS, 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="${nome}"` },
       });
     }
