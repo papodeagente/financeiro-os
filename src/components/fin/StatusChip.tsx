@@ -21,7 +21,7 @@ export const statusChipVariants = cva(
 
 export type StatusTone = NonNullable<VariantProps<typeof statusChipVariants>['tone']>;
 
-export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza' | 'comissao' | 'plano' | 'cobranca' | 'mudanca';
+export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza' | 'comissao' | 'plano' | 'cobranca' | 'mudanca' | 'conferencia';
 
 export type StatusChipProps = {
   /** Valor cru do banco. NUNCA é renderizado como veio. */
@@ -124,6 +124,21 @@ export const STATUS_LABELS: Record<StatusDominio, Record<string, { rotulo: strin
     pronto:         { rotulo: 'Completo',            tone: 'positivo' },
     parcial:        { rotulo: 'Em parte',            tone: 'aviso'    },
     vem:            { rotulo: 'Ainda vem',           tone: 'neutro'   },
+  },
+  // Conferência do extrato da operadora e conciliação automática (E6,
+  // 05/11/2026): situação de cada linha e da conferência.
+  conferencia: {
+    CONFERIDO:      { rotulo: 'Conferido',        tone: 'positivo' },
+    DIVERGENTE:     { rotulo: 'Divergente',       tone: 'aviso'    },
+    NAO_ENCONTRADO: { rotulo: 'Não encontrado',   tone: 'negativo' },
+    ACEITO:         { rotulo: 'Aceito',           tone: 'info'     },
+    PROPOSTA:       { rotulo: 'Cancelar?',        tone: 'aviso'    },
+    ABERTA:         { rotulo: 'Aberta',           tone: 'info'     },
+    FECHADA:        { rotulo: 'Fechada',          tone: 'neutro'   },
+    SOZINHA:        { rotulo: 'Concilia sozinha', tone: 'positivo' },
+    SUGERE:         { rotulo: 'Só sugere',        tone: 'neutro'   },
+    DESFEITA:       { rotulo: 'Desfeita',         tone: 'neutro'   },
+    ATIVA:          { rotulo: 'Conciliada',       tone: 'positivo' },
   },
 };
 

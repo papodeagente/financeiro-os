@@ -55,6 +55,16 @@ export const DESTINOS_DE_MERCADO: readonly DestinoDeMercado[] = [
     frase: 'Importe o extrato do banco e confira cada lançamento com as contas.',
   },
   {
+    id: 'conferencia-operadora', termos: ['extrato da operadora', 'extrato de operadora', 'extrato da consolidadora', 'conferir operadora', 'conferência de operadora', 'comissão da operadora', 'comissão esperada', 'conferir comissão'],
+    href: '/financeiro-ag/conferencia-operadora', tela: 'Conferência de operadora',
+    frase: 'Solte o extrato (PDF, planilha, CSV ou e-mail) de qualquer operadora: cada linha é casada com a venda pelo localizador.',
+  },
+  {
+    id: 'conciliacao-automatica', termos: ['conciliação automática', 'regras de conciliação', 'conciliar sozinho', 'tarifa bancária', 'tarifas do banco'],
+    href: '/financeiro-ag/conciliacao/automatica', tela: 'Conciliação automática',
+    frase: 'O que você concilia vira regra; ligada, ela concilia sozinha a mesma pessoa e o mesmo valor, com desfazer.',
+  },
+  {
     id: 'fechar-caixa', termos: ['fechar caixa', 'fechamento de caixa', 'fechamento do mês', 'travar período', 'reabrir caixa'],
     href: '/financeiro-ag/fechamento', tela: 'Fechar Caixa',
   },

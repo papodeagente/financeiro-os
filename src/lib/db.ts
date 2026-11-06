@@ -19,6 +19,8 @@ import { AUDIT_SCHEMA_SQL } from './audit-schema';
 import { NOTIFICACOES_SCHEMA_SQL } from './notificacoes-schema';
 import { MAPAS_MENTAIS_COMPARTILHAMENTO_SCHEMA_SQL } from './mapas-mentais-compartilhamento';
 import { SITES_SCHEMA_SQL } from './sites-schema';
+import { CONCILIACAO_REGRAS_SCHEMA_SQL } from './conciliacao-regras-schema';
+import { CONFERENCIA_OPERADORA_SCHEMA_SQL } from './conferencia-operadora-schema';
 
 const pool = process.env.DATABASE_URL
   ? new AuditPool({ connectionString: process.env.DATABASE_URL, max: 5 }, getAuditContext)
@@ -1553,6 +1555,11 @@ async function executarInitDB() {
   // fontes, cofre do Super Admin, variações cambiais e a trava da moeda da
   // conta bancária. Antes do razão e da auditoria.
   await pool.query(CAMBIO_SCHEMA_SQL);
+  // Conciliação com regras aprendidas e conferência do extrato de operadora
+  // (05/11/2026, E6). A lista "conciliado sozinho" e as linhas da conferência
+  // são controle e ficam fora do gatilho de auditoria.
+  await pool.query(CONCILIACAO_REGRAS_SCHEMA_SQL);
+  await pool.query(CONFERENCIA_OPERADORA_SCHEMA_SQL);
   await pool.query(RAZAO_SCHEMA_SQL);
   // Instala a captura somente depois das migrações/seed, sem fabricar histórico.
   await pool.query(AUDIT_SCHEMA_SQL);

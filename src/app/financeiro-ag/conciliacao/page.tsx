@@ -323,6 +323,7 @@ export default function ConciliacaoPage() {
       }
       if (!resultado) throw new ErroDeImportacao('A conexão caiu antes da resposta final.', false);
       atualizar({ fase: 'pronto', feitas: parsed.length, total: parsed.length, resultado });
+      void conciliarComRegras();
     } catch (err) {
       const nadaGravado = err instanceof ErroDeImportacao ? err.nadaGravado : true;
       atualizar({
@@ -331,6 +332,27 @@ export default function ConciliacaoPage() {
       });
     } finally {
       void load(true);
+    }
+  }
+
+  // Depois de importar, as regras que a agência ligou conciliam sozinhas o
+  // que têm certeza (E6). Sem regra ligada, nada acontece. Falha aqui não
+  // estraga a importação: a fila continua como estava.
+  async function conciliarComRegras() {
+    try {
+      const r = await fetch('/api/conciliacao/automatica', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acao: 'executar', conta_bancaria_id: selectedConta }),
+      });
+      if (!r.ok) return;
+      const j = (await r.json().catch(() => null)) as { conciliadas?: unknown[] } | null;
+      const n = j?.conciliadas?.length ?? 0;
+      if (n > 0) {
+        toast.success(n === 1 ? '1 linha conciliada sozinha' : `${n} linhas conciliadas sozinhas`, 'Pelas regras que você ligou. Confira e desfaça em Conciliação automática.');
+        void load(true);
+      }
+    } catch {
+      /* a fila continua igual */
     }
   }
 
@@ -602,6 +624,7 @@ export default function ConciliacaoPage() {
               ? { rotulo: importacao ? 'Importando o arquivo' : 'Importar extrato', icone: Upload, onClick: abrirSeletorDeArquivo }
               : undefined
           }
+          acoesSecundarias={[{ rotulo: 'Conciliação automática', href: '/financeiro-ag/conciliacao/automatica' }]}
           onRecarregar={async () => { await load(); }}
         />
 
