@@ -6,6 +6,7 @@ import { CalendarClock, PiggyBank, Plus, Users, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { BotaoExportar } from '@/components/fin/BotaoExportar';
 import { Field } from '@/components/fin/Field';
 import { FilterBar } from '@/components/fin/FilterBar';
 import { FinTable, type FinColuna } from '@/components/fin/FinTable';
@@ -21,6 +22,7 @@ import { loadEntities } from '@/lib/crm-storage';
 import { deCentavos, hojeISO, paraCentavos } from '@/lib/money';
 import { MESES_DE_VALIDADE_PADRAO, ROTULO_MOVIMENTO, ROTULO_ORIGEM_DO_CREDITO, fraseDaValidade, validadePadrao } from '@/lib/credito-cliente';
 import type { CarteiraDoCliente, ExtratoCompleto } from '@/lib/credito-cliente-servidor';
+import { documentoDosCreditos } from '@/lib/exportacao/reembolsos-e-creditos';
 import type { ContaReceber } from '@/lib/crm-types';
 import { toast } from '@/lib/toast';
 import { cn, formatBRL } from '@/lib/utils';
@@ -139,6 +141,14 @@ export function TelaDeCreditos() {
           ativos={ativos}
           onLimpar={limpar}
         />
+        <div className="flex justify-end">
+          <BotaoExportar
+            origem="credito_do_cliente"
+            podeExportar={pode('exportar')}
+            desabilitado={!linhas.length}
+            documento={() => documentoDosCreditos(linhas, { busca, mostrar: f.mostrar })}
+          />
+        </div>
 
         <FinTable<CarteiraDoCliente>
           linhas={linhas}

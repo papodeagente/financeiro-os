@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { BotaoExportar } from '@/components/fin/BotaoExportar';
 import { ConfirmDialog } from '@/components/fin/ConfirmDialog';
 import { Field } from '@/components/fin/Field';
 import { FilterBar } from '@/components/fin/FilterBar';
@@ -28,6 +29,7 @@ import { loadEntities } from '@/lib/crm-storage';
 import { consumirAtalho, lerAtalhos } from '@/lib/atalho-da-url';
 import { addDias, deCentavos, hojeISO } from '@/lib/money';
 import type { ListaDeReembolsos, Reembolso, TipoDeReembolso } from '@/lib/reembolsos-servidor';
+import { documentoDosReembolsos } from '@/lib/exportacao/reembolsos-e-creditos';
 import { toast } from '@/lib/toast';
 import { cn, formatBRL } from '@/lib/utils';
 
@@ -280,6 +282,14 @@ export function TelaDeReembolsos() {
           onLimpar={limpar}
         />
         {!datasValidas ? <p role="alert" className="fin-t-body text-[var(--fin-negative-text)]">A data inicial precisa ser igual ou anterior à final.</p> : null}
+        <div className="flex justify-end">
+          <BotaoExportar
+            origem="reembolsos"
+            podeExportar={pode('exportar')}
+            desabilitado={!linhas.length}
+            documento={() => documentoDosReembolsos(linhas, { de: f.de, ate: f.ate, tipo: f.tipo, situacao: f.situacao, busca })}
+          />
+        </div>
 
         <FinTable<Reembolso>
           linhas={linhas}
