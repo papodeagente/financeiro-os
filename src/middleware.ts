@@ -91,6 +91,8 @@ export async function middleware(request: NextRequest) {
       pathname.startsWith('/p/') || pathname.startsWith('/api/propostas/public/')
       // O endereço do portal do cliente também é o token dele.
       || pathname.startsWith('/c/') || pathname.startsWith('/api/portal/')
+      // E o do link de leitura de relatório (E7).
+      || pathname.startsWith('/r/') || pathname.startsWith('/api/leitura/')
     ) {
       response.headers.set('Referrer-Policy', 'no-referrer');
       response.headers.set('X-Robots-Tag', 'noindex, nofollow');

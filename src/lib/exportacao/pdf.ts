@@ -19,7 +19,6 @@ export function paraLatin1(s: string): string {
   return s
     .replace(/[→⇒]/g, '->').replace(/[←⇐]/g, '<-').replace(/[✓✔]/g, 'ok').replace(/[✗✘]/g, 'x')
     .replace(/[−]/g, '-').replace(/[  ]/g, ' ')
-    // eslint-disable-next-line no-control-regex
     .replace(/[^\x00-\xff–—‘’“”•…€]/g, '');
 }
 

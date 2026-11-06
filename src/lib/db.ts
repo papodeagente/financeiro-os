@@ -28,6 +28,7 @@ import { MAPAS_MENTAIS_COMPARTILHAMENTO_SCHEMA_SQL } from './mapas-mentais-compa
 import { SITES_SCHEMA_SQL } from './sites-schema';
 import { CONCILIACAO_REGRAS_SCHEMA_SQL } from './conciliacao-regras-schema';
 import { CONFERENCIA_OPERADORA_SCHEMA_SQL } from './conferencia-operadora-schema';
+import { RELATORIOS_AGENDADOS_SCHEMA_SQL } from './relatorios-agendados/schema';
 
 const pool = process.env.DATABASE_URL
   ? new AuditPool({ connectionString: process.env.DATABASE_URL, max: 5 }, getAuditContext)
@@ -1592,6 +1593,9 @@ async function executarInitDB() {
   // o identificador do banco deduplica no mesmo lugar do FITID.
   await pool.query(EXTRATO_AUTOMATICO_SCHEMA_SQL);
   await pool.query(EXTRATO_ID_EXTERNO_UNICO_SQL);
+  // Envio agendado de relatório e link de leitura (E7, G3): agendamentos
+  // (auditados), cópias lidas pelo link e histórico dos envios (controle).
+  await pool.query(RELATORIOS_AGENDADOS_SCHEMA_SQL);
   await pool.query(RAZAO_SCHEMA_SQL);
   // Instala a captura somente depois das migrações/seed, sem fabricar histórico.
   await pool.query(AUDIT_SCHEMA_SQL);

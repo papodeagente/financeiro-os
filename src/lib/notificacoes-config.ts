@@ -23,6 +23,8 @@ export const TIPOS_NOTIFICACAO = [
   { tipo: 'CREDITO_CLIENTE_VENCENDO', label: 'Crédito do cliente vencendo', descricao: 'Um aviso por crédito, 30 dias antes de ele vencer sem uso.' },
   { tipo: 'REEMBOLSO_NO_PRAZO', label: 'Reembolsos no prazo', descricao: 'Quando um reembolso ao cliente ou do fornecedor chega perto do prazo sem ser pago.' },
   // Extrato automático do banco (06/11/2026): leitura parada e certificado vencendo.
+  // Envio agendado de relatório sem CRM ligado (E7): o link de leitura ficou pronto.
+  { tipo: 'RELATORIO_AGENDADO_PRONTO', label: 'Relatórios agendados prontos', descricao: 'Quando um relatório agendado fica pronto e o CRM não está ligado para mandar o e-mail: o link de leitura espera você copiar.' },
   { tipo: 'EXTRATO_AUTOMATICO', label: 'Extrato automático do banco', descricao: 'Quando a leitura do extrato falha seguidas vezes ou o certificado do banco está perto de vencer.' },
 ] as const;
 
