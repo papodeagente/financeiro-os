@@ -9,6 +9,7 @@
  * Não existe "apagar": desativar esconde o campo do lançamento, e o que já
  * foi preenchido continua nas contas.
  */
+import { naEmpresa } from '@/components/fin/EmpresaDaConfiguracao';
 import { useEffect, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react';
 
@@ -37,7 +38,7 @@ export function SecaoCamposPersonalizados() {
 
   useEffect(() => {
     let vivo = true;
-    fetch('/api/config/financeiro/campos-personalizados', { cache: 'no-store' })
+    fetch(naEmpresa('/api/config/financeiro/campos-personalizados'), { cache: 'no-store' })
       .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((j: { campos?: CampoPersonalizado[] }) => {
         if (!vivo) return;
@@ -86,7 +87,7 @@ export function SecaoCamposPersonalizados() {
         usados.add(id);
         return { ...c, id };
       });
-      const r = await fetch('/api/config/financeiro/campos-personalizados', {
+      const r = await fetch(naEmpresa('/api/config/financeiro/campos-personalizados'), {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ campos: envio }),
       });
       const corpo = await r.json().catch(() => ({}));

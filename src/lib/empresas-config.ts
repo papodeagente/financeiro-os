@@ -38,12 +38,16 @@ async function tabelaExiste(exec: ExecutorEmpresas): Promise<boolean> {
 export const SECAO_DA_CHAVE: Record<string, SecaoPorEmpresa> = {
   politica_cobranca: 'financeiro',
   categorias_encargos: 'financeiro',
+  // As três da G1 (E7, frente D, 06/11/2026): também por empresa.
+  conta_previsao_padrao: 'financeiro',
+  categorias_dos_titulos: 'financeiro',
+  campos_personalizados_titulos: 'financeiro',
   cobranca: 'cobranca',
   venda_config: 'vendas',
 };
 
 export const CHAVES_DA_SECAO: Record<Exclude<SecaoPorEmpresa, 'notas'>, string[]> = {
-  financeiro: ['politica_cobranca', 'categorias_encargos'],
+  financeiro: ['politica_cobranca', 'categorias_encargos', 'conta_previsao_padrao', 'categorias_dos_titulos', 'campos_personalizados_titulos'],
   cobranca: ['cobranca'],
   vendas: ['venda_config'],
 };

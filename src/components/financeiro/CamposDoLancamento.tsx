@@ -17,7 +17,8 @@ import { CalendarClock, Lock } from 'lucide-react';
 import { Field } from '@/components/fin/Field';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MOEDAS } from '@/lib/cambio';
+import { useMoedas } from '@/components/fin/useMoedas';
+import { moedasParaEscolher } from '@/lib/moedas';
 import { contasParaEscolher } from '@/lib/contas-bancarias-regras';
 import { ErroAoGravar, enderecoDaVenda } from '@/lib/gravar-registro';
 import { toast } from '@/lib/toast';
@@ -34,9 +35,13 @@ const PADRAO = '__PADRAO__';
 
 export type ContaParaPrevisao = { id: string; nome: string; ativo?: unknown; moeda?: string };
 
-/** Contas bancárias e a conta previsão padrão da agência, para os formulários. */
-export function useContasDaPrevisao(): { contas: ContaParaPrevisao[]; padraoId: string | null } {
-  const [estado, setEstado] = React.useState<{ contas: ContaParaPrevisao[]; padraoId: string | null }>({ contas: [], padraoId: null });
+/**
+ * Contas bancárias e a conta previsão padrão da agência, para os formulários.
+ * `porEmpresa` (E7, frente D): a de cada empresa que escolheu a própria; use
+ * padraoDaEmpresa() para a conta em edição.
+ */
+export function useContasDaPrevisao(): { contas: ContaParaPrevisao[]; padraoId: string | null; porEmpresa: Record<string, string> } {
+  const [estado, setEstado] = React.useState<{ contas: ContaParaPrevisao[]; padraoId: string | null; porEmpresa: Record<string, string> }>({ contas: [], padraoId: null, porEmpresa: {} });
   React.useEffect(() => {
     let vivo = true;
     Promise.all([
@@ -52,11 +57,18 @@ export function useContasDaPrevisao(): { contas: ContaParaPrevisao[]; padraoId: 
       const padrao = cfg && typeof cfg === 'object' && typeof (cfg as Record<string, unknown>).conta_previsao_padrao === 'string'
         ? String((cfg as Record<string, unknown>).conta_previsao_padrao) || null
         : null;
-      setEstado({ contas: lista, padraoId: padrao });
+      const porEmpresa = cfg && typeof cfg === 'object' && (cfg as Record<string, unknown>).por_empresa && typeof (cfg as Record<string, unknown>).por_empresa === 'object'
+        ? (cfg as { por_empresa: Record<string, string> }).por_empresa : {};
+      setEstado({ contas: lista, padraoId: padrao, porEmpresa });
     });
     return () => { vivo = false; };
   }, []);
   return estado;
+}
+
+/** A conta previsão padrão que vale para a empresa da conta (sem escolha própria, a da agência). */
+export function padraoDaEmpresa(previsao: { padraoId: string | null; porEmpresa?: Record<string, string> }, empresaId?: string | null): string | null {
+  return (empresaId && previsao.porEmpresa?.[empresaId]) || previsao.padraoId;
 }
 
 export function CampoContaPrevista({
@@ -167,7 +179,9 @@ export function CampoMoeda({ valor, onChange, travada, ajuda }: {
   travada?: boolean;
   ajuda?: string;
 }) {
-  const atual = MOEDAS.find(m => m.codigo === valor);
+  // Catálogo da agência (E7): as oito do sistema e as que ela cadastrou.
+  const { moedas } = useMoedas();
+  const atual = moedas.find(m => m.codigo === valor);
   const rotulo = (m: { codigo: string; nome: string }) => `${m.nome} (${m.codigo})`;
   return (
     <Field
@@ -180,7 +194,7 @@ export function CampoMoeda({ valor, onChange, travada, ajuda }: {
             <SelectValue>{() => (atual ? rotulo(atual) : valor || 'Real (BRL)')}</SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {MOEDAS.map(m => (
+            {moedasParaEscolher(moedas, valor).map(m => (
               <SelectItem key={m.codigo} value={m.codigo} className="fin-t-body">{rotulo(m)}</SelectItem>
             ))}
           </SelectContent>

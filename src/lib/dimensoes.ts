@@ -102,6 +102,52 @@ export function aplicarRegraDeRateio(
   return validarRateio(total, regra.linhas.map(l => ({ ...l, valor: 0 })));
 }
 
+function nomeComparavel(s: unknown): string {
+  return String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/** O gatilho da regra, limpo (vazio = a regra só se aplica à mão). */
+export function gatilhoDaRegra(v: unknown): { categoria_id?: string; pessoa?: string } | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const x = v as Record<string, unknown>;
+  const categoria = typeof x.categoria_id === 'string' ? x.categoria_id.trim().slice(0, 100) : '';
+  const pessoa = typeof x.pessoa === 'string' ? x.pessoa.replace(/\s+/g, ' ').trim().slice(0, 120) : '';
+  if (!categoria && !pessoa) return undefined;
+  return { ...(categoria ? { categoria_id: categoria } : {}), ...(pessoa ? { pessoa } : {}) };
+}
+
+/**
+ * A regra salva que entra sozinha no lançamento (E7, frente D): a que tem
+ * gatilho e casa com a categoria e/ou a pessoa escolhidas. Gatilho com as
+ * duas exige as duas e vence; depois, a de pessoa; depois, a de categoria.
+ * Empate no mesmo nível: nenhuma (melhor não adivinhar).
+ */
+export function regraQueSeAplicaSozinha<R extends { id: string; aplicar_quando?: { categoria_id?: string; pessoa?: string } }>(
+  regras: readonly R[], lancamento: { categoria_id?: string | null; pessoa?: string | null },
+): R | null {
+  const categoria = String(lancamento.categoria_id ?? '').trim();
+  const pessoa = nomeComparavel(lancamento.pessoa);
+  const nivel = (r: R): number => {
+    const g = gatilhoDaRegra(r.aplicar_quando);
+    if (!g) return 0;
+    const casaCategoria = g.categoria_id ? g.categoria_id === categoria : null;
+    const casaPessoa = g.pessoa ? pessoa !== '' && nomeComparavel(g.pessoa) === pessoa : null;
+    if (casaCategoria === false || casaPessoa === false) return 0;
+    if (casaCategoria && casaPessoa) return 3;
+    if (casaPessoa) return 2;
+    return casaCategoria ? 1 : 0;
+  };
+  let melhor: R | null = null;
+  let melhorNivel = 0;
+  let empate = false;
+  for (const r of regras) {
+    const n = nivel(r);
+    if (n > melhorNivel) { melhor = r; melhorNivel = n; empate = false; }
+    else if (n > 0 && n === melhorNivel) empate = true;
+  }
+  return empate ? null : melhor;
+}
+
 /** Tags sem espaço sobrando, sem repetição (ignora maiúsculas) e sem vazias. */
 export function normalizarTags(tags: unknown): string[] {
   if (!Array.isArray(tags)) return [];

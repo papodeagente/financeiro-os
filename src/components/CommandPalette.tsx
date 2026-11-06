@@ -97,6 +97,7 @@ const NAVIGATION_ITEMS: CommandItem[] = [
   { id: 'cac', label: 'Dashboard CAC', href: '/cac/dashboard', icon: <Gauge className="w-4 h-4" />, section: 'navegacao' },
   { id: 'rentabilidade', label: 'Rentabilidade', href: '/relatorios/rentabilidade', icon: <TrendingUp className="w-4 h-4" />, section: 'navegacao' },
   { id: 'config-agencia', label: 'Configurações', href: '/config/agencia', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'moedas-agencia', label: 'Moedas da agência (cadastrar moeda, câmbio)', href: '/financeiro-ag/moedas', icon: <DollarSign className="w-4 h-4" />, section: 'navegacao' },
   { id: 'config-empresas', label: 'Empresas da agência (lojas, CNPJs, multiempresa)', href: '/config/empresas', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
   // Mudança de sistema (E4, 05/11/2026).
   { id: 'mudanca', label: 'Mudar para o EnturOS (trazer dados do sistema anterior)', href: '/mudanca', icon: <FolderInput className="w-4 h-4" />, section: 'navegacao' },

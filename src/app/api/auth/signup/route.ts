@@ -261,6 +261,18 @@ export async function POST(req: Request) {
       client.release();
     }
 
+    // Assistente inicial do Financeiro (E7, frente D): a agência nova já nasce
+    // com o plano de contas padrão e as categorias das contas geradas ligadas,
+    // para nenhuma conta da venda nascer sem categoria. Fora da transação do
+    // cadastro e sem derrubá-lo: se falhar, a tela do Financeiro oferece.
+    try {
+      const { emTransacao } = await import('@/lib/caixa-atomico');
+      const { prepararAgenciaNova } = await import('@/lib/assistente-inicial-servidor');
+      await emTransacao(exec => prepararAgenciaNova(exec, tenantId));
+    } catch (e) {
+      console.error('[assistente-inicial] agência nova', e instanceof Error ? e.message : e);
+    }
+
     // Cria sessao + cookie pra logar o usuario imediatamente
     const token = await createSession({
       userId,

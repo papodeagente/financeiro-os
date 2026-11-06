@@ -21,7 +21,7 @@
  */
 import { generateId } from './utils';
 import { addDias, deCentavos, hojeISO, round2 } from './money';
-import { lerCategoriasDosTitulos } from './categorias-padrao-titulos-servidor';
+import { empresaDaVenda, lerCategoriasDosTitulos } from './categorias-padrao-titulos-servidor';
 import type { ExecutorSQL } from './caixa-atomico';
 import { criarCredito } from './credito-cliente-servidor';
 
@@ -220,7 +220,8 @@ export async function aprovarReembolso(exec: ExecutorSQL, tenantId: string, id: 
   const valor = round2(deCentavos(r.valor_centavos));
   const hoje = hojeISO();
   const contaId = generateId();
-  const padroes = await lerCategoriasDosTitulos(exec, tenantId);
+  // Por empresa (E7, frente D): a da venda do reembolso (sem venda, a de sempre).
+  const padroes = await lerCategoriasDosTitulos(exec, tenantId, await empresaDaVenda(exec, tenantId, r.venda_id));
   const descricao = `Reembolso ${rotuloDoReembolso(r).toLowerCase()} · ${r.pessoa_nome}${r.venda_numero ? ` · Venda ${r.venda_numero}` : ''}`;
   const comum = {
     id: contaId, descricao, valor_original: valor, valor_final: valor, juros: 0, multa: 0, desconto: 0,

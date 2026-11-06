@@ -14,7 +14,7 @@ import Link from 'next/link';
 import { Plus, Split, Trash2, X } from 'lucide-react';
 
 import type { CentroCusto, LinhaRateio, PlanoContas, RegraRateio } from '@/lib/crm-types';
-import { aplicarRegraDeRateio, dividirIgual, normalizarTags, ordenarEmArvore, validarRateio } from '@/lib/dimensoes';
+import { aplicarRegraDeRateio, dividirIgual, normalizarTags, ordenarEmArvore, regraQueSeAplicaSozinha, validarRateio } from '@/lib/dimensoes';
 import { round2, soma } from '@/lib/money';
 import { Field } from '@/components/fin/Field';
 import { Money } from '@/components/fin/Money';
@@ -55,6 +55,13 @@ export type SecaoRateiosProps = {
   rateio: LinhaRateio[];
   tags: string[];
   onChange: (alteracao: AlteracaoDeDimensoes) => void;
+  /**
+   * Categoria e pessoa (fornecedor ou cliente) do lançamento (E7, frente D):
+   * ao escolher uma que tem regra salva "aplicar sozinha", e sem rateio
+   * preenchido, a regra entra no formulário — sempre editável.
+   */
+  categoriaId?: string;
+  pessoa?: string;
 };
 
 /** O erro do rateio para mostrar antes de salvar, ou null. */
@@ -120,8 +127,29 @@ function SeletorDeCentro({
   );
 }
 
-export function SecaoRateios({ total, tipo, centroId, rateio, tags, onChange }: SecaoRateiosProps) {
+export function SecaoRateios({ total, tipo, centroId, rateio, tags, onChange, categoriaId, pessoa }: SecaoRateiosProps) {
   const { centros, regras, categorias, carregando } = useCadastros();
+  // Rateio salvo aplicado sozinho (E7, frente D): só quando a pessoa ESCOLHE
+  // a categoria ou a pessoa (nunca ao abrir) e o rateio está vazio.
+  const [aplicadaSozinha, setAplicadaSozinha] = React.useState<string | null>(null);
+  const chaveDoGatilho = `${categoriaId ?? ''}|${(pessoa ?? '').trim().toLowerCase()}`;
+  const gatilhoAnterior = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (carregando) return;
+    if (gatilhoAnterior.current === null) { gatilhoAnterior.current = chaveDoGatilho; return; }
+    if (gatilhoAnterior.current === chaveDoGatilho) return;
+    gatilhoAnterior.current = chaveDoGatilho;
+    if (rateio.length > 0) return;
+    const regra = regraQueSeAplicaSozinha(regras, { categoria_id: categoriaId, pessoa });
+    if (!regra) return;
+    const r = aplicarRegraDeRateio(regra, total);
+    if (!r.ok) return;
+    onChange({ rateio: r.linhas });
+    // Resposta a uma escolha da pessoa (categoria ou pessoa mudou), não a uma renderização.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAplicadaSozinha(regra.nome);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveDoGatilho, carregando]);
   // Rateio entre empresas (E7): só com duas ou mais empresas.
   const { multi, empresas } = useEmpresas();
   const grade = multi ? GRADE_COM_EMPRESA : GRADE;
@@ -401,6 +429,17 @@ export function SecaoRateios({ total, tipo, centroId, rateio, tags, onChange }: 
           </p>
         </div>
       )}
+
+      {aplicadaSozinha && dividindo ? (
+        <div role="status" className="flex flex-col gap-[var(--fin-s-2)] rounded-[var(--fin-r-md)] bg-[var(--fin-surface-sunken)] p-[var(--fin-s-3)] sm:flex-row sm:items-center sm:justify-between">
+          <p className="fin-t-caption text-[var(--fin-text-2)]">
+            A regra <strong className="fin-t-body-strong text-[var(--fin-text)]">{aplicadaSozinha}</strong> entrou sozinha por causa da categoria ou da pessoa escolhida. Ajuste as linhas à vontade.
+          </p>
+          <Button type="button" variant="ghost" size="sm" className={FOCO} onClick={() => { setAplicadaSozinha(null); onChange({ rateio: [] }); }}>
+            Desfazer
+          </Button>
+        </div>
+      ) : null}
 
       {opcoesRegra.length > 0 ? (
         <Field rotulo="Aplicar regra salva" ajuda="Preenche o rateio de uma vez. Você ainda pode ajustar as linhas.">

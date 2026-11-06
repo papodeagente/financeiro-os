@@ -668,6 +668,12 @@ export interface RegraRateio {
   id: string;
   nome: string;
   linhas: Array<{ centro_custo_id: string; categoria_id?: string; percentual: number }>;
+  /**
+   * Aplicar sozinha (E7, frente D): ao escolher esta categoria e/ou esta
+   * pessoa (fornecedor ou cliente) num lançamento sem rateio, a regra entra
+   * no formulário — sempre editável. Sem nada aqui, só se aplica à mão.
+   */
+  aplicar_quando?: { categoria_id?: string; pessoa?: string };
 }
 
 // ============================================================

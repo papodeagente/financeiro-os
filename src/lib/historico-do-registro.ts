@@ -34,6 +34,10 @@ export const ENTIDADES_DO_HISTORICO: Readonly<Record<string, EntidadeDoHistorico
   formas_pagamento: { nome: 'forma de pagamento', grupo: 'financeiro' },
   clientes: { nome: 'cliente', grupo: 'cadastro' },
   fornecedores_crm: { nome: 'fornecedor', grupo: 'cadastro' },
+  // Fornecedores: acordos e faturas (E7, frente D). O gatilho de auditoria já
+  // gravava as duas tabelas; agora a tela mostra.
+  fornecedor_acordos: { nome: 'acordo com o fornecedor', grupo: 'financeiro' },
+  faturas_fornecedor: { nome: 'fatura do fornecedor', grupo: 'financeiro' },
 };
 
 export function entidadeDoHistorico(entidade: string): EntidadeDoHistorico | null {
@@ -168,6 +172,44 @@ const CAMPOS_DA_PESSOA: Record<string, Campo> = {
   ativo: c('Ativo', 'booleano'),
 };
 
+/** Acordo com o fornecedor (colunas da tabela, sem JSON). */
+const CAMPOS_DO_ACORDO: Record<string, Campo> = {
+  fornecedor_nome: c('Fornecedor'),
+  representante_nome: c('Representante'),
+  tipo_produto: c('Tipo de produto'),
+  produto_nome: c('Produto'),
+  comissao_percentual: c('Comissão', 'percentual'),
+  comissao_valor_centavos: c('Comissão em valor', 'centavos'),
+  over_percentual: c('Over', 'percentual'),
+  over_valor_centavos: c('Over em valor', 'centavos'),
+  taxa_cc_du_percentual: c('Taxa DU', 'percentual'),
+  taxa_cc_rav_percentual: c('RAV', 'percentual'),
+  vigencia_inicio: c('Início da vigência', 'data'),
+  vigencia_fim: c('Fim da vigência', 'data'),
+  observacoes: c('Observações'),
+};
+
+/** Fatura do fornecedor (colunas da tabela). */
+const CAMPOS_DA_FATURA_FORNECEDOR: Record<string, Campo> = {
+  numero: c('Número'),
+  parte_nome: c('Fornecedor'),
+  situacao: c('Situação'),
+  modo: c('Forma de acerto'),
+  periodo_inicio: c('Início do período', 'data'),
+  corte: c('Corte', 'data'),
+  vencimento: c('Vencimento', 'data'),
+  vencimento_pela_regra: c('Vencimento pela regra', 'data'),
+  motivo_ajuste: c('Motivo do ajuste do vencimento'),
+  valor_itens_centavos: c('Valor dos itens', 'centavos'),
+  sinal_centavos: c('Sinal descontado', 'centavos'),
+  valor_centavos: c('Valor a pagar', 'centavos'),
+  receitas_centavos: c('Comissão e over a receber', 'centavos'),
+  observacoes: c('Observações'),
+  automatica: c('Gerada sozinha', 'booleano'),
+  desfeita_em: c('Desfeita em', 'data'),
+  motivo_desfazer: c('Motivo para desfazer'),
+};
+
 const CAMPOS_POR_ENTIDADE: Record<string, Record<string, Campo>> = {
   contas_pagar: CAMPOS_DO_TITULO,
   contas_receber: CAMPOS_DO_TITULO,
@@ -177,6 +219,8 @@ const CAMPOS_POR_ENTIDADE: Record<string, Record<string, Campo>> = {
   formas_pagamento: CAMPOS_DA_FORMA,
   clientes: CAMPOS_DA_PESSOA,
   fornecedores_crm: CAMPOS_DA_PESSOA,
+  fornecedor_acordos: CAMPOS_DO_ACORDO,
+  faturas_fornecedor: CAMPOS_DA_FATURA_FORNECEDOR,
 };
 
 /** Campos que nunca aparecem: gravação, ids internos, marcas da tela e derivados que mudam sozinhos. */
@@ -187,6 +231,9 @@ const RUIDO = new Set([
   'origem_comissao_id', 'serie_id', 'grupo_id', 'compra_id', 'fatura_id', 'cartao_id', 'usuario_id',
   'auto_gerado', 'venda_modelo', 'plataforma_transacao', 'chave_idempotencia', 'importado_de', 'migracao_id',
   'cadastrado_por', 'cadastrado_em', 'excluido_por', 'excluido_em',
+  // Acordos e faturas do fornecedor (E7, frente D): ids e controle.
+  'parte_id', 'representante_id', 'produto_crm_id', 'conta_pagar_id', 'conta_receber_id', 'regra',
+  'criado_por', 'criada_por', 'criada_em', 'desfeita_por',
 ]);
 
 /** O caminho do gatilho ("data.valor_final", "status") sem o prefixo da coluna JSON. */
@@ -381,6 +428,8 @@ const RESUMO_DA_CRIACAO: Record<string, string[]> = {
   formas_pagamento: ['nome', 'uso', 'dias_para_cair', 'taxa_pct'],
   clientes: ['nome', 'nome_completo', 'nome_fantasia', 'email', 'telefone'],
   fornecedores_crm: ['nome_fantasia', 'razao_social', 'cnpj', 'email'],
+  fornecedor_acordos: ['fornecedor_nome', 'produto_nome', 'tipo_produto', 'comissao_percentual', 'vigencia_inicio'],
+  faturas_fornecedor: ['numero', 'parte_nome', 'valor_centavos', 'vencimento'],
 };
 
 function alteracoesLegiveis(entidade: string, log: LogAuditoria, nomes: NomesDeReferencia, soResumo: boolean): AlteracaoLegivel[] {

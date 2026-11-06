@@ -22,7 +22,8 @@ import { toast } from '@/lib/toast';
 import { SecaoContaPrevisao } from './SecaoContaPrevisao';
 import { SecaoCamposPersonalizados } from './SecaoCamposPersonalizados';
 import { SecaoCategoriasDosTitulos } from './SecaoCategoriasDosTitulos';
-import { EmpresaDaConfiguracao, naEmpresa } from '@/components/fin/EmpresaDaConfiguracao';
+import { EmpresaDaConfiguracao, empresaEmEdicao, naEmpresa } from '@/components/fin/EmpresaDaConfiguracao';
+import { AssistenteInicial } from '@/components/fin/AssistenteInicial';
 
 const CONTROLE = 'h-11 rounded-[var(--fin-r-md)] border-[var(--fin-border-strong)] bg-[var(--fin-surface)] fin-t-body tabular-nums lg:h-10';
 const VAZIA: PoliticaCobranca = { juros_am_pct: 0, multa_pct: 0, tolerancia_dias: 0, desconto_antecipacao: null, aplicar_em_pagar: false };
@@ -76,6 +77,9 @@ function Numero({ rotulo, ajuda, valor, onChange, unidade, max }: {
  */
 export default function ConfigFinanceiroPage() {
   const [p, setP] = useState<PoliticaCobranca>(VAZIA);
+  // Assistente inicial (E7, frente D): depois de ligar, as seções releem.
+  const [versaoDasCategorias, setVersaoDasCategorias] = useState(0);
+  const [naPrincipal] = useState(() => { const e = empresaEmEdicao(); return !e || e === 'principal'; });
   const [estado, setEstado] = useState<'carregando' | 'ok' | 'erro'>('carregando');
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -344,7 +348,8 @@ export default function ConfigFinanceiroPage() {
             </section>
 
             <SecaoContaPrevisao />
-            <SecaoCategoriasDosTitulos />
+            {naPrincipal ? <AssistenteInicial onAplicado={() => setVersaoDasCategorias(v => v + 1)} /> : null}
+            <SecaoCategoriasDosTitulos key={versaoDasCategorias} />
             <SecaoCamposPersonalizados />
           </div>
         </DataState>

@@ -34,7 +34,7 @@ import {
 } from './venda-servidor';
 import { cancelarCreditosDaOrigem, creditoNaoUsadoPorPagamento, criarCredito, saldoDisponivel } from './credito-cliente-servidor';
 import { acertarSituacoes, cancelarReembolso, criarReembolso } from './reembolsos-servidor';
-import { lerCategoriasDosTitulos } from './categorias-padrao-titulos-servidor';
+import { empresaDaVenda, lerCategoriasDosTitulos } from './categorias-padrao-titulos-servidor';
 
 export { PARTE_D_SCHEMA_SQL, VENDA_CANCELAMENTOS_SCHEMA_SQL } from './cancelamento-schema';
 
@@ -323,7 +323,7 @@ async function aplicarEstornoDeComissao(
         id: contaId, origem: 'OUTROS', venda_id: vendaId, grupo_id: null, cliente_id: '', cliente_nome: e.vendedor_nome || 'Vendedor',
         vendedor_id: txt(c.vendedor_id), comissao_id: e.comissao_id, descricao: `Estorno de comissão · ${e.vendedor_nome || 'vendedor'} · venda ${vendaNumero}`,
         // Categoria padrão de restituição (06/11/2026); vazia sem escolha.
-        categoria_id: (await lerCategoriasDosTitulos(exec, tenantId)).restituicao ?? '',
+        categoria_id: (await lerCategoriasDosTitulos(exec, tenantId, await empresaDaVenda(exec, tenantId, vendaId))).restituicao ?? '',
         centro_custo: '', valor_original: e.estorno, juros: 0, multa: 0, desconto: 0, valor_final: e.estorno,
         data_emissao: hoje, data_vencimento: venc.data, data_recebimento: null, valor_recebido: null, conta_bancaria_id: null,
         forma_recebimento: '', taxa: 0, taxa_plataforma: '', boleto_emitido: false, boleto_codigo: '', boleto_url: '', status: 'PENDENTE',

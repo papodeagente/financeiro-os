@@ -11,6 +11,7 @@ import {
   trocarCategoriaNaConta,
   trocarCategoriaNaRegra,
   validarRateio,
+  gatilhoDaRegra,
   type CategoriaParaJuntar,
 } from './dimensoes';
 import { num, round2 } from './money';
@@ -248,7 +249,10 @@ export async function excluirCentro(exec: ExecutorSQL, tenantId: string, id: str
 function regraDaLinha(row: Record<string, unknown>): RegraRateio {
   const d = (row.data && typeof row.data === 'object' ? row.data : {}) as Record<string, unknown>;
   const linhas = Array.isArray(d.linhas) ? d.linhas as Array<Record<string, unknown>> : [];
+  // Aplicar sozinha (E7, frente D).
+  const gatilho = gatilhoDaRegra(d.aplicar_quando);
   return {
+    ...(gatilho ? { aplicar_quando: gatilho } : {}),
     id: str(row.id),
     nome: str(row.nome) || str(d.nome),
     linhas: linhas.map(l => ({
@@ -285,7 +289,14 @@ export async function salvarRegra(
   const fora = conferido.linhas.find(l => !centros.has(l.centro_custo_id));
   if (fora) throw new ErroCadastro('Um dos centros da regra não existe nesta agência.');
 
+  // Aplicar sozinha (E7, frente D): a categoria do gatilho é desta agência.
+  const gatilho = gatilhoDaRegra(entrada.aplicar_quando);
+  if (gatilho?.categoria_id) {
+    const { rows: cat } = await exec.query(`SELECT 1 FROM plano_contas WHERE id = $1 AND tenant_id = $2`, [gatilho.categoria_id, tenantId]);
+    if (!cat.length) throw new ErroCadastro('A categoria que aplica a regra sozinha não existe nesta agência.');
+  }
   const regra: RegraRateio = {
+    ...(gatilho ? { aplicar_quando: gatilho } : {}),
     id,
     nome,
     linhas: conferido.linhas.map(l => ({
@@ -441,11 +452,15 @@ export async function juntarCategorias(
     }
   }
   for (const regra of await listarRegras(exec, tenantId)) {
-    const linhas = trocarCategoriaNaRegra(regra.linhas, origem, previa.destino.id);
-    if (!linhas) continue;
+    const trocadas = trocarCategoriaNaRegra(regra.linhas, origem, previa.destino.id);
+    // O gatilho "aplicar sozinha" também acompanha a categoria (E7, frente D).
+    const gatilhoMuda = regra.aplicar_quando?.categoria_id === origem.id;
+    if (!trocadas && !gatilhoMuda) continue;
+    const linhas = trocadas ?? regra.linhas;
+    const aplicar_quando = gatilhoMuda ? { ...regra.aplicar_quando, categoria_id: previa.destino.id } : regra.aplicar_quando;
     await exec.query(
       `UPDATE regras_rateio SET data = $3::jsonb, updated_at = NOW() WHERE id = $1 AND tenant_id = $2`,
-      [regra.id, tenantId, JSON.stringify({ ...regra, linhas })],
+      [regra.id, tenantId, JSON.stringify({ ...regra, linhas, ...(aplicar_quando ? { aplicar_quando } : {}) })],
     );
   }
   await exec.query(`DELETE FROM plano_contas WHERE id = $1 AND tenant_id = $2`, [origem.id, tenantId]);

@@ -22,16 +22,22 @@ const CONTROLE = 'h-11 rounded-[var(--fin-r-md)] border-[var(--fin-border-strong
 const GATILHO = `${CONTROLE} justify-between gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)] focus-visible:ring-0`;
 const VAZIO = '__vazio__';
 
-// As definições mudam pouco: uma leitura por página aberta basta.
-let cache: Promise<CampoPersonalizado[]> | null = null;
-function carregarDefinicoes(): Promise<CampoPersonalizado[]> {
-  if (!cache) {
-    cache = fetch('/api/config/financeiro/campos-personalizados', { cache: 'no-store' })
+// As definições mudam pouco: uma leitura por página aberta basta, por
+// empresa (E7, frente D: cada empresa pode ter os próprios campos; a que não
+// tem segue os da agência).
+const cache = new Map<string, Promise<CampoPersonalizado[]>>();
+export function carregarDefinicoes(empresaId?: string | null): Promise<CampoPersonalizado[]> {
+  const chave = empresaId && empresaId !== 'principal' ? empresaId : '';
+  let p = cache.get(chave);
+  if (!p) {
+    const url = '/api/config/financeiro/campos-personalizados' + (chave ? `?empresa=${encodeURIComponent(chave)}` : '');
+    p = fetch(url, { cache: 'no-store' })
       .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then(j => normalizarDefinicoes(j))
-      .catch(e => { cache = null; throw e; });
+      .catch(e => { cache.delete(chave); throw e; });
+    cache.set(chave, p);
   }
-  return cache;
+  return p;
 }
 
 export function CamposPersonalizadosDoTitulo({
@@ -39,11 +45,14 @@ export function CamposPersonalizadosDoTitulo({
   valores,
   onChange,
   desabilitado = false,
+  empresaId,
 }: {
   tabela: TabelaDoTitulo;
   valores: Record<string, unknown>;
   onChange: (valores: Record<string, unknown>) => void;
   desabilitado?: boolean;
+  /** Empresa do título (E7, frente D): vale a lista de campos dela. */
+  empresaId?: string | null;
 }) {
   const [defs, setDefs] = React.useState<CampoPersonalizado[] | null>(null);
   const [erro, setErro] = React.useState(false);
@@ -52,9 +61,9 @@ export function CamposPersonalizadosDoTitulo({
 
   React.useEffect(() => {
     let vivo = true;
-    carregarDefinicoes().then(d => { if (vivo) setDefs(d); }).catch(() => { if (vivo) setErro(true); });
+    carregarDefinicoes(empresaId).then(d => { if (vivo) setDefs(d); }).catch(() => { if (vivo) setErro(true); });
     return () => { vivo = false; };
-  }, []);
+  }, [empresaId]);
 
   if (erro) {
     return (

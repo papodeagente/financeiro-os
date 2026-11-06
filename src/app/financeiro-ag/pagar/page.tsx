@@ -8,7 +8,7 @@ import { loadEntities, saveEntity } from '@/lib/crm-storage';
 import { atualizarRegistro, excluirRegistro } from '@/lib/gravar-registro';
 import { conferirEmissao, vendaQueTravaATitulo } from '@/lib/lancamento-titulo';
 import { AvisoDeEdicaoSimultanea } from '@/components/fin/AvisoDeEdicaoSimultanea';
-import { tratarErroAoGravar, useContasDaPrevisao } from '@/components/financeiro/CamposDoLancamento';
+import { tratarErroAoGravar, padraoDaEmpresa, useContasDaPrevisao } from '@/components/financeiro/CamposDoLancamento';
 import { toast } from '@/lib/toast';
 import { validarRateio } from '@/lib/dimensoes';
 import { consumirAtalho, lerAtalhos } from '@/lib/atalho-da-url';
@@ -43,6 +43,10 @@ import { rotuloStatus } from '@/components/fin/StatusChip';
 import { criarColunas, semFornecedor } from './colunas';
 import { BaixaDePagar } from './BaixaDePagar';
 import { HistoricoDeBaixas } from '@/components/fin/HistoricoDeBaixas';
+import { PainelDoTitulo } from '@/components/financeiro/PainelDoTitulo';
+import { carregarDefinicoes } from '@/components/fin/CamposPersonalizadosDoTitulo';
+import { validarObrigatorios } from '@/lib/campos-personalizados';
+import type { Anexo } from '@/lib/anexos-do-titulo';
 import { saldoDevedor, valorBRLDaConta } from './valores';
 import { FormularioConta } from './FormularioConta';
 import { PainelCopiarMes } from './PainelCopiarMes';
@@ -337,6 +341,12 @@ export default function ContasPagarPage() {
     setShowForm(true);
   }
 
+  /** O anexo mudou no servidor: a conta em mãos fica com a lista e a versão novas (salvar depois não desfaz). */
+  function anexosMudaram(id: string, anexos: Anexo[], versao: string) {
+    setItems(lista => lista.map(i => (i.id === id ? ({ ...i, anexos, ...(versao ? { _versao: versao } : {}) } as ContaPagar) : i)));
+    setForm(f => ({ ...f, anexos }));
+  }
+
   async function handleSave() {
     // Guarda de duplo-submit: sem isso, clique duplo cria a conta (ou a série
     // inteira de parcelas) duas vezes.
@@ -349,6 +359,17 @@ export default function ContasPagarPage() {
     if (form.moeda !== 'BRL' && num(form.cambio) <= 0) { toast.error('Informe o câmbio da moeda estrangeira'); return; }
     const emissaoInvalida = conferirEmissao({ emissao: form.data_emissao, vencimento: form.data_vencimento });
     if (emissaoInvalida) { toast.error(emissaoInvalida); return; }
+    // Campo personalizado obrigatório (E7, frente D): a mesma regra que o
+    // servidor confere, pela lista da empresa da conta. Conta gerada pelo
+    // sistema não trava.
+    {
+      const existente = editId ? items.find(i => i.id === editId) : undefined;
+      if (!existente || !tituloGeradoPeloSistema('contas_pagar', existente as unknown as Record<string, unknown>)) {
+        const defs = await carregarDefinicoes((existente as { empresa_id?: string } | undefined)?.empresa_id).catch(() => []);
+        const faltou = validarObrigatorios(defs, 'contas_pagar', form.campos_personalizados);
+        if (faltou) { setTentouSalvar(true); toast.error(faltou); return; }
+      }
+    }
 
     const valorOriginal = round2(num(form.valor_original));
     const cambio = form.moeda === 'BRL' ? 1 : num(form.cambio);
@@ -909,10 +930,17 @@ export default function ContasPagarPage() {
         salvando={saving}
         onSalvar={salvarFormulario}
         contasPrevisao={previsao.contas}
-        padraoPrevisaoId={previsao.padraoId}
+        padraoPrevisaoId={padraoDaEmpresa(previsao, editId ? (items.find(i => i.id === editId) as { empresa_id?: string } | undefined)?.empresa_id : null)}
         tituloId={editId}
         vendaId={editId ? vendaQueTravaATitulo(items.find(i => i.id === editId) as ContaComExtras | undefined) : null}
-        extra={editId ? <HistoricoDeBaixas tabela="contas_pagar" tituloId={editId} onMudou={() => { void load(); }} /> : null}
+        empresaId={editId ? ((items.find(i => i.id === editId) as { empresa_id?: string } | undefined)?.empresa_id ?? null) : null}
+        extra={editId ? (
+          <>
+            {/* Itens, Comissões e Anexos da conta (E7, frente D). */}
+            <PainelDoTitulo key={editId} tabela="contas_pagar" tituloId={editId} onAnexosMudaram={(anexos, versao) => anexosMudaram(editId, anexos, versao)} />
+            <HistoricoDeBaixas tabela="contas_pagar" tituloId={editId} onMudou={() => { void load(); }} />
+          </>
+        ) : null}
         faixaDaSerie={(() => {
           const editada = editId ? (items.find(i => i.id === editId) as ContaComSerie | undefined) : undefined;
           if (!editada?.serie_id) return null;

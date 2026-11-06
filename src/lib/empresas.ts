@@ -263,7 +263,8 @@ export function ehSecaoPorEmpresa(v: unknown): v is SecaoPorEmpresa {
  * isso faria a empresa B emitir com o CNPJ da A.
  */
 export const CHAVES_QUE_NAO_SE_COPIAM: Record<SecaoPorEmpresa, readonly string[]> = {
-  financeiro: [],
+  // A conta previsão é uma conta bancária da própria empresa (E7, frente D).
+  financeiro: ['conta_previsao_padrao'],
   cobranca: ['credenciais', 'token', 'chave_api', 'webhook_segredo', 'conta_id'],
   vendas: [],
   notas: ['token', 'token_cofre', 'token_mascarado', 'empresa_id', 'certificado', 'conectado', 'cnpj', 'inscricao_municipal', 'id'],

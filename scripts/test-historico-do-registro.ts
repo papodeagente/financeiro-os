@@ -22,7 +22,10 @@ function eq(atual: unknown, esperado: unknown, label: string) {
 const n = (s: string) => s.replace(/ /g, ' ');
 
 console.log('--- Entidades ---');
-eq(Object.keys(ENTIDADES_DO_HISTORICO).sort(), ['centros_custo', 'clientes', 'contas_bancarias', 'contas_pagar', 'contas_receber', 'formas_pagamento', 'fornecedores_crm', 'plano_contas'], 'lista fechada');
+eq(Object.keys(ENTIDADES_DO_HISTORICO).sort(), ['centros_custo', 'clientes', 'contas_bancarias', 'contas_pagar', 'contas_receber', 'faturas_fornecedor', 'formas_pagamento', 'fornecedor_acordos', 'fornecedores_crm', 'plano_contas'], 'lista fechada (com acordos e faturas do fornecedor, E7 frente D)');
+eq([entidadeDoHistorico('fornecedor_acordos')?.grupo, entidadeDoHistorico('faturas_fornecedor')?.grupo], ['financeiro', 'financeiro'], 'acordo e fatura do fornecedor: financeiro');
+eq([rotuloDoCampo('fornecedor_acordos', 'comissao_percentual'), rotuloDoCampo('faturas_fornecedor', 'valor_centavos'), rotuloDoCampo('faturas_fornecedor', 'vencimento')],
+  ['Comissão', 'Valor a pagar', 'Vencimento'], 'rótulos do acordo e da fatura do fornecedor');
 eq(entidadeDoHistorico('usuarios'), null, 'tabela fora da lista: nada');
 eq(entidadeDoHistorico('toString'), null, 'nome de propriedade do objeto não passa');
 eq(entidadeDoHistorico('contas_pagar')?.grupo, 'financeiro', 'título é do financeiro');

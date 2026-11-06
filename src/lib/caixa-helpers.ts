@@ -12,7 +12,6 @@ export { calcularSaldoBancario } from './saldo-bancario';
 // regra da leitura, senão os dois divergem.
 import { valorMovimentado } from './saldo-bancario';
 import { reconstruirSaldos } from './razao';
-import { moedaDe } from './cambio';
 import { registrarMovimento } from './razao-servidor';
 import type { ExecutorSQL } from './caixa-atomico';
 
@@ -190,7 +189,9 @@ export async function recalcularSaldosCaixa(tenantId: string): Promise<{
       // Conta em moeda estrangeira (05/11/2026, E6): o histórico das contas
       // a pagar/receber está em reais e o saldo dela está na moeda. Recalcular
       // misturaria as duas; o saldo fica como está e a conferência é pelo razão.
-      if (moedaDe(((r.data ?? {}) as Record<string, unknown>).moeda) !== 'BRL') {
+      // Lê o texto gravado (E7): moeda cadastrada pela agência também conta.
+      const moedaGravada = String(((r.data ?? {}) as Record<string, unknown>).moeda ?? '').trim().toUpperCase();
+      if (moedaGravada && moedaGravada !== 'BRL') {
         result.contas_em_moeda_mantidas.push(id);
         continue;
       }

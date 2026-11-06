@@ -43,7 +43,8 @@ import {
   type Compensacao, type ModoDaFatura, type FaturaParaReflexo, type ItemAFaturar, type PreviaDaFatura, type SinalDisponivel,
 } from './fornecedor-fatura';
 import { faturasParaReflexo, refletirFaturasNasContas } from './fornecedor-fatura-banco';
-import { lerCategoriasDosTitulos } from './categorias-padrao-titulos-servidor';
+import { empresaComum, empresaDaVenda, lerCategoriasDosTitulos } from './categorias-padrao-titulos-servidor';
+import { empresaComConfigPropria } from './empresas-config';
 import { comissoesPorOperadora, type ComissoesPorOperadora, type LinhaDoExtrato } from './fornecedor-comissao';
 
 export class ErroFornecedor extends Error {
@@ -448,12 +449,16 @@ export async function criarSinal(exec: ExecutorSQL, tenantId: string, e: NovoSin
   const contaId = generateId();
   const descricao = txt(e.descricao).trim().slice(0, 300);
   const reais = deCentavos(valor);
+  // Por empresa (E7, frente D): o sinal de uma venda é da empresa dela e lê a
+  // configuração dela. Empresa principal ou sem venda: como sempre.
+  const empresaDoSinal = await empresaDaVenda(exec, tenantId, e.venda_id);
   const conta = {
+    ...(empresaComConfigPropria(empresaDoSinal) ? { empresa_id: empresaDoSinal } : {}),
     id: contaId, origem: 'VENDA', venda_id: null, grupo_id: null,
     fornecedor_id: e.parte_id, fornecedor_nome: nome,
     descricao: `Sinal - ${nome}${vendaNumero ? ` - Venda ${vendaNumero}` : ''}${descricao ? ` - ${descricao}` : ''}`,
     // Categoria padrão de pagamento ao fornecedor (06/11/2026); vazia sem escolha.
-    categoria_id: (await lerCategoriasDosTitulos(exec, tenantId)).pagamento_fornecedor ?? '',
+    categoria_id: (await lerCategoriasDosTitulos(exec, tenantId, empresaDoSinal)).pagamento_fornecedor ?? '',
     centro_custo: '', valor_original: reais, juros: 0, multa: 0, desconto: 0, valor_final: reais,
     moeda: 'BRL', cambio: 1, valor_brl: reais, data_emissao: hoje, data_vencimento: venc, data_pagamento: null, valor_pago: null,
     conta_bancaria_id: null, forma_pagamento: '', cartao_id: null, comprovante: '', parcela_numero: 1, total_parcelas: 1,
@@ -590,15 +595,21 @@ export async function gerarFatura(
   const { rows: contasItens } = await exec.query(`SELECT id, data FROM contas_pagar WHERE tenant_id = $1 AND id = ANY($2::text[])`, [tenantId, previa.itens.map(i => i.conta_id)]);
   const dados = contasItens.map(r => (r.data ?? {}) as Record<string, unknown>);
   let contaId: string | null = null;
+  // Por empresa (E7, frente D): itens todos de uma empresa além da principal
+  // = a fatura é dela e lê a configuração dela. Misturados ou da principal:
+  // como sempre.
+  const empresaDosItens = empresaComum(dados);
+  const empresaDaFatura = empresaComConfigPropria(empresaDosItens) ? empresaDosItens : null;
   if (previa.a_pagar > 0) {
     contaId = generateId();
     const reais = deCentavos(previa.a_pagar);
     const conta = {
+      ...(empresaDaFatura ? { empresa_id: empresaDaFatura } : {}),
       id: contaId, origem: 'VENDA', venda_id: null, grupo_id: null,
       fornecedor_id: pedido.parte_id, fornecedor_nome: previa.parte_nome,
       descricao: `Fatura ${numero} - ${previa.parte_nome} (${previa.quantidade} ${previa.quantidade === 1 ? 'item' : 'itens'} de ${previa.vendas} ${previa.vendas === 1 ? 'venda' : 'vendas'})`,
       // A dos itens; sem ela, a padrão da fatura do fornecedor (06/11/2026).
-      categoria_id: maisComum(dados.map(d => txt(d.categoria_id))) || ((await lerCategoriasDosTitulos(exec, tenantId)).fatura_fornecedor ?? ''),
+      categoria_id: maisComum(dados.map(d => txt(d.categoria_id))) || ((await lerCategoriasDosTitulos(exec, tenantId, empresaDaFatura)).fatura_fornecedor ?? ''),
       centro_custo: maisComum(dados.map(d => txt(d.centro_custo))),
       valor_original: reais, juros: 0, multa: 0, desconto: 0, valor_final: reais, moeda: 'BRL', cambio: 1, valor_brl: reais,
       data_emissao: hoje, data_vencimento: previa.vencimento.data, data_pagamento: null, valor_pago: null,

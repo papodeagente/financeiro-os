@@ -8,7 +8,7 @@
  * Uso: node --experimental-strip-types --no-warnings scripts/run-tests.mjs scripts/test-exportacao-listas-b.ts
  */
 import { matrizDoDocumento, nomeDoArquivo, type DocumentoExportado } from '../src/lib/exportacao/documento.ts';
-import { documentoDosMovimentos, type FiltroDeMovimentos, type MovimentoCaixa } from '../src/lib/movimentos-caixa.ts';
+import { csvDosMovimentos, documentoDosMovimentos, type FiltroDeMovimentos, type MovimentoCaixa } from '../src/lib/movimentos-caixa.ts';
 import { documentoDasLinhas, filtrosLegiveis, lerFiltros, type LinhaLancamento } from '../src/lib/lancamentos-por-dimensao.ts';
 import { documentoDosCreditos, documentoDosReembolsos } from '../src/lib/exportacao/reembolsos-e-creditos.ts';
 import { documentoDaTabelaDinamica } from '../src/lib/exportacao/tabela-dinamica.ts';
@@ -43,14 +43,19 @@ const ids = (d: DocumentoExportado) => d.colunas.map(c => c.id);
   };
   const ext = documentoDosMovimentos(linhas, 'extrato', filtro);
   eq(ext.titulo, 'Extrato de conta', 'extrato: título da tela');
-  eq(ext.colunas.map(c => c.rotulo), ['Data', 'Conta', 'Número', 'Descrição', 'Documento', 'Pessoa', 'CPF/CNPJ', 'Informações', 'Forma', 'Origem', 'Valor', 'Saldo da conta', 'Saldo'], 'extrato: as mesmas colunas do CSV');
+  eq(ext.colunas.map(c => c.rotulo), ['Data', 'Conta', 'Número', 'Descrição', 'Documento', 'Pessoa', 'CPF/CNPJ', 'Informações', 'Forma', 'Origem', 'Valor', 'Saldo da conta', 'Saldo', 'Fechado'], 'extrato: as mesmas colunas do CSV');
   eq(ext.filtros, [{ rotulo: 'Período', valor: '01/11/2026 a 30/11/2026' }, { rotulo: 'Conta', valor: 'Itaú' }, { rotulo: 'Origem', valor: 'Conta a pagar' }, { rotulo: 'Taxas retidas', valor: 'fora' }], 'extrato: filtros por extenso, conta pelo nome');
   eq(ext.totais, { valor: 69.5 }, 'extrato: total líquido do recorte');
   eq(nomeDoArquivo(ext, 'xlsx'), 'extrato-de-conta-2026-11-01-a-2026-11-30-itau-conta-a-pagar-fora.xlsx', 'extrato: filtro no nome do arquivo');
   eq(ext.linhas[1].origem, 'Conta a pagar', 'extrato: origem por extenso');
   const movs = documentoDosMovimentos(linhas, 'movimentacoes', { ...filtro, contas: [], origem: '', taxas: true });
   eq(movs.titulo, 'Movimentações', 'movimentações: título da tela');
-  eq(movs.colunas.map(c => c.rotulo), ['Data', 'Número', 'Venda', 'Conta', 'Forma de pagamento', 'Pessoa', 'Documento', 'Cheque/Cartão', 'Moeda', 'Valor origem', 'Câmbio', 'Movimento', 'Valor'], 'movimentações: as mesmas colunas do CSV');
+  eq(movs.colunas.map(c => c.rotulo), ['Data', 'Número', 'Venda', 'Conta', 'Forma de pagamento', 'Pessoa', 'Documento', 'Cheque/Cartão', 'Moeda', 'Valor origem', 'Câmbio', 'Movimento', 'Valor', 'Fechado'], 'movimentações: as mesmas colunas do CSV');
+  // Coluna Fechado (E7, frente D): o período fechado sai marcado no arquivo e no CSV.
+  const comFechado = [mov({ fechado: true }), mov({ chave: 'cp:3', fechado: false })];
+  eq(documentoDosMovimentos(comFechado, 'extrato', filtro).linhas.map(l => l.fechado), ['Sim', ''], 'extrato: Fechado = Sim no período fechado');
+  eq(csvDosMovimentos(comFechado, 'extrato').split('\r\n').slice(1).map(l => l.split(';').pop()), ['"Sim"', '""'], 'CSV do extrato: a coluna Fechado sai preenchida');
+  eq(csvDosMovimentos(comFechado, 'movimentacoes').split('\r\n')[1].endsWith(';"Sim"'), true, 'CSV das movimentações: também com Fechado');
   eq(movs.linhas[1].venda, 'v9', 'movimentações: sem número, a venda pelo id (como no CSV)');
   eq(movs.linhas[1].movimento, 'Saída · Conta a pagar', 'movimentações: movimento por extenso');
   eq(movs.filtros, [{ rotulo: 'Período', valor: '01/11/2026 a 30/11/2026' }], 'movimentações: sem filtro extra, só o período');

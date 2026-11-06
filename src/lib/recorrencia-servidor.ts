@@ -76,7 +76,7 @@ export function prepararSerie(corpo: Record<string, unknown>): SeriePreparada {
   if (!(valor > 0)) throw new ErroRecorrencia('O valor precisa ser maior que zero.');
   const modelo = limparModelo(tabela, corpo.modelo);
   if (!String(modelo.descricao ?? '').trim()) throw new ErroRecorrencia('Informe uma descrição.');
-  if (tabela === 'contas_pagar' && modelo.moeda !== 'BRL' && modelo.moeda && !(num(modelo.cambio) > 0)) {
+  if (modelo.moeda !== 'BRL' && modelo.moeda && !(num(modelo.cambio) > 0)) {
     throw new ErroRecorrencia('Informe o câmbio da moeda estrangeira.');
   }
   const horizonte = Math.floor(num(corpo.horizonte_meses) || 3);
@@ -379,8 +379,10 @@ export function aplicarAlteracoes(
     }
     if (alteracoes.forma_pagamento !== undefined && novo.forma_pagamento !== 'CARTAO_CORP') novo.cartao_id = null;
     if (alteracoes.fornecedor_nome !== undefined && String(alteracoes.fornecedor_nome).trim()) novo.fornecedor_pendente = false;
-  } else if (alteracoes.valor_original !== undefined) {
-    novo.valor_final = novo.valor_original;
+  } else if (['valor_original', 'cambio'].some(c => alteracoes[c] !== undefined)) {
+    // A receber em outra moeda (E7, frente D): em reais pelo câmbio do
+    // lançamento. Em real, o mesmo valor, como sempre.
+    novo.valor_final = paraBRL(num(novo.valor_original), novo.moeda ? String(novo.moeda) : 'BRL', num(novo.cambio));
   }
   // Rateio guarda percentuais: o valor de cada linha é refeito sobre o
   // valor deste título (o de outra parcela não serve).

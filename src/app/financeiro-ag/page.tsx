@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { DataState } from '@/components/fin/DataState';
 import { MolduraDaPagina, RITMO_DA_PAGINA } from '@/components/fin/MolduraDaPagina';
 import { PageHeader } from '@/components/fin/PageHeader';
+import { AssistenteInicial } from '@/components/fin/AssistenteInicial';
 import { Segmentado } from '@/components/fin/Segmentado';
 import { BaixaDeReceber } from './receber/BaixaDeReceber';
 import { BaixaDePagar } from './pagar/BaixaDePagar';
@@ -253,6 +254,9 @@ export default function FinanceiroVisaoGeralPage() {
         }}
       />
 
+      {/* Assistente inicial (E7, frente D): agência nova fica pronta sozinha;
+          a que já tem dados recebe a oferta num clique. */}
+      <AssistenteInicial onAplicado={() => { void carregar(); }} />
       {/* Perguntar em texto (E7): some sozinha para quem não tem financeiro nem relatórios. */}
       <PerguntarEmTexto compacta />
 

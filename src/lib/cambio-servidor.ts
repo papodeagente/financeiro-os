@@ -24,6 +24,7 @@ import {
 } from './cambio';
 import { janelaDeMinutos, type DefinicaoTarefa } from './agendador/nucleo';
 import { addDias } from './money';
+import { codigosPtaxDasAgencias } from './moedas-servidor';
 
 export const CAMBIO_SCHEMA_SQL = `
   CREATE TABLE IF NOT EXISTS cotacoes_cambio (
@@ -368,7 +369,9 @@ export async function atualizarCotacoes(exec: ExecutorSQL, opcoes: OpcoesAtualiz
   }
 
   // 2) PTAX: só quando falta o fechamento esperado; uma chamada por moeda.
-  const moedasPtax = opcoes.moedasPtax ?? MOEDAS_ESTRANGEIRAS;
+  // As oito do sistema mais as que alguma agência cadastrou e a PTAX publica
+  // (E7, frente D). Moeda que a PTAX não publica nunca entra: câmbio digitado.
+  const moedasPtax = opcoes.moedasPtax ?? [...MOEDAS_ESTRANGEIRAS, ...(await codigosPtaxDasAgencias(exec))];
   const estPtax = estados.get('bcb_ptax') ?? null;
   const { rows: ult } = await exec.query(
     `SELECT MIN(r) AS r FROM (SELECT codigo, MAX(referencia) AS r FROM cotacoes_cambio WHERE tipo = 'ptax' AND codigo = ANY($1::text[]) GROUP BY codigo) x`,
