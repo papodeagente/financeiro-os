@@ -7,6 +7,9 @@
  *    fornecedor e do Valor a gerar, a seleção sugerida pela regra (até o
  *    corte), a prévia com o sinal descontado e o vencimento já em dia útil;
  *  - "Faturas geradas": a lista, o detalhe e o desfazer (com motivo).
+ * Na prévia, o valor a gerar: "Líquido" ou "Bruto" (o
+ * bruto, com a comissão a receber do fornecedor). A regra de faturamento pode
+ * ser mensal, diária, semanal, decendial ou quinzenal.
  * A Taxa CC DU/RAV muda no detalhe do item, com motivo.
  */
 import * as React from 'react';
@@ -28,10 +31,10 @@ import { Callout } from '@/components/fin/Callout';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import {
-  ROTULO_AJUSTE, ROTULO_DATA_BASE, descreverRegra, normalizarRegra, proximasFaturas,
-  type AjusteDoVencimento, type DataBaseDaFatura, type PeriodoDaFatura, type RegraDeFaturamento,
+  DIAS_DA_SEMANA, PERIODICIDADES, ROTULO_AJUSTE, ROTULO_DATA_BASE, ROTULO_PERIODICIDADE, descreverRegra, normalizarRegra, proximasFaturas,
+  type AjusteDoVencimento, type DataBaseDaFatura, type PeriodicidadeDaFatura, type PeriodoDaFatura, type RegraDeFaturamento,
 } from '@/lib/fornecedor-regra';
-import type { ItemAFaturar, PreviaDaFatura } from '@/lib/fornecedor-fatura';
+import type { ItemAFaturar, ModoDaFatura, PreviaDaFatura } from '@/lib/fornecedor-fatura';
 import type { AFaturarDaParte, DetalheDaFatura, FaturaResumo, RegraDoFornecedor, ResumoDaParte, SituacaoDoPagamento } from '@/lib/fornecedor-servidor';
 import {
   CampoReais, ErroDaApi, LINK, LinhaDeResumo, ListaDeAlertas, Pilula, SECAO, SELECT, api, dataBR, emReais, hojeNoBrasil, quandoBR, reais,
@@ -346,7 +349,7 @@ function ItensDaParte({ parteId, onVoltar, onGerada }: { parteId: string; onVolt
           contaIds={selecionados.map(i => i.conta_id)}
           corte={selecionados.every(i => i.data_base <= corte) ? corte : ''}
           onFechar={() => setPreviaAberta(false)}
-          onGerada={f => { setPreviaAberta(false); toast.success(`Fatura ${f.numero} gerada`, f.valor > 0 ? `${reais(f.valor)} a pagar em ${dataBR(f.vencimento)}.` : 'O sinal cobriu tudo: não há conta a pagar.'); onGerada(f.id); }}
+          onGerada={f => { setPreviaAberta(false); toast.success(`Fatura ${f.numero} gerada`, f.valor_a_pagar > 0 ? `${reais(f.valor_a_pagar)} a pagar em ${dataBR(f.vencimento)}${f.receitas > 0 ? `; ${reais(f.receitas)} de comissão a receber do fornecedor` : ''}.` : 'O sinal cobriu tudo: não há conta a pagar.'); onGerada(f.id); }}
           onItensMudaram={() => { setPreviaAberta(false); void carregar(true); }}
         />
       ) : null}
@@ -369,18 +372,21 @@ function PreviaDaFaturaSheet({ parteId, contaIds, corte, onFechar, onGerada, onI
   const [erro, setErro] = React.useState('');
   const [vencimento, setVencimento] = React.useState('');
   const [observacoes, setObservacoes] = React.useState('');
+  const [modo, setModo] = React.useState<ModoDaFatura>('SALDO');
   const [gerando, setGerando] = React.useState(false);
+  const vencRef = React.useRef('');
+  vencRef.current = vencimento;
 
   const pedir = React.useCallback(async (venc: string) => {
     setErro('');
     try {
-      setPrevia(await api('/api/fornecedores/faturas/previa', { metodo: 'POST', corpo: { parte_id: parteId, conta_ids: contaIds, corte: corte || undefined, vencimento: venc || undefined } }));
+      setPrevia(await api('/api/fornecedores/faturas/previa', { metodo: 'POST', corpo: { parte_id: parteId, conta_ids: contaIds, corte: corte || undefined, vencimento: venc || undefined, modo } }));
     } catch (e) {
       if (e instanceof ErroDaApi && e.codigo === 'ITENS_MUDARAM') { toast.warning('A lista mudou', e.message); onItensMudaram(); return; }
       setErro(e instanceof Error ? e.message : 'Não foi possível montar a prévia.');
     }
-  }, [parteId, contaIds, corte, onItensMudaram]);
-  React.useEffect(() => { void pedir(''); }, [pedir]);
+  }, [parteId, contaIds, corte, modo, onItensMudaram]);
+  React.useEffect(() => { void pedir(vencRef.current); }, [pedir]);
 
   async function gerar() {
     if (!previa) return;
@@ -388,7 +394,7 @@ function PreviaDaFaturaSheet({ parteId, contaIds, corte, onFechar, onGerada, onI
     try {
       const f = await api<DetalheDaFatura>('/api/fornecedores/faturas', {
         metodo: 'POST',
-        corpo: { parte_id: parteId, conta_ids: contaIds, corte: corte || undefined, vencimento: vencimento || undefined, observacoes, assinatura: previa.assinatura },
+        corpo: { parte_id: parteId, conta_ids: contaIds, corte: corte || undefined, vencimento: vencimento || undefined, observacoes, modo, assinatura: previa.assinatura },
       });
       onGerada(f);
     } catch (e) {
@@ -416,19 +422,39 @@ function PreviaDaFaturaSheet({ parteId, contaIds, corte, onFechar, onGerada, onI
       descricao={p ? `${p.parte_nome}: ${p.quantidade} ${p.quantidade === 1 ? 'item' : 'itens'} de ${p.vendas} ${p.vendas === 1 ? 'venda' : 'vendas'}.` : 'Montando a prévia…'}
       largura={640}
       resumo={p ? (p.a_pagar > 0
-        ? <>Nasce uma conta a pagar de <strong>{reais(p.a_pagar)}</strong> para {dataBR(p.vencimento.data)}, e as contas destas vendas passam a ser pagas por ela.</>
+        ? <>Nasce uma conta a pagar de <strong>{reais(p.a_pagar)}</strong> para {dataBR(p.vencimento.data)}, e as contas destas vendas passam a ser pagas por ela.{p.receitas > 0 ? <> Nasce também uma conta a receber de <strong>{reais(p.receitas)}</strong>: a comissão e o over que o fornecedor devolve.</> : null}</>
         : <>O sinal cobre a fatura inteira: nenhuma conta a pagar nasce, e as vendas ficam com o fornecedor pago.</>) : null}
-      acaoPrimaria={{ rotulo: 'Gerar fatura', onClick: gerar, carregando: gerando, desabilitado: !p || p.quantidade === 0 }}
+      acaoPrimaria={{ rotulo: 'Gerar fatura', onClick: gerar, carregando: gerando, desabilitado: !p || p.quantidade === 0 || p.modo !== modo }}
     >
       {erro ? <Callout tom="negativo" titulo="Não deu para montar a prévia">{erro}</Callout> : null}
       {!p && !erro ? <div className="h-48 animate-pulse rounded-[var(--fin-r-md)] bg-[var(--fin-surface-2)]" aria-label="Carregando a prévia" /> : null}
       {p && previa ? (
         <div className="flex flex-col gap-[var(--fin-s-4)]">
+          {p.receitas_no_bruto > 0 ? (
+            <section aria-labelledby="t-valor-a-gerar" className="flex flex-col gap-[var(--fin-s-2)]">
+              <h3 id="t-valor-a-gerar" className="fin-t-body-strong">Quanto pagar ao fornecedor</h3>
+              <Segmentado<ModoDaFatura>
+                rotulo="Quanto pagar ao fornecedor"
+                opcoes={[{ valor: 'SALDO', rotulo: 'Pagar o líquido' }, { valor: 'BRUTO', rotulo: 'Pagar o bruto' }]}
+                valor={modo}
+                onChange={setModo}
+                className="self-start"
+                cheio="celular"
+              />
+              <p className="fin-t-caption text-[var(--fin-text-2)]" aria-live="polite">
+                {modo === 'SALDO'
+                  ? <>Paga só o líquido: o fornecedor já fica com a comissão e o over ({reais(p.receitas_no_bruto)}). É o mais comum.</>
+                  : <>Paga o valor cheio, com a comissão e o over ({reais(p.receitas_no_bruto)}), e o fornecedor devolve essa parte depois. Para isso nasce uma conta a receber dele, ligada a esta fatura.</>}
+              </p>
+            </section>
+          ) : null}
           <dl className="flex flex-col">
             <LinhaDeResumo rotulo="Período">{dataBR(previa.periodo.inicio)} a {dataBR(previa.periodo.corte)}</LinhaDeResumo>
             <LinhaDeResumo rotulo="Itens">{reais(p.total_itens)}</LinhaDeResumo>
             <LinhaDeResumo rotulo="Sinal descontado">{p.total_sinal > 0 ? `− ${reais(p.total_sinal)}` : 'Nenhum'}</LinhaDeResumo>
+            {p.receitas > 0 ? <LinhaDeResumo rotulo="Receitas (comissão e over)">+ {reais(p.receitas)}</LinhaDeResumo> : null}
             <LinhaDeResumo rotulo="A pagar" forte>{reais(p.a_pagar)}</LinhaDeResumo>
+            {p.receitas > 0 ? <LinhaDeResumo rotulo="A receber do fornecedor">{reais(p.receitas)}</LinhaDeResumo> : null}
             <LinhaDeResumo rotulo="Vencimento">
               <span className="inline-flex items-center gap-[var(--fin-s-1)]"><CalendarClock aria-hidden="true" className="size-4 text-[var(--fin-text-3)]" />{vencimentoTexto(p.vencimento)}</span>
             </LinhaDeResumo>
@@ -608,12 +634,39 @@ function RegraSheet({ regra, onFechar, onSalva }: { regra: RegraDoFornecedor; on
     >
       <div className="flex flex-col gap-[var(--fin-s-4)]">
         <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:grid-cols-2">
-          <Field rotulo="Dia do corte" ajuda="Os itens até este dia entram na fatura.">
-            {a => <select {...a} className={SELECT} value={r.dia_corte} onChange={e => setR(x => ({ ...x, dia_corte: Number(e.target.value) }))}>{DIAS.map(d => <option key={d} value={d}>{dia(d)}</option>)}</select>}
+          <Field rotulo="De quanto em quanto tempo" ajuda="Quando a fatura deste fornecedor fecha.">
+            {a => (
+              <select {...a} className={SELECT} value={r.periodicidade} onChange={e => setR(x => ({ ...x, periodicidade: e.target.value as PeriodicidadeDaFatura }))}>
+                {PERIODICIDADES.map(k => <option key={k} value={k}>{ROTULO_PERIODICIDADE[k]}</option>)}
+              </select>
+            )}
           </Field>
-          <Field rotulo="Dia do vencimento" ajuda="Depois do corte: no mesmo mês, se vier depois; senão, no seguinte.">
-            {a => <select {...a} className={SELECT} value={r.dia_vencimento} onChange={e => setR(x => ({ ...x, dia_vencimento: Number(e.target.value) }))}>{DIAS.map(d => <option key={d} value={d}>{dia(d)}</option>)}</select>}
-          </Field>
+          {r.periodicidade === 'SEMANAL' ? (
+            <Field rotulo="A semana começa" ajuda={`O corte é ${DIAS_DA_SEMANA[(r.inicio_semana + 6) % 7]}.`}>
+              {a => (
+                <select {...a} className={SELECT} value={r.inicio_semana} onChange={e => setR(x => ({ ...x, inicio_semana: Number(e.target.value) }))}>
+                  {DIAS_DA_SEMANA.map((d, i) => <option key={d} value={i}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>)}
+                </select>
+              )}
+            </Field>
+          ) : null}
+          {r.periodicidade === 'MENSAL' ? (
+            <>
+              <Field rotulo="Dia do corte" ajuda="Os itens até este dia entram na fatura.">
+                {a => <select {...a} className={SELECT} value={r.dia_corte} onChange={e => setR(x => ({ ...x, dia_corte: Number(e.target.value) }))}>{DIAS.map(d => <option key={d} value={d}>{dia(d)}</option>)}</select>}
+              </Field>
+              <Field rotulo="Dia do vencimento" ajuda="Depois do corte: no mesmo mês, se vier depois; senão, no seguinte.">
+                {a => <select {...a} className={SELECT} value={r.dia_vencimento} onChange={e => setR(x => ({ ...x, dia_vencimento: Number(e.target.value) }))}>{DIAS.map(d => <option key={d} value={d}>{dia(d)}</option>)}</select>}
+              </Field>
+            </>
+          ) : (
+            <Field rotulo="Dias para vencer" ajuda="Contados a partir do corte. 0 vence no próprio dia do corte.">
+              {a => (
+                <Input {...a} type="number" inputMode="numeric" min={0} max={365} value={r.prazo_dias} className="h-11 tabular-nums lg:h-10"
+                  onChange={e => setR(x => ({ ...x, prazo_dias: Math.max(0, Math.min(365, Math.floor(Number(e.target.value) || 0))) }))} />
+              )}
+            </Field>
+          )}
           <Field rotulo="Vencimento sem expediente" ajuda="Fim de semana e feriado nacional.">
             {a => (
               <select {...a} className={SELECT} value={r.ajuste_vencimento} onChange={e => setR(x => ({ ...x, ajuste_vencimento: e.target.value as AjusteDoVencimento }))}>
@@ -632,7 +685,7 @@ function RegraSheet({ regra, onFechar, onSalva }: { regra: RegraDoFornecedor; on
         <label className="flex cursor-pointer items-start gap-[var(--fin-s-3)] rounded-[var(--fin-r-md)] border border-[var(--fin-border)] px-[var(--fin-s-3)] py-[var(--fin-s-2)] hover:bg-[var(--fin-surface-2)]">
           <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-[var(--fin-accent)]" checked={r.gerar_sozinha} onChange={e => setR(x => ({ ...x, gerar_sozinha: e.target.checked }))} />
           <span className="flex flex-col gap-0.5">
-            <span className="fin-t-body-strong">Montar a fatura sozinha no dia seguinte ao corte</span>
+            <span className="fin-t-body-strong">Montar a fatura sozinha depois de cada corte</span>
             <span className="fin-t-caption text-[var(--fin-text-2)]">Com os itens até o corte e o sinal já descontado. Sem esta opção, o sino avisa que a fatura está pronta para montar.</span>
           </span>
         </label>
@@ -683,7 +736,8 @@ function FaturasGeradas({ faturaId, onAbrir }: { faturaId: string; onAbrir: (id:
     { id: 'itens', cabecalho: 'Itens', tipo: 'texto', sortable: true, acessor: f => f.itens, render: f => `${f.itens} de ${f.vendas} ${f.vendas === 1 ? 'venda' : 'vendas'}`, prioridade: 1 },
     { id: 'valor_itens', cabecalho: 'Itens', tipo: 'dinheiro', sortable: true, valor: f => emReais(f.valor_itens), prioridade: 1 },
     { id: 'sinal', cabecalho: 'Sinal', tipo: 'dinheiro', sortable: true, valor: f => emReais(f.sinal), prioridade: 1 },
-    { id: 'valor', cabecalho: 'A pagar', tipo: 'dinheiro', sortable: true, valor: f => emReais(f.valor) },
+    { id: 'valor', cabecalho: 'A pagar', tipo: 'dinheiro', sortable: true, valor: f => emReais(f.valor_a_pagar) },
+    { id: 'receitas', cabecalho: 'Comissão a receber', tipo: 'dinheiro', sortable: true, valor: f => emReais(f.receitas), prioridade: 2 },
     { id: 'pagamento', cabecalho: 'Situação', tipo: 'texto', sortable: true, acessor: f => f.pagamento,
       render: f => <Pilula tom={ROTULO_PAGAMENTO[f.pagamento].tom}>{ROTULO_PAGAMENTO[f.pagamento].rotulo}</Pilula> },
   ];
@@ -692,7 +746,7 @@ function FaturasGeradas({ faturaId, onAbrir }: { faturaId: string; onAbrir: (id:
       <FilterBar
         busca={{ valor: filtro, onChange: setFiltro, placeholder: 'Buscar fatura ou fornecedor' }}
         selects={[{ id: 'situacao', rotulo: 'Situação', valor: situacao || 'TODAS', opcoes: [{ valor: 'GERADA', rotulo: 'Valendo' }, { valor: 'DESFEITA', rotulo: 'Desfeitas' }, { valor: 'TODAS', rotulo: 'Todas' }], onChange: v => setSituacao(v === 'TODAS' ? '' : v) }]}
-        resumo={{ exibidos: visiveis.length, total: faturas.length, substantivo: 'faturas', soma: emReais(visiveis.reduce((a, f) => a + f.valor, 0)) }}
+        resumo={{ exibidos: visiveis.length, total: faturas.length, substantivo: 'faturas', soma: emReais(visiveis.reduce((a, f) => a + f.valor_a_pagar, 0)) }}
         ativos={(filtro ? 1 : 0) + (situacao !== 'GERADA' ? 1 : 0)}
         onLimpar={() => { setFiltro(''); setSituacao('GERADA'); }}
       />
@@ -718,6 +772,7 @@ function DetalheDaFaturaSheet({ id, onFechar, onMudou }: { id: string; onFechar:
   const [desfazendo, setDesfazendo] = React.useState(false);
   const [motivo, setMotivo] = React.useState('');
   const [enviando, setEnviando] = React.useState(false);
+  const [conferindo, setConferindo] = React.useState<string | null>(null);
   const carregar = React.useCallback(async () => {
     try { setF(await api<DetalheDaFatura>(`/api/fornecedores/faturas/${encodeURIComponent(id)}`)); } catch (e) { setErro(e instanceof Error ? e.message : 'Não foi possível abrir.'); }
   }, [id]);
@@ -737,7 +792,33 @@ function DetalheDaFaturaSheet({ id, onFechar, onMudou }: { id: string; onFechar:
     }
   }
 
-  const podeDesfazer = f && f.situacao === 'GERADA' && (f.pagamento === 'EM_ABERTO' || f.pagamento === 'VENCIDA' || (f.pagamento === 'PAGA' && f.valor === 0));
+  async function conferir(contaId: string, conferido: boolean) {
+    setConferindo(contaId);
+    try {
+      setF(await api<DetalheDaFatura>(`/api/fornecedores/faturas/${encodeURIComponent(id)}/conferido`, { metodo: 'POST', corpo: { conta_pagar_id: contaId, conferido } }));
+    } catch (e) {
+      toast.error('A marca não mudou', e instanceof Error ? e.message : undefined);
+    } finally {
+      setConferindo(null);
+    }
+  }
+  const colunasDaFatura: FinColuna<ItemAFaturar>[] = f ? [
+    ...colunasDosItens(),
+    { id: 'conferido', cabecalho: 'Conferido', tipo: 'texto', sortable: true, acessor: i => (f.conferidos[i.conta_id] ? 1 : 0),
+      render: i => {
+        const c = f.conferidos[i.conta_id];
+        return (
+          <label className="flex min-h-11 cursor-pointer items-center gap-[var(--fin-s-2)] whitespace-nowrap lg:min-h-0" title={c ? `Por ${c.por || '—'} em ${quandoBR(c.em)}` : undefined}>
+            <input type="checkbox" className="size-4 shrink-0 accent-[var(--fin-accent)]" checked={!!c} disabled={f.situacao !== 'GERADA' || conferindo === i.conta_id}
+              aria-label={`Item da venda ${i.venda_numero} conferido`} onChange={e => { void conferir(i.conta_id, e.target.checked); }} />
+            <span className="fin-t-caption text-[var(--fin-text-2)]">{c ? 'Conferido' : 'A conferir'}</span>
+          </label>
+        );
+      } },
+  ] : [];
+  const conferidosNaFatura = f ? f.linhas.filter(l => f.conferidos[l.conta_id]).length : 0;
+
+  const podeDesfazer = f && f.situacao === 'GERADA' && (f.pagamento === 'EM_ABERTO' || f.pagamento === 'VENCIDA' || (f.pagamento === 'PAGA' && f.valor_a_pagar === 0));
   if (desfazendo && f) {
     return (
       <RecordSheet
@@ -773,7 +854,9 @@ function DetalheDaFaturaSheet({ id, onFechar, onMudou }: { id: string; onFechar:
             <dl className="flex flex-col">
               <LinhaDeResumo rotulo="Itens">{reais(f.valor_itens)}</LinhaDeResumo>
               <LinhaDeResumo rotulo="Sinal descontado">{f.sinal ? `− ${reais(f.sinal)}` : 'Nenhum'}</LinhaDeResumo>
-              <LinhaDeResumo rotulo="A pagar" forte>{reais(f.valor)}</LinhaDeResumo>
+              {f.receitas > 0 ? <LinhaDeResumo rotulo="Receitas (comissão e over)">+ {reais(f.receitas)}</LinhaDeResumo> : null}
+              <LinhaDeResumo rotulo="A pagar" forte>{reais(f.valor_a_pagar)}</LinhaDeResumo>
+              {f.receitas > 0 ? <LinhaDeResumo rotulo="A receber do fornecedor">{reais(f.receitas)}</LinhaDeResumo> : null}
             </dl>
             <dl className="flex flex-col">
               <LinhaDeResumo rotulo="Vencimento">{vencimentoTexto({ data: f.vencimento, pela_regra: f.vencimento_pela_regra || f.vencimento, motivo_ajuste: f.motivo_ajuste || null })}</LinhaDeResumo>
@@ -787,6 +870,7 @@ function DetalheDaFaturaSheet({ id, onFechar, onMudou }: { id: string; onFechar:
           {f.situacao === 'GERADA' && f.conta_pagar_id ? (
             <p className="fin-t-caption text-[var(--fin-text-2)]">
               O pagamento é pela conta a pagar {f.numero}, em <Link className={LINK} href="/financeiro-ag/pagar">Contas a pagar</Link>. Para desfazer uma fatura já paga, estorne o pagamento antes.
+              {f.modo === 'BRUTO' && f.conta_receber_id ? <> Paga pelo valor bruto: a comissão de {reais(f.receitas)} que o fornecedor devolve está em <Link className={LINK} href="/financeiro-ag/receber">Contas a receber</Link>; desfazer a fatura cancela essa conta também, se ainda não foi recebida.</> : null}
             </p>
           ) : null}
           {f.compensacoes.length ? (
@@ -802,10 +886,15 @@ function DetalheDaFaturaSheet({ id, onFechar, onMudou }: { id: string; onFechar:
               </ul>
             </section>
           ) : null}
+          {f.situacao === 'GERADA' && f.linhas.length ? (
+            <p className="fin-t-caption text-[var(--fin-text-2)]" aria-live="polite">
+              {conferidosNaFatura === f.linhas.length ? 'Todos os itens conferidos com o documento do fornecedor.' : `${conferidosNaFatura} de ${f.linhas.length} itens conferidos com o documento do fornecedor.`}
+            </p>
+          ) : null}
           <FinTable<ItemAFaturar>
             linhas={f.linhas}
-            colunas={colunasDosItens()}
-            colunasVisiveis={['venda', 'cliente', 'produto', 'valor_cliente', 'liquidado_cliente', 'saldo_cliente', 'saldo_fornecedor']}
+            colunas={colunasDaFatura}
+            colunasVisiveis={['venda', 'cliente', 'produto', 'localizador', 'valor_cliente', 'saldo_cliente', 'saldo_fornecedor', ...(f.modo === 'BRUTO' ? ['comissao', 'over'] : []), 'conferido']}
             chave={i => i.conta_id}
             densidade="compacta"
             estado="ok"

@@ -5,12 +5,15 @@
  * Contrato (dinheiro em CENTAVOS de real; datas AAAA-MM-DD):
  *   GET  /api/fornecedores/faturas/a-faturar                → { partes: ResumoDaParte[] }
  *   GET  /api/fornecedores/faturas/a-faturar?parte_id=X     → AFaturarDaParte (itens, sugeridos, regra, próximas 3, sinais)
- *   POST /api/fornecedores/faturas/previa  { parte_id, conta_ids, corte?, vencimento? } → { previa, assinatura, periodo }
+ *   POST /api/fornecedores/faturas/previa  { parte_id, conta_ids, corte?, vencimento?, modo?: 'SALDO'|'BRUTO' } → { previa, assinatura, periodo }
+ *        (modo BRUTO = "Bruto": paga Comissão + Over junto e cria a conta a receber delas, ligada à fatura)
  *   POST /api/fornecedores/faturas         { …o mesmo, assinatura, observacoes? }      → 201 DetalheDaFatura | 409 PREVIA_MUDOU/ITENS_MUDARAM
  *   GET  /api/fornecedores/faturas?parte_id=&situacao=&de=&ate=                         → { faturas: FaturaResumo[] }
  *   GET  /api/fornecedores/faturas/[id]                                                 → DetalheDaFatura
- *   POST /api/fornecedores/faturas/[id]/desfazer { motivo }                              → DetalheDaFatura | 409 FATURA_PAGA
- *   GET|PUT /api/fornecedores/regra-faturamento?parte_id=X  { dia_corte, dia_vencimento, ajuste_vencimento, data_base, gerar_sozinha }
+ *   POST /api/fornecedores/faturas/[id]/conferido { conta_pagar_id, conferido: boolean } → DetalheDaFatura (marca o item conferido)
+ *   POST /api/fornecedores/faturas/[id]/desfazer { motivo }                              → DetalheDaFatura | 409 FATURA_PAGA/COMISSAO_RECEBIDA
+ *   GET|PUT /api/fornecedores/regra-faturamento?parte_id=X  { periodicidade: MENSAL|DIARIO|SEMANAL|DECENDIAL|QUINZENAL, inicio_semana (0–6),
+ *                                                             prazo_dias, dia_corte, dia_vencimento, ajuste_vencimento, data_base, gerar_sozinha }
  *                                                            → { regra: RegraDoFornecedor, proximas: PeriodoDaFatura[] }
  *   POST /api/fornecedores/taxa-cc { venda_id, produto_id, lado: 'DU'|'RAV', valor_centavos, motivo } → { de, para }
  *   GET  /api/fornecedores/sinais?parte_id=&situacao=       → { sinais: SinalComSaldo[] }

@@ -16,7 +16,10 @@
  *   (f) desfazer fatura: só sem pagamento; as contas voltam e a venda acerta;
  *   (g) tarefa do dia: avisa no corte e monta sozinha quando a regra pede;
  *   (h) comissão esperada × lançada × recebida por operadora, com extrato;
- *   (i) isolamento entre agências e permissões.
+ *   (i) isolamento entre agências e permissões;
+ *   (j) regra diária, semanal, decendial e quinzenal (E7), com a tarefa do dia;
+ *   (k) fatura pelo valor bruto: a conta a receber das
+ *       receitas, desfazer, e a posição da venda contando só a parte dos itens.
  *
  * Uso: node --no-warnings scripts/test-sql-fornecedor.mjs
  */
@@ -337,6 +340,87 @@ eq((await json(await rotaComissoes.GET(pedir('GET', '/api/fornecedores/comissoes
 const alheio = await json(await rotaAcordo.PUT(pedir('PUT', `/api/fornecedores/acordos/${acordoNov}`, { fornecedor: { id: 'f-x' }, comissao_percentual: 50, vigencia_inicio: '2026-01-01' }), params(acordoNov)));
 eq([alheio.status, (await um(`SELECT comissao_percentual FROM fornecedor_acordos WHERE id = $1`, [acordoNov])).comissao_percentual], [404, '12.0000'], 'outra agência: não muda o acordo alheio');
 eq((await rotaAcordo.DELETE(pedir('DELETE', `/api/fornecedores/acordos/${acordoNov}`), params(acordoNov))).status, 404, 'outra agência: não exclui o acordo alheio');
+
+console.log('--- (j) Regra diária/semanal/decendial/quinzenal (E7) ---');
+comoAdmin();
+r = await json(await rotaRegra.PUT(pedir('PUT', '/api/fornecedores/regra-faturamento?parte_id=f-hot', { periodicidade: 'SEMANAL', inicio_semana: 1, prazo_dias: 7 })));
+eq([r.status, r.corpo.regra.regra.periodicidade, r.corpo.regra.regra.inicio_semana, r.corpo.regra.regra.prazo_dias, r.corpo.proximas.length], [200, 'SEMANAL', 1, 7, 3], 'regra semanal gravada, com a prévia das próximas 3');
+eq(/por semana, de segunda-feira a domingo/.test(r.corpo.regra.descricao), true, 'a regra por extenso fala da semana');
+const guardada = (await um(`SELECT data FROM fornecedores_crm WHERE id = 'f-hot'`)).data.regras_faturamento;
+eq([guardada.periodicidade, guardada.dia_corte, guardada.gerar_sozinha], ['SEMANAL', 20, true], 'o cadastro guarda a periodicidade e mantém o resto');
+r = await json(await rotaRegra.GET(pedir('GET', '/api/fornecedores/regra-faturamento?parte_id=f-hot')));
+eq(r.corpo.proximas.every(x => x.corte > x.inicio && new Date(`${x.corte}T12:00:00Z`).getUTCDay() === 0), true, 'semanal: todo corte cai no domingo');
+r = await json(await rotaRegra.PUT(pedir('PUT', '/api/fornecedores/regra-faturamento?parte_id=f-hot', { periodicidade: 'QUINZENAL', prazo_dias: 10 })));
+const ultimoDia = iso => new Date(Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)), 0)).getUTCDate();
+eq([r.corpo.regra.regra.periodicidade, r.corpo.proximas.every(x => Number(x.corte.slice(8)) === 15 || Number(x.corte.slice(8)) === ultimoDia(x.corte))], ['QUINZENAL', true], 'quinzenal: cortes no dia 15 e no último do mês');
+await cadastro('f-sem', T, 'Receptivo Semanal', { periodicidade: 'SEMANAL', inicio_semana: 1, prazo_dias: 7, gerar_sozinha: true });
+v = await lancar({
+  data_venda: '2026-11-24', cliente: { id: 'cli-d', nome: 'Davi Melo' },
+  produtos: [{ tipo: 'RECEPTIVO', descricao: 'Transfer', fornecedor: { id: 'f-sem', nome: 'Receptivo Semanal' }, quem_cobra: 'AGENCIA',
+    passageiros: [{ nome: 'Davi Melo', tarifa_centavos: 30000 }], componentes: [{ tipo: 'MARKUP', valor_centavos: 5000 }] }],
+  pagamentos: [{ forma: 'PIX', valor_centavos: 35000 }],
+});
+eq(v.status, 201, 'venda do receptivo semanal (terça 24/11)');
+t = await faturasDoDia(pool, emTransacao, T, new Date('2026-12-01T13:00:00Z'));
+const fsem = (await forn.listarFaturas(pool, T, { parte_id: 'f-sem' }, '2026-12-01'))[0];
+eq([fsem?.periodo_inicio, fsem?.corte, fsem?.vencimento, fsem?.valor, fsem?.automatica], ['2026-11-23', '2026-11-29', '2026-12-07', 30000, true], 'tarefa do dia: semana de 23 a 29/11 montada sozinha; vence 06/12 (domingo) → segunda 07/12');
+
+console.log('--- (k) Fatura pelo valor bruto (E7) ---');
+await cadastro('f-bru', T, 'Operadora Bruta', { dia_corte: 25, dia_vencimento: 15 });
+const lancarBruta = async (data, cliente) => (await lancar({
+  data_venda: data, cliente: { id: cliente, nome: cliente },
+  produtos: [{ tipo: 'PACOTE', descricao: 'Pacote Serra', fornecedor: { id: 'f-bru', nome: 'Operadora Bruta' }, quem_cobra: 'AGENCIA',
+    passageiros: [{ nome: cliente, tarifa_centavos: 100000 }], componentes: [{ tipo: 'COMISSAO', valor_centavos: 10000 }, { tipo: 'OVER', valor_centavos: 2000 }] }],
+  pagamentos: [{ forma: 'PIX', valor_centavos: 100000 }],
+})).corpo.venda.id;
+const VBR = await lancarBruta('2026-11-10', 'cli-e');
+const itemBR = (await forn.aFaturarDaParte(pool, T, 'f-bru', '2026-11-12')).itens.find(i => i.venda_id === VBR);
+eq([itemBR.valor_a_gerar, itemBR.comissao, itemBR.over], [88000, 10000, 2000], 'item: líquido 880, comissão 100 e over 20');
+const pvSaldo = await previa({ parte_id: 'f-bru', conta_ids: [itemBR.conta_id], corte: '2026-11-25' });
+const pvBruto = await previa({ parte_id: 'f-bru', conta_ids: [itemBR.conta_id], corte: '2026-11-25', modo: 'BRUTO' });
+eq([pvSaldo.corpo.previa.modo, pvSaldo.corpo.previa.a_pagar, pvSaldo.corpo.previa.receitas_no_bruto], ['SALDO', 88000, 12000], 'prévia pelo saldo: 880 (mostra que o bruto teria 120 de receitas)');
+eq([pvBruto.corpo.previa.modo, pvBruto.corpo.previa.receitas, pvBruto.corpo.previa.a_pagar, pvBruto.corpo.assinatura !== pvSaldo.corpo.assinatura], ['BRUTO', 12000, 100000, true], 'prévia pelo bruto: 880 + 120 = 1.000; a assinatura muda com o modo');
+r = await gerar({ parte_id: 'f-bru', conta_ids: [itemBR.conta_id], corte: '2026-11-25', modo: 'BRUTO', assinatura: pvSaldo.corpo.assinatura });
+eq([r.status, r.corpo.codigo], [409, 'PREVIA_MUDOU'], 'gerar no bruto com a assinatura do saldo: recusado');
+r = await gerar({ parte_id: 'f-bru', conta_ids: [itemBR.conta_id], corte: '2026-11-25', modo: 'BRUTO', assinatura: pvBruto.corpo.assinatura });
+const FB1 = r.corpo;
+eq([r.status, FB1.modo, FB1.valor, FB1.receitas, FB1.valor_a_pagar], [201, 'BRUTO', 88000, 12000, 100000], 'fatura no bruto: itens 880, receitas 120, a pagar 1.000');
+const cpFB1 = (await um(`SELECT data FROM contas_pagar WHERE id = $1`, [FB1.conta_pagar_id])).data;
+const crFB1 = await um(`SELECT id, data FROM contas_receber WHERE id = $1`, [FB1.conta_receber_id]);
+eq([cpFB1.valor_final, crFB1.data.origem, crFB1.data.valor_final, crFB1.data.fornecedor_id, crFB1.data.fatura_fornecedor_id, crFB1.data.auto_gerado, crFB1.data.origem_venda_id ?? null, crFB1.data.data_vencimento],
+  [1000, 'COMISSAO_FORNECEDOR', 120, 'f-bru', FB1.id, true, null, '2027-01-14'], 'conta a pagar de 1.000 e UMA conta a receber de 120 do fornecedor, ligada à fatura e fora da venda');
+await query(`UPDATE contas_receber SET status = 'RECEBIDO', data = data || '{"status":"RECEBIDO","valor_recebido":120}' WHERE id = $1`, [FB1.conta_receber_id]);
+r = await json(await rotaDesfazer.POST(pedir('POST', `/api/fornecedores/faturas/${FB1.id}/desfazer`, { motivo: 'Fornecedor mandou outra fatura' }), params(FB1.id)));
+eq([r.status, r.corpo.codigo], [409, 'COMISSAO_RECEBIDA'], 'comissão da fatura já recebida: não se desfaz');
+await query(`UPDATE contas_receber SET status = 'PENDENTE', data = (data - 'valor_recebido') || '{"status":"PENDENTE"}' WHERE id = $1`, [FB1.conta_receber_id]);
+r = await json(await rotaDesfazer.POST(pedir('POST', `/api/fornecedores/faturas/${FB1.id}/desfazer`, { motivo: 'Fornecedor mandou outra fatura' }), params(FB1.id)));
+eq([r.status, (await um(`SELECT data->>'status' AS s FROM contas_receber WHERE id = $1`, [FB1.conta_receber_id])).s], [200, 'CANCELADO'], 'desfazer cancela também a conta a receber das receitas');
+const itemBR2 = (await forn.aFaturarDaParte(pool, T, 'f-bru', '2026-11-12')).itens.find(i => i.venda_id === VBR);
+const pvB2 = await previa({ parte_id: 'f-bru', conta_ids: [itemBR2.conta_id], corte: '2026-11-25', modo: 'BRUTO' });
+const FB2 = (await gerar({ parte_id: 'f-bru', conta_ids: [itemBR2.conta_id], corte: '2026-11-25', modo: 'BRUTO', assinatura: pvB2.corpo.assinatura })).corpo;
+await query(`UPDATE contas_pagar SET status = 'PARCIAL', data = data || '{"status":"PARCIAL","valor_pago":500}' WHERE id = $1`, [FB2.conta_pagar_id]);
+pos = await srv.posicaoDaVendaNoBanco(pool, T, VBR, '2026-11-12');
+eq(pos.posicao.fornecedores.map(f => [f.a_pagar, f.pago, f.situacao]), [[88000, 44000, 'PARCIAL']], 'conta bruta paga pela metade: a venda vê só a parte dos itens (440 de 880)');
+r = await json(await rotaFatura.GET(pedir('GET', `/api/fornecedores/faturas/${FB2.id}`), params(FB2.id)));
+eq([r.corpo.pago, r.corpo.pagamento, r.corpo.modo], [44000, 'PARCIAL', 'BRUTO'], 'detalhe da fatura bruta: parcial pela parte dos itens');
+ficha = await json(await rotaVendaUma.GET(pedir('GET', `/api/vendas/completa/${VBR}`), params(VBR)));
+r = await json(await rotaVendaUma.PUT(pedir('PUT', `/api/vendas/completa/${VBR}`, { venda: ficha.corpo.venda }), params(VBR)));
+const crVivas = await todos(`SELECT data FROM contas_receber WHERE tenant_id = $1 AND data->>'fatura_fornecedor_id' = $2`, [T, FB2.id]);
+eq([r.status, crVivas.map(x => [x.data.status, x.data.valor_final])], [200, [['PENDENTE', 120]]], 'salvar a venda de novo não mexe na conta a receber das receitas');
+const rotaConferido = await import('../src/app/api/fornecedores/faturas/[id]/conferido/route.ts');
+r = await json(await rotaConferido.POST(pedir('POST', `/api/fornecedores/faturas/${FB2.id}/conferido`, { conta_pagar_id: itemBR2.conta_id, conferido: true }), params(FB2.id)));
+eq([r.status, Object.keys(r.corpo.conferidos), r.corpo.conferidos[itemBR2.conta_id]?.por], [200, [itemBR2.conta_id], 'Pessoa ADMIN'], 'item marcado como conferido, com quem marcou');
+r = await json(await rotaConferido.POST(pedir('POST', `/api/fornecedores/faturas/${FB2.id}/conferido`, { conta_pagar_id: itemBR2.conta_id, conferido: false }), params(FB2.id)));
+eq([r.status, Object.keys(r.corpo.conferidos).length], [200, 0], 'tirar a marca de conferido');
+r = await json(await rotaConferido.POST(pedir('POST', `/api/fornecedores/faturas/${FB1.id}/conferido`, { conta_pagar_id: itemBR.conta_id }), params(FB1.id)));
+eq([r.status, r.corpo.codigo], [409, 'JA_DESFEITA'], 'fatura desfeita: não se confere');
+r = await json(await rotaConferido.POST(pedir('POST', `/api/fornecedores/faturas/${FB2.id}/conferido`, { conta_pagar_id: 'outra-conta' }), params(FB2.id)));
+eq(r.status, 404, 'conta fora da fatura: 404');
+globalThis.__SESSAO_DE_TESTE__ = sessao('ADMIN', T2);
+eq((await rotaConferido.POST(pedir('POST', `/api/fornecedores/faturas/${FB2.id}/conferido`, { conta_pagar_id: itemBR2.conta_id }), params(FB2.id))).status, 404, 'outra agência: não confere fatura alheia');
+comoAdmin();
+const fSaldo = (await forn.listarFaturas(pool, T, { parte_id: 'f-sol' })).find(f => f.numero === 'FF-0002');
+eq([fSaldo.modo, fSaldo.receitas, fSaldo.valor_a_pagar, fSaldo.conta_receber_id], ['SALDO', 0, 126000, null], 'fatura de antes: modo saldo, sem receitas');
 globalThis.__SESSAO_DE_TESTE__ = null;
 
 console.log(`\n${total - falhas}/${total} passaram`);
