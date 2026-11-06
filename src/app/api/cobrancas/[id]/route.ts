@@ -32,8 +32,8 @@ export async function GET(_req: Request, { params }: Params) {
   const { id } = await params;
   try {
     const d = await detalheDaCobranca(pool as unknown as ExecutorSQL, await getTenantId(), id);
-    const contaDaCobranca = (d.conta ?? {}) as { cliente_nome?: string };
-    return NextResponse.json({ ...cobrancaParaTela({ ...d, cliente_nome: String(contaDaCobranca.cliente_nome ?? '') }), capacidades: d.capacidades, conta: d.conta, eventos: d.eventos });
+    const contaDaCobranca = (d.conta ?? {}) as { cliente_nome?: string; fatura_numero?: string | null };
+    return NextResponse.json({ ...cobrancaParaTela({ ...d, cliente_nome: String(contaDaCobranca.cliente_nome ?? ''), fatura_numero: Number(contaDaCobranca.fatura_numero) || null }), capacidades: d.capacidades, conta: d.conta, eventos: d.eventos });
   } catch (e) {
     return respostaDeErroDaCobranca(e, 'detalhe');
   }

@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Check, ChevronDown, CircleAlert, MessageSquareReply, ThumbsUp } from 'lucide-react';
+import { Check, ChevronDown, CircleAlert, FileText, MessageSquareReply, ThumbsUp } from 'lucide-react';
 
 import type { FaturaNoPortal } from '@/lib/fatura-servidor';
 import { ROTULO_SITUACAO } from '@/lib/fatura-regras';
@@ -193,6 +193,13 @@ function Fatura({ f, token, onMudou }: { f: FaturaNoPortal; token: string; onMud
               <div className="flex justify-between gap-[var(--fin-s-3)] border-t border-[var(--fin-border)] pt-1 fin-t-body-strong"><dt>A pagar</dt><dd className="tabular-nums">{reais(f.totais.liquido)}</dd></div>
             </dl>
           ) : null}
+
+          <a
+            href={`/c/${encodeURIComponent(token)}/fatura/${encodeURIComponent(f.id)}`}
+            className={cn('inline-flex min-h-11 items-center gap-1 self-start fin-t-body text-[var(--fin-accent)] underline-offset-2 hover:underline', FOCO)}
+          >
+            <FileText aria-hidden="true" className="size-4" /> Ver a fatura completa e salvar em PDF
+          </a>
 
           {!paga ? <p className="fin-t-caption text-[var(--fin-text-3)]">Para pagar, use a Fatura Nº {f.numero} em “Para pagar”, no começo desta página.</p> : null}
 

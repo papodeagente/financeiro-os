@@ -20,6 +20,7 @@ import {
 import { addDias, hojeISO, num } from '@/lib/money';
 import { toast } from '@/lib/toast';
 import { SecaoContaPrevisao } from './SecaoContaPrevisao';
+import { SecaoAvisoWhatsApp } from './SecaoAvisoWhatsApp';
 import { SecaoCamposPersonalizados } from './SecaoCamposPersonalizados';
 import { SecaoCategoriasDosTitulos } from './SecaoCategoriasDosTitulos';
 import { EmpresaDaConfiguracao, naEmpresa } from '@/components/fin/EmpresaDaConfiguracao';
@@ -355,6 +356,7 @@ export default function ConfigFinanceiroPage() {
               </div>
             </section>
 
+            <SecaoAvisoWhatsApp />
             <SecaoContaPrevisao />
             <SecaoCategoriasDosTitulos />
             <SecaoCamposPersonalizados />

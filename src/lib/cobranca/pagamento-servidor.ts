@@ -96,13 +96,13 @@ async function contaDoPagamentoSemConta(exec: ExecutorSQL, tenantId: string, c: 
  */
 export async function itensDoPagamento(
   exec: ExecutorSQL, tenantId: string, c: LinhaCobranca,
-  p: { tituloPrincipal?: string; contaCentavos: number; taxaBoletoCentavos: number; taxaProvedorCentavos: number; juros: number; desconto: number; data: string; conta_bancaria_id: string | null; forma: string; tratamento?: ItemBaixa['tratamento_diferenca'] },
+  p: { tituloPrincipal?: string; contaCentavos: number; taxaBoletoCentavos: number; taxaProvedorCentavos: number; juros: number; multa?: number; desconto: number; data: string; conta_bancaria_id: string | null; forma: string; tratamento?: ItemBaixa['tratamento_diferenca'] },
 ): Promise<ItemBaixa[]> {
   const nome = nomeDoProvedor(c.provedor);
   const taxa = deCentavos(p.taxaProvedorCentavos);
   const itens: ItemBaixa[] = [{
     titulo_tabela: 'contas_receber', titulo_id: p.tituloPrincipal ?? c.titulo_id, data: p.data, conta_bancaria_id: p.conta_bancaria_id,
-    forma: p.forma, valor: deCentavos(p.contaCentavos), juros: round2(p.juros), desconto: round2(p.desconto), taxa,
+    forma: p.forma, valor: deCentavos(p.contaCentavos), juros: round2(p.juros), ...(p.multa ? { multa: round2(p.multa) } : {}), desconto: round2(p.desconto), taxa,
     taxa_plataforma: taxa > 0 ? c.provedor : undefined, observacao: `Recebido pelo ${nome} (cobrança ${c.id}).`,
     ...(p.tratamento ? { tratamento_diferenca: p.tratamento } : {}),
   }];

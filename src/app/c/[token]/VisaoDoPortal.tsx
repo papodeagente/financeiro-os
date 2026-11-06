@@ -2,9 +2,9 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Check, Copy, ExternalLink, FileText, Mail, MessageCircle, Phone, ShieldCheck } from 'lucide-react';
+import { Check, Copy, Download, ExternalLink, FileText, Loader2, Mail, MessageCircle, Phone, RefreshCw, ShieldCheck } from 'lucide-react';
 
-import type { ItemDoPortal, PortalPublico } from '@/lib/cobranca/portal-regras';
+import type { ItemDoPortal, NotaNoPortal, PortalPublico, SegundaViaNoPortal } from '@/lib/cobranca/portal-regras';
 import { dataBR, linhaEmBlocos } from '@/lib/cobranca/regras-telas';
 import { cn, formatBRL } from '@/lib/utils';
 import { FaturasParaConferir } from './FaturasParaConferir';
@@ -42,9 +42,60 @@ function vencimentoEmPalavras(item: ItemDoPortal, hoje: string): string {
   return item.situacao === 'em_atraso' ? `Venceu em ${dataBR(item.vencimento)}` : `Vence em ${dataBR(item.vencimento)}`;
 }
 
-function ContaParaPagar({ item, hoje, copiar, copiado, agencia }: {
+/**
+ * 2ª via pelo próprio cliente (E7): o boleto venceu e o provedor não deu o
+ * link com o valor atualizado. O valor novo (com juros e multa) aparece antes
+ * do botão; um toque gera, e a página recarrega com o boleto novo.
+ */
+function SegundaViaDoCliente({ sv, contaRef, token, vencimentoAntigo, aoGerar }: {
+  sv: SegundaViaNoPortal; contaRef: string; token: string; vencimentoAntigo: string; aoGerar: () => void;
+}) {
+  const [estado, setEstado] = React.useState<{ tipo: 'livre' } | { tipo: 'gerando' } | { tipo: 'erro'; texto: string }>({ tipo: 'livre' });
+  const encargos = Math.round((sv.juros + sv.multa) * 100) / 100;
+  const gerar = async () => {
+    setEstado({ tipo: 'gerando' });
+    try {
+      const r = await fetch(`/api/portal/${encodeURIComponent(token)}/segunda-via`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ conta: contaRef }), cache: 'no-store',
+      });
+      const corpo = await r.json().catch(() => null) as { error?: string } | null;
+      if (!r.ok) { setEstado({ tipo: 'erro', texto: corpo?.error || 'Não foi possível gerar agora. Tente de novo em alguns minutos.' }); return; }
+      aoGerar();
+    } catch {
+      setEstado({ tipo: 'erro', texto: 'Sem conexão. Confira a internet e tente de novo.' });
+    }
+  };
+  return (
+    <div className="flex flex-col gap-[var(--fin-s-2)] rounded-[var(--fin-r-md)] bg-[var(--fin-surface-2)] p-[var(--fin-s-3)]">
+      <p className="fin-t-body text-[var(--fin-text)]">
+        Este boleto venceu em {dataBR(vencimentoAntigo)}. Gere um novo, para pagar até <span className="tabular-nums">{dataBR(sv.vencimento)}</span>, no valor de{' '}
+        <span className="fin-t-body-strong tabular-nums">{formatBRL(sv.valor)}</span>
+        {encargos > 0 ? <span className="text-[var(--fin-text-2)]"> (inclui {formatBRL(encargos)} de juros e multa pelo atraso)</span> : null}.
+      </p>
+      <button
+        type="button"
+        onClick={gerar}
+        disabled={estado.tipo === 'gerando'}
+        aria-busy={estado.tipo === 'gerando'}
+        className={cn(
+          'inline-flex h-12 w-full items-center justify-center gap-[var(--fin-s-2)] rounded-[var(--fin-r-md)] bg-[var(--fin-accent)] px-4 fin-t-body-strong text-[var(--fin-text-on-fill)] transition-colors duration-[var(--fin-dur-rapida)] hover:bg-[var(--fin-accent-hover)] disabled:cursor-wait disabled:opacity-70',
+          FOCO,
+        )}
+      >
+        {estado.tipo === 'gerando'
+          ? <><Loader2 aria-hidden="true" className="size-5 animate-spin motion-reduce:animate-none" /> Gerando o boleto novo</>
+          : <><RefreshCw aria-hidden="true" className="size-5" /> Gerar boleto atualizado</>}
+      </button>
+      {estado.tipo === 'erro' ? <p role="alert" className="fin-t-caption text-[var(--fin-negative-text)]">{estado.texto}</p> : null}
+      <p className="fin-t-caption text-[var(--fin-text-3)]">O boleto e o Pix antigos deixam de valer.</p>
+    </div>
+  );
+}
+
+function ContaParaPagar({ item, hoje, copiar, copiado, agencia, token, recarregar }: {
   item: ItemDoPortal; hoje: string; copiado: string | null;
   copiar: (chave: string, texto: string) => void; agencia: PortalPublico['agencia'];
+  token: string; recarregar: () => void;
 }) {
   const c = item.cobranca;
   const viva = c && (c.status === 'aberta' || c.status === 'vencida' || c.status === 'emitindo');
@@ -114,7 +165,9 @@ function ContaParaPagar({ item, hoje, copiar, copiado, agencia }: {
               </a>
             ) : null}
           </div>
-          {c.status === 'vencida' && !c.url_fatura ? (
+          {c.segunda_via ? (
+            <SegundaViaDoCliente sv={c.segunda_via} contaRef={item.ref} token={token} vencimentoAntigo={c.vencimento} aoGerar={recarregar} />
+          ) : c.status === 'vencida' && !c.url_fatura ? (
             <p className="fin-t-caption text-[var(--fin-text-2)]">Este boleto venceu. Peça à agência a 2ª via com a data nova.</p>
           ) : null}
         </div>
@@ -130,7 +183,36 @@ function ContaParaPagar({ item, hoje, copiar, copiado, agencia }: {
   );
 }
 
-export function VisaoDoPortal({ portal, token }: { portal: PortalPublico; token: string }) {
+/** Notas fiscais do cliente (E7): número, data, valor e os arquivos que o emissor guardou. */
+function NotasFiscais({ notas, token }: { notas: NotaNoPortal[]; token: string }) {
+  const arquivo = (n: NotaNoPortal, tipo: 'pdf' | 'xml') => `/api/portal/${encodeURIComponent(token)}/nota/${encodeURIComponent(n.ref)}?tipo=${tipo}`;
+  const link = cn('inline-flex min-h-11 shrink-0 items-center gap-1 rounded-[var(--fin-r-md)] px-2 fin-t-body text-[var(--fin-accent)] hover:bg-[var(--fin-surface-2)]', FOCO);
+  return (
+    <section aria-labelledby="t-notas" className="flex flex-col gap-[var(--fin-s-3)]">
+      <h2 id="t-notas" className="fin-t-subhead text-[var(--fin-text)]">Notas fiscais</h2>
+      <ul className="flex flex-col divide-y divide-[var(--fin-border)] rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)]">
+        {notas.map(n => (
+          <li key={n.ref} className="flex flex-wrap items-center justify-between gap-x-[var(--fin-s-3)] px-[var(--fin-s-4)] py-[var(--fin-s-3)]">
+            <div className="flex min-w-0 flex-col">
+              <span className="fin-t-body text-[var(--fin-text)]">{n.numero ? `Nota Nº ${n.numero}` : 'Nota fiscal de serviço'}</span>
+              <span className="fin-t-caption tabular-nums text-[var(--fin-text-3)]">{formatBRL(n.valor)}{n.emitida_em ? ` · emitida em ${dataBR(n.emitida_em)}` : ''}</span>
+            </div>
+            {n.tem_pdf || n.tem_xml ? (
+              <span className="flex items-center">
+                {n.tem_pdf ? <a href={arquivo(n, 'pdf')} className={link} download><Download aria-hidden="true" className="size-4" /> PDF</a> : null}
+                {n.tem_xml ? <a href={arquivo(n, 'xml')} className={link} download><Download aria-hidden="true" className="size-4" /> XML</a> : null}
+              </span>
+            ) : (
+              <span className="fin-t-caption text-[var(--fin-text-3)]">Arquivo com a agência</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+export function VisaoDoPortal({ portal, token, recarregar }: { portal: PortalPublico; token: string; recarregar: () => void }) {
   const { copiado, copiar } = useCopiar();
   const { agencia, cliente } = portal;
   const proxima = portal.em_aberto[0];
@@ -171,7 +253,7 @@ export function VisaoDoPortal({ portal, token }: { portal: PortalPublico; token:
             <h2 id="t-pagar" className="fin-t-subhead text-[var(--fin-text)]">Para pagar</h2>
             <ul className="flex flex-col gap-[var(--fin-s-3)]">
               {portal.em_aberto.map(i => (
-                <ContaParaPagar key={i.ref} item={i} hoje={portal.hoje} copiar={copiar} copiado={copiado} agencia={agencia} />
+                <ContaParaPagar key={i.ref} item={i} hoje={portal.hoje} copiar={copiar} copiado={copiado} agencia={agencia} token={token} recarregar={recarregar} />
               ))}
             </ul>
             <p className="fin-t-caption text-[var(--fin-text-3)]">Depois de pagar, a conta aparece como paga em alguns minutos (o boleto pode levar até 3 dias úteis).</p>
@@ -203,6 +285,8 @@ export function VisaoDoPortal({ portal, token }: { portal: PortalPublico; token:
             </ul>
           </section>
         ) : null}
+
+        {portal.notas?.length ? <NotasFiscais notas={portal.notas} token={token} /> : null}
 
         <footer className="flex flex-col gap-[var(--fin-s-3)] border-t border-[var(--fin-border)] pt-[var(--fin-s-4)]">
           {agencia.whatsapp || agencia.telefone || agencia.email ? (

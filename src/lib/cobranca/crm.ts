@@ -58,6 +58,10 @@ export interface PayloadCobrancaCrm {
   copia_para?: string[];
   assunto?: string;
   mensagem?: string;
+  /** E7: o que o e-mail leva ('fatura' ou 'boleto_e_fatura'); ausente = o boleto, o e-mail de sempre. */
+  documentos?: 'fatura' | 'boleto_e_fatura';
+  /** E7: o documento da fatura (link do portal para ler e salvar em PDF). */
+  fatura_documento?: { numero: number; url: string };
 }
 
 export interface ExtraDoAviso {
@@ -67,6 +71,8 @@ export interface ExtraDoAviso {
   copia_para?: string[];
   assunto?: string;
   mensagem?: string;
+  documentos?: 'fatura' | 'boleto_e_fatura';
+  fatura_documento?: { numero: number; url: string };
 }
 
 /** O id do contato no CRM, a partir do `external_id` do cliente ("crm_contact_<id>"). */
@@ -105,6 +111,8 @@ export function montarPayload(
   if (extra.copia_para?.length) p.copia_para = extra.copia_para;
   if (extra.assunto) p.assunto = extra.assunto;
   if (extra.mensagem) p.mensagem = extra.mensagem;
+  if (extra.documentos) p.documentos = extra.documentos;
+  if (extra.fatura_documento) p.fatura_documento = extra.fatura_documento;
   if (c.pago_centavos != null) p.valor_pago = deCentavos(c.pago_centavos);
   if (c.pago_em) p.pago_em = c.pago_em;
   return p;

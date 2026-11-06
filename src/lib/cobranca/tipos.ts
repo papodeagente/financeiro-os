@@ -280,7 +280,7 @@ export type CodigoErroCobranca =
   | 'SEM_PROVEDOR' | 'PROVEDOR_DESLIGADO' | 'CREDENCIAL_INVALIDA' | 'PROVEDOR_FORA' | 'LIMITE_DO_PROVEDOR'
   | 'CLIENTE_SEM_DOCUMENTO' | 'CLIENTE_SEM_CONTATO' | 'VALOR_MINIMO' | 'VENCIMENTO_INVALIDO'
   | 'JA_TEM_COBRANCA' | 'CONTA_QUITADA' | 'CONTA_CANCELADA' | 'SEM_CARNE' | 'NADA_SAI' | 'ASSINATURA_VENCIDA'
-  | 'SEM_PERMISSAO';
+  | 'SEM_PERMISSAO' | 'SEM_SEGUNDA_VIA' | 'LIMITE_DO_PORTAL';
 
 /** Erro de regra do nosso lado, com o status HTTP que a rota devolve. */
 export class ErroCobranca extends Error {

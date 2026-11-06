@@ -282,6 +282,18 @@ async function linksEmAbertoDoValor(exec: ExecutorSQL, tenantId: string, valorCe
   return rows.map(lerLinha);
 }
 
+/**
+ * Juros e multa guardados pela 2ª via do portal (centavos → reais). Só valem
+ * quando o provedor não mandou juros próprios no aviso (senão contaria duas vezes).
+ */
+export function encargosDaSegundaVia(v: unknown, jurosDoProvedor: number): { juros: number; multa: number } {
+  if (!v || typeof v !== 'object' || jurosDoProvedor > 0) return { juros: 0, multa: 0 };
+  const o = v as Record<string, unknown>;
+  const j = Math.max(0, Math.round(Number(o.juros_centavos) || 0));
+  const m = Math.max(0, Math.round(Number(o.multa_centavos) || 0));
+  return { juros: j / 100, multa: m / 100 };
+}
+
 async function aplicarAviso(
   exec: ExecutorSQL,
   tenantId: string,
@@ -327,7 +339,11 @@ async function aplicarAviso(
     const bruto = pistas.pagoCentavos ?? paraCentavos(Number(parcela?.valor_bruto ?? 0)) ?? c.valor_centavos;
     const valor = round2((bruto || c.valor_centavos) / 100);
     const taxa = round2(Math.max(0, Number(parcela?.valor_taxa ?? 0)));
-    const juros = round2(Math.max(0, Number(parcela?.juros ?? 0)));
+    // 2ª via pedida no portal (E7): juros e multa já estão no valor do
+    // documento; quando o provedor não os separa, a baixa entra com eles.
+    const daSegundaVia = encargosDaSegundaVia(c.dados?.encargos_segunda_via, Number(parcela?.juros ?? 0));
+    const juros = round2(Math.max(0, Number(parcela?.juros ?? 0)) + daSegundaVia.juros);
+    const multa = daSegundaVia.multa;
     const desconto = round2(Math.max(0, Number(parcela?.desconto ?? 0)));
     const dataPedida = (parcela?.data_pagamento || parcela?.data_recebimento || hoje).slice(0, 10);
     const conta = c.conta_bancaria_id || opcoes.contaBancariaId || null;
@@ -341,7 +357,7 @@ async function aplicarAviso(
       if (opcoes.pendenciaEmVezDeBaixa) throw new ErroBaixa(opcoes.pendenciaEmVezDeBaixa);
       const itens = await itensDoPagamento(exec, tenantId, c, {
         contaCentavos: divisao.conta, taxaBoletoCentavos: divisao.taxa, taxaProvedorCentavos: paraCentavos(taxa),
-        juros, desconto, data, conta_bancaria_id: conta, forma,
+        juros, multa, desconto, data, conta_bancaria_id: conta, forma,
       });
       const r = await registrarBaixas(exec, {
         tenantId, usuarioNome: `Aviso do ${nome}`, origem: 'plataforma',
