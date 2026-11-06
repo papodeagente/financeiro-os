@@ -513,11 +513,15 @@ export function FinTable<T>({
 
           {totais && totais.length > 0 ? (
             <tfoot className="bg-[var(--fin-surface-sunken)]">
-              {totais.map((total) => (
-                <tr key={`${total.colunaId}-${total.rotulo}`} className="border-t-2 border-[var(--fin-border-strong)]">
+              {/* Totais com o mesmo rótulo ficam na MESMA linha (um relatório
+                  com várias colunas de dinheiro tem um "Total" só). Um total por
+                  rótulo continua exatamente como antes. */}
+              {agruparTotais(totais).map((grupo) => (
+                <tr key={`${grupo.colunas.join('|')}-${grupo.rotulo}`} className="border-t-2 border-[var(--fin-border-strong)]">
                   {selecao ? <td aria-hidden="true" className={celulaVariants({ densidade })} /> : null}
                   {colunas.map((coluna, indice) => {
-                    const alvo = coluna.id === total.colunaId;
+                    const total = { rotulo: grupo.rotulo, valor: grupo.valores.get(coluna.id) ?? 0 };
+                    const alvo = grupo.valores.has(coluna.id);
                     const rotuloAqui = indice === 0;
                     const alinhamento = alinhamentoDe(coluna);
                     const classes = cn(
@@ -570,6 +574,18 @@ export function FinTable<T>({
       {rodape ?? null}
     </Moldura>
   );
+}
+
+/** Junta os totais pelo rótulo, na ordem em que aparecem. */
+function agruparTotais(totais: { colunaId: string; valor: number; rotulo: string }[]) {
+  const grupos: { rotulo: string; colunas: string[]; valores: Map<string, number> }[] = [];
+  for (const t of totais) {
+    let g = grupos.find(x => x.rotulo === t.rotulo && !x.valores.has(t.colunaId));
+    if (!g) { g = { rotulo: t.rotulo, colunas: [], valores: new Map() }; grupos.push(g); }
+    g.colunas.push(t.colunaId);
+    g.valores.set(t.colunaId, t.valor);
+  }
+  return grupos;
 }
 
 /** Marca ou desmarca todas as linhas visíveis; meio-marcada quando só algumas. */
