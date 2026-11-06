@@ -57,6 +57,12 @@ const NAVIGATION_ITEMS: CommandItem[] = [
   { id: 'config-cobranca', label: 'Configurações de cobrança', href: '/config/cobranca', icon: <Settings className="w-4 h-4" />, section: 'navegacao' },
   { id: 'pagar', label: 'Contas a pagar', href: '/financeiro-ag/pagar', icon: <CreditCard className="w-4 h-4" />, section: 'navegacao' },
   { id: 'conciliacao', label: 'Conciliação', href: '/financeiro-ag/conciliacao', icon: <FileSpreadsheet className="w-4 h-4" />, section: 'navegacao' },
+  // E6 (05/11/2026): regras aprendidas e conferência do extrato de operadora.
+  { id: 'conciliacao-automatica', label: 'Conciliação automática (regras aprendidas)', href: '/financeiro-ag/conciliacao/automatica', icon: <FileSpreadsheet className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'conciliado-sozinho', label: 'Conciliado sozinho (desfazer conciliação automática)', href: '/financeiro-ag/conciliacao/automatica', icon: <FileSpreadsheet className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'tarifas-bancarias', label: 'Tarifas bancárias que se repetem', href: '/financeiro-ag/conciliacao/automatica', icon: <Landmark className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'conferencia-operadora', label: 'Conferência de operadora (extrato da operadora ou consolidadora)', href: '/financeiro-ag/conferencia-operadora', icon: <FileSpreadsheet className="w-4 h-4" />, section: 'navegacao' },
+  { id: 'comissao-esperada-recebida', label: 'Comissão esperada × recebida por operadora', href: '/financeiro-ag/conferencia-operadora', icon: <Percent className="w-4 h-4" />, section: 'navegacao' },
   { id: 'transferencias', label: 'Transferências', href: '/financeiro-ag/transferencias', icon: <ArrowRightLeft className="w-4 h-4" />, section: 'navegacao' },
   { id: 'plano-contas', label: 'Categorias (plano de contas)', href: '/financeiro-ag/plano-contas', icon: <BookOpen className="w-4 h-4" />, section: 'navegacao' },
   { id: 'formas-pagamento', label: 'Formas de pagamento', href: '/financeiro-ag/formas-pagamento', icon: <Wallet className="w-4 h-4" />, section: 'navegacao' },

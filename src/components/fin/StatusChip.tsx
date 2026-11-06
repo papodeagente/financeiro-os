@@ -21,7 +21,7 @@ export const statusChipVariants = cva(
 
 export type StatusTone = NonNullable<VariantProps<typeof statusChipVariants>['tone']>;
 
-export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza' | 'comissao' | 'plano' | 'cobranca' | 'mudanca' | 'nota' | 'comissao_item' | 'reembolso' | 'credito' | 'fatura' | 'conferencia_fatura';
+export type StatusDominio = 'pagar' | 'receber' | 'conciliacao' | 'transferencia' | 'origem' | 'natureza' | 'comissao' | 'plano' | 'cobranca' | 'mudanca' | 'nota' | 'comissao_item' | 'reembolso' | 'credito' | 'fatura' | 'conferencia_fatura' | 'conferencia' | 'conexao_banco';
 
 export type StatusChipProps = {
   /** Valor cru do banco. NUNCA é renderizado como veio. */
@@ -53,6 +53,14 @@ export const STATUS_LABELS: Record<StatusDominio, Record<string, { rotulo: strin
     ATRASADO:  { rotulo: 'Em atraso',          tone: 'negativo' },
     VENCIDO:   { rotulo: 'Vencido',            tone: 'negativo' },
     CANCELADO: { rotulo: 'Cancelado',          tone: 'neutro'   },
+  },
+  // Extrato automático: estado da conexão de uma conta com o banco (06/11/2026).
+  conexao_banco: {
+    ATIVA:        { rotulo: 'Conectada',     tone: 'positivo' },
+    ATENCAO:      { rotulo: 'Atenção',       tone: 'aviso'    },
+    EXPIRADA:     { rotulo: 'Expirada',      tone: 'negativo' },
+    DESCONECTADA: { rotulo: 'Desconectada',  tone: 'neutro'   },
+    SEM_CONEXAO:  { rotulo: 'Sem conexão',   tone: 'neutro'   },
   },
   conciliacao: {
     PENDENTE:   { rotulo: 'A conciliar', tone: 'neutro'   },
@@ -173,6 +181,21 @@ export const STATUS_LABELS: Record<StatusDominio, Record<string, { rotulo: strin
     USADO:     { rotulo: 'Usado',     tone: 'neutro'   },
     VENCIDO:   { rotulo: 'Vencido',   tone: 'negativo' },
     CANCELADO: { rotulo: 'Cancelado', tone: 'neutro'   },
+  },
+  // Conferência do extrato da operadora e conciliação automática (E6,
+  // 05/11/2026): situação de cada linha e da conferência.
+  conferencia: {
+    CONFERIDO:      { rotulo: 'Conferido',        tone: 'positivo' },
+    DIVERGENTE:     { rotulo: 'Divergente',       tone: 'aviso'    },
+    NAO_ENCONTRADO: { rotulo: 'Não encontrado',   tone: 'negativo' },
+    ACEITO:         { rotulo: 'Aceito',           tone: 'info'     },
+    PROPOSTA:       { rotulo: 'Cancelar?',        tone: 'aviso'    },
+    ABERTA:         { rotulo: 'Aberta',           tone: 'info'     },
+    FECHADA:        { rotulo: 'Fechada',          tone: 'neutro'   },
+    SOZINHA:        { rotulo: 'Concilia sozinha', tone: 'positivo' },
+    SUGERE:         { rotulo: 'Só sugere',        tone: 'neutro'   },
+    DESFEITA:       { rotulo: 'Desfeita',         tone: 'neutro'   },
+    ATIVA:          { rotulo: 'Conciliada',       tone: 'positivo' },
   },
 };
 

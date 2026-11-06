@@ -24,7 +24,7 @@ import {
   pessoaDaConta,
   type ExecutorSQL,
 } from './caixa-atomico';
-import { registrarBaixaLegada } from './baixas-servidor';
+import { estornarBaixa, registrarBaixaLegada } from './baixas-servidor';
 import { createContaPagar, createContaReceber } from './crm-types';
 import { formatBRL, generateId } from './utils';
 import { num, round2 } from './money';
@@ -61,8 +61,16 @@ const TABELAS: Record<TipoLancamento, Tabela> = {
 export interface Vinculo {
   id: string;
   tipo: TipoLancamento;
-  acao: 'VINCULAR' | 'BAIXAR' | 'PARCIAL' | 'CRIADA' | 'LEGADO';
+  /**
+   * BAIXA: a conciliação automática (E6) liquidou pelo caminho da liquidação
+   * no servidor; desfazer é estornar aquela baixa (`baixa_id`) e, se a conta
+   * nasceu ali (`criada`), apagá-la.
+   */
+  acao: 'VINCULAR' | 'BAIXAR' | 'PARCIAL' | 'CRIADA' | 'LEGADO' | 'BAIXA';
   aplicado: number;
+  baixa_id?: string;
+  criada?: boolean;
+  automatica?: boolean;
   antes?: { status: string; valor_baixado: number | null; data_baixa: string | null; conta_bancaria_id: string | null } | null;
   depois?: { status: string; valor_baixado: number } | null;
 }
@@ -364,7 +372,13 @@ export async function conciliarCriandoConta(
  * depois da conciliação, recusa: desfazer não pode apagar baixa de outra
  * pessoa.
  */
-export async function desfazerConciliacao(exec: ExecutorSQL, tenantId: string, extratoId: string): Promise<{ linha: Dados; restauradas: number }> {
+export async function desfazerConciliacao(
+  exec: ExecutorSQL,
+  tenantId: string,
+  extratoId: string,
+  /** Quem desfaz e por quê: vai para o estorno da baixa automática. */
+  quem: { usuarioId?: string; usuarioNome?: string; motivo?: string } = {},
+): Promise<{ linha: Dados; restauradas: number }> {
   const linha = await travarLinha(exec, tenantId, extratoId);
   if (linha.status_conciliacao !== 'CONCILIADO') throw new ErroConciliacao('Esta linha não está conciliada.', 409);
 
@@ -386,6 +400,28 @@ export async function desfazerConciliacao(exec: ExecutorSQL, tenantId: string, e
     if (rows.length === 0) continue; // apagada por alguém: nada a devolver
     const prev = rows[0].data as Dados;
     const versao = String(rows[0].versao);
+
+    if (v.acao === 'BAIXA' && v.baixa_id) {
+      // Liquidada pelo caminho da liquidação: o estorno dela devolve o caixa
+      // e o título (inclusive se outra baixa veio depois, que fica valendo).
+      const { rows: ja } = await exec.query(
+        `SELECT 1 FROM baixas WHERE tenant_id = $1 AND estorna_baixa_id = $2`, [tenantId, v.baixa_id]);
+      if (ja.length === 0) {
+        await estornarBaixa(exec, { tenantId, usuarioId: quem.usuarioId, usuarioNome: quem.usuarioNome }, v.baixa_id, {
+          motivo: (quem.motivo || 'Conciliação desfeita').slice(0, 200),
+        });
+      }
+      if (v.criada) {
+        await exec.query(`DELETE FROM ${t.tabela} WHERE id = $1 AND tenant_id = $2`, [v.id, tenantId]);
+      } else {
+        await exec.query(
+          `UPDATE ${t.tabela} SET data = data - 'extrato_conciliado_id', updated_at = NOW() WHERE id = $1 AND tenant_id = $2`,
+          [v.id, tenantId],
+        );
+      }
+      restauradas++;
+      continue;
+    }
 
     if (v.acao === 'CRIADA') {
       const { rows: apagadas } = await exec.query(
