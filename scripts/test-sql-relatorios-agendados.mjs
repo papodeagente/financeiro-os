@@ -181,7 +181,7 @@ eq([pl.destinatarios, pl.titulo, pl.url_leitura === r.corpo.resultado.url, /\/ap
   [['diretoria@sol.com.br', 'ana@sol.com.br'], 'Vendas por vendedor', true, true, 'string', true], 'RELATORIO_ENVIAR: e-mails, assunto, link de leitura e de download, validade');
 {
   const fetchAntes = globalThis.fetch;
-  globalThis.fetch = async u => (String(u).startsWith('https://crm.exemplo.com/') ? new Response(JSON.stringify({ recebido: true, acao: 'e-mail enviado' }), { status: 200, headers: { 'content-type': 'application/json' } }) : fetchAntes(u));
+  globalThis.fetch = async u => (String(u).startsWith('https://crm.exemplo.com/') ? new Response(JSON.stringify({ recebido: true, acao: 'relatorio_enviado' }), { status: 200, headers: { 'content-type': 'application/json' } }) : fetchAntes(u));
   r = await json(await R.enviar.POST(pedir('POST', `/api/relatorios/agendados/${ag.id}/enviar`), p(ag.id)));
   globalThis.fetch = fetchAntes;
   eq(r.corpo.resultado.situacao, 'enviado', 'CRM recebeu: enviado');

@@ -232,3 +232,22 @@ export function situacaoDoLink(l: { expira_em: string | Date; revogado_em: strin
 export function urlDaLeitura(base: string, token: string): string {
   return `${base.replace(/\/+$/, '')}/r/${token}`;
 }
+
+/**
+ * O que a resposta do CRM ao RELATORIO_ENVIAR quer dizer. O CRM responde 200
+ * mesmo quando não mandou: só "relatorio_enviado…" é envio; "não enviado
+ * (motivo)" é recusa com o motivo; sem resposta, fica na fila.
+ */
+export function resultadoDoEnvioDoRelatorio(
+  resposta: { entregue: boolean; acao: string } | null | undefined,
+): { situacao: 'enviado' | 'na_fila' | 'falhou'; detalhe: string } {
+  if (!resposta || !resposta.entregue) return { situacao: 'na_fila', detalhe: '' };
+  const acao = String(resposta.acao ?? '').trim();
+  if (/^relatorio_enviado\b/i.test(acao)) {
+    const parcial = acao.replace(/^relatorio_enviado\s*:?\s*/i, '');
+    return { situacao: 'enviado', detalhe: parcial ? `Saiu para ${parcial}` : '' };
+  }
+  const m = /não enviado \((.*)\)\s*$/i.exec(acao);
+  if (m) return { situacao: 'falhou', detalhe: m[1] };
+  return { situacao: 'falhou', detalhe: acao ? `O CRM respondeu: ${acao}` : 'O CRM não confirmou o envio.' };
+}

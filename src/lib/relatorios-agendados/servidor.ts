@@ -28,7 +28,7 @@ import { hashDoTokenDeLeitura, novoTokenDeLeitura } from './token';
 import {
   LIMITES_DO_AGENDAMENTO, brasilia, descricaoDoAgendamento, periodoDoEnvio, proximoEnvio,
   situacaoDoLink, tokenTemFormato, urlDaLeitura,
-  type DadosDoAgendamento, type FormatoDoAnexo, type Frequencia, type PeriodoDoEnvio, type RelatorioAgendavel, type SituacaoDoLink,
+  resultadoDoEnvioDoRelatorio, type DadosDoAgendamento, type FormatoDoAnexo, type Frequencia, type PeriodoDoEnvio, type RelatorioAgendavel, type SituacaoDoLink,
 } from './regras';
 
 export const EVENTO_CRM_RELATORIO = 'RELATORIO_ENVIAR';
@@ -323,7 +323,8 @@ export async function enviarAgendamento(
   const payload = payloadDoEnvio(a, doc, leitura, de, ate);
   const chave = `relatorio:${a.id}:${previsto ? previsto.toISOString() : `manual:${agora.toISOString()}`}`;
   const resposta = await emitirEventoCRM(EVENTO_CRM_RELATORIO, payload as unknown as Record<string, unknown>, { tenantId, idempotency_key: chave });
-  return registrar({ ...base, situacao: resposta?.entregue ? 'enviado' : 'na_fila', canal: 'crm', detalhe: '' }, leitura.id);
+  const r = resultadoDoEnvioDoRelatorio(resposta);
+  return registrar({ ...base, situacao: r.situacao, canal: 'crm', detalhe: r.detalhe }, leitura.id);
 }
 
 // ============================================================

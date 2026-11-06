@@ -6,7 +6,7 @@
  * Uso: node --experimental-strip-types --no-warnings scripts/run-tests.mjs scripts/test-relatorios-agendados.ts
  */
 import {
-  consultaSemDatas, descricaoDoAgendamento, lerDestinatarios, periodoDoEnvio, proximoEnvio,
+  consultaSemDatas, descricaoDoAgendamento, lerDestinatarios, periodoDoEnvio, proximoEnvio, resultadoDoEnvioDoRelatorio,
   situacaoDoLink, tokenTemFormato, urlDaLeitura, validarAgendamento,
 } from '../src/lib/relatorios-agendados/regras.ts';
 import { hashDoTokenDeLeitura, novoTokenDeLeitura } from '../src/lib/relatorios-agendados/token.ts';
@@ -22,6 +22,13 @@ function eq(atual: unknown, esperado: unknown, label: string) {
     console.log(`FAIL  ${label}\n        esperado: ${JSON.stringify(esperado)}\n        obtido:   ${JSON.stringify(atual)}`);
   } else console.log(`PASS  ${label}`);
 }
+
+console.log('--- Resposta do CRM ---');
+eq(resultadoDoEnvioDoRelatorio(null), { situacao: 'na_fila', detalhe: '' }, 'sem resposta: na fila');
+eq(resultadoDoEnvioDoRelatorio({ entregue: true, acao: 'relatorio_enviado' }), { situacao: 'enviado', detalhe: '' }, 'enviado para todos');
+eq(resultadoDoEnvioDoRelatorio({ entregue: true, acao: 'relatorio_enviado: 2 de 3 (1 na lista de bloqueio, 0 recusado(s) pelo envio)' }).situacao, 'enviado', 'enviado para parte');
+eq(resultadoDoEnvioDoRelatorio({ entregue: true, acao: 'relatório ag-1: não enviado (conta com pagamento pendente)' }), { situacao: 'falhou', detalhe: 'conta com pagamento pendente' }, 'recusado pelo CRM: falhou com o motivo');
+eq(resultadoDoEnvioDoRelatorio({ entregue: true, acao: 'evento ignorado' }).situacao, 'falhou', 'resposta desconhecida não conta como enviado');
 
 console.log('--- E-mails e validação ---');
 eq(lerDestinatarios('A@x.com; b@y.com.br,\n a@x.com  ruim'), { emails: ['a@x.com', 'b@y.com.br'], invalidos: ['ruim'] }, 'separadores livres, sem repetir, inválido apontado');
