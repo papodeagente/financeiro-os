@@ -19,6 +19,7 @@ import type { ExecutorSQL } from '../caixa-atomico';
 import { registrarProcessador } from '../agendador/fila';
 import { horaDeBrasilia, janelaDiaria, type DefinicaoTarefa } from '../agendador/nucleo';
 import { nadaSai } from '../nada-sai';
+import { mudancaSegurandoSaidas } from '../migracao/estado';
 import { addDias } from '../money';
 import { diaDaReguaHoje } from './calculo';
 import { lerConfigCobranca } from './config';
@@ -56,7 +57,8 @@ export async function rodarRegua(
 ): Promise<{ vencidas: number; lembretes: number; motivo?: string }> {
   const hoje = horaDeBrasilia(agora).data;
   const vencidas = await marcarVencidas(exec, tenantId, hoje);
-  const motivo = nadaSai();
+  // Mudança do sistema anterior em andamento: nenhum lembrete até concluir.
+  const motivo = nadaSai() ?? (await mudancaSegurandoSaidas(exec, tenantId));
   if (motivo) return { vencidas, lembretes: 0, motivo: `nada sai: ${motivo}` };
   const { config } = await lerConfigCobranca(exec, tenantId);
   if (!config.regua.ligada || !config.regua.dias.length) return { vencidas, lembretes: 0, motivo: 'régua desligada' };

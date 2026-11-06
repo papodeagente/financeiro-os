@@ -13,6 +13,7 @@
 import type { ExecutorSQL } from './caixa-atomico';
 import { addDias } from './money';
 import { nadaSai } from './nada-sai';
+import { mudancaSegurandoSaidas } from './migracao/estado';
 import { criarNotificacao } from './notificacoes';
 import { horaDeBrasilia, janelaDiaria, type DefinicaoTarefa } from './agendador/nucleo';
 import {
@@ -70,7 +71,8 @@ export async function contasParaAvisar(
 export async function avisarVencimentos(
   exec: ExecutorSQL, tenantId: string, agora: Date,
 ): Promise<{ avisos: number; motivo?: string }> {
-  const motivo = nadaSai();
+  // Mudança do sistema anterior em andamento: nenhum aviso até concluir.
+  const motivo = nadaSai() ?? (await mudancaSegurandoSaidas(exec, tenantId));
   if (motivo) return { avisos: 0, motivo: `nada sai: ${motivo}` };
   const pref = await preferenciaDa(exec, tenantId);
   if (!algumAvisoLigado(pref)) return { avisos: 0, motivo: 'avisos desligados' };
