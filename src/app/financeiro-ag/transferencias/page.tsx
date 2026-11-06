@@ -31,6 +31,7 @@ import { PageHeader } from '@/components/fin/PageHeader';
 import { RecordSheet } from '@/components/fin/RecordSheet';
 import { rotuloStatus } from '@/components/fin/StatusChip';
 import type { EmptyLessonProps } from '@/components/fin/EmptyLesson';
+import { useMoedas } from '@/components/fin/useMoedas';
 import { formatarNaMoeda, moedaDe, pernasDaTransferencia, planoDaTransferencia, type CarimboDoCambio } from '@/lib/cambio';
 import {
   CambioDaTransferencia, SaldoNaMoeda, valorEmReais, type ContaComMoeda, type TransferenciaComMoeda,
@@ -140,6 +141,9 @@ function PreviaDeSaldos({
 }
 
 export default function TransferenciasPage() {
+  // Catálogo da agência (E7): ao chegar, moedas cadastradas por ela passam a
+  // ser lidas e formatadas como as do sistema em toda a tela.
+  useMoedas();
   const [items, setItems] = useState<TransferenciaComMoeda[]>([]);
   const [contas, setContas] = useState<ContaComMoeda[]>([]);
   const [loading, setLoading] = useState(true);

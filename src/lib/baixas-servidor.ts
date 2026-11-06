@@ -12,6 +12,7 @@
  * Toda baixa move o caixa por aplicarMovimentoCaixaAtomico (razão junto) e
  * respeita o fechamento de período (gatilho no banco).
  */
+import { lerCatalogoDaAgencia } from './moedas-servidor';
 import { createHash } from 'node:crypto';
 import { aplicarMovimentoCaixaAtomico, pessoaDaConta, type ExecutorSQL } from './caixa-atomico';
 import { generateId } from './utils';
@@ -201,12 +202,14 @@ export function tituloParaBaixa(tabela: TituloTabela, d: Record<string, unknown>
 async function cambioDaBaixa(
   exec: ExecutorSQL, tenantId: string, it: ItemBaixa, d: Record<string, unknown>, t: TituloParaBaixa, conta: string | null,
 ): Promise<CambioDaBaixa | null> {
+  // Catálogo da agência (E7, frente D): moedas que ela cadastrou também valem.
+  const catalogo = await lerCatalogoDaAgencia(exec, tenantId);
   let moedaConta: CodigoMoeda = 'BRL';
   if (conta) {
     const { rows } = await exec.query(`SELECT data->>'moeda' AS moeda FROM contas_bancarias WHERE id = $1 AND tenant_id = $2`, [conta, tenantId]);
-    moedaConta = moedaDe(rows[0]?.moeda);
+    moedaConta = moedaDe(rows[0]?.moeda, catalogo);
   }
-  const naMoeda = valorNaMoedaDoTitulo(d, baseDosEncargos(t));
+  const naMoeda = valorNaMoedaDoTitulo(d, baseDosEncargos(t), catalogo);
   const cambioPago = num(it.cambio) > 0 ? round4(num(it.cambio)) : null;
   if (moedaConta !== 'BRL') {
     if (!naMoeda || naMoeda.moeda !== moedaConta) {
@@ -216,7 +219,7 @@ async function cambioDaBaixa(
   }
   const c = cambioDaLiquidacao({
     tabela: t.tabela, titulo: d, base_reais: baseDosEncargos(t), valor_baixado: t.valor_baixado,
-    valor: num(it.valor), juros: it.juros, multa: it.multa, desconto: it.desconto, cambio_pago: cambioPago, moeda_conta: moedaConta,
+    valor: num(it.valor), juros: it.juros, multa: it.multa, desconto: it.desconto, cambio_pago: cambioPago, moeda_conta: moedaConta, catalogo,
   });
   if (!c || !cambioPago) return null;
   return {

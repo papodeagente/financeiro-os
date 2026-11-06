@@ -8,6 +8,8 @@ import { contasPermitidas } from '@/lib/permissoes-servidor';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
 import { mensagemContaComMovimento, usoDaContaBancaria } from '@/lib/contas-bancarias-servidor';
 import { normalizarDadosDaConta } from '@/lib/contas-bancarias-dados';
+import { conferirMoedaDoCadastro } from '@/lib/moedas';
+import { lerCatalogoDaAgencia } from '@/lib/moedas-servidor';
 
 // Uma conta bancária. Leitura e edição pelo CRUD de sempre, com a versão do
 // registro (aviso de edição simultânea, 06/11/2026). Excluir (06/11/2026) só
@@ -30,6 +32,14 @@ export async function PUT(req: Request, ctx: Params) {
   if (!item || typeof item !== 'object' || Array.isArray(item)) return NextResponse.json({ error: 'Formato inválido' }, { status: 400 });
   const recusa = normalizarDadosDaConta(item as Record<string, unknown>);
   if (recusa) return NextResponse.json({ error: recusa }, { status: 400 });
+  // Moeda do catálogo da agência (E7, frente D): desconhecida é recusada.
+  const dados = item as Record<string, unknown>;
+  if ('moeda' in dados && pool) {
+    await initDB();
+    const r = conferirMoedaDoCadastro(dados.moeda, await lerCatalogoDaAgencia(pool as unknown as ExecutorSQL, await getTenantId()));
+    if ('erro' in r) return NextResponse.json({ error: r.erro }, { status: 400 });
+    dados.moeda = r.moeda;
+  }
   return crud.PUT(new Request(req.url, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(item) }), ctx);
 }
 

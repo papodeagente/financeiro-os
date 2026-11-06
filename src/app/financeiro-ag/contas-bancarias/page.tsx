@@ -14,10 +14,12 @@ import { AvisoDeEdicaoSimultanea } from '@/components/fin/AvisoDeEdicaoSimultane
 import { HistoricoRecolhivel } from '@/components/fin/HistoricoDoRegistro';
 import { somaPor } from '@/lib/money';
 import {
-  MOEDAS, formatarCambio, formatarNaMoeda, infoDaMoeda, moedaDe, saldoTotalEmReais, saldosEmReais,
+  formatarCambio, formatarNaMoeda, infoDaMoeda, moedaDe, saldoTotalEmReais, saldosEmReais,
   type SaldoEmReais,
 } from '@/lib/cambio';
 import { useCotacoes } from '@/components/fin/useCotacoes';
+import { useMoedas } from '@/components/fin/useMoedas';
+import { moedasParaEscolher } from '@/lib/moedas';
 import { Callout } from '@/components/fin/Callout';
 
 import { Button } from '@/components/ui/button';
@@ -187,6 +189,8 @@ function contagemDeContas(n: number): string {
 export default function ContasBancariasPage() {
   const [items, setItems] = useState<ContaComMoeda[]>([]);
   const cotacoes = useCotacoes();
+  // Catálogo da agência (E7): as oito do sistema e as que ela cadastrou.
+  const { moedas } = useMoedas();
   const empresaSugerida = useEmpresaSugerida();
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -372,7 +376,7 @@ export default function ContasBancariasPage() {
   // Saldo de cada conta em reais (conta em moeda pela PTAX de venda do cache).
   // Só contas em real: o mesmo número de sempre.
   const listaDeCotacoes = cotacoes.painel?.cotacoes;
-  const saldos = useMemo(() => new Map(saldosEmReais(items, listaDeCotacoes ?? []).map(x => [x.id, x])), [items, listaDeCotacoes]);
+  const saldos = useMemo(() => new Map(saldosEmReais(items, listaDeCotacoes ?? [], moedas).map(x => [x.id, x])), [items, listaDeCotacoes, moedas]);
   const temMoeda = items.some(i => moedaDe(i.moeda) !== 'BRL');
   const somaEmReais = (lista: ContaComMoeda[]) => saldoTotalEmReais(lista.map(i => saldos.get(i.id)).filter((x): x is SaldoEmReais => !!x));
   const totalGeral = somaEmReais(items);
@@ -806,7 +810,7 @@ export default function ContasBancariasPage() {
                   <SelectValue>{() => `${infoDaMoeda(form.moeda).nome} (${infoDaMoeda(form.moeda).simbolo})`}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {MOEDAS.map(m => (
+                  {moedasParaEscolher(moedas, form.moeda).map(m => (
                     <SelectItem key={m.codigo} value={m.codigo} className="fin-t-body">
                       {m.nome} ({m.simbolo})
                     </SelectItem>

@@ -3,7 +3,8 @@ import { num, round2 } from '@/lib/money';
 import pool from '@/lib/db';
 import { garantirAberturaDaConta } from '@/lib/razao-servidor';
 import type { ExecutorSQL } from '@/lib/caixa-atomico';
-import { moedaDe } from '@/lib/cambio';
+import { conferirMoedaDoCadastro } from '@/lib/moedas';
+import { lerCatalogoDaAgencia } from '@/lib/moedas-servidor';
 import { normalizarDadosDaConta } from '@/lib/contas-bancarias-dados';
 
 // Saldo atual é calculado pelo servidor (baixas, transferências, recálculo).
@@ -24,15 +25,23 @@ export const { GET, POST } = createCrudHandlers('contas_bancarias', ['nome', 'ba
   versao: true,
   // Conta disponível por empresa (E7): a dela e as marcadas como disponíveis.
   filtroDeEmpresa: { tipo: 'conta_bancaria' },
-  // Moeda da conta (05/11/2026, E6): ausente ou desconhecida = real, como
-  // sempre. O saldo da conta fica na moeda dela; a moeda não muda depois que
-  // a conta tem movimento (gatilho fin_moeda_da_conta_fixa).
+  // Moeda da conta (05/11/2026, E6): ausente = real, como sempre. O saldo da
+  // conta fica na moeda dela; a moeda não muda depois que a conta tem
+  // movimento (gatilho fin_moeda_da_conta_fixa).
   normalizarCadastro: item => {
     item.saldo_atual = round2(num(item.saldo_inicial));
-    item.moeda = moedaDe(item.moeda);
   },
   // Titular, dígitos e banco da lista oficial (06/11/2026).
   validarCadastro: normalizarDadosDaConta,
+  // Moeda do catálogo da agência (E7, frente D): as oito do sistema e as que
+  // ela cadastrou. Código desconhecido é recusado (antes virava real calado).
+  conferirNoServidor: async (tenantId, item) => {
+    if (!pool) return null;
+    const r = conferirMoedaDoCadastro(item.moeda, await lerCatalogoDaAgencia(pool as unknown as ExecutorSQL, tenantId));
+    if ('erro' in r) return r.erro;
+    item.moeda = r.moeda;
+    return null;
+  },
   aposGravar: async (tenantId, item) => {
     if (!pool || typeof item.id !== 'string') return;
     await garantirAberturaDaConta(pool as unknown as ExecutorSQL, tenantId, item.id);

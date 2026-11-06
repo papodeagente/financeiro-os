@@ -32,6 +32,9 @@ import { tituloGeradoPeloSistema } from './recorrencia';
 import { pode } from './permissoes-servidor';
 import { escopoDaSessao, tituloForaDasEmpresas, type ExecutorEmpresas } from './empresas-servidor';
 import { empresasDoRegistro } from './empresas';
+import { conferirMoedaDoCadastro } from './moedas';
+import { lerCatalogoDaAgencia } from './moedas-servidor';
+import { recusaDosObrigatorios } from './campos-personalizados-servidor';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -62,6 +65,42 @@ function erroGenerico(e: unknown) {
 export function validarCadastroDoTitulo(tabela: TabelaDoTitulo) {
   return (item: Record<string, unknown>): string | null =>
     sanearCamposPersonalizadosDoItem(item) ?? prepararDimensoesDaConta(item) ?? conferirEmissaoDaConta(tabela, item);
+}
+
+/**
+ * Moeda do título pelo catálogo da agência (E7, frente D): as oito do
+ * sistema e as que ela cadastrou. Desconhecida é recusada, a não ser que o
+ * título já estivesse nela (a venda grava a moeda do produto; regravar não
+ * pode travar). Ajusta o item com o código normalizado.
+ */
+async function recusaDaMoeda(
+  exec: ExecutorSQL, tenantId: string, tabela: TabelaDoTitulo, id: unknown, item: Record<string, unknown>,
+): Promise<string | null> {
+  if (!('moeda' in item) || item.moeda === null || item.moeda === undefined || item.moeda === '') return null;
+  const r = conferirMoedaDoCadastro(item.moeda, await lerCatalogoDaAgencia(exec, tenantId));
+  if (!('erro' in r)) { item.moeda = r.moeda; return null; }
+  if (typeof id === 'string' && id) {
+    const { rows } = await exec.query(`SELECT data->>'moeda' AS m FROM ${tabela} WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+    if (String(rows[0]?.m ?? '').trim().toUpperCase() === String(item.moeda).trim().toUpperCase()) return null;
+  }
+  return r.erro;
+}
+
+/**
+ * O que o POST confere no banco (E7, frente D): a moeda pelo catálogo da
+ * agência e os campos personalizados obrigatórios da empresa do título.
+ * Conta que o sistema gerou (venda, fatura, cartão...) não trava pelo
+ * obrigatório: quem a criou não tinha como preencher.
+ */
+export function conferirTituloNoServidor(tabela: TabelaDoTitulo) {
+  return async (tenantId: string, item: Record<string, unknown>): Promise<string | null> => {
+    if (!pool) return null;
+    const exec = pool as unknown as ExecutorSQL;
+    const moeda = await recusaDaMoeda(exec, tenantId, tabela, item.id, item);
+    if (moeda) return moeda;
+    if (tituloGeradoPeloSistema(tabela, item)) return null;
+    return recusaDosObrigatorios(exec, tenantId, tabela, item);
+  };
 }
 
 export function rotasDoTitulo(tabela: TabelaDoTitulo) {
@@ -102,6 +141,24 @@ export function rotasDoTitulo(tabela: TabelaDoTitulo) {
       if (!pool) return NextResponse.json(item);
       const tenantId = await getTenantId();
       if (await foraDasEmpresas(tabela, id)) return NAO_ACHADO();
+      // Moeda pelo catálogo da agência e campos obrigatórios da empresa do
+      // título (E7, frente D). O obrigatório vale na edição pelo formulário
+      // (que sempre manda os campos personalizados); a baixa e as mudanças de
+      // situação não mandam e seguem como sempre.
+      {
+        const exec = pool as unknown as ExecutorSQL;
+        const dados = item as Record<string, unknown>;
+        const recusaMoeda = await recusaDaMoeda(exec, tenantId, tabela, id, dados);
+        if (recusaMoeda) return NextResponse.json({ error: recusaMoeda }, { status: 400 });
+        if ('campos_personalizados' in dados) {
+          const { rows: atual } = await exec.query(`SELECT data FROM ${tabela} WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+          const junto = { ...((atual[0]?.data ?? {}) as Record<string, unknown>), ...dados };
+          if (!tituloGeradoPeloSistema(tabela, junto)) {
+            const faltou = await recusaDosObrigatorios(exec, tenantId, tabela, junto);
+            if (faltou) return NextResponse.json({ error: faltou, campo_obrigatorio: true }, { status: 400 });
+          }
+        }
+      }
       // Perfis de acesso (05/11/2026): baixa pela edição segue as mesmas regras da liquidação.
       const barrado = await conferirEdicaoDoTitulo(
         pool as unknown as ExecutorSQL, ((await getSession()) ?? {}) as SessaoDaBaixa, tenantId, tabela, id, item as Record<string, unknown>);

@@ -37,7 +37,7 @@ import { posicaoDaVenda, type CobrancaDaPosicao, type PosicaoDaVenda } from './v
 import { contasNaFaturaDoFornecedor, refletirFaturasNasContas } from './fornecedor-fatura-banco';
 import { aplicarRetencoesDaAgencia } from './nota-retencoes-servidor';
 import { contasTravadasPelaFatura, projetarContasNaFatura, sincronizarFaturasDaVenda } from './fatura-servidor';
-import { lerCategoriasDosTitulos } from './categorias-padrao-titulos-servidor';
+import { empresaDaVenda, lerCategoriasDosTitulos } from './categorias-padrao-titulos-servidor';
 import { categoriaParaContaNova, chaveDaContaDaVenda, type CategoriasDosTitulos } from './categorias-padrao-titulos';
 import { empresaComConfigPropria, lerChavesDaEmpresa } from './empresas-config';
 
@@ -494,7 +494,8 @@ async function regerarTabela(
       cont.atualizadas++;
     } else {
       if (vazio(n.categoria_id)) {
-        padroes ??= await lerCategoriasDosTitulos(exec, tenantId);
+        // Por empresa (E7, frente D): a configuração da empresa da venda.
+        padroes ??= await lerCategoriasDosTitulos(exec, tenantId, await empresaDaVenda(exec, tenantId, vendaId));
         const cat = categoriaParaContaNova(n.categoria_id, padroes, chaveDaContaDaVenda(tabela));
         if (cat) n.categoria_id = cat;
       }

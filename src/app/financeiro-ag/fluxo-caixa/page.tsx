@@ -159,6 +159,8 @@ export default function FluxoCaixaPage() {
   // Conta previsão padrão da agência (06/11/2026, E7): o que está em aberto
   // sem conta prevista entra nela no fluxo por conta.
   const [contaPrevisaoPadraoId, setContaPrevisaoPadraoId] = useState<string | null>(null);
+  // Conta previsão de cada empresa que escolheu a própria (E7, frente D).
+  const [contaPrevisaoPorEmpresa, setContaPrevisaoPorEmpresa] = useState<Record<string, string> | null>(null);
   // E7, G3: grade conta × dia (saldo no fim do dia ou movimento do dia).
   const [medidaGrade, setMedidaGrade] = useState<MedidaDaGrade>('saldo');
   const [contaDoDetalhe, setContaDoDetalhe] = useState<string | null>(null);
@@ -195,6 +197,7 @@ export default function FluxoCaixaPage() {
         fetch('/api/config/financeiro/conta-previsao').then(r => (r.ok ? r.json() : null)).catch(() => null),
       ]);
       setContaPrevisaoPadraoId(typeof previsao?.conta_previsao_padrao === 'string' && previsao.conta_previsao_padrao ? previsao.conta_previsao_padrao : null);
+      setContaPrevisaoPorEmpresa(previsao?.por_empresa && typeof previsao.por_empresa === 'object' ? previsao.por_empresa as Record<string, string> : null);
       // Várias empresas (E7): o rateado entre empresas entra só com a parte das
       // empresas marcadas. Uma empresa só: as listas como vieram.
       const visiveis = await lerEmpresasVisiveis();
@@ -236,7 +239,8 @@ export default function FluxoCaixaPage() {
     contaId: contaEscolhida?.id ?? null,
     caixaGeralId: contasBancarias.find(c => c.nome === 'Caixa Geral')?.id ?? null,
     contaPrevisaoPadraoId,
-  }), [contaEscolhida, contasBancarias, contaPrevisaoPadraoId]);
+    contaPrevisaoPorEmpresa,
+  }), [contaEscolhida, contasBancarias, contaPrevisaoPadraoId, contaPrevisaoPorEmpresa]);
 
   // Todas as contas: exatamente o caderno de sempre (mesma chamada).
   const { lancamentos, semConta } = useMemo(() => {
@@ -276,9 +280,9 @@ export default function FluxoCaixaPage() {
   const grade = useMemo(
     () => gradeContaPorDia({
       receber: contasReceber, pagar: contasPagar, folha: eventosFolha, contas: contasBancarias,
-      caixaGeralId: filtro.caixaGeralId, contaPrevisaoPadraoId, periodo, hoje,
+      caixaGeralId: filtro.caixaGeralId, contaPrevisaoPadraoId, contaPrevisaoPorEmpresa, periodo, hoje,
     }),
-    [contasReceber, contasPagar, eventosFolha, contasBancarias, filtro.caixaGeralId, contaPrevisaoPadraoId, periodo, hoje],
+    [contasReceber, contasPagar, eventosFolha, contasBancarias, filtro.caixaGeralId, contaPrevisaoPadraoId, contaPrevisaoPorEmpresa, periodo, hoje],
   );
 
   function abrirDiaDaConta(l: LinhaDaGrade, dia: string, i: number) {

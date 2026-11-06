@@ -68,6 +68,13 @@ export interface CrudOpcoes {
    */
   validarCadastro?: (item: Record<string, unknown>) => string | null;
   /**
+   * Conferência que precisa do banco (E7, frente D, 06/11/2026): roda no
+   * POST depois de validarCadastro, com a agência. Devolve a recusa (400) ou
+   * null; pode ajustar o item (a moeda normalizada pelo catálogo da agência).
+   * Usada para a moeda cadastrada e os campos personalizados obrigatórios.
+   */
+  conferirNoServidor?: (tenantId: string, item: Record<string, unknown>) => Promise<string | null>;
+  /**
    * Permissão por conta bancária (05/11/2026): quem tem contas liberadas por
    * perfil de acesso ou pela restrição própria não lê linhas de outras
    * contas. Sem restrição (o padrão), a leitura é a mesma de antes.
@@ -292,6 +299,8 @@ export function createCrudHandlers(tableName: string, indexColumns: string[] = [
       opcoes.normalizarCadastro?.(item as Record<string, unknown>);
       const invalido = opcoes.validarCadastro?.(item as Record<string, unknown>) ?? null;
       if (invalido) return NextResponse.json({ error: invalido }, { status: 400 });
+      const recusaServidor = opcoes.conferirNoServidor ? await opcoes.conferirNoServidor(tenantId, item as Record<string, unknown>) : null;
+      if (recusaServidor) return NextResponse.json({ error: recusaServidor }, { status: 400 });
       const recusaEmpresa = await guardaDeEmpresaNaGravacao(opcoes, tenantId, item.id, item as Record<string, unknown>);
       if (recusaEmpresa) return recusaEmpresa;
 

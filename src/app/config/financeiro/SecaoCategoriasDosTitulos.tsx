@@ -7,6 +7,7 @@
  * comissão. Sem escolha, a conta nasce sem categoria, como antes. Mudar aqui
  * vale para as contas novas; as já gravadas ficam como estão.
  */
+import { naEmpresa } from '@/components/fin/EmpresaDaConfiguracao';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -32,7 +33,7 @@ export function SecaoCategoriasDosTitulos() {
     let vivo = true;
     Promise.all([
       loadEntities<PlanoContas>('plano-contas'),
-      fetch('/api/config/financeiro/categorias-dos-titulos', { cache: 'no-store' }).then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))),
+      fetch(naEmpresa('/api/config/financeiro/categorias-dos-titulos'), { cache: 'no-store' }).then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))),
     ]).then(([p, cfg]) => {
       if (!vivo) return;
       setPlano(p);
@@ -50,7 +51,7 @@ export function SecaoCategoriasDosTitulos() {
     if (salvando) return;
     setSalvando(true);
     try {
-      const r = await fetch('/api/config/financeiro/categorias-dos-titulos', {
+      const r = await fetch(naEmpresa('/api/config/financeiro/categorias-dos-titulos'), {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ categorias: escolha }),
       });
       const corpo = await r.json().catch(() => ({}));

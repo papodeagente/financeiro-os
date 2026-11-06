@@ -1,5 +1,6 @@
 'use client';
 
+import { useMoedas } from './useMoedas';
 import * as React from 'react';
 import { Check, Clock3 } from 'lucide-react';
 
@@ -63,7 +64,9 @@ export function CampoCambio({
   moeda, valor, carimbo, onChange, rotulo = 'Câmbio', ajuda, erro, obrigatorio = false, lado = 'venda',
   cotacoes, fontes, agora,
 }: CampoCambioProps) {
-  const m = moedaDe(moeda);
+  // Catálogo da agência (E7): moeda cadastrada por ela também pede câmbio.
+  const { moedas } = useMoedas();
+  const m = moedaDe(moeda, moedas);
   const lido = useCotacoes();
   const lista = cotacoes ?? lido.painel?.cotacoes ?? [];
   const estadosDasFontes = fontes ?? lido.painel?.fontes ?? [];

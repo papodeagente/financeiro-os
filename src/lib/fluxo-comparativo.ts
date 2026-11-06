@@ -52,6 +52,11 @@ export interface FiltroDeConta {
    * conta prevista nem conta escolhida é esperado nela. Ausente = como antes.
    */
   contaPrevisaoPadraoId?: string | null;
+  /**
+   * Conta previsão de cada empresa que escolheu a própria (E7, frente D):
+   * o título da empresa usa a dela; sem escolha própria, a padrão acima.
+   */
+  contaPrevisaoPorEmpresa?: Readonly<Record<string, string>> | null;
 }
 
 /** O que receber e pagar têm em comum para achar a conta. */
@@ -80,13 +85,16 @@ function movimentou(t: Titulo, lado: 'receber' | 'pagar'): number {
  */
 export function contaDoTitulo(
   t: Titulo, lado: 'receber' | 'pagar', caixaGeralId?: string | null, contaPrevisaoPadraoId?: string | null,
+  contaPrevisaoPorEmpresa?: Readonly<Record<string, string>> | null,
 ): string | null {
   const escolhida = String(t.conta_bancaria_id ?? '').trim();
   if (movimentou(t, lado) > 0) return escolhida || caixaGeralId || null;
   const prevista = String(t.conta_previsao_id ?? '').trim();
   if (prevista) return prevista;
   if (escolhida) return escolhida;
-  return String(contaPrevisaoPadraoId ?? '').trim() || null;
+  const empresa = String((t as { empresa_id?: unknown }).empresa_id ?? '').trim();
+  const daEmpresa = empresa && contaPrevisaoPorEmpresa ? String(contaPrevisaoPorEmpresa[empresa] ?? '').trim() : '';
+  return daEmpresa || String(contaPrevisaoPadraoId ?? '').trim() || null;
 }
 
 export interface TitulosDaConta {
@@ -129,7 +137,7 @@ export function titulosDaConta(entrada: {
   let valor = 0;
   const filtrar = <T extends Titulo>(lista: readonly T[], lado: 'receber' | 'pagar'): T[] => lista.filter(t => {
     if (t.status === 'CANCELADO') return false;
-    const conta = contaDoTitulo(t, lado, filtro.caixaGeralId, filtro.contaPrevisaoPadraoId);
+    const conta = contaDoTitulo(t, lado, filtro.caixaGeralId, filtro.contaPrevisaoPadraoId, filtro.contaPrevisaoPorEmpresa);
     if (conta === null) {
       const aberto = emAberto(t, lado);
       if (aberto > 0) { quantidade++; valor = round2(valor + aberto); }
@@ -369,6 +377,8 @@ export function gradeContaPorDia(entrada: {
   caixaGeralId?: string | null;
   /** Conta previsão padrão da agência: o que está em aberto sem conta prevista entra nela. */
   contaPrevisaoPadraoId?: string | null;
+  /** A de cada empresa que escolheu a própria (E7, frente D). */
+  contaPrevisaoPorEmpresa?: Readonly<Record<string, string>> | null;
   periodo: Periodo;
   hoje: string;
 }): GradeContaDia {
@@ -386,11 +396,11 @@ export function gradeContaPorDia(entrada: {
   const chaveDe = (conta: string | null) => (conta === null ? SEM_CONTA : conhecidas.has(conta) ? conta : OUTRAS_CONTAS);
   for (const cr of entrada.receber) {
     if (cr.status === 'CANCELADO') continue;
-    grupo(chaveDe(contaDoTitulo(cr, 'receber', entrada.caixaGeralId, entrada.contaPrevisaoPadraoId))).receber.push(cr);
+    grupo(chaveDe(contaDoTitulo(cr, 'receber', entrada.caixaGeralId, entrada.contaPrevisaoPadraoId, entrada.contaPrevisaoPorEmpresa))).receber.push(cr);
   }
   for (const cp of entrada.pagar) {
     if (cp.status === 'CANCELADO') continue;
-    grupo(chaveDe(contaDoTitulo(cp, 'pagar', entrada.caixaGeralId, entrada.contaPrevisaoPadraoId))).pagar.push(cp);
+    grupo(chaveDe(contaDoTitulo(cp, 'pagar', entrada.caixaGeralId, entrada.contaPrevisaoPadraoId, entrada.contaPrevisaoPorEmpresa))).pagar.push(cp);
   }
 
   const montar = (id: string, nome: string, tipo: LinhaDaGrade['tipo'], saldoInicialDaConta: number, folha: readonly EventoDeFolha[]): LinhaDaGrade => {

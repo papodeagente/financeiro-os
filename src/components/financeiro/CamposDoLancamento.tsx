@@ -17,7 +17,8 @@ import { CalendarClock, Lock } from 'lucide-react';
 import { Field } from '@/components/fin/Field';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MOEDAS } from '@/lib/cambio';
+import { useMoedas } from '@/components/fin/useMoedas';
+import { moedasParaEscolher } from '@/lib/moedas';
 import { contasParaEscolher } from '@/lib/contas-bancarias-regras';
 import { ErroAoGravar, enderecoDaVenda } from '@/lib/gravar-registro';
 import { toast } from '@/lib/toast';
@@ -167,7 +168,9 @@ export function CampoMoeda({ valor, onChange, travada, ajuda }: {
   travada?: boolean;
   ajuda?: string;
 }) {
-  const atual = MOEDAS.find(m => m.codigo === valor);
+  // Catálogo da agência (E7): as oito do sistema e as que ela cadastrou.
+  const { moedas } = useMoedas();
+  const atual = moedas.find(m => m.codigo === valor);
   const rotulo = (m: { codigo: string; nome: string }) => `${m.nome} (${m.codigo})`;
   return (
     <Field
@@ -180,7 +183,7 @@ export function CampoMoeda({ valor, onChange, travada, ajuda }: {
             <SelectValue>{() => (atual ? rotulo(atual) : valor || 'Real (BRL)')}</SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {MOEDAS.map(m => (
+            {moedasParaEscolher(moedas, valor).map(m => (
               <SelectItem key={m.codigo} value={m.codigo} className="fin-t-body">{rotulo(m)}</SelectItem>
             ))}
           </SelectContent>

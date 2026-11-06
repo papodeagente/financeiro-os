@@ -11,6 +11,7 @@ import { PERIODO_SCHEMA_SQL } from './periodo-fechado';
 import { COBRANCA_SCHEMA_SQL } from './cobranca/schema';
 import { MIGRACAO_SCHEMA_SQL } from './migracao/schema';
 import { CAMBIO_SCHEMA_SQL } from './cambio-servidor';
+import { MOEDAS_SCHEMA_SQL } from './moedas-servidor';
 import { VENDA_SCHEMA_SQL } from './venda-schema';
 import { FORNECEDOR_SCHEMA_SQL } from './fornecedor-schema';
 import { NOTAS_REGRAS_SCHEMA_SQL } from './nota-regras-schema';
@@ -1567,6 +1568,9 @@ async function executarInitDB() {
   // fontes, cofre do Super Admin, variações cambiais e a trava da moeda da
   // conta bancária. Antes do razão e da auditoria.
   await pool.query(CAMBIO_SCHEMA_SQL);
+  // Cadastro de moedas da agência (06/11/2026, E7 frente D): as que ela
+  // acrescenta às oito do sistema. Cadastro: entra na auditoria.
+  await pool.query(MOEDAS_SCHEMA_SQL);
   // Venda completa (05/11/2026, E5): produtos, passageiros, componentes de
   // receita, pagamentos por forma, pendências e o histórico da venda. Antes
   // do razão e da auditoria (o histórico fica fora do gatilho).

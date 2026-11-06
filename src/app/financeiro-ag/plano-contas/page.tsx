@@ -1,5 +1,6 @@
 'use client';
 
+import { planoPadraoComIdsNovos } from '@/lib/assistente-inicial';
 import { useEffect, useMemo, useState } from 'react';
 import { GitMerge, ListTree, Pencil, Plus, Trash2 } from 'lucide-react';
 
@@ -169,9 +170,9 @@ export default function PlanoContasPage() {
 
   async function handleCarregarPadrao() {
     setLoadingPadrao(true);
-    const padrao = getPlanoContasPadrao();
-    for (const conta of padrao) {
-      const novaConta: PlanoContas = { ...conta, id: generateId() };
+    // Ids novos com a categoria-mãe ligada pelo id novo (E7, frente D): antes a
+    // mãe ficava apontando para o número do plano padrão, que não existe.
+    for (const novaConta of planoPadraoComIdsNovos(getPlanoContasPadrao(), generateId)) {
       await saveEntity('plano-contas', novaConta);
     }
     setLoadingPadrao(false);

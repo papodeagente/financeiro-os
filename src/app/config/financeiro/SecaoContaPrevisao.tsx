@@ -6,6 +6,7 @@
  * qual: entra no fluxo de caixa por conta e aparece como sugestão no
  * lançamento. Só contas ativas.
  */
+import { naEmpresa } from '@/components/fin/EmpresaDaConfiguracao';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -31,7 +32,7 @@ export function SecaoContaPrevisao() {
     let vivo = true;
     Promise.all([
       fetch('/api/contas-bancarias', { cache: 'no-store' }).then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))),
-      fetch('/api/config/financeiro/conta-previsao', { cache: 'no-store' }).then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))),
+      fetch(naEmpresa('/api/config/financeiro/conta-previsao'), { cache: 'no-store' }).then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))),
     ]).then(([lista, cfg]) => {
       if (!vivo) return;
       setContas(Array.isArray(lista)
@@ -49,7 +50,7 @@ export function SecaoContaPrevisao() {
     if (salvando) return;
     setSalvando(true);
     try {
-      const r = await fetch('/api/config/financeiro/conta-previsao', {
+      const r = await fetch(naEmpresa('/api/config/financeiro/conta-previsao'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ conta_previsao_padrao: escolhida || null }),

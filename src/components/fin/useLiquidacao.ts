@@ -20,6 +20,7 @@ import { formaEhCartao, formaEhCheque } from '@/lib/baixa-meio';
 import { contasParaEscolher } from '@/lib/contas-bancarias-regras';
 import type { BlocoDeLiquidacaoProps, ContaOpcao } from './BlocoDeLiquidacao';
 import { useFormasDePagamento } from './useFormasDePagamento';
+import { useMoedas } from './useMoedas';
 import { cambioDaLiquidacao, moedaDe, valorNaMoedaDoTitulo, type CarimboDoCambio } from '@/lib/cambio';
 
 type Titulo = Record<string, unknown> & { id: string };
@@ -73,6 +74,7 @@ export function useLiquidacao(
   // Câmbio do pagamento, só para conta lançada em moeda (05/11/2026, E6).
   const [cambio, setCambio] = useState(0);
   const [cambioCarimbo, setCambioCarimbo] = useState<CarimboDoCambio | null>(null);
+  const { moedas } = useMoedas();
   // Cheque e cartão (06/11/2026, E7): nunca o número completo do cartão.
   const [cheque, setCheque] = useState('');
   const [ultimos4, setUltimos4] = useState('');
@@ -81,7 +83,7 @@ export function useLiquidacao(
   useEffect(() => {
     let vivo = true;
     loadEntities<{ id: string; nome?: string; moeda?: string }>('contas-bancarias')
-      .then(l => { if (vivo) setContas(l.map(c => ({ id: c.id, nome: c.nome || 'Conta', moeda: moedaDe(c.moeda), ativo: (c as { ativo?: unknown }).ativo }))); })
+      .then(l => { if (vivo) setContas(l.map(c => ({ id: c.id, nome: c.nome || 'Conta', moeda: String(c.moeda ?? ''), ativo: (c as { ativo?: unknown }).ativo }))); })
       .catch(() => undefined);
     fetch('/api/config/financeiro')
       .then(r => (r.ok ? r.json() : null))
@@ -125,12 +127,13 @@ export function useLiquidacao(
   const ds = desconto ?? sugeridos.desconto_antecipacao;
 
   // Câmbio: a mesma conta que o servidor faz (cambioDaLiquidacao).
-  const moedaConta = moedaDe(contas.find(c => c.id === contaId)?.moeda);
-  const naMoeda = titulo && t ? valorNaMoedaDoTitulo(titulo, baseDosEncargos(t)) : null;
+  // Catálogo da agência (E7): moeda cadastrada por ela vale como as do sistema.
+  const moedaConta = moedaDe(contas.find(c => c.id === contaId)?.moeda, moedas);
+  const naMoeda = titulo && t ? valorNaMoedaDoTitulo(titulo, baseDosEncargos(t), moedas) : null;
   const cambioCalc = titulo && t && naMoeda
     ? cambioDaLiquidacao({
       tabela, titulo, base_reais: baseDosEncargos(t), valor_baixado: t.valor_baixado,
-      valor: valorPago, juros: j, multa: m, desconto: ds, cambio_pago: cambio, moeda_conta: moedaConta,
+      valor: valorPago, juros: j, multa: m, desconto: ds, cambio_pago: cambio, moeda_conta: moedaConta, catalogo: moedas,
     })
     : null;
   const variacao = cambioCalc?.variacao.variacao ?? 0;

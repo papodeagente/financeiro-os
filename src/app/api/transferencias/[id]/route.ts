@@ -1,3 +1,4 @@
+import { lerCatalogoDaAgencia } from '@/lib/moedas-servidor';
 import { recusaFinanceira, recusaExclusao, respostaPeriodoFechado } from '@/lib/guarda-rota';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
@@ -69,11 +70,13 @@ async function prepararMoedas(tenantId: string, item: Registro, exec: ExecutorSQ
     `SELECT id, data->>'moeda' AS moeda FROM contas_bancarias WHERE tenant_id = $1 AND id IN ($2, $3)`,
     [tenantId, origem, destino],
   );
-  const moedaDaConta = (id: string | null) => moedaDe(rows.find(r => r.id === id)?.moeda);
+  // Catálogo da agência (E7, frente D): moedas cadastradas por ela também valem.
+  const catalogo = await lerCatalogoDaAgencia(exec, tenantId);
+  const moedaDaConta = (id: string | null) => moedaDe(rows.find(r => r.id === id)?.moeda, catalogo);
   const plano = planoDaTransferencia({
     valor: num(item.valor), moeda_origem: moedaDaConta(origem), moeda_destino: moedaDaConta(destino),
     cambio: num(item.cambio), tarifa: num(item.tarifa),
-  });
+  }, catalogo);
   if (plano.erros.length) return plano.erros[0];
   item.moeda_origem = plano.moeda_origem;
   item.moeda_destino = plano.moeda_destino;

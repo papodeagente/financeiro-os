@@ -44,7 +44,7 @@ export function naEmpresa(url: string): string {
 
 /** O que cada seção leva na cópia, por extenso, para a confirmação. */
 const O_QUE_COPIA: Record<SecaoPorEmpresa, string> = {
-  financeiro: 'juros, multa, tolerância, desconto por antecipação e as categorias dos encargos',
+  financeiro: 'juros, multa, tolerância, desconto por antecipação, as categorias dos encargos e das contas geradas e os campos personalizados (a conta previsão fica: é da empresa)',
   cobranca: 'provedor padrão, tipo de cobrança, encargos e a régua de lembretes',
   vendas: 'quais componentes contam como receita',
   notas: 'o enquadramento do serviço, alíquota, regime e série. A conexão com o emissor e o certificado continuam os da empresa',
