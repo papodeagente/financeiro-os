@@ -31,12 +31,15 @@ import type { NotaFiscal, TomadorNota } from './nfse-tipos';
 import { carregarVenda, lerConfigVenda } from './venda-servidor';
 import type { ParteDaVenda } from './venda-modelo';
 import { listarRetencoes } from './nota-retencoes-servidor';
-import { TRIBUTOS_RETIDOS, type RetencaoDoCliente } from './nota-retencoes';
+import { RETENCAO_MINIMA_VAZIA, TRIBUTOS_RETIDOS, normalizarRetencaoMinima, type RetencaoDoCliente, type RetencaoMinima } from './nota-retencoes';
 import {
-  ROTULO_DESTINO, analisarVenda, assinaturaDaPrevia, combinacaoDaRegra, normalizarRegra, notaExistenteDe,
-  type AnaliseDaVenda, type DestinoDaNota, type EstadoDaVenda, type LinhaDaGrade, type NotaExistente, type NotaPrevista,
-  type RegraDaNota, type SugestaoDeCancelamento,
+  DATAS_DA_NOTA, ROTULO_DESTINO, analisarVenda, assinaturaDaPrevia, combinacaoDaRegra, dataDaNota, normalizarRegra,
+  normalizarTributosAproximados, notaExistenteDe,
+  type AnaliseDaVenda, type DataDaNota, type DestinoDaNota, type EstadoDaVenda, type LinhaDaGrade, type NotaExistente, type NotaPrevista,
+  type OpcoesDaAnalise, type RegraDaNota, type SugestaoDeCancelamento, type TributosAproximados,
 } from './nota-regras';
+import { TIPO_DO_V1 } from './venda-modelo-v1';
+import type { TipoProduto } from './venda-modelo';
 
 // ============================================================
 // Erros e configuração
@@ -54,16 +57,34 @@ export interface ConfigNotas {
   automatico: boolean;
   /** Pedir ao emissor que mande a nota ao pagante por e-mail. */
   enviar_ao_cliente: boolean;
+  /** Data da nota: o dia, a data da venda ou a do embarque (E7). Padrão: o dia (como antes). */
+  data_da_nota: DataDaNota;
+  /** Dispensa de retenção pequena (E7). Vazio = sem dispensa. Confirmar com o contador. */
+  retencao_minima: RetencaoMinima;
+  /** Texto dos tributos aproximados (Lei 12.741) com os percentuais da agência (E7). */
+  tributos_aproximados: TributosAproximados;
 }
 
-export const CONFIG_NOTAS_PADRAO: ConfigNotas = { automatico: false, enviar_ao_cliente: true };
+export const CONFIG_NOTAS_PADRAO: ConfigNotas = {
+  automatico: false, enviar_ao_cliente: true, data_da_nota: 'DIA',
+  retencao_minima: RETENCAO_MINIMA_VAZIA,
+  tributos_aproximados: { ligado: false, federal: null, estadual: null, municipal: null, texto: '' },
+};
 
 export function normalizarConfigNotas(v: unknown): ConfigNotas {
   const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
   return {
     automatico: o.automatico === true,
     enviar_ao_cliente: o.enviar_ao_cliente === undefined ? CONFIG_NOTAS_PADRAO.enviar_ao_cliente : o.enviar_ao_cliente === true,
+    data_da_nota: (DATAS_DA_NOTA as readonly string[]).includes(String(o.data_da_nota)) ? o.data_da_nota as DataDaNota : 'DIA',
+    retencao_minima: normalizarRetencaoMinima(o.retencao_minima),
+    tributos_aproximados: normalizarTributosAproximados(o.tributos_aproximados),
   };
+}
+
+/** As opções da análise que vêm da configuração. */
+export function opcoesDaConfig(c: ConfigNotas): OpcoesDaAnalise {
+  return { retencao_minima: c.retencao_minima, tributos_aproximados: c.tributos_aproximados };
 }
 
 export async function lerConfigNotas(exec: ExecutorSQL, tenantId: string): Promise<ConfigNotas> {
@@ -75,7 +96,9 @@ export async function lerConfigNotas(exec: ExecutorSQL, tenantId: string): Promi
 }
 
 export async function gravarConfigNotas(exec: ExecutorSQL, tenantId: string, v: unknown): Promise<ConfigNotas> {
-  const c = normalizarConfigNotas(v);
+  // O que não veio continua como estava (a tela pode mandar só uma parte).
+  const atual = await lerConfigNotas(exec, tenantId);
+  const c = normalizarConfigNotas({ ...atual, ...(v && typeof v === 'object' ? v as Record<string, unknown> : {}) });
   await gravarChaveDaAgencia(exec, tenantId, 'notas_config', c);
   return c;
 }
@@ -182,6 +205,8 @@ export interface ContextoDaAnalise {
   regras?: RegraDaNota[];
   retencoes?: RetencaoDoCliente[];
   estado?: EstadoDaVenda | null;
+  /** Dispensa de retenção e tributos aproximados (sem: lidos da configuração). */
+  opcoes?: OpcoesDaAnalise;
 }
 
 export interface AnaliseNoBanco extends AnaliseDaVenda {
@@ -199,8 +224,9 @@ export async function analisarVendaNoBanco(exec: ExecutorSQL, tenantId: string, 
   const retencoes = ctx.retencoes ?? await listarRetencoes(exec, tenantId);
   const config = await lerConfigVenda(exec, tenantId);
   const notas = await notasDaVenda(exec, tenantId, vendaId);
+  const opcoes = ctx.opcoes ?? opcoesDaConfig(await lerConfigNotas(exec, tenantId));
   const analise = analisarVenda({
-    venda: carregada.venda, regras, notas, retencoes, config_receita: config.receita, venda_cancelada, estado: ctx.estado ?? null,
+    venda: carregada.venda, regras, notas, retencoes, config_receita: config.receita, venda_cancelada, estado: ctx.estado ?? null, opcoes,
   });
   return { ...analise, venda_id: vendaId, venda_cancelada };
 }
@@ -212,44 +238,178 @@ export async function analisarVendaNoBanco(exec: ExecutorSQL, tenantId: string, 
 export interface FiltroDaGrade {
   de: string;
   ate: string;
+  /** O período vale para a data da venda (padrão) ou do embarque (E7). */
+  data_de?: 'VENDA' | 'EMBARQUE';
   /** Só linhas com algo a fazer (a emitir, complementar ou acima). */
   so_pendentes?: boolean;
   busca?: string;
+  /** Filtros da E7: tipo de produto, vendedor, fornecedor ou representante. */
+  tipo?: TipoProduto | null;
+  vendedor_id?: string;
+  /** Casa com o fornecedor OU o representante do produto. */
+  fornecedor_id?: string;
+  /** Paginação por venda, no lugar do corte de antes. */
+  pagina?: number;
+  por_pagina?: number;
 }
 
 export interface GradeDeNotas {
   linhas: LinhaDaGrade[];
   cancelar: SugestaoDeCancelamento[];
+  /** Totais desta página. */
   totais: { receita: number; valor_notas: number; saldo: number; a_emitir: number };
-  /** Vendas do período que ficaram de fora pelo limite. */
+  /** Sempre 0 desde a paginação (E7); mantido para quem lia o campo. */
   vendas_fora: number;
   tem_regras: boolean;
+  pagina: number;
+  por_pagina: number;
+  /** Vendas no filtro (todas as páginas). */
+  total_vendas: number;
+  paginas: number;
+  /** A data que a nota vai levar pela configuração (para o aviso da tela). */
+  data_da_nota: DataDaNota;
+  /** Opções dos filtros de vendedor e fornecedor/representante (do período). */
+  opcoes: Awaited<ReturnType<typeof opcoesDaGrade>>;
 }
 
+/** Vendas por página da grade. Cada venda é analisada inteira. */
+export const VENDAS_POR_PAGINA_NA_GRADE = 50;
+/** @deprecated o corte virou paginação (E7); fica para quem importava. */
 export const LIMITE_DE_VENDAS_NA_GRADE = 300;
 
-export async function gradeDeNotas(exec: ExecutorSQL, tenantId: string, f: FiltroDaGrade): Promise<GradeDeNotas> {
+/** Tipos do item de antes que viram `tipo` no modelo (filtro por tipo nas vendas de antes). */
+function tiposDeAntes(tipo: TipoProduto): string[] {
+  return Object.entries(TIPO_DO_V1).filter(([, t]) => t === tipo).map(([k]) => k);
+}
+
+const DATA_DA_VENDA_SQL = `COALESCE(NULLIF(v.data->>'data_venda', ''), to_char(v.created_at, 'YYYY-MM-DD'))`;
+
+/**
+ * As vendas do filtro, uma página. O filtro fica no banco (período pela
+ * venda ou pelo embarque, tipo, vendedor, fornecedor/representante, busca);
+ * a grade ainda confere linha a linha, porque uma venda pode ter um produto
+ * que casa e outros que não.
+ */
+export async function vendasDaGrade(exec: ExecutorSQL, tenantId: string, f: FiltroDaGrade): Promise<{ ids: string[]; total: number; pagina: number; por_pagina: number }> {
+  const args: unknown[] = [tenantId, f.de, f.ate];
+  const cond: string[] = ['v.tenant_id = $1'];
+  const add = (sql: (n: string) => string, valor: unknown) => { args.push(valor); cond.push(sql(`$${args.length}`)); };
+  if (f.data_de === 'EMBARQUE') {
+    cond.push(`(EXISTS (SELECT 1 FROM venda_produtos p WHERE p.tenant_id = v.tenant_id AND p.venda_id = v.id AND p.cancelado_em IS NULL AND to_char(p.data_inicio, 'YYYY-MM-DD') BETWEEN $2 AND $3)
+      OR (NOT EXISTS (SELECT 1 FROM vendas_modelo m WHERE m.tenant_id = v.tenant_id AND m.venda_id = v.id AND m.versao_modelo = 2)
+          AND EXISTS (SELECT 1 FROM itens_venda i WHERE i.tenant_id = v.tenant_id AND i.venda_id = v.id AND NULLIF(i.data->>'data_inicio', '') BETWEEN $2 AND $3)))`);
+  } else {
+    cond.push(`${DATA_DA_VENDA_SQL} BETWEEN $2 AND $3`);
+  }
+  if (f.vendedor_id) {
+    add(n => `(v.vendedor_id = ${n} OR v.data->>'vendedor_id' = ${n}
+      OR EXISTS (SELECT 1 FROM vendas_modelo m WHERE m.tenant_id = v.tenant_id AND m.venda_id = v.id AND m.vendedor->>'id' = ${n}))`, f.vendedor_id);
+  }
+  if (f.fornecedor_id) {
+    add(n => `(EXISTS (SELECT 1 FROM venda_produtos p WHERE p.tenant_id = v.tenant_id AND p.venda_id = v.id
+                 AND ${n} IN (p.fornecedor_id, p.representante_id, NULLIF(p.fornecedor_externo, ''), NULLIF(p.representante_externo, '')))
+      OR EXISTS (SELECT 1 FROM itens_venda i WHERE i.tenant_id = v.tenant_id AND i.venda_id = v.id AND i.fornecedor_id = ${n}))`, f.fornecedor_id);
+  }
+  if (f.tipo) {
+    args.push(f.tipo);
+    const nTipo = `$${args.length}`;
+    args.push(tiposDeAntes(f.tipo));
+    const nAntes = `$${args.length}`;
+    cond.push(`(EXISTS (SELECT 1 FROM venda_produtos p WHERE p.tenant_id = v.tenant_id AND p.venda_id = v.id AND p.tipo = ${nTipo})
+      OR EXISTS (SELECT 1 FROM itens_venda i WHERE i.tenant_id = v.tenant_id AND i.venda_id = v.id AND COALESCE(i.data->>'tipo', 'OUTROS') = ANY(${nAntes}::text[])))`);
+  }
+  const busca = (f.busca ?? '').trim();
+  if (busca) {
+    add(n => `(v.id ILIKE ${n} OR v.data::text ILIKE ${n}
+      OR EXISTS (SELECT 1 FROM clientes c WHERE c.tenant_id = v.tenant_id AND c.id = v.cliente_id AND c.nome ILIKE ${n})
+      OR EXISTS (SELECT 1 FROM venda_produtos p WHERE p.tenant_id = v.tenant_id AND p.venda_id = v.id AND p.descricao ILIKE ${n})
+      OR EXISTS (SELECT 1 FROM itens_venda i WHERE i.tenant_id = v.tenant_id AND i.venda_id = v.id AND i.data->>'descricao' ILIKE ${n}))`,
+    `%${busca.replace(/[%_\\]/g, m => `\\${m}`)}%`);
+  }
+  const por_pagina = Math.min(200, Math.max(1, Math.round(Number(f.por_pagina) || VENDAS_POR_PAGINA_NA_GRADE)));
+  const pagina = Math.max(1, Math.round(Number(f.pagina) || 1));
   const { rows } = await exec.query(
-    `SELECT id FROM vendas_crm
-      WHERE tenant_id = $1
-        AND COALESCE(NULLIF(data->>'data_venda', ''), to_char(created_at, 'YYYY-MM-DD')) BETWEEN $2 AND $3
-      ORDER BY COALESCE(NULLIF(data->>'data_venda', ''), to_char(created_at, 'YYYY-MM-DD')) DESC, id
-      LIMIT $4`,
-    [tenantId, f.de, f.ate, LIMITE_DE_VENDAS_NA_GRADE + 1],
+    `SELECT v.id, COUNT(*) OVER () AS total_linhas FROM vendas_crm v
+      WHERE ${cond.join(' AND ')}
+      ORDER BY ${DATA_DA_VENDA_SQL} DESC, v.id
+      LIMIT ${por_pagina} OFFSET ${(pagina - 1) * por_pagina}`,
+    args,
   );
-  const ids = rows.map(r => txt(r.id)).slice(0, LIMITE_DE_VENDAS_NA_GRADE);
+  let total = Number(rows[0]?.total_linhas ?? 0);
+  if (!rows.length && pagina > 1) {
+    // Página além do fim: conta de novo para a tela voltar à última.
+    const { rows: c } = await exec.query(`SELECT COUNT(*)::int AS n FROM vendas_crm v WHERE ${cond.join(' AND ')}`, args);
+    total = Number(c[0]?.n ?? 0);
+  }
+  return { ids: rows.map(r => txt(r.id)), total, pagina, por_pagina };
+}
+
+/**
+ * As opções dos filtros de vendedor e de fornecedor/representante: só quem
+ * aparece nas vendas do período (pela data da venda), para a lista não trazer
+ * o cadastro inteiro.
+ */
+export async function opcoesDaGrade(exec: ExecutorSQL, tenantId: string, f: Pick<FiltroDaGrade, 'de' | 'ate'>): Promise<{ vendedores: Array<{ id: string; nome: string }>; fornecedores: Array<{ id: string; nome: string }> }> {
+  const periodo = `v.tenant_id = $1 AND ${DATA_DA_VENDA_SQL} BETWEEN $2 AND $3`;
+  const vazio = { rows: [] as Array<Record<string, unknown>> };
+  const { rows: vs } = await exec.query(
+    `SELECT DISTINCT COALESCE(NULLIF(v.vendedor_id, ''), v.data->>'vendedor_id') AS id,
+            COALESCE(NULLIF(u.nome, ''), NULLIF(m.vendedor->>'nome', ''), NULLIF(v.data->>'vendedor_nome', ''), 'Vendedor sem nome') AS nome
+       FROM vendas_crm v
+       LEFT JOIN usuarios u ON u.id = COALESCE(NULLIF(v.vendedor_id, ''), v.data->>'vendedor_id')
+       LEFT JOIN vendas_modelo m ON m.tenant_id = v.tenant_id AND m.venda_id = v.id
+      WHERE ${periodo} AND COALESCE(NULLIF(v.vendedor_id, ''), v.data->>'vendedor_id', '') <> ''
+      ORDER BY 2 LIMIT 300`,
+    [tenantId, f.de, f.ate],
+  ).catch(() => vazio);
+  const { rows: fs } = await exec.query(
+    `SELECT id, MIN(nome) AS nome FROM (
+       SELECT p.fornecedor_id AS id, NULLIF(p.fornecedor_nome, '') AS nome FROM venda_produtos p JOIN vendas_crm v ON v.tenant_id = p.tenant_id AND v.id = p.venda_id
+        WHERE ${periodo} AND p.fornecedor_id <> ''
+       UNION ALL
+       SELECT p.representante_id, NULLIF(p.representante_nome, '') FROM venda_produtos p JOIN vendas_crm v ON v.tenant_id = p.tenant_id AND v.id = p.venda_id
+        WHERE ${periodo} AND p.representante_id <> ''
+       UNION ALL
+       SELECT i.fornecedor_id, NULLIF(f.nome_fantasia, '') FROM itens_venda i JOIN vendas_crm v ON v.tenant_id = i.tenant_id AND v.id = i.venda_id
+         LEFT JOIN fornecedores_crm f ON f.tenant_id = i.tenant_id AND f.id = i.fornecedor_id
+        WHERE ${periodo} AND i.fornecedor_id <> ''
+     ) x GROUP BY id ORDER BY 2 NULLS LAST LIMIT 300`,
+    [tenantId, f.de, f.ate],
+  ).catch(() => vazio);
+  return {
+    vendedores: vs.map(r => ({ id: txt(r.id), nome: txt(r.nome) })).filter(x => x.id),
+    fornecedores: fs.map(r => ({ id: txt(r.id), nome: txt(r.nome) || 'Fornecedor sem nome' })).filter(x => x.id),
+  };
+}
+
+/** A linha da grade casa com os filtros por produto? */
+export function linhaNoFiltro(l: LinhaDaGrade, f: FiltroDaGrade): boolean {
+  if (f.data_de === 'EMBARQUE' && !(l.data_embarque && l.data_embarque >= f.de && l.data_embarque <= f.ate)) return false;
+  if (f.tipo && l.tipo !== f.tipo) return false;
+  if (f.fornecedor_id && l.fornecedor_id !== f.fornecedor_id && l.representante_id !== f.fornecedor_id) return false;
+  if (f.so_pendentes && !['A_EMITIR', 'COMPLEMENTAR', 'ACIMA', 'CANCELADA', 'SEM_REGRA'].includes(l.situacao)) return false;
+  return true;
+}
+
+export async function gradeDeNotas(exec: ExecutorSQL, tenantId: string, f: FiltroDaGrade): Promise<GradeDeNotas> {
+  const pagina = await vendasDaGrade(exec, tenantId, f);
   const regras = await listarRegras(exec, tenantId);
   const retencoes = await listarRetencoes(exec, tenantId);
+  const configNotas = await lerConfigNotas(exec, tenantId);
+  const opcoes = opcoesDaConfig(configNotas);
   const linhas: LinhaDaGrade[] = [];
   const cancelar: SugestaoDeCancelamento[] = [];
   const busca = (f.busca ?? '').trim().toLowerCase();
-  for (const id of ids) {
-    const a = await analisarVendaNoBanco(exec, tenantId, id, { regras, retencoes });
+  for (const id of pagina.ids) {
+    const a = await analisarVendaNoBanco(exec, tenantId, id, { regras, retencoes, opcoes });
     if (!a) continue;
     cancelar.push(...a.cancelar);
+    // A busca já filtrou a venda no banco; aqui só tira o produto que não casa
+    // quando a busca bate no produto (e não no número nem no cliente).
+    const vendaCasa = !busca || a.linhas.some(l => `${l.venda_numero} ${l.cliente_nome} ${l.venda_id}`.toLowerCase().includes(busca));
     for (const l of a.linhas) {
-      if (busca && !`${l.venda_numero} ${l.cliente_nome} ${l.produto_descricao}`.toLowerCase().includes(busca)) continue;
-      if (f.so_pendentes && !['A_EMITIR', 'COMPLEMENTAR', 'ACIMA', 'CANCELADA', 'SEM_REGRA'].includes(l.situacao)) continue;
+      if (busca && !vendaCasa && !l.produto_descricao.toLowerCase().includes(busca)) continue;
+      if (!linhaNoFiltro(l, f)) continue;
       linhas.push(l);
     }
   }
@@ -257,8 +417,14 @@ export async function gradeDeNotas(exec: ExecutorSQL, tenantId: string, f: Filtr
   return {
     linhas, cancelar,
     totais: { receita: soma('receita'), valor_notas: soma('valor_notas'), saldo: soma('saldo'), a_emitir: soma('a_emitir') },
-    vendas_fora: Math.max(0, rows.length - ids.length),
+    vendas_fora: 0,
     tem_regras: regras.some(r => r.ativa),
+    pagina: pagina.pagina,
+    por_pagina: pagina.por_pagina,
+    total_vendas: pagina.total,
+    paginas: Math.max(1, Math.ceil(pagina.total / pagina.por_pagina)),
+    data_da_nota: configNotas.data_da_nota,
+    opcoes: await opcoesDaGrade(exec, tenantId, f),
   };
 }
 
@@ -280,6 +446,10 @@ export interface NotaDaPrevia extends NotaPrevista {
   aliquota_iss: number;
   valor_iss: number;
   iss_e_estimativa: boolean;
+  /** Data (competência) que a nota vai levar, AAAA-MM-DD (E7). */
+  data_nota: string;
+  /** Por que a data não é a pedida (sem a data, data futura). */
+  aviso_data: string | null;
 }
 
 export interface PreviaDeNotas {
@@ -288,7 +458,25 @@ export interface PreviaDeNotas {
   pendencias_gerais: string[];
   assinatura: string;
   cancelar: SugestaoDeCancelamento[];
+  /** Qual data as notas desta prévia levam (E7). */
+  data_da_nota: DataDaNota;
 }
+
+/**
+ * Tomador do exterior pelo cadastro do cliente (E7): a marca `estrangeiro`,
+ * ou um país que não é o Brasil. O documento do país vem de
+ * `documento_estrangeiro` (ou do passaporte).
+ */
+export function estrangeiroDoCadastro(c: Record<string, unknown>): Pick<TomadorNota, 'estrangeiro' | 'documento_estrangeiro' | 'pais'> {
+  const pais = txt(c.pais).trim();
+  const ehBrasil = !pais || /^(br|bra|brasil|brazil)$/i.test(pais);
+  const estrangeiro = c.estrangeiro === true || !ehBrasil;
+  if (!estrangeiro) return {};
+  return { estrangeiro: true, documento_estrangeiro: txt(c.documento_estrangeiro || c.passaporte).trim(), pais };
+}
+
+/** A pendência do tomador do exterior sem CPF/CNPJ: os emissores daqui não mandam este tomador. */
+export const PENDENCIA_TOMADOR_EXTERIOR = 'O tomador é do exterior e não tem CPF nem CNPJ: o emissor ligado aqui ainda não manda nota para esse tomador. Emita no portal da prefeitura e registre a nota em Notas fiscais › Registrar nota emitida fora. O código do país e se o serviço conta como exportação: confirmar com o contador.';
 
 async function tomadorDaParte(exec: ExecutorSQL, tenantId: string, destino: DestinoDaNota, p: ParteDaVenda | null): Promise<TomadorNota | null> {
   if (!p) return null;
@@ -311,26 +499,21 @@ async function tomadorDaParte(exec: ExecutorSQL, tenantId: string, destino: Dest
     const d = (rows[0].data ?? {}) as Record<string, unknown>;
     return { ...d, nome_fantasia: d.nome_fantasia || rows[0].nome_fantasia, cnpj: d.cnpj || rows[0].cnpj };
   };
+  const doCliente = (c: Record<string, unknown>): TomadorNota => ({
+    cpf_cnpj: documentoDoCliente(c) || txt(p.documento), razao_social: nomeDoCliente(c) || p.nome,
+    email: txt(c.email), inscricao_municipal: txt(c.inscricao_municipal), endereco: enderecoDoCliente(c),
+    ...estrangeiroDoCadastro(c),
+  });
   if (destino === 'PAGANTE') {
     const c = await procurarCliente();
-    if (c) {
-      return {
-        cpf_cnpj: documentoDoCliente(c) || txt(p.documento), razao_social: nomeDoCliente(c) || p.nome,
-        email: txt(c.email), inscricao_municipal: txt(c.inscricao_municipal), endereco: enderecoDoCliente(c),
-      };
-    }
+    if (c) return doCliente(c);
     const f = await procurarFornecedor();
     if (f) return tomadorDoFornecedor(f);
   } else {
     const f = await procurarFornecedor();
     if (f) return tomadorDoFornecedor(f);
     const c = await procurarCliente();
-    if (c) {
-      return {
-        cpf_cnpj: documentoDoCliente(c) || txt(p.documento), razao_social: nomeDoCliente(c) || p.nome,
-        email: txt(c.email), inscricao_municipal: txt(c.inscricao_municipal), endereco: enderecoDoCliente(c),
-      };
-    }
+    if (c) return doCliente(c);
   }
   return {
     cpf_cnpj: txt(p.documento), razao_social: p.nome, email: '', inscricao_municipal: '',
@@ -361,10 +544,13 @@ function recortar(p: NotaPrevista, produtos: string[] | undefined): NotaPrevista
   return { ...p, itens, valor_centavos: valor, retencoes };
 }
 
-export async function previaDeNotas(exec: ExecutorSQL, tenantId: string, selecao: SelecaoDeNotas[], ctx: ContextoDaAnalise & { so_gatilho_cumprido?: boolean; chaves?: string[] } = {}): Promise<PreviaDeNotas> {
+export async function previaDeNotas(exec: ExecutorSQL, tenantId: string, selecao: SelecaoDeNotas[], ctx: ContextoDaAnalise & { so_gatilho_cumprido?: boolean; chaves?: string[]; data_da_nota?: DataDaNota | null; hoje?: string } = {}): Promise<PreviaDeNotas> {
   const config = await carregarConfigFiscal(tenantId);
   const emitente = await carregarEmitente(tenantId);
   const configNotas = await lerConfigNotas(exec, tenantId);
+  const opcoes = ctx.opcoes ?? opcoesDaConfig(configNotas);
+  const modoData: DataDaNota = ctx.data_da_nota ?? configNotas.data_da_nota;
+  const hoje = ctx.hoje ?? hojeISO();
   let capacidades = CAPACIDADES_FECHADAS;
   let issEstimativa = false;
   try {
@@ -400,7 +586,7 @@ export async function previaDeNotas(exec: ExecutorSQL, tenantId: string, selecao
     if (!s.venda_id || vistas.has(s.venda_id)) continue;
     vistas.add(s.venda_id);
     const estado = ctx.estado !== undefined ? ctx.estado : await estadoDaVenda(exec, tenantId, s.venda_id);
-    const a = await analisarVendaNoBanco(exec, tenantId, s.venda_id, { regras, retencoes, estado });
+    const a = await analisarVendaNoBanco(exec, tenantId, s.venda_id, { regras, retencoes, estado, opcoes });
     if (!a) continue;
     cancelar.push(...a.cancelar);
     for (const bruta of a.previstas) {
@@ -412,9 +598,14 @@ export async function previaDeNotas(exec: ExecutorSQL, tenantId: string, selecao
       const pend = [...p.pendencias];
       if (tomador) {
         const daPessoa = p.destino === 'PAGANTE' ? 'O cliente' : p.destino === 'FORNECEDOR' ? 'O fornecedor' : 'O representante';
-        if (!tomador.cpf_cnpj.trim()) pend.push(`${daPessoa} "${tomador.razao_social || 'sem nome'}" está sem CPF ou CNPJ no cadastro, e a prefeitura exige o documento do tomador.`);
+        if (!tomador.cpf_cnpj.trim()) {
+          pend.push(tomador.estrangeiro
+            ? PENDENCIA_TOMADOR_EXTERIOR
+            : `${daPessoa} "${tomador.razao_social || 'sem nome'}" está sem CPF ou CNPJ no cadastro, e a prefeitura exige o documento do tomador.`);
+        }
         if (!tomador.razao_social.trim()) pend.push(`${daPessoa} desta nota está sem nome no cadastro.`);
       }
+      const data = dataDaNota(modoData, { data_venda: p.data_venda, data_embarque: p.data_embarque }, hoje);
       if (p.retencoes && p.retencoes.total > 0 && !capacidades.retencao_fonte) {
         pend.push('O cliente retém tributos na fonte e o emissor configurado não declara retenção na nota. Troque o emissor em Configurações › Fiscal ou emita esta nota à mão no portal do emissor.');
       }
@@ -435,10 +626,11 @@ export async function previaDeNotas(exec: ExecutorSQL, tenantId: string, selecao
       notas.push({
         ...p, pendencias: pend, tomador_nota: tomador, valida: pend.length === 0 && pendencias_gerais.length === 0 && Boolean(tomador),
         envio, aliquota_iss: calc.aliquota_iss, valor_iss: Math.round(calc.valor_iss * 100), iss_e_estimativa: issEstimativa,
+        data_nota: data.data, aviso_data: data.aviso,
       });
     }
   }
-  return { notas, pendencias_gerais, assinatura: assinaturaDaPrevia(notas), cancelar };
+  return { notas, pendencias_gerais, assinatura: assinaturaDaPrevia(notas), cancelar, data_da_nota: modoData };
 }
 
 // ============================================================
@@ -524,6 +716,7 @@ export function notaFiscalDaPrevia(p: NotaDaPrevia, config: Awaited<ReturnType<t
     itens: p.itens.map(i => ({ produto_id: i.produto_id, descricao: i.descricao, valor_centavos: i.valor_centavos })),
     complementar_de: p.complementar_de,
     gatilho,
+    data_competencia: p.data_nota || undefined,
     ibs_cbs: {
       cst: p.ibs_cbs.cst, classificacao_tributaria: p.ibs_cbs.classificacao_tributaria, indicador_operacao: p.ibs_cbs.indicador_operacao,
       aliquota_ibs: p.ibs_cbs.aliquota_ibs, aliquota_cbs: p.ibs_cbs.aliquota_cbs, situacao: 'CONFIRMAR_COM_O_CONTADOR',
@@ -539,14 +732,14 @@ export function notaFiscalDaPrevia(p: NotaDaPrevia, config: Awaited<ReturnType<t
  */
 export async function emitirNotasDaRegra(
   exec: ExecutorSQL, tenantId: string,
-  pedido: { selecao: SelecaoDeNotas[]; chaves?: string[]; assinatura?: string },
+  pedido: { selecao: SelecaoDeNotas[]; chaves?: string[]; assinatura?: string; data_da_nota?: DataDaNota | null },
   autor: { id: string; nome: string },
   opcoes: { gatilho?: string; so_gatilho_cumprido?: boolean; estado?: EstadoDaVenda | null } = {},
 ): Promise<ResultadoDaEmissao> {
   const motivo = nadaSai();
   if (motivo) throw new ErroNota('NADA_SAI', `Nenhuma nota sai agora: ${motivo}.`, 423);
   const previa = await previaDeNotas(exec, tenantId, pedido.selecao, {
-    chaves: pedido.chaves, so_gatilho_cumprido: opcoes.so_gatilho_cumprido, ...(opcoes.estado !== undefined ? { estado: opcoes.estado } : {}),
+    chaves: pedido.chaves, data_da_nota: pedido.data_da_nota ?? null, so_gatilho_cumprido: opcoes.so_gatilho_cumprido, ...(opcoes.estado !== undefined ? { estado: opcoes.estado } : {}),
   });
   if (pedido.assinatura && pedido.assinatura !== previa.assinatura) {
     throw new ErroNota('PREVIA_MUDOU', 'Os valores mudaram desde a prévia. Confira a prévia nova antes de emitir.', 409, previa);

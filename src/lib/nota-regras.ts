@@ -28,8 +28,8 @@ import {
 } from './venda-modelo';
 import { CONFIG_RECEITA_PADRAO, receitaDaVenda, type ConfigReceita } from './venda-receita';
 import {
-  TRIBUTOS_RETIDOS, retencaoAplicavel, retencaoDoProduto,
-  type BaseDeRetencao, type RetencaoDoCliente, type TributoRetido,
+  TRIBUTOS_RETIDOS, dispensarRetencaoPequena, retencaoAplicavel, retencaoDoProduto,
+  type BaseDeRetencao, type RetencaoDoCliente, type RetencaoMinima, type TributoRetido,
 } from './nota-retencoes';
 
 // ============================================================
@@ -88,8 +88,138 @@ export interface DestinoDaRegra {
   receitas: CampoDaRegra[];
   descontos: CampoDaRegra[];
   gatilho: GatilhoDaNota;
-  /** Texto da nota. Aceita {produtos}, {venda} e {cliente}. Vazio: o padrão. */
+  /** Texto da nota. Aceita os marcadores de MARCADORES_DA_NOTA. Vazio: o padrão. */
   discriminacao: string;
+}
+
+/**
+ * Marcadores do texto da nota (E7: passageiros, período e documento além dos
+ * de antes). A tela que edita o texto mostra esta lista.
+ */
+export const MARCADORES_DA_NOTA: ReadonlyArray<{ marcador: string; rotulo: string; exemplo: string }> = [
+  { marcador: '{produtos}', rotulo: 'Produtos da nota', exemplo: 'Hotel Mar 4 noites, Aéreo São Paulo–Lisboa' },
+  { marcador: '{venda}', rotulo: 'Número da venda', exemplo: 'VND-0042' },
+  { marcador: '{cliente}', rotulo: 'Cliente da venda', exemplo: 'Carla Dias' },
+  { marcador: '{passageiros}', rotulo: 'Passageiros dos produtos', exemplo: 'Carla Dias, Pedro Dias' },
+  { marcador: '{periodo}', rotulo: 'Período da viagem', exemplo: '20/12/2026 a 24/12/2026' },
+  { marcador: '{embarque}', rotulo: 'Data do embarque', exemplo: '20/12/2026' },
+  { marcador: '{documento}', rotulo: 'Localizador (ou o número da venda, se não houver)', exemplo: 'HM123, XKT9QZ' },
+];
+
+// ============================================================
+// Data da nota e tributos aproximados (E7, 06/11/2026)
+// ============================================================
+
+/** Qual data vai como data (competência) da nota. */
+export const DATAS_DA_NOTA = ['DIA', 'VENDA', 'EMBARQUE'] as const;
+export type DataDaNota = (typeof DATAS_DA_NOTA)[number];
+export const ROTULO_DATA_DA_NOTA: Record<DataDaNota, string> = {
+  DIA: 'O dia da emissão',
+  VENDA: 'A data da venda',
+  EMBARQUE: 'A data do embarque',
+};
+
+const dataBR = (iso: string) => (iso ? iso.slice(0, 10).split('-').reverse().join('/') : '');
+
+/**
+ * A data da nota pela escolha da agência. Sem a data pedida (venda sem
+ * embarque) ou com ela no futuro (a prefeitura recusa competência que ainda
+ * não chegou), a nota sai com a data de hoje e o aviso diz por quê.
+ */
+export function dataDaNota(modo: DataDaNota, d: { data_venda: string; data_embarque: string }, hoje: string): { data: string; aviso: string | null } {
+  if (modo === 'DIA') return { data: hoje, aviso: null };
+  const pedida = modo === 'VENDA' ? d.data_venda : d.data_embarque;
+  const nome = modo === 'VENDA' ? 'da venda' : 'do embarque';
+  if (!pedida) return { data: hoje, aviso: `A venda não tem a data ${nome}: a nota sai com a data de hoje.` };
+  if (pedida > hoje) return { data: hoje, aviso: `A data ${nome} (${dataBR(pedida)}) ainda não chegou e a prefeitura não aceita nota com data futura: a nota sai com a data de hoje.` };
+  return { data: pedida, aviso: null };
+}
+
+/**
+ * Texto dos tributos aproximados (Lei 12.741). Os percentuais são os que a
+ * agência digita com o contador; sem nenhum percentual, o texto não entra.
+ */
+export interface TributosAproximados {
+  ligado: boolean;
+  federal: number | null;
+  estadual: number | null;
+  municipal: number | null;
+  /** Aceita {total}, {percentual}, {federal}, {estadual} e {municipal}. */
+  texto: string;
+}
+
+export const TEXTO_TRIBUTOS_PADRAO = 'Valor aproximado dos tributos: {total} ({percentual}).';
+
+export const MARCADORES_DOS_TRIBUTOS: ReadonlyArray<{ marcador: string; rotulo: string }> = [
+  { marcador: '{total}', rotulo: 'Valor aproximado de todos os tributos' },
+  { marcador: '{percentual}', rotulo: 'Soma dos percentuais' },
+  { marcador: '{federal}', rotulo: 'Valor federal' },
+  { marcador: '{estadual}', rotulo: 'Valor estadual' },
+  { marcador: '{municipal}', rotulo: 'Valor municipal' },
+];
+
+function percentualOuNulo(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(String(v).replace(',', '.'));
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? Math.round(n * 10_000) / 10_000 : null;
+}
+
+export function normalizarTributosAproximados(v: unknown): TributosAproximados {
+  const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+  return {
+    ligado: o.ligado === true,
+    federal: percentualOuNulo(o.federal),
+    estadual: percentualOuNulo(o.estadual),
+    municipal: percentualOuNulo(o.municipal),
+    texto: String(o.texto ?? '').trim().slice(0, 300),
+  };
+}
+
+/** O texto pronto para a nota de `valor` centavos, ou '' quando não se aplica. */
+export function textoDosTributos(valor: Centavos, t: TributosAproximados | null | undefined): string {
+  if (!t?.ligado || valor <= 0) return '';
+  const partes = [t.federal, t.estadual, t.municipal];
+  if (partes.every(p => p === null)) return '';
+  const de = (p: number | null) => Math.round(valor * (p ?? 0) / 100);
+  const total = partes.reduce<number>((s, p) => s + de(p), 0);
+  const soma = partes.reduce<number>((s, p) => s + (p ?? 0), 0);
+  const pct = (n: number) => `${n.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}%`;
+  return preencherTexto(t.texto || TEXTO_TRIBUTOS_PADRAO, {
+    total: formatarReais(total), percentual: pct(soma),
+    federal: formatarReais(de(t.federal)), estadual: formatarReais(de(t.estadual)), municipal: formatarReais(de(t.municipal)),
+  });
+}
+
+/** Troca os marcadores {nome} pelos valores (marcador sem valor some). */
+export function preencherTexto(modelo: string, valores: Record<string, string>): string {
+  return modelo.replace(/\{(\w+)\}/g, (_t, k: string) => valores[k] ?? '').replace(/\s{2,}/g, ' ').trim();
+}
+
+/** Os valores dos marcadores do texto para os produtos de uma nota. */
+export function valoresDosMarcadores(venda: Pick<Venda, 'id' | 'numero' | 'cliente'>, produtos: ProdutoDaVenda[]): Record<string, string> {
+  const nomes = [...new Set(produtos.map(p => p.descricao).filter(Boolean))];
+  const passageiros = [...new Set(produtos.flatMap(p => p.passageiros.filter(x => !x.cancelado_em).map(x => x.nome.trim())).filter(Boolean))];
+  const inicios = produtos.map(p => p.data_inicio).filter(Boolean).sort();
+  const fins = produtos.map(p => p.data_fim || p.data_inicio).filter(Boolean).sort();
+  const inicio = inicios[0] ?? '';
+  const fim = fins[fins.length - 1] ?? '';
+  const periodo = inicio ? (fim && fim !== inicio ? `${dataBR(inicio)} a ${dataBR(fim)}` : dataBR(inicio)) : '';
+  const localizadores = [...new Set(produtos.map(p => p.localizador.trim()).filter(Boolean))];
+  return {
+    produtos: nomes.length ? nomes.join(', ') : 'produtos da venda',
+    venda: venda.numero || venda.id,
+    cliente: venda.cliente.nome,
+    passageiros: passageiros.join(', '),
+    periodo,
+    embarque: dataBR(inicio),
+    documento: localizadores.length ? localizadores.join(', ') : (venda.numero || venda.id),
+  };
+}
+
+/** Opções da agência que mudam a nota prevista (vêm de agencia.notas_config). */
+export interface OpcoesDaAnalise {
+  retencao_minima?: RetencaoMinima | null;
+  tributos_aproximados?: TributosAproximados | null;
 }
 
 /** Campos da reforma tributária. Sem cálculo: confirmar com o contador. */
@@ -467,6 +597,13 @@ export interface LinhaDaGrade {
   regra_descricao: string;
   situacao: SituacaoDaLinha;
   destinos: CelulaDoDestino[];
+  /** Para os filtros de Gerar notas (E7). */
+  data_embarque: string;
+  vendedor_id: string;
+  fornecedor_id: string;
+  fornecedor_nome: string;
+  representante_id: string;
+  representante_nome: string;
 }
 
 export interface ItemDaNotaPrevista {
@@ -508,6 +645,11 @@ export interface NotaPrevista {
   ibs_cbs: ReformaDaRegra;
   /** O que impede a nota (o servidor acrescenta as do tomador e do emissor). */
   pendencias: string[];
+  /** Datas para escolher a data da nota (E7). */
+  data_venda: string;
+  data_embarque: string;
+  /** Retenção pequena que não foi retida, explicada (E7). */
+  dispensas: string[];
 }
 
 export interface SugestaoDeCancelamento {
@@ -537,6 +679,8 @@ export interface EntradaDaAnalise {
   venda_cancelada?: boolean;
   /** Para avaliar os gatilhos; sem estado, nenhum gatilho está cumprido. */
   estado?: EstadoDaVenda | null;
+  /** Dispensa de retenção pequena e tributos aproximados (E7). */
+  opcoes?: OpcoesDaAnalise;
 }
 
 export function formatarReais(c: Centavos): string {
@@ -550,10 +694,6 @@ function formula(linhas: LinhaDaFormula[], total: Centavos): string {
   if (!linhas.length) return 'Nenhum item da regra tem valor neste produto.';
   const partes = linhas.map((l, i) => `${i === 0 ? (l.sinal < 0 ? '− ' : '') : (l.sinal < 0 ? ' − ' : ' + ')}${l.rotulo} ${formatarReais(l.valor)}`);
   return `${partes.join('')} = ${formatarReais(total)}`;
-}
-
-function preencher(modelo: string, valores: Record<string, string>): string {
-  return modelo.replace(/\{(\w+)\}/g, (_t, k: string) => valores[k] ?? '').replace(/\s{2,}/g, ' ').trim();
 }
 
 interface Celula {
@@ -658,6 +798,12 @@ export function analisarVenda(e: EntradaDaAnalise): AnaliseDaVenda {
         destino: c.destino, previsto: c.previsto, emitido: c.emitido, saldo: c.previsto - c.emitido,
         tomador: c.tomador, gatilho: c.cfg?.gatilho ?? 'MANUAL', linhas: c.linhas,
       })),
+      data_embarque: p.data_inicio || '',
+      vendedor_id: venda.vendedor?.id ?? '',
+      fornecedor_id: p.fornecedor?.id || p.fornecedor?.id_externo || '',
+      fornecedor_nome: p.fornecedor?.nome ?? '',
+      representante_id: p.representante?.id || p.representante?.id_externo || '',
+      representante_nome: p.representante?.nome ?? '',
     };
   });
 
@@ -710,6 +856,7 @@ export function analisarVenda(e: EntradaDaAnalise): AnaliseDaVenda {
     }
     // Retenção na fonte: só na nota ao pagante, e só sobre as bases que ela cobra.
     let retencoes: RetencoesDaNota | null = null;
+    const dispensas: string[] = [];
     if (destino === 'PAGANTE' && e.retencoes?.length && tomador) {
       const por_tributo: Record<TributoRetido, Centavos> = { IR: 0, CSLL: 0, PIS: 0, COFINS: 0 };
       let reter_iss = false;
@@ -721,6 +868,10 @@ export function analisarVenda(e: EntradaDaAnalise): AnaliseDaVenda {
         const fator = c.previsto > 0 ? (c.previsto - c.emitido) / c.previsto : 0;
         for (const t of TRIBUTOS_RETIDOS) por_tributo[t] += Math.round(rp.por_tributo[t] * fator);
       }
+      // Dispensa de retenção pequena (E7): só com o limite digitado pela agência.
+      const dispensa = dispensarRetencaoPequena(por_tributo, e.opcoes?.retencao_minima);
+      for (const t of TRIBUTOS_RETIDOS) por_tributo[t] = dispensa.por_tributo[t];
+      dispensas.push(...dispensa.dispensas);
       let total = TRIBUTOS_RETIDOS.reduce((s, t) => s + por_tributo[t], 0);
       if (total > valor) {
         // A retenção não pode passar do valor da nota.
@@ -734,14 +885,13 @@ export function analisarVenda(e: EntradaDaAnalise): AnaliseDaVenda {
         retencoes = { por_tributo, total, reter_iss, aliquotas_medias: medias };
       }
     }
-    const nomes = [...new Set(lista.map(c => c.produto.descricao).filter(Boolean))];
+    const produtosDaNota = lista.map(c => c.produto);
     const modelo = c0.cfg!.discriminacao || DISCRIMINACAO_PADRAO[destino];
-    let discriminacao = preencher(modelo, {
-      produtos: nomes.length ? nomes.join(', ') : 'produtos da venda',
-      venda: venda.numero || venda.id,
-      cliente: venda.cliente.nome,
-    });
+    let discriminacao = preencherTexto(modelo, valoresDosMarcadores(venda, produtosDaNota));
     if (anteriores.length) discriminacao = `Nota complementar. ${discriminacao}`;
+    const tributos = textoDosTributos(valor, e.opcoes?.tributos_aproximados);
+    if (tributos) discriminacao = `${discriminacao} ${tributos}`;
+    const embarques = produtosDaNota.map(p => p.data_inicio).filter(Boolean).sort();
     const gatilho = c0.cfg!.gatilho;
     previstas.push({
       chave: `${prefixo}|${n}`,
@@ -755,6 +905,9 @@ export function analisarVenda(e: EntradaDaAnalise): AnaliseDaVenda {
       retencoes,
       ibs_cbs: regra.ibs_cbs,
       pendencias,
+      data_venda: venda.data_venda || '',
+      data_embarque: embarques[0] ?? '',
+      dispensas,
     });
   }
 

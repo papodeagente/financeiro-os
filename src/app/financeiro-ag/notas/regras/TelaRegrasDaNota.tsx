@@ -15,12 +15,14 @@ import { usePermissoes } from '@/app/financeiro-ag/contas/useContas';
 import { apiNotas, type ConfigNotas } from '@/components/financeiro/notas/api';
 import { CAMPO_TEXTO, CampoSelecao, Interruptor, Pilula, SECAO } from '@/components/financeiro/notas/pecas';
 import {
-  AJUDA_DESTINO, CAMPOS_DA_REGRA, DESTINOS_DA_NOTA, GATILHOS_DA_NOTA, ROTULO_DESTINO, ROTULO_GATILHO, ajudaDoCampo, descricaoAutomatica,
-  rotuloDoCampo, type CampoDaRegra, type DestinoDaNota, type DestinoDaRegra, type RegraDaNota,
+  AJUDA_DESTINO, CAMPOS_DA_REGRA, DATAS_DA_NOTA, DESTINOS_DA_NOTA, DISCRIMINACAO_PADRAO, GATILHOS_DA_NOTA, MARCADORES_DA_NOTA,
+  MARCADORES_DOS_TRIBUTOS, ROTULO_DATA_DA_NOTA, ROTULO_DESTINO, ROTULO_GATILHO, TEXTO_TRIBUTOS_PADRAO, ajudaDoCampo, descricaoAutomatica,
+  rotuloDoCampo, textoDosTributos, type CampoDaRegra, type DataDaNota, type DestinoDaNota, type DestinoDaRegra, type RegraDaNota,
 } from '@/lib/nota-regras';
 import { ROTULO_TIPO_PRODUTO, TIPOS_PRODUTO } from '@/lib/venda-modelo';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
 /**
  * Regras da nota (E5, parte E): para cada combinação de tipo de produto,
@@ -121,7 +123,9 @@ export function TelaRegrasDaNota() {
       setConfig(await apiNotas.salvarConfig(c));
       toast.success(c.automatico !== anterior?.automatico
         ? (c.automatico ? 'Emissão automática ligada' : 'Emissão automática desligada')
-        : (c.enviar_ao_cliente ? 'O cliente vai receber a nota por e-mail' : 'O cliente não vai receber a nota por e-mail'));
+        : c.enviar_ao_cliente !== anterior?.enviar_ao_cliente
+          ? (c.enviar_ao_cliente ? 'O cliente vai receber a nota por e-mail' : 'O cliente não vai receber a nota por e-mail')
+          : 'Data e tributos da nota salvos', 'Valem para as próximas notas geradas.');
     } catch (e) {
       setConfig(anterior);
       toast.error('A configuração não foi salva', e instanceof Error ? e.message : undefined);
@@ -215,6 +219,8 @@ export function TelaRegrasDaNota() {
             />
           </section>
         ) : null}
+
+        {config ? <DataETributos config={config} desabilitado={!podeConfigurar} onSalvar={salvarConfig} /> : null}
 
         <FinTable<RegraDaNota>
           linhas={regras ?? []}
@@ -417,6 +423,12 @@ function EditorDaRegra({ regra, mudar, mudarDestino }: {
                     <span className="fin-t-caption text-[var(--fin-text-3)]">Vazio: a pessoa da própria venda.</span>
                   </div>
                 </div>
+                <TextoDaNota
+                  id={`texto-${d}`}
+                  valor={x.discriminacao}
+                  padrao={DISCRIMINACAO_PADRAO[d]}
+                  onChange={v => mudarDestino(d, { discriminacao: v })}
+                />
               </div>
             ) : null}
           </fieldset>
@@ -453,6 +465,191 @@ function CampoCurto({ rotulo, valor, onChange, max, decimal }: { rotulo: string;
         inputMode={decimal ? 'decimal' : undefined}
         onChange={e => { setTexto(e.target.value); if (!decimal) onChange(e.target.value); }}
         onBlur={() => { if (decimal) onChange(texto); }}
+      />
+    </label>
+  );
+}
+
+/** O texto da nota de um destino, com os marcadores que dá para usar (clique insere). */
+function TextoDaNota({ id, valor, padrao, onChange }: { id: string; valor: string; padrao: string; onChange: (v: string) => void }) {
+  const ref = React.useRef<HTMLTextAreaElement>(null);
+  function inserir(m: string) {
+    const el = ref.current;
+    const atual = valor || padrao;
+    if (!el) { onChange(`${atual} ${m}`.trim()); return; }
+    const ini = el.selectionStart ?? atual.length;
+    const fim = el.selectionEnd ?? atual.length;
+    const novo = `${atual.slice(0, ini)}${m}${atual.slice(fim)}`;
+    onChange(novo);
+    requestAnimationFrame(() => { el.focus(); el.setSelectionRange(ini + m.length, ini + m.length); });
+  }
+  return (
+    <div className="flex flex-col gap-[var(--fin-s-2)]">
+      <label htmlFor={id} className="fin-t-body-strong text-[var(--fin-text)]">Texto da nota</label>
+      <textarea
+        ref={ref}
+        id={id}
+        rows={3}
+        maxLength={600}
+        value={valor}
+        placeholder={padrao}
+        onChange={e => onChange(e.target.value)}
+        aria-describedby={`${id}-marcadores`}
+        className="rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] p-[var(--fin-s-2)] fin-t-body text-[var(--fin-text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)]"
+      />
+      <div id={`${id}-marcadores`} className="flex flex-col gap-[var(--fin-s-1)]">
+        <span className="fin-t-caption text-[var(--fin-text-3)]">Vazio: o texto de exemplo acima. Toque num campo para pôr no texto; na nota ele vira o dado da venda.</span>
+        <ul className="flex flex-wrap gap-[var(--fin-s-2)]">
+          {MARCADORES_DA_NOTA.map(m => (
+            <li key={m.marcador}>
+              <button
+                type="button"
+                onClick={() => inserir(m.marcador)}
+                title={`${m.rotulo}. Exemplo: ${m.exemplo}`}
+                className="inline-flex h-8 items-center gap-1 rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-2 fin-t-caption text-[var(--fin-text-2)] hover:bg-[var(--fin-surface-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)] max-lg:h-11"
+              >
+                {m.rotulo}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+const reaisDoCentavo = (c: number | null) => (c === null ? '' : (c / 100).toFixed(2).replace('.', ','));
+function centavosDoTexto(v: string): number | null {
+  const limpo = v.trim().replace(/\./g, '').replace(',', '.');
+  if (!limpo) return null;
+  const n = Number(limpo);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : null;
+}
+const pctTexto = (n: number | null) => (n === null ? '' : String(n).replace('.', ','));
+function pctDoTexto(v: string): number | null {
+  const limpo = v.trim().replace(',', '.');
+  if (!limpo) return null;
+  const n = Number(limpo);
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
+}
+
+/**
+ * Data da nota, dispensa de retenção pequena e tributos aproximados. Os números
+ * são os da agência: nada vem preenchido, e o texto pede a conferência do
+ * contador.
+ */
+function DataETributos({ config, desabilitado, onSalvar }: { config: ConfigNotas; desabilitado: boolean; onSalvar: (c: ConfigNotas) => Promise<void> }) {
+  const [data, setData] = React.useState<DataDaNota>(config.data_da_nota);
+  const [ir, setIr] = React.useState(reaisDoCentavo(config.retencao_minima.ir_centavos));
+  const [pcc, setPcc] = React.useState(reaisDoCentavo(config.retencao_minima.csll_pis_cofins_centavos));
+  const [trib, setTrib] = React.useState(config.tributos_aproximados);
+  const [fed, setFed] = React.useState(pctTexto(config.tributos_aproximados.federal));
+  const [est, setEst] = React.useState(pctTexto(config.tributos_aproximados.estadual));
+  const [mun, setMun] = React.useState(pctTexto(config.tributos_aproximados.municipal));
+  const [salvando, setSalvando] = React.useState(false);
+  const tributos = { ...trib, federal: pctDoTexto(fed), estadual: pctDoTexto(est), municipal: pctDoTexto(mun) };
+  const exemplo = textoDosTributos(100_000, { ...tributos, ligado: true });
+  const invalido = [ir, pcc].some(v => v.trim() && centavosDoTexto(v) === null) || [fed, est, mun].some(v => v.trim() && pctDoTexto(v) === null);
+
+  async function salvar() {
+    setSalvando(true);
+    try {
+      await onSalvar({
+        ...config,
+        data_da_nota: data,
+        retencao_minima: { ir_centavos: centavosDoTexto(ir), csll_pis_cofins_centavos: centavosDoTexto(pcc) },
+        tributos_aproximados: tributos,
+      });
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <section aria-labelledby="titulo-data-tributos" className={cn(SECAO, 'max-w-3xl')}>
+      <h2 id="titulo-data-tributos" className="fin-t-subhead text-[var(--fin-text)]">Data e tributos da nota</h2>
+      <CampoSelecao
+        id="notas-data"
+        rotulo="Data da nota"
+        valor={data}
+        onChange={v => setData(v as DataDaNota)}
+        opcoes={DATAS_DA_NOTA.map(d => ({ valor: d, rotulo: ROTULO_DATA_DA_NOTA[d] }))}
+        ajuda="Em Gerar notas dá para trocar só naquela emissão. Sem a data pedida, ou com ela ainda por vir, a nota sai com a data do dia."
+      />
+
+      <fieldset className="flex flex-col gap-[var(--fin-s-2)]">
+        <legend className="mb-[var(--fin-s-1)] fin-t-body-strong text-[var(--fin-text)]">Retenção pequena que não se retém</legend>
+        <p className="fin-t-caption text-[var(--fin-text-3)]">
+          Quando o valor retido fica até o limite, a nota e a conta a receber saem sem aquela retenção. Vazio: retém sempre. Os limites: confirmar com o contador.
+        </p>
+        <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:grid-cols-2">
+          <CampoLivre id="minimo-ir" rotulo="IR retido até (R$)" valor={ir} onChange={setIr} desabilitado={desabilitado} />
+          <CampoLivre id="minimo-pcc" rotulo="CSLL + PIS + COFINS até (R$)" valor={pcc} onChange={setPcc} desabilitado={desabilitado} />
+        </div>
+      </fieldset>
+
+      <fieldset className="flex flex-col gap-[var(--fin-s-2)]">
+        <legend className="sr-only">Tributos aproximados</legend>
+        <Interruptor
+          id="notas-tributos"
+          ligado={trib.ligado}
+          desabilitado={desabilitado}
+          onChange={v => setTrib(t => ({ ...t, ligado: v }))}
+          rotulo="Pôr o valor aproximado dos tributos no texto da nota"
+          descricao="Lei 12.741. Os percentuais são os da agência (confirmar com o contador); sem nenhum percentual, o texto não entra."
+        />
+        {trib.ligado ? (
+          <div className="flex flex-col gap-[var(--fin-s-3)] pl-[52px] max-sm:pl-0">
+            <div className="grid grid-cols-1 gap-[var(--fin-s-3)] sm:grid-cols-3">
+              <CampoLivre id="trib-fed" rotulo="Federal (%)" valor={fed} onChange={setFed} desabilitado={desabilitado} />
+              <CampoLivre id="trib-est" rotulo="Estadual (%)" valor={est} onChange={setEst} desabilitado={desabilitado} />
+              <CampoLivre id="trib-mun" rotulo="Municipal (%)" valor={mun} onChange={setMun} desabilitado={desabilitado} />
+            </div>
+            <label className="flex flex-col gap-[var(--fin-s-1)]">
+              <span className="fin-t-body-strong text-[var(--fin-text)]">Texto</span>
+              <input
+                className={CAMPO_TEXTO}
+                value={trib.texto}
+                maxLength={300}
+                placeholder={TEXTO_TRIBUTOS_PADRAO}
+                disabled={desabilitado}
+                onChange={e => setTrib(t => ({ ...t, texto: e.target.value }))}
+              />
+              <span className="fin-t-caption text-[var(--fin-text-3)]">
+                Campos: {MARCADORES_DOS_TRIBUTOS.map(m => `${m.marcador} (${m.rotulo.toLowerCase()})`).join(', ')}.
+              </span>
+            </label>
+            <p className="fin-t-body text-[var(--fin-text-2)]">
+              Numa nota de R$ 1.000,00: <span className="text-[var(--fin-text)]">{exemplo || 'digite ao menos um percentual.'}</span>
+            </p>
+          </div>
+        ) : null}
+      </fieldset>
+
+      {!desabilitado ? (
+        <div className="flex items-center gap-[var(--fin-s-3)]">
+          <Button type="button" onClick={() => { void salvar(); }} disabled={salvando || invalido}>
+            {salvando ? 'Salvando…' : 'Salvar data e tributos'}
+          </Button>
+          {invalido ? <span role="alert" className="fin-t-caption text-[var(--fin-negative-text)]">Confira os números: valor em reais e percentual entre 0 e 100.</span> : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function CampoLivre({ id, rotulo, valor, onChange, desabilitado }: { id: string; rotulo: string; valor: string; onChange: (v: string) => void; desabilitado?: boolean }) {
+  return (
+    <label htmlFor={id} className="flex flex-col gap-[var(--fin-s-1)]">
+      <span className="fin-t-body-strong text-[var(--fin-text)]">{rotulo}</span>
+      <input
+        id={id}
+        className={cn(CAMPO_TEXTO, 'tabular-nums')}
+        inputMode="decimal"
+        value={valor}
+        placeholder="Vazio"
+        disabled={desabilitado}
+        onChange={e => onChange(e.target.value)}
       />
     </label>
   );
