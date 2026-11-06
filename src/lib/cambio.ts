@@ -21,7 +21,7 @@
  *   valores em texto; `timestamp` em segundos UTC).
  * - PTAX (Olinda): https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/$metadata
  *   (CotacaoMoedaPeriodo, datas MM-DD-AAAA entre aspas simples, boletim
- *   "Fechamento PTAX"; números como número).
+ *   de fechamento, "Fechamento" ou "Fechamento PTAX"; números como número).
  * - SGS: https://dadosabertos.bcb.gov.br/dataset/432-taxa-de-juros---meta-selic-definida-pelo-copom
  *   (432 meta Selic % a.a., 4390 Selic acumulada no mês % a.m., 433 IPCA % no
  *   mês, 189 IGP-M % no mês; `/dados/ultimos/N` aceita N até 20; a 432 traz
@@ -215,7 +215,9 @@ export function lerRespostaAwesome(json: unknown, obtidoEm: Date): Cotacao[] {
 
 /**
  * Resposta da Olinda (CotacaoMoedaPeriodo) → uma cotação por dia, só o
- * boletim de fechamento ("Fechamento PTAX"). Dia sem fechamento fica de fora.
+ * boletim de fechamento. A Olinda responde `tipoBoletim: "Fechamento"` (visto na
+ * resposta real em 05/11/2026; a documentação fala em "Fechamento PTAX"):
+ * aceita os dois. Dia sem fechamento fica de fora.
  */
 export function lerRespostaPtax(json: unknown, moeda: CodigoMoeda, obtidoEm: Date): Cotacao[] {
   const valor = (json as { value?: unknown } | null)?.value;
@@ -224,7 +226,7 @@ export function lerRespostaPtax(json: unknown, moeda: CodigoMoeda, obtidoEm: Dat
   for (const v of valor) {
     if (!v || typeof v !== 'object') continue;
     const r = v as Record<string, unknown>;
-    if (r.tipoBoletim !== undefined && r.tipoBoletim !== 'Fechamento PTAX') continue;
+    if (r.tipoBoletim !== undefined && !/^Fechamento\b/i.test(String(r.tipoBoletim))) continue;
     const compra = numeroPositivo(r.cotacaoCompra);
     const venda = numeroPositivo(r.cotacaoVenda);
     const dh = String(r.dataHoraCotacao ?? '');
