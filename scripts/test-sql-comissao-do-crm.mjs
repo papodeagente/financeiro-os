@@ -80,9 +80,9 @@ const { editarContaNoExecutor } = await import('../src/lib/baixa-de-conta.ts');
 const { abrirRazaoNoExecutor } = await import('../src/lib/razao-servidor.ts');
 const { processarEventoCRM } = await import('../src/lib/crm-integration.ts');
 const {
-  tarefaComissaoPagaAoCrm, fonteDaComissao, reporAvisosDeComissaoPaga, avisarComissaoPaga, MOTIVO_FORA_DO_ECOSSISTEMA,
+  tarefaComissaoPagaAoCrm, fonteDaComissao, trocarFonteDaComissao, reporAvisosDeComissaoPaga, avisarComissaoPaga, MOTIVO_FORA_DO_ECOSSISTEMA,
 } = await import('../src/lib/comissao-do-crm-servidor.ts');
-const { AVISO_COMISSAO_VEM_DO_CRM } = await import('../src/lib/comissao-do-crm.ts');
+const { AVISO_COMISSAO_VEM_DO_CRM, MOTIVO_FONTE_DAS_FAIXAS } = await import('../src/lib/comissao-do-crm.ts');
 const { gerarComissoesMrr } = await import('../src/lib/comissao-mrr-servidor.ts');
 const rota = await import('../src/app/api/v1/crm/webhook/[tenantId]/route.ts');
 const { NextRequest } = await import('next/server.js');
@@ -114,7 +114,7 @@ const porta = servidor.address().port;
 
 // ── As contas ────────────────────────────────────────────────────────────
 const ENTUR = 't-entur', AGENCIA = 't-agencia', NOVA = 't-nova', OUTRA = 't-outra';
-await query(`INSERT INTO tenants (id, numero, data) VALUES ($1, 1, '{"perfil":"ecossistema"}'), ($2, 2, '{}'), ($3, 3, '{}'), ($4, 4, '{"perfil":"ecossistema"}')`, [ENTUR, AGENCIA, NOVA, OUTRA]);
+await query(`INSERT INTO tenants (id, numero, data) VALUES ($1, 1, '{"perfil":"ecossistema","fonte_da_comissao":"crm"}'), ($2, 2, '{}'), ($3, 3, '{}'), ($4, 4, '{"perfil":"ecossistema","fonte_da_comissao":"crm"}')`, [ENTUR, AGENCIA, NOVA, OUTRA]);
 const SEGREDO = { [ENTUR]: 'entra-entur', [AGENCIA]: 'entra-agencia', [NOVA]: 'entra-nova', [OUTRA]: 'entra-outra' };
 const urlDoCrm = `http://127.0.0.1:${porta}/api/integracao-financeiro/webhook/150002`;
 for (const t of [ENTUR, AGENCIA, NOVA, OUTRA]) {
@@ -274,8 +274,12 @@ console.log('\n--- (e) conta que não é o ecossistema ---');
   const antes = await enviar(NOVA, 'ev-nova', payload);
   eq(antes.status, 404, 'a conta nova ainda é agência: recusada');
   await query(`UPDATE tenants SET data = '{"perfil":"ecossistema"}' WHERE id = $1`, [NOVA]);
+  const nasFaixas = await enviar(NOVA, 'ev-nova', payload);
+  eq([nasFaixas.status, nasFaixas.corpo], [409, { ok: false, motivo: MOTIVO_FONTE_DAS_FAIXAS }], 'ecossistema com a fonte padrão (as faixas): o extrato do CRM é recusado, para não pagar duas vezes');
+  eq([(await todos(`SELECT id FROM comissoes WHERE tenant_id = $1`, [NOVA])).length, (await todos(`SELECT id FROM contas_pagar WHERE tenant_id = $1`, [NOVA])).length], [0, 0], 'e nada é gravado');
+  await trocarFonteDaComissao(pool, NOVA, 'crm');
   const depois = await enviar(NOVA, 'ev-nova', payload);
-  eq([depois.status, depois.corpo.situacao, (await entrada('ev-nova', NOVA)).processado], [200, 'criada', true], 'virou ecossistema: a MESMA entrega é aceita');
+  eq([depois.status, depois.corpo.situacao, (await entrada('ev-nova', NOVA)).processado], [200, 'criada', true], 'virou ecossistema e a fonte passou ao CRM: a MESMA entrega é aceita');
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -380,7 +384,7 @@ const BIA = 'comissao-crm-2026-10-888', CP_BIA = 'cp-comissao-comissao-crm-2026-
 console.log('\n--- (h) a geração por faixas recusa na conta ecossistema ---');
 {
   const apuracao = { mes: COMP, vendedores: [], foraDasMetas: { mrr: 0, itens: [] }, semVendedor: { mrr: 0, contas: [] }, semCadastro: [], total: { mrr: 0, mrr_nas_metas: 0, comissao: 0 } };
-  eq(await fonteDaComissao(pool, ENTUR), 'crm', 'a fonte da comissão da Entur é o CRM (o padrão)');
+  eq(await fonteDaComissao(pool, ENTUR), 'crm', 'a fonte da comissão da Entur foi trocada para o CRM');
   const e = await falha(gerarComissoesMrr(pool, ENTUR, apuracao, '2026-11-05'));
   eq([e?.nome, e?.status, e?.msg], ['ComissaoVemDoCrm', 409, 'A comissão agora vem do CRM (Área Comercial). As metas de MRR seguem só para acompanhamento.'], 'gerar por faixas recusa com o texto combinado');
   eq(e?.msg, AVISO_COMISSAO_VEM_DO_CRM, 'o mesmo texto que a tela mostra');
@@ -388,6 +392,9 @@ console.log('\n--- (h) a geração por faixas recusa na conta ecossistema ---');
   const ok = await gerarComissoesMrr(pool, ENTUR, apuracao, '2026-11-05');
   eq([await fonteDaComissao(pool, ENTUR), ok.gravadas], ['mrr', 0], 'com a fonte trocada para "mrr", as faixas voltam a gerar');
   await query(`UPDATE tenants SET data = data - 'fonte_da_comissao' WHERE id = $1`, [ENTUR]);
+  eq(await fonteDaComissao(pool, ENTUR), 'mrr', 'sem a fonte gravada, a comissão sai das faixas (o padrão desde 06/11/2026)');
+  await trocarFonteDaComissao(pool, ENTUR, 'crm');
+  eq(await fonteDaComissao(pool, ENTUR), 'crm', 'a troca grava a fonte CRM de volta');
 }
 
 // ══════════════════════════════════════════════════════════════════════

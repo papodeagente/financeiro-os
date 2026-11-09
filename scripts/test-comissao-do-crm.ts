@@ -156,7 +156,7 @@ console.log('\n--- (f) o aviso de volta e a fonte da comissão ---');
   eq(avisoDeComissaoPaga(d, { data_pagamento: '2026-12-10', valor_pago: 300, valor_final: 300 }),
     { competencia: '2026-11', usuarioId: 420008, eventIdOrigem: 'ev-1', pagoEm: '2026-12-10', valorPagoCents: 30000 }, 'COMISSAO_PAGA: competência, usuarioId como veio, eventId de origem, data e valor pago em centavos');
   eq(avisoDeComissaoPaga(d, { data_pagamento: '2026-12-10T15:00:00', valor_pago: null, valor_final: 300.1 }).valorPagoCents, 30010, 'sem valor pago gravado vale o valor final, em centavos');
-  eq([fonteDosDados({}), fonteDosDados(null), fonteDosDados({ fonte_da_comissao: 'mrr' }), fonteDosDados({ fonte_da_comissao: 'qualquer' })], ['crm', 'crm', 'mrr', 'crm'], 'a fonte da comissão: CRM por padrão; só "mrr" gravado volta às faixas');
+  eq([fonteDosDados({}), fonteDosDados(null), fonteDosDados({ fonte_da_comissao: 'mrr' }), fonteDosDados({ fonte_da_comissao: 'qualquer' }), fonteDosDados({ fonte_da_comissao: 'crm' })], ['mrr', 'mrr', 'mrr', 'mrr', 'crm'], 'a fonte da comissão: as faixas por padrão; só "crm" gravado passa ao extrato do CRM');
   const e = new ComissaoVemDoCrm();
   eq([e.message, e.status, AVISO_COMISSAO_VEM_DO_CRM], ['A comissão agora vem do CRM (Área Comercial). As metas de MRR seguem só para acompanhamento.', 409, e.message], 'a recusa das faixas, com o texto combinado');
 }

@@ -292,6 +292,23 @@ export default function ComissaoPorMrrPage() {
     await carregar(mes);
   };
 
+  const [trocandoFonte, setTrocandoFonte] = useState<FonteDaComissao | null>(null);
+  const trocarFonte = async (fonte: FonteDaComissao) => {
+    setResultado(null);
+    try {
+      const res = await fetch('/api/comissao-mrr', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fonte }),
+      });
+      const corpo = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(corpo?.error || 'Não foi possível trocar a fonte da comissão.');
+      setTrocandoFonte(null);
+      await carregar(mes);
+    } catch (e) {
+      setResultado({ tom: 'negativo', texto: e instanceof Error ? e.message : 'Não foi possível trocar a fonte da comissão.', avisos: [] });
+    }
+  };
+
   const gerar = async () => {
     setGerando(true);
     setResultado(null);
@@ -325,8 +342,9 @@ export default function ComissaoPorMrrPage() {
   const foraDaComissao = ap ? ap.foraDasMetas.mrr + ap.semVendedor.mrr + ap.semCadastro.reduce((s, x) => s + x.mrr, 0) : 0;
   const comissaoGravada = (painel?.comissoes ?? []).filter(c => c.status !== 'CANCELADA').reduce((s, c) => s + (Number(c.valor_comissao) || 0), 0);
   const mesFuturo = mes > hojeISO().slice(0, 7);
-  // A comissão vem do CRM (padrão): sem faixas, sem "Gerar"; a meta é acompanhamento.
-  const comissaoDoCrm = painel?.fonte !== 'mrr';
+  // Com a comissão vindo do CRM: sem faixas, sem "Gerar"; a meta é acompanhamento.
+  // O padrão são as faixas (base "MRR gerado"); a troca é da pessoa, logo abaixo.
+  const comissaoDoCrm = painel?.fonte === 'crm';
   const extratosDoCrm = (painel?.comissoes_crm ?? []).filter(c => c.status !== 'CANCELADA');
   const totalDoCrm = somaPor(extratosDoCrm, c => c.valor_comissao);
 
@@ -371,6 +389,28 @@ export default function ComissaoPorMrrPage() {
       {painel && comissaoDoCrm ? (
         <Callout tom="info" titulo={AVISO_COMISSAO_VEM_DO_CRM}>
           O extrato de cada pessoa chega do CRM no dia 1º e vira conta a pagar em <Link className="text-[var(--fin-accent)] hover:underline" href="/financeiro-ag/contas">Contas a pagar</Link>, vencendo no dia 10.
+        </Callout>
+      ) : null}
+      {painel && podeEditar ? (
+        <Callout
+          tom="info"
+          titulo={comissaoDoCrm ? 'A comissão vem do extrato do CRM' : 'A comissão sai das faixas da meta de MRR'}
+          acaoSecundaria={trocandoFonte
+            ? { rotulo: 'Cancelar', onClick: () => setTrocandoFonte(null) }
+            : { rotulo: comissaoDoCrm ? 'Voltar para as faixas' : 'Usar o extrato do CRM', onClick: () => setTrocandoFonte(comissaoDoCrm ? 'mrr' : 'crm') }}
+        >
+          {trocandoFonte ? (
+            <span className="flex flex-col gap-2">
+              <span>
+                {trocandoFonte === 'crm'
+                  ? 'Daqui para a frente, o extrato que o CRM manda no dia 1º vira a conta a pagar e as faixas deixam de gerar comissão. As duas nunca valem juntas, para a mesma venda não pagar duas vezes.'
+                  : 'Daqui para a frente, as faixas voltam a gerar a comissão e o extrato do CRM passa a ser recusado. As duas nunca valem juntas, para a mesma venda não pagar duas vezes.'}
+              </span>
+              <span><Button onClick={() => trocarFonte(trocandoFonte)} className="h-9 rounded-[10px] px-3">Confirmar a troca</Button></span>
+            </span>
+          ) : comissaoDoCrm
+            ? 'O CRM apura vendedor e CS (Área Comercial) e manda o extrato de cada pessoa; as faixas não geram comissão.'
+            : 'As faixas geram a comissão; o extrato que o CRM mandar é recusado com o motivo, sem conta a pagar.'}
         </Callout>
       ) : null}
       {painel && painel.crm.situacao !== 'ok' ? (

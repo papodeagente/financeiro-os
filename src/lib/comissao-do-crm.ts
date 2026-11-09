@@ -32,16 +32,23 @@ export const PREFIXO_DA_COMISSAO_DO_CRM = 'comissao-crm-';
 // ============================================================
 
 /**
- * 'crm' (padrão): a comissão chega pronta do CRM e a geração por faixas da
- * meta de MRR recusa. 'mrr': as faixas voltam a valer. Mora em
- * `tenants.data.fonte_da_comissao`; só 'mrr' gravado ali troca a fonte.
+ * 'mrr' (padrão): a comissão sai das faixas da meta de MRR (planos com base
+ * "MRR gerado", 06/11/2026) e o extrato do CRM é recusado. 'crm': a comissão
+ * chega pronta do CRM (COMISSAO_DO_MES) e a geração por faixas recusa. As duas
+ * nunca valem juntas, senão a mesma venda paga duas vezes. Mora em
+ * `tenants.data.fonte_da_comissao`; só 'crm' gravado ali troca a fonte, e quem
+ * troca é a pessoa em Equipe › Comissão por MRR.
  */
 export type FonteDaComissao = 'crm' | 'mrr';
 
 export const AVISO_COMISSAO_VEM_DO_CRM = 'A comissão agora vem do CRM (Área Comercial). As metas de MRR seguem só para acompanhamento.';
 
+/** A recusa do extrato do CRM enquanto a comissão sai das faixas. */
+export const MOTIVO_FONTE_DAS_FAIXAS =
+  'Nesta conta a comissão sai das faixas da meta de MRR. Para receber o extrato do CRM, troque a fonte da comissão para o CRM em Equipe › Comissão por MRR.';
+
 export function fonteDosDados(data: unknown): FonteDaComissao {
-  return data && typeof data === 'object' && (data as Record<string, unknown>).fonte_da_comissao === 'mrr' ? 'mrr' : 'crm';
+  return data && typeof data === 'object' && (data as Record<string, unknown>).fonte_da_comissao === 'crm' ? 'crm' : 'mrr';
 }
 
 /** A recusa da geração por faixas enquanto a comissão vem do CRM. */

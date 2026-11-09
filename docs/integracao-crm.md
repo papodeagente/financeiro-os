@@ -128,19 +128,27 @@ conta não saem por ela.
 
 Estorno da baixa depois do aviso não avisa o CRM nesta versão.
 
-## 3. A comissão por faixas de MRR
+## 3. A fonte da comissão: as faixas de MRR ou o extrato do CRM
 
-Na conta do ecossistema, a fonte da comissão é o CRM por padrão
-(`tenants.data.fonte_da_comissao`, ausente = `crm`). Enquanto for, gerar a
-comissão por faixas (`gerarComissoesMrr`, POST `/api/comissao-mrr`) recusa com
-"A comissão agora vem do CRM (Área Comercial). As metas de MRR seguem só para
-acompanhamento." e a tela Comissão por MRR mostra o aviso, sem o botão de
-gerar; metas e acompanhamento continuam. Para voltar às faixas, grave
-`fonte_da_comissao = 'mrr'` na conta (SQL revisado).
+Na conta do ecossistema, a comissão sai de UM lugar só, para a mesma venda nunca
+pagar duas vezes (`tenants.data.fonte_da_comissao`):
+
+- `mrr` (padrão, ausente = `mrr`, desde 09/11/2026): as faixas da meta de MRR
+  (planos com base "MRR gerado", 06/11/2026) geram a comissão; o
+  COMISSAO_DO_MES do CRM é recusado com 409 e o motivo "Nesta conta a comissão
+  sai das faixas da meta de MRR. Para receber o extrato do CRM, troque a fonte da
+  comissão para o CRM em Equipe › Comissão por MRR.", sem gravar nada.
+- `crm`: o extrato do CRM vira a conta a pagar; gerar por faixas
+  (`gerarComissoesMrr`, POST `/api/comissao-mrr`) recusa com "A comissão agora vem
+  do CRM (Área Comercial). As metas de MRR seguem só para acompanhamento." e a
+  tela mostra o aviso, sem o botão de gerar; metas e acompanhamento continuam.
+
+A troca é da pessoa com permissão de escrita, na própria tela Equipe › Comissão
+por MRR (PUT `/api/comissao-mrr` com `{ fonte }`), com confirmação.
 
 ## 4. Como conferir depois do deploy
 
-Com a conta 01 no perfil ecossistema e integrada à 150002, mande pelo CRM (ou por
+Com a conta 01 no perfil ecossistema, integrada à 150002 e com a fonte da comissão no CRM, mande pelo CRM (ou por
 um POST assinado no webhook) um COMISSAO_DO_MES de teste com total de R$ 1,00:
 a resposta tem de ser 200 `criada` e a conta "Comissão de <mês>/<ano>, <nome>"
 aparece em Contas a pagar vencendo no dia 10; o mesmo `id` de novo responde

@@ -156,11 +156,11 @@ eq([apAgencia.vendedores.length, apAgencia.total.mrr_nas_metas], [0, 0], 'a apur
 
 // ══════════════════════════════════════════════════════════════════════
 console.log('\n--- (f) a comissão vem do CRM: as faixas não geram ---');
-await query(`UPDATE tenants SET data = data - 'fonte_da_comissao' WHERE id = $1`, [ENTUR]);
+await query(`UPDATE tenants SET data = data || '{"fonte_da_comissao":"crm"}'::jsonb WHERE id = $1`, [ENTUR]);
 const antes = JSON.stringify(await comissoes());
 let recusa = null;
 try { await gerarComissoesMrr(exec, ENTUR, await apurarMes(exec, ENTUR, MES, vendasNov), '2026-11-20'); } catch (e) { recusa = e; }
-eq([recusa?.name, recusa?.status, recusa?.message], ['ComissaoVemDoCrm', 409, 'A comissão agora vem do CRM (Área Comercial). As metas de MRR seguem só para acompanhamento.'], 'sem a fonte gravada (o padrão é o CRM), gerar recusa com o texto combinado');
+eq([recusa?.name, recusa?.status, recusa?.message], ['ComissaoVemDoCrm', 409, 'A comissão agora vem do CRM (Área Comercial). As metas de MRR seguem só para acompanhamento.'], 'com a fonte CRM gravada, gerar recusa com o texto combinado');
 eq(JSON.stringify(await comissoes()), antes, 'e nada é gravado');
 eq((await listarMetasMrr(exec, ENTUR, MES)).length, 2, 'as metas seguem lá, para acompanhamento');
 

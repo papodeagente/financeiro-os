@@ -11,7 +11,8 @@
  *    só por conta a pagar.
  *  - tarefaComissaoPagaAoCrm: o agendador manda esses avisos ao CRM e repõe
  *    o aviso de conta paga que, por algum caminho, não entrou na fila.
- *  - fonteDaComissao: 'crm' (padrão) ou 'mrr', em tenants.data.
+ *  - fonteDaComissao: 'mrr' (padrão, as faixas) ou 'crm' (o extrato do CRM), em
+ *    tenants.data; trocarFonteDaComissao grava a escolha.
  *
  * Toda consulta de negócio filtra tenant_id.
  */
@@ -23,7 +24,7 @@ import { hojeISO, mesDe } from './money';
 import type { ComissaoVenda } from './crm-types';
 import { janelaDeMinutos, type DefinicaoTarefa } from './agendador/nucleo';
 import {
-  ComissaoVemDoCrm, PREFIXO_DA_COMISSAO_DO_CRM, TIPO_COMISSAO_PAGA, avisoDeComissaoPaga, decidirVersao,
+  ComissaoVemDoCrm, MOTIVO_FONTE_DAS_FAIXAS, PREFIXO_DA_COMISSAO_DO_CRM, TIPO_COMISSAO_PAGA, avisoDeComissaoPaga, decidirVersao,
   detalheDaComissaoDoCrm, fonteDosDados, idDaComissaoDoCrm, idDoAvisoDeComissaoPaga, lerExtratoDoCrm, linhaDaComissaoDoCrm,
   type DecisaoDaVersao, type FonteDaComissao,
 } from './comissao-do-crm';
@@ -35,6 +36,11 @@ import {
 export async function fonteDaComissao(exec: ExecutorSQL, tenantId: string): Promise<FonteDaComissao> {
   const { rows } = await exec.query(`SELECT data FROM tenants WHERE id = $1 LIMIT 1`, [tenantId]);
   return fonteDosDados(rows[0]?.data);
+}
+
+/** Grava de onde vem a comissão da conta (só na conta do ecossistema, quem chama confere). */
+export async function trocarFonteDaComissao(exec: ExecutorSQL, tenantId: string, fonte: FonteDaComissao): Promise<void> {
+  await exec.query(`UPDATE tenants SET data = COALESCE(data, '{}'::jsonb) || jsonb_build_object('fonte_da_comissao', $2::text) WHERE id = $1`, [tenantId, fonte]);
 }
 
 /** Recusa (ComissaoVemDoCrm) a geração por faixas enquanto a comissão vem do CRM. */
@@ -77,6 +83,8 @@ export async function receberComissaoDoMes(
   const exec = pool as unknown as ExecutorSQL;
   const fora = await exigirEcossistema(tenantId, exec);
   if (fora) return { status: fora.status, corpo: { ok: false, motivo: MOTIVO_FORA_DO_ECOSSISTEMA } };
+  // Com a comissão saindo das faixas (o padrão), o extrato do CRM pagaria a mesma venda de novo.
+  if ((await fonteDaComissao(exec, tenantId)) !== 'crm') return { status: 409, corpo: { ok: false, motivo: MOTIVO_FONTE_DAS_FAIXAS } };
 
   const hoje = opcoes.hoje ?? hojeISO();
   const lido = lerExtratoDoCrm(payload, { eventId, mesAtual: mesDe(hoje) });

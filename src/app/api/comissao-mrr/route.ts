@@ -3,7 +3,7 @@ import { consultarMrrVendido, upsertVendedorByExternalId } from '@/lib/crm-integ
 import { contextoDoEcossistema, respostaJson as json } from '@/lib/rota-do-ecossistema';
 import { hojeISO } from '@/lib/money';
 import { AVISO_COMISSAO_VEM_DO_CRM, ComissaoVemDoCrm } from '@/lib/comissao-do-crm';
-import { fonteDaComissao } from '@/lib/comissao-do-crm-servidor';
+import { fonteDaComissao, trocarFonteDaComissao } from '@/lib/comissao-do-crm-servidor';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,9 +15,9 @@ const MES = /^\d{4}-(0[1-9]|1[0-2])$/;
  * Sem resposta do CRM, a apuração não sai: comissão nunca é calculada sobre
  * número que não veio.
  *
- * `fonte` diz de onde vem a comissão da conta (D31, 05/11/2026): 'crm', o
- * padrão, faz a tela mostrar o aviso, esconder o "Gerar" e somar os extratos
- * do mês que chegaram do CRM (`comissoes_crm`).
+ * `fonte` diz de onde vem a comissão da conta: 'mrr' (padrão) são as faixas;
+ * 'crm' faz a tela mostrar o aviso, esconder o "Gerar" e somar os extratos do
+ * mês que chegaram do CRM (`comissoes_crm`). Quem troca é o PUT abaixo.
  */
 export async function GET(req: Request) {
   try {
@@ -81,5 +81,22 @@ export async function POST(req: Request) {
     if (error instanceof ComissaoVemDoCrm) return json({ error: error.message }, error.status);
     console.error('[comissao-mrr] Falha ao gerar:', error instanceof Error ? error.message : 'Erro');
     return json({ error: 'Não foi possível gerar a comissão por MRR.' }, 500);
+  }
+}
+
+/** { fonte: 'mrr' | 'crm' }: de onde vem a comissão da conta (as faixas ou o extrato do CRM). */
+export async function PUT(req: Request) {
+  try {
+    const ctx = await contextoDoEcossistema('escrever');
+    if ('response' in ctx) return ctx.response;
+    let corpo: Record<string, unknown>;
+    try { corpo = await req.json(); } catch { return json({ error: 'Pedido inválido.' }, 400); }
+    const fonte = corpo?.fonte;
+    if (fonte !== 'mrr' && fonte !== 'crm') return json({ error: 'Pedido inválido.' }, 400);
+    await trocarFonteDaComissao(ctx.exec, ctx.tenantId, fonte);
+    return json({ ok: true, fonte });
+  } catch (error) {
+    console.error('[comissao-mrr] Falha ao trocar a fonte:', error instanceof Error ? error.message : 'Erro');
+    return json({ error: 'Não foi possível trocar a fonte da comissão.' }, 500);
   }
 }
