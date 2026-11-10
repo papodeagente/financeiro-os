@@ -41,6 +41,13 @@ export async function POST(req: NextRequest) {
 
     const resultado = await processarEventoCRM(tipo, payload, id, tenantId);
 
+    // O evento que responde no corpo (COMISSAO_DO_MES: criada, atualizada, já
+    // existia ou recusada com o motivo; docs/integracao-crm.md) volta com o
+    // corpo e o status do processamento. Os outros seguem como antes.
+    if (resultado.resposta) {
+      return NextResponse.json(resultado.resposta.corpo, { status: resultado.resposta.status });
+    }
+
     // Evento que FALHOU responde 5xx: é o que faz o CRM tentar de novo com o
     // backoff dele. Antes a falha voltava 200, o CRM dava o evento por
     // entregue e a venda nunca entrava. Duplicata e tipo ignorado continuam

@@ -34,6 +34,7 @@ import { ErroDoMeio, lerMeioDoPagamento, recusaDaForma, type MeioDoPagamento } f
 import type { FormaPagamento } from './formas-pagamento';
 import { EMPRESA_PRINCIPAL_ID, empresaDoRegistro } from './empresas';
 import { empresaComConfigPropria, lerChavesDaEmpresa } from './empresas-config';
+import { avisarComissaoPaga } from './comissao-do-crm-servidor';
 import {
   cambioDaLiquidacao, lerCarimbo, moedaDe, round4, valorNaMoedaDoTitulo,
   type CarimboDoCambio, type CodigoMoeda, type VariacaoCambial,
@@ -525,6 +526,11 @@ export async function registrarBaixas(
           cambio.carimbo.origem, cambio.carimbo.fonte ?? null, cambio.carimbo.cotado_em ?? null],
       );
     }
+    // Comissão do CRM paga por inteiro: o aviso COMISSAO_PAGA entra na fila de
+    // saída para o CRM nesta mesma transação (comissao-do-crm-servidor.ts).
+    if (it.titulo_tabela === 'contas_pagar' && plano.status_depois === 'PAGO') {
+      await avisarComissaoPaga(exec, ctx.tenantId, it.titulo_id);
+    }
   }
 
   const assinatura = assinar(assinaturaPartes);
@@ -746,5 +752,8 @@ export async function registrarBaixaLegada(
     if (!/baixas|does not exist|não existe/i.test(msg) || !avisou) console.error('[baixas] histórico não registrado:', msg);
     avisou = true;
   }
+  // A tela antiga e a conciliação também pagam conta: comissão do CRM paga
+  // por inteiro avisa o CRM (comissao-do-crm-servidor.ts, nunca derruba quem chamou).
+  if (p.tabela === 'contas_pagar' && p.caixa < 0) await avisarComissaoPaga(exec, p.tenantId, p.tituloId);
 }
 let avisou = false;

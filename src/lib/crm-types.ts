@@ -1,6 +1,7 @@
 // Grupos OS - CRM & Agency Management Types
 
 import type { DetalheDaComissaoMrr, FaixaDaMeta } from './comissao-mrr';
+import type { DetalheDaComissaoDoCrm } from './comissao-do-crm';
 import { generateId } from './utils';
 // hojeISO devolve a data civil no fuso do tenant. Os factories usavam
 // new Date().toISOString(), que é UTC: em produção (servidor em UTC), das
@@ -779,9 +780,14 @@ export interface ComissaoVenda {
   data_aprovacao: string | null;
   data_pagamento: string | null;
   observacoes: string;
-  /** 'mrr': comissão por MRR do mês (comissao-mrr.ts), sem venda própria. O cálculo da tela de comissões nunca toca. */
-  origem?: 'mrr';
+  /**
+   * 'mrr': comissão por MRR do mês (comissao-mrr.ts); 'crm': extrato do mês da
+   * Área Comercial do CRM (comissao-do-crm.ts). Nenhuma das duas tem venda
+   * própria, e o cálculo da tela de comissões nunca toca.
+   */
+  origem?: 'mrr' | 'crm';
   mrr?: DetalheDaComissaoMrr;
+  crm?: DetalheDaComissaoDoCrm;
 }
 
 export type PeriodoMeta = 'MENSAL' | 'TRIMESTRAL' | 'ANUAL';

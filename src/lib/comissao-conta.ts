@@ -39,6 +39,7 @@ import type { ExecutorSQL } from './caixa-atomico';
 import { DIA_ULTIMO, diaNoMes, proximaDataPagamento } from './comissao-agenda';
 import type { ComissaoVenda, ContaPagar } from './crm-types';
 import { hojeISO, num, round2 } from './money';
+import { descricaoDaComissaoDoCrm, observacaoDaContaDoCrm, vencimentoDaComissaoDoCrm } from './comissao-do-crm';
 
 export const PREFIXO_CONTA_COMISSAO = 'cp-comissao-';
 
@@ -86,14 +87,19 @@ export function contaDaComissao(
   const valor = round2(num(c.valor_comissao));
   if (valor <= 0) return null;
   const hoje = ctx.hoje ?? hojeISO();
-  const venc = vencimentoDaComissao(ctx.datasPagamento, c.data_venda, hoje);
+  // Extrato do mês vindo do CRM (conta do ecossistema, comissao-do-crm.ts):
+  // vence no dia 10 do mês seguinte à competência, sem olhar a agenda.
+  const doCrm = c.origem === 'crm' && c.crm ? c.crm : null;
+  const venc = doCrm
+    ? { data: vencimentoDaComissaoDoCrm(doCrm.competencia), semAgenda: false }
+    : vencimentoDaComissao(ctx.datasPagamento, c.data_venda, hoje);
   // Comissão por MRR (conta do ecossistema): é do mês do vendedor, não de uma
   // venda. A conta não aponta para venda nenhuma e diz o que ela é.
   const doMrr = c.origem === 'mrr';
-  const vendaId = doMrr ? null : c.venda_id || null;
+  const vendaId = doMrr || doCrm ? null : c.venda_id || null;
 
   const observacoes = [
-    doMrr
+    doCrm ? observacaoDaContaDoCrm(doCrm) : doMrr
       ? `Comissão por MRR de ${c.venda_numero.replace(/^MRR /, '')} (${c.plano_nome || 'plano de comissão'}, ${num(c.percentual_aplicado)}% sobre ${round2(num(c.valor_base)).toFixed(2)} de MRR vendido).`
       : `Comissão da venda ${c.venda_numero || c.venda_id} (${c.plano_nome || 'plano de comissão'}, ${num(c.percentual_aplicado)}% sobre ${round2(num(c.valor_base)).toFixed(2)}).`,
     venc.semAgenda ? 'Agenda de pagamento de comissão não configurada: vencimento no fim do mês. Defina os dias em Configurações, Agência.' : '',
@@ -107,7 +113,7 @@ export function contaDaComissao(
     grupo_id: null,
     fornecedor_id: '',
     fornecedor_nome: c.vendedor_nome || 'Vendedor',
-    descricao: doMrr
+    descricao: doCrm ? descricaoDaComissaoDoCrm(doCrm.competencia, c.vendedor_nome) : doMrr
       ? `Comissão por MRR · ${c.vendedor_nome || 'vendedor'} · ${c.venda_numero.replace(/^MRR /, '')}`
       : `Comissão · ${c.vendedor_nome || 'vendedor'} · venda ${c.venda_numero || c.venda_id}`,
     categoria_id: ctx.categoriaId,
