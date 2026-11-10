@@ -23,6 +23,7 @@ import { EMPRESAS_SCHEMA_SQL } from './empresas-schema';
 import { RECORRENCIA_SCHEMA_SQL } from './recorrencia-schema';
 import { CENTROS_CUSTO_SCHEMA_SQL } from './centros-custo-servidor';
 import { PERMISSOES_SCHEMA_SQL } from './permissoes-schema';
+import { semearPlanos } from './planos-do-saas';
 import { LEITURA_DOCUMENTO_SCHEMA_SQL } from './leitura-documento-servidor';
 import { FORMAS_PAGAMENTO_SCHEMA_SQL } from './formas-pagamento-servidor';
 import { CONTAS_EXCLUIDAS_SCHEMA_SQL } from './contas-excluidas-schema';
@@ -794,7 +795,7 @@ async function executarInitDB() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
-    -- Planos do SaaS (Basic, Founder, Founder Pro). Editaveis no
+    -- Planos do SaaS (Básico, Controle, Escala). Editaveis no
     -- /admin/planos pra ajustar preco/limites/features sem deploy.
     -- slug e a referencia estavel usada em tenants.plano.
     CREATE TABLE IF NOT EXISTS planos (
@@ -934,28 +935,9 @@ async function executarInitDB() {
     CREATE INDEX IF NOT EXISTS idx_assinaturas_trial ON assinaturas(trial_ends_at) WHERE status = 'trial';
   `);
 
-  // Seed dos planos padrao (idempotente — ON CONFLICT DO NOTHING).
-  // Precos sao PLACEHOLDERS que o user edita em /admin/planos.
-  await pool.query(`
-    INSERT INTO planos (id, slug, nome, descricao, preco_mensal, preco_anual, moeda, destaque, ordem, ativo, limites, features)
-    VALUES
-      ('plano-basic', 'basic', 'Basic', 'Para agências que estão começando.',
-        97, 970, 'BRL', FALSE, 1, TRUE,
-        '{"usuarios": 3, "propostas_mes": 50, "grupos": 10, "ai_enabled": false, "white_label": false}'::jsonb,
-        '["Até 3 usuários", "50 propostas/mês", "Hub de viagens", "Templates prontos", "Suporte por email"]'::jsonb
-      ),
-      ('plano-founder', 'founder', 'Founder', 'Para agências em crescimento que precisam de mais ferramentas.',
-        197, 1970, 'BRL', TRUE, 2, TRUE,
-        '{"usuarios": 10, "propostas_mes": 200, "grupos": 50, "ai_enabled": true, "white_label": false}'::jsonb,
-        '["Até 10 usuários", "200 propostas/mês", "Geração com IA (Claude)", "CRM completo", "Funis e campanhas", "API de hotéis e voos", "Suporte prioritário"]'::jsonb
-      ),
-      ('plano-founder-pro', 'founder-pro', 'Founder Pro', 'Para agências consolidadas com alto volume e necessidade de white-label.',
-        397, 3970, 'BRL', FALSE, 3, TRUE,
-        '{"usuarios": -1, "propostas_mes": -1, "grupos": -1, "ai_enabled": true, "white_label": true}'::jsonb,
-        '["Usuários ilimitados", "Propostas ilimitadas", "Geração com IA (Claude)", "CRM completo + automações", "White-label completo", "Suporte dedicado", "Onboarding 1-a-1"]'::jsonb
-      )
-    ON CONFLICT (id) DO NOTHING;
-  `);
+  // Planos padrao (Básico, Controle, Escala) e a troca dos nomes antigos:
+  // src/lib/planos-do-saas.ts. Idempotente; preco editado em /admin/planos fica.
+  await semearPlanos(pool);
 
   // Seed default login_campanha — vazio inicialmente. Super admin
   // edita em /admin/marketing.
