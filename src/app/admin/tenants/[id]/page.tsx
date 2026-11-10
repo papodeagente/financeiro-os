@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Loader2, Users, Layers, DollarSign, UserCheck, Pause, Play, Save } from 'lucide-react'
 import { toast } from '@/lib/toast'
+import { useEhSuperAdmin } from '@/components/admin/PapelDaPlataforma'
 
 interface TenantDetail {
   id: string
@@ -24,6 +25,7 @@ interface TenantDetail {
 }
 
 export default function AdminTenantDetailPage() {
+  const superAdmin = useEhSuperAdmin()
   const params = useParams()
   const router = useRouter()
   const id = params.id as string
@@ -189,6 +191,8 @@ export default function AdminTenantDetailPage() {
         ))}
       </div>
 
+      {/* Ações e edição: só super admin. O CS consulta a ficha. */}
+      {superAdmin ? (<>
       {/* Actions */}
       <div className="bg-[var(--fin-surface)] border border-[var(--fin-border)] rounded-xl p-6 mb-6">
         <h2 className="text-lg font-semibold text-[var(--fin-text)] mb-4">Ações</h2>
@@ -305,6 +309,7 @@ export default function AdminTenantDetailPage() {
           </div>
         </form>
       </div>
+      </>) : null}
     </div>
   )
 }

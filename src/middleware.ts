@@ -4,6 +4,7 @@ import { isCanonicalHost, extractHost, getCanonicalBaseUrl } from './lib/canonic
 import { isMindMapImportPath, isPublicMindMapShareRequest } from './lib/mapa-mental-public-path';
 import { isPublicBasePath } from './lib/public-paths';
 import { corpoSimplesEmRotaJson, origemPermitida } from './lib/origem-da-mutacao';
+import { csPodeAbrir, papelDaSessao } from './lib/plataforma';
 
 let _jwtSecret: Uint8Array | null = null;
 function getJwtSecret() {
@@ -152,12 +153,20 @@ export async function middleware(request: NextRequest) {
       }
     }
 
-    // Admin routes: require isSuperAdmin
+    // Admin routes: super admin, ou CS nos caminhos dele (src/lib/plataforma.ts).
+    // O CS também não usa o app das agências: fora da lista dele, nada abre.
     const isAdminRoute = pathname.startsWith('/admin') || pathname.startsWith('/api/admin/');
+    const papel = papelDaSessao(payload as Parameters<typeof papelDaSessao>[0]);
+    if (papel === 'CS' && !csPodeAbrir(pathname, request.method)) {
+      if (pathname.startsWith('/api/')) {
+        return NextResponse.json({ error: 'Seu papel na plataforma não permite esta ação.' }, { status: 403 });
+      }
+      return NextResponse.redirect(new URL('/admin/dashboard', request.url));
+    }
     if (isAdminRoute) {
-      if (!payload.isSuperAdmin) {
+      if (!papel) {
         if (pathname.startsWith('/api/')) {
-          return NextResponse.json({ error: 'Acesso restrito a super admins' }, { status: 403 });
+          return NextResponse.json({ error: 'Acesso restrito à equipe da plataforma' }, { status: 403 });
         }
         return NextResponse.redirect(new URL('/admin/login', request.url));
       }

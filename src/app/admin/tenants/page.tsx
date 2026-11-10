@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, Loader2, ExternalLink } from 'lucide-react'
+import { useEhSuperAdmin } from '@/components/admin/PapelDaPlataforma'
 
 interface Tenant {
   id: string
@@ -16,6 +17,7 @@ interface Tenant {
 }
 
 export default function AdminTenantsPage() {
+  const superAdmin = useEhSuperAdmin()
   const router = useRouter()
   const [tenants, setTenants] = useState<Tenant[]>([])
   const [loading, setLoading] = useState(true)
@@ -58,6 +60,7 @@ export default function AdminTenantsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-[var(--fin-text)]">Agencias</h1>
+        {superAdmin ? (
         <Link
           href="/admin/tenants/novo"
           className="bg-[var(--fin-accent)] text-[var(--fin-text-on-fill)] font-medium rounded-lg px-4 py-2 text-sm hover:bg-[var(--fin-accent-hover)] transition-colors inline-flex items-center gap-2"
@@ -65,6 +68,7 @@ export default function AdminTenantsPage() {
           <Plus className="w-4 h-4" />
           Nova Agencia
         </Link>
+        ) : null}
       </div>
 
       <div className="bg-[var(--fin-surface)] border border-[var(--fin-border)] rounded-xl overflow-hidden">
