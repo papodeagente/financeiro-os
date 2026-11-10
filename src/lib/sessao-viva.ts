@@ -17,13 +17,21 @@
 import pool from './db';
 import { runWithAuditContext, SYSTEM_AUDIT_CONTEXT } from './audit-context';
 import { perfilCanonico, semAcessoAoSistema } from './permissoes';
+import { papelDoCadastro } from './plataforma';
 
 export interface DonoDaSessao {
   userId: string;
   tenantId?: string;
   isSuperAdmin?: boolean;
+  /** 'CS' para quem é da plataforma sem ser super admin (ver ./plataforma). */
+  plataforma?: string;
   perfil?: string;
   tv?: number;
+}
+
+/** Da plataforma: super admin ou CS, os dois em `super_admins`. */
+function daPlataforma(p: DonoDaSessao): boolean {
+  return p.isSuperAdmin === true || p.plataforma === 'CS';
 }
 
 interface Estado { tv: number; ok: boolean; ate: number }
@@ -31,8 +39,22 @@ interface Estado { tv: number; ok: boolean; ate: number }
 const CACHE_MS = 30_000;
 const cache = new Map<string, Estado>();
 
+// O papel entra na chave: o resultado guardado para a sessão de CS não pode
+// servir a um token de super admin com o mesmo id (nem o contrário).
 function chave(p: DonoDaSessao): string {
-  return p.isSuperAdmin ? `sa:${p.userId}` : `u:${p.tenantId ?? ''}:${p.userId}`;
+  if (p.isSuperAdmin === true) return `sa:${p.userId}`;
+  if (p.plataforma === 'CS') return `cs:${p.userId}`;
+  return `u:${p.tenantId ?? ''}:${p.userId}`;
+}
+
+/** Esquece o que está guardado da pessoa, nos dois papéis da plataforma. */
+function esquecer(p: DonoDaSessao): void {
+  if (daPlataforma(p)) {
+    cache.delete(`sa:${p.userId}`);
+    cache.delete(`cs:${p.userId}`);
+  } else {
+    cache.delete(chave(p));
+  }
 }
 
 /**
@@ -47,10 +69,14 @@ function lerEstado(p: DonoDaSessao): Promise<Estado> {
 
 async function lerEstadoNoBanco(p: DonoDaSessao): Promise<Estado> {
   if (!pool) return { tv: Number(p.tv) || 0, ok: true, ate: 0 };
-  if (p.isSuperAdmin) {
+  if (daPlataforma(p)) {
     const { rows } = await pool.query(`SELECT data FROM super_admins WHERE id = $1`, [p.userId]);
     const d = (rows[0]?.data ?? null) as Record<string, unknown> | null;
-    return { tv: Number(d?.token_version) || 0, ok: !!d && d.ativo !== false, ate: Date.now() + CACHE_MS };
+    // O papel do cadastro tem de ser o da sessão: CS promovido ou super admin
+    // rebaixado entra de novo, mesmo que a versão não tivesse subido.
+    const papelDaSessao = p.isSuperAdmin === true ? 'SUPER_ADMIN' : 'CS';
+    const ok = !!d && d.ativo !== false && papelDoCadastro(d) === papelDaSessao;
+    return { tv: Number(d?.token_version) || 0, ok, ate: Date.now() + CACHE_MS };
   }
   const { rows } = await pool.query(
     `SELECT u.data, t.status AS tenant_status
@@ -71,7 +97,7 @@ export async function versaoAtualDaSessao(p: DonoDaSessao): Promise<number> {
   // Não guarda em cache: no cadastro, o token é emitido antes de a transação
   // que cria a pessoa terminar, e um "não existe" guardado aqui derrubaria a
   // sessão recém-criada.
-  cache.delete(chave(p));
+  esquecer(p);
   return (await lerEstado(p)).tv;
 }
 
@@ -80,7 +106,7 @@ export async function sessaoViva(p: DonoDaSessao): Promise<boolean> {
   if (!p?.userId) return false;
   // Token de administrador emitido antes desta versão (sem `tv`) não passou
   // pelo segundo fator: cai uma vez e a pessoa entra de novo com o código.
-  if (p.tv === undefined && (p.isSuperAdmin || perfilCanonico(p.perfil) === 'ADMIN')) return false;
+  if (p.tv === undefined && (daPlataforma(p) || perfilCanonico(p.perfil) === 'ADMIN')) return false;
   const k = chave(p);
   let estado = cache.get(k);
   if (!estado || estado.ate < Date.now()) {
@@ -100,10 +126,10 @@ export async function sessaoViva(p: DonoDaSessao): Promise<boolean> {
 
 /** Derruba todas as sessões abertas da pessoa (sair, troca de senha...). */
 export async function revogarSessoes(p: DonoDaSessao): Promise<void> {
-  cache.delete(chave(p));
+  esquecer(p);
   if (!pool) return;
   const incrementa = `jsonb_set(data, '{token_version}', to_jsonb(COALESCE((data->>'token_version')::int, 0) + 1), true)`;
-  if (p.isSuperAdmin) {
+  if (daPlataforma(p)) {
     await pool.query(`UPDATE super_admins SET data = ${incrementa}, updated_at = NOW() WHERE id = $1`, [p.userId]);
   } else {
     await pool.query(
@@ -115,5 +141,5 @@ export async function revogarSessoes(p: DonoDaSessao): Promise<void> {
 
 /** Para o serviço de usuários limpar o cache local depois de subir a versão. */
 export function esquecerSessaoEmCache(p: DonoDaSessao): void {
-  cache.delete(chave(p));
+  esquecer(p);
 }

@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
+import { papelDaSessao } from '@/lib/plataforma';
 
 export async function GET() {
   try {
     const session = await getSession();
+    const papel = papelDaSessao(session);
 
-    if (!session || session.isSuperAdmin !== true) {
+    if (!session || !papel) {
       return NextResponse.json({ error: 'Nao autorizado' }, { status: 401 });
     }
 
@@ -16,7 +18,8 @@ export async function GET() {
         nome: session.nome,
         email: session.email,
         perfil: session.perfil,
-        isSuperAdmin: session.isSuperAdmin,
+        isSuperAdmin: session.isSuperAdmin === true,
+        papel,
         impersonatingTenantId: session.impersonatingTenantId || null,
         impersonatingTenantSlug: session.impersonatingTenantSlug || null,
       },

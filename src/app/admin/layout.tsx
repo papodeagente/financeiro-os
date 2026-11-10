@@ -3,9 +3,11 @@
 import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LayoutDashboard, Building2, LogOut, Shield, Sparkles, Image as ImageIcon, Link as LinkIcon, MessageSquare, KeyRound } from 'lucide-react'
+import { LayoutDashboard, Building2, LogOut, Shield, Sparkles, Image as ImageIcon, Link as LinkIcon, MessageSquare, KeyRound, Users, UserCog } from 'lucide-react'
+import { TELAS_DO_CS, rotuloDoPapel, type PapelDaPlataforma } from '@/lib/plataforma'
+import { PapelDaPlataformaContext } from '@/components/admin/PapelDaPlataforma'
 
-const navItems = [
+const todosOsItens = [
   { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/tenants', label: 'Agencias', icon: Building2 },
   { href: '/admin/planos', label: 'Planos', icon: Sparkles },
@@ -13,22 +15,29 @@ const navItems = [
   { href: '/admin/marketing', label: 'Marketing', icon: ImageIcon },
   { href: '/admin/support', label: 'Suporte', icon: MessageSquare },
   { href: '/admin/cofre', label: 'Cofre', icon: KeyRound },
+  { href: '/admin/equipe', label: 'Equipe', icon: Users },
+  { href: '/admin/minha-conta', label: 'Minha conta', icon: UserCog },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const [authenticated, setAuthenticated] = useState<boolean | null>(null)
+  const [papel, setPapel] = useState<PapelDaPlataforma | null>(null)
   const isLoginPage = pathname === '/admin/login'
+  // O CS vê só as telas dele; o servidor recusa o resto de qualquer jeito.
+  const navItems = papel === 'CS' ? todosOsItens.filter(i => TELAS_DO_CS.includes(i.href)) : todosOsItens
 
   useEffect(() => {
     if (isLoginPage) return
     fetch('/api/admin/auth/session')
-      .then(res => {
+      .then(async res => {
         if (!res.ok) {
           setAuthenticated(false)
           router.push('/admin/login')
         } else {
+          const dados = await res.json().catch(() => null)
+          setPapel(dados?.session?.papel === 'CS' ? 'CS' : 'SUPER_ADMIN')
           setAuthenticated(true)
         }
       })
@@ -40,7 +49,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   async function handleLogout() {
     try {
-      await fetch('/api/admin/auth/logout', { method: 'POST' })
+      await fetch('/api/auth/logout', { method: 'POST' })
     } catch {}
     router.push('/admin/login')
   }
@@ -68,7 +77,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </span>
       <div className="flex min-w-0 flex-col">
         <span className="fin-t-body-strong truncate text-[var(--fin-text)]">Entur OS</span>
-        <span className="fin-t-caption font-medium text-[var(--fin-violet)]">Super Admin</span>
+        <span className="fin-t-caption font-medium text-[var(--fin-violet)]">{papel ? rotuloDoPapel(papel) : 'Super Admin'}</span>
       </div>
     </div>
   )
@@ -142,7 +151,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </aside>
 
       <main className="min-w-0 flex-1 px-[var(--fin-page-pad)] py-[var(--fin-page-pad)]">
-        <div className="mx-auto w-full max-w-[var(--fin-page-max)]">{children}</div>
+        <div className="mx-auto w-full max-w-[var(--fin-page-max)]">
+          <PapelDaPlataformaContext.Provider value={papel}>{children}</PapelDaPlataformaContext.Provider>
+        </div>
       </main>
     </div>
   )

@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
-import { getSession } from '@/lib/auth';
+import { acessoDaPlataforma } from '@/lib/plataforma-servidor';
 
 // GET /api/admin/support/tickets — super admin lista TODOS os tickets
 // de todos os tenants, com filtros opcionais via querystring:
 //   ?status=aberto&prioridade=alta&q=<busca-titulo>
+// Suporte: super admin e CS (ver src/lib/plataforma.ts).
 async function requireSuper() {
-  const session = await getSession();
-  if (!session || session.isSuperAdmin !== true) return null;
-  return session;
+  const acesso = await acessoDaPlataforma('atender_suporte');
+  return acesso instanceof NextResponse ? null : acesso.session;
 }
 
 export async function GET(req: Request) {

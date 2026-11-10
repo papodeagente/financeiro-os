@@ -4,6 +4,7 @@ import { verifyPassword, createSession, COOKIE_NAME, SESSAO_SEGUNDOS, type Sessi
 import { registrarEventoAuditoria } from '@/lib/audit';
 import { etapaSegundoFator, exigeSegundoFator, type Consulta as ConsultaSegundoFator } from '@/lib/segundo-fator';
 import { bloqueioDeLogin, ipDoLogin, registrarFalhaDeLogin, registrarSucessoDeLogin } from '@/lib/limite-login';
+import { papelDoCadastro, TENANT_DA_PLATAFORMA } from '@/lib/plataforma';
 
 export async function POST(req: Request) {
   try {
@@ -69,6 +70,7 @@ export async function POST(req: Request) {
     }
 
     // Administrador entra com senha e código do app autenticador (FIN-12).
+    // Vale para toda a equipe da plataforma, CS incluído.
     if (exigeSegundoFator(undefined, true)) {
       const etapa = await etapaSegundoFator(pool as unknown as ConsultaSegundoFator, 'super_admins', user, corpoLogin ?? {});
       if (!etapa.ok) {
@@ -80,15 +82,18 @@ export async function POST(req: Request) {
       }
     }
 
+    // O CS entra no painel sem a marca de super admin (ver src/lib/plataforma.ts).
+    const papel = papelDoCadastro(user);
     const session: SessionPayload = {
       userId: user.id,
       nome: user.nome,
       email: user.email,
-      perfil: 'SUPER_ADMIN',
+      perfil: papel,
       permissoes: {},
-      tenantId: '__platform__',
-      tenantSlug: '__platform__',
-      isSuperAdmin: true,
+      tenantId: TENANT_DA_PLATAFORMA,
+      tenantSlug: TENANT_DA_PLATAFORMA,
+      plataforma: papel,
+      ...(papel === 'SUPER_ADMIN' ? { isSuperAdmin: true } : {}),
     };
     registrarSucessoDeLogin('plataforma', emailNormalizado, ipLogin);
     const token = await createSession(session);
@@ -99,7 +104,7 @@ export async function POST(req: Request) {
       modulo: 'Segurança',
       entidade: 'super_admins',
       entidadeId: user.id,
-      descricao: 'Entrou na administração da plataforma.',
+      descricao: papel === 'CS' ? 'Entrou na administração da plataforma como CS.' : 'Entrou na administração da plataforma.',
     });
 
     const response = NextResponse.json({
@@ -108,7 +113,7 @@ export async function POST(req: Request) {
         id: user.id,
         nome: user.nome,
         email: user.email,
-        perfil: 'SUPER_ADMIN',
+        perfil: papel,
       },
     });
 

@@ -25,6 +25,11 @@ export interface SessionPayload {
   tenantId: string;
   tenantSlug: string;
   isSuperAdmin?: boolean;
+  /**
+   * Papel de quem é da plataforma (ver ./plataforma). O CS tem 'CS' e NÃO
+   * tem isSuperAdmin; o super admin tem os dois.
+   */
+  plataforma?: 'SUPER_ADMIN' | 'CS';
   impersonatingTenantId?: string;
   impersonatingTenantSlug?: string;
   /** Versão da sessão no cadastro (ver ./sessao-viva). */
@@ -55,6 +60,7 @@ export async function createSession(payload: SessionPayload): Promise<string> {
     userId: payload.userId,
     tenantId: payload.tenantId,
     isSuperAdmin: payload.isSuperAdmin,
+    plataforma: payload.plataforma,
   });
   const token = await new SignJWT({ ...payload, tv })
     .setProtectedHeader({ alg: 'HS256' })

@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { acessoDaPlataforma } from '@/lib/plataforma-servidor';
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getSession();
-    if (!session || session.isSuperAdmin !== true) {
-      return NextResponse.json({ error: 'Nao autorizado' }, { status: 401 });
-    }
+    // Ficha da agência: super admin e CS (só leitura; editar é do super admin).
+    const acesso = await acessoDaPlataforma('ver_agencias');
+    if (acesso instanceof NextResponse) return acesso;
 
     await initDB();
     if (!pool) {
