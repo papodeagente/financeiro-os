@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
-import { verifyPassword, createSession, COOKIE_NAME, SESSAO_SEGUNDOS, type SessionPayload } from '@/lib/auth';
+import { verifyPassword, createSession, duracaoDaSessao, COOKIE_NAME, type SessionPayload } from '@/lib/auth';
+import { COOKIE_NAVEGADOR, navegadorConfiavel, opcoesDoCookieDoNavegador, seloDepoisDoCodigo, seloDoPedido } from '@/lib/navegador-confiavel';
 import { registrarEventoAuditoria } from '@/lib/audit';
 import { etapaSegundoFator, exigeSegundoFator, type Consulta as ConsultaSegundoFator } from '@/lib/segundo-fator';
 import { bloqueioDeLogin, ipDoLogin, registrarFalhaDeLogin, registrarSucessoDeLogin } from '@/lib/limite-login';
@@ -71,14 +72,23 @@ export async function POST(req: Request) {
 
     // Administrador entra com senha e código do app autenticador (FIN-12).
     // Vale para toda a equipe da plataforma, CS incluído.
+    // Navegador confiável: pula só o código, nunca a senha (ver
+    // src/lib/navegador-confiavel.ts).
+    const lembrar = corpoLogin?.lembrar === true;
+    let seloNovo: string | null = null;
+    let peloNavegador = false;
     if (exigeSegundoFator(undefined, true)) {
-      const etapa = await etapaSegundoFator(pool as unknown as ConsultaSegundoFator, 'super_admins', user, corpoLogin ?? {});
-      if (!etapa.ok) {
-        if (etapa.contaComoFalha) {
-          registrarFalhaDeLogin('plataforma', emailNormalizado, ipLogin);
-          await registrarFalha('código do segundo fator inválido');
+      peloNavegador = await navegadorConfiavel(seloDoPedido(req.headers), 'super_admins', user);
+      if (!peloNavegador) {
+        const etapa = await etapaSegundoFator(pool as unknown as ConsultaSegundoFator, 'super_admins', user, corpoLogin ?? {});
+        if (!etapa.ok) {
+          if (etapa.contaComoFalha) {
+            registrarFalhaDeLogin('plataforma', emailNormalizado, ipLogin);
+            await registrarFalha('código do segundo fator inválido');
+          }
+          return NextResponse.json(etapa.corpo, { status: etapa.status });
         }
-        return NextResponse.json(etapa.corpo, { status: etapa.status });
+        if (lembrar) seloNovo = await seloDepoisDoCodigo(pool, 'super_admins', user.id);
       }
     }
 
@@ -94,6 +104,7 @@ export async function POST(req: Request) {
       tenantSlug: TENANT_DA_PLATAFORMA,
       plataforma: papel,
       ...(papel === 'SUPER_ADMIN' ? { isSuperAdmin: true } : {}),
+      ...(lembrar ? { lembrar: true } : {}),
     };
     registrarSucessoDeLogin('plataforma', emailNormalizado, ipLogin);
     const token = await createSession(session);
@@ -104,7 +115,8 @@ export async function POST(req: Request) {
       modulo: 'Segurança',
       entidade: 'super_admins',
       entidadeId: user.id,
-      descricao: papel === 'CS' ? 'Entrou na administração da plataforma como CS.' : 'Entrou na administração da plataforma.',
+      descricao: (papel === 'CS' ? 'Entrou na administração da plataforma como CS' : 'Entrou na administração da plataforma')
+        + (peloNavegador ? ' (navegador confiável, sem código).' : '.'),
     });
 
     const response = NextResponse.json({
@@ -121,9 +133,10 @@ export async function POST(req: Request) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: SESSAO_SEGUNDOS,
+      maxAge: duracaoDaSessao(session),
       path: '/',
     });
+    if (seloNovo) response.cookies.set(COOKIE_NAVEGADOR, seloNovo, opcoesDoCookieDoNavegador());
 
     return response;
   } catch (e: unknown) {

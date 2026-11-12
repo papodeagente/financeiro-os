@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { semAcessoAoSistema } from '@/lib/permissoes';
-import { verifyPassword, createSession, COOKIE_NAME, SESSAO_SEGUNDOS, type SessionPayload } from '@/lib/auth';
+import { verifyPassword, createSession, duracaoDaSessao, COOKIE_NAME, type SessionPayload } from '@/lib/auth';
+import { COOKIE_NAVEGADOR, navegadorConfiavel, opcoesDoCookieDoNavegador, seloDepoisDoCodigo, seloDoPedido } from '@/lib/navegador-confiavel';
 import { registrarEventoAuditoria } from '@/lib/audit';
 import { etapaSegundoFator, loginPedeSegundoFator, type Consulta as ConsultaSegundoFator } from '@/lib/segundo-fator';
 import { bloqueioDeLogin, ipDoLogin, registrarFalhaDeLogin, registrarSucessoDeLogin } from '@/lib/limite-login';
@@ -120,15 +121,26 @@ export async function POST(req: Request) {
     // Quem não é administrador e já cadastrou o aplicativo (para pagar, E7)
     // também: o código cadastrado passa a valer no login. Quem não cadastrou
     // entra só com a senha e é levado a cadastrar na hora de pagar.
+    //
+    // Navegador confiável (12/11/2026): quem já digitou o código neste
+    // navegador e marcou "Manter conectado" não digita de novo por 30 dias.
+    // A senha continua sempre obrigatória. Ver src/lib/navegador-confiavel.ts.
+    const lembrar = corpoLogin?.lembrar === true;
     const comSegundoFator = loginPedeSegundoFator(user);
+    let seloNovo: string | null = null;
+    let peloNavegador = false;
     if (comSegundoFator) {
-      const etapa = await etapaSegundoFator(pool as unknown as ConsultaSegundoFator, 'usuarios', user, corpoLogin ?? {});
-      if (!etapa.ok) {
-        if (etapa.contaComoFalha) {
-          registrarFalhaDeLogin('agencia', emailNormalizado, ipLogin);
-          await registrarFalha('código do segundo fator inválido');
+      peloNavegador = await navegadorConfiavel(seloDoPedido(req.headers), 'usuarios', user);
+      if (!peloNavegador) {
+        const etapa = await etapaSegundoFator(pool as unknown as ConsultaSegundoFator, 'usuarios', user, corpoLogin ?? {});
+        if (!etapa.ok) {
+          if (etapa.contaComoFalha) {
+            registrarFalhaDeLogin('agencia', emailNormalizado, ipLogin);
+            await registrarFalha('código do segundo fator inválido');
+          }
+          return NextResponse.json(etapa.corpo, { status: etapa.status });
         }
-        return NextResponse.json(etapa.corpo, { status: etapa.status });
+        if (lembrar) seloNovo = await seloDepoisDoCodigo(pool, 'usuarios', user.id, row.tenant_id);
       }
     }
 
@@ -142,6 +154,7 @@ export async function POST(req: Request) {
       tenantId: row.tenant_id || '',
       tenantSlug: row.tenant_slug || '',
       ...(comSegundoFator ? { sf: true } : {}),
+      ...(lembrar ? { lembrar: true } : {}),
     };
     registrarSucessoDeLogin('agencia', emailNormalizado, ipLogin);
     const token = await createSession(session);
@@ -152,7 +165,7 @@ export async function POST(req: Request) {
       modulo: 'Segurança',
       entidade: 'usuarios',
       entidadeId: user.id,
-      descricao: 'Entrou no sistema.',
+      descricao: peloNavegador ? 'Entrou no sistema (navegador confiável, sem código).' : 'Entrou no sistema.',
     });
 
     const response = NextResponse.json({
@@ -173,9 +186,10 @@ export async function POST(req: Request) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: SESSAO_SEGUNDOS,
+      maxAge: duracaoDaSessao(session),
       path: '/',
     });
+    if (seloNovo) response.cookies.set(COOKIE_NAVEGADOR, seloNovo, opcoesDoCookieDoNavegador());
 
     return response;
   } catch (e: unknown) {

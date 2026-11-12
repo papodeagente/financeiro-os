@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Check, KeyRound, Loader2, ShieldCheck } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import { QrDoAutenticador } from './QrDoAutenticador';
 
 interface Situacao {
   ativo: boolean;
@@ -109,17 +110,18 @@ export function SegundoFatorDoPerfil() {
           )}
 
           {cadastro && (
-            <ol className="max-w-[65ch] list-decimal space-y-2 pl-5 text-sm text-[var(--fin-text-2)]">
-              <li>No celular, abra o aplicativo autenticador e escolha adicionar conta com chave.</li>
-              <li>
-                Digite esta chave:
+            <div className="max-w-[65ch] space-y-3 text-sm text-[var(--fin-text-2)]">
+              <p>No celular, abra o aplicativo autenticador, toque em adicionar conta e leia o QR code. Depois digite o código de 6 números que ele mostrar.</p>
+              {cadastro.uri && <div className="w-fit"><QrDoAutenticador uri={cadastro.uri} /></div>}
+              <details>
+                <summary className="cursor-pointer text-[var(--fin-accent)]">Não consegue ler o QR?</summary>
+                <p className="mt-2">Escolha adicionar com chave e digite:</p>
                 <span className="mt-1 block select-all break-all font-mono text-base tracking-wider text-[var(--fin-text)]">{grupos}</span>
                 {cadastro.uri && (
                   <a href={cadastro.uri} className="text-[var(--fin-accent)] underline underline-offset-2">Abrir no aplicativo deste aparelho</a>
                 )}
-              </li>
-              <li>Digite abaixo o código de 6 números que o aplicativo mostrar.</li>
-            </ol>
+              </details>
+            </div>
           )}
 
           {(cadastro || situacao.ativo) && (
@@ -138,7 +140,14 @@ export function SegundoFatorDoPerfil() {
                   autoComplete="one-time-code"
                   maxLength={6}
                   value={codigo}
-                  onChange={e => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  onChange={e => {
+                    const v = e.target.value.replace(/\D/g, '').slice(0, 6);
+                    setCodigo(v);
+                    // O sexto número envia sozinho.
+                    if (v.length === 6 && codigo.length !== 6 && !enviando) {
+                      void enviar(cadastro ? { segredo_novo: cadastro.segredo, codigo: v } : { codigo: v });
+                    }
+                  }}
                   placeholder="000000"
                   aria-invalid={erro ? true : undefined}
                   aria-describedby={erro ? 'erro-segundo-fator' : undefined}

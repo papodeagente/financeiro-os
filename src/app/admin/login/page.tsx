@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Shield, Loader2 } from 'lucide-react'
-import { SegundoFatorCampos, type EstadoSegundoFator } from '@/components/auth/SegundoFatorCampos'
+import { ManterConectado, SegundoFatorCampos, type EstadoSegundoFator } from '@/components/auth/SegundoFatorCampos'
 
 export default function AdminLoginPage() {
   const router = useRouter()
@@ -13,9 +13,15 @@ export default function AdminLoginPage() {
   const [loading, setLoading] = useState(false)
   const [segundoFator, setSegundoFator] = useState<EstadoSegundoFator | null>(null)
   const [codigo, setCodigo] = useState('')
+  const [lembrar, setLembrar] = useState(true)
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    void enviar()
+  }
+
+  async function enviar(codigoAgora?: string) {
+    if (loading) return
     setError('')
     setLoading(true)
 
@@ -26,7 +32,8 @@ export default function AdminLoginPage() {
         body: JSON.stringify({
           email,
           senha: password,
-          ...(segundoFator ? { codigo, segredo_novo: segundoFator.segredo } : {}),
+          lembrar,
+          ...(segundoFator ? { codigo: codigoAgora ?? codigo, segredo_novo: segundoFator.segredo } : {}),
         }),
       })
 
@@ -93,8 +100,10 @@ export default function AdminLoginPage() {
           </div>
 
           {segundoFator && (
-            <SegundoFatorCampos estado={segundoFator} codigo={codigo} onCodigo={setCodigo} />
+            <SegundoFatorCampos estado={segundoFator} codigo={codigo} onCodigo={setCodigo} onCompleto={v => void enviar(v)} />
           )}
+
+          <ManterConectado marcado={lembrar} onMudar={setLembrar} />
 
           <button
             type="submit"

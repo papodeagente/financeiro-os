@@ -40,10 +40,24 @@ export interface SessionPayload {
    * (ver ./segundo-fator-pagador).
    */
   sf?: boolean;
+  /**
+   * "Manter conectado neste navegador" marcado no login: a sessão dura
+   * SESSAO_LEMBRADA_SEGUNDOS em vez de SESSAO_SEGUNDOS. Continua revogável
+   * (sair, troca de senha ou de perfil derrubam na hora, ver ./sessao-viva).
+   */
+  lembrar?: boolean;
 }
 
 /** Duração da sessão: 12 horas (era 7 dias). Vale para o JWT e o cookie. */
 export const SESSAO_SEGUNDOS = 12 * 60 * 60;
+
+/** Sessão de quem marcou "Manter conectado neste navegador": 15 dias. */
+export const SESSAO_LEMBRADA_SEGUNDOS = 15 * 24 * 60 * 60;
+
+/** Quanto dura a sessão deste payload: vale para o JWT e para o cookie. */
+export function duracaoDaSessao(payload: { lembrar?: boolean }): number {
+  return payload.lembrar === true ? SESSAO_LEMBRADA_SEGUNDOS : SESSAO_SEGUNDOS;
+}
 
 // Hash de senha mora em ./senha para poder ser usado (e testado) sem
 // arrastar next/headers.
@@ -65,7 +79,7 @@ export async function createSession(payload: SessionPayload): Promise<string> {
   const token = await new SignJWT({ ...payload, tv })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime(`${SESSAO_SEGUNDOS}s`)
+    .setExpirationTime(`${duracaoDaSessao(payload)}s`)
     .sign(getJwtSecret());
   return token;
 }

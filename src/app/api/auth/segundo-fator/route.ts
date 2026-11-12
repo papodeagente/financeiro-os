@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
-import { createSession, getSession, COOKIE_NAME, SESSAO_SEGUNDOS, type SessionPayload } from '@/lib/auth';
+import { createSession, getSession, duracaoDaSessao, COOKIE_NAME, type SessionPayload } from '@/lib/auth';
+import { COOKIE_NAVEGADOR, opcoesDoCookieDoNavegador, seloDepoisDoCodigo } from '@/lib/navegador-confiavel';
 import { registrarEventoAuditoria } from '@/lib/audit';
 import { etapaSegundoFator, exigeSegundoFator, segredoGravado, type Consulta } from '@/lib/segundo-fator';
 import { regraDoPagador } from '@/lib/segundo-fator-pagador';
@@ -107,8 +108,14 @@ export async function POST(req: Request) {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: SESSAO_SEGUNDOS,
+    maxAge: duracaoDaSessao(semDatas),
     path: '/',
   });
+  // Quem entrou com "Manter conectado" já escolheu lembrar este navegador:
+  // o código digitado aqui também vale para os próximos logins.
+  if (semDatas.lembrar === true) {
+    const selo = await seloDepoisDoCodigo(pool, 'usuarios', sessao.userId, sessao.tenantId);
+    if (selo) resposta.cookies.set(COOKIE_NAVEGADOR, selo, opcoesDoCookieDoNavegador());
+  }
   return resposta;
 }

@@ -52,6 +52,7 @@ function ambiente(opcoes = {}) {
     },
     '@/lib/auth': {
       COOKIE_NAME: 'entur-session',
+      duracaoDaSessao: p => (p?.lembrar === true ? 15 * 24 * 60 * 60 : 12 * 60 * 60),
       getSession: async () => Object.hasOwn(opcoes, 'session') ? opcoes.session : sessao,
       verifyPassword: async () => opcoes.senhaValida ?? true,
       createSession: async () => 'jwt-que-nao-pode-ir-para-o-log',

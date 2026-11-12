@@ -5,6 +5,8 @@
  */
 export const SESSAO_SEGUNDOS = 12 * 60 * 60;
 export const COOKIE_NAME = 'entur-session';
+export const SESSAO_LEMBRADA_SEGUNDOS = 15 * 24 * 60 * 60;
+export function duracaoDaSessao(p) { return p?.lembrar === true ? SESSAO_LEMBRADA_SEGUNDOS : SESSAO_SEGUNDOS; }
 export async function getSession() {
   const s = globalThis.__SESSAO_DE_TESTE__ ?? null;
   // A sessão de teste entra como quem passou pelo código do aplicativo

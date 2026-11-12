@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Lock, Mail, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { redirectImportacaoMapaSeguro } from '@/lib/redirect-interno';
-import { SegundoFatorCampos, type EstadoSegundoFator } from '@/components/auth/SegundoFatorCampos';
+import { ManterConectado, SegundoFatorCampos, type EstadoSegundoFator } from '@/components/auth/SegundoFatorCampos';
 
 interface CampanhaLogin {
   image_url: string;
@@ -25,6 +25,8 @@ export default function LoginPage() {
   // Administrador: depois da senha, o código do aplicativo autenticador.
   const [segundoFator, setSegundoFator] = useState<EstadoSegundoFator | null>(null);
   const [codigo, setCodigo] = useState('');
+  // Sessão de 15 dias e, depois do código, 30 dias sem pedir o código de novo.
+  const [lembrar, setLembrar] = useState(true);
 
   // Carrega imagem de campanha editavel pelo super admin em
   // /admin/marketing. Se nao houver image_url ou campanha estiver
@@ -40,8 +42,15 @@ export default function LoginPage() {
       .catch(() => { /* ignore — login funciona sem campanha */ });
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    void enviar();
+  };
+
+  // `codigoAgora`: o sexto número digitado envia sozinho, antes de o estado
+  // do campo ser atualizado.
+  const enviar = async (codigoAgora?: string) => {
+    if (loading) return;
     setError('');
     setLoading(true);
 
@@ -52,7 +61,8 @@ export default function LoginPage() {
         body: JSON.stringify({
           email: email.trim().toLowerCase(),
           senha,
-          ...(segundoFator ? { codigo, segredo_novo: segundoFator.segredo } : {}),
+          lembrar,
+          ...(segundoFator ? { codigo: codigoAgora ?? codigo, segredo_novo: segundoFator.segredo } : {}),
         }),
       });
 
@@ -187,8 +197,10 @@ export default function LoginPage() {
               </div>
 
               {segundoFator && (
-                <SegundoFatorCampos estado={segundoFator} codigo={codigo} onCodigo={setCodigo} />
+                <SegundoFatorCampos estado={segundoFator} codigo={codigo} onCodigo={setCodigo} onCompleto={v => void enviar(v)} />
               )}
+
+              <ManterConectado marcado={lembrar} onMudar={setLembrar} />
 
               {/* Submit */}
               <button
