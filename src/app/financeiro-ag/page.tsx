@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowDownLeft, ArrowLeftRight, ArrowRight, ArrowUpRight, CircleCheck, ClockAlert, GitCompareArrows, Plug, Plus, TrendingDown, TrendingUp, TriangleAlert, UserRoundX, Wallet } from 'lucide-react';
+import { ArrowDownLeft, ArrowLeftRight, ArrowRight, ArrowUpRight, CalendarClock, CircleCheck, ClockAlert, GitCompareArrows, Plug, Plus, TrendingDown, TrendingUp, TriangleAlert, UserRoundX, Wallet } from 'lucide-react';
 
 import type { ContaBancaria, ContaPagar, ContaReceber } from '@/lib/crm-types';
 import { hojeISO, round2 } from '@/lib/money';
@@ -136,6 +136,7 @@ const ICONE_PENDENCIA: Record<Pendencia['chave'], typeof ClockAlert> = {
   'pagar-vencido': ClockAlert,
   extrato: GitCompareArrows,
   'sem-fornecedor': UserRoundX,
+  'recebimento-a-definir': CalendarClock,
   plataformas: Plug,
 };
 

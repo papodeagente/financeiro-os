@@ -1,6 +1,12 @@
 /**
- * Venda do CRM paga direto ao fornecedor (Bruno, 09/10/2026), contra um
- * Postgres real (PGlite), rodando o webhook DE PRODUÇÃO (processarEventoCRM).
+ * Venda do CRM: quem recebe do cliente, contra um Postgres real (PGlite),
+ * rodando o webhook DE PRODUÇÃO (processarEventoCRM).
+ *
+ * Regra de 13/11/2026 (SUBSTITUI o padrão de 09/10): por padrão a agência
+ * recebe do cliente e paga cada fornecedor — conta a receber + conta a pagar
+ * por fornecedor; sem fornecedor, a conta a pagar nasce pendente. O "pago
+ * direto ao fornecedor" abaixo vale só para fornecedor marcado no cadastro
+ * como "recebe direto do cliente" (recebe_direto_do_cliente).
  *
  * "Contas a pagar (o valor total da venda) na maioria das vezes é pago direto
  * ao fornecedor. Contas a receber: a comissão gerada com a venda, a margem de
@@ -51,6 +57,7 @@ await pg.exec(`
   CREATE TABLE contas_pagar (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT '', fornecedor_id TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pendente', data JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
   CREATE TABLE contas_bancarias (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT '', nome TEXT NOT NULL DEFAULT '', banco TEXT NOT NULL DEFAULT '', data JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
   CREATE TABLE notificacoes (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT '', tipo TEXT NOT NULL DEFAULT '', titulo TEXT NOT NULL DEFAULT '', descricao TEXT NOT NULL DEFAULT '', link TEXT NOT NULL DEFAULT '', vendedor_id TEXT NOT NULL DEFAULT '', lida BOOLEAN NOT NULL DEFAULT FALSE, data JSONB NOT NULL DEFAULT '{}'::jsonb, chave_deduplicacao TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+  CREATE UNIQUE INDEX idx_notificacoes_dedup ON notificacoes (tenant_id, chave_deduplicacao) WHERE chave_deduplicacao IS NOT NULL AND chave_deduplicacao <> '';
   CREATE TABLE plataformas_transacoes (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT '', plataforma TEXT NOT NULL DEFAULT '', id_transacao TEXT NOT NULL DEFAULT '', cliente_id TEXT NOT NULL DEFAULT '', venda_id TEXT NOT NULL DEFAULT '', status_conciliacao TEXT NOT NULL DEFAULT 'PENDENTE', data JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 `);
 
@@ -98,7 +105,18 @@ const japao = (o = {}) => ({
 });
 
 // ══════════════════════════════════════════════════════════════════════
-console.log('--- (a) o caso real: Grupo Japão, Cativa Operadora ---');
+console.log('--- (0) o padrão: a agência recebe do cliente e paga o fornecedor ---');
+{
+  await evento('VENDA_FECHADA', japao({ crm_venda_id: 'crm_deal_0' }));
+  const v = (await vendaDo('crm_deal_0')).id;
+  const forn = await cativa();
+  eq((await crs(v)).map(x => [x.data.origem, x.data.valor_final]), [['VENDA', 390.63]], 'conta a receber do cliente pela venda inteira');
+  eq((await cps(v)).map(x => [x.fornecedor_id, x.data.valor_final, x.data.fornecedor_pendente === true]), [[forn.id, 312.5, false]], 'e conta a pagar à Cativa pelo custo');
+  // Daqui em diante, a exceção: a Cativa recebe direto do cliente.
+  await query(`UPDATE fornecedores_crm SET data = data || '{"recebe_direto_do_cliente":true}' WHERE id = $1`, [forn.id]);
+}
+
+console.log('\n--- (a) pago direto (fornecedor marcado): Grupo Japão, Cativa Operadora ---');
 let vendaJapao;
 {
   const r = await evento('VENDA_FECHADA', japao());
@@ -128,17 +146,17 @@ console.log('\n--- (b) reenviar não duplica ---');
   eq(depois.map(x => [x.id, x.status]), [[c.id, 'RECEBIDO']], 'a comissão recebida é preservada e não nasce outra ao lado');
 }
 
-console.log('\n--- (c) quando a agência recebe do cliente ---');
+console.log('\n--- (c) quando a agência recebe do cliente (sem a marcação, ou por plataforma) ---');
 {
   const forn = await cativa();
-  await query(`UPDATE fornecedores_crm SET data = data || '{"quem_recebe_do_cliente":"AGENCIA"}' WHERE id = $1`, [forn.id]);
+  await query(`UPDATE fornecedores_crm SET data = data - 'recebe_direto_do_cliente' WHERE id = $1`, [forn.id]);
   await evento('VENDA_FECHADA', japao({ crm_venda_id: 'crm_deal_2' }));
   const v = (await vendaDo('crm_deal_2')).id;
   const receber = await crs(v);
   const pagar = await cps(v);
-  eq(receber.map(x => [x.data.origem, x.data.valor_final]), [['VENDA', 390.63]], 'cadastro diz "a agência": conta a receber do cliente');
+  eq(receber.map(x => [x.data.origem, x.data.valor_final]), [['VENDA', 390.63]], 'sem a marcação: conta a receber do cliente');
   eq(pagar.map(x => [x.fornecedor_id, x.data.valor_final]), [[forn.id, 312.5]], 'e conta a pagar à Cativa pelo custo');
-  await query(`UPDATE fornecedores_crm SET data = data - 'quem_recebe_do_cliente' WHERE id = $1`, [forn.id]);
+  await query(`UPDATE fornecedores_crm SET data = data || '{"recebe_direto_do_cliente":true}' WHERE id = $1`, [forn.id]);
 
   await evento('VENDA_FECHADA', japao({ crm_venda_id: 'crm_deal_3', plataforma_origem: 'pagarme', plataforma_transacao: 'or_123', plataforma_transacoes: ['or_123'] }));
   const p = (await vendaDo('crm_deal_3')).id;
@@ -149,9 +167,8 @@ console.log('\n--- (d) sem fornecedor e sem custo ---');
 {
   await evento('VENDA_FECHADA', japao({ crm_venda_id: 'crm_deal_4', valor_total: 600, custo_total: 500, fornecedores: [] }));
   const v = (await vendaDo('crm_deal_4')).id;
-  const [c] = await crs(v);
-  eq([c.data.origem, c.data.valor_final, c.cliente_id, c.data.cliente_nome, c.data.fornecedor_pendente], ['COMISSAO_FORNECEDOR', 100, '', 'Fornecedor não informado', true], 'custo sem fornecedor: comissão marcada para informar quem paga, fora da conta do cliente');
-  eq((await cps(v)).length, 0, 'e nenhuma conta a pagar inventada');
+  eq((await crs(v)).map(x => [x.data.origem, x.data.valor_final]), [['VENDA', 600]], 'custo sem fornecedor: o cliente paga a agência pela venda inteira');
+  eq((await cps(v)).map(x => [x.data.valor_final, x.data.fornecedor_pendente === true]), [[500, true]], 'e a conta a pagar do custo nasce com fornecedor pendente, para ser cobrada');
 
   await evento('VENDA_FECHADA', japao({ crm_venda_id: 'crm_deal_5', valor_total: 300, custo_total: 0, fornecedores: [] }));
   const s = (await vendaDo('crm_deal_5')).id;
@@ -185,5 +202,25 @@ console.log('\n--- (f) a ficha do cliente ---');
   eq([d.cidade, d.cep, d.crm_ficha.profissao, d.marcadores], ['Campinas', '01310-100', 'Médico', ['vip', 'japão']], 'mudança no CRM sobrescreve; vazio não apaga; etiqueta nova soma às que já estavam');
 }
 
-console.log(`\n${total - falhas}/${total} testes da venda paga direto ao fornecedor passaram`);
+console.log('\n--- (g) parcelado no cartão: a pergunta e a antecipação ---');
+{
+  const forn = await cativa();
+  await query(`UPDATE fornecedores_crm SET data = data - 'recebe_direto_do_cliente' WHERE id = $1`, [forn.id]);
+  const condicoes = [1, 2, 3].map(n => ({ parcela: n, valor: 130.21, vencimento: n === 1 ? '2026-11-15' : '', forma_pagamento: 'cartao_credito' }));
+  await evento('VENDA_FECHADA', japao({ crm_venda_id: 'crm_deal_8', condicoes_pagamento: condicoes }));
+  const venda = await vendaDo('crm_deal_8');
+  eq([venda.data.forma_pagamento, venda.data.parcelas, venda.data.primeiro_vencimento, venda.data.recebimento?.modo], ['CARTAO', 3, '2026-11-15', 'pendente'], 'a venda chega no cartão em 3x, com o 1º vencimento do CRM e a pergunta pendente');
+  let receber = (await crs(venda.id)).filter(c => c.data.origem === 'VENDA').sort((a, b) => a.data.parcela_numero - b.data.parcela_numero);
+  eq(receber.map(c => [c.data.parcela_numero, c.data.data_vencimento, c.data.recebimento_a_definir === true]), [[1, '2026-11-15', true], [2, '2026-12-15', true], [3, '2027-01-15', true]], 'nascem 3 parcelas mês a mês, marcadas para a escolha');
+  const aviso = await um(`SELECT titulo FROM notificacoes WHERE tenant_id = $1 AND tipo = 'VENDA_RECEBIMENTO_A_DEFINIR'`, [T1]);
+  eq(/receber mês a mês ou antecipar/.test(aviso?.titulo ?? ''), true, 'e o sino pergunta');
+
+  await query(`UPDATE vendas_crm SET data = jsonb_set(data, '{recebimento}', '{"modo":"antecipado","taxa_pct":4,"data_antecipacao":"2026-11-20"}') WHERE id = $1`, [venda.id]);
+  await evento('VENDA_FECHADA', japao({ crm_venda_id: 'crm_deal_8', condicoes_pagamento: condicoes }));
+  receber = (await crs(venda.id)).filter(c => c.data.origem === 'VENDA');
+  eq(receber.map(c => [c.data.valor_final, c.data.taxa, c.data.data_vencimento, c.data.recebimento_antecipado === true, c.data.parcelas_originais?.length]), [[390.63, 15.63, '2026-11-20', true, 3]], 'reenvio do CRM respeita a antecipação: uma conta, na data, com 4% de taxa');
+  eq((await cps(venda.id)).map(c => c.data.valor_final), [312.5], 'a conta a pagar da Cativa não muda');
+}
+
+console.log(`\n${total - falhas}/${total} testes de quem recebe a venda do CRM passaram`);
 if (falhas > 0) process.exit(1);

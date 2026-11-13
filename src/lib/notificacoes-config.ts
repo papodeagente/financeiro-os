@@ -3,6 +3,7 @@ export const TIPOS_NOTIFICACAO = [
   { tipo: 'PROPOSTA_FEEDBACK', label: 'Pedidos de alteração', descricao: 'Quando um cliente envia comentários ou pede mudanças.' },
   { tipo: 'PROPOSTA_VISUALIZADA', label: 'Propostas visualizadas', descricao: 'Na primeira visualização de cada proposta por dia.' },
   { tipo: 'PROPOSTA_LEAD', label: 'Novos interessados', descricao: 'Quando alguém deixa seus dados em uma proposta.' },
+  { tipo: 'VENDA_RECEBIMENTO_A_DEFINIR', label: 'Recebimento de vendas parceladas', descricao: 'Vendas do CRM parceladas no cartão ou no boleto: receber mês a mês ou antecipar.' },
   { tipo: 'VENDA_VENDEDOR_NAO_CADASTRADO', label: 'Pendências de vendedores', descricao: 'Vendas recebidas do CRM sem vendedor cadastrado.' },
   { tipo: 'VENDA_CANCELADA_CRM', label: 'Vendas perdidas no CRM', descricao: 'Quando o CRM perde uma venda que já movimentou dinheiro, ou pede aprovação para cancelar.' },
 ] as const;

@@ -18,15 +18,19 @@ function eq(atual: unknown, esperado: unknown, label: string) {
 }
 
 console.log('--- como a linha da venda do CRM vira conta ---');
-const direto = { pagoAAgencia: false, agenciaRecebeDe: new Set<string>() };
+// Regra de 13/11/2026: por padrão a agência recebe do cliente e paga o
+// fornecedor; pago direto só para fornecedor marcado no cadastro.
+const padrao = { pagoAAgencia: false, recebeDiretoDoCliente: new Set<string>() };
+const direto = { pagoAAgencia: false, recebeDiretoDoCliente: new Set<string>(['f-cativa']) };
 const linha = { fornecedor_id: 'f-cativa', valor_custo: 312.5, valor_venda: 390.63, sem_fornecedor: false };
-eq(comoALinhaNasce(linha, direto), { meio_pagamento: 'fornecedor', comissao_valor: 78.13, comissao_percentual: 20 }, 'padrão: pago direto, comissão = margem (20%)');
-eq(comoALinhaNasce(linha, { ...direto, pagoAAgencia: true }).meio_pagamento, 'proprio', 'pago pela plataforma da agência: a agência recebe e paga');
-eq(comoALinhaNasce(linha, { ...direto, agenciaRecebeDe: new Set(['f-cativa']) }).meio_pagamento, 'proprio', 'cadastro do fornecedor diz "a agência"');
-eq(comoALinhaNasce({ fornecedor_id: '', valor_custo: 0, valor_venda: 300, sem_fornecedor: false }, direto).meio_pagamento, 'proprio', 'sem fornecedor e sem custo: serviço da própria agência');
-eq(comoALinhaNasce({ fornecedor_id: '', valor_custo: 500, valor_venda: 600, sem_fornecedor: true }, direto), { meio_pagamento: 'fornecedor', comissao_valor: 100, comissao_percentual: 16.67 }, 'custo sem fornecedor: comissão, para informar quem paga');
-eq(comoALinhaNasce({ ...linha, valor_custo: 400 }, direto), { meio_pagamento: 'fornecedor', comissao_valor: 0, comissao_percentual: 0 }, 'vendido abaixo do custo: nenhuma comissão inventada (fica a do cadastro)');
-eq(comoALinhaNasce({ ...linha, valor_custo: 0 }, direto).comissao_valor, 0, 'sem custo informado: a margem não é a venda inteira');
+eq(comoALinhaNasce(linha, padrao).meio_pagamento, 'proprio', 'padrão: a agência recebe do cliente e paga o fornecedor');
+eq(comoALinhaNasce({ fornecedor_id: '', valor_custo: 500, valor_venda: 600, sem_fornecedor: true }, padrao).meio_pagamento, 'proprio', 'custo sem fornecedor: conta a pagar (pendente), não comissão');
+eq(comoALinhaNasce({ fornecedor_id: '', valor_custo: 0, valor_venda: 300, sem_fornecedor: false }, padrao).meio_pagamento, 'proprio', 'sem fornecedor e sem custo: serviço da própria agência');
+eq(comoALinhaNasce(linha, direto), { meio_pagamento: 'fornecedor', comissao_valor: 78.13, comissao_percentual: 20 }, 'fornecedor marcado "recebe direto do cliente": pago direto, comissão = margem (20%)');
+eq(comoALinhaNasce(linha, { ...direto, pagoAAgencia: true }).meio_pagamento, 'proprio', 'mesmo marcado, pago pela plataforma da agência: a agência recebe e paga');
+eq(comoALinhaNasce({ ...linha, fornecedor_id: 'f-outro' }, direto).meio_pagamento, 'proprio', 'a marcação vale só para o fornecedor marcado');
+eq(comoALinhaNasce({ ...linha, valor_custo: 400 }, direto), { meio_pagamento: 'fornecedor', comissao_valor: 0, comissao_percentual: 0 }, 'pago direto abaixo do custo: nenhuma comissão inventada (fica a do cadastro)');
+eq(comoALinhaNasce({ ...linha, valor_custo: 0 }, direto).comissao_valor, 0, 'pago direto sem custo informado: a margem não é a venda inteira');
 
 console.log('\n--- a frase da comissão ---');
 eq(fraseDaComissao({ origem: 'COMISSAO_FORNECEDOR', cliente_da_venda_nome: 'Bruno', valor_pago_direto: 390.63 })?.replace(/\s/g, ' '), 'Venda de Bruno: pagou R$ 390,63 direto ao fornecedor.', 'de qual venda e quanto foi pago direto');

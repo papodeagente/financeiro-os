@@ -17,6 +17,8 @@ import { descricaoSemPlataforma, plataformaDaConta } from '@/lib/plataformas/rot
 import { Button } from '@/components/ui/button';
 import { toast } from '@/lib/toast';
 import { NegociacaoAtividade } from '@/components/vendas/NegociacaoAtividade';
+import { EscolhaDoRecebimento } from '@/components/vendas/EscolhaDoRecebimento';
+import { precisaEscolherRecebimento, type RecebimentoDaVenda } from '@/lib/recebimento-parcelado';
 
 const fmt = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -73,6 +75,8 @@ export default function VendaDetalhe() {
   const [contasReceber, setContasReceber] = useState<ContaReceber[]>([]);
   const [contasPagar, setContasPagar] = useState<ContaPagar[]>([]);
   const [resumoFin, setResumoFin] = useState<Record<string, number> | null>(null);
+  // Sobe depois de gravar a escolha do recebimento: refaz a leitura da venda e das contas.
+  const [versao, setVersao] = useState(0);
 
   useEffect(() => {
     Promise.all([
@@ -96,7 +100,7 @@ export default function VendaDetalhe() {
       }
       setLoading(false);
     });
-  }, [id]);
+  }, [id, versao]);
 
   if (loading) {
     return (
@@ -288,6 +292,16 @@ export default function VendaDetalhe() {
             <Info label="Desconto" value={fmt(venda.desconto || 0)} />
             <Info label="Valor Final" value={fmt(venda.valor_final || 0)} highlight />
           </div>
+          {precisaEscolherRecebimento(venda.forma_pagamento, venda.parcelas) ? (
+            <EscolhaDoRecebimento
+              vendaId={venda.id}
+              forma={venda.forma_pagamento}
+              parcelas={venda.parcelas}
+              total={venda.valor_final || 0}
+              recebimento={(venda as VendaCRM & { recebimento?: RecebimentoDaVenda }).recebimento}
+              onSalvo={() => setVersao(v => v + 1)}
+            />
+          ) : null}
         </Section>
 
         {/* Financeiro — Contas geradas automaticamente */}

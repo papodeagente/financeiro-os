@@ -225,7 +225,7 @@ export function rotuloDoGrupo(g: GrupoDaAgenda, ate: string): string {
 // ─── Precisa de você ───────────────────────────────────────────────────────
 
 export interface Pendencia {
-  chave: 'receber-vencido' | 'pagar-vencido' | 'extrato' | 'sem-fornecedor' | 'plataformas';
+  chave: 'receber-vencido' | 'pagar-vencido' | 'extrato' | 'sem-fornecedor' | 'recebimento-a-definir' | 'plataformas';
   titulo: string;
   detalhe: string;
   acao: string;
@@ -284,6 +284,19 @@ export function pendencias(entrada: {
       chave: 'sem-fornecedor', tom: 'aviso', acao: 'Informar', href: '/financeiro-ag/pagar?sem_fornecedor=1',
       titulo: `${plural(semFornecedor.length, 'custo de venda', 'custos de venda')} sem fornecedor`,
       detalhe: [formatar(somaPor(semFornecedor, emAbertoPagar)), proxima ? `vence em ${diaMes(proxima)}` : ''].filter(Boolean).join(' · '),
+    });
+  }
+
+  // Venda parcelada no cartão ou no boleto esperando a escolha: mês a mês ou
+  // antecipar (recebimento-parcelado.ts). Uma linha por venda, não por parcela.
+  const aDefinir = entrada.receber.filter(c => (c as { recebimento_a_definir?: boolean }).recebimento_a_definir === true && emAbertoReceber(c) > 0);
+  if (aDefinir.length > 0) {
+    const vendas = [...new Set(aDefinir.map(c => String(c.origem_venda_id ?? c.venda_id ?? '')).filter(Boolean))];
+    saida.push({
+      chave: 'recebimento-a-definir', tom: 'aviso', acao: 'Escolher',
+      href: vendas.length === 1 ? `/vendas/${vendas[0]}#recebimento` : '/vendas',
+      titulo: `${plural(vendas.length || 1, 'venda parcelada', 'vendas parceladas')}: receber mês a mês ou antecipar?`,
+      detalhe: formatar(somaPor(aDefinir, emAbertoReceber)),
     });
   }
 

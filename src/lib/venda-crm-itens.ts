@@ -218,31 +218,31 @@ export function montarLinhasDeCusto(entrada: {
 }
 
 /**
- * COMO A LINHA VIRA CONTA (Bruno, 09/10/2026).
+ * Como a linha da venda do CRM vira conta (regra de 13/11/2026, que SUBSTITUI
+ * a de 09/10).
  *
- * "Contas a pagar (o valor total da venda) na maioria das vezes é pago direto
- * ao fornecedor. Contas a receber: a comissão gerada com a venda, a margem de
- * dentro do produto. Toda venda gera uma comissão a receber."
+ * Bruno: "Dentro do financeiro, preciso de uma conta a receber e uma a pagar
+ * para cada fornecedor." Então, por padrão, a agência RECEBE do cliente e PAGA
+ * cada fornecedor: nasce a conta a receber do cliente (quebrada por
+ * fornecedor) e a conta a pagar de cada um. Linha sem fornecedor também nasce
+ * assim, com a conta a pagar marcada como fornecedor pendente, para ser
+ * cobrada no Financeiro.
  *
- * Então, por padrão, a linha de fornecedor é PAGA DIRETO: o cliente paga o
- * fornecedor, nada passa pelo caixa da agência, e o que a agência tem a
- * receber é a comissão, cobrada DO FORNECEDOR, igual à margem (venda menos
- * custo). Não nasce conta do cliente nem conta a pagar.
+ * Exceção, só por escolha explícita no cadastro do fornecedor
+ * (`recebe_direto_do_cliente`): o cliente paga esse fornecedor direto, nada
+ * passa pelo caixa da agência, e o que ela tem a receber é a comissão,
+ * cobrada DO FORNECEDOR, igual à margem. Pagamento por plataforma da agência
+ * desfaz a exceção: o dinheiro do cliente entrou aqui.
  *
- * A agência recebe do cliente e paga o fornecedor (o modelo de antes) quando:
- *  - o pagamento passou por uma plataforma da agência (Pagar.me, Asaas...):
- *    o dinheiro do cliente entrou aqui;
- *  - o cadastro do fornecedor diz que é a agência quem recebe do cliente;
- *  - a linha não tem fornecedor nem custo (serviço da própria agência).
- *
- * Margem zero, negativa ou sem custo informado não inventa comissão a partir
- * da venda: fica a do cadastro do fornecedor (comissão padrão), se houver.
+ * O campo antigo `quem_recebe_do_cliente` não decide mais nada: a tela o
+ * mostrava como "fornecedor" quando vazio, e ele foi gravado assim sem
+ * ninguém escolher.
  */
 export interface ModoDaVenda {
   /** O cliente pagou a agência por uma plataforma ligada a esta venda. */
   pagoAAgencia: boolean;
-  /** Fornecedores cujo cadastro diz que a agência recebe do cliente. */
-  agenciaRecebeDe: ReadonlySet<string>;
+  /** Fornecedores marcados no cadastro como "recebe direto do cliente". */
+  recebeDiretoDoCliente: ReadonlySet<string>;
 }
 
 export interface ComoNasce {
@@ -253,9 +253,8 @@ export interface ComoNasce {
 
 export function comoALinhaNasce(l: Pick<LinhaCusto, 'fornecedor_id' | 'valor_custo' | 'valor_venda' | 'sem_fornecedor'>, modo: ModoDaVenda): ComoNasce {
   const proprio: ComoNasce = { meio_pagamento: 'proprio', comissao_valor: 0, comissao_percentual: 0 };
+  if (!l.fornecedor_id || !modo.recebeDiretoDoCliente.has(l.fornecedor_id)) return proprio;
   if (modo.pagoAAgencia) return proprio;
-  if (!l.fornecedor_id && !l.sem_fornecedor && num(l.valor_custo) <= 0) return proprio;
-  if (l.fornecedor_id && modo.agenciaRecebeDe.has(l.fornecedor_id)) return proprio;
   const venda = round2(num(l.valor_venda));
   const custo = round2(num(l.valor_custo));
   const margem = round2(venda - custo);

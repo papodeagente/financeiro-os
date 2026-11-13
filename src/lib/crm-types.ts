@@ -163,6 +163,13 @@ export interface FornecedorCRM {
    *  - AGENCIA: a agência recebe do cliente e paga o custo ao fornecedor.
    */
   quem_recebe_do_cliente?: 'FORNECEDOR' | 'AGENCIA';
+  /**
+   * Regra de 13/11/2026: por padrão a agência recebe do cliente e paga este
+   * fornecedor. true = o cliente paga este fornecedor direto e a agência só
+   * recebe a comissão dele (venda-crm-itens.ts, comoALinhaNasce). Substitui
+   * `quem_recebe_do_cliente`, que não decide mais nada.
+   */
+  recebe_direto_do_cliente?: boolean;
 }
 
 export interface Membro {

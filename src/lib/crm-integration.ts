@@ -19,6 +19,7 @@ import { gerarContasVenda, receberPorFornecedorDe, type ItemVendaInput, type For
 import { round2, num, hojeISO } from './money';
 import { produtosDoPayload } from './venda-crm-produtos';
 import { montarLinhasDeCusto, comoALinhaNasce, type FornecedorResolvido } from './venda-crm-itens';
+import { aplicarRecebimento, formaDoCrm, recebimentoAoChegar } from './recebimento-parcelado';
 import { criarNotificacao } from './notificacoes';
 // Caixa do webhook usa o caminho ATÔMICO (um único UPDATE em SQL), igual ao
 // PUT das rotas de conta. O helper antigo lia, somava e regravava fora de
@@ -1278,6 +1279,11 @@ export async function processarEventoCRM(
         // receber. The customer pays the supplier directly; only the
         // commission flows back to the agency.
         const parcelasCliente = (payload.condicoes_pagamento as Array<Record<string, unknown>>) || [];
+        // Forma e 1º vencimento, quando o CRM diz (a Cotação manda boleto,
+        // cartão, Pix...). "nao_definida" mantém o comportamento de antes:
+        // Pix, com a 1ª parcela um mês depois da venda.
+        const formaInformada = formaDoCrm(parcelasCliente[0]?.forma_pagamento);
+        const primeiroVencimentoInformado = formaInformada ? asDateYMD(parcelasCliente[0]?.vencimento) : '';
 
         // IDENTIDADE DA VENDA — a idempotência real do webhook.
         //
@@ -1354,8 +1360,9 @@ export async function processarEventoCRM(
           data_venda: dataVenda,
           tipo: payload.entur_grupo_id ? 'GRUPO' : 'AVULSA',
           status: 'CONFIRMADO',
-          forma_pagamento: 'AVISTA_PIX',
+          forma_pagamento: formaInformada ?? 'AVISTA_PIX',
           parcelas: parcelasCliente.length || 1,
+          ...(primeiroVencimentoInformado ? { primeiro_vencimento: primeiroVencimentoInformado } : {}),
           valor_total_venda: valorTotal,
           valor_total_custo: custoTotal,
           valor_final: valorTotal,
@@ -1388,6 +1395,13 @@ export async function processarEventoCRM(
           crm_plataforma_transacao: carimbo.crm_plataforma_transacao,
           historico,
           versao_contrato: Number.isFinite(versaoContrato) && versaoContrato > 0 ? versaoContrato : 1,
+          // Parcelado no cartão ou no boleto: receber mês a mês ou antecipar
+          // (recebimento-parcelado.ts). A escolha já feita sobrevive ao reenvio.
+          recebimento: recebimentoAoChegar(
+            vendaAnterior?.data.recebimento,
+            formaInformada ?? 'AVISTA_PIX',
+            parcelasCliente.length || 1,
+          ),
         };
         // A reentrega atualiza também as colunas: o cliente pode ter mudado
         // no CRM, e a venda fechada de novo volta a ser CONFIRMADO na coluna,
@@ -1429,8 +1443,8 @@ export async function processarEventoCRM(
 
         /** Fornecedores do payload, já com cadastro resolvido no financeiro. */
         const fornecedoresResolvidos: FornecedorResolvido[] = [];
-        /** Fornecedores cujo cadastro diz que a agência recebe do cliente. */
-        const agenciaRecebeDe = new Set<string>();
+        /** Fornecedores marcados como "recebe direto do cliente" (pago direto). */
+        const recebeDiretoDoCliente = new Set<string>();
 
         for (const forn of fornecedoresValidos) {
           // Mesmo caminho da mudança de cadastro: acha pelo vínculo, pelo id
@@ -1446,7 +1460,7 @@ export async function processarEventoCRM(
             [fornecedorId, tenantId],
           );
           const fornData = (fornRows[0]?.data ?? {}) as Record<string, unknown>;
-          if (fornData.quem_recebe_do_cliente === 'AGENCIA') agenciaRecebeDe.add(fornecedorId);
+          if (fornData.recebe_direto_do_cliente === true) recebeDiretoDoCliente.add(fornecedorId);
           const nomeForn =
             asStr(forn.fornecedor_nome) || asStr(fornData.nome_fantasia) || 'Fornecedor';
           fornecedoresInfo.push({
@@ -1477,13 +1491,13 @@ export async function processarEventoCRM(
         });
 
         // Quem recebe do cliente (venda-crm-itens.ts, comoALinhaNasce): por
-        // padrão o fornecedor, direto, e a agência recebe dele a comissão. O
-        // pagamento por plataforma da agência prova o contrário.
+        // padrão a agência, que paga cada fornecedor (regra de 13/11/2026).
+        // Pago direto só para fornecedor marcado no cadastro.
         const pagoAAgencia = !!(carimbo.plataforma_transacao || carimbo.plataforma_transacoes.length > 0);
         for (let i = 0; i < linhas.length; i++) {
           const l = linhas[i];
           const item = createItemVenda();
-          const nasce = comoALinhaNasce(l, { pagoAAgencia, agenciaRecebeDe });
+          const nasce = comoALinhaNasce(l, { pagoAAgencia, recebeDiretoDoCliente });
           const itemData: ItemVendaData = {
             ...item.data,
             tipo: l.tipo,
@@ -1559,6 +1573,11 @@ export async function processarEventoCRM(
           fornecedores: fornecedoresInfo,
           cliente_nome: asStr(payload.cliente_nome),
         });
+        contasGen.contas_receber = aplicarRecebimento(
+          contasGen.contas_receber,
+          vendaData.recebimento as Parameters<typeof aplicarRecebimento>[1],
+          vendaData.forma_pagamento,
+        );
 
         // Regeneração das contas desta venda.
         //
@@ -1634,6 +1653,19 @@ export async function processarEventoCRM(
         const cpGerados = contasGen.contas_pagar.length;
         const crGerados = contasGen.contas_receber.length;
         const crValor = contasGen.resumo.total_comissoes + contasGen.resumo.total_cliente;
+        // Venda parcelada no cartão ou no boleto que ainda não tem escolha:
+        // a pergunta vai para o sino (uma vez por venda) e para as pendências.
+        if ((vendaData.recebimento as { modo?: string } | undefined)?.modo === 'pendente') {
+          await criarNotificacao({
+            tenantId,
+            tipo: 'VENDA_RECEBIMENTO_A_DEFINIR',
+            titulo: `Venda ${numeroVenda}: receber mês a mês ou antecipar?`,
+            descricao: `${asStr(payload.cliente_nome) || 'O cliente'} parcelou em ${parcelasCliente.length}x no ${vendaData.forma_pagamento === 'BOLETO' ? 'boleto' : 'cartão'}. Escolha se a agência recebe mês a mês ou antecipa tudo, e informe a taxa, se houver.`,
+            link: `/vendas/${vendaId}`,
+            chaveDeduplicacao: `recebimento-a-definir:${vendaId}`,
+            data: { venda_id: vendaId },
+          });
+        }
         // A venda entrou. Se o vendedor não está cadastrado, avisa em vez
         // de deixar o valor sumir da meta e da comissão sem explicação.
         if (vendedorPendente) {
