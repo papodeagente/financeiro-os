@@ -15,6 +15,7 @@ function formatarData(iso: string | null): string {
   return d ? d.toLocaleDateString('pt-BR') : 'sem data';
 }
 import { loadAgencia, saveAgencia } from '@/lib/crm-storage';
+import { IdentidadeVisual } from '@/components/config/IdentidadeVisual';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -201,6 +202,15 @@ export default function AgenciaPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Identidade visual: logo e cores do recibo e dos documentos */}
+        <IdentidadeVisual
+          logo={data.logo || ''}
+          cores={data.cores}
+          nome={data.nome_fantasia || data.razao_social}
+          onLogo={(url) => setField('logo', url)}
+          onCores={(c) => setField('cores', c)}
+        />
 
         {/* Section 2: Endereço */}
         <Card className="bg-[var(--t-header-bg)] border-[var(--t-border)]">

@@ -1357,6 +1357,12 @@ export interface Agencia {
   site: string;
   redes_sociais: Record<string, string>;
   logo: string;
+  /**
+   * Identidade visual da agência (13/11/2026): a cor principal e a de
+   * destaque usadas no recibo e nos documentos para o cliente. Hex "#RRGGBB";
+   * vazio usa o padrão (ver src/lib/marca-da-agencia.ts).
+   */
+  cores?: { primaria?: string; destaque?: string };
   regime_tributario: 'SIMPLES' | 'LUCRO_PRESUMIDO' | 'LUCRO_REAL';
   aliquota_padrao: number;
   /** Dias do mês em que a agência paga comissão, por exemplo [5, 20].

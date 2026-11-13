@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
+import { getSession } from '@/lib/auth';
+import { bloqueioFinanceiro } from '@/lib/permissoes';
 
 export async function GET() {
   try {
@@ -23,6 +25,10 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    // Razão social, CNPJ, logo e cores saem nos documentos para o cliente:
+    // só quem edita o financeiro grava (antes, qualquer sessão gravava).
+    const bloqueio = bloqueioFinanceiro(await getSession(), 'escrever');
+    if (bloqueio) return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
     await initDB();
     const data = await req.json();
     if (!pool) return NextResponse.json(data);
