@@ -222,5 +222,34 @@ console.log('\n--- (g) parcelado no cartão: a pergunta e a antecipação ---');
   eq((await cps(venda.id)).map(c => c.data.valor_final), [312.5], 'a conta a pagar da Cativa não muda');
 }
 
+console.log('\n--- (h) venda pela Cotação: item sem fornecedor, cobrado pelo fornecedor e a volta ao CRM ---');
+{
+  const { avisarFornecedorDoItem } = await import('../src/lib/fornecedor-do-item.ts');
+  const forn = await cativa();
+  await evento('VENDA_FECHADA', japao({
+    crm_venda_id: 'crm_deal_9', valor_total: 1000, custo_total: 700,
+    fornecedores: [{ ...japao().fornecedores[0], valor_custo: 400, valor_venda: 500, crm_item_ids: [101, 102] }],
+    itens_sem_fornecedor: [{ crm_item_id: 103, descricao: 'Passeio de barco', servico: 'OUTROS', valor_custo: 300, valor_venda: 500 }],
+  }));
+  const v = (await vendaDo('crm_deal_9')).id;
+  const pagar = (await cps(v)).sort((a, b) => a.data.valor_final - b.data.valor_final);
+  eq(pagar.map(c => [c.data.valor_final, c.data.fornecedor_pendente === true, c.data.crm_item_ids]), [[300, true, [103]], [400, false, [101, 102]]], 'o item sem fornecedor vira a sua própria conta pendente, com o id do item; a da Cativa leva os dela');
+  eq((await crs(v)).filter(c => c.data.origem === 'VENDA').reduce((s, c) => s + c.data.valor_final, 0), 1000, 'o cliente deve a venda inteira (500 da Cativa + 500 do passeio)');
+
+  const pendente = pagar[0];
+  const antes = pendente.data;
+  const depois = { ...antes, fornecedor_id: forn.id, fornecedor_pendente: false };
+  await query(`UPDATE contas_pagar SET fornecedor_id = $2, data = $3 WHERE id = $1`, [pendente.id, forn.id, JSON.stringify(depois)]);
+  await avisarFornecedorDoItem(T1, antes, depois);
+  const volta = (await todos(`SELECT data FROM crm_eventos_saida WHERE tenant_id = $1 AND tipo = 'FORNECEDOR_DO_ITEM'`, [T1])).map(r => r.data.payload ?? r.data);
+  eq(volta.map(p => [p.crm_venda_id, p.crm_item_ids, p.fornecedor?.nome, p.fornecedor?.crm_supplier_id]), [['crm_deal_9', [103], 'Cativa Operadora', '7']], 'informar o fornecedor aqui avisa o CRM: qual venda, qual item e qual fornecedor (com o vínculo do cadastro)');
+
+  await evento('VENDA_FECHADA', japao({
+    crm_venda_id: 'crm_deal_10', fornecedores: [{ ...japao().fornecedores[0], crm_item_ids: [201], cobrado_pelo_fornecedor: true }],
+  }));
+  const d = (await vendaDo('crm_deal_10')).id;
+  eq([(await crs(d)).map(c => c.data.origem), (await cps(d)).length], [['COMISSAO_FORNECEDOR'], 0], 'item cotado como "cobrado pelo fornecedor": pago direto, só a comissão');
+}
+
 console.log(`\n${total - falhas}/${total} testes de quem recebe a venda do CRM passaram`);
 if (falhas > 0) process.exit(1);

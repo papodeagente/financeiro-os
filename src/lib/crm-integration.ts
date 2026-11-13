@@ -1480,14 +1480,28 @@ export async function processarEventoCRM(
             localizador: asStr(forn.localizador),
             data_inicio: asDateYMD(forn.data_inicio),
             data_fim: asDateYMD(forn.data_fim),
+            crm_item_ids: Array.isArray(forn.crm_item_ids) ? (forn.crm_item_ids as unknown[]).map(Number).filter(x => Number.isInteger(x) && x > 0) : undefined,
+            cobrado_pelo_fornecedor: forn.cobrado_pelo_fornecedor === true,
           });
         }
+
+        // Itens da Cotação com custo e sem fornecedor (13/11/2026): cada um
+        // vira conta a pagar pendente, com a identidade do item.
+        const itensSemFornecedor = (Array.isArray(payload.itens_sem_fornecedor) ? payload.itens_sem_fornecedor as Array<Record<string, unknown>> : [])
+          .map(i => ({
+            crm_item_id: Number(i.crm_item_id),
+            descricao: asStr(i.descricao),
+            servico: asStr(i.servico),
+            valor_custo: asNum(i.valor_custo),
+            valor_venda: asNum(i.valor_venda),
+          }));
 
         const linhas = montarLinhasDeCusto({
           fornecedores: fornecedoresResolvidos,
           custo_total: custoTotal,
           valor_total: valorTotal,
           referencia: asStr(payload.crm_venda_id) || vendaId,
+          itens_sem_fornecedor: itensSemFornecedor,
         });
 
         // Quem recebe do cliente (venda-crm-itens.ts, comoALinhaNasce): por
@@ -1515,6 +1529,9 @@ export async function processarEventoCRM(
             data_fim: l.data_fim,
             observacoes: l.observacoes,
             contas_geradas_ids: [],
+            // Itens da Cotação do CRM desta linha: a conta a pagar os carrega
+            // para devolver ao CRM o fornecedor informado aqui.
+            ...(l.crm_item_ids?.length ? { crm_item_ids: l.crm_item_ids } : {}),
           };
           itensInput.push({
             id: item.id,

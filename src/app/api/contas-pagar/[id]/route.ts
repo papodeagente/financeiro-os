@@ -9,6 +9,7 @@ import {
   estornarBaixaDaConta,
   type ExecutorSQL,
 } from '@/lib/caixa-atomico';
+import { avisarFornecedorDoItem } from '@/lib/fornecedor-do-item';
 
 const TABLE = 'contas_pagar';
 const INDEX_COLS = ['fornecedor_id', 'status'];
@@ -77,6 +78,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         versaoAnterior: null,
         statusAlvo: null,
       });
+      // Fornecedor informado numa conta pendente de item da Cotação: volta ao CRM.
+      void avisarFornecedorDoItem(tenantId, prev, item as Record<string, unknown>);
       return NextResponse.json(item);
     }
 
@@ -104,6 +107,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       return NextResponse.json(rows[0]?.data ?? item);
     }
 
+    void avisarFornecedorDoItem(tenantId, prev, item as Record<string, unknown>);
     return NextResponse.json(item);
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Erro';

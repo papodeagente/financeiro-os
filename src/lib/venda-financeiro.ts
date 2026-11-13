@@ -275,6 +275,11 @@ export function gerarContasVenda(input: VendaInput): ContasGeradas {
         origem_item_id: item.id,
         auto_gerado: true,
         fornecedor_pendente: !temFornecedorReal,
+        // Itens da Cotação do CRM: ao informar o fornecedor aqui, ele volta
+        // para eles no CRM (FORNECEDOR_DO_ITEM, ver fornecedor-do-item.ts).
+        ...(Array.isArray((item.data as { crm_item_ids?: number[] }).crm_item_ids)
+          ? { crm_item_ids: (item.data as { crm_item_ids?: number[] }).crm_item_ids }
+          : {}),
       };
       contas_pagar.push(cp);
 

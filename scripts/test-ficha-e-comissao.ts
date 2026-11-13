@@ -8,6 +8,7 @@
 import { aplicarFichaDoCrm, dataDaFicha, lerFichaDoCrm, secoesDaFicha } from '../src/lib/ficha-do-cliente.ts';
 import { fraseDaComissao } from '../src/lib/comissao-da-venda.ts';
 import { comoALinhaNasce } from '../src/lib/venda-crm-itens.ts';
+import { deveAvisarOCrm } from '../src/lib/fornecedor-do-item-regra.ts';
 
 let falhas = 0, total = 0;
 function eq(atual: unknown, esperado: unknown, label: string) {
@@ -31,6 +32,15 @@ eq(comoALinhaNasce(linha, { ...direto, pagoAAgencia: true }).meio_pagamento, 'pr
 eq(comoALinhaNasce({ ...linha, fornecedor_id: 'f-outro' }, direto).meio_pagamento, 'proprio', 'a marcação vale só para o fornecedor marcado');
 eq(comoALinhaNasce({ ...linha, valor_custo: 400 }, direto), { meio_pagamento: 'fornecedor', comissao_valor: 0, comissao_percentual: 0 }, 'pago direto abaixo do custo: nenhuma comissão inventada (fica a do cadastro)');
 eq(comoALinhaNasce({ ...linha, valor_custo: 0 }, direto).comissao_valor, 0, 'pago direto sem custo informado: a margem não é a venda inteira');
+
+console.log('\n--- fornecedor informado aqui volta ao CRM ---');
+eq(deveAvisarOCrm({ fornecedor_pendente: true, crm_item_ids: [5] }, { fornecedor_pendente: false, fornecedor_id: 'f1', crm_item_ids: [5] }), [5], 'estava pendente e ganhou fornecedor: avisa com os itens');
+eq(deveAvisarOCrm({ fornecedor_pendente: true, crm_item_ids: [5] }, { fornecedor_pendente: false, fornecedor_id: 'f1' }), [5], 'os itens vêm do estado anterior quando a tela não os reenvia');
+eq([
+  deveAvisarOCrm({ fornecedor_pendente: false, crm_item_ids: [5] }, { fornecedor_pendente: false, fornecedor_id: 'f2', crm_item_ids: [5] }),
+  deveAvisarOCrm({ fornecedor_pendente: true, crm_item_ids: [5] }, { fornecedor_pendente: true, fornecedor_id: '', crm_item_ids: [5] }),
+  deveAvisarOCrm({ fornecedor_pendente: true }, { fornecedor_pendente: false, fornecedor_id: 'f1' }),
+], [null, null, null], 'não estava pendente, continua sem fornecedor ou não é item da Cotação: não avisa');
 
 console.log('\n--- a frase da comissão ---');
 eq(fraseDaComissao({ origem: 'COMISSAO_FORNECEDOR', cliente_da_venda_nome: 'Bruno', valor_pago_direto: 390.63 })?.replace(/\s/g, ' '), 'Venda de Bruno: pagou R$ 390,63 direto ao fornecedor.', 'de qual venda e quanto foi pago direto');

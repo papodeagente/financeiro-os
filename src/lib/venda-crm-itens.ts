@@ -53,6 +53,10 @@ export interface FornecedorResolvido {
    * que sempre existiu aqui.
    */
   valor_venda?: number;
+  /** Itens da Cotação do CRM deste fornecedor (13/11/2026). */
+  crm_item_ids?: number[];
+  /** O cliente paga este fornecedor direto: abre só a comissão. */
+  cobrado_pelo_fornecedor?: boolean;
   localizador?: string;
   data_inicio?: string;
   data_fim?: string;
@@ -71,6 +75,19 @@ export interface LinhaCusto {
   observacoes: string;
   /** true = o CRM mandou o custo mas não disse de quem é. */
   sem_fornecedor: boolean;
+  /** Os itens da Cotação do CRM desta linha: a identidade para devolver o fornecedor. */
+  crm_item_ids?: number[];
+  /** O cliente paga este fornecedor direto (item "cobrado pelo fornecedor" na Cotação). */
+  cobrado_pelo_fornecedor?: boolean;
+}
+
+/** Item da Cotação com custo e sem fornecedor (13/11/2026): vira conta a pagar pendente, com identidade. */
+export interface ItemSemFornecedorDoCrm {
+  crm_item_id: number;
+  descricao?: string;
+  servico?: string;
+  valor_custo: number;
+  valor_venda?: number;
 }
 
 function tipoDoServico(servico: string | undefined): TipoProdutoVenda {
@@ -91,6 +108,8 @@ export function montarLinhasDeCusto(entrada: {
   valor_total: number;
   /** Identificação da venda no CRM, usada quando não há nada a descrever. */
   referencia?: string;
+  /** Itens da Cotação com custo e sem fornecedor: uma linha pendente cada. */
+  itens_sem_fornecedor?: ItemSemFornecedorDoCrm[];
 }): LinhaCusto[] {
   const valorTotal = round2(num(entrada.valor_total));
   const custoTotal = round2(num(entrada.custo_total));
@@ -120,6 +139,30 @@ export function montarLinhasDeCusto(entrada: {
       observacoes: '',
       sem_fornecedor: false,
       venda_informada: num(f.valor_venda) > 0 ? round2(num(f.valor_venda)) : undefined,
+      crm_item_ids: Array.isArray(f.crm_item_ids) ? f.crm_item_ids.filter(x => Number.isInteger(x) && x > 0) : undefined,
+      cobrado_pelo_fornecedor: f.cobrado_pelo_fornecedor === true,
+    });
+  }
+
+  // Cada item da Cotação com custo e sem fornecedor é uma linha própria,
+  // pendente, com a identidade do item: quem informar o fornecedor aqui
+  // devolve ao CRM o fornecedor CERTO daquele item (e não de um balde).
+  for (const it of entrada.itens_sem_fornecedor ?? []) {
+    const custo = Math.max(0, round2(num(it.valor_custo)));
+    if (!(custo > 0) || !Number.isInteger(it.crm_item_id) || it.crm_item_id <= 0) continue;
+    linhas.push({
+      fornecedor_id: '',
+      fornecedor_nome: '',
+      tipo: tipoDoServico(it.servico),
+      descricao: (it.descricao || '').trim() || DESCRICAO_SEM_FORNECEDOR,
+      valor_custo: custo,
+      localizador: '',
+      data_inicio: '',
+      data_fim: '',
+      observacoes: OBSERVACAO_SEM_FORNECEDOR,
+      sem_fornecedor: true,
+      venda_informada: num(it.valor_venda) > 0 ? round2(num(it.valor_venda)) : undefined,
+      crm_item_ids: [it.crm_item_id],
     });
   }
 
@@ -168,7 +211,10 @@ export function montarLinhasDeCusto(entrada: {
   // O que o emissor não atribuiu (linha sem fornecedor, ou venda antiga que não
   // manda o campo) continua no rateio proporcional ao custo, sobre o que sobra
   // do valor total. Assim a soma fecha com valor_total nos dois casos.
-  const informada = vendaInformada(entrada.fornecedores);
+  const informada = vendaInformada([
+    ...entrada.fornecedores,
+    ...(entrada.itens_sem_fornecedor ?? []).map(i => ({ fornecedor_id: '', fornecedor_nome: '', valor_custo: num(i.valor_custo), valor_venda: num(i.valor_venda) })),
+  ]);
   if (informada === null) {
     const valoresVenda = ratearTotal(valorTotal, linhas.map(l => l.valor_custo));
     return linhas.map((l, i) => ({ ...l, valor_venda: valoresVenda[i] }));
@@ -251,9 +297,12 @@ export interface ComoNasce {
   comissao_percentual: number;
 }
 
-export function comoALinhaNasce(l: Pick<LinhaCusto, 'fornecedor_id' | 'valor_custo' | 'valor_venda' | 'sem_fornecedor'>, modo: ModoDaVenda): ComoNasce {
+export function comoALinhaNasce(l: Pick<LinhaCusto, 'fornecedor_id' | 'valor_custo' | 'valor_venda' | 'sem_fornecedor' | 'cobrado_pelo_fornecedor'>, modo: ModoDaVenda): ComoNasce {
   const proprio: ComoNasce = { meio_pagamento: 'proprio', comissao_valor: 0, comissao_percentual: 0 };
-  if (!l.fornecedor_id || !modo.recebeDiretoDoCliente.has(l.fornecedor_id)) return proprio;
+  // Pago direto: o cadastro do fornecedor diz, ou o item foi cotado como
+  // "cobrado pelo fornecedor" na Cotação do CRM (escolha explícita, por item).
+  const direto = !!l.fornecedor_id && (modo.recebeDiretoDoCliente.has(l.fornecedor_id) || l.cobrado_pelo_fornecedor === true);
+  if (!direto) return proprio;
   if (modo.pagoAAgencia) return proprio;
   const venda = round2(num(l.valor_venda));
   const custo = round2(num(l.valor_custo));
