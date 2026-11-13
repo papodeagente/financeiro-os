@@ -1905,7 +1905,8 @@
     --fin-e1: none;
     --fin-e2: none;
   }
-  .fin-no-print, nav, aside, [data-slot="sheet"] { display: none !important; }
+  /* A barrinha de navegação é fixa no topo: no papel ela se repetia em toda página. */
+  .fin-no-print, nav, aside, [data-slot="sheet"], .route-progress { display: none !important; }
   /* No papel o gráfico não sobrevive: a rampa de um matiz só colapsa em
      cinzas iguais quando o fundo é forçado a branco. Quem imprime é a
      tabela — é assim que folha e comissão chegam ao contador. */

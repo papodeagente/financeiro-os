@@ -37,7 +37,39 @@ const FOLHA = `
   }
   @media print {
     header:not([data-recibo] header) { display: none !important; }
-    @page { margin: 12mm; }
+    /* A página sai SEM margem e a folha carrega o próprio respiro, em mm:
+       o "Salvar como PDF" usa a margem que a pessoa escolher na caixa de
+       impressão (às vezes nenhuma), e o recibo encostava na borda. As
+       faixas da marca vão de borda a borda, como papel timbrado. */
+    /* A 1ª página não tem margem no topo (a faixa da marca encosta na borda,
+       como papel timbrado); as demais e o pé de toda página têm 12 mm, para
+       a continuação de um recibo longo não colar na borda. */
+    @page { size: A4; margin: 12mm 0; }
+    @page :first { margin-top: 0; }
+    html, body { background: #FFFFFF !important; }
+    /* O casco do sistema não pode cortar nem empurrar a folha no papel. */
+    body:has([data-recibo]) :has(> [data-recibo]),
+    body:has([data-recibo]) :has([data-recibo]) {
+      overflow: visible !important; height: auto !important; min-height: 0 !important;
+    }
+    body:has([data-recibo]) main { padding: 0 !important; margin: 0 !important; }
+    [data-recibo] {
+      width: 210mm; max-width: none !important; margin: 0 !important;
+      border-radius: 0 !important; box-shadow: none !important; opacity: 1 !important;
+      overflow: visible !important;
+    }
+    /* Layout de BLOCO de propósito: num flex o Chrome ignora o "não quebre
+       ao meio" e o rodapé partia entre duas páginas. O fim (assinatura,
+       contatos e faixa) é uma peça só que nunca parte; a altura mínima do
+       corpo o deixa na base da folha quando o recibo cabe numa página.
+       Medido no modo de impressão (13/11/2026): folha útil de 285 mm, faixa
+       do topo 2,1 mm, fim 48 mm com contatos e 30 mm sem; com folga, senão
+       um nome de agência que quebra em mais uma linha leva a 2 páginas. */
+    [data-recibo] .recibo-corpo { padding: 14mm 16mm 8mm; min-height: 230mm; }
+    [data-recibo][data-sem-contatos] .recibo-corpo { min-height: 248mm; }
+    [data-recibo] .recibo-pe footer { padding: 4mm 16mm; }
+    [data-recibo] tr, [data-recibo] .recibo-bloco, [data-recibo] .recibo-fim { break-inside: avoid; }
+    [data-recibo] .recibo-assinatura { padding: 4mm 16mm 7mm; }
   }
 `;
 
@@ -139,14 +171,15 @@ export default function ReciboDaVendaPage() {
 
       <article
         data-recibo
+        data-sem-contatos={enderecoAgencia || contatos.length > 0 ? undefined : ''}
         aria-label={`Recibo da venda ${venda.numero}`}
         style={cores}
-        className={`mx-auto max-w-[820px] overflow-hidden rounded-[18px] shadow-[0_1px_2px_rgba(15,23,42,0.06),0_18px_48px_rgba(15,23,42,0.10)] print:max-w-none print:rounded-none print:shadow-none ${podeEmitir ? '' : 'opacity-40'}`}
+        className={`mx-auto max-w-[820px] overflow-hidden rounded-[18px] shadow-[0_1px_2px_rgba(15,23,42,0.06),0_18px_48px_rgba(15,23,42,0.10)] ${podeEmitir ? '' : 'opacity-40'}`}
       >
         {/* Faixa da marca */}
         <div aria-hidden="true" className="h-2 bg-[var(--m)]" />
 
-        <div className="px-10 pb-8 pt-9 print:px-2">
+        <div className="recibo-corpo px-10 pb-8 pt-9">
           {/* Cabeçalho: a agência e o documento */}
           <header className="flex flex-wrap items-start justify-between gap-6">
             <div className="min-w-0">
@@ -167,7 +200,7 @@ export default function ReciboDaVendaPage() {
           {/* O valor */}
           <section
             aria-label="Valor recebido"
-            className="mt-8 rounded-[14px] border-l-4 border-[var(--m)] bg-[var(--m-suave)] px-6 py-5"
+            className="recibo-bloco mt-8 rounded-[14px] border-l-4 border-[var(--m)] bg-[var(--m-suave)] px-6 py-5"
           >
             <p className={ROTULO}>Valor recebido</p>
             <p className="mt-1 text-[38px] font-semibold leading-none tracking-[-0.02em] tabular-nums text-[var(--m-papel)]">
@@ -224,7 +257,7 @@ export default function ReciboDaVendaPage() {
           </table>
 
           {/* Totais */}
-          <div className="mt-4 flex justify-end">
+          <div className="recibo-bloco mt-4 flex justify-end">
             <dl className="w-full max-w-[300px] text-[13px]">
               {recibo.desconto > 0 ? (
                 <>
@@ -261,26 +294,32 @@ export default function ReciboDaVendaPage() {
             </div>
           ) : null}
 
-          {/* Data e assinatura */}
-          <div className="mt-12 flex flex-wrap items-end justify-between gap-8 text-[13px] print:mt-14">
-            <p className="text-[var(--tinta-2)]">{cidade}{dataLonga(hoje)}.</p>
-            <div className="w-72 text-center">
-              <div className="border-t border-[var(--tinta)] pt-2">
-                <p className="font-semibold text-[var(--tinta)]">{razaoAgencia}</p>
-                {agencia?.cnpj ? <p className="text-[12px] text-[var(--tinta-3)]">CNPJ {agencia.cnpj}</p> : null}
-              </div>
+        </div>
+
+        {/* O fim da folha é uma peça só, que nunca parte entre páginas:
+            assinatura, endereço e contatos e a faixa de destaque. */}
+        <div className="recibo-fim">
+        {/* Data e assinatura */}
+        <div className="recibo-assinatura flex flex-wrap items-end justify-between gap-8 px-10 pb-8 pt-4 text-[13px]">
+          <p className="text-[var(--tinta-2)]">{cidade}{dataLonga(hoje)}.</p>
+          <div className="w-72 text-center">
+            <div className="border-t border-[var(--tinta)] pt-2">
+              <p className="font-semibold text-[var(--tinta)]">{razaoAgencia}</p>
+              {agencia?.cnpj ? <p className="text-[12px] text-[var(--tinta-3)]">CNPJ {agencia.cnpj}</p> : null}
             </div>
           </div>
         </div>
-
-        {/* Rodapé: endereço e contatos */}
-        {enderecoAgencia || contatos.length > 0 ? (
-          <footer className="border-t border-[var(--m-linha)] px-10 py-4 text-center text-[11.5px] leading-relaxed text-[var(--tinta-3)] print:px-2">
-            {enderecoAgencia ? <p>{enderecoAgencia}</p> : null}
-            {contatos.length > 0 ? <p>{contatos.join(' · ')}</p> : null}
-          </footer>
-        ) : null}
-        <div aria-hidden="true" className="h-1.5 bg-[var(--d)]" />
+        {/* Pé da folha: endereço, contatos e a faixa de destaque */}
+        <div className="recibo-pe">
+          {enderecoAgencia || contatos.length > 0 ? (
+            <footer className="border-t border-[var(--m-linha)] px-10 py-4 text-center text-[11.5px] leading-relaxed text-[var(--tinta-3)]">
+              {enderecoAgencia ? <p>{enderecoAgencia}</p> : null}
+              {contatos.length > 0 ? <p>{contatos.join(' · ')}</p> : null}
+            </footer>
+          ) : null}
+          <div aria-hidden="true" className="h-1.5 bg-[var(--d)]" />
+        </div>
+        </div>
       </article>
     </div>
   );
