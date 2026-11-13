@@ -1,3 +1,4 @@
+import { lerPagamentoAoFornecedor } from './pagamento-ao-fornecedor';
 import pool, { initDB } from './db';
 import { generateId } from './utils';
 import { createHmac } from 'crypto';
@@ -1482,6 +1483,7 @@ export async function processarEventoCRM(
             data_fim: asDateYMD(forn.data_fim),
             crm_item_ids: Array.isArray(forn.crm_item_ids) ? (forn.crm_item_ids as unknown[]).map(Number).filter(x => Number.isInteger(x) && x > 0) : undefined,
             cobrado_pelo_fornecedor: forn.cobrado_pelo_fornecedor === true,
+            pagamento_ao_fornecedor: lerPagamentoAoFornecedor(forn.pagamento_ao_fornecedor),
           });
         }
 
@@ -1532,6 +1534,8 @@ export async function processarEventoCRM(
             // Itens da Cotação do CRM desta linha: a conta a pagar os carrega
             // para devolver ao CRM o fornecedor informado aqui.
             ...(l.crm_item_ids?.length ? { crm_item_ids: l.crm_item_ids } : {}),
+            // Forma, vencimento e parcelas do pagamento a este fornecedor.
+            ...(l.pagamento_ao_fornecedor ? { pagamento_ao_fornecedor: l.pagamento_ao_fornecedor } : {}),
           };
           itensInput.push({
             id: item.id,
@@ -1619,6 +1623,10 @@ export async function processarEventoCRM(
         const chaveNatural = (c: Record<string, unknown>) => {
           // Comissão: uma por fornecedor da venda (o item muda de id a cada
           // reprocessamento, o fornecedor não).
+          // Conta com identidade estável (14/11/2026): fornecedor + itens da
+          // Cotação + parcela. Sem ela, a conta a pagar casava pelo id do
+          // item, que muda a cada reenvio, e a parcela paga nascia de novo.
+          if (c.chave_natural) return `chave:${String(c.chave_natural)}`;
           if (String(c.origem ?? '') === 'COMISSAO_FORNECEDOR') {
             return `comissao:${String(c.fornecedor_id ?? '') || String(c.descricao ?? '')}`;
           }

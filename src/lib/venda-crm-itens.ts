@@ -19,6 +19,7 @@
  *     exatamente com valor_total.
  */
 
+import type { PagamentoAoFornecedor } from './pagamento-ao-fornecedor';
 import { num, ratearTotal, round2, somaPor } from './money';
 import type { TipoProdutoVenda } from './crm-types';
 
@@ -57,6 +58,8 @@ export interface FornecedorResolvido {
   crm_item_ids?: number[];
   /** O cliente paga este fornecedor direto: abre só a comissão. */
   cobrado_pelo_fornecedor?: boolean;
+  /** Como a agência paga este fornecedor (forma, vencimento, parcelas), já validado. */
+  pagamento_ao_fornecedor?: PagamentoAoFornecedor | null;
   localizador?: string;
   data_inicio?: string;
   data_fim?: string;
@@ -79,6 +82,8 @@ export interface LinhaCusto {
   crm_item_ids?: number[];
   /** O cliente paga este fornecedor direto (item "cobrado pelo fornecedor" na Cotação). */
   cobrado_pelo_fornecedor?: boolean;
+  /** Como a agência paga este fornecedor. Nunca em linha cobrada pelo fornecedor. */
+  pagamento_ao_fornecedor?: PagamentoAoFornecedor;
 }
 
 /** Item da Cotação com custo e sem fornecedor (13/11/2026): vira conta a pagar pendente, com identidade. */
@@ -141,6 +146,12 @@ export function montarLinhasDeCusto(entrada: {
       venda_informada: num(f.valor_venda) > 0 ? round2(num(f.valor_venda)) : undefined,
       crm_item_ids: Array.isArray(f.crm_item_ids) ? f.crm_item_ids.filter(x => Number.isInteger(x) && x > 0) : undefined,
       cobrado_pelo_fornecedor: f.cobrado_pelo_fornecedor === true,
+      // O cliente paga o fornecedor direto: a agência não paga nada a ele,
+      // então um plano de pagamento ali seria lixo (o CRM não manda; aqui
+      // também não passa).
+      ...(f.pagamento_ao_fornecedor && f.cobrado_pelo_fornecedor !== true
+        ? { pagamento_ao_fornecedor: f.pagamento_ao_fornecedor }
+        : {}),
     });
   }
 

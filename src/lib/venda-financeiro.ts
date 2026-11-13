@@ -4,6 +4,7 @@
  */
 
 import { generateId } from './utils';
+import { planoDoPagamento } from './pagamento-ao-fornecedor';
 import {
   addDias,
   addMeses,
@@ -229,59 +230,77 @@ export function gerarContasVenda(input: VendaInput): ContasGeradas {
         continue;
       }
 
-      // Conta a pagar ao fornecedor (valor_custo)
-      const cp: ContaPagar = {
-        id: generateId(),
-        origem: 'VENDA',
-        venda_id: venda.id,
-        grupo_id: venda.grupo_id,
-        fornecedor_id: item.fornecedor_id,
-        fornecedor_nome: nomeFornecedor,
-        descricao: `Custo ${item.data.tipo} — ${item.data.descricao || 'Item ' + item.sequencia}`,
-        categoria_id: '',
-        centro_custo: venda.centro_custo || '',
-        // CONTRATO DE MOEDA (vale para toda conta a pagar/receber do sistema):
-        //   valor_original -> valor na MOEDA DE ORIGEM (o que o fornecedor cobra)
-        //   valor_final    -> SEMPRE em BRL, é o campo que todos os relatórios somam
-        //   moeda/cambio   -> como se chegou de um ao outro
-        // Gravar valor_final na moeda estrangeira faria fluxo de caixa, DRE,
-        // hub e limite de cartão lerem USD como se fosse real.
-        valor_original: round2(num(item.data.valor_custo)),
-        juros: 0, multa: 0, desconto: 0,
-        valor_final: custoBRL,
-        moeda,
-        cambio,
-        valor_brl: custoBRL,
-        data_emissao: hoje,
-        // A data escolhida no lançamento manda; sem ela, o prazo do cadastro.
-        data_vencimento: dataValida(item.data.data_pagamento_fornecedor)
-          || calcularVencimentoPagamento(venda.data_venda, fornecedor),
-        data_pagamento: null,
-        valor_pago: null,
-        conta_bancaria_id: null,
-        forma_pagamento: '',
-        cartao_id: null,
-        comprovante: '',
-        parcela_numero: 1,
-        total_parcelas: 1,
-        natureza_custo: 'VARIAVEL',
-        is_custo_comercial: false,
-        status: 'PENDENTE',
-        rateio: [], anexos: [],
-        observacoes: temFornecedorReal
-          ? ''
-          : 'Sem fornecedor no CRM. Edite esta conta para informar a quem pagar.',
-        origem_venda_id: venda.id,
-        origem_item_id: item.id,
-        auto_gerado: true,
-        fornecedor_pendente: !temFornecedorReal,
-        // Itens da Cotação do CRM: ao informar o fornecedor aqui, ele volta
-        // para eles no CRM (FORNECEDOR_DO_ITEM, ver fornecedor-do-item.ts).
-        ...(Array.isArray((item.data as { crm_item_ids?: number[] }).crm_item_ids)
-          ? { crm_item_ids: (item.data as { crm_item_ids?: number[] }).crm_item_ids }
-          : {}),
-      };
-      contas_pagar.push(cp);
+      // Conta a pagar ao fornecedor (valor_custo).
+      //
+      // Com o plano que veio da Cotação (forma, vencimento, parcelas; ver
+      // pagamento-ao-fornecedor.ts), nasce uma conta por parcela, e a soma
+      // fecha com o custo. Sem o plano, uma conta só, como sempre.
+      const itemCrm = item.data as { crm_item_ids?: number[] };
+      const crmItemIds = Array.isArray(itemCrm.crm_item_ids) ? itemCrm.crm_item_ids : null;
+      const pagamento = item.data.pagamento_ao_fornecedor;
+      const plano = planoDoPagamento(pagamento, custoBRL);
+      const parcelas = plano ?? [{ numero: 1, total: 1, valor: custoBRL, vencimento: '' }];
+      const identidade = `${item.fornecedor_id || '-'}|${crmItemIds?.length ? crmItemIds.join(',') : 'seq' + item.sequencia}`;
+      for (const parcela of parcelas) {
+        const descricaoBase = `Custo ${item.data.tipo} — ${item.data.descricao || 'Item ' + item.sequencia}`;
+        const valorParcelaOriginal = parcela.total > 1
+          ? (moeda === 'BRL' ? parcela.valor : round2(parcela.valor / cambio))
+          : round2(num(item.data.valor_custo));
+        const cp: ContaPagar = {
+          id: generateId(),
+          origem: 'VENDA',
+          venda_id: venda.id,
+          grupo_id: venda.grupo_id,
+          fornecedor_id: item.fornecedor_id,
+          fornecedor_nome: nomeFornecedor,
+          descricao: parcela.total > 1 ? `${descricaoBase} - Parcela ${parcela.numero}/${parcela.total}` : descricaoBase,
+          categoria_id: '',
+          centro_custo: venda.centro_custo || '',
+          // CONTRATO DE MOEDA (vale para toda conta a pagar/receber do sistema):
+          //   valor_original -> valor na MOEDA DE ORIGEM (o que o fornecedor cobra)
+          //   valor_final    -> SEMPRE em BRL, é o campo que todos os relatórios somam
+          //   moeda/cambio   -> como se chegou de um ao outro
+          // Gravar valor_final na moeda estrangeira faria fluxo de caixa, DRE,
+          // hub e limite de cartão lerem USD como se fosse real.
+          valor_original: valorParcelaOriginal,
+          juros: 0, multa: 0, desconto: 0,
+          valor_final: parcela.valor,
+          moeda,
+          cambio,
+          valor_brl: parcela.valor,
+          data_emissao: hoje,
+          // A parcela da Cotação manda; depois a data escolhida no lançamento;
+          // sem nenhuma, o prazo do cadastro.
+          data_vencimento: dataValida(parcela.vencimento)
+            || dataValida(item.data.data_pagamento_fornecedor)
+            || calcularVencimentoPagamento(venda.data_venda, fornecedor),
+          data_pagamento: null,
+          valor_pago: null,
+          conta_bancaria_id: null,
+          forma_pagamento: pagamento?.forma ?? '',
+          cartao_id: null,
+          comprovante: '',
+          parcela_numero: parcela.numero,
+          total_parcelas: parcela.total,
+          natureza_custo: 'VARIAVEL',
+          is_custo_comercial: false,
+          status: 'PENDENTE',
+          rateio: [], anexos: [],
+          observacoes: temFornecedorReal
+            ? ''
+            : 'Sem fornecedor no CRM. Edite esta conta para informar a quem pagar.',
+          origem_venda_id: venda.id,
+          origem_item_id: item.id,
+          auto_gerado: true,
+          fornecedor_pendente: !temFornecedorReal,
+          // Itens da Cotação do CRM: ao informar o fornecedor aqui, ele volta
+          // para eles no CRM (FORNECEDOR_DO_ITEM, ver fornecedor-do-item.ts).
+          ...(crmItemIds ? { crm_item_ids: crmItemIds } : {}),
+          // Identidade estável: o reenvio da venda não duplica parcela já paga.
+          chave_natural: `${identidade}|parcela:${parcela.numero}`,
+        };
+        contas_pagar.push(cp);
+      }
 
     } else {
       // ---- FLUXO FORNECEDOR ----

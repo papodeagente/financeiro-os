@@ -251,5 +251,33 @@ console.log('\n--- (h) venda pela Cotação: item sem fornecedor, cobrado pelo f
   eq([(await crs(d)).map(c => c.data.origem), (await cps(d)).length], [['COMISSAO_FORNECEDOR'], 0], 'item cotado como "cobrado pelo fornecedor": pago direto, só a comissão');
 }
 
+console.log('\n--- (i) forma e parcelas do pagamento ao fornecedor (CRM #1079) ---');
+{
+  const hotel = {
+    fornecedor_id: 'crm_cnpj_33444555000166', crm_supplier_id: '8', financeiro_id: null,
+    fornecedor_nome: 'Hotel Sakura', fornecedor_cnpj: '33444555000166',
+    servico: 'HOSPEDAGEM', descricao: 'Hotel em Tóquio', valor_custo: 950, valor_venda: 1200, crm_item_ids: [301],
+    pagamento_ao_fornecedor: { forma: 'BOLETO', vencimento: '2026-12-15', parcelas: [
+      { parcela: 1, valor: 475, vencimento: '2026-12-15' }, { parcela: 2, valor: 475, vencimento: '2027-01-15' }] },
+  };
+  const venda = () => japao({ crm_venda_id: 'crm_deal_11', valor_total: 1200, custo_total: 950, fornecedores: [hotel] });
+  await evento('VENDA_FECHADA', venda());
+  const v = (await vendaDo('crm_deal_11')).id;
+  const ordem = cs => cs.sort((a, b) => a.data.parcela_numero - b.data.parcela_numero);
+  const pagar = ordem(await cps(v));
+  eq(pagar.map(c => [c.data.valor_final, c.data.forma_pagamento, c.data.parcela_numero, c.data.total_parcelas, c.data.data_vencimento, c.data.crm_item_ids, c.data.fornecedor_pendente === true]),
+    [[475, 'BOLETO', 1, 2, '2026-12-15', [301], false], [475, 'BOLETO', 2, 2, '2027-01-15', [301], false]],
+    'boleto em 2x: uma conta a pagar por parcela, com forma, número, valor e vencimento');
+
+  await query(`UPDATE contas_pagar SET status = 'PAGO', data = data || '{"status":"PAGO"}' WHERE id = $1`, [pagar[0].id]);
+  await evento('VENDA_FECHADA', venda());
+  const depois = ordem(await cps(v));
+  eq(depois.map(c => [c.data.parcela_numero, c.data.status]), [[1, 'PAGO'], [2, 'PENDENTE']], 'reenviar a venda depois de pagar a 1ª parcela não a recria: continuam 2 contas');
+
+  await evento('VENDA_FECHADA', japao({ crm_venda_id: 'crm_deal_12', fornecedores: [{ ...japao().fornecedores[0], crm_supplier_id: '8', fornecedor_id: hotel.fornecedor_id, fornecedor_cnpj: hotel.fornecedor_cnpj, fornecedor_nome: 'Hotel Sakura' }] }));
+  const sem = await cps((await vendaDo('crm_deal_12')).id);
+  eq(sem.map(c => [c.data.parcela_numero, c.data.total_parcelas, c.data.forma_pagamento]), [[1, 1, '']], 'sem o bloco, tudo como antes: uma conta, sem forma');
+}
+
 console.log(`\n${total - falhas}/${total} testes de quem recebe a venda do CRM passaram`);
 if (falhas > 0) process.exit(1);

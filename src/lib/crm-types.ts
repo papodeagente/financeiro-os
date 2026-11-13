@@ -231,6 +231,8 @@ export interface ItemVendaData {
   contas_geradas_ids: string[];
   /** Quando pagar o fornecedor deste item. Vazio usa o prazo do cadastro dele. */
   data_pagamento_fornecedor?: string;
+  /** Como a agência paga este fornecedor, vindo da Cotação do CRM (pagamento-ao-fornecedor.ts). */
+  pagamento_ao_fornecedor?: import('./pagamento-ao-fornecedor').PagamentoAoFornecedor;
 }
 
 export interface ProdutoVenda {
@@ -526,6 +528,12 @@ export interface ContaPagar {
    * dizer para quem. A tela de contas a pagar mostra isso e deixa preencher.
    */
   fornecedor_pendente?: boolean;
+  /**
+   * Identidade estável da conta gerada pela venda (14/11/2026): fornecedor,
+   * itens da Cotação e parcela. Sobrevive ao reenvio da venda, que recria os
+   * itens com ids novos; assim a parcela já paga não nasce de novo.
+   */
+  chave_natural?: string;
 }
 
 // ============================================================
