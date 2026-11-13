@@ -1,0 +1,151 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   Design system do Entur OS CRM, importado no Financeiro (12/11/2026).
+
+   Pedido do Bruno: "quero que ele fique no design system do CRM, que será
+   importado para o financeiro, respeitando apenas as cores de cada sistema".
+
+   O QUE VEM DO CRM: os nomes dos tokens (--ds-*, iguais aos de
+   client/src/styles/propostas2.css no entur-os-crm, para que uma peça do CRM
+   seja portada sem tradução), raios (cartão 24 px, painel 22 px), sombras de
+   vidro, aurora no fundo da página, tipografia Aeonik com número tabular,
+   rótulos em caixa alta com 0,08em, e as peças em src/components/ds/.
+
+   O QUE CONTINUA DO FINANCEIRO: toda COR. Cada --ds-* aponta para um --fin-*
+   (o violeta do CRM vira o azul do FIN), então o tema escuro vem junto sem
+   um segundo bloco de cores, e o porteiro (scripts/test-design-system.ts)
+   continua valendo: nenhuma cor crua, nenhum hex em classe.
+
+   Escopo .ds: só onde a tela entra no design system. Nada vaza para o menu
+   nem para as telas que ainda não foram portadas.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.ds {
+  --ds-brand: var(--fin-accent);
+  --ds-brand-hover: var(--fin-accent-hover);
+  --ds-brand-soft: var(--fin-accent-soft);
+  --ds-brand-soft-2: color-mix(in srgb, var(--fin-accent) 20%, var(--fin-surface));
+  --ds-brand-soft-ink: var(--fin-accent);
+
+  --ds-text-strong: var(--fin-text);
+  --ds-text-body: var(--fin-text-2);
+  --ds-text-muted: var(--fin-text-3);
+  --ds-text-subtle: color-mix(in srgb, var(--fin-text-3) 65%, var(--fin-surface));
+  --ds-text-link: var(--fin-accent);
+  --ds-text-on-fill: var(--fin-text-on-fill);
+
+  --ds-surface-page: var(--fin-bg);
+  --ds-surface-card: var(--fin-surface);
+  --ds-surface-raised: var(--fin-surface);
+  --ds-surface-sunken: var(--fin-surface-sunken);
+  --ds-surface-hover: var(--fin-surface-2);
+
+  --ds-border-subtle: color-mix(in srgb, var(--fin-border) 65%, var(--fin-surface));
+  --ds-border-default: var(--fin-border);
+  --ds-border-strong: var(--fin-border-strong);
+  --ds-border-focus: var(--fin-accent);
+
+  --ds-success: var(--fin-positive);
+  --ds-success-soft: var(--fin-positive-soft);
+  --ds-success-ink: var(--fin-positive);
+  --ds-danger: var(--fin-negative);
+  --ds-danger-soft: var(--fin-negative-soft);
+  --ds-danger-ink: var(--fin-negative-text);
+  --ds-warning: var(--fin-warning);
+  --ds-warning-soft: var(--fin-warning-soft);
+  --ds-warning-ink: var(--fin-warning-text);
+  --ds-info: var(--fin-info);
+  --ds-info-soft: var(--fin-info-soft);
+  --ds-info-ink: var(--fin-info);
+
+  /* Ladrilho do ícone: o degradê do CRM (claro → tom), feito do tom do FIN. */
+  --ds-tom-brand-de: color-mix(in srgb, var(--fin-accent) 62%, white);
+  --ds-tom-brand-ate: var(--fin-accent);
+  --ds-tom-success-de: color-mix(in srgb, var(--fin-positive) 60%, white);
+  --ds-tom-success-ate: var(--fin-positive);
+  --ds-tom-danger-de: color-mix(in srgb, var(--fin-negative) 62%, white);
+  --ds-tom-danger-ate: var(--fin-negative);
+  --ds-tom-warning-de: color-mix(in srgb, var(--fin-warning) 62%, white);
+  --ds-tom-warning-ate: var(--fin-warning);
+  --ds-tom-info-de: color-mix(in srgb, var(--fin-info) 62%, white);
+  --ds-tom-info-ate: var(--fin-info);
+
+  /* As sombras do CRM, com a tinta do FIN no lugar do violeta. */
+  --ds-shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --ds-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05), 0 2px 6px color-mix(in srgb, var(--fin-accent) 5%, transparent);
+  --ds-shadow-md: 0 2px 4px rgba(15, 23, 42, 0.04), 0 8px 24px color-mix(in srgb, var(--fin-accent) 8%, transparent);
+  --ds-glass-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 30px color-mix(in srgb, var(--fin-accent) 6%, transparent);
+  --ds-radius-card: 24px;
+  --ds-radius-panel: 22px;
+  --ds-gradient-brand: linear-gradient(100deg, var(--ds-tom-brand-ate) 0%, var(--ds-tom-brand-de) 100%);
+  --ds-gradient-aurora:
+    radial-gradient(55% 45% at 90% -5%, color-mix(in srgb, var(--fin-accent) 10%, transparent) 0%, transparent 70%),
+    radial-gradient(45% 40% at -5% 100%, color-mix(in srgb, var(--fin-info) 7%, transparent) 0%, transparent 70%);
+  --ds-ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ds-dur-fast: 120ms;
+  --ds-dur-base: 180ms;
+
+  font-family: var(--font-aeonik), "Helvetica Neue", Arial, sans-serif;
+  color: var(--ds-text-body);
+}
+
+.dark .ds {
+  /* No escuro o tom já é claro: o degradê sai dele para um pouco mais fundo. */
+  --ds-tom-brand-de: var(--fin-accent);
+  --ds-tom-brand-ate: color-mix(in srgb, var(--fin-accent) 70%, black);
+  --ds-tom-success-de: var(--fin-positive);
+  --ds-tom-success-ate: color-mix(in srgb, var(--fin-positive) 70%, black);
+  --ds-tom-danger-de: var(--fin-negative);
+  --ds-tom-danger-ate: color-mix(in srgb, var(--fin-negative) 70%, black);
+  --ds-tom-warning-de: var(--fin-warning);
+  --ds-tom-warning-ate: color-mix(in srgb, var(--fin-warning) 70%, black);
+  --ds-tom-info-de: var(--fin-info);
+  --ds-tom-info-ate: color-mix(in srgb, var(--fin-info) 70%, black);
+  --ds-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --ds-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.25);
+  --ds-shadow-md: 0 2px 4px rgba(0, 0, 0, 0.35), 0 12px 32px rgba(0, 0, 0, 0.4);
+  --ds-glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 20px 40px rgba(0, 0, 0, 0.3);
+  --ds-gradient-aurora:
+    radial-gradient(55% 45% at 88% -5%, color-mix(in srgb, var(--fin-accent) 22%, transparent) 0%, transparent 70%),
+    radial-gradient(45% 40% at -5% 105%, color-mix(in srgb, var(--fin-info) 12%, transparent) 0%, transparent 70%);
+  color-scheme: dark;
+}
+
+/* Número: Aeonik tabular, como o p2-num do CRM. */
+.ds .ds-num,
+.ds.ds-num {
+  font-family: var(--font-aeonik), "Helvetica Neue", Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Fundo da página: superfície + aurora fixa. */
+.ds-pagina {
+  background-color: var(--ds-surface-page);
+  background-image: var(--ds-gradient-aurora);
+  background-attachment: fixed;
+}
+
+.ds ::selection { background: var(--ds-brand-soft-2); color: var(--ds-text-strong); }
+.ds :focus-visible { outline-color: var(--ds-border-focus); }
+
+/* Filtro de período (componente da casa) vestido de pílula, como o
+   .ds-periodo do CRM. */
+.ds .ds-periodo select,
+.ds .ds-periodo input {
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--ds-border-default);
+  background-color: var(--ds-surface-card);
+  color: var(--ds-text-strong);
+  font-size: 13px;
+  box-shadow: none;
+}
+.ds .ds-periodo select { padding-right: 14px; }
+.ds .ds-periodo input { padding: 0 12px; }
+.ds .ds-periodo select:hover,
+.ds .ds-periodo input:hover { background-color: var(--ds-surface-hover); }
+.ds .ds-periodo svg { color: var(--ds-text-muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ds * { transition-duration: 1ms !important; }
+}

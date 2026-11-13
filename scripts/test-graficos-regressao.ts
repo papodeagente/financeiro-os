@@ -195,7 +195,9 @@ console.log('--- toda tela do pilar tem uma resposta e uma só ---');
 {
   for (const tela of TELAS) {
     const fonte = fontes.get(tela)!;
-    const aberturas = [...fonte.matchAll(/<Resposta\b/g)].length;
+    // Tela no design system do CRM (12/11/2026): a manchete é o bloco marcado
+    // com data-ds-resposta. A regra continua: uma e só uma, nas duas formas.
+    const aberturas = [...fonte.matchAll(/<Resposta\b|data-ds-resposta=/g)].length;
     ok(aberturas === 1, `${tela} monta exatamente uma Resposta`, `${aberturas} encontradas`);
   }
 }

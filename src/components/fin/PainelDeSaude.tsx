@@ -6,6 +6,8 @@ import { CircleCheck, CircleDashed, OctagonAlert, TriangleAlert, type LucideIcon
 import { ALVO_MIN, RAIO_PONTA, RESPIRO, TRACEJADO_AUSENCIA, escalaLinear } from '@/lib/escala';
 import { ORDEM_DE_GRAVIDADE } from '@/lib/dashboard-insights';
 import { AreaDeGrafico } from '@/components/fin/GraficoMoldura';
+import { CabecaDoBloco, CARTAO_DS, type TomDoDs } from '@/components/ds/pecas';
+import { cn } from '@/lib/utils';
 
 /**
  * "Como está a saúde financeira da minha agência?" respondido em três segundos,
@@ -63,7 +65,17 @@ export type FatorDeSaude = {
 export type PainelDeSaudeProps = {
   fatores: FatorDeSaude[];
   onAtivar?: (id: string) => void;
+  /**
+   * 'ds' = design system do CRM: cartão de 24 px e o veredito como legenda
+   * do cabeçalho do bloco (ladrilho no tom do veredito), não em tamanho de
+   * manchete. Na tela com a manchete de caixa, dois números gigantes
+   * competiam, e "Sem base suficiente" saía maior que o próprio saldo.
+   */
+  aparencia?: 'fin' | 'ds';
 };
+
+/** O tom do ladrilho no design system, pelo veredito. */
+const TOM_DS: Record<FaixaDeSaude, TomDoDs> = { bom: 'success', atencao: 'warning', risco: 'danger', 'sem-base': 'info' };
 
 /**
  * Onde a régua vira outra faixa. Exportado de propósito: quem calcula `posicao`
@@ -377,7 +389,7 @@ function LinhaDeFator({ fator, onAtivar }: { fator: FatorDeSaude; onAtivar?: (id
   );
 }
 
-export function PainelDeSaude({ fatores, onAtivar }: PainelDeSaudeProps) {
+export function PainelDeSaude({ fatores, onAtivar, aparencia = 'fin' }: PainelDeSaudeProps) {
   // Sem fator não há painel. Um quadro com a moldura e nada dentro lê como bug;
   // quem tem um motivo para mostrar ("ainda não há lançamentos") mostra o motivo,
   // e isso é responsabilidade de quem chama, que sabe qual é o motivo.
@@ -478,11 +490,29 @@ export function PainelDeSaude({ fatores, onAtivar }: PainelDeSaudeProps) {
         : `${semBase.length} fatores ainda não têm base e ficaram de fora desta conta.`
       : null;
 
+  const ds = aparencia === 'ds';
+
   return (
     <section
       data-fin-saude={pior.faixa}
-      className="flex flex-col rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-4 shadow-[var(--fin-e-card)]"
+      className={cn(
+        'flex flex-col',
+        ds
+          ? cn(CARTAO_DS, 'p-[22px]')
+          : 'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-4 shadow-[var(--fin-e-card)]',
+      )}
     >
+      {ds ? (
+        <header className="flex flex-col gap-3">
+          <CabecaDoBloco tom={TOM_DS[pior.faixa]} Icone={IconeDoVeredito} titulo="Saúde financeira" sub={palavra} />
+          <p className="text-[13px] text-[var(--ds-text-body)]">{regra}</p>
+          {ressalva ? <p className="text-[13px] text-[var(--ds-text-body)]">{ressalva}</p> : null}
+          <p className="text-[12px] text-[var(--ds-text-muted)]">
+            Não existe nota de 0 a 100 aqui: cada fator é medido por conta própria e o pior deles dá o
+            veredito.
+          </p>
+        </header>
+      ) : (
       <header className="flex flex-col gap-2">
         <div className="flex items-center gap-3">
           <IconeDoVeredito className="size-8 shrink-0" style={{ color: corDoIcone }} aria-hidden="true" />
@@ -498,6 +528,7 @@ export function PainelDeSaude({ fatores, onAtivar }: PainelDeSaudeProps) {
           veredito.
         </p>
       </header>
+      )}
 
       {/* Legenda da régua, uma vez para a lista toda. Sem ela três tons do mesmo
           matiz são três tons, e o sentido da progressão muda entre o tema claro
@@ -516,7 +547,8 @@ export function PainelDeSaude({ fatores, onAtivar }: PainelDeSaudeProps) {
         ))}
       </p>
 
-      <ul className="mt-1 flex flex-col">
+      {/* No design system o painel ocupa a largura toda: os fatores em duas colunas. */}
+      <ul className={ds ? 'mt-2 grid grid-cols-1 gap-x-10 lg:grid-cols-2' : 'mt-1 flex flex-col'}>
         {fatores.map(fator => (
           <LinhaDeFator key={fator.id} fator={fator} onAtivar={onAtivar} />
         ))}

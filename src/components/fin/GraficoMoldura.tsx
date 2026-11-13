@@ -2,7 +2,10 @@
 
 import * as React from 'react';
 
+import type { LucideIcon } from 'lucide-react';
+
 import { cn } from '@/lib/utils';
+import { CabecaDoBloco, CARTAO_DS, PILULA_DS, type TomDoDs } from '@/components/ds/pecas';
 
 /**
  * A moldura de todo gráfico do pilar: título, largura medida, estado vazio COM
@@ -39,6 +42,14 @@ export type GraficoMolduraProps = {
   /** ReactNode, ou função que recebe a largura medida em px. */
   children: React.ReactNode | ((largura: number) => React.ReactNode);
   className?: string;
+  /**
+   * 'ds' veste a moldura com o design system do CRM (cartão de 24 px e
+   * cabeçalho com ladrilho do ícone). Precisa de `icone` e `tom`. O padrão
+   * continua o visual antigo, para as telas que ainda não foram portadas.
+   */
+  aparencia?: 'fin' | 'ds';
+  icone?: LucideIcon;
+  tom?: TomDoDs;
 };
 
 type ContextoDaMoldura = {
@@ -127,16 +138,23 @@ export function VazioDoGrafico({
   motivo,
   frase,
   acao,
+  aparencia = 'fin',
 }: {
   motivo: MotivoDoVazio;
   frase?: string;
   acao?: { rotulo: string; href?: string; onClick?: () => void };
+  aparencia?: 'fin' | 'ds';
 }) {
   return (
     <div
       data-fin-vazio={motivo}
       role={motivo === 'erro' ? 'alert' : undefined}
-      className="flex min-h-[120px] flex-col items-start justify-center gap-3 rounded-[var(--fin-r-md)] bg-[var(--fin-surface-2)] px-4 py-5"
+      className={cn(
+        'flex min-h-[120px] flex-col items-start justify-center gap-3 px-4 py-5',
+        aparencia === 'ds'
+          ? 'rounded-[16px] bg-[var(--ds-surface-sunken)]'
+          : 'rounded-[var(--fin-r-md)] bg-[var(--fin-surface-2)]',
+      )}
     >
       <p className="fin-t-body text-[var(--fin-text-2)]">{frase || FRASE_PADRAO[motivo]}</p>
       {acao ? (
@@ -225,6 +243,9 @@ export function GraficoMoldura({
   tabela,
   children,
   className,
+  aparencia = 'fin',
+  icone,
+  tom = 'brand',
 }: GraficoMolduraProps) {
   const idDaTabela = React.useId();
   const [tabelaAberta, setTabelaAberta] = React.useState(false);
@@ -236,37 +257,56 @@ export function GraficoMoldura({
 
   const desenha = estado === 'ok';
 
+  const ds = aparencia === 'ds' && icone;
+  const botaoDaTabela =
+    desenha && tabela.linhas.length > 0 ? (
+      <button
+        type="button"
+        aria-expanded={tabelaAberta}
+        aria-controls={idDaTabela}
+        onClick={() => setTabelaAberta(v => !v)}
+        // Visível de propósito: a alternativa à leitura visual não pode
+        // morar num <summary> cinza que ninguém enxerga.
+        className={
+          ds
+            ? cn('fin-no-print', PILULA_DS)
+            : 'fin-no-print fin-t-body inline-flex h-11 shrink-0 items-center rounded-[var(--fin-r-md)] border border-[var(--fin-border)] px-3 text-[var(--fin-text-2)] transition-colors hover:bg-[var(--fin-surface-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)]'
+        }
+      >
+        {tabelaAberta ? 'Ocultar números' : 'Ver os números'}
+      </button>
+    ) : null;
+
   return (
     <section
       data-fin-grafico={estado}
-      className={cn('flex flex-col rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-4 shadow-[var(--fin-e-card)]', className)}
+      className={cn(
+        ds
+          ? cn(CARTAO_DS, 'flex min-w-0 flex-col p-[22px]')
+          : 'flex flex-col rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-4 shadow-[var(--fin-e-card)]',
+        className,
+      )}
     >
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="fin-t-subhead text-[var(--fin-text)]">{titulo}</h3>
-          {sublinha ? <p className="fin-t-caption text-[var(--fin-text-3)]">{sublinha}</p> : null}
+      {ds ? (
+        <CabecaDoBloco tom={tom} Icone={icone} titulo={titulo} sub={sublinha} nivel={3}>
+          {botaoDaTabela}
+        </CabecaDoBloco>
+      ) : (
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="fin-t-subhead text-[var(--fin-text)]">{titulo}</h3>
+            {sublinha ? <p className="fin-t-caption text-[var(--fin-text-3)]">{sublinha}</p> : null}
+          </div>
+          {botaoDaTabela}
         </div>
-        {desenha && tabela.linhas.length > 0 ? (
-          <button
-            type="button"
-            aria-expanded={tabelaAberta}
-            aria-controls={idDaTabela}
-            onClick={() => setTabelaAberta(v => !v)}
-            // Visível de propósito: a alternativa à leitura visual não pode
-            // morar num <summary> cinza que ninguém enxerga.
-            className="fin-no-print fin-t-body inline-flex h-11 shrink-0 items-center rounded-[var(--fin-r-md)] border border-[var(--fin-border)] px-3 text-[var(--fin-text-2)] transition-colors hover:bg-[var(--fin-surface-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)]"
-          >
-            {tabelaAberta ? 'Ocultar números' : 'Ver os números'}
-          </button>
-        ) : null}
-      </div>
+      )}
 
       <Contexto.Provider value={contexto}>
         {desenha ? (
-          <AreaDeGrafico className="fin-no-print mt-3">{children}</AreaDeGrafico>
+          <AreaDeGrafico className={cn('fin-no-print', ds ? 'mt-5' : 'mt-3')}>{children}</AreaDeGrafico>
         ) : (
-          <div className="mt-3">
-            <VazioDoGrafico motivo={estado} frase={vazio?.frase} acao={vazio?.acao} />
+          <div className={ds ? 'mt-5' : 'mt-3'}>
+            <VazioDoGrafico motivo={estado} frase={vazio?.frase} acao={vazio?.acao} aparencia={ds ? 'ds' : 'fin'} />
           </div>
         )}
       </Contexto.Provider>
