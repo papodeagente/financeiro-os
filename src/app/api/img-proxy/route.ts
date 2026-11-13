@@ -1,39 +1,72 @@
 import { NextResponse } from 'next/server';
-import { baixarImagemSegura, DestinoRecusado } from '@/lib/saida-segura';
-import { detectarTipo } from '@/lib/arquivos';
 
+const BLOCKED_HOSTS = /^(localhost|127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|0\.|169\.254\.|::1|fc00|fe80)/i;
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 
-/**
- * Proxy de imagem para a tela (auditoria 04/11/2026, FIN-06): só https, IP
- * conferido no próprio socket (sem rede interna, nem por DNS nem por
- * redirecionamento), corpo cortado no teto e resposta só se os bytes forem
- * mesmo de imagem.
- */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const url = searchParams.get('url');
+
   if (!url) {
     return NextResponse.json({ error: 'url parameter required' }, { status: 400 });
   }
 
+  // Validate URL scheme and host
+  let parsed: URL;
   try {
-    const { bytes } = await baixarImagemSegura(url, { tetoBytes: MAX_IMAGE_SIZE, tempoMs: 10_000 });
-    const tipo = detectarTipo(bytes, '');
-    if (!tipo?.imagem) {
+    parsed = new URL(url);
+  } catch {
+    return NextResponse.json({ error: 'Invalid URL' }, { status: 400 });
+  }
+
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    return NextResponse.json({ error: 'Only HTTP/HTTPS URLs allowed' }, { status: 400 });
+  }
+
+  if (BLOCKED_HOSTS.test(parsed.hostname)) {
+    return NextResponse.json({ error: 'Blocked host' }, { status: 403 });
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; TravelBot/1.0)',
+        'Accept': 'image/*',
+      },
+      signal: controller.signal,
+      redirect: 'follow',
+    });
+    clearTimeout(timeout);
+
+    if (!res.ok) {
+      return NextResponse.json({ error: 'Failed to fetch image' }, { status: res.status });
+    }
+
+    const contentType = res.headers.get('content-type') || 'image/jpeg';
+    if (!contentType.startsWith('image/')) {
       return NextResponse.json({ error: 'Response is not an image' }, { status: 400 });
     }
-    return new NextResponse(new Uint8Array(bytes), {
+
+    const contentLength = parseInt(res.headers.get('content-length') || '0', 10);
+    if (contentLength > MAX_IMAGE_SIZE) {
+      return NextResponse.json({ error: 'Image too large' }, { status: 400 });
+    }
+
+    const buffer = await res.arrayBuffer();
+    if (buffer.byteLength > MAX_IMAGE_SIZE) {
+      return NextResponse.json({ error: 'Image too large' }, { status: 400 });
+    }
+
+    return new NextResponse(buffer, {
       headers: {
-        'Content-Type': tipo.mime,
+        'Content-Type': contentType,
         'Cache-Control': 'public, max-age=604800, immutable',
-        'X-Content-Type-Options': 'nosniff',
       },
     });
-  } catch (e) {
-    if (e instanceof DestinoRecusado) {
-      return NextResponse.json({ error: e.message }, { status: 400 });
-    }
-    return NextResponse.json({ error: 'Proxy error' }, { status: 502 });
+  } catch {
+    return NextResponse.json({ error: 'Proxy error' }, { status: 500 });
   }
 }

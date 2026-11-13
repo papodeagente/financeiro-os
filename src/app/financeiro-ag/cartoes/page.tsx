@@ -39,7 +39,6 @@ import { DataState } from '@/components/fin/DataState';
 import { type EmptyLessonProps } from '@/components/fin/EmptyLesson';
 import { RecordSheet } from '@/components/fin/RecordSheet';
 import { Field } from '@/components/fin/Field';
-import { CampoEmpresa, useEmpresaSugerida } from '@/components/fin/CamposDeEmpresa';
 import { MoneyField } from '@/components/fin/MoneyField';
 import { ConfirmDialog } from '@/components/fin/ConfirmDialog';
 import { statusChipVariants } from '@/components/fin/StatusChip';
@@ -203,7 +202,6 @@ export default function CartoesCorpPage() {
   const [showTaxas, setShowTaxas] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const empresaSugerida = useEmpresaSugerida();
   const [busca, setBusca] = useState('');
   const [situacao, setSituacao] = useState<Situacao>('TODAS');
   const [excluirId, setExcluirId] = useState<string | null>(null);
@@ -267,7 +265,7 @@ export default function CartoesCorpPage() {
   useEffect(() => { load(); }, []);
 
   function openNew() {
-    setForm({ ...EMPTY_FORM, empresa_id: empresaSugerida });
+    setForm(EMPTY_FORM);
     setEditId(null);
     setShowTaxas(false);
     setShowForm(true);
@@ -870,14 +868,6 @@ export default function CartoesCorpPage() {
                 />
               )}
             </Field>
-
-            {/* Várias empresas (E7): só aparece com duas ou mais. */}
-            <CampoEmpresa
-              rotulo="Gerar a fatura na empresa"
-              valor={form.empresa_id}
-              onChange={empresa_id => setForm(f => ({ ...f, empresa_id }))}
-              ajuda="As compras deste cartão viram contas a pagar desta empresa. Ao trocar, as faturas em aberto vão junto."
-            />
 
             <Field rotulo="Situação" ajuda="Cartão inativo continua na lista, mas fica marcado como fora de uso.">
               {a => (

@@ -1,4 +1,3 @@
-import { chaveAnthropic, type Consulta } from '@/lib/config-apis';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
@@ -6,7 +5,11 @@ import { getTenantId } from '@/lib/tenant';
 async function getAnthropicConfig(tenantId: string) {
   await initDB();
   if (!pool) return null;
-  return chaveAnthropic(pool as unknown as Consulta, tenantId, 'claude-sonnet-4-5-20250929');
+  const { rows } = await pool.query(`SELECT data FROM config_apis WHERE id = 'apis-config-singleton' AND tenant_id = $1`, [tenantId]);
+  if (rows.length === 0) return null;
+  const cfg = rows[0].data;
+  if (!cfg.anthropic?.ativo || !cfg.anthropic?.api_key) return null;
+  return { api_key: cfg.anthropic.api_key, modelo: cfg.anthropic.modelo || 'claude-sonnet-4-5-20250929' };
 }
 
 export async function POST(req: Request) {

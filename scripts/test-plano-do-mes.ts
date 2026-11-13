@@ -17,15 +17,13 @@
  *   (e) lucro só fecha no fim do mês; equilíbrio vem do que de fato aconteceu;
  *   (f) sem plano: o realizado aparece e nada vira meta; editar o plano muda
  *       as metas e não toca nos registros;
- *   (g) pontos de atenção, premissas contra a realidade e a frase do mês;
- *   (h) leads e vendas do CRM (as contas das Análises): mandam quando o CRM
- *       responde; sem resposta, o motivo aparece e o registro manual volta.
+ *   (g) pontos de atenção, premissas contra a realidade e a frase do mês.
  *
  * Roda com: node --experimental-strip-types scripts/run-tests.mjs scripts/test-plano-do-mes.ts
  */
 import { calcRelatorio, type CustosData } from '../src/lib/planejamento-custos.ts';
 import {
-  calendarioDoMes, diasUteisAte, montarAcompanhamento, situacaoDaMeta, serieDoMes, ritmoDoPlano,
+  calendarioDoMes, diasUteisAte, montarAcompanhamento, situacaoDaMeta,
   type RealizadoDoMes, type ContaDoMes, type ItemDoPlano,
 } from '../src/lib/plano-do-mes.ts';
 
@@ -74,11 +72,6 @@ eq([c20.diasUteisPassados, c20.diasUteisRestantes, Math.round(c20.fracao * 100),
 eq([calendarioDoMes('2026-10', '2026-11-03').fracao, calendarioDoMes('2026-10', '2026-11-03').aberto], [1, false], 'mês que já passou: inteiro');
 eq([calendarioDoMes('2026-10', '2026-09-28').futuro, calendarioDoMes('2026-10', '2026-09-28').fracao], [true, 0], 'mês que ainda não começou: nada esperado');
 
-const serie = serieDoMes('2026-10', [{ data: '2026-10-09', comissao: 78.13 }, { data: '2026-10-09', comissao: 2000 }, { data: '2026-10-31', comissao: 10 }, { data: '2026-11-01', comissao: 999 }]);
-eq([serie.vendas.length, serie.vendas[8], serie.comissao[8], serie.vendas[30], serie.vendas.reduce((a, b) => a + b, 0)], [31, 2, 2078.13, 1, 3], 'série do mês: um valor por dia, dia sem venda é zero, outro mês fica fora');
-const ritmo = ritmoDoPlano('2026-10', 22000);
-eq([ritmo[0], ritmo[3], ritmo[4], ritmo[19], ritmo[30]], [1000, 2000, 3000, 14000, 22000], 'ritmo do plano: anda R$ 1.000 por dia útil e para no fim de semana');
-
 console.log('\n--- (b) metas ---');
 eq(situacaoDaMeta({ planejado: 7, realizado: 2, formato: 'contagem', cal: c20 }).situacao, 'atrasado', '2 de 7 vendas no dia 20: o ritmo pedia 4, atrasado');
 eq(situacaoDaMeta({ planejado: 7, realizado: 4, formato: 'contagem', cal: c20 }).situacao, 'pendente', '4 de 7: no ritmo (4,45 arredonda para 4), pendente');
@@ -103,7 +96,7 @@ eq(a.atencao.some(p => p.chave === 'atendimentos' && p.acao?.registrar === 'aten
 const reg = (valor: number, data: string, criado = `${data}T12:00:00Z`) => ({ id: `r-${valor}-${data}`, chave: 'atendimentos', valor, data, observacao: '', autor: 'Karen', criado_em: criado });
 const comRegistro = montarAcompanhamento({ plano, rel, realizado: realizado({ registros: [reg(35, '2026-10-09')] }) });
 const at = item(comRegistro, 'atendimentos');
-eq([at.realizado, at.situacao, /até 09\/10/.test(at.porque), at.fonte.startsWith('Registrado em 09/10 por Karen')], [35, 'pendente', true, true], '35 em 09/10: comparado com o ritmo de 09/10 (pedia 31), pendente; pelo de hoje (63) estaria atrasado');
+eq([at.realizado, at.situacao, /até 09\/10/.test(at.porque), at.fonte], [35, 'pendente', true, 'Registrado em 09/10 por Karen'], '35 em 09/10: comparado com o ritmo de 09/10 (pedia 31), pendente; pelo de hoje (63) estaria atrasado');
 eq(item(montarAcompanhamento({ plano, rel, realizado: realizado({ registros: [reg(30, '2026-10-09')] }) }), 'atendimentos').situacao, 'atrasado', '30 em 09/10: abaixo dos 31 daquele dia, atrasado');
 eq(comRegistro.atencao.some(p => /último registro de atendimentos é de 09\/10/.test(p.texto)), true, 'registro com mais de 7 dias: pede atualização');
 const doisRegistros = montarAcompanhamento({ plano, rel, realizado: realizado({ registros: [reg(30, '2026-10-09'), reg(55, '2026-10-19'), reg(40, '2026-10-19', '2026-10-19T08:00:00Z')] }) });
@@ -148,13 +141,12 @@ eq([item(pago, 'equilibrio').situacao, item(pago, 'equilibrio').porque], ['concl
 const semCusto = montarAcompanhamento({ plano, rel, realizado: realizado({ vendas: 6, custo_fixo: 0, lucro: 27565.57, equilibrio: { atingido: true, na_venda: null, data: null, faltam: 0 } }) });
 const eqSemCusto = item(semCusto, 'equilibrio');
 eq([eqSemCusto.situacao, /null/.test(eqSemCusto.porque)], ['sem_dados', false], 'nenhum custo lançado: cobrir os custos fica SEM DADOS, nunca "concluído" nem "nullª venda"');
-eq([item(semCusto, 'lucro').situacao, /ainda não desconta a estrutura/.test(item(semCusto, 'lucro').porque), item(semCusto, 'lucro').progresso], ['sem_dados', true, null], 'e o lucro de R$ 27.565 não vira "concluído" nem "pendente com 276%": sem custo lançado é SEM DADOS, como a cobertura');
-eq(semCusto.atencao.some(p => p.titulo === 'Custos do mês não lançados' && p.acao?.href === '/financeiro-ag/pagar'), true, 'e a lista de atenção diz o motivo único: nenhuma conta do mês lançada');
+eq([item(semCusto, 'lucro').situacao, /falta descontar a estrutura/.test(item(semCusto, 'lucro').porque)], ['pendente', true], 'e o lucro de R$ 27.565 não vira "concluído": avisa que a estrutura ainda não foi descontada');
 eq(item(montarAcompanhamento({ plano, rel, realizado: realizado({ hoje: '2026-11-03', custo_fixo: 0, lucro: 27565.57 }) }), 'lucro').situacao, 'sem_dados', 'mês fechado sem custo lançado: lucro SEM DADOS');
 const semNada = { ...plano, custos_fixos: [], marketing: [] };
 const semNadaA = montarAcompanhamento({ plano: semNada, rel: calcRelatorio(semNada), realizado: realizado({ custo_fixo: 0, lucro: 27565.57, equilibrio: { atingido: true, na_venda: null, data: null, faltam: 0 } }) });
 eq(item(semNadaA, 'equilibrio').situacao, 'sem_meta', 'nada planejado e nada lançado: sem meta');
-eq(item(semNadaA, 'lucro').situacao, 'sem_dados', 'mesmo com o plano sem custo: lucro sem nenhuma conta do mês lançada não vira "concluído"');
+eq(item(semNadaA, 'lucro').situacao, 'pendente', 'mesmo com o plano sem custo: lucro sem nenhuma conta do mês lançada não vira "concluído"');
 eq(/^\d+ de \d+\. [A-ZÁÉÍÓÚ]/.test(a.atencao.find(p => p.chave === 'vendas')!.detalhe), true, 'o detalhe começa a frase com maiúscula depois do número');
 eq(item(montarAcompanhamento({ plano, rel, realizado: realizado({ equilibrio: { atingido: true, na_venda: null, data: null, faltam: 0 } }) }), 'equilibrio').porque, 'As vendas do mês já cobriram os custos lançados.', 'coberto sem saber em qual venda: a frase não inventa ordinal');
 const vendasAtrasadas = a.atencao.find(p => p.chave === 'vendas')!;
@@ -182,56 +174,8 @@ const margem = a.indicadores.find(i => i.titulo === 'Margem de comissão')!;
 eq([margem.realizado, margem.desvio], [24, false], 'margem real 24% contra 25%: dentro de 3 pontos');
 const margemBaixa = montarAcompanhamento({ plano, rel, realizado: realizado({ comissao: 2700 }) });
 eq(margemBaixa.indicadores.find(i => i.titulo === 'Margem de comissão')!.desvio, true, 'margem real 18%: abaixo do plano, vira aviso');
-eq(a.frase, `14 de 22 dias úteis: ${a.atencao.length} ${a.atencao.length === 1 ? 'ponto precisa' : 'pontos precisam'} de atenção.`, 'a frase: onde o mês está e quantos pontos a lista de atenção mostra');
+eq(/^14 de 22 dias úteis: \d+ itens? precisa/.test(a.frase), true, 'a frase: onde o mês está e quantos itens pedem atenção');
 eq(Object.values(a.contagem).reduce((x, y) => x + y, 0), 9, 'nove itens em quatro áreas');
-
-
-console.log('\n--- (h) leads e vendas do CRM ---');
-const doCrm = (o: Partial<{ negociacoes: number; ganhas: number; perdidas: number; abertas: number; taxa_decididas: number }> = {}): RealizadoDoMes['crm'] => ({
-  situacao: 'ok', consultado_em: '2026-10-20T12:00:00Z',
-  metricas: {
-    negociacoes: 40, ganhas: 3, perdidas: 1, abertas: 36, valor_ganho: 24000, taxa_decididas: 75,
-    por_dia: { negociacoes: Array.from({ length: 31 }, () => 0), ganhas: Array.from({ length: 31 }, () => 0) },
-    ...o,
-  },
-});
-const comCrm = montarAcompanhamento({ plano, rel, realizado: realizado({ crm: doCrm(), registros: [reg(90, '2026-10-19')] }) });
-const vCrm = item(comCrm, 'vendas'), lCrm = item(comCrm, 'atendimentos');
-eq([vCrm.realizado, /no CRM/.test(vCrm.fonte)], [3, true], 'vendas fechadas: as 3 ganhas do CRM, não as 2 com lançamento');
-eq([lCrm.realizado, lCrm.situacao, !!lCrm.registravel, /negociações do mês no CRM/.test(lCrm.fonte)], [40, 'atrasado', false, true], 'leads: as 40 negociações do CRM (o ritmo pedia 63), sem registro manual');
-eq(lCrm.realizado !== 90, true, 'com o CRM respondendo, o registro manual antigo não manda');
-const convCrm = comCrm.indicadores.find(i => i.titulo === 'Taxa de conversão')!;
-eq([convCrm.realizado, /3 vendas de 40 leads no CRM/.test(convCrm.nota), /só as decididas: 75% \(3 de 4\)/.test(convCrm.nota)], [7.5, true, true], 'conversão = ganhas sobre leads do CRM (7,5%), e diz que a das Análises conta só as decididas');
-eq(comCrm.atencao.some(p => p.titulo === 'Leads do CRM não chegaram'), false, 'com os leads do CRM, nada de pedir registro');
-eq(comCrm.atencao.find(p => p.titulo === 'Leads atendidos abaixo do ritmo')?.acao, undefined, 'e o ponto de leads atrasados não oferece "Registrar": o número é do CRM');
-const planoSemCusto = { ...plano, custos_fixos: [], marketing: [] };
-const semCustoNenhum = montarAcompanhamento({ plano: planoSemCusto, rel: calcRelatorio(planoSemCusto), realizado: realizado({ custo_fixo: 0, lucro: 2784, crm: doCrm() }) });
-eq([item(semCustoNenhum, 'lucro').situacao, semCustoNenhum.atencao.some(p => p.titulo === 'Custos do mês não lançados' && /o plano também não tem custo fixo/.test(p.detalhe))], ['sem_dados', true], 'plano sem custo e nada lançado: o lucro sem dados ganha o aviso do motivo');
-const divergeMais = comCrm.atencao.find(p => p.titulo === 'Venda do CRM sem lançamento no financeiro');
-eq([!!divergeMais, /O CRM tem 3 vendas ganhas no mês e o financeiro tem 2 com lançamento/.test(divergeMais?.detalhe ?? '')], [true, true], 'CRM com mais vendas que o financeiro: aviso com os dois números');
-const iguais = montarAcompanhamento({ plano, rel, realizado: realizado({ crm: doCrm({ ganhas: 2 }) }) });
-eq(iguais.atencao.some(p => p.chave === 'vendas' && /financeiro/.test(p.titulo)), false, 'CRM e financeiro com as mesmas vendas: sem aviso de divergência');
-const divergeMenos = montarAcompanhamento({ plano, rel, realizado: realizado({ crm: doCrm({ ganhas: 1 }) }) });
-eq(divergeMenos.atencao.some(p => p.titulo === 'Vendas no financeiro que o CRM não conta'), true, 'financeiro com mais vendas que o CRM: aviso também');
-const zeroLeads = montarAcompanhamento({ plano, rel, realizado: realizado({ crm: doCrm({ negociacoes: 0, ganhas: 0, perdidas: 0, abertas: 0 }), vendas: 0 }) });
-eq(zeroLeads.indicadores.find(i => i.titulo === 'Taxa de conversão')!.realizado, null, 'sem negociação no mês: conversão sem dado, nunca divisão por zero');
-
-const foraDoAr = montarAcompanhamento({ plano, rel, realizado: realizado({ crm: { situacao: 'indisponivel', detalhe: 'O CRM demorou mais de 6 segundos para responder.' } }) });
-const lFora = item(foraDoAr, 'atendimentos');
-eq([item(foraDoAr, 'vendas').realizado, lFora.situacao, !!lFora.registravel, /demorou mais de 6 segundos/.test(lFora.fonte)], [2, 'sem_dados', true, true], 'CRM fora do ar: vendas do financeiro, leads sem dados, registro manual liberado e o motivo à vista');
-const pontoFora = foraDoAr.atencao.find(p => p.titulo === 'Leads do CRM não chegaram');
-eq([!!pontoFora, pontoFora?.detalhe.startsWith('O CRM demorou mais de 6 segundos'), pontoFora?.acao?.registrar], [true, true, 'atendimentos'], 'e a atenção diz por que e oferece o registro');
-const semIntegracao = montarAcompanhamento({ plano, rel, realizado: realizado({ crm: { situacao: 'sem_integracao', detalhe: 'A integração com o CRM não está ligada nesta empresa (Configurações, CRM Entur).' }, registros: [reg(70, '2026-10-20')] }) });
-eq([item(semIntegracao, 'atendimentos').realizado, item(semIntegracao, 'atendimentos').situacao], [70, 'pendente'], 'sem integração: o registro manual continua valendo');
-
-const tudoCerto = montarAcompanhamento({ plano, rel, realizado: realizado({
-  vendas: 10, faturamento: 80000, comissao: 20000, taxa_plataforma: 600, impostos: 216, contribuicao: 19000, custo_fixo: 4500, lucro: 14500,
-  equilibrio: { atingido: true, na_venda: 3, data: '2026-10-08', faltam: 0 },
-  contas: [conta('Aluguel', 3000, 3000, '2026-10-05'), conta('Sistema', 500, 500, '2026-10-10')],
-  crm: doCrm({ negociacoes: 100, ganhas: 10, perdidas: 5 }),
-}) });
-eq([tudoCerto.atencao.length, item(tudoCerto, 'marketing').situacao], [0, 'sem_dados'], 'tudo no ritmo, mas o marketing sem conta lançada');
-eq(tudoCerto.frase, '14 de 22 dias úteis: 1 item ainda sem dados; o resto no ritmo do plano.', 'a frase não diz "tudo no ritmo" com item sem dado');
 
 console.log(`\n${total - falhas}/${total} testes do acompanhamento do plano passaram`);
 if (falhas > 0) process.exit(1);

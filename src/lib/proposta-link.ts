@@ -43,12 +43,7 @@ export function normalizarPropostaLink(
   const link = String(linkGravado ?? '').trim();
   if (!link) return buildPropostaLink(propostaId, base);
   try {
-    const gravado = new URL(link);
-    if (gravado.origin === new URL(base).origin) return link;
-    // Outro host: troca só a origem e MANTÉM o caminho. Desde a auditoria de
-    // 04/11 o caminho leva o token público da proposta, não o id; refazer o
-    // link pelo id entregaria ao cliente um endereço que não abre.
-    if (/^\/p\/[\w-]{10,200}$/.test(gravado.pathname)) return `${base}${gravado.pathname}`;
+    if (new URL(link).origin === new URL(base).origin) return link;
   } catch {
     // Link gravado fora de forma: reconstruir é mais seguro que repassar.
   }

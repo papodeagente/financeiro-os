@@ -1,5 +1,3 @@
-import { recusaFinanceira } from '@/lib/guarda-rota';
-import { abrirCrmConfig } from '@/lib/crm-config-cofre';
 import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
@@ -8,8 +6,6 @@ import { getTenantId } from '@/lib/tenant';
 // can diagnose "events not arriving" cases without touching the DB directly.
 export async function GET(req: NextRequest) {
   try {
-    const recusa = await recusaFinanceira('ler');
-    if (recusa) return recusa;
     if (!pool) return NextResponse.json({ error: 'no db' }, { status: 503 });
     await initDB();
     const tenantId = await getTenantId();
@@ -24,7 +20,7 @@ export async function GET(req: NextRequest) {
       [tenantId],
     );
     const cfgRow = cfgRes.rows[0];
-    const cfg = abrirCrmConfig(cfgRow?.data ?? null);
+    const cfg = cfgRow?.data ?? null;
 
     const config = cfg ? {
       ativo: cfg.ativo ?? false,

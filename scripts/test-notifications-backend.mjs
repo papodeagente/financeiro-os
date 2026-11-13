@@ -115,8 +115,6 @@ const backend = carregarTS('src/lib/notificacoes.ts', {
   './utils': { generateId: () => `generated-${++generatedIds}` },
   './permissoes': permissoes,
   './notificacoes-config': config,
-  // "Nada sai" (E1): fora de uma mudança de sistema, avisos saem normalmente.
-  './nada-sai': { nadaSai: () => null },
 });
 
 function sessao(userId, tenantId, perfil = 'VENDEDOR') {

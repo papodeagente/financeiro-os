@@ -35,8 +35,6 @@ interface AuditResponse {
 
 interface Filters {
   q: string;
-  /** Registro de atividades (05/11/2026): cliente/fornecedor do registro. */
-  pessoa: string;
   modulo: string;
   acao: string;
   usuario: string;
@@ -56,7 +54,7 @@ interface Result {
 }
 
 const INITIAL_FILTERS: Filters = {
-  q: '', pessoa: '', modulo: '', acao: '', usuario: '', origem: '', inicio: '', fim: '', page: 1,
+  q: '', modulo: '', acao: '', usuario: '', origem: '', inicio: '', fim: '', page: 1,
 };
 const PANEL = 'rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] shadow-[var(--fin-e-card)]';
 const FIELD = 'h-11 w-full min-w-0 rounded-[var(--fin-r-md)] border border-[var(--fin-border-strong)] bg-[var(--fin-surface)] px-3 text-sm text-[var(--fin-text)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--fin-accent-ring)] focus-visible:border-[var(--fin-accent)]';
@@ -194,7 +192,6 @@ function AuditEvent({ entry }: { entry: AuditEntry }) {
 
 export default function AuditoriaPage() {
   const [search, setSearch] = useState('');
-  const [pessoa, setPessoa] = useState('');
   const [filters, setFilters] = useState<Filters>(INITIAL_FILTERS);
   const [refresh, setRefresh] = useState(0);
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -211,17 +208,10 @@ export default function AuditoriaPage() {
     return () => window.clearTimeout(timeout);
   }, [search]);
 
-  useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      setFilters(current => current.pessoa === pessoa.trim() ? current : { ...current, pessoa: pessoa.trim(), page: 1 });
-    }, 350);
-    return () => window.clearTimeout(timeout);
-  }, [pessoa]);
-
   const invalidDates = Boolean(filters.inicio && filters.fim && filters.inicio > filters.fim);
   const query = useMemo(() => {
     const params = new URLSearchParams({ page: String(filters.page), pageSize: '50' });
-    for (const key of ['q', 'pessoa', 'modulo', 'acao', 'usuario', 'origem'] as const) {
+    for (const key of ['q', 'modulo', 'acao', 'usuario', 'origem'] as const) {
       if (filters[key]) params.set(key, filters[key]);
     }
     // Date inputs are local calendar days, so include the full day in the user's timezone.
@@ -241,7 +231,7 @@ export default function AuditoriaPage() {
   const data = !restricted && result?.query === query ? result.data : null;
   const error = result?.key === requestKey ? result.error : null;
   const facets = result?.data?.facets;
-  const hasFilters = Object.entries(filters).some(([key, value]) => key !== 'page' && Boolean(value)) || Boolean(search) || Boolean(pessoa);
+  const hasFilters = Object.entries(filters).some(([key, value]) => key !== 'page' && Boolean(value)) || Boolean(search);
 
   useEffect(() => {
     if (invalidDates) return;
@@ -304,7 +294,6 @@ export default function AuditoriaPage() {
 
   function clearFilters() {
     setSearch('');
-    setPessoa('');
     setFilters(INITIAL_FILTERS);
     setExportError(null);
   }
@@ -347,16 +336,16 @@ export default function AuditoriaPage() {
         <div className="min-w-0 space-y-2">
           <h1 className="flex items-center gap-3 text-xl font-semibold text-[var(--fin-text)]">
             <ShieldCheck aria-hidden="true" className="size-6 shrink-0 text-[var(--fin-accent)]" />
-            Registro de atividades
+            Auditoria do sistema
           </h1>
-          <p className="text-sm leading-6 text-[var(--fin-text-3)]">Auditoria do sistema: quem fez cada ação, quando, em qual cadastro, e o que mudou campo a campo.</p>
+          <p className="text-sm leading-6 text-[var(--fin-text-3)]">Acompanhe quem fez cada ação e confira os detalhes das alterações.</p>
         </div>
         {!restricted && (
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" className={BUTTON} disabled={loading || invalidDates} onClick={() => setRefresh(value => value + 1)}>
               <RefreshCw aria-hidden="true" className={`size-4 ${loading ? 'animate-spin' : ''}`} /> Atualizar
             </Button>
-            <Button type="button" variant="outline" className={BUTTON} disabled={exporting || loading || invalidDates || !data?.total || search.trim() !== filters.q || pessoa.trim() !== filters.pessoa} onClick={handleExport}>
+            <Button type="button" variant="outline" className={BUTTON} disabled={exporting || loading || invalidDates || !data?.total || search.trim() !== filters.q} onClick={handleExport}>
               {exporting ? <Loader2 aria-hidden="true" className="size-4 animate-spin" /> : <Download aria-hidden="true" className="size-4" />}
               {exporting ? 'Exportando…' : 'Exportar CSV'}
             </Button>
@@ -405,11 +394,14 @@ export default function AuditoriaPage() {
                 <input type="date" value={filters.fim} min={filters.inicio || undefined} onChange={event => changeFilter('fim', event.target.value)} aria-invalid={invalidDates} aria-describedby={invalidDates ? 'audit-date-error' : undefined} className={FIELD} />
               </label>
               <label className="flex min-w-0 flex-col gap-2 text-xs font-medium text-[var(--fin-text-2)]">
-                Pessoa
-                <input type="search" value={pessoa} onChange={event => setPessoa(event.target.value)} placeholder="Cliente ou fornecedor…" maxLength={200} className={FIELD} />
+                Usuário
+                <select value={filters.usuario} onChange={event => changeFilter('usuario', event.target.value)} className={FIELD}>
+                  <option value="">Todos os usuários</option>
+                  {(facets?.usuarios ?? []).map(user => <option key={user.id} value={user.id}>{user.nome || 'Sistema'}</option>)}
+                </select>
               </label>
               <label className="flex min-w-0 flex-col gap-2 text-xs font-medium text-[var(--fin-text-2)]">
-                Origem (módulo)
+                Módulo
                 <select value={filters.modulo} onChange={event => changeFilter('modulo', event.target.value)} className={FIELD}>
                   <option value="">Todos os módulos</option>
                   {(facets?.modulos ?? []).map(module => <option key={module} value={module}>{humanize(module)}</option>)}
@@ -423,16 +415,9 @@ export default function AuditoriaPage() {
                 </select>
               </label>
               <label className="flex min-w-0 flex-col gap-2 text-xs font-medium text-[var(--fin-text-2)]">
-                Usuário
-                <select value={filters.usuario} onChange={event => changeFilter('usuario', event.target.value)} className={FIELD}>
-                  <option value="">Todos os usuários</option>
-                  {(facets?.usuarios ?? []).map(user => <option key={user.id} value={user.id}>{user.nome || 'Sistema'}</option>)}
-                </select>
-              </label>
-              <label className="flex min-w-0 flex-col gap-2 text-xs font-medium text-[var(--fin-text-2)]">
-                Canal
+                Origem
                 <select value={filters.origem} onChange={event => changeFilter('origem', event.target.value)} className={FIELD}>
-                  <option value="">Todos os canais</option>
+                  <option value="">Todas as origens</option>
                   {(facets?.origens ?? []).map(origin => <option key={origin} value={origin}>{originLabel(origin)}</option>)}
                 </select>
               </label>

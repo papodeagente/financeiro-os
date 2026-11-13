@@ -59,16 +59,9 @@ export async function PATCH(req: Request) {
       ...(telefone !== undefined ? { telefone } : {}),
     };
 
-    // Só os campos alterados, por cima do banco atual: regravar o `data` lido
-    // antes desfaria uma saída (token_version) ou um 2FA feitos no meio.
-    const patch = {
-      ...(nome !== undefined ? { nome } : {}),
-      ...(foto !== undefined ? { foto } : {}),
-      ...(telefone !== undefined ? { telefone } : {}),
-    };
     await pool.query(
-      `UPDATE usuarios SET data = data || $1::jsonb, updated_at = NOW() WHERE data->>'id' = $2 AND tenant_id = $3`,
-      [JSON.stringify(patch), session.userId, session.tenantId || ''],
+      `UPDATE usuarios SET data = $1, updated_at = NOW() WHERE data->>'id' = $2 AND tenant_id = $3`,
+      [JSON.stringify(updated), session.userId, session.tenantId || ''],
     );
 
     return NextResponse.json({

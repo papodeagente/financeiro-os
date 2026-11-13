@@ -21,10 +21,8 @@ import {
   atualizarContaComGuarda,
   calcularMovimentos,
   estornarBaixaDaConta,
-  pessoaDaConta,
   type ExecutorSQL,
 } from './caixa-atomico';
-import { estornarBaixa, registrarBaixaLegada } from './baixas-servidor';
 import { createContaPagar, createContaReceber } from './crm-types';
 import { formatBRL, generateId } from './utils';
 import { num, round2 } from './money';
@@ -61,16 +59,8 @@ const TABELAS: Record<TipoLancamento, Tabela> = {
 export interface Vinculo {
   id: string;
   tipo: TipoLancamento;
-  /**
-   * BAIXA: a conciliação automática (E6) liquidou pelo caminho da liquidação
-   * no servidor; desfazer é estornar aquela baixa (`baixa_id`) e, se a conta
-   * nasceu ali (`criada`), apagá-la.
-   */
-  acao: 'VINCULAR' | 'BAIXAR' | 'PARCIAL' | 'CRIADA' | 'LEGADO' | 'BAIXA';
+  acao: 'VINCULAR' | 'BAIXAR' | 'PARCIAL' | 'CRIADA' | 'LEGADO';
   aplicado: number;
-  baixa_id?: string;
-  criada?: boolean;
-  automatica?: boolean;
   antes?: { status: string; valor_baixado: number | null; data_baixa: string | null; conta_bancaria_id: string | null } | null;
   depois?: { status: string; valor_baixado: number } | null;
 }
@@ -137,22 +127,7 @@ async function moverCaixa(exec: ExecutorSQL, tenantId: string, prev: Dados, novo
   const movimentos = calcularMovimentos(prev, novo, t.campo, t.sinal);
   // Ordem fixa por conta, igual às rotas de baixa: evita travar em ordem cruzada.
   movimentos.sort((a, b) => String(a.conta).localeCompare(String(b.conta)));
-  // Movimento que não acontece (conta bancária apagada, de outra agência,
-  // Caixa Geral impossível) desfaz a conciliação inteira: antes a linha
-  // ficava CONCILIADA e a conta RECEBIDA sem o dinheiro no saldo (FIN2-02).
-  for (const m of movimentos) {
-    const ok = await aplicarMovimentoCaixaAtomico(tenantId, m.conta, m.delta, exec, {
-      tipo: 'conciliacao',
-      tabela: t.tabela,
-      id: String(novo.id ?? prev.id ?? ''),
-      pessoaId: pessoaDaConta(t.tabela, { ...prev, ...novo }),
-    });
-    if (!ok) throw new ErroConciliacao('A conta bancária deste extrato não existe nesta agência. Nada foi conciliado.', 409);
-    await registrarBaixaLegada(exec, {
-      tenantId, tabela: t.tabela, tituloId: String(novo.id ?? prev.id ?? ''), dadosAntes: prev, conta: m.conta, caixa: m.delta,
-      data: String(novo[t.campoData] ?? ''), origem: 'conciliacao',
-    });
-  }
+  for (const m of movimentos) await aplicarMovimentoCaixaAtomico(tenantId, m.conta, m.delta, exec);
 }
 
 function linhaConciliada(linha: Dados, vinculos: Vinculo[]): Dados {
@@ -372,13 +347,7 @@ export async function conciliarCriandoConta(
  * depois da conciliação, recusa: desfazer não pode apagar baixa de outra
  * pessoa.
  */
-export async function desfazerConciliacao(
-  exec: ExecutorSQL,
-  tenantId: string,
-  extratoId: string,
-  /** Quem desfaz e por quê: vai para o estorno da baixa automática. */
-  quem: { usuarioId?: string; usuarioNome?: string; motivo?: string } = {},
-): Promise<{ linha: Dados; restauradas: number }> {
+export async function desfazerConciliacao(exec: ExecutorSQL, tenantId: string, extratoId: string): Promise<{ linha: Dados; restauradas: number }> {
   const linha = await travarLinha(exec, tenantId, extratoId);
   if (linha.status_conciliacao !== 'CONCILIADO') throw new ErroConciliacao('Esta linha não está conciliada.', 409);
 
@@ -400,28 +369,6 @@ export async function desfazerConciliacao(
     if (rows.length === 0) continue; // apagada por alguém: nada a devolver
     const prev = rows[0].data as Dados;
     const versao = String(rows[0].versao);
-
-    if (v.acao === 'BAIXA' && v.baixa_id) {
-      // Liquidada pelo caminho da liquidação: o estorno dela devolve o caixa
-      // e o título (inclusive se outra baixa veio depois, que fica valendo).
-      const { rows: ja } = await exec.query(
-        `SELECT 1 FROM baixas WHERE tenant_id = $1 AND estorna_baixa_id = $2`, [tenantId, v.baixa_id]);
-      if (ja.length === 0) {
-        await estornarBaixa(exec, { tenantId, usuarioId: quem.usuarioId, usuarioNome: quem.usuarioNome }, v.baixa_id, {
-          motivo: (quem.motivo || 'Conciliação desfeita').slice(0, 200),
-        });
-      }
-      if (v.criada) {
-        await exec.query(`DELETE FROM ${t.tabela} WHERE id = $1 AND tenant_id = $2`, [v.id, tenantId]);
-      } else {
-        await exec.query(
-          `UPDATE ${t.tabela} SET data = data - 'extrato_conciliado_id', updated_at = NOW() WHERE id = $1 AND tenant_id = $2`,
-          [v.id, tenantId],
-        );
-      }
-      restauradas++;
-      continue;
-    }
 
     if (v.acao === 'CRIADA') {
       const { rows: apagadas } = await exec.query(

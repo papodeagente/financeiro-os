@@ -298,7 +298,7 @@ export interface DivulgacaoFornecedor {
   valor_venda_total?: number | null;
 }
 
-import type { FinanceiroGrupo } from './financial-types';
+import { FinanceiroGrupo } from './financial-types';
 
 // 4 estagios do fluxo (PRODUTO/PROPOSTA no Entur OS, ORCAMENTO/VENDA no CRM).
 // 'RESERVA' aceito apenas para retrocompatibilidade — registros legados sao

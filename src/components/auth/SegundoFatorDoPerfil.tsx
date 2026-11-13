@@ -3,11 +3,9 @@
 /**
  * Meu perfil › Verificação em duas etapas (E7, 06/11/2026).
  *
- * Quem paga sem ser administrador precisa do código do aplicativo
- * autenticador (ver src/lib/segundo-fator-pagador.ts). Aqui a pessoa ativa
- * sem sair do sistema: o servidor gera a chave, ela cadastra no aplicativo e
- * digita o primeiro código. Quem já ativou e entrou antes confirma o código
- * para pagar nesta sessão.
+ * Aqui a pessoa ativa o aplicativo autenticador sem sair do sistema: o servidor
+ * gera a chave, ela lê o QR code e digita o primeiro código. Quem já ativou e
+ * entrou antes confirma o código nesta sessão.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { Check, KeyRound, Loader2, ShieldCheck } from 'lucide-react';
@@ -17,17 +15,10 @@ import { QrDoAutenticador } from './QrDoAutenticador';
 interface Situacao {
   ativo: boolean;
   administrador: boolean;
-  exigido_para_pagar: boolean;
   verificada_nesta_sessao: boolean;
-  prazo: string;
 }
 
 interface Cadastro { segredo: string; uri?: string }
-
-function dataBR(iso: string): string {
-  const [a, m, d] = iso.split('-');
-  return d && m && a ? `${d}/${m}/${a}` : iso;
-}
 
 const CAMPO = 'mt-1.5 w-full max-w-[12rem] rounded-md border border-[var(--fin-border)] bg-[var(--fin-surface)] px-3 py-2 text-base tracking-[0.3em] tabular-nums text-[var(--fin-text)] outline-none focus:border-[var(--fin-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fin-accent)]/30';
 const BOTAO = 'inline-flex items-center gap-1.5 rounded-md bg-[var(--fin-accent)] px-4 py-2 text-sm font-semibold text-[var(--fin-text-on-fill)] hover:bg-[var(--fin-accent-hover)] disabled:opacity-60';
@@ -54,7 +45,7 @@ export function SegundoFatorDoPerfil() {
       });
       const c = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; segredo?: string; uri?: string };
       if (r.ok && c.ok) {
-        toast.success(situacao?.ativo ? 'Código confirmado.' : 'Verificação em duas etapas ativada.', 'Pagar e transferir já estão liberados nesta sessão.');
+        toast.success(situacao?.ativo ? 'Código confirmado.' : 'Verificação em duas etapas ativada.');
         setCadastro(null);
         setCodigo('');
         await carregar();
@@ -85,12 +76,10 @@ export function SegundoFatorDoPerfil() {
             {situacao.administrador
               ? 'Ativa: administradores entram sempre com a senha e o código do aplicativo autenticador.'
               : pronto
-                ? 'Ativa. Pagar, transferir e aprovar pagamentos estão liberados nesta sessão.'
+                ? 'Ativa nesta sessão.'
                 : situacao.ativo
-                  ? 'Ativa. Você entrou antes de confirmar o código: digite o código do aplicativo para pagar nesta sessão.'
-                  : situacao.exigido_para_pagar
-                    ? `Pagar, transferir e aprovar pagamentos pedem o código do aplicativo autenticador (obrigatório a partir de ${dataBR(situacao.prazo)}). O resto do sistema não muda.`
-                    : 'Proteja sua conta com o código do aplicativo autenticador (Google Authenticator, Microsoft Authenticator, 1Password).'}
+                  ? 'Ativa. Você entrou antes de confirmar o código: digite o código do aplicativo para confirmar nesta sessão.'
+                  : 'Proteja sua conta com o código do aplicativo autenticador (Google Authenticator, Microsoft Authenticator, 1Password).'}
           </p>
         </div>
         {pronto && (

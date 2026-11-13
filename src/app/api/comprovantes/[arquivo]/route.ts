@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import { readFile, stat } from 'fs/promises';
 import path from 'path';
 import { getTenantId } from '@/lib/tenant';
-import { pastaComprovantes } from '@/lib/comprovantes';
-import { comoServir, FORMATO_DO_ARQUIVO_PRIVADO } from '@/lib/anexos-do-titulo';
+import { pastaComprovantes, MIME_COMPROVANTE } from '@/lib/comprovantes';
 
 /**
  * Serve um comprovante. Exige sessão (o middleware não libera esta rota) e
@@ -21,9 +20,7 @@ export async function GET(
 
     // Só id gerado mais extensão. Barra, ponto duplo e til não passam,
     // então não há como subir de diretório.
-    // Anexo livre dos títulos (E7, frente D) também mora aqui: Word, Excel,
-    // texto, CSV e ZIP além de PDF e imagem.
-    if (!FORMATO_DO_ARQUIVO_PRIVADO.test(arquivo)) {
+    if (!/^[\w-]+\.(pdf|jpg|png|webp|avif)$/.test(arquivo)) {
       return NextResponse.json({ error: 'Nome inválido' }, { status: 400 });
     }
 
@@ -44,16 +41,13 @@ export async function GET(
     }
 
     const conteudo = await readFile(caminho);
-    const { mime, inline } = comoServir(arquivo);
+    const ext = arquivo.split('.').pop() ?? '';
     return new NextResponse(new Uint8Array(conteudo), {
       headers: {
-        'Content-Type': mime,
+        'Content-Type': MIME_COMPROVANTE[ext] ?? 'application/octet-stream',
         // Privado: comprovante não pode ficar em cache compartilhado.
         'Cache-Control': 'private, max-age=3600',
-        // PDF e imagem abrem na tela; o resto desce como arquivo (nunca é
-        // interpretado pelo navegador).
-        'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="${arquivo}"`,
-        'X-Content-Type-Options': 'nosniff',
+        'Content-Disposition': `inline; filename="${arquivo}"`,
       },
     });
   } catch (e) {

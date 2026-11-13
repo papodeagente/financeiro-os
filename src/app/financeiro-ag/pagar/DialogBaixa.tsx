@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
 import { CONTROLE } from './campos';
-import { BlocoDeLiquidacao, type BlocoDeLiquidacaoProps } from '@/components/fin/BlocoDeLiquidacao';
 
 export type DialogBaixaProps = {
   item: ContaPagar | null;
@@ -36,8 +35,6 @@ export type DialogBaixaProps = {
   pagando: boolean;
   onFechar: () => void;
   onConfirmar: () => void;
-  /** Data, conta, encargos e diferença (05/11/2026). Substitui o campo de data. */
-  liquidacao?: BlocoDeLiquidacaoProps;
 };
 
 export function DialogBaixa({
@@ -59,7 +56,6 @@ export function DialogBaixa({
   pagando,
   onFechar,
   onConfirmar,
-  liquidacao,
 }: DialogBaixaProps) {
   if (!item) return null;
 
@@ -80,8 +76,8 @@ export function DialogBaixa({
 
   const previa = (
     <div className="flex flex-col gap-3">
-      <div className={cn('grid grid-cols-1 gap-3', liquidacao ? '' : 'sm:grid-cols-2')}>
-        {liquidacao ? null : <Field rotulo="Data do pagamento">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field rotulo="Data do pagamento">
           {(a) => (
             <Input
               {...a}
@@ -92,7 +88,7 @@ export function DialogBaixa({
               className={cn(CONTROLE, 'tabular-nums')}
             />
           )}
-        </Field>}
+        </Field>
 
         <MoneyField
           rotulo="Valor pago"
@@ -101,8 +97,6 @@ export function DialogBaixa({
           atalhos={[{ rotulo: 'Saldo devedor', valor: saldoDevedor }]}
         />
       </div>
-
-      {liquidacao ? <BlocoDeLiquidacao {...liquidacao} /> : null}
 
       <Field rotulo="Observação" ajuda="Opcional. Fica junto das observações da conta.">
         {(a) => (
@@ -125,7 +119,7 @@ export function DialogBaixa({
         desabilitado={pagando}
       />
 
-      {parcial && !liquidacao ? (
+      {parcial ? (
         <p className="fin-t-caption text-[var(--fin-warning-text)]">
           Pagamento em parte: a conta continua aberta com saldo devedor de{' '}
           <Money valor={restanteDepois} size="caption" tone="suave" align="esquerda" />.
@@ -133,7 +127,7 @@ export function DialogBaixa({
       ) : null}
 
       <p className="fin-t-caption text-[var(--fin-text-3)]">
-        O saldo da conta é atualizado logo depois de confirmar.
+        O saldo da caixa geral é atualizado logo depois de confirmar.
       </p>
     </div>
   );
@@ -150,7 +144,7 @@ export function DialogBaixa({
       previa={previa}
       confirmarRotulo={enviandoAnexo ? 'Anexando comprovante...' : 'Confirmar pagamento'}
       processando={pagando || enviandoAnexo}
-      onConfirmar={() => { if (liquidacao && liquidacao.plano.erros.length > 0) return; onConfirmar(); }}
+      onConfirmar={onConfirmar}
     />
   );
 }

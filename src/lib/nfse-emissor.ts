@@ -113,12 +113,6 @@ export interface EmissorNFSe {
     emitente: DadosEmitente;
   }): Promise<ResultadoTransmissao>;
   consultar(referencia: string, config: ConfigFiscal): Promise<ResultadoTransmissao>;
-  /**
-   * Consulta pela identidade que NÓS mandamos na emissão (idIntegracao /
-   * cod_interno), para a nota cujo resultado ficou desconhecido e não tem
-   * protocolo. Emissor que não sabe consultar assim não implementa.
-   */
-  consultarPorIntencao?(nota: NotaFiscal, config: ConfigFiscal): Promise<ResultadoTransmissao>;
   cancelar(referencia: string, motivo: string, config: ConfigFiscal): Promise<ResultadoTransmissao>;
   /**
    * Busca o PDF/XML da nota no emissor.
@@ -131,31 +125,13 @@ export interface EmissorNFSe {
   baixarArquivo(url: string, tipo_padrao: string, config: ConfigFiscal): Promise<ArquivoBaixado>;
 }
 
-/**
- * Resposta de erro do emissor que NÃO é recusa da nota: falha do lado dele
- * (5xx, tempo, limite) ou "já existe/duplicada" (a nota pode ter saído na
- * tentativa anterior). Nesses casos o resultado é desconhecido, nunca
- * REJEITADA (auditoria 04/11/2026, FIN2-09).
- */
-export function respostaNaoERecusa(httpStatus: number, texto: string): boolean {
-  if (httpStatus >= 500 || httpStatus === 408 || httpStatus === 429 || httpStatus === 409) return true;
-  return /duplic|j[áa] (existe|foi emitid|emitid|cadastrad)|already exists|nota_existente|cod_interno.*(uso|usad)/i.test(texto);
-}
-
 /** Erro que já vem com texto para o usuário final. */
 export class ErroFiscal extends Error {
   readonly detalhe: string;
-  /**
-   * true = falha de transporte (tempo esgotado, rede caiu) DEPOIS de começar
-   * a falar com o emissor: a nota pode ter saído. Não é recusa e não libera
-   * nova emissão (auditoria 04/11/2026, FIN2-09).
-   */
-  readonly incerto: boolean;
-  constructor(mensagem: string, detalhe = '', incerto = false) {
+  constructor(mensagem: string, detalhe = '') {
     super(mensagem);
     this.name = 'ErroFiscal';
     this.detalhe = detalhe;
-    this.incerto = incerto;
   }
 }
 
@@ -217,14 +193,11 @@ async function requisicao(
     if (e instanceof Error && e.name === 'AbortError') {
       throw new ErroFiscal(
         'O emissor de nota não respondeu a tempo. A nota pode ter sido enviada: consulte antes de emitir de novo.',
-        '',
-        true,
       );
     }
     throw new ErroFiscal(
       'Não foi possível falar com o emissor de nota.',
       e instanceof Error ? e.message : '',
-      true,
     );
   } finally {
     clearTimeout(timer);
@@ -479,7 +452,7 @@ export class EmissorPlugNotas implements EmissorNFSe {
     emitente: DadosEmitente;
   }): Promise<ResultadoTransmissao> {
     const payload = this.montarPayload(entrada);
-    const { ok, status: httpStatus, corpo } = await requisicao(
+    const { ok, corpo } = await requisicao(
       `${this.base(entrada.config)}/nfse`,
       {
         method: 'POST',
@@ -489,14 +462,6 @@ export class EmissorPlugNotas implements EmissorNFSe {
       this.token(entrada.config),
     );
     if (!ok) {
-      const texto = textoDoErro(corpo);
-      if (respostaNaoERecusa(httpStatus, texto)) {
-        throw new ErroFiscal(
-          'O emissor não confirmou a nota (' + (texto || `HTTP ${httpStatus}`) + '). Ela pode ter sido emitida: consulte antes de emitir de novo.',
-          '',
-          true,
-        );
-      }
       return {
         status: 'REJEITADA',
         referencia: entrada.nota.id,
@@ -517,11 +482,6 @@ export class EmissorPlugNotas implements EmissorNFSe {
 
   async baixarArquivo(url: string, tipo_padrao: string, config: ConfigFiscal): Promise<ArquivoBaixado> {
     return buscarArquivo(url, { 'x-api-key': this.token(config) }, tipo_padrao);
-  }
-
-  /** O gateway guarda o idIntegracao (= id da nota): a consulta vai por ele. */
-  async consultarPorIntencao(nota: NotaFiscal, config: ConfigFiscal): Promise<ResultadoTransmissao> {
-    return this.consultar(nota.id, config);
   }
 
   async consultar(referencia: string, config: ConfigFiscal): Promise<ResultadoTransmissao> {

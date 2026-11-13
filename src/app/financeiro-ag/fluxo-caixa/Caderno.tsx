@@ -9,11 +9,6 @@ import { cn, formatBRL } from '@/lib/utils';
 export type CadernoProps = {
   caderno: CadernoDeCaixa;
   onAbrir: (linha: LinhaDoCaderno) => void;
-  /**
-   * Caderno de um recorte (centro de custo, tag: E7, frente C): começa em zero
-   * e acumula o resultado do recorte, não o saldo do banco. Ausente = o de sempre.
-   */
-  recorte?: boolean;
 };
 
 function quantos(n: number): string {
@@ -44,9 +39,8 @@ const GRADE = 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-[var(--fin
  * entrou, o que saiu e o saldo corrido, e o saldo final. Cada linha abre o
  * detalhe no centro da tela.
  */
-export function Caderno({ caderno, onAbrir, recorte = false }: CadernoProps) {
+export function Caderno({ caderno, onAbrir }: CadernoProps) {
   const { periodo } = caderno;
-  const rotuloDoSaldo = recorte ? 'Acumulado' : 'Saldo';
   return (
     <div className="flex flex-col">
       {/* Cabeçalho das colunas: só onde há espaço para colunas. */}
@@ -57,12 +51,12 @@ export function Caderno({ caderno, onAbrir, recorte = false }: CadernoProps) {
         <span className="fin-t-overline text-[var(--fin-text-3)]">Data</span>
         <span className="text-right fin-t-overline text-[var(--fin-text-3)]">Entrou</span>
         <span className="text-right fin-t-overline text-[var(--fin-text-3)]">Saiu</span>
-        <span className="text-right fin-t-overline text-[var(--fin-text-3)]">{rotuloDoSaldo}</span>
+        <span className="text-right fin-t-overline text-[var(--fin-text-3)]">Saldo</span>
         <span />
       </div>
 
       <div className={cn(GRADE, 'px-[var(--fin-s-4)] py-[var(--fin-s-3)]')}>
-        <span className="fin-t-body text-[var(--fin-text-2)]">{recorte ? 'Início do período' : 'Saldo anterior'}</span>
+        <span className="fin-t-body text-[var(--fin-text-2)]">Saldo anterior</span>
         <span className="hidden sm:block" />
         <span className="hidden sm:block" />
         <Money valor={caderno.saldoInicial} estado="ok" size="body" tone={caderno.saldoInicial < 0 ? 'negativo' : 'neutro'} className="text-[var(--fin-text-2)]" />
@@ -72,7 +66,7 @@ export function Caderno({ caderno, onAbrir, recorte = false }: CadernoProps) {
       <ol className="flex flex-col gap-0.5">
         {caderno.linhas.map(l => {
           const vazia = l.lancamentos.length === 0;
-          const resumo = `${l.rotulo}: entrou ${formatBRL(l.entradas)}, saiu ${formatBRL(l.saidas)}, ${rotuloDoSaldo.toLowerCase()} ${formatBRL(l.saldo)}`;
+          const resumo = `${l.rotulo}: entrou ${formatBRL(l.entradas)}, saiu ${formatBRL(l.saidas)}, saldo ${formatBRL(l.saldo)}`;
           return (
             <li key={l.chave}>
               <button
@@ -147,7 +141,7 @@ export function Caderno({ caderno, onAbrir, recorte = false }: CadernoProps) {
 
       <div className={cn(GRADE, 'mt-[var(--fin-s-1)] border-t border-[var(--fin-border)] px-[var(--fin-s-4)] pt-[var(--fin-s-3)]')}>
         <span className="flex flex-col">
-          <span className="fin-t-body-strong text-[var(--fin-text)]">{recorte ? 'Resultado do período' : 'Saldo final'}</span>
+          <span className="fin-t-body-strong text-[var(--fin-text)]">Saldo final</span>
           <span className="fin-t-caption text-[var(--fin-text-3)]">
             {periodo.fim.split('-').reverse().slice(0, 2).join('/')}
           </span>

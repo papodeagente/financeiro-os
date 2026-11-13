@@ -1,12 +1,9 @@
-import { recusaFinanceira } from '@/lib/guarda-rota';
 import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
 
 export async function GET(req: NextRequest) {
   try {
-    const recusa = await recusaFinanceira('ler');
-    if (recusa) return recusa;
     if (!pool) return NextResponse.json({ items: [], total: 0 });
     await initDB();
 

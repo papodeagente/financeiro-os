@@ -1,6 +1,6 @@
-import type { GrupoViagem } from './types';
-import { type FinanceiroGrupo, type Venda, type Parcela, type PagamentoFornecedor, type FormaPagamento, type TipoApto, PAX_PER_APTO, type DREAgenciaResult } from './financial-types';
-import { calcProposta, type PropostaResult } from './calculations';
+import { GrupoViagem } from './types';
+import { FinanceiroGrupo, Venda, Parcela, PagamentoFornecedor, FormaPagamento, TipoApto, PAX_PER_APTO, DREAgenciaResult } from './financial-types';
+import { calcProposta, PropostaResult } from './calculations';
 import { generateId } from './utils';
 import {
   addDias,

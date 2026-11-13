@@ -1,6 +1,6 @@
-import { vendaAutorizada } from '@/lib/venda-autorizada';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
+import { getTenantId } from '@/lib/tenant';
 import { generateId } from '@/lib/utils';
 
 // GET /api/vendas-crm/[id]/tarefas
@@ -11,9 +11,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     await initDB();
     const { id } = await params;
     if (!pool) return NextResponse.json([]);
-    const acesso = await vendaAutorizada(id);
-    if (acesso instanceof NextResponse) return acesso;
-    const { tenantId } = acesso;
+    const tenantId = await getTenantId();
     const url = new URL(req.url);
     const status = url.searchParams.get('status');
     const where: string[] = [`tenant_id = $1`, `venda_id = $2`];
@@ -45,9 +43,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     await initDB();
     const { id } = await params;
     if (!pool) return NextResponse.json({ error: 'DB indisponível' }, { status: 500 });
-    const acesso = await vendaAutorizada(id);
-    if (acesso instanceof NextResponse) return acesso;
-    const { tenantId } = acesso;
+    const tenantId = await getTenantId();
     const body = await req.json();
     const titulo = String(body.titulo || '').trim();
     if (!titulo) return NextResponse.json({ error: 'Título obrigatório' }, { status: 400 });
@@ -84,9 +80,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     await initDB();
     const { id } = await params;
     if (!pool) return NextResponse.json({ error: 'DB indisponível' }, { status: 500 });
-    const acesso = await vendaAutorizada(id);
-    if (acesso instanceof NextResponse) return acesso;
-    const { tenantId } = acesso;
+    const tenantId = await getTenantId();
     const body = await req.json();
     const tarefaId = String(body.tarefa_id || '');
     if (!tarefaId) return NextResponse.json({ error: 'tarefa_id obrigatório' }, { status: 400 });

@@ -1,7 +1,3 @@
-import pool, { initDB } from '@/lib/db';
-import { getTenantId } from '@/lib/tenant';
-import { recusaAdmin } from '@/lib/guarda-rota';
-import { lerConfigApis, mesclar, type Consulta } from '@/lib/config-apis';
 import { NextResponse } from 'next/server';
 import { testConnection as testAmadeus } from '@/lib/amadeus-api';
 import { testConnection as testGoogle } from '@/lib/google-places-api';
@@ -54,16 +50,8 @@ async function testOpenAI(config: { api_key: string }) {
 
 export async function POST(req: Request) {
   try {
-    // Testar gasta a chave da agência: só administrador.
-    const recusa = await recusaAdmin();
-    if (recusa) return recusa;
     const body = await req.json();
-    const provider = String(body?.provider ?? '');
-    // A tela só tem a máscara. Campo mascarado (ou ausente) usa a chave
-    // gravada; valor novo digitado é testado como veio, antes de salvar.
-    await initDB();
-    const gravada = pool ? (await lerConfigApis(pool as unknown as Consulta, await getTenantId()))[provider] ?? {} : {};
-    const config = mesclar({ [provider]: body?.config ?? {} }, { [provider]: gravada })[provider] as never;
+    const { provider, config } = body;
 
     if (provider === 'amadeus') {
       const result = await testAmadeus(config);

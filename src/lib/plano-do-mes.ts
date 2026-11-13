@@ -9,10 +9,8 @@
  *              vendas, faturamento, comissão, atendimentos e lucro, e o teto
  *              de cada custo.
  *   REALIZADO  sai do que o sistema registrou no mês (RealizadoDoMes, montado
- *              no servidor com a mesma régua do relatório Lucro real). Leads
- *              atendidos e vendas fechadas vêm do CRM, com as contas da tela
- *              Análises dele (metricas-comerciais.ts); sem resposta do CRM, os
- *              leads saem do que a pessoa registrou e as vendas do Financeiro.
+ *              no servidor com a mesma régua do relatório Lucro real) e, onde
+ *              o sistema não enxerga (atendimentos), do que a pessoa registrou.
  *
  * As metades nunca se misturam no banco: o plano mora em planejamento_custos,
  * os registros de progresso em planejamento_progresso. Editar o plano refaz
@@ -36,7 +34,6 @@
 import type { CustosData, Relatorio } from './planejamento-custos';
 import { divSegura, round2, somaPor } from './money';
 import { formatBRL } from './utils';
-import type { ComercialDoCrm, MetricasDoCrm } from './metricas-comerciais';
 
 // ============================================================
 // O que chega do servidor
@@ -85,41 +82,6 @@ export interface RealizadoDoMes {
   equilibrio: { atingido: boolean; na_venda: number | null; data: string | null; faltam: number };
   contas: ContaDoMes[];
   registros: RegistroDeProgresso[];
-  /** Por dia do mês (posição 0 = dia 1): vendas e comissão. Para os gráficos. */
-  diario?: { vendas: number[]; comissao: number[] };
-  /** Leads e vendas ganhas do CRM (ou por que não vieram). */
-  crm?: ComercialDoCrm;
-}
-
-/** Os números do CRM, quando a consulta respondeu. */
-export function metricasDoCrm(r: Pick<RealizadoDoMes, 'crm'>): MetricasDoCrm | null {
-  return r.crm?.situacao === 'ok' ? r.crm.metricas : null;
-}
-
-/** Vendas e comissão de cada dia do mês, sem buraco: dia sem venda é zero. */
-export function serieDoMes(mes: string, vendas: ReadonlyArray<{ data: string; comissao: number }>): { vendas: number[]; comissao: number[] } {
-  const [ano, m] = mes.split('-').map(Number);
-  const dias = diasNoMes(ano, m);
-  const out = { vendas: Array.from({ length: dias }, () => 0), comissao: Array.from({ length: dias }, () => 0) };
-  for (const v of vendas) {
-    if (String(v.data).slice(0, 7) !== mes) continue;
-    const i = Number(String(v.data).slice(8, 10)) - 1;
-    if (!(i >= 0 && i < dias)) continue;
-    out.vendas[i] += 1;
-    out.comissao[i] = round2(out.comissao[i] + (Number(v.comissao) || 0));
-  }
-  return out;
-}
-
-/**
- * O ritmo do plano dia a dia: quanto da meta o plano pedia acumulado até cada
- * dia, pelos dias úteis (fim de semana não anda).
- */
-export function ritmoDoPlano(mes: string, meta: number): number[] {
-  const [ano, m] = mes.split('-').map(Number);
-  const dias = diasNoMes(ano, m);
-  const total = diasUteisAte(mes, dias);
-  return Array.from({ length: dias }, (_, i) => (total > 0 ? round2((meta * diasUteisAte(mes, i + 1)) / total) : 0));
 }
 
 // ============================================================
@@ -433,52 +395,31 @@ export function montarAcompanhamento(e: {
     ? 'O plano ainda não tem ticket médio, margem e conversão: sem eles não há meta de vendas.'
     : 'Ainda não há plano para este mês.';
   const fonteVendas = `${r.vendas} ${r.vendas === 1 ? 'venda' : 'vendas'} com lançamento no mês`;
-  // Leads e vendas fechadas: do CRM, com as contas das Análises dele. O
-  // dinheiro (faturamento, comissão, lucro) segue do Financeiro, que é onde a
-  // venda vira lançamento. Cada razão usa numerador e denominador da MESMA
-  // fonte: conversão = ganhas no CRM / leads no CRM; ticket = faturamento do
-  // Financeiro / vendas do Financeiro.
-  const crm = metricasDoCrm(r);
-  const semCrm = r.crm && r.crm.situacao !== 'ok' ? r.crm.detalhe : 'O CRM não foi consultado.';
 
   // ── Comercial ───────────────────────────────────────────────────────────
   const vendas = itemDeMeta({
     chave: 'vendas', titulo: 'Vendas fechadas', formato: 'contagem',
-    planejado: semMetasDeVenda ? 0 : rel!.vendasMeta, realizado: crm ? crm.ganhas : r.vendas,
-    fonte: crm
-      ? `${crm.ganhas} ${crm.ganhas === 1 ? 'negociação ganha' : 'negociações ganhas'} no mês no CRM (funis de vendas, como nas Análises)`
-      : `${fonteVendas} no financeiro. ${semCrm}`,
-    cal, semMeta: semMetaTexto,
+    planejado: semMetasDeVenda ? 0 : rel!.vendasMeta, realizado: r.vendas,
+    fonte: fonteVendas, cal, semMeta: semMetaTexto,
   });
 
-  const registro = crm ? null : ultimoRegistro(r.registros, 'atendimentos');
-  let atendimentos: ItemDoPlano;
-  if (crm) {
-    atendimentos = itemDeMeta({
-      chave: 'atendimentos', titulo: 'Leads atendidos', formato: 'contagem',
-      planejado: semMetasDeVenda ? 0 : rel!.atendimentosMeta,
-      realizado: crm.negociacoes,
-      fonte: `${crm.negociacoes} ${crm.negociacoes === 1 ? 'negociação' : 'negociações'} do mês no CRM, o mesmo total das Análises`,
-      cal, semMeta: semMetaTexto,
-    });
-  } else {
-    atendimentos = itemDeMeta({
-      chave: 'atendimentos', titulo: 'Leads atendidos', formato: 'contagem',
-      planejado: semMetasDeVenda ? 0 : rel!.atendimentosMeta,
-      realizado: registro ? registro.valor : null,
-      fonte: registro
-        ? `Registrado em ${dataBR(registro.data)}${registro.autor ? ` por ${registro.autor}` : ''}, porque os leads do CRM não chegaram`
-        : `Os leads vêm do CRM, e não chegaram: ${semCrm.charAt(0).toLowerCase()}${semCrm.slice(1)}`,
-      // O registro é comparado com o ritmo do DIA em que foi feito.
-      cal: registro ? calendarioDoMes(r.mes, registro.data < hoje ? registro.data : hoje) : cal,
-      semMeta: semMetaTexto,
-      semDados: 'Os leads do CRM não chegaram e não há registro manual neste mês.',
-      registravel: true,
-    });
-    // O ritmo é o do dia do registro: a frase diz qual dia.
-    if (registro && registro.data < hoje && cal.aberto) {
-      atendimentos = { ...atendimentos, porque: atendimentos.porque.replace('até hoje', `até ${dataBR(registro.data)}`) };
-    }
+  const registro = ultimoRegistro(r.registros, 'atendimentos');
+  let atendimentos = itemDeMeta({
+    chave: 'atendimentos', titulo: 'Leads atendidos', formato: 'contagem',
+    planejado: semMetasDeVenda ? 0 : rel!.atendimentosMeta,
+    realizado: registro ? registro.valor : null,
+    fonte: registro
+      ? `Registrado em ${dataBR(registro.data)}${registro.autor ? ` por ${registro.autor}` : ''}`
+      : 'O financeiro não recebe os leads do CRM: registre quantos foram atendidos.',
+    // O registro é comparado com o ritmo do DIA em que foi feito.
+    cal: registro ? calendarioDoMes(r.mes, registro.data < hoje ? registro.data : hoje) : cal,
+    semMeta: semMetaTexto,
+    semDados: 'Nenhum registro de atendimentos neste mês.',
+    registravel: true,
+  });
+  // O ritmo é o do dia do registro: a frase diz qual dia.
+  if (registro && registro.data < hoje && cal.aberto) {
+    atendimentos = { ...atendimentos, porque: atendimentos.porque.replace('até hoje', `até ${dataBR(registro.data)}`) };
   }
 
   // ── Receita ─────────────────────────────────────────────────────────────
@@ -600,17 +541,15 @@ export function montarAcompanhamento(e: {
     lucro = {
       chave: 'lucro', titulo: 'Lucro do mês', formato: 'dinheiro', sentido: 'atingir',
       planejado: lucroPlanejado, realizado: r.lucro,
-      falta: semEstrutura ? null : Math.max(0, round2(lucroPlanejado - r.lucro)),
+      falta: Math.max(0, round2(lucroPlanejado - r.lucro)),
+      progresso: r.lucro > 0 ? pct(r.lucro, lucroPlanejado) : 0,
       esperadoPct: null,
       // O lucro só fecha no fim: o custo fixo é do mês inteiro e pesa desde o dia 1.
-      // Sem custo lançado, o lucro não é medida: é a comissão inteira. Fica sem
-      // dados, como "Cobrir os custos", que tem o mesmo motivo.
-      situacao: batido ? 'concluido' : semEstrutura ? 'sem_dados' : cal.aberto || cal.futuro ? 'pendente' : 'atrasado',
-      progresso: semEstrutura ? null : r.lucro > 0 ? pct(r.lucro, lucroPlanejado) : 0,
+      situacao: batido ? 'concluido' : cal.aberto || cal.futuro ? 'pendente' : semEstrutura ? 'sem_dados' : 'atrasado',
       porque: batido
         ? 'Lucro desejado alcançado.'
         : semEstrutura
-          ? 'Nenhum custo do mês lançado nas contas a pagar: o lucro ainda não desconta a estrutura.'
+          ? 'Nenhum custo do mês lançado nas contas a pagar: o lucro está alto porque falta descontar a estrutura.'
           : cal.aberto || cal.futuro
             ? 'O lucro só fecha no último dia: o custo fixo é do mês inteiro e pesa desde o dia 1.'
             : `O mês fechou com ${formatBRL(r.lucro)} de lucro.`,
@@ -630,11 +569,7 @@ export function montarAcompanhamento(e: {
   if (temPlano) {
     const ticketReal = r.vendas > 0 ? round2(r.faturamento / r.vendas) : null;
     const margemReal = r.faturamento > 0 ? round2(divSegura(r.comissao, r.faturamento) * 100) : null;
-    const conversaoReal = crm
-      ? (crm.negociacoes > 0 ? round2((crm.ganhas / crm.negociacoes) * 100) : null)
-      : registro && registro.valor > 0 ? round2((r.vendas / registro.valor) * 100) : null;
-    const decididas = crm ? crm.ganhas + crm.perdidas : 0;
-    const pctBR = (x: number) => `${x.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
+    const conversaoReal = registro && registro.valor > 0 ? round2((r.vendas / registro.valor) * 100) : null;
     const sobraReal = r.vendas > 0 ? round2(r.contribuicao / r.vendas) : null;
     const abaixo = (real: number | null, plan: number, folga: number) => real !== null && plan > 0 && real < plan * (1 - folga);
     indicadores.push(
@@ -651,13 +586,7 @@ export function montarAcompanhamento(e: {
       {
         titulo: 'Taxa de conversão', formato: 'percentual', planejado: plano!.taxa_conversao || null, realizado: conversaoReal,
         desvio: abaixo(conversaoReal, plano!.taxa_conversao, 0.2),
-        nota: crm
-          ? crm.negociacoes === 0
-            ? 'Nenhuma negociação no CRM neste mês.'
-            : `${crm.ganhas} ${crm.ganhas === 1 ? 'venda' : 'vendas'} de ${crm.negociacoes} leads no CRM.${decididas > 0 ? ` A taxa das Análises do CRM conta só as decididas: ${pctBR(crm.taxa_decididas)} (${crm.ganhas} de ${decididas}).` : ''}`
-          : conversaoReal === null
-            ? 'Precisa dos leads do CRM, que não chegaram, ou de um registro de atendimentos.'
-            : `Vendas sobre os ${registro!.valor} atendimentos registrados.`,
+        nota: conversaoReal === null ? 'Precisa do registro de atendimentos.' : `Vendas sobre os ${registro!.valor} atendimentos registrados.`,
       },
       {
         titulo: 'Sobra por venda', formato: 'dinheiro', planejado: rel!.lucroPorVenda || null, realizado: sobraReal,
@@ -680,8 +609,7 @@ export function montarAcompanhamento(e: {
       tom: 'negativo', chave: it.chave,
       titulo: cal.aberto ? `${it.titulo} abaixo do ritmo` : `${it.titulo} abaixo da meta`,
       detalhe: `${fmt(it.realizado, it.formato)} de ${fmt(it.planejado, it.formato)}. ${maiuscula(it.porque.replace(/^Abaixo do ritmo: /, ''))}${ritmo}`,
-      // Registrar só existe quando os leads não vêm do CRM.
-      ...(it.chave === 'atendimentos' && it.registravel ? { acao: { rotulo: 'Registrar', registrar: 'atendimentos' } } : {}),
+      ...(it.chave === 'atendimentos' ? { acao: { rotulo: 'Registrar', registrar: 'atendimentos' } } : {}),
     });
   }
   for (const it of [fixos, marketing]) {
@@ -691,43 +619,15 @@ export function montarAcompanhamento(e: {
       ponto({ tom: 'aviso', chave: it.chave, titulo: `${it.titulo} acima do plano`, detalhe: it.porque });
     }
   }
-  // CRM e Financeiro contando vendas diferentes no mesmo mês: a diferença é
-  // venda fora da receita (ou lançamento sem negociação ganha). Dizer, não esconder.
-  if (crm && crm.ganhas !== r.vendas && !cal.futuro) {
-    const d = Math.abs(crm.ganhas - r.vendas);
-    ponto(crm.ganhas > r.vendas
-      ? {
-        tom: 'aviso', chave: 'vendas',
-        titulo: d === 1 ? 'Venda do CRM sem lançamento no financeiro' : 'Vendas do CRM sem lançamento no financeiro',
-        detalhe: `O CRM tem ${crm.ganhas} ${crm.ganhas === 1 ? 'venda ganha' : 'vendas ganhas'} no mês e o financeiro tem ${r.vendas} com lançamento. ${d === 1 ? 'A diferença fica' : `As ${d} de diferença ficam`} fora do faturamento, da comissão e do lucro até chegar${d === 1 ? '' : 'em'} ao financeiro.`,
-        acao: { rotulo: 'Ver vendas', href: '/vendas' },
-      }
-      : {
-        tom: 'aviso', chave: 'vendas',
-        titulo: 'Vendas no financeiro que o CRM não conta',
-        detalhe: `O financeiro tem ${r.vendas} ${r.vendas === 1 ? 'venda' : 'vendas'} com lançamento no mês e o CRM tem ${crm.ganhas} ${crm.ganhas === 1 ? 'ganha' : 'ganhas'}. Confira se ${d === 1 ? 'a venda a mais foi lançada' : `as ${d} a mais foram lançadas`} só no financeiro ou se a negociação foi reaberta no CRM.`,
-        acao: { rotulo: 'Ver vendas', href: '/vendas' },
-      });
-  }
-  // Sem nenhuma conta do mês, lucro e cobertura ficam sem dados: o motivo é um só.
-  // Vale também com o plano sem custo: o lucro fica sem dados do mesmo jeito.
-  if (temPlano && !(r.custo_fixo > 0) && !cal.futuro && (rel!.custoFixoMaisMarketing > 0 || lucro.situacao === 'sem_dados')) {
-    ponto({
-      tom: 'aviso', chave: 'custos_fixos',
-      titulo: 'Custos do mês não lançados',
-      detalhe: `Nenhuma conta a pagar do mês foi lançada${rel!.custoFixoMaisMarketing > 0 ? ` (o plano prevê ${formatBRL(rel!.custoFixoMaisMarketing)})` : ', e o plano também não tem custo fixo'}. Até lançar, o lucro é a comissão inteira e a cobertura dos custos fica sem dados.`,
-      acao: { rotulo: 'Ver contas a pagar', href: '/financeiro-ag/pagar' },
-    });
-  }
   if (variaveis.situacao === 'acima') ponto({ tom: 'aviso', chave: 'custos_variaveis', titulo: 'Custo por venda acima do plano', detalhe: variaveis.porque });
-  if (!crm && atendimentos.situacao === 'sem_dados') {
+  if (atendimentos.situacao === 'sem_dados') {
     ponto({
       tom: 'aviso', chave: 'atendimentos',
-      titulo: 'Leads do CRM não chegaram',
-      detalhe: `${semCrm} Enquanto isso, registre quantos leads foram atendidos para acompanhar a conversão.`,
+      titulo: 'Atendimentos sem registro',
+      detalhe: 'O financeiro não recebe os leads do CRM. Anote quantos foram atendidos para acompanhar a conversão.',
       acao: { rotulo: 'Registrar', registrar: 'atendimentos' },
     });
-  } else if (!crm && registro && cal.aberto && diasEntre(registro.data, hoje) > 7) {
+  } else if (registro && cal.aberto && diasEntre(registro.data, hoje) > 7) {
     ponto({
       tom: 'aviso', chave: 'atendimentos',
       titulo: 'Registro de atendimentos antigo',
@@ -757,14 +657,11 @@ export function montarAcompanhamento(e: {
     const momento = cal.aberto
       ? `${cal.diasUteisPassados} de ${cal.diasUteis} dias úteis`
       : 'Mês encerrado';
-    // A frase conta o que a lista de atenção mostra, e só diz "tudo no ritmo"
-    // quando não há ponto de atenção NEM item sem dado: sem dado não é ritmo.
-    const n = atencao.length;
-    const semDados = contagem.sem_dados;
-    const leitura = n > 0
-      ? `${n} ${n === 1 ? 'ponto precisa' : 'pontos precisam'} de atenção`
-      : semDados > 0
-        ? `${semDados} ${semDados === 1 ? 'item ainda sem dados' : 'itens ainda sem dados'}; o resto ${cal.aberto ? 'no ritmo do plano' : 'dentro do plano'}`
+    const atrasados = contagem.atrasado;
+    const leitura = atrasados > 0
+      ? `${atrasados} ${atrasados === 1 ? 'item precisa' : 'itens precisam'} de atenção`
+      : contagem.acima > 0
+        ? `${contagem.acima} ${contagem.acima === 1 ? 'custo está' : 'custos estão'} acima do plano`
         : cal.aberto ? 'tudo no ritmo do plano' : 'o plano foi cumprido';
     frase = `${momento}: ${leitura}.`;
   }

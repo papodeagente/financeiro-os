@@ -1,4 +1,3 @@
-import { recusaAdmin } from '@/lib/guarda-rota';
 import { NextResponse } from 'next/server';
 import { recalcularSaldosCaixa } from '@/lib/caixa-helpers';
 import { getTenantId } from '@/lib/tenant';
@@ -8,8 +7,6 @@ import { getTenantId } from '@/lib/tenant';
 // override PUT que sincroniza saldo. Idempotente.
 export async function POST() {
   try {
-    const recusa = await recusaAdmin();
-    if (recusa) return recusa;
     const tenantId = await getTenantId();
     const r = await recalcularSaldosCaixa(tenantId);
     return NextResponse.json(r);

@@ -1,13 +1,6 @@
 import { getCached, setCache } from './api-cache';
 
-// A chave vem do ambiente (SEARCHAPI_KEY). A literal que ficava aqui foi
-// removida na auditoria de 04/11/2026 (FIN2-18) e precisa ser revogada no
-// provedor: apagar do arquivo não a tira do histórico do Git.
-function chaveSearchApi(): string {
-  const chave = process.env.SEARCHAPI_KEY || '';
-  if (!chave) throw new Error('Busca indisponível: SEARCHAPI_KEY não configurada no servidor.');
-  return chave;
-}
+const SEARCHAPI_KEY = '3YERKNQB33FLb2fV6XAZAKcV';
 const SEARCHAPI_BASE = 'https://www.searchapi.io/api/v1/search';
 const TTL_FLIGHTS = 24 * 3600; // 24h
 
@@ -88,7 +81,7 @@ export async function searchFlights(params: {
     currency: 'BRL',
     hl: 'pt-BR',
     gl: 'br',
-    api_key: chaveSearchApi(),
+    api_key: SEARCHAPI_KEY,
   });
 
   if (params.data_volta) {

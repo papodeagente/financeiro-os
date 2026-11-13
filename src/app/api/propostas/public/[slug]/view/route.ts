@@ -1,48 +1,66 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { criarNotificacao } from '@/lib/notificacoes';
-import { resolvePropostaForHost } from '@/lib/tenant-host';
-import { acrescentarEventoPublico, marcarVisualizada, type Consulta } from '@/lib/proposta-publica';
-import { ipDaRequisicao, permitirChamada } from '@/lib/limite-publico';
+import { isHostAuthorizedForProposta } from '@/lib/tenant-host';
 
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
     await initDB();
     const { slug } = await params;
-    if (!pool) return NextResponse.json({ ok: false });
-    if (!permitirChamada(`view:${ipDaRequisicao(req)}:${slug}`, 30, 10 * 60_000)) {
-      return NextResponse.json({ ok: false }, { status: 429 });
+    if (!pool || !slug || slug.length < 10 || !/^[\w-]+$/.test(slug)) {
+      return NextResponse.json({ ok: false });
     }
-    const r = await resolvePropostaForHost(req, slug);
-    if (!r.ok) return NextResponse.json({ ok: false });
 
+    // Find the proposta
+    const { rows } = await pool.query(
+      `SELECT id, tenant_id, data FROM propostas WHERE id = $1 LIMIT 1`,
+      [slug]
+    );
+    if (rows.length === 0) return NextResponse.json({ ok: false });
+
+    if (!isHostAuthorizedForProposta(req)) {
+      return NextResponse.json({ ok: false });
+    }
+
+    const proposta = rows[0].data;
+    const tenantId = rows[0].tenant_id || '';
     const body = await req.json().catch(() => ({}));
-    const bruto = typeof body?.tempo_segundos === 'number' ? body.tempo_segundos : 0;
-    const tempo = Math.max(0, Math.min(Math.round(bruto), 24 * 3600));
-    const dataVisualizacao = new Date().toISOString();
+    const tempo = typeof body.tempo_segundos === 'number' ? body.tempo_segundos : 0;
+    const agora = new Date();
+    const dataVisualizacao = agora.toISOString();
 
-    // Mutações parciais e atômicas (FIN2-07): a visualização só acrescenta
-    // ao histórico e só leva ENVIADO a VISUALIZADO. Nunca regrava o registro
-    // inteiro, então não apaga um aceite que chegue ao mesmo tempo.
-    const db = pool as unknown as Consulta;
-    await acrescentarEventoPublico(db, r.id, 'visualizacoes', { data: dataVisualizacao, tempo_segundos: tempo });
-    await marcarVisualizada(db, r.id);
+    // Record view
+    if (!proposta.visualizacoes) proposta.visualizacoes = [];
+    proposta.visualizacoes.push({
+      data: dataVisualizacao,
+      tempo_segundos: tempo,
+    });
 
-    if (r.tenantId) {
-      const proposta = r.data;
-      const cliente = String(proposta.cliente_nome || 'Cliente');
-      const numero = String(proposta.numero || r.id);
+    // Update status if still ENVIADO
+    if (proposta.status === 'ENVIADO') {
+      proposta.status = 'VISUALIZADO';
+    }
+    proposta.atualizado_em = dataVisualizacao;
+
+    await pool.query(
+      `UPDATE propostas SET data = $1, status = $2, updated_at = NOW() WHERE id = $3`,
+      [JSON.stringify(proposta), proposta.status, rows[0].id]
+    );
+
+    if (tenantId) {
+      const cliente = proposta.cliente_nome || 'Cliente';
+      const numero = proposta.numero || rows[0].id;
       const diaUtc = dataVisualizacao.slice(0, 10);
       await criarNotificacao({
-        tenantId: r.tenantId,
+        tenantId,
         tipo: 'PROPOSTA_VISUALIZADA',
         titulo: `${cliente} visualizou a proposta ${numero}`,
         descricao: 'A proposta pública foi acessada pelo cliente.',
-        link: `/propostas/${r.id}`,
-        vendedorId: String(proposta.vendedor_id || ''),
-        chaveDeduplicacao: `proposta:${r.id}:visualizada:${diaUtc}`,
+        link: `/propostas/${rows[0].id}`,
+        vendedorId: proposta.vendedor_id || '',
+        chaveDeduplicacao: `proposta:${rows[0].id}:visualizada:${diaUtc}`,
         data: {
-          proposta_id: r.id,
+          proposta_id: rows[0].id,
           proposta_numero: numero,
           visualizada_em: dataVisualizacao,
           tempo_segundos: tempo,

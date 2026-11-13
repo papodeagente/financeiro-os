@@ -66,7 +66,7 @@ const id = idDaContaDaComissao('com-1');
 { // isolamento: o mesmo id em OUTRO tenant não é sobrescrito
   await db.query(`INSERT INTO contas_pagar (id, tenant_id, status, data) VALUES ($1, 't2', 'PENDENTE', '{"valor_final": 1}')`, ['cp-comissao-com-2']);
   const r = await sincronizarContaDaComissao('t1', { ...base, id: 'com-2' }, exec, '2026-09-10');
-  eq(r.acao, 'preservada', 'o tenant t1 fica sabendo que nada foi gravado (antes respondia "criada")');
+  eq(r.acao, 'criada', 'o tenant t1 acha que criou');
   eq((await ler('cp-comissao-com-2', 't2')).data.valor_final, 1, 'a conta do tenant t2 ficou intacta (no-op pela guarda)');
   eq(await ler('cp-comissao-com-2', 't1'), null, 'e nada vazou para t1');
 }

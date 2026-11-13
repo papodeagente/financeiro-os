@@ -16,10 +16,6 @@
 import pool from './db';
 import { ensureCaixaGeral } from './caixa-helpers';
 import { num, round2 } from './money';
-import type { OrigemDoMovimento } from './razao';
-import { registrarMovimento } from './razao-servidor';
-
-export type { OrigemDoMovimento } from './razao';
 
 /** Pool ou client de transação — ambos expõem `query`. */
 export interface ExecutorSQL {
@@ -61,26 +57,16 @@ export async function emTransacao<T>(fn: (exec: ExecutorSQL) => Promise<T>): Pro
  * gravar, imune a corrida entre requisições). Delta positivo = entrada.
  * Conta vazia/nula cai na Caixa Geral, igual ao comportamento antigo.
  * Devolve true se alguma linha foi afetada.
- *
- * `origem` (05/11/2026) é obrigatória: todo movimento também vira um
- * lançamento no razão financeiro, na mesma transação. O razão nunca derruba
- * o movimento (erro dele vira registro em razao_falhas). Sem `exec`, o
- * movimento e o lançamento rodam numa transação própria.
  */
 export async function aplicarMovimentoCaixaAtomico(
   tenantId: string,
   contaId: string | null | undefined,
   delta: number,
-  exec: ExecutorSQL | undefined,
-  origem: OrigemDoMovimento,
+  exec?: ExecutorSQL,
 ): Promise<boolean> {
+  const db = exec ?? (pool as ExecutorSQL | null);
   const valor = round2(num(delta));
-  if (!tenantId || !valor) return false;
-  if (!exec) {
-    if (!pool) return false;
-    return emTransacao(tx => aplicarMovimentoCaixaAtomico(tenantId, contaId, delta, tx, origem));
-  }
-  const db = exec;
+  if (!db || !tenantId || !valor) return false;
   // exec é repassado: dentro de uma transação, resolver a Caixa Geral pelo
   // pool pediria um segundo client e poderia esgotá-lo (deadlock).
   const id = contaId || (await ensureCaixaGeral(tenantId, exec));
@@ -99,54 +85,10 @@ export async function aplicarMovimentoCaixaAtomico(
                       ELSE 0 END) + $3::numeric, 2)),
               true),
             updated_at = NOW()
-      WHERE id = $1 AND tenant_id = $2
-        AND ($4::boolean OR COALESCE(NULLIF(data->>'moeda', ''), 'BRL') = 'BRL')`,
-    [id, tenantId, valor, origem.naMoedaDaConta === true],
+      WHERE id = $1 AND tenant_id = $2`,
+    [id, tenantId, valor],
   );
-  const moveu = (rowCount ?? 0) > 0;
-  if (!moveu && origem.naMoedaDaConta !== true) {
-    // Conta em moeda estrangeira não recebe reais por caminho que não
-    // converte (tela antiga, conciliação, CRM, plataformas): o saldo dela
-    // está na moeda e ficaria misturado.
-    const { rows } = await db.query(
-      `SELECT data->>'moeda' AS moeda, data->>'nome' AS nome FROM contas_bancarias WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
-    const moeda = String(rows[0]?.moeda ?? '').trim();
-    if (rows[0] && moeda && moeda !== 'BRL') {
-      throw new ErroMovimentoCaixa(
-        `A conta ${String(rows[0].nome || 'escolhida')} é em ${moeda}. Pagamento em reais não entra nela: escolha uma conta em reais, ou liquide pela tela de liquidação informando o câmbio.`);
-    }
-  }
-  // Depois do UPDATE (que esperou a trava da conta): se a abertura do razão
-  // terminou enquanto este movimento esperava, ele já enxerga e entra.
-  if (moveu) await registrarMovimento(db, tenantId, id, valor, origem);
-  return moveu;
-}
-
-/**
- * O movimento de caixa não aconteceu: conta bancária inexistente, de outra
- * agência, apagada no meio do caminho, ou Caixa Geral impossível de criar.
- * Quem recebe isto desfaz a transação inteira: uma baixa nunca pode ficar
- * RECEBIDA/PAGA sem o dinheiro correspondente no saldo (auditoria 04/11, FIN2-02).
- */
-export class ErroMovimentoCaixa extends Error {
-  status = 409;
-  constructor(message = 'A conta bancária desta baixa não existe nesta agência. Escolha outra conta e tente de novo.') {
-    super(message);
-    this.name = 'ErroMovimentoCaixa';
-  }
-}
-
-/** Como aplicarMovimentoCaixaAtomico, mas falha (lança) quando nenhuma conta foi movida. */
-export async function moverCaixaOuFalhar(
-  tenantId: string,
-  contaId: string | null | undefined,
-  delta: number,
-  exec: ExecutorSQL | undefined,
-  origem: OrigemDoMovimento,
-): Promise<void> {
-  if (!round2(num(delta))) return;
-  const ok = await aplicarMovimentoCaixaAtomico(tenantId, contaId, delta, exec, origem);
-  if (!ok) throw new ErroMovimentoCaixa();
+  return (rowCount ?? 0) > 0;
 }
 
 /** Valor efetivamente baixado de uma conta (mesma precedência usada nas rotas). */
@@ -233,23 +175,7 @@ export async function estornarBaixaDaConta(
   const valor = valorNoCaixa(data, campo);
   if (valor === 0) return;
   const sinal = tabela === 'contas_receber' ? -1 : +1;
-  // Ao APAGAR a conta, banco que não existe mais não tem saldo a corrigir
-  // (o saldo dele sumiu junto). Recusar aqui travaria a exclusão para
-  // sempre; por isso só registra. Na edição (estorno pelo PUT) a regra é
-  // estrita: moverCaixaOuFalhar.
-  const ok = await aplicarMovimentoCaixaAtomico(tenantId, conta, round2(valor * sinal), exec, {
-    tipo: tabela === 'contas_receber' ? 'exclusao_receber' : 'exclusao_pagar',
-    tabela,
-    id: typeof data.id === 'string' ? data.id : undefined,
-    pessoaId: pessoaDaConta(tabela, data),
-  });
-  if (!ok) console.warn(`[caixa] estorno sem conta bancária no tenant ${tenantId} (conta ${conta ?? 'Caixa Geral'})`);
-}
-
-/** Cliente (a receber) ou fornecedor (a pagar) da conta, para o razão. */
-export function pessoaDaConta(tabela: string, data: Record<string, unknown>): string | undefined {
-  const v = tabela === 'contas_pagar' ? data.fornecedor_id : data.cliente_id;
-  return typeof v === 'string' && v ? v : undefined;
+  await aplicarMovimentoCaixaAtomico(tenantId, conta, round2(valor * sinal), exec);
 }
 
 export interface AtualizacaoGuardadaParams {

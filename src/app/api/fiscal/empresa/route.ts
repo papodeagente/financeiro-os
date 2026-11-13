@@ -1,5 +1,3 @@
-import pool from '@/lib/db';
-import { garantirVinculoFiscal, ErroVinculoFiscal, type Consulta as ConsultaVinculo } from '@/lib/vinculo-fiscal';
 import { NextResponse } from 'next/server';
 import { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
@@ -18,7 +16,6 @@ import {
   criarEmpresaAcelera,
   regenerarTokenEmpresa,
 } from '@/lib/nfse-acelera';
-import { empresaDoPedido } from '@/lib/empresas-rota';
 
 /**
  * Conecta ESTA agência à AceleraAPI.
@@ -35,23 +32,29 @@ import { empresaDoPedido } from '@/lib/empresas-rota';
  */
 export async function POST(req: Request) {
   try {
-    // Configuração fiscal por empresa (E7): ?empresa=<id>; sem ele, a de sempre.
-    const { empresa: empresaFiscal, recusa: recusaEmpresa } = await empresaDoPedido(req);
-    if (recusaEmpresa) return recusaEmpresa;
     await initDB();
     const bloqueio = bloqueioFinanceiro(await getSession(), 'escrever');
     if (bloqueio) return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
     const tenantId = await getTenantId();
 
     const [config, emitente] = await Promise.all([
-      carregarConfigFiscal(tenantId, empresaFiscal),
-      carregarEmitente(tenantId, empresaFiscal),
+      carregarConfigFiscal(tenantId),
+      carregarEmitente(tenantId),
     ]);
 
-    // O empresa_id NUNCA vem do corpo (FIN-02): com ele, uma agência ligava a
-    // própria conta à empresa de outra e o sistema regenerava o token dela.
-    let empresaId = config.empresa_id;
-    let token = String(config.token ?? '');
+    // `empresa_id` no corpo liga a agência a uma empresa específica da conta,
+    // para o caso de já existir cadastro feito por fora.
+    let escolhida: number | null = null;
+    try {
+      const corpo = await req.json();
+      const n = Number(corpo?.empresa_id);
+      if (Number.isFinite(n) && n > 0) escolhida = n;
+    } catch {
+      escolhida = null;
+    }
+
+    let empresaId = escolhida ?? config.empresa_id;
+    let token = escolhida ? '' : String(config.token ?? '');
 
     if (empresaId && token) {
       return NextResponse.json({
@@ -64,7 +67,6 @@ export async function POST(req: Request) {
       // Empresa já conhecida, token perdido: regenerar. Cadastrar de novo
       // criaria um segundo cadastro para o mesmo CNPJ, e duas empresas no
       // mesmo emitente significam duas numerações de nota.
-      await garantirVinculoFiscal(pool as unknown as ConsultaVinculo, tenantId, empresaId, emitente.cnpj);
       token = await regenerarTokenEmpresa(empresaId);
     } else {
       // RECONECTAR NÃO PODE DUPLICAR. Depois de desconectar, o CNPJ da
@@ -72,9 +74,6 @@ export async function POST(req: Request) {
       // vez de criar outro.
       const existente = await acharEmpresaPorCnpj(emitente.cnpj);
       if (existente) {
-        // CNPJ já cadastrado no emissor: só reaproveita se a empresa é DESTA
-        // agência. O CNPJ é digitado pela própria agência e não prova nada.
-        await garantirVinculoFiscal(pool as unknown as ConsultaVinculo, tenantId, existente.id, emitente.cnpj);
         empresaId = existente.id;
         token = await regenerarTokenEmpresa(existente.id);
       } else {
@@ -84,7 +83,6 @@ export async function POST(req: Request) {
           nome_fantasia: emitente.nome_fantasia,
           uf: emitente.endereco.estado,
         });
-        await garantirVinculoFiscal(pool as unknown as ConsultaVinculo, tenantId, empresa.id, emitente.cnpj);
         empresaId = empresa.id;
         token = empresa.token;
       }
@@ -96,7 +94,7 @@ export async function POST(req: Request) {
       empresa_id: empresaId,
       token,
     };
-    await salvarConfigFiscal(tenantId, conectada, empresaFiscal);
+    await salvarConfigFiscal(tenantId, conectada);
 
     // A configuração do prestador é melhor-esforço: se faltar município ou
     // código de tributação, a resposta já diz o que falta e a agência
@@ -123,7 +121,7 @@ export async function POST(req: Request) {
       pendencias,
     });
   } catch (e) {
-    const msg = e instanceof ErroFiscal || e instanceof ErroVinculoFiscal
+    const msg = e instanceof ErroFiscal
       ? e.message
       : e instanceof Error ? e.message : 'Erro ao conectar a agência.';
     return NextResponse.json({ error: msg }, { status: 400 });
@@ -131,29 +129,25 @@ export async function POST(req: Request) {
 }
 
 /** Gera um token novo para a empresa, revogando o anterior. */
-export async function PUT(req: Request) {
+export async function PUT() {
   try {
-    // Configuração fiscal por empresa (E7): ?empresa=<id>; sem ele, a de sempre.
-    const { empresa: empresaFiscal, recusa: recusaEmpresa } = await empresaDoPedido(req);
-    if (recusaEmpresa) return recusaEmpresa;
     await initDB();
     const bloqueio = bloqueioFinanceiro(await getSession(), 'escrever');
     if (bloqueio) return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
     const tenantId = await getTenantId();
-    const config = await carregarConfigFiscal(tenantId, empresaFiscal);
+    const config = await carregarConfigFiscal(tenantId);
     if (!config.empresa_id) {
       return NextResponse.json(
         { error: 'Esta agência ainda não está conectada à AceleraAPI.' },
         { status: 400 },
       );
     }
-    await garantirVinculoFiscal(pool as unknown as ConsultaVinculo, tenantId, config.empresa_id);
     const token = await regenerarTokenEmpresa(config.empresa_id);
     const novo = { ...config, token };
-    await salvarConfigFiscal(tenantId, novo, empresaFiscal);
+    await salvarConfigFiscal(tenantId, novo);
     return NextResponse.json({ config: configParaCliente(novo) });
   } catch (e) {
-    const msg = e instanceof ErroFiscal || e instanceof ErroVinculoFiscal
+    const msg = e instanceof ErroFiscal
       ? e.message
       : e instanceof Error ? e.message : 'Erro ao gerar o token.';
     return NextResponse.json({ error: msg }, { status: 400 });
@@ -171,25 +165,21 @@ export async function PUT(req: Request) {
  * O cadastro da empresa NÃO é apagado lá. Notas já emitidas continuam
  * existindo, e reconectar com o mesmo CNPJ reaproveita o mesmo cadastro.
  */
-export async function DELETE(req: Request) {
+export async function DELETE() {
   try {
-    // Configuração fiscal por empresa (E7): ?empresa=<id>; sem ele, a de sempre.
-    const { empresa: empresaFiscal, recusa: recusaEmpresa } = await empresaDoPedido(req);
-    if (recusaEmpresa) return recusaEmpresa;
     await initDB();
     const bloqueio = bloqueioFinanceiro(await getSession(), 'escrever');
     if (bloqueio) return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
     const tenantId = await getTenantId();
-    const config = await carregarConfigFiscal(tenantId, empresaFiscal);
+    const config = await carregarConfigFiscal(tenantId);
 
     const desconectada = {
       ...config,
       empresa_id: null,
       token: '',
-      token_cofre: undefined,
       certificado: null,
     };
-    await salvarConfigFiscal(tenantId, desconectada, empresaFiscal);
+    await salvarConfigFiscal(tenantId, desconectada);
     return NextResponse.json({
       config: configParaCliente(desconectada),
       empresa_anterior: config.empresa_id,
@@ -209,15 +199,12 @@ export async function DELETE(req: Request) {
  * chave de operação. Listar o vizinho nunca foi necessário para configurar a
  * própria nota.
  */
-export async function GET(req: Request) {
+export async function GET() {
   try {
-    // Configuração fiscal por empresa (E7): ?empresa=<id>; sem ele, a de sempre.
-    const { empresa: empresaFiscal, recusa: recusaEmpresa } = await empresaDoPedido(req);
-    if (recusaEmpresa) return recusaEmpresa;
     await initDB();
     const bloqueio = bloqueioFinanceiro(await getSession(), 'ler');
     if (bloqueio) return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
-    const config = await carregarConfigFiscal(await getTenantId(), empresaFiscal);
+    const config = await carregarConfigFiscal(await getTenantId());
     return NextResponse.json({
       empresa_id: config.empresa_id,
       conectada: Boolean(config.empresa_id && config.token),

@@ -1,6 +1,6 @@
-import { vendaAutorizada } from '@/lib/venda-autorizada';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
+import { getTenantId } from '@/lib/tenant';
 import { generateId } from '@/lib/utils';
 
 // GET /api/vendas-crm/[id]/anotacoes
@@ -10,9 +10,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     await initDB();
     const { id } = await params;
     if (!pool) return NextResponse.json([]);
-    const acesso = await vendaAutorizada(id);
-    if (acesso instanceof NextResponse) return acesso;
-    const { tenantId } = acesso;
+    const tenantId = await getTenantId();
     const { rows } = await pool.query(
       `SELECT id, autor_id, autor_nome, texto, origem, tipo_evento, data, created_at
        FROM negociacao_anotacoes
@@ -34,9 +32,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     await initDB();
     const { id } = await params;
     if (!pool) return NextResponse.json({ error: 'DB indisponível' }, { status: 500 });
-    const acesso = await vendaAutorizada(id);
-    if (acesso instanceof NextResponse) return acesso;
-    const { tenantId, sessao } = acesso;
+    const tenantId = await getTenantId();
     const body = await req.json();
     const texto = String(body.texto || '').trim();
     if (!texto) return NextResponse.json({ error: 'Texto obrigatório' }, { status: 400 });
@@ -44,9 +40,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     await pool.query(
       `INSERT INTO negociacao_anotacoes (id, tenant_id, venda_id, autor_id, autor_nome, texto, origem, data)
        VALUES ($1, $2, $3, $4, $5, $6, 'manual', '{}'::jsonb)`,
-      // Autor vem da sessão. O corpo trazia autor_id e autor_nome, e qualquer um
-      // assinava a anotação em nome de outra pessoa.
-      [anotacaoId, tenantId, id, sessao.userId, sessao.nome || '', texto],
+      [anotacaoId, tenantId, id, String(body.autor_id || ''), String(body.autor_nome || ''), texto],
     );
     return NextResponse.json({ ok: true, id: anotacaoId });
   } catch (e: unknown) {

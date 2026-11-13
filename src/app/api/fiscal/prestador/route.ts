@@ -12,7 +12,6 @@ import {
 import type { ConfigFiscal } from '@/lib/nfse-tipos';
 import { ErroFiscal, emissorDaConfig } from '@/lib/nfse-emissor';
 import { EmissorAceleraAPI } from '@/lib/nfse-acelera';
-import { empresaDoPedido } from '@/lib/empresas-rota';
 
 /**
  * Sincroniza o cadastro do prestador com o emissor e devolve as pendências
@@ -25,16 +24,13 @@ import { empresaDoPedido } from '@/lib/empresas-rota';
  */
 export async function POST(req: Request) {
   try {
-    // Configuração fiscal por empresa (E7): ?empresa=<id>; sem ele, a de sempre.
-    const { empresa: empresaFiscal, recusa: recusaEmpresa } = await empresaDoPedido(req);
-    if (recusaEmpresa) return recusaEmpresa;
     await initDB();
     const bloqueio = bloqueioFinanceiro(await getSession(), 'escrever');
     if (bloqueio) return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
     const tenantId = await getTenantId();
     const [gravada, emitente] = await Promise.all([
-      carregarConfigFiscal(tenantId, empresaFiscal),
-      carregarEmitente(tenantId, empresaFiscal),
+      carregarConfigFiscal(tenantId),
+      carregarEmitente(tenantId),
     ]);
 
     // SINCRONIZAR SALVA ANTES. A versão anterior sincronizava o que estava
@@ -57,7 +53,7 @@ export async function POST(req: Request) {
           certificado: gravada.certificado,
           empresa_id: gravada.empresa_id,
         };
-        await salvarConfigFiscal(tenantId, config, empresaFiscal);
+        await salvarConfigFiscal(tenantId, config);
       }
     } catch {
       // Sem corpo, sincroniza o que já está gravado.
@@ -83,15 +79,12 @@ export async function POST(req: Request) {
 }
 
 /** Só lê as pendências, sem reenviar o cadastro. */
-export async function GET(req: Request) {
+export async function GET() {
   try {
-    // Configuração fiscal por empresa (E7): ?empresa=<id>; sem ele, a de sempre.
-    const { empresa: empresaFiscal, recusa: recusaEmpresa } = await empresaDoPedido(req);
-    if (recusaEmpresa) return recusaEmpresa;
     await initDB();
     const bloqueio = bloqueioFinanceiro(await getSession(), 'ler');
     if (bloqueio) return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
-    const config = await carregarConfigFiscal(await getTenantId(), empresaFiscal);
+    const config = await carregarConfigFiscal(await getTenantId());
     const emissor = emissorDaConfig(config);
     if (!(emissor instanceof EmissorAceleraAPI)) {
       return NextResponse.json({ pronto: true, itens: [] });

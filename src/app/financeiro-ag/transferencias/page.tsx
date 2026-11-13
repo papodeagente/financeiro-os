@@ -3,13 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeftRight, ArrowRight, Clock, Plus, Trash2, Undo2 } from 'lucide-react';
 
-import { TransferenciaBancaria, createTransferencia, StatusTransferencia } from '@/lib/crm-types';
+import { TransferenciaBancaria, ContaBancaria, createTransferencia, StatusTransferencia } from '@/lib/crm-types';
 import { loadEntities, saveEntity } from '@/lib/crm-storage';
-import { levarParaSegundoFator, lembrarSegundoFator } from '@/components/fin/segundoFatorNaTela';
 import { somaPor, round2, hojeISO } from '@/lib/money';
 import { toast } from '@/lib/toast';
 import { consumirAtalho, lerAtalhos } from '@/lib/atalho-da-url';
-import { contasParaEscolher } from '@/lib/contas-bancarias-regras';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,25 +25,16 @@ import { Field } from '@/components/fin/Field';
 import { FilterBar } from '@/components/fin/FilterBar';
 import { FinTable, type FinColuna } from '@/components/fin/FinTable';
 import { MetricCard } from '@/components/fin/MetricCard';
+import { Money } from '@/components/fin/Money';
 import { MoneyField } from '@/components/fin/MoneyField';
 import { PageHeader } from '@/components/fin/PageHeader';
 import { RecordSheet } from '@/components/fin/RecordSheet';
 import { rotuloStatus } from '@/components/fin/StatusChip';
 import type { EmptyLessonProps } from '@/components/fin/EmptyLesson';
-import { useMoedas } from '@/components/fin/useMoedas';
-import { formatarNaMoeda, moedaDe, pernasDaTransferencia, planoDaTransferencia, type CarimboDoCambio } from '@/lib/cambio';
-import {
-  CambioDaTransferencia, SaldoNaMoeda, valorEmReais, type ContaComMoeda, type TransferenciaComMoeda,
-} from './moedas';
 
 // Efetivar/cancelar/excluir transferência mexe no saldo das contas e por isso
 // vive INTEIRO no servidor (/api/transferencias/[id]): ele relê o saldo do
 // banco e aplica o delta. O cliente nunca calcula nem envia saldo_atual.
-//
-// Transferir pede a verificação em duas etapas a quem não é administrador
-// (E7): sem ela, o aviso leva a Meu perfil e a tela não repete o erro.
-class AvisoJaMostrado extends Error {}
-
 async function salvarTransferencia(item: TransferenciaBancaria): Promise<TransferenciaBancaria> {
   const res = await fetch(`/api/transferencias/${item.id}`, {
     method: 'PUT',
@@ -53,16 +42,13 @@ async function salvarTransferencia(item: TransferenciaBancaria): Promise<Transfe
     body: JSON.stringify(item),
   });
   const body = await res.json().catch(() => null);
-  if (levarParaSegundoFator(res.status, body ?? {})) throw new AvisoJaMostrado(body?.error ?? '');
   if (!res.ok) throw new Error(body?.error || 'Não foi possível salvar a transferência.');
-  lembrarSegundoFator(body);
   return body as TransferenciaBancaria;
 }
 
 async function excluirTransferencia(id: string): Promise<void> {
   const res = await fetch(`/api/transferencias/${id}`, { method: 'DELETE' });
   const body = await res.json().catch(() => null);
-  if (levarParaSegundoFator(res.status, body ?? {})) throw new AvisoJaMostrado(body?.error ?? '');
   if (!res.ok) throw new Error(body?.error || 'Não foi possível excluir a transferência.');
 }
 
@@ -81,7 +67,7 @@ const ACAO_DE_LINHA_TEXTO =
 const ACAO_DE_LINHA_ICONE =
   'size-11 rounded-[var(--fin-r-md)] shadow-none lg:size-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)] focus-visible:ring-0';
 
-type Confirmacao = { tipo: 'efetivar' | 'cancelar' | 'excluir'; item: TransferenciaComMoeda };
+type Confirmacao = { tipo: 'efetivar' | 'cancelar' | 'excluir'; item: TransferenciaBancaria };
 
 function normalizar(texto: string): string {
   return texto
@@ -108,53 +94,50 @@ function PreviaDeSaldos({
   origemId,
   destinoId,
   valor,
-  valorDestino,
-  tarifa = 0,
   sentido,
 }: {
-  contas: ContaComMoeda[];
+  contas: ContaBancaria[];
   origemId: string;
   destinoId: string;
   valor: number;
-  /** Entre moedas: o que chega no destino (na moeda dele). Ausente = o mesmo valor. */
-  valorDestino?: number | null;
-  tarifa?: number;
   sentido: 'aplicar' | 'reverter';
 }) {
   const origem = contas.find(c => c.id === origemId) ?? null;
   const destino = contas.find(c => c.id === destinoId) ?? null;
   if (!origem || !destino || !(valor > 0)) return null;
-  const mOrigem = moedaDe(origem.moeda);
-  const mDestino = moedaDe(destino.moeda);
-  // Moedas diferentes sem câmbio ainda: não há prévia honesta do destino.
-  if (mOrigem !== mDestino && !(valorDestino && valorDestino > 0)) return null;
 
   const fator = sentido === 'aplicar' ? -1 : 1;
-  const entra = mOrigem !== mDestino ? round2(valorDestino ?? 0) : valor;
-  const saldoOrigem = round2(origem.saldo_atual + fator * round2(valor + tarifa));
-  const saldoDestino = round2(destino.saldo_atual - fator * entra);
+  const saldoOrigem = round2(origem.saldo_atual + fator * valor);
+  const saldoDestino = round2(destino.saldo_atual - fator * valor);
 
   return (
     <div className="flex flex-col gap-[var(--fin-s-2)]">
       <p className="fin-t-caption text-[var(--fin-text-3)]">Como ficam os saldos depois desta operação</p>
       <div className="flex items-baseline justify-between gap-[var(--fin-s-3)]">
         <span className="fin-t-body min-w-0 truncate text-[var(--fin-text-2)]">{origem.nome}</span>
-        <SaldoNaMoeda valor={saldoOrigem} moeda={mOrigem} tone={saldoOrigem < 0 ? 'negativo' : 'neutro'} />
+        <Money
+          valor={saldoOrigem}
+          size="strong"
+          estado="ok"
+          tone={saldoOrigem < 0 ? 'negativo' : 'neutro'}
+        />
       </div>
       <div className="flex items-baseline justify-between gap-[var(--fin-s-3)]">
         <span className="fin-t-body min-w-0 truncate text-[var(--fin-text-2)]">{destino.nome}</span>
-        <SaldoNaMoeda valor={saldoDestino} moeda={mDestino} tone={saldoDestino < 0 ? 'negativo' : 'neutro'} />
+        <Money
+          valor={saldoDestino}
+          size="strong"
+          estado="ok"
+          tone={saldoDestino < 0 ? 'negativo' : 'neutro'}
+        />
       </div>
     </div>
   );
 }
 
 export default function TransferenciasPage() {
-  // Catálogo da agência (E7): ao chegar, moedas cadastradas por ela passam a
-  // ser lidas e formatadas como as do sistema em toda a tela.
-  useMoedas();
-  const [items, setItems] = useState<TransferenciaComMoeda[]>([]);
-  const [contas, setContas] = useState<ContaComMoeda[]>([]);
+  const [items, setItems] = useState<TransferenciaBancaria[]>([]);
+  const [contas, setContas] = useState<ContaBancaria[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
@@ -165,13 +148,6 @@ export default function TransferenciasPage() {
   const [valor, setValor] = useState(0);
   const [data, setData] = useState(hojeISO());
   const [descricao, setDescricao] = useState('');
-  // Nº do cheque, quando a transferência é feita com cheque (06/11/2026).
-  const [chequeNumero, setChequeNumero] = useState('');
-  // Entre moedas (05/11/2026, E6): câmbio com a origem dele, e a tarifa do banco.
-  const [cambio, setCambio] = useState(0);
-  const [cambioCarimbo, setCambioCarimbo] = useState<CarimboDoCambio | null>(null);
-  const [tarifa, setTarifa] = useState(0);
-  const [erroCambio, setErroCambio] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
   const [criando, setCriando] = useState(false);
@@ -189,8 +165,8 @@ export default function TransferenciasPage() {
     setLoading(true);
     try {
       const [t, c] = await Promise.all([
-        loadEntities<TransferenciaComMoeda>('transferencias'),
-        loadEntities<ContaComMoeda>('contas-bancarias'),
+        loadEntities<TransferenciaBancaria>('transferencias'),
+        loadEntities<ContaBancaria>('contas-bancarias'),
       ]);
       setItems(t);
       setContas(c);
@@ -218,23 +194,12 @@ export default function TransferenciasPage() {
     setValor(0);
     setData(hojeISO());
     setDescricao('');
-    setChequeNumero('');
-    setCambio(0);
-    setCambioCarimbo(null);
-    setTarifa(0);
-    setErroCambio(null);
     setErroOrigem(null);
     setErroDestino(null);
     setErroValor(null);
     setSujo(false);
     setShowForm(true);
   }
-
-  const moedaOrigem = moedaDe(contas.find(c => c.id === contaOrigemId)?.moeda);
-  const moedaDestino = moedaDe(contas.find(c => c.id === contaDestinoId)?.moeda);
-  const previaMoeda = moedaOrigem !== moedaDestino && cambio > 0
-    ? planoDaTransferencia({ valor, moeda_origem: moedaOrigem, moeda_destino: moedaDestino, cambio, tarifa })
-    : null;
 
   async function handleSave() {
     setErroOrigem(!contaOrigemId ? 'Escolha a conta de onde o dinheiro sai.' : null);
@@ -246,13 +211,10 @@ export default function TransferenciasPage() {
           : null,
     );
     setErroValor(valor <= 0 ? 'Escreva um valor maior que zero.' : null);
-    const precisaCambio = moedaOrigem !== moedaDestino;
-    setErroCambio(precisaCambio && !(cambio > 0) ? 'Informe o câmbio: as contas são de moedas diferentes.' : null);
     if (!contaOrigemId || !contaDestinoId || contaOrigemId === contaDestinoId || valor <= 0) return;
-    if (precisaCambio && !(cambio > 0)) return;
     const origem = contas.find(c => c.id === contaOrigemId);
     const destino = contas.find(c => c.id === contaDestinoId);
-    const t: TransferenciaComMoeda = {
+    const t: TransferenciaBancaria = {
       ...createTransferencia(),
       conta_origem_id: contaOrigemId,
       conta_origem_nome: origem?.nome || '',
@@ -261,11 +223,6 @@ export default function TransferenciasPage() {
       valor: round2(valor),
       data,
       descricao,
-      ...(chequeNumero.trim() ? { cheque_numero: chequeNumero.replace(/\D/g, '').slice(0, 20) } : {}),
-      moeda_origem: moedaOrigem,
-      moeda_destino: moedaDestino,
-      tarifa: round2(tarifa),
-      ...(precisaCambio ? { cambio, cambio_carimbo: cambioCarimbo, valor_destino: previaMoeda?.valor_destino ?? 0 } : {}),
     };
     setCriando(true);
     try {
@@ -286,7 +243,7 @@ export default function TransferenciasPage() {
       await salvarTransferencia({ ...item, status: 'EFETIVADA' });
       toast.success('Transferência efetivada');
     } catch (e) {
-      if (!(e instanceof AvisoJaMostrado)) toast.error(e instanceof Error ? e.message : 'Erro ao efetivar transferência');
+      toast.error(e instanceof Error ? e.message : 'Erro ao efetivar transferência');
     } finally {
       setSalvando(false);
       setConfirmacao(null);
@@ -303,7 +260,7 @@ export default function TransferenciasPage() {
       await salvarTransferencia({ ...item, status: 'CANCELADA' });
       toast.success(efetivada ? 'Transferência estornada' : 'Transferência cancelada');
     } catch (e) {
-      if (!(e instanceof AvisoJaMostrado)) toast.error(e instanceof Error ? e.message : 'Erro ao cancelar transferência');
+      toast.error(e instanceof Error ? e.message : 'Erro ao cancelar transferência');
     } finally {
       setSalvando(false);
       setConfirmacao(null);
@@ -319,7 +276,7 @@ export default function TransferenciasPage() {
       await excluirTransferencia(item.id);
       toast.success(efetivada ? 'Transferência excluída e saldos estornados' : 'Transferência excluída');
     } catch (e) {
-      if (!(e instanceof AvisoJaMostrado)) toast.error(e instanceof Error ? e.message : 'Erro ao excluir transferência');
+      toast.error(e instanceof Error ? e.message : 'Erro ao excluir transferência');
     } finally {
       setSalvando(false);
       setConfirmacao(null);
@@ -327,9 +284,8 @@ export default function TransferenciasPage() {
     }
   }
 
-  // Em reais: o lado em real da transferência (entre duas moedas estrangeiras, fora).
-  const totalPendente = somaPor(items.filter(i => i.status === 'PENDENTE'), i => valorEmReais(i) ?? 0);
-  const totalEfetivada = somaPor(items.filter(i => i.status === 'EFETIVADA'), i => valorEmReais(i) ?? 0);
+  const totalPendente = somaPor(items.filter(i => i.status === 'PENDENTE'), i => i.valor);
+  const totalEfetivada = somaPor(items.filter(i => i.status === 'EFETIVADA'), i => i.valor);
   const qtdPendente = items.filter(i => i.status === 'PENDENTE').length;
   const qtdEfetivada = items.filter(i => i.status === 'EFETIVADA').length;
 
@@ -352,7 +308,7 @@ export default function TransferenciasPage() {
     [filtradas],
   );
 
-  const totalDoRecorte = somaPor(filtradas, i => valorEmReais(i) ?? 0);
+  const totalDoRecorte = somaPor(filtradas, i => i.valor);
   const filtrosAtivos = (busca.trim() ? 1 : 0) + (statusFiltro !== STATUS_TODOS ? 1 : 0);
 
   function limparFiltros() {
@@ -382,7 +338,7 @@ export default function TransferenciasPage() {
           acao: { rotulo: 'Nova transferência', onClick: openNew },
         };
 
-  const colunas: FinColuna<TransferenciaComMoeda>[] = [
+  const colunas: FinColuna<TransferenciaBancaria>[] = [
     {
       id: 'data',
       cabecalho: 'Data',
@@ -406,9 +362,6 @@ export default function TransferenciasPage() {
             <ArrowRight aria-hidden="true" className="size-3 shrink-0 text-[var(--fin-text-3)]" />
             <span className="min-w-0 truncate">{nomeDaConta(item.conta_destino_nome)}</span>
           </span>
-          {(item as TransferenciaComMoeda & { cheque_numero?: string }).cheque_numero ? (
-            <span className="fin-t-caption tabular-nums text-[var(--fin-text-3)]">Cheque nº {(item as TransferenciaComMoeda & { cheque_numero?: string }).cheque_numero}</span>
-          ) : null}
           {item.descricao ? (
             <span className="fin-t-caption truncate text-[var(--fin-text-3)]">{item.descricao}</span>
           ) : null}
@@ -421,17 +374,7 @@ export default function TransferenciasPage() {
       tipo: 'dinheiro',
       sortable: true,
       minWidth: 128,
-      valor: item => valorEmReais(item) ?? 0,
-      estado: item => (valorEmReais(item) === null ? 'indisponivel' : 'ok'),
-      sub: item => {
-        const o = moedaDe(item.moeda_origem);
-        const d = moedaDe(item.moeda_destino);
-        const p = pernasDaTransferencia(item as unknown as Record<string, unknown>);
-        const partes: string[] = [];
-        if (o !== d) partes.push(`${formatarNaMoeda(p.sai, o)} → ${formatarNaMoeda(p.entra, d)}`);
-        if (p.tarifa > 0) partes.push(`tarifa ${formatarNaMoeda(p.tarifa, o)}`);
-        return partes.length ? <span>{partes.join(' · ')}</span> : null;
-      },
+      valor: item => item.valor,
     },
     {
       id: 'status',
@@ -511,11 +454,7 @@ export default function TransferenciasPage() {
     ? [
         { rotulo: 'Sai de', valor: nomeDaConta(alvo.conta_origem_nome) },
         { rotulo: 'Entra em', valor: nomeDaConta(alvo.conta_destino_nome) },
-        { rotulo: 'Valor', valor: <SaldoNaMoeda valor={alvo.valor} moeda={alvo.moeda_origem} /> },
-        ...(moedaDe(alvo.moeda_origem) !== moedaDe(alvo.moeda_destino)
-          ? [{ rotulo: 'Chega no destino', valor: <SaldoNaMoeda valor={pernasDaTransferencia(alvo as unknown as Record<string, unknown>).entra} moeda={alvo.moeda_destino} /> }]
-          : []),
-        ...(Number(alvo.tarifa) > 0 ? [{ rotulo: 'Tarifa', valor: <SaldoNaMoeda valor={Number(alvo.tarifa)} moeda={alvo.moeda_origem} /> }] : []),
+        { rotulo: 'Valor', valor: <Money valor={alvo.valor} size="strong" estado="ok" /> },
         { rotulo: 'Situação', valor: rotuloStatus('transferencia', alvo.status) },
       ]
     : undefined;
@@ -630,10 +569,11 @@ export default function TransferenciasPage() {
                         className="flex min-w-0 flex-col gap-[var(--fin-s-1)] rounded-[var(--fin-r-md)] border border-[var(--fin-border)] bg-[var(--fin-surface-2)] px-[var(--fin-s-3)] py-[var(--fin-s-2)]"
                       >
                         <span className="fin-t-caption truncate text-[var(--fin-text-2)]">{c.nome}</span>
-                        <SaldoNaMoeda
+                        <Money
                           valor={c.saldo_atual}
-                          moeda={c.moeda}
+                          size="strong"
                           align="esquerda"
+                          estado="ok"
                           tone={c.saldo_atual < 0 ? 'negativo' : 'neutro'}
                           className="min-w-0"
                         />
@@ -716,8 +656,6 @@ export default function TransferenciasPage() {
             origemId={contaOrigemId}
             destinoId={contaDestinoId}
             valor={valor}
-            valorDestino={previaMoeda?.valor_destino ?? null}
-            tarifa={tarifa}
             sentido="aplicar"
           />
         }
@@ -750,11 +688,17 @@ export default function TransferenciasPage() {
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {contasParaEscolher(contas, contaOrigemId).map(c => (
+                  {contas.map(c => (
                     <SelectItem key={c.id} value={c.id} className="fin-t-body">
                       <span className="flex w-full items-baseline justify-between gap-[var(--fin-s-3)]">
                         <span className="min-w-0 truncate">{c.nome}</span>
-                        <SaldoNaMoeda valor={c.saldo_atual} moeda={c.moeda} size="caption" tone="suave" className="min-w-0" />
+                        <Money
+                          valor={c.saldo_atual}
+                          size="caption"
+                          estado="ok"
+                          tone="suave"
+                          className="min-w-0"
+                        />
                       </span>
                     </SelectItem>
                   ))}
@@ -795,11 +739,17 @@ export default function TransferenciasPage() {
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {contasParaEscolher(contas, contaDestinoId).filter(c => c.id !== contaOrigemId).map(c => (
+                  {contas.filter(c => c.id !== contaOrigemId).map(c => (
                     <SelectItem key={c.id} value={c.id} className="fin-t-body">
                       <span className="flex w-full items-baseline justify-between gap-[var(--fin-s-3)]">
                         <span className="min-w-0 truncate">{c.nome}</span>
-                        <SaldoNaMoeda valor={c.saldo_atual} moeda={c.moeda} size="caption" tone="suave" className="min-w-0" />
+                        <Money
+                          valor={c.saldo_atual}
+                          size="caption"
+                          estado="ok"
+                          tone="suave"
+                          className="min-w-0"
+                        />
                       </span>
                     </SelectItem>
                   ))}
@@ -817,25 +767,8 @@ export default function TransferenciasPage() {
               setSujo(true);
             }}
             erro={erroValor}
-            moeda={moedaOrigem}
-            ajuda={moedaOrigem === moedaDestino
-              ? 'Quanto sai da conta de origem e entra na conta de destino.'
-              : `Quanto sai da conta de origem, em ${moedaOrigem}. O que chega no destino sai do câmbio.`}
+            ajuda="Quanto sai da conta de origem e entra na conta de destino."
           />
-
-          {contaOrigemId && contaDestinoId ? (
-            <CambioDaTransferencia
-              moedaOrigem={moedaOrigem}
-              moedaDestino={moedaDestino}
-              valor={valor}
-              cambio={cambio}
-              carimbo={cambioCarimbo}
-              tarifa={tarifa}
-              erroCambio={erroCambio}
-              onCambio={(v, k) => { setCambio(v); setCambioCarimbo(k); setSujo(true); }}
-              onTarifa={v => { setTarifa(round2(v)); setSujo(true); }}
-            />
-          ) : null}
 
           <Field rotulo="Data da transferência">
             {a => (
@@ -848,23 +781,6 @@ export default function TransferenciasPage() {
                   setData(e.target.value);
                   setSujo(true);
                 }}
-                className={`${CONTROLE_FORMULARIO} tabular-nums`}
-              />
-            )}
-          </Field>
-
-          <Field rotulo="Nº do cheque" ajuda="Só se a transferência foi feita com cheque. Aparece no extrato.">
-            {a => (
-              <Input
-                {...a}
-                value={chequeNumero}
-                inputMode="numeric"
-                maxLength={20}
-                onChange={e => {
-                  setChequeNumero(e.target.value.replace(/\D/g, ''));
-                  setSujo(true);
-                }}
-                placeholder="000123"
                 className={`${CONTROLE_FORMULARIO} tabular-nums`}
               />
             )}
@@ -904,8 +820,6 @@ export default function TransferenciasPage() {
                 origemId={alvo.conta_origem_id}
                 destinoId={alvo.conta_destino_id}
                 valor={alvo.valor}
-                valorDestino={pernasDaTransferencia(alvo as unknown as Record<string, unknown>).entra}
-                tarifa={pernasDaTransferencia(alvo as unknown as Record<string, unknown>).tarifa}
                 sentido={confirmacao.tipo === 'efetivar' ? 'aplicar' : 'reverter'}
               />
             ) : undefined

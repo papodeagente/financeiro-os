@@ -659,35 +659,6 @@ export async function ensureGestaoGrupo(
 // Recalcula vagas_reservadas/confirmadas/disponiveis de um período a partir
 // das reservas ativas (não canceladas). Chamar após criar/atualizar/cancelar
 // uma reserva.
-/**
- * Teto de parcelas de uma reserva (auditoria 04/11/2026, FIN2-13). A
- * confirmação cria uma conta a receber por parcela dentro de uma transação;
- * sem teto, um número enorme gravado na reserva virava milhões de linhas.
- */
-export const MAX_PARCELAS = 24;
-
-/** Parcelas válidas (1 a MAX_PARCELAS) ou null quando o valor não serve. */
-export function parcelasValidas(bruto: unknown): number | null {
-  const n = bruto === undefined || bruto === null || bruto === '' ? 1 : Number(bruto);
-  if (!Number.isFinite(n)) return null;
-  const inteiro = Math.max(1, Math.floor(n));
-  return inteiro > MAX_PARCELAS ? null : inteiro;
-}
-
-/**
- * Na CONFIRMAÇÃO de reserva antiga (gravada antes do teto), vale o que a
- * reserva já tinha, até este limite de sanidade: confirmar uma reserva de
- * 36x feita antes da mudança continua funcionando; um número absurdo
- * (milhões de contas numa transação) não.
- */
-export const MAX_PARCELAS_LEGADO = 240;
-
-export function parcelasDaConfirmacao(bruto: unknown): number | null {
-  const n = Number(bruto);
-  const inteiro = Number.isFinite(n) ? Math.max(1, Math.floor(n)) : 1;
-  return inteiro > MAX_PARCELAS_LEGADO ? null : inteiro;
-}
-
 export async function recalcularVagasPeriodo(
   pool: Pool,
   periodoId: string,

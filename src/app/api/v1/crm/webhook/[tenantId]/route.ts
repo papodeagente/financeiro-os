@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { TIPO_ASAAS_OPERACAO } from '@/lib/asaas-unificado/regras';
-import { responderOperacaoDoCrm } from '@/lib/asaas-unificado/rota';
 import { processarEventoCRM, verificarAssinaturaCRM } from '@/lib/crm-integration';
 
 export async function POST(
@@ -16,7 +14,7 @@ export async function POST(
     const bodyText = await req.text();
     const signature = req.headers.get('x-crm-signature') || '';
 
-    const valid = await verificarAssinaturaCRM(bodyText, signature, tenantId, req.headers.get('x-crm-timestamp'));
+    const valid = await verificarAssinaturaCRM(bodyText, signature, tenantId);
     if (!valid) {
       return NextResponse.json({ error: 'Assinatura invalida' }, { status: 401 });
     }
@@ -30,24 +28,11 @@ export async function POST(
     }
     const { id, tipo, payload } = body ?? {};
 
-    // Conexão Asaas unificada (E7): o CRM pede uma operação no Asaas da
-    // agência e espera a resposta na hora (não é evento, não entra na fila).
-    if (tipo === TIPO_ASAAS_OPERACAO) {
-      return responderOperacaoDoCrm(tenantId, payload, req.headers.get('x-crm-timestamp'));
-    }
-
     if (!id || !tipo || !payload) {
       return NextResponse.json({ error: 'Campos obrigatorios: id, tipo, payload' }, { status: 400 });
     }
 
     const resultado = await processarEventoCRM(tipo, payload, id, tenantId);
-
-    // O evento que responde no corpo (COMISSAO_DO_MES: criada, atualizada, já
-    // existia ou recusada com o motivo; docs/integracao-crm.md) volta com o
-    // corpo e o status do processamento. Os outros seguem como antes.
-    if (resultado.resposta) {
-      return NextResponse.json(resultado.resposta.corpo, { status: resultado.resposta.status });
-    }
 
     // Evento que FALHOU responde 5xx: é o que faz o CRM tentar de novo com o
     // backoff dele. Antes a falha voltava 200, o CRM dava o evento por
@@ -59,9 +44,6 @@ export async function POST(
       processado: resultado.processado,
       evento_id: id,
       acao: resultado.acao,
-      // Versões da VENDA_FECHADA que este Financeiro entende (E5): o CRM
-      // passa a mandar a v2 quando vê o 2 aqui (ou pela chave da empresa).
-      versoes_venda: [1, 2],
       ...(resultado.processado ? {} : { erro: resultado.erro ?? resultado.acao }),
     }, { status: resultado.processado ? 200 : 500 });
   } catch (e) {

@@ -2,9 +2,7 @@ import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { criarNotificacao } from '@/lib/notificacoes';
-import { resolvePropostaForHost } from '@/lib/tenant-host';
-import { acrescentarEventoPublico, type Consulta } from '@/lib/proposta-publica';
-import { ipDaRequisicao, permitirChamada } from '@/lib/limite-publico';
+import { isHostAuthorizedForProposta } from '@/lib/tenant-host';
 
 function normalizarTextoIdentidade(valor: string): string {
   return valor.normalize('NFKC').trim().toLowerCase().replace(/\s+/g, ' ');
@@ -23,49 +21,61 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   try {
     await initDB();
     const { slug } = await params;
-    if (!pool) return NextResponse.json({ error: 'Bad request' }, { status: 400 });
-    if (!permitirChamada(`acao:${ipDaRequisicao(req)}`, 20, 10 * 60_000)) {
-      return NextResponse.json({ error: 'Muitas tentativas. Espere alguns minutos.' }, { status: 429 });
+    if (!pool || !slug || slug.length < 10 || !/^[\w-]+$/.test(slug)) {
+      return NextResponse.json({ error: 'Bad request' }, { status: 400 });
     }
 
-    const body = await req.json().catch(() => ({}));
-    const nomeLead = String(body?.nome ?? '').trim().slice(0, 200);
-    const emailLead = String(body?.email ?? '').trim().slice(0, 200);
-    const telefoneLead = String(body?.telefone ?? '').trim().slice(0, 40);
-    const mensagemLead = String(body?.mensagem ?? '').trim().slice(0, 4000);
-    if (!nomeLead || (!emailLead && !telefoneLead)) {
+    const body = await req.json();
+    const { nome, email, telefone, mensagem } = body;
+    if (!nome?.trim() || (!email?.trim() && !telefone?.trim())) {
       return NextResponse.json({ error: 'Nome e email ou telefone obrigatorios' }, { status: 400 });
     }
 
-    const r = await resolvePropostaForHost(req, slug);
-    if (!r.ok) return NextResponse.json({ error: 'Proposta nao encontrada' }, { status: 404 });
+    const { rows } = await pool.query(
+      `SELECT id, tenant_id, data FROM propostas WHERE id = $1 LIMIT 1`,
+      [slug]
+    );
+    if (rows.length === 0) return NextResponse.json({ error: 'Proposta nao encontrada' }, { status: 404 });
 
+    if (!isHostAuthorizedForProposta(req)) {
+      return NextResponse.json({ error: 'Proposta nao encontrada' }, { status: 404 });
+    }
+
+    const proposta = rows[0].data;
+    const tenantId = rows[0].tenant_id || '';
+    const nomeLead = nome.trim();
+    const emailLead = (email || '').trim();
+    const telefoneLead = (telefone || '').trim();
+    const mensagemLead = (mensagem || '').trim();
     const dataLead = new Date().toISOString();
-    // Só acrescenta (FIN2-07). O visitante recebe um recibo sem dado de
-    // ninguém; os interessados ficam para a agência (FIN2-06).
-    const gravou = await acrescentarEventoPublico(pool as unknown as Consulta, r.id, 'leads', {
+    if (!proposta.leads) proposta.leads = [];
+    proposta.leads.push({
       nome: nomeLead,
       email: emailLead,
       telefone: telefoneLead,
       mensagem: mensagemLead,
       data: dataLead,
     });
-    if (!gravou) return NextResponse.json({ error: 'Limite de contatos desta proposta atingido.' }, { status: 429 });
+    proposta.atualizado_em = dataLead;
 
-    if (r.tenantId) {
-      const proposta = r.data;
-      const numero = String(proposta.numero || r.id);
+    await pool.query(
+      `UPDATE propostas SET data = $1, updated_at = NOW() WHERE id = $2`,
+      [JSON.stringify(proposta), rows[0].id]
+    );
+
+    if (tenantId) {
+      const numero = proposta.numero || rows[0].id;
       const leadFingerprint = fingerprintLead(nomeLead, emailLead, telefoneLead);
       await criarNotificacao({
-        tenantId: r.tenantId,
+        tenantId,
         tipo: 'PROPOSTA_LEAD',
         titulo: `${nomeLead} demonstrou interesse na proposta ${numero}`,
         descricao: mensagemLead || 'Um novo contato foi enviado pela proposta pública.',
-        link: `/propostas/${r.id}`,
-        vendedorId: String(proposta.vendedor_id || ''),
-        chaveDeduplicacao: `proposta:${r.id}:lead:${leadFingerprint}`,
+        link: `/propostas/${rows[0].id}`,
+        vendedorId: proposta.vendedor_id || '',
+        chaveDeduplicacao: `proposta:${rows[0].id}:lead:${leadFingerprint}`,
         data: {
-          proposta_id: r.id,
+          proposta_id: rows[0].id,
           proposta_numero: numero,
           recebido_em: dataLead,
         },
@@ -73,7 +83,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     }
 
     return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ error: 'Erro' }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erro' }, { status: 500 });
   }
 }

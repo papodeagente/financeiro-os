@@ -21,8 +21,6 @@ export type PainelCopiarMesProps = {
   /** Contagem e soma do recorte, calculadas fora. */
   quantidade: number;
   soma: number;
-  /** Contas desse mês que já foram copiadas para o destino (não se repetem). */
-  jaCopiadas?: number;
   copiando: boolean;
   onCopiar: () => void;
 };
@@ -38,7 +36,6 @@ export function PainelCopiarMes({
   rotuloMes,
   quantidade,
   soma,
-  jaCopiadas = 0,
   copiando,
   onCopiar,
 }: PainelCopiarMesProps) {
@@ -64,16 +61,12 @@ export function PainelCopiarMes({
         <span>
           As cópias nascem em aberto, com o mesmo dia de vencimento em{' '}
           {mesDestino ? rotuloMes(mesDestino) : 'no mês escolhido'}.
-          {jaCopiadas > 0
-            ? ` ${jaCopiadas === 1 ? '1 conta já foi copiada' : `${jaCopiadas} contas já foram copiadas`} para esse mês e não se repete${jaCopiadas === 1 ? '' : 'm'}.`
-            : ''}
         </span>
       </span>
     ) : (
       <span>
-        {jaCopiadas > 0
-          ? `As contas desse mês já foram copiadas para ${mesDestino ? rotuloMes(mesDestino) : 'o mês escolhido'}. Nada se repete.`
-          : 'Nenhuma conta do mês escolhido pode ser copiada. Compras únicas, contas canceladas, custos gerados por vendas ou grupos e contas que já se repetem sozinhas ficam de fora.'}
+        Nenhuma conta do mês escolhido pode ser copiada. Compras únicas, contas canceladas e custos
+        gerados por vendas ou grupos ficam de fora.
       </span>
     );
 
@@ -96,8 +89,7 @@ export function PainelCopiarMes({
         <p className="fin-t-body text-[var(--fin-text-2)]">
           Copia as despesas fixas e variáveis lançadas manualmente de um mês para o outro. Ignora
           compras únicas, contas canceladas e custos gerados automaticamente por vendas ou grupos,
-          porque esses nascem da própria venda, e as contas que já se repetem sozinhas. Os valores são
-          mantidos, a cópia fica em aberto e a mesma conta não é copiada duas vezes para o mesmo mês.
+          porque esses nascem da própria venda. Os valores são mantidos e a cópia fica em aberto.
         </p>
 
         {opcoesMes.length === 0 ? (

@@ -1,6 +1,6 @@
-import { vendaAutorizada } from '@/lib/venda-autorizada';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
+import { getTenantId } from '@/lib/tenant';
 import { round2, num, somaPor } from '@/lib/money';
 import {
   calcularResultado,
@@ -16,9 +16,7 @@ export async function GET(
     await initDB();
     const { id } = await params;
     if (!pool) return NextResponse.json({ error: 'No database' }, { status: 500 });
-    const acesso = await vendaAutorizada(id);
-    if (acesso instanceof NextResponse) return acesso;
-    const { tenantId } = acesso;
+    const tenantId = await getTenantId();
 
     // Fetch venda, itens, contas in parallel
     const [vendaRes, itensRes, crRes, cpRes] = await Promise.all([

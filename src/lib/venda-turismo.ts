@@ -17,7 +17,6 @@
  * e a pagar NÃO são calculadas aqui: saem de gerarContasVenda, o mesmo
  * gerador do servidor, para a prévia e a gravação nunca discordarem.
  */
-import type { CarimboDoCambio } from './cambio';
 import type { ItemVendaData, TipoProdutoVenda, VendaCRM } from './crm-types';
 import { createVendaCRM } from './crm-types';
 import { generateId } from './utils';
@@ -54,8 +53,6 @@ export interface LinhaDeServico {
   moeda: Moeda;
   /** Reais por unidade da moeda. Ignorado em BRL. */
   cambio: number;
-  /** De onde veio o câmbio (sugestão usada ou digitado), 05/11/2026, E6. */
-  cambio_carimbo?: CarimboDoCambio | null;
   /** O cliente paga direto ao fornecedor; a agência recebe comissão. */
   pagoDireto: boolean;
   /** Comissão do fornecedor, em % do valor do serviço (só quando pagoDireto). */
@@ -222,7 +219,6 @@ export function montarVenda(cab: CabecalhoDaVenda, linhas: readonly LinhaDeServi
       valor_custo: l.pagoDireto || l.daAgencia ? 0 : round2(num(l.net)), valor_venda: round2(num(l.venda)),
       comissao_fornecedor: l.pagoDireto ? round2(num(l.comissaoPct)) : 0,
       moeda: l.moeda, cambio: l.moeda === 'BRL' ? 1 : num(l.cambio), status: 'CONFIRMADO',
-      ...(l.moeda !== 'BRL' && l.cambio_carimbo ? { cambio_carimbo: l.cambio_carimbo } : {}),
       aprovador: '', solicitante: '', centro_custo: '', projeto: '',
     })),
   };
@@ -238,7 +234,6 @@ export function montarVenda(cab: CabecalhoDaVenda, linhas: readonly LinhaDeServi
       comissao_valor: 0,
       moeda: l.moeda,
       cambio: l.moeda === 'BRL' ? 1 : num(l.cambio),
-      ...(l.moeda !== 'BRL' && l.cambio_carimbo ? { cambio_carimbo: l.cambio_carimbo } : {}),
       localizador: '', data_inicio: '', data_fim: '', observacoes: '',
       contas_geradas_ids: [],
       data_pagamento_fornecedor: l.pagoDireto || l.daAgencia ? undefined : (l.dataPagamento || undefined),

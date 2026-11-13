@@ -21,7 +21,7 @@ export const AUDIT_SCHEMA_SQL = String.raw`
   CREATE OR REPLACE FUNCTION audit_sensitive_key(key_name TEXT)
   RETURNS BOOLEAN LANGUAGE sql IMMUTABLE AS $fn$
     SELECT regexp_replace(lower(key_name), '[^a-z0-9]', '', 'g') ~
-      '(senha|totp|password|passwd|secret|token|apikey|apisecret|chaveapi|chaveprivada|privatekey|credential|credencial|authorization|cookie|certificado|certificate|pfx|base64|hash|salt|cvv|cvc|numerocartao|cardnumber|payload|rawbody|requestbody|responsebody|xml|connectionstring|databaseurl)'
+      '(senha|password|passwd|secret|token|apikey|apisecret|chaveapi|chaveprivada|privatekey|credential|credencial|authorization|cookie|certificado|certificate|pfx|base64|hash|salt|cvv|cvc|numerocartao|cardnumber|payload|rawbody|requestbody|responsebody|xml|connectionstring|databaseurl)'
       OR lower(key_name) IN ('headers', 'body', 'raw', 'chave', 'key', 'segredo');
   $fn$;
 
@@ -148,9 +148,7 @@ export const AUDIT_SCHEMA_SQL = String.raw`
   CREATE OR REPLACE FUNCTION audit_module(table_name TEXT)
   RETURNS TEXT LANGUAGE sql IMMUTABLE AS $fn$
     SELECT CASE
-      WHEN table_name IN ('grupos_usuario','grupo_usuario_membros','usuario_restricoes') THEN 'Equipe'
-      WHEN table_name IN ('pedidos_aprovacao','alcadas_aprovacao') THEN 'Financeiro'
-      WHEN table_name IN ('contas_receber','contas_pagar','contas_bancarias','plano_contas','centros_custo','regras_rateio','transferencias','extrato_bancario','cartoes_corp') THEN 'Financeiro'
+      WHEN table_name IN ('contas_receber','contas_pagar','contas_bancarias','plano_contas','centros_custo','transferencias','extrato_bancario','cartoes_corp') THEN 'Financeiro'
       WHEN table_name IN ('config_fiscal','notas_fiscais') THEN 'Fiscal'
       WHEN table_name IN ('usuarios','membros','planos_comissao','comissoes','metas') THEN 'Equipe'
       WHEN table_name IN ('clientes','fornecedores_crm','vendas_crm','itens_venda','negociacao_anotacoes','negociacao_tarefas') THEN 'CRM'
@@ -242,13 +240,7 @@ export const AUDIT_SCHEMA_SQL = String.raw`
       SELECT c.table_name FROM information_schema.columns c
       JOIN information_schema.tables t ON t.table_schema = c.table_schema AND t.table_name = c.table_name
       WHERE c.table_schema = 'public' AND c.column_name = 'tenant_id' AND t.table_type = 'BASE TABLE'
-        AND c.table_name NOT IN ('audit_log','api_cache','audit_config','grupo_eventos',
-          'razao_estado','razao_lancamentos','razao_partidas','razao_falhas','razao_conferencias',
-          'retrato_saldos','agendador_execucoes','agendador_estado','tarefas','leituras_de_documento',
-          'cobranca_eventos','cobranca_lembretes','cobranca_disjuntor','cobranca_portal_links',
-          'migracao_lotes','migracao_arquivos','migracao_linhas','migracao_vinculos','migracao_historico',
-          'variacoes_cambiais','venda_eventos','comissao_lancamentos','comissao_fechamentos','creditos_cliente_movimentos','fatura_eventos','conciliacoes_automaticas','conferencias_operadora_linhas','conexoes_bancarias_segredo','sincronizacoes_bancarias','relatorios_leituras','relatorios_envios','empresa_selecao',
-          'contas_excluidas','titulos_numeros','titulos_numeracao','preferencias_usuario','perguntas_ia')
+        AND c.table_name NOT IN ('audit_log','api_cache','audit_config','grupo_eventos')
       UNION SELECT t.table_name FROM information_schema.tables t
       WHERE t.table_schema = 'public' AND t.table_name IN ('tenants','super_admins','planos','saas_config','convites')
       ORDER BY 1

@@ -39,7 +39,6 @@ import type { ExecutorSQL } from './caixa-atomico';
 import { DIA_ULTIMO, diaNoMes, proximaDataPagamento } from './comissao-agenda';
 import type { ComissaoVenda, ContaPagar } from './crm-types';
 import { hojeISO, num, round2 } from './money';
-import { descricaoDaComissaoDoCrm, observacaoDaContaDoCrm, vencimentoDaComissaoDoCrm } from './comissao-do-crm';
 
 export const PREFIXO_CONTA_COMISSAO = 'cp-comissao-';
 
@@ -87,21 +86,10 @@ export function contaDaComissao(
   const valor = round2(num(c.valor_comissao));
   if (valor <= 0) return null;
   const hoje = ctx.hoje ?? hojeISO();
-  // Extrato do mês vindo do CRM (conta do ecossistema, comissao-do-crm.ts):
-  // vence no dia 10 do mês seguinte à competência, sem olhar a agenda.
-  const doCrm = c.origem === 'crm' && c.crm ? c.crm : null;
-  const venc = doCrm
-    ? { data: vencimentoDaComissaoDoCrm(doCrm.competencia), semAgenda: false }
-    : vencimentoDaComissao(ctx.datasPagamento, c.data_venda, hoje);
-  // Comissão por MRR (conta do ecossistema): é do mês do vendedor, não de uma
-  // venda. A conta não aponta para venda nenhuma e diz o que ela é.
-  const doMrr = c.origem === 'mrr';
-  const vendaId = doMrr || doCrm ? null : c.venda_id || null;
+  const venc = vencimentoDaComissao(ctx.datasPagamento, c.data_venda, hoje);
 
   const observacoes = [
-    doCrm ? observacaoDaContaDoCrm(doCrm) : doMrr
-      ? `Comissão por MRR de ${c.venda_numero.replace(/^MRR /, '')} (${c.plano_nome || 'plano de comissão'}, ${num(c.percentual_aplicado)}% sobre ${round2(num(c.valor_base)).toFixed(2)} de MRR vendido).`
-      : `Comissão da venda ${c.venda_numero || c.venda_id} (${c.plano_nome || 'plano de comissão'}, ${num(c.percentual_aplicado)}% sobre ${round2(num(c.valor_base)).toFixed(2)}).`,
+    `Comissão da venda ${c.venda_numero || c.venda_id} (${c.plano_nome || 'plano de comissão'}, ${num(c.percentual_aplicado)}% sobre ${round2(num(c.valor_base)).toFixed(2)}).`,
     venc.semAgenda ? 'Agenda de pagamento de comissão não configurada: vencimento no fim do mês. Defina os dias em Configurações, Agência.' : '',
     c.status === 'PAGA' ? `Comissão consta como paga em ${String(c.data_pagamento ?? '').slice(0, 10) || 'data não informada'}: confirme a baixa com a conta bancária de onde o dinheiro saiu.` : '',
   ].filter(Boolean).join(' ');
@@ -109,13 +97,11 @@ export function contaDaComissao(
   return {
     id: idDaContaDaComissao(c.id),
     origem: 'OUTROS',
-    venda_id: vendaId,
+    venda_id: c.venda_id || null,
     grupo_id: null,
     fornecedor_id: '',
     fornecedor_nome: c.vendedor_nome || 'Vendedor',
-    descricao: doCrm ? descricaoDaComissaoDoCrm(doCrm.competencia, c.vendedor_nome) : doMrr
-      ? `Comissão por MRR · ${c.vendedor_nome || 'vendedor'} · ${c.venda_numero.replace(/^MRR /, '')}`
-      : `Comissão · ${c.vendedor_nome || 'vendedor'} · venda ${c.venda_numero || c.venda_id}`,
+    descricao: `Comissão · ${c.vendedor_nome || 'vendedor'} · venda ${c.venda_numero || c.venda_id}`,
     categoria_id: ctx.categoriaId,
     centro_custo: '',
     valor_original: valor,
@@ -142,7 +128,7 @@ export function contaDaComissao(
     rateio: [],
     anexos: [],
     observacoes,
-    origem_venda_id: vendaId || undefined,
+    origem_venda_id: c.venda_id || undefined,
     auto_gerado: true,
     origem_comissao_id: c.id,
   };
@@ -192,15 +178,11 @@ export async function sincronizarContaDaComissao(
   // nunca excluída — o histórico de que ela existiu fica.
   if (!conta) {
     if (atual && atual.status !== 'CANCELADO') {
-      // A guarda de baixa vai no próprio UPDATE: o pagamento pode ter caído
-      // depois da leitura acima (FIN2-03).
-      const { rows: canceladas } = await exec.query(
-        `UPDATE contas_pagar SET data = jsonb_set(data, '{status}', '"CANCELADO"', true), status = 'CANCELADO', updated_at = NOW()
-          WHERE id = $1 AND tenant_id = $2 AND COALESCE(data->>'status', '') NOT IN ('PAGO', 'PARCIAL')
-          RETURNING id`,
-        [id, tenantId],
+      await exec.query(
+        `UPDATE contas_pagar SET data = $3::jsonb, status = 'CANCELADO', updated_at = NOW() WHERE id = $1 AND tenant_id = $2`,
+        [id, tenantId, JSON.stringify({ ...atual, status: 'CANCELADO' })],
       );
-      return { acao: canceladas.length > 0 ? 'cancelada' : 'preservada', id };
+      return { acao: 'cancelada', id };
     }
     return { acao: 'nenhuma', id };
   }
@@ -211,19 +193,12 @@ export async function sincronizarContaDaComissao(
     ? { ...conta, conta_bancaria_id: atual.conta_bancaria_id, centro_custo: atual.centro_custo, anexos: atual.anexos ?? [], comprovante: atual.comprovante ?? '' }
     : conta;
 
-  // A conta paga NÃO é regravada, e a checagem está no próprio upsert: ler
-  // PENDENTE acima, o pagamento concorrente debitar e esta gravação voltar a
-  // conta a PENDENTE sem estorno deixava a próxima baixa debitar de novo
-  // (auditoria 04/11, FIN2-03).
-  const { rows: gravadas } = await exec.query(
+  await exec.query(
     `INSERT INTO contas_pagar (id, tenant_id, fornecedor_id, status, data, created_at, updated_at)
      VALUES ($1, $2, $3, $4, $5::jsonb, NOW(), NOW())
      ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, status = EXCLUDED.status, updated_at = NOW()
-     WHERE contas_pagar.tenant_id = EXCLUDED.tenant_id
-       AND COALESCE(contas_pagar.data->>'status', '') NOT IN ('PAGO', 'PARCIAL')
-     RETURNING id`,
+     WHERE contas_pagar.tenant_id = EXCLUDED.tenant_id`,
     [gravar.id, tenantId, '', gravar.status, JSON.stringify(gravar)],
   );
-  if (gravadas.length === 0) return { acao: 'preservada', id };
   return { acao: atual ? (gravar.status === 'CANCELADO' ? 'cancelada' : 'atualizada') : 'criada', id };
 }

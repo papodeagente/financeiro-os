@@ -19,9 +19,6 @@ export const toast = {
     sonnerToast.warning(msg, normalize(description)),
   message: (msg: string, description?: Description) =>
     sonnerToast(msg, normalize(description)),
-  /** Aviso com um botão (ex.: "Pedir aprovação"). Fica até a pessoa decidir. */
-  comAcao: (msg: string, description: string, acao: { rotulo: string; onClick: () => void }) =>
-    sonnerToast.warning(msg, { description, duration: Infinity, closeButton: true, action: { label: acao.rotulo, onClick: acao.onClick } }),
   promise: sonnerToast.promise,
   loading: sonnerToast.loading,
   dismiss: sonnerToast.dismiss,

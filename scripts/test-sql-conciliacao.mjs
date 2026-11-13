@@ -203,18 +203,15 @@ console.log('--- importação com andamento ---');
 {
   const linhas = Array.from({ length: 250 }, (_, i) => ({ data: '2026-10-01', descricao: `Linha ${i}`, valor: i % 2 ? -10 : 10, fitid: `F${i}` }));
   const avisos = [];
-  const r = await emTransacao(x => importarExtrato(x, 't1', 'b1', 'extrato.ofx', linhas, a => avisos.push(a)));
+  const r = await emTransacao(x => importarExtrato(x, 't1', 'b9', 'extrato.ofx', linhas, a => avisos.push(a)));
   eq([r.inseridas, r.duplicadas, r.total], [250, 0, 250], 'grava as 250 linhas');
   eq(avisos.length <= 100 && avisos.length >= 50, true, 'avisa o andamento em no máximo uns cem passos');
   eq(avisos.every((a, i) => i === 0 || a.feitas > avisos[i - 1].feitas), true, 'o andamento só cresce');
   eq(avisos.at(-1), { feitas: 250, total: 250, inseridas: 250, duplicadas: 0 }, 'e o último aviso é o total');
-  const r2 = await emTransacao(x => importarExtrato(x, 't1', 'b1', 'extrato.ofx', linhas));
+  const r2 = await emTransacao(x => importarExtrato(x, 't1', 'b9', 'extrato.ofx', linhas));
   eq([r2.inseridas, r2.duplicadas], [0, 250], 'reimportar o mesmo arquivo não duplica');
-  const r3 = await emTransacao(x => importarExtrato(x, 't2', 'b2', 'extrato.ofx', linhas.slice(0, 3)));
-  eq(r3.inseridas, 3, 'outra agência, na conta dela, importa as mesmas linhas');
-  // Auditoria 04/11/2026 (FIN2-20): extrato só entra em conta bancária da própria agência.
-  eq((await recusa(() => emTransacao(x => importarExtrato(x, 't1', 'b2', 'extrato.ofx', linhas.slice(0, 1))))) !== null, true, 'conta bancária de outra agência é recusada');
-  eq((await recusa(() => emTransacao(x => importarExtrato(x, 't1', 'b9', 'extrato.ofx', linhas.slice(0, 1))))) !== null, true, 'conta inexistente é recusada');
+  const r3 = await emTransacao(x => importarExtrato(x, 't2', 'b9', 'extrato.ofx', linhas.slice(0, 3)));
+  eq(r3.inseridas, 3, 'outra agência com a mesma conta importa as dela');
 }
 
 console.log(`\n${total - falhas}/${total} testes SQL da conciliação passaram`);

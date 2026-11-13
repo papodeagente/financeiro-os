@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import pool, { initDB } from '@/lib/db';
-import { escopoDaSessao, type ExecutorEmpresas } from '@/lib/empresas-servidor';
+import { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
 import { getSession } from '@/lib/auth';
 import { bloqueioFinanceiro } from '@/lib/permissoes';
@@ -11,12 +10,9 @@ import type { OpcoesDaNota } from '@/lib/nfse-servico';
 export async function GET() {
   try {
     await initDB();
-    const sessao = await getSession();
-    const bloqueio = bloqueioFinanceiro(sessao, 'ler');
+    const bloqueio = bloqueioFinanceiro(await getSession(), 'ler');
     if (bloqueio) return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
-    // Empresas marcadas e liberadas (E7). Uma empresa só: todas.
-    const visiveis = pool ? (await escopoDaSessao(sessao, pool as unknown as ExecutorEmpresas)).visiveis : null;
-    return NextResponse.json(await listarNotas(await getTenantId(), visiveis));
+    return NextResponse.json(await listarNotas(await getTenantId()));
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Erro';
     return NextResponse.json({ error: msg }, { status: 500 });

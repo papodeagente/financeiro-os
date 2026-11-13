@@ -1,4 +1,3 @@
-import { recusaAdmin } from '@/lib/guarda-rota';
 import { NextResponse } from 'next/server';
 import { reprocessarVendasLegadas } from '@/lib/crm-integration';
 import { getTenantId } from '@/lib/tenant';
@@ -7,8 +6,6 @@ import { getTenantId } from '@/lib/tenant';
 // preenchendo aliases que DRE/Dashboard/Indicadores esperam ler. Idempotente.
 export async function POST() {
   try {
-    const recusa = await recusaAdmin();
-    if (recusa) return recusa;
     const tenantId = await getTenantId();
     const r = await reprocessarVendasLegadas(tenantId);
     return NextResponse.json(r);

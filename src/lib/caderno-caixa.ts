@@ -337,11 +337,8 @@ function rotuloDoIntervalo(inicio: string, fim: string): string {
   return `${a.getDate()} ${MESES_CURTOS[a.getMonth()]} a ${b.getDate()} ${MESES_CURTOS[b.getMonth()]}`;
 }
 
-/**
- * Os intervalos das linhas. Semana vai de domingo a sábado, cortada nas pontas do período.
- * Exportado em 05/11/2026 para o Previsto × Realizado usar as mesmas linhas.
- */
-export function intervalos(periodo: Periodo, agrupamento: Agrupamento, diasComMovimento: Set<string>, hoje: string) {
+/** Os intervalos das linhas. Semana vai de domingo a sábado, cortada nas pontas do período. */
+function intervalos(periodo: Periodo, agrupamento: Agrupamento, diasComMovimento: Set<string>, hoje: string) {
   const saida: Array<{ inicio: string; fim: string; rotulo: string }> = [];
   if (agrupamento === 'mes') {
     let ym = mesDe(periodo.inicio);

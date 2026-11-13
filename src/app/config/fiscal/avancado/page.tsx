@@ -22,7 +22,6 @@ import { toast } from '@/lib/toast';
 import { hojeISO } from '@/lib/money';
 import { cn } from '@/lib/utils';
 import type { ConfigFiscal } from '@/lib/nfse-tipos';
-import { EmpresaDaConfiguracao, naEmpresa } from '@/components/fin/EmpresaDaConfiguracao';
 
 interface Emitente {
   cnpj: string;
@@ -77,7 +76,7 @@ export default function ConfigFiscalPage() {
   const carregar = useCallback(async () => {
     setCarregando(true);
     try {
-      const res = await fetch(naEmpresa('/api/fiscal/config'));
+      const res = await fetch('/api/fiscal/config');
       const corpo = await res.json();
       if (!res.ok) { setErro(corpo?.error || 'Não foi possível carregar.'); return; }
       setConfig(corpo.config as ConfigFiscal);
@@ -100,7 +99,7 @@ export default function ConfigFiscalPage() {
     if (!config || salvando) return;
     setSalvando(true);
     try {
-      const res = await fetch(naEmpresa('/api/fiscal/config'), {
+      const res = await fetch('/api/fiscal/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
@@ -123,7 +122,7 @@ export default function ConfigFiscalPage() {
       const form = new FormData();
       form.append('arquivo', arquivo);
       form.append('senha', senhaCert);
-      const res = await fetch(naEmpresa('/api/fiscal/certificado'), { method: 'POST', body: form });
+      const res = await fetch('/api/fiscal/certificado', { method: 'POST', body: form });
       const corpo = await res.json();
       if (!res.ok) { toast.error('O certificado não foi aceito', corpo?.error || ''); return; }
       setConfig(corpo.config as ConfigFiscal);
@@ -148,7 +147,7 @@ export default function ConfigFiscalPage() {
     if (desconectando) return;
     setDesconectando(true);
     try {
-      const res = await fetch(naEmpresa('/api/fiscal/empresa'), { method: 'DELETE' });
+      const res = await fetch('/api/fiscal/empresa', { method: 'DELETE' });
       const corpo = await res.json();
       if (!res.ok) { toast.error('Não foi possível desconectar', corpo?.error || ''); return; }
       setConfig(corpo.config as ConfigFiscal);
@@ -168,7 +167,7 @@ export default function ConfigFiscalPage() {
     if (buscandoCnpj) return;
     setBuscandoCnpj(true);
     try {
-      const res = await fetch(naEmpresa('/api/fiscal/autopreencher'), { method: 'POST' });
+      const res = await fetch('/api/fiscal/autopreencher', { method: 'POST' });
       const corpo = await res.json();
       if (!res.ok) { toast.error('Não foi possível buscar o CNPJ', corpo?.error || ''); return; }
       setConfig(corpo.config as ConfigFiscal);
@@ -193,7 +192,7 @@ export default function ConfigFiscalPage() {
     if (conectando) return;
     setConectando(true);
     try {
-      const res = await fetch(naEmpresa('/api/fiscal/empresa'), { method: 'POST' });
+      const res = await fetch('/api/fiscal/empresa', { method: 'POST' });
       const corpo = await res.json();
       if (!res.ok) { toast.error('Não foi possível conectar', corpo?.error || ''); return; }
       setConfig(corpo.config as ConfigFiscal);
@@ -215,7 +214,7 @@ export default function ConfigFiscalPage() {
     if (!config || configurando) return;
     setConfigurando(true);
     try {
-      const res = await fetch(naEmpresa('/api/fiscal/configurar'), {
+      const res = await fetch('/api/fiscal/configurar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
@@ -241,7 +240,7 @@ export default function ConfigFiscalPage() {
     if (!config || sincronizando) return;
     setSincronizando(true);
     try {
-      const res = await fetch(naEmpresa('/api/fiscal/prestador'), {
+      const res = await fetch('/api/fiscal/prestador', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
@@ -277,7 +276,7 @@ export default function ConfigFiscalPage() {
   }
 
   async function removerCertificado() {
-    const res = await fetch(naEmpresa('/api/fiscal/certificado'), { method: 'DELETE' });
+    const res = await fetch('/api/fiscal/certificado', { method: 'DELETE' });
     const corpo = await res.json();
     if (!res.ok) { toast.error('Não foi possível remover', corpo?.error || ''); return; }
     setConfig(corpo.config as ConfigFiscal);
@@ -354,8 +353,6 @@ export default function ConfigFiscalPage() {
         acaoPrimaria={{ rotulo: salvando ? 'Salvando…' : 'Salvar', onClick: () => { void salvar(); } }}
         acoesSecundarias={[{ rotulo: 'Voltar à tela guiada', href: '/config/fiscal' }]}
       />
-      {/* Várias empresas (E7): de qual empresa é esta configuração. */}
-      <EmpresaDaConfiguracao secao="notas" />
 
       <DataState
         estado={carregando ? 'carregando' : erro ? 'erro' : 'ok'}

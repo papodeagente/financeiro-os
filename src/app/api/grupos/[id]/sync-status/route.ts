@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { abrirCrmConfig } from '@/lib/crm-config-cofre';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
 
@@ -30,7 +29,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       "SELECT data FROM crm_config WHERE id = 'singleton' AND tenant_id = $1",
       [tenantId],
     );
-    const cfg = abrirCrmConfig(cfgRes.rows[0]?.data);
+    const cfg = cfgRes.rows[0]?.data;
     const crmConfigured = !!cfg?.ativo && !!cfg?.api_key_crm && !!cfg?.webhook_url_crm;
     const circuitOpen = cfg?.circuit_breaker_status === 'aberto';
 

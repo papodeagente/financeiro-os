@@ -34,13 +34,13 @@ export function perfilCanonico(
 ): 'ADMIN' | 'OPERADOR' | 'VENDEDOR' | 'COLABORADOR' {
   if (perfil === 'ADMIN' || perfil === 'owner') return 'ADMIN';
   if (perfil === 'VENDEDOR') return 'VENDEDOR';
-  if (perfil === 'OPERADOR' || perfil === 'GERENTE' || perfil === 'FINANCEIRO' || perfil === 'VISUALIZADOR') {
-    return 'OPERADOR';
-  }
-  // Qualquer outra coisa (COLABORADOR, vazio, ausente, valor inventado) não
-  // tem acesso. O padrão era OPERADOR, que enxerga todo o financeiro: um
-  // perfil gravado errado virava acesso amplo (FIN-15, auditoria 04/11/2026).
-  return 'COLABORADOR';
+  // COLABORADOR precisa vir ANTES do caso final. O padrão desta função é
+  // devolver OPERADOR para perfil desconhecido, e OPERADOR enxerga todo o
+  // financeiro: cair no padrão daria acesso total a quem foi cadastrado
+  // justamente para não ter acesso nenhum.
+  if (perfil === 'COLABORADOR') return 'COLABORADOR';
+  // GERENTE / FINANCEIRO / VISUALIZADOR / OPERADOR
+  return 'OPERADOR';
 }
 
 /** Perfil que existe só para a folha e nunca entra na plataforma. */
@@ -52,7 +52,7 @@ export const PERFIS: { id: 'ADMIN' | 'OPERADOR' | 'VENDEDOR' | 'COLABORADOR'; la
   {
     id: 'ADMIN',
     label: 'Administrador',
-    descricao: 'Pode tudo na conta: criar, editar, excluir, exportar, gerenciar usuários e configurações.',
+    descricao: 'Acesso total à conta. Pode criar, editar, excluir, exportar, gerenciar usuários e configurações.',
   },
   {
     id: 'OPERADOR',

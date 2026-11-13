@@ -12,7 +12,6 @@ import {
 import { ErroFiscal } from '@/lib/nfse-emissor';
 import { EmissorAceleraAPI, consultarCnpj } from '@/lib/nfse-acelera';
 import { codigoDoItem, itemSugerido, servicosDaEmpresa } from '@/lib/lc116-servicos';
-import { empresaDoPedido } from '@/lib/empresas-rota';
 
 /**
  * Busca na Receita tudo o que dá para preencher sozinho.
@@ -31,19 +30,16 @@ import { empresaDoPedido } from '@/lib/empresas-rota';
  * Só preenche campo VAZIO. O que a agência digitou à mão é mais confiável
  * que a base da Receita, que atrasa para refletir mudança de endereço.
  */
-export async function POST(req: Request) {
+export async function POST() {
   try {
-    // Configuração fiscal por empresa (E7): ?empresa=<id>; sem ele, a de sempre.
-    const { empresa: empresaFiscal, recusa: recusaEmpresa } = await empresaDoPedido(req);
-    if (recusaEmpresa) return recusaEmpresa;
     await initDB();
     const bloqueio = bloqueioFinanceiro(await getSession(), 'escrever');
     if (bloqueio) return NextResponse.json({ error: bloqueio.erro }, { status: bloqueio.status });
     const tenantId = await getTenantId();
 
     const [config, emitente] = await Promise.all([
-      carregarConfigFiscal(tenantId, empresaFiscal),
-      carregarEmitente(tenantId, empresaFiscal),
+      carregarConfigFiscal(tenantId),
+      carregarEmitente(tenantId),
     ]);
 
     const cadastro = await consultarCnpj(emitente.cnpj, config);
@@ -119,7 +115,7 @@ export async function POST(req: Request) {
         preenchidos.push('código de tributação (pela atividade da empresa)');
       }
     }
-    await salvarConfigFiscal(tenantId, novaConfig, empresaFiscal);
+    await salvarConfigFiscal(tenantId, novaConfig);
 
     // Com município e código de tributação preenchidos, já dá para empurrar o
     // cadastro do prestador e devolver as pendências que realmente sobraram.

@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { MoneyInput } from '@/components/MoneyInput';
-import { cn, formatBRL, generateId } from '@/lib/utils';
-import { AlertTriangle, ArrowRight, Filter as FunilIcon, Download, Loader2, RefreshCw, Save, Wallet } from 'lucide-react';
+import { formatBRL, generateId } from '@/lib/utils';
+import { AlertTriangle, ArrowRight, Filter as FunilIcon, Download, Loader2, RefreshCw, Save } from 'lucide-react';
 import Link from 'next/link';
 import type { FunilPayload } from '@/lib/funil-types';
 import {
@@ -25,7 +25,6 @@ import { PageHeader } from '@/components/fin/PageHeader';
 import { SeletorDeMes } from '@/components/fin/SeletorDeMes';
 import { DataState } from '@/components/fin/DataState';
 import { Callout } from '@/components/fin/Callout';
-import { CARTAO_DO_PAINEL, SeloDoTom } from '@/components/fin/PecasDoPainel';
 import { hojeISO } from '@/lib/money';
 import { useAuth } from '@/contexts/AuthContext';
 import { podeEditarFinanceiro } from '@/lib/permissoes';
@@ -499,7 +498,7 @@ export default function CustosPage() {
 
   if (loading || loadError || !data || !rel) return (
     <MolduraDaPagina>
-      <PageHeader icone={Wallet} titulo="Planejamento mensal" subtitulo={loading ? 'Carregando o plano do mês…' : mesPorExtenso(mes)} />
+      <PageHeader titulo="Planejamento mensal" subtitulo={loading ? 'Carregando o plano do mês…' : mesPorExtenso(mes)} />
       <DataState
         estado={loading ? 'carregando' : 'erro'}
         erro={loading ? null : { mensagem: loadError ?? 'Resposta inválida do servidor.', onTentarDeNovo: () => { void load(mes); } }}
@@ -581,9 +580,8 @@ export default function CustosPage() {
   return (
     <MolduraDaPagina>
       <PageHeader
-        icone={Wallet}
         titulo="Planejamento mensal"
-        subtitulo="As metas do mês e o acompanhamento do que já aconteceu contra elas"
+        subtitulo={`${mesPorExtenso(mes).charAt(0).toUpperCase()}${mesPorExtenso(mes).slice(1)}: ${situacaoDoPlano}.`}
         acaoPrimaria={!existePlano && podeEditar ? { rotulo: 'Salvar plano do mês', icone: Save, onClick: salvarPlano } : undefined}
         acoesSecundarias={[
           ...(podeEditar ? [{ rotulo: copying ? 'Copiando…' : 'Copiar do mês anterior', onClick: () => { void copyFromPrev(); } }] : []),
@@ -591,14 +589,8 @@ export default function CustosPage() {
         ]}
       />
 
-      <div className={cn(CARTAO_DO_PAINEL, 'flex flex-col gap-[var(--fin-s-3)] p-3 sm:px-4 md:flex-row md:items-center md:justify-between')}>
-        <div className="flex flex-wrap items-center gap-[var(--fin-s-3)]">
-          <span className="fin-t-overline text-[var(--fin-text-3)]">Período</span>
-          <SeletorDeMes valor={mes} onChange={m => { void trocarMes(m); }} maximo={tetoDoSeletor} />
-          <SeloDoTom tom={saveError ? 'negativo' : saving ? 'neutro' : existePlano ? 'positivo' : 'aviso'}>
-            {situacaoDoPlano.charAt(0).toUpperCase()}{situacaoDoPlano.slice(1)}
-          </SeloDoTom>
-        </div>
+      <div className="flex flex-col gap-[var(--fin-s-3)] sm:flex-row sm:items-center sm:justify-between">
+        <SeletorDeMes valor={mes} onChange={m => { void trocarMes(m); }} maximo={tetoDoSeletor} />
         <Segmentado<Aba>
           rotulo="O que ver"
           opcoes={[

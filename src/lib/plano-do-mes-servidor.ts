@@ -19,7 +19,7 @@ import { apenasVendasComLastro, vendasComLancamento } from './venda-lancamentos'
 import { valorRealizado } from './resultado-financeiro';
 import { round2 } from './money';
 import { generateId } from './utils';
-import { serieDoMes, type ContaDoMes, type RealizadoDoMes, type RegistroDeProgresso } from './plano-do-mes';
+import type { ContaDoMes, RealizadoDoMes, RegistroDeProgresso } from './plano-do-mes';
 
 /** O que o sistema não mede sozinho e aceita registro. */
 export const CHAVES_REGISTRAVEIS = ['atendimentos'] as const;
@@ -168,6 +168,5 @@ export async function carregarRealizadoDoMes(
     },
     contas,
     registros,
-    diario: serieDoMes(mes, escada.vendas.map(v => ({ data: v.data, comissao: v.comissao }))),
   };
 }

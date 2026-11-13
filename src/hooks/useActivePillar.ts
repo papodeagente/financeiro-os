@@ -47,7 +47,6 @@ const ROUTE_MAP: [string, Pillar][] = [
   ['/relatorios', 'financeiro'],
   // Configurações
   ['/config', 'configuracoes'],
-  ['/mudanca', 'configuracoes'],
   ['/suporte', 'configuracoes'],
 ];
 

@@ -38,7 +38,6 @@ import { cn } from '@/lib/utils';
 import { BuscaComLista, type OpcaoBusca } from './Busca';
 import { servicoDoCodigo } from '@/lib/lc116-servicos';
 import type { ConfigFiscal } from '@/lib/nfse-tipos';
-import { EmpresaDaConfiguracao, naEmpresa } from '@/components/fin/EmpresaDaConfiguracao';
 
 interface Emitente {
   cnpj: string;
@@ -109,7 +108,7 @@ export default function NotaFiscalPage() {
 
   const carregar = useCallback(async () => {
     try {
-      const res = await fetch(naEmpresa('/api/fiscal/config'));
+      const res = await fetch('/api/fiscal/config');
       const corpo = await res.json();
       if (!res.ok) { setErroCarga(corpo?.error || 'Não foi possível carregar.'); return; }
       setConfig(corpo.config as ConfigFiscal);
@@ -164,7 +163,7 @@ export default function NotaFiscalPage() {
       const form = new FormData();
       form.append('arquivo', arquivo);
       form.append('senha', senha);
-      const res = await fetch(naEmpresa('/api/fiscal/certificado'), { method: 'POST', body: form });
+      const res = await fetch('/api/fiscal/certificado', { method: 'POST', body: form });
       const corpo = await res.json();
       if (!res.ok) {
         setErro(corpo?.error || 'O certificado não foi aceito.');
@@ -207,7 +206,7 @@ export default function NotaFiscalPage() {
       { nome: 'Cadastrando o prestador', ok: false, detalhe: '' },
     ]);
     try {
-      const res = await fetch(naEmpresa('/api/fiscal/configurar'), {
+      const res = await fetch('/api/fiscal/configurar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config ?? {}),
@@ -238,7 +237,7 @@ export default function NotaFiscalPage() {
     setTrabalhando(true);
     setErro('');
     try {
-      const res = await fetch(naEmpresa('/api/fiscal/prestador'), {
+      const res = await fetch('/api/fiscal/prestador', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
@@ -293,8 +292,6 @@ export default function NotaFiscalPage() {
         subtitulo="Envie o certificado digital e a agência fica pronta para emitir."
         acoesSecundarias={[{ rotulo: 'Ajuste manual', href: '/config/fiscal/avancado' }]}
       />
-      {/* Várias empresas (E7): de qual empresa é esta configuração. */}
-      <EmpresaDaConfiguracao secao="notas" />
 
       <DataState
         estado={carregando ? 'carregando' : erroCarga ? 'erro' : 'ok'}

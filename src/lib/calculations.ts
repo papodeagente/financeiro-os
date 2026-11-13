@@ -1,4 +1,4 @@
-import type { GrupoViagem } from './types';
+import { GrupoViagem } from './types';
 import { minPositivo } from './utils';
 
 // PAX count per room type

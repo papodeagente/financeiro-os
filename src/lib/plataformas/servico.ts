@@ -23,8 +23,6 @@ import pool from '../db';
 import { generateId } from '../utils';
 import { round2, num, hojeISO, addDias } from '../money';
 import { emTransacao, aplicarMovimentoCaixaAtomico, type ExecutorSQL } from '../caixa-atomico';
-import { registrarBaixaLegada } from '../baixas-servidor';
-import { dataForaDoFechamento } from '../periodo-fechado';
 import { cifrar, decifrar, mascarar } from '../cofre';
 import { acharAdapter } from './index';
 import { nomeDaPlataforma } from './rotulo';
@@ -34,7 +32,6 @@ import { contasJaUsadas } from '../conciliacao-servidor';
 import { desfazerUnificacao, unificarRecebimento, type ResultadoUnificacao } from './unificar-db';
 import { parcelaUnicaAntecipada, planoDeParcelaUnica } from './antecipacao';
 import { valorDaParcela } from './pagarme';
-import { desviarAvisoDeCobranca, transacaoEhDeCobranca } from '../cobranca/aviso';
 import {
   decidir, type CandidatoVenda, type Decisao, type PagamentoParaConciliar,
 } from './conciliacao';
@@ -730,11 +727,6 @@ async function sincronizarContas(
       );
     } else {
       const sufixo = parcela.total > 1 ? ` (${parcela.numero}/${parcela.total})` : '';
-      // Recebimento com data num período fechado entra no dia seguinte ao
-      // fechamento: a integração nunca para por isso (05/11/2026).
-      const dataRecebimento = parcela.data_recebimento
-        ? await dataForaDoFechamento(exec, tenantId, ctx.contaBancariaId, parcela.data_recebimento)
-        : '';
       const conta = {
         id: contaId,
         origem: ctx.vendaId ? 'VENDA' : 'VENDA_DIRETA',
@@ -753,7 +745,7 @@ async function sincronizarContas(
         data_emissao: transacao.data_venda || parcela.data_vencimento,
         data_vencimento: parcela.data_vencimento || transacao.data_venda,
         data_prevista_recebimento: parcela.data_prevista_recebimento,
-        data_recebimento: dataRecebimento,
+        data_recebimento: parcela.data_recebimento || '',
         // O que entrou de verdade é o líquido. O bruto fica em valor_final
         // para o DRE ver receita cheia, e a taxa fica declarada ao lado.
         valor_recebido: parcela.status === 'RECEBIDO' ? parcela.valor_liquido : 0,
@@ -822,17 +814,7 @@ async function sincronizarContas(
     const jaCreditado = round2(num(creditado[chave]));
     const delta = round2(alvo - jaCreditado);
     if (delta !== 0) {
-      await aplicarMovimentoCaixaAtomico(tenantId, ctx.contaBancariaId, delta, exec, {
-        tipo: 'plataforma',
-        tabela: 'contas_receber',
-        id: contaId,
-        pessoaId: ctx.clienteId || undefined,
-        descricao: `${plataforma}: parcela ${chave} da transação ${transacao.id_transacao}`,
-      });
-      await registrarBaixaLegada(exec, {
-        tenantId, tabela: 'contas_receber', tituloId: contaId, dadosAntes: gravada.get(contaId) ?? {},
-        conta: ctx.contaBancariaId, caixa: delta, data: parcela.data_recebimento || '', origem: 'plataforma',
-      });
+      await aplicarMovimentoCaixaAtomico(tenantId, ctx.contaBancariaId, delta, exec);
       creditado[chave] = alvo;
       movido = round2(movido + delta);
     }
@@ -849,8 +831,6 @@ export interface ResultadoProcessamento {
   processado: boolean;
   acao: string;
   sincronizacao?: ResultadoSincronizacao;
-  /** Aviso de cobrança emitida pelo financeiro (E3): não virou venda. */
-  cobranca?: { cobranca_id: string | null; status?: string; baixa_id?: string | null };
 }
 
 /**
@@ -872,8 +852,7 @@ export async function processarEvento(
   const conciliacaoAutomatica = conf?.config.conciliacao_automatica === true;
   const recebimentoAntecipado = conf?.config.recebimento_antecipado ?? antecipadoPorPadrao(plataforma, undefined);
 
-  let depoisDaCobranca: (() => Promise<void>) | undefined;
-  const resultado = await emTransacao(async (exec: ExecutorSQL): Promise<ResultadoProcessamento> => {
+  return emTransacao(async (exec: ExecutorSQL) => {
     const ins = await exec.query(
       `INSERT INTO plataformas_eventos (id, tenant_id, plataforma, id_externo, tipo, status, data, created_at)
        VALUES ($1, $2, $3, $4, $5, 'RECEBIDO', $6::jsonb, NOW())
@@ -893,20 +872,6 @@ export async function processarEvento(
     if (evento.tipo === 'IGNORADO') {
       await marcar('IGNORADO');
       return { processado: true, acao: 'evento sem efeito financeiro' };
-    }
-
-    // Cobrança emitida pelo financeiro (referência `f1;` ou id de cobrança
-    // nossa): vai para a cobrança e NÃO vira venda. Aviso que não é nosso
-    // devolve null e segue exatamente o caminho de antes (E3, 05/11/2026).
-    const desvio = await desviarAvisoDeCobranca(exec, tenantId, plataforma, evento, { contaBancariaId: contaBancaria });
-    if (desvio) {
-      await marcar('PROCESSADO');
-      depoisDaCobranca = desvio.depois;
-      return {
-        processado: true,
-        acao: desvio.acao,
-        cobranca: { cobranca_id: desvio.cobranca_id, status: desvio.status, baixa_id: desvio.baixa_id },
-      };
     }
 
     const transacao = evento.transacao;
@@ -945,21 +910,6 @@ export async function processarEvento(
       sincronizacao: r,
     };
   });
-  // Avisos ao CRM da cobrança paga: só depois do COMMIT, e sem nunca
-  // derrubar o aviso (que já está gravado).
-  if (depoisDaCobranca) {
-    await depoisDaCobranca().catch(e => console.error('[cobranca] depois do aviso:', e instanceof Error ? e.message : e));
-  }
-  // Conexão Asaas unificada (E7, 06/11/2026): aviso de cobrança do CRM
-  // (referência p2;/c1;) vai também ao CRM, quando a agência unificou. O
-  // caminho do aviso aqui é o de sempre; o repasse é depois do COMMIT, só do
-  // aviso novo (o repetido parou acima) e nunca derruba o aviso.
-  if (resultado.processado && plataforma === 'asaas') {
-    await import('../asaas-unificado/servidor')
-      .then(m => m.repassarAvisoAoCrm(tenantId, plataforma, evento))
-      .catch(e => console.error('[asaas-unificado] repasse ao CRM:', e instanceof Error ? e.message : e));
-  }
-  return resultado;
 }
 
 export interface ResultadoImportacao {
@@ -969,8 +919,6 @@ export interface ResultadoImportacao {
   atualizadas: number;
   caixa_movido: number;
   erros: string[];
-  /** Cobranças emitidas pelo financeiro que vieram junto e foram puladas (E3). */
-  cobrancas_do_financeiro?: number;
 }
 
 /**
@@ -1002,13 +950,6 @@ export async function importarPeriodo(
   for (const t of transacoes) {
     if (t.moeda && t.moeda !== 'BRL') {
       saida.erros.push(`Transação ${t.id_transacao} em ${t.moeda}: precisa de câmbio informado.`);
-      continue;
-    }
-    // Cobrança emitida pelo financeiro (E3) não é venda: quem cuida dela é
-    // o aviso do provedor. Sem isto, importar o histórico do Asaas criaria
-    // uma "venda direta" para cada boleto que a própria agência emitiu.
-    if (await transacaoEhDeCobranca(pool as unknown as ExecutorSQL, tenantId, plataforma, t)) {
-      saida.cobrancas_do_financeiro = (saida.cobrancas_do_financeiro ?? 0) + 1;
       continue;
     }
     try {
@@ -1268,12 +1209,7 @@ export async function absorverDuplicata(
   let movido = 0;
   if (creditado !== 0) {
     const banco = contas.find(c => c.conta_bancaria_id)?.conta_bancaria_id || contaBancariaPadrao;
-    await aplicarMovimentoCaixaAtomico(tenantId, banco, -creditado, exec, {
-      tipo: 'plataforma',
-      tabela: 'plataformas_transacoes',
-      id: secundaria,
-      descricao: `${plataforma}: transação duplicada absorvida (estorno do crédito)`,
-    });
+    await aplicarMovimentoCaixaAtomico(tenantId, banco, -creditado, exec);
     movido = -creditado;
   }
 

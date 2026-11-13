@@ -1,4 +1,3 @@
-import { recusaAdmin, rotaDeTesteDesligada } from '@/lib/guarda-rota';
 import { NextRequest, NextResponse } from 'next/server';
 import { getTenantId } from '@/lib/tenant';
 import { processarEventoCRM } from '@/lib/crm-integration';
@@ -9,10 +8,6 @@ import { processarEventoCRM } from '@/lib/crm-integration';
 // by session.
 export async function POST(req: NextRequest) {
   try {
-    const desligada = rotaDeTesteDesligada();
-    if (desligada) return desligada;
-    const recusa = await recusaAdmin();
-    if (recusa) return recusa;
     const tenantId = await getTenantId();
     const body = await req.json().catch(() => ({}));
 

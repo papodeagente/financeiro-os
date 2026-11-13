@@ -11,7 +11,6 @@ import { loadEntities, saveEntity, updateEntity, deleteEntity } from '@/lib/crm-
 import { PageHeader } from '@/components/PageHeader';
 import { DataTable, DataTableColumn } from '@/components/ui/data-table';
 import { toast } from '@/lib/toast';
-import { HistoricoRecolhivel } from '@/components/fin/HistoricoDoRegistro';
 
 const TIPO_OPTIONS: { value: TipoFornecedor; label: string }[] = [
   { value: 'OPERADORA', label: 'Operadora' },
@@ -646,9 +645,6 @@ export default function FornecedoresPage() {
                 {saving ? 'Salvando...' : editingId ? 'Atualizar' : 'Salvar'}
               </Button>
             </div>
-            {editingId ? (
-              <div className="mt-4"><HistoricoRecolhivel entidade="fornecedores_crm" id={editingId} /></div>
-            ) : null}
           </CardContent>
         </Card>
       )}

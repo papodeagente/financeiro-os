@@ -1,18 +1,16 @@
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
-import { recusaAdmin } from '@/lib/guarda-rota';
-import { lerConfigApis, paraTela, salvarConfigApis, type Consulta } from '@/lib/config-apis';
 
-// A tela recebe as chaves só mascaradas, e gravar exige administrador.
-// Detalhes em src/lib/config-apis.ts.
+const CONFIG_ID = 'apis-config-singleton';
+
 export async function GET() {
   try {
     await initDB();
     if (!pool) return NextResponse.json(null);
     const tenantId = await getTenantId();
-    const cfg = await lerConfigApis(pool as unknown as Consulta, tenantId);
-    return NextResponse.json(Object.keys(cfg).length > 0 ? paraTela(cfg) : null);
+    const { rows } = await pool.query(`SELECT data FROM config_apis WHERE id = $1 AND tenant_id = $2`, [CONFIG_ID, tenantId]);
+    return NextResponse.json(rows.length > 0 ? rows[0].data : null);
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Error' }, { status: 500 });
   }
@@ -21,12 +19,31 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     await initDB();
-    const recusa = await recusaAdmin();
-    if (recusa) return recusa;
     const data = await req.json();
-    if (!pool) return NextResponse.json({ error: 'Banco de dados indisponivel' }, { status: 503 });
+    if (!pool) return NextResponse.json(data);
     const tenantId = await getTenantId();
-    return NextResponse.json(await salvarConfigApis(pool as unknown as Consulta, tenantId, data));
+    // Antes da PK composta existia UMA linha de config_apis no banco inteiro:
+    // o último tenant a salvar sobrescrevia o conteúdo, o tenant_id continuava
+    // do primeiro, e as chaves de API de uma agência passavam a ser lidas por
+    // outra.
+    //
+    // Atualiza e, se não existir, insere — em vez de ON CONFLICT. A cláusula
+    // de conflito precisa casar exatamente com a chave única existente, então
+    // ela amarraria esta rota ao sucesso da promoção de PK: com a PK antiga,
+    // ON CONFLICT (id, tenant_id) falha; com a nova, ON CONFLICT (id) falha.
+    // Assim a tela salva corretamente em qualquer um dos dois estados.
+    const atualizado = await pool.query(
+      `UPDATE config_apis SET data = $3, updated_at = NOW()
+        WHERE id = $1 AND tenant_id = $2`,
+      [CONFIG_ID, tenantId, JSON.stringify(data)]
+    );
+    if ((atualizado.rowCount ?? 0) === 0) {
+      await pool.query(
+        `INSERT INTO config_apis (id, tenant_id, data, updated_at) VALUES ($1, $2, $3, NOW())`,
+        [CONFIG_ID, tenantId, JSON.stringify(data)]
+      );
+    }
+    return NextResponse.json(data);
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Error' }, { status: 500 });
   }

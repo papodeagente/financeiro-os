@@ -8,7 +8,6 @@ import { Menu } from '@base-ui/react/menu';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { IconeDeIndicador, type TomDoIcone } from '@/components/fin/MetricCard';
-import { SeletorDeEmpresas } from '@/components/fin/SeletorDeEmpresas';
 
 export type PageHeaderProps = {
   titulo: string;
@@ -32,11 +31,6 @@ export type PageHeaderProps = {
   };
   acoesSecundarias?: { rotulo: string; href?: string; onClick?: () => void }[];
   badge?: React.ReactNode;
-  /**
-   * Seletor de empresas ao lado do título (E7). Só desenha quando a agência
-   * tem duas ou mais empresas; com uma, a tela fica exatamente como era.
-   */
-  empresas?: boolean;
   /** Carimbo honesto: só é escrito quando load() TERMINOU com sucesso. */
   atualizadoEm?: Date | null;
   onRecarregar?: () => Promise<void>;
@@ -91,7 +85,6 @@ export function PageHeader({
   acaoPrimaria,
   acoesSecundarias,
   badge,
-  empresas,
   atualizadoEm,
   onRecarregar,
 }: PageHeaderProps) {
@@ -123,7 +116,6 @@ export function PageHeader({
           <div className="flex min-w-0 flex-wrap items-center gap-[var(--fin-s-2)]">
             <h1 className="fin-t-title min-w-0 truncate text-[var(--fin-text)]">{titulo}</h1>
             {badge}
-            {empresas ? <SeletorDeEmpresas /> : null}
           </div>
           {subtitulo ? (
             <p className="fin-t-caption text-[var(--fin-text-3)]">{subtitulo}</p>

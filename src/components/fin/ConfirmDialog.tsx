@@ -23,12 +23,8 @@ export type ConfirmDialogProps = {
   /** Efeito da operação escrito por extenso. Ver seção 9.10. */
   previa?: React.ReactNode;
   confirmarRotulo: string;
-  /** Rótulo do botão que fecha sem fazer nada. Padrão: "Cancelar". */
-  voltarRotulo?: string;
   tone?: 'padrao' | 'destrutivo';
   processando?: boolean;
-  /** Falta algo para confirmar (ex.: o motivo). Só o botão de confirmar fica fechado. */
-  confirmarDesabilitado?: boolean;
   onConfirmar: () => Promise<void> | void;
 };
 
@@ -42,10 +38,8 @@ export function ConfirmDialog({
   detalhes,
   previa,
   confirmarRotulo,
-  voltarRotulo = 'Cancelar',
   tone = 'padrao',
   processando = false,
-  confirmarDesabilitado = false,
   onConfirmar,
 }: ConfirmDialogProps) {
   const destrutivo = tone === 'destrutivo';
@@ -110,7 +104,7 @@ export function ConfirmDialog({
             disabled={processando}
             onClick={() => onOpenChange(false)}
           >
-            {voltarRotulo}
+            Cancelar
           </Button>
           <Button
             className={cn(
@@ -120,7 +114,7 @@ export function ConfirmDialog({
                 ? 'bg-[var(--fin-negative)] hover:bg-[var(--fin-negative-text)]'
                 : 'bg-[var(--fin-accent)] hover:bg-[var(--fin-accent-hover)]'
             )}
-            disabled={processando || confirmarDesabilitado}
+            disabled={processando}
             aria-busy={processando}
             onClick={() => {
               void onConfirmar();

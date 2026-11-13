@@ -20,7 +20,6 @@ const { aplicarMovimentoCaixaAtomico, atualizarContaComGuarda, estornarBaixaDaCo
         calcularMovimentos, valorNoCaixa, STATUS_BAIXADOS } =
   await import(modUrl);
 
-const ORIGEM = { tipo: 'ajuste', tabela: 'teste', id: 'teste' };
 let falhas = 0, total = 0;
 function eq(a, b, label) {
   total++;
@@ -59,32 +58,32 @@ const novaConta = (id, tenant, data) =>
 
 console.log('--- aplicarMovimentoCaixaAtomico (código real) ---');
 await novaConta('c1', 't1', { nome: 'Inter', saldo_inicial: 1000, saldo_atual: 1000 });
-eq(await aplicarMovimentoCaixaAtomico('t1', 'c1', 250.55, exec, ORIGEM), true, 'crédito devolve true');
+eq(await aplicarMovimentoCaixaAtomico('t1', 'c1', 250.55, exec), true, 'crédito devolve true');
 eq(await saldo('c1'), 1250.55, 'crédito soma ao saldo');
-await aplicarMovimentoCaixaAtomico('t1', 'c1', -300.05, exec, ORIGEM);
+await aplicarMovimentoCaixaAtomico('t1', 'c1', -300.05, exec);
 eq(await saldo('c1'), 950.5, 'débito subtrai do saldo');
 
-for (let i = 0; i < 300; i++) await aplicarMovimentoCaixaAtomico('t1', 'c1', 0.01, exec, ORIGEM);
+for (let i = 0; i < 300; i++) await aplicarMovimentoCaixaAtomico('t1', 'c1', 0.01, exec);
 eq(await saldo('c1'), 953.5, '300 x R$0,01 = +R$3,00 exato (numeric, sem erro de float)');
 
-eq(await aplicarMovimentoCaixaAtomico('t1', 'c1', 0, exec, ORIGEM), false, 'delta zero não gera escrita');
+eq(await aplicarMovimentoCaixaAtomico('t1', 'c1', 0, exec), false, 'delta zero não gera escrita');
 eq(await saldo('c1'), 953.5, 'saldo intacto após delta zero');
 
 console.log('--- dados legados / defensivos ---');
 await novaConta('c2', 't1', { nome: 'Sem saldo' });
-await aplicarMovimentoCaixaAtomico('t1', 'c2', 100, exec, ORIGEM);
+await aplicarMovimentoCaixaAtomico('t1', 'c2', 100, exec);
 eq(await saldo('c2'), 100, 'saldo_atual ausente vira 0 + delta (não quebra)');
 
 await novaConta('c3', 't1', { nome: 'Texto', saldo_atual: 'abc' });
-await aplicarMovimentoCaixaAtomico('t1', 'c3', 50, exec, ORIGEM);
+await aplicarMovimentoCaixaAtomico('t1', 'c3', 50, exec);
 eq(await saldo('c3'), 50, 'saldo textual inválido não derruba a query');
 
 await novaConta('c4', 't1', { nome: 'String num', saldo_atual: '250.75' });
-await aplicarMovimentoCaixaAtomico('t1', 'c4', 10, exec, ORIGEM);
+await aplicarMovimentoCaixaAtomico('t1', 'c4', 10, exec);
 eq(await saldo('c4'), 260.75, 'saldo gravado como string numérica é respeitado');
 
 console.log('--- isolamento de tenant ---');
-eq(await aplicarMovimentoCaixaAtomico('OUTRO', 'c1', 9999, exec, ORIGEM), false, 'tenant errado não move saldo');
+eq(await aplicarMovimentoCaixaAtomico('OUTRO', 'c1', 9999, exec), false, 'tenant errado não move saldo');
 eq(await saldo('c1'), 953.5, 'saldo intacto após tentativa cross-tenant');
 
 console.log('--- atualizarContaComGuarda: baixa idempotente ---');

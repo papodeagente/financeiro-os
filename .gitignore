@@ -46,7 +46,3 @@ next-env.d.ts
 
 # Comprovantes gravados em desenvolvimento
 .data/
-.data/
-
-# Cópias de trabalho dos agentes
-.claude/worktrees/

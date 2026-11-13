@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { recusaFinanceira } from '@/lib/guarda-rota';
 import pool, { initDB } from '@/lib/db';
 import { generateId, minPositivo } from '@/lib/utils';
 import { hojeISO } from '@/lib/money';
@@ -9,9 +8,6 @@ import type { VendaCRM, ProdutoVenda } from '@/lib/crm-types';
 import { getTenantId } from '@/lib/tenant';
 
 export async function POST(req: Request) {
-  // Cria venda e contas a receber/pagar: é escrita financeira (05/11/2026).
-  const recusa = await recusaFinanceira('escrever');
-  if (recusa) return recusa;
   try {
     await initDB();
     if (!pool) return NextResponse.json({ error: 'DB not initialized' }, { status: 500 });

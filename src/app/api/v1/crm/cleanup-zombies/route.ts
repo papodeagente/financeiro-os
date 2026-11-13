@@ -1,4 +1,3 @@
-import { recusaAdmin } from '@/lib/guarda-rota';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { getTenantId } from '@/lib/tenant';
@@ -13,8 +12,6 @@ import { getTenantId } from '@/lib/tenant';
 // Auth: requires session (tenant scope), so the caller must be logged in.
 export async function POST() {
   try {
-    const recusa = await recusaAdmin();
-    if (recusa) return recusa;
     if (!pool) return NextResponse.json({ error: 'no db' }, { status: 503 });
     await initDB();
     const tenantId = await getTenantId();

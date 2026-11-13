@@ -1,4 +1,3 @@
-import { chaveOpenAI, type Consulta } from '@/lib/config-apis';
 import { NextResponse } from 'next/server';
 import { writeFile, mkdir, unlink } from 'fs/promises';
 import path from 'path';
@@ -22,9 +21,17 @@ async function getUploadDir(): Promise<string> {
 async function getOpenAIConfig(tenantId: string) {
   await initDB();
   if (!pool) return null;
-  const o = await chaveOpenAI(pool as unknown as Consulta, tenantId);
-  if (!o) return null;
-  return { api_key: o.api_key, modelo: (o.modelo_imagem as string) || 'gpt-image-1' };
+  const { rows } = await pool.query(
+    `SELECT data FROM config_apis WHERE id = 'apis-config-singleton' AND tenant_id = $1`,
+    [tenantId],
+  );
+  if (rows.length === 0) return null;
+  const cfg = rows[0].data;
+  if (!cfg.openai?.ativo || !cfg.openai?.api_key) return null;
+  return {
+    api_key: cfg.openai.api_key as string,
+    modelo: (cfg.openai.modelo_imagem as string) || 'gpt-image-1',
+  };
 }
 
 interface GenerateBody {

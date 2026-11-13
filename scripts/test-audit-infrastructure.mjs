@@ -86,9 +86,7 @@ function loadApplication() {
     }).outputText;
     vm.runInNewContext(source, {
       module: loadedModule, exports: loadedModule.exports, console, Buffer,
-      // db.ts importa módulos que leem process.cwd() ao carregar (ex.: arquivos.ts);
-      // o processo falso só precisa do mínimo para o initDB rodar isolado.
-      process: { env: { DATABASE_URL: 'isolated-test' }, cwd: () => root },
+      process: { env: { DATABASE_URL: 'isolated-test' } },
       require(name) {
         if (name === './audit-pool') return { AuditPool: IsolatedPool };
         if (name === './auth') return { getSession: async () => null, hashPassword: async () => 'isolated' };

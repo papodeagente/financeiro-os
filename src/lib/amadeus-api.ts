@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { getCached, setCache } from './api-cache';
 
 const TTL_FLIGHTS = 24 * 3600; // 24h
@@ -11,28 +10,15 @@ interface AmadeusConfig {
   ambiente: 'test' | 'production';
 }
 
-/**
- * Chave do cache do token: ambiente + identidade da credencial (hash, nunca o
- * segredo). Antes era só o ambiente, e o token de uma agência servia para a
- * credencial de outra; o teste de conexão dava "ok" sem nem chamar o
- * provedor (auditoria 04/11/2026, FIN2-19).
- */
-export function chaveDoTokenAmadeus(config: AmadeusConfig): string {
-  const identidade = createHash('sha256').update(`${config.api_key}\n${config.api_secret}`).digest('hex').slice(0, 32);
-  return `amadeus_token:${config.ambiente}:${identidade}`;
-}
-
-async function getAccessToken(config: AmadeusConfig, opcoes: { semCache?: boolean } = {}): Promise<string> {
+async function getAccessToken(config: AmadeusConfig): Promise<string> {
   const baseUrl = config.ambiente === 'production'
     ? 'https://api.amadeus.com'
     : 'https://test.api.amadeus.com';
 
-  const cacheKey = chaveDoTokenAmadeus(config);
-  if (!opcoes.semCache) {
-    const cached = await getCached(cacheKey);
-    if (cached && typeof cached === 'object' && 'access_token' in (cached as Record<string, unknown>)) {
-      return (cached as Record<string, string>).access_token;
-    }
+  const cacheKey = `amadeus_token:${config.ambiente}`;
+  const cached = await getCached(cacheKey);
+  if (cached && typeof cached === 'object' && 'access_token' in (cached as Record<string, unknown>)) {
+    return (cached as Record<string, string>).access_token;
   }
 
   const res = await fetch(`${baseUrl}/v1/security/oauth2/token`, {
@@ -193,8 +179,7 @@ export async function searchHotels(config: AmadeusConfig, params: {
 
 export async function testConnection(config: AmadeusConfig): Promise<{ ok: boolean; error?: string }> {
   try {
-    // O teste confere a credencial DE VERDADE: nunca responde pelo cache.
-    await getAccessToken(config, { semCache: true });
+    await getAccessToken(config);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Falha na conexão' };

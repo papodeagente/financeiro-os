@@ -6,8 +6,6 @@ import { getTenantId } from '@/lib/tenant';
 import { emitirEventoCRM } from '@/lib/crm-integration';
 import {
   recalcularVagasPeriodo,
-  parcelasDaConfirmacao,
-  MAX_PARCELAS,
   registrarEvento,
   type ReservaData,
   type PeriodoVagasData,
@@ -62,7 +60,7 @@ export async function POST(
          FROM grupo_reservas r
          LEFT JOIN clientes c ON c.id = r.cliente_id AND c.tenant_id = r.tenant_id
         WHERE r.id = $1 AND r.grupo_id = $2 AND r.tenant_id = $3
-        FOR UPDATE OF r`,
+        FOR UPDATE`,
       [reserva_id, grupo_id, tenantId],
     );
     if (rRows.length === 0) {
@@ -115,13 +113,7 @@ export async function POST(
     const numero = `VEN-${String(parseInt(countRows[0].c) + 1).padStart(4, '0')}`;
     const vendaId = generateId();
     const valor = reservaData.valor_cobrado || 0;
-    // Reserva gravada antes do teto de 24 confirma com as parcelas que tinha,
-    // até o limite de sanidade, antes de qualquer escrita (FIN2-13).
-    const parcelas = parcelasDaConfirmacao(reservaData.parcelas);
-    if (parcelas === null) {
-      await client.query('ROLLBACK');
-      return NextResponse.json({ error: `Esta reserva tem parcelas demais. Edite para no máximo ${MAX_PARCELAS} e confirme de novo.` }, { status: 400 });
-    }
+    const parcelas = Math.max(1, reservaData.parcelas || 1);
 
     const venda = {
       id: vendaId,

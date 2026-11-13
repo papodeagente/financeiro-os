@@ -3,14 +3,10 @@ import pool, { initDB } from '@/lib/db';
 import { emitirEventoCRM } from '@/lib/crm-integration';
 import { getTenantId } from '@/lib/tenant';
 import { getSession } from '@/lib/auth';
-import { podeVerTodasVendas, podeVerVenda } from '@/lib/permissoes';
+import { podeVerTodasVendas } from '@/lib/permissoes';
 import { gerarContasVenda, receberPorFornecedorDe, type ItemVendaInput, type FornecedorInfo } from '@/lib/venda-financeiro';
 import { STATUS_BAIXADOS } from '@/lib/caixa-atomico';
 import { hojeISO } from '@/lib/money';
-import type { ExecutorSQL } from '@/lib/caixa-atomico';
-import { situacaoDaVenda, versaoDoModelo } from '@/lib/venda-servidor';
-import { filtrarPorEmpresa } from '@/lib/empresas';
-import { escopoDaSessao, type ExecutorEmpresas } from '@/lib/empresas-servidor';
 
 const TABLE = 'vendas_crm';
 const INDEX_COLS = ['cliente_id', 'vendedor_id', 'status'];
@@ -43,11 +39,6 @@ export async function GET() {
     const tenantId = await getTenantId();
     const session = await getSession();
 
-    // Várias empresas (E7): só as vendas das empresas marcadas e liberadas.
-    // Uma empresa só: nada muda.
-    const { visiveis } = await escopoDaSessao(session, pool as unknown as ExecutorEmpresas);
-    const recortar = (lista: Record<string, unknown>[]) => filtrarPorEmpresa(lista, { tipo: 'registro' }, visiveis);
-
     // VENDEDOR só vê as próprias vendas (vendedor_id = session.userId).
     // ADMIN/OPERADOR veem tudo do tenant.
     if (session && !podeVerTodasVendas(session)) {
@@ -55,11 +46,11 @@ export async function GET() {
         `SELECT data FROM ${TABLE} WHERE tenant_id = $1 AND vendedor_id = $2 ORDER BY created_at DESC`,
         [tenantId, session.userId || ''],
       );
-      return NextResponse.json(recortar(rows.map(r => r.data as Record<string, unknown>)));
+      return NextResponse.json(rows.map(r => r.data));
     }
 
     const { rows } = await pool.query(`SELECT data FROM ${TABLE} WHERE tenant_id = $1 ORDER BY created_at DESC`, [tenantId]);
-    return NextResponse.json(recortar(rows.map(r => r.data as Record<string, unknown>)));
+    return NextResponse.json(rows.map(r => r.data));
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Unknown error';
     return NextResponse.json({ error: msg }, { status: 500 });
@@ -76,36 +67,6 @@ export async function POST(req: Request) {
 
     // Detecta fluxo: se body.itens existe → novo fluxo transacional
     const hasItens = Array.isArray(body.itens) && body.itens.length > 0;
-
-    // O POST é upsert pelo id do corpo. Quem só vê as próprias vendas não
-    // sobrescreve a venda de um colega nem lança venda no nome de outro
-    // (auditoria 04/11/2026, FIN2-04).
-    const sessao = await getSession();
-    if (!sessao) return NextResponse.json({ error: 'Sessao necessaria' }, { status: 401 });
-    const venda = (hasItens ? body.venda : body) as Record<string, unknown> | undefined;
-    if (!venda || typeof venda !== 'object' || typeof venda.id !== 'string' || !venda.id) {
-      return NextResponse.json({ error: 'Invalid payload: id is required' }, { status: 400 });
-    }
-    const { rows: existente } = await pool.query(
-      `SELECT vendedor_id FROM ${TABLE} WHERE id = $1 AND tenant_id = $2`, [venda.id, tenantId],
-    );
-    if (existente.length > 0 && !podeVerVenda(sessao, String(existente[0].vendedor_id ?? ''))) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-    if (!podeVerTodasVendas(sessao)) {
-      venda.vendedor_id = existente.length > 0 ? String(existente[0].vendedor_id ?? '') : sessao.userId;
-    }
-    // Venda completa (E5, 05/11/2026): a venda fechada não muda, e a venda do
-    // modelo completo é editada na ficha dela (as contas seguem outro gerador).
-    if (existente.length > 0) {
-      const exec = pool as unknown as ExecutorSQL;
-      if ((await situacaoDaVenda(exec, tenantId, venda.id)) === 'FECHADA') {
-        return NextResponse.json({ error: 'A venda está fechada. Reabra a venda para mudar.', codigo: 'VENDA_FECHADA' }, { status: 409 });
-      }
-      if ((await versaoDoModelo(exec, tenantId, venda.id)) === 2) {
-        return NextResponse.json({ error: 'Esta venda é editada na ficha da venda.', codigo: 'VENDA_COMPLETA' }, { status: 409 });
-      }
-    }
 
     if (hasItens) {
       return await postComItens(body, tenantId);

@@ -15,10 +15,7 @@ import { addDias, addMeses, dataSegura, hojeISO } from '@/lib/money';
 
 export type PeriodoChave =
   | 'MES_ATUAL' | 'PROX_30' | 'PROX_90' | 'VENCIDOS'
-  | 'MES_PASSADO' | 'TUDO' | 'PERSONALIZADO'
-  // Atalhos de 06/11/2026 (E7). Cada tela escolhe quais oferece em `opcoes`.
-  | 'AMANHA' | 'SEMANA_ATUAL' | 'PROX_MES' | 'ANO_ATUAL'
-  | 'PROX_7' | 'PROX_14' | 'ULT_7' | 'ULT_14' | 'ULT_30';
+  | 'MES_PASSADO' | 'TUDO' | 'PERSONALIZADO';
 
 /** Apelido usado pela FilterBar. Mesmo tipo, nome alternativo da spec. */
 export type PeriodoValor = PeriodoChave;
@@ -46,15 +43,6 @@ export const ROTULO_PERIODO: Record<PeriodoChave, string> = {
   MES_PASSADO: 'Mês passado',
   TUDO: 'Todo o período',
   PERSONALIZADO: 'Período personalizado',
-  AMANHA: 'Amanhã',
-  SEMANA_ATUAL: 'Esta semana',
-  PROX_MES: 'Próximo mês',
-  ANO_ATUAL: 'Este ano',
-  PROX_7: 'Próximos 7 dias',
-  PROX_14: 'Próximos 14 dias',
-  ULT_7: 'Últimos 7 dias',
-  ULT_14: 'Últimos 14 dias',
-  ULT_30: 'Últimos 30 dias',
 };
 
 export const OPCOES_PERIODO_PADRAO: PeriodoChave[] = [
@@ -71,48 +59,8 @@ export function resolverPeriodo(
   de?: string,
   ate?: string,
 ): PeriodoRange {
-  return resolverPeriodoEm(chave, hojeISO(), de, ate);
-}
-
-/** Dia da semana de uma data civil (0 = domingo), sem fuso. */
-function diaDaSemana(iso: string): number {
-  const [a, m, d] = iso.split('-').map(Number);
-  return new Date(Date.UTC(a, m - 1, d)).getUTCDay();
-}
-
-/** Mesmo que resolverPeriodo, com o "hoje" informado (testes e servidor). */
-export function resolverPeriodoEm(
-  chave: PeriodoChave,
-  hoje: string,
-  de?: string,
-  ate?: string,
-): PeriodoRange {
+  const hoje = hojeISO();
   const [ano, mes] = hoje.split('-').map(Number);
-
-  if (chave === 'AMANHA') {
-    const amanha = addDias(hoje, 1);
-    return { de: amanha, ate: amanha };
-  }
-  if (chave === 'SEMANA_ATUAL') {
-    // Semana do calendário brasileiro: de domingo a sábado.
-    const domingo = addDias(hoje, -diaDaSemana(hoje));
-    return { de: domingo, ate: addDias(domingo, 6) };
-  }
-  if (chave === 'PROX_MES') {
-    const ini = addMeses(dataSegura(ano, mes, 1), 1);
-    const [anoP, mesP] = ini.split('-').map(Number);
-    return { de: ini, ate: dataSegura(anoP, mesP, 31) };
-  }
-  if (chave === 'ANO_ATUAL') {
-    return { de: dataSegura(ano, 1, 1), ate: dataSegura(ano, 12, 31) };
-  }
-  if (chave === 'PROX_7' || chave === 'PROX_14') {
-    return { de: hoje, ate: addDias(hoje, chave === 'PROX_7' ? 7 : 14) };
-  }
-  if (chave === 'ULT_7' || chave === 'ULT_14' || chave === 'ULT_30') {
-    const n = chave === 'ULT_7' ? 7 : chave === 'ULT_14' ? 14 : 30;
-    return { de: addDias(hoje, -n), ate: hoje };
-  }
 
   if (chave === 'MES_ATUAL') {
     return { de: dataSegura(ano, mes, 1), ate: dataSegura(ano, mes, 31) };

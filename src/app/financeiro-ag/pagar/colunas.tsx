@@ -1,6 +1,6 @@
 'use client';
 
-import { Paperclip, Pencil, Printer, Trash2 } from 'lucide-react';
+import { Paperclip, Pencil, Trash2 } from 'lucide-react';
 
 import type { ContaPagar } from '@/lib/crm-types';
 import type { FinColuna } from '@/components/fin/FinTable';
@@ -27,8 +27,6 @@ export type DependenciasDasColunas = {
   onPagar: (i: ContaPagar) => void;
   onEditar: (i: ContaPagar) => void;
   onExcluir: (i: ContaPagar) => void;
-  /** Imprimir cheque (E7, frente C). Sem ele, a coluna fica como sempre. */
-  onImprimirCheque?: (i: ContaPagar) => void;
 };
 
 const FOCO =
@@ -222,7 +220,7 @@ export function criarColunas(dep: DependenciasDasColunas): FinColuna<ContaPagar>
       id: 'acoes',
       cabecalho: 'Ações',
       tipo: 'acoes',
-      minWidth: dep.onImprimirCheque ? 220 : 176,
+      minWidth: 176,
       render: (i) => (
         <>
           {dep.podePagar(i) ? (
@@ -234,19 +232,6 @@ export function criarColunas(dep: DependenciasDasColunas): FinColuna<ContaPagar>
               onClick={() => dep.onPagar(i)}
             >
               Pagar
-            </Button>
-          ) : null}
-          {dep.onImprimirCheque && dep.podePagar(i) ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={BOTAO_ICONE}
-              aria-label={`Imprimir cheque para a conta de ${nomeDoFornecedor(i)}`}
-              title="Imprimir cheque"
-              onClick={() => dep.onImprimirCheque?.(i)}
-            >
-              <Printer aria-hidden="true" className="size-4" />
             </Button>
           ) : null}
           <Button

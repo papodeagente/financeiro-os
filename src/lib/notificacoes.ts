@@ -1,5 +1,4 @@
 import type { PoolClient } from 'pg';
-import { nadaSai } from './nada-sai';
 import pool from './db';
 import { generateId } from './utils';
 import { podeVerTodasVendas } from './permissoes';
@@ -31,21 +30,11 @@ const safeLocalLink = (link?: string) => {
   return value.slice(0, 1_000);
 };
 
-/**
- * `executor` (opcional, 05/11/2026): a conexão de quem chama — a tarefa do
- * agendador grava pela conexão dela. Sem ele, o pool, como antes.
- */
-export async function criarNotificacao(
-  input: CriarNotificacaoInput,
-  executor?: { query(text: string, values?: unknown[]): Promise<unknown> },
-): Promise<void> {
-  const alvo = executor ?? pool;
-  if (!alvo || !input.tenantId || !TIPOS_NOTIFICACAO.some(item => item.tipo === input.tipo)) return;
-  // Importação/ensaio em andamento: nenhuma notificação (05/11/2026).
-  if (nadaSai()) return;
+export async function criarNotificacao(input: CriarNotificacaoInput): Promise<void> {
+  if (!pool || !input.tenantId || !TIPOS_NOTIFICACAO.some(item => item.tipo === input.tipo)) return;
   try {
     const key = input.chaveDeduplicacao?.trim().slice(0, 500) || null;
-    await alvo.query(
+    await pool.query(
       `INSERT INTO notificacoes
          (id, tenant_id, tipo, titulo, descricao, link, vendedor_id, lida, data, chave_deduplicacao)
        VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE, $8::jsonb, $9)

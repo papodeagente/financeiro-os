@@ -38,17 +38,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      // Documento que a plataforma anexou foi registrado como dela
-      // ('__platform__'): passa a ser da agência do chamado, senão a agência
-      // não consegue abrir o anexo da resposta (auditoria 04/11/2026, FIN-08).
-      for (const a of anexos as Array<{ url?: unknown }>) {
-        const m = typeof a?.url === 'string' ? /^\/api\/arquivos\/([^/?#]+)/.exec(a.url) : null;
-        if (!m) continue;
-        await client.query(
-          `UPDATE arquivos_privados SET tenant_id = $2 WHERE nome = $1 AND tenant_id = '__platform__'`,
-          [m[1], t[0].tenant_id],
-        );
-      }
       await client.query(
         `INSERT INTO support_ticket_messages
            (id, ticket_id, tenant_id, from_type, from_id, from_nome, mensagem, anexos)

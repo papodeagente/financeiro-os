@@ -1,10 +1,9 @@
-import { vendaAutorizada } from '@/lib/venda-autorizada';
 import { NextResponse } from 'next/server';
 import pool, { initDB } from '@/lib/db';
 import { emitirEventoCRM } from '@/lib/crm-integration';
 import { getTenantId } from '@/lib/tenant';
 import { getSession } from '@/lib/auth';
-import { podeVerTodasVendas, podeExcluir } from '@/lib/permissoes';
+import { podeVerVenda, podeExcluir } from '@/lib/permissoes';
 import { emTransacao, estornarBaixaDaConta, type ExecutorSQL } from '@/lib/caixa-atomico';
 import { cancelarContasDaVenda } from '@/lib/venda-cancelamento';
 
@@ -18,10 +17,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     await initDB();
     const { id } = await params;
     if (!pool) return NextResponse.json(null);
+    const tenantId = await getTenantId();
+    const session = await getSession();
+    const { rows } = await pool.query(`SELECT data FROM ${TABLE} WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+    if (rows.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const venda = rows[0].data;
     // Vendedor só vê a própria venda — 404 (mesmo comportamento de não-existente)
-    const acesso = await vendaAutorizada(id);
-    if (acesso instanceof NextResponse) return acesso;
-    return NextResponse.json(acesso.venda);
+    if (session && !podeVerVenda(session, venda.vendedor_id || '')) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+    return NextResponse.json(venda);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Unknown error';
     return NextResponse.json({ error: msg }, { status: 500 });
@@ -35,15 +40,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     const item = await req.json();
     if (!pool) return NextResponse.json(item);
 
-    const acesso = await vendaAutorizada(id);
-    if (acesso instanceof NextResponse) return acesso;
-    const { tenantId, sessao, venda: anterior } = acesso;
-    // Quem só vê as próprias vendas não passa a venda para outra pessoa
-    // (nem tira dela): o vendedor_id fica o que estava.
-    if (!podeVerTodasVendas(sessao)) {
-      (item as Record<string, unknown>).vendedor_id = anterior.vendedor_id ?? '';
-    }
-    const prevStatus = (anterior.status as string | undefined) ?? null;
+    const tenantId = await getTenantId();
+    // Get previous status
+    const { rows: prev } = await pool.query(`SELECT status FROM ${TABLE} WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+    const prevStatus = prev.length > 0 ? prev[0].status : null;
 
     const paramValues: unknown[] = [id, JSON.stringify(item)];
     const setClauses = ['data = $2', 'updated_at = NOW()'];

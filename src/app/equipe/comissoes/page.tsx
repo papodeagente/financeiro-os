@@ -10,7 +10,6 @@ import { loadEntities, saveEntity, updateEntity, deleteEntity, loadAgencia, load
 import { proximaDataPagamento, descreverAgenda } from '@/lib/comissao-agenda';
 import { calcularComissaoDoMes, chaveAcumulado } from '@/lib/comissao-acumulada';
 import { normalizarRegras, repartirVenda, type ParteDaVenda } from '@/lib/comissao-regras';
-import { planoUsaMrr } from '@/lib/plano-comissao';
 import {
   round2, num, somaPor, percentual, paraBRL, hojeISO, dataLocal, mesDe,
 } from '@/lib/money';
@@ -172,11 +171,8 @@ export default function ComissoesPage() {
     comissoesPorVenda: Map<string, number>,
     cacheItens: Map<string, ItemVendaData[]>,
   ): Promise<{ valor: number } | { erro: string }> {
-    // Cancelamento com "manter na meta" (E5, parte D): o que saiu da venda
-    // continua contando para a comissão e a meta do vendedor.
-    const mantida = (venda as VendaCRM & { meta_mantida?: { valor_final?: number; valor_total_custo?: number } }).meta_mantida;
-    const valorFinal = round2(num(venda.valor_final) + num(mantida?.valor_final));
-    const custo = round2(num(venda.valor_total_custo) + num(mantida?.valor_total_custo));
+    const valorFinal = num(venda.valor_final);
+    const custo = num(venda.valor_total_custo);
 
     if (plano.base_calculo === 'VALOR_VENDA') return { valor: round2(valorFinal) };
 
@@ -253,7 +249,7 @@ export default function ComissoesPage() {
     }
 
     /** Apura a base da venda, ou devolve o motivo da pendência. */
-    async function montar(venda: VendaCRM, anterior?: ComissaoVenda): Promise<BaseApurada | { erro: string } | { ignorarMrr: true; plano: PlanoComissao }> {
+    async function montar(venda: VendaCRM, anterior?: ComissaoVenda): Promise<BaseApurada | { erro: string }> {
       // A equipe é uma lista só, vinda de `usuarios`, e é exatamente para
       // lá que venda.vendedor_id aponta quando a venda vem do CRM. Venda
       // antiga, gravada quando existia o cadastro paralelo, resolve pelos
@@ -277,10 +273,6 @@ export default function ComissoesPage() {
             : `vendedor ${vendedor.nome} está sem plano de comissão vinculado`,
         };
       }
-
-      // Este plano é apurado pelo motor de MRR, com uma linha mensal por
-      // vendedor. Ele nunca pode gerar também uma comissão por venda.
-      if (planoUsaMrr(plano)) return { ignorarMrr: true, plano };
 
       const base = await calcularValorBase(venda, plano, comissoesPorVenda, cacheItens);
       if ('erro' in base) return base;
@@ -333,17 +325,10 @@ export default function ComissoesPage() {
     // Feito antes de tudo: essas comissões saem do acumulado do mês.
     for (const c of comissoes) {
       if (c.status === 'CANCELADA') continue;
-      // A comissão por MRR e o extrato do CRM (conta do ecossistema) são do mês
-      // da pessoa, não de uma venda daqui: quem os calcula é a tela Comissão por
-      // MRR e a Área Comercial do CRM, nunca este motor.
-      if (c.origem === 'mrr' || c.origem === 'crm') continue;
       const venda = vendasById.get(c.venda_id);
       if (venda && venda.status !== 'CANCELADO') continue;
 
       const motivo = venda ? 'venda cancelada' : 'venda removida';
-      // O cancelamento pela venda (E5, parte D) já lançou o estorno a receber do vendedor.
-      const jaEstornada = Array.isArray((c as ComissaoVenda & { estornos?: unknown[] }).estornos) && ((c as ComissaoVenda & { estornos?: unknown[] }).estornos?.length ?? 0) > 0;
-      if (c.status === 'PAGA' && jaEstornada) continue;
       if (c.status === 'PAGA') {
         pend.push({ id: c.id, venda: c.venda_numero, motivo: `${motivo} com comissão JÁ PAGA — estornar manualmente` });
       } else {
@@ -372,22 +357,6 @@ export default function ComissoesPage() {
       const r = await montar(venda, anterior);
       if ('erro' in r) {
         pend.push({ id: anterior?.id ?? venda.id, venda: venda.numero, motivo: r.erro });
-        continue;
-      }
-      if ('ignorarMrr' in r) {
-        if (anterior?.status === 'CALCULADA') {
-          await updateEntity('comissoes', {
-            ...anterior,
-            status: 'CANCELADA',
-            observacoes: `${anterior.observacoes ? anterior.observacoes + ' | ' : ''}Cancelada automaticamente em ${hoje}: o plano ${r.plano.nome} usa a base MRR gerado.`,
-          });
-        } else if (anterior && anterior.status !== 'CANCELADA') {
-          pend.push({
-            id: anterior.id,
-            venda: venda.numero,
-            motivo: `o plano ${r.plano.nome} passou a usar MRR gerado, mas esta comissão já está ${anterior.status.toLowerCase()} — revise antes de cancelar`,
-          });
-        }
         continue;
       }
       apuradas.push(r);
@@ -452,9 +421,6 @@ export default function ComissoesPage() {
           // acumulado do mês pode ter subido a faixa DEPOIS da aprovação, e
           // aí existe complemento devido: dizer o número é obrigação.
           const diferenca = round2(nova.valor_comissao - round2(num(anterior.valor_comissao)));
-          // Queda que o cancelamento da venda já estornou (E5, parte D): nada a avisar.
-          const estornado = ((anterior as ComissaoVenda & { estornos?: Array<{ valor?: number }> }).estornos ?? []).reduce((a, x) => a + num(x.valor), 0);
-          if (diferenca < 0 && estornado > 0 && Math.abs(diferenca) <= round2(estornado) + 0.01) continue;
           const motivo = diferenca > 0
             ? `acumulado do mês ${BRL(resultado.base_acumulada)} subiu a faixa para ${nova.percentual_aplicado}% — complemento de ${BRL(diferenca)} devido (comissão ${anterior.status} mantida em ${BRL(num(anterior.valor_comissao))})`
             : diferenca < 0
@@ -578,7 +544,6 @@ export default function ComissoesPage() {
     const mapa = new Map<string, { nome: string; base: number; pct: number; vendas: number }>();
     for (const c of comissoes) {
       if (c.status === 'CANCELADA') continue;
-      if (c.origem === 'mrr' || c.origem === 'crm') continue; // a escada do MRR é outra (faixas da meta); o CRM manda pronta
       if (filterMonth && mesDe(c.data_venda) !== filterMonth) continue;
       const atual = mapa.get(c.vendedor_id) ?? { nome: c.vendedor_nome, base: 0, pct: 0, vendas: 0 };
       atual.base = round2(atual.base + num(c.valor_base));
@@ -615,8 +580,7 @@ export default function ComissoesPage() {
     return { calculadas: porStatus('CALCULADA'), aprovadas: porStatus('APROVADA'), pagas: porStatus('PAGA') };
   }, [doEscopo]);
 
-  // O extrato do CRM já nasce com a conta a pagar: não passa por "Aprovar" aqui.
-  const aAprovar = useMemo(() => doEscopo.filter(c => c.status === 'CALCULADA' && c.origem !== 'crm'), [doEscopo]);
+  const aAprovar = useMemo(() => doEscopo.filter(c => c.status === 'CALCULADA'), [doEscopo]);
   const proximaSaida = proximaDataPagamento(agendaPagamento, hojeISO());
   const nomeDoMes = rotuloDoMes(filterMonth);
 
@@ -684,7 +648,7 @@ export default function ComissoesPage() {
       // A base NOMEADA: "R$ 1.815,55" sozinho não diz sobre o que a comissão
       // incidiu, e a coluna "%" repetia a mesma alíquota em todas as linhas
       // da mesma pessoa, sugerindo variação onde não há.
-      sub: c => <span>{c.origem === 'crm' ? 'extrato do mês da Área Comercial do CRM' : `${num(c.percentual_aplicado)}% sobre a receita da agência`}</span>,
+      sub: c => <span>{`${num(c.percentual_aplicado)}% sobre a receita da agência`}</span>,
     },
     { id: 'valor', cabecalho: 'Comissão', tipo: 'dinheiro', prioridade: 3, sortable: true, valor: c => num(c.valor_comissao) },
     { id: 'situacao', cabecalho: 'Situação', tipo: 'status', prioridade: 2, valor: c => c.status, dominio: 'comissao' },
@@ -695,25 +659,22 @@ export default function ComissoesPage() {
       prioridade: 3,
       render: c => (
         <div className="flex flex-wrap justify-end gap-1">
-          {/* Extrato do CRM: a conta a pagar já existe e é paga em Contas a pagar;
-              aprovar ou pagar por aqui criaria uma segunda conta. */}
-          {c.origem === 'crm' && c.status === 'CALCULADA' && <span className="fin-t-caption text-[var(--fin-text-3)]">Pague em Contas a pagar</span>}
-          {c.origem !== 'crm' && c.status === 'CALCULADA' && (
+          {c.status === 'CALCULADA' && (
             <button className={BOTAO} onClick={() => setConfirmando({ tipo: 'aprovar', comissao: c })}>
               Aprovar
             </button>
           )}
-          {c.origem !== 'crm' && c.status === 'APROVADA' && (
+          {c.status === 'APROVADA' && (
             <button className={BOTAO} onClick={() => setConfirmando({ tipo: 'pagar', comissao: c })}>
               Pagar
             </button>
           )}
-          {c.origem !== 'crm' && c.status !== 'PAGA' && c.status !== 'CANCELADA' && (
+          {c.status !== 'PAGA' && c.status !== 'CANCELADA' && (
             <button className={BOTAO} onClick={() => setConfirmando({ tipo: 'cancelar', comissao: c })}>
               Cancelar
             </button>
           )}
-          {c.origem !== 'crm' && c.status === 'CANCELADA' && (
+          {c.status === 'CANCELADA' && (
             <button className={BOTAO} onClick={() => setConfirmando({ tipo: 'excluir', comissao: c })}>
               Excluir
             </button>
