@@ -50,6 +50,10 @@ export type GraficoMolduraProps = {
   aparencia?: 'fin' | 'ds';
   icone?: LucideIcon;
   tom?: TomDoDs;
+  /** Só na aparência 'ds': botões extras no cabeçalho (ex.: ocultar o widget). */
+  acoes?: React.ReactNode;
+  /** Só na aparência 'ds': widget (cabeçalho e respiros menores). */
+  compacta?: boolean;
 };
 
 type ContextoDaMoldura = {
@@ -246,6 +250,8 @@ export function GraficoMoldura({
   aparencia = 'fin',
   icone,
   tom = 'brand',
+  acoes,
+  compacta,
 }: GraficoMolduraProps) {
   const idDaTabela = React.useId();
   const [tabelaAberta, setTabelaAberta] = React.useState(false);
@@ -269,11 +275,11 @@ export function GraficoMoldura({
         // morar num <summary> cinza que ninguém enxerga.
         className={
           ds
-            ? cn('fin-no-print', PILULA_DS)
+            ? cn('fin-no-print', PILULA_DS, compacta && 'h-8 px-3 text-[12px]')
             : 'fin-no-print fin-t-body inline-flex h-11 shrink-0 items-center rounded-[var(--fin-r-md)] border border-[var(--fin-border)] px-3 text-[var(--fin-text-2)] transition-colors hover:bg-[var(--fin-surface-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fin-accent)]'
         }
       >
-        {tabelaAberta ? 'Ocultar números' : 'Ver os números'}
+        {compacta && ds ? (tabelaAberta ? 'Gráfico' : 'Números') : tabelaAberta ? 'Ocultar números' : 'Ver os números'}
       </button>
     ) : null;
 
@@ -282,14 +288,15 @@ export function GraficoMoldura({
       data-fin-grafico={estado}
       className={cn(
         ds
-          ? cn(CARTAO_DS, 'flex min-w-0 flex-col p-[22px]')
+          ? cn(CARTAO_DS, 'flex min-w-0 flex-col', compacta ? 'p-[18px]' : 'p-[22px]')
           : 'flex flex-col rounded-[var(--fin-r-lg)] border border-[var(--fin-border)] bg-[var(--fin-surface)] p-4 shadow-[var(--fin-e-card)]',
         className,
       )}
     >
       {ds ? (
-        <CabecaDoBloco tom={tom} Icone={icone} titulo={titulo} sub={sublinha} nivel={3}>
+        <CabecaDoBloco tom={tom} Icone={icone} titulo={titulo} sub={sublinha} nivel={3} compacta={compacta}>
           {botaoDaTabela}
+          {acoes}
         </CabecaDoBloco>
       ) : (
         <div className="flex flex-wrap items-start justify-between gap-2">
@@ -303,9 +310,9 @@ export function GraficoMoldura({
 
       <Contexto.Provider value={contexto}>
         {desenha ? (
-          <AreaDeGrafico className={cn('fin-no-print', ds ? 'mt-5' : 'mt-3')}>{children}</AreaDeGrafico>
+          <AreaDeGrafico className={cn('fin-no-print', ds ? (compacta ? 'mt-4' : 'mt-5') : 'mt-3', compacta && ds && tabelaAberta && 'hidden')}>{children}</AreaDeGrafico>
         ) : (
-          <div className={ds ? 'mt-5' : 'mt-3'}>
+          <div className={ds ? (compacta ? 'mt-4' : 'mt-5') : 'mt-3'}>
             <VazioDoGrafico motivo={estado} frase={vazio?.frase} acao={vazio?.acao} aparencia={ds ? 'ds' : 'fin'} />
           </div>
         )}

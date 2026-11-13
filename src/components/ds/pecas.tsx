@@ -81,7 +81,7 @@ export function TopoDoDs({
 
 /** Cabeçalho de um bloco: ladrilho de 38 px, título e legenda; ações à direita. */
 export function CabecaDoBloco({
-  tom, Icone, titulo, sub, children, id, nivel = 2,
+  tom, Icone, titulo, sub, children, id, nivel = 2, compacta,
 }: {
   tom: TomDoDs;
   Icone: LucideIcon;
@@ -90,30 +90,80 @@ export function CabecaDoBloco({
   children?: React.ReactNode;
   id?: string;
   nivel?: 2 | 3;
+  /** Widget: ladrilho de 32 px, título de 15 px e legenda numa linha só. */
+  compacta?: boolean;
 }) {
   const Titulo = nivel === 3 ? 'h3' : 'h2';
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      <ChipDoTom tom={tom} Icone={Icone} tamanho={38} />
+    <div className={cn('flex items-center', compacta ? 'gap-2.5' : 'flex-wrap gap-3')}>
+      <ChipDoTom tom={tom} Icone={Icone} tamanho={compacta ? 32 : 38} />
       {/* min-w: no celular o título não espreme; a legenda e as ações descem. */}
-      <div className="min-w-[11rem] flex-1">
-        <Titulo id={id} className="text-[16.5px] font-medium tracking-[-0.01em] text-[var(--ds-text-strong)]">
+      <div className={cn('flex-1', compacta ? 'min-w-0' : 'min-w-[11rem]')}>
+        <Titulo
+          id={id}
+          className={cn(
+            'font-medium tracking-[-0.01em] text-[var(--ds-text-strong)]',
+            compacta ? 'truncate text-[15px]' : 'text-[16.5px]',
+          )}
+        >
           {titulo}
         </Titulo>
-        {sub ? <p className="mt-0.5 text-[12.5px] text-[var(--ds-text-muted)]">{sub}</p> : null}
+        {sub ? (
+          <p
+            className={cn('mt-0.5 text-[var(--ds-text-muted)]', compacta ? 'truncate text-[12px]' : 'text-[12.5px]')}
+            title={compacta && typeof sub === 'string' ? sub : undefined}
+          >
+            {sub}
+          </p>
+        ) : null}
       </div>
       {children}
     </div>
   );
 }
 
+/** Anel de percentual (a "taxa de conversão" do CRM). */
+export function Anel({ pct, tamanho = 48, espessura = 5, cor }: { pct: number; tamanho?: number; espessura?: number; cor: string }) {
+  const r = (tamanho - espessura) / 2;
+  const volta = 2 * Math.PI * r;
+  const p = Math.max(0, Math.min(100, pct));
+  return (
+    <svg width={tamanho} height={tamanho} viewBox={`0 0 ${tamanho} ${tamanho}`} aria-hidden="true" className="shrink-0 -rotate-90">
+      <circle cx={tamanho / 2} cy={tamanho / 2} r={r} fill="none" strokeWidth={espessura} style={{ stroke: 'var(--ds-surface-sunken)' }} />
+      <circle
+        cx={tamanho / 2} cy={tamanho / 2} r={r} fill="none" strokeWidth={espessura} strokeLinecap="round"
+        strokeDasharray={`${(p / 100) * volta} ${volta}`} style={{ stroke: cor }}
+      />
+    </svg>
+  );
+}
+
+/** Mini barras (o volume por pedaço). A última na cor cheia, as outras suaves. */
+export function MiniBarras({ valores, cor }: { valores: number[]; cor: string }) {
+  const maior = Math.max(1, ...valores.map(v => Math.abs(v)));
+  return (
+    <span aria-hidden="true" className="flex h-10 shrink-0 items-end gap-[3px]">
+      {valores.map((v, i) => (
+        <span
+          key={i}
+          className="w-1.5 rounded-[3px]"
+          style={{ height: Math.max(3, (Math.abs(v) / maior) * 40), background: i === valores.length - 1 ? cor : suave(cor, 0.26) }}
+        />
+      ))}
+    </span>
+  );
+}
+
 /** Título de seção: bolinha do tom da marca e rótulo em caixa alta. */
-export function TituloDeSecao({ children, extra, primeira }: { children: React.ReactNode; extra?: React.ReactNode; primeira?: boolean }) {
+export function TituloDeSecao({
+  children, extra, primeira, acao,
+}: { children: React.ReactNode; extra?: React.ReactNode; primeira?: boolean; acao?: React.ReactNode }) {
   return (
     <div className={cn('mb-3.5 flex items-center gap-2', primeira ? 'mt-[26px]' : 'mt-[34px]')}>
       <i aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-[var(--ds-brand)]" />
       <h2 className={cn(ROTULO_DS, 'text-[var(--ds-text-strong)]')}>{children}</h2>
-      {extra ? <span className="text-[12px] text-[var(--ds-text-muted)]">{extra}</span> : null}
+      {extra ? <span className="ds-num text-[12px] text-[var(--ds-text-muted)]">{extra}</span> : null}
+      {acao ? <><span className="flex-1" />{acao}</> : null}
     </div>
   );
 }
@@ -173,6 +223,12 @@ export interface NumeroDoDs {
   dicaDaVariacao?: string;
   /** Valor negativo: o número sai na tinta de perigo. */
   negativo?: boolean;
+  /** Mini barras ao lado do número (série, prazos, projeção). */
+  barras?: number[];
+  /** Anel de percentual ao lado do número (0 a 100). */
+  anel?: number | null;
+  /** Pílula curta de alerta no topo do cartão ("3 sem custo"). */
+  alerta?: string;
 }
 
 export function CartaoDeNumero({ n }: { n: NumeroDoDs }) {
@@ -203,6 +259,12 @@ export function CartaoDeNumero({ n }: { n: NumeroDoDs }) {
       <span className="relative flex items-center gap-2.5">
         <ChipDoTom tom={n.tom} Icone={n.Icone} tamanho={36} />
         <span className="flex-1" />
+        {n.alerta ? (
+          <span className="inline-flex h-[22px] items-center gap-1 whitespace-nowrap rounded-full bg-[var(--ds-warning-soft)] px-2 text-[11px] font-medium text-[var(--ds-warning-ink)]">
+            <Info className="h-3 w-3" aria-hidden="true" />
+            {n.alerta}
+          </span>
+        ) : null}
         {n.variacao ? <SeloDeVariacao v={n.variacao} dica={n.dicaDaVariacao} /> : null}
         {n.onAbrir ? (
           <ArrowUpRight className="h-[15px] w-[15px] text-[var(--ds-text-muted)] transition-colors group-hover:text-[var(--cor)]" aria-hidden="true" />
@@ -210,15 +272,21 @@ export function CartaoDeNumero({ n }: { n: NumeroDoDs }) {
       </span>
       <span className="relative">
         <span className={cn(ROTULO_DS, 'block text-[10.5px] text-[var(--ds-text-muted)]')}>{n.rotulo}</span>
-        <span
-          className={cn(
-            'ds-num mt-1.5 block truncate text-[30px] font-medium leading-[1.1] tracking-[-0.03em] sm:text-[32px]',
-            n.negativo ? 'text-[var(--ds-danger-ink)]' : 'text-[var(--ds-text-strong)]',
-          )}
-        >
-          {n.valor}
+        <span className="mt-1.5 flex items-end gap-3">
+          <span className="min-w-0 flex-1">
+            <span
+              className={cn(
+                'ds-num block truncate text-[28px] font-medium leading-[1.1] tracking-[-0.03em]',
+                n.negativo ? 'text-[var(--ds-danger-ink)]' : 'text-[var(--ds-text-strong)]',
+              )}
+            >
+              {n.valor}
+            </span>
+            <span className="mt-1 block text-[12.5px] text-[var(--ds-text-body)]">{n.sub}</span>
+          </span>
+          {n.barras && n.barras.some(b => b !== 0) ? <MiniBarras valores={n.barras} cor={cor} /> : null}
+          {n.anel != null ? <Anel pct={n.anel} cor={cor} tamanho={40} espessura={4} /> : null}
         </span>
-        <span className="mt-1 block text-[12.5px] text-[var(--ds-text-body)]">{n.sub}</span>
       </span>
       {n.aviso ? (
         <span className="relative flex items-start gap-1.5 rounded-[12px] bg-[var(--ds-warning-soft)] px-2.5 py-2 text-[11.5px] text-[var(--ds-text-body)]">
